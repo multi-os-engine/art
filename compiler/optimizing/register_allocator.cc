@@ -310,9 +310,11 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
     current->AddHighInterval();
   }
 
+  current->StartNewScan();
   for (size_t safepoint_index = safepoints_.Size(); safepoint_index > 0; --safepoint_index) {
     HInstruction* safepoint = safepoints_.Get(safepoint_index - 1);
     size_t safepoint_position = safepoint->GetLifetimePosition();
+    current->AdvanceScanPosition(safepoint_position);
 
     // Test that safepoints are ordered in the optimal way.
     DCHECK(safepoint_index == safepoints_.Size()
@@ -570,8 +572,21 @@ void RegisterAllocator::DumpAllIntervals(std::ostream& stream) const {
   }
 }
 
+static void InitializeIntervalCaches(const GrowableArray<LiveInterval*>& intervals) {
+  for (size_t i = 0, e = intervals.Size(); i < e; ++i) {
+    intervals.Get(i)->StartNewScan();
+  }
+}
+
 // By the book implementation of a linear scan register allocator.
 void RegisterAllocator::LinearScan() {
+  // Initialize search caches of all involved intervals - unallocated in
+  // 'unhandled_' and fixed in 'inactive_'. This is part of a performance
+  // optimization. See LiveInterval::StartNewScan for details.
+  DCHECK(active_.IsEmpty());
+  InitializeIntervalCaches(inactive_);
+  InitializeIntervalCaches(*unhandled_);
+
   while (!unhandled_->IsEmpty()) {
     // (1) Remove interval with the lowest start position from unhandled.
     LiveInterval* current = unhandled_->Pop();
@@ -594,10 +609,13 @@ void RegisterAllocator::LinearScan() {
         active_.Delete(interval);
         --i;
         handled_.Add(interval);
-      } else if (!interval->Covers(position)) {
-        active_.Delete(interval);
-        --i;
-        inactive_.Add(interval);
+      } else {
+        interval->AdvanceScanPosition(position);
+        if (!interval->Covers(position)) {
+          active_.Delete(interval);
+          --i;
+          inactive_.Add(interval);
+        }
       }
     }
 
@@ -611,11 +629,14 @@ void RegisterAllocator::LinearScan() {
         --i;
         --inactive_intervals_to_handle;
         handled_.Add(interval);
-      } else if (interval->Covers(position)) {
-        inactive_.Delete(interval);
-        --i;
-        --inactive_intervals_to_handle;
-        active_.Add(interval);
+      } else {
+        interval->AdvanceScanPosition(position);
+        if (interval->Covers(position)) {
+          inactive_.Delete(interval);
+          --i;
+          --inactive_intervals_to_handle;
+          active_.Add(interval);
+        }
       }
     }
 
@@ -703,7 +724,7 @@ bool RegisterAllocator::TryAllocateFreeReg(LiveInterval* current) {
   }
 
   // An interval that starts an instruction (that is, it is not split), may
-  // re-use the registers used by the inputs of that instruciton, based on the
+  // re-use the registers used by the inputs of that instruction, based on the
   // location summary.
   HInstruction* defined_by = current->GetDefinedBy();
   if (defined_by != nullptr && !current->IsSplit()) {
@@ -720,7 +741,7 @@ bool RegisterAllocator::TryAllocateFreeReg(LiveInterval* current) {
           // the linear scan algorithm. So we use `defined_by`'s end lifetime
           // position to check whether the input is dead or is inactive after
           // `defined_by`.
-          DCHECK(interval->Covers(defined_by->GetLifetimePosition()));
+          DCHECK(interval->Covers_Slow(defined_by->GetLifetimePosition()));
           size_t position = defined_by->GetLifetimePosition() + 1;
           FreeIfNotCoverAt(interval, position, free_until);
         }
@@ -1439,7 +1460,7 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
         use = use->GetNext();
       }
       while (use != nullptr && use->GetPosition() <= range->GetEnd()) {
-        DCHECK(current->Covers(use->GetPosition()) || (use->GetPosition() == range->GetEnd()));
+        DCHECK(current->Covers_Slow(use->GetPosition()) || (use->GetPosition() == range->GetEnd()));
         LocationSummary* locations = use->GetUser()->GetLocations();
         if (use->GetIsEnvironment()) {
           locations->SetEnvironmentAt(use->GetInputIndex(), source);
@@ -1474,7 +1495,7 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
     }
 
     for (; safepoint_position != nullptr; safepoint_position = safepoint_position->GetNext()) {
-      if (!current->Covers(safepoint_position->GetPosition())) {
+      if (!current->IsDefinedAt(safepoint_position->GetPosition())) {
         DCHECK(next_sibling != nullptr);
         break;
       }
@@ -1541,35 +1562,13 @@ void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,
     return;
   }
 
-  // Intervals end at the lifetime end of a block. The decrement by one
-  // ensures the `Cover` call will return true.
-  size_t from_position = from->GetLifetimeEnd() - 1;
-  size_t to_position = to->GetLifetimeStart();
-
-  LiveInterval* destination = nullptr;
-  LiveInterval* source = nullptr;
-
-  LiveInterval* current = interval;
-
-  // Check the intervals that cover `from` and `to`.
-  while ((current != nullptr) && (source == nullptr || destination == nullptr)) {
-    if (current->Covers(from_position)) {
-      DCHECK(source == nullptr);
-      source = current;
-    }
-    if (current->Covers(to_position)) {
-      DCHECK(destination == nullptr);
-      destination = current;
-    }
-
-    current = current->GetNextSibling();
-  }
-
+  // Find the intervals that cover `from` and `to`.
+  const LiveInterval* destination = interval->GetSiblingAt(to->GetLifetimeStart());
+  const LiveInterval* source = interval->GetSiblingAt(from->GetLifetimeEnd() - 1);
   if (destination == source) {
     // Interval was not split.
     return;
   }
-
   DCHECK(destination != nullptr && source != nullptr);
 
   if (!destination->HasRegister()) {
