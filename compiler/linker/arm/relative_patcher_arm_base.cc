@@ -86,6 +86,8 @@ uint32_t ArmBaseRelativePatcher::ReserveSpaceInternal(uint32_t offset,
   uint32_t next_aligned_offset = compiled_method->AlignCode(quick_code_offset + quick_code_size);
   // Adjust for extra space required by the subclass.
   next_aligned_offset = compiled_method->AlignCode(next_aligned_offset + max_extra_space);
+  // TODO: ignore unprocessed patches targeting this method if they can reach quick_code_offset.
+  // We need the MethodReference for that.
   if (!unprocessed_patches_.empty() &&
       next_aligned_offset - unprocessed_patches_.front().second > max_positive_displacement_) {
     bool needs_thunk = ReserveSpaceProcessPatches(next_aligned_offset);
@@ -142,7 +144,8 @@ bool ArmBaseRelativePatcher::ReserveSpaceProcessPatches(uint32_t next_aligned_of
         return next_aligned_offset - patch_offset > max_positive_displacement_;
       }
     } else if (result.second >= patch_offset) {
-      DCHECK_LE(result.second - patch_offset, max_positive_displacement_);
+      DCHECK_LE(result.second - patch_offset - CompiledCode::CodeDelta(instruction_set_),
+                max_positive_displacement_);
     } else {
       // When calling back, check if we have a thunk that's closer than the actual target.
       uint32_t target_offset =

@@ -166,7 +166,7 @@ class RelativePatcherTest : public testing::Test {
 
     auto result = method_offset_map_.FindMethodOffset(method_ref);
     CHECK(result.first);  // Must have been linked.
-    size_t offset = result.second;
+    size_t offset = result.second - compiled_methods_[idx]->CodeDelta();
     CHECK_LT(offset, output_.size());
     CHECK_LE(offset + expected_code.size(), output_.size());
     ArrayRef<const uint8_t> linked_code(&output_[offset], expected_code.size());
@@ -174,6 +174,12 @@ class RelativePatcherTest : public testing::Test {
       return true;
     }
     // Log failure info.
+    DumpDiff(expected_code, linked_code);
+    return false;
+  }
+
+  void DumpDiff(const ArrayRef<const uint8_t>& expected_code,
+                const ArrayRef<const uint8_t>& linked_code) {
     std::ostringstream expected_hex;
     std::ostringstream linked_hex;
     std::ostringstream diff_indicator;
@@ -193,7 +199,6 @@ class RelativePatcherTest : public testing::Test {
     LOG(ERROR) << "<" << expected_hex.str();
     LOG(ERROR) << ">" << linked_hex.str();
     LOG(ERROR) << " " << diff_indicator.str();
-    return false;
   }
 
   // Map method reference to assinged offset.

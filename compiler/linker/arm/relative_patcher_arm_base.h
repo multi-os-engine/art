@@ -54,6 +54,8 @@ class ArmBaseRelativePatcher : public RelativePatcher {
   typedef std::pair<MethodReference, uint32_t> UnprocessedPatch;
   std::deque<UnprocessedPatch> unprocessed_patches_;
 
+  friend class Thumb2RelativePatcherTest;
+
   DISALLOW_COPY_AND_ASSIGN(ArmBaseRelativePatcher);
 };
 
