@@ -25,6 +25,8 @@
 #include "offsets.h"
 #include "utils/assembler.h"
 #include "utils.h"
+#include "driver/compiler_driver.h"
+#include "oat_writer.h"
 
 namespace art {
 namespace x86 {
@@ -662,6 +664,11 @@ class X86ExceptionSlowPath FINAL : public SlowPath {
 };
 
 }  // namespace x86
+
+const std::vector<uint8_t>* CreateTrampolineFor32(InstructionSet isa, EntryPointCallingConvention abi,
+                                             ThreadOffset<4> offset);
+Assembler* CreateAssembler(InstructionSet instruction_set);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_X86_ASSEMBLER_X86_H_

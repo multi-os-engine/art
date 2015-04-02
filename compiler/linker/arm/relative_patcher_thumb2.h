@@ -17,6 +17,7 @@
 #ifndef ART_COMPILER_LINKER_ARM_RELATIVE_PATCHER_THUMB2_H_
 #define ART_COMPILER_LINKER_ARM_RELATIVE_PATCHER_THUMB2_H_
 
+#include "linker/relative_patcher.h"
 #include "linker/arm/relative_patcher_arm_base.h"
 
 namespace art {
@@ -51,6 +52,10 @@ class Thumb2RelativePatcher FINAL : public ArmBaseRelativePatcher {
 
   DISALLOW_COPY_AND_ASSIGN(Thumb2RelativePatcher);
 };
+
+  RelativePatcher* CreateRelativePatcher(InstructionSet instruction_set,
+                                         RelativePatcherTargetProvider* provider,
+                                         const InstructionSetFeatures* features);
 
 }  // namespace linker
 }  // namespace art

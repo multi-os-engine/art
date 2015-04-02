@@ -120,6 +120,42 @@ class RelativePatcher {
   DISALLOW_COPY_AND_ASSIGN(RelativePatcher);
 };
 
+class RelativePatcherNone FINAL : public RelativePatcher {
+ public:
+  RelativePatcherNone() { }
+
+  uint32_t ReserveSpace(uint32_t offset,
+                        const CompiledMethod* compiled_method ATTRIBUTE_UNUSED,
+                        MethodReference method_ref ATTRIBUTE_UNUSED) OVERRIDE {
+    return offset;  // No space reserved; no patches expected.
+  }
+
+  uint32_t ReserveSpaceEnd(uint32_t offset) OVERRIDE {
+    return offset;  // No space reserved; no patches expected.
+  }
+
+  uint32_t WriteThunks(OutputStream* out ATTRIBUTE_UNUSED, uint32_t offset) OVERRIDE {
+    return offset;  // No thunks added; no patches expected.
+  }
+
+  void PatchCall(std::vector<uint8_t>* code ATTRIBUTE_UNUSED,
+                 uint32_t literal_offset ATTRIBUTE_UNUSED,
+                 uint32_t patch_offset ATTRIBUTE_UNUSED,
+                 uint32_t target_offset ATTRIBUTE_UNUSED) OVERRIDE {
+    LOG(FATAL) << "Unexpected relative call patch.";
+  }
+
+  virtual void PatchDexCacheReference(std::vector<uint8_t>* code ATTRIBUTE_UNUSED,
+                                      const LinkerPatch& patch ATTRIBUTE_UNUSED,
+                                      uint32_t patch_offset ATTRIBUTE_UNUSED,
+                                      uint32_t target_offset ATTRIBUTE_UNUSED) {
+    LOG(FATAL) << "Unexpected relative dex cache array patch.";
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(RelativePatcherNone);
+};
+
 }  // namespace linker
 }  // namespace art
 

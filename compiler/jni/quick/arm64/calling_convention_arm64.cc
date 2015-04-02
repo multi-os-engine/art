@@ -271,4 +271,32 @@ size_t Arm64JniCallingConvention::NumberOfOutgoingStackArgs() {
 }
 
 }  // namespace arm64
+
+ManagedRuntimeCallingConvention* CreateManagedRuntimeCallingConvention64(
+    bool is_static,
+    bool is_synchronized,
+    const char* shorty,
+    InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kArm64:
+      return new arm64::Arm64ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
+JniCallingConvention* CreateJniCallingConvention64(bool is_static,
+                                                   bool is_synchronized,
+                                                   const char* shorty,
+                                                   InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kArm64:
+      return new arm64::Arm64JniCallingConvention(is_static, is_synchronized, shorty);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

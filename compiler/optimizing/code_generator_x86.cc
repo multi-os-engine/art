@@ -30,6 +30,7 @@
 #include "utils/stack_checks.h"
 #include "utils/x86/assembler_x86.h"
 #include "utils/x86/managed_register_x86.h"
+#include "code_generator_x86_64.h"
 
 namespace art {
 
@@ -4513,4 +4514,21 @@ void InstructionCodeGeneratorX86::VisitBoundType(HBoundType* instruction) {
 }
 
 }  // namespace x86
+
+  CodeGenerator* GetCodeGenerator(HGraph* graph,
+                                  InstructionSet instruction_set,
+                                  const InstructionSetFeatures& isa_features,
+                                  const CompilerOptions& compiler_options) {
+  switch (instruction_set) {
+    case kX86:
+      return new x86::CodeGeneratorX86(graph,
+                                       *isa_features.AsX86InstructionSetFeatures(),
+                                       compiler_options);
+    case kX86_64:
+      return GetCodeGenerator64(graph, instruction_set, isa_features, compiler_options);
+    default:
+      return nullptr;
+  }
+}
+
 }  // namespace art

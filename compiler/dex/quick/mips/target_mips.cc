@@ -925,4 +925,14 @@ const char* MipsMir2Lir::GetTargetInstFmt(int opcode) {
   return MipsMir2Lir::EncodingMap[opcode].fmt;
 }
 
+Mir2Lir* CreateCodeGenerator(CompilationUnit* cu) {
+  switch (cu->instruction_set) {
+    case kMips:
+      return MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+    default:
+      LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;
+      return nullptr;
+  }
+}
+
 }  // namespace art

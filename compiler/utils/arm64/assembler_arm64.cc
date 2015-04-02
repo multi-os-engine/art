@@ -20,6 +20,11 @@
 #include "offsets.h"
 #include "thread.h"
 #include "utils.h"
+#include "jni_env_ext.h"
+#include "utils/arm/assembler_thumb2.h"
+#include "mirror/art_method-inl.h"
+#include "output_stream.h"
+#include "arch/arm64/instruction_set_features_arm64.h"
 
 using namespace vixl;  // NOLINT(build/namespaces)
 
@@ -760,5 +765,64 @@ void Arm64Assembler::RemoveFrame(size_t frame_size, const std::vector<ManagedReg
   cfi_.DefCFAOffset(frame_size);
 }
 
+static const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
+                                                    ThreadOffset<8> offset) {
+#define __ assembler->
+  std::unique_ptr<Arm64Assembler> assembler(static_cast<Arm64Assembler*>(Assembler::Create(kArm64)));
+
+  switch (abi) {
+    case kInterpreterAbi:  // Thread* is first argument (X0) in interpreter ABI.
+      __ JumpTo(Arm64ManagedRegister::FromXRegister(X0), Offset(offset.Int32Value()),
+          Arm64ManagedRegister::FromXRegister(IP1));
+
+      break;
+    case kJniAbi:  // Load via Thread* held in JNIEnv* in first argument (X0).
+      __ LoadRawPtr(Arm64ManagedRegister::FromXRegister(IP1),
+                      Arm64ManagedRegister::FromXRegister(X0),
+                      Offset(JNIEnvExt::SelfOffset().Int32Value()));
+
+      __ JumpTo(Arm64ManagedRegister::FromXRegister(IP1), Offset(offset.Int32Value()),
+                Arm64ManagedRegister::FromXRegister(IP0));
+
+      break;
+    case kQuickAbi:  // X18 holds Thread*.
+      __ JumpTo(Arm64ManagedRegister::FromXRegister(TR), Offset(offset.Int32Value()),
+                Arm64ManagedRegister::FromXRegister(IP0));
+
+      break;
+  }
+
+  assembler->EmitSlowPaths();
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
+}
+
 }  // namespace arm64
+
+const std::vector<uint8_t>* CreateTrampolineFor64(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<8> offset) {
+  switch (isa) {
+    case kArm64:
+      return arm64::CreateTrampoline(abi, offset);
+    default:
+      LOG(FATAL) << "Unexpected InstructionSet: " << isa;
+      return nullptr;
+  }
+}
+
+Assembler* CreateAssembler64(InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kArm64:
+       return new arm64::Arm64Assembler();
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

@@ -313,6 +313,12 @@ class SlowPathCodeX86 : public SlowPathCode {
 };
 
 }  // namespace x86
+
+    CodeGenerator* GetCodeGenerator(HGraph* graph,
+                                    InstructionSet instruction_set,
+                                    const InstructionSetFeatures& isa_features,
+                                    const CompilerOptions& compiler_options);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_CODE_GENERATOR_X86_H_

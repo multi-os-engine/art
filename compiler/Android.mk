@@ -17,24 +17,26 @@
 LOCAL_PATH := $(call my-dir)
 
 include art/build/Android.common_build.mk
+include $(LOCAL_PATH)/Android.art.x86.mk
+include $(LOCAL_PATH)/Android.art.arm.mk
+include $(LOCAL_PATH)/Android.art.mips.mk
 
+# Files that are common to all ISA and both Quick and Optimizing compilers
 LIBART_COMPILER_SRC_FILES := \
+	buffered_output_stream.cc \
 	compiled_method.cc \
+	compiler.cc \
+	elf_writer.cc \
+	elf_writer_debug.cc \
+	elf_writer_quick.cc \
+	file_output_stream.cc \
+	image_writer.cc \
+	oat_writer.cc \
+	output_stream.cc \
+	vector_output_stream.cc \
 	dex/global_value_numbering.cc \
 	dex/gvn_dead_code_elimination.cc \
 	dex/local_value_numbering.cc \
-	dex/quick/arm/assemble_arm.cc \
-	dex/quick/arm/call_arm.cc \
-	dex/quick/arm/fp_arm.cc \
-	dex/quick/arm/int_arm.cc \
-	dex/quick/arm/target_arm.cc \
-	dex/quick/arm/utility_arm.cc \
-	dex/quick/arm64/assemble_arm64.cc \
-	dex/quick/arm64/call_arm64.cc \
-	dex/quick/arm64/fp_arm64.cc \
-	dex/quick/arm64/int_arm64.cc \
-	dex/quick/arm64/target_arm64.cc \
-	dex/quick/arm64/utility_arm64.cc \
 	dex/quick/codegen_util.cc \
 	dex/quick/dex_file_method_inliner.cc \
 	dex/quick/dex_file_to_method_inliner_map.cc \
@@ -43,22 +45,9 @@ LIBART_COMPILER_SRC_FILES := \
 	dex/quick/gen_loadstore.cc \
 	dex/quick/lazy_debug_frame_opcode_writer.cc \
 	dex/quick/local_optimizations.cc \
-	dex/quick/mips/assemble_mips.cc \
-	dex/quick/mips/call_mips.cc \
-	dex/quick/mips/fp_mips.cc \
-	dex/quick/mips/int_mips.cc \
-	dex/quick/mips/target_mips.cc \
-	dex/quick/mips/utility_mips.cc \
 	dex/quick/mir_to_lir.cc \
-	dex/quick/quick_compiler.cc \
 	dex/quick/ralloc_util.cc \
 	dex/quick/resource_mask.cc \
-	dex/quick/x86/assemble_x86.cc \
-	dex/quick/x86/call_x86.cc \
-	dex/quick/x86/fp_x86.cc \
-	dex/quick/x86/int_x86.cc \
-	dex/quick/x86/target_x86.cc \
-	dex/quick/x86/utility_x86.cc \
 	dex/dex_to_dex_compiler.cc \
 	dex/bb_optimizations.cc \
 	dex/compiler_ir.cc \
@@ -81,30 +70,24 @@ LIBART_COMPILER_SRC_FILES := \
 	driver/compiler_options.cc \
 	driver/dex_compilation_unit.cc \
 	linker/relative_patcher.cc \
-	linker/arm/relative_patcher_arm_base.cc \
-	linker/arm/relative_patcher_thumb2.cc \
-	linker/arm64/relative_patcher_arm64.cc \
-	linker/x86/relative_patcher_x86_base.cc \
-	linker/x86/relative_patcher_x86.cc \
-	linker/x86_64/relative_patcher_x86_64.cc \
 	jit/jit_compiler.cc \
-	jni/quick/arm/calling_convention_arm.cc \
-	jni/quick/arm64/calling_convention_arm64.cc \
-	jni/quick/mips/calling_convention_mips.cc \
-	jni/quick/mips64/calling_convention_mips64.cc \
-	jni/quick/x86/calling_convention_x86.cc \
-	jni/quick/x86_64/calling_convention_x86_64.cc \
 	jni/quick/calling_convention.cc \
 	jni/quick/jni_compiler.cc \
+	trampolines/trampoline_compiler.cc \
+	utils/arena_bit_vector.cc \
+	utils/assembler.cc \
+	utils/swap_space.cc
+
+# Quick compiler files that are common to all ISA
+LIBART_QUICK_COMPILER_SRC_FILES := \
+	dex/quick/quick_compiler.cc
+
+# Optimizing compiler files that are common to all ISA
+LIBART_OPTIMIZING_COMPILER_SRC_FILES := \
 	optimizing/boolean_simplifier.cc \
 	optimizing/builder.cc \
 	optimizing/bounds_check_elimination.cc \
 	optimizing/code_generator.cc \
-	optimizing/code_generator_arm.cc \
-	optimizing/code_generator_arm64.cc \
-	optimizing/code_generator_x86.cc \
-	optimizing/code_generator_x86_64.cc \
-	optimizing/code_generator_utils.cc \
 	optimizing/constant_folding.cc \
 	optimizing/dead_code_elimination.cc \
 	optimizing/graph_checker.cc \
@@ -113,10 +96,6 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/inliner.cc \
 	optimizing/instruction_simplifier.cc \
 	optimizing/intrinsics.cc \
-	optimizing/intrinsics_arm.cc \
-	optimizing/intrinsics_arm64.cc \
-	optimizing/intrinsics_x86.cc \
-	optimizing/intrinsics_x86_64.cc \
 	optimizing/licm.cc \
 	optimizing/locations.cc \
 	optimizing/nodes.cc \
@@ -130,35 +109,26 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/ssa_liveness_analysis.cc \
 	optimizing/ssa_phi_elimination.cc \
 	optimizing/primitive_type_propagation.cc \
-	optimizing/reference_type_propagation.cc \
-	trampolines/trampoline_compiler.cc \
-	utils/arena_bit_vector.cc \
-	utils/arm/assembler_arm.cc \
-	utils/arm/assembler_arm32.cc \
-	utils/arm/assembler_thumb2.cc \
-	utils/arm/managed_register_arm.cc \
-	utils/arm64/assembler_arm64.cc \
-	utils/arm64/managed_register_arm64.cc \
-	utils/assembler.cc \
-	utils/mips/assembler_mips.cc \
-	utils/mips/managed_register_mips.cc \
-	utils/mips64/assembler_mips64.cc \
-	utils/mips64/managed_register_mips64.cc \
-	utils/x86/assembler_x86.cc \
-	utils/x86/managed_register_x86.cc \
-	utils/x86_64/assembler_x86_64.cc \
-	utils/x86_64/managed_register_x86_64.cc \
-	utils/swap_space.cc \
-	buffered_output_stream.cc \
-	compiler.cc \
-	elf_writer.cc \
-	elf_writer_debug.cc \
-	elf_writer_quick.cc \
-	file_output_stream.cc \
-	image_writer.cc \
-	oat_writer.cc \
-	output_stream.cc \
-	vector_output_stream.cc
+	optimizing/reference_type_propagation.cc
+
+# Check if the device specific makefile specifies type of compiler
+ifeq ($(VENDOR_COMPILER_TYPE),quick)
+  COMPILER_TYPE=quick
+else ifeq ($(VENDOR_COMPILER_TYPE),optimizing)
+  COMPILER_TYPE=optimizing
+endif
+
+# Compiler type specific files
+ifeq ($(COMPILER_TYPE),quick)
+  LIBART_COMPILER_SRC_FILES += ${LIBART_QUICK_COMPILER_SRC_FILES}
+  LIBART_COMPILER_SRC_FILES += error/optimizing_compiler.cc
+else ifeq ($(COMPILER_TYPE),optimizing)
+  LIBART_COMPILER_SRC_FILES += ${LIBART_OPTIMIZING_COMPILER_SRC_FILES}
+  LIBART_COMPILER_SRC_FILES += error/quick_compiler.cc
+else
+  LIBART_COMPILER_SRC_FILES += ${LIBART_QUICK_COMPILER_SRC_FILES}
+  LIBART_COMPILER_SRC_FILES += ${LIBART_OPTIMIZING_COMPILER_SRC_FILES}
+endif
 
 LIBART_COMPILER_CFLAGS :=
 
@@ -192,27 +162,37 @@ define build-libart-compiler
 
   art_target_or_host := $(1)
   art_ndebug_or_debug := $(2)
+  isa := $(3)
 
   include $(CLEAR_VARS)
+  $(eval $(call add-isa-files,$$(3)))
   ifeq ($$(art_target_or_host),host)
     LOCAL_IS_HOST_MODULE := true
   endif
   LOCAL_CPP_EXTENSION := $(ART_CPP_EXTENSION)
   ifeq ($$(art_ndebug_or_debug),ndebug)
-    LOCAL_MODULE := libart-compiler
+    ifeq ($$(art_target_or_host),host)
+      LOCAL_MODULE := libart-compiler_${isa}
+    else
+      LOCAL_MODULE := libart-compiler
+    endif
     LOCAL_SHARED_LIBRARIES += libart
     ifeq ($$(art_target_or_host),target)
       LOCAL_FDO_SUPPORT := true
     endif
   else # debug
-    LOCAL_MODULE := libartd-compiler
+    ifeq ($$(art_target_or_host),host)
+      LOCAL_MODULE := libartd-compiler_$${isa}
+    else
+      LOCAL_MODULE := libartd-compiler
+    endif
     LOCAL_SHARED_LIBRARIES += libartd
   endif
 
   LOCAL_MODULE_TAGS := optional
   LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 
-  LOCAL_SRC_FILES := $$(LIBART_COMPILER_SRC_FILES)
+  LOCAL_SRC_FILES := $$(LIBART_COMPILER_SRC_BUILD_FILES)
 
   GENERATED_SRC_DIR := $$(call local-generated-sources-dir)
   ENUM_OPERATOR_OUT_CC_FILES := $$(patsubst %.h,%_operator_out.cc,$$(LIBART_COMPILER_ENUM_OPERATOR_OUT_HEADER_FILES))
@@ -241,6 +221,10 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
   endif
 
   LOCAL_C_INCLUDES += $(ART_C_INCLUDES) art/runtime
+
+  ifneq ($(VENDOR_COMPILER_MK_FILE),)
+    include $(VENDOR_COMPILER_MK_FILE)
+  endif
 
   ifeq ($$(art_target_or_host),host)
     # For compiler driver TLS.
@@ -282,16 +266,48 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
 
 endef
 
+# $(1) : The ISA.
+define add-isa-files
+  isa := ${1}
+
+  LIBART_COMPILER_SRC_BUILD_FILES := ${LIBART_COMPILER_SRC_FILES}
+
+  ifeq ($(VENDOR_COMPILER_MK_FILE),)
+    ifeq ($$(isa),x86)
+      LIBART_COMPILER_SRC_BUILD_FILES += ${LIBART_COMPILER_SRC_X86_FILES}
+      LIBART_COMPILER_SRC_BUILD_FILES += error/unsupported_64_bit.cc
+    else ifeq ($$(isa),x86_64)
+      LIBART_COMPILER_SRC_BUILD_FILES += ${LIBART_COMPILER_SRC_X86_FILES}
+      LIBART_COMPILER_SRC_BUILD_FILES += ${LIBART_COMPILER_SRC_X86_64_FILES}
+    else ifeq ($$(isa),arm)
+      LIBART_COMPILER_SRC_BUILD_FILES += ${LIBART_COMPILER_SRC_ARM_FILES}
+      LIBART_COMPILER_SRC_BUILD_FILES += error/unsupported_64_bit.cc
+    else ifeq ($$(isa),arm64)
+      LIBART_COMPILER_SRC_BUILD_FILES += ${LIBART_COMPILER_SRC_ARM_FILES}
+      LIBART_COMPILER_SRC_BUILD_FILES += ${LIBART_COMPILER_SRC_ARM_64_FILES}
+    else ifeq ($$(isa),mips)
+      LIBART_COMPILER_SRC_BUILD_FILES += ${LIBART_COMPILER_SRC_MIPS_FILES}
+      LIBART_COMPILER_SRC_BUILD_FILES += error/unsupported_64_bit.cc
+    else ifeq ($$(isa),mips64)
+      LIBART_COMPILER_SRC_BUILD_FILES += ${LIBART_COMPILER_SRC_MIPS_FILES}
+      LIBART_COMPILER_SRC_BUILD_FILES += ${LIBART_COMPILER_SRC_MIPS_64_FILES}
+    endif
+  endif
+
+endef
+
+HOST_ISA_LIST := x86 x86_64 arm arm64 mips mips64
+
 # We always build dex2oat and dependencies, even if the host build is otherwise disabled, since they are used to cross compile for the target.
 ifeq ($(ART_BUILD_HOST_NDEBUG),true)
-  $(eval $(call build-libart-compiler,host,ndebug))
+  $(foreach isa,$(HOST_ISA_LIST),$(eval $(call build-libart-compiler,host,ndebug,$(isa))))
 endif
 ifeq ($(ART_BUILD_HOST_DEBUG),true)
-  $(eval $(call build-libart-compiler,host,debug))
+  $(foreach isa,$(HOST_ISA_LIST),$(eval $(call build-libart-compiler,host,debug,$(isa))))
 endif
 ifeq ($(ART_BUILD_TARGET_NDEBUG),true)
-  $(eval $(call build-libart-compiler,target,ndebug))
+  $(eval $(call build-libart-compiler,target,ndebug,$(TARGET_ARCH)))
 endif
 ifeq ($(ART_BUILD_TARGET_DEBUG),true)
-  $(eval $(call build-libart-compiler,target,debug))
+  $(eval $(call build-libart-compiler,target,debug,$(TARGET_ARCH)))
 endif

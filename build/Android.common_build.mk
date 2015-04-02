@@ -205,7 +205,6 @@ art_cflags := \
   -Wstrict-aliasing \
   -fstrict-aliasing \
   -Wunreachable-code \
-  -Wredundant-decls \
   -Wshadow \
   -Wunused \
   -fvisibility=protected \

@@ -25,6 +25,7 @@
 #include "offsets.h"
 #include "utils/assembler.h"
 #include "utils.h"
+#include "driver/compiler_driver.h"
 
 namespace art {
 namespace x86_64 {
@@ -836,6 +837,11 @@ inline void X86_64Assembler::EmitOperandSizeOverride() {
 }
 
 }  // namespace x86_64
+
+  const std::vector<uint8_t>* CreateTrampolineFor64(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<8> offset);
+  Assembler* CreateAssembler64(InstructionSet instruction_set);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_X86_64_ASSEMBLER_X86_64_H_

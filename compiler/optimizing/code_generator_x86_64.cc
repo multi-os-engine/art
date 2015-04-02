@@ -4292,4 +4292,20 @@ Address CodeGeneratorX86_64::LiteralInt64Address(int64_t v) {
 }
 
 }  // namespace x86_64
+
+CodeGenerator* GetCodeGenerator64(HGraph* graph,
+                                  InstructionSet instruction_set,
+                                  const InstructionSetFeatures& isa_features,
+                                  const CompilerOptions& compiler_options) {
+  UNUSED(isa_features);
+  switch (instruction_set) {
+    case kX86_64:
+      return new x86_64::CodeGeneratorX86_64(graph,
+                                             *isa_features.AsX86_64InstructionSetFeatures(),
+                                             compiler_options);
+    default:
+      return nullptr;
+  }
+}
+
 }  // namespace art

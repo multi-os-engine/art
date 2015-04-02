@@ -20,6 +20,7 @@
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "memory_region.h"
 #include "thread.h"
+#include "utils/x86_64/assembler_x86_64.h"
 
 namespace art {
 namespace x86 {
@@ -2130,5 +2131,46 @@ void X86ExceptionSlowPath::Emit(Assembler *sasm) {
 #undef __
 }
 
+static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<4> offset) {
+  std::unique_ptr<X86Assembler> assembler(static_cast<X86Assembler*>(Assembler::Create(kX86)));
+#define __ assembler->
+  // All x86 trampolines call via the Thread* held in fs.
+  __ fs()->jmp(Address::Absolute(offset));
+  __ int3();
+
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
+}
+
 }  // namespace x86
+
+const std::vector<uint8_t>* CreateTrampolineFor32(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<4> offset) {
+  UNUSED(abi);
+  switch (isa) {
+    case kX86:
+      return x86::CreateTrampoline(offset);
+    default:
+      LOG(FATAL) << "Unexpected InstructionSet: " << isa;
+      return nullptr;
+  }
+}
+
+Assembler* CreateAssembler(InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kX86:
+      return new x86::X86Assembler();
+    case kX86_64:
+      return CreateAssembler64(instruction_set);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

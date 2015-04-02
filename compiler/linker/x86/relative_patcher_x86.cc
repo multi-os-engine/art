@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include "linker/relative_patcher.h"
 #include "linker/x86/relative_patcher_x86.h"
+#include "linker/x86_64/relative_patcher_x86_64.h"
 
 #include "compiled_method.h"
 
@@ -53,6 +55,22 @@ void X86RelativePatcher::PatchDexCacheReference(std::vector<uint8_t>* code,
   (*code)[literal_offset + 1u] = static_cast<uint8_t>(diff >> 8);
   (*code)[literal_offset + 2u] = static_cast<uint8_t>(diff >> 16);
   (*code)[literal_offset + 3u] = static_cast<uint8_t>(diff >> 24);
+}
+
+RelativePatcher* CreateRelativePatcher(InstructionSet instruction_set,
+                                       RelativePatcherTargetProvider* provider,
+                                       const InstructionSetFeatures* features) {
+  UNUSED(provider);
+  UNUSED(features);
+
+  switch (instruction_set) {
+    case kX86:
+      return new X86RelativePatcher();
+    case kX86_64:
+      return new X86_64RelativePatcher();
+    default:
+      return new RelativePatcherNone;
+  }
 }
 
 }  // namespace linker

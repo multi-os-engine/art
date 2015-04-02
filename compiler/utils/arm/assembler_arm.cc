@@ -21,6 +21,7 @@
 #include "offsets.h"
 #include "thread.h"
 #include "utils.h"
+#include "jni_env_ext.h"
 
 namespace art {
 namespace arm {
@@ -920,5 +921,45 @@ uint32_t ArmAssembler::ModifiedImmediate(uint32_t value) {
   return value | i << 26 | imm3 << 12 | a << 7;
 }
 
+static const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
+                                                    ThreadOffset<4> offset) {
+#define __ assembler->
+  std::unique_ptr<ArmAssembler> assembler(static_cast<ArmAssembler*>(Assembler::Create(kThumb2)));
+
+  switch (abi) {
+    case kInterpreterAbi:  // Thread* is first argument (R0) in interpreter ABI.
+      __ LoadFromOffset(kLoadWord, PC, R0, offset.Int32Value());
+      break;
+    case kJniAbi:  // Load via Thread* held in JNIEnv* in first argument (R0).
+      __ LoadFromOffset(kLoadWord, IP, R0, JNIEnvExt::SelfOffset().Int32Value());
+      __ LoadFromOffset(kLoadWord, PC, IP, offset.Int32Value());
+      break;
+    case kQuickAbi:  // R9 holds Thread*.
+      __ LoadFromOffset(kLoadWord, PC, R9, offset.Int32Value());
+  }
+  __ bkpt(0);
+
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
+}
+
 }  // namespace arm
+
+const std::vector<uint8_t>* CreateTrampolineFor32(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<4> offset) {
+  switch (isa) {
+    case kArm:
+    case kThumb2:
+      return arm::CreateTrampoline(abi, offset);
+    default:
+      LOG(FATAL) << "Unexpected InstructionSet: " << isa;
+      return nullptr;
+  }
+}
+
 }  // namespace art
