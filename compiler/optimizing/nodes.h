@@ -3409,10 +3409,12 @@ class HMonitorOperation : public HTemplateInstruction<1> {
 class MoveOperands : public ArenaObject<kArenaAllocMisc> {
  public:
   MoveOperands(Location source, Location destination, HInstruction* instruction)
-      : source_(source), destination_(destination), instruction_(instruction) {}
+      : source_(source), destination_(destination),
+        pending_(Location::NoLocation()), instruction_(instruction) {}
 
   Location GetSource() const { return source_; }
   Location GetDestination() const { return destination_; }
+  Location GetPending() const { return pending_; }
 
   void SetSource(Location value) { source_ = value; }
   void SetDestination(Location value) { destination_ = value; }
@@ -3421,19 +3423,20 @@ class MoveOperands : public ArenaObject<kArenaAllocMisc> {
   // destination (but not the source).
   Location MarkPending() {
     DCHECK(!IsPending());
-    Location dest = destination_;
+    pending_ = destination_;
     destination_ = Location::NoLocation();
-    return dest;
+    return pending_;
   }
 
   void ClearPending(Location dest) {
     DCHECK(IsPending());
     destination_ = dest;
+    pending_ = Location::NoLocation();
   }
 
   bool IsPending() const {
     DCHECK(!source_.IsInvalid() || destination_.IsInvalid());
-    return destination_.IsInvalid() && !source_.IsInvalid();
+    return destination_.IsInvalid() && !source_.IsInvalid() && !pending_.IsInvalid();
   }
 
   // True if this blocks a move from the given location.
@@ -3462,6 +3465,7 @@ class MoveOperands : public ArenaObject<kArenaAllocMisc> {
  private:
   Location source_;
   Location destination_;
+  Location pending_;
   // The instruction this move is assocatied with. Null when this move is
   // for moving an input in the expected locations of user (including a phi user).
   // This is only used in debug mode, to ensure we do not connect interval siblings
