@@ -26,6 +26,8 @@
 #include "utils/assembler.h"
 #include "offsets.h"
 #include "utils.h"
+#include "driver/compiler_driver.h"
+#include "jni_internal.h"
 
 namespace art {
 namespace arm {
@@ -798,6 +800,10 @@ class ArmExceptionSlowPath FINAL : public SlowPath {
 };
 
 }  // namespace arm
+
+  const std::vector<uint8_t>* CreateTrampolineFor32(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<4> offset);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_ARM_ASSEMBLER_ARM_H_

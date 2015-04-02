@@ -25,6 +25,7 @@
 #include "base/logging.h"
 #include "dex/mir_graph.h"
 #include "dex/quick/mir_to_lir-inl.h"
+#include "dex/quick/arm64/backend_arm64.h"
 
 namespace art {
 
@@ -994,6 +995,18 @@ void ArmMir2Lir::GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir) {
       break;
     default:
       LOG(FATAL) << "Unexpected opcode: " << mir->dalvikInsn.opcode;
+  }
+}
+
+Mir2Lir* CreateCodeGenerator(CompilationUnit* cu) {
+  switch (cu->instruction_set) {
+    case kThumb2:
+      return ArmCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+    case kArm64:
+      return Arm64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+    default:
+      LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;
+      return nullptr;
   }
 }
 
