@@ -26,6 +26,7 @@
 #include "utils/assembler.h"
 #include "offsets.h"
 #include "utils.h"
+#include "driver/compiler_driver.h"
 
 namespace art {
 namespace mips64 {
@@ -289,6 +290,10 @@ class Mips64ExceptionSlowPath FINAL : public SlowPath {
 };
 
 }  // namespace mips64
+
+const std::vector<uint8_t>* CreateTrampolineFor64(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<8> offset);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_MIPS64_ASSEMBLER_MIPS64_H_

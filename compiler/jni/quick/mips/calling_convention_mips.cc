@@ -213,4 +213,32 @@ size_t MipsJniCallingConvention::NumberOfOutgoingStackArgs() {
   return static_args + param_args + 1;
 }
 }  // namespace mips
+
+ManagedRuntimeCallingConvention* CreateManagedRuntimeCallingConvention(
+    bool is_static,
+    bool is_synchronized,
+    const char* shorty,
+    InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kMips:
+      return new mips::MipsManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
+JniCallingConvention* CreateJniCallingConvention(bool is_static,
+                                                 bool is_synchronized,
+                                                 const char* shorty,
+                                                 InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kMips:
+      return new mips::MipsJniCallingConvention(is_static, is_synchronized, shorty);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

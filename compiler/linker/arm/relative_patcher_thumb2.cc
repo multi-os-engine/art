@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
+#include "linker/relative_patcher.h"
 #include "linker/arm/relative_patcher_thumb2.h"
+#include "linker/arm64/relative_patcher_arm64.h"
 
 #include "compiled_method.h"
 #include "mirror/art_method.h"
 #include "utils/arm/assembler_thumb2.h"
+#include "error/unsupported_64_bit.h"
 
 namespace art {
 namespace linker {
@@ -78,6 +81,25 @@ std::vector<uint8_t> Thumb2RelativePatcher::CompileThunkCode() {
   MemoryRegion code(thunk_code.data(), thunk_code.size());
   assembler.FinalizeInstructions(code);
   return thunk_code;
+}
+
+RelativePatcher* CreateRelativePatcher(InstructionSet instruction_set,
+                                       RelativePatcherTargetProvider* provider,
+                                       const InstructionSetFeatures* features) {
+  switch(instruction_set) {
+    case kArm:
+      // Fall through : we generate Thumb2 code for "arm"
+    case kThumb2:
+      return new Thumb2RelativePatcher(provider);
+      break;
+    case kArm64:
+      return CreateRelativePatcher64(instruction_set, provider, features);
+      break;
+    default:
+      return new RelativePatcherNone;
+      break;
+  }
+  return nullptr;
 }
 
 }  // namespace linker
