@@ -75,11 +75,7 @@ void Transaction::ThrowInternalError(Thread* self, bool rethrow) {
     CHECK(IsAborted()) << "Rethrow InternalError while transaction is not aborted";
   }
   std::string abort_msg(GetAbortMessage());
-  // Temporary workaround for b/20019689.
-  if (self->IsExceptionPending()) {
-    self->ClearException();
-  }
-  self->ThrowNewException("Ljava/lang/InternalError;", abort_msg.c_str());
+  self->ThrowNewWrappedException("Ljava/lang/InternalError;", abort_msg.c_str());
 }
 
 bool Transaction::IsAborted() {
