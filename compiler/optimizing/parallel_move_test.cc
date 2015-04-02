@@ -306,4 +306,49 @@ TEST(ParallelMoveTest, Pairs) {
   }
 }
 
+TEST(ParallelMoveTest, Cycles) {
+  ArenaPool pool;
+  ArenaAllocator allocator(&pool);
+
+  {
+    // Test checking the loop with different size of moves.
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    moves->AddMove(
+        Location::RegisterLocation(0),
+        Location::RegisterLocation(1),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(1),
+        Location::StackSlot(48),
+        nullptr);
+    moves->AddMove(
+        Location::StackSlot(48),
+        Location::RegisterLocation(0),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(0 <-> 1) (48(sp) <-> 0)", resolver.GetMessage().c_str());
+  }
+
+  {
+    // Performance test to handle (R,R) move earlier than (R,M) move.
+    TestParallelMoveResolver resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterPairLocation(2,3),
+        Location::DoubleStackSlot(32),
+        nullptr);
+    moves->AddMove(
+        Location::DoubleStackSlot(32),
+        Location::RegisterPairLocation(0,1),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    ASSERT_STREQ("(0,1 <-> 2,3) (2x32(sp) <-> 0,1)", resolver.GetMessage().c_str());
+  }
+}
+
 }  // namespace art

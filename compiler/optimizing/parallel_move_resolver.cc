@@ -158,8 +158,8 @@ MoveOperands* ParallelMoveResolver::PerformMove(size_t index) {
         i = 0;
       } else if (required_swap != nullptr) {
         // A move is required to swap. We walk back the cycle to find the
-        // move by just returning from this `PerforrmMove`.
-        moves_.Get(index)->ClearPending(destination);
+        // move by just returning from this `PerformMove`.
+        move->ClearPending(destination);
         return required_swap;
       }
     }
@@ -189,10 +189,72 @@ MoveOperands* ParallelMoveResolver::PerformMove(size_t index) {
       const MoveOperands& other_move = *moves_.Get(i);
       if (other_move.Blocks(destination)) {
         DCHECK(other_move.IsPending());
-        if (!destination.IsPair() && other_move.GetSource().IsPair()) {
-          // We swap pairs before swapping non-pairs. Go back from the
-          // cycle by returning the pair that must be swapped.
-          return moves_.Get(i);
+        // We'd like to ensure the right order of swap operation.
+        // We'd like to swap wider move first otherwise we can
+        // lose the high part of register in case of swap with
+        // memory operation.
+
+        // We also want to handle Register -> Register swap first
+        // because it will allow us to avoid redundant swap with memory:
+        //   R1 -> R2, R2 -> M, M -> R1.
+        // If we swap M & R1 first then we need to swap with memory again
+        // (M -> R2, R2 -> M). But if we swap registers first
+        // then we have got only one swap with memory (R2 -> M, M -> R2).
+
+        // On 64 bit platform register can contain both 32 and 64 bit values
+        // and Location does not separate them unfortunately.
+        // It would be better if Location/MoveOperand contains the
+        // information with size. It would allow us to make this check fast
+        // and also would allow to emit a more efficient move of Reg to Reg,
+        // becuase 32-bit move may take less bytes to encode.
+
+        // OK, our destination is blocked by source of other move and we
+        // both registers or stack slot.
+        Location other_source = other_move.GetSource();
+        DCHECK_EQ(destination.IsRegisterKind(), other_source.IsRegisterKind());
+        if (destination.IsRegisterKind()) {
+          // We both are registers. Compare pairing.
+          if (other_source.IsPair()) {
+            if (destination.IsPair()) {
+              // We are equivavlent, prefer R1 -> R2 move.
+              if (other_move.GetPending().IsRegisterKind() &&
+                  !move->GetSource().IsRegisterKind()) {
+                return moves_.Get(i);
+              }
+            } else {
+              // Other is wider.
+              return moves_.Get(i);
+            }
+          } else if (!destination.IsPair()) {
+            // move and other move are non-pair registers.
+            // Let's compare other parts trying to determine the size if they
+            // are memory location.
+            Location other_destination = other_move.GetPending();
+            Location source = move->GetSource();
+
+            if (!source.IsDoubleStackSlot()) {
+              if (other_destination.IsDoubleStackSlot()) {
+                // Other is wider.
+                return moves_.Get(i);
+              } else {
+                // Prefer R1 -> R2 move. 64-bit register will be covered as well.
+                if (!source.IsRegisterKind() && other_destination.IsRegisterKind()) {
+                  return moves_.Get(i);
+                }
+              }
+            } else {
+              // Other cannot be wider and even if it is register
+              // it is risky to be based on it because it might be 32-bit.
+              // So fallthrough.
+            }
+          } else {
+            // move is wider. Fallthrough.
+          }
+        } else {
+          // We are stack slot both, so it is easy to detect who is wider.
+          if (destination.IsStackSlot() && other_source.IsDoubleStackSlot()) {
+            return moves_.Get(i);
+          }
         }
         do_swap = true;
         break;
