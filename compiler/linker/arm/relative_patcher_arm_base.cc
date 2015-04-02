@@ -29,6 +29,10 @@ uint32_t ArmBaseRelativePatcher::ReserveSpace(uint32_t offset,
   return ReserveSpaceInternal(offset, compiled_method, method_ref, 0u);
 }
 
+uint32_t ArmBaseRelativePatcher::ReserveSpaceEnd(uint32_t offset) {
+  return ReserveSpaceInternal(offset, nullptr, MethodReference(nullptr, 0u), 0u);
+}
+
 uint32_t ArmBaseRelativePatcher::WriteThunks(OutputStream* out, uint32_t offset) {
   if (current_thunk_to_write_ == thunk_locations_.size()) {
     return offset;
