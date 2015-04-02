@@ -20,6 +20,7 @@
 #include "handle_scope-inl.h"
 #include "utils/x86/managed_register_x86.h"
 #include "utils.h"
+#include "jni/quick/x86_64/calling_convention_x86_64.h"
 
 namespace art {
 namespace x86 {
@@ -220,4 +221,40 @@ size_t X86JniCallingConvention::NumberOfOutgoingStackArgs() {
 }
 
 }  // namespace x86
+
+//  Modular interface implementation;
+ManagedRuntimeCallingConvention* CreateManagedRuntimeCallingConvention(
+    bool is_static,
+    bool is_synchronized,
+    const char* shorty,
+    InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kX86:
+      return new x86::X86ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+    case kX86_64:
+      return CreateManagedRuntimeCallingConvention64(is_static,
+                                                     is_synchronized,
+                                                     shorty,
+                                                     instruction_set);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
+JniCallingConvention* CreateJniCallingConvention(bool is_static,
+                                                 bool is_synchronized,
+                                                 const char* shorty,
+                                                 InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kX86:
+      return new x86::X86JniCallingConvention(is_static, is_synchronized, shorty);
+    case kX86_64:
+      return CreateJniCallingConvention64(is_static, is_synchronized, shorty, instruction_set );
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

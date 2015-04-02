@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include "linker/relative_patcher.h"
 #include "linker/x86/relative_patcher_x86.h"
+#include "linker/x86_64/relative_patcher_x86_64.h"
 
 namespace art {
 namespace linker {
@@ -24,6 +26,25 @@ void X86RelativePatcher::PatchDexCacheReference(std::vector<uint8_t>* code ATTRI
                                                 uint32_t patch_offset ATTRIBUTE_UNUSED,
                                                 uint32_t target_offset ATTRIBUTE_UNUSED) {
   LOG(FATAL) << "Unexpected relative dex cache array patch.";
+}
+
+RelativePatcher* CreateRelativePatcher(InstructionSet instruction_set,
+                                       RelativePatcherTargetProvider* provider,
+                                       const InstructionSetFeatures* features) {
+  UNUSED(provider);
+  UNUSED(features);
+
+  switch (instruction_set) {
+    case kX86:
+      return new X86RelativePatcher();
+      break;
+    case kX86_64:
+      return new X86_64RelativePatcher();
+      break;
+    default:
+      return new RelativePatcherNone;
+      break;
+  }
 }
 
 }  // namespace linker

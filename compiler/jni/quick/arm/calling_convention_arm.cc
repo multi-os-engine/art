@@ -18,6 +18,8 @@
 #include "calling_convention_arm.h"
 #include "handle_scope-inl.h"
 #include "utils/arm/managed_register_arm.h"
+#include "jni/quick/arm64/calling_convention_arm64.h"
+#include "error/unsupported_64_bit.h"
 
 namespace art {
 namespace arm {
@@ -324,4 +326,37 @@ size_t ArmJniCallingConvention::NumberOfOutgoingStackArgs() {
 }
 
 }  // namespace arm
+
+ManagedRuntimeCallingConvention* CreateManagedRuntimeCallingConvention(
+    bool is_static, bool is_synchronized, const char* shorty, InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kArm:
+    case kThumb2:
+      return new arm::ArmManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+    case kArm64:
+      return CreateManagedRuntimeCallingConvention64(is_static,
+                                                     is_synchronized,
+                                                     shorty,
+                                                     instruction_set);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
+JniCallingConvention* CreateJniCallingConvention(bool is_static, bool is_synchronized,
+                                                   const char* shorty,
+                                                   InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kArm:
+    case kThumb2:
+      return new arm::ArmJniCallingConvention(is_static, is_synchronized, shorty);
+    case kArm64:
+      return CreateJniCallingConvention64(is_static, is_synchronized, shorty, instruction_set);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

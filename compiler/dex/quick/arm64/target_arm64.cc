@@ -913,4 +913,14 @@ void Arm64Mir2Lir::GenMachineSpecificExtendedMethodMIR(BasicBlock* bb, MIR* mir)
   }
 }
 
+Mir2Lir* CreateCodeGenerator64(CompilationUnit* cu) {
+  switch (cu->instruction_set) {
+    case kArm64:
+      return Arm64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+    default:
+      LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;
+      return nullptr;
+  }
+}
+
 }  // namespace art

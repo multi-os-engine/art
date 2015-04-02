@@ -17,6 +17,7 @@
 #ifndef ART_COMPILER_LINKER_ARM64_RELATIVE_PATCHER_ARM64_H_
 #define ART_COMPILER_LINKER_ARM64_RELATIVE_PATCHER_ARM64_H_
 
+#include "linker/relative_patcher.h"
 #include "linker/arm/relative_patcher_arm_base.h"
 #include "utils/array_ref.h"
 
@@ -67,6 +68,10 @@ class Arm64RelativePatcher FINAL : public ArmBaseRelativePatcher {
 
   DISALLOW_COPY_AND_ASSIGN(Arm64RelativePatcher);
 };
+
+  RelativePatcher* CreateRelativePatcher64(InstructionSet instruction_set,
+                                           RelativePatcherTargetProvider* provider,
+                                           const InstructionSetFeatures* features);
 
 }  // namespace linker
 }  // namespace art
