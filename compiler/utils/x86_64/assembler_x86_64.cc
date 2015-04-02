@@ -2926,5 +2926,27 @@ int ConstantArea::AddFloat(float v) {
   return AddInt32(bit_cast<int32_t, float>(v));
 }
 
+const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<8> offset) {
+  std::unique_ptr<x86_64::X86_64Assembler>
+      assembler(static_cast<x86_64::X86_64Assembler*>(Assembler::Create(kX86_64)));
+#define __ assembler->
+  // All x86 trampolines call via the Thread* held in gs.
+  __ gs()->jmp(x86_64::Address::Absolute(offset, true));
+  __ int3();
+
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
+}
+
 }  // namespace x86_64
+
+Assembler* CreateX86_64Assembler() {
+  return new x86_64::X86_64Assembler();
+}
+
 }  // namespace art

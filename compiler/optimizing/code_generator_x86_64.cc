@@ -4453,4 +4453,13 @@ Address CodeGeneratorX86_64::LiteralInt64Address(int64_t v) {
 }
 
 }  // namespace x86_64
+
+CodeGenerator* GetCodeGeneratorX86_64(HGraph* graph,
+                                      const InstructionSetFeatures& isa_features,
+                                      const CompilerOptions& compiler_options) {
+  return new x86_64::CodeGeneratorX86_64(graph,
+      *isa_features.AsX86_64InstructionSetFeatures(),
+      compiler_options);
+}
+
 }  // namespace art

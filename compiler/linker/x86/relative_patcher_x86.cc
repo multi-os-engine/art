@@ -55,5 +55,9 @@ void X86RelativePatcher::PatchDexCacheReference(std::vector<uint8_t>* code,
   (*code)[literal_offset + 3u] = static_cast<uint8_t>(diff >> 24);
 }
 
+RelativePatcher* CreateX86RelativePatcher() {
+  return new X86RelativePatcher();
+}
+
 }  // namespace linker
 }  // namespace art

@@ -364,6 +364,11 @@ inline Arm64Assembler* ParallelMoveResolverARM64::GetAssembler() const {
 }
 
 }  // namespace arm64
+
+CodeGenerator* GetCodeGeneratorARM64(HGraph* graph,
+                                     const InstructionSetFeatures& isa_features,
+                                     const CompilerOptions& compiler_options);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_CODE_GENERATOR_ARM64_H_

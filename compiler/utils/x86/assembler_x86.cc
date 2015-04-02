@@ -2130,5 +2130,26 @@ void X86ExceptionSlowPath::Emit(Assembler *sasm) {
 #undef __
 }
 
+const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<4> offset) {
+  std::unique_ptr<X86Assembler> assembler(static_cast<X86Assembler*>(Assembler::Create(kX86)));
+#define __ assembler->
+  // All x86 trampolines call via the Thread* held in fs.
+  __ fs()->jmp(Address::Absolute(offset));
+  __ int3();
+
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
+}
+
 }  // namespace x86
+
+Assembler* CreateX86Assembler() {
+  return new x86::X86Assembler();
+}
+
 }  // namespace art

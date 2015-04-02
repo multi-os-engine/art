@@ -30,6 +30,8 @@ class X86_64RelativePatcher FINAL : public X86BaseRelativePatcher {
                               uint32_t patch_offset, uint32_t target_offset) OVERRIDE;
 };
 
+RelativePatcher* CreateX86_64RelativePatcher();
+
 }  // namespace linker
 }  // namespace art
 

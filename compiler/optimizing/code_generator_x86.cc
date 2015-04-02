@@ -17,6 +17,7 @@
 #include "code_generator_x86.h"
 
 #include "code_generator_utils.h"
+#include "dex/quick/x86/codegen_x86.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
@@ -4480,4 +4481,13 @@ void InstructionCodeGeneratorX86::VisitBoundType(HBoundType* instruction) {
 }
 
 }  // namespace x86
+
+CodeGenerator* GetCodeGeneratorX86(HGraph* graph,
+                                   const InstructionSetFeatures& isa_features,
+                                   const CompilerOptions& compiler_options) {
+  return new x86::CodeGeneratorX86(graph,
+      *isa_features.AsX86InstructionSetFeatures(),
+      compiler_options);
+}
+
 }  // namespace art

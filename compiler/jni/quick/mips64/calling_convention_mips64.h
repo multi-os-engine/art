@@ -86,6 +86,13 @@ class Mips64JniCallingConvention FINAL : public JniCallingConvention {
 };
 
 }  // namespace mips64
+
+JniCallingConvention* CreateMips64JniCallingConvention(bool is_static, bool is_synchronized,
+                                                       const char* shorty);
+
+ManagedRuntimeCallingConvention* CreateMips64ManagedRuntimeCallingConvention(
+    bool is_static, bool is_synchronized, const char* shorty);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_JNI_QUICK_MIPS64_CALLING_CONVENTION_MIPS64_H_

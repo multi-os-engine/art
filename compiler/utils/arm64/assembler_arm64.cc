@@ -17,6 +17,7 @@
 #include "assembler_arm64.h"
 #include "base/logging.h"
 #include "entrypoints/quick/quick_entrypoints.h"
+#include "jni_env_ext.h"
 #include "offsets.h"
 #include "thread.h"
 #include "utils.h"
@@ -795,5 +796,47 @@ void Arm64Assembler::RemoveFrame(size_t frame_size,
   cfi_.DefCFAOffset(frame_size);
 }
 
+const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
+                                             ThreadOffset<8> offset) {
+#define __ assembler->
+  std::unique_ptr<Arm64Assembler> assembler(static_cast<Arm64Assembler*>(Assembler::Create(kArm64)));
+
+  switch (abi) {
+    case kInterpreterAbi:  // Thread* is first argument (X0) in interpreter ABI.
+      __ JumpTo(Arm64ManagedRegister::FromXRegister(X0), Offset(offset.Int32Value()),
+          Arm64ManagedRegister::FromXRegister(IP1));
+
+      break;
+    case kJniAbi:  // Load via Thread* held in JNIEnv* in first argument (X0).
+      __ LoadRawPtr(Arm64ManagedRegister::FromXRegister(IP1),
+                      Arm64ManagedRegister::FromXRegister(X0),
+                      Offset(JNIEnvExt::SelfOffset().Int32Value()));
+
+      __ JumpTo(Arm64ManagedRegister::FromXRegister(IP1), Offset(offset.Int32Value()),
+                Arm64ManagedRegister::FromXRegister(IP0));
+
+      break;
+    case kQuickAbi:  // X18 holds Thread*.
+      __ JumpTo(Arm64ManagedRegister::FromXRegister(TR), Offset(offset.Int32Value()),
+                Arm64ManagedRegister::FromXRegister(IP0));
+
+      break;
+  }
+
+  assembler->EmitSlowPaths();
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
+}
+
 }  // namespace arm64
+
+Assembler* CreateArm64Assembler() {
+  return new arm64::Arm64Assembler();
+}
+
 }  // namespace art

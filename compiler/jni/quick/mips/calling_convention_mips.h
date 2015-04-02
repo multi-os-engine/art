@@ -90,6 +90,13 @@ class MipsJniCallingConvention FINAL : public JniCallingConvention {
 };
 
 }  // namespace mips
+
+JniCallingConvention* CreateMipsJniCallingConvention(bool is_static, bool is_synchronized,
+                                                     const char* shorty);
+
+ManagedRuntimeCallingConvention* CreateMipsManagedRuntimeCallingConvention(
+    bool is_static, bool is_synchronized, const char* shorty);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_JNI_QUICK_MIPS_CALLING_CONVENTION_MIPS_H_

@@ -311,6 +311,11 @@ class CodeGeneratorARM : public CodeGenerator {
 };
 
 }  // namespace arm
+
+CodeGenerator* GetCodeGeneratorARM(HGraph* graph,
+                                   const InstructionSetFeatures& isa_features,
+                                   const CompilerOptions& compiler_options);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_CODE_GENERATOR_ARM_H_

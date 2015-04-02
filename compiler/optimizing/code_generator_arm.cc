@@ -4088,4 +4088,13 @@ void InstructionCodeGeneratorARM::VisitBoundType(HBoundType* instruction) {
 }
 
 }  // namespace arm
+
+CodeGenerator* GetCodeGeneratorARM(HGraph* graph,
+                                   const InstructionSetFeatures& isa_features,
+                                   const CompilerOptions& compiler_options) {
+  return new arm::CodeGeneratorARM(graph,
+      *isa_features.AsArmInstructionSetFeatures(),
+      compiler_options);
+}
+
 }  // namespace art

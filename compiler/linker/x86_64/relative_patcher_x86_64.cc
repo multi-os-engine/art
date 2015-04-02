@@ -33,5 +33,9 @@ void X86_64RelativePatcher::PatchDexCacheReference(std::vector<uint8_t>* code,
   reinterpret_cast<unaligned_int32_t*>(&(*code)[patch.LiteralOffset()])[0] = displacement;
 }
 
+RelativePatcher* CreateX86_64RelativePatcher() {
+  return new X86_64RelativePatcher();
+}
+
 }  // namespace linker
 }  // namespace art
