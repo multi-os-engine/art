@@ -26,6 +26,9 @@
 #include "utils/assembler.h"
 #include "offsets.h"
 #include "utils.h"
+#include "driver/compiler_driver.h"
+#include "jni_internal.h"
+#include "oat_writer.h"
 
 namespace art {
 namespace mips {
@@ -292,6 +295,11 @@ class MipsExceptionSlowPath FINAL : public SlowPath {
 };
 
 }  // namespace mips
+
+  const std::vector<uint8_t>* CreateTrampolineFor32(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<4> offset);
+  Assembler* CreateAssembler(InstructionSet instruction_set);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_MIPS_ASSEMBLER_MIPS_H_

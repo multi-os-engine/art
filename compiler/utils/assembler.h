@@ -518,6 +518,8 @@ class Assembler {
   AssemblerBuffer buffer_;
 };
 
+Assembler * CreateAssembler(InstructionSet instruction_set);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_ASSEMBLER_H_

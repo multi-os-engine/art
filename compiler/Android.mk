@@ -18,23 +18,21 @@ LOCAL_PATH := $(call my-dir)
 
 include art/build/Android.common_build.mk
 
+# Files that are common to all ISA and both Quick and Optimizing compilers
 LIBART_COMPILER_SRC_FILES := \
+	buffered_output_stream.cc \
 	compiled_method.cc \
+	compiler.cc \
+	elf_writer.cc \
+	elf_writer_quick.cc \
+	file_output_stream.cc \
+	image_writer.cc \
+	oat_writer.cc \
+	output_stream.cc \
+	vector_output_stream.cc \
 	dex/global_value_numbering.cc \
 	dex/gvn_dead_code_elimination.cc \
 	dex/local_value_numbering.cc \
-	dex/quick/arm/assemble_arm.cc \
-	dex/quick/arm/call_arm.cc \
-	dex/quick/arm/fp_arm.cc \
-	dex/quick/arm/int_arm.cc \
-	dex/quick/arm/target_arm.cc \
-	dex/quick/arm/utility_arm.cc \
-	dex/quick/arm64/assemble_arm64.cc \
-	dex/quick/arm64/call_arm64.cc \
-	dex/quick/arm64/fp_arm64.cc \
-	dex/quick/arm64/int_arm64.cc \
-	dex/quick/arm64/target_arm64.cc \
-	dex/quick/arm64/utility_arm64.cc \
 	dex/quick/codegen_util.cc \
 	dex/quick/dex_file_method_inliner.cc \
 	dex/quick/dex_file_to_method_inliner_map.cc \
@@ -42,22 +40,9 @@ LIBART_COMPILER_SRC_FILES := \
 	dex/quick/gen_invoke.cc \
 	dex/quick/gen_loadstore.cc \
 	dex/quick/local_optimizations.cc \
-	dex/quick/mips/assemble_mips.cc \
-	dex/quick/mips/call_mips.cc \
-	dex/quick/mips/fp_mips.cc \
-	dex/quick/mips/int_mips.cc \
-	dex/quick/mips/target_mips.cc \
-	dex/quick/mips/utility_mips.cc \
 	dex/quick/mir_to_lir.cc \
-	dex/quick/quick_compiler.cc \
 	dex/quick/ralloc_util.cc \
 	dex/quick/resource_mask.cc \
-	dex/quick/x86/assemble_x86.cc \
-	dex/quick/x86/call_x86.cc \
-	dex/quick/x86/fp_x86.cc \
-	dex/quick/x86/int_x86.cc \
-	dex/quick/x86/target_x86.cc \
-	dex/quick/x86/utility_x86.cc \
 	dex/dex_to_dex_compiler.cc \
 	dex/bb_optimizations.cc \
 	dex/compiler_ir.cc \
@@ -80,29 +65,25 @@ LIBART_COMPILER_SRC_FILES := \
 	driver/compiler_options.cc \
 	driver/dex_compilation_unit.cc \
 	linker/relative_patcher.cc \
-	linker/arm/relative_patcher_arm_base.cc \
-	linker/arm/relative_patcher_thumb2.cc \
-	linker/arm64/relative_patcher_arm64.cc \
-	linker/x86/relative_patcher_x86_base.cc \
-	linker/x86/relative_patcher_x86.cc \
-	linker/x86_64/relative_patcher_x86_64.cc \
 	jit/jit_compiler.cc \
-	jni/quick/arm/calling_convention_arm.cc \
-	jni/quick/arm64/calling_convention_arm64.cc \
-	jni/quick/mips/calling_convention_mips.cc \
-	jni/quick/mips64/calling_convention_mips64.cc \
-	jni/quick/x86/calling_convention_x86.cc \
-	jni/quick/x86_64/calling_convention_x86_64.cc \
 	jni/quick/calling_convention.cc \
 	jni/quick/jni_compiler.cc \
+	trampolines/trampoline_compiler.cc \
+	utils/arena_bit_vector.cc \
+	utils/assembler.cc \
+	utils/dwarf_cfi.cc \
+	utils/swap_space.cc
+
+# Quick compiler files that are common to all ISA
+LIBART_QUICK_COMPILER_SRC_FILES := \
+	dex/quick/quick_compiler.cc
+
+# Optimizing compiler files that are common to all ISA
+LIBART_OPTIMIZING_COMPILER_SRC_FILES := \
 	optimizing/boolean_simplifier.cc \
 	optimizing/builder.cc \
 	optimizing/bounds_check_elimination.cc \
 	optimizing/code_generator.cc \
-	optimizing/code_generator_arm.cc \
-	optimizing/code_generator_arm64.cc \
-	optimizing/code_generator_x86.cc \
-	optimizing/code_generator_x86_64.cc \
 	optimizing/constant_folding.cc \
 	optimizing/dead_code_elimination.cc \
 	optimizing/graph_checker.cc \
@@ -111,10 +92,6 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/inliner.cc \
 	optimizing/instruction_simplifier.cc \
 	optimizing/intrinsics.cc \
-	optimizing/intrinsics_arm.cc \
-	optimizing/intrinsics_arm64.cc \
-	optimizing/intrinsics_x86.cc \
-	optimizing/intrinsics_x86_64.cc \
 	optimizing/licm.cc \
 	optimizing/locations.cc \
 	optimizing/nodes.cc \
@@ -128,35 +105,39 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/ssa_liveness_analysis.cc \
 	optimizing/ssa_phi_elimination.cc \
 	optimizing/primitive_type_propagation.cc \
-	optimizing/reference_type_propagation.cc \
-	trampolines/trampoline_compiler.cc \
-	utils/arena_bit_vector.cc \
-	utils/arm/assembler_arm.cc \
-	utils/arm/assembler_arm32.cc \
-	utils/arm/assembler_thumb2.cc \
-	utils/arm/managed_register_arm.cc \
-	utils/arm64/assembler_arm64.cc \
-	utils/arm64/managed_register_arm64.cc \
-	utils/assembler.cc \
-	utils/dwarf_cfi.cc \
-	utils/mips/assembler_mips.cc \
-	utils/mips/managed_register_mips.cc \
-	utils/mips64/assembler_mips64.cc \
-	utils/mips64/managed_register_mips64.cc \
-	utils/x86/assembler_x86.cc \
-	utils/x86/managed_register_x86.cc \
-	utils/x86_64/assembler_x86_64.cc \
-	utils/x86_64/managed_register_x86_64.cc \
-	utils/swap_space.cc \
-	buffered_output_stream.cc \
-	compiler.cc \
-	elf_writer.cc \
-	elf_writer_quick.cc \
-	file_output_stream.cc \
-	image_writer.cc \
-	oat_writer.cc \
-	output_stream.cc \
-	vector_output_stream.cc
+	optimizing/reference_type_propagation.cc
+
+COMPILER_TYPE=both
+
+# Check if the device specific makefile specifies type of compiler
+ifeq ($(VENDOR_COMPILER_TYPE),quick)
+  COMPILER_TYPE=quick
+else ifeq ($(VENDOR_COMPILER_TYPE),optimizing)
+  COMPILER_TYPE=optimizing
+endif
+
+# Compiler type specific files
+ifeq ($(COMPILER_TYPE),quick)
+  LIBART_COMPILER_SRC_FILES += ${LIBART_QUICK_COMPILER_SRC_FILES}
+  LIBART_COMPILER_SRC_FILES += error/optimizing_compiler.cc
+else ifeq ($(COMPILER_TYPE),optimizing)
+  LIBART_COMPILER_SRC_FILES += ${LIBART_OPTIMIZING_COMPILER_SRC_FILES}
+  LIBART_COMPILER_SRC_FILES += error/quick_compiler.cc
+else ifeq ($(COMPILER_TYPE),both)
+  LIBART_COMPILER_SRC_FILES += ${LIBART_QUICK_COMPILER_SRC_FILES}
+  LIBART_COMPILER_SRC_FILES += ${LIBART_OPTIMIZING_COMPILER_SRC_FILES}
+endif
+
+# Vendor/ISA specific files
+ifneq ($(VENDOR_COMPILER_MK_FILE),)
+  include $(VENDOR_COMPILER_MK_FILE)
+else ifeq ($(TARGET_ARCH),$(filter $(TARGET_ARCH), x86 x86_64))
+  include $(LOCAL_PATH)/Android.art.x86.mk
+else ifeq ($(TARGET_ARCH),$(filter $(TARGET_ARCH), arm arm64))
+  include $(LOCAL_PATH)/Android.art.arm.mk
+else ifeq ($(TARGET_ARCH),$(filter $(TARGET_ARCH), mips mips64))
+  include $(LOCAL_PATH)/Android.art.mips.mk
+endif
 
 LIBART_COMPILER_CFLAGS :=
 
