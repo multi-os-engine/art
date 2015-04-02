@@ -25,6 +25,9 @@ class Compiler;
 class CompilerDriver;
 class Mir2Lir;
 class PassManager;
+struct CompilationUnit;
+
+Mir2Lir* CreateCodeGenerator(CompilationUnit* cu);
 
 class QuickCompiler : public Compiler {
  public:
