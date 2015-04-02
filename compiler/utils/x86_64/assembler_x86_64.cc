@@ -20,6 +20,7 @@
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "memory_region.h"
 #include "thread.h"
+#include "utils/x86/assembler_x86.h"
 
 namespace art {
 namespace x86_64 {
@@ -2797,5 +2798,45 @@ int ConstantArea::AddFloat(float v) {
   return AddInt32(bit_cast<int32_t, float>(v));
 }
 
+static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<8> offset) {
+  std::unique_ptr<x86_64::X86_64Assembler>
+      assembler(static_cast<x86_64::X86_64Assembler*>(Assembler::Create(kX86_64)));
+#define __ assembler->
+  // All x86 trampolines call via the Thread* held in gs.
+  __ gs()->jmp(x86_64::Address::Absolute(offset, true));
+  __ int3();
+
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
+}
+
 }  // namespace x86_64
+
+const std::vector<uint8_t>* CreateTrampolineFor64(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<8> offset) {
+  UNUSED(abi);
+  switch (isa) {
+    case kX86_64:
+      return x86_64::CreateTrampoline(offset);
+    default:
+      LOG(FATAL) << "Unexpected InstructionSet: " << isa;
+      return nullptr;
+  }
+}
+
+Assembler* CreateAssembler64(InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kX86_64:
+      return new x86_64::X86_64Assembler();
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

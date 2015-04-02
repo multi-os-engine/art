@@ -110,25 +110,7 @@ void DebugFrameOpCodeWriterForAssembler::ImplicitlyAdvancePC() {
 }
 
 Assembler* Assembler::Create(InstructionSet instruction_set) {
-  switch (instruction_set) {
-    case kArm:
-      return new arm::Arm32Assembler();
-    case kThumb2:
-      return new arm::Thumb2Assembler();
-    case kArm64:
-      return new arm64::Arm64Assembler();
-    case kMips:
-      return new mips::MipsAssembler();
-    case kMips64:
-      return new mips64::Mips64Assembler();
-    case kX86:
-      return new x86::X86Assembler();
-    case kX86_64:
-      return new x86_64::X86_64Assembler();
-    default:
-      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
-      return NULL;
-  }
+  return CreateAssembler(instruction_set);
 }
 
 void Assembler::StoreImmediateToThread32(ThreadOffset<4> dest ATTRIBUTE_UNUSED,

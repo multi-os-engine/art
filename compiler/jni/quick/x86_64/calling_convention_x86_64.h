@@ -83,6 +83,10 @@ class X86_64JniCallingConvention FINAL : public JniCallingConvention {
 };
 
 }  // namespace x86_64
+
+  JniCallingConvention* CreateJniCallingConvention64(bool is_static, bool is_synchronized, const char* shorty, InstructionSet instruction_set);
+  ManagedRuntimeCallingConvention* CreateManagedRuntimeCallingConvention64(bool is_static, bool is_synchronized, const char* shorty, InstructionSet instruction_set);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_JNI_QUICK_X86_64_CALLING_CONVENTION_X86_64_H_

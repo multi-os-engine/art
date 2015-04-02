@@ -212,4 +212,25 @@ size_t X86_64JniCallingConvention::NumberOfOutgoingStackArgs() {
 }
 
 }  // namespace x86_64
+
+//  implement modular interfaces;
+ManagedRuntimeCallingConvention* CreateManagedRuntimeCallingConvention64(bool is_static, bool is_synchronized, const char* shorty, InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kX86_64:
+      return new x86_64::X86_64ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+JniCallingConvention* CreateJniCallingConvention64(bool is_static, bool is_synchronized, const char* shorty, InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kX86_64:
+      return new x86_64::X86_64JniCallingConvention(is_static, is_synchronized, shorty);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

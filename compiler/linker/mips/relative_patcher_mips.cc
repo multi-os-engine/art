@@ -14,28 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_LINKER_X86_RELATIVE_PATCHER_X86_H_
-#define ART_COMPILER_LINKER_X86_RELATIVE_PATCHER_X86_H_
-
 #include "linker/relative_patcher.h"
-#include "linker/x86/relative_patcher_x86_base.h"
+#include "linker/mips/relative_patcher_mips.h"
 
 namespace art {
 namespace linker {
 
-class X86RelativePatcher FINAL : public X86BaseRelativePatcher {
- public:
-  X86RelativePatcher() { }
-
-  void PatchDexCacheReference(std::vector<uint8_t>* code, const LinkerPatch& patch,
-                              uint32_t patch_offset, uint32_t target_offset) OVERRIDE;
-};
-
-  RelativePatcher* CreateRelativePatcher(InstructionSet instruction_set,
-                                         RelativePatcherTargetProvider* provider,
-                                         const InstructionSetFeatures* features);
+RelativePatcher* CreateRelativePatcher(InstructionSet instruction_set,
+                                       RelativePatcherTargetProvider* provider,
+                                       const InstructionSetFeatures* features) {
+  UNUSED(instruction_set);
+  UNUSED(provider);
+  UNUSED(features);
+  return new RelativePatcherNone;
+}
 
 }  // namespace linker
 }  // namespace art
-
-#endif  // ART_COMPILER_LINKER_X86_RELATIVE_PATCHER_X86_H_

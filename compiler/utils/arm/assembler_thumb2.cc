@@ -21,6 +21,9 @@
 #include "offsets.h"
 #include "thread.h"
 #include "utils.h"
+#include "utils/arm64/assembler_arm64.h"
+#include "mirror/art_method-inl.h"
+#include "output_stream.h"
 
 namespace art {
 namespace arm {
@@ -2736,4 +2739,15 @@ void Thumb2Assembler::CompareAndBranchIfNonZero(Register r, Label* label) {
   }
 }
 }  // namespace arm
+
+Assembler* CreateAssemblerThumb(InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kThumb2:
+       return new arm::Thumb2Assembler();
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

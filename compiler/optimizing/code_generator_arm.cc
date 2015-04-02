@@ -15,6 +15,7 @@
  */
 
 #include "code_generator_arm.h"
+#include "code_generator_arm64.h"
 
 #include "arch/arm/instruction_set_features_arm.h"
 #include "entrypoints/quick/quick_entrypoints.h"
@@ -29,6 +30,7 @@
 #include "utils/arm/managed_register_arm.h"
 #include "utils/assembler.h"
 #include "utils/stack_checks.h"
+#include "error/unsupported_64_bit.h"
 
 namespace art {
 
@@ -4041,4 +4043,22 @@ void InstructionCodeGeneratorARM::VisitBoundType(HBoundType* instruction) {
 }
 
 }  // namespace arm
+
+CodeGenerator* GetCodeGenerator(HGraph* graph,
+                                InstructionSet instruction_set,
+                                const InstructionSetFeatures& isa_features,
+                                const CompilerOptions& compiler_options) {
+  switch (instruction_set) {
+    case kArm:
+    case kThumb2:
+      return new arm::CodeGeneratorARM(graph,
+          *isa_features.AsArmInstructionSetFeatures(),
+          compiler_options);
+    case kArm64:
+      return GetCodeGenerator64(graph, instruction_set, isa_features, compiler_options);
+    default:
+      return nullptr;
+  }
+}
+
 }  // namespace art

@@ -44,10 +44,12 @@ ifeq ($(ART_BUILD_TARGET_DEBUG),true)
   $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libartd-compiler,art/compiler,target,debug,$(dex2oat_target_arch)))
 endif
 
+HOST_ISA_LIST := x86 x86_64 arm arm64 mips mips64
+
 # We always build dex2oat and dependencies, even if the host build is otherwise disabled, since they are used to cross compile for the target.
 ifeq ($(ART_BUILD_HOST_NDEBUG),true)
-  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libart-compiler libziparchive-host,art/compiler,host,ndebug,$(dex2oat_host_arch)))
+  $(foreach isa,$(HOST_ISA_LIST),$(eval $(call build-art-executable,dex2oat_${isa},$(DEX2OAT_SRC_FILES),libcutils libart-compiler_${isa} libziparchive-host,art/compiler,host,ndebug,$(dex2oat_host_arch))))
 endif
 ifeq ($(ART_BUILD_HOST_DEBUG),true)
-  $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libartd-compiler libziparchive-host,art/compiler,host,debug,$(dex2oat_host_arch)))
+  $(foreach isa,$(HOST_ISA_LIST),$(eval $(call build-art-executable,dex2oat_${isa},$(DEX2OAT_SRC_FILES),libcutils libartd-compiler_${isa} libziparchive-host,art/compiler,host,debug,$(dex2oat_host_arch))))
 endif

@@ -420,6 +420,10 @@ define define-art-gtest
     LOCAL_LDFLAGS := -Wl,--export-dynamic -Wl,-u,Java_MyClassNatives_bar -Wl,-u,Java_MyClassNatives_sbar
   endif
 
+  ifneq ($(VENDOR_COMPILER_GTEST_MK_FILE),)
+    include $(VENDOR_COMPILER_GTEST_MK_FILE)
+  endif
+
   LOCAL_CFLAGS := $$(ART_TEST_CFLAGS)
   ifeq ($$(art_target_or_host),target)
     $$(eval $$(call set-target-local-clang-vars))
