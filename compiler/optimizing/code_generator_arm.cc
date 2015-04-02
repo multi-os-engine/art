@@ -4020,4 +4020,20 @@ void InstructionCodeGeneratorARM::VisitBoundType(HBoundType* instruction) {
 }
 
 }  // namespace arm
+
+CodeGenerator* GetCodeGenerator(HGraph* graph,
+                                InstructionSet instruction_set,
+                                const InstructionSetFeatures& isa_features,
+                                const CompilerOptions& compiler_options) {
+  switch (instruction_set) {
+    case kArm:
+    case kThumb2:
+      return new arm::CodeGeneratorARM(graph,
+          *isa_features.AsArmInstructionSetFeatures(),
+          compiler_options);
+    default:
+      return nullptr;
+  }
+}
+
 }  // namespace art

@@ -93,6 +93,18 @@ class OatWriter {
     return *oat_header_;
   }
 
+  uint32_t GetRelativeSizeThunk() const {
+    return size_relative_call_thunks_;
+  }
+
+  void SetRelativeSizeThunk(uint32_t size) {
+    size_relative_call_thunks_ = size;
+  }
+
+  SafeMap<MethodReference, uint32_t, MethodReferenceComparator> get_method_offset_map() const {
+    return method_offset_map_;
+  }
+
   size_t GetSize() const {
     return size_;
   }
@@ -132,6 +144,71 @@ class OatWriter {
   const std::vector<DebugInfo>& GetCFIMethodInfo() const {
     return method_info_;
   }
+
+  class RelativeCallPatcher;
+  RelativeCallPatcher* CreateRelativeCallPatcher(InstructionSet isa);
+
+  class RelativeCallPatcher {
+   public:
+    virtual ~RelativeCallPatcher() { }
+
+    // Reserve space for relative call thunks if needed, return adjusted offset.
+    // After all methods have been processed it's call one last time with compiled_method == nullptr.
+    virtual uint32_t ReserveSpace(uint32_t offset, const CompiledMethod* compiled_method) {
+      UNUSED(offset);
+      UNUSED(compiled_method);
+      return 0;
+    };
+
+    // Write relative call thunks if needed, return adjusted offset.
+    virtual uint32_t WriteThunks(OutputStream* out, uint32_t offset) {
+      UNUSED(out);
+      UNUSED(offset);
+      return 0;
+    };
+
+    // Patch method code. The input displacement is relative to the patched location,
+    // the patcher may need to adjust it if the correct base is different.
+    virtual void Patch(std::vector<uint8_t>* code, uint32_t literal_offset, uint32_t patch_offset,
+                       uint32_t target_offset) {
+      UNUSED(code);
+      UNUSED(literal_offset);
+      UNUSED(patch_offset);
+      UNUSED(target_offset);
+      return;
+    };
+
+   protected:
+    RelativeCallPatcher() { }
+
+   private:
+    DISALLOW_COPY_AND_ASSIGN(RelativeCallPatcher);
+  };
+
+  class NoRelativeCallPatcher FINAL : public RelativeCallPatcher {
+   public:
+    NoRelativeCallPatcher() { }
+
+    uint32_t ReserveSpace(uint32_t offset,
+                        const CompiledMethod* compiled_method ATTRIBUTE_UNUSED) OVERRIDE {
+      return offset;  // No space reserved; no patches expected.
+    }
+
+    uint32_t WriteThunks(OutputStream* out ATTRIBUTE_UNUSED, uint32_t offset) OVERRIDE {
+      return offset;  // No thunks added; no patches expected.
+    }
+
+    void Patch(std::vector<uint8_t>* code ATTRIBUTE_UNUSED, uint32_t literal_offset ATTRIBUTE_UNUSED,
+               uint32_t patch_offset ATTRIBUTE_UNUSED,
+               uint32_t target_offset ATTRIBUTE_UNUSED) OVERRIDE {
+      LOG(FATAL) << "Unexpected relative patch.";
+    }
+
+   private:
+    DISALLOW_COPY_AND_ASSIGN(NoRelativeCallPatcher);
+  };
+
+  bool WriteCodeAlignment(OutputStream* out, uint32_t aligned_code_delta);
 
  private:
   // The DataAccess classes are helper classes that provide access to members related to
@@ -176,7 +253,6 @@ class OatWriter {
   size_t WriteCode(OutputStream* out, const size_t file_offset, size_t relative_offset);
   size_t WriteCodeDexFiles(OutputStream* out, const size_t file_offset, size_t relative_offset);
 
-  bool WriteCodeAlignment(OutputStream* out, uint32_t aligned_code_delta);
 
   class OatDexFile {
    public:
@@ -327,14 +403,7 @@ class OatWriter {
   uint32_t size_oat_class_method_bitmaps_;
   uint32_t size_oat_class_method_offsets_;
 
-  class RelativePatcher;
-  class NoRelativePatcher;
-  class X86RelativePatcher;
-  class ArmBaseRelativePatcher;
-  class Thumb2RelativePatcher;
-  class Arm64RelativePatcher;
-
-  std::unique_ptr<RelativePatcher> relative_patcher_;
+  std::unique_ptr<RelativeCallPatcher> relative_call_patcher_;
 
   // The locations of absolute patches relative to the start of the executable section.
   std::vector<uintptr_t> absolute_patch_locations_;

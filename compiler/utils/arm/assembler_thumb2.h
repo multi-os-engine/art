@@ -25,6 +25,7 @@
 #include "utils/arm/assembler_arm.h"
 #include "offsets.h"
 #include "utils.h"
+#include "oat_writer.h"
 
 namespace art {
 namespace arm {
@@ -709,6 +710,10 @@ class Thumb2Assembler FINAL : public ArmAssembler {
 };
 
 }  // namespace arm
+
+  OatWriter::RelativeCallPatcher* CreateRelativeCallPatcher(OatWriter* writer, InstructionSet instruction_set);
+  Assembler* CreateAssemblerThumb(InstructionSet instruction_set);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_ARM_ASSEMBLER_THUMB2_H_

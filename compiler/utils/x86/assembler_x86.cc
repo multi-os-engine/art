@@ -21,6 +21,7 @@
 #include "memory_region.h"
 #include "thread.h"
 #include "utils/dwarf_cfi.h"
+#include "utils/x86_64/assembler_x86_64.h"
 
 namespace art {
 namespace x86 {
@@ -2117,5 +2118,89 @@ void X86ExceptionSlowPath::Emit(Assembler *sasm) {
 #undef __
 }
 
+static const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<4> offset) {
+  std::unique_ptr<X86Assembler> assembler(static_cast<X86Assembler*>(Assembler::Create(kX86)));
+#define __ assembler->
+  // All x86 trampolines call via the Thread* held in fs.
+  __ fs()->jmp(Address::Absolute(offset));
+  __ int3();
+
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
+}
+
 }  // namespace x86
+
+class X86RelativeCallPatcher FINAL : public OatWriter::RelativeCallPatcher {
+ public:
+  X86RelativeCallPatcher() { }
+
+  uint32_t ReserveSpace(uint32_t offset,
+                        const CompiledMethod* compiled_method ATTRIBUTE_UNUSED) OVERRIDE {
+    return offset;  // No space reserved; no limit on relative call distance.
+  }
+
+  uint32_t WriteThunks(OutputStream* out ATTRIBUTE_UNUSED, uint32_t offset) OVERRIDE {
+    return offset;  // No thunks added; no limit on relative call distance.
+  }
+
+  void Patch(std::vector<uint8_t>* code, uint32_t literal_offset, uint32_t patch_offset,
+             uint32_t target_offset) OVERRIDE {
+    DCHECK_LE(literal_offset + 4u, code->size());
+    // Unsigned arithmetic with its well-defined overflow behavior is just fine here.
+    uint32_t displacement = target_offset - patch_offset;
+    displacement -= kPcDisplacement;  // The base PC is at the end of the 4-byte patch.
+
+    typedef __attribute__((__aligned__(1))) int32_t unaligned_int32_t;
+    reinterpret_cast<unaligned_int32_t*>(&(*code)[literal_offset])[0] = displacement;
+  }
+
+ private:
+  // PC displacement from patch location; x86 PC for relative calls points to the next
+  // instruction and the patch location is 4 bytes earlier.
+  static constexpr int32_t kPcDisplacement = 4;
+
+  DISALLOW_COPY_AND_ASSIGN(X86RelativeCallPatcher);
+};
+
+OatWriter::RelativeCallPatcher* CreateRelativeCallPatcher(OatWriter* writer, InstructionSet instruction_set) {
+  UNUSED(writer);
+  switch (instruction_set) {
+    case kX86:
+    case kX86_64:
+      return new X86RelativeCallPatcher;
+    default:
+      return new OatWriter::NoRelativeCallPatcher;
+  }
+}
+
+const std::vector<uint8_t>* CreateTrampolineFor32(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<4> offset) {
+  UNUSED(abi);
+  switch (isa) {
+    case kX86:
+      return x86::CreateTrampoline(offset);
+    default:
+      LOG(FATAL) << "Unexpected InstructionSet: " << isa;
+      return nullptr;
+  }
+}
+
+Assembler* CreateAssembler(InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kX86:
+      return new x86::X86Assembler();
+    case kX86_64:
+      return CreateAssembler64(instruction_set);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art
