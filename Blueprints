@@ -1,7 +1,14 @@
 subdirs = [
     "build",
     "compiler",
+    "dalvikvm",
     "dex2oat",
+    "disassembler",
+    "imgdiag",
+    "oatdump",
+    "patchoat",
     "runtime",
     "sigchainlib",
+    "tools",
+    "tools/dexfuzz",
 ]
