@@ -60,8 +60,8 @@ Transaction::~Transaction() {
 
 void Transaction::Abort(const std::string& abort_message) {
   MutexLock mu(Thread::Current(), log_lock_);
-  // We may abort more than once if the java.lang.InternalError thrown at the
-  // time of the abort has been caught during execution of a class initializer.
+  // We may abort more than once if the exception thrown at the time of the
+  // previous abort has been caught during execution of a class initializer.
   // We just keep the message of the first abort because it will cause the
   // transaction to be rolled back anyway.
   if (!aborted_) {
@@ -70,12 +70,13 @@ void Transaction::Abort(const std::string& abort_message) {
   }
 }
 
-void Transaction::ThrowInternalError(Thread* self, bool rethrow) {
+void Transaction::ThrowAbortError(Thread* self, bool rethrow) {
   if (kIsDebugBuild && rethrow) {
-    CHECK(IsAborted()) << "Rethrow InternalError while transaction is not aborted";
+    CHECK(IsAborted()) << "Rethrow " << Transaction::kAbortExceptionDescriptor
+                       << " while transaction is not aborted";
   }
   std::string abort_msg(GetAbortMessage());
-  self->ThrowNewWrappedException("Ljava/lang/InternalError;", abort_msg.c_str());
+  self->ThrowNewWrappedException(Transaction::kAbortExceptionSignature, abort_msg.c_str());
 }
 
 bool Transaction::IsAborted() {
