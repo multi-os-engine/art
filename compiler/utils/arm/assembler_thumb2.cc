@@ -2736,4 +2736,9 @@ void Thumb2Assembler::CompareAndBranchIfNonZero(Register r, Label* label) {
   }
 }
 }  // namespace arm
+
+Assembler* CreateThumb2Assembler() {
+  return new arm::Thumb2Assembler();
+}
+
 }  // namespace art

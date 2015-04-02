@@ -305,6 +305,11 @@ class CodeGeneratorX86_64 : public CodeGenerator {
 };
 
 }  // namespace x86_64
+
+CodeGenerator* GetCodeGeneratorX86_64(HGraph* graph,
+                                      const InstructionSetFeatures& isa_features,
+                                      const CompilerOptions& compiler_options);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_CODE_GENERATOR_X86_64_H_

@@ -68,6 +68,9 @@ class Arm64RelativePatcher FINAL : public ArmBaseRelativePatcher {
   DISALLOW_COPY_AND_ASSIGN(Arm64RelativePatcher);
 };
 
+RelativePatcher* CreateArm64RelativePatcher(RelativePatcherTargetProvider* provider,
+                                            const InstructionSetFeatures* features);
+
 }  // namespace linker
 }  // namespace art
 

@@ -24,6 +24,7 @@
 #include "dex/verified_method.h"
 #include "driver/dex_compilation_unit.h"
 #include "gc_map_builder.h"
+#include "isa_interface_optimizing.h"
 #include "leb128.h"
 #include "mapping_table.h"
 #include "mirror/array-inl.h"
@@ -438,33 +439,7 @@ CodeGenerator* CodeGenerator::Create(HGraph* graph,
                                      InstructionSet instruction_set,
                                      const InstructionSetFeatures& isa_features,
                                      const CompilerOptions& compiler_options) {
-  switch (instruction_set) {
-    case kArm:
-    case kThumb2: {
-      return new arm::CodeGeneratorARM(graph,
-          *isa_features.AsArmInstructionSetFeatures(),
-          compiler_options);
-    }
-    case kArm64: {
-      return new arm64::CodeGeneratorARM64(graph,
-          *isa_features.AsArm64InstructionSetFeatures(),
-          compiler_options);
-    }
-    case kMips:
-      return nullptr;
-    case kX86: {
-      return new x86::CodeGeneratorX86(graph,
-           *isa_features.AsX86InstructionSetFeatures(),
-           compiler_options);
-    }
-    case kX86_64: {
-      return new x86_64::CodeGeneratorX86_64(graph,
-          *isa_features.AsX86_64InstructionSetFeatures(),
-          compiler_options);
-    }
-    default:
-      return nullptr;
-  }
+  return GetCodeGenerator(graph, instruction_set, isa_features, compiler_options);
 }
 
 void CodeGenerator::BuildNativeGCMap(

@@ -52,6 +52,8 @@ class Thumb2RelativePatcher FINAL : public ArmBaseRelativePatcher {
   DISALLOW_COPY_AND_ASSIGN(Thumb2RelativePatcher);
 };
 
+RelativePatcher* CreateThumb2RelativePatcher(RelativePatcherTargetProvider* provider);
+
 }  // namespace linker
 }  // namespace art
 

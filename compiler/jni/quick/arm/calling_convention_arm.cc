@@ -17,6 +17,7 @@
 #include "base/logging.h"
 #include "calling_convention_arm.h"
 #include "handle_scope-inl.h"
+#include "jni/quick/arm64/calling_convention_arm64.h"
 #include "utils/arm/managed_register_arm.h"
 
 namespace art {
@@ -324,4 +325,15 @@ size_t ArmJniCallingConvention::NumberOfOutgoingStackArgs() {
 }
 
 }  // namespace arm
+
+JniCallingConvention* CreateArmJniCallingConvention(bool is_static, bool is_synchronized,
+                                                    const char* shorty) {
+  return new arm::ArmJniCallingConvention(is_static, is_synchronized, shorty);
+}
+
+ManagedRuntimeCallingConvention* CreateArmManagedRuntimeCallingConvention(
+    bool is_static, bool is_synchronized, const char* shorty) {
+  return new arm::ArmManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+}
+
 }  // namespace art

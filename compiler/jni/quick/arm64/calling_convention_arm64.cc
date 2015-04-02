@@ -271,4 +271,15 @@ size_t Arm64JniCallingConvention::NumberOfOutgoingStackArgs() {
 }
 
 }  // namespace arm64
+
+JniCallingConvention* CreateArm64JniCallingConvention(bool is_static, bool is_synchronized,
+                                                      const char* shorty) {
+  return new arm64::Arm64JniCallingConvention(is_static, is_synchronized, shorty);
+}
+
+ManagedRuntimeCallingConvention* CreateArm64ManagedRuntimeCallingConvention(
+    bool is_static, bool is_synchronized, const char* shorty) {
+  return new arm64::Arm64ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+}
+
 }  // namespace art

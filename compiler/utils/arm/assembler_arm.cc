@@ -18,6 +18,7 @@
 
 #include "base/logging.h"
 #include "entrypoints/quick/quick_entrypoints.h"
+#include "jni_env_ext.h"
 #include "offsets.h"
 #include "thread.h"
 #include "utils.h"
@@ -918,6 +919,33 @@ uint32_t ArmAssembler::ModifiedImmediate(uint32_t value) {
   uint32_t imm3 = (v >> 1) & 7U /* 0b111 */;
   uint32_t a = v & 1;
   return value | i << 26 | imm3 << 12 | a << 7;
+}
+
+const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
+                                             ThreadOffset<4> offset) {
+#define __ assembler->
+  std::unique_ptr<ArmAssembler> assembler(static_cast<ArmAssembler*>(Assembler::Create(kThumb2)));
+
+  switch (abi) {
+    case kInterpreterAbi:  // Thread* is first argument (R0) in interpreter ABI.
+      __ LoadFromOffset(kLoadWord, PC, R0, offset.Int32Value());
+      break;
+    case kJniAbi:  // Load via Thread* held in JNIEnv* in first argument (R0).
+      __ LoadFromOffset(kLoadWord, IP, R0, JNIEnvExt::SelfOffset().Int32Value());
+      __ LoadFromOffset(kLoadWord, PC, IP, offset.Int32Value());
+      break;
+    case kQuickAbi:  // R9 holds Thread*.
+      __ LoadFromOffset(kLoadWord, PC, R9, offset.Int32Value());
+  }
+  __ bkpt(0);
+
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
 }
 
 }  // namespace arm

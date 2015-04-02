@@ -18,6 +18,7 @@
 
 #include "base/casts.h"
 #include "entrypoints/quick/quick_entrypoints.h"
+#include "jni_env_ext.h"
 #include "memory_region.h"
 #include "thread.h"
 
@@ -980,5 +981,39 @@ void MipsExceptionSlowPath::Emit(Assembler* sasm) {
 #undef __
 }
 
+const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
+                                             ThreadOffset<4> offset) {
+#define __ assembler->
+  std::unique_ptr<MipsAssembler> assembler(static_cast<MipsAssembler*>(Assembler::Create(kMips)));
+
+  switch (abi) {
+    case kInterpreterAbi:  // Thread* is first argument (A0) in interpreter ABI.
+      __ LoadFromOffset(kLoadWord, T9, A0, offset.Int32Value());
+      break;
+    case kJniAbi:  // Load via Thread* held in JNIEnv* in first argument (A0).
+      __ LoadFromOffset(kLoadWord, T9, A0, JNIEnvExt::SelfOffset().Int32Value());
+      __ LoadFromOffset(kLoadWord, T9, T9, offset.Int32Value());
+      break;
+    case kQuickAbi:  // S1 holds Thread*.
+      __ LoadFromOffset(kLoadWord, T9, S1, offset.Int32Value());
+  }
+  __ Jr(T9);
+  __ Nop();
+  __ Break();
+
+  size_t cs = assembler->CodeSize();
+  std::unique_ptr<std::vector<uint8_t>> entry_stub(new std::vector<uint8_t>(cs));
+  MemoryRegion code(&(*entry_stub)[0], entry_stub->size());
+  assembler->FinalizeInstructions(code);
+
+  return entry_stub.release();
+#undef __
+}
+
 }  // namespace mips
+
+Assembler* CreateMipsAssembler() {
+  return new mips::MipsAssembler();
+}
+
 }  // namespace art
