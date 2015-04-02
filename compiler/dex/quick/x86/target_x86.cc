@@ -2663,4 +2663,15 @@ int X86Mir2Lir::GenDalvikArgsBulkCopy(CallInfo* info, int first, int count) {
   return count;
 }
 
+Mir2Lir* CreateCodeGenerator(CompilationUnit* cu) {
+  switch (cu->instruction_set) {
+    case kX86:
+    case kX86_64:
+      return X86CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+    default:
+      LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;
+      return nullptr;
+  }
+}
+
 }  // namespace art

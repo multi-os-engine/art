@@ -21,6 +21,9 @@
 #include "offsets.h"
 #include "thread.h"
 #include "utils.h"
+#include "assembler_thumb2.h"
+#include "utils/arm64/assembler_arm64.h"
+#include "error/unsupported_64_bit.h"
 
 namespace art {
 namespace arm {
@@ -1614,4 +1617,19 @@ void Arm32Assembler::CompareAndBranchIfNonZero(Register r, Label* label) {
 
 
 }  // namespace arm
+
+Assembler* CreateAssembler(InstructionSet instruction_set) {
+  switch (instruction_set) {
+    case kArm:
+       return new arm::Arm32Assembler();
+    case kThumb2:
+       return CreateAssemblerThumb(instruction_set);
+    case kArm64:
+       return CreateAssembler64(instruction_set);
+    default:
+      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
+      return NULL;
+  }
+}
+
 }  // namespace art

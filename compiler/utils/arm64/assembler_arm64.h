@@ -27,6 +27,9 @@
 #include "utils/assembler.h"
 #include "offsets.h"
 #include "utils.h"
+#include "driver/compiler_driver.h"
+#include "jni_internal.h"
+#include "oat_writer.h"
 
 // TODO: make vixl clean wrt -Wshadow.
 #pragma GCC diagnostic push
@@ -258,6 +261,11 @@ class Arm64Exception {
 };
 
 }  // namespace arm64
+
+  const std::vector<uint8_t>* CreateTrampolineFor64(InstructionSet isa, EntryPointCallingConvention abi,
+                                               ThreadOffset<8> offset);
+  Assembler* CreateAssembler64(InstructionSet instruction_set);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_ARM64_ASSEMBLER_ARM64_H_

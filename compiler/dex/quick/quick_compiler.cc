@@ -796,26 +796,7 @@ uintptr_t QuickCompiler::GetEntryPointOf(mirror::ArtMethod* method) const {
 Mir2Lir* QuickCompiler::GetCodeGenerator(CompilationUnit* cu, void* compilation_unit) {
   UNUSED(compilation_unit);
   Mir2Lir* mir_to_lir = nullptr;
-  switch (cu->instruction_set) {
-    case kThumb2:
-      mir_to_lir = ArmCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
-      break;
-    case kArm64:
-      mir_to_lir = Arm64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
-      break;
-    case kMips:
-      // Fall-through.
-    case kMips64:
-      mir_to_lir = MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
-      break;
-    case kX86:
-      // Fall-through.
-    case kX86_64:
-      mir_to_lir = X86CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
-      break;
-    default:
-      LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;
-  }
+  mir_to_lir = CreateCodeGenerator(cu);
 
   /* The number of compiler temporaries depends on backend so set it up now if possible */
   if (mir_to_lir) {

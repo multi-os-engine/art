@@ -31,24 +31,7 @@ namespace art {
 
 ManagedRuntimeCallingConvention* ManagedRuntimeCallingConvention::Create(
     bool is_static, bool is_synchronized, const char* shorty, InstructionSet instruction_set) {
-  switch (instruction_set) {
-    case kArm:
-    case kThumb2:
-      return new arm::ArmManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
-    case kArm64:
-      return new arm64::Arm64ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
-    case kMips:
-      return new mips::MipsManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
-    case kMips64:
-      return new mips64::Mips64ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
-    case kX86:
-      return new x86::X86ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
-    case kX86_64:
-      return new x86_64::X86_64ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
-    default:
-      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
-      return NULL;
-  }
+  return CreateManagedRuntimeCallingConvention(is_static, is_synchronized, shorty, instruction_set);
 }
 
 bool ManagedRuntimeCallingConvention::HasNext() {
@@ -106,24 +89,7 @@ bool ManagedRuntimeCallingConvention::IsCurrentParamALong() {
 JniCallingConvention* JniCallingConvention::Create(bool is_static, bool is_synchronized,
                                                    const char* shorty,
                                                    InstructionSet instruction_set) {
-  switch (instruction_set) {
-    case kArm:
-    case kThumb2:
-      return new arm::ArmJniCallingConvention(is_static, is_synchronized, shorty);
-    case kArm64:
-      return new arm64::Arm64JniCallingConvention(is_static, is_synchronized, shorty);
-    case kMips:
-      return new mips::MipsJniCallingConvention(is_static, is_synchronized, shorty);
-    case kMips64:
-      return new mips64::Mips64JniCallingConvention(is_static, is_synchronized, shorty);
-    case kX86:
-      return new x86::X86JniCallingConvention(is_static, is_synchronized, shorty);
-    case kX86_64:
-      return new x86_64::X86_64JniCallingConvention(is_static, is_synchronized, shorty);
-    default:
-      LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
-      return NULL;
-  }
+  return CreateJniCallingConvention(is_static, is_synchronized, shorty, instruction_set);
 }
 
 size_t JniCallingConvention::ReferenceCount() const {

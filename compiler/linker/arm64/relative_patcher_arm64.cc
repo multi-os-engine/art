@@ -318,5 +318,16 @@ uint32_t Arm64RelativePatcher::GetInsn(std::vector<uint8_t, Alloc>* code, uint32
   return GetInsn(ArrayRef<const uint8_t>(*code), offset);
 }
 
+RelativePatcher* CreateRelativePatcher64(InstructionSet instruction_set,
+                                         RelativePatcherTargetProvider* provider,
+                                         const InstructionSetFeatures* features) {
+  switch (instruction_set) {
+    case kArm64:
+      return new Arm64RelativePatcher(provider, features->AsArm64InstructionSetFeatures());
+    default:
+      return new RelativePatcherNone;
+  }
+}
+
 }  // namespace linker
 }  // namespace art
