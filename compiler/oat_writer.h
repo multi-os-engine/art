@@ -27,6 +27,7 @@
 #include "oat.h"
 #include "mirror/class.h"
 #include "safe_map.h"
+#include "compiled_method.h"
 
 namespace art {
 
@@ -94,6 +95,10 @@ class OatWriter {
     return *oat_header_;
   }
 
+  const CompilerDriver* GetCompilerDriver() const {
+    return compiler_driver_;
+  }
+
   size_t GetSize() const {
     return size_;
   }
@@ -111,6 +116,8 @@ class OatWriter {
   }
 
   bool Write(OutputStream* out);
+
+  bool WriteCodeAlignment(OutputStream* out, uint32_t aligned_code_delta);
 
   ~OatWriter();
 
@@ -185,7 +192,6 @@ class OatWriter {
   size_t WriteCode(OutputStream* out, const size_t file_offset, size_t relative_offset);
   size_t WriteCodeDexFiles(OutputStream* out, const size_t file_offset, size_t relative_offset);
 
-  bool WriteCodeAlignment(OutputStream* out, uint32_t aligned_code_delta);
 
   class OatDexFile {
    public:
