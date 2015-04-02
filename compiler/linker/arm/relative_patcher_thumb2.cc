@@ -114,5 +114,9 @@ uint32_t Thumb2RelativePatcher::GetInsn32(std::vector<uint8_t, Alloc>* code, uin
   return GetInsn32(ArrayRef<const uint8_t>(*code), offset);
 }
 
+RelativePatcher* CreateThumb2RelativePatcher(RelativePatcherTargetProvider* provider) {
+  return new Thumb2RelativePatcher(provider);
+}
+
 }  // namespace linker
 }  // namespace art

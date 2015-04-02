@@ -23,6 +23,7 @@
 
 #include "base/logging.h"
 #include "constants_arm64.h"
+#include "driver/compiler_driver.h"
 #include "utils/arm64/managed_register_arm64.h"
 #include "utils/assembler.h"
 #include "offsets.h"
@@ -257,7 +258,13 @@ class Arm64Exception {
   DISALLOW_COPY_AND_ASSIGN(Arm64Exception);
 };
 
+const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
+                                             ThreadOffset<8> offset);
+
 }  // namespace arm64
+
+Assembler* CreateArm64Assembler();
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_ARM64_ASSEMBLER_ARM64_H_

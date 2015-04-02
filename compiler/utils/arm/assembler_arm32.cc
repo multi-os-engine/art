@@ -1614,4 +1614,9 @@ void Arm32Assembler::CompareAndBranchIfNonZero(Register r, Label* label) {
 
 
 }  // namespace arm
+
+Assembler* CreateArm32Assembler() {
+  return new arm::Arm32Assembler();
+}
+
 }  // namespace art

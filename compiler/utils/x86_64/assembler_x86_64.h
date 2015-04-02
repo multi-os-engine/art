@@ -20,6 +20,7 @@
 #include <vector>
 #include "base/macros.h"
 #include "constants_x86_64.h"
+#include "driver/compiler_driver.h"
 #include "globals.h"
 #include "managed_register_x86_64.h"
 #include "offsets.h"
@@ -835,7 +836,12 @@ inline void X86_64Assembler::EmitOperandSizeOverride() {
   EmitUint8(0x66);
 }
 
+const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<8> offset);
+
 }  // namespace x86_64
+
+Assembler* CreateX86_64Assembler();
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_X86_64_ASSEMBLER_X86_64_H_

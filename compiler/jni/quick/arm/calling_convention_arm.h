@@ -88,6 +88,13 @@ class ArmJniCallingConvention FINAL : public JniCallingConvention {
 };
 
 }  // namespace arm
+
+JniCallingConvention* CreateArmJniCallingConvention(bool is_static, bool is_synchronized,
+                                                    const char* shorty);
+
+ManagedRuntimeCallingConvention* CreateArmManagedRuntimeCallingConvention(
+    bool is_static, bool is_synchronized, const char* shorty);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_JNI_QUICK_ARM_CALLING_CONVENTION_ARM_H_

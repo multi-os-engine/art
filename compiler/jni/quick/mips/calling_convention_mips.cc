@@ -213,4 +213,15 @@ size_t MipsJniCallingConvention::NumberOfOutgoingStackArgs() {
   return static_args + param_args + 1;
 }
 }  // namespace mips
+
+JniCallingConvention* CreateMipsJniCallingConvention(bool is_static, bool is_synchronized,
+                                                     const char* shorty) {
+  return new mips::MipsJniCallingConvention(is_static, is_synchronized, shorty);
+}
+
+ManagedRuntimeCallingConvention* CreateMipsManagedRuntimeCallingConvention(
+    bool is_static, bool is_synchronized, const char* shorty) {
+  return new mips::MipsManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+}
+
 }  // namespace art

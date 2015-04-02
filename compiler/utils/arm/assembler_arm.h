@@ -22,6 +22,7 @@
 #include "base/logging.h"
 #include "base/value_object.h"
 #include "constants_arm.h"
+#include "driver/compiler_driver.h"
 #include "utils/arm/managed_register_arm.h"
 #include "utils/assembler.h"
 #include "offsets.h"
@@ -796,6 +797,9 @@ class ArmExceptionSlowPath FINAL : public SlowPath {
   const ArmManagedRegister scratch_;
   const size_t stack_adjust_;
 };
+
+const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
+                                             ThreadOffset<4> offset);
 
 }  // namespace arm
 }  // namespace art

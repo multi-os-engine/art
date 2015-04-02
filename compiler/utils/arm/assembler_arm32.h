@@ -371,6 +371,9 @@ class Arm32Assembler FINAL : public ArmAssembler {
 };
 
 }  // namespace arm
+
+  Assembler* CreateArm32Assembler();
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_ARM_ASSEMBLER_ARM32_H_

@@ -212,4 +212,15 @@ size_t X86_64JniCallingConvention::NumberOfOutgoingStackArgs() {
 }
 
 }  // namespace x86_64
+
+JniCallingConvention* CreateX86_64JniCallingConvention(bool is_static, bool is_synchronized,
+                                                       const char* shorty) {
+  return new x86_64::X86_64JniCallingConvention(is_static, is_synchronized, shorty);
+}
+
+ManagedRuntimeCallingConvention* CreateX86_64ManagedRuntimeCallingConvention(
+    bool is_static, bool is_synchronized, const char* shorty) {
+  return new x86_64::X86_64ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+}
+
 }  // namespace art

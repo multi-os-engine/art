@@ -21,6 +21,7 @@
 
 #include "base/macros.h"
 #include "constants_mips.h"
+#include "driver/compiler_driver.h"
 #include "globals.h"
 #include "managed_register_mips.h"
 #include "utils/assembler.h"
@@ -291,7 +292,13 @@ class MipsExceptionSlowPath FINAL : public SlowPath {
   const size_t stack_adjust_;
 };
 
+const std::vector<uint8_t>* CreateTrampoline(EntryPointCallingConvention abi,
+                                             ThreadOffset<4> offset);
+
 }  // namespace mips
+
+Assembler* CreateMipsAssembler();
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_MIPS_ASSEMBLER_MIPS_H_

@@ -193,4 +193,15 @@ size_t Mips64JniCallingConvention::NumberOfOutgoingStackArgs() {
   return (all_args > 8) ? all_args - 8 : 0;
 }
 }  // namespace mips64
+
+JniCallingConvention* CreateMips64JniCallingConvention(bool is_static, bool is_synchronized,
+                                                       const char* shorty) {
+  return new mips64::Mips64JniCallingConvention(is_static, is_synchronized, shorty);
+}
+
+ManagedRuntimeCallingConvention* CreateMips64ManagedRuntimeCallingConvention(
+    bool is_static, bool is_synchronized, const char* shorty) {
+  return new mips64::Mips64ManagedRuntimeCallingConvention(is_static, is_synchronized, shorty);
+}
+
 }  // namespace art

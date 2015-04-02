@@ -20,6 +20,7 @@
 #include <vector>
 #include "base/macros.h"
 #include "constants_x86.h"
+#include "driver/compiler_driver.h"
 #include "globals.h"
 #include "managed_register_x86.h"
 #include "offsets.h"
@@ -661,7 +662,12 @@ class X86ExceptionSlowPath FINAL : public SlowPath {
   const size_t stack_adjust_;
 };
 
+const std::vector<uint8_t>* CreateTrampoline(ThreadOffset<4> offset);
+
 }  // namespace x86
+
+Assembler* CreateX86Assembler();
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_X86_ASSEMBLER_X86_H_

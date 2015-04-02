@@ -2719,4 +2719,13 @@ void InstructionCodeGeneratorARM64::VisitBoundType(HBoundType* instruction) {
 #undef QUICK_ENTRY_POINT
 
 }  // namespace arm64
+
+CodeGenerator* GetCodeGeneratorARM64(HGraph* graph,
+                                     const InstructionSetFeatures& isa_features,
+                                     const CompilerOptions& compiler_options) {
+  return new arm64::CodeGeneratorARM64(graph,
+      *isa_features.AsArm64InstructionSetFeatures(),
+      compiler_options);
+}
+
 }  // namespace art

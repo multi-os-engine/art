@@ -25,6 +25,7 @@
 #include "utils/arm/assembler_arm.h"
 #include "offsets.h"
 #include "utils.h"
+#include "oat_writer.h"
 
 namespace art {
 namespace arm {
@@ -717,6 +718,9 @@ class Thumb2Assembler FINAL : public ArmAssembler {
 };
 
 }  // namespace arm
+
+  Assembler* CreateThumb2Assembler();
+
 }  // namespace art
 
 #endif  // ART_COMPILER_UTILS_ARM_ASSEMBLER_THUMB2_H_
