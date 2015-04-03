@@ -191,6 +191,9 @@ class InstructionCodeGeneratorX86_64 : public HGraphVisitor {
   DISALLOW_COPY_AND_ASSIGN(InstructionCodeGeneratorX86_64);
 };
 
+// Class for fixups to constant area.
+class RIPFixup;
+
 class CodeGeneratorX86_64 : public CodeGenerator {
  public:
   CodeGeneratorX86_64(HGraph* graph,
@@ -282,6 +285,12 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   Address LiteralInt32Address(int32_t v);
   Address LiteralInt64Address(int64_t v);
 
+  Address LiteralCaseTable(HSwitch* switch_instr);
+
+  bool SupportsSwitch() const OVERRIDE {
+    return true;
+  }
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
@@ -295,6 +304,9 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   // Offset to the start of the constant area in the assembled code.
   // Used for fixups to the constant area.
   int constant_area_start_;
+
+  // Fixups into the constant area that need to be handled specially.
+  GrowableArray<RIPFixup*> jump_table_fixups_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorX86_64);
 };

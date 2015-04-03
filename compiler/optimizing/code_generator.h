@@ -329,6 +329,11 @@ class CodeGenerator {
 
   virtual ParallelMoveResolver* GetMoveResolver() = 0;
 
+  // TODO: Remove when all implementations support Switch.
+  virtual bool SupportsSwitch() const {
+    return false;
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
