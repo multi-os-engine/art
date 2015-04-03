@@ -1355,10 +1355,10 @@ void RegisterAllocator::InsertParallelMoveAtExitOf(HBasicBlock* block,
   DCHECK_EQ(block->GetSuccessors().Size(), 1u);
   HInstruction* last = block->GetLastInstruction();
   // We insert moves at exit for phi predecessors and connecting blocks.
-  // A block ending with an if cannot branch to a block with phis because
+  // A block ending with an if or a switch cannot branch to a block with phis because
   // we do not allow critical edges. It can also not connect
   // a split interval between two blocks: the move has to happen in the successor.
-  DCHECK(!last->IsIf());
+  DCHECK(!last->IsIf() && !last->IsSwitch());
   HInstruction* previous = last->GetPrevious();
   HParallelMove* move;
   // This is a parallel move for connecting blocks. We need to differentiate
