@@ -1083,7 +1083,11 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                            \
   M(X86ComputeBaseMethodAddress, Instruction)                           \
-  M(X86LoadFromConstantTable, Instruction)
+  M(X86LoadFromConstantTable, Instruction)                              \
+  M(X86Switch, Instruction)
+
+#define FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)                     \
+  M(Switch, Instruction)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
@@ -1092,6 +1096,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                                \
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)                               \
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)                           \
   FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
@@ -2403,6 +2408,38 @@ class HCurrentMethod : public HExpression<0> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HCurrentMethod);
+};
+
+// Switch (jump table). A block ending with a Switch instruction will have
+// one successor for each entry in the switch table, and the final successor
+// will be the block containing the next Dex opcode.
+class HSwitch : public HTemplateInstruction<1> {
+ public:
+  HSwitch(int32_t start_value, int32_t num_entries, HInstruction* input,
+          uint32_t dex_pc = kNoDexPc)
+    : HTemplateInstruction(SideEffects::None(), dex_pc),
+      start_value_(start_value),
+      num_entries_(num_entries) {
+    SetRawInputAt(0, input);
+  }
+
+  bool IsControlFlow() const OVERRIDE { return true; }
+
+  int32_t GetStartValue() const { return start_value_; }
+
+  int32_t GetNumEntries() const { return num_entries_; }
+
+  HBasicBlock* GetDefaultBlock() const {
+    // Last entry is the default block.
+    return GetBlock()->GetSuccessor(num_entries_);
+  }
+  DECLARE_INSTRUCTION(Switch);
+
+ private:
+  int32_t start_value_;
+  int32_t num_entries_;
+
+  DISALLOW_COPY_AND_ASSIGN(HSwitch);
 };
 
 class HUnaryOperation : public HExpression<1> {

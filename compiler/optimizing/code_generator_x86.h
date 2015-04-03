@@ -125,6 +125,7 @@ class LocationsBuilderX86 : public HGraphVisitor {
   void Visit##name(H##name* instr) OVERRIDE;
 
   FOR_EACH_CONCRETE_INSTRUCTION_COMMON(DECLARE_VISIT_INSTRUCTION)
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(DECLARE_VISIT_INSTRUCTION)
   FOR_EACH_CONCRETE_INSTRUCTION_X86(DECLARE_VISIT_INSTRUCTION)
 
 #undef DECLARE_VISIT_INSTRUCTION
@@ -155,6 +156,7 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   void Visit##name(H##name* instr) OVERRIDE;
 
   FOR_EACH_CONCRETE_INSTRUCTION_COMMON(DECLARE_VISIT_INSTRUCTION)
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(DECLARE_VISIT_INSTRUCTION)
   FOR_EACH_CONCRETE_INSTRUCTION_X86(DECLARE_VISIT_INSTRUCTION)
 
 #undef DECLARE_VISIT_INSTRUCTION
@@ -215,6 +217,9 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
 
   DISALLOW_COPY_AND_ASSIGN(InstructionCodeGeneratorX86);
 };
+
+// Class for fixups to constant area.
+class RIPFixup;
 
 class CodeGeneratorX86 : public CodeGenerator {
  public:
@@ -344,6 +349,8 @@ class CodeGeneratorX86 : public CodeGenerator {
   Address LiteralInt32Address(int32_t v, Register reg);
   Address LiteralInt64Address(int64_t v, Register reg);
 
+  Address LiteralCaseTable(HX86Switch* switch_instr, Register reg);
+
   void Finalize(CodeAllocator* allocator) OVERRIDE;
 
  private:
@@ -363,6 +370,9 @@ class CodeGeneratorX86 : public CodeGenerator {
   // Offset to the start of the constant area in the assembled code.
   // Used for fixups to the constant area.
   int32_t constant_area_start_;
+
+  // Fixups into the constant area that need to be handled specially.
+  GrowableArray<RIPFixup*> jump_table_fixups_;
 
   // If there is a HX86ComputeBaseMethodAddress instruction in the graph
   // (which shall be the sole instruction of this kind), subtracting this offset

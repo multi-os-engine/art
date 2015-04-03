@@ -41,6 +41,21 @@ static void MarkReachableBlocks(HBasicBlock* block, ArenaBitVector* visited) {
       DCHECK(condition->AsIntConstant()->IsZero());
       MarkReachableBlocks(if_instruction->IfFalseSuccessor(), visited);
     }
+  } else if (last_instruction->IsSwitch() &&
+             last_instruction->AsSwitch()->InputAt(0)->IsIntConstant()) {
+    HSwitch* switch_instruction = last_instruction->AsSwitch();
+    int switch_value = last_instruction->AsSwitch()->InputAt(0)->AsIntConstant()->GetValue();
+    int start_value = switch_instruction->GetStartValue();
+    int last_value = start_value + switch_instruction->GetNumEntries();
+    for (int case_value = start_value; case_value <= last_value; case_value++) {
+      if (case_value == last_value) {
+        MarkReachableBlocks(switch_instruction->GetDefaultBlock(), visited);
+      }
+      if (case_value == switch_value) {
+        MarkReachableBlocks(block->GetSuccessor(case_value - start_value), visited);
+        break;
+      }
+    }
   } else {
     for (HBasicBlock* successor : block->GetSuccessors()) {
       MarkReachableBlocks(successor, visited);
