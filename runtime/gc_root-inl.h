@@ -26,8 +26,13 @@ namespace art {
 template<class MirrorType>
 template<ReadBarrierOption kReadBarrierOption>
 inline MirrorType* GcRoot<MirrorType>::Read() const {
-  return ReadBarrier::BarrierForRoot<MirrorType, kReadBarrierOption>(&root_);
+  return down_cast<MirrorType*>(
+      ReadBarrier::BarrierForRoot<mirror::Object, kReadBarrierOption>(&root_));
 }
+template<class MirrorType>
+inline GcRoot<MirrorType>::GcRoot(MirrorType* ref)
+    : root_(mirror::CompressedReference<mirror::Object>::FromMirrorPtr(ref)) { }
+
 
 }  // namespace art
 #endif  // ART_RUNTIME_GC_ROOT_INL_H_

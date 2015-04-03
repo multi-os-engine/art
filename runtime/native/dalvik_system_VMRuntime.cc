@@ -248,13 +248,31 @@ static void VMRuntime_runHeapTasks(JNIEnv* env, jobject) {
 
 typedef std::map<std::string, mirror::String*> StringTable;
 
-static void PreloadDexCachesStringsCallback(mirror::Object** root, void* arg,
-                                            const RootInfo& /*root_info*/)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  StringTable& table = *reinterpret_cast<StringTable*>(arg);
-  mirror::String* string = const_cast<mirror::Object*>(*root)->AsString();
-  table[string->ToModifiedUtf8()] = string;
-}
+class PreloadDexCachesStringsVisitor : public RootVisitor {
+ public:
+  explicit PreloadDexCachesStringsVisitor(StringTable* table) : table_(table) {
+  }
+
+  void VisitRoots(mirror::Object*** roots, size_t count, const RootInfo& info ATTRIBUTE_UNUSED)
+      OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    for (size_t i = 0; i < count; ++i) {
+      mirror::String* string = (*roots[i])->AsString();
+      table_->operator[](string->ToModifiedUtf8()) = string;
+    }
+  }
+
+  void VisitRoots(mirror::CompressedReference<mirror::Object>** roots, size_t count,
+                  const RootInfo& info ATTRIBUTE_UNUSED) OVERRIDE
+                      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    for (size_t i = 0; i < count; ++i) {
+      mirror::String* string = roots[i]->AsMirrorPtr()->AsString();
+      table_->operator[](string->ToModifiedUtf8()) = string;
+    }
+  }
+
+ private:
+  StringTable* const table_;
+};
 
 // Based on ClassLinker::ResolveString.
 static void PreloadDexCachesResolveString(Handle<mirror::DexCache> dex_cache, uint32_t string_idx,
@@ -469,8 +487,8 @@ static void VMRuntime_preloadDexCaches(JNIEnv* env, jobject) {
   // We use a std::map to avoid heap allocating StringObjects to lookup in gDvm.literalStrings
   StringTable strings;
   if (kPreloadDexCachesStrings) {
-    runtime->GetInternTable()->VisitRoots(PreloadDexCachesStringsCallback, &strings,
-                                          kVisitRootFlagAllRoots);
+    PreloadDexCachesStringsVisitor visitor(&strings);
+    runtime->GetInternTable()->VisitRoots(&visitor, kVisitRootFlagAllRoots);
   }
 
   const std::vector<const DexFile*>& boot_class_path = linker->GetBootClassPath();
