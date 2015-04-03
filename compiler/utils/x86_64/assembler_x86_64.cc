@@ -2885,10 +2885,26 @@ void X86_64ExceptionSlowPath::Emit(Assembler *sasm) {
 }
 
 void X86_64Assembler::AddConstantArea() {
-  const std::vector<int32_t>& area = constant_area_.GetBuffer();
+  size_t num_zero_words = 0;
+  const std::vector<int32_t>& area = constant_area_.GetBuffer(&num_zero_words);
+  // Generate the literal area first.
   for (size_t i = 0, e = area.size(); i < e; i++) {
     AssemblerBuffer::EnsureCapacity ensured(&buffer_);
     EmitInt32(area[i]);
+  }
+
+  // Generate the zero word area, with the fixups as needed.
+  const std::vector<ConstantArea::FixupInfo>& fixups = constant_area_.GetFixups();
+  auto fixup_it = fixups.begin();
+  size_t next_fixup_index = (fixup_it == fixups.end()) ? -1 : fixup_it->first;
+  for (size_t i = 0; i < num_zero_words; i++) {
+    AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+    if (i == next_fixup_index) {
+      EmitFixup(fixup_it->second);
+      fixup_it++;
+      next_fixup_index = (fixup_it == fixups.end()) ? -1 : fixup_it->first;
+    }
+    EmitInt32(0);
   }
 }
 
