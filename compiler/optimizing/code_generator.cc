@@ -850,6 +850,13 @@ void CodeGenerator::MaybeRecordImplicitNullCheck(HInstruction* instr) {
     return;
   }
 
+  if (CompilerOptions::kUseDeoptimizationForExceptionHandling &&
+      graph_->MethodHasCatchBlocks()) {
+    // Explicit null check is required since the slow path keeps track of live register
+    // mapping for doing deoptimization.
+    return;
+  }
+
   // Find the first previous instruction which is not a move.
   HInstruction* first_prev_not_move = instr->GetPreviousDisregardingMoves();
 
