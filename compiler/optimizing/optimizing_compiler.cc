@@ -511,6 +511,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     compilation_stats_.RecordStat(MethodCompilationStat::kNotCompiledNoCodegen);
     return nullptr;
   }
+  graph->SetCodeGenerator(codegen.get());
 
   PassInfoPrinter pass_info_printer(graph,
                                     method_name.c_str(),
