@@ -595,6 +595,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   }
   codegen->GetAssembler()->cfi().SetEnabled(
       compiler_driver->GetCompilerOptions().GetGenerateDebugInfo());
+  graph->SetCodeGenerator(codegen.get());
 
   PassObserver pass_observer(graph,
                              method_name.c_str(),

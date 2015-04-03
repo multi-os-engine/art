@@ -345,6 +345,11 @@ class CodeGenerator {
   void SetDisassemblyInformation(DisassemblyInformation* info) { disasm_info_ = info; }
   DisassemblyInformation* GetDisassemblyInformation() const { return disasm_info_; }
 
+  // TODO: Remove when all implementations support Switch.
+  virtual bool SupportsSwitch() const {
+    return false;
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,

@@ -33,6 +33,7 @@
 
 namespace art {
 
+class CodeGenerator;
 class GraphChecker;
 class HBasicBlock;
 class HCurrentMethod;
@@ -155,7 +156,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         cached_float_constants_(std::less<int32_t>(), arena->Adapter()),
         cached_long_constants_(std::less<int64_t>(), arena->Adapter()),
         cached_double_constants_(std::less<int64_t>(), arena->Adapter()),
-        cached_current_method_(nullptr) {}
+        cached_current_method_(nullptr), code_generator_(nullptr) {}
 
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
@@ -311,6 +312,13 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   HCurrentMethod* GetCurrentMethod();
 
+  void SetCodeGenerator(CodeGenerator* code_generator) {
+    code_generator_ = code_generator;
+  }
+  CodeGenerator* GetCodeGenerator() const {
+    return code_generator_;
+  }
+
   HBasicBlock* FindCommonDominator(HBasicBlock* first, HBasicBlock* second) const;
 
   const DexFile& GetDexFile() const {
@@ -428,9 +436,11 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   ArenaSafeMap<int64_t, HDoubleConstant*> cached_double_constants_;
 
   HCurrentMethod* cached_current_method_;
+  CodeGenerator* code_generator_;
 
   friend class SsaBuilder;           // For caching constants.
   friend class SsaLivenessAnalysis;  // For the linear order.
+
   ART_FRIEND_TEST(GraphTest, IfSuccessorSimpleJoinBlock1);
   DISALLOW_COPY_AND_ASSIGN(HGraph);
 };
@@ -967,6 +977,9 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
+#define FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)                     \
+  M(Switch, Instruction)
+
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
@@ -976,6 +989,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                                \
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)                               \
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)                           \
   FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
@@ -2026,6 +2040,37 @@ class HCurrentMethod : public HExpression<0> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HCurrentMethod);
+};
+
+// Switch (jump table). A block ending with a Switch instruction will have
+// one successor for each entry in the switch table, and the final successor
+// will be the block containing the next Dex opcode.
+class HSwitch : public HTemplateInstruction<1> {
+ public:
+  HSwitch(int32_t start_value, int32_t num_entries, HInstruction* input)
+    : HTemplateInstruction(SideEffects::None()),
+      start_value_(start_value),
+      num_entries_(num_entries) {
+    SetRawInputAt(0, input);
+  }
+
+  bool IsControlFlow() const OVERRIDE { return true; }
+
+  int32_t GetStartValue() const { return start_value_; }
+
+  int32_t GetNumEntries() const { return num_entries_; }
+
+  HBasicBlock* GetDefaultBlock() const {
+    // Last entry is the default block.
+    return GetBlock()->GetSuccessors().Get(num_entries_);
+  }
+  DECLARE_INSTRUCTION(Switch);
+
+ private:
+  int32_t start_value_;
+  int32_t num_entries_;
+
+  DISALLOW_COPY_AND_ASSIGN(HSwitch);
 };
 
 class HUnaryOperation : public HExpression<1> {
