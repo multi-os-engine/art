@@ -269,7 +269,7 @@ class Address : public Operand {
  */
 class ConstantArea {
   public:
-    ConstantArea() {}
+    ConstantArea() : num_zero_words_(0) {}
 
     // Add a double to the constant area, returning the offset into
     // the constant area where the literal resides.
@@ -288,16 +288,36 @@ class ConstantArea {
     int AddInt64(int64_t v);
 
     int GetSize() const {
-      return buffer_.size() * elem_size_;
+      return buffer_.size() * elem_size_ + num_zero_words_ * sizeof(int32_t);
     }
 
-    const std::vector<int32_t>& GetBuffer() const {
+    const std::vector<int32_t>& GetBuffer(size_t* zero_word_start) const {
+      DCHECK(zero_word_start != nullptr);
+      *zero_word_start = num_zero_words_;
       return buffer_;
+    }
+
+    typedef std::pair<size_t, AssemblerFixup*> FixupInfo;
+
+    void AddFixup(AssemblerFixup* fixup) {
+      fixups_.push_back(FixupInfo(num_zero_words_, fixup));
+    }
+
+    const std::vector<FixupInfo>& GetFixups() const {
+      return fixups_;
+    }
+
+    int AddZeroWords(int num_words) {
+      int orig_count = num_zero_words_;
+      num_zero_words_ += num_words;
+      return orig_count * sizeof(int32_t);
     }
 
   private:
     static constexpr size_t elem_size_ = sizeof(int32_t);
     std::vector<int32_t> buffer_;
+    int num_zero_words_;
+    std::vector<FixupInfo> fixups_;
 };
 
 
@@ -762,6 +782,10 @@ class X86_64Assembler FINAL : public Assembler {
 
   // Is the constant area empty? Return true if there are no literals in the constant area.
   bool IsConstantAreaEmpty() const { return constant_area_.GetSize() == 0; }
+  void AddConstantAreaFixup(AssemblerFixup* fixup) { constant_area_.AddFixup(fixup); }
+  int AllocateConstantAreaWords(int num_words) {
+    return constant_area_.AddZeroWords(num_words);
+  }
 
  private:
   void EmitUint8(uint8_t value);
