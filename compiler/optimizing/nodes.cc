@@ -111,7 +111,7 @@ void HGraph::BuildDominatorTree() {
 
   // (4) Simplify the CFG now, so that we don't need to recompute
   //     dominators and the reverse post order.
-  SimplifyCFG();
+  SimplifyCFG(visited);
 
   // (5) Compute the immediate dominator of each block. We visit
   //     the successors of a block only when all its forward branches
@@ -248,11 +248,14 @@ void HGraph::SimplifyLoop(HBasicBlock* header) {
   info->SetSuspendCheck(first_instruction->AsSuspendCheck());
 }
 
-void HGraph::SimplifyCFG() {
+void HGraph::SimplifyCFG(const ArenaBitVector& visited) {
   // Simplify the CFG for future analysis, and code generation:
   // (1): Split critical edges.
   // (2): Simplify loops by having only one back edge, and one preheader.
   for (size_t i = 0; i < blocks_.Size(); ++i) {
+    if (!visited.IsBitSet(i)) {
+      continue;
+    }
     HBasicBlock* block = blocks_.Get(i);
     if (block == nullptr) continue;
     if (block->GetSuccessors().Size() > 1) {

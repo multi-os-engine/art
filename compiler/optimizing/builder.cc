@@ -327,6 +327,9 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
   entry_block_->AddInstruction(new (arena_) HSuspendCheck(0));
   entry_block_->AddInstruction(new (arena_) HGoto());
 
+  graph_->SetMayCatchExceptions(
+      CompilerOptions::kUseDeoptimizationForExceptionHandling &&
+      code_item.tries_size_ > 0);
   return true;
 }
 
