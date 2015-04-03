@@ -907,6 +907,16 @@ void InstructionCodeGeneratorARM::VisitExit(HExit* exit) {
   UNUSED(exit);
 }
 
+void LocationsBuilderARM::VisitSwitch(HSwitch* switch_instr) {
+  UNUSED(switch_instr);
+  LOG(FATAL) << "Switch not implemented";
+}
+
+void InstructionCodeGeneratorARM::VisitSwitch(HSwitch* switch_instr) {
+  UNUSED(switch_instr);
+  LOG(FATAL) << "Switch not implemented";
+}
+
 void InstructionCodeGeneratorARM::GenerateTestAndBranch(HInstruction* instruction,
                                                         Label* true_target,
                                                         Label* false_target,
