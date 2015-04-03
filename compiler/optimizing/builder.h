@@ -207,6 +207,12 @@ class HGraphBuilder : public ValueObject {
   // Builds an instruction sequence for a packed switch statement.
   void BuildPackedSwitch(const Instruction& instruction, uint32_t dex_pc);
 
+  // Build a switch instruction from a packed switch statement.
+  void BuildSwitchJumpTable(const SwitchTable& table,
+                            const Instruction& instruction,
+                            HInstruction* value,
+                            uint32_t dex_pc);
+
   // Builds an instruction sequence for a sparse switch statement.
   void BuildSparseSwitch(const Instruction& instruction, uint32_t dex_pc);
 

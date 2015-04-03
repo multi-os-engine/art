@@ -1711,6 +1711,14 @@ void InstructionCodeGeneratorARM64::VisitGoto(HGoto* got) {
   }
 }
 
+void LocationsBuilderARM64::VisitSwitch(HSwitch* switch_instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Switch not implemented";
+}
+
+void InstructionCodeGeneratorARM64::VisitSwitch(HSwitch* switch_instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Switch not implemented";
+}
+
 void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruction,
                                                           vixl::Label* true_target,
                                                           vixl::Label* false_target,
