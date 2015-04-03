@@ -343,6 +343,11 @@ class CodeGenerator {
   static void CreateCommonInvokeLocationSummary(
       HInvoke* invoke, InvokeDexCallingConventionVisitor* visitor);
 
+  // TODO: Remove when all implementations support Switch.
+  virtual bool SupportsSwitch() const {
+    return false;
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
