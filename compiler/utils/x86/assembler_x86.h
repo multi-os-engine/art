@@ -248,44 +248,59 @@ class NearLabel : private Label {
  */
 class ConstantArea {
  public:
-  ConstantArea() {}
+  ConstantArea() : num_zero_words_(0) {}
 
   // Add a double to the constant area, returning the offset into
   // the constant area where the literal resides.
-  int AddDouble(double v);
+  int32_t AddDouble(double v);
 
   // Add a float to the constant area, returning the offset into
   // the constant area where the literal resides.
-  int AddFloat(float v);
+  int32_t AddFloat(float v);
 
   // Add an int32_t to the constant area, returning the offset into
   // the constant area where the literal resides.
-  int AddInt32(int32_t v);
+  int32_t AddInt32(int32_t v);
 
   // Add an int64_t to the constant area, returning the offset into
   // the constant area where the literal resides.
-  int AddInt64(int64_t v);
+  int32_t AddInt64(int64_t v);
 
-  bool IsEmpty() const {
-    return buffer_.size() == 0;
+  int32_t AddZeroWords(int32_t num_words) {
+    int32_t orig_count = num_zero_words_;
+    num_zero_words_ += num_words;
+    return orig_count * elem_size_;
   }
 
-  const std::vector<int32_t>& GetBuffer() const {
+  bool IsEmpty() const {
+    return num_zero_words_ == 0 && buffer_.empty();
+  }
+
+  int32_t GetInitializedSize() const {
+    return buffer_.size() * elem_size_;
+  }
+
+  const std::vector<int32_t>& GetBuffer(size_t* zero_word_start) const {
+    DCHECK(zero_word_start != nullptr);
+    *zero_word_start = num_zero_words_;
     return buffer_;
   }
 
+  typedef std::pair<size_t, AssemblerFixup*> FixupInfo;
+
   void AddFixup(AssemblerFixup* fixup) {
-    fixups_.push_back(fixup);
+    fixups_.push_back(FixupInfo(num_zero_words_, fixup));
   }
 
-  const std::vector<AssemblerFixup*>& GetFixups() const {
+  const std::vector<FixupInfo>& GetFixups() const {
     return fixups_;
   }
 
  private:
-  static constexpr size_t kEntrySize = sizeof(int32_t);
+  static constexpr size_t elem_size_ = sizeof(int32_t);
   std::vector<int32_t> buffer_;
-  std::vector<AssemblerFixup*> fixups_;
+  int32_t num_zero_words_;
+  std::vector<FixupInfo> fixups_;
 };
 
 class X86Assembler FINAL : public Assembler {
@@ -749,7 +764,12 @@ class X86Assembler FINAL : public Assembler {
 
   // Is the constant area empty? Return true if there are no literals in the constant area.
   bool IsConstantAreaEmpty() const { return constant_area_.IsEmpty(); }
+  size_t GetInitializedConstantAreaSize() const { return constant_area_.GetInitializedSize(); }
   void AddConstantAreaFixup(AssemblerFixup* fixup) { constant_area_.AddFixup(fixup); }
+  int32_t AllocateConstantAreaWords(int32_t num_words) {
+    return constant_area_.AddZeroWords(num_words);
+  }
+
 
  private:
   inline void EmitUint8(uint8_t value);
