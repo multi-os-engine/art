@@ -25,6 +25,7 @@
 #include <setjmp.h>
 #include <string>
 
+#include "arch/context.h"
 #include "arch/instruction_set.h"
 #include "atomic.h"
 #include "base/macros.h"
@@ -70,7 +71,6 @@ class MethodVerifier;
 class BaseMutex;
 class ClassLinker;
 class Closure;
-class Context;
 struct DebugInvokeReq;
 class DexFile;
 class JavaVMExt;
@@ -354,7 +354,9 @@ class Thread {
 
   Context* GetLongJumpContext();
   void ReleaseLongJumpContext(Context* context) {
-    DCHECK(tlsPtr_.long_jump_context == nullptr);
+    if (tlsPtr_.long_jump_context != nullptr) {
+      delete tlsPtr_.long_jump_context;
+    }
     tlsPtr_.long_jump_context = context;
   }
 

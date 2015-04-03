@@ -52,6 +52,8 @@ class CompilerOptions FINAL {
   static const bool kDefaultIncludeDebugSymbols = kIsDebugBuild;
   static const bool kDefaultIncludePatchInformation = false;
 
+  static const bool kUseDeoptimizationForExceptionHandling = false;
+
   CompilerOptions();
   ~CompilerOptions();
 

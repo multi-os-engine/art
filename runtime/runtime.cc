@@ -55,6 +55,7 @@
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
 #include "compiler_callbacks.h"
+#include "compiler/driver/compiler_options.h"
 #include "debugger.h"
 #include "elf_file.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
