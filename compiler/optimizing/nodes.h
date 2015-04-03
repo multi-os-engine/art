@@ -154,7 +154,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         cached_float_constants_(std::less<int32_t>(), arena->Adapter()),
         cached_long_constants_(std::less<int64_t>(), arena->Adapter()),
         cached_double_constants_(std::less<int64_t>(), arena->Adapter()),
-        cached_current_method_(nullptr) {}
+        cached_current_method_(nullptr),
+        method_has_catch_blocks_(false) {}
 
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
@@ -166,6 +167,14 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   void SetEntryBlock(HBasicBlock* block) { entry_block_ = block; }
   void SetExitBlock(HBasicBlock* block) { exit_block_ = block; }
+
+  bool MethodHasCatchBlocks() const {
+    return method_has_catch_blocks_;
+  }
+
+  void SetMethodHasCatchBlocks(bool val) {
+    method_has_catch_blocks_ = val;
+  }
 
   void AddBlock(HBasicBlock* block);
 
@@ -185,7 +194,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   void BuildDominatorTree();
   void TransformToSsa();
-  void SimplifyCFG();
+  // `visited` keeps track of which blocks have been visited.
+  void SimplifyCFG(const ArenaBitVector& visited);
 
   // Analyze all natural loops in this graph. Returns false if one
   // loop is not natural, that is the header does not dominate the
@@ -415,6 +425,16 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   ArenaSafeMap<int64_t, HDoubleConstant*> cached_double_constants_;
 
   HCurrentMethod* cached_current_method_;
+
+  // Whether the method has catch blocks.
+  // If we use deoptimization for throwing exceptions and if the method
+  // has catch blocks, we can deoptimize the current method and resume the current
+  // method in interpreter. Thus we need to make sure live registers are saved
+  // at slow paths that throw exceptions so we can deoptimize correctly.
+  // If the method doesn't have catch blocks, when an exception is thrown,
+  // the execution won't be resumed in the current method so we don't need to do
+  // deoptimization perfectly for the current method.
+  bool method_has_catch_blocks_;
 
   friend class SsaBuilder;           // For caching constants.
   friend class SsaLivenessAnalysis;  // For the linear order.

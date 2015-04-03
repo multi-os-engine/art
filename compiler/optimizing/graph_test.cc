@@ -89,7 +89,9 @@ TEST(GraphTest, IfSuccessorSimpleJoinBlock1) {
   ASSERT_EQ(if_block->GetLastInstruction()->AsIf()->IfTrueSuccessor(), if_true);
   ASSERT_EQ(if_block->GetLastInstruction()->AsIf()->IfFalseSuccessor(), return_block);
 
-  graph->SimplifyCFG();
+  ArenaBitVector visited(&allocator, graph->GetBlocks().Size(), false);
+  visited.SetInitialBits(graph->GetBlocks().Size());
+  graph->SimplifyCFG(visited);
 
   // Ensure we still have the same if true block.
   ASSERT_EQ(if_block->GetLastInstruction()->AsIf()->IfTrueSuccessor(), if_true);
@@ -124,7 +126,9 @@ TEST(GraphTest, IfSuccessorSimpleJoinBlock2) {
   ASSERT_EQ(if_block->GetLastInstruction()->AsIf()->IfTrueSuccessor(), return_block);
   ASSERT_EQ(if_block->GetLastInstruction()->AsIf()->IfFalseSuccessor(), if_false);
 
-  graph->SimplifyCFG();
+  ArenaBitVector visited(&allocator, graph->GetBlocks().Size(), false);
+  visited.SetInitialBits(graph->GetBlocks().Size());
+  graph->SimplifyCFG(visited);
 
   // Ensure we still have the same if true block.
   ASSERT_EQ(if_block->GetLastInstruction()->AsIf()->IfFalseSuccessor(), if_false);

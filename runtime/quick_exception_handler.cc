@@ -186,6 +186,8 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
       // Ignore callee save method.
       DCHECK(method->IsCalleeSaveMethod());
       return true;
+    } else if (method->IsNative()) {
+      return true;
     } else {
       return HandleDeoptimization(method);
     }

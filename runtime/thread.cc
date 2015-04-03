@@ -39,6 +39,7 @@
 #include "base/timing_logger.h"
 #include "base/to_str.h"
 #include "class_linker-inl.h"
+#include "compiler/driver/compiler_options.h"
 #include "debugger.h"
 #include "dex_file-inl.h"
 #include "entrypoints/entrypoint_utils.h"
@@ -2178,10 +2179,18 @@ void Thread::QuickDeliverException() {
   // Don't leave exception visible while we try to find the handler, which may cause class
   // resolution.
   ClearException();
-  bool is_deoptimization = (exception == GetDeoptimizationException());
+  bool is_deoptimization = (exception == GetDeoptimizationException() ||
+                            CompilerOptions::kUseDeoptimizationForExceptionHandling);
   QuickExceptionHandler exception_handler(this, is_deoptimization);
-  if (is_deoptimization) {
+
+  if (exception == GetDeoptimizationException()) {
     exception_handler.DeoptimizeStack();
+  } else if (CompilerOptions::kUseDeoptimizationForExceptionHandling) {
+    StackHandleScope<1> hs(this);
+    PushAndClearDeoptimizationReturnValue();
+    Handle<mirror::Throwable> h_ex(hs.NewHandle(exception));
+    exception_handler.DeoptimizeStack();
+    SetException(h_ex.Get());
   } else {
     exception_handler.FindCatch(exception);
   }

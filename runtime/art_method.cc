@@ -20,6 +20,7 @@
 #include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "base/stringpiece.h"
+#include "compiler/driver/compiler_options.h"
 #include "dex_file-inl.h"
 #include "dex_instruction.h"
 #include "entrypoints/entrypoint_utils.h"
@@ -423,11 +424,27 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
 #else
       (*art_quick_invoke_stub)(this, args, args_size, self, result, shorty);
 #endif
-      if (UNLIKELY(self->GetException() == Thread::GetDeoptimizationException())) {
+      bool should_handle_deopt = false;
+      if (!CompilerOptions::kUseDeoptimizationForExceptionHandling) {
+        if (self->GetException() == Thread::GetDeoptimizationException()) {
+          should_handle_deopt = true;
+          self->ClearException();
+        }
+      } else {
+        if (self->IsExceptionPending()) {
+          should_handle_deopt = true;
+          if (self->GetException() == Thread::GetDeoptimizationException()) {
+            self->ClearException();
+          } else {
+            // Keep the pending exception since the interpreter is supposed to
+            // catch and handle it.
+          }
+        }
+      }
+      if (should_handle_deopt) {
         // Unusual case where we were running generated code and an
         // exception was thrown to force the activations to be removed from the
         // stack. Continue execution in the interpreter.
-        self->ClearException();
         ShadowFrame* shadow_frame =
             self->PopStackedShadowFrame(StackedShadowFrameType::kDeoptimizationShadowFrame);
         result->SetJ(self->PopDeoptimizationReturnValue().GetJ());
@@ -435,6 +452,7 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
         self->SetTopOfShadowStack(shadow_frame);
         interpreter::EnterInterpreterFromDeoptimize(self, shadow_frame, result);
       }
+
       if (kLogInvocationStartAndReturn) {
         LOG(INFO) << StringPrintf("Returned '%s' quick code=%p", PrettyMethod(this).c_str(),
                                   GetEntryPointFromQuickCompiledCode());

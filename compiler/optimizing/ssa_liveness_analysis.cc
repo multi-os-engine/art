@@ -226,6 +226,12 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
         for (size_t i = 0, e = environment->Size(); i < e; ++i) {
           HInstruction* instruction = environment->GetInstructionAt(i);
           bool should_be_live = ShouldBeLiveForEnvironment(instruction);
+          if (!should_be_live && (instruction != nullptr) && graph_->MethodHasCatchBlocks()) {
+            // Uncompiled catch blocks can also use the instruction.
+            // This is very coarse-grained since we don't analyze yet whether current
+            // can throw an exception that's caught by one of the catch blocks.
+            should_be_live = current->IsInvoke() || current->CanThrow();
+          }
           if (should_be_live) {
             DCHECK(instruction->HasSsaIndex());
             live_in->SetBit(instruction->GetSsaIndex());
