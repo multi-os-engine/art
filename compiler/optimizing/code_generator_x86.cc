@@ -833,6 +833,14 @@ void InstructionCodeGeneratorX86::VisitExit(HExit* exit) {
   UNUSED(exit);
 }
 
+void LocationsBuilderX86::VisitSwitch(HSwitch* switch_instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Switch not implemented";
+}
+
+void InstructionCodeGeneratorX86::VisitSwitch(HSwitch* switch_instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Switch not implemented";
+}
+
 void InstructionCodeGeneratorX86::GenerateTestAndBranch(HInstruction* instruction,
                                                         Label* true_target,
                                                         Label* false_target,
