@@ -2720,5 +2720,65 @@ void X86_64ExceptionSlowPath::Emit(Assembler *sasm) {
 #undef __
 }
 
+void X86_64Assembler::AddConstantArea() {
+  const std::vector<int32_t>& area = constant_area_.GetBuffer();
+
+  // We have to worry about fixups as well, now that we support jump tables.
+  auto& fixups = constant_area_.GetFixups();
+  auto fixup_it = fixups.begin();
+  size_t next_fixup_index = fixup_it == fixups.end() ? -1 : fixup_it->first;
+  for (size_t i = 0, u = area.size(); i < u; i++) {
+    AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+    if (i == next_fixup_index) {
+      EmitFixup(fixup_it->second);
+      fixup_it++;
+      next_fixup_index = fixup_it == fixups.end() ? -1 : fixup_it->first;
+    }
+    EmitInt32(area[i]);
+  }
+}
+
+int ConstantArea::AddInt32(int32_t v) {
+  for (size_t i = 0, u = buffer_.size(); i < u; i++) {
+    if (v == buffer_[i]) {
+      return i * elem_size_;
+    }
+  }
+
+  // Didn't match anything.
+  int result = buffer_.size() * elem_size_;
+  buffer_.push_back(v);
+  return result;
+}
+
+int ConstantArea::AddInt64(int64_t v) {
+  int32_t v_low = v;
+  int32_t v_high = v >> 32;
+  if (buffer_.size() > 1) {
+    // Ensure we don't pass the end of the buffer.
+    for (size_t i = 0, u = buffer_.size() - 1; i < u; i++) {
+      if (v_low == buffer_[i] && v_high == buffer_[i+1]) {
+        return i * elem_size_;
+      }
+    }
+  }
+
+  // Didn't match anything.
+  int result = buffer_.size() * elem_size_;
+  buffer_.push_back(v_low);
+  buffer_.push_back(v_high);
+  return result;
+}
+
+int ConstantArea::AddDouble(double v) {
+  // Treat the value as an integer value.
+  return AddInt64(bit_cast<int64_t, double>(v));
+}
+
+int ConstantArea::AddFloat(float v) {
+  // Treat the value as an integer value.
+  return AddInt32(bit_cast<int32_t, float>(v));
+}
+
 }  // namespace x86_64
 }  // namespace art

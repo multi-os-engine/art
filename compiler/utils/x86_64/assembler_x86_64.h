@@ -242,6 +242,49 @@ class Address : public Operand {
 };
 
 
+/**
+ * Class to handle constant area values.
+ */
+class ConstantArea {
+  public:
+    ConstantArea() {}
+
+    int AddDouble(double v);
+    int AddFloat(float v);
+    int AddInt32(int32_t v);
+    int AddInt64(int64_t v);
+
+    int GetSize() const {
+      return buffer_.size() * elem_size_;
+    }
+
+    const std::vector<int32_t>& GetBuffer() const {
+      return buffer_;
+    }
+
+    typedef std::pair<size_t, AssemblerFixup*> FixupInfo;
+
+    void AddFixup(AssemblerFixup* fixup) {
+      fixups_.push_back(FixupInfo(buffer_.size(), fixup));
+    }
+
+    const std::vector<FixupInfo>& GetFixups() const {
+      return fixups_;
+    }
+
+    int AddZeroWords(int num_words) {
+      int orig_size = GetSize();
+      buffer_.insert(buffer_.end(), num_words, 0);
+      return orig_size;
+    }
+
+  private:
+    static constexpr size_t elem_size_ = sizeof(int32_t);
+    std::vector<int32_t> buffer_;
+    std::vector<FixupInfo> fixups_;
+};
+
+
 class X86_64Assembler FINAL : public Assembler {
  public:
   X86_64Assembler() : cfi_cfa_offset_(0), cfi_pc_(0) {}
@@ -668,6 +711,17 @@ class X86_64Assembler FINAL : public Assembler {
   std::vector<uint8_t>* GetFrameDescriptionEntry() OVERRIDE {
     return &cfi_info_;
   }
+
+  int AddDouble(double v) { return constant_area_.AddDouble(v); }
+  int AddFloat(float v)   { return constant_area_.AddFloat(v); }
+  int AddInt32(int32_t v) { return constant_area_.AddInt32(v); }
+  int AddInt64(int64_t v) { return constant_area_.AddInt64(v); }
+  void AddConstantArea();
+  void AddConstantAreaFixup(AssemblerFixup* fixup) { constant_area_.AddFixup(fixup); }
+  int AllocateConstantAreaWords(int num_words) {
+    return constant_area_.AddZeroWords(num_words);
+  }
+  bool ConstantAreaEmpty() const { return constant_area_.GetSize() == 0; }
 
  private:
   void EmitUint8(uint8_t value);
