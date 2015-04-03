@@ -25,6 +25,7 @@
 #include <setjmp.h>
 #include <string>
 
+#include "arch/context.h"
 #include "arch/instruction_set.h"
 #include "atomic.h"
 #include "base/macros.h"
@@ -70,7 +71,6 @@ class MethodVerifier;
 class BaseMutex;
 class ClassLinker;
 class Closure;
-class Context;
 struct DebugInvokeReq;
 class DexFile;
 class JavaVMExt;
@@ -95,6 +95,30 @@ enum ThreadFlag {
   kSuspendRequest   = 1,  // If set implies that suspend_count_ > 0 and the Thread should enter the
                           // safepoint handler.
   kCheckpointRequest = 2  // Request that the thread do some checkpoint work and then continue.
+};
+
+enum StackedShadowFrameType {
+  kShadowFrameUnderConstruction,
+  kDeoptimizationShadowFrame
+};
+
+class StackedShadowFrameRecord {
+ public:
+  StackedShadowFrameRecord(ShadowFrame* shadow_frame,
+                           StackedShadowFrameType type,
+                           StackedShadowFrameRecord* link)
+      : shadow_frame_(shadow_frame),
+        type_(type),
+        link_(link) {}
+
+  ShadowFrame* GetShadowFrame() { return shadow_frame_; }
+  StackedShadowFrameType GetType() { return type_; }
+  StackedShadowFrameRecord* GetLink() { return link_; }
+
+ private:
+  ShadowFrame* shadow_frame_;
+  StackedShadowFrameType type_;
+  StackedShadowFrameRecord* link_;
 };
 
 static constexpr size_t kNumRosAllocThreadLocalSizeBrackets = 34;
@@ -354,7 +378,13 @@ class Thread {
 
   Context* GetLongJumpContext();
   void ReleaseLongJumpContext(Context* context) {
-    DCHECK(tlsPtr_.long_jump_context == nullptr);
+   if (tlsPtr_.long_jump_context != nullptr) {
+      // Can happen for nested exception handling.
+      // Since we only keeps one context for reuse,
+      // delete the existing one since context
+      // is yet to be used for longjump.
+      delete tlsPtr_.long_jump_context;
+    }
     tlsPtr_.long_jump_context = context;
   }
 
@@ -766,9 +796,11 @@ class Thread {
   void SetShadowFrameUnderConstruction(ShadowFrame* sf);
   void ClearShadowFrameUnderConstruction();
 
-  bool HasShadowFrameUnderConstruction() const {
-    return tlsPtr_.shadow_frame_under_construction != nullptr;
-  }
+  void PushStackedShadowFrameUnderConstruction(ShadowFrame* sf);
+  ShadowFrame* PopStackedShadowFrameUnderConstruction();
+
+  void PushStackedDeoptimizationShadowFrame(ShadowFrame* sf);
+  ShadowFrame* PopStackedDeoptimizationShadowFrame();
 
   std::deque<instrumentation::InstrumentationStackFrame>* GetInstrumentationStack() {
     return tlsPtr_.instrumentation_stack;
@@ -949,6 +981,9 @@ class Thread {
   void SetUpAlternateSignalStack();
   void TearDownAlternateSignalStack();
 
+  void PushStackedShadowFrame(ShadowFrame* sf, StackedShadowFrameType type);
+  ShadowFrame* PopStackedShadowFrame(StackedShadowFrameType type);
+
   // 32 bits of atomically changed state and flags. Keeping as 32 bits allows and atomic CAS to
   // change from being Suspended to Runnable without a suspend request occurring.
   union PACKED(4) StateAndFlags {
@@ -1074,7 +1109,7 @@ class Thread {
       stack_trace_sample(nullptr), wait_next(nullptr), monitor_enter_object(nullptr),
       top_handle_scope(nullptr), class_loader_override(nullptr), long_jump_context(nullptr),
       instrumentation_stack(nullptr), debug_invoke_req(nullptr), single_step_control(nullptr),
-      deoptimization_shadow_frame(nullptr), shadow_frame_under_construction(nullptr), name(nullptr),
+      deoptimization_shadow_frame(nullptr), stacked_shadow_frame_record(nullptr), name(nullptr),
       pthread_self(0), last_no_thread_suspension_cause(nullptr), thread_local_start(nullptr),
       thread_local_pos(nullptr), thread_local_end(nullptr), thread_local_objects(0),
       thread_local_alloc_stack_top(nullptr), thread_local_alloc_stack_end(nullptr),
@@ -1150,8 +1185,10 @@ class Thread {
     // Shadow frame stack that is used temporarily during the deoptimization of a method.
     ShadowFrame* deoptimization_shadow_frame;
 
-    // Shadow frame stack that is currently under construction but not yet on the stack
-    ShadowFrame* shadow_frame_under_construction;
+    // Shadow frame stack that keeps track of:
+    // 1) shadow frames under construction.
+    // 2) deoptimization shadow frames that aren't for the current upcall.
+    StackedShadowFrameRecord* stacked_shadow_frame_record;
 
     // A cached copy of the java.lang.Thread's name.
     std::string* name;

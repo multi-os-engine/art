@@ -286,8 +286,8 @@ static bool IsInstructionSetSupported(InstructionSet instruction_set) {
 }
 
 static bool CanOptimize(const DexFile::CodeItem& code_item) {
-  // TODO: We currently cannot optimize methods with try/catch.
-  return code_item.tries_size_ == 0;
+  return code_item.tries_size_ == 0 ||
+         CompilerOptions::kUseDeoptimizationForExceptionHandling;
 }
 
 static void RunOptimizations(HOptimization* optimizations[],

@@ -37,6 +37,7 @@
 #include "base/timing_logger.h"
 #include "base/to_str.h"
 #include "class_linker-inl.h"
+#include "compiler/driver/compiler_options.h"
 #include "debugger.h"
 #include "dex_file-inl.h"
 #include "entrypoints/entrypoint_utils.h"
@@ -120,18 +121,41 @@ void Thread::SetDeoptimizationReturnValue(const JValue& ret_val) {
 ShadowFrame* Thread::GetAndClearDeoptimizationShadowFrame(JValue* ret_val) {
   ShadowFrame* sf = tlsPtr_.deoptimization_shadow_frame;
   tlsPtr_.deoptimization_shadow_frame = nullptr;
-  ret_val->SetJ(tls64_.deoptimization_return_value.GetJ());
+  if (ret_val != nullptr) {
+    ret_val->SetJ(tls64_.deoptimization_return_value.GetJ());
+  }
   return sf;
 }
 
-void Thread::SetShadowFrameUnderConstruction(ShadowFrame* sf) {
-  sf->SetLink(tlsPtr_.shadow_frame_under_construction);
-  tlsPtr_.shadow_frame_under_construction = sf;
+void Thread::PushStackedShadowFrame(ShadowFrame* sf, StackedShadowFrameType type) {
+  StackedShadowFrameRecord* record = new StackedShadowFrameRecord(
+      sf, type, tlsPtr_.stacked_shadow_frame_record);
+  tlsPtr_.stacked_shadow_frame_record = record;
 }
 
-void Thread::ClearShadowFrameUnderConstruction() {
-  CHECK_NE(static_cast<ShadowFrame*>(nullptr), tlsPtr_.shadow_frame_under_construction);
-  tlsPtr_.shadow_frame_under_construction = tlsPtr_.shadow_frame_under_construction->GetLink();
+ShadowFrame* Thread::PopStackedShadowFrame(StackedShadowFrameType type) {
+  StackedShadowFrameRecord* record = tlsPtr_.stacked_shadow_frame_record;
+  DCHECK(record != nullptr && record->GetType() == type);
+  tlsPtr_.stacked_shadow_frame_record = record->GetLink();
+  ShadowFrame* shadow_frame = record->GetShadowFrame();
+  delete record;
+  return shadow_frame;
+}
+
+void Thread::PushStackedShadowFrameUnderConstruction(ShadowFrame* sf) {
+  PushStackedShadowFrame(sf, kShadowFrameUnderConstruction);
+}
+
+ShadowFrame* Thread::PopStackedShadowFrameUnderConstruction() {
+  return PopStackedShadowFrame(kShadowFrameUnderConstruction);
+}
+
+void Thread::PushStackedDeoptimizationShadowFrame(ShadowFrame* sf) {
+  PushStackedShadowFrame(sf, kDeoptimizationShadowFrame);
+}
+
+ShadowFrame* Thread::PopStackedDeoptimizationShadowFrame() {
+  return PopStackedShadowFrame(kDeoptimizationShadowFrame);
 }
 
 void Thread::InitTid() {
@@ -2020,10 +2044,17 @@ void Thread::QuickDeliverException() {
   // Don't leave exception visible while we try to find the handler, which may cause class
   // resolution.
   ClearException();
-  bool is_deoptimization = (exception == GetDeoptimizationException());
+  bool is_deoptimization = (exception == GetDeoptimizationException() ||
+                            CompilerOptions::kUseDeoptimizationForExceptionHandling);
   QuickExceptionHandler exception_handler(this, is_deoptimization);
-  if (is_deoptimization) {
+
+  if (exception == GetDeoptimizationException()) {
     exception_handler.DeoptimizeStack();
+  } else if (CompilerOptions::kUseDeoptimizationForExceptionHandling) {
+    StackHandleScope<1> hs(this);
+    Handle<mirror::Throwable> h_ex(hs.NewHandle(exception));
+    exception_handler.DeoptimizeStack();
+    SetException(h_ex.Get());
   } else {
     exception_handler.FindCatch(exception);
   }
@@ -2294,13 +2325,17 @@ void Thread::VisitRoots(RootVisitor* visitor) {
       mapper.VisitShadowFrame(shadow_frame);
     }
   }
-  if (tlsPtr_.shadow_frame_under_construction != nullptr) {
+  if (tlsPtr_.stacked_shadow_frame_record != nullptr) {
     RootCallbackVisitor visitor_to_callback(visitor, thread_id);
     ReferenceMapVisitor<RootCallbackVisitor> mapper(this, nullptr, visitor_to_callback);
-    for (ShadowFrame* shadow_frame = tlsPtr_.shadow_frame_under_construction;
-        shadow_frame != nullptr;
-        shadow_frame = shadow_frame->GetLink()) {
-      mapper.VisitShadowFrame(shadow_frame);
+    for (StackedShadowFrameRecord* record = tlsPtr_.stacked_shadow_frame_record;
+         record != nullptr;
+         record = record->GetLink()) {
+      ShadowFrame* shadow_frame = record->GetShadowFrame();
+      while (shadow_frame != nullptr) {
+        mapper.VisitShadowFrame(shadow_frame);
+        shadow_frame = shadow_frame->GetLink();
+      }
     }
   }
   for (auto* verifier = tlsPtr_.method_verifier; verifier != nullptr; verifier = verifier->link_) {
