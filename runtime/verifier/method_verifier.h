@@ -169,6 +169,14 @@ class MethodVerifier {
     return &reg_types_;
   }
 
+  MethodVerifier* GetLink() const {
+    return link_;
+  }
+
+  void SetLink(MethodVerifier* verifier) {
+    link_ = verifier;
+  }
+
   // Log a verification failure.
   std::ostream& Fail(VerifyError error);
 
@@ -737,6 +745,8 @@ class MethodVerifier {
   // thread dumping checkpoints since we may get thread suspension at an inopportune time due to
   // FindLocksAtDexPC, resulting in deadlocks.
   const bool allow_thread_suspension_;
+
+  MethodVerifier* link_;
 
   DISALLOW_COPY_AND_ASSIGN(MethodVerifier);
 };
