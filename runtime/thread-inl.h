@@ -107,7 +107,9 @@ inline void Thread::AssertThreadSuspensionIsAllowable(bool check_locks) const {
 }
 
 inline void Thread::TransitionFromRunnableToSuspended(ThreadState new_state) {
-  AssertThreadSuspensionIsAllowable();
+  if (new_state != kBlocked) {
+    AssertThreadSuspensionIsAllowable();
+  }
   DCHECK_NE(new_state, kRunnable);
   DCHECK_EQ(this, Thread::Current());
   // Change to non-runnable state, thereby appearing suspended to the system.

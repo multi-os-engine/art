@@ -665,8 +665,14 @@ void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWo
     // Suspend the owner, inflate. First change to blocked and give up mutator_lock_.
     self->SetMonitorEnterObject(obj.Get());
     bool timed_out;
-    Thread* owner;
-    {
+    Thread* owner = nullptr;
+    // If we hold mutator_lock_ at this point then we already suspended all threads.
+    // And thread suspension will lead to crash due to holding lock exclusively.
+    if (Locks::mutator_lock_->IsExclusiveHeld(self)) {
+      if (!Locks::thread_list_lock_->IsExclusiveHeld(self)) {
+        thread_list->FindThreadByThreadId(owner_thread_id);
+      }
+    } else {
       ScopedThreadStateChange tsc(self, kBlocked);
       owner = thread_list->SuspendThreadByThreadId(owner_thread_id, false, &timed_out);
     }
