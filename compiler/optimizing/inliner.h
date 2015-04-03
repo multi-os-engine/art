@@ -44,6 +44,11 @@ class HInliner : public HOptimization {
 
   void Run() OVERRIDE;
 
+  bool CanInlineThrower(const HInstruction* insn) const {
+    return insn->IsNullCheck() || insn->IsBoundsCheck() ||
+           insn->IsDivZeroCheck();
+  }
+
   static constexpr const char* kInlinerPassName = "inliner";
 
  private:
