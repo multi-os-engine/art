@@ -64,12 +64,12 @@ ADD_TEST_EQ(static_cast<size_t>(RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET),
             art::Runtime::GetCalleeSaveMethodOffset(art::Runtime::kSaveAll))
 
 // Offset of field Runtime::callee_save_methods_[kRefsOnly]
-#define RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET __SIZEOF_POINTER__
+#define RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET 4
 ADD_TEST_EQ(static_cast<size_t>(RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET),
             art::Runtime::GetCalleeSaveMethodOffset(art::Runtime::kRefsOnly))
 
 // Offset of field Runtime::callee_save_methods_[kRefsAndArgs]
-#define RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET (2 * __SIZEOF_POINTER__)
+#define RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET (2 * 4)
 ADD_TEST_EQ(static_cast<size_t>(RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET),
             art::Runtime::GetCalleeSaveMethodOffset(art::Runtime::kRefsAndArgs))
 
