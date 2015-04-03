@@ -298,6 +298,9 @@ class CodeGenerator {
     return GetFpuSpillSize() + GetCoreSpillSize();
   }
 
+  virtual bool SupportsSwitch() const {
+    return false;
+  }
 
  protected:
   CodeGenerator(HGraph* graph,

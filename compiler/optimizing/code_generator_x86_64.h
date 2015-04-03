@@ -274,6 +274,12 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   Address LiteralInt32(int32_t v);
   Address LiteralInt64(int64_t v);
 
+  Address LiteralCaseTable(HSwitch* switch_instr);
+
+  virtual bool SupportsSwitch() const {
+    return true;
+  }
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
