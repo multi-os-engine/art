@@ -37,6 +37,7 @@
 #include "base/to_str.h"
 #include "class_linker-inl.h"
 #include "class_linker.h"
+#include "compiler/driver/compiler_options.h"
 #include "debugger.h"
 #include "dex_file-inl.h"
 #include "entrypoints/entrypoint_utils.h"
@@ -122,7 +123,9 @@ void Thread::SetDeoptimizationReturnValue(const JValue& ret_val) {
 ShadowFrame* Thread::GetAndClearDeoptimizationShadowFrame(JValue* ret_val) {
   ShadowFrame* sf = tlsPtr_.deoptimization_shadow_frame;
   tlsPtr_.deoptimization_shadow_frame = nullptr;
-  ret_val->SetJ(tls64_.deoptimization_return_value.GetJ());
+  if (ret_val != nullptr) {
+    ret_val->SetJ(tls64_.deoptimization_return_value.GetJ());
+  }
   return sf;
 }
 
@@ -2025,10 +2028,17 @@ void Thread::QuickDeliverException() {
   // Don't leave exception visible while we try to find the handler, which may cause class
   // resolution.
   ClearException();
-  bool is_deoptimization = (exception == GetDeoptimizationException());
+  bool is_deoptimization = (exception == GetDeoptimizationException() ||
+                            CompilerOptions::kUseDeoptimizationForExceptionHandling);
   QuickExceptionHandler exception_handler(this, is_deoptimization);
-  if (is_deoptimization) {
+
+  if (exception == GetDeoptimizationException()) {
     exception_handler.DeoptimizeStack();
+  } else if (CompilerOptions::kUseDeoptimizationForExceptionHandling) {
+    StackHandleScope<1> hs(this);
+    Handle<mirror::Throwable> h_ex(hs.NewHandle(exception));
+    exception_handler.DeoptimizeStack();
+    SetException(h_ex.Get());
   } else {
     exception_handler.FindCatch(exception);
   }
