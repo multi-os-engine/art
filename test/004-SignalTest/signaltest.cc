@@ -103,3 +103,15 @@ extern "C" JNIEXPORT jint JNICALL Java_Main_testSignal(JNIEnv*, jclass) {
   return 1234;
 }
 
+extern "C" JNIEXPORT jint JNICALL Java_Main_testSignal2(JNIEnv*, jclass) {
+  signal(11, SIG_DFL);
+
+#if defined(__arm__) || defined(__i386__) || defined(__x86_64__) || defined(__aarch64__)
+  // On supported architectures we cause a real SEGV.
+  *go_away_compiler = 'a';
+#else
+  // On other architectures we simulate SEGV.
+  kill(getpid(), SIGSEGV);
+#endif
+  return 1234;
+}

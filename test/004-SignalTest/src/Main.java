@@ -18,6 +18,7 @@ public class Main {
     private static native void initSignalTest();
     private static native void terminateSignalTest();
     private static native int testSignal();
+    private static native int testSignal2();
 
     private static void stackOverflow() {
         stackOverflow();
@@ -55,5 +56,7 @@ public class Main {
 
         terminateSignalTest();
         System.out.println("Signal test OK");
+
+        testSignal2();
     }
 }
