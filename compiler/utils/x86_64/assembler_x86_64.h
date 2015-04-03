@@ -269,36 +269,60 @@ class Address : public Operand {
  * Class to handle constant area values.
  */
 class ConstantArea {
-  public:
-    ConstantArea() {}
+ public:
+  ConstantArea() : num_zero_words_(0) {}
 
-    // Add a double to the constant area, returning the offset into
-    // the constant area where the literal resides.
-    int AddDouble(double v);
+  // Add a double to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int32_t AddDouble(double v);
 
-    // Add a float to the constant area, returning the offset into
-    // the constant area where the literal resides.
-    int AddFloat(float v);
+  // Add a float to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int32_t AddFloat(float v);
 
-    // Add an int32_t to the constant area, returning the offset into
-    // the constant area where the literal resides.
-    int AddInt32(int32_t v);
+  // Add an int32_t to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int32_t AddInt32(int32_t v);
 
-    // Add an int64_t to the constant area, returning the offset into
-    // the constant area where the literal resides.
-    int AddInt64(int64_t v);
+  // Add an int64_t to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int32_t AddInt64(int64_t v);
 
-    int GetSize() const {
-      return buffer_.size() * elem_size_;
-    }
+  bool IsEmpty() const {
+    return num_zero_words_ == 0 && buffer_.empty();
+  }
 
-    const std::vector<int32_t>& GetBuffer() const {
-      return buffer_;
-    }
+  int32_t GetInitializedSize() const {
+    return buffer_.size() * elem_size_;
+  }
 
-  private:
-    static constexpr size_t elem_size_ = sizeof(int32_t);
-    std::vector<int32_t> buffer_;
+  const std::vector<int32_t>& GetBuffer(size_t* zero_word_start) const {
+    DCHECK(zero_word_start != nullptr);
+    *zero_word_start = num_zero_words_;
+    return buffer_;
+  }
+
+  typedef std::pair<size_t, AssemblerFixup*> FixupInfo;
+
+  void AddFixup(AssemblerFixup* fixup) {
+    fixups_.push_back(FixupInfo(num_zero_words_, fixup));
+  }
+
+  const std::vector<FixupInfo>& GetFixups() const {
+    return fixups_;
+  }
+
+  int32_t AddZeroWords(int32_t num_words) {
+    int32_t orig_count = num_zero_words_;
+    num_zero_words_ += num_words;
+    return orig_count * elem_size_;
+  }
+
+ private:
+  static constexpr size_t elem_size_ = sizeof(int32_t);
+  std::vector<int32_t> buffer_;
+  int32_t num_zero_words_;
+  std::vector<FixupInfo> fixups_;
 };
 
 
@@ -824,7 +848,12 @@ class X86_64Assembler FINAL : public Assembler {
   void AddConstantArea();
 
   // Is the constant area empty? Return true if there are no literals in the constant area.
-  bool IsConstantAreaEmpty() const { return constant_area_.GetSize() == 0; }
+  bool IsConstantAreaEmpty() const { return constant_area_.IsEmpty(); }
+  size_t GetInitializedConstantAreaSize() const { return constant_area_.GetInitializedSize(); }
+  void AddConstantAreaFixup(AssemblerFixup* fixup) { constant_area_.AddFixup(fixup); }
+  int32_t AllocateConstantAreaWords(int32_t num_words) {
+    return constant_area_.AddZeroWords(num_words);
+  }
 
   //
   // Heap poisoning.
