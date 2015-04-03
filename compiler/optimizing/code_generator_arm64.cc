@@ -2279,6 +2279,16 @@ void InstructionCodeGeneratorARM64::VisitNot(HNot* instruction) {
   }
 }
 
+void LocationsBuilderARM64::VisitBooleanNot(HBooleanNot* instruction) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM64::VisitBooleanNot(HBooleanNot* instruction) {
+  __ Eor(OutputRegister(instruction), InputRegisterAt(instruction, 0), vixl::Operand(1));
+}
+
 void LocationsBuilderARM64::VisitNullCheck(HNullCheck* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
