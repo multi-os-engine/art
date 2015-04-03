@@ -282,9 +282,26 @@ class ConstantArea {
       return buffer_;
     }
 
+    typedef std::pair<size_t, AssemblerFixup*> FixupInfo;
+
+    void AddFixup(AssemblerFixup* fixup) {
+      fixups_.push_back(FixupInfo(buffer_.size(), fixup));
+    }
+
+    const std::vector<FixupInfo>& GetFixups() const {
+      return fixups_;
+    }
+
+    int AddZeroWords(int num_words) {
+      int orig_size = GetSize();
+      buffer_.insert(buffer_.end(), num_words, 0);
+      return orig_size;
+    }
+
   private:
     static constexpr size_t elem_size_ = sizeof(int32_t);
     std::vector<int32_t> buffer_;
+    std::vector<FixupInfo> fixups_;
 };
 
 
@@ -720,6 +737,10 @@ class X86_64Assembler FINAL : public Assembler {
   int AddInt32(int32_t v) { return constant_area_.AddInt32(v); }
   int AddInt64(int64_t v) { return constant_area_.AddInt64(v); }
   void AddConstantArea();
+  void AddConstantAreaFixup(AssemblerFixup* fixup) { constant_area_.AddFixup(fixup); }
+  int AllocateConstantAreaWords(int num_words) {
+    return constant_area_.AddZeroWords(num_words);
+  }
   bool ConstantAreaEmpty() const { return constant_area_.GetSize() == 0; }
 
  private:

@@ -2726,8 +2726,18 @@ void X86_64ExceptionSlowPath::Emit(Assembler *sasm) {
 
 void X86_64Assembler::AddConstantArea() {
   const std::vector<int32_t>& area = constant_area_.GetBuffer();
+
+  // We have to worry about fixups as well, now that we support jump tables.
+  auto& fixups = constant_area_.GetFixups();
+  auto fixup_it = fixups.begin();
+  size_t next_fixup_index = fixup_it == fixups.end() ? -1 : fixup_it->first;
   for (size_t i = 0, u = area.size(); i < u; i++) {
     AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+    if (i == next_fixup_index) {
+      EmitFixup(fixup_it->second);
+      fixup_it++;
+      next_fixup_index = fixup_it == fixups.end() ? -1 : fixup_it->first;
+    }
     EmitInt32(area[i]);
   }
 }
