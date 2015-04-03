@@ -123,7 +123,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         current_instruction_id_(start_instruction_id),
         cached_null_constant_(nullptr),
         cached_int_constants_(std::less<int32_t>(), arena->Adapter()),
-        cached_long_constants_(std::less<int64_t>(), arena->Adapter()) {}
+        cached_long_constants_(std::less<int64_t>(), arena->Adapter()),
+        may_catch_exceptions_(false) {}
 
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
@@ -134,6 +135,14 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   void SetEntryBlock(HBasicBlock* block) { entry_block_ = block; }
   void SetExitBlock(HBasicBlock* block) { exit_block_ = block; }
+
+  bool MayCatchExceptions() const {
+    return may_catch_exceptions_;
+  }
+
+  void SetMayCatchExceptions(bool val) {
+    may_catch_exceptions_ = val;
+  }
 
   void AddBlock(HBasicBlock* block);
 
@@ -152,7 +161,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   void BuildDominatorTree();
   void TransformToSsa();
-  void SimplifyCFG();
+  // `visited` keeps track of which blocks have been visited.
+  void SimplifyCFG(const ArenaBitVector& visited);
 
   // Analyze all natural loops in this graph. Returns false if one
   // loop is not natural, that is the header does not dominate the
@@ -292,6 +302,16 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   HNullConstant* cached_null_constant_;
   ArenaSafeMap<int32_t, HIntConstant*> cached_int_constants_;
   ArenaSafeMap<int64_t, HLongConstant*> cached_long_constants_;
+
+  // Whether the method has catch blocks.
+  // If we use deoptimization for throwing exceptions and if the method
+  // has catch blocks, we can deoptimize the current method and resume the current
+  // method in interpreter. Thus we need to make sure live registers are saved
+  // at slow paths that throw exceptions so we can deoptimize correctly.
+  // If the method doesn't have catch blocks, when an exception is thrown,
+  // the execution won't be resumed in the current method so we don't need to do
+  // deoptimization perfectly for the current method.
+  bool may_catch_exceptions_;
 
   ART_FRIEND_TEST(GraphTest, IfSuccessorSimpleJoinBlock1);
   DISALLOW_COPY_AND_ASSIGN(HGraph);

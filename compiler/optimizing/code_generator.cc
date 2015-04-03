@@ -766,6 +766,13 @@ void CodeGenerator::MaybeRecordImplicitNullCheck(HInstruction* instr) {
     return;
   }
 
+  if (CompilerOptions::kUseDeoptimizationForExceptionHandling &&
+      graph_->MayCatchExceptions()) {
+    // Explicit null check is required since the slow path keeps track of live register
+    // mapping for doing deoptimization.
+    return;
+  }
+
   if (!instr->CanDoImplicitNullCheck()) {
     return;
   }
