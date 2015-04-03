@@ -887,6 +887,16 @@ void InstructionCodeGeneratorARM::VisitExit(HExit* exit) {
   UNUSED(exit);
 }
 
+void LocationsBuilderARM::VisitSwitch(HSwitch* switch_instr) {
+  UNUSED(switch_instr);
+  LOG(FATAL) << "Switch not implemented";
+}
+
+void InstructionCodeGeneratorARM::VisitSwitch(HSwitch* switch_instr) {
+  UNUSED(switch_instr);
+  LOG(FATAL) << "Switch not implemented";
+}
+
 void LocationsBuilderARM::VisitIf(HIf* if_instr) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(if_instr, LocationSummary::kNoCall);

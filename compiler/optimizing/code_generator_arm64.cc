@@ -1611,6 +1611,16 @@ void InstructionCodeGeneratorARM64::VisitGoto(HGoto* got) {
   }
 }
 
+void LocationsBuilderARM64::VisitSwitch(HSwitch* switch_instr) {
+  UNUSED(switch_instr);
+  LOG(FATAL) << "Switch not implemented";
+}
+
+void InstructionCodeGeneratorARM64::VisitSwitch(HSwitch* switch_instr) {
+  UNUSED(switch_instr);
+  LOG(FATAL) << "Switch not implemented";
+}
+
 void LocationsBuilderARM64::VisitIf(HIf* if_instr) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(if_instr);
   HInstruction* cond = if_instr->InputAt(0);
