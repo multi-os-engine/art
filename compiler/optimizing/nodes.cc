@@ -322,6 +322,12 @@ InstructionType* HGraph::CreateConstant(ValueType value,
   return constant;
 }
 
+bool HGraph::HasCatchHandler(int32_t instruction_id ATTRIBUTE_UNUSED) const {
+  // TODO: Until we store catch information for each instruction, be conservative and
+  // assume if there is a catch handler, this instruction is in it.
+  return HasCatchHandlers();
+}
+
 HConstant* HGraph::GetConstant(Primitive::Type type, int64_t value) {
   switch (type) {
     case Primitive::Type::kPrimBoolean:
@@ -990,7 +996,8 @@ void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
     if (last->IsReturn()) {
       invoke->ReplaceWith(last->InputAt(0));
     } else {
-      DCHECK(last->IsReturnVoid());
+      DCHECK(last->IsReturnVoid()) << "Did not find a void return and instead found " <<
+          last->DebugName();
     }
 
     invoke->GetBlock()->RemoveInstruction(last);
@@ -1130,6 +1137,22 @@ void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
     } else {
       DCHECK(current->IsGoto() || current->IsSuspendCheck());
       entry_block_->RemoveInstruction(current);
+    }
+  }
+
+  // Now try to fix the environment for the callee instructions.
+  HReversePostOrderIterator callee_it(*this);
+  for (callee_it.Advance(); !callee_it.Done(); callee_it.Advance()) {
+    HBasicBlock* block = callee_it.Current();
+    for (HInstructionIterator instr_it(block->GetInstructions());
+         !instr_it.Done();
+         instr_it.Advance()) {
+      HInstruction* current = instr_it.Current();
+      if (current->CanThrow() && current->NeedsEnvironment()) {
+        // All supported throwers end the callee context and thus it is safe to copy
+        // environment from invoke.
+        current->CopyEnvironmentFrom(invoke->GetEnvironment());
+      }
     }
   }
 

@@ -215,6 +215,11 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
     inliner.Run();
   }
 
+  // Logic that checks limitations allows throwers but requires that invoke is
+  // not in try/catch block.
+  bool invoke_in_try_catch = graph_->HasCatchHandler(invoke_instruction->GetId());
+
+  // Now walk through graph to find any instructions that will pose limitations to inlining.
   HReversePostOrderIterator it(*callee_graph);
   it.Advance();  // Past the entry block, it does not contain instructions that prevent inlining.
   for (; !it.Done(); it.Advance()) {
@@ -229,17 +234,34 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
          !instr_it.Done();
          instr_it.Advance()) {
       HInstruction* current = instr_it.Current();
+      // Since no loops are accepted, the suspend checks that exist can be ignored.
       if (current->IsSuspendCheck()) {
         continue;
       }
 
+      // In case where there are throwers but caller does not have catch handler for it,
+      // then we can allow inlining if the thrower will end current method's context.
+      // However, since we may escape to runtime from callee code, we don't enable
+      // this optimization unless debuggability is disabled.
       if (current->CanThrow()) {
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
-                       << " could not be inlined because " << current->DebugName()
-                       << " can throw";
-        return false;
+        bool ends_callee_context = ThrowerEndCalleeContext(current);
+
+        if (ends_callee_context &&
+            !invoke_in_try_catch &&
+            !callee_graph->HasCatchHandler(current->GetId()) &&
+            !graph_->IsDebuggable()) {
+          // This thrower passed criteria, so allow it to be inlined.
+          continue;
+        } else {
+          VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
+            << " could not be inlined because " << current->DebugName()
+            << " can throw";
+          return false;
+        }
       }
 
+      // Reject if environment is needed because callee registers cannot be expressed
+      // via environment yet.
       if (current->NeedsEnvironment()) {
         VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
                        << " could not be inlined because " << current->DebugName()
@@ -262,7 +284,18 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
     graph_->SetHasArrayAccesses(true);
   }
 
+  if (callee_graph->HasCatchHandlers()) {
+    graph_->SetHasCatchHandlers(true);
+  }
+
   return true;
+}
+
+bool HInliner::ThrowerEndCalleeContext(const HInstruction* insn) const {
+  // This is a simple conservative approximation of throwers that can be supported.
+  return insn->IsNullCheck() ||
+         insn->IsBoundsCheck() ||
+         insn->IsDivZeroCheck();
 }
 
 }  // namespace art

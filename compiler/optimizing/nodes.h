@@ -234,6 +234,16 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
     has_array_accesses_ = value;
   }
 
+  bool HasCatchHandlers() const {
+    return has_catch_handlers_;
+  }
+
+  void SetHasCatchHandlers(bool value) {
+    has_catch_handlers_ = value;
+  }
+
+  bool HasCatchHandler(int32_t instruction_id) const;
+
   bool IsDebuggable() const { return debuggable_; }
 
   // Returns a constant of the given type and value. If it does not exist
@@ -292,6 +302,9 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   // Has array accesses. We can totally skip BCE if it's false.
   bool has_array_accesses_;
+
+  // Has catch handlers.
+  bool has_catch_handlers_;
 
   // Indicates whether the graph should be compiled in a way that
   // ensures full debuggability. If false, we can apply more

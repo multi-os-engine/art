@@ -289,6 +289,7 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
 
   // Also create blocks for catch handlers.
   if (code_item.tries_size_ != 0) {
+    graph_->SetHasCatchHandlers(true);
     const uint8_t* handlers_ptr = DexFile::GetCatchHandlerData(code_item, 0);
     uint32_t handlers_size = DecodeUnsignedLeb128(&handlers_ptr);
     for (uint32_t idx = 0; idx < handlers_size; ++idx) {
