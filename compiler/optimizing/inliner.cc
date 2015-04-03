@@ -211,6 +211,11 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
     inliner.Run();
   }
 
+  // The code below checking contents of graph is written with assumption that callee
+  // does not have catch handlers. The gate should have checked this but reconfirm.
+  DCHECK_EQ(callee_graph->HasCatchHandlers(), false);
+
+  // Now walk through graph to find any instructions that will pose limitations to inlining.
   HReversePostOrderIterator it(*callee_graph);
   it.Advance();  // Past the entry block, it does not contain instructions that prevent inlining.
   for (; !it.Done(); it.Advance()) {
@@ -225,17 +230,38 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
          !instr_it.Done();
          instr_it.Advance()) {
       HInstruction* current = instr_it.Current();
+      // Since no loops are accepted, the suspend checks that exist can be ignored.
       if (current->IsSuspendCheck()) {
         continue;
       }
 
-      if (current->CanThrow()) {
+      // Figure out if there is an issue with dex cache (which can happen if instruction
+      // needs dex cache but inline target is in a different dex file). We check early
+      // because the solution which handles some throwers specially shouldn't accept
+      // if the thrower passes criteria but there is a dex cache issue.
+      bool dex_cache_issue = !can_use_dex_cache && current->NeedsDexCache();
+
+      // In case where there are throwers but caller does not have catch handler for it,
+      // then we can allow inlining since the thrower will end current method's context.
+      // However, since we may escape to runtime from callee code, we don't enable
+      // this optimization unless debuggability is disabled.
+      bool can_throw = current->CanThrow();
+      if (can_throw &&
+          !dex_cache_issue &&
+          current->CanBeMoved() &&
+          !graph_->HasCatchHandler(current->GetId()) &&
+          !graph_->IsDebuggable()) {
+        // This thrower passed criteria, so allow it to be inlined.
+        continue;
+      } else if (can_throw) {
         VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
                        << " could not be inlined because " << current->DebugName()
                        << " can throw";
         return false;
       }
 
+      // Reject if environment is needed because callee registers cannot be expressed
+      // via environment yet.
       if (current->NeedsEnvironment()) {
         VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
                        << " could not be inlined because " << current->DebugName()
@@ -243,7 +269,7 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
         return false;
       }
 
-      if (!can_use_dex_cache && current->NeedsDexCache()) {
+      if (dex_cache_issue) {
         VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
                        << " could not be inlined because " << current->DebugName()
                        << " it is in a different dex file and requires access to the dex cache";
@@ -256,6 +282,10 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
 
   if (callee_graph->HasArrayAccesses()) {
     graph_->SetHasArrayAccesses(true);
+  }
+
+  if (callee_graph->HasCatchHandlers()) {
+    graph_->SetHasCatchHandlers(true);
   }
 
   // Now that we have inlined the callee, we need to update the next
