@@ -304,6 +304,10 @@ class CodeGenerator {
     return GetFpuSpillSize() + GetCoreSpillSize();
   }
 
+  // TODO: Remove when all implementations support Switch.
+  virtual bool SupportsSwitch() const {
+    return false;
+  }
 
  protected:
   CodeGenerator(HGraph* graph,

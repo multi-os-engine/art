@@ -295,9 +295,32 @@ class ConstantArea {
       return buffer_;
     }
 
+    typedef std::pair<size_t, AssemblerFixup*> FixupInfo;
+
+    void AddFixup(AssemblerFixup* fixup) {
+      fixups_.push_back(FixupInfo(buffer_.size(), fixup));
+    }
+
+    const std::vector<FixupInfo>& GetFixups() const {
+      return fixups_;
+    }
+
+    int AddZeroWords(int num_words) {
+      int orig_size = GetSize();
+      buffer_.insert(buffer_.end(), num_words, 0);
+      used_for_non_literal_.insert(used_for_non_literal_.end(), num_words, true);
+      return orig_size;
+    }
+
   private:
     static constexpr size_t elem_size_ = sizeof(int32_t);
     std::vector<int32_t> buffer_;
+    std::vector<FixupInfo> fixups_;
+
+    // Remember that a word has been used for a non-literal, so we
+    // won't match it when trying to combine literals.  This is because
+    // switch tables are entered as 0, but will have non-zero final contents.
+    std::vector<bool> used_for_non_literal_;
 };
 
 
@@ -762,6 +785,10 @@ class X86_64Assembler FINAL : public Assembler {
 
   // Is the constant area empty? Return true if there are no literals in the constant area.
   bool IsConstantAreaEmpty() const { return constant_area_.GetSize() == 0; }
+  void AddConstantAreaFixup(AssemblerFixup* fixup) { constant_area_.AddFixup(fixup); }
+  int AllocateConstantAreaWords(int num_words) {
+    return constant_area_.AddZeroWords(num_words);
+  }
 
  private:
   void EmitUint8(uint8_t value);
