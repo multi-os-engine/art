@@ -440,7 +440,8 @@ CodeGeneratorX86_64::CodeGeneratorX86_64(HGraph* graph,
         instruction_visitor_(graph, this),
         move_resolver_(graph->GetArena(), this),
         isa_features_(isa_features),
-        constant_area_start_(0) {
+        constant_area_start_(0),
+        jump_table_fixups_(graph->GetArena(), 0) {
   AddAllocatedRegister(Location::RegisterLocation(kFakeReturnRegister));
 }
 
@@ -790,6 +791,49 @@ void LocationsBuilderX86_64::VisitExit(HExit* exit) {
 
 void InstructionCodeGeneratorX86_64::VisitExit(HExit* exit) {
   UNUSED(exit);
+}
+
+void LocationsBuilderX86_64::VisitSwitch(HSwitch* switch_instr) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(switch_instr, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorX86_64::VisitSwitch(HSwitch* switch_instr) {
+  int32_t lower_bound = switch_instr->GetStartValue();
+  int32_t num_entries = switch_instr->GetNumEntries();
+  LocationSummary* locations = switch_instr->GetLocations();
+  CpuRegister value_reg_in = locations->InAt(0).AsRegister<CpuRegister>();
+  CpuRegister temp_reg = locations->GetTemp(0).AsRegister<CpuRegister>();
+  CpuRegister base_reg = locations->GetTemp(1).AsRegister<CpuRegister>();
+
+  // Remove the bias, if needed. CpuRegister can't be assigned (boo!).
+  Register value_reg_out = value_reg_in.AsRegister();
+  if (lower_bound != 0) {
+    __ leal(temp_reg, Address(value_reg_in, -lower_bound));
+    value_reg_out = temp_reg.AsRegister();
+  }
+  CpuRegister value_reg(value_reg_out);
+
+  // Is the value in range?
+  HBasicBlock* default_block = switch_instr->GetDefaultBlock();
+  __ cmpl(value_reg, Immediate(num_entries - 1));
+  __ j(kAbove, codegen_->GetLabelOf(default_block));
+
+  // We are in the range of the table.
+  // Load the address of the jump table in the constant area.
+  __ leaq(base_reg, codegen_->LiteralCaseTable(switch_instr));
+
+  // Load the (signed) offset from the jump table.
+  __ movsxd(temp_reg, Address(base_reg, value_reg, TIMES_4, 0));
+
+  // Add the offset to the address of the table base.
+  __ addq(temp_reg, base_reg);
+
+  // And jump.
+  __ jmp(temp_reg);
 }
 
 void InstructionCodeGeneratorX86_64::GenerateTestAndBranch(HInstruction* instruction,
@@ -4435,22 +4479,6 @@ void InstructionCodeGeneratorX86_64::VisitBoundType(HBoundType* instruction) {
   LOG(FATAL) << "Unreachable";
 }
 
-void CodeGeneratorX86_64::Finalize(CodeAllocator* allocator) {
-  // Generate the constant area if needed.
-  X86_64Assembler* assembler = GetAssembler();
-  if (!assembler->IsConstantAreaEmpty()) {
-    // Align to 4 byte boundary to reduce cache misses, as the data is 4 and 8
-    // byte values.  If used for vectors at a later time, this will need to be
-    // updated to 16 bytes with the appropriate offset.
-    assembler->Align(4, 0);
-    constant_area_start_ = assembler->CodeSize();
-    assembler->AddConstantArea();
-  }
-
-  // And finish up.
-  CodeGenerator::Finalize(allocator);
-}
-
 /**
  * Class to handle late fixup of offsets into constant area.
  */
@@ -4458,6 +4486,8 @@ class RIPFixup : public AssemblerFixup, public ArenaObject<kArenaAllocMisc> {
   public:
     RIPFixup(const CodeGeneratorX86_64& codegen, int offset)
       : codegen_(codegen), offset_into_constant_area_(offset) {}
+
+    void AddOffset(int delta) { offset_into_constant_area_ += delta; }
 
   private:
     void Process(const MemoryRegion& region, int pos) OVERRIDE {
@@ -4476,6 +4506,30 @@ class RIPFixup : public AssemblerFixup, public ArenaObject<kArenaAllocMisc> {
     int offset_into_constant_area_;
 };
 
+void CodeGeneratorX86_64::Finalize(CodeAllocator* allocator) {
+  // Generate the constant area if needed.
+  X86_64Assembler* assembler = GetAssembler();
+  if (!assembler->IsConstantAreaEmpty()) {
+    // Align to 4 byte boundary to reduce cache misses, as the data is 4 and 8
+    // byte values.  If used for vectors at a later time, this will need to be
+    // updated to 16 bytes with the appropriate offset.
+    assembler->Align(4, 0);
+    constant_area_start_ = assembler->CodeSize();
+    assembler->AddConstantArea();
+
+    // Fixup offsets to jump tables, if needed.
+    size_t const_init_size = assembler->GetInitializedConstantAreaSize();
+    if (const_init_size != 0 && jump_table_fixups_.Size() > 0) {
+      for (size_t i = 0, e = jump_table_fixups_.Size(); i < e; i++) {
+        jump_table_fixups_.Get(i)->AddOffset(const_init_size);
+      }
+    }
+  }
+
+  // And finish up.
+  CodeGenerator::Finalize(allocator);
+}
+
 Address CodeGeneratorX86_64::LiteralDoubleAddress(double v) {
   AssemblerFixup* fixup = new (GetGraph()->GetArena()) RIPFixup(*this, __ AddDouble(v));
   return Address::RIP(fixup);
@@ -4493,6 +4547,51 @@ Address CodeGeneratorX86_64::LiteralInt32Address(int32_t v) {
 
 Address CodeGeneratorX86_64::LiteralInt64Address(int64_t v) {
   AssemblerFixup* fixup = new (GetGraph()->GetArena()) RIPFixup(*this, __ AddInt64(v));
+  return Address::RIP(fixup);
+}
+
+/**
+ * Class to handle late fixup of jump tables in constant area.
+ */
+class JumpTableFixup : public AssemblerFixup, public ArenaObject<kArenaAllocMisc> {
+ public:
+  JumpTableFixup(CodeGeneratorX86_64& codegen, HSwitch* switch_instr)
+    : codegen_(codegen), switch_instr_(switch_instr) {}
+
+ private:
+  void Process(const MemoryRegion& region, int pos) OVERRIDE;
+
+  CodeGeneratorX86_64& codegen_;
+  HSwitch* switch_instr_;
+};
+
+void JumpTableFixup::Process(const MemoryRegion& region, int pos) {
+  int32_t num_entries = switch_instr_->GetNumEntries();
+  HBasicBlock* block = switch_instr_->GetBlock();
+  const GrowableArray<HBasicBlock*>& successors = block->GetSuccessors();
+  // The value that we want is the target offset - the position of the table.
+  for (int i = 0; i < num_entries; i++) {
+    HBasicBlock* b = successors.Get(i);
+    Label* l = codegen_.GetLabelOf(b);
+    DCHECK(l->IsBound());
+    int32_t offset_to_block = l->Position() - pos;
+    region.StoreUnaligned<int32_t>(pos + i * 4, offset_to_block);
+  }
+}
+
+Address CodeGeneratorX86_64::LiteralCaseTable(HSwitch* switch_instr) {
+  // Create a fixup to be used to patch the table.
+  AssemblerFixup* table_fixup = new (GetGraph()->GetArena()) JumpTableFixup(*this, switch_instr);
+  __ AddConstantAreaFixup(table_fixup);
+
+  // Create the table itself in the constant area.
+  int table_offset = __ AllocateConstantAreaWords(switch_instr->GetNumEntries());
+
+  // Now the fixup to the table itself.
+  RIPFixup* fixup = new (GetGraph()->GetArena()) RIPFixup(*this, table_offset);
+
+  // We may have to fix the offset to account for the initialized data.
+  jump_table_fixups_.Insert(fixup);
   return Address::RIP(fixup);
 }
 
