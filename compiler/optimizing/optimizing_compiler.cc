@@ -535,6 +535,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   }
   codegen->GetAssembler()->cfi().SetEnabled(
       compiler_driver->GetCompilerOptions().GetGenerateDebugInfo());
+  graph->SetCodeGenerator(codegen.get());
 
   PassInfoPrinter pass_info_printer(graph,
                                     method_name.c_str(),
