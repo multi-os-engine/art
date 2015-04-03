@@ -1305,16 +1305,21 @@ void HBasicBlock::DisconnectAndDelete() {
   for (size_t i = 0, e = predecessors_.Size(); i < e; ++i) {
     HBasicBlock* predecessor = predecessors_.Get(i);
     HInstruction* last_instruction = predecessor->GetLastInstruction();
-    predecessor->RemoveInstruction(last_instruction);
     predecessor->RemoveSuccessor(this);
-    if (predecessor->GetSuccessors().Size() == 1u) {
-      DCHECK(last_instruction->IsIf());
-      predecessor->AddInstruction(new (graph_->GetArena()) HGoto());
-    } else {
-      // The predecessor has no remaining successors and therefore must be dead.
-      // We deliberately leave it without a control-flow instruction so that the
-      // SSAChecker fails unless it is not removed during the pass too.
-      DCHECK_EQ(predecessor->GetSuccessors().Size(), 0u);
+    // We handle switch control flow instruction in different manner than If or
+    // Goto insns because it could have multiple successors. Because of that we
+    // shouldn't remove switch instruction while we have more than one successor.
+    if (!last_instruction->IsSwitch() || predecessor->GetSuccessors().Size() == 1u) {
+      predecessor->RemoveInstruction(last_instruction);
+      if (predecessor->GetSuccessors().Size() == 1u) {
+        DCHECK(last_instruction->IsIf() || last_instruction->IsSwitch());
+        predecessor->AddInstruction(new (graph_->GetArena()) HGoto());
+      } else {
+        // The predecessor has no remaining successors and therefore must be dead.
+        // We deliberately leave it without a control-flow instruction so that the
+        // SSAChecker fails unless it is not removed during the pass too.
+        DCHECK_EQ(predecessor->GetSuccessors().Size(), 0u);
+      }
     }
   }
   predecessors_.Reset();
