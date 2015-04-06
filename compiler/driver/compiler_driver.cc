@@ -2272,9 +2272,6 @@ void CompilerDriver::CompileMethod(Thread* self, const DexFile::CodeItem* code_i
     DCHECK(GetCompiledMethod(method_ref) != nullptr) << PrettyMethod(method_idx, dex_file);
   }
 
-  // Done compiling, delete the verified method to reduce native memory usage.
-  verification_results_->RemoveVerifiedMethod(method_ref);
-
   if (self->IsExceptionPending()) {
     ScopedObjectAccess soa(self);
     LOG(FATAL) << "Unexpected exception compiling: " << PrettyMethod(method_idx, dex_file) << "\n"
