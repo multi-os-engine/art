@@ -171,8 +171,15 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   void GenerateMemoryBarrier(MemBarrierKind kind);
   void HandleFieldSet(HInstruction* instruction, const FieldInfo& field_info);
   void HandleFieldGet(HInstruction* instruction, const FieldInfo& field_info);
+  /* @breif Push value located on stack to FPU stack.
+     @param source Where the value is located.
+     @param temp_offset Offset of temporary to stack pointer if source is register.
+     @param stack_adjustment Shift if stack pointer was temporary shifted.
+     @param is_fp whether the value is floating point ot not.
+     @param is_fp whether the value is wide or not.
+   */
   void PushOntoFPStack(Location source, uint32_t temp_offset,
-                       uint32_t stack_adjustment, bool is_float);
+                       uint32_t stack_adjustment, bool is_fp, bool is_wide);
 
   void GenerateImplicitNullCheck(HNullCheck* instruction);
   void GenerateExplicitNullCheck(HNullCheck* instruction);
