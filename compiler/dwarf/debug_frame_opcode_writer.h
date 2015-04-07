@@ -236,6 +236,10 @@ class DebugFrameOpCodeWriter : private Writer<Allocator> {
     this->PushData(expr, expr_size);
   }
 
+  int GetCurrentPC() const {
+    return current_pc_;
+  }
+
   int GetCurrentCFAOffset() const {
     return current_cfa_offset_;
   }
