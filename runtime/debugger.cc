@@ -2262,12 +2262,16 @@ JDWP::JdwpError Dbg::GetThreadFrames(JDWP::ObjectId thread_id, size_t start_fram
   };
 
   ScopedObjectAccessUnchecked soa(Thread::Current());
-  MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   JDWP::JdwpError error;
-  Thread* thread = DecodeThread(soa, thread_id, &error);
+  Thread* thread;
+  {
+    MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
+    thread = DecodeThread(soa, thread_id, &error);
+  }
   if (error != JDWP::ERR_NONE) {
     return error;
   }
+
   if (!IsSuspendedForDebugger(soa, thread)) {
     return JDWP::ERR_THREAD_NOT_SUSPENDED;
   }
