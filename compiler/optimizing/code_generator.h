@@ -425,6 +425,8 @@ class CodeGenerator {
 
   StackMapStream stack_map_stream_;
 
+  friend class OptimizingCFITest;
+
   DISALLOW_COPY_AND_ASSIGN(CodeGenerator);
 };
 
