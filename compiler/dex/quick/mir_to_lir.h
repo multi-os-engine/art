@@ -29,6 +29,7 @@
 #include "dex/quick/resource_mask.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "invoke_type.h"
+#include "lazy_debug_frame_opcode_writer.h"
 #include "leb128.h"
 #include "safe_map.h"
 #include "utils/array_ref.h"
@@ -1505,6 +1506,12 @@ class Mir2Lir {
       return 0;
     }
 
+    /**
+     * @brief Buffer of DWARF's Call Frame Information opcodes.
+     * @details It is used by debuggers and other tools to unwind the call stack.
+     */
+    dwarf::LazyDebugFrameOpCodeWriter& cfi() { return cfi_; }
+
   protected:
     Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
 
@@ -1760,6 +1767,13 @@ class Mir2Lir {
     // Update references from prev_mir to mir.
     void UpdateReferenceVRegs(MIR* mir, MIR* prev_mir, BitVector* references);
 
+    /**
+     * Returns true if the frame spills the given core register.
+     */
+    bool CoreSpillMaskContains(int reg) {
+      return (core_spill_mask_ & (1u << reg)) != 0;
+    }
+
   public:
     // TODO: add accessors for these.
     LIR* literal_list_;                        // Constants.
@@ -1836,6 +1850,8 @@ class Mir2Lir {
     // The layout of the cu_->dex_file's dex cache arrays for PC-relative addressing.
     const DexCacheArraysLayout dex_cache_arrays_layout_;
 
+    dwarf::LazyDebugFrameOpCodeWriter cfi_;
+
     // ABI support
     class ShortyArg {
       public:
@@ -1895,6 +1911,8 @@ class Mir2Lir {
 
   private:
     static bool SizeMatchesTypeForEntrypoint(OpSize size, Primitive::Type type);
+
+    friend class QuickCFITest;
 };  // Class Mir2Lir
 
 }  // namespace art
