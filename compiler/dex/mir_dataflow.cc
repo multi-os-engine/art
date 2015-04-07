@@ -1396,6 +1396,13 @@ void MIRGraph::CompilerInitializeSSAConversion() {
   InitializeBasicBlockDataFlow();
 }
 
+uint32_t MIRGraph::GetUseCountWeight(BasicBlock* bb) const {
+  // Each level of nesting adds *100 to count, up to 3 levels deep.
+  uint32_t depth = std::min(3U, static_cast<uint32_t>(bb->nesting_depth));
+  uint32_t weight = std::max(1U, depth * 100);
+  return weight;
+}
+
 /*
  * Count uses, weighting by loop nesting depth.  This code only
  * counts explicitly used s_regs.  A later phase will add implicit
@@ -1405,9 +1412,7 @@ void MIRGraph::CountUses(BasicBlock* bb) {
   if (bb->block_type != kDalvikByteCode) {
     return;
   }
-  // Each level of nesting adds *100 to count, up to 3 levels deep.
-  uint32_t depth = std::min(3U, static_cast<uint32_t>(bb->nesting_depth));
-  uint32_t weight = std::max(1U, depth * 100);
+  uint32_t weight = GetUseCountWeight(bb);
   for (MIR* mir = bb->first_mir_insn; (mir != NULL); mir = mir->next) {
     if (mir->ssa_rep == NULL) {
       continue;

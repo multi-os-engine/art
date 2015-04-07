@@ -576,7 +576,10 @@ RegisterClass ArmMir2Lir::RegClassForFieldLoadStore(OpSize size, bool is_volatil
 ArmMir2Lir::ArmMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
     : Mir2Lir(cu, mir_graph, arena),
       call_method_insns_(arena->Adapter()),
-      dex_cache_access_insns_(arena->Adapter()) {
+      dex_cache_access_insns_(arena->Adapter()),
+      dex_cache_array_base_temp_(nullptr),
+      dex_cache_array_base_reg_(RegStorage::InvalidReg()),
+      dex_cache_array_base_offset_(std::numeric_limits<uint32_t>::max()) {
   call_method_insns_.reserve(100);
   // Sanity check - make sure encoding map lines up.
   for (int i = 0; i < kArmLast; i++) {

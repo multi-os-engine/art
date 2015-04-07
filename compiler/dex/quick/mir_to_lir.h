@@ -774,9 +774,9 @@ class Mir2Lir {
      */
     virtual RegLocation EvalLoc(RegLocation loc, int reg_class, bool update);
 
-    void CountRefs(RefCounts* core_counts, RefCounts* fp_counts, size_t num_regs);
+    virtual void CountRefs(RefCounts* core_counts, RefCounts* fp_counts, size_t num_regs);
     void DumpCounts(const RefCounts* arr, int size, const char* msg);
-    void DoPromotion();
+    virtual void DoPromotion();
     int VRegOffset(int v_reg);
     int SRegOffset(int s_reg);
     RegLocation GetReturnWide(RegisterClass reg_class);

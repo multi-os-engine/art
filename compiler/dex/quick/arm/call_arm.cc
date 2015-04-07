@@ -491,6 +491,11 @@ void ArmMir2Lir::GenEntrySequence(RegLocation* ArgLocs, RegLocation rl_method) {
 
   FlushIns(ArgLocs, rl_method);
 
+  if (dex_cache_array_base_reg_.Valid()) {
+    OpPcRelDexCacheArrayAddr(cu_->dex_file, dex_cache_array_base_offset_,
+                             dex_cache_array_base_reg_);
+  }
+
   FreeTemp(rs_r0);
   FreeTemp(rs_r1);
   FreeTemp(rs_r2);
