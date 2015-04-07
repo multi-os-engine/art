@@ -16,6 +16,7 @@
 
 #include "entrypoints/quick/quick_alloc_entrypoints.h"
 
+#include "base/macros.h"
 #include "callee_save_frame.h"
 #include "entrypoints/entrypoint_utils-inl.h"
 #include "mirror/art_method-inl.h"
@@ -230,8 +231,13 @@ void SetQuickAllocEntryPointsInstrumented(bool instrumented) {
   entry_points_instrumented = instrumented;
 }
 
+#if defined(__APPLE__) && defined(__LP64__)
+NO_RETURN void ResetQuickAllocEntryPoints(QuickEntryPoints* qpoints ATTRIBUTE_UNUSED) {
+  UNIMPLEMENTED(FATAL);
+  UNREACHABLE();
+}
+#else
 void ResetQuickAllocEntryPoints(QuickEntryPoints* qpoints) {
-#if !defined(__APPLE__) || !defined(__LP64__)
   switch (entry_points_allocator) {
     case gc::kAllocatorTypeDlMalloc: {
       SetQuickAllocEntryPoints_dlmalloc(qpoints, entry_points_instrumented);
@@ -261,14 +267,15 @@ void ResetQuickAllocEntryPoints(QuickEntryPoints* qpoints) {
       SetQuickAllocEntryPoints_region_tlab(qpoints, entry_points_instrumented);
       return;
     }
-    default:
-      break;
+
+    case gc::kAllocatorTypeLOS:
+    case gc::kAllocatorTypeNonMoving:
+      UNIMPLEMENTED(FATAL) << "Unexpected allocator type " << entry_points_allocator;
+      UNREACHABLE();
   }
-#else
-  UNUSED(qpoints);
-#endif
-  UNIMPLEMENTED(FATAL);
+  LOG(FATAL);
   UNREACHABLE();
 }
+#endif
 
 }  // namespace art
