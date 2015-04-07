@@ -172,7 +172,7 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   void HandleFieldSet(HInstruction* instruction, const FieldInfo& field_info);
   void HandleFieldGet(HInstruction* instruction, const FieldInfo& field_info);
   void PushOntoFPStack(Location source, uint32_t temp_offset,
-                       uint32_t stack_adjustment, bool is_float);
+                       uint32_t stack_adjustment, bool is_fp, bool is_wide);
 
   void GenerateImplicitNullCheck(HNullCheck* instruction);
   void GenerateExplicitNullCheck(HNullCheck* instruction);
