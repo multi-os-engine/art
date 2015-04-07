@@ -23,6 +23,9 @@
 
 namespace art {
 
+#if defined(__APPLE__) && defined(__LP64__)
+NO_RETURN
+#endif
 void ResetQuickAllocEntryPoints(QuickEntryPoints* qpoints);
 
 // Runtime shutdown lock is necessary to prevent races in thread initialization. When the thread is
