@@ -18,6 +18,7 @@
 #define ART_COMPILER_UTILS_X86_MANAGED_REGISTER_X86_H_
 
 #include "constants_x86.h"
+#include "dwarf/register.h"
 #include "utils/managed_register.h"
 
 namespace art {
@@ -209,6 +210,13 @@ class X86ManagedRegister : public ManagedRegister {
     return reg;
   }
 };
+
+static inline dwarf::Reg DWARFReg(Register reg) {
+  return dwarf::Reg::X86Core(static_cast<int>(reg));
+}
+static inline dwarf::Reg DWARFReg(XmmRegister reg) {
+  return dwarf::Reg::X86Fp(static_cast<int>(reg));
+}
 
 std::ostream& operator<<(std::ostream& os, const X86ManagedRegister& reg);
 
