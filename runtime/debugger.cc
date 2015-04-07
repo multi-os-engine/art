@@ -1381,7 +1381,9 @@ bool Dbg::MatchInstance(JDWP::ObjectId expected_instance_id, mirror::Object* eve
 }
 
 void Dbg::SetJdwpLocation(JDWP::JdwpLocation* location, mirror::ArtMethod* m, uint32_t dex_pc)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+    LOCKS_EXCLUDED(Locks::thread_list_lock_,
+                   Locks::thread_suspend_count_lock_) {
   if (m == nullptr) {
     memset(location, 0, sizeof(*location));
   } else {
@@ -1872,9 +1874,12 @@ void Dbg::OutputJValue(JDWP::JdwpTag tag, const JValue* return_value, JDWP::Expa
 
 JDWP::JdwpError Dbg::GetThreadName(JDWP::ObjectId thread_id, std::string* name) {
   ScopedObjectAccessUnchecked soa(Thread::Current());
-  MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   JDWP::JdwpError error;
-  Thread* thread = DecodeThread(soa, thread_id, &error);
+  Thread* thread;
+  {
+    MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
+    thread = DecodeThread(soa, thread_id, &error);
+  }
   UNUSED(thread);
   if (error != JDWP::ERR_NONE && error != JDWP::ERR_THREAD_NOT_ALIVE) {
     return error;
@@ -2094,9 +2099,12 @@ JDWP::JdwpError Dbg::GetThreadStatus(JDWP::ObjectId thread_id, JDWP::JdwpThreadS
 
   *pSuspendStatus = JDWP::SUSPEND_STATUS_NOT_SUSPENDED;
 
-  MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   JDWP::JdwpError error;
-  Thread* thread = DecodeThread(soa, thread_id, &error);
+  Thread* thread;
+  {
+    MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
+    thread = DecodeThread(soa, thread_id, &error);
+  }
   if (error != JDWP::ERR_NONE) {
     if (error == JDWP::ERR_THREAD_NOT_ALIVE) {
       *pThreadStatus = JDWP::TS_ZOMBIE;
@@ -2115,9 +2123,12 @@ JDWP::JdwpError Dbg::GetThreadStatus(JDWP::ObjectId thread_id, JDWP::JdwpThreadS
 
 JDWP::JdwpError Dbg::GetThreadDebugSuspendCount(JDWP::ObjectId thread_id, JDWP::ExpandBuf* pReply) {
   ScopedObjectAccess soa(Thread::Current());
-  MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   JDWP::JdwpError error;
-  Thread* thread = DecodeThread(soa, thread_id, &error);
+  Thread* thread;
+  {
+    MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
+    thread = DecodeThread(soa, thread_id, &error);
+  }
   if (error != JDWP::ERR_NONE) {
     return error;
   }
@@ -2128,9 +2139,12 @@ JDWP::JdwpError Dbg::GetThreadDebugSuspendCount(JDWP::ObjectId thread_id, JDWP::
 
 JDWP::JdwpError Dbg::Interrupt(JDWP::ObjectId thread_id) {
   ScopedObjectAccess soa(Thread::Current());
-  MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   JDWP::JdwpError error;
-  Thread* thread = DecodeThread(soa, thread_id, &error);
+  Thread* thread;
+  {
+    MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
+    thread = DecodeThread(soa, thread_id, &error);
+  }
   if (error != JDWP::ERR_NONE) {
     return error;
   }
@@ -2207,10 +2221,13 @@ static int GetStackDepth(Thread* thread) SHARED_LOCKS_REQUIRED(Locks::mutator_lo
 
 JDWP::JdwpError Dbg::GetThreadFrameCount(JDWP::ObjectId thread_id, size_t* result) {
   ScopedObjectAccess soa(Thread::Current());
-  MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   JDWP::JdwpError error;
   *result = 0;
-  Thread* thread = DecodeThread(soa, thread_id, &error);
+  Thread* thread;
+  {
+    MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
+    thread = DecodeThread(soa, thread_id, &error);
+  }
   if (error != JDWP::ERR_NONE) {
     return error;
   }
@@ -2233,9 +2250,7 @@ JDWP::JdwpError Dbg::GetThreadFrames(JDWP::ObjectId thread_id, size_t start_fram
       expandBufAdd4BE(buf_, frame_count_);
     }
 
-    // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
-    // annotalysis.
-    virtual bool VisitFrame() NO_THREAD_SAFETY_ANALYSIS {
+    bool VisitFrame() OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
       if (GetMethod()->IsRuntimeMethod()) {
         return true;  // The debugger can't do anything useful with a frame that has no Method*.
       }
@@ -2262,12 +2277,16 @@ JDWP::JdwpError Dbg::GetThreadFrames(JDWP::ObjectId thread_id, size_t start_fram
   };
 
   ScopedObjectAccessUnchecked soa(Thread::Current());
-  MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   JDWP::JdwpError error;
-  Thread* thread = DecodeThread(soa, thread_id, &error);
+  Thread* thread;
+  {
+    MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
+    thread = DecodeThread(soa, thread_id, &error);
+  }
   if (error != JDWP::ERR_NONE) {
     return error;
   }
+
   if (!IsSuspendedForDebugger(soa, thread)) {
     return JDWP::ERR_THREAD_NOT_SUSPENDED;
   }
@@ -2602,16 +2621,16 @@ JDWP::JdwpError Dbg::SetLocalValues(JDWP::Request* request) {
 
   ScopedObjectAccessUnchecked soa(Thread::Current());
   Thread* thread;
+  JDWP::JdwpError error;
   {
     MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
-    JDWP::JdwpError error;
     thread = DecodeThread(soa, thread_id, &error);
-    if (error != JDWP::ERR_NONE) {
-      return error;
-    }
-    if (!IsSuspendedForDebugger(soa, thread)) {
-      return JDWP::ERR_THREAD_NOT_SUSPENDED;
-    }
+  }
+  if (error != JDWP::ERR_NONE) {
+    return error;
+  }
+  if (!IsSuspendedForDebugger(soa, thread)) {
+    return JDWP::ERR_THREAD_NOT_SUSPENDED;
   }
   // Find the frame with the given frame_id.
   std::unique_ptr<Context> context(Context::Create());
@@ -2630,7 +2649,7 @@ JDWP::JdwpError Dbg::SetLocalValues(JDWP::Request* request) {
     uint64_t value = request->ReadValue(width);
 
     VLOG(jdwp) << "    --> slot " << slot << " " << sigByte << " " << value;
-    JDWP::JdwpError error = Dbg::SetLocalValue(visitor, slot, sigByte, value, width);
+    error = Dbg::SetLocalValue(visitor, slot, sigByte, value, width);
     if (error != JDWP::ERR_NONE) {
       return error;
     }
@@ -3650,9 +3669,12 @@ JDWP::JdwpError Dbg::ConfigureStep(JDWP::ObjectId thread_id, JDWP::JdwpStepSize 
 
 void Dbg::UnconfigureStep(JDWP::ObjectId thread_id) {
   ScopedObjectAccessUnchecked soa(Thread::Current());
-  MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
   JDWP::JdwpError error;
-  Thread* thread = DecodeThread(soa, thread_id, &error);
+  Thread* thread;
+  {
+    MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
+    thread = DecodeThread(soa, thread_id, &error);
+  }
   if (error == JDWP::ERR_NONE) {
     thread->DeactivateSingleStepControl();
   }
@@ -3700,9 +3722,11 @@ JDWP::JdwpError Dbg::InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId objec
   Thread* self = Thread::Current();
   {
     ScopedObjectAccessUnchecked soa(self);
-    MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
     JDWP::JdwpError error;
-    targetThread = DecodeThread(soa, thread_id, &error);
+    {
+      MutexLock mu(soa.Self(), *Locks::thread_list_lock_);
+      targetThread = DecodeThread(soa, thread_id, &error);
+    }
     if (error != JDWP::ERR_NONE) {
       LOG(ERROR) << "InvokeMethod request for invalid thread id " << thread_id;
       return error;
