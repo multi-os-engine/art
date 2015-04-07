@@ -1,0 +1,7 @@
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Code-Review+2: Andreas Gampe <agampe@google.com>
+Submitted-by: Sebastien Hertz <shertz@google.com>
+Submitted-at: Tue, 07 Apr 2015 15:16:13 +0000
+Reviewed-on: https://android-review.googlesource.com/145170
+Project: platform/art
+Branch: refs/heads/master
