@@ -803,6 +803,134 @@ void InstructionCodeGeneratorX86_64::VisitSwitch(HSwitch* switch_instr) {
   __ jmp(temp_reg);
 }
 
+void LocationsBuilderX86_64::VisitCompareIf(HCompareIf* compare_if) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(compare_if, LocationSummary::kNoCall);
+  switch (compare_if->InputAt(0)->GetType()) {
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RegisterOrInt32LongConstant(compare_if->InputAt(1)));
+      break;
+    }
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble: {
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::Any());
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected type for compare if operation " << compare_if->InputAt(0)->GetType();
+  }
+}
+
+void InstructionCodeGeneratorX86_64::VisitCompareIf(HCompareIf* compare_if) {
+  LocationSummary* locations = compare_if->GetLocations();
+  Location left = locations->InAt(0);
+  Location right = locations->InAt(1);
+
+  Label* true_target = codegen_->GetLabelOf(compare_if->IfTrueSuccessor());
+  Label* false_target = codegen_->GetLabelOf(compare_if->IfFalseSuccessor());
+  bool falls_through = codegen_->GoesToNextBlock(compare_if->GetBlock(),
+                                                 compare_if->IfFalseSuccessor());
+  Primitive::Type type = compare_if->InputAt(0)->GetType();
+  switch (type) {
+    case Primitive::kPrimLong: {
+      CpuRegister left_reg = left.AsRegister<CpuRegister>();
+      if (right.IsConstant()) {
+        int64_t value = right.GetConstant()->AsLongConstant()->GetValue();
+        DCHECK(IsInt<32>(value));
+        if (value == 0) {
+          __ testq(left_reg, left_reg);
+        } else {
+          __ cmpq(left_reg, Immediate(static_cast<int32_t>(value)));
+        }
+      } else {
+        __ cmpq(left_reg, right.AsRegister<CpuRegister>());
+      }
+      __ j(X86_64Condition(compare_if->GetCondition()), true_target);
+      if (!falls_through) {
+        __ jmp(false_target);
+      }
+      return;
+    }
+    case Primitive::kPrimFloat: {
+      if (right.IsFpuRegister()) {
+        __ ucomiss(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      } else if (right.IsConstant()) {
+        __ ucomiss(left.AsFpuRegister<XmmRegister>(),
+                   codegen_->LiteralFloatAddress(right.GetConstant()->AsFloatConstant()->GetValue()));
+      } else {
+        DCHECK(right.IsStackSlot());
+        __ ucomiss(left.AsFpuRegister<XmmRegister>(),
+                   Address(CpuRegister(RSP), right.GetStackIndex()));
+      }
+      break;
+    }
+    case Primitive::kPrimDouble: {
+      if (right.IsFpuRegister()) {
+        __ ucomisd(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      } else if (right.IsConstant()) {
+        __ ucomisd(left.AsFpuRegister<XmmRegister>(),
+                   codegen_->LiteralDoubleAddress(right.GetConstant()->AsDoubleConstant()->GetValue()));
+      } else {
+        DCHECK(right.IsDoubleStackSlot());
+        __ ucomisd(left.AsFpuRegister<XmmRegister>(),
+                   Address(CpuRegister(RSP), right.GetStackIndex()));
+      }
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected compare type " << type;
+  }
+
+  // This is an FP compare.  Generate the correct jumps handling the bias.
+  bool gt_bias = compare_if->IsGtBias();
+  IfCondition if_cond = compare_if->GetCondition();
+  Condition ccode = X86_64Condition(if_cond);
+  switch (if_cond) {
+    case kCondEQ:
+      if (!gt_bias) {
+        __ j(kParityEven, false_target);
+      }
+      break;
+    case kCondNE:
+      if (!gt_bias) {
+        __ j(kParityEven, true_target);
+      }
+      break;
+    case kCondLT:
+      if (gt_bias) {
+        __ j(kParityEven, false_target);
+      }
+      ccode = kBelow;
+      break;
+    case kCondLE:
+      if (gt_bias) {
+        __ j(kParityEven, false_target);
+      }
+      ccode = kBelowEqual;
+      break;
+    case kCondGT:
+      if (gt_bias) {
+        __ j(kParityEven, true_target);
+      }
+      ccode = kAbove;
+      break;
+    case kCondGE:
+      if (gt_bias) {
+        __ j(kParityEven, true_target);
+      }
+      ccode = kAboveEqual;
+      break;
+    default:
+      LOG(FATAL) << "Unexpected ccode";
+  }
+  __ j(ccode, true_target);
+  if (!falls_through) {
+    __ jmp(false_target);
+  }
+}
+
 void InstructionCodeGeneratorX86_64::GenerateTestAndBranch(HInstruction* instruction,
                                                            Label* true_target,
                                                            Label* false_target,
@@ -1047,7 +1175,7 @@ void LocationsBuilderX86_64::VisitCompare(HCompare* compare) {
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble: {
       locations->SetInAt(0, Location::RequiresFpuRegister());
-      locations->SetInAt(1, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::Any());
       locations->SetOut(Location::RequiresRegister());
       break;
     }
@@ -1081,12 +1209,30 @@ void InstructionCodeGeneratorX86_64::VisitCompare(HCompare* compare) {
       break;
     }
     case Primitive::kPrimFloat: {
-      __ ucomiss(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      if (right.IsFpuRegister()) {
+        __ ucomiss(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      } else if (right.IsConstant()) {
+        __ ucomiss(left.AsFpuRegister<XmmRegister>(),
+                   codegen_->LiteralFloatAddress(right.GetConstant()->AsFloatConstant()->GetValue()));
+      } else {
+        DCHECK(right.IsStackSlot());
+        __ ucomiss(left.AsFpuRegister<XmmRegister>(),
+                   Address(CpuRegister(RSP), right.GetStackIndex()));
+      }
       __ j(kUnordered, compare->IsGtBias() ? &greater : &less);
       break;
     }
     case Primitive::kPrimDouble: {
-      __ ucomisd(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      if (right.IsFpuRegister()) {
+        __ ucomisd(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      } else if (right.IsConstant()) {
+        __ ucomisd(left.AsFpuRegister<XmmRegister>(),
+                   codegen_->LiteralDoubleAddress(right.GetConstant()->AsDoubleConstant()->GetValue()));
+      } else {
+        DCHECK(right.IsDoubleStackSlot());
+        __ ucomisd(left.AsFpuRegister<XmmRegister>(),
+                   Address(CpuRegister(RSP), right.GetStackIndex()));
+      }
       __ j(kUnordered, compare->IsGtBias() ? &greater : &less);
       break;
     }

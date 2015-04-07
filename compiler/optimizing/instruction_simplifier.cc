@@ -16,6 +16,7 @@
 
 #include "instruction_simplifier.h"
 
+#include "code_generator.h"
 #include "mirror/class-inl.h"
 #include "scoped_thread_state_change.h"
 
@@ -39,6 +40,7 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitAdd(HAdd* instruction) OVERRIDE;
   void VisitAnd(HAnd* instruction) OVERRIDE;
   void VisitDiv(HDiv* instruction) OVERRIDE;
+  void VisitIf(HIf* instruction) OVERRIDE;
   void VisitMul(HMul* instruction) OVERRIDE;
   void VisitOr(HOr* instruction) OVERRIDE;
   void VisitShl(HShl* instruction) OVERRIDE;
@@ -210,6 +212,54 @@ void InstructionSimplifierVisitor::VisitAnd(HAnd* instruction) {
     instruction->ReplaceWith(instruction->GetLeft());
     instruction->GetBlock()->RemoveInstruction(instruction);
   }
+}
+
+void InstructionSimplifierVisitor::VisitIf(HIf* instruction) {
+  // Try to replace a Condition comparing a Compare to 0 with
+  // a CompareIf.
+  HInstruction* input = instruction->InputAt(0);
+  if (!input->AsCondition()) {
+    return;
+  }
+
+  // Is there even possible?
+  // TODO: remove when all backends support CompareIf.
+  if (!GetGraph()->GetCodeGenerator()->SupportsCompareIf()) {
+    return;
+  }
+
+  HCondition *cond = input->AsCondition();
+  HInstruction* left = cond->GetLeft();
+  HInstruction* right = cond->GetRight();
+  // We can only replace an if which compares a Compare to 0.
+  if (!left->IsCompare() || !right->IsConstant() ||
+      right->AsConstant()->AsIntConstant()->GetValue() != 0) {
+    // Not possible to do conversion.
+    return;
+  }
+
+  // Is the Compare only used for this purpose?
+  if (!cond->GetUses().HasOnlyOneUse() || !left->GetUses().HasOnlyOneUse()) {
+    // Someone else also wants the result.
+    return;
+  }
+
+  // We have the right conditions to replace this with a CompareIf.
+  HCompare* compare = left->AsCompare();
+  ArenaAllocator* allocator = GetGraph()->GetArena();
+  HInstruction* compare_left = compare->GetLeft();
+  HInstruction* compare_right = compare->GetRight();
+  HCompareIf* compare_if =
+    new (allocator) HCompareIf(compare_left->GetType(),
+                               cond->GetCondition(),
+                               compare_left,
+                               compare_right,
+                               compare->GetBias());
+  instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, compare_if);
+
+  // TODO: Remove the Condition and Compare.
+  // cond->GetBlock()->RemoveInstruction(cond);
+  // compare->GetBlock()->RemoveInstruction(compare);
 }
 
 void InstructionSimplifierVisitor::VisitDiv(HDiv* instruction) {
