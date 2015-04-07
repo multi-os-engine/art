@@ -20,6 +20,7 @@
 #include "dwarf.h"
 #include "register.h"
 #include "writer.h"
+#include "utils.h"
 
 namespace art {
 namespace dwarf {
@@ -79,19 +80,23 @@ class DebugFrameOpCodeWriter : private Writer<Allocator> {
                         int reg_size) {
     DCHECK(reg_size == 4 || reg_size == 8);
     for (int i = 0; reg_mask != 0u; reg_mask >>= 1, i++) {
-      if ((reg_mask & 1) != 0u) {
-        RelOffset(Reg(reg_base.num() + i), offset);
-        offset += reg_size;
-      }
+      // Skip zero bits and go to the set bit.
+      int num_zeros = CTZ(reg_mask);
+      i += num_zeros;
+      reg_mask >>= num_zeros;
+      RelOffset(Reg(reg_base.num() + i), offset);
+      offset += reg_size;
     }
   }
 
   // Custom alias - unspill many registers based on bitmask.
   void RestoreMany(Reg reg_base, uint32_t reg_mask) {
     for (int i = 0; reg_mask != 0u; reg_mask >>= 1, i++) {
-      if ((reg_mask & 1) != 0u) {
-        Restore(Reg(reg_base.num() + i));
-      }
+      // Skip zero bits and go to the set bit.
+      int num_zeros = CTZ(reg_mask);
+      i += num_zeros;
+      reg_mask >>= num_zeros;
+      Restore(Reg(reg_base.num() + i));
     }
   }
 
@@ -256,6 +261,7 @@ class DebugFrameOpCodeWriter : private Writer<Allocator> {
         current_cfa_offset_(0),
         current_pc_(0),
         uses_dwarf3_features_(false) {
+    opcodes_.reserve(16);
   }
 
   virtual ~DebugFrameOpCodeWriter() { }
