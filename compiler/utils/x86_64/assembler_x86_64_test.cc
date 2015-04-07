@@ -174,6 +174,23 @@ class AssemblerX86_64Test : public AssemblerTest<x86_64::X86_64Assembler, x86_64
       secondary_register_names_.emplace(x86_64::CpuRegister(x86_64::R14), "r14d");
       secondary_register_names_.emplace(x86_64::CpuRegister(x86_64::R15), "r15d");
 
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::RAX), "al");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::RBX), "bl");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::RCX), "cl");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::RDX), "dl");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::RBP), "bpl");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::RSP), "spl");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::RSI), "sil");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::RDI), "dil");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::R8), "r8b");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::R9), "r9b");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::R10), "r10b");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::R11), "r11b");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::R12), "r12b");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::R13), "r13b");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::R14), "r14b");
+      tertiary_register_names_.emplace(x86_64::CpuRegister(x86_64::R15), "r15b");
+
       fp_registers_.push_back(new x86_64::XmmRegister(x86_64::XMM0));
       fp_registers_.push_back(new x86_64::XmmRegister(x86_64::XMM1));
       fp_registers_.push_back(new x86_64::XmmRegister(x86_64::XMM2));
@@ -216,9 +233,15 @@ class AssemblerX86_64Test : public AssemblerTest<x86_64::X86_64Assembler, x86_64
     return secondary_register_names_[reg];
   }
 
+  std::string GetTertiaryRegisterName(const x86_64::CpuRegister& reg) OVERRIDE {
+    CHECK(tertiary_register_names_.find(reg) != tertiary_register_names_.end());
+    return tertiary_register_names_[reg];
+  }
+
  private:
   std::vector<x86_64::CpuRegister*> registers_;
   std::map<x86_64::CpuRegister, std::string, X86_64CpuRegisterCompare> secondary_register_names_;
+  std::map<x86_64::CpuRegister, std::string, X86_64CpuRegisterCompare> tertiary_register_names_;
 
   std::vector<x86_64::XmmRegister*> fp_registers_;
 };
@@ -977,6 +1000,14 @@ std::string decreaseframe_test_fn(AssemblerX86_64Test::Base* assembler_test ATTR
 
 TEST_F(AssemblerX86_64Test, DecreaseFrame) {
   DriverFn(&decreaseframe_test_fn, "DecreaseFrame");
+}
+
+TEST_F(AssemblerX86_64Test, MovzxbRegs) {
+  DriverStr(Repeatrb(&x86_64::X86_64Assembler::movzxb, "movzbl %{reg2}, %{reg1}"), "movzxb");
+}
+
+TEST_F(AssemblerX86_64Test, MovsxbRegs) {
+  DriverStr(Repeatrb(&x86_64::X86_64Assembler::movsxb, "movsbl %{reg2}, %{reg1}"), "movsxb");
 }
 
 }  // namespace art

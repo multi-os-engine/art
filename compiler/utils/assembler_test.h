@@ -44,7 +44,8 @@ static std::string tmpnam_;
 
 enum class RegisterView {  // private
   kUsePrimaryName,
-  kUseSecondaryName
+  kUseSecondaryName,
+  kUseTertiaryName,
 };
 
 template<typename Ass, typename Reg, typename FPReg, typename Imm>
@@ -94,6 +95,15 @@ class AssemblerTest : public testing::Test {
         GetRegisters(),
         &AssemblerTest::GetRegName<RegisterView::kUseSecondaryName>,
         &AssemblerTest::GetRegName<RegisterView::kUseSecondaryName>,
+        fmt);
+  }
+
+  std::string Repeatrb(void (Ass::*f)(Reg, Reg), std::string fmt) {
+    return RepeatTemplatedRegisters<Reg, Reg>(f,
+        GetRegisters(),
+        GetRegisters(),
+        &AssemblerTest::GetRegName<RegisterView::kUseSecondaryName>,
+        &AssemblerTest::GetRegName<RegisterView::kUseTertiaryName>,
         fmt);
   }
 
@@ -237,6 +247,12 @@ class AssemblerTest : public testing::Test {
   // Secondary register names are the secondary view on registers, e.g., 32b on 64b systems.
   virtual std::string GetSecondaryRegisterName(const Reg& reg ATTRIBUTE_UNUSED) {
     UNIMPLEMENTED(FATAL) << "Architecture does not support secondary registers";
+    UNREACHABLE();
+  }
+
+  // Tertiary register names are the tertiary view on registers, e.g., 8b on 64b systems.
+  virtual std::string GetTertiaryRegisterName(const Reg& reg ATTRIBUTE_UNUSED) {
+    UNIMPLEMENTED(FATAL) << "Architecture does not support tertiary registers";
     UNREACHABLE();
   }
 
@@ -519,6 +535,10 @@ class AssemblerTest : public testing::Test {
 
       case RegisterView::kUseSecondaryName:
         sreg << GetSecondaryRegisterName(reg);
+        break;
+
+      case RegisterView::kUseTertiaryName:
+        sreg << GetTertiaryRegisterName(reg);
         break;
     }
     return sreg.str();
