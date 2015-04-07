@@ -1686,6 +1686,14 @@ void InstructionCodeGeneratorARM64::VisitSwitch(HSwitch* switch_instr ATTRIBUTE_
   LOG(FATAL) << "Switch not implemented";
 }
 
+void LocationsBuilderARM64::VisitCompareIf(HCompareIf* compare_if ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "CompareIf not implemented";
+}
+
+void InstructionCodeGeneratorARM64::VisitCompareIf(HCompareIf* compare_if ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "CompareIf not implemented";
+}
+
 void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruction,
                                                           vixl::Label* true_target,
                                                           vixl::Label* false_target,

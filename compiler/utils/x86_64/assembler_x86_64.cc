@@ -789,6 +789,15 @@ void X86_64Assembler::ucomiss(XmmRegister a, XmmRegister b) {
 }
 
 
+void X86_64Assembler::ucomiss(XmmRegister a, const Address& b) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitOptionalRex32(a, b);
+  EmitUint8(0x0F);
+  EmitUint8(0x2E);
+  EmitOperand(a.LowBits(), b);
+}
+
+
 void X86_64Assembler::ucomisd(XmmRegister a, XmmRegister b) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitUint8(0x66);
@@ -796,6 +805,16 @@ void X86_64Assembler::ucomisd(XmmRegister a, XmmRegister b) {
   EmitUint8(0x0F);
   EmitUint8(0x2E);
   EmitXmmRegisterOperand(a.LowBits(), b);
+}
+
+
+void X86_64Assembler::ucomisd(XmmRegister a, const Address& b) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitUint8(0x66);
+  EmitOptionalRex32(a, b);
+  EmitUint8(0x0F);
+  EmitUint8(0x2E);
+  EmitOperand(a.LowBits(), b);
 }
 
 

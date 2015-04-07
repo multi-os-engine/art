@@ -418,13 +418,20 @@ static void UpdateInputsUsers(HInstruction* instruction) {
   DCHECK(!instruction->HasEnvironment());
 }
 
-void HBasicBlock::InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor) {
+void HBasicBlock::InsertInstructionBefore(HInstruction* instruction,
+                                          HInstruction* cursor,
+                                          bool can_insert_control_flow) {
   DCHECK(!cursor->IsPhi());
   DCHECK(!instruction->IsPhi());
   DCHECK_EQ(instruction->GetId(), -1);
   DCHECK_NE(cursor->GetId(), -1);
   DCHECK_EQ(cursor->GetBlock(), this);
-  DCHECK(!instruction->IsControlFlow());
+  if (can_insert_control_flow) {
+    // We may be replacing one control flow instruction with another.
+    DCHECK_EQ(instruction->IsControlFlow(), cursor->IsControlFlow());
+  } else {
+    DCHECK(!instruction->IsControlFlow());
+  }
   instruction->next_ = cursor;
   instruction->previous_ = cursor->previous_;
   cursor->previous_ = instruction;
@@ -441,7 +448,7 @@ void HBasicBlock::InsertInstructionBefore(HInstruction* instruction, HInstructio
 void HBasicBlock::ReplaceAndRemoveInstructionWith(HInstruction* initial,
                                                   HInstruction* replacement) {
   DCHECK(initial->GetBlock() == this);
-  InsertInstructionBefore(replacement, initial);
+  InsertInstructionBefore(replacement, initial, true);
   initial->ReplaceWith(replacement);
   RemoveInstruction(initial);
 }

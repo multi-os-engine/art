@@ -1327,7 +1327,7 @@ void RegisterAllocator::InsertParallelMoveAtExitOf(HBasicBlock* block,
   // A block ending with an if or a switch cannot branch to a block with phis because
   // we do not allow critical edges. It can also not connect
   // a split interval between two blocks: the move has to happen in the successor.
-  DCHECK(!last->IsIf() && !last->IsSwitch());
+  DCHECK(!last->IsIf() && !last->IsSwitch() && !last->IsCompareIf());
   HInstruction* previous = last->GetPrevious();
   HParallelMove* move;
   // This is a parallel move for connecting blocks. We need to differentiate
