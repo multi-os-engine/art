@@ -916,6 +916,16 @@ void InstructionCodeGeneratorARM::VisitSwitch(HSwitch* switch_instr) {
   LOG(FATAL) << "Switch not implemented";
 }
 
+void LocationsBuilderARM::VisitCompareIf(HCompareIf* compare_if) {
+  UNUSED(compare_if);
+  LOG(FATAL) << "CompareIf not implemented";
+}
+
+void InstructionCodeGeneratorARM::VisitCompareIf(HCompareIf* compare_if) {
+  UNUSED(compare_if);
+  LOG(FATAL) << "CompareIf not implemented";
+}
+
 void InstructionCodeGeneratorARM::GenerateTestAndBranch(HInstruction* instruction,
                                                         Label* true_target,
                                                         Label* false_target,

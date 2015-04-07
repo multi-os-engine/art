@@ -563,7 +563,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   void DisconnectFromAll();
 
   void AddInstruction(HInstruction* instruction);
-  void InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor);
+  void InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor,
+                               bool can_insert_control_flow = false);
   // Replace instruction `initial` with `replacement` within this block.
   void ReplaceAndRemoveInstructionWith(HInstruction* initial,
                                        HInstruction* replacement);
@@ -692,6 +693,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(CheckCast, Instruction)                                             \
   M(ClinitCheck, Instruction)                                           \
   M(Compare, BinaryOperation)                                           \
+  M(CompareIf, Instruction)                                             \
   M(Condition, BinaryOperation)                                         \
   M(Deoptimize, Instruction)                                            \
   M(Div, BinaryOperation)                                               \
@@ -1933,12 +1935,62 @@ class HCompare : public HBinaryOperation {
 
   bool IsGtBias() { return bias_ == kGtBias; }
 
+  Bias GetBias() const { return bias_; }
+
   DECLARE_INSTRUCTION(Compare);
 
  private:
   const Bias bias_;
 
   DISALLOW_COPY_AND_ASSIGN(HCompare);
+};
+
+// Instruction combining HCondition, HCompare and HIf, used if the result of a
+// HCondition of a HCompare and 0 is only used as the input to an HIf.
+class HCompareIf : public HTemplateInstruction<2> {
+ public:
+  HCompareIf(Primitive::Type type, IfCondition condition,
+             HInstruction* left, HInstruction* right,
+             HCompare::Bias bias)
+  : HTemplateInstruction(SideEffects::None()), bias_(bias), condition_(condition) {
+    DCHECK_EQ(type, left->GetType());
+    DCHECK_EQ(type, right->GetType());
+    SetRawInputAt(0, left);
+    SetRawInputAt(1, right);
+  }
+
+  bool IsControlFlow() const OVERRIDE { return true; }
+
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    HCompareIf *other_compare_if = other->AsCompareIf();
+    return bias_ == other_compare_if->bias_ &&
+           condition_ == other_compare_if->condition_;
+  }
+
+  HBasicBlock* IfTrueSuccessor() const {
+    return GetBlock()->GetSuccessors().Get(0);
+  }
+
+  HBasicBlock* IfFalseSuccessor() const {
+    return GetBlock()->GetSuccessors().Get(1);
+  }
+
+  IfCondition GetCondition() const {
+    return condition_;
+  }
+
+  bool IsGtBias() { return bias_ == HCompare::kGtBias; }
+
+  DECLARE_INSTRUCTION(CompareIf);
+
+  // But we aren't really a Compare.
+  HCompare* AsCompare() OVERRIDE { return nullptr; }
+
+ private:
+  const HCompare::Bias bias_;
+  IfCondition condition_;
+
+  DISALLOW_COPY_AND_ASSIGN(HCompareIf);
 };
 
 // A local in the graph. Corresponds to a Dex register.

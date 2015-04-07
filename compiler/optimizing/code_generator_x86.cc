@@ -818,6 +818,16 @@ void InstructionCodeGeneratorX86::VisitSwitch(HSwitch* switch_instr) {
   LOG(FATAL) << "Switch not implemented";
 }
 
+void LocationsBuilderX86::VisitCompareIf(HCompareIf* compare_if) {
+  UNUSED(compare_if);
+  LOG(FATAL) << "CompareIf not implemented";
+}
+
+void InstructionCodeGeneratorX86::VisitCompareIf(HCompareIf* compare_if) {
+  UNUSED(compare_if);
+  LOG(FATAL) << "CompareIf not implemented";
+}
+
 void InstructionCodeGeneratorX86::GenerateTestAndBranch(HInstruction* instruction,
                                                         Label* true_target,
                                                         Label* false_target,

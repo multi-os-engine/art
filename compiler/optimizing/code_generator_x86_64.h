@@ -290,6 +290,10 @@ class CodeGeneratorX86_64 : public CodeGenerator {
     return true;
   }
 
+  virtual bool SupportsCompareIf() const {
+    return true;
+  }
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
