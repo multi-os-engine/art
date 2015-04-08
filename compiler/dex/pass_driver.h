@@ -109,7 +109,7 @@ class PassDriver {
    * @param time_split do we want a time split request(default: false)?
    * @return whether the pass was applied.
    */
-  virtual bool RunPass(const Pass* pass, bool time_split = false) = 0;
+  virtual bool RunPass(const Pass* pass) = 0;
 
  protected:
   /**
