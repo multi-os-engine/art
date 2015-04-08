@@ -1839,6 +1839,9 @@ void Thread::ThrowNewWrappedException(const char* exception_class_descriptor,
       SetException(exception.Get());
     }
   }
+  if (strcmp(exception_class_descriptor, "Ljava/lang/NullPointerException;") == 0) {
+    LOG(ERROR) << exception->Dump();
+  }
 }
 
 void Thread::ThrowOutOfMemoryError(const char* msg) {
