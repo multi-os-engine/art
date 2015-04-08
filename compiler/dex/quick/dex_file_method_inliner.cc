@@ -413,6 +413,18 @@ bool DexFileMethodInliner::AnalyseMethodCode(verifier::MethodVerifier* verifier)
   return success && AddInlineMethod(verifier->GetMethodReference().dex_method_index, method);
 }
 
+std::pair<bool, bool> DexFileMethodInliner::IsIntrinsicOrSpecial(uint32_t method_index) {
+  ReaderMutexLock mu(Thread::Current(), lock_);
+  auto it = inline_methods_.find(method_index);
+  if (it != inline_methods_.end()) {
+    DCHECK_NE(it->second.flags & (kInlineIntrinsic | kInlineSpecial), 0);
+    return std::pair<bool, bool>((it->second.flags & kInlineIntrinsic) != 0,
+                                 (it->second.flags & kInlineSpecial) != 0);
+  } else {
+    return std::pair<bool, bool>(false, false);
+  }
+}
+
 bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index, InlineMethod* intrinsic) {
   ReaderMutexLock mu(Thread::Current(), lock_);
   auto it = inline_methods_.find(method_index);
