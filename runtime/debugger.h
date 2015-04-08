@@ -109,8 +109,8 @@ class SingleStepControl {
     return stack_depth_;
   }
 
-  mirror::ArtMethod* GetMethod() const {
-    return method_;
+  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return method_.Read();
   }
 
   const std::set<uint32_t>& GetDexPcs() const {
@@ -138,7 +138,7 @@ class SingleStepControl {
   // set of DEX pcs associated to the source line number where the suspension occurred.
   // This is used to support SD_INTO and SD_OVER single-step depths so we detect when a single-step
   // causes the execution of an instruction in a different method or at a different line number.
-  mirror::ArtMethod* method_;
+  GcRoot<mirror::ArtMethod> method_;
   std::set<uint32_t> dex_pcs_;
 
   DISALLOW_COPY_AND_ASSIGN(SingleStepControl);
@@ -524,23 +524,23 @@ class Dbg {
     kMethodEntry    = 0x04,
     kMethodExit     = 0x08,
   };
-  static void PostFieldAccessEvent(mirror::ArtMethod* m, int dex_pc, mirror::Object* this_object,
-                                   ArtField* f)
+  static void PostFieldAccessEvent(Thread* self, mirror::ArtMethod* m, int dex_pc,
+                                   mirror::Object* this_object, ArtField* f)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  static void PostFieldModificationEvent(mirror::ArtMethod* m, int dex_pc,
+  static void PostFieldModificationEvent(Thread* self, mirror::ArtMethod* m, int dex_pc,
                                          mirror::Object* this_object, ArtField* f,
                                          const JValue* field_value)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  static void PostException(mirror::Throwable* exception)
+  static void PostException(Thread* self, mirror::Throwable* exception)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static void PostThreadStart(Thread* t)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static void PostThreadDeath(Thread* t)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  static void PostClassPrepare(mirror::Class* c)
+  static void PostClassPrepare(Thread* self, mirror::Class* c)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  static void UpdateDebugger(Thread* thread, mirror::Object* this_object,
+  static void UpdateDebugger(Thread* self, mirror::Object* this_object,
                              mirror::ArtMethod* method, uint32_t new_dex_pc,
                              int event_flags, const JValue* return_value)
       LOCKS_EXCLUDED(Locks::breakpoint_lock_)
@@ -729,7 +729,7 @@ class Dbg {
   static void PostThreadStartOrStop(Thread*, uint32_t)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  static void PostLocationEvent(mirror::ArtMethod* method, int pcOffset,
+  static void PostLocationEvent(Thread* self, mirror::ArtMethod* method, int pcOffset,
                                 mirror::Object* thisPtr, int eventFlags,
                                 const JValue* return_value)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

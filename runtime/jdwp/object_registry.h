@@ -23,6 +23,7 @@
 #include <map>
 
 #include "base/casts.h"
+#include "handle.h"
 #include "jdwp/jdwp.h"
 #include "safe_map.h"
 
@@ -94,7 +95,7 @@ class ObjectRegistry {
   jobject GetJObject(JDWP::ObjectId id) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:
-  JDWP::ObjectId InternalAdd(mirror::Object* o)
+  JDWP::ObjectId InternalAdd(Handle<mirror::Object> o)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       LOCKS_EXCLUDED(lock_, Locks::thread_list_lock_);
 

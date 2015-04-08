@@ -195,8 +195,8 @@ struct JdwpState {
    *
    * "returnValue" is non-null for MethodExit events only.
    */
-  void PostLocationEvent(const EventLocation* pLoc, mirror::Object* thisPtr, int eventFlags,
-                         const JValue* returnValue)
+  void PostLocationEvent(Thread* self, const EventLocation* pLoc, mirror::Object* thisPtr,
+                         int eventFlags, const JValue* returnValue)
      LOCKS_EXCLUDED(event_list_lock_)
      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -207,8 +207,8 @@ struct JdwpState {
    * "fieldValue" is non-null for field modification events only.
    * "is_modification" is true for field modification, false for field access.
    */
-  void PostFieldEvent(const EventLocation* pLoc, ArtField* field, mirror::Object* thisPtr,
-                      const JValue* fieldValue, bool is_modification)
+  void PostFieldEvent(Thread* self, const EventLocation* pLoc, ArtField* field,
+                      mirror::Object* thisPtr, const JValue* fieldValue, bool is_modification)
       LOCKS_EXCLUDED(event_list_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -217,7 +217,8 @@ struct JdwpState {
    *
    * Pass in a zeroed-out "*pCatchLoc" if the exception wasn't caught.
    */
-  void PostException(const EventLocation* pThrowLoc, mirror::Throwable* exception_object,
+  void PostException(Thread* self, const EventLocation* pThrowLoc,
+                     mirror::Throwable* exception_object,
                      const EventLocation* pCatchLoc, mirror::Object* thisPtr)
       LOCKS_EXCLUDED(event_list_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -225,14 +226,14 @@ struct JdwpState {
   /*
    * A thread has started or stopped.
    */
-  void PostThreadChange(Thread* thread, bool start)
+  void PostThreadChange(Thread* self, bool start)
       LOCKS_EXCLUDED(event_list_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   /*
    * Class has been prepared.
    */
-  void PostClassPrepare(mirror::Class* klass)
+  void PostClassPrepare(Thread* self, mirror::Class* klass)
       LOCKS_EXCLUDED(event_list_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

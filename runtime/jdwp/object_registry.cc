@@ -36,23 +36,22 @@ ObjectRegistry::ObjectRegistry()
 }
 
 JDWP::RefTypeId ObjectRegistry::AddRefType(mirror::Class* c) {
-  return InternalAdd(c);
+  return Add(c);
 }
 
 JDWP::ObjectId ObjectRegistry::Add(mirror::Object* o) {
-  return InternalAdd(o);
+  Thread* const self = Thread::Current();
+  StackHandleScope<1> hs(self);
+  return InternalAdd(hs.NewHandle(o));
 }
 
-JDWP::ObjectId ObjectRegistry::InternalAdd(mirror::Object* o) {
-  if (o == nullptr) {
+JDWP::ObjectId ObjectRegistry::InternalAdd(Handle<mirror::Object> obj_h) {
+  if (obj_h.Get() == nullptr) {
     return 0;
   }
 
   Thread* const self = Thread::Current();
   self->AssertNoPendingException();
-
-  StackHandleScope<1> hs(self);
-  Handle<mirror::Object> obj_h(hs.NewHandle(o));
 
   // Call IdentityHashCode here to avoid a lock level violation between lock_ and monitor_lock.
   int32_t identity_hash_code = obj_h->IdentityHashCode();

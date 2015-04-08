@@ -1547,7 +1547,7 @@ mirror::Class* ClassLinker::DefineClass(Thread* self, const char* descriptor, si
    * The class has been prepared and resolved but possibly not yet verified
    * at this point.
    */
-  Dbg::PostClassPrepare(new_class_h.Get());
+  Dbg::PostClassPrepare(self, new_class_h.Get());
 
   return new_class_h.Get();
 }
