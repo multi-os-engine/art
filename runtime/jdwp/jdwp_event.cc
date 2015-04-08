@@ -32,6 +32,8 @@
 #include "scoped_thread_state_change.h"
 #include "thread-inl.h"
 
+#include "handle_scope-inl.h"
+
 /*
 General notes:
 
@@ -110,17 +112,23 @@ namespace JDWP {
  * The rest will be zeroed.
  */
 struct ModBasket {
-  ModBasket() : pLoc(nullptr), thread(nullptr), locationClass(nullptr), exceptionClass(nullptr),
-                caught(false), field(nullptr), thisPtr(nullptr) { }
+  explicit ModBasket(Thread* self)
+    : hs(self), pLoc(nullptr), thread(self),
+      locationClass(hs.NewHandle<mirror::Class>(nullptr)),
+      exceptionClass(hs.NewHandle<mirror::Class>(nullptr)),
+      caught(false),
+      field(nullptr),
+      thisPtr(hs.NewHandle<mirror::Object>(nullptr)) { }
 
-  const EventLocation*  pLoc;             /* LocationOnly */
-  std::string           className;        /* ClassMatch/ClassExclude */
-  Thread*               thread;           /* ThreadOnly */
-  mirror::Class*        locationClass;    /* ClassOnly */
-  mirror::Class*        exceptionClass;   /* ExceptionOnly */
-  bool                  caught;           /* ExceptionOnly */
-  ArtField*             field;            /* FieldOnly */
-  mirror::Object*       thisPtr;          /* InstanceOnly */
+  StackHandleScope<3> hs;
+  const EventLocation*            pLoc;             /* LocationOnly */
+  std::string                     className;        /* ClassMatch/ClassExclude */
+  Thread* const                   thread;           /* ThreadOnly */
+  MutableHandle<mirror::Class>    locationClass;    /* ClassOnly */
+  MutableHandle<mirror::Class>    exceptionClass;   /* ExceptionOnly */
+  bool                            caught;           /* ExceptionOnly */
+  ArtField*                       field;            /* FieldOnly */
+  MutableHandle<mirror::Object>   thisPtr;          /* InstanceOnly */
   /* nothing for StepOnly -- handled differently */
 };
 
@@ -457,7 +465,7 @@ static bool ModsMatch(JdwpEvent* pEvent, const ModBasket& basket)
       }
       break;
     case MK_CLASS_ONLY:
-      if (!Dbg::MatchType(basket.locationClass, pMod->classOnly.refTypeId)) {
+      if (!Dbg::MatchType(basket.locationClass.Get(), pMod->classOnly.refTypeId)) {
         return false;
       }
       break;
@@ -478,7 +486,7 @@ static bool ModsMatch(JdwpEvent* pEvent, const ModBasket& basket)
       break;
     case MK_EXCEPTION_ONLY:
       if (pMod->exceptionOnly.refTypeId != 0 &&
-          !Dbg::MatchType(basket.exceptionClass, pMod->exceptionOnly.refTypeId)) {
+          !Dbg::MatchType(basket.exceptionClass.Get(), pMod->exceptionOnly.refTypeId)) {
         return false;
       }
       if ((basket.caught && !pMod->exceptionOnly.caught) ||
@@ -497,7 +505,7 @@ static bool ModsMatch(JdwpEvent* pEvent, const ModBasket& basket)
       }
       break;
     case MK_INSTANCE_ONLY:
-      if (!Dbg::MatchInstance(pMod->instanceOnly.objectId, basket.thisPtr)) {
+      if (!Dbg::MatchInstance(pMod->instanceOnly.objectId, basket.thisPtr.Get())) {
         return false;
       }
       break;
@@ -825,12 +833,11 @@ void JdwpState::PostLocationEvent(const EventLocation* pLoc, mirror::Object* thi
   DCHECK(pLoc->method != nullptr);
   DCHECK_EQ(pLoc->method->IsStatic(), thisPtr == nullptr);
 
-  ModBasket basket;
+  ModBasket basket(Thread::Current());
   basket.pLoc = pLoc;
-  basket.locationClass = pLoc->method->GetDeclaringClass();
-  basket.thisPtr = thisPtr;
-  basket.thread = Thread::Current();
-  basket.className = Dbg::GetClassName(basket.locationClass);
+  basket.locationClass.Assign(pLoc->method->GetDeclaringClass());
+  basket.thisPtr.Assign(thisPtr);
+  basket.className = Dbg::GetClassName(basket.locationClass.Get());
 
   /*
    * On rare occasions we may need to execute interpreted code in the VM
@@ -924,16 +931,15 @@ void JdwpState::PostFieldEvent(const EventLocation* pLoc, ArtField* field,
   DCHECK_EQ(fieldValue != nullptr, is_modification);
   DCHECK_EQ(field->IsStatic(), this_object == nullptr);
 
-  ModBasket basket;
+  ModBasket basket(Thread::Current());
   basket.pLoc = pLoc;
-  basket.locationClass = pLoc->method->GetDeclaringClass();
-  basket.thisPtr = this_object;
-  basket.thread = Thread::Current();
-  basket.className = Dbg::GetClassName(basket.locationClass);
+  basket.locationClass.Assign(pLoc->method->GetDeclaringClass());
+  basket.thisPtr.Assign(this_object);
+  basket.className = Dbg::GetClassName(basket.locationClass.Get());
   basket.field = field;
 
   if (InvokeInProgress()) {
-    VLOG(jdwp) << "Not posting field event during invoke";
+    VLOG(jdwp) << "Not posting field event during invoke (" << basket.className << ")";
     return;
   }
 
@@ -975,7 +981,7 @@ void JdwpState::PostFieldEvent(const EventLocation* pLoc, ArtField* field,
   uint8_t tag;
   {
     ScopedObjectAccessUnchecked soa(Thread::Current());
-    tag = Dbg::TagFromObject(soa, basket.thisPtr);
+    tag = Dbg::TagFromObject(soa, basket.thisPtr.Get());
   }
 
   for (const JdwpEvent* pEvent : match_list) {
@@ -1028,8 +1034,7 @@ void JdwpState::PostThreadChange(Thread* thread, bool start) {
     return;
   }
 
-  ModBasket basket;
-  basket.thread = thread;
+  ModBasket basket(thread);
 
   std::vector<JdwpEvent*> match_list;
   const JdwpEventKind match_kind = (start) ? EK_THREAD_START : EK_THREAD_DEATH;
@@ -1106,18 +1111,15 @@ void JdwpState::PostException(const EventLocation* pThrowLoc, mirror::Throwable*
     VLOG(jdwp) << "Unexpected: exception event with empty throw location";
   }
 
-  ModBasket basket;
+  ModBasket basket(Thread::Current());
   basket.pLoc = pThrowLoc;
   if (pThrowLoc->method != nullptr) {
-    basket.locationClass = pThrowLoc->method->GetDeclaringClass();
-  } else {
-    basket.locationClass = nullptr;
+    basket.locationClass.Assign(pThrowLoc->method->GetDeclaringClass());
   }
-  basket.thread = Thread::Current();
-  basket.className = Dbg::GetClassName(basket.locationClass);
-  basket.exceptionClass = exception_object->GetClass();
+  basket.className = Dbg::GetClassName(basket.locationClass.Get());
+  basket.exceptionClass.Assign(exception_object->GetClass());
   basket.caught = (pCatchLoc->method != 0);
-  basket.thisPtr = thisPtr;
+  basket.thisPtr.Assign(thisPtr);
 
   /* don't try to post an exception caused by the debugger */
   if (InvokeInProgress()) {
@@ -1188,10 +1190,9 @@ void JdwpState::PostException(const EventLocation* pThrowLoc, mirror::Throwable*
 void JdwpState::PostClassPrepare(mirror::Class* klass) {
   DCHECK(klass != nullptr);
 
-  ModBasket basket;
-  basket.locationClass = klass;
-  basket.thread = Thread::Current();
-  basket.className = Dbg::GetClassName(basket.locationClass);
+  ModBasket basket(Thread::Current());
+  basket.locationClass.Assign(klass);
+  basket.className = Dbg::GetClassName(basket.locationClass.Get());
 
   /* suppress class prep caused by debugger */
   if (InvokeInProgress()) {
@@ -1214,7 +1215,7 @@ void JdwpState::PostClassPrepare(mirror::Class* klass) {
   // debuggers seem to like that.  There might be some advantage to honesty,
   // since the class may not yet be verified.
   int status = JDWP::CS_VERIFIED | JDWP::CS_PREPARED;
-  JDWP::JdwpTypeTag tag = Dbg::GetTypeTag(basket.locationClass);
+  JDWP::JdwpTypeTag tag = Dbg::GetTypeTag(basket.locationClass.Get());
   std::string temp;
   std::string signature(basket.locationClass->GetDescriptor(&temp));
 
