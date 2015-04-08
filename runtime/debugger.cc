@@ -250,11 +250,10 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
     Dbg::UpdateDebugger(thread, this_object, method, dex_pc, Dbg::kMethodExit, &return_value);
   }
 
-  void MethodUnwind(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
-                    uint32_t dex_pc)
+  void MethodUnwind(Thread* thread ATTRIBUTE_UNUSED, mirror::Object* this_object ATTRIBUTE_UNUSED,
+                    mirror::ArtMethod* method, uint32_t dex_pc)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     // We're not recorded to listen to this kind of event, so complain.
-    UNUSED(thread, this_object, method, dex_pc);
     LOG(ERROR) << "Unexpected method unwind event in debugger " << PrettyMethod(method)
                << " " << dex_pc;
   }
@@ -268,20 +267,19 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
   void FieldRead(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
                  uint32_t dex_pc, mirror::ArtField* field)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    UNUSED(thread);
-    Dbg::PostFieldAccessEvent(method, dex_pc, this_object, field);
+    Dbg::PostFieldAccessEvent(thread, method, dex_pc, this_object, field);
   }
 
-  void FieldWritten(Thread* thread ATTRIBUTE_UNUSED, mirror::Object* this_object,
+  void FieldWritten(Thread* thread, mirror::Object* this_object,
                     mirror::ArtMethod* method, uint32_t dex_pc, mirror::ArtField* field,
                     const JValue& field_value)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    Dbg::PostFieldModificationEvent(method, dex_pc, this_object, field, &field_value);
+    Dbg::PostFieldModificationEvent(thread, method, dex_pc, this_object, field, &field_value);
   }
 
-  void ExceptionCaught(Thread* thread ATTRIBUTE_UNUSED, mirror::Throwable* exception_object)
+  void ExceptionCaught(Thread* thread, mirror::Throwable* exception_object)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    Dbg::PostException(exception_object);
+    Dbg::PostException(thread, exception_object);
   }
 
   // We only care about how many backward branches were executed in the Jit.
@@ -351,7 +349,7 @@ void DebugInvokeReq::VisitRoots(RootVisitor* visitor, const RootInfo& root_info)
 }
 
 void SingleStepControl::VisitRoots(RootVisitor* visitor, const RootInfo& root_info) {
-  visitor->VisitRootIfNonNull(reinterpret_cast<mirror::Object**>(&method_), root_info);
+  method_.VisitRootIfNonNull(visitor, root_info);
 }
 
 void SingleStepControl::AddDexPc(uint32_t dex_pc) {
@@ -2765,7 +2763,7 @@ static void SetEventLocation(JDWP::EventLocation* location, mirror::ArtMethod* m
   }
 }
 
-void Dbg::PostLocationEvent(mirror::ArtMethod* m, int dex_pc, mirror::Object* this_object,
+void Dbg::PostLocationEvent(Thread* self, mirror::ArtMethod* m, int dex_pc, mirror::Object* this_object,
                             int event_flags, const JValue* return_value) {
   if (!IsDebuggerActive()) {
     return;
@@ -2775,10 +2773,10 @@ void Dbg::PostLocationEvent(mirror::ArtMethod* m, int dex_pc, mirror::Object* th
   JDWP::EventLocation location;
   SetEventLocation(&location, m, dex_pc);
 
-  gJdwpState->PostLocationEvent(&location, this_object, event_flags, return_value);
+  gJdwpState->PostLocationEvent(self, &location, this_object, event_flags, return_value);
 }
 
-void Dbg::PostFieldAccessEvent(mirror::ArtMethod* m, int dex_pc,
+void Dbg::PostFieldAccessEvent(Thread* self, mirror::ArtMethod* m, int dex_pc,
                                mirror::Object* this_object, mirror::ArtField* f) {
   if (!IsDebuggerActive()) {
     return;
@@ -2788,10 +2786,10 @@ void Dbg::PostFieldAccessEvent(mirror::ArtMethod* m, int dex_pc,
   JDWP::EventLocation location;
   SetEventLocation(&location, m, dex_pc);
 
-  gJdwpState->PostFieldEvent(&location, f, this_object, nullptr, false);
+  gJdwpState->PostFieldEvent(self, &location, f, this_object, nullptr, false);
 }
 
-void Dbg::PostFieldModificationEvent(mirror::ArtMethod* m, int dex_pc,
+void Dbg::PostFieldModificationEvent(Thread* self, mirror::ArtMethod* m, int dex_pc,
                                      mirror::Object* this_object, mirror::ArtField* f,
                                      const JValue* field_value) {
   if (!IsDebuggerActive()) {
@@ -2803,7 +2801,7 @@ void Dbg::PostFieldModificationEvent(mirror::ArtMethod* m, int dex_pc,
   JDWP::EventLocation location;
   SetEventLocation(&location, m, dex_pc);
 
-  gJdwpState->PostFieldEvent(&location, f, this_object, field_value, true);
+  gJdwpState->PostFieldEvent(self, &location, f, this_object, field_value, true);
 }
 
 /**
@@ -2894,7 +2892,7 @@ class CatchLocationFinder : public StackVisitor {
   DISALLOW_COPY_AND_ASSIGN(CatchLocationFinder);
 };
 
-void Dbg::PostException(mirror::Throwable* exception_object) {
+void Dbg::PostException(Thread* self, mirror::Throwable* exception_object) {
   if (!IsDebuggerActive()) {
     return;
   }
@@ -2908,15 +2906,15 @@ void Dbg::PostException(mirror::Throwable* exception_object) {
   JDWP::EventLocation exception_catch_location;
   SetEventLocation(&exception_catch_location, clf.GetCatchMethod(), clf.GetCatchDexPc());
 
-  gJdwpState->PostException(&exception_throw_location, h_exception.Get(), &exception_catch_location,
-                            clf.GetThisAtThrow());
+  gJdwpState->PostException(self, &exception_throw_location, h_exception.Get(),
+                            &exception_catch_location, clf.GetThisAtThrow());
 }
 
-void Dbg::PostClassPrepare(mirror::Class* c) {
+void Dbg::PostClassPrepare(Thread* self, mirror::Class* c) {
   if (!IsDebuggerActive()) {
     return;
   }
-  gJdwpState->PostClassPrepare(c);
+  gJdwpState->PostClassPrepare(self, c);
 }
 
 void Dbg::UpdateDebugger(Thread* thread, mirror::Object* this_object,
@@ -2992,7 +2990,7 @@ void Dbg::UpdateDebugger(Thread* thread, mirror::Object* this_object,
   // If there's something interesting going on, see if it matches one
   // of the debugger filters.
   if (event_flags != 0) {
-    Dbg::PostLocationEvent(m, dex_pc, this_object, event_flags, return_value);
+    Dbg::PostLocationEvent(thread, m, dex_pc, this_object, event_flags, return_value);
   }
 }
 
