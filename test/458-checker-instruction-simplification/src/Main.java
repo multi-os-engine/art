@@ -33,245 +33,245 @@ public class Main {
    */
 
   // CHECK-START: long Main.Add0(long) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:j\d+]]     ParameterValue
-  // CHECK-DAG:     [[Const0:j\d+]]  LongConstant 0
-  // CHECK-DAG:     [[Add:j\d+]]     Add [ [[Const0]] [[Arg]] ]
-  // CHECK-DAG:                      Return [ [[Add]] ]
+  // CHECK:         [[Arg:j\d+]]     ParameterValue
+  // CHECK:         [[Const0:j\d+]]  LongConstant 0
+  // CHECK:         [[Add:j\d+]]     Add [ [[Const0]] [[Arg]] ]
+  // CHECK:                          Return [ [[Add]] ]
 
   // CHECK-START: long Main.Add0(long) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:j\d+]]     ParameterValue
+  // CHECK:         [[Arg:j\d+]]     ParameterValue
   // CHECK-NOT:                      Add
-  // CHECK-DAG:                      Return [ [[Arg]] ]
+  // CHECK:                          Return [ [[Arg]] ]
 
   public static long Add0(long arg) {
     return 0 + arg;
   }
 
   // CHECK-START: int Main.AndAllOnes(int) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:i\d+]]     ParameterValue
-  // CHECK-DAG:     [[ConstF:i\d+]]  IntConstant -1
-  // CHECK-DAG:     [[And:i\d+]]     And [ [[Arg]] [[ConstF]] ]
-  // CHECK-DAG:                      Return [ [[And]] ]
+  // CHECK:         [[Arg:i\d+]]     ParameterValue
+  // CHECK:         [[ConstF:i\d+]]  IntConstant -1
+  // CHECK:         [[And:i\d+]]     And [ [[Arg]] [[ConstF]] ]
+  // CHECK:                          Return [ [[And]] ]
 
   // CHECK-START: int Main.AndAllOnes(int) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:i\d+]]     ParameterValue
+  // CHECK:         [[Arg:i\d+]]     ParameterValue
   // CHECK-NOT:                      And
-  // CHECK-DAG:                      Return [ [[Arg]] ]
+  // CHECK:                          Return [ [[Arg]] ]
 
   public static int AndAllOnes(int arg) {
     return arg & -1;
   }
 
   // CHECK-START: long Main.Div1(long) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:j\d+]]     ParameterValue
-  // CHECK-DAG:     [[Const1:j\d+]]  LongConstant 1
-  // CHECK-DAG:     [[Div:j\d+]]     Div [ [[Arg]] [[Const1]] ]
-  // CHECK-DAG:                      Return [ [[Div]] ]
+  // CHECK:         [[Arg:j\d+]]     ParameterValue
+  // CHECK:         [[Const1:j\d+]]  LongConstant 1
+  // CHECK:         [[Div:j\d+]]     Div [ [[Arg]] [[Const1]] ]
+  // CHECK:                          Return [ [[Div]] ]
 
   // CHECK-START: long Main.Div1(long) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:j\d+]]     ParameterValue
+  // CHECK:         [[Arg:j\d+]]     ParameterValue
   // CHECK-NOT:                      Div
-  // CHECK-DAG:                      Return [ [[Arg]] ]
+  // CHECK:                          Return [ [[Arg]] ]
 
   public static long Div1(long arg) {
     return arg / 1;
   }
 
   // CHECK-START: int Main.DivN1(int) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[ConstN1:i\d+]]  IntConstant -1
-  // CHECK-DAG:     [[Div:i\d+]]      Div [ [[Arg]] [[ConstN1]] ]
-  // CHECK-DAG:                       Return [ [[Div]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[ConstN1:i\d+]]  IntConstant -1
+  // CHECK:         [[Div:i\d+]]      Div [ [[Arg]] [[ConstN1]] ]
+  // CHECK:                           Return [ [[Div]] ]
 
   // CHECK-START: int Main.DivN1(int) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[Neg:i\d+]]      Neg [ [[Arg]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Neg:i\d+]]      Neg [ [[Arg]] ]
   // CHECK-NOT:                       Div
-  // CHECK-DAG:                       Return [ [[Neg]] ]
+  // CHECK:                           Return [ [[Neg]] ]
 
   public static int DivN1(int arg) {
     return arg / -1;
   }
 
   // CHECK-START: long Main.Mul1(long) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:j\d+]]     ParameterValue
-  // CHECK-DAG:     [[Const1:j\d+]]  LongConstant 1
-  // CHECK-DAG:     [[Mul:j\d+]]     Mul [ [[Arg]] [[Const1]] ]
-  // CHECK-DAG:                      Return [ [[Mul]] ]
+  // CHECK:         [[Arg:j\d+]]     ParameterValue
+  // CHECK:         [[Const1:j\d+]]  LongConstant 1
+  // CHECK:         [[Mul:j\d+]]     Mul [ [[Arg]] [[Const1]] ]
+  // CHECK:                          Return [ [[Mul]] ]
 
   // CHECK-START: long Main.Mul1(long) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:j\d+]]     ParameterValue
+  // CHECK:         [[Arg:j\d+]]     ParameterValue
   // CHECK-NOT:                      Mul
-  // CHECK-DAG:                      Return [ [[Arg]] ]
+  // CHECK:                          Return [ [[Arg]] ]
 
   public static long Mul1(long arg) {
     return arg * 1;
   }
 
   // CHECK-START: int Main.MulN1(int) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[ConstN1:i\d+]]  IntConstant -1
-  // CHECK-DAG:     [[Mul:i\d+]]      Mul [ [[Arg]] [[ConstN1]] ]
-  // CHECK-DAG:                       Return [ [[Mul]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[ConstN1:i\d+]]  IntConstant -1
+  // CHECK:         [[Mul:i\d+]]      Mul [ [[Arg]] [[ConstN1]] ]
+  // CHECK:                           Return [ [[Mul]] ]
 
   // CHECK-START: int Main.MulN1(int) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[Neg:i\d+]]      Neg [ [[Arg]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Neg:i\d+]]      Neg [ [[Arg]] ]
   // CHECK-NOT:                       Mul
-  // CHECK-DAG:                       Return [ [[Neg]] ]
+  // CHECK:                           Return [ [[Neg]] ]
 
   public static int MulN1(int arg) {
     return arg * -1;
   }
 
   // CHECK-START: long Main.MulPowerOfTwo128(long) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
-  // CHECK-DAG:     [[Const128:j\d+]]  LongConstant 128
-  // CHECK-DAG:     [[Mul:j\d+]]       Mul [ [[Arg]] [[Const128]] ]
-  // CHECK-DAG:                        Return [ [[Mul]] ]
+  // CHECK:         [[Arg:j\d+]]       ParameterValue
+  // CHECK:         [[Const128:j\d+]]  LongConstant 128
+  // CHECK:         [[Mul:j\d+]]       Mul [ [[Arg]] [[Const128]] ]
+  // CHECK:                            Return [ [[Mul]] ]
 
   // CHECK-START: long Main.MulPowerOfTwo128(long) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
-  // CHECK-DAG:     [[Const7:i\d+]]    IntConstant 7
-  // CHECK-DAG:     [[Shl:j\d+]]       Shl [ [[Arg]] [[Const7]] ]
+  // CHECK:         [[Arg:j\d+]]       ParameterValue
+  // CHECK:         [[Const7:i\d+]]    IntConstant 7
+  // CHECK:         [[Shl:j\d+]]       Shl [ [[Arg]] [[Const7]] ]
   // CHECK-NOT:                        Mul
-  // CHECK-DAG:                        Return [ [[Shl]] ]
+  // CHECK:                            Return [ [[Shl]] ]
 
   public static long MulPowerOfTwo128(long arg) {
     return arg * 128;
   }
 
   // CHECK-START: int Main.Or0(int) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[Const0:i\d+]]   IntConstant 0
-  // CHECK-DAG:     [[Or:i\d+]]       Or [ [[Arg]] [[Const0]] ]
-  // CHECK-DAG:                       Return [ [[Or]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Const0:i\d+]]   IntConstant 0
+  // CHECK:         [[Or:i\d+]]       Or [ [[Arg]] [[Const0]] ]
+  // CHECK:                           Return [ [[Or]] ]
 
   // CHECK-START: int Main.Or0(int) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
   // CHECK-NOT:                       Or
-  // CHECK-DAG:                       Return [ [[Arg]] ]
+  // CHECK:                           Return [ [[Arg]] ]
 
   public static int Or0(int arg) {
     return arg | 0;
   }
 
   // CHECK-START: long Main.OrSame(long) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
-  // CHECK-DAG:     [[Or:j\d+]]        Or [ [[Arg]] [[Arg]] ]
-  // CHECK-DAG:                        Return [ [[Or]] ]
+  // CHECK:         [[Arg:j\d+]]       ParameterValue
+  // CHECK:         [[Or:j\d+]]        Or [ [[Arg]] [[Arg]] ]
+  // CHECK:                            Return [ [[Or]] ]
 
   // CHECK-START: long Main.OrSame(long) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:j\d+]]       ParameterValue
+  // CHECK:         [[Arg:j\d+]]       ParameterValue
   // CHECK-NOT:                        Or
-  // CHECK-DAG:                        Return [ [[Arg]] ]
+  // CHECK:                            Return [ [[Arg]] ]
 
   public static long OrSame(long arg) {
     return arg | arg;
   }
 
   // CHECK-START: int Main.Shl0(int) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[Const0:i\d+]]   IntConstant 0
-  // CHECK-DAG:     [[Shl:i\d+]]      Shl [ [[Arg]] [[Const0]] ]
-  // CHECK-DAG:                       Return [ [[Shl]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Const0:i\d+]]   IntConstant 0
+  // CHECK:         [[Shl:i\d+]]      Shl [ [[Arg]] [[Const0]] ]
+  // CHECK:                           Return [ [[Shl]] ]
 
   // CHECK-START: int Main.Shl0(int) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
   // CHECK-NOT:                       Shl
-  // CHECK-DAG:                       Return [ [[Arg]] ]
+  // CHECK:                           Return [ [[Arg]] ]
 
   public static int Shl0(int arg) {
     return arg << 0;
   }
 
   // CHECK-START: long Main.Shr0(long) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:j\d+]]      ParameterValue
-  // CHECK-DAG:     [[Const0:i\d+]]   IntConstant 0
-  // CHECK-DAG:     [[Shr:j\d+]]      Shr [ [[Arg]] [[Const0]] ]
-  // CHECK-DAG:                       Return [ [[Shr]] ]
+  // CHECK:         [[Arg:j\d+]]      ParameterValue
+  // CHECK:         [[Const0:i\d+]]   IntConstant 0
+  // CHECK:         [[Shr:j\d+]]      Shr [ [[Arg]] [[Const0]] ]
+  // CHECK:                           Return [ [[Shr]] ]
 
   // CHECK-START: long Main.Shr0(long) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:j\d+]]      ParameterValue
+  // CHECK:         [[Arg:j\d+]]      ParameterValue
   // CHECK-NOT:                       Shr
-  // CHECK-DAG:                       Return [ [[Arg]] ]
+  // CHECK:                           Return [ [[Arg]] ]
 
   public static long Shr0(long arg) {
     return arg >> 0;
   }
 
   // CHECK-START: long Main.Sub0(long) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:j\d+]]      ParameterValue
-  // CHECK-DAG:     [[Const0:j\d+]]   LongConstant 0
-  // CHECK-DAG:     [[Sub:j\d+]]      Sub [ [[Arg]] [[Const0]] ]
-  // CHECK-DAG:                       Return [ [[Sub]] ]
+  // CHECK:         [[Arg:j\d+]]      ParameterValue
+  // CHECK:         [[Const0:j\d+]]   LongConstant 0
+  // CHECK:         [[Sub:j\d+]]      Sub [ [[Arg]] [[Const0]] ]
+  // CHECK:                           Return [ [[Sub]] ]
 
   // CHECK-START: long Main.Sub0(long) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:j\d+]]      ParameterValue
+  // CHECK:         [[Arg:j\d+]]      ParameterValue
   // CHECK-NOT:                       Sub
-  // CHECK-DAG:                       Return [ [[Arg]] ]
+  // CHECK:                           Return [ [[Arg]] ]
 
   public static long Sub0(long arg) {
     return arg - 0;
   }
 
   // CHECK-START: int Main.SubAliasNeg(int) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[Const0:i\d+]]   IntConstant 0
-  // CHECK-DAG:     [[Sub:i\d+]]      Sub [ [[Const0]] [[Arg]] ]
-  // CHECK-DAG:                       Return [ [[Sub]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Const0:i\d+]]   IntConstant 0
+  // CHECK:         [[Sub:i\d+]]      Sub [ [[Const0]] [[Arg]] ]
+  // CHECK:                           Return [ [[Sub]] ]
 
   // CHECK-START: int Main.SubAliasNeg(int) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[Neg:i\d+]]      Neg [ [[Arg]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Neg:i\d+]]      Neg [ [[Arg]] ]
   // CHECK-NOT:                       Sub
-  // CHECK-DAG:                       Return [ [[Neg]] ]
+  // CHECK:                           Return [ [[Neg]] ]
 
   public static int SubAliasNeg(int arg) {
     return 0 - arg;
   }
 
   // CHECK-START: long Main.UShr0(long) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:j\d+]]      ParameterValue
-  // CHECK-DAG:     [[Const0:i\d+]]   IntConstant 0
-  // CHECK-DAG:     [[UShr:j\d+]]     UShr [ [[Arg]] [[Const0]] ]
-  // CHECK-DAG:                       Return [ [[UShr]] ]
+  // CHECK:         [[Arg:j\d+]]      ParameterValue
+  // CHECK:         [[Const0:i\d+]]   IntConstant 0
+  // CHECK:         [[UShr:j\d+]]     UShr [ [[Arg]] [[Const0]] ]
+  // CHECK:                           Return [ [[UShr]] ]
 
   // CHECK-START: long Main.UShr0(long) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:j\d+]]      ParameterValue
+  // CHECK:         [[Arg:j\d+]]      ParameterValue
   // CHECK-NOT:                       UShr
-  // CHECK-DAG:                       Return [ [[Arg]] ]
+  // CHECK:                           Return [ [[Arg]] ]
 
   public static long UShr0(long arg) {
     return arg >>> 0;
   }
 
   // CHECK-START: int Main.Xor0(int) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[Const0:i\d+]]   IntConstant 0
-  // CHECK-DAG:     [[Xor:i\d+]]      Xor [ [[Arg]] [[Const0]] ]
-  // CHECK-DAG:                       Return [ [[Xor]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Const0:i\d+]]   IntConstant 0
+  // CHECK:         [[Xor:i\d+]]      Xor [ [[Arg]] [[Const0]] ]
+  // CHECK:                           Return [ [[Xor]] ]
 
   // CHECK-START: int Main.Xor0(int) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
   // CHECK-NOT:                       Xor
-  // CHECK-DAG:                       Return [ [[Arg]] ]
+  // CHECK:                           Return [ [[Arg]] ]
 
   public static int Xor0(int arg) {
     return arg ^ 0;
   }
 
   // CHECK-START: int Main.XorAllOnes(int) instruction_simplifier (before)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[ConstF:i\d+]]   IntConstant -1
-  // CHECK-DAG:     [[Xor:i\d+]]      Xor [ [[Arg]] [[ConstF]] ]
-  // CHECK-DAG:                       Return [ [[Xor]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[ConstF:i\d+]]   IntConstant -1
+  // CHECK:         [[Xor:i\d+]]      Xor [ [[Arg]] [[ConstF]] ]
+  // CHECK:                           Return [ [[Xor]] ]
 
   // CHECK-START: int Main.XorAllOnes(int) instruction_simplifier (after)
-  // CHECK-DAG:     [[Arg:i\d+]]      ParameterValue
-  // CHECK-DAG:     [[Not:i\d+]]      Not [ [[Arg]] ]
+  // CHECK:         [[Arg:i\d+]]      ParameterValue
+  // CHECK:         [[Not:i\d+]]      Not [ [[Arg]] ]
   // CHECK-NOT:                       Xor
-  // CHECK-DAG:                       Return [ [[Not]] ]
+  // CHECK:                           Return [ [[Not]] ]
 
   public static int XorAllOnes(int arg) {
     return arg ^ -1;
