@@ -39,7 +39,8 @@ CompilerOptions::CompilerOptions()
       verbose_methods_(nullptr),
       pass_manager_options_(new PassManagerOptions),
       abort_on_hard_verifier_failure_(false),
-      init_failure_output_(nullptr) {
+      init_failure_output_(nullptr),
+      dump_separate_passes_time_(false) {
 }
 
 CompilerOptions::~CompilerOptions() {
@@ -65,8 +66,8 @@ CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
                                  const std::vector<std::string>* verbose_methods,
                                  PassManagerOptions* pass_manager_options,
                                  std::ostream* init_failure_output,
-                                 bool abort_on_hard_verifier_failure
-                                 ) :  // NOLINT(whitespace/parens)
+                                 bool abort_on_hard_verifier_failure,
+                                 bool dump_separate_passes_time) :  // NOLINT(whitespace/parens)
     compiler_filter_(compiler_filter),
     huge_method_threshold_(huge_method_threshold),
     large_method_threshold_(large_method_threshold),
@@ -85,7 +86,8 @@ CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
     verbose_methods_(verbose_methods),
     pass_manager_options_(pass_manager_options),
     abort_on_hard_verifier_failure_(abort_on_hard_verifier_failure),
-    init_failure_output_(init_failure_output) {
+    init_failure_output_(init_failure_output),
+    dump_separate_passes_time_(dump_separate_passes_time) {
 }
 
 }  // namespace art

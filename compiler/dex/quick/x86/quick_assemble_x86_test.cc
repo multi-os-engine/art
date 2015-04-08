@@ -51,6 +51,7 @@ class QuickAssembleX86TestBase : public testing::Test {
         nullptr,
         new PassManagerOptions(),
         nullptr,
+        false,
         false));
     verification_results_.reset(new VerificationResults(compiler_options_.get()));
     method_inliner_map_.reset(new DexFileToMethodInlinerMap());

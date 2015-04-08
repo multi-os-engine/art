@@ -20,6 +20,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "driver/compiler_driver.h"
+#include "driver/compiler_options.h"
 #include "bb_optimizations.h"
 #include "dataflow_iterator.h"
 #include "dataflow_iterator-inl.h"
@@ -87,15 +89,15 @@ class PassDriverME: public PassDriver {
     }
   }
 
-  bool RunPass(const Pass* pass, bool time_split) OVERRIDE {
-    // Paranoid: c_unit and pass cannot be null, and the pass should have a name.
+  bool RunPass(const Pass* pass) OVERRIDE {
+    // Paranoid: c_unit and pass cannot be nullptr, and the pass should have a name
     DCHECK(pass != nullptr);
     DCHECK(pass->GetName() != nullptr && pass->GetName()[0] != 0);
     CompilationUnit* c_unit = pass_me_data_holder_.c_unit;
     DCHECK(c_unit != nullptr);
 
     // Do we perform a time split
-    if (time_split) {
+    if (c_unit->compiler_driver->GetCompilerOptions().GetDumpSeparatePassesTime() == true) {
       c_unit->NewTimingSplit(pass->GetName());
     }
 

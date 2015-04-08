@@ -73,7 +73,8 @@ class CompilerOptions FINAL {
                   const std::vector<std::string>* verbose_methods,
                   PassManagerOptions* pass_manager_options,
                   std::ostream* init_failure_output,
-                  bool abort_on_hard_verifier_failure);
+                  bool abort_on_hard_verifier_failure,
+                  bool dump_separate_passes_time);
 
   CompilerFilter GetCompilerFilter() const {
     return compiler_filter_;
@@ -201,6 +202,10 @@ class CompilerOptions FINAL {
     return abort_on_hard_verifier_failure_;
   }
 
+  bool GetDumpSeparatePassesTime() const {
+    return dump_separate_passes_time_;
+  }
+
  private:
   CompilerFilter compiler_filter_;
   const size_t huge_method_threshold_;
@@ -230,6 +235,8 @@ class CompilerOptions FINAL {
 
   // Log initialization of initialization failures to this stream if not null.
   std::ostream* const init_failure_output_;
+
+  const bool dump_separate_passes_time_;
 
   DISALLOW_COPY_AND_ASSIGN(CompilerOptions);
 };

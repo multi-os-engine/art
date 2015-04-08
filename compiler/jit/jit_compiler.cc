@@ -83,6 +83,7 @@ JitCompiler::JitCompiler() : total_time_(0) {
       nullptr,
       pass_manager_options,
       nullptr,
+      false,
       false));
   const InstructionSet instruction_set = kRuntimeISA;
   instruction_set_features_.reset(InstructionSetFeatures::FromCppDefines());

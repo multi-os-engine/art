@@ -504,6 +504,7 @@ class Dex2Oat FINAL {
     bool watch_dog_enabled = true;
     bool abort_on_hard_verifier_error = false;
     bool requested_specific_compiler = false;
+    bool dump_separate_passes_time = false;
 
     PassManagerOptions pass_manager_options;
 
@@ -678,6 +679,8 @@ class Dex2Oat FINAL {
         dump_timing_ = true;
       } else if (option == "--dump-passes") {
         dump_passes_ = true;
+      } else if (option == "--dump-separate-passes-time") {
+        dump_separate_passes_time = true;
       } else if (option.starts_with("--dump-cfg=")) {
         dump_cfg_file_name_ = option.substr(strlen("--dump-cfg=")).data();
       } else if (option == "--dump-stats") {
@@ -957,7 +960,8 @@ class Dex2Oat FINAL {
                                                     &verbose_methods_,
                                                 new PassManagerOptions(pass_manager_options),
                                                 init_failure_output_.get(),
-                                                abort_on_hard_verifier_error));
+                                                abort_on_hard_verifier_error,
+                                                dump_separate_passes_time));
 
     // Done with usage checks, enable watchdog if requested
     if (watch_dog_enabled) {
