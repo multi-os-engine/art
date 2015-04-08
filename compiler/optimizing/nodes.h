@@ -710,6 +710,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(LongConstant, Constant)                                             \
   M(MonitorOperation, Instruction)                                      \
   M(Mul, BinaryOperation)                                               \
+  M(MulAdd, TernaryOperation)                                           \
   M(Neg, UnaryOperation)                                                \
   M(NewArray, Instruction)                                              \
   M(NewInstance, Instruction)                                           \
@@ -742,6 +743,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(Constant, Instruction)                                              \
   M(UnaryOperation, Instruction)                                        \
   M(BinaryOperation, Instruction)                                       \
+  M(TernaryOperation, Instruction)                                      \
   M(Invoke, Instruction)
 
 #define FORWARD_DECLARATION(type, super) class H##type;
@@ -1687,6 +1689,28 @@ class HBinaryOperation : public HExpression<2> {
   DISALLOW_COPY_AND_ASSIGN(HBinaryOperation);
 };
 
+class HTernaryOperation : public HExpression<3> {
+  public:
+    HTernaryOperation(Primitive::Type result_type,
+                      HInstruction* first,
+                      HInstruction* second,
+                      HInstruction* third) : HExpression(result_type, SideEffects::None()) {
+      SetRawInputAt(0, first);
+      SetRawInputAt(1, second);
+      SetRawInputAt(2, third);
+    }
+
+    HInstruction* GetFirst() const { return InputAt(0); }
+    HInstruction* GetSecond() const { return InputAt(1); }
+    HInstruction* GetThird() const { return InputAt(2); }
+    Primitive::Type GetResultType() const { return GetType(); }
+
+    DECLARE_INSTRUCTION(TernaryOperation);
+
+  private:
+    DISALLOW_COPY_AND_ASSIGN(HTernaryOperation);
+};
+
 class HCondition : public HBinaryOperation {
  public:
   HCondition(HInstruction* first, HInstruction* second)
@@ -2406,6 +2430,17 @@ class HMul : public HBinaryOperation {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HMul);
+};
+
+class HMulAdd : public HTernaryOperation {
+  public:
+    HMulAdd(Primitive::Type result_type, HInstruction* factor1, HInstruction* factor2,
+            HInstruction* constant) : HTernaryOperation(result_type, factor1, factor2, constant) {}
+
+    DECLARE_INSTRUCTION(MulAdd);
+
+  private:
+    DISALLOW_COPY_AND_ASSIGN(HMulAdd);
 };
 
 class HDiv : public HBinaryOperation {

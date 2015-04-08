@@ -1996,6 +1996,57 @@ void InstructionCodeGeneratorARM::VisitAdd(HAdd* add) {
   }
 }
 
+void LocationsBuilderARM::VisitMulAdd(HMulAdd* muladd) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(muladd, LocationSummary::kNoCall);
+  switch (muladd->GetResultType()) {
+    case Primitive::kPrimInt: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetInAt(2, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      break;
+    }
+
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetInAt(2, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      break;
+    }
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble: {
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
+      locations->SetInAt(2, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
+      break;
+    }
+
+    default:
+      LOG(FATAL) << "Unexpected muladd type " << muladd->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM::VisitMulAdd(HMulAdd* muladd) {
+  LocationSummary* locations = muladd->GetLocations();
+  Register out = locations->Out().AsRegister<Register>();
+  Register factor1 = locations->InAt(0).AsRegister<Register>();
+  Register factor2 = locations->InAt(1).AsRegister<Register>();
+  Register constant = locations->InAt(2).AsRegister<Register>();
+  switch (muladd->GetResultType()) {
+    case Primitive::kPrimInt: {
+      __ mla(out, factor1, factor2, constant);
+      break;
+    }
+
+    default:
+      LOG(FATAL) << "Unexpected muladd type " << muladd->GetResultType();
+  }
+}
+
 void LocationsBuilderARM::VisitSub(HSub* sub) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(sub, LocationSummary::kNoCall);

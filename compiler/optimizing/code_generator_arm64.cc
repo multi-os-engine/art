@@ -1282,6 +1282,14 @@ void InstructionCodeGeneratorARM64::VisitAnd(HAnd* instruction) {
   HandleBinaryOp(instruction);
 }
 
+void LocationsBuilderARM64::VisitMulAdd(HMulAdd* muladd) {
+  (void) muladd;
+}
+
+void InstructionCodeGeneratorARM64::VisitMulAdd(HMulAdd* muladd) {
+  (void) muladd;
+}
+
 void LocationsBuilderARM64::VisitArrayGet(HArrayGet* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);

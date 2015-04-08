@@ -2073,6 +2073,36 @@ void InstructionCodeGeneratorX86_64::VisitAdd(HAdd* add) {
   }
 }
 
+void LocationsBuilderX86_64::VisitMulAdd(HMulAdd* muladd) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(muladd, LocationSummary::kNoCall);
+  switch (muladd->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      locations->SetInAt(2, Location::Any());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble: {
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
+      locations->SetInAt(2, Location::RequiresFpuRegister());
+      locations->SetOut(Location::SameAsFirstInput());
+      break;
+    }
+
+    default:
+      LOG(FATAL) << "Unexpected muladd type " << muladd->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorX86_64::VisitMulAdd(HMulAdd* muladd) {
+  (void) muladd;
+  LOG(FATAL) << "You fucking rock dude muladd type " << muladd->GetResultType();
+}
 void LocationsBuilderX86_64::VisitSub(HSub* sub) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(sub, LocationSummary::kNoCall);

@@ -173,15 +173,35 @@ void InstructionSimplifierVisitor::VisitTypeConversion(HTypeConversion* instruct
 }
 
 void InstructionSimplifierVisitor::VisitAdd(HAdd* instruction) {
-  HConstant* input_cst = instruction->GetConstantRight();
-  HInstruction* input_other = instruction->GetLeastConstantLeft();
-  if ((input_cst != nullptr) && input_cst->IsZero()) {
-    // Replace code looking like
-    //    ADD dst, src, 0
-    // with
-    //    src
-    instruction->ReplaceWith(input_other);
-    instruction->GetBlock()->RemoveInstruction(instruction);
+  // TODO: handle for longs
+  if (instruction->GetLeft()->IsMul() && instruction->GetResultType() == Primitive::kPrimInt) {
+    HInstruction* mul = instruction->GetLeft();
+    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(
+        instruction, (new (GetGraph()->GetArena()) HMulAdd(instruction->GetResultType(),
+                                                           mul->InputAt(0),
+                                                           mul->InputAt(1),
+                                                           instruction->GetRight())));
+    mul->GetBlock()->RemoveInstruction(mul);
+  } else if (instruction->GetRight()->IsMul()
+      && instruction->GetResultType() == Primitive::kPrimInt) {
+    HInstruction* mul = instruction->GetRight();
+    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(
+        instruction, (new (GetGraph()->GetArena()) HMulAdd(instruction->GetResultType(),
+                                                           mul->InputAt(0),
+                                                           mul->InputAt(1),
+                                                           instruction->GetLeft())));
+    mul->GetBlock()->RemoveInstruction(mul);
+  } else {
+    HConstant* input_cst = instruction->GetConstantRight();
+    HInstruction* input_other = instruction->GetLeastConstantLeft();
+    if ((input_cst != nullptr) && input_cst->IsZero()) {
+      // Replace code looking like
+      //    ADD dst, src, 0
+      // with
+      //    src
+      instruction->ReplaceWith(input_other);
+      instruction->GetBlock()->RemoveInstruction(instruction);
+    }
   }
 }
 
