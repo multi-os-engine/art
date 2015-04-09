@@ -183,6 +183,10 @@ class MANAGED ArtMethod FINAL : public Object {
     SetField32<false>(OFFSET_OF_OBJECT_MEMBER(ArtMethod, method_index_), new_method_index);
   }
 
+  static MemberOffset DexMethodIndexOffset() {
+    return OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_method_index_);
+  }
+
   static MemberOffset MethodIndexOffset() {
     return OFFSET_OF_OBJECT_MEMBER(ArtMethod, method_index_);
   }
@@ -432,10 +436,6 @@ class MANAGED ArtMethod FINAL : public Object {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     SetFieldPtrWithSize<false, true, kVerifyFlags>(
         EntryPointFromJniOffset(pointer_size), entrypoint, pointer_size);
-  }
-
-  static MemberOffset GetMethodIndexOffset() {
-    return OFFSET_OF_OBJECT_MEMBER(ArtMethod, method_index_);
   }
 
   // Is this a CalleSaveMethod or ResolutionMethod and therefore doesn't adhere to normal
