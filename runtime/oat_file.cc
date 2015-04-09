@@ -592,4 +592,19 @@ bool OatFile::IsPic() const {
   // TODO: Check against oat_patches. b/18144996
 }
 
+static constexpr char kDexClassPathEncodingSeparator = '*';
+
+std::string OatFile::EncodeDexFileDependencies(const std::vector<const DexFile*>& dex_files) {
+  std::ostringstream out;
+
+  for (const DexFile* dex_file : dex_files) {
+    out << DexFile::GetDexCanonicalLocation(dex_file->GetLocation().c_str());
+    out << kDexClassPathEncodingSeparator;
+    out << dex_file->GetLocationChecksum();
+    out << kDexClassPathEncodingSeparator;
+  }
+
+  return out.str();
+}
+
 }  // namespace art

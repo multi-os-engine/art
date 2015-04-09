@@ -248,6 +248,8 @@ class OatFile FINAL {
   static std::string ResolveRelativeEncodedDexLocation(
       const char* abs_dex_location, const std::string& rel_dex_location);
 
+  static std::string EncodeDexFileDependencies(const std::vector<const DexFile*>& dex_files);
+
  private:
   static void CheckLocation(const std::string& location);
 
