@@ -146,6 +146,7 @@ LIR* X86Mir2Lir::OpRegImm(OpKind op, RegStorage r_dest_src1, int value) {
       case kOpLsl: opcode = kX86Sal64RI; break;
       case kOpLsr: opcode = kX86Shr64RI; break;
       case kOpAsr: opcode = kX86Sar64RI; break;
+      case kOpAnd: opcode = byte_imm ? kX86And64RI8 : kX86And64RI; break;
       case kOpCmp: opcode = byte_imm ? kX86Cmp64RI8 : kX86Cmp64RI; break;
       default:
         LOG(FATAL) << "Bad case in OpRegImm (64-bit) " << op;

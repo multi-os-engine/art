@@ -270,6 +270,10 @@ static Intrinsics GetIntrinsic(InlineMethod method) {
     case kIntrinsicReferenceGetReferent:
       return Intrinsics::kReferenceGetReferent;
 
+    case kIntrinsicClassFindOverriddenMethodIfProxy:
+      // TODO
+      return Intrinsics::kNone;
+
     // Quick inliner cases. Remove after refactoring. They are here so that we can use the
     // compiler to warn on missing cases.
 

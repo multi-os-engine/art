@@ -1232,6 +1232,104 @@ bool Mir2Lir::GenInlinedArrayCopyCharArray(CallInfo* info) {
   return false;
 }
 
+bool Mir2Lir::GenInlinedFindOverriddenMethodIfProxy(CallInfo* info) {
+  RegLocation rl_method = info->args[0];
+  rl_method = LoadValue(rl_method, kRefReg);
+  RegLocation rl_dest = InlineTarget(info);
+  RegLocation rl_result = EvalLoc(rl_dest, kRefReg, true);
+  if (!rl_result.reg.Valid()) {
+    LOG(WARNING) << "OOOPS!";
+    mir_graph_->DumpMIRGraph();
+  }
+  CHECK(rl_result.reg.Valid())
+      << info->mir->dalvikInsn.opcode << " "
+      << static_cast<int>(info->mir->next->dalvikInsn.opcode);
+
+  // If proxy method, branch to slow path.
+  GenNullCheck(rl_method.reg, info->opt_flags);
+  RegStorage r_tmp = AllocTempRef();
+  LoadBaseDisp(rl_method.reg, mirror::ArtMethod::DeclaringClassOffset().Int32Value(), r_tmp,
+               kReference, kNotVolatile);
+  MarkPossibleNullPointerException(info->opt_flags);
+  GenNullCheck(r_tmp, 0);
+  LoadBaseDisp(r_tmp, mirror::Class::AccessFlagsOffset().Int32Value(), r_tmp, k32, kNotVolatile);
+  MarkPossibleNullPointerException(0);
+  OpRegRegImm(kOpAnd, r_tmp, r_tmp, kAccClassIsProxy);
+  LIR* branch = OpCmpImmBranch(kCondNe, r_tmp, 0, nullptr);
+  FreeTemp(r_tmp);
+
+  // In normal path just copy the ArtMethod*.
+  OpRegCopy(rl_result.reg, rl_method.reg);
+
+  // Return point from slow path.
+  LIR* resume = NewLIR0(kPseudoTargetLabel);
+
+  // Store the value.
+  if (rl_dest.s_reg_low != INVALID_SREG) {
+    StoreValue(rl_dest, rl_result);
+  }
+
+  class SlowPath : public LIRSlowPath {
+   public:
+    SlowPath(Mir2Lir* m2l, LIR* fromfast, LIR* cont, RegStorage r_dest, RegStorage r_method)
+        : LIRSlowPath(m2l, fromfast, cont), r_dest_(r_dest), r_method_(r_method),
+          r_ptr_(m2l_->IsTemp(r_dest_) ? r_dest_ : m2l_->AllocTempRef()),
+          r_index_(m2l_->AllocTemp()), r_length_(m2l_->AllocTemp()) {
+      // We have reserved temps for the slow path above because by the time Compile() is
+      // executed the temp tracking info will be obsolete. Now free them for the normal path.
+      m2l->FreeTemp(r_length_);
+      m2l->FreeTemp(r_index_);
+      if (r_ptr_.GetRawBits() != r_dest_.GetRawBits()) {
+        m2l_->FreeTemp(r_ptr_);
+      }
+    }
+
+    void Compile() {
+      GenerateTargetLabel();
+
+      // Get resolved methods pointer and index. (r_method_ is already null-checked.)
+      m2l_->LoadBaseDisp(r_method_, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
+                         r_ptr_, kReference, kNotVolatile);
+      m2l_->LoadBaseDisp(r_method_, mirror::ArtMethod::DexMethodIndexOffset().Int32Value(),
+                         r_index_, kReference, kNotVolatile);
+
+      // Null and range check.
+      m2l_->GenNullCheck(r_ptr_, 0);
+      m2l_->LoadBaseDisp(r_ptr_, mirror::Array::LengthOffset().Int32Value(),
+                         r_length_, k32, kNotVolatile);
+      m2l_->MarkPossibleNullPointerException(0);
+      LIR* range_check_branch = m2l_->OpCmpBranch(kCondUge, r_index_, r_length_, nullptr);
+
+      // Adjust pointer to the start of the data.
+      constexpr size_t sizeof_heap_ref = sizeof(mirror::HeapReference<mirror::ArtMethod>);
+      m2l_->OpRegImm(kOpAdd, r_ptr_, mirror::Array::DataOffset(sizeof_heap_ref).Int32Value());
+
+      // Load the value straight to the r_dest_ and jump to cont_.
+      static_assert(IsPowerOfTwo(sizeof_heap_ref), "size of heap reference must be a power of 2");
+      m2l_->LoadRefIndexed(r_ptr_, r_index_, r_dest_, CTZ(sizeof_heap_ref));
+      DCHECK(cont_ != nullptr);
+      m2l_->OpUnconditionalBranch(cont_);
+
+      // Throw ArrayIndexOutOfBoundsException.
+      LIR* throw_label = m2l_->NewLIR0(kPseudoThrowTarget);
+      range_check_branch->target = throw_label;
+      m2l_->CallRuntimeHelperRegReg(kQuickThrowArrayBounds, r_index_, r_length_, true);
+    }
+
+   private:
+    const RegStorage r_dest_;
+    const RegStorage r_method_;
+
+    // Temporaries.
+    const RegStorage r_ptr_;
+    const RegStorage r_index_;
+    const RegStorage r_length_;
+  };
+
+  AddSlowPath(new (arena_) SlowPath(this, branch, resume, rl_result.reg, rl_method.reg));
+  LOG(WARNING) << "ADDED SLOW PATH IN " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
+  return true;
+}
 
 /*
  * Fast String.indexOf(I) & (II).  Tests for simple case of char <= 0xFFFF,
