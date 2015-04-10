@@ -74,6 +74,35 @@ static void WriteDebugSymbols(const CompilerDriver* compiler_driver,
                                          Elf_Sym, Elf_Ehdr, Elf_Phdr, Elf_Shdr>* builder,
                               OatWriter* oat_writer);
 
+// Get patch locations from OatWriter and encode them in .oat_patches section.
+static void WriteOatPatches(OatWriter* oat_writer, std::vector<uint8_t>* oat_patches) {
+  for (const auto& section : oat_writer->GetAbsolutePatchLocations()) {
+    const std::string& name = section.first;
+    std::vector<uintptr_t>* locations = section.second.get();
+    DCHECK(!name.empty());
+    std::sort(locations->begin(), locations->end());
+    // Reserve buffer space - guess 2 bytes per ULEB128.
+    oat_patches->reserve(oat_patches->size() + name.size() + locations->size() * 2);
+    // Write null-terminated section name.
+    const uint8_t* name_data = reinterpret_cast<const uint8_t*>(name.c_str());
+    oat_patches->insert(oat_patches->end(), name_data, name_data + name.size() + 1);
+    // Write placeholder for data length.
+    size_t length_pos = oat_patches->size();
+    EncodeUnsignedLeb128(oat_patches, UINT32_MAX);
+    // Write LEB128 encoded list of advances (deltas between consequtive addresses).
+    size_t data_pos = oat_patches->size();
+    uintptr_t address = 0;  // relative to start of section.
+    for (uintptr_t location : *locations) {
+      DCHECK_LT(location - address, UINT32_MAX) << "Large gap between patch locations";
+      EncodeUnsignedLeb128(oat_patches, location - address);
+      address = location;
+    }
+    // Update length.
+    UpdateUnsignedLeb128(oat_patches->data() + length_pos, oat_patches->size() - data_pos);
+  }
+  oat_patches->push_back(0);  // End of sections.
+}
+
 template <typename Elf_Word, typename Elf_Sword, typename Elf_Addr,
           typename Elf_Dyn, typename Elf_Sym, typename Elf_Ehdr,
           typename Elf_Phdr, typename Elf_Shdr>
@@ -115,16 +144,13 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
     WriteDebugSymbols(compiler_driver_, builder.get(), oat_writer);
   }
 
-  if (compiler_driver_->GetCompilerOptions().GetIncludePatchInformation()) {
+  if (compiler_driver_->GetCompilerOptions().GetIncludePatchInformation() ||
+      // ElfWriter::Fixup with be called regardless and it needs to be able
+      // to patch debug sections so we have to include patches for them.
+      compiler_driver_->GetCompilerOptions().GetIncludeDebugSymbols()) {
     ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> oat_patches(
-        ".oat_patches", SHT_OAT_PATCH, 0, NULL, 0, sizeof(uintptr_t), sizeof(uintptr_t));
-    const std::vector<uintptr_t>& locations = oat_writer->GetAbsolutePatchLocations();
-    const uint8_t* begin = reinterpret_cast<const uint8_t*>(&locations[0]);
-    const uint8_t* end = begin + locations.size() * sizeof(locations[0]);
-    oat_patches.GetBuffer()->assign(begin, end);
-    if (debug) {
-      LOG(INFO) << "Prepared .oat_patches for " << locations.size() << " patches.";
-    }
+        ".oat_patches", SHT_OAT_PATCH, 0, NULL, 0, 1, 0);
+    WriteOatPatches(oat_writer, oat_patches.GetBuffer());
     builder->RegisterRawSection(oat_patches);
   }
 
