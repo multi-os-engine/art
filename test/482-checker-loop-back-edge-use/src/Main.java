@@ -36,11 +36,11 @@ public class Main {
   }
 
   // CHECK-START: void Main.loop3(boolean) liveness (after)
-  // CHECK:         ParameterValue  liveness:4  ranges:{[4,62)} uses:[58,62]
-  // CHECK:         Goto            liveness:60
+  // CHECK:         ParameterValue  liveness:4  ranges:{[4,58)} uses:[54,58]
+  // CHECK:         Goto            liveness:56
 
   // CHECK-START: void Main.loop3(boolean) liveness (after)
-  // CHECK-NOT:     Goto liveness:56
+  // CHECK-NOT:     Goto liveness:50
   public static void loop3(boolean incoming) {
     // 'incoming' only needs a use at the outer loop's back edge.
     while (System.currentTimeMillis() != 42) {
@@ -50,10 +50,10 @@ public class Main {
   }
 
   // CHECK-START: void Main.loop4(boolean) liveness (after)
-  // CHECK:         ParameterValue  liveness:4  ranges:{[4,24)} uses:[24]
+  // CHECK:         ParameterValue  liveness:4  ranges:{[4,22)} uses:[22]
 
   // CHECK-START: void Main.loop4(boolean) liveness (after)
-  // CHECK-NOT:     Goto            liveness:22
+  // CHECK-NOT:     Goto            liveness:18
   public static void loop4(boolean incoming) {
     // 'incoming' has no loop use, so should not have back edge uses.
     System.out.println(incoming);
