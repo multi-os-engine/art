@@ -950,6 +950,7 @@ class Mir2Lir {
     virtual bool GenInlinedRint(CallInfo* info);
     virtual bool GenInlinedRound(CallInfo* info, bool is_double);
     virtual bool GenInlinedArrayCopyCharArray(CallInfo* info);
+    bool GenInlinedFindOverriddenMethodIfProxy(CallInfo* info);
     virtual bool GenInlinedIndexOf(CallInfo* info, bool zero_based);
     bool GenInlinedStringCompareTo(CallInfo* info);
     virtual bool GenInlinedCurrentThread(CallInfo* info);

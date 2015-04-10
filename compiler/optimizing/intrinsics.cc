@@ -145,6 +145,10 @@ static Intrinsics GetIntrinsic(InlineMethod method) {
     case kIntrinsicSystemArrayCopyCharArray:
       return Intrinsics::kSystemArrayCopyChar;
 
+    // TODO: Implement intrinsic for Class.findOverriddenMethodIfProxy()
+    case kIntrinsicClassFindOverriddenMethodIfProxy:
+      return Intrinsics::kNone;
+
     // Thread.currentThread.
     case kIntrinsicCurrentThread:
       return  Intrinsics::kThreadCurrentThread;
