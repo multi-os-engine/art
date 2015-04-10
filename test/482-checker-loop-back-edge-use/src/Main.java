@@ -36,8 +36,8 @@ public class Main {
   }
 
   // CHECK-START: void Main.loop3(boolean) liveness (after)
-  // CHECK:         ParameterValue  liveness:2  ranges:[2-60] uses:[56,60]
-  // CHECK:         Goto            liveness:58
+  // CHECK:         ParameterValue  liveness:2  ranges:[2-58] uses:[54,58]
+  // CHECK:         Goto            liveness:56
 
   // CHECK-START: void Main.loop3(boolean) liveness (after)
   // CHECK-NOT:     Goto liveness:54
