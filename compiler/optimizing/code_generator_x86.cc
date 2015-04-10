@@ -833,6 +833,199 @@ void InstructionCodeGeneratorX86::VisitExit(HExit* exit) {
   UNUSED(exit);
 }
 
+static IfCondition GetOppositeCondition(IfCondition cond) {
+  switch (cond) {
+    case kCondEQ:
+      return kCondNE;
+    case kCondNE:
+      return kCondEQ;
+    case kCondLE:
+      return kCondGT;
+    case kCondGT:
+      return kCondLE;
+    case kCondLT:
+      return kCondGE;
+    case kCondGE:
+      return kCondLT;
+  }
+  return kCondEQ;
+}
+
+void InstructionCodeGeneratorX86::GenerateFPJumps(HCondition* cond,
+                                                  Label *true_lab,
+                                                  Label *false_lab) {
+  bool gt_bias = cond->IsGtBias();
+  IfCondition if_cond = cond->GetCondition();
+  Condition ccode = X86Condition(if_cond);
+  switch (if_cond) {
+    case kCondEQ:
+      if (!gt_bias) {
+        __ j(kParityEven, false_lab);
+      }
+      break;
+    case kCondNE:
+      if (!gt_bias) {
+        __ j(kParityEven, true_lab);
+      }
+      break;
+    case kCondLT:
+      if (gt_bias) {
+        __ j(kParityEven, false_lab);
+      }
+      ccode = kBelow;
+      break;
+    case kCondLE:
+      if (gt_bias) {
+        __ j(kParityEven, false_lab);
+      }
+      ccode = kBelowEqual;
+      break;
+    case kCondGT:
+      if (gt_bias) {
+        __ j(kParityEven, true_lab);
+      }
+      ccode = kAbove;
+      break;
+    case kCondGE:
+      if (gt_bias) {
+        __ j(kParityEven, true_lab);
+      }
+      ccode = kAboveEqual;
+      break;
+  }
+  __ j(ccode, true_lab);
+}
+
+void InstructionCodeGeneratorX86::GenerateLongComparesAndJumps(HCondition *cond,
+                                                               Label *true_lab,
+                                                               Label *false_lab) {
+  LocationSummary* locations = cond->GetLocations();
+  Location left = locations->InAt(0);
+  Location right = locations->InAt(1);
+  IfCondition if_cond = cond->GetCondition();
+
+  Register left_low = left.AsRegisterPairLow<Register>();
+  Register left_high = left.AsRegisterPairHigh<Register>();
+  IfCondition true_high_cond = if_cond;
+  IfCondition false_high_cond = GetOppositeCondition(if_cond);
+  Condition final_condition = X86Condition(if_cond);
+
+  // Set the conditions for the test, remembering that == needs to be
+  // decided using the low words.
+  switch (if_cond) {
+    case kCondEQ:
+      false_high_cond = kCondNE;
+      break;
+    case kCondNE:
+      false_high_cond = kCondEQ;
+      break;
+    case kCondLT:
+      false_high_cond = kCondGT;
+      final_condition = kBelow;
+      break;
+    case kCondLE:
+      true_high_cond = kCondLT;
+      final_condition = kBelowEqual;
+      break;
+    case kCondGT:
+      false_high_cond = kCondLT;
+      final_condition = kAbove;
+      break;
+    case kCondGE:
+      true_high_cond = kCondGT;
+      final_condition = kAboveEqual;
+      break;
+  }
+
+  if (right.IsConstant()) {
+    int64_t value = right.GetConstant()->AsLongConstant()->GetValue();
+    int32_t val_low = Low32Bits(value);
+    int32_t val_high = High32Bits(value);
+
+    if (val_high == 0) {
+      __ testl(left_high, left_high);
+    } else {
+      __ cmpl(left_high, Immediate(val_high));
+    }
+    if (if_cond == kCondNE) {
+      __ j(X86Condition(true_high_cond), true_lab);
+    } else if (if_cond == kCondEQ) {
+      __ j(X86Condition(false_high_cond), false_lab);
+    } else {
+      __ j(X86Condition(true_high_cond), true_lab);
+      __ j(X86Condition(false_high_cond), false_lab);
+    }
+    // Must be equal high, so lets compare the lows.
+    if (val_low == 0) {
+      __ testl(left_low, left_low);
+    } else {
+      __ cmpl(left_low, Immediate(val_low));
+    }
+  } else {
+    Register right_low = right.AsRegisterPairLow<Register>();
+    Register right_high = right.AsRegisterPairHigh<Register>();
+
+    __ cmpl(left_high, right_high);
+    if (if_cond == kCondNE) {
+      __ j(X86Condition(true_high_cond), true_lab);
+    } else if (if_cond == kCondEQ) {
+      __ j(X86Condition(false_high_cond), false_lab);
+    } else {
+      __ j(X86Condition(true_high_cond), true_lab);
+      __ j(X86Condition(false_high_cond), false_lab);
+    }
+    // Must be equal high, so lets compare the lows.
+    __ cmpl(left_low, right_low);
+  }
+  // The last comparison might be unsigned.
+  __ j(final_condition, true_lab);
+}
+
+void InstructionCodeGeneratorX86::GenerateCompareTestAndBranch(
+                                HIf* if_instr,
+                                HCondition* condition,
+                                Label* true_target,
+                                Label* false_target,
+                                Label* always_true_target) {
+  LocationSummary* locations = condition->GetLocations();
+  Location left = locations->InAt(0);
+  Location right = locations->InAt(1);
+
+  // We don't want true_target as a nullptr.
+  if (true_target == nullptr) {
+    true_target = always_true_target;
+  }
+  bool falls_through = (false_target == nullptr);
+
+  // FP compares don't like null false_targets.
+  if (false_target == nullptr) {
+    false_target = codegen_->GetLabelOf(if_instr->IfFalseSuccessor());
+  }
+
+  Primitive::Type type = condition->InputAt(0)->GetType();
+  switch (type) {
+    case Primitive::kPrimLong:
+      GenerateLongComparesAndJumps(condition, true_target, false_target);
+      break;
+    case Primitive::kPrimFloat:
+      DCHECK(right.IsFpuRegister());
+      __ ucomiss(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      GenerateFPJumps(condition, true_target, false_target);
+      break;
+    case Primitive::kPrimDouble:
+      DCHECK(right.IsFpuRegister());
+      __ ucomisd(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      GenerateFPJumps(condition, true_target, false_target);
+      break;
+    default:
+      LOG(FATAL) << "Unexpected compare type " << type;
+  }
+
+  if (!falls_through) {
+    __ jmp(false_target);
+  }
+}
+
 void InstructionCodeGeneratorX86::GenerateTestAndBranch(HInstruction* instruction,
                                                         Label* true_target,
                                                         Label* false_target,
@@ -857,6 +1050,11 @@ void InstructionCodeGeneratorX86::GenerateTestAndBranch(HInstruction* instructio
     // again.
     bool eflags_set = cond->IsCondition()
         && cond->AsCondition()->IsBeforeWhenDisregardMoves(instruction);
+    Primitive::Type type = cond->IsCondition() ? cond->InputAt(0)->GetType() : Primitive::kPrimInt;
+    if (type != Primitive::kPrimInt) {
+      // We can't use the eflags on long/FP conditions if they are materialized.
+      eflags_set = false;
+    }
     if (materialized) {
       if (!eflags_set) {
         // Materialized condition, compare against 0.
@@ -871,6 +1069,13 @@ void InstructionCodeGeneratorX86::GenerateTestAndBranch(HInstruction* instructio
         __ j(X86Condition(cond->AsCondition()->GetCondition()), true_target);
       }
     } else {
+      // Is this a long or FP comparison that has been folded into the HCondition?
+      if (type == Primitive::kPrimLong || Primitive::IsFloatingPointType(type)) {
+        // Generate the comparison directly
+        GenerateCompareTestAndBranch(instruction->AsIf(), cond->AsCondition(),
+                                     true_target, false_target, always_true_target);
+        return;
+      }
       Location lhs = cond->GetLocations()->InAt(0);
       Location rhs = cond->GetLocations()->InAt(1);
       // LHS is guaranteed to be in a register (see
@@ -986,36 +1191,94 @@ void InstructionCodeGeneratorX86::VisitStoreLocal(HStoreLocal* store) {
 void LocationsBuilderX86::VisitCondition(HCondition* comp) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(comp, LocationSummary::kNoCall);
-  locations->SetInAt(0, Location::RequiresRegister());
-  locations->SetInAt(1, Location::Any());
-  if (comp->NeedsMaterialization()) {
-    // We need a byte register.
-    locations->SetOut(Location::RegisterLocation(ECX));
+  // Handle the long/FP additions made in instruction simplification.
+  switch (comp->InputAt(0)->GetType()) {
+    case Primitive::kPrimLong: {
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RegisterOrConstant(comp->InputAt(1)));
+      if (comp->NeedsMaterialization()) {
+        locations->SetOut(Location::RequiresRegister());
+      }
+      break;
+    }
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble: {
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
+      if (comp->NeedsMaterialization()) {
+        locations->SetOut(Location::RequiresRegister());
+      }
+      break;
+    }
+    default:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::Any());
+      if (comp->NeedsMaterialization()) {
+        // We need a byte register.
+        locations->SetOut(Location::RegisterLocation(ECX));
+      }
+      break;
   }
 }
 
 void InstructionCodeGeneratorX86::VisitCondition(HCondition* comp) {
-  if (comp->NeedsMaterialization()) {
-    LocationSummary* locations = comp->GetLocations();
-    Register reg = locations->Out().AsRegister<Register>();
-    // Clear register: setcc only sets the low byte.
-    __ xorl(reg, reg);
-    Location lhs = locations->InAt(0);
-    Location rhs = locations->InAt(1);
-    if (rhs.IsRegister()) {
-      __ cmpl(lhs.AsRegister<Register>(), rhs.AsRegister<Register>());
-    } else if (rhs.IsConstant()) {
-      int32_t constant = CodeGenerator::GetInt32ValueOf(rhs.GetConstant());
-      if (constant == 0) {
-        __ testl(lhs.AsRegister<Register>(), lhs.AsRegister<Register>());
-      } else {
-      __ cmpl(lhs.AsRegister<Register>(), Immediate(constant));
-      }
-    } else {
-      __ cmpl(lhs.AsRegister<Register>(), Address(ESP, rhs.GetStackIndex()));
-    }
-    __ setb(X86Condition(comp->GetCondition()), reg);
+  if (!comp->NeedsMaterialization()) {
+    return;
   }
+
+  LocationSummary* locations = comp->GetLocations();
+  Location lhs = locations->InAt(0);
+  Location rhs = locations->InAt(1);
+  Register reg = locations->Out().AsRegister<Register>();
+  Label true_lab, false_lab;
+
+  switch (comp->InputAt(0)->GetType()) {
+    default: {
+      // Integer case.
+
+      // Clear output register: setcc only sets the low byte.
+      __ xorl(reg, reg);
+
+      if (rhs.IsRegister()) {
+        __ cmpl(lhs.AsRegister<Register>(), rhs.AsRegister<Register>());
+      } else if (rhs.IsConstant()) {
+        int32_t constant = CodeGenerator::GetInt32ValueOf(rhs.GetConstant());
+        if (constant == 0) {
+          __ testl(lhs.AsRegister<Register>(), lhs.AsRegister<Register>());
+        } else {
+        __ cmpl(lhs.AsRegister<Register>(), Immediate(constant));
+        }
+      } else {
+        __ cmpl(lhs.AsRegister<Register>(), Address(ESP, rhs.GetStackIndex()));
+      }
+      __ setb(X86Condition(comp->GetCondition()), reg);
+      return;
+    }
+    case Primitive::kPrimLong:
+      GenerateLongComparesAndJumps(comp, &true_lab, &false_lab);
+      break;
+    case Primitive::kPrimFloat:
+      __ ucomiss(lhs.AsFpuRegister<XmmRegister>(), rhs.AsFpuRegister<XmmRegister>());
+      GenerateFPJumps(comp, &true_lab, &false_lab);
+      break;
+    case Primitive::kPrimDouble:
+      __ ucomisd(lhs.AsFpuRegister<XmmRegister>(), rhs.AsFpuRegister<XmmRegister>());
+      GenerateFPJumps(comp, &true_lab, &false_lab);
+      break;
+  }
+
+  // Convert the jumps into the result.
+  Label done_lab;
+
+  // false case: result = 0;
+  __ Bind(&false_lab);
+  __ xorl(reg, reg);
+  __ jmp(&done_lab);
+
+  // True case: result = 1
+  __ Bind(&true_lab);
+  __ movl(reg, Immediate(1));
+  __ Bind(&done_lab);
 }
 
 void LocationsBuilderX86::VisitEqual(HEqual* comp) {
