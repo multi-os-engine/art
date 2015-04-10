@@ -483,7 +483,7 @@ void HGraphBuilder::Binop_23x_shift(const Instruction& instruction,
 
 void HGraphBuilder::Binop_23x_cmp(const Instruction& instruction,
                                   Primitive::Type type,
-                                  HCompare::Bias bias) {
+                                  ComparisonBias bias) {
   HInstruction* first = LoadLocal(instruction.VRegB(), type);
   HInstruction* second = LoadLocal(instruction.VRegC(), type);
   current_block_->AddInstruction(new (arena_) HCompare(type, first, second, bias));
@@ -2064,27 +2064,27 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       break;
 
     case Instruction::CMP_LONG: {
-      Binop_23x_cmp(instruction, Primitive::kPrimLong, HCompare::kNoBias);
+      Binop_23x_cmp(instruction, Primitive::kPrimLong, kNoBias);
       break;
     }
 
     case Instruction::CMPG_FLOAT: {
-      Binop_23x_cmp(instruction, Primitive::kPrimFloat, HCompare::kGtBias);
+      Binop_23x_cmp(instruction, Primitive::kPrimFloat, kGtBias);
       break;
     }
 
     case Instruction::CMPG_DOUBLE: {
-      Binop_23x_cmp(instruction, Primitive::kPrimDouble, HCompare::kGtBias);
+      Binop_23x_cmp(instruction, Primitive::kPrimDouble, kGtBias);
       break;
     }
 
     case Instruction::CMPL_FLOAT: {
-      Binop_23x_cmp(instruction, Primitive::kPrimFloat, HCompare::kLtBias);
+      Binop_23x_cmp(instruction, Primitive::kPrimFloat, kLtBias);
       break;
     }
 
     case Instruction::CMPL_DOUBLE: {
-      Binop_23x_cmp(instruction, Primitive::kPrimDouble, HCompare::kLtBias);
+      Binop_23x_cmp(instruction, Primitive::kPrimDouble, kLtBias);
       break;
     }
 
