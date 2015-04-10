@@ -33,8 +33,12 @@
 
 namespace art {
 
+inline mirror::Class* ArtField::GetDeclaringClassUnchecked() {
+  return declaring_class_.Read();
+}
+
 inline mirror::Class* ArtField::GetDeclaringClass() {
-  mirror::Class* result = declaring_class_.Read();
+  mirror::Class* result = GetDeclaringClassUnchecked();
   DCHECK(result != nullptr);
   DCHECK(result->IsLoaded() || result->IsErroneous());
   return result;

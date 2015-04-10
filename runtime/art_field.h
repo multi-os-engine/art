@@ -44,6 +44,10 @@ class ArtField {
 
   mirror::Class* GetDeclaringClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Used only for root marking since the class may not actually be resolved when we mark its
+  // roots.
+  mirror::Class* GetDeclaringClassUnchecked() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   void SetDeclaringClass(mirror::Class *new_declaring_class)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
