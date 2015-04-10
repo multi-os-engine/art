@@ -1366,4 +1366,52 @@ std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
   return os;
 }
 
+bool HIf::ConditionCompareNotNeedingMaterialization() const {
+  HCondition* cond = InputAt(0)->AsCondition();
+  if (cond != nullptr) {
+    HCompare* compare = cond->InputAt(0)->AsCompare();
+    if (compare != nullptr && !compare->NeedsMaterialization()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool HCompare::NeedsMaterialization() const {
+  if (needs_materialization_) {
+    return true;
+  }
+
+  // Make sure that none of our assumptions about a single use have been broken
+  // during optimization.
+  if (!HasOnlyOneNonEnvironmentUse()) {
+    return true;
+  }
+
+  HInstruction* cond = GetUses().GetFirst()->GetUser();
+  if (!cond->IsCondition() || !cond->HasOnlyOneNonEnvironmentUse()) {
+    return true;
+  }
+
+  // Must be immediately proceeding, ignoring moves.
+  if (cond->GetPreviousDisregardingMoves() != this) {
+    return true;
+  }
+
+  HInstruction* if_instr = cond->GetUses().GetFirst()->GetUser();
+  if (!if_instr->IsIf()) {
+    return true;
+  }
+
+  // Must be immediately proceeding, ignoring moves.
+  if (if_instr->GetPreviousDisregardingMoves() != cond) {
+    return true;
+  }
+
+  // Okay, we are still set up as we were before.  It is safe to leave this
+  // unmaterialized.
+  return false;
+}
+
+
 }  // namespace art
