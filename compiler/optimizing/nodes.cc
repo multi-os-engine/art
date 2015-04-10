@@ -1475,4 +1475,36 @@ std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
   return os;
 }
 
+bool HInstruction::HasAnyEnvironmentUseBefore(HInstruction* other) {
+  // For now, assume that instructions in different blocks may use the
+  // environment.
+  // TODO: Use the control flow to decide if this is true.
+  if (GetBlock() != other->GetBlock()) {
+    return true;
+  }
+
+  // We know that we are in the same block. Walk from 'this' to 'other',
+  // checking to see if there is any instruction with an environment.
+  HInstruction *p = this;
+  for (; p != other && p != nullptr; p = p->GetNext()) {
+    if (p->HasEnvironment()) {
+      return true;
+    }
+  }
+
+  // We should have been called with 'this' before 'other' in the block.
+  // Just confirm this.
+  DCHECK(p != nullptr);
+  return false;
+}
+
+void HInstruction::RemoveEnvironmentUsers() {
+  for (HUseIterator<HEnvironment*> use_it(GetEnvUses()); !use_it.Done();
+       use_it.Advance()) {
+    HUseListNode<HEnvironment*>* user_node = use_it.Current();
+    HEnvironment* user = user_node->GetUser();
+    user->SetRawEnvAt(user_node->GetIndex(), nullptr);
+  }
+}
+
 }  // namespace art

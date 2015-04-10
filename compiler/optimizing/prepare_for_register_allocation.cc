@@ -76,6 +76,48 @@ void PrepareForRegisterAllocation::VisitCondition(HCondition* condition) {
   }
   if (!needs_materialization) {
     condition->ClearNeedsMaterialization();
+
+    // Try to fold an HCompare into this HCondition.
+    HInstruction* left = condition->GetLeft();
+    HInstruction* right = condition->GetRight();
+    // We can only replace an HCondition which compares a Compare to 0.
+    // 'dx' code generation always generates a compare to 0.
+    if (!left->IsCompare() || !right->IsConstant() || right->AsIntConstant()->GetValue() != 0) {
+      // Conversion is not possible.
+      return;
+    }
+
+    // Is the Compare only used for this purpose?
+    if (!left->GetUses().HasOnlyOneUse()) {
+      // Someone else also wants the result of the compare.
+      return;
+    }
+
+    if (!left->GetEnvUses().IsEmpty()) {
+      // There is a reference to the compare result in an environment.  Do we really need it?
+      if (left->GetBlock()->GetGraph()->IsDebuggable()) {
+        return;
+      }
+    }
+
+    // We have to ensure that there are no deopt points in the sequence.
+    if (left->HasAnyEnvironmentUseBefore(condition)) {
+      return;
+    }
+
+    // Clean up any environment uses from the HCompare, if any.
+    // We do this at the end to ensure that we don't remove them unless we commit to this change.
+    left->RemoveEnvironmentUsers();
+
+    // We have decided to fold the HCompare into the HCondition.  Transfer the information.
+    condition->SetBias(left->AsCompare()->GetBias());
+
+    // Replace the operands of the HCondition.
+    condition->ReplaceInput(left->InputAt(0), 0);
+    condition->ReplaceInput(left->InputAt(1), 1);
+
+    // Remove the HCompare.
+    left->GetBlock()->RemoveInstruction(left, false);
   }
 }
 
