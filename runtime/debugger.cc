@@ -237,6 +237,9 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
       // TODO: post location events is a suspension point and native method entry stubs aren't.
       return;
     }
+    // We must remember we already handled the MethodEntry event so we do not report it
+    // twice for a DexPcMoved event.
+    thread->SetDebugMethodEntry();
     Dbg::UpdateDebugger(thread, this_object, method, 0, Dbg::kMethodEntry, nullptr);
   }
 
@@ -262,7 +265,12 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
   void DexPcMoved(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
                   uint32_t new_dex_pc)
       OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    Dbg::UpdateDebugger(thread, this_object, method, new_dex_pc, 0, nullptr);
+    if (thread->IsDebugMethodEntry()) {
+      // We already reported the event as part of MethodEntry event.
+      thread->ClearDebugMethodEntry();
+    } else {
+      Dbg::UpdateDebugger(thread, this_object, method, new_dex_pc, 0, nullptr);
+    }
   }
 
   void FieldRead(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,

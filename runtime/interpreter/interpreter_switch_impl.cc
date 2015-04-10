@@ -48,9 +48,7 @@ namespace interpreter {
 #define PREAMBLE()                                                                              \
   do {                                                                                          \
     DCHECK(!inst->IsReturn());                                                                  \
-    if (UNLIKELY(notified_method_entry_event)) {                                                \
-      notified_method_entry_event = false;                                                      \
-    } else if (UNLIKELY(instrumentation->HasDexPcListeners())) {                                \
+    if (UNLIKELY(instrumentation->HasDexPcListeners())) {                                       \
       instrumentation->DexPcMovedEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),  \
                                        shadow_frame.GetMethod(), dex_pc);                       \
     }                                                                                           \
@@ -67,7 +65,6 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
   self->VerifyStack();
 
   uint32_t dex_pc = shadow_frame.GetDexPC();
-  bool notified_method_entry_event = false;
   const instrumentation::Instrumentation* const instrumentation = Runtime::Current()->GetInstrumentation();
   if (LIKELY(dex_pc == 0)) {  // We are entering the method as opposed to deoptimizing.
     if (kIsDebugBuild) {
@@ -76,7 +73,6 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
     if (UNLIKELY(instrumentation->HasMethodEntryListeners())) {
       instrumentation->MethodEnterEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
                                         shadow_frame.GetMethod(), 0);
-      notified_method_entry_event = true;
     }
   }
   const uint16_t* const insns = code_item->insns_;
