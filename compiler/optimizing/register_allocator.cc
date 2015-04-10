@@ -1478,7 +1478,7 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
           LocationSummary* locations = use->GetUser()->GetLocations();
           Location expected_location = locations->InAt(use->GetInputIndex());
           // The expected (actual) location may be invalid in case the input is unused. Currently
-          // this only happens for intrinsics.
+          // this only happens for intrinsics and fused compare/ifs.
           if (expected_location.IsValid()) {
             if (expected_location.IsUnallocated()) {
               locations->SetInAt(use->GetInputIndex(), source);
@@ -1486,8 +1486,20 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
               AddInputMoveFor(interval->GetDefinedBy(), use->GetUser(), source, expected_location);
             }
           } else {
-            DCHECK(use->GetUser()->IsInvoke());
-            DCHECK(use->GetUser()->AsInvoke()->GetIntrinsic() != Intrinsics::kNone);
+            if (kIsDebugBuild) {
+              HInstruction* user = use->GetUser();
+              if (user->IsInvoke()) {
+                DCHECK_NE(user->AsInvoke()->GetIntrinsic(), Intrinsics::kNone);
+              } else if (user->IsCondition()) {
+                HCondition* cond = user->AsCondition();
+                DCHECK_EQ(cond->InputCount(), 2u);
+                HInstruction* lhs = cond->InputAt(0);
+                DCHECK(lhs->IsCompare());
+                DCHECK(!lhs->AsCompare()->NeedsMaterialization());
+              } else {
+                DCHECK(false);
+              }
+            }
           }
         }
         use = use->GetNext();
