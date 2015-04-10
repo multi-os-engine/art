@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <cstddef>
+#include <map>
 #include <memory>
 
 #include "linker/relative_patcher.h"  // For linker::RelativePatcherTargetProvider.
@@ -102,8 +103,18 @@ class OatWriter {
     return bss_size_;
   }
 
-  const std::vector<uintptr_t>& GetAbsolutePatchLocations() const {
+  const std::map<std::string, std::unique_ptr<std::vector<uintptr_t>>>&
+  GetAbsolutePatchLocations() const {
     return absolute_patch_locations_;
+  }
+
+  std::vector<uintptr_t>* GetAbsolutePatchLocationsFor(const char* section_name) {
+    auto it = absolute_patch_locations_.emplace(
+        std::string(section_name), std::unique_ptr<std::vector<uintptr_t>>());
+    if (it.second) {  // Inserted new item.
+      it.first->second.reset(new std::vector<uintptr_t>());
+    }
+    return it.first->second.get();
   }
 
   void SetOatDataOffset(size_t oat_data_offset) {
@@ -330,8 +341,9 @@ class OatWriter {
 
   std::unique_ptr<linker::RelativePatcher> relative_patcher_;
 
-  // The locations of absolute patches relative to the start of the executable section.
-  std::vector<uintptr_t> absolute_patch_locations_;
+  // The locations of absolute patches relative to the start of section.
+  // The map's key is the ELF's section name (including dot).
+  std::map<std::string, std::unique_ptr<std::vector<uintptr_t>>> absolute_patch_locations_;
 
   // Map method reference to assigned offset.
   // Wrap the map in a class implementing linker::RelativePatcherTargetProvider.
