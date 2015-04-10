@@ -786,6 +786,122 @@ void InstructionCodeGeneratorX86_64::VisitExit(HExit* exit) {
   UNUSED(exit);
 }
 
+void InstructionCodeGeneratorX86_64::GenerateCompareTestAndBranch(
+                                HIf* if_instr,
+                                HCondition* condition,
+                                HCompare* compare) {
+  LocationSummary* locations = compare->GetLocations();
+  Location left = locations->InAt(0);
+  Location right = locations->InAt(1);
+
+  Label* true_target = codegen_->GetLabelOf(if_instr->IfTrueSuccessor());
+  Label* false_target = codegen_->GetLabelOf(if_instr->IfFalseSuccessor());
+  bool falls_through = codegen_->GoesToNextBlock(if_instr->GetBlock(), if_instr->IfFalseSuccessor());
+  Primitive::Type type = compare->InputAt(0)->GetType();
+  switch (type) {
+    case Primitive::kPrimLong: {
+      CpuRegister left_reg = left.AsRegister<CpuRegister>();
+      if (right.IsConstant()) {
+        int64_t value = right.GetConstant()->AsLongConstant()->GetValue();
+        if (IsInt<32>(value)) {
+          if (value == 0) {
+            __ testq(left_reg, left_reg);
+          } else {
+            __ cmpq(left_reg, Immediate(static_cast<int32_t>(value)));
+          }
+        } else {
+          // Value won't fit in an int.
+          __ cmpq(left_reg, codegen_->LiteralInt64Address(value));
+        }
+      } else if (right.IsDoubleStackSlot()) {
+        __ cmpq(left_reg, Address(CpuRegister(RSP), right.GetStackIndex()));
+      } else {
+        __ cmpq(left_reg, right.AsRegister<CpuRegister>());
+      }
+      __ j(X86_64Condition(condition->GetCondition()), true_target);
+      if (!falls_through) {
+        __ jmp(false_target);
+      }
+      return;
+    }
+    case Primitive::kPrimFloat: {
+      if (right.IsFpuRegister()) {
+        __ ucomiss(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      } else if (right.IsConstant()) {
+        __ ucomiss(left.AsFpuRegister<XmmRegister>(),
+                   codegen_->LiteralFloatAddress(right.GetConstant()->AsFloatConstant()->GetValue()));
+      } else {
+        DCHECK(right.IsStackSlot());
+        __ ucomiss(left.AsFpuRegister<XmmRegister>(),
+                   Address(CpuRegister(RSP), right.GetStackIndex()));
+      }
+      break;
+    }
+    case Primitive::kPrimDouble: {
+      if (right.IsFpuRegister()) {
+        __ ucomisd(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
+      } else if (right.IsConstant()) {
+        __ ucomisd(left.AsFpuRegister<XmmRegister>(),
+                   codegen_->LiteralDoubleAddress(right.GetConstant()->AsDoubleConstant()->GetValue()));
+      } else {
+        DCHECK(right.IsDoubleStackSlot());
+        __ ucomisd(left.AsFpuRegister<XmmRegister>(),
+                   Address(CpuRegister(RSP), right.GetStackIndex()));
+      }
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected compare type " << type;
+  }
+
+  // This is an FP compare.  Generate the correct jumps handling the bias.
+  bool gt_bias = compare->IsGtBias();
+  IfCondition if_cond = condition->GetCondition();
+  Condition ccode = X86_64Condition(if_cond);
+  switch (if_cond) {
+    case kCondEQ:
+      if (!gt_bias) {
+        __ j(kParityEven, false_target);
+      }
+      break;
+    case kCondNE:
+      if (!gt_bias) {
+        __ j(kParityEven, true_target);
+      }
+      break;
+    case kCondLT:
+      if (gt_bias) {
+        __ j(kParityEven, false_target);
+      }
+      ccode = kBelow;
+      break;
+    case kCondLE:
+      if (gt_bias) {
+        __ j(kParityEven, false_target);
+      }
+      ccode = kBelowEqual;
+      break;
+    case kCondGT:
+      if (gt_bias) {
+        __ j(kParityEven, true_target);
+      }
+      ccode = kAbove;
+      break;
+    case kCondGE:
+      if (gt_bias) {
+        __ j(kParityEven, true_target);
+      }
+      ccode = kAboveEqual;
+      break;
+    default:
+      LOG(FATAL) << "Unexpected ccode";
+  }
+  __ j(ccode, true_target);
+  if (!falls_through) {
+    __ jmp(false_target);
+  }
+}
+
 void InstructionCodeGeneratorX86_64::GenerateTestAndBranch(HInstruction* instruction,
                                                            Label* true_target,
                                                            Label* false_target,
@@ -858,6 +974,16 @@ void LocationsBuilderX86_64::VisitIf(HIf* if_instr) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitIf(HIf* if_instr) {
+  if (if_instr->ConditionCompareNotNeedingMaterialization()) {
+    HCondition* cond = if_instr->InputAt(0)->AsCondition();
+    DCHECK(cond != nullptr);
+    HCompare* compare = cond->InputAt(0)->AsCompare();
+    DCHECK(compare != nullptr);
+    GenerateCompareTestAndBranch(if_instr, cond, compare);
+    return;
+  }
+
+  // Non Compare version.
   Label* true_target = codegen_->GetLabelOf(if_instr->IfTrueSuccessor());
   Label* false_target = codegen_->GetLabelOf(if_instr->IfFalseSuccessor());
   Label* always_true_target = true_target;
@@ -938,6 +1064,14 @@ void InstructionCodeGeneratorX86_64::VisitStoreLocal(HStoreLocal* store) {
 void LocationsBuilderX86_64::VisitCondition(HCondition* comp) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(comp, LocationSummary::kNoCall);
+  HCompare* possible_compare = comp->InputAt(0)->AsCompare();
+  if (possible_compare != nullptr && !possible_compare->NeedsMaterialization()) {
+    // We don't want inputs or outputs in this case, as the If will use the inputs
+    // from the Compare.
+    return;
+  }
+
+  // We want the inputs.
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::Any());
   if (comp->NeedsMaterialization()) {
@@ -946,8 +1080,8 @@ void LocationsBuilderX86_64::VisitCondition(HCondition* comp) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitCondition(HCondition* comp) {
-  if (comp->NeedsMaterialization()) {
-    LocationSummary* locations = comp->GetLocations();
+  LocationSummary* locations = comp->GetLocations();
+  if (locations->Out().IsValid()) {
     CpuRegister reg = locations->Out().AsRegister<CpuRegister>();
     // Clear register: setcc only sets the low byte.
     __ xorq(reg, reg);
@@ -1024,14 +1158,18 @@ void LocationsBuilderX86_64::VisitCompare(HCompare* compare) {
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RequiresRegister());
       locations->SetInAt(1, Location::Any());
-      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      if (compare->NeedsMaterialization()) {
+        locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      }
       break;
     }
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble: {
       locations->SetInAt(0, Location::RequiresFpuRegister());
       locations->SetInAt(1, Location::Any());
-      locations->SetOut(Location::RequiresRegister());
+      if (compare->NeedsMaterialization()) {
+        locations->SetOut(Location::RequiresRegister());
+      }
       break;
     }
     default:
@@ -1040,6 +1178,11 @@ void LocationsBuilderX86_64::VisitCompare(HCompare* compare) {
 }
 
 void InstructionCodeGeneratorX86_64::VisitCompare(HCompare* compare) {
+  if (!compare->NeedsMaterialization()) {
+    // We will generate code for this at the HIf.
+    return;
+  }
+
   LocationSummary* locations = compare->GetLocations();
   CpuRegister out = locations->Out().AsRegister<CpuRegister>();
   Location left = locations->InAt(0);

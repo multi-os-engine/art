@@ -53,6 +53,7 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitAdd(HAdd* instruction) OVERRIDE;
   void VisitAnd(HAnd* instruction) OVERRIDE;
   void VisitDiv(HDiv* instruction) OVERRIDE;
+  void VisitIf(HIf* instruction) OVERRIDE;
   void VisitMul(HMul* instruction) OVERRIDE;
   void VisitNeg(HNeg* instruction) OVERRIDE;
   void VisitNot(HNot* instruction) OVERRIDE;
@@ -349,6 +350,51 @@ void InstructionSimplifierVisitor::VisitAnd(HAnd* instruction) {
     instruction->ReplaceWith(instruction->GetLeft());
     instruction->GetBlock()->RemoveInstruction(instruction);
   }
+}
+
+void InstructionSimplifierVisitor::VisitIf(HIf* instruction) {
+  // Try to mark a Condition comparing a Compare to 0 as not needing
+  // materialization.
+  HInstruction* input = instruction->InputAt(0);
+  if (!input->AsCondition()) {
+    return;
+  }
+
+  // We have to ensure that there are no deopt points in the sequence.
+  // Implement that for now by checking to see if the instructions are
+  // contiguous.
+  // TODO: Implement a better check for this.
+  if (instruction->GetPreviousDisregardingMoves() != input) {
+    return;
+  }
+
+  HCondition *cond = input->AsCondition();
+  HInstruction* left = cond->GetLeft();
+  HInstruction* right = cond->GetRight();
+  // We can only replace an if which compares a Compare to 0.
+  if (!left->IsCompare() || !right->IsConstant() ||
+      right->AsConstant()->AsIntConstant()->GetValue() != 0) {
+    // Not possible to do conversion.
+    return;
+  }
+
+  // Is the Compare only used for this purpose?
+  if (!cond->GetUses().HasOnlyOneUse() || !left->GetUses().HasOnlyOneUse()) {
+    // Someone else also wants the result.
+    return;
+  }
+
+  // Ensure that we are contiguous again.
+  // TODO: Implement a better check for this.
+  if (cond->GetPreviousDisregardingMoves() != left) {
+    return;
+  }
+
+  // Mark the Compare as not needing materialization.
+  // Don't mark the condition as not needing materialization for backwards
+  // compatibilty.
+  HCompare* compare = left->AsCompare();
+  compare->ClearNeedsMaterialization();
 }
 
 void InstructionSimplifierVisitor::VisitDiv(HDiv* instruction) {

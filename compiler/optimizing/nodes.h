@@ -1589,6 +1589,9 @@ class HIf : public HTemplateInstruction<1> {
     return GetBlock()->GetSuccessors().Get(1);
   }
 
+  // Helper function for folding a compare feeding a condition
+  bool ConditionCompareNotNeedingMaterialization() const;
+
   DECLARE_INSTRUCTION(If);
 
  private:
@@ -1899,7 +1902,8 @@ class HCompare : public HBinaryOperation {
   };
 
   HCompare(Primitive::Type type, HInstruction* first, HInstruction* second, Bias bias)
-      : HBinaryOperation(Primitive::kPrimInt, first, second), bias_(bias) {
+      : HBinaryOperation(Primitive::kPrimInt, first, second), bias_(bias),
+        needs_materialization_(true) {
     DCHECK_EQ(type, first->GetType());
     DCHECK_EQ(type, second->GetType());
   }
@@ -1924,10 +1928,17 @@ class HCompare : public HBinaryOperation {
 
   bool IsGtBias() { return bias_ == kGtBias; }
 
+  bool NeedsMaterialization() const;
+
+  void ClearNeedsMaterialization() { needs_materialization_ = false; }
+
   DECLARE_INSTRUCTION(Compare);
 
  private:
   const Bias bias_;
+  // For register allocation purposes, returns whether this instruction needs to be
+  // materialized (that is, not just be in the processor flags).
+  bool needs_materialization_;
 
   DISALLOW_COPY_AND_ASSIGN(HCompare);
 };
