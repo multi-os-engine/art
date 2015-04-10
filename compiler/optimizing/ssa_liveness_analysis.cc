@@ -231,7 +231,7 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
             DCHECK(instruction->HasSsaIndex());
             live_in->SetBit(instruction->GetSsaIndex());
           }
-          if (instruction != nullptr) {
+          if (instruction != nullptr && instruction->GetLiveInterval() != nullptr) {
             instruction->GetLiveInterval()->AddUse(
                 current, i, /* is_environment */ true, should_be_live);
           }

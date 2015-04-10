@@ -1167,4 +1167,40 @@ std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
   return os;
 }
 
+bool HCompare::NeedsMaterialization() const {
+  if (needs_materialization_) {
+    return true;
+  }
+
+  // Make sure that none of our assumptions about a single use have been broken
+  // during optimization.
+  if (!GetUses().HasOnlyOneUse()) {
+    return true;
+  }
+  HInstruction* cond = GetUses().GetFirst()->GetUser();
+  if (!cond->IsCondition() || !cond->GetUses().HasOnlyOneUse()) {
+    return true;
+  }
+
+  // Must be immediately proceeding.
+  if (cond->GetPreviousDisregardingMoves() != this) {
+    return true;
+  }
+
+  HInstruction* if_instr = cond->GetUses().GetFirst()->GetUser();
+  if (!if_instr->IsIf()) {
+    return true;
+  }
+
+  // Must be immediately proceeding.
+  if (if_instr->GetPreviousDisregardingMoves() != cond) {
+    return true;
+  }
+
+  // Okay, we are still set up as we were before.  It is safe to leave this
+  // unmaterialized.
+  return false;
+}
+
+
 }  // namespace art
