@@ -816,14 +816,14 @@ void mirror::Class::VisitFieldRoots(Visitor& visitor) {
   ArtField* const sfields = GetSFieldsUnchecked();
   for (size_t i = 0, count = NumStaticFields(); i < count; ++i) {
     if (kIsDebugBuild && GetStatus() != kStatusRetired) {
-      CHECK_EQ(sfields[i].GetDeclaringClass(), this);
+      CHECK_EQ(sfields[i].GetDeclaringClassUnchecked(), this);
     }
     visitor.VisitRoot(sfields[i].DeclaringClassRoot().AddressWithoutBarrier());
   }
   ArtField* const ifields = GetIFieldsUnchecked();
   for (size_t i = 0, count = NumInstanceFields(); i < count; ++i) {
     if (kIsDebugBuild && GetStatus() != kStatusRetired) {
-      CHECK_EQ(ifields[i].GetDeclaringClass(), this);
+      CHECK_EQ(ifields[i].GetDeclaringClassUnchecked(), this);
     }
     visitor.VisitRoot(ifields[i].DeclaringClassRoot().AddressWithoutBarrier());
   }
