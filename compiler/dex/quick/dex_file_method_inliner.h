@@ -111,6 +111,7 @@ class DexFileMethodInliner {
       kClassCacheFloat,
       kClassCacheDouble,
       kClassCacheVoid,
+      kClassCacheJavaLangClass,
       kClassCacheJavaLangObject,
       kClassCacheJavaLangRefReference,
       kClassCacheJavaLangString,
@@ -126,6 +127,7 @@ class DexFileMethodInliner {
       kClassCacheSunMiscUnsafe,
       kClassCacheJavaLangSystem,
       kClassCacheJavaLangCharArray,
+      kClassCacheJavaLangReflectArtMethod,
       kClassCacheLast
     };
 
@@ -184,6 +186,7 @@ class DexFileMethodInliner {
       kNameCachePutObjectVolatile,
       kNameCachePutOrderedObject,
       kNameCacheArrayCopy,
+      kNameCacheFindOverriddenMethodIfProxy,
       kNameCacheLast
     };
 
@@ -230,6 +233,7 @@ class DexFileMethodInliner {
       kProtoCacheObjectJ_Object,
       kProtoCacheObjectJObject_V,
       kProtoCacheCharArrayICharArrayII_V,
+      kProtoCacheArtMethod_ArtMethod,
       kProtoCacheLast
     };
 

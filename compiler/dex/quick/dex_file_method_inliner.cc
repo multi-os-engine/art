@@ -64,6 +64,7 @@ static constexpr bool kIntrinsicIsStatic[] = {
     false,  // kIntrinsicUnsafeGet
     false,  // kIntrinsicUnsafePut
     true,   // kIntrinsicSystemArrayCopyCharArray
+    true,   // kIntrinsicClassFindOverriddenMethodIfProxy
 };
 static_assert(arraysize(kIntrinsicIsStatic) == kInlineOpNop,
               "arraysize of kIntrinsicIsStatic unexpected");
@@ -98,6 +99,8 @@ static_assert(!kIntrinsicIsStatic[kIntrinsicUnsafeGet], "UnsafeGet_must_not_be_s
 static_assert(!kIntrinsicIsStatic[kIntrinsicUnsafePut], "UnsafePut must not be static");
 static_assert(kIntrinsicIsStatic[kIntrinsicSystemArrayCopyCharArray],
               "SystemArrayCopyCharArray must be static");
+static_assert(kIntrinsicIsStatic[kIntrinsicClassFindOverriddenMethodIfProxy],
+              "ClassFindOverriddenMethodIfProxy must be static");
 
 MIR* AllocReplacementMIR(MIRGraph* mir_graph, MIR* invoke) {
   MIR* insn = mir_graph->NewMIR();
@@ -137,6 +140,7 @@ const char* const DexFileMethodInliner::kClassCacheNames[] = {
     "F",                       // kClassCacheFloat
     "D",                       // kClassCacheDouble
     "V",                       // kClassCacheVoid
+    "Ljava/lang/Class;",       // kClassCacheJavaLangClass
     "Ljava/lang/Object;",      // kClassCacheJavaLangObject
     "Ljava/lang/ref/Reference;",  // kClassCacheJavaLangRefReference
     "Ljava/lang/String;",      // kClassCacheJavaLangString
@@ -151,7 +155,8 @@ const char* const DexFileMethodInliner::kClassCacheNames[] = {
     "Llibcore/io/Memory;",     // kClassCacheLibcoreIoMemory
     "Lsun/misc/Unsafe;",       // kClassCacheSunMiscUnsafe
     "Ljava/lang/System;",      // kClassCacheJavaLangSystem
-    "[C"                       // kClassCacheJavaLangCharArray
+    "[C",                      // kClassCacheJavaLangCharArray
+    "Ljava/lang/reflect/ArtMethod;",  // kClassCacheJavaLangReflectArtMethod
 };
 
 const char* const DexFileMethodInliner::kNameCacheNames[] = {
@@ -203,6 +208,7 @@ const char* const DexFileMethodInliner::kNameCacheNames[] = {
     "putObjectVolatile",     // kNameCachePutObjectVolatile
     "putOrderedObject",      // kNameCachePutOrderedObject
     "arraycopy",             // kNameCacheArrayCopy
+    "findOverriddenMethodIfProxy",  // kNameCacheFindOverriddenMethodIfProxy
 };
 
 const DexFileMethodInliner::ProtoDef DexFileMethodInliner::kProtoCacheDefs[] = {
@@ -282,7 +288,9 @@ const DexFileMethodInliner::ProtoDef DexFileMethodInliner::kProtoCacheDefs[] = {
         kClassCacheJavaLangObject } },
     // kProtoCacheCharArrayICharArrayII_V
     { kClassCacheVoid, 5, {kClassCacheJavaLangCharArray, kClassCacheInt,
-                kClassCacheJavaLangCharArray, kClassCacheInt, kClassCacheInt}}
+        kClassCacheJavaLangCharArray, kClassCacheInt, kClassCacheInt} },
+    // kProtoCacheArtMethod_ArtMethod
+    { kClassCacheJavaLangReflectArtMethod, 1, { kClassCacheJavaLangReflectArtMethod } },
 };
 
 const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods[] = {
@@ -383,9 +391,10 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
     UNSAFE_GET_PUT(Object, Object, kIntrinsicFlagIsObject),
 #undef UNSAFE_GET_PUT
 
-    INTRINSIC(JavaLangSystem, ArrayCopy, CharArrayICharArrayII_V , kIntrinsicSystemArrayCopyCharArray,
-              0),
-
+    INTRINSIC(JavaLangSystem, ArrayCopy, CharArrayICharArrayII_V ,
+              kIntrinsicSystemArrayCopyCharArray, 0),
+    INTRINSIC(JavaLangClass, FindOverriddenMethodIfProxy, ArtMethod_ArtMethod,
+              kIntrinsicClassFindOverriddenMethodIfProxy, 0),
 
 #undef INTRINSIC
 };
@@ -515,6 +524,8 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
                                           intrinsic.d.data & kIntrinsicFlagIsOrdered);
     case kIntrinsicSystemArrayCopyCharArray:
       return backend->GenInlinedArrayCopyCharArray(info);
+    case kIntrinsicClassFindOverriddenMethodIfProxy:
+      return backend->GenInlinedFindOverriddenMethodIfProxy(info);
     default:
       LOG(FATAL) << "Unexpected intrinsic opcode: " << intrinsic.opcode;
       return false;  // avoid warning "control reaches end of non-void function"
