@@ -79,6 +79,57 @@ void PrepareForRegisterAllocation::VisitCondition(HCondition* condition) {
   }
 }
 
+void PrepareForRegisterAllocation::VisitIf(HIf* insn) {
+  // Try to mark a Condition comparing a Compare to 0 as not needing
+  // materialization.
+  HInstruction* input = insn->InputAt(0);
+  if (!input->IsCondition()) {
+    return;
+  }
+
+  // We have to ensure that there are no deopt points in the sequence.
+  // Implement that for now by checking to see if the instructions are
+  // contiguous.
+  // TODO: Implement a better check for this.
+  if (insn->GetPreviousDisregardingMoves() != input) {
+    return;
+  }
+
+  HCondition* cond = input->AsCondition();
+
+  if (!cond->GetUses().HasOnlyOneUse() || !cond->GetEnvUses().IsEmpty()) {
+    // If someone needs the condition, they will need the compare as well.
+    return;
+  }
+
+  HInstruction* left = cond->GetLeft();
+  HInstruction* right = cond->GetRight();
+  // We can only replace an if which compares a Compare to 0.
+  if (!left->IsCompare() || !right->IsConstant() || right->AsIntConstant()->GetValue() != 0) {
+    // Conversion is not possible.
+    return;
+  }
+
+  // Is the Compare only used for this purpose?
+  if (!left->GetUses().HasOnlyOneUse() || !left->GetEnvUses().IsEmpty()) {
+    // Someone else also wants the result of the compare.
+    return;
+  }
+
+  // Ensure that we are contiguous again.
+  // TODO: Implement a better check for this.
+  if (cond->GetPreviousDisregardingMoves() != left) {
+    return;
+  }
+
+  // Mark the Compare as not needing materialization.
+  // Don't mark the condition as not needing materialization for backwards
+  // compatibility.
+  left->AsCompare()->ClearNeedsMaterialization();
+
+  // Remove the compare from the environment of any users, as the value is not being
+}
+
 void PrepareForRegisterAllocation::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
   if (invoke->IsStaticWithExplicitClinitCheck()) {
     size_t last_input_index = invoke->InputCount() - 1;

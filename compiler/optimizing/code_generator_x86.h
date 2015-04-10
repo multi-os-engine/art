@@ -183,6 +183,7 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
                              Label* true_target,
                              Label* false_target,
                              Label* always_true_target);
+  void GenerateCompareTestAndBranch(HIf* if_instr, HCondition* condition, HCompare* compare);
 
   X86Assembler* const assembler_;
   CodeGeneratorX86* const codegen_;

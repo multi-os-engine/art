@@ -1475,4 +1475,15 @@ std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
   return os;
 }
 
+bool HIf::ConditionCompareNotNeedingMaterialization() const {
+  HCondition* cond = InputAt(0)->AsCondition();
+  if (cond != nullptr) {
+    HCompare* compare = cond->InputAt(0)->AsCompare();
+    if (compare != nullptr && !compare->NeedsMaterialization()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace art
