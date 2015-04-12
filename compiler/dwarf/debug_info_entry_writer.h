@@ -20,7 +20,7 @@
 #include <cstdint>
 #include <unordered_map>
 
-#include "dwarf.h"
+#include "enums.h"
 #include "leb128.h"
 #include "writer.h"
 

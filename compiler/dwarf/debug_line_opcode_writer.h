@@ -19,7 +19,7 @@
 
 #include <cstdint>
 
-#include "dwarf.h"
+#include "enums.h"
 #include "writer.h"
 
 namespace art {

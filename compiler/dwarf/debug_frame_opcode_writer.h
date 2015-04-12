@@ -17,7 +17,7 @@
 #ifndef ART_COMPILER_DWARF_DEBUG_FRAME_OPCODE_WRITER_H_
 #define ART_COMPILER_DWARF_DEBUG_FRAME_OPCODE_WRITER_H_
 
-#include "dwarf.h"
+#include "enums.h"
 #include "register.h"
 #include "writer.h"
 #include "utils.h"
