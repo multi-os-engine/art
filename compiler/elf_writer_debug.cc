@@ -149,6 +149,24 @@ static void WriteEhFrameCIE(InstructionSet isa, std::vector<uint8_t>* eh_frame) 
   UNREACHABLE();
 }
 
+void WriteEhFrame(const CompilerDriver* compiler,
+                  const OatWriter* oat_writer,
+                  uint32_t text_section_offset,
+                  std::vector<uint8_t>* eh_frame) {
+  const auto& method_infos = oat_writer->GetMethodDebugInfo();
+  const InstructionSet isa = compiler->GetInstructionSet();
+  size_t cie_offset = eh_frame->size();
+  WriteEhFrameCIE(isa, eh_frame);
+  for (const OatWriter::DebugInfo& mi : method_infos) {
+    const SwapVector<uint8_t>* opcodes = mi.compiled_method_->GetCFIInfo();
+    if (opcodes != nullptr) {
+      WriteEhFrameFDE(Is64BitInstructionSet(isa), cie_offset,
+                      text_section_offset + mi.low_pc_, mi.high_pc_ - mi.low_pc_,
+                      opcodes, eh_frame);
+    }
+  }
+}
+
 /*
  * @brief Generate the DWARF sections.
  * @param oat_writer The Oat file Writer.
@@ -161,7 +179,6 @@ static void WriteEhFrameCIE(InstructionSet isa, std::vector<uint8_t>* eh_frame) 
 void WriteDebugSections(const CompilerDriver* compiler,
                         const OatWriter* oat_writer,
                         uint32_t text_section_offset,
-                        std::vector<uint8_t>* eh_frame,
                         std::vector<uint8_t>* debug_info,
                         std::vector<uint8_t>* debug_abbrev,
                         std::vector<uint8_t>* debug_str,
@@ -173,18 +190,6 @@ void WriteDebugSections(const CompilerDriver* compiler,
   for (auto method_info : method_infos) {
     cunit_low_pc = std::min(cunit_low_pc, method_info.low_pc_);
     cunit_high_pc = std::max(cunit_high_pc, method_info.high_pc_);
-  }
-
-  // Write .eh_frame section.
-  size_t cie_offset = eh_frame->size();
-  WriteEhFrameCIE(isa, eh_frame);
-  for (const OatWriter::DebugInfo& mi : method_infos) {
-    const SwapVector<uint8_t>* opcodes = mi.compiled_method_->GetCFIInfo();
-    if (opcodes != nullptr) {
-      WriteEhFrameFDE(Is64BitInstructionSet(isa), cie_offset,
-                      text_section_offset + mi.low_pc_, mi.high_pc_ - mi.low_pc_,
-                      opcodes, eh_frame);
-    }
   }
 
   // Write .debug_info section.
