@@ -844,7 +844,9 @@ bool MethodVerifier::VerifyInstruction(const Instruction* inst, uint32_t code_of
     case Instruction::kVerifyVarArgNonZero:
       // Fall-through.
     case Instruction::kVerifyVarArg: {
-      if (inst->GetVerifyExtraFlags() == Instruction::kVerifyVarArgNonZero && inst->VRegA() <= 0) {
+      int32_t vA = inst->VRegA();
+      if ((inst->GetVerifyExtraFlags() == Instruction::kVerifyVarArgNonZero && vA == 0) ||
+          vA < 0 || vA > static_cast<int32_t>(Instruction::kMaxVarArgRegs)) {
         Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "invalid arg count (" << inst->VRegA() << ") in "
                                              "non-range invoke";
         return false;
@@ -1162,10 +1164,7 @@ bool MethodVerifier::CheckSwitchTargets(uint32_t cur_offset) {
 }
 
 bool MethodVerifier::CheckVarArgRegs(uint32_t vA, uint32_t arg[]) {
-  if (vA > Instruction::kMaxVarArgRegs) {
-    Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "invalid arg count (" << vA << ") in non-range invoke)";
-    return false;
-  }
+  DCHECK_LE(vA, Instruction::kMaxVarArgRegs);
   uint16_t registers_size = code_item_->registers_size_;
   for (uint32_t idx = 0; idx < vA; idx++) {
     if (arg[idx] >= registers_size) {
