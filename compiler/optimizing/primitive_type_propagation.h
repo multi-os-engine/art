@@ -33,7 +33,9 @@ class PrimitiveTypePropagation : public ValueObject {
   void VisitBasicBlock(HBasicBlock* block);
   void ProcessWorklist();
   void AddToWorklist(HPhi* phi);
-  void AddDependentInstructionsToWorklist(HPhi* phi);
+  // Forces reconsidering of Phis which are use of specified instruction
+  // ignoring specified Phi,
+  void AddDependentInstructionsToWorklist(HInstruction* instruction, HPhi *ignore = nullptr);
   bool UpdateType(HPhi* phi);
 
   HGraph* const graph_;

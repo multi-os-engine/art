@@ -82,6 +82,8 @@ class SsaBuilder : public HGraphVisitor {
 
   static HInstruction* GetReferenceTypeEquivalent(HInstruction* instruction);
 
+  static bool IsPhiEquivalentOf(HInstruction* instruction, HPhi* phi);
+
   static constexpr const char* kSsaBuilderPassName = "ssa_builder";
 
  private:

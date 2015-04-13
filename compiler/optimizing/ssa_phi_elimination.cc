@@ -15,6 +15,7 @@
  */
 
 #include "ssa_phi_elimination.h"
+#include "ssa_builder.h"
 
 namespace art {
 
@@ -132,9 +133,14 @@ void SsaRedundantPhiElimination::Run() {
       }
     }
 
-    // If the inputs are not the same, continue.
+    // If the inputs are not the same, check other case when equivqlent is identical to phi.
     if (candidate == nullptr) {
-      continue;
+      HInstruction* next = phi->GetNext();
+      if (!SsaBuilder::IsPhiEquivalentOf(next, phi) || next->AsPhi()->GetType() != phi->GetType()) {
+        // Move to next Phi.
+        continue;
+      }
+      candidate = next;
     }
 
     if (phi->IsInLoop()) {

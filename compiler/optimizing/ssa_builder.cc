@@ -168,7 +168,7 @@ void DeadPhiHandling::Run() {
   ProcessWorklist();
 }
 
-static bool IsPhiEquivalentOf(HInstruction* instruction, HPhi* phi) {
+bool SsaBuilder::IsPhiEquivalentOf(HInstruction* instruction, HPhi* phi) {
   return instruction != nullptr
       && instruction->IsPhi()
       && instruction->AsPhi()->GetRegNumber() == phi->GetRegNumber();
