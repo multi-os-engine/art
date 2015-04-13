@@ -299,6 +299,9 @@ class CodeGenerator {
     return GetFpuSpillSize() + GetCoreSpillSize();
   }
 
+  bool GetIsBaseline() const {
+    return is_baseline_;
+  }
 
  protected:
   CodeGenerator(HGraph* graph,
@@ -328,7 +331,8 @@ class CodeGenerator {
         current_block_index_(0),
         is_leaf_(true),
         requires_current_method_(false),
-        stack_map_stream_(graph->GetArena()) {}
+        stack_map_stream_(graph->GetArena()),
+        is_baseline_(false) {}
 
   // Register allocation logic.
   void AllocateRegistersLocally(HInstruction* instruction) const;
@@ -425,6 +429,9 @@ class CodeGenerator {
   bool requires_current_method_;
 
   StackMapStream stack_map_stream_;
+
+  // Whether the method is being compiled using the baseline compiler.
+  bool is_baseline_;
 
   friend class OptimizingCFITest;
 
