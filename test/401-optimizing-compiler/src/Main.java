@@ -110,6 +110,8 @@ public class Main {
     if (result != 42) {
       throw new Error("Unexpected result: " + result);
     }
+
+    ssaBuilderDouble(new double[3]);
   }
 
   public static void invokePrivate() {
@@ -228,6 +230,17 @@ public class Main {
 
   public static int $opt$ArrayLengthOfNull(int[] array) {
     return array.length;
+  }
+
+  public static void ssaBuilderDouble(double[] array) {
+    double x;
+    if (array.length > 10) {
+      x = array[0];
+    } else {
+      x = array[1];
+    }
+    array[2] = x;
+    System.out.println(x);
   }
 
   Object o;

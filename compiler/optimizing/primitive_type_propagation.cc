@@ -65,6 +65,19 @@ bool PrimitiveTypePropagation::UpdateType(HPhi* phi) {
         if (equivalent->IsPhi()) {
           equivalent->AsPhi()->SetLive();
           AddToWorklist(equivalent->AsPhi());
+        } else {
+          // We changed the type of input. One of three could happen:
+          // 1) New node is return.
+          // 2) Othre node with correct type is returned.
+          // 3) The same node is returned with changed type.
+          // First two cases do not impact other Phi nodes while third one
+          // may. Node can be input of other Phi nodes. Handle the last
+          // case now.
+          if (equivalent == input) {
+            // We changed the type of instruction, so re-consider all
+            // uses except the one we are handling at this moment.
+            AddDependentInstructionsToWorklist(equivalent, phi);
+          }
         }
       }
     }
@@ -117,10 +130,11 @@ void PrimitiveTypePropagation::AddToWorklist(HPhi* instruction) {
   worklist_.Add(instruction);
 }
 
-void PrimitiveTypePropagation::AddDependentInstructionsToWorklist(HPhi* instruction) {
+void PrimitiveTypePropagation::AddDependentInstructionsToWorklist(HInstruction* instruction,
+                                                                  HPhi *ignore) {
   for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
     HPhi* phi = it.Current()->GetUser()->AsPhi();
-    if (phi != nullptr && phi->IsLive()) {
+    if (phi != nullptr && phi->IsLive() && phi != ignore) {
       AddToWorklist(phi);
     }
   }
