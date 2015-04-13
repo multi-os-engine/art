@@ -2344,6 +2344,31 @@ CompiledMethod* CompilerDriver::GetCompiledMethod(MethodReference ref) const {
   return it->second;
 }
 
+bool CompilerDriver::IsMethodVerifiedWithoutFailures(uint32_t method_idx,
+                                                     uint16_t class_def_idx,
+                                                     const DexFile& dex_file) const {
+  if (IsImage()) {
+    // We trust that everything is verified when compiling the image.
+    // (we already dcheck this when we verify image classes)
+    return true;
+  }
+
+  MethodReference method_ref(&dex_file, method_idx);
+  const VerifiedMethod* verified_method = GetVerificationResults()->GetVerifiedMethod(method_ref);
+  if (verified_method == nullptr) {
+    // TODO: investigate more why we can get here. It appears that for inherited methods
+    // (the subclass does not provide an implementation) we generate new method indices and use
+    // those for performing the queries. However during verification we only very the base methods
+    // and thus the inherited methods will not be in the verified cache. Returning false in this
+    // case is conservative but safe.
+    //
+    // For image classes, we trust that their methods are always verified.
+    const char* descriptor = dex_file.GetClassDescriptor(dex_file.GetClassDef(class_def_idx));
+    return IsImageClass(descriptor);
+  }
+  return !verified_method->HasVerificationFailures();
+}
+
 size_t CompilerDriver::GetNonRelativeLinkerPatchCount() const {
   MutexLock mu(Thread::Current(), compiled_methods_lock_);
   return non_relative_linker_patch_count_;
