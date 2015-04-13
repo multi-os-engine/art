@@ -609,6 +609,18 @@ class ArmAssembler : public Assembler {
                               int32_t offset,
                               Condition cond = AL) = 0;
 
+  // Load `value` into `reg`, using registers `temp1` and `temp2` as temporaries.
+  virtual void LoadImmediateWide(DRegister reg, int64_t value, Register temp1, Register temp2) {
+    DCHECK_NE(temp1, temp2);
+    // Using vmovd to load the immediate `value` into `reg` does not
+    // work, as this instruction only transfers the 8 most significant
+    // bits of its immediate operand.  Instead, use two 32-bit core
+    // registers and vmovdrr to load `value` into `reg`.
+    LoadImmediate(temp1, Low32Bits(value));
+    LoadImmediate(temp2, High32Bits(value));
+    vmovdrr(reg, temp1, temp2);
+  };
+
   virtual void Push(Register rd, Condition cond = AL) = 0;
   virtual void Pop(Register rd, Condition cond = AL) = 0;
 
