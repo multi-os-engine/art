@@ -973,6 +973,7 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
   }
 
   void CopyFrom(HEnvironment* env);
+  void CopyFromWithLoopPhiAdjustment(HEnvironment* env, HBasicBlock* block);
 
   void SetRawEnvAt(size_t index, HInstruction* instruction) {
     vregs_.Put(index, HUserRecord<HEnvironment*>(instruction));
@@ -1205,6 +1206,13 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
     ArenaAllocator* allocator = GetBlock()->GetGraph()->GetArena();
     environment_ = new (allocator) HEnvironment(allocator, environment->Size());
     environment_->CopyFrom(environment);
+  }
+
+  void CopyEnvironmentFromWithLoopPhiAdjustment(HEnvironment* environment,
+                                                HBasicBlock* block) {
+    ArenaAllocator* allocator = GetBlock()->GetGraph()->GetArena();
+    environment_ = new (allocator) HEnvironment(allocator, environment->Size());
+    environment_->CopyFromWithLoopPhiAdjustment(environment, block);
   }
 
   // Returns the number of entries in the environment. Typically, that is the
