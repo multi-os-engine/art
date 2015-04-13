@@ -2344,6 +2344,23 @@ CompiledMethod* CompilerDriver::GetCompiledMethod(MethodReference ref) const {
   return it->second;
 }
 
+bool CompilerDriver::IsMethodVerifiedWithoutFailures(uint32_t method_idx,
+                                                     uint16_t class_def_idx,
+                                                     const DexFile& dex_file) const {
+  MethodReference method_ref(&dex_file, method_idx);
+  const VerifiedMethod* verified_method = GetVerificationResults()->GetVerifiedMethod(method_ref);
+  if (verified_method == nullptr) {
+    if (!IsImage()) {
+      // Methods from image classes are not cached in the veried_methods.
+      const char* descriptor = dex_file.GetClassDescriptor(dex_file.GetClassDef(class_def_idx));
+      return IsImageClass(descriptor);
+    } else {
+      return false;
+    }
+  }
+  return !verified_method->HasVerificationFailures();
+}
+
 size_t CompilerDriver::GetNonRelativeLinkerPatchCount() const {
   MutexLock mu(Thread::Current(), compiled_methods_lock_);
   return non_relative_linker_patch_count_;
