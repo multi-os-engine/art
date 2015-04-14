@@ -361,14 +361,15 @@ static void AllocateRegisters(HGraph* graph,
                               CodeGenerator* codegen,
                               PassInfoPrinter* pass_info_printer) {
   PrepareForRegisterAllocation(graph).Run();
-  SsaLivenessAnalysis liveness(*graph, codegen);
+  ArenaAllocator* allocator = graph->GetArena();
+  SsaLivenessAnalysis* liveness = new (allocator) SsaLivenessAnalysis(*graph, codegen);
   {
     PassInfo pass_info(SsaLivenessAnalysis::kLivenessPassName, pass_info_printer);
-    liveness.Analyze();
+    liveness->Analyze();
   }
   {
     PassInfo pass_info(RegisterAllocator::kRegisterAllocatorPassName, pass_info_printer);
-    RegisterAllocator(graph->GetArena(), codegen, liveness).AllocateRegisters();
+    RegisterAllocator(graph->GetArena(), codegen, *liveness).AllocateRegisters();
   }
 }
 

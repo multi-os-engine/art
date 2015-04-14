@@ -836,7 +836,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
  *
  * (b) and (c) are implemented through SsaLivenessAnalysis::ShouldBeLiveForEnvironment.
  */
-class SsaLivenessAnalysis : public ValueObject {
+class SsaLivenessAnalysis : public ArenaObject<kArenaAllocRegAlloc> {
  public:
   SsaLivenessAnalysis(const HGraph& graph, CodeGenerator* codegen)
       : graph_(graph),
