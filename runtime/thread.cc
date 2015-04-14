@@ -2312,6 +2312,7 @@ void Thread::VisitRoots(RootVisitor* visitor) {
   ReleaseLongJumpContext(context);
   for (instrumentation::InstrumentationStackFrame& frame : *GetInstrumentationStack()) {
     visitor->VisitRootIfNonNull(&frame.this_object_, RootInfo(kRootVMInternal, thread_id));
+    DCHECK(frame.method_ != nullptr);
     visitor->VisitRoot(reinterpret_cast<mirror::Object**>(&frame.method_),
                        RootInfo(kRootVMInternal, thread_id));
   }

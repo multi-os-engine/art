@@ -259,6 +259,7 @@ void IndirectReferenceTable::VisitRoots(RootVisitor* visitor, const RootInfo& ro
   BufferedRootVisitor<kDefaultBufferedRootCount> root_visitor(visitor, root_info);
   for (auto ref : *this) {
     root_visitor.VisitRootIfNonNull(*ref);
+    DCHECK(!ref->IsNull());
   }
 }
 
