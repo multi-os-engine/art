@@ -65,6 +65,10 @@ bool PrimitiveTypePropagation::UpdateType(HPhi* phi) {
         if (equivalent->IsPhi()) {
           equivalent->AsPhi()->SetLive();
           AddToWorklist(equivalent->AsPhi());
+        } else {
+          // The inputs have changed. They can be inputs of other phis,
+          // so we need to put phi users in the work list.
+          AddDependentInstructionsToWorklist(equivalent);
         }
       }
     }
@@ -117,7 +121,7 @@ void PrimitiveTypePropagation::AddToWorklist(HPhi* instruction) {
   worklist_.Add(instruction);
 }
 
-void PrimitiveTypePropagation::AddDependentInstructionsToWorklist(HPhi* instruction) {
+void PrimitiveTypePropagation::AddDependentInstructionsToWorklist(HInstruction* instruction) {
   for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
     HPhi* phi = it.Current()->GetUser()->AsPhi();
     if (phi != nullptr && phi->IsLive()) {
