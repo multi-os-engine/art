@@ -36,6 +36,72 @@
 
 namespace art {
 
+// Check that a location is consistent with a type.
+static void CheckType(Primitive::Type type, Location location) {
+  if (location.IsFpuRegister()
+      || (location.IsUnallocated() && (location.GetPolicy() == Location::kRequiresFpuRegister))) {
+    DCHECK(type == Primitive::kPrimFloat || type == Primitive::kPrimDouble);
+  } else if (location.IsRegister() ||
+             (location.IsUnallocated() && (location.GetPolicy() == Location::kRequiresRegister))) {
+    DCHECK(Primitive::IsIntegralType(type) || type == Primitive::kPrimNot) << type;
+  } else if (location.IsRegisterPair()) {
+    DCHECK_EQ(type, Primitive::kPrimLong);
+  } else if (location.IsFpuRegisterPair()) {
+    DCHECK_EQ(type, Primitive::kPrimDouble);
+  } else if (location.IsStackSlot()) {
+    DCHECK((Primitive::IsIntegralType(type) && type != Primitive::kPrimLong)
+           || type == Primitive::kPrimFloat
+           || type == Primitive::kPrimNot) << type;
+  } else if (location.IsDoubleStackSlot()) {
+    DCHECK(type == Primitive::kPrimLong || type == Primitive::kPrimDouble) << type;
+  } else if (location.IsConstant()) {
+    if (location.GetConstant()->IsIntConstant()) {
+      DCHECK(Primitive::IsIntegralType(type)) << type;
+      DCHECK_NE(type, Primitive::kPrimLong);
+    } else if (location.GetConstant()->IsNullConstant()) {
+      DCHECK_EQ(type, Primitive::kPrimNot);
+    } else if (location.GetConstant()->IsLongConstant()) {
+      DCHECK_EQ(type, Primitive::kPrimLong);
+    } else if (location.GetConstant()->IsFloatConstant()) {
+      DCHECK_EQ(type, Primitive::kPrimFloat);
+    } else {
+      DCHECK(location.GetConstant()->IsDoubleConstant());
+      DCHECK_EQ(type, Primitive::kPrimDouble);
+    }
+  } else {
+    DCHECK(location.IsInvalid() || location.GetPolicy() == Location::kAny) << location;
+  }
+}
+
+// Check that a location summary is consistent with an instruction.
+static bool CheckTypeConsistent(HInstruction* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  if (locations == nullptr) {
+    return true;
+  }
+
+  if (locations->Out().IsUnallocated()
+      && (locations->Out().GetPolicy() == Location::kSameAsFirstInput)) {
+    CheckType(instruction->GetType(), locations->InAt(0));
+  } else {
+    CheckType(instruction->GetType(), locations->Out());
+  }
+
+  for (size_t i = 0, e = instruction->InputCount(); i < e; ++i) {
+    CheckType(instruction->InputAt(i)->GetType(), locations->InAt(i));
+  }
+
+  HEnvironment* environment = instruction->GetEnvironment();
+  for (size_t i = 0; i < instruction->EnvironmentSize(); ++i) {
+    if (environment->GetInstructionAt(i) != nullptr) {
+      CheckType(environment->GetInstructionAt(i)->GetType(), locations->GetEnvironmentAt(i));
+    } else {
+      DCHECK(locations->GetEnvironmentAt(i).IsInvalid());
+    }
+  }
+  return true;
+}
+
 size_t CodeGenerator::GetCacheOffset(uint32_t index) {
   return mirror::ObjectArray<mirror::Object>::OffsetOfElement(index).SizeValue();
 }
@@ -95,6 +161,7 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
       if (is_baseline) {
         InitLocationsBaseline(current);
       }
+      DCHECK(CheckTypeConsistent(current));
       current->Accept(instruction_visitor);
     }
   }
@@ -347,6 +414,7 @@ void CodeGenerator::InitLocationsBaseline(HInstruction* instruction) {
 
 void CodeGenerator::AllocateLocations(HInstruction* instruction) {
   instruction->Accept(GetLocationBuilder());
+  DCHECK(CheckTypeConsistent(instruction));
   LocationSummary* locations = instruction->GetLocations();
   if (!instruction->IsSuspendCheckEntry()) {
     if (locations != nullptr && locations->CanCall()) {
