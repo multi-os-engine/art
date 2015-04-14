@@ -321,11 +321,7 @@ public class Main {
     assertFloatEquals(9223372036854775807F, $opt$LongToFloat(9223372036854775807L));  // 2^63 - 1
     assertFloatEquals(-9223372036854775807F, $opt$LongToFloat(-9223372036854775807L));  // -(2^63 - 1)
     assertFloatEquals(-9223372036854775808F, $opt$LongToFloat(-9223372036854775808L));  // -(2^63)
-    if (!System.getProperty("os.arch").startsWith("arm")) {
-      // Does not hold on ARM due to the implementation of long-to-float type conversion
-      // (both with Quick and Optimizing).
-      assertFloatEquals(Float.intBitsToFloat(-555858671), $opt$LongToFloat(-8008112895877447681L));
-    }
+    assertFloatEquals(Float.intBitsToFloat(-555858671), $opt$LongToFloat(-8008112895877447681L));
   }
 
   private static void longToDouble() {
