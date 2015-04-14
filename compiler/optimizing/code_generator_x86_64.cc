@@ -3277,7 +3277,11 @@ void LocationsBuilderX86_64::VisitArrayGet(HArrayGet* instruction) {
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(
       1, Location::RegisterOrConstant(instruction->InputAt(1)));
-  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  if (Primitive::IsFloatingPointType(instruction->GetType())) {
+    locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
+  } else {
+    locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  }
 }
 
 void InstructionCodeGeneratorX86_64::VisitArrayGet(HArrayGet* instruction) {
