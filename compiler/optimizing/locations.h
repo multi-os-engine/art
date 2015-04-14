@@ -486,6 +486,11 @@ class LocationSummary : public ArenaObject<kArenaAllocMisc> {
 
   void SetOut(Location location, Location::OutputOverlap overlaps = Location::kOutputOverlap) {
     DCHECK(output_.IsInvalid());
+    if (kIsDebugBuild && location.IsUnallocated()) {
+      if ((location.GetPolicy() == Location::kSameAsFirstInput) && InAt(0).IsUnallocated()) {
+        DCHECK_NE(InAt(0).GetPolicy(), Location::kAny);
+      }
+    }
     output_overlaps_ = overlaps;
     output_ = location;
   }
@@ -496,6 +501,7 @@ class LocationSummary : public ArenaObject<kArenaAllocMisc> {
     //    doing full register allocation.
     // 2) Unallocated location.
     DCHECK(output_.IsStackSlot() || output_.IsDoubleStackSlot() || output_.IsUnallocated());
+    DCHECK(!location.IsUnallocated());
     output_ = location;
   }
 
