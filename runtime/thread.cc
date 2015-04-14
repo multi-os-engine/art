@@ -1754,6 +1754,7 @@ void Thread::ThrowNewWrappedException(const char* exception_class_descriptor,
   if (UNLIKELY(exception_class.Get() == nullptr)) {
     CHECK(IsExceptionPending());
     LOG(ERROR) << "No exception class " << PrettyDescriptor(exception_class_descriptor);
+    LOG(ERROR) << GetException()->Dump();
     return;
   }
 
