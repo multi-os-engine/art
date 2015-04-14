@@ -119,9 +119,10 @@ class ClassLinker {
 
   // Find a class in the path class loader, loading it if necessary without using JNI. Hash
   // function is supposed to be ComputeModifiedUtf8Hash(descriptor).
-  mirror::Class* FindClassInPathClassLoader(ScopedObjectAccessAlreadyRunnable& soa,
-                                            Thread* self, const char* descriptor, size_t hash,
-                                            Handle<mirror::ClassLoader> class_loader)
+  bool FindClassInPathClassLoader(ScopedObjectAccessAlreadyRunnable& soa,
+                                  Thread* self, const char* descriptor, size_t hash,
+                                  Handle<mirror::ClassLoader> class_loader,
+                                  mirror::Class** result)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Finds a class by its descriptor using the "system" class loader, ie by searching the
