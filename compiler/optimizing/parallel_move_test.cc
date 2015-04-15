@@ -19,27 +19,29 @@
 #include "parallel_move_resolver.h"
 
 #include "gtest/gtest.h"
+#include "gtest/gtest-typed-test.h"
 
 namespace art {
 
-class TestParallelMoveResolver : public ParallelMoveResolver {
- public:
-  explicit TestParallelMoveResolver(ArenaAllocator* allocator) : ParallelMoveResolver(allocator) {}
-
-  void Dump(Location location) {
-    if (location.IsConstant()) {
-      message_ << "C";
-    } else if (location.IsPair()) {
-      message_ << location.low() << "," << location.high();
-    } else if (location.IsRegister()) {
-      message_ << location.reg();
-    } else if (location.IsStackSlot()) {
-      message_ << location.GetStackIndex() << "(sp)";
-    } else {
-      message_ << "2x" << location.GetStackIndex() << "(sp)";
-      DCHECK(location.IsDoubleStackSlot()) << location;
-    }
+static void DumpLocationForTest(std::ostream& os, Location location) {
+  if (location.IsConstant()) {
+    os << "C";
+  } else if (location.IsPair()) {
+    os << location.low() << "," << location.high();
+  } else if (location.IsRegister()) {
+    os << location.reg();
+  } else if (location.IsStackSlot()) {
+    os << location.GetStackIndex() << "(sp)";
+  } else {
+    DCHECK(location.IsDoubleStackSlot())<< location;
+    os << "2x" << location.GetStackIndex() << "(sp)";
   }
+}
+
+class TestParallelMoveResolverWithSwap : public ParallelMoveResolverWithSwap {
+ public:
+  explicit TestParallelMoveResolverWithSwap(ArenaAllocator* allocator)
+      : ParallelMoveResolverWithSwap(allocator) {}
 
   void EmitMove(size_t index) OVERRIDE {
     MoveOperands* move = moves_.Get(index);
@@ -47,9 +49,9 @@ class TestParallelMoveResolver : public ParallelMoveResolver {
       message_ << " ";
     }
     message_ << "(";
-    Dump(move->GetSource());
+    DumpLocationForTest(message_, move->GetSource());
     message_ << " -> ";
-    Dump(move->GetDestination());
+    DumpLocationForTest(message_, move->GetDestination());
     message_ << ")";
   }
 
@@ -59,9 +61,9 @@ class TestParallelMoveResolver : public ParallelMoveResolver {
       message_ << " ";
     }
     message_ << "(";
-    Dump(move->GetSource());
+    DumpLocationForTest(message_, move->GetSource());
     message_ << " <-> ";
-    Dump(move->GetDestination());
+    DumpLocationForTest(message_, move->GetDestination());
     message_ << ")";
   }
 
@@ -76,7 +78,67 @@ class TestParallelMoveResolver : public ParallelMoveResolver {
   std::ostringstream message_;
 
 
-  DISALLOW_COPY_AND_ASSIGN(TestParallelMoveResolver);
+  DISALLOW_COPY_AND_ASSIGN(TestParallelMoveResolverWithSwap);
+};
+
+class TestParallelMoveResolverNoSwap : public ParallelMoveResolverNoSwap {
+ public:
+  explicit TestParallelMoveResolverNoSwap(ArenaAllocator* allocator)
+      : ParallelMoveResolverNoSwap(allocator), scratch_index_(scratch_start_) {}
+
+  void PrepareForEmitNativeCode() OVERRIDE {
+    scratch_index_ = scratch_start_;
+  }
+
+  void FinishEmitNativeCode() OVERRIDE {}
+
+  Location AllocateScratchLocation(Location loc) OVERRIDE {
+    Location::Kind kind = loc.GetKind();
+    if (kind == Location::kConstant) {
+      HConstant* constant = loc.GetConstant();
+      if (constant->IsIntConstant() || constant->IsFloatConstant()) {
+        kind = Location::kRegister;
+      } else {
+        kind = Location::kRegisterPair;
+      }
+    }
+    Location scratch = GetScratchLocation(kind);
+    if (scratch.Equals(Location::NoLocation())) {
+      AddScratchLocation(Location::RegisterLocation(scratch_index_));
+      AddScratchLocation(Location::RegisterLocation(scratch_index_ + 1));
+      AddScratchLocation(Location::RegisterPairLocation(scratch_index_, scratch_index_ + 1));
+      scratch = (kind == Location::kRegister) ? Location::RegisterLocation(scratch_index_)
+          : Location::RegisterPairLocation(scratch_index_, scratch_index_ + 1);
+      scratch_index_ += 2;
+    }
+    return scratch;
+  }
+
+  void FreeScratchLocation(Location loc ATTRIBUTE_UNUSED) OVERRIDE {}
+
+  void EmitMove(size_t index) OVERRIDE {
+    MoveOperands* move = moves_.Get(index);
+    if (!message_.str().empty()) {
+      message_ << " ";
+    }
+    message_ << "(";
+    DumpLocationForTest(message_, move->GetSource());
+    message_ << " -> ";
+    DumpLocationForTest(message_, move->GetDestination());
+    message_ << ")";
+  }
+
+  std::string GetMessage() const {
+    return  message_.str();
+  }
+
+ private:
+  std::ostringstream message_;
+
+  int scratch_index_;
+  static constexpr int scratch_start_ = 10;
+
+  DISALLOW_COPY_AND_ASSIGN(TestParallelMoveResolverNoSwap);
 };
 
 static HParallelMove* BuildParallelMove(ArenaAllocator* allocator,
@@ -92,55 +154,102 @@ static HParallelMove* BuildParallelMove(ArenaAllocator* allocator,
   return moves;
 }
 
-TEST(ParallelMoveTest, Dependency) {
+template <typename T>
+class ParallelMoveTest : public ::testing::Test {
+ public:
+  static const bool has_swap;
+};
+
+template<> const bool ParallelMoveTest<TestParallelMoveResolverWithSwap>::has_swap = true;
+template<> const bool ParallelMoveTest<TestParallelMoveResolverNoSwap>::has_swap = false;
+
+typedef ::testing::Types<TestParallelMoveResolverWithSwap, TestParallelMoveResolverNoSwap>
+    ParallelMoveResolverTestTypes;
+
+TYPED_TEST_CASE(ParallelMoveTest, ParallelMoveResolverTestTypes);
+
+
+TYPED_TEST(ParallelMoveTest, Dependency) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
 
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     static constexpr size_t moves[][2] = {{0, 1}, {1, 2}};
     resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
-    ASSERT_STREQ("(1 -> 2) (0 -> 1)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(1 -> 2) (0 -> 1)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(1 -> 2) (0 -> 1)", resolver.GetMessage().c_str());
+    }
   }
 
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     static constexpr size_t moves[][2] = {{0, 1}, {1, 2}, {2, 3}, {1, 4}};
     resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
-    ASSERT_STREQ("(2 -> 3) (1 -> 2) (1 -> 4) (0 -> 1)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(2 -> 3) (1 -> 2) (1 -> 4) (0 -> 1)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(2 -> 3) (1 -> 2) (0 -> 1) (2 -> 4)", resolver.GetMessage().c_str());
+    }
   }
 }
 
-TEST(ParallelMoveTest, Swap) {
+TYPED_TEST(ParallelMoveTest, Cycle) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
 
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     static constexpr size_t moves[][2] = {{0, 1}, {1, 0}};
     resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
-    ASSERT_STREQ("(1 <-> 0)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(1 <-> 0)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(1 -> 10) (0 -> 1) (10 -> 0)", resolver.GetMessage().c_str());
+    }
   }
 
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     static constexpr size_t moves[][2] = {{0, 1}, {1, 2}, {1, 0}};
     resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
-    ASSERT_STREQ("(1 -> 2) (1 <-> 0)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(1 -> 2) (1 <-> 0)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(1 -> 2) (0 -> 1) (2 -> 0)", resolver.GetMessage().c_str());
+    }
   }
 
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
+    static constexpr size_t moves[][2] = {{0, 1}, {1, 0}, {0, 2}};
+    resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(0 -> 2) (1 <-> 0)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(0 -> 2) (1 -> 0) (2 -> 1)", resolver.GetMessage().c_str());
+    }
+  }
+
+  {
+    TypeParam resolver(&allocator);
     static constexpr size_t moves[][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 0}};
     resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
-    ASSERT_STREQ("(4 <-> 0) (3 <-> 4) (2 <-> 3) (1 <-> 2)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(4 <-> 0) (3 <-> 4) (2 <-> 3) (1 <-> 2)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(4 -> 10) (3 -> 4) (2 -> 3) (1 -> 2) (0 -> 1) (10 -> 0)",
+          resolver.GetMessage().c_str());
+    }
   }
 }
 
-TEST(ParallelMoveTest, ConstantLast) {
+TYPED_TEST(ParallelMoveTest, ConstantLast) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
-  TestParallelMoveResolver resolver(&allocator);
+  TypeParam resolver(&allocator);
   HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
   moves->AddMove(
       Location::ConstantLocation(new (&allocator) HIntConstant(0)),
@@ -154,12 +263,12 @@ TEST(ParallelMoveTest, ConstantLast) {
   ASSERT_STREQ("(1 -> 2) (C -> 0)", resolver.GetMessage().c_str());
 }
 
-TEST(ParallelMoveTest, Pairs) {
+TYPED_TEST(ParallelMoveTest, Pairs) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
 
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
     moves->AddMove(
         Location::RegisterLocation(2),
@@ -174,7 +283,7 @@ TEST(ParallelMoveTest, Pairs) {
   }
 
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
     moves->AddMove(
         Location::RegisterPairLocation(0, 1),
@@ -189,7 +298,7 @@ TEST(ParallelMoveTest, Pairs) {
   }
 
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
     moves->AddMove(
         Location::RegisterPairLocation(0, 1),
@@ -200,10 +309,14 @@ TEST(ParallelMoveTest, Pairs) {
         Location::RegisterLocation(0),
         nullptr);
     resolver.EmitNativeCode(moves);
-    ASSERT_STREQ("(0,1 <-> 2,3)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(0,1 <-> 2,3)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(2 -> 10) (0,1 -> 2,3) (10 -> 0)", resolver.GetMessage().c_str());
+    }
   }
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
     moves->AddMove(
         Location::RegisterLocation(2),
@@ -218,10 +331,15 @@ TEST(ParallelMoveTest, Pairs) {
         Location::RegisterPairLocation(2, 3),
         nullptr);
     resolver.EmitNativeCode(moves);
-    ASSERT_STREQ("(0,1 <-> 2,3) (7 -> 1) (0 -> 7)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(0,1 <-> 2,3) (7 -> 1) (0 -> 7)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(0,1 -> 10,11) (7 -> 1) (2 -> 7) (10,11 -> 2,3)",
+          resolver.GetMessage().c_str());
+    }
   }
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
     moves->AddMove(
         Location::RegisterLocation(2),
@@ -236,10 +354,15 @@ TEST(ParallelMoveTest, Pairs) {
         Location::RegisterLocation(1),
         nullptr);
     resolver.EmitNativeCode(moves);
-    ASSERT_STREQ("(0,1 <-> 2,3) (7 -> 1) (0 -> 7)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(0,1 <-> 2,3) (7 -> 1) (0 -> 7)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(0,1 -> 10,11) (7 -> 1) (2 -> 7) (10,11 -> 2,3)",
+          resolver.GetMessage().c_str());
+    }
   }
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
     moves->AddMove(
         Location::RegisterPairLocation(0, 1),
@@ -254,10 +377,14 @@ TEST(ParallelMoveTest, Pairs) {
         Location::RegisterLocation(1),
         nullptr);
     resolver.EmitNativeCode(moves);
-    ASSERT_STREQ("(0,1 <-> 2,3) (7 -> 1) (0 -> 7)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(0,1 <-> 2,3) (7 -> 1) (0 -> 7)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(7 -> 10) (2 -> 7) (0,1 -> 2,3) (10 -> 1)", resolver.GetMessage().c_str());
+    }
   }
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
     moves->AddMove(
         Location::RegisterPairLocation(0, 1),
@@ -268,10 +395,14 @@ TEST(ParallelMoveTest, Pairs) {
         Location::RegisterPairLocation(0, 1),
         nullptr);
     resolver.EmitNativeCode(moves);
-    ASSERT_STREQ("(2,3 <-> 0,1)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(2,3 <-> 0,1)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(2,3 -> 10,11) (0,1 -> 2,3) (10,11 -> 0,1)", resolver.GetMessage().c_str());
+    }
   }
   {
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
     moves->AddMove(
         Location::RegisterPairLocation(2, 3),
@@ -282,27 +413,99 @@ TEST(ParallelMoveTest, Pairs) {
         Location::RegisterPairLocation(2, 3),
         nullptr);
     resolver.EmitNativeCode(moves);
-    ASSERT_STREQ("(0,1 <-> 2,3)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(0,1 <-> 2,3)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(0,1 -> 10,11) (2,3 -> 0,1) (10,11 -> 2,3)", resolver.GetMessage().c_str());
+    }
+  }
+}
+
+TYPED_TEST(ParallelMoveTest, MultiCycles) {
+  ArenaPool pool;
+  ArenaAllocator allocator(&pool);
+
+  {
+    TypeParam resolver(&allocator);
+    static constexpr size_t moves[][2] = {{0, 1}, {1, 0}, {2, 3}, {3, 2}};
+    resolver.EmitNativeCode(BuildParallelMove(&allocator, moves, arraysize(moves)));
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(1 <-> 0) (3 <-> 2)",  resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(1 -> 10) (0 -> 1) (10 -> 0) (3 -> 10) (2 -> 3) (10 -> 2)",
+          resolver.GetMessage().c_str());
+    }
+  }
+  {
+    TypeParam resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(2),
+        Location::RegisterLocation(0),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(3),
+        Location::RegisterLocation(1),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(0,1 <-> 2,3)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(2 -> 10) (3 -> 11) (0,1 -> 2,3) (10 -> 0) (11 -> 1)",
+          resolver.GetMessage().c_str());
+    }
+  }
+  {
+    TypeParam resolver(&allocator);
+    HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
+    moves->AddMove(
+        Location::RegisterLocation(2),
+        Location::RegisterLocation(0),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterLocation(3),
+        Location::RegisterLocation(1),
+        nullptr);
+    moves->AddMove(
+        Location::RegisterPairLocation(0, 1),
+        Location::RegisterPairLocation(2, 3),
+        nullptr);
+    resolver.EmitNativeCode(moves);
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(0,1 <-> 2,3)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(3 -> 10) (0,1 -> 12,13) (10 -> 1) (2 -> 0) (12,13 -> 2,3)",
+          resolver.GetMessage().c_str());
+    }
   }
 
   {
     // Test involving registers used in single context and pair context.
-    TestParallelMoveResolver resolver(&allocator);
+    TypeParam resolver(&allocator);
     HParallelMove* moves = new (&allocator) HParallelMove(&allocator);
     moves->AddMove(
-        Location::RegisterLocation(10),
-        Location::RegisterLocation(5),
+        Location::RegisterLocation(2),
+        Location::RegisterLocation(1),
         nullptr);
     moves->AddMove(
-        Location::RegisterPairLocation(4, 5),
+        Location::RegisterPairLocation(0, 1),
         Location::DoubleStackSlot(32),
         nullptr);
     moves->AddMove(
         Location::DoubleStackSlot(32),
-        Location::RegisterPairLocation(10, 11),
+        Location::RegisterPairLocation(2, 3),
         nullptr);
     resolver.EmitNativeCode(moves);
-    ASSERT_STREQ("(2x32(sp) <-> 10,11) (4,5 <-> 2x32(sp)) (4 -> 5)", resolver.GetMessage().c_str());
+    if (TestFixture::has_swap) {
+      ASSERT_STREQ("(2x32(sp) <-> 2,3) (0,1 <-> 2x32(sp)) (0 -> 1)", resolver.GetMessage().c_str());
+    } else {
+      ASSERT_STREQ("(2x32(sp) -> 10,11) (0,1 -> 2x32(sp)) (2 -> 1) (10,11 -> 2,3)",
+          resolver.GetMessage().c_str());
+    }
   }
 }
 
