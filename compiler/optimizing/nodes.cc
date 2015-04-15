@@ -65,8 +65,10 @@ void HGraph::RemoveDeadBlocks(const ArenaBitVector& visited) const {
   for (size_t i = 0; i < blocks_.Size(); ++i) {
     if (!visited.IsBitSet(i)) {
       HBasicBlock* block = blocks_.Get(i);
-      for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
-        block->GetSuccessors().Get(j)->RemovePredecessor(block);
+      for (size_t j = block->GetSuccessors().Size(); j > 0; --j) {
+        HBasicBlock* succ = block->GetSuccessors().Get(j - 1);
+        succ->RemovePredecessor(block);
+        block->RemoveSuccessor(succ);
       }
       for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
         block->RemovePhi(it.Current()->AsPhi(), /*ensure_safety=*/ false);
