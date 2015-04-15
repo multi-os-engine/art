@@ -351,6 +351,7 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
  public:
   InitCodeMethodVisitor(OatWriter* writer, size_t offset)
     : OatDexMethodVisitor(writer, offset) {
+    debuggable_ = writer->GetCompilerDriver()->GetCompilerOptions().GetDebuggable();
     text_absolute_patch_locations_ = writer->GetAbsolutePatchLocationsFor(".text");
     text_absolute_patch_locations_->reserve(
         writer_->compiler_driver_->GetNonRelativeLinkerPatchCount());
@@ -379,20 +380,29 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
       CHECK_NE(code_size, 0U);
       uint32_t thumb_offset = compiled_method->CodeDelta();
 
-      // Deduplicate code arrays.
+      // Deduplicate code arrays if we are not producing debuggable code.
       bool deduped = false;
-      auto lb = dedupe_map_.lower_bound(compiled_method);
-      if (lb != dedupe_map_.end() && !dedupe_map_.key_comp()(compiled_method, lb->first)) {
-        quick_code_offset = lb->second;
-        deduped = true;
-      } else {
+      if (debuggable_) {
         offset_ = writer_->relative_patcher_->ReserveSpace(
             offset_, compiled_method, MethodReference(dex_file_, it.GetMemberIndex()));
         offset_ = compiled_method->AlignCode(offset_);
         DCHECK_ALIGNED_PARAM(offset_,
                              GetInstructionSetAlignment(compiled_method->GetInstructionSet()));
         quick_code_offset = offset_ + sizeof(OatQuickMethodHeader) + thumb_offset;
-        dedupe_map_.PutBefore(lb, compiled_method, quick_code_offset);
+      } else {
+        auto lb = dedupe_map_.lower_bound(compiled_method);
+        if (lb != dedupe_map_.end() && !dedupe_map_.key_comp()(compiled_method, lb->first)) {
+          quick_code_offset = lb->second;
+          deduped = true;
+        } else {
+          offset_ = writer_->relative_patcher_->ReserveSpace(
+              offset_, compiled_method, MethodReference(dex_file_, it.GetMemberIndex()));
+          offset_ = compiled_method->AlignCode(offset_);
+          DCHECK_ALIGNED_PARAM(offset_,
+                               GetInstructionSetAlignment(compiled_method->GetInstructionSet()));
+          quick_code_offset = offset_ + sizeof(OatQuickMethodHeader) + thumb_offset;
+          dedupe_map_.PutBefore(lb, compiled_method, quick_code_offset);
+        }
       }
 
       MethodReference method_ref(dex_file_, it.GetMemberIndex());
@@ -538,6 +548,9 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
 
   // Patch locations for the .text section.
   std::vector<uintptr_t>* text_absolute_patch_locations_;
+
+  // Cache of compiler's --debuggable option.
+  bool debuggable_;
 };
 
 template <typename DataAccess>
