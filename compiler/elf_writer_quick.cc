@@ -148,11 +148,15 @@ bool ElfWriterQuick<Elf_Word, Elf_Sword, Elf_Addr, Elf_Dyn,
   if (compiler_driver_->GetCompilerOptions().GetIncludeCFI() &&
       !oat_writer->GetMethodDebugInfo().empty()) {
     ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> eh_frame(
-        ".eh_frame", SHT_PROGBITS, SHF_ALLOC, nullptr, 0, 4, 0);
+        ".eh_frame", SHT_PROGBITS, SHF_ALLOC, nullptr, 0, kPageSize, 0);
+    ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> eh_frame_hdr(
+        ".eh_frame_hdr", SHT_PROGBITS, SHF_ALLOC, nullptr, 0, 4, 0);
     dwarf::WriteEhFrame(compiler_driver_, oat_writer,
                         builder->GetTextBuilder().GetSection()->sh_addr,
+                        eh_frame_hdr.GetBuffer(),
                         eh_frame.GetBuffer());
     builder->RegisterRawSection(eh_frame);
+    builder->RegisterRawSection(eh_frame_hdr);
   }
 
   if (compiler_driver_->GetCompilerOptions().GetIncludeDebugSymbols() &&
