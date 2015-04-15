@@ -27,6 +27,7 @@ namespace dwarf {
 void WriteEhFrame(const CompilerDriver* compiler,
                   OatWriter* oat_writer,
                   uint32_t text_section_offset,
+                  std::vector<uint8_t>* eh_frame_hdr,
                   std::vector<uint8_t>* eh_frame);
 
 void WriteDebugSections(const CompilerDriver* compiler,

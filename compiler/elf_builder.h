@@ -589,6 +589,8 @@ class ElfBuilder FINAL {
     // | Elf_Phdr LOAD RW        | .bss (Optional)
     // | Elf_Phdr LOAD RW        | .dynamic
     // | Elf_Phdr DYNAMIC        | .dynamic
+    // | Elf_Phdr LOAD R         | .eh_frame .eh_frame_hdr
+    // | Elf_Phdr EH_FRAME R     | .eh_frame_hdr
     // +-------------------------+
     // | .dynsym                 |
     // | Elf_Sym  STN_UNDEF      |
@@ -648,21 +650,24 @@ class ElfBuilder FINAL {
     // | .shstrtab\0             |
     // | .symtab\0               |  (Optional)
     // | .strtab\0               |  (Optional)
-    // | .debug_str\0            |  (Optional)
-    // | .debug_info\0           |  (Optional)
     // | .eh_frame\0             |  (Optional)
-    // | .debug_line\0           |  (Optional)
+    // | .eh_frame_hdr\0         |  (Optional)
+    // | .debug_info\0           |  (Optional)
     // | .debug_abbrev\0         |  (Optional)
+    // | .debug_str\0            |  (Optional)
+    // | .debug_line\0           |  (Optional)
+    // +-------------------------+  (Optional)
+    // | .eh_frame               |  (Optional)
+    // +-------------------------+  (Optional)
+    // | .eh_frame_hdr           |  (Optional)
     // +-------------------------+  (Optional)
     // | .debug_info             |  (Optional)
     // +-------------------------+  (Optional)
     // | .debug_abbrev           |  (Optional)
     // +-------------------------+  (Optional)
-    // | .eh_frame               |  (Optional)
+    // | .debug_str              |  (Optional)
     // +-------------------------+  (Optional)
     // | .debug_line             |  (Optional)
-    // +-------------------------+  (Optional)
-    // | .debug_str              |  (Optional)
     // +-------------------------+  (Optional)
     // | Elf_Shdr NULL           |
     // | Elf_Shdr .dynsym        |
@@ -673,11 +678,12 @@ class ElfBuilder FINAL {
     // | Elf_Shdr .bss           |  (Optional)
     // | Elf_Shdr .dynamic       |
     // | Elf_Shdr .shstrtab      |
+    // | Elf_Shdr .eh_frame      |  (Optional)
+    // | Elf_Shdr .eh_frame_hdr  |  (Optional)
     // | Elf_Shdr .debug_info    |  (Optional)
     // | Elf_Shdr .debug_abbrev  |  (Optional)
-    // | Elf_Shdr .eh_frame      |  (Optional)
-    // | Elf_Shdr .debug_line    |  (Optional)
     // | Elf_Shdr .debug_str     |  (Optional)
+    // | Elf_Shdr .debug_line    |  (Optional)
     // +-------------------------+
 
     if (fatal_error_) {
@@ -717,6 +723,12 @@ class ElfBuilder FINAL {
 
     program_headers_[PH_DYNAMIC].p_type    = PT_DYNAMIC;
     program_headers_[PH_DYNAMIC].p_flags   = PF_R | PF_W;
+
+    program_headers_[PH_LOAD_EH_FRAME].p_type = PT_NULL;
+    program_headers_[PH_LOAD_EH_FRAME].p_flags = PF_R;
+
+    program_headers_[PH_EH_FRAME_HDR].p_type = PT_NULL;
+    program_headers_[PH_EH_FRAME_HDR].p_flags = PF_R;
 
     // Get the dynstr string.
     dynstr_ = dynsym_builder_.GenerateStrtab();
@@ -1044,6 +1056,43 @@ class ElfBuilder FINAL {
     program_headers_[PH_DYNAMIC].p_memsz  = dynamic_builder_.GetSection()->sh_size;
     program_headers_[PH_DYNAMIC].p_align  = dynamic_builder_.GetSection()->sh_addralign;
 
+    const auto* eh_frame = FindRawSection(".eh_frame");
+    if (eh_frame != nullptr) {
+      const auto* eh_frame_hdr = FindRawSection(".eh_frame_hdr");
+
+      // We create a segment that covers eh_frame and eh_frame_hdr. Need to adjust sizes in the
+      // case there is an eh_frame_hdr.
+      Elf_Word adjust_memsz = 0;
+      Elf_Word adjust_filesz = 0;
+
+      if (eh_frame_hdr != nullptr) {
+        // Check layout:
+        // 1) eh_frame is before eh_frame_hdr.
+        // 2) There's no gap.
+        CHECK_LE(eh_frame->GetSection()->sh_offset, eh_frame_hdr->GetSection()->sh_offset);
+        CHECK_EQ(eh_frame->GetSection()->sh_offset + eh_frame->GetSection()->sh_size,
+                 eh_frame_hdr->GetSection()->sh_offset);
+
+        adjust_memsz = adjust_filesz = eh_frame_hdr->GetSection()->sh_size;
+
+        program_headers_[PH_EH_FRAME_HDR].p_type   = PT_GNU_EH_FRAME;
+        program_headers_[PH_EH_FRAME_HDR].p_offset = eh_frame_hdr->GetSection()->sh_offset;
+        program_headers_[PH_EH_FRAME_HDR].p_vaddr  = eh_frame_hdr->GetSection()->sh_offset;
+        program_headers_[PH_EH_FRAME_HDR].p_paddr  = eh_frame_hdr->GetSection()->sh_offset;
+        program_headers_[PH_EH_FRAME_HDR].p_filesz = eh_frame_hdr->GetSection()->sh_size;
+        program_headers_[PH_EH_FRAME_HDR].p_memsz  = eh_frame_hdr->GetSection()->sh_size;
+        program_headers_[PH_EH_FRAME_HDR].p_align  = eh_frame_hdr->GetSection()->sh_addralign;
+      }
+
+      program_headers_[PH_LOAD_EH_FRAME].p_type   = PT_LOAD;
+      program_headers_[PH_LOAD_EH_FRAME].p_offset = eh_frame->GetSection()->sh_offset;
+      program_headers_[PH_LOAD_EH_FRAME].p_vaddr  = eh_frame->GetSection()->sh_offset;
+      program_headers_[PH_LOAD_EH_FRAME].p_paddr  = eh_frame->GetSection()->sh_offset;
+      program_headers_[PH_LOAD_EH_FRAME].p_filesz = eh_frame->GetSection()->sh_size + adjust_filesz;
+      program_headers_[PH_LOAD_EH_FRAME].p_memsz  = eh_frame->GetSection()->sh_size + adjust_memsz;
+      program_headers_[PH_LOAD_EH_FRAME].p_align  = eh_frame->GetSection()->sh_addralign;
+    }
+
     // Finish setup of the Ehdr values.
     elf_header_.e_phoff = PHDR_OFFSET;
     elf_header_.e_shoff = sections_offset;
@@ -1129,6 +1178,16 @@ class ElfBuilder FINAL {
   // is responsible for deallocating their copy.
   void RegisterRawSection(ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> bld) {
     other_builders_.push_back(bld);
+  }
+
+  const ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>*
+  FindRawSection(const char* name) {
+    for (const auto& other_builder : other_builders_) {
+      if (other_builder.GetName() == name) {
+        return &other_builder;
+      }
+    }
+    return nullptr;
   }
 
  private:
@@ -1282,7 +1341,9 @@ class ElfBuilder FINAL {
     PH_LOAD_RW_BSS      = 3,
     PH_LOAD_RW_DYNAMIC  = 4,
     PH_DYNAMIC          = 5,
-    PH_NUM              = 6,
+    PH_LOAD_EH_FRAME    = 6,
+    PH_EH_FRAME_HDR     = 7,
+    PH_NUM              = 8,
   };
   static const uint32_t PHDR_SIZE = sizeof(Elf_Phdr) * PH_NUM;
   Elf_Phdr program_headers_[PH_NUM];
