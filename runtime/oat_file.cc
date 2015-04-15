@@ -33,6 +33,7 @@
 #include "mirror/art_method-inl.h"
 #include "mirror/class.h"
 #include "mirror/object-inl.h"
+#include "oat_file_assistant.h"
 #include "os.h"
 #include "runtime.h"
 #include "utils.h"
@@ -593,62 +594,113 @@ bool OatFile::IsPic() const {
   // TODO: Check against oat_patches. b/18144996
 }
 
-static constexpr char kDexClassPathEncodingSeparator = '*';
+// Dex dependency lists:
+//
+// Dex dependency lists are lists of strings separated by a separator char '*'. The list elements
+// come in pairs. The first string gives a (potentially relative) dex location. The second string
+// gives the checksum of said file (in hex).
+//
+// An empty string encodes no dependencies. A null string is equivalent to an empty string for
+// checking purposes.
 
-std::string OatFile::EncodeDexFileDependencies(const std::vector<const DexFile*>& dex_files) {
+static constexpr char kDexClassPathEncodingSeparator = '*';
+static_assert(kDexClassPathEncodingSeparator != DexFile::kMultiDexSeparator,
+              "Multidex separator and dex dependency list separator must be different");
+
+std::string OatFile::EncodeDexFileDependencies(const std::vector<const DexFile*>& dex_files,
+                                               const char* abs_dex_location) {
   std::ostringstream out;
+  size_t abs_length = 0U;
+  if (abs_dex_location != nullptr) {
+    abs_length = strlen(abs_dex_location);
+  }
 
   for (const DexFile* dex_file : dex_files) {
-    out << dex_file->GetLocation().c_str();
+    std::string location = dex_file->GetLocation();
+    if (abs_dex_location != nullptr) {
+      if (StartsWith(location, abs_dex_location)) {
+        location = location.substr(abs_length);
+      }
+    }
+    out << location;
     out << kDexClassPathEncodingSeparator;
-    out << dex_file->GetLocationChecksum();
+    out << std::hex << dex_file->GetLocationChecksum() << std::dec;
     out << kDexClassPathEncodingSeparator;
   }
 
   return out.str();
 }
 
-bool OatFile::CheckStaticDexFileDependencies(const char* dex_dependencies, std::string* msg) {
-  if (dex_dependencies == nullptr || dex_dependencies[0] == 0) {
-    // No dependencies.
+static bool Split(const char* input, std::vector<std::string>* out, std::string* msg) {
+  DCHECK(out != nullptr);
+  if (input == nullptr || input[0] == 0) {
     return true;
   }
 
   // Assumption: this is not performance-critical. So it's OK to do this with a std::string and
   //             Split() instead of manual parsing of the combined char*.
-  std::vector<std::string> split;
-  Split(dex_dependencies, kDexClassPathEncodingSeparator, &split);
-  if (split.size() % 2 != 0) {
+
+  Split(input, kDexClassPathEncodingSeparator, out);
+
+  if (out->size() % 2 != 0) {
     // Expected pairs of location and checksum.
-    *msg = StringPrintf("Odd number of elements in dependency list %s", dex_dependencies);
+    *msg = StringPrintf("Odd number of elements in dependency list %s", input);
     return false;
+  }
+
+  return true;
+}
+
+static bool ConvertHexString(const char* input, uint64_t* output) {
+  DCHECK(input != nullptr);
+
+  char* end;
+  *output = strtoull(input, &end, 16);
+
+  // strtoll made progress all the way to null-terminator. This does not treat overflows correctly,
+  // but checksums are 32b, anyways.
+  return (input != end && *end == '\0');
+}
+
+bool OatFile::CheckStaticDexFileDependencies(const char* dex_dependencies,
+                                             const char* abs_dex_location,
+                                             std::string* msg) {
+  std::vector<std::string> split;
+  if (!Split(dex_dependencies, &split, msg)) {
+    return false;
+  }
+  if (split.empty()) {
+    // No dependencies.
+    return true;
   }
 
   for (auto it = split.begin(), end = split.end(); it != end; it += 2) {
     std::string& location = *it;
     std::string& checksum = *(it + 1);
-    int64_t converted = strtoll(checksum.c_str(), nullptr, 10);
-    if (converted == 0) {
+    uint64_t converted;
+    if (!ConvertHexString(checksum.c_str(), &converted)) {
       // Conversion error.
       *msg = StringPrintf("Conversion error for %s", checksum.c_str());
       return false;
     }
 
-    uint32_t dex_checksum;
     std::string error_msg;
-    if (DexFile::GetChecksum(DexFile::GetDexCanonicalLocation(location.c_str()).c_str(),
-                             &dex_checksum,
-                             &error_msg)) {
-      if (converted != dex_checksum) {
-        *msg = StringPrintf("Checksums don't match for %s: %" PRId64 " vs %u",
-                            location.c_str(), converted, dex_checksum);
+
+    std::string abs_location =
+        OatFile::ResolveRelativeEncodedDexLocation(abs_dex_location, location);
+    OatFileAssistant ofa(abs_location.c_str(), nullptr, kRuntimeISA, false);
+    const uint32_t* dex_checksum = ofa.GetRequiredDexChecksum();
+    if (dex_checksum != nullptr) {
+      if (converted != *dex_checksum) {
+        *msg = StringPrintf("Checksums don't match for %s (%" PRId64 " vs %u) while checking dex "
+                            "file dependencies.", location.c_str(), converted, *dex_checksum);
         return false;
       }
     } else {
-      // Problem retrieving checksum.
-      // TODO: odex files?
-      *msg = StringPrintf("Could not retrieve checksum for %s: %s", location.c_str(),
-                          error_msg.c_str());
+      // Could not find checksum.
+      // TODO: Make this configurable? For now: return that the dependency has changed.
+      *msg = StringPrintf("Could not retrieve checksum for %s while checking dex file "
+                          "dependencies : %s", location.c_str(), error_msg.c_str());
       return false;
     }
   }
@@ -657,23 +709,18 @@ bool OatFile::CheckStaticDexFileDependencies(const char* dex_dependencies, std::
 }
 
 bool OatFile::GetDexLocationsFromDependencies(const char* dex_dependencies,
+                                              const char* abs_dex_location,
                                               std::vector<std::string>* locations) {
-  DCHECK(locations != nullptr);
-  if (dex_dependencies == nullptr || dex_dependencies[0] == 0) {
-    return true;
-  }
-
-  // Assumption: this is not performance-critical. So it's OK to do this with a std::string and
-  //             Split() instead of manual parsing of the combined char*.
   std::vector<std::string> split;
-  Split(dex_dependencies, kDexClassPathEncodingSeparator, &split);
-  if (split.size() % 2 != 0) {
-    // Expected pairs of location and checksum.
+  std::string msg;
+  if (!Split(dex_dependencies, &split, &msg)) {
     return false;
   }
 
   for (auto it = split.begin(), end = split.end(); it != end; it += 2) {
-    locations->push_back(*it);
+    std::string abs_location = OatFile::ResolveRelativeEncodedDexLocation(abs_dex_location,
+                                                                          it->c_str());
+    locations->push_back(abs_location);
   }
 
   return true;

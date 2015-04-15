@@ -248,16 +248,28 @@ class OatFile FINAL {
   static std::string ResolveRelativeEncodedDexLocation(
       const char* abs_dex_location, const std::string& rel_dex_location);
 
-  // Create a dependency list (dex locations and checksums) for the given dex files.
-  static std::string EncodeDexFileDependencies(const std::vector<const DexFile*>& dex_files);
+  // Create a dependency list (dex locations and checksums) for the given dex files. If
+  // abs_dex_location is not null, use it to create relative locations for the given dex files
+  // by removing it if it is a prefix.
+  //
+  // Note: the actual format is implementation-dependent. Documentation may be found in oat_file.cc.
+  static std::string EncodeDexFileDependencies(const std::vector<const DexFile*>& dex_files,
+                                               const char* abs_dex_location);
 
-  // Check the given dependency list against their dex files - thus the name "Static," this does
-  // not check the class-loader environment, only whether there have been file updates.
-  static bool CheckStaticDexFileDependencies(const char* dex_dependencies, std::string* msg);
+  // Check the given dependency list against their dex files. This will check against the dex
+  // files on disk, thus the name "Static." This does not check the class-loader environment,
+  // only whether there have been file updates.
+  // Use abs_dex_location to resolve relative locations in dex_dependencies. A dependency list that
+  // is null is equivalent to an empty string, i.e., no dependencies.
+  static bool CheckStaticDexFileDependencies(const char* dex_dependencies,
+                                             const char* abs_dex_location,
+                                             std::string* msg);
 
   // Get the dex locations of a dependency list. Note: this is *not* cleaned for synthetic
   // locations of multidex files.
+  // Use abs_dex_location to resolve relative locations in dex_dependencies.
   static bool GetDexLocationsFromDependencies(const char* dex_dependencies,
+                                              const char* abs_dex_location,
                                               std::vector<std::string>* locations);
 
  private:

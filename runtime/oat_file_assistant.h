@@ -277,6 +277,12 @@ class OatFileAssistant {
   static bool DexFilenameToOdexFilename(const std::string& location,
       InstructionSet isa, std::string* odex_filename, std::string* error_msg);
 
+  // Gets the dex checksum required for an up-to-date oat file.
+  // Returns dex_checksum if a required checksum was located. Returns
+  // nullptr if the required checksum was not found.
+  // The caller shouldn't clean up or free the returned pointer.
+  const uint32_t* GetRequiredDexChecksum();
+
  private:
   struct ImageInfo {
     uint32_t oat_checksum = 0;
@@ -307,12 +313,6 @@ class OatFileAssistant {
   // TODO: This method should belong with an image file manager, not
   // the oat file assistant.
   static std::string ImageLocation();
-
-  // Gets the dex checksum required for an up-to-date oat file.
-  // Returns dex_checksum if a required checksum was located. Returns
-  // nullptr if the required checksum was not found.
-  // The caller shouldn't clean up or free the returned pointer.
-  const uint32_t* GetRequiredDexChecksum();
 
   // Returns the loaded odex file.
   // Loads the file if needed. Returns nullptr if the file failed to load.
