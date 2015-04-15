@@ -61,19 +61,17 @@ void HGraph::RemoveInstructionsAsUsersFromDeadBlocks(const ArenaBitVector& visit
   }
 }
 
-void HGraph::RemoveDeadBlocks(const ArenaBitVector& visited) const {
+void HGraph::RemoveDeadBlocks(const ArenaBitVector& visited) {
   for (size_t i = 0; i < blocks_.Size(); ++i) {
     if (!visited.IsBitSet(i)) {
       HBasicBlock* block = blocks_.Get(i);
+      // We only need to update the successor, which might be live.
       for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
         block->GetSuccessors().Get(j)->RemovePredecessor(block);
       }
-      for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
-        block->RemovePhi(it.Current()->AsPhi(), /*ensure_safety=*/ false);
-      }
-      for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
-        block->RemoveInstruction(it.Current(), /*ensure_safety=*/ false);
-      }
+      // Remove the block from the list of blocks, so that further analysis
+      // never see it.
+      blocks_.Put(i, nullptr);
     }
   }
 }
@@ -258,6 +256,7 @@ void HGraph::SimplifyCFG() {
   // (2): Simplify loops by having only one back edge, and one preheader.
   for (size_t i = 0; i < blocks_.Size(); ++i) {
     HBasicBlock* block = blocks_.Get(i);
+    if (block == nullptr) continue;
     if (block->GetSuccessors().Size() > 1) {
       for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
         HBasicBlock* successor = block->GetSuccessors().Get(j);
@@ -274,8 +273,9 @@ void HGraph::SimplifyCFG() {
 }
 
 bool HGraph::AnalyzeNaturalLoops() const {
-  for (size_t i = 0; i < blocks_.Size(); ++i) {
-    HBasicBlock* block = blocks_.Get(i);
+  // Order does not matter.
+  for (HReversePostOrderIterator it(*this); !it.Done(); it.Advance()) {
+    HBasicBlock* block = it.Current();
     if (block->IsLoopHeader()) {
       HLoopInformation* info = block->GetLoopInformation();
       if (!info->Populate()) {
