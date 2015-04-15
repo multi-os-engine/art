@@ -88,10 +88,10 @@ class MANAGED Class FINAL : public Object {
   // class, it may not be kStatusResolved and it will try to push it
   // forward toward kStatusResolved.
   //
-  // kStatusIdx: LoadClass populates with Class with information from
+  // kStatusIdx: SetupClass and LoadClass populate the Class with information from
   // the DexFile, moving the status to kStatusIdx, indicating that the
   // Class value in super_class_ has not been populated. The new Class
-  // can then be inserted into the classes table.
+  // can then be inserted into the classes table after SetupClass but before LoadClass.
   //
   // kStatusLoaded: After taking a lock on Class, the ClassLinker will
   // attempt to move a kStatusIdx class forward to kStatusLoaded by
@@ -1177,7 +1177,7 @@ class MANAGED Class FINAL : public Object {
   // TODO: really 16bits
   int32_t dex_type_idx_;
 
-  // Number of static fields.
+  // Number of instance fields equals the number of fields in the ifields_ array.
   uint32_t num_instance_fields_;
 
   // Number of instance fields that are object refs.
@@ -1186,7 +1186,7 @@ class MANAGED Class FINAL : public Object {
   // Number of static fields that are object refs,
   uint32_t num_reference_static_fields_;
 
-  // Number of static fields.
+  // Number of static fields equals the number of fields in the sfields_ array.
   uint32_t num_static_fields_;
 
   // Total object size; used when allocating storage on gc heap.

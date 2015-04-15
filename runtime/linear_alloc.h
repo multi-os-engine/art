@@ -28,7 +28,10 @@ class LinearAlloc {
  public:
   explicit LinearAlloc(ArenaPool* pool);
 
-  void* Alloc(Thread* self, size_t size);
+  void* Alloc(Thread* self, size_t size) {
+    MutexLock mu(self, lock_);
+    return allocator_.Alloc(size);
+  }
 
   // Allocate and construct an array of structs of type T.
   template<class T>

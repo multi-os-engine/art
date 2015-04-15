@@ -23,11 +23,6 @@ namespace art {
 LinearAlloc::LinearAlloc(ArenaPool* pool) : lock_("linear alloc"), allocator_(pool) {
 }
 
-void* LinearAlloc::Alloc(Thread* self, size_t size) {
-  MutexLock mu(self, lock_);
-  return allocator_.Alloc(size);
-}
-
 size_t LinearAlloc::GetUsedMemory() const {
   MutexLock mu(Thread::Current(), lock_);
   return allocator_.BytesUsed();

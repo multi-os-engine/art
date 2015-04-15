@@ -306,8 +306,8 @@ inline ShortArray* Object::AsShortSizedArray() {
 template<VerifyObjectFlags kVerifyFlags>
 inline IntArray* Object::AsIntArray() {
   constexpr auto kNewFlags = static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis);
-  CHECK(GetClass<kVerifyFlags>()->IsArrayClass());
-  CHECK(GetClass<kNewFlags>()->template GetComponentType<kNewFlags>()->IsPrimitiveInt() ||
+  DCHECK(GetClass<kVerifyFlags>()->IsArrayClass());
+  DCHECK(GetClass<kNewFlags>()->template GetComponentType<kNewFlags>()->IsPrimitiveInt() ||
          GetClass<kNewFlags>()->template GetComponentType<kNewFlags>()->IsPrimitiveFloat());
   return down_cast<IntArray*>(this);
 }
@@ -315,8 +315,8 @@ inline IntArray* Object::AsIntArray() {
 template<VerifyObjectFlags kVerifyFlags>
 inline LongArray* Object::AsLongArray() {
   constexpr auto kNewFlags = static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis);
-  CHECK(GetClass<kVerifyFlags>()->IsArrayClass());
-  CHECK(GetClass<kNewFlags>()->template GetComponentType<kNewFlags>()->IsPrimitiveLong() ||
+  DCHECK(GetClass<kVerifyFlags>()->IsArrayClass());
+  DCHECK(GetClass<kNewFlags>()->template GetComponentType<kNewFlags>()->IsPrimitiveLong() ||
          GetClass<kNewFlags>()->template GetComponentType<kNewFlags>()->IsPrimitiveDouble());
   return down_cast<LongArray*>(this);
 }

@@ -133,7 +133,7 @@ enum FindFieldType {
 
 template<FindFieldType type, bool access_check>
 inline ArtField* FindFieldFromCode(uint32_t field_idx, mirror::ArtMethod* referrer,
-                                           Thread* self, size_t expected_size)
+                                   Thread* self, size_t expected_size)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
 template<InvokeType type, bool access_check>
@@ -143,9 +143,8 @@ inline mirror::ArtMethod* FindMethodFromCode(uint32_t method_idx,
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
 // Fast path field resolution that can't initialize classes or throw exceptions.
-inline ArtField* FindFieldFast(uint32_t field_idx,
-                                       mirror::ArtMethod* referrer,
-                                       FindFieldType type, size_t expected_size)
+inline ArtField* FindFieldFast(uint32_t field_idx, mirror::ArtMethod* referrer, FindFieldType type,
+                               size_t expected_size)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
 // Fast path method resolution that can't throw exceptions.

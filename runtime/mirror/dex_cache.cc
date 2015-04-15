@@ -43,6 +43,9 @@ void DexCache::Init(const DexFile* dex_file,
   CHECK(resolved_types != nullptr);
   CHECK(resolved_methods != nullptr);
   CHECK(resolved_fields != nullptr);
+  auto* component_type = resolved_fields->GetClass()->GetComponentType();
+  CHECK(component_type->IsPrimitiveInt() || component_type->IsPrimitiveLong())
+      << PrettyClass(component_type);
 
   SetDexFile(dex_file);
   SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(DexCache, location_), location);

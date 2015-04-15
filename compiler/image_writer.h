@@ -126,12 +126,12 @@ class ImageWriter FINAL {
     kBinClassVerified,            // Class verified, but initializers haven't been run
     kBinArtMethodNative,          // Art method that is actually native
     kBinArtMethodNotInitialized,  // Art method with a declaring class that wasn't initialized
+    // Number of bins which are for mirror objects.
+    kBinMirrorCount,
     // Add more bins here if we add more segregation code.
     // Non mirror fields must be below. ArtFields should be always clean.
-    kBinArtField,
+    kBinArtField = kBinMirrorCount,
     kBinSize,
-    // Number of bins which are for mirror objects.
-    kBinMirrorCount = kBinArtField,
   };
 
   friend std::ostream& operator<<(std::ostream& stream, const Bin& bin);
@@ -309,8 +309,8 @@ class ImageWriter FINAL {
   // Indexes, lengths for dex cache arrays (objects are inside of the image so that they don't
   // move).
   struct DexCacheArrayLocation {
-    size_t offset_;
-    size_t length_;
+    size_t offset;
+    size_t length;
   };
   SafeMap<mirror::Object*, DexCacheArrayLocation> dex_cache_array_indexes_;
 
@@ -348,7 +348,8 @@ class ImageWriter FINAL {
   size_t bin_slot_count_[kBinSize];  // Number of objects in a bin
 
   // ArtField relocating map, ArtFields are allocated as array of structs but we want to have one
-  // entry per art field for convenience.
+  // entry per art field for convenience. The values in the map are offsets into the ArtField
+  // section.
   // ArtFields are placed right after the end of the image objects (aka sum of bin_slot_sizes_).
   std::unordered_map<ArtField*, uintptr_t> art_field_reloc_;
 

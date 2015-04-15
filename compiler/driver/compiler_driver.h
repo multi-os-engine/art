@@ -341,10 +341,8 @@ class CompilerDriver {
                                 MemberOffset* field_offset, bool* is_volatile)
       LOCKS_EXCLUDED(Locks::mutator_lock_);
 
-  ArtField* ComputeInstanceFieldInfo(uint32_t field_idx,
-                                             const DexCompilationUnit* mUnit,
-                                             bool is_put,
-                                             const ScopedObjectAccess& soa)
+  ArtField* ComputeInstanceFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit,
+                                     bool is_put, const ScopedObjectAccess& soa)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
 

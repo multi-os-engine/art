@@ -78,6 +78,8 @@
 
 namespace art {
 
+// This check currently ensures that the fields have valid declaring classes. It also checks the
+// sanity of the dex cache field arrays.
 static constexpr bool kSanityCheckObjects = kIsDebugBuild;
 
 static void ThrowNoClassDefFoundError(const char* fmt, ...)
@@ -934,13 +936,13 @@ void ClassLinker::VisitClassRoots(RootVisitor* visitor, VisitRootFlags flags) {
       visitor, RootInfo(kRootStickyClass));
   if ((flags & kVisitRootFlagAllRoots) != 0) {
     for (GcRoot<mirror::Class>& root : class_table_) {
+      root.Read<kWithoutReadBarrier>()->VisitFieldRoots(buffered_visitor);
       buffered_visitor.VisitRoot(root);
-      root.Read()->VisitFieldRoots(buffered_visitor);
     }
     // PreZygote classes can't move so we won't need to update fields' declaring classes.
     for (GcRoot<mirror::Class>& root : pre_zygote_class_table_) {
+      root.Read<kWithoutReadBarrier>()->VisitFieldRoots(buffered_visitor);
       buffered_visitor.VisitRoot(root);
-      root.Read()->VisitFieldRoots(buffered_visitor);
     }
   } else if ((flags & kVisitRootFlagNewRoots) != 0) {
     for (auto& root : new_class_roots_) {
@@ -1512,6 +1514,8 @@ mirror::Class* ClassLinker::DefineClass(Thread* self, const char* descriptor, si
   klass->SetClinitThreadId(self->GetTid());
 
   // Add the newly loaded class to the loaded classes table.
+  // Note: It is important that there is not any suspend points after InsertClass but before we
+  // have filled in the class field arrays.
   mirror::Class* existing = InsertClass(descriptor, klass.Get(), hash);
   if (existing != nullptr) {
     // We failed to insert because we raced with another thread. Calling EnsureResolved may cause

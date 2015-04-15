@@ -993,7 +993,7 @@ class ScopedCheck {
       return nullptr;
     }
     ArtField* f = soa.DecodeField(fid);
-    // TODO: Better check here.
+    // TODO: Better check here, such as checking that the field is inside of the linear alloc.
     if (!Runtime::Current()->GetHeap()->IsValidObjectAddress(f->GetDeclaringClass())) {
       Runtime::Current()->GetHeap()->DumpSpaces(LOG(ERROR));
       AbortF("invalid jfieldID: %p", fid);

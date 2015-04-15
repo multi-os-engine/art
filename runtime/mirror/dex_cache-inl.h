@@ -59,7 +59,7 @@ inline ArtField* DexCache::GetResolvedField(uint32_t idx, size_t ptr_size) {
     field = reinterpret_cast<ArtField*>(
       static_cast<uintptr_t>(GetResolvedFields()->AsIntArray()->GetWithoutChecks(idx)));
   }
-  if (field == nullptr || field->GetDeclaringClass()->IsErroneous()) {
+  if (UNLIKELY(field == nullptr || field->GetDeclaringClass()->IsErroneous())) {
     return nullptr;
   }
   return field;
@@ -71,7 +71,8 @@ inline void DexCache::SetResolvedField(uint32_t idx, ArtField* field, size_t ptr
         idx, static_cast<uint64_t>(reinterpret_cast<uintptr_t>(field)));
   } else {
     DCHECK_EQ(ptr_size, 4u);
-    CHECK_LE(reinterpret_cast<uintptr_t>(field), 0xFFFFFFFF);
+    // Check that we don't lose bits if we have a 64 bit pointer which gets incorrectly truncated.
+    DCHECK_LE(reinterpret_cast<uintptr_t>(field), 0xFFFFFFFF);
     GetResolvedFields()->AsIntArray()->Set(
         idx, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(field)));
   }

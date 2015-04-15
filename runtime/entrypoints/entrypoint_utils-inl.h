@@ -469,9 +469,8 @@ EXPLICIT_FIND_METHOD_FROM_CODE_TYPED_TEMPLATE_DECL(kInterface);
 #undef EXPLICIT_FIND_METHOD_FROM_CODE_TEMPLATE_DECL
 
 // Fast path field resolution that can't initialize classes or throw exceptions.
-inline ArtField* FindFieldFast(uint32_t field_idx,
-                                       mirror::ArtMethod* referrer,
-                                       FindFieldType type, size_t expected_size) {
+inline ArtField* FindFieldFast(uint32_t field_idx, mirror::ArtMethod* referrer, FindFieldType type,
+                               size_t expected_size) {
   ArtField* resolved_field =
       referrer->GetDeclaringClass()->GetDexCache()->GetResolvedField(field_idx, sizeof(void*));
   if (UNLIKELY(resolved_field == nullptr)) {

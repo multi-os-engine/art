@@ -144,6 +144,8 @@ class ImageSpace : public MemMapSpace {
 
   std::unique_ptr<accounting::ContinuousSpaceBitmap> live_bitmap_;
 
+  // The end of the mirror region of the image is smaller than the map size since we have
+  // ArtFields at the end.
   ImageSpace(const std::string& name, const char* image_location,
              MemMap* mem_map, accounting::ContinuousSpaceBitmap* live_bitmap, uint8_t* end);
 

@@ -190,7 +190,7 @@ bool ImageWriter::Write(const std::string& image_filename,
   }
 
   // Write out the image + fields.
-  const auto write_count = image_header->GetImageSize() + image_header->GetArtFieldsSize();
+  const size_t write_count = image_header->GetImageSize() + image_header->GetArtFieldsSize();
   CHECK_EQ(image_end_, image_header->GetImageSize());
   if (!image_file->WriteFully(image_->Begin(), write_count)) {
     PLOG(ERROR) << "Failed to write image file " << image_filename;
@@ -225,8 +225,6 @@ void ImageWriter::SetImageOffset(mirror::Object* object,
   mirror::Object* obj = reinterpret_cast<mirror::Object*>(image_->Begin() + offset);
   DCHECK_ALIGNED(obj, kObjectAlignment);
 
-  static size_t max_offset = 0;
-  max_offset = std::max(max_offset, offset);
   image_bitmap_->Set(obj);  // Mark the obj as mutated, since we will end up changing it.
   {
     // Remember the object-inside-of-the-image's hash code so we can restore it after the copy.
@@ -435,9 +433,9 @@ void ImageWriter::AssignImageBinSlot(mirror::Object* object) {
         if (it != dex_cache_array_indexes_.end()) {
           bin = kBinDexCacheArray;
           // Use prepared offset defined by the DexCacheLayout.
-          current_offset = it->second.offset_;
+          current_offset = it->second.offset;
           // Override incase of cross compilation.
-          object_size = it->second.length_;
+          object_size = it->second.length;
         }  // else bin = kBinRegular
       }
     }  // else bin = kBinRegular
@@ -1079,7 +1077,7 @@ bool ImageWriter::CopyAndFixupIfDexCacheFieldArray(mirror::Object* dst, mirror::
   }
   mirror::Array* arr = obj->AsArray();
   CHECK_EQ(reinterpret_cast<Object*>(
-      image_->Begin() + it->second.offset_ + image_objects_offset_begin_), dst);
+      image_->Begin() + it->second.offset + image_objects_offset_begin_), dst);
   dex_cache_array_indexes_.erase(it);
   // Fixup int pointers for the field array.
   CHECK(!arr->IsObjectArray());

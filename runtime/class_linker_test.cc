@@ -991,14 +991,10 @@ TEST_F(ClassLinkerTest, Interfaces) {
   EXPECT_EQ(Aj1, A->FindVirtualMethodForVirtualOrInterface(Jj1));
   EXPECT_EQ(Aj2, A->FindVirtualMethodForVirtualOrInterface(Jj2));
 
-  ArtField* Afoo = mirror::Class::FindStaticField(soa.Self(), A, "foo",
-                                                          "Ljava/lang/String;");
-  ArtField* Bfoo = mirror::Class::FindStaticField(soa.Self(), B, "foo",
-                                                          "Ljava/lang/String;");
-  ArtField* Jfoo = mirror::Class::FindStaticField(soa.Self(), J, "foo",
-                                                          "Ljava/lang/String;");
-  ArtField* Kfoo = mirror::Class::FindStaticField(soa.Self(), K, "foo",
-                                                          "Ljava/lang/String;");
+  ArtField* Afoo = mirror::Class::FindStaticField(soa.Self(), A, "foo", "Ljava/lang/String;");
+  ArtField* Bfoo = mirror::Class::FindStaticField(soa.Self(), B, "foo", "Ljava/lang/String;");
+  ArtField* Jfoo = mirror::Class::FindStaticField(soa.Self(), J, "foo", "Ljava/lang/String;");
+  ArtField* Kfoo = mirror::Class::FindStaticField(soa.Self(), K, "foo", "Ljava/lang/String;");
   ASSERT_TRUE(Afoo != nullptr);
   EXPECT_EQ(Afoo, Bfoo);
   EXPECT_EQ(Afoo, Jfoo);

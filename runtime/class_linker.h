@@ -522,8 +522,7 @@ class ClassLinker {
                         Handle<mirror::Class> klass, const OatFile::OatClass* oat_class)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void LoadField(const ClassDataItemIterator& it, Handle<mirror::Class> klass,
-                 ArtField* dst)
+  void LoadField(const ClassDataItemIterator& it, Handle<mirror::Class> klass, ArtField* dst)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   mirror::ArtMethod* LoadMethod(Thread* self, const DexFile& dex_file,

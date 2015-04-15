@@ -451,8 +451,7 @@ void MethodVerifier::FindLocksAtDexPc() {
   Verify();
 }
 
-ArtField* MethodVerifier::FindAccessedFieldAtDexPc(mirror::ArtMethod* m,
-                                                           uint32_t dex_pc) {
+ArtField* MethodVerifier::FindAccessedFieldAtDexPc(mirror::ArtMethod* m, uint32_t dex_pc) {
   Thread* self = Thread::Current();
   StackHandleScope<3> hs(self);
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(m->GetDexCache()));
@@ -3984,8 +3983,7 @@ void MethodVerifier::VerifyISFieldAccess(const Instruction* inst, const RegType&
   }
 }
 
-ArtField* MethodVerifier::GetQuickFieldAccess(const Instruction* inst,
-                                                      RegisterLine* reg_line) {
+ArtField* MethodVerifier::GetQuickFieldAccess(const Instruction* inst, RegisterLine* reg_line) {
   DCHECK(IsInstructionIGetQuickOrIPutQuick(inst->Opcode())) << inst->Opcode();
   const RegType& object_type = reg_line->GetRegisterType(this, inst->VRegB_22c());
   if (!object_type.HasClass()) {
