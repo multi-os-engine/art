@@ -19,6 +19,7 @@
 
 #include <cstdint>
 
+#include "dwarf/dwarf_constants.h"
 #include "dwarf/debug_frame_opcode_writer.h"
 #include "dwarf/debug_info_entry_writer.h"
 #include "dwarf/debug_line_opcode_writer.h"
@@ -50,9 +51,9 @@ void WriteEhFrameCIE(bool is64bit, Reg return_address_register,
   writer.PushUleb128(return_address_register.num());  // ubyte in DWARF2.
   writer.PushUleb128(1);  // z: Augmentation data size.
   if (is64bit) {
-    writer.PushUint8(0x04);  // R: ((DW_EH_PE_absptr << 4) | DW_EH_PE_udata8).
+    writer.PushUint8((DW_EH_PE_absptr << 4) | DW_EH_PE_udata8);  // R: Pointer encoding.
   } else {
-    writer.PushUint8(0x03);  // R: ((DW_EH_PE_absptr << 4) | DW_EH_PE_udata4).
+    writer.PushUint8((DW_EH_PE_absptr << 4) | DW_EH_PE_udata4);  // R: Pointer encoding.
   }
   writer.PushData(opcodes.data());
   writer.Pad(is64bit ? 8 : 4);
