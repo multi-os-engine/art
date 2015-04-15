@@ -369,24 +369,38 @@ void SSAChecker::VisitPhi(HPhi* phi) {
   }
 }
 
-void SSAChecker::VisitIf(HIf* instruction) {
-  VisitInstruction(instruction);
-  HInstruction* input = instruction->InputAt(0);
+void SSAChecker::VisitBooleanInput(HInstruction* instruction, size_t input_at) {
+  HInstruction* input = instruction->InputAt(input_at);
   if (input->IsIntConstant()) {
-    int value = input->AsIntConstant()->GetValue();
+    int32_t value = input->AsIntConstant()->GetValue();
     if (value != 0 && value != 1) {
       AddError(StringPrintf(
-          "If instruction %d has a non-Boolean constant input "
-          "whose value is: %d.",
+          "%s instruction %d has a non-Boolean constant input %d whose value is: %d.",
+          instruction->DebugName(),
           instruction->GetId(),
+          static_cast<int>(input_at),
           value));
     }
-  } else if (instruction->InputAt(0)->GetType() != Primitive::kPrimBoolean) {
+  } else if (input->GetType() == Primitive::kPrimInt && input->IsPhi()) {
+    // TODO: We need a data-flow analysis which determines if the Phi is boolean.
+  } else if (input->GetType() != Primitive::kPrimBoolean) {
     AddError(StringPrintf(
-        "If instruction %d has a non-Boolean input type: %s.",
+        "%s instruction %d has a non-Boolean input %d whose type is: %s.",
+        instruction->DebugName(),
         instruction->GetId(),
-        Primitive::PrettyDescriptor(instruction->InputAt(0)->GetType())));
+        static_cast<int>(input_at),
+        Primitive::PrettyDescriptor(input->GetType())));
   }
+}
+
+void SSAChecker::VisitIf(HIf* instruction) {
+  VisitInstruction(instruction);
+  VisitBooleanInput(instruction, 0);
+}
+
+void SSAChecker::VisitBooleanNot(HBooleanNot* instruction) {
+  VisitInstruction(instruction);
+  VisitBooleanInput(instruction, 0);
 }
 
 void SSAChecker::VisitCondition(HCondition* op) {
