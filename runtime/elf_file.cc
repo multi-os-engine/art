@@ -1592,6 +1592,8 @@ template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_
 bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
     Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel, Elf_Rela, Elf_Dyn, Elf_Off>
     ::FixupDebugSections(typename std::make_signed<Elf_Off>::type base_address_delta) {
+  const Elf_Shdr* eh_frame_hdr = FindSectionByName(".eh_frame_hdr");
+  const Elf_Shdr* eh_frame = FindSectionByName(".eh_frame");
   const Elf_Shdr* debug_info = FindSectionByName(".debug_info");
   const Elf_Shdr* debug_abbrev = FindSectionByName(".debug_abbrev");
   const Elf_Shdr* debug_str = FindSectionByName(".debug_str");
@@ -1605,6 +1607,12 @@ bool ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
   }
   if (base_address_delta == 0) {
     return true;
+  }
+  if (eh_frame_hdr != nullptr && eh_frame != nullptr) {
+    // .eh_frame_hdr contains relative pointer to .eh_frame.
+    uint8_t* eh_frame_pointer = Begin() + eh_frame_hdr->sh_offset + 4;
+    int32_t offset = eh_frame->sh_offset - eh_frame_hdr->sh_offset;
+    *reinterpret_cast<int32_t*>(eh_frame_pointer) = offset;
   }
   if (!ApplyOatPatchesTo(".eh_frame", base_address_delta)) {
     return false;

@@ -154,11 +154,14 @@ static void WriteEhFrameCIE(InstructionSet isa, std::vector<uint8_t>* eh_frame) 
 void WriteEhFrame(const CompilerDriver* compiler,
                   OatWriter* oat_writer,
                   uint32_t text_section_offset,
+                  std::vector<uint8_t>* eh_frame_hdr,
                   std::vector<uint8_t>* eh_frame) {
   const auto& method_infos = oat_writer->GetMethodDebugInfo();
   const InstructionSet isa = compiler->GetInstructionSet();
-  size_t cie_offset = eh_frame->size();
+
+  // Write .eh_frame section.
   auto* eh_frame_patches = oat_writer->GetAbsolutePatchLocationsFor(".eh_frame");
+  size_t cie_offset = eh_frame->size();
   WriteEhFrameCIE(isa, eh_frame);
   for (const OatWriter::DebugInfo& mi : method_infos) {
     const SwapVector<uint8_t>* opcodes = mi.compiled_method_->GetCFIInfo();
@@ -168,6 +171,15 @@ void WriteEhFrame(const CompilerDriver* compiler,
                       opcodes, eh_frame, eh_frame_patches);
     }
   }
+
+  // Write .eh_frame_hdr section.
+  Writer<> header(eh_frame_hdr);
+  header.PushUint8(1);  // Version.
+  // .eh_frame pointer is encoded reltive to the start of .eh_frame_hdr.
+  header.PushUint8(DW_EH_PE_datarel | DW_EH_PE_sdata4);
+  header.PushUint8(DW_EH_PE_omit);  // Omit the binary search table.
+  header.PushUint8(DW_EH_PE_omit);  // Omit the binary search table.
+  header.PushInt32(0);  // .eh_frame pointer - to be filled by linker.
 }
 
 /*
