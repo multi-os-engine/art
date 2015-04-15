@@ -1258,6 +1258,7 @@ class Dex2Oat FINAL {
                                      image_,
                                      image_classes_.release(),
                                      compiled_classes_.release(),
+                                     nullptr,
                                      thread_count_,
                                      dump_stats_,
                                      dump_passes_,
