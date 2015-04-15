@@ -392,7 +392,10 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
         DCHECK_ALIGNED_PARAM(offset_,
                              GetInstructionSetAlignment(compiled_method->GetInstructionSet()));
         quick_code_offset = offset_ + sizeof(OatQuickMethodHeader) + thumb_offset;
-        dedupe_map_.PutBefore(lb, compiled_method, quick_code_offset);
+        // Do not deduplicate code if the debuggable flag is set.
+        if (!writer_->GetCompilerDriver()->GetCompilerOptions().GetDebuggable()) {
+          dedupe_map_.PutBefore(lb, compiled_method, quick_code_offset);
+        }
       }
 
       MethodReference method_ref(dex_file_, it.GetMemberIndex());
