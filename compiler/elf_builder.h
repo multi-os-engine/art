@@ -706,6 +706,12 @@ class ElfBuilder FINAL {
     program_headers_[PH_LOAD_R__].p_paddr   = 0;
     program_headers_[PH_LOAD_R__].p_flags   = PF_R;
 
+    program_headers_[PH_EH_FRAME_HDR].p_type = PT_NULL;
+    program_headers_[PH_EH_FRAME_HDR].p_flags = PF_R;
+
+    program_headers_[PH_EH_FRAME].p_type = PT_NULL;
+    program_headers_[PH_EH_FRAME].p_flags = PF_R;
+
     program_headers_[PH_LOAD_R_X].p_type    = PT_LOAD;
     program_headers_[PH_LOAD_R_X].p_flags   = PF_R | PF_X;
 
@@ -836,10 +842,22 @@ class ElfBuilder FINAL {
     rodata_builder_.GetSection()->sh_size = rodata_builder_.GetSize();
     rodata_builder_.GetSection()->sh_link = rodata_builder_.GetLink();
 
+    // Get the layout of the extra sections which have SHF_ALLOC set.
+    // (.eh_frame_hdr and .eh_frame)
+    Elf_Shdr* prev = rodata_builder_.GetSection();
+    for (auto it = other_builders_.begin(); it != other_builders_.end(); ++it) {
+      if ((it->GetSection()->sh_flags & SHF_ALLOC) != 0) {
+        it->GetSection()->sh_offset = NextOffset<Elf_Word, Elf_Shdr>(*it->GetSection(), *prev);
+        it->GetSection()->sh_addr = it->GetSection()->sh_offset;
+        it->GetSection()->sh_size = it->GetBuffer()->size();
+        it->GetSection()->sh_link = it->GetLink();
+        prev = it->GetSection();
+      }
+    }
+
     // Get the layout of the text section.
     text_builder_.GetSection()->sh_offset =
-        NextOffset<Elf_Word, Elf_Shdr>(*text_builder_.GetSection(),
-                                       *rodata_builder_.GetSection());
+        NextOffset<Elf_Word, Elf_Shdr>(*text_builder_.GetSection(), *prev);
     text_builder_.GetSection()->sh_addr = text_builder_.GetSection()->sh_offset;
     text_builder_.GetSection()->sh_size = text_builder_.GetSize();
     text_builder_.GetSection()->sh_link = text_builder_.GetLink();
@@ -958,20 +976,23 @@ class ElfBuilder FINAL {
       }
     }
 
-    // Get the layout of the extra sections. (This will deal with the debug
-    // sections if they are there)
+    // Get the layout of the extra sections which do not have SHF_ALLOC set.
+    // We have handled the sections with SHF_ALLOC already.
+    // (This will deal with the debug sections if they are there)
     for (auto it = other_builders_.begin(); it != other_builders_.end(); ++it) {
-      it->GetSection()->sh_offset = NextOffset<Elf_Word, Elf_Shdr>(*it->GetSection(), *prev);
-      it->GetSection()->sh_addr = 0;
-      it->GetSection()->sh_size = it->GetBuffer()->size();
-      it->GetSection()->sh_link = it->GetLink();
+      if ((it->GetSection()->sh_flags & SHF_ALLOC) == 0) {
+        it->GetSection()->sh_offset = NextOffset<Elf_Word, Elf_Shdr>(*it->GetSection(), *prev);
+        it->GetSection()->sh_addr = 0;
+        it->GetSection()->sh_size = it->GetBuffer()->size();
+        it->GetSection()->sh_link = it->GetLink();
 
-      // We postpone adding an ElfFilePiece to keep the order in "pieces."
+        // We postpone adding an ElfFilePiece to keep the order in "pieces."
 
-      prev = it->GetSection();
-      if (debug_logging_) {
-        LOG(INFO) << it->GetName() << " off=" << it->GetSection()->sh_offset
-                  << " size=" << it->GetSection()->sh_size;
+        prev = it->GetSection();
+        if (debug_logging_) {
+          LOG(INFO) << it->GetName() << " off=" << it->GetSection()->sh_offset
+                    << " size=" << it->GetSection()->sh_size;
+        }
       }
     }
 
@@ -1043,6 +1064,28 @@ class ElfBuilder FINAL {
     program_headers_[PH_DYNAMIC].p_filesz = dynamic_builder_.GetSection()->sh_size;
     program_headers_[PH_DYNAMIC].p_memsz  = dynamic_builder_.GetSection()->sh_size;
     program_headers_[PH_DYNAMIC].p_align  = dynamic_builder_.GetSection()->sh_addralign;
+
+    const auto* eh_frame_hdr = FindRawSection(".eh_frame_hdr");
+    if (eh_frame_hdr != nullptr) {
+      program_headers_[PH_EH_FRAME_HDR].p_type   = PT_GNU_EH_FRAME;
+      program_headers_[PH_EH_FRAME_HDR].p_offset = eh_frame_hdr->GetSection()->sh_offset;
+      program_headers_[PH_EH_FRAME_HDR].p_vaddr  = eh_frame_hdr->GetSection()->sh_addr;
+      program_headers_[PH_EH_FRAME_HDR].p_paddr  = eh_frame_hdr->GetSection()->sh_addr;
+      program_headers_[PH_EH_FRAME_HDR].p_filesz = eh_frame_hdr->GetSection()->sh_size;
+      program_headers_[PH_EH_FRAME_HDR].p_memsz  = eh_frame_hdr->GetSection()->sh_size;
+      program_headers_[PH_EH_FRAME_HDR].p_align  = eh_frame_hdr->GetSection()->sh_addralign;
+    }
+
+    const auto* eh_frame = FindRawSection(".eh_frame");
+    if (eh_frame != nullptr) {
+      program_headers_[PH_EH_FRAME].p_type   = PT_LOAD;
+      program_headers_[PH_EH_FRAME].p_offset = eh_frame->GetSection()->sh_offset;
+      program_headers_[PH_EH_FRAME].p_vaddr  = eh_frame->GetSection()->sh_addr;
+      program_headers_[PH_EH_FRAME].p_paddr  = eh_frame->GetSection()->sh_addr;
+      program_headers_[PH_EH_FRAME].p_filesz = eh_frame->GetSection()->sh_size;
+      program_headers_[PH_EH_FRAME].p_memsz  = eh_frame->GetSection()->sh_size;
+      program_headers_[PH_EH_FRAME].p_align  = eh_frame->GetSection()->sh_addralign;
+    }
 
     // Finish setup of the Ehdr values.
     elf_header_.e_phoff = PHDR_OFFSET;
@@ -1129,6 +1172,16 @@ class ElfBuilder FINAL {
   // is responsible for deallocating their copy.
   void RegisterRawSection(ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr> bld) {
     other_builders_.push_back(bld);
+  }
+
+  const ElfRawSectionBuilder<Elf_Word, Elf_Sword, Elf_Shdr>*
+  FindRawSection(const char* name) {
+    for (auto& other_builder : other_builders_) {
+      if (other_builder.GetName() == name) {
+        return &other_builder;
+      }
+    }
+    return nullptr;
   }
 
  private:
@@ -1278,11 +1331,13 @@ class ElfBuilder FINAL {
   enum : uint8_t {
     PH_PHDR             = 0,
     PH_LOAD_R__         = 1,
-    PH_LOAD_R_X         = 2,
-    PH_LOAD_RW_BSS      = 3,
-    PH_LOAD_RW_DYNAMIC  = 4,
-    PH_DYNAMIC          = 5,
-    PH_NUM              = 6,
+    PH_EH_FRAME_HDR     = 2,
+    PH_EH_FRAME         = 3,
+    PH_LOAD_R_X         = 4,
+    PH_LOAD_RW_BSS      = 5,
+    PH_LOAD_RW_DYNAMIC  = 6,
+    PH_DYNAMIC          = 7,
+    PH_NUM              = 8,
   };
   static const uint32_t PHDR_SIZE = sizeof(Elf_Phdr) * PH_NUM;
   Elf_Phdr program_headers_[PH_NUM];
