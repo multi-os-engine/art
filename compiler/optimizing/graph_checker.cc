@@ -109,7 +109,7 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
 
 void GraphChecker::VisitInstruction(HInstruction* instruction) {
   if (seen_ids_.IsBitSet(instruction->GetId())) {
-    AddError(StringPrintf("Instruction id %d is duplicate in graph.",
+    AddError(StringPrintf("Multiple instructions have id %d in graph.",
                           instruction->GetId()));
   } else {
     seen_ids_.SetBit(instruction->GetId());
