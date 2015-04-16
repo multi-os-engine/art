@@ -129,10 +129,10 @@ void SpaceBitmap<kAlignment>::Walk(ObjectCallback* callback, void* arg) {
 }
 
 template<size_t kAlignment>
-void SpaceBitmap<kAlignment>::SweepWalk(const SpaceBitmap<kAlignment>& live_bitmap,
-                                        const SpaceBitmap<kAlignment>& mark_bitmap,
-                                        uintptr_t sweep_begin, uintptr_t sweep_end,
-                                        SpaceBitmap::SweepCallback* callback, void* arg) {
+void SpaceBitmap<kAlignment>::SweepWalkBitmap(const SpaceBitmap<kAlignment>& live_bitmap,
+                                              const SpaceBitmap<kAlignment>& mark_bitmap,
+                                              uintptr_t sweep_begin, uintptr_t sweep_end,
+                                              SpaceBitmap::SweepCallback* callback, void* arg) {
   CHECK(live_bitmap.bitmap_begin_ != nullptr);
   CHECK(mark_bitmap.bitmap_begin_ != nullptr);
   CHECK_EQ(live_bitmap.heap_begin_, mark_bitmap.heap_begin_);

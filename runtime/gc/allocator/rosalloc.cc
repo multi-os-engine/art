@@ -18,6 +18,7 @@
 
 #include "base/memory_tool.h"
 #include "base/mutex-inl.h"
+#include "gc/accounting/space_bitmap-inl.h"
 #include "gc/space/memory_tool_settings.h"
 #include "mem_map.h"
 #include "mirror/class-inl.h"
@@ -86,6 +87,7 @@ RosAlloc::RosAlloc(void* base, size_t capacity, size_t max_capacity,
   CHECK(page_map_mem_map_.get() != nullptr) << "Couldn't allocate the page map : " << error_msg;
   page_map_ = page_map_mem_map_->Begin();
   page_map_size_ = num_of_pages;
+  cur_page_map_size_snapshot_ = num_of_pages;
   max_page_map_size_ = max_num_of_pages;
   free_page_run_size_map_.resize(num_of_pages);
   FreePageRun* free_pages = reinterpret_cast<FreePageRun*>(base_);
@@ -1018,6 +1020,265 @@ void RosAlloc::Run::InspectAllSlots(void (*handler)(void* start, void* end, size
   }
 }
 
+// record currently used page size for efficiently walking the whole page map
+void RosAlloc::SetPageMapSizeSnapshot() {
+  cur_page_map_size_snapshot_ = page_map_size_;
+}
+
+/* SweepRun is to first scan the region of live bitmap and mark bitmap corresponding to between run
+ * header to the end of run, then find the garbages, and finally update the bulk free bitmap.
+ * The run size is multiple of page size. One word of bitmap is corresponding to 256B(32 * 8B).
+ */
+ObjectBytePair RosAlloc::SweepRun(Thread* self, Run* run, size_t bracket_idx, uintptr_t* live,
+                                  uintptr_t* mark, accounting::ContinuousSpaceBitmap* live_bitmap,
+                                  uintptr_t space_begin, bool swap_bitmaps) {
+  ObjectBytePair freed_pair(0, 0);
+  bool need_to_free = false;
+  size_t run_header_size = headerSizes[bracket_idx];
+  size_t run_size = numOfPages[bracket_idx];
+  uintptr_t ptr = reinterpret_cast<uintptr_t>(run);
+  size_t start = reinterpret_cast<size_t>((ptr + run_header_size - space_begin) /
+      kObjectAlignment / kBitsPerIntPtrT);
+  size_t end = reinterpret_cast<size_t>((ptr + run_size * kPageSize - space_begin - 1) /
+      kObjectAlignment / kBitsPerIntPtrT);
+  for (size_t i = start; i <= end; i++) {
+    uintptr_t garbage = live[i] & ~mark[i];
+    if (UNLIKELY(garbage != 0)) {
+      uintptr_t ptr_base = i * kObjectAlignment * kBitsPerIntPtrT + space_begin;
+      do {
+        const size_t shift = CTZ(garbage);
+        garbage ^= (static_cast<uintptr_t>(1)) << shift;
+        uintptr_t pobject = ptr_base + shift * kObjectAlignment;
+        size_t freed_bytes = run->AddToBulkFreeList(reinterpret_cast<void*>(pobject));
+        if (!swap_bitmaps) {
+          live_bitmap->Clear(reinterpret_cast<mirror::Object*>(pobject));
+        }
+        need_to_free = true;
+        freed_pair.objects++;
+        freed_pair.bytes += freed_bytes;
+      } while (garbage != 0);
+    }
+  }
+  if (need_to_free) {
+    UpdateRunMetadata(self, run);
+  }
+  return freed_pair;
+}
+
+/* Applying the characteristics of ros space, below is an alternative approach to sweep the ros
+ * space. The overall mechanism is to traverse the ros space by walking page_map_ and meanwhile
+ * bypass free memory.
+ * 1) for kPageMapEmpty and kPageMapReleased, the stride is contiguous free page size.
+ * 2) for kPageMapLargeObject,
+ *    i) if the object is dead, the stride is contiguous free page size starting this object;
+ *    ii) otherwise, the stride is one page size.
+ * 3) for kPageMapRun, the stride is the whole run size. Internally,
+ *    i) If it's not thread local, no need bulk_free_lock which is used to avoid
+ *       race condition with revoking thread local runs by destroying thread;
+ *    ii)TODO: The traditional stride is word-size which covers 256B once
+ *         for bracket size >= 256B, the stride unit can be the slot size.
+ * 4) otherwise, the stride is one page size.
+ */
+ObjectBytePair RosAlloc::SweepWalkPagemap(bool swap_bitmaps) {
+  size_t page_idx = 0;
+  size_t freed_bytes = 0;
+  size_t multiplier = 1;
+  size_t free_memory = 0;
+  ObjectBytePair freed_pair(0, 0);
+  Thread* self = Thread::Current();
+  accounting::ContinuousSpaceBitmap* live_bitmap =
+      Runtime::Current()->GetHeap()->GetRosAllocSpace()->GetLiveBitmap();
+  accounting::ContinuousSpaceBitmap* mark_bitmap =
+      Runtime::Current()->GetHeap()->GetRosAllocSpace()->GetMarkBitmap();
+  // If the bitmaps are bound then sweeping this space clearly won't do anything.
+  if (live_bitmap == mark_bitmap) {
+    return freed_pair;
+  }
+  if (swap_bitmaps) {
+    std::swap(live_bitmap, mark_bitmap);
+  }
+  uintptr_t ptr = reinterpret_cast<uintptr_t>(Begin());
+  uint8_t page_map_entry;
+  uintptr_t* live = live_bitmap->Begin();
+  uintptr_t* mark = mark_bitmap->Begin();
+  uintptr_t space_begin = live_bitmap->HeapBegin();
+  while (page_idx < cur_page_map_size_snapshot_) {
+    page_map_entry = page_map_[page_idx];
+    switch (page_map_entry) {
+      case kPageMapLargeObject: {
+        size_t i = reinterpret_cast<size_t>((ptr - space_begin) / kObjectAlignment / kBitsPerIntPtrT);
+        uintptr_t garbage = (live[i] & ~mark[i]) & 1;
+        if (garbage != 0) {
+          {
+            MutexLock mu(self, lock_);
+            freed_bytes = FreePages(self, reinterpret_cast<void*>(ptr), false);
+          }
+          // Bypass free holes which may be bigger than freed_bytes.
+          free_memory = free_page_run_size_map_[page_idx];
+          multiplier = free_memory / kPageSize;
+          if (!swap_bitmaps) {
+            live_bitmap->Clear(reinterpret_cast<const mirror::Object*>(ptr));
+          }
+          page_idx += multiplier;
+          ptr += multiplier * kPageSize;
+          freed_pair.objects++;
+          freed_pair.bytes += freed_bytes;
+        } else {
+          ptr += kPageSize;
+          page_idx++;
+        }
+        break;
+      }
+      case kPageMapRun: {
+        Run* run = reinterpret_cast<Run*>(ptr);
+        size_t bracket_idx = run->size_bracket_idx_;
+        size_t run_size = numOfPages[bracket_idx];
+        // If the run hasn't allocated objects yet, bypass it.
+        if (run->IsAllFree()) {
+          ptr += run_size * kPageSize;
+          page_idx += run_size;
+          break;
+        }
+        // If the bracket index >= kNumThreadLocalSizeBrackets, it's definitely not thread local
+        // If the bracket index < kNumThreadLocalSizeBrackets and also in non_full_runs, it's also
+        // not thread local.
+        ObjectBytePair run_freed_pair(0, 0);
+        if (bracket_idx < kNumThreadLocalSizeBrackets) {
+          WriterMutexLock wmu(self, bulk_free_lock_);
+          run_freed_pair = SweepRun(self, run, bracket_idx, live, mark, live_bitmap, space_begin,
+                                    swap_bitmaps);
+        } else {
+          run_freed_pair = SweepRun(self, run, bracket_idx, live, mark, live_bitmap, space_begin,
+                                    swap_bitmaps);
+        }
+        freed_pair.objects += run_freed_pair.objects;
+        freed_pair.bytes += run_freed_pair.bytes;
+        multiplier = run_size;
+        ptr = reinterpret_cast<uintptr_t>(run) + multiplier * kPageSize;
+        page_idx += multiplier;
+        break;
+      }
+      case kPageMapEmpty:
+        // Fall-through.
+      case kPageMapReleased: {
+        // Bypass free holes.
+        free_memory = free_page_run_size_map_[page_idx];
+        DCHECK_GT(free_memory / kPageSize, static_cast<size_t>(0));
+        multiplier = free_memory / kPageSize;
+        page_idx += multiplier;
+        ptr += multiplier * kPageSize;
+        break;
+      }
+      default:
+        ptr += kPageSize;
+        page_idx++;
+        break;
+    }
+  }
+  return freed_pair;
+}
+
+void RosAlloc::UpdateRunMetadata(Thread* self, Run* run) {
+  size_t idx = run->size_bracket_idx_;
+  MutexLock brackets_mu(self, *size_bracket_locks_[idx]);
+  if (run->IsThreadLocal()) {
+    DCHECK_LT(run->size_bracket_idx_, kNumThreadLocalSizeBrackets);
+    DCHECK(non_full_runs_[idx].find(run) == non_full_runs_[idx].end());
+    DCHECK(full_runs_[idx].find(run) == full_runs_[idx].end());
+    run->MergeBulkFreeListToThreadLocalFreeList();
+    if (kTraceRosAlloc) {
+      LOG(INFO) << "RosAlloc::UpdateRunMetadata() : Freed slot(s) in a thread local run 0x"
+                << std::hex << reinterpret_cast<intptr_t>(run);
+    }
+    DCHECK(run->IsThreadLocal());
+    // A thread local run will be kept as a thread local even if
+    // it's become all free.
+  } else {
+    bool run_was_full = run->IsFull();
+    run->MergeBulkFreeListToFreeList();
+    if (kTraceRosAlloc) {
+      LOG(INFO) << "RosAlloc::UpdateRunMetadata() : Freed slot(s) in a run 0x" << std::hex
+                << reinterpret_cast<intptr_t>(run);
+    }
+    // Check if the run should be moved to non_full_runs_ or
+    // free_page_runs_.
+    auto* non_full_runs = &non_full_runs_[idx];
+    auto* full_runs = kIsDebugBuild ? &full_runs_[idx] : NULL;
+    if (run->IsAllFree()) {
+      // It has just become completely free. Free the pages of the
+      // run.
+      bool run_was_current = run == current_runs_[idx];
+      if (run_was_current) {
+        DCHECK(full_runs->find(run) == full_runs->end());
+        DCHECK(non_full_runs->find(run) == non_full_runs->end());
+        // If it was a current run, reuse it.
+      } else if (run_was_full) {
+        // If it was full, remove it from the full run set (debug
+        // only.)
+        if (kIsDebugBuild) {
+          std::unordered_set<Run*, hash_run, eq_run>::iterator pos = full_runs->find(run);
+          DCHECK(pos != full_runs->end());
+          full_runs->erase(pos);
+          if (kTraceRosAlloc) {
+            LOG(INFO) << "RosAlloc::UpdateRunMetadata() : Erased run 0x" << std::hex
+                      << reinterpret_cast<intptr_t>(run)
+                      << " from full_runs_";
+          }
+          DCHECK(full_runs->find(run) == full_runs->end());
+        }
+      } else {
+        // If it was in a non full run set, remove it from the set.
+        DCHECK(full_runs->find(run) == full_runs->end());
+        DCHECK(non_full_runs->find(run) != non_full_runs->end());
+        non_full_runs->erase(run);
+        if (kTraceRosAlloc) {
+          LOG(INFO) << "RosAlloc::UpdateRunMetadata() : Erased run 0x" << std::hex
+                    << reinterpret_cast<intptr_t>(run)
+                    << " from non_full_runs_";
+        }
+        DCHECK(non_full_runs->find(run) == non_full_runs->end());
+      }
+      if (!run_was_current) {
+        run->ZeroHeaderAndSlotHeaders();
+        MutexLock lock_mu(self, lock_);
+        FreePages(self, run, true);
+      }
+    } else {
+      // It is not completely free. If it wasn't the current run or
+      // already in the non-full run set (i.e., it was full) insert
+      // it into the non-full run set.
+      if (run == current_runs_[idx]) {
+        DCHECK(non_full_runs->find(run) == non_full_runs->end());
+        DCHECK(full_runs->find(run) == full_runs->end());
+        // If it was a current run, keep it.
+      } else if (run_was_full) {
+        // If it was full, remove it from the full run set (debug
+        // only) and insert into the non-full run set.
+        DCHECK(full_runs->find(run) != full_runs->end());
+        DCHECK(non_full_runs->find(run) == non_full_runs->end());
+        if (kIsDebugBuild) {
+          full_runs->erase(run);
+          if (kTraceRosAlloc) {
+            LOG(INFO) << "RosAlloc::UpdateRunMetadata() : Erased run 0x" << std::hex
+                      << reinterpret_cast<intptr_t>(run)
+                      << " from full_runs_";
+          }
+        }
+        non_full_runs->insert(run);
+        if (kTraceRosAlloc) {
+          LOG(INFO) << "RosAlloc::UpdateRunMetadata() : Inserted run 0x" << std::hex
+                    << reinterpret_cast<intptr_t>(run)
+                    << " into non_full_runs_[" << std::dec << idx;
+        }
+      } else {
+        // If it was not full, so leave it in the non full run set.
+        DCHECK(full_runs->find(run) == full_runs->end());
+        DCHECK(non_full_runs->find(run) != non_full_runs->end());
+      }
+    }
+  }
+}
+
 // If true, read the page map entries in BulkFree() without using the
 // lock for better performance, assuming that the existence of an
 // allocated chunk/pointer being freed in BulkFree() guarantees that
@@ -1122,104 +1383,7 @@ size_t RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
     DCHECK(run->to_be_bulk_freed_);
     run->to_be_bulk_freed_ = false;
 #endif
-    size_t idx = run->size_bracket_idx_;
-    MutexLock brackets_mu(self, *size_bracket_locks_[idx]);
-    if (run->IsThreadLocal()) {
-      DCHECK_LT(run->size_bracket_idx_, kNumThreadLocalSizeBrackets);
-      DCHECK(non_full_runs_[idx].find(run) == non_full_runs_[idx].end());
-      DCHECK(full_runs_[idx].find(run) == full_runs_[idx].end());
-      run->MergeBulkFreeListToThreadLocalFreeList();
-      if (kTraceRosAlloc) {
-        LOG(INFO) << "RosAlloc::BulkFree() : Freed slot(s) in a thread local run 0x"
-                  << std::hex << reinterpret_cast<intptr_t>(run);
-      }
-      DCHECK(run->IsThreadLocal());
-      // A thread local run will be kept as a thread local even if
-      // it's become all free.
-    } else {
-      bool run_was_full = run->IsFull();
-      run->MergeBulkFreeListToFreeList();
-      if (kTraceRosAlloc) {
-        LOG(INFO) << "RosAlloc::BulkFree() : Freed slot(s) in a run 0x" << std::hex
-                  << reinterpret_cast<intptr_t>(run);
-      }
-      // Check if the run should be moved to non_full_runs_ or
-      // free_page_runs_.
-      auto* non_full_runs = &non_full_runs_[idx];
-      auto* full_runs = kIsDebugBuild ? &full_runs_[idx] : nullptr;
-      if (run->IsAllFree()) {
-        // It has just become completely free. Free the pages of the
-        // run.
-        bool run_was_current = run == current_runs_[idx];
-        if (run_was_current) {
-          DCHECK(full_runs->find(run) == full_runs->end());
-          DCHECK(non_full_runs->find(run) == non_full_runs->end());
-          // If it was a current run, reuse it.
-        } else if (run_was_full) {
-          // If it was full, remove it from the full run set (debug
-          // only.)
-          if (kIsDebugBuild) {
-            std::unordered_set<Run*, hash_run, eq_run>::iterator pos = full_runs->find(run);
-            DCHECK(pos != full_runs->end());
-            full_runs->erase(pos);
-            if (kTraceRosAlloc) {
-              LOG(INFO) << "RosAlloc::BulkFree() : Erased run 0x" << std::hex
-                        << reinterpret_cast<intptr_t>(run)
-                        << " from full_runs_";
-            }
-            DCHECK(full_runs->find(run) == full_runs->end());
-          }
-        } else {
-          // If it was in a non full run set, remove it from the set.
-          DCHECK(full_runs->find(run) == full_runs->end());
-          DCHECK(non_full_runs->find(run) != non_full_runs->end());
-          non_full_runs->erase(run);
-          if (kTraceRosAlloc) {
-            LOG(INFO) << "RosAlloc::BulkFree() : Erased run 0x" << std::hex
-                      << reinterpret_cast<intptr_t>(run)
-                      << " from non_full_runs_";
-          }
-          DCHECK(non_full_runs->find(run) == non_full_runs->end());
-        }
-        if (!run_was_current) {
-          run->ZeroHeaderAndSlotHeaders();
-          MutexLock lock_mu(self, lock_);
-          FreePages(self, run, true);
-        }
-      } else {
-        // It is not completely free. If it wasn't the current run or
-        // already in the non-full run set (i.e., it was full) insert
-        // it into the non-full run set.
-        if (run == current_runs_[idx]) {
-          DCHECK(non_full_runs->find(run) == non_full_runs->end());
-          DCHECK(full_runs->find(run) == full_runs->end());
-          // If it was a current run, keep it.
-        } else if (run_was_full) {
-          // If it was full, remove it from the full run set (debug
-          // only) and insert into the non-full run set.
-          DCHECK(full_runs->find(run) != full_runs->end());
-          DCHECK(non_full_runs->find(run) == non_full_runs->end());
-          if (kIsDebugBuild) {
-            full_runs->erase(run);
-            if (kTraceRosAlloc) {
-              LOG(INFO) << "RosAlloc::BulkFree() : Erased run 0x" << std::hex
-                        << reinterpret_cast<intptr_t>(run)
-                        << " from full_runs_";
-            }
-          }
-          non_full_runs->insert(run);
-          if (kTraceRosAlloc) {
-            LOG(INFO) << "RosAlloc::BulkFree() : Inserted run 0x" << std::hex
-                      << reinterpret_cast<intptr_t>(run)
-                      << " into non_full_runs_[" << std::dec << idx;
-          }
-        } else {
-          // If it was not full, so leave it in the non full run set.
-          DCHECK(full_runs->find(run) == full_runs->end());
-          DCHECK(non_full_runs->find(run) != non_full_runs->end());
-        }
-      }
-    }
+    UpdateRunMetadata(self, run);
   }
   return freed_bytes;
 }

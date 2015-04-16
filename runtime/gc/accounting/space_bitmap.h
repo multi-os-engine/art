@@ -141,8 +141,8 @@ class SpaceBitmap {
   // Walk through the bitmaps in increasing address order, and find the object pointers that
   // correspond to garbage objects.  Call <callback> zero or more times with lists of these object
   // pointers. The callback is not permitted to increase the max of either bitmap.
-  static void SweepWalk(const SpaceBitmap& live, const SpaceBitmap& mark, uintptr_t base,
-                        uintptr_t max, SweepCallback* thunk, void* arg);
+  static void SweepWalkBitmap(const SpaceBitmap& live, const SpaceBitmap& mark, uintptr_t base,
+                              uintptr_t max, SweepCallback* thunk, void* arg);
 
   void CopyFrom(SpaceBitmap* source_bitmap);
 

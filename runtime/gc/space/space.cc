@@ -86,19 +86,19 @@ DiscontinuousSpace::DiscontinuousSpace(const std::string& name,
   CHECK(mark_bitmap_.get() != nullptr);
 }
 
-collector::ObjectBytePair ContinuousMemMapAllocSpace::Sweep(bool swap_bitmaps) {
+ObjectBytePair ContinuousMemMapAllocSpace::Sweep(bool swap_bitmaps) {
   accounting::ContinuousSpaceBitmap* live_bitmap = GetLiveBitmap();
   accounting::ContinuousSpaceBitmap* mark_bitmap = GetMarkBitmap();
   // If the bitmaps are bound then sweeping this space clearly won't do anything.
   if (live_bitmap == mark_bitmap) {
-    return collector::ObjectBytePair(0, 0);
+    return ObjectBytePair(0, 0);
   }
   SweepCallbackContext scc(swap_bitmaps, this);
   if (swap_bitmaps) {
     std::swap(live_bitmap, mark_bitmap);
   }
   // Bitmaps are pre-swapped for optimization which enables sweeping with the heap unlocked.
-  accounting::ContinuousSpaceBitmap::SweepWalk(
+  accounting::ContinuousSpaceBitmap::SweepWalkBitmap(
       *live_bitmap, *mark_bitmap, reinterpret_cast<uintptr_t>(Begin()),
       reinterpret_cast<uintptr_t>(End()), GetSweepCallback(), reinterpret_cast<void*>(&scc));
   return scc.freed;

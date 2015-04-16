@@ -25,6 +25,7 @@
 #include "base/mutex.h"
 #include "gc/accounting/space_bitmap.h"
 #include "gc/collector/garbage_collector.h"
+#include "gc/object_byte_pair.h"
 #include "globals.h"
 #include "image.h"
 #include "mem_map.h"
@@ -252,7 +253,7 @@ class AllocSpace {
     const bool swap_bitmaps;
     space::Space* const space;
     Thread* const self;
-    collector::ObjectBytePair freed;
+    ObjectBytePair freed;
   };
 
   AllocSpace() {}
@@ -437,7 +438,7 @@ class ContinuousMemMapAllocSpace : public MemMapSpace, public AllocSpace {
     return mark_bitmap_.get();
   }
 
-  collector::ObjectBytePair Sweep(bool swap_bitmaps);
+  ObjectBytePair Sweep(bool swap_bitmaps);
   virtual accounting::ContinuousSpaceBitmap::SweepCallback* GetSweepCallback() = 0;
 
  protected:

@@ -32,6 +32,8 @@
 #include "base/logging.h"
 #include "globals.h"
 #include "thread.h"
+#include "gc/accounting/space_bitmap.h"
+#include "gc/object_byte_pair.h"
 
 namespace art {
 
@@ -694,6 +696,7 @@ class RosAlloc {
   // The table that indicates what pages are currently used for.
   volatile uint8_t* page_map_;  // No GUARDED_BY(lock_) for kReadPageMapEntryWithoutLockInBulkFree.
   size_t page_map_size_;
+  size_t cur_page_map_size_snapshot_;
   size_t max_page_map_size_;
   std::unique_ptr<MemMap> page_map_mem_map_;
 
@@ -803,6 +806,16 @@ class RosAlloc {
       REQUIRES(!lock_);
   size_t Free(Thread* self, void* ptr)
       REQUIRES(!bulk_free_lock_, !lock_);
+  void UpdateRunMetadata(Thread* self, Run* run) NO_THREAD_SAFETY_ANALYSIS;
+  ObjectBytePair SweepRun(Thread* self, Run* run, size_t bracket_idx, uintptr_t* live,
+                          uintptr_t* mark, accounting::ContinuousSpaceBitmap* live_bitmap,
+                          uintptr_t live_bitmap_begin, bool swap_bitmaps);
+  // SweepWalkPagemap is using free_page_run_size_map_ table to bypass free pages.
+  // The table is guarded by lock_. No need lock_ for SweepWalkPagemap, because it's
+  // OK to bypass fewer pages if this table is modified by new allocation during walking,
+  // since there is no record in the live and mark bitmap for new allocated pages.
+  ObjectBytePair SweepWalkPagemap(bool swap_bitmaps) NO_THREAD_SAFETY_ANALYSIS;
+  void SetPageMapSizeSnapshot();
   size_t BulkFree(Thread* self, void** ptrs, size_t num_ptrs)
       REQUIRES(!bulk_free_lock_, !lock_);
 

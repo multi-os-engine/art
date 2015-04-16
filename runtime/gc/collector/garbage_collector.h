@@ -25,6 +25,7 @@
 #include "base/timing_logger.h"
 #include "gc/collector_type.h"
 #include "gc/gc_cause.h"
+#include "gc/object_byte_pair.h"
 #include "gc_root.h"
 #include "gc_type.h"
 #include "object_callbacks.h"
@@ -42,21 +43,6 @@ namespace gc {
 class Heap;
 
 namespace collector {
-
-struct ObjectBytePair {
-  ObjectBytePair(uint64_t num_objects = 0, int64_t num_bytes = 0)
-      : objects(num_objects), bytes(num_bytes) {}
-  void Add(const ObjectBytePair& other) {
-    objects += other.objects;
-    bytes += other.bytes;
-  }
-  // Number of objects which were freed.
-  uint64_t objects;
-  // Freed bytes are signed since the GC can free negative bytes if it promotes objects to a space
-  // which has a larger allocation size.
-  int64_t bytes;
-};
-
 // A information related single garbage collector iteration. Since we only ever have one GC running
 // at any given time, we can have a single iteration info.
 class Iteration {
