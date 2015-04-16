@@ -443,6 +443,11 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
   args.SetIfMissing(M::ParallelGCThreads,
                     static_cast<unsigned int>(sysconf(_SC_NPROCESSORS_CONF) - 1u));
 
+  // Default to 5 / 8 processors minus one for concurrent parallel marking.
+  args.SetIfMissing(M::ConcGCThreads,
+                    std::max(static_cast<unsigned int>(
+                        (sysconf(_SC_NPROCESSORS_CONF) * 5) / 8 - 1u), 0u));
+
   // -Xverbose:
   {
     LogVerbosity *log_verbosity = args.Get(M::Verbose);
