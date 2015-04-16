@@ -16,6 +16,7 @@
 
 #include "unstarted_runtime.h"
 
+#include <algorithm>
 #include <cmath>
 #include <unordered_map>
 
@@ -755,6 +756,107 @@ static void UnstartedSecurityGetSecurityPropertiesReader(
   result->SetL(h_obj.Get());
 }
 
+static bool ComputeCallStack(ShadowFrame* shadow_frame, size_t steps,
+                             std::vector<std::string>* out)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  shadow_frame = shadow_frame->GetLink();
+  while (shadow_frame != nullptr && steps > 0) {
+    out->push_back(PrettyMethod(shadow_frame->GetMethod(), true));
+
+    steps--;
+    shadow_frame = shadow_frame->GetLink();
+  }
+
+  return steps == 0U;
+}
+
+static bool IsPrefix(std::vector<std::string> v, std::vector<std::string> of) {
+  if (v.size() > of.size()) {
+    return false;
+  }
+  return std::equal(v.begin(), v.end(), of.begin());
+}
+
+// Initialized in UnstartedRuntimeInitialize.
+static std::vector<std::vector<std::string>> kUnstartedLocaleGetDefaultWhitelist;
+
+// Allows to override the default locale, which is derived from system properties. In certain
+// white-listed situations it is fine to use Locale.EN.
+static void UnstartedLocaleGetDefault(
+    Thread* self,
+    ShadowFrame* shadow_frame,
+    JValue* result,
+    size_t arg_offset ATTRIBUTE_UNUSED)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  std::vector<std::string> actual_stack;
+  if (!ComputeCallStack(shadow_frame, 4U, &actual_stack)) {
+    AbortTransactionOrFail(self, "Could not compute call-stack");
+    return;
+  }
+
+  std::vector<std::string> whitelist1({
+      "java.lang.String java.lang.String.toLowerCase()",
+      "org.ccil.cowan.tagsoup.ElementType org.ccil.cowan.tagsoup.Schema.getElementType"
+          "(java.lang.String)",
+      "void org.ccil.cowan.tagsoup.Schema.attribute(java.lang.String, java.lang.String, "
+          "java.lang.String, java.lang.String)",
+      "void org.ccil.cowan.tagsoup.HTMLSchema.<init>()"
+  });
+
+  Runtime* runtime = Runtime::Current();
+  for (std::vector<std::string>& white_list : kUnstartedLocaleGetDefaultWhitelist) {
+    if (!IsPrefix(white_list, actual_stack)) {
+      continue;
+    }
+
+    // We'll try to use the Locale.EN field. Handle necessary for Locale class initialization.
+    StackHandleScope<1> hs(self);
+
+    Handle<mirror::Class> h_locale_class(hs.NewHandle(
+        runtime->GetClassLinker()->FindClass(self,
+                                             "Ljava/util/Locale;",
+                                             NullHandle<mirror::ClassLoader>())));
+    if (h_locale_class.Get() == nullptr) {
+      AbortTransactionOrFail(self, "Could not find Locale class");
+      return;
+    }
+
+    if (!runtime->GetClassLinker()->EnsureInitialized(self, h_locale_class, true, true)) {
+      AbortTransactionOrFail(self, "Could not initialize Locale class");
+      return;
+    }
+
+    ArtField* en_field = h_locale_class->FindDeclaredStaticField("ENGLISH", "Ljava/util/Locale;");
+    if (en_field == nullptr) {
+      AbortTransactionOrFail(self, "Could not find ENGLISH field in Locale class");
+      return;
+    }
+
+    if (en_field->IsVolatile()) {
+      AbortTransactionOrFail(self, "ENGLISH field isn't expected to be volatile.");
+      return;
+    }
+
+    MemberOffset offset(en_field->GetOffset());
+    mirror::Object* ret = h_locale_class->GetFieldObject<mirror::Object>(offset);
+
+    if (ret == nullptr) {
+      AbortTransactionOrFail(self, "ENGLISH field value isn't expected to be null.");
+      return;
+    }
+
+    result->SetL(ret);
+    return;
+  }
+
+  std::ostringstream call_stack_os;
+  for (auto& s : actual_stack) {
+    call_stack_os << " " << s;
+  }
+  AbortTransactionOrFail(self, "Unsupported call stack for Locale.getDefault: %s",
+                         call_stack_os.str().c_str());
+}
+
 static void UnstartedJNIVMRuntimeNewUnpaddedArray(Thread* self,
                                                   mirror::ArtMethod* method ATTRIBUTE_UNUSED,
                                                   mirror::Object* receiver ATTRIBUTE_UNUSED,
@@ -1079,11 +1181,35 @@ static void UnstartedRuntimeInitializeInvokeHandlers() {
           &UnstartedMemoryPeekArrayEntry },
       { "java.io.Reader java.security.Security.getSecurityPropertiesReader()",
           &UnstartedSecurityGetSecurityPropertiesReader },
+      { "java.util.Locale java.util.Locale.getDefault()",
+          &UnstartedLocaleGetDefault },
   };
 
   for (auto& def : defs) {
     invoke_handlers_.insert(std::make_pair(def.name, def.function));
   }
+
+  kUnstartedLocaleGetDefaultWhitelist = {
+      // The following elements of the whitelist are used in tagsoup initialization. All strings
+      // are plain ASCII strings (html tags) and can be correctly lower-cased with Locale.ENGLISH.
+      {   // NOLINT [whitespace/braces] [4]
+          "java.lang.String java.lang.String.toLowerCase()",
+          "org.ccil.cowan.tagsoup.ElementType org.ccil.cowan.tagsoup.Schema.getElementType"
+              "(java.lang.String)",
+          "void org.ccil.cowan.tagsoup.Schema.attribute(java.lang.String, java.lang.String, "
+                "java.lang.String, java.lang.String)",
+          "void org.ccil.cowan.tagsoup.HTMLSchema.<init>()" },
+      {   // NOLINT [whitespace/braces] [4]
+          "java.lang.String java.lang.String.toLowerCase()",
+          "void org.ccil.cowan.tagsoup.Schema.elementType(java.lang.String, int, int, int)",
+          "void org.ccil.cowan.tagsoup.HTMLSchema.<init>()" },
+      {   // NOLINT [whitespace/braces] [4]
+          "java.lang.String java.lang.String.toLowerCase()",
+          "org.ccil.cowan.tagsoup.ElementType org.ccil.cowan.tagsoup.Schema.getElementType"
+              "(java.lang.String)",
+          "void org.ccil.cowan.tagsoup.Schema.parent(java.lang.String, java.lang.String)",
+          "void org.ccil.cowan.tagsoup.HTMLSchema.<init>()" },
+  };
 }
 
 static void UnstartedRuntimeInitializeJNIHandlers() {
