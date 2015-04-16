@@ -74,7 +74,7 @@ class LargeObjectSpace : public DiscontinuousSpace, public AllocSpace {
   AllocSpace* AsAllocSpace() OVERRIDE {
     return this;
   }
-  collector::ObjectBytePair Sweep(bool swap_bitmaps);
+  ObjectBytePair Sweep(bool swap_bitmaps);
   virtual bool CanMoveObjects() const OVERRIDE {
     return false;
   }
