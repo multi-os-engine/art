@@ -73,11 +73,46 @@ bool PrimitiveTypePropagation::UpdateType(HPhi* phi) {
   return existing != new_type;
 }
 
+// Fix up the type for null constants which part of an equality comparison.
+void PrimitiveTypePropagation::HandleEqualityWithNullConstant() {
+  // The order doesn't matter here.
+  for (HReversePostOrderIterator itb(*graph_); !itb.Done(); itb.Advance()) {
+    for (HInstructionIterator it(itb.Current()->GetInstructions()); !it.Done(); it.Advance()) {
+      HInstruction* equality_instr = it.Current();
+      if (!equality_instr->IsEqual() && !equality_instr->IsNotEqual()) {
+        continue;
+      }
+      HInstruction* left = equality_instr->InputAt(0);
+      HInstruction* right = equality_instr->InputAt(1);
+      HInstruction* null_instr = nullptr;
+
+      if ((left->GetType() == Primitive::kPrimNot)
+          && (right->IsNullConstant() || right->IsIntConstant())) {
+        null_instr = right;
+      } else if ((right->GetType() == Primitive::kPrimNot)
+              && (left->IsNullConstant() || left->IsIntConstant())) {
+        null_instr = left;
+      } else {
+        continue;
+      }
+
+      // If we got here, we are comparing against a reference and the int constant
+      // should be replaced with a null constant.
+      if (null_instr->IsIntConstant()) {
+        DCHECK_EQ(0, null_instr->AsIntConstant()->GetValue());
+        equality_instr->ReplaceInput(graph_->GetNullConstant(), null_instr == right ? 1 : 0);
+      }
+    }
+  }
+}
+
 void PrimitiveTypePropagation::Run() {
   for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     VisitBasicBlock(it.Current());
   }
   ProcessWorklist();
+
+  HandleEqualityWithNullConstant();
 }
 
 void PrimitiveTypePropagation::VisitBasicBlock(HBasicBlock* block) {
