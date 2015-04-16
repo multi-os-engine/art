@@ -35,6 +35,7 @@ class PrimitiveTypePropagation : public ValueObject {
   void AddToWorklist(HPhi* phi);
   void AddDependentInstructionsToWorklist(HPhi* phi);
   bool UpdateType(HPhi* phi);
+  void HandleEqualityWithNullConstant();
 
   HGraph* const graph_;
   GrowableArray<HPhi*> worklist_;

@@ -168,6 +168,32 @@ void DeadPhiHandling::Run() {
   ProcessWorklist();
 }
 
+class EquivalentPhisCleanup : public ValueObject {
+ public:
+  explicit EquivalentPhisCleanup(HGraph* graph) : graph_(graph) {}
+
+  void Run();
+
+ private:
+  HGraph* const graph_;
+};
+
+void EquivalentPhisCleanup::Run() {
+  // The order doesn't matter here.
+  for (HReversePostOrderIterator itb(*graph_); !itb.Done(); itb.Advance()) {
+    for (HInstructionIterator it(itb.Current()->GetPhis()); !it.Done(); it.Advance()) {
+      HPhi* phi = it.Current()->AsPhi();
+      HPhi* next = phi->GetNextEquivalentPhiWithSameType();
+      if (next != nullptr) {
+        phi->ReplaceWith(next);
+        DCHECK(next->GetNextEquivalentPhiWithSameType() == nullptr)
+            << "More then one phi equivalent with type " << phi->GetType()
+            << " found for phi" << phi->GetId();
+      }
+    }
+  }
+}
+
 static bool IsPhiEquivalentOf(HInstruction* instruction, HPhi* phi) {
   return instruction != nullptr
       && instruction->IsPhi()
@@ -209,11 +235,18 @@ void SsaBuilder::BuildSsa() {
   PrimitiveTypePropagation type_propagation(GetGraph());
   type_propagation.Run();
 
-  // 5) Mark dead phis again. Steph 4) may have introduced new phis.
+  // 5) When creating equivalent phis we copy the inputs of the original phi which
+  // may be improperly typed. This will be fixed during the type propagation but
+  // as a result we may have two equivalent phis with the same type for the same
+  // dex register. This pass cleans them up.
+  EquivalentPhisCleanup equivalent_phis_cleanup(GetGraph());
+  equivalent_phis_cleanup.Run();
+
+  // 6) Mark dead phis again. Steph 4) may have introduced new phis.
   SsaDeadPhiElimination dead_phis(GetGraph());
   dead_phis.MarkDeadPhis();
 
-  // 6) Now that the graph is correclty typed, we can get rid of redundant phis.
+  // 7) Now that the graph is correctly typed, we can get rid of redundant phis.
   // Note that we cannot do this phase before type propagation, otherwise
   // we could get rid of phi equivalents, whose presence is a requirement for the
   // type propagation phase. Note that this is to satisfy statement (a) of the
@@ -221,7 +254,7 @@ void SsaBuilder::BuildSsa() {
   SsaRedundantPhiElimination redundant_phi(GetGraph());
   redundant_phi.Run();
 
-  // 7) Make sure environments use the right phi "equivalent": a phi marked dead
+  // 8) Make sure environments use the right phi "equivalent": a phi marked dead
   // can have a phi equivalent that is not dead. We must therefore update
   // all environment uses of the dead phi to use its equivalent. Note that there
   // can be multiple phis for the same Dex register that are live (for example
@@ -248,7 +281,7 @@ void SsaBuilder::BuildSsa() {
     }
   }
 
-  // 8) Deal with phis to guarantee liveness of phis in case of a debuggable
+  // 9) Deal with phis to guarantee liveness of phis in case of a debuggable
   // application. This is for satisfying statement (c) of the SsaBuilder
   // (see ssa_builder.h).
   if (GetGraph()->IsDebuggable()) {
@@ -256,7 +289,7 @@ void SsaBuilder::BuildSsa() {
     dead_phi_handler.Run();
   }
 
-  // 9) Now that the right phis are used for the environments, and we
+  // 10) Now that the right phis are used for the environments, and we
   // have potentially revive dead phis in case of a debuggable application,
   // we can eliminate phis we do not need. Regardless of the debuggable status,
   // this phase is necessary for statement (b) of the SsaBuilder (see ssa_builder.h),
@@ -264,7 +297,7 @@ void SsaBuilder::BuildSsa() {
   // input types.
   dead_phis.EliminateDeadPhis();
 
-  // 10) Clear locals.
+  // 11) Clear locals.
   for (HInstructionIterator it(GetGraph()->GetEntryBlock()->GetInstructions());
        !it.Done();
        it.Advance()) {
@@ -294,6 +327,7 @@ void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
             GetGraph()->GetArena(), local, 0, Primitive::kPrimVoid);
         block->AddPhi(phi);
         current_locals_->SetRawEnvAt(local, phi);
+        // LOG(INFO) << "calin build loop header " << phi->GetId();
       }
     }
     // Save the loop header so that the last phase of the analysis knows which
@@ -332,6 +366,7 @@ void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
         }
         block->AddPhi(phi);
         value = phi;
+        // LOG(INFO) << "calin build " << phi->GetId();
       }
       current_locals_->SetRawEnvAt(local, value);
     }
@@ -419,6 +454,7 @@ HPhi* SsaBuilder::GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive:
       new_phi->SetRawInputAt(i, phi->InputAt(i));
     }
     phi->GetBlock()->InsertPhiAfter(new_phi, phi);
+    // LOG(INFO) << "calin get equiv phi: " << new_phi->GetId() << " FOR " << phi->GetId();
     return new_phi;
   } else {
     DCHECK_EQ(next->GetType(), type);
@@ -468,6 +504,7 @@ void SsaBuilder::VisitLoadLocal(HLoadLocal* load) {
     if (load->GetType() == Primitive::kPrimFloat || load->GetType() == Primitive::kPrimDouble) {
       value = GetFloatOrDoubleEquivalent(load, value, load->GetType());
     } else if (load->GetType() == Primitive::kPrimNot) {
+      // LOG(INFO) << "CALIN: visit load local load type " << load->GetType();
       value = GetReferenceTypeEquivalent(value);
     }
   }
