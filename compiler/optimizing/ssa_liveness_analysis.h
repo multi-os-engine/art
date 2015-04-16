@@ -379,18 +379,35 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     return GetStart() <= position && !IsDeadAt(position);
   }
 
-  bool Covers(size_t position) {
-    return !IsDeadAt(position) && FindRangeAt(position) != nullptr;
+  // Returns true if the interval contains a LiveRange covering `position`.
+  // The range at or immediately after the current position of linear scan
+  // is cached for better performance. If `position` can be smaller than
+  // that, Covers_Slow should be used instead.
+  bool Covers(size_t position, bool is_current_position = true) {
+    LiveRange* candidate = FindRangeAtOrAfter(position, range_search_start_);
+    if (is_current_position) {
+      range_search_start_ = candidate;
+    }
+    return (candidate != nullptr && candidate->GetStart() <= position);
   }
 
-  /**
-   * Returns the first intersection of this interval with `other`.
-   */
-  size_t FirstIntersectionWith(LiveInterval* other) const {
+  // Same as Covers but always tests all ranges.
+  bool Covers_Slow(size_t position) {
+    LiveRange* candidate = FindRangeAtOrAfter(position, first_range_);
+    return candidate != nullptr && candidate->GetStart() <= position;
+  }
+
+  // Returns the first intersection of this interval with `current`, which
+  // must be the interval currently being allocated by linear scan.
+  size_t FirstIntersectionWith(LiveInterval* current) const {
     // Advance both intervals and find the first matching range start in
     // this interval.
-    LiveRange* my_range = first_range_;
-    LiveRange* other_range = other->first_range_;
+    LiveRange* other_range = current->first_range_;
+    LiveRange* my_range = FindRangeAtOrAfter(other_range->GetStart(), range_search_start_);
+    if (my_range == nullptr) {
+      return kNoLifetime;
+    }
+
     do {
       if (my_range->IsBefore(*other_range)) {
         my_range = my_range->GetNext();
@@ -541,7 +558,6 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     new_interval->parent_ = parent_;
 
     new_interval->first_use_ = first_use_;
-    last_visited_range_ = nullptr;
     LiveRange* current = first_range_;
     LiveRange* previous = nullptr;
     // Iterate over the ranges, and either find a range that covers this position, or
@@ -561,6 +577,11 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         last_range_ = previous;
         previous->next_ = nullptr;
         new_interval->first_range_ = current;
+        if (range_search_start_ != nullptr && range_search_start_->GetEnd() >= current->GetEnd()) {
+          // Search start point is inside `new_interval`. Change it to nullptr
+          // (i.e. the end of the interval) in the original interval.
+          range_search_start_ = nullptr;
+        }
         return new_interval;
       } else {
         // This range covers position. We create a new last_range_ for this interval
@@ -576,6 +597,11 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         }
         new_interval->first_range_ = current;
         current->start_ = position;
+        if (range_search_start_ != nullptr && range_search_start_->GetEnd() >= current->GetEnd()) {
+          // Search start point is inside `new_interval`. Change it to `last_range`
+          // in the original interval. This is conservative but always correct.
+          range_search_start_ = last_range_;
+        }
         return new_interval;
       }
     } while (current != nullptr);
@@ -711,12 +737,14 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   // Returns whether an interval, when it is non-split, is using
   // the same register of one of its input.
   bool IsUsingInputRegister() const {
+    CHECK(kIsDebugBuild) << "Function should be used only for DCHECKs";
     if (defined_by_ != nullptr && !IsSplit()) {
       for (HInputIterator it(defined_by_); !it.Done(); it.Advance()) {
         LiveInterval* interval = it.Current()->GetLiveInterval();
 
-        // Find the interval that covers `defined_by`_.
-        while (interval != nullptr && !interval->Covers(defined_by_->GetLifetimePosition())) {
+        // Find the interval that covers `defined_by`_. Calls to this function
+        // are made outside the linear scan, hence we need to use Covers_Slow.
+        while (interval != nullptr && !interval->Covers_Slow(defined_by_->GetLifetimePosition())) {
           interval = interval->GetNextSibling();
         }
 
@@ -735,6 +763,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   // the same register of one of its input. Note that this method requires
   // IsUsingInputRegister() to be true.
   bool CanUseInputRegister() const {
+    CHECK(kIsDebugBuild) << "Function should be used only for DCHECKs";
     DCHECK(IsUsingInputRegister());
     if (defined_by_ != nullptr && !IsSplit()) {
       LocationSummary* locations = defined_by_->GetLocations();
@@ -744,8 +773,9 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       for (HInputIterator it(defined_by_); !it.Done(); it.Advance()) {
         LiveInterval* interval = it.Current()->GetLiveInterval();
 
-        // Find the interval that covers `defined_by`_.
-        while (interval != nullptr && !interval->Covers(defined_by_->GetLifetimePosition())) {
+        // Find the interval that covers `defined_by`_. Calls to this function
+        // are made outside the linear scan, hence we need to use Covers_Slow.
+        while (interval != nullptr && !interval->Covers_Slow(defined_by_->GetLifetimePosition())) {
           interval = interval->GetNextSibling();
         }
 
@@ -754,7 +784,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
             && interval->GetRegister() == GetRegister()) {
           // We found the input that has the same register. Check if it is live after
           // `defined_by`_.
-          return !interval->Covers(defined_by_->GetLifetimePosition() + 1);
+          return !interval->Covers_Slow(defined_by_->GetLifetimePosition() + 1);
         }
       }
     }
@@ -777,6 +807,12 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     return first_safepoint_;
   }
 
+  // Resets the starting point for range-searching queries to the first range.
+  // Intervals must be reset prior to starting a new linear scan over them.
+  void StartNewScan() {
+    range_search_start_ = first_range_;
+  }
+
  private:
   LiveInterval(ArenaAllocator* allocator,
                Primitive::Type type,
@@ -789,9 +825,9 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       : allocator_(allocator),
         first_range_(nullptr),
         last_range_(nullptr),
+        range_search_start_(nullptr),
         first_safepoint_(nullptr),
         last_safepoint_(nullptr),
-        last_visited_range_(nullptr),
         first_use_(nullptr),
         type_(type),
         next_sibling_(nullptr),
@@ -805,39 +841,29 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         high_or_low_interval_(nullptr),
         defined_by_(defined_by) {}
 
-  // Returns a LiveRange covering the given position or nullptr if no such range
-  // exists in the interval.
-  // This is a linear search optimized for multiple queries in a non-decreasing
-  // position order typical for linear scan register allocation.
-  LiveRange* FindRangeAt(size_t position) {
-    // Make sure operations on the interval didn't leave us with a cached result
-    // from a sibling.
+  // Searches for a LiveRange that either covers the given position or is the
+  // first next LiveRange. Returns nullptr if no such LiveRange exists. Ranges
+  // known to end before `position` can be skipped with `search_start`.
+  LiveRange* FindRangeAtOrAfter(size_t position, LiveRange* search_start) const {
     if (kIsDebugBuild) {
-      if (last_visited_range_ != nullptr) {
-        DCHECK_GE(last_visited_range_->GetStart(), GetStart());
-        DCHECK_LE(last_visited_range_->GetEnd(), GetEnd());
+      if (search_start != first_range_) {
+        // If we are not searching the entire list of ranges, make sure we do
+        // not skip the range we are searching for.
+        if (search_start == nullptr) {
+          DCHECK(IsDeadAt(position));
+        } else if (search_start->GetStart() > position) {
+          DCHECK_EQ(search_start, FindRangeAtOrAfter(position, first_range_));
+        }
       }
     }
 
-    // If this method was called earlier on a lower position, use that result as
-    // a starting point to save time. However, linear scan performs 3 scans:
-    // integers, floats, and resolution. Instead of resetting at the beginning
-    // of a scan, we do it here.
-    LiveRange* current;
-    if (last_visited_range_ != nullptr && position >= last_visited_range_->GetStart()) {
-      current = last_visited_range_;
-    } else {
-      current = first_range_;
+    LiveRange* range;
+    for (range = search_start;
+         range != nullptr && range->GetEnd() <= position;
+         range = range->GetNext()) {
+      continue;
     }
-    while (current != nullptr && current->GetEnd() <= position) {
-      current = current->GetNext();
-    }
-    last_visited_range_ = current;
-    if (current != nullptr && position >= current->GetStart()) {
-      return current;
-    } else {
-      return nullptr;
-    }
+    return range;
   }
 
   ArenaAllocator* const allocator_;
@@ -847,13 +873,13 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   LiveRange* first_range_;
   LiveRange* last_range_;
 
+  // The first range at or after the current position of a linear scan. It is
+  // used to optimize range-searching queries.
+  LiveRange* range_search_start_;
+
   // Safepoints where this interval is live.
   SafepointPosition* first_safepoint_;
   SafepointPosition* last_safepoint_;
-
-  // Last visited range. This is a range search optimization leveraging the fact
-  // that the register allocator does a linear scan through the intervals.
-  LiveRange* last_visited_range_;
 
   // Uses of this interval. Note that this linked list is shared amongst siblings.
   UsePosition* first_use_;
