@@ -775,7 +775,7 @@ bool RegisterAllocator::TryAllocateFreeReg(LiveInterval* current) {
     } else if (current->IsLowInterval()) {
       reg = FindAvailableRegisterPair(free_until, current->GetStart());
     } else {
-      reg = FindAvailableRegister(free_until);
+      reg = FindAvailableRegister(free_until, current);
     }
   }
 
@@ -839,14 +839,48 @@ int RegisterAllocator::FindAvailableRegisterPair(size_t* next_use, size_t starti
   return reg;
 }
 
-int RegisterAllocator::FindAvailableRegister(size_t* next_use) const {
+bool RegisterAllocator::IsCallerSaveRegister(int reg) const {
+  return processing_core_registers_
+      ? !codegen_->IsCoreCalleeSaveRegister(reg)
+      : !codegen_->IsFloatingPointCalleeSaveRegister(reg);
+}
+
+int RegisterAllocator::FindAvailableRegister(size_t* next_use, LiveInterval* current) const {
+  bool prefers_caller_save = !current->HasSafepoint();
   int reg = kNoRegister;
-  // Pick the register that is used the last.
   for (size_t i = 0; i < number_of_registers_; ++i) {
-    if (IsBlocked(i)) continue;
-    if (reg == kNoRegister || next_use[i] > next_use[reg]) {
+    if (IsBlocked(i)) {
+      // Register cannot be used. Continue.
+      continue;
+    }
+
+    // Best case: we found a register fully available.
+    if (next_use[i] == kMaxLifetimePosition) {
+      if (prefers_caller_save && !IsCallerSaveRegister(i)) {
+        // We can get shorter encodings on some platforms by using
+        // small register numbers. So only update the candidate if the previous
+        // one was not available for the whole method.
+        if (reg == -1 || next_use[reg] != kMaxLifetimePosition) {
+          reg = i;
+        }
+        // Continue the iteration in the hope of finding a caller save register.
+        continue;
+      }
       reg = i;
-      if (next_use[i] == kMaxLifetimePosition) break;
+      // We know the register is good enough. Return it.
+      break;
+    }
+
+    // If we had no register before, take this one as a reference.
+    if (reg == kNoRegister) {
+      reg = i;
+      continue;
+    }
+
+    // Pick the register that is used the last.
+    if (next_use[i] > next_use[reg]) {
+      reg = i;
+      continue;
     }
   }
   return reg;
@@ -971,7 +1005,7 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
       || (first_use >= next_use[GetHighForLowRegister(reg)]);
   } else {
     DCHECK(!current->IsHighInterval());
-    reg = FindAvailableRegister(next_use);
+    reg = FindAvailableRegister(next_use, current);
     should_spill = (first_use >= next_use[reg]);
   }
 
