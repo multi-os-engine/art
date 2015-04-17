@@ -19,6 +19,7 @@
 #include "art_field-inl.h"
 #include "base/logging.h"
 #include "class_linker.h"
+#include "dex/compiler_ir.h"
 #include "dex_file-inl.h"
 #include "dex_instruction-inl.h"
 #include "driver/compiler_driver-inl.h"
@@ -520,8 +521,32 @@ void HGraphBuilder::Binop_22b(const Instruction& instruction, bool reverse) {
   UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
 }
 
+static bool RequiresConstructorBarrier(const DexCompilationUnit& cu, const CompilerDriver& driver) {
+  Thread* self = Thread::Current();
+  return cu.IsConstructor()
+      && driver.RequiresConstructorBarrier(self, cu.GetDexFile(), cu.GetClassDefIndex());
+}
+
 void HGraphBuilder::BuildReturn(const Instruction& instruction, Primitive::Type type) {
   if (type == Primitive::kPrimVoid) {
+    if (RequiresConstructorBarrier(*dex_compilation_unit_, *compiler_driver_)) {
+      if (dex_compilation_unit_ == outer_compilation_unit_) {
+        // We are not inlining so we must add the barrier if required.
+        current_block_->AddInstruction(new (arena_) HMemoryBarrier(kStoreStore));
+      } else if (!RequiresConstructorBarrier(*outer_compilation_unit_, *compiler_driver_)) {
+        // We are inlining either into either:
+        //   - non-constructor method or,
+        //   - constructor which does not require a barrier
+        // so we must add the barrier if required.
+        //
+        // Note that since we don't keep track of nested inlines we might still add redundant
+        // barriers if the most outer constructor doesn't need a barrier but all the others do.
+        current_block_->AddInstruction(new (arena_) HMemoryBarrier(kStoreStore));
+      } else {
+        // We are inlining into a constructor which already needs a barrier. That constructor will
+        // add its own barrier so we don't have to add an extra one.
+      }
+    }
     current_block_->AddInstruction(new (arena_) HReturnVoid());
   } else {
     HInstruction* value = LoadLocal(instruction.VRegA(), type);
