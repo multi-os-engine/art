@@ -935,6 +935,14 @@ void InstructionCodeGeneratorARM::VisitExit(HExit* exit) {
   UNUSED(exit);
 }
 
+void LocationsBuilderARM::VisitX86ComputeBaseMethodAddress(HX86ComputeBaseMethodAddress* instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "X86ComputeBaseMethodAddress not implemented";
+}
+
+void InstructionCodeGeneratorARM::VisitX86ComputeBaseMethodAddress(HX86ComputeBaseMethodAddress* instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "X86ComputeBaseMethodAddress not implemented";
+}
+
 void InstructionCodeGeneratorARM::GenerateTestAndBranch(HInstruction* instruction,
                                                         Label* true_target,
                                                         Label* false_target,
