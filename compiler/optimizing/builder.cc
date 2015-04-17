@@ -520,8 +520,21 @@ void HGraphBuilder::Binop_22b(const Instruction& instruction, bool reverse) {
   UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
 }
 
+static bool RequiresConstructorBarrier(const DexCompilationUnit& cu, const CompilerDriver& driver) {
+  Thread* self = Thread::Current();
+  return cu.IsConstructor()
+      && driver.RequiresConstructorBarrier(self, cu.GetDexFile(), cu.GetClassDefIndex());
+}
+
 void HGraphBuilder::BuildReturn(const Instruction& instruction, Primitive::Type type) {
   if (type == Primitive::kPrimVoid) {
+    // Note that we might insert redundant barrier when inlining `super` calls.
+    // There is no easy way to figure out if we are doing it because:
+    //    - dex does not support kAccSuper flag
+    //    - we might inline when calling
+    if (RequiresConstructorBarrier(*dex_compilation_unit_, *compiler_driver_)) {
+      current_block_->AddInstruction(new (arena_) HMemoryBarrier(kStoreStore));
+    }
     current_block_->AddInstruction(new (arena_) HReturnVoid());
   } else {
     HInstruction* value = LoadLocal(instruction.VRegA(), type);
