@@ -257,9 +257,10 @@ JValue InvokeProxyInvocationHandler(ScopedObjectAccessAlreadyRunnable& soa, cons
     }
   }
 
-  // Call Proxy.invoke(Proxy proxy, ArtMethod method, Object[] args).
+  // Call Proxy.invoke(Proxy proxy, Method method, Object[] args).
   jvalue invocation_args[3];
   invocation_args[0].l = rcvr_jobj;
+  // TODO: Convert to mirror::Method from mirror::ArtMethod here.
   invocation_args[1].l = interface_method_jobj;
   invocation_args[2].l = args_jobj;
   jobject result =

@@ -25,6 +25,7 @@
 #include "dex_file.h"
 #include "entrypoints/entrypoint_utils-inl.h"
 #include "gc/heap.h"
+#include "mirror/abstract_method.h"
 #include "mirror/accessible_object.h"
 #include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
@@ -611,6 +612,17 @@ struct FieldOffsets : public CheckOffsets<mirror::Field> {
   };
 };
 
+struct AbstractMethodOffsets : public CheckOffsets<mirror::AbstractMethod> {
+  AbstractMethodOffsets() : CheckOffsets<mirror::AbstractMethod>(
+      false, "Ljava/lang/reflect/AbstractMethod;") {
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::AbstractMethod, access_flags_),                         "accessFlags"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::AbstractMethod, art_method_),                           "artMethod"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::AbstractMethod, declaring_class_),                      "declaringClass"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::AbstractMethod, declaring_class_of_overridden_method_), "declaringClassOfOverriddenMethod"));
+    offsets.push_back(CheckOffset(OFFSETOF_MEMBER(mirror::AbstractMethod, dex_method_index_),                     "dexMethodIndex"));
+  };
+};
+
 // C++ fields must exactly match the fields in the Java classes. If this fails,
 // reorder the fields in the C++ class. Managed class fields are ordered by
 // ClassLinker::LinkFields.
@@ -629,6 +641,7 @@ TEST_F(ClassLinkerTest, ValidateFieldOrderOfJavaCppUnionClasses) {
   EXPECT_TRUE(FinalizerReferenceOffsets().Check());
   EXPECT_TRUE(AccessibleObjectOffsets().Check());
   EXPECT_TRUE(FieldOffsets().Check());
+  EXPECT_TRUE(AbstractMethodOffsets().Check());
 }
 
 TEST_F(ClassLinkerTest, FindClassNonexistent) {

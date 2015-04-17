@@ -59,6 +59,7 @@
 #include "mirror/dex_cache-inl.h"
 #include "mirror/field.h"
 #include "mirror/iftable-inl.h"
+#include "mirror/method.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/proxy.h"
@@ -525,17 +526,36 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   SetClassRoot(kJavaLangReflectProxy, java_lang_reflect_Proxy);
 
   // Create java.lang.reflect.Field.class root.
-  mirror::Class* java_lang_reflect_Field = FindSystemClass(self, "Ljava/lang/reflect/Field;");
-  CHECK(java_lang_reflect_Field != nullptr);
-  SetClassRoot(kJavaLangReflectField, java_lang_reflect_Field);
-  mirror::Field::SetClass(java_lang_reflect_Field);
+  mirror::Class* class_root = FindSystemClass(self, "Ljava/lang/reflect/Field;");
+  CHECK(class_root != nullptr);
+  SetClassRoot(kJavaLangReflectField, class_root);
+  mirror::Field::SetClass(class_root);
 
   // Create java.lang.reflect.Field array root.
-  mirror::Class* java_lang_reflect_Field_array =
-      FindSystemClass(self, "[Ljava/lang/reflect/Field;");
-  CHECK(java_lang_reflect_Field_array != nullptr);
-  SetClassRoot(kJavaLangReflectFieldArrayClass, java_lang_reflect_Field_array);
-  mirror::Field::SetArrayClass(java_lang_reflect_Field_array);
+  class_root = FindSystemClass(self, "[Ljava/lang/reflect/Field;");
+  CHECK(class_root != nullptr);
+  SetClassRoot(kJavaLangReflectFieldArrayClass, class_root);
+  mirror::Field::SetArrayClass(class_root);
+
+  // Create java.lang.reflect.Constructor.class root and array root.
+  class_root = FindSystemClass(self, "Ljava/lang/reflect/Constructor;");
+  CHECK(class_root != nullptr);
+  SetClassRoot(kJavaLangReflectConstructor, class_root);
+  mirror::Constructor::SetClass(class_root);
+  class_root = FindSystemClass(self, "[Ljava/lang/reflect/Constructor;");
+  CHECK(class_root != nullptr);
+  SetClassRoot(kJavaLangReflectConstructorArrayClass, class_root);
+  mirror::Constructor::SetArrayClass(class_root);
+
+  // Create java.lang.reflect.Method.class root and array root.
+  class_root = FindSystemClass(self, "Ljava/lang/reflect/Method;");
+  CHECK(class_root != nullptr);
+  SetClassRoot(kJavaLangReflectMethod, class_root);
+  mirror::Method::SetClass(class_root);
+  class_root = FindSystemClass(self, "[Ljava/lang/reflect/Method;");
+  CHECK(class_root != nullptr);
+  SetClassRoot(kJavaLangReflectMethodArrayClass, class_root);
+  mirror::Method::SetArrayClass(class_root);
 
   // java.lang.ref classes need to be specially flagged, but otherwise are normal classes
   // finish initializing Reference class
@@ -911,6 +931,10 @@ void ClassLinker::InitFromImage() {
   // String class root was set above
   mirror::Field::SetClass(GetClassRoot(kJavaLangReflectField));
   mirror::Field::SetArrayClass(GetClassRoot(kJavaLangReflectFieldArrayClass));
+  mirror::Constructor::SetClass(GetClassRoot(kJavaLangReflectConstructor));
+  mirror::Constructor::SetArrayClass(GetClassRoot(kJavaLangReflectConstructorArrayClass));
+  mirror::Method::SetClass(GetClassRoot(kJavaLangReflectMethod));
+  mirror::Method::SetArrayClass(GetClassRoot(kJavaLangReflectMethodArrayClass));
   mirror::Reference::SetClass(GetClassRoot(kJavaLangRefReference));
   mirror::BooleanArray::SetArrayClass(GetClassRoot(kBooleanArrayClass));
   mirror::ByteArray::SetArrayClass(GetClassRoot(kByteArrayClass));
@@ -1096,22 +1120,26 @@ void ClassLinker::VisitClassesWithoutClassesLock(ClassVisitor* visitor, void* ar
 }
 
 ClassLinker::~ClassLinker() {
-  mirror::Class::ResetClass();
-  mirror::String::ResetClass();
-  mirror::Reference::ResetClass();
   mirror::ArtMethod::ResetClass();
+  mirror::Class::ResetClass();
+  mirror::Constructor::ResetClass();
   mirror::Field::ResetClass();
-  mirror::Field::ResetArrayClass();
+  mirror::Method::ResetClass();
+  mirror::Reference::ResetClass();
+  mirror::StackTraceElement::ResetClass();
+  mirror::String::ResetClass();
+  mirror::Throwable::ResetClass();
   mirror::BooleanArray::ResetArrayClass();
   mirror::ByteArray::ResetArrayClass();
   mirror::CharArray::ResetArrayClass();
+  mirror::Constructor::ResetArrayClass();
   mirror::DoubleArray::ResetArrayClass();
+  mirror::Field::ResetArrayClass();
   mirror::FloatArray::ResetArrayClass();
+  mirror::Method::ResetArrayClass();
   mirror::IntArray::ResetArrayClass();
   mirror::LongArray::ResetArrayClass();
   mirror::ShortArray::ResetArrayClass();
-  mirror::Throwable::ResetClass();
-  mirror::StackTraceElement::ResetClass();
   STLDeleteElements(&oat_files_);
 }
 
@@ -3002,7 +3030,7 @@ mirror::Class* ClassLinker::CreateProxyClass(ScopedObjectAccessAlreadyRunnable& 
 
   // Create virtual method using specified prototypes.
   size_t num_virtual_methods =
-      soa.Decode<mirror::ObjectArray<mirror::ArtMethod>*>(methods)->GetLength();
+      soa.Decode<mirror::ObjectArray<mirror::Method>*>(methods)->GetLength();
   {
     mirror::ObjectArray<mirror::ArtMethod>* virtuals = AllocArtMethodArray(self,
                                                                            num_virtual_methods);
@@ -3014,9 +3042,8 @@ mirror::Class* ClassLinker::CreateProxyClass(ScopedObjectAccessAlreadyRunnable& 
   }
   for (size_t i = 0; i < num_virtual_methods; ++i) {
     StackHandleScope<1> hs2(self);
-    mirror::ObjectArray<mirror::ArtMethod>* decoded_methods =
-        soa.Decode<mirror::ObjectArray<mirror::ArtMethod>*>(methods);
-    Handle<mirror::ArtMethod> prototype(hs2.NewHandle(decoded_methods->Get(i)));
+    auto* decoded_methods = soa.Decode<mirror::ObjectArray<mirror::Method>*>(methods);
+    Handle<mirror::ArtMethod> prototype(hs2.NewHandle(decoded_methods->Get(i)->GetArtMethod()));
     mirror::ArtMethod* clone = CreateProxyMethod(self, klass, prototype);
     if (UNLIKELY(clone == nullptr)) {
       CHECK(self->IsExceptionPending());  // OOME.
@@ -3066,9 +3093,8 @@ mirror::Class* ClassLinker::CreateProxyClass(ScopedObjectAccessAlreadyRunnable& 
     CheckProxyConstructor(klass->GetDirectMethod(0));
     for (size_t i = 0; i < num_virtual_methods; ++i) {
       StackHandleScope<2> hs2(self);
-      mirror::ObjectArray<mirror::ArtMethod>* decoded_methods =
-          soa.Decode<mirror::ObjectArray<mirror::ArtMethod>*>(methods);
-      Handle<mirror::ArtMethod> prototype(hs2.NewHandle(decoded_methods->Get(i)));
+      auto* decoded_methods = soa.Decode<mirror::ObjectArray<mirror::Method>*>(methods);
+      Handle<mirror::ArtMethod> prototype(hs2.NewHandle(decoded_methods->Get(i)->GetArtMethod()));
       Handle<mirror::ArtMethod> virtual_method(hs2.NewHandle(klass->GetVirtualMethod(i)));
       CheckProxyMethod(virtual_method, prototype);
     }
@@ -3104,23 +3130,22 @@ mirror::ArtMethod* ClassLinker::FindMethodForProxy(mirror::Class* proxy_class,
                                                    mirror::ArtMethod* proxy_method) {
   DCHECK(proxy_class->IsProxyClass());
   DCHECK(proxy_method->IsProxyMethod());
-  // Locate the dex cache of the original interface/Object
-  mirror::DexCache* dex_cache = nullptr;
   {
     ReaderMutexLock mu(Thread::Current(), dex_lock_);
-    for (size_t i = 0; i != dex_caches_.size(); ++i) {
-      mirror::DexCache* a_dex_cache = GetDexCache(i);
-      if (proxy_method->HasSameDexCacheResolvedTypes(a_dex_cache->GetResolvedTypes())) {
-        dex_cache = a_dex_cache;
-        break;
+    // Locate the dex cache of the original interface/Object
+    for (const GcRoot<mirror::DexCache>& root : dex_caches_) {
+      auto* dex_cache = root.Read();
+      if (proxy_method->HasSameDexCacheResolvedTypes(dex_cache->GetResolvedTypes())) {
+        mirror::ArtMethod* resolved_method = dex_cache->GetResolvedMethod(
+            proxy_method->GetDexMethodIndex());
+        CHECK(resolved_method != nullptr);
+        return resolved_method;
       }
     }
   }
-  CHECK(dex_cache != nullptr);
-  uint32_t method_idx = proxy_method->GetDexMethodIndex();
-  mirror::ArtMethod* resolved_method = dex_cache->GetResolvedMethod(method_idx);
-  CHECK(resolved_method != nullptr);
-  return resolved_method;
+  LOG(FATAL) << "Didn't find dex cache for " << PrettyClass(proxy_class) << " "
+      << PrettyMethod(proxy_method);
+  UNREACHABLE();
 }
 
 
@@ -3163,8 +3188,11 @@ mirror::ArtMethod* ClassLinker::CreateProxyMethod(Thread* self,
                                                   Handle<mirror::ArtMethod> prototype) {
   // Ensure prototype is in dex cache so that we can use the dex cache to look up the overridden
   // prototype method
-  prototype->GetDeclaringClass()->GetDexCache()->SetResolvedMethod(prototype->GetDexMethodIndex(),
-                                                                   prototype.Get());
+  auto* dex_cache = prototype->GetDeclaringClass()->GetDexCache();
+  // Avoid dirtying the dex cache unless we need to.
+  if (dex_cache->GetResolvedMethod(prototype->GetDexMethodIndex()) != prototype.Get()) {
+    dex_cache->SetResolvedMethod(prototype->GetDexMethodIndex(), prototype.Get());
+  }
   // We steal everything from the prototype (such as DexCache, invoke stub, etc.) then specialize
   // as necessary
   mirror::ArtMethod* method = down_cast<mirror::ArtMethod*>(prototype->Clone(self));
@@ -3198,6 +3226,7 @@ static void CheckProxyMethod(Handle<mirror::ArtMethod> method,
   // interface prototype. The exception to this are Constructors and the Class of the Proxy itself.
   CHECK(prototype->HasSameDexCacheResolvedMethods(method.Get()));
   CHECK(prototype->HasSameDexCacheResolvedTypes(method.Get()));
+  CHECK_EQ(prototype->GetDeclaringClass()->GetDexCache(), method->GetDexCache());
   CHECK_EQ(prototype->GetDexMethodIndex(), method->GetDexMethodIndex());
 
   CHECK_STREQ(method->GetName(), prototype->GetName());
@@ -5210,11 +5239,15 @@ const char* ClassLinker::GetClassRootDescriptor(ClassRoot class_root) {
     "Ljava/lang/DexCache;",
     "Ljava/lang/ref/Reference;",
     "Ljava/lang/reflect/ArtMethod;",
+    "Ljava/lang/reflect/Constructor;",
     "Ljava/lang/reflect/Field;",
+    "Ljava/lang/reflect/Method;",
     "Ljava/lang/reflect/Proxy;",
     "[Ljava/lang/String;",
     "[Ljava/lang/reflect/ArtMethod;",
+    "[Ljava/lang/reflect/Constructor;",
     "[Ljava/lang/reflect/Field;",
+    "[Ljava/lang/reflect/Method;",
     "Ljava/lang/ClassLoader;",
     "Ljava/lang/Throwable;",
     "Ljava/lang/ClassNotFoundException;",
