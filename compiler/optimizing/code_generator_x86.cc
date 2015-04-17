@@ -1224,7 +1224,7 @@ void LocationsBuilderX86::HandleInvoke(HInvoke* invoke) {
   locations->AddTemp(Location::RegisterLocation(EAX));
 
   InvokeDexCallingConventionVisitor calling_convention_visitor;
-  for (size_t i = 0; i < invoke->InputCount(); i++) {
+  for (size_t i = invoke->GetArgumentsStartIndex(); i < invoke->InputCount(); i++) {
     HInstruction* input = invoke->InputAt(i);
     locations->SetInAt(i, calling_convention_visitor.GetNextLocation(input->GetType()));
   }

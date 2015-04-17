@@ -1097,7 +1097,7 @@ void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
   // - Remove suspend checks, that hold an environment.
   // We must do this after the other blocks have been inlined, otherwise ids of
   // constants could overlap with the inner graph.
-  int parameter_index = 0;
+  int parameter_index = invoke->GetArgumentsStartIndex();
   for (HInstructionIterator it(entry_block_->GetInstructions()); !it.Done(); it.Advance()) {
     HInstruction* current = it.Current();
     if (current->IsNullConstant()) {

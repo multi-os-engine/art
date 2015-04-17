@@ -457,7 +457,7 @@ void SSAChecker::VisitBinaryOperation(HBinaryOperation* op) {
           Primitive::PrettyDescriptor(op->InputAt(1)->GetType())));
     }
   } else {
-    if (PrimitiveKind(op->InputAt(1)->GetType()) != PrimitiveKind(op->InputAt(0)->GetType())) {
+    if (PrimitiveKind(op->InputAt(0)->GetType()) != PrimitiveKind(op->InputAt(1)->GetType())) {
       AddError(StringPrintf(
           "Binary operation %s %d has inputs of different types: "
           "%s, and %s.",
@@ -482,7 +482,7 @@ void SSAChecker::VisitBinaryOperation(HBinaryOperation* op) {
           "from its input type: %s vs %s.",
           op->DebugName(), op->GetId(),
           Primitive::PrettyDescriptor(op->GetType()),
-          Primitive::PrettyDescriptor(op->InputAt(1)->GetType())));
+          Primitive::PrettyDescriptor(op->InputAt(0)->GetType())));
     }
   }
 }

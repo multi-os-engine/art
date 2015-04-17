@@ -112,7 +112,8 @@ static void MoveFromReturnRegister(Location target,
 }
 
 static void MoveArguments(HInvoke* invoke, ArenaAllocator* arena, CodeGeneratorX86* codegen) {
-  if (invoke->InputCount() == 0) {
+  if (invoke->InputCount() == invoke->GetArgumentsStartIndex()) {
+    // No argument to move.
     return;
   }
 
@@ -123,7 +124,7 @@ static void MoveArguments(HInvoke* invoke, ArenaAllocator* arena, CodeGeneratorX
   // a parallel move resolver.
   HParallelMove parallel_move(arena);
 
-  for (size_t i = 0; i < invoke->InputCount(); i++) {
+  for (size_t i = invoke->GetArgumentsStartIndex(); i < invoke->InputCount(); i++) {
     HInstruction* input = invoke->InputAt(i);
     Location cc_loc = calling_convention_visitor.GetNextLocation(input->GetType());
     Location actual_loc = locations->InAt(i);
@@ -1038,7 +1039,7 @@ static void CreateLongIntToVoidLocations(ArenaAllocator* arena, Primitive::Type 
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresRegister());
-  HInstruction *value = invoke->InputAt(1);
+  HInstruction* value = invoke->InputAt(invoke->GetArgumentsStartIndex() + 1);
   if (size == Primitive::kPrimByte) {
     locations->SetInAt(1, Location::ByteRegisterOrConstant(EDX, value));
   } else {
