@@ -294,6 +294,26 @@ class CodeGeneratorX86 : public CodeGenerator {
     return isa_features_;
   }
 
+  void SetMethodAddressOffset(int offset) {
+    method_address_offset_ = offset;
+  }
+
+  int GetMethodAddressOffset() const {
+    return method_address_offset_;
+  }
+
+  int ConstantAreaStart() const {
+    return constant_area_start_;
+  }
+
+  Address LiteralDoubleAddress(double v, Register reg);
+  Address LiteralFloatAddress(float v, Register reg);
+  Address LiteralInt32Address(int32_t v, Register reg);
+  Address LiteralInt64Address(int64_t v, Register reg);
+
+  void Finalize(CodeAllocator* allocator) OVERRIDE;
+  void RunBackendOptimization(HGraph* graph) OVERRIDE;
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
@@ -303,6 +323,16 @@ class CodeGeneratorX86 : public CodeGenerator {
   ParallelMoveResolverX86 move_resolver_;
   X86Assembler assembler_;
   const X86InstructionSetFeatures& isa_features_;
+
+  // Offset to the start of the constant area in the assembled code.
+  // Used for fixups to the constant area.
+  int constant_area_start_;
+
+  // If there is a HX86ComputeBaseMethodAddress instruction in the graph
+  // (which shall be the sole instruction of this kind), subtracting this offset
+  // from the value contained in the out register of this HX86ComputeBaseMethodAddress
+  // instruction gives the address of the start of this method.
+  int method_address_offset_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorX86);
 };
