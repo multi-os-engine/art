@@ -120,6 +120,19 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
     return false;
   }
 
+  // TODO: Very rough fix, we can do better. If callee's class was already
+  // used in any dominator so we are sure it is initialized.
+  if (!resolved_method->GetDeclaringClass()->IsInitialized()) {
+    mirror::Class* caller_class = compiler_driver_->ResolveCompilingMethodsClass(
+        soa, dex_cache, class_loader, &caller_compilation_unit_);
+
+    if (!resolved_method->GetDeclaringClass()->IsAssignableFrom(caller_class)) {
+      VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
+                     << " is not inlined because its class may not be initialized";
+      return false;
+    }
+  }
+
   if (resolved_method->ShouldNotInline()) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
                    << " was already flagged as non inlineable";

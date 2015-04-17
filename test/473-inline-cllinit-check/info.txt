@@ -1,0 +1,4 @@
+The test is created basing on CTS test
+  dot.junit.opcodes.invoke_static.Main_testE7
+Inline should skip method if it is not proven
+that class is initilaized.
