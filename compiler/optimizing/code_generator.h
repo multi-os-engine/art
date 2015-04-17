@@ -336,6 +336,9 @@ class CodeGenerator {
 
   virtual ParallelMoveResolver* GetMoveResolver() = 0;
 
+  // Per code generator optimization pass.
+  virtual void RunBackendOptimization(HGraph* graph ATTRIBUTE_UNUSED) {}
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,

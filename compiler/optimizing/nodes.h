@@ -33,6 +33,7 @@
 
 namespace art {
 
+class CodeGenerator;
 class GraphChecker;
 class HBasicBlock;
 class HCurrentMethod;
@@ -149,7 +150,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         cached_float_constants_(std::less<int32_t>(), arena->Adapter()),
         cached_long_constants_(std::less<int64_t>(), arena->Adapter()),
         cached_double_constants_(std::less<int64_t>(), arena->Adapter()),
-        cached_current_method_(nullptr) {}
+        cached_current_method_(nullptr), code_generator_(nullptr) {}
 
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
@@ -282,6 +283,13 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   HCurrentMethod* GetCurrentMethod();
 
+  void SetCodeGenerator(CodeGenerator* code_generator) {
+    code_generator_ = code_generator;
+  }
+  CodeGenerator* GetCodeGenerator() const {
+    return code_generator_;
+  }
+
   HBasicBlock* FindCommonDominator(HBasicBlock* first, HBasicBlock* second) const;
 
   const DexFile& GetDexFile() const {
@@ -391,6 +399,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   ArenaSafeMap<int64_t, HDoubleConstant*> cached_double_constants_;
 
   HCurrentMethod* cached_current_method_;
+  CodeGenerator* code_generator_;
 
   friend class SsaBuilder;           // For caching constants.
   friend class SsaLivenessAnalysis;  // For the linear order.
@@ -873,6 +882,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(TypeConversion, Instruction)                                        \
   M(UShr, BinaryOperation)                                              \
   M(Xor, BinaryOperation)                                               \
+  M(X86ComputeBaseMethodAddress, Instruction)                           \
 
 #define FOR_EACH_INSTRUCTION(M)                                         \
   FOR_EACH_CONCRETE_INSTRUCTION(M)                                      \
@@ -1530,9 +1540,32 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
 
   virtual bool NeedsDexCache() const { return false; }
 
+  size_t BackendInputCount() const {
+    return (backend_input_.GetInstruction() == nullptr) ? 0 : 1;
+  }
+
+  HInstruction* GetBackendInstruction() const {
+    return backend_input_.GetInstruction();
+  }
+
  protected:
   virtual const HUserRecord<HInstruction*> InputRecordAt(size_t i) const = 0;
   virtual void SetRawInputRecordAt(size_t index, const HUserRecord<HInstruction*>& input) = 0;
+
+  const HUserRecord<HInstruction*> GetBackendInputRecord() const {
+    return backend_input_;
+  }
+
+  void SetBackendInputRecord(const HUserRecord<HInstruction*>& input) {
+    backend_input_ = input;
+  }
+
+  // One extra input for an instruction that can be added by a backend, to
+  // pass information from one location to another, so that the register
+  // allocator will ensure that the value is accessible for this instruction.
+  // This should be set in a backend optimization pass, and is used only by the
+  // matching backend.
+  HUserRecord<HInstruction*> backend_input_;
 
  private:
   void RemoveEnvironmentUser(HUseListNode<HEnvironment*>* use_node) { env_uses_.Remove(use_node); }
@@ -1695,13 +1728,19 @@ class HTemplateInstruction: public HInstruction {
       : HInstruction(side_effects), inputs_() {}
   virtual ~HTemplateInstruction() {}
 
-  size_t InputCount() const OVERRIDE { return N; }
+  size_t InputCount() const OVERRIDE { return N + BackendInputCount(); }
 
  protected:
-  const HUserRecord<HInstruction*> InputRecordAt(size_t i) const OVERRIDE { return inputs_[i]; }
+  const HUserRecord<HInstruction*> InputRecordAt(size_t i) const OVERRIDE {
+    return (i == N) ? GetBackendInputRecord() : inputs_[i];
+  }
 
   void SetRawInputRecordAt(size_t i, const HUserRecord<HInstruction*>& input) OVERRIDE {
-    inputs_[i] = input;
+    if (i == N) {
+      SetBackendInputRecord(input);
+    } else {
+      inputs_[i] = input;
+    }
   }
 
  private:
@@ -2387,7 +2426,7 @@ std::ostream& operator<<(std::ostream& os, const Intrinsics& intrinsic);
 
 class HInvoke : public HInstruction {
  public:
-  size_t InputCount() const OVERRIDE { return inputs_.Size(); }
+  size_t InputCount() const OVERRIDE { return inputs_.Size() + BackendInputCount(); }
 
   // Runtime needs to walk the stack, so Dex -> Dex calls need to
   // know their environment.
@@ -2442,9 +2481,15 @@ class HInvoke : public HInstruction {
     inputs_.SetSize(number_of_inputs);
   }
 
-  const HUserRecord<HInstruction*> InputRecordAt(size_t i) const OVERRIDE { return inputs_.Get(i); }
+  const HUserRecord<HInstruction*> InputRecordAt(size_t i) const OVERRIDE {
+    return (i == inputs_.Size()) ? GetBackendInputRecord() : inputs_.Get(i);
+  }
   void SetRawInputRecordAt(size_t index, const HUserRecord<HInstruction*>& input) OVERRIDE {
-    inputs_.Put(index, input);
+    if (index == inputs_.Size()) {
+      SetBackendInputRecord(input);
+    } else {
+      inputs_.Put(index, input);
+    }
   }
 
   uint32_t number_of_arguments_;
@@ -3078,7 +3123,10 @@ class HPhi : public HInstruction {
     }
   }
 
-  size_t InputCount() const OVERRIDE { return inputs_.Size(); }
+  size_t InputCount() const OVERRIDE {
+    DCHECK_EQ(BackendInputCount(), 0u);
+    return inputs_.Size();
+  }
 
   void AddInput(HInstruction* input);
   void RemoveInputAt(size_t index);
@@ -3868,6 +3916,17 @@ class HMonitorOperation : public HTemplateInstruction<1> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HMonitorOperation);
+};
+
+// Compute the address of the method for X86 Constant area support.
+class HX86ComputeBaseMethodAddress : public HExpression<0> {
+ public:
+  HX86ComputeBaseMethodAddress() : HExpression(Primitive::kPrimInt, SideEffects::None()) {}
+
+  DECLARE_INSTRUCTION(X86ComputeBaseMethodAddress);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HX86ComputeBaseMethodAddress);
 };
 
 class MoveOperands : public ArenaObject<kArenaAllocMisc> {
