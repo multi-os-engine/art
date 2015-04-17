@@ -1572,6 +1572,10 @@ void X86Assembler::EmitOperand(int reg_or_opcode, const Operand& operand) {
   for (int i = 1; i < length; i++) {
     EmitUint8(operand.encoding_[i]);
   }
+  AssemblerFixup* fixup = operand.GetFixup();
+  if (fixup != nullptr) {
+    EmitFixup(fixup);
+  }
 }
 
 
@@ -2128,6 +2132,69 @@ void X86ExceptionSlowPath::Emit(Assembler *sasm) {
   // this call should never return
   __ int3();
 #undef __
+}
+
+void X86Assembler::AddConstantArea() {
+  const std::vector<int32_t>& area = constant_area_.GetBuffer();
+  // We have to worry about fixups as well, now that we support jump tables.
+  const std::vector<ConstantArea::FixupInfo>& fixups = constant_area_.GetFixups();
+  auto fixup_it = fixups.begin();
+  size_t next_fixup_index = (fixup_it == fixups.end()) ? -1 : fixup_it->first;
+  for (size_t i = 0, e = area.size(); i < e; i++) {
+    AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+    if (i == next_fixup_index) {
+      EmitFixup(fixup_it->second);
+      fixup_it++;
+      next_fixup_index = (fixup_it == fixups.end()) ? -1 : fixup_it->first;
+    }
+    EmitInt32(area[i]);
+  }
+}
+
+int ConstantArea::AddInt32(int32_t v) {
+  for (size_t i = 0, e = buffer_.size(); i < e; i++) {
+    if (v == buffer_[i] && !used_for_non_literal_[i]) {
+      return i * elem_size_;
+    }
+  }
+
+  // Didn't match anything.
+  int result = buffer_.size() * elem_size_;
+  buffer_.push_back(v);
+  used_for_non_literal_.push_back(false);
+  return result;
+}
+
+int ConstantArea::AddInt64(int64_t v) {
+  int32_t v_low = v;
+  int32_t v_high = v >> 32;
+  if (buffer_.size() > 1) {
+    // Ensure we don't pass the end of the buffer.
+    for (size_t i = 0, e = buffer_.size() - 1; i < e; i++) {
+      if (v_low == buffer_[i] && v_high == buffer_[i + 1] &&
+          !used_for_non_literal_[i] && !used_for_non_literal_[i + 1]) {
+        return i * elem_size_;
+      }
+    }
+  }
+
+  // Didn't match anything.
+  int result = buffer_.size() * elem_size_;
+  buffer_.push_back(v_low);
+  buffer_.push_back(v_high);
+  used_for_non_literal_.push_back(false);
+  used_for_non_literal_.push_back(false);
+  return result;
+}
+
+int ConstantArea::AddDouble(double v) {
+  // Treat the value as a 64-bit integer value.
+  return AddInt64(bit_cast<int64_t, double>(v));
+}
+
+int ConstantArea::AddFloat(float v) {
+  // Treat the value as a 32-bit integer value.
+  return AddInt32(bit_cast<int32_t, float>(v));
 }
 
 }  // namespace x86
