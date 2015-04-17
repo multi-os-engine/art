@@ -2170,6 +2170,9 @@ class HInvoke : public HInstruction {
 
   uint32_t GetDexMethodIndex() const { return dex_method_index_; }
 
+  // The index of the first argument among inputs.
+  virtual size_t GetArgumentsStartIndex() const { return 0; }
+
   Intrinsics GetIntrinsic() const {
     return intrinsic_;
   }
@@ -2219,11 +2222,13 @@ class HInvokeStaticOrDirect : public HInvoke {
                         uint32_t dex_method_index,
                         bool is_recursive,
                         InvokeType original_invoke_type,
-                        InvokeType invoke_type)
+                        InvokeType invoke_type,
+                        bool has_clinit_check_as_first_input)
       : HInvoke(arena, number_of_arguments, return_type, dex_pc, dex_method_index),
         original_invoke_type_(original_invoke_type),
         invoke_type_(invoke_type),
-        is_recursive_(is_recursive) {}
+        is_recursive_(is_recursive),
+        has_clinit_check_as_first_input_(has_clinit_check_as_first_input) {}
 
   bool CanDoImplicitNullCheck() const OVERRIDE {
     // We access the method via the dex cache so we can't do an implicit null check.
@@ -2236,12 +2241,56 @@ class HInvokeStaticOrDirect : public HInvoke {
   bool IsRecursive() const { return is_recursive_; }
   bool NeedsDexCache() const OVERRIDE { return !IsRecursive(); }
 
+  // Is this instruction as call to a static method?
+  bool IsInvokeStatic() const {
+    return GetInvokeType() == kStatic;
+  }
+
+  // Does this instruction have a class initialization check as first
+  // input (only relevant for static calls)?
+  bool HasClinitCheckAsFirstInput() const {
+    DCHECK(IsInvokeStatic());
+    return has_clinit_check_as_first_input_;
+  }
+
+  // The index of the first argument among inputs.
+  size_t GetArgumentsStartIndex() const OVERRIDE {
+    // If this is a call to a static method, skip the first input if it is
+    // a class initialization check.
+    size_t arguments_start_index = IsStaticWithClinitCheck() ? 1: 0;
+    DCHECK_LE(arguments_start_index, InputCount());
+    return arguments_start_index;
+  }
+
+  // Get the initialization check of a static method's declaring class
+  // (only relevant for static calls having an explicit clinit check
+  // as first input).
+  HClinitCheck* GetInvokeStaticClassInitCheck() const {
+    DCHECK(IsInvokeStatic()) << GetInvokeType();
+    DCHECK(HasClinitCheckAsFirstInput());
+    HClinitCheck* clinit_check = InputAt(0)->AsClinitCheck();
+    return clinit_check;
+  }
+
+  // Is this a call to a static method whose declaring class has an
+  // explicit intialization check in the graph?
+  bool IsStaticWithClinitCheck() const {
+    return IsInvokeStatic() && HasClinitCheckAsFirstInput();
+  }
+
+  // Is this a call to a static method whose declaring class has no
+  // explicit intialization check in the graph?
+  bool IsStaticWithoutClinitCheck() const {
+    return IsInvokeStatic() && !HasClinitCheckAsFirstInput();
+  }
+
   DECLARE_INSTRUCTION(InvokeStaticOrDirect);
 
  private:
   const InvokeType original_invoke_type_;
   const InvokeType invoke_type_;
   const bool is_recursive_;
+  const bool has_clinit_check_as_first_input_;
 
   DISALLOW_COPY_AND_ASSIGN(HInvokeStaticOrDirect);
 };
@@ -3210,7 +3259,6 @@ class HLoadString : public HExpression<0> {
   DISALLOW_COPY_AND_ASSIGN(HLoadString);
 };
 
-// TODO: Pass this check to HInvokeStaticOrDirect nodes.
 /**
  * Performs an initialization check on its Class object input.
  */

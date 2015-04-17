@@ -175,6 +175,54 @@ inline std::pair<bool, bool> CompilerDriver::IsFastStaticField(
   return std::make_pair(false, false);
 }
 
+inline bool CompilerDriver::IsFastStaticMethod(
+    mirror::DexCache* dex_cache, mirror::Class* referrer_class,
+    mirror::ArtMethod* resolved_method, uint16_t method_idx, uint32_t* storage_index) {
+  DCHECK(resolved_method->IsStatic());
+  if (LIKELY(referrer_class != nullptr)) {
+    mirror::Class* methods_class = resolved_method->GetDeclaringClass();
+    if (methods_class == referrer_class) {
+      *storage_index = methods_class->GetDexTypeIndex();
+      return true;
+    }
+    if (referrer_class->CanAccessResolvedMethod(methods_class, resolved_method,
+                                                dex_cache, method_idx)) {
+      // We have the resolved method, we must make it into a index for the referrer
+      // in its static storage (which may fail if it doesn't have a slot for it)
+      // TODO: for images we can elide the static storage base null check
+      // if we know there's a non-null entry in the image
+      const DexFile* dex_file = dex_cache->GetDexFile();
+      uint32_t storage_idx = DexFile::kDexNoIndex;
+      if (LIKELY(methods_class->GetDexCache() == dex_cache)) {
+        // common case where the dex cache of both the referrer and the method are the same,
+        // no need to search the dex file
+        storage_idx = methods_class->GetDexTypeIndex();
+      } else {
+        // Search dex file for localized ssb index, may fail if method's class is a parent
+        // of the class mentioned in the dex file and there is no dex cache entry.
+        std::string temp;
+        const DexFile::StringId* string_id =
+            dex_file->FindStringId(resolved_method->GetDeclaringClass()->GetDescriptor(&temp));
+        if (string_id != nullptr) {
+          const DexFile::TypeId* type_id =
+             dex_file->FindTypeId(dex_file->GetIndexForStringId(*string_id));
+          if (type_id != nullptr) {
+            // medium path, needs check of static storage base being initialized
+            storage_idx = dex_file->GetIndexForTypeId(*type_id);
+          }
+        }
+      }
+      if (storage_idx != DexFile::kDexNoIndex) {
+        *storage_index = storage_idx;
+        return true;
+      }
+    }
+  }
+  // Conservative defaults.
+  *storage_index = DexFile::kDexNoIndex;
+  return true;
+}
+
 inline bool CompilerDriver::IsStaticFieldInReferrerClass(mirror::Class* referrer_class,
                                                          ArtField* resolved_field) {
   DCHECK(resolved_field->IsStatic());

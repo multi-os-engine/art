@@ -21,6 +21,7 @@
 #include "class_linker.h"
 #include "dex_file-inl.h"
 #include "dex_instruction-inl.h"
+#include "dex/verified_method.h"
 #include "driver/compiler_driver-inl.h"
 #include "driver/compiler_options.h"
 #include "mirror/class_loader.h"
@@ -587,7 +588,7 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   const char* descriptor = dex_file_->StringDataByIdx(proto_id.shorty_idx_);
   Primitive::Type return_type = Primitive::GetType(descriptor[0]);
   bool is_instance_call = invoke_type != kStatic;
-  const size_t number_of_arguments = strlen(descriptor) - (is_instance_call ? 0 : 1);
+  size_t number_of_arguments = strlen(descriptor) - (is_instance_call ? 0 : 1);
 
   MethodReference target_method(dex_file_, method_idx);
   uintptr_t direct_code;
@@ -605,7 +606,11 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   }
   DCHECK(optimized_invoke_type != kSuper);
 
+  // Potential class initialization check, in the case of a static method call.
+  HClinitCheck* clinit_check = nullptr;
+
   HInvoke* invoke = nullptr;
+
   if (optimized_invoke_type == kVirtual) {
     invoke = new (arena_) HInvokeVirtual(
         arena_, number_of_arguments, return_type, dex_pc, method_idx, table_index);
@@ -620,12 +625,71 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
     bool is_recursive =
         (target_method.dex_method_index == dex_compilation_unit_->GetDexMethodIndex());
     DCHECK(!is_recursive || (target_method.dex_file == dex_compilation_unit_->GetDexFile()));
+
+    if (optimized_invoke_type == kStatic) {
+      ScopedObjectAccess soa(Thread::Current());
+      StackHandleScope<4> hs(soa.Self());
+      Handle<mirror::DexCache> dex_cache(hs.NewHandle(
+          dex_compilation_unit_->GetClassLinker()->FindDexCache(
+              *dex_compilation_unit_->GetDexFile())));
+      Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
+          soa.Decode<mirror::ClassLoader*>(dex_compilation_unit_->GetClassLoader())));
+      mirror::ArtMethod* resolved_method = compiler_driver_->ResolveMethod(
+          soa, dex_cache, class_loader, dex_compilation_unit_, method_idx,
+          optimized_invoke_type);
+
+      if (resolved_method == nullptr) {
+        MaybeRecordStat(MethodCompilationStat::kNotCompiledUnresolvedMethod);
+        return false;
+      }
+
+      const DexFile& outer_dex_file = *outer_compilation_unit_->GetDexFile();
+      Handle<mirror::DexCache> outer_dex_cache(hs.NewHandle(
+          outer_compilation_unit_->GetClassLinker()->FindDexCache(outer_dex_file)));
+      Handle<mirror::Class> referrer_class(hs.NewHandle(GetOutermostCompilingClass()));
+
+      // The index at which the method's class is stored in the DexCache's type array.
+      uint32_t storage_index = DexFile::kDexNoIndex;
+      bool is_referrer_class = (referrer_class.Get() == resolved_method->GetDeclaringClass());
+      if (is_referrer_class) {
+        storage_index = referrer_class->GetDexTypeIndex();
+      } else if (outer_dex_cache.Get() == dex_cache.Get()) {
+        // Get `storage_index` from IsFastStaticMethod.
+        compiler_driver_->IsFastStaticMethod(outer_dex_cache.Get(),
+                                             referrer_class.Get(),
+                                             resolved_method,
+                                             method_idx,
+                                             &storage_index);
+      }
+
+      // If the method's class type index is available, add a class
+      // initialization check for it before the static method call.
+      if (storage_index != DexFile::kDexNoIndex) {
+        // TODO: find out why this check is needed.
+        bool is_in_dex_cache = compiler_driver_->CanAssumeTypeIsPresentInDexCache(
+            *outer_compilation_unit_->GetDexFile(), storage_index);
+        bool is_initialized =
+            resolved_method->GetDeclaringClass()->IsInitialized() && is_in_dex_cache;
+
+        if (!is_initialized && !is_referrer_class) {
+          HLoadClass* load_class =
+              new (arena_) HLoadClass(storage_index, is_referrer_class, dex_pc);
+          current_block_->AddInstruction(load_class);
+          clinit_check = new (arena_) HClinitCheck(load_class, dex_pc);
+          current_block_->AddInstruction(clinit_check);
+          ++number_of_arguments;
+        }
+      }
+    }
+
+    bool has_clinit_check_as_first_input = (clinit_check != nullptr);
     invoke = new (arena_) HInvokeStaticOrDirect(
         arena_, number_of_arguments, return_type, dex_pc, target_method.dex_method_index,
-        is_recursive, invoke_type, optimized_invoke_type);
+        is_recursive, invoke_type, optimized_invoke_type, has_clinit_check_as_first_input);
   }
 
   size_t start_index = 0;
+  uint32_t argument_index = 0;
   Temporaries temps(graph_);
   if (is_instance_call) {
     HInstruction* arg = LoadLocal(is_range ? register_index : args[0], Primitive::kPrimNot);
@@ -634,10 +698,16 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
     temps.Add(null_check);
     invoke->SetArgumentAt(0, null_check);
     start_index = 1;
+    argument_index = 1;
+  } else {
+    if (clinit_check != nullptr) {
+      // Add the class initialization check as first input of `invoke`.
+      invoke->SetArgumentAt(0, clinit_check);
+      argument_index = 1;
+    }
   }
 
   uint32_t descriptor_index = 1;
-  uint32_t argument_index = start_index;
   for (size_t i = start_index; i < number_of_vreg_arguments; i++, argument_index++) {
     Primitive::Type type = Primitive::GetType(descriptor[descriptor_index++]);
     bool is_wide = (type == Primitive::kPrimLong) || (type == Primitive::kPrimDouble);
@@ -764,7 +834,7 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
   if (is_referrer_class) {
     storage_index = referrer_class->GetDexTypeIndex();
   } else if (outer_dex_cache.Get() != dex_cache.Get()) {
-    // The compiler driver cannot currently understand multple dex caches involved. Just bailout.
+    // The compiler driver cannot currently understand multiple dex caches involved. Just bailout.
     return false;
   } else {
     std::pair<bool, bool> pair = compiler_driver_->IsFastStaticField(

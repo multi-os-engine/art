@@ -1453,7 +1453,8 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
         } else {
           Location expected_location = locations->InAt(use->GetInputIndex());
           // The expected (actual) location may be invalid in case the input is unused. Currently
-          // this only happens for intrinsics.
+          // this only happens for intrinsics or for static invokes with a clinit check as first
+          // input.
           if (expected_location.IsValid()) {
             if (expected_location.IsUnallocated()) {
               locations->SetInAt(use->GetInputIndex(), source);
@@ -1462,7 +1463,9 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
             }
           } else {
             DCHECK(use->GetUser()->IsInvoke());
-            DCHECK(use->GetUser()->AsInvoke()->GetIntrinsic() != Intrinsics::kNone);
+            DCHECK((use->GetUser()->AsInvoke()->GetIntrinsic() != Intrinsics::kNone)
+                   || (use->GetUser()->IsInvokeStaticOrDirect()
+                       && use->GetUser()->AsInvokeStaticOrDirect()->IsStaticWithClinitCheck()));
           }
         }
         use = use->GetNext();
