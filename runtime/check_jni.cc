@@ -358,7 +358,7 @@ class ScopedCheck {
         (traceMethod != nullptr && soa.Vm()->ShouldTrace(traceMethod))) {
       std::string msg;
       for (size_t i = 0; fmt[i] != '\0'; ++i) {
-        TracePossibleHeapValue(soa, entry, fmt[i], args[i], &msg);
+        TracePossibleHeapValue(soa, entry, fmt[i], fmt[i] != '.' ? &args[i] : nullptr, &msg);
         if (fmt[i + 1] != '\0') {
           StringAppendF(&msg, ", ");
         }
@@ -383,7 +383,7 @@ class ScopedCheck {
     // We always do the thorough checks on entry, and never on exit...
     if (entry) {
       for (size_t i = 0; fmt[i] != '\0'; ++i) {
-        if (!CheckPossibleHeapValue(soa, fmt[i], args[i])) {
+        if (!CheckPossibleHeapValue(soa, fmt[i], fmt[i] != '.' ? &args[i] : nullptr)) {
           return false;
         }
       }
@@ -406,7 +406,7 @@ class ScopedCheck {
     if (should_trace) {
       std::string msg;
       for (size_t i = 0; fmt[i] != '\0'; ++i) {
-        TraceNonHeapValue(fmt[i], args[i], &msg);
+        TraceNonHeapValue(fmt[i], fmt[i] != '.' ? &args[i] : nullptr, &msg);
         if (fmt[i + 1] != '\0') {
           StringAppendF(&msg, ", ");
         }
@@ -434,7 +434,7 @@ class ScopedCheck {
     // We always do the thorough checks on entry, and never on exit...
     if (entry) {
       for (size_t i = 0; fmt[i] != '\0'; ++i) {
-        if (!CheckNonHeapValue(fmt[i], args[i])) {
+        if (!CheckNonHeapValue(fmt[i], fmt[i] != '.' ? &args[i] : nullptr)) {
           return false;
         }
       }
@@ -714,33 +714,33 @@ class ScopedCheck {
     return true;
   }
 
-  bool CheckPossibleHeapValue(ScopedObjectAccess& soa, char fmt, JniValueType arg)
+  bool CheckPossibleHeapValue(ScopedObjectAccess& soa, char fmt, JniValueType* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     switch (fmt) {
       case 'a':  // jarray
-        return CheckArray(soa, arg.a);
+        return CheckArray(soa, arg->a);
       case 'c':  // jclass
-        return CheckInstance(soa, kClass, arg.c, false);
+        return CheckInstance(soa, kClass, arg->c, false);
       case 'f':  // jfieldID
-        return CheckFieldID(soa, arg.f) != nullptr;
+        return CheckFieldID(soa, arg->f) != nullptr;
       case 'm':  // jmethodID
-        return CheckMethodID(soa, arg.m) != nullptr;
+        return CheckMethodID(soa, arg->m) != nullptr;
       case 'r':  // release int
-        return CheckReleaseMode(arg.r);
+        return CheckReleaseMode(arg->r);
       case 's':  // jstring
-        return CheckInstance(soa, kString, arg.s, false);
+        return CheckInstance(soa, kString, arg->s, false);
       case 't':  // jthrowable
-        return CheckInstance(soa, kThrowable, arg.t, false);
+        return CheckInstance(soa, kThrowable, arg->t, false);
       case 'E':  // JNIEnv*
-        return CheckThread(arg.E);
+        return CheckThread(arg->E);
       case 'L':  // jobject
-        return CheckInstance(soa, kObject, arg.L, true);
+        return CheckInstance(soa, kObject, arg->L, true);
       default:
         return CheckNonHeapValue(fmt, arg);
     }
   }
 
-  bool CheckNonHeapValue(char fmt, JniValueType arg) {
+  bool CheckNonHeapValue(char fmt, JniValueType* arg) {
     switch (fmt) {
       case '.':  // ...
       case 'p':  // TODO: pointer - null or readable?
@@ -755,16 +755,16 @@ class ScopedCheck {
         break;  // Ignored.
       case 'b':  // jboolean, why two? Fall-through.
       case 'Z':
-        return CheckBoolean(arg.Z);
+        return CheckBoolean(arg->Z);
       case 'u':  // utf8
         if ((flags_ & kFlag_Release) != 0) {
-          return CheckNonNull(arg.u);
+          return CheckNonNull(arg->u);
         } else {
           bool nullable = ((flags_ & kFlag_NullableUtf) != 0);
-          return CheckUtfString(arg.u, nullable);
+          return CheckUtfString(arg->u, nullable);
         }
       case 'w':  // jobjectRefType
-        switch (arg.w) {
+        switch (arg->w) {
           case JNIInvalidRefType:
           case JNILocalRefType:
           case JNIGlobalRefType:
@@ -776,7 +776,7 @@ class ScopedCheck {
         }
         break;
       case 'z':  // jsize
-        return CheckLengthPositive(arg.z);
+        return CheckLengthPositive(arg->z);
       default:
         AbortF("unknown format specifier: '%c'", fmt);
         return false;
@@ -784,7 +784,7 @@ class ScopedCheck {
     return true;
   }
 
-  void TracePossibleHeapValue(ScopedObjectAccess& soa, bool entry, char fmt, JniValueType arg,
+  void TracePossibleHeapValue(ScopedObjectAccess& soa, bool entry, char fmt, JniValueType* arg,
                               std::string* msg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     switch (fmt) {
@@ -792,14 +792,14 @@ class ScopedCheck {
       case 'a':  // jarray fall-through.
       case 's':  // jstring fall-through.
       case 't':  // jthrowable fall-through.
-        if (arg.L == nullptr) {
+        if (arg->L == nullptr) {
           *msg += "NULL";
         } else {
-          StringAppendF(msg, "%p", arg.L);
+          StringAppendF(msg, "%p", arg->L);
         }
         break;
       case 'c': {  // jclass
-        jclass jc = arg.c;
+        jclass jc = arg->c;
         mirror::Class* c = soa.Decode<mirror::Class*>(jc);
         if (c == nullptr) {
           *msg += "NULL";
@@ -816,7 +816,7 @@ class ScopedCheck {
         break;
       }
       case 'f': {  // jfieldID
-        jfieldID fid = arg.f;
+        jfieldID fid = arg->f;
         ArtField* f = soa.DecodeField(fid);
         *msg += PrettyField(f);
         if (!entry) {
@@ -825,7 +825,7 @@ class ScopedCheck {
         break;
       }
       case 'm': {  // jmethodID
-        jmethodID mid = arg.m;
+        jmethodID mid = arg->m;
         mirror::ArtMethod* m = soa.DecodeMethod(mid);
         *msg += PrettyMethod(m);
         if (!entry) {
@@ -839,67 +839,67 @@ class ScopedCheck {
     }
   }
 
-  void TraceNonHeapValue(char fmt, JniValueType arg, std::string* msg) {
+  void TraceNonHeapValue(char fmt, JniValueType* arg, std::string* msg) {
     switch (fmt) {
       case 'B':  // jbyte
-        if (arg.B >= 0 && arg.B < 10) {
-          StringAppendF(msg, "%d", arg.B);
+        if (arg->B >= 0 && arg->B < 10) {
+          StringAppendF(msg, "%d", arg->B);
         } else {
-          StringAppendF(msg, "%#x (%d)", arg.B, arg.B);
+          StringAppendF(msg, "%#x (%d)", arg->B, arg->B);
         }
         break;
       case 'C':  // jchar
-        if (arg.C < 0x7f && arg.C >= ' ') {
-          StringAppendF(msg, "U+%x ('%c')", arg.C, arg.C);
+        if (arg->C < 0x7f && arg->C >= ' ') {
+          StringAppendF(msg, "U+%x ('%c')", arg->C, arg->C);
         } else {
-          StringAppendF(msg, "U+%x", arg.C);
+          StringAppendF(msg, "U+%x", arg->C);
         }
         break;
       case 'F':  // jfloat
-        StringAppendF(msg, "%g", arg.F);
+        StringAppendF(msg, "%g", arg->F);
         break;
       case 'D':  // jdouble
-        StringAppendF(msg, "%g", arg.D);
+        StringAppendF(msg, "%g", arg->D);
         break;
       case 'S':  // jshort
-        StringAppendF(msg, "%d", arg.S);
+        StringAppendF(msg, "%d", arg->S);
         break;
       case 'i':  // jint - fall-through.
       case 'I':  // jint
-        StringAppendF(msg, "%d", arg.I);
+        StringAppendF(msg, "%d", arg->I);
         break;
       case 'J':  // jlong
-        StringAppendF(msg, "%" PRId64, arg.J);
+        StringAppendF(msg, "%" PRId64, arg->J);
         break;
       case 'Z':  // jboolean
       case 'b':  // jboolean (JNI-style)
-        *msg += arg.b == JNI_TRUE ? "true" : "false";
+        *msg += arg->b == JNI_TRUE ? "true" : "false";
         break;
       case 'V':  // void
-        DCHECK(arg.V == nullptr);
+        DCHECK(arg->V == nullptr);
         *msg += "void";
         break;
       case 'v':  // JavaVM*
-        StringAppendF(msg, "(JavaVM*)%p", arg.v);
+        StringAppendF(msg, "(JavaVM*)%p", arg->v);
         break;
       case 'E':
-        StringAppendF(msg, "(JNIEnv*)%p", arg.E);
+        StringAppendF(msg, "(JNIEnv*)%p", arg->E);
         break;
       case 'z':  // non-negative jsize
         // You might expect jsize to be size_t, but it's not; it's the same as jint.
         // We only treat this specially so we can do the non-negative check.
         // TODO: maybe this wasn't worth it?
-        StringAppendF(msg, "%d", arg.z);
+        StringAppendF(msg, "%d", arg->z);
         break;
       case 'p':  // void* ("pointer")
-        if (arg.p == nullptr) {
+        if (arg->p == nullptr) {
           *msg += "NULL";
         } else {
-          StringAppendF(msg, "(void*) %p", arg.p);
+          StringAppendF(msg, "(void*) %p", arg->p);
         }
         break;
       case 'r': {  // jint (release mode)
-        jint releaseMode = arg.r;
+        jint releaseMode = arg->r;
         if (releaseMode == 0) {
           *msg += "0";
         } else if (releaseMode == JNI_ABORT) {
@@ -912,14 +912,14 @@ class ScopedCheck {
         break;
       }
       case 'u':  // const char* (Modified UTF-8)
-        if (arg.u == nullptr) {
+        if (arg->u == nullptr) {
           *msg += "NULL";
         } else {
-          StringAppendF(msg, "\"%s\"", arg.u);
+          StringAppendF(msg, "\"%s\"", arg->u);
         }
         break;
       case 'w':  // jobjectRefType
-        switch (arg.w) {
+        switch (arg->w) {
           case JNIInvalidRefType:
             *msg += "invalid reference type";
             break;
