@@ -86,7 +86,7 @@ class Operand : public ValueObject {
 
  protected:
   // Operand can be sub classed (e.g: Address).
-  Operand() : length_(0) { }
+  Operand() : length_(0), fixup_(nullptr) { }
 
   void SetModRM(int mod_in, Register rm_in) {
     CHECK_EQ(mod_in & ~3, 0);
@@ -113,11 +113,23 @@ class Operand : public ValueObject {
     length_ += disp_size;
   }
 
+  AssemblerFixup* GetFixup() const {
+    return fixup_;
+  }
+
+  void SetFixup(AssemblerFixup* fixup) {
+    fixup_ = fixup;
+  }
+
  private:
   uint8_t length_;
   uint8_t encoding_[6];
 
-  explicit Operand(Register reg) { SetModRM(3, reg); }
+  // A fixup can be associated with the operand, in order to be applied after the
+  // code has been generated. This is used for constant area fixups.
+  AssemblerFixup* fixup_;
+
+  explicit Operand(Register reg) : fixup_(nullptr) { SetModRM(3, reg); }
 
   // Get the operand encoding byte at the given index.
   uint8_t encoding_at(int index_in) const {
@@ -134,6 +146,11 @@ class Address : public Operand {
  public:
   Address(Register base_in, int32_t disp) {
     Init(base_in, disp);
+  }
+
+  Address(Register base_in, int32_t disp, AssemblerFixup *fixup) {
+    Init(base_in, disp);
+    SetFixup(fixup);
   }
 
   Address(Register base_in, Offset disp) {
@@ -202,6 +219,70 @@ class Address : public Operand {
   Address() {}
 };
 
+
+/**
+ * Class to handle constant area values.
+ */
+class ConstantArea {
+ public:
+  ConstantArea() : num_zero_words_(0) {}
+
+  // Add a double to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int AddDouble(double v);
+
+  // Add a float to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int AddFloat(float v);
+
+  // Add an int32_t to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int AddInt32(int32_t v);
+
+  // Add an int64_t to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int AddInt64(int64_t v);
+
+  int GetSize() const {
+    return buffer_.size() * elem_size_ + num_zero_words_ * sizeof(int32_t);
+  }
+
+  int GetInitializedSize() const {
+    return buffer_.size() * elem_size_;
+  }
+
+  const std::vector<int32_t>& GetBuffer(size_t* zero_word_start) const {
+    DCHECK(zero_word_start != nullptr);
+    *zero_word_start = num_zero_words_;
+    return buffer_;
+  }
+
+  typedef std::pair<size_t, AssemblerFixup*> FixupInfo;
+
+  void AddFixup(AssemblerFixup* fixup) {
+    fixups_.push_back(FixupInfo(num_zero_words_, fixup));
+  }
+
+  const std::vector<FixupInfo>& GetFixups() const {
+    return fixups_;
+  }
+
+  int AddZeroWords(int num_words) {
+    int orig_count = num_zero_words_;
+    num_zero_words_ += num_words;
+    return orig_count * sizeof(int32_t);
+  }
+
+ private:
+  static constexpr size_t elem_size_ = sizeof(int32_t);
+  std::vector<int32_t> buffer_;
+
+  // Support a number of words initialized to zeroes in the constant area.
+  // They will be used for switch jump tables, and will be patched by Fixups
+  // after all the code is generated.
+  int num_zero_words_;
+  std::vector<FixupInfo> fixups_;
+};
 
 class X86Assembler FINAL : public Assembler {
  public:
@@ -639,6 +720,32 @@ class X86Assembler FINAL : public Assembler {
     }
   }
 
+  // Add a double to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int AddDouble(double v) { return constant_area_.AddDouble(v); }
+
+  // Add a float to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int AddFloat(float v)   { return constant_area_.AddFloat(v); }
+
+  // Add an int32_t to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int AddInt32(int32_t v) { return constant_area_.AddInt32(v); }
+
+  // Add an int64_t to the constant area, returning the offset into
+  // the constant area where the literal resides.
+  int AddInt64(int64_t v) { return constant_area_.AddInt64(v); }
+
+  // Add the contents of the constant area to the assembler buffer.
+  void AddConstantArea();
+
+  // Is the constant area empty? Return true if there are no literals in the constant area.
+  bool IsConstantAreaEmpty() const { return constant_area_.GetSize() == 0; }
+  void AddConstantAreaFixup(AssemblerFixup* fixup) { constant_area_.AddFixup(fixup); }
+  int AllocateConstantAreaWords(int num_words) {
+    return constant_area_.AddZeroWords(num_words);
+  }
+
  private:
   inline void EmitUint8(uint8_t value);
   inline void EmitInt32(int32_t value);
@@ -655,6 +762,8 @@ class X86Assembler FINAL : public Assembler {
 
   void EmitGenericShift(int rm, const Operand& operand, const Immediate& imm);
   void EmitGenericShift(int rm, const Operand& operand, Register shifter);
+
+  ConstantArea constant_area_;
 
   DISALLOW_COPY_AND_ASSIGN(X86Assembler);
 };

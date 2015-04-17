@@ -1068,7 +1068,9 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
-#define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)
+#define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                            \
+  M(X86ComputeBaseMethodAddress, Instruction)                           \
+  M(X86LoadFromConstantTable, Instruction)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
@@ -4942,6 +4944,14 @@ class HParallelMove : public HTemplateInstruction<0> {
 
   DISALLOW_COPY_AND_ASSIGN(HParallelMove);
 };
+
+}  // namespace art
+
+#ifdef ART_ENABLE_CODEGEN_x86
+#include "nodes_x86.h"
+#endif
+
+namespace art {
 
 class HGraphVisitor : public ValueObject {
  public:
