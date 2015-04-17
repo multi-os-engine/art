@@ -786,6 +786,14 @@ void InstructionCodeGeneratorX86_64::VisitExit(HExit* exit) {
   UNUSED(exit);
 }
 
+void LocationsBuilderX86_64::VisitX86ComputeBaseMethodAddress(HX86ComputeBaseMethodAddress* instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "X86ComputeBaseMethodAddress not implemented";
+}
+
+void InstructionCodeGeneratorX86_64::VisitX86ComputeBaseMethodAddress(HX86ComputeBaseMethodAddress* instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "X86ComputeBaseMethodAddress not implemented";
+}
+
 void LocationsBuilderX86_64::VisitSwitch(HSwitch* switch_instr) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(switch_instr, LocationSummary::kNoCall);

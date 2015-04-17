@@ -944,6 +944,14 @@ void InstructionCodeGeneratorARM::VisitSwitch(HSwitch* switch_instr ATTRIBUTE_UN
   LOG(FATAL) << "Switch not implemented";
 }
 
+void LocationsBuilderARM::VisitX86ComputeBaseMethodAddress(HX86ComputeBaseMethodAddress* instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "X86ComputeBaseMethodAddress not implemented";
+}
+
+void InstructionCodeGeneratorARM::VisitX86ComputeBaseMethodAddress(HX86ComputeBaseMethodAddress* instr ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "X86ComputeBaseMethodAddress not implemented";
+}
+
 void InstructionCodeGeneratorARM::GenerateTestAndBranch(HInstruction* instruction,
                                                         Label* true_target,
                                                         Label* false_target,

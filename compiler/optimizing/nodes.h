@@ -761,6 +761,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(TypeConversion, Instruction)                                        \
   M(UShr, BinaryOperation)                                              \
   M(Xor, BinaryOperation)                                               \
+  M(X86ComputeBaseMethodAddress, Instruction)                           \
 
 #define FOR_EACH_INSTRUCTION(M)                                         \
   FOR_EACH_CONCRETE_INSTRUCTION(M)                                      \
@@ -1327,6 +1328,20 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   virtual const HUserRecord<HInstruction*> InputRecordAt(size_t i) const = 0;
   virtual void SetRawInputRecordAt(size_t index, const HUserRecord<HInstruction*>& input) = 0;
 
+  size_t BackendInputCount() const {
+    return (backend_input_.GetInstruction() == nullptr) ? 0 : 1;
+  }
+
+  const HUserRecord<HInstruction*> GetBackendInputRecord() const {
+    return backend_input_;
+  }
+
+  void SetBackendInputRecord(const HUserRecord<HInstruction*>& input) {
+    backend_input_ = input;
+  }
+
+  HUserRecord<HInstruction*> backend_input_;
+
  private:
   void RemoveEnvironmentUser(HUseListNode<HEnvironment*>* use_node) { env_uses_.Remove(use_node); }
 
@@ -1488,13 +1503,19 @@ class HTemplateInstruction: public HInstruction {
       : HInstruction(side_effects), inputs_() {}
   virtual ~HTemplateInstruction() {}
 
-  size_t InputCount() const OVERRIDE { return N; }
+  size_t InputCount() const OVERRIDE { return N + BackendInputCount(); }
 
  protected:
-  const HUserRecord<HInstruction*> InputRecordAt(size_t i) const OVERRIDE { return inputs_[i]; }
+  const HUserRecord<HInstruction*> InputRecordAt(size_t i) const OVERRIDE {
+    return (i == N) ? GetBackendInputRecord() : inputs_[i];
+  }
 
   void SetRawInputRecordAt(size_t i, const HUserRecord<HInstruction*>& input) OVERRIDE {
-    inputs_[i] = input;
+    if (i == N) {
+      SetBackendInputRecord(input);
+    } else {
+      inputs_[i] = input;
+    }
   }
 
  private:
@@ -2201,7 +2222,7 @@ std::ostream& operator<<(std::ostream& os, const Intrinsics& intrinsic);
 
 class HInvoke : public HInstruction {
  public:
-  size_t InputCount() const OVERRIDE { return inputs_.Size(); }
+  size_t InputCount() const OVERRIDE { return inputs_.Size() + BackendInputCount(); }
 
   // Runtime needs to walk the stack, so Dex -> Dex calls need to
   // know their environment.
@@ -2242,9 +2263,15 @@ class HInvoke : public HInstruction {
     inputs_.SetSize(number_of_arguments);
   }
 
-  const HUserRecord<HInstruction*> InputRecordAt(size_t i) const OVERRIDE { return inputs_.Get(i); }
+  const HUserRecord<HInstruction*> InputRecordAt(size_t i) const OVERRIDE {
+    return (i == inputs_.Size()) ? GetBackendInputRecord() : inputs_.Get(i);
+  }
   void SetRawInputRecordAt(size_t index, const HUserRecord<HInstruction*>& input) OVERRIDE {
-    inputs_.Put(index, input);
+    if (index == inputs_.Size()) {
+      SetBackendInputRecord(input);
+    } else {
+      inputs_.Put(index, input);
+    }
   }
 
   GrowableArray<HUserRecord<HInstruction*> > inputs_;
@@ -2791,7 +2818,7 @@ class HPhi : public HInstruction {
     }
   }
 
-  size_t InputCount() const OVERRIDE { return inputs_.Size(); }
+  size_t InputCount() const OVERRIDE { DCHECK_EQ(BackendInputCount(), 0u); return inputs_.Size(); }
 
   void AddInput(HInstruction* input);
 
@@ -3541,6 +3568,17 @@ class HMonitorOperation : public HTemplateInstruction<1> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HMonitorOperation);
+};
+
+// Compute the address of the method for X86 Constant area support.
+class HX86ComputeBaseMethodAddress : public HExpression<0> {
+ public:
+  HX86ComputeBaseMethodAddress() : HExpression(Primitive::kPrimInt, SideEffects::None()) {}
+
+  DECLARE_INSTRUCTION(X86ComputeBaseMethodAddress);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HX86ComputeBaseMethodAddress);
 };
 
 class MoveOperands : public ArenaObject<kArenaAllocMisc> {
