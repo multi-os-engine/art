@@ -448,6 +448,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
                                                  ArrayRef<const uint8_t>(),  // vmap_table.
                                                  ArrayRef<const uint8_t>(),  // native_gc_map.
                                                  ArrayRef<const uint8_t>(*jni_asm->cfi().data()),
+                                                 jni_asm->cfi().GetCurrentPC(),
                                                  ArrayRef<const LinkerPatch>());
 }
 

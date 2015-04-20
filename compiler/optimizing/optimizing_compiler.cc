@@ -426,6 +426,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
       ArrayRef<const uint8_t>(stack_map),
       ArrayRef<const uint8_t>(),  // native_gc_map.
       ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()),
+      codegen->GetAssembler()->cfi().GetCurrentPC(),
       ArrayRef<const LinkerPatch>());
 }
 
@@ -463,6 +464,7 @@ CompiledMethod* OptimizingCompiler::CompileBaseline(
       AlignVectorSize(vmap_table),
       AlignVectorSize(gc_map),
       ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()),
+      codegen->GetAssembler()->cfi().GetCurrentPC(),
       ArrayRef<const LinkerPatch>());
 }
 

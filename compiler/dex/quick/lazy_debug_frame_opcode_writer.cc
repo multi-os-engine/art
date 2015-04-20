@@ -49,7 +49,6 @@ const ArenaVector<uint8_t>* LazyDebugFrameOpCodeWriter::Patch(size_t code_size) 
     this->opcodes_.insert(this->opcodes_.end(),
                           old_opcodes.begin() + pos,
                           old_opcodes.end());
-    Base::AdvancePC(code_size);
   }
   return this->data();
 }
