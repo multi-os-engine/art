@@ -126,6 +126,7 @@ void SignalCatcher::Output(const std::string& s) {
 
 void SignalCatcher::HandleSigQuit() {
   Runtime* runtime = Runtime::Current();
+
   std::ostringstream os;
   os << "\n"
       << "----- pid " << getpid() << " at " << GetIsoDate() << " -----\n";

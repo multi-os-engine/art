@@ -29,6 +29,7 @@
 #include "atomic.h"
 #include "base/macros.h"
 #include "base/mutex.h"
+#include "barrier.h"
 #include "entrypoints/interpreter/interpreter_entrypoints.h"
 #include "entrypoints/jni/jni_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints.h"
@@ -94,7 +95,8 @@ enum ThreadPriority {
 enum ThreadFlag {
   kSuspendRequest   = 1,  // If set implies that suspend_count_ > 0 and the Thread should enter the
                           // safepoint handler.
-  kCheckpointRequest = 2  // Request that the thread do some checkpoint work and then continue.
+  kCheckpointRequest = 2,  // Request that the thread do some checkpoint work and then continue.
+  kActiveSuspendBarrier = 4  // Register that at least 1 suspend barrier needs to be passed.
 };
 
 static constexpr size_t kNumRosAllocThreadLocalSizeBrackets = 34;
@@ -210,11 +212,10 @@ class Thread {
   bool IsSuspended() const {
     union StateAndFlags state_and_flags;
     state_and_flags.as_int = tls32_.state_and_flags.as_int;
-    return state_and_flags.as_struct.state != kRunnable &&
-        (state_and_flags.as_struct.flags & kSuspendRequest) != 0;
+    return state_and_flags.as_struct.state != kRunnable && ReadFlag(kSuspendRequest);
   }
 
-  void ModifySuspendCount(Thread* self, int delta, bool for_debugger)
+  bool ModifySuspendCount(Thread* self, int delta, Barrier* suspend_barrier, bool for_debugger)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::thread_suspend_count_lock_);
 
   bool RequestCheckpoint(Closure* function)
@@ -798,7 +799,9 @@ class Thread {
     tlsPtr_.held_mutexes[level] = mutex;
   }
 
-  void RunCheckpointFunction();
+  bool RunCheckpointFunction();
+
+  bool PassActiveSuspendBarriers(Thread* self);
 
   bool ReadFlag(ThreadFlag flag) const {
     return (tls32_.state_and_flags.as_struct.flags & flag) != 0;
@@ -977,6 +980,9 @@ class Thread {
 
   // Maximum number of checkpoint functions.
   static constexpr uint32_t kMaxCheckpoints = 3;
+
+  // Maximum number of suspend barriers.
+  static constexpr uint32_t kMaxSuspendBarriers = 3;
 
   // Has Thread::Startup been called?
   static bool is_started_;
@@ -1165,6 +1171,10 @@ class Thread {
     // Pending checkpoint function or NULL if non-pending. Installation guarding by
     // Locks::thread_suspend_count_lock_.
     Closure* checkpoint_functions[kMaxCheckpoints];
+
+    // Pending barriers that require passing or NULL if non-pending. Installation guarding by
+    // Locks::thread_suspend_count_lock_.
+    Barrier* active_suspend_barriers[kMaxSuspendBarriers];
 
     // Entrypoint function pointers.
     // TODO: move this to more of a global offset table model to avoid per-thread duplication.
