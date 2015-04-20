@@ -4225,9 +4225,11 @@ void InstructionCodeGeneratorX86::VisitInstanceOf(HInstanceOf* instruction) {
   SlowPathCodeX86* slow_path = nullptr;
 
   // Return 0 if `obj` is null.
-  // TODO: avoid this check if we know obj is not null.
-  __ testl(obj, obj);
-  __ j(kEqual, &zero);
+  // Avoid this check if we know obj is not null.
+  if (instruction->InputAt(0)->CanBeNull()) {
+    __ testl(obj, obj);
+    __ j(kEqual, &zero);
+  }
   __ movl(out, Address(obj, class_offset));
   // Compare the class of `obj` with `cls`.
   if (cls.IsRegister()) {
@@ -4278,11 +4280,13 @@ void InstructionCodeGeneratorX86::VisitCheckCast(HCheckCast* instruction) {
       instruction, locations->InAt(1), locations->GetTemp(0), instruction->GetDexPc());
   codegen_->AddSlowPath(slow_path);
 
-  // TODO: avoid this check if we know obj is not null.
-  __ testl(obj, obj);
-  __ j(kEqual, slow_path->GetExitLabel());
-  __ movl(temp, Address(obj, class_offset));
+  // Avoid this check if we know obj is not null.
+  if (instruction->InputAt(0)->CanBeNull()) {
+    __ testl(obj, obj);
+    __ j(kEqual, slow_path->GetExitLabel());
+  }
 
+  __ movl(temp, Address(obj, class_offset));
   // Compare the class of `obj` with `cls`.
   if (cls.IsRegister()) {
     __ cmpl(temp, cls.AsRegister<Register>());

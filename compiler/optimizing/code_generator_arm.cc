@@ -3874,9 +3874,11 @@ void InstructionCodeGeneratorARM::VisitInstanceOf(HInstanceOf* instruction) {
   SlowPathCodeARM* slow_path = nullptr;
 
   // Return 0 if `obj` is null.
-  // TODO: avoid this check if we know obj is not null.
-  __ cmp(obj, ShifterOperand(0));
-  __ b(&zero, EQ);
+  // avoid null check if we know obj is not null.
+  if (instruction->InputAt(0)->CanBeNull()) {
+    __ cmp(obj, ShifterOperand(0));
+    __ b(&zero, EQ);
+  }
   // Compare the class of `obj` with `cls`.
   __ LoadFromOffset(kLoadWord, out, obj, class_offset);
   __ cmp(out, ShifterOperand(cls));
@@ -3922,9 +3924,11 @@ void InstructionCodeGeneratorARM::VisitCheckCast(HCheckCast* instruction) {
       instruction, locations->InAt(1), locations->GetTemp(0), instruction->GetDexPc());
   codegen_->AddSlowPath(slow_path);
 
-  // TODO: avoid this check if we know obj is not null.
-  __ cmp(obj, ShifterOperand(0));
-  __ b(slow_path->GetExitLabel(), EQ);
+  // avoid null check if we know obj is not null.
+  if (instruction->InputAt(0)->CanBeNull()) {
+    __ cmp(obj, ShifterOperand(0));
+    __ b(slow_path->GetExitLabel(), EQ);
+  }
   // Compare the class of `obj` with `cls`.
   __ LoadFromOffset(kLoadWord, temp, obj, class_offset);
   __ cmp(temp, ShifterOperand(cls));
