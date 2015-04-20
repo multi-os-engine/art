@@ -3329,6 +3329,7 @@ class HInstanceOf : public HExpression<2> {
               uint32_t dex_pc)
       : HExpression(Primitive::kPrimBoolean, SideEffects::None()),
         class_is_final_(class_is_final),
+        must_do_null_check_(true),
         dex_pc_(dex_pc) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, constant);
@@ -3348,10 +3349,19 @@ class HInstanceOf : public HExpression<2> {
 
   bool IsClassFinal() const { return class_is_final_; }
 
+  // Used only in code generation.
+  bool MustDoNullCheck() const { return must_do_null_check_; }
+  void SetMustDoNullCheck(bool must_do_null_check) {
+    DCHECK(!(!must_do_null_check_ && must_do_null_check))
+      << "Knowledge about input nullability has been erased";
+    must_do_null_check_ = must_do_null_check;
+  }
+
   DECLARE_INSTRUCTION(InstanceOf);
 
  private:
   const bool class_is_final_;
+  bool must_do_null_check_;
   const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceOf);
@@ -3392,6 +3402,7 @@ class HCheckCast : public HTemplateInstruction<2> {
              uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::None()),
         class_is_final_(class_is_final),
+        must_do_null_check_(true),
         dex_pc_(dex_pc) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, constant);
@@ -3410,6 +3421,13 @@ class HCheckCast : public HTemplateInstruction<2> {
 
   bool CanThrow() const OVERRIDE { return true; }
 
+  bool MustDoNullCheck() const { return must_do_null_check_; }
+  void SetMustDoNullCheck(bool must_do_null_check) {
+    DCHECK(!(!must_do_null_check_ && must_do_null_check))
+      << "Knowledge about input nullability has been erased";
+    must_do_null_check_ = must_do_null_check;
+  }
+
   uint32_t GetDexPc() const { return dex_pc_; }
 
   bool IsClassFinal() const { return class_is_final_; }
@@ -3418,6 +3436,7 @@ class HCheckCast : public HTemplateInstruction<2> {
 
  private:
   const bool class_is_final_;
+  bool must_do_null_check_;
   const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HCheckCast);
