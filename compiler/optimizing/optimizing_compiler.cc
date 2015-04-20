@@ -29,6 +29,7 @@
 #include "compiled_method.h"
 #include "compiler.h"
 #include "constant_folding.h"
+#include "dead_block_elimination.h"
 #include "dead_code_elimination.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/verified_method.h"
@@ -335,6 +336,7 @@ static void RunOptimizations(HGraph* graph,
   BoundsCheckElimination bce(graph);
   ReferenceTypePropagation type_propagation(graph, dex_file, dex_compilation_unit, handles);
   InstructionSimplifier simplify2(graph, stats, "instruction_simplifier_after_types");
+  HDeadBlockElimination dbe(graph, stats);
 
   IntrinsicsRecognizer intrinsics(graph, dex_compilation_unit.GetDexFile(), driver);
 
@@ -355,6 +357,7 @@ static void RunOptimizations(HGraph* graph,
     &type_propagation,
     &simplify2,
     &dce2,
+    &dbe,
   };
 
   RunOptimizations(optimizations, arraysize(optimizations), pass_info_printer);
