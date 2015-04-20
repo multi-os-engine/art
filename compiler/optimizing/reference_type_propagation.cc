@@ -58,11 +58,11 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
 }
 
 void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
-  HInstruction* lastInstruction = block->GetLastInstruction();
-  if (!lastInstruction->IsIf()) {
+  HIf* ifInstruction = block->GetLastInstruction()->AsIf();
+  if (ifInstruction == nullptr) {
     return;
   }
-  HInstruction* ifInput = lastInstruction->InputAt(0);
+  HInstruction* ifInput = ifInstruction->InputAt(0);
   if (!ifInput->IsNotEqual() && !ifInput->IsEqual()) {
     return;
   }
@@ -78,16 +78,20 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
     return;
   }
 
-  HBoundType* bound_type =
-      new (graph_->GetArena()) HBoundType(obj, ReferenceTypeInfo::CreateTop(false));
-
-  block->InsertInstructionBefore(bound_type, lastInstruction);
+  // We only need to bound the type if we have uses in the relevant block.
+  // So start with null and create the HBountType lazily, only if it's needed.
+  HBoundType* bound_type = nullptr;
   HBasicBlock* notNullBlock = ifInput->IsNotEqual()
-      ? lastInstruction->AsIf()->IfTrueSuccessor()
-      : lastInstruction->AsIf()->IfFalseSuccessor();
+      ? ifInstruction->IfTrueSuccessor()
+      : ifInstruction->IfFalseSuccessor();
+
   for (HUseIterator<HInstruction*> it(obj->GetUses()); !it.Done(); it.Advance()) {
     HInstruction* user = it.Current()->GetUser();
     if (notNullBlock->Dominates(user->GetBlock())) {
+      if (bound_type == nullptr) {
+        bound_type = new (graph_->GetArena()) HBoundType(obj, ReferenceTypeInfo::CreateTop(false));
+        notNullBlock->InsertInstructionBefore(bound_type, notNullBlock->GetFirstInstruction());
+      }
       user->ReplaceInput(bound_type, it.Current()->GetIndex());
     }
   }
@@ -98,11 +102,11 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
 // If that's the case insert an HBoundType instruction to bound the type of `x`
 // to `ClassX` in the scope of the dominated blocks.
 void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
-  HInstruction* lastInstruction = block->GetLastInstruction();
-  if (!lastInstruction->IsIf()) {
+  HIf* ifInstruction = block->GetLastInstruction()->AsIf();
+  if (ifInstruction == nullptr) {
     return;
   }
-  HInstruction* ifInput = lastInstruction->InputAt(0);
+  HInstruction* ifInput = ifInstruction->InputAt(0);
   // TODO: Handle more patterns here: HIf(bool) HIf(HNotEqual).
   if (!ifInput->IsEqual()) {
     return;
@@ -113,34 +117,40 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
     return;
   }
 
-  HInstruction* obj = instanceOf->InputAt(0);
-  HLoadClass* load_class = instanceOf->InputAt(1)->AsLoadClass();
+  // We only need to bound the type if we have uses in the relevant block.
+  // So start with null and create the HBountType lazily, only if it's needed.
+  HBoundType* bound_type = nullptr;
 
-  ReferenceTypeInfo obj_rti = obj->GetReferenceTypeInfo();
-  ReferenceTypeInfo class_rti = load_class->GetLoadedClassRTI();
-  HBoundType* bound_type = new (graph_->GetArena()) HBoundType(obj, class_rti);
-
-  // Narrow the type as much as possible.
-  {
-    ScopedObjectAccess soa(Thread::Current());
-    if (!load_class->IsResolved() || class_rti.IsSupertypeOf(obj_rti)) {
-      bound_type->SetReferenceTypeInfo(obj_rti);
-    } else {
-      bound_type->SetReferenceTypeInfo(
-          ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ false));
-    }
-  }
-
-  block->InsertInstructionBefore(bound_type, lastInstruction);
   // Pick the right successor based on the value we compare against.
   HIntConstant* comp_value_int = comp_value->AsIntConstant();
   HBasicBlock* instanceOfTrueBlock = comp_value_int->GetValue() == 0
-      ? lastInstruction->AsIf()->IfFalseSuccessor()
-      : lastInstruction->AsIf()->IfTrueSuccessor();
-
+      ? ifInstruction->IfFalseSuccessor()
+      : ifInstruction->IfTrueSuccessor();
+  HInstruction* obj = instanceOf->InputAt(0);
   for (HUseIterator<HInstruction*> it(obj->GetUses()); !it.Done(); it.Advance()) {
     HInstruction* user = it.Current()->GetUser();
     if (instanceOfTrueBlock->Dominates(user->GetBlock())) {
+      if (bound_type == nullptr) {
+        HLoadClass* load_class = instanceOf->InputAt(1)->AsLoadClass();
+
+        ReferenceTypeInfo obj_rti = obj->GetReferenceTypeInfo();
+        ReferenceTypeInfo class_rti = load_class->GetLoadedClassRTI();
+        bound_type = new (graph_->GetArena()) HBoundType(obj, class_rti);
+
+        // Narrow the type as much as possible.
+        {
+          ScopedObjectAccess soa(Thread::Current());
+          if (!load_class->IsResolved() || class_rti.IsSupertypeOf(obj_rti)) {
+            bound_type->SetReferenceTypeInfo(obj_rti);
+          } else {
+            bound_type->SetReferenceTypeInfo(
+                ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ false));
+          }
+        }
+
+        instanceOfTrueBlock->InsertInstructionBefore(
+            bound_type, instanceOfTrueBlock->GetFirstInstruction());
+      }
       user->ReplaceInput(bound_type, it.Current()->GetIndex());
     }
   }
