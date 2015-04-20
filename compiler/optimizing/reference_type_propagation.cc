@@ -89,6 +89,12 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
     HInstruction* user = it.Current()->GetUser();
     if (notNullBlock->Dominates(user->GetBlock())) {
       user->ReplaceInput(bound_type, it.Current()->GetIndex());
+
+      if (user->IsInstanceOf()) {
+        user->AsInstanceOf()->SetInputCanBeNull(false);
+      } else if (user->IsCheckCast()) {
+        user->AsCheckCast()->SetInputCanBeNull(false);
+      }
     }
   }
 }
@@ -142,6 +148,12 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
     HInstruction* user = it.Current()->GetUser();
     if (instanceOfTrueBlock->Dominates(user->GetBlock())) {
       user->ReplaceInput(bound_type, it.Current()->GetIndex());
+
+      if (user->IsInstanceOf()) {
+        user->AsInstanceOf()->SetInputCanBeNull(false);
+      } else if (user->IsCheckCast()) {
+        user->AsCheckCast()->SetInputCanBeNull(false);
+      }
     }
   }
 }

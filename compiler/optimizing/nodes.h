@@ -3329,6 +3329,7 @@ class HInstanceOf : public HExpression<2> {
               uint32_t dex_pc)
       : HExpression(Primitive::kPrimBoolean, SideEffects::None()),
         class_is_final_(class_is_final),
+        input_can_be_null_(true),
         dex_pc_(dex_pc) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, constant);
@@ -3348,10 +3349,14 @@ class HInstanceOf : public HExpression<2> {
 
   bool IsClassFinal() const { return class_is_final_; }
 
+  bool InputCanBeNull() const { return input_can_be_null_; }
+  void SetInputCanBeNull(bool input_can_be_null) { input_can_be_null_ = input_can_be_null; }
+
   DECLARE_INSTRUCTION(InstanceOf);
 
  private:
   const bool class_is_final_;
+  bool input_can_be_null_;
   const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceOf);
@@ -3392,6 +3397,7 @@ class HCheckCast : public HTemplateInstruction<2> {
              uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::None()),
         class_is_final_(class_is_final),
+        input_can_be_null_(true),
         dex_pc_(dex_pc) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, constant);
@@ -3410,6 +3416,10 @@ class HCheckCast : public HTemplateInstruction<2> {
 
   bool CanThrow() const OVERRIDE { return true; }
 
+  bool InputCanBeNull() const { return input_can_be_null_; }
+
+  void SetInputCanBeNull(bool input_can_be_null) { input_can_be_null_ = input_can_be_null; }
+
   uint32_t GetDexPc() const { return dex_pc_; }
 
   bool IsClassFinal() const { return class_is_final_; }
@@ -3418,6 +3428,7 @@ class HCheckCast : public HTemplateInstruction<2> {
 
  private:
   const bool class_is_final_;
+  bool input_can_be_null_;
   const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HCheckCast);
