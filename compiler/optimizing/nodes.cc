@@ -520,10 +520,13 @@ HInstruction* HInstruction::GetPreviousDisregardingMoves() const {
 }
 
 void HInstructionList::AddInstruction(HInstruction* instruction) {
+  DCHECK(instruction->next_ == nullptr);
+  DCHECK(instruction->previous_ == nullptr);
   if (first_instruction_ == nullptr) {
     DCHECK(last_instruction_ == nullptr);
     first_instruction_ = last_instruction_ = instruction;
   } else {
+    DCHECK(last_instruction_ != nullptr);
     last_instruction_->next_ = instruction;
     instruction->previous_ = last_instruction_;
     last_instruction_ = instruction;
@@ -560,15 +563,19 @@ void HInstructionList::InsertInstructionAfter(HInstruction* instruction, HInstru
 
 void HInstructionList::RemoveInstruction(HInstruction* instruction) {
   if (instruction->previous_ != nullptr) {
+    DCHECK_EQ(instruction->previous_->next_, instruction);
     instruction->previous_->next_ = instruction->next_;
   }
   if (instruction->next_ != nullptr) {
+    DCHECK_EQ(instruction->next_->previous_, instruction);
     instruction->next_->previous_ = instruction->previous_;
   }
   if (instruction == first_instruction_) {
+    DCHECK(instruction->previous_ == nullptr);
     first_instruction_ = instruction->next_;
   }
   if (instruction == last_instruction_) {
+    DCHECK(instruction->next_ == nullptr);
     last_instruction_ = instruction->previous_;
   }
 }
@@ -670,6 +677,11 @@ void HPhi::AddInput(HInstruction* input) {
   DCHECK(input->GetBlock() != nullptr);
   inputs_.Add(HUserRecord<HInstruction*>(input));
   input->AddUseAt(this, inputs_.Size() - 1);
+}
+
+void HPhi::RemoveInputAt(size_t index) {
+  RemoveAsUserOfInput(index);
+  inputs_.DeleteAt(index);
 }
 
 #define DEFINE_ACCEPT(name, super)                                             \
@@ -901,11 +913,35 @@ void HInstructionList::Add(const HInstructionList& instruction_list) {
 void HBasicBlock::DisconnectFromAll() {
   DCHECK(dominated_blocks_.IsEmpty()) << "Unimplemented scenario";
 
+  for (HLoopInformationOutwardIterator it(*this); !it.Done(); it.Advance()) {
+    HLoopInformation* loop_info = it.Current();
+    loop_info->Remove(this);
+    if (loop_info->IsBackEdge(*this)) {
+      loop_info->RemoveBackEdge(this);
+    }
+  }
+
   for (size_t i = 0, e = predecessors_.Size(); i < e; ++i) {
     predecessors_.Get(i)->successors_.Delete(this);
   }
+
   for (size_t i = 0, e = successors_.Size(); i < e; ++i) {
-    successors_.Get(i)->predecessors_.Delete(this);
+    HBasicBlock* successor = successors_.Get(i);
+    size_t this_index = successor->GetPredecessorIndexOf(this);
+    if (successor->predecessors_.Size() == 1u) {
+      DCHECK(successor->GetPhis().IsEmpty());
+    } else if (successor->predecessors_.Size() == 2u) {
+      for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+        HPhi* phi = phi_it.Current()->AsPhi();
+        phi->ReplaceWith(phi->InputAt(1 - this_index));
+        successor->RemovePhi(phi);
+      }
+    } else {
+      for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+        phi_it.Current()->AsPhi()->RemoveInputAt(this_index);
+      }
+    }
+    successor->predecessors_.DeleteAt(this_index);
   }
   dominator_->dominated_blocks_.Delete(this);
 
@@ -916,19 +952,25 @@ void HBasicBlock::DisconnectFromAll() {
 }
 
 void HBasicBlock::MergeWith(HBasicBlock* other) {
-  DCHECK(successors_.IsEmpty()) << "Unimplemented block merge scenario";
-  DCHECK(dominated_blocks_.IsEmpty()
-         || (dominated_blocks_.Size() == 1 && dominated_blocks_.Get(0) == other))
+  DCHECK(successors_.IsEmpty()
+         || (successors_.Size() == 1 && successors_.Get(0) == other))
+      << "Unimplemented block merge scenario";
+  DCHECK(dominated_blocks_.IsEmpty() || (dominated_blocks_.Contains(other)))
       << "Unimplemented block merge scenario";
   DCHECK(other->GetPhis().IsEmpty());
+  DCHECK_LE(other->predecessors_.Size(), 1u) << "Unimplemented block merge scenario";
 
   successors_.Reset();
-  dominated_blocks_.Reset();
-  instructions_.Add(other->GetInstructions());
-  other->GetInstructions().SetBlockOfInstructions(this);
+  if (!dominated_blocks_.IsEmpty()) {
+    dominated_blocks_.Delete(other);
+  }
 
-  while (!other->GetSuccessors().IsEmpty()) {
-    HBasicBlock* successor = other->GetSuccessors().Get(0);
+  instructions_.Add(other->GetInstructions());
+  other->instructions_.SetBlockOfInstructions(this);
+  other->instructions_.Clear();
+
+  while (!other->successors_.IsEmpty()) {
+    HBasicBlock* successor = other->successors_.Get(0);
     successor->ReplacePredecessor(other, this);
   }
 
@@ -937,6 +979,16 @@ void HBasicBlock::MergeWith(HBasicBlock* other) {
     dominated_blocks_.Add(dominated);
     dominated->SetDominator(this);
   }
+
+  for (HLoopInformationOutwardIterator it(*other); !it.Done(); it.Advance()) {
+     HLoopInformation* loop_info = it.Current();
+     loop_info->Remove(other);
+     if (loop_info->IsBackEdge(*other)) {
+       loop_info->ClearBackEdges();
+       loop_info->AddBackEdge(this);
+     }
+  }
+
   other->dominated_blocks_.Reset();
   other->dominator_ = nullptr;
   other->graph_ = nullptr;
@@ -971,6 +1023,17 @@ static void MakeRoomFor(GrowableArray<HBasicBlock*>* blocks,
   for (size_t i = old_size - 1, j = new_size - 1; i > at; --i, --j) {
     blocks->Put(j, blocks->Get(i));
   }
+}
+
+void HGraph::DeleteDeadBlock(HBasicBlock* block) {
+  for (HBackwardInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
+    block->RemoveInstruction(it.Current());
+  }
+  for (HBackwardInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
+    block->RemovePhi(it.Current()->AsPhi());
+  }
+  blocks_.Put(block->GetBlockId(), nullptr);
+  reverse_post_order_.Delete(block);
 }
 
 void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
@@ -1159,29 +1222,9 @@ void HGraph::MergeEmptyBranches(HBasicBlock* start_block, HBasicBlock* end_block
   start_block->MergeWith(end_block);
 
   // Delete the now redundant blocks from the graph.
-  blocks_.Put(left_branch->GetBlockId(), nullptr);
-  blocks_.Put(right_branch->GetBlockId(), nullptr);
-  blocks_.Put(end_block->GetBlockId(), nullptr);
-
-  // Update reverse post order.
-  reverse_post_order_.Delete(left_branch);
-  reverse_post_order_.Delete(right_branch);
-  reverse_post_order_.Delete(end_block);
-
-  // Update loops which contain the code.
-  for (HLoopInformationOutwardIterator it(*start_block); !it.Done(); it.Advance()) {
-    HLoopInformation* loop_info = it.Current();
-    DCHECK(loop_info->Contains(*left_branch));
-    DCHECK(loop_info->Contains(*right_branch));
-    DCHECK(loop_info->Contains(*end_block));
-    loop_info->Remove(left_branch);
-    loop_info->Remove(right_branch);
-    loop_info->Remove(end_block);
-    if (loop_info->IsBackEdge(*end_block)) {
-      loop_info->RemoveBackEdge(end_block);
-      loop_info->AddBackEdge(start_block);
-    }
-  }
+  DeleteDeadBlock(left_branch);
+  DeleteDeadBlock(right_branch);
+  DeleteDeadBlock(end_block);
 }
 
 std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
