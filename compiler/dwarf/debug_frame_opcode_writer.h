@@ -278,6 +278,17 @@ class DebugFrameOpCodeWriter : private Writer<Allocator> {
     }
   }
 
+  template<typename Allocator2>
+  void AppendOpcodes(const std::vector<uint8_t, Allocator2>* opcodes,
+                     int last_pc, int new_cfa_offset) {
+    if (UNLIKELY(enabled_)) {
+      this->PushData(opcodes);
+      current_pc_ += last_pc;
+      current_cfa_offset_ = INT32_MIN;  // We do not know what the opcodes did.
+      DefCFAOffset(new_cfa_offset);  // Set new known value.
+    }
+  }
+
   bool IsEnabled() const { return enabled_; }
 
   void SetEnabled(bool value) { enabled_ = value; }

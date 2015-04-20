@@ -132,11 +132,12 @@ CompiledMethod::CompiledMethod(CompilerDriver* driver,
                                const ArrayRef<const uint8_t>& vmap_table,
                                const ArrayRef<const uint8_t>& native_gc_map,
                                const ArrayRef<const uint8_t>& cfi_info,
+                               int cfi_last_pc,
                                const ArrayRef<const LinkerPatch>& patches)
     : CompiledCode(driver, instruction_set, quick_code, !driver->DedupeEnabled()),
       owns_arrays_(!driver->DedupeEnabled()),
       frame_size_in_bytes_(frame_size_in_bytes), core_spill_mask_(core_spill_mask),
-      fp_spill_mask_(fp_spill_mask),
+      fp_spill_mask_(fp_spill_mask), cfi_last_pc_(cfi_last_pc),
       patches_(patches.begin(), patches.end(), driver->GetSwapSpaceAllocator()) {
   if (owns_arrays_) {
     if (src_mapping_table == nullptr) {
@@ -179,12 +180,13 @@ CompiledMethod* CompiledMethod::SwapAllocCompiledMethod(
     const ArrayRef<const uint8_t>& vmap_table,
     const ArrayRef<const uint8_t>& native_gc_map,
     const ArrayRef<const uint8_t>& cfi_info,
+    int cfi_last_pc,
     const ArrayRef<const LinkerPatch>& patches) {
   SwapAllocator<CompiledMethod> alloc(driver->GetSwapSpaceAllocator());
   CompiledMethod* ret = alloc.allocate(1);
   alloc.construct(ret, driver, instruction_set, quick_code, frame_size_in_bytes, core_spill_mask,
                   fp_spill_mask, src_mapping_table, mapping_table, vmap_table, native_gc_map,
-                  cfi_info, patches);
+                  cfi_info, cfi_last_pc, patches);
   return ret;
 }
 

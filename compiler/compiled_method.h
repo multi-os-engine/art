@@ -320,6 +320,7 @@ class CompiledMethod FINAL : public CompiledCode {
                  const ArrayRef<const uint8_t>& vmap_table,
                  const ArrayRef<const uint8_t>& native_gc_map,
                  const ArrayRef<const uint8_t>& cfi_info,
+                 int cfi_last_pc,
                  const ArrayRef<const LinkerPatch>& patches);
 
   virtual ~CompiledMethod();
@@ -336,6 +337,7 @@ class CompiledMethod FINAL : public CompiledCode {
       const ArrayRef<const uint8_t>& vmap_table,
       const ArrayRef<const uint8_t>& native_gc_map,
       const ArrayRef<const uint8_t>& cfi_info,
+      int cfi_last_pc,
       const ArrayRef<const LinkerPatch>& patches);
 
   static void ReleaseSwapAllocatedCompiledMethod(CompilerDriver* driver, CompiledMethod* m);
@@ -374,6 +376,10 @@ class CompiledMethod FINAL : public CompiledCode {
     return cfi_info_;
   }
 
+  int GetCFILastPC() const {
+    return cfi_last_pc_;
+  }
+
   ArrayRef<const LinkerPatch> GetPatches() const {
     return ArrayRef<const LinkerPatch>(patches_);
   }
@@ -397,8 +403,10 @@ class CompiledMethod FINAL : public CompiledCode {
   // For quick code, a map keyed by native PC indices to bitmaps describing what dalvik registers
   // are live.
   SwapVector<uint8_t>* gc_map_;
-  // For quick code, a FDE entry for the debug_frame section.
+  // Call Frame Information opcodes for .eh_frame section.
   SwapVector<uint8_t>* cfi_info_;
+  // Range of instructions covered by the CFI opcodes above.
+  const int cfi_last_pc_;
   // For quick code, linker patches needed by the method.
   const SwapVector<LinkerPatch> patches_;
 };

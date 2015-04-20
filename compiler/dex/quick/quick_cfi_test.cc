@@ -107,7 +107,6 @@ class QuickCFITest : public CFITest {
     std::vector<uint8_t> actual_asm(m2l->code_buffer_.begin(), m2l->code_buffer_.end());
     auto const& cfi_data = m2l->cfi().Patch(actual_asm.size());
     std::vector<uint8_t> actual_cfi(cfi_data->begin(), cfi_data->end());
-    EXPECT_EQ(m2l->cfi().GetCurrentPC(), static_cast<int>(actual_asm.size()));
 
     if (kGenerateExpected) {
       GenerateExpected(stdout, isa, isa_str, actual_asm, actual_cfi);

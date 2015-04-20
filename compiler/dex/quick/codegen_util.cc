@@ -1157,6 +1157,7 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
     return lhs.LiteralOffset() < rhs.LiteralOffset();
   });
 
+  auto cfi_data = cfi_.Patch(code_buffer_.size());
   return CompiledMethod::SwapAllocCompiledMethod(
       cu_->compiler_driver, cu_->instruction_set,
       ArrayRef<const uint8_t>(code_buffer_),
@@ -1165,7 +1166,8 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
       ArrayRef<const uint8_t>(encoded_mapping_table_),
       ArrayRef<const uint8_t>(vmap_encoder.GetData()),
       ArrayRef<const uint8_t>(native_gc_map_),
-      ArrayRef<const uint8_t>(*cfi_.Patch(code_buffer_.size())),
+      ArrayRef<const uint8_t>(*cfi_data),
+      cfi_.GetCurrentPC(),
       ArrayRef<const LinkerPatch>(patches_));
 }
 

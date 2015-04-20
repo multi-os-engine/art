@@ -30,6 +30,7 @@ namespace dwarf {
 
 static void WriteEhFrameCIE(InstructionSet isa,
                             ExceptionHeaderValueApplication addr_type,
+                            int* initial_cfa_offset,
                             std::vector<uint8_t>* eh_frame) {
   // Scratch registers should be marked as undefined.  This tells the
   // debugger that its value in the previous frame is not recoverable.
@@ -38,7 +39,8 @@ static void WriteEhFrameCIE(InstructionSet isa,
     case kArm:
     case kThumb2: {
       DebugFrameOpCodeWriter<> opcodes;
-      opcodes.DefCFA(Reg::ArmCore(13), 0);  // R13(SP).
+      *initial_cfa_offset = 0;
+      opcodes.DefCFA(Reg::ArmCore(13), *initial_cfa_offset);  // R13(SP).
       // core registers.
       for (int reg = 0; reg < 13; reg++) {
         if (reg < 4 || reg == 12) {
@@ -61,7 +63,8 @@ static void WriteEhFrameCIE(InstructionSet isa,
     }
     case kArm64: {
       DebugFrameOpCodeWriter<> opcodes;
-      opcodes.DefCFA(Reg::Arm64Core(31), 0);  // R31(SP).
+      *initial_cfa_offset = 0;
+      opcodes.DefCFA(Reg::Arm64Core(31), *initial_cfa_offset);  // R31(SP).
       // core registers.
       for (int reg = 0; reg < 30; reg++) {
         if (reg < 8 || reg == 16 || reg == 17) {
@@ -85,7 +88,8 @@ static void WriteEhFrameCIE(InstructionSet isa,
     case kMips:
     case kMips64: {
       DebugFrameOpCodeWriter<> opcodes;
-      opcodes.DefCFA(Reg::MipsCore(29), 0);  // R29(SP).
+      *initial_cfa_offset = 0;
+      opcodes.DefCFA(Reg::MipsCore(29), *initial_cfa_offset);  // R29(SP).
       // core registers.
       for (int reg = 1; reg < 26; reg++) {
         if (reg < 16 || reg == 24 || reg == 25) {  // AT, V*, A*, T*.
@@ -100,7 +104,8 @@ static void WriteEhFrameCIE(InstructionSet isa,
     }
     case kX86: {
       DebugFrameOpCodeWriter<> opcodes;
-      opcodes.DefCFA(Reg::X86Core(4), 4);   // R4(ESP).
+      *initial_cfa_offset = 4;
+      opcodes.DefCFA(Reg::X86Core(4), *initial_cfa_offset);   // R4(ESP).
       opcodes.Offset(Reg::X86Core(8), -4);  // R8(EIP).
       // core registers.
       for (int reg = 0; reg < 8; reg++) {
@@ -119,7 +124,8 @@ static void WriteEhFrameCIE(InstructionSet isa,
     }
     case kX86_64: {
       DebugFrameOpCodeWriter<> opcodes;
-      opcodes.DefCFA(Reg::X86_64Core(4), 8);  // R4(RSP).
+      *initial_cfa_offset = 8;
+      opcodes.DefCFA(Reg::X86_64Core(4), *initial_cfa_offset);  // R4(RSP).
       opcodes.Offset(Reg::X86_64Core(16), -8);  // R16(RIP).
       // core registers.
       for (int reg = 0; reg < 16; reg++) {
@@ -150,24 +156,66 @@ static void WriteEhFrameCIE(InstructionSet isa,
   UNREACHABLE();
 }
 
+struct CompilationUnit {
+  std::vector<const OatWriter::DebugInfo*> method_infos_;
+  uint32_t low_pc_ = 0xFFFFFFFFU;
+  uint32_t high_pc_ = 0;
+};
+
+// Group the methods into compilation units based on source file.
+std::vector<CompilationUnit> GroupIntoCompilationUnits(
+    const std::vector<OatWriter::DebugInfo>& method_infos) {
+  std::vector<CompilationUnit> compilation_units;
+  const char* last_source_file = nullptr;
+  for (const auto& mi : method_infos) {
+    // Attribute given instruction range only to single method.
+    // Otherwise the debugger might get really confused.
+    if (!mi.deduped_) {
+      auto& dex_class_def = mi.dex_file_->GetClassDef(mi.class_def_index_);
+      const char* source_file = mi.dex_file_->GetSourceFile(dex_class_def);
+      if (compilation_units.empty() || source_file != last_source_file) {
+        compilation_units.push_back(CompilationUnit());
+      }
+      last_source_file = source_file;
+      CompilationUnit& cu = compilation_units.back();
+      cu.method_infos_.push_back(&mi);
+      cu.low_pc_ = std::min(cu.low_pc_, mi.low_pc_);
+      cu.high_pc_ = std::max(cu.high_pc_, mi.high_pc_);
+    }
+  }
+  return compilation_units;
+}
+
 void WriteEhFrame(const CompilerDriver* compiler,
                   const OatWriter* oat_writer,
                   ExceptionHeaderValueApplication address_type,
                   std::vector<uint8_t>* eh_frame,
                   std::vector<uintptr_t>* eh_frame_patches,
                   std::vector<uint8_t>* eh_frame_hdr) {
-  const auto& method_infos = oat_writer->GetMethodDebugInfo();
   const InstructionSet isa = compiler->GetInstructionSet();
+  auto compilation_units = GroupIntoCompilationUnits(oat_writer->GetMethodDebugInfo());
 
   // Write .eh_frame section.
+  int initial_cfa_offset;
   size_t cie_offset = eh_frame->size();
-  WriteEhFrameCIE(isa, address_type, eh_frame);
-  for (const OatWriter::DebugInfo& mi : method_infos) {
-    const SwapVector<uint8_t>* opcodes = mi.compiled_method_->GetCFIInfo();
-    if (opcodes != nullptr) {
-      WriteEhFrameFDE(Is64BitInstructionSet(isa), cie_offset,
-                      mi.low_pc_, mi.high_pc_ - mi.low_pc_,
-                      opcodes, eh_frame, eh_frame_patches);
+  WriteEhFrameCIE(isa, address_type, &initial_cfa_offset, eh_frame);
+  for (const auto& compilation_unit : compilation_units) {
+    DebugFrameOpCodeWriter<> opcodes;
+    for (const OatWriter::DebugInfo* mi : compilation_unit.method_infos_) {
+      const SwapVector<uint8_t>* method_opcodes = mi->compiled_method_->GetCFIInfo();
+      if (method_opcodes != nullptr) {
+        opcodes.AdvancePC(mi->low_pc_ - compilation_unit.low_pc_);
+        opcodes.RememberState();
+        opcodes.AppendOpcodes(method_opcodes, mi->compiled_method_->GetCFILastPC(),
+                              initial_cfa_offset);
+        opcodes.RestoreState();
+      }
+    }
+    // Single FDE header contains opcodes for the whole compilation unit.
+    if (opcodes.data()->size() > 0) {
+      WriteEhFrameFDE(Is64BitInstructionSet(isa), cie_offset, compilation_unit.low_pc_,
+                      compilation_unit.high_pc_ - compilation_unit.low_pc_,
+                      opcodes.data(), eh_frame, eh_frame_patches);
     }
   }
 
@@ -205,6 +253,7 @@ void WriteDebugSections(const CompilerDriver* compiler,
   const std::vector<OatWriter::DebugInfo>& method_infos = oat_writer->GetMethodDebugInfo();
   const InstructionSet isa = compiler->GetInstructionSet();
   const bool is64bit = Is64BitInstructionSet(isa);
+  auto compilation_units = GroupIntoCompilationUnits(method_infos);
 
   // Find all addresses (low_pc) which contain deduped methods.
   // The first instance of method is not marked deduped_, but the rest is.
@@ -215,41 +264,17 @@ void WriteDebugSections(const CompilerDriver* compiler,
     }
   }
 
-  // Group the methods into compilation units based on source file.
-  std::vector<std::vector<const OatWriter::DebugInfo*>> compilation_units;
-  const char* last_source_file = nullptr;
-  for (const auto& mi : method_infos) {
-    // Attribute given instruction range only to single method.
-    // Otherwise the debugger might get really confused.
-    if (!mi.deduped_) {
-      auto& dex_class_def = mi.dex_file_->GetClassDef(mi.class_def_index_);
-      const char* source_file = mi.dex_file_->GetSourceFile(dex_class_def);
-      if (compilation_units.empty() || source_file != last_source_file) {
-        compilation_units.push_back(std::vector<const OatWriter::DebugInfo*>());
-      }
-      compilation_units.back().push_back(&mi);
-      last_source_file = source_file;
-    }
-  }
-
   // Write .debug_info section.
   for (const auto& compilation_unit : compilation_units) {
-    uint32_t cunit_low_pc = 0xFFFFFFFFU;
-    uint32_t cunit_high_pc = 0;
-    for (auto method_info : compilation_unit) {
-      cunit_low_pc = std::min(cunit_low_pc, method_info->low_pc_);
-      cunit_high_pc = std::max(cunit_high_pc, method_info->high_pc_);
-    }
-
     size_t debug_abbrev_offset = debug_abbrev->size();
     DebugInfoEntryWriter<> info(is64bit, debug_abbrev);
     info.StartTag(DW_TAG_compile_unit, DW_CHILDREN_yes);
     info.WriteStrp(DW_AT_producer, "Android dex2oat", debug_str);
     info.WriteData1(DW_AT_language, DW_LANG_Java);
-    info.WriteAddr(DW_AT_low_pc, cunit_low_pc);
-    info.WriteAddr(DW_AT_high_pc, cunit_high_pc);
+    info.WriteAddr(DW_AT_low_pc, compilation_unit.low_pc_);
+    info.WriteAddr(DW_AT_high_pc, compilation_unit.high_pc_);
     info.WriteData4(DW_AT_stmt_list, debug_line->size());
-    for (auto method_info : compilation_unit) {
+    for (auto method_info : compilation_unit.method_infos_) {
       std::string method_name = PrettyMethod(method_info->dex_method_index_,
                                              *method_info->dex_file_, true);
       if (deduped_addresses.find(method_info->low_pc_) != deduped_addresses.end()) {
@@ -288,11 +313,11 @@ void WriteDebugSections(const CompilerDriver* compiler,
         break;
     }
     DebugLineOpCodeWriter<> opcodes(is64bit, code_factor_bits_);
-    opcodes.SetAddress(cunit_low_pc);
+    opcodes.SetAddress(compilation_unit.low_pc_);
     if (dwarf_isa != -1) {
       opcodes.SetISA(dwarf_isa);
     }
-    for (const OatWriter::DebugInfo* mi : compilation_unit) {
+    for (const OatWriter::DebugInfo* mi : compilation_unit.method_infos_) {
       struct DebugInfoCallbacks {
         static bool NewPosition(void* ctx, uint32_t address, uint32_t line) {
           auto* context = reinterpret_cast<DebugInfoCallbacks*>(ctx);
@@ -389,7 +414,7 @@ void WriteDebugSections(const CompilerDriver* compiler,
         opcodes.AddRow(mi->low_pc_, 0);
       }
     }
-    opcodes.AdvancePC(cunit_high_pc);
+    opcodes.AdvancePC(compilation_unit.high_pc_);
     opcodes.EndSequence();
     WriteDebugLineTable(directories, files, opcodes, debug_line, debug_line_patches);
   }

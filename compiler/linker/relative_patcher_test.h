@@ -74,7 +74,7 @@ class RelativePatcherTest : public testing::Test {
     compiled_methods_.emplace_back(new CompiledMethod(
         &driver_, instruction_set_, code,
         0u, 0u, 0u, nullptr, ArrayRef<const uint8_t>(), ArrayRef<const uint8_t>(),
-        ArrayRef<const uint8_t>(), ArrayRef<const uint8_t>(),
+        ArrayRef<const uint8_t>(), ArrayRef<const uint8_t>(), 0,
         patches));
   }
 
