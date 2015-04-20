@@ -60,6 +60,8 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitSub(HSub* instruction) OVERRIDE;
   void VisitUShr(HUShr* instruction) OVERRIDE;
   void VisitXor(HXor* instruction) OVERRIDE;
+  void VisitBoundType(HBoundType* instruction) OVERRIDE;
+  void VisitInstanceOf(HInstanceOf* instruction) OVERRIDE;
 
   OptimizingCompilerStats* stats_;
   bool simplification_occurred_ = false;
@@ -150,6 +152,16 @@ void InstructionSimplifierVisitor::VisitShift(HBinaryOperation* instruction) {
 
 void InstructionSimplifierVisitor::VisitNullCheck(HNullCheck* null_check) {
   HInstruction* obj = null_check->InputAt(0);
+  // Save that users of NullCheck have a non null input.
+  for (HUseIterator<HInstruction*> it(null_check->GetUses()); !it.Done(); it.Advance()) {
+    HInstruction* user = it.Current()->GetUser();
+    if (user->IsInstanceOf()) {
+      user->AsInstanceOf()->SetMustDoNullCheck(false);
+    } else if (user->IsCheckCast()) {
+      user->AsCheckCast()->SetMustDoNullCheck(false);
+    }
+  }
+
   if (!obj->CanBeNull()) {
     null_check->ReplaceWith(obj);
     null_check->GetBlock()->RemoveInstruction(null_check);
@@ -159,8 +171,23 @@ void InstructionSimplifierVisitor::VisitNullCheck(HNullCheck* null_check) {
   }
 }
 
+void InstructionSimplifierVisitor::VisitBoundType(HBoundType* instruction) {
+  // Save that users of BoundType have a non null input.
+  for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
+    HInstruction* user = it.Current()->GetUser();
+    if (user->IsInstanceOf()) {
+      user->AsInstanceOf()->SetMustDoNullCheck(false);
+    } else if (user->IsCheckCast()) {
+      user->AsCheckCast()->SetMustDoNullCheck(false);
+    }
+  }
+}
+
 void InstructionSimplifierVisitor::VisitCheckCast(HCheckCast* check_cast) {
   HLoadClass* load_class = check_cast->InputAt(1)->AsLoadClass();
+  check_cast->SetMustDoNullCheck(check_cast->MustDoNullCheck()
+      && check_cast->InputAt(0)->CanBeNull());
+
   if (!load_class->IsResolved()) {
     // If the class couldn't be resolve it's not safe to compare against it. It's
     // default type would be Top which might be wider that the actual class type
@@ -176,6 +203,11 @@ void InstructionSimplifierVisitor::VisitCheckCast(HCheckCast* check_cast) {
       stats_->RecordStat(MethodCompilationStat::kRemovedCheckedCast);
     }
   }
+}
+
+void InstructionSimplifierVisitor::VisitInstanceOf(HInstanceOf* instruction) {
+  instruction->SetMustDoNullCheck(instruction->MustDoNullCheck()
+      && instruction->InputAt(0)->CanBeNull());
 }
 
 void InstructionSimplifierVisitor::VisitSuspendCheck(HSuspendCheck* check) {
