@@ -693,10 +693,9 @@ ENTRY \name
 END \name
 .endm
 
-TWO_ARG_DOWNCALL art_quick_initialize_static_storage, artInitializeStaticStorageFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
-
-TWO_ARG_DOWNCALL art_quick_initialize_type, artInitializeTypeFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
-TWO_ARG_DOWNCALL art_quick_initialize_type_and_verify_access, artInitializeTypeAndVerifyAccessFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+ONE_ARG_REF_DOWNCALL art_quick_initialize_static_storage, artInitializeStaticStorageFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+ONE_ARG_REF_DOWNCALL art_quick_initialize_type, artInitializeTypeFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+ONE_ARG_REF_DOWNCALL art_quick_initialize_type_and_verify_access, artInitializeTypeAndVerifyAccessFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 
     /*
      * Called by managed code to resolve a static field and load a non-wide value.
@@ -805,11 +804,10 @@ END art_quick_set64_instance
 
     /*
      * Entry from managed code to resolve a string, this stub will allocate a String and deliver an
-     * exception on error. On success the String is returned. R0 holds the referring method,
-     * R1 holds the string index. The fast path check for hit in strings cache has already been
-     * performed.
+     * exception on error. On success the String is returned. R0 holds the string index. The fast
+     * path check for hit in strings cache has already been performed.
      */
-TWO_ARG_DOWNCALL art_quick_resolve_string, artResolveStringFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
+ONE_ARG_REF_DOWNCALL art_quick_resolve_string, artResolveStringFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 
 // Generate the allocation entrypoints for each allocator.
 GENERATE_ALL_ALLOC_ENTRYPOINTS
