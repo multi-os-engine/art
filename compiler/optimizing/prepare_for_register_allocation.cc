@@ -43,6 +43,16 @@ void PrepareForRegisterAllocation::VisitBoundsCheck(HBoundsCheck* check) {
 }
 
 void PrepareForRegisterAllocation::VisitBoundType(HBoundType* bound_type) {
+  // Save that users of BoundType have a non null input.
+  for (HUseIterator<HInstruction*> it(bound_type->GetUses()); !it.Done(); it.Advance()) {
+    HInstruction* user = it.Current()->GetUser();
+    if (user->IsInstanceOf()) {
+      user->AsInstanceOf()->SetMustDoNullCheck(false);
+    } else if (user->IsCheckCast()) {
+      user->AsCheckCast()->SetMustDoNullCheck(false);
+    }
+  }
+
   bound_type->ReplaceWith(bound_type->InputAt(0));
   bound_type->GetBlock()->RemoveInstruction(bound_type);
 }
