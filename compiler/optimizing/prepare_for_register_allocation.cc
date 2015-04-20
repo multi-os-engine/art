@@ -31,6 +31,16 @@ void PrepareForRegisterAllocation::Run() {
 }
 
 void PrepareForRegisterAllocation::VisitNullCheck(HNullCheck* check) {
+  // Save that users of BoundType have a non null input.
+  for (HUseIterator<HInstruction*> it(check->GetUses()); !it.Done(); it.Advance()) {
+    HInstruction* user = it.Current()->GetUser();
+    if (user->IsInstanceOf()) {
+      user->AsInstanceOf()->SetInputIsMaybeNull(false);
+    } else if (user->IsCheckCast()) {
+      user->AsCheckCast()->SetInputIsMaybeNull(false);
+    }
+  }
+
   check->ReplaceWith(check->InputAt(0));
 }
 
@@ -43,6 +53,16 @@ void PrepareForRegisterAllocation::VisitBoundsCheck(HBoundsCheck* check) {
 }
 
 void PrepareForRegisterAllocation::VisitBoundType(HBoundType* bound_type) {
+  // Save that users of BoundType have a non null input.
+  for (HUseIterator<HInstruction*> it(bound_type->GetUses()); !it.Done(); it.Advance()) {
+    HInstruction* user = it.Current()->GetUser();
+    if (user->IsInstanceOf()) {
+      user->AsInstanceOf()->SetInputIsMaybeNull(false);
+    } else if (user->IsCheckCast()) {
+      user->AsCheckCast()->SetInputIsMaybeNull(false);
+    }
+  }
+
   bound_type->ReplaceWith(bound_type->InputAt(0));
   bound_type->GetBlock()->RemoveInstruction(bound_type);
 }
