@@ -278,14 +278,18 @@ void SSAChecker::CheckLoop(HBasicBlock* loop_header) {
         num_back_edges));
   }
 
-  // Ensure all blocks in the loop are dominated by the loop header.
+  // Ensure all blocks in the loop are live and dominated by the loop header.
   const ArenaBitVector& loop_blocks =
     loop_header->GetLoopInformation()->GetBlocks();
   for (uint32_t i : loop_blocks.Indexes()) {
     HBasicBlock* loop_block = GetGraph()->GetBlocks().Get(i);
-    if (!loop_header->Dominates(loop_block)) {
+    if (loop_block == nullptr) {
+      AddError(StringPrintf("Loop defined by header %d contains a dead block %d.",
+                            id,
+                            i));
+    } else if (!loop_header->Dominates(loop_block)) {
       AddError(StringPrintf("Loop block %d not dominated by loop header %d.",
-                            loop_block->GetBlockId(),
+                            i,
                             id));
     }
   }
@@ -296,7 +300,7 @@ void SSAChecker::CheckLoop(HBasicBlock* loop_header) {
     if (!loop_blocks.IsSubsetOf(&outer_info->GetBlocks())) {
       AddError(StringPrintf("Blocks of loop defined by header %d are not a subset of blocks of "
                             "an outer loop defined by header %d.",
-                            loop_header->GetBlockId(),
+                            id,
                             outer_info->GetHeader()->GetBlockId()));
     }
   }

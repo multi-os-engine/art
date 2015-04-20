@@ -170,6 +170,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   void MergeEmptyBranches(HBasicBlock* start_block, HBasicBlock* end_block);
 
+  void DeleteDeadBlock(HBasicBlock* block);
+
   void SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor);
   void SimplifyLoop(HBasicBlock* header);
 
@@ -487,6 +489,9 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     new_block->predecessors_.Add(this);
     successors_.Put(successor_index, new_block);
   }
+
+  void RemoveFromPredecessors();
+  void RemoveFromSuccessors();
 
   void ReplacePredecessor(HBasicBlock* existing, HBasicBlock* new_block) {
     size_t predecessor_index = GetPredecessorIndexOf(existing);
@@ -2755,6 +2760,7 @@ class HPhi : public HInstruction {
   size_t InputCount() const OVERRIDE { return inputs_.Size(); }
 
   void AddInput(HInstruction* input);
+  void RemoveInputAt(size_t index);
 
   Primitive::Type GetType() const OVERRIDE { return type_; }
   void SetType(Primitive::Type type) { type_ = type; }
