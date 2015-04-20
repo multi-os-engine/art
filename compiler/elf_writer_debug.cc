@@ -112,10 +112,7 @@ static void WriteEhFrameCIE(InstructionSet isa,
           opcodes.SameValue(Reg::X86Core(reg));
         }
       }
-      // fp registers.
-      for (int reg = 0; reg < 8; reg++) {
-        opcodes.Undefined(Reg::X86Fp(reg));
-      }
+      // do not mention fp registers since libunwind does not support them.
       auto return_reg = Reg::X86Core(8);  // R8(EIP).
       WriteEhFrameCIE(is64bit, addr_type, return_reg, opcodes, eh_frame);
       return;
