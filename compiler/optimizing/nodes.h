@@ -97,6 +97,9 @@ class HInstructionList {
   void AddAfter(HInstruction* cursor, const HInstructionList& instruction_list);
   void Add(const HInstructionList& instruction_list);
 
+  // Return the number of instructions in the list. This is an expensive operation.
+  size_t CountSize() const;
+
  private:
   HInstruction* first_instruction_;
   HInstruction* last_instruction_;
@@ -169,6 +172,9 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   void InlineInto(HGraph* outer_graph, HInvoke* invoke);
 
   void MergeEmptyBranches(HBasicBlock* start_block, HBasicBlock* end_block);
+
+  // Removes `block` from the graph.
+  void DeleteDeadBlock(HBasicBlock* block);
 
   void SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor);
   void SimplifyLoop(HBasicBlock* header);
@@ -488,6 +494,9 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     successors_.Put(successor_index, new_block);
   }
 
+  void RemoveFromPredecessors();
+  void RemoveFromSuccessors();
+
   void ReplacePredecessor(HBasicBlock* existing, HBasicBlock* new_block) {
     size_t predecessor_index = GetPredecessorIndexOf(existing);
     DCHECK_NE(predecessor_index, static_cast<size_t>(-1));
@@ -559,12 +568,13 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   // with a control flow instruction).
   void ReplaceWith(HBasicBlock* other);
 
-  // Disconnects `this` from all its predecessors, successors and the dominator.
+  // Disconnects `this` from all its predecessors, successors, dominator and
+  // removes it from all loops it is included in.
   // It assumes that `this` does not dominate any blocks.
   // Note that this method does not update the graph, reverse post order, loop
   // information, nor make sure the blocks are consistent (for example ending
   // with a control flow instruction).
-  void DisconnectFromAll();
+  void Disconnect();
 
   void AddInstruction(HInstruction* instruction);
   void InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor);
@@ -2755,6 +2765,7 @@ class HPhi : public HInstruction {
   size_t InputCount() const OVERRIDE { return inputs_.Size(); }
 
   void AddInput(HInstruction* input);
+  void RemoveInputAt(size_t index);
 
   Primitive::Type GetType() const OVERRIDE { return type_; }
   void SetType(Primitive::Type type) { type_ = type; }

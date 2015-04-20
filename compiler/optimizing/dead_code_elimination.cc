@@ -20,10 +20,76 @@
 
 namespace art {
 
+static void VisitAllSuccessors(HBasicBlock* block, ArenaBitVector* visited) {
+  int block_id = block->GetBlockId();
+  if (visited->IsBitSet(block_id)) {
+    return;
+  }
+  visited->SetBit(block_id);
+
+  HInstruction* last_instruction = block->GetLastInstruction();
+  if (last_instruction->IsIf()) {
+    HInstruction* condition = last_instruction->InputAt(0);
+    if (!condition->IsIntConstant()) {
+      VisitAllSuccessors(last_instruction->AsIf()->IfTrueSuccessor(), visited);
+      VisitAllSuccessors(last_instruction->AsIf()->IfFalseSuccessor(), visited);
+    } else if (condition->AsIntConstant()->IsOne()) {
+      VisitAllSuccessors(last_instruction->AsIf()->IfTrueSuccessor(), visited);
+    } else {
+      DCHECK(condition->AsIntConstant()->IsZero());
+      VisitAllSuccessors(last_instruction->AsIf()->IfFalseSuccessor(), visited);
+    }
+  } else {
+    for (size_t i = 0, e = block->GetSuccessors().Size(); i < e; ++i) {
+      VisitAllSuccessors(block->GetSuccessors().Get(i), visited);
+    }
+  }
+}
+
 void HDeadCodeElimination::Run() {
-  // Process basic blocks in post-order in the dominator tree, so that
-  // a dead instruction depending on another dead instruction is
-  // removed.
+  // Classify blocks as reachable/unreachable.
+  ArenaAllocator* allocator = graph_->GetArena();
+  ArenaBitVector live_blocks(allocator, graph_->GetBlocks().Size(), false);
+  VisitAllSuccessors(graph_->GetEntryBlock(), &live_blocks);
+
+  // Remove all unreachable blocks. Process blocks in post-order, because
+  // removal needs the block's chain of dominators.
+  for (HPostOrderIterator block_it(*graph_); !block_it.Done(); block_it.Advance()) {
+    HBasicBlock* block  = block_it.Current();
+    if (live_blocks.IsBitSet(block->GetBlockId())) {
+      continue;
+    }
+
+    MaybeRecordStat(MethodCompilationStat::kRemovedDeadInstruction,
+                    block->GetPhis().CountSize() + block->GetInstructions().CountSize());
+    block->Disconnect();
+    graph_->DeleteDeadBlock(block);
+  }
+
+  // Connect successive blocks created by dead branches.
+  for (size_t i = 0, e = graph_->GetBlocks().Size(); i < e; ++i) {
+    HBasicBlock* block  = graph_->GetBlocks().Get(i);
+    if (block == nullptr
+        || block->IsEntryBlock()
+        || block->GetSuccessors().Size() != 1u) {
+      continue;
+    }
+    HBasicBlock* successor = block->GetSuccessors().Get(0);
+    if (successor->IsExitBlock()
+        || successor->GetPredecessors().Size() != 1u) {
+      continue;
+    }
+
+    block->RemoveInstruction(block->GetLastInstruction());
+    block->MergeWith(successor);
+    graph_->DeleteDeadBlock(successor);
+
+    // Reiterate on this block in case it can be merged with its new successor.
+    --i;
+  }
+
+  // Remove dead instructions. Process blocks in post-order, so that a dead
+  // instruction depending on another dead instruction is removed.
   for (HPostOrderIterator b(*graph_); !b.Done(); b.Advance()) {
     HBasicBlock* block = b.Current();
     // Traverse this block's instructions in backward order and remove
