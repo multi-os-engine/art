@@ -350,6 +350,22 @@ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
     return;
   }
 
+  // Constant folding handles the zero case pretty well but sometimes
+  // it is possible that zero constant can appear as the input of mul
+  // due to other simplifications. Handle this case.
+  if (input_cst->IsZero()) {
+    // Replace code looking like
+    //    MUL dst, src, 0
+    // with
+    //    0
+    // Don't do it for fp, because input_other can be NaN/Infinity.
+    if (!Primitive::IsFloatingPointType(type)) {
+      instruction->ReplaceWith(input_cst);
+      instruction->GetBlock()->RemoveInstruction(instruction);
+    }
+    return;
+  }
+
   if (input_cst->IsOne()) {
     // Replace code looking like
     //    MUL dst, src, 1
@@ -388,7 +404,8 @@ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
 
   if (Primitive::IsIntOrLongType(type)) {
     int64_t factor = Int64FromConstant(input_cst);
-    // We expect the `0` case to have been handled in the constant folding pass.
+    // We expect the `0` case to have been handled in the constant folding pass
+    // or above in this method.
     DCHECK_NE(factor, 0);
     if (IsPowerOfTwo(factor)) {
       // Replace code looking like
