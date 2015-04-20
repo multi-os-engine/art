@@ -1406,14 +1406,10 @@ void MIRGraph::ApplyGlobalValueNumberingEnd() {
     LOG(WARNING) << "GVN failed for " << PrettyMethod(cu_->method_idx, *cu_->dex_file);
     cu_->disable_opt |= (1u << kGvnDeadCodeElimination);
   }
-
-  if ((cu_->disable_opt & (1 << kGvnDeadCodeElimination)) != 0) {
-    EliminateDeadCodeEnd();
-  }  // else preserve GVN data for CSE.
 }
 
 bool MIRGraph::EliminateDeadCodeGate() {
-  if ((cu_->disable_opt & (1 << kGvnDeadCodeElimination)) != 0) {
+  if ((cu_->disable_opt & (1 << kGvnDeadCodeElimination)) != 0 || temp_.gvn.gvn == nullptr) {
     return false;
   }
   DCHECK(temp_scoped_alloc_ != nullptr);
@@ -1434,6 +1430,19 @@ bool MIRGraph::EliminateDeadCode(BasicBlock* bb) {
 }
 
 void MIRGraph::EliminateDeadCodeEnd() {
+  if (kIsDebugBuild) {
+    // DCE can make some previously dead vregs alive again. Make sure the obsolete
+    // live-in information is not used anymore.
+    AllNodesIterator iter(this);
+    for (BasicBlock* bb = iter.Next(); bb != nullptr; bb = iter.Next()) {
+      if (bb->data_flow_info != nullptr) {
+        bb->data_flow_info->live_in_v = nullptr;
+      }
+    }
+  }
+}
+
+void MIRGraph::GlobalValueNumberingCleanup() {
   DCHECK_EQ(temp_.gvn.dce != nullptr, (cu_->disable_opt & (1 << kGvnDeadCodeElimination)) == 0);
   if (temp_.gvn.dce != nullptr) {
     delete temp_.gvn.dce;
