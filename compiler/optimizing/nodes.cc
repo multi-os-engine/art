@@ -672,6 +672,11 @@ void HPhi::AddInput(HInstruction* input) {
   input->AddUseAt(this, inputs_.Size() - 1);
 }
 
+void HPhi::RemoveInputAt(size_t index) {
+  RemoveAsUserOfInput(index);
+  inputs_.DeleteAt(index);
+}
+
 #define DEFINE_ACCEPT(name, super)                                             \
 void H##name::Accept(HGraphVisitor* visitor) {                                 \
   visitor->Visit##name(this);                                                  \
@@ -867,6 +872,15 @@ bool HBasicBlock::HasSinglePhi() const {
   return !GetPhis().IsEmpty() && GetFirstPhi()->GetNext() == nullptr;
 }
 
+size_t HInstructionList::CountSize() const {
+  size_t size = 0;
+  HInstruction* current = first_instruction_;
+  for (; current != nullptr; current = current->GetNext()) {
+    size++;
+  }
+  return size;
+}
+
 void HInstructionList::SetBlockOfInstructions(HBasicBlock* block) const {
   for (HInstruction* current = first_instruction_;
        current != nullptr;
@@ -899,39 +913,100 @@ void HInstructionList::Add(const HInstructionList& instruction_list) {
 }
 
 void HBasicBlock::DisconnectFromAll() {
-  DCHECK(dominated_blocks_.IsEmpty()) << "Unimplemented scenario";
+  DCHECK(dominated_blocks_.IsEmpty());
+
+  for (HLoopInformationOutwardIterator it(*this); !it.Done(); it.Advance()) {
+    HLoopInformation* loop_info = it.Current();
+    loop_info->Remove(this);
+    if (loop_info->IsBackEdge(*this)) {
+      loop_info->RemoveBackEdge(this);
+    }
+  }
 
   for (size_t i = 0, e = predecessors_.Size(); i < e; ++i) {
-    predecessors_.Get(i)->successors_.Delete(this);
+    HBasicBlock* predecessor = predecessors_.Get(i);
+    predecessor->successors_.Delete(this);
   }
+
   for (size_t i = 0, e = successors_.Size(); i < e; ++i) {
-    successors_.Get(i)->predecessors_.Delete(this);
+    HBasicBlock* successor = successors_.Get(i);
+    size_t this_index = successor->GetPredecessorIndexOf(this);
+    if (successor->predecessors_.Size() == 1u) {
+      DCHECK(successor->GetPhis().IsEmpty());
+    } else if (successor->predecessors_.Size() == 2u) {
+      for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+        HPhi* phi = phi_it.Current()->AsPhi();
+        phi->ReplaceWith(phi->InputAt(1 - this_index));
+        successor->RemovePhi(phi);
+      }
+    } else {
+      for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+        phi_it.Current()->AsPhi()->RemoveInputAt(this_index);
+      }
+    }
+    successor->predecessors_.DeleteAt(this_index);
   }
+
   dominator_->dominated_blocks_.Delete(this);
 
   predecessors_.Reset();
   successors_.Reset();
   dominator_ = nullptr;
-  graph_ = nullptr;
+}
+
+static bool IsInlineMergeScenario(HBasicBlock* first, HBasicBlock* second) {
+  return first->GetDominatedBlocks().IsEmpty()
+      && first->GetSuccessors().IsEmpty()
+      && second->GetPredecessors().Size() == 1u
+      && second->GetPredecessors().Get(0)->IsEntryBlock()
+      && first->GetGraph() != second->GetGraph();
+}
+
+static bool IsBoolMergeScenario(HBasicBlock* first, HBasicBlock* second) {
+  return first->GetDominatedBlocks().Size() == 1u
+      && first->GetDominatedBlocks().Get(0) == second
+      && first->GetSuccessors().IsEmpty()
+      && second->GetPredecessors().IsEmpty()
+      && first->GetGraph() == second->GetGraph();
+}
+
+static bool IsSuccessiveMergeScenario(HBasicBlock* first, HBasicBlock* second) {
+  return first->GetSuccessors().Size() == 1u
+      && second->GetPredecessors().Size() == 1u
+      && first->GetSuccessors().Get(0) == second
+      && second->GetPredecessors().Get(0) == first
+      && first->GetGraph() == second->GetGraph();
 }
 
 void HBasicBlock::MergeWith(HBasicBlock* other) {
-  DCHECK(successors_.IsEmpty()) << "Unimplemented block merge scenario";
-  DCHECK(dominated_blocks_.IsEmpty()
-         || (dominated_blocks_.Size() == 1 && dominated_blocks_.Get(0) == other))
-      << "Unimplemented block merge scenario";
+  DCHECK(IsInlineMergeScenario(this, other)
+      || IsBoolMergeScenario(this, other)
+      || IsSuccessiveMergeScenario(this, other));
   DCHECK(other->GetPhis().IsEmpty());
 
-  successors_.Reset();
-  dominated_blocks_.Reset();
   instructions_.Add(other->GetInstructions());
-  other->GetInstructions().SetBlockOfInstructions(this);
+  other->instructions_.SetBlockOfInstructions(this);
+  other->instructions_.Clear();
 
-  while (!other->GetSuccessors().IsEmpty()) {
-    HBasicBlock* successor = other->GetSuccessors().Get(0);
+  for (HLoopInformationOutwardIterator it(*other); !it.Done(); it.Advance()) {
+     HLoopInformation* loop_info = it.Current();
+     loop_info->Remove(other);
+     if (loop_info->IsBackEdge(*other)) {
+       loop_info->ClearBackEdges();
+       loop_info->AddBackEdge(this);
+     }
+  }
+
+  other->predecessors_.Reset();
+  successors_.Reset();
+  while (!other->successors_.IsEmpty()) {
+    HBasicBlock* successor = other->successors_.Get(0);
     successor->ReplacePredecessor(other, this);
   }
 
+  if (dominated_blocks_.Contains(other)) {
+    dominated_blocks_.Delete(other);
+  }
   for (size_t i = 0, e = other->GetDominatedBlocks().Size(); i < e; ++i) {
     HBasicBlock* dominated = other->GetDominatedBlocks().Get(i);
     dominated_blocks_.Add(dominated);
@@ -939,7 +1014,6 @@ void HBasicBlock::MergeWith(HBasicBlock* other) {
   }
   other->dominated_blocks_.Reset();
   other->dominator_ = nullptr;
-  other->graph_ = nullptr;
 }
 
 void HBasicBlock::ReplaceWith(HBasicBlock* other) {
@@ -971,6 +1045,25 @@ static void MakeRoomFor(GrowableArray<HBasicBlock*>* blocks,
   for (size_t i = old_size - 1, j = new_size - 1; i > at; --i, --j) {
     blocks->Put(j, blocks->Get(i));
   }
+}
+
+void HGraph::DeleteDeadBlock(HBasicBlock* block) {
+  DCHECK_EQ(block->GetGraph(), this);
+  DCHECK(block->GetSuccessors().IsEmpty());
+  DCHECK(block->GetPredecessors().IsEmpty());
+  DCHECK(block->GetDominatedBlocks().IsEmpty());
+  DCHECK(block->GetDominator() == nullptr);
+
+  for (HBackwardInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
+    block->RemoveInstruction(it.Current());
+  }
+  for (HBackwardInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
+    block->RemovePhi(it.Current()->AsPhi());
+  }
+
+  blocks_.Put(block->GetBlockId(), nullptr);
+  reverse_post_order_.Delete(block);
+  block->graph_ = nullptr;
 }
 
 void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
@@ -1149,7 +1242,7 @@ void HGraph::MergeEmptyBranches(HBasicBlock* start_block, HBasicBlock* end_block
   DCHECK_EQ(end_block->GetPredecessors().Size(), 2u);
   DCHECK_EQ(start_block, end_block->GetDominator());
 
-  // Disconnect the branches and merge the two blocks. This will move
+  // DisconnectFromAll the branches and merge the two blocks. This will move
   // all instructions from 'end_block' to 'start_block'.
   DCHECK(left_branch->IsSingleGoto());
   DCHECK(right_branch->IsSingleGoto());
@@ -1159,29 +1252,9 @@ void HGraph::MergeEmptyBranches(HBasicBlock* start_block, HBasicBlock* end_block
   start_block->MergeWith(end_block);
 
   // Delete the now redundant blocks from the graph.
-  blocks_.Put(left_branch->GetBlockId(), nullptr);
-  blocks_.Put(right_branch->GetBlockId(), nullptr);
-  blocks_.Put(end_block->GetBlockId(), nullptr);
-
-  // Update reverse post order.
-  reverse_post_order_.Delete(left_branch);
-  reverse_post_order_.Delete(right_branch);
-  reverse_post_order_.Delete(end_block);
-
-  // Update loops which contain the code.
-  for (HLoopInformationOutwardIterator it(*start_block); !it.Done(); it.Advance()) {
-    HLoopInformation* loop_info = it.Current();
-    DCHECK(loop_info->Contains(*left_branch));
-    DCHECK(loop_info->Contains(*right_branch));
-    DCHECK(loop_info->Contains(*end_block));
-    loop_info->Remove(left_branch);
-    loop_info->Remove(right_branch);
-    loop_info->Remove(end_block);
-    if (loop_info->IsBackEdge(*end_block)) {
-      loop_info->RemoveBackEdge(end_block);
-      loop_info->AddBackEdge(start_block);
-    }
-  }
+  DeleteDeadBlock(left_branch);
+  DeleteDeadBlock(right_branch);
+  DeleteDeadBlock(end_block);
 }
 
 std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
