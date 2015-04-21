@@ -495,7 +495,8 @@ void CompilerDriver::CompileAll(jobject class_loader,
                                 const std::vector<const DexFile*>& dex_files,
                                 TimingLogger* timings) {
   DCHECK(!Runtime::Current()->IsStarted());
-  std::unique_ptr<ThreadPool> thread_pool(new ThreadPool("Compiler driver thread pool", thread_count_ - 1));
+  std::unique_ptr<ThreadPool> thread_pool(
+      new ThreadPool("Compiler driver thread pool", thread_count_ - 1));
   VLOG(compiler) << "Before precompile " << GetMemoryUsageString(false);
   PreCompile(class_loader, dex_files, thread_pool.get(), timings);
   Compile(class_loader, dex_files, thread_pool.get(), timings);
@@ -2101,7 +2102,8 @@ void CompilerDriver::Compile(jobject class_loader, const std::vector<const DexFi
   VLOG(compiler) << "Compile: " << GetMemoryUsageString(false);
 }
 
-void CompilerDriver::CompileClass(const ParallelCompilationManager* manager, size_t class_def_index) {
+void CompilerDriver::CompileClass(const ParallelCompilationManager* manager,
+                                  size_t class_def_index) {
   ATRACE_CALL();
   const DexFile& dex_file = *manager->GetDexFile();
   const DexFile::ClassDef& class_def = dex_file.GetClassDef(class_def_index);
