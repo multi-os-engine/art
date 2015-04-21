@@ -1158,6 +1158,8 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
     return true;
   }
 
+  // If this returns true, the first input of the instruction will be the object
+  // checked for null.
   virtual bool CanDoImplicitNullCheck() const { return false; }
 
   void SetReferenceTypeInfo(ReferenceTypeInfo reference_type_info) {
