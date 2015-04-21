@@ -248,7 +248,7 @@ class Runtime {
   }
 
   InternTable* GetInternTable() const {
-    DCHECK(intern_table_ != NULL);
+    DCHECK(intern_table_ != nullptr);
     return intern_table_;
   }
 
@@ -574,7 +574,7 @@ class Runtime {
   void StartDaemonThreads();
   void StartSignalCatcher();
 
-  // A pointer to the active runtime or NULL.
+  // A pointer to the active runtime or nullptr.
   static Runtime* instance_;
 
   // NOTE: these must match the gc::ProcessState values as they come directly from the framework.

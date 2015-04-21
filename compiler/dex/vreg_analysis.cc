@@ -269,7 +269,7 @@ bool MIRGraph::InferTypeAndSize(BasicBlock* bb, MIR* mir, bool changed) {
         if (move_result_mir && (move_result_mir->dalvikInsn.opcode !=
             Instruction::MOVE_RESULT_OBJECT)) {
           SSARepresentation* tgt_rep = move_result_mir->ssa_rep;
-          DCHECK(tgt_rep != NULL);
+          DCHECK(tgt_rep != nullptr);
           tgt_rep->fp_def[0] = true;
           changed |= SetFp(tgt_rep->defs[0]);
           if (shorty[0] == 'D') {

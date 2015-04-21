@@ -48,7 +48,7 @@ class OatFile FINAL {
   static OatFile* OpenWithElfFile(ElfFile* elf_file, const std::string& location,
                                   const char* abs_dex_location,
                                   std::string* error_msg);
-  // Open an oat file. Returns NULL on failure.  Requested base can
+  // Open an oat file. Returns null on failure.  Requested base can
   // optionally be used to request where the file should be loaded.
   // See the ResolveRelativeEncodedDexLocation for a description of how the
   // abs_dex_location argument is used.
@@ -149,7 +149,7 @@ class OatFile FINAL {
     template<class T>
     T GetOatPointer(uint32_t offset) const {
       if (offset == 0) {
-        return NULL;
+        return nullptr;
       }
       return reinterpret_cast<T>(begin_ + offset);
     }
@@ -177,7 +177,7 @@ class OatFile FINAL {
     const OatMethod GetOatMethod(uint32_t method_index) const;
 
     // Return a pointer to the OatMethodOffsets for the requested
-    // method_index, or nullptr if none is present. Note that most
+    // method_index, or null if none is present. Note that most
     // callers should use GetOatMethod.
     const OatMethodOffsets* GetOatMethodOffsets(uint32_t method_index) const;
 
@@ -238,7 +238,7 @@ class OatFile FINAL {
 
   // Returns the absolute dex location for the encoded relative dex location.
   //
-  // If not nullptr, abs_dex_location is used to resolve the absolute dex
+  // If not null, abs_dex_location is used to resolve the absolute dex
   // location of relative dex locations encoded in the oat file.
   // For example, given absolute location "/data/app/foo/base.apk", encoded
   // dex locations "base.apk", "base.apk:classes2.dex", etc. would be resolved
