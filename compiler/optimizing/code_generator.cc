@@ -827,7 +827,11 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
 
 bool CodeGenerator::CanMoveNullCheckToUser(HNullCheck* null_check) {
   HInstruction* first_next_not_move = null_check->GetNextDisregardingMoves();
-  return (first_next_not_move != nullptr) && first_next_not_move->CanDoImplicitNullCheck();
+
+  return (first_next_not_move != nullptr)
+      && first_next_not_move->CanDoImplicitNullCheck()
+      // Make sure that we check the same object. The object is always the first input.
+      && first_next_not_move->InputAt(0) == null_check->InputAt(0);
 }
 
 void CodeGenerator::MaybeRecordImplicitNullCheck(HInstruction* instr) {
