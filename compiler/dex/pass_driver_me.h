@@ -88,7 +88,7 @@ class PassDriverME: public PassDriver {
   }
 
   bool RunPass(const Pass* pass, bool time_split) OVERRIDE {
-    // Paranoid: c_unit and pass cannot be nullptr, and the pass should have a name
+    // Paranoid: c_unit and pass cannot be null, and the pass should have a name
     DCHECK(pass != nullptr);
     DCHECK(pass->GetName() != nullptr && pass->GetName()[0] != 0);
     CompilationUnit* c_unit = pass_me_data_holder_.c_unit;

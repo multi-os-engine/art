@@ -86,14 +86,14 @@ static jobject VMStack_getClosestUserClassLoader(JNIEnv* env, jclass, jobject ja
   struct ClosestUserClassLoaderVisitor : public StackVisitor {
     ClosestUserClassLoaderVisitor(Thread* thread, mirror::Object* bootstrap_in,
                                   mirror::Object* system_in)
-      : StackVisitor(thread, NULL), bootstrap(bootstrap_in), system(system_in),
-        class_loader(NULL) {}
+      : StackVisitor(thread, nullptr), bootstrap(bootstrap_in), system(system_in),
+        class_loader(nullptr) {}
 
     bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-      DCHECK(class_loader == NULL);
+      DCHECK(class_loader == nullptr);
       mirror::Class* c = GetMethod()->GetDeclaringClass();
       mirror::Object* cl = c->GetClassLoader();
-      if (cl != NULL && cl != bootstrap && cl != system) {
+      if (cl != nullptr && cl != bootstrap && cl != system) {
         class_loader = cl;
         return false;
       }
