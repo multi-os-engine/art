@@ -276,6 +276,21 @@ void SSAChecker::CheckLoop(HBasicBlock* loop_header) {
                             id));
     }
   }
+
+  // If this is a nested loop, ensure the outer loops a superset
+  // of the blocks.
+  for (HLoopInformationOutwardIterator it(*loop_header); !it.Done(); it.Advance()) {
+    if (!loop_blocks.IsSubsetOf(&it.Current()->GetBlocks())) {
+      LOG(INFO) << "PROBLEM";
+      for (size_t i = 0, e = loop_header->GetGraph()->GetBlocks().Size(); i < e; ++i) {
+        LOG(INFO) << i << ": " << loop_blocks.IsBitSet(i) << " x " << it.Current()->GetBlocks().IsBitSet(i);
+      }
+      AddError(StringPrintf("Blocks of loop defined by header %d are not a subset of blocks of "
+                            "an outer loop defined by header %d.",
+                            loop_header->GetBlockId(),
+                            it.Current()->GetHeader()->GetBlockId()));
+    }
+  }
 }
 
 void SSAChecker::VisitInstruction(HInstruction* instruction) {
