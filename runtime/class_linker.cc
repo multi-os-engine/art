@@ -110,7 +110,7 @@ static void ThrowEarlierClassFailure(mirror::Class* c)
     mirror::Throwable* pre_allocated = runtime->GetPreAllocatedNoClassDefFoundError();
     self->SetException(pre_allocated);
   } else {
-    if (c->GetVerifyErrorClass() != NULL) {
+    if (c->GetVerifyErrorClass() != nullptr) {
       // TODO: change the verifier to store an _instance_, with a useful detail message?
       std::string temp;
       self->ThrowNewException(c->GetVerifyErrorClass()->GetDescriptor(&temp),

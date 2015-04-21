@@ -302,7 +302,7 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
   const DexFile::CodeItem* code_item = method->GetCodeItem();
   uint16_t num_regs;
   uint16_t num_ins;
-  if (code_item != NULL) {
+  if (code_item != nullptr) {
     num_regs =  code_item->registers_size_;
     num_ins = code_item->ins_size_;
   } else if (method->IsAbstract()) {
@@ -325,7 +325,7 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
 
   size_t cur_reg = num_regs - num_ins;
   if (!method->IsStatic()) {
-    CHECK(receiver != NULL);
+    CHECK(receiver != nullptr);
     shadow_frame->SetVRegReference(cur_reg, receiver);
     ++cur_reg;
   }
@@ -365,7 +365,7 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
   }
   if (LIKELY(!method->IsNative())) {
     JValue r = Execute(self, code_item, *shadow_frame, JValue());
-    if (result != NULL) {
+    if (result != nullptr) {
       *result = r;
     }
   } else {
@@ -387,7 +387,7 @@ void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame, JVa
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   JValue value;
   value.SetJ(ret_val->GetJ());  // Set value to last known result in case the shadow frame chain is empty.
-  while (shadow_frame != NULL) {
+  while (shadow_frame != nullptr) {
     self->SetTopOfShadowStack(shadow_frame);
     const DexFile::CodeItem* code_item = shadow_frame->GetMethod()->GetCodeItem();
     const uint32_t dex_pc = shadow_frame->GetDexPC();

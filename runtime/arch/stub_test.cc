@@ -1788,9 +1788,9 @@ static void TestFields(Thread* self, StubTest* test, Primitive::Type test_type) 
 
   JNIEnv* env = Thread::Current()->GetJniEnv();
   jclass jc = env->FindClass("AllFields");
-  CHECK(jc != NULL);
+  CHECK(jc != nullptr);
   jobject o = env->AllocObject(jc);
-  CHECK(o != NULL);
+  CHECK(o != nullptr);
 
   ScopedObjectAccess soa(self);
   StackHandleScope<4> hs(self);

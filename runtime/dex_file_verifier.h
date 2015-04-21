@@ -36,7 +36,7 @@ class DexFileVerifier {
  private:
   DexFileVerifier(const DexFile* dex_file, const uint8_t* begin, size_t size, const char* location)
       : dex_file_(dex_file), begin_(begin), size_(size), location_(location),
-        header_(&dex_file->GetHeader()), ptr_(NULL), previous_item_(NULL)  {
+        header_(&dex_file->GetHeader()), ptr_(nullptr), previous_item_(nullptr)  {
   }
 
   bool Verify();

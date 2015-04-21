@@ -605,7 +605,7 @@ class Mir2Lir {
     char* ArenaStrdup(const char* str) {
       size_t len = strlen(str) + 1;
       char* res = arena_->AllocArray<char>(len, kArenaAllocMisc);
-      if (res != NULL) {
+      if (res != nullptr) {
         strncpy(res, str, len);
       }
       return res;
@@ -651,7 +651,7 @@ class Mir2Lir {
     void DumpPromotionMap();
     void CodegenDump();
     LIR* RawLIR(DexOffset dalvik_offset, int opcode, int op0 = 0, int op1 = 0,
-                int op2 = 0, int op3 = 0, int op4 = 0, LIR* target = NULL);
+                int op2 = 0, int op3 = 0, int op4 = 0, LIR* target = nullptr);
     LIR* NewLIR0(int opcode);
     LIR* NewLIR1(int opcode, int dest);
     LIR* NewLIR2(int opcode, int dest, int src1);

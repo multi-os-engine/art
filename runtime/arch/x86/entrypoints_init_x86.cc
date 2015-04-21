@@ -96,17 +96,17 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pUnlockObject = art_quick_unlock_object;
 
   // Math
-  // points->pCmpgDouble = NULL;  // Not needed on x86.
-  // points->pCmpgFloat = NULL;  // Not needed on x86.
-  // points->pCmplDouble = NULL;  // Not needed on x86.
-  // points->pCmplFloat = NULL;  // Not needed on x86.
-  // qpoints->pFmod = NULL;  // Not needed on x86.
-  // qpoints->pL2d = NULL;  // Not needed on x86.
-  // qpoints->pFmodf = NULL;  // Not needed on x86.
-  // qpoints->pL2f = NULL;  // Not needed on x86.
-  // points->pD2iz = NULL;  // Not needed on x86.
-  // points->pF2iz = NULL;  // Not needed on x86.
-  // qpoints->pIdivmod = NULL;  // Not needed on x86.
+  // points->pCmpgDouble = nullptr;  // Not needed on x86.
+  // points->pCmpgFloat = nullptr;  // Not needed on x86.
+  // points->pCmplDouble = nullptr;  // Not needed on x86.
+  // points->pCmplFloat = nullptr;  // Not needed on x86.
+  // qpoints->pFmod = nullptr;  // Not needed on x86.
+  // qpoints->pL2d = nullptr;  // Not needed on x86.
+  // qpoints->pFmodf = nullptr;  // Not needed on x86.
+  // qpoints->pL2f = nullptr;  // Not needed on x86.
+  // points->pD2iz = nullptr;  // Not needed on x86.
+  // points->pF2iz = nullptr;  // Not needed on x86.
+  // qpoints->pIdivmod = nullptr;  // Not needed on x86.
   qpoints->pD2l = art_quick_d2l;
   qpoints->pF2l = art_quick_f2l;
   qpoints->pLdiv = art_quick_ldiv;

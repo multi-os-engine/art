@@ -112,7 +112,7 @@ class JniInternalTest : public CommonCompilerTest {
 
     // Null argument is always an abort.
     env_->FindClass(nullptr);
-    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was null"
                                             : "name == null");
 
     // Reference types...
@@ -172,15 +172,15 @@ class JniInternalTest : public CommonCompilerTest {
 
     jfieldID fid = env_->GetFieldID(nullptr, "count", "I");
     EXPECT_EQ(nullptr, fid);
-    check_jni_abort_catcher.Check(check_jni ? "GetFieldID received NULL jclass"
+    check_jni_abort_catcher.Check(check_jni ? "GetFieldID received null jclass"
                                             : "java_class == null");
     fid = env_->GetFieldID(c, nullptr, "I");
     EXPECT_EQ(nullptr, fid);
-    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was null"
                                             : "name == null");
     fid = env_->GetFieldID(c, "count", nullptr);
     EXPECT_EQ(nullptr, fid);
-    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was null"
                                             : "sig == null");
 
     EXPECT_EQ(check_jni, vm_->SetCheckJniEnabled(old_check_jni));
@@ -195,15 +195,15 @@ class JniInternalTest : public CommonCompilerTest {
 
     jfieldID fid = env_->GetStaticFieldID(nullptr, "CASE_INSENSITIVE_ORDER", "Ljava/util/Comparator;");
     EXPECT_EQ(nullptr, fid);
-    check_jni_abort_catcher.Check(check_jni ? "GetStaticFieldID received NULL jclass"
+    check_jni_abort_catcher.Check(check_jni ? "GetStaticFieldID received null jclass"
                                             : "java_class == null");
     fid = env_->GetStaticFieldID(c, nullptr, "Ljava/util/Comparator;");
     EXPECT_EQ(nullptr, fid);
-    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was null"
                                             : "name == null");
     fid = env_->GetStaticFieldID(c, "CASE_INSENSITIVE_ORDER", nullptr);
     EXPECT_EQ(nullptr, fid);
-    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was null"
                                             : "sig == null");
 
     EXPECT_EQ(check_jni, vm_->SetCheckJniEnabled(old_check_jni));
@@ -215,17 +215,17 @@ class JniInternalTest : public CommonCompilerTest {
 
     jmethodID method = env_->GetMethodID(nullptr, "<init>", "(Ljava/lang/String;)V");
     EXPECT_EQ(nullptr, method);
-    check_jni_abort_catcher.Check(check_jni ? "GetMethodID received NULL jclass"
+    check_jni_abort_catcher.Check(check_jni ? "GetMethodID received null jclass"
                                             : "java_class == null");
     jclass jlnsme = env_->FindClass("java/lang/NoSuchMethodError");
     ASSERT_TRUE(jlnsme != nullptr);
     method = env_->GetMethodID(jlnsme, nullptr, "(Ljava/lang/String;)V");
     EXPECT_EQ(nullptr, method);
-    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was null"
                                             : "name == null");
     method = env_->GetMethodID(jlnsme, "<init>", nullptr);
     EXPECT_EQ(nullptr, method);
-    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was null"
                                             : "sig == null");
 
     EXPECT_EQ(check_jni, vm_->SetCheckJniEnabled(old_check_jni));
@@ -237,16 +237,16 @@ class JniInternalTest : public CommonCompilerTest {
 
     jmethodID method = env_->GetStaticMethodID(nullptr, "valueOf", "(I)Ljava/lang/String;");
     EXPECT_EQ(nullptr, method);
-    check_jni_abort_catcher.Check(check_jni ? "GetStaticMethodID received NULL jclass"
+    check_jni_abort_catcher.Check(check_jni ? "GetStaticMethodID received null jclass"
                                             : "java_class == null");
     jclass jlstring = env_->FindClass("java/lang/String");
     method = env_->GetStaticMethodID(jlstring, nullptr, "(I)Ljava/lang/String;");
     EXPECT_EQ(nullptr, method);
-    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was null"
                                             : "name == null");
     method = env_->GetStaticMethodID(jlstring, "valueOf", nullptr);
     EXPECT_EQ(nullptr, method);
-    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "non-nullable const char* was null"
                                             : "sig == null");
 
     EXPECT_EQ(check_jni, vm_->SetCheckJniEnabled(old_check_jni));
@@ -265,14 +265,14 @@ class JniInternalTest : public CommonCompilerTest {
     jobject field = env_->ToReflectedField(nullptr, fid, JNI_FALSE);
     if (check_jni) {
       EXPECT_EQ(field, nullptr);
-      check_jni_abort_catcher.Check("ToReflectedField received NULL jclass");
+      check_jni_abort_catcher.Check("ToReflectedField received null jclass");
     } else {
       EXPECT_NE(field, nullptr);
     }
 
     field = env_->ToReflectedField(c, nullptr, JNI_FALSE);
     EXPECT_EQ(field, nullptr);
-    check_jni_abort_catcher.Check(check_jni ? "jfieldID was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "jfieldID was null"
                                             : "fid == null");
 
     fid = env_->FromReflectedField(nullptr);
@@ -296,14 +296,14 @@ class JniInternalTest : public CommonCompilerTest {
     jobject method = env_->ToReflectedMethod(nullptr, mid, JNI_FALSE);
     if (check_jni) {
       EXPECT_EQ(method, nullptr);
-      check_jni_abort_catcher.Check("ToReflectedMethod received NULL jclass");
+      check_jni_abort_catcher.Check("ToReflectedMethod received null jclass");
     } else {
       EXPECT_NE(method, nullptr);
     }
 
     method = env_->ToReflectedMethod(c, nullptr, JNI_FALSE);
     EXPECT_EQ(method, nullptr);
-    check_jni_abort_catcher.Check(check_jni ? "jmethodID was NULL"
+    check_jni_abort_catcher.Check(check_jni ? "jmethodID was null"
                                             : "mid == null");
     mid = env_->FromReflectedMethod(method);
     ASSERT_EQ(mid, nullptr);
@@ -319,7 +319,7 @@ class JniInternalTest : public CommonCompilerTest {
     {
       JNINativeMethod methods[] = { };
       EXPECT_EQ(env_->RegisterNatives(nullptr, methods, 0), JNI_ERR);
-      check_jni_abort_catcher->Check(check_jni ? "RegisterNatives received NULL jclass"
+      check_jni_abort_catcher->Check(check_jni ? "RegisterNatives received null jclass"
                                                : "java_class == null");
     }
 
@@ -330,7 +330,7 @@ class JniInternalTest : public CommonCompilerTest {
 
     // Unregisters null is a failure.
     EXPECT_EQ(env_->UnregisterNatives(nullptr), JNI_ERR);
-    check_jni_abort_catcher->Check(check_jni ? "UnregisterNatives received NULL jclass"
+    check_jni_abort_catcher->Check(check_jni ? "UnregisterNatives received null jclass"
                                              : "java_class == null");
 
     EXPECT_EQ(check_jni, vm_->SetCheckJniEnabled(old_check_jni));
@@ -1169,7 +1169,7 @@ TEST_F(JniInternalTest, NewObjectArrayWithPrimitiveClasses) {
   EXPECT_FALSE(vm_->SetCheckJniEnabled(true));
   for (size_t i = 0; i < strlen(primitive_descriptors); ++i) {
     env_->NewObjectArray(0, nullptr, nullptr);
-    jni_abort_catcher.Check("NewObjectArray received NULL jclass");
+    jni_abort_catcher.Check("NewObjectArray received null jclass");
     jclass primitive_class = GetPrimitiveClass(primitive_descriptors[i]);
     env_->NewObjectArray(1, primitive_class, nullptr);
     std::string error_msg(StringPrintf("not an object type: %s", primitive_names[i]));
@@ -1200,14 +1200,14 @@ TEST_F(JniInternalTest, NewObjectArrayWithInitialValue) {
 }
 
 TEST_F(JniInternalTest, GetArrayLength) {
-  // Already tested in NewObjectArray/NewPrimitiveArray except for NULL.
+  // Already tested in NewObjectArray/NewPrimitiveArray except for nullptr.
   CheckJniAbortCatcher jni_abort_catcher;
   bool old_check_jni = vm_->SetCheckJniEnabled(false);
   EXPECT_EQ(0, env_->GetArrayLength(nullptr));
   jni_abort_catcher.Check("java_array == null");
   EXPECT_FALSE(vm_->SetCheckJniEnabled(true));
   EXPECT_EQ(JNI_ERR, env_->GetArrayLength(nullptr));
-  jni_abort_catcher.Check("jarray was NULL");
+  jni_abort_catcher.Check("jarray was null");
   EXPECT_TRUE(vm_->SetCheckJniEnabled(old_check_jni));
 }
 
@@ -1248,7 +1248,7 @@ TEST_F(JniInternalTest, GetSuperclass) {
   jni_abort_catcher.Check("java_class == null");
   EXPECT_FALSE(vm_->SetCheckJniEnabled(true));
   EXPECT_EQ(env_->GetSuperclass(nullptr), nullptr);
-  jni_abort_catcher.Check("GetSuperclass received NULL jclass");
+  jni_abort_catcher.Check("GetSuperclass received null jclass");
   EXPECT_TRUE(vm_->SetCheckJniEnabled(old_check_jni));
 }
 
@@ -1290,9 +1290,9 @@ TEST_F(JniInternalTest, IsAssignableFrom) {
   jni_abort_catcher.Check("java_class2 == null");
   EXPECT_FALSE(vm_->SetCheckJniEnabled(true));
   EXPECT_EQ(env_->IsAssignableFrom(nullptr, string_class), JNI_FALSE);
-  jni_abort_catcher.Check("IsAssignableFrom received NULL jclass");
+  jni_abort_catcher.Check("IsAssignableFrom received null jclass");
   EXPECT_EQ(env_->IsAssignableFrom(object_class, nullptr), JNI_FALSE);
-  jni_abort_catcher.Check("IsAssignableFrom received NULL jclass");
+  jni_abort_catcher.Check("IsAssignableFrom received null jclass");
   EXPECT_TRUE(vm_->SetCheckJniEnabled(old_check_jni));
 }
 
@@ -1503,7 +1503,7 @@ TEST_F(JniInternalTest, GetStringUTFChars_ReleaseStringUTFChars) {
     CheckJniAbortCatcher check_jni_abort_catcher;
     EXPECT_FALSE(vm_->SetCheckJniEnabled(true));
     EXPECT_EQ(env_->GetStringUTFChars(nullptr, nullptr), nullptr);
-    check_jni_abort_catcher.Check("GetStringUTFChars received NULL jstring");
+    check_jni_abort_catcher.Check("GetStringUTFChars received null jstring");
     EXPECT_TRUE(vm_->SetCheckJniEnabled(old_check_jni));
   }
 
@@ -1606,9 +1606,9 @@ TEST_F(JniInternalTest, GetObjectArrayElement_SetObjectArrayElement) {
   jni_abort_catcher.Check("java_array == null");
   EXPECT_FALSE(vm_->SetCheckJniEnabled(true));
   EXPECT_EQ(nullptr, env_->GetObjectArrayElement(nullptr, 0));
-  jni_abort_catcher.Check("jarray was NULL");
+  jni_abort_catcher.Check("jarray was null");
   env_->SetObjectArrayElement(nullptr, 0, nullptr);
-  jni_abort_catcher.Check("jarray was NULL");
+  jni_abort_catcher.Check("jarray was null");
   EXPECT_TRUE(vm_->SetCheckJniEnabled(old_check_jni));
 }
 
@@ -1635,13 +1635,13 @@ TEST_F(JniInternalTest, GetObjectArrayElement_SetObjectArrayElement) {
     \
     EXPECT_FALSE(vm_->SetCheckJniEnabled(true)); \
     env_->GetStatic ## type ## Field(nullptr, fid); \
-    jni_abort_catcher.Check("received NULL jclass"); \
+    jni_abort_catcher.Check("received null jclass"); \
     env_->SetStatic ## type ## Field(nullptr, fid, value1); \
-    jni_abort_catcher.Check("received NULL jclass"); \
+    jni_abort_catcher.Check("received null jclass"); \
     env_->GetStatic ## type ## Field(c, nullptr); \
-    jni_abort_catcher.Check("jfieldID was NULL"); \
+    jni_abort_catcher.Check("jfieldID was null"); \
     env_->SetStatic ## type ## Field(c, nullptr, value1); \
-    jni_abort_catcher.Check("jfieldID was NULL"); \
+    jni_abort_catcher.Check("jfieldID was null"); \
     EXPECT_TRUE(vm_->SetCheckJniEnabled(old_check_jni)); \
   } while (false)
 
@@ -1666,13 +1666,13 @@ TEST_F(JniInternalTest, GetObjectArrayElement_SetObjectArrayElement) {
     jni_abort_catcher.Check("fid == null"); \
     EXPECT_FALSE(vm_->SetCheckJniEnabled(true)); \
     env_->Get ## type ## Field(nullptr, fid); \
-    jni_abort_catcher.Check("field operation on NULL object:"); \
+    jni_abort_catcher.Check("field operation on null object:"); \
     env_->Set ## type ## Field(nullptr, fid, value1); \
-    jni_abort_catcher.Check("field operation on NULL object:"); \
+    jni_abort_catcher.Check("field operation on null object:"); \
     env_->Get ## type ## Field(instance, nullptr); \
-    jni_abort_catcher.Check("jfieldID was NULL"); \
+    jni_abort_catcher.Check("jfieldID was null"); \
     env_->Set ## type ## Field(instance, nullptr, value1); \
-    jni_abort_catcher.Check("jfieldID was NULL"); \
+    jni_abort_catcher.Check("jfieldID was null"); \
     EXPECT_TRUE(vm_->SetCheckJniEnabled(old_check_jni)); \
   } while (false)
 
@@ -1985,7 +1985,7 @@ TEST_F(JniInternalTest, Throw) {
   EXPECT_FALSE(vm_->SetCheckJniEnabled(true));
   CheckJniAbortCatcher check_jni_abort_catcher;
   EXPECT_EQ(JNI_ERR, env_->Throw(nullptr));
-  check_jni_abort_catcher.Check("Throw received NULL jthrowable");
+  check_jni_abort_catcher.Check("Throw received null jthrowable");
   EXPECT_TRUE(vm_->SetCheckJniEnabled(old_check_jni));
 }
 
@@ -2014,7 +2014,7 @@ TEST_F(JniInternalTest, ThrowNew) {
   check_jni_abort_catcher.Check("c == null");
   EXPECT_FALSE(vm_->SetCheckJniEnabled(true));
   EXPECT_EQ(JNI_ERR, env_->ThrowNew(nullptr, nullptr));
-  check_jni_abort_catcher.Check("ThrowNew received NULL jclass");
+  check_jni_abort_catcher.Check("ThrowNew received null jclass");
   EXPECT_TRUE(vm_->SetCheckJniEnabled(old_check_jni));
 }
 

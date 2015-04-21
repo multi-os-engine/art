@@ -48,7 +48,7 @@ class OatFile FINAL {
   static OatFile* OpenWithElfFile(ElfFile* elf_file, const std::string& location,
                                   const char* abs_dex_location,
                                   std::string* error_msg);
-  // Open an oat file. Returns NULL on failure.  Requested base can
+  // Open an oat file. Returns nullptr on failure.  Requested base can
   // optionally be used to request where the file should be loaded.
   // See the ResolveRelativeEncodedDexLocation for a description of how the
   // abs_dex_location argument is used.
@@ -149,7 +149,7 @@ class OatFile FINAL {
     template<class T>
     T GetOatPointer(uint32_t offset) const {
       if (offset == 0) {
-        return NULL;
+        return nullptr;
       }
       return reinterpret_cast<T>(begin_ + offset);
     }

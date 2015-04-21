@@ -199,7 +199,7 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   static_assert(IsDirectEntrypoint(kQuickD2iz), "Direct C stub not marked direct.");
   qpoints->pF2iz = art_f2i;
   static_assert(IsDirectEntrypoint(kQuickF2iz), "Direct C stub not marked direct.");
-  qpoints->pIdivmod = NULL;
+  qpoints->pIdivmod = nullptr;
   qpoints->pD2l = art_d2l;
   static_assert(IsDirectEntrypoint(kQuickD2l), "Direct C stub not marked direct.");
   qpoints->pF2l = art_f2l;

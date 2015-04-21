@@ -302,7 +302,7 @@ inline int CompilerDriver::IsFastInvoke(
                                                   target_dex_cache, class_loader,
                                                   NullHandle<mirror::ArtMethod>(), kVirtual);
     }
-    CHECK(called_method != NULL);
+    CHECK(called_method != nullptr);
     CHECK(!called_method->IsAbstract());
     int stats_flags = kFlagMethodResolved;
     GetCodeAndMethodForDirectCall(/*out*/invoke_type,

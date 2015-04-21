@@ -85,7 +85,7 @@ class OatFileAssistant {
   // Constructs an OatFileAssistant object to assist the oat file
   // corresponding to the given dex location with the target instruction set.
   //
-  // The dex_location must not be NULL and should remain available and
+  // The dex_location must not be nullptr and should remain available and
   // unchanged for the duration of the lifetime of the OatFileAssistant object.
   // Typically the dex_location is the absolute path to the original,
   // un-optimized dex file.

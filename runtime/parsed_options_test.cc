@@ -33,7 +33,7 @@ TEST_F(ParsedOptionsTest, ParsedOptions) {
   void* test_vfprintf = reinterpret_cast<void*>(0xa);
   void* test_abort = reinterpret_cast<void*>(0xb);
   void* test_exit = reinterpret_cast<void*>(0xc);
-  void* null = reinterpret_cast<void*>(NULL);
+  void* null = nullptr;
 
   std::string lib_core(CommonRuntimeTest::GetLibCoreDexFileName());
 
@@ -62,7 +62,7 @@ TEST_F(ParsedOptionsTest, ParsedOptions) {
 
   RuntimeArgumentMap map;
   std::unique_ptr<ParsedOptions> parsed(ParsedOptions::Create(options, false, &map));
-  ASSERT_TRUE(parsed.get() != NULL);
+  ASSERT_TRUE(parsed.get() != nullptr);
   ASSERT_NE(0u, map.Size());
 
   using Opt = RuntimeArgumentMap;
@@ -104,7 +104,7 @@ TEST_F(ParsedOptionsTest, ParsedOptionsGc) {
 
   RuntimeArgumentMap map;
   std::unique_ptr<ParsedOptions> parsed(ParsedOptions::Create(options, false, &map));
-  ASSERT_TRUE(parsed.get() != NULL);
+  ASSERT_TRUE(parsed.get() != nullptr);
   ASSERT_NE(0u, map.Size());
 
   using Opt = RuntimeArgumentMap;

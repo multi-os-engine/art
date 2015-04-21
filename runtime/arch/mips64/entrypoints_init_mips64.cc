@@ -135,15 +135,15 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pL2f = art_l2f;
   qpoints->pD2iz = art_d2i;
   qpoints->pF2iz = art_f2i;
-  qpoints->pIdivmod = NULL;
+  qpoints->pIdivmod = nullptr;
   qpoints->pD2l = art_d2l;
   qpoints->pF2l = art_f2l;
   qpoints->pLdiv = artLdiv;
   qpoints->pLmod = artLmod;
   qpoints->pLmul = artLmul;
-  qpoints->pShlLong = NULL;
-  qpoints->pShrLong = NULL;
-  qpoints->pUshrLong = NULL;
+  qpoints->pShlLong = nullptr;
+  qpoints->pShrLong = nullptr;
+  qpoints->pUshrLong = nullptr;
 
   // Intrinsics
   qpoints->pIndexOf = art_quick_indexof;

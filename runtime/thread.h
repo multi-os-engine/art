@@ -185,7 +185,7 @@ class Thread {
       LOCKS_EXCLUDED(Locks::thread_suspend_count_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Dumps the SIGQUIT per-thread header. 'thread' can be NULL for a non-attached thread, in which
+  // Dumps the SIGQUIT per-thread header. 'thread' can be nullptr for a non-attached thread, in which
   // case we use 'tid' to identify the thread, and we'll include as much information as we can.
   static void DumpState(std::ostream& os, const Thread* thread, pid_t tid)
       LOCKS_EXCLUDED(Locks::thread_suspend_count_lock_)
@@ -245,7 +245,7 @@ class Thread {
   // Once called thread suspension will cause an assertion failure.
   const char* StartAssertNoThreadSuspension(const char* cause) {
     if (kIsDebugBuild) {
-      CHECK(cause != NULL);
+      CHECK(cause != nullptr);
       const char* previous_cause = tlsPtr_.last_no_thread_suspension_cause;
       tls32_.no_thread_suspension++;
       tlsPtr_.last_no_thread_suspension_cause = cause;
@@ -297,7 +297,7 @@ class Thread {
     return tls32_.tid;
   }
 
-  // Returns the java.lang.Thread's name, or NULL if this Thread* doesn't have a peer.
+  // Returns the java.lang.Thread's name, or nullptr if this Thread* doesn't have a peer.
   mirror::String* GetThreadName(const ScopedObjectAccessAlreadyRunnable& ts) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -340,7 +340,7 @@ class Thread {
 
   void SetException(mirror::Throwable* new_exception)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    CHECK(new_exception != NULL);
+    CHECK(new_exception != nullptr);
     // TODO: DCHECK(!IsExceptionPending());
     tlsPtr_.exception = new_exception;
   }
@@ -381,11 +381,11 @@ class Thread {
         (tlsPtr_.managed_stack.GetTopShadowFrame() != nullptr);
   }
 
-  // If 'msg' is NULL, no detail message is set.
+  // If 'msg' is nullptr, no detail message is set.
   void ThrowNewException(const char* exception_class_descriptor, const char* msg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // If 'msg' is NULL, no detail message is set. An exception must be pending, and will be
+  // If 'msg' is nullptr, no detail message is set. An exception must be pending, and will be
   // used as the new exception's cause.
   void ThrowNewWrappedException(const char* exception_class_descriptor, const char* msg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -477,8 +477,8 @@ class Thread {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Convert an internal stack trace representation (returned by CreateInternalStackTrace) to a
-  // StackTraceElement[]. If output_array is NULL, a new array is created, otherwise as many
-  // frames as will fit are written into the given array. If stack_depth is non-NULL, it's updated
+  // StackTraceElement[]. If output_array is nullptr, a new array is created, otherwise as many
+  // frames as will fit are written into the given array. If stack_depth is non-nullptr, it's updated
   // with the number of valid frames in the returned array.
   static jobjectArray InternalStackTraceToStackTraceElementArray(
       const ScopedObjectAccessAlreadyRunnable& soa, jobject internal,
@@ -1085,7 +1085,7 @@ class Thread {
     // The biased card table, see CardTable for details.
     uint8_t* card_table;
 
-    // The pending exception or NULL.
+    // The pending exception or nullptr.
     mirror::Throwable* exception;
 
     // The end of this thread's stack. This is the lowest safely-addressable address on the stack.
@@ -1121,7 +1121,7 @@ class Thread {
     // Pointer to previous stack trace captured by sampling profiler.
     std::vector<mirror::ArtMethod*>* stack_trace_sample;
 
-    // The next thread in the wait set this thread is part of or NULL if not waiting.
+    // The next thread in the wait set this thread is part of or nullptr if not waiting.
     Thread* wait_next;
 
     // If we're blocked in MonitorEnter, this is the object we're trying to lock.
@@ -1162,7 +1162,7 @@ class Thread {
     // If no_thread_suspension_ is > 0, what is causing that assertion.
     const char* last_no_thread_suspension_cause;
 
-    // Pending checkpoint function or NULL if non-pending. Installation guarding by
+    // Pending checkpoint function or nullptr if non-pending. Installation guarding by
     // Locks::thread_suspend_count_lock_.
     Closure* checkpoint_functions[kMaxCheckpoints];
 
@@ -1203,7 +1203,7 @@ class Thread {
 
   // Condition variable waited upon during a wait.
   ConditionVariable* wait_cond_ GUARDED_BY(wait_mutex_);
-  // Pointer to the monitor lock we're currently waiting on or NULL if not waiting.
+  // Pointer to the monitor lock we're currently waiting on or nullptr if not waiting.
   Monitor* wait_monitor_ GUARDED_BY(wait_mutex_);
 
   // Thread "interrupted" status; stays raised until queried or thrown.

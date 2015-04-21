@@ -122,7 +122,7 @@ class ImageSpace : public MemMapSpace {
 
  private:
   // Tries to initialize an ImageSpace from the given image path,
-  // returning NULL on error.
+  // returning nullptr on error.
   //
   // If validate_oat_file is false (for /system), do not verify that
   // image's OatFile is up-to-date relative to its DexFile

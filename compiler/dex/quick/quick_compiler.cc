@@ -515,7 +515,7 @@ bool QuickCompiler::CanCompileMethod(uint32_t method_idx, const DexFile& dex_fil
 
   for (unsigned int idx = 0; idx < cu->mir_graph->GetNumBlocks(); idx++) {
     BasicBlock* bb = cu->mir_graph->GetBasicBlock(idx);
-    if (bb == NULL) continue;
+    if (bb == nullptr) continue;
     if (bb->block_type == kDead) continue;
     for (MIR* mir = bb->first_mir_insn; mir != nullptr; mir = mir->next) {
       int opcode = mir->dalvikInsn.opcode;

@@ -714,7 +714,7 @@ std::string Dbg::GetClassName(JDWP::RefTypeId class_id) {
   mirror::Object* o = gRegistry->Get<mirror::Object*>(class_id, &error);
   if (o == nullptr) {
     if (error == JDWP::ERR_NONE) {
-      return "NULL";
+      return "null";
     } else {
       return StringPrintf("invalid object %p", reinterpret_cast<void*>(class_id));
     }
@@ -727,7 +727,7 @@ std::string Dbg::GetClassName(JDWP::RefTypeId class_id) {
 
 std::string Dbg::GetClassName(mirror::Class* klass) {
   if (klass == nullptr) {
-    return "NULL";
+    return "null";
   }
   std::string temp;
   return DescriptorToName(klass->GetDescriptor(&temp));
@@ -1409,7 +1409,7 @@ void Dbg::SetJdwpLocation(JDWP::JdwpLocation* location, mirror::ArtMethod* m, ui
 std::string Dbg::GetMethodName(JDWP::MethodId method_id) {
   mirror::ArtMethod* m = FromMethodId(method_id);
   if (m == nullptr) {
-    return "NULL";
+    return "null";
   }
   return m->GetName();
 }
@@ -1417,7 +1417,7 @@ std::string Dbg::GetMethodName(JDWP::MethodId method_id) {
 std::string Dbg::GetFieldName(JDWP::FieldId field_id) {
   ArtField* f = FromFieldId(field_id);
   if (f == nullptr) {
-    return "NULL";
+    return "null";
   }
   return f->GetName();
 }
@@ -2176,7 +2176,7 @@ void Dbg::GetThreads(mirror::Object* thread_group, std::vector<JDWP::ObjectId>* 
     }
     mirror::Object* peer = t->GetPeer();
     if (peer == nullptr) {
-      // peer might be NULL if the thread is still starting up. We can't tell the debugger about
+      // peer might be nullptr if the thread is still starting up. We can't tell the debugger about
       // this thread yet.
       // TODO: if we identified threads to the debugger by their Thread*
       // rather than their peer's mirror::Object*, we could fix this.

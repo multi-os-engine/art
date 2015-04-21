@@ -299,7 +299,7 @@ class ShadowFrame {
   }
 
   const uint32_t number_of_vregs_;
-  // Link to previous shadow frame or NULL.
+  // Link to previous shadow frame or nullptr.
   ShadowFrame* link_;
   mirror::ArtMethod* method_;
   uint32_t dex_pc_;

@@ -152,7 +152,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
     // References need placing in handle scope and the entry value passing
     if (ref_param) {
       // Compute handle scope entry, note null is placed in the handle scope but its boxed value
-      // must be NULL
+      // must be nullptr
       FrameOffset handle_scope_offset = main_jni_conv->CurrentParamHandleScopeEntryOffset();
       // Check handle scope offset is within frame and doesn't run into the saved segment state
       CHECK_LT(handle_scope_offset.Uint32Value(), frame_size);
@@ -243,7 +243,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   // 7. Iterate over arguments placing values from managed calling convention in
   //    to the convention required for a native call (shuffling). For references
   //    place an index/pointer to the reference after checking whether it is
-  //    NULL (which must be encoded as NULL).
+  //    nullptr (which must be encoded as nullptr).
   //    Note: we do this prior to materializing the JNIEnv* and static's jclass to
   //    give as many free registers for the shuffle as possible
   mr_conv->ResetIterator(FrameOffset(frame_size + main_out_arg_size));
