@@ -1,3 +1,4 @@
+
 /*
  * Copyright (C) 2014 The Android Open Source Project
  *
@@ -41,6 +42,7 @@ void HDeadCodeElimination::Run() {
           && !inst->IsMemoryBarrier()  // If we added an explicit barrier then we should keep it.
           && !inst->HasUses()) {
         block->RemoveInstruction(inst);
+        MaybeRecordStat(MethodCompilationStat::kRemovedDeadInstruction);
       }
     }
   }
