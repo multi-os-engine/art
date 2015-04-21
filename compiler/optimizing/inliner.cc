@@ -16,6 +16,7 @@
 
 #include "inliner.h"
 
+#include "boolean_simplifier.h"
 #include "builder.h"
 #include "class_linker.h"
 #include "constant_folding.h"
@@ -193,11 +194,13 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
   HDeadCodeElimination dce(callee_graph);
   HConstantFolding fold(callee_graph);
   InstructionSimplifier simplify(callee_graph, stats_);
+  HBooleanSimplifier boolean_simplify(callee_graph);
 
   HOptimization* optimizations[] = {
     &dce,
     &fold,
     &simplify,
+    &boolean_simplify
   };
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
