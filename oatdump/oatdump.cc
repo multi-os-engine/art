@@ -76,41 +76,11 @@ const char* image_roots_descriptions_[] = {
   "kClassRoots",
 };
 
-class OatSymbolizer FINAL : public CodeOutput {
+class OatSymbolizer FINAL {
  public:
   explicit OatSymbolizer(const OatFile* oat_file, const std::string& output_name) :
-      oat_file_(oat_file), builder_(nullptr), elf_output_(nullptr),
+      oat_file_(oat_file), builder_(nullptr),
       output_name_(output_name.empty() ? "symbolized.oat" : output_name) {
-  }
-
-  bool Init() {
-    Elf32_Word oat_data_size = oat_file_->GetOatHeader().GetExecutableOffset();
-
-    uint32_t diff = static_cast<uint32_t>(oat_file_->End() - oat_file_->Begin());
-    uint32_t oat_exec_size = diff - oat_data_size;
-    uint32_t oat_bss_size = oat_file_->BssSize();
-
-    elf_output_ = OS::CreateEmptyFile(output_name_.c_str());
-
-    builder_.reset(new ElfBuilder<ElfTypes32>(
-        this,
-        elf_output_,
-        oat_file_->GetOatHeader().GetInstructionSet(),
-        0,
-        oat_data_size,
-        oat_data_size,
-        oat_exec_size,
-        RoundUp(oat_data_size + oat_exec_size, kPageSize),
-        oat_bss_size,
-        true,
-        false));
-
-    if (!builder_->Init()) {
-      builder_.reset(nullptr);
-      return false;
-    }
-
-    return true;
   }
 
   typedef void (OatSymbolizer::*Callback)(const DexFile::ClassDef&,
@@ -122,9 +92,21 @@ class OatSymbolizer FINAL : public CodeOutput {
                                           uint32_t);
 
   bool Symbolize() {
-    if (builder_.get() == nullptr) {
-      return false;
-    }
+    Elf32_Word rodata_size = oat_file_->GetOatHeader().GetExecutableOffset();
+    uint32_t size = static_cast<uint32_t>(oat_file_->End() - oat_file_->Begin());
+    uint32_t text_size = size - rodata_size;
+    uint32_t bss_size = oat_file_->BssSize();
+    auto write_rodata = [this, rodata_size](File* f)->bool {
+      return f->WriteFully(oat_file_->Begin(), rodata_size);
+    };
+    auto write_text = [this, rodata_size, text_size](File* f)->bool {
+      return f->WriteFully(oat_file_->Begin() + rodata_size, text_size);
+    };
+    builder_.reset(new ElfBuilder<ElfTypes32>(
+        oat_file_->GetOatHeader().GetInstructionSet(),
+        rodata_size, write_rodata,
+        text_size, write_text,
+        bss_size));
 
     Walk(&art::OatSymbolizer::RegisterForDedup);
 
@@ -132,10 +114,11 @@ class OatSymbolizer FINAL : public CodeOutput {
 
     Walk(&art::OatSymbolizer::AddSymbol);
 
-    bool result = builder_->Write();
+    File* elf_output = OS::CreateEmptyFile(output_name_.c_str());
+    bool result = builder_->Write(elf_output);
 
     // Ignore I/O errors.
-    UNUSED(elf_output_->FlushClose());
+    UNUSED(elf_output->FlushClose());
 
     return result;
   }
@@ -269,22 +252,12 @@ class OatSymbolizer FINAL : public CodeOutput {
         pretty_name = "[Dedup]" + pretty_name;
       }
 
-      auto* symtab = builder_->GetSymtabBuilder();
+      typename ElfBuilder<ElfTypes32>::SymtabSection* symtab = builder_->GetSymtab();
 
-      symtab->AddSymbol(pretty_name, &builder_->GetTextBuilder(),
+      symtab->AddSymbol(pretty_name, builder_->GetText(),
           oat_method.GetCodeOffset() - oat_file_->GetOatHeader().GetExecutableOffset(),
           true, oat_method.GetQuickCodeSize(), STB_GLOBAL, STT_FUNC);
     }
-  }
-
-  // Set oat data offset. Required by ElfBuilder/CodeOutput.
-  void SetCodeOffset(size_t offset ATTRIBUTE_UNUSED) {
-    // Nothing to do.
-  }
-
-  // Write oat code. Required by ElfBuilder/CodeOutput.
-  bool Write(OutputStream* out) {
-    return out->WriteFully(oat_file_->Begin(), oat_file_->End() - oat_file_->Begin());
   }
 
  private:
@@ -299,7 +272,6 @@ class OatSymbolizer FINAL : public CodeOutput {
 
   const OatFile* oat_file_;
   std::unique_ptr<ElfBuilder<ElfTypes32> > builder_;
-  File* elf_output_;
   std::unordered_map<uint32_t, uint32_t> state_;
   const std::string output_name_;
 };
@@ -2203,10 +2175,6 @@ static int SymbolizeOat(const char* oat_filename, std::string& output_name) {
   }
 
   OatSymbolizer oat_symbolizer(oat_file, output_name);
-  if (!oat_symbolizer.Init()) {
-    fprintf(stderr, "Failed to initialize symbolizer\n");
-    return EXIT_FAILURE;
-  }
   if (!oat_symbolizer.Symbolize()) {
     fprintf(stderr, "Failed to symbolize\n");
     return EXIT_FAILURE;
