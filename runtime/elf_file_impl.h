@@ -32,11 +32,22 @@ extern "C" {
   struct JITCodeEntry;
 }
 
-template <typename Elf_Ehdr, typename Elf_Phdr, typename Elf_Shdr, typename Elf_Word,
-          typename Elf_Sword, typename Elf_Addr, typename Elf_Sym, typename Elf_Rel,
-          typename Elf_Rela, typename Elf_Dyn, typename Elf_Off>
+template <typename ElfTypes>
 class ElfFileImpl {
  public:
+  typedef typename ElfTypes::Addr Elf_Addr;
+  typedef typename ElfTypes::Off Elf_Off;
+  typedef typename ElfTypes::Half Elf_Half;
+  typedef typename ElfTypes::Word Elf_Word;
+  typedef typename ElfTypes::Sword Elf_Sword;
+  typedef typename ElfTypes::Ehdr Elf_Ehdr;
+  typedef typename ElfTypes::Shdr Elf_Shdr;
+  typedef typename ElfTypes::Sym Elf_Sym;
+  typedef typename ElfTypes::Rel Elf_Rel;
+  typedef typename ElfTypes::Rela Elf_Rela;
+  typedef typename ElfTypes::Phdr Elf_Phdr;
+  typedef typename ElfTypes::Dyn Elf_Dyn;
+
   static ElfFileImpl* Open(File* file, bool writable, bool program_header_only,
                            std::string* error_msg, uint8_t* requested_base = nullptr);
   static ElfFileImpl* Open(File* file, int mmap_prot, int mmap_flags, std::string* error_msg);
@@ -209,9 +220,7 @@ class ElfFileImpl {
   // Support for GDB JIT
   uint8_t* jit_elf_image_;
   JITCodeEntry* jit_gdb_entry_;
-  std::unique_ptr<ElfFileImpl<Elf_Ehdr, Elf_Phdr, Elf_Shdr, Elf_Word,
-                  Elf_Sword, Elf_Addr, Elf_Sym, Elf_Rel,
-                  Elf_Rela, Elf_Dyn, Elf_Off>> gdb_file_mapping_;
+  std::unique_ptr<ElfFileImpl<ElfTypes>> gdb_file_mapping_;
   void GdbJITSupport();
 
   // Override the 'base' p_vaddr in the first LOAD segment with this value (if non-null).
