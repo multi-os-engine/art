@@ -21,6 +21,7 @@
 
 #include "ScopedLocalRef.h"
 
+#include "art_method-inl.h"
 #include "base/logging.h"
 #include "base/macros.h"
 #include "class_linker.h"
@@ -29,7 +30,6 @@
 #include "handle_scope-inl.h"
 #include "interpreter/interpreter_common.h"
 #include "mirror/array-inl.h"
-#include "mirror/art_method-inl.h"
 #include "mirror/class.h"
 #include "mirror/field-inl.h"
 #include "mirror/object-inl.h"
@@ -173,7 +173,7 @@ static void UnstartedClassClassForName(
 static void UnstartedClassNewInstance(
     Thread* self, ShadowFrame* shadow_frame, JValue* result, size_t arg_offset)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  StackHandleScope<3> hs(self);  // Class, constructor, object.
+  StackHandleScope<2> hs(self);  // Class, constructor, object.
   mirror::Object* param = shadow_frame->GetVRegReference(arg_offset);
   if (param == nullptr) {
     AbortTransactionOrFail(self, "Null-pointer in Class.newInstance.");
@@ -202,13 +202,13 @@ static void UnstartedClassNewInstance(
   //  2) If we can't find the default constructor. We'll postpone the exception to runtime.
   // Note that 2) could likely be handled here, but for safety abort the transaction.
   bool ok = false;
-  if (Runtime::Current()->GetClassLinker()->EnsureInitialized(self, h_klass, true, true)) {
-    Handle<mirror::ArtMethod> h_cons(hs.NewHandle(
-        h_klass->FindDeclaredDirectMethod("<init>", "()V")));
-    if (h_cons.Get() != nullptr) {
+  auto* cl = Runtime::Current()->GetClassLinker();
+  if (cl->EnsureInitialized(self, h_klass, true, true)) {
+    auto* cons = h_klass->FindDeclaredDirectMethod("<init>", "()V", cl->GetImagePointerSize());
+    if (cons != nullptr) {
       Handle<mirror::Object> h_obj(hs.NewHandle(klass->AllocObject(self)));
       CHECK(h_obj.Get() != nullptr);  // We don't expect OOM at compile-time.
-      EnterInterpreterFromInvoke(self, h_cons.Get(), h_obj.Get(), nullptr, nullptr);
+      EnterInterpreterFromInvoke(self, cons, h_obj.Get(), nullptr, nullptr);
       if (!self->IsExceptionPending()) {
         result->SetL(h_obj.Get());
         ok = true;
@@ -436,8 +436,9 @@ static void UnstartedThreadLocalGet(
         Handle<mirror::Object> h_real_to_string_obj(hs.NewHandle(
             h_real_to_string_class->AllocObject(self)));
         if (h_real_to_string_obj.Get() != nullptr) {
-          mirror::ArtMethod* init_method =
-              h_real_to_string_class->FindDirectMethod("<init>", "()V");
+          auto* cl = Runtime::Current()->GetClassLinker();
+          ArtMethod* init_method = h_real_to_string_class->FindDirectMethod(
+              "<init>", "()V", cl->GetImagePointerSize());
           if (init_method == nullptr) {
             h_real_to_string_class->DumpClass(LOG(FATAL), mirror::Class::kDumpClassFullDetail);
           } else {
@@ -472,13 +473,6 @@ static void UnstartedMathCeil(
     out = ceil(in);
   }
   result->SetD(out);
-}
-
-static void UnstartedArtMethodGetMethodName(
-    Thread* self, ShadowFrame* shadow_frame, JValue* result, size_t arg_offset)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::ArtMethod* method = shadow_frame->GetVRegReference(arg_offset)->AsArtMethod();
-  result->SetL(method->GetNameAsString(self));
 }
 
 static void UnstartedObjectHashCode(
@@ -736,8 +730,9 @@ static void UnstartedSecurityGetSecurityPropertiesReader(
     return;
   }
 
-  mirror::ArtMethod* constructor = h_class->FindDeclaredDirectMethod("<init>",
-                                                                     "(Ljava/lang/String;)V");
+  auto* cl = Runtime::Current()->GetClassLinker();
+  ArtMethod* constructor = h_class->FindDeclaredDirectMethod(
+      "<init>", "(Ljava/lang/String;)V", cl->GetImagePointerSize());
   if (constructor == nullptr) {
     AbortTransactionOrFail(self, "Could not find StringReader constructor");
     return;
@@ -756,7 +751,7 @@ static void UnstartedSecurityGetSecurityPropertiesReader(
 }
 
 static void UnstartedJNIVMRuntimeNewUnpaddedArray(Thread* self,
-                                                  mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                                  ArtMethod* method ATTRIBUTE_UNUSED,
                                                   mirror::Object* receiver ATTRIBUTE_UNUSED,
                                                   uint32_t* args,
                                                   JValue* result)
@@ -773,7 +768,7 @@ static void UnstartedJNIVMRuntimeNewUnpaddedArray(Thread* self,
 }
 
 static void UnstartedJNIVMStackGetCallingClassLoader(Thread* self ATTRIBUTE_UNUSED,
-                                                     mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                                     ArtMethod* method ATTRIBUTE_UNUSED,
                                                      mirror::Object* receiver ATTRIBUTE_UNUSED,
                                                      uint32_t* args ATTRIBUTE_UNUSED,
                                                      JValue* result) {
@@ -781,7 +776,7 @@ static void UnstartedJNIVMStackGetCallingClassLoader(Thread* self ATTRIBUTE_UNUS
 }
 
 static void UnstartedJNIVMStackGetStackClass2(Thread* self,
-                                              mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                              ArtMethod* method ATTRIBUTE_UNUSED,
                                               mirror::Object* receiver ATTRIBUTE_UNUSED,
                                               uint32_t* args ATTRIBUTE_UNUSED,
                                               JValue* result)
@@ -794,7 +789,7 @@ static void UnstartedJNIVMStackGetStackClass2(Thread* self,
 }
 
 static void UnstartedJNIMathLog(Thread* self ATTRIBUTE_UNUSED,
-                                mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                ArtMethod* method ATTRIBUTE_UNUSED,
                                 mirror::Object* receiver ATTRIBUTE_UNUSED,
                                 uint32_t* args,
                                 JValue* result) {
@@ -804,7 +799,7 @@ static void UnstartedJNIMathLog(Thread* self ATTRIBUTE_UNUSED,
 }
 
 static void UnstartedJNIMathExp(Thread* self ATTRIBUTE_UNUSED,
-                                mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                ArtMethod* method ATTRIBUTE_UNUSED,
                                 mirror::Object* receiver ATTRIBUTE_UNUSED,
                                 uint32_t* args,
                                 JValue* result) {
@@ -814,7 +809,7 @@ static void UnstartedJNIMathExp(Thread* self ATTRIBUTE_UNUSED,
 }
 
 static void UnstartedJNIClassGetNameNative(Thread* self,
-                                           mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                           ArtMethod* method ATTRIBUTE_UNUSED,
                                            mirror::Object* receiver,
                                            uint32_t* args ATTRIBUTE_UNUSED,
                                            JValue* result)
@@ -824,7 +819,7 @@ static void UnstartedJNIClassGetNameNative(Thread* self,
 }
 
 static void UnstartedJNIFloatFloatToRawIntBits(Thread* self ATTRIBUTE_UNUSED,
-                                               mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                               ArtMethod* method ATTRIBUTE_UNUSED,
                                                mirror::Object* receiver ATTRIBUTE_UNUSED,
                                                uint32_t* args,
                                                JValue* result) {
@@ -832,7 +827,7 @@ static void UnstartedJNIFloatFloatToRawIntBits(Thread* self ATTRIBUTE_UNUSED,
 }
 
 static void UnstartedJNIFloatIntBitsToFloat(Thread* self ATTRIBUTE_UNUSED,
-                                            mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                            ArtMethod* method ATTRIBUTE_UNUSED,
                                             mirror::Object* receiver ATTRIBUTE_UNUSED,
                                             uint32_t* args,
                                             JValue* result) {
@@ -840,7 +835,7 @@ static void UnstartedJNIFloatIntBitsToFloat(Thread* self ATTRIBUTE_UNUSED,
 }
 
 static void UnstartedJNIObjectInternalClone(Thread* self,
-                                            mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                            ArtMethod* method ATTRIBUTE_UNUSED,
                                             mirror::Object* receiver,
                                             uint32_t* args ATTRIBUTE_UNUSED,
                                             JValue* result)
@@ -849,7 +844,7 @@ static void UnstartedJNIObjectInternalClone(Thread* self,
 }
 
 static void UnstartedJNIObjectNotifyAll(Thread* self,
-                                        mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                        ArtMethod* method ATTRIBUTE_UNUSED,
                                         mirror::Object* receiver,
                                         uint32_t* args ATTRIBUTE_UNUSED,
                                         JValue* result ATTRIBUTE_UNUSED)
@@ -858,7 +853,7 @@ static void UnstartedJNIObjectNotifyAll(Thread* self,
 }
 
 static void UnstartedJNIStringCompareTo(Thread* self,
-                                        mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                        ArtMethod* method ATTRIBUTE_UNUSED,
                                         mirror::Object* receiver,
                                         uint32_t* args,
                                         JValue* result)
@@ -871,7 +866,7 @@ static void UnstartedJNIStringCompareTo(Thread* self,
 }
 
 static void UnstartedJNIStringIntern(Thread* self ATTRIBUTE_UNUSED,
-                                     mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                     ArtMethod* method ATTRIBUTE_UNUSED,
                                      mirror::Object* receiver,
                                      uint32_t* args ATTRIBUTE_UNUSED,
                                      JValue* result)
@@ -880,7 +875,7 @@ static void UnstartedJNIStringIntern(Thread* self ATTRIBUTE_UNUSED,
 }
 
 static void UnstartedJNIStringFastIndexOf(Thread* self ATTRIBUTE_UNUSED,
-                                          mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                          ArtMethod* method ATTRIBUTE_UNUSED,
                                           mirror::Object* receiver,
                                           uint32_t* args,
                                           JValue* result)
@@ -889,7 +884,7 @@ static void UnstartedJNIStringFastIndexOf(Thread* self ATTRIBUTE_UNUSED,
 }
 
 static void UnstartedJNIArrayCreateMultiArray(Thread* self,
-                                              mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                              ArtMethod* method ATTRIBUTE_UNUSED,
                                               mirror::Object* receiver ATTRIBUTE_UNUSED,
                                               uint32_t* args,
                                               JValue* result)
@@ -901,7 +896,7 @@ static void UnstartedJNIArrayCreateMultiArray(Thread* self,
 }
 
 static void UnstartedJNIArrayCreateObjectArray(Thread* self,
-                                               mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                               ArtMethod* method ATTRIBUTE_UNUSED,
                                                mirror::Object* receiver ATTRIBUTE_UNUSED,
                                                uint32_t* args,
                                                JValue* result)
@@ -926,7 +921,7 @@ static void UnstartedJNIArrayCreateObjectArray(Thread* self,
 }
 
 static void UnstartedJNIThrowableNativeFillInStackTrace(Thread* self,
-                                                        mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                                        ArtMethod* method ATTRIBUTE_UNUSED,
                                                         mirror::Object* receiver ATTRIBUTE_UNUSED,
                                                         uint32_t* args ATTRIBUTE_UNUSED,
                                                         JValue* result)
@@ -940,7 +935,7 @@ static void UnstartedJNIThrowableNativeFillInStackTrace(Thread* self,
 }
 
 static void UnstartedJNISystemIdentityHashCode(Thread* self ATTRIBUTE_UNUSED,
-                                               mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                               ArtMethod* method ATTRIBUTE_UNUSED,
                                                mirror::Object* receiver ATTRIBUTE_UNUSED,
                                                uint32_t* args,
                                                JValue* result)
@@ -950,7 +945,7 @@ static void UnstartedJNISystemIdentityHashCode(Thread* self ATTRIBUTE_UNUSED,
 }
 
 static void UnstartedJNIByteOrderIsLittleEndian(Thread* self ATTRIBUTE_UNUSED,
-                                                mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                                ArtMethod* method ATTRIBUTE_UNUSED,
                                                 mirror::Object* receiver ATTRIBUTE_UNUSED,
                                                 uint32_t* args ATTRIBUTE_UNUSED,
                                                 JValue* result) {
@@ -958,7 +953,7 @@ static void UnstartedJNIByteOrderIsLittleEndian(Thread* self ATTRIBUTE_UNUSED,
 }
 
 static void UnstartedJNIUnsafeCompareAndSwapInt(Thread* self ATTRIBUTE_UNUSED,
-                                                mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                                ArtMethod* method ATTRIBUTE_UNUSED,
                                                 mirror::Object* receiver ATTRIBUTE_UNUSED,
                                                 uint32_t* args,
                                                 JValue* result)
@@ -979,7 +974,7 @@ static void UnstartedJNIUnsafeCompareAndSwapInt(Thread* self ATTRIBUTE_UNUSED,
 }
 
 static void UnstartedJNIUnsafePutObject(Thread* self ATTRIBUTE_UNUSED,
-                                        mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+                                        ArtMethod* method ATTRIBUTE_UNUSED,
                                         mirror::Object* receiver ATTRIBUTE_UNUSED,
                                         uint32_t* args,
                                         JValue* result ATTRIBUTE_UNUSED)
@@ -996,7 +991,7 @@ static void UnstartedJNIUnsafePutObject(Thread* self ATTRIBUTE_UNUSED,
 
 static void UnstartedJNIUnsafeGetArrayBaseOffsetForComponentType(
     Thread* self ATTRIBUTE_UNUSED,
-    mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+    ArtMethod* method ATTRIBUTE_UNUSED,
     mirror::Object* receiver ATTRIBUTE_UNUSED,
     uint32_t* args,
     JValue* result)
@@ -1008,7 +1003,7 @@ static void UnstartedJNIUnsafeGetArrayBaseOffsetForComponentType(
 
 static void UnstartedJNIUnsafeGetArrayIndexScaleForComponentType(
     Thread* self ATTRIBUTE_UNUSED,
-    mirror::ArtMethod* method ATTRIBUTE_UNUSED,
+    ArtMethod* method ATTRIBUTE_UNUSED,
     mirror::Object* receiver ATTRIBUTE_UNUSED,
     uint32_t* args,
     JValue* result)
@@ -1021,7 +1016,7 @@ static void UnstartedJNIUnsafeGetArrayIndexScaleForComponentType(
 typedef void (*InvokeHandler)(Thread* self, ShadowFrame* shadow_frame, JValue* result,
     size_t arg_size);
 
-typedef void (*JNIHandler)(Thread* self, mirror::ArtMethod* method, mirror::Object* receiver,
+typedef void (*JNIHandler)(Thread* self, ArtMethod* method, mirror::Object* receiver,
     uint32_t* args, JValue* result);
 
 static bool tables_initialized_ = false;
@@ -1051,8 +1046,6 @@ static void UnstartedRuntimeInitializeInvokeHandlers() {
           &UnstartedClassGetDeclaredField },
       { "int java.lang.Object.hashCode()",
           &UnstartedObjectHashCode },
-      { "java.lang.String java.lang.reflect.ArtMethod.getMethodName(java.lang.reflect.ArtMethod)",
-          &UnstartedArtMethodGetMethodName },
       { "void java.lang.System.arraycopy(java.lang.Object, int, java.lang.Object, int, int)",
           &UnstartedSystemArraycopy},
       { "void java.lang.System.arraycopy(char[], int, char[], int, int)",
@@ -1170,7 +1163,7 @@ void UnstartedRuntimeInvoke(Thread* self, const DexFile::CodeItem* code_item,
 }
 
 // Hand select a number of methods to be run in a not yet started runtime without using JNI.
-void UnstartedRuntimeJni(Thread* self, mirror::ArtMethod* method, mirror::Object* receiver,
+void UnstartedRuntimeJni(Thread* self, ArtMethod* method, mirror::Object* receiver,
                          uint32_t* args, JValue* result) {
   std::string name(PrettyMethod(method));
   const auto& iter = jni_handlers_.find(name);

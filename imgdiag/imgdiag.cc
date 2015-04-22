@@ -24,13 +24,13 @@
 #include <set>
 #include <map>
 
+#include "art_method-inl.h"
 #include "base/unix_file/fd_file.h"
 #include "base/stringprintf.h"
 #include "gc/space/image_space.h"
 #include "gc/heap.h"
 #include "mirror/class-inl.h"
 #include "mirror/object-inl.h"
-#include "mirror/art_method-inl.h"
 #include "image.h"
 #include "scoped_thread_state_change.h"
 #include "os.h"
@@ -335,7 +335,7 @@ class ImgDiagDumper {
     std::map<mirror::Class*, std::string> class_to_descriptor_map;
 
     std::map<off_t /* field offset */, int /* count */> art_method_field_dirty_count;
-    std::vector<mirror::ArtMethod*> art_method_dirty_objects;
+    std::vector<ArtMethod*> art_method_dirty_objects;
 
     std::map<off_t /* field offset */, int /* count */> class_field_dirty_count;
     std::vector<mirror::Class*> class_dirty_objects;
@@ -437,7 +437,7 @@ class ImgDiagDumper {
             class_dirty_objects.push_back(obj_as_class);
           } else if (strcmp(descriptor.c_str(), "Ljava/lang/reflect/ArtMethod;") == 0) {
             // this is an ArtMethod
-            mirror::ArtMethod* art_method = reinterpret_cast<mirror::ArtMethod*>(remote_obj);
+            ArtMethod* art_method = reinterpret_cast<ArtMethod*>(remote_obj);
 
             // print the fields that are dirty
             for (size_t i = 0; i < obj->SizeOf(); ++i) {
@@ -533,7 +533,7 @@ class ImgDiagDumper {
         const auto& dirty_objects_list = dirty_objects_by_class[klass];
         for (mirror::Object* obj : dirty_objects_list) {
           // remote method
-          auto art_method = reinterpret_cast<mirror::ArtMethod*>(obj);
+          auto art_method = reinterpret_cast<ArtMethod*>(obj);
 
           // remote class
           mirror::Class* remote_declaring_class =
@@ -551,7 +551,7 @@ class ImgDiagDumper {
                     art_method->GetEntryPointFromJniPtrSize(pointer_size)) << ", ";
           os << "  entryPointFromInterpreter: "
              << reinterpret_cast<const void*>(
-                    art_method->GetEntryPointFromInterpreterPtrSize<kVerifyNone>(pointer_size))
+                    art_method->GetEntryPointFromInterpreterPtrSize(pointer_size))
              << ", ";
           os << "  entryPointFromQuickCompiledCode: "
              << reinterpret_cast<const void*>(
@@ -623,7 +623,7 @@ class ImgDiagDumper {
         os << "      field contents:\n";
         for (mirror::Object* obj : art_method_false_dirty_objects) {
           // local method
-          auto art_method = reinterpret_cast<mirror::ArtMethod*>(obj);
+          auto art_method = reinterpret_cast<ArtMethod*>(obj);
 
           // local class
           mirror::Class* declaring_class = art_method->GetDeclaringClass();
@@ -634,7 +634,7 @@ class ImgDiagDumper {
                     art_method->GetEntryPointFromJniPtrSize(pointer_size)) << ", ";
           os << "  entryPointFromInterpreter: "
              << reinterpret_cast<const void*>(
-                    art_method->GetEntryPointFromInterpreterPtrSize<kVerifyNone>(pointer_size))
+                    art_method->GetEntryPointFromInterpreterPtrSize(pointer_size))
              << ", ";
           os << "  entryPointFromQuickCompiledCode: "
              << reinterpret_cast<const void*>(

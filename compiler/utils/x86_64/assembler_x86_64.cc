@@ -2380,7 +2380,7 @@ void X86_64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
     }
   }
 
-  DCHECK_EQ(4U, sizeof(StackReference<mirror::ArtMethod>));
+  DCHECK_EQ(4U, sizeof(StackReference<ArtMethod>));
 
   movl(Address(CpuRegister(RSP), 0), method_reg.AsX86_64().AsCpuRegister());
 

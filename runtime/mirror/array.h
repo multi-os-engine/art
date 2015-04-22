@@ -31,7 +31,7 @@ namespace mirror {
 class MANAGED Array : public Object {
  public:
   // The size of a java.lang.Class representing an array.
-  static uint32_t ClassSize();
+  static uint32_t ClassSize(size_t pointer_size);
 
   // Allocates an array with the given properties, if kFillUsable is true the array will be of at
   // least component_count size, however, if there's usable space at the end of the allocation the
@@ -83,6 +83,8 @@ class MANAGED Array : public Object {
   // returns false.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   ALWAYS_INLINE bool CheckIsValidIndex(int32_t index) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  Array* CopyOf(Thread* self, int32_t new_length) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  protected:
   void ThrowArrayStoreException(Object* object) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -172,6 +174,36 @@ class MANAGED PrimitiveArray : public Array {
   static GcRoot<Class> array_class_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(PrimitiveArray);
+};
+
+// Either an IntArray or a LongArray.
+class PointerArray : public Array {
+ public:
+  template<typename T>
+  T GetElementPtrSize(uint32_t idx, size_t ptr_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    // C style casts here since we sometimes have T be a pointer, or sometimes an integer
+    // (for stack traces).
+    if (ptr_size == 8) {
+      return (T)static_cast<uintptr_t>(AsLongArray()->GetWithoutChecks(idx));
+    }
+    DCHECK_EQ(ptr_size, 4u);
+    return (T)static_cast<uintptr_t>(AsIntArray()->GetWithoutChecks(idx));
+  }
+
+  template<bool kTransactionActive = false, typename T>
+  void SetElementPtrSize(uint32_t idx, T element, size_t ptr_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    if (ptr_size == 8) {
+      AsLongArray()->SetWithoutChecks<kTransactionActive>(
+          idx, (uint64_t)(element));
+    } else {
+      DCHECK_EQ(ptr_size, 4u);
+      DCHECK_LE((uintptr_t)element, 0xFFFFFFFFu);
+      AsIntArray()->SetWithoutChecks<kTransactionActive>(
+          idx, static_cast<uint32_t>((uintptr_t)element));
+    }
+  }
 };
 
 }  // namespace mirror

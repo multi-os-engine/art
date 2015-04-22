@@ -85,7 +85,7 @@ FrameOffset Mips64ManagedRuntimeCallingConvention::CurrentParamStackOffset() {
   CHECK(IsCurrentParamOnStack());
   FrameOffset result =
       FrameOffset(displacement_.Int32Value() +                 // displacement
-                  sizeof(StackReference<mirror::ArtMethod>) +  // Method ref
+                  sizeof(StackReference<ArtMethod>) +  // Method ref
                   (itr_slots_ * sizeof(uint32_t)));            // offset into in args
   return result;
 }
@@ -149,7 +149,7 @@ ManagedRegister Mips64JniCallingConvention::ReturnScratchRegister() const {
 
 size_t Mips64JniCallingConvention::FrameSize() {
   // Mehtod* and callee save area size, local reference segment state
-  size_t frame_data_size = sizeof(StackReference<mirror::ArtMethod>) +
+  size_t frame_data_size = sizeof(StackReference<ArtMethod>) +
       CalleeSaveRegisters().size() * kFramePointerSize + sizeof(uint32_t);
   // References plus 2 words for HandleScope header
   size_t handle_scope_size = HandleScope::SizeOf(kFramePointerSize, ReferenceCount());

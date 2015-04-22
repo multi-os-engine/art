@@ -20,8 +20,8 @@
 #include <limits.h>
 #include "ScopedLocalRef.h"
 
+#include "art_method-inl.h"
 #include "common_compiler_test.h"
-#include "mirror/art_method-inl.h"
 #include "scoped_thread_state_change.h"
 
 namespace art {
@@ -81,7 +81,7 @@ class ReflectionTest : public CommonCompilerTest {
     return soa.AddLocalReference<jclass>(c);
   }
 
-  void ReflectionTestMakeExecutable(mirror::ArtMethod** method,
+  void ReflectionTestMakeExecutable(ArtMethod** method,
                                     mirror::Object** receiver,
                                     bool is_static, const char* method_name,
                                     const char* method_signature)
@@ -107,8 +107,8 @@ class ReflectionTest : public CommonCompilerTest {
                                                 class_loader);
     CHECK(c != nullptr);
 
-    *method = is_static ? c->FindDirectMethod(method_name, method_signature)
-                        : c->FindVirtualMethod(method_name, method_signature);
+    *method = is_static ? c->FindDirectMethod(method_name, method_signature, sizeof(void*))
+                        : c->FindVirtualMethod(method_name, method_signature, sizeof(void*));
     CHECK(method != nullptr);
 
     if (is_static) {
@@ -130,7 +130,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeNopMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "nop", "()V");
     InvokeWithJValues(soa, receiver, soa.EncodeMethod(method), nullptr);
@@ -138,7 +138,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeIdentityByteMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "identity", "(B)B");
     jvalue args[1];
@@ -162,7 +162,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeIdentityIntMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "identity", "(I)I");
     jvalue args[1];
@@ -186,7 +186,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeIdentityDoubleMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "identity", "(D)D");
     jvalue args[1];
@@ -210,7 +210,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeSumIntIntMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "sum", "(II)I");
     jvalue args[2];
@@ -238,7 +238,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeSumIntIntIntMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "sum", "(III)I");
     jvalue args[3];
@@ -276,7 +276,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeSumIntIntIntIntMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "sum", "(IIII)I");
     jvalue args[4];
@@ -319,7 +319,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeSumIntIntIntIntIntMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "sum", "(IIIII)I");
     jvalue args[5];
@@ -367,7 +367,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeSumDoubleDoubleMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "sum", "(DD)D");
     jvalue args[2];
@@ -400,7 +400,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeSumDoubleDoubleDoubleMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "sum", "(DDD)D");
     jvalue args[3];
@@ -426,7 +426,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeSumDoubleDoubleDoubleDoubleMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "sum", "(DDDD)D");
     jvalue args[4];
@@ -455,7 +455,7 @@ class ReflectionTest : public CommonCompilerTest {
 
   void InvokeSumDoubleDoubleDoubleDoubleDoubleMethod(bool is_static) {
     ScopedObjectAccess soa(env_);
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     mirror::Object* receiver;
     ReflectionTestMakeExecutable(&method, &receiver, is_static, "sum", "(DDDDD)D");
     jvalue args[5];
@@ -503,7 +503,7 @@ TEST_F(ReflectionTest, StaticMainMethod) {
   mirror::Class* klass = class_linker_->FindClass(soa.Self(), "LMain;", class_loader);
   ASSERT_TRUE(klass != nullptr);
 
-  mirror::ArtMethod* method = klass->FindDirectMethod("main", "([Ljava/lang/String;)V");
+  ArtMethod* method = klass->FindDirectMethod("main", "([Ljava/lang/String;)V", sizeof(void*));
   ASSERT_TRUE(method != nullptr);
 
   // Start runtime.
