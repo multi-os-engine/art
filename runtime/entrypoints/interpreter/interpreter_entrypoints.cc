@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#include "art_method-inl.h"
 #include "class_linker.h"
 #include "dex_file-inl.h"
 #include "interpreter/interpreter.h"
-#include "mirror/art_method-inl.h"
 #include "mirror/object-inl.h"
 #include "reflection.h"
 #include "runtime.h"
@@ -27,7 +27,7 @@ namespace art {
 
 extern "C" void artInterpreterToCompiledCodeBridge(Thread* self, const DexFile::CodeItem* code_item,
                                                    ShadowFrame* shadow_frame, JValue* result) {
-  mirror::ArtMethod* method = shadow_frame->GetMethod();
+  ArtMethod* method = shadow_frame->GetMethod();
   // Ensure static methods are initialized.
   if (method->IsStatic()) {
     mirror::Class* declaringClass = method->GetDeclaringClass();

@@ -16,7 +16,7 @@
 
 #include "context_mips.h"
 
-#include "mirror/art_method-inl.h"
+#include "art_method-inl.h"
 #include "quick/quick_method_frame_info.h"
 #include "utils.h"
 
@@ -40,7 +40,7 @@ void MipsContext::Reset() {
 }
 
 void MipsContext::FillCalleeSaves(const StackVisitor& fr) {
-  mirror::ArtMethod* method = fr.GetMethod();
+  ArtMethod* method = fr.GetMethod();
   const QuickMethodFrameInfo frame_info = method->GetQuickFrameInfo();
   size_t spill_count = POPCOUNT(frame_info.CoreSpillMask());
   size_t fp_spill_count = POPCOUNT(frame_info.FpSpillMask());

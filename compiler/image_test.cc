@@ -214,6 +214,7 @@ TEST_F(ImageTest, ImageHeaderIsValid) {
                              oat_data_begin,
                              oat_data_end,
                              oat_file_end,
+                             sizeof(void*),
                              /*compile_pic*/false);
     ASSERT_TRUE(image_header.IsValid());
 
