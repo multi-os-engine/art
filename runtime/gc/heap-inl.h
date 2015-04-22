@@ -29,7 +29,6 @@
 #include "gc/space/rosalloc_space-inl.h"
 #include "runtime.h"
 #include "handle_scope-inl.h"
-#include "thread.h"
 #include "thread-inl.h"
 #include "verify_object-inl.h"
 

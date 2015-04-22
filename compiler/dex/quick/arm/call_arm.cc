@@ -19,13 +19,13 @@
 #include "codegen_arm.h"
 
 #include "arm_lir.h"
+#include "art_method.h"
 #include "base/logging.h"
 #include "dex/mir_graph.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
 #include "gc/accounting/card_table.h"
-#include "mirror/art_method.h"
 #include "mirror/object_array-inl.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "utils.h"
@@ -659,7 +659,7 @@ int ArmMir2Lir::ArmNextSDCallInsn(CompilationUnit* cu, CallInfo* info ATTRIBUTE_
     case 1:  // Get method->dex_cache_resolved_methods_
       if (!use_pc_rel) {
         cg->LoadRefDisp(arg0_ref,
-                        mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
+                        ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
                         arg0_ref,
                         kNotVolatile);
       }
@@ -696,7 +696,7 @@ int ArmMir2Lir::ArmNextSDCallInsn(CompilationUnit* cu, CallInfo* info ATTRIBUTE_
       if (direct_code == 0) {
         // kInvokeTgt := arg0_ref->entrypoint
         cg->LoadWordDisp(arg0_ref,
-                         mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                         ArtMethod::EntryPointFromQuickCompiledCodeOffset(
                              kArmPointerSize).Int32Value(), cg->TargetPtrReg(kInvokeTgt));
       }
       break;

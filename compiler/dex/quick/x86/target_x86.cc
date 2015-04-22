@@ -21,6 +21,7 @@
 #include <string>
 
 #include "arch/instruction_set_features.h"
+#include "art_method.h"
 #include "backend_x86.h"
 #include "base/logging.h"
 #include "dex/compiler_ir.h"
@@ -28,7 +29,6 @@
 #include "dex/reg_storage_eq.h"
 #include "driver/compiler_driver.h"
 #include "mirror/array-inl.h"
-#include "mirror/art_method.h"
 #include "mirror/string.h"
 #include "oat.h"
 #include "x86_lir.h"
@@ -1026,7 +1026,7 @@ LIR* X86Mir2Lir::GenCallInsn(const MirMethodLoweringInfo& method_info) {
       call_insn = CallWithLinkerFixup(method_info.GetTargetMethod(), method_info.GetSharpType());
     } else {
       call_insn = OpMem(kOpBlx, TargetReg(kArg0, kRef),
-                        mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                        ArtMethod::EntryPointFromQuickCompiledCodeOffset(
                             cu_->target64 ? 8 : 4).Int32Value());
     }
   } else {

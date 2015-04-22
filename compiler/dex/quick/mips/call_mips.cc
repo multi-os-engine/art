@@ -18,13 +18,13 @@
 
 #include "codegen_mips.h"
 
+#include "art_method.h"
 #include "base/logging.h"
 #include "dex/mir_graph.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/accounting/card_table.h"
 #include "mips_lir.h"
-#include "mirror/art_method.h"
 #include "mirror/object_array-inl.h"
 
 namespace art {
@@ -435,7 +435,7 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info ATTRIBUTE_UNUSED, 
         break;
       case 1:  // Get method->dex_cache_resolved_methods_
         cg->LoadRefDisp(arg0_ref,
-                        mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
+                        ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
                         arg0_ref,
                         kNotVolatile);
         // Set up direct code if known.
@@ -462,7 +462,7 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info ATTRIBUTE_UNUSED, 
         break;
       case 3:  // Grab the code from the method*
         if (direct_code == 0) {
-          int32_t offset = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+          int32_t offset = ArtMethod::EntryPointFromQuickCompiledCodeOffset(
               InstructionSetPointerSize(cu->instruction_set)).Int32Value();
           // Get the compiled code address [use *alt_from or kArg0, set kInvokeTgt]
           cg->LoadWordDisp(arg0_ref, offset, cg->TargetPtrReg(kInvokeTgt));

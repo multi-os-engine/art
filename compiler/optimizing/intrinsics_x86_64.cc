@@ -17,11 +17,11 @@
 #include "intrinsics_x86_64.h"
 
 #include "arch/x86_64/instruction_set_features_x86_64.h"
+#include "art_method-inl.h"
 #include "code_generator_x86_64.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "intrinsics.h"
 #include "mirror/array-inl.h"
-#include "mirror/art_method.h"
 #include "mirror/string.h"
 #include "thread.h"
 #include "utils/x86_64/assembler_x86_64.h"

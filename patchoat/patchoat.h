@@ -29,6 +29,7 @@
 
 namespace art {
 
+class ArtMethod;
 class ImageHeader;
 class OatHeader;
 
@@ -36,7 +37,6 @@ namespace mirror {
 class Object;
 class Reference;
 class Class;
-class ArtMethod;
 }  // namespace mirror
 
 class PatchOat {
@@ -100,7 +100,7 @@ class PatchOat {
 
   void VisitObject(mirror::Object* obj)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void FixupMethod(mirror::ArtMethod* object, mirror::ArtMethod* copy)
+  void FixupMethod(ArtMethod* object, ArtMethod* copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool InHeap(mirror::Object*);
 
@@ -113,6 +113,7 @@ class PatchOat {
 
   bool PatchImage() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void PatchArtFields(const ImageHeader* image_header) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void PatchArtMethods(const ImageHeader* image_header) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void PatchDexFileArrays(mirror::ObjectArray<mirror::Object>* img_roots)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -136,6 +137,11 @@ class PatchOat {
   T* RelocatedAddressOfPointer(T* obj) {
     return obj == nullptr ? nullptr :
         reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(obj) + delta_);
+  }
+
+  template <typename T>
+  T RelocatedAddressOfIntPointer(T obj) {
+    return obj == T(0) ? T(0) : obj + delta_;
   }
 
   // Look up the oat header from any elf file.

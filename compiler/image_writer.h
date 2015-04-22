@@ -34,7 +34,6 @@
 #include "mirror/dex_cache.h"
 #include "os.h"
 #include "safe_map.h"
-#include "gc/space/space.h"
 #include "utils.h"
 
 namespace art {
@@ -73,12 +72,15 @@ class ImageWriter FINAL {
     return image_roots_address_ != 0u;
   }
 
-  mirror::Object* GetImageAddress(mirror::Object* object) const
+  template <typename T>
+  T* GetImageAddress(T* object) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    if (object == nullptr) {
-      return nullptr;
-    }
-    return reinterpret_cast<mirror::Object*>(image_begin_ + GetImageOffset(object));
+    return object == nullptr ? nullptr :
+        reinterpret_cast<T*>(image_begin_ + GetImageOffset(object));
+  }
+
+  ArtMethod* GetImageAddress(ArtMethod* method) {
+    return method;  // TODO: class_linker_->GetImagePointerSize()
   }
 
   mirror::HeapReference<mirror::Object>* GetDexCacheArrayElementImageAddress(
@@ -129,6 +131,7 @@ class ImageWriter FINAL {
     // Add more bins here if we add more segregation code.
     // Non mirror fields must be below. ArtFields should be always clean.
     kBinArtField,
+    kBinArtMethod,
     kBinSize,
     // Number of bins which are for mirror objects.
     kBinMirrorCount = kBinArtField,
@@ -260,21 +263,20 @@ class ImageWriter FINAL {
   static void CopyAndFixupObjectsCallback(mirror::Object* obj, void* arg)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void CopyAndFixupObject(mirror::Object* obj) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  bool CopyAndFixupIfDexCacheFieldArray(mirror::Object* dst, mirror::Object* obj,
-                                        mirror::Class* klass)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void FixupMethod(mirror::ArtMethod* orig, mirror::ArtMethod* copy)
+  void CopyAndFixupMethod(ArtMethod* orig, ArtMethod* copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void FixupClass(mirror::Class* orig, mirror::Class* copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void FixupObject(mirror::Object* orig, mirror::Object* copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  // Get quick code for non-resolution/imt_conflict/abstract method.
-  const uint8_t* GetQuickCode(mirror::ArtMethod* method, bool* quick_is_interpreted)
+  void FixupPointerArray(mirror::Object* dst, mirror::PointerArray* arr, mirror::Class* klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  const uint8_t* GetQuickEntryPoint(mirror::ArtMethod* method)
+  // Get quick code for non-resolution/imt_conflict/abstract method.
+  const uint8_t* GetQuickCode(ArtMethod* method, bool* quick_is_interpreted)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  const uint8_t* GetQuickEntryPoint(ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Patches references in OatFile to expect runtime addresses.
@@ -311,6 +313,7 @@ class ImageWriter FINAL {
   struct DexCacheArrayLocation {
     size_t offset_;
     size_t length_;
+    BinSlot bin_type_;
   };
   SafeMap<mirror::Object*, DexCacheArrayLocation> dex_cache_array_indexes_;
 
@@ -351,6 +354,9 @@ class ImageWriter FINAL {
   // entry per art field for convenience.
   // ArtFields are placed right after the end of the image objects (aka sum of bin_slot_sizes_).
   std::unordered_map<ArtField*, uintptr_t> art_field_reloc_;
+
+  // Methods, info is same as art fields.
+  std::unordered_map<ArtMethod*, uintptr_t> art_method_reloc_;
 
   void* string_data_array_;  // The backing for the interned strings.
 

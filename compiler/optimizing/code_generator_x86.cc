@@ -16,6 +16,7 @@
 
 #include "code_generator_x86.h"
 
+#include "art_method.h"
 #include "code_generator_utils.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
@@ -23,7 +24,6 @@
 #include "intrinsics.h"
 #include "intrinsics_x86.h"
 #include "mirror/array-inl.h"
-#include "mirror/art_method.h"
 #include "mirror/class.h"
 #include "thread.h"
 #include "utils/assembler.h"
@@ -1276,8 +1276,8 @@ void LocationsBuilderX86::HandleInvoke(HInvoke* invoke) {
 
 void InstructionCodeGeneratorX86::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   Register temp = invoke->GetLocations()->GetTemp(0).AsRegister<Register>();
-  uint32_t method_offset = mirror::Class::EmbeddedVTableOffset().Uint32Value() +
-          invoke->GetVTableIndex() * sizeof(mirror::Class::VTableEntry);
+  uint32_t method_offset = mirror::Class::EmbeddedVTableOffset(sizeof(uint32_t)).Uint32Value() +
+          invoke->GetVTableIndex() * mirror::Class::VTableEntrySize(sizeof(uint32_t));
   LocationSummary* locations = invoke->GetLocations();
   Location receiver = locations->InAt(0);
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
@@ -1293,7 +1293,7 @@ void InstructionCodeGeneratorX86::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
   __ call(Address(
-      temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(kX86WordSize).Int32Value()));
+      temp, ArtMethod::EntryPointFromQuickCompiledCodeOffset(kX86WordSize).Int32Value()));
 
   DCHECK(!codegen_->IsLeafMethod());
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
@@ -1309,7 +1309,8 @@ void InstructionCodeGeneratorX86::VisitInvokeInterface(HInvokeInterface* invoke)
   // TODO: b/18116999, our IMTs can miss an IncompatibleClassChangeError.
   Register temp = invoke->GetLocations()->GetTemp(0).AsRegister<Register>();
   uint32_t method_offset = mirror::Class::EmbeddedImTableOffset().Uint32Value() +
-          (invoke->GetImtIndex() % mirror::Class::kImtSize) * sizeof(mirror::Class::ImTableEntry);
+          (invoke->GetImtIndex() % mirror::Class::kImtSize) *
+          mirror::Class::ImTableEntrySize(sizeof(uint32_t));
   LocationSummary* locations = invoke->GetLocations();
   Location receiver = locations->InAt(0);
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
@@ -1329,7 +1330,7 @@ void InstructionCodeGeneratorX86::VisitInvokeInterface(HInvokeInterface* invoke)
   // temp = temp->GetImtEntryAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
-  __ call(Address(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+  __ call(Address(temp, ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kX86WordSize).Int32Value()));
 
   DCHECK(!codegen_->IsLeafMethod());
@@ -3118,12 +3119,12 @@ void CodeGeneratorX86::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
   LoadCurrentMethod(temp);
   if (!invoke->IsRecursive()) {
     // temp = temp->dex_cache_resolved_methods_;
-    __ movl(temp, Address(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value()));
+    __ movl(temp, Address(temp, ArtMethod::DexCacheResolvedMethodsOffset().Int32Value()));
     // temp = temp[index_in_cache]
     __ movl(temp, Address(temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex())));
     // (temp + offset_of_quick_compiled_code)()
     __ call(Address(
-        temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(kX86WordSize).Int32Value()));
+        temp, ArtMethod::EntryPointFromQuickCompiledCodeOffset(kX86WordSize).Int32Value()));
   } else {
     __ call(GetFrameEntryLabel());
   }
@@ -4171,11 +4172,11 @@ void InstructionCodeGeneratorX86::VisitLoadClass(HLoadClass* cls) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
     codegen_->LoadCurrentMethod(out);
-    __ movl(out, Address(out, mirror::ArtMethod::DeclaringClassOffset().Int32Value()));
+    __ movl(out, Address(out, ArtMethod::DeclaringClassOffset().Int32Value()));
   } else {
     DCHECK(cls->CanCallRuntime());
     codegen_->LoadCurrentMethod(out);
-    __ movl(out, Address(out, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
+    __ movl(out, Address(out, ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
     __ movl(out, Address(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
 
     SlowPathCodeX86* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathX86(
@@ -4230,7 +4231,7 @@ void InstructionCodeGeneratorX86::VisitLoadString(HLoadString* load) {
 
   Register out = load->GetLocations()->Out().AsRegister<Register>();
   codegen_->LoadCurrentMethod(out);
-  __ movl(out, Address(out, mirror::ArtMethod::DeclaringClassOffset().Int32Value()));
+  __ movl(out, Address(out, ArtMethod::DeclaringClassOffset().Int32Value()));
   __ movl(out, Address(out, mirror::Class::DexCacheStringsOffset().Int32Value()));
   __ movl(out, Address(out, CodeGenerator::GetCacheOffset(load->GetStringIndex())));
   __ testl(out, out);

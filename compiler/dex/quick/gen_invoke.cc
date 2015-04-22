@@ -386,7 +386,7 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocationRegLocation(
 // TODO: Support 64-bit argument registers.
 void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
   /*
-   * Dummy up a RegLocation for the incoming StackReference<mirror::ArtMethod>
+   * Dummy up a RegLocation for the incoming StackReference<ArtMethod>
    * It will attempt to keep kArg0 live (or copy it to home location
    * if promoted).
    */
@@ -486,7 +486,7 @@ static void CommonCallCodeLoadClassIntoArg0(const CallInfo* info, Mir2Lir* cg) {
 static bool CommonCallCodeLoadCodePointerIntoInvokeTgt(const RegStorage* alt_from,
                                                        const CompilationUnit* cu, Mir2Lir* cg) {
   if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
-    int32_t offset = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+    int32_t offset = ArtMethod::EntryPointFromQuickCompiledCodeOffset(
         InstructionSetPointerSize(cu->instruction_set)).Int32Value();
     // Get the compiled code address [use *alt_from or kArg0, set kInvokeTgt]
     cg->LoadWordDisp(alt_from == nullptr ? cg->TargetReg(kArg0, kRef) : *alt_from, offset,
@@ -523,8 +523,9 @@ static int NextVCallInsn(CompilationUnit* cu, CallInfo* info,
       break;
     case 2: {
       // Get this->klass_.embedded_vtable[method_idx] [usr kArg0, set kArg0]
-      int32_t offset = mirror::Class::EmbeddedVTableOffset().Uint32Value() +
-          method_idx * sizeof(mirror::Class::VTableEntry);
+      const auto pointer_size = InstructionSetPointerSize(cu->compiler_driver->GetInstructionSet());
+      int32_t offset = mirror::Class::EmbeddedVTableOffset(pointer_size).Uint32Value() +
+          method_idx * mirror::Class::VTableEntrySize(pointer_size);
       // Load target method from embedded vtable to kArg0 [use kArg0, set kArg0]
       cg->LoadRefDisp(cg->TargetReg(kArg0, kRef), offset, cg->TargetReg(kArg0, kRef), kNotVolatile);
       break;
@@ -568,8 +569,9 @@ static int NextInterfaceCallInsn(CompilationUnit* cu, CallInfo* info, int state,
                                                   // Includes a null-check.
       break;
     case 3: {  // Get target method [use kInvokeTgt, set kArg0]
+      const auto pointer_size = InstructionSetPointerSize(cu->compiler_driver->GetInstructionSet());
       int32_t offset = mirror::Class::EmbeddedImTableOffset().Uint32Value() +
-          (method_idx % mirror::Class::kImtSize) * sizeof(mirror::Class::ImTableEntry);
+          (method_idx % mirror::Class::kImtSize) * mirror::Class::ImTableEntrySize(pointer_size);
       // Load target method from embedded imtable to kArg0 [use kArg0, set kArg0]
       cg->LoadRefDisp(cg->TargetReg(kArg0, kRef), offset, cg->TargetReg(kArg0, kRef), kNotVolatile);
       break;

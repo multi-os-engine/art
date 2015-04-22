@@ -307,7 +307,7 @@ TEST_F(ObjectTest, CheckAndAllocArrayFromCode) {
   // pretend we are trying to call 'new char[3]' from String.toCharArray
   ScopedObjectAccess soa(Thread::Current());
   Class* java_util_Arrays = class_linker_->FindSystemClass(soa.Self(), "Ljava/util/Arrays;");
-  ArtMethod* sort = java_util_Arrays->FindDirectMethod("sort", "([I)V");
+  ArtMethod* sort = java_util_Arrays->FindDirectMethod("sort", "([I)V", sizeof(void*));
   const DexFile::StringId* string_id = java_lang_dex_file_->FindStringId("[I");
   ASSERT_TRUE(string_id != nullptr);
   const DexFile::TypeId* type_id = java_lang_dex_file_->FindTypeId(
@@ -367,7 +367,7 @@ TEST_F(ObjectTest, StaticFieldFromCode) {
   StackHandleScope<2> hs(soa.Self());
   Handle<mirror::ClassLoader> loader(hs.NewHandle(soa.Decode<ClassLoader*>(class_loader)));
   Class* klass = class_linker_->FindClass(soa.Self(), "LStaticsFromCode;", loader);
-  ArtMethod* clinit = klass->FindClassInitializer();
+  ArtMethod* clinit = klass->FindClassInitializer(sizeof(void*));
   const DexFile::StringId* klass_string_id = dex_file->FindStringId("LStaticsFromCode;");
   ASSERT_TRUE(klass_string_id != nullptr);
   const DexFile::TypeId* klass_type_id = dex_file->FindTypeId(
@@ -515,22 +515,22 @@ TEST_F(ObjectTest, DescriptorCompare) {
   Class* klass2 = linker->FindClass(soa.Self(), "LProtoCompare2;", class_loader_2);
   ASSERT_TRUE(klass2 != nullptr);
 
-  ArtMethod* m1_1 = klass1->GetVirtualMethod(0);
+  ArtMethod* m1_1 = klass1->GetVirtualMethod(0, sizeof(void*));
   EXPECT_STREQ(m1_1->GetName(), "m1");
-  ArtMethod* m2_1 = klass1->GetVirtualMethod(1);
+  ArtMethod* m2_1 = klass1->GetVirtualMethod(1, sizeof(void*));
   EXPECT_STREQ(m2_1->GetName(), "m2");
-  ArtMethod* m3_1 = klass1->GetVirtualMethod(2);
+  ArtMethod* m3_1 = klass1->GetVirtualMethod(2, sizeof(void*));
   EXPECT_STREQ(m3_1->GetName(), "m3");
-  ArtMethod* m4_1 = klass1->GetVirtualMethod(3);
+  ArtMethod* m4_1 = klass1->GetVirtualMethod(3, sizeof(void*));
   EXPECT_STREQ(m4_1->GetName(), "m4");
 
-  ArtMethod* m1_2 = klass2->GetVirtualMethod(0);
+  ArtMethod* m1_2 = klass2->GetVirtualMethod(0, sizeof(void*));
   EXPECT_STREQ(m1_2->GetName(), "m1");
-  ArtMethod* m2_2 = klass2->GetVirtualMethod(1);
+  ArtMethod* m2_2 = klass2->GetVirtualMethod(1, sizeof(void*));
   EXPECT_STREQ(m2_2->GetName(), "m2");
-  ArtMethod* m3_2 = klass2->GetVirtualMethod(2);
+  ArtMethod* m3_2 = klass2->GetVirtualMethod(2, sizeof(void*));
   EXPECT_STREQ(m3_2->GetName(), "m3");
-  ArtMethod* m4_2 = klass2->GetVirtualMethod(3);
+  ArtMethod* m4_2 = klass2->GetVirtualMethod(3, sizeof(void*));
   EXPECT_STREQ(m4_2->GetName(), "m4");
 }
 

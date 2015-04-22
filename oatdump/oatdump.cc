@@ -27,6 +27,7 @@
 
 #include "arch/instruction_set_features.h"
 #include "art_field-inl.h"
+#include "art_method-inl.h"
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
 #include "class_linker-inl.h"
@@ -41,7 +42,6 @@
 #include "image.h"
 #include "indenter.h"
 #include "mapping_table.h"
-#include "mirror/art_method-inl.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/object-inl.h"
@@ -499,7 +499,7 @@ class OatDumper {
     return oat_file_.GetOatHeader().GetInstructionSet();
   }
 
-  const void* GetQuickOatCode(mirror::ArtMethod* m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  const void* GetQuickOatCode(ArtMethod* m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     for (size_t i = 0; i < oat_dex_files_.size(); i++) {
       const OatFile::OatDexFile* oat_dex_file = oat_dex_files_[i];
       CHECK(oat_dex_file != nullptr);
@@ -1316,12 +1316,9 @@ class OatDumper {
       Handle<mirror::DexCache> dex_cache(
           hs.NewHandle(Runtime::Current()->GetClassLinker()->FindDexCache(*dex_file)));
       DCHECK(options_.class_loader_ != nullptr);
-      return verifier::MethodVerifier::VerifyMethodAndDump(soa.Self(), os, dex_method_idx, dex_file,
-                                                           dex_cache,
-                                                           *options_.class_loader_,
-                                                           &class_def, code_item,
-                                                           NullHandle<mirror::ArtMethod>(),
-                                                           method_access_flags);
+      return verifier::MethodVerifier::VerifyMethodAndDump(
+          soa.Self(), os, dex_method_idx, dex_file, dex_cache, *options_.class_loader_, &class_def,
+          code_item, nullptr, method_access_flags);
     }
 
     return nullptr;
@@ -1546,9 +1543,6 @@ class ImageDumper {
     } else if (type->IsClassClass()) {
       mirror::Class* klass = value->AsClass();
       os << StringPrintf("%p   Class: %s\n", klass, PrettyDescriptor(klass).c_str());
-    } else if (type->IsArtMethodClass()) {
-      mirror::ArtMethod* method = value->AsArtMethod();
-      os << StringPrintf("%p   Method: %s\n", method, PrettyMethod(method).c_str());
     } else {
       os << StringPrintf("%p   %s\n", value, PrettyDescriptor(type).c_str());
     }
@@ -1623,7 +1617,7 @@ class ImageDumper {
     return image_space_.Contains(object);
   }
 
-  const void* GetQuickOatCodeBegin(mirror::ArtMethod* m)
+  const void* GetQuickOatCodeBegin(ArtMethod* m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const void* quick_code = m->GetEntryPointFromQuickCompiledCodePtrSize(
         InstructionSetPointerSize(oat_dumper_->GetOatInstructionSet()));
@@ -1636,7 +1630,7 @@ class ImageDumper {
     return quick_code;
   }
 
-  uint32_t GetQuickOatCodeSize(mirror::ArtMethod* m)
+  uint32_t GetQuickOatCodeSize(ArtMethod* m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const uint32_t* oat_code_begin = reinterpret_cast<const uint32_t*>(GetQuickOatCodeBegin(m));
     if (oat_code_begin == nullptr) {
@@ -1645,7 +1639,7 @@ class ImageDumper {
     return oat_code_begin[-1];
   }
 
-  const void* GetQuickOatCodeEnd(mirror::ArtMethod* m)
+  const void* GetQuickOatCodeEnd(ArtMethod* m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const uint8_t* oat_code_begin = reinterpret_cast<const uint8_t*>(GetQuickOatCodeBegin(m));
     if (oat_code_begin == nullptr) {
@@ -1654,8 +1648,7 @@ class ImageDumper {
     return oat_code_begin + GetQuickOatCodeSize(m);
   }
 
-  static void Callback(mirror::Object* obj, void* arg)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  static void Callback(mirror::Object* obj, void* arg) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK(obj != nullptr);
     DCHECK(arg != nullptr);
     ImageDumper* state = reinterpret_cast<ImageDumper*>(arg);
@@ -1677,9 +1670,6 @@ class ImageDumper {
       mirror::Class* klass = obj->AsClass();
       os << StringPrintf("%p: java.lang.Class \"%s\" (", obj, PrettyDescriptor(klass).c_str())
          << klass->GetStatus() << ")\n";
-    } else if (obj->IsArtMethod()) {
-      os << StringPrintf("%p: java.lang.reflect.ArtMethod %s\n", obj,
-                         PrettyMethod(obj->AsArtMethod()).c_str());
     } else if (obj_class->IsStringClass()) {
       os << StringPrintf("%p: java.lang.String %s\n", obj,
                          PrintableString(obj->AsString()->ToModifiedUtf8().c_str()).c_str());
@@ -1724,85 +1714,87 @@ class ImageDumper {
           PrintField(indent2_os, &sfields[i], sfields[i].GetDeclaringClass());
         }
       }
-    } else if (obj->IsArtMethod()) {
-      const size_t image_pointer_size = InstructionSetPointerSize(
-          state->oat_dumper_->GetOatInstructionSet());
-      mirror::ArtMethod* method = obj->AsArtMethod();
-      if (method->IsNative()) {
-        DCHECK(method->GetNativeGcMap(image_pointer_size) == nullptr) << PrettyMethod(method);
-        DCHECK(method->GetMappingTable(image_pointer_size) == nullptr) << PrettyMethod(method);
-        bool first_occurrence;
-        const void* quick_oat_code = state->GetQuickOatCodeBegin(method);
-        uint32_t quick_oat_code_size = state->GetQuickOatCodeSize(method);
-        state->ComputeOatSize(quick_oat_code, &first_occurrence);
-        if (first_occurrence) {
-          state->stats_.native_to_managed_code_bytes += quick_oat_code_size;
-        }
-        if (quick_oat_code != method->GetEntryPointFromQuickCompiledCodePtrSize(
-            image_pointer_size)) {
-          indent_os << StringPrintf("OAT CODE: %p\n", quick_oat_code);
-        }
-      } else if (method->IsAbstract() || method->IsCalleeSaveMethod() ||
-          method->IsResolutionMethod() || method->IsImtConflictMethod() ||
-          method->IsImtUnimplementedMethod() || method->IsClassInitializer()) {
-        DCHECK(method->GetNativeGcMap(image_pointer_size) == nullptr) << PrettyMethod(method);
-        DCHECK(method->GetMappingTable(image_pointer_size) == nullptr) << PrettyMethod(method);
-      } else {
-        const DexFile::CodeItem* code_item = method->GetCodeItem();
-        size_t dex_instruction_bytes = code_item->insns_size_in_code_units_ * 2;
-        state->stats_.dex_instruction_bytes += dex_instruction_bytes;
-
-        bool first_occurrence;
-        size_t gc_map_bytes =
-            state->ComputeOatSize(method->GetNativeGcMap(image_pointer_size), &first_occurrence);
-        if (first_occurrence) {
-          state->stats_.gc_map_bytes += gc_map_bytes;
-        }
-
-        size_t pc_mapping_table_bytes =
-            state->ComputeOatSize(method->GetMappingTable(image_pointer_size), &first_occurrence);
-        if (first_occurrence) {
-          state->stats_.pc_mapping_table_bytes += pc_mapping_table_bytes;
-        }
-
-        size_t vmap_table_bytes =
-            state->ComputeOatSize(method->GetVmapTable(image_pointer_size), &first_occurrence);
-        if (first_occurrence) {
-          state->stats_.vmap_table_bytes += vmap_table_bytes;
-        }
-
-        const void* quick_oat_code_begin = state->GetQuickOatCodeBegin(method);
-        const void* quick_oat_code_end = state->GetQuickOatCodeEnd(method);
-        uint32_t quick_oat_code_size = state->GetQuickOatCodeSize(method);
-        state->ComputeOatSize(quick_oat_code_begin, &first_occurrence);
-        if (first_occurrence) {
-          state->stats_.managed_code_bytes += quick_oat_code_size;
-          if (method->IsConstructor()) {
-            if (method->IsStatic()) {
-              state->stats_.class_initializer_code_bytes += quick_oat_code_size;
-            } else if (dex_instruction_bytes > kLargeConstructorDexBytes) {
-              state->stats_.large_initializer_code_bytes += quick_oat_code_size;
-            }
-          } else if (dex_instruction_bytes > kLargeMethodDexBytes) {
-            state->stats_.large_method_code_bytes += quick_oat_code_size;
-          }
-        }
-        state->stats_.managed_code_bytes_ignoring_deduplication += quick_oat_code_size;
-
-        indent_os << StringPrintf("OAT CODE: %p-%p\n", quick_oat_code_begin, quick_oat_code_end);
-        indent_os << StringPrintf("SIZE: Dex Instructions=%zd GC=%zd Mapping=%zd\n",
-                                  dex_instruction_bytes, gc_map_bytes, pc_mapping_table_bytes);
-
-        size_t total_size = dex_instruction_bytes + gc_map_bytes + pc_mapping_table_bytes +
-            vmap_table_bytes + quick_oat_code_size + object_bytes;
-
-        double expansion =
-            static_cast<double>(quick_oat_code_size) / static_cast<double>(dex_instruction_bytes);
-        state->stats_.ComputeOutliers(total_size, expansion, method);
-      }
     }
     std::string temp;
     state->stats_.Update(obj_class->GetDescriptor(&temp), object_bytes);
+  }
+
+  void DumpMethod(ArtMethod* method, ImageDumper* state, std::ostream& indent_os)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    DCHECK(method != nullptr);
+    const auto image_pointer_size =
+        InstructionSetPointerSize(state->oat_dumper_->GetOatInstructionSet());
+    if (method->IsNative()) {
+      DCHECK(method->GetNativeGcMap(image_pointer_size) == nullptr) << PrettyMethod(method);
+      DCHECK(method->GetMappingTable(image_pointer_size) == nullptr) << PrettyMethod(method);
+      bool first_occurrence;
+      const void* quick_oat_code = state->GetQuickOatCodeBegin(method);
+      uint32_t quick_oat_code_size = state->GetQuickOatCodeSize(method);
+      state->ComputeOatSize(quick_oat_code, &first_occurrence);
+      if (first_occurrence) {
+        state->stats_.native_to_managed_code_bytes += quick_oat_code_size;
+      }
+      if (quick_oat_code != method->GetEntryPointFromQuickCompiledCodePtrSize(image_pointer_size)) {
+        indent_os << StringPrintf("OAT CODE: %p\n", quick_oat_code);
+      }
+    } else if (method->IsAbstract() || method->IsCalleeSaveMethod() ||
+      method->IsResolutionMethod() || method->IsImtConflictMethod() ||
+      method->IsImtUnimplementedMethod() || method->IsClassInitializer()) {
+      DCHECK(method->GetNativeGcMap(image_pointer_size) == nullptr) << PrettyMethod(method);
+      DCHECK(method->GetMappingTable(image_pointer_size) == nullptr) << PrettyMethod(method);
+    } else {
+      const DexFile::CodeItem* code_item = method->GetCodeItem();
+      size_t dex_instruction_bytes = code_item->insns_size_in_code_units_ * 2;
+      state->stats_.dex_instruction_bytes += dex_instruction_bytes;
+
+      bool first_occurrence;
+      size_t gc_map_bytes = state->ComputeOatSize(
+          method->GetNativeGcMap(image_pointer_size), &first_occurrence);
+      if (first_occurrence) {
+        state->stats_.gc_map_bytes += gc_map_bytes;
+      }
+
+      size_t pc_mapping_table_bytes = state->ComputeOatSize(
+          method->GetMappingTable(image_pointer_size), &first_occurrence);
+      if (first_occurrence) {
+        state->stats_.pc_mapping_table_bytes += pc_mapping_table_bytes;
+      }
+
+      size_t vmap_table_bytes = state->ComputeOatSize(
+          method->GetVmapTable(image_pointer_size), &first_occurrence);
+      if (first_occurrence) {
+        state->stats_.vmap_table_bytes += vmap_table_bytes;
+      }
+
+      const void* quick_oat_code_begin = state->GetQuickOatCodeBegin(method);
+      const void* quick_oat_code_end = state->GetQuickOatCodeEnd(method);
+      uint32_t quick_oat_code_size = state->GetQuickOatCodeSize(method);
+      state->ComputeOatSize(quick_oat_code_begin, &first_occurrence);
+      if (first_occurrence) {
+        state->stats_.managed_code_bytes += quick_oat_code_size;
+        if (method->IsConstructor()) {
+          if (method->IsStatic()) {
+            state->stats_.class_initializer_code_bytes += quick_oat_code_size;
+          } else if (dex_instruction_bytes > kLargeConstructorDexBytes) {
+            state->stats_.large_initializer_code_bytes += quick_oat_code_size;
+          }
+        } else if (dex_instruction_bytes > kLargeMethodDexBytes) {
+          state->stats_.large_method_code_bytes += quick_oat_code_size;
+        }
+      }
+      state->stats_.managed_code_bytes_ignoring_deduplication += quick_oat_code_size;
+
+      indent_os << StringPrintf("OAT CODE: %p-%p\n", quick_oat_code_begin, quick_oat_code_end);
+      indent_os << StringPrintf("SIZE: Dex Instructions=%zd GC=%zd Mapping=%zd\n",
+      dex_instruction_bytes, gc_map_bytes, pc_mapping_table_bytes);
+
+      size_t total_size = dex_instruction_bytes + gc_map_bytes + pc_mapping_table_bytes +
+          vmap_table_bytes + quick_oat_code_size + ArtMethod::ObjectSize(image_pointer_size);
+
+      double expansion =
+      static_cast<double>(quick_oat_code_size) / static_cast<double>(dex_instruction_bytes);
+      state->stats_.ComputeOutliers(total_size, expansion, method);
+    }
   }
 
   std::set<const void*> already_seen_;
@@ -1842,7 +1834,7 @@ class ImageDumper {
 
     size_t dex_instruction_bytes;
 
-    std::vector<mirror::ArtMethod*> method_outlier;
+    std::vector<ArtMethod*> method_outlier;
     std::vector<size_t> method_outlier_size;
     std::vector<double> method_outlier_expansion;
     std::vector<std::pair<std::string, size_t>> oat_dex_file_sizes;
@@ -1896,7 +1888,7 @@ class ImageDumper {
       return (static_cast<double>(size) / static_cast<double>(object_bytes)) * 100;
     }
 
-    void ComputeOutliers(size_t total_size, double expansion, mirror::ArtMethod* method) {
+    void ComputeOutliers(size_t total_size, double expansion, ArtMethod* method) {
       method_outlier_size.push_back(total_size);
       method_outlier_expansion.push_back(expansion);
       method_outlier.push_back(method);
