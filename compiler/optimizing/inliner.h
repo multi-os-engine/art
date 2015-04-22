@@ -47,9 +47,11 @@ class HInliner : public HOptimization {
   static constexpr const char* kInlinerPassName = "inliner";
 
  private:
-  bool TryInline(HInvoke* invoke_instruction, uint32_t method_index, InvokeType invoke_type) const;
+  bool TryInline(HInvokeStaticOrDirect* invoke_instruction,
+                 uint32_t method_index,
+                 InvokeType invoke_type) const;
   bool TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
-                         HInvoke* invoke_instruction,
+                         HInvokeStaticOrDirect* invoke_instruction,
                          uint32_t method_index,
                          bool can_use_dex_cache) const;
 
