@@ -2388,9 +2388,9 @@ void X86_64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
     }
   }
 
-  DCHECK_EQ(4U, sizeof(StackReference<mirror::ArtMethod>));
+  DCHECK_EQ(kX86_64PointerSize, kFramePointerSize);
 
-  movl(Address(CpuRegister(RSP), 0), method_reg.AsX86_64().AsCpuRegister());
+  movq(Address(CpuRegister(RSP), 0), method_reg.AsX86_64().AsCpuRegister());
 
   for (size_t i = 0; i < entry_spills.size(); ++i) {
     ManagedRegisterSpill spill = entry_spills.at(i);
@@ -2667,8 +2667,7 @@ void X86_64Assembler::Move(ManagedRegister mdest, ManagedRegister msrc, size_t s
   }
 }
 
-void X86_64Assembler::CopyRef(FrameOffset dest, FrameOffset src,
-                           ManagedRegister mscratch) {
+void X86_64Assembler::CopyRef(FrameOffset dest, FrameOffset src, ManagedRegister mscratch) {
   X86_64ManagedRegister scratch = mscratch.AsX86_64();
   CHECK(scratch.IsCpuRegister());
   movl(scratch.AsCpuRegister(), Address(CpuRegister(RSP), src));
@@ -2693,9 +2692,8 @@ void X86_64Assembler::CopyRawPtrToThread64(ThreadOffset<8> thr_offs,
   gs()->movq(Address::Absolute(thr_offs, true), scratch.AsCpuRegister());
 }
 
-void X86_64Assembler::Copy(FrameOffset dest, FrameOffset src,
-                        ManagedRegister mscratch,
-                        size_t size) {
+void X86_64Assembler::Copy(FrameOffset dest, FrameOffset src, ManagedRegister mscratch,
+                           size_t size) {
   X86_64ManagedRegister scratch = mscratch.AsX86_64();
   if (scratch.IsCpuRegister() && size == 8) {
     Load(scratch, src, 4);
@@ -2834,7 +2832,7 @@ void X86_64Assembler::Call(ManagedRegister mbase, Offset offset, ManagedRegister
 
 void X86_64Assembler::Call(FrameOffset base, Offset offset, ManagedRegister mscratch) {
   CpuRegister scratch = mscratch.AsX86_64().AsCpuRegister();
-  movl(scratch, Address(CpuRegister(RSP), base));
+  movq(scratch, Address(CpuRegister(RSP), base));
   call(Address(scratch, offset));
 }
 

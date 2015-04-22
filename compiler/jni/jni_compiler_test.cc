@@ -18,6 +18,7 @@
 
 #include <math.h>
 
+#include "art_method-inl.h"
 #include "class_linker.h"
 #include "common_compiler_test.h"
 #include "dex_file.h"
@@ -25,7 +26,6 @@
 #include "indirect_reference_table.h"
 #include "jni_internal.h"
 #include "mem_map.h"
-#include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
 #include "mirror/object_array-inl.h"
@@ -39,7 +39,6 @@
 extern "C" JNIEXPORT jint JNICALL Java_MyClassNatives_bar(JNIEnv*, jobject, jint count) {
   return count + 1;
 }
-
 extern "C" JNIEXPORT jint JNICALL Java_MyClassNatives_sbar(JNIEnv*, jclass, jint count) {
   return count + 1;
 }
@@ -65,12 +64,9 @@ class JniCompilerTest : public CommonCompilerTest {
         hs.NewHandle(soa.Decode<mirror::ClassLoader*>(class_loader)));
     // Compile the native method before starting the runtime
     mirror::Class* c = class_linker_->FindClass(soa.Self(), "LMyClassNatives;", loader);
-    mirror::ArtMethod* method;
-    if (direct) {
-      method = c->FindDirectMethod(method_name, method_sig);
-    } else {
-      method = c->FindVirtualMethod(method_name, method_sig);
-    }
+    const auto pointer_size = class_linker_->GetImagePointerSize();
+    ArtMethod* method = direct ? c->FindDirectMethod(method_name, method_sig, pointer_size) :
+        c->FindVirtualMethod(method_name, method_sig, pointer_size);
     ASSERT_TRUE(method != nullptr) << method_name << " " << method_sig;
     if (check_generic_jni_) {
       method->SetEntryPointFromQuickCompiledCode(class_linker_->GetRuntimeQuickGenericJniStub());

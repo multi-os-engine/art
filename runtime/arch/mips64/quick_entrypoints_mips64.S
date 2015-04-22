@@ -90,8 +90,8 @@
     ld      $v0, %got(_ZN3art7Runtime9instance_E)($gp)
     ld      $v0, 0($v0)
     THIS_LOAD_REQUIRES_READ_BARRIER
-    lwu     $v0, RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET($v0)
-    sw      $v0, 0($sp)                                # Place Method* at bottom of stack.
+    ld      $v0, RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET($v0)
+    sd      $v0, 0($sp)                                # Place ArtMethod* at bottom of stack.
     sd      $sp, THREAD_TOP_QUICK_FRAME_OFFSET(rSELF)  # Place sp in Thread::Current()->top_quick_frame.
 .endm
 
@@ -133,8 +133,8 @@
     ld      $v0, %got(_ZN3art7Runtime9instance_E)($gp)
     ld      $v0, 0($v0)
     THIS_LOAD_REQUIRES_READ_BARRIER
-    lwu     $v0, RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET($v0)
-    sw      $v0, 0($sp)                                # Place Method* at bottom of stack.
+    ld      $v0, RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET($v0)
+    sd      $v0, 0($sp)                                # Place Method* at bottom of stack.
     sd      $sp, THREAD_TOP_QUICK_FRAME_OFFSET(rSELF)  # Place sp in Thread::Current()->top_quick_frame.
 .endm
 
@@ -256,14 +256,14 @@
     ld      $v0, %got(_ZN3art7Runtime9instance_E)($gp)
     ld      $v0, 0($v0)
     THIS_LOAD_REQUIRES_READ_BARRIER
-    lwu     $v0, RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET($v0)
-    sw      $v0, 0($sp)                                # Place Method* at bottom of stack.
+    ld      $v0, RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET($v0)
+    sd      $v0, 0($sp)                                # Place Method* at bottom of stack.
     sd      $sp, THREAD_TOP_QUICK_FRAME_OFFSET(rSELF)  # Place sp in Thread::Current()->top_quick_frame.
 .endm
 
 .macro SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_A0
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_INTERNAL
-    sw      $a0, 0($sp)                                # Place Method* at bottom of stack.
+    sd      $a0, 0($sp)                                # Place Method* at bottom of stack.
     sd      $sp, THREAD_TOP_QUICK_FRAME_OFFSET(rSELF)  # Place sp in Thread::Current()->top_quick_frame.
 .endm
 
@@ -670,8 +670,8 @@ ENTRY_NO_GP art_quick_invoke_stub
 call_fn:
     # call method (a0 and a1 have been untouched)
     lwu    $a1, 0($a1)           # make a1 = this ptr
-    sw     $a1, 4($sp)           # copy this ptr (skip 4 bytes for method*)
-    sw     $zero, 0($sp)         # store null for method* at bottom of frame
+    sw     $a1, 8($sp)           # copy this ptr (skip 4 bytes for method*)
+    sd     $zero, 0($sp)         # store null for method* at bottom of frame
     ld     $t9, MIRROR_ART_METHOD_QUICK_CODE_OFFSET_64($a0)  # get pointer to the code
     jalr   $t9                   # call the method
     nop
@@ -773,7 +773,7 @@ ENTRY_NO_GP art_quick_invoke_static_stub
 
 call_sfn:
     # call method (a0 has been untouched)
-    sw     $zero, 0($sp)         # store null for method* at bottom of frame
+    sd     $zero, 0($sp)         # store null for method* at bottom of frame
     ld     $t9, MIRROR_ART_METHOD_QUICK_CODE_OFFSET_64($a0)  # get pointer to the code
     jalr   $t9                   # call the method
     nop
@@ -1365,14 +1365,14 @@ END art_quick_proxy_invoke_handler
      * dex method index.
      */
 ENTRY art_quick_imt_conflict_trampoline
-    lwu     $a0, 0($sp)            # load caller Method*
+    ld      $a0, 0($sp)            # load caller Method*
     lwu     $a0, MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET($a0)  # load dex_cache_resolved_methods
-    dsll    $t0, 2                 # convert target method offset to bytes
+    dsll    $t0, 3                 # convert target method offset to bytes
     daddu   $a0, $t0               # get address of target method
     dla     $t9, art_quick_invoke_interface_trampoline
     .cpreturn
     jalr    $zero, $t9
-    lwu     $a0, MIRROR_OBJECT_ARRAY_DATA_OFFSET($a0)  # load the target method
+    lwu     $a0, MIRROR_LONG_ARRAY_DATA_OFFSET($a0)  # load the target method
 END art_quick_imt_conflict_trampoline
 
     .extern artQuickResolutionTrampoline
@@ -1382,7 +1382,7 @@ ENTRY art_quick_resolution_trampoline
     jal     artQuickResolutionTrampoline  # (Method* called, receiver, Thread*, SP)
     move    $a3, $sp               # pass $sp
     beq     $v0, $zero, 1f
-    lwu     $a0, 0($sp)            # load resolved method in $a0
+    ld      $a0, 0($sp)            # load resolved method in $a0
                                    # artQuickResolutionTrampoline puts resolved method in *SP
     RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     move    $t9, $v0               # code pointer must be in $t9 to generate the global pointer

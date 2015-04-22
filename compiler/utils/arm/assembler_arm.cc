@@ -378,7 +378,7 @@ static dwarf::Reg DWARFReg(SRegister reg) {
   return dwarf::Reg::ArmFp(static_cast<int>(reg));
 }
 
-constexpr size_t kFramePointerSize = 4;
+constexpr size_t kFramePointerSize = kArmPointerSize;
 
 void ArmAssembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
                               const std::vector<ManagedRegister>& callee_save_regs,
@@ -415,7 +415,7 @@ void ArmAssembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
   StoreToOffset(kStoreWord, R0, SP, 0);
 
   // Write out entry spills.
-  int32_t offset = frame_size + sizeof(StackReference<mirror::ArtMethod>);
+  int32_t offset = frame_size + kFramePointerSize;
   for (size_t i = 0; i < entry_spills.size(); ++i) {
     ArmManagedRegister reg = entry_spills.at(i).AsArm();
     if (reg.IsNoRegister()) {
