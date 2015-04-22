@@ -248,7 +248,7 @@ int MIRGraph::GetSSAUseCount(int s_reg) {
 size_t MIRGraph::GetNumBytesForSpecialTemps() const {
   // This logic is written with assumption that Method* is only special temp.
   DCHECK_EQ(max_available_special_compiler_temps_, 1u);
-  return sizeof(StackReference<mirror::ArtMethod>);
+  return sizeof(StackReference<ArtMethod>);
 }
 
 size_t MIRGraph::GetNumAvailableVRTemps() {

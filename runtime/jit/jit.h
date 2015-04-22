@@ -48,7 +48,7 @@ class Jit {
 
   virtual ~Jit();
   static Jit* Create(JitOptions* options, std::string* error_msg);
-  bool CompileMethod(mirror::ArtMethod* method, Thread* self)
+  bool CompileMethod(ArtMethod* method, Thread* self)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void CreateInstrumentationCache(size_t compile_threshold);
   void CreateThreadPool();
@@ -77,7 +77,7 @@ class Jit {
   void* jit_compiler_handle_;
   void* (*jit_load_)(CompilerCallbacks**);
   void (*jit_unload_)(void*);
-  bool (*jit_compile_method_)(void*, mirror::ArtMethod*, Thread*);
+  bool (*jit_compile_method_)(void*, ArtMethod*, Thread*);
 
   // Performance monitoring.
   bool dump_info_on_shutdown_;

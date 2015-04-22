@@ -28,7 +28,7 @@ class LinearAlloc {
  public:
   explicit LinearAlloc(ArenaPool* pool);
 
-  void* Alloc(Thread* self, size_t size);
+  void* Alloc(Thread* self, size_t size) LOCKS_EXCLUDED(lock_);
 
   // Allocate and construct an array of structs of type T.
   template<class T>
@@ -37,7 +37,9 @@ class LinearAlloc {
   }
 
   // Return the number of bytes used in the allocator.
-  size_t GetUsedMemory() const;
+  size_t GetUsedMemory() const LOCKS_EXCLUDED(lock_);
+
+  ArenaPool* GetArenaPool() LOCKS_EXCLUDED(lock_);
 
  private:
   mutable Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;

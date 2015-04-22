@@ -33,4 +33,9 @@ size_t LinearAlloc::GetUsedMemory() const {
   return allocator_.BytesUsed();
 }
 
+ArenaPool* LinearAlloc::GetArenaPool() {
+  MutexLock mu(Thread::Current(), lock_);
+  return allocator_.GetArenaPool();
+}
+
 }  // namespace art
