@@ -56,7 +56,6 @@ void MIRGraph::InitRegLocations() {
 
   /* Mark the location of ArtMethod* as temporary */
   loc[GetMethodSReg()].location = kLocCompilerTemp;
-
   reg_location_ = loc;
 }
 
