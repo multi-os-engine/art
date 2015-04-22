@@ -1299,7 +1299,7 @@ void Mir2Lir::LoadMethodAddress(const MethodReference& target_method, InvokeType
     data_target->operands[2] = type;
   }
   // Loads an ArtMethod pointer, which is a reference as it lives in the heap.
-  OpPcRelLoad(TargetReg(symbolic_reg, kRef), data_target);
+  OpPcRelLoad(TargetPtrReg(symbolic_reg), data_target);
   DCHECK_NE(cu_->instruction_set, kMips) << reinterpret_cast<void*>(data_target);
   DCHECK_NE(cu_->instruction_set, kMips64) << reinterpret_cast<void*>(data_target);
 }
@@ -1322,7 +1322,8 @@ bool Mir2Lir::CanUseOpPcRelDexCacheArrayLoad() const {
 
 void Mir2Lir::OpPcRelDexCacheArrayLoad(const DexFile* dex_file ATTRIBUTE_UNUSED,
                                        int offset ATTRIBUTE_UNUSED,
-                                       RegStorage r_dest ATTRIBUTE_UNUSED) {
+                                       RegStorage r_dest ATTRIBUTE_UNUSED,
+                                       bool wide ATTRIBUTE_UNUSED) {
   LOG(FATAL) << "No generic implementation.";
   UNREACHABLE();
 }

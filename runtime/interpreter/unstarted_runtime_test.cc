@@ -50,9 +50,9 @@ class UnstartedRuntimeTest : public CommonRuntimeTest {
 #undef UNSTARTED_DIRECT
 
   // Methods that are native.
-#define UNSTARTED_JNI(Name, SigIgnored)                                   \
+#define UNSTARTED_JNI(Name, SigIgnored)                       \
   static void UnstartedJNI ## Name(Thread* self,              \
-                                   mirror::ArtMethod* method, \
+                                   ArtMethod* method,         \
                                    mirror::Object* receiver,  \
                                    uint32_t* args,            \
                                    JValue* result)            \

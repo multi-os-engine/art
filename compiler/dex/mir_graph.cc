@@ -120,7 +120,7 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       opcode_count_(nullptr),
       num_ssa_regs_(0),
       extended_basic_blocks_(arena->Adapter()),
-      method_sreg_(0),
+      method_sreg_(999999),
       attributes_(METHOD_IS_LEAF),  // Start with leaf assumption, change on encountering invoke.
       checkstats_(nullptr),
       arena_(arena),
