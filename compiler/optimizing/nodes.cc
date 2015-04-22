@@ -467,19 +467,10 @@ void HBasicBlock::InsertPhiAfter(HPhi* phi, HPhi* cursor) {
   DCHECK_EQ(phi->GetId(), -1);
   DCHECK_NE(cursor->GetId(), -1);
   DCHECK_EQ(cursor->GetBlock(), this);
-  if (cursor->next_ == nullptr) {
-    cursor->next_ = phi;
-    phi->previous_ = cursor;
-    DCHECK(phi->next_ == nullptr);
-  } else {
-    phi->next_ = cursor->next_;
-    phi->previous_ = cursor;
-    cursor->next_ = phi;
-    phi->next_->previous_ = phi;
-  }
   phi->SetBlock(this);
   phi->SetId(GetGraph()->GetNextInstructionId());
   UpdateInputsUsers(phi);
+  phis_.AddInstructionAfter(phi, cursor);
 }
 
 static void Remove(HInstructionList* instruction_list,
@@ -543,6 +534,20 @@ void HInstructionList::AddInstruction(HInstruction* instruction) {
     last_instruction_->next_ = instruction;
     instruction->previous_ = last_instruction_;
     last_instruction_ = instruction;
+  }
+}
+
+void HInstructionList::AddInstructionAfter(HInstruction* instruction, HInstruction* cursor) {
+  DCHECK(Contains(cursor));
+  if (cursor == last_instruction_) {
+    cursor->next_ = instruction;
+    instruction->previous_ = cursor;
+    last_instruction_ = instruction;
+  } else {
+    instruction->next_ = cursor->next_;
+    instruction->previous_ = cursor;
+    cursor->next_ = instruction;
+    instruction->next_->previous_ = instruction;
   }
 }
 
