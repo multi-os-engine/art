@@ -18,13 +18,13 @@
 
 #include "codegen_x86.h"
 
+#include "art_method.h"
 #include "base/logging.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
 #include "gc/accounting/card_table.h"
-#include "mirror/art_method.h"
 #include "mirror/object_array-inl.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 #include "x86_lir.h"
@@ -394,7 +394,7 @@ int X86Mir2Lir::X86NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
       break;
     case 1:  // Get method->dex_cache_resolved_methods_
       cg->LoadRefDisp(arg0_ref,
-                      mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
+                      ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
                       arg0_ref,
                       kNotVolatile);
       break;

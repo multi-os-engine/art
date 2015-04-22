@@ -16,9 +16,9 @@
 
 #include "dalvik_system_VMStack.h"
 
+#include "art_method-inl.h"
 #include "jni_internal.h"
 #include "nth_caller_visitor.h"
-#include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
 #include "mirror/object-inl.h"

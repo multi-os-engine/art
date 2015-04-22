@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
+#include "art_method-inl.h"
 #include "callee_save_frame.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
 #include "instrumentation.h"
-#include "mirror/art_method-inl.h"
 #include "mirror/object-inl.h"
 #include "runtime.h"
 #include "thread-inl.h"
 
 namespace art {
 
-extern "C" const void* artInstrumentationMethodEntryFromCode(mirror::ArtMethod* method,
+extern "C" const void* artInstrumentationMethodEntryFromCode(ArtMethod* method,
                                                              mirror::Object* this_object,
                                                              Thread* self,
                                                              uintptr_t lr)
@@ -46,7 +46,7 @@ extern "C" const void* artInstrumentationMethodEntryFromCode(mirror::ArtMethod* 
 }
 
 extern "C" TwoWordReturn artInstrumentationMethodExitFromCode(Thread* self,
-                                                              StackReference<mirror::ArtMethod>* sp,
+                                                              StackReference<ArtMethod>* sp,
                                                               uint64_t gpr_result,
                                                               uint64_t fpr_result)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {

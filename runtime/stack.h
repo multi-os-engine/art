@@ -31,10 +31,10 @@
 namespace art {
 
 namespace mirror {
-  class ArtMethod;
   class Object;
 }  // namespace mirror
 
+class ArtMethod;
 class Context;
 class ShadowFrame;
 class HandleScope;
@@ -75,7 +75,7 @@ class ShadowFrame {
 
   // Create ShadowFrame in heap for deoptimization.
   static ShadowFrame* CreateDeoptimizedFrame(uint32_t num_vregs, ShadowFrame* link,
-                                             mirror::ArtMethod* method, uint32_t dex_pc) {
+                                             ArtMethod* method, uint32_t dex_pc) {
     uint8_t* memory = new uint8_t[ComputeSize(num_vregs)];
     return Create(num_vregs, link, method, dex_pc, memory);
   }
@@ -88,7 +88,7 @@ class ShadowFrame {
 
   // Create ShadowFrame for interpreter using provided memory.
   static ShadowFrame* Create(uint32_t num_vregs, ShadowFrame* link,
-                             mirror::ArtMethod* method, uint32_t dex_pc, void* memory) {
+                             ArtMethod* method, uint32_t dex_pc, void* memory) {
     ShadowFrame* sf = new (memory) ShadowFrame(num_vregs, link, method, dex_pc, true);
     return sf;
   }
@@ -238,14 +238,9 @@ class ShadowFrame {
     }
   }
 
-  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK(method_ != nullptr);
     return method_;
-  }
-
-  mirror::ArtMethod** GetMethodAddress() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK(method_ != nullptr);
-    return &method_;
   }
 
   mirror::Object* GetThisObject() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -284,7 +279,7 @@ class ShadowFrame {
   }
 
  private:
-  ShadowFrame(uint32_t num_vregs, ShadowFrame* link, mirror::ArtMethod* method,
+  ShadowFrame(uint32_t num_vregs, ShadowFrame* link, ArtMethod* method,
               uint32_t dex_pc, bool has_reference_array)
       : number_of_vregs_(num_vregs), link_(link), method_(method), dex_pc_(dex_pc) {
     if (has_reference_array) {
@@ -308,7 +303,7 @@ class ShadowFrame {
   const uint32_t number_of_vregs_;
   // Link to previous shadow frame or null.
   ShadowFrame* link_;
-  mirror::ArtMethod* method_;
+  ArtMethod* method_;
   uint32_t dex_pc_;
   uint32_t vregs_[0];
 
@@ -356,11 +351,11 @@ class PACKED(4) ManagedStack {
     return link_;
   }
 
-  StackReference<mirror::ArtMethod>* GetTopQuickFrame() const {
+  ArtMethod** GetTopQuickFrame() const {
     return top_quick_frame_;
   }
 
-  void SetTopQuickFrame(StackReference<mirror::ArtMethod>* top) {
+  void SetTopQuickFrame(ArtMethod** top) {
     DCHECK(top_shadow_frame_ == nullptr);
     top_quick_frame_ = top;
   }
@@ -403,7 +398,7 @@ class PACKED(4) ManagedStack {
   bool ShadowFramesContain(StackReference<mirror::Object>* shadow_frame_entry) const;
 
  private:
-  StackReference<mirror::ArtMethod>* top_quick_frame_;
+  ArtMethod** top_quick_frame_;
   ManagedStack* link_;
   ShadowFrame* top_shadow_frame_;
 };
@@ -421,11 +416,11 @@ class StackVisitor {
   void WalkStack(bool include_transitions = false)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (cur_shadow_frame_ != nullptr) {
       return cur_shadow_frame_->GetMethod();
     } else if (cur_quick_frame_ != nullptr) {
-      return cur_quick_frame_->AsMirrorPtr();
+      return *cur_quick_frame_;
     } else {
       return nullptr;
     }
@@ -475,27 +470,27 @@ class StackVisitor {
   }
 
   // Get the method and dex pc immediately after the one that's currently being visited.
-  bool GetNextMethodAndDexPc(mirror::ArtMethod** next_method, uint32_t* next_dex_pc)
+  bool GetNextMethodAndDexPc(ArtMethod** next_method, uint32_t* next_dex_pc)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool GetVReg(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind, uint32_t* val) const
+  bool GetVReg(ArtMethod* m, uint16_t vreg, VRegKind kind, uint32_t* val) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool GetVRegPair(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind_lo, VRegKind kind_hi,
+  bool GetVRegPair(ArtMethod* m, uint16_t vreg, VRegKind kind_lo, VRegKind kind_hi,
                    uint64_t* val) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool SetVReg(mirror::ArtMethod* m, uint16_t vreg, uint32_t new_value, VRegKind kind)
+  bool SetVReg(ArtMethod* m, uint16_t vreg, uint32_t new_value, VRegKind kind)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool SetVRegPair(mirror::ArtMethod* m, uint16_t vreg, uint64_t new_value,
+  bool SetVRegPair(ArtMethod* m, uint16_t vreg, uint64_t new_value,
                    VRegKind kind_lo, VRegKind kind_hi)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   uintptr_t* GetGPRAddress(uint32_t reg) const;
 
   // This is a fast-path for getting/setting values in a quick frame.
-  uint32_t* GetVRegAddrFromQuickCode(StackReference<mirror::ArtMethod>* cur_quick_frame,
+  uint32_t* GetVRegAddrFromQuickCode(ArtMethod** cur_quick_frame,
                                      const DexFile::CodeItem* code_item,
                                      uint32_t core_spills, uint32_t fp_spills, size_t frame_size,
                                      uint16_t vreg) const {
@@ -578,7 +573,7 @@ class StackVisitor {
        * Special temporaries may have custom locations and the logic above deals with that.
        * However, non-special temporaries are placed relative to the outs.
        */
-      int temps_start = sizeof(StackReference<mirror::ArtMethod>) +
+      int temps_start = sizeof(StackReference<ArtMethod>) +
           code_item->outs_size_ * sizeof(uint32_t);
       int relative_offset = (reg - (temp_threshold + max_num_special_temps)) * sizeof(uint32_t);
       return temps_start + relative_offset;
@@ -588,21 +583,21 @@ class StackVisitor {
     } else {
       // Handle ins.
       return frame_size + ((reg - num_regs) * sizeof(uint32_t)) +
-          sizeof(StackReference<mirror::ArtMethod>);
+          sizeof(StackReference<ArtMethod>);
     }
   }
 
   static int GetOutVROffset(uint16_t out_num, InstructionSet isa) {
     UNUSED(isa);
     // According to stack model, the first out is above the Method referernce.
-    return sizeof(StackReference<mirror::ArtMethod>) + (out_num * sizeof(uint32_t));
+    return sizeof(StackReference<ArtMethod>) + (out_num * sizeof(uint32_t));
   }
 
   uintptr_t GetCurrentQuickFramePc() const {
     return cur_quick_frame_pc_;
   }
 
-  StackReference<mirror::ArtMethod>* GetCurrentQuickFrame() const {
+  ArtMethod** GetCurrentQuickFrame() const {
     return cur_quick_frame_;
   }
 
@@ -611,8 +606,8 @@ class StackVisitor {
   }
 
   HandleScope* GetCurrentHandleScope() const {
-    StackReference<mirror::ArtMethod>* sp = GetCurrentQuickFrame();
-    ++sp;  // Skip Method*; handle scope comes next;
+    ArtMethod** sp = GetCurrentQuickFrame();
+    ++sp;  // Skip ArtMethod*; handle scope comes next;
     return reinterpret_cast<HandleScope*>(sp);
   }
 
@@ -651,19 +646,19 @@ class StackVisitor {
   uintptr_t GetFPR(uint32_t reg) const;
   void SetFPR(uint32_t reg, uintptr_t value);
 
-  bool GetVRegFromQuickCode(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind,
+  bool GetVRegFromQuickCode(ArtMethod* m, uint16_t vreg, VRegKind kind,
                             uint32_t* val) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  bool GetVRegFromOptimizedCode(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind,
+  bool GetVRegFromOptimizedCode(ArtMethod* m, uint16_t vreg, VRegKind kind,
                                 uint32_t* val) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool GetRegisterIfAccessible(uint32_t reg, VRegKind kind, uint32_t* val) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool GetVRegPairFromQuickCode(mirror::ArtMethod* m, uint16_t vreg, VRegKind kind_lo,
+  bool GetVRegPairFromQuickCode(ArtMethod* m, uint16_t vreg, VRegKind kind_lo,
                                 VRegKind kind_hi, uint64_t* val) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  bool GetVRegPairFromOptimizedCode(mirror::ArtMethod* m, uint16_t vreg,
+  bool GetVRegPairFromOptimizedCode(ArtMethod* m, uint16_t vreg,
                                     VRegKind kind_lo, VRegKind kind_hi,
                                     uint64_t* val) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -671,13 +666,13 @@ class StackVisitor {
                                    uint64_t* val) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool SetVRegFromQuickCode(mirror::ArtMethod* m, uint16_t vreg, uint32_t new_value,
+  bool SetVRegFromQuickCode(ArtMethod* m, uint16_t vreg, uint32_t new_value,
                             VRegKind kind)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool SetRegisterIfAccessible(uint32_t reg, uint32_t new_value, VRegKind kind)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool SetVRegPairFromQuickCode(mirror::ArtMethod* m, uint16_t vreg, uint64_t new_value,
+  bool SetVRegPairFromQuickCode(ArtMethod* m, uint16_t vreg, uint64_t new_value,
                                 VRegKind kind_lo, VRegKind kind_hi)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool SetRegisterPairIfAccessible(uint32_t reg_lo, uint32_t reg_hi, uint64_t new_value,
@@ -688,7 +683,7 @@ class StackVisitor {
 
   Thread* const thread_;
   ShadowFrame* cur_shadow_frame_;
-  StackReference<mirror::ArtMethod>* cur_quick_frame_;
+  ArtMethod** cur_quick_frame_;
   uintptr_t cur_quick_frame_pc_;
   // Lazily computed, number of frames in the stack.
   size_t num_frames_;

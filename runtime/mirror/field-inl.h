@@ -32,7 +32,6 @@ inline mirror::Field* Field::CreateFromArtField(Thread* self, ArtField* field,
                                                 bool force_resolve) {
   // Try to resolve type before allocating since this is a thread suspension point.
   mirror::Class* type = field->GetType<true>();
-
   if (type == nullptr) {
     if (force_resolve) {
       if (kIsDebugBuild) {
@@ -50,14 +49,14 @@ inline mirror::Field* Field::CreateFromArtField(Thread* self, ArtField* field,
   }
   StackHandleScope<1> hs(self);
   auto ret = hs.NewHandle(static_cast<Field*>(StaticClass()->AllocObject(self)));
-  if (ret.Get() == nullptr) {
-    if (kIsDebugBuild) {
-      self->AssertPendingException();
-    }
+  if (UNLIKELY(ret.Get() == nullptr)) {
+    self->AssertPendingOOMException();
     return nullptr;
   }
+  const auto pointer_size = kTransactionActive ?
+      Runtime::Current()->GetClassLinker()->GetImagePointerSize() : sizeof(void*);
   auto dex_field_index = field->GetDexFieldIndex();
-  auto* resolved_field = field->GetDexCache()->GetResolvedField(dex_field_index, sizeof(void*));
+  auto* resolved_field = field->GetDexCache()->GetResolvedField(dex_field_index, pointer_size);
   if (resolved_field != nullptr) {
     DCHECK_EQ(resolved_field, field);
   } else {
