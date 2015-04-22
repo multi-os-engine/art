@@ -196,7 +196,7 @@ class OptimizingCompiler FINAL : public Compiler {
     return ArtQuickJniCompileMethod(GetCompilerDriver(), access_flags, method_idx, dex_file);
   }
 
-  uintptr_t GetEntryPointOf(mirror::ArtMethod* method) const OVERRIDE
+  uintptr_t GetEntryPointOf(ArtMethod* method) const OVERRIDE
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return reinterpret_cast<uintptr_t>(method->GetEntryPointFromQuickCompiledCodePtrSize(
         InstructionSetPointerSize(GetCompilerDriver()->GetInstructionSet())));

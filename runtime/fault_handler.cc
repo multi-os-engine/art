@@ -321,7 +321,7 @@ bool FaultManager::IsInGeneratedCode(siginfo_t* siginfo, void* context, bool che
     return false;
   }
 
-  mirror::ArtMethod* method_obj = 0;
+  ArtMethod* method_obj = 0;
   uintptr_t return_pc = 0;
   uintptr_t sp = 0;
 
@@ -357,7 +357,7 @@ bool FaultManager::IsInGeneratedCode(siginfo_t* siginfo, void* context, bool che
     return false;
   }
 
-  // Now make sure the class is a mirror::ArtMethod.
+  // Now make sure the class is a ArtMethod.
   if (!cls->IsArtMethodClass()) {
     VLOG(signals) << "not a method";
     return false;
@@ -418,15 +418,15 @@ bool JavaStackTraceHandler::Action(int sig, siginfo_t* siginfo, void* context) {
 #endif
   if (in_generated_code) {
     LOG(ERROR) << "Dumping java stack trace for crash in generated code";
-    mirror::ArtMethod* method = nullptr;
+    ArtMethod* method = nullptr;
     uintptr_t return_pc = 0;
     uintptr_t sp = 0;
     Thread* self = Thread::Current();
 
     manager_->GetMethodAndReturnPcAndSp(siginfo, context, &method, &return_pc, &sp);
     // Inside of generated code, sp[0] is the method, so sp is the frame.
-    StackReference<mirror::ArtMethod>* frame =
-        reinterpret_cast<StackReference<mirror::ArtMethod>*>(sp);
+    StackReference<ArtMethod>* frame =
+        reinterpret_cast<StackReference<ArtMethod>*>(sp);
     self->SetTopOfStack(frame);
 #ifdef TEST_NESTED_SIGNAL
     // To test the nested signal handler we raise a signal here.  This will cause the

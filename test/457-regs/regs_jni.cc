@@ -32,7 +32,7 @@ class TestVisitor : public StackVisitor {
       : StackVisitor(thread, context) {}
 
   bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::ArtMethod* m = GetMethod();
+    ArtMethod* m = GetMethod();
     std::string m_name(m->GetName());
 
     if (m_name.compare("mergeOk") == 0) {

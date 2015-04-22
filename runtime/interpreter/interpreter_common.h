@@ -41,7 +41,7 @@
 #include "thread.h"
 #include "well_known_classes.h"
 
-using ::art::mirror::ArtMethod;
+using ::art::ArtMethod;
 using ::art::mirror::Array;
 using ::art::mirror::BooleanArray;
 using ::art::mirror::ByteArray;
@@ -105,7 +105,7 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
   const uint32_t method_idx = (is_range) ? inst->VRegB_3rc() : inst->VRegB_35c();
   const uint32_t vregC = (is_range) ? inst->VRegC_3rc() : inst->VRegC_35c();
   Object* receiver = (type == kStatic) ? nullptr : shadow_frame.GetVRegReference(vregC);
-  mirror::ArtMethod* sf_method = shadow_frame.GetMethod();
+  ArtMethod* sf_method = shadow_frame.GetMethod();
   ArtMethod* const called_method = FindMethodFromCode<type, do_access_check>(
       method_idx, &receiver, &sf_method, self);
   // The shadow frame should already be pushed, so we don't need to update it.
@@ -195,7 +195,7 @@ static inline String* ResolveString(Thread* self, ShadowFrame& shadow_frame, uin
       return nullptr;
     }
   }
-  mirror::ArtMethod* method = shadow_frame.GetMethod();
+  ArtMethod* method = shadow_frame.GetMethod();
   mirror::Class* declaring_class = method->GetDeclaringClass();
   mirror::String* s = declaring_class->GetDexCacheStrings()->Get(string_idx);
   if (UNLIKELY(s == nullptr)) {

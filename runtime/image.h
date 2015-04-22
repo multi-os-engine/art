@@ -42,6 +42,7 @@ class PACKED(4) ImageHeader {
               uint32_t oat_data_begin,
               uint32_t oat_data_end,
               uint32_t oat_file_end,
+              uint32_t pointer_size,
               bool compile_pic_);
 
   bool IsValid() const;
@@ -95,6 +96,10 @@ class PACKED(4) ImageHeader {
     return reinterpret_cast<uint8_t*>(oat_file_end_);
   }
 
+  uint32_t GetPointerSize() const {
+    return pointer_size_;
+  }
+
   off_t GetPatchDelta() const {
     return patch_delta_;
   }
@@ -113,7 +118,6 @@ class PACKED(4) ImageHeader {
     kResolutionMethod,
     kImtConflictMethod,
     kImtUnimplementedMethod,
-    kDefaultImt,
     kCalleeSaveMethod,
     kRefsOnlySaveMethod,
     kRefsAndArgsSaveMethod,
@@ -179,6 +183,9 @@ class PACKED(4) ImageHeader {
 
   // Absolute address of an Object[] of objects needed to reinitialize from an image.
   uint32_t image_roots_;
+
+  // Pointer size, this affects the size of the ArtMethods.
+  uint32_t pointer_size_;
 
   // Boolean (0 or 1) to denote if the image was compiled with --compile-pic option
   const uint32_t compile_pic_;

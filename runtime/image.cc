@@ -38,6 +38,7 @@ ImageHeader::ImageHeader(uint32_t image_begin,
                          uint32_t oat_data_begin,
                          uint32_t oat_data_end,
                          uint32_t oat_file_end,
+                         uint32_t pointer_size,
                          bool compile_pic)
   : image_begin_(image_begin),
     image_size_(image_size),
@@ -52,6 +53,7 @@ ImageHeader::ImageHeader(uint32_t image_begin,
     oat_file_end_(oat_file_end),
     patch_delta_(0),
     image_roots_(image_roots),
+    pointer_size_(pointer_size),
     compile_pic_(compile_pic) {
   CHECK_EQ(image_begin, RoundUp(image_begin, kPageSize));
   CHECK_EQ(oat_file_begin, RoundUp(oat_file_begin, kPageSize));
@@ -61,6 +63,7 @@ ImageHeader::ImageHeader(uint32_t image_begin,
   CHECK_LE(oat_file_begin, oat_data_begin);
   CHECK_LT(oat_data_begin, oat_data_end);
   CHECK_LE(oat_data_end, oat_file_end);
+  CHECK(pointer_size_ == 4 || pointer_size_ == 8) << pointer_size_;
   memcpy(magic_, kImageMagic, sizeof(kImageMagic));
   memcpy(version_, kImageVersion, sizeof(kImageVersion));
 }

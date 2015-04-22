@@ -40,7 +40,7 @@ void X86Context::Reset() {
 }
 
 void X86Context::FillCalleeSaves(const StackVisitor& fr) {
-  mirror::ArtMethod* method = fr.GetMethod();
+  ArtMethod* method = fr.GetMethod();
   const QuickMethodFrameInfo frame_info = method->GetQuickFrameInfo();
   size_t spill_count = POPCOUNT(frame_info.CoreSpillMask());
   size_t fp_spill_count = POPCOUNT(frame_info.FpSpillMask());

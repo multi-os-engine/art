@@ -51,14 +51,14 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
   }
 
   bool VisitFrame() OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::ArtMethod* method = GetMethod();
+    ArtMethod* method = GetMethod();
     exception_handler_->SetHandlerFrameDepth(GetFrameDepth());
     if (method == nullptr) {
       // This is the upcall, we remember the frame and last pc so that we may long jump to them.
       exception_handler_->SetHandlerQuickFramePc(GetCurrentQuickFramePc());
       exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
       uint32_t next_dex_pc;
-      mirror::ArtMethod* next_art_method;
+      ArtMethod* next_art_method;
       bool has_next = GetNextMethodAndDexPc(&next_art_method, &next_dex_pc);
       // Report the method that did the down call as the handler.
       exception_handler_->SetHandlerDexPc(next_dex_pc);
@@ -81,7 +81,7 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
   }
 
  private:
-  bool HandleTryItems(Handle<mirror::ArtMethod> method)
+  bool HandleTryItems(Handle<ArtMethod> method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     uint32_t dex_pc = DexFile::kDexNoIndex;
     if (!method->IsNative()) {
@@ -91,7 +91,7 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
       bool clear_exception = false;
       StackHandleScope<1> hs(Thread::Current());
       Handle<mirror::Class> to_find(hs.NewHandle((*exception_)->GetClass()));
-      uint32_t found_dex_pc = mirror::ArtMethod::FindCatchBlock(method, to_find, dex_pc,
+      uint32_t found_dex_pc = ArtMethod::FindCatchBlock(method, to_find, dex_pc,
                                                                 &clear_exception);
       exception_handler_->SetClearException(clear_exception);
       if (found_dex_pc != DexFile::kDexNoIndex) {
@@ -167,7 +167,7 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
 
   bool VisitFrame() OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     exception_handler_->SetHandlerFrameDepth(GetFrameDepth());
-    mirror::ArtMethod* method = GetMethod();
+    ArtMethod* method = GetMethod();
     if (method == nullptr) {
       // This is the upcall, we remember the frame and last pc so that we may long jump to them.
       exception_handler_->SetHandlerQuickFramePc(GetCurrentQuickFramePc());
@@ -187,7 +187,7 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     return static_cast<VRegKind>(kinds.at(reg * 2));
   }
 
-  bool HandleDeoptimization(mirror::ArtMethod* m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  bool HandleDeoptimization(ArtMethod* m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const DexFile::CodeItem* code_item = m->GetCodeItem();
     CHECK(code_item != nullptr);
     uint16_t num_regs = code_item->registers_size_;
@@ -196,7 +196,7 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     mirror::Class* declaring_class = m->GetDeclaringClass();
     Handle<mirror::DexCache> h_dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
     Handle<mirror::ClassLoader> h_class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
-    Handle<mirror::ArtMethod> h_method(hs.NewHandle(m));
+    Handle<ArtMethod> h_method(hs.NewHandle(m));
     verifier::MethodVerifier verifier(self_, h_dex_cache->GetDexFile(), h_dex_cache, h_class_loader,
                                       &m->GetClassDef(), code_item, m->GetDexMethodIndex(),
                                       h_method, m->GetAccessFlags(), true, true, true, true);

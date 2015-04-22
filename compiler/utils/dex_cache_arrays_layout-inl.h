@@ -25,12 +25,6 @@
 #include "primitive.h"
 #include "utils.h"
 
-namespace mirror {
-class ArtMethod;
-class Class;
-class String;
-}  // namespace mirror
-
 namespace art {
 
 inline DexCacheArraysLayout::DexCacheArraysLayout(size_t pointer_size, const DexFile* dex_file)
@@ -53,11 +47,11 @@ inline size_t DexCacheArraysLayout::TypesSize(size_t num_elements) const {
 
 inline size_t DexCacheArraysLayout::MethodOffset(uint32_t method_idx) const {
   return methods_offset_ + ElementOffset(
-      sizeof(mirror::HeapReference<mirror::ArtMethod>), method_idx);
+      sizeof(mirror::HeapReference<ArtMethod>), method_idx);
 }
 
 inline size_t DexCacheArraysLayout::MethodsSize(size_t num_elements) const {
-  return ArraySize(sizeof(mirror::HeapReference<mirror::ArtMethod>), num_elements);
+  return ArraySize(sizeof(mirror::HeapReference<ArtMethod>), num_elements);
 }
 
 inline size_t DexCacheArraysLayout::StringOffset(uint32_t string_idx) const {

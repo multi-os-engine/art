@@ -688,11 +688,11 @@ ArtField* Class::FindField(Thread* self, Handle<Class> klass, const StringPiece&
   return nullptr;
 }
 
-static void SetPreverifiedFlagOnMethods(mirror::ObjectArray<mirror::ArtMethod>* methods)
+static void SetPreverifiedFlagOnMethods(mirror::ObjectArray<ArtMethod>* methods)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   if (methods != nullptr) {
     for (int32_t index = 0, end = methods->GetLength(); index < end; ++index) {
-      mirror::ArtMethod* method = methods->GetWithoutChecks(index);
+      ArtMethod* method = methods->GetWithoutChecks(index);
       DCHECK(method != nullptr);
       if (!method->IsNative() && !method->IsAbstract()) {
         method->SetPreverified();
@@ -800,20 +800,18 @@ const DexFile::TypeList* Class::GetInterfaceTypeList() {
 }
 
 void Class::PopulateEmbeddedImtAndVTable(StackHandleScope<kImtSize>* imt_handle_scope) {
-  for (uint32_t i = 0; i < kImtSize; i++) {
-    // Replace null with conflict.
+  for (size_t i = 0; i < kImtSize; i++) {
     mirror::Object* obj = imt_handle_scope->GetReference(i);
     DCHECK(obj != nullptr);
     SetEmbeddedImTableEntry(i, obj->AsArtMethod());
   }
-
-  ObjectArray<ArtMethod>* table = GetVTableDuringLinking();
+  PointerArray* table = GetVTableDuringLinking();
   CHECK(table != nullptr) << PrettyClass(this);
-  SetEmbeddedVTableLength(table->GetLength());
-  for (int32_t i = 0; i < table->GetLength(); i++) {
-    SetEmbeddedVTableEntry(i, table->GetWithoutChecks(i));
+  const size_t table_length = table->GetLength();
+  SetEmbeddedVTableLength(table_length);
+  for (size_t i = 0; i < table_length; i++) {
+    SetEmbeddedVTableEntry(i, table->GetWithout(i));
   }
-
   // Keep java.lang.Object class's vtable around for since it's easier
   // to be reused by array classes during their linking.
   if (!IsObjectClass()) {
@@ -861,10 +859,9 @@ Class* Class::CopyOf(Thread* self, int32_t new_length,
   // The num_bytes (3rd param) is sizeof(Class) as opposed to SizeOf()
   // to skip copying the tail part that we will overwrite here.
   CopyClassVisitor visitor(self, &h_this, new_length, sizeof(Class), imt_handle_scope);
-  mirror::Object* new_class =
-      kMovingClasses
-         ? heap->AllocObject<true>(self, java_lang_Class_.Read(), new_length, visitor)
-         : heap->AllocNonMovableObject<true>(self, java_lang_Class_.Read(), new_length, visitor);
+  mirror::Object* new_class = kMovingClasses ?
+      heap->AllocObject<true>(self, java_lang_Class_.Read(), new_length, visitor) :
+      heap->AllocNonMovableObject<true>(self, java_lang_Class_.Read(), new_length, visitor);
   if (UNLIKELY(new_class == nullptr)) {
     CHECK(self->IsExceptionPending());  // Expect an OOME.
     return nullptr;
@@ -877,7 +874,8 @@ bool Class::ProxyDescriptorEquals(const char* match) {
   return Runtime::Current()->GetClassLinker()->GetDescriptorForProxy(this) == match;
 }
 
-mirror::ArtMethod* Class::GetDeclaredConstructor(
+// TODO: Move this to java_lang_Class.cc?
+ArtMethod* Class::GetDeclaredConstructor(
     Thread* self, Handle<mirror::ObjectArray<mirror::Class>> args) {
   auto* direct_methods = GetDirectMethods();
   size_t count = direct_methods != nullptr ? direct_methods->GetLength() : 0u;
@@ -896,6 +894,14 @@ mirror::ArtMethod* Class::GetDeclaredConstructor(
     }
   }
   return nullptr;
+}
+
+uint32_t Class::Depth() {
+  uint32_t depth = 0;
+  for (Class* klass = this; klass->GetSuperClass() != nullptr; klass = klass->GetSuperClass()) {
+    depth++;
+  }
+  return depth;
 }
 
 }  // namespace mirror

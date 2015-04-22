@@ -26,7 +26,7 @@ namespace jit {
 
 class JitCompileTask : public Task {
  public:
-  explicit JitCompileTask(mirror::ArtMethod* method, JitInstrumentationCache* cache)
+  explicit JitCompileTask(ArtMethod* method, JitInstrumentationCache* cache)
       : method_(method), cache_(cache) {
   }
 
@@ -45,7 +45,7 @@ class JitCompileTask : public Task {
   }
 
  private:
-  mirror::ArtMethod* const method_;
+  ArtMethod* const method_;
   JitInstrumentationCache* const cache_;
 };
 
@@ -61,7 +61,7 @@ void JitInstrumentationCache::DeleteThreadPool() {
   thread_pool_.reset();
 }
 
-void JitInstrumentationCache::SignalCompiled(Thread* self, mirror::ArtMethod* method) {
+void JitInstrumentationCache::SignalCompiled(Thread* self, ArtMethod* method) {
   ScopedObjectAccessUnchecked soa(self);
   jmethodID method_id = soa.EncodeMethod(method);
   MutexLock mu(self, lock_);
@@ -71,7 +71,7 @@ void JitInstrumentationCache::SignalCompiled(Thread* self, mirror::ArtMethod* me
   }
 }
 
-void JitInstrumentationCache::AddSamples(Thread* self, mirror::ArtMethod* method, size_t count) {
+void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t count) {
   ScopedObjectAccessUnchecked soa(self);
   // Since we don't have on-stack replacement, some methods can remain in the interpreter longer
   // than we want resulting in samples even after the method is compiled.

@@ -108,7 +108,7 @@ RegStorage Mir2Lir::GenGetOtherTypeForSgetSput(const MirSFieldLoweringInfo& fiel
   } else {
     // Using fixed register to sync with possible call to runtime support.
     r_method = LoadCurrMethodWithHint(TargetReg(kArg1, kRef));
-    LoadRefDisp(r_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(), r_base,
+    LoadRefDisp(r_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(), r_base,
                 kNotVolatile);
     int32_t offset_of_field = ObjArray::OffsetOfElement(field_info.StorageIndex()).Int32Value();
     LoadRefDisp(r_base, offset_of_field, r_base, kNotVolatile);
@@ -711,7 +711,7 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, OpSize size) {
       // Fast path, static storage base is this method's class
       r_base = AllocTempRef();
       RegStorage r_method = LoadCurrMethodWithHint(r_base);
-      LoadRefDisp(r_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value(), r_base,
+      LoadRefDisp(r_method, ArtMethod::DeclaringClassOffset().Int32Value(), r_base,
                   kNotVolatile);
     } else {
       // Medium path, static storage base in a different class which requires checks that the other
@@ -789,7 +789,7 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest, OpSize size, Primitive::Typ
       // Fast path, static storage base is this method's class
       r_base = AllocTempRef();
       RegStorage r_method = LoadCurrMethodWithHint(r_base);
-      LoadRefDisp(r_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value(), r_base,
+      LoadRefDisp(r_method, ArtMethod::DeclaringClassOffset().Int32Value(), r_base,
                   kNotVolatile);
     } else {
       // Medium path, static storage base in a different class which requires checks that the other
@@ -1056,7 +1056,7 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
       CheckRegLocation(rl_method);
       r_method = rl_method.reg;
       int32_t dex_cache_offset =
-          mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value();
+          ArtMethod::DexCacheResolvedTypesOffset().Int32Value();
       RegStorage res_reg = AllocTempRef();
       LoadRefDisp(r_method, dex_cache_offset, res_reg, kNotVolatile);
       int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
@@ -1093,7 +1093,7 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
       r_method = LoadCurrMethodWithHint(TargetReg(kArg1, kRef));
       // Method to declaring class.
       RegStorage arg0 = TargetReg(kArg0, kRef);
-      LoadRefDisp(r_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value(),
+      LoadRefDisp(r_method, ArtMethod::DeclaringClassOffset().Int32Value(),
                   arg0, kNotVolatile);
       // Declaring class to dex cache strings.
       LoadRefDisp(arg0, mirror::Class::DexCacheStringsOffset().Int32Value(), arg0, kNotVolatile);
@@ -1112,7 +1112,7 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
     } else {
       RegLocation rl_method = LoadCurrMethod();
       RegStorage res_reg = AllocTempRef();
-      LoadRefDisp(rl_method.reg, mirror::ArtMethod::DeclaringClassOffset().Int32Value(), res_reg,
+      LoadRefDisp(rl_method.reg, ArtMethod::DeclaringClassOffset().Int32Value(), res_reg,
                   kNotVolatile);
       LoadRefDisp(res_reg, mirror::Class::DexCacheStringsOffset().Int32Value(), res_reg,
                   kNotVolatile);
@@ -1195,7 +1195,7 @@ void Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx, Re
 
   if (use_declaring_class) {
     RegStorage r_method = LoadCurrMethodWithHint(check_class);
-    LoadRefDisp(r_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value(), check_class,
+    LoadRefDisp(r_method, ArtMethod::DeclaringClassOffset().Int32Value(), check_class,
                 kNotVolatile);
     LoadRefDisp(object.reg,  mirror::Object::ClassOffset().Int32Value(), object_class,
                 kNotVolatile);
@@ -1206,7 +1206,7 @@ void Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx, Re
                 kNotVolatile);
   } else {
     RegStorage r_method = LoadCurrMethodWithHint(check_class);
-    LoadRefDisp(r_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
+    LoadRefDisp(r_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                 check_class, kNotVolatile);
     LoadRefDisp(object.reg,  mirror::Object::ClassOffset().Int32Value(), object_class,
                 kNotVolatile);
@@ -1254,7 +1254,7 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
   } else if (use_declaring_class) {
     RegStorage r_method = LoadCurrMethodWithHint(TargetReg(kArg1, kRef));
     LoadValueDirectFixed(rl_src, ref_reg);  // kArg0 <= ref
-    LoadRefDisp(r_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value(),
+    LoadRefDisp(r_method, ArtMethod::DeclaringClassOffset().Int32Value(),
                 class_reg, kNotVolatile);
   } else {
     if (can_assume_type_is_in_dex_cache) {
@@ -1269,7 +1269,7 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
     } else {
       r_method = LoadCurrMethodWithHint(TargetReg(kArg1, kRef));
       // Load dex cache entry into class_reg (kArg2)
-      LoadRefDisp(r_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
+      LoadRefDisp(r_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                   class_reg, kNotVolatile);
       int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
       LoadRefDisp(class_reg, offset_of_type, class_reg, kNotVolatile);
@@ -1390,7 +1390,7 @@ void Mir2Lir::GenCheckCast(int opt_flags, uint32_t insn_idx, uint32_t type_idx,
     OpRegCopy(class_reg, TargetReg(kRet0, kRef));  // Align usage with fast path
   } else if (use_declaring_class) {
     RegStorage method_reg = LoadCurrMethodWithHint(TargetReg(kArg1, kRef));
-    LoadRefDisp(method_reg, mirror::ArtMethod::DeclaringClassOffset().Int32Value(),
+    LoadRefDisp(method_reg, ArtMethod::DeclaringClassOffset().Int32Value(),
                 class_reg, kNotVolatile);
   } else {
     // Load dex cache entry into class_reg (kArg2)
@@ -1401,7 +1401,7 @@ void Mir2Lir::GenCheckCast(int opt_flags, uint32_t insn_idx, uint32_t type_idx,
     } else {
       r_method = LoadCurrMethodWithHint(TargetReg(kArg1, kRef));
 
-      LoadRefDisp(r_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
+      LoadRefDisp(r_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                   class_reg, kNotVolatile);
       int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
       LoadRefDisp(class_reg, offset_of_type, class_reg, kNotVolatile);

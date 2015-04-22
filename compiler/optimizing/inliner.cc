@@ -81,7 +81,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
       hs.NewHandle(caller_compilation_unit_.GetClassLinker()->FindDexCache(caller_dex_file)));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
       soa.Decode<mirror::ClassLoader*>(caller_compilation_unit_.GetClassLoader())));
-  Handle<mirror::ArtMethod> resolved_method(hs.NewHandle(
+  Handle<ArtMethod> resolved_method(hs.NewHandle(
       compiler_driver_->ResolveMethod(
           soa, dex_cache, class_loader, &caller_compilation_unit_, method_index, invoke_type)));
 
@@ -140,7 +140,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
   return true;
 }
 
-bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
+bool HInliner::TryBuildAndInline(Handle<ArtMethod> resolved_method,
                                  HInvoke* invoke_instruction,
                                  uint32_t method_index,
                                  bool can_use_dex_cache) const {

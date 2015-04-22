@@ -22,10 +22,10 @@
 namespace art {
 namespace mirror {
 class Array;
-class ArtMethod;
 class Class;
 class Object;
 }  // namespace mirror
+class ArtMethod;
 }  // namespace art
 
 // These are extern declarations of assembly stubs with common names.
@@ -34,10 +34,10 @@ class Object;
 extern "C" void art_quick_check_cast(const art::mirror::Class*, const art::mirror::Class*);
 
 // DexCache entrypoints.
-extern "C" void* art_quick_initialize_static_storage(uint32_t, art::mirror::ArtMethod*);
-extern "C" void* art_quick_initialize_type(uint32_t, art::mirror::ArtMethod*);
-extern "C" void* art_quick_initialize_type_and_verify_access(uint32_t, art::mirror::ArtMethod*);
-extern "C" void* art_quick_resolve_string(uint32_t, art::mirror::ArtMethod*);
+extern "C" void* art_quick_initialize_static_storage(uint32_t, art::ArtMethod*);
+extern "C" void* art_quick_initialize_type(uint32_t, art::ArtMethod*);
+extern "C" void* art_quick_initialize_type_and_verify_access(uint32_t, art::ArtMethod*);
+extern "C" void* art_quick_resolve_string(uint32_t, art::ArtMethod*);
 
 // Field entrypoints.
 extern "C" int art_quick_set8_instance(uint32_t, void*, int8_t);
@@ -97,9 +97,9 @@ extern "C" int32_t art_quick_string_compareto(void*, void*);
 extern "C" void* art_quick_memcpy(void*, const void*, size_t);
 
 // Invoke entrypoints.
-extern "C" void art_quick_imt_conflict_trampoline(art::mirror::ArtMethod*);
-extern "C" void art_quick_resolution_trampoline(art::mirror::ArtMethod*);
-extern "C" void art_quick_to_interpreter_bridge(art::mirror::ArtMethod*);
+extern "C" void art_quick_imt_conflict_trampoline(art::ArtMethod*);
+extern "C" void art_quick_resolution_trampoline(art::ArtMethod*);
+extern "C" void art_quick_to_interpreter_bridge(art::ArtMethod*);
 extern "C" void art_quick_invoke_direct_trampoline_with_access_check(uint32_t, void*);
 extern "C" void art_quick_invoke_interface_trampoline_with_access_check(uint32_t, void*);
 extern "C" void art_quick_invoke_static_trampoline_with_access_check(uint32_t, void*);

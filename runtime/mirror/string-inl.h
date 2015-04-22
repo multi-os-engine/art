@@ -28,9 +28,9 @@
 namespace art {
 namespace mirror {
 
-inline uint32_t String::ClassSize() {
+inline uint32_t String::ClassSize(size_t pointer_size) {
   uint32_t vtable_entries = Object::kVTableLength + 51;
-  return Class::ComputeClassSize(true, vtable_entries, 0, 1, 0, 1, 2);
+  return Class::ComputeClassSize(true, vtable_entries, 0, 1, 0, 1, 2, pointer_size);
 }
 
 inline uint16_t String::UncheckedCharAt(int32_t index) {

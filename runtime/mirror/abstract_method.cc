@@ -21,7 +21,7 @@
 namespace art {
 namespace mirror {
 
-bool AbstractMethod::CreateFromArtMethod(mirror::ArtMethod* method) {
+bool AbstractMethod::CreateFromArtMethod(ArtMethod* method) {
   auto* interface_method = method->GetInterfaceMethodIfProxy();
   SetFieldObject<false>(ArtMethodOffset(), method);
   SetFieldObject<false>(DeclaringClassOffset(), method->GetDeclaringClass());
@@ -32,8 +32,8 @@ bool AbstractMethod::CreateFromArtMethod(mirror::ArtMethod* method) {
   return true;
 }
 
-mirror::ArtMethod* AbstractMethod::GetArtMethod() {
-  return GetFieldObject<mirror::ArtMethod>(ArtMethodOffset());
+ArtMethod* AbstractMethod::GetArtMethod() {
+  return GetFieldObject<ArtMethod>(ArtMethodOffset());
 }
 
 mirror::Class* AbstractMethod::GetDeclaringClass() {

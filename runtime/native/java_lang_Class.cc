@@ -272,7 +272,7 @@ static jobject Class_getDeclaredConstructorInternal(
   return nullptr;
 }
 
-static ALWAYS_INLINE inline bool MethodMatchesConstructor(mirror::ArtMethod* m, bool public_only)
+static ALWAYS_INLINE inline bool MethodMatchesConstructor(ArtMethod* m, bool public_only)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   DCHECK(m != nullptr);
   return (!public_only || m->IsPublic()) && !m->IsStatic() && m->IsConstructor();
@@ -330,7 +330,7 @@ static jobject Class_getDeclaredMethodInternal(JNIEnv* env, jobject javaThis,
   }
   auto h_args = hs.NewHandle(soa.Decode<mirror::ObjectArray<mirror::Class>*>(args));
   auto* klass = DecodeClass(soa, javaThis);
-  mirror::ArtMethod* result = nullptr;
+  ArtMethod* result = nullptr;
   auto* virtual_methods = klass->GetVirtualMethods();
   if (virtual_methods != nullptr) {
     auto h_virtual_methods = hs.NewHandle(virtual_methods);

@@ -159,7 +159,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     EXPECT_EQ(class_linker_->FindArrayClass(self, &array_ptr), array.Get());
   }
 
-  void AssertMethod(mirror::ArtMethod* method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  void AssertMethod(ArtMethod* method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     EXPECT_TRUE(method != nullptr);
     EXPECT_TRUE(method->GetClass() != nullptr);
     EXPECT_TRUE(method->GetName() != nullptr);
@@ -247,14 +247,14 @@ class ClassLinkerTest : public CommonRuntimeTest {
     EXPECT_TRUE(klass->CanAccess(klass.Get()));
 
     for (size_t i = 0; i < klass->NumDirectMethods(); i++) {
-      mirror::ArtMethod* method = klass->GetDirectMethod(i);
+      ArtMethod* method = klass->GetDirectMethod(i);
       AssertMethod(method);
       EXPECT_TRUE(method->IsDirect());
       EXPECT_EQ(klass.Get(), method->GetDeclaringClass());
     }
 
     for (size_t i = 0; i < klass->NumVirtualMethods(); i++) {
-      mirror::ArtMethod* method = klass->GetVirtualMethod(i);
+      ArtMethod* method = klass->GetVirtualMethod(i);
       AssertMethod(method);
       EXPECT_FALSE(method->IsDirect());
       EXPECT_TRUE(method->GetDeclaringClass()->IsAssignableFrom(klass.Get()));
@@ -358,7 +358,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     class_linker_->VisitRoots(&visitor, kVisitRootFlagAllRoots);
     // Verify the dex cache has resolution methods in all resolved method slots
     mirror::DexCache* dex_cache = class_linker_->FindDexCache(dex);
-    mirror::ObjectArray<mirror::ArtMethod>* resolved_methods = dex_cache->GetResolvedMethods();
+    mirror::ObjectArray<ArtMethod>* resolved_methods = dex_cache->GetResolvedMethods();
     for (size_t i = 0; i < static_cast<size_t>(resolved_methods->GetLength()); i++) {
       EXPECT_TRUE(resolved_methods->Get(i) != nullptr) << dex.GetLocation() << " i=" << i;
     }
@@ -486,17 +486,17 @@ struct ObjectOffsets : public CheckOffsets<mirror::Object> {
   };
 };
 
-struct ArtMethodOffsets : public CheckOffsets<mirror::ArtMethod> {
-  ArtMethodOffsets() : CheckOffsets<mirror::ArtMethod>(false, "Ljava/lang/reflect/ArtMethod;") {
-    addOffset(OFFSETOF_MEMBER(mirror::ArtMethod, access_flags_), "accessFlags");
-    addOffset(OFFSETOF_MEMBER(mirror::ArtMethod, declaring_class_), "declaringClass");
-    addOffset(OFFSETOF_MEMBER(mirror::ArtMethod, dex_cache_resolved_methods_),
+struct ArtMethodOffsets : public CheckOffsets<ArtMethod> {
+  ArtMethodOffsets() : CheckOffsets<ArtMethod>(false, "Ljava/lang/reflect/ArtMethod;") {
+    addOffset(OFFSETOF_MEMBER(ArtMethod, access_flags_), "accessFlags");
+    addOffset(OFFSETOF_MEMBER(ArtMethod, declaring_class_), "declaringClass");
+    addOffset(OFFSETOF_MEMBER(ArtMethod, dex_cache_resolved_methods_),
               "dexCacheResolvedMethods");
-    addOffset(OFFSETOF_MEMBER(mirror::ArtMethod, dex_cache_resolved_types_),
+    addOffset(OFFSETOF_MEMBER(ArtMethod, dex_cache_resolved_types_),
               "dexCacheResolvedTypes");
-    addOffset(OFFSETOF_MEMBER(mirror::ArtMethod, dex_code_item_offset_), "dexCodeItemOffset");
-    addOffset(OFFSETOF_MEMBER(mirror::ArtMethod, dex_method_index_), "dexMethodIndex");
-    addOffset(OFFSETOF_MEMBER(mirror::ArtMethod, method_index_), "methodIndex");
+    addOffset(OFFSETOF_MEMBER(ArtMethod, dex_code_item_offset_), "dexCodeItemOffset");
+    addOffset(OFFSETOF_MEMBER(ArtMethod, dex_method_index_), "dexMethodIndex");
+    addOffset(OFFSETOF_MEMBER(ArtMethod, method_index_), "methodIndex");
   };
 };
 
@@ -900,7 +900,7 @@ TEST_F(ClassLinkerTest, StaticFields) {
   // Static final primitives that are initialized by a compile-time constant
   // expression resolve to a copy of a constant value from the constant pool.
   // So <clinit> should be null.
-  mirror::ArtMethod* clinit = statics->FindDirectMethod("<clinit>", "()V");
+  ArtMethod* clinit = statics->FindDirectMethod("<clinit>", "()V");
   EXPECT_TRUE(clinit == nullptr);
 
   EXPECT_EQ(9U, statics->NumStaticFields());
@@ -987,15 +987,15 @@ TEST_F(ClassLinkerTest, Interfaces) {
   EXPECT_TRUE(J->IsAssignableFrom(B.Get()));
 
   const Signature void_sig = I->GetDexCache()->GetDexFile()->CreateSignature("()V");
-  mirror::ArtMethod* Ii = I->FindVirtualMethod("i", void_sig);
-  mirror::ArtMethod* Jj1 = J->FindVirtualMethod("j1", void_sig);
-  mirror::ArtMethod* Jj2 = J->FindVirtualMethod("j2", void_sig);
-  mirror::ArtMethod* Kj1 = K->FindInterfaceMethod("j1", void_sig);
-  mirror::ArtMethod* Kj2 = K->FindInterfaceMethod("j2", void_sig);
-  mirror::ArtMethod* Kk = K->FindInterfaceMethod("k", void_sig);
-  mirror::ArtMethod* Ai = A->FindVirtualMethod("i", void_sig);
-  mirror::ArtMethod* Aj1 = A->FindVirtualMethod("j1", void_sig);
-  mirror::ArtMethod* Aj2 = A->FindVirtualMethod("j2", void_sig);
+  ArtMethod* Ii = I->FindVirtualMethod("i", void_sig);
+  ArtMethod* Jj1 = J->FindVirtualMethod("j1", void_sig);
+  ArtMethod* Jj2 = J->FindVirtualMethod("j2", void_sig);
+  ArtMethod* Kj1 = K->FindInterfaceMethod("j1", void_sig);
+  ArtMethod* Kj2 = K->FindInterfaceMethod("j2", void_sig);
+  ArtMethod* Kk = K->FindInterfaceMethod("k", void_sig);
+  ArtMethod* Ai = A->FindVirtualMethod("i", void_sig);
+  ArtMethod* Aj1 = A->FindVirtualMethod("j1", void_sig);
+  ArtMethod* Aj2 = A->FindVirtualMethod("j2", void_sig);
   ASSERT_TRUE(Ii != nullptr);
   ASSERT_TRUE(Jj1 != nullptr);
   ASSERT_TRUE(Jj2 != nullptr);
@@ -1044,8 +1044,8 @@ TEST_F(ClassLinkerTest, ResolveVerifyAndClinit) {
   Handle<mirror::ClassLoader> class_loader(
       hs.NewHandle(soa.Decode<mirror::ClassLoader*>(jclass_loader)));
   mirror::Class* klass = class_linker_->FindClass(soa.Self(), "LStaticsFromCode;", class_loader);
-  mirror::ArtMethod* clinit = klass->FindClassInitializer();
-  mirror::ArtMethod* getS0 = klass->FindDirectMethod("getS0", "()Ljava/lang/Object;");
+  ArtMethod* clinit = klass->FindClassInitializer();
+  ArtMethod* getS0 = klass->FindDirectMethod("getS0", "()Ljava/lang/Object;");
   const DexFile::StringId* string_id = dex_file->FindStringId("LStaticsFromCode;");
   ASSERT_TRUE(string_id != nullptr);
   const DexFile::TypeId* type_id = dex_file->FindTypeId(dex_file->GetIndexForStringId(*string_id));
@@ -1122,10 +1122,10 @@ TEST_F(ClassLinkerTest, ValidatePredefinedClassSizes) {
   EXPECT_EQ(c->GetClassSize(), mirror::DexCache::ClassSize());
 
   c = class_linker_->FindClass(soa.Self(), "Ljava/lang/reflect/ArtMethod;", class_loader);
-  EXPECT_EQ(c->GetClassSize(), mirror::ArtMethod::ClassSize());
+  EXPECT_EQ(c->GetClassSize(), ArtMethod::ClassSize());
 }
 
-static void CheckMethod(mirror::ArtMethod* method, bool verified)
+static void CheckMethod(ArtMethod* method, bool verified)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   if (!method->IsNative() && !method->IsAbstract()) {
     EXPECT_EQ((method->GetAccessFlags() & kAccPreverified) != 0U, verified)

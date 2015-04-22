@@ -30,12 +30,12 @@
 
 namespace art {
 namespace mirror {
-  class ArtMethod;
   class Class;
   class Object;
   class Throwable;
 }  // namespace mirror
 class ArtField;
+class ArtMethod;
 union JValue;
 class Thread;
 
@@ -63,34 +63,34 @@ struct InstrumentationListener {
 
   // Call-back for when a method is entered.
   virtual void MethodEntered(Thread* thread, mirror::Object* this_object,
-                             mirror::ArtMethod* method,
+                             ArtMethod* method,
                              uint32_t dex_pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
 
   // Call-back for when a method is exited.
   // TODO: its likely passing the return value would be useful, however, we may need to get and
   //       parse the shorty to determine what kind of register holds the result.
   virtual void MethodExited(Thread* thread, mirror::Object* this_object,
-                            mirror::ArtMethod* method, uint32_t dex_pc,
+                            ArtMethod* method, uint32_t dex_pc,
                             const JValue& return_value)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
 
   // Call-back for when a method is popped due to an exception throw. A method will either cause a
   // MethodExited call-back or a MethodUnwind call-back when its activation is removed.
   virtual void MethodUnwind(Thread* thread, mirror::Object* this_object,
-                            mirror::ArtMethod* method, uint32_t dex_pc)
+                            ArtMethod* method, uint32_t dex_pc)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
 
   // Call-back for when the dex pc moves in a method.
   virtual void DexPcMoved(Thread* thread, mirror::Object* this_object,
-                          mirror::ArtMethod* method, uint32_t new_dex_pc)
+                          ArtMethod* method, uint32_t new_dex_pc)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
 
   // Call-back for when we read from a field.
-  virtual void FieldRead(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
+  virtual void FieldRead(Thread* thread, mirror::Object* this_object, ArtMethod* method,
                          uint32_t dex_pc, ArtField* field) = 0;
 
   // Call-back for when we write into a field.
-  virtual void FieldWritten(Thread* thread, mirror::Object* this_object, mirror::ArtMethod* method,
+  virtual void FieldWritten(Thread* thread, mirror::Object* this_object, ArtMethod* method,
                             uint32_t dex_pc, ArtField* field, const JValue& field_value) = 0;
 
   // Call-back when an exception is caught.
@@ -98,7 +98,7 @@ struct InstrumentationListener {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
 
   // Call-back for when we get a backward branch.
-  virtual void BackwardBranch(Thread* thread, mirror::ArtMethod* method, int32_t dex_pc_offset)
+  virtual void BackwardBranch(Thread* thread, ArtMethod* method, int32_t dex_pc_offset)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) = 0;
 };
 
@@ -159,18 +159,18 @@ class Instrumentation {
   // Deoptimize a method by forcing its execution with the interpreter. Nevertheless, a static
   // method (except a class initializer) set to the resolution trampoline will be deoptimized only
   // once its declaring class is initialized.
-  void Deoptimize(mirror::ArtMethod* method)
+  void Deoptimize(ArtMethod* method)
       LOCKS_EXCLUDED(Locks::thread_list_lock_, deoptimized_methods_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Undeoptimze the method by restoring its entrypoints. Nevertheless, a static method
   // (except a class initializer) set to the resolution trampoline will be updated only once its
   // declaring class is initialized.
-  void Undeoptimize(mirror::ArtMethod* method)
+  void Undeoptimize(ArtMethod* method)
       LOCKS_EXCLUDED(Locks::thread_list_lock_, deoptimized_methods_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  bool IsDeoptimized(mirror::ArtMethod* method)
+  bool IsDeoptimized(ArtMethod* method)
       LOCKS_EXCLUDED(deoptimized_methods_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -201,13 +201,13 @@ class Instrumentation {
   void ResetQuickAllocEntryPoints() EXCLUSIVE_LOCKS_REQUIRED(Locks::runtime_shutdown_lock_);
 
   // Update the code of a method respecting any installed stubs.
-  void UpdateMethodsCode(mirror::ArtMethod* method, const void* quick_code)
+  void UpdateMethodsCode(ArtMethod* method, const void* quick_code)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Get the quick code for the given method. More efficient than asking the class linker as it
   // will short-cut to GetCode if instrumentation and static method resolution stubs aren't
   // installed.
-  const void* GetQuickCodeFor(mirror::ArtMethod* method, size_t pointer_size) const
+  const void* GetQuickCodeFor(ArtMethod* method, size_t pointer_size) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void ForceInterpretOnly() {
@@ -265,7 +265,7 @@ class Instrumentation {
   // Inform listeners that a method has been entered. A dex PC is provided as we may install
   // listeners into executing code and get method enter events for methods already on the stack.
   void MethodEnterEvent(Thread* thread, mirror::Object* this_object,
-                        mirror::ArtMethod* method, uint32_t dex_pc) const
+                        ArtMethod* method, uint32_t dex_pc) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (UNLIKELY(HasMethodEntryListeners())) {
       MethodEnterEventImpl(thread, this_object, method, dex_pc);
@@ -274,7 +274,7 @@ class Instrumentation {
 
   // Inform listeners that a method has been exited.
   void MethodExitEvent(Thread* thread, mirror::Object* this_object,
-                       mirror::ArtMethod* method, uint32_t dex_pc,
+                       ArtMethod* method, uint32_t dex_pc,
                        const JValue& return_value) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (UNLIKELY(HasMethodExitListeners())) {
@@ -284,12 +284,12 @@ class Instrumentation {
 
   // Inform listeners that a method has been exited due to an exception.
   void MethodUnwindEvent(Thread* thread, mirror::Object* this_object,
-                         mirror::ArtMethod* method, uint32_t dex_pc) const
+                         ArtMethod* method, uint32_t dex_pc) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Inform listeners that the dex pc has moved (only supported by the interpreter).
   void DexPcMovedEvent(Thread* thread, mirror::Object* this_object,
-                       mirror::ArtMethod* method, uint32_t dex_pc) const
+                       ArtMethod* method, uint32_t dex_pc) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (UNLIKELY(HasDexPcListeners())) {
       DexPcMovedEventImpl(thread, this_object, method, dex_pc);
@@ -297,7 +297,7 @@ class Instrumentation {
   }
 
   // Inform listeners that a backward branch has been taken (only supported by the interpreter).
-  void BackwardBranch(Thread* thread, mirror::ArtMethod* method, int32_t offset) const
+  void BackwardBranch(Thread* thread, ArtMethod* method, int32_t offset) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (UNLIKELY(HasBackwardBranchListeners())) {
       BackwardBranchImpl(thread, method, offset);
@@ -306,7 +306,7 @@ class Instrumentation {
 
   // Inform listeners that we read a field (only supported by the interpreter).
   void FieldReadEvent(Thread* thread, mirror::Object* this_object,
-                      mirror::ArtMethod* method, uint32_t dex_pc,
+                      ArtMethod* method, uint32_t dex_pc,
                       ArtField* field) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (UNLIKELY(HasFieldReadListeners())) {
@@ -316,7 +316,7 @@ class Instrumentation {
 
   // Inform listeners that we write a field (only supported by the interpreter).
   void FieldWriteEvent(Thread* thread, mirror::Object* this_object,
-                       mirror::ArtMethod* method, uint32_t dex_pc,
+                       ArtMethod* method, uint32_t dex_pc,
                        ArtField* field, const JValue& field_value) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     if (UNLIKELY(HasFieldWriteListeners())) {
@@ -331,7 +331,7 @@ class Instrumentation {
   // Called when an instrumented method is entered. The intended link register (lr) is saved so
   // that returning causes a branch to the method exit stub. Generates method enter events.
   void PushInstrumentationStackFrame(Thread* self, mirror::Object* this_object,
-                                     mirror::ArtMethod* method, uintptr_t lr,
+                                     ArtMethod* method, uintptr_t lr,
                                      bool interpreter_entry)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -348,7 +348,7 @@ class Instrumentation {
   // Call back for configure stubs.
   void InstallStubsForClass(mirror::Class* klass) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void InstallStubsForMethod(mirror::ArtMethod* method)
+  void InstallStubsForMethod(ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void VisitRoots(RootVisitor* visitor) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
@@ -370,37 +370,37 @@ class Instrumentation {
   void SetEntrypointsInstrumented(bool instrumented) NO_THREAD_SAFETY_ANALYSIS;
 
   void MethodEnterEventImpl(Thread* thread, mirror::Object* this_object,
-                            mirror::ArtMethod* method, uint32_t dex_pc) const
+                            ArtMethod* method, uint32_t dex_pc) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void MethodExitEventImpl(Thread* thread, mirror::Object* this_object,
-                           mirror::ArtMethod* method,
+                           ArtMethod* method,
                            uint32_t dex_pc, const JValue& return_value) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void DexPcMovedEventImpl(Thread* thread, mirror::Object* this_object,
-                           mirror::ArtMethod* method, uint32_t dex_pc) const
+                           ArtMethod* method, uint32_t dex_pc) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void BackwardBranchImpl(Thread* thread, mirror::ArtMethod* method, int32_t offset) const
+  void BackwardBranchImpl(Thread* thread, ArtMethod* method, int32_t offset) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void FieldReadEventImpl(Thread* thread, mirror::Object* this_object,
-                           mirror::ArtMethod* method, uint32_t dex_pc,
+                           ArtMethod* method, uint32_t dex_pc,
                            ArtField* field) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void FieldWriteEventImpl(Thread* thread, mirror::Object* this_object,
-                           mirror::ArtMethod* method, uint32_t dex_pc,
+                           ArtMethod* method, uint32_t dex_pc,
                            ArtField* field, const JValue& field_value) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Read barrier-aware utility functions for accessing deoptimized_methods_
-  bool AddDeoptimizedMethod(mirror::ArtMethod* method)
+  bool AddDeoptimizedMethod(ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(deoptimized_methods_lock_);
-  bool FindDeoptimizedMethod(mirror::ArtMethod* method)
+  bool FindDeoptimizedMethod(ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       SHARED_LOCKS_REQUIRED(deoptimized_methods_lock_);
-  bool RemoveDeoptimizedMethod(mirror::ArtMethod* method)
+  bool RemoveDeoptimizedMethod(ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(deoptimized_methods_lock_);
-  mirror::ArtMethod* BeginDeoptimizedMethod()
+  ArtMethod* BeginDeoptimizedMethod()
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       SHARED_LOCKS_REQUIRED(deoptimized_methods_lock_);
   bool IsDeoptimizedMethodsEmpty() const
@@ -469,8 +469,7 @@ class Instrumentation {
   // The set of methods being deoptimized (by the debugger) which must be executed with interpreter
   // only.
   mutable ReaderWriterMutex deoptimized_methods_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
-  std::multimap<int32_t, GcRoot<mirror::ArtMethod>> deoptimized_methods_
-      GUARDED_BY(deoptimized_methods_lock_);
+  std::multimap<int32_t, ArtMethod*> deoptimized_methods_ GUARDED_BY(deoptimized_methods_lock_);
   bool deoptimization_enabled_;
 
   // Current interpreter handler table. This is updated each time the thread state flags are
@@ -487,7 +486,7 @@ std::ostream& operator<<(std::ostream& os, const Instrumentation::Instrumentatio
 
 // An element in the instrumentation side stack maintained in art::Thread.
 struct InstrumentationStackFrame {
-  InstrumentationStackFrame(mirror::Object* this_object, mirror::ArtMethod* method,
+  InstrumentationStackFrame(mirror::Object* this_object, ArtMethod* method,
                             uintptr_t return_pc, size_t frame_id, bool interpreter_entry)
       : this_object_(this_object), method_(method), return_pc_(return_pc), frame_id_(frame_id),
         interpreter_entry_(interpreter_entry) {
@@ -496,7 +495,7 @@ struct InstrumentationStackFrame {
   std::string Dump() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   mirror::Object* this_object_;
-  mirror::ArtMethod* method_;
+  ArtMethod* method_;
   uintptr_t return_pc_;
   size_t frame_id_;
   bool interpreter_entry_;

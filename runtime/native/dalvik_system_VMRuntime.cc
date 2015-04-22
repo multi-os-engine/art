@@ -341,7 +341,7 @@ static void PreloadDexCachesResolveField(Handle<mirror::DexCache> dex_cache, uin
 static void PreloadDexCachesResolveMethod(Handle<mirror::DexCache> dex_cache, uint32_t method_idx,
                                           InvokeType invoke_type)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::ArtMethod* method = dex_cache->GetResolvedMethod(method_idx);
+  ArtMethod* method = dex_cache->GetResolvedMethod(method_idx);
   if (method != nullptr) {
     return;
   }
@@ -443,7 +443,7 @@ static void PreloadDexCachesStatsFilled(DexCacheStats* filled)
       }
     }
     for (size_t j = 0; j < dex_cache->NumResolvedMethods(); j++) {
-      mirror::ArtMethod* method = dex_cache->GetResolvedMethod(j);
+      ArtMethod* method = dex_cache->GetResolvedMethod(j);
       if (method != nullptr) {
         filled->num_methods++;
       }

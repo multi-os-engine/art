@@ -540,7 +540,7 @@ DexToDexCompilationLevel CompilerDriver::GetDexToDexCompilationlevel(
   }
 }
 
-void CompilerDriver::CompileOne(Thread* self, mirror::ArtMethod* method, TimingLogger* timings) {
+void CompilerDriver::CompileOne(Thread* self, ArtMethod* method, TimingLogger* timings) {
   DCHECK(!Runtime::Current()->IsStarted());
   jobject jclass_loader;
   const DexFile* dex_file;
@@ -584,7 +584,7 @@ void CompilerDriver::CompileOne(Thread* self, mirror::ArtMethod* method, TimingL
   self->TransitionFromSuspendedToRunnable();
 }
 
-CompiledMethod* CompilerDriver::CompileMethod(Thread* self, mirror::ArtMethod* method) {
+CompiledMethod* CompilerDriver::CompileMethod(Thread* self, ArtMethod* method) {
   const uint32_t method_idx = method->GetDexMethodIndex();
   const uint32_t access_flags = method->GetAccessFlags();
   const InvokeType invoke_type = method->GetInvokeType();
@@ -686,8 +686,8 @@ bool CompilerDriver::IsMethodToCompile(const MethodReference& method_ref) const 
   return methods_to_compile_->find(tmp.c_str()) != methods_to_compile_->end();
 }
 
-static void ResolveExceptionsForMethod(MutableHandle<mirror::ArtMethod> method_handle,
-    std::set<std::pair<uint16_t, const DexFile*>>& exceptions_to_resolve)
+static void ResolveExceptionsForMethod(
+    ArtMethod* method_handle, std::set<std::pair<uint16_t, const DexFile*>>& exceptions_to_resolve)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   const DexFile::CodeItem* code_item = method_handle->GetCodeItem();
   if (code_item == nullptr) {
@@ -728,15 +728,11 @@ static bool ResolveCatchBlockExceptionsClassVisitor(mirror::Class* c, void* arg)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   std::set<std::pair<uint16_t, const DexFile*>>* exceptions_to_resolve =
       reinterpret_cast<std::set<std::pair<uint16_t, const DexFile*>>*>(arg);
-  StackHandleScope<1> hs(Thread::Current());
-  MutableHandle<mirror::ArtMethod> method_handle(hs.NewHandle<mirror::ArtMethod>(nullptr));
   for (size_t i = 0; i < c->NumVirtualMethods(); ++i) {
-    method_handle.Assign(c->GetVirtualMethod(i));
-    ResolveExceptionsForMethod(method_handle, *exceptions_to_resolve);
+    ResolveExceptionsForMethod(c->GetVirtualMethod(i), *exceptions_to_resolve);
   }
   for (size_t i = 0; i < c->NumDirectMethods(); ++i) {
-    method_handle.Assign(c->GetDirectMethod(i));
-    ResolveExceptionsForMethod(method_handle, *exceptions_to_resolve);
+    ResolveExceptionsForMethod(c->GetDirectMethod(i), *exceptions_to_resolve);
   }
   return true;
 }
@@ -1332,7 +1328,7 @@ bool CompilerDriver::ComputeStaticFieldInfo(uint32_t field_idx, const DexCompila
 void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType sharp_type,
                                                    bool no_guarantee_of_dex_cache_entry,
                                                    const mirror::Class* referrer_class,
-                                                   mirror::ArtMethod* method,
+                                                   ArtMethod* method,
                                                    int* stats_flags,
                                                    MethodReference* target_method,
                                                    uintptr_t* direct_code,
@@ -1467,7 +1463,7 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
   int stats_flags = 0;
   ScopedObjectAccess soa(Thread::Current());
   // Try to resolve the method and compiling method's class.
-  mirror::ArtMethod* resolved_method;
+  ArtMethod* resolved_method;
   mirror::Class* referrer_class;
   StackHandleScope<3> hs(soa.Self());
   Handle<mirror::DexCache> dex_cache(
@@ -1476,7 +1472,7 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
       soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader())));
   {
     uint32_t method_idx = target_method->dex_method_index;
-    Handle<mirror::ArtMethod> resolved_method_handle(hs.NewHandle(
+    ArtMethod* resolved_method_handle(hs.NewHandle(
         ResolveMethod(soa, dex_cache, class_loader, mUnit, method_idx, orig_invoke_type)));
     referrer_class = (resolved_method_handle.Get() != nullptr)
         ? ResolveCompilingMethodsClass(soa, dex_cache, class_loader, mUnit) : nullptr;
@@ -1771,20 +1767,18 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
     }
     if (resolve_fields_and_methods) {
       while (it.HasNextDirectMethod()) {
-        mirror::ArtMethod* method = class_linker->ResolveMethod(dex_file, it.GetMemberIndex(),
-                                                                dex_cache, class_loader,
-                                                                NullHandle<mirror::ArtMethod>(),
-                                                                it.GetMethodInvokeType(class_def));
+        ArtMethod* method = class_linker->ResolveMethod(
+            dex_file, it.GetMemberIndex(), dex_cache, class_loader, nullptr,
+            it.GetMethodInvokeType(class_def));
         if (method == nullptr) {
           CheckAndClearResolveException(soa.Self());
         }
         it.Next();
       }
       while (it.HasNextVirtualMethod()) {
-        mirror::ArtMethod* method = class_linker->ResolveMethod(dex_file, it.GetMemberIndex(),
-                                                                dex_cache, class_loader,
-                                                                NullHandle<mirror::ArtMethod>(),
-                                                                it.GetMethodInvokeType(class_def));
+        ArtMethod* method = class_linker->ResolveMethod(
+            dex_file, it.GetMemberIndex(), dex_cache, class_loader, nullptr,
+            it.GetMethodInvokeType(class_def));
         if (method == nullptr) {
           CheckAndClearResolveException(soa.Self());
         }

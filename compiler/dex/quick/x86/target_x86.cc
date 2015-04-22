@@ -1026,7 +1026,7 @@ LIR* X86Mir2Lir::GenCallInsn(const MirMethodLoweringInfo& method_info) {
       call_insn = CallWithLinkerFixup(method_info.GetTargetMethod(), method_info.GetSharpType());
     } else {
       call_insn = OpMem(kOpBlx, TargetReg(kArg0, kRef),
-                        mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                        ArtMethod::EntryPointFromQuickCompiledCodeOffset(
                             cu_->target64 ? 8 : 4).Int32Value());
     }
   } else {

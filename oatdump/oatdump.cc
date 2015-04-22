@@ -499,7 +499,7 @@ class OatDumper {
     return oat_file_.GetOatHeader().GetInstructionSet();
   }
 
-  const void* GetQuickOatCode(mirror::ArtMethod* m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  const void* GetQuickOatCode(ArtMethod* m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     for (size_t i = 0; i < oat_dex_files_.size(); i++) {
       const OatFile::OatDexFile* oat_dex_file = oat_dex_files_[i];
       CHECK(oat_dex_file != nullptr);
@@ -1320,7 +1320,7 @@ class OatDumper {
                                                            dex_cache,
                                                            *options_.class_loader_,
                                                            &class_def, code_item,
-                                                           NullHandle<mirror::ArtMethod>(),
+                                                           NullHandle<ArtMethod>(),
                                                            method_access_flags);
     }
 
@@ -1547,7 +1547,7 @@ class ImageDumper {
       mirror::Class* klass = value->AsClass();
       os << StringPrintf("%p   Class: %s\n", klass, PrettyDescriptor(klass).c_str());
     } else if (type->IsArtMethodClass()) {
-      mirror::ArtMethod* method = value->AsArtMethod();
+      ArtMethod* method = value->AsArtMethod();
       os << StringPrintf("%p   Method: %s\n", method, PrettyMethod(method).c_str());
     } else {
       os << StringPrintf("%p   %s\n", value, PrettyDescriptor(type).c_str());
@@ -1623,7 +1623,7 @@ class ImageDumper {
     return image_space_.Contains(object);
   }
 
-  const void* GetQuickOatCodeBegin(mirror::ArtMethod* m)
+  const void* GetQuickOatCodeBegin(ArtMethod* m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const void* quick_code = m->GetEntryPointFromQuickCompiledCodePtrSize(
         InstructionSetPointerSize(oat_dumper_->GetOatInstructionSet()));
@@ -1636,7 +1636,7 @@ class ImageDumper {
     return quick_code;
   }
 
-  uint32_t GetQuickOatCodeSize(mirror::ArtMethod* m)
+  uint32_t GetQuickOatCodeSize(ArtMethod* m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const uint32_t* oat_code_begin = reinterpret_cast<const uint32_t*>(GetQuickOatCodeBegin(m));
     if (oat_code_begin == nullptr) {
@@ -1645,7 +1645,7 @@ class ImageDumper {
     return oat_code_begin[-1];
   }
 
-  const void* GetQuickOatCodeEnd(mirror::ArtMethod* m)
+  const void* GetQuickOatCodeEnd(ArtMethod* m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const uint8_t* oat_code_begin = reinterpret_cast<const uint8_t*>(GetQuickOatCodeBegin(m));
     if (oat_code_begin == nullptr) {
@@ -1727,7 +1727,7 @@ class ImageDumper {
     } else if (obj->IsArtMethod()) {
       const size_t image_pointer_size = InstructionSetPointerSize(
           state->oat_dumper_->GetOatInstructionSet());
-      mirror::ArtMethod* method = obj->AsArtMethod();
+      ArtMethod* method = obj->AsArtMethod();
       if (method->IsNative()) {
         DCHECK(method->GetNativeGcMap(image_pointer_size) == nullptr) << PrettyMethod(method);
         DCHECK(method->GetMappingTable(image_pointer_size) == nullptr) << PrettyMethod(method);
@@ -1842,7 +1842,7 @@ class ImageDumper {
 
     size_t dex_instruction_bytes;
 
-    std::vector<mirror::ArtMethod*> method_outlier;
+    std::vector<ArtMethod*> method_outlier;
     std::vector<size_t> method_outlier_size;
     std::vector<double> method_outlier_expansion;
     std::vector<std::pair<std::string, size_t>> oat_dex_file_sizes;
@@ -1896,7 +1896,7 @@ class ImageDumper {
       return (static_cast<double>(size) / static_cast<double>(object_bytes)) * 100;
     }
 
-    void ComputeOutliers(size_t total_size, double expansion, mirror::ArtMethod* method) {
+    void ComputeOutliers(size_t total_size, double expansion, ArtMethod* method) {
       method_outlier_size.push_back(total_size);
       method_outlier_expansion.push_back(expansion);
       method_outlier.push_back(method);

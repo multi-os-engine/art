@@ -263,7 +263,7 @@ class ImageWriter FINAL {
   bool CopyAndFixupIfDexCacheFieldArray(mirror::Object* dst, mirror::Object* obj,
                                         mirror::Class* klass)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void FixupMethod(mirror::ArtMethod* orig, mirror::ArtMethod* copy)
+  void FixupMethod(ArtMethod* orig, ArtMethod* copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void FixupClass(mirror::Class* orig, mirror::Class* copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -271,10 +271,10 @@ class ImageWriter FINAL {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Get quick code for non-resolution/imt_conflict/abstract method.
-  const uint8_t* GetQuickCode(mirror::ArtMethod* method, bool* quick_is_interpreted)
+  const uint8_t* GetQuickCode(ArtMethod* method, bool* quick_is_interpreted)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  const uint8_t* GetQuickEntryPoint(mirror::ArtMethod* method)
+  const uint8_t* GetQuickEntryPoint(ArtMethod* method)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Patches references in OatFile to expect runtime addresses.

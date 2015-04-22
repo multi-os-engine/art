@@ -327,7 +327,7 @@ bool InlineMethodAnalyser::ComputeSpecialAccessorInfo(uint32_t field_idx, bool i
                                                       InlineIGetIPutData* result) {
   mirror::DexCache* dex_cache = verifier->GetDexCache();
   uint32_t method_idx = verifier->GetMethodReference().dex_method_index;
-  mirror::ArtMethod* method = dex_cache->GetResolvedMethod(method_idx);
+  ArtMethod* method = dex_cache->GetResolvedMethod(method_idx);
   ArtField* field = Runtime::Current()->GetClassLinker()->GetResolvedField(field_idx, dex_cache);
   if (method == nullptr || field == nullptr || field->IsStatic()) {
     return false;

@@ -37,7 +37,7 @@ static jobject Method_invoke(JNIEnv* env, jobject javaMethod, jobject javaReceiv
 
 static jobject Method_getExceptionTypesNative(JNIEnv* env, jobject javaMethod) {
   ScopedFastNativeObjectAccess soa(env);
-  mirror::ArtMethod* proxy_method = mirror::ArtMethod::FromReflectedMethod(soa, javaMethod);
+  ArtMethod* proxy_method = ArtMethod::FromReflectedMethod(soa, javaMethod);
   CHECK(proxy_method->GetDeclaringClass()->IsProxyClass());
   mirror::Class* proxy_class = proxy_method->GetDeclaringClass();
   int throws_index = -1;

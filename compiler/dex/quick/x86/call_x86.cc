@@ -384,7 +384,7 @@ int X86Mir2Lir::X86NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
       break;
     case 1:  // Get method->dex_cache_resolved_methods_
       cg->LoadRefDisp(arg0_ref,
-                      mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
+                      ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
                       arg0_ref,
                       kNotVolatile);
       break;

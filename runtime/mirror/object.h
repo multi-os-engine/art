@@ -25,6 +25,7 @@
 namespace art {
 
 class ArtField;
+class ArtMethod;
 class ImageWriter;
 class LockWord;
 class Monitor;
@@ -34,7 +35,6 @@ class VoidFunctor;
 
 namespace mirror {
 
-class ArtMethod;
 class Array;
 class Class;
 class FinalizerReference;
@@ -71,7 +71,7 @@ class MANAGED LOCKABLE Object {
   static constexpr size_t kVTableLength = 11;
 
   // The size of the java.lang.Class representing a java.lang.Object.
-  static uint32_t ClassSize();
+  static uint32_t ClassSize(size_t pointer_size);
 
   // Size of an instance of java.lang.Object.
   static constexpr uint32_t InstanceSize() {
@@ -187,12 +187,6 @@ class MANAGED LOCKABLE Object {
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   Throwable* AsThrowable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
-           ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  bool IsArtMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ArtMethod* AsArtMethod() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsReferenceInstance() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

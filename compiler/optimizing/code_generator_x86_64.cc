@@ -372,11 +372,11 @@ void CodeGeneratorX86_64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invo
   LoadCurrentMethod(temp);
   if (!invoke->IsRecursive()) {
     // temp = temp->dex_cache_resolved_methods_;
-    __ movl(temp, Address(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().SizeValue()));
+    __ movl(temp, Address(temp, ArtMethod::DexCacheResolvedMethodsOffset().SizeValue()));
     // temp = temp[index_in_cache]
     __ movl(temp, Address(temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex())));
     // (temp + offset_of_quick_compiled_code)()
-    __ call(Address(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+    __ call(Address(temp, ArtMethod::EntryPointFromQuickCompiledCodeOffset(
         kX86_64WordSize).SizeValue()));
   } else {
     __ call(&frame_entry_label_);
@@ -1382,7 +1382,7 @@ void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) 
   // temp = temp->GetMethodAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
-  __ call(Address(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+  __ call(Address(temp, ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kX86_64WordSize).SizeValue()));
 
   DCHECK(!codegen_->IsLeafMethod());
@@ -1419,7 +1419,7 @@ void InstructionCodeGeneratorX86_64::VisitInvokeInterface(HInvokeInterface* invo
   // temp = temp->GetImtEntryAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
-  __ call(Address(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+  __ call(Address(temp, ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kX86_64WordSize).SizeValue()));
 
   DCHECK(!codegen_->IsLeafMethod());
@@ -4078,11 +4078,11 @@ void InstructionCodeGeneratorX86_64::VisitLoadClass(HLoadClass* cls) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
     codegen_->LoadCurrentMethod(out);
-    __ movl(out, Address(out, mirror::ArtMethod::DeclaringClassOffset().Int32Value()));
+    __ movl(out, Address(out, ArtMethod::DeclaringClassOffset().Int32Value()));
   } else {
     DCHECK(cls->CanCallRuntime());
     codegen_->LoadCurrentMethod(out);
-    __ movl(out, Address(out, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
+    __ movl(out, Address(out, ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
     __ movl(out, Address(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
     SlowPathCodeX86_64* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathX86_64(
         cls, cls, cls->GetDexPc(), cls->MustGenerateClinitCheck());
@@ -4127,7 +4127,7 @@ void InstructionCodeGeneratorX86_64::VisitLoadString(HLoadString* load) {
 
   CpuRegister out = load->GetLocations()->Out().AsRegister<CpuRegister>();
   codegen_->LoadCurrentMethod(CpuRegister(out));
-  __ movl(out, Address(out, mirror::ArtMethod::DeclaringClassOffset().Int32Value()));
+  __ movl(out, Address(out, ArtMethod::DeclaringClassOffset().Int32Value()));
   __ movl(out, Address(out, mirror::Class::DexCacheStringsOffset().Int32Value()));
   __ movl(out, Address(out, CodeGenerator::GetCacheOffset(load->GetStringIndex())));
   __ testl(out, out);

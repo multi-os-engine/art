@@ -427,8 +427,8 @@ uint32_t FindNextInstructionFollowingException(Thread* self,
   uint32_t found_dex_pc;
   {
     Handle<mirror::Class> exception_class(hs.NewHandle(exception->GetClass()));
-    Handle<mirror::ArtMethod> h_method(hs.NewHandle(shadow_frame.GetMethod()));
-    found_dex_pc = mirror::ArtMethod::FindCatchBlock(h_method, exception_class, dex_pc,
+    Handle<ArtMethod> h_method(hs.NewHandle(shadow_frame.GetMethod()));
+    found_dex_pc = ArtMethod::FindCatchBlock(h_method, exception_class, dex_pc,
                                                      &clear_exception);
   }
   if (found_dex_pc == DexFile::kDexNoIndex) {

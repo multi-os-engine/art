@@ -140,7 +140,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
     CHECK_LT(handle_scope_offset.Uint32Value(), frame_size);
     // TODO: Insert the read barrier for this load.
     __ LoadRef(main_jni_conv->InterproceduralScratchRegister(),
-               mr_conv->MethodRegister(), mirror::ArtMethod::DeclaringClassOffset());
+               mr_conv->MethodRegister(), ArtMethod::DeclaringClassOffset());
     __ VerifyObject(main_jni_conv->InterproceduralScratchRegister(), false);
     __ StoreRef(handle_scope_offset, main_jni_conv->InterproceduralScratchRegister());
     main_jni_conv->Next();  // in handle scope so move to next argument
@@ -311,7 +311,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   }
 
   // 9. Plant call to native code associated with method.
-  MemberOffset jni_entrypoint_offset = mirror::ArtMethod::EntryPointFromJniOffset(
+  MemberOffset jni_entrypoint_offset = ArtMethod::EntryPointFromJniOffset(
       InstructionSetPointerSize(instruction_set));
   __ Call(main_jni_conv->MethodStackOffset(), jni_entrypoint_offset,
           mr_conv->InterproceduralScratchRegister());

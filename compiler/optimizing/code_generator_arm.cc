@@ -1321,7 +1321,7 @@ void InstructionCodeGeneratorARM::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   }
   codegen_->MaybeRecordImplicitNullCheck(invoke);
   // temp = temp->GetMethodAt(method_offset);
-  uint32_t entry_point = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+  uint32_t entry_point = ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kArmWordSize).Int32Value();
   __ LoadFromOffset(kLoadWord, temp, temp, method_offset);
   // LR = temp->GetEntryPoint();
@@ -1360,7 +1360,7 @@ void InstructionCodeGeneratorARM::VisitInvokeInterface(HInvokeInterface* invoke)
   }
   codegen_->MaybeRecordImplicitNullCheck(invoke);
   // temp = temp->GetImtEntryAt(method_offset);
-  uint32_t entry_point = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+  uint32_t entry_point = ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kArmWordSize).Int32Value();
   __ LoadFromOffset(kLoadWord, temp, temp, method_offset);
   // LR = temp->GetEntryPoint();
@@ -3781,12 +3781,12 @@ void InstructionCodeGeneratorARM::VisitLoadClass(HLoadClass* cls) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
     codegen_->LoadCurrentMethod(out);
-    __ LoadFromOffset(kLoadWord, out, out, mirror::ArtMethod::DeclaringClassOffset().Int32Value());
+    __ LoadFromOffset(kLoadWord, out, out, ArtMethod::DeclaringClassOffset().Int32Value());
   } else {
     DCHECK(cls->CanCallRuntime());
     codegen_->LoadCurrentMethod(out);
     __ LoadFromOffset(
-        kLoadWord, out, out, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value());
+        kLoadWord, out, out, ArtMethod::DexCacheResolvedTypesOffset().Int32Value());
     __ LoadFromOffset(kLoadWord, out, out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex()));
 
     SlowPathCodeARM* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM(
@@ -3843,7 +3843,7 @@ void InstructionCodeGeneratorARM::VisitLoadString(HLoadString* load) {
 
   Register out = load->GetLocations()->Out().AsRegister<Register>();
   codegen_->LoadCurrentMethod(out);
-  __ LoadFromOffset(kLoadWord, out, out, mirror::ArtMethod::DeclaringClassOffset().Int32Value());
+  __ LoadFromOffset(kLoadWord, out, out, ArtMethod::DeclaringClassOffset().Int32Value());
   __ LoadFromOffset(kLoadWord, out, out, mirror::Class::DexCacheStringsOffset().Int32Value());
   __ LoadFromOffset(kLoadWord, out, out, CodeGenerator::GetCacheOffset(load->GetStringIndex()));
   __ cmp(out, ShifterOperand(0));
@@ -4066,13 +4066,13 @@ void CodeGeneratorARM::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
   if (!invoke->IsRecursive()) {
     // temp = temp->dex_cache_resolved_methods_;
     __ LoadFromOffset(
-        kLoadWord, temp, temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
+        kLoadWord, temp, temp, ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
     // temp = temp[index_in_cache]
     __ LoadFromOffset(
         kLoadWord, temp, temp, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex()));
     // LR = temp[offset_of_quick_compiled_code]
     __ LoadFromOffset(kLoadWord, LR, temp,
-                      mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                      ArtMethod::EntryPointFromQuickCompiledCodeOffset(
                           kArmWordSize).Int32Value());
     // LR()
     __ blx(LR);

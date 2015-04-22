@@ -29,7 +29,7 @@ namespace art {
 
 static const char* GetMethodShorty(JNIEnv* env, jmethodID mid) {
   ScopedObjectAccess soa(env);
-  mirror::ArtMethod* m = soa.DecodeMethod(mid);
+  ArtMethod* m = soa.DecodeMethod(mid);
   return m->GetShorty();
 }
 
@@ -42,13 +42,13 @@ static uint32_t GetNativeMethodCount(JNIEnv* env, jclass clazz) {
 
   uint32_t native_method_count = 0;
   for (uint32_t i = 0; i < c->NumDirectMethods(); ++i) {
-    mirror::ArtMethod* m = c->GetDirectMethod(i);
+    ArtMethod* m = c->GetDirectMethod(i);
     if (m->IsNative()) {
       native_method_count++;
     }
   }
   for (uint32_t i = 0; i < c->NumVirtualMethods(); ++i) {
-    mirror::ArtMethod* m = c->GetVirtualMethod(i);
+    ArtMethod* m = c->GetVirtualMethod(i);
     if (m->IsNative()) {
       native_method_count++;
     }
@@ -66,7 +66,7 @@ static uint32_t GetNativeMethods(JNIEnv* env, jclass clazz, JNINativeMethod* met
 
   uint32_t count = 0;
   for (uint32_t i = 0; i < c->NumDirectMethods(); ++i) {
-    mirror::ArtMethod* m = c->GetDirectMethod(i);
+    ArtMethod* m = c->GetDirectMethod(i);
     if (m->IsNative()) {
       if (count < method_count) {
         methods[count].name = m->GetName();
@@ -79,7 +79,7 @@ static uint32_t GetNativeMethods(JNIEnv* env, jclass clazz, JNINativeMethod* met
     }
   }
   for (uint32_t i = 0; i < c->NumVirtualMethods(); ++i) {
-    mirror::ArtMethod* m = c->GetVirtualMethod(i);
+    ArtMethod* m = c->GetVirtualMethod(i);
     if (m->IsNative()) {
       if (count < method_count) {
         methods[count].name = m->GetName();

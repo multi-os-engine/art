@@ -58,7 +58,7 @@
 #include "handle_scope-inl.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 
-using ::art::mirror::ArtMethod;
+using ::art::ArtMethod;
 using ::art::mirror::Class;
 using ::art::mirror::DexCache;
 using ::art::mirror::EntryPointFromInterpreter;
@@ -413,7 +413,7 @@ void ImageWriter::AssignImageBinSlot(mirror::Object* object) {
         }
       }
     } else if (object->IsArtMethod<kVerifyNone>()) {
-      mirror::ArtMethod* art_method = down_cast<ArtMethod*>(object);
+      ArtMethod* art_method = down_cast<ArtMethod*>(object);
       if (art_method->IsNative()) {
         bin = kBinArtMethodNative;
       } else {
@@ -846,7 +846,6 @@ ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
   image_roots->Set<false>(ImageHeader::kImtConflictMethod, runtime->GetImtConflictMethod());
   image_roots->Set<false>(ImageHeader::kImtUnimplementedMethod,
                           runtime->GetImtUnimplementedMethod());
-  image_roots->Set<false>(ImageHeader::kDefaultImt, runtime->GetDefaultImt());
   image_roots->Set<false>(ImageHeader::kCalleeSaveMethod,
                           runtime->GetCalleeSaveMethod(Runtime::kSaveAll));
   image_roots->Set<false>(ImageHeader::kRefsOnlySaveMethod,
@@ -1135,7 +1134,7 @@ void ImageWriter::CopyAndFixupObject(Object* obj) {
   if (klass->IsArtMethodClass()) {
     // Size without pointer fields since we don't want to overrun the buffer if target art method
     // is 32 bits but source is 64 bits.
-    n = mirror::ArtMethod::SizeWithoutPointerFields(target_ptr_size_);
+    n = ArtMethod::SizeWithoutPointerFields(target_ptr_size_);
   } else {
     n = obj->SizeOf();
   }
@@ -1242,7 +1241,7 @@ void ImageWriter::FixupObject(Object* orig, Object* copy) {
   }
 }
 
-const uint8_t* ImageWriter::GetQuickCode(mirror::ArtMethod* method, bool* quick_is_interpreted) {
+const uint8_t* ImageWriter::GetQuickCode(ArtMethod* method, bool* quick_is_interpreted) {
   DCHECK(!method->IsResolutionMethod() && !method->IsImtConflictMethod() &&
          !method->IsImtUnimplementedMethod() && !method->IsAbstract()) << PrettyMethod(method);
 
@@ -1274,7 +1273,7 @@ const uint8_t* ImageWriter::GetQuickCode(mirror::ArtMethod* method, bool* quick_
   return quick_code;
 }
 
-const uint8_t* ImageWriter::GetQuickEntryPoint(mirror::ArtMethod* method) {
+const uint8_t* ImageWriter::GetQuickEntryPoint(ArtMethod* method) {
   // Calculate the quick entry point following the same logic as FixupMethod() below.
   // The resolution method has a special trampoline to call.
   Runtime* runtime = Runtime::Current();

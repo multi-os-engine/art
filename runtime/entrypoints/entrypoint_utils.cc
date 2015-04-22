@@ -35,7 +35,7 @@ namespace art {
 
 static inline mirror::Class* CheckFilledNewArrayAlloc(uint32_t type_idx,
                                                       int32_t component_count,
-                                                      mirror::ArtMethod* referrer,
+                                                      ArtMethod* referrer,
                                                       Thread* self,
                                                       bool access_check)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -76,7 +76,7 @@ static inline mirror::Class* CheckFilledNewArrayAlloc(uint32_t type_idx,
 
 // Helper function to allocate array for FILLED_NEW_ARRAY.
 mirror::Array* CheckAndAllocArrayFromCode(uint32_t type_idx, int32_t component_count,
-                                          mirror::ArtMethod* referrer, Thread* self,
+                                          ArtMethod* referrer, Thread* self,
                                           bool access_check,
                                           gc::AllocatorType /* allocator_type */) {
   mirror::Class* klass = CheckFilledNewArrayAlloc(type_idx, component_count, referrer, self,
@@ -96,7 +96,7 @@ mirror::Array* CheckAndAllocArrayFromCode(uint32_t type_idx, int32_t component_c
 // Helper function to allocate array for FILLED_NEW_ARRAY.
 mirror::Array* CheckAndAllocArrayFromCodeInstrumented(uint32_t type_idx,
                                                       int32_t component_count,
-                                                      mirror::ArtMethod* referrer,
+                                                      ArtMethod* referrer,
                                                       Thread* self,
                                                       bool access_check,
                                                       gc::AllocatorType /* allocator_type */) {
@@ -294,7 +294,7 @@ JValue InvokeProxyInvocationHandler(ScopedObjectAccessAlreadyRunnable& soa, cons
       mirror::Object* rcvr = soa.Decode<mirror::Object*>(rcvr_jobj);
       mirror::Class* proxy_class = rcvr->GetClass();
       mirror::Method* interface_method = soa.Decode<mirror::Method*>(interface_method_jobj);
-      mirror::ArtMethod* proxy_method =
+      ArtMethod* proxy_method =
           rcvr->GetClass()->FindVirtualMethodForInterface(interface_method->GetArtMethod());
       int throws_index = -1;
       size_t num_virt_methods = proxy_class->NumVirtualMethods();

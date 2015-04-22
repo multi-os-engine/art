@@ -386,7 +386,7 @@ void Mir2Lir::CallRuntimeHelperRegLocationRegLocationRegLocation(
 // TODO: Support 64-bit argument registers.
 void Mir2Lir::FlushIns(RegLocation* ArgLocs, RegLocation rl_method) {
   /*
-   * Dummy up a RegLocation for the incoming StackReference<mirror::ArtMethod>
+   * Dummy up a RegLocation for the incoming StackReference<ArtMethod>
    * It will attempt to keep kArg0 live (or copy it to home location
    * if promoted).
    */
@@ -486,7 +486,7 @@ static void CommonCallCodeLoadClassIntoArg0(const CallInfo* info, Mir2Lir* cg) {
 static bool CommonCallCodeLoadCodePointerIntoInvokeTgt(const RegStorage* alt_from,
                                                        const CompilationUnit* cu, Mir2Lir* cg) {
   if (cu->instruction_set != kX86 && cu->instruction_set != kX86_64) {
-    int32_t offset = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+    int32_t offset = ArtMethod::EntryPointFromQuickCompiledCodeOffset(
         InstructionSetPointerSize(cu->instruction_set)).Int32Value();
     // Get the compiled code address [use *alt_from or kArg0, set kInvokeTgt]
     cg->LoadWordDisp(alt_from == nullptr ? cg->TargetReg(kArg0, kRef) : *alt_from, offset,

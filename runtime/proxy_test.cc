@@ -51,7 +51,7 @@ class ProxyTest : public CommonCompilerTest {
     // Builds the method array.
     jsize methods_count = 3;  // Object.equals, Object.hashCode and Object.toString.
     for (mirror::Class* interface : interfaces) {
-      mirror::ObjectArray<mirror::ArtMethod>* virtual_methods = interface->GetVirtualMethods();
+      mirror::ObjectArray<ArtMethod>* virtual_methods = interface->GetVirtualMethods();
       methods_count += (virtual_methods == nullptr) ? 0 : virtual_methods->GetLength();
     }
     jobjectArray proxyClassMethods = soa.Env()->NewObjectArray(
@@ -60,7 +60,7 @@ class ProxyTest : public CommonCompilerTest {
 
     jsize array_index = 0;
     // Fill the method array
-    mirror::ArtMethod* method = javaLangObject->FindDeclaredVirtualMethod(
+    ArtMethod* method = javaLangObject->FindDeclaredVirtualMethod(
         "equals", "(Ljava/lang/Object;)Z");
     CHECK(method != nullptr);
     soa.Env()->SetObjectArrayElement(

@@ -87,7 +87,7 @@ void Instrumentation::InstallStubsForClass(mirror::Class* klass) {
   }
 }
 
-static void UpdateEntrypoints(mirror::ArtMethod* method, const void* quick_code)
+static void UpdateEntrypoints(ArtMethod* method, const void* quick_code)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   Runtime* const runtime = Runtime::Current();
   jit::Jit* jit = runtime->GetJit();
@@ -115,7 +115,7 @@ static void UpdateEntrypoints(mirror::ArtMethod* method, const void* quick_code)
   }
 }
 
-void Instrumentation::InstallStubsForMethod(mirror::ArtMethod* method) {
+void Instrumentation::InstallStubsForMethod(ArtMethod* method) {
   if (method->IsAbstract() || method->IsProxyMethod()) {
     // Do not change stubs for these methods.
     return;
@@ -176,7 +176,7 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
     }
 
     virtual bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-      mirror::ArtMethod* m = GetMethod();
+      ArtMethod* m = GetMethod();
       if (m == nullptr) {
         if (kVerboseInstrumentation) {
           LOG(INFO) << "  Skipping upcall. Frame " << GetFrameId();
@@ -319,7 +319,7 @@ static void InstrumentationRestoreStack(Thread* thread, void* arg)
       if (instrumentation_stack_->size() == 0) {
         return false;  // Stop.
       }
-      mirror::ArtMethod* m = GetMethod();
+      ArtMethod* m = GetMethod();
       if (GetCurrentQuickFrame() == nullptr) {
         if (kVerboseInstrumentation) {
           LOG(INFO) << "  Ignoring a shadow frame. Frame " << GetFrameId()
@@ -649,7 +649,7 @@ void Instrumentation::ResetQuickAllocEntryPoints() {
   }
 }
 
-void Instrumentation::UpdateMethodsCode(mirror::ArtMethod* method, const void* quick_code) {
+void Instrumentation::UpdateMethodsCode(ArtMethod* method, const void* quick_code) {
   DCHECK(method->GetDeclaringClass()->IsResolved());
   const void* new_quick_code;
   if (LIKELY(!instrumentation_stubs_installed_)) {
@@ -672,7 +672,7 @@ void Instrumentation::UpdateMethodsCode(mirror::ArtMethod* method, const void* q
   UpdateEntrypoints(method, new_quick_code);
 }
 
-bool Instrumentation::AddDeoptimizedMethod(mirror::ArtMethod* method) {
+bool Instrumentation::AddDeoptimizedMethod(ArtMethod* method) {
   // Note that the insert() below isn't read barrier-aware. So, this
   // FindDeoptimizedMethod() call is necessary or else we would end up
   // storing the same method twice in the map (the from-space and the
@@ -684,16 +684,16 @@ bool Instrumentation::AddDeoptimizedMethod(mirror::ArtMethod* method) {
   // Not found. Add it.
   static_assert(!kMovingMethods, "Not safe if methods can move");
   int32_t hash_code = method->IdentityHashCode();
-  deoptimized_methods_.insert(std::make_pair(hash_code, GcRoot<mirror::ArtMethod>(method)));
+  deoptimized_methods_.insert(std::make_pair(hash_code, method));
   return true;
 }
 
-bool Instrumentation::FindDeoptimizedMethod(mirror::ArtMethod* method) {
+bool Instrumentation::FindDeoptimizedMethod(ArtMethod* method) {
   static_assert(!kMovingMethods, "Not safe if methods can move");
   int32_t hash_code = method->IdentityHashCode();
   auto range = deoptimized_methods_.equal_range(hash_code);
   for (auto it = range.first; it != range.second; ++it) {
-    mirror::ArtMethod* m = it->second.Read();
+    ArtMethod* m = it->second.Read();
     if (m == method) {
       // Found.
       return true;
@@ -703,7 +703,7 @@ bool Instrumentation::FindDeoptimizedMethod(mirror::ArtMethod* method) {
   return false;
 }
 
-mirror::ArtMethod* Instrumentation::BeginDeoptimizedMethod() {
+ArtMethod* Instrumentation::BeginDeoptimizedMethod() {
   auto it = deoptimized_methods_.begin();
   if (it == deoptimized_methods_.end()) {
     // Empty.
@@ -712,12 +712,12 @@ mirror::ArtMethod* Instrumentation::BeginDeoptimizedMethod() {
   return it->second.Read();
 }
 
-bool Instrumentation::RemoveDeoptimizedMethod(mirror::ArtMethod* method) {
+bool Instrumentation::RemoveDeoptimizedMethod(ArtMethod* method) {
   static_assert(!kMovingMethods, "Not safe if methods can move");
   int32_t hash_code = method->IdentityHashCode();
   auto range = deoptimized_methods_.equal_range(hash_code);
   for (auto it = range.first; it != range.second; ++it) {
-    mirror::ArtMethod* m = it->second.Read();
+    ArtMethod* m = it->second.Read();
     if (m == method) {
       // Found. Erase and return.
       deoptimized_methods_.erase(it);
@@ -732,7 +732,7 @@ bool Instrumentation::IsDeoptimizedMethodsEmpty() const {
   return deoptimized_methods_.empty();
 }
 
-void Instrumentation::Deoptimize(mirror::ArtMethod* method) {
+void Instrumentation::Deoptimize(ArtMethod* method) {
   CHECK(!method->IsNative());
   CHECK(!method->IsProxyMethod());
   CHECK(!method->IsAbstract());
@@ -755,7 +755,7 @@ void Instrumentation::Deoptimize(mirror::ArtMethod* method) {
   }
 }
 
-void Instrumentation::Undeoptimize(mirror::ArtMethod* method) {
+void Instrumentation::Undeoptimize(ArtMethod* method) {
   CHECK(!method->IsNative());
   CHECK(!method->IsProxyMethod());
   CHECK(!method->IsAbstract());
@@ -791,7 +791,7 @@ void Instrumentation::Undeoptimize(mirror::ArtMethod* method) {
   }
 }
 
-bool Instrumentation::IsDeoptimized(mirror::ArtMethod* method) {
+bool Instrumentation::IsDeoptimized(ArtMethod* method) {
   DCHECK(method != nullptr);
   ReaderMutexLock mu(Thread::Current(), deoptimized_methods_lock_);
   return FindDeoptimizedMethod(method);
@@ -812,7 +812,7 @@ void Instrumentation::DisableDeoptimization() {
   }
   // Undeoptimized selected methods.
   while (true) {
-    mirror::ArtMethod* method;
+    ArtMethod* method;
     {
       ReaderMutexLock mu(Thread::Current(), deoptimized_methods_lock_);
       if (IsDeoptimizedMethodsEmpty()) {
@@ -849,7 +849,7 @@ void Instrumentation::DisableMethodTracing() {
   ConfigureStubs(false, false);
 }
 
-const void* Instrumentation::GetQuickCodeFor(mirror::ArtMethod* method, size_t pointer_size) const {
+const void* Instrumentation::GetQuickCodeFor(ArtMethod* method, size_t pointer_size) const {
   Runtime* runtime = Runtime::Current();
   if (LIKELY(!instrumentation_stubs_installed_)) {
     const void* code = method->GetEntryPointFromQuickCompiledCodePtrSize(pointer_size);
@@ -866,7 +866,7 @@ const void* Instrumentation::GetQuickCodeFor(mirror::ArtMethod* method, size_t p
 }
 
 void Instrumentation::MethodEnterEventImpl(Thread* thread, mirror::Object* this_object,
-                                           mirror::ArtMethod* method,
+                                           ArtMethod* method,
                                            uint32_t dex_pc) const {
   auto it = method_entry_listeners_.begin();
   bool is_end = (it == method_entry_listeners_.end());
@@ -880,7 +880,7 @@ void Instrumentation::MethodEnterEventImpl(Thread* thread, mirror::Object* this_
 }
 
 void Instrumentation::MethodExitEventImpl(Thread* thread, mirror::Object* this_object,
-                                          mirror::ArtMethod* method,
+                                          ArtMethod* method,
                                           uint32_t dex_pc, const JValue& return_value) const {
   auto it = method_exit_listeners_.begin();
   bool is_end = (it == method_exit_listeners_.end());
@@ -894,7 +894,7 @@ void Instrumentation::MethodExitEventImpl(Thread* thread, mirror::Object* this_o
 }
 
 void Instrumentation::MethodUnwindEvent(Thread* thread, mirror::Object* this_object,
-                                        mirror::ArtMethod* method,
+                                        ArtMethod* method,
                                         uint32_t dex_pc) const {
   if (have_method_unwind_listeners_) {
     for (InstrumentationListener* listener : method_unwind_listeners_) {
@@ -904,7 +904,7 @@ void Instrumentation::MethodUnwindEvent(Thread* thread, mirror::Object* this_obj
 }
 
 void Instrumentation::DexPcMovedEventImpl(Thread* thread, mirror::Object* this_object,
-                                          mirror::ArtMethod* method,
+                                          ArtMethod* method,
                                           uint32_t dex_pc) const {
   if (HasDexPcListeners()) {
     std::shared_ptr<std::list<InstrumentationListener*>> original(dex_pc_listeners_);
@@ -914,7 +914,7 @@ void Instrumentation::DexPcMovedEventImpl(Thread* thread, mirror::Object* this_o
   }
 }
 
-void Instrumentation::BackwardBranchImpl(Thread* thread, mirror::ArtMethod* method,
+void Instrumentation::BackwardBranchImpl(Thread* thread, ArtMethod* method,
                                          int32_t offset) const {
   for (InstrumentationListener* listener : backward_branch_listeners_) {
     listener->BackwardBranch(thread, method, offset);
@@ -922,7 +922,7 @@ void Instrumentation::BackwardBranchImpl(Thread* thread, mirror::ArtMethod* meth
 }
 
 void Instrumentation::FieldReadEventImpl(Thread* thread, mirror::Object* this_object,
-                                         mirror::ArtMethod* method, uint32_t dex_pc,
+                                         ArtMethod* method, uint32_t dex_pc,
                                          ArtField* field) const {
   if (HasFieldReadListeners()) {
     std::shared_ptr<std::list<InstrumentationListener*>> original(field_read_listeners_);
@@ -933,7 +933,7 @@ void Instrumentation::FieldReadEventImpl(Thread* thread, mirror::Object* this_ob
 }
 
 void Instrumentation::FieldWriteEventImpl(Thread* thread, mirror::Object* this_object,
-                                         mirror::ArtMethod* method, uint32_t dex_pc,
+                                         ArtMethod* method, uint32_t dex_pc,
                                          ArtField* field, const JValue& field_value) const {
   if (HasFieldWriteListeners()) {
     std::shared_ptr<std::list<InstrumentationListener*>> original(field_write_listeners_);
@@ -969,7 +969,7 @@ static void CheckStackDepth(Thread* self, const InstrumentationStackFrame& instr
 }
 
 void Instrumentation::PushInstrumentationStackFrame(Thread* self, mirror::Object* this_object,
-                                                    mirror::ArtMethod* method,
+                                                    ArtMethod* method,
                                                     uintptr_t lr, bool interpreter_entry) {
   // We have a callee-save frame meaning this value is guaranteed to never be 0.
   size_t frame_id = StackVisitor::ComputeNumFrames(self);
@@ -1000,7 +1000,7 @@ TwoWordReturn Instrumentation::PopInstrumentationStackFrame(Thread* self, uintpt
   CheckStackDepth(self, instrumentation_frame, 0);
   self->VerifyStack();
 
-  mirror::ArtMethod* method = instrumentation_frame.method_;
+  ArtMethod* method = instrumentation_frame.method_;
   uint32_t length;
   char return_shorty = method->GetShorty(&length)[0];
   JValue return_value;
@@ -1053,7 +1053,7 @@ void Instrumentation::PopMethodForUnwind(Thread* self, bool is_deoptimization) c
   // TODO: bring back CheckStackDepth(self, instrumentation_frame, 2);
   stack->pop_front();
 
-  mirror::ArtMethod* method = instrumentation_frame.method_;
+  ArtMethod* method = instrumentation_frame.method_;
   if (is_deoptimization) {
     if (kVerboseInstrumentation) {
       LOG(INFO) << "Popping for deoptimization " << PrettyMethod(method);

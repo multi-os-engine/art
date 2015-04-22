@@ -31,7 +31,7 @@ struct NthCallerVisitor : public StackVisitor {
         include_runtime_and_upcalls_(include_runtime_and_upcalls), count(0), caller(nullptr) {}
 
   bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::ArtMethod* m = GetMethod();
+    ArtMethod* m = GetMethod();
     bool do_count = false;
     if (m == nullptr || m->IsRuntimeMethod()) {
       // Upcall.
@@ -53,7 +53,7 @@ struct NthCallerVisitor : public StackVisitor {
   const size_t n;
   const bool include_runtime_and_upcalls_;
   size_t count;
-  mirror::ArtMethod* caller;
+  ArtMethod* caller;
 };
 
 }  // namespace art

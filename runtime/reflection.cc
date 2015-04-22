@@ -213,7 +213,7 @@ class ArgArray {
 
   bool BuildArgArrayFromObjectArray(mirror::Object* receiver,
                                     mirror::ObjectArray<mirror::Object>* args,
-                                    Handle<mirror::ArtMethod> h_m)
+                                    Handle<ArtMethod> h_m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     const DexFile::TypeList* classes = h_m->GetParameterTypeList();
     // Set receiver if non-null (method is not static)
@@ -342,7 +342,7 @@ class ArgArray {
   std::unique_ptr<uint32_t[]> large_arg_array_;
 };
 
-static void CheckMethodArguments(JavaVMExt* vm, mirror::ArtMethod* m, uint32_t* args)
+static void CheckMethodArguments(JavaVMExt* vm, ArtMethod* m, uint32_t* args)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   const DexFile::TypeList* params = m->GetParameterTypeList();
   if (params == nullptr) {
@@ -357,7 +357,7 @@ static void CheckMethodArguments(JavaVMExt* vm, mirror::ArtMethod* m, uint32_t* 
   // TODO: If args contain object references, it may cause problems.
   Thread* self = Thread::Current();
   StackHandleScope<1> hs(self);
-  Handle<mirror::ArtMethod> h_m(hs.NewHandle(m));
+  Handle<ArtMethod> h_m(hs.NewHandle(m));
   for (uint32_t i = 0; i < num_params; i++) {
     uint16_t type_idx = params->GetTypeItem(i).type_idx_;
     mirror::Class* param_type = h_m->GetClassFromTypeIndex(type_idx, true);
@@ -419,15 +419,15 @@ static void CheckMethodArguments(JavaVMExt* vm, mirror::ArtMethod* m, uint32_t* 
   }
 }
 
-static mirror::ArtMethod* FindVirtualMethod(mirror::Object* receiver,
-                                            mirror::ArtMethod* method)
+static ArtMethod* FindVirtualMethod(mirror::Object* receiver,
+                                            ArtMethod* method)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   return receiver->GetClass()->FindVirtualMethodForVirtualOrInterface(method);
 }
 
 
 static void InvokeWithArgArray(const ScopedObjectAccessAlreadyRunnable& soa,
-                               mirror::ArtMethod* method, ArgArray* arg_array, JValue* result,
+                               ArtMethod* method, ArgArray* arg_array, JValue* result,
                                const char* shorty)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   uint32_t* args = arg_array->GetArray();
@@ -448,7 +448,7 @@ JValue InvokeWithVarArgs(const ScopedObjectAccessAlreadyRunnable& soa, jobject o
     return JValue();
   }
 
-  mirror::ArtMethod* method = soa.DecodeMethod(mid);
+  ArtMethod* method = soa.DecodeMethod(mid);
   mirror::Object* receiver = method->IsStatic() ? nullptr : soa.Decode<mirror::Object*>(obj);
   uint32_t shorty_len = 0;
   const char* shorty = method->GetShorty(&shorty_len);
@@ -469,7 +469,7 @@ JValue InvokeWithJValues(const ScopedObjectAccessAlreadyRunnable& soa, mirror::O
     return JValue();
   }
 
-  mirror::ArtMethod* method = soa.DecodeMethod(mid);
+  ArtMethod* method = soa.DecodeMethod(mid);
   uint32_t shorty_len = 0;
   const char* shorty = method->GetShorty(&shorty_len);
   JValue result;
@@ -489,7 +489,7 @@ JValue InvokeVirtualOrInterfaceWithJValues(const ScopedObjectAccessAlreadyRunnab
     return JValue();
   }
 
-  mirror::ArtMethod* method = FindVirtualMethod(receiver, soa.DecodeMethod(mid));
+  ArtMethod* method = FindVirtualMethod(receiver, soa.DecodeMethod(mid));
   uint32_t shorty_len = 0;
   const char* shorty = method->GetShorty(&shorty_len);
   JValue result;
@@ -510,7 +510,7 @@ JValue InvokeVirtualOrInterfaceWithVarArgs(const ScopedObjectAccessAlreadyRunnab
   }
 
   mirror::Object* receiver = soa.Decode<mirror::Object*>(obj);
-  mirror::ArtMethod* method = FindVirtualMethod(receiver, soa.DecodeMethod(mid));
+  ArtMethod* method = FindVirtualMethod(receiver, soa.DecodeMethod(mid));
   uint32_t shorty_len = 0;
   const char* shorty = method->GetShorty(&shorty_len);
   JValue result;
@@ -550,7 +550,7 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject javaM
 
   auto* abstract_method = soa.Decode<mirror::AbstractMethod*>(javaMethod);
   const bool accessible = abstract_method->IsAccessible();
-  mirror::ArtMethod* m = abstract_method->GetArtMethod();
+  ArtMethod* m = abstract_method->GetArtMethod();
 
   mirror::Class* declaring_class = m->GetDeclaringClass();
   if (UNLIKELY(!declaring_class->IsInitialized())) {
@@ -605,7 +605,7 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject javaM
   const char* shorty = m->GetShorty(&shorty_len);
   ArgArray arg_array(shorty, shorty_len);
   StackHandleScope<1> hs(soa.Self());
-  Handle<mirror::ArtMethod> h_m(hs.NewHandle(m));
+  Handle<ArtMethod> h_m(hs.NewHandle(m));
   if (!arg_array.BuildArgArrayFromObjectArray(receiver, objects, h_m)) {
     CHECK(soa.Self()->IsExceptionPending());
     return nullptr;

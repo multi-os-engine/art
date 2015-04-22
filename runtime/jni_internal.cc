@@ -126,7 +126,7 @@ static jmethodID FindMethodID(ScopedObjectAccess& soa, jclass jni_class,
   if (c == nullptr) {
     return nullptr;
   }
-  mirror::ArtMethod* method = nullptr;
+  ArtMethod* method = nullptr;
   if (is_static) {
     method = c->FindDirectMethod(name, sig);
   } else if (c->IsInterface()) {
@@ -148,7 +148,7 @@ static jmethodID FindMethodID(ScopedObjectAccess& soa, jclass jni_class,
 
 static mirror::ClassLoader* GetClassLoader(const ScopedObjectAccess& soa)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::ArtMethod* method = soa.Self()->GetCurrentMethod(nullptr);
+  ArtMethod* method = soa.Self()->GetCurrentMethod(nullptr);
   // If we are running Runtime.nativeLoad, use the overriding ClassLoader it set.
   if (method == soa.DecodeMethod(WellKnownClasses::java_lang_Runtime_nativeLoad)) {
     return soa.Decode<mirror::ClassLoader*>(soa.Self()->GetClassLoaderOverride());
@@ -342,7 +342,7 @@ class JNI {
   static jmethodID FromReflectedMethod(JNIEnv* env, jobject jlr_method) {
     CHECK_NON_NULL_ARGUMENT(jlr_method);
     ScopedObjectAccess soa(env);
-    return soa.EncodeMethod(mirror::ArtMethod::FromReflectedMethod(soa, jlr_method));
+    return soa.EncodeMethod(ArtMethod::FromReflectedMethod(soa, jlr_method));
   }
 
   static jfieldID FromReflectedField(JNIEnv* env, jobject jlr_field) {
@@ -360,7 +360,7 @@ class JNI {
   static jobject ToReflectedMethod(JNIEnv* env, jclass, jmethodID mid, jboolean) {
     CHECK_NON_NULL_ARGUMENT(mid);
     ScopedObjectAccess soa(env);
-    mirror::ArtMethod* m = soa.DecodeMethod(mid);
+    ArtMethod* m = soa.DecodeMethod(mid);
     CHECK(!kMovingMethods);
     mirror::AbstractMethod* method;
     if (m->IsConstructor()) {
@@ -2098,7 +2098,7 @@ class JNI {
         ++sig;
       }
 
-      mirror::ArtMethod* m = c->FindDirectMethod(name, sig);
+      ArtMethod* m = c->FindDirectMethod(name, sig);
       if (m == nullptr) {
         m = c->FindVirtualMethod(name, sig);
       }
@@ -2133,14 +2133,14 @@ class JNI {
 
     size_t unregistered_count = 0;
     for (size_t i = 0; i < c->NumDirectMethods(); ++i) {
-      mirror::ArtMethod* m = c->GetDirectMethod(i);
+      ArtMethod* m = c->GetDirectMethod(i);
       if (m->IsNative()) {
         m->UnregisterNative();
         unregistered_count++;
       }
     }
     for (size_t i = 0; i < c->NumVirtualMethods(); ++i) {
-      mirror::ArtMethod* m = c->GetVirtualMethod(i);
+      ArtMethod* m = c->GetVirtualMethod(i);
       if (m->IsNative()) {
         m->UnregisterNative();
         unregistered_count++;

@@ -46,10 +46,6 @@ void ArtField::SetOffset(MemberOffset num_bytes) {
   offset_ = num_bytes.Uint32Value();
 }
 
-void ArtField::VisitRoots(RootVisitor* visitor) {
-  declaring_class_.VisitRoot(visitor, RootInfo(kRootStickyClass));
-}
-
 ArtField* ArtField::FindInstanceFieldWithOffset(mirror::Class* klass, uint32_t field_offset) {
   DCHECK(klass != nullptr);
   auto* instance_fields = klass->GetIFields();

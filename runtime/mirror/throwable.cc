@@ -95,7 +95,7 @@ std::string Throwable::Dump() {
       result += "(Throwable with empty stack trace)";
     } else {
       for (int32_t i = 0; i < depth; ++i) {
-        mirror::ArtMethod* method = down_cast<ArtMethod*>(method_trace->Get(i));
+        ArtMethod* method = down_cast<ArtMethod*>(method_trace->Get(i));
         uint32_t dex_pc = pc_trace->Get(i);
         int32_t line_number = method->GetLineNumFromDexPC(dex_pc);
         const char* source_file = method->GetDeclaringClassSourceFile();

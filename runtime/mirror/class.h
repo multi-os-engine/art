@@ -36,6 +36,7 @@
 namespace art {
 
 class ArtField;
+class ArtMethod;
 struct ClassOffsets;
 template<class T> class Handle;
 template<class T> class Handle;
@@ -45,7 +46,6 @@ template<size_t kNumReferences> class PACKED(4) StackHandleScope;
 
 namespace mirror {
 
-class ArtMethod;
 class ClassLoader;
 class Constructor;
 class DexCache;
@@ -64,16 +64,6 @@ class MANAGED Class FINAL : public Object {
   // colliding in the interface method table but increases the size of classes that implement
   // (non-marker) interfaces.
   static constexpr size_t kImtSize = IMT_SIZE;
-
-  // imtable entry embedded in class object.
-  struct MANAGED ImTableEntry {
-    HeapReference<ArtMethod> method;
-  };
-
-  // vtable entry embedded in class object.
-  struct MANAGED VTableEntry {
-    HeapReference<ArtMethod> method;
-  };
 
   // Class Status
   //
@@ -398,13 +388,7 @@ class MANAGED Class FINAL : public Object {
   }
 
   // Depth of class from java.lang.Object
-  uint32_t Depth() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    uint32_t depth = 0;
-    for (Class* klass = this; klass->GetSuperClass() != nullptr; klass = klass->GetSuperClass()) {
-      depth++;
-    }
-    return depth;
-  }
+  uint32_t Depth() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
@@ -419,9 +403,6 @@ class MANAGED Class FINAL : public Object {
   bool IsStringClass() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool IsThrowableClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  bool IsArtMethodClass() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   bool IsReferenceClass() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -463,12 +444,13 @@ class MANAGED Class FINAL : public Object {
 
   bool IsInstantiable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return (!IsPrimitive() && !IsInterface() && !IsAbstract()) ||
-        ((IsAbstract()) && IsArrayClass());
+        (IsAbstract() && IsArrayClass());
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsObjectArrayClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetComponentType<kVerifyFlags>() != nullptr && !GetComponentType<kVerifyFlags>()->IsPrimitive();
+    return GetComponentType<kVerifyFlags>() != nullptr &&
+        !GetComponentType<kVerifyFlags>()->IsPrimitive();
   }
 
   // Creates a raw object instance but does not invoke the default constructor.
@@ -511,18 +493,19 @@ class MANAGED Class FINAL : public Object {
                                    uint32_t num_16bit_static_fields,
                                    uint32_t num_32bit_static_fields,
                                    uint32_t num_64bit_static_fields,
-                                   uint32_t num_ref_static_fields);
+                                   uint32_t num_ref_static_fields,
+                                   size_t pointer_size);
 
   // The size of java.lang.Class.class.
-  static uint32_t ClassClassSize() {
+  static uint32_t ClassClassSize(size_t pointer_size) {
     // The number of vtable entries in java.lang.Class.
     uint32_t vtable_entries = Object::kVTableLength + 66;
-    return ComputeClassSize(true, vtable_entries, 0, 0, 0, 1, 0);
+    return ComputeClassSize(true, vtable_entries, 0, 0, 0, 1, 0, pointer_size);
   }
 
   // The size of a java.lang.Class representing a primitive such as int.class.
-  static uint32_t PrimitiveClassSize() {
-    return ComputeClassSize(false, 0, 0, 0, 0, 0, 0);
+  static uint32_t PrimitiveClassSize(size_t pointer_size) {
+    return ComputeClassSize(false, 0, 0, 0, 0, 0, 0, pointer_size);
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
@@ -667,45 +650,42 @@ class MANAGED Class FINAL : public Object {
   // Also updates the dex_cache_strings_ variable from new_dex_cache.
   void SetDexCache(DexCache* new_dex_cache) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  ALWAYS_INLINE ObjectArray<ArtMethod>* GetDirectMethods()
+  ALWAYS_INLINE ArtMethod* GetDirectMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void SetDirectMethods(ArtMethod* new_direct_methods)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void SetDirectMethods(ObjectArray<ArtMethod>* new_direct_methods)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  ALWAYS_INLINE ArtMethod* GetDirectMethod(int32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  void SetDirectMethod(uint32_t i, ArtMethod* f)  // TODO: uint16_t
+  ALWAYS_INLINE ArtMethod* GetDirectMethod(size_t i, size_t pointer_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Returns the number of static, private, and constructor methods.
-  uint32_t NumDirectMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ALWAYS_INLINE uint32_t NumDirectMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, num_direct_methods_));
+  }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE ObjectArray<ArtMethod>* GetVirtualMethods()
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ALWAYS_INLINE ArtMethod* GetVirtualMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  ALWAYS_INLINE void SetVirtualMethods(ObjectArray<ArtMethod>* new_virtual_methods)
+  ALWAYS_INLINE void SetVirtualMethods(ArtMethod* new_virtual_methods)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Returns the number of non-inherited virtual methods.
-  ALWAYS_INLINE uint32_t NumVirtualMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ALWAYS_INLINE uint32_t NumVirtualMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, num_virtual_methods_));
+  }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ArtMethod* GetVirtualMethod(uint32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  ArtMethod* GetVirtualMethodDuringLinking(uint32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  void SetVirtualMethod(uint32_t i, ArtMethod* f)  // TODO: uint16_t
+  ArtMethod* GetVirtualMethod(size_t i, size_t pointer_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  ALWAYS_INLINE ObjectArray<ArtMethod>* GetVTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  ALWAYS_INLINE ObjectArray<ArtMethod>* GetVTableDuringLinking()
+  ArtMethod* GetVirtualMethodDuringLinking(size_t i, size_t pointer_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void SetVTable(ObjectArray<ArtMethod>* new_vtable)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ALWAYS_INLINE PointerArray* GetVTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  ALWAYS_INLINE PointerArray* GetVTableDuringLinking() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void SetVTable(PointerArray* new_vtable) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static MemberOffset VTableOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Class, vtable_);
@@ -715,12 +695,14 @@ class MANAGED Class FINAL : public Object {
     return MemberOffset(sizeof(Class));
   }
 
-  static MemberOffset EmbeddedVTableLengthOffset() {
-    return MemberOffset(sizeof(Class) + kImtSize * sizeof(mirror::Class::ImTableEntry));
+  static MemberOffset EmbeddedVTableLengthOffset(size_t pointer_size) {
+    return MemberOffset(sizeof(Class) + kImtSize * ImTableEntrySize(pointer_size));
   }
 
-  static MemberOffset EmbeddedVTableOffset() {
-    return MemberOffset(sizeof(Class) + kImtSize * sizeof(ImTableEntry) + sizeof(int32_t));
+  static MemberOffset EmbeddedVTableOffset(size_t pointer_size) {
+    // TODO: Alignment probably broken on 64 bits?
+    return MemberOffset(sizeof(Class) + kImtSize * ImTableEntrySize(pointer_size) +
+                        sizeof(int32_t));
   }
 
   bool ShouldHaveEmbeddedImtAndVTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -729,42 +711,49 @@ class MANAGED Class FINAL : public Object {
 
   bool HasVTable() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  ArtMethod* GetEmbeddedImTableEntry(uint32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ArtMethod* GetEmbeddedImTableEntry(uint32_t i, size_t pointer_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void SetEmbeddedImTableEntry(uint32_t i, ArtMethod* method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetEmbeddedImTableEntry(uint32_t i, ArtMethod* method, size_t pointer_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  int32_t GetVTableLength() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  int32_t GetVTableLength(size_t pointer_size) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  ArtMethod* GetVTableEntry(uint32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ArtMethod* GetVTableEntry(uint32_t i, size_t pointer_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  int32_t GetEmbeddedVTableLength() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  int32_t GetEmbeddedVTableLength(size_t pointer_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void SetEmbeddedVTableLength(int32_t len) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetEmbeddedVTableLength(int32_t len, size_t pointer_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  ArtMethod* GetEmbeddedVTableEntry(uint32_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ArtMethod* GetEmbeddedVTableEntry(uint32_t i, size_t pointer_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  void SetEmbeddedVTableEntry(uint32_t i, ArtMethod* method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void SetEmbeddedVTableEntry(uint32_t i, ArtMethod* method, size_t pointer_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void PopulateEmbeddedImtAndVTable(StackHandleScope<kImtSize>* imt_handle_scope)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Given a method implemented by this class but potentially from a super class, return the
   // specific implementation method for this class.
-  ArtMethod* FindVirtualMethodForVirtual(ArtMethod* method)
+  ArtMethod* FindVirtualMethodForVirtual(ArtMethod* method, size_t pointer_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Given a method implemented by this class' super class, return the specific implementation
   // method for this class.
-  ArtMethod* FindVirtualMethodForSuper(ArtMethod* method)
+  ArtMethod* FindVirtualMethodForSuper(ArtMethod* method, size_t pointer_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Given a method implemented by this class, but potentially from a
   // super class or interface, return the specific implementation
   // method for this class.
-  ArtMethod* FindVirtualMethodForInterface(ArtMethod* method)
+  ArtMethod* FindVirtualMethodForInterface(ArtMethod* method, size_t pointer_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) ALWAYS_INLINE;
 
-  ArtMethod* FindVirtualMethodForVirtualOrInterface(ArtMethod* method)
+  ArtMethod* FindVirtualMethodForVirtualOrInterface(ArtMethod* method, size_t pointer_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   ArtMethod* FindInterfaceMethod(const StringPiece& name, const StringPiece& signature)
@@ -861,7 +850,8 @@ class MANAGED Class FINAL : public Object {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Get the offset of the first reference instance field. Other reference instance fields follow.
-  MemberOffset GetFirstReferenceInstanceFieldOffset() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  MemberOffset GetFirstReferenceInstanceFieldOffset()
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Returns the number of static fields containing reference types.
   uint32_t NumReferenceStaticFields() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -880,10 +870,11 @@ class MANAGED Class FINAL : public Object {
   }
 
   // Get the offset of the first reference static field. Other reference static fields follow.
-  MemberOffset GetFirstReferenceStaticFieldOffset() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  MemberOffset GetFirstReferenceStaticFieldOffset(size_t pointer_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Get the offset of the first reference static field. Other reference static fields follow.
-  MemberOffset GetFirstReferenceStaticFieldOffsetDuringLinking()
+  MemberOffset GetFirstReferenceStaticFieldOffsetDuringLinking(size_t pointer_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Gets the static fields of the class.
@@ -983,9 +974,10 @@ class MANAGED Class FINAL : public Object {
   static void VisitRoots(RootVisitor* visitor)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Visit native roots visits roots which are keyed off the native pointers such as ArtFields and
+  // ArtMethods.
   template<class Visitor>
-  // Visit field roots.
-  void VisitFieldRoots(Visitor& visitor) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void VisitNativeRoots(Visitor& visitor) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // When class is verified, set the kAccPreverified flag on each method.
   void SetPreverifiedFlagOnAllMethods() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -993,11 +985,6 @@ class MANAGED Class FINAL : public Object {
   template <bool kVisitClass, typename Visitor>
   void VisitReferences(mirror::Class* klass, const Visitor& visitor)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  // Visit references within the embedded tables of the class.
-  // TODO: remove NO_THREAD_SAFETY_ANALYSIS when annotalysis handles visitors better.
-  template<typename Visitor>
-  void VisitEmbeddedImtAndVTable(const Visitor& visitor) NO_THREAD_SAFETY_ANALYSIS;
 
   // Get the descriptor of the class. In a few cases a std::string is required, rather than
   // always create one the storage argument is populated and its internal c_str() returned. We do
@@ -1054,7 +1041,7 @@ class MANAGED Class FINAL : public Object {
   }
 
   // May cause thread suspension due to EqualParameters.
-  mirror::ArtMethod* GetDeclaredConstructor(
+  ArtMethod* GetDeclaredConstructor(
       Thread* self, Handle<mirror::ObjectArray<mirror::Class>> args)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -1077,6 +1064,14 @@ class MANAGED Class FINAL : public Object {
   // Returns true if the class loader is null, ie the class loader is the boot strap class loader.
   bool IsBootStrapClassLoaded() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return GetClassLoader() == nullptr;
+  }
+
+  static size_t ImTableEntrySize(size_t pointer_size) {
+    return pointer_size;
+  }
+
+  static size_t VTableEntrySize(size_t pointer_size) {
+    return pointer_size;
   }
 
  private:
@@ -1103,6 +1098,11 @@ class MANAGED Class FINAL : public Object {
 
   bool ProxyDescriptorEquals(const char* match) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  inline ArtMethod* GetDirectMethodsUnchecked() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  inline ArtMethod* GetVirtualMethodUnchecked(size_t i, size_t pointer_size)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Defining class loader, or null for the "bootstrap" system loader.
   HeapReference<ClassLoader> class_loader_;
 
@@ -1118,7 +1118,7 @@ class MANAGED Class FINAL : public Object {
   HeapReference<ObjectArray<String>> dex_cache_strings_;
 
   // static, private, and <init> methods
-  HeapReference<ObjectArray<ArtMethod>> direct_methods_;
+  uint64_t direct_methods_;
 
   // The interface table (iftable_) contains pairs of a interface class and an array of the
   // interface methods. There is one pair per interface supported by this class.  That means one
@@ -1143,13 +1143,13 @@ class MANAGED Class FINAL : public Object {
   HeapReference<Class> verify_error_class_;
 
   // Virtual methods defined in this class; invoked through vtable.
-  HeapReference<ObjectArray<ArtMethod>> virtual_methods_;
+  uint64_t virtual_methods_;
 
   // Virtual method table (vtable), for use by "invoke-virtual".  The vtable from the superclass is
   // copied in, and virtual methods from our class either replace those from the super or are
   // appended. For abstract classes, methods may be created in the vtable that aren't in
   // virtual_ methods_ for miranda methods.
-  HeapReference<ObjectArray<ArtMethod>> vtable_;
+  HeapReference<PointerArray> vtable_;
 
   // Access flags; low 16 bits are defined by VM spec.
   // Note: Shuffled back.
@@ -1183,7 +1183,10 @@ class MANAGED Class FINAL : public Object {
   // TODO: really 16bits
   int32_t dex_type_idx_;
 
-  // Number of static fields.
+  // Number of direct fields.
+  uint32_t num_direct_methods_;
+
+  // Number of instance fields.
   uint32_t num_instance_fields_;
 
   // Number of instance fields that are object refs.
@@ -1194,6 +1197,9 @@ class MANAGED Class FINAL : public Object {
 
   // Number of static fields.
   uint32_t num_static_fields_;
+
+  // Number of virtual methods.
+  uint32_t num_virtual_methods_;
 
   // Total object size; used when allocating storage on gc heap.
   // (For interfaces and abstract classes this will be zero.)
