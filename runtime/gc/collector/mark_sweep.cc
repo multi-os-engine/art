@@ -401,7 +401,8 @@ class MarkSweepMarkObjectSlowPath {
                             << (field != nullptr ? field->GetTypeDescriptor() : "")
                             << " first_ref_field_offset="
                             << (holder_->IsClass()
-                                ? holder_->AsClass()->GetFirstReferenceStaticFieldOffset()
+                                ? holder_->AsClass()->GetFirstReferenceStaticFieldOffset(
+                                    sizeof(void*))
                                 : holder_->GetClass()->GetFirstReferenceInstanceFieldOffset())
                             << " num_of_ref_fields="
                             << (holder_->IsClass()
@@ -555,7 +556,7 @@ class VerifyRootVisitor : public SingleRootVisitor {
     if (heap->GetLiveBitmap()->GetContinuousSpaceBitmap(root) == nullptr) {
       space::LargeObjectSpace* large_object_space = heap->GetLargeObjectsSpace();
       if (large_object_space != nullptr && !large_object_space->Contains(root)) {
-        LOG(INTERNAL_FATAL) << "Found invalid root: " << root << " " << info;
+        LOG(INTERNAL_FATAL) << "Found invalid root: " << root << " " << info << "\n";
       }
     }
   }

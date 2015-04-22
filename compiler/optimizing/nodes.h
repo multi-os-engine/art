@@ -124,6 +124,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
          const DexFile& dex_file,
          uint32_t method_idx,
          bool should_generate_constructor_barrier,
+         InstructionSet instruction_set,
          InvokeType invoke_type = kInvalidInvokeType,
          bool debuggable = false,
          int start_instruction_id = 0)
@@ -144,6 +145,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         method_idx_(method_idx),
         invoke_type_(invoke_type),
         should_generate_constructor_barrier_(should_generate_constructor_barrier),
+        instruction_set_(instruction_set),
         cached_null_constant_(nullptr),
         cached_int_constants_(std::less<int32_t>(), arena->Adapter()),
         cached_float_constants_(std::less<int32_t>(), arena->Adapter()),
@@ -382,6 +384,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   const InvokeType invoke_type_;
 
   const bool should_generate_constructor_barrier_;
+
+  const InstructionSet instruction_set_;
 
   // Cached constants.
   HNullConstant* cached_null_constant_;
@@ -1836,7 +1840,7 @@ class HDeoptimize : public HTemplateInstruction<1> {
 // instructions that work with the dex cache.
 class HCurrentMethod : public HExpression<0> {
  public:
-  HCurrentMethod() : HExpression(Primitive::kPrimNot, SideEffects::None()) {}
+  explicit HCurrentMethod(Primitive::Type type) : HExpression(type, SideEffects::None()) {}
 
   DECLARE_INSTRUCTION(CurrentMethod);
 

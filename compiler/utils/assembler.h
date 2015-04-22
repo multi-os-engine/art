@@ -434,8 +434,9 @@ class Assembler {
   virtual void LoadFromThread32(ManagedRegister dest, ThreadOffset<4> src, size_t size);
   virtual void LoadFromThread64(ManagedRegister dest, ThreadOffset<8> src, size_t size);
 
-  virtual void LoadRef(ManagedRegister dest, FrameOffset  src) = 0;
-  virtual void LoadRef(ManagedRegister dest, ManagedRegister base, MemberOffset offs) = 0;
+  virtual void LoadRef(ManagedRegister dest, FrameOffset src) = 0;
+  virtual void LoadRef(ManagedRegister dest, ManagedRegister base, MemberOffset offs,
+                       bool poison_reference) = 0;
 
   virtual void LoadRawPtr(ManagedRegister dest, ManagedRegister base, Offset offs) = 0;
 
