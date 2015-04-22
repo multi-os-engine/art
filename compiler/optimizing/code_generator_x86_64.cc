@@ -2061,28 +2061,19 @@ void LocationsBuilderX86_64::VisitAdd(HAdd* add) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(add, LocationSummary::kNoCall);
   switch (add->GetResultType()) {
-    case Primitive::kPrimInt: {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
       locations->SetInAt(0, Location::RequiresRegister());
-      locations->SetInAt(1, Location::RegisterOrConstant(add->InputAt(1)));
+      locations->SetInAt(1, Location::Any());
       locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
       break;
-    }
-
-    case Primitive::kPrimLong: {
-      locations->SetInAt(0, Location::RequiresRegister());
-      // We can use a leaq or addq if the constant can fit in an immediate.
-      locations->SetInAt(1, Location::RegisterOrInt32LongConstant(add->InputAt(1)));
-      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
-      break;
-    }
 
     case Primitive::kPrimDouble:
-    case Primitive::kPrimFloat: {
+    case Primitive::kPrimFloat:
       locations->SetInAt(0, Location::RequiresFpuRegister());
       locations->SetInAt(1, Location::Any());
       locations->SetOut(Location::SameAsFirstInput());
       break;
-    }
 
     default:
       LOG(FATAL) << "Unexpected add type " << add->GetResultType();
@@ -2097,46 +2088,71 @@ void InstructionCodeGeneratorX86_64::VisitAdd(HAdd* add) {
 
   switch (add->GetResultType()) {
     case Primitive::kPrimInt: {
+      CpuRegister out_reg = out.AsRegister<CpuRegister>();
       if (second.IsRegister()) {
-        if (out.AsRegister<Register>() == first.AsRegister<Register>()) {
-          __ addl(out.AsRegister<CpuRegister>(), second.AsRegister<CpuRegister>());
+        if (out_reg.AsRegister() == first.AsRegister<Register>()) {
+          __ addl(out_reg, second.AsRegister<CpuRegister>());
         } else {
-          __ leal(out.AsRegister<CpuRegister>(), Address(
+          __ leal(out_reg, Address(
               first.AsRegister<CpuRegister>(), second.AsRegister<CpuRegister>(), TIMES_1, 0));
         }
-      } else if (second.IsConstant()) {
-        if (out.AsRegister<Register>() == first.AsRegister<Register>()) {
+      } else if (second.IsStackSlot()) {
+        if (out_reg.AsRegister() == first.AsRegister<Register>()) {
+          __ addl(out_reg, Address(CpuRegister(RSP), second.GetStackIndex()));
+        } else {
+          // We have to do this the hard way.
+          __ movl(out_reg, Address(CpuRegister(RSP), second.GetStackIndex()));
+          __ addl(out_reg, first.AsRegister<CpuRegister>());
+        }
+      } else {
+        DCHECK(second.IsConstant());
+        if (out_reg.AsRegister() == first.AsRegister<Register>()) {
           __ addl(out.AsRegister<CpuRegister>(),
                   Immediate(second.GetConstant()->AsIntConstant()->GetValue()));
         } else {
-          __ leal(out.AsRegister<CpuRegister>(), Address(
+          __ leal(out_reg, Address(
               first.AsRegister<CpuRegister>(), second.GetConstant()->AsIntConstant()->GetValue()));
         }
-      } else {
-        DCHECK(first.Equals(locations->Out()));
-        __ addl(first.AsRegister<CpuRegister>(), Address(CpuRegister(RSP), second.GetStackIndex()));
       }
       break;
     }
 
     case Primitive::kPrimLong: {
+      CpuRegister out_reg = out.AsRegister<CpuRegister>();
       if (second.IsRegister()) {
-        if (out.AsRegister<Register>() == first.AsRegister<Register>()) {
-          __ addq(out.AsRegister<CpuRegister>(), second.AsRegister<CpuRegister>());
+        if (out_reg.AsRegister() == first.AsRegister<Register>()) {
+          __ addq(out_reg, second.AsRegister<CpuRegister>());
         } else {
-          __ leaq(out.AsRegister<CpuRegister>(), Address(
+          __ leaq(out_reg, Address(
               first.AsRegister<CpuRegister>(), second.AsRegister<CpuRegister>(), TIMES_1, 0));
+        }
+      } else if (second.IsDoubleStackSlot()) {
+        if (out_reg.AsRegister() == first.AsRegister<Register>()) {
+          __ addq(out_reg, Address(CpuRegister(RSP), second.GetStackIndex()));
+        } else {
+          // We have to do this the hard way.
+          __ movq(out_reg, Address(CpuRegister(RSP), second.GetStackIndex()));
+          __ addq(out_reg, first.AsRegister<CpuRegister>());
         }
       } else {
         DCHECK(second.IsConstant());
         int64_t value = second.GetConstant()->AsLongConstant()->GetValue();
-        int32_t int32_value = Low32Bits(value);
-        DCHECK_EQ(int32_value, value);
-        if (out.AsRegister<Register>() == first.AsRegister<Register>()) {
-          __ addq(out.AsRegister<CpuRegister>(), Immediate(int32_value));
+        if (IsInt<32>(value)) {
+          int32_t int32_value = Low32Bits(value);
+          if (out_reg.AsRegister() == first.AsRegister<Register>()) {
+            __ addq(out_reg, Immediate(int32_value));
+          } else {
+            __ leaq(out_reg, Address(first.AsRegister<CpuRegister>(), int32_value));
+          }
         } else {
-          __ leaq(out.AsRegister<CpuRegister>(), Address(
-              first.AsRegister<CpuRegister>(), int32_value));
+          // Long value won't fit into the instruction.
+          if (out_reg.AsRegister() == first.AsRegister<Register>()) {
+            __ addq(out_reg, codegen_->LiteralInt64Address(value));
+          } else {
+            // Load the value and add to that.
+            __ movq(out_reg, codegen_->LiteralInt64Address(value));
+            __ addq(out_reg, first.AsRegister<CpuRegister>());
+          }
         }
       }
       break;
@@ -2187,7 +2203,7 @@ void LocationsBuilderX86_64::VisitSub(HSub* sub) {
     }
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RequiresRegister());
-      locations->SetInAt(1, Location::RegisterOrInt32LongConstant(sub->InputAt(1)));
+      locations->SetInAt(1, Location::Any());
       locations->SetOut(Location::SameAsFirstInput());
       break;
     }
@@ -2216,6 +2232,7 @@ void InstructionCodeGeneratorX86_64::VisitSub(HSub* sub) {
         Immediate imm(second.GetConstant()->AsIntConstant()->GetValue());
         __ subl(first.AsRegister<CpuRegister>(), imm);
       } else {
+        DCHECK(second.IsStackSlot());
         __ subl(first.AsRegister<CpuRegister>(), Address(CpuRegister(RSP), second.GetStackIndex()));
       }
       break;
@@ -2223,8 +2240,14 @@ void InstructionCodeGeneratorX86_64::VisitSub(HSub* sub) {
     case Primitive::kPrimLong: {
       if (second.IsConstant()) {
         int64_t value = second.GetConstant()->AsLongConstant()->GetValue();
-        DCHECK(IsInt<32>(value));
-        __ subq(first.AsRegister<CpuRegister>(), Immediate(static_cast<int32_t>(value)));
+        if (IsInt<32>(value)) {
+          __ subq(first.AsRegister<CpuRegister>(), Immediate(static_cast<int32_t>(value)));
+        } else {
+          // Need to use the constant area to hold a large value.
+          __ subq(first.AsRegister<CpuRegister>(), codegen_->LiteralInt64Address(value));
+        }
+      } else if (second.IsDoubleStackSlot()) {
+        __ subq(first.AsRegister<CpuRegister>(), Address(CpuRegister(RSP), second.GetStackIndex()));
       } else {
         __ subq(first.AsRegister<CpuRegister>(), second.AsRegister<CpuRegister>());
       }
@@ -3750,7 +3773,7 @@ void LocationsBuilderX86_64::VisitBoundsCheck(HBoundsCheck* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
   locations->SetInAt(0, Location::RegisterOrConstant(instruction->InputAt(0)));
-  locations->SetInAt(1, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RegisterOrConstant(instruction->InputAt(1)));
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
@@ -3760,18 +3783,46 @@ void InstructionCodeGeneratorX86_64::VisitBoundsCheck(HBoundsCheck* instruction)
   LocationSummary* locations = instruction->GetLocations();
   Location index_loc = locations->InAt(0);
   Location length_loc = locations->InAt(1);
+
+  if (length_loc.IsConstant()) {
+    int32_t len = CodeGenerator::GetInt32ValueOf(length_loc.GetConstant());
+    if (index_loc.IsConstant()) {
+      int32_t index = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
+      if (index < 0 || index >= len) {
+        // We will fail.  Jump there directly.
+        SlowPathCodeX86_64* slow_path =
+          new (GetGraph()->GetArena()) BoundsCheckSlowPathX86_64(instruction, index_loc, length_loc);
+        codegen_->AddSlowPath(slow_path);
+        __ jmp(slow_path->GetEntryLabel());
+      }
+
+      // We are fine, or we jumped to the slow path.
+      return;
+    }
+  }
+
+  // We may fail the bounds check.
   SlowPathCodeX86_64* slow_path =
     new (GetGraph()->GetArena()) BoundsCheckSlowPathX86_64(instruction, index_loc, length_loc);
   codegen_->AddSlowPath(slow_path);
 
-  CpuRegister length = length_loc.AsRegister<CpuRegister>();
-  if (index_loc.IsConstant()) {
-    int32_t value = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
-    __ cmpl(length, Immediate(value));
+  if (length_loc.IsConstant()) {
+    // We have to reverse the jump condition because the length is the constant.
+    DCHECK(!index_loc.IsConstant());
+    CpuRegister index_reg = index_loc.AsRegister<CpuRegister>();
+    int32_t value = CodeGenerator::GetInt32ValueOf(length_loc.GetConstant());
+    __ cmpl(index_reg, Immediate(value));
+    __ j(kAboveEqual, slow_path->GetEntryLabel());
   } else {
-    __ cmpl(length, index_loc.AsRegister<CpuRegister>());
+    CpuRegister length = length_loc.AsRegister<CpuRegister>();
+    if (index_loc.IsConstant()) {
+      int32_t value = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
+      __ cmpl(length, Immediate(value));
+    } else {
+      __ cmpl(length, index_loc.AsRegister<CpuRegister>());
+    }
+    __ j(kBelowEqual, slow_path->GetEntryLabel());
   }
-  __ j(kBelowEqual, slow_path->GetEntryLabel());
 }
 
 void CodeGeneratorX86_64::MarkGCCard(CpuRegister temp,
