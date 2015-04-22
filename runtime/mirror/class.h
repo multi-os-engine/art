@@ -416,6 +416,7 @@ class MANAGED Class FINAL : public Object {
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   bool IsClassClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   bool IsStringClass() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool IsThrowableClass() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);

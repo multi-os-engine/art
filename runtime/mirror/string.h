@@ -120,10 +120,8 @@ class MANAGED String FINAL : public Object {
 
   void SetArray(CharArray* new_array) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  static Class* GetJavaLangString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    DCHECK(!java_lang_String_.IsNull());
-    return java_lang_String_.Read();
-  }
+  template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
+  static Class* GetJavaLangString() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   static void SetClass(Class* java_lang_String);
   static void ResetClass();

@@ -68,6 +68,12 @@ inline int32_t String::GetHashCode() {
   return result;
 }
 
+template<ReadBarrierOption kReadBarrierOption>
+inline Class* String::GetJavaLangString() {
+  DCHECK(!java_lang_String_.IsNull());
+  return java_lang_String_.Read<kReadBarrierOption>();
+}
+
 }  // namespace mirror
 }  // namespace art
 

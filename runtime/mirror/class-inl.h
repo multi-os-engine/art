@@ -31,7 +31,7 @@
 #include "read_barrier-inl.h"
 #include "reference-inl.h"
 #include "runtime.h"
-#include "string.h"
+#include "string-inl.h"
 
 namespace art {
 namespace mirror {
@@ -672,6 +672,11 @@ inline void Class::VisitEmbeddedImtAndVTable(const Visitor& visitor) {
     visitor(this, offset, true);
     pos += sizeof(VTableEntry);
   }
+}
+
+template<ReadBarrierOption kReadBarrierOption>
+bool Class::IsStringClass() const {
+  return this == String::GetJavaLangString<kReadBarrierOption>();
 }
 
 template<ReadBarrierOption kReadBarrierOption>
