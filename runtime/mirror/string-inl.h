@@ -179,6 +179,8 @@ template <bool kIsInstrumented>
 inline String* String::AllocFromCharArray(Thread* self, int32_t array_length,
                                           Handle<CharArray> array, int32_t offset,
                                           gc::AllocatorType allocator_type) {
+  // It is a caller error to have an array length less than the actual array's size.
+  DCHECK_GE(array->GetLength(), array_length);
   SetStringCountAndValueVisitorFromCharArray visitor(array_length, array, offset);
   String* new_string = Alloc<kIsInstrumented>(self, array_length, allocator_type, visitor);
   return new_string;

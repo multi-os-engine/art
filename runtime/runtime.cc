@@ -189,7 +189,8 @@ Runtime::Runtime()
       implicit_so_checks_(false),
       implicit_suspend_checks_(false),
       is_native_bridge_loaded_(false),
-      zygote_max_failed_boots_(0) {
+      zygote_max_failed_boots_(0),
+      experimental_opcodes_(false) {
   CheckAsmSupportOffsetsAndSizes();
   std::fill(callee_save_methods_, callee_save_methods_ + arraysize(callee_save_methods_), 0u);
 }
@@ -836,6 +837,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   }
 
   zygote_max_failed_boots_ = runtime_options.GetOrDefault(Opt::ZygoteMaxFailedBoots);
+  experimental_opcodes_ = runtime_options.GetOrDefault(Opt::ExperimentalOpcodes);
 
   XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
   ATRACE_BEGIN("CreateHeap");
