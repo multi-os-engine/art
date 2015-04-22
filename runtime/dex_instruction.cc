@@ -63,7 +63,7 @@ int const Instruction::kInstructionSizeInCodeUnits[] = {
 #define INSTRUCTION_SIZE(opcode, c, p, format, r, i, a, v) \
     ((opcode == NOP)                        ? -1 : \
      ((format >= k10x) && (format <= k10t)) ?  1 : \
-     ((format >= k20t) && (format <= k22c)) ?  2 : \
+     ((format >= k20t) && (format <= k25x)) ?  2 : \
      ((format >= k32x) && (format <= k3rc)) ?  3 : \
       (format == k51l)                      ?  5 : -1),
 #include "dex_instruction_list.h"

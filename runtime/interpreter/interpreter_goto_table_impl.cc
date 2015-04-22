@@ -1559,6 +1559,13 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   }
   HANDLE_INSTRUCTION_END();
 
+  HANDLE_INSTRUCTION_START(INVOKE_LAMBDA) {
+    bool success = DoInvokeLambda<do_access_check>(self, shadow_frame, inst, inst_data, &result_register);
+    UPDATE_HANDLER_TABLE();
+    POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 2);
+  }
+  HANDLE_INSTRUCTION_END();
+
   HANDLE_INSTRUCTION_START(NEG_INT)
     shadow_frame.SetVReg(inst->VRegA_12x(inst_data), -shadow_frame.GetVReg(inst->VRegB_12x(inst_data)));
     ADVANCE(1);
@@ -2324,6 +2331,13 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     ADVANCE(2);
   HANDLE_INSTRUCTION_END();
 
+  HANDLE_INSTRUCTION_START(CREATE_LAMBDA) {
+    bool success = DoCreateLambda<true>(self, shadow_frame, inst);
+    UPDATE_HANDLER_TABLE();
+    POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, 2);
+  }
+  HANDLE_INSTRUCTION_END();
+
   HANDLE_INSTRUCTION_START(UNUSED_3E)
     UnexpectedOpcode(inst, shadow_frame);
   HANDLE_INSTRUCTION_END();
@@ -2356,19 +2370,11 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     UnexpectedOpcode(inst, shadow_frame);
   HANDLE_INSTRUCTION_END();
 
-  HANDLE_INSTRUCTION_START(UNUSED_F3)
-    UnexpectedOpcode(inst, shadow_frame);
-  HANDLE_INSTRUCTION_END();
-
   HANDLE_INSTRUCTION_START(UNUSED_F4)
     UnexpectedOpcode(inst, shadow_frame);
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(UNUSED_F5)
-    UnexpectedOpcode(inst, shadow_frame);
-  HANDLE_INSTRUCTION_END();
-
-  HANDLE_INSTRUCTION_START(UNUSED_F6)
     UnexpectedOpcode(inst, shadow_frame);
   HANDLE_INSTRUCTION_END();
 

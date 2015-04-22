@@ -59,7 +59,7 @@ namespace interpreter {
 template<bool do_access_check, bool transaction_active>
 JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
                          ShadowFrame& shadow_frame, JValue result_register) {
-  bool do_assignability_check = do_access_check;
+  const bool do_assignability_check = do_access_check;
   if (UNLIKELY(!shadow_frame.HasReferenceArray())) {
     LOG(FATAL) << "Invalid shadow frame for interpreter use";
     return JValue();
@@ -1403,6 +1403,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         shadow_frame.SetVRegLong(inst->VRegA_12x(inst_data), -shadow_frame.GetVRegLong(inst->VRegB_12x(inst_data)));
         inst = inst->Next_1xx();
         break;
+
       case Instruction::NOT_LONG:
         PREAMBLE();
         shadow_frame.SetVRegLong(inst->VRegA_12x(inst_data), ~shadow_frame.GetVRegLong(inst->VRegB_12x(inst_data)));
@@ -2156,8 +2157,29 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
                              (inst->VRegC_22b() & 0x1f));
         inst = inst->Next_2xx();
         break;
+      case Instruction::INVOKE_LAMBDA: {
+        PREAMBLE();
+        bool success = DoInvokeLambda<do_access_check>(self, shadow_frame, inst, inst_data, &result_register);
+        POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
+        break;
+      }
+      case Instruction::CREATE_LAMBDA: {
+        PREAMBLE();
+        bool success = DoCreateLambda<do_access_check>(self, shadow_frame, inst);
+        POSSIBLY_HANDLE_PENDING_EXCEPTION(!success, Next_2xx);
+
+        break;
+      }
+
+      case 0xf4:
+      case 0xf5:
+      case 0xf7 ... 0xf9: {
+          CHECK(false);  // TODO(iam): Implement opcodes for lambdas
+          break;
+      }
+
       case Instruction::UNUSED_3E ... Instruction::UNUSED_43:
-      case Instruction::UNUSED_F3 ... Instruction::UNUSED_FF:
+      case Instruction::UNUSED_FA ... Instruction::UNUSED_FF:
       case Instruction::UNUSED_79:
       case Instruction::UNUSED_7A:
         UnexpectedOpcode(inst, shadow_frame);

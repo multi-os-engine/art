@@ -77,6 +77,10 @@ enum VerifyError {
   VERIFY_ERROR_ACCESS_METHOD,   // IllegalAccessError.
   VERIFY_ERROR_CLASS_CHANGE,    // IncompatibleClassChangeError.
   VERIFY_ERROR_INSTANTIATION,   // InstantiationError.
+
+  VERIFY_ERROR_FORCE_INTERPRETER,  // Skip the verification phase at runtime;
+                                   // force the interpreter to do access checks.
+                                   // (sets a soft fail at compile time).
 };
 std::ostream& operator<<(std::ostream& os, const VerifyError& rhs);
 

@@ -88,6 +88,7 @@ class ShadowFrame {
   }
   ~ShadowFrame() {}
 
+  // XX: Always true? So why do we even need this function.
   bool HasReferenceArray() const {
     return true;
   }
@@ -113,6 +114,8 @@ class ShadowFrame {
     link_ = frame;
   }
 
+  // XX: Why is this int32_t instead of uint32_t? Sign extension will screw us up more often than not.
+  // Perhaps there should be a uint32_t just for reading arbitrary vregs without knowing the type?
   int32_t GetVReg(size_t i) const {
     DCHECK_LT(i, NumberOfVRegs());
     const uint32_t* vreg = &vregs_[i];
@@ -142,11 +145,14 @@ class ShadowFrame {
     return *reinterpret_cast<unaligned_double*>(vreg);
   }
 
+  // Look up the reference given its virtual register number.
+  // If this returns non-null then this does not mean the vreg is currently a reference
+  // on non-moving collectors. Check that the raw reg with GetVReg is equal to this if not certain.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   mirror::Object* GetVRegReference(size_t i) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK_LT(i, NumberOfVRegs());
     mirror::Object* ref;
-    if (HasReferenceArray()) {
+    if (HasReferenceArray()) {  // XX: this always returns true. Why does there need to be a check?
       ref = References()[i].AsMirrorPtr();
     } else {
       const uint32_t* vreg_ptr = &vregs_[i];
@@ -281,6 +287,8 @@ class ShadowFrame {
   ShadowFrame(uint32_t num_vregs, ShadowFrame* link, mirror::ArtMethod* method,
               uint32_t dex_pc, bool has_reference_array)
       : number_of_vregs_(num_vregs), link_(link), method_(method), dex_pc_(dex_pc) {
+    // XX: I think has_reference_array is always true. Why do we need this parameter?
+    DCHECK(has_reference_array);
     if (has_reference_array) {
       memset(vregs_, 0, num_vregs * (sizeof(uint32_t) + sizeof(StackReference<mirror::Object>)));
     } else {
@@ -295,6 +303,7 @@ class ShadowFrame {
   }
 
   StackReference<mirror::Object>* References() {
+    // XX: possibly unnecessary const casts?
     return const_cast<StackReference<mirror::Object>*>(const_cast<const ShadowFrame*>(this)->References());
   }
 
@@ -303,7 +312,15 @@ class ShadowFrame {
   ShadowFrame* link_;
   mirror::ArtMethod* method_;
   uint32_t dex_pc_;
+
+  // This is a two-part array:
+  //  - [0..number_of_vregs) holds the raw virtual registers, and each element here is always 4 bytes.
+  //  - [number_of_vregs..number_of_vregs*2) holds only reference registers. each element here is ptr-sized.
+  // In other words when a primitive is stored in vX, the second (reference) part of the array will be null.
+  // When a reference is stored in vX, the second (reference) part of the array will be a copy of vX.
   uint32_t vregs_[0];
+
+  // XX: Do we really need this micro-optimization that has vregs_ inline to the shadow frame?
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(ShadowFrame);
 };
