@@ -2361,7 +2361,7 @@ void Thread::VisitRoots(RootVisitor* visitor) {
       mapper.VisitShadowFrame(shadow_frame);
     }
   }
-  if (tlsPtr_.shadow_frame_under_construction != nullptr) {
+  if (HasShadowFrameUnderConstruction()) {
     RootCallbackVisitor visitor_to_callback(visitor, thread_id);
     ReferenceMapVisitor<RootCallbackVisitor> mapper(this, nullptr, visitor_to_callback);
     for (ShadowFrame* shadow_frame = tlsPtr_.shadow_frame_under_construction;
