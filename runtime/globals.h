@@ -71,8 +71,6 @@ static constexpr bool kMarkCompactSupport = false && kMovingCollector;
 static constexpr bool kMoveFieldArrays = !kMarkCompactSupport;
 // True if we allow moving classes.
 static constexpr bool kMovingClasses = !kMarkCompactSupport;
-// True if we allow moving methods.
-static constexpr bool kMovingMethods = false;
 
 // If true, the quick compiler embeds class pointers in the compiled
 // code, if possible.

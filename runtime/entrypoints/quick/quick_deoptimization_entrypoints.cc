@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#include "art_method-inl.h"
 #include "callee_save_frame.h"
 #include "dex_file-inl.h"
 #include "interpreter/interpreter.h"
-#include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/object-inl.h"

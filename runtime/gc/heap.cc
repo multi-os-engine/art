@@ -159,7 +159,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       num_bytes_freed_revoke_(0),
       verify_missing_card_marks_(false),
       verify_system_weaks_(false),
-      verify_pre_gc_heap_(verify_pre_gc_heap),
+      verify_pre_gc_heap_(verify_pre_gc_heap || true),
       verify_pre_sweeping_heap_(verify_pre_sweeping_heap),
       verify_post_gc_heap_(verify_post_gc_heap),
       verify_mod_union_table_(false),
