@@ -79,4 +79,24 @@ void PrepareForRegisterAllocation::VisitCondition(HCondition* condition) {
   }
 }
 
+void PrepareForRegisterAllocation::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
+  if (invoke->IsStaticWithExplicitClinitCheck()) {
+    HInstruction* input = invoke->InputAt(0);
+    DCHECK(input->IsLoadClass()) << input->DebugName();
+
+    // Remove a load class instruction as first input of a static
+    // invoke, which has been added (along with a clinit check,
+    // removed by PrepareForRegisterAllocation::VisitClinitCheck
+    // previously) by the graph builder during the creation of the
+    // static invoke instruction, but is no longer required at this
+    // stage (i.e., after inlining has been performed).
+    invoke->RemoveLoadClassAsFirstInput();
+
+    // If load class instruction is no longer used, remove it from the graph.
+    if (!input->HasUses()) {
+      input->GetBlock()->RemoveInstruction(input);
+    }
+  }
+}
+
 }  // namespace art

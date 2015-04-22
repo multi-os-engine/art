@@ -69,7 +69,7 @@ void HInliner::Run() {
   }
 }
 
-bool HInliner::TryInline(HInvoke* invoke_instruction,
+bool HInliner::TryInline(HInvokeStaticOrDirect* invoke_instruction,
                          uint32_t method_index,
                          InvokeType invoke_type) const {
   ScopedObjectAccess soa(Thread::Current());
@@ -130,6 +130,13 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
     return false;
   }
 
+  if (invoke_instruction->IsStaticWithImplicitClinitCheck()) {
+    VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
+                   << " is not inlined because it is static and implicitly requires"
+                   << " an initialization check of its declaring class";
+    return false;
+  }
+
   if (!TryBuildAndInline(resolved_method, invoke_instruction, method_index, can_use_dex_cache)) {
     resolved_method->SetShouldNotInline();
     return false;
@@ -141,7 +148,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
 }
 
 bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
-                                 HInvoke* invoke_instruction,
+                                 HInvokeStaticOrDirect* invoke_instruction,
                                  uint32_t method_index,
                                  bool can_use_dex_cache) const {
   ScopedObjectAccess soa(Thread::Current());

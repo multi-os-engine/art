@@ -280,6 +280,13 @@ class CompilerDriver {
       ArtField* resolved_field, uint16_t field_idx, uint32_t* storage_index)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Can we fast-path a static method call? If yes, compute the type index
+  // of the declaring class in the referrer's dex file.
+  bool IsFastStaticMethod(mirror::DexCache* dex_cache, mirror::Class* referrer_class,
+                          mirror::ArtMethod* resolved_method, uint16_t method_idx,
+                          uint32_t* storage_index)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Is static field's in referrer's class?
   bool IsStaticFieldInReferrerClass(mirror::Class* referrer_class, ArtField* resolved_field)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
