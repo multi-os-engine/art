@@ -42,9 +42,7 @@ static constexpr uint32_t kArm64CalleeSaveArgSpills =
     (1 << art::arm64::X1) | (1 << art::arm64::X2) | (1 << art::arm64::X3) |
     (1 << art::arm64::X4) | (1 << art::arm64::X5) | (1 << art::arm64::X6) |
     (1 << art::arm64::X7);
-static constexpr uint32_t kArm64CalleeSaveAllSpills =
-    // Thread register.
-    (1 << art::arm64::X18);
+static constexpr uint32_t kArm64CalleeSaveAllSpills = 0;
 
 static constexpr uint32_t kArm64CalleeSaveFpAlwaysSpills = 0;
 static constexpr uint32_t kArm64CalleeSaveFpRefSpills = 0;

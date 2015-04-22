@@ -32,7 +32,6 @@ namespace arm64 {
 // avoid a dependency on libart.
 enum {
   TR  = 18,
-  ETR = 21,
   IP0 = 16,
   IP1 = 17,
   FP  = 29,
