@@ -73,6 +73,8 @@ class HInstructionList {
   HInstructionList() : first_instruction_(nullptr), last_instruction_(nullptr) {}
 
   void AddInstruction(HInstruction* instruction);
+  void InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor);
+  void InsertInstructionAfter(HInstruction* instruction, HInstruction* cursor);
   void RemoveInstruction(HInstruction* instruction);
 
   // Return true if this list contains `instruction`.
@@ -467,8 +469,9 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   HInstruction* GetFirstInstruction() const { return instructions_.first_instruction_; }
   HInstruction* GetLastInstruction() const { return instructions_.last_instruction_; }
   const HInstructionList& GetInstructions() const { return instructions_; }
-  const HInstructionList& GetPhis() const { return phis_; }
   HInstruction* GetFirstPhi() const { return phis_.first_instruction_; }
+  HInstruction* GetLastPhi() const { return phis_.last_instruction_; }
+  const HInstructionList& GetPhis() const { return phis_; }
 
   void AddSuccessor(HBasicBlock* block) {
     successors_.Add(block);
