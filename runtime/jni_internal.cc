@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "art_field-inl.h"
+#include "art_method-inl.h"
 #include "atomic.h"
 #include "base/allocator.h"
 #include "base/logging.h"
@@ -38,7 +39,6 @@
 #include "interpreter/interpreter.h"
 #include "jni_env_ext.h"
 #include "java_vm_ext.h"
-#include "mirror/art_method-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
 #include "mirror/field-inl.h"
@@ -126,17 +126,18 @@ static jmethodID FindMethodID(ScopedObjectAccess& soa, jclass jni_class,
   if (c == nullptr) {
     return nullptr;
   }
-  mirror::ArtMethod* method = nullptr;
+  ArtMethod* method = nullptr;
+  auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
   if (is_static) {
-    method = c->FindDirectMethod(name, sig);
+    method = c->FindDirectMethod(name, sig, pointer_size);
   } else if (c->IsInterface()) {
-    method = c->FindInterfaceMethod(name, sig);
+    method = c->FindInterfaceMethod(name, sig, pointer_size);
   } else {
-    method = c->FindVirtualMethod(name, sig);
+    method = c->FindVirtualMethod(name, sig, pointer_size);
     if (method == nullptr) {
       // No virtual method matching the signature.  Search declared
       // private methods and constructors.
-      method = c->FindDeclaredDirectMethod(name, sig);
+      method = c->FindDeclaredDirectMethod(name, sig, pointer_size);
     }
   }
   if (method == nullptr || method->IsStatic() != is_static) {
@@ -148,7 +149,7 @@ static jmethodID FindMethodID(ScopedObjectAccess& soa, jclass jni_class,
 
 static mirror::ClassLoader* GetClassLoader(const ScopedObjectAccess& soa)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::ArtMethod* method = soa.Self()->GetCurrentMethod(nullptr);
+  ArtMethod* method = soa.Self()->GetCurrentMethod(nullptr);
   // If we are running Runtime.nativeLoad, use the overriding ClassLoader it set.
   if (method == soa.DecodeMethod(WellKnownClasses::java_lang_Runtime_nativeLoad)) {
     return soa.Decode<mirror::ClassLoader*>(soa.Self()->GetClassLoaderOverride());
@@ -342,7 +343,7 @@ class JNI {
   static jmethodID FromReflectedMethod(JNIEnv* env, jobject jlr_method) {
     CHECK_NON_NULL_ARGUMENT(jlr_method);
     ScopedObjectAccess soa(env);
-    return soa.EncodeMethod(mirror::ArtMethod::FromReflectedMethod(soa, jlr_method));
+    return soa.EncodeMethod(ArtMethod::FromReflectedMethod(soa, jlr_method));
   }
 
   static jfieldID FromReflectedField(JNIEnv* env, jobject jlr_field) {
@@ -360,8 +361,7 @@ class JNI {
   static jobject ToReflectedMethod(JNIEnv* env, jclass, jmethodID mid, jboolean) {
     CHECK_NON_NULL_ARGUMENT(mid);
     ScopedObjectAccess soa(env);
-    mirror::ArtMethod* m = soa.DecodeMethod(mid);
-    CHECK(!kMovingMethods);
+    ArtMethod* m = soa.DecodeMethod(mid);
     mirror::AbstractMethod* method;
     if (m->IsConstructor()) {
       method = mirror::Constructor::CreateFromArtMethod(soa.Self(), m);
@@ -2133,9 +2133,10 @@ class JNI {
         ++sig;
       }
 
-      mirror::ArtMethod* m = c->FindDirectMethod(name, sig);
+      auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+      ArtMethod* m = c->FindDirectMethod(name, sig, pointer_size);
       if (m == nullptr) {
-        m = c->FindVirtualMethod(name, sig);
+        m = c->FindVirtualMethod(name, sig, pointer_size);
       }
       if (m == nullptr) {
         LOG(return_errors ? ERROR : INTERNAL_FATAL) << "Failed to register native method "
@@ -2169,17 +2170,16 @@ class JNI {
     VLOG(jni) << "[Unregistering JNI native methods for " << PrettyClass(c) << "]";
 
     size_t unregistered_count = 0;
-    for (size_t i = 0; i < c->NumDirectMethods(); ++i) {
-      mirror::ArtMethod* m = c->GetDirectMethod(i);
-      if (m->IsNative()) {
-        m->UnregisterNative();
+    auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+    for (auto& m : c->GetDirectMethods(pointer_size)) {
+      if (m.IsNative()) {
+        m.UnregisterNative();
         unregistered_count++;
       }
     }
-    for (size_t i = 0; i < c->NumVirtualMethods(); ++i) {
-      mirror::ArtMethod* m = c->GetVirtualMethod(i);
-      if (m->IsNative()) {
-        m->UnregisterNative();
+    for (auto& m : c->GetVirtualMethods(pointer_size)) {
+      if (m.IsNative()) {
+        m.UnregisterNative();
         unregistered_count++;
       }
     }

@@ -384,15 +384,16 @@ class MarkSweepMarkObjectSlowPath {
     if (UNLIKELY(obj == nullptr || !IsAligned<kPageSize>(obj) ||
                  (kIsDebugBuild && large_object_space != nullptr &&
                      !large_object_space->Contains(obj)))) {
-      LOG(INTERNAL_FATAL) << "Tried to mark " << obj << " not contained by any spaces";
-      LOG(INTERNAL_FATAL) << "Attempting see if it's a bad root";
+      LOG(INTERNAL_FATAL) << "Tried to mark " << obj << " not contained by any spaces\n";
+      LOG(INTERNAL_FATAL) << "Attempting see if it's a bad root\n";
       mark_sweep_->VerifyRoots();
       if (holder_ != nullptr) {
         ArtField* field = holder_->FindFieldByOffset(offset_);
         LOG(INTERNAL_FATAL) << "Field info: holder=" << holder_
                             << " holder_type=" << PrettyTypeOf(holder_)
                             << " offset=" << offset_.Uint32Value()
-                            << " field=" << (field != nullptr ? field->GetName() : "nullptr");
+                            << " field=" << (field != nullptr ? field->GetName() : "nullptr")
+                            << "\n";
       }
       PrintFileToLog("/proc/self/maps", LogSeverity::INTERNAL_FATAL);
       MemMap::DumpMaps(LOG(INTERNAL_FATAL), true);
@@ -512,7 +513,7 @@ class VerifyRootVisitor : public SingleRootVisitor {
     if (heap->GetLiveBitmap()->GetContinuousSpaceBitmap(root) == nullptr) {
       space::LargeObjectSpace* large_object_space = heap->GetLargeObjectsSpace();
       if (large_object_space != nullptr && !large_object_space->Contains(root)) {
-        LOG(INTERNAL_FATAL) << "Found invalid root: " << root << " " << info;
+        LOG(INTERNAL_FATAL) << "Found invalid root: " << root << " " << info << "\n";
       }
     }
   }

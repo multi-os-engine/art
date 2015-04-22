@@ -21,6 +21,7 @@
 #include <vector>
 #include <fstream>
 
+#include "art_method.h"
 #include "base/logging.h"
 #include "base/macros.h"
 #include "calling_convention.h"
@@ -31,7 +32,6 @@
 #include "driver/compiler_options.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "jni_env_ext.h"
-#include "mirror/art_method.h"
 #include "utils/assembler.h"
 #include "utils/managed_register.h"
 #include "utils/arm/managed_register_arm.h"
@@ -141,7 +141,7 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
     // Note this LoadRef() already includes the heap poisoning negation.
     // Note this LoadRef() does not include read barrier. It will be handled below.
     __ LoadRef(main_jni_conv->InterproceduralScratchRegister(),
-               mr_conv->MethodRegister(), mirror::ArtMethod::DeclaringClassOffset());
+               mr_conv->MethodRegister(), ArtMethod::DeclaringClassOffset());
     __ VerifyObject(main_jni_conv->InterproceduralScratchRegister(), false);
     __ StoreRef(handle_scope_offset, main_jni_conv->InterproceduralScratchRegister());
     main_jni_conv->Next();  // in handle scope so move to next argument
@@ -347,15 +347,15 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
     FrameOffset jni_env = main_jni_conv->CurrentParamStackOffset();
     if (is_64_bit_target) {
       __ CopyRawPtrFromThread64(jni_env, Thread::JniEnvOffset<8>(),
-                            main_jni_conv->InterproceduralScratchRegister());
+                                main_jni_conv->InterproceduralScratchRegister());
     } else {
       __ CopyRawPtrFromThread32(jni_env, Thread::JniEnvOffset<4>(),
-                            main_jni_conv->InterproceduralScratchRegister());
+                                main_jni_conv->InterproceduralScratchRegister());
     }
   }
 
   // 9. Plant call to native code associated with method.
-  MemberOffset jni_entrypoint_offset = mirror::ArtMethod::EntryPointFromJniOffset(
+  MemberOffset jni_entrypoint_offset = ArtMethod::EntryPointFromJniOffset(
       InstructionSetPointerSize(instruction_set));
   __ Call(main_jni_conv->MethodStackOffset(), jni_entrypoint_offset,
           mr_conv->InterproceduralScratchRegister());

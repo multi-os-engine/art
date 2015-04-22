@@ -1007,12 +1007,11 @@ class Mir2Lir {
     }
     // Store an uncompressed reference into a compressed 32-bit container.
     LIR* StoreRefDisp(RegStorage r_base, int displacement, RegStorage r_src,
-                              VolatileKind is_volatile) {
+                      VolatileKind is_volatile) {
       return StoreBaseDisp(r_base, displacement, r_src, kReference, is_volatile);
     }
     // Store an uncompressed reference into a compressed 32-bit container by index.
-    LIR* StoreRefIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_src,
-                                 int scale) {
+    LIR* StoreRefIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_src, int scale) {
       return StoreBaseIndexed(r_base, r_index, r_src, scale, kReference);
     }
     // Store 32 bits, regardless of target.

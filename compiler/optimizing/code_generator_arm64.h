@@ -94,7 +94,8 @@ class InvokeRuntimeCallingConvention : public CallingConvention<vixl::Register, 
       : CallingConvention(kRuntimeParameterCoreRegisters,
                           kRuntimeParameterCoreRegistersLength,
                           kRuntimeParameterFpuRegisters,
-                          kRuntimeParameterFpuRegistersLength) {}
+                          kRuntimeParameterFpuRegistersLength,
+                          kArm64PointerSize) {}
 
   Location GetReturnLocation(Primitive::Type return_type);
 
@@ -108,7 +109,8 @@ class InvokeDexCallingConvention : public CallingConvention<vixl::Register, vixl
       : CallingConvention(kParameterCoreRegisters,
                           kParameterCoreRegistersLength,
                           kParameterFPRegisters,
-                          kParameterFPRegistersLength) {}
+                          kParameterFPRegistersLength,
+                          kArm64PointerSize) {}
 
   Location GetReturnLocation(Primitive::Type return_type) {
     return ARM64ReturnLocation(return_type);
