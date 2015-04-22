@@ -174,7 +174,7 @@ struct CmdlineParser {
     CmdlineParser::Builder& IntoKey(const MapKey& key) {
       // Only capture save destination as a pointer.
       // This allows the parser to later on change the specific save targets.
-      auto save_destination = save_destination_;
+      auto save_destination = &*save_destination_;
       save_value_ = [save_destination, &key](TArg& value) {
         save_destination->SaveToMap(key, value);
         CMDLINE_DEBUG_LOG << "Saved value into map '"
