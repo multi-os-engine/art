@@ -1,0 +1,4 @@
+Smali-based tests for experimental lambda intructions.
+Will compile and run all the smali files in smali/ and run the test cases mentioned in smali/Main.smali.
+
+Obviously needs to run under ART.

@@ -97,6 +97,105 @@ template<bool is_range, bool do_assignability_check>
 bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
             const Instruction* inst, uint16_t inst_data, JValue* result);
 
+// Invokes the given lambda closure. This is part of the invocation support and is used by
+// DoLambdaInvoke functions.
+// Returns true on success, otherwise throws an exception and returns false.
+template<bool is_range, bool do_assignability_check>
+bool DoLambdaCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
+                  const Instruction* inst, uint16_t inst_data, JValue* result);
+
+// Validates that the art method corresponding to a lambda method target
+// is semantically valid:
+//
+// Must be ACC_STATIC, ACC_LAMBDA. Must be a concrete managed implementation
+// (i.e. not native, not proxy, not abstract, ...).
+//
+// If the validation fails, return false and raise an exception.
+static inline bool ValidateLambdaTarget(mirror::ArtMethod* called_method)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  bool success = false;
+
+  if (UNLIKELY(called_method == nullptr)) {
+    // The shadow frame should already be pushed, so we don't need to update it.
+  } else if (UNLIKELY(called_method->IsAbstract())) {
+    ThrowAbstractMethodError(called_method);
+    // TODO(iam): Also handle the case when the method is non-static, what error do we throw?
+    // TODO(iam): Also make sure that ACC_LAMBDA is set.
+  } else if (UNLIKELY(called_method->GetCodeItem() == nullptr)) {
+    // Method could be native, proxy method, etc. Lambda targets have to be concrete impls,
+    // so don't allow this.
+  } else {
+    success = true;
+  }
+
+  return success;
+}
+
+// Handles create-lambda instructions.
+// Returns true on success, otherwise throws an exception and returns false.
+//
+// As a work-in-progress implementation, this shoves the ArtMethod object corresponding
+// to the target method ID into the target register vA.
+template<bool do_access_check>
+static inline bool DoCreateLambda(Thread* self, ShadowFrame& shadow_frame,
+                                  const Instruction* inst) {
+  /*
+   * create-lambda is always 0x21c opcode
+   * - vA is always the target register where the closure will be stored into
+   * - vB is always the method ID which will be the target for a later invoke-lambda
+   */
+  const uint32_t method_idx = inst->VRegB_21c();
+  Object* receiver = nullptr;  // Always static. (see 'kStatic')
+  mirror::ArtMethod* sf_method = shadow_frame.GetMethod();
+  ArtMethod* const called_method = FindMethodFromCode<kStatic, do_access_check>(
+      method_idx, &receiver, &sf_method, self);
+
+  if (UNLIKELY(!ValidateLambdaTarget(called_method))) {
+    CHECK(self->IsExceptionPending());
+    shadow_frame.SetVRegReference(inst->VRegA_21c(), nullptr);
+    return false;
+  }
+
+  shadow_frame.SetVRegReference(inst->VRegA_21c(), called_method);
+  return true;
+}
+
+template<bool do_access_check>
+static inline bool DoInvokeLambda(Thread* self, ShadowFrame& shadow_frame, const Instruction* inst,
+                                  uint16_t inst_data, JValue* result) {
+  /*
+   * invoke-lambda is always 0x25 opcode
+   *
+   * - vC is always the closure register
+   * - vB is always the number of additional registers up to {vD,vE,vF,vG}
+   * - the rest of the registers are always var-args
+   *
+   * - reading var-args for 0x25 gets us vD,vE,vF,vG (but not vB)
+   */
+  uint32_t vC = inst->VRegC_25x();
+
+  // TODO(iam): this should be a proper closure instead of just an ArtMethod.
+  mirror::Object* vcRef = shadow_frame.GetVRegReference(vC);
+
+  // Guard against the user passing a null closure, which is odd but (sadly) semantically valid.
+  if (UNLIKELY(vcRef == nullptr)) {
+    ThrowNullPointerExceptionFromInterpreter();
+    result->SetJ(0);
+    return false;
+  }
+
+  ArtMethod* const called_method = vcRef->AsArtMethod();
+
+  if (UNLIKELY(!ValidateLambdaTarget(called_method))) {
+    CHECK(self->IsExceptionPending());
+    result->SetJ(0);
+    return false;
+  } else {
+    return DoLambdaCall<false, do_access_check>(called_method, self, shadow_frame, inst, inst_data,
+                                                result);
+  }
+}
+
 // Handles invoke-XXX/range instructions.
 // Returns true on success, otherwise throws an exception and returns false.
 template<InvokeType type, bool is_range, bool do_access_check>
@@ -109,6 +208,8 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
   ArtMethod* const called_method = FindMethodFromCode<type, do_access_check>(
       method_idx, &receiver, &sf_method, self);
   // The shadow frame should already be pushed, so we don't need to update it.
+  // XX: Why aren't these guards checked by do_access_check? Shouldn't verifier
+  // take care of at least the IsAbstract situation if not also failing to find the method target?
   if (UNLIKELY(called_method == nullptr)) {
     CHECK(self->IsExceptionPending());
     result->SetJ(0);
@@ -416,6 +517,26 @@ EXPLICIT_DO_INVOKE_ALL_TEMPLATE_DECL(kInterface)   // invoke-interface/range.
 EXPLICIT_DO_INVOKE_VIRTUAL_QUICK_TEMPLATE_DECL(false);  // invoke-virtual-quick.
 EXPLICIT_DO_INVOKE_VIRTUAL_QUICK_TEMPLATE_DECL(true);   // invoke-virtual-quick-range.
 #undef EXPLICIT_INSTANTIATION_DO_INVOKE_VIRTUAL_QUICK
+
+// Explicitly instantiate all DoCreateLambda functions.
+#define EXPLICIT_DO_CREATE_LAMBDA_DECL(_do_check)                                    \
+template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)                                 \
+bool DoCreateLambda<_do_check>(Thread* self, ShadowFrame& shadow_frame,              \
+                        const Instruction* inst)
+
+EXPLICIT_DO_CREATE_LAMBDA_DECL(false);  // create-lambda
+EXPLICIT_DO_CREATE_LAMBDA_DECL(true);   // create-lambda
+#undef EXPLICIT_DO_CREATE_LAMBDA_DECL
+
+// Explicitly instantiate all DoInvokeLambda functions.
+#define EXPLICIT_DO_INVOKE_LAMBDA_DECL(_do_check)                                    \
+template SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)                                 \
+bool DoInvokeLambda<_do_check>(Thread* self, ShadowFrame& shadow_frame, const Instruction* inst, \
+                               uint16_t inst_data, JValue* result);
+
+EXPLICIT_DO_INVOKE_LAMBDA_DECL(false);  // invoke-lambda
+EXPLICIT_DO_INVOKE_LAMBDA_DECL(true);   // invoke-lambda
+#undef EXPLICIT_DO_INVOKE_LAMBDA_DECL
 
 
 }  // namespace interpreter

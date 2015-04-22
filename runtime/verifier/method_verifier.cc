@@ -576,6 +576,7 @@ std::ostream& MethodVerifier::Fail(VerifyError error) {
     case VERIFY_ERROR_ACCESS_METHOD:
     case VERIFY_ERROR_INSTANTIATION:
     case VERIFY_ERROR_CLASS_CHANGE:
+    case VERIFY_ERROR_FORCE_INTERPRETER:
       if (Runtime::Current()->IsAotCompiler() || !can_load_classes_) {
         // If we're optimistically running verification at compile time, turn NO_xxx, ACCESS_xxx,
         // class change and instantiation errors into soft verification errors so that we re-verify
@@ -1973,6 +1974,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       work_line_->SetRegisterType(this, inst->VRegA_21c(), uninit_type);
       break;
     }
+
     case Instruction::NEW_ARRAY:
       VerifyNewArray(inst, false, false);
       break;
@@ -2846,10 +2848,27 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       }
       break;
     }
+    case Instruction::INVOKE_LAMBDA: {
+      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
+      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement invoke-lambda verification
+      break;
+    }
+    case Instruction::CREATE_LAMBDA: {
+      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
+      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement create-lambda verification
+      break;
+    }
+
+    case 0xf4:
+    case 0xf5:
+    case 0xf7 ... 0xf9: {
+      CHECK(false);  // TODO(iam): Implement opcodes for lambdas
+      break;
+    }
 
     /* These should never appear during verification. */
     case Instruction::UNUSED_3E ... Instruction::UNUSED_43:
-    case Instruction::UNUSED_F3 ... Instruction::UNUSED_FF:
+    case Instruction::UNUSED_FA ... Instruction::UNUSED_FF:
     case Instruction::UNUSED_79:
     case Instruction::UNUSED_7A:
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Unexpected opcode " << inst->DumpString(dex_file_);

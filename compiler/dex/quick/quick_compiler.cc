@@ -377,10 +377,10 @@ static int kAllOpcodes[] = {
     Instruction::IGET_BYTE_QUICK,
     Instruction::IGET_CHAR_QUICK,
     Instruction::IGET_SHORT_QUICK,
-    Instruction::UNUSED_F3,
+    Instruction::INVOKE_LAMBDA,
     Instruction::UNUSED_F4,
     Instruction::UNUSED_F5,
-    Instruction::UNUSED_F6,
+    Instruction::CREATE_LAMBDA,
     Instruction::UNUSED_F7,
     Instruction::UNUSED_F8,
     Instruction::UNUSED_F9,
@@ -422,7 +422,13 @@ static int kInvokeOpcodes[] = {
     Instruction::INVOKE_VIRTUAL_RANGE_QUICK,
 };
 
-// Unsupported opcodes. null can be used when everything is supported. Size of the lists is
+// TODO: Add support for lambda opcodes to the quick compiler.
+static const int kUnsupportedLambdaOpcodes[] = {
+    Instruction::INVOKE_LAMBDA,
+    Instruction::CREATE_LAMBDA,
+};
+
+// Unsupported opcodes. nullptr can be used when everything is supported. Size of the lists is
 // recorded below.
 static const int* kUnsupportedOpcodes[] = {
     // 0 = kNone.
@@ -430,17 +436,17 @@ static const int* kUnsupportedOpcodes[] = {
     // 1 = kArm, unused (will use kThumb2).
     kAllOpcodes,
     // 2 = kArm64.
-    nullptr,
+    kUnsupportedLambdaOpcodes,
     // 3 = kThumb2.
-    nullptr,
+    kUnsupportedLambdaOpcodes,
     // 4 = kX86.
-    nullptr,
+    kUnsupportedLambdaOpcodes,
     // 5 = kX86_64.
-    nullptr,
+    kUnsupportedLambdaOpcodes,
     // 6 = kMips.
-    nullptr,
+    kUnsupportedLambdaOpcodes,
     // 7 = kMips64.
-    nullptr
+    kUnsupportedLambdaOpcodes,
 };
 static_assert(sizeof(kUnsupportedOpcodes) == 8 * sizeof(int*), "kUnsupportedOpcodes unexpected");
 
@@ -451,17 +457,17 @@ static const size_t kUnsupportedOpcodesSize[] = {
     // 1 = kArm, unused (will use kThumb2).
     arraysize(kAllOpcodes),
     // 2 = kArm64.
-    0,
+    arraysize(kUnsupportedLambdaOpcodes),
     // 3 = kThumb2.
-    0,
+    arraysize(kUnsupportedLambdaOpcodes),
     // 4 = kX86.
-    0,
+    arraysize(kUnsupportedLambdaOpcodes),
     // 5 = kX86_64.
-    0,
+    arraysize(kUnsupportedLambdaOpcodes),
     // 6 = kMips.
-    0,
+    arraysize(kUnsupportedLambdaOpcodes),
     // 7 = kMips64.
-    0
+    arraysize(kUnsupportedLambdaOpcodes),
 };
 static_assert(sizeof(kUnsupportedOpcodesSize) == 8 * sizeof(size_t),
               "kUnsupportedOpcodesSize unexpected");
