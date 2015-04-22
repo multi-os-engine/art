@@ -113,7 +113,7 @@ class VerifiedMethod {
   DequickenMap dequicken_map_;
   SafeCastSet safe_cast_set_;
 
-  bool has_verification_failures_;
+  bool has_verification_failures_ = false;
 };
 
 }  // namespace art

@@ -48,6 +48,7 @@ extern JValue EnterInterpreterFromEntryPoint(Thread* self, const DexFile::CodeIt
 
 }  // namespace interpreter
 
+// XX: Where is this coming from? Code search turned up nothing.
 extern "C" void artInterpreterToInterpreterBridge(Thread* self, const DexFile::CodeItem* code_item,
                                                   ShadowFrame* shadow_frame, JValue* result)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
