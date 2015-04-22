@@ -67,7 +67,7 @@ MACRO0(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME)
     movq %xmm15, 32(%rsp)
     // R10 := ArtMethod* for save all callee save frame method.
     THIS_LOAD_REQUIRES_READ_BARRIER
-    movl RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10d
+    movq RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
     // Store rsp as the top quick frame.
@@ -110,7 +110,7 @@ MACRO0(SETUP_REFS_ONLY_CALLEE_SAVE_FRAME)
     movq %xmm15, 32(%rsp)
     // R10 := ArtMethod* for refs only callee save frame method.
     THIS_LOAD_REQUIRES_READ_BARRIER
-    movl RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10d
+    movq RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
     // Store rsp as the stop quick frame.
@@ -170,7 +170,7 @@ MACRO0(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME)
     CFI_ADJUST_CFA_OFFSET(80 + 4 * 8)
     // R10 := ArtMethod* for ref and args callee save frame method.
     THIS_LOAD_REQUIRES_READ_BARRIER
-    movl RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10d
+    movq RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
     // Save FPRs.
     movq %xmm0, 16(%rsp)
     movq %xmm1, 24(%rsp)
@@ -362,7 +362,7 @@ MACRO2(INVOKE_TRAMPOLINE, c_name, cxx_name)
     // Helper signature is always
     // (method_idx, *this_object, *caller_method, *self, sp)
 
-    movl FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE(%rsp), %edx  // pass caller Method*
+    movq FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE(%rsp), %rdx  // pass caller Method*
     movq %gs:THREAD_SELF_OFFSET, %rcx                      // pass Thread
     movq %rsp, %r8                                         // pass SP
 
@@ -506,12 +506,12 @@ DEFINE_FUNCTION art_quick_invoke_stub
 #if (STACK_REFERENCE_SIZE != 4)
 #error "STACK_REFERENCE_SIZE(X86_64) size not as expected."
 #endif
-    movl LITERAL(0), (%rsp)       // Store null for method*
+    movq LITERAL(0), (%rsp)       // Store null for method*
 
     movl %r10d, %ecx              // Place size of args in rcx.
     movq %rdi, %rax               // rax := method to be called
     movq %rsi, %r11               // r11 := arg_array
-    leaq 4(%rsp), %rdi            // rdi is pointing just above the StackReference<method> in the
+    leaq 8(%rsp), %rdi            // rdi is pointing just above the StackReference<method> in the
                                   // stack arguments.
     // Copy arg array into stack.
     rep movsb                     // while (rcx--) { *rdi++ = *rsi++ }
@@ -600,12 +600,12 @@ DEFINE_FUNCTION art_quick_invoke_static_stub
 #if (STACK_REFERENCE_SIZE != 4)
 #error "STACK_REFERENCE_SIZE(X86_64) size not as expected."
 #endif
-    movl LITERAL(0), (%rsp)        // Store null for method*
+    movq LITERAL(0), (%rsp)        // Store null for method*
 
     movl %r10d, %ecx               // Place size of args in rcx.
     movq %rdi, %rax                // rax := method to be called
     movq %rsi, %r11                // r11 := arg_array
-    leaq 4(%rsp), %rdi             // rdi is pointing just above the StackReference<method> in the
+    leaq 8(%rsp), %rdi             // rdi is pointing just above the ArtMethod* in the
                                    // stack arguments.
     // Copy arg array into stack.
     rep movsb                      // while (rcx--) { *rdi++ = *rsi++ }
@@ -1340,9 +1340,9 @@ DEFINE_FUNCTION art_quick_imt_conflict_trampoline
     int3
     int3
 #else
-    movl 8(%rsp), %edi            // load caller Method*
+    movq 8(%rsp), %rdi            // load caller Method*
     movl MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET(%rdi), %edi  // load dex_cache_resolved_methods
-    movl MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rax, 4), %edi  // load the target method
+    movq MIRROR_LONG_ARRAY_DATA_OFFSET(%rdi, %rax, 8), %rdi  // load the target method
     jmp art_quick_invoke_interface_trampoline
 #endif  // __APPLE__
 END_FUNCTION art_quick_imt_conflict_trampoline

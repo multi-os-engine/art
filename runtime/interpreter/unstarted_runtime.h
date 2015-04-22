@@ -24,14 +24,12 @@
 
 namespace art {
 
+class ArtMethod;
 class Thread;
 class ShadowFrame;
 
 namespace mirror {
-
-class ArtMethod;
 class Object;
-
 }  // namespace mirror
 
 namespace interpreter {
@@ -43,7 +41,7 @@ void UnstartedRuntimeInvoke(Thread* self, const DexFile::CodeItem* code_item,
                             JValue* result, size_t arg_offset)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-void UnstartedRuntimeJni(Thread* self, mirror::ArtMethod* method, mirror::Object* receiver,
+void UnstartedRuntimeJni(Thread* self, ArtMethod* method, mirror::Object* receiver,
                          uint32_t* args, JValue* result)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

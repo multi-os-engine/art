@@ -41,7 +41,6 @@ jclass WellKnownClasses::java_lang_Error;
 jclass WellKnownClasses::java_lang_Object;
 jclass WellKnownClasses::java_lang_OutOfMemoryError;
 jclass WellKnownClasses::java_lang_reflect_AbstractMethod;
-jclass WellKnownClasses::java_lang_reflect_ArtMethod;
 jclass WellKnownClasses::java_lang_reflect_Constructor;
 jclass WellKnownClasses::java_lang_reflect_Field;
 jclass WellKnownClasses::java_lang_reflect_Method;
@@ -213,7 +212,6 @@ void WellKnownClasses::Init(JNIEnv* env) {
   java_lang_OutOfMemoryError = CacheClass(env, "java/lang/OutOfMemoryError");
   java_lang_Error = CacheClass(env, "java/lang/Error");
   java_lang_reflect_AbstractMethod = CacheClass(env, "java/lang/reflect/AbstractMethod");
-  java_lang_reflect_ArtMethod = CacheClass(env, "java/lang/reflect/ArtMethod");
   java_lang_reflect_Constructor = CacheClass(env, "java/lang/reflect/Constructor");
   java_lang_reflect_Field = CacheClass(env, "java/lang/reflect/Field");
   java_lang_reflect_Method = CacheClass(env, "java/lang/reflect/Method");
@@ -334,7 +332,7 @@ void WellKnownClasses::Init(JNIEnv* env) {
   java_lang_Throwable_stackTrace = CacheField(env, java_lang_Throwable, false, "stackTrace", "[Ljava/lang/StackTraceElement;");
   java_lang_Throwable_stackState = CacheField(env, java_lang_Throwable, false, "stackState", "Ljava/lang/Object;");
   java_lang_Throwable_suppressedExceptions = CacheField(env, java_lang_Throwable, false, "suppressedExceptions", "Ljava/util/List;");
-  java_lang_reflect_AbstractMethod_artMethod = CacheField(env, java_lang_reflect_AbstractMethod, false, "artMethod", "Ljava/lang/reflect/ArtMethod;");
+  java_lang_reflect_AbstractMethod_artMethod = CacheField(env, java_lang_reflect_AbstractMethod, false, "artMethod", "J");
   java_lang_reflect_Proxy_h = CacheField(env, java_lang_reflect_Proxy, false, "h", "Ljava/lang/reflect/InvocationHandler;");
   java_nio_DirectByteBuffer_capacity = CacheField(env, java_nio_DirectByteBuffer, false, "capacity", "I");
   java_nio_DirectByteBuffer_effectiveDirectAddress = CacheField(env, java_nio_DirectByteBuffer, false, "effectiveDirectAddress", "J");

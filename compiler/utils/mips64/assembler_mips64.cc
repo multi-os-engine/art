@@ -603,7 +603,7 @@ void Mips64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
   StoreToOffset(kStoreWord, method_reg.AsMips64().AsGpuRegister(), SP, 0);
 
   // Write out entry spills.
-  int32_t offset = frame_size + sizeof(StackReference<mirror::ArtMethod>);
+  int32_t offset = frame_size + sizeof(StackReference<ArtMethod>);
   for (size_t i = 0; i < entry_spills.size(); ++i) {
     Mips64ManagedRegister reg = entry_spills.at(i).AsMips64();
     ManagedRegisterSpill spill = entry_spills.at(i);

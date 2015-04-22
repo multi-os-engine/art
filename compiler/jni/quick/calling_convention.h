@@ -320,12 +320,13 @@ class JniCallingConvention : public CallingConvention {
 
   // Position of handle scope and interior fields
   FrameOffset HandleScopeOffset() const {
-    return FrameOffset(this->displacement_.Int32Value() + sizeof(StackReference<mirror::ArtMethod>));
+    return FrameOffset(this->displacement_.Int32Value() + frame_pointer_size_);
     // above Method reference
   }
 
   FrameOffset HandleScopeLinkOffset() const {
-    return FrameOffset(HandleScopeOffset().Int32Value() + HandleScope::LinkOffset(frame_pointer_size_));
+    return FrameOffset(HandleScopeOffset().Int32Value() +
+                       HandleScope::LinkOffset(frame_pointer_size_));
   }
 
   FrameOffset HandleScopeNumRefsOffset() const {
@@ -333,7 +334,7 @@ class JniCallingConvention : public CallingConvention {
                        HandleScope::NumberOfReferencesOffset(frame_pointer_size_));
   }
 
-  FrameOffset HandleerencesOffset() const {
+  FrameOffset HandleReferencesOffset() const {
     return FrameOffset(HandleScopeOffset().Int32Value() +
                        HandleScope::ReferencesOffset(frame_pointer_size_));
   }
