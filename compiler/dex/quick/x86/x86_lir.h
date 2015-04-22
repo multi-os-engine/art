@@ -104,7 +104,7 @@ namespace art {
  * | OUT[outs-2]               |
  * |       .                   |
  * | OUT[0]                    |
- * | StackReference<ArtMethod> | <<== sp w/ 16-byte alignment
+ * | ArtMethod*                | <<== sp w/ 16-byte alignment
  * +===========================+
  */
 

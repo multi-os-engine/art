@@ -1724,9 +1724,9 @@ void X86Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
   }
 
   // return address then method on stack.
-  int32_t adjust = frame_size - (gpr_count * kFramePointerSize) -
-                   sizeof(StackReference<mirror::ArtMethod>) /*method*/ -
-                   kFramePointerSize /*return address*/;
+  int32_t adjust = frame_size - gpr_count * kFramePointerSize -
+      kFramePointerSize /*method*/ -
+      kFramePointerSize /*return address*/;
   addl(ESP, Immediate(-adjust));
   cfi_.AdjustCFAOffset(adjust);
   pushl(method_reg.AsX86().AsCpuRegister());
@@ -1754,8 +1754,7 @@ void X86Assembler::RemoveFrame(size_t frame_size,
                             const std::vector<ManagedRegister>& spill_regs) {
   CHECK_ALIGNED(frame_size, kStackAlignment);
   cfi_.RememberState();
-  int adjust = frame_size - (spill_regs.size() * kFramePointerSize) -
-               sizeof(StackReference<mirror::ArtMethod>);
+  int adjust = frame_size - spill_regs.size() * kFramePointerSize - kFramePointerSize;
   addl(ESP, Immediate(adjust));
   cfi_.AdjustCFAOffset(-adjust);
   for (size_t i = 0; i < spill_regs.size(); ++i) {

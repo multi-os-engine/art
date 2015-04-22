@@ -14,8 +14,15 @@
  * limitations under the License.
  */
 
+import java.lang.Runtime;
+
 public class Main {
   public static void main(String[] args) {
+    otherStatic(1, 2);
     System.out.println("Hello, world!");
+    otherStatic(1, 2);
+  }
+  private static void otherStatic(int x, int y) {
+    Runtime.getRuntime().gc();
   }
 }
