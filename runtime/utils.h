@@ -34,10 +34,10 @@
 namespace art {
 
 class ArtField;
+class ArtMethod;
 class DexFile;
 
 namespace mirror {
-class ArtMethod;
 class Class;
 class Object;
 class String;
@@ -361,7 +361,7 @@ std::string PrettyField(uint32_t field_idx, const DexFile& dex_file, bool with_t
 
 // Returns a human-readable signature for 'm'. Something like "a.b.C.m" or
 // "a.b.C.m(II)V" (depending on the value of 'with_signature').
-std::string PrettyMethod(mirror::ArtMethod* m, bool with_signature = true)
+std::string PrettyMethod(ArtMethod* m, bool with_signature = true)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 std::string PrettyMethod(uint32_t method_idx, const DexFile& dex_file, bool with_signature = true);
 
@@ -432,10 +432,10 @@ bool IsValidDescriptor(const char* s);       // "Ljava/lang/String;"
 bool IsValidMemberName(const char* s);
 
 // Returns the JNI native function name for the non-overloaded method 'm'.
-std::string JniShortName(mirror::ArtMethod* m)
+std::string JniShortName(ArtMethod* m)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 // Returns the JNI native function name for the overloaded method 'm'.
-std::string JniLongName(mirror::ArtMethod* m)
+std::string JniLongName(ArtMethod* m)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
 bool ReadFileToString(const std::string& file_name, std::string* result);
@@ -509,7 +509,7 @@ void SetThreadName(const char* thread_name);
 
 // Dumps the native stack for thread 'tid' to 'os'.
 void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix = "",
-    mirror::ArtMethod* current_method = nullptr, void* ucontext = nullptr)
+    ArtMethod* current_method = nullptr, void* ucontext = nullptr)
     NO_THREAD_SAFETY_ANALYSIS;
 
 // Dumps the kernel stack for thread 'tid' to 'os'. Note that this is only available on linux-x86.
@@ -608,6 +608,38 @@ inline bool TestBitmap(size_t idx, const uint8_t* bitmap) {
   return ((bitmap[idx / kBitsPerByte] >> (idx % kBitsPerByte)) & 0x01) != 0;
 }
 
+// Iterator pair adapter, for helping with for each.
+template<typename Iterator>
+class IteratorPair {
+ public:
+  IteratorPair(const IteratorPair&) = default;
+  IteratorPair(IteratorPair&&) = default;
+  IteratorPair& operator=(const IteratorPair&) = default;
+  IteratorPair& operator=(IteratorPair&&) = default;
+  IteratorPair(Iterator begin_it, Iterator end_it) : begin_(begin_it), end_(end_it) { }
+
+  Iterator begin() const {
+    return begin_;
+  }
+
+  Iterator end() const {
+    return end_;
+  }
+
+ private:
+  Iterator begin_;
+  Iterator end_;
+};
+
+template<typename Iterator>
+static inline IteratorPair<Iterator> MakeIteratorPair(
+    const Iterator& begin_it, const Iterator& end_it) {
+  return IteratorPair<Iterator>(begin_it, end_it);
+}
+
+static inline bool ValidPointerSize(size_t pointer_size) {
+  return pointer_size == 4 || pointer_size == 8;
+}
 
 }  // namespace art
 

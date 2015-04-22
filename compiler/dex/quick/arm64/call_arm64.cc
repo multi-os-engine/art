@@ -19,6 +19,7 @@
 #include "codegen_arm64.h"
 
 #include "arm64_lir.h"
+#include "art_method.h"
 #include "base/logging.h"
 #include "dex/mir_graph.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
@@ -27,7 +28,6 @@
 #include "driver/compiler_options.h"
 #include "gc/accounting/card_table.h"
 #include "entrypoints/quick/quick_entrypoints.h"
-#include "mirror/art_method.h"
 #include "mirror/object_array-inl.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 
@@ -472,7 +472,7 @@ int Arm64Mir2Lir::Arm64NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
       if (direct_code == 0) {
         // kInvokeTgt := arg0_ref->entrypoint
         cg->LoadWordDisp(arg0_ref,
-                         mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                         ArtMethod::EntryPointFromQuickCompiledCodeOffset(
                              kArm64PointerSize).Int32Value(), cg->TargetPtrReg(kInvokeTgt));
       }
       break;
@@ -513,7 +513,7 @@ int Arm64Mir2Lir::Arm64NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
     case 1:  // Get method->dex_cache_resolved_methods_
       if (!use_pc_rel) {
         cg->LoadRefDisp(arg0_ref,
-                        mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
+                        ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
                         arg0_ref,
                         kNotVolatile);
       }
@@ -543,14 +543,14 @@ int Arm64Mir2Lir::Arm64NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
                         kNotVolatile);
       } else {
         size_t offset = cg->dex_cache_arrays_layout_.MethodOffset(target_method.dex_method_index);
-        cg->OpPcRelDexCacheArrayLoad(cu->dex_file, offset, arg0_ref);
+        cg->OpPcRelDexCacheArrayLoad(cu->dex_file, offset, arg0_ref, true);
       }
       break;
     case 3:  // Grab the code from the method*
       if (direct_code == 0) {
         // kInvokeTgt := arg0_ref->entrypoint
         cg->LoadWordDisp(arg0_ref,
-                         mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+                         ArtMethod::EntryPointFromQuickCompiledCodeOffset(
                              kArm64PointerSize).Int32Value(), cg->TargetPtrReg(kInvokeTgt));
       }
       break;

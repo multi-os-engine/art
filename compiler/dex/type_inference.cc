@@ -686,7 +686,7 @@ void TypeInference::InitializeSRegs() {
   std::fill_n(sregs_, num_sregs_, Type::Unknown());
 
   /* Treat ArtMethod* as a normal reference */
-  sregs_[mir_graph_->GetMethodSReg()] = Type::NonArrayRefType();
+  sregs_[mir_graph_->GetMethodSReg()] = Type::NonArrayNonRefType(cu_->target64);
 
   // Initialize parameter SSA regs at method entry.
   int32_t entry_param_s_reg = mir_graph_->GetFirstInVR();

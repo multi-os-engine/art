@@ -55,9 +55,15 @@ void MIRGraph::InitRegLocations() {
   }
 
   /* Mark the location of ArtMethod* as temporary */
-  loc[GetMethodSReg()].location = kLocCompilerTemp;
+  auto& method_loc = loc[GetMethodSReg()];
+  method_loc.location = kLocCompilerTemp;
+  CHECK_EQ(cu_->target64, Is64BitInstructionSet(cu_->instruction_set));
+  if (cu_->target64) {
+    method_loc.wide = true;
+  }
 
   reg_location_ = loc;
+  DCHECK_EQ(GetMethodLoc().wide, cu_->target64);
 }
 
 /*

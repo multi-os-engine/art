@@ -19,6 +19,7 @@
 #include <fstream>
 #include <stdint.h>
 
+#include "art_method-inl.h"
 #include "base/arena_allocator.h"
 #include "base/dumpable.h"
 #include "base/timing_logger.h"
@@ -44,7 +45,6 @@
 #include "intrinsics.h"
 #include "licm.h"
 #include "jni/quick/jni_compiler.h"
-#include "mirror/art_method-inl.h"
 #include "nodes.h"
 #include "prepare_for_register_allocation.h"
 #include "reference_type_propagation.h"
@@ -196,7 +196,7 @@ class OptimizingCompiler FINAL : public Compiler {
     return ArtQuickJniCompileMethod(GetCompilerDriver(), access_flags, method_idx, dex_file);
   }
 
-  uintptr_t GetEntryPointOf(mirror::ArtMethod* method) const OVERRIDE
+  uintptr_t GetEntryPointOf(ArtMethod* method) const OVERRIDE
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return reinterpret_cast<uintptr_t>(method->GetEntryPointFromQuickCompiledCodePtrSize(
         InstructionSetPointerSize(GetCompilerDriver()->GetInstructionSet())));
@@ -631,12 +631,15 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
   if (method != nullptr) {
     return method;
   }
+#if 0
+  // HACK: TODO: Disabled since quick isn't ready for 64 bit ArtMethod* yet.
   method = delegate_->Compile(code_item, access_flags, invoke_type, class_def_idx, method_idx,
                               jclass_loader, dex_file);
 
   if (method != nullptr) {
     MaybeRecordStat(MethodCompilationStat::kCompiledQuick);
   }
+#endif
   return method;
 }
 

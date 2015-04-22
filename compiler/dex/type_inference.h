@@ -80,6 +80,10 @@ class TypeInference : public DeletableArenaObject<kArenaAllocMisc> {
       return Type(kFlagLowWord | kFlagNarrow | kFlagRef);
     }
 
+    static Type NonArrayNonRefType(bool wide) {
+      return Type(kFlagLowWord | kFlagRef | (wide ? kFlagWide : kFlagNarrow));
+    }
+
     static Type ObjectArrayType() {
       return Type(kFlagNarrow | kFlagRef | kFlagLowWord |
                   (1u << kBitArrayDepthStart) | kFlagArrayNarrow | kFlagArrayRef);
