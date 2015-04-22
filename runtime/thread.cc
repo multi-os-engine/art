@@ -33,6 +33,7 @@
 
 #include "arch/context.h"
 #include "art_field-inl.h"
+#include "art_method-inl.h"
 #include "base/mutex.h"
 #include "base/timing_logger.h"
 #include "base/to_str.h"
@@ -49,7 +50,6 @@
 #include "handle_scope-inl.h"
 #include "indirect_reference_table-inl.h"
 #include "jni_internal.h"
-#include "mirror/art_method-inl.h"
 #include "mirror/class_loader.h"
 #include "mirror/class-inl.h"
 #include "mirror/object_array-inl.h"
@@ -912,7 +912,7 @@ struct StackDumpVisitor : public StackVisitor {
   }
 
   bool VisitFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::ArtMethod* m = GetMethod();
+    ArtMethod* m = GetMethod();
     if (m->IsRuntimeMethod()) {
       return true;
     }
@@ -983,7 +983,7 @@ struct StackDumpVisitor : public StackVisitor {
   std::ostream& os;
   const Thread* thread;
   const bool can_allocate;
-  mirror::ArtMethod* last_method;
+  ArtMethod* last_method;
   int last_line_number;
   int repetition_count;
   int frame_count;
@@ -1014,7 +1014,7 @@ static bool ShouldShowNativeStack(const Thread* thread)
   // We don't just check kNative because native methods will be in state kSuspended if they're
   // calling back into the VM, or kBlocked if they're blocked on a monitor, or one of the
   // thread-startup states if it's early enough in their life cycle (http://b/7432159).
-  mirror::ArtMethod* current_method = thread->GetCurrentMethod(nullptr);
+  ArtMethod* current_method = thread->GetCurrentMethod(nullptr);
   return current_method != nullptr && current_method->IsNative();
 }
 
@@ -1495,7 +1495,7 @@ class CountStackDepthVisitor : public StackVisitor {
     // We want to skip frames up to and including the exception's constructor.
     // Note we also skip the frame if it doesn't have a method (namely the callee
     // save frame)
-    mirror::ArtMethod* m = GetMethod();
+    ArtMethod* m = GetMethod();
     if (skipping_ && !m->IsRuntimeMethod() &&
         !mirror::Throwable::GetJavaLangThrowable()->IsAssignableFrom(m->GetDeclaringClass())) {
       skipping_ = false;
@@ -1572,7 +1572,7 @@ class BuildInternalStackTraceVisitor : public StackVisitor {
       skip_depth_--;
       return true;
     }
-    mirror::ArtMethod* m = GetMethod();
+    ArtMethod* m = GetMethod();
     if (m->IsRuntimeMethod()) {
       return true;  // Ignore runtime frames (in particular callee save).
     }
@@ -1669,7 +1669,7 @@ jobjectArray Thread::InternalStackTraceToStackTraceElementArray(
     mirror::ObjectArray<mirror::Object>* method_trace =
           soa.Decode<mirror::ObjectArray<mirror::Object>*>(internal);
     // Prepare parameters for StackTraceElement(String cls, String method, String file, int line)
-    mirror::ArtMethod* method = down_cast<mirror::ArtMethod*>(method_trace->Get(i));
+    ArtMethod* method = down_cast<ArtMethod*>(method_trace->Get(i));
     int32_t line_number;
     StackHandleScope<3> hs(soa.Self());
     auto class_name_object(hs.NewHandle<mirror::String>(nullptr));
@@ -1740,7 +1740,7 @@ void Thread::ThrowNewException(const char* exception_class_descriptor,
 
 static mirror::ClassLoader* GetCurrentClassLoader(Thread* self)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::ArtMethod* method = self->GetCurrentMethod(nullptr);
+  ArtMethod* method = self->GetCurrentMethod(nullptr);
   return method != nullptr
       ? method->GetDeclaringClass()->GetClassLoader()
       : nullptr;
@@ -1755,9 +1755,9 @@ void Thread::ThrowNewWrappedException(const char* exception_class_descriptor,
   ScopedLocalRef<jobject> cause(GetJniEnv(), soa.AddLocalReference<jobject>(GetException()));
   ClearException();
   Runtime* runtime = Runtime::Current();
+  auto* cl = runtime->GetClassLinker();
   Handle<mirror::Class> exception_class(
-      hs.NewHandle(runtime->GetClassLinker()->FindClass(this, exception_class_descriptor,
-                                                        class_loader)));
+      hs.NewHandle(cl->FindClass(this, exception_class_descriptor, class_loader)));
   if (UNLIKELY(exception_class.Get() == nullptr)) {
     CHECK(IsExceptionPending());
     LOG(ERROR) << "No exception class " << PrettyDescriptor(exception_class_descriptor);
@@ -1802,8 +1802,8 @@ void Thread::ThrowNewWrappedException(const char* exception_class_descriptor,
       signature = "(Ljava/lang/Throwable;)V";
     }
   }
-  mirror::ArtMethod* exception_init_method =
-      exception_class->FindDeclaredDirectMethod("<init>", signature);
+  ArtMethod* exception_init_method =
+      exception_class->FindDeclaredDirectMethod("<init>", signature, cl->GetImagePointerSize());
 
   CHECK(exception_init_method != nullptr) << "No <init>" << signature << " in "
       << PrettyDescriptor(exception_class_descriptor);
@@ -2055,7 +2055,7 @@ struct CurrentMethodVisitor FINAL : public StackVisitor {
       : StackVisitor(thread, context), this_object_(nullptr), method_(nullptr), dex_pc_(0),
         abort_on_error_(abort_on_error) {}
   bool VisitFrame() OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::ArtMethod* m = GetMethod();
+    ArtMethod* m = GetMethod();
     if (m->IsRuntimeMethod()) {
       // Continue if this is a runtime method.
       return true;
@@ -2068,12 +2068,12 @@ struct CurrentMethodVisitor FINAL : public StackVisitor {
     return false;
   }
   mirror::Object* this_object_;
-  mirror::ArtMethod* method_;
+  ArtMethod* method_;
   uint32_t dex_pc_;
   const bool abort_on_error_;
 };
 
-mirror::ArtMethod* Thread::GetCurrentMethod(uint32_t* dex_pc, bool abort_on_error) const {
+ArtMethod* Thread::GetCurrentMethod(uint32_t* dex_pc, bool abort_on_error) const {
   CurrentMethodVisitor visitor(const_cast<Thread*>(this), nullptr, abort_on_error);
   visitor.WalkStack(false);
   if (dex_pc != nullptr) {
@@ -2112,9 +2112,7 @@ class ReferenceMapVisitor : public StackVisitor {
   }
 
   void VisitShadowFrame(ShadowFrame* shadow_frame) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    mirror::ArtMethod** method_addr = shadow_frame->GetMethodAddress();
-    visitor_(reinterpret_cast<mirror::Object**>(method_addr), 0 /*ignored*/, this);
-    mirror::ArtMethod* m = *method_addr;
+    ArtMethod* m = shadow_frame->GetMethod();
     DCHECK(m != nullptr);
     size_t num_regs = shadow_frame->NumberOfVRegs();
     if (m->IsNative() || shadow_frame->HasReferenceArray()) {
@@ -2156,13 +2154,11 @@ class ReferenceMapVisitor : public StackVisitor {
 
  private:
   void VisitQuickFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    StackReference<mirror::ArtMethod>* cur_quick_frame = GetCurrentQuickFrame();
-    mirror::ArtMethod* m = cur_quick_frame->AsMirrorPtr();
-    mirror::ArtMethod* old_method = m;
-    visitor_(reinterpret_cast<mirror::Object**>(&m), 0 /*ignored*/, this);
-    if (m != old_method) {
-      cur_quick_frame->Assign(m);
-    }
+    auto* cur_quick_frame = GetCurrentQuickFrame();
+    DCHECK(cur_quick_frame != nullptr);
+    auto* m = *cur_quick_frame;
+    auto* vreg_base = reinterpret_cast<StackReference<mirror::Object>*>(
+        reinterpret_cast<uintptr_t>(cur_quick_frame) + sizeof(void*));
 
     // Process register map (which native and runtime methods don't have)
     if (!m->IsNative() && !m->IsRuntimeMethod() && !m->IsProxyMethod()) {
@@ -2176,8 +2172,7 @@ class ReferenceMapVisitor : public StackVisitor {
         // Visit stack entries that hold pointers.
         for (size_t i = 0; i < mask.size_in_bits(); ++i) {
           if (mask.LoadBit(i)) {
-            StackReference<mirror::Object>* ref_addr =
-                  reinterpret_cast<StackReference<mirror::Object>*>(cur_quick_frame) + i;
+            auto* ref_addr = vreg_base + i;
             mirror::Object* ref = ref_addr->AsMirrorPtr();
             if (ref != nullptr) {
               mirror::Object* new_ref = ref;
@@ -2213,7 +2208,7 @@ class ReferenceMapVisitor : public StackVisitor {
           uintptr_t native_pc_offset = m->NativeQuickPcOffset(GetCurrentQuickFramePc(), entry_point);
           const uint8_t* reg_bitmap = map.FindBitMap(native_pc_offset);
           DCHECK(reg_bitmap != nullptr);
-          const void* code_pointer = mirror::ArtMethod::EntryPointToCodePointer(entry_point);
+          const void* code_pointer = ArtMethod::EntryPointToCodePointer(entry_point);
           const VmapTable vmap_table(m->GetVmapTable(code_pointer, sizeof(void*)));
           QuickMethodFrameInfo frame_info = m->GetQuickFrameInfo(code_pointer);
           // For all dex registers in the bitmap

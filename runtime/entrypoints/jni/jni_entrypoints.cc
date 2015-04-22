@@ -34,7 +34,7 @@ extern "C" void* artFindNativeMethod(Thread* self) {
   Locks::mutator_lock_->AssertNotHeld(self);  // We come here as Native.
   ScopedObjectAccess soa(self);
 
-  mirror::ArtMethod* method = self->GetCurrentMethod(nullptr);
+  ArtMethod* method = self->GetCurrentMethod(nullptr);
   DCHECK(method != nullptr);
 
   // Lookup symbol address for method, on failure we'll return null with an exception set,

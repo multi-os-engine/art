@@ -31,12 +31,9 @@
 namespace art {
 namespace mirror {
 
-void DexCache::Init(const DexFile* dex_file,
-                    String* location,
-                    ObjectArray<String>* strings,
-                    ObjectArray<Class>* resolved_types,
-                    ObjectArray<ArtMethod>* resolved_methods,
-                    Array* resolved_fields) {
+void DexCache::Init(const DexFile* dex_file, String* location, ObjectArray<String>* strings,
+                    ObjectArray<Class>* resolved_types, PointerArray* resolved_methods,
+                    PointerArray* resolved_fields, size_t pointer_size) {
   CHECK(dex_file != nullptr);
   CHECK(location != nullptr);
   CHECK(strings != nullptr);
@@ -56,19 +53,18 @@ void DexCache::Init(const DexFile* dex_file,
     // Initialize the resolve methods array to contain trampolines for resolution.
     ArtMethod* trampoline = runtime->GetResolutionMethod();
     for (size_t i = 0, length = resolved_methods->GetLength(); i < length; i++) {
-      resolved_methods->SetWithoutChecks<false>(i, trampoline);
+      resolved_methods->SetElementPtrSize(i, trampoline, pointer_size);
     }
   }
 }
 
-void DexCache::Fixup(ArtMethod* trampoline) {
+void DexCache::Fixup(ArtMethod* trampoline, size_t pointer_size) {
   // Fixup the resolve methods array to contain trampoline for resolution.
   CHECK(trampoline != nullptr);
-  ObjectArray<ArtMethod>* resolved_methods = GetResolvedMethods();
-  size_t length = resolved_methods->GetLength();
-  for (size_t i = 0; i < length; i++) {
-    if (resolved_methods->GetWithoutChecks(i) == nullptr) {
-      resolved_methods->SetWithoutChecks<false>(i, trampoline);
+  auto* resolved_methods = GetResolvedMethods();
+  for (size_t i = 0, length = resolved_methods->GetLength(); i < length; i++) {
+    if (resolved_methods->GetElementPtrSize<ArtMethod*>(i, pointer_size) == nullptr) {
+      resolved_methods->SetElementPtrSize(i, trampoline, pointer_size);
     }
   }
 }

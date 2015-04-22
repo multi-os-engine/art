@@ -3022,20 +3022,20 @@ void X86Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,
 
   if (rl_method.location == kLocPhysReg) {
     if (use_declaring_class) {
-      LoadRefDisp(rl_method.reg, mirror::ArtMethod::DeclaringClassOffset().Int32Value(),
+      LoadRefDisp(rl_method.reg, ArtMethod::DeclaringClassOffset().Int32Value(),
                   check_class, kNotVolatile);
     } else {
-      LoadRefDisp(rl_method.reg, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
+      LoadRefDisp(rl_method.reg, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                   check_class, kNotVolatile);
       LoadRefDisp(check_class, offset_of_type, check_class, kNotVolatile);
     }
   } else {
     LoadCurrMethodDirect(check_class);
     if (use_declaring_class) {
-      LoadRefDisp(check_class, mirror::ArtMethod::DeclaringClassOffset().Int32Value(),
+      LoadRefDisp(check_class, ArtMethod::DeclaringClassOffset().Int32Value(),
                   check_class, kNotVolatile);
     } else {
-      LoadRefDisp(check_class, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
+      LoadRefDisp(check_class, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                   check_class, kNotVolatile);
       LoadRefDisp(check_class, offset_of_type, check_class, kNotVolatile);
     }

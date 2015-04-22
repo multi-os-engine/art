@@ -38,7 +38,7 @@ namespace art {
 CommonCompilerTest::CommonCompilerTest() {}
 CommonCompilerTest::~CommonCompilerTest() {}
 
-void CommonCompilerTest::MakeExecutable(mirror::ArtMethod* method) {
+void CommonCompilerTest::MakeExecutable(ArtMethod* method) {
   CHECK(method != nullptr);
 
   const CompiledMethod* compiled_method = nullptr;
@@ -233,7 +233,7 @@ void CommonCompilerTest::CompileClass(mirror::ClassLoader* class_loader, const c
   }
 }
 
-void CommonCompilerTest::CompileMethod(mirror::ArtMethod* method) {
+void CommonCompilerTest::CompileMethod(ArtMethod* method) {
   CHECK(method != nullptr);
   TimingLogger timings("CommonTest::CompileMethod", false, false);
   TimingLogger::ScopedTiming t(__FUNCTION__, &timings);
@@ -249,7 +249,7 @@ void CommonCompilerTest::CompileDirectMethod(Handle<mirror::ClassLoader> class_l
   Thread* self = Thread::Current();
   mirror::Class* klass = class_linker_->FindClass(self, class_descriptor.c_str(), class_loader);
   CHECK(klass != nullptr) << "Class not found " << class_name;
-  mirror::ArtMethod* method = klass->FindDirectMethod(method_name, signature);
+  ArtMethod* method = klass->FindDirectMethod(method_name, signature);
   CHECK(method != nullptr) << "Direct method not found: "
       << class_name << "." << method_name << signature;
   CompileMethod(method);
@@ -262,7 +262,7 @@ void CommonCompilerTest::CompileVirtualMethod(Handle<mirror::ClassLoader> class_
   Thread* self = Thread::Current();
   mirror::Class* klass = class_linker_->FindClass(self, class_descriptor.c_str(), class_loader);
   CHECK(klass != nullptr) << "Class not found " << class_name;
-  mirror::ArtMethod* method = klass->FindVirtualMethod(method_name, signature);
+  ArtMethod* method = klass->FindVirtualMethod(method_name, signature);
   CHECK(method != nullptr) << "Virtual method not found: "
       << class_name << "." << method_name << signature;
   CompileMethod(method);

@@ -82,6 +82,33 @@ public class Main {
         if (triggerInstanceOOM()) {
             System.out.println("NEW_INSTANCE correctly threw OOME");
         }
+        
+        if (triggerReflectionOOM()) {
+            System.out.println("Test reflection correctly threw");
+        }
+    }
+    
+    static char [][] holder;
+
+    static void blowup() {
+        int size = 1024 * 1024;       
+        for (int i = 0; i < holder.length; ) {
+            try {
+                holder[i++] = new char[size];
+            } catch (OutOfMemoryError oome) {
+                size = size / 2;
+                if (size == 0) {
+                     return;
+                }
+            }
+        }
+    }
+
+    boolean triggerReflectionOOM() {
+        Class<?> c = Class.forName("Main");
+        Method m = c.getMethod("blowup", (Class[]) null);
+        holder = new char[128 * 1024][];
+        m.invoke(null, (Object[]) null);
     }
 
     static Object[] holder;

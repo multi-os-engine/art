@@ -546,7 +546,7 @@ void PatchOat::VisitObject(mirror::Object* object) {
   PatchOat::PatchVisitor visitor(this, copy);
   object->VisitReferences<true, kVerifyNone>(visitor, visitor);
   if (object->IsArtMethod<kVerifyNone>()) {
-    FixupMethod(down_cast<mirror::ArtMethod*>(object), down_cast<mirror::ArtMethod*>(copy));
+    FixupMethod(down_cast<ArtMethod*>(object), down_cast<ArtMethod*>(copy));
   } else if (object->IsClass<kVerifyNone>()) {
     mirror::Class* klass = down_cast<mirror::Class*>(object);
     down_cast<mirror::Class*>(copy)->SetSFieldsUnchecked(
@@ -556,7 +556,7 @@ void PatchOat::VisitObject(mirror::Object* object) {
   }
 }
 
-void PatchOat::FixupMethod(mirror::ArtMethod* object, mirror::ArtMethod* copy) {
+void PatchOat::FixupMethod(ArtMethod* object, ArtMethod* copy) {
   const size_t pointer_size = InstructionSetPointerSize(isa_);
   // Just update the entry points if it looks like we should.
   // TODO: sanity check all the pointers' values

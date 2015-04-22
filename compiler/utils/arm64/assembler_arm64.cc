@@ -707,7 +707,7 @@ void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
 
   // Increase frame to required size.
   DCHECK_ALIGNED(frame_size, kStackAlignment);
-  DCHECK_GE(frame_size, core_reg_size + fp_reg_size + sizeof(StackReference<mirror::ArtMethod>));
+  DCHECK_GE(frame_size, core_reg_size + fp_reg_size + sizeof(StackReference<ArtMethod>));
   IncreaseFrameSize(frame_size);
 
   // Save callee-saves.
@@ -723,11 +723,11 @@ void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
 
   // Write StackReference<Method>.
   DCHECK(X0 == method_reg.AsArm64().AsXRegister());
-  DCHECK_EQ(4U, sizeof(StackReference<mirror::ArtMethod>));
+  DCHECK_EQ(4U, sizeof(StackReference<ArtMethod>));
   StoreWToOffset(StoreOperandType::kStoreWord, W0, SP, 0);
 
   // Write out entry spills
-  int32_t offset = frame_size + sizeof(StackReference<mirror::ArtMethod>);
+  int32_t offset = frame_size + sizeof(StackReference<ArtMethod>);
   for (size_t i = 0; i < entry_spills.size(); ++i) {
     Arm64ManagedRegister reg = entry_spills.at(i).AsArm64();
     if (reg.IsNoRegister()) {
@@ -769,7 +769,7 @@ void Arm64Assembler::RemoveFrame(size_t frame_size,
 
   // For now we only check that the size of the frame is large enough to hold spills and method
   // reference.
-  DCHECK_GE(frame_size, core_reg_size + fp_reg_size + sizeof(StackReference<mirror::ArtMethod>));
+  DCHECK_GE(frame_size, core_reg_size + fp_reg_size + sizeof(StackReference<ArtMethod>));
   DCHECK_ALIGNED(frame_size, kStackAlignment);
 
   // Note: This is specific to JNI method frame.

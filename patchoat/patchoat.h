@@ -29,6 +29,7 @@
 
 namespace art {
 
+class ArtMethod;
 class ImageHeader;
 class OatHeader;
 
@@ -36,7 +37,6 @@ namespace mirror {
 class Object;
 class Reference;
 class Class;
-class ArtMethod;
 }  // namespace mirror
 
 class PatchOat {
@@ -100,7 +100,7 @@ class PatchOat {
 
   void VisitObject(mirror::Object* obj)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void FixupMethod(mirror::ArtMethod* object, mirror::ArtMethod* copy)
+  void FixupMethod(ArtMethod* object, ArtMethod* copy)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool InHeap(mirror::Object*);
 

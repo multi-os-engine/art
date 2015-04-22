@@ -217,7 +217,7 @@ TEST_F(UtilsTest, JniShortName_JniLongName) {
   ScopedObjectAccess soa(Thread::Current());
   mirror::Class* c = class_linker_->FindSystemClass(soa.Self(), "Ljava/lang/String;");
   ASSERT_TRUE(c != nullptr);
-  mirror::ArtMethod* m;
+  ArtMethod* m;
 
   m = c->FindVirtualMethod("charAt", "(I)C");
   ASSERT_TRUE(m != nullptr);

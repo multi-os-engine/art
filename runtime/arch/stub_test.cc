@@ -70,7 +70,7 @@ class StubTest : public CommonRuntimeTest {
 
   // TODO: Set up a frame according to referrer's specs.
   size_t Invoke3WithReferrer(size_t arg0, size_t arg1, size_t arg2, uintptr_t code, Thread* self,
-                             mirror::ArtMethod* referrer) {
+                             ArtMethod* referrer) {
     // Push a transition back into managed code onto the linked list in thread.
     ManagedStack fragment;
     self->PushManagedStackFragment(&fragment);
@@ -294,7 +294,7 @@ class StubTest : public CommonRuntimeTest {
 
   // TODO: Set up a frame according to referrer's specs.
   size_t Invoke3WithReferrerAndHidden(size_t arg0, size_t arg1, size_t arg2, uintptr_t code,
-                                      Thread* self, mirror::ArtMethod* referrer, size_t hidden) {
+                                      Thread* self, ArtMethod* referrer, size_t hidden) {
     // Push a transition back into managed code onto the linked list in thread.
     ManagedStack fragment;
     self->PushManagedStackFragment(&fragment);
@@ -520,7 +520,7 @@ class StubTest : public CommonRuntimeTest {
 
   // Method with 32b arg0, 64b arg1
   size_t Invoke3UWithReferrer(size_t arg0, uint64_t arg1, uintptr_t code, Thread* self,
-                              mirror::ArtMethod* referrer) {
+                              ArtMethod* referrer) {
 #if (defined(__x86_64__) && !defined(__APPLE__)) || defined(__aarch64__)
     // Just pass through.
     return Invoke3WithReferrer(arg0, arg1, 0U, code, self, referrer);
@@ -1307,7 +1307,7 @@ TEST_F(StubTest, StringCompareTo) {
 
 
 static void GetSetBooleanStatic(ArtField* f, Thread* self,
-                                mirror::ArtMethod* referrer, StubTest* test)
+                                ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
   constexpr size_t num_values = 5;
@@ -1336,7 +1336,7 @@ static void GetSetBooleanStatic(ArtField* f, Thread* self,
   std::cout << "Skipping set_boolean_static as I don't know how to do that on " << kRuntimeISA << std::endl;
 #endif
 }
-static void GetSetByteStatic(ArtField* f, Thread* self, mirror::ArtMethod* referrer,
+static void GetSetByteStatic(ArtField* f, Thread* self, ArtMethod* referrer,
                              StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
@@ -1367,7 +1367,7 @@ static void GetSetByteStatic(ArtField* f, Thread* self, mirror::ArtMethod* refer
 
 
 static void GetSetBooleanInstance(Handle<mirror::Object>* obj, ArtField* f, Thread* self,
-                                  mirror::ArtMethod* referrer, StubTest* test)
+                                  ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
   uint8_t values[] = { 0, true, 2, 128, 0xFF };
@@ -1401,7 +1401,7 @@ static void GetSetBooleanInstance(Handle<mirror::Object>* obj, ArtField* f, Thre
 #endif
 }
 static void GetSetByteInstance(Handle<mirror::Object>* obj, ArtField* f,
-                             Thread* self, mirror::ArtMethod* referrer, StubTest* test)
+                             Thread* self, ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
   int8_t values[] = { -128, -64, 0, 64, 127 };
@@ -1434,7 +1434,7 @@ static void GetSetByteInstance(Handle<mirror::Object>* obj, ArtField* f,
 #endif
 }
 
-static void GetSetCharStatic(ArtField* f, Thread* self, mirror::ArtMethod* referrer,
+static void GetSetCharStatic(ArtField* f, Thread* self, ArtMethod* referrer,
                              StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
@@ -1464,7 +1464,7 @@ static void GetSetCharStatic(ArtField* f, Thread* self, mirror::ArtMethod* refer
 #endif
 }
 static void GetSetShortStatic(ArtField* f, Thread* self,
-                              mirror::ArtMethod* referrer, StubTest* test)
+                              ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
   int16_t values[] = { -0x7FFF, -32768, 0, 255, 32767, 0x7FFE };
@@ -1494,7 +1494,7 @@ static void GetSetShortStatic(ArtField* f, Thread* self,
 }
 
 static void GetSetCharInstance(Handle<mirror::Object>* obj, ArtField* f,
-                               Thread* self, mirror::ArtMethod* referrer, StubTest* test)
+                               Thread* self, ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
   uint16_t values[] = { 0, 1, 2, 255, 32768, 0xFFFF };
@@ -1527,7 +1527,7 @@ static void GetSetCharInstance(Handle<mirror::Object>* obj, ArtField* f,
 #endif
 }
 static void GetSetShortInstance(Handle<mirror::Object>* obj, ArtField* f,
-                             Thread* self, mirror::ArtMethod* referrer, StubTest* test)
+                             Thread* self, ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
   int16_t values[] = { -0x7FFF, -32768, 0, 255, 32767, 0x7FFE };
@@ -1560,7 +1560,7 @@ static void GetSetShortInstance(Handle<mirror::Object>* obj, ArtField* f,
 #endif
 }
 
-static void GetSet32Static(ArtField* f, Thread* self, mirror::ArtMethod* referrer,
+static void GetSet32Static(ArtField* f, Thread* self, ArtMethod* referrer,
                            StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
@@ -1592,7 +1592,7 @@ static void GetSet32Static(ArtField* f, Thread* self, mirror::ArtMethod* referre
 
 
 static void GetSet32Instance(Handle<mirror::Object>* obj, ArtField* f,
-                             Thread* self, mirror::ArtMethod* referrer, StubTest* test)
+                             Thread* self, ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
   uint32_t values[] = { 0, 1, 2, 255, 32768, 1000000, 0xFFFFFFFF };
@@ -1631,7 +1631,7 @@ static void GetSet32Instance(Handle<mirror::Object>* obj, ArtField* f,
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
 
 static void set_and_check_static(uint32_t f_idx, mirror::Object* val, Thread* self,
-                                 mirror::ArtMethod* referrer, StubTest* test)
+                                 ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   test->Invoke3WithReferrer(static_cast<size_t>(f_idx),
                             reinterpret_cast<size_t>(val),
@@ -1650,7 +1650,7 @@ static void set_and_check_static(uint32_t f_idx, mirror::Object* val, Thread* se
 }
 #endif
 
-static void GetSetObjStatic(ArtField* f, Thread* self, mirror::ArtMethod* referrer,
+static void GetSetObjStatic(ArtField* f, Thread* self, ArtMethod* referrer,
                             StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
@@ -1672,7 +1672,7 @@ static void GetSetObjStatic(ArtField* f, Thread* self, mirror::ArtMethod* referr
 
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
 static void set_and_check_instance(ArtField* f, mirror::Object* trg,
-                                   mirror::Object* val, Thread* self, mirror::ArtMethod* referrer,
+                                   mirror::Object* val, Thread* self, ArtMethod* referrer,
                                    StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   test->Invoke3WithReferrer(static_cast<size_t>(f->GetDexFieldIndex()),
@@ -1696,7 +1696,7 @@ static void set_and_check_instance(ArtField* f, mirror::Object* trg,
 #endif
 
 static void GetSetObjInstance(Handle<mirror::Object>* obj, ArtField* f,
-                              Thread* self, mirror::ArtMethod* referrer, StubTest* test)
+                              Thread* self, ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
   set_and_check_instance(f, obj->Get(), nullptr, self, referrer, test);
@@ -1717,7 +1717,7 @@ static void GetSetObjInstance(Handle<mirror::Object>* obj, ArtField* f,
 
 // TODO: Complete these tests for 32b architectures.
 
-static void GetSet64Static(ArtField* f, Thread* self, mirror::ArtMethod* referrer,
+static void GetSet64Static(ArtField* f, Thread* self, ArtMethod* referrer,
                            StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if (defined(__x86_64__) && !defined(__APPLE__)) || defined(__aarch64__)
@@ -1748,7 +1748,7 @@ static void GetSet64Static(ArtField* f, Thread* self, mirror::ArtMethod* referre
 
 
 static void GetSet64Instance(Handle<mirror::Object>* obj, ArtField* f,
-                             Thread* self, mirror::ArtMethod* referrer, StubTest* test)
+                             Thread* self, ArtMethod* referrer, StubTest* test)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
 #if (defined(__x86_64__) && !defined(__APPLE__)) || defined(__aarch64__)
   uint64_t values[] = { 0, 1, 2, 255, 32768, 1000000, 0xFFFFFFFF, 0xFFFFFFFFFFFF };
@@ -1797,7 +1797,7 @@ static void TestFields(Thread* self, StubTest* test, Primitive::Type test_type) 
   Handle<mirror::Object> obj(hs.NewHandle(soa.Decode<mirror::Object*>(o)));
   Handle<mirror::Class> c(hs.NewHandle(obj->GetClass()));
   // Need a method as a referrer
-  Handle<mirror::ArtMethod> m(hs.NewHandle(c->GetDirectMethod(0)));
+  Handle<ArtMethod> m(hs.NewHandle(c->GetDirectMethod(0)));
 
   // Play with it...
 
@@ -1973,7 +1973,7 @@ TEST_F(StubTest, IMT) {
   ASSERT_NE(nullptr, add_jmethod);
 
   // Get mirror representation.
-  Handle<mirror::ArtMethod> contains_amethod(hs.NewHandle(soa.DecodeMethod(contains_jmethod)));
+  Handle<ArtMethod> contains_amethod(hs.NewHandle(soa.DecodeMethod(contains_jmethod)));
 
   // Patch up ArrayList.contains.
   if (contains_amethod.Get()->GetEntryPointFromQuickCompiledCode() == nullptr) {
@@ -1990,7 +1990,7 @@ TEST_F(StubTest, IMT) {
   ASSERT_NE(nullptr, inf_contains_jmethod);
 
   // Get mirror representation.
-  Handle<mirror::ArtMethod> inf_contains(hs.NewHandle(soa.DecodeMethod(inf_contains_jmethod)));
+  Handle<ArtMethod> inf_contains(hs.NewHandle(soa.DecodeMethod(inf_contains_jmethod)));
 
   // Object
 

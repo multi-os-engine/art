@@ -81,9 +81,8 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
       hs.NewHandle(caller_compilation_unit_.GetClassLinker()->FindDexCache(caller_dex_file)));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
       soa.Decode<mirror::ClassLoader*>(caller_compilation_unit_.GetClassLoader())));
-  Handle<mirror::ArtMethod> resolved_method(hs.NewHandle(
-      compiler_driver_->ResolveMethod(
-          soa, dex_cache, class_loader, &caller_compilation_unit_, method_index, invoke_type)));
+  ArtMethod* resolved_method(hs.NewHandle(compiler_driver_->ResolveMethod(
+      soa, dex_cache, class_loader, &caller_compilation_unit_, method_index, invoke_type)));
 
   if (resolved_method.Get() == nullptr) {
     VLOG(compiler) << "Method cannot be resolved " << PrettyMethod(method_index, caller_dex_file);
@@ -150,10 +149,8 @@ bool HInliner::TryInline(HInvoke* invoke_instruction,
   return true;
 }
 
-bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
-                                 HInvoke* invoke_instruction,
-                                 uint32_t method_index,
-                                 bool can_use_dex_cache) const {
+bool HInliner::TryBuildAndInline(ArtMethod* resolved_method, HInvoke* invoke_instruction,
+                                 uint32_t method_index, bool can_use_dex_cache) const {
   ScopedObjectAccess soa(Thread::Current());
   const DexFile::CodeItem* code_item = resolved_method->GetCodeItem();
   const DexFile& caller_dex_file = *caller_compilation_unit_.GetDexFile();

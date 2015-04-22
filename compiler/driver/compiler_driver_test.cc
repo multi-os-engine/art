@@ -121,7 +121,7 @@ TEST_F(CompilerDriverTest, DISABLED_LARGE_CompileDexLibCore) {
   }
   EXPECT_EQ(dex.NumMethodIds(), dex_cache->NumResolvedMethods());
   for (size_t i = 0; i < dex_cache->NumResolvedMethods(); i++) {
-    mirror::ArtMethod* method = dex_cache->GetResolvedMethod(i);
+    ArtMethod* method = dex_cache->GetResolvedMethod(i);
     EXPECT_TRUE(method != nullptr) << "method_idx=" << i
                                 << " " << dex.GetMethodDeclaringClassDescriptor(dex.GetMethodId(i))
                                 << " " << dex.GetMethodName(dex.GetMethodId(i));
@@ -213,7 +213,7 @@ TEST_F(CompilerDriverMethodsTest, Selection) {
   std::unique_ptr<std::unordered_set<std::string>> expected(GetCompiledMethods());
 
   for (int32_t i = 0; static_cast<uint32_t>(i) < klass->NumDirectMethods(); i++) {
-    mirror::ArtMethod* m = klass->GetDirectMethod(i);
+    ArtMethod* m = klass->GetDirectMethod(i);
     std::string name = PrettyMethod(m, true);
     const void* code =
         m->GetEntryPointFromQuickCompiledCodePtrSize(InstructionSetPointerSize(kRuntimeISA));

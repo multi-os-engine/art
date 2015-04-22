@@ -41,7 +41,7 @@ class OatTest : public CommonCompilerTest {
  protected:
   static const bool kCompile = false;  // DISABLED_ due to the time to compile libcore
 
-  void CheckMethod(mirror::ArtMethod* method,
+  void CheckMethod(ArtMethod* method,
                    const OatFile::OatMethod& oat_method,
                    const DexFile& dex_file)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {

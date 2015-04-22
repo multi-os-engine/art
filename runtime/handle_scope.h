@@ -160,6 +160,10 @@ class PACKED(4) StackHandleScope FINAL : public HandleScope {
   ALWAYS_INLINE void SetReference(size_t i, mirror::Object* object)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  Thread* Self() {
+    return self_;
+  }
+
  private:
   template<class T>
   ALWAYS_INLINE MutableHandle<T> GetHandle(size_t i) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {

@@ -620,10 +620,9 @@ class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {
     ScopedObjectAccessUnchecked soa(Thread::Current());
     StackHandleScope<1> hs(soa.Self());
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(linker->FindDexCache(*dex_file_)));
-    mirror::ArtMethod* method = linker->ResolveMethod(*dex_file_, it.GetMemberIndex(), dex_cache,
-                                                      NullHandle<mirror::ClassLoader>(),
-                                                      NullHandle<mirror::ArtMethod>(),
-                                                      invoke_type);
+    ArtMethod* method = linker->ResolveMethod(
+        *dex_file_, it.GetMemberIndex(), dex_cache, NullHandle<mirror::ClassLoader>(), nullptr,
+        invoke_type);
     if (method == nullptr) {
       LOG(ERROR) << "Unexpected failure to resolve a method: "
                  << PrettyMethod(it.GetMemberIndex(), *dex_file_, true);
@@ -755,7 +754,7 @@ class OatWriter::WriteCodeMethodVisitor : public OatDexMethodVisitor {
                 uint32_t target_offset = GetTargetOffset(patch);
                 PatchCodeAddress(&patched_code_, patch.LiteralOffset(), target_offset);
               } else if (patch.Type() == kLinkerPatchMethod) {
-                mirror::ArtMethod* method = GetTargetMethod(patch);
+                ArtMethod* method = GetTargetMethod(patch);
                 PatchObjectAddress(&patched_code_, patch.LiteralOffset(), method);
               } else if (patch.Type() == kLinkerPatchType) {
                 mirror::Class* type = GetTargetType(patch);
@@ -794,12 +793,12 @@ class OatWriter::WriteCodeMethodVisitor : public OatDexMethodVisitor {
         << PrettyMethod(it.GetMemberIndex(), *dex_file_) << " to " << out_->GetLocation();
   }
 
-  mirror::ArtMethod* GetTargetMethod(const LinkerPatch& patch)
+  ArtMethod* GetTargetMethod(const LinkerPatch& patch)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     MethodReference ref = patch.TargetMethod();
     mirror::DexCache* dex_cache =
         (dex_file_ == ref.dex_file) ? dex_cache_ : class_linker_->FindDexCache(*ref.dex_file);
-    mirror::ArtMethod* method = dex_cache->GetResolvedMethod(ref.dex_method_index);
+    ArtMethod* method = dex_cache->GetResolvedMethod(ref.dex_method_index);
     CHECK(method != nullptr);
     return method;
   }
@@ -810,7 +809,7 @@ class OatWriter::WriteCodeMethodVisitor : public OatDexMethodVisitor {
         (target_it != writer_->method_offset_map_.map.end()) ? target_it->second : 0u;
     // If there's no compiled code, point to the correct trampoline.
     if (UNLIKELY(target_offset == 0)) {
-      mirror::ArtMethod* target = GetTargetMethod(patch);
+      ArtMethod* target = GetTargetMethod(patch);
       DCHECK(target != nullptr);
       size_t size = GetInstructionSetPointerSize(writer_->compiler_driver_->GetInstructionSet());
       const void* oat_code_offset = target->GetEntryPointFromQuickCompiledCodePtrSize(size);

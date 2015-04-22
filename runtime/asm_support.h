@@ -18,8 +18,8 @@
 #define ART_RUNTIME_ASM_SUPPORT_H_
 
 #if defined(__cplusplus)
+#include "art_method.h"
 #include "lock_word.h"
-#include "mirror/art_method.h"
 #include "mirror/class.h"
 #include "mirror/string.h"
 #include "runtime.h"
@@ -182,19 +182,19 @@ ADD_TEST_EQ(MIRROR_STRING_OFFSET_OFFSET, art::mirror::String::OffsetOffset().Int
 // Offsets within java.lang.reflect.ArtMethod.
 #define MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET (4 + MIRROR_OBJECT_HEADER_SIZE)
 ADD_TEST_EQ(MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET,
-            art::mirror::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value())
+            art::ArtMethod::DexCacheResolvedMethodsOffset().Int32Value())
 
 #define MIRROR_ART_METHOD_DEX_CACHE_TYPES_OFFSET (8 + MIRROR_OBJECT_HEADER_SIZE)
 ADD_TEST_EQ(MIRROR_ART_METHOD_DEX_CACHE_TYPES_OFFSET,
-            art::mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value())
+            art::ArtMethod::DexCacheResolvedTypesOffset().Int32Value())
 
 #define MIRROR_ART_METHOD_QUICK_CODE_OFFSET_32        (36 + MIRROR_OBJECT_HEADER_SIZE)
 ADD_TEST_EQ(MIRROR_ART_METHOD_QUICK_CODE_OFFSET_32,
-            art::mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(4).Int32Value())
+            art::ArtMethod::EntryPointFromQuickCompiledCodeOffset(4).Int32Value())
 
 #define MIRROR_ART_METHOD_QUICK_CODE_OFFSET_64        (48 + MIRROR_OBJECT_HEADER_SIZE)
 ADD_TEST_EQ(MIRROR_ART_METHOD_QUICK_CODE_OFFSET_64,
-            art::mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(8).Int32Value())
+            art::ArtMethod::EntryPointFromQuickCompiledCodeOffset(8).Int32Value())
 
 #define LOCK_WORD_STATE_SHIFT 30
 ADD_TEST_EQ(LOCK_WORD_STATE_SHIFT, static_cast<int32_t>(art::LockWord::kStateShift))

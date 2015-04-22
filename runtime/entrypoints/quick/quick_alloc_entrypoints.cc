@@ -29,7 +29,7 @@ static constexpr bool kUseTlabFastPath = true;
 
 #define GENERATE_ENTRYPOINTS_FOR_ALLOCATOR_INST(suffix, suffix2, instrumented_bool, allocator_type) \
 extern "C" mirror::Object* artAllocObjectFromCode ##suffix##suffix2( \
-    uint32_t type_idx, mirror::ArtMethod* method, Thread* self) \
+    uint32_t type_idx, ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   if (kUseTlabFastPath && !instrumented_bool && allocator_type == gc::kAllocatorTypeTLAB) { \
@@ -56,7 +56,7 @@ extern "C" mirror::Object* artAllocObjectFromCode ##suffix##suffix2( \
   return AllocObjectFromCode<false, instrumented_bool>(type_idx, method, self, allocator_type); \
 } \
 extern "C" mirror::Object* artAllocObjectFromCodeResolved##suffix##suffix2( \
-    mirror::Class* klass, mirror::ArtMethod* method, Thread* self) \
+    mirror::Class* klass, ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   UNUSED(method); \
   ScopedQuickEntrypointChecks sqec(self); \
@@ -83,7 +83,7 @@ extern "C" mirror::Object* artAllocObjectFromCodeResolved##suffix##suffix2( \
   return AllocObjectFromCodeResolved<instrumented_bool>(klass, self, allocator_type); \
 } \
 extern "C" mirror::Object* artAllocObjectFromCodeInitialized##suffix##suffix2( \
-    mirror::Class* klass, mirror::ArtMethod* method, Thread* self) \
+    mirror::Class* klass, ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   UNUSED(method); \
   ScopedQuickEntrypointChecks sqec(self); \
@@ -108,34 +108,34 @@ extern "C" mirror::Object* artAllocObjectFromCodeInitialized##suffix##suffix2( \
   return AllocObjectFromCodeInitialized<instrumented_bool>(klass, self, allocator_type); \
 } \
 extern "C" mirror::Object* artAllocObjectFromCodeWithAccessCheck##suffix##suffix2( \
-    uint32_t type_idx, mirror::ArtMethod* method, Thread* self) \
+    uint32_t type_idx, ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   return AllocObjectFromCode<true, instrumented_bool>(type_idx, method, self, allocator_type); \
 } \
 extern "C" mirror::Array* artAllocArrayFromCode##suffix##suffix2( \
-    uint32_t type_idx, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
+    uint32_t type_idx, int32_t component_count, ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   return AllocArrayFromCode<false, instrumented_bool>(type_idx, component_count, method, self, \
                                                       allocator_type); \
 } \
 extern "C" mirror::Array* artAllocArrayFromCodeResolved##suffix##suffix2( \
-    mirror::Class* klass, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
+    mirror::Class* klass, int32_t component_count, ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   return AllocArrayFromCodeResolved<false, instrumented_bool>(klass, component_count, method, self, \
                                                               allocator_type); \
 } \
 extern "C" mirror::Array* artAllocArrayFromCodeWithAccessCheck##suffix##suffix2( \
-    uint32_t type_idx, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
+    uint32_t type_idx, int32_t component_count, ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   return AllocArrayFromCode<true, instrumented_bool>(type_idx, component_count, method, self, \
                                                      allocator_type); \
 } \
 extern "C" mirror::Array* artCheckAndAllocArrayFromCode##suffix##suffix2( \
-    uint32_t type_idx, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
+    uint32_t type_idx, int32_t component_count, ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   if (!instrumented_bool) { \
@@ -145,7 +145,7 @@ extern "C" mirror::Array* artCheckAndAllocArrayFromCode##suffix##suffix2( \
   } \
 } \
 extern "C" mirror::Array* artCheckAndAllocArrayFromCodeWithAccessCheck##suffix##suffix2( \
-    uint32_t type_idx, int32_t component_count, mirror::ArtMethod* method, Thread* self) \
+    uint32_t type_idx, int32_t component_count, ArtMethod* method, Thread* self) \
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) { \
   ScopedQuickEntrypointChecks sqec(self); \
   if (!instrumented_bool) { \
@@ -167,24 +167,24 @@ GENERATE_ENTRYPOINTS_FOR_ALLOCATOR(Region, gc::kAllocatorTypeRegion)
 GENERATE_ENTRYPOINTS_FOR_ALLOCATOR(RegionTLAB, gc::kAllocatorTypeRegionTLAB)
 
 #define GENERATE_ENTRYPOINTS(suffix) \
-extern "C" void* art_quick_alloc_array##suffix(uint32_t, int32_t, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_array_resolved##suffix(mirror::Class* klass, int32_t, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_array_with_access_check##suffix(uint32_t, int32_t, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_object##suffix(uint32_t type_idx, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_object_resolved##suffix(mirror::Class* klass, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_object_initialized##suffix(mirror::Class* klass, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_object_with_access_check##suffix(uint32_t type_idx, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_check_and_alloc_array##suffix(uint32_t, int32_t, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_check_and_alloc_array_with_access_check##suffix(uint32_t, int32_t, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_array##suffix##_instrumented(uint32_t, int32_t, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_array_resolved##suffix##_instrumented(mirror::Class* klass, int32_t, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_array_with_access_check##suffix##_instrumented(uint32_t, int32_t, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_object##suffix##_instrumented(uint32_t type_idx, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_object_resolved##suffix##_instrumented(mirror::Class* klass, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_object_initialized##suffix##_instrumented(mirror::Class* klass, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_alloc_object_with_access_check##suffix##_instrumented(uint32_t type_idx, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_check_and_alloc_array##suffix##_instrumented(uint32_t, int32_t, mirror::ArtMethod* ref); \
-extern "C" void* art_quick_check_and_alloc_array_with_access_check##suffix##_instrumented(uint32_t, int32_t, mirror::ArtMethod* ref); \
+extern "C" void* art_quick_alloc_array##suffix(uint32_t, int32_t, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_array_resolved##suffix(mirror::Class* klass, int32_t, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_array_with_access_check##suffix(uint32_t, int32_t, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_object##suffix(uint32_t type_idx, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_object_resolved##suffix(mirror::Class* klass, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_object_initialized##suffix(mirror::Class* klass, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_object_with_access_check##suffix(uint32_t type_idx, ArtMethod* ref); \
+extern "C" void* art_quick_check_and_alloc_array##suffix(uint32_t, int32_t, ArtMethod* ref); \
+extern "C" void* art_quick_check_and_alloc_array_with_access_check##suffix(uint32_t, int32_t, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_array##suffix##_instrumented(uint32_t, int32_t, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_array_resolved##suffix##_instrumented(mirror::Class* klass, int32_t, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_array_with_access_check##suffix##_instrumented(uint32_t, int32_t, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_object##suffix##_instrumented(uint32_t type_idx, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_object_resolved##suffix##_instrumented(mirror::Class* klass, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_object_initialized##suffix##_instrumented(mirror::Class* klass, ArtMethod* ref); \
+extern "C" void* art_quick_alloc_object_with_access_check##suffix##_instrumented(uint32_t type_idx, ArtMethod* ref); \
+extern "C" void* art_quick_check_and_alloc_array##suffix##_instrumented(uint32_t, int32_t, ArtMethod* ref); \
+extern "C" void* art_quick_check_and_alloc_array_with_access_check##suffix##_instrumented(uint32_t, int32_t, ArtMethod* ref); \
 void SetQuickAllocEntryPoints##suffix(QuickEntryPoints* qpoints, bool instrumented) { \
   if (instrumented) { \
     qpoints->pAllocArray = art_quick_alloc_array##suffix##_instrumented; \

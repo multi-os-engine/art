@@ -788,7 +788,7 @@ CompiledMethod* QuickCompiler::JniCompile(uint32_t access_flags,
   return ArtQuickJniCompileMethod(GetCompilerDriver(), access_flags, method_idx, dex_file);
 }
 
-uintptr_t QuickCompiler::GetEntryPointOf(mirror::ArtMethod* method) const {
+uintptr_t QuickCompiler::GetEntryPointOf(ArtMethod* method) const {
   return reinterpret_cast<uintptr_t>(method->GetEntryPointFromQuickCompiledCodePtrSize(
       InstructionSetPointerSize(GetCompilerDriver()->GetInstructionSet())));
 }

@@ -1930,7 +1930,7 @@ void InstructionCodeGeneratorARM64::VisitInvokeInterface(HInvokeInterface* invok
           (invoke->GetImtIndex() % mirror::Class::kImtSize) * sizeof(mirror::Class::ImTableEntry);
   Location receiver = invoke->GetLocations()->InAt(0);
   Offset class_offset = mirror::Object::ClassOffset();
-  Offset entry_point = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(kArm64WordSize);
+  Offset entry_point = ArtMethod::EntryPointFromQuickCompiledCodeOffset(kArm64WordSize);
 
   // The register ip1 is required to be used for the hidden argument in
   // art_quick_imt_conflict_trampoline, so prevent VIXL from using it.
@@ -2010,11 +2010,11 @@ void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invok
   LoadCurrentMethod(temp);
   if (!invoke->IsRecursive()) {
     // temp = temp->dex_cache_resolved_methods_;
-    __ Ldr(temp, HeapOperand(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset()));
+    __ Ldr(temp, HeapOperand(temp, ArtMethod::DexCacheResolvedMethodsOffset()));
     // temp = temp[index_in_cache];
     __ Ldr(temp, HeapOperand(temp, index_in_cache));
     // lr = temp->entry_point_from_quick_compiled_code_;
-    __ Ldr(lr, HeapOperand(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
+    __ Ldr(lr, HeapOperand(temp, ArtMethod::EntryPointFromQuickCompiledCodeOffset(
         kArm64WordSize)));
     // lr();
     __ Blr(lr);
@@ -2051,7 +2051,7 @@ void InstructionCodeGeneratorARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   size_t method_offset = mirror::Class::EmbeddedVTableOffset().SizeValue() +
     invoke->GetVTableIndex() * sizeof(mirror::Class::VTableEntry);
   Offset class_offset = mirror::Object::ClassOffset();
-  Offset entry_point = mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(kArm64WordSize);
+  Offset entry_point = ArtMethod::EntryPointFromQuickCompiledCodeOffset(kArm64WordSize);
 
   BlockPoolsScope block_pools(GetVIXLAssembler());
 
@@ -2087,11 +2087,11 @@ void InstructionCodeGeneratorARM64::VisitLoadClass(HLoadClass* cls) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
     codegen_->LoadCurrentMethod(out);
-    __ Ldr(out, HeapOperand(out, mirror::ArtMethod::DeclaringClassOffset()));
+    __ Ldr(out, HeapOperand(out, ArtMethod::DeclaringClassOffset()));
   } else {
     DCHECK(cls->CanCallRuntime());
     codegen_->LoadCurrentMethod(out);
-    __ Ldr(out, HeapOperand(out, mirror::ArtMethod::DexCacheResolvedTypesOffset()));
+    __ Ldr(out, HeapOperand(out, ArtMethod::DexCacheResolvedTypesOffset()));
     __ Ldr(out, HeapOperand(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
 
     SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM64(
@@ -2139,7 +2139,7 @@ void InstructionCodeGeneratorARM64::VisitLoadString(HLoadString* load) {
 
   Register out = OutputRegister(load);
   codegen_->LoadCurrentMethod(out);
-  __ Ldr(out, HeapOperand(out, mirror::ArtMethod::DeclaringClassOffset()));
+  __ Ldr(out, HeapOperand(out, ArtMethod::DeclaringClassOffset()));
   __ Ldr(out, HeapOperand(out, mirror::Class::DexCacheStringsOffset()));
   __ Ldr(out, HeapOperand(out, CodeGenerator::GetCacheOffset(load->GetStringIndex())));
   __ Cbz(out, slow_path->GetEntryLabel());
@@ -2267,7 +2267,7 @@ void LocationsBuilderARM64::VisitNewArray(HNewArray* instruction) {
   locations->SetOut(LocationFrom(x0));
   locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(1)));
   CheckEntrypointTypes<kQuickAllocArrayWithAccessCheck,
-                       void*, uint32_t, int32_t, mirror::ArtMethod*>();
+                       void*, uint32_t, int32_t, ArtMethod*>();
 }
 
 void InstructionCodeGeneratorARM64::VisitNewArray(HNewArray* instruction) {
@@ -2285,7 +2285,7 @@ void InstructionCodeGeneratorARM64::VisitNewArray(HNewArray* instruction) {
       instruction->GetDexPc(),
       nullptr);
   CheckEntrypointTypes<kQuickAllocArrayWithAccessCheck,
-                       void*, uint32_t, int32_t, mirror::ArtMethod*>();
+                       void*, uint32_t, int32_t, ArtMethod*>();
 }
 
 void LocationsBuilderARM64::VisitNewInstance(HNewInstance* instruction) {
@@ -2295,7 +2295,7 @@ void LocationsBuilderARM64::VisitNewInstance(HNewInstance* instruction) {
   locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(0)));
   locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(1)));
   locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimNot));
-  CheckEntrypointTypes<kQuickAllocObjectWithAccessCheck, void*, uint32_t, mirror::ArtMethod*>();
+  CheckEntrypointTypes<kQuickAllocObjectWithAccessCheck, void*, uint32_t, ArtMethod*>();
 }
 
 void InstructionCodeGeneratorARM64::VisitNewInstance(HNewInstance* instruction) {
@@ -2311,7 +2311,7 @@ void InstructionCodeGeneratorARM64::VisitNewInstance(HNewInstance* instruction) 
       instruction,
       instruction->GetDexPc(),
       nullptr);
-  CheckEntrypointTypes<kQuickAllocObjectWithAccessCheck, void*, uint32_t, mirror::ArtMethod*>();
+  CheckEntrypointTypes<kQuickAllocObjectWithAccessCheck, void*, uint32_t, ArtMethod*>();
 }
 
 void LocationsBuilderARM64::VisitNot(HNot* instruction) {

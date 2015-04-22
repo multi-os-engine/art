@@ -53,7 +53,7 @@ extern "C" void jit_unload(void* handle) {
   delete reinterpret_cast<JitCompiler*>(handle);
 }
 
-extern "C" bool jit_compile_method(void* handle, mirror::ArtMethod* method, Thread* self)
+extern "C" bool jit_compile_method(void* handle, ArtMethod* method, Thread* self)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   auto* jit_compiler = reinterpret_cast<JitCompiler*>(handle);
   DCHECK(jit_compiler != nullptr);
@@ -104,13 +104,12 @@ JitCompiler::JitCompiler() : total_time_(0) {
 JitCompiler::~JitCompiler() {
 }
 
-bool JitCompiler::CompileMethod(Thread* self, mirror::ArtMethod* method) {
+bool JitCompiler::CompileMethod(Thread* self, ArtMethod* method) {
   TimingLogger logger("JIT compiler timing logger", true, VLOG_IS_ON(jit));
   const uint64_t start_time = NanoTime();
   StackHandleScope<2> hs(self);
   self->AssertNoPendingException();
   Runtime* runtime = Runtime::Current();
-  Handle<mirror::ArtMethod> h_method(hs.NewHandle(method));
   if (runtime->GetJit()->GetCodeCache()->ContainsMethod(method)) {
     VLOG(jit) << "Already compiled " << PrettyMethod(method);
     return true;  // Already compiled
@@ -204,7 +203,7 @@ uint8_t* JitCompiler::WriteMethodHeaderAndCode(const CompiledMethod* compiled_me
   return code_ptr;
 }
 
-bool JitCompiler::AddToCodeCache(mirror::ArtMethod* method, const CompiledMethod* compiled_method,
+bool JitCompiler::AddToCodeCache(ArtMethod* method, const CompiledMethod* compiled_method,
                                  OatFile::OatMethod* out_method) {
   Runtime* runtime = Runtime::Current();
   JitCodeCache* const code_cache = runtime->GetJit()->GetCodeCache();
@@ -260,7 +259,7 @@ bool JitCompiler::AddToCodeCache(mirror::ArtMethod* method, const CompiledMethod
   return true;
 }
 
-bool JitCompiler::MakeExecutable(CompiledMethod* compiled_method, mirror::ArtMethod* method) {
+bool JitCompiler::MakeExecutable(CompiledMethod* compiled_method, ArtMethod* method) {
   CHECK(method != nullptr);
   CHECK(compiled_method != nullptr);
   OatFile::OatMethod oat_method(nullptr, 0);
