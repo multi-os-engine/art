@@ -972,6 +972,7 @@ class X86Mir2Lir FINAL : public Mir2Lir {
   static const X86EncodingMap EncodingMap[kX86Last];
 
   friend std::ostream& operator<<(std::ostream& os, const X86OpCode& rhs);
+  friend class QuickAssembleX86Test;
 
   DISALLOW_COPY_AND_ASSIGN(X86Mir2Lir);
 };

@@ -191,6 +191,7 @@ COMPILER_GTEST_COMMON_SRC_FILES := \
   compiler/dex/mir_graph_test.cc \
   compiler/dex/mir_optimization_test.cc \
   compiler/dex/quick/quick_cfi_test.cc \
+  compiler/dex/quick/x86/quick_assemble_x86_test.cc \
   compiler/dwarf/dwarf_test.cc \
   compiler/driver/compiler_driver_test.cc \
   compiler/elf_writer_test.cc \

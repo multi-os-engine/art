@@ -1459,6 +1459,7 @@ class MIRGraph {
   friend class LocalValueNumberingTest;
   friend class TopologicalSortOrderTest;
   friend class QuickCFITest;
+  friend class QuickAssembleX86Test;
 };
 
 }  // namespace art
