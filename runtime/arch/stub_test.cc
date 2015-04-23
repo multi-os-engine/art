@@ -1836,7 +1836,7 @@ static void GetSet32Static(ArtField* f, Thread* self, mirror::ArtMethod* referre
                                            self,
                                            referrer);
 
-    EXPECT_EQ(res, values[i]) << "Iteration " << i;
+    EXPECT_EQ(static_cast<uint32_t>(res), values[i]) << "Iteration " << i;
   }
 #else
   UNUSED(f, self, referrer, test);
