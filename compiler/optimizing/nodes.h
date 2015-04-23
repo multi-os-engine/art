@@ -2170,6 +2170,9 @@ class HInvoke : public HInstruction {
 
   uint32_t GetDexMethodIndex() const { return dex_method_index_; }
 
+  // The index of the first argument among inputs.
+  virtual size_t GetArgumentsStartIndex() const { return 0; }
+
   Intrinsics GetIntrinsic() const {
     return intrinsic_;
   }
@@ -2212,6 +2215,16 @@ class HInvoke : public HInstruction {
 
 class HInvokeStaticOrDirect : public HInvoke {
  public:
+  // Requirements of this method call regarding the class
+  // initialization (clinit) check of its declaring class.
+  enum class ClinitCheckRequirement {
+    // TODO: Use the kNone status in the code generators to avoid
+    // generating clinit checks when they are not required?
+    kNone,      // Declaring class already initialized.
+    kExplicit,  // Static call having explicit clinit check as first input.
+    kImplicit,  // Static call implicitly requiring a clinit check.
+  };
+
   HInvokeStaticOrDirect(ArenaAllocator* arena,
                         uint32_t number_of_arguments,
                         Primitive::Type return_type,
@@ -2219,11 +2232,13 @@ class HInvokeStaticOrDirect : public HInvoke {
                         uint32_t dex_method_index,
                         bool is_recursive,
                         InvokeType original_invoke_type,
-                        InvokeType invoke_type)
+                        InvokeType invoke_type,
+                        ClinitCheckRequirement clinit_check_requirement)
       : HInvoke(arena, number_of_arguments, return_type, dex_pc, dex_method_index),
         original_invoke_type_(original_invoke_type),
         invoke_type_(invoke_type),
-        is_recursive_(is_recursive) {}
+        is_recursive_(is_recursive),
+        clinit_check_requirement_(clinit_check_requirement) {}
 
   bool CanDoImplicitNullCheck() const OVERRIDE {
     // We access the method via the dex cache so we can't do an implicit null check.
@@ -2236,12 +2251,70 @@ class HInvokeStaticOrDirect : public HInvoke {
   bool IsRecursive() const { return is_recursive_; }
   bool NeedsDexCache() const OVERRIDE { return !IsRecursive(); }
 
+  // Is this instruction as call to a static method?
+  bool IsInvokeStatic() const {
+    return GetInvokeType() == kStatic;
+  }
+
+  // The index of the first argument among inputs.
+  size_t GetArgumentsStartIndex() const OVERRIDE {
+    // If this is a call to a static method with explicit class
+    // initialization check, skip the first input, as it is the aforesaid clinit
+    // check (or a load class instruction).
+    size_t arguments_start_index = IsStaticWithExplicitClinitCheck() ? 1 : 0;
+    if (kIsDebugBuild && IsStaticWithExplicitClinitCheck()) {
+      DCHECK(InputAt(0) != nullptr);
+      // The first input must either be
+      // - an art::HClinitCheck instruction, set by art::HGraphBuilder; or
+      // - an art::HLoadClass instruction, set by art::PrepareForRegisterAllocation.
+      DCHECK(InputAt(0)->IsClinitCheck() || InputAt(0)->IsLoadClass()) << InputAt(0)->DebugName();
+    }
+    DCHECK_LE(arguments_start_index, InputCount());
+    return arguments_start_index;
+  }
+
+  // Remove the art::HLoadClass instruction set as first input by
+  // art::PrepareForRegisterAllocation::VisitClinitCheck in lieu of
+  // the initial art::HClinitCheck instruction (only relevant for
+  // static calls with explciti clinit check).
+  void RemoveLoadClassAsFirstInput() {
+    DCHECK(IsStaticWithExplicitClinitCheck());
+    DCHECK(InputAt(0) != nullptr);
+    DCHECK(InputAt(0)->IsLoadClass()) << InputAt(0)->DebugName();
+    RemoveAsUserOfInput(0);
+    inputs_.DeleteAt(0);
+    clinit_check_requirement_ = ClinitCheckRequirement::kImplicit;
+    DCHECK(IsStaticWithImplicitClinitCheck());
+  }
+
+  // Is this a call to a static method whose declaring class has an
+  // explicit intialization check in the graph?
+  bool IsStaticWithExplicitClinitCheck() const {
+    bool is_static_with_explicit_clinit_check  =
+        IsInvokeStatic() && (clinit_check_requirement_ == ClinitCheckRequirement::kExplicit);
+    if (kIsDebugBuild && is_static_with_explicit_clinit_check) {
+      DCHECK(InputAt(0) != nullptr);
+      // The first input must either be
+      // - an art::HClinitCheck instruction, set by art::HGraphBuilder; or
+      // - an art::HLoadClass instruction, set by art::PrepareForRegisterAllocation.
+      DCHECK(InputAt(0)->IsClinitCheck() || InputAt(0)->IsLoadClass()) << InputAt(0)->DebugName();
+    }
+    return is_static_with_explicit_clinit_check;
+  }
+
+  // Is this a call to a static method whose declaring class has an
+  // implicit intialization check requirement?
+  bool IsStaticWithImplicitClinitCheck() const {
+    return IsInvokeStatic() && (clinit_check_requirement_ == ClinitCheckRequirement::kImplicit);
+  }
+
   DECLARE_INSTRUCTION(InvokeStaticOrDirect);
 
  private:
   const InvokeType original_invoke_type_;
   const InvokeType invoke_type_;
   const bool is_recursive_;
+  ClinitCheckRequirement clinit_check_requirement_;
 
   DISALLOW_COPY_AND_ASSIGN(HInvokeStaticOrDirect);
 };
@@ -3210,7 +3283,6 @@ class HLoadString : public HExpression<0> {
   DISALLOW_COPY_AND_ASSIGN(HLoadString);
 };
 
-// TODO: Pass this check to HInvokeStaticOrDirect nodes.
 /**
  * Performs an initialization check on its Class object input.
  */

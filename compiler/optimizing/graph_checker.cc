@@ -178,6 +178,29 @@ void GraphChecker::VisitInstruction(HInstruction* instruction) {
   }
 }
 
+void GraphChecker::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
+  VisitInstruction(invoke);
+
+  if (invoke->IsStaticWithExplicitClinitCheck()) {
+    HInstruction* input = invoke->InputAt(0);
+    if (input == nullptr) {
+      AddError(StringPrintf("Static invoke %s:%d marked as having an explicit clinit check "
+                            "has a null pointer as first input.",
+                            invoke->DebugName(),
+                            invoke->GetId()));
+    }
+    if (!input->IsClinitCheck() && !input->IsLoadClass()) {
+      AddError(StringPrintf("Static invoke %s:%d marked as having an explicit clinit check "
+                            "has a first instruction (%s:%d) which is neither a clinit check "
+                            "nor a load class instruction.",
+                            invoke->DebugName(),
+                            invoke->GetId(),
+                            input->DebugName(),
+                            input->GetId()));
+    }
+  }
+}
+
 void SSAChecker::VisitBasicBlock(HBasicBlock* block) {
   super_type::VisitBasicBlock(block);
 
@@ -459,7 +482,7 @@ void SSAChecker::VisitBinaryOperation(HBinaryOperation* op) {
           Primitive::PrettyDescriptor(op->InputAt(1)->GetType())));
     }
   } else {
-    if (PrimitiveKind(op->InputAt(1)->GetType()) != PrimitiveKind(op->InputAt(0)->GetType())) {
+    if (PrimitiveKind(op->InputAt(0)->GetType()) != PrimitiveKind(op->InputAt(1)->GetType())) {
       AddError(StringPrintf(
           "Binary operation %s %d has inputs of different types: "
           "%s, and %s.",
@@ -484,7 +507,7 @@ void SSAChecker::VisitBinaryOperation(HBinaryOperation* op) {
           "from its input type: %s vs %s.",
           op->DebugName(), op->GetId(),
           Primitive::PrettyDescriptor(op->GetType()),
-          Primitive::PrettyDescriptor(op->InputAt(1)->GetType())));
+          Primitive::PrettyDescriptor(op->InputAt(0)->GetType())));
     }
   }
 }
