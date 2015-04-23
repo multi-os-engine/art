@@ -46,13 +46,13 @@
 namespace art {
 
 // Whether OatFile::Open will try DlOpen() first. Fallback is our own ELF loader.
-static constexpr bool kUseDlopen = false;
+static constexpr bool kUseDlopen = true;
 
 // Whether OatFile::Open will try DlOpen() on the host. On the host we're not linking against
 // bionic, so cannot take advantage of the support for changed semantics (loading the same soname
 // multiple times). However, if/when we switch the above, we likely want to switch this, too,
 // to get test coverage of the code paths.
-static constexpr bool kUseDlopenOnHost = false;
+static constexpr bool kUseDlopenOnHost = true;
 
 // For debugging, Open will print DlOpen error message if set to true.
 static constexpr bool kPrintDlOpenErrorMessage = false;
