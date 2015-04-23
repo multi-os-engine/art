@@ -998,6 +998,15 @@ class SsaLivenessAnalysis : public ValueObject {
     return instructions_from_lifetime_position_.Get(index);
   }
 
+  HBasicBlock* GetBlockFromPosition(size_t index) const {
+    HInstruction* instruction = GetInstructionFromPosition(index / 2);
+    if (instruction == nullptr) {
+      // If we are at a block boundary, get the block following.
+      instruction = GetInstructionFromPosition((index / 2) + 1);
+    }
+    return instruction->GetBlock();
+  }
+
   HInstruction* GetTempUser(LiveInterval* temp) const {
     // A temporary shares the same lifetime start as the instruction that requires it.
     DCHECK(temp->IsTemp());
