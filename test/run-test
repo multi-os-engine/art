@@ -569,6 +569,7 @@ if [ "$dev_mode" = "yes" ]; then
         fi
         echo "run exit status: $run_exit" 1>&2
     fi
+    exit
 elif [ "$update_mode" = "yes" ]; then
     "./${build}" $build_args >"$build_output" 2>&1
     build_exit="$?"
