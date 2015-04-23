@@ -490,6 +490,21 @@ void SsaBuilder::VisitInstruction(HInstruction* instruction) {
   instruction->SetRawEnvironment(environment);
 }
 
+void SsaBuilder::VisitInvoke(HInvoke* invoke) {
+  if (invoke->IsInvokeStaticOrDirect()
+      && invoke->AsInvokeStaticOrDirect()->GetOriginalInvokeType() == InvokeType::kStatic) {
+    return;
+  }
+
+  HInstruction* instance = invoke->InputAt(0);
+  if (!instance->CanBeNull()) {
+    return;
+  }
+
+  HNullCheck* null_check = new (GetGraph()->GetArena()) HNullCheck(invoke, 0);
+  invoke->GetBlock()->InsertInstructionBefore(null_check, invoke);
+}
+
 void SsaBuilder::VisitTemporary(HTemporary* temp) {
   // Temporaries are only used by the baseline register allocator.
   temp->GetBlock()->RemoveInstruction(temp);
