@@ -615,11 +615,24 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject javaM
 
   // Wrap any exception with "Ljava/lang/reflect/InvocationTargetException;" and return early.
   if (soa.Self()->IsExceptionPending()) {
+    // If we get another exception when we are trying to wrap, then just use that instead.
     jthrowable th = soa.Env()->ExceptionOccurred();
-    soa.Env()->ExceptionClear();
+    soa.Self()->ClearException();
     jclass exception_class = soa.Env()->FindClass("java/lang/reflect/InvocationTargetException");
+    if (exception_class == nullptr) {
+      soa.Self()->AssertPendingException();
+      return nullptr;
+    }
     jmethodID mid = soa.Env()->GetMethodID(exception_class, "<init>", "(Ljava/lang/Throwable;)V");
+    if (mid == nullptr) {
+      soa.Self()->AssertPendingException();
+      return nullptr;
+    }
     jobject exception_instance = soa.Env()->NewObject(exception_class, mid, th);
+    if (exception_instance == nullptr) {
+      soa.Self()->AssertPendingException();
+      return nullptr;  // Maybe got an OOME.
+    }
     soa.Env()->Throw(reinterpret_cast<jthrowable>(exception_instance));
     return nullptr;
   }

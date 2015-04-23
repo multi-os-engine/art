@@ -225,7 +225,7 @@ if [ "$DEBUGGER" = "y" ]; then
 fi
 
 if [ "$USE_JVM" = "y" ]; then
-  ${JAVA} ${DEBUGGER_OPTS} ${JVM_VERIFY_ARG} -classpath classes $MAIN "$@"
+  ${JAVA} ${DEBUGGER_OPTS} ${JVM_VERIFY_ARG} -Xmx256m -classpath classes $MAIN "$@"
   exit
 fi
 
