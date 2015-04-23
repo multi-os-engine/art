@@ -338,6 +338,14 @@ HInstruction* SsaBuilder::ValueOfLocal(HBasicBlock* block, size_t local) {
 void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
   current_locals_ = GetLocalsFor(block);
 
+  // First pass: use methods call to add more NullChecks.
+  for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
+    HInstruction* instr = it.Current();
+    if (instr->IsInvoke()) {
+      UseInvokeForNullability(instr->AsInvoke());
+    }
+  }
+
   if (block->IsLoopHeader()) {
     // If the block is a loop header, we know we only have visited the pre header
     // because we are visiting in reverse post order. We create phis for all initialized
@@ -544,6 +552,21 @@ void SsaBuilder::VisitInstruction(HInstruction* instruction) {
       GetGraph()->GetArena(), current_locals_->Size());
   environment->CopyFrom(current_locals_);
   instruction->SetRawEnvironment(environment);
+}
+
+void SsaBuilder::UseInvokeForNullability(HInvoke* invoke) {
+  (void) invoke;
+#if 1
+  if (invoke->IsInvokeStaticOrDirect()
+      && invoke->AsInvokeStaticOrDirect()->GetOriginalInvokeType() == InvokeType::kStatic) {
+    return;
+  }
+
+  LOG(INFO) << "entry";
+  HInstruction* instance = invoke->InputAt(0);
+
+  current_locals_->SetRawEnvAt(instance->InputAt(0)->AsLoadLocal()->GetLocal()->GetRegNumber(), instance);
+#endif
 }
 
 void SsaBuilder::VisitTemporary(HTemporary* temp) {
