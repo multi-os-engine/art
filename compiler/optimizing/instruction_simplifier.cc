@@ -166,6 +166,21 @@ void InstructionSimplifierVisitor::VisitCheckCast(HCheckCast* check_cast) {
     check_cast->ClearMustDoNullCheck();
   }
 
+  // Don't check for previous method call if we already know input is not null.
+  if (check_cast->MustDoNullCheck()) {
+    // If a method call occured in a dominating block, the reference is not null.
+    HBlock* cur_block = check_cast->GetBlock();
+    for (HUseIterator<HInstruction*> it(check_cast->InputAt(0)->GetUses());
+        !it.Done(); it.Advance()) {
+      if (it->IsInvoke()
+          && it->GetBlock()->Dominates(cur_block)
+          && it->InputAt(0) == check_cast->InputAt(0)) {
+        check_cast->ClearMustDoNullCheck();
+        break;
+      }
+    }
+  }
+
   if (!load_class->IsResolved()) {
     // If the class couldn't be resolve it's not safe to compare against it. It's
     // default type would be Top which might be wider that the actual class type
