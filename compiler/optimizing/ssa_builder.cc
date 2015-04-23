@@ -329,6 +329,37 @@ void SsaBuilder::BuildSsa() {
       current->GetBlock()->RemoveInstruction(current);
     }
   }
+
+  // 13) Visit Invokes. The "this" reference is NullCheck'd before all Invoke. If the Invoke
+  // succeeded, it means the this reference was not null, and we should keep this info.
+  // This pass isolates the unnecessary NullChecks, so that they are removed later, but keeping
+  // the nullability info.
+  // IE change this:
+  //   l6  LoadParam
+  //   ...
+  //   l42 NullCheck [ l6 ]  <= this NullCheck is persistent
+  //   v43 Invoke [ l42 ]
+  //   ...
+  //   l52 NullCheck [ l6 ]  <= this will be removed by GVN
+  //   v53 Invoke [ l52 ]    <= this will later take l6 as input: non-null knowledge has been lost.
+  //
+  // Into this:
+  //   l6  LoadParam
+  //   ...
+  //   l42 NullCheck [ l6 ]  <= this NullCheck is still persistent
+  //   v43 Invoke [ l42 ]
+  //   ...
+  //   l52 NullCheck [ l6 ]  <= this will be removed by GVN
+  //   v53 Invoke [ l42 ]    <= but now, input is l42 which is the persistent NullCheck.
+  //
+  for (HReversePostOrderIterator block_it(*GetGraph()); !block_it.Done(); block_it.Advance()) {
+    HBasicBlock* block = block_it.Current();
+    for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
+      if (it.Current()->IsInvoke()) {
+        UseInvokeForNullability(it.Current()->AsInvoke());
+      }
+    }
+  }
 }
 
 HInstruction* SsaBuilder::ValueOfLocal(HBasicBlock* block, size_t local) {
@@ -544,6 +575,45 @@ void SsaBuilder::VisitInstruction(HInstruction* instruction) {
       GetGraph()->GetArena(), current_locals_->Size());
   environment->CopyFrom(current_locals_);
   instruction->SetRawEnvironment(environment);
+}
+
+// When we have a method call, we know that the subsequent uses of the reference are not null.
+// After a method call, set the NullCheck as the local variable in the env instead of the LoadLocal.
+void SsaBuilder::UseInvokeForNullability(HInvoke* invoke) {
+  (void) invoke;
+#if 1
+  if (invoke->IsInvokeStaticOrDirect()
+      && invoke->AsInvokeStaticOrDirect()->GetOriginalInvokeType() == InvokeType::kStatic) {
+    return;
+  }
+
+  HInstruction* instance = invoke->InputAt(0);
+
+  if (!instance->IsNullCheck()) {
+    return;
+  }
+
+  if (instance->InputAt(0)->IsNullCheck()) {
+    for (size_t i = 0; i < invoke->InputCount(); ++i) {
+      if (invoke->InputAt(i) == instance) {
+        invoke->ReplaceInput(instance->InputAt(0), i);
+      }
+    }
+    return;
+  }
+
+  for (HUseIterator<HInstruction*> it(instance->InputAt(0)->GetUses()); !it.Done(); it.Advance()) {
+    HInstruction* user = it.Current()->GetUser();
+    HBasicBlock* block = user->GetBlock();
+    if (user != instance
+        && instance->GetBlock()->Dominates(block)
+        && user->GetId() > instance->GetId()
+        && !user->IsPhi()) {
+      user->ReplaceInput(instance, it.Current()->GetIndex());
+    }
+  }
+
+#endif
 }
 
 void SsaBuilder::VisitTemporary(HTemporary* temp) {
