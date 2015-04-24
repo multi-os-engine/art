@@ -121,6 +121,18 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
   }
 }
 
+void GraphChecker::CheckArrayAccess(HInstruction* instruction) {
+  if (!GetGraph()->HasArrayAccesses()) {
+    AddError(StringPrintf("Instruction %s:%d accesses an array, "
+                          "but HasArrayAccesses() returns false",
+                          instruction->DebugName(),
+                          instruction->GetId()));
+  }
+
+  // Perform the instruction base checks too.
+  VisitInstruction(instruction);
+}
+
 void GraphChecker::VisitInstruction(HInstruction* instruction) {
   if (seen_ids_.IsBitSet(instruction->GetId())) {
     AddError(StringPrintf("Instruction id %d is duplicate in graph.",
