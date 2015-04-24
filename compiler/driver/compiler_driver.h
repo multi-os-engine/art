@@ -280,6 +280,16 @@ class CompilerDriver {
       ArtField* resolved_field, uint16_t field_idx, uint32_t* storage_index)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Is the declaring class of `resolved_method` available to
+  // `referrer_class`? If so, compute the type index of the declaring
+  // class in the referrer's dex file.
+  bool IsClassOfStaticMethodAvailableToReferrer(mirror::DexCache* dex_cache,
+                                                mirror::Class* referrer_class,
+                                                mirror::ArtMethod* resolved_method,
+                                                uint16_t method_idx,
+                                                uint32_t* storage_index)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Is static field's in referrer's class?
   bool IsStaticFieldInReferrerClass(mirror::Class* referrer_class, ArtField* resolved_field)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -455,6 +465,28 @@ class CompilerDriver {
   }
 
  private:
+  // Can we fast-path a read/write access to a static member? If yes, compute the type index
+  // of the declaring class in the referrer's dex file.
+  template <typename ArtMember>
+  std::pair<bool, bool> IsFastStaticMember(mirror::DexCache* dex_cache,
+                                           mirror::Class* referrer_class,
+                                           ArtMember* resolved_member,
+                                           uint16_t member_idx,
+                                           uint32_t* storage_index)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Can `referrer_class` access the resolved `member`?
+  // Dispatch call to mirror::Class::CanAccessResolvedField or
+  // mirror::Class::CanAccessResolvedMember depending on the value of
+  // ArtMember.
+  template <typename ArtMember>
+  static bool CanAccessResolvedMember(mirror::Class* referrer_class,
+                                      mirror::Class* access_to,
+                                      ArtMember* member,
+                                      mirror::DexCache* dex_cache,
+                                      uint32_t field_idx)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // These flags are internal to CompilerDriver for collecting INVOKE resolution statistics.
   // The only external contract is that unresolved method has flags 0 and resolved non-0.
   enum {
