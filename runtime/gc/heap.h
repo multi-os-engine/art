@@ -495,7 +495,7 @@ class Heap {
   // Deflate monitors, ... and trim the spaces.
   void Trim(Thread* self) LOCKS_EXCLUDED(gc_complete_lock_);
 
-  void RevokeThreadLocalBuffers(Thread* thread);
+  void RevokeThreadLocalBuffers(Thread* thread, bool from_destroying_thread = false);
   void RevokeRosAllocThreadLocalBuffers(Thread* thread);
   void RevokeAllThreadLocalBuffers();
   void AssertThreadLocalBuffersAreRevoked(Thread* thread);

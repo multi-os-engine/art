@@ -1653,13 +1653,23 @@ void RosAlloc::SetFootprintLimit(size_t new_capacity) {
   }
 }
 
+size_t RosAlloc::RevokeThreadLocalRunsLocked(Thread* thread) {
+  Thread* self = Thread::Current();
+  size_t free_bytes = 0U;
+  // Avoid race conditions of bulk free bitmaps between from unexpected thread destroying
+  // and BulkFree() (GC).
+  ReaderMutexLock wmu(self, bulk_free_lock_);
+  free_bytes = RevokeThreadLocalRuns(thread);
+  return free_bytes;
+}
+
+// If RevokeThreadLocalRuns is from either root set enumeration or RevokeAllThreadLocalBuffers
+// between PausePhase and ReclaimPhase of collector , then no race condition since BulkFree()
+// hasn't happened yet or finished already.
 size_t RosAlloc::RevokeThreadLocalRuns(Thread* thread) {
   Thread* self = Thread::Current();
-  // Avoid race conditions on the bulk free bit maps with BulkFree() (GC).
-  ReaderMutexLock wmu(self, bulk_free_lock_);
   size_t free_bytes = 0U;
   for (size_t idx = 0; idx < kNumThreadLocalSizeBrackets; idx++) {
-    MutexLock mu(self, *size_bracket_locks_[idx]);
     Run* thread_local_run = reinterpret_cast<Run*>(thread->GetRosAllocRun(idx));
     CHECK(thread_local_run != nullptr);
     // Invalid means already revoked.
@@ -1677,6 +1687,8 @@ size_t RosAlloc::RevokeThreadLocalRuns(Thread* thread) {
       thread_local_run->MergeBulkFreeBitMapIntoAllocBitMap();
       DCHECK(non_full_runs_[idx].find(thread_local_run) == non_full_runs_[idx].end());
       DCHECK(full_runs_[idx].find(thread_local_run) == full_runs_[idx].end());
+      // Above thread local operations are lock free which is done by mutators on GC checkpoints.
+      MutexLock mu(self, *size_bracket_locks_[idx]);
       RevokeRun(self, idx, thread_local_run);
     }
   }
@@ -1739,11 +1751,10 @@ size_t RosAlloc::RevokeAllThreadLocalRuns() {
 
 void RosAlloc::AssertThreadLocalRunsAreRevoked(Thread* thread) {
   if (kIsDebugBuild) {
-    Thread* self = Thread::Current();
-    // Avoid race conditions on the bulk free bit maps with BulkFree() (GC).
-    ReaderMutexLock wmu(self, bulk_free_lock_);
+    // The thread is about to exit after destroying itself. No need bulk_free_lock
+    // and bracket lock, because the thread state is not runnable, and there is no
+    // allocation. It's assumed to expose the errors here if any.
     for (size_t idx = 0; idx < kNumThreadLocalSizeBrackets; idx++) {
-      MutexLock mu(self, *size_bracket_locks_[idx]);
       Run* thread_local_run = reinterpret_cast<Run*>(thread->GetRosAllocRun(idx));
       DCHECK(thread_local_run == nullptr || thread_local_run == dedicated_full_run_);
     }
