@@ -175,8 +175,10 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
   }
 
   // Generate the slow paths.
-  for (size_t i = 0, e = slow_paths_.Size(); i < e; ++i) {
-    slow_paths_.Get(i)->EmitNativeCode(this);
+  for (size_t k = 0, e_k = SlowPathCode::kNumberOfSlowPathKinds; k < e_k; ++k) {
+    for (size_t i = 0, e_i = slow_paths_[k]->Size(); i < e_i; ++i) {
+      slow_paths_[k]->Get(i)->EmitNativeCode(this);
+    }
   }
 
   // Finalize instructions in assember;
@@ -437,34 +439,41 @@ void CodeGenerator::AllocateLocations(HInstruction* instruction) {
 CodeGenerator* CodeGenerator::Create(HGraph* graph,
                                      InstructionSet instruction_set,
                                      const InstructionSetFeatures& isa_features,
-                                     const CompilerOptions& compiler_options) {
+                                     const CompilerOptions& compiler_options,
+                                     OptimizingCompilerStats* const stats = nullptr) {
+  CodeGenerator* codegen = nullptr;
+
   switch (instruction_set) {
     case kArm:
     case kThumb2: {
-      return new arm::CodeGeneratorARM(graph,
+      codegen = new arm::CodeGeneratorARM(graph,
           *isa_features.AsArmInstructionSetFeatures(),
           compiler_options);
-    }
+    } break;
     case kArm64: {
-      return new arm64::CodeGeneratorARM64(graph,
+      codegen = new arm64::CodeGeneratorARM64(graph,
           *isa_features.AsArm64InstructionSetFeatures(),
           compiler_options);
-    }
+    } break;
     case kMips:
-      return nullptr;
+      break;
     case kX86: {
-      return new x86::CodeGeneratorX86(graph,
+      codegen = new x86::CodeGeneratorX86(graph,
            *isa_features.AsX86InstructionSetFeatures(),
            compiler_options);
-    }
+    } break;
     case kX86_64: {
-      return new x86_64::CodeGeneratorX86_64(graph,
+      codegen = new x86_64::CodeGeneratorX86_64(graph,
           *isa_features.AsX86_64InstructionSetFeatures(),
           compiler_options);
-    }
+    } break;
     default:
-      return nullptr;
+      break;
   }
+
+  if (codegen != nullptr) codegen->SetStats(stats);
+
+  return codegen;
 }
 
 void CodeGenerator::BuildNativeGCMap(
@@ -861,6 +870,27 @@ void CodeGenerator::MaybeRecordImplicitNullCheck(HInstruction* instr) {
     // otherwise the stack maps at the throw point will not be correct.
     RecordPcInfo(null_check, null_check->GetDexPc());
   }
+}
+
+SlowPathCode* CodeGenerator::AddSlowPath(SlowPathCode* slow_path) {
+  // To reduce the code size, we check if there is a slow path that we can reuse.
+  // If not, we add the new slow path to the list.
+  SlowPathCode::SlowPathKind kind = slow_path->GetKind();
+  const size_t n_slow_paths = slow_paths_[kind]->Size();
+
+  if (!GetGraph()->IsDebuggable() && slow_path->IsShareable()) {
+    for (size_t i = 0; i < n_slow_paths; i++) {
+      SlowPathCode* spc = slow_paths_[kind]->Get(i);
+      if (spc->IsShareable() && slow_path->CanBeMergedWith(spc)) {
+        MaybeRecordStat(MethodCompilationStat::kRemovedDuplicateSlowPath);
+        return spc;
+      }
+    }
+  }
+
+  // No matches were found for reuse.
+  slow_paths_[kind]->Add(slow_path);
+  return slow_path;
 }
 
 void CodeGenerator::ClearSpillSlotsFromLoopPhisInStackMap(HSuspendCheck* suspend_check) const {

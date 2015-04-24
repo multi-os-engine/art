@@ -26,6 +26,7 @@
 #include "memory_region.h"
 #include "nodes.h"
 #include "stack_map_stream.h"
+#include "optimizing_compiler_stats.h"
 
 namespace art {
 
@@ -64,8 +65,31 @@ struct PcInfo {
   uintptr_t native_pc;
 };
 
+#define DECLARE_SHAREABLE_SLOWPATH(type)                                       \
+  SlowPathKind GetKind() const OVERRIDE {                                      \
+    return SlowPathKind::k##type;                                              \
+  }                                                                            \
+  bool IsShareable() const OVERRIDE {                                          \
+    return true;                                                               \
+  }
+
+#define DECLARE_SHAREABLE_FATAL_SLOWPATH(type)                                 \
+  DECLARE_SHAREABLE_SLOWPATH(type)                                             \
+  bool IsFatal() const OVERRIDE {                                              \
+    return true;                                                               \
+  }
+
 class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
  public:
+  enum SlowPathKind {
+    kDefaultSlowPath,
+    kBoundsCheck,
+    kDivZeroCheck,
+    kDeoptimization,
+    kNullCheck,
+    kNumberOfSlowPathKinds
+  };
+
   SlowPathCode() {
     for (size_t i = 0; i < kMaximumNumberOfExpectedRegisters; ++i) {
       saved_core_stack_offsets_[i] = kRegisterNotSaved;
@@ -97,6 +121,39 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
     return saved_fpu_stack_offsets_[reg];
   }
 
+  virtual SlowPathKind GetKind() const {
+    return SlowPathKind::kDefaultSlowPath;
+  }
+
+  virtual bool IsShareable() const {
+    return false;
+  }
+
+  virtual bool IsFatal() const {
+    return false;
+  }
+
+  bool TypeEquals(SlowPathCode* other) const {
+    if (GetKind() == SlowPathKind::kDefaultSlowPath) return false;
+    return (GetKind() == other->GetKind());
+  }
+
+  virtual bool Equals(SlowPathCode* other) const {
+    if (IsFatal()) {
+      return TypeEquals(other);
+    } else {
+      // TODO: Run a check sum on the two non fatal slow paths.
+      return false;
+    }
+  }
+
+  virtual bool CanBeMergedWith(SlowPathCode* other) const {
+    DCHECK(other != nullptr);
+    DCHECK(IsShareable());
+    DCHECK(other->IsShareable());
+    return Equals(other);
+  }
+
  private:
   static constexpr size_t kMaximumNumberOfExpectedRegisters = 32;
   static constexpr uint32_t kRegisterNotSaved = -1;
@@ -114,7 +171,8 @@ class CodeGenerator {
   static CodeGenerator* Create(HGraph* graph,
                                InstructionSet instruction_set,
                                const InstructionSetFeatures& isa_features,
-                               const CompilerOptions& compiler_options);
+                               const CompilerOptions& compiler_options,
+                               OptimizingCompilerStats* const stats);
   virtual ~CodeGenerator() {}
 
   HGraph* GetGraph() const { return graph_; }
@@ -201,9 +259,7 @@ class CodeGenerator {
   bool CanMoveNullCheckToUser(HNullCheck* null_check);
   void MaybeRecordImplicitNullCheck(HInstruction* instruction);
 
-  void AddSlowPath(SlowPathCode* slow_path) {
-    slow_paths_.Add(slow_path);
-  }
+  SlowPathCode* AddSlowPath(SlowPathCode* slow_path);
 
   void BuildSourceMap(DefaultSrcMap* src_map) const;
   void BuildMappingTable(std::vector<uint8_t>* vector) const;
@@ -304,6 +360,15 @@ class CodeGenerator {
     return GetFpuSpillSize() + GetCoreSpillSize();
   }
 
+  void MaybeRecordStat(MethodCompilationStat compilation_stat) const {
+    if (stats_ != nullptr) {
+      stats_->RecordStat(compilation_stat);
+    }
+  }
+
+  void SetStats(OptimizingCompilerStats* stats) {
+    stats_ = stats;
+  }
 
  protected:
   CodeGenerator(HGraph* graph,
@@ -328,12 +393,17 @@ class CodeGenerator {
         graph_(graph),
         compiler_options_(compiler_options),
         pc_infos_(graph->GetArena(), 32),
-        slow_paths_(graph->GetArena(), 8),
         block_order_(nullptr),
         current_block_index_(0),
         is_leaf_(true),
         requires_current_method_(false),
-        stack_map_stream_(graph->GetArena()) {}
+        stack_map_stream_(graph->GetArena()),
+        stats_(nullptr) {
+    ArenaAllocator* arena = graph->GetArena();
+    for (int i = 0; i < SlowPathCode::kNumberOfSlowPathKinds; i++) {
+      slow_paths_[i] = new (arena) GrowableArray<SlowPathCode*>(arena, 8);
+    }
+  }
 
   // Register allocation logic.
   void AllocateRegistersLocally(HInstruction* instruction) const;
@@ -414,7 +484,7 @@ class CodeGenerator {
   const CompilerOptions& compiler_options_;
 
   GrowableArray<PcInfo> pc_infos_;
-  GrowableArray<SlowPathCode*> slow_paths_;
+  GrowableArray<SlowPathCode*>* slow_paths_[SlowPathCode::kNumberOfSlowPathKinds];
 
   // The order to use for code generation.
   const GrowableArray<HBasicBlock*>* block_order_;
@@ -432,6 +502,8 @@ class CodeGenerator {
   StackMapStream stack_map_stream_;
 
   friend class OptimizingCFITest;
+
+  OptimizingCompilerStats* stats_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGenerator);
 };
