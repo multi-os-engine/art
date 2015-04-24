@@ -1194,9 +1194,20 @@ void InstructionCodeGeneratorX86::VisitReturn(HReturn* ret) {
 }
 
 void LocationsBuilderX86::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
-  // Explicit clinit checks triggered by static invokes must have been
-  // pruned by art::PrepareForRegisterAllocation.
-  DCHECK(!invoke->IsStaticWithExplicitClinitCheck());
+  // TODO: Explicit clinit checks triggered by static invokes must
+  // have been pruned by art::PrepareForRegisterAllocation, but this
+  // step is not run in baseline. So we remove them here manually here
+  // if we find them. Instead of this local workaround, address this
+  // properly.
+  if (invoke->IsStaticWithExplicitClinitCheck()) {
+    size_t last_input_index = invoke->InputCount() - 1;
+    HInstruction* last_input = invoke->InputAt(last_input_index);
+    DCHECK(last_input->IsClinitCheck()) << last_input->DebugName();
+    invoke->RemoveClinitCheckOrLoadClassAsLastInput();
+    if (!last_input->HasUses()) {
+      last_input->GetBlock()->RemoveInstruction(last_input);
+    }
+  }
 
   IntrinsicLocationsBuilderX86 intrinsic(codegen_);
   if (intrinsic.TryDispatch(invoke)) {
