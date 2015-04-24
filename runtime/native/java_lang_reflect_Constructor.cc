@@ -29,8 +29,14 @@
 
 namespace art {
 
-static ALWAYS_INLINE inline jobject NewInstanceHelper(
-    JNIEnv* env, jobject javaMethod, jobjectArray javaArgs, size_t num_frames) {
+/*
+ * We get here through Constructor.newInstance().  The Constructor object
+ * would not be available if the constructor weren't public (per the
+ * definition of Class.getConstructor), so we can skip the method access
+ * check.  We can also safely assume the constructor isn't associated
+ * with an interface, array, or primitive class.
+ */
+static jobject Constructor_newInstance(JNIEnv* env, jobject javaMethod, jobjectArray javaArgs) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Method* m = soa.Decode<mirror::Method*>(javaMethod);
   StackHandleScope<1> hs(soa.Self());
@@ -61,31 +67,14 @@ static ALWAYS_INLINE inline jobject NewInstanceHelper(
   }
 
   jobject javaReceiver = soa.AddLocalReference<jobject>(receiver);
-  InvokeMethod(soa, javaMethod, javaReceiver, javaArgs, num_frames);
+  InvokeMethod(soa, javaMethod, javaReceiver, javaArgs, 1);
 
   // Constructors are ()V methods, so we shouldn't touch the result of InvokeMethod.
   return javaReceiver;
 }
 
-/*
- * We get here through Constructor.newInstance().  The Constructor object
- * would not be available if the constructor weren't public (per the
- * definition of Class.getConstructor), so we can skip the method access
- * check.  We can also safely assume the constructor isn't associated
- * with an interface, array, or primitive class.
- */
-static jobject Constructor_newInstance(JNIEnv* env, jobject javaMethod, jobjectArray javaArgs) {
-  return NewInstanceHelper(env, javaMethod, javaArgs, 1);
-}
-
-static jobject Constructor_newInstanceTwoFrames(JNIEnv* env, jobject javaMethod,
-                                                jobjectArray javaArgs) {
-  return NewInstanceHelper(env, javaMethod, javaArgs, 2);
-}
-
 static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(Constructor, newInstance, "!([Ljava/lang/Object;)Ljava/lang/Object;"),
-  NATIVE_METHOD(Constructor, newInstanceTwoFrames, "!([Ljava/lang/Object;)Ljava/lang/Object;"),
 };
 
 void register_java_lang_reflect_Constructor(JNIEnv* env) {
