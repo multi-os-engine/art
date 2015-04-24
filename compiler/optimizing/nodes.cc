@@ -443,6 +443,19 @@ void HBasicBlock::AddPhi(HPhi* phi) {
   Add(&phis_, this, phi);
 }
 
+void HBasicBlock::InsertInstructionAfter(HInstruction* instruction, HInstruction* cursor) {
+  DCHECK(!cursor->IsPhi());
+  DCHECK(!instruction->IsPhi());
+  DCHECK_EQ(instruction->GetId(), -1);
+  DCHECK_NE(cursor->GetId(), -1);
+  DCHECK_EQ(cursor->GetBlock(), this);
+  DCHECK(!instruction->IsControlFlow());
+  instruction->SetBlock(this);
+  instruction->SetId(GetGraph()->GetNextInstructionId());
+  UpdateInputsUsers(instruction);
+  instructions_.InsertInstructionAfter(instruction, cursor);
+}
+
 void HBasicBlock::InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor) {
   DCHECK(!cursor->IsPhi());
   DCHECK(!instruction->IsPhi());

@@ -567,6 +567,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   void DisconnectFromAll();
 
   void AddInstruction(HInstruction* instruction);
+  void InsertInstructionAfter(HInstruction* instruction, HInstruction* cursor);
   void InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor);
   // Replace instruction `initial` with `replacement` within this block.
   void ReplaceAndRemoveInstructionWith(HInstruction* initial,
