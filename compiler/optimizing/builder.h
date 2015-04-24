@@ -224,6 +224,10 @@ class HGraphBuilder : public ValueObject {
   // Returns whether `type_index` points to the outer-most compiling method's class.
   bool IsOutermostCompilingClass(uint16_t type_index) const;
 
+  // Is `this_klass` a (strict) super class of `that_klass`?
+  static bool IsSuperClassOf(mirror::Class* this_klass, mirror::Class* that_klass)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   ArenaAllocator* const arena_;
 
   // A list of the size of the dex code holding block information for

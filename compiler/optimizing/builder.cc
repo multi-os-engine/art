@@ -655,6 +655,8 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
       // The index at which the method's class is stored in the DexCache's type array.
       uint32_t storage_index = DexFile::kDexNoIndex;
       bool is_referrer_class = (resolved_method->GetDeclaringClass() == referrer_class.Get());
+      bool is_superclass_of_referrer_class =
+          IsSuperClassOf(resolved_method->GetDeclaringClass(), referrer_class.Get());
       if (is_referrer_class) {
         storage_index = referrer_class->GetDexTypeIndex();
       } else if (outer_dex_cache.Get() == dex_cache.Get()) {
@@ -666,9 +668,10 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
                                                                    &storage_index);
       }
 
-      if (is_referrer_class) {
-        // If the declaring class is the referrer class, no class
-        // initialization is needed before the static method call.
+      if (is_referrer_class || is_superclass_of_referrer_class) {
+        // If the declaring class is the referrer class or a super
+        // class of the referrer class, no class initialization is
+        // needed before the static method call.
         clinit_check_requirement = HInvokeStaticOrDirect::ClinitCheckRequirement::kNone;
       } else if (storage_index != DexFile::kDexNoIndex) {
         // If the method's class type index is available, check
@@ -811,6 +814,15 @@ bool HGraphBuilder::IsOutermostCompilingClass(uint16_t type_index) const {
   Handle<mirror::Class> compiling_class(hs.NewHandle(GetOutermostCompilingClass()));
 
   return compiling_class.Get() == cls.Get();
+}
+
+bool HGraphBuilder::IsSuperClassOf(mirror::Class* this_klass, mirror::Class* that_klass) {
+  for (mirror::Class* klass = that_klass; klass != nullptr; klass = klass->GetSuperClass()) {
+    if (this_klass == that_klass->GetSuperClass()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
