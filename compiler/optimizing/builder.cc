@@ -997,6 +997,7 @@ void HGraphBuilder::BuildFilledNewArray(uint32_t dex_pc,
         new (arena_) HArraySet(object, index, value, type, dex_pc));
   }
   latest_result_ = object;
+  graph_->SetHasArrayAccesses(true);
 }
 
 template <typename T>

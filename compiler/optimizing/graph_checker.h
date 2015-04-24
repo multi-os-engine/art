@@ -45,6 +45,13 @@ class GraphChecker : public HGraphDelegateVisitor {
   // Perform control-flow graph checks on instruction.
   void VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) OVERRIDE;
 
+  // Check that the HasArrayAccesses() flag is set for array accesses.
+  void CheckArrayAccess(HInstruction* instruction);
+
+  void VisitArraySet(HArraySet* array) OVERRIDE { CheckArrayAccess(array); }
+  void VisitArrayGet(HArrayGet* array) OVERRIDE { CheckArrayAccess(array); }
+  void VisitBoundsCheck(HBoundsCheck* check) OVERRIDE { CheckArrayAccess(check); }
+
   // Was the last visit of the graph valid?
   bool IsValid() const {
     return errors_.empty();
