@@ -129,6 +129,8 @@ class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
     CheckEntrypointTypes<kQuickThrowArrayBounds, void, int32_t, int32_t>();
   }
 
+  DECLARE_SHAREABLE_FATAL_SLOWPATH(BoundsCheck)
+
  private:
   HBoundsCheck* const instruction_;
   const Location index_location_;
@@ -148,6 +150,8 @@ class DivZeroCheckSlowPathARM64 : public SlowPathCodeARM64 {
         QUICK_ENTRY_POINT(pThrowDivZero), instruction_, instruction_->GetDexPc(), this);
     CheckEntrypointTypes<kQuickThrowDivZero, void, void>();
   }
+
+  DECLARE_SHAREABLE_FATAL_SLOWPATH(DivZeroCheck)
 
  private:
   HDivZeroCheck* const instruction_;
@@ -252,6 +256,8 @@ class NullCheckSlowPathARM64 : public SlowPathCodeARM64 {
         QUICK_ENTRY_POINT(pThrowNullPointer), instruction_, instruction_->GetDexPc(), this);
     CheckEntrypointTypes<kQuickThrowNullPointer, void, void>();
   }
+
+  DECLARE_SHAREABLE_FATAL_SLOWPATH(NullCheck)
 
  private:
   HNullCheck* const instruction_;
@@ -1426,7 +1432,7 @@ void InstructionCodeGeneratorARM64::VisitBoundsCheck(HBoundsCheck* instruction) 
   LocationSummary* locations = instruction->GetLocations();
   BoundsCheckSlowPathARM64* slow_path = new (GetGraph()->GetArena()) BoundsCheckSlowPathARM64(
       instruction, locations->InAt(0), locations->InAt(1));
-  codegen_->AddSlowPath(slow_path);
+  slow_path = reinterpret_cast<BoundsCheckSlowPathARM64*>(codegen_->AddSlowPath(slow_path));
 
   __ Cmp(InputRegisterAt(instruction, 0), InputOperandAt(instruction, 1));
   __ B(slow_path->GetEntryLabel(), hs);
@@ -1643,7 +1649,7 @@ void LocationsBuilderARM64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
 void InstructionCodeGeneratorARM64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
   SlowPathCodeARM64* slow_path =
       new (GetGraph()->GetArena()) DivZeroCheckSlowPathARM64(instruction);
-  codegen_->AddSlowPath(slow_path);
+  slow_path = reinterpret_cast<SlowPathCodeARM64*>(codegen_->AddSlowPath(slow_path));
   Location value = instruction->GetLocations()->InAt(0);
 
   Primitive::Type type = instruction->GetType();
@@ -1815,7 +1821,7 @@ void LocationsBuilderARM64::VisitDeoptimize(HDeoptimize* deoptimize) {
 void InstructionCodeGeneratorARM64::VisitDeoptimize(HDeoptimize* deoptimize) {
   SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena())
       DeoptimizationSlowPathARM64(deoptimize);
-  codegen_->AddSlowPath(slow_path);
+  slow_path = reinterpret_cast<SlowPathCodeARM64*>(codegen_->AddSlowPath(slow_path));
   vixl::Label* slow_path_entry = slow_path->GetEntryLabel();
   GenerateTestAndBranch(deoptimize, slow_path_entry, nullptr, slow_path_entry);
 }
@@ -2364,7 +2370,7 @@ void InstructionCodeGeneratorARM64::GenerateImplicitNullCheck(HNullCheck* instru
 
 void InstructionCodeGeneratorARM64::GenerateExplicitNullCheck(HNullCheck* instruction) {
   SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) NullCheckSlowPathARM64(instruction);
-  codegen_->AddSlowPath(slow_path);
+  slow_path = reinterpret_cast<SlowPathCodeARM64*>(codegen_->AddSlowPath(slow_path));
 
   LocationSummary* locations = instruction->GetLocations();
   Location obj = locations->InAt(0);
