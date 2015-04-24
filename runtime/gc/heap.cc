@@ -3459,9 +3459,14 @@ void Heap::RequestTrim(Thread* self) {
   task_processor_->AddTask(self, added_task);
 }
 
-void Heap::RevokeThreadLocalBuffers(Thread* thread) {
+void Heap::RevokeThreadLocalBuffers(Thread* thread, bool from_destroying_thread) {
   if (rosalloc_space_ != nullptr) {
-    size_t freed_bytes_revoke = rosalloc_space_->RevokeThreadLocalBuffers(thread);
+    size_t freed_bytes_revoke = 0U;
+    if (UNLIKELY(from_destroying_thread)) {
+      freed_bytes_revoke = rosalloc_space_->RevokeThreadLocalBuffersLocked(thread);
+    } else {
+      freed_bytes_revoke = rosalloc_space_->RevokeThreadLocalBuffers(thread);
+    }
     if (freed_bytes_revoke > 0U) {
       num_bytes_freed_revoke_.FetchAndAddSequentiallyConsistent(freed_bytes_revoke);
       CHECK_GE(num_bytes_allocated_.LoadRelaxed(), num_bytes_freed_revoke_.LoadRelaxed());

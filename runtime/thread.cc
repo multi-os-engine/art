@@ -1268,7 +1268,7 @@ void Thread::Destroy() {
 
   {
     ScopedObjectAccess soa(self);
-    Runtime::Current()->GetHeap()->RevokeThreadLocalBuffers(this);
+    Runtime::Current()->GetHeap()->RevokeThreadLocalBuffers(this, true);
   }
 }
 

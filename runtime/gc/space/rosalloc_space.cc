@@ -340,6 +340,10 @@ void RosAllocSpace::InspectAllRosAlloc(void (*callback)(void *start, void *end, 
   }
 }
 
+size_t RosAllocSpace::RevokeThreadLocalBuffersLocked(Thread* thread) {
+  return rosalloc_->RevokeThreadLocalRunsLocked(thread);
+}
+
 size_t RosAllocSpace::RevokeThreadLocalBuffers(Thread* thread) {
   return rosalloc_->RevokeThreadLocalRuns(thread);
 }

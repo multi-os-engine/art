@@ -619,6 +619,7 @@ class RosAlloc {
   // Returns the total bytes of free slots in the revoked thread local runs. This is to be
   // subtracted from Heap::num_bytes_allocated_ to cancel out the ahead-of-time counting.
   size_t RevokeThreadLocalRuns(Thread* thread);
+  size_t RevokeThreadLocalRunsLocked(Thread* thread) LOCKS_EXCLUDED(bulk_free_lock_);
   // Releases the thread-local runs assigned to all the threads back to the common set of runs.
   // Returns the total bytes of free slots in the revoked thread local runs. This is to be
   // subtracted from Heap::num_bytes_allocated_ to cancel out the ahead-of-time counting.
