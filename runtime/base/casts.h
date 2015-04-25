@@ -18,9 +18,11 @@
 #define ART_RUNTIME_BASE_CASTS_H_
 
 #include <assert.h>
+#include <limits>
 #include <string.h>
 #include <type_traits>
 
+#include "base/logging.h"
 #include "base/macros.h"
 
 namespace art {
@@ -81,6 +83,30 @@ inline Dest bit_cast(const Source& source) {
   Dest dest;
   memcpy(&dest, &source, sizeof(dest));
   return dest;
+}
+
+// A version of static_cast that DCHECKs that the value can be precisely represented
+// when converting to Dest.
+template <typename Dest, typename Source>
+inline Dest dchecked_integral_cast(const Source source) {
+  // Compile time assertion: sizeof(Dest) >= sizeof(Source)
+  static_assert(sizeof(Dest) >= sizeof(Source), "sizes should be equal");
+  // Compile time assertion: Source and Dest are integral types.
+  static_assert(std::is_integral<Source>::value, "Source must be integral");
+  static_assert(std::is_integral<Dest>::value, "Dest must be integral");
+  // Checking only makes sense if Source is signed and Dest is unsigned, or the reverse.
+  static_assert(std::is_signed<Source>::value != std::is_signed<Dest>::value,
+                "Source and Dest are of the same signedness");
+
+  if (std::is_signed<Source>::value) {
+    DCHECK_GE(source, 0);
+  } else {
+    // Dest is signed. Check is only necessary if sizeof(Dest) == sizeof(Source).
+    if (sizeof(Dest) == sizeof(Source)) {
+      DCHECK_LE(source, static_cast<Source>(std::numeric_limits<Dest>::max()));
+    }
+  }
+  return static_cast<Dest>(source);
 }
 
 }  // namespace art
