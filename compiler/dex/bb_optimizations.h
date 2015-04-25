@@ -284,6 +284,15 @@ class GlobalValueNumberingCleanupPass : public PassME {
     : PassME("GVNCleanup", kNoNodes, "") {
   }
 
+  bool Gate(const PassDataHolder* data) const OVERRIDE {
+    DCHECK(data != nullptr);
+    CompilationUnit* c_unit = down_cast<const PassMEDataHolder*>(data)->c_unit;
+    DCHECK(c_unit != nullptr);
+    // Do not do cleanup if GVN skipped this.
+    // TODO: Proper dependencies between passes?
+    return !GlobalValueNumbering::Skip(c_unit);
+  }
+
   void Start(PassDataHolder* data) const OVERRIDE {
     DCHECK(data != nullptr);
     CompilationUnit* c_unit = down_cast<const PassMEDataHolder*>(data)->c_unit;

@@ -1357,6 +1357,8 @@ void MIRGraph::EliminateClassInitChecksEnd() {
 
 bool MIRGraph::ApplyGlobalValueNumberingGate() {
   if (GlobalValueNumbering::Skip(cu_)) {
+    // Need to disable dependent optimizations.
+    cu_->disable_opt |= (1u << kGvnDeadCodeElimination);
     return false;
   }
 
