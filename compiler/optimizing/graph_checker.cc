@@ -184,6 +184,14 @@ void GraphChecker::VisitInstruction(HInstruction* instruction) {
                             use->GetId(),
                             instruction->GetId()));
     }
+    size_t use_index = use_it.Current()->GetIndex();
+    if (use_index >= use->InputCount() || (use->InputAt(use_index) != instruction)) {
+      AddError(StringPrintf("User %s:%d of instruction %d has a wrong "
+                            "UseListNode index.",
+                            use->DebugName(),
+                            use->GetId(),
+                            instruction->GetId()));
+    }
   }
 
   // Ensure 'instruction' has pointers to its inputs' use entries.
@@ -191,7 +199,11 @@ void GraphChecker::VisitInstruction(HInstruction* instruction) {
     HUserRecord<HInstruction*> input_record = instruction->InputRecordAt(i);
     HInstruction* input = input_record.GetInstruction();
     HUseListNode<HInstruction*>* use_node = input_record.GetUseNode();
-    if (use_node == nullptr || !input->GetUses().Contains(use_node)) {
+    size_t use_index = use_node->GetIndex();
+    if ((use_node == nullptr)
+        || !input->GetUses().Contains(use_node)
+        || (use_index >= e)
+        || (instruction->InputAt(use_index) != input)) {
       AddError(StringPrintf("Instruction %s:%d has an invalid pointer to use entry "
                             "at input %u (%s:%d).",
                             instruction->DebugName(),
