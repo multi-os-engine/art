@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
-// This optimization recognizes a common pattern where a boolean value is
-// either cast to an integer or negated by selecting from zero/one integer
-// constants with an If statement. Because boolean values are internally
-// represented as zero/one, we can safely replace the pattern with a suitable
-// condition instruction.
+// This optimization recognizes two common patterns:
+//  (a) Boolean selection: Casting a boolean to an integer or negating its value
+//      is carried out with an If statement selecting from zero/one integer
+//      constants. Because boolean values are represented as zero/one, we can
+//      safely replace the pattern with a suitable condition instruction.
+//  (b) Negated condition: The instruction simplifier can replace If's condition
+//      with a boolean value. If this value is the result of a Boolean negation,
+//      true/false branches can be swapped and negation removed.
 
 // Example: Negating a boolean value
 //     B1:
@@ -66,6 +69,9 @@ class HBooleanSimplifier : public HOptimization {
   static constexpr const char* kBooleanSimplifierPassName = "boolean_simplifier";
 
  private:
+  void TryRemovingNegatedCondition(HBasicBlock* block);
+  void TryRemovingBooleanSelection(HBasicBlock* block);
+
   DISALLOW_COPY_AND_ASSIGN(HBooleanSimplifier);
 };
 
