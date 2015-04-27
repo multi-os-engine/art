@@ -102,8 +102,7 @@ void CustomDisassembler::VisitLoadStoreUnsignedOffset(const vixl::Instruction* i
 size_t DisassemblerArm64::Dump(std::ostream& os, const uint8_t* begin) {
   const vixl::Instruction* instr = reinterpret_cast<const vixl::Instruction*>(begin);
   decoder.Decode(instr);
-    os << FormatInstructionPointer(begin)
-     << StringPrintf(": %08x\t%s\n", instr->InstructionBits(), disasm.GetOutput());
+  os << StringPrintf("%08x\t%s", instr->InstructionBits(), disasm.GetOutput());
   return vixl::kInstructionSize;
 }
 

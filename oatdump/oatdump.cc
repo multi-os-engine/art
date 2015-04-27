@@ -306,7 +306,8 @@ class OatSymbolizer FINAL : public CodeOutput {
 
 class OatDumperOptions {
  public:
-  OatDumperOptions(bool dump_raw_mapping_table,
+  OatDumperOptions(bool dump_addresses,
+                   bool dump_raw_mapping_table,
                    bool dump_raw_gc_map,
                    bool dump_vmap,
                    bool disassemble_code,
@@ -317,7 +318,8 @@ class OatDumperOptions {
                    bool list_methods,
                    const char* export_dex_location,
                    uint32_t addr2instr)
-    : dump_raw_mapping_table_(dump_raw_mapping_table),
+    : dump_addresses_(dump_addresses),
+      dump_raw_mapping_table_(dump_raw_mapping_table),
       dump_raw_gc_map_(dump_raw_gc_map),
       dump_vmap_(dump_vmap),
       disassemble_code_(disassemble_code),
@@ -330,6 +332,7 @@ class OatDumperOptions {
       addr2instr_(addr2instr),
       class_loader_(nullptr) {}
 
+  const bool dump_addresses_;
   const bool dump_raw_mapping_table_;
   const bool dump_raw_gc_map_;
   const bool dump_vmap_;
@@ -1345,7 +1348,12 @@ class OatDumper {
         if (!bad_input) {
           DumpMappingAtOffset(os, oat_method, offset, false);
         }
-        offset += disassembler_->Dump(os, quick_native_pc + offset);
+        const uint8_t* instr_ptr = quick_native_pc + offset;
+        if (options_.dump_addresses_) {
+          os << disassembler_->FormatInstructionPointer(instr_ptr) << ": ";
+        }
+        offset += disassembler_->Dump(os, instr_ptr);
+        os << std::endl;
         if (!bad_input) {
           uint32_t dex_pc = DumpMappingAtOffset(os, oat_method, offset, true);
           if (dex_pc != DexFile::kDexNoIndex) {
@@ -2258,6 +2266,8 @@ struct OatdumpArgs : public CmdlineArgs {
         *error_msg = "Address conversion failed";
         return kParseError;
       }
+    } else if (option.starts_with("--no-dump-addresses")) {
+      dump_addresses_ = false;
     } else {
       return kParseUnknownArgument;
     }
@@ -2320,6 +2330,9 @@ struct OatdumpArgs : public CmdlineArgs {
         "  --no-disassemble may be used to disable disassembly.\n"
         "      Example: --no-disassemble\n"
         "\n"
+        "  --no-dump-addresses: do not dump addresses of instructions.\n"
+        "      Example: --no-dump-addresses\n"
+        "\n"
         "  --list-classes may be used to list target file classes (can be used with filters).\n"
         "      Example: --list-classes\n"
         "      Example: --list-classes --class-filter=com.example.foo\n"
@@ -2354,6 +2367,7 @@ struct OatdumpArgs : public CmdlineArgs {
   const char* method_filter_ = "";
   const char* image_location_ = nullptr;
   std::string elf_filename_prefix_;
+  bool dump_addresses_ = true;
   bool dump_raw_mapping_table_ = false;
   bool dump_raw_gc_map_ = false;
   bool dump_vmap_ = true;
@@ -2373,6 +2387,7 @@ struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
     bool absolute_addresses = (args_->oat_filename_ == nullptr);
 
     oat_dumper_options_ = std::unique_ptr<OatDumperOptions>(new OatDumperOptions(
+        args_->dump_addresses_,
         args_->dump_raw_mapping_table_,
         args_->dump_raw_gc_map_,
         args_->dump_vmap_,

@@ -311,9 +311,8 @@ size_t DisassemblerMips::Dump(std::ostream& os, const uint8_t* instr_ptr) {
     }
   }
 
-  os << FormatInstructionPointer(instr_ptr)
-     << StringPrintf(": %08x\t%-7s ", instruction, opcode.c_str())
-     << args.str() << '\n';
+  os << StringPrintf("%08x\t%-7s ", instruction, opcode.c_str())
+     << args.str();
   return 4;
 }
 

@@ -1893,9 +1893,8 @@ size_t DisassemblerArm::DumpThumb16(std::ostream& os, const uint8_t* instr_ptr) 
       it_conditions_.pop_back();
     }
 
-    os << FormatInstructionPointer(instr_ptr)
-       << StringPrintf(": %04x    \t%-7s ", instr, opcode.str().c_str())
-       << args.str() << '\n';
+    os << StringPrintf("%04x    \t%-7s ", instr, opcode.str().c_str())
+       << args.str();
   }
   return 2;
 }
