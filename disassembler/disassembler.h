@@ -63,13 +63,13 @@ class Disassembler {
   // Dump instructions within a range.
   virtual void Dump(std::ostream& os, const uint8_t* begin, const uint8_t* end) = 0;
 
+  std::string FormatInstructionPointer(const uint8_t* begin);
+
  protected:
   explicit Disassembler(DisassemblerOptions* disassembler_options)
       : disassembler_options_(disassembler_options) {
     CHECK(disassembler_options_ != nullptr);
   }
-
-  std::string FormatInstructionPointer(const uint8_t* begin);
 
  private:
   DisassemblerOptions* disassembler_options_;

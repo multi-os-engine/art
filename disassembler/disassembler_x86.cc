@@ -1362,10 +1362,9 @@ DISASSEMBLER_ENTRY(cmp,
     case 0: prefix_str = ""; break;
     default: LOG(FATAL) << "Unreachable"; UNREACHABLE();
   }
-  os << FormatInstructionPointer(begin_instr)
-     << StringPrintf(": %22s    \t%-7s%s%s%s%s%s ", DumpCodeHex(begin_instr, instr).c_str(),
+  os << StringPrintf("%22s    \t%-7s%s%s%s%s%s ", DumpCodeHex(begin_instr, instr).c_str(),
                      prefix_str, opcode0, opcode1, opcode2, opcode3, opcode4)
-     << args.str() << '\n';
+     << args.str();
   return instr - begin_instr;
 }  // NOLINT(readability/fn_size)
 
