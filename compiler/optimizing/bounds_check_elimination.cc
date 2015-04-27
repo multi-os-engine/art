@@ -271,7 +271,7 @@ class ArrayAccessInsideLoopFinder : public ValueObject {
       // Loop header of loop_info. Exiting loop is normal.
       return false;
     }
-    const GrowableArray<HBasicBlock*> successors = block->GetSuccessors();
+    const GrowableArray<HBasicBlock*>& successors = block->GetSuccessors();
     for (size_t i = 0; i < successors.Size(); i++) {
       if (!loop_info->Contains(*successors.Get(i))) {
         // One of the successors exits the loop.
@@ -301,9 +301,7 @@ class ArrayAccessInsideLoopFinder : public ValueObject {
         // that the loop will loop through the full monotonic value range from
         // initial_ to end_. So adding deoptimization might be too aggressive and can
         // trigger deoptimization unnecessarily even if the loop won't actually throw
-        // AIOOBE. Otherwise, the loop induction variable is going to cover the full
-        // monotonic value range from initial_ to end_, and deoptimizations are added
-        // iff the loop will throw AIOOBE.
+        // AIOOBE.
         found_array_length_ = nullptr;
         return;
       }
@@ -709,7 +707,7 @@ class MonotonicValueRange : public ValueRange {
         suspend_check->GetEnvironment(), block);
   }
 
-  // Add deoptimizations in loop pre-header with the collected array access
+  // Adds deoptimizations in loop pre-header with the collected array access
   // data so that value ranges can be established in loop body.
   // Returns true if deoptimizations are successfully added, or if it's proven
   // it's not necessary.
@@ -759,9 +757,48 @@ class MonotonicValueRange : public ValueRange {
   }
 
   // Try to add HDeoptimize's in the loop pre-header first to narrow this range.
+  // For example, this loop:
+  //   for (int i = start; i < end; i++) {
+  //     array[i - 1] = array[i] + array[i + 1];
+  //   }
+  // will be transformed to:
+  //   if (start < 1) deoptimize();
+  //   if (array == null) deoptimize();
+  //   hoist array.length into loop pre-header;
+  //   if (end > array.length - 1) deoptimize;
+  //   for (int i = start; i < end; i++) {
+  //     // No more null check and bounds check.
+  //     array[i - 1] = array[i] + array[i + 1];
+  //   }
+  //
+  // We basically first goes through the loop and find those array accesses which index
+  // is at a constant offset from the induction variable, and update offset_low
+  // and offset_high along the way. And add the following deoptimizations in the loop
+  // pre-header (suppose end is not inclusive).
+  //   if (start < -offset_low) deoptimize();
+  //   if (end >= array.length - offset_high) deoptimize();
+  // It might be necessary to first hoist array.length (and the null check on it) out of
+  // the loop with another deoptimization.
+  //
+  // In order not to trigger deoptimization unnecessarily, we want to make a strong
+  // guarantee that no deoptimization is triggered if the loop itself doesn't throw AIOOBE.
+  // (It's the same as saying if deoptimization is triggered, the loop must throws AIOOBE).
+  // This is achieved by the following:
+  // 1) We only process loops that iterate through the full monotonic range from
+  //    from initial_ to end_. We do the following checks to make sure that's the case:
+  //    a) The loop doesn't have early exit (via break, return, etc.)
+  //    b) The increment_ is 1/-1. An increment of 2, for example, may skip end_.
+  // 2) We only collect array accesses inside a block in the loop that dominates
+  //    the loop back edge, so the collected array accesses are guaranteed to happen
+  //    at each loop iteration.
+  // With 1) and 2), if the loop doesn't throw AIOOBE, collected array accesses when the
+  // induction variable is at initial_ or end_ are in the legal range, which is what the
+  // added deoptimizations are checking. Thus no deoptimization will be triggered either.
   ValueRange* NarrowWithDeoptimization() {
     if (increment_ != 1 && increment_ != -1) {
-      // TODO: possibly handle overflow/underflow issues with deoptimization.
+      // In order not to trigger deoptimization unnecessarily, we want to
+      // make sure the loop iterates through the full range from initial_ to
+      // end_ so that boundaries are covered by the loop.
       return this;
     }
 
@@ -1218,11 +1255,11 @@ class BCEVisitor : public HGraphVisitor {
           // The comparison is for an induction variable in the loop header.
           DCHECK(left == left_range->AsMonotonicValueRange()->GetInductionVariable());
           HBasicBlock* loop_body_successor;
-          if (LIKELY(block->GetLoopInformation()->
-              Contains(*instruction->IfFalseSuccessor()))) {
+          if (block->GetLoopInformation()->Contains(*instruction->IfFalseSuccessor())) {
             loop_body_successor = instruction->IfFalseSuccessor();
           } else {
             loop_body_successor = instruction->IfTrueSuccessor();
+            DCHECK(block->GetLoopInformation()->Contains(*loop_body_successor));
           }
           ValueRange* new_left_range = LookupValueRange(left, loop_body_successor);
           if (new_left_range == left_range) {
