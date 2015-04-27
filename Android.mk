@@ -55,16 +55,16 @@ endif
 clean-oat-target:
 	adb root
 	adb wait-for-device remount
-	adb shell rm -rf $(ART_TARGET_NATIVETEST_DIR)
-	adb shell rm -rf $(ART_TARGET_TEST_DIR)
-	adb shell rm -rf $(ART_TARGET_DALVIK_CACHE_DIR)/*/*
-	adb shell rm -rf $(DEXPREOPT_BOOT_JAR_DIR)/$(DEX2OAT_TARGET_ARCH)
-	adb shell rm -rf system/app/$(DEX2OAT_TARGET_ARCH)
+	adb shell sh -c "rm -rf $(ART_TARGET_NATIVETEST_DIR)"
+	adb shell sh -c "rm -rf $(ART_TARGET_TEST_DIR)"
+	adb shell sh -c "rm -rf $(ART_TARGET_DALVIK_CACHE_DIR)/*/*"
+	adb shell sh -c "rm -rf $(DEXPREOPT_BOOT_JAR_DIR)/$(DEX2OAT_TARGET_ARCH)"
+	adb shell sh -c "rm -rf system/app/$(DEX2OAT_TARGET_ARCH)"
 ifdef TARGET_2ND_ARCH
-	adb shell rm -rf $(DEXPREOPT_BOOT_JAR_DIR)/$($(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH)
-	adb shell rm -rf system/app/$($(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH)
+	adb shell sh -c "rm -rf $(DEXPREOPT_BOOT_JAR_DIR)/$($(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH)"
+	adb shell sh -c "rm -rf system/app/$($(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH)"
 endif
-	adb shell rm -rf data/run-test/test-*/dalvik-cache/*
+	adb shell sh -c "rm -rf data/run-test/test-*/dalvik-cache/*"
 
 ifneq ($(art_dont_bother),true)
 
