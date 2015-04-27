@@ -303,25 +303,6 @@ HNullConstant* HGraph::GetNullConstant() {
   return cached_null_constant_;
 }
 
-template <class InstructionType, typename ValueType>
-InstructionType* HGraph::CreateConstant(ValueType value,
-                                        ArenaSafeMap<ValueType, InstructionType*>* cache) {
-  // Try to find an existing constant of the given value.
-  InstructionType* constant = nullptr;
-  auto cached_constant = cache->find(value);
-  if (cached_constant != cache->end()) {
-    constant = cached_constant->second;
-  }
-
-  // If not found or previously deleted, create and cache a new instruction.
-  if (constant == nullptr || constant->GetBlock() == nullptr) {
-    constant = new (arena_) InstructionType(value);
-    cache->Overwrite(value, constant);
-    InsertConstant(constant);
-  }
-  return constant;
-}
-
 HConstant* HGraph::GetConstant(Primitive::Type type, int64_t value) {
   switch (type) {
     case Primitive::Type::kPrimBoolean:
