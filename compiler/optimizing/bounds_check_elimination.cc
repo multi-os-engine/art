@@ -271,7 +271,7 @@ class ArrayAccessInsideLoopFinder : public ValueObject {
       // Loop header of loop_info. Exiting loop is normal.
       return false;
     }
-    const GrowableArray<HBasicBlock*> successors = block->GetSuccessors();
+    const GrowableArray<HBasicBlock*>& successors = block->GetSuccessors();
     for (size_t i = 0; i < successors.Size(); i++) {
       if (!loop_info->Contains(*successors.Get(i))) {
         // One of the successors exits the loop.
@@ -301,9 +301,7 @@ class ArrayAccessInsideLoopFinder : public ValueObject {
         // that the loop will loop through the full monotonic value range from
         // initial_ to end_. So adding deoptimization might be too aggressive and can
         // trigger deoptimization unnecessarily even if the loop won't actually throw
-        // AIOOBE. Otherwise, the loop induction variable is going to cover the full
-        // monotonic value range from initial_ to end_, and deoptimizations are added
-        // iff the loop will throw AIOOBE.
+        // AIOOBE.
         found_array_length_ = nullptr;
         return;
       }
@@ -713,6 +711,24 @@ class MonotonicValueRange : public ValueRange {
   // data so that value ranges can be established in loop body.
   // Returns true if deoptimizations are successfully added, or if it's proven
   // it's not necessary.
+  //
+  // In order not to trigger deoptimization unnecessarily, we want to make sure
+  // deoptimization is triggered only if the loop will throw AIOOBE.
+  // This is achieved with the following guarantees:
+  // 1) We only collect array accesses inside a block in the loop that dominates
+  //    the loop back edge, so the array access is guaranteed to happen at each
+  //    loop iteration.
+  // 2) We abort the deoptimization approach if the loop has early exit. This combined
+  //    with the fact that we do a loop exit check in the loop header, and we only deal
+  //    with increment of 1 or -1, the loop is guaranteed to loop through the full monotonic
+  //    range from initial_ to end_.
+  // 3) Deoptimizations are added with the assumption that the boundaries won't trigger
+  //    AIOOBE. Since boundary condition is guaranteed to happen as a result of 1) and 2),
+  //    if deoptimization is triggered, the same boundary check would fail as part of
+  //    of bounds check and AIOOBE will be thrown.
+  // 4) The reverse may not be true, i.e. the array may throw AIOOBE but we don't add
+  //    deoptimization since we skip those blocks inside the loop that don't dominate
+  //    the loop back edge.
   bool AddDeoptimization(const ArrayAccessInsideLoopFinder& finder) {
     int32_t offset_low = finder.GetOffsetLow();
     int32_t offset_high = finder.GetOffsetHigh();
@@ -761,7 +777,9 @@ class MonotonicValueRange : public ValueRange {
   // Try to add HDeoptimize's in the loop pre-header first to narrow this range.
   ValueRange* NarrowWithDeoptimization() {
     if (increment_ != 1 && increment_ != -1) {
-      // TODO: possibly handle overflow/underflow issues with deoptimization.
+      // In order not to trigger deoptimization unnecessarily, we want to
+      // make sure the loop iterates through the full range from initial_ to
+      // end_ so that boundaries are covered by the loop.
       return this;
     }
 
@@ -1218,11 +1236,11 @@ class BCEVisitor : public HGraphVisitor {
           // The comparison is for an induction variable in the loop header.
           DCHECK(left == left_range->AsMonotonicValueRange()->GetInductionVariable());
           HBasicBlock* loop_body_successor;
-          if (LIKELY(block->GetLoopInformation()->
-              Contains(*instruction->IfFalseSuccessor()))) {
+          if (block->GetLoopInformation()->Contains(*instruction->IfFalseSuccessor())) {
             loop_body_successor = instruction->IfFalseSuccessor();
           } else {
             loop_body_successor = instruction->IfTrueSuccessor();
+            DCHECK(block->GetLoopInformation()->Contains(*loop_body_successor));
           }
           ValueRange* new_left_range = LookupValueRange(left, loop_body_successor);
           if (new_left_range == left_range) {
