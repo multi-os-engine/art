@@ -352,10 +352,10 @@ class OatDumper {
       options_(options),
       resolved_addr2instr_(0),
       instruction_set_(oat_file_.GetOatHeader().GetInstructionSet()),
-      disassembler_(Disassembler::Create(instruction_set_,
-                                         new DisassemblerOptions(options_.absolute_addresses_,
-                                                                 oat_file.Begin(),
-                                                                 true /* can_read_litals_ */))) {
+      disassembler_options_(options_.absolute_addresses_,
+                            oat_file.Begin(),
+                            true /* can_read_litals_ */),
+      disassembler_(Disassembler::Create(instruction_set_, &disassembler_options_)) {
     CHECK(options_.class_loader_ != nullptr);
     CHECK(options_.class_filter_ != nullptr);
     CHECK(options_.method_filter_ != nullptr);
@@ -1365,6 +1365,7 @@ class OatDumper {
   uint32_t resolved_addr2instr_;
   InstructionSet instruction_set_;
   std::set<uintptr_t> offsets_;
+  DisassemblerOptions disassembler_options_;
   Disassembler* disassembler_;
 };
 

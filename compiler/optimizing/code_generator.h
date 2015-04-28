@@ -17,6 +17,8 @@
 #ifndef ART_COMPILER_OPTIMIZING_CODE_GENERATOR_H_
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_H_
 
+#include <map>
+
 #include "arch/instruction_set.h"
 #include "arch/instruction_set_features.h"
 #include "base/bit_field.h"
@@ -97,6 +99,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
     return saved_fpu_stack_offsets_[reg];
   }
 
+  virtual const char* GetDescription() const { return "slow path"; }
+
  private:
   static constexpr size_t kMaximumNumberOfExpectedRegisters = 32;
   static constexpr uint32_t kRegisterNotSaved = -1;
@@ -133,7 +137,8 @@ class CodeGenerator {
   static CodeGenerator* Create(HGraph* graph,
                                InstructionSet instruction_set,
                                const InstructionSetFeatures& isa_features,
-                               const CompilerOptions& compiler_options);
+                               const CompilerOptions& compiler_options,
+                               bool visualizer_enabled);
   virtual ~CodeGenerator() {}
 
   HGraph* GetGraph() const { return graph_; }
@@ -156,6 +161,8 @@ class CodeGenerator {
   virtual void Bind(HBasicBlock* block) = 0;
   virtual void Move(HInstruction* instruction, Location location, HInstruction* move_for) = 0;
   virtual Assembler* GetAssembler() = 0;
+  virtual const Assembler* GetAssembler() const = 0;
+  const uint8_t* GetAssemblerCodeBaseAddress() const;
   virtual size_t GetWordSize() const = 0;
   virtual size_t GetFloatingPointSpillSlotSize() const = 0;
   virtual uintptr_t GetAddressOf(HBasicBlock* block) const = 0;
@@ -329,6 +336,16 @@ class CodeGenerator {
 
   virtual ParallelMoveResolver* GetMoveResolver() = 0;
 
+  const std::map<const HInstruction*, std::pair<size_t, size_t>>& InstructionCodeOffsets() const {
+    return instruction_code_offsets_;
+  }
+
+  void AddInstructionCodeOffsets(HInstruction* instr, size_t start, size_t end) {
+    instruction_code_offsets_[instr] = {start, end};
+  }
+
+  bool GetVisualizerEnabled() const { return visualizer_enabled_; }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
@@ -434,6 +451,7 @@ class CodeGenerator {
  private:
   void InitLocationsBaseline(HInstruction* instruction);
   size_t GetStackOffsetOfSavedRegister(size_t index);
+  void GenerateSlowPaths();
   void CompileInternal(CodeAllocator* allocator, bool is_baseline);
   void BlockIfInRegister(Location location, bool is_out = false) const;
 
@@ -459,6 +477,12 @@ class CodeGenerator {
   StackMapStream stack_map_stream_;
 
   friend class OptimizingCFITest;
+
+  // The offsets to the start and end of the code generated for instructions is
+  // recorded here. The graph visualizer will use that information to print the
+  // disassembly of the code generated.
+  std::map<const HInstruction*, std::pair<size_t, size_t>> instruction_code_offsets_;
+  bool visualizer_enabled_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGenerator);
 };

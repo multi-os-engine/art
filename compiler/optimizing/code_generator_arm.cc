@@ -67,6 +67,7 @@ class NullCheckSlowPathARM : public SlowPathCodeARM {
         QUICK_ENTRY_POINT(pThrowNullPointer), instruction_, instruction_->GetDexPc(), this);
   }
 
+  const char* GetDescription() const OVERRIDE { return "NullCheckSlowPathARM"; }
  private:
   HNullCheck* const instruction_;
   DISALLOW_COPY_AND_ASSIGN(NullCheckSlowPathARM);
@@ -82,6 +83,8 @@ class DivZeroCheckSlowPathARM : public SlowPathCodeARM {
     arm_codegen->InvokeRuntime(
         QUICK_ENTRY_POINT(pThrowDivZero), instruction_, instruction_->GetDexPc(), this);
   }
+
+  const char* GetDescription() const OVERRIDE { return "DivZeroCheckSlowPathARM"; }
 
  private:
   HDivZeroCheck* const instruction_;
@@ -111,6 +114,8 @@ class SuspendCheckSlowPathARM : public SlowPathCodeARM {
     DCHECK(successor_ == nullptr);
     return &return_label_;
   }
+
+  const char* GetDescription() const OVERRIDE { return "SuspendCheckSlowPathARM"; }
 
  private:
   HSuspendCheck* const instruction_;
@@ -148,6 +153,8 @@ class BoundsCheckSlowPathARM : public SlowPathCodeARM {
     arm_codegen->InvokeRuntime(
         QUICK_ENTRY_POINT(pThrowArrayBounds), instruction_, instruction_->GetDexPc(), this);
   }
+
+  const char* GetDescription() const OVERRIDE { return "BoundsCheckSlowPathARM"; }
 
  private:
   HBoundsCheck* const instruction_;
@@ -191,6 +198,8 @@ class LoadClassSlowPathARM : public SlowPathCodeARM {
     __ b(GetExitLabel());
   }
 
+  const char* GetDescription() const OVERRIDE { return "LoadClassSlowPathARM"; }
+
  private:
   // The class this slow path will load.
   HLoadClass* const cls_;
@@ -229,6 +238,8 @@ class LoadStringSlowPathARM : public SlowPathCodeARM {
     RestoreLiveRegisters(codegen, locations);
     __ b(GetExitLabel());
   }
+
+  const char* GetDescription() const OVERRIDE { return "LoadStringSlowPathARM"; }
 
  private:
   HLoadString* const instruction_;
@@ -279,6 +290,8 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
     RestoreLiveRegisters(codegen, locations);
     __ b(GetExitLabel());
   }
+
+  const char* GetDescription() const OVERRIDE { return "TypeCheckSlowPathARM"; }
 
  private:
   HInstruction* const instruction_;

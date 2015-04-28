@@ -17,6 +17,7 @@
 #include "graph_visualizer.h"
 
 #include "code_generator.h"
+#include "disassembler.h"
 #include "licm.h"
 #include "nodes.h"
 #include "optimization.h"
@@ -40,7 +41,19 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
         pass_name_(pass_name),
         is_after_pass_(is_after_pass),
         codegen_(codegen),
-        indent_(0) {}
+        indent_(0),
+        // Reading the disassembly from 0x0 is easier, so we print relative
+        // addresses.  We will only disassemble the code once everything has
+        // been generated, so we can read data in literal pools.
+        disassembler_options_(/* absolute_addresses */ false,
+                              codegen.GetAssemblerCodeBaseAddress(),
+                              /* can_read_literals */ true) {
+    disassembler_ = Disassembler::Create(codegen.GetInstructionSet(), &disassembler_options_);
+  }
+
+  ~HGraphVisualizerPrinter() {
+    delete disassembler_;
+  }
 
   void StartTag(const char* name) {
     AddIndent();
@@ -196,6 +209,10 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     output_ << " " << barrier->GetBarrierKind();
   }
 
+  void VisitDisassembly(HDisassembly* disasm) OVERRIDE {
+    output_ << " " << disasm->GetDescription();
+  }
+
   bool IsPass(const char* name) {
     return strcmp(pass_name_, name) == 0;
   }
@@ -255,6 +272,22 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
         output_ << "null )";
       } else {
         output_ << "B" << info->GetHeader()->GetBlockId() << " )";
+      }
+    }
+    if (print_disassembly_ && (disassembler_ != nullptr)) {
+      // If information is available, disassemble the code generated for this
+      // instruction.
+      std::map<const HInstruction*, std::pair<size_t, size_t>>::const_iterator it;
+      it = codegen_.InstructionCodeOffsets().find(instruction);
+      if (it != codegen_.InstructionCodeOffsets().cend()) {
+        const uint8_t* base = disassembler_->disassembler_options()->base_address_;
+        if (codegen_.GetInstructionSet() == kThumb2) {
+          // ARM and Thumb-2 use the same disassembler, and differentiate using
+          // the bottom bit of the address.
+          base += 1;
+        }
+        output_ << std::endl;
+        disassembler_->Dump(output_, base + it->second.first, base + it->second.second);
       }
     }
   }
@@ -329,12 +362,20 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     EndTag("block");
   }
 
+  void SetPrintDisassembly(bool print) {
+    print_disassembly_ = print;
+  }
+
  private:
   std::ostream& output_;
   const char* pass_name_;
   const bool is_after_pass_;
   const CodeGenerator& codegen_;
   size_t indent_;
+
+  Disassembler* disassembler_ = nullptr;
+  DisassemblerOptions disassembler_options_;
+  bool print_disassembly_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphVisualizerPrinter);
 };
@@ -359,6 +400,16 @@ void HGraphVisualizer::DumpGraph(const char* pass_name, bool is_after_pass) cons
   if (!graph_->GetBlocks().IsEmpty()) {
     HGraphVisualizerPrinter printer(graph_, *output_, pass_name, is_after_pass, codegen_);
     printer.Run();
+  }
+}
+
+void HGraphVisualizer::DumpGraphWithDisassembly() const {
+  DCHECK(output_ != nullptr);
+  if (!graph_->GetBlocks().IsEmpty()) {
+    HGraphVisualizerPrinter printer(graph_, *output_, "disassembly", true, codegen_);
+    printer.SetPrintDisassembly(true);
+    printer.Run();
+    printer.SetPrintDisassembly(false);
   }
 }
 

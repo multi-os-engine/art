@@ -20,6 +20,7 @@
 #include <ostream>
 
 #include "base/value_object.h"
+#include "arch/instruction_set.h"
 
 namespace art {
 
@@ -39,6 +40,7 @@ class HGraphVisualizer : public ValueObject {
 
   void PrintHeader(const char* method_name) const;
   void DumpGraph(const char* pass_name, bool is_after_pass = true) const;
+  void DumpGraphWithDisassembly() const;
 
  private:
   std::ostream* const output_;

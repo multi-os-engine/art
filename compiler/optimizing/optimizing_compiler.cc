@@ -214,6 +214,11 @@ class OptimizingCompiler FINAL : public Compiler {
     }
   }
 
+  void DisassembleOptimizedCode(CodeGenerator* codegen) const {
+    HGraphVisualizer visualizer(visualizer_output_.get(), codegen->GetGraph(), *codegen);
+    visualizer.DumpGraphWithDisassembly();
+  }
+
  private:
   // Whether we should run any optimization or register allocation. If false, will
   // just run the code generation after the graph was built.
@@ -523,7 +528,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
       CodeGenerator::Create(graph,
                             instruction_set,
                             *compiler_driver->GetInstructionSetFeatures(),
-                            compiler_driver->GetCompilerOptions()));
+                            compiler_driver->GetCompilerOptions(),
+                            !compiler_driver->GetDumpCfgFileName().empty()));
   if (codegen.get() == nullptr) {
     CHECK(!shouldCompile) << "Could not find code generator for optimizing compiler";
     MaybeRecordStat(MethodCompilationStat::kNotCompiledNoCodegen);
@@ -575,12 +581,16 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
       }
     }
 
-    return CompileOptimized(graph,
-                            codegen.get(),
-                            compiler_driver,
-                            dex_file,
-                            dex_compilation_unit,
-                            &pass_info_printer);
+    CompiledMethod* compiled_method = CompileOptimized(graph,
+                                                       codegen.get(),
+                                                       compiler_driver,
+                                                       dex_file,
+                                                       dex_compilation_unit,
+                                                       &pass_info_printer);
+    if (!compiler_driver->GetDumpCfgFileName().empty()) {
+      DisassembleOptimizedCode(codegen.get());
+    }
+    return compiled_method;
   } else if (shouldOptimize && can_allocate_registers) {
     LOG(FATAL) << "Could not allocate registers in optimizing compiler";
     UNREACHABLE();
