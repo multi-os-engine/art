@@ -266,10 +266,11 @@ class Main {
     show(ctor.newInstance(new char[] { 'x', 'y', 'z', '!' }, 1, 2));
   }
 
-  private static void testPackagePrivate() {
+  private static void testPackagePrivateConstructor() {
     try {
       Class<?> c = Class.forName("sub.PPClass");
       Constructor cons = c.getConstructor();
+      cons.setAccessible(false);  // ensure we do not prevent IllegalAccessException
       cons.newInstance();
       throw new RuntimeException("Expected IllegalAccessException.");
     } catch (IllegalAccessException e) {
@@ -280,10 +281,23 @@ class Main {
     }
   }
 
+  private static void testPackagePrivateAccessibleConstructor() {
+    try {
+      Class<?> c = Class.forName("sub.PPClass");
+      Constructor cons = c.getConstructor();
+      cons.setAccessible(true);  // ensure we prevent IllegalAccessException
+      cons.newInstance();
+    } catch (Exception e) {
+      // Error.
+      e.printStackTrace();
+    }
+  }
+
   public static void main(String[] args) throws Exception {
     testFieldReflection();
     testMethodReflection();
     testConstructorReflection();
-    testPackagePrivate();
+    testPackagePrivateConstructor();
+    testPackagePrivateAccessibleConstructor();
   }
 }

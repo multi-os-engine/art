@@ -36,7 +36,7 @@ namespace art {
  */
 static jobject Constructor_newInstance(JNIEnv* env, jobject javaMethod, jobjectArray javaArgs) {
   ScopedFastNativeObjectAccess soa(env);
-  mirror::Method* m = soa.Decode<mirror::Method*>(javaMethod);
+  mirror::Constructor* m = soa.Decode<mirror::Constructor*>(javaMethod);
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::Class> c(hs.NewHandle(m->GetDeclaringClass()));
   if (UNLIKELY(c->IsAbstract())) {
@@ -50,7 +50,7 @@ static jobject Constructor_newInstance(JNIEnv* env, jobject javaMethod, jobjectA
     auto* caller = GetCallingClass(soa.Self(), 1);
     // If caller is null, then we called from JNI, just avoid the check since JNI avoids most
     // access checks anyways. TODO: Investigate if this the correct behavior.
-    if (caller != nullptr && !caller->CanAccess(c.Get())) {
+    if (caller != nullptr && !caller->CanAccess(c.Get()) && !m->IsAccessible()) {
       soa.Self()->ThrowNewExceptionF(
           "Ljava/lang/IllegalAccessException;", "%s is not accessible from %s",
           PrettyClass(c.Get()).c_str(), PrettyClass(caller).c_str());
