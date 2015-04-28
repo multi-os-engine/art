@@ -142,7 +142,6 @@ class LocationsBuilderX86_64 : public HGraphVisitor {
   void HandleFieldGet(HInstruction* instruction);
 
   CodeGeneratorX86_64* const codegen_;
-  InvokeDexCallingConventionVisitorX86_64 parameter_visitor_;
 
   DISALLOW_COPY_AND_ASSIGN(LocationsBuilderX86_64);
 };
@@ -223,6 +222,10 @@ class CodeGeneratorX86_64 : public CodeGenerator {
     return &instruction_visitor_;
   }
 
+  InvokeDexCallingConventionVisitorX86_64* GetCallingConventionVisitor() OVERRIDE {
+    return &calling_convention_visitor_;
+  }
+
   X86_64Assembler* GetAssembler() OVERRIDE {
     return &assembler_;
   }
@@ -288,6 +291,7 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   Label frame_entry_label_;
   LocationsBuilderX86_64 location_builder_;
   InstructionCodeGeneratorX86_64 instruction_visitor_;
+  InvokeDexCallingConventionVisitorX86_64 calling_convention_visitor_;
   ParallelMoveResolverX86_64 move_resolver_;
   X86_64Assembler assembler_;
   const X86_64InstructionSetFeatures& isa_features_;

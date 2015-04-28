@@ -196,6 +196,8 @@ class CodeGenerator {
 
   const CompilerOptions& GetCompilerOptions() const { return compiler_options_; }
 
+  virtual InvokeDexCallingConventionVisitor* GetCallingConventionVisitor() = 0;
+
   // Saves the register in the stack. Returns the size taken on stack.
   virtual size_t SaveCoreRegister(size_t stack_index, uint32_t reg_id) = 0;
   // Restores the register from the stack. Returns the size taken on stack.

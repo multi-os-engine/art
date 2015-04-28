@@ -188,7 +188,6 @@ class LocationsBuilderARM64 : public HGraphVisitor {
   void HandleShift(HBinaryOperation* instr);
 
   CodeGeneratorARM64* const codegen_;
-  InvokeDexCallingConventionVisitorARM64 parameter_visitor_;
 
   DISALLOW_COPY_AND_ASSIGN(LocationsBuilderARM64);
 };
@@ -262,6 +261,9 @@ class CodeGeneratorARM64 : public CodeGenerator {
 
   HGraphVisitor* GetLocationBuilder() OVERRIDE { return &location_builder_; }
   HGraphVisitor* GetInstructionVisitor() OVERRIDE { return &instruction_visitor_; }
+  InvokeDexCallingConventionVisitorARM64* GetCallingConventionVisitor() OVERRIDE {
+    return &calling_convention_visitor_;
+  }
   Arm64Assembler* GetAssembler() OVERRIDE { return &assembler_; }
   vixl::MacroAssembler* GetVIXLAssembler() { return GetAssembler()->vixl_masm_; }
 
@@ -347,6 +349,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
 
   LocationsBuilderARM64 location_builder_;
   InstructionCodeGeneratorARM64 instruction_visitor_;
+  InvokeDexCallingConventionVisitorARM64 calling_convention_visitor_;
   ParallelMoveResolverARM64 move_resolver_;
   Arm64Assembler assembler_;
   const Arm64InstructionSetFeatures& isa_features_;

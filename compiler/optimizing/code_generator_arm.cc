@@ -1232,7 +1232,8 @@ void InstructionCodeGeneratorARM::VisitReturnVoid(HReturnVoid* ret) {
 void LocationsBuilderARM::VisitReturn(HReturn* ret) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(ret, LocationSummary::kNoCall);
-  locations->SetInAt(0, parameter_visitor_.GetReturnLocation(ret->InputAt(0)->GetType()));
+  locations->SetInAt(
+      0, codegen_->GetCallingConventionVisitor()->GetReturnLocation(ret->InputAt(0)->GetType()));
 }
 
 void InstructionCodeGeneratorARM::VisitReturn(HReturn* ret) {
@@ -2637,7 +2638,8 @@ void InstructionCodeGeneratorARM::VisitNewArray(HNewArray* instruction) {
 void LocationsBuilderARM::VisitParameterValue(HParameterValue* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  Location location = parameter_visitor_.GetNextLocation(instruction->GetType());
+  Location location =
+      codegen_->GetCallingConventionVisitor()->GetNextLocation(instruction->GetType());
   if (location.IsStackSlot()) {
     location = Location::StackSlot(location.GetStackIndex() + codegen_->GetFrameSize());
   } else if (location.IsDoubleStackSlot()) {

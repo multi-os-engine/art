@@ -103,11 +103,6 @@ static void MoveFromReturnRegister(Location trg,
   }
 }
 
-static void MoveArguments(HInvoke* invoke, CodeGeneratorX86_64* codegen) {
-  InvokeDexCallingConventionVisitorX86_64 calling_convention_visitor;
-  IntrinsicVisitor::MoveArguments(invoke, codegen, &calling_convention_visitor);
-}
-
 // Slow-path for fallback (calling the managed code to handle the intrinsic) in an intrinsified
 // call. This will copy the arguments into the positions for a regular call.
 //
@@ -124,7 +119,7 @@ class IntrinsicSlowPathX86_64 : public SlowPathCodeX86_64 {
 
     SaveLiveRegisters(codegen, invoke_->GetLocations());
 
-    MoveArguments(invoke_, codegen);
+    IntrinsicVisitor::MoveArguments(invoke_, codegen);
 
     if (invoke_->IsInvokeStaticOrDirect()) {
       codegen->GenerateStaticOrDirectCall(invoke_->AsInvokeStaticOrDirect(), CpuRegister(RDI));
@@ -604,7 +599,7 @@ void IntrinsicCodeGeneratorX86_64::VisitMathSqrt(HInvoke* invoke) {
 }
 
 static void InvokeOutOfLineIntrinsic(CodeGeneratorX86_64* codegen, HInvoke* invoke) {
-  MoveArguments(invoke, codegen);
+  IntrinsicVisitor::MoveArguments(invoke, codegen);
 
   DCHECK(invoke->IsInvokeStaticOrDirect());
   codegen->GenerateStaticOrDirectCall(invoke->AsInvokeStaticOrDirect(), CpuRegister(RDI));

@@ -148,7 +148,6 @@ class LocationsBuilderARM : public HGraphVisitor {
   void HandleFieldGet(HInstruction* instruction, const FieldInfo& field_info);
 
   CodeGeneratorARM* const codegen_;
-  InvokeDexCallingConventionVisitorARM parameter_visitor_;
 
   DISALLOW_COPY_AND_ASSIGN(LocationsBuilderARM);
 };
@@ -229,6 +228,10 @@ class CodeGeneratorARM : public CodeGenerator {
     return &instruction_visitor_;
   }
 
+  InvokeDexCallingConventionVisitorARM* GetCallingConventionVisitor() OVERRIDE {
+    return &calling_convention_visitor_;
+  }
+
   ArmAssembler* GetAssembler() OVERRIDE {
     return &assembler_;
   }
@@ -300,6 +303,7 @@ class CodeGeneratorARM : public CodeGenerator {
   Label frame_entry_label_;
   LocationsBuilderARM location_builder_;
   InstructionCodeGeneratorARM instruction_visitor_;
+  InvokeDexCallingConventionVisitorARM calling_convention_visitor_;
   ParallelMoveResolverARM move_resolver_;
   Thumb2Assembler assembler_;
   const ArmInstructionSetFeatures& isa_features_;
