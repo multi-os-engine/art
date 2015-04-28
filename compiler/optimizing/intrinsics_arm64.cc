@@ -86,11 +86,6 @@ static void MoveFromReturnRegister(Location trg,
   }
 }
 
-static void MoveArguments(HInvoke* invoke, CodeGeneratorARM64* codegen) {
-  InvokeDexCallingConventionVisitorARM64 calling_convention_visitor;
-  IntrinsicVisitor::MoveArguments(invoke, codegen, &calling_convention_visitor);
-}
-
 // Slow-path for fallback (calling the managed code to handle the intrinsic) in an intrinsified
 // call. This will copy the arguments into the positions for a regular call.
 //
@@ -107,7 +102,7 @@ class IntrinsicSlowPathARM64 : public SlowPathCodeARM64 {
 
     SaveLiveRegisters(codegen, invoke_->GetLocations());
 
-    MoveArguments(invoke_, codegen);
+    IntrinsicVisitor::MoveArguments(invoke_, codegen);
 
     if (invoke_->IsInvokeStaticOrDirect()) {
       codegen->GenerateStaticOrDirectCall(invoke_->AsInvokeStaticOrDirect(), kArtMethodRegister);

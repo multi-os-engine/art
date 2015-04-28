@@ -78,9 +78,7 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
 #undef INTRINSICS_LIST
 #undef OPTIMIZING_INTRINSICS
 
-  static void MoveArguments(HInvoke* invoke,
-                            CodeGenerator* codegen,
-                            InvokeDexCallingConventionVisitor* calling_convention_visitor) {
+  static void MoveArguments(HInvoke* invoke, CodeGenerator* codegen) {
     if (kIsDebugBuild && invoke->IsInvokeStaticOrDirect()) {
       HInvokeStaticOrDirect* invoke_static_or_direct = invoke->AsInvokeStaticOrDirect();
       // When we do not run baseline, explicit clinit checks triggered by static
@@ -94,6 +92,8 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
     }
 
     LocationSummary* locations = invoke->GetLocations();
+    InvokeDexCallingConventionVisitor* calling_convention_visitor =
+        codegen->GetCallingConventionVisitor();
 
     // We're moving potentially two or more locations to locations that could overlap, so we need
     // a parallel move resolver.

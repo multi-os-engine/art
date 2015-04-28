@@ -2910,7 +2910,8 @@ void InstructionCodeGeneratorX86::VisitNewArray(HNewArray* instruction) {
 void LocationsBuilderX86::VisitParameterValue(HParameterValue* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  Location location = parameter_visitor_.GetNextLocation(instruction->GetType());
+  Location location =
+      codegen_->GetCallingConventionVisitor()->GetNextLocation(instruction->GetType());
   if (location.IsStackSlot()) {
     location = Location::StackSlot(location.GetStackIndex() + codegen_->GetFrameSize());
   } else if (location.IsDoubleStackSlot()) {
