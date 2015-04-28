@@ -188,6 +188,7 @@ art_gcc_cflags :=
 ART_CPP_EXTENSION := .cc
 
 ART_C_INCLUDES := \
+  art/disassembler \
   external/gtest/include \
   external/icu/icu4c/source/common \
   external/valgrind/main/include \
