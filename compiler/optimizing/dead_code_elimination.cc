@@ -64,11 +64,12 @@ void HDeadCodeElimination::RemoveDeadBlocks() {
   // the block's chain of dominators.
   for (HPostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     HBasicBlock* block  = it.Current();
-    if (live_blocks.IsBitSet(block->GetBlockId())) {
-      continue;
+    if (!live_blocks.IsBitSet(block->GetBlockId())) {
+      MaybeRecordDeadBlock(block);
+      block->DisconnectAndDelete();
+    } else {
+      block->UpdateLoopInformation();
     }
-    MaybeRecordDeadBlock(block);
-    block->DisconnectAndDelete();
   }
 
   // Connect successive blocks created by dead branches. Order does not matter.
