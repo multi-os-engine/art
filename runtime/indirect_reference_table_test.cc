@@ -254,4 +254,17 @@ TEST_F(IndirectReferenceTableTest, BasicTest) {
   CheckDump(&irt, 0, 0);
 }
 
+TEST_F(IndirectReferenceTableTest, TestRemoveIRT) {
+  // This will lead to error messages in the log.
+  ScopedLogSeverity sls(LogSeverity::WARNING);
+  ScopedObjectAccess soa(Thread::Current());
+  IndirectReferenceTable irt(10, 20, kGlobal);
+  StackHandleScope<1> hs(soa.Self());
+  soa.Self()->GetJniEnv()->check_jni = true;  // Enable check JNI just in case.
+  auto h = hs.NewHandle<mirror::Object>(nullptr);
+  // Test that we gracefully deleting a handlescope reference.
+  auto ref = reinterpret_cast<IndirectRef>(h.GetReference());
+  irt.Remove(0, ref);
+}
+
 }  // namespace art

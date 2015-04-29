@@ -182,6 +182,7 @@ bool IndirectReferenceTable::Remove(uint32_t cookie, IndirectRef iref) {
       DCHECK(env != nullptr);
       if (env->check_jni) {
         LOG(WARNING) << "Attempt to remove local handle scope entry from IRT, ignoring";
+        self->DumpNativeStack(LOG(WARNING), nullptr);
       }
       return true;
     }

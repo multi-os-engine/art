@@ -1110,12 +1110,21 @@ void Thread::DumpStack(std::ostream& os) const {
     // If we're currently in native code, dump that stack before dumping the managed stack.
     if (dump_for_abort || ShouldShowNativeStack(this)) {
       DumpKernelStack(os, GetTid(), "  kernel: ", false);
-      DumpNativeStack(os, GetTid(), "  native: ", GetCurrentMethod(nullptr, !dump_for_abort));
+      DumpNativeStack(os, GetCurrentMethod(nullptr, !dump_for_abort));
     }
     DumpJavaStack(os);
   } else {
     os << "Not able to dump stack of thread that isn't suspended";
   }
+}
+
+void Thread::DumpNativeStack(std::ostream& os, mirror::ArtMethod* current_method) const {
+  if (current_method != nullptr) {
+    auto* self = Thread::Current();
+    DCHECK(Locks::mutator_lock_->IsSharedHeld(self) ||
+           Locks::mutator_lock_->IsExclusiveHeld(self));
+  }
+  ::art::DumpNativeStack(os, GetTid(), "  native: ", current_method);
 }
 
 void Thread::ThreadExitCallback(void* arg) {

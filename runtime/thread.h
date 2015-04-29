@@ -186,6 +186,10 @@ class Thread {
       LOCKS_EXCLUDED(Locks::thread_suspend_count_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // NO_THREAD_SAFETY_ANALYSIS since we only need the mutator lock if current_method != null.
+  void DumpNativeStack(std::ostream& os, mirror::ArtMethod* current_method) const
+      NO_THREAD_SAFETY_ANALYSIS;
+
   // Dumps the SIGQUIT per-thread header. 'thread' can be null for a non-attached thread, in which
   // case we use 'tid' to identify the thread, and we'll include as much information as we can.
   static void DumpState(std::ostream& os, const Thread* thread, pid_t tid)
