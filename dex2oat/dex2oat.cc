@@ -757,6 +757,10 @@ class Dex2Oat FINAL {
       // If no specific compiler is requested, the current behavior is
       // to compile the boot image with Quick, and the rest with Optimizing.
       compiler_kind_ = image_ ? Compiler::kQuick : Compiler::kOptimizing;
+      // The MIPS/MIPS64 optimizing compiler is incomplete
+      // so do not use it unless specifically requested
+      if (instruction_set_ == InstructionSet::kMips || instruction_set_ == InstructionSet::kMips64)
+        compiler_kind_ = Compiler::kQuick;
     }
 
     if (compiler_kind_ == Compiler::kOptimizing) {

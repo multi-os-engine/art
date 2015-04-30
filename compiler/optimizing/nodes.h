@@ -1973,8 +1973,12 @@ class HCompare : public HBinaryOperation {
     kLtBias,  // return -1 for NaN comparisons
   };
 
-  HCompare(Primitive::Type type, HInstruction* first, HInstruction* second, Bias bias)
-      : HBinaryOperation(Primitive::kPrimInt, first, second), bias_(bias) {
+  HCompare(Primitive::Type type,
+           HInstruction* first,
+           HInstruction* second,
+           Bias bias,
+           uint32_t dex_pc)
+      : HBinaryOperation(Primitive::kPrimInt, first, second), bias_(bias), dex_pc_(dex_pc) {
     DCHECK_EQ(type, first->GetType());
     DCHECK_EQ(type, second->GetType());
   }
@@ -1999,10 +2003,13 @@ class HCompare : public HBinaryOperation {
 
   bool IsGtBias() { return bias_ == kGtBias; }
 
+  uint32_t GetDexPc() const { return dex_pc_; }
+
   DECLARE_INSTRUCTION(Compare);
 
  private:
   const Bias bias_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HCompare);
 };
