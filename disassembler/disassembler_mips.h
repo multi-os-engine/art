@@ -27,13 +27,17 @@ namespace mips {
 class DisassemblerMips FINAL : public Disassembler {
  public:
   explicit DisassemblerMips(DisassemblerOptions* options, bool is64bit) : Disassembler(options),
-      is64bit_(is64bit) {}
+      is64bit_(is64bit),
+      last_ptr(nullptr),
+      last_instr(0) {}
 
   size_t Dump(std::ostream& os, const uint8_t* begin) OVERRIDE;
   void Dump(std::ostream& os, const uint8_t* begin, const uint8_t* end) OVERRIDE;
 
  private:
   const bool is64bit_;
+  const uint8_t* last_ptr;
+  uint32_t last_instr;
 
   DISALLOW_COPY_AND_ASSIGN(DisassemblerMips);
 };
