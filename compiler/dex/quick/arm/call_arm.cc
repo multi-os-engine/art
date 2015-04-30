@@ -18,6 +18,7 @@
 
 #include "codegen_arm.h"
 
+#include "arch/arm/instruction_set_features_arm.h"
 #include "arm_lir.h"
 #include "base/logging.h"
 #include "dex/mir_graph.h"
@@ -149,8 +150,8 @@ void ArmMir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
   // FIXME: need separate LoadValues for object references.
   LoadValueDirectFixed(rl_src, rs_r0);  // Get obj
   LockCallTemps();  // Prepare for explicit register usage
-  constexpr bool kArchVariantHasGoodBranchPredictor = false;  // TODO: true if cortex-A15.
-  if (kArchVariantHasGoodBranchPredictor) {
+  if (cu_->compiler_driver->GetInstructionSetFeatures()->AsArmInstructionSetFeatures()->
+      HasGoodBranchPredictor()) {
     LIR* null_check_branch = nullptr;
     if ((opt_flags & MIR_IGNORE_NULL_CHECK) && !(cu_->disable_opt & (1 << kNullCheckElimination))) {
       null_check_branch = nullptr;  // No null check.

@@ -67,6 +67,12 @@ class ArmInstructionSetFeatures FINAL : public InstructionSetFeatures {
     return has_atomic_ldrd_strd_;
   }
 
+  // Is the branch predictor any decent, that is, can we rely on it predicting well and not emit
+  // longer specialized sequences.
+  bool HasGoodBranchPredictor() const {
+    return has_good_branch_predictor_;
+  }
+
   virtual ~ArmInstructionSetFeatures() {}
 
  protected:
@@ -76,9 +82,11 @@ class ArmInstructionSetFeatures FINAL : public InstructionSetFeatures {
                                  std::string* error_msg) const OVERRIDE;
 
  private:
-  ArmInstructionSetFeatures(bool smp, bool has_div, bool has_atomic_ldrd_strd)
+  ArmInstructionSetFeatures(bool smp, bool has_div, bool has_atomic_ldrd_strd,
+                            bool has_good_branch_predictor)
       : InstructionSetFeatures(smp),
-        has_div_(has_div), has_atomic_ldrd_strd_(has_atomic_ldrd_strd) {
+        has_div_(has_div), has_atomic_ldrd_strd_(has_atomic_ldrd_strd),
+        has_good_branch_predictor_(has_good_branch_predictor) {
   }
 
   // Bitmap positions for encoding features as a bitmap.
@@ -86,10 +94,12 @@ class ArmInstructionSetFeatures FINAL : public InstructionSetFeatures {
     kSmpBitfield = 1,
     kDivBitfield = 2,
     kAtomicLdrdStrdBitfield = 4,
+    kGoodBranchPredictorBitfield = 8
   };
 
   const bool has_div_;
   const bool has_atomic_ldrd_strd_;
+  const bool has_good_branch_predictor_;
 
   DISALLOW_COPY_AND_ASSIGN(ArmInstructionSetFeatures);
 };

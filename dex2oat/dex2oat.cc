@@ -873,10 +873,13 @@ class Dex2Oat FINAL {
       }
     }
 
-    if (instruction_set_ == kRuntimeISA) {
+    if (kIsDebugBuild && instruction_set_ == kRuntimeISA) {
       std::unique_ptr<const InstructionSetFeatures> runtime_features(
           InstructionSetFeatures::FromCppDefines());
       if (!instruction_set_features_->Equals(runtime_features.get())) {
+        // This may be a spurious warning. E.g., we can't derive whether the runtime is running
+        // on a variant with good branch predictor from CPP defines. That is why this is restricted
+        // to debug builds now.
         LOG(WARNING) << "Mismatch between dex2oat instruction set features ("
             << *instruction_set_features_ << ") and those of dex2oat executable ("
             << *runtime_features <<") for the command line:\n"

@@ -97,14 +97,23 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromVariant(
           << ") using conservative defaults";
     }
   }
-  return new ArmInstructionSetFeatures(smp, has_div, has_lpae);
+
+  static const char* arm_variants_with_good_predictor[] = {
+            "cortex-a15", "cortex-a17", "cortex-a53", "cortex-a57", "denver", "krait"};
+
+  bool has_good_predictor = FindVariantInArray(arm_variants_with_good_predictor,
+                                           arraysize(arm_variants_with_good_predictor),
+                                           variant);
+
+  return new ArmInstructionSetFeatures(smp, has_div, has_lpae, has_good_predictor);
 }
 
 const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromBitmap(uint32_t bitmap) {
   bool smp = (bitmap & kSmpBitfield) != 0;
   bool has_div = (bitmap & kDivBitfield) != 0;
   bool has_atomic_ldrd_strd = (bitmap & kAtomicLdrdStrdBitfield) != 0;
-  return new ArmInstructionSetFeatures(smp, has_div, has_atomic_ldrd_strd);
+  bool has_good_predictor = (bitmap & kGoodBranchPredictorBitfield) != 0;
+  return new ArmInstructionSetFeatures(smp, has_div, has_atomic_ldrd_strd, has_good_predictor);
 }
 
 const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromCppDefines() {
@@ -119,7 +128,10 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromCppDefines() {
 #else
   const bool has_lpae = false;
 #endif
-  return new ArmInstructionSetFeatures(smp, has_div, has_lpae);
+  // Conservatively assume no good predictor.
+  const bool has_good_predictor = false;
+
+  return new ArmInstructionSetFeatures(smp, has_div, has_lpae, has_good_predictor);
 }
 
 const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromCpuInfo() {
@@ -157,7 +169,10 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromCpuInfo() {
   } else {
     LOG(ERROR) << "Failed to open /proc/cpuinfo";
   }
-  return new ArmInstructionSetFeatures(smp, has_div, has_lpae);
+  // Conservatively assume no good predictor.
+  const bool has_good_predictor = false;
+
+  return new ArmInstructionSetFeatures(smp, has_div, has_lpae, has_good_predictor);
 }
 
 const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromHwcap() {
@@ -180,7 +195,10 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromHwcap() {
   }
 #endif
 
-  return new ArmInstructionSetFeatures(smp, has_div, has_lpae);
+  // Conservatively assume no good predictor.
+  const bool has_good_predictor = false;
+
+  return new ArmInstructionSetFeatures(smp, has_div, has_lpae, has_good_predictor);
 }
 
 // A signal handler called by a fault for an illegal instruction.  We record the fact in r0
@@ -225,7 +243,11 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromAssembly() {
 #else
   const bool has_lpae = false;
 #endif
-  return new ArmInstructionSetFeatures(smp, has_div, has_lpae);
+
+  // Conservatively assume no good predictor.
+  const bool has_good_predictor = false;
+
+  return new ArmInstructionSetFeatures(smp, has_div, has_lpae, has_good_predictor);
 }
 
 bool ArmInstructionSetFeatures::Equals(const InstructionSetFeatures* other) const {
@@ -235,13 +257,15 @@ bool ArmInstructionSetFeatures::Equals(const InstructionSetFeatures* other) cons
   const ArmInstructionSetFeatures* other_as_arm = other->AsArmInstructionSetFeatures();
   return IsSmp() == other_as_arm->IsSmp() &&
       has_div_ == other_as_arm->has_div_ &&
-      has_atomic_ldrd_strd_ == other_as_arm->has_atomic_ldrd_strd_;
+      has_atomic_ldrd_strd_ == other_as_arm->has_atomic_ldrd_strd_ &&
+      has_good_branch_predictor_ == other_as_arm->has_good_branch_predictor_;
 }
 
 uint32_t ArmInstructionSetFeatures::AsBitmap() const {
   return (IsSmp() ? kSmpBitfield : 0) |
       (has_div_ ? kDivBitfield : 0) |
-      (has_atomic_ldrd_strd_ ? kAtomicLdrdStrdBitfield : 0);
+      (has_atomic_ldrd_strd_ ? kAtomicLdrdStrdBitfield : 0) |
+      (has_good_branch_predictor_ ? kGoodBranchPredictorBitfield : 0);
 }
 
 std::string ArmInstructionSetFeatures::GetFeatureString() const {
@@ -261,6 +285,11 @@ std::string ArmInstructionSetFeatures::GetFeatureString() const {
   } else {
     result += ",-atomic_ldrd_strd";
   }
+  if (has_good_branch_predictor_) {
+    result += ",good_predictor";
+  } else {
+    result += ",-good_predictor";
+  }
   return result;
 }
 
@@ -268,6 +297,7 @@ const InstructionSetFeatures* ArmInstructionSetFeatures::AddFeaturesFromSplitStr
     const bool smp, const std::vector<std::string>& features, std::string* error_msg) const {
   bool has_atomic_ldrd_strd = has_atomic_ldrd_strd_;
   bool has_div = has_div_;
+  bool has_good_predictor = has_good_branch_predictor_;
   for (auto i = features.begin(); i != features.end(); i++) {
     std::string feature = Trim(*i);
     if (feature == "div") {
@@ -278,12 +308,16 @@ const InstructionSetFeatures* ArmInstructionSetFeatures::AddFeaturesFromSplitStr
       has_atomic_ldrd_strd = true;
     } else if (feature == "-atomic_ldrd_strd") {
       has_atomic_ldrd_strd = false;
+    } else if (feature == "good_predictor") {
+      has_good_predictor = true;
+    } else if (feature == "-good_predictor") {
+      has_good_predictor = false;
     } else {
       *error_msg = StringPrintf("Unknown instruction set feature: '%s'", feature.c_str());
       return nullptr;
     }
   }
-  return new ArmInstructionSetFeatures(smp, has_div, has_atomic_ldrd_strd);
+  return new ArmInstructionSetFeatures(smp, has_div, has_atomic_ldrd_strd, has_good_predictor);
 }
 
 }  // namespace art
