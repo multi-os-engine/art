@@ -148,7 +148,7 @@ ManagedRegister Mips64JniCallingConvention::ReturnScratchRegister() const {
 }
 
 size_t Mips64JniCallingConvention::FrameSize() {
-  // Mehtod* and callee save area size, local reference segment state
+  // Method* and callee save area size, local reference segment state
   size_t frame_data_size = sizeof(StackReference<mirror::ArtMethod>) +
       CalleeSaveRegisters().size() * kFramePointerSize + sizeof(uint32_t);
   // References plus 2 words for HandleScope header
