@@ -107,12 +107,25 @@ class TextWriter FINAL : public CodeOutput {
   OatWriter* oat_writer_;
 };
 
+template <typename Elf_Addr, typename Address,
+          bool SubtractMyAddr = false, bool SubtractLocation = false>
+static void Patch(uint8_t* buffer, const std::vector<uintptr_t>& locations,
+                  Elf_Addr my_address, Elf_Addr other_address) {
+  for (uintptr_t location : locations) {
+    typedef __attribute__((__aligned__(1))) Address UnalignedAddress;
+    auto* to_patch = reinterpret_cast<UnalignedAddress*>(buffer + location);
+    *to_patch += other_address - (SubtractMyAddr ? my_address : 0)
+                               - (SubtractLocation ? location : 0);
+  }
+}
+
 template <typename ElfTypes>
 bool ElfWriterQuick<ElfTypes>::Write(
     OatWriter* oat_writer,
     const std::vector<const DexFile*>& dex_files_unused ATTRIBUTE_UNUSED,
     const std::string& android_root_unused ATTRIBUTE_UNUSED,
     bool is_host_unused ATTRIBUTE_UNUSED) {
+  using Elf_Addr = typename ElfTypes::Addr;
   const InstructionSet isa = compiler_driver_->GetInstructionSet();
 
   // Setup the builder with the main OAT sections (.rodata .text .bss).
@@ -129,27 +142,31 @@ bool ElfWriterQuick<ElfTypes>::Write(
   // but they are registred with the builder only if they are used.
   using RawSection = typename ElfBuilder<ElfTypes>::RawSection;
   const auto* text = builder->GetText();
-  constexpr bool absolute = false;  // patch to make absolute addresses.
-  constexpr bool relative = true;  // patch to make relative addresses.
   const bool is64bit = Is64BitInstructionSet(isa);
   RawSection eh_frame(".eh_frame", SHT_PROGBITS, SHF_ALLOC,
-                      nullptr, 0, kPageSize, 0, text, relative, is64bit);
+                      nullptr, 0, kPageSize, 0,
+                      // address = (other_address + address) - (my_address + location)
+                      is64bit ? Patch<Elf_Addr, uint64_t, true, true> :
+                                Patch<Elf_Addr, uint32_t, true, true>,
+                      text);
   RawSection eh_frame_hdr(".eh_frame_hdr", SHT_PROGBITS, SHF_ALLOC,
-                          nullptr, 0, 4, 0);
+                          nullptr, 0, 4, 0,
+                          // address = (other_address + address) - my_address
+                          Patch<Elf_Addr, uint32_t, true, false>, text);
   RawSection debug_info(".debug_info", SHT_PROGBITS, 0,
-                        nullptr, 0, 1, 0, text, absolute, false /* 32bit */);
+                        nullptr, 0, 1, 0, Patch<Elf_Addr, uint32_t>, text);
   RawSection debug_abbrev(".debug_abbrev", SHT_PROGBITS, 0,
                           nullptr, 0, 1, 0);
   RawSection debug_str(".debug_str", SHT_PROGBITS, 0,
                        nullptr, 0, 1, 0);
   RawSection debug_line(".debug_line", SHT_PROGBITS, 0,
-                        nullptr, 0, 1, 0, text, absolute, false /* 32bit */);
+                        nullptr, 0, 1, 0, Patch<Elf_Addr, uint32_t>, text);
   if (!oat_writer->GetMethodDebugInfo().empty()) {
     if (compiler_driver_->GetCompilerOptions().GetIncludeCFI()) {
       dwarf::WriteEhFrame(
           compiler_driver_, oat_writer, dwarf::DW_EH_PE_pcrel,
           eh_frame.GetBuffer(), eh_frame.GetPatchLocations(),
-          eh_frame_hdr.GetBuffer());
+          eh_frame_hdr.GetBuffer(), eh_frame_hdr.GetPatchLocations());
       builder->RegisterSection(&eh_frame);
       builder->RegisterSection(&eh_frame_hdr);
     }
@@ -202,6 +219,9 @@ static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder, OatWriter* oat_writ
 
   auto* symtab = builder->GetSymtab();
   for (auto it = method_info.begin(); it != method_info.end(); ++it) {
+    if (it->deduped_) {
+      continue;  // Add symbol only for the first instance.
+    }
     std::string name = PrettyMethod(it->dex_method_index_, *it->dex_file_, true);
     if (deduped_addresses.find(it->low_pc_) != deduped_addresses.end()) {
       name += " [DEDUPED]";
