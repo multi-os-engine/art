@@ -384,6 +384,8 @@ class MarkSweepMarkObjectSlowPath {
       LOG(ERROR) << "Tried to mark " << obj << " not contained by any spaces";
       LOG(ERROR) << "Attempting see if it's a bad root";
       mark_sweep_->VerifyRoots();
+      PrintFileToLog("/proc/self/maps", LogSeverity::ERROR);
+      MemMap::DumpMaps(LOG(ERROR));
       LOG(FATAL) << "Can't mark invalid object";
     }
   }
