@@ -973,7 +973,9 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         break;
       }
 
-      size_t back_edge_use_position = current->GetSingleBackEdge()->GetLifetimeEnd();
+      // TODO: Instead of using the last back edge, should we add synthesized uses at all
+      // back edges?
+      size_t back_edge_use_position = current->GetLifetimeEnd();
       if ((first_use_ != nullptr) && (first_use_->GetPosition() <= back_edge_use_position)) {
         // There was a use already seen in this loop. Therefore the previous call to `AddUse`
         // already inserted the backedge use. We can stop going outward.
