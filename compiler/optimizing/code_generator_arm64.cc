@@ -285,6 +285,10 @@ class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
     return &return_label_;
   }
 
+  HBasicBlock* GetSuccessor() const {
+    return successor_;
+  }
+
  private:
   HSuspendCheck* const instruction_;
   // If not null, the block to branch to after the suspend check.
@@ -1033,9 +1037,21 @@ void InstructionCodeGeneratorARM64::GenerateMemoryBarrier(MemBarrierKind kind) {
 
 void InstructionCodeGeneratorARM64::GenerateSuspendCheck(HSuspendCheck* instruction,
                                                          HBasicBlock* successor) {
+
   SuspendCheckSlowPathARM64* slow_path =
-    new (GetGraph()->GetArena()) SuspendCheckSlowPathARM64(instruction, successor);
-  codegen_->AddSlowPath(slow_path);
+      reinterpret_cast<SuspendCheckSlowPathARM64*>(instruction->GetSlowPath());
+  if (slow_path == nullptr) {
+    slow_path = new (GetGraph()->GetArena()) SuspendCheckSlowPathARM64(instruction, successor);
+    instruction->SetSlowPath(slow_path);
+    codegen_->AddSlowPath(slow_path);
+    if (successor != nullptr) {
+      DCHECK(successor->IsLoopHeader());
+      codegen_->ClearSpillSlotsFromLoopPhisInStackMap(instruction);
+    }
+  } else {
+    DCHECK_EQ(slow_path->GetSuccessor(), successor);
+  }
+
   UseScratchRegisterScope temps(codegen_->GetVIXLAssembler());
   Register temp = temps.AcquireW();
 
