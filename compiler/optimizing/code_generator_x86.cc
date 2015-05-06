@@ -2827,7 +2827,11 @@ void InstructionCodeGeneratorX86::HandleShift(HBinaryOperation* op) {
 void InstructionCodeGeneratorX86::GenerateShlLong(const Location& loc, int shift) {
   Register low = loc.AsRegisterPairLow<Register>();
   Register high = loc.AsRegisterPairHigh<Register>();
-  if (shift == 32) {
+  if (shift == 1) {
+    // This is just an addition.
+    __ addl(low, low);
+    __ adcl(high, high);
+  } else if (shift == 32) {
     // Shift by 32 is easy. High gets low, and low gets 0.
     codegen_->EmitParallelMoves(
         loc.ToLow(),
@@ -2836,6 +2840,18 @@ void InstructionCodeGeneratorX86::GenerateShlLong(const Location& loc, int shift
         Location::ConstantLocation(GetGraph()->GetIntConstant(0)),
         loc.ToLow(),
         Primitive::kPrimInt);
+  } else if (shift == 33) {
+    // high <- low << 1; low <- 0.
+    __ leal(high, Address(low, TIMES_2, 0));
+    __ xorl(low, low);
+  } else if (shift == 34) {
+    // high <- low << 2; low <- 0.
+    __ leal(high, Address(low, TIMES_4, 0));
+    __ xorl(low, low);
+  } else if (shift == 35) {
+    // high <- low << 3; low <- 0.
+    __ leal(high, Address(low, TIMES_8, 0));
+    __ xorl(low, low);
   } else if (shift > 32) {
     // Low part becomes 0.  High part is low part << (shift-32).
     __ movl(high, low);
