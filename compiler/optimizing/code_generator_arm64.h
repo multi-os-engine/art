@@ -360,7 +360,39 @@ class CodeGeneratorARM64 : public CodeGenerator {
 
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp);
 
+  void EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches) OVERRIDE;
+
  private:
+  struct MethodPatchData {
+    explicit MethodPatchData(MethodReference method)
+        : target_method(method), label(), literal_offset(0u) { }
+
+    MethodReference target_method;
+    vixl::Label label;  // TODO: Replace with RawLiteral* when vixl supports low-level access.
+    uint32_t literal_offset;  // TODO: Remove when we have the RawLiteral*.
+  };
+
+  struct PcRelDexCacheAccessData {
+    PcRelDexCacheAccessData(const DexFile* dex_file, uint32_t element_off)
+        : target_dex_file(dex_file), element_offset(element_off), label(), pc_insn_label() { }
+
+    const DexFile* target_dex_file;
+    uint32_t element_offset;
+    // NOTE: Labels are bound to the end of the patched instruction because
+    // we don't know if there will be a veneer or how big it will be.
+    vixl::Label label;
+    vixl::Label* pc_insn_label;
+  };
+
+  struct RelativeCallPatchData {
+    explicit RelativeCallPatchData(MethodReference method) : target_method(method), label() { }
+
+    MethodReference target_method;
+    // NOTE: Labels are bound to the end of the patched instruction because
+    // we don't know if there will be a veneer or how big it will be.
+    vixl::Label label;
+  };
+
   // Labels for each block that will be compiled.
   vixl::Label* block_labels_;
   vixl::Label frame_entry_label_;
@@ -370,6 +402,16 @@ class CodeGeneratorARM64 : public CodeGenerator {
   ParallelMoveResolverARM64 move_resolver_;
   Arm64Assembler assembler_;
   const Arm64InstructionSetFeatures& isa_features_;
+
+  // Method address and code address patch data.
+  // TODO: Rewrite as a map for deduplication when vixl supports low-level access to RawLiteral.
+  ArenaDeque<MethodPatchData> method_patches_;
+  ArenaDeque<MethodPatchData> call_patches_;
+  // Relative call patch data.
+  // Using std::deque<> which retains element addresses on push/emplace_back().
+  ArenaDeque<RelativeCallPatchData> relative_call_patches_;
+  // PC-relative DexCache access data.
+  ArenaDeque<PcRelDexCacheAccessData> pc_rel_dex_cache_patches_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorARM64);
 };
