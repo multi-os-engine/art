@@ -1995,37 +1995,49 @@ void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invok
   size_t index_in_cache = mirror::Array::DataOffset(kHeapRefSize).SizeValue() +
       invoke->GetDexMethodIndex() * kHeapRefSize;
 
-  // TODO: Implement all kinds of calls:
-  // 1) boot -> boot
-  // 2) app -> boot
-  // 3) app -> app
-  //
-  // Currently we implement the app -> app logic, which looks up in the resolve cache.
-
-  if (invoke->IsStringInit()) {
-    // temp = thread->string_init_entrypoint
-    __ Ldr(temp, HeapOperand(tr, invoke->GetStringInitOffset()));
-    // LR = temp->entry_point_from_quick_compiled_code_;
-    __ Ldr(lr, HeapOperand(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
-        kArm64WordSize)));
-    // lr()
-    __ Blr(lr);
-  } else {
-    // temp = method;
-    LoadCurrentMethod(temp);
-    if (!invoke->IsRecursive()) {
+  switch (invoke->GetMethodLoadType()) {
+    case HInvokeStaticOrDirect::MethodLoadType::kStringInit:
+      // temp = thread->string_init_entrypoint
+      __ Ldr(temp, HeapOperand(tr, invoke->GetStringInitOffset()));
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kRecursive:
+      // temp = method;
+      LoadCurrentMethod(temp);
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kDirectAddress:
+      __ Ldr(temp, invoke->GetMethodAddress());
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kDirectAddressFixup:
+    case HInvokeStaticOrDirect::MethodLoadType::kDexCachePcRel:
+      // TODO: Implement these types. For the moment, we fall back to kDexCacheViaMethod.
+      FALLTHROUGH_INTENDED;
+    case HInvokeStaticOrDirect::MethodLoadType::kDexCacheViaMethod:
+      // temp = method;
+      LoadCurrentMethod(temp);
       // temp = temp->dex_cache_resolved_methods_;
       __ Ldr(temp, HeapOperand(temp, mirror::ArtMethod::DexCacheResolvedMethodsOffset()));
       // temp = temp[index_in_cache];
       __ Ldr(temp, HeapOperand(temp, index_in_cache));
-      // lr = temp->entry_point_from_quick_compiled_code_;
+      break;
+  }
+
+  switch (invoke->GetCodePtrLocation()) {
+    case HInvokeStaticOrDirect::CodePtrLocation::kCallSelf:
+      __ Bl(&frame_entry_label_);
+      break;
+    case HInvokeStaticOrDirect::CodePtrLocation::kPcRelFixup:
+      // TODO: Implement kPcRelFixup. For the moment, we fall back to kMethodCode.
+      FALLTHROUGH_INTENDED;
+    case HInvokeStaticOrDirect::CodePtrLocation::kDirectCode:
+      // For direct code, we actually prefer to call via the code pointer from ArtMethod*.
+      FALLTHROUGH_INTENDED;
+    case HInvokeStaticOrDirect::CodePtrLocation::kMethodCode:
+      // LR = temp->entry_point_from_quick_compiled_code_;
       __ Ldr(lr, HeapOperand(temp, mirror::ArtMethod::EntryPointFromQuickCompiledCodeOffset(
           kArm64WordSize)));
-      // lr();
+      // lr()
       __ Blr(lr);
-    } else {
-      __ Bl(&frame_entry_label_);
-    }
+      break;
   }
 
   DCHECK(!IsLeafMethod());

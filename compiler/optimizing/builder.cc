@@ -31,6 +31,7 @@
 #include "primitive.h"
 #include "scoped_thread_state_change.h"
 #include "thread.h"
+#include "utils/dex_cache_arrays_layout-inl.h"
 
 namespace art {
 
@@ -637,9 +638,6 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
     // Sharpening to kDirect only works if we compile PIC.
     DCHECK((optimized_invoke_type == invoke_type) || (optimized_invoke_type != kDirect)
            || compiler_driver_->GetCompilerOptions().GetCompilePic());
-    bool is_recursive =
-        (target_method.dex_method_index == dex_compilation_unit_->GetDexMethodIndex());
-    DCHECK(!is_recursive || (target_method.dex_file == dex_compilation_unit_->GetDexFile()));
 
     if (optimized_invoke_type == kStatic) {
       ScopedObjectAccess soa(Thread::Current());
@@ -706,9 +704,52 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
       }
     }
 
+    DCHECK(is_string_init || target_method.dex_file == dex_compilation_unit_->GetDexFile());
+    size_t method_load_data = 0u;
+    HInvokeStaticOrDirect::MethodLoadType method_load_type;
+    HInvokeStaticOrDirect::CodePtrLocation code_ptr_location;
+    uint64_t direct_code_ptr = 0u;
+    if (is_string_init) {
+      // TODO: Use direct_method and direct_code for the appropriate StringFactory method.
+      method_load_type = HInvokeStaticOrDirect::MethodLoadType::kStringInit;
+      code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kMethodCode;
+      method_load_data = string_init_offset;
+    } else if (target_method.dex_method_index == dex_compilation_unit_->GetDexMethodIndex()) {
+      method_load_type = HInvokeStaticOrDirect::MethodLoadType::kRecursive;
+      code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallSelf;
+    } else {
+      if (direct_method != 0u) {
+        if (direct_method != static_cast<uintptr_t>(-1)) {
+          method_load_type = HInvokeStaticOrDirect::MethodLoadType::kDirectAddress;
+          method_load_data = direct_method;
+        } else {
+          method_load_type = HInvokeStaticOrDirect::MethodLoadType::kDirectAddressFixup;
+        }
+      } else {
+        auto layout = compiler_driver_->GetDexCacheArraysLayout(target_method.dex_file);
+        if (layout.Valid()) {
+          method_load_type = HInvokeStaticOrDirect::MethodLoadType::kDexCachePcRel;
+          method_load_data = layout.MethodOffset(target_method.dex_method_index);
+        } else {
+          method_load_type = HInvokeStaticOrDirect::MethodLoadType::kDexCacheViaMethod;
+        }
+      }
+      if (direct_code != 0u) {
+        if (direct_code != static_cast<uintptr_t>(-1)) {
+          code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kDirectCode;
+          direct_code_ptr = direct_code;
+        } else {
+          code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kPcRelFixup;
+        }
+      } else {
+        code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kMethodCode;
+      }
+    }
+
     invoke = new (arena_) HInvokeStaticOrDirect(
-        arena_, number_of_arguments, return_type, dex_pc, target_method.dex_method_index,
-        is_recursive, string_init_offset, invoke_type, optimized_invoke_type,
+        arena_, number_of_arguments, return_type, dex_pc, target_method,
+        method_load_type, method_load_data, code_ptr_location, direct_code_ptr,
+        invoke_type, optimized_invoke_type,
         clinit_check_requirement);
   }
 
