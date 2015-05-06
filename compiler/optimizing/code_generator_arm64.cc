@@ -20,6 +20,7 @@
 #include "art_method.h"
 #include "code_generator_utils.h"
 #include "common_arm64.h"
+#include "compiled_method.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
@@ -516,7 +517,8 @@ CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
       location_builder_(graph, this),
       instruction_visitor_(graph, this),
       move_resolver_(graph->GetArena(), this),
-      isa_features_(isa_features) {
+      isa_features_(isa_features),
+      method_patches_(graph->GetArena()->Adapter()) {
   // Save the link register (containing the return address) to mimic Quick.
   AddAllocatedRegister(LocationFrom(lr));
 }
@@ -527,7 +529,23 @@ CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
 void CodeGeneratorARM64::Finalize(CodeAllocator* allocator) {
   // Ensure we emit the literal pool.
   __ FinalizeCode();
-  CodeGenerator::Finalize(allocator);
+
+  // We can't call CodeGenerator::Finalize(allocator), we need to do it ourselves because
+  // we need access to the allocated region for the hack below.
+  size_t code_size = GetAssembler()->CodeSize();
+  uint8_t* buffer = allocator->Allocate(code_size);
+  MemoryRegion code(buffer, code_size);
+  GetAssembler()->FinalizeInstructions(code);
+
+  // Calculate offsets of method patches.
+  // This is an ugly hack necessitated by lack of low-level support for working with
+  // RawLiteral that would allow us to deduplicate the method literals and retrieve
+  // offsets straight from the RawLiteral.
+  for (auto& data : method_patches_) {
+    uint32_t ldr = code.LoadUnaligned<uint32_t>(data.label.location());
+    int32_t imm19 = static_cast<int32_t>(ldr << 8) >> 13;  // Sign-extended.
+    data.literal_offset = data.label.location() + 4 + (imm19 << 2);
+  }
 }
 
 void ParallelMoveResolverARM64::PrepareForEmitNativeCode() {
@@ -2370,52 +2388,79 @@ static bool TryGenerateIntrinsicCode(HInvoke* invoke, CodeGeneratorARM64* codege
 
 void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp) {
   // Make sure that ArtMethod* is passed in kArtMethodRegister as per the calling convention.
-  size_t index_in_cache = GetCachePointerOffset(invoke->GetDexMethodIndex());
+  switch (invoke->GetMethodLoadType()) {
+    case HInvokeStaticOrDirect::MethodLoadType::kStringInit:
+      // temp = thread->string_init_entrypoint
+      __ Ldr(XRegisterFrom(temp).X(), MemOperand(tr, invoke->GetStringInitOffset()));
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kRecursive:
+      // Nothing to do.
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kDirectAddress:
+      __ Ldr(XRegisterFrom(temp).X(), invoke->GetMethodAddress());
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kDirectAddressFixup:
+      // TODO: When vixl provides low level access to literals, rewrite this hack.
+      method_patches_.emplace_back(invoke->GetTargetMethod(), invoke->GetOriginalInvokeType());
+      __ Bind(&method_patches_.back().label);
+      __ Ldr(XRegisterFrom(temp).X(), UINT64_C(0));
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kDexCachePcRel:
+      // TODO: Implement this type. For the moment, we fall back to kDexCacheViaMethod.
+      FALLTHROUGH_INTENDED;
+    case HInvokeStaticOrDirect::MethodLoadType::kDexCacheViaMethod: {
+      Location current_method = invoke->GetLocations()->InAt(invoke->GetCurrentMethodInputIndex());
+      Register reg = XRegisterFrom(temp);
+      Register method_reg;
+      if (current_method.IsRegister()) {
+        method_reg = XRegisterFrom(current_method);
+      } else {
+        DCHECK(invoke->GetLocations()->Intrinsified());
+        DCHECK(!current_method.IsValid());
+        method_reg = reg;
+        __ Ldr(reg.X(), MemOperand(sp, kCurrentMethodStackOffset));
+      }
 
-  // TODO: Implement all kinds of calls:
-  // 1) boot -> boot
-  // 2) app -> boot
-  // 3) app -> app
-  //
-  // Currently we implement the app -> app logic, which looks up in the resolve cache.
-
-  if (invoke->IsStringInit()) {
-    Register reg = XRegisterFrom(temp);
-    // temp = thread->string_init_entrypoint
-    __ Ldr(reg.X(), MemOperand(tr, invoke->GetStringInitOffset()));
-    // LR = temp->entry_point_from_quick_compiled_code_;
-    __ Ldr(lr, MemOperand(
-        reg, ArtMethod::EntryPointFromQuickCompiledCodeOffset(kArm64WordSize).Int32Value()));
-    // lr()
-    __ Blr(lr);
-  } else if (invoke->IsRecursive()) {
-    __ Bl(&frame_entry_label_);
-  } else {
-    Location current_method = invoke->GetLocations()->InAt(invoke->GetCurrentMethodInputIndex());
-    Register reg = XRegisterFrom(temp);
-    Register method_reg;
-    if (current_method.IsRegister()) {
-      method_reg = XRegisterFrom(current_method);
-    } else {
-      DCHECK(invoke->GetLocations()->Intrinsified());
-      DCHECK(!current_method.IsValid());
-      method_reg = reg;
-      __ Ldr(reg.X(), MemOperand(sp, kCurrentMethodStackOffset));
+      // temp = current_method->dex_cache_resolved_methods_;
+      __ Ldr(reg.W(), MemOperand(method_reg.X(),
+                                 ArtMethod::DexCacheResolvedMethodsOffset().Int32Value()));
+      // temp = temp[index_in_cache];
+      uint32_t index_in_cache = invoke->GetTargetMethod().dex_method_index;
+    __ Ldr(reg.X(), MemOperand(reg.X(), GetCachePointerOffset(index_in_cache)));
+      break;
     }
+  }
 
-    // temp = current_method->dex_cache_resolved_methods_;
-    __ Ldr(reg.W(), MemOperand(method_reg.X(),
-                               ArtMethod::DexCacheResolvedMethodsOffset().Int32Value()));
-    // temp = temp[index_in_cache];
-    __ Ldr(reg.X(), MemOperand(reg, index_in_cache));
-    // lr = temp->entry_point_from_quick_compiled_code_;
-    __ Ldr(lr, MemOperand(reg.X(), ArtMethod::EntryPointFromQuickCompiledCodeOffset(
-        kArm64WordSize).Int32Value()));
-    // lr();
-    __ Blr(lr);
+  switch (invoke->GetCodePtrLocation()) {
+    case HInvokeStaticOrDirect::CodePtrLocation::kCallSelf:
+      __ Bl(&frame_entry_label_);
+      break;
+    case HInvokeStaticOrDirect::CodePtrLocation::kDirectCodeFixup:
+      // TODO: Implement kDirectCodeFixup. For the moment, we fall back to kMethodCode.
+      FALLTHROUGH_INTENDED;
+    case HInvokeStaticOrDirect::CodePtrLocation::kDirectCode:
+      // For direct code, we actually prefer to call via the code pointer from ArtMethod*.
+      FALLTHROUGH_INTENDED;
+    case HInvokeStaticOrDirect::CodePtrLocation::kMethodCode:
+      // LR = temp->entry_point_from_quick_compiled_code_;
+      __ Ldr(lr, MemOperand(
+          XRegisterFrom(temp).X(),
+          ArtMethod::EntryPointFromQuickCompiledCodeOffset(kArm64WordSize).Int32Value()));
+      // lr()
+      __ Blr(lr);
+      break;
   }
 
   DCHECK(!IsLeafMethod());
+}
+
+void CodeGeneratorARM64::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches) {
+  DCHECK(linker_patches->empty());
+  linker_patches->reserve(method_patches_.size());
+  for (const auto& data : method_patches_) {
+    linker_patches->push_back(LinkerPatch::MethodPatch(
+        data.literal_offset, data.target_method.dex_file, data.target_method.dex_method_index));
+  }
 }
 
 void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {

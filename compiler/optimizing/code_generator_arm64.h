@@ -360,7 +360,19 @@ class CodeGeneratorARM64 : public CodeGenerator {
 
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp);
 
+  void EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches) OVERRIDE;
+
  private:
+  struct MethodPatchData {
+    MethodPatchData(MethodReference m, InvokeType t)
+        : target_method(m), invoke_type(t), label(), literal_offset(0u) { }
+
+    MethodReference target_method;
+    InvokeType invoke_type;
+    vixl::Label label;  // TODO: Replace with RawLiteral* when vixl supports low-level access.
+    uint32_t literal_offset;  // TODO: Remove when we have the RawLiteral*.
+  };
+
   // Labels for each block that will be compiled.
   vixl::Label* block_labels_;
   vixl::Label frame_entry_label_;
@@ -370,6 +382,10 @@ class CodeGeneratorARM64 : public CodeGenerator {
   ParallelMoveResolverARM64 move_resolver_;
   Arm64Assembler assembler_;
   const Arm64InstructionSetFeatures& isa_features_;
+
+  // Method patch data.
+  // TODO: Rewrite as a set for deduplication when vixl supports low-level access to RawLiteral.
+  ArenaDeque<MethodPatchData> method_patches_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorARM64);
 };
