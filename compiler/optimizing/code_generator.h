@@ -48,6 +48,7 @@ static int64_t constexpr kPrimLongMax = INT64_C(0x7fffffffffffffff);
 class Assembler;
 class CodeGenerator;
 class DexCompilationUnit;
+class LinkerPatch;
 class ParallelMoveResolver;
 class SrcMapElem;
 template <class Alloc>
@@ -160,6 +161,7 @@ class CodeGenerator {
 
   virtual void Initialize() = 0;
   virtual void Finalize(CodeAllocator* allocator);
+  virtual void EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches);
   virtual void GenerateFrameEntry() = 0;
   virtual void GenerateFrameExit() = 0;
   virtual void Bind(HBasicBlock* block) = 0;
