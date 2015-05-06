@@ -168,7 +168,7 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   struct InstallStackVisitor : public StackVisitor {
     InstallStackVisitor(Thread* thread_in, Context* context, uintptr_t instrumentation_exit_pc)
-        : StackVisitor(thread_in, context),
+        : StackVisitor(thread_in, context, false),
           instrumentation_stack_(thread_in->GetInstrumentationStack()),
           instrumentation_exit_pc_(instrumentation_exit_pc),
           reached_existing_instrumentation_frames_(false), instrumentation_stack_depth_(0),
@@ -309,7 +309,7 @@ static void InstrumentationRestoreStack(Thread* thread, void* arg)
   struct RestoreStackVisitor : public StackVisitor {
     RestoreStackVisitor(Thread* thread_in, uintptr_t instrumentation_exit_pc,
                         Instrumentation* instrumentation)
-        : StackVisitor(thread_in, nullptr), thread_(thread_in),
+        : StackVisitor(thread_in, nullptr, false), thread_(thread_in),
           instrumentation_exit_pc_(instrumentation_exit_pc),
           instrumentation_(instrumentation),
           instrumentation_stack_(thread_in->GetInstrumentationStack()),
@@ -959,7 +959,7 @@ void Instrumentation::ExceptionCaughtEvent(Thread* thread,
 static void CheckStackDepth(Thread* self, const InstrumentationStackFrame& instrumentation_frame,
                             int delta)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  size_t frame_id = StackVisitor::ComputeNumFrames(self) + delta;
+  size_t frame_id = StackVisitor::ComputeNumFrames(self, false) + delta;
   if (frame_id != instrumentation_frame.frame_id_) {
     LOG(ERROR) << "Expected frame_id=" << frame_id << " but found "
         << instrumentation_frame.frame_id_;
@@ -972,7 +972,7 @@ void Instrumentation::PushInstrumentationStackFrame(Thread* self, mirror::Object
                                                     mirror::ArtMethod* method,
                                                     uintptr_t lr, bool interpreter_entry) {
   // We have a callee-save frame meaning this value is guaranteed to never be 0.
-  size_t frame_id = StackVisitor::ComputeNumFrames(self);
+  size_t frame_id = StackVisitor::ComputeNumFrames(self, false);
   std::deque<instrumentation::InstrumentationStackFrame>* stack = self->GetInstrumentationStack();
   if (kVerboseInstrumentation) {
     LOG(INFO) << "Entering " << PrettyMethod(method) << " from PC " << reinterpret_cast<void*>(lr);

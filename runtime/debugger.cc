@@ -831,8 +831,10 @@ JDWP::JdwpError Dbg::GetOwnedMonitors(JDWP::ObjectId thread_id,
                         std::vector<JDWP::ObjectId>* monitor_vector,
                         std::vector<uint32_t>* stack_depth_vector)
         SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : StackVisitor(thread, context), current_stack_depth(0),
-        monitors(monitor_vector), stack_depths(stack_depth_vector) {}
+      : StackVisitor(thread, context, true),
+        current_stack_depth(0),
+        monitors(monitor_vector),
+        stack_depths(stack_depth_vector) {}
 
     // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
     // annotalysis.
@@ -2193,7 +2195,7 @@ void Dbg::GetThreads(mirror::Object* thread_group, std::vector<JDWP::ObjectId>* 
 static int GetStackDepth(Thread* thread) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   struct CountStackDepthVisitor : public StackVisitor {
     explicit CountStackDepthVisitor(Thread* thread_in)
-        : StackVisitor(thread_in, nullptr), depth(0) {}
+        : StackVisitor(thread_in, nullptr, true), depth(0) {}
 
     // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
     // annotalysis.
@@ -2233,7 +2235,7 @@ JDWP::JdwpError Dbg::GetThreadFrames(JDWP::ObjectId thread_id, size_t start_fram
     GetFrameVisitor(Thread* thread, size_t start_frame_in, size_t frame_count_in,
                     JDWP::ExpandBuf* buf_in)
         SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-        : StackVisitor(thread, nullptr), depth_(0),
+        : StackVisitor(thread, nullptr, true), depth_(0),
           start_frame_(start_frame_in), frame_count_(frame_count_in), buf_(buf_in) {
       expandBufAdd4BE(buf_, frame_count_);
     }
@@ -2351,7 +2353,7 @@ void Dbg::SuspendSelf() {
 struct GetThisVisitor : public StackVisitor {
   GetThisVisitor(Thread* thread, Context* context, JDWP::FrameId frame_id_in)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : StackVisitor(thread, context), this_object(nullptr), frame_id(frame_id_in) {}
+      : StackVisitor(thread, context, true), this_object(nullptr), frame_id(frame_id_in) {}
 
   // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
   // annotalysis.
@@ -2391,7 +2393,7 @@ class FindFrameVisitor FINAL : public StackVisitor {
  public:
   FindFrameVisitor(Thread* thread, Context* context, JDWP::FrameId frame_id)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : StackVisitor(thread, context), frame_id_(frame_id), error_(JDWP::ERR_INVALID_FRAMEID) {}
+      : StackVisitor(thread, context, true), frame_id_(frame_id), error_(JDWP::ERR_INVALID_FRAMEID) {}
 
   // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
   // annotalysis.
@@ -2775,7 +2777,7 @@ class CatchLocationFinder : public StackVisitor {
  public:
   CatchLocationFinder(Thread* self, const Handle<mirror::Throwable>& exception, Context* context)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-    : StackVisitor(self, context),
+    : StackVisitor(self, context, true),
       self_(self),
       exception_(exception),
       handle_scope_(self),
@@ -3523,7 +3525,7 @@ JDWP::JdwpError Dbg::ConfigureStep(JDWP::ObjectId thread_id, JDWP::JdwpStepSize 
   // is for step-out.
   struct SingleStepStackVisitor : public StackVisitor {
     explicit SingleStepStackVisitor(Thread* thread) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-        : StackVisitor(thread, nullptr), stack_depth(0), method(nullptr), line_number(-1) {
+        : StackVisitor(thread, nullptr, true), stack_depth(0), method(nullptr), line_number(-1) {
     }
 
     // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
@@ -4637,7 +4639,7 @@ void Dbg::SetAllocTrackingEnabled(bool enable) {
 struct AllocRecordStackVisitor : public StackVisitor {
   AllocRecordStackVisitor(Thread* thread, AllocRecord* record_in)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      : StackVisitor(thread, nullptr), record(record_in), depth(0) {}
+      : StackVisitor(thread, nullptr, true), record(record_in), depth(0) {}
 
   // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
   // annotalysis.
