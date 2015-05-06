@@ -289,6 +289,9 @@ class CodeGeneratorX86 : public CodeGenerator {
   // Generate a call to a static or direct method.
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp);
 
+  // Emit linker patches.
+  void EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches) OVERRIDE;
+
   // Emit a write barrier.
   void MarkGCCard(Register temp,
                   Register card,
@@ -317,6 +320,13 @@ class CodeGeneratorX86 : public CodeGenerator {
   }
 
  private:
+  struct MethodPatchData {
+    explicit MethodPatchData(MethodReference m) : target_method(m), label() { }
+
+    MethodReference target_method;
+    Label label;
+  };
+
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
   Label frame_entry_label_;
@@ -325,6 +335,10 @@ class CodeGeneratorX86 : public CodeGenerator {
   ParallelMoveResolverX86 move_resolver_;
   X86Assembler assembler_;
   const X86InstructionSetFeatures& isa_features_;
+
+  // Method patch data. Using std::deque<> which retains element addresses on push/emplace_back().
+  ArenaDeque<MethodPatchData> method_patches_;
+  ArenaDeque<MethodPatchData> relative_call_patches_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorX86);
 };
