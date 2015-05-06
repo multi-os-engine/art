@@ -407,6 +407,24 @@ public class Main {
     return arg ^ arg;
   }
 
+  // CHECK-START: long Main.ShlLong33(long) constant_folding (before)
+  // CHECK-DAG:     [[Arg:j\d+]]      ParameterValue
+  // CHECK-DAG:     [[Const33:j\d+]]  LongConstant 33
+  // CHECK-DAG:     [[TypeConvert:i\d+]] TypeConversion [[Const33]]
+  // CHECK-DAG:     [[Shl:j\d+]]      Shl [ [[Arg]] [[TypeConvert]] ]
+  // CHECK-DAG:                       Return [ [[Shl]] ]
+
+  // CHECK-START: long Main.ShlLong33(long) constant_folding (after)
+  // CHECK-DAG:     [[Arg:j\d+]]      ParameterValue
+  // CHECK-DAG:     [[Const33:i\d+]]  IntConstant 33
+  // CHECK-DAG:     [[Shl:j\d+]]      Shl [ [[Arg]] [[Const33]] ]
+  // CHECK-DAG:                       Return [ [[Shl]] ]
+
+  public static long ShlLong33(long arg) {
+    long imm = 33;
+    return arg << imm;
+  }
+
   public static void main(String[] args) {
     assertIntEquals(IntNegation(), -42);
     assertIntEquals(IntAddition1(), 3);
@@ -429,5 +447,6 @@ public class Main {
     assertLongEquals(SubSameLong(random), 0);
     assertIntEquals(UShr0(random), 0);
     assertIntEquals(XorSameInt(random), 0);
+    assertLongEquals(ShlLong33(random), 0x3C48000000000L);
   }
 }
