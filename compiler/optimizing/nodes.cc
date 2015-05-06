@@ -751,6 +751,88 @@ void HGraphVisitor::VisitBasicBlock(HBasicBlock* block) {
   }
 }
 
+HConstant* HTypeConversion::TryStaticEvaluation() const {
+  HGraph* graph = GetBlock()->GetGraph();
+  if (GetInput()->IsIntConstant()) {
+    int32_t value = GetInput()->AsIntConstant()->GetValue();
+    switch (GetResultType()) {
+      case Primitive::kPrimBoolean:
+        return graph->GetIntConstant(static_cast<bool>(value));
+      case Primitive::kPrimByte:
+        return graph->GetIntConstant(static_cast<int8_t>(value));
+      case Primitive::kPrimShort:
+        return graph->GetIntConstant(static_cast<int16_t>(value));
+      case Primitive::kPrimLong:
+        return graph->GetLongConstant(static_cast<int64_t>(value));
+      case Primitive::kPrimFloat:
+        return graph->GetFloatConstant(static_cast<float>(value));
+      case Primitive::kPrimDouble:
+        return graph->GetDoubleConstant(static_cast<double>(value));
+      default:
+        return nullptr;
+    }
+  } else if (GetInput()->IsLongConstant()) {
+    int64_t value = GetInput()->AsLongConstant()->GetValue();
+    switch (GetResultType()) {
+      case Primitive::kPrimBoolean:
+        return graph->GetIntConstant(static_cast<bool>(value));
+      case Primitive::kPrimByte:
+        return graph->GetIntConstant(static_cast<int8_t>(value));
+      case Primitive::kPrimShort:
+        return graph->GetIntConstant(static_cast<int16_t>(value));
+      case Primitive::kPrimInt:
+        return graph->GetIntConstant(static_cast<int32_t>(value));
+      case Primitive::kPrimFloat:
+        return graph->GetFloatConstant(static_cast<float>(value));
+      case Primitive::kPrimDouble:
+        return graph->GetDoubleConstant(static_cast<double>(value));
+      default:
+        return nullptr;
+    }
+  } else if (GetInput()->IsFloatConstant()) {
+    float value = GetInput()->AsFloatConstant()->GetValue();
+    switch (GetResultType()) {
+      case Primitive::kPrimInt:
+        if (isnan(value))
+          return graph->GetIntConstant(0);
+        if (value >= INT_MAX)
+          return graph->GetIntConstant(INT_MAX);
+        return graph->GetIntConstant(static_cast<int32_t>(value));
+      case Primitive::kPrimLong:
+        if (isnan(value))
+          return graph->GetLongConstant(0);
+        if (value >= LONG_MAX)
+          return graph->GetLongConstant(LONG_MAX);
+        return graph->GetLongConstant(static_cast<int64_t>(value));
+      case Primitive::kPrimDouble:
+        return graph->GetDoubleConstant(static_cast<double>(value));
+      default:
+        return nullptr;
+    }
+  } else if (GetInput()->IsDoubleConstant()) {
+    double value = GetInput()->AsDoubleConstant()->GetValue();
+    switch (GetResultType()) {
+      case Primitive::kPrimInt:
+        if (isnan(value))
+          return graph->GetIntConstant(0);
+        if (value >= INT_MAX)
+          return graph->GetIntConstant(INT_MAX);
+        return graph->GetIntConstant(static_cast<int32_t>(value));
+      case Primitive::kPrimLong:
+        if (isnan(value))
+          return graph->GetLongConstant(0);
+        if (value >= LONG_MAX)
+          return graph->GetLongConstant(LONG_MAX);
+        return graph->GetLongConstant(static_cast<int64_t>(value));
+      case Primitive::kPrimFloat:
+        return graph->GetFloatConstant(static_cast<float>(value));
+      default:
+        return nullptr;
+    }
+  }
+  return nullptr;
+}
+
 HConstant* HUnaryOperation::TryStaticEvaluation() const {
   if (GetInput()->IsIntConstant()) {
     int32_t value = Evaluate(GetInput()->AsIntConstant()->GetValue());
