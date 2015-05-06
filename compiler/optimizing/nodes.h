@@ -27,6 +27,7 @@
 #include "handle_scope.h"
 #include "invoke_type.h"
 #include "locations.h"
+#include "method_reference.h"
 #include "mirror/class.h"
 #include "offsets.h"
 #include "primitive.h"
@@ -2890,13 +2891,35 @@ class HInvokeStaticOrDirect : public HInvoke {
     kImplicit,  // Static call implicitly requiring a clinit check.
   };
 
+  // Determines how to load the target ArtMethod*.
+  enum class MethodLoadKind {
+    kStringInit,              // String init ArtMethod* is loaded from Thread entrypoints.
+    kRecursive,               // Use the method's own ArtMethod*.
+    kDirectAddress,           // Direct address (app->boot call).
+    kDirectAddressWithFixup,  // Direct address with linker fixup (boot->boot call).
+    kDexCacheViaMethod,       // Load from dex_cache_resolved_methods_ of its own ArtMethod*.
+    kDexCachePcRelative,      // Load from dex cache using PC-relative load.
+  };
+
+  // Determines the location of the code pointer.
+  enum class CodePtrLocation {
+    kCallSelf,              // Recursive call, use local PC-relative call insn.
+    kCallPCRelative,        // PC-relative call within oat file (boot->boot or app->app call).
+    kCallDirectWithFixup,   // Use direct code address with linker fixup (boot->boot or app->boot).
+    kCallDirect,            // Use direct code address (app->boot call, non-relocatable).
+    kCallArtMethod,         // Use code pointer from the ArtMethod*.
+  };
+
   HInvokeStaticOrDirect(ArenaAllocator* arena,
                         uint32_t number_of_arguments,
                         Primitive::Type return_type,
                         uint32_t dex_pc,
-                        uint32_t dex_method_index,
-                        bool is_recursive,
-                        int32_t string_init_offset,
+                        uint32_t method_index,
+                        MethodReference target_method,
+                        MethodLoadKind method_load_kind,
+                        uint64_t method_load_data,
+                        CodePtrLocation code_ptr_location,
+                        uint64_t direct_code_ptr,
                         InvokeType original_invoke_type,
                         InvokeType invoke_type,
                         ClinitCheckRequirement clinit_check_requirement)
@@ -2906,15 +2929,18 @@ class HInvokeStaticOrDirect : public HInvoke {
                 // potentially one other if the clinit check is explicit, and one other
                 // if the method is a string factory.
                 1u + (clinit_check_requirement == ClinitCheckRequirement::kExplicit ? 1u : 0u)
-                   + (string_init_offset ? 1u : 0u),
+                   + (method_load_kind == MethodLoadKind::kStringInit ? 1u : 0u),
                 return_type,
                 dex_pc,
-                dex_method_index,
+                method_index,
                 original_invoke_type),
         invoke_type_(invoke_type),
-        is_recursive_(is_recursive),
         clinit_check_requirement_(clinit_check_requirement),
-        string_init_offset_(string_init_offset) {}
+        method_load_kind_(method_load_kind),
+        code_ptr_location_(code_ptr_location),
+        target_method_(target_method),
+        method_load_data_(method_load_data),
+        direct_code_ptr_(direct_code_ptr) {}
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
     UNUSED(obj);
@@ -2924,11 +2950,36 @@ class HInvokeStaticOrDirect : public HInvoke {
   }
 
   InvokeType GetInvokeType() const { return invoke_type_; }
-  bool IsRecursive() const { return is_recursive_; }
-  bool NeedsDexCache() const OVERRIDE { return !IsRecursive(); }
-  bool IsStringInit() const { return string_init_offset_ != 0; }
-  int32_t GetStringInitOffset() const { return string_init_offset_; }
+  MethodLoadKind GetMethodLoadKind() const { return method_load_kind_; }
+  CodePtrLocation GetCodePtrLocation() const { return code_ptr_location_; }
+  bool IsRecursive() const { return method_load_kind_ == MethodLoadKind::kRecursive; }
+  bool NeedsDexCache() const OVERRIDE { return !IsRecursive() && !IsStringInit(); }
+  bool IsStringInit() const { return method_load_kind_ == MethodLoadKind::kStringInit; }
   uint32_t GetCurrentMethodInputIndex() const { return GetNumberOfArguments(); }
+  bool HasMethodAddress() const { return method_load_kind_ == MethodLoadKind::kDirectAddress; }
+  bool HasPcRelDexCache() const { return method_load_kind_ == MethodLoadKind::kDexCachePcRelative; }
+  bool HasDirectCodePtr() const { return code_ptr_location_ == CodePtrLocation::kCallDirect; }
+  MethodReference GetTargetMethod() const { return target_method_; }
+
+  int32_t GetStringInitOffset() const {
+    DCHECK(IsStringInit());
+    return method_load_data_;
+  }
+
+  uint64_t GetMethodAddress() const {
+    DCHECK(HasMethodAddress());
+    return method_load_data_;
+  }
+
+  uint32_t GetDexCacheArrayOffset() const {
+    DCHECK(HasPcRelDexCache());
+    return method_load_data_;
+  }
+
+  uint64_t GetDirectCodePtr() const {
+    DCHECK(HasDirectCodePtr());
+    return direct_code_ptr_;
+  }
 
   // Is this instruction a call to a static method?
   bool IsStatic() const {
@@ -2999,11 +3050,17 @@ class HInvokeStaticOrDirect : public HInvoke {
 
  private:
   const InvokeType invoke_type_;
-  const bool is_recursive_;
   ClinitCheckRequirement clinit_check_requirement_;
-  // Thread entrypoint offset for string init method if this is a string init invoke.
-  // Note that there are multiple string init methods, each having its own offset.
-  int32_t string_init_offset_;
+  const MethodLoadKind method_load_kind_;
+  const CodePtrLocation code_ptr_location_;
+  MethodReference target_method_;
+  // The method load data holds
+  //   - thread entrypoint offset for kStringInit method if this is a string init invoke.
+  //     Note that there are multiple string init methods, each having its own offset.
+  //   - the method address for kDirectAddress
+  //   - the dex cache arrays offset for kDexCachePcRel.
+  uint64_t method_load_data_;
+  uint64_t direct_code_ptr_;
 
   DISALLOW_COPY_AND_ASSIGN(HInvokeStaticOrDirect);
 };
