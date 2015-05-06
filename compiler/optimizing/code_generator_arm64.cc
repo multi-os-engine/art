@@ -20,6 +20,7 @@
 #include "art_method.h"
 #include "code_generator_utils.h"
 #include "common_arm64.h"
+#include "compiled_method.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
@@ -516,7 +517,11 @@ CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
       location_builder_(graph, this),
       instruction_visitor_(graph, this),
       move_resolver_(graph->GetArena(), this),
-      isa_features_(isa_features) {
+      isa_features_(isa_features),
+      method_patches_(graph->GetArena()->Adapter()),
+      call_patches_(graph->GetArena()->Adapter()),
+      relative_call_patches_(graph->GetArena()->Adapter()),
+      pc_rel_dex_cache_patches_(graph->GetArena()->Adapter()) {
   // Save the link register (containing the return address) to mimic Quick.
   AddAllocatedRegister(LocationFrom(lr));
 }
@@ -527,7 +532,32 @@ CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
 void CodeGeneratorARM64::Finalize(CodeAllocator* allocator) {
   // Ensure we emit the literal pool.
   __ FinalizeCode();
-  CodeGenerator::Finalize(allocator);
+
+  // We can't call CodeGenerator::Finalize(allocator), we need to do it ourselves because
+  // we need access to the allocated region for the hack below.
+  size_t code_size = GetAssembler()->CodeSize();
+  uint8_t* buffer = allocator->Allocate(code_size);
+  MemoryRegion code(buffer, code_size);
+  GetAssembler()->FinalizeInstructions(code);
+
+  // Calculate offsets of method and code patches.
+  // This is an ugly hack necessitated by lack of low-level support for working with
+  // RawLiteral that would allow us to deduplicate the method literals and retrieve
+  // offsets straight from the RawLiteral.
+  for (MethodPatchData& data : method_patches_) {
+    DCHECK_GE(data.label.location(), 4);
+    uint32_t ldr = code.LoadUnaligned<uint32_t>(data.label.location() - 4u);
+    DCHECK_EQ(ldr & 0xff000000u, 0x58000000u);
+    int32_t imm19 = static_cast<int32_t>(ldr << 8) >> 13;  // Sign-extended.
+    data.literal_offset = data.label.location() - 4 + (imm19 << 2);
+  }
+  for (MethodPatchData& data : call_patches_) {
+    DCHECK_GE(data.label.location(), 4);
+    uint32_t ldr = code.LoadUnaligned<uint32_t>(data.label.location() - 4u);
+    DCHECK_EQ(ldr & 0xff000000u, 0x58000000u);
+    int32_t imm19 = static_cast<int32_t>(ldr << 8) >> 13;  // Sign-extended.
+    data.literal_offset = data.label.location() - 4 + (imm19 << 2);
+  }
 }
 
 void ParallelMoveResolverARM64::PrepareForEmitNativeCode() {
@@ -2369,53 +2399,160 @@ static bool TryGenerateIntrinsicCode(HInvoke* invoke, CodeGeneratorARM64* codege
 }
 
 void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp) {
+  // For better instruction scheduling we load the direct code pointer before the method pointer.
+  bool direct_code_loaded = false;
+  switch (invoke->GetCodePtrLocation()) {
+    case HInvokeStaticOrDirect::CodePtrLocation::kDirectCode:
+      // LR = invoke->GetDirectCodePtr();
+      // TODO: When vixl provides low level access to literals, deduplicate these.
+      __ Ldr(lr, invoke->GetDirectCodePtr());
+      direct_code_loaded = true;
+      break;
+    case HInvokeStaticOrDirect::CodePtrLocation::kDirectCodeFixup:
+      // For calls across dex files use absolute patch.
+      // TODO: Allow relative boot -> boot calls in line with Quick. (Requires knowledge
+      // that we're compiling boot image but we don't have access to CompilerDriver here.)
+      // TODO: Allow relative app->app calls contrary to Quick behavior.
+      if (invoke->GetTargetMethod().dex_file != &GetGraph()->GetDexFile()) {
+        // LR = code address from literal pool with link-time patch.
+        // TODO: When vixl provides low level access to literals, rewrite this hack.
+        call_patches_.emplace_back(invoke->GetTargetMethod());
+        __ Ldr(lr, UINT64_C(0));
+        __ Bind(&call_patches_.back().label);  // Bind after LDR.
+        direct_code_loaded = true;
+      }
+      break;
+    default:
+      break;
+  }
+
   // Make sure that ArtMethod* is passed in kArtMethodRegister as per the calling convention.
-  size_t index_in_cache = GetCachePointerOffset(invoke->GetDexMethodIndex());
-
-  // TODO: Implement all kinds of calls:
-  // 1) boot -> boot
-  // 2) app -> boot
-  // 3) app -> app
-  //
-  // Currently we implement the app -> app logic, which looks up in the resolve cache.
-
-  if (invoke->IsStringInit()) {
-    Register reg = XRegisterFrom(temp);
-    // temp = thread->string_init_entrypoint
-    __ Ldr(reg.X(), MemOperand(tr, invoke->GetStringInitOffset()));
-    // LR = temp->entry_point_from_quick_compiled_code_;
-    __ Ldr(lr, MemOperand(
-        reg, ArtMethod::EntryPointFromQuickCompiledCodeOffset(kArm64WordSize).Int32Value()));
-    // lr()
-    __ Blr(lr);
-  } else if (invoke->IsRecursive()) {
-    __ Bl(&frame_entry_label_);
-  } else {
-    Location current_method = invoke->GetLocations()->InAt(invoke->GetCurrentMethodInputIndex());
-    Register reg = XRegisterFrom(temp);
-    Register method_reg;
-    if (current_method.IsRegister()) {
-      method_reg = XRegisterFrom(current_method);
-    } else {
-      DCHECK(invoke->GetLocations()->Intrinsified());
-      DCHECK(!current_method.IsValid());
-      method_reg = reg;
-      __ Ldr(reg.X(), MemOperand(sp, kCurrentMethodStackOffset));
+  switch (invoke->GetMethodLoadType()) {
+    case HInvokeStaticOrDirect::MethodLoadType::kStringInit:
+      // temp = thread->string_init_entrypoint
+      __ Ldr(XRegisterFrom(temp).X(), MemOperand(tr, invoke->GetStringInitOffset()));
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kRecursive:
+      // Nothing to do.
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kDirectAddress:
+      // Load method address from literal pool.
+      // TODO: When vixl provides low level access to literals, deduplicate these.
+      __ Ldr(XRegisterFrom(temp).X(), invoke->GetMethodAddress());
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kDirectAddressFixup:
+      // Load method address from literal pool with a link-time patch.
+      // TODO: When vixl provides low level access to literals, rewrite this hack.
+      method_patches_.emplace_back(invoke->GetTargetMethod());
+      __ Ldr(XRegisterFrom(temp).X(), UINT64_C(0));
+      __ Bind(&method_patches_.back().label);  // Bind after LDR.
+      break;
+    case HInvokeStaticOrDirect::MethodLoadType::kDexCachePcRel: {
+      // Add ADRP with its PC-relative DexCache access patch.
+      pc_rel_dex_cache_patches_.emplace_back(invoke->GetTargetMethod().dex_file,
+                                             invoke->GetDexCacheArrayOffset());
+      vixl::Label* pc_insn_label = &pc_rel_dex_cache_patches_.back().label;
+      {
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
+        __ adrp(XRegisterFrom(temp).X(), 0);
+      }
+      __ Bind(pc_insn_label);  // Bind after ADRP.
+      pc_rel_dex_cache_patches_.back().pc_insn_label = pc_insn_label;
+      // Add LDR with its PC-relative DexCache access patch.
+      pc_rel_dex_cache_patches_.emplace_back(invoke->GetTargetMethod().dex_file,
+                                             invoke->GetDexCacheArrayOffset());
+      __ Ldr(XRegisterFrom(temp).X(), MemOperand(XRegisterFrom(temp).X(), 0));
+      __ Bind(&pc_rel_dex_cache_patches_.back().label);  // Bind after LDR.
+      pc_rel_dex_cache_patches_.back().pc_insn_label = pc_insn_label;
+      break;
     }
+    case HInvokeStaticOrDirect::MethodLoadType::kDexCacheViaMethod: {
+      Location current_method = invoke->GetLocations()->InAt(invoke->GetCurrentMethodInputIndex());
+      Register reg = XRegisterFrom(temp);
+      Register method_reg;
+      if (current_method.IsRegister()) {
+        method_reg = XRegisterFrom(current_method);
+      } else {
+        DCHECK(invoke->GetLocations()->Intrinsified());
+        DCHECK(!current_method.IsValid());
+        method_reg = reg;
+        __ Ldr(reg.X(), MemOperand(sp, kCurrentMethodStackOffset));
+      }
 
-    // temp = current_method->dex_cache_resolved_methods_;
-    __ Ldr(reg.W(), MemOperand(method_reg.X(),
-                               ArtMethod::DexCacheResolvedMethodsOffset().Int32Value()));
-    // temp = temp[index_in_cache];
-    __ Ldr(reg.X(), MemOperand(reg, index_in_cache));
-    // lr = temp->entry_point_from_quick_compiled_code_;
-    __ Ldr(lr, MemOperand(reg.X(), ArtMethod::EntryPointFromQuickCompiledCodeOffset(
-        kArm64WordSize).Int32Value()));
-    // lr();
-    __ Blr(lr);
+      // temp = current_method->dex_cache_resolved_methods_;
+      __ Ldr(reg.W(), MemOperand(method_reg.X(),
+                                 ArtMethod::DexCacheResolvedMethodsOffset().Int32Value()));
+      // temp = temp[index_in_cache];
+      uint32_t index_in_cache = invoke->GetTargetMethod().dex_method_index;
+    __ Ldr(reg.X(), MemOperand(reg.X(), GetCachePointerOffset(index_in_cache)));
+      break;
+    }
+  }
+
+  switch (invoke->GetCodePtrLocation()) {
+    case HInvokeStaticOrDirect::CodePtrLocation::kCallSelf:
+      __ Bl(&frame_entry_label_);
+      break;
+    case HInvokeStaticOrDirect::CodePtrLocation::kDirectCode:
+      // LR prepared above for better instruction scheduling.
+      DCHECK(direct_code_loaded);
+      // lr()
+      __ Blr(lr);
+      break;
+    case HInvokeStaticOrDirect::CodePtrLocation::kDirectCodeFixup:
+      if (direct_code_loaded) {
+        // LR prepared above for better instruction scheduling.
+        // LR()
+        __ Blr(lr);
+      } else {
+        relative_call_patches_.emplace_back(invoke->GetTargetMethod());
+        vixl::Label* label = &relative_call_patches_.back().label;
+        __ Bl(label);  // Arbitrarily branch to the instruction after BL, override at link time.
+        __ Bind(label);  // Bind after BL.
+      }
+      break;
+    case HInvokeStaticOrDirect::CodePtrLocation::kMethodCode:
+      // LR = temp->entry_point_from_quick_compiled_code_;
+      __ Ldr(lr, MemOperand(
+          XRegisterFrom(temp).X(),
+          ArtMethod::EntryPointFromQuickCompiledCodeOffset(kArm64WordSize).Int32Value()));
+      // lr()
+      __ Blr(lr);
+      break;
   }
 
   DCHECK(!IsLeafMethod());
+}
+
+void CodeGeneratorARM64::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches) {
+  DCHECK(linker_patches->empty());
+  size_t size =
+      method_patches_.size() +
+      call_patches_.size() +
+      relative_call_patches_.size() +
+      pc_rel_dex_cache_patches_.size();
+  linker_patches->reserve(size);
+  for (const MethodPatchData& data : method_patches_) {
+    linker_patches->push_back(LinkerPatch::MethodPatch(data.literal_offset,
+                                                       data.target_method.dex_file,
+                                                       data.target_method.dex_method_index));
+  }
+  for (const MethodPatchData& data : call_patches_) {
+    linker_patches->push_back(LinkerPatch::CodePatch(data.literal_offset,
+                                                     data.target_method.dex_file,
+                                                     data.target_method.dex_method_index));
+  }
+  for (const RelativeCallPatchData& data : relative_call_patches_) {
+    linker_patches->push_back(LinkerPatch::RelativeCodePatch(data.label.location() - 4u,
+                                                             data.target_method.dex_file,
+                                                             data.target_method.dex_method_index));
+  }
+  for (const PcRelDexCacheAccessData& data : pc_rel_dex_cache_patches_) {
+    linker_patches->push_back(LinkerPatch::DexCacheArrayPatch(data.label.location() - 4u,
+                                                              data.target_dex_file,
+                                                              data.pc_insn_label->location() - 4u,
+                                                              data.element_offset));
+  }
 }
 
 void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
