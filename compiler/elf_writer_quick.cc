@@ -161,12 +161,17 @@ bool ElfWriterQuick<ElfTypes>::Write(
   using RawSection = typename ElfBuilder<ElfTypes>::RawSection;
   const auto* text = builder->GetText();
   const bool is64bit = Is64BitInstructionSet(isa);
+  const int alignment = GetInstructionSetPointerSize(isa);
   RawSection eh_frame(".eh_frame", SHT_PROGBITS, SHF_ALLOC, nullptr, 0, kPageSize, 0,
                       is64bit ? Patch<Elf_Addr, uint64_t, kPointerRelativeAddress> :
                                 Patch<Elf_Addr, uint32_t, kPointerRelativeAddress>,
                       text);
   RawSection eh_frame_hdr(".eh_frame_hdr", SHT_PROGBITS, SHF_ALLOC, nullptr, 0, 4, 0,
                           Patch<Elf_Addr, uint32_t, kSectionRelativeAddress>, text);
+  RawSection debug_frame(".debug_frame", SHT_PROGBITS, 0, nullptr, 0, alignment, 0,
+                         is64bit ? Patch<Elf_Addr, uint64_t, kAbsoluteAddress> :
+                                   Patch<Elf_Addr, uint32_t, kAbsoluteAddress>,
+                         text);
   RawSection debug_info(".debug_info", SHT_PROGBITS, 0, nullptr, 0, 1, 0,
                         Patch<Elf_Addr, uint32_t, kAbsoluteAddress>, text);
   RawSection debug_abbrev(".debug_abbrev", SHT_PROGBITS, 0, nullptr, 0, 1, 0);
@@ -175,12 +180,33 @@ bool ElfWriterQuick<ElfTypes>::Write(
                         Patch<Elf_Addr, uint32_t, kAbsoluteAddress>, text);
   if (!oat_writer->GetMethodDebugInfo().empty()) {
     if (compiler_driver_->GetCompilerOptions().GetIncludeCFI()) {
-      dwarf::WriteEhFrame(
-          compiler_driver_, oat_writer, dwarf::DW_EH_PE_pcrel,
-          eh_frame.GetBuffer(), eh_frame.GetPatchLocations(),
-          eh_frame_hdr.GetBuffer(), eh_frame_hdr.GetPatchLocations());
-      builder->RegisterSection(&eh_frame);
-      builder->RegisterSection(&eh_frame_hdr);
+      // .eh_frame and .debug_frame are almost identical.
+      // Except for some minor formatting differences, the main difference
+      // is that .eh_frame is allocated within the running program because
+      // is it used by C++ exception handling (which we do not use so we
+      // can choose either).  C++ compilers generally tend to use .eh_frame
+      // because if they need it sometimes, they might as well always use it.
+      // However, we opt for debug_frame because it is easier to strip or
+      // separate from the executable to save space.
+      const bool use_eh_frame_format = false;
+      if (use_eh_frame_format) {
+        dwarf::WriteDebugFrame(
+            compiler_driver_, oat_writer,
+            dwarf::DW_EH_PE_pcrel, use_eh_frame_format,
+            eh_frame.GetBuffer(), eh_frame.GetPatchLocations(),
+            eh_frame_hdr.GetBuffer(), eh_frame_hdr.GetPatchLocations());
+        builder->RegisterSection(&eh_frame);
+        builder->RegisterSection(&eh_frame_hdr);
+      } else {
+        dwarf::WriteDebugFrame(
+            compiler_driver_, oat_writer,
+            dwarf::DW_EH_PE_absptr, use_eh_frame_format,
+            debug_frame.GetBuffer(), debug_frame.GetPatchLocations(),
+            nullptr, nullptr);
+        builder->RegisterSection(&debug_frame);
+        *oat_writer->GetAbsolutePatchLocationsFor(".debug_frame") =
+            *debug_frame.GetPatchLocations();
+      }
     }
     if (compiler_driver_->GetCompilerOptions().GetIncludeDebugSymbols()) {
       // Add methods to .symtab.
