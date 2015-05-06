@@ -31,6 +31,7 @@
 #include "primitive.h"
 #include "scoped_thread_state_change.h"
 #include "thread.h"
+#include "utils/dex_cache_arrays_layout-inl.h"
 
 namespace art {
 
@@ -878,12 +879,6 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
         arena_, number_of_arguments, return_type, dex_pc, method_idx, table_index);
   } else {
     DCHECK(optimized_invoke_type == kDirect || optimized_invoke_type == kStatic);
-    // Sharpening to kDirect only works if we compile PIC.
-    DCHECK((optimized_invoke_type == invoke_type) || (optimized_invoke_type != kDirect)
-           || compiler_driver_->GetCompilerOptions().GetCompilePic());
-    bool is_recursive =
-        (target_method.dex_method_index == outer_compilation_unit_->GetDexMethodIndex())
-        && (target_method.dex_file == outer_compilation_unit_->GetDexFile());
 
     if (optimized_invoke_type == kStatic && !is_string_init) {
       ScopedObjectAccess soa(Thread::Current());
@@ -957,13 +952,70 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
       }
     }
 
+    size_t method_load_data = 0u;
+    HInvokeStaticOrDirect::MethodLoadType method_load_type;
+    HInvokeStaticOrDirect::CodePtrLocation code_ptr_location;
+    uint64_t direct_code_ptr = 0u;
+    if (is_string_init) {
+      // TODO: Use direct_method and direct_code for the appropriate StringFactory method.
+      method_load_type = HInvokeStaticOrDirect::MethodLoadType::kStringInit;
+      code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kMethodCode;
+      method_load_data = string_init_offset;
+    } else if (target_method.dex_file == outer_compilation_unit_->GetDexFile() &&
+        target_method.dex_method_index == outer_compilation_unit_->GetDexMethodIndex()) {
+      method_load_type = HInvokeStaticOrDirect::MethodLoadType::kRecursive;
+      code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallSelf;
+    } else {
+      if (direct_method != 0u) {
+        if (direct_method != static_cast<uintptr_t>(-1)) {
+          method_load_type = HInvokeStaticOrDirect::MethodLoadType::kDirectAddress;
+          method_load_data = direct_method;
+        } else {
+          method_load_type = HInvokeStaticOrDirect::MethodLoadType::kDirectAddressFixup;
+        }
+      } else {
+        DCHECK(target_method.dex_file == dex_compilation_unit_->GetDexFile());
+        auto layout = compiler_driver_->GetDexCacheArraysLayout(target_method.dex_file);
+        if (layout.Valid()) {
+          method_load_type = HInvokeStaticOrDirect::MethodLoadType::kDexCachePcRelative;
+          method_load_data = layout.MethodOffset(target_method.dex_method_index);
+        } else {
+          method_load_type = HInvokeStaticOrDirect::MethodLoadType::kDexCacheViaMethod;
+        }
+      }
+      if (direct_code != 0u) {
+        if (direct_code != static_cast<uintptr_t>(-1)) {
+          code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kDirectCode;
+          direct_code_ptr = direct_code;
+        } else if (compiler_driver_->IsImage() ||
+            target_method.dex_file == dex_compilation_unit_->GetDexFile()) {
+          // TODO: Recognize when the target dex file is within the current oat file
+          // for app compilation and use the PC-relative call.
+          code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallPCRelative;
+        } else {
+          code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kDirectCodeFixup;
+        }
+      } else {
+        code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kMethodCode;
+      }
+    }
+
+    if (graph_->IsDebuggable()) {
+      // For debuggable apps always use the code pointer from ArtMethod
+      // so that we don't circumvent instrumentation stubs if installed.
+      code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kMethodCode;
+    }
+
     invoke = new (arena_) HInvokeStaticOrDirect(arena_,
                                                 number_of_arguments,
                                                 return_type,
                                                 dex_pc,
-                                                target_method.dex_method_index,
-                                                is_recursive,
-                                                string_init_offset,
+                                                method_idx,
+                                                target_method,
+                                                method_load_type,
+                                                method_load_data,
+                                                code_ptr_location,
+                                                direct_code_ptr,
                                                 invoke_type,
                                                 optimized_invoke_type,
                                                 clinit_check_requirement);

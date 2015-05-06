@@ -300,6 +300,8 @@ class CodeGeneratorX86_64 : public CodeGenerator {
 
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp);
 
+  void EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches) OVERRIDE;
+
   const X86_64InstructionSetFeatures& GetInstructionSetFeatures() const {
     return isa_features_;
   }
@@ -317,6 +319,22 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   void Load64BitValue(CpuRegister dest, int64_t value);
 
  private:
+  struct MethodPatchData {
+    explicit MethodPatchData(MethodReference m) : target_method(m), label() { }
+
+    MethodReference target_method;
+    Label label;
+  };
+
+  struct PcRelDexCacheAccessData {
+    PcRelDexCacheAccessData(const DexFile* dex_file, uint32_t element_off)
+        : target_dex_file(dex_file), element_offset(element_off), label() { }
+
+    const DexFile* target_dex_file;
+    uint32_t element_offset;
+    Label label;
+  };
+
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
   Label frame_entry_label_;
@@ -329,6 +347,16 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   // Offset to the start of the constant area in the assembled code.
   // Used for fixups to the constant area.
   int constant_area_start_;
+
+  // Method patch data. Using std::deque<> which retains element addresses on push/emplace_back().
+  ArenaDeque<MethodPatchData> method_patches_;
+  ArenaDeque<MethodPatchData> relative_call_patches_;
+  // PC-relative DexCache access data.
+  ArenaDeque<PcRelDexCacheAccessData> pc_rel_dex_cache_patches_;
+
+  // When we don't know the proper offset for the value, we use kDummy32BitOffset.
+  // We will fix this up in the linker later to have the right value.
+  static constexpr int32_t kDummy32BitOffset = 256;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorX86_64);
 };
