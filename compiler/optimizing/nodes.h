@@ -2877,6 +2877,11 @@ class HTypeConversion : public HExpression<1> {
   bool CanBeMoved() const OVERRIDE { return true; }
   bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE { return true; }
 
+  // Try to statically evaluate `operation` and return a HConstant
+  // containing the result of this evaluation.  If `operation` cannot
+  // be evaluated as a constant, return null.
+  HConstant* TryStaticEvaluation() const;
+
   DECLARE_INSTRUCTION(TypeConversion);
 
  private:
