@@ -360,7 +360,28 @@ class CodeGeneratorARM64 : public CodeGenerator {
 
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp);
 
+  void EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches) OVERRIDE;
+
  private:
+  struct MethodPatchData {
+    explicit MethodPatchData(MethodReference method)
+        : target_method(method), label(), literal_offset(0u) { }
+
+    MethodReference target_method;
+    vixl::Label label;  // TODO: Replace with RawLiteral* when vixl supports low-level access.
+    uint32_t literal_offset;  // TODO: Remove when we have the RawLiteral*.
+  };
+
+  struct PcRelDexCacheAccessData {
+    PcRelDexCacheAccessData(const DexFile* dex_file, uint32_t element_off)
+        : target_dex_file(dex_file), element_offset(element_off), label(), pc_insn_label() { }
+
+    const DexFile* target_dex_file;
+    uint32_t element_offset;
+    vixl::Label label;
+    vixl::Label* pc_insn_label;
+  };
+
   // Labels for each block that will be compiled.
   vixl::Label* block_labels_;
   vixl::Label frame_entry_label_;
@@ -370,6 +391,12 @@ class CodeGeneratorARM64 : public CodeGenerator {
   ParallelMoveResolverARM64 move_resolver_;
   Arm64Assembler assembler_;
   const Arm64InstructionSetFeatures& isa_features_;
+
+  // Method patch data.
+  // TODO: Rewrite as a map for deduplication when vixl supports low-level access to RawLiteral.
+  ArenaDeque<MethodPatchData> method_patches_;
+  // PC-relative DexCache access data.
+  ArenaDeque<PcRelDexCacheAccessData> pc_rel_dex_cache_patches_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorARM64);
 };
