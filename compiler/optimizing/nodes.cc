@@ -38,12 +38,13 @@ static void RemoveAsUser(HInstruction* instruction) {
   }
 
   HEnvironment* environment = instruction->GetEnvironment();
-  if (environment != nullptr) {
+  while (environment != nullptr) {
     for (size_t i = 0, e = environment->Size(); i < e; ++i) {
       if (environment->GetInstructionAt(i) != nullptr) {
         environment->RemoveAsUserOfInput(i);
       }
     }
+    environment = environment->GetParent();
   }
 }
 

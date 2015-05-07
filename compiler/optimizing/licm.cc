@@ -41,19 +41,22 @@ static bool InputsAreDefinedBeforeLoop(HInstruction* instruction) {
 
   if (instruction->HasEnvironment()) {
     HEnvironment* environment = instruction->GetEnvironment();
-    for (size_t i = 0, e = environment->Size(); i < e; ++i) {
-      HInstruction* input = environment->GetInstructionAt(i);
-      if (input != nullptr) {
-        HLoopInformation* input_loop = input->GetBlock()->GetLoopInformation();
-        if (input_loop != nullptr && input_loop->IsIn(*info)) {
-          // We can move an instruction that takes a loop header phi in the environment:
-          // we will just replace that phi with its first input later in `UpdateLoopPhisIn`.
-          bool is_loop_header_phi = IsPhiOf(input, info->GetHeader());
-          if (!is_loop_header_phi) {
-            return false;
+    while (environment != nullptr) {
+      for (size_t i = 0, e = environment->Size(); i < e; ++i) {
+        HInstruction* input = environment->GetInstructionAt(i);
+        if (input != nullptr) {
+          HLoopInformation* input_loop = input->GetBlock()->GetLoopInformation();
+          if (input_loop != nullptr && input_loop->IsIn(*info)) {
+            // We can move an instruction that takes a loop header phi in the environment:
+            // we will just replace that phi with its first input later in `UpdateLoopPhisIn`.
+            bool is_loop_header_phi = IsPhiOf(input, info->GetHeader());
+            if (!is_loop_header_phi) {
+              return false;
+            }
           }
         }
       }
+      environment = environment->GetParent();
     }
   }
   return true;
@@ -63,14 +66,17 @@ static bool InputsAreDefinedBeforeLoop(HInstruction* instruction) {
  * If `environment` has a loop header phi, we replace it with its first input.
  */
 static void UpdateLoopPhisIn(HEnvironment* environment, HLoopInformation* info) {
-  for (size_t i = 0, e = environment->Size(); i < e; ++i) {
-    HInstruction* input = environment->GetInstructionAt(i);
-    if (input != nullptr && IsPhiOf(input, info->GetHeader())) {
-      environment->RemoveAsUserOfInput(i);
-      HInstruction* incoming = input->InputAt(0);
-      environment->SetRawEnvAt(i, incoming);
-      incoming->AddEnvUseAt(environment, i);
+  while (environment != nullptr) {
+    for (size_t i = 0, e = environment->Size(); i < e; ++i) {
+      HInstruction* input = environment->GetInstructionAt(i);
+      if (input != nullptr && IsPhiOf(input, info->GetHeader())) {
+        environment->RemoveAsUserOfInput(i);
+        HInstruction* incoming = input->InputAt(0);
+        environment->SetRawEnvAt(i, incoming);
+        incoming->AddEnvUseAt(environment, i);
+      }
     }
+    environment = environment->GetParent();
   }
 }
 
