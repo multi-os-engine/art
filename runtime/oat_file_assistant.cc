@@ -96,9 +96,10 @@ OatFileAssistant::OatFileAssistant(const char* dex_location,
 
 OatFileAssistant::~OatFileAssistant() {
   // Clean up the lock file.
-  if (lock_file_.get() != nullptr) {
+  if (lock_file_.get() != nullptr && lock_file_->IsOpened()) {
+    std::string path = lock_file_->GetPath();
     lock_file_->Erase();
-    TEMP_FAILURE_RETRY(unlink(lock_file_->GetPath().c_str()));
+    TEMP_FAILURE_RETRY(unlink(path.c_str()));
   }
 }
 
