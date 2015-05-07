@@ -212,16 +212,21 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     }
     if (instruction->HasEnvironment()) {
       HEnvironment* env = instruction->GetEnvironment();
-      output_ << " (env: [ ";
-      for (size_t i = 0, e = env->Size(); i < e; ++i) {
-        HInstruction* insn = env->GetInstructionAt(i);
-        if (insn != nullptr) {
-          output_ << GetTypeId(insn->GetType()) << insn->GetId() << " ";
-        } else {
-          output_ << " _ ";
+      output_ << " (env:";
+      while (env != nullptr) {
+        output_ << " [ ";
+        for (size_t i = 0, e = env->Size(); i < e; ++i) {
+          HInstruction* insn = env->GetInstructionAt(i);
+          if (insn != nullptr) {
+            output_ << GetTypeId(insn->GetType()) << insn->GetId() << " ";
+          } else {
+            output_ << " _ ";
+          }
         }
+        output_ << "]";
+        env = env->GetParent();
       }
-      output_ << "])";
+      output_ << ")";
     }
     if (IsPass(SsaLivenessAnalysis::kLivenessPassName)
         && is_after_pass_
