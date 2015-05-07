@@ -17,6 +17,7 @@
 #include "nodes.h"
 
 #include "ssa_builder.h"
+#include "base/bit_vector-inl.h"
 #include "utils/growable_array.h"
 #include "scoped_thread_state_change.h"
 
@@ -332,6 +333,10 @@ void HLoopInformation::Remove(HBasicBlock* block) {
   blocks_.ClearBit(block->GetBlockId());
 }
 
+void HLoopInformation::ClearContainedBlocks() {
+  blocks_.ClearAllBits();
+}
+
 void HLoopInformation::PopulateRecursive(HBasicBlock* block) {
   if (blocks_.IsBitSet(block->GetBlockId())) {
     return;
@@ -345,6 +350,7 @@ void HLoopInformation::PopulateRecursive(HBasicBlock* block) {
 }
 
 bool HLoopInformation::Populate() {
+  DCHECK_EQ(blocks_.NumSetBits(), 0u) << "Loop information has already been populated";
   for (size_t i = 0, e = GetBackEdges().Size(); i < e; ++i) {
     HBasicBlock* back_edge = GetBackEdges().Get(i);
     DCHECK(back_edge->GetDominator() != nullptr);
@@ -1038,17 +1044,20 @@ void HBasicBlock::DisconnectAndDelete() {
   SetGraph(nullptr);
 }
 
-void HBasicBlock::UpdateLoopInformation() {
-  // Check if loop information points to a dismantled loop. If so, replace with
-  // the loop information of a larger loop which contains this block, or nullptr
-  // otherwise. We iterate in case the larger loop has been destroyed too.
-  while (IsInLoop() && loop_information_->GetBackEdges().IsEmpty()) {
-    if (IsLoopHeader()) {
-      HSuspendCheck* suspend_check = loop_information_->GetSuspendCheck();
-      DCHECK_EQ(suspend_check->GetBlock(), this);
-      RemoveInstruction(suspend_check);
+void HBasicBlock::ResetLoopInformation() {
+  if (IsLoopHeader()) {
+    if (loop_information_->GetBackEdges().IsEmpty()) {
+      // This used to be a loop header but the loop has been dismantled.
+      // Delete its suspend check and clear its loop information.
+      RemoveInstruction(loop_information_->GetSuspendCheck());
+      SetLoopInformation(nullptr);
+    } else {
+      // This is still a loop header. Clear data that should be recomputed.
+      loop_information_->ClearContainedBlocks();
     }
-    loop_information_ = loop_information_->GetPreHeader()->GetLoopInformation();
+  } else {
+    // This is not a header, clear loop information.
+    SetLoopInformation(nullptr);
   }
 }
 

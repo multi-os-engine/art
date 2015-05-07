@@ -65,14 +65,17 @@ void HDeadCodeElimination::RemoveDeadBlocks() {
   for (HPostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     HBasicBlock* block  = it.Current();
     if (live_blocks.IsBitSet(block->GetBlockId())) {
-      // If this block is part of a loop that is being dismantled, we need to
-      // update its loop information.
-      block->UpdateLoopInformation();
+      block->ResetLoopInformation();
     } else {
       MaybeRecordDeadBlock(block);
       block->DisconnectAndDelete();
     }
   }
+
+  // We need to update loop information because some back edges may have been
+  // removed and some blocks may now lie outside the loops they used to be in.
+  // Doing this locally is complex, so we simply reanalyze the whole graph.
+  graph_->AnalyzeNaturalLoops();
 
   // Connect successive blocks created by dead branches. Order does not matter.
   for (HReversePostOrderIterator it(*graph_); !it.Done();) {

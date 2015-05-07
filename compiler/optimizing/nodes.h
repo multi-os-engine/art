@@ -428,6 +428,7 @@ class HLoopInformation : public ArenaObject<kArenaAllocMisc> {
 
   void Add(HBasicBlock* block);
   void Remove(HBasicBlock* block);
+  void ClearContainedBlocks();
 
  private:
   // Internal recursive implementation of `Populate`.
@@ -685,14 +686,13 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     loop_information_ = info;
   }
 
-  // Checks if the loop information points to a valid loop. If the loop has been
-  // dismantled (does not have a back edge any more), loop information is
-  // removed or replaced with the information of the first valid outer loop.
-  void UpdateLoopInformation();
+  // Returns loop information to the state before natural loop analysis, i.e.
+  // only loop headers have HLoopInformation assigned with lists of back edges.
+  void ResetLoopInformation();
 
   bool IsInLoop() const { return loop_information_ != nullptr; }
 
-  // Returns wheter this block dominates the blocked passed as parameter.
+  // Returns whether this block dominates the blocked passed as parameter.
   bool Dominates(HBasicBlock* block) const;
 
   size_t GetLifetimeStart() const { return lifetime_start_; }
