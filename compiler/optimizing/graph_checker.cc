@@ -290,6 +290,13 @@ void SSAChecker::CheckLoop(HBasicBlock* loop_header) {
   int id = loop_header->GetBlockId();
   HLoopInformation* loop_information = loop_header->GetLoopInformation();
 
+  // Ensure the loop information has been populated and is up to date.
+  if (loop_information->NeedsUpdate()) {
+    AddError(StringPrintf(
+        "Loop defined by header %d needs to be updated.",
+        id));
+  }
+
   // Ensure the pre-header block is first in the list of
   // predecessors of a loop header.
   if (!loop_header->IsLoopPreHeaderFirstPredecessor()) {

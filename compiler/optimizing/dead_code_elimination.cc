@@ -65,7 +65,7 @@ void HDeadCodeElimination::RemoveDeadBlocks() {
   for (HPostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     HBasicBlock* block  = it.Current();
     if (live_blocks.IsBitSet(block->GetBlockId())) {
-      // If this block is part of a loop that is being dismantled, we need to
+      // If this block is in a loop that had some blocks removed, we need to
       // update its loop information.
       block->UpdateLoopInformation();
     } else {

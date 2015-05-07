@@ -17,6 +17,7 @@
 #include "nodes.h"
 
 #include "ssa_builder.h"
+#include "base/bit_vector-inl.h"
 #include "utils/growable_array.h"
 #include "scoped_thread_state_change.h"
 
@@ -332,6 +333,10 @@ void HLoopInformation::Remove(HBasicBlock* block) {
   blocks_.ClearBit(block->GetBlockId());
 }
 
+void HLoopInformation::ClearContainedBlocks() {
+  blocks_.ClearAllBits();
+}
+
 void HLoopInformation::PopulateRecursive(HBasicBlock* block) {
   if (blocks_.IsBitSet(block->GetBlockId())) {
     return;
@@ -345,6 +350,8 @@ void HLoopInformation::PopulateRecursive(HBasicBlock* block) {
 }
 
 bool HLoopInformation::Populate() {
+  DCHECK(NeedsUpdate()) << "Loop information is not up to date";
+  DCHECK_EQ(blocks_.NumSetBits(), 0u) << "Loop information has already been populated";
   for (size_t i = 0, e = GetBackEdges().Size(); i < e; ++i) {
     HBasicBlock* back_edge = GetBackEdges().Get(i);
     DCHECK(back_edge->GetDominator() != nullptr);
@@ -361,6 +368,7 @@ bool HLoopInformation::Populate() {
     blocks_.SetBit(header_->GetBlockId());
     PopulateRecursive(back_edge);
   }
+  needs_update_ = false;
   return true;
 }
 
@@ -959,7 +967,7 @@ void HInstructionList::Add(const HInstructionList& instruction_list) {
   }
 }
 
-void HBasicBlock::DisconnectAndDelete() {
+void HBasicBlock::DisconnectAndDelete(bool may_disconnect_loops) {
   // Dominators must be removed after all the blocks they dominate. This way
   // a loop header is removed last, a requirement for correct loop information
   // iteration.
@@ -969,11 +977,16 @@ void HBasicBlock::DisconnectAndDelete() {
   for (HLoopInformationOutwardIterator it(*this); !it.Done(); it.Advance()) {
     HLoopInformation* loop_info = it.Current();
     loop_info->Remove(this);
-    if (loop_info->IsBackEdge(*this)) {
-      // If this was the last back edge of the loop, we deliberately leave the
-      // loop in an inconsistent state and will fail SSAChecker unless the
-      // entire loop is removed during the pass.
-      loop_info->RemoveBackEdge(this);
+    if (may_disconnect_loops) {
+      if (loop_info->IsBackEdge(*this)) {
+        // If this was the last back edge of the loop, we deliberately leave the
+        // loop in an inconsistent state and will fail SSAChecker unless the
+        // entire loop is removed during the pass.
+        loop_info->RemoveBackEdge(this);
+      }
+      loop_info->SetNeedsUpdate();
+    } else {
+      DCHECK(!loop_info->IsBackEdge(*this));
     }
   }
 
@@ -1049,16 +1062,26 @@ void HBasicBlock::DisconnectAndDelete() {
 }
 
 void HBasicBlock::UpdateLoopInformation() {
-  // Check if loop information points to a dismantled loop. If so, replace with
-  // the loop information of a larger loop which contains this block, or nullptr
-  // otherwise. We iterate in case the larger loop has been destroyed too.
-  while (IsInLoop() && loop_information_->GetBackEdges().IsEmpty()) {
+  if (IsInLoop() && loop_information_->NeedsUpdate()) {
     if (IsLoopHeader()) {
-      HSuspendCheck* suspend_check = loop_information_->GetSuspendCheck();
-      DCHECK_EQ(suspend_check->GetBlock(), this);
-      RemoveInstruction(suspend_check);
+      if (loop_information_->GetBackEdges().IsEmpty()) {
+        // This used to be a loop header but the loop has been dismantled.
+        // Delete its suspend check and clear its loop information.
+        DCHECK(loop_information_->HasSuspendCheck());
+        RemoveInstruction(loop_information_->GetSuspendCheck());
+        SetLoopInformation(nullptr);
+      } else {
+        // This is still a loop header. Recompute the loop information.
+        // We assume that all the loop blocks have already had their
+        // loop info cleared or updated (in the case of nested loops).
+        loop_information_->ClearContainedBlocks();
+        bool populate_successful = loop_information_->Populate();
+        DCHECK(populate_successful);
+      }
+    } else {
+      // This is not a header, clear loop information.
+      SetLoopInformation(nullptr);
     }
-    loop_information_ = loop_information_->GetPreHeader()->GetLoopInformation();
   }
 }
 

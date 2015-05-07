@@ -137,7 +137,7 @@ void HBooleanSimplifier::TryRemovingBooleanSelection(HBasicBlock* block) {
 
   // Delete the true branch and merge the resulting chain of blocks
   // 'block->false_block->merge_block' into one.
-  true_block->DisconnectAndDelete();
+  true_block->DisconnectAndDelete(/* may_disconnect_loops */ false);
   block->MergeWith(false_block);
   block->MergeWith(merge_block);
 

@@ -359,7 +359,8 @@ class HLoopInformation : public ArenaObject<kArenaAllocMisc> {
         suspend_check_(nullptr),
         back_edges_(graph->GetArena(), kDefaultNumberOfBackEdges),
         // Make bit vector growable, as the number of blocks may change.
-        blocks_(graph->GetArena(), graph->GetBlocks().Size(), true) {}
+        blocks_(graph->GetArena(), graph->GetBlocks().Size(), true),
+        needs_update_(true) {}
 
   HBasicBlock* GetHeader() const {
     return header_;
@@ -428,6 +429,10 @@ class HLoopInformation : public ArenaObject<kArenaAllocMisc> {
 
   void Add(HBasicBlock* block);
   void Remove(HBasicBlock* block);
+  void ClearContainedBlocks();
+
+  bool NeedsUpdate() const { return needs_update_; }
+  void SetNeedsUpdate() { needs_update_ = true; }
 
  private:
   // Internal recursive implementation of `Populate`.
@@ -437,6 +442,7 @@ class HLoopInformation : public ArenaObject<kArenaAllocMisc> {
   HSuspendCheck* suspend_check_;
   GrowableArray<HBasicBlock*> back_edges_;
   ArenaBitVector blocks_;
+  bool needs_update_;
 
   DISALLOW_COPY_AND_ASSIGN(HLoopInformation);
 };
@@ -627,8 +633,10 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   // Disconnects `this` from all its predecessors, successors and dominator,
   // removes it from all loops it is included in and eventually from the graph.
   // The block must not dominate any other block. Predecessors and successors
-  // are safely updated.
-  void DisconnectAndDelete();
+  // are safely updated. All loops containing the block have the `needs_update`
+  // flag set unless the operation is guaranteed to not disconnect any paths
+  // from the header to back edge(s) with the argument.
+  void DisconnectAndDelete(bool may_disconnect_loops = true);
 
   void AddInstruction(HInstruction* instruction);
   // Insert `instruction` before/after an existing instruction `cursor`.
@@ -685,14 +693,12 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     loop_information_ = info;
   }
 
-  // Checks if the loop information points to a valid loop. If the loop has been
-  // dismantled (does not have a back edge any more), loop information is
-  // removed or replaced with the information of the first valid outer loop.
+  // TODO:
   void UpdateLoopInformation();
 
   bool IsInLoop() const { return loop_information_ != nullptr; }
 
-  // Returns wheter this block dominates the blocked passed as parameter.
+  // Returns whether this block dominates the blocked passed as parameter.
   bool Dominates(HBasicBlock* block) const;
 
   size_t GetLifetimeStart() const { return lifetime_start_; }
