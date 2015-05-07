@@ -858,6 +858,225 @@ void IntrinsicCodeGeneratorX86_64::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
+void IntrinsicLocationsBuilderX86_64::VisitStringIndexOf(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCall,
+                                                            kIntrinsified);
+  // The data needs to be in RDI for scasw. So request that the string is there, anyways.
+  locations->SetInAt(0, Location::RegisterLocation(RDI));
+  // If we look for a constant char, we'll still have to copy it into RAX. So just request the
+  // allocator to do that, anyways. We can still do the constant check by checking the parameter
+  // of the instruction explicitly.
+  // Note: This works as we don't clobber RAX anywhere.
+  locations->SetInAt(1, Location::RegisterLocation(RAX));
+  // As we clobber RDI during execution anyways, also use it as the output.
+  locations->SetOut(Location::SameAsFirstInput());
+
+  // rep scasw uses RCX as the counter.
+  locations->AddTemp(Location::RegisterLocation(RCX));
+  // Need another temporary to be able to compute the result.
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorX86_64::VisitStringIndexOf(HInvoke* invoke) {
+  X86_64Assembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  // Note that the null check must have been done earlier.
+  DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
+
+  CpuRegister string_obj = locations->InAt(0).AsRegister<CpuRegister>();
+  CpuRegister search_value = locations->InAt(1).AsRegister<CpuRegister>();
+  CpuRegister tmp = locations->GetTemp(0).AsRegister<CpuRegister>();
+  CpuRegister tmp2 = locations->GetTemp(1).AsRegister<CpuRegister>();
+  CpuRegister out = locations->Out().AsRegister<CpuRegister>();
+
+  // Check our assumptions for registers.
+  DCHECK_EQ(string_obj.AsRegister(), RDI);
+  DCHECK_EQ(search_value.AsRegister(), RAX);
+  DCHECK_EQ(tmp.AsRegister(), RCX);
+  DCHECK_EQ(out.AsRegister(), RDI);
+
+  // Check for code points > 0xFFFF. Either a slow-path check when we don't know statically,
+  // or directly dispatch if we have a constant.
+  SlowPathCodeX86_64* slow_path = nullptr;
+  if (invoke->InputAt(1)->IsIntConstant()) {
+    if (static_cast<uint32_t>(invoke->InputAt(1)->AsIntConstant()->GetValue()) > 0xFFFFU) {
+      // Always needs the slow-path. We could directly dispatch to it, but this case should be
+      // rare, so for simplicity just put the full slow-path down and branch unconditionally.
+      slow_path = new (GetAllocator()) IntrinsicSlowPathX86_64(invoke);
+      codegen_->AddSlowPath(slow_path);
+      __ jmp(slow_path->GetEntryLabel());
+      __ Bind(slow_path->GetExitLabel());
+      return;
+    }
+  } else {
+    __ cmpl(search_value, Immediate(0xFFFF));
+    slow_path = new (GetAllocator()) IntrinsicSlowPathX86_64(invoke);
+    codegen_->AddSlowPath(slow_path);
+    __ j(kAbove, slow_path->GetEntryLabel());
+  }
+
+  // From here down, we know that we are looking for a char that fits in 16 bits.
+  // Location of reference to data array within the String object.
+  int32_t value_offset = mirror::String::ValueOffset().Int32Value();
+  // Location of count within the String object.
+  int32_t count_offset = mirror::String::CountOffset().Int32Value();
+
+  // Load length.
+  __ movl(tmp, Address(string_obj, count_offset));
+
+  // Do a length check. TODO: Support jecxz.
+  Label not_found_label;
+  __ testl(tmp, tmp);
+  __ j(kEqual, &not_found_label);
+
+  // Copy the number of words to search in a temporary register.
+  // We will use the register at the end to calculate result.
+  __ movl(tmp2, tmp);
+
+  // Move to the start of the string.
+  __ addq(string_obj, Immediate(value_offset));
+
+  // Everything is set up for repne scasw:
+  //   * Comparison address in RDI.
+  //   * Counter in ECX.
+  __ repnescasw();
+
+  // Did we find a match?
+  __ j(kNotEqual, &not_found_label);
+
+  // Yes, we matched.  Compute the index of the result.
+  __ subl(tmp2, tmp);
+  __ leal(out, Address(tmp2, -1));
+
+  Label done;
+  __ jmp(&done);
+
+  // Failed to match; return -1.
+  __ Bind(&not_found_label);
+  __ movl(out, Immediate(-1));
+
+  // And join up at the end.
+  __ Bind(&done);
+  if (slow_path != nullptr) {
+    __ Bind(slow_path->GetExitLabel());
+  }
+}
+
+// Note: to save a temporary register, we have a dedicated implementation for indexOf with a start
+//       index.
+
+void IntrinsicLocationsBuilderX86_64::VisitStringIndexOfAfter(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCall,
+                                                            kIntrinsified);
+  // For an explanation of the register constants see IndexOf.
+  locations->SetInAt(0, Location::RegisterLocation(RDI));
+  locations->SetInAt(1, Location::RegisterLocation(RAX));
+  locations->SetInAt(2, Location::RequiresRegister());          // The starting index.
+  locations->SetOut(Location::SameAsFirstInput());
+
+  locations->AddTemp(Location::RegisterLocation(RCX));
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorX86_64::VisitStringIndexOfAfter(HInvoke* invoke) {
+  X86_64Assembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  // Note that the null check must have been done earlier.
+  DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
+
+  CpuRegister string_obj = locations->InAt(0).AsRegister<CpuRegister>();
+  CpuRegister search_value = locations->InAt(1).AsRegister<CpuRegister>();
+  CpuRegister start_index = locations->InAt(2).AsRegister<CpuRegister>();
+  CpuRegister tmp = locations->GetTemp(0).AsRegister<CpuRegister>();
+  CpuRegister tmp2 = locations->GetTemp(1).AsRegister<CpuRegister>();
+  CpuRegister out = locations->Out().AsRegister<CpuRegister>();
+
+  // Check our assumptions for registers.
+  DCHECK_EQ(string_obj.AsRegister(), RDI);
+  DCHECK_EQ(search_value.AsRegister(), RAX);
+  DCHECK_EQ(tmp.AsRegister(), RCX);
+  DCHECK_EQ(out.AsRegister(), RDI);
+
+  // Check for code points > 0xFFFF. Either a slow-path check when we don't know statically,
+  // or directly dispatch if we have a constant.
+  SlowPathCodeX86_64* slow_path = nullptr;
+  if (invoke->InputAt(1)->IsIntConstant()) {
+    if (static_cast<uint32_t>(invoke->InputAt(1)->AsIntConstant()->GetValue()) > 0xFFFFU) {
+      // Always needs the slow-path. We could directly dispatch to it, but this case should be
+      // rare, so for simplicity just put the full slow-path down and branch unconditionally.
+      slow_path = new (GetAllocator()) IntrinsicSlowPathX86_64(invoke);
+      codegen_->AddSlowPath(slow_path);
+      __ jmp(slow_path->GetEntryLabel());
+      __ Bind(slow_path->GetExitLabel());
+      return;
+    }
+  } else {
+    __ cmpl(search_value, Immediate(0xFFFF));
+    slow_path = new (GetAllocator()) IntrinsicSlowPathX86_64(invoke);
+    codegen_->AddSlowPath(slow_path);
+    __ j(kAbove, slow_path->GetEntryLabel());
+  }
+
+  // From here down, we know that we are looking for a char that fits in 16 bits.
+  // Location of reference to data array within the String object.
+  int32_t value_offset = mirror::String::ValueOffset().Int32Value();
+  // Location of count within the String object.
+  int32_t count_offset = mirror::String::CountOffset().Int32Value();
+
+  // Load length.
+  __ movl(tmp2, Address(string_obj, count_offset));
+
+  // Do a length check. TODO: Support jecxz.
+  Label not_found_label;
+  __ testl(tmp2, tmp2);
+  __ j(kEqual, &not_found_label);
+
+  // Do a start_index check.
+  __ cmpl(start_index, tmp2);
+  __ j(kGreaterEqual, &not_found_label);
+
+  // Ensure we have a start index >= 0;
+  __ xorl(tmp, tmp);
+  __ cmpl(start_index, Immediate(0));
+  __ cmov(kGreater, tmp, start_index, false);  // 32-bit copy is enough.
+
+  // Move to the start of the string: string_obj + value_offset + 2 * start_index.
+  __ leaq(string_obj, Address(string_obj, tmp, ScaleFactor::TIMES_2, value_offset));
+
+  // Now update ecx, the work counter: it's gonna be string.length - start_index.
+  __ negq(tmp);  // Needs to be 64-bit negation, as the address computation is 64-bit.
+  __ leaq(tmp, Address(tmp2, tmp, ScaleFactor::TIMES_1, 0));
+
+  // Everything is set up for repne scasw:
+  //   * Comparison start address in RDI.
+  //   * Counter in ECX.
+  __ repnescasw();
+
+  // Did we find a match?
+  __ j(kNotEqual, &not_found_label);
+
+  // Yes, we matched.  Compute the index of the result.
+  __ subl(tmp2, tmp);
+  __ leal(out, Address(tmp2, -1));
+
+  Label done;
+  __ jmp(&done);
+
+  // Failed to match; return -1.
+  __ Bind(&not_found_label);
+  __ movl(out, Immediate(-1));
+
+  // And join up at the end.
+  __ Bind(&done);
+  if (slow_path != nullptr) {
+    __ Bind(slow_path->GetExitLabel());
+  }
+}
+
 void IntrinsicLocationsBuilderX86_64::VisitStringNewStringFromBytes(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                             LocationSummary::kCall,
@@ -1434,8 +1653,6 @@ void IntrinsicCodeGeneratorX86_64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSE
 }
 
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
-UNIMPLEMENTED_INTRINSIC(StringIndexOf)
-UNIMPLEMENTED_INTRINSIC(StringIndexOfAfter)
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 
