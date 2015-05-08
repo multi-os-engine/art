@@ -850,6 +850,113 @@ void IntrinsicCodeGeneratorARM::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
+void IntrinsicLocationsBuilderARM::VisitStringIndexOf(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCall,
+                                                            kIntrinsified);
+  // We have an assembly stub for index_of that tests multiple elements at the same time. So it's
+  // best to align the inputs accordingly.
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
+  locations->SetInAt(1, Location::RegisterLocation(calling_convention.GetRegisterAt(1)));
+  locations->SetOut(Location::RegisterLocation(R0));
+
+  // Need a temp for slow-path codepoint compare, and need to send start_index=0.
+  locations->AddTemp(Location::RegisterLocation(calling_convention.GetRegisterAt(2)));
+}
+
+void IntrinsicCodeGeneratorARM::VisitStringIndexOf(HInvoke* invoke) {
+  ArmAssembler* assembler = GetAssembler();
+
+  LocationSummary* locations = invoke->GetLocations();
+  Register tmp_reg = locations->GetTemp(0).AsRegister<Register>();
+
+  // Check for code points > 0xFFFF. Either a slow-path check when we don't know statically,
+  // or directly dispatch if we have a constant.
+  SlowPathCodeARM* slow_path = nullptr;
+  if (invoke->InputAt(1)->IsIntConstant()) {
+    if (static_cast<uint32_t>(invoke->InputAt(1)->AsIntConstant()->GetValue()) > 0xFFFFU) {
+      // Always needs the slow-path. We could directly dispatch to it, but this case should be
+      // rare, so for simplicity just put the full slow-path down and branch unconditionally.
+      slow_path = new (GetAllocator()) IntrinsicSlowPathARM(invoke);
+      codegen_->AddSlowPath(slow_path);
+      __ b(slow_path->GetEntryLabel());
+      __ Bind(slow_path->GetExitLabel());
+      return;
+    }
+  } else {
+    Register char_reg = locations->InAt(1).AsRegister<Register>();
+    __ LoadImmediate(tmp_reg, 0xFFFF);
+    __ cmp(char_reg, ShifterOperand(tmp_reg));
+    slow_path = new (GetAllocator()) IntrinsicSlowPathARM(invoke);
+    codegen_->AddSlowPath(slow_path);
+    __ b(slow_path->GetEntryLabel(), HI);
+  }
+
+  // Start-index = 0.
+  __ LoadImmediate(tmp_reg, 0);
+
+  __ LoadFromOffset(kLoadWord, LR, TR,
+                    QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pIndexOf).Int32Value());
+  __ blx(LR);
+
+  if (slow_path != nullptr) {
+    __ Bind(slow_path->GetExitLabel());
+  }
+}
+
+void IntrinsicLocationsBuilderARM::VisitStringIndexOfAfter(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCall,
+                                                            kIntrinsified);
+  // We have an assembly stub for index_of that tests multiple elements at the same time. So it's
+  // best to align the inputs accordingly.
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
+  locations->SetInAt(1, Location::RegisterLocation(calling_convention.GetRegisterAt(1)));
+  locations->SetInAt(2, Location::RegisterLocation(calling_convention.GetRegisterAt(2)));
+  locations->SetOut(Location::RegisterLocation(R0));
+
+  // Need a temp for slow-path codepoint compare.
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorARM::VisitStringIndexOfAfter(HInvoke* invoke) {
+  ArmAssembler* assembler = GetAssembler();
+
+  // Check for code points > 0xFFFF. Either a slow-path check when we don't know statically,
+  // or directly dispatch if we have a constant.
+  SlowPathCodeARM* slow_path = nullptr;
+  if (invoke->InputAt(1)->IsIntConstant()) {
+    if (static_cast<uint32_t>(invoke->InputAt(1)->AsIntConstant()->GetValue()) > 0xFFFFU) {
+      // Always needs the slow-path. We could directly dispatch to it, but this case should be
+      // rare, so for simplicity just put the full slow-path down and branch unconditionally.
+      slow_path = new (GetAllocator()) IntrinsicSlowPathARM(invoke);
+      codegen_->AddSlowPath(slow_path);
+      __ b(slow_path->GetEntryLabel());
+      __ Bind(slow_path->GetExitLabel());
+      return;
+    }
+  } else {
+    LocationSummary* locations = invoke->GetLocations();
+    Register char_reg = locations->InAt(1).AsRegister<Register>();
+    Register tmp_reg = locations->GetTemp(0).AsRegister<Register>();
+    __ LoadImmediate(tmp_reg, 0xFFFF);
+    __ cmp(char_reg, ShifterOperand(tmp_reg));
+    slow_path = new (GetAllocator()) IntrinsicSlowPathARM(invoke);
+    codegen_->AddSlowPath(slow_path);
+    __ b(slow_path->GetEntryLabel(), HI);
+  }
+
+  __ LoadFromOffset(kLoadWord, LR, TR,
+                    QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pIndexOf).Int32Value());
+  __ blx(LR);
+
+  if (slow_path != nullptr) {
+    __ Bind(slow_path->GetExitLabel());
+  }
+}
+
 void IntrinsicLocationsBuilderARM::VisitStringNewStringFromBytes(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                             LocationSummary::kCall,
@@ -951,8 +1058,6 @@ UNIMPLEMENTED_INTRINSIC(MathRoundDouble)   // Could be done by changing rounding
 UNIMPLEMENTED_INTRINSIC(MathRoundFloat)    // Could be done by changing rounding mode, maybe?
 UNIMPLEMENTED_INTRINSIC(UnsafeCASLong)     // High register pressure.
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
-UNIMPLEMENTED_INTRINSIC(StringIndexOf)
-UNIMPLEMENTED_INTRINSIC(StringIndexOfAfter)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
 
