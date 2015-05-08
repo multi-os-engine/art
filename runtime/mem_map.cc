@@ -68,11 +68,25 @@ static std::ostream& operator<<(
 
 std::ostream& operator<<(std::ostream& os, const MemMap::Maps& mem_maps) {
   os << "MemMap:" << std::endl;
-  for (auto it = mem_maps.begin(); it != mem_maps.end(); ++it) {
-    void* base = it->first;
+  for (auto it = mem_maps.begin(), maps_end = mem_maps.end(); it != maps_end;) {
     MemMap* map = it->second;
+    void* base = it->first;
+    void* end = map->BaseEnd();
+    size_t num = 1u;
+    ++it;
+    // Merge consecutive maps with the same protect flags and name.
+    while (it != maps_end && it->second->BaseBegin() == end &&
+        it->second->GetProtect() == map->GetProtect() && it->second->GetName() == map->GetName()) {
+      end = it->second->BaseEnd();
+      ++it;
+      ++num;
+    }
     CHECK_EQ(base, map->BaseBegin());
-    os << *map << std::endl;
+    os << "[MemMap: " << map->BaseBegin() << "-" << end << " ";
+    if (num != 1u) {
+      os << num << "x ";
+    }
+    os << "prot=0x" << std::hex << map->GetProtect() << " " << map->GetName() << "]" << std::endl;
   }
   return os;
 }
