@@ -617,13 +617,61 @@ bool MemMap::CheckNoGaps(MemMap* begin_map, MemMap* end_map) {
   return true;
 }
 
-void MemMap::DumpMaps(std::ostream& os) {
+void MemMap::DumpMaps(std::ostream& os, bool terse) {
   MutexLock mu(Thread::Current(), *Locks::mem_maps_lock_);
-  DumpMapsLocked(os);
+  DumpMapsLocked(os, terse);
 }
 
-void MemMap::DumpMapsLocked(std::ostream& os) {
-  os << *maps_;
+void MemMap::DumpMapsLocked(std::ostream& os, bool terse) {
+  const auto& mem_maps = *maps_;
+  if (!terse) {
+    os << mem_maps;
+    return;
+  }
+
+  os << "MemMap:" << std::endl;
+  for (auto it = mem_maps.begin(), maps_end = mem_maps.end(); it != maps_end;) {
+    MemMap* map = it->second;
+    void* base = it->first;
+    CHECK_EQ(base, map->BaseBegin());
+    os << "[MemMap: " << base;
+    ++it;
+    // Merge consecutive maps with the same protect flags and name.
+    constexpr size_t kMaxGaps = 9;
+    size_t num_gaps = 0;
+    size_t num = 1u;
+    size_t size = map->BaseSize();
+    CHECK(IsAligned<kPageSize>(size));
+    void* end = map->BaseEnd();
+    while (it != maps_end &&
+        it->second->GetProtect() == map->GetProtect() &&
+        it->second->GetName() == map->GetName() &&
+        (it->second->BaseBegin() == end || num_gaps < kMaxGaps)) {
+      if (it->second->BaseBegin() != end) {
+        ++num_gaps;
+        os << "+0x" << std::hex << (size / kPageSize) << "P";
+        if (num != 1u) {
+          os << "(" << std::dec << num << ")";
+        }
+        size_t gap =
+            reinterpret_cast<uintptr_t>(it->second->BaseBegin()) - reinterpret_cast<uintptr_t>(end);
+        CHECK(IsAligned<kPageSize>(gap));
+        os << "~0x" << std::hex << (gap / kPageSize) << "P";
+        num = 0u;
+        size = 0u;
+      }
+      CHECK(IsAligned<kPageSize>(it->second->BaseSize()));
+      ++num;
+      size += it->second->BaseSize();
+      end = it->second->BaseEnd();
+      ++it;
+    }
+    os << "+0x" << std::hex << (size / kPageSize) << "P";
+    if (num != 1u) {
+      os << "(" << std::dec << num << ")";
+    }
+    os << " prot=0x" << std::hex << map->GetProtect() << " " << map->GetName() << "]" << std::endl;
+  }
 }
 
 bool MemMap::HasMemMap(MemMap* map) {
