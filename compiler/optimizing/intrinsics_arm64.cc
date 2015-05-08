@@ -993,6 +993,132 @@ void IntrinsicCodeGeneratorARM64::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
+void IntrinsicLocationsBuilderARM64::VisitStringIndexOf(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCall,
+                                                            kIntrinsified);
+  // We have an assembly stub for index_of that tests multiple elements at the same time. So it's
+  // best to align the inputs accordingly.
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
+  locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
+  locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimInt));
+
+  // Need a temp for slow-path codepoint compare, and need to send start_index=0.
+  locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(2)));
+}
+
+void IntrinsicCodeGeneratorARM64::VisitStringIndexOf(HInvoke* invoke) {
+  vixl::MacroAssembler* masm = GetVIXLAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  Register char_reg = WRegisterFrom(locations->InAt(1));
+  Register tmp_reg = WRegisterFrom(locations->GetTemp(0));
+  __ Mov(tmp_reg, 0xFFFF);
+
+  // Slow-path check: we do not handle non-char search values.
+  __ Cmp(char_reg, Operand(tmp_reg));
+  SlowPathCodeARM64* slow_path = new (GetAllocator()) IntrinsicSlowPathARM64(invoke);
+  codegen_->AddSlowPath(slow_path);
+  __ B(gt, slow_path->GetEntryLabel());
+
+  // Start-index = 0.
+  __ Mov(tmp_reg, 0);
+
+  // We want to dispatch to an assembly implementation in the runtime. That implementation does
+  // not create stack frame. It assumes that the caller saves all caller-saves. So we use a SlowPath
+  // to handle spilling and restoring live registers.
+  class DispatchToSlowPathCodeARM64 : public SlowPathCodeARM64 {
+   public:
+    explicit DispatchToSlowPathCodeARM64(HInvoke* invoke_inner) : invoke_(invoke_inner) { }
+
+    void EmitNativeCode(CodeGenerator* codegen_in) OVERRIDE {
+      CodeGeneratorARM64* codegen = down_cast<CodeGeneratorARM64*>(codegen_in);
+
+      SaveLiveRegisters(codegen, invoke_->GetLocations());
+
+      BlockPoolsScope block_pools(codegen->GetVIXLAssembler());
+      codegen->GetVIXLAssembler()->Ldr(lr, MemOperand(tr,
+          QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pIndexOf).Int32Value()));
+      codegen->GetVIXLAssembler()->Blr(lr);
+
+      RestoreLiveRegisters(codegen, invoke_->GetLocations());
+    }
+
+   private:
+    // The instruction where this slow path is happening.
+    HInvoke* const invoke_;
+
+    DISALLOW_COPY_AND_ASSIGN(DispatchToSlowPathCodeARM64);
+  };
+  DispatchToSlowPathCodeARM64 runtime_code(invoke);
+  runtime_code.EmitNativeCode(codegen_);
+
+  __ Bind(slow_path->GetExitLabel());
+}
+
+void IntrinsicLocationsBuilderARM64::VisitStringIndexOfAfter(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCall,
+                                                            kIntrinsified);
+  // We have an assembly stub for index_of that tests multiple elements at the same time. So it's
+  // best to align the inputs accordingly.
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
+  locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
+  locations->SetInAt(2, LocationFrom(calling_convention.GetRegisterAt(2)));
+  locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimInt));
+
+  // Need a temp for slow-path codepoint compare.
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorARM64::VisitStringIndexOfAfter(HInvoke* invoke) {
+  vixl::MacroAssembler* masm = GetVIXLAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  Register char_reg = WRegisterFrom(locations->InAt(1));
+  Register tmp_reg = WRegisterFrom(locations->GetTemp(0));
+  __ Mov(tmp_reg, 0xFFFF);
+
+  // Slow-path check: we do not handle non-char search values.
+  __ Cmp(char_reg, Operand(tmp_reg));
+  SlowPathCodeARM64* slow_path = new (GetAllocator()) IntrinsicSlowPathARM64(invoke);
+  codegen_->AddSlowPath(slow_path);
+  __ B(gt, slow_path->GetEntryLabel());
+
+  // We want to dispatch to an assembly implementation in the runtime. That implementation does
+  // not create stack frame. It assumes that the caller saves all caller-saves. So we use a SlowPath
+  // to handle spilling and restoring live registers.
+  class DispatchToSlowPathCodeARM64 : public SlowPathCodeARM64 {
+   public:
+    explicit DispatchToSlowPathCodeARM64(HInvoke* invoke_inner) : invoke_(invoke_inner) { }
+
+    void EmitNativeCode(CodeGenerator* codegen_in) OVERRIDE {
+      CodeGeneratorARM64* codegen = down_cast<CodeGeneratorARM64*>(codegen_in);
+
+      SaveLiveRegisters(codegen, invoke_->GetLocations());
+
+      BlockPoolsScope block_pools(codegen->GetVIXLAssembler());
+      codegen->GetVIXLAssembler()->Ldr(lr, MemOperand(tr,
+          QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pIndexOf).Int32Value()));
+      codegen->GetVIXLAssembler()->Blr(lr);
+
+      RestoreLiveRegisters(codegen, invoke_->GetLocations());
+    }
+
+   private:
+    // The instruction where this slow path is happening.
+    HInvoke* const invoke_;
+
+    DISALLOW_COPY_AND_ASSIGN(DispatchToSlowPathCodeARM64);
+  };
+  DispatchToSlowPathCodeARM64 runtime_code(invoke);
+  runtime_code.EmitNativeCode(codegen_);
+
+  __ Bind(slow_path->GetExitLabel());
+}
+
 void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromBytes(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                             LocationSummary::kCall,
@@ -1080,8 +1206,6 @@ void IntrinsicCodeGeneratorARM64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED
 }
 
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
-UNIMPLEMENTED_INTRINSIC(StringIndexOf)
-UNIMPLEMENTED_INTRINSIC(StringIndexOfAfter)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
 

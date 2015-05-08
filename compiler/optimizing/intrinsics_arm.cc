@@ -850,6 +850,130 @@ void IntrinsicCodeGeneratorARM::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
+void IntrinsicLocationsBuilderARM::VisitStringIndexOf(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCall,
+                                                            kIntrinsified);
+  // We have an assembly stub for index_of that tests multiple elements at the same time. So it's
+  // best to align the inputs accordingly.
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
+  locations->SetInAt(1, Location::RegisterLocation(calling_convention.GetRegisterAt(1)));
+  locations->SetOut(Location::RegisterLocation(R0));
+
+  // Need a temp for slow-path codepoint compare, and need to send start_index=0.
+  locations->AddTemp(Location::RegisterLocation(calling_convention.GetRegisterAt(2)));
+}
+
+void IntrinsicCodeGeneratorARM::VisitStringIndexOf(HInvoke* invoke) {
+  ArmAssembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  Register char_reg = locations->InAt(1).AsRegister<Register>();
+  Register tmp_reg = locations->GetTemp(0).AsRegister<Register>();
+  __ LoadImmediate(tmp_reg, 0xFFFF);
+
+  // Slow-path check: we do not handle non-char search values.
+  __ cmp(char_reg, ShifterOperand(tmp_reg));
+  SlowPathCodeARM* slow_path = new (GetAllocator()) IntrinsicSlowPathARM(invoke);
+  codegen_->AddSlowPath(slow_path);
+  __ b(slow_path->GetEntryLabel(), GT);
+
+  // Start-index = 0.
+  __ LoadImmediate(tmp_reg, 0);
+
+  // We want to dispatch to an assembly implementation in the runtime. That implementation does
+  // not create stack frame. It assumes that the caller saves all caller-saves. So we use a SlowPath
+  // to handle spilling and restoring live registers.
+  class DispatchToSlowPathCodeARM : public SlowPathCodeARM {
+   public:
+    explicit DispatchToSlowPathCodeARM(HInvoke* invoke_inner) : invoke_(invoke_inner) { }
+
+    void EmitNativeCode(CodeGenerator* codegen_in) OVERRIDE {
+      CodeGeneratorARM* codegen = down_cast<CodeGeneratorARM*>(codegen_in);
+
+      SaveLiveRegisters(codegen, invoke_->GetLocations());
+
+      codegen->GetAssembler()->LoadFromOffset(kLoadWord, LR, TR,
+          QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pIndexOf).Int32Value());
+      codegen->GetAssembler()->blx(LR);
+
+      RestoreLiveRegisters(codegen, invoke_->GetLocations());
+    }
+
+   private:
+    // The instruction where this slow path is happening.
+    HInvoke* const invoke_;
+
+    DISALLOW_COPY_AND_ASSIGN(DispatchToSlowPathCodeARM);
+  };
+  DispatchToSlowPathCodeARM runtime_code(invoke);
+  runtime_code.EmitNativeCode(codegen_);
+
+  __ Bind(slow_path->GetExitLabel());
+}
+
+void IntrinsicLocationsBuilderARM::VisitStringIndexOfAfter(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCall,
+                                                            kIntrinsified);
+  // We have an assembly stub for index_of that tests multiple elements at the same time. So it's
+  // best to align the inputs accordingly.
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
+  locations->SetInAt(1, Location::RegisterLocation(calling_convention.GetRegisterAt(1)));
+  locations->SetInAt(2, Location::RegisterLocation(calling_convention.GetRegisterAt(2)));
+  locations->SetOut(Location::RegisterLocation(R0));
+
+  // Need a temp for slow-path codepoint compare.
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorARM::VisitStringIndexOfAfter(HInvoke* invoke) {
+  ArmAssembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  Register char_reg = locations->InAt(1).AsRegister<Register>();
+  Register tmp_reg = locations->GetTemp(0).AsRegister<Register>();
+  __ LoadImmediate(tmp_reg, 0xFFFF);
+
+  // Slow-path check: we do not handle non-char search values.
+  __ cmp(char_reg, ShifterOperand(tmp_reg));
+  SlowPathCodeARM* slow_path = new (GetAllocator()) IntrinsicSlowPathARM(invoke);
+  codegen_->AddSlowPath(slow_path);
+  __ b(slow_path->GetEntryLabel(), GT);
+
+  // We want to dispatch to an assembly implementation in the runtime. That implementation does
+  // not create stack frame. It assumes that the caller saves all caller-saves. So we use a SlowPath
+  // to handle spilling and restoring live registers.
+  class DispatchToSlowPathCodeARM : public SlowPathCodeARM {
+   public:
+    explicit DispatchToSlowPathCodeARM(HInvoke* invoke_inner) : invoke_(invoke_inner) { }
+
+    void EmitNativeCode(CodeGenerator* codegen_in) OVERRIDE {
+      CodeGeneratorARM* codegen = down_cast<CodeGeneratorARM*>(codegen_in);
+
+      SaveLiveRegisters(codegen, invoke_->GetLocations());
+
+      codegen->GetAssembler()->LoadFromOffset(kLoadWord, LR, TR,
+          QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pIndexOf).Int32Value());
+      codegen->GetAssembler()->blx(LR);
+
+      RestoreLiveRegisters(codegen, invoke_->GetLocations());
+    }
+
+   private:
+    // The instruction where this slow path is happening.
+    HInvoke* const invoke_;
+
+    DISALLOW_COPY_AND_ASSIGN(DispatchToSlowPathCodeARM);
+  };
+  DispatchToSlowPathCodeARM runtime_code(invoke);
+  runtime_code.EmitNativeCode(codegen_);
+
+  __ Bind(slow_path->GetExitLabel());
+}
+
 void IntrinsicLocationsBuilderARM::VisitStringNewStringFromBytes(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                             LocationSummary::kCall,
@@ -951,8 +1075,6 @@ UNIMPLEMENTED_INTRINSIC(MathRoundDouble)   // Could be done by changing rounding
 UNIMPLEMENTED_INTRINSIC(MathRoundFloat)    // Could be done by changing rounding mode, maybe?
 UNIMPLEMENTED_INTRINSIC(UnsafeCASLong)     // High register pressure.
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
-UNIMPLEMENTED_INTRINSIC(StringIndexOf)
-UNIMPLEMENTED_INTRINSIC(StringIndexOfAfter)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
 
