@@ -3737,6 +3737,36 @@ bool ClassLinker::WaitForInitializeClass(Handle<mirror::Class> klass, Thread* se
   UNREACHABLE();
 }
 
+static std::string ResolveReturnTypeExceptionToMessage(Thread* self, mirror::ArtMethod* m)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  self->AssertPendingException();
+  std::string exception_message = self->GetException()->GetDetailMessage()->ToModifiedUtf8();
+  self->ClearException();
+  DCHECK(!m->IsProxyMethod());
+  const DexFile* dex_file = m->GetDexFile();
+  const DexFile::MethodId& method_id = dex_file->GetMethodId(m->GetDexMethodIndex());
+  const DexFile::ProtoId& proto_id = dex_file->GetMethodPrototype(method_id);
+  uint16_t return_type_idx = proto_id.return_type_idx_;
+  std::string return_type = PrettyType(return_type_idx, *dex_file);
+  std::string class_loader = PrettyTypeOf(m->GetDeclaringClass()->GetClassLoader());
+  return StringPrintf("Failed to resolve return type %s with %s: %s",
+                      return_type.c_str(), class_loader.c_str(), exception_message.c_str());
+}
+
+static std::string ResolveArgExceptionToMessage(Thread* self, mirror::ArtMethod* m,
+                                                uint32_t index, uint32_t arg_type_idx)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  self->AssertPendingException();
+  std::string exception_message = self->GetException()->GetDetailMessage()->ToModifiedUtf8();
+  self->ClearException();
+  DCHECK(!m->IsProxyMethod());
+  const DexFile* dex_file = m->GetDexFile();
+  std::string arg_type = PrettyType(arg_type_idx, *dex_file);
+  std::string class_loader = PrettyTypeOf(m->GetDeclaringClass()->GetClassLoader());
+  return StringPrintf("Failed to resolve arg %u type %s with %s: %s",
+                      index, arg_type.c_str(), class_loader.c_str(), exception_message.c_str());
+}
+
 static bool HasSameSignatureWithDifferentClassLoaders(Thread* self,
                                                       Handle<mirror::ArtMethod> method1,
                                                       Handle<mirror::ArtMethod> method2,
@@ -3745,8 +3775,15 @@ static bool HasSameSignatureWithDifferentClassLoaders(Thread* self,
   {
     StackHandleScope<1> hs(self);
     Handle<mirror::Class> return_type(hs.NewHandle(method1->GetReturnType()));
+    if (UNLIKELY(return_type.Get() == nullptr)) {
+      *error_msg = ResolveReturnTypeExceptionToMessage(self, method1.Get());
+      return false;
+    }
     mirror::Class* other_return_type = method2->GetReturnType();
-    // NOTE: return_type.Get() must be sequenced after method2->GetReturnType().
+    if (UNLIKELY(other_return_type == nullptr)) {
+      *error_msg = ResolveReturnTypeExceptionToMessage(self, method2.Get());
+      return false;
+    }
     if (UNLIKELY(other_return_type != return_type.Get())) {
       *error_msg = StringPrintf("Return types mismatch: %s(%p) vs %s(%p)",
                                 PrettyClassAndClassLoader(return_type.Get()).c_str(),
@@ -3781,11 +3818,20 @@ static bool HasSameSignatureWithDifferentClassLoaders(Thread* self,
   }
   for (uint32_t i = 0; i < num_types; ++i) {
     StackHandleScope<1> hs(self);
+    uint32_t param_type_idx = types1->GetTypeItem(i).type_idx_;
     Handle<mirror::Class> param_type(hs.NewHandle(
-        method1->GetClassFromTypeIndex(types1->GetTypeItem(i).type_idx_, true)));
+        method1->GetClassFromTypeIndex(param_type_idx, true)));
+    if (UNLIKELY(param_type.Get() == nullptr)) {
+      *error_msg = ResolveArgExceptionToMessage(self, method1.Get(), i, param_type_idx);
+      return false;
+    }
+    uint32_t other_param_type_idx = types1->GetTypeItem(i).type_idx_;
     mirror::Class* other_param_type =
-        method2->GetClassFromTypeIndex(types2->GetTypeItem(i).type_idx_, true);
-    // NOTE: param_type.Get() must be sequenced after method2->GetClassFromTypeIndex(...).
+        method2->GetClassFromTypeIndex(other_param_type_idx, true);
+    if (UNLIKELY(other_param_type == nullptr)) {
+      *error_msg = ResolveArgExceptionToMessage(self, method2.Get(), i, other_param_type_idx);
+      return false;
+    }
     if (UNLIKELY(param_type.Get() != other_param_type)) {
       *error_msg = StringPrintf("Parameter %u type mismatch: %s(%p) vs %s(%p)",
                                 i,
