@@ -1,0 +1,7 @@
+Code-Review+2: Mathieu Chartier <mathieuc@google.com>
+Verified+1: Deckard Autoverifier <deckard@android.com>
+Submitted-by: Hiroshi Yamauchi <yamauchi@google.com>
+Submitted-at: Mon, 11 May 2015 18:04:09 +0000
+Reviewed-on: https://android-review.googlesource.com/149639
+Project: platform/art
+Branch: refs/heads/master
