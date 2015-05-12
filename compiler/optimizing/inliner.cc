@@ -195,6 +195,7 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
       invoke_instruction->GetOriginalInvokeType(),
       graph_->IsDebuggable(),
       graph_->GetCurrentInstructionId());
+  callee_graph->SetCodeGenerator(graph_->GetCodeGenerator());
 
   OptimizingCompilerStats inline_stats;
   HGraphBuilder builder(callee_graph,

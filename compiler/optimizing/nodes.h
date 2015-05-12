@@ -33,6 +33,7 @@
 
 namespace art {
 
+class CodeGenerator;
 class GraphChecker;
 class HBasicBlock;
 class HCurrentMethod;
@@ -149,7 +150,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         cached_float_constants_(std::less<int32_t>(), arena->Adapter()),
         cached_long_constants_(std::less<int64_t>(), arena->Adapter()),
         cached_double_constants_(std::less<int64_t>(), arena->Adapter()),
-        cached_current_method_(nullptr) {}
+        cached_current_method_(nullptr), code_generator_(nullptr) {}
 
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
@@ -282,6 +283,13 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   HCurrentMethod* GetCurrentMethod();
 
+  void SetCodeGenerator(CodeGenerator* code_generator) {
+    code_generator_ = code_generator;
+  }
+  CodeGenerator* GetCodeGenerator() const {
+    return code_generator_;
+  }
+
   HBasicBlock* FindCommonDominator(HBasicBlock* first, HBasicBlock* second) const;
 
   const DexFile& GetDexFile() const {
@@ -391,6 +399,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   ArenaSafeMap<int64_t, HDoubleConstant*> cached_double_constants_;
 
   HCurrentMethod* cached_current_method_;
+  CodeGenerator* code_generator_;
 
   friend class SsaBuilder;           // For caching constants.
   friend class SsaLivenessAnalysis;  // For the linear order.
