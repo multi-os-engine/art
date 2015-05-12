@@ -338,6 +338,10 @@ class CodeGenerator {
   static void CreateCommonInvokeLocationSummary(
       HInvoke* invoke, InvokeDexCallingConventionVisitor* visitor);
 
+  // Per code generator optimization pass.
+  virtual void RunBackendOptimization(HGraph* graph ATTRIBUTE_UNUSED) {
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,

@@ -312,6 +312,21 @@ static void RunOptimizations(HOptimization* optimizations[],
   }
 }
 
+/**
+ * Simple optimization pass to allow backends to process the graph after all optimizations.
+ */
+class BackendOptimizer : public HOptimization {
+ public:
+  BackendOptimizer(HGraph* graph, const char* name = kBackendOptimizationPassName)
+  : HOptimization(graph, true, name, nullptr) {}
+
+  static constexpr const char* kBackendOptimizationPassName = "backend_optimization";
+
+  void Run() OVERRIDE {
+    graph_->GetCodeGenerator()->RunBackendOptimization(graph_);
+  }
+};
+
 static void RunOptimizations(HGraph* graph,
                              CompilerDriver* driver,
                              OptimizingCompilerStats* stats,
@@ -345,6 +360,7 @@ static void RunOptimizations(HGraph* graph,
       new (arena) ReferenceTypePropagation(graph, handles);
 
   IntrinsicsRecognizer* intrinsics = new (arena) IntrinsicsRecognizer(graph, driver);
+  BackendOptimizer* backend = new(arena) BackendOptimizer(graph);
 
   HOptimization* optimizations[] = {
     intrinsics,
@@ -367,6 +383,9 @@ static void RunOptimizations(HGraph* graph,
     bce,
     simplify3,
     dce2,
+
+    // Must be the final optimization in this list.
+    backend
   };
 
   RunOptimizations(optimizations, arraysize(optimizations), pass_info_printer);
@@ -545,6 +564,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     MaybeRecordStat(MethodCompilationStat::kNotCompiledNoCodegen);
     return nullptr;
   }
+  graph->SetCodeGenerator(codegen.get());
   codegen->GetAssembler()->cfi().SetEnabled(
       compiler_driver->GetCompilerOptions().GetGenerateDebugInfo());
 
