@@ -345,6 +345,10 @@ class CodeGenerator {
   void SetDisassemblyInformation(DisassemblyInformation* info) { disasm_info_ = info; }
   DisassemblyInformation* GetDisassemblyInformation() const { return disasm_info_; }
 
+  // Per code generator optimization pass.
+  virtual void RunBackendOptimization(HGraph* graph ATTRIBUTE_UNUSED) {
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
