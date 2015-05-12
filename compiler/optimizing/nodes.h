@@ -33,6 +33,7 @@
 
 namespace art {
 
+class CodeGenerator;
 class GraphChecker;
 class HBasicBlock;
 class HDoubleConstant;
@@ -147,7 +148,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         cached_int_constants_(std::less<int32_t>(), arena->Adapter()),
         cached_float_constants_(std::less<int32_t>(), arena->Adapter()),
         cached_long_constants_(std::less<int64_t>(), arena->Adapter()),
-        cached_double_constants_(std::less<int64_t>(), arena->Adapter()) {}
+        cached_double_constants_(std::less<int64_t>(), arena->Adapter()),
+        code_generator_(nullptr) {}
 
   ArenaAllocator* GetArena() const { return arena_; }
   const GrowableArray<HBasicBlock*>& GetBlocks() const { return blocks_; }
@@ -278,6 +280,13 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
     return CreateConstant(bit_cast<int64_t, double>(value), &cached_double_constants_);
   }
 
+  void SetCodeGenerator(CodeGenerator* code_generator) {
+    code_generator_ = code_generator;
+  }
+  CodeGenerator* GetCodeGenerator() const {
+    return code_generator_;
+  }
+
   HBasicBlock* FindCommonDominator(HBasicBlock* first, HBasicBlock* second) const;
 
   const DexFile& GetDexFile() const {
@@ -385,6 +394,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   ArenaSafeMap<int32_t, HFloatConstant*> cached_float_constants_;
   ArenaSafeMap<int64_t, HLongConstant*> cached_long_constants_;
   ArenaSafeMap<int64_t, HDoubleConstant*> cached_double_constants_;
+
+  CodeGenerator* code_generator_;
 
   friend class SsaBuilder;           // For caching constants.
   friend class SsaLivenessAnalysis;  // For the linear order.
