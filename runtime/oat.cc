@@ -448,6 +448,12 @@ bool OatHeader::IsPic() const {
   return (pic_string != nullptr && strncmp(pic_string, kTrue, sizeof(kTrue)) == 0);
 }
 
+bool OatHeader::IsDebuggable() const {
+  const char* debuggable_string = GetStoreValueByKey(OatHeader::kDebuggableKey);
+  static const char kTrue[] = "true";
+  return (debuggable_string != nullptr && strncmp(debuggable_string, kTrue, sizeof(kTrue)) == 0);
+}
+
 void OatHeader::Flatten(const SafeMap<std::string, std::string>* key_value_store) {
   char* data_ptr = reinterpret_cast<char*>(&key_value_store_);
   if (key_value_store != nullptr) {
