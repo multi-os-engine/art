@@ -658,12 +658,11 @@ bool PatchOat::PatchElf(ElfFileImpl* oat_file) {
     return false;
   }
 
-  bool need_fixup = false;
+  bool need_fixup = true;
   for (unsigned int i = 0; i < oat_file->GetProgramHeaderNum(); ++i) {
     auto hdr = oat_file->GetProgramHeader(i);
-    if ((hdr->p_vaddr != 0 && hdr->p_vaddr != hdr->p_offset) ||
-        (hdr->p_paddr != 0 && hdr->p_paddr != hdr->p_offset)) {
-      need_fixup = true;
+    if (hdr->p_type == PT_LOAD && hdr->p_vaddr == 0u) {
+      need_fixup = false;
       break;
     }
   }

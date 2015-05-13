@@ -45,7 +45,8 @@ void ElfWriter::GetOatElfInformation(File* file,
   std::unique_ptr<ElfFile> elf_file(ElfFile::Open(file, false, false, &error_msg));
   CHECK(elf_file.get() != nullptr) << error_msg;
 
-  oat_loaded_size = elf_file->GetLoadedSize();
+  bool success = elf_file->GetLoadedSize(&oat_loaded_size, &error_msg);
+  CHECK(success) << error_msg;
   CHECK_NE(0U, oat_loaded_size);
   oat_data_offset = GetOatDataAddress(elf_file.get());
   CHECK_NE(0U, oat_data_offset);
