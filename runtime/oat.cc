@@ -448,6 +448,12 @@ bool OatHeader::IsPic() const {
   return (pic_string != nullptr && strncmp(pic_string, kTrue, sizeof(kTrue)) == 0);
 }
 
+bool OatHeader::IsDebuggable() const {
+  // TODO should we use a specific key?
+  const char* dex2oat_cmd_line_string = GetStoreValueByKey(OatHeader::kDex2OatCmdLineKey);
+  return std::string(dex2oat_cmd_line_string).find("--debuggable") != std::string::npos;
+}
+
 void OatHeader::Flatten(const SafeMap<std::string, std::string>* key_value_store) {
   char* data_ptr = reinterpret_cast<char*>(&key_value_store_);
   if (key_value_store != nullptr) {

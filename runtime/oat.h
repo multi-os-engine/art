@@ -99,6 +99,7 @@ class PACKED(4) OatHeader {
 
   size_t GetHeaderSize() const;
   bool IsPic() const;
+  bool IsDebuggable() const;
 
  private:
   OatHeader(InstructionSet instruction_set,

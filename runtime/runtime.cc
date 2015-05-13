@@ -1679,7 +1679,8 @@ void Runtime::AddCurrentRuntimeFeaturesAsDex2OatArguments(std::vector<std::strin
   feature_string += features->GetFeatureString();
   argv->push_back(feature_string);
 
-  if (Dbg::IsJdwpConfigured()) {
+  const OatFile* primary_oat_file = GetClassLinker()->GetPrimaryOatFile();
+  if (primary_oat_file != nullptr && primary_oat_file->IsDebuggable()) {
     argv->push_back("--debuggable");
   }
 }
