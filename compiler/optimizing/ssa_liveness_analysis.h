@@ -76,7 +76,7 @@ class LiveRange FINAL : public ArenaObject<kArenaAllocMisc> {
   }
 
   void Dump(std::ostream& stream) const {
-    stream << "[" << start_ << ", " << end_ << ")";
+    stream << start_ << "-" << end_;
   }
 
   LiveRange* Dup(ArenaAllocator* allocator) const {
@@ -651,33 +651,38 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   }
 
   void Dump(std::ostream& stream) const {
-    stream << "ranges: { ";
-    LiveRange* current = first_range_;
-    while (current != nullptr) {
-      current->Dump(stream);
-      stream << " ";
-      current = current->GetNext();
+    stream << "ranges:[";
+    for (LiveRange* range = first_range_; range != nullptr; range = range->GetNext()) {
+      if (range != first_range_) {
+        stream << ",";
+      }
+      range->Dump(stream);
     }
-    stream << "}, uses: { ";
-    UsePosition* use = first_use_;
-    if (use != nullptr) {
-      do {
+    stream << "]";
+    if (first_use_ != nullptr) {
+      stream << " uses:[";
+      for (UsePosition* use = first_use_; use != nullptr; use = use->GetNext()) {
+        if (use != first_use_) {
+          stream << ",";
+        }
         use->Dump(stream);
-        stream << " ";
-      } while ((use = use->GetNext()) != nullptr);
+      }
+      stream << "]";
     }
-    stream << "}, { ";
-    use = first_env_use_;
-    if (use != nullptr) {
-      do {
+    if (first_env_use_ != nullptr) {
+      stream << " env_uses:[";
+      for (UsePosition* use = first_env_use_; use != nullptr; use = use->GetNext()) {
+        if (use != first_env_use_) {
+          stream << ",";
+        }
         use->Dump(stream);
-        stream << " ";
-      } while ((use = use->GetNext()) != nullptr);
+      }
+      stream << "]";
     }
-    stream << "}";
-    stream << " is_fixed: " << is_fixed_ << ", is_split: " << IsSplit();
-    stream << " is_low: " << IsLowInterval();
-    stream << " is_high: " << IsHighInterval();
+    stream << " is_fixed:" << IsFixed();
+    stream << " is_split:" << IsSplit();
+    stream << " is_low:" << IsLowInterval();
+    stream << " is_high:" << IsHighInterval();
   }
 
   LiveInterval* GetNextSibling() const { return next_sibling_; }
