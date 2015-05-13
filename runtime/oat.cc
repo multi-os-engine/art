@@ -443,9 +443,17 @@ size_t OatHeader::GetHeaderSize() const {
 }
 
 bool OatHeader::IsPic() const {
-  const char* pic_string = GetStoreValueByKey(OatHeader::kPicKey);
+  return IsKeyEnabled(OatHeader::kPicKey);
+}
+
+bool OatHeader::IsDebuggable() const {
+  return IsKeyEnabled(OatHeader::kDebuggableKey);
+}
+
+bool OatHeader::IsKeyEnabled(const char* key) const {
+  const char* key_value = GetStoreValueByKey(key);
   static const char kTrue[] = "true";
-  return (pic_string != nullptr && strncmp(pic_string, kTrue, sizeof(kTrue)) == 0);
+  return (key_value != nullptr && strncmp(key_value, kTrue, sizeof(kTrue)) == 0);
 }
 
 void OatHeader::Flatten(const SafeMap<std::string, std::string>* key_value_store) {
