@@ -24,7 +24,61 @@
 #include "register_allocator.h"
 #include "ssa_liveness_analysis.h"
 
+#include <cctype>
+#include <sstream>
+
 namespace art {
+
+template <typename T>
+static void PrintToStream(std::ostream& stream, T& value) {
+  stream << value;
+}
+
+template<typename T, typename... Args>
+static void PrintToStream(std::ostream& stream, T& first_value, Args&&... other_values) {
+  stream << first_value;
+  PrintToStream(stream, other_values...);
+}
+
+template<typename... Args>
+static std::string ToString(Args&&... content) {
+  std::ostringstream sstream;
+  PrintToStream(sstream, content...);
+  return sstream.str();
+}
+
+template<typename... Args>
+static bool HasWhitespace(Args&&... args) {
+  std::string str = ToString(args...);
+  return std::any_of(str.begin(), str.end(), isspace);
+}
+
+class StringList {
+ public:
+  StringList() : is_empty_(true) {}
+
+  template<typename... Args>
+  void Add(Args&&... content) {
+    if (is_empty_) {
+      is_empty_ = false;
+    } else {
+      sstream_ << " ";
+    }
+    // TODO: check for comma
+    PrintToStream(sstream_, content...);
+  }
+
+ private:
+  bool is_empty_;
+  std::ostringstream sstream_;
+
+  friend std::ostream& operator<<(std::ostream& os, const StringList& list);
+};
+
+std::ostream& operator<<(std::ostream& os, const StringList& list) {
+  os << "[ " << list.sstream_.str() << " ]";
+  return os;
+}
 
 /**
  * HGraph visitor to generate a file suitable for the c1visualizer tool and IRHydra.
@@ -125,18 +179,28 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     output_<< std::endl;
   }
 
+  template<typename... Args>
+  void PrintAttribute(const char* name, Args&&... args) {
+    if (name == nullptr) {
+      PrintToStream(output_, " ", args...);
+    } else {
+      DCHECK(!HasWhitespace(name));
+      PrintToStream(output_, " ", name, ":", args...);
+    }
+  }
+
   void DumpLocation(Location location) {
     if (location.IsRegister()) {
       codegen_.DumpCoreRegister(output_, location.reg());
     } else if (location.IsFpuRegister()) {
       codegen_.DumpFloatingPointRegister(output_, location.reg());
     } else if (location.IsConstant()) {
-      output_ << "constant";
+      output_ << "#";
       HConstant* constant = location.GetConstant();
       if (constant->IsIntConstant()) {
-        output_ << " " << constant->AsIntConstant()->GetValue();
+        output_ << constant->AsIntConstant()->GetValue();
       } else if (constant->IsLongConstant()) {
-        output_ << " " << constant->AsLongConstant()->GetValue();
+        output_ << constant->AsLongConstant()->GetValue();
       }
     } else if (location.IsInvalid()) {
       output_ << "invalid";
@@ -144,14 +208,14 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       output_ << location.GetStackIndex() << "(sp)";
     } else if (location.IsFpuRegisterPair()) {
       codegen_.DumpFloatingPointRegister(output_, location.low());
-      output_ << " and ";
+      output_ << "|";
       codegen_.DumpFloatingPointRegister(output_, location.high());
     } else if (location.IsRegisterPair()) {
       codegen_.DumpCoreRegister(output_, location.low());
-      output_ << " and ";
+      output_ << "|";
       codegen_.DumpCoreRegister(output_, location.high());
     } else if (location.IsUnallocated()) {
-      output_ << "<U>";
+      output_ << "null";
     } else {
       DCHECK(location.IsDoubleStackSlot());
       output_ << "2x" << location.GetStackIndex() << "(sp)";
@@ -161,40 +225,40 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
   void VisitParallelMove(HParallelMove* instruction) OVERRIDE {
     output_ << " (";
     for (size_t i = 0, e = instruction->NumMoves(); i < e; ++i) {
+      if (i != 0) {
+        output_ << ",";
+      }
       MoveOperands* move = instruction->MoveOperandsAt(i);
       DumpLocation(move->GetSource());
-      output_ << " -> ";
+      output_ << "->";
       DumpLocation(move->GetDestination());
-      if (i + 1 != e) {
-        output_ << ", ";
-      }
     }
     output_ << ")";
-    output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
+    PrintAttribute("liveness", instruction->GetLifetimePosition());
   }
 
   void VisitIntConstant(HIntConstant* instruction) OVERRIDE {
-    output_ << " " << instruction->GetValue();
+    PrintAttribute(nullptr, instruction->GetValue());
   }
 
   void VisitLongConstant(HLongConstant* instruction) OVERRIDE {
-    output_ << " " << instruction->GetValue();
+    PrintAttribute(nullptr, instruction->GetValue());
   }
 
   void VisitFloatConstant(HFloatConstant* instruction) OVERRIDE {
-    output_ << " " << instruction->GetValue();
+    PrintAttribute(nullptr, instruction->GetValue());
   }
 
   void VisitDoubleConstant(HDoubleConstant* instruction) OVERRIDE {
-    output_ << " " << instruction->GetValue();
+    PrintAttribute(nullptr, instruction->GetValue());
   }
 
   void VisitPhi(HPhi* phi) OVERRIDE {
-    output_ << " " << phi->GetRegNumber();
+    PrintAttribute("reg", phi->GetRegNumber());
   }
 
   void VisitMemoryBarrier(HMemoryBarrier* barrier) OVERRIDE {
-    output_ << " " << barrier->GetBarrierKind();
+    PrintAttribute("kind", barrier->GetBarrierKind());
   }
 
   bool IsPass(const char* name) {
@@ -203,65 +267,65 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
 
   void PrintInstruction(HInstruction* instruction) {
     output_ << instruction->DebugName();
-    instruction->Accept(this);
     if (instruction->InputCount() > 0) {
-      output_ << " [ ";
+      StringList list;
       for (HInputIterator inputs(instruction); !inputs.Done(); inputs.Advance()) {
-        output_ << GetTypeId(inputs.Current()->GetType()) << inputs.Current()->GetId() << " ";
+        list.Add(GetTypeId(inputs.Current()->GetType()), inputs.Current()->GetId());
       }
-      output_ << "]";
+      PrintAttribute(nullptr, list);
     }
+    instruction->Accept(this);
     if (instruction->HasEnvironment()) {
-      output_ << " (env:";
+      StringList envs;
       for (HEnvironment* environment = instruction->GetEnvironment();
            environment != nullptr;
            environment = environment->GetParent()) {
-        output_ << " [ ";
+        StringList vregs;
         for (size_t i = 0, e = environment->Size(); i < e; ++i) {
           HInstruction* insn = environment->GetInstructionAt(i);
           if (insn != nullptr) {
-            output_ << GetTypeId(insn->GetType()) << insn->GetId() << " ";
+            vregs.Add(GetTypeId(insn->GetType()), insn->GetId());
           } else {
-            output_ << " _ ";
+            vregs.Add("null");
           }
         }
-        output_ << "]";
+        envs.Add(vregs);
       }
-      output_ << ")";
+      PrintAttribute("env", envs);
     }
     if (IsPass(SsaLivenessAnalysis::kLivenessPassName)
         && is_after_pass_
         && instruction->GetLifetimePosition() != kNoLifetime) {
-      output_ << " (liveness: " << instruction->GetLifetimePosition();
+      PrintAttribute("liveness", instruction->GetLifetimePosition());
       if (instruction->HasLiveInterval()) {
         output_ << " ";
         const LiveInterval& interval = *instruction->GetLiveInterval();
         interval.Dump(output_);
       }
-      output_ << ")";
     } else if (IsPass(RegisterAllocator::kRegisterAllocatorPassName) && is_after_pass_) {
+      PrintAttribute("liveness", instruction->GetLifetimePosition());
       LocationSummary* locations = instruction->GetLocations();
       if (locations != nullptr) {
-        output_ << " ( ";
+        output_ << " location:[";
         for (size_t i = 0; i < instruction->InputCount(); ++i) {
+          if (i != 0) {
+            output_ << ",";
+          }
           DumpLocation(locations->InAt(i));
-          output_ << " ";
         }
-        output_ << ")";
+        output_ << "]";
         if (locations->Out().IsValid()) {
-          output_ << " -> ";
+          output_ << "->";
           DumpLocation(locations->Out());
         }
       }
-      output_ << " (liveness: " << instruction->GetLifetimePosition() << ")";
     } else if (IsPass(LICM::kLoopInvariantCodeMotionPassName)
                || IsPass(HDeadCodeElimination::kFinalDeadCodeEliminationPassName)) {
-      output_ << " ( loop_header:";
       HLoopInformation* info = instruction->GetBlock()->GetLoopInformation();
       if (info == nullptr) {
-        output_ << "null )";
+        PrintAttribute("loop", "null");
       } else {
-        output_ << "B" << info->GetHeader()->GetBlockId() << " )";
+        PrintAttribute("loop", "B", info->GetHeader()->GetBlockId());
       }
     }
   }
@@ -281,7 +345,7 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       output_ << bci << " " << num_uses << " "
               << GetTypeId(instruction->GetType()) << instruction->GetId() << " ";
       PrintInstruction(instruction);
-      output_ << kEndInstructionMarker << std::endl;
+      output_ << " " << kEndInstructionMarker << std::endl;
     }
   }
 
