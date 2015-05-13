@@ -1058,17 +1058,15 @@ void HBasicBlock::DisconnectAndDelete() {
     }
 
     // Remove this block's entries in the successor's phis.
-    if (successor->predecessors_.Size() == 1u) {
-      // The successor has just one predecessor left. Replace phis with the only
-      // remaining input.
-      for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
-        HPhi* phi = phi_it.Current()->AsPhi();
-        phi->ReplaceWith(phi->InputAt(1 - this_index));
+    for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+      HPhi* phi = phi_it.Current()->AsPhi();
+      phi->RemoveInputAt(this_index);
+
+      HInstruction* only_input = phi->GetOnlyInput();
+      if (only_input != nullptr) {
+        // The phi has just one input left. Remove the phi.
+        phi->ReplaceWith(only_input);
         successor->RemovePhi(phi);
-      }
-    } else {
-      for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
-        phi_it.Current()->AsPhi()->RemoveInputAt(this_index);
       }
     }
   }

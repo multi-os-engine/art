@@ -228,13 +228,12 @@
 # CHECK-DAG:     [[Cst7:i\d+]]  IntConstant 7
 #
 # CHECK-DAG:     [[PhiX:i\d+]]  Phi [ [[ArgX]] [[Add7:i\d+]] ]               loop_header:[[HeaderY:B\d+]]
-# CHECK-DAG:     [[PhiZ1:i\d+]] Phi [ [[ArgZ]] [[PhiZ1]] ]                   loop_header:[[HeaderY]]
 # CHECK-DAG:                    If [ [[ArgY]] ]                              loop_header:[[HeaderY]]
 # CHECK-DAG:     [[Add7]]       Add [ [[PhiX]] [[Cst7]] ]                    loop_header:[[HeaderY]]
 #
 #                               ### Inner loop ###
-# CHECK-DAG:     [[PhiZ2:i\d+]] Phi [ [[PhiZ1]] [[XorZ:i\d+]] ]              loop_header:[[HeaderZ:B\d+]]
-# CHECK-DAG:     [[XorZ]]       Xor [ [[PhiZ2]] [[Cst1]] ]                   loop_header:[[HeaderZ]]
+# CHECK-DAG:     [[PhiZ:i\d+]]  Phi [ [[ArgZ]] [[XorZ:i\d+]] ]               loop_header:[[HeaderZ:B\d+]]
+# CHECK-DAG:     [[XorZ]]       Xor [ [[PhiZ]] [[Cst1]] ]                    loop_header:[[HeaderZ]]
 # CHECK-DAG:     [[CondZ:z\d+]] Equal [ [[XorZ]] [[Cst0]] ]                  loop_header:[[HeaderZ]]
 # CHECK-DAG:                    If [ [[CondZ]] ]                             loop_header:[[HeaderZ]]
 #

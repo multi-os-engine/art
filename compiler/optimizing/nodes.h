@@ -3049,6 +3049,24 @@ class HPhi : public HInstruction {
     return nullptr;
   }
 
+  // Returns nullptr unless there is just one non-self input. If that is the
+  // case, the Phi can be safely replaced with that input.
+  HInstruction* GetOnlyInput() {
+    HInstruction* only_input = nullptr;
+    for (size_t i = 0, e = InputCount(); i < e; ++i) {
+      HInstruction* input = InputAt(i);
+      if (input != this) {
+        if (only_input == nullptr) {
+          only_input = input;
+        } else if (only_input != input) {
+          return nullptr;
+        }
+      }
+    }
+    DCHECK(only_input != nullptr);
+    return only_input;
+  }
+
   DECLARE_INSTRUCTION(Phi);
 
  protected:
