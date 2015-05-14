@@ -244,5 +244,25 @@ void Object::CheckFieldAssignmentImpl(MemberOffset field_offset, Object* new_val
   UNREACHABLE();
 }
 
+ArtField* Object::FindFieldByOffset(MemberOffset offset) {
+  const bool is_static = IsClass();
+  for (mirror::Class* klass = is_static ? AsClass() : GetClass(); klass != nullptr;
+       klass = is_static ? nullptr : klass->GetSuperClass()) {
+    uint32_t num_fields = is_static ? klass->NumStaticFields()
+        : klass->NumInstanceFields();
+    if (num_fields == 0) {
+      return nullptr;
+    }
+    for (size_t i = 0; i < num_fields; ++i) {
+      ArtField* field = is_static ? klass->GetStaticField(i) :
+          klass->GetInstanceField(i);
+      if (field->GetOffset().Uint32Value() == offset.Uint32Value()) {
+        return field;
+      }
+    }
+  }
+  return nullptr;
+}
+
 }  // namespace mirror
 }  // namespace art
