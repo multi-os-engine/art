@@ -105,12 +105,14 @@ void dump(std::vector<uint8_t>& code, const char* testname) {
 
   // Assemble the .S
   snprintf(cmd, sizeof(cmd), "%sas %s -o %s.o", toolsdir.c_str(), filename, filename);
-  system(cmd);
+  int cmd_result =  system(cmd);
+  ASSERT_EQ(cmd_result, 0) << strerror(errno);
 
   // Remove the $d symbols to prevent the disassembler dumping the instructions
   // as .word
   snprintf(cmd, sizeof(cmd), "%sobjcopy -N '$d' %s.o %s.oo", toolsdir.c_str(), filename, filename);
-  system(cmd);
+  int cmd_result2 = system(cmd);
+  ASSERT_EQ(cmd_result2, 0) << strerror(errno);
 
   // Disassemble.
 
@@ -119,7 +121,8 @@ void dump(std::vector<uint8_t>& code, const char* testname) {
   if (kPrintResults) {
     // Print the results only, don't check. This is used to generate new output for inserting
     // into the .inc file.
-    system(cmd);
+    int cmd_result3 = system(cmd);
+    ASSERT_EQ(cmd_result3, 0) << strerror(errno);
   } else {
     // Check the results match the appropriate results in the .inc file.
     FILE *fp = popen(cmd, "r");
