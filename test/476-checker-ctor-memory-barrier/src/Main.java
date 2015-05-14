@@ -14,7 +14,6 @@
 * limitations under the License.
 */
 
-
 class ClassWithoutFinals {
   // CHECK-START: void ClassWithoutFinals.<init>() register (after)
   // CHECK-NOT: MemoryBarrier {{StoreStore}}
@@ -80,6 +79,20 @@ class InheritFromClassWithFinals extends ClassWithFinals {
     super(cond);
     // should not inline the super constructor
   }
+
+  // CHECK-START: void InheritFromClassWithFinals.<init>(int) register (after)
+  // CHECK:     MemoryBarrier {{StoreStore}}
+  // CHECK:     MemoryBarrier {{StoreStore}}
+  // CHECK:     ReturnVoid
+
+  // CHECK-START: void InheritFromClassWithFinals.<init>(int) register (after)
+  // CHECK-NOT: InvokeStaticOrDirect
+  public InheritFromClassWithFinals(int unused) {
+    // Should inline the super constructor and insert a memory barrier.
+
+    // Should inline the new instance call and insert another memory barrier.
+    new InheritFromClassWithFinals();
+  }
 }
 
 class HaveFinalsAndInheritFromClassWithFinals extends ClassWithFinals {
@@ -87,14 +100,13 @@ class HaveFinalsAndInheritFromClassWithFinals extends ClassWithFinals {
 
   // CHECK-START: void HaveFinalsAndInheritFromClassWithFinals.<init>() register (after)
   // CHECK:     MemoryBarrier {{StoreStore}}
-  // CHECK:     MemoryBarrier {{StoreStore}}
   // CHECK-NOT: {{.*}}
   // CHECK:     ReturnVoid
 
   // CHECK-START: void HaveFinalsAndInheritFromClassWithFinals.<init>() register (after)
   // CHECK-NOT: InvokeStaticOrDirect
   public HaveFinalsAndInheritFromClassWithFinals() {
-    // Should inline the super constructor.
+    // Should inline the super constructor and remove the memory barrier.
     y = 0;
   }
 
@@ -107,6 +119,21 @@ class HaveFinalsAndInheritFromClassWithFinals extends ClassWithFinals {
     super(cond);
     // should not inline the super constructor
     y = 0;
+  }
+
+  // CHECK-START: void HaveFinalsAndInheritFromClassWithFinals.<init>(int) register (after)
+  // CHECK:     MemoryBarrier {{StoreStore}}
+  // CHECK:     MemoryBarrier {{StoreStore}}
+  // CHECK:     ReturnVoid
+
+  // CHECK-START: void HaveFinalsAndInheritFromClassWithFinals.<init>(int) register (after)
+  // CHECK-NOT: InvokeStaticOrDirect
+  public HaveFinalsAndInheritFromClassWithFinals(int unused) {
+    // Should inline the super constructor and keep just one memory barrier.
+    y = 0;
+
+    // Should inline new instance and keep one barrier.
+    new HaveFinalsAndInheritFromClassWithFinals();
   }
 }
 
