@@ -785,6 +785,20 @@ static void UnstartedStringCharAt(
   result->SetC(string->CharAt(index));
 }
 
+// This allows setting chars from the new style of String objects during compilation.
+static void UnstartedStringSetCharAt(
+    Thread* self, ShadowFrame* shadow_frame, JValue* result ATTRIBUTE_UNUSED, size_t arg_offset)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  jint index = shadow_frame->GetVReg(arg_offset + 1);
+  jchar c = shadow_frame->GetVReg(arg_offset + 2);
+  mirror::String* string = shadow_frame->GetVRegReference(arg_offset)->AsString();
+  if (string == nullptr) {
+    AbortTransactionOrFail(self, "String.setCharAt with null object");
+    return;
+  }
+  string->SetCharAt(index, c);
+}
+
 // This allows creating the new style of String objects during compilation.
 static void UnstartedStringFactoryNewStringFromChars(
     Thread* self, ShadowFrame* shadow_frame, JValue* result, size_t arg_offset)
@@ -800,6 +814,23 @@ static void UnstartedStringFactoryNewStringFromChars(
 }
 
 // This allows creating the new style of String objects during compilation.
+static void UnstartedStringFactoryNewStringFromString(
+    Thread* self, ShadowFrame* shadow_frame, JValue* result, size_t arg_offset)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::String* to_copy = shadow_frame->GetVRegReference(arg_offset)->AsString();
+  if (to_copy == nullptr) {
+    AbortTransactionOrFail(self, "StringFactory.newStringFromString with null object");
+    return;
+  }
+  StackHandleScope<1> hs(self);
+  Handle<mirror::String> h_string(hs.NewHandle(to_copy));
+  Runtime* runtime = Runtime::Current();
+  gc::AllocatorType allocator = runtime->GetHeap()->GetCurrentAllocator();
+  result->SetL(mirror::String::AllocFromString<true>(self, h_string->GetLength(), h_string, 0,
+                                                     allocator));
+}
+
+// This allows creating the new style of String objects during compilation.
 static void UnstartedStringFastSubstring(
     Thread* self, ShadowFrame* shadow_frame, JValue* result, size_t arg_offset)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -811,6 +842,18 @@ static void UnstartedStringFastSubstring(
   Runtime* runtime = Runtime::Current();
   gc::AllocatorType allocator = runtime->GetHeap()->GetCurrentAllocator();
   result->SetL(mirror::String::AllocFromString<true>(self, length, h_string, start, allocator));
+}
+
+// This allows getting the char array for new style of String objects during compilation.
+static void UnstartedStringToCharArray(
+    Thread* self, ShadowFrame* shadow_frame, JValue* result, size_t arg_offset)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  mirror::String* string = shadow_frame->GetVRegReference(arg_offset)->AsString();
+  if (string == nullptr) {
+    AbortTransactionOrFail(self, "String.charAt with null object");
+    return;
+  }
+  result->SetL(string->ToCharArray(self));
 }
 
 static void UnstartedJNIVMRuntimeNewUnpaddedArray(Thread* self,
@@ -1141,10 +1184,16 @@ static void UnstartedRuntimeInitializeInvokeHandlers() {
           &UnstartedStringGetCharsNoCheck },
       { "char java.lang.String.charAt(int)",
           &UnstartedStringCharAt },
+      { "void java.lang.String.setCharAt(int, char)",
+          &UnstartedStringSetCharAt },
       { "java.lang.String java.lang.StringFactory.newStringFromChars(int, int, char[])",
           &UnstartedStringFactoryNewStringFromChars },
+      { "java.lang.String java.lang.StringFactory.newStringFromString(java.lang.String)",
+          &UnstartedStringFactoryNewStringFromString },
       { "java.lang.String java.lang.String.fastSubstring(int, int)",
           &UnstartedStringFastSubstring },
+      { "char[] java.lang.String.toCharArray()",
+          &UnstartedStringToCharArray },
   };
 
   for (auto& def : defs) {
