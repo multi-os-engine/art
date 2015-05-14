@@ -39,6 +39,67 @@ namespace art {
 static constexpr int kMaxInlineCodeUnits = 100;
 static constexpr int kDepthLimit = 5;
 
+// Eliminates constructor memory barriers when inlining super invokations.
+class ConstructorBarrierElimination : public HOptimization {
+ public:
+  ConstructorBarrierElimination(HGraph* graph,
+                                OptimizingCompilerStats* stats,
+                                const HInvoke& invoke,
+                                const CompilerDriver& compiler_driver,
+                                const DexCompilationUnit& dex_compilation_unit,
+                                const DexCompilationUnit& outer_dex_compilation_unit)
+      : HOptimization(graph, true, "constructor_barrier_elimination", stats),
+        invoke_(invoke),
+        compiler_driver_(compiler_driver),
+        dex_compilation_unit_(dex_compilation_unit),
+        outer_dex_compilation_unit_(outer_dex_compilation_unit) {}
+
+  void Run() {
+    bool is_super_invokation = dex_compilation_unit_.IsConstructor()
+        && outer_dex_compilation_unit_.IsConstructor()
+        && !invoke_.InputAt(0)->IsNewInstance();
+
+    if (!is_super_invokation) {
+      return;
+    }
+
+    Thread* self = Thread::Current();
+    bool requires_barrier = compiler_driver_.RequiresConstructorBarrier(self,
+        dex_compilation_unit_.GetDexFile(),
+        dex_compilation_unit_.GetClassDefIndex());
+    bool outer_requires_barrier = compiler_driver_.RequiresConstructorBarrier(self,
+        outer_dex_compilation_unit_.GetDexFile(),
+        outer_dex_compilation_unit_.GetClassDefIndex());
+
+    if (!requires_barrier || !outer_requires_barrier) {
+      return;
+    }
+
+    HReversePostOrderIterator it(*graph_);
+    it.Advance();  // Past the entry block, it does not contain MemoryBarriers.
+    for (; !it.Done(); it.Advance()) {
+      HBasicBlock* block = it.Current();
+      for (HInstructionIterator instr_it(block->GetInstructions());
+          !instr_it.Done();
+          instr_it.Advance()) {
+        HInstruction* current = instr_it.Current();
+        if (current->IsMemoryBarrier()) {
+          block->RemoveInstruction(current);
+          MaybeRecordStat(kRemovedConstructorBarrier);
+        }
+      }
+    }
+  }
+
+ private:
+  const HInvoke& invoke_;
+  const CompilerDriver& compiler_driver_;
+  const DexCompilationUnit& dex_compilation_unit_;
+  const DexCompilationUnit& outer_dex_compilation_unit_;
+
+  DISALLOW_COPY_AND_ASSIGN(ConstructorBarrierElimination);
+};
+
 void HInliner::Run() {
   if (graph_->IsDebuggable()) {
     // For simplicity, we currently never inline when the graph is debuggable. This avoids
@@ -207,11 +268,15 @@ bool HInliner::TryBuildAndInline(Handle<mirror::ArtMethod> resolved_method,
   HDeadCodeElimination dce(callee_graph, stats_);
   HConstantFolding fold(callee_graph);
   InstructionSimplifier simplify(callee_graph, stats_);
+  ConstructorBarrierElimination constructor_barrier_elimination(
+      callee_graph, stats_, *invoke_instruction, *compiler_driver_,
+      dex_compilation_unit, outer_compilation_unit_);
 
   HOptimization* optimizations[] = {
     &dce,
     &fold,
     &simplify,
+    &constructor_barrier_elimination,
   };
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {

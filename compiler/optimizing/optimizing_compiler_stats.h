@@ -50,6 +50,7 @@ enum MethodCompilationStat {
   kNotOptimizedRegisterAllocator,
   kNotOptimizedTryCatch,
   kRemovedCheckedCast,
+  kRemovedConstructorBarrier,
   kRemovedDeadInstruction,
   kRemovedNullCheck,
   kLastStat
@@ -118,6 +119,7 @@ class OptimizingCompilerStats {
       case kNotOptimizedRegisterAllocator : return "kNotOptimizedRegisterAllocator";
       case kNotOptimizedTryCatch : return "kNotOptimizedTryCatch";
       case kRemovedCheckedCast: return "kRemovedCheckedCast";
+      case kRemovedConstructorBarrier: return "kRemovedConstructorBarrier";
       case kRemovedDeadInstruction: return "kRemovedDeadInstruction";
       case kRemovedNullCheck: return "kRemovedNullCheck";
       default: LOG(FATAL) << "invalid stat";

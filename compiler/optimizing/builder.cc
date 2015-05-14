@@ -551,8 +551,6 @@ static bool RequiresConstructorBarrier(const DexCompilationUnit* cu, const Compi
 
 void HGraphBuilder::BuildReturn(const Instruction& instruction, Primitive::Type type) {
   if (type == Primitive::kPrimVoid) {
-    // Note that we might insert redundant barriers when inlining `super` calls.
-    // TODO: add a data flow analysis to get rid of duplicate barriers.
     if (RequiresConstructorBarrier(dex_compilation_unit_, *compiler_driver_)) {
       current_block_->AddInstruction(new (arena_) HMemoryBarrier(kStoreStore));
     }
