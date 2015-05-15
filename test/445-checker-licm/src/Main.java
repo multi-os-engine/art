@@ -88,16 +88,16 @@ public class Main {
   }
 
   // CHECK-START: int Main.arrayLength(int[]) licm (before)
-  // CHECK-DAG: [[NullCheck:l\d+]] NullCheck ( loop_header:{{B\d+}} )
-  // CHECK-DAG:                    ArrayLength [ [[NullCheck]] ] ( loop_header:{{B\d+}} )
+  // CHECK-DAG: <<NullCheck:l\d+>> NullCheck ( loop_header:{{B\d+}} )
+  // CHECK-DAG:                    ArrayLength [ <<NullCheck>> ] ( loop_header:{{B\d+}} )
 
   // CHECK-START: int Main.arrayLength(int[]) licm (after)
   // CHECK-NOT:                    NullCheck ( loop_header:{{B\d+}} )
   // CHECK-NOT:                    ArrayLength ( loop_header:{{B\d+}} )
 
   // CHECK-START: int Main.arrayLength(int[]) licm (after)
-  // CHECK-DAG: [[NullCheck:l\d+]] NullCheck ( loop_header:null )
-  // CHECK-DAG:                    ArrayLength [ [[NullCheck]] ] ( loop_header:null )
+  // CHECK-DAG: <<NullCheck:l\d+>> NullCheck ( loop_header:null )
+  // CHECK-DAG:                    ArrayLength [ <<NullCheck>> ] ( loop_header:null )
 
   public static int arrayLength(int[] array) {
     int result = 0;
