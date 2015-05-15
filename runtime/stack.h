@@ -36,9 +36,10 @@ namespace mirror {
 }  // namespace mirror
 
 class Context;
-class ShadowFrame;
 class HandleScope;
+class InlineFrameVisitor;
 class ScopedObjectAccess;
+class ShadowFrame;
 class StackVisitor;
 class Thread;
 
@@ -430,15 +431,7 @@ class StackVisitor {
   void WalkStack(bool include_transitions = false)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    if (cur_shadow_frame_ != nullptr) {
-      return cur_shadow_frame_->GetMethod();
-    } else if (cur_quick_frame_ != nullptr) {
-      return cur_quick_frame_->AsMirrorPtr();
-    } else {
-      return nullptr;
-    }
-  }
+  mirror::ArtMethod* GetMethod() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool IsShadowFrame() const {
     return cur_shadow_frame_ != nullptr;
@@ -611,7 +604,7 @@ class StackVisitor {
   }
 
   bool IsInInlinedFrame() const {
-    return false;
+    return current_inlining_depth_ != 0;
   }
 
   uintptr_t GetCurrentQuickFramePc() const {
@@ -712,6 +705,7 @@ class StackVisitor {
   size_t num_frames_;
   // Depth of the frame we're currently at.
   size_t cur_depth_;
+  size_t current_inlining_depth_;
 
  protected:
   Context* const context_;
