@@ -430,6 +430,8 @@ class DexRegisterLocationCatalog {
  */
 class DexRegisterMap {
  public:
+  DexRegisterMap() {}
+
   explicit DexRegisterMap(MemoryRegion region) : region_(region) {}
 
   // Get the surface kind of Dex register `dex_register_number`.
@@ -793,6 +795,8 @@ class InlineInfo {
  */
 class CodeInfo {
  public:
+  CodeInfo() {}
+
   explicit CodeInfo(MemoryRegion region) : region_(region) {}
 
   explicit CodeInfo(const void* data) {
