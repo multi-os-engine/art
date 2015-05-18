@@ -1180,15 +1180,27 @@ ENTRY art_quick_aput_obj
     cbz x2, .Ldo_aput_null
     ldr w3, [x0, #MIRROR_OBJECT_CLASS_OFFSET]            // Heap reference = 32b
                                                          // This also zero-extends to x3
+#ifdef USE_HEAP_POISONING
+    neg w3, w3
+#endif
     ldr w4, [x2, #MIRROR_OBJECT_CLASS_OFFSET]            // Heap reference = 32b
                                                          // This also zero-extends to x4
+#ifdef USE_HEAP_POISONING
+    neg w4, w4
+#endif
     ldr w3, [x3, #MIRROR_CLASS_COMPONENT_TYPE_OFFSET]    // Heap reference = 32b
                                                          // This also zero-extends to x3
+#ifdef USE_HEAP_POISONING
+    neg w3, w3
+#endif
     cmp w3, w4  // value's type == array's component type - trivial assignability
     bne .Lcheck_assignability
 .Ldo_aput:
     add x3, x0, #MIRROR_OBJECT_ARRAY_DATA_OFFSET
                                                          // "Compress" = do nothing
+#ifdef USE_HEAP_POISONING
+    neg w2, w2
+#endif
     str w2, [x3, x1, lsl #2]                             // Heap reference = 32b
     ldr x3, [xSELF, #THREAD_CARD_TABLE_OFFSET]
     lsr x0, x0, #7
@@ -1234,6 +1246,9 @@ ENTRY art_quick_aput_obj
 
     add x3, x0, #MIRROR_OBJECT_ARRAY_DATA_OFFSET
                                                           // "Compress" = do nothing
+#ifdef USE_HEAP_POISONING
+    neg w2, w2
+#endif
     str w2, [x3, x1, lsl #2]                              // Heap reference = 32b
     ldr x3, [xSELF, #THREAD_CARD_TABLE_OFFSET]
     lsr x0, x0, #7
@@ -1468,8 +1483,14 @@ END art_quick_proxy_invoke_handler
 ENTRY art_quick_imt_conflict_trampoline
     ldr    w0, [sp, #0]                                // load caller Method*
     ldr    w0, [x0, #MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET]  // load dex_cache_resolved_methods
+#ifdef USE_HEAP_POISONING
+    neg    w0, w0
+#endif
     add    x0, x0, #MIRROR_OBJECT_ARRAY_DATA_OFFSET    // get starting address of data
     ldr    w0, [x0, xIP1, lsl 2]                       // load the target method
+#ifdef USE_HEAP_POISONING
+    neg    w0, w0
+#endif
     b art_quick_invoke_interface_trampoline
 END art_quick_imt_conflict_trampoline
 

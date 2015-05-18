@@ -642,13 +642,25 @@ ENTRY art_quick_aput_obj
     beqz $a2, .Ldo_aput_null
     nop
     lw $t0, MIRROR_OBJECT_CLASS_OFFSET($a0)
+#ifdef USE_HEAP_POISONING
+    subu $t0, $zero, $t0
+#endif
     lw $t1, MIRROR_OBJECT_CLASS_OFFSET($a2)
+#ifdef USE_HEAP_POISONING
+    subu $t1, $zero, $t1
+#endif
     lw $t0, MIRROR_CLASS_COMPONENT_TYPE_OFFSET($t0)
+#ifdef USE_HEAP_POISONING
+    subu $t0, $zero, $t0
+#endif
     bne $t1, $t0, .Lcheck_assignability  # value's type == array's component type - trivial assignability
     nop
 .Ldo_aput:
     sll $a1, $a1, 2
     add $t0, $a0, $a1
+#ifdef USE_HEAP_POISONING
+    subu $a2, $zero, $a2
+#endif
     sw  $a2, MIRROR_OBJECT_ARRAY_DATA_OFFSET($t0)
     lw  $t0, THREAD_CARD_TABLE_OFFSET(rSELF)
     srl $t1, $a0, 7
@@ -1093,9 +1105,15 @@ END art_quick_proxy_invoke_handler
 ENTRY art_quick_imt_conflict_trampoline
     lw      $a0, 0($sp)            # load caller Method*
     lw      $a0, MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET($a0)  # load dex_cache_resolved_methods
+#ifdef USE_HEAP_POISONING
+    subu    $a0, $zero, $a0
+#endif
     sll     $t0, 2                 # convert target method offset to bytes
     add     $a0, $t0               # get address of target method
     lw      $a0, MIRROR_OBJECT_ARRAY_DATA_OFFSET($a0)  # load the target method
+#ifdef USE_HEAP_POISONING
+    subu    $a0, $zero, $a0
+#endif
     la      $t9, art_quick_invoke_interface_trampoline
     jalr    $zero, $t9
 END art_quick_imt_conflict_trampoline

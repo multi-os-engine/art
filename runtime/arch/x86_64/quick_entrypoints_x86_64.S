@@ -921,8 +921,14 @@ DEFINE_FUNCTION art_quick_alloc_object_tlab
     // RDI: uint32_t type_idx, RSI: ArtMethod*
     // RDX, RCX, R8, R9: free. RAX: return val.
     movl MIRROR_ART_METHOD_DEX_CACHE_TYPES_OFFSET(%rsi), %edx  // Load dex cache resolved types array
+#ifdef USE_HEAP_POISONING
+    negl %edx
+#endif
                                                                // Load the class
     movl MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdx, %rdi, MIRROR_OBJECT_ARRAY_COMPONENT_SIZE), %edx
+#ifdef USE_HEAP_POISONING
+    negl %edx
+#endif
     testl %edx, %edx                                           // Check null class
     jz   .Lart_quick_alloc_object_tlab_slow_path
                                                                // Check class status.
@@ -1191,12 +1197,27 @@ DEFINE_FUNCTION art_quick_aput_obj
     jz .Ldo_aput_null
     movl MIRROR_OBJECT_CLASS_OFFSET(%edi), %ecx
 //  movq MIRROR_OBJECT_CLASS_OFFSET(%rdi), %rcx
+#ifdef USE_HEAP_POISONING
+    negl %ecx
+#endif
     movl MIRROR_CLASS_COMPONENT_TYPE_OFFSET(%ecx), %ecx
 //  movq MIRROR_CLASS_COMPONENT_TYPE_OFFSET(%rcx), %rcx
+#ifdef USE_HEAP_POISONING
+    negl %ecx
+#endif
+#ifdef USE_HEAP_POISONING
+    movl MIRROR_OBJECT_CLASS_OFFSET(%edx), %eax  // rax is free.
+    negl %eax
+    cmpl %eax, %ecx  // value's type == array's component type - trivial assignability
+#else
     cmpl MIRROR_OBJECT_CLASS_OFFSET(%edx), %ecx // value's type == array's component type - trivial assignability
 //  cmpq MIRROR_CLASS_OFFSET(%rdx), %rcx
+#endif
     jne .Lcheck_assignability
 .Ldo_aput:
+#ifdef USE_HEAP_POISONING
+    negl %edx
+#endif
     movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
 //  movq %rdx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
     movq %gs:THREAD_CARD_TABLE_OFFSET, %rdx
@@ -1219,6 +1240,9 @@ DEFINE_FUNCTION art_quick_aput_obj
 
                                   // "Uncompress" = do nothing, as already zero-extended on load.
     movl MIRROR_OBJECT_CLASS_OFFSET(%edx), %esi // Pass arg2 = value's class.
+#ifdef USE_HEAP_POISONING
+    negl %esi
+#endif
     movq %rcx, %rdi               // Pass arg1 = array's component type.
 
     call SYMBOL(artIsAssignableFromCode)  // (Class* a, Class* b)
@@ -1235,6 +1259,9 @@ DEFINE_FUNCTION art_quick_aput_obj
     POP  rsi
     POP  rdi
 
+#ifdef USE_HEAP_POISONING
+    negl %edx
+#endif
     movl %edx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%edi, %esi, 4)
 //  movq %rdx, MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rsi, 4)
     movq %gs:THREAD_CARD_TABLE_OFFSET, %rdx
@@ -1340,7 +1367,13 @@ DEFINE_FUNCTION art_quick_imt_conflict_trampoline
 #else
     movl 8(%rsp), %edi            // load caller Method*
     movl MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET(%rdi), %edi  // load dex_cache_resolved_methods
+#ifdef USE_HEAP_POISONING
+    negl %edi
+#endif
     movl MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdi, %rax, 4), %edi  // load the target method
+#ifdef USE_HEAP_POISONING
+    negl %edi
+#endif
     jmp art_quick_invoke_interface_trampoline
 #endif  // __APPLE__
 END_FUNCTION art_quick_imt_conflict_trampoline
