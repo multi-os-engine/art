@@ -142,6 +142,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
         dex_file_(dex_file),
         method_idx_(method_idx),
         invoke_type_(invoke_type),
+        in_ssa_form_(false),
         should_generate_constructor_barrier_(should_generate_constructor_barrier),
         cached_null_constant_(nullptr),
         cached_int_constants_(std::less<int32_t>(), arena->Adapter()),
@@ -172,6 +173,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
     // users remaining when being visited.
     if (!AnalyzeNaturalLoops()) return false;
     TransformToSsa();
+    in_ssa_form_ = true;
     return true;
   }
 
@@ -214,11 +216,16 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
     maximum_number_of_out_vregs_ = new_value;
   }
 
+  void UpdateMaximumNumberOfOutVRegs(uint16_t other_value) {
+    maximum_number_of_out_vregs_ = std::max(maximum_number_of_out_vregs_, other_value);
+  }
+
   void UpdateTemporariesVRegSlots(size_t slots) {
     temporaries_vreg_slots_ = std::max(slots, temporaries_vreg_slots_);
   }
 
   size_t GetTemporariesVRegSlots() const {
+    DCHECK(!in_ssa_form_);
     return temporaries_vreg_slots_;
   }
 
@@ -227,6 +234,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   }
 
   uint16_t GetNumberOfVRegs() const {
+    DCHECK(!in_ssa_form_);
     return number_of_vregs_;
   }
 
@@ -235,6 +243,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   }
 
   uint16_t GetNumberOfLocalVRegs() const {
+    DCHECK(!in_ssa_form_);
     return number_of_vregs_ - number_of_in_vregs_;
   }
 
@@ -376,6 +385,11 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   // If inlined, this encodes how the callee is being invoked.
   const InvokeType invoke_type_;
+
+  // Whether the graph has been transformed to SSA form. Only used
+  // in debug mode to ensure we are not using properties only valid
+  // for non-SSA form (like the number of temporaries).
+  bool in_ssa_form_;
 
   const bool should_generate_constructor_barrier_;
 
@@ -1114,14 +1128,16 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
                const DexFile& dex_file,
                uint32_t method_idx,
                uint32_t dex_pc,
-               InvokeType invoke_type)
+               InvokeType invoke_type,
+               HInstruction* holder)
      : vregs_(arena, number_of_vregs),
        locations_(arena, number_of_vregs),
        parent_(nullptr),
        dex_file_(dex_file),
        method_idx_(method_idx),
        dex_pc_(dex_pc),
-       invoke_type_(invoke_type) {
+       invoke_type_(invoke_type),
+       holder_(holder) {
     vregs_.SetSize(number_of_vregs);
     for (size_t i = 0; i < number_of_vregs; i++) {
       vregs_.Put(i, HUserRecord<HEnvironment*>());
@@ -1133,19 +1149,24 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
     }
   }
 
-  HEnvironment(ArenaAllocator* arena, const HEnvironment& to_copy)
+  HEnvironment(ArenaAllocator* arena, const HEnvironment& to_copy, HInstruction* holder)
       : HEnvironment(arena,
                      to_copy.Size(),
                      to_copy.GetDexFile(),
                      to_copy.GetMethodIdx(),
                      to_copy.GetDexPc(),
-                     to_copy.GetInvokeType()) {}
+                     to_copy.GetInvokeType(),
+                     holder) {}
 
   void SetAndCopyParentChain(ArenaAllocator* allocator, HEnvironment* parent) {
-    parent_ = new (allocator) HEnvironment(allocator, *parent);
-    parent_->CopyFrom(parent);
-    if (parent->GetParent() != nullptr) {
-      parent_->SetAndCopyParentChain(allocator, parent->GetParent());
+    if (parent_ != nullptr) {
+      parent_->SetAndCopyParentChain(allocator, parent);
+    } else {
+      parent_ = new (allocator) HEnvironment(allocator, *parent, holder_);
+      parent_->CopyFrom(parent);
+      if (parent->GetParent() != nullptr) {
+        parent_->SetAndCopyParentChain(allocator, parent->GetParent());
+      }
     }
   }
 
@@ -1195,6 +1216,10 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
     return dex_file_;
   }
 
+  HInstruction* GetHolder() const {
+    return holder_;
+  }
+
  private:
   // Record instructions' use entries of this environment for constant-time removal.
   // It should only be called by HInstruction when a new environment use is added.
@@ -1211,6 +1236,10 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
   const uint32_t method_idx_;
   const uint32_t dex_pc_;
   const InvokeType invoke_type_;
+
+  // The instruction that holds this environment. Only used in debug mode
+  // to ensure the graph is consistent.
+  HInstruction* const holder_;
 
   friend class HInstruction;
 
@@ -1418,13 +1447,18 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   HEnvironment* GetEnvironment() const { return environment_; }
   // Set the `environment_` field. Raw because this method does not
   // update the uses lists.
-  void SetRawEnvironment(HEnvironment* environment) { environment_ = environment; }
+  void SetRawEnvironment(HEnvironment* environment) {
+    DCHECK(environment_ == nullptr);
+    DCHECK_EQ(environment->GetHolder(), this);
+    environment_ = environment;
+  }
 
   // Set the environment of this instruction, copying it from `environment`. While
   // copying, the uses lists are being updated.
   void CopyEnvironmentFrom(HEnvironment* environment) {
+    DCHECK(environment_ == nullptr);
     ArenaAllocator* allocator = GetBlock()->GetGraph()->GetArena();
-    environment_ = new (allocator) HEnvironment(allocator, *environment);
+    environment_ = new (allocator) HEnvironment(allocator, *environment, this);
     environment_->CopyFrom(environment);
     if (environment->GetParent() != nullptr) {
       environment_->SetAndCopyParentChain(allocator, environment->GetParent());
@@ -1433,8 +1467,9 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
 
   void CopyEnvironmentFromWithLoopPhiAdjustment(HEnvironment* environment,
                                                 HBasicBlock* block) {
+    DCHECK(environment_ == nullptr);
     ArenaAllocator* allocator = GetBlock()->GetGraph()->GetArena();
-    environment_ = new (allocator) HEnvironment(allocator, *environment);
+    environment_ = new (allocator) HEnvironment(allocator, *environment, this);
     environment_->CopyFromWithLoopPhiAdjustment(environment, block);
     if (environment->GetParent() != nullptr) {
       environment_->SetAndCopyParentChain(allocator, environment->GetParent());
@@ -2399,6 +2434,12 @@ class HInvoke : public HInstruction {
   void SetIntrinsic(Intrinsics intrinsic) {
     intrinsic_ = intrinsic;
   }
+
+  bool IsInlined() const {
+    return GetEnvironment()->GetParent() != nullptr;
+  }
+
+  bool CanThrow() const OVERRIDE { return true; }
 
   DECLARE_INSTRUCTION(Invoke);
 
