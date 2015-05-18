@@ -300,7 +300,25 @@ class QuickArgumentVisitor {
   static uint32_t GetCallingDexPc(StackReference<mirror::ArtMethod>* sp)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     DCHECK(sp->AsMirrorPtr()->IsCalleeSaveMethod());
-    return GetCallingMethod(sp)->ToDexPc(QuickArgumentVisitor::GetCallingPc(sp));
+    const size_t callee_frame_size = GetCalleeSaveFrameSize(kRuntimeISA, Runtime::kRefsAndArgs);
+    auto* caller_sp = reinterpret_cast<StackReference<mirror::ArtMethod>*>(
+          reinterpret_cast<uintptr_t>(sp) + callee_frame_size);
+    mirror::ArtMethod* outer_method = caller_sp->AsMirrorPtr();
+    uintptr_t outer_pc = QuickArgumentVisitor::GetCallingPc(sp);
+    uintptr_t outer_pc_offset = outer_method->NativeQuickPcOffset(outer_pc);
+
+    if (outer_method->IsOptimized(sizeof(void*))) {
+      CodeInfo code_info = outer_method->GetOptimizedCodeInfo();
+      StackMap stack_map = code_info.GetStackMapForNativePcOffset(outer_pc_offset);
+      if (stack_map.HasInlineInfo(code_info)) {
+        InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map);
+        return inline_info.GetDexPcAtDepth(inline_info.GetDepth() - 1);
+      } else {
+        return stack_map.GetDexPc(code_info);
+      }
+    } else {
+      return outer_method->ToDexPc(outer_pc);
+    }
   }
 
   // For the given quick ref and args quick frame, return the caller's PC.
