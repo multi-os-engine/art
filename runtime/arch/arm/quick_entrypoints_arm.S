@@ -616,12 +616,24 @@ END art_quick_aput_obj_with_bound_check
 ENTRY art_quick_aput_obj
     cbz r2, .Ldo_aput_null
     ldr r3, [r0, #MIRROR_OBJECT_CLASS_OFFSET]
+#ifdef USE_HEAP_POISONING
+    rsb r3, r3, #0
+#endif
     ldr ip, [r2, #MIRROR_OBJECT_CLASS_OFFSET]
+#ifdef USE_HEAP_POISONING
+    rsb ip, ip, #0
+#endif
     ldr r3, [r3, #MIRROR_CLASS_COMPONENT_TYPE_OFFSET]
+#ifdef USE_HEAP_POISONING
+    rsb r3, r3, #0
+#endif
     cmp r3, ip  @ value's type == array's component type - trivial assignability
     bne .Lcheck_assignability
 .Ldo_aput:
     add r3, r0, #MIRROR_OBJECT_ARRAY_DATA_OFFSET
+#ifdef USE_HEAP_POISONING
+    rsb r2, r2, #0
+#endif
     str r2, [r3, r1, lsl #2]
     ldr r3, [r9, #THREAD_CARD_TABLE_OFFSET]
     lsr r0, r0, #7
@@ -649,6 +661,9 @@ ENTRY art_quick_aput_obj
     .cfi_restore lr
     .cfi_adjust_cfa_offset -16
     add r3, r0, #MIRROR_OBJECT_ARRAY_DATA_OFFSET
+#ifdef USE_HEAP_POISONING
+    rsb r2, r2, #0
+#endif
     str r2, [r3, r1, lsl #2]
     ldr r3, [r9, #THREAD_CARD_TABLE_OFFSET]
     lsr r0, r0, #7
@@ -892,8 +907,14 @@ END art_quick_proxy_invoke_handler
 ENTRY art_quick_imt_conflict_trampoline
     ldr    r0, [sp, #0]            @ load caller Method*
     ldr    r0, [r0, #MIRROR_ART_METHOD_DEX_CACHE_METHODS_OFFSET]  @ load dex_cache_resolved_methods
+#ifdef USE_HEAP_POISONING
+    rsb    r0, r0, #0
+#endif
     add    r0, #MIRROR_OBJECT_ARRAY_DATA_OFFSET  @ get starting address of data
     ldr    r0, [r0, r12, lsl 2]    @ load the target method
+#ifdef USE_HEAP_POISONING
+    rsb    r0, r0, #0
+#endif
     b art_quick_invoke_interface_trampoline
 END art_quick_imt_conflict_trampoline
 
