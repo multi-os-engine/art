@@ -20,82 +20,20 @@
 #include "JniConstants.h"
 #include "ScopedBytes.h"
 #include "ScopedPrimitiveArray.h"
+#include "mirror/array.h"
+#include "mirror/object.h"
+#include "byte_swap_utils-inl.h"
+#include "scoped_fast_native_object_access.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 
-#if defined(__APPLE__)
-#include <libkern/OSByteOrder.h>
-#define bswap_16 OSSwapInt16
-#define bswap_32 OSSwapInt32
-#define bswap_64 OSSwapInt64
-#else
-#include <byteswap.h>
-#endif
+namespace art {
 
-// Use packed structures for access to unaligned data on targets with alignment restrictions.
-// The compiler will generate appropriate code to access these structures without
-// generating alignment exceptions.
-template <typename T> static inline T get_unaligned(const T* address) {
-  struct unaligned { T v; } __attribute__ ((packed));
-  const unaligned* p = reinterpret_cast<const unaligned*>(address);
-  return p->v;
-}
-
-template <typename T> static inline void put_unaligned(T* address, T v) {
-  struct unaligned { T v; } __attribute__ ((packed));
-  unaligned* p = reinterpret_cast<unaligned*>(address);
-  p->v = v;
-}
-
-template <typename T> static T cast(jlong address) {
+template <typename T> static ALWAYS_INLINE T cast(jlong address) {
   return reinterpret_cast<T>(static_cast<uintptr_t>(address));
-}
-
-// Byte-swap 2 jshort values packed in a jint.
-static inline jint bswap_2x16(jint v) {
-  // v is initially ABCD
-#if defined(__mips__) && defined(__mips_isa_rev) && (__mips_isa_rev >= 2)
-  __asm__ volatile ("wsbh %0, %0" : "+r" (v)); // v=BADC
-#else
-  v = bswap_32(v);                          // v=DCBA
-  v = (v << 16) | ((v >> 16) & 0xffff);     // v=BADC
-#endif
-  return v;
-}
-
-static inline void swapShorts(jshort* dstShorts, const jshort* srcShorts, size_t count) {
-  // Do 32-bit swaps as long as possible...
-  jint* dst = reinterpret_cast<jint*>(dstShorts);
-  const jint* src = reinterpret_cast<const jint*>(srcShorts);
-  for (size_t i = 0; i < count / 2; ++i) {
-    jint v = get_unaligned<jint>(src++);
-    put_unaligned<jint>(dst++, bswap_2x16(v));
-  }
-  if ((count % 2) != 0) {
-    jshort v = get_unaligned<jshort>(reinterpret_cast<const jshort*>(src));
-    put_unaligned<jshort>(reinterpret_cast<jshort*>(dst), bswap_16(v));
-  }
-}
-
-static inline void swapInts(jint* dstInts, const jint* srcInts, size_t count) {
-  for (size_t i = 0; i < count; ++i) {
-    jint v = get_unaligned<int>(srcInts++);
-    put_unaligned<jint>(dstInts++, bswap_32(v));
-  }
-}
-
-static inline void swapLongs(jlong* dstLongs, const jlong* srcLongs, size_t count) {
-  jint* dst = reinterpret_cast<jint*>(dstLongs);
-  const jint* src = reinterpret_cast<const jint*>(srcLongs);
-  for (size_t i = 0; i < count; ++i) {
-    jint v1 = get_unaligned<jint>(src++);
-    jint v2 = get_unaligned<jint>(src++);
-    put_unaligned<jint>(dst++, bswap_32(v2));
-    put_unaligned<jint>(dst++, bswap_32(v1));
-  }
 }
 
 static void Memory_memmove(JNIEnv* env, jclass, jobject dstObject, jint dstOffset, jobject srcObject, jint srcOffset, jlong length) {
@@ -140,27 +78,27 @@ static void Memory_peekByteArray(JNIEnv* env, jclass, jlong srcAddress, jbyteArr
 }
 
 static void Memory_peekCharArray(JNIEnv* env, jclass, jlong srcAddress, jcharArray dst, jint dstOffset, jint count, jboolean swap) {
-  PEEKER(jchar, Char, jshort, swapShorts);
+  PEEKER(jchar, Char, jshort, SwapShorts);
 }
 
 static void Memory_peekDoubleArray(JNIEnv* env, jclass, jlong srcAddress, jdoubleArray dst, jint dstOffset, jint count, jboolean swap) {
-  PEEKER(jdouble, Double, jlong, swapLongs);
+  PEEKER(jdouble, Double, jlong, SwapLongs);
 }
 
 static void Memory_peekFloatArray(JNIEnv* env, jclass, jlong srcAddress, jfloatArray dst, jint dstOffset, jint count, jboolean swap) {
-  PEEKER(jfloat, Float, jint, swapInts);
+  PEEKER(jfloat, Float, jint, SwapInts);
 }
 
 static void Memory_peekIntArray(JNIEnv* env, jclass, jlong srcAddress, jintArray dst, jint dstOffset, jint count, jboolean swap) {
-  PEEKER(jint, Int, jint, swapInts);
+  PEEKER(jint, Int, jint, SwapInts);
 }
 
 static void Memory_peekLongArray(JNIEnv* env, jclass, jlong srcAddress, jlongArray dst, jint dstOffset, jint count, jboolean swap) {
-  PEEKER(jlong, Long, jlong, swapLongs);
+  PEEKER(jlong, Long, jlong, SwapLongs);
 }
 
 static void Memory_peekShortArray(JNIEnv* env, jclass, jlong srcAddress, jshortArray dst, jint dstOffset, jint count, jboolean swap) {
-  PEEKER(jshort, Short, jshort, swapShorts);
+  PEEKER(jshort, Short, jshort, SwapShorts);
 }
 
 static void Memory_pokeByte(JNIEnv*, jclass, jlong dstAddress, jbyte value) {
@@ -192,51 +130,51 @@ static void Memory_pokeByteArray(JNIEnv* env, jclass, jlong dstAddress, jbyteArr
 }
 
 static void Memory_pokeCharArray(JNIEnv* env, jclass, jlong dstAddress, jcharArray src, jint srcOffset, jint count, jboolean swap) {
-  POKER(jchar, Char, jshort, swapShorts);
+  POKER(jchar, Char, jshort, SwapShorts);
 }
 
 static void Memory_pokeDoubleArray(JNIEnv* env, jclass, jlong dstAddress, jdoubleArray src, jint srcOffset, jint count, jboolean swap) {
-  POKER(jdouble, Double, jlong, swapLongs);
+  POKER(jdouble, Double, jlong, SwapLongs);
 }
 
 static void Memory_pokeFloatArray(JNIEnv* env, jclass, jlong dstAddress, jfloatArray src, jint srcOffset, jint count, jboolean swap) {
-  POKER(jfloat, Float, jint, swapInts);
+  POKER(jfloat, Float, jint, SwapInts);
 }
 
 static void Memory_pokeIntArray(JNIEnv* env, jclass, jlong dstAddress, jintArray src, jint srcOffset, jint count, jboolean swap) {
-  POKER(jint, Int, jint, swapInts);
+  POKER(jint, Int, jint, SwapInts);
 }
 
 static void Memory_pokeLongArray(JNIEnv* env, jclass, jlong dstAddress, jlongArray src, jint srcOffset, jint count, jboolean swap) {
-  POKER(jlong, Long, jlong, swapLongs);
+  POKER(jlong, Long, jlong, SwapLongs);
 }
 
 static void Memory_pokeShortArray(JNIEnv* env, jclass, jlong dstAddress, jshortArray src, jint srcOffset, jint count, jboolean swap) {
-  POKER(jshort, Short, jshort, swapShorts);
+  POKER(jshort, Short, jshort, SwapShorts);
 }
 
 static jshort Memory_peekShortNative(JNIEnv*, jclass, jlong srcAddress) {
-  return get_unaligned<jshort>(cast<const jshort*>(srcAddress));
+  return GetUnaligned<jshort>(cast<const jshort*>(srcAddress));
 }
 
 static void Memory_pokeShortNative(JNIEnv*, jclass, jlong dstAddress, jshort value) {
-  put_unaligned<jshort>(cast<jshort*>(dstAddress), value);
+  PutUnaligned<jshort>(cast<jshort*>(dstAddress), value);
 }
 
 static jint Memory_peekIntNative(JNIEnv*, jclass, jlong srcAddress) {
-  return get_unaligned<jint>(cast<const jint*>(srcAddress));
+  return GetUnaligned<jint>(cast<const jint*>(srcAddress));
 }
 
 static void Memory_pokeIntNative(JNIEnv*, jclass, jlong dstAddress, jint value) {
-  put_unaligned<jint>(cast<jint*>(dstAddress), value);
+  PutUnaligned<jint>(cast<jint*>(dstAddress), value);
 }
 
 static jlong Memory_peekLongNative(JNIEnv*, jclass, jlong srcAddress) {
-  return get_unaligned<jlong>(cast<const jlong*>(srcAddress));
+  return GetUnaligned<jlong>(cast<const jlong*>(srcAddress));
 }
 
 static void Memory_pokeLongNative(JNIEnv*, jclass, jlong dstAddress, jlong value) {
-  put_unaligned<jlong>(cast<jlong*>(dstAddress), value);
+  PutUnaligned<jlong>(cast<jlong*>(dstAddress), value);
 }
 
 static void unsafeBulkCopy(jbyte* dst, const jbyte* src, jint byteCount,
@@ -249,15 +187,15 @@ static void unsafeBulkCopy(jbyte* dst, const jbyte* src, jint byteCount,
   if (sizeofElement == 2) {
     jshort* dstShorts = reinterpret_cast<jshort*>(dst);
     const jshort* srcShorts = reinterpret_cast<const jshort*>(src);
-    swapShorts(dstShorts, srcShorts, byteCount / 2);
+    SwapShorts(dstShorts, srcShorts, byteCount / 2);
   } else if (sizeofElement == 4) {
     jint* dstInts = reinterpret_cast<jint*>(dst);
     const jint* srcInts = reinterpret_cast<const jint*>(src);
-    swapInts(dstInts, srcInts, byteCount / 4);
+    SwapInts(dstInts, srcInts, byteCount / 4);
   } else if (sizeofElement == 8) {
     jlong* dstLongs = reinterpret_cast<jlong*>(dst);
     const jlong* srcLongs = reinterpret_cast<const jlong*>(src);
-    swapLongs(dstLongs, srcLongs, byteCount / 8);
+    SwapLongs(dstLongs, srcLongs, byteCount / 8);
   }
 }
 
@@ -295,6 +233,72 @@ static void Memory_unsafeBulkPut(JNIEnv* env, jclass, jbyteArray dstArray, jint 
   env->ReleasePrimitiveArrayCritical(srcArray, srcBytes, 0);
 }
 
+static jint Memory_peekInt(JNIEnv* env, jclass, jbyteArray srcArray, jint srcOffset,
+                          jboolean swap) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Array* src = soa.Decode<mirror::Array*>(srcArray);
+  const void* ptr = src->GetRawData(1U /* component_size */, srcOffset);
+  const jint value = GetUnaligned<jint>(reinterpret_cast<const jint*>(ptr));
+  if (swap == JNI_FALSE) {
+    return value;
+  } else {
+    return bswap_32(value);
+  }
+}
+
+static jlong Memory_peekLong(JNIEnv* env, jclass, jbyteArray srcArray, jint srcOffset,
+                             jboolean swap) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Array* src = soa.Decode<mirror::Array*>(srcArray);
+  const void* ptr = src->GetRawData(1U /* component_size */, srcOffset);
+  const jlong value = GetUnaligned<jlong>(reinterpret_cast<const jlong*>(ptr));
+  if (swap == JNI_FALSE) {
+    return value;
+  } else {
+    return bswap_64(value);
+  }
+}
+
+static jshort Memory_peekShort(JNIEnv* env, jclass, jbyteArray srcArray, jint srcOffset,
+                              jboolean swap) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Array* src = soa.Decode<mirror::Array*>(srcArray);
+  const void* ptr = src->GetRawData(1U /* component_size */, srcOffset);
+  const jshort value = GetUnaligned<jshort>(reinterpret_cast<const jshort*>(ptr));
+  if (swap == JNI_FALSE) {
+    return value;
+  } else {
+    return bswap_16(value);
+  }
+}
+
+static void Memory_pokeInt(JNIEnv* env, jclass, jbyteArray dstArray, jint dstOffset,
+                           jint value, jboolean swap) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Array* src = soa.Decode<mirror::Array*>(dstArray);
+  void* ptr = src->GetRawData(1U /* component_size */, dstOffset);
+
+  PutUnaligned<jint>(reinterpret_cast<jint*>(ptr), (swap == JNI_FALSE) ? value : bswap_32(value));
+}
+
+static void Memory_pokeLong(JNIEnv* env, jclass, jbyteArray dstArray, jint dstOffset,
+                            jlong value, jboolean swap) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Array* src = soa.Decode<mirror::Array*>(dstArray);
+  void* ptr = src->GetRawData(1U /* component_size */, dstOffset);
+
+  PutUnaligned<jlong>(reinterpret_cast<jlong*>(ptr), (swap == JNI_FALSE) ? value : bswap_64(value));
+}
+
+static void Memory_pokeShort(JNIEnv* env, jclass, jbyteArray dstArray, jint dstOffset,
+                             jshort value, jboolean swap) {
+  ScopedFastNativeObjectAccess soa(env);
+  mirror::Array* src = soa.Decode<mirror::Array*>(dstArray);
+  void* ptr = src->GetRawData(1U /* component_size */, dstOffset);
+
+  PutUnaligned<jshort>(reinterpret_cast<jshort*>(ptr), (swap == JNI_FALSE) ? value : bswap_16(value));
+}
+
 static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(Memory, memmove, "(Ljava/lang/Object;ILjava/lang/Object;IJ)V"),
   NATIVE_METHOD(Memory, peekByte, "!(J)B"),
@@ -302,28 +306,41 @@ static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(Memory, peekCharArray, "(J[CIIZ)V"),
   NATIVE_METHOD(Memory, peekDoubleArray, "(J[DIIZ)V"),
   NATIVE_METHOD(Memory, peekFloatArray, "(J[FIIZ)V"),
+
+  NATIVE_METHOD(Memory, peekInt, "!([BIZ)I"),
   NATIVE_METHOD(Memory, peekIntNative, "!(J)I"),
   NATIVE_METHOD(Memory, peekIntArray, "(J[IIIZ)V"),
+
+  NATIVE_METHOD(Memory, peekLong, "!([BIZ)J"),
   NATIVE_METHOD(Memory, peekLongNative, "!(J)J"),
   NATIVE_METHOD(Memory, peekLongArray, "(J[JIIZ)V"),
+
+  NATIVE_METHOD(Memory, peekShort, "!([BIZ)S"),
   NATIVE_METHOD(Memory, peekShortNative, "!(J)S"),
   NATIVE_METHOD(Memory, peekShortArray, "(J[SIIZ)V"),
+
   NATIVE_METHOD(Memory, pokeByte, "!(JB)V"),
   NATIVE_METHOD(Memory, pokeByteArray, "(J[BII)V"),
   NATIVE_METHOD(Memory, pokeCharArray, "(J[CIIZ)V"),
   NATIVE_METHOD(Memory, pokeDoubleArray, "(J[DIIZ)V"),
   NATIVE_METHOD(Memory, pokeFloatArray, "(J[FIIZ)V"),
+
+  NATIVE_METHOD(Memory, pokeInt, "!([BIIZ)V"),
   NATIVE_METHOD(Memory, pokeIntNative, "!(JI)V"),
   NATIVE_METHOD(Memory, pokeIntArray, "(J[IIIZ)V"),
+
+  NATIVE_METHOD(Memory, pokeLong, "!([BIJZ)V"),
   NATIVE_METHOD(Memory, pokeLongNative, "!(JJ)V"),
   NATIVE_METHOD(Memory, pokeLongArray, "(J[JIIZ)V"),
+
+  NATIVE_METHOD(Memory, pokeShort, "!([BISZ)V"),
   NATIVE_METHOD(Memory, pokeShortNative, "!(JS)V"),
   NATIVE_METHOD(Memory, pokeShortArray, "(J[SIIZ)V"),
+
   NATIVE_METHOD(Memory, unsafeBulkGet, "(Ljava/lang/Object;II[BIIZ)V"),
   NATIVE_METHOD(Memory, unsafeBulkPut, "([BIILjava/lang/Object;IIZ)V"),
 };
 
-namespace art {
 
 void register_libcore_io_Memory(JNIEnv* env) {
   jniRegisterNativeMethods(env, "libcore/io/Memory", gMethods, NELEM(gMethods));
