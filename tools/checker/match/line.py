@@ -13,77 +13,92 @@
 # limitations under the License.
 
 from common.logger              import Logger
-from file_format.checker.struct import TestAssertion, RegexExpression
+from file_format.checker.struct import RegexExpression
 
 import re
 
-def __isMatchAtStart(match):
-  """ Tests if the given Match occurred at the beginning of the line. """
-  return (match is not None) and (match.start() == 0)
+def nextCheckerWord(expressions):
+  """ Splits list of RegexExpressions at the first separator. """
+  assert expressions
+  word = []
+  while expressions:
+    head, expressions = expressions[0], expressions[1:]
+    if head.variant == RegexExpression.Variant.Separator:
+      return word, expressions
+    else:
+      word.append(head)
+  return word, None
 
-def __generatePattern(checkLine, linePart, varState):
-  """ Returns the regex pattern to be matched in the output line. Variable
-      references are substituted with their current values provided in the
-      'varState' argument.
-
-  An exception is raised if a referenced variable is undefined.
-  """
-  if linePart.variant == RegexExpression.Variant.VarRef:
-    try:
-      return re.escape(varState[linePart.name])
-    except KeyError:
-      Logger.testFailed("Use of undefined variable \"" + linePart.name + "\"",
-                        checkLine.fileName, checkLine.lineNo)
+def nextStringWord(string):
+  """ Splits string at the first whitespace character. """
+  assert string
+  whitespace = re.search("\s", string)
+  if whitespace:
+    return string[:whitespace.start()], string[whitespace.end():].strip()
   else:
-    return linePart.pattern
+    return string, None
 
-def __isSeparated(outputLine, matchStart):
-  return (matchStart == 0) or (outputLine[matchStart - 1:matchStart].isspace())
-
-def MatchLines(checkLine, outputLine, initialVarState):
-  """ Attempts to match the check line against a line from the output file with
-      the given initial variable values. It returns the new variable state if
-      successful and None otherwise.
+def matchWords(checkerWord, strWord, varState, pos):
+  """ Attempts to match a list of RegexExpressions against a string. 
+      Returns updated variable state if successful and None otherwise.
   """
-  # Do the full matching on a shadow copy of the variable state. If the
-  # matching fails half-way, we will not need to revert the state.
-  varState = dict(initialVarState)
+  # Work on a shadow variable state (dictionaries are passed by reference).
+  varState = dict(varState)
 
-  matchStart = 0
-  isAfterSeparator = True
-
-  # Now try to parse all of the parts of the check line in the right order.
-  # Variable values are updated on-the-fly, meaning that a variable can
-  # be referenced immediately after its definition.
-  for part in checkLine.expressions:
-    if part.variant == RegexExpression.Variant.Separator:
-      isAfterSeparator = True
-      continue
-
-    # Find the earliest match for this line part.
-    pattern = __generatePattern(checkLine, part, varState)
-    while True:
-      match = re.search(pattern, outputLine[matchStart:])
-      if (match is None) or (not isAfterSeparator and not __isMatchAtStart(match)):
-        return None
-      matchEnd = matchStart + match.end()
-      matchStart += match.start()
-
-      # Check if this is a valid match if we expect a whitespace separator
-      # before the matched text. Otherwise loop and look for another match.
-      if not isAfterSeparator or __isSeparated(outputLine, matchStart):
-        break
+  for expr in checkerWord:
+    # If `expr` is variable reference, replace it with the variable's value.
+    if expr.variant == RegexExpression.Variant.VarRef:
+      if expr.name in varState:
+        pattern = re.escape(varState[expr.name])
       else:
-        matchStart += 1
+        Logger.testFailed("Multiple definitions of variable \"{}\"".format(expr.name), 
+                          pos.fileName, pos.lineNo)
+    else:
+      pattern = expr.pattern
 
-    if part.variant == RegexExpression.Variant.VarDef:
-      if part.name in varState:
-        Logger.testFailed("Multiple definitions of variable \"" + part.name + "\"",
-                          checkLine.fileName, checkLine.lineNo)
-      varState[part.name] = outputLine[matchStart:matchEnd]
+    # Match the expression's regex pattern against the remainder of the word.
+    # Note: re.match will succeed only if matched from the beginning.
+    match = re.match(pattern, strWord)
+    if not match:
+      return None
 
-    matchStart = matchEnd
-    isAfterSeparator = False
+    # If `expr` was variable definition, update the variable's value.
+    if expr.variant == RegexExpression.Variant.VarDef:
+      if expr.name not in varState:
+        varState[expr.name] = strWord[:match.end()]
+      else:
+        Logger.testFailed("Multiple definitions of variable \"{}\"".format(expr.name), 
+                          pos.fileName, pos.lineNo)
 
-  # All parts were successfully matched. Return the new variable state.
+    # Move cursor by deleting the matched characters.
+    strWord = strWord[match.end():]
+
+  # Make sure the entire word matched, i.e. `strWord` is empty.
+  if strWord:
+    return None
+  
+  return varState
+
+def MatchLines(checkerLine, strLine, varState):
+  """ Attempts to match a CHECK line against a string. Returns variable state
+      after the match if successful and None otherwise.
+  """
+  expressions = checkerLine.expressions
+  while expressions:
+    # Get the next run of RegexExpressions which must match one string word.
+    checkerWord, expressions = nextCheckerWord(expressions)
+
+    # Keep reading words from the `strLine` until a match is found.
+    wordMatched = False
+    while strLine:
+      strWord, strLine = nextStringWord(strLine)
+      newVarState = matchWords(checkerWord, strWord, varState, checkerLine)
+      if newVarState is not None:
+        wordMatched = True
+        varState = newVarState
+        break
+    if not wordMatched:
+      return None
+
+  # All RegexExpressions matched. Return new variable state.
   return varState
