@@ -137,6 +137,7 @@ LIBART_COMMON_SRC_FILES := \
   native/java_lang_reflect_Method.cc \
   native/java_lang_reflect_Proxy.cc \
   native/java_util_concurrent_atomic_AtomicLong.cc \
+  native/libcore_io_Memory.cc \
   native/libcore_util_CharsetUtils.cc \
   native/org_apache_harmony_dalvik_ddmc_DdmServer.cc \
   native/org_apache_harmony_dalvik_ddmc_DdmVmInternal.cc \
