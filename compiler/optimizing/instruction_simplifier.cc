@@ -45,6 +45,8 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitEqual(HEqual* equal) OVERRIDE;
   void VisitNotEqual(HNotEqual* equal) OVERRIDE;
   void VisitBooleanNot(HBooleanNot* bool_not) OVERRIDE;
+  void VisitInstanceFieldSet(HInstanceFieldSet* equal) OVERRIDE;
+  void VisitStaticFieldSet(HStaticFieldSet* equal) OVERRIDE;
   void VisitArraySet(HArraySet* equal) OVERRIDE;
   void VisitTypeConversion(HTypeConversion* instruction) OVERRIDE;
   void VisitNullCheck(HNullCheck* instruction) OVERRIDE;
@@ -199,6 +201,20 @@ void InstructionSimplifierVisitor::VisitInstanceOf(HInstanceOf* instruction) {
   }
 }
 
+void InstructionSimplifierVisitor::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
+  if ((instruction->GetValue()->GetType() == Primitive::kPrimNot)
+      && !instruction->GetValue()->CanBeNull()) {
+    instruction->ClearValueCanBeNull();
+  }
+}
+
+void InstructionSimplifierVisitor::VisitStaticFieldSet(HStaticFieldSet* instruction) {
+  if ((instruction->GetValue()->GetType() == Primitive::kPrimNot)
+      && !instruction->GetValue()->CanBeNull()) {
+    instruction->ClearValueCanBeNull();
+  }
+}
+
 void InstructionSimplifierVisitor::VisitSuspendCheck(HSuspendCheck* check) {
   HBasicBlock* block = check->GetBlock();
   // Currently always keep the suspend check at entry.
@@ -293,6 +309,10 @@ void InstructionSimplifierVisitor::VisitArraySet(HArraySet* instruction) {
       // If the code is just swapping elements in the array, no need for a type check.
       instruction->ClearNeedsTypeCheck();
     }
+  }
+
+  if (!value->CanBeNull()) {
+    instruction->ClearValueCanBeNull();
   }
 }
 
