@@ -670,7 +670,8 @@ static void UnsafeLogFatalForSuspendCount(Thread* self, Thread* thread) NO_THREA
   LOG(FATAL) << ss.str();
 }
 
-void Thread::ModifySuspendCount(Thread* self, int delta, bool for_debugger) {
+bool Thread::ModifySuspendCount(Thread* self, int delta, Barrier* suspend_barrier,
+                                bool for_debugger) {
   if (kIsDebugBuild) {
     DCHECK(delta == -1 || delta == +1 || delta == -tls32_.debug_suspend_count)
           << delta << " " << tls32_.debug_suspend_count << " " << this;
@@ -682,7 +683,24 @@ void Thread::ModifySuspendCount(Thread* self, int delta, bool for_debugger) {
   }
   if (UNLIKELY(delta < 0 && tls32_.suspend_count <= 0)) {
     UnsafeLogFatalForSuspendCount(self, this);
-    return;
+    return false;
+  }
+
+  uint16_t flags = kSuspendRequest;
+  if (delta > 0 && suspend_barrier != nullptr) {
+    uint32_t available_barrier = kMaxSuspendBarriers;
+    for (uint32_t i = 0; i < kMaxSuspendBarriers; ++i) {
+      if (tlsPtr_.active_suspend_barriers[i] == nullptr) {
+        available_barrier = i;
+        break;
+      }
+    }
+    if (available_barrier == kMaxSuspendBarriers) {
+      // No barrier spaces available, we can't add another.
+      return false;
+    }
+    tlsPtr_.active_suspend_barriers[available_barrier] = suspend_barrier;
+    flags |= kActiveSuspendBarrier;
   }
 
   tls32_.suspend_count += delta;
@@ -693,20 +711,61 @@ void Thread::ModifySuspendCount(Thread* self, int delta, bool for_debugger) {
   if (tls32_.suspend_count == 0) {
     AtomicClearFlag(kSuspendRequest);
   } else {
-    AtomicSetFlag(kSuspendRequest);
+    // Two bits might be set simultaneously.
+    tls32_.state_and_flags.as_atomic_int.FetchAndOrSequentiallyConsistent(flags);
     TriggerSuspend();
   }
+  return true;
 }
 
-void Thread::RunCheckpointFunction() {
-  Closure *checkpoints[kMaxCheckpoints];
+bool Thread::PassActiveSuspendBarriers(Thread* self) {
+  // Grab the suspend_count lock and copy the current set of
+  // barriers. Then clear the list and the flag. The ModifySuspendCount
+  // function requires the lock so we prevent a race between setting
+  // the kActiveSuspendBarrier flag and clearing it.
+  Barrier* pass_barriers[kMaxSuspendBarriers];
+  {
+    MutexLock mu(self, *Locks::thread_suspend_count_lock_);
+    if (!ReadFlag(kActiveSuspendBarrier)) {
+      // quick exit test: the barriers have already been claimed - this is
+      // possible as there may be a race to claim and it doesn't matter
+      // who wins.
+      return false;
+    }
 
+    for (uint32_t i = 0; i < kMaxSuspendBarriers; ++i) {
+      pass_barriers[i] = tlsPtr_.active_suspend_barriers[i];
+      tlsPtr_.active_suspend_barriers[i] = nullptr;
+    }
+    AtomicClearFlag(kActiveSuspendBarrier);
+  }
+
+  uint32_t barrier_count = 0;
+  for (uint32_t i = 0; i < kMaxSuspendBarriers; i++) {
+    if (pass_barriers[i] != nullptr) {
+      pass_barriers[i]->Pass(self);
+      ++barrier_count;
+    }
+  }
+  CHECK_GT(barrier_count, 0U);
+  return true;
+}
+
+bool Thread::RunCheckpointFunction() {
+  Closure *checkpoints[kMaxCheckpoints];
   // Grab the suspend_count lock and copy the current set of
   // checkpoints.  Then clear the list and the flag.  The RequestCheckpoint
   // function will also grab this lock so we prevent a race between setting
   // the kCheckpointRequest flag and clearing it.
   {
     MutexLock mu(this, *Locks::thread_suspend_count_lock_);
+    if (!ReadFlag(kCheckpointRequest)) {
+      // quick exit test: the checkpoint has already run - this is possible
+      // as there may be a race to run the checkpoint if the thread was
+      // suspended or becomes suspended before the checkpoint runs.
+      return false;
+    }
+
     for (uint32_t i = 0; i < kMaxCheckpoints; ++i) {
       checkpoints[i] = tlsPtr_.checkpoint_functions[i];
       tlsPtr_.checkpoint_functions[i] = nullptr;
@@ -716,16 +775,17 @@ void Thread::RunCheckpointFunction() {
 
   // Outside the lock, run all the checkpoint functions that
   // we collected.
-  bool found_checkpoint = false;
+  uint32_t collected_checkpoints = 0;
   for (uint32_t i = 0; i < kMaxCheckpoints; ++i) {
     if (checkpoints[i] != nullptr) {
       ATRACE_BEGIN("Checkpoint function");
       checkpoints[i]->Run(this);
       ATRACE_END();
-      found_checkpoint = true;
+      ++collected_checkpoints;
     }
   }
-  CHECK(found_checkpoint);
+  CHECK_GT(collected_checkpoints, 0U);
+  return true;
 }
 
 bool Thread::RequestCheckpoint(Closure* function) {
@@ -1198,6 +1258,9 @@ Thread::Thread(bool daemon) : tls32_(daemon), wait_monitor_(nullptr), interrupte
             gc::allocator::RosAlloc::GetDedicatedFullRun());
   for (uint32_t i = 0; i < kMaxCheckpoints; ++i) {
     tlsPtr_.checkpoint_functions[i] = nullptr;
+  }
+  for (uint32_t i = 0; i < kMaxSuspendBarriers; ++i) {
+    tlsPtr_.active_suspend_barriers[i] = nullptr;
   }
   tlsPtr_.flip_function = nullptr;
   tls32_.suspended_at_suspend_check = false;

@@ -113,7 +113,7 @@ class EntrypointsOrderTest : public CommonRuntimeTest {
     EXPECT_OFFSET_DIFFP(Thread, tlsPtr_, last_no_thread_suspension_cause, checkpoint_functions,
                         sizeof(void*));
     EXPECT_OFFSET_DIFFP(Thread, tlsPtr_, checkpoint_functions, interpreter_entrypoints,
-                        sizeof(void*) * 3);
+                        sizeof(void*) * 6);
 
     // Skip across the entrypoints structures.
 

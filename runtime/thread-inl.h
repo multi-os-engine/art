@@ -133,12 +133,25 @@ inline void Thread::TransitionFromRunnableToSuspended(ThreadState new_state) {
       break;
     }
   }
-  // Release share on mutator_lock_.
-  Locks::mutator_lock_->SharedUnlock(this);
+
+  // Change to non-runnable state, thereby appearing suspended to the system.
+  // Mark the release of the share of the mutator_lock_.
+  Locks::mutator_lock_->TransitionFromRunnableToSuspended(this);
+
+  // Once suspended - check the active suspend barrier flag
+  for (uint16_t current_flags = tls32_.state_and_flags.as_struct.flags;
+      UNLIKELY((current_flags & (kCheckpointRequest | kActiveSuspendBarrier)) != 0);
+      current_flags = tls32_.state_and_flags.as_struct.flags) {
+    if ((current_flags & kActiveSuspendBarrier) != 0) {
+      PassActiveSuspendBarriers(this);
+    } else if ((current_flags & kCheckpointRequest) != 0) {
+      // Impossible
+      LOG(FATAL) << "Fatal, thread transits into suspended without running the checkpoint";
+    }
+  }
 }
 
 inline ThreadState Thread::TransitionFromSuspendedToRunnable() {
-  bool done = false;
   union StateAndFlags old_state_and_flags;
   old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
   int16_t old_state = old_state_and_flags.as_struct.state;
@@ -147,7 +160,30 @@ inline ThreadState Thread::TransitionFromSuspendedToRunnable() {
     Locks::mutator_lock_->AssertNotHeld(this);  // Otherwise we starve GC..
     old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
     DCHECK_EQ(old_state_and_flags.as_struct.state, old_state);
-    if (UNLIKELY((old_state_and_flags.as_struct.flags & kSuspendRequest) != 0)) {
+    if (LIKELY(old_state_and_flags.as_struct.flags == 0)) {
+      // Optimize for the return from native code case - this is the fast path.
+      // Atomically change from suspended to runnable if no suspend request pending.
+      old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
+      DCHECK_EQ(old_state_and_flags.as_struct.state, old_state);
+      if (LIKELY(old_state_and_flags.as_struct.flags == 0)) {
+        union StateAndFlags new_state_and_flags;
+        new_state_and_flags.as_int = old_state_and_flags.as_int;
+        new_state_and_flags.as_struct.state = kRunnable;
+        // CAS the value with a memory barrier.
+        if (LIKELY(tls32_.state_and_flags.as_atomic_int.CompareExchangeWeakRelaxed(
+                                                   old_state_and_flags.as_int,
+                                                   new_state_and_flags.as_int))) {
+          // Mark the acquisition of a share of the mutator_lock_.
+          Locks::mutator_lock_->TransitionFromSuspendedToRunnable(this);
+          break;
+        }
+      }
+    } else if ((old_state_and_flags.as_struct.flags & kActiveSuspendBarrier) != 0) {
+      PassActiveSuspendBarriers(this);
+    } else if ((old_state_and_flags.as_struct.flags & kCheckpointRequest) != 0) {
+      // Impossible
+      LOG(FATAL) << "Fatal, wrong checkpoint flag";
+    } else if ((old_state_and_flags.as_struct.flags & kSuspendRequest) != 0) {
       // Wait while our suspend count is non-zero.
       MutexLock mu(this, *Locks::thread_suspend_count_lock_);
       old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
@@ -160,32 +196,8 @@ inline ThreadState Thread::TransitionFromSuspendedToRunnable() {
       }
       DCHECK_EQ(GetSuspendCount(), 0);
     }
-    // Re-acquire shared mutator_lock_ access.
-    Locks::mutator_lock_->SharedLock(this);
-    // Atomically change from suspended to runnable if no suspend request pending.
-    old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
-    DCHECK_EQ(old_state_and_flags.as_struct.state, old_state);
-    if (LIKELY((old_state_and_flags.as_struct.flags & kSuspendRequest) == 0)) {
-      union StateAndFlags new_state_and_flags;
-      new_state_and_flags.as_int = old_state_and_flags.as_int;
-      new_state_and_flags.as_struct.state = kRunnable;
-      // CAS the value without a memory ordering as that is given by the lock acquisition above.
-      done =
-          tls32_.state_and_flags.as_atomic_int.CompareExchangeWeakRelaxed(old_state_and_flags.as_int,
-                                                                          new_state_and_flags.as_int);
-    }
-    if (UNLIKELY(!done)) {
-      // Failed to transition to Runnable. Release shared mutator_lock_ access and try again.
-      Locks::mutator_lock_->SharedUnlock(this);
-    } else {
-      // Run the flip function, if set.
-      Closure* flip_func = GetFlipFunction();
-      if (flip_func != nullptr) {
-        flip_func->Run(this);
-      }
-      return static_cast<ThreadState>(old_state);
-    }
   } while (true);
+  return static_cast<ThreadState>(old_state);
 }
 
 inline void Thread::VerifyStack() {
