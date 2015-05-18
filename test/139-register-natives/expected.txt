@@ -1,0 +1,4 @@
+TestSub.foo succeeded
+TestSuper.foo failed
+TestSub2.foo succeeded
+TestSuper2.foo succeeded
