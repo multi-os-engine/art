@@ -424,6 +424,10 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
             << "Don't call compiled code when -Xint " << PrettyMethod(this);
       }
 
+      // For nested deoptimization cases.
+      ShadowFrame* prev_deopt_shadow_frame = self->GetAndClearDeoptimizationShadowFrame(nullptr);
+      self->PushStackedDeoptimizationShadowFrame(prev_deopt_shadow_frame);
+
 #if defined(__LP64__) || defined(__arm__) || defined(__i386__)
       if (!IsStatic()) {
         (*art_quick_invoke_stub)(this, args, args_size, self, result, shorty);
@@ -443,6 +447,10 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
         self->SetTopOfShadowStack(shadow_frame);
         interpreter::EnterInterpreterFromDeoptimize(self, shadow_frame, result);
       }
+
+      // Restore saved deoptimization shadow frame for nested cases.
+      self->SetDeoptimizationShadowFrame(self->PopStackedDeoptimizationShadowFrame());
+
       if (kLogInvocationStartAndReturn) {
         LOG(INFO) << StringPrintf("Returned '%s' quick code=%p", PrettyMethod(this).c_str(),
                                   GetEntryPointFromQuickCompiledCode());

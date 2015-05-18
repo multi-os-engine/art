@@ -208,7 +208,7 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     CHECK(verifier_success) << PrettyMethod(h_method.Get());
     ShadowFrame* new_frame = ShadowFrame::CreateDeoptimizedFrame(
         num_regs, nullptr, h_method.Get(), dex_pc);
-    self_->SetShadowFrameUnderConstruction(new_frame);
+    self_->PushStackedShadowFrameUnderConstruction(new_frame);
     const std::vector<int32_t> kinds(verifier.DescribeVRegs(dex_pc));
 
     // Markers for dead values, used when the verifier knows a Dex register is undefined,
@@ -312,7 +312,7 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     } else {
       self_->SetDeoptimizationShadowFrame(new_frame);
     }
-    self_->ClearShadowFrameUnderConstruction();
+    self_->PopStackedShadowFrameUnderConstruction();
     prev_shadow_frame_ = new_frame;
     return true;
   }

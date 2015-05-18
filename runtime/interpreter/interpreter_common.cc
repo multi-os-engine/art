@@ -523,7 +523,7 @@ bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
     // Slow path.
     // We might need to do class loading, which incurs a thread state change to kNative. So
     // register the shadow frame as under construction and allow suspension again.
-    self->SetShadowFrameUnderConstruction(new_shadow_frame);
+    self->PushStackedShadowFrameUnderConstruction(new_shadow_frame);
     self->EndAssertNoThreadSuspension(old_cause);
 
     // We need to do runtime check on reference assignment. We need to load the shorty
@@ -567,6 +567,7 @@ bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
                     params->GetTypeItem(shorty_pos).type_idx_, true);
             if (arg_type == nullptr) {
               CHECK(self->IsExceptionPending());
+              self->PopStackedShadowFrameUnderConstruction();
               return false;
             }
             if (!o->VerifierInstanceOf(arg_type)) {
@@ -577,6 +578,7 @@ bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
                                        new_shadow_frame->GetMethod()->GetName(), shorty_pos,
                                        o->GetClass()->GetDescriptor(&temp1),
                                        arg_type->GetDescriptor(&temp2));
+              self->PopStackedShadowFrameUnderConstruction();
               return false;
             }
           }
@@ -597,7 +599,7 @@ bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
       }
     }
     // We're done with the construction.
-    self->ClearShadowFrameUnderConstruction();
+    self->PopStackedShadowFrameUnderConstruction();
   } else {
     // Fast path: no extra checks.
     if (is_range) {

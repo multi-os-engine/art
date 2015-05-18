@@ -157,18 +157,40 @@ void Thread::SetDeoptimizationReturnValue(const JValue& ret_val) {
 ShadowFrame* Thread::GetAndClearDeoptimizationShadowFrame(JValue* ret_val) {
   ShadowFrame* sf = tlsPtr_.deoptimization_shadow_frame;
   tlsPtr_.deoptimization_shadow_frame = nullptr;
-  ret_val->SetJ(tls64_.deoptimization_return_value.GetJ());
+  if (ret_val != nullptr) {
+    ret_val->SetJ(tls64_.deoptimization_return_value.GetJ());
+  }
   return sf;
 }
 
-void Thread::SetShadowFrameUnderConstruction(ShadowFrame* sf) {
-  sf->SetLink(tlsPtr_.shadow_frame_under_construction);
-  tlsPtr_.shadow_frame_under_construction = sf;
+void Thread::PushStackedShadowFrameUnderConstruction(ShadowFrame* sf) {
+  StackedShadowFrameRecord* record = new StackedShadowFrameRecord(
+      sf, kShadowFrameUnderConstruction, tlsPtr_.stacked_shadow_frame_record);
+  tlsPtr_.stacked_shadow_frame_record = record;
 }
 
-void Thread::ClearShadowFrameUnderConstruction() {
-  CHECK_NE(static_cast<ShadowFrame*>(nullptr), tlsPtr_.shadow_frame_under_construction);
-  tlsPtr_.shadow_frame_under_construction = tlsPtr_.shadow_frame_under_construction->GetLink();
+ShadowFrame* Thread::PopStackedShadowFrameUnderConstruction() {
+  StackedShadowFrameRecord* record = tlsPtr_.stacked_shadow_frame_record;
+  DCHECK(record != nullptr && record->IsForUnderConstruction());
+  tlsPtr_.stacked_shadow_frame_record = record->GetLink();
+  ShadowFrame* shadow_frame = record->GetShadowFrame();
+  delete record;
+  return shadow_frame;
+}
+
+void Thread::PushStackedDeoptimizationShadowFrame(ShadowFrame* sf) {
+  StackedShadowFrameRecord* record = new StackedShadowFrameRecord(
+      sf, kDeoptimizationShadowFrame, tlsPtr_.stacked_shadow_frame_record);
+  tlsPtr_.stacked_shadow_frame_record = record;
+}
+
+ShadowFrame* Thread::PopStackedDeoptimizationShadowFrame() {
+  StackedShadowFrameRecord* record = tlsPtr_.stacked_shadow_frame_record;
+  DCHECK(record != nullptr && record->IsForDeoptimization());
+  tlsPtr_.stacked_shadow_frame_record = record->GetLink();
+  ShadowFrame* shadow_frame = record->GetShadowFrame();
+  delete record;
+  return shadow_frame;
 }
 
 void Thread::InitTid() {
@@ -2369,13 +2391,17 @@ void Thread::VisitRoots(RootVisitor* visitor) {
       mapper.VisitShadowFrame(shadow_frame);
     }
   }
-  if (tlsPtr_.shadow_frame_under_construction != nullptr) {
+  if (tlsPtr_.stacked_shadow_frame_record != nullptr) {
     RootCallbackVisitor visitor_to_callback(visitor, thread_id);
     ReferenceMapVisitor<RootCallbackVisitor> mapper(this, nullptr, visitor_to_callback);
-    for (ShadowFrame* shadow_frame = tlsPtr_.shadow_frame_under_construction;
-        shadow_frame != nullptr;
-        shadow_frame = shadow_frame->GetLink()) {
-      mapper.VisitShadowFrame(shadow_frame);
+    for (StackedShadowFrameRecord* record = tlsPtr_.stacked_shadow_frame_record;
+         record != nullptr;
+         record = record->GetLink()) {
+      ShadowFrame* shadow_frame = record->GetShadowFrame();
+      while (shadow_frame != nullptr) {
+        mapper.VisitShadowFrame(shadow_frame);
+        shadow_frame = shadow_frame->GetLink();
+      }
     }
   }
   for (auto* verifier = tlsPtr_.method_verifier; verifier != nullptr; verifier = verifier->link_) {
