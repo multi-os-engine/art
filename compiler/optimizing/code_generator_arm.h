@@ -304,6 +304,7 @@ class CodeGeneratorARM : public CodeGenerator {
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
   Label frame_entry_label_;
+
   LocationsBuilderARM location_builder_;
   InstructionCodeGeneratorARM instruction_visitor_;
   ParallelMoveResolverARM move_resolver_;
