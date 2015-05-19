@@ -157,20 +157,20 @@ const ManagedRegisterEntrySpills& Arm64ManagedRuntimeCallingConvention::EntrySpi
 Arm64JniCallingConvention::Arm64JniCallingConvention(bool is_static, bool is_synchronized,
                                                      const char* shorty)
     : JniCallingConvention(is_static, is_synchronized, shorty, kFramePointerSize) {
-  uint32_t core_spill_mask = CoreSpillMask();
-  for (int x_reg = 0; x_reg < kNumberOfXRegisters; ++x_reg) {
-    if (((1 << x_reg) & core_spill_mask) != 0) {
-      callee_save_regs_.push_back(
-          Arm64ManagedRegister::FromXRegister(static_cast<XRegister>(x_reg)));
-    }
+  uint32_t x_regs = CoreSpillMask();
+  while (x_regs != 0u) {
+    int x_reg = CTZ(x_regs);
+    x_regs &= x_regs - 1u;
+    callee_save_regs_.push_back(
+        Arm64ManagedRegister::FromXRegister(static_cast<XRegister>(x_reg)));
   }
 
-  uint32_t fp_spill_mask = FpSpillMask();
-  for (int d_reg = 0; d_reg < kNumberOfDRegisters; ++d_reg) {
-    if (((1 << d_reg) & fp_spill_mask) != 0) {
-      callee_save_regs_.push_back(
-          Arm64ManagedRegister::FromDRegister(static_cast<DRegister>(d_reg)));
-    }
+  uint32_t d_regs = FpSpillMask();
+  while (d_regs != 0u) {
+    int d_reg = CTZ(d_regs);
+    d_regs &= d_regs - 1u;
+    callee_save_regs_.push_back(
+        Arm64ManagedRegister::FromDRegister(static_cast<DRegister>(d_reg)));
   }
 }
 
