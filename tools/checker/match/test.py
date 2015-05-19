@@ -195,6 +195,42 @@ class MatchFiles_Test(unittest.TestCase):
       foo
     """)
 
+  def test_NextLineAssertions(self):
+    self.assertMatches(
+    """
+      // CHECK:      foo
+      // CHECK-NEXT: bar
+      // CHECK-NEXT: abc
+      // CHECK:      def
+    """,
+    """
+      foo
+      bar
+      abc
+      def
+    """)
+    self.assertDoesNotMatch(
+    """
+      // CHECK:      foo
+      // CHECK-NEXT: bar
+    """,
+    """
+      foo
+      abc
+      bar
+    """)
+
+    self.assertDoesNotMatch(
+    """
+      // CHECK:      foo
+      // CHECK-NEXT: bar
+    """,
+    """
+      bar
+      foo
+      abc
+    """)
+
   def test_DagAssertions(self):
     self.assertMatches(
     """
