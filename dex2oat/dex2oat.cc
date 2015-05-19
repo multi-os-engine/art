@@ -88,6 +88,33 @@ static std::string CommandLine() {
   return Join(command, ' ');
 }
 
+// A stripped version. Remove some less essential parameters.
+static std::string StrippedCommandLine() {
+  std::vector<std::string> command;
+  for (int i = 0; i < original_argc; ++i) {
+    // All runtime-arg parameters are dropped.
+    if (strcmp(original_argv[i], "--runtime-arg") == 0) {
+      i++;  // Drop the next part, too.
+      continue;
+    }
+
+    // Any instruction-set-XXX is dropped.
+    if (strncmp(original_argv[i], "--instruction-set", strlen("--instruction-set")) == 0) {
+      continue;
+    }
+
+    // The boot image is dropped.
+    if (strncmp(original_argv[i], "--boot-image=", strlen("--boot-image=")) == 0) {
+      continue;
+    }
+
+    // This should leave any dex-file and oat-file options, describing what we compiled.
+
+    command.push_back(original_argv[i]);
+  }
+  return Join(command, ' ');
+}
+
 static void UsageErrorV(const char* fmt, va_list ap) {
   std::string error;
   StringAppendV(&error, fmt, ap);
@@ -1918,7 +1945,17 @@ static int dex2oat(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
-  LOG(INFO) << CommandLine();
+  // Print the complete line when any of the following is true:
+  //   1) Debug build
+  //   2) Compiling an image
+  //   3) Compiling with --host
+  //   4) Compiling on the host (not a target build)
+  // Otherwise, print a stripped command line.
+  if (kIsDebugBuild || dex2oat.IsImage() || dex2oat.IsHost() || !kIsTargetBuild) {
+    LOG(INFO) << CommandLine();
+  } else {
+    LOG(INFO) << StrippedCommandLine();
+  }
 
   if (!dex2oat.Setup()) {
     dex2oat.EraseOatFile();
