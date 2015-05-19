@@ -617,15 +617,15 @@ public class Main {
   /// CHECK: ArrayGet
 
   /// CHECK-START: void Main.foo1(int[], int, int) BCE (after)
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK-NOT: Deoptimize
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK-NOT: Deoptimize
 
   void foo1(int[] array, int start, int end) {
     // Three HDeoptimize will be added. One for
@@ -646,15 +646,15 @@ public class Main {
   /// CHECK: ArrayGet
 
   /// CHECK-START: void Main.foo2(int[], int, int) BCE (after)
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK-NOT: Deoptimize
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK-NOT: Deoptimize
 
   void foo2(int[] array, int start, int end) {
     // Three HDeoptimize will be added. One for
@@ -675,14 +675,14 @@ public class Main {
   /// CHECK: ArrayGet
 
   /// CHECK-START: void Main.foo3(int[], int) BCE (after)
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK-NOT: Deoptimize
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK-NOT: Deoptimize
 
   void foo3(int[] array, int end) {
     // Two HDeoptimize will be added. One for end < array.length,
@@ -694,6 +694,7 @@ public class Main {
     }
   }
 
+
   /// CHECK-START: void Main.foo4(int[], int) BCE (before)
   /// CHECK: BoundsCheck
   /// CHECK: ArraySet
@@ -701,14 +702,14 @@ public class Main {
   /// CHECK: ArrayGet
 
   /// CHECK-START: void Main.foo4(int[], int) BCE (after)
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK-NOT: Deoptimize
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK-NOT: Deoptimize
 
   void foo4(int[] array, int end) {
     // Two HDeoptimize will be added. One for end <= array.length,
@@ -734,8 +735,6 @@ public class Main {
   /// CHECK-START: void Main.foo5(int[], int) BCE (after)
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
-  /// CHECK: Deoptimize
-  /// CHECK-NOT: Deoptimize
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArrayGet
@@ -743,6 +742,8 @@ public class Main {
   /// CHECK: ArrayGet
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK-NOT: Deoptimize
 
   void foo5(int[] array, int end) {
     // Bounds check in this loop can be eliminated without deoptimization.
@@ -774,10 +775,6 @@ public class Main {
   /// CHECK: ArraySet
 
   /// CHECK-START: void Main.foo6(int[], int, int) BCE (after)
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK-NOT: Deoptimize
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArrayGet
@@ -791,6 +788,10 @@ public class Main {
   /// CHECK: ArrayGet
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK-NOT: Deoptimize
 
   void foo6(int[] array, int start, int end) {
     // Three HDeoptimize will be added. One for
@@ -810,15 +811,15 @@ public class Main {
   /// CHECK: ArrayGet
 
   /// CHECK-START: void Main.foo7(int[], int, int, boolean) BCE (after)
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK-NOT: Deoptimize
   /// CHECK: Phi
   /// CHECK: BoundsCheck
   /// CHECK: ArrayGet
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK-NOT: Deoptimize
 
   void foo7(int[] array, int start, int end, boolean lowEnd) {
     // Three HDeoptimize will be added. One for

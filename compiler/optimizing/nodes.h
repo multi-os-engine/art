@@ -195,6 +195,10 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   // Inline this graph in `outer_graph`, replacing the given `invoke` instruction.
   void InlineInto(HGraph* outer_graph, HInvoke* invoke);
 
+  // Need to add a couple of blocks to test if the loop body is entered and
+  // put deoptimization instructions, etc.
+  void TransformLoopHeaderForBCE(HBasicBlock* header);
+
   // Removes `block` from the graph.
   void DeleteDeadBlock(HBasicBlock* block);
 
