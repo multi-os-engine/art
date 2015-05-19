@@ -828,6 +828,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(InvokeInterface, Invoke)                                            \
   M(InvokeStaticOrDirect, Invoke)                                       \
   M(InvokeVirtual, Invoke)                                              \
+  M(Jump, Instruction)                                                  \
   M(LessThan, Condition)                                                \
   M(LessThanOrEqual, Condition)                                         \
   M(LoadClass, Instruction)                                             \
@@ -1777,6 +1778,23 @@ class HGoto : public HTemplateInstruction<0> {
   DISALLOW_COPY_AND_ASSIGN(HGoto);
 };
 
+// Jumps from one instruction to another. It's only used for jumping from
+// around the end of loop pre-header to skip over deoptimization code inserted
+// at the end of loop pre-header.
+class HJump : public HTemplateInstruction<1> {
+ public:
+  HJump(HInstruction* cond) : HTemplateInstruction(SideEffects::None()) {
+    SetRawInputAt(0, cond);
+  }
+
+  // Don't move/eliminate it.
+  bool CanThrow() const OVERRIDE { return true; }
+
+  DECLARE_INSTRUCTION(Jump);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HJump);
+};
 
 // Conditional branch. A block ending with an HIf instruction must have
 // two successors.
@@ -1805,20 +1823,27 @@ class HIf : public HTemplateInstruction<1> {
 // Deoptimize to interpreter, upon checking a condition.
 class HDeoptimize : public HTemplateInstruction<1> {
  public:
-  HDeoptimize(HInstruction* cond, uint32_t dex_pc)
+  HDeoptimize(HInstruction* cond, uint32_t dex_pc, bool needs_label_after)
       : HTemplateInstruction(SideEffects::None()),
-        dex_pc_(dex_pc) {
+        dex_pc_(dex_pc),
+        needs_label_after_(needs_label_after) {
     SetRawInputAt(0, cond);
   }
 
   bool NeedsEnvironment() const OVERRIDE { return true; }
   bool CanThrow() const OVERRIDE { return true; }
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+  bool NeedsLabelAfter() const { return needs_label_after_; }
 
   DECLARE_INSTRUCTION(Deoptimize);
 
  private:
   uint32_t dex_pc_;
+
+  // Last HDeoptimize in the loop pre-header. Need to have
+  // a label after this instruction. If the loop body isn't
+  // entered at all, the deoptimization part should be skipped.
+  bool needs_label_after_;
 
   DISALLOW_COPY_AND_ASSIGN(HDeoptimize);
 };

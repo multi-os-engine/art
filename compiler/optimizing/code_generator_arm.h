@@ -298,12 +298,27 @@ class CodeGeneratorARM : public CodeGenerator {
 
   Label* GetFrameEntryLabel() { return &frame_entry_label_; }
 
+  Label* MakeInBlockJumpLabel() {
+    LabelWrapper<Label>* label_wrapper =
+        new (GetGraph()->GetArena()) LabelWrapper<Label>();
+    in_block_jump_label_ = label_wrapper->GetLabel();
+    return in_block_jump_label_;
+  }
+
+  Label* GetInBlockJumpLabel() {
+    return in_block_jump_label_;
+  }
+
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Register temp);
 
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
   Label frame_entry_label_;
+
+  // Used for skipping over deoptimization in loop pre-header.
+  Label* in_block_jump_label_;
+
   LocationsBuilderARM location_builder_;
   InstructionCodeGeneratorARM instruction_visitor_;
   ParallelMoveResolverARM move_resolver_;
