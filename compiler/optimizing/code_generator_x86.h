@@ -290,10 +290,25 @@ class CodeGeneratorX86 : public CodeGenerator {
     return isa_features_;
   }
 
+  Label* MakeInBlockJumpLabel() {
+    LabelWrapper<Label>* label_wrapper =
+        new (GetGraph()->GetArena()) LabelWrapper<Label>();
+    in_block_jump_label_ = label_wrapper->GetLabel();
+    return in_block_jump_label_;
+  }
+
+  Label* GetInBlockJumpLabel() {
+    return in_block_jump_label_;
+  }
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
   Label frame_entry_label_;
+
+  // Used for skipping over deoptimization in loop pre-header.
+  Label* in_block_jump_label_;
+
   LocationsBuilderX86 location_builder_;
   InstructionCodeGeneratorX86 instruction_visitor_;
   ParallelMoveResolverX86 move_resolver_;

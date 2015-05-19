@@ -291,10 +291,25 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   // Load a 64 bit value into a register in the most efficient manner.
   void Load64BitValue(CpuRegister dest, int64_t value);
 
+  Label* MakeInBlockJumpLabel() {
+    LabelWrapper<Label>* label_wrapper =
+        new (GetGraph()->GetArena()) LabelWrapper<Label>();
+    in_block_jump_label_ = label_wrapper->GetLabel();
+    return in_block_jump_label_;
+  }
+
+  Label* GetInBlockJumpLabel() {
+    return in_block_jump_label_;
+  }
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
   Label frame_entry_label_;
+
+  // Used for skipping over deoptimization in loop pre-header.
+  Label* in_block_jump_label_;
+
   LocationsBuilderX86_64 location_builder_;
   InstructionCodeGeneratorX86_64 instruction_visitor_;
   ParallelMoveResolverX86_64 move_resolver_;

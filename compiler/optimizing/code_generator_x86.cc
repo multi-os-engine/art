@@ -380,6 +380,7 @@ CodeGeneratorX86::CodeGeneratorX86(HGraph* graph,
                         0,
                         compiler_options),
       block_labels_(graph->GetArena(), 0),
+      in_block_jump_label_(nullptr),
       location_builder_(graph, this),
       instruction_visitor_(graph, this),
       move_resolver_(graph->GetArena(), this),
@@ -825,6 +826,24 @@ void InstructionCodeGeneratorX86::VisitGoto(HGoto* got) {
   }
 }
 
+void LocationsBuilderX86::VisitJump(HJump* jump) {
+  LocationSummary* locations = new (GetGraph()->GetArena())
+      LocationSummary(jump, LocationSummary::kNoCall);
+  HInstruction* cond = jump->InputAt(0);
+  DCHECK(cond->IsCondition());
+  if (cond->AsCondition()->NeedsMaterialization()) {
+    locations->SetInAt(0, Location::Any());
+  }
+}
+
+void InstructionCodeGeneratorX86::VisitJump(HJump* jump) {
+  HBasicBlock* block = jump->GetBlock();
+  HBasicBlock* successor = block->GetSuccessors().Get(0);
+  DCHECK(successor->IsLoopHeader());
+  Label* label = codegen_->MakeInBlockJumpLabel();
+  GenerateTestAndBranch(jump, label, nullptr, label);
+}
+
 void LocationsBuilderX86::VisitExit(HExit* exit) {
   exit->SetLocations(nullptr);
 }
@@ -935,6 +954,9 @@ void InstructionCodeGeneratorX86::VisitDeoptimize(HDeoptimize* deoptimize) {
   codegen_->AddSlowPath(slow_path);
   Label* slow_path_entry = slow_path->GetEntryLabel();
   GenerateTestAndBranch(deoptimize, slow_path_entry, nullptr, slow_path_entry);
+  if (deoptimize->NeedsLabelAfter()) {
+    __ Bind(codegen_->GetInBlockJumpLabel());
+  }
 }
 
 void LocationsBuilderX86::VisitLocal(HLocal* local) {

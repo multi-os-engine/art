@@ -511,6 +511,22 @@ class CallingConvention {
   DISALLOW_COPY_AND_ASSIGN(CallingConvention);
 };
 
+// An ArenaObject that contains a label.
+template <typename T>
+class LabelWrapper : public ArenaObject<kArenaAllocMisc> {
+ public:
+  LabelWrapper() {}
+
+  T* GetLabel() {
+    return &label_;
+  }
+
+ private:
+  T label_;
+
+  DISALLOW_COPY_AND_ASSIGN(LabelWrapper);
+};
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_CODE_GENERATOR_H_

@@ -343,10 +343,24 @@ class CodeGeneratorARM64 : public CodeGenerator {
 
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, vixl::Register temp);
 
+  vixl::Label* MakeInBlockJumpLabel() {
+    LabelWrapper<vixl::Label>* label_wrapper =
+        new (GetGraph()->GetArena()) LabelWrapper<vixl::Label>();
+    in_block_jump_label_ = label_wrapper->GetLabel();
+    return in_block_jump_label_;
+  }
+
+  vixl::Label* GetInBlockJumpLabel() {
+    return in_block_jump_label_;
+  }
+
  private:
   // Labels for each block that will be compiled.
   vixl::Label* block_labels_;
   vixl::Label frame_entry_label_;
+
+  // Used for skipping over deoptimization in loop pre-header.
+  vixl::Label* in_block_jump_label_;
 
   LocationsBuilderARM64 location_builder_;
   InstructionCodeGeneratorARM64 instruction_visitor_;

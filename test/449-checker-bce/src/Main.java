@@ -249,6 +249,7 @@ public class Main {
     array[Integer.MAX_VALUE - 998] = 1;
   }
 
+
   // CHECK-START: void Main.loopPattern1(int[]) BCE (before)
   // CHECK: BoundsCheck
   // CHECK: ArraySet
@@ -693,6 +694,7 @@ public class Main {
       sum += array[i];
     }
   }
+
 
   // CHECK-START: void Main.foo4(int[], int) BCE (before)
   // CHECK: BoundsCheck
