@@ -253,6 +253,14 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     StartAttributeStream("kind") << barrier->GetBarrierKind();
   }
 
+  void VisitCheckCast(HCheckCast* check_cast) OVERRIDE {
+    StartAttributeStream("must_do_null_check") << check_cast->MustDoNullCheck();
+  }
+
+  void VisitInstanceOf(HInstanceOf* instance_of) OVERRIDE {
+    StartAttributeStream("must_do_null_check") << instance_of->MustDoNullCheck();
+  }
+
   bool IsPass(const char* name) {
     return strcmp(pass_name_, name) == 0;
   }
