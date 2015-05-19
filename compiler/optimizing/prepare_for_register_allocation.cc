@@ -47,10 +47,28 @@ void PrepareForRegisterAllocation::VisitBoundType(HBoundType* bound_type) {
   bound_type->GetBlock()->RemoveInstruction(bound_type);
 }
 
+static bool RequiresClassToBeInitialized(HInstruction* instr) {
+  return !instr->IsCheckCast()
+      && !instr->IsInstanceOf()
+      && !(instr->IsInvokeStaticOrDirect()
+          && instr->AsInvokeStaticOrDirect()->IsStaticWithExplicitClinitCheck());
+}
+
+static bool MustGenerateClinitCheck(HLoadClass* cls) {
+  for (HUseIterator<HInstruction*> it(cls->GetUses()); !it.Done(); it.Advance()) {
+    if (RequiresClassToBeInitialized(it.Current()->GetUser())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void PrepareForRegisterAllocation::VisitClinitCheck(HClinitCheck* check) {
   HLoadClass* cls = check->GetLoadClass();
   check->ReplaceWith(cls);
-  if (check->GetPrevious() == cls) {
+  if (!MustGenerateClinitCheck(cls)) {
+    check->GetBlock()->RemoveInstruction(check);
+  } else if (check->GetPrevious() == cls) {
     // Pass the initialization duty to the `HLoadClass` instruction,
     // and remove the instruction from the graph.
     cls->SetMustGenerateClinitCheck();
