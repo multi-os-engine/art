@@ -35,7 +35,7 @@ void ReferenceTypePropagation::Run() {
 
 void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
   // TODO: handle other instructions that give type info
-  // (Call/Field accesses/array accesses)
+  // (Call/array accesses)
 
   // Initialize exact types first for faster convergence.
   for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
@@ -46,6 +46,10 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
       VisitLoadClass(instr->AsLoadClass());
     } else if (instr->IsNewArray()) {
       VisitNewArray(instr->AsNewArray());
+    } else if (instr->IsInstanceFieldGet()) {
+      VisitInstanceFieldGet(instr->AsInstanceFieldGet());
+    } else if (instr->IsStaticFieldGet()) {
+      VisitStaticFieldGet(instr->AsStaticFieldGet());
     }
   }
 
@@ -180,6 +184,33 @@ void ReferenceTypePropagation::VisitNewInstance(HNewInstance* instr) {
 
 void ReferenceTypePropagation::VisitNewArray(HNewArray* instr) {
   UpdateReferenceTypeInfo(instr, instr->GetTypeIndex());
+}
+
+void ReferenceTypePropagation::UpdateFieldAccessTypeInfo(HInstruction* instr, uint32_t field_idx) {
+  if (instr->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+
+  ScopedObjectAccess soa(Thread::Current());
+  mirror::DexCache* dex_cache = dex_compilation_unit_.GetClassLinker()->FindDexCache(dex_file_);
+  ArtField* field = dex_compilation_unit_.GetClassLinker()->GetResolvedField(field_idx, dex_cache);
+  if (!field) {
+    return;
+  }
+
+  mirror::Class* resolved_class = field->GetType<false /* kResolve */>();
+  if (resolved_class != nullptr) {
+    MutableHandle<mirror::Class> handle = handles_->NewHandle(resolved_class);
+    instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(handle, true));
+  }
+}
+
+void ReferenceTypePropagation::VisitInstanceFieldGet(HInstanceFieldGet* instr) {
+  UpdateFieldAccessTypeInfo(instr, instr->GetFieldInfo().GetFieldIndex());
+}
+
+void ReferenceTypePropagation::VisitStaticFieldGet(HStaticFieldGet* instr) {
+  UpdateFieldAccessTypeInfo(instr, instr->GetFieldInfo().GetFieldIndex());
 }
 
 void ReferenceTypePropagation::VisitLoadClass(HLoadClass* instr) {
