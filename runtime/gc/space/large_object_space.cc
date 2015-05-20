@@ -50,13 +50,14 @@ class ValgrindLargeObjectMapSpace FINAL : public LargeObjectMapSpace {
                                 size_t* usable_size, size_t* bytes_tl_bulk_allocated)
       OVERRIDE {
     mirror::Object* obj =
-        LargeObjectMapSpace::Alloc(self, num_bytes + kValgrindRedZoneBytes * 2, bytes_allocated,
+        LargeObjectMapSpace::Alloc(self, num_bytes + kMemoryToolRedZoneBytes * 2, bytes_allocated,
                                    usable_size, bytes_tl_bulk_allocated);
     mirror::Object* object_without_rdz = reinterpret_cast<mirror::Object*>(
-        reinterpret_cast<uintptr_t>(obj) + kValgrindRedZoneBytes);
-    VALGRIND_MAKE_MEM_NOACCESS(reinterpret_cast<void*>(obj), kValgrindRedZoneBytes);
-    VALGRIND_MAKE_MEM_NOACCESS(reinterpret_cast<uint8_t*>(object_without_rdz) + num_bytes,
-                               kValgrindRedZoneBytes);
+        reinterpret_cast<uintptr_t>(obj) + kMemoryToolRedZoneBytes);
+    MAKE_MEM_NOACCESS(reinterpret_cast<void*>(obj), kMemoryToolRedZoneBytes);
+    MAKE_MEM_NOACCESS(
+        reinterpret_cast<uint8_t*>(object_without_rdz) + num_bytes,
+        kMemoryToolRedZoneBytes);
     if (usable_size != nullptr) {
       *usable_size = num_bytes;  // Since we have redzones, shrink the usable size.
     }
@@ -65,25 +66,25 @@ class ValgrindLargeObjectMapSpace FINAL : public LargeObjectMapSpace {
 
   virtual size_t AllocationSize(mirror::Object* obj, size_t* usable_size) OVERRIDE {
     mirror::Object* object_with_rdz = reinterpret_cast<mirror::Object*>(
-        reinterpret_cast<uintptr_t>(obj) - kValgrindRedZoneBytes);
+        reinterpret_cast<uintptr_t>(obj) - kMemoryToolRedZoneBytes);
     return LargeObjectMapSpace::AllocationSize(object_with_rdz, usable_size);
   }
 
   virtual size_t Free(Thread* self, mirror::Object* obj) OVERRIDE {
     mirror::Object* object_with_rdz = reinterpret_cast<mirror::Object*>(
-        reinterpret_cast<uintptr_t>(obj) - kValgrindRedZoneBytes);
-    VALGRIND_MAKE_MEM_UNDEFINED(object_with_rdz, AllocationSize(obj, nullptr));
+        reinterpret_cast<uintptr_t>(obj) - kMemoryToolRedZoneBytes);
+    MAKE_MEM_UNDEFINED(object_with_rdz, AllocationSize(obj, nullptr));
     return LargeObjectMapSpace::Free(self, object_with_rdz);
   }
 
   bool Contains(const mirror::Object* obj) const OVERRIDE {
     mirror::Object* object_with_rdz = reinterpret_cast<mirror::Object*>(
-        reinterpret_cast<uintptr_t>(obj) - kValgrindRedZoneBytes);
+        reinterpret_cast<uintptr_t>(obj) - kMemoryToolRedZoneBytes);
     return LargeObjectMapSpace::Contains(object_with_rdz);
   }
 
  private:
-  static constexpr size_t kValgrindRedZoneBytes = kPageSize;
+  static constexpr size_t kMemoryToolRedZoneBytes = kPageSize;
 };
 
 void LargeObjectSpace::SwapBitmaps() {
@@ -110,7 +111,7 @@ LargeObjectMapSpace::LargeObjectMapSpace(const std::string& name)
       lock_("large object map space lock", kAllocSpaceLock) {}
 
 LargeObjectMapSpace* LargeObjectMapSpace::Create(const std::string& name) {
-  if (Runtime::Current()->RunningOnValgrind()) {
+  if (Runtime::Current()->RunningOnMemoryTool()) {
     return new ValgrindLargeObjectMapSpace(name);
   } else {
     return new LargeObjectMapSpace(name);
