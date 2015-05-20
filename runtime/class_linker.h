@@ -428,6 +428,8 @@ class ClassLinker {
     return intern_table_;
   }
 
+  size_t GetImagePtrSize() const { return image_pointer_size_; }
+
   // Set the entrypoints up for method to the given code.
   void SetEntryPointsToCompiledCode(mirror::ArtMethod* method, const void* method_code) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
