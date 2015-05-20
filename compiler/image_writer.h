@@ -18,7 +18,7 @@
 #define ART_COMPILER_IMAGE_WRITER_H_
 
 #include <stdint.h>
-#include <valgrind.h>
+#include "base/memory_tool.h"
 
 #include <cstddef>
 #include <memory>
@@ -62,7 +62,7 @@ class ImageWriter FINAL {
     // overhead. However, no GC is run anymore at this point. As the array is likely large, it
     // will be allocated in the large object space, where valgrind can track every single
     // allocation. Not explicitly freeing that array will be recognized as a leak.
-    if (RUNNING_ON_VALGRIND != 0) {
+    if (RUNNING_ON_LEAK_CHECKER != 0) {
       FreeStringDataArray();
     }
   }
