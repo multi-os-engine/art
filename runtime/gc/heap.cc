@@ -188,7 +188,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       total_allocation_time_(0),
       verify_object_mode_(kVerifyObjectModeDisabled),
       disable_moving_gc_count_(0),
-      running_on_valgrind_(Runtime::Current()->RunningOnValgrind()),
+      running_on_memory_tool_(Runtime::Current()->RunningOnMemoryTool()),
       use_tlab_(use_tlab),
       main_space_backup_(nullptr),
       min_interval_homogeneous_space_compaction_by_oom_(
@@ -496,7 +496,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       LOG(FATAL) << "There's a gap between the image space and the non-moving space";
     }
   }
-  if (running_on_valgrind_) {
+  if (running_on_memory_tool_) {
     Runtime::Current()->GetInstrumentation()->InstrumentQuickAllocEntryPoints();
   }
   if (VLOG_IS_ON(heap) || VLOG_IS_ON(startup)) {
@@ -2063,6 +2063,7 @@ class ZygoteCompactingCollector FINAL : public collector::SemiSpace {
   }
 
   void AddBin(size_t size, uintptr_t position) {
+    MAKE_MEM_UNDEFINED((void *)position, size);
     if (size != 0) {
       bins_.insert(std::make_pair(size, position));
     }
