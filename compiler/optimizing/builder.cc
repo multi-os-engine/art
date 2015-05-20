@@ -824,13 +824,14 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
         value,
         field_type,
         resolved_field->GetOffset(),
-        resolved_field->IsVolatile()));
+        resolved_field->IsVolatile(),
+        resolved_field->GetDexFieldIndex()));
   } else {
     current_block_->AddInstruction(new (arena_) HInstanceFieldGet(
         current_block_->GetLastInstruction(),
         field_type,
         resolved_field->GetOffset(),
-        resolved_field->IsVolatile()));
+        resolved_field->IsVolatile(), resolved_field->GetDexFieldIndex()));
 
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }

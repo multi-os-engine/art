@@ -52,9 +52,15 @@ inline void DexCache::SetResolvedType(uint32_t type_idx, Class* resolved) {
 inline ArtField* DexCache::GetResolvedField(uint32_t idx, size_t ptr_size) {
   ArtField* field = nullptr;
   if (ptr_size == 8) {
+    if ((uint32_t)GetResolvedFields()->AsLongArray()->GetLength() <= idx) {
+      return nullptr;
+    }
     field = reinterpret_cast<ArtField*>(
         static_cast<uintptr_t>(GetResolvedFields()->AsLongArray()->GetWithoutChecks(idx)));
   } else {
+    if ((uint32_t)GetResolvedFields()->AsIntArray()->GetLength() <= idx) {
+      return nullptr;
+    }
     DCHECK_EQ(ptr_size, 4u);
     field = reinterpret_cast<ArtField*>(
       static_cast<uintptr_t>(GetResolvedFields()->AsIntArray()->GetWithoutChecks(idx)));

@@ -340,6 +340,19 @@ public class Main {
     }
   }
 
+  public SubclassA a = new SubclassA();
+
+  // CHECK-START: void Main.testInstanceFieldGetSimpleRemove() instruction_simplifier_after_types (before)
+  // CHECK:         CheckCast
+
+  // CHECK-START: void Main.testInstanceFieldGetSimpleRemove() instruction_simplifier_after_types (after)
+  // CHECK-NOT:     CheckCast
+  public void testInstanceFieldGetSimpleRemove() {
+    Main m = new Main();
+    Super a = m.a;
+    ((SubclassA)a).g();
+  }
+
   public static void main(String[] args) {
   }
 }

@@ -46,6 +46,8 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
       VisitLoadClass(instr->AsLoadClass());
     } else if (instr->IsNewArray()) {
       VisitNewArray(instr->AsNewArray());
+    } else if (instr->IsInstanceFieldGet()) {
+      VisitInstanceFieldGet(instr->AsInstanceFieldGet());
     }
   }
 
@@ -180,6 +182,26 @@ void ReferenceTypePropagation::VisitNewInstance(HNewInstance* instr) {
 
 void ReferenceTypePropagation::VisitNewArray(HNewArray* instr) {
   UpdateReferenceTypeInfo(instr, instr->GetTypeIndex());
+}
+
+void ReferenceTypePropagation::VisitInstanceFieldGet(HInstanceFieldGet* instr) {
+  if (instr->GetType() != Primitive::kPrimNot || !instr->GetFieldInfo().GetFieldIndex()) {
+    return;
+  }
+
+  ScopedObjectAccess soa(Thread::Current());
+  mirror::DexCache* dex_cache = dex_compilation_unit_.GetClassLinker()->FindDexCache(dex_file_);
+  ArtField* field = dex_compilation_unit_.GetClassLinker()
+    ->GetResolvedField(instr->GetFieldInfo().GetFieldIndex(), dex_cache);
+  if (!field) {
+    return;
+  }
+
+  mirror::Class* resolved_class = field->GetType<false /* kResolve */>();
+  if (resolved_class != nullptr) {
+    MutableHandle<mirror::Class> handle = handles_->NewHandle(resolved_class);
+    instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(handle, true));
+  }
 }
 
 void ReferenceTypePropagation::VisitLoadClass(HLoadClass* instr) {

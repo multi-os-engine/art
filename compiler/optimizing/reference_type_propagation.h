@@ -57,6 +57,7 @@ class ReferenceTypePropagation : public HOptimization {
   void BoundTypeForIfNotNull(HBasicBlock* block);
   void BoundTypeForIfInstanceOf(HBasicBlock* block);
   void UpdateReferenceTypeInfo(HInstruction* instr, uint16_t type_idx);
+  void VisitInstanceFieldGet(HInstanceFieldGet* instr);
 
   void ProcessWorklist();
   void AddToWorklist(HInstruction* instr);
