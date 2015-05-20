@@ -196,7 +196,9 @@ class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
                            Location length_location)
       : instruction_(instruction),
         index_location_(index_location),
-        length_location_(length_location) {}
+        length_location_(length_location) {
+    description_ = "BoundsCheckSlowPathARM64";
+  }
 
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
@@ -223,7 +225,9 @@ class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
 
 class DivZeroCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  explicit DivZeroCheckSlowPathARM64(HDivZeroCheck* instruction) : instruction_(instruction) {}
+  explicit DivZeroCheckSlowPathARM64(HDivZeroCheck* instruction) : instruction_(instruction) {
+    description_ = "DivZeroCheckSlowPathARM64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
@@ -245,6 +249,7 @@ class LoadClassSlowPathARM64 : public SlowPathCodeARM64 {
                          uint32_t dex_pc,
                          bool do_clinit)
       : cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
+    description_ = "LoadClassSlowPathARM64";
     DCHECK(at->IsLoadClass() || at->IsClinitCheck());
   }
 
@@ -297,7 +302,9 @@ class LoadClassSlowPathARM64 : public SlowPathCodeARM64 {
 
 class LoadStringSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  explicit LoadStringSlowPathARM64(HLoadString* instruction) : instruction_(instruction) {}
+  explicit LoadStringSlowPathARM64(HLoadString* instruction) : instruction_(instruction) {
+    description_ = "LoadStringSlowPathARM64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -327,7 +334,9 @@ class LoadStringSlowPathARM64 : public SlowPathCodeARM64 {
 
 class NullCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  explicit NullCheckSlowPathARM64(HNullCheck* instr) : instruction_(instr) {}
+  explicit NullCheckSlowPathARM64(HNullCheck* instr) : instruction_(instr) {
+    description_ = "NullCheckSlowPathARM64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
@@ -347,7 +356,9 @@ class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
   explicit SuspendCheckSlowPathARM64(HSuspendCheck* instruction,
                                      HBasicBlock* successor)
-      : instruction_(instruction), successor_(successor) {}
+      : instruction_(instruction), successor_(successor) {
+    description_ = "SuspendCheckSlowPathARM64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
@@ -393,7 +404,9 @@ class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
       : instruction_(instruction),
         class_to_check_(class_to_check),
         object_class_(object_class),
-        dex_pc_(dex_pc) {}
+        dex_pc_(dex_pc) {
+    description_ = "TypeCheckSlowPathARM64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -440,8 +453,9 @@ class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
 
 class DeoptimizationSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  explicit DeoptimizationSlowPathARM64(HInstruction* instruction)
-    : instruction_(instruction) {}
+  explicit DeoptimizationSlowPathARM64(HInstruction* instruction) : instruction_(instruction) {
+    description_ = "DeoptimizationSlowPathARM64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -485,14 +499,18 @@ Location InvokeDexCallingConventionVisitorARM64::GetNextLocation(Primitive::Type
 
 CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
                                        const Arm64InstructionSetFeatures& isa_features,
-                                       const CompilerOptions& compiler_options)
+                                       const CompilerOptions& compiler_options,
+                                       std::ostream* visualizer_output,
+                                       bool visualizer_enabled)
     : CodeGenerator(graph,
                     kNumberOfAllocatableRegisters,
                     kNumberOfAllocatableFPRegisters,
                     kNumberOfAllocatableRegisterPairs,
                     callee_saved_core_registers.list(),
                     callee_saved_fp_registers.list(),
-                    compiler_options),
+                    compiler_options,
+                    visualizer_output,
+                    visualizer_enabled),
       block_labels_(nullptr),
       location_builder_(graph, this),
       instruction_visitor_(graph, this),

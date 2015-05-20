@@ -50,7 +50,9 @@ static constexpr int kC2ConditionMask = 0x400;
 
 class NullCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
  public:
-  explicit NullCheckSlowPathX86_64(HNullCheck* instruction) : instruction_(instruction) {}
+  explicit NullCheckSlowPathX86_64(HNullCheck* instruction) : instruction_(instruction) {
+    description_ = "NullCheckSlowPathX86_64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -66,7 +68,9 @@ class NullCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
 
 class DivZeroCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
  public:
-  explicit DivZeroCheckSlowPathX86_64(HDivZeroCheck* instruction) : instruction_(instruction) {}
+  explicit DivZeroCheckSlowPathX86_64(HDivZeroCheck* instruction) : instruction_(instruction) {
+    description_ = "DivZeroCheckSlowPathX86_64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -83,7 +87,9 @@ class DivZeroCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
 class DivRemMinusOneSlowPathX86_64 : public SlowPathCodeX86_64 {
  public:
   explicit DivRemMinusOneSlowPathX86_64(Register reg, Primitive::Type type, bool is_div)
-      : cpu_reg_(CpuRegister(reg)), type_(type), is_div_(is_div) {}
+      : cpu_reg_(CpuRegister(reg)), type_(type), is_div_(is_div) {
+    description_ = "DivRemMinusOneSlowPathX86_64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -115,7 +121,9 @@ class DivRemMinusOneSlowPathX86_64 : public SlowPathCodeX86_64 {
 class SuspendCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
  public:
   explicit SuspendCheckSlowPathX86_64(HSuspendCheck* instruction, HBasicBlock* successor)
-      : instruction_(instruction), successor_(successor) {}
+      : instruction_(instruction), successor_(successor) {
+    description_ = "SuspendCheckSlowPathX86_64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorX86_64* x64_codegen = down_cast<CodeGeneratorX86_64*>(codegen);
@@ -155,7 +163,9 @@ class BoundsCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
                             Location length_location)
       : instruction_(instruction),
         index_location_(index_location),
-        length_location_(length_location) {}
+        length_location_(length_location) {
+    description_ = "BoundsCheckSlowPathX86_64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -190,6 +200,7 @@ class LoadClassSlowPathX86_64 : public SlowPathCodeX86_64 {
                           bool do_clinit)
       : cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
     DCHECK(at->IsLoadClass() || at->IsClinitCheck());
+    description_ = "LoadClassSlowPathX86_64";
   }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
@@ -236,7 +247,9 @@ class LoadClassSlowPathX86_64 : public SlowPathCodeX86_64 {
 
 class LoadStringSlowPathX86_64 : public SlowPathCodeX86_64 {
  public:
-  explicit LoadStringSlowPathX86_64(HLoadString* instruction) : instruction_(instruction) {}
+  explicit LoadStringSlowPathX86_64(HLoadString* instruction) : instruction_(instruction) {
+    description_ = "LoadStringSlowPathX86_64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -272,7 +285,9 @@ class TypeCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
       : instruction_(instruction),
         class_to_check_(class_to_check),
         object_class_(object_class),
-        dex_pc_(dex_pc) {}
+        dex_pc_(dex_pc) {
+    description_ = "TypeCheckSlowPathX86_64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -323,8 +338,9 @@ class TypeCheckSlowPathX86_64 : public SlowPathCodeX86_64 {
 
 class DeoptimizationSlowPathX86_64 : public SlowPathCodeX86_64 {
  public:
-  explicit DeoptimizationSlowPathX86_64(HInstruction* instruction)
-      : instruction_(instruction) {}
+  explicit DeoptimizationSlowPathX86_64(HInstruction* instruction) : instruction_(instruction) {
+    description_ = "DeoptimizationSlowPathX86_64";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -428,7 +444,9 @@ static constexpr int kNumberOfCpuRegisterPairs = 0;
 static constexpr Register kFakeReturnRegister = Register(kLastCpuRegister + 1);
 CodeGeneratorX86_64::CodeGeneratorX86_64(HGraph* graph,
                 const X86_64InstructionSetFeatures& isa_features,
-                const CompilerOptions& compiler_options)
+                const CompilerOptions& compiler_options,
+                std::ostream* visualizer_output,
+                bool visualizer_enabled)
       : CodeGenerator(graph,
                       kNumberOfCpuRegisters,
                       kNumberOfFloatRegisters,
@@ -438,7 +456,9 @@ CodeGeneratorX86_64::CodeGeneratorX86_64(HGraph* graph,
                           | (1 << kFakeReturnRegister),
                       ComputeRegisterMask(reinterpret_cast<const int*>(kFpuCalleeSaves),
                                           arraysize(kFpuCalleeSaves)),
-                      compiler_options),
+                      compiler_options,
+                      visualizer_output,
+                      visualizer_enabled),
         block_labels_(graph->GetArena(), 0),
         location_builder_(graph, this),
         instruction_visitor_(graph, this),

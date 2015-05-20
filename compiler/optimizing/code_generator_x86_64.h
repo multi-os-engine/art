@@ -197,7 +197,9 @@ class CodeGeneratorX86_64 : public CodeGenerator {
  public:
   CodeGeneratorX86_64(HGraph* graph,
                   const X86_64InstructionSetFeatures& isa_features,
-                  const CompilerOptions& compiler_options);
+                  const CompilerOptions& compiler_options,
+                  std::ostream* visualizer_output = nullptr,
+                  bool visualizer_enabled = false);
   virtual ~CodeGeneratorX86_64() {}
 
   void GenerateFrameEntry() OVERRIDE;
@@ -227,6 +229,10 @@ class CodeGeneratorX86_64 : public CodeGenerator {
 
   X86_64Assembler* GetAssembler() OVERRIDE {
     return &assembler_;
+  }
+
+  const X86_64Assembler& GetAssembler() const OVERRIDE {
+    return assembler_;
   }
 
   ParallelMoveResolverX86_64* GetMoveResolver() OVERRIDE {

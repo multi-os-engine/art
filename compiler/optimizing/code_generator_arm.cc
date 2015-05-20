@@ -59,7 +59,9 @@ static constexpr DRegister DTMP = D31;
 
 class NullCheckSlowPathARM : public SlowPathCodeARM {
  public:
-  explicit NullCheckSlowPathARM(HNullCheck* instruction) : instruction_(instruction) {}
+  explicit NullCheckSlowPathARM(HNullCheck* instruction) : instruction_(instruction) {
+    description_ = "NullCheckSlowPathARM";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -75,7 +77,9 @@ class NullCheckSlowPathARM : public SlowPathCodeARM {
 
 class DivZeroCheckSlowPathARM : public SlowPathCodeARM {
  public:
-  explicit DivZeroCheckSlowPathARM(HDivZeroCheck* instruction) : instruction_(instruction) {}
+  explicit DivZeroCheckSlowPathARM(HDivZeroCheck* instruction) : instruction_(instruction) {
+    description_ = "DivZeroCheckSlowPathARM";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -92,7 +96,9 @@ class DivZeroCheckSlowPathARM : public SlowPathCodeARM {
 class SuspendCheckSlowPathARM : public SlowPathCodeARM {
  public:
   SuspendCheckSlowPathARM(HSuspendCheck* instruction, HBasicBlock* successor)
-      : instruction_(instruction), successor_(successor) {}
+      : instruction_(instruction), successor_(successor) {
+    description_ = "SuspendCheckSlowPathARM";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -135,7 +141,9 @@ class BoundsCheckSlowPathARM : public SlowPathCodeARM {
                          Location length_location)
       : instruction_(instruction),
         index_location_(index_location),
-        length_location_(length_location) {}
+        length_location_(length_location) {
+    description_ = "BoundsCheckSlowPathARM";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -169,6 +177,7 @@ class LoadClassSlowPathARM : public SlowPathCodeARM {
                        uint32_t dex_pc,
                        bool do_clinit)
       : cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
+    description_ = "LoadClassSlowPathARM";
     DCHECK(at->IsLoadClass() || at->IsClinitCheck());
   }
 
@@ -215,7 +224,9 @@ class LoadClassSlowPathARM : public SlowPathCodeARM {
 
 class LoadStringSlowPathARM : public SlowPathCodeARM {
  public:
-  explicit LoadStringSlowPathARM(HLoadString* instruction) : instruction_(instruction) {}
+  explicit LoadStringSlowPathARM(HLoadString* instruction) : instruction_(instruction) {
+    description_ = "LoadStringSlowPathARM";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -250,7 +261,9 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
       : instruction_(instruction),
         class_to_check_(class_to_check),
         object_class_(object_class),
-        dex_pc_(dex_pc) {}
+        dex_pc_(dex_pc) {
+    description_ = "TypeCheckSlowPathARM";
+  }
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -377,7 +390,9 @@ size_t CodeGeneratorARM::RestoreFloatingPointRegister(size_t stack_index, uint32
 
 CodeGeneratorARM::CodeGeneratorARM(HGraph* graph,
                                    const ArmInstructionSetFeatures& isa_features,
-                                   const CompilerOptions& compiler_options)
+                                   const CompilerOptions& compiler_options,
+                                   std::ostream* visualizer_output,
+                                   bool visualizer_enabled)
     : CodeGenerator(graph,
                     kNumberOfCoreRegisters,
                     kNumberOfSRegisters,
@@ -386,7 +401,9 @@ CodeGeneratorARM::CodeGeneratorARM(HGraph* graph,
                                         arraysize(kCoreCalleeSaves)),
                     ComputeRegisterMask(reinterpret_cast<const int*>(kFpuCalleeSaves),
                                         arraysize(kFpuCalleeSaves)),
-                    compiler_options),
+                    compiler_options,
+                    visualizer_output,
+                    visualizer_enabled),
       block_labels_(graph->GetArena(), 0),
       location_builder_(graph, this),
       instruction_visitor_(graph, this),

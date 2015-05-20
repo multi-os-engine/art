@@ -231,7 +231,9 @@ class CodeGeneratorARM64 : public CodeGenerator {
  public:
   CodeGeneratorARM64(HGraph* graph,
                      const Arm64InstructionSetFeatures& isa_features,
-                     const CompilerOptions& compiler_options);
+                     const CompilerOptions& compiler_options,
+                     std::ostream* visualizer_output = nullptr,
+                     bool visualizer_enabled = false);
   virtual ~CodeGeneratorARM64() {}
 
   void GenerateFrameEntry() OVERRIDE;
@@ -266,6 +268,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
   HGraphVisitor* GetLocationBuilder() OVERRIDE { return &location_builder_; }
   HGraphVisitor* GetInstructionVisitor() OVERRIDE { return &instruction_visitor_; }
   Arm64Assembler* GetAssembler() OVERRIDE { return &assembler_; }
+  const Arm64Assembler& GetAssembler() const OVERRIDE { return assembler_; }
   vixl::MacroAssembler* GetVIXLAssembler() { return GetAssembler()->vixl_masm_; }
 
   // Emit a write barrier.

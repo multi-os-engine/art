@@ -206,7 +206,9 @@ class CodeGeneratorARM : public CodeGenerator {
  public:
   CodeGeneratorARM(HGraph* graph,
                    const ArmInstructionSetFeatures& isa_features,
-                   const CompilerOptions& compiler_options);
+                   const CompilerOptions& compiler_options,
+                   std::ostream* visualizer_output = nullptr,
+                   bool visualizer_enabled = false);
   virtual ~CodeGeneratorARM() {}
 
   void GenerateFrameEntry() OVERRIDE;
@@ -237,6 +239,10 @@ class CodeGeneratorARM : public CodeGenerator {
 
   ArmAssembler* GetAssembler() OVERRIDE {
     return &assembler_;
+  }
+
+  const ArmAssembler& GetAssembler() const OVERRIDE {
+    return assembler_;
   }
 
   uintptr_t GetAddressOf(HBasicBlock* block) const OVERRIDE {
