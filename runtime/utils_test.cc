@@ -26,7 +26,7 @@
 #include "scoped_thread_state_change.h"
 #include "handle_scope-inl.h"
 
-#include <valgrind.h>
+#include "base/memory_tool.h"
 
 namespace art {
 

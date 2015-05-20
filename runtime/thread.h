@@ -29,6 +29,7 @@
 #include "arch/instruction_set.h"
 #include "atomic.h"
 #include "base/macros.h"
+#include "base/memory_tool.h"
 #include "base/mutex.h"
 #include "entrypoints/interpreter/interpreter_entrypoints.h"
 #include "entrypoints/jni/jni_entrypoints.h"
@@ -142,7 +143,8 @@ class Thread {
   // of the stack (lowest memory).  The higher portion of the memory
   // is protected against reads and the lower is available for use while
   // throwing the StackOverflow exception.
-  static constexpr size_t kStackOverflowProtectedSize = 4 * KB;
+  static constexpr size_t kStackOverflowProtectedSize =
+      4 * kMemoryToolStackGuardSizeScale * KB;
   static const size_t kStackOverflowImplicitCheckSize;
 
   // Creates a new native thread corresponding to the given managed peer.
