@@ -42,14 +42,17 @@ class ReferenceTypePropagation : public HOptimization {
  private:
   void VisitNewInstance(HNewInstance* new_instance);
   void VisitLoadClass(HLoadClass* load_class);
+  void VisitNewArray(HNewArray* instr);
   void VisitPhi(HPhi* phi);
   void VisitBasicBlock(HBasicBlock* block);
+  void SetClassAsTypeInfo(HInstruction* instr, mirror::Class* klass);
 
   void UpdateBoundType(HBoundType* bound_type) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void UpdatePhi(HPhi* phi) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void BoundTypeForIfNotNull(HBasicBlock* block);
   void BoundTypeForIfInstanceOf(HBasicBlock* block);
+  void UpdateReferenceTypeInfo(HInstruction* instr, uint16_t type_idx, const DexFile& dex_file);
 
   void ProcessWorklist();
   void AddToWorklist(HInstruction* instr);
