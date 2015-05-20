@@ -3138,19 +3138,43 @@ class HNullCheck : public HExpression<1> {
   DISALLOW_COPY_AND_ASSIGN(HNullCheck);
 };
 
+static const uint32_t kUnknownIndex = static_cast<uint32_t>(-1);
+
+class DexCacheIndex {
+  public:
+    DexCacheIndex(uint32_t index, const DexFile* cache)
+      : index_(index), dex_cache_(cache) {}
+
+    DexCacheIndex() : index_(kUnknownIndex), dex_cache_(nullptr) {}
+
+    uint32_t GetIndex() const { return index_; }
+    const DexFile* GetDexFile() const { return dex_cache_; }
+    bool IsUndefined() const { return !dex_cache_ || index_ == kUnknownIndex; }
+
+  private:
+    uint32_t index_;
+    const DexFile* const dex_cache_;
+};
+
 class FieldInfo : public ValueObject {
  public:
-  FieldInfo(MemberOffset field_offset, Primitive::Type field_type, bool is_volatile)
-      : field_offset_(field_offset), field_type_(field_type), is_volatile_(is_volatile) {}
+  FieldInfo(MemberOffset field_offset,
+            Primitive::Type field_type,
+            bool is_volatile,
+            const DexCacheIndex& cache_idx)
+      : field_offset_(field_offset), field_type_(field_type), is_volatile_(is_volatile),
+        cache_idx_(cache_idx) {}
 
   MemberOffset GetFieldOffset() const { return field_offset_; }
   Primitive::Type GetFieldType() const { return field_type_; }
   bool IsVolatile() const { return is_volatile_; }
+  const DexCacheIndex& GetCacheIndex() const { return cache_idx_; }
 
  private:
   const MemberOffset field_offset_;
   const Primitive::Type field_type_;
   const bool is_volatile_;
+  const DexCacheIndex cache_idx_;
 };
 
 class HInstanceFieldGet : public HExpression<1> {
@@ -3158,9 +3182,10 @@ class HInstanceFieldGet : public HExpression<1> {
   HInstanceFieldGet(HInstruction* value,
                     Primitive::Type field_type,
                     MemberOffset field_offset,
-                    bool is_volatile)
+                    bool is_volatile,
+                    const DexCacheIndex& cache_idx = {})
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile, cache_idx) {
     SetRawInputAt(0, value);
   }
 
@@ -3198,9 +3223,10 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     HInstruction* value,
                     Primitive::Type field_type,
                     MemberOffset field_offset,
-                    bool is_volatile)
+                    bool is_volatile,
+                    const DexCacheIndex& cache_idx = {})
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type, is_volatile),
+        field_info_(field_offset, field_type, is_volatile, cache_idx),
         value_can_be_null_(true) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, value);
@@ -3591,9 +3617,10 @@ class HStaticFieldGet : public HExpression<1> {
   HStaticFieldGet(HInstruction* cls,
                   Primitive::Type field_type,
                   MemberOffset field_offset,
-                  bool is_volatile)
+                  bool is_volatile,
+                  const DexCacheIndex& cache_idx)
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile, cache_idx) {
     SetRawInputAt(0, cls);
   }
 
@@ -3628,9 +3655,10 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                   HInstruction* value,
                   Primitive::Type field_type,
                   MemberOffset field_offset,
-                  bool is_volatile)
+                  bool is_volatile,
+                  const DexCacheIndex& cache_idx)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type, is_volatile),
+        field_info_(field_offset, field_type, is_volatile, cache_idx),
         value_can_be_null_(true) {
     SetRawInputAt(0, cls);
     SetRawInputAt(1, value);
