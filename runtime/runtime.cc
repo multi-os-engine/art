@@ -24,7 +24,7 @@
 
 #include <signal.h>
 #include <sys/syscall.h>
-#include <valgrind.h>
+#include "base/memory_tool.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -172,7 +172,7 @@ Runtime::Runtime()
       exit_(nullptr),
       abort_(nullptr),
       stats_enabled_(false),
-      running_on_valgrind_(RUNNING_ON_VALGRIND > 0),
+      is_running_on_memory_tool_(RUNNING_ON_MEMORY_TOOL),
       profiler_started_(false),
       instrumentation_(),
       main_thread_group_(nullptr),
