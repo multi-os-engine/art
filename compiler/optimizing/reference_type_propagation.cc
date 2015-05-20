@@ -35,7 +35,7 @@ void ReferenceTypePropagation::Run() {
 
 void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
   // TODO: handle other instructions that give type info
-  // (NewArray/Call/Field accesses/array accesses)
+  // (Call/Field accesses/array accesses)
 
   // Initialize exact types first for faster convergence.
   for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
@@ -44,6 +44,8 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
       VisitNewInstance(instr->AsNewInstance());
     } else if (instr->IsLoadClass()) {
       VisitLoadClass(instr->AsLoadClass());
+    } else if (instr->IsNewArray()) {
+      VisitNewArray(instr->AsNewArray());
     }
   }
 
@@ -159,15 +161,27 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
   }
 }
 
-void ReferenceTypePropagation::VisitNewInstance(HNewInstance* instr) {
+void ReferenceTypePropagation::GetAndSetReferenceTypeInfo(HInstruction* instr, uint16_t type_idx) {
+  if (instr->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+
   ScopedObjectAccess soa(Thread::Current());
   mirror::DexCache* dex_cache = dex_compilation_unit_.GetClassLinker()->FindDexCache(dex_file_);
   // Get type from dex cache assuming it was populated by the verifier.
-  mirror::Class* resolved_class = dex_cache->GetResolvedType(instr->GetTypeIndex());
+  mirror::Class* resolved_class = dex_cache->GetResolvedType(type_idx);
   if (resolved_class != nullptr) {
     MutableHandle<mirror::Class> handle = handles_->NewHandle(resolved_class);
     instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(handle, true));
   }
+}
+
+void ReferenceTypePropagation::VisitNewInstance(HNewInstance* instr) {
+  GetAndSetReferenceTypeInfo(instr, instr->GetTypeIndex());
+}
+
+void ReferenceTypePropagation::VisitNewArray(HNewArray* instr) {
+  GetAndSetReferenceTypeInfo(instr, instr->GetTypeIndex());
 }
 
 void ReferenceTypePropagation::VisitLoadClass(HLoadClass* instr) {
