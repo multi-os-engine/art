@@ -23,7 +23,7 @@ namespace space {
 
 // Default number of bytes to use as a red zone (rdz). A red zone of this size will be placed before
 // and after each allocation. 8 bytes provides long/double alignment.
-static constexpr size_t kDefaultValgrindRedZoneBytes = 8;
+static constexpr size_t kDefaultMemoryToolRedZoneBytes = 8;
 
 }  // namespace space
 }  // namespace gc
