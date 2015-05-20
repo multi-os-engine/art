@@ -16,6 +16,7 @@
 
 #include "rosalloc.h"
 
+#include "base/memory_tool.h"
 #include "base/mutex-inl.h"
 #include "gc/space/valgrind_settings.h"
 #include "mem_map.h"
@@ -58,7 +59,7 @@ RosAlloc::RosAlloc(void* base, size_t capacity, size_t max_capacity,
       bulk_free_lock_("rosalloc bulk free lock", kRosAllocBulkFreeLock),
       page_release_mode_(page_release_mode),
       page_release_size_threshold_(page_release_size_threshold),
-      running_on_valgrind_(running_on_valgrind) {
+      running_on_memory_tool_(running_on_valgrind) {
   DCHECK_EQ(RoundUp(capacity, kPageSize), capacity);
   DCHECK_EQ(RoundUp(max_capacity, kPageSize), max_capacity);
   CHECK_LE(capacity, max_capacity);
@@ -1897,7 +1898,7 @@ void RosAlloc::Verify() {
     MutexLock lock_mu(self, lock_);
     size_t pm_end = page_map_size_;
     size_t i = 0;
-    size_t valgrind_modifier =  running_on_valgrind_ ?
+    size_t valgrind_modifier =  running_on_memory_tool_ ?
         2 * ::art::gc::space::kDefaultValgrindRedZoneBytes :  // Redzones before and after.
         0;
     while (i < pm_end) {
@@ -1938,7 +1939,7 @@ void RosAlloc::Verify() {
             idx++;
           }
           uint8_t* start = base_ + i * kPageSize;
-          if (running_on_valgrind_) {
+          if (running_on_memory_tool_) {
             start += ::art::gc::space::kDefaultValgrindRedZoneBytes;
           }
           mirror::Object* obj = reinterpret_cast<mirror::Object*>(start);
@@ -2011,7 +2012,7 @@ void RosAlloc::Verify() {
   }
   // Call Verify() here for the lock order.
   for (auto& run : runs) {
-    run->Verify(self, this, running_on_valgrind_);
+    run->Verify(self, this, running_on_memory_tool_);
   }
 }
 

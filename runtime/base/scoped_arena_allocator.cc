@@ -17,7 +17,7 @@
 #include "scoped_arena_allocator.h"
 
 #include "arena_allocator.h"
-#include <memcheck/memcheck.h>
+#include "base/memory_tool.h"
 
 namespace art {
 
@@ -30,7 +30,7 @@ ArenaStack::ArenaStack(ArenaPool* arena_pool)
     top_arena_(nullptr),
     top_ptr_(nullptr),
     top_end_(nullptr),
-    running_on_valgrind_(RUNNING_ON_VALGRIND > 0) {
+    running_on_memory_tool_(RUNNING_ON_MEMORY_TOOL > 0) {
 }
 
 ArenaStack::~ArenaStack() {
@@ -100,8 +100,8 @@ void* ArenaStack::AllocValgrind(size_t bytes, ArenaAllocKind kind) {
   }
   CurrentStats()->RecordAlloc(bytes, kind);
   top_ptr_ = ptr + rounded_bytes;
-  VALGRIND_MAKE_MEM_UNDEFINED(ptr, bytes);
-  VALGRIND_MAKE_MEM_NOACCESS(ptr + bytes, rounded_bytes - bytes);
+  MAKE_MEM_UNDEFINED(ptr, bytes);
+  MAKE_MEM_NOACCESS(ptr + bytes, rounded_bytes - bytes);
   return ptr;
 }
 

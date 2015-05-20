@@ -62,7 +62,7 @@ DlMallocSpace* DlMallocSpace::CreateFromMemMap(MemMap* mem_map, const std::strin
 
   // Everything is set so record in immutable structure and leave
   uint8_t* begin = mem_map->Begin();
-  if (Runtime::Current()->RunningOnValgrind()) {
+  if (Runtime::Current()->RunningOnMemoryTool()) {
     return new ValgrindMallocSpace<DlMallocSpace, kDefaultValgrindRedZoneBytes, true, false>(
         mem_map, initial_size, name, mspace, begin, end, begin + capacity, growth_limit,
         can_move_objects, starting_size);
@@ -152,7 +152,7 @@ MallocSpace* DlMallocSpace::CreateInstance(MemMap* mem_map, const std::string& n
                                            void* allocator, uint8_t* begin, uint8_t* end,
                                            uint8_t* limit, size_t growth_limit,
                                            bool can_move_objects) {
-  if (Runtime::Current()->RunningOnValgrind()) {
+  if (Runtime::Current()->RunningOnMemoryTool()) {
     return new ValgrindMallocSpace<DlMallocSpace, kDefaultValgrindRedZoneBytes, true, false>(
         mem_map, initial_size_, name, allocator, begin, end, limit, growth_limit,
         can_move_objects, starting_size_);

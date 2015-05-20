@@ -54,9 +54,10 @@ class ValgrindLargeObjectMapSpace FINAL : public LargeObjectMapSpace {
                                    usable_size, bytes_tl_bulk_allocated);
     mirror::Object* object_without_rdz = reinterpret_cast<mirror::Object*>(
         reinterpret_cast<uintptr_t>(obj) + kValgrindRedZoneBytes);
-    VALGRIND_MAKE_MEM_NOACCESS(reinterpret_cast<void*>(obj), kValgrindRedZoneBytes);
-    VALGRIND_MAKE_MEM_NOACCESS(reinterpret_cast<uint8_t*>(object_without_rdz) + num_bytes,
-                               kValgrindRedZoneBytes);
+    MAKE_MEM_NOACCESS(reinterpret_cast<void*>(obj), kValgrindRedZoneBytes);
+    MAKE_MEM_NOACCESS(
+        reinterpret_cast<uint8_t*>(object_without_rdz) + num_bytes,
+        kValgrindRedZoneBytes);
     if (usable_size != nullptr) {
       *usable_size = num_bytes;  // Since we have redzones, shrink the usable size.
     }
@@ -72,7 +73,7 @@ class ValgrindLargeObjectMapSpace FINAL : public LargeObjectMapSpace {
   virtual size_t Free(Thread* self, mirror::Object* obj) OVERRIDE {
     mirror::Object* object_with_rdz = reinterpret_cast<mirror::Object*>(
         reinterpret_cast<uintptr_t>(obj) - kValgrindRedZoneBytes);
-    VALGRIND_MAKE_MEM_UNDEFINED(object_with_rdz, AllocationSize(obj, nullptr));
+    MAKE_MEM_UNDEFINED(object_with_rdz, AllocationSize(obj, nullptr));
     return LargeObjectMapSpace::Free(self, object_with_rdz);
   }
 
@@ -110,7 +111,7 @@ LargeObjectMapSpace::LargeObjectMapSpace(const std::string& name)
       lock_("large object map space lock", kAllocSpaceLock) {}
 
 LargeObjectMapSpace* LargeObjectMapSpace::Create(const std::string& name) {
-  if (Runtime::Current()->RunningOnValgrind()) {
+  if (Runtime::Current()->RunningOnMemoryTool()) {
     return new ValgrindLargeObjectMapSpace(name);
   } else {
     return new LargeObjectMapSpace(name);

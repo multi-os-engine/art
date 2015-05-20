@@ -95,7 +95,7 @@ class RosAllocSpace : public MallocSpace {
   ALWAYS_INLINE size_t MaxBytesBulkAllocatedForNonvirtual(size_t num_bytes);
 
   // TODO: NO_THREAD_SAFETY_ANALYSIS because SizeOf() requires that mutator_lock is held.
-  template<bool kMaybeRunningOnValgrind>
+  template<bool kMaybeRunningOnMemoryTool>
   size_t AllocationSizeNonvirtual(mirror::Object* obj, size_t* usable_size)
       NO_THREAD_SAFETY_ANALYSIS;
 
@@ -158,7 +158,7 @@ class RosAllocSpace : public MallocSpace {
   void* CreateAllocator(void* base, size_t morecore_start, size_t initial_size,
                         size_t maximum_size, bool low_memory_mode) OVERRIDE {
     return CreateRosAlloc(base, morecore_start, initial_size, maximum_size, low_memory_mode,
-                          RUNNING_ON_VALGRIND != 0);
+                          RUNNING_ON_MEMORY_TOOL != 0);
   }
   static allocator::RosAlloc* CreateRosAlloc(void* base, size_t morecore_start, size_t initial_size,
                                              size_t maximum_size, bool low_memory_mode,

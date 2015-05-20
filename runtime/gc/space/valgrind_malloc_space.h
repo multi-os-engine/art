@@ -19,8 +19,6 @@
 
 #include "malloc_space.h"
 
-#include <valgrind.h>
-
 namespace art {
 namespace gc {
 namespace space {

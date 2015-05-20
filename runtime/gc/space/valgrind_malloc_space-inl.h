@@ -19,7 +19,7 @@
 
 #include "valgrind_malloc_space.h"
 
-#include <memcheck/memcheck.h>
+#include "base/memory_tool.h"
 
 #include "valgrind_settings.h"
 
@@ -53,21 +53,21 @@ inline mirror::Object* AdjustForValgrind(void* obj_with_rdz, size_t num_bytes,
   }
 
   // Left redzone.
-  VALGRIND_MAKE_MEM_NOACCESS(obj_with_rdz, kValgrindRedZoneBytes);
+  MAKE_MEM_NOACCESS(obj_with_rdz, kValgrindRedZoneBytes);
 
   // Make requested memory readable.
   // (If the allocator assumes memory is zeroed out, we might get UNDEFINED warnings, so make
   //  everything DEFINED initially.)
   mirror::Object* result = reinterpret_cast<mirror::Object*>(
       reinterpret_cast<uint8_t*>(obj_with_rdz) + kValgrindRedZoneBytes);
-  VALGRIND_MAKE_MEM_DEFINED(result, num_bytes);
+  MAKE_MEM_DEFINED(result, num_bytes);
 
   // Right redzone. Assumes that if bytes_allocated > usable_size, then the difference is
   // management data at the upper end, and for simplicity we will not protect that.
   // At the moment, this fits RosAlloc (no management data in a slot, usable_size == alloc_size)
   // and DlMalloc (allocation_size = (usable_size == num_bytes) + 4, 4 is management)
-  VALGRIND_MAKE_MEM_NOACCESS(reinterpret_cast<uint8_t*>(result) + num_bytes,
-                             usable_size - (num_bytes + kValgrindRedZoneBytes));
+  MAKE_MEM_NOACCESS(reinterpret_cast<uint8_t*>(result) + num_bytes,
+                    usable_size - (num_bytes + kValgrindRedZoneBytes));
 
   return result;
 }
@@ -198,6 +198,7 @@ size_t ValgrindMallocSpace<S,
     Thread* self, mirror::Object* ptr) {
   void* obj_after_rdz = reinterpret_cast<void*>(ptr);
   uint8_t* obj_with_rdz = reinterpret_cast<uint8_t*>(obj_after_rdz) - kValgrindRedZoneBytes;
+
   // Make redzones undefined.
   size_t usable_size;
   size_t allocation_size = AllocationSize(ptr, &usable_size);
@@ -206,9 +207,9 @@ size_t ValgrindMallocSpace<S,
   // Use the obj-size-for-usable flag to determine whether usable_size is the more important one,
   // e.g., whether there's data in the allocation_size (and usable_size can't be trusted).
   if (kUseObjSizeForUsable) {
-    VALGRIND_MAKE_MEM_UNDEFINED(obj_with_rdz, allocation_size);
+    MAKE_MEM_UNDEFINED(obj_with_rdz, allocation_size);
   } else {
-    VALGRIND_MAKE_MEM_UNDEFINED(obj_with_rdz, usable_size + 2 * kValgrindRedZoneBytes);
+    MAKE_MEM_UNDEFINED(obj_with_rdz, usable_size + 2 * kValgrindRedZoneBytes);
   }
 
   return S::Free(self, reinterpret_cast<mirror::Object*>(obj_with_rdz));
@@ -241,8 +242,9 @@ ValgrindMallocSpace<S,
                     kAdjustForRedzoneInAllocSize,
                     kUseObjSizeForUsable>::ValgrindMallocSpace(
     MemMap* mem_map, size_t initial_size, Params... params) : S(mem_map, initial_size, params...) {
-  VALGRIND_MAKE_MEM_UNDEFINED(mem_map->Begin() + initial_size,
-                              mem_map->Size() - initial_size);
+  MAKE_MEM_UNDEFINED(mem_map->Begin(), initial_size);
+  MAKE_MEM_UNDEFINED(mem_map->Begin() + initial_size,
+                     mem_map->Size() - initial_size);
 }
 
 template <typename S,

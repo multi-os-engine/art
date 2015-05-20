@@ -503,7 +503,7 @@ class RosAlloc {
   const size_t page_release_size_threshold_;
 
   // Whether this allocator is running under Valgrind.
-  bool running_on_valgrind_;
+  bool running_on_memory_tool_;
 
   // The base address of the memory region that's managed by this allocator.
   uint8_t* Begin() { return base_; }
