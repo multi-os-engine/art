@@ -35,10 +35,6 @@ def matchWords(checkerWord, stringWord, variables, pos):
   """ Attempts to match a list of RegexExpressions against a string. 
       Returns updated variable dictionary if successful and None otherwise.
   """
-  # Create own copy of the variable dictionary, otherwise updates would change
-  # the caller's state.
-  variables = dict(variables)
-
   for expression in checkerWord:
     # If `expression` is a variable reference, replace it with the value.
     if expression.variant == RegexExpression.Variant.VarRef:
@@ -59,7 +55,7 @@ def matchWords(checkerWord, stringWord, variables, pos):
     # If `expression` was a variable definition, set the variable's value.
     if expression.variant == RegexExpression.Variant.VarDef:
       if expression.name not in variables:
-        variables[expression.name] = stringWord[:match.end()]
+        variables = variables.copyWith(expression.name, stringWord[:match.end()])
       else:
         Logger.testFailed("Multiple definitions of variable \"{}\"".format(expression.name), 
                           pos.fileName, pos.lineNo)
