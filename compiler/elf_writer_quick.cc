@@ -45,6 +45,15 @@ namespace art {
 // because if they need it sometimes, they might as well always use it.
 constexpr dwarf::CFIFormat kCFIFormat = dwarf::DW_EH_FRAME_FORMAT;
 
+// The ARM specification defines three special mapping symbols
+// $a, $t and $d which mark ARM, Thumb and data ranges respectively.
+// These symbols can be used by tools, for example, to pretty
+// print instructions correctly.  Objdump will use them if they
+// exist, but it will still work well without them.
+// However, these extra symbols take space, so let's just generate
+// one symbol which marks the whole .text section as code.
+constexpr bool kGenerateSingleArmMappingSymbol = true;
+
 template <typename ElfTypes>
 bool ElfWriterQuick<ElfTypes>::Create(File* elf_file,
                                       OatWriter* oat_writer,
@@ -244,6 +253,7 @@ bool ElfWriterQuick<ElfTypes>::Write(
 
 template <typename ElfTypes>
 static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder, OatWriter* oat_writer) {
+  const InstructionSet isa = oat_writer->GetCompilerDriver()->GetInstructionSet();
   const std::vector<OatWriter::DebugInfo>& method_info = oat_writer->GetMethodDebugInfo();
 
   // Find all addresses (low_pc) which contain deduped methods.
@@ -271,11 +281,20 @@ static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder, OatWriter* oat_writ
     symtab->AddSymbol(name, builder->GetText(), low_pc,
                       true, it->high_pc_ - it->low_pc_, STB_GLOBAL, STT_FUNC);
 
-    // Conforming to aaelf, add $t mapping symbol to indicate start of a sequence of thumb2
-    // instructions, so that disassembler tools can correctly disassemble.
-    if (it->compiled_method_->GetInstructionSet() == kThumb2) {
-      symtab->AddSymbol("$t", builder->GetText(), it->low_pc_ & ~1, true,
-                        0, STB_LOCAL, STT_NOTYPE);
+    if (!kGenerateSingleArmMappingSymbol) {
+      // Conforming to aaelf, add $t mapping symbol to indicate start of a sequence of thumb2
+      // instructions, so that disassembler tools can correctly disassemble.
+      if (it->compiled_method_->GetInstructionSet() == kThumb2) {
+        symtab->AddSymbol("$t", builder->GetText(), it->low_pc_ & ~1, true,
+                          0, STB_LOCAL, STT_NOTYPE);
+      }
+    }
+  }
+
+  if (kGenerateSingleArmMappingSymbol) {
+    // Add $t mapping symbol to mark the whole .text section as Thumb2 for disassemblers.
+    if (isa == kThumb2) {
+      symtab->AddSymbol("$t", builder->GetText(), 0, true, 0, STB_LOCAL, STT_NOTYPE);
     }
   }
 }
