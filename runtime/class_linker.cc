@@ -290,7 +290,7 @@ void ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   gc::Heap* const heap = Runtime::Current()->GetHeap();
   // The GC can't handle an object with a null class since we can't get the size of this object.
   heap->IncrementDisableMovingGC(self);
-  StackHandleScope<64> hs(self);  // 64 is picked arbitrarily.
+  StackHandleScope<16> hs(self);
   Handle<mirror::Class> java_lang_Class(hs.NewHandle(down_cast<mirror::Class*>(
       heap->AllocNonMovableObject<true>(self, nullptr,
                                         mirror::Class::ClassClassSize(),
@@ -1377,7 +1377,7 @@ ClassLinker::~ClassLinker() {
 
 mirror::DexCache* ClassLinker::AllocDexCache(Thread* self, const DexFile& dex_file) {
   gc::Heap* const heap = Runtime::Current()->GetHeap();
-  StackHandleScope<16> hs(self);
+  StackHandleScope<7> hs(self);
   Handle<mirror::Class> dex_cache_class(hs.NewHandle(GetClassRoot(kJavaLangDexCache)));
   Handle<mirror::DexCache> dex_cache(
       hs.NewHandle(down_cast<mirror::DexCache*>(
@@ -1562,7 +1562,7 @@ bool ClassLinker::FindClassInPathClassLoader(ScopedObjectAccessAlreadyRunnable& 
   }
 
   // Handles as RegisterDexFile may allocate dex caches (and cause thread suspension).
-  StackHandleScope<4> hs(self);
+  StackHandleScope<2> hs(self);
   Handle<mirror::ClassLoader> h_parent(hs.NewHandle(class_loader->GetParent()));
   bool recursive_result = FindClassInPathClassLoader(soa, self, descriptor, hash, h_parent, result);
 
@@ -3214,7 +3214,7 @@ mirror::Class* ClassLinker::CreateProxyClass(ScopedObjectAccessAlreadyRunnable& 
                                              jobjectArray interfaces, jobject loader,
                                              jobjectArray methods, jobjectArray throws) {
   Thread* self = soa.Self();
-  StackHandleScope<9> hs(self);
+  StackHandleScope<3> hs(self);
   MutableHandle<mirror::Class> klass(hs.NewHandle(
       AllocClass(self, GetClassRoot(kJavaLangClass), sizeof(mirror::Class))));
   if (klass.Get() == nullptr) {
@@ -5599,7 +5599,7 @@ jobject ClassLinker::CreatePathClassLoader(Thread* self, std::vector<const DexFi
   }
 
   // For now, create a libcore-level DexFile for each ART DexFile. This "explodes" multidex.
-  StackHandleScope<10> hs(self);
+  StackHandleScope<6> hs(self);
 
   ArtField* dex_elements_field =
       soa.DecodeField(WellKnownClasses::dalvik_system_DexPathList_dexElements);

@@ -137,7 +137,7 @@ TEST_F(ProxyTest, ProxyClassHelper) {
 TEST_F(ProxyTest, ProxyFieldHelper) {
   ScopedObjectAccess soa(Thread::Current());
   jobject jclass_loader = LoadDex("Interfaces");
-  StackHandleScope<9> hs(soa.Self());
+  StackHandleScope<6> hs(soa.Self());
   Handle<mirror::ClassLoader> class_loader(
       hs.NewHandle(soa.Decode<mirror::ClassLoader*>(jclass_loader)));
 

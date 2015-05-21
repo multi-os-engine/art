@@ -323,7 +323,7 @@ static jobject Class_getDeclaredMethodInternal(JNIEnv* env, jobject javaThis,
   // were synthesized by the runtime.
   constexpr uint32_t kSkipModifiers = kAccMiranda | kAccSynthetic;
   ScopedFastNativeObjectAccess soa(env);
-  StackHandleScope<5> hs(soa.Self());
+  StackHandleScope<4> hs(soa.Self());
   auto h_method_name = hs.NewHandle(soa.Decode<mirror::String*>(name));
   if (UNLIKELY(h_method_name.Get() == nullptr)) {
     ThrowNullPointerException("name == null");
@@ -395,7 +395,7 @@ static jobject Class_getDeclaredMethodInternal(JNIEnv* env, jobject javaThis,
 static jobjectArray Class_getDeclaredMethodsUnchecked(JNIEnv* env, jobject javaThis,
                                                       jboolean publicOnly) {
   ScopedFastNativeObjectAccess soa(env);
-  StackHandleScope<5> hs(soa.Self());
+  StackHandleScope<3> hs(soa.Self());
   auto* klass = DecodeClass(soa, javaThis);
   auto virtual_methods = hs.NewHandle(klass->GetVirtualMethods());
   auto direct_methods = hs.NewHandle(klass->GetDirectMethods());

@@ -95,7 +95,7 @@ TEST_F(ObjectTest, IsInSamePackage) {
 
 TEST_F(ObjectTest, Clone) {
   ScopedObjectAccess soa(Thread::Current());
-  StackHandleScope<2> hs(soa.Self());
+  StackHandleScope<1> hs(soa.Self());
   Handle<ObjectArray<Object>> a1(
       hs.NewHandle(class_linker_->AllocObjectArray<Object>(soa.Self(), 256)));
   size_t s1 = a1->SizeOf();
@@ -499,7 +499,7 @@ TEST_F(ObjectTest, DescriptorCompare) {
 
   jobject jclass_loader_1 = LoadDex("ProtoCompare");
   jobject jclass_loader_2 = LoadDex("ProtoCompare2");
-  StackHandleScope<4> hs(soa.Self());
+  StackHandleScope<2> hs(soa.Self());
   Handle<ClassLoader> class_loader_1(hs.NewHandle(soa.Decode<ClassLoader*>(jclass_loader_1)));
   Handle<ClassLoader> class_loader_2(hs.NewHandle(soa.Decode<ClassLoader*>(jclass_loader_2)));
 
@@ -704,7 +704,7 @@ TEST_F(ObjectTest, FindInstanceField) {
 
 TEST_F(ObjectTest, FindStaticField) {
   ScopedObjectAccess soa(Thread::Current());
-  StackHandleScope<4> hs(soa.Self());
+  StackHandleScope<2> hs(soa.Self());
   Handle<String> s(hs.NewHandle(String::AllocFromModifiedUtf8(soa.Self(), "ABC")));
   ASSERT_TRUE(s.Get() != nullptr);
   Handle<Class> c(hs.NewHandle(s->GetClass()));
