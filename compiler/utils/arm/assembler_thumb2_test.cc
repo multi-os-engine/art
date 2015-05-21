@@ -370,4 +370,23 @@ TEST_F(AssemblerThumb2Test, StoreWordPairToNonThumbOffset) {
   DriverStr(expected, "StoreWordPairToNonThumbOffset");
 }
 
+TEST_F(AssemblerThumb2Test, CompareAndBranch) {
+
+  arm::NearLabel label;
+  __ CompareAndBranchIfZero(arm::R0, &label);
+  __ CompareAndBranchIfZero(arm::R11, &label);
+  __ CompareAndBranchIfNonZero(arm::R0, &label);
+  __ CompareAndBranchIfNonZero(arm::R11, &label);
+  __ Bind(&label);
+
+  const char* expected =
+      "cbz r0, 2\n"
+      "cmp r11, 0\n"
+      "beq 2\n"
+      "cbnz r0, 2\n"
+      "cmp r11, 0\n"
+      "bne 0\n";
+  DriverStr(expected, "CompareAndBranch");
+}
+
 }  // namespace art
