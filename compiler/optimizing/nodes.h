@@ -3562,9 +3562,9 @@ class HStaticFieldGet : public HExpression<1> {
   HStaticFieldGet(HInstruction* cls,
                   Primitive::Type field_type,
                   MemberOffset field_offset,
-                  bool is_volatile)
+                  bool is_volatile, uint32_t field_idx)
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type, is_volatile, 0) {
+        field_info_(field_offset, field_type, is_volatile, field_idx) {
     SetRawInputAt(0, cls);
   }
 
@@ -3599,9 +3599,9 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                   HInstruction* value,
                   Primitive::Type field_type,
                   MemberOffset field_offset,
-                  bool is_volatile)
+                  bool is_volatile, uint32_t field_idx)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type, is_volatile, 0),
+        field_info_(field_offset, field_type, is_volatile, field_idx),
         value_can_be_null_(true) {
     SetRawInputAt(0, cls);
     SetRawInputAt(1, value);
