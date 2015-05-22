@@ -1164,16 +1164,18 @@ void InstructionCodeGeneratorX86_64::GenerateTestAndBranch(HInstruction* instruc
       DCHECK_EQ(cond_value, 0);
     }
   } else {
-    bool is_materialized =
-        !cond->IsCondition() || cond->AsCondition()->NeedsMaterialization();
+    HCondition* condition = cond->AsCondition();
+    bool is_materialized = condition == nullptr || condition->NeedsMaterialization();
     // Moves do not affect the eflags register, so if the condition is
     // evaluated just before the if, we don't need to evaluate it
     // again.  We can't use the eflags on FP conditions if they are
     // materialized due to the complex branching.
-    Primitive::Type type = cond->IsCondition() ? cond->InputAt(0)->GetType() : Primitive::kPrimInt;
-    bool eflags_set = cond->IsCondition()
-        && cond->AsCondition()->IsBeforeWhenDisregardMoves(instruction)
+    Primitive::Type type = condition != nullptr ? cond->InputAt(0)->GetType() : Primitive::kPrimInt;
+    bool eflags_set = condition != nullptr
+        && condition->IsBeforeWhenDisregardMoves(instruction)
         && !Primitive::IsFloatingPointType(type);
+    // Can we optimize the jump if we know that the next block is the true case?
+    bool can_jump_to_false = CanReverseCondition(always_true_target, false_target, condition);
 
     if (is_materialized) {
       if (!eflags_set) {
@@ -1185,9 +1187,17 @@ void InstructionCodeGeneratorX86_64::GenerateTestAndBranch(HInstruction* instruc
           __ cmpl(Address(CpuRegister(RSP), lhs.GetStackIndex()),
                   Immediate(0));
         }
+        if (can_jump_to_false) {
+          __ j(kEqual, false_target);
+          return;
+        }
         __ j(kNotEqual, true_target);
       } else {
-        __ j(X86_64IntegerCondition(cond->AsCondition()->GetCondition()), true_target);
+        if (can_jump_to_false) {
+          __ j(X86_64IntegerCondition(condition->GetOppositeCondition()), false_target);
+          return;
+        }
+        __ j(X86_64IntegerCondition(condition->GetCondition()), true_target);
       }
     } else {
       // Condition has not been materialized, use its inputs as the
@@ -1196,7 +1206,7 @@ void InstructionCodeGeneratorX86_64::GenerateTestAndBranch(HInstruction* instruc
       // Is this a long or FP comparison that has been folded into the HCondition?
       if (type == Primitive::kPrimLong || Primitive::IsFloatingPointType(type)) {
         // Generate the comparison directly.
-        GenerateCompareTestAndBranch(instruction->AsIf(), cond->AsCondition(),
+        GenerateCompareTestAndBranch(instruction->AsIf(), condition,
                                      true_target, false_target, always_true_target);
         return;
       }
@@ -1216,7 +1226,13 @@ void InstructionCodeGeneratorX86_64::GenerateTestAndBranch(HInstruction* instruc
         __ cmpl(lhs.AsRegister<CpuRegister>(),
                 Address(CpuRegister(RSP), rhs.GetStackIndex()));
       }
-      __ j(X86_64IntegerCondition(cond->AsCondition()->GetCondition()), true_target);
+
+      if (can_jump_to_false) {
+        __ j(X86_64IntegerCondition(condition->GetOppositeCondition()), false_target);
+        return;
+      }
+
+      __ j(X86_64IntegerCondition(condition->GetCondition()), true_target);
     }
   }
   if (false_target != nullptr) {
