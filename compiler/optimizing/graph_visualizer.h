@@ -17,15 +17,18 @@
 #ifndef ART_COMPILER_OPTIMIZING_GRAPH_VISUALIZER_H_
 #define ART_COMPILER_OPTIMIZING_GRAPH_VISUALIZER_H_
 
+#include <map>
 #include <ostream>
 
 #include "base/value_object.h"
+#include "arch/instruction_set.h"
 
 namespace art {
 
 class CodeGenerator;
 class DexCompilationUnit;
 class HGraph;
+class HInstruction;
 
 /**
  * This class outputs the HGraph in the C1visualizer format.
@@ -39,11 +42,32 @@ class HGraphVisualizer : public ValueObject {
 
   void PrintHeader(const char* method_name) const;
   void DumpGraph(const char* pass_name, bool is_after_pass = true) const;
+  void DumpGraphWithDisassembly() const;
+
+  const CodeGenerator& GetCodegen() const { return codegen_; }
+
+  struct GeneratedCodeInterval {
+    size_t start;
+    size_t end;
+  };
+
+  const std::map<const HInstruction*, GeneratedCodeInterval>& InstructionCodeOffsets() const {
+    return instruction_code_offsets_;
+  }
+
+  void AddInstructionCodeOffsets(HInstruction* instr, size_t start, size_t end) {
+    instruction_code_offsets_[instr] = {start, end};
+  }
 
  private:
   std::ostream* const output_;
   HGraph* const graph_;
   const CodeGenerator& codegen_;
+
+  // The offsets to the start and end of the code generated for instructions are
+  // recorded here. The graph visualizer printer will use that information to
+  // print the disassembly of the code generated.
+  std::map<const HInstruction*, GeneratedCodeInterval> instruction_code_offsets_;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphVisualizer);
 };

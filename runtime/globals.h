@@ -131,6 +131,13 @@ static constexpr bool kDefaultMustRelocate = true;
 
 static constexpr bool kArm32QuickCodeUseSoftFloat = false;
 
+// This indicates if we support inlining disassembly of the code generated in
+// the '.cfg' output.
+#ifdef ART_CFG_DUMP_DISASSEMBLY
+static constexpr bool kCfgDumpDisassembly = true;
+#else
+static constexpr bool kCfgDumpDisassembly = false;
+#endif
 }  // namespace art
 
 #endif  // ART_RUNTIME_GLOBALS_H_

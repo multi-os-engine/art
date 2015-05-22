@@ -22,6 +22,7 @@
 #include "base/bit_field.h"
 #include "driver/compiler_options.h"
 #include "globals.h"
+#include "graph_visualizer.h"
 #include "locations.h"
 #include "memory_region.h"
 #include "nodes.h"
@@ -71,7 +72,7 @@ struct PcInfo {
 
 class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
  public:
-  SlowPathCode() {
+  explicit SlowPathCode(const char* description) : description_(description) {
     for (size_t i = 0; i < kMaximumNumberOfExpectedRegisters; ++i) {
       saved_core_stack_offsets_[i] = kRegisterNotSaved;
       saved_fpu_stack_offsets_[i] = kRegisterNotSaved;
@@ -102,6 +103,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
     return saved_fpu_stack_offsets_[reg];
   }
 
+  const char* GetDescription() const { return description_; }
+
  protected:
   static constexpr size_t kMaximumNumberOfExpectedRegisters = 32;
   static constexpr uint32_t kRegisterNotSaved = -1;
@@ -109,6 +112,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
   uint32_t saved_fpu_stack_offsets_[kMaximumNumberOfExpectedRegisters];
 
  private:
+  const char* description_;
+
   DISALLOW_COPY_AND_ASSIGN(SlowPathCode);
 };
 
@@ -140,7 +145,9 @@ class CodeGenerator {
   static CodeGenerator* Create(HGraph* graph,
                                InstructionSet instruction_set,
                                const InstructionSetFeatures& isa_features,
-                               const CompilerOptions& compiler_options);
+                               const CompilerOptions& compiler_options,
+                               std::ostream* visualizer_output = nullptr,
+                               bool visualizer_enabled = false);
   virtual ~CodeGenerator() {}
 
   HGraph* GetGraph() const { return graph_; }
@@ -163,6 +170,8 @@ class CodeGenerator {
   virtual void Bind(HBasicBlock* block) = 0;
   virtual void Move(HInstruction* instruction, Location location, HInstruction* move_for) = 0;
   virtual Assembler* GetAssembler() = 0;
+  virtual const Assembler& GetAssembler() const = 0;
+  const uint8_t* GetAssemblerCodeBaseAddress() const;
   virtual size_t GetWordSize() const = 0;
   virtual size_t GetFloatingPointSpillSlotSize() const = 0;
   virtual uintptr_t GetAddressOf(HBasicBlock* block) const = 0;
@@ -336,6 +345,9 @@ class CodeGenerator {
 
   virtual ParallelMoveResolver* GetMoveResolver() = 0;
 
+  HGraphVisualizer* GetVisualizer() { return &visualizer_; }
+  bool ShouldDumpDisassembly() const { return kCfgDumpDisassembly && visualizer_enabled_; }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
@@ -343,7 +355,9 @@ class CodeGenerator {
                 size_t number_of_register_pairs,
                 uint32_t core_callee_save_mask,
                 uint32_t fpu_callee_save_mask,
-                const CompilerOptions& compiler_options)
+                const CompilerOptions& compiler_options,
+                std::ostream* visualizer_output,
+                bool visualizer_enabled)
       : frame_size_(0),
         core_spill_mask_(0),
         fpu_spill_mask_(0),
@@ -357,6 +371,8 @@ class CodeGenerator {
         core_callee_save_mask_(core_callee_save_mask),
         fpu_callee_save_mask_(fpu_callee_save_mask),
         is_baseline_(false),
+        visualizer_enabled_(visualizer_enabled),
+        visualizer_(visualizer_output, graph, *this),
         graph_(graph),
         compiler_options_(compiler_options),
         pc_infos_(graph->GetArena(), 32),
@@ -438,9 +454,16 @@ class CodeGenerator {
   // Whether we are using baseline.
   bool is_baseline_;
 
+  bool visualizer_enabled_;
+  HGraphVisualizer visualizer_;
+
  private:
   void InitLocationsBaseline(HInstruction* instruction);
   size_t GetStackOffsetOfSavedRegister(size_t index);
+  // Generate code for the slow paths. The function returns a block containing
+  // information that can be used to disassemble the code generated, or nullptr
+  // if no information is available or disassembly is not supported.
+  HBasicBlock* GenerateSlowPaths();
   void CompileInternal(CodeAllocator* allocator, bool is_baseline);
   void BlockIfInRegister(Location location, bool is_out = false) const;
   void EmitEnvironment(HEnvironment* environment, SlowPathCode* slow_path);
