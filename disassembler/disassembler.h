@@ -50,22 +50,23 @@ class DisassemblerOptions {
 class Disassembler {
  public:
   // Creates a Disassembler for the given InstructionSet with the
-  // non-null DisassemblerOptions which become owned by the
-  // Disassembler.
+  // non-null DisassemblerOptions.
   static Disassembler* Create(InstructionSet instruction_set, DisassemblerOptions* options);
 
-  virtual ~Disassembler() {
-    delete disassembler_options_;
-  }
+  virtual ~Disassembler() {}
 
   // Dump a single instruction returning the length of that instruction.
   virtual size_t Dump(std::ostream& os, const uint8_t* begin) = 0;
   // Dump instructions within a range.
   virtual void Dump(std::ostream& os, const uint8_t* begin, const uint8_t* end) = 0;
 
+  const DisassemblerOptions* disassembler_options() const {
+    return disassembler_options_;
+  }
+
  protected:
-  explicit Disassembler(DisassemblerOptions* disassembler_options)
-      : disassembler_options_(disassembler_options) {
+  explicit Disassembler(DisassemblerOptions* options)
+      : disassembler_options_(options) {
     CHECK(disassembler_options_ != nullptr);
   }
 

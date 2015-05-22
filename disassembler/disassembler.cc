@@ -28,6 +28,7 @@
 namespace art {
 
 Disassembler* Disassembler::Create(InstructionSet instruction_set, DisassemblerOptions* options) {
+  DCHECK(options != nullptr);
   if (instruction_set == kArm || instruction_set == kThumb2) {
     return new arm::DisassemblerArm(options);
   } else if (instruction_set == kArm64) {

@@ -210,6 +210,10 @@ define build-libart-compiler
     LOCAL_MODULE := libartd-compiler
     LOCAL_SHARED_LIBRARIES += libartd
   endif
+  ifneq ($(TARGET_BUILD_VARIANT),user)
+    LOCAL_SHARED_LIBRARIES += libart-disassembler
+    LOCAL_CFLAGS += -DART_CFG_DUMP_DISASSEMBLY
+  endif
 
   LOCAL_MODULE_TAGS := optional
   LOCAL_MODULE_CLASS := SHARED_LIBRARIES
@@ -227,7 +231,7 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
 
   LOCAL_GENERATED_SOURCES += $$(ENUM_OPERATOR_OUT_GEN)
 
-  LOCAL_CFLAGS := $$(LIBART_COMPILER_CFLAGS)
+  LOCAL_CFLAGS += $$(LIBART_COMPILER_CFLAGS)
   ifeq ($$(art_target_or_host),target)
     $(call set-target-local-clang-vars)
     $(call set-target-local-cflags-vars,$(2))

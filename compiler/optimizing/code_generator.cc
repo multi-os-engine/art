@@ -152,12 +152,66 @@ HBasicBlock* CodeGenerator::FirstNonEmptyBlock(HBasicBlock* block) const {
   return block;
 }
 
+class DisassemblyScope {
+ public:
+  DisassemblyScope(CodeGenerator* codegen, HInstruction* instruction)
+      : codegen_(codegen), instruction_(instruction), start_offset_(static_cast<size_t>(-1)) {
+    if (codegen_->ShouldDumpDisassembly()) {
+      start_offset_ = codegen_->GetAssembler()->CodeSize();
+    }
+  }
+
+  ~DisassemblyScope() {
+    // We avoid building this data when we know it will not be used.
+    if (codegen_->ShouldDumpDisassembly()) {
+      codegen_->GetVisualizer()->AddInstructionCodeOffsets(
+          instruction_, start_offset_, codegen_->GetAssembler()->CodeSize());
+    }
+  }
+
+ private:
+  CodeGenerator* codegen_;
+  HInstruction* instruction_;
+  size_t start_offset_;
+};
+
+
+HBasicBlock* CodeGenerator::GenerateSlowPaths() {
+  HGraph* graph = GetInstructionVisitor()->GetGraph();
+  ArenaAllocator* arena = graph->GetArena();
+
+  // We add dummy disassembly instructions to the graph to show the code for the slow paths.
+  HBasicBlock* slow_path_block = ShouldDumpDisassembly() ? new (arena) HBasicBlock(graph) : nullptr;
+
+  for (size_t i = 0, e = slow_paths_.Size(); i < e; ++i) {
+    HDisassembly* disasm = nullptr;
+    if (ShouldDumpDisassembly()) {
+      disasm = new (arena) HDisassembly(slow_paths_.Get(i)->GetDescription());
+      slow_path_block->AddInstruction(disasm);
+    }
+    DisassemblyScope disassembly_scope(this, disasm);
+    slow_paths_.Get(i)->EmitNativeCode(this);
+  }
+
+  return slow_path_block;
+}
+
 void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) {
   is_baseline_ = is_baseline;
   HGraphVisitor* instruction_visitor = GetInstructionVisitor();
+  HGraph* graph = instruction_visitor->GetGraph();
   DCHECK_EQ(current_block_index_, 0u);
-  GenerateFrameEntry();
-  DCHECK_EQ(GetAssembler()->cfi().GetCurrentCFAOffset(), static_cast<int>(frame_size_));
+
+  // We create a dummy instruction to be able to show the disassembly for the
+  // frame entry. We only add it to the graph later, after we are done with code
+  // generation.
+  HDisassembly* disasm_frame_entry = new (graph->GetArena()) HDisassembly("GenerateFrameEntry");
+  {
+    DisassemblyScope disassembly_scope(this, disasm_frame_entry);
+    GenerateFrameEntry();
+    DCHECK_EQ(GetAssembler()->cfi().GetCurrentCFAOffset(), static_cast<int>(frame_size_));
+  }
+
   for (size_t e = block_order_->Size(); current_block_index_ < e; ++current_block_index_) {
     HBasicBlock* block = block_order_->Get(current_block_index_);
     // Don't generate code for an empty block. Its predecessors will branch to its successor
@@ -167,6 +221,7 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
     Bind(block);
     for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
       HInstruction* current = it.Current();
+      DisassemblyScope disassembly_scope(this, current);
       if (is_baseline) {
         InitLocationsBaseline(current);
       }
@@ -175,11 +230,16 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
     }
   }
 
-  // Generate the slow paths.
-  for (size_t i = 0, e = slow_paths_.Size(); i < e; ++i) {
-    slow_paths_.Get(i)->EmitNativeCode(this);
-  }
+  HBasicBlock* slow_path_disasm_block = GenerateSlowPaths();
 
+  if (ShouldDumpDisassembly()) {
+    // Now that code generation is done with the graph, add the disassembly information.
+    graph->GetEntryBlock()->InsertInstructionBefore(disasm_frame_entry,
+                                                    graph->GetEntryBlock()->GetFirstInstruction());
+    if (slow_path_disasm_block != nullptr) {
+      graph->AddBlock(slow_path_disasm_block);
+    }
+  }
   // Finalize instructions in assember;
   Finalize(allocator);
 }
@@ -221,6 +281,10 @@ size_t CodeGenerator::FindTwoFreeConsecutiveAlignedEntries(bool* array, size_t l
   }
   LOG(FATAL) << "Could not find a register in baseline register allocator";
   UNREACHABLE();
+}
+
+const uint8_t* CodeGenerator::GetAssemblerCodeBaseAddress() const {
+  return GetAssembler().CodeBufferBaseAddress();
 }
 
 void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
@@ -438,30 +502,40 @@ void CodeGenerator::AllocateLocations(HInstruction* instruction) {
 CodeGenerator* CodeGenerator::Create(HGraph* graph,
                                      InstructionSet instruction_set,
                                      const InstructionSetFeatures& isa_features,
-                                     const CompilerOptions& compiler_options) {
+                                     const CompilerOptions& compiler_options,
+                                     std::ostream* visualizer_output,
+                                     bool visualizer_enabled) {
   switch (instruction_set) {
     case kArm:
     case kThumb2: {
       return new arm::CodeGeneratorARM(graph,
           *isa_features.AsArmInstructionSetFeatures(),
-          compiler_options);
+          compiler_options,
+          visualizer_output,
+          visualizer_enabled);
     }
     case kArm64: {
       return new arm64::CodeGeneratorARM64(graph,
           *isa_features.AsArm64InstructionSetFeatures(),
-          compiler_options);
+          compiler_options,
+          visualizer_output,
+          visualizer_enabled);
     }
     case kMips:
       return nullptr;
     case kX86: {
       return new x86::CodeGeneratorX86(graph,
            *isa_features.AsX86InstructionSetFeatures(),
-           compiler_options);
+           compiler_options,
+           visualizer_output,
+           visualizer_enabled);
     }
     case kX86_64: {
       return new x86_64::CodeGeneratorX86_64(graph,
           *isa_features.AsX86_64InstructionSetFeatures(),
-          compiler_options);
+          compiler_options,
+          visualizer_output,
+          visualizer_enabled);
     }
     default:
       return nullptr;

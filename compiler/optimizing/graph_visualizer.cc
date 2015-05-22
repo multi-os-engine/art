@@ -27,6 +27,8 @@
 #include <cctype>
 #include <sstream>
 
+#include "disassembler.h"
+
 namespace art {
 
 static bool HasWhitespace(const char* str) {
@@ -86,6 +88,42 @@ std::ostream& operator<<(std::ostream& os, const StringList& list) {
   }
 }
 
+class HGraphVisualizerDisassembler {
+ public:
+  HGraphVisualizerDisassembler(InstructionSet instruction_set, const uint8_t* base_address)
+      // Reading the disassembly from 0x0 is easier, so we print relative
+      // addresses.  We will only disassemble the code once everything has
+      // been generated, so we can read data in literal pools.
+      : instruction_set_(instruction_set),
+        disassembler_options_(/* absolute_addresses */ false,
+                              base_address,
+                              /* can_read_literals */ true),
+        disassembler_(kCfgDumpDisassembly ?
+                      Disassembler::Create(instruction_set, &disassembler_options_) : nullptr) {}
+
+  ~HGraphVisualizerDisassembler() {
+    delete disassembler_;
+  }
+
+  void Disassemble(std::ostream& output, size_t start, size_t end) {
+    const uint8_t* base = disassembler_options_.base_address_;
+    if (instruction_set_ == kThumb2) {
+      // ARM and Thumb-2 use the same disassembler. The bottom bit of the
+      // address is used to distinguish between the two.
+      base += 1;
+    }
+    output << std::endl;
+    disassembler_->Dump(output, base + start, base + end);
+  }
+
+  const Disassembler* GetDisassembler() const { return disassembler_; }
+
+ private:
+  InstructionSet instruction_set_;
+  DisassemblerOptions disassembler_options_;
+  Disassembler* disassembler_;
+};
+
 /**
  * HGraph visitor to generate a file suitable for the c1visualizer tool and IRHydra.
  */
@@ -95,13 +133,22 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
                           std::ostream& output,
                           const char* pass_name,
                           bool is_after_pass,
-                          const CodeGenerator& codegen)
+                          const HGraphVisualizer& visualizer,
+                          bool print_disassembly = false)
       : HGraphVisitor(graph),
         output_(output),
         pass_name_(pass_name),
         is_after_pass_(is_after_pass),
-        codegen_(codegen),
+        visualizer_(visualizer),
+        disassembler_((print_disassembly && kCfgDumpDisassembly) ?
+            new HGraphVisualizerDisassembler(GetCodegen().GetInstructionSet(),
+                                             GetCodegen().GetAssemblerCodeBaseAddress()) :
+            nullptr),
         indent_(0) {}
+
+  ~HGraphVisualizerPrinter() {
+    delete disassembler_;
+  }
 
   void StartTag(const char* name) {
     AddIndent();
@@ -187,9 +234,9 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
 
   void DumpLocation(std::ostream& stream, const Location& location) {
     if (location.IsRegister()) {
-      codegen_.DumpCoreRegister(stream, location.reg());
+      GetCodegen().DumpCoreRegister(stream, location.reg());
     } else if (location.IsFpuRegister()) {
-      codegen_.DumpFloatingPointRegister(stream, location.reg());
+      GetCodegen().DumpFloatingPointRegister(stream, location.reg());
     } else if (location.IsConstant()) {
       stream << "#";
       HConstant* constant = location.GetConstant();
@@ -203,13 +250,13 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     } else if (location.IsStackSlot()) {
       stream << location.GetStackIndex() << "(sp)";
     } else if (location.IsFpuRegisterPair()) {
-      codegen_.DumpFloatingPointRegister(stream, location.low());
+      GetCodegen().DumpFloatingPointRegister(stream, location.low());
       stream << "|";
-      codegen_.DumpFloatingPointRegister(stream, location.high());
+      GetCodegen().DumpFloatingPointRegister(stream, location.high());
     } else if (location.IsRegisterPair()) {
-      codegen_.DumpCoreRegister(stream, location.low());
+      GetCodegen().DumpCoreRegister(stream, location.low());
       stream << "|";
-      codegen_.DumpCoreRegister(stream, location.high());
+      GetCodegen().DumpCoreRegister(stream, location.high());
     } else if (location.IsUnallocated()) {
       stream << "unallocated";
     } else {
@@ -284,6 +331,10 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     return strcmp(pass_name_, name) == 0;
   }
 
+  void VisitDisassembly(HDisassembly* disasm) OVERRIDE {
+    output_ << " " << disasm->GetDescription();
+  }
+
   void PrintInstruction(HInstruction* instruction) {
     output_ << instruction->DebugName();
     if (instruction->InputCount() > 0) {
@@ -346,6 +397,15 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
         StartAttributeStream("loop") << "none";
       } else {
         StartAttributeStream("loop") << "B" << info->GetHeader()->GetBlockId();
+      }
+    }
+    if (kCfgDumpDisassembly && disassembler_ != nullptr) {
+      // If information is available, disassemble the code generated for this
+      // instruction.
+      std::map<const HInstruction*, HGraphVisualizer::GeneratedCodeInterval>::const_iterator it =
+          visualizer_.InstructionCodeOffsets().find(instruction);
+      if (it != visualizer_.InstructionCodeOffsets().cend()) {
+        disassembler_->Disassemble(output_, it->second.start, it->second.end);
       }
     }
   }
@@ -420,11 +480,14 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     EndTag("block");
   }
 
+  const CodeGenerator& GetCodegen() const { return visualizer_.GetCodegen(); }
+
  private:
   std::ostream& output_;
   const char* pass_name_;
   const bool is_after_pass_;
-  const CodeGenerator& codegen_;
+  const HGraphVisualizer& visualizer_;
+  HGraphVisualizerDisassembler* disassembler_;
   size_t indent_;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphVisualizerPrinter);
@@ -437,7 +500,7 @@ HGraphVisualizer::HGraphVisualizer(std::ostream* output,
 
 void HGraphVisualizer::PrintHeader(const char* method_name) const {
   DCHECK(output_ != nullptr);
-  HGraphVisualizerPrinter printer(graph_, *output_, "", true, codegen_);
+  HGraphVisualizerPrinter printer(graph_, *output_, "", true, *this);
   printer.StartTag("compilation");
   printer.PrintProperty("name", method_name);
   printer.PrintProperty("method", method_name);
@@ -448,7 +511,16 @@ void HGraphVisualizer::PrintHeader(const char* method_name) const {
 void HGraphVisualizer::DumpGraph(const char* pass_name, bool is_after_pass) const {
   DCHECK(output_ != nullptr);
   if (!graph_->GetBlocks().IsEmpty()) {
-    HGraphVisualizerPrinter printer(graph_, *output_, pass_name, is_after_pass, codegen_);
+    HGraphVisualizerPrinter printer(graph_, *output_, pass_name, is_after_pass, *this);
+    printer.Run();
+  }
+}
+
+void HGraphVisualizer::DumpGraphWithDisassembly() const {
+  DCHECK(output_ != nullptr);
+  if (kCfgDumpDisassembly && !graph_->GetBlocks().IsEmpty()) {
+    HGraphVisualizerPrinter printer(graph_, *output_, "disassembly", true, *this,
+                                    /* disassembly */ true);
     printer.Run();
   }
 }

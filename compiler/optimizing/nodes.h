@@ -860,7 +860,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(Constant, Instruction)                                              \
   M(UnaryOperation, Instruction)                                        \
   M(BinaryOperation, Instruction)                                       \
-  M(Invoke, Instruction)
+  M(Invoke, Instruction)                                                \
+  M(Disassembly, Instruction)
 
 #define FORWARD_DECLARATION(type, super) class H##type;
 FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
@@ -3940,6 +3941,21 @@ class HParallelMove : public HTemplateInstruction<0> {
   GrowableArray<MoveOperands> moves_;
 
   DISALLOW_COPY_AND_ASSIGN(HParallelMove);
+};
+
+// Dummy instruction used to emit disassembled code in the graph visualizer output.
+class HDisassembly : public HTemplateInstruction<0> {
+ public:
+  explicit HDisassembly(const char* description)
+      : HTemplateInstruction(SideEffects::None()),
+        description_(description) {}
+
+  DECLARE_INSTRUCTION(Disassembly);
+
+  const char* GetDescription() const { return description_; }
+
+ private:
+  const char* description_;
 };
 
 class HGraphVisitor : public ValueObject {
