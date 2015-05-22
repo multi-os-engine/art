@@ -207,10 +207,10 @@ bool ElfWriterQuick<ElfTypes>::Write(
         *oat_writer->GetAbsolutePatchLocationsFor(".debug_frame") =
             *debug_frame.GetPatchLocations();
       }
-    }
-    if (compiler_driver_->GetCompilerOptions().GetIncludeDebugSymbols()) {
       // Add methods to .symtab.
       WriteDebugSymbols(builder.get(), oat_writer);
+    }
+    if (compiler_driver_->GetCompilerOptions().GetIncludeDebugSymbols()) {
       // Generate DWARF .debug_* sections.
       dwarf::WriteDebugSections(
           compiler_driver_, oat_writer,
