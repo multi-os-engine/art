@@ -1143,7 +1143,12 @@ class MANAGED Class FINAL : public Object {
   // Descriptor for the class such as "java.lang.Class" or "[C". Lazily initialized by ComputeName
   HeapReference<String> name_;
 
-  // The superclass, or null if this is java.lang.Object, an interface or primitive type.
+  // The superclass, or null if this is java.lang.Object or primitive type.
+  //
+  // Note that interfaces have java.lang.Object as the superclass
+  // which is expected when viewed through JNI, but means that
+  // java.lang.Class.getSuperClass has to check for interfaces and
+  // return null to match differing expectations there.
   HeapReference<Class> super_class_;
 
   // If class verify fails, we must return same error on subsequent tries.
