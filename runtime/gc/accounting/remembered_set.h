@@ -17,7 +17,9 @@
 #ifndef ART_RUNTIME_GC_ACCOUNTING_REMEMBERED_SET_H_
 #define ART_RUNTIME_GC_ACCOUNTING_REMEMBERED_SET_H_
 
+#include "bitmap.h"
 #include "base/allocator.h"
+#include "card_table.h"
 #include "globals.h"
 #include "object_callbacks.h"
 #include "safe_map.h"
@@ -39,15 +41,14 @@ class Heap;
 
 namespace accounting {
 
+class Bitmap;
 // The remembered set keeps track of cards that may contain references
 // from the free list spaces to the bump pointer spaces.
 class RememberedSet {
  public:
-  typedef std::set<uint8_t*, std::less<uint8_t*>,
-                   TrackingAllocator<uint8_t*, kAllocatorTagRememberedSet>> CardSet;
+  typedef MemoryRangeBitmap<CardTable::kCardSize> CardBitmap;
 
-  explicit RememberedSet(const std::string& name, Heap* heap, space::ContinuousSpace* space)
-      : name_(name), heap_(heap), space_(space) {}
+  explicit RememberedSet(const std::string& name, Heap* heap, space::ContinuousSpace* space);
 
   // Clear dirty cards and add them to the dirty card set.
   void ClearCards();
@@ -58,6 +59,13 @@ class RememberedSet {
                                space::ContinuousSpace* target_space, void* arg)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::heap_bitmap_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Returns true if a card is marked inside the remembered set. Used for testing. The address
+  // doesn't need to be aligned.
+  bool ContainsCardFor(uintptr_t addr);
+
+  // Sets all the cards in the remembered set to be marked.
+  void SetCards();
 
   void Dump(std::ostream& os);
 
@@ -70,14 +78,15 @@ class RememberedSet {
   const std::string& GetName() const {
     return name_;
   }
-  void AssertAllDirtyCardsAreWithinSpace() const;
 
  private:
   const std::string name_;
   Heap* const heap_;
   space::ContinuousSpace* const space_;
 
-  CardSet dirty_cards_;
+ protected:
+  // Cleared card bitmap, used to update the remembered set.
+  std::unique_ptr<CardBitmap> card_bitmap_;
 };
 
 }  // namespace accounting

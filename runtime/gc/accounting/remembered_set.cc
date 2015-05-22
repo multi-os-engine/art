@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "base/stl_util.h"
+#include "bitmap-inl.h"
 #include "card_table-inl.h"
 #include "heap_bitmap.h"
 #include "gc/collector/mark_sweep.h"
@@ -36,27 +37,31 @@ namespace art {
 namespace gc {
 namespace accounting {
 
-class RememberedSetCardVisitor {
+class RememberedSetBitmapVisitor {
  public:
-  explicit RememberedSetCardVisitor(RememberedSet::CardSet* const dirty_cards)
-      : dirty_cards_(dirty_cards) {}
+  explicit RememberedSetBitmapVisitor(RememberedSet::CardBitmap* bitmap,
+                                      CardTable* card_table)
+      : bitmap_(bitmap), card_table_(card_table) {}
 
-  void operator()(uint8_t* card, uint8_t expected_value, uint8_t new_value) const {
+  inline void operator()(uint8_t* card, uint8_t expected_value,
+                         uint8_t new_value) const {
     UNUSED(new_value);
     if (expected_value == CardTable::kCardDirty) {
-      dirty_cards_->insert(card);
+      // We want the address the card represents, not the address of the card.
+      bitmap_->Set(reinterpret_cast<uintptr_t>(card_table_->AddrFromCard(card)));
     }
   }
 
  private:
-  RememberedSet::CardSet* const dirty_cards_;
+  RememberedSet::CardBitmap* const bitmap_;
+  CardTable* const card_table_;
 };
 
 void RememberedSet::ClearCards() {
   CardTable* card_table = GetHeap()->GetCardTable();
-  RememberedSetCardVisitor card_visitor(&dirty_cards_);
+  RememberedSetBitmapVisitor card_bitmap_visitor(card_bitmap_.get(), card_table);
   // Clear dirty cards in the space and insert them into the dirty card set.
-  card_table->ModifyCardsAtomic(space_->Begin(), space_->End(), AgeCardVisitor(), card_visitor);
+  card_table->ModifyCardsAtomic(space_->Begin(), space_->End(), AgeCardVisitor(), card_bitmap_visitor);
 }
 
 class RememberedSetReferenceVisitor {
@@ -120,56 +125,79 @@ class RememberedSetObjectVisitor {
   bool* const contains_reference_to_target_space_;
 };
 
-void RememberedSet::UpdateAndMarkReferences(MarkHeapReferenceCallback* callback,
-                                            DelayReferenceReferentCallback* ref_callback,
-                                            space::ContinuousSpace* target_space, void* arg) {
-  CardTable* card_table = heap_->GetCardTable();
-  bool contains_reference_to_target_space = false;
-  RememberedSetObjectVisitor obj_visitor(callback, ref_callback, target_space,
-                                         &contains_reference_to_target_space, arg);
-  ContinuousSpaceBitmap* bitmap = space_->GetLiveBitmap();
-  CardSet remove_card_set;
-  for (uint8_t* const card_addr : dirty_cards_) {
-    contains_reference_to_target_space = false;
-    uintptr_t start = reinterpret_cast<uintptr_t>(card_table->AddrFromCard(card_addr));
-    DCHECK(space_->HasAddress(reinterpret_cast<mirror::Object*>(start)));
-    bitmap->VisitMarkedRange(start, start + CardTable::kCardSize, obj_visitor);
-    if (!contains_reference_to_target_space) {
-      // It was in the dirty card set, but it didn't actually contain
-      // a reference to the target space. So, remove it from the dirty
-      // card set so we won't have to scan it again (unless it gets
-      // dirty again.)
-      remove_card_set.insert(card_addr);
+RememberedSet::RememberedSet(const std::string& name, Heap* heap,
+                             space::ContinuousSpace* space)
+  : name_(name), heap_(heap), space_(space) {
+  // Normally here we could use End() instead of Limit(), but for testing we may want to have a
+  // remembered set for a space which can still grow.
+  card_bitmap_.reset(CardBitmap::Create(
+      "remembered set bitmap", reinterpret_cast<uintptr_t>(space->Begin()),
+      RoundUp(reinterpret_cast<uintptr_t>(space->Limit()), CardTable::kCardSize)));
+}
+
+class RememberedSetCardBitVisitor {
+ public:
+  RememberedSetCardBitVisitor(MarkHeapReferenceCallback* callback, DelayReferenceReferentCallback* ref_callback,
+                               void* arg, space::ContinuousSpace* target_space, space::ContinuousSpace* space,
+                               RememberedSet::CardBitmap* card_bitmap)
+      : callback_(callback), ref_callback_(ref_callback), arg_(arg), space_(space), target_space_(target_space),
+        bitmap_(space->GetLiveBitmap()), card_bitmap_(card_bitmap) {
+  }
+
+  void operator()(size_t bit_index) const {
+    const uintptr_t start = card_bitmap_->AddrFromBitIndex(bit_index);
+    DCHECK(space_->HasAddress(reinterpret_cast<mirror::Object*>(start)))
+        << start << " " << *space_;
+    bool contains_reference_to_target_space = false;
+    RememberedSetObjectVisitor visitor(callback_, ref_callback_, target_space_,
+                                       &contains_reference_to_target_space, arg_);
+    bitmap_->VisitMarkedRange(start, start + CardTable::kCardSize, visitor);
+
+     if (!contains_reference_to_target_space) {
+      // Clear the bit that doesn't contain a reference to the target space.
+      card_bitmap_->ClearBit(bit_index);
     }
   }
 
-  // Remove the cards that didn't contain a reference to the target
-  // space from the dirty card set.
-  for (uint8_t* const card_addr : remove_card_set) {
-    DCHECK(dirty_cards_.find(card_addr) != dirty_cards_.end());
-    dirty_cards_.erase(card_addr);
-  }
+ private:
+  MarkHeapReferenceCallback* const callback_;
+  DelayReferenceReferentCallback* ref_callback_;
+  void* const arg_;
+  space::ContinuousSpace* const space_;
+  space::ContinuousSpace* const target_space_;
+  ContinuousSpaceBitmap* const bitmap_;
+  RememberedSet::CardBitmap* const card_bitmap_;
+};
+
+void RememberedSet::UpdateAndMarkReferences(MarkHeapReferenceCallback* callback,
+                                            DelayReferenceReferentCallback* ref_callback,
+                                            space::ContinuousSpace* target_space, void* arg) {
+  RememberedSetCardBitVisitor visitor(callback, ref_callback, arg, target_space, space_, card_bitmap_.get());
+  card_bitmap_->VisitSetBits(0, RoundUp(space_->Size(), CardTable::kCardSize) / CardTable::kCardSize, visitor);
 }
 
 void RememberedSet::Dump(std::ostream& os) {
-  CardTable* card_table = heap_->GetCardTable();
   os << "RememberedSet dirty cards: [";
-  for (const uint8_t* card_addr : dirty_cards_) {
-    auto start = reinterpret_cast<uintptr_t>(card_table->AddrFromCard(card_addr));
-    auto end = start + CardTable::kCardSize;
-    os << reinterpret_cast<void*>(start) << "-" << reinterpret_cast<void*>(end) << "\n";
+  for (uint8_t* addr = space_->Begin(); addr < AlignUp(space_->End(), CardTable::kCardSize);
+      addr += CardTable::kCardSize) {
+    if (card_bitmap_->Test(reinterpret_cast<uintptr_t>(addr))) {
+      os << reinterpret_cast<void*>(addr) << "-"
+         << reinterpret_cast<void*>(addr + CardTable::kCardSize) << "\n";
+    }
   }
   os << "]";
 }
 
-void RememberedSet::AssertAllDirtyCardsAreWithinSpace() const {
-  CardTable* card_table = heap_->GetCardTable();
-  for (const uint8_t* card_addr : dirty_cards_) {
-    auto start = reinterpret_cast<uint8_t*>(card_table->AddrFromCard(card_addr));
-    auto end = start + CardTable::kCardSize;
-    DCHECK_LE(space_->Begin(), start);
-    DCHECK_LE(end, space_->Limit());
+void RememberedSet::SetCards() {
+  // Only clean up to the end since there cannot be any objects past the End() of the space.
+  for (uint8_t* addr = space_->Begin(); addr < AlignUp(space_->End(), CardTable::kCardSize);
+       addr += CardTable::kCardSize) {
+    card_bitmap_->Set(reinterpret_cast<uintptr_t>(addr));
   }
+}
+
+bool RememberedSet::ContainsCardFor(uintptr_t addr) {
+  return card_bitmap_->Test(addr);
 }
 
 }  // namespace accounting
