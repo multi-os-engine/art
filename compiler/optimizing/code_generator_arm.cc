@@ -1312,9 +1312,17 @@ void InstructionCodeGeneratorARM::GenerateTestAndBranch(HInstruction* instructio
       DCHECK_EQ(cond_value, 0);
     }
   } else {
+    // Can we optimize the jump if we know that the next block is the true case?
+    HCondition* condition = cond->AsCondition();
+    bool can_jump_to_false = CanReverseCondition(always_true_target, false_target, condition);
     if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
-      // Condition has been materialized, compare the output to 0
+      // Condition has been materialized, compare the output to 0.
       DCHECK(instruction->GetLocations()->InAt(0).IsRegister());
+      if (can_jump_to_false) {
+        __ CompareAndBranchIfZero(instruction->GetLocations()->InAt(0).AsRegister<Register>(),
+                                  false_target);
+        return;
+      }
       __ CompareAndBranchIfNonZero(instruction->GetLocations()->InAt(0).AsRegister<Register>(),
                                    true_target);
     } else {
@@ -1340,7 +1348,12 @@ void InstructionCodeGeneratorARM::GenerateTestAndBranch(HInstruction* instructio
         DCHECK(right.IsConstant());
         GenerateCompareWithImmediate(left, CodeGenerator::GetInt32ValueOf(right.GetConstant()));
       }
-      __ b(true_target, ARMCondition(cond->AsCondition()->GetCondition()));
+      if (can_jump_to_false) {
+        __ b(false_target, ARMCondition(condition->GetOppositeCondition()));
+        return;
+      }
+
+      __ b(true_target, ARMCondition(condition->GetCondition()));
     }
   }
   if (false_target != nullptr) {

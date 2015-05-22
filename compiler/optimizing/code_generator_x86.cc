@@ -1226,6 +1226,9 @@ void InstructionCodeGeneratorX86::GenerateTestAndBranch(HInstruction* instructio
     bool eflags_set = cond->IsCondition()
         && cond->AsCondition()->IsBeforeWhenDisregardMoves(instruction)
         && (type != Primitive::kPrimLong && !Primitive::IsFloatingPointType(type));
+    HCondition* condition = cond->AsCondition();
+    // Can we optimize the jump if we know that the next block is the true case?
+    bool can_jump_to_false = CanReverseCondition(always_true_target, false_target, condition);
     if (is_materialized) {
       if (!eflags_set) {
         // Materialized condition, compare against 0.
@@ -1235,9 +1238,17 @@ void InstructionCodeGeneratorX86::GenerateTestAndBranch(HInstruction* instructio
         } else {
           __ cmpl(Address(ESP, lhs.GetStackIndex()), Immediate(0));
         }
+        if (can_jump_to_false) {
+          __ j(kEqual, false_target);
+          return;
+        }
         __ j(kNotEqual, true_target);
       } else {
-        __ j(X86Condition(cond->AsCondition()->GetCondition()), true_target);
+        if (can_jump_to_false) {
+          __ j(X86Condition(condition->GetOppositeCondition()), false_target);
+          return;
+        }
+        __ j(X86Condition(condition->GetCondition()), true_target);
       }
     } else {
       // Condition has not been materialized, use its inputs as the
@@ -1270,7 +1281,13 @@ void InstructionCodeGeneratorX86::GenerateTestAndBranch(HInstruction* instructio
       } else {
         __ cmpl(lhs.AsRegister<Register>(), Address(ESP, rhs.GetStackIndex()));
       }
-      __ j(X86Condition(cond->AsCondition()->GetCondition()), true_target);
+
+      if (can_jump_to_false) {
+        __ j(X86Condition(condition->GetOppositeCondition()), false_target);
+        return;
+      }
+
+      __ j(X86Condition(condition->GetCondition()), true_target);
     }
   }
   if (false_target != nullptr) {
