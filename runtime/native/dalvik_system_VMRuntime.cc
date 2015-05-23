@@ -46,6 +46,9 @@
 #include "scoped_thread_state_change.h"
 #include "thread.h"
 #include "thread_list.h"
+#ifdef HAVE_ANDROID_OS
+#include <android/appsdk.h>
+#endif
 
 namespace art {
 
@@ -192,6 +195,9 @@ static void VMRuntime_setTargetSdkVersionNative(JNIEnv*, jobject, jint target_sd
   // Note that targetSdkVersion may be CUR_DEVELOPMENT (10000).
   // Note that targetSdkVersion may be 0, meaning "current".
   Runtime::Current()->SetTargetSdkVersion(target_sdk_version);
+#ifdef HAVE_ANDROID_OS
+  android_set_application_sdk_versions(static_cast<uint32_t>(target_sdk_version), 0U, 0U);
+#endif
 }
 
 static void VMRuntime_registerNativeAllocation(JNIEnv* env, jobject, jint bytes) {
