@@ -329,9 +329,9 @@ class X86_64Assembler FINAL : public Assembler {
   void movq(CpuRegister dst, const Address& src);
   void movl(CpuRegister dst, const Address& src);
   void movq(const Address& dst, CpuRegister src);
-  void movq(const Address& dst, const Immediate& src);
   void movl(const Address& dst, CpuRegister src);
   void movl(const Address& dst, const Immediate& imm);
+  void movq(const Address& dst, const Immediate& imm);
 
   void cmov(Condition c, CpuRegister dst, CpuRegister src);  // This is the 64b version.
   void cmov(Condition c, CpuRegister dst, CpuRegister src, bool is64bit);
