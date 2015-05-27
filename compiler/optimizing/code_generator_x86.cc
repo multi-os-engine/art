@@ -43,6 +43,8 @@ static constexpr int kC2ConditionMask = 0x400;
 
 static constexpr int kFakeReturnRegister = Register(8);
 
+static constexpr Register kMethodRegisterArgument = EAX;
+
 #define __ reinterpret_cast<X86Assembler*>(codegen->GetAssembler())->
 
 class NullCheckSlowPathX86 : public SlowPathCodeX86 {
@@ -498,7 +500,7 @@ void CodeGeneratorX86::GenerateFrameEntry() {
   int adjust = GetFrameSize() - FrameEntrySpillSize();
   __ subl(ESP, Immediate(adjust));
   __ cfi().AdjustCFAOffset(adjust);
-  __ movl(Address(ESP, kCurrentMethodStackOffset), EAX);
+  __ movl(Address(ESP, kCurrentMethodStackOffset), kMethodRegisterArgument);
 }
 
 void CodeGeneratorX86::GenerateFrameExit() {
@@ -1239,7 +1241,7 @@ void LocationsBuilderX86::VisitInvokeVirtual(HInvokeVirtual* invoke) {
 void LocationsBuilderX86::HandleInvoke(HInvoke* invoke) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(invoke, LocationSummary::kCall);
-  locations->AddTemp(Location::RegisterLocation(EAX));
+  locations->AddTemp(Location::RegisterLocation(kMethodRegisterArgument));
 
   InvokeDexCallingConventionVisitorX86 calling_convention_visitor;
   for (size_t i = 0; i < invoke->GetNumberOfArguments(); i++) {
@@ -3014,6 +3016,16 @@ void InstructionCodeGeneratorX86::VisitParameterValue(HParameterValue* instructi
   UNUSED(instruction);
 }
 
+void LocationsBuilderX86::VisitCurrentMethod(HCurrentMethod* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetOut(Location::RegisterLocation(kMethodRegisterArgument));
+}
+
+void InstructionCodeGeneratorX86::VisitCurrentMethod(HCurrentMethod* instruction) {
+  UNUSED(instruction);
+}
+
 void LocationsBuilderX86::VisitNot(HNot* not_) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(not_, LocationSummary::kNoCall);
@@ -4279,20 +4291,22 @@ void LocationsBuilderX86::VisitLoadClass(HLoadClass* cls) {
       : LocationSummary::kNoCall;
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(cls, call_kind);
+  locations->SetInAt(0, Location::RequiresRegister());
   locations->SetOut(Location::RequiresRegister());
 }
 
 void InstructionCodeGeneratorX86::VisitLoadClass(HLoadClass* cls) {
-  Register out = cls->GetLocations()->Out().AsRegister<Register>();
+  LocationSummary* locations = cls->GetLocations();
+  Register out = locations->Out().AsRegister<Register>();
+  Register current_method = locations->InAt(0).AsRegister<Register>();
   if (cls->IsReferrersClass()) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
-    codegen_->LoadCurrentMethod(out);
-    __ movl(out, Address(out, mirror::ArtMethod::DeclaringClassOffset().Int32Value()));
+    __ movl(out, Address(current_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value()));
   } else {
     DCHECK(cls->CanCallRuntime());
-    codegen_->LoadCurrentMethod(out);
-    __ movl(out, Address(out, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
+    __ movl(out, Address(
+        current_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
     __ movl(out, Address(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
 
     SlowPathCodeX86* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathX86(
