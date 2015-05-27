@@ -932,6 +932,7 @@ class CodeInfo {
   }
 
   StackMap GetStackMapAt(size_t i) const {
+    DCHECK(i != kInvalidStackMapNumber);
     size_t size = StackMapSize();
     return StackMap(GetStackMaps().Subregion(i * size, size));
   }
@@ -1048,6 +1049,20 @@ class CodeInfo {
     return StackMap();
   }
 
+  // Return a stack map's number in this CodeInfo corresponding to
+  // `native_pc_offset`.  If there is not stack map for this native PC
+  // offset, return kInvalidStackMapNumber.
+  size_t GetStackMapNumberForNativePcOffset(uint32_t native_pc_offset) const {
+    // TODO: stack maps are sorted by native pc, we can do a binary search.
+    for (size_t i = 0, e = GetNumberOfStackMaps(); i < e; ++i) {
+      StackMap stack_map = GetStackMapAt(i);
+      if (stack_map.GetNativePcOffset(*this) == native_pc_offset) {
+        return i;
+      }
+    }
+    return kInvalidStackMapNumber;
+  }
+
   // Dump this CodeInfo object on `os`.  If `dump_stack_maps` is true,
   // also dump the stack maps and the associated Dex register maps.
   void Dump(std::ostream& os, uint16_t number_of_dex_registers, bool dump_stack_maps) const;
@@ -1058,6 +1073,9 @@ class CodeInfo {
   // Dump the header of stack map number `stack_map_num` on `os`, without
   // associated data.
   void DumpStackMapHeader(std::ostream& os, size_t stack_map_num) const;
+
+  // Special (invalid) number for a nonexistent stack map.
+  static constexpr size_t kInvalidStackMapNumber = -1;
 
  private:
   // TODO: Instead of plain types such as "uint32_t", introduce
