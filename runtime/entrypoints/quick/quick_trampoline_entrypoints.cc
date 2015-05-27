@@ -823,7 +823,7 @@ extern "C" const void* artQuickResolutionTrampoline(mirror::ArtMethod* called,
                                                     Thread* self,
                                                     StackReference<mirror::ArtMethod>* sp)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  ScopedQuickEntrypointChecks sqec(self);
+  ScopedQuickEntrypointChecks sqec(self, kIsDebugBuild, false);
   // Start new JNI local reference state
   JNIEnvExt* env = self->GetJniEnv();
   ScopedObjectAccessUnchecked soa(env);
