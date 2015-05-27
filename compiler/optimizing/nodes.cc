@@ -277,22 +277,35 @@ bool HGraph::AnalyzeNaturalLoops() const {
   return true;
 }
 
-void HGraph::InsertConstant(HConstant* constant) {
+void HGraph::InsertAtEntry(HInstruction* instruction) {
   // New constants are inserted before the final control-flow instruction
   // of the graph, or at its end if called from the graph builder.
   if (entry_block_->EndsWithControlFlowInstruction()) {
-    entry_block_->InsertInstructionBefore(constant, entry_block_->GetLastInstruction());
+    entry_block_->InsertInstructionBefore(instruction, entry_block_->GetLastInstruction());
   } else {
-    entry_block_->AddInstruction(constant);
+    entry_block_->AddInstruction(instruction);
   }
 }
 
 HNullConstant* HGraph::GetNullConstant() {
   if (cached_null_constant_ == nullptr) {
     cached_null_constant_ = new (arena_) HNullConstant();
-    InsertConstant(cached_null_constant_);
+    InsertAtEntry(cached_null_constant_);
   }
   return cached_null_constant_;
+}
+
+HCurrentMethod* HGraph::GetCurrentMethod() {
+  if (cached_current_method_ == nullptr) {
+    cached_current_method_ = new (arena_) HCurrentMethod();
+    if (entry_block_->GetFirstInstruction() == nullptr) {
+      entry_block_->AddInstruction(cached_current_method_);
+    } else {
+      entry_block_->InsertInstructionBefore(
+          cached_current_method_, entry_block_->GetFirstInstruction());
+    }
+  }
+  return cached_current_method_;
 }
 
 HConstant* HGraph::GetConstant(Primitive::Type type, int64_t value) {
@@ -1461,6 +1474,8 @@ void HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
         DCHECK(parameter_index != last_input_index);
       }
       current->ReplaceWith(invoke->InputAt(parameter_index++));
+    } else if (current->IsCurrentMethod()) {
+      current->ReplaceWith(outer_graph->GetCurrentMethod());
     } else {
       DCHECK(current->IsGoto() || current->IsSuspendCheck());
       entry_block_->RemoveInstruction(current);
