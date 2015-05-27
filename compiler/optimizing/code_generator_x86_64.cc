@@ -45,6 +45,7 @@ static constexpr FloatRegister kFpuCalleeSaves[] = { XMM12, XMM13, XMM14, XMM15 
 
 static constexpr int kC2ConditionMask = 0x400;
 
+static constexpr Register kMethodRegisterArgument = RDI;
 
 #define __ reinterpret_cast<X86_64Assembler*>(codegen->GetAssembler())->
 
@@ -545,7 +546,8 @@ void CodeGeneratorX86_64::GenerateFrameEntry() {
     }
   }
 
-  __ movl(Address(CpuRegister(RSP), kCurrentMethodStackOffset), CpuRegister(RDI));
+  __ movl(Address(CpuRegister(RSP), kCurrentMethodStackOffset),
+          CpuRegister(kMethodRegisterArgument));
 }
 
 void CodeGeneratorX86_64::GenerateFrameExit() {
@@ -1339,7 +1341,7 @@ void InstructionCodeGeneratorX86_64::VisitInvokeStaticOrDirect(HInvokeStaticOrDi
 void LocationsBuilderX86_64::HandleInvoke(HInvoke* invoke) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(invoke, LocationSummary::kCall);
-  locations->AddTemp(Location::RegisterLocation(RDI));
+  locations->AddTemp(Location::RegisterLocation(kMethodRegisterArgument));
 
   InvokeDexCallingConventionVisitorX86_64 calling_convention_visitor;
   for (size_t i = 0; i < invoke->GetNumberOfArguments(); i++) {
@@ -3066,9 +3068,20 @@ void LocationsBuilderX86_64::VisitParameterValue(HParameterValue* instruction) {
   locations->SetOut(location);
 }
 
-void InstructionCodeGeneratorX86_64::VisitParameterValue(HParameterValue* instruction) {
+void InstructionCodeGeneratorX86_64::VisitParameterValue(
+    HParameterValue* instruction ATTRIBUTE_UNUSED) {
   // Nothing to do, the parameter is already at its location.
-  UNUSED(instruction);
+}
+
+void LocationsBuilderX86_64::VisitCurrentMethod(HCurrentMethod* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetOut(Location::RegisterLocation(kMethodRegisterArgument));
+}
+
+void InstructionCodeGeneratorX86_64::VisitCurrentMethod(
+    HCurrentMethod* instruction ATTRIBUTE_UNUSED) {
+  // Nothing to do, the method is already at its location.
 }
 
 void LocationsBuilderX86_64::VisitNot(HNot* not_) {
@@ -4123,20 +4136,22 @@ void LocationsBuilderX86_64::VisitLoadClass(HLoadClass* cls) {
       : LocationSummary::kNoCall;
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(cls, call_kind);
+  locations->SetInAt(0, Location::RequiresRegister());
   locations->SetOut(Location::RequiresRegister());
 }
 
 void InstructionCodeGeneratorX86_64::VisitLoadClass(HLoadClass* cls) {
-  CpuRegister out = cls->GetLocations()->Out().AsRegister<CpuRegister>();
+  LocationSummary* locations = cls->GetLocations();
+  CpuRegister out = locations->Out().AsRegister<CpuRegister>();
+  CpuRegister current_method = locations->InAt(0).AsRegister<CpuRegister>();
   if (cls->IsReferrersClass()) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
-    codegen_->LoadCurrentMethod(out);
-    __ movl(out, Address(out, mirror::ArtMethod::DeclaringClassOffset().Int32Value()));
+    __ movl(out, Address(current_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value()));
   } else {
     DCHECK(cls->CanCallRuntime());
-    codegen_->LoadCurrentMethod(out);
-    __ movl(out, Address(out, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
+    __ movl(out, Address(
+        current_method, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
     __ movl(out, Address(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
     SlowPathCodeX86_64* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathX86_64(
         cls, cls, cls->GetDexPc(), cls->MustGenerateClinitCheck());

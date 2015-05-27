@@ -49,6 +49,7 @@ static constexpr Register kCoreCalleeSaves[] =
     { R5, R6, R7, R8, R10, R11, PC };
 static constexpr SRegister kFpuCalleeSaves[] =
     { S16, S17, S18, S19, S20, S21, S22, S23, S24, S25, S26, S27, S28, S29, S30, S31 };
+static constexpr Register kMethodRegisterArgument = R0;
 
 // D31 cannot be split into two S registers, and the register allocator only works on
 // S registers. Therefore there is no need to block it.
@@ -544,7 +545,7 @@ void CodeGeneratorARM::GenerateFrameEntry() {
   uint32_t push_mask = (core_spill_mask_ & (~(1 << PC))) | 1 << LR;
   __ PushList(push_mask);
   __ cfi().AdjustCFAOffset(kArmWordSize * POPCOUNT(push_mask));
-  __ cfi().RelOffsetForMany(DWARFReg(R0), 0, push_mask, kArmWordSize);
+  __ cfi().RelOffsetForMany(DWARFReg(kMethodRegisterArgument), 0, push_mask, kArmWordSize);
   if (fpu_spill_mask_ != 0) {
     SRegister start_register = SRegister(LeastSignificantBit(fpu_spill_mask_));
     __ vpushs(start_register, POPCOUNT(fpu_spill_mask_));
@@ -554,7 +555,7 @@ void CodeGeneratorARM::GenerateFrameEntry() {
   int adjust = GetFrameSize() - FrameEntrySpillSize();
   __ AddConstant(SP, -adjust);
   __ cfi().AdjustCFAOffset(adjust);
-  __ StoreToOffset(kStoreWord, R0, SP, 0);
+  __ StoreToOffset(kStoreWord, kMethodRegisterArgument, SP, 0);
 }
 
 void CodeGeneratorARM::GenerateFrameExit() {
@@ -1286,7 +1287,7 @@ void InstructionCodeGeneratorARM::VisitInvokeStaticOrDirect(HInvokeStaticOrDirec
 void LocationsBuilderARM::HandleInvoke(HInvoke* invoke) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(invoke, LocationSummary::kCall);
-  locations->AddTemp(Location::RegisterLocation(R0));
+  locations->AddTemp(Location::RegisterLocation(kMethodRegisterArgument));
 
   InvokeDexCallingConventionVisitorARM calling_convention_visitor;
   for (size_t i = 0; i < invoke->GetNumberOfArguments(); i++) {
@@ -2802,9 +2803,19 @@ void LocationsBuilderARM::VisitParameterValue(HParameterValue* instruction) {
   locations->SetOut(location);
 }
 
-void InstructionCodeGeneratorARM::VisitParameterValue(HParameterValue* instruction) {
+void InstructionCodeGeneratorARM::VisitParameterValue(
+    HParameterValue* instruction ATTRIBUTE_UNUSED) {
   // Nothing to do, the parameter is already at its location.
-  UNUSED(instruction);
+}
+
+void LocationsBuilderARM::VisitCurrentMethod(HCurrentMethod* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetOut(Location::RegisterLocation(kMethodRegisterArgument));
+}
+
+void InstructionCodeGeneratorARM::VisitCurrentMethod(HCurrentMethod* instruction ATTRIBUTE_UNUSED) {
+  // Nothing to do, the method is already at its location.
 }
 
 void LocationsBuilderARM::VisitNot(HNot* not_) {
@@ -3954,21 +3965,25 @@ void LocationsBuilderARM::VisitLoadClass(HLoadClass* cls) {
       : LocationSummary::kNoCall;
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(cls, call_kind);
+  locations->SetInAt(0, Location::RequiresRegister());
   locations->SetOut(Location::RequiresRegister());
 }
 
 void InstructionCodeGeneratorARM::VisitLoadClass(HLoadClass* cls) {
-  Register out = cls->GetLocations()->Out().AsRegister<Register>();
+  LocationSummary* locations = cls->GetLocations();
+  Register out = locations->Out().AsRegister<Register>();
+  Register current_method = locations->InAt(0).AsRegister<Register>();
   if (cls->IsReferrersClass()) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
-    codegen_->LoadCurrentMethod(out);
-    __ LoadFromOffset(kLoadWord, out, out, mirror::ArtMethod::DeclaringClassOffset().Int32Value());
+    __ LoadFromOffset(
+        kLoadWord, out, current_method, mirror::ArtMethod::DeclaringClassOffset().Int32Value());
   } else {
     DCHECK(cls->CanCallRuntime());
-    codegen_->LoadCurrentMethod(out);
-    __ LoadFromOffset(
-        kLoadWord, out, out, mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value());
+    __ LoadFromOffset(kLoadWord,
+                      out,
+                      current_method,
+                      mirror::ArtMethod::DexCacheResolvedTypesOffset().Int32Value());
     __ LoadFromOffset(kLoadWord, out, out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex()));
 
     SlowPathCodeARM* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM(
