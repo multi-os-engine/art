@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#if !defined(__clang__)
-// Clang 3.4 fails to build the goto interpreter implementation.
-
 #include "interpreter_common.h"
 #include "safe_math.h"
 
@@ -2526,5 +2523,3 @@ JValue ExecuteGotoImpl<false, true>(Thread* self, const DexFile::CodeItem* code_
 
 }  // namespace interpreter
 }  // namespace art
-
-#endif
