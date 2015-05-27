@@ -482,8 +482,9 @@ bool RegisterAllocator::ValidateIntervals(const GrowableArray<LiveInterval*>& in
       LiveInterval* current = it.CurrentInterval();
       HInstruction* defined_by = current->GetParent()->GetDefinedBy();
       if (current->GetParent()->HasSpillSlot()
-           // Parameters have their own stack slot.
-           && !(defined_by != nullptr && defined_by->IsParameterValue())) {
+           // Parameters and current method have their own stack slot.
+           && !(defined_by != nullptr && (defined_by->IsParameterValue()
+                                          || defined_by->IsCurrentMethod()))) {
         BitVector* liveness_of_spill_slot = liveness_of_values.Get(number_of_registers
             + current->GetParent()->GetSpillSlot() / kVRegSize
             - number_of_out_slots);
@@ -1246,6 +1247,11 @@ void RegisterAllocator::AllocateSpillSlotFor(LiveInterval* interval) {
     return;
   }
 
+  if (defined_by->IsCurrentMethod()) {
+    parent->SetSpillSlot(0);
+    return;
+  }
+
   if (defined_by->IsConstant()) {
     // Constants don't need a spill slot.
     return;
@@ -1519,7 +1525,10 @@ void RegisterAllocator::InsertMoveAfter(HInstruction* instruction,
 
 void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
   LiveInterval* current = interval;
-  if (current->HasSpillSlot() && current->HasRegister()) {
+  if (current->HasSpillSlot()
+      && current->HasRegister()
+      // Currently, we spill unconditionnally the current method in the code generators.
+      && !interval->GetDefinedBy()->IsCurrentMethod()) {
     // We spill eagerly, so move must be at definition.
     InsertMoveAfter(interval->GetDefinedBy(),
                     interval->ToLocation(),
@@ -1715,7 +1724,7 @@ void RegisterAllocator::Resolve() {
       } else if (current->HasSpillSlot()) {
         current->SetSpillSlot(current->GetSpillSlot() + codegen_->GetFrameSize());
       }
-    } else if (current->HasSpillSlot()) {
+    } else if (current->HasSpillSlot() && !instruction->IsCurrentMethod()) {
       // Adjust the stack slot, now that we know the number of them for each type.
       // The way this implementation lays out the stack is the following:
       // [parameter slots     ]
