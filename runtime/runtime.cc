@@ -154,6 +154,7 @@ Runtime::Runtime()
       image_dex2oat_enabled_(true),
       default_stack_size_(0),
       heap_(nullptr),
+      alloc_tracking_enabled_(false),
       max_spins_before_thin_lock_inflation_(Monitor::kDefaultMaxSpinsBeforeThinLockInflation),
       monitor_list_(nullptr),
       monitor_pool_(nullptr),
@@ -267,6 +268,11 @@ Runtime::~Runtime() {
   linear_alloc_.reset();
   arena_pool_.reset();
   low_4gb_arena_pool_.reset();
+
+  {
+    MutexLock mu(self, *Locks::alloc_tracker_lock_);
+    allocation_records_.reset();
+  }
 
   // Shutdown the fault manager if it was initialized.
   fault_manager.Shutdown();
@@ -402,6 +408,7 @@ void Runtime::SweepSystemWeaks(IsMarkedCallback* visitor, void* arg) {
   GetInternTable()->SweepInternTableWeaks(visitor, arg);
   GetMonitorList()->SweepMonitorList(visitor, arg);
   GetJavaVM()->SweepJniWeakGlobals(visitor, arg);
+  TrySweepAllocationRecords(visitor, arg);
 }
 
 bool Runtime::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
@@ -1471,6 +1478,7 @@ void Runtime::DisallowNewSystemWeaks() {
   monitor_list_->DisallowNewMonitors();
   intern_table_->DisallowNewInterns();
   java_vm_->DisallowNewWeakGlobals();
+  // Manc: TODO: add a similar call for allocation_records_
 }
 
 void Runtime::AllowNewSystemWeaks() {
@@ -1718,6 +1726,19 @@ void Runtime::SetImtUnimplementedMethod(ArtMethod* method) {
   CHECK(method != nullptr);
   CHECK(method->IsRuntimeMethod());
   imt_unimplemented_method_ = method;
+}
+
+void Runtime::SetAllocationRecords(AllocRecordObjectMap* records) {
+  allocation_records_.reset(records);
+}
+
+void Runtime::TrySweepAllocationRecords(IsMarkedCallback* visitor, void* arg) const {
+  if (IsAllocTrackingEnabled()) {
+    MutexLock mu(Thread::Current(), *Locks::alloc_tracker_lock_);
+    if (IsAllocTrackingEnabled()) {
+      GetAllocationRecords()->SweepAllocationRecords(visitor, arg);
+    }
+  }
 }
 
 }  // namespace art
