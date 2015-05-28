@@ -51,8 +51,8 @@ public class OtherDex {
   }
 
   public static Class returnOtherDexClassStaticCall() {
-    // Do not call returnOtherDexClass, as it may have been flagged
-    // as non-inlineable.
+    /// Do not call returnOtherDexClass, as it may have been flagged
+    /// as non-inlineable.
     return returnOtherDexClass2();
   }
 

@@ -27,37 +27,56 @@ class CheckerParser_PrefixTest(unittest.TestCase):
 
   def tryParse(self, string):
     checkerText = u"// CHECK-START: pass\n" + ToUnicode(string)
-    checkFile = ParseCheckerStream("<test-file>", "CHECK", io.StringIO(checkerText))
+    return ParseCheckerStream("<test-file>", "CHECK", io.StringIO(checkerText))
+
+  def assertParses(self, string):
+    checkFile = self.tryParse(string)
     self.assertEqual(len(checkFile.testCases), 1)
-    testCase = checkFile.testCases[0]
-    return len(testCase.assertions) != 0
+    self.assertNotEqual(len(checkFile.testCases[0].assertions), 0)
+
+  def assertIgnored(self, string):
+    checkFile = self.tryParse(string)
+    self.assertEqual(len(checkFile.testCases), 1)
+    self.assertEqual(len(checkFile.testCases[0].assertions), 0)
+
+  def assertInvalid(self, string):
+    with self.assertRaises(CheckerException):
+      self.tryParse(string)
+
+  def test_ValidFormat(self):
+    self.assertParses("//CHECK:foo")
+    self.assertParses("#CHECK:bar")
 
   def test_InvalidFormat(self):
-    self.assertFalse(self.tryParse("CHECK"))
-    self.assertFalse(self.tryParse(":CHECK"))
-    self.assertFalse(self.tryParse("CHECK:"))
-    self.assertFalse(self.tryParse("//CHECK"))
-    self.assertFalse(self.tryParse("#CHECK"))
+    self.assertIgnored("CHECK")
+    self.assertIgnored(":CHECK")
+    self.assertIgnored("CHECK:")
+    self.assertInvalid("//CHECK")
+    self.assertInvalid("#CHECK")
 
-    self.assertTrue(self.tryParse("//CHECK:foo"))
-    self.assertTrue(self.tryParse("#CHECK:bar"))
-
-  def test_InvalidLabel(self):
-    self.assertFalse(self.tryParse("//ACHECK:foo"))
-    self.assertFalse(self.tryParse("#ACHECK:foo"))
+  def test_InvalidPrefix(self):
+    self.assertInvalid("//ACHECK:foo")
+    self.assertInvalid("#ACHECK:foo")
 
   def test_NotFirstOnTheLine(self):
-    self.assertFalse(self.tryParse("A// CHECK: foo"))
-    self.assertFalse(self.tryParse("A # CHECK: foo"))
-    self.assertFalse(self.tryParse("// // CHECK: foo"))
-    self.assertFalse(self.tryParse("# # CHECK: foo"))
+    self.assertIgnored("A// CHECK: foo")
+    self.assertIgnored("A # CHECK: foo")
+    self.assertInvalid("// // CHECK: foo")
+    self.assertInvalid("# # CHECK: foo")
+
+  def test_Comments(self):
+    self.assertIgnored("/// this is a comment")
+    self.assertIgnored("//// this is a comment")
+    self.assertIgnored("## this is a comment")
+    self.assertIgnored("### this is a comment")
 
   def test_WhitespaceAgnostic(self):
-    self.assertTrue(self.tryParse("  //CHECK: foo"))
-    self.assertTrue(self.tryParse("//  CHECK: foo"))
-    self.assertTrue(self.tryParse("    //CHECK: foo"))
-    self.assertTrue(self.tryParse("//    CHECK: foo"))
-
+    self.assertParses("  //CHECK: foo")
+    self.assertParses("//  CHECK: foo")
+    self.assertParses("    //CHECK: foo")
+    self.assertParses("//    CHECK: foo")
+    self.assertIgnored("///   foo")
+    self.assertIgnored("    ///foo")
 
 class CheckerParser_RegexExpressionTest(unittest.TestCase):
 

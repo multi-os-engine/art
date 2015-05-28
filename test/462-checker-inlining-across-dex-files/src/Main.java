@@ -14,8 +14,8 @@
 * limitations under the License.
 */
 
-// Add a class that will be the first entry in the dex cache, to
-// avoid having the OtherDex and Main classes share the same cache index.
+/// Add a class that will be the first entry in the dex cache, to
+/// avoid having the OtherDex and Main classes share the same cache index.
 class AAA {
 }
 
@@ -120,8 +120,8 @@ public class Main {
   // CHECK-START: java.lang.Class Main.inlineMainClass() inliner (after)
   // CHECK-DAG:                     Return [<<Class:l\d+>>]
   // CHECK-DAG:     <<Class>>       LoadClass
-  // Note: There are two LoadClass instructions. We obtain the correct
-  //       instruction id by matching the Return's input list first.
+  /// Note: There are two LoadClass instructions. We obtain the correct
+  ///       instruction id by matching the Return's input list first.
 
   public static Class inlineMainClass() {
     return OtherDex.returnMainClass();
@@ -149,8 +149,8 @@ public class Main {
   // CHECK-START: java.lang.Class Main.inlineOtherDexCallingMain() inliner (after)
   // CHECK-DAG:                     Return [<<Class:l\d+>>]
   // CHECK-DAG:     <<Class>>       LoadClass
-  // Note: There are two LoadClass instructions. We obtain the correct
-  //       instruction id by matching the Return's input list first.
+  /// Note: There are two LoadClass instructions. We obtain the correct
+  ///       instruction id by matching the Return's input list first.
 
   public static Class inlineOtherDexCallingMain() {
     return OtherDex.returnOtherDexCallingMain();
@@ -195,12 +195,12 @@ public class Main {
     }
   }
 
-  // Reference the AAA class to ensure it is in the dex cache.
+  /// Reference the AAA class to ensure it is in the dex cache.
   public static Class<?> cls = AAA.class;
 
-  // Add a field that will be the first entry in the dex cache, to
-  // avoid having the OtherDex.myStatic and Main.myStatic fields
-  // share the same cache index.
+  /// Add a field that will be the first entry in the dex cache, to
+  /// avoid having the OtherDex.myStatic and Main.myStatic fields
+  /// share the same cache index.
   public static int aaa = 32;
   public static int myStatic = 42;
 }

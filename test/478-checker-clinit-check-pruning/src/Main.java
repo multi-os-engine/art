@@ -35,11 +35,11 @@ public class Main {
   // CHECK-START: void Main.invokeStaticInlined() inliner (after)
   // CHECK-NOT:                           InvokeStaticOrDirect
 
-  // The following checks ensure the clinit check instruction added by
-  // the builder is pruned by the PrepareForRegisterAllocation, while
-  // the load class instruction is preserved.  As the control flow
-  // graph is not dumped after (nor before) this step, we check the
-  // CFG as it is before the next pass (liveness analysis) instead.
+  /// The following checks ensure the clinit check instruction added by
+  /// the builder is pruned by the PrepareForRegisterAllocation, while
+  /// the load class instruction is preserved.  As the control flow
+  /// graph is not dumped after (nor before) this step, we check the
+  /// CFG as it is before the next pass (liveness analysis) instead.
 
   // CHECK-START: void Main.invokeStaticInlined() liveness (before)
   // CHECK-DAG:                           LoadClass gen_clinit_check:true
@@ -76,11 +76,11 @@ public class Main {
   // CHECK-DAG:     <<ClinitCheck:l\d+>>  ClinitCheck [<<LoadClass>>]
   // CHECK-DAG:                           InvokeStaticOrDirect [<<ClinitCheck>>]
 
-  // The following checks ensure the clinit check and load class
-  // instructions added by the builder are pruned by the
-  // PrepareForRegisterAllocation.  As the control flow graph is not
-  // dumped after (nor before) this step, we check the CFG as it is
-  // before the next pass (liveness analysis) instead.
+  /// The following checks ensure the clinit check and load class
+  /// instructions added by the builder are pruned by the
+  /// PrepareForRegisterAllocation.  As the control flow graph is not
+  /// dumped after (nor before) this step, we check the CFG as it is
+  /// before the next pass (liveness analysis) instead.
 
   // CHECK-START: void Main.invokeStaticNotInlined() liveness (before)
   // CHECK-DAG:                           InvokeStaticOrDirect
@@ -102,7 +102,7 @@ public class Main {
 
     static void staticMethod() {
       if (doThrow) {
-        // Try defeating inlining.
+        /// Try defeating inlining.
         throw new Error();
       }
     }
@@ -128,10 +128,10 @@ public class Main {
 
   static class ClassWithClinit3 {
     static void invokeStaticInlined() {
-      // The invocation of invokeStaticInlined triggers the
-      // initialization of ClassWithClinit3, meaning that the
-      // hereinbelow call to $opt$inline$StaticMethod does not need a
-      // clinit check.
+      /// The invocation of invokeStaticInlined triggers the
+      /// initialization of ClassWithClinit3, meaning that the
+      /// hereinbelow call to $opt$inline$StaticMethod does not need a
+      /// clinit check.
       $opt$inline$StaticMethod();
     }
 
@@ -165,10 +165,10 @@ public class Main {
 
   static class ClassWithClinit4 {
     static void invokeStaticNotInlined() {
-      // The invocation of invokeStaticNotInlined triggers the
-      // initialization of ClassWithClinit4, meaning that the
-      // hereinbelow call to staticMethod does not need a clinit
-      // check.
+      /// The invocation of invokeStaticNotInlined triggers the
+      /// initialization of ClassWithClinit4, meaning that the
+      /// hereinbelow call to staticMethod does not need a clinit
+      /// check.
       staticMethod();
     }
 
@@ -180,7 +180,7 @@ public class Main {
 
     static void staticMethod() {
       if (doThrow) {
-        // Try defeating inlining.
+        /// Try defeating inlining.
         throw new Error();
       }
     }
@@ -244,7 +244,7 @@ public class Main {
 
     static void staticMethod() {
       if (doThrow) {
-        // Try defeating inlining.
+        /// Try defeating inlining.
         throw new Error();
       }
     }
@@ -298,10 +298,10 @@ public class Main {
     ClassWithClinit2.staticMethod();
   }
 
-  // TODO: Add a test for the case of a static method whose declaring
-  // class type index is not available (i.e. when `storage_index`
-  // equals `DexFile::kDexNoIndex` in
-  // art::HGraphBuilder::BuildInvoke).
+  /// TODO: Add a test for the case of a static method whose declaring
+  /// class type index is not available (i.e. when `storage_index`
+  /// equals `DexFile::kDexNoIndex` in
+  /// art::HGraphBuilder::BuildInvoke).
 
   public static void main(String[] args) {
     invokeStaticInlined();

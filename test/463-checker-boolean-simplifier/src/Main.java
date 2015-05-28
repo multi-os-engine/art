@@ -16,9 +16,9 @@
 
 public class Main {
 
-  // Note #1: `javac` flips the conditions of If statements.
-  // Note #2: In the optimizing compiler, the first input of Phi is always
-  //          the fall-through path, i.e. the false branch.
+  /// Note #1: `javac` flips the conditions of If statements.
+  /// Note #2: In the optimizing compiler, the first input of Phi is always
+  ///          the fall-through path, i.e. the false branch.
 
   public static void assertBoolEquals(boolean expected, boolean result) {
     if (expected != result) {
@@ -178,7 +178,7 @@ public class Main {
   // CHECK-DAG:     <<Phi:i\d+>>      Phi [<<Const42>>,<<Const43>>]
   // CHECK-DAG:                       Return [<<Phi>>]
 
-  // Note: The fact that branches are swapped is verified by running the test.
+  /// Note: The fact that branches are swapped is verified by running the test.
 
   // CHECK-START: int Main.NegatedCondition(boolean) boolean_simplifier (after)
   // CHECK-NOT:                       BooleanNot

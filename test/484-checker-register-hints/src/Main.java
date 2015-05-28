@@ -26,9 +26,9 @@ public class Main {
   // CHECK:       name "B3"
   // CHECK-NOT:   end_block
   // CHECK:         ArraySet
-  // We could check here that there is a parallel move, but it's only valid
-  // for some architectures (for example x86), as other architectures may
-  // not do move at all.
+  /// We could check here that there is a parallel move, but it's only valid
+  /// for some architectures (for example x86), as other architectures may
+  /// not do move at all.
   // CHECK:       end_block
   // CHECK-NOT:     ParallelMove
 
@@ -38,7 +38,7 @@ public class Main {
     int g = live3;
     if (z) {
     } else {
-      // Create enough live instructions to force spilling on x86.
+      /// Create enough live instructions to force spilling on x86.
       int h = live4;
       int i = live5;
       array[2] = e + i + h;
@@ -61,9 +61,9 @@ public class Main {
   // CHECK:       name "B3"
   // CHECK-NOT:   end_block
   // CHECK:         ArraySet
-  // We could check here that there is a parallel move, but it's only valid
-  // for some architectures (for example x86), as other architectures may
-  // not do move at all.
+  /// We could check here that there is a parallel move, but it's only valid
+  /// for some architectures (for example x86), as other architectures may
+  /// not do move at all.
   // CHECK:       end_block
   // CHECK-NOT:     ParallelMove
 
@@ -95,15 +95,15 @@ public class Main {
   // CHECK:       name "B6"
   // CHECK-NOT:   end_block
   // CHECK:         ArraySet
-  // We could check here that there is a parallel move, but it's only valid
-  // for some architectures (for example x86), as other architectures may
-  // not do move at all.
+  /// We could check here that there is a parallel move, but it's only valid
+  /// for some architectures (for example x86), as other architectures may
+  /// not do move at all.
   // CHECK:       end_block
   // CHECK-NOT:     ParallelMove
 
   public static void test3(boolean z, int a, int b, int c, int d, int m) {
-    // Same version as test2, but with branches reversed, to ensure
-    // whatever linear order is computed, we will get the same results.
+    /// Same version as test2, but with branches reversed, to ensure
+    /// whatever linear order is computed, we will get the same results.
     int e = live1;
     int f = live2;
     int g = live3;

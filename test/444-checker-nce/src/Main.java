@@ -242,7 +242,7 @@ public class Main {
   public Main(int dummy) {}
 
   private Main g() {
-    // avoids inlining
+    /// avoids inlining
     throw new RuntimeException();
   }
 
@@ -252,9 +252,9 @@ public class Main {
 
 }
 
-// Regression for when we created and kept equivalent phis with the same type.
-// The phi used in comparison would be different then the one used for access
-// so we could not safely discard it.
+/// Regression for when we created and kept equivalent phis with the same type.
+/// The phi used in comparison would be different then the one used for access
+/// so we could not safely discard it.
 class ListElement {
   private ListElement next;
 

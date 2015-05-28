@@ -42,7 +42,7 @@ public class Main {
   // CHECK-START: void Main.loop3(boolean) liveness (after)
   // CHECK-NOT:     Goto liveness:54
   public static void loop3(boolean incoming) {
-    // 'incoming' only needs a use at the outer loop's back edge.
+    /// 'incoming' only needs a use at the outer loop's back edge.
     while (System.currentTimeMillis() != 42) {
       while (Runtime.getRuntime() != null) {}
       System.out.println(incoming);
@@ -55,7 +55,7 @@ public class Main {
   // CHECK-START: void Main.loop4(boolean) liveness (after)
   // CHECK-NOT:     Goto            liveness:20
   public static void loop4(boolean incoming) {
-    // 'incoming' has no loop use, so should not have back edge uses.
+    /// 'incoming' has no loop use, so should not have back edge uses.
     System.out.println(incoming);
     while (System.currentTimeMillis() != 42) {
       while (Runtime.getRuntime() != null) {}
@@ -67,7 +67,7 @@ public class Main {
   // CHECK:         Goto            liveness:44
   // CHECK:         Goto            liveness:48
   public static void loop5(boolean incoming) {
-    // 'incoming' must have a use at both back edges.
+    /// 'incoming' must have a use at both back edges.
     while (Runtime.getRuntime() != null) {
       while (incoming) {
         System.out.println(incoming);
@@ -76,13 +76,13 @@ public class Main {
   }
 
   // CHECK-START: void Main.loop6(boolean) liveness (after)
-  // CHECK          ParameterValue  liveness:2  ranges:{[2,46)} uses:[24,46]
+  // CHECK:         ParameterValue  liveness:2  ranges:{[2,46)} uses:[24,46]
   // CHECK:         Goto            liveness:44
 
   // CHECK-START: void Main.loop6(boolean) liveness (after)
   // CHECK-NOT:     Goto            liveness:22
   public static void loop6(boolean incoming) {
-    // 'incoming' must have a use only at the first loop's back edge.
+    /// 'incoming' must have a use only at the first loop's back edge.
     while (true) {
       System.out.println(incoming);
       while (Runtime.getRuntime() != null) {}
@@ -94,7 +94,7 @@ public class Main {
   // CHECK:         Goto            liveness:44
   // CHECK:         Goto            liveness:48
   public static void loop7(boolean incoming) {
-    // 'incoming' must have a use at both back edges.
+    /// 'incoming' must have a use at both back edges.
     while (Runtime.getRuntime() != null) {
       System.out.println(incoming);
       while (incoming) {}
@@ -106,7 +106,7 @@ public class Main {
   // CHECK:         Goto            liveness:38
   // CHECK:         Goto            liveness:42
   public static void loop8() {
-    // 'incoming' must have a use at both back edges.
+    /// 'incoming' must have a use at both back edges.
     boolean incoming = field;
     while (Runtime.getRuntime() != null) {
       while (incoming) {}
@@ -118,7 +118,7 @@ public class Main {
   // CHECK:         Goto            liveness:38
   public static void loop9() {
     while (Runtime.getRuntime() != null) {
-      // 'incoming' must only have a use in the inner loop.
+      /// 'incoming' must only have a use in the inner loop.
       boolean incoming = field;
       while (incoming) {}
     }

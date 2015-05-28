@@ -428,25 +428,25 @@ public class Main {
    */
 
   // CHECK-START: long Main.AddNegs3(long, long) instruction_simplifier (before)
-  // -------------- Arguments and initial negation operations.
+  ///-------------- Arguments and initial negation operations.
   // CHECK-DAG:     <<Arg1:j\d+>>     ParameterValue
   // CHECK-DAG:     <<Arg2:j\d+>>     ParameterValue
   // CHECK-DAG:     <<Neg1:j\d+>>     Neg [<<Arg1>>]
   // CHECK-DAG:     <<Neg2:j\d+>>     Neg [<<Arg2>>]
   // CHECK:                           Goto
-  // -------------- Loop
+  ///-------------- Loop
   // CHECK:                           SuspendCheck
   // CHECK:         <<Add:j\d+>>      Add [<<Neg1>>,<<Neg2>>]
   // CHECK:                           Goto
 
   // CHECK-START: long Main.AddNegs3(long, long) instruction_simplifier (after)
-  // -------------- Arguments and initial negation operations.
+  ///-------------- Arguments and initial negation operations.
   // CHECK-DAG:     <<Arg1:j\d+>>     ParameterValue
   // CHECK-DAG:     <<Arg2:j\d+>>     ParameterValue
   // CHECK-DAG:     <<Neg1:j\d+>>     Neg [<<Arg1>>]
   // CHECK-DAG:     <<Neg2:j\d+>>     Neg [<<Arg2>>]
   // CHECK:                           Goto
-  // -------------- Loop
+  ///-------------- Loop
   // CHECK:                           SuspendCheck
   // CHECK:         <<Add:j\d+>>      Add [<<Neg1>>,<<Neg2>>]
   // CHECK-NOT:                       Neg
@@ -780,23 +780,23 @@ public class Main {
    */
 
   // CHECK-START: long Main.SubNeg3(long, long) instruction_simplifier (before)
-  // -------------- Arguments and initial negation operation.
+  ///-------------- Arguments and initial negation operation.
   // CHECK-DAG:     <<Arg1:j\d+>>     ParameterValue
   // CHECK-DAG:     <<Arg2:j\d+>>     ParameterValue
   // CHECK-DAG:     <<Neg:j\d+>>      Neg [<<Arg1>>]
   // CHECK:                           Goto
-  // -------------- Loop
+  ///-------------- Loop
   // CHECK:                           SuspendCheck
   // CHECK:         <<Sub:j\d+>>      Sub [<<Neg>>,<<Arg2>>]
   // CHECK:                           Goto
 
   // CHECK-START: long Main.SubNeg3(long, long) instruction_simplifier (after)
-  // -------------- Arguments and initial negation operation.
+  ///-------------- Arguments and initial negation operation.
   // CHECK-DAG:     <<Arg1:j\d+>>     ParameterValue
   // CHECK-DAG:     <<Arg2:j\d+>>     ParameterValue
   // CHECK-DAG:     <<Neg:j\d+>>      Neg [<<Arg1>>]
   // CHECK-DAG:                       Goto
-  // -------------- Loop
+  ///-------------- Loop
   // CHECK:                           SuspendCheck
   // CHECK:         <<Sub:j\d+>>      Sub [<<Neg>>,<<Arg2>>]
   // CHECK-NOT:                       Neg

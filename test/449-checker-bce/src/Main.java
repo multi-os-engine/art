@@ -37,10 +37,10 @@ public class Main {
     boolean[] flags = new boolean[size + 1];
     for (int i = 1; i < size; i++) flags[i] = true; // Can eliminate.
     for (int i = 2; i < size; i++) {
-      if (flags[i]) { // Can eliminate.
+      if (flags[i]) { /// Can eliminate.
         primeCount++;
         for (int k = i + 1; k <= size; k += i)
-          flags[k - 1] = false; // Can't eliminate yet due to (k+i) may overflow.
+          flags[k - 1] = false; /// Can't eliminate yet due to (k+i) may overflow.
       }
     }
     return primeCount;
@@ -72,37 +72,37 @@ public class Main {
       return;
     }
     if (offset < array.length) {
-      // offset is in range [0, array.length-1].
-      // Bounds check can be eliminated.
+      /// offset is in range [0, array.length-1].
+      /// Bounds check can be eliminated.
       array[offset] = 1;
 
       int biased_offset1 = offset + 1;
-      // biased_offset1 is in range [1, array.length].
+      /// biased_offset1 is in range [1, array.length].
       if (biased_offset1 < array.length) {
-        // biased_offset1 is in range [1, array.length-1].
-        // Bounds check can be eliminated.
+        /// biased_offset1 is in range [1, array.length-1].
+        /// Bounds check can be eliminated.
         array[biased_offset1] = 1;
       }
 
       int biased_offset2 = offset + 0x70000000;
-      // biased_offset2 is in range [0x70000000, array.length-1+0x70000000].
-      // It may overflow and be negative.
+      /// biased_offset2 is in range [0x70000000, array.length-1+0x70000000].
+      /// It may overflow and be negative.
       if (biased_offset2 < array.length) {
-        // Even with this test, biased_offset2 can be negative so we can't
-        // eliminate this bounds check.
+        /// Even with this test, biased_offset2 can be negative so we can't
+        /// eliminate this bounds check.
         array[biased_offset2] = 1;
       }
 
-      // offset_sub1 won't underflow since offset is no less than 0.
+      /// offset_sub1 won't underflow since offset is no less than 0.
       int offset_sub1 = offset - Integer.MAX_VALUE;
       if (offset_sub1 >= 0) {
-        array[offset_sub1] = 1;  // Bounds check can be eliminated.
+        array[offset_sub1] = 1;  /// Bounds check can be eliminated.
       }
 
-      // offset_sub2 can underflow.
+      /// offset_sub2 can underflow.
       int offset_sub2 = offset_sub1 - Integer.MAX_VALUE;
       if (offset_sub2 >= 0) {
-        array[offset_sub2] = 1;  // Bounds check can't be eliminated.
+        array[offset_sub2] = 1;  /// Bounds check can't be eliminated.
       }
     }
   }
@@ -221,8 +221,8 @@ public class Main {
   // CHECK: BoundsCheck
   // CHECK: ArraySet
 
-  // There is only one array access. It's not beneficial
-  // to create a compare with deoptimization instruction.
+  /// There is only one array access. It's not beneficial
+  /// to create a compare with deoptimization instruction.
   static void constantIndexing4(int[] array) {
     array[0] = 1;
   }
@@ -242,8 +242,8 @@ public class Main {
   // CHECK: ArraySet
 
   static void constantIndexing5(int[] array) {
-    // We don't apply the deoptimization for very large constant index
-    // since it's likely to be an anomaly and will throw AIOOBE.
+    /// We don't apply the deoptimization for very large constant index
+    /// since it's likely to be an anomaly and will throw AIOOBE.
     array[Integer.MAX_VALUE - 1000] = 1;
     array[Integer.MAX_VALUE - 999] = 1;
     array[Integer.MAX_VALUE - 998] = 1;
@@ -283,34 +283,34 @@ public class Main {
 
   static void loopPattern1(int[] array) {
     for (int i = 0; i < array.length; i++) {
-      array[i] = 1;  // Bounds check can be eliminated.
+      array[i] = 1;  /// Bounds check can be eliminated.
     }
 
     for (int i = 1; i < array.length; i++) {
-      array[i] = 1;  // Bounds check can be eliminated.
+      array[i] = 1;  /// Bounds check can be eliminated.
     }
 
     for (int i = 1; i < array.length - 1; i++) {
-      array[i] = 1;  // Bounds check can be eliminated.
+      array[i] = 1;  /// Bounds check can be eliminated.
     }
 
     for (int i = -1; i < array.length; i++) {
-      array[i] = 1;  // Bounds check can't be eliminated.
+      array[i] = 1;  /// Bounds check can't be eliminated.
     }
 
     for (int i = 0; i <= array.length; i++) {
-      array[i] = 1;  // Bounds check can't be eliminated.
+      array[i] = 1;  /// Bounds check can't be eliminated.
     }
 
     for (int i = 0; i < array.length; i += 2) {
-      // We don't have any assumption on max array length yet.
-      // Bounds check can't be eliminated due to overflow concern.
+      /// We don't have any assumption on max array length yet.
+      /// Bounds check can't be eliminated due to overflow concern.
       array[i] = 1;
     }
 
     for (int i = 1; i < array.length; i += 2) {
-      // Bounds check can be eliminated since i is odd so the last
-      // i that's less than array.length is at most (Integer.MAX_VALUE - 2).
+      /// Bounds check can be eliminated since i is odd so the last
+      /// i that's less than array.length is at most (Integer.MAX_VALUE - 2).
       array[i] = 1;
     }
   }
@@ -346,28 +346,28 @@ public class Main {
 
   static void loopPattern2(int[] array) {
     for (int i = array.length - 1; i >= 0; i--) {
-      array[i] = 1;  // Bounds check can be eliminated.
+      array[i] = 1;  /// Bounds check can be eliminated.
     }
 
     for (int i = array.length; i > 0; i--) {
-      array[i - 1] = 1;  // Bounds check can be eliminated.
+      array[i - 1] = 1;  /// Bounds check can be eliminated.
     }
 
     for (int i = array.length - 1; i > 0; i--) {
-      array[i] = 1;  // Bounds check can be eliminated.
+      array[i] = 1;  /// Bounds check can be eliminated.
     }
 
     for (int i = array.length; i >= 0; i--) {
-      array[i] = 1;  // Bounds check can't be eliminated.
+      array[i] = 1;  /// Bounds check can't be eliminated.
     }
 
     for (int i = array.length; i >= 0; i--) {
-      array[i - 1] = 1;  // Bounds check can't be eliminated.
+      array[i - 1] = 1;  /// Bounds check can't be eliminated.
     }
 
     for (int i = array.length; i > 0; i -= 20) {
-      // For i >= 0, (i - 20 - 1) is guaranteed not to underflow.
-      array[i - 1] = 1;  // Bounds check can be eliminated.
+      /// For i >= 0, (i - 20 - 1) is guaranteed not to underflow.
+      array[i - 1] = 1;  /// Bounds check can be eliminated.
     }
   }
 
@@ -384,9 +384,9 @@ public class Main {
     java.util.Random random = new java.util.Random();
     for (int i = 0; ; i++) {
       if (random.nextInt() % 1000 == 0 && i < array.length) {
-        // Can't eliminate the bound check since not every i++ is
-        // matched with a array length check, so there is some chance that i
-        // overflows and is negative.
+        /// Can't eliminate the bound check since not every i++ is
+        /// matched with a array length check, so there is some chance that i
+        /// overflows and is negative.
         array[i] = 1;
       }
     }
@@ -420,16 +420,16 @@ public class Main {
   static void constantNewArray() {
     int[] array = new int[10];
     for (int i = 0; i < 10; i++) {
-      array[i] = 1;  // Bounds check can be eliminated.
+      array[i] = 1;  /// Bounds check can be eliminated.
     }
 
     for (int i = 0; i <= 10; i++) {
-      array[i] = 1;  // Bounds check can't be eliminated.
+      array[i] = 1;  /// Bounds check can't be eliminated.
     }
 
-    array[0] = 1;  // Bounds check can be eliminated.
-    array[9] = 1;  // Bounds check can be eliminated.
-    array[10] = 1; // Bounds check can't be eliminated.
+    array[0] = 1;  /// Bounds check can be eliminated.
+    array[9] = 1;  /// Bounds check can be eliminated.
+    array[10] = 1; /// Bounds check can't be eliminated.
   }
 
 
@@ -467,7 +467,7 @@ public class Main {
   // CHECK-NOT: BoundsCheck
   // CHECK: ArraySet
 
-  // Set array to something like {0, 1, 2, 3, 2, 1, 0}.
+  /// Set array to something like {0, 1, 2, 3, 2, 1, 0}.
   static void pyramid1(int[] array) {
     for (int i = 0; i < (array.length + 1) / 2; i++) {
       array[i] = i;
@@ -488,7 +488,7 @@ public class Main {
   // CHECK-NOT: BoundsCheck
   // CHECK: ArraySet
 
-  // Set array to something like {0, 1, 2, 3, 2, 1, 0}.
+  /// Set array to something like {0, 1, 2, 3, 2, 1, 0}.
   static void pyramid2(int[] array) {
     for (int i = 0; i < (array.length + 1) >> 1; i++) {
       array[i] = i;
@@ -509,7 +509,7 @@ public class Main {
   // CHECK-NOT: BoundsCheck
   // CHECK: ArraySet
 
-  // Set array to something like {0, 1, 2, 3, 2, 1, 0}.
+  /// Set array to something like {0, 1, 2, 3, 2, 1, 0}.
   static void pyramid3(int[] array) {
     for (int i = 0; i < (array.length + 1) >>> 1; i++) {
       array[i] = i;
@@ -599,7 +599,7 @@ public class Main {
 
   static int foo() {
     try {
-      // This will cause AIOOBE.
+      /// This will cause AIOOBE.
       constantIndexing2(new int[3]);
     } catch (ArrayIndexOutOfBoundsException e) {
       return 99;
@@ -628,10 +628,10 @@ public class Main {
   // CHECK: ArrayGet
 
   void foo1(int[] array, int start, int end) {
-    // Three HDeoptimize will be added. One for
-    // start >= 0, one for end <= array.length,
-    // and one for null check on array (to hoist null
-    // check and array.length out of loop).
+    /// Three HDeoptimize will be added. One for
+    /// start >= 0, one for end <= array.length,
+    /// and one for null check on array (to hoist null
+    /// check and array.length out of loop).
     for (int i = start ; i < end; i++) {
       array[i] = 1;
       sum += array[i];
@@ -657,10 +657,10 @@ public class Main {
   // CHECK: ArrayGet
 
   void foo2(int[] array, int start, int end) {
-    // Three HDeoptimize will be added. One for
-    // start >= 0, one for end <= array.length,
-    // and one for null check on array (to hoist null
-    // check and array.length out of loop).
+    /// Three HDeoptimize will be added. One for
+    /// start >= 0, one for end <= array.length,
+    /// and one for null check on array (to hoist null
+    /// check and array.length out of loop).
     for (int i = start ; i <= end; i++) {
       array[i] = 1;
       sum += array[i];
@@ -685,9 +685,9 @@ public class Main {
   // CHECK: ArrayGet
 
   void foo3(int[] array, int end) {
-    // Two HDeoptimize will be added. One for end < array.length,
-    // and one for null check on array (to hoist null check
-    // and array.length out of loop).
+    /// Two HDeoptimize will be added. One for end < array.length,
+    /// and one for null check on array (to hoist null check
+    /// and array.length out of loop).
     for (int i = 3 ; i <= end; i++) {
       array[i] = 1;
       sum += array[i];
@@ -711,9 +711,9 @@ public class Main {
   // CHECK: ArrayGet
 
   void foo4(int[] array, int end) {
-    // Two HDeoptimize will be added. One for end <= array.length,
-    // and one for null check on array (to hoist null check
-    // and array.length out of loop).
+    /// Two HDeoptimize will be added. One for end <= array.length,
+    /// and one for null check on array (to hoist null check
+    /// and array.length out of loop).
     for (int i = end ; i > 0; i--) {
       array[i - 1] = 1;
       sum += array[i - 1];
@@ -745,12 +745,12 @@ public class Main {
   // CHECK: ArrayGet
 
   void foo5(int[] array, int end) {
-    // Bounds check in this loop can be eliminated without deoptimization.
+    /// Bounds check in this loop can be eliminated without deoptimization.
     for (int i = array.length - 1 ; i >= 0; i--) {
       array[i] = 1;
     }
-    // One HDeoptimize will be added.
-    // It's for (end - 2 <= array.length - 2).
+    /// One HDeoptimize will be added.
+    /// It's for (end - 2 <= array.length - 2).
     for (int i = end - 2 ; i > 0; i--) {
       sum += array[i - 1];
       sum += array[i];
@@ -793,10 +793,10 @@ public class Main {
   // CHECK: ArraySet
 
   void foo6(int[] array, int start, int end) {
-    // Three HDeoptimize will be added. One for
-    // start >= 2, one for end <= array.length - 3,
-    // and one for null check on array (to hoist null
-    // check and array.length out of loop).
+    /// Three HDeoptimize will be added. One for
+    /// start >= 2, one for end <= array.length - 3,
+    /// and one for null check on array (to hoist null
+    /// check and array.length out of loop).
     for (int i = end; i >= start; i--) {
       array[i] = (array[i-2] + array[i-1] + array[i] + array[i+1] + array[i+2]) / 5;
     }
@@ -821,15 +821,15 @@ public class Main {
   // CHECK: ArrayGet
 
   void foo7(int[] array, int start, int end, boolean lowEnd) {
-    // Three HDeoptimize will be added. One for
-    // start >= 0, one for end <= array.length,
-    // and one for null check on array (to hoist null
-    // check and array.length out of loop).
+    /// Three HDeoptimize will be added. One for
+    /// start >= 0, one for end <= array.length,
+    /// and one for null check on array (to hoist null
+    /// check and array.length out of loop).
     for (int i = start ; i < end; i++) {
       if (lowEnd) {
-        // This array access isn't certain. So we don't
-        // use +1000 offset in decision making for deoptimization
-        // conditions.
+        /// This array access isn't certain. So we don't
+        /// use +1000 offset in decision making for deoptimization
+        /// conditions.
         sum += array[i + 1000];
       }
       sum += array[i];
@@ -847,10 +847,10 @@ public class Main {
   // CHECK: ArraySet
 
   void partialLooping(int[] array, int start, int end) {
-    // This loop doesn't cover the full range of [start, end) so
-    // adding deoptimization is too aggressive, since end can be
-    // greater than array.length but the loop is never going to work on
-    // more than 2 elements.
+    /// This loop doesn't cover the full range of [start, end) so
+    /// adding deoptimization is too aggressive, since end can be
+    /// greater than array.length but the loop is never going to work on
+    /// more than 2 elements.
     for (int i = start; i < end; i++) {
       if (i == 2) {
         return;
@@ -982,7 +982,7 @@ public class Main {
 
   }
 
-  // Make sure this method is compiled with optimizing.
+  /// Make sure this method is compiled with optimizing.
   // CHECK-START: void Main.main(java.lang.String[]) register (after)
   // CHECK: ParallelMove
 
@@ -1015,7 +1015,7 @@ public class Main {
       System.out.println("pyramid3 failed!");
     }
 
-    // Make sure this value is kept after deoptimization.
+    /// Make sure this value is kept after deoptimization.
     int i = 1;
     if (foo() + i != 100) {
       System.out.println("foo failed!");

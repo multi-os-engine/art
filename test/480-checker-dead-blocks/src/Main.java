@@ -153,8 +153,8 @@ public class Main {
   // CHECK-NOT:                      Add
 
   public static int testUpdateLoopInformation(int x) {
-    // Use of Or in the condition generates a dead loop where not all of its
-    // blocks are removed. This forces DCE to update their loop information.
+    /// Use of Or in the condition generates a dead loop where not all of its
+    /// blocks are removed. This forces DCE to update their loop information.
     while (inlineFalse() || !inlineTrue()) {
       x++;
     }
@@ -173,8 +173,8 @@ public class Main {
   // CHECK-NOT:                      SuspendCheck
 
   public static int testRemoveSuspendCheck(int x, int y) {
-    // Inner loop will leave behind the header with its SuspendCheck. DCE must
-    // remove it, otherwise the outer loop would end up with two.
+    /// Inner loop will leave behind the header with its SuspendCheck. DCE must
+    /// remove it, otherwise the outer loop would end up with two.
     while (y > 0) {
       while (inlineFalse() || !inlineTrue()) {
         x++;
