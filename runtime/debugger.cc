@@ -3612,6 +3612,8 @@ JDWP::JdwpError Dbg::ConfigureStep(JDWP::ObjectId thread_id, JDWP::JdwpStepSize 
 
   // Work out what ArtMethod* we're in, the current line number, and how deep the stack currently
   // is for step-out.
+  // Note: if the thread is not running Java code (pure native thread), there is no "current"
+  // method in the stack (and no line number either).
   struct SingleStepStackVisitor : public StackVisitor {
     explicit SingleStepStackVisitor(Thread* thread) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
         : StackVisitor(thread, nullptr, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
@@ -3702,7 +3704,7 @@ JDWP::JdwpError Dbg::ConfigureStep(JDWP::ObjectId thread_id, JDWP::JdwpStepSize 
 
   mirror::ArtMethod* m = single_step_control->GetMethod();
   const int32_t line_number = visitor.line_number;
-  if (!m->IsNative()) {
+  if (m != nullptr && !m->IsNative()) {
     const DexFile::CodeItem* const code_item = m->GetCodeItem();
     DebugCallbackContext context(single_step_control, line_number, code_item);
     m->GetDexFile()->DecodeDebugInfo(code_item, m->IsStatic(), m->GetDexMethodIndex(),
