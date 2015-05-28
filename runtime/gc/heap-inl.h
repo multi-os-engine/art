@@ -168,11 +168,11 @@ inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self, mirror::Clas
     PushOnAllocationStack(self, &obj);
   }
   if (kInstrumented) {
-    if (Dbg::IsAllocTrackingEnabled()) {
-      Dbg::RecordAllocation(self, klass, bytes_allocated);
+    if (Runtime::Current()->IsAllocTrackingEnabled()) {
+      Dbg::RecordAllocation(self, obj, klass, bytes_allocated);
     }
   } else {
-    DCHECK(!Dbg::IsAllocTrackingEnabled());
+    DCHECK(!Runtime::Current()->IsAllocTrackingEnabled());
   }
   // IsConcurrentGc() isn't known at compile time so we can optimize by not checking it for
   // the BumpPointer or TLAB allocators. This is nice since it allows the entire if statement to be
