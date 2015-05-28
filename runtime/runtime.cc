@@ -402,6 +402,7 @@ void Runtime::SweepSystemWeaks(IsMarkedCallback* visitor, void* arg) {
   GetInternTable()->SweepInternTableWeaks(visitor, arg);
   GetMonitorList()->SweepMonitorList(visitor, arg);
   GetJavaVM()->SweepJniWeakGlobals(visitor, arg);
+  GetHeap()->TrySweepAllocationRecords(visitor, arg);
 }
 
 bool Runtime::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
@@ -1471,6 +1472,8 @@ void Runtime::DisallowNewSystemWeaks() {
   monitor_list_->DisallowNewMonitors();
   intern_table_->DisallowNewInterns();
   java_vm_->DisallowNewWeakGlobals();
+  // TODO: add a similar call for heap.allocation_records_, otherwise some of the newly allocated
+  // objects that are not marked might be swept from the records, making the records incomplete.
 }
 
 void Runtime::AllowNewSystemWeaks() {
