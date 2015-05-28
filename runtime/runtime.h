@@ -84,6 +84,7 @@ class ThreadList;
 class Trace;
 struct TraceConfig;
 class Transaction;
+class AllocRecordObjectMap;
 
 typedef std::vector<std::pair<std::string, const void*>> RuntimeOptions;
 typedef SafeMap<MethodReference, SafeMap<uint32_t, std::set<uint32_t>>,
@@ -548,6 +549,23 @@ class Runtime {
     return method_ref_string_init_reg_map_;
   }
 
+  bool IsAllocTrackingEnabled() const {
+    return alloc_tracking_enabled_;
+  }
+
+  void SetAllocTrackingEnabled(bool enabled)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_) {
+    alloc_tracking_enabled_ = enabled;
+  }
+
+  AllocRecordObjectMap* GetAllocationRecords() const
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_) {
+    return allocation_records_.get();
+  }
+
+  void SetAllocationRecords(AllocRecordObjectMap* records)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_);
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -563,6 +581,9 @@ class Runtime {
 
   void StartDaemonThreads();
   void StartSignalCatcher();
+
+  void TrySweepAllocationRecords(IsMarkedCallback* visitor, void* arg) const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // A pointer to the active runtime or null.
   static Runtime* instance_;
@@ -619,6 +640,11 @@ class Runtime {
 
   // Shared linear alloc for now.
   std::unique_ptr<LinearAlloc> linear_alloc_;
+
+  // Allocation tracking support
+  bool alloc_tracking_enabled_;
+  std::unique_ptr<AllocRecordObjectMap> allocation_records_
+        PT_GUARDED_BY(Locks::alloc_tracker_lock_);
 
   // The number of spins that are done before thread suspension is used to forcibly inflate.
   size_t max_spins_before_thin_lock_inflation_;
