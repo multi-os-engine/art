@@ -696,6 +696,11 @@ class StackMap {
                                     size_t native_pc_max,
                                     size_t register_mask_max);
 
+  void Dump(std::ostream& os,
+            const CodeInfo& code_info,
+            uint16_t number_of_dex_registers,
+            const std::string& header_suffix = "") const;
+
   // Special (invalid) offset for the DexRegisterMapOffset field meaning
   // that there is no Dex register map for this stack map.
   static constexpr uint32_t kNoDexRegisterMap = -1;
@@ -1051,13 +1056,6 @@ class CodeInfo {
   // Dump this CodeInfo object on `os`.  If `dump_stack_maps` is true,
   // also dump the stack maps and the associated Dex register maps.
   void Dump(std::ostream& os, uint16_t number_of_dex_registers, bool dump_stack_maps) const;
-
-  // Dump stack map number `stack_map_num` as well as associated data on `os`,
-  // such as Dex register locations.
-  void DumpStackMap(std::ostream& os, size_t stack_map_num, uint16_t number_of_dex_registers) const;
-  // Dump the header of stack map number `stack_map_num` on `os`, without
-  // associated data.
-  void DumpStackMapHeader(std::ostream& os, size_t stack_map_num) const;
 
  private:
   // TODO: Instead of plain types such as "uint32_t", introduce
