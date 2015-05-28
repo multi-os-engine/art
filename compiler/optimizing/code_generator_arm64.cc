@@ -44,6 +44,7 @@ namespace art {
 
 namespace arm64 {
 
+using helpers::ARTRegCodeFromVIXL;
 using helpers::CPURegisterFrom;
 using helpers::DRegisterFrom;
 using helpers::FPRegisterFrom;
@@ -60,6 +61,7 @@ using helpers::OutputCPURegister;
 using helpers::OutputFPRegister;
 using helpers::OutputRegister;
 using helpers::RegisterFrom;
+using helpers::SRegisterFrom;
 using helpers::StackOperandFrom;
 using helpers::VIXLRegCodeFromART;
 using helpers::WRegisterFrom;
@@ -511,7 +513,44 @@ void CodeGeneratorARM64::Finalize(CodeAllocator* allocator) {
   CodeGenerator::Finalize(allocator);
 }
 
-void ParallelMoveResolverARM64::PrepareForEmitNativeCode() {
+static int CompareMoves(const void* data1, const void* data2) {
+  const MoveOperands* move1 = static_cast<const MoveOperands*>(data1);
+  const MoveOperands* move2 = static_cast<const MoveOperands*>(data2);
+  Location src1 = move1->GetSource();
+  Location dst1 = move1->GetDestination();
+  Location src2 = move2->GetSource();
+  Location dst2 = move2->GetDestination();
+  // Stores are unlikely to be blocked while loads are likely be blocked by the other moves. We
+  // hope that the move sequence won't be changed too much by the parallel move resolver. So the
+  // moves are reordered, stores first and loads in the end. Here we are dealing with stack load
+  // and store, so cache miss is not taken into account.
+  if (dst1.IsStackSlot() || dst1.IsDoubleStackSlot()) {
+    if (dst2.IsStackSlot() || dst2.IsDoubleStackSlot()) {
+      return dst1.GetStackIndex() - dst2.GetStackIndex();
+    }
+    return -1;
+  }
+  if (dst2.IsStackSlot() || dst2.IsDoubleStackSlot()) {
+    return 1;
+  }
+  if (src1.IsStackSlot() || src1.IsDoubleStackSlot()) {
+    if (src2.IsStackSlot() || src2.IsDoubleStackSlot()) {
+      return src1.GetStackIndex() - src2.GetStackIndex();
+    }
+    return 1;
+  }
+  if (src2.IsStackSlot() || src2.IsDoubleStackSlot()) {
+    return -1;
+  }
+  return 0;
+}
+
+void ParallelMoveResolverARM64::PrepareForEmitNativeCode(HParallelMove* parallel_move) {
+  DCHECK(deferred_move_.IsEliminated());
+  // TODO: This qsort based implementation relies on the way we store the MoveOperands. Use
+  // std::sort() once we store the MoveOperands in ArenaVector.
+  qsort(parallel_move->MoveOperandsAt(0), parallel_move->NumMoves(), sizeof(MoveOperands),
+        CompareMoves);
   // Note: There are 6 kinds of moves:
   // 1. constant -> GPR/FPR (non-cycle)
   // 2. constant -> stack (non-cycle)
@@ -527,6 +566,12 @@ void ParallelMoveResolverARM64::PrepareForEmitNativeCode() {
 }
 
 void ParallelMoveResolverARM64::FinishEmitNativeCode() {
+  if (!deferred_move_.IsEliminated()) {
+    // Emit deferred move.
+    codegen_->MoveLocation(deferred_move_.GetDestination(), deferred_move_.GetSource(),
+                           deferred_move_.GetType());
+    deferred_move_.Eliminate();
+  }
   vixl_temps_.Close();
 }
 
@@ -559,9 +604,111 @@ void ParallelMoveResolverARM64::FreeScratchLocation(Location loc) {
   RemoveScratchLocation(loc);
 }
 
+static bool IsExactZero(HConstant* cst) {
+  if (cst->IsNullConstant()) {
+    return true;
+  } else if (cst->IsIntConstant() || cst->IsLongConstant()) {
+    return cst->IsZero();
+  } else if (cst->IsFloatConstant()) {
+    float value = cst->AsFloatConstant()->GetValue();
+    if (bit_cast<int32_t, float>(value) == 0) {
+      return true;
+    }
+  } else {
+    DCHECK(cst->IsDoubleConstant());
+    double value = cst->AsDoubleConstant()->GetValue();
+    if (bit_cast<int64_t, double>(value) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void ParallelMoveResolverARM64::EmitMove(size_t index) {
   MoveOperands* move = moves_.Get(index);
-  codegen_->MoveLocation(move->GetDestination(), move->GetSource());
+  Location src = move->GetSource();
+  Location dst = move->GetDestination();
+  Location deferred_src = deferred_move_.GetSource();
+  Location deferred_dst = deferred_move_.GetDestination();
+
+  if (deferred_move_.IsEliminated()) {
+    deferred_move_ = *move;
+    return;
+  }
+
+  // Replace zero constant sources by zero register.
+  if (deferred_src.IsConstant() && IsExactZero(deferred_src.GetConstant())) {
+    deferred_src = Location::RegisterLocation(ARTRegCodeFromVIXL(xzr.code()));
+  }
+  if (src.IsConstant() && IsExactZero(src.GetConstant())) {
+    src = Location::RegisterLocation(ARTRegCodeFromVIXL(xzr.code()));
+  }
+
+  // Try to combine two adjacent moves and emit load/store pair.
+  if ((deferred_src.IsStackSlot() && src.IsStackSlot()
+      && deferred_src.GetStackIndex() + 4 == src.GetStackIndex())
+      || (deferred_src.IsDoubleStackSlot() && src.IsDoubleStackSlot()
+      && deferred_src.GetStackIndex() + 8 == src.GetStackIndex())) {
+    // Load.
+    if ((deferred_dst.IsRegister() && dst.IsRegister())
+        || (deferred_dst.IsFpuRegister() && dst.IsFpuRegister())) {
+      if (src.IsStackSlot()) {
+        if (dst.IsRegister()) {
+          __ Ldp(WRegisterFrom(deferred_dst), WRegisterFrom(dst),
+                 MemOperand(sp, deferred_src.GetStackIndex()));
+        } else {
+          __ Ldp(SRegisterFrom(deferred_dst), SRegisterFrom(dst),
+                 MemOperand(sp, deferred_src.GetStackIndex()));
+        }
+      } else {
+        if (dst.IsRegister()) {
+          __ Ldp(XRegisterFrom(deferred_dst), XRegisterFrom(dst),
+                 MemOperand(sp, deferred_src.GetStackIndex()));
+        } else {
+          __ Ldp(DRegisterFrom(deferred_dst), DRegisterFrom(dst),
+                 MemOperand(sp, deferred_src.GetStackIndex()));
+        }
+      }
+      deferred_move_.Eliminate();
+      return;
+    }
+  } else if ((deferred_dst.IsStackSlot() && dst.IsStackSlot()
+             && deferred_dst.GetStackIndex() + 4 == dst.GetStackIndex())
+             || (deferred_dst.IsDoubleStackSlot() && dst.IsDoubleStackSlot() &&
+             deferred_dst.GetStackIndex() + 8 == dst.GetStackIndex())) {
+    if ((deferred_src.IsRegister() && src.IsRegister())
+        || (deferred_src.IsFpuRegister() && src.IsFpuRegister())) {
+      // Store.
+      if (dst.IsStackSlot()) {
+        if (src.IsRegister()) {
+          __ Stp(WRegisterFrom(deferred_src), WRegisterFrom(src),
+                 MemOperand(sp, deferred_dst.GetStackIndex()));
+        } else {
+          __ Stp(SRegisterFrom(deferred_src), SRegisterFrom(src),
+                 MemOperand(sp, deferred_dst.GetStackIndex()));
+        }
+      } else {
+        if (src.IsRegister()) {
+          __ Stp(XRegisterFrom(deferred_src), XRegisterFrom(src),
+                 MemOperand(sp, deferred_dst.GetStackIndex()));
+        } else {
+          __ Stp(DRegisterFrom(deferred_src), DRegisterFrom(src),
+                 MemOperand(sp, deferred_dst.GetStackIndex()));
+        }
+      }
+      deferred_move_.Eliminate();
+      return;
+    }
+  }
+  // Below instructions won't be generated because it might run out of temp registers.
+  // ldp temp1, temp2, [sp, #source_offset]
+  // stp temp1, temp2, [sp, #destination_offset]
+
+  // The last two moves can not be combined. Emit the deferred move and defer
+  // the current move.
+  codegen_->MoveLocation(deferred_move_.GetDestination(), deferred_move_.GetSource(),
+                         deferred_move_.GetType());
+  deferred_move_ = *move;
 }
 
 void CodeGeneratorARM64::GenerateFrameEntry() {
@@ -721,7 +868,6 @@ void CodeGeneratorARM64::SetupBlockedRegisters(bool is_baseline) const {
   // Blocked core registers:
   //      lr        : Runtime reserved.
   //      tr        : Runtime reserved.
-  //      xSuspend  : Runtime reserved. TODO: Unblock this when the runtime stops using it.
   //      ip1       : VIXL core temp.
   //      ip0       : VIXL core temp.
   //
@@ -831,6 +977,23 @@ void CodeGeneratorARM64::MoveLocation(Location destination, Location source, Pri
     return;
   }
 
+  // There is no register size information described in Location. We use the
+  // primitive type information to identify which register form should be used.
+  // After the below translation, type presents the register form if the location
+  // is a register.
+  // Primitive::kPrimInt    -> W     Primitive::kPrimLong   -> X
+  // Primitive::kPrimFloat  -> S     Primitive::kPrimDouble -> D
+  // Primitive::kPrimVoid   -> Unknown, 64bit move will be used if both source and
+  // destination are registers.
+  if (type == Primitive::kPrimNot || type == Primitive::kPrimBoolean
+      || type == Primitive::kPrimByte || type == Primitive::kPrimChar
+      || type == Primitive::kPrimShort) {
+    type = Primitive::kPrimInt;
+  }
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong
+         || type == Primitive::kPrimFloat || type == Primitive::kPrimDouble
+         || type == Primitive::kPrimVoid);
+
   // A valid move can always be inferred from the destination and source
   // locations. When moving from and to a register, the argument type can be
   // used to generate 32bit instead of 64bit moves. In debug mode we also
@@ -889,24 +1052,28 @@ void CodeGeneratorARM64::MoveLocation(Location destination, Location source, Pri
       UseScratchRegisterScope temps(GetVIXLAssembler());
       HConstant* src_cst = source.GetConstant();
       CPURegister temp;
-      if (src_cst->IsIntConstant() || src_cst->IsNullConstant()) {
-        temp = temps.AcquireW();
-      } else if (src_cst->IsLongConstant()) {
-        temp = temps.AcquireX();
-      } else if (src_cst->IsFloatConstant()) {
-        temp = temps.AcquireS();
+      if (IsExactZero(src_cst)) {
+        temp = src_cst->IsLongConstant() || src_cst->IsDoubleConstant() ? xzr : wzr;
       } else {
-        DCHECK(src_cst->IsDoubleConstant());
-        temp = temps.AcquireD();
+        if (src_cst->IsIntConstant()) {
+          temp = temps.AcquireW();
+        } else if (src_cst->IsLongConstant()) {
+          temp = temps.AcquireX();
+        } else if (src_cst->IsFloatConstant()) {
+          temp = temps.AcquireS();
+        } else {
+          DCHECK(src_cst->IsDoubleConstant());
+          temp = temps.AcquireD();
+        }
+        MoveConstant(temp, src_cst);
       }
-      MoveConstant(temp, src_cst);
       __ Str(temp, StackOperandFrom(destination));
     } else {
       DCHECK(source.IsStackSlot() || source.IsDoubleStackSlot());
       DCHECK(source.IsDoubleStackSlot() == destination.IsDoubleStackSlot());
       UseScratchRegisterScope temps(GetVIXLAssembler());
-      // There is generally less pressure on FP registers.
-      FPRegister temp = destination.IsDoubleStackSlot() ? temps.AcquireD() : temps.AcquireS();
+      // Load/store on core registers is a bit faster than on fp registers.
+      Register temp = destination.IsDoubleStackSlot() ? temps.AcquireX() : temps.AcquireW();
       __ Ldr(temp, StackOperandFrom(source));
       __ Str(temp, StackOperandFrom(destination));
     }

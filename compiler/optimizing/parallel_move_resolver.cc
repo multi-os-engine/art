@@ -292,7 +292,7 @@ void ParallelMoveResolverNoSwap::EmitNativeCode(HParallelMove* parallel_move) {
   DCHECK(scratches_.IsEmpty());
 
   // Backend dependent initialization.
-  PrepareForEmitNativeCode();
+  PrepareForEmitNativeCode(parallel_move);
 
   // Build up a worklist of moves.
   BuildInitialMoveList(parallel_move);
@@ -444,8 +444,7 @@ void ParallelMoveResolverNoSwap::PerformMove(size_t index) {
     Location::Kind kind = source.GetKind();
     DCHECK_NE(kind, Location::kConstant);
     Location scratch = AllocateScratchLocationFor(kind);
-    // We only care about the move size.
-    Primitive::Type type = move->Is64BitMove() ? Primitive::kPrimLong : Primitive::kPrimInt;
+    Primitive::Type type = move->GetType();
     // Perform (C -> scratch)
     move->SetDestination(scratch);
     EmitMove(index);
@@ -472,6 +471,7 @@ void ParallelMoveResolverNoSwap::PerformMove(size_t index) {
     DeletePendingMove(pending_move);
     move->SetSource(pending_source);
     move->SetDestination(pending_destination);
+    move->SetType(pending_move->GetType());
     EmitMove(index);
     move->Eliminate();
     UpdateMoveSource(pending_source, pending_destination);

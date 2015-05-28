@@ -206,10 +206,13 @@ class LocationsBuilderARM64 : public HGraphVisitor {
 class ParallelMoveResolverARM64 : public ParallelMoveResolverNoSwap {
  public:
   ParallelMoveResolverARM64(ArenaAllocator* allocator, CodeGeneratorARM64* codegen)
-      : ParallelMoveResolverNoSwap(allocator), codegen_(codegen), vixl_temps_() {}
+      : ParallelMoveResolverNoSwap(allocator), codegen_(codegen), vixl_temps_(),
+        deferred_move_(Location::NoLocation(), Location::NoLocation(), Primitive::kPrimVoid, nullptr) {
+    DCHECK(deferred_move_.IsEliminated());
+  }
 
  protected:
-  void PrepareForEmitNativeCode() OVERRIDE;
+  void PrepareForEmitNativeCode(HParallelMove* parallel_move) OVERRIDE;
   void FinishEmitNativeCode() OVERRIDE;
   Location AllocateScratchLocationFor(Location::Kind kind) OVERRIDE;
   void FreeScratchLocation(Location loc) OVERRIDE;
@@ -223,6 +226,7 @@ class ParallelMoveResolverARM64 : public ParallelMoveResolverNoSwap {
 
   CodeGeneratorARM64* const codegen_;
   vixl::UseScratchRegisterScope vixl_temps_;
+  MoveOperands deferred_move_;
 
   DISALLOW_COPY_AND_ASSIGN(ParallelMoveResolverARM64);
 };

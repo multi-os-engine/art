@@ -98,7 +98,7 @@ class TestParallelMoveResolverNoSwap : public ParallelMoveResolverNoSwap {
   explicit TestParallelMoveResolverNoSwap(ArenaAllocator* allocator)
       : ParallelMoveResolverNoSwap(allocator), scratch_index_(kScratchRegisterStartIndexForTest) {}
 
-  void PrepareForEmitNativeCode() OVERRIDE {
+  void PrepareForEmitNativeCode(HParallelMove* parallel_move ATTRIBUTE_UNUSED) OVERRIDE {
     scratch_index_ = kScratchRegisterStartIndexForTest;
   }
 

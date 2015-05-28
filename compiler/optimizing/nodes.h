@@ -3880,9 +3880,11 @@ class MoveOperands : public ArenaObject<kArenaAllocMisc> {
 
   Location GetSource() const { return source_; }
   Location GetDestination() const { return destination_; }
+  Primitive::Type GetType() const { return type_; }
 
   void SetSource(Location value) { source_ = value; }
   void SetDestination(Location value) { destination_ = value; }
+  void SetType(Primitive::Type type) { type_ = type; }
 
   // The parallel move resolver marks moves as "in-progress" by clearing the
   // destination (but not the source).

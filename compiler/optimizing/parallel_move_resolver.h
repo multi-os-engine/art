@@ -130,7 +130,7 @@ class ParallelMoveResolverNoSwap : public ParallelMoveResolver {
  protected:
   // Called at the beginning of EmitNativeCode(). A subclass may put some architecture dependent
   // initialization here.
-  virtual void PrepareForEmitNativeCode() = 0;
+  virtual void PrepareForEmitNativeCode(HParallelMove* parallel_move) = 0;
 
   // Called at the end of EmitNativeCode(). A subclass may put some architecture dependent cleanup
   // here. All scratch locations will be removed after this call.
