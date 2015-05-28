@@ -206,7 +206,8 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       blocking_gc_count_last_window_(0U),
       gc_count_rate_histogram_("gc count rate histogram", 1U, kGcCountRateMaxBucketCount),
       blocking_gc_count_rate_histogram_("blocking gc count rate histogram", 1U,
-                                        kGcCountRateMaxBucketCount) {
+                                        kGcCountRateMaxBucketCount),
+      alloc_tracking_enabled_(false) {
   if (VLOG_IS_ON(heap) || VLOG_IS_ON(startup)) {
     LOG(INFO) << "Heap() entering";
   }
@@ -1040,6 +1041,10 @@ Heap::~Heap() {
   STLDeleteElements(&garbage_collectors_);
   // If we don't reset then the mark stack complains in its destructor.
   allocation_stack_->Reset();
+  {
+    MutexLock mu(Thread::Current(), *Locks::alloc_tracker_lock_);
+    allocation_records_.reset();
+  }
   live_stack_->Reset();
   STLDeleteValues(&mod_union_tables_);
   STLDeleteValues(&remembered_sets_);
@@ -3653,6 +3658,19 @@ void Heap::ClearMarkedObjects() {
   // Clear the marked objects in the discontinous space object sets.
   for (const auto& space : GetDiscontinuousSpaces()) {
     space->GetMarkBitmap()->Clear();
+  }
+}
+
+void Heap::SetAllocationRecords(AllocRecordObjectMap* records) {
+  allocation_records_.reset(records);
+}
+
+void Heap::TrySweepAllocationRecords(IsMarkedCallback* visitor, void* arg) const {
+  if (IsAllocTrackingEnabled()) {
+    MutexLock mu(Thread::Current(), *Locks::alloc_tracker_lock_);
+    if (IsAllocTrackingEnabled()) {
+      GetAllocationRecords()->SweepAllocationRecords(visitor, arg);
+    }
   }
 }
 
