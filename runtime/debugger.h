@@ -23,6 +23,7 @@
 
 #include <pthread.h>
 
+#include <list>
 #include <map>
 #include <set>
 #include <string>
@@ -41,7 +42,6 @@ class Class;
 class Object;
 class Throwable;
 }  // namespace mirror
-class AllocRecord;
 class ArtField;
 class ArtMethod;
 class ObjectRegistry;
@@ -199,6 +199,209 @@ class DeoptimizationRequest {
   jmethodID method_;
 };
 std::ostream& operator<<(std::ostream& os, const DeoptimizationRequest::Kind& rhs);
+
+class AllocRecordStackTraceElement {
+ public:
+  AllocRecordStackTraceElement() : method_(nullptr), dex_pc_(0) {}
+
+  int32_t LineNumber() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  ArtMethod* Method() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return method_;
+  }
+
+  void SetMethod(ArtMethod* m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    method_ = m;
+  }
+
+  void SetDexPc(uint32_t pc) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    dex_pc_ = pc;
+  }
+
+  bool operator==(const AllocRecordStackTraceElement& other) const {
+    if (this == &other) return true;
+    return method_ == other.method_ && dex_pc_ == other.dex_pc_;
+  }
+
+  friend struct hash_AllocRecordStackTraceElement;
+
+ private:
+  ArtMethod* method_;
+  uint32_t dex_pc_;
+};
+
+class AllocRecordStackTrace {
+ public:
+  static constexpr size_t kHashMultiplier = 17;
+  static constexpr size_t kMaxAllocRecordStackDepth = 4;  // Max 255.
+
+  explicit AllocRecordStackTrace(pid_t tid) : tid_(tid), depth_(0) {}
+
+  pid_t GetTid() const {
+    return tid_;
+  }
+
+  size_t GetDepth() const {
+    return depth_;
+  }
+
+  void SetDepth(size_t depth) {
+    depth_ = depth;
+  }
+
+  AllocRecordStackTraceElement* StackElement(size_t index) {
+    DCHECK_LT(index, kMaxAllocRecordStackDepth);
+    return &stack_[index];
+  }
+
+  bool operator==(const AllocRecordStackTrace& other) const {
+    if (this == &other) return true;
+    if (depth_ != other.depth_) return false;
+    for (size_t i = 0; i < depth_; ++i) {
+      if (!(stack_[i] == other.stack_[i])) return false;
+    }
+    return true;
+  }
+
+  friend struct hash_AllocRecordStackTrace;
+
+ private:
+  const pid_t tid_;
+  size_t depth_;
+  AllocRecordStackTraceElement stack_[kMaxAllocRecordStackDepth];
+};
+
+struct hash_AllocRecordStackTraceElement {
+  size_t operator()(const AllocRecordStackTraceElement& r) const {
+    return std::hash<void*>()(reinterpret_cast<void*>(r.method_)) *
+        AllocRecordStackTrace::kHashMultiplier + std::hash<uint32_t>()(r.dex_pc_);
+  }
+};
+
+struct hash_AllocRecordStackTrace {
+  size_t operator()(const AllocRecordStackTrace& r) const {
+    size_t result = r.depth_;
+    for (size_t i = 0; i < r.depth_; ++i) {
+      result = result * AllocRecordStackTrace::kHashMultiplier
+               + hash_AllocRecordStackTraceElement()(r.stack_[i]);
+    }
+    return result;
+  }
+};
+
+class AllocRecord {
+ public:
+  // all instances of AllocRecord should be managed by an instance of AllocRecordObjectMap.
+  AllocRecord(mirror::Class* c, size_t count, AllocRecordStackTrace* trace)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_);
+
+  ~AllocRecord() {
+    delete trace_;
+  }
+
+  mirror::Class* Type() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  size_t GetDepth() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    return trace_->GetDepth();
+  }
+
+  AllocRecordStackTrace* GetStackTrace() const {
+    return trace_;
+  }
+
+  size_t ByteCount() const {
+    return byte_count_;
+  }
+
+  pid_t GetTid() const {
+    return trace_->GetTid();
+  }
+
+  AllocRecordStackTraceElement* StackElement(size_t index) {
+    return trace_->StackElement(index);
+  }
+
+ private:
+  const jobject type_;  // This is a weak global.
+  const size_t byte_count_;
+  // Manc: TODO: currently trace_ is like a std::unique_ptr,
+  // but in future with deduplication it could be a std::shared_ptr
+  AllocRecordStackTrace* const trace_;
+};
+
+class AllocRecordObjectMap {
+ public:
+  ~AllocRecordObjectMap() {
+    for (const auto& it : entries_) {
+      delete it.second;
+    }
+  }
+
+  void Put(mirror::Object* obj, AllocRecord* record)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_) {
+    entries_.emplace_back(obj, record);
+  }
+
+  // only called when all threads are suspended
+  // Manc: TODO: unused method
+  AllocRecord* Get(mirror::Object* obj) const
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::mutator_lock_, Locks::alloc_tracker_lock_) {
+    for (auto it = entries_.begin(), end = entries_.end(); it != end; ++it) {
+      if (it->first == obj) {
+        return it->second;
+      }
+    }
+    return nullptr;
+  }
+
+  size_t Size() const
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_) {
+    return entries_.size();
+  }
+
+  void SweepAllocationRecords(IsMarkedCallback* callback, void* arg)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_);
+
+  void RemoveOldest()
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_) {
+    DCHECK(!entries_.empty());
+    delete entries_.front().second;
+    entries_.pop_front();
+  }
+
+  // Manc: TODO: Is there a better way to hide the entries_'s type?
+  std::list<std::pair<mirror::Object*, AllocRecord*>>::iterator Begin()
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_) {
+    return entries_.begin();
+  }
+
+  std::list<std::pair<mirror::Object*, AllocRecord*>>::iterator End()
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_) {
+    return entries_.end();
+  }
+
+  std::list<std::pair<mirror::Object*, AllocRecord*>>::reverse_iterator RBegin()
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_) {
+    return entries_.rbegin();
+  }
+
+  std::list<std::pair<mirror::Object*, AllocRecord*>>::reverse_iterator REnd()
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_) {
+    return entries_.rend();
+  }
+
+ private:
+  std::list<std::pair<mirror::Object*, AllocRecord*>> entries_;
+};
 
 class Dbg {
  public:
@@ -655,19 +858,16 @@ class Dbg {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   /*
-   * Recent allocation tracking support.
+   * Allocation tracking support.
    */
-  static void RecordAllocation(Thread* self, mirror::Class* type, size_t byte_count)
+  static void RecordAllocation(Thread* self, mirror::Object* obj,
+                               mirror::Class* type, size_t byte_count)
       LOCKS_EXCLUDED(Locks::alloc_tracker_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   static void SetAllocTrackingEnabled(bool enabled) LOCKS_EXCLUDED(Locks::alloc_tracker_lock_);
-  static bool IsAllocTrackingEnabled() {
-    return recent_allocation_records_ != nullptr;
-  }
   static jbyteArray GetRecentAllocations()
       LOCKS_EXCLUDED(Locks::alloc_tracker_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  static size_t HeadIndex() EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_);
   static void DumpRecentAllocations() LOCKS_EXCLUDED(Locks::alloc_tracker_lock_);
 
   enum HpifWhen {
@@ -755,10 +955,8 @@ class Dbg {
   static bool IsForcedInterpreterNeededForUpcallImpl(Thread* thread, ArtMethod* m)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  static AllocRecord* recent_allocation_records_ PT_GUARDED_BY(Locks::alloc_tracker_lock_);
   static size_t alloc_record_max_ GUARDED_BY(Locks::alloc_tracker_lock_);
-  static size_t alloc_record_head_ GUARDED_BY(Locks::alloc_tracker_lock_);
-  static size_t alloc_record_count_ GUARDED_BY(Locks::alloc_tracker_lock_);
+  static pid_t alloc_ddm_thread_id_ GUARDED_BY(Locks::alloc_tracker_lock_);
 
   // Indicates whether the debugger is making requests.
   static bool gDebuggerActive;
@@ -799,6 +997,7 @@ class Dbg {
   static uint32_t instrumentation_events_ GUARDED_BY(Locks::mutator_lock_);
 
   friend class AllocRecord;  // For type_cache_ with proper annotalysis.
+  friend class AllocRecordObjectMap;
   DISALLOW_COPY_AND_ASSIGN(Dbg);
 };
 
