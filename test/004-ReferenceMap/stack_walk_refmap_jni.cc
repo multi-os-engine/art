@@ -53,7 +53,7 @@ struct ReferenceMap2Visitor : public CheckReferenceMapVisitor {
       //   0024: move-object v3, v2
       //   0025: goto 0013
       // Detailed dex instructions for ReferenceMap.java are at the end of this function.
-      // CHECK_REGS_CONTAIN_REFS(8, 3, 2, 1);  // v8: this, v3: y, v2: y, v1: x
+      /// CHECK_REGS_CONTAIN_REFS(8, 3, 2, 1);  // v8: this, v3: y, v2: y, v1: x
       // We eliminate the non-live registers at a return, so only v3 is live.
       // Note that it is OK for a compiler to not have a dex map at this dex PC because
       // a return is not necessarily a safepoint.
