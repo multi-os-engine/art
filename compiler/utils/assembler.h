@@ -376,8 +376,8 @@ class Assembler {
  public:
   static Assembler* Create(InstructionSet instruction_set);
 
-  // Emit slow paths queued during assembly
-  virtual void EmitSlowPaths() { buffer_.EmitSlowPaths(this); }
+  // Finalize the code; emit slow paths, fixup branches, add literal pool, etc.
+  virtual void FinalizeCode() { buffer_.EmitSlowPaths(this); }
 
   // Size of generated code
   virtual size_t CodeSize() const { return buffer_.Size(); }

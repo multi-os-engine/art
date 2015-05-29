@@ -78,11 +78,28 @@ class AssemblerThumb2Test : public AssemblerTest<arm::Thumb2Assembler,
     return imm_value;
   }
 
+  std::string RepeatInsn(size_t count, const std::string& insn) {
+    std::string result;
+    for (; count != 0u; --count) {
+      result += insn;
+    }
+    return result;
+  }
+
  private:
   std::vector<arm::Register*> registers_;
 
   static constexpr const char* kThumb2AssemblyHeader = ".syntax unified\n.thumb\n";
 };
+
+#define REPEAT_INSN_VAR_IMPL(base, line) a##b
+#define REPEAT_INSN_VAR(line) REPEAT_INSN_VAR_IMPL(repeat_insn_var_, line)
+#define REPEAT_INSN_IMPL(count, expr, var) \
+  for (size_t var = 0u; var != count; ++var) { expr; }
+#define REPEAT_INSN(count, expr) \
+  do { \
+    REPEAT_INSN_IMPL(count, expr, REPEAT_INSN_VAR(__LINE__)) \
+  } while (false)
 
 
 TEST_F(AssemblerThumb2Test, Toolchain) {
@@ -369,5 +386,29 @@ TEST_F(AssemblerThumb2Test, StoreWordPairToNonThumbOffset) {
       "ldr r6, [sp], #4\n";       // Pop(r6)
   DriverStr(expected, "StoreWordPairToNonThumbOffset");
 }
+
+#if 0
+TEST_F(AssemblerThumb2Test, BranchRelocation1) {
+  Label label1;
+  __ cbz(arm::R0, &label1);
+  constexpr size_t kLdrR0R0Count1 = 200;
+  REPEAT_INSN(kLdrR0R0Count1, __ ldr(arm::R0, arm::Address(arm::R0)));
+  Label label2;
+  __ cbz(arm::R0, &label2);
+  __ Bind(&label1);
+  constexpr size_t kLdrR0R0Count2 = 10;
+  REPEAT_INSN(kLdrR0R0Count2, __ ldr(arm::R0, arm::Address(arm::R0)));
+  __ Bind(&label2);
+
+  std::string expected =
+      "cbz r0, 1f\n" +            // cbz r0, label1
+      RepeatInsn(kLdrR0R0Count1, "ldr r0, [r0]\n") +
+      "cbz r0, 2f\n" +            // cbz r0, label2
+      "1:\n" +
+      RepeatInsn(kLdrR0R0Count2, "ldr r0, [r0]\n") +
+      "2:\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+#endif
 
 }  // namespace art
