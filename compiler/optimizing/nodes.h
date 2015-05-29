@@ -2391,6 +2391,7 @@ class HInvoke : public HInstruction {
 
   uint32_t GetDexMethodIndex() const { return dex_method_index_; }
   const DexFile& GetDexFile() const { return GetEnvironment()->GetDexFile(); }
+  const DexFile& GetDefinitionDexFile() const { return dex_file_; }
 
   InvokeType GetOriginalInvokeType() const { return original_invoke_type_; }
 
@@ -2411,7 +2412,8 @@ class HInvoke : public HInstruction {
           Primitive::Type return_type,
           uint32_t dex_pc,
           uint32_t dex_method_index,
-          InvokeType original_invoke_type)
+          InvokeType original_invoke_type,
+          const DexFile& dex_file_arg)
     : HInstruction(SideEffects::All()),
       number_of_arguments_(number_of_arguments),
       inputs_(arena, number_of_arguments),
@@ -2419,7 +2421,8 @@ class HInvoke : public HInstruction {
       dex_pc_(dex_pc),
       dex_method_index_(dex_method_index),
       original_invoke_type_(original_invoke_type),
-      intrinsic_(Intrinsics::kNone) {
+      intrinsic_(Intrinsics::kNone),
+      dex_file_(dex_file_arg) {
     uint32_t number_of_inputs = number_of_arguments + number_of_other_inputs;
     inputs_.SetSize(number_of_inputs);
   }
@@ -2436,6 +2439,7 @@ class HInvoke : public HInstruction {
   const uint32_t dex_method_index_;
   const InvokeType original_invoke_type_;
   Intrinsics intrinsic_;
+  const DexFile& dex_file_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HInvoke);
@@ -2460,14 +2464,16 @@ class HInvokeStaticOrDirect : public HInvoke {
                         int32_t string_init_offset,
                         InvokeType original_invoke_type,
                         InvokeType invoke_type,
-                        ClinitCheckRequirement clinit_check_requirement)
+                        ClinitCheckRequirement clinit_check_requirement,
+                        const DexFile& dex_file)
       : HInvoke(arena,
                 number_of_arguments,
                 clinit_check_requirement == ClinitCheckRequirement::kExplicit ? 1u : 0u,
                 return_type,
                 dex_pc,
                 dex_method_index,
-                original_invoke_type),
+                original_invoke_type,
+                dex_file),
         invoke_type_(invoke_type),
         is_recursive_(is_recursive),
         clinit_check_requirement_(clinit_check_requirement),
@@ -2554,8 +2560,16 @@ class HInvokeVirtual : public HInvoke {
                  Primitive::Type return_type,
                  uint32_t dex_pc,
                  uint32_t dex_method_index,
-                 uint32_t vtable_index)
-      : HInvoke(arena, number_of_arguments, 0u, return_type, dex_pc, dex_method_index, kVirtual),
+                 uint32_t vtable_index,
+                 const DexFile& dex_file)
+      : HInvoke(arena,
+                number_of_arguments,
+                0u,
+                return_type,
+                dex_pc,
+                dex_method_index,
+                kVirtual,
+                dex_file),
         vtable_index_(vtable_index) {}
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
@@ -2580,8 +2594,16 @@ class HInvokeInterface : public HInvoke {
                    Primitive::Type return_type,
                    uint32_t dex_pc,
                    uint32_t dex_method_index,
-                   uint32_t imt_index)
-      : HInvoke(arena, number_of_arguments, 0u, return_type, dex_pc, dex_method_index, kInterface),
+                   uint32_t imt_index,
+                   const DexFile& dex_file)
+      : HInvoke(arena,
+                number_of_arguments,
+                0u,
+                return_type,
+                dex_pc,
+                dex_method_index,
+                kInterface,
+                dex_file),
         imt_index_(imt_index) {}
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {

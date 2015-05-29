@@ -642,10 +642,10 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
 
   if (optimized_invoke_type == kVirtual) {
     invoke = new (arena_) HInvokeVirtual(
-        arena_, number_of_arguments, return_type, dex_pc, method_idx, table_index);
+        arena_, number_of_arguments, return_type, dex_pc, method_idx, table_index, *dex_file_);
   } else if (optimized_invoke_type == kInterface) {
     invoke = new (arena_) HInvokeInterface(
-        arena_, number_of_arguments, return_type, dex_pc, method_idx, table_index);
+        arena_, number_of_arguments, return_type, dex_pc, method_idx, table_index, *dex_file_);
   } else {
     DCHECK(optimized_invoke_type == kDirect || optimized_invoke_type == kStatic);
     // Sharpening to kDirect only works if we compile PIC.
@@ -720,10 +720,17 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
       }
     }
 
-    invoke = new (arena_) HInvokeStaticOrDirect(
-        arena_, number_of_arguments, return_type, dex_pc, target_method.dex_method_index,
-        is_recursive, string_init_offset, invoke_type, optimized_invoke_type,
-        clinit_check_requirement);
+    invoke = new (arena_) HInvokeStaticOrDirect(arena_,
+                                                number_of_arguments,
+                                                return_type,
+                                                dex_pc,
+                                                target_method.dex_method_index,
+                                                is_recursive,
+                                                string_init_offset,
+                                                invoke_type,
+                                                optimized_invoke_type,
+                                                clinit_check_requirement,
+                                                *dex_file_);
   }
 
   size_t start_index = 0;
