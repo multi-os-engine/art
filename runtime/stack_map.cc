@@ -20,6 +20,8 @@
 
 #include "indenter.h"
 
+#include <sstream>
+
 namespace art {
 
 constexpr size_t DexRegisterLocationCatalog::kNoLocationEntryIndex;
@@ -198,6 +200,10 @@ size_t StackMap::ComputeStackMapSize(size_t stack_mask_size,
 
 MemoryRegion StackMap::GetStackMask(const CodeInfo& info) const {
   return region_.Subregion(info.ComputeStackMapStackMaskOffset(), info.GetStackMaskSize());
+}
+
+void StackMap::SetStackMask(const CodeInfo& info, const BitVector& sp_map) {
+  GetStackMask(info).FillWith(sp_map);
 }
 
 static void DumpRegisterMapping(std::ostream& os,
