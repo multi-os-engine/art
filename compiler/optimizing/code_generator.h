@@ -64,11 +64,6 @@ class CodeAllocator {
   DISALLOW_COPY_AND_ASSIGN(CodeAllocator);
 };
 
-struct PcInfo {
-  uint32_t dex_pc;
-  uintptr_t native_pc;
-};
-
 class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
  public:
   SlowPathCode() {
@@ -363,16 +358,15 @@ class CodeGenerator {
         number_of_register_pairs_(number_of_register_pairs),
         core_callee_save_mask_(core_callee_save_mask),
         fpu_callee_save_mask_(fpu_callee_save_mask),
+        stack_map_stream_(graph->GetArena()),
         is_baseline_(false),
         graph_(graph),
         compiler_options_(compiler_options),
-        pc_infos_(graph->GetArena(), 32),
         slow_paths_(graph->GetArena(), 8),
         block_order_(nullptr),
         current_block_index_(0),
         is_leaf_(true),
-        requires_current_method_(false),
-        stack_map_stream_(graph->GetArena()) {}
+        requires_current_method_(false) {}
 
   // Register allocation logic.
   void AllocateRegistersLocally(HInstruction* instruction) const;
@@ -442,6 +436,8 @@ class CodeGenerator {
   const uint32_t core_callee_save_mask_;
   const uint32_t fpu_callee_save_mask_;
 
+  StackMapStream stack_map_stream_;
+
   // Whether we are using baseline.
   bool is_baseline_;
 
@@ -455,7 +451,6 @@ class CodeGenerator {
   HGraph* const graph_;
   const CompilerOptions& compiler_options_;
 
-  GrowableArray<PcInfo> pc_infos_;
   GrowableArray<SlowPathCode*> slow_paths_;
 
   // The order to use for code generation.
@@ -470,8 +465,6 @@ class CodeGenerator {
 
   // Whether an instruction in the graph accesses the current method.
   bool requires_current_method_;
-
-  StackMapStream stack_map_stream_;
 
   friend class OptimizingCFITest;
 
