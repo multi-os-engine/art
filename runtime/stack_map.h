@@ -671,9 +671,7 @@ class StackMap {
 
   void SetStackMask(const CodeInfo& info, const BitVector& sp_map) {
     MemoryRegion region = GetStackMask(info);
-    for (size_t i = 0; i < region.size_in_bits(); i++) {
-      region.StoreBit(i, sp_map.IsBitSet(i));
-    }
+    memcpy(region.pointer(), sp_map.GetRawStorage(), region.size());
   }
 
   bool HasDexRegisterMap(const CodeInfo& info) const {
