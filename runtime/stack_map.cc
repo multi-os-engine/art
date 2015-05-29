@@ -20,6 +20,8 @@
 
 #include "indenter.h"
 
+#include <sstream>
+
 namespace art {
 
 constexpr size_t DexRegisterLocationCatalog::kNoLocationEntryIndex;
