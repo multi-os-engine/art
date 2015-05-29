@@ -291,8 +291,8 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
 
   HGraph* callee_graph = new (graph_->GetArena()) HGraph(
       graph_->GetArena(),
-      caller_dex_file,
-      method_index,
+      *resolved_method->GetDexFile(),
+      resolved_method->GetDexMethodIndex(),
       requires_ctor_barrier,
       compiler_driver_->GetInstructionSet(),
       invoke_instruction->GetOriginalInvokeType(),
