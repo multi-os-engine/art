@@ -29,8 +29,10 @@ constexpr uint32_t StackMap::kNoInlineInfo;
 DexRegisterLocation::Kind DexRegisterMap::GetLocationInternalKind(uint16_t dex_register_number,
                                                                   uint16_t number_of_dex_registers,
                                                                   const CodeInfo& code_info) const {
+  // TODO: pass in encoding
+  EncodingInfo encoding = code_info.ExtractEncoding();
   DexRegisterLocationCatalog dex_register_location_catalog =
-      code_info.GetDexRegisterLocationCatalog();
+      code_info.GetDexRegisterLocationCatalog(encoding);
   size_t location_catalog_entry_index = GetLocationCatalogEntryIndex(
       dex_register_number,
       number_of_dex_registers,
@@ -41,8 +43,10 @@ DexRegisterLocation::Kind DexRegisterMap::GetLocationInternalKind(uint16_t dex_r
 DexRegisterLocation DexRegisterMap::GetDexRegisterLocation(uint16_t dex_register_number,
                                                            uint16_t number_of_dex_registers,
                                                            const CodeInfo& code_info) const {
+  // TODO: pass in encoding
+  EncodingInfo encoding = code_info.ExtractEncoding();
   DexRegisterLocationCatalog dex_register_location_catalog =
-      code_info.GetDexRegisterLocationCatalog();
+      code_info.GetDexRegisterLocationCatalog(encoding);
   size_t location_catalog_entry_index = GetLocationCatalogEntryIndex(
       dex_register_number,
       number_of_dex_registers,
@@ -104,62 +108,62 @@ static void StoreAt(MemoryRegion region, size_t number_of_bytes, size_t offset, 
   }
 }
 
-uint32_t StackMap::GetDexPc(const CodeInfo& info) const {
-  return LoadAt(region_, info.NumberOfBytesForDexPc(), info.ComputeStackMapDexPcOffset());
+uint32_t StackMap::GetDexPc(const EncodingInfo& enc) const {
+  return LoadAt(region_, enc.NumberOfBytesForDexPc(), enc.ComputeStackMapDexPcOffset());
 }
 
-void StackMap::SetDexPc(const CodeInfo& info, uint32_t dex_pc) {
-  StoreAt(region_, info.NumberOfBytesForDexPc(), info.ComputeStackMapDexPcOffset(), dex_pc);
+void StackMap::SetDexPc(const EncodingInfo& enc, uint32_t dex_pc) {
+  StoreAt(region_, enc.NumberOfBytesForDexPc(), enc.ComputeStackMapDexPcOffset(), dex_pc);
 }
 
-uint32_t StackMap::GetNativePcOffset(const CodeInfo& info) const {
-  return LoadAt(region_, info.NumberOfBytesForNativePc(), info.ComputeStackMapNativePcOffset());
+uint32_t StackMap::GetNativePcOffset(const EncodingInfo& enc) const {
+  return LoadAt(region_, enc.NumberOfBytesForNativePc(), enc.ComputeStackMapNativePcOffset());
 }
 
-void StackMap::SetNativePcOffset(const CodeInfo& info, uint32_t native_pc_offset) {
-  StoreAt(region_, info.NumberOfBytesForNativePc(), info.ComputeStackMapNativePcOffset(), native_pc_offset);
+void StackMap::SetNativePcOffset(const EncodingInfo& enc, uint32_t native_pc_offset) {
+  StoreAt(region_, enc.NumberOfBytesForNativePc(), enc.ComputeStackMapNativePcOffset(), native_pc_offset);
 }
 
-uint32_t StackMap::GetDexRegisterMapOffset(const CodeInfo& info) const {
+uint32_t StackMap::GetDexRegisterMapOffset(const EncodingInfo& enc) const {
   return LoadAt(region_,
-                info.NumberOfBytesForDexRegisterMap(),
-                info.ComputeStackMapDexRegisterMapOffset(),
+                enc.NumberOfBytesForDexRegisterMap(),
+                enc.ComputeStackMapDexRegisterMapOffset(),
                 /* check_max */ true);
 }
 
-void StackMap::SetDexRegisterMapOffset(const CodeInfo& info, uint32_t offset) {
+void StackMap::SetDexRegisterMapOffset(const EncodingInfo& enc, uint32_t offset) {
   StoreAt(region_,
-          info.NumberOfBytesForDexRegisterMap(),
-          info.ComputeStackMapDexRegisterMapOffset(),
+          enc.NumberOfBytesForDexRegisterMap(),
+          enc.ComputeStackMapDexRegisterMapOffset(),
           offset);
 }
 
-uint32_t StackMap::GetInlineDescriptorOffset(const CodeInfo& info) const {
-  if (!info.HasInlineInfo()) return kNoInlineInfo;
+uint32_t StackMap::GetInlineDescriptorOffset(const EncodingInfo& enc) const {
+  if (!enc.HasInlineInfo()) return kNoInlineInfo;
   return LoadAt(region_,
-                info.NumberOfBytesForInlineInfo(),
-                info.ComputeStackMapInlineInfoOffset(),
+                enc.NumberOfBytesForInlineInfo(),
+                enc.ComputeStackMapInlineInfoOffset(),
                 /* check_max */ true);
 }
 
-void StackMap::SetInlineDescriptorOffset(const CodeInfo& info, uint32_t offset) {
-  DCHECK(info.HasInlineInfo());
+void StackMap::SetInlineDescriptorOffset(const EncodingInfo& enc, uint32_t offset) {
+  DCHECK(enc.HasInlineInfo());
   StoreAt(region_,
-          info.NumberOfBytesForInlineInfo(),
-          info.ComputeStackMapInlineInfoOffset(),
+          enc.NumberOfBytesForInlineInfo(),
+          enc.ComputeStackMapInlineInfoOffset(),
           offset);
 }
 
-uint32_t StackMap::GetRegisterMask(const CodeInfo& info) const {
+uint32_t StackMap::GetRegisterMask(const EncodingInfo& enc) const {
   return LoadAt(region_,
-                info.NumberOfBytesForRegisterMask(),
-                info.ComputeStackMapRegisterMaskOffset());
+                enc.NumberOfBytesForRegisterMask(),
+                enc.ComputeStackMapRegisterMaskOffset());
 }
 
-void StackMap::SetRegisterMask(const CodeInfo& info, uint32_t mask) {
+void StackMap::SetRegisterMask(const EncodingInfo& enc, uint32_t mask) {
   StoreAt(region_,
-          info.NumberOfBytesForRegisterMask(),
-          info.ComputeStackMapRegisterMaskOffset(),
+          enc.NumberOfBytesForRegisterMask(),
+          enc.ComputeStackMapRegisterMaskOffset(),
           mask);
 }
 
@@ -183,21 +187,25 @@ size_t StackMap::ComputeStackMapSize(size_t stack_mask_size,
                                      size_t dex_pc_max,
                                      size_t native_pc_max,
                                      size_t register_mask_max) {
-  return ComputeStackMapSizeInternal(
-      stack_mask_size,
-      inline_info_size == 0
-          ? 0
-            // + 1 to also encode kNoInlineInfo.
-          :  CodeInfo::EncodingSizeInBytes(inline_info_size + dex_register_map_size + 1),
-      // + 1 to also encode kNoDexRegisterMap.
-      CodeInfo::EncodingSizeInBytes(dex_register_map_size + 1),
-      CodeInfo::EncodingSizeInBytes(dex_pc_max),
-      CodeInfo::EncodingSizeInBytes(native_pc_max),
-      CodeInfo::EncodingSizeInBytes(register_mask_max));
+  EncodingInfo encoding = EncodingInfo::ComputeFromSizes(stack_mask_size,
+                                                         inline_info_size,
+                                                         dex_register_map_size + 1,
+                                                         dex_pc_max,
+                                                         native_pc_max,
+                                                         register_mask_max);
+  return encoding.StackMapSize();
 }
 
-MemoryRegion StackMap::GetStackMask(const CodeInfo& info) const {
-  return region_.Subregion(info.ComputeStackMapStackMaskOffset(), info.GetStackMaskSize());
+MemoryRegion StackMap::GetStackMask(const EncodingInfo& enc) const {
+  return region_.Subregion(enc.ComputeStackMapStackMaskOffset(), enc.GetStackMaskSize());
+}
+
+void StackMap::SetStackMask(const EncodingInfo& enc, const BitVector& sp_map) {
+  MemoryRegion region = GetStackMask(enc);
+  memcpy(region.pointer(), sp_map.GetRawStorage(), region.size());
+  // for (size_t i = 0; i < region.size_in_bits(); i++) {
+  //   region.StoreBit(i, sp_map.IsBitSet(i));
+  // }
 }
 
 static void DumpRegisterMapping(std::ostream& os,
@@ -215,28 +223,31 @@ static void DumpRegisterMapping(std::ostream& os,
 void CodeInfo::DumpStackMap(std::ostream& os,
                             size_t stack_map_num,
                             uint16_t number_of_dex_registers) const {
-  StackMap stack_map = GetStackMapAt(stack_map_num);
+  EncodingInfo encoding = ExtractEncoding();
+  StackMap stack_map = GetStackMapAt(stack_map_num, encoding);
   DumpStackMapHeader(os, stack_map_num);
-  if (stack_map.HasDexRegisterMap(*this)) {
-    DexRegisterMap dex_register_map = GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+  if (stack_map.HasDexRegisterMap(encoding)) {
+    DexRegisterMap dex_register_map =
+        GetDexRegisterMapOf(stack_map, number_of_dex_registers, encoding);
     dex_register_map.Dump(os, *this, number_of_dex_registers);
   }
 }
 
 void CodeInfo::DumpStackMapHeader(std::ostream& os, size_t stack_map_num) const {
-  StackMap stack_map = GetStackMapAt(stack_map_num);
+  EncodingInfo encoding = ExtractEncoding();
+  StackMap stack_map = GetStackMapAt(stack_map_num, encoding);
   Indenter indent_filter(os.rdbuf(), kIndentChar, kIndentBy1Count);
   std::ostream indented_os(&indent_filter);
   indented_os << "StackMap " << stack_map_num
               << std::hex
-              << " (dex_pc=0x" << stack_map.GetDexPc(*this)
-              << ", native_pc_offset=0x" << stack_map.GetNativePcOffset(*this)
-              << ", dex_register_map_offset=0x" << stack_map.GetDexRegisterMapOffset(*this)
-              << ", inline_info_offset=0x" << stack_map.GetInlineDescriptorOffset(*this)
-              << ", register_mask=0x" << stack_map.GetRegisterMask(*this)
+              << " (dex_pc=0x" << stack_map.GetDexPc(encoding)
+              << ", native_pc_offset=0x" << stack_map.GetNativePcOffset(encoding)
+              << ", dex_register_map_offset=0x" << stack_map.GetDexRegisterMapOffset(encoding)
+              << ", inline_info_offset=0x" << stack_map.GetInlineDescriptorOffset(encoding)
+              << ", register_mask=0x" << stack_map.GetRegisterMask(encoding)
               << std::dec
               << ", stack_mask=0b";
-  MemoryRegion stack_mask = stack_map.GetStackMask(*this);
+  MemoryRegion stack_mask = stack_map.GetStackMask(encoding);
   for (size_t i = 0, e = stack_mask.size_in_bits(); i < e; ++i) {
     indented_os << stack_mask.LoadBit(e - i - 1);
   }
@@ -246,6 +257,7 @@ void CodeInfo::DumpStackMapHeader(std::ostream& os, size_t stack_map_num) const 
 void CodeInfo::Dump(std::ostream& os,
                     uint16_t number_of_dex_registers,
                     bool dump_stack_maps) const {
+  EncodingInfo enc = ExtractEncoding();
   uint32_t code_info_size = GetOverallSize();
   size_t number_of_stack_maps = GetNumberOfStackMaps();
   Indenter indent_filter(os.rdbuf(), kIndentChar, kIndentBy1Count);
@@ -253,15 +265,15 @@ void CodeInfo::Dump(std::ostream& os,
   indented_os << "Optimized CodeInfo (size=" << code_info_size
               << ", number_of_dex_registers=" << number_of_dex_registers
               << ", number_of_stack_maps=" << number_of_stack_maps
-              << ", has_inline_info=" << HasInlineInfo()
-              << ", number_of_bytes_for_inline_info=" << NumberOfBytesForInlineInfo()
-              << ", number_of_bytes_for_dex_register_map=" << NumberOfBytesForDexRegisterMap()
-              << ", number_of_bytes_for_dex_pc=" << NumberOfBytesForDexPc()
-              << ", number_of_bytes_for_native_pc=" << NumberOfBytesForNativePc()
-              << ", number_of_bytes_for_register_mask=" << NumberOfBytesForRegisterMask()
+              << ", has_inline_info=" << enc.HasInlineInfo()
+              << ", number_of_bytes_for_inline_info=" << enc.NumberOfBytesForInlineInfo()
+              << ", number_of_bytes_for_dex_register_map=" << enc.NumberOfBytesForDexRegisterMap()
+              << ", number_of_bytes_for_dex_pc=" << enc.NumberOfBytesForDexPc()
+              << ", number_of_bytes_for_native_pc=" << enc.NumberOfBytesForNativePc()
+              << ", number_of_bytes_for_register_mask=" << enc.NumberOfBytesForRegisterMask()
               << ")\n";
   // Display the Dex register location catalog.
-  GetDexRegisterLocationCatalog().Dump(indented_os, *this);
+  GetDexRegisterLocationCatalog(enc).Dump(indented_os, *this);
   // Display stack maps along with (live) Dex register maps.
   if (dump_stack_maps) {
     for (size_t i = 0; i < number_of_stack_maps; ++i) {
@@ -273,9 +285,10 @@ void CodeInfo::Dump(std::ostream& os,
 }
 
 void DexRegisterLocationCatalog::Dump(std::ostream& os, const CodeInfo& code_info) {
+  EncodingInfo encoding = code_info.ExtractEncoding();
   size_t number_of_location_catalog_entries =
       code_info.GetNumberOfDexRegisterLocationCatalogEntries();
-  size_t location_catalog_size_in_bytes = code_info.GetDexRegisterLocationCatalogSize();
+  size_t location_catalog_size_in_bytes = code_info.GetDexRegisterLocationCatalogSize(encoding);
   Indenter indent_filter(os.rdbuf(), kIndentChar, kIndentBy1Count);
   std::ostream indented_os(&indent_filter);
   indented_os
@@ -321,8 +334,9 @@ void InlineInfo::Dump(std::ostream& os,
                 << ", method_index=0x" << GetMethodIndexAtDepth(i)
                 << ")\n";
     if (HasDexRegisterMapAtDepth(i)) {
+      EncodingInfo encoding = code_info.ExtractEncoding();
       DexRegisterMap dex_register_map =
-          code_info.GetDexRegisterMapAtDepth(i, *this, number_of_dex_registers[i]);
+          code_info.GetDexRegisterMapAtDepth(i, *this, number_of_dex_registers[i], encoding);
       dex_register_map.Dump(indented_os, code_info, number_of_dex_registers[i]);
     }
   }

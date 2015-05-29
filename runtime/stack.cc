@@ -113,9 +113,10 @@ InlineInfo StackVisitor::GetCurrentInlineInfo() const {
   ArtMethod* outer_method = *GetCurrentQuickFrame();
   uint32_t native_pc_offset = outer_method->NativeQuickPcOffset(cur_quick_frame_pc_);
   CodeInfo code_info = outer_method->GetOptimizedCodeInfo();
-  StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset);
+  EncodingInfo encoding = code_info.ExtractEncoding();
+  StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
   DCHECK(stack_map.IsValid());
-  return code_info.GetInlineInfoOf(stack_map);
+  return code_info.GetInlineInfoOf(stack_map, encoding);
 }
 
 ArtMethod* StackVisitor::GetMethod() const {
@@ -274,16 +275,19 @@ bool StackVisitor::GetVRegFromOptimizedCode(ArtMethod* m, uint16_t vreg, VRegKin
   const void* code_pointer = outer_method->GetQuickOatCodePointer(sizeof(void*));
   DCHECK(code_pointer != nullptr);
   CodeInfo code_info = outer_method->GetOptimizedCodeInfo();
+  EncodingInfo encoding = code_info.ExtractEncoding();
 
   uint32_t native_pc_offset = outer_method->NativeQuickPcOffset(cur_quick_frame_pc_);
-  StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset);
+  StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
   DCHECK(stack_map.IsValid());
   size_t depth_in_stack_map = current_inlining_depth_ - 1;
 
   DexRegisterMap dex_register_map = IsInInlinedFrame()
-      ? code_info.GetDexRegisterMapAtDepth(
-            depth_in_stack_map, code_info.GetInlineInfoOf(stack_map), number_of_dex_registers)
-      : code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+      ? code_info.GetDexRegisterMapAtDepth(depth_in_stack_map,
+                                           code_info.GetInlineInfoOf(stack_map, encoding),
+                                           number_of_dex_registers,
+                                           encoding)
+      : code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers, encoding);
 
   DexRegisterLocation::Kind location_kind =
       dex_register_map.GetLocationKind(vreg, number_of_dex_registers, code_info);
@@ -782,10 +786,11 @@ void StackVisitor::WalkStack(bool include_transitions) {
         if ((walk_kind_ == StackWalkKind::kIncludeInlinedFrames)
             && method->IsOptimized(sizeof(void*))) {
           CodeInfo code_info = method->GetOptimizedCodeInfo();
+          EncodingInfo encoding = code_info.ExtractEncoding();
           uint32_t native_pc_offset = method->NativeQuickPcOffset(cur_quick_frame_pc_);
-          StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset);
-          if (stack_map.IsValid() && stack_map.HasInlineInfo(code_info)) {
-            InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map);
+          StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
+          if (stack_map.IsValid() && stack_map.HasInlineInfo(encoding)) {
+            InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map, encoding);
             DCHECK_EQ(current_inlining_depth_, 0u);
             for (current_inlining_depth_ = inline_info.GetDepth();
                  current_inlining_depth_ != 0;
