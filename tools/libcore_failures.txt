@@ -36,14 +36,19 @@
   names: ["libcore.io.OsTest#testUnixDomainSockets_in_file_system"]
 },
 {
-  description: "Failures needing investigation",
+  description: "Issue with incorrect device time (1970) b/20879084",
   result: EXEC_FAILED,
   modes: [device],
   names: ["libcore.java.util.TimeZoneTest#testDisplayNames",
           "libcore.java.util.TimeZoneTest#test_useDaylightTime_Taiwan",
-          "org.apache.harmony.tests.java.util.DateTest#test_Constructor",
-          "org.apache.harmony.tests.java.util.ScannerTest#test_Constructor_LReadableByteChannel",
           "org.apache.harmony.tests.java.util.TimeZoneTest#test_hasSameRules_Ljava_util_TimeZone"]
+},
+{
+  description: "Issue with incorrect device time (1970). Test assumes that DateTime.now()
+                is greater then a date in 1998.",
+  result: EXEC_FAILED,
+  modes: [device],
+  names: ["org.apache.harmony.tests.java.util.DateTest#test_Constructor"]
 },
 {
   description: "Failing due to a locale problem on hammerhead.",
@@ -75,7 +80,8 @@
           "libcore.net.NetworkSecurityPolicyTest#testCleartextTrafficPolicyWithJarHttpURLConnection",
           "org.apache.harmony.luni.tests.internal.net.www.protocol.http.HttpURLConnectionTest",
           "org.apache.harmony.luni.tests.internal.net.www.protocol.https.HttpsURLConnectionTest",
-          "org.apache.harmony.luni.tests.java.net.URLConnectionTest"
+          "org.apache.harmony.luni.tests.java.net.URLConnectionTest",
+          "org.apache.harmony.tests.java.util.ScannerTest#test_Constructor_LReadableByteChannel"
          ]
 },
 {
