@@ -27,7 +27,7 @@ void ReferenceTypePropagation::Run() {
   // To properly propagate type info we need to visit in the dominator-based order.
   // Reverse post order guarantees a node's dominators are visited first.
   // We take advantage of this order in `VisitBasicBlock`.
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+  for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
     VisitBasicBlock(it.Current());
   }
   ProcessWorklist();
@@ -35,7 +35,7 @@ void ReferenceTypePropagation::Run() {
 
 void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
   // TODO: handle other instructions that give type info
-  // (Call/array accesses)
+  // (array accesses)
 
   // Initialize exact types first for faster convergence.
   for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
@@ -51,6 +51,8 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
       VisitInstanceFieldGet(instr->AsInstanceFieldGet());
     } else if (instr->IsStaticFieldGet()) {
       VisitStaticFieldGet(instr->AsStaticFieldGet());
+    } else if (instr->IsInvoke()) {
+      VisitInvoke(instr->AsInvoke());
     }
   }
 
@@ -96,7 +98,7 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
     HInstruction* user = it.Current()->GetUser();
     if (notNullBlock->Dominates(user->GetBlock())) {
       if (bound_type == nullptr) {
-        bound_type = new (graph_->GetArena()) HBoundType(obj, ReferenceTypeInfo::CreateTop(false));
+        bound_type = new (GetGraph()->GetArena()) HBoundType(obj, ReferenceTypeInfo::CreateTop(false));
         notNullBlock->InsertInstructionBefore(bound_type, notNullBlock->GetFirstInstruction());
       }
       user->ReplaceInput(bound_type, it.Current()->GetIndex());
@@ -145,7 +147,7 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
 
         ReferenceTypeInfo obj_rti = obj->GetReferenceTypeInfo();
         ReferenceTypeInfo class_rti = load_class->GetLoadedClassRTI();
-        bound_type = new (graph_->GetArena()) HBoundType(obj, class_rti);
+        bound_type = new (GetGraph()->GetArena()) HBoundType(obj, class_rti);
 
         // Narrow the type as much as possible.
         {
@@ -293,6 +295,21 @@ bool ReferenceTypePropagation::UpdateReferenceTypeInfo(HInstruction* instr) {
   }
 
   return !previous_rti.IsEqual(instr->GetReferenceTypeInfo());
+}
+
+void ReferenceTypePropagation::VisitInvoke(HInvoke* instr) {
+  if (instr->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+
+  ScopedObjectAccess soa(Thread::Current());
+  ClassLinker* cl = Runtime::Current()->GetClassLinker();
+  mirror::DexCache* dex_cache = cl->FindDexCache(instr->GetDexFile());
+  ArtMethod* method = dex_cache->GetResolvedMethod(instr->GetDexMethodIndex(),
+      Runtime::Current()->GetClassLinker()->GetImagePointerSize());
+  DCHECK(method != nullptr);
+  mirror::Class* klass = method->GetReturnType();
+  SetClassAsTypeInfo(instr, klass);
 }
 
 void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
