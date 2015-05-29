@@ -22,6 +22,7 @@
 
 #include "arch/instruction_set.h"
 #include "base/bit_utils.h"
+#include "base/bit_vector.h"
 #include "base/casts.h"
 #include "base/logging.h"
 #include "base/macros.h"
@@ -146,6 +147,16 @@ class MemoryRegion FINAL : public ValueObject {
   }
 
   void CopyFrom(size_t offset, const MemoryRegion& from) const;
+
+  void FillWith(const BitVector& vector) const {
+    size_t vector_size = vector.GetSizeOf();
+    if (vector_size < size_) {
+      memcpy(start(), vector.GetRawStorage(), vector_size);
+      memset(start() + vector_size, size_ - vector_size, 0);
+    } else {
+      memcpy(start(), vector.GetRawStorage(), size_);
+    }
+  }
 
   // Compute a sub memory region based on an existing one.
   MemoryRegion Subregion(uintptr_t offset, uintptr_t size_in) const {
