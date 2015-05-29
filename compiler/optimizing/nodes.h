@@ -2402,6 +2402,8 @@ class HInvoke : public HInstruction {
     intrinsic_ = intrinsic;
   }
 
+  const DexFile* dex_file;
+
   DECLARE_INSTRUCTION(Invoke);
 
  protected:
