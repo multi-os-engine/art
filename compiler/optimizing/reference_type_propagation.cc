@@ -35,7 +35,7 @@ void ReferenceTypePropagation::Run() {
 
 void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
   // TODO: handle other instructions that give type info
-  // (Call/array accesses)
+  // (array accesses)
 
   // Initialize exact types first for faster convergence.
   for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
@@ -51,6 +51,8 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
       VisitInstanceFieldGet(instr->AsInstanceFieldGet());
     } else if (instr->IsStaticFieldGet()) {
       VisitStaticFieldGet(instr->AsStaticFieldGet());
+    } else if (instr->IsInvoke()) {
+      VisitInvoke(instr->AsInvoke());
     }
   }
 
@@ -293,6 +295,20 @@ bool ReferenceTypePropagation::UpdateReferenceTypeInfo(HInstruction* instr) {
   }
 
   return !previous_rti.IsEqual(instr->GetReferenceTypeInfo());
+}
+
+void ReferenceTypePropagation::VisitInvoke(HInvoke* instr) {
+  if (instr->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+
+  ScopedObjectAccess soa(Thread::Current());
+  ClassLinker* cl = Runtime::Current()->GetClassLinker();
+  mirror::DexCache* dex_cache = cl->FindDexCache(instr->GetDefinitionDexFile());
+  mirror::ArtMethod* method = dex_cache->GetResolvedMethod(instr->GetDexMethodIndex());
+  DCHECK(method != nullptr);
+  mirror::Class* klass = method->GetReturnType();
+  SetClassAsTypeInfo(instr, klass);
 }
 
 void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
