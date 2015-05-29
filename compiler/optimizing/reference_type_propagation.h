@@ -25,6 +25,29 @@
 
 namespace art {
 
+class RTPVisitor : public HGraphDelegateVisitor {
+ public:
+  RTPVisitor(HGraph* graph, StackHandleScopeCollection* handles)
+    : HGraphDelegateVisitor(graph),
+      handles_(handles) {}
+
+  void VisitNewInstance(HNewInstance* new_instance);
+  void VisitLoadClass(HLoadClass* load_class);
+  void VisitNewArray(HNewArray* instr);
+  void UpdateFieldAccessTypeInfo(HInstruction* instr, const FieldInfo& info);
+  void SetClassAsTypeInfo(HInstruction* instr, mirror::Class* klass, bool is_exact);
+  void VisitInstanceFieldGet(HInstanceFieldGet* instr);
+  void VisitStaticFieldGet(HStaticFieldGet* instr);
+  void VisitInvoke(HInvoke* instr);
+  void UpdateReferenceTypeInfo(HInstruction* instr,
+                               uint16_t type_idx,
+                               const DexFile& dex_file,
+                               bool is_exact);
+
+ private:
+  StackHandleScopeCollection* handles_;
+};
+
 /**
  * Propagates reference types to instructions.
  */
@@ -32,7 +55,8 @@ class ReferenceTypePropagation : public HOptimization {
  public:
   ReferenceTypePropagation(HGraph* graph, StackHandleScopeCollection* handles)
     : HOptimization(graph, true, kReferenceTypePropagationPassName),
-      handles_(handles),
+      graph_(graph),
+      visitor_(graph, handles),
       worklist_(graph->GetArena(), kDefaultWorklistSize) {}
 
   void Run() OVERRIDE;
@@ -40,26 +64,12 @@ class ReferenceTypePropagation : public HOptimization {
   static constexpr const char* kReferenceTypePropagationPassName = "reference_type_propagation";
 
  private:
-  void VisitNewInstance(HNewInstance* new_instance);
-  void VisitLoadClass(HLoadClass* load_class);
-  void VisitNewArray(HNewArray* instr);
   void VisitPhi(HPhi* phi);
   void VisitBasicBlock(HBasicBlock* block);
-  void UpdateFieldAccessTypeInfo(HInstruction* instr, const FieldInfo& info);
-  void SetClassAsTypeInfo(HInstruction* instr, mirror::Class* klass, bool is_exact);
-
   void UpdateBoundType(HBoundType* bound_type) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void UpdatePhi(HPhi* phi) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
   void BoundTypeForIfNotNull(HBasicBlock* block);
   void BoundTypeForIfInstanceOf(HBasicBlock* block);
-  void UpdateReferenceTypeInfo(HInstruction* instr,
-                               uint16_t type_idx,
-                               const DexFile& dex_file,
-                               bool is_exact);
-  void VisitInstanceFieldGet(HInstanceFieldGet* instr);
-  void VisitStaticFieldGet(HStaticFieldGet* instr);
-
   void ProcessWorklist();
   void AddToWorklist(HInstruction* instr);
   void AddDependentInstructionsToWorklist(HInstruction* instr);
@@ -70,7 +80,8 @@ class ReferenceTypePropagation : public HOptimization {
   ReferenceTypeInfo MergeTypes(const ReferenceTypeInfo& a, const ReferenceTypeInfo& b)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  StackHandleScopeCollection* handles_;
+  HGraph* graph_;
+  RTPVisitor visitor_;
 
   GrowableArray<HInstruction*> worklist_;
 
