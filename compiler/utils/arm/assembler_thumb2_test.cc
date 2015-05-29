@@ -78,11 +78,28 @@ class AssemblerThumb2Test : public AssemblerTest<arm::Thumb2Assembler,
     return imm_value;
   }
 
+  std::string RepeatInsn(size_t count, const std::string& insn) {
+    std::string result;
+    for (; count != 0u; --count) {
+      result += insn;
+    }
+    return result;
+  }
+
  private:
   std::vector<arm::Register*> registers_;
 
   static constexpr const char* kThumb2AssemblyHeader = ".syntax unified\n.thumb\n";
 };
+
+#define REPEAT_INSN_VAR_IMPL(base, line) a##b
+#define REPEAT_INSN_VAR(line) REPEAT_INSN_VAR_IMPL(repeat_insn_var_, line)
+#define REPEAT_INSN_IMPL(count, expr, var) \
+  for (size_t var = 0u; var != count; ++var) { expr; }
+#define REPEAT_INSN(count, expr) \
+  do { \
+    REPEAT_INSN_IMPL(count, expr, REPEAT_INSN_VAR(__LINE__)) \
+  } while (false)
 
 
 TEST_F(AssemblerThumb2Test, Toolchain) {
@@ -368,6 +385,287 @@ TEST_F(AssemblerThumb2Test, StoreWordPairToNonThumbOffset) {
       "strd r11, ip, [r6, #0]\n"
       "ldr r6, [sp], #4\n";       // Pop(r6)
   DriverStr(expected, "StoreWordPairToNonThumbOffset");
+}
+
+TEST_F(AssemblerThumb2Test, TwoCbzMaxOffset) {
+  Label label1;
+  __ cbz(arm::R0, &label1);
+  constexpr size_t kLdrR0R0Count1 = 63;
+  REPEAT_INSN(kLdrR0R0Count1, __ ldr(arm::R0, arm::Address(arm::R0)));
+  Label label2;
+  __ cbz(arm::R0, &label2);
+  __ Bind(&label1);
+  constexpr size_t kLdrR0R0Count2 = 64;
+  REPEAT_INSN(kLdrR0R0Count2, __ ldr(arm::R0, arm::Address(arm::R0)));
+  __ Bind(&label2);
+
+  std::string expected =
+      "cbz r0, 1f\n" +            // cbz r0, label1
+      RepeatInsn(kLdrR0R0Count1, "ldr r0, [r0]\n") +
+      "cbz r0, 2f\n"              // cbz r0, label2
+      "1:\n" +
+      RepeatInsn(kLdrR0R0Count2, "ldr r0, [r0]\n") +
+      "2:\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, TwoCbzBeyondMaxOffset) {
+  Label label1;
+  __ cbz(arm::R0, &label1);
+  constexpr size_t kLdrR0R0Count1 = 63;
+  REPEAT_INSN(kLdrR0R0Count1, __ ldr(arm::R0, arm::Address(arm::R0)));
+  Label label2;
+  __ cbz(arm::R0, &label2);
+  __ Bind(&label1);
+  constexpr size_t kLdrR0R0Count2 = 65;
+  REPEAT_INSN(kLdrR0R0Count2, __ ldr(arm::R0, arm::Address(arm::R0)));
+  __ Bind(&label2);
+
+  std::string expected =
+      "cmp r0, #0\n"              // cbz r0, label1
+      "beq.n 1f\n" +
+      RepeatInsn(kLdrR0R0Count1, "ldr r0, [r0]\n") +
+      "cmp r0, #0\n"              // cbz r0, label2
+      "beq.n 2f\n"
+      "1:\n" +
+      RepeatInsn(kLdrR0R0Count2, "ldr r0, [r0]\n") +
+      "2:\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, TwoCbzSecondAtMaxB16Offset) {
+  Label label1;
+  __ cbz(arm::R0, &label1);
+  constexpr size_t kLdrR0R0Count1 = 62;
+  REPEAT_INSN(kLdrR0R0Count1, __ ldr(arm::R0, arm::Address(arm::R0)));
+  Label label2;
+  __ cbz(arm::R0, &label2);
+  __ Bind(&label1);
+  constexpr size_t kLdrR0R0Count2 = 128;
+  REPEAT_INSN(kLdrR0R0Count2, __ ldr(arm::R0, arm::Address(arm::R0)));
+  __ Bind(&label2);
+
+  std::string expected =
+      "cbz r0, 1f\n" +            // cbz r0, label1
+      RepeatInsn(kLdrR0R0Count1, "ldr r0, [r0]\n") +
+      "cmp r0, #0\n"              // cbz r0, label2
+      "beq.n 2f\n"
+      "1:\n" +
+      RepeatInsn(kLdrR0R0Count2, "ldr r0, [r0]\n") +
+      "2:\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, TwoCbzSecondBeyondMaxB16Offset) {
+  Label label1;
+  __ cbz(arm::R0, &label1);
+  constexpr size_t kLdrR0R0Count1 = 62;
+  REPEAT_INSN(kLdrR0R0Count1, __ ldr(arm::R0, arm::Address(arm::R0)));
+  Label label2;
+  __ cbz(arm::R0, &label2);
+  __ Bind(&label1);
+  constexpr size_t kLdrR0R0Count2 = 129;
+  REPEAT_INSN(kLdrR0R0Count2, __ ldr(arm::R0, arm::Address(arm::R0)));
+  __ Bind(&label2);
+
+  std::string expected =
+      "cmp r0, #0\n"              // cbz r0, label1
+      "beq.n 1f\n" +
+      RepeatInsn(kLdrR0R0Count1, "ldr r0, [r0]\n") +
+      "cmp r0, #0\n"              // cbz r0, label2
+      "beq.w 2f\n"
+      "1:\n" +
+      RepeatInsn(kLdrR0R0Count2, "ldr r0, [r0]\n") +
+      "2:\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, TwoCbzFirstAtMaxB16Offset) {
+  Label label1;
+  __ cbz(arm::R0, &label1);
+  constexpr size_t kLdrR0R0Count1 = 127;
+  REPEAT_INSN(kLdrR0R0Count1, __ ldr(arm::R0, arm::Address(arm::R0)));
+  Label label2;
+  __ cbz(arm::R0, &label2);
+  __ Bind(&label1);
+  constexpr size_t kLdrR0R0Count2 = 64;
+  REPEAT_INSN(kLdrR0R0Count2, __ ldr(arm::R0, arm::Address(arm::R0)));
+  __ Bind(&label2);
+
+  std::string expected =
+      "cmp r0, #0\n"              // cbz r0, label1
+      "beq.n 1f\n" +
+      RepeatInsn(kLdrR0R0Count1, "ldr r0, [r0]\n") +
+      "cbz r0, 2f\n"              // cbz r0, label2
+      "1:\n" +
+      RepeatInsn(kLdrR0R0Count2, "ldr r0, [r0]\n") +
+      "2:\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, TwoCbzBeyondAtMaxB16Offset) {
+  Label label1;
+  __ cbz(arm::R0, &label1);
+  constexpr size_t kLdrR0R0Count1 = 127;
+  REPEAT_INSN(kLdrR0R0Count1, __ ldr(arm::R0, arm::Address(arm::R0)));
+  Label label2;
+  __ cbz(arm::R0, &label2);
+  __ Bind(&label1);
+  constexpr size_t kLdrR0R0Count2 = 65;
+  REPEAT_INSN(kLdrR0R0Count2, __ ldr(arm::R0, arm::Address(arm::R0)));
+  __ Bind(&label2);
+
+  std::string expected =
+      "cmp r0, #0\n"              // cbz r0, label1
+      "beq.w 1f\n" +
+      RepeatInsn(kLdrR0R0Count1, "ldr r0, [r0]\n") +
+      "cmp r0, #0\n"              // cbz r0, label2
+      "beq.n 2f\n"
+      "1:\n" +
+      RepeatInsn(kLdrR0R0Count2, "ldr r0, [r0]\n") +
+      "2:\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, LoadLiteralMax1KiB) {
+  arm::Literal* literal = __ NewLiteral<int32_t>(0x12345678);
+  __ LoadLiteral(arm::R0, literal);
+  constexpr size_t kLdrR0R0Count = 511;
+  REPEAT_INSN(kLdrR0R0Count, __ ldr(arm::R0, arm::Address(arm::R0)));
+
+  std::string expected =
+      "1:\n"
+      "ldr.n r0, [pc, #((2f - 1b - 2) & ~2)]\n" +
+      RepeatInsn(kLdrR0R0Count, "ldr r0, [r0]\n") +
+      ".align 2, 0\n"
+      "2:\n"
+      ".word 0x12345678\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, LoadLiteralBeyondMax1KiB) {
+  arm::Literal* literal = __ NewLiteral<int32_t>(0x12345678);
+  __ LoadLiteral(arm::R0, literal);
+  constexpr size_t kLdrR0R0Count = 512;
+  REPEAT_INSN(kLdrR0R0Count, __ ldr(arm::R0, arm::Address(arm::R0)));
+
+  std::string expected =
+      "1:\n"
+      "ldr.w r0, [pc, #((2f - 1b - 2) & ~2)]\n" +
+      RepeatInsn(kLdrR0R0Count, "ldr r0, [r0]\n") +
+      ".align 2, 0\n"
+      "2:\n"
+      ".word 0x12345678\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, LoadLiteralMax4KiB) {
+  arm::Literal* literal = __ NewLiteral<int32_t>(0x12345678);
+  __ LoadLiteral(arm::R1, literal);
+  constexpr size_t kLdrR0R0Count = 2046;
+  REPEAT_INSN(kLdrR0R0Count, __ ldr(arm::R0, arm::Address(arm::R0)));
+
+  std::string expected =
+      "1:\n"
+      "ldr.w r1, [pc, #((2f - 1b - 2) & ~2)]\n" +
+      RepeatInsn(kLdrR0R0Count, "ldr r0, [r0]\n") +
+      ".align 2, 0\n"
+      "2:\n"
+      ".word 0x12345678\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, LoadLiteralBeyondMax4KiB) {
+  arm::Literal* literal = __ NewLiteral<int32_t>(0x12345678);
+  __ LoadLiteral(arm::R1, literal);
+  constexpr size_t kLdrR0R0Count = 2047;
+  REPEAT_INSN(kLdrR0R0Count, __ ldr(arm::R0, arm::Address(arm::R0)));
+
+  std::string expected =
+      "movw r1, #4096\n"  // "as" does not consider (2f - 1f - 4) a constant expression for movw.
+      "1:\n"
+      "add r1, pc\n"
+      "ldr r1, [r1, #0]\n" +
+      RepeatInsn(kLdrR0R0Count, "ldr r0, [r0]\n") +
+      ".align 2, 0\n"
+      "2:\n"
+      ".word 0x12345678\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, LoadLiteralMax64KiB) {
+  arm::Literal* literal = __ NewLiteral<int32_t>(0x12345678);
+  __ LoadLiteral(arm::R1, literal);
+  constexpr size_t kLdrR0R0Count = (1u << 15) - 2u;
+  REPEAT_INSN(kLdrR0R0Count, __ ldr(arm::R0, arm::Address(arm::R0)));
+
+  std::string expected =
+      "movw r1, #0xfffc\n"  // "as" does not consider (2f - 1f - 4) a constant expression for movw.
+      "1:\n"
+      "add r1, pc\n"
+      "ldr r1, [r1, #0]\n" +
+      RepeatInsn(kLdrR0R0Count, "ldr r0, [r0]\n") +
+      ".align 2, 0\n"
+      "2:\n"
+      ".word 0x12345678\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, LoadLiteralBeyondMax64KiB) {
+  arm::Literal* literal = __ NewLiteral<int32_t>(0x12345678);
+  __ LoadLiteral(arm::R1, literal);
+  constexpr size_t kLdrR0R0Count = (1u << 15) - 1u;
+  REPEAT_INSN(kLdrR0R0Count, __ ldr(arm::R0, arm::Address(arm::R0)));
+
+  std::string expected =
+      "mov.w r1, #((2f - 1f - 4) & ~0xfff)\n"
+      "1:\n"
+      "add r1, pc\n"
+      "ldr r1, [r1, #((2f - 1b - 4) & 0xfff)]\n" +
+      RepeatInsn(kLdrR0R0Count, "ldr r0, [r0]\n") +
+      ".align 2, 0\n"
+      "2:\n"
+      ".word 0x12345678\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, LoadLiteralMax1MiB) {
+  arm::Literal* literal = __ NewLiteral<int32_t>(0x12345678);
+  __ LoadLiteral(arm::R1, literal);
+  constexpr size_t kLdrR0R0Count = (1u << 19) - 3u;
+  REPEAT_INSN(kLdrR0R0Count, __ ldr(arm::R0, arm::Address(arm::R0)));
+
+  std::string expected =
+      "mov.w r1, #((2f - 1f - 4) & ~0xfff)\n"
+      "1:\n"
+      "add r1, pc\n"
+      "ldr r1, [r1, #((2f - 1b - 4) & 0xfff)]\n" +
+      RepeatInsn(kLdrR0R0Count, "ldr r0, [r0]\n") +
+      ".align 2, 0\n"
+      "2:\n"
+      ".word 0x12345678\n";
+  DriverStr(expected, "BranchRelocation1");
+}
+
+TEST_F(AssemblerThumb2Test, LoadLiteralBeyondMax1MiB) {
+  arm::Literal* literal = __ NewLiteral<int32_t>(0x12345678);
+  __ LoadLiteral(arm::R1, literal);
+  constexpr size_t kLdrR0R0Count = (1u << 19) - 2u;
+  REPEAT_INSN(kLdrR0R0Count, __ ldr(arm::R0, arm::Address(arm::R0)));
+
+  std::string expected =
+      // "as" does not consider ((2f - 1f - 4) & 0xffff) a constant expression for movw.
+      "movw r1, #(0x100000 & 0xffff)\n"
+      // "as" does not consider ((2f - 1f - 4) >> 16) a constant expression for movt.
+      "movt r1, #(0x100000 >> 16)\n"
+      "1:\n"
+      "add r1, pc\n"
+      "ldr.w r1, [r1, #((2f - 1b - 4) & 0xfff)]\n" +
+      RepeatInsn(kLdrR0R0Count, "ldr r0, [r0]\n") +
+      ".align 2, 0\n"
+      "2:\n"
+      ".word 0x12345678\n";
+  DriverStr(expected, "BranchRelocation1");
 }
 
 }  // namespace art
