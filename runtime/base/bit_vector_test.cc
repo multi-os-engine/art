@@ -211,4 +211,65 @@ TEST(BitVector, Subset) {
   }
 }
 
+TEST(BitVector, CopyTo) {
+  {
+    // Test copying when lengths are equal.
+    BitVector bv(0, true, Allocator::GetMallocAllocator());
+    uint32_t buf;
+
+    bv.CopyTo(&buf, sizeof(buf));
+    EXPECT_EQ(0u, bv.GetSizeOf());
+    EXPECT_EQ(0u, buf);
+
+    bv.SetBit(0);
+    bv.CopyTo(&buf, sizeof(buf));
+    EXPECT_EQ(4u, bv.GetSizeOf());
+    EXPECT_EQ(0x00000001u, buf);
+
+    bv.SetBit(17);
+    bv.CopyTo(&buf, sizeof(buf));
+    EXPECT_EQ(0x00020001u, buf);
+
+    bv.SetBit(26);
+    bv.CopyTo(&buf, sizeof(buf));
+    EXPECT_EQ(0x04020001u, buf);
+  }
+
+  {
+    // Test copying when vector storage is longer than destination.
+    BitVector bv(0, true, Allocator::GetMallocAllocator());
+    uint8_t buf[5];
+
+    bv.SetBit(18);
+    bv.SetBit(33);
+    bv.CopyTo(buf, sizeof(buf));
+    EXPECT_EQ(8u, bv.GetSizeOf());
+    EXPECT_EQ(0x00u, buf[0]);
+    EXPECT_EQ(0x00u, buf[1]);
+    EXPECT_EQ(0x04u, buf[2]);
+    EXPECT_EQ(0x00u, buf[3]);
+    EXPECT_EQ(0x02u, buf[4]);
+  }
+
+  {
+    // Test zero padding when vector is shorter.
+    BitVector bv(0, true, Allocator::GetMallocAllocator());
+    uint32_t buf[2];
+
+    bv.SetBit(31);
+    bv.CopyTo(buf, sizeof(buf));
+    EXPECT_EQ(4u, bv.GetSizeOf());
+    EXPECT_EQ(0x80000000U, buf[0]);
+    EXPECT_EQ(0x00000000U, buf[1]);
+
+    bv.SetBit(47);
+    bv.SetBit(48);
+    bv.SetBit(49);
+    bv.CopyTo(buf, sizeof(buf));
+    EXPECT_EQ(8u, bv.GetSizeOf());
+    EXPECT_EQ(0x80000000U, buf[0]);
+    EXPECT_EQ(0x00038000U, buf[1]);
+  }
+}
+
 }  // namespace art
