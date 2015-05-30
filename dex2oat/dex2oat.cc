@@ -918,6 +918,8 @@ class Dex2Oat FINAL {
       case kArm64:
       case kX86:
       case kX86_64:
+      case kMips:
+      case kMips64:
         implicit_null_checks = true;
         implicit_so_checks = true;
         break;
