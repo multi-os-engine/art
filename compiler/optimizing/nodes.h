@@ -2528,7 +2528,7 @@ class HInvokeStaticOrDirect : public HInvoke {
                         ClinitCheckRequirement clinit_check_requirement)
       : HInvoke(arena,
                 number_of_arguments,
-                clinit_check_requirement == ClinitCheckRequirement::kExplicit ? 1u : 0u,
+                clinit_check_requirement == ClinitCheckRequirement::kExplicit ? 2u : 1u,
                 return_type,
                 dex_pc,
                 dex_method_index,
@@ -2550,6 +2550,7 @@ class HInvokeStaticOrDirect : public HInvoke {
   bool NeedsDexCache() const OVERRIDE { return !IsRecursive(); }
   bool IsStringInit() const { return string_init_offset_ != 0; }
   int32_t GetStringInitOffset() const { return string_init_offset_; }
+  uint32_t GetCurrentMethodInputIndex() const { return GetNumberOfArguments(); }
 
   // Is this instruction a call to a static method?
   bool IsStatic() const {
