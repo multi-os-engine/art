@@ -16,16 +16,18 @@
 
 #include "graph_visualizer.h"
 
+#include <cctype>
+#include <dlfcn.h>
+#include <sstream>
+
 #include "code_generator.h"
 #include "dead_code_elimination.h"
+#include "disassembler.h"
 #include "licm.h"
 #include "nodes.h"
 #include "optimization.h"
 #include "register_allocator.h"
 #include "ssa_liveness_analysis.h"
-
-#include <cctype>
-#include <sstream>
 
 namespace art {
 
@@ -86,6 +88,64 @@ std::ostream& operator<<(std::ostream& os, const StringList& list) {
   }
 }
 
+typedef Disassembler* create_disasm_prototype(InstructionSet instruction_set,
+                                              DisassemblerOptions* options);
+class HGraphVisualizerDisassembler {
+ public:
+  HGraphVisualizerDisassembler(InstructionSet instruction_set, const uint8_t* base_address)
+      : instruction_set_(instruction_set),
+        disassembler_(nullptr),
+        libart_disassembler_handle_(nullptr) {
+    libart_disassembler_handle_ =
+        dlopen(kIsDebugBuild ? "libartd-disassembler.so" : "libart-disassembler.so", RTLD_NOW);
+    if (libart_disassembler_handle_ == nullptr) {
+      LOG(WARNING) << "Failed to dlopen libart-disassembler: " << dlerror();
+      return;
+    }
+    create_disassembler_ = reinterpret_cast<create_disasm_prototype*>(
+        dlsym(libart_disassembler_handle_, "CreateDisassembler"));
+    if (create_disassembler_ == nullptr) {
+      LOG(WARNING) << "Could not find CreateDisassembly entry: " << dlerror();
+      return;
+    }
+    // Reading the disassembly from 0x0 is easier, so we print relative
+    // addresses. We will only disassemble the code once everything has
+    // been generated, so we can read data in literal pools.
+    disassembler_ = (*create_disassembler_)(instruction_set,
+                                            new DisassemblerOptions(/* absolute_addresses */ false,
+                                                                    base_address,
+                                                                    /* can_read_literals */ true));
+  }
+
+  ~HGraphVisualizerDisassembler() {
+    delete disassembler_;
+    if (libart_disassembler_handle_ != nullptr) {
+      dlclose(libart_disassembler_handle_);
+    }
+  }
+
+  void Disassemble(std::ostream& output, size_t start, size_t end) const {
+    const uint8_t* base = disassembler_->GetDisassemblerOptions()->base_address_;
+    if (instruction_set_ == kThumb2) {
+      // ARM and Thumb-2 use the same disassembler. The bottom bit of the
+      // address is used to distinguish between the two.
+      base += 1;
+    }
+    output << std::endl;
+    disassembler_->Dump(output, base + start, base + end);
+  }
+
+  const Disassembler* GetDisassembler() const { return disassembler_; }
+
+ private:
+  InstructionSet instruction_set_;
+  Disassembler* disassembler_;
+
+  void* libart_disassembler_handle_;
+  create_disasm_prototype* create_disassembler_;
+};
+
+
 /**
  * HGraph visitor to generate a file suitable for the c1visualizer tool and IRHydra.
  */
@@ -95,13 +155,23 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
                           std::ostream& output,
                           const char* pass_name,
                           bool is_after_pass,
-                          const CodeGenerator& codegen)
+                          const CodeGenerator& codegen,
+                          DisassemblyInformation* disasm_info = nullptr)
       : HGraphVisitor(graph),
         output_(output),
         pass_name_(pass_name),
         is_after_pass_(is_after_pass),
         codegen_(codegen),
+        disasm_info_(disasm_info),
+        disassembler_(disasm_info != nullptr ?
+            new HGraphVisualizerDisassembler(codegen_.GetInstructionSet(),
+                                             codegen_.GetAssemblerCodeBaseAddress()) :
+            nullptr),
         indent_(0) {}
+
+  ~HGraphVisualizerPrinter() {
+    delete disassembler_;
+  }
 
   void StartTag(const char* name) {
     AddIndent();
@@ -172,6 +242,9 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
       HBasicBlock* predecessor = block->GetPredecessors().Get(i);
       output_ << " \"B" << predecessor->GetBlockId() << "\" ";
     }
+    if (block->IsEntryBlock() && (disasm_info_ != nullptr)) {
+      output_ << " \"" << kDisassemblyBlockFrameEntry << "\" ";
+    }
     output_<< std::endl;
   }
 
@@ -181,6 +254,11 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     for (size_t i = 0, e = block->GetSuccessors().Size(); i < e; ++i) {
       HBasicBlock* successor = block->GetSuccessors().Get(i);
       output_ << " \"B" << successor->GetBlockId() << "\" ";
+    }
+    if (block->IsExitBlock() &&
+        (disasm_info_ != nullptr) &&
+        !disasm_info_->GetSlowPaths().empty()) {
+      output_ << " \"" << kDisassemblyBlockSlowPaths << "\" ";
     }
     output_<< std::endl;
   }
@@ -265,9 +343,9 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     StartAttributeStream("kind") << barrier->GetBarrierKind();
   }
 
-  void VisitLoadClass(HLoadClass* load_cass) OVERRIDE {
+  void VisitLoadClass(HLoadClass* load_class) OVERRIDE {
     StartAttributeStream("gen_clinit_check") << std::boolalpha
-        << load_cass->MustGenerateClinitCheck() << std::noboolalpha;
+        << load_class->MustGenerateClinitCheck() << std::noboolalpha;
   }
 
   void VisitCheckCast(HCheckCast* check_cast) OVERRIDE {
@@ -355,10 +433,18 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
         StartAttributeStream("loop") << "B" << info->GetHeader()->GetBlockId();
       }
     }
+    if (disasm_info_ != nullptr) {
+      // If information is available, disassemble the code generated for this
+      // instruction.
+      ArenaSafeMap<const HInstruction*, GeneratedCodeInterval>::const_iterator it =
+          disasm_info_->InstructionCodeOffsets().find(instruction);
+      if (it != disasm_info_->InstructionCodeOffsets().end()) {
+        disassembler_->Disassemble(output_, it->second.start, it->second.end);
+      }
+    }
   }
 
   void PrintInstructions(const HInstructionList& list) {
-    const char* kEndInstructionMarker = "<|@";
     for (HInstructionIterator it(list); !it.Done(); it.Advance()) {
       HInstruction* instruction = it.Current();
       int bci = 0;
@@ -376,11 +462,76 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     }
   }
 
+  void DumpStartOfDisassemblyBlock(const char* block_name,
+                                   int predecessor_index,
+                                   int successor_index) {
+    output_ << "begin_block\n"
+               "  name \"" << block_name << "\"\n"
+               "  from_bci 0\n"
+               "  to_bci 0\n"
+               "  predecessors";
+    if (predecessor_index != -1) {
+      output_ << " \"B" << predecessor_index << "\"";
+    }
+    output_ << "\n";
+    output_ << "  successors";
+    if (successor_index != -1) {
+      output_ << " \"B" << successor_index << "\"";
+    }
+    output_ << "\n";
+    output_ << "  xhandlers\n"
+               "  flags\n"
+               "  begin_states\n"
+               "    begin_locals\n"
+               "      size 0\n"
+               "      method \"None\"\n"
+               "    end_locals\n"
+               "  end_states\n"
+               "  begin_HIR" << std::endl;
+  }
+
+  void DumpEndOfDisassemblyBlock() {
+    output_ << "  end_HIR\n"
+               "end_block" << std::endl;
+  }
+
+  void DumpDisassemblyBlockForFrameEntry() {
+    DumpStartOfDisassemblyBlock(kDisassemblyBlockFrameEntry,
+                                -1,
+                                GetGraph()->GetEntryBlock()->GetBlockId());
+    output_ << "    0 0 disasm FrameEntry";
+    GeneratedCodeInterval frame_entry = disasm_info_->GetFunctionFrameEntryCodeInfo();
+    GetDisassembler()->Disassemble(output_, frame_entry.start, frame_entry.end);
+    output_ << kEndInstructionMarker << "\n";
+    DumpEndOfDisassemblyBlock();
+  }
+
+  void DumpDisassemblyBlockForSlowPaths() {
+    if (disasm_info_->GetSlowPaths().empty()) {
+      return;
+    }
+    DumpStartOfDisassemblyBlock(kDisassemblyBlockSlowPaths,
+                                GetGraph()->GetExitBlock()->GetBlockId(),
+                                -1);
+    for (SlowPathCodeInfo info : disasm_info_->GetSlowPaths()) {
+      output_ << "    0 0 disasm " << info.slow_path->GetDescription();
+      GetDisassembler()->Disassemble(output_, info.code_interval.start, info.code_interval.end);
+      output_ << kEndInstructionMarker << "" << std:: endl;;
+    }
+    DumpEndOfDisassemblyBlock();
+  }
+
   void Run() {
     StartTag("cfg");
     std::string pass_desc = std::string(pass_name_) + (is_after_pass_ ? " (after)" : " (before)");
     PrintProperty("name", pass_desc.c_str());
+    if (disasm_info_ != nullptr) {
+      DumpDisassemblyBlockForFrameEntry();
+    }
     VisitInsertionOrder();
+    if (disasm_info_ != nullptr) {
+      DumpDisassemblyBlockForSlowPaths();
+    }
     EndTag("cfg");
   }
 
@@ -427,11 +578,19 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     EndTag("block");
   }
 
+  const HGraphVisualizerDisassembler* GetDisassembler() const { return disassembler_; }
+
+  static constexpr const char* const kEndInstructionMarker = "<|@";
+  static constexpr const char* const kDisassemblyBlockFrameEntry = "FrameEntry";
+  static constexpr const char* const kDisassemblyBlockSlowPaths = "SlowPaths";
+
  private:
   std::ostream& output_;
   const char* pass_name_;
   const bool is_after_pass_;
   const CodeGenerator& codegen_;
+  DisassemblyInformation* disasm_info_;
+  HGraphVisualizerDisassembler* disassembler_;
   size_t indent_;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphVisualizerPrinter);
@@ -456,6 +615,14 @@ void HGraphVisualizer::DumpGraph(const char* pass_name, bool is_after_pass) cons
   DCHECK(output_ != nullptr);
   if (!graph_->GetBlocks().IsEmpty()) {
     HGraphVisualizerPrinter printer(graph_, *output_, pass_name, is_after_pass, codegen_);
+    printer.Run();
+  }
+}
+
+void HGraphVisualizer::DumpGraphWithDisassembly(DisassemblyInformation* disasm_info) const {
+  DCHECK(output_ != nullptr);
+  if (!graph_->GetBlocks().IsEmpty()) {
+    HGraphVisualizerPrinter printer(graph_, *output_, "disassembly", true, codegen_, disasm_info);
     printer.Run();
   }
 }

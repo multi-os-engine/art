@@ -214,6 +214,13 @@ class OptimizingCompiler FINAL : public Compiler {
     }
   }
 
+  void DisassembleOptimizedCode(HGraph* graph,
+                                DisassemblyInformation* disasm_info,
+                                const CodeGenerator& codegen) const {
+    HGraphVisualizer visualizer(visualizer_output_.get(), graph, codegen);
+    visualizer.DumpGraphWithDisassembly(disasm_info);
+  }
+
  private:
   // Whether we should run any optimization or register allocation. If false, will
   // just run the code generation after the graph was built.
@@ -224,7 +231,8 @@ class OptimizingCompiler FINAL : public Compiler {
                                    CodeGenerator* codegen,
                                    CompilerDriver* driver,
                                    const DexCompilationUnit& dex_compilation_unit,
-                                   PassInfoPrinter* pass_info) const;
+                                   PassInfoPrinter* pass_info,
+                                   DisassemblyInformation* disasm_info = nullptr) const;
 
   // Just compile without doing optimizations.
   CompiledMethod* CompileBaseline(CodeGenerator* codegen,
@@ -390,7 +398,8 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
                                                      CodeGenerator* codegen,
                                                      CompilerDriver* compiler_driver,
                                                      const DexCompilationUnit& dex_compilation_unit,
-                                                     PassInfoPrinter* pass_info_printer) const {
+                                                     PassInfoPrinter* pass_info_printer,
+                                                     DisassemblyInformation* disasm_info) const {
   StackHandleScopeCollection handles(Thread::Current());
   RunOptimizations(graph, compiler_driver, compilation_stats_.get(),
                    dex_compilation_unit, pass_info_printer, &handles);
@@ -410,7 +419,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
 
   MaybeRecordStat(MethodCompilationStat::kCompiledOptimized);
 
-  return CompiledMethod::SwapAllocCompiledMethod(
+  CompiledMethod* compiled_method = CompiledMethod::SwapAllocCompiledMethod(
       compiler_driver,
       codegen->GetInstructionSet(),
       ArrayRef<const uint8_t>(allocator.GetMemory()),
@@ -426,6 +435,11 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
       ArrayRef<const uint8_t>(),  // native_gc_map.
       ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()),
       ArrayRef<const LinkerPatch>());
+
+  if (disasm_info != nullptr) {
+    DisassembleOptimizedCode(graph, disasm_info, *codegen);
+  }
+  return compiled_method;
 }
 
 CompiledMethod* OptimizingCompiler::CompileBaseline(
@@ -523,11 +537,16 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   bool shouldCompile = method_name.find("$opt$") != std::string::npos;
   bool shouldOptimize = method_name.find("$opt$reg$") != std::string::npos && run_optimizations_;
 
+  DisassemblyInformation disasm_info_object(&arena);
+  DisassemblyInformation* disasm_info =
+      !compiler_driver->GetDumpCfgFileName().empty() ? &disasm_info_object : nullptr;
+
   std::unique_ptr<CodeGenerator> codegen(
       CodeGenerator::Create(graph,
                             instruction_set,
                             *compiler_driver->GetInstructionSetFeatures(),
-                            compiler_driver->GetCompilerOptions()));
+                            compiler_driver->GetCompilerOptions(),
+                            disasm_info));
   if (codegen.get() == nullptr) {
     CHECK(!shouldCompile) << "Could not find code generator for optimizing compiler";
     MaybeRecordStat(MethodCompilationStat::kNotCompiledNoCodegen);
@@ -583,7 +602,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                             codegen.get(),
                             compiler_driver,
                             dex_compilation_unit,
-                            &pass_info_printer);
+                            &pass_info_printer,
+                            disasm_info);
   } else if (shouldOptimize && can_allocate_registers) {
     LOG(FATAL) << "Could not allocate registers in optimizing compiler";
     UNREACHABLE();
