@@ -383,6 +383,23 @@ bool JdwpState::IsActive() {
   return IsConnected();
 }
 
+static bool IsInvokeCommand(uint8_t command_set, uint8_t command) {
+  // These values come from JDWP specifications.
+  constexpr uint8_t kClassTypeCommandSet = 3;
+  constexpr uint8_t kClassTypeInvokeMethodCommand = 3;
+  constexpr uint8_t kClassTypeNewInstanceCommand = 4;
+  constexpr uint8_t kObjectReferenceCommandSet = 9;
+  constexpr uint8_t kObjectReferenceInvokeCommand = 6;
+
+  if (command_set == kClassTypeCommandSet) {
+    return command == kClassTypeInvokeMethodCommand || command == kClassTypeNewInstanceCommand;
+  } else if (command_set == kObjectReferenceCommandSet) {
+    return command == kObjectReferenceInvokeCommand;
+  } else {
+    return false;
+  }
+}
+
 // Returns "false" if we encounter a connection-fatal error.
 bool JdwpState::HandlePacket() {
   Thread* const self = Thread::Current();
@@ -396,14 +413,23 @@ bool JdwpState::HandlePacket() {
 
   ExpandBuf* pReply = expandBufAlloc();
   size_t replyLength = ProcessRequest(&request, pReply);
-  ssize_t cc = netStateBase->WritePacket(pReply, replyLength);
+  // TODO we need the error code.
+  size_t replyDataLength = replyLength - kJDWPHeaderLen;
+  bool skip_invoke_reply = replyDataLength == 0 && IsInvokeCommand(request.GetCommandSet(),
+                                                                  request.GetCommand());
+  ssize_t cc = 0;
+  if (!skip_invoke_reply) {
+    cc = netStateBase->WritePacket(pReply, replyLength);
+  } else {
+    LOG(INFO) << "JDWP skips invoke command";
+  }
 
   /*
    * We processed this request and sent its reply so we can release the JDWP token.
    */
   ReleaseJdwpTokenForCommand();
 
-  if (cc != static_cast<ssize_t>(replyLength)) {
+  if (!skip_invoke_reply && cc != static_cast<ssize_t>(replyLength)) {
     PLOG(ERROR) << "Failed sending reply to debugger";
     expandBufFree(pReply);
     return false;
