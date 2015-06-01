@@ -45,6 +45,7 @@ class AllocRecord;
 class ArtField;
 class ArtMethod;
 class ObjectRegistry;
+class ScopedObjectAccess;
 class ScopedObjectAccessUnchecked;
 class StackVisitor;
 class Thread;
@@ -53,33 +54,30 @@ class Thread;
  * Invoke-during-breakpoint support.
  */
 struct DebugInvokeReq {
-  DebugInvokeReq(mirror::Object* invoke_receiver, mirror::Class* invoke_class,
+  DebugInvokeReq(uint32_t invoke_request_id, JDWP::ObjectId invoke_thread_id,
+                 mirror::Object* invoke_receiver, mirror::Class* invoke_class,
                  ArtMethod* invoke_method, uint32_t invoke_options,
                  uint64_t* args, uint32_t args_count)
-      : receiver(invoke_receiver), klass(invoke_class), method(invoke_method),
-        arg_count(args_count), arg_values(args), options(invoke_options),
-        error(JDWP::ERR_NONE), result_tag(JDWP::JT_VOID), result_value(0), exception(0),
-        lock("a DebugInvokeReq lock", kBreakpointInvokeLock),
-        cond("a DebugInvokeReq condition variable", lock) {
+      : request_id(invoke_request_id), thread_id(invoke_thread_id), receiver(invoke_receiver),
+        klass(invoke_class), method(invoke_method), arg_count(args_count), arg_values(args),
+        options(invoke_options), reply(nullptr) {
   }
 
-  /* request */
+  ~DebugInvokeReq();
+
+  // Request
+  const uint32_t request_id;
+  const JDWP::ObjectId thread_id;
   GcRoot<mirror::Object> receiver;      // not used for ClassType.InvokeMethod
   GcRoot<mirror::Class> klass;
   ArtMethod* method;
   const uint32_t arg_count;
-  uint64_t* const arg_values;   // will be null if arg_count_ == 0
+  uint64_t* const arg_values;   // will be null if arg_count_ == 0. We take ownership of this array
+                                // so we must delete it upon destruction
   const uint32_t options;
 
-  /* result */
-  JDWP::JdwpError error;
-  JDWP::JdwpTag result_tag;
-  uint64_t result_value;        // either a primitive value or an ObjectId
-  JDWP::ObjectId exception;
-
-  /* condition variable to wait on while the method executes */
-  Mutex lock DEFAULT_MUTEX_ACQUIRED_AFTER;
-  ConditionVariable cond GUARDED_BY(lock);
+  // Reply
+  JDWP::ExpandBuf* reply;
 
   void VisitRoots(RootVisitor* visitor, const RootInfo& root_info)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -621,18 +619,33 @@ class Dbg {
       LOCKS_EXCLUDED(Locks::thread_list_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Invoke support for commands ClassType.InvokeMethod, ClassType.NewInstance and
-  // ObjectReference.InvokeMethod.
-  static JDWP::JdwpError InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId object_id,
-                                      JDWP::RefTypeId class_id, JDWP::MethodId method_id,
-                                      uint32_t arg_count, uint64_t* arg_values,
-                                      JDWP::JdwpTag* arg_types, uint32_t options,
-                                      JDWP::JdwpTag* pResultTag, uint64_t* pResultValue,
-                                      JDWP::ObjectId* pExceptObj)
+  /*
+   * Invoke support
+   */
+
+  // Called by the JDWP thread to prepare invocation in the event thread suspended on an event.
+  // The information required to invoke the method is stored in a DebugInvokeReq object and
+  // attached to the event thread. The JDWP thread does not wait for the invoke to complete
+  // to avoid freezing the debugger if the event thread is suspended by another thread during
+  // the invoke.
+  static JDWP::JdwpError PrepareInvokeMethod(uint32_t request_id, JDWP::ObjectId thread_id,
+                                             JDWP::ObjectId object_id,
+                                             JDWP::RefTypeId class_id, JDWP::MethodId method_id,
+                                             uint32_t arg_count, uint64_t* arg_values,
+                                             JDWP::JdwpTag* arg_types, uint32_t options)
       LOCKS_EXCLUDED(Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  // Called by the event thread to execute a method requested by the debugger. The reply is then
+  // attached to the given DebugInvokeReq. Before suspend itself, the event thread calls the
+  // FinishInvokeMethod to send that reply to the debugger.
   static void ExecuteMethod(DebugInvokeReq* pReq);
+
+  // Called by the event thread to send the reply of the invoke (created in ExecuteMethod)
+  // before suspending itself. This is to ensure the thread is ready to suspend before the
+  // debugger receives the reply.
+  static void FinishInvokeMethod(DebugInvokeReq* pReq);
 
   /*
    * DDM support.
@@ -717,6 +730,9 @@ class Dbg {
   }
 
  private:
+  static void ExecuteMethodImpl(ScopedObjectAccess& soa, DebugInvokeReq* pReq)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   static JDWP::JdwpError GetLocalValue(const StackVisitor& visitor,
                                        ScopedObjectAccessUnchecked& soa, int slot,
                                        JDWP::JdwpTag tag, uint8_t* buf, size_t width)

@@ -32,6 +32,8 @@
 #include "gc/space/large_object_space.h"
 #include "gc/space/space-inl.h"
 #include "handle_scope.h"
+#include "jdwp/jdwp_priv.h"
+#include "jdwp/jdwp_expand_buf.h"
 #include "jdwp/object_registry.h"
 #include "mirror/class.h"
 #include "mirror/class-inl.h"
@@ -404,6 +406,17 @@ uint32_t Dbg::instrumentation_events_ = 0;
 
 // Breakpoints.
 static std::vector<Breakpoint> gBreakpoints GUARDED_BY(Locks::breakpoint_lock_);
+
+DebugInvokeReq::~DebugInvokeReq() {
+  if (arg_values != nullptr) {
+    // Delete the argument array allocated with new uint64_t[].
+    delete[] arg_values;
+  }
+  if (reply != nullptr) {
+    // Delete the reply allocated in Dbg::ExecuteMethodImpl.
+    JDWP::expandBufFree(reply);
+  }
+}
 
 void DebugInvokeReq::VisitRoots(RootVisitor* visitor, const RootInfo& root_info) {
   receiver.VisitRootIfNonNull(visitor, root_info);  // null for static method call.
@@ -3763,16 +3776,14 @@ static char JdwpTagToShortyChar(JDWP::JdwpTag tag) {
   }
 }
 
-JDWP::JdwpError Dbg::InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId object_id,
-                                  JDWP::RefTypeId class_id, JDWP::MethodId method_id,
-                                  uint32_t arg_count, uint64_t* arg_values,
-                                  JDWP::JdwpTag* arg_types, uint32_t options,
-                                  JDWP::JdwpTag* pResultTag, uint64_t* pResultValue,
-                                  JDWP::ObjectId* pExceptionId) {
+JDWP::JdwpError Dbg::PrepareInvokeMethod(uint32_t request_id, JDWP::ObjectId thread_id,
+                                         JDWP::ObjectId object_id,
+                                         JDWP::RefTypeId class_id, JDWP::MethodId method_id,
+                                         uint32_t arg_count, uint64_t* arg_values,
+                                         JDWP::JdwpTag* arg_types, uint32_t options) {
   ThreadList* thread_list = Runtime::Current()->GetThreadList();
 
   Thread* targetThread = nullptr;
-  std::unique_ptr<DebugInvokeReq> req;
   Thread* self = Thread::Current();
   {
     ScopedObjectAccessUnchecked soa(self);
@@ -3883,16 +3894,17 @@ JDWP::JdwpError Dbg::InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId objec
     }
 
     // Allocates a DebugInvokeReq.
-    req.reset(new (std::nothrow) DebugInvokeReq(receiver, c, m, options, arg_values, arg_count));
-    if (req.get() == nullptr) {
+    DebugInvokeReq* req = new (std::nothrow) DebugInvokeReq(request_id, thread_id, receiver, c, m,
+                                                            options, arg_values, arg_count);
+    if (req == nullptr) {
       LOG(ERROR) << "Failed to allocate DebugInvokeReq";
       return JDWP::ERR_OUT_OF_MEMORY;
     }
 
-    // Attach the DebugInvokeReq to the target thread so it executes the method when
-    // it is resumed. Once the invocation completes, it will detach it and signal us
+    // Attaches the DebugInvokeReq to the target thread so it executes the method when
+    // it is resumed. Once the invocation completes, the target thread will delete it
     // before suspending itself.
-    targetThread->SetDebugInvokeReq(req.get());
+    targetThread->SetDebugInvokeReq(req);
   }
 
   // The fact that we've released the thread list lock is a bit risky --- if the thread goes
@@ -3908,60 +3920,18 @@ JDWP::JdwpError Dbg::InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId objec
      */
     self->TransitionFromRunnableToSuspended(kWaitingForDebuggerSend);
 
-    VLOG(jdwp) << "    Transferring control to event thread";
-    {
-      MutexLock mu(self, req->lock);
-
-      if ((options & JDWP::INVOKE_SINGLE_THREADED) == 0) {
-        VLOG(jdwp) << "      Resuming all threads";
-        thread_list->UndoDebuggerSuspensions();
-      } else {
-        VLOG(jdwp) << "      Resuming event thread only";
-        thread_list->Resume(targetThread, true);
-      }
-
-      // The target thread is resumed but needs the JDWP token we're holding.
-      // We release it now and will acquire it again when the invocation is
-      // complete and the target thread suspends itself.
-      gJdwpState->ReleaseJdwpTokenForCommand();
-
-      // Wait for the request to finish executing.
-      while (targetThread->GetInvokeReq() != nullptr) {
-        req->cond.Wait(self);
-      }
+    if ((options & JDWP::INVOKE_SINGLE_THREADED) == 0) {
+      VLOG(jdwp) << "      Resuming all threads";
+      thread_list->UndoDebuggerSuspensions();
+    } else {
+      VLOG(jdwp) << "      Resuming event thread only";
+      thread_list->Resume(targetThread, true);
     }
-    VLOG(jdwp) << "    Control has returned from event thread";
-
-    /* wait for thread to re-suspend itself */
-    SuspendThread(thread_id, false /* request_suspension */);
-
-    // Now the thread is suspended again, we can re-acquire the JDWP token.
-    gJdwpState->AcquireJdwpTokenForCommand();
 
     self->TransitionFromSuspendedToRunnable();
   }
 
-  /*
-   * Suspend the threads.  We waited for the target thread to suspend
-   * itself, so all we need to do is suspend the others.
-   *
-   * The SuspendAllForDebugger() call will double-suspend the event thread,
-   * so we want to resume the target thread once to keep the books straight.
-   */
-  if ((options & JDWP::INVOKE_SINGLE_THREADED) == 0) {
-    self->TransitionFromRunnableToSuspended(kWaitingForDebuggerSuspension);
-    VLOG(jdwp) << "      Suspending all threads";
-    thread_list->SuspendAllForDebugger();
-    self->TransitionFromSuspendedToRunnable();
-    VLOG(jdwp) << "      Resuming event thread to balance the count";
-    thread_list->Resume(targetThread, true);
-  }
-
-  // Copy the result.
-  *pResultTag = req->result_tag;
-  *pResultValue = req->result_value;
-  *pExceptionId = req->exception;
-  return req->error;
+  return JDWP::ERR_NONE;
 }
 
 void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
@@ -3969,13 +3939,64 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
 
   // We can be called while an exception is pending. We need
   // to preserve that across the method invocation.
-  StackHandleScope<3> hs(soa.Self());
-  auto old_exception = hs.NewHandle<mirror::Throwable>(soa.Self()->GetException());
+  StackHandleScope<1> hs(soa.Self());
+  Handle<mirror::Throwable> old_exception = hs.NewHandle(soa.Self()->GetException());
   soa.Self()->ClearException();
 
+  // Execute the method then sends reply to the debugger.
+  ExecuteMethodImpl(soa, pReq);
+
+  // If an exception was pending before the invoke, restore it now.
+  if (old_exception.Get() != nullptr) {
+    soa.Self()->SetException(old_exception.Get());
+  }
+}
+
+void Dbg::FinishInvokeMethod(DebugInvokeReq* pReq) {
+  JDWP::ExpandBuf* pReply = pReq->reply;
+  CHECK(pReply != nullptr) << "No reply attached to DebugInvokeReq";
+
+  // We need to prevent other threads from interacting with the debugger. The token will be
+  // released when the thread suspends after sending the reply.
+  gJdwpState->AcquireJdwpTokenForEvent(pReq->thread_id);
+
+  size_t respLen = expandBufGetLength(pReply) - kJDWPHeaderLen;
+  constexpr JDWP::JdwpError result = JDWP::ERR_NONE;
+  VLOG(jdwp) << "REPLY INVOKE #" << std::hex << pReq->request_id << " " << result
+             << " (length=" << std::dec << respLen << ")";
+
+  // Now send the reply to the debugger.
+  gJdwpState->SendRequest(pReply);
+}
+
+// Helper function: write a variable-width value into the output input buffer.
+static void WriteValue(JDWP::ExpandBuf* pReply, int width, uint64_t value) {
+  switch (width) {
+    case 1:
+      expandBufAdd1(pReply, value);
+      break;
+    case 2:
+      expandBufAdd2BE(pReply, value);
+      break;
+    case 4:
+      expandBufAdd4BE(pReply, value);
+      break;
+    case 8:
+      expandBufAdd8BE(pReply, value);
+      break;
+    default:
+      LOG(FATAL) << width;
+      UNREACHABLE();
+  }
+}
+
+void Dbg::ExecuteMethodImpl(ScopedObjectAccess& soa, DebugInvokeReq* pReq) {
+  soa.Self()->AssertNoPendingException();
+
+  // TODO: should be done by the JDWP thread?
   // Translate the method through the vtable, unless the debugger wants to suppress it.
-  auto* m = pReq->method;
-  auto image_pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+  ArtMethod* m = pReq->method;
+  size_t image_pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
   if ((pReq->options & JDWP::INVOKE_NONVIRTUAL) == 0 && pReq->receiver.Read() != nullptr) {
     ArtMethod* actual_method =
         pReq->klass.Read()->FindVirtualMethodForVirtualOrInterface(m, image_pointer_size);
@@ -3992,40 +4013,98 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
 
   CHECK_EQ(sizeof(jvalue), sizeof(uint64_t));
 
+  // Invoke method.
   ScopedLocalRef<jobject> ref(soa.Env(), soa.AddLocalReference<jobject>(pReq->receiver.Read()));
   JValue result = InvokeWithJValues(soa, ref.get(), soa.EncodeMethod(m),
                                     reinterpret_cast<jvalue*>(pReq->arg_values));
 
-  pReq->result_tag = BasicTagFromDescriptor(m->GetShorty());
-  const bool is_object_result = (pReq->result_tag == JDWP::JT_OBJECT);
+  // Prepare JDWP ids for the reply.
+  JDWP::JdwpTag result_tag = BasicTagFromDescriptor(m->GetShorty());
+  const bool is_object_result = (result_tag == JDWP::JT_OBJECT);
+  StackHandleScope<2> hs(soa.Self());
   Handle<mirror::Object> object_result = hs.NewHandle(is_object_result ? result.GetL() : nullptr);
-  Handle<mirror::Throwable> exception = hs.NewHandle(soa.Self()->GetException());
+  Handle<mirror::Throwable> h_exception = hs.NewHandle(soa.Self()->GetException());
   soa.Self()->ClearException();
-  pReq->exception = gRegistry->Add(exception);
-  if (pReq->exception != 0) {
-    VLOG(jdwp) << "  JDWP invocation returning with exception=" << exception.Get()
-               << " " << exception->Dump();
-    pReq->result_value = 0;
+  JDWP::ObjectId exception = gRegistry->Add(h_exception);
+  uint64_t result_value = 0;
+  if (exception != 0) {
+    VLOG(jdwp) << "  JDWP invocation returning with exception=" << h_exception.Get()
+               << " " << h_exception->Dump();
+    result_value = 0;
   } else if (is_object_result) {
-    /* if no exception thrown, examine object result more closely */
+    /* if no exception was thrown, examine object result more closely */
     JDWP::JdwpTag new_tag = TagFromObject(soa, object_result.Get());
-    if (new_tag != pReq->result_tag) {
-      VLOG(jdwp) << "  JDWP promoted result from " << pReq->result_tag << " to " << new_tag;
-      pReq->result_tag = new_tag;
+    if (new_tag != result_tag) {
+      VLOG(jdwp) << "  JDWP promoted result from " << result_tag << " to " << new_tag;
+      result_tag = new_tag;
     }
 
     // Register the object in the registry and reference its ObjectId. This ensures
     // GC safety and prevents from accessing stale reference if the object is moved.
-    pReq->result_value = gRegistry->Add(object_result.Get());
+    result_value = gRegistry->Add(object_result.Get());
   } else {
     // Primitive result.
-    DCHECK(IsPrimitiveTag(pReq->result_tag));
-    pReq->result_value = result.GetJ();
+    DCHECK(IsPrimitiveTag(result_tag));
+    result_value = result.GetJ();
+  }
+  const bool is_constructor = m->IsConstructor() && !m->IsStatic();
+  if (is_constructor) {
+    // If we invoked a constructor (which actually returns void), return the receiver,
+    // unless we threw, in which case we return null.
+    // TODO should we keep the receiver as ObjectId to avoid the ObjectRegistry::Add here?
+    JDWP::ObjectId receiverObjectId = GetObjectRegistry()->Add(pReq->receiver.Read());
+    result_tag = JDWP::JT_OBJECT;
+    result_value = (exception == 0) ? receiverObjectId : 0;
   }
 
-  if (old_exception.Get() != nullptr) {
-    soa.Self()->SetException(old_exception.Get());
+  // Suspend other threads if the invoke is not single-threaded.
+  if ((pReq->options & JDWP::INVOKE_SINGLE_THREADED) == 0) {
+    soa.Self()->TransitionFromRunnableToSuspended(kWaitingForDebuggerSuspension);
+    VLOG(jdwp) << "      Suspending all threads";
+    Runtime::Current()->GetThreadList()->SuspendAllForDebugger();
+    soa.Self()->TransitionFromSuspendedToRunnable();
   }
+
+  // Allocate the reply. We do not know the data size yet so we make space for the JDWP header.
+  JDWP::ExpandBuf* pReply = JDWP::expandBufAlloc();
+  JDWP::expandBufAddSpace(pReply, kJDWPHeaderLen);
+
+  // Fill reply's data.
+  size_t width = GetTagWidth(result_tag);
+  JDWP::expandBufAdd1(pReply, result_tag);
+  if (width != 0) {
+    WriteValue(pReply, width, result_value);
+  }
+  JDWP::expandBufAdd1(pReply, JDWP::JT_OBJECT);
+  JDWP::expandBufAddObjectId(pReply, exception);
+
+  VLOG(jdwp) << "  --> returned " << result_tag
+             << StringPrintf(" %#" PRIx64 " (except=%#" PRIx64 ")", result_value, exception);
+
+  /* show detailed debug output */
+  if (result_tag == JDWP::JT_STRING && exception == 0) {
+    if (result_value != 0) {
+      if (VLOG_IS_ON(jdwp)) {
+        std::string result_string;
+        JDWP::JdwpError error = Dbg::StringToUtf8(result_value, &result_string);
+        CHECK_EQ(error, JDWP::ERR_NONE);
+        VLOG(jdwp) << "      string '" << result_string << "'";
+      }
+    } else {
+      VLOG(jdwp) << "      string (null)";
+    }
+  }
+
+  // Now we know the data size, we can complete the JDWP header.
+  uint8_t* buf = expandBufGetBuffer(pReply);
+  JDWP::Set4BE(buf, expandBufGetLength(pReply));
+  JDWP::Set4BE(buf + 4, pReq->request_id);
+  JDWP::Set1(buf + 8, kJDWPFlagReply);     /* flags */
+  JDWP::Set2BE(buf + 9, JDWP::ERR_NONE);
+
+  // Set the reply in DebugInvokeReq so it can be sent to the debugger when thread suspends
+  // itself.
+  pReq->reply = pReply;
 }
 
 /*

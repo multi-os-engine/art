@@ -775,14 +775,13 @@ class Thread {
 
   // Sets debug invoke request for debugging. When the thread is resumed,
   // it executes the method described by this request then suspends itself.
-  // The thread does not take ownership of the given DebugInvokeReq*, it is
-  // owned by the JDWP thread which is waiting for the execution of the
-  // method.
+  // The thread takes ownership of the given DebugInvokeReq*. It is deleted
+  // in ClearDebugInvokeReq.
   void SetDebugInvokeReq(DebugInvokeReq* req);
 
   // Clears debug invoke request for debugging. When the thread completes
-  // method invocation, it clears its debug invoke request, signals the
-  // JDWP thread and suspends itself.
+  // method invocation, it clears and deletes its debug invoke request and
+  // suspends itself.
   void ClearDebugInvokeReq();
 
   // Returns the fake exception used to activate deoptimization.
