@@ -881,16 +881,7 @@ void ThreadList::SuspendSelfForDebugger() {
 
   VLOG(threads) << *self << " self-suspending (debugger)";
 
-  // Tell JDWP we've completed invocation and are ready to suspend.
-  DebugInvokeReq* const pReq = self->GetInvokeReq();
-  if (pReq != nullptr) {
-    // Clear debug invoke request before signaling.
-    self->ClearDebugInvokeReq();
-
-    VLOG(jdwp) << "invoke complete, signaling";
-    MutexLock mu(self, pReq->lock);
-    pReq->cond.Signal(self);
-  }
+  CHECK(self->GetInvokeReq() == nullptr) << "Cannot have invoke request before suspending";
 
   // Tell JDWP that we've completed suspension. The JDWP thread can't
   // tell us to resume before we're fully asleep because we hold the

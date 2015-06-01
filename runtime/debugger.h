@@ -45,6 +45,7 @@ class AllocRecord;
 class ArtField;
 class ArtMethod;
 class ObjectRegistry;
+class ScopedObjectAccess;
 class ScopedObjectAccessUnchecked;
 class StackVisitor;
 class Thread;
@@ -53,17 +54,18 @@ class Thread;
  * Invoke-during-breakpoint support.
  */
 struct DebugInvokeReq {
-  DebugInvokeReq(mirror::Object* invoke_receiver, mirror::Class* invoke_class,
-                 ArtMethod* invoke_method, uint32_t invoke_options,
+  DebugInvokeReq(uint32_t invoke_request_id, mirror::Object* invoke_receiver,
+                 mirror::Class* invoke_class, ArtMethod* invoke_method, uint32_t invoke_options,
                  uint64_t* args, uint32_t args_count)
-      : receiver(invoke_receiver), klass(invoke_class), method(invoke_method),
-        arg_count(args_count), arg_values(args), options(invoke_options),
-        error(JDWP::ERR_NONE), result_tag(JDWP::JT_VOID), result_value(0), exception(0),
-        lock("a DebugInvokeReq lock", kBreakpointInvokeLock),
-        cond("a DebugInvokeReq condition variable", lock) {
+      : request_id(invoke_request_id), receiver(invoke_receiver), klass(invoke_class),
+        method(invoke_method), arg_count(args_count), arg_values(args), options(invoke_options),
+        error(JDWP::ERR_NONE) {
   }
 
+  ~DebugInvokeReq();
+
   /* request */
+  uint32_t request_id;
   GcRoot<mirror::Object> receiver;      // not used for ClassType.InvokeMethod
   GcRoot<mirror::Class> klass;
   ArtMethod* method;
@@ -73,13 +75,6 @@ struct DebugInvokeReq {
 
   /* result */
   JDWP::JdwpError error;
-  JDWP::JdwpTag result_tag;
-  uint64_t result_value;        // either a primitive value or an ObjectId
-  JDWP::ObjectId exception;
-
-  /* condition variable to wait on while the method executes */
-  Mutex lock DEFAULT_MUTEX_ACQUIRED_AFTER;
-  ConditionVariable cond GUARDED_BY(lock);
 
   void VisitRoots(RootVisitor* visitor, const RootInfo& root_info)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -623,16 +618,15 @@ class Dbg {
 
   // Invoke support for commands ClassType.InvokeMethod, ClassType.NewInstance and
   // ObjectReference.InvokeMethod.
-  static JDWP::JdwpError InvokeMethod(JDWP::ObjectId thread_id, JDWP::ObjectId object_id,
+  static JDWP::JdwpError InvokeMethod(uint32_t request_id, JDWP::ObjectId thread_id,
+                                      JDWP::ObjectId object_id,
                                       JDWP::RefTypeId class_id, JDWP::MethodId method_id,
                                       uint32_t arg_count, uint64_t* arg_values,
-                                      JDWP::JdwpTag* arg_types, uint32_t options,
-                                      JDWP::JdwpTag* pResultTag, uint64_t* pResultValue,
-                                      JDWP::ObjectId* pExceptObj)
+                                      JDWP::JdwpTag* arg_types, uint32_t options)
       LOCKS_EXCLUDED(Locks::thread_list_lock_,
                      Locks::thread_suspend_count_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  static void ExecuteMethod(DebugInvokeReq* pReq);
+  static JDWP::ExpandBuf* ExecuteMethod(DebugInvokeReq* pReq);
 
   /*
    * DDM support.
@@ -717,6 +711,9 @@ class Dbg {
   }
 
  private:
+  static JDWP::ExpandBuf* ExecuteMethodImpl(ScopedObjectAccess& soa, DebugInvokeReq* pReq)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   static JDWP::JdwpError GetLocalValue(const StackVisitor& visitor,
                                        ScopedObjectAccessUnchecked& soa, int slot,
                                        JDWP::JdwpTag tag, uint8_t* buf, size_t width)

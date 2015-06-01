@@ -52,17 +52,6 @@ std::string DescribeRefTypeId(const RefTypeId& ref_type_id) {
   return StringPrintf("%#" PRIx64 " (%s)", ref_type_id, signature.c_str());
 }
 
-// Helper function: write a variable-width value into the output input buffer.
-static void WriteValue(ExpandBuf* pReply, int width, uint64_t value) {
-  switch (width) {
-  case 1:     expandBufAdd1(pReply, value); break;
-  case 2:     expandBufAdd2BE(pReply, value); break;
-  case 4:     expandBufAdd4BE(pReply, value); break;
-  case 8:     expandBufAdd8BE(pReply, value); break;
-  default:    LOG(FATAL) << width; break;
-  }
-}
-
 static JdwpError WriteTaggedObject(ExpandBuf* reply, ObjectId object_id)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   uint8_t tag;
@@ -92,7 +81,7 @@ static JdwpError WriteTaggedObjectList(ExpandBuf* reply, const std::vector<Objec
  * If "is_constructor" is set, this returns "object_id" rather than the
  * expected-to-be-void return value of the called function.
  */
-static JdwpError RequestInvoke(JdwpState*, Request* request, ExpandBuf* pReply,
+static JdwpError RequestInvoke(JdwpState*, Request* request,
                                ObjectId thread_id, ObjectId object_id,
                                RefTypeId class_id, MethodId method_id, bool is_constructor)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -122,49 +111,15 @@ static JdwpError RequestInvoke(JdwpState*, Request* request, ExpandBuf* pReply,
                              (options & INVOKE_SINGLE_THREADED) ? " (SINGLE_THREADED)" : "",
                              (options & INVOKE_NONVIRTUAL) ? " (NONVIRTUAL)" : "");
 
-  JdwpTag resultTag;
-  uint64_t resultValue;
-  ObjectId exceptObjId;
-  JdwpError err = Dbg::InvokeMethod(thread_id, object_id, class_id, method_id, arg_count,
-                                    argValues.get(), argTypes.get(), options, &resultTag,
-                                    &resultValue, &exceptObjId);
-  if (err != ERR_NONE) {
-    return err;
+  JDWP::JdwpError error =  Dbg::InvokeMethod(request->GetId(), thread_id, object_id, class_id,
+                                             method_id, arg_count, argValues.get(), argTypes.get(),
+                                             options);
+  if (error == JDWP::ERR_NONE) {
+    // TODO: do it somewhere else ?
+    argValues.release();
+    argTypes.release();
   }
-
-  if (is_constructor) {
-    // If we invoked a constructor (which actually returns void), return the receiver,
-    // unless we threw, in which case we return null.
-    resultTag = JT_OBJECT;
-    resultValue = (exceptObjId == 0) ? object_id : 0;
-  }
-
-  size_t width = Dbg::GetTagWidth(resultTag);
-  expandBufAdd1(pReply, resultTag);
-  if (width != 0) {
-    WriteValue(pReply, width, resultValue);
-  }
-  expandBufAdd1(pReply, JT_OBJECT);
-  expandBufAddObjectId(pReply, exceptObjId);
-
-  VLOG(jdwp) << "  --> returned " << resultTag
-      << StringPrintf(" %#" PRIx64 " (except=%#" PRIx64 ")", resultValue, exceptObjId);
-
-  /* show detailed debug output */
-  if (resultTag == JT_STRING && exceptObjId == 0) {
-    if (resultValue != 0) {
-      if (VLOG_IS_ON(jdwp)) {
-        std::string result_string;
-        JDWP::JdwpError error = Dbg::StringToUtf8(resultValue, &result_string);
-        CHECK_EQ(error, JDWP::ERR_NONE);
-        VLOG(jdwp) << "      string '" << result_string << "'";
-      }
-    } else {
-      VLOG(jdwp) << "      string (null)";
-    }
-  }
-
-  return err;
+  return error;
 }
 
 static JdwpError VM_Version(JdwpState*, Request*, ExpandBuf* pReply)
@@ -684,13 +639,14 @@ static JdwpError CT_SetValues(JdwpState* , Request* request, ExpandBuf*)
  * Example: Eclipse sometimes uses java/lang/Class.forName(String s) on
  * values in the "variables" display.
  */
-static JdwpError CT_InvokeMethod(JdwpState* state, Request* request, ExpandBuf* pReply)
+static JdwpError CT_InvokeMethod(JdwpState* state, Request* request,
+                                 ExpandBuf* pReply ATTRIBUTE_UNUSED)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   RefTypeId class_id = request->ReadRefTypeId();
   ObjectId thread_id = request->ReadThreadId();
   MethodId method_id = request->ReadMethodId();
 
-  return RequestInvoke(state, request, pReply, thread_id, 0, class_id, method_id, false);
+  return RequestInvoke(state, request, thread_id, 0, class_id, method_id, false);
 }
 
 /*
@@ -700,7 +656,8 @@ static JdwpError CT_InvokeMethod(JdwpState* state, Request* request, ExpandBuf* 
  * Example: in IntelliJ, create a watch on "new String(myByteArray)" to
  * see the contents of a byte[] as a string.
  */
-static JdwpError CT_NewInstance(JdwpState* state, Request* request, ExpandBuf* pReply)
+static JdwpError CT_NewInstance(JdwpState* state, Request* request,
+                                ExpandBuf* pReply ATTRIBUTE_UNUSED)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   RefTypeId class_id = request->ReadRefTypeId();
   ObjectId thread_id = request->ReadThreadId();
@@ -711,7 +668,7 @@ static JdwpError CT_NewInstance(JdwpState* state, Request* request, ExpandBuf* p
   if (status != ERR_NONE) {
     return status;
   }
-  return RequestInvoke(state, request, pReply, thread_id, object_id, class_id, method_id, true);
+  return RequestInvoke(state, request, thread_id, object_id, class_id, method_id, true);
 }
 
 /*
@@ -863,14 +820,15 @@ static JdwpError OR_MonitorInfo(JdwpState*, Request* request, ExpandBuf* reply)
  * object), it will try to invoke the object's toString() function.  This
  * feature becomes crucial when examining ArrayLists with Eclipse.
  */
-static JdwpError OR_InvokeMethod(JdwpState* state, Request* request, ExpandBuf* pReply)
+static JdwpError OR_InvokeMethod(JdwpState* state, Request* request,
+                                 ExpandBuf* pReply ATTRIBUTE_UNUSED)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
   ObjectId object_id = request->ReadObjectId();
   ObjectId thread_id = request->ReadThreadId();
   RefTypeId class_id = request->ReadRefTypeId();
   MethodId method_id = request->ReadMethodId();
 
-  return RequestInvoke(state, request, pReply, thread_id, object_id, class_id, method_id, false);
+  return RequestInvoke(state, request, thread_id, object_id, class_id, method_id, false);
 }
 
 static JdwpError OR_DisableCollection(JdwpState*, Request* request, ExpandBuf*)

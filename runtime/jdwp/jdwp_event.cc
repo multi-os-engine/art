@@ -610,16 +610,20 @@ void JdwpState::SuspendByPolicy(JdwpSuspendPolicy suspend_policy, JDWP::ObjectId
      * The JDWP thread has told us (and possibly all other threads) to
      * resume.  See if it has left anything in our DebugInvokeReq mailbox.
      */
-    DebugInvokeReq* const pReq = Dbg::GetInvokeReq();
+    Thread* const self = Thread::Current();
+    DebugInvokeReq* const pReq = self->GetInvokeReq();
     if (pReq == nullptr) {
       /*LOGD("SuspendByPolicy: no invoke needed");*/
       break;
     }
 
-    /* grab this before posting/suspending again */
+    // Execute method then send reply to debugger.
+    ExpandBuf* pReply = Dbg::ExecuteMethod(pReq);
     AcquireJdwpTokenForEvent(thread_self_id);
+    SendRequest(pReply);
+    JDWP::expandBufFree(pReply);
 
-    Dbg::ExecuteMethod(pReq);
+    self->ClearDebugInvokeReq();
   }
 }
 
