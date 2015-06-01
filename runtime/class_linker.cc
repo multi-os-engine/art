@@ -4806,11 +4806,11 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass
           }
           ArtMethod* interface_method = interface->GetVirtualMethod(j, image_pointer_size_);
           uint32_t imt_index = interface_method->GetDexMethodIndex() % mirror::Class::kImtSize;
-          auto*& imt_ref = out_imt[imt_index];
-          if (imt_ref == unimplemented_method) {
-            imt_ref = method;
-          } else if (imt_ref != conflict_method) {
-            imt_ref = conflict_method;
+          auto** imt_ref = &out_imt[imt_index];
+          if (*imt_ref == unimplemented_method) {
+            *imt_ref = method;
+          } else if (*imt_ref != conflict_method) {
+            *imt_ref = conflict_method;
           }
         }
       }
@@ -4965,6 +4965,15 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass
         ++out;
       }
     }
+    StrideIterator<ArtMethod> out(
+        reinterpret_cast<uintptr_t>(virtuals) + old_method_count * method_size, method_size);
+    // Copy the mirada methods before making a copy of the vtable so that moving GC doesn't miss
+    // any roots. This is necessary since these miranda methods wont get their roots visited from
+    // the class table root visiting until they are copied to the new virtuals array.
+    for (auto* mir_method : miranda_methods) {
+      out->CopyFrom(mir_method, image_pointer_size_);
+      ++out;
+    }
     UpdateClassVirtualMethods(klass.Get(), virtuals, new_method_count);
     // Done copying methods, they are all reachable from the class now, so we can end the no thread
     // suspension assert.
@@ -4977,18 +4986,17 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass
       self->AssertPendingOOMException();
       return false;
     }
-    StrideIterator<ArtMethod> out(
+    out = StrideIterator<ArtMethod>(
         reinterpret_cast<uintptr_t>(virtuals) + old_method_count * method_size, method_size);
     for (auto* mir_method : miranda_methods) {
       ArtMethod* out_method = &*out;
-      out->CopyFrom(mir_method, image_pointer_size_);
       // Leave the declaring class alone as type indices are relative to it
       out_method->SetAccessFlags(out_method->GetAccessFlags() | kAccMiranda);
       out_method->SetMethodIndex(0xFFFF & old_vtable_count);
       vtable->SetElementPtrSize(old_vtable_count, out_method, image_pointer_size_);
       move_table.emplace(mir_method, out_method);
-      ++out;
       ++old_vtable_count;
+      ++out;
     }
 
     // Update old vtable methods.
