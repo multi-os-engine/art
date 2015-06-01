@@ -224,6 +224,10 @@ void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix = "",
     ArtMethod* current_method = nullptr, void* ucontext = nullptr)
     NO_THREAD_SAFETY_ANALYSIS;
 
+// Maintain the life cycle of the shared BacktraceMap for DumpForSigQuit
+void CreateBacktraceMap();
+void DeleteBacktraceMap();
+
 // Dumps the kernel stack for thread 'tid' to 'os'. Note that this is only available on linux-x86.
 void DumpKernelStack(std::ostream& os, pid_t tid, const char* prefix = "", bool include_count = true);
 

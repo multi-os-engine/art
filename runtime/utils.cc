@@ -1090,6 +1090,24 @@ static void Addr2line(const std::string& map_src, uintptr_t offset, std::ostream
 }
 #endif
 
+BacktraceMap* gBacktraceMap = nullptr;
+
+void CreateBacktraceMap() {
+  if (gBacktraceMap != nullptr) {
+    delete gBacktraceMap;
+  }
+
+  gBacktraceMap = BacktraceMap::Create(BACKTRACE_CURRENT_PROCESS);
+}
+
+void DeleteBacktraceMap() {
+  if (gBacktraceMap != nullptr) {
+    delete gBacktraceMap;
+  }
+
+  gBacktraceMap = nullptr;
+}
+
 void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix,
     ArtMethod* current_method, void* ucontext_ptr) {
 #if __linux__
@@ -1098,7 +1116,8 @@ void DumpNativeStack(std::ostream& os, pid_t tid, const char* prefix,
     return;
   }
 
-  std::unique_ptr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid));
+  std::unique_ptr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS, tid,
+                                                         gBacktraceMap));
   if (!backtrace->Unwind(0, reinterpret_cast<ucontext*>(ucontext_ptr))) {
     os << prefix << "(backtrace::Unwind failed for thread " << tid << ")\n";
     return;

@@ -102,6 +102,8 @@ void ThreadList::DumpNativeStacks(std::ostream& os) {
 }
 
 void ThreadList::DumpForSigQuit(std::ostream& os) {
+  CreateBacktraceMap();
+
   {
     ScopedObjectAccess soa(Thread::Current());
     // Only print if we have samples.
@@ -113,6 +115,8 @@ void ThreadList::DumpForSigQuit(std::ostream& os) {
   }
   Dump(os);
   DumpUnattachedThreads(os);
+
+  DeleteBacktraceMap();
 }
 
 static void DumpUnattachedThread(std::ostream& os, pid_t tid) NO_THREAD_SAFETY_ANALYSIS {
