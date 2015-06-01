@@ -891,15 +891,13 @@ void ThreadList::SuspendSelfForDebugger() {
 
   VLOG(threads) << *self << " self-suspending (debugger)";
 
-  // Tell JDWP we've completed invocation and are ready to suspend.
-  DebugInvokeReq* const pReq = self->GetInvokeReq();
-  if (pReq != nullptr) {
-    // Clear debug invoke request before signaling.
-    self->ClearDebugInvokeReq();
-
-    VLOG(jdwp) << "invoke complete, signaling";
-    MutexLock mu(self, pReq->lock);
-    pReq->cond.Signal(self);
+  // If the debugger requested an invoke, we need to send the reply and clear the request.
+  {
+    DebugInvokeReq* const pReq = self->GetInvokeReq();
+    if (pReq != nullptr) {
+      Dbg::FinishInvokeMethod(pReq);
+      self->ClearDebugInvokeReq();
+    }
   }
 
   // Tell JDWP that we've completed suspension. The JDWP thread can't
