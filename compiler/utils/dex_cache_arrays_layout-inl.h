@@ -31,8 +31,7 @@ inline DexCacheArraysLayout::DexCacheArraysLayout(size_t pointer_size, const Dex
     : /* types_offset_ is always 0u */
       pointer_size_(pointer_size),
       methods_offset_(types_offset_ + TypesSize(dex_file->NumTypeIds())),
-      strings_offset_(methods_offset_ + MethodsSize(dex_file->NumMethodIds())),
-      fields_offset_(strings_offset_ + StringsSize(dex_file->NumStringIds())),
+      fields_offset_(methods_offset_ + MethodsSize(dex_file->NumMethodIds())),
       size_(fields_offset_ + FieldsSize(dex_file->NumFieldIds())) {
   DCHECK(ValidPointerSize(pointer_size)) << pointer_size;
 }
@@ -51,14 +50,6 @@ inline size_t DexCacheArraysLayout::MethodOffset(uint32_t method_idx) const {
 
 inline size_t DexCacheArraysLayout::MethodsSize(size_t num_elements) const {
   return ArraySize(pointer_size_, num_elements);
-}
-
-inline size_t DexCacheArraysLayout::StringOffset(uint32_t string_idx) const {
-  return strings_offset_ + ElementOffset(sizeof(mirror::HeapReference<mirror::String>), string_idx);
-}
-
-inline size_t DexCacheArraysLayout::StringsSize(size_t num_elements) const {
-  return ArraySize(sizeof(mirror::HeapReference<mirror::String>), num_elements);
 }
 
 inline size_t DexCacheArraysLayout::FieldOffset(uint32_t field_idx) const {

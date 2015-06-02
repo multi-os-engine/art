@@ -1178,12 +1178,7 @@ void Mir2Lir::AnalyzeMIR(RefCounts* core_counts, MIR* mir, uint32_t weight) {
 
     case Instruction::CONST_STRING:
     case Instruction::CONST_STRING_JUMBO:
-      if (CanUseOpPcRelDexCacheArrayLoad()) {
-        uses_pc_rel_load = true;  // And ignore method use in slow path.
-        dex_cache_array_offset = dex_cache_arrays_layout_.StringOffset(mir->dalvikInsn.vB);
-      } else {
-        uses_method = true;
-      }
+      uses_method = true;
       break;
 
     case Instruction::INVOKE_VIRTUAL:

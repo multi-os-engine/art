@@ -494,9 +494,6 @@ bool Runtime::Start() {
     ScopedObjectAccess soa(self);
     gc::space::ImageSpace* image_space = heap_->GetImageSpace();
     if (image_space != nullptr) {
-      ATRACE_BEGIN("AddImageStringsToTable");
-      GetInternTable()->AddImageStringsToTable(image_space);
-      ATRACE_END();
       ATRACE_BEGIN("MoveImageClassesToClassTable");
       GetClassLinker()->MoveImageClassesToClassTable();
       ATRACE_END();

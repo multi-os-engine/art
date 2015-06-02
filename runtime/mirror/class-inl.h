@@ -799,14 +799,6 @@ inline uint32_t Class::NumDirectInterfaces() {
   }
 }
 
-inline void Class::SetDexCacheStrings(ObjectArray<String>* new_dex_cache_strings) {
-  SetFieldObject<false>(DexCacheStringsOffset(), new_dex_cache_strings);
-}
-
-inline ObjectArray<String>* Class::GetDexCacheStrings() {
-  return GetFieldObject<ObjectArray<String>>(DexCacheStringsOffset());
-}
-
 template<class Visitor>
 void mirror::Class::VisitNativeRoots(Visitor& visitor, size_t pointer_size) {
   ArtField* const sfields = GetSFieldsUnchecked();

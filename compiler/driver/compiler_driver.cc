@@ -1013,28 +1013,6 @@ bool CompilerDriver::CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file, u
   }
 }
 
-bool CompilerDriver::CanAssumeStringIsPresentInDexCache(const DexFile& dex_file,
-                                                        uint32_t string_idx) {
-  // See also Compiler::ResolveDexFile
-
-  bool result = false;
-  if (IsImage()) {
-    // We resolve all const-string strings when building for the image.
-    ScopedObjectAccess soa(Thread::Current());
-    StackHandleScope<1> hs(soa.Self());
-    Handle<mirror::DexCache> dex_cache(
-        hs.NewHandle(Runtime::Current()->GetClassLinker()->FindDexCache(dex_file)));
-    Runtime::Current()->GetClassLinker()->ResolveString(dex_file, string_idx, dex_cache);
-    result = true;
-  }
-  if (result) {
-    stats_->StringInDexCache();
-  } else {
-    stats_->StringNotInDexCache();
-  }
-  return result;
-}
-
 bool CompilerDriver::CanAccessTypeWithoutChecks(uint32_t referrer_idx, const DexFile& dex_file,
                                                 uint32_t type_idx,
                                                 bool* type_known_final, bool* type_known_abstract,

@@ -316,16 +316,15 @@ inline const DexFile* ArtField::GetDexFile() SHARED_LOCKS_REQUIRED(Locks::mutato
 }
 
 inline mirror::String* ArtField::GetStringName(Thread* self, bool resolve) {
-  auto dex_field_index = GetDexFieldIndex();
-  CHECK_NE(dex_field_index, DexFile::kDexNoIndex);
-  auto* dex_cache = GetDexCache();
-  const auto* dex_file = dex_cache->GetDexFile();
-  const auto& field_id = dex_file->GetFieldId(dex_field_index);
-  auto* name = dex_cache->GetResolvedString(field_id.name_idx_);
-  if (resolve && name == nullptr) {
-    name = ResolveGetStringName(self, *dex_file, field_id.name_idx_, dex_cache);
+  if (resolve) {
+    auto dex_field_index = GetDexFieldIndex();
+    CHECK_NE(dex_field_index, DexFile::kDexNoIndex);
+    auto* dex_cache = GetDexCache();
+    const auto* dex_file = dex_cache->GetDexFile();
+    const auto& field_id = dex_file->GetFieldId(dex_field_index);
+    return ResolveGetStringName(self, *dex_file, field_id.name_idx_, dex_cache);
   }
-  return name;
+  return nullptr;
 }
 
 template<typename RootVisitorType>

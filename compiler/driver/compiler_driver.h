@@ -196,9 +196,6 @@ class CompilerDriver {
 
   bool CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file, uint32_t type_idx);
 
-  bool CanAssumeStringIsPresentInDexCache(const DexFile& dex_file, uint32_t string_idx)
-      LOCKS_EXCLUDED(Locks::mutator_lock_);
-
   // Are runtime access checks necessary in the compiled code?
   bool CanAccessTypeWithoutChecks(uint32_t referrer_idx, const DexFile& dex_file,
                                   uint32_t type_idx, bool* type_known_final = nullptr,

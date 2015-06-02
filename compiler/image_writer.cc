@@ -70,7 +70,6 @@ namespace art {
 
 // Separate objects into multiple bins to optimize dirty memory use.
 static constexpr bool kBinObjects = true;
-static constexpr bool kComputeEagerResolvedStrings = false;
 
 static void CheckNoDexObjectsCallback(Object* obj, void* arg ATTRIBUTE_UNUSED)
     SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -92,9 +91,6 @@ bool ImageWriter::PrepareImageAddressSpace() {
 
     // Calling this can in theory fill in some resolved strings. However, in practice it seems to
     // never resolve any.
-    if (kComputeEagerResolvedStrings) {
-      ComputeEagerResolvedStrings();
-    }
     Thread::Current()->TransitionFromRunnableToSuspended(kNative);
   }
   gc::Heap* heap = Runtime::Current()->GetHeap();
@@ -328,7 +324,6 @@ void ImageWriter::PrepareDexCacheArraySlots() {
     auto types_size = layout.TypesSize(dex_file->NumTypeIds());
     auto methods_size = layout.MethodsSize(dex_file->NumMethodIds());
     auto fields_size = layout.FieldsSize(dex_file->NumFieldIds());
-    auto strings_size = layout.StringsSize(dex_file->NumStringIds());
     dex_cache_array_indexes_.Put(
         dex_cache->GetResolvedTypes(),
         DexCacheArrayLocation {size + layout.TypesOffset(), types_size, kBinRegular});
@@ -340,11 +335,8 @@ void ImageWriter::PrepareDexCacheArraySlots() {
         dex_cache->GetResolvedFields(),
         DexCacheArrayLocation {size + layout.FieldsOffset(), fields_size, kBinArtField});
     pointer_arrays_.emplace(dex_cache->GetResolvedFields(), kBinArtField);
-    dex_cache_array_indexes_.Put(
-        dex_cache->GetStrings(),
-        DexCacheArrayLocation {size + layout.StringsOffset(), strings_size, kBinRegular});
     size += layout.Size();
-    CHECK_EQ(layout.Size(), types_size + methods_size + fields_size + strings_size);
+    CHECK_EQ(layout.Size(), types_size + methods_size + fields_size);
   }
   // Set the slot size early to avoid DCHECK() failures in IsImageBinSlotAssigned()
   // when AssignImageBinSlot() assigns their indexes out or order.
@@ -604,39 +596,6 @@ class LexicographicalStringComparator {
                                         rhs_begin, rhs_begin + rhs_s->GetLength());
   }
 };
-
-void ImageWriter::ComputeEagerResolvedStringsCallback(Object* obj, void* arg ATTRIBUTE_UNUSED) {
-  if (!obj->GetClass()->IsStringClass()) {
-    return;
-  }
-  mirror::String* string = obj->AsString();
-  const uint16_t* utf16_string = string->GetValue();
-  size_t utf16_length = static_cast<size_t>(string->GetLength());
-  ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  ReaderMutexLock mu(Thread::Current(), *class_linker->DexLock());
-  size_t dex_cache_count = class_linker->GetDexCacheCount();
-  for (size_t i = 0; i < dex_cache_count; ++i) {
-    DexCache* dex_cache = class_linker->GetDexCache(i);
-    const DexFile& dex_file = *dex_cache->GetDexFile();
-    const DexFile::StringId* string_id;
-    if (UNLIKELY(utf16_length == 0)) {
-      string_id = dex_file.FindStringId("");
-    } else {
-      string_id = dex_file.FindStringId(utf16_string, utf16_length);
-    }
-    if (string_id != nullptr) {
-      // This string occurs in this dex file, assign the dex cache entry.
-      uint32_t string_idx = dex_file.GetIndexForStringId(*string_id);
-      if (dex_cache->GetResolvedString(string_idx) == nullptr) {
-        dex_cache->SetResolvedString(string_idx, string);
-      }
-    }
-  }
-}
-
-void ImageWriter::ComputeEagerResolvedStrings() {
-  Runtime::Current()->GetHeap()->VisitObjects(ComputeEagerResolvedStringsCallback, this);
-}
 
 bool ImageWriter::IsImageClass(Class* klass) {
   if (klass == nullptr) {

@@ -2397,12 +2397,8 @@ void InstructionCodeGeneratorARM64::VisitLoadString(HLoadString* load) {
   SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathARM64(load);
   codegen_->AddSlowPath(slow_path);
 
-  Register out = OutputRegister(load);
-  Register current_method = InputRegisterAt(load, 0);
-  __ Ldr(out, MemOperand(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
-  __ Ldr(out, HeapOperand(out, mirror::Class::DexCacheStringsOffset()));
-  __ Ldr(out, HeapOperand(out, CodeGenerator::GetCacheOffset(load->GetStringIndex())));
-  __ Cbz(out, slow_path->GetEntryLabel());
+  // TODO(ruhler) Inline the slow path here, don't jump to and from it.
+  __ B(slow_path->GetEntryLabel());
   __ Bind(slow_path->GetExitLabel());
 }
 

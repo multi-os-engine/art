@@ -31,19 +31,17 @@
 namespace art {
 namespace mirror {
 
-void DexCache::Init(const DexFile* dex_file, String* location, ObjectArray<String>* strings,
+void DexCache::Init(const DexFile* dex_file, String* location,
                     ObjectArray<Class>* resolved_types, PointerArray* resolved_methods,
                     PointerArray* resolved_fields, size_t pointer_size) {
   CHECK(dex_file != nullptr);
   CHECK(location != nullptr);
-  CHECK(strings != nullptr);
   CHECK(resolved_types != nullptr);
   CHECK(resolved_methods != nullptr);
   CHECK(resolved_fields != nullptr);
 
   SetDexFile(dex_file);
   SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(DexCache, location_), location);
-  SetFieldObject<false>(StringsOffset(), strings);
   SetFieldObject<false>(ResolvedFieldsOffset(), resolved_fields);
   SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(DexCache, resolved_types_), resolved_types);
   SetFieldObject<false>(ResolvedMethodsOffset(), resolved_methods);

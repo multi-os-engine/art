@@ -200,8 +200,6 @@ class ClassLinkerTest : public CommonRuntimeTest {
     EXPECT_FALSE(klass->IsArrayClass());
     EXPECT_TRUE(klass->GetComponentType() == nullptr);
     EXPECT_TRUE(klass->IsInSamePackage(klass.Get()));
-    EXPECT_TRUE(klass->GetDexCacheStrings() != nullptr);
-    EXPECT_EQ(klass->GetDexCacheStrings(), klass->GetDexCache()->GetStrings());
     std::string temp2;
     EXPECT_TRUE(mirror::Class::IsInSamePackage(klass->GetDescriptor(&temp),
                                                klass->GetDescriptor(&temp2)));

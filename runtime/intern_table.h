@@ -89,10 +89,6 @@ class InternTable {
   void AllowNewInterns() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void EnsureNewInternsDisallowed() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  // Adds all of the resolved image strings from the image space into the intern table. The
-  // advantage of doing this is preventing expensive DexFile::FindStringId calls.
-  void AddImageStringsToTable(gc::space::ImageSpace* image_space)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) LOCKS_EXCLUDED(Locks::intern_table_lock_);
   // Copy the post zygote tables to pre zygote to save memory by preventing dirty pages.
   void SwapPostZygoteWithPreZygote()
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) LOCKS_EXCLUDED(Locks::intern_table_lock_);
@@ -175,9 +171,6 @@ class InternTable {
       EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_);
 
   // Transaction rollback access.
-  mirror::String* LookupStringFromImage(mirror::String* s)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_);
   mirror::String* InsertStrongFromTransaction(mirror::String* s)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_);

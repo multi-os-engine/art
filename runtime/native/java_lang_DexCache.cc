@@ -55,10 +55,9 @@ static jobject DexCache_getResolvedType(JNIEnv* env, jobject javaDexCache, jint 
   return soa.AddLocalReference<jobject>(dex_cache->GetResolvedType(type_index));
 }
 
-static jobject DexCache_getResolvedString(JNIEnv* env, jobject javaDexCache, jint string_index) {
+static jobject DexCache_getResolvedString(JNIEnv* env, jobject javaDexCache ATTRIBUTE_UNUSED, jint string_index ATTRIBUTE_UNUSED) {
   ScopedFastNativeObjectAccess soa(env);
-  mirror::DexCache* dex_cache = soa.Decode<mirror::DexCache*>(javaDexCache);
-  return soa.AddLocalReference<jobject>(dex_cache->GetResolvedString(string_index));
+  return soa.AddLocalReference<jobject>(nullptr);
 }
 
 static void DexCache_setResolvedType(JNIEnv* env, jobject javaDexCache, jint type_index,
@@ -68,11 +67,11 @@ static void DexCache_setResolvedType(JNIEnv* env, jobject javaDexCache, jint typ
   dex_cache->SetResolvedType(type_index, soa.Decode<mirror::Class*>(type));
 }
 
-static void DexCache_setResolvedString(JNIEnv* env, jobject javaDexCache, jint string_index,
-                                       jobject string) {
-  ScopedFastNativeObjectAccess soa(env);
-  mirror::DexCache* dex_cache = soa.Decode<mirror::DexCache*>(javaDexCache);
-  dex_cache->SetResolvedString(string_index, soa.Decode<mirror::String*>(string));
+// TODO(ruhler) Remove this method.
+static void DexCache_setResolvedString(JNIEnv* env ATTRIBUTE_UNUSED,
+    jobject javaDexCache ATTRIBUTE_UNUSED,
+    jint string_index ATTRIBUTE_UNUSED,
+    jobject string ATTRIBUTE_UNUSED) {
 }
 
 static JNINativeMethod gMethods[] = {
