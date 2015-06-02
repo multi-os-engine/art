@@ -46,7 +46,7 @@ class MANAGED DexCache FINAL : public Object {
     return sizeof(DexCache);
   }
 
-  void Init(const DexFile* dex_file, String* location, ObjectArray<String>* strings,
+  void Init(const DexFile* dex_file, String* location,
             ObjectArray<Class>* types, PointerArray* methods, PointerArray* fields,
             size_t pointer_size) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -61,20 +61,12 @@ class MANAGED DexCache FINAL : public Object {
     return OFFSET_OF_OBJECT_MEMBER(DexCache, dex_);
   }
 
-  static MemberOffset StringsOffset() {
-    return OFFSET_OF_OBJECT_MEMBER(DexCache, strings_);
-  }
-
   static MemberOffset ResolvedFieldsOffset() {
     return OFFSET_OF_OBJECT_MEMBER(DexCache, resolved_fields_);
   }
 
   static MemberOffset ResolvedMethodsOffset() {
     return OFFSET_OF_OBJECT_MEMBER(DexCache, resolved_methods_);
-  }
-
-  size_t NumStrings() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStrings()->GetLength();
   }
 
   size_t NumResolvedTypes() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
@@ -87,16 +79,6 @@ class MANAGED DexCache FINAL : public Object {
 
   size_t NumResolvedFields() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return GetResolvedFields()->GetLength();
-  }
-
-  String* GetResolvedString(uint32_t string_idx) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetStrings()->Get(string_idx);
-  }
-
-  void SetResolvedString(uint32_t string_idx, String* resolved) ALWAYS_INLINE
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    // TODO default transaction support.
-    GetStrings()->Set(string_idx, resolved);
   }
 
   Class* GetResolvedType(uint32_t type_idx) ALWAYS_INLINE
@@ -120,10 +102,6 @@ class MANAGED DexCache FINAL : public Object {
   // Pointer sized variant, used for patching.
   ALWAYS_INLINE void SetResolvedField(uint32_t idx, ArtField* field, size_t ptr_size)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-
-  ObjectArray<String>* GetStrings() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-    return GetFieldObject<ObjectArray<String>>(StringsOffset());
-  }
 
   ObjectArray<Class>* GetResolvedTypes() ALWAYS_INLINE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return GetFieldObject<ObjectArray<Class>>(

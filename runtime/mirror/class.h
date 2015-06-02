@@ -1100,13 +1100,6 @@ class MANAGED Class FINAL : public Object {
   bool GetSlowPathEnabled() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void SetSlowPath(bool enabled) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
-  ObjectArray<String>* GetDexCacheStrings() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void SetDexCacheStrings(ObjectArray<String>* new_dex_cache_strings)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  static MemberOffset DexCacheStringsOffset() {
-    return OFFSET_OF_OBJECT_MEMBER(Class, dex_cache_strings_);
-  }
-
   // May cause thread suspension due to EqualParameters.
   ArtMethod* GetDeclaredConstructor(
       Thread* self, Handle<mirror::ObjectArray<mirror::Class>> args)

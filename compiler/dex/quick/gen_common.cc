@@ -50,10 +50,6 @@ ALWAYS_INLINE static inline bool ForceSlowFieldPath(CompilationUnit* cu) {
   return (cu->enable_debug & (1 << kDebugSlowFieldPath)) != 0;
 }
 
-ALWAYS_INLINE static inline bool ForceSlowStringPath(CompilationUnit* cu) {
-  return (cu->enable_debug & (1 << kDebugSlowStringPath)) != 0;
-}
-
 ALWAYS_INLINE static inline bool ForceSlowTypePath(CompilationUnit* cu) {
   return (cu->enable_debug & (1 << kDebugSlowTypePath)) != 0;
 }
@@ -1053,51 +1049,11 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
 }
 
 void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
-  /* NOTE: Most strings should be available at compile time */
-  int32_t offset_of_string = mirror::ObjectArray<mirror::String>::OffsetOfElement(string_idx).
-                                                                                      Int32Value();
-  if (!cu_->compiler_driver->CanAssumeStringIsPresentInDexCache(
-      *cu_->dex_file, string_idx) || ForceSlowStringPath(cu_)) {
-    // slow path, resolve string if not in dex cache
-    FlushAllRegs();
-    LockCallTemps();  // Using explicit registers
-
-    // Might call out to helper, which will return resolved string in kRet0
-    RegStorage ret0 = TargetReg(kRet0, kRef);
-    if (CanUseOpPcRelDexCacheArrayLoad()) {
-      size_t offset = dex_cache_arrays_layout_.StringOffset(string_idx);
-      OpPcRelDexCacheArrayLoad(cu_->dex_file, offset, ret0, false);
-    } else {
-      // Method to declaring class.
-      RegStorage arg0 = TargetReg(kArg0, kRef);
-      RegStorage r_method = LoadCurrMethodWithHint(arg0);
-      LoadRefDisp(r_method, ArtMethod::DeclaringClassOffset().Int32Value(), arg0, kNotVolatile);
-      // Declaring class to dex cache strings.
-      LoadRefDisp(arg0, mirror::Class::DexCacheStringsOffset().Int32Value(), arg0, kNotVolatile);
-
-      LoadRefDisp(arg0, offset_of_string, ret0, kNotVolatile);
-    }
-    GenIfNullUseHelperImm(ret0, kQuickResolveString, string_idx);
-
-    GenBarrier();
-    StoreValue(rl_dest, GetReturn(kRefReg));
-  } else {
-    RegLocation rl_result = EvalLoc(rl_dest, kRefReg, true);
-    if (CanUseOpPcRelDexCacheArrayLoad()) {
-      size_t offset = dex_cache_arrays_layout_.StringOffset(string_idx);
-      OpPcRelDexCacheArrayLoad(cu_->dex_file, offset, rl_result.reg, false);
-    } else {
-      RegLocation rl_method = LoadCurrMethod();
-      RegStorage res_reg = AllocTempRef();
-      LoadRefDisp(rl_method.reg, ArtMethod::DeclaringClassOffset().Int32Value(), res_reg,
-                  kNotVolatile);
-      LoadRefDisp(res_reg, mirror::Class::DexCacheStringsOffset().Int32Value(), res_reg,
-                  kNotVolatile);
-      LoadRefDisp(res_reg, offset_of_string, rl_result.reg, kNotVolatile);
-      FreeTemp(res_reg);
-    }
-    StoreValue(rl_dest, rl_result);
-  }
+  FlushAllRegs();
+  LockCallTemps();  // Using explicit registers
+  CallRuntimeHelperImm(kQuickResolveString, string_idx, true);
+  GenBarrier();
+  StoreValue(rl_dest, GetReturn(kRefReg));
 }
 
 /*

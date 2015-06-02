@@ -4199,14 +4199,8 @@ void InstructionCodeGeneratorX86_64::VisitLoadString(HLoadString* load) {
   SlowPathCodeX86_64* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathX86_64(load);
   codegen_->AddSlowPath(slow_path);
 
-  LocationSummary* locations = load->GetLocations();
-  CpuRegister out = locations->Out().AsRegister<CpuRegister>();
-  CpuRegister current_method = locations->InAt(0).AsRegister<CpuRegister>();
-  __ movl(out, Address(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
-  __ movl(out, Address(out, mirror::Class::DexCacheStringsOffset().Int32Value()));
-  __ movl(out, Address(out, CodeGenerator::GetCacheOffset(load->GetStringIndex())));
-  __ testl(out, out);
-  __ j(kEqual, slow_path->GetEntryLabel());
+  // TODO(ruhler) Inline the slow path here, don't jump to and from it.
+  __ jmp(slow_path->GetEntryLabel());
   __ Bind(slow_path->GetExitLabel());
 }
 

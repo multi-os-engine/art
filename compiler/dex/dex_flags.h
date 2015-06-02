@@ -47,7 +47,7 @@ enum DebugControlVector {
   kDebugDumpCFG,
   kDebugSlowFieldPath,
   kDebugSlowInvokePath,
-  kDebugSlowStringPath,
+  kDebugSlowStringPath,   // TODO(ruhler) Remove this.
   kDebugSlowTypePath,
   kDebugSlowestFieldPath,
   kDebugSlowestStringPath,

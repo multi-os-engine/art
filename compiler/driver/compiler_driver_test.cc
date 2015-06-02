@@ -109,11 +109,6 @@ TEST_F(CompilerDriverTest, DISABLED_LARGE_CompileDexLibCore) {
   ASSERT_TRUE(java_lang_dex_file_ != nullptr);
   const DexFile& dex = *java_lang_dex_file_;
   mirror::DexCache* dex_cache = class_linker_->FindDexCache(dex);
-  EXPECT_EQ(dex.NumStringIds(), dex_cache->NumStrings());
-  for (size_t i = 0; i < dex_cache->NumStrings(); i++) {
-    const mirror::String* string = dex_cache->GetResolvedString(i);
-    EXPECT_TRUE(string != nullptr) << "string_idx=" << i;
-  }
   EXPECT_EQ(dex.NumTypeIds(), dex_cache->NumResolvedTypes());
   for (size_t i = 0; i < dex_cache->NumResolvedTypes(); i++) {
     mirror::Class* type = dex_cache->GetResolvedType(i);

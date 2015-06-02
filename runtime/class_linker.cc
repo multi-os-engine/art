@@ -1472,11 +1472,6 @@ mirror::DexCache* ClassLinker::AllocDexCache(Thread* self, const DexFile& dex_fi
     self->AssertPendingOOMException();
     return nullptr;
   }
-  auto strings(hs.NewHandle(AllocStringArray(self, dex_file.NumStringIds())));
-  if (strings.Get() == nullptr) {
-    self->AssertPendingOOMException();
-    return nullptr;
-  }
   auto types(hs.NewHandle(AllocClassArray(self, dex_file.NumTypeIds())));
   if (types.Get() == nullptr) {
     self->AssertPendingOOMException();
@@ -1492,7 +1487,7 @@ mirror::DexCache* ClassLinker::AllocDexCache(Thread* self, const DexFile& dex_fi
     self->AssertPendingOOMException();
     return nullptr;
   }
-  dex_cache->Init(&dex_file, location.Get(), strings.Get(), types.Get(), methods.Get(),
+  dex_cache->Init(&dex_file, location.Get(), types.Get(), methods.Get(),
                   fields.Get(), image_pointer_size_);
   return dex_cache.Get();
 }
@@ -2258,7 +2253,6 @@ void ClassLinker::SetupClass(const DexFile& dex_file, const DexFile::ClassDef& d
 
   klass->SetDexClassDefIndex(dex_file.GetIndexForClassDef(dex_class_def));
   klass->SetDexTypeIndex(dex_class_def.class_idx_);
-  CHECK(klass->GetDexCacheStrings() != nullptr);
 }
 
 void ClassLinker::LoadClass(Thread* self, const DexFile& dex_file,
@@ -5268,17 +5262,10 @@ void ClassLinker::CreateReferenceInstanceOffsets(Handle<mirror::Class> klass) {
 }
 
 mirror::String* ClassLinker::ResolveString(const DexFile& dex_file, uint32_t string_idx,
-                                           Handle<mirror::DexCache> dex_cache) {
-  DCHECK(dex_cache.Get() != nullptr);
-  mirror::String* resolved = dex_cache->GetResolvedString(string_idx);
-  if (resolved != nullptr) {
-    return resolved;
-  }
+                                           Handle<mirror::DexCache> dex_cache ATTRIBUTE_UNUSED) {
   uint32_t utf16_length;
   const char* utf8_data = dex_file.StringDataAndUtf16LengthByIdx(string_idx, &utf16_length);
-  mirror::String* string = intern_table_->InternStrong(utf16_length, utf8_data);
-  dex_cache->SetResolvedString(string_idx, string);
-  return string;
+  return intern_table_->InternStrong(utf16_length, utf8_data);
 }
 
 mirror::Class* ClassLinker::ResolveType(const DexFile& dex_file, uint16_t type_idx,

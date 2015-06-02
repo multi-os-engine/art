@@ -197,14 +197,10 @@ static inline String* ResolveString(Thread* self, ShadowFrame& shadow_frame, uin
   }
   ArtMethod* method = shadow_frame.GetMethod();
   mirror::Class* declaring_class = method->GetDeclaringClass();
-  mirror::String* s = declaring_class->GetDexCacheStrings()->Get(string_idx);
-  if (UNLIKELY(s == nullptr)) {
-    StackHandleScope<1> hs(self);
-    Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
-    s = Runtime::Current()->GetClassLinker()->ResolveString(*method->GetDexFile(), string_idx,
-                                                            dex_cache);
-  }
-  return s;
+  StackHandleScope<1> hs(self);
+  Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
+  return Runtime::Current()->GetClassLinker()->ResolveString(*method->GetDexFile(), string_idx,
+      dex_cache);
 }
 
 // Handles div-int, div-int/2addr, div-int/li16 and div-int/lit8 instructions.

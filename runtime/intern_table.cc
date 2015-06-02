@@ -148,61 +148,6 @@ void InternTable::RemoveWeakFromTransaction(mirror::String* s) {
   RemoveWeak(s);
 }
 
-void InternTable::AddImageStringsToTable(gc::space::ImageSpace* image_space) {
-  CHECK(image_space != nullptr);
-  MutexLock mu(Thread::Current(), *Locks::intern_table_lock_);
-  if (!image_added_to_intern_table_) {
-    mirror::Object* root = image_space->GetImageHeader().GetImageRoot(ImageHeader::kDexCaches);
-    mirror::ObjectArray<mirror::DexCache>* dex_caches = root->AsObjectArray<mirror::DexCache>();
-    for (int32_t i = 0; i < dex_caches->GetLength(); ++i) {
-      mirror::DexCache* dex_cache = dex_caches->Get(i);
-      const DexFile* dex_file = dex_cache->GetDexFile();
-      const size_t num_strings = dex_file->NumStringIds();
-      for (size_t j = 0; j < num_strings; ++j) {
-        mirror::String* image_string = dex_cache->GetResolvedString(j);
-        if (image_string != nullptr) {
-          mirror::String* found = LookupStrong(image_string);
-          if (found == nullptr) {
-            InsertStrong(image_string);
-          } else {
-            DCHECK_EQ(found, image_string);
-          }
-        }
-      }
-    }
-    image_added_to_intern_table_ = true;
-  }
-}
-
-mirror::String* InternTable::LookupStringFromImage(mirror::String* s)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  if (image_added_to_intern_table_) {
-    return nullptr;
-  }
-  gc::space::ImageSpace* image = Runtime::Current()->GetHeap()->GetImageSpace();
-  if (image == nullptr) {
-    return nullptr;  // No image present.
-  }
-  mirror::Object* root = image->GetImageHeader().GetImageRoot(ImageHeader::kDexCaches);
-  mirror::ObjectArray<mirror::DexCache>* dex_caches = root->AsObjectArray<mirror::DexCache>();
-  const std::string utf8 = s->ToModifiedUtf8();
-  for (int32_t i = 0; i < dex_caches->GetLength(); ++i) {
-    mirror::DexCache* dex_cache = dex_caches->Get(i);
-    const DexFile* dex_file = dex_cache->GetDexFile();
-    // Binary search the dex file for the string index.
-    const DexFile::StringId* string_id = dex_file->FindStringId(utf8.c_str());
-    if (string_id != nullptr) {
-      uint32_t string_idx = dex_file->GetIndexForStringId(*string_id);
-      // GetResolvedString() contains a RB.
-      mirror::String* image_string = dex_cache->GetResolvedString(string_idx);
-      if (image_string != nullptr) {
-        return image_string;
-      }
-    }
-  }
-  return nullptr;
-}
-
 void InternTable::AllowNewInterns() {
   Thread* self = Thread::Current();
   MutexLock mu(self, *Locks::intern_table_lock_);
@@ -247,11 +192,7 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong) {
     }
     return weak;
   }
-  // Check the image for a match.
-  mirror::String* image = LookupStringFromImage(s);
-  if (image != nullptr) {
-    return is_strong ? InsertStrong(image) : InsertWeak(image);
-  }
+
   // No match in the strong table or the weak table. Insert into the strong / weak table.
   return is_strong ? InsertStrong(s) : InsertWeak(s);
 }

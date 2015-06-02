@@ -271,24 +271,6 @@ class PreloadDexCachesStringsVisitor : public SingleRootVisitor {
   StringTable* const table_;
 };
 
-// Based on ClassLinker::ResolveString.
-static void PreloadDexCachesResolveString(
-    Handle<mirror::DexCache> dex_cache, uint32_t string_idx, StringTable& strings)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
-  mirror::String* string = dex_cache->GetResolvedString(string_idx);
-  if (string != nullptr) {
-    return;
-  }
-  const DexFile* dex_file = dex_cache->GetDexFile();
-  const char* utf8 = dex_file->StringDataByIdx(string_idx);
-  string = strings[utf8];
-  if (string == nullptr) {
-    return;
-  }
-  // LOG(INFO) << "VMRuntime.preloadDexCaches resolved string=" << utf8;
-  dex_cache->SetResolvedString(string_idx, string);
-}
-
 // Based on ClassLinker::ResolveType.
 static void PreloadDexCachesResolveType(
     Thread* self, mirror::DexCache* dex_cache, uint32_t type_idx)
@@ -384,7 +366,7 @@ static void PreloadDexCachesResolveMethod(Handle<mirror::DexCache> dex_cache, ui
 }
 
 struct DexCacheStats {
-    uint32_t num_strings;
+    uint32_t num_strings;   // TODO(ruhler): Remove this field.
     uint32_t num_types;
     uint32_t num_fields;
     uint32_t num_methods;
@@ -395,10 +377,6 @@ struct DexCacheStats {
 };
 
 static const bool kPreloadDexCachesEnabled = true;
-
-// Disabled because it takes a long time (extra half second) but
-// gives almost no benefit in terms of saving private dirty pages.
-static const bool kPreloadDexCachesStrings = false;
 
 static const bool kPreloadDexCachesTypes = true;
 static const bool kPreloadDexCachesFieldsAndMethods = true;
@@ -433,12 +411,6 @@ static void PreloadDexCachesStatsFilled(DexCacheStats* filled)
     const DexFile* dex_file = boot_class_path[i];
     CHECK(dex_file != nullptr);
     mirror::DexCache* dex_cache = linker->FindDexCache(*dex_file);
-    for (size_t j = 0; j < dex_cache->NumStrings(); j++) {
-      mirror::String* string = dex_cache->GetResolvedString(j);
-      if (string != nullptr) {
-        filled->num_strings++;
-      }
-    }
     for (size_t j = 0; j < dex_cache->NumResolvedTypes(); j++) {
       mirror::Class* klass = dex_cache->GetResolvedType(j);
       if (klass != nullptr) {
@@ -484,23 +456,12 @@ static void VMRuntime_preloadDexCaches(JNIEnv* env, jobject) {
 
   // We use a std::map to avoid heap allocating StringObjects to lookup in gDvm.literalStrings
   StringTable strings;
-  if (kPreloadDexCachesStrings) {
-    PreloadDexCachesStringsVisitor visitor(&strings);
-    runtime->GetInternTable()->VisitRoots(&visitor, kVisitRootFlagAllRoots);
-  }
-
   const std::vector<const DexFile*>& boot_class_path = linker->GetBootClassPath();
   for (size_t i = 0; i< boot_class_path.size(); i++) {
     const DexFile* dex_file = boot_class_path[i];
     CHECK(dex_file != nullptr);
     StackHandleScope<1> hs(soa.Self());
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(linker->FindDexCache(*dex_file)));
-
-    if (kPreloadDexCachesStrings) {
-      for (size_t j = 0; j < dex_cache->NumStrings(); j++) {
-        PreloadDexCachesResolveString(dex_cache, j, strings);
-      }
-    }
 
     if (kPreloadDexCachesTypes) {
       for (size_t j = 0; j < dex_cache->NumResolvedTypes(); j++) {
