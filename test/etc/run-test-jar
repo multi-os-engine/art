@@ -308,13 +308,14 @@ fi
 
 dex2oat_cmdline="true"
 mkdir_cmdline="mkdir -p ${DEX_LOCATION}/dalvik-cache/$ISA"
+oat_file_path="${DEX_LOCATION}/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g")"
 
 if [ "$PREBUILD" = "y" ]; then
   dex2oat_cmdline="$INVOKE_WITH $ANDROID_ROOT/bin/dex2oatd \
                       $COMPILE_FLAGS \
                       --boot-image=${BOOT_IMAGE} \
                       --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
-                      --oat-file=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g") \
+                      --oat-file=$oat_file_path \
                       --instruction-set=$ISA"
 fi
 
@@ -432,6 +433,11 @@ else
 
     $mkdir_cmdline || exit 1
     $dex2oat_cmdline || { echo "Dex2oat failed." >&2 ; exit 2; }
+    objcopy -R .debug_info -R .debug_abbrev -R .debug_str -R .debug_line -R *.oat_patches $oat_file_path
+    objcopy --only-keep-debug $oat_file_path $oat_file_path.debug
+    strip $oat_file_path
+    xz --keep $oat_file_path.debug
+    objcopy --add-section .gnu_debugdata=$oat_file_path.debug.xz $oat_file_path
 
     # For running, we must turn off logging when dex2oat or patchoat are missing. Otherwise we use
     # the same defaults as for prebuilt: everything when --dev, otherwise errors and above only.
