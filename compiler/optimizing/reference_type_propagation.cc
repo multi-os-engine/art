@@ -301,6 +301,18 @@ void RTPVisitor::VisitInvoke(HInvoke* instr) {
   DCHECK(method != nullptr);
   mirror::Class* klass = method->GetReturnType(false);
   SetClassAsTypeInfo(instr, klass, /* is_exact */ false);
+
+void ReferenceTypePropagation::VisitArrayGet(HArrayGet* instr) {
+  if (instr->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+
+  HInstruction* parent = instr->InputAt(0);
+  ScopedObjectAccess soa(Thread::Current());
+  Handle<mirror::Class> handle = parent->GetReferenceTypeInfo().GetTypeHandle();
+  if (handle.GetReference() != nullptr && handle->IsObjectArrayClass()) {
+    SetClassAsTypeInfo(instr, handle->GetComponentType(), /* is_exact */ false);
+  }
 }
 
 void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
