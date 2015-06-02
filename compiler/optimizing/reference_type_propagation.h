@@ -61,6 +61,7 @@ class ReferenceTypePropagation : public HOptimization, public HGraphDelegateVisi
   void VisitInstanceFieldGet(HInstanceFieldGet* instr);
   void VisitStaticFieldGet(HStaticFieldGet* instr);
   void VisitInvoke(HInvoke* instr);
+  void VisitArrayGet(HArrayGet* instr);
 
   void ProcessWorklist();
   void AddToWorklist(HInstruction* instr);

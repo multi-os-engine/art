@@ -376,6 +376,26 @@ public class Main {
     ((SubclassA)b).$noinline$g();
   }
 
+  /// CHECK-START: void Main.testArraySimpleRemove() instruction_simplifier_after_types (before)
+  /// CHECK:         CheckCast
+
+  /// CHECK-START: void Main.testArraySimpleRemove() instruction_simplifier_after_types (after)
+  /// CHECK-NOT:     CheckCast
+  public void testArraySimpleRemove() {
+    Super[] b = new SubclassA[10];
+    SubclassA[] c = (SubclassA[])b;
+  }
+
+  /// CHECK-START: void Main.testArrayGetSimpleRemove() instruction_simplifier_after_types (before)
+  /// CHECK:         CheckCast
+
+  /// CHECK-START: void Main.testArrayGetSimpleRemove() instruction_simplifier_after_types (after)
+  /// CHECK-NOT:     CheckCast
+  public void testArrayGetSimpleRemove() {
+    Super[] a = new SubclassA[10];
+    ((SubclassA)a[0]).$noinline$g();
+  }
+
   public static void main(String[] args) {
   }
 }

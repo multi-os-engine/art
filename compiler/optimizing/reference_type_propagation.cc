@@ -303,6 +303,19 @@ void ReferenceTypePropagation::VisitInvoke(HInvoke* instr) {
   SetClassAsTypeInfo(instr, klass, /* is_exact */ false);
 }
 
+void ReferenceTypePropagation::VisitArrayGet(HArrayGet* instr) {
+  if (instr->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+
+  HInstruction* parent = instr->InputAt(0);
+  ScopedObjectAccess soa(Thread::Current());
+  auto handle = parent->GetReferenceTypeInfo().GetTypeHandle();
+  if (handle.GetReference()) {
+    SetClassAsTypeInfo(instr, handle->GetComponentType(), /* is_exact */ false);
+  }
+}
+
 void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
   ReferenceTypeInfo new_rti = instr->InputAt(0)->GetReferenceTypeInfo();
   // Be sure that we don't go over the bounded type.
