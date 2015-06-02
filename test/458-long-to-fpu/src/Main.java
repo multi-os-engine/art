@@ -20,10 +20,13 @@ public class Main {
     System.out.println(doubleConvert(false));
   }
 
+  // A dummy value to defeat inlining of these routines.
+  static boolean doThrow = false;
+
   public static long floatConvert(boolean flag) {
-    if (flag) {
-      // Try defeating inlining.
-      floatConvert(false);
+    // Try defeating inlining.
+    if (doThrow) {
+      throw new Error();
     }
     long l = myLong;
     myFloat = (float)l;
@@ -31,12 +34,12 @@ public class Main {
   }
 
   public static long doubleConvert(boolean flag) {
-    if (flag) {
-      // Try defeating inlining.
-      floatConvert(false);
+    // Try defeating inlining.
+    if (doThrow) {
+      throw new Error();
     }
     long l = myLong;
-    myFloat = (float)l;
+    myDouble = (double)l;
     return l;
   }
 
