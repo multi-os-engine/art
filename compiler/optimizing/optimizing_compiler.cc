@@ -523,12 +523,11 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   bool shouldCompile = method_name.find("$opt$") != std::string::npos;
   bool shouldOptimize = method_name.find("$opt$reg$") != std::string::npos && run_optimizations_;
 
-  std::unique_ptr<CodeGenerator> codegen(
-      CodeGenerator::Create(graph,
-                            instruction_set,
-                            *compiler_driver->GetInstructionSetFeatures(),
-                            compiler_driver->GetCompilerOptions()));
-  if (codegen.get() == nullptr) {
+  CodeGenerator* codegen = CodeGenerator::Create(graph,
+                                                 instruction_set,
+                                                 *compiler_driver->GetInstructionSetFeatures(),
+                                                 compiler_driver->GetCompilerOptions());
+  if (codegen == nullptr) {
     CHECK(!shouldCompile) << "Could not find code generator for optimizing compiler";
     MaybeRecordStat(MethodCompilationStat::kNotCompiledNoCodegen);
     return nullptr;
@@ -538,7 +537,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
 
   PassInfoPrinter pass_info_printer(graph,
                                     method_name.c_str(),
-                                    *codegen.get(),
+                                    *codegen,
                                     visualizer_output_.get(),
                                     compiler_driver);
 
@@ -580,7 +579,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     }
 
     return CompileOptimized(graph,
-                            codegen.get(),
+                            codegen,
                             compiler_driver,
                             dex_compilation_unit,
                             &pass_info_printer);
@@ -598,7 +597,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
       MaybeRecordStat(MethodCompilationStat::kNotOptimizedRegisterAllocator);
     }
 
-    return CompileBaseline(codegen.get(), compiler_driver, dex_compilation_unit);
+    return CompileBaseline(codegen, compiler_driver, dex_compilation_unit);
   } else {
     return nullptr;
   }
