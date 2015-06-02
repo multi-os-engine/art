@@ -59,6 +59,7 @@ class ReferenceTypePropagation : public HOptimization {
                                bool is_exact);
   void VisitInstanceFieldGet(HInstanceFieldGet* instr);
   void VisitStaticFieldGet(HStaticFieldGet* instr);
+  void VisitArrayGet(HArrayGet* instr);
 
   void ProcessWorklist();
   void AddToWorklist(HInstruction* instr);
