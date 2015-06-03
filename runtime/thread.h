@@ -101,7 +101,8 @@ enum ThreadFlag {
 
 enum StackedShadowFrameType {
   kShadowFrameUnderConstruction,
-  kDeoptimizationShadowFrame
+  kDeoptimizationShadowFrame,
+  kSingleFrameDeoptimizationShadowFrame
 };
 
 class StackedShadowFrameRecord {
@@ -114,7 +115,7 @@ class StackedShadowFrameRecord {
         link_(link) {}
 
   ShadowFrame* GetShadowFrame() const { return shadow_frame_; }
-  bool GetType() const { return type_; }
+  StackedShadowFrameType GetType() const { return type_; }
   StackedShadowFrameRecord* GetLink() const { return link_; }
 
  private:
@@ -857,7 +858,7 @@ class Thread {
   void PushAndClearDeoptimizationReturnValue();
   JValue PopDeoptimizationReturnValue();
   void PushStackedShadowFrame(ShadowFrame* sf, StackedShadowFrameType type);
-  ShadowFrame* PopStackedShadowFrame(StackedShadowFrameType type);
+  ShadowFrame* PopStackedShadowFrame(StackedShadowFrameType type, bool abort_on_error = true);
 
   std::deque<instrumentation::InstrumentationStackFrame>* GetInstrumentationStack() {
     return tlsPtr_.instrumentation_stack;

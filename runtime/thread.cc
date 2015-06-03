@@ -171,10 +171,16 @@ void Thread::PushStackedShadowFrame(ShadowFrame* sf, StackedShadowFrameType type
   tlsPtr_.stacked_shadow_frame_record = record;
 }
 
-ShadowFrame* Thread::PopStackedShadowFrame(StackedShadowFrameType type) {
+ShadowFrame* Thread::PopStackedShadowFrame(StackedShadowFrameType type, bool abort_on_error) {
   StackedShadowFrameRecord* record = tlsPtr_.stacked_shadow_frame_record;
-  DCHECK(record != nullptr);
-  DCHECK(record->GetType() == type);
+  if (abort_on_error) {
+    DCHECK(record != nullptr);
+    DCHECK(record->GetType() == type);
+  } else {
+    if (record == nullptr || record->GetType() != type) {
+      return nullptr;
+    }
+  }
   tlsPtr_.stacked_shadow_frame_record = record->GetLink();
   ShadowFrame* shadow_frame = record->GetShadowFrame();
   delete record;

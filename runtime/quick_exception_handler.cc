@@ -20,6 +20,7 @@
 #include "art_method-inl.h"
 #include "dex_instruction.h"
 #include "entrypoints/entrypoint_utils.h"
+#include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
 #include "handle_scope-inl.h"
 #include "mirror/class-inl.h"
@@ -36,8 +37,9 @@ QuickExceptionHandler::QuickExceptionHandler(Thread* self, bool is_deoptimizatio
   : self_(self), context_(self->GetLongJumpContext()), is_deoptimization_(is_deoptimization),
     method_tracing_active_(is_deoptimization ||
                            Runtime::Current()->GetInstrumentation()->AreExitStubsInstalled()),
-    handler_quick_frame_(nullptr), handler_quick_frame_pc_(0), handler_method_(nullptr),
-    handler_dex_pc_(0), clear_exception_(false), handler_frame_depth_(kInvalidFrameDepth) {
+    handler_quick_frame_(nullptr), handler_quick_frame_pc_(0), handler_quick_arg0_(0),
+    handler_method_(nullptr), handler_dex_pc_(0), clear_exception_(false),
+    handler_frame_depth_(kInvalidFrameDepth) {
 }
 
 // Finds catch handler or prepares for deoptimization.
@@ -332,6 +334,178 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
   DISALLOW_COPY_AND_ASSIGN(DeoptimizeStackVisitor);
 };
 
+// Prepares deoptimization.
+class DeoptimizeSingleFrameStackVisitor FINAL : public StackVisitor {
+ public:
+  DeoptimizeSingleFrameStackVisitor(Thread* self,
+                                    Context* context,
+                                    QuickExceptionHandler* exception_handler)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      : StackVisitor(self, context, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
+        self_(self),
+        exception_handler_(exception_handler),
+        prev_shadow_frame_(nullptr),
+        found_(false) {
+  }
+
+  bool VisitFrame() OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    exception_handler_->SetHandlerFrameDepth(GetFrameDepth());
+    ArtMethod* method = GetMethod();
+    if (method == nullptr || found_) {
+      // This is the upcall, we remember the frame and last pc so that we may long jump to them.
+      exception_handler_->SetHandlerQuickFramePc(GetCurrentQuickFramePc());
+      exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
+      return false;  // End stack walk.
+    } else if (method->IsRuntimeMethod()) {
+      // Ignore callee save method.
+      DCHECK(method->IsCalleeSaveMethod());
+      return true;
+    } else {
+      HandleDeoptimization(method);
+      exception_handler_->SetHandlerQuickArg0(reinterpret_cast<uintptr_t>(method));
+      found_ = true;
+      return true;  // Go on one more frame so we get the frame and PC to return to.
+    }
+  }
+
+ private:
+  static VRegKind GetVRegKind(uint16_t reg, const std::vector<int32_t>& kinds) {
+    return static_cast<VRegKind>(kinds.at(reg * 2));
+  }
+
+  bool HandleDeoptimization(ArtMethod* m) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    const DexFile::CodeItem* code_item = m->GetCodeItem();
+    CHECK(code_item != nullptr);
+    uint16_t num_regs = code_item->registers_size_;
+    uint32_t dex_pc = GetDexPc();
+    StackHandleScope<2> hs(self_);  // Dex cache, class loader and method.
+    mirror::Class* declaring_class = m->GetDeclaringClass();
+    Handle<mirror::DexCache> h_dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
+    Handle<mirror::ClassLoader> h_class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
+    verifier::MethodVerifier verifier(self_, h_dex_cache->GetDexFile(), h_dex_cache, h_class_loader,
+                                      &m->GetClassDef(), code_item, m->GetDexMethodIndex(),
+                                      m, m->GetAccessFlags(), true, true, true, true);
+    bool verifier_success = verifier.Verify();
+    CHECK(verifier_success) << PrettyMethod(m);
+    ShadowFrame* new_frame = ShadowFrame::CreateDeoptimizedFrame(num_regs, nullptr, m, dex_pc);
+    self_->PushStackedShadowFrame(new_frame, StackedShadowFrameType::kShadowFrameUnderConstruction);
+    const std::vector<int32_t> kinds(verifier.DescribeVRegs(dex_pc));
+
+    // Markers for dead values, used when the verifier knows a Dex register is undefined,
+    // or when the compiler knows the register has not been initialized, or is not used
+    // anymore in the method.
+    static constexpr uint32_t kDeadValue = 0xEBADDE09;
+    static constexpr uint64_t kLongDeadValue = 0xEBADDE09EBADDE09;
+    for (uint16_t reg = 0; reg < num_regs; ++reg) {
+      VRegKind kind = GetVRegKind(reg, kinds);
+      switch (kind) {
+        case kUndefined:
+          new_frame->SetVReg(reg, kDeadValue);
+          break;
+        case kConstant:
+          new_frame->SetVReg(reg, kinds.at((reg * 2) + 1));
+          break;
+        case kReferenceVReg: {
+          uint32_t value = 0;
+          // Check IsReferenceVReg in case the compiled GC map doesn't agree with the verifier.
+          // We don't want to copy a stale reference into the shadow frame as a reference.
+          // b/20736048
+          if (GetVReg(m, reg, kind, &value) && IsReferenceVReg(m, reg)) {
+            new_frame->SetVRegReference(reg, reinterpret_cast<mirror::Object*>(value));
+          } else {
+            new_frame->SetVReg(reg, kDeadValue);
+          }
+          break;
+        }
+        case kLongLoVReg:
+          if (GetVRegKind(reg + 1, kinds) == kLongHiVReg) {
+            // Treat it as a "long" register pair.
+            uint64_t value = 0;
+            if (GetVRegPair(m, reg, kLongLoVReg, kLongHiVReg, &value)) {
+              new_frame->SetVRegLong(reg, value);
+            } else {
+              new_frame->SetVRegLong(reg, kLongDeadValue);
+            }
+          } else {
+            uint32_t value = 0;
+            if (GetVReg(m, reg, kind, &value)) {
+              new_frame->SetVReg(reg, value);
+            } else {
+              new_frame->SetVReg(reg, kDeadValue);
+            }
+          }
+          break;
+        case kLongHiVReg:
+          if (GetVRegKind(reg - 1, kinds) == kLongLoVReg) {
+            // Nothing to do: we treated it as a "long" register pair.
+          } else {
+            uint32_t value = 0;
+            if (GetVReg(m, reg, kind, &value)) {
+              new_frame->SetVReg(reg, value);
+            } else {
+              new_frame->SetVReg(reg, kDeadValue);
+            }
+          }
+          break;
+        case kDoubleLoVReg:
+          if (GetVRegKind(reg + 1, kinds) == kDoubleHiVReg) {
+            uint64_t value = 0;
+            if (GetVRegPair(m, reg, kDoubleLoVReg, kDoubleHiVReg, &value)) {
+              // Treat it as a "double" register pair.
+              new_frame->SetVRegLong(reg, value);
+            } else {
+              new_frame->SetVRegLong(reg, kLongDeadValue);
+            }
+          } else {
+            uint32_t value = 0;
+            if (GetVReg(m, reg, kind, &value)) {
+              new_frame->SetVReg(reg, value);
+            } else {
+              new_frame->SetVReg(reg, kDeadValue);
+            }
+          }
+          break;
+        case kDoubleHiVReg:
+          if (GetVRegKind(reg - 1, kinds) == kDoubleLoVReg) {
+            // Nothing to do: we treated it as a "double" register pair.
+          } else {
+            uint32_t value = 0;
+            if (GetVReg(m, reg, kind, &value)) {
+              new_frame->SetVReg(reg, value);
+            } else {
+              new_frame->SetVReg(reg, kDeadValue);
+            }
+          }
+          break;
+        default:
+          uint32_t value = 0;
+          if (GetVReg(m, reg, kind, &value)) {
+            new_frame->SetVReg(reg, value);
+          } else {
+            new_frame->SetVReg(reg, kDeadValue);
+          }
+          break;
+      }
+    }
+    self_->PopStackedShadowFrame(StackedShadowFrameType::kShadowFrameUnderConstruction);
+    if (prev_shadow_frame_ != nullptr) {
+      prev_shadow_frame_->SetLink(new_frame);
+    } else {
+      self_->PushStackedShadowFrame(new_frame,
+                                    StackedShadowFrameType::kSingleFrameDeoptimizationShadowFrame);
+    }
+    prev_shadow_frame_ = new_frame;
+    return true;
+  }
+
+  Thread* const self_;
+  QuickExceptionHandler* const exception_handler_;
+  ShadowFrame* prev_shadow_frame_;
+  bool found_;
+
+  DISALLOW_COPY_AND_ASSIGN(DeoptimizeSingleFrameStackVisitor);
+};
+
 void QuickExceptionHandler::DeoptimizeStack() {
   DCHECK(is_deoptimization_);
   if (kDebugExceptionDelivery) {
@@ -343,6 +517,35 @@ void QuickExceptionHandler::DeoptimizeStack() {
 
   // Restore deoptimization exception
   self_->SetException(Thread::GetDeoptimizationException());
+}
+
+void QuickExceptionHandler::DeoptimizeSingleFrame() {
+  DCHECK(is_deoptimization_);
+
+  if (VLOG_IS_ON(deopt) || kDebugExceptionDelivery) {
+    LOG(INFO) << "Single-frame deopting:";
+    self_->Dump(LOG(INFO));
+    if (kDetailedSingleFrameDeoptDebug) {
+      DumpFramesWithType(self_);
+    }
+  }
+
+  DeoptimizeSingleFrameStackVisitor visitor(self_, context_, this);
+  visitor.WalkStack(true);
+
+  // PC needs to be of the quick-to-interpreter bridge.
+  int32_t offset;
+  #ifdef __LP64__
+      offset = GetThreadOffset<8>(kQuickQuickToInterpreterBridge).Int32Value();
+  #else
+      offset = GetThreadOffset<4>(kQuickQuickToInterpreterBridge).Int32Value();
+  #endif
+  handler_quick_frame_pc_ = *reinterpret_cast<uintptr_t*>(
+      reinterpret_cast<uint8_t*>(self_) + offset);
+#if defined(__i386__) || defined(__x86_64__)
+  handler_quick_frame_ = reinterpret_cast<ArtMethod**>(
+      reinterpret_cast<uintptr_t>(handler_quick_frame_) - sizeof(void*));
+#endif
 }
 
 // Unwinds all instrumentation stack frame prior to catch handler or upcall.
@@ -399,15 +602,48 @@ void QuickExceptionHandler::UpdateInstrumentationStack() {
   }
 }
 
-void QuickExceptionHandler::DoLongJump() {
+void QuickExceptionHandler::DoLongJump(bool smash_caller_saves) {
   // Place context back on thread so it will be available when we continue.
   self_->ReleaseLongJumpContext(context_);
   context_->SetSP(reinterpret_cast<uintptr_t>(handler_quick_frame_));
   CHECK_NE(handler_quick_frame_pc_, 0u);
   context_->SetPC(handler_quick_frame_pc_);
-  context_->SmashCallerSaves();
+  context_->SetArg0(handler_quick_arg0_);
+  if (smash_caller_saves) {
+    context_->SmashCallerSaves();
+  }
   context_->DoLongJump();
   UNREACHABLE();
+}
+
+// Prints out methods with their type of frame.
+class DumpFramesWithTypeStackVisitor FINAL : public StackVisitor {
+ public:
+  explicit DumpFramesWithTypeStackVisitor(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      : StackVisitor(self, nullptr, StackVisitor::StackWalkKind::kIncludeInlinedFrames) {}
+
+  bool VisitFrame() OVERRIDE SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    ArtMethod* method = GetMethod();
+    if (method == nullptr) {
+      // Transition, do go on, we want to unwind over bridges, all the way.
+      return true;
+    } else if (method->IsRuntimeMethod()) {
+      // Ignore callee save method.
+      return true;
+    } else {
+      bool is_shadow = GetCurrentShadowFrame() != nullptr;
+      LOG(INFO) << (is_shadow ? "S " : "Q ") << PrettyMethod(method, true);
+      return true;  // Go on.
+    }
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(DumpFramesWithTypeStackVisitor);
+};
+
+void QuickExceptionHandler::DumpFramesWithType(Thread* self) {
+  DumpFramesWithTypeStackVisitor visitor(self);
+  visitor.WalkStack(true);
 }
 
 }  // namespace art

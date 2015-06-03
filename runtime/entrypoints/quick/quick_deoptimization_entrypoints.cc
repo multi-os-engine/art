@@ -22,6 +22,7 @@
 #include "mirror/class-inl.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/object-inl.h"
+#include "quick_exception_handler.h"
 #include "stack.h"
 #include "thread.h"
 #include "verifier/method_verifier.h"
@@ -39,6 +40,21 @@ extern "C" NO_RETURN void artDeoptimize(Thread* self) SHARED_LOCKS_REQUIRED(Lock
   self->PushAndClearDeoptimizationReturnValue();
   self->SetException(Thread::GetDeoptimizationException());
   self->QuickDeliverException();
+}
+
+extern "C" NO_RETURN void artDeoptimizeSingleFrame(Thread* self)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  ScopedQuickEntrypointChecks sqec(self);
+
+  // Deopt logging will be in DeoptimizeSingleFrame. It is there to take advantage of the
+  // specialized visitor that will show whether a method is Quick or Shadow.
+
+  QuickExceptionHandler exception_handler(self, true);
+  exception_handler.DeoptimizeSingleFrame();
+  exception_handler.UpdateInstrumentationStack();
+  // This is a little bit risky: we can't smash caller-saves, as we need the ArtMethod in a param
+  // register.
+  exception_handler.DoLongJump(false);
 }
 
 }  // namespace art
