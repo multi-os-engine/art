@@ -20,6 +20,7 @@
 #include "art_method-inl.h"
 #include "dex_instruction.h"
 #include "entrypoints/entrypoint_utils.h"
+#include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
 #include "handle_scope-inl.h"
 #include "mirror/class-inl.h"
@@ -36,8 +37,9 @@ QuickExceptionHandler::QuickExceptionHandler(Thread* self, bool is_deoptimizatio
   : self_(self), context_(self->GetLongJumpContext()), is_deoptimization_(is_deoptimization),
     method_tracing_active_(is_deoptimization ||
                            Runtime::Current()->GetInstrumentation()->AreExitStubsInstalled()),
-    handler_quick_frame_(nullptr), handler_quick_frame_pc_(0), handler_method_(nullptr),
-    handler_dex_pc_(0), clear_exception_(false), handler_frame_depth_(kInvalidFrameDepth) {
+    handler_quick_frame_(nullptr), handler_quick_frame_pc_(0), handler_quick_arg0_(0),
+    handler_method_(nullptr), handler_dex_pc_(0), clear_exception_(false),
+    handler_frame_depth_(kInvalidFrameDepth) {
 }
 
 // Finds catch handler or prepares for deoptimization.
@@ -161,20 +163,26 @@ void QuickExceptionHandler::FindCatch(mirror::Throwable* exception) {
 // Prepares deoptimization.
 class DeoptimizeStackVisitor FINAL : public StackVisitor {
  public:
-  DeoptimizeStackVisitor(Thread* self, Context* context, QuickExceptionHandler* exception_handler)
+  DeoptimizeStackVisitor(Thread* self,
+                         Context* context,
+                         QuickExceptionHandler* exception_handler,
+                         bool single_frame)
       SHARED_REQUIRES(Locks::mutator_lock_)
       : StackVisitor(self, context, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
         self_(self),
         exception_handler_(exception_handler),
         prev_shadow_frame_(nullptr),
-        stacked_shadow_frame_pushed_(false) {
+        stacked_shadow_frame_pushed_(false),
+        single_frame_deopt_(single_frame),
+        single_frame_done_(false) {
   }
 
   bool VisitFrame() OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
     exception_handler_->SetHandlerFrameDepth(GetFrameDepth());
     ArtMethod* method = GetMethod();
-    if (method == nullptr) {
-      // This is the upcall, we remember the frame and last pc so that we may long jump to them.
+    if (method == nullptr || single_frame_done_) {
+      // This is the upcall (or the next full frame in single-frame deopt), we remember the frame
+      // and last pc so that we may long jump to them.
       exception_handler_->SetHandlerQuickFramePc(GetCurrentQuickFramePc());
       exception_handler_->SetHandlerQuickFrame(GetCurrentQuickFrame());
       if (!stacked_shadow_frame_pushed_) {
@@ -190,7 +198,13 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
       DCHECK(method->IsCalleeSaveMethod());
       return true;
     } else {
-      return HandleDeoptimization(method);
+      HandleDeoptimization(method);
+      if (single_frame_deopt_ && !IsInInlinedFrame()) {
+        // Single-frame deopt ends at the first non-inlined frame and needs to store that method.
+        exception_handler_->SetHandlerQuickArg0(reinterpret_cast<uintptr_t>(method));
+        single_frame_done_ = true;
+      }
+      return true;
     }
   }
 
@@ -199,7 +213,7 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     return static_cast<VRegKind>(kinds.at(reg * 2));
   }
 
-  bool HandleDeoptimization(ArtMethod* m) SHARED_REQUIRES(Locks::mutator_lock_) {
+  void HandleDeoptimization(ArtMethod* m) SHARED_REQUIRES(Locks::mutator_lock_) {
     const DexFile::CodeItem* code_item = m->GetCodeItem();
     CHECK(code_item != nullptr);
     uint16_t num_regs = code_item->registers_size_;
@@ -322,16 +336,21 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
       // Will be popped after the long jump after DeoptimizeStack(),
       // right before interpreter::EnterInterpreterFromDeoptimize().
       stacked_shadow_frame_pushed_ = true;
-      self_->PushStackedShadowFrame(new_frame, StackedShadowFrameType::kDeoptimizationShadowFrame);
+      self_->PushStackedShadowFrame(
+          new_frame,
+          single_frame_deopt_
+              ? StackedShadowFrameType::kSingleFrameDeoptimizationShadowFrame
+              : StackedShadowFrameType::kDeoptimizationShadowFrame);
     }
     prev_shadow_frame_ = new_frame;
-    return true;
   }
 
   Thread* const self_;
   QuickExceptionHandler* const exception_handler_;
   ShadowFrame* prev_shadow_frame_;
   bool stacked_shadow_frame_pushed_;
+  const bool single_frame_deopt_;
+  bool single_frame_done_;
 
   DISALLOW_COPY_AND_ASSIGN(DeoptimizeStackVisitor);
 };
@@ -342,11 +361,37 @@ void QuickExceptionHandler::DeoptimizeStack() {
     self_->DumpStack(LOG(INFO) << "Deoptimizing: ");
   }
 
-  DeoptimizeStackVisitor visitor(self_, context_, this);
+  DeoptimizeStackVisitor visitor(self_, context_, this, false);
   visitor.WalkStack(true);
 
   // Restore deoptimization exception
   self_->SetException(Thread::GetDeoptimizationException());
+}
+
+void QuickExceptionHandler::DeoptimizeSingleFrame() {
+  DCHECK(is_deoptimization_);
+
+  if (VLOG_IS_ON(deopt) || kDebugExceptionDelivery) {
+    LOG(INFO) << "Single-frame deopting:";
+    DumpFramesWithType(self_);
+  }
+
+  DeoptimizeStackVisitor visitor(self_, context_, this, true);
+  visitor.WalkStack(true);
+
+  // PC needs to be of the quick-to-interpreter bridge.
+  int32_t offset;
+  #ifdef __LP64__
+      offset = GetThreadOffset<8>(kQuickQuickToInterpreterBridge).Int32Value();
+  #else
+      offset = GetThreadOffset<4>(kQuickQuickToInterpreterBridge).Int32Value();
+  #endif
+  handler_quick_frame_pc_ = *reinterpret_cast<uintptr_t*>(
+      reinterpret_cast<uint8_t*>(self_) + offset);
+#if defined(__i386__) || defined(__x86_64__)
+  handler_quick_frame_ = reinterpret_cast<ArtMethod**>(
+      reinterpret_cast<uintptr_t>(handler_quick_frame_) - sizeof(void*));
+#endif
 }
 
 // Unwinds all instrumentation stack frame prior to catch handler or upcall.
@@ -403,15 +448,51 @@ void QuickExceptionHandler::UpdateInstrumentationStack() {
   }
 }
 
-void QuickExceptionHandler::DoLongJump() {
+void QuickExceptionHandler::DoLongJump(bool smash_caller_saves) {
   // Place context back on thread so it will be available when we continue.
   self_->ReleaseLongJumpContext(context_);
   context_->SetSP(reinterpret_cast<uintptr_t>(handler_quick_frame_));
   CHECK_NE(handler_quick_frame_pc_, 0u);
   context_->SetPC(handler_quick_frame_pc_);
-  context_->SmashCallerSaves();
+  context_->SetArg0(handler_quick_arg0_);
+  if (smash_caller_saves) {
+    context_->SmashCallerSaves();
+  }
   context_->DoLongJump();
   UNREACHABLE();
+}
+
+// Prints out methods with their type of frame.
+class DumpFramesWithTypeStackVisitor FINAL : public StackVisitor {
+ public:
+  explicit DumpFramesWithTypeStackVisitor(Thread* self) SHARED_REQUIRES(Locks::mutator_lock_)
+      : StackVisitor(self, nullptr, StackVisitor::StackWalkKind::kIncludeInlinedFrames) {}
+
+  bool VisitFrame() OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+    ArtMethod* method = GetMethod();
+    if (method == nullptr) {
+      // Transition, do go on, we want to unwind over bridges, all the way.
+      return true;
+    } else if (method->IsRuntimeMethod()) {
+      // Ignore callee save method.
+      return true;
+    } else {
+      bool is_shadow = GetCurrentShadowFrame() != nullptr;
+      LOG(INFO) << (is_shadow ? "S" : "Q")
+                << ((!is_shadow && IsInInlinedFrame()) ? "i" : " ")
+                << " "
+                << PrettyMethod(method, true);
+      return true;  // Go on.
+    }
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(DumpFramesWithTypeStackVisitor);
+};
+
+void QuickExceptionHandler::DumpFramesWithType(Thread* self) {
+  DumpFramesWithTypeStackVisitor visitor(self);
+  visitor.WalkStack(true);
 }
 
 }  // namespace art
