@@ -437,8 +437,8 @@ ARM_ENTRY art_quick_do_long_jump
     ldr  r14, [r0, #56]   @ (LR from gprs_ 56=4*14)
     add  r0, r0, #12      @ increment r0 to skip gprs_[0..2] 12=4*3
     ldm  r0, {r3-r13}     @ load remaining gprs from argument gprs_
-    mov  r0, #0           @ clear result registers r0 and r1
-    mov  r1, #0
+    ldr  r0, [r0, #-12]   @ load r0 value
+    mov  r1, #0           @ clear result register r1
     bx   r2               @ do long jump
 END art_quick_do_long_jump
 
@@ -1139,6 +1139,19 @@ ENTRY art_quick_deoptimize
     mov    r0, r9         @ Set up args.
     blx    artDeoptimize  @ artDeoptimize(Thread*)
 END art_quick_deoptimize
+
+    .extern artDeoptimizeSingleFrame
+ENTRY art_quick_deoptimize_single_frame
+
+.type art_quick_deoptimize_from_compiled_slow_path, #function
+.global art_quick_deoptimize_from_compiled_slow_path  // Entry point for real calls
+                                                      // from compiled slow paths.
+art_quick_deoptimize_from_compiled_slow_path:
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r0, r1
+    mov    r0, r9                    @ Set up args.
+    blx    artDeoptimizeSingleFrame  @ artDeoptimizeSingleFrame(Thread*)
+END art_quick_deoptimize_single_frame
+
 
     /*
      * Signed 64-bit integer multiply.
