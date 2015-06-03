@@ -45,6 +45,10 @@ class ArmContext : public Context {
     SetGPR(PC, new_pc);
   }
 
+  void SetArg0(uintptr_t new_arg0_value) OVERRIDE {
+    SetGPR(R0, new_arg0_value);
+  }
+
   bool IsAccessibleGPR(uint32_t reg) OVERRIDE {
     DCHECK_LT(reg, static_cast<uint32_t>(kNumberOfCoreRegisters));
     return gprs_[reg] != nullptr;
@@ -83,8 +87,8 @@ class ArmContext : public Context {
   // Pointers to register locations, initialized to null or the specific registers below.
   uintptr_t* gprs_[kNumberOfCoreRegisters];
   uint32_t* fprs_[kNumberOfSRegisters];
-  // Hold values for sp and pc if they are not located within a stack frame.
-  uintptr_t sp_, pc_;
+  // Hold values for sp, pc and arg0 if they are not located within a stack frame.
+  uintptr_t sp_, pc_, arg0_;
 };
 
 }  // namespace arm
