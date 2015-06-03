@@ -335,6 +335,7 @@ static void RunOptimizations(HGraph* graph,
   BoundsCheckElimination bce(graph);
   ReferenceTypePropagation type_propagation(graph, handles);
   InstructionSimplifier simplify2(graph, stats, "instruction_simplifier_after_types");
+  InstructionSimplifier simplify3(graph, stats, "last_instruction_simplifier");
 
   IntrinsicsRecognizer intrinsics(graph, driver);
 
@@ -343,6 +344,8 @@ static void RunOptimizations(HGraph* graph,
     &dce1,
     &fold1,
     &simplify1,
+    &type_propagation,
+    &simplify2,
     &inliner,
     // BooleanSimplifier depends on the InstructionSimplifier removing redundant
     // suspend checks to recognize empty blocks.
@@ -352,8 +355,7 @@ static void RunOptimizations(HGraph* graph,
     &gvn,
     &licm,
     &bce,
-    &type_propagation,
-    &simplify2,
+    &simplify3,
     &dce2,
   };
 
