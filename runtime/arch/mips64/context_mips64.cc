@@ -29,10 +29,14 @@ void Mips64Context::Reset() {
   std::fill_n(gprs_, arraysize(gprs_), nullptr);
   std::fill_n(fprs_, arraysize(fprs_), nullptr);
   gprs_[SP] = &sp_;
-  gprs_[RA] = &ra_;
+  gprs_[A0] = &arg0_;
+  gprs_[T9] = &t9_;
+  gprs_[GP] = &gp_;
   // Initialize registers with easy to spot debug values.
   sp_ = Mips64Context::kBadGprBase + SP;
-  ra_ = Mips64Context::kBadGprBase + RA;
+  arg0_ = 0;
+  t9_ = Mips64Context::kBadGprBase + T9;
+  gp_ = Mips64Context::kBadGprBase + GP;
 }
 
 void Mips64Context::FillCalleeSaves(const StackVisitor& fr) {
