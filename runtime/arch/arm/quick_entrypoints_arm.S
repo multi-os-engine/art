@@ -429,16 +429,16 @@ ENTRY art_quick_invoke_stub_internal
 END art_quick_invoke_stub_internal
 
     /*
-     * On entry r0 is uint32_t* gprs_ and r1 is uint32_t* fprs_
+     * On entry r0 is uintptr_t target value and r1 is uintptr_t* registers_
      */
 ARM_ENTRY art_quick_do_long_jump
+    ldr  r2, [r1, #60]    @ r2 = r15 (PC from gprs_ 60=4*15)
+    ldr  r14, [r1, #56]   @ (LR from gprs_ 56=4*14)
+    add  r1, r1, #12      @ increment r1 to skip gprs_[0..2] 12=4*3
+    ldm  r1, {r3-r13}     @ load remaining gprs from argument gprs_
+    add  r1, r1, #52      @ set r1 to the start of fprs. 16 * 4 - 12 = 52
     vldm r1, {s0-s31}     @ load all fprs from argument fprs_
-    ldr  r2, [r0, #60]    @ r2 = r15 (PC from gprs_ 60=4*15)
-    ldr  r14, [r0, #56]   @ (LR from gprs_ 56=4*14)
-    add  r0, r0, #12      @ increment r0 to skip gprs_[0..2] 12=4*3
-    ldm  r0, {r3-r13}     @ load remaining gprs from argument gprs_
-    mov  r0, #0           @ clear result registers r0 and r1
-    mov  r1, #0
+    mov  r1, #0           @ clear result register r1. We must not clear r0.
     bx   r2               @ do long jump
 END art_quick_do_long_jump
 
@@ -1139,6 +1139,19 @@ ENTRY art_quick_deoptimize
     mov    r0, r9         @ Set up args.
     blx    artDeoptimize  @ artDeoptimize(Thread*)
 END art_quick_deoptimize
+
+    .extern artDeoptimizeSingleFrame
+ENTRY art_quick_deoptimize_single_frame
+
+.type art_quick_deoptimize_from_compiled_slow_path, #function
+.global art_quick_deoptimize_from_compiled_slow_path  // Entry point for real calls
+                                                      // from compiled slow paths.
+art_quick_deoptimize_from_compiled_slow_path:
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r0, r1
+    mov    r0, r9                    @ Set up args.
+    blx    artDeoptimizeSingleFrame  @ artDeoptimizeSingleFrame(Thread*)
+END art_quick_deoptimize_single_frame
+
 
     /*
      * Signed 64-bit integer multiply.

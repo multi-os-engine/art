@@ -167,7 +167,7 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pThrowNullPointer = art_quick_throw_null_pointer_exception;
   qpoints->pThrowStackOverflow = art_quick_throw_stack_overflow;
 
-  qpoints->pDeoptimize = art_quick_deoptimize;
+  qpoints->pDeoptimize = art_quick_deoptimize_from_compiled_slow_path;
 
   // Read barrier
   qpoints->pReadBarrierJni = ReadBarrierJni;
