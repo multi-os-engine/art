@@ -16,24 +16,24 @@
 
 public class Main {
   public static void main(String[] args) {
-    System.out.println(floatConvert(false));
-    System.out.println(doubleConvert(false));
+    System.out.println($noinline$floatConvert(false));
+    System.out.println($noinline$doubleConvert(false));
   }
 
-  public static long floatConvert(boolean flag) {
+  public static long $noinline$floatConvert(boolean flag) {
     if (flag) {
       // Try defeating inlining.
-      floatConvert(false);
+      $noinline$floatConvert(false);
     }
     long l = myLong;
     myFloat = (float)l;
     return l;
   }
 
-  public static long doubleConvert(boolean flag) {
+  public static long $noinline$doubleConvert(boolean flag) {
     if (flag) {
       // Try defeating inlining.
-      floatConvert(false);
+      $noinline$floatConvert(false);
     }
     long l = myLong;
     myFloat = (float)l;
