@@ -60,14 +60,20 @@ void HInliner::Run() {
       HInvokeStaticOrDirect* call = instruction->AsInvokeStaticOrDirect();
       // As long as the call is not intrinsified, it is worth trying to inline.
       if (call != nullptr && call->GetIntrinsic() == Intrinsics::kNone) {
+        std::string callee_name =
+          PrettyMethod(call->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
+
         // We use the original invoke type to ensure the resolution of the called method
         // works properly.
         if (!TryInline(call, call->GetDexMethodIndex(), call->GetOriginalInvokeType())) {
           if (kIsDebugBuild) {
-            std::string callee_name =
-                PrettyMethod(call->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
             bool should_inline = callee_name.find("$inline$") != std::string::npos;
             CHECK(!should_inline) << "Could not inline " << callee_name;
+          }
+        } else {
+          if (kIsDebugBuild) {
+            bool must_not_inline = callee_name.find("$noinline$") != std::string::npos;
+            CHECK(!must_not_inline) << "Inlined " << callee_name;
           }
         }
       }
