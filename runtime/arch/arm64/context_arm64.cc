@@ -32,9 +32,11 @@ void Arm64Context::Reset() {
   std::fill_n(fprs_, arraysize(fprs_), nullptr);
   gprs_[SP] = &sp_;
   gprs_[LR] = &pc_;
+  gprs_[X0] = &arg0_;
   // Initialize registers with easy to spot debug values.
   sp_ = Arm64Context::kBadGprBase + SP;
   pc_ = Arm64Context::kBadGprBase + LR;
+  arg0_ = 0;
 }
 
 void Arm64Context::FillCalleeSaves(const StackVisitor& fr) {
