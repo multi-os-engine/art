@@ -45,8 +45,10 @@ class QuickExceptionHandler {
 
   void FindCatch(mirror::Throwable* exception) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void DeoptimizeStack() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void DeoptimizeSingleFrame() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void UpdateInstrumentationStack() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  NO_RETURN void DoLongJump() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  NO_RETURN void DoLongJump(bool smash_caller_saves = true)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void SetHandlerQuickFrame(ArtMethod** handler_quick_frame) {
     handler_quick_frame_ = handler_quick_frame;
@@ -54,6 +56,10 @@ class QuickExceptionHandler {
 
   void SetHandlerQuickFramePc(uintptr_t handler_quick_frame_pc) {
     handler_quick_frame_pc_ = handler_quick_frame_pc;
+  }
+
+  void SetHandlerQuickArg0(uintptr_t handler_quick_arg0) {
+    handler_quick_arg0_ = handler_quick_arg0;
   }
 
   ArtMethod* GetHandlerMethod() const {
@@ -80,6 +86,10 @@ class QuickExceptionHandler {
     handler_frame_depth_ = frame_depth;
   }
 
+  // Walk the stack frames of the given thread, printing out non-runtime methods with their types
+  // of frames. Helps to verify that single-frame deopt really only deopted one frame.
+  static void DumpFramesWithType(Thread* self) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
  private:
   Thread* const self_;
   Context* const context_;
@@ -90,6 +100,8 @@ class QuickExceptionHandler {
   ArtMethod** handler_quick_frame_;
   // PC to branch to for the handler.
   uintptr_t handler_quick_frame_pc_;
+  // The value for argument 0.
+  uintptr_t handler_quick_arg0_;
   // The handler method to report to the debugger.
   ArtMethod* handler_method_;
   // The handler's dex PC, zero implies an uncaught exception.

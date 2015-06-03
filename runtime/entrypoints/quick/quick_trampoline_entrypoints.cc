@@ -29,6 +29,7 @@
 #include "mirror/method.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
+#include "quick_exception_handler.h"
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
 #include "debugger.h"
@@ -633,27 +634,62 @@ extern "C" uint64_t artQuickToInterpreterBridge(ArtMethod* method, Thread* self,
   if (method->IsAbstract()) {
     ThrowAbstractMethodError(method);
     return 0;
+  }
+
+  JValue tmp_value;
+  ShadowFrame* deopt_frame = self->PopStackedShadowFrame(
+      StackedShadowFrameType::kSingleFrameDeoptimizationShadowFrame, false);
+  const DexFile::CodeItem* code_item = method->GetCodeItem();
+  DCHECK(code_item != nullptr) << PrettyMethod(method);
+  ShadowFrame* shadow_frame;
+  ManagedStack fragment;
+
+  DCHECK(!method->IsNative()) << PrettyMethod(method);
+  uint32_t shorty_len = 0;
+  auto* non_proxy_method = method->GetInterfaceMethodIfProxy(sizeof(void*));
+  const char* shorty = non_proxy_method->GetShorty(&shorty_len);
+
+  if (deopt_frame != nullptr) {
+    // Coming from single-frame deopt.
+
+    // Sanity-check: are the methods as expected?
+    CHECK_EQ(method, deopt_frame->GetMethod());
+
+    // Just do the same alloca as usual, and copy the content from the deopt frame. We have to
+    // re-compute the size.
+    const char* old_cause = self->StartAssertNoThreadSuspension("Copying deopted shadow frame");
+    uint16_t num_regs = code_item->registers_size_;
+    size_t size = ShadowFrame::ComputeSize(num_regs);
+    void* memory = alloca(size);
+    memcpy(memory, reinterpret_cast<void*>(deopt_frame), size);
+    shadow_frame = reinterpret_cast<ShadowFrame*>(memory);
+
+    // Now we can delete the deopted ShadowFrame.
+    ShadowFrame::DeleteDeoptimizedFrame(deopt_frame);
+
+    // Push a transition back into managed code onto the linked list in thread.
+    self->PushManagedStackFragment(&fragment);
+    self->PushShadowFrame(shadow_frame);
+    self->EndAssertNoThreadSuspension(old_cause);
+
+    if (VLOG_IS_ON(deopt)) {
+      // Print out the stack to verify that it was a single-frame deopt.
+      QuickExceptionHandler::DumpFramesWithType(self);
+    }
   } else {
-    DCHECK(!method->IsNative()) << PrettyMethod(method);
     const char* old_cause = self->StartAssertNoThreadSuspension(
         "Building interpreter shadow frame");
-    const DexFile::CodeItem* code_item = method->GetCodeItem();
-    DCHECK(code_item != nullptr) << PrettyMethod(method);
     uint16_t num_regs = code_item->registers_size_;
     void* memory = alloca(ShadowFrame::ComputeSize(num_regs));
     // No last shadow coming from quick.
-    ShadowFrame* shadow_frame(ShadowFrame::Create(num_regs, nullptr, method, 0, memory));
+    shadow_frame = ShadowFrame::Create(num_regs, nullptr, method, 0, memory);
     size_t first_arg_reg = code_item->registers_size_ - code_item->ins_size_;
-    uint32_t shorty_len = 0;
-    auto* non_proxy_method = method->GetInterfaceMethodIfProxy(sizeof(void*));
-    const char* shorty = non_proxy_method->GetShorty(&shorty_len);
     BuildQuickShadowFrameVisitor shadow_frame_builder(sp, method->IsStatic(), shorty, shorty_len,
                                                       shadow_frame, first_arg_reg);
     shadow_frame_builder.VisitArguments();
     const bool needs_initialization =
         method->IsStatic() && !method->GetDeclaringClass()->IsInitialized();
     // Push a transition back into managed code onto the linked list in thread.
-    ManagedStack fragment;
     self->PushManagedStackFragment(&fragment);
     self->PushShadowFrame(shadow_frame);
     self->EndAssertNoThreadSuspension(old_cause);
@@ -668,20 +704,21 @@ extern "C" uint64_t artQuickToInterpreterBridge(ArtMethod* method, Thread* self,
         return 0;
       }
     }
-    JValue result = interpreter::EnterInterpreterFromEntryPoint(self, code_item, shadow_frame);
-    // Pop transition.
-    self->PopManagedStackFragment(fragment);
-
-    // Request a stack deoptimization if needed
-    ArtMethod* caller = QuickArgumentVisitor::GetCallingMethod(sp);
-    if (UNLIKELY(Dbg::IsForcedInterpreterNeededForUpcall(self, caller))) {
-      self->SetException(Thread::GetDeoptimizationException());
-      self->SetDeoptimizationReturnValue(result, shorty[0] == 'L');
-    }
-
-    // No need to restore the args since the method has already been run by the interpreter.
-    return result.GetJ();
   }
+
+  JValue result = interpreter::EnterInterpreterFromEntryPoint(self, code_item, shadow_frame);
+  // Pop transition.
+  self->PopManagedStackFragment(fragment);
+
+  // Request a stack deoptimization if needed
+  ArtMethod* caller = QuickArgumentVisitor::GetCallingMethod(sp);
+  if (UNLIKELY(Dbg::IsForcedInterpreterNeededForUpcall(self, caller))) {
+    self->SetException(Thread::GetDeoptimizationException());
+    self->SetDeoptimizationReturnValue(result, shorty[0] == 'L');
+  }
+
+  // No need to restore the args since the method has already been run by the interpreter.
+  return result.GetJ();
 }
 
 // Visits arguments on the stack placing them into the args vector, Object* arguments are converted
