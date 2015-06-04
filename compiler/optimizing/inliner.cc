@@ -35,6 +35,8 @@
 #include "dex/verified_method.h"
 #include "dex/verification_results.h"
 
+#include <iostream>
+
 namespace art {
 
 static constexpr int kMaxInlineCodeUnits = 18;
@@ -119,6 +121,9 @@ static ArtMethod* FindVirtualOrInterfaceTarget(HInvoke* invoke, ArtMethod* resol
   } else if (info.GetTypeHandle()->IsInterface()) {
     // Statically knowing that the receiver has an interface type cannot
     // help us find what is the target method.
+    return nullptr;
+  } else if (!resolved_method->GetDeclaringClass()->IsAssignableFrom(info.GetTypeHandle().Get())) {
+    // The method that we're trying to call is not in the receiver's class or super classes.
     return nullptr;
   }
 
