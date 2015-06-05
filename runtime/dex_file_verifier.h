@@ -125,6 +125,9 @@ class DexFileVerifier {
 
   // Set of type ids for which there are ClassDef elements in the dex file.
   std::unordered_set<decltype(DexFile::ClassDef::class_idx_)> defined_classes_;
+
+  // Set of direct method indexes in a ClassDef, used to check for overlap with virtual methods.
+  std::set<uint32_t> direct_method_indexes_;
 };
 
 }  // namespace art

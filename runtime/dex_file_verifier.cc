@@ -480,6 +480,13 @@ bool DexFileVerifier::CheckClassDataItemMethod(uint32_t idx, uint32_t access_fla
     return false;
   }
 
+  if (expect_direct) {
+    direct_method_indexes_.insert(idx);
+  } else if (direct_method_indexes_.find(idx) != direct_method_indexes_.end()) {
+    ErrorStringPrintf("Found virtual method with same index as direct method: %d", idx);
+    return false;
+  }
+
   constexpr uint32_t access_method_mask = kAccJavaFlagsMask | kAccConstructor |
       kAccDeclaredSynchronized;
   if (UNLIKELY(((access_flags & ~access_method_mask) != 0) ||
@@ -707,6 +714,7 @@ bool DexFileVerifier::CheckIntraClassDataItem() {
       return false;
     }
   }
+  direct_method_indexes_.clear();
 
   ptr_ = it.EndDataPointer();
   return true;
