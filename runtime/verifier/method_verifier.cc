@@ -3318,7 +3318,8 @@ ArtMethod* MethodVerifier::VerifyInvocationArgsFromIterator(
     }
     if (method_type != METHOD_INTERFACE && !actual_arg_type.IsZero()) {
       const RegType* res_method_class;
-      if (res_method != nullptr) {
+      // Miranda methods do not have the right declaring class.
+      if (res_method != nullptr && !res_method->IsMiranda()) {
         mirror::Class* klass = res_method->GetDeclaringClass();
         std::string temp;
         res_method_class = &reg_types_.FromClass(klass->GetDescriptor(&temp), klass,
