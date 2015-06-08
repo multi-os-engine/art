@@ -60,13 +60,13 @@ public class Main {
   }
 
   private void runSecondary() {
-      foo(true);
+      foo();
       throw new RuntimeException("Didn't expect to get back...");
   }
 
   private void runPrimary() {
       // First do the in-process unwinding.
-      if (TEST_LOCAL_UNWINDING && !foo(false)) {
+      if (TEST_LOCAL_UNWINDING && !foo()) {
           System.out.println("Unwinding self failed.");
       }
 
@@ -134,8 +134,14 @@ public class Main {
       }
   }
 
-  public boolean foo(boolean b) {
-      return bar(b);
+  public boolean foo() {
+      // Call bar() via string.valueOf(object).
+      // This tests that we can unwind from framework code.
+      return String.valueOf(this).equals("true");
+  }
+
+  @Override public String toString() {
+      return bar(secondary) ? "true" : "false";
   }
 
   public boolean bar(boolean b) {
