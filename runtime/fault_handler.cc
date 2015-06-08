@@ -126,13 +126,13 @@ void FaultManager::Init() {
     VLOG(signals) << "Failed to claim SEGV: " << strerror(errno);
   }
   // Make sure our signal handler is called before any user handlers.
-  ClaimSignalChain(SIGSEGV, &oldaction_);
+  // ClaimSignalChain(SIGSEGV, &oldaction_);
   initialized_ = true;
 }
 
 void FaultManager::Release() {
   if (initialized_) {
-    UnclaimSignalChain(SIGSEGV);
+    // UnclaimSignalChain(SIGSEGV);
     initialized_ = false;
   }
 }

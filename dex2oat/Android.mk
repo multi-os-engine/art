@@ -19,7 +19,7 @@ LOCAL_PATH := $(call my-dir)
 include art/build/Android.executable.mk
 
 DEX2OAT_SRC_FILES := \
-	dex2oat.cc
+  dex2oat.cc
 
 # TODO: Remove this when the framework (installd) supports pushing the
 # right instruction-set parameter for the primary architecture.
@@ -40,6 +40,7 @@ endif
 ifeq ($(ART_BUILD_TARGET_NDEBUG),true)
   $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libart-compiler,art/compiler,target,ndebug,$(dex2oat_target_arch)))
 endif
+
 ifeq ($(ART_BUILD_TARGET_DEBUG),true)
   $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libartd-compiler,art/compiler,target,debug,$(dex2oat_target_arch)))
 endif
@@ -47,7 +48,14 @@ endif
 # We always build dex2oat and dependencies, even if the host build is otherwise disabled, since they are used to cross compile for the target.
 ifeq ($(ART_BUILD_HOST_NDEBUG),true)
   $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libart-compiler libziparchive-host,art/compiler,host,ndebug,$(dex2oat_host_arch)))
+  ifeq ($(ART_BUILD_HOST_STATIC),true)
+    $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libart libart-compiler libziparchive-host libnativehelper libnativebridge libsigchain_dummy libvixl liblog libz libcutils libbacktrace libunwind libunwindbacktrace libutils libbase,art/compiler,host,ndebug,$(dex2oat_host_arch),static))
+  endif
 endif
+
 ifeq ($(ART_BUILD_HOST_DEBUG),true)
   $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libcutils libartd-compiler libziparchive-host,art/compiler,host,debug,$(dex2oat_host_arch)))
+  ifeq ($(ART_BUILD_HOST_STATIC),true)
+    $(eval $(call build-art-executable,dex2oat,$(DEX2OAT_SRC_FILES),libartd libartd-compiler libziparchive-host libnativehelper libnativebridge libsigchain_dummy libvixld liblog libz libcutils libbacktrace libunwind libunwindbacktrace libutils libbase,art/compiler,host,debug,$(dex2oat_host_arch),static))
+  endif
 endif
