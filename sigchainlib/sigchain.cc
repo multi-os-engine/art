@@ -265,6 +265,7 @@ extern "C" sighandler_t signal(int signal, sighandler_t handler) {
 }
 
 extern "C" int sigprocmask(int how, const sigset_t* bionic_new_set, sigset_t* bionic_old_set) {
+  log("oki.... weird stuff happening if I see this");
   const sigset_t* new_set_ptr = bionic_new_set;
   sigset_t tmpset;
   if (bionic_new_set != nullptr) {

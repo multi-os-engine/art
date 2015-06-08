@@ -910,30 +910,30 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   // Always initialize the signal chain so that any calls to sigaction get
   // correctly routed to the next in the chain regardless of whether we
   // have claimed the signal or not.
-  InitializeSignalChain();
+  // InitializeSignalChain();
 
   if (implicit_null_checks_ || implicit_so_checks_ || implicit_suspend_checks_) {
-    fault_manager.Init();
+    // fault_manager.Init();
 
-    // These need to be in a specific order.  The null point check handler must be
-    // after the suspend check and stack overflow check handlers.
-    //
-    // Note: the instances attach themselves to the fault manager and are handled by it. The manager
-    //       will delete the instance on Shutdown().
-    if (implicit_suspend_checks_) {
-      new SuspensionHandler(&fault_manager);
-    }
+    // // These need to be in a specific order.  The null point check handler must be
+    // // after the suspend check and stack overflow check handlers.
+    // //
+    // // Note: the instances attach themselves to the fault manager and are handled by it. The manager
+    // //       will delete the instance on Shutdown().
+    // if (implicit_suspend_checks_) {
+    //   new SuspensionHandler(&fault_manager);
+    // }
 
-    if (implicit_so_checks_) {
-      new StackOverflowHandler(&fault_manager);
-    }
+    // if (implicit_so_checks_) {
+    //   new StackOverflowHandler(&fault_manager);
+    // }
 
-    if (implicit_null_checks_) {
-      new NullPointerHandler(&fault_manager);
-    }
+    // if (implicit_null_checks_) {
+    //   new NullPointerHandler(&fault_manager);
+    // }
 
     if (kEnableJavaStackTraceHandler) {
-      new JavaStackTraceHandler(&fault_manager);
+    //  new JavaStackTraceHandler(&fault_manager);
     }
   }
 
@@ -1268,13 +1268,13 @@ int32_t Runtime::GetStat(int kind) {
 }
 
 void Runtime::BlockSignals() {
-  SignalSet signals;
-  signals.Add(SIGPIPE);
-  // SIGQUIT is used to dump the runtime's state (including stack traces).
-  signals.Add(SIGQUIT);
-  // SIGUSR1 is used to initiate a GC.
-  signals.Add(SIGUSR1);
-  signals.Block();
+  // SignalSet signals;
+  // signals.Add(SIGPIPE);
+  // // SIGQUIT is used to dump the runtime's state (including stack traces).
+  // signals.Add(SIGQUIT);
+  // // SIGUSR1 is used to initiate a GC.
+  // signals.Add(SIGUSR1);
+  // signals.Block();
 }
 
 bool Runtime::AttachCurrentThread(const char* thread_name, bool as_daemon, jobject thread_group,
