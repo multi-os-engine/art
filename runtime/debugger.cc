@@ -689,15 +689,11 @@ void Dbg::GoActive() {
 
   Runtime* runtime = Runtime::Current();
   runtime->GetThreadList()->SuspendAll(__FUNCTION__);
-  Thread* self = Thread::Current();
-  ThreadState old_state = self->SetStateUnsafe(kRunnable);
-  CHECK_NE(old_state, kRunnable);
   if (RequiresDeoptimization()) {
     runtime->GetInstrumentation()->EnableDeoptimization();
   }
   instrumentation_events_ = 0;
   gDebuggerActive = true;
-  CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
   runtime->GetThreadList()->ResumeAll();
 
   LOG(INFO) << "Debugger is active";
@@ -714,7 +710,6 @@ void Dbg::Disconnected() {
   Runtime* runtime = Runtime::Current();
   runtime->GetThreadList()->SuspendAll(__FUNCTION__);
   Thread* self = Thread::Current();
-  ThreadState old_state = self->SetStateUnsafe(kRunnable);
 
   // Debugger may not be active at this point.
   if (IsDebuggerActive()) {
@@ -736,7 +731,6 @@ void Dbg::Disconnected() {
     }
     gDebuggerActive = false;
   }
-  CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
   runtime->GetThreadList()->ResumeAll();
 
   {
@@ -3202,7 +3196,6 @@ void Dbg::ManageDeoptimization() {
   // We need to suspend mutator threads first.
   Runtime* const runtime = Runtime::Current();
   runtime->GetThreadList()->SuspendAll(__FUNCTION__);
-  const ThreadState old_state = self->SetStateUnsafe(kRunnable);
   {
     MutexLock mu(self, *Locks::deoptimization_lock_);
     size_t req_index = 0;
@@ -3212,7 +3205,6 @@ void Dbg::ManageDeoptimization() {
     }
     deoptimization_requests_.clear();
   }
-  CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
   runtime->GetThreadList()->ResumeAll();
   self->TransitionFromSuspendedToRunnable();
 }
