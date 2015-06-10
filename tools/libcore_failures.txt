@@ -152,5 +152,16 @@
           "libcore.javax.net.ssl.KeyManagerFactoryTest#test_KeyManagerFactory_getInstance",
           "libcore.javax.net.ssl.SSLContextTest#test_SSLContext_defaultConfiguration",
           "libcore.javax.net.ssl.SSLSocketTest#test_SSLSocket_sendsTlsFallbackScsv_InappropriateFallback_Failure"]
+},
+{
+  description: "Tests newly added to the build bot (b/21722374)",
+  modes: [host],
+  result: EXEC_FAILED,
+  names: ["libcore.java.security.KeyStoreTest#test_KeyStore_load_InputStream",
+          "libcore.java.security.KeyStoreTest#test_KeyStore_load_LoadStoreParameter",
+          "libcore.java.security.KeyStoreTest#test_KeyStore_size",
+          "libcore.java.security.MessageDigestTest#test_getInstance",
+          "libcore.javax.net.ssl.TrustManagerFactoryTest#test_TrustManagerFactory_getDefaultAlgorithm",
+          "libcore.javax.net.ssl.TrustManagerFactoryTest#test_TrustManagerFactory_getInstance"]
 }
 ]
