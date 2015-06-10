@@ -125,25 +125,41 @@ String* String::AllocFromModifiedUtf8(Thread* self, int32_t utf16_length,
   return string;
 }
 
+// bool String::Equals(String* that) {
+//   if (this == that) {
+//     // Quick reference equality test
+//     return true;
+//   } else if (that == nullptr) {
+//     // Null isn't an instanceof anything
+//     return false;
+//   } else if (this->GetLength() != that->GetLength()) {
+//     // Quick length inequality test
+//     return false;
+//   } else {
+//     // Note: don't short circuit on hash code as we're presumably here as the
+//     // hash code was already equal
+//     for (int32_t i = 0; i < that->GetLength(); ++i) {
+//       if (this->CharAt(i) != that->CharAt(i)) {
+//         return false;
+//       }
+//     }
+//     return true;
+//   }
+// }
+
 bool String::Equals(String* that) {
+  const int32_t length = GetLength();
   if (this == that) {
     // Quick reference equality test
     return true;
-  } else if (that == nullptr) {
-    // Null isn't an instanceof anything
-    return false;
-  } else if (this->GetLength() != that->GetLength()) {
-    // Quick length inequality test
+  } else if ((that == nullptr) || (length != that->GetLength())) {
+    // Null isn't instanceof anything and quick length inequality test
     return false;
   } else {
-    // Note: don't short circuit on hash code as we're presumably here as the
-    // hash code was already equal
-    for (int32_t i = 0; i < that->GetLength(); ++i) {
-      if (this->CharAt(i) != that->CharAt(i)) {
-        return false;
-      }
-    }
-    return true;
+    const uint16_t* thisChars = GetValue();
+    const uint16_t* thatChars = that->GetValue();
+    // Compare values of strings, know lengths are equal at this point
+    return MemCmp16(thisChars, thatChars, length) == 0;
   }
 }
 

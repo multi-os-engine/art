@@ -44,6 +44,15 @@ static jint String_compareTo(JNIEnv* env, jobject java_this, jobject java_rhs) {
   }
 }
 
+static jboolean String_equals(JNIEnv* env, jobject java_this, jobject java_rhs) {
+  ScopedFastNativeObjectAccess soa(env);
+  if (UNLIKELY(java_rhs == nullptr)) {
+    return false;
+  } else {
+    return soa.Decode<mirror::String*>(java_this)->Equals(soa.Decode<mirror::String*>(java_rhs));
+  }
+}
+
 static jstring String_concat(JNIEnv* env, jobject java_this, jobject java_string_arg) {
   ScopedFastNativeObjectAccess soa(env);
   if (UNLIKELY(java_string_arg == nullptr)) {
@@ -116,6 +125,7 @@ static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(String, intern, "!()Ljava/lang/String;"),
   NATIVE_METHOD(String, setCharAt, "!(IC)V"),
   NATIVE_METHOD(String, toCharArray, "!()[C"),
+  NATIVE_METHOD(String, equals,"!(Ljava/lang/Object;)Z")
 };
 
 void register_java_lang_String(JNIEnv* env) {
