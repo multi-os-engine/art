@@ -60,7 +60,8 @@ static constexpr DRegister DTMP = D31;
 
 class NullCheckSlowPathARM : public SlowPathCodeARM {
  public:
-  explicit NullCheckSlowPathARM(HNullCheck* instruction) : instruction_(instruction) {}
+  explicit NullCheckSlowPathARM(HNullCheck* instruction)
+      : SlowPathCodeARM("NullCheckSlowPathARM"), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -76,7 +77,8 @@ class NullCheckSlowPathARM : public SlowPathCodeARM {
 
 class DivZeroCheckSlowPathARM : public SlowPathCodeARM {
  public:
-  explicit DivZeroCheckSlowPathARM(HDivZeroCheck* instruction) : instruction_(instruction) {}
+  explicit DivZeroCheckSlowPathARM(HDivZeroCheck* instruction)
+      : SlowPathCodeARM("DivZeroCheckSlowPathARM"), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -93,7 +95,8 @@ class DivZeroCheckSlowPathARM : public SlowPathCodeARM {
 class SuspendCheckSlowPathARM : public SlowPathCodeARM {
  public:
   SuspendCheckSlowPathARM(HSuspendCheck* instruction, HBasicBlock* successor)
-      : instruction_(instruction), successor_(successor) {}
+      : SlowPathCodeARM("SuspendCheckSlowPathARM"),
+        instruction_(instruction), successor_(successor) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -134,7 +137,8 @@ class BoundsCheckSlowPathARM : public SlowPathCodeARM {
   BoundsCheckSlowPathARM(HBoundsCheck* instruction,
                          Location index_location,
                          Location length_location)
-      : instruction_(instruction),
+      : SlowPathCodeARM("BoundsCheckSlowPathARM"),
+        instruction_(instruction),
         index_location_(index_location),
         length_location_(length_location) {}
 
@@ -169,7 +173,8 @@ class LoadClassSlowPathARM : public SlowPathCodeARM {
                        HInstruction* at,
                        uint32_t dex_pc,
                        bool do_clinit)
-      : cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
+      : SlowPathCodeARM("LoadClassSlowPathARM"),
+        cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
     DCHECK(at->IsLoadClass() || at->IsClinitCheck());
   }
 
@@ -216,7 +221,8 @@ class LoadClassSlowPathARM : public SlowPathCodeARM {
 
 class LoadStringSlowPathARM : public SlowPathCodeARM {
  public:
-  explicit LoadStringSlowPathARM(HLoadString* instruction) : instruction_(instruction) {}
+  explicit LoadStringSlowPathARM(HLoadString* instruction)
+      : SlowPathCodeARM("LoadStringSlowPathARM"), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -248,7 +254,8 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
                        Location class_to_check,
                        Location object_class,
                        uint32_t dex_pc)
-      : instruction_(instruction),
+      : SlowPathCodeARM("TypeCheckSlowPathARM"),
+        instruction_(instruction),
         class_to_check_(class_to_check),
         object_class_(object_class),
         dex_pc_(dex_pc) {}
@@ -298,7 +305,7 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
 class DeoptimizationSlowPathARM : public SlowPathCodeARM {
  public:
   explicit DeoptimizationSlowPathARM(HInstruction* instruction)
-    : instruction_(instruction) {}
+    : SlowPathCodeARM("DeoptimizationSlowPathARM"), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());

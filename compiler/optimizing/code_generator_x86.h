@@ -245,6 +245,10 @@ class CodeGeneratorX86 : public CodeGenerator {
     return &assembler_;
   }
 
+  const X86Assembler& GetAssembler() const OVERRIDE {
+    return assembler_;
+  }
+
   uintptr_t GetAddressOf(HBasicBlock* block) const OVERRIDE {
     return GetLabelOf(block)->Position();
   }
@@ -319,7 +323,8 @@ class CodeGeneratorX86 : public CodeGenerator {
 
 class SlowPathCodeX86 : public SlowPathCode {
  public:
-  SlowPathCodeX86() : entry_label_(), exit_label_() {}
+  explicit SlowPathCodeX86(const char* description) :
+      SlowPathCode(description), entry_label_(), exit_label_() {}
 
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }

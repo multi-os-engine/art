@@ -65,7 +65,8 @@ Location ARM64ReturnLocation(Primitive::Type return_type);
 
 class SlowPathCodeARM64 : public SlowPathCode {
  public:
-  SlowPathCodeARM64() : entry_label_(), exit_label_() {}
+  explicit SlowPathCodeARM64(const char* description) :
+      SlowPathCode(description), entry_label_(), exit_label_() {}
 
   vixl::Label* GetEntryLabel() { return &entry_label_; }
   vixl::Label* GetExitLabel() { return &exit_label_; }
@@ -283,6 +284,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
   HGraphVisitor* GetLocationBuilder() OVERRIDE { return &location_builder_; }
   HGraphVisitor* GetInstructionVisitor() OVERRIDE { return &instruction_visitor_; }
   Arm64Assembler* GetAssembler() OVERRIDE { return &assembler_; }
+  const Arm64Assembler& GetAssembler() const OVERRIDE { return assembler_; }
   vixl::MacroAssembler* GetVIXLAssembler() { return GetAssembler()->vixl_masm_; }
 
   // Emit a write barrier.

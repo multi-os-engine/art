@@ -22,6 +22,7 @@
 #include "base/bit_field.h"
 #include "driver/compiler_options.h"
 #include "globals.h"
+#include "graph_visualizer.h"
 #include "locations.h"
 #include "memory_region.h"
 #include "nodes.h"
@@ -66,7 +67,7 @@ class CodeAllocator {
 
 class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
  public:
-  SlowPathCode() {
+  explicit SlowPathCode(const char* description) : description_(description) {
     for (size_t i = 0; i < kMaximumNumberOfExpectedRegisters; ++i) {
       saved_core_stack_offsets_[i] = kRegisterNotSaved;
       saved_fpu_stack_offsets_[i] = kRegisterNotSaved;
@@ -97,6 +98,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
     return saved_fpu_stack_offsets_[reg];
   }
 
+  const char* GetDescription() const { return description_; }
+
  protected:
   static constexpr size_t kMaximumNumberOfExpectedRegisters = 32;
   static constexpr uint32_t kRegisterNotSaved = -1;
@@ -104,6 +107,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
   uint32_t saved_fpu_stack_offsets_[kMaximumNumberOfExpectedRegisters];
 
  private:
+  const char* description_;
+
   DISALLOW_COPY_AND_ASSIGN(SlowPathCode);
 };
 
@@ -132,8 +137,10 @@ class CodeGenerator {
  public:
   // Compiles the graph to executable instructions. Returns whether the compilation
   // succeeded.
-  void CompileBaseline(CodeAllocator* allocator, bool is_leaf = false);
-  void CompileOptimized(CodeAllocator* allocator);
+  void CompileBaseline(CodeAllocator* allocator,
+                       bool is_leaf = false,
+                       DisassemblyInformation* disasm_info = nullptr);
+  void CompileOptimized(CodeAllocator* allocator, DisassemblyInformation* disasm_info = nullptr);
   static CodeGenerator* Create(HGraph* graph,
                                InstructionSet instruction_set,
                                const InstructionSetFeatures& isa_features,
@@ -160,6 +167,8 @@ class CodeGenerator {
   virtual void Bind(HBasicBlock* block) = 0;
   virtual void Move(HInstruction* instruction, Location location, HInstruction* move_for) = 0;
   virtual Assembler* GetAssembler() = 0;
+  virtual const Assembler& GetAssembler() const = 0;
+  const uint8_t* GetAssemblerCodeBaseAddress() const;
   virtual size_t GetWordSize() const = 0;
   virtual size_t GetFloatingPointSpillSlotSize() const = 0;
   virtual uintptr_t GetAddressOf(HBasicBlock* block) const = 0;
@@ -338,6 +347,9 @@ class CodeGenerator {
   static void CreateCommonInvokeLocationSummary(
       HInvoke* invoke, InvokeDexCallingConventionVisitor* visitor);
 
+  DisassemblyInformation* GetDisasmInfo() { return disasm_info_; }
+  bool ShouldFillDisassemblyInformation() const { return disasm_info_ != nullptr; }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,
@@ -345,7 +357,8 @@ class CodeGenerator {
                 size_t number_of_register_pairs,
                 uint32_t core_callee_save_mask,
                 uint32_t fpu_callee_save_mask,
-                const CompilerOptions& compiler_options)
+                const CompilerOptions& compiler_options,
+                DisassemblyInformation* disasm_info = nullptr)
       : frame_size_(0),
         core_spill_mask_(0),
         fpu_spill_mask_(0),
@@ -366,7 +379,8 @@ class CodeGenerator {
         current_block_index_(0),
         is_leaf_(true),
         requires_current_method_(false),
-        stack_map_stream_(graph->GetArena()) {}
+        stack_map_stream_(graph->GetArena()),
+        disasm_info_(disasm_info) {}
 
   // Register allocation logic.
   void AllocateRegistersLocally(HInstruction* instruction) const;
@@ -442,7 +456,10 @@ class CodeGenerator {
  private:
   void InitLocationsBaseline(HInstruction* instruction);
   size_t GetStackOffsetOfSavedRegister(size_t index);
-  void CompileInternal(CodeAllocator* allocator, bool is_baseline);
+  void GenerateSlowPaths();
+  void CompileInternal(CodeAllocator* allocator,
+                       bool is_baseline,
+                       DisassemblyInformation* disasm_info);
   void BlockIfInRegister(Location location, bool is_out = false) const;
   void EmitEnvironment(HEnvironment* environment, SlowPathCode* slow_path);
 
@@ -465,6 +482,8 @@ class CodeGenerator {
   bool requires_current_method_;
 
   StackMapStream stack_map_stream_;
+
+  DisassemblyInformation* disasm_info_;
 
   friend class OptimizingCFITest;
 

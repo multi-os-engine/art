@@ -24,6 +24,7 @@
 #include "dex/verified_method.h"
 #include "driver/dex_compilation_unit.h"
 #include "gc_map_builder.h"
+#include "graph_visualizer.h"
 #include "leb128.h"
 #include "mapping_table.h"
 #include "mirror/array-inl.h"
@@ -119,7 +120,9 @@ size_t CodeGenerator::GetCachePointerOffset(uint32_t index) {
   return mirror::Array::DataOffset(pointer_size).Uint32Value() + pointer_size * index;
 }
 
-void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
+void CodeGenerator::CompileBaseline(CodeAllocator* allocator,
+                                    bool is_leaf,
+                                    DisassemblyInformation* disasm_info) {
   Initialize();
   if (!is_leaf) {
     MarkNotLeaf();
@@ -133,7 +136,7 @@ void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
                            GetGraph()->GetMaximumNumberOfOutVRegs()
                              + (is_64_bit ? 2 : 1) /* current method */,
                            GetGraph()->GetBlocks());
-  CompileInternal(allocator, /* is_baseline */ true);
+  CompileInternal(allocator, /* is_baseline */ true, disasm_info);
 }
 
 bool CodeGenerator::GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) const {
@@ -158,12 +161,57 @@ HBasicBlock* CodeGenerator::FirstNonEmptyBlock(HBasicBlock* block) const {
   return block;
 }
 
-void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) {
+class DisassemblyScope {
+ public:
+  DisassemblyScope(CodeGenerator* codegen, HInstruction* instruction)
+      : codegen_(codegen), instruction_(instruction), start_offset_(static_cast<size_t>(-1)) {
+    if (codegen_->ShouldFillDisassemblyInformation()) {
+      start_offset_ = codegen_->GetAssembler()->CodeSize();
+    }
+  }
+
+  ~DisassemblyScope() {
+    // We avoid building this data when we know it will not be used.
+    if (codegen_->ShouldFillDisassemblyInformation()) {
+      codegen_->GetDisasmInfo()->AddInstructionCodeOffsets(
+          instruction_, start_offset_, codegen_->GetAssembler()->CodeSize());
+    }
+  }
+
+ private:
+  CodeGenerator* codegen_;
+  HInstruction* instruction_;
+  size_t start_offset_;
+};
+
+
+void CodeGenerator::GenerateSlowPaths() {
+  size_t code_start = 0;
+  for (size_t i = 0, e = slow_paths_.Size(); i < e; ++i) {
+    if (ShouldFillDisassemblyInformation()) {
+      code_start = GetAssembler()->CodeSize();
+    }
+    slow_paths_.Get(i)->EmitNativeCode(this);
+    if (ShouldFillDisassemblyInformation()) {
+      disasm_info_->AddSlowPathCodeInfo(slow_paths_.Get(i), code_start, GetAssembler()->CodeSize());
+    }
+  }
+}
+
+void CodeGenerator::CompileInternal(CodeAllocator* allocator,
+                                    bool is_baseline,
+                                    DisassemblyInformation* disasm_info) {
   is_baseline_ = is_baseline;
+  disasm_info_ = disasm_info;
   HGraphVisitor* instruction_visitor = GetInstructionVisitor();
   DCHECK_EQ(current_block_index_, 0u);
+
   GenerateFrameEntry();
   DCHECK_EQ(GetAssembler()->cfi().GetCurrentCFAOffset(), static_cast<int>(frame_size_));
+  if (ShouldFillDisassemblyInformation()) {
+    disasm_info_->SetEndOfFrameEntry(GetAssembler()->CodeSize());
+  }
+
   for (size_t e = block_order_->Size(); current_block_index_ < e; ++current_block_index_) {
     HBasicBlock* block = block_order_->Get(current_block_index_);
     // Don't generate code for an empty block. Its predecessors will branch to its successor
@@ -173,6 +221,7 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
     Bind(block);
     for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
       HInstruction* current = it.Current();
+      DisassemblyScope disassembly_scope(this, current);
       if (is_baseline) {
         InitLocationsBaseline(current);
       }
@@ -181,21 +230,20 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
     }
   }
 
-  // Generate the slow paths.
-  for (size_t i = 0, e = slow_paths_.Size(); i < e; ++i) {
-    slow_paths_.Get(i)->EmitNativeCode(this);
-  }
+  GenerateSlowPaths();
 
   // Finalize instructions in assember;
   Finalize(allocator);
+  disasm_info_ = nullptr;
 }
 
-void CodeGenerator::CompileOptimized(CodeAllocator* allocator) {
+void CodeGenerator::CompileOptimized(CodeAllocator* allocator,
+                                     DisassemblyInformation* disasm_info) {
   // The register allocator already called `InitializeCodeGeneration`,
   // where the frame size has been computed.
   DCHECK(block_order_ != nullptr);
   Initialize();
-  CompileInternal(allocator, /* is_baseline */ false);
+  CompileInternal(allocator, /* is_baseline */ false, disasm_info);
 }
 
 void CodeGenerator::Finalize(CodeAllocator* allocator) {
@@ -227,6 +275,10 @@ size_t CodeGenerator::FindTwoFreeConsecutiveAlignedEntries(bool* array, size_t l
   }
   LOG(FATAL) << "Could not find a register in baseline register allocator";
   UNREACHABLE();
+}
+
+const uint8_t* CodeGenerator::GetAssemblerCodeBaseAddress() const {
+  return GetAssembler().CodeBufferBaseAddress();
 }
 
 void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,

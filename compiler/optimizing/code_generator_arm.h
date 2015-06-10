@@ -119,7 +119,8 @@ class ParallelMoveResolverARM : public ParallelMoveResolverWithSwap {
 
 class SlowPathCodeARM : public SlowPathCode {
  public:
-  SlowPathCodeARM() : entry_label_(), exit_label_() {}
+  explicit SlowPathCodeARM(const char* description)
+      : SlowPathCode(description), entry_label_(), exit_label_() {}
 
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }
@@ -252,6 +253,10 @@ class CodeGeneratorARM : public CodeGenerator {
 
   ArmAssembler* GetAssembler() OVERRIDE {
     return &assembler_;
+  }
+
+  const ArmAssembler& GetAssembler() const OVERRIDE {
+    return assembler_;
   }
 
   uintptr_t GetAddressOf(HBasicBlock* block) const OVERRIDE {
