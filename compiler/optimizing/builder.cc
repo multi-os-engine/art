@@ -259,6 +259,134 @@ bool HGraphBuilder::SkipCompilation(const DexFile::CodeItem& code_item,
   return false;
 }
 
+bool HGraphBuilder::IsBlockOutsidePcRange(HBasicBlock* block,
+                                          uint32_t dex_pc_start,
+                                          uint32_t dex_pc_end) {
+  uint32_t dex_pc = block->GetDexPc();
+  return block == entry_block_
+      || block == exit_block_
+      || dex_pc < dex_pc_start
+      || dex_pc >= dex_pc_end;
+}
+
+void HGraphBuilder::CreateBlocksForTryCatch(const DexFile::CodeItem& code_item) {
+  if (code_item.tries_size_ == 0) {
+    return;
+  }
+
+  for (size_t idx = 0; idx < code_item.tries_size_; ++idx) {
+    const DexFile::TryItem* try_item = DexFile::GetTryItems(code_item, idx);
+    uint32_t start_address = try_item->start_addr_;
+    uint32_t end_address = start_address + try_item->insn_count_;
+    FindOrCreateBlockStartingAt(start_address);
+    if (end_address < code_item.insns_size_in_code_units_) {
+      FindOrCreateBlockStartingAt(end_address);
+    }
+  }
+
+  const uint8_t* handlers_ptr = DexFile::GetCatchHandlerData(code_item, 0);
+  uint32_t handlers_size = DecodeUnsignedLeb128(&handlers_ptr);
+  for (uint32_t idx = 0; idx < handlers_size; ++idx) {
+    CatchHandlerIterator iterator(handlers_ptr);
+    for (; iterator.HasNext(); iterator.Next()) {
+      uint32_t address = iterator.GetHandlerAddress();
+      HBasicBlock* block = FindOrCreateBlockStartingAt(address);
+      block->SetIsCatchBlock();
+    }
+    handlers_ptr = iterator.EndDataPointer();
+  }
+}
+
+void HGraphBuilder::InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item) {
+  if (code_item.tries_size_ == 0) {
+    return;
+  }
+
+  for (size_t idx = 0; idx < code_item.tries_size_; ++idx) {
+    const DexFile::TryItem* try_item = DexFile::GetTryItems(code_item, idx);
+    uint32_t try_start = try_item->start_addr_;
+    uint32_t try_end = try_start + try_item->insn_count_;
+
+    // Iterate over all blocks in the dex pc range of the TryItem and:
+    //   (a) split edges which enter/exit the try range,
+    //   (b) create TryBoundary instructions in the new blocks,
+    //   (c) link the new blocks to corresponding exception handlers.
+    for (uint32_t inner_pc = try_start; inner_pc < try_end; ++inner_pc) {
+      HBasicBlock* block = FindBlockStartingAt(inner_pc);
+      if (block == nullptr) {
+        continue;
+      }
+
+      for (size_t i = 0; i < block->GetPredecessors().Size(); ++i) {
+        HBasicBlock* predecessor = block->GetPredecessors().Get(i);
+        HTryBoundary* try_boundary;
+        if (predecessor->IsSingleTryBoundary()) {
+          try_boundary = predecessor->GetLastInstruction()->AsTryBoundary();
+          if (try_boundary->GetNormalFlowSuccessor() == block
+              && block->IsFirstIndexOfPredecessor(predecessor, i)) {
+            // The edge was already split because of an exit from a neighbouring
+            // TryItem. We do not split it again.
+            DCHECK(IsBlockOutsidePcRange(predecessor->GetPredecessors().Get(0),
+                                         try_start, try_end));
+            DCHECK(try_boundary->IsTryExit());
+            DCHECK(!try_boundary->IsTryEntry());
+            try_boundary->SetIsTryEntry();
+          } else {
+            // This is an edge between a previously created TryBoundary and its
+            // handler. We skip it because it is exceptional flow.
+            DCHECK(block->IsCatchBlock());
+            DCHECK(try_boundary->HasExceptionHandler(block));
+            continue;
+          }
+        } else if (IsBlockOutsidePcRange(predecessor, try_start, try_end)) {
+          // This is an entry point into the try block and the edge has not been
+          // split yet.
+          try_boundary = new (arena_) HTryBoundary(/* is_entry */ true, /* is_exit */ false);
+          HBasicBlock* try_entry_block = graph_->SplitEdge(predecessor, block);
+          try_entry_block->AddInstruction(try_boundary);
+        } else {
+          // Not an edge on the boundary of the try block.
+          continue;
+        }
+
+        // Link the TryBoundary block to the handlers of this TryItem.
+        for (CatchHandlerIterator it(code_item, *try_item); it.HasNext(); it.Next()) {
+          try_boundary->AddExceptionHandler(FindBlockStartingAt(it.GetHandlerAddress()));
+        }
+      }
+
+      for (size_t i = 0; i < block->GetSuccessors().Size(); ++i) {
+        HBasicBlock* successor = block->GetSuccessors().Get(i);
+        HTryBoundary* try_boundary;
+        if (successor->IsSingleTryBoundary()) {
+          // The edge was already split because of an entry into a neighbouring
+          // TryItem. We do not split the edge again.
+          try_boundary = successor->GetLastInstruction()->AsTryBoundary();
+          DCHECK_EQ(block, successor->GetPredecessors().Get(0));
+          DCHECK(try_boundary->IsTryEntry());
+          DCHECK(!try_boundary->IsTryExit());
+          DCHECK(IsBlockOutsidePcRange(try_boundary->GetNormalFlowSuccessor(), try_start, try_end));
+          try_boundary->SetIsTryExit();
+        } else if (IsBlockOutsidePcRange(successor, try_start, try_end)) {
+          // This is an exit out of the try block and the edge has not been
+          // split yet.
+          try_boundary = new (arena_) HTryBoundary(/* is_entry */ false, /* is_exit */ true);
+          HBasicBlock* try_exit_block = graph_->SplitEdge(block, successor);
+          try_exit_block->AddInstruction(try_boundary);
+        } else {
+          // Not an edge on the boundary of the try block.
+          continue;
+        }
+
+        // Link the TryBoundary block to the handlers of this TryItem.
+        for (CatchHandlerIterator it(code_item, *try_item); it.HasNext(); it.Next()) {
+          try_boundary->AddExceptionHandler(FindBlockStartingAt(it.GetHandlerAddress()));
+        }
+      }
+    }
+  }
+}
+
 bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
   DCHECK(graph_->GetBlocks().IsEmpty());
 
@@ -292,24 +420,7 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
     return false;
   }
 
-  // Also create blocks for catch handlers.
-  if (code_item.tries_size_ != 0) {
-    const uint8_t* handlers_ptr = DexFile::GetCatchHandlerData(code_item, 0);
-    uint32_t handlers_size = DecodeUnsignedLeb128(&handlers_ptr);
-    for (uint32_t idx = 0; idx < handlers_size; ++idx) {
-      CatchHandlerIterator iterator(handlers_ptr);
-      for (; iterator.HasNext(); iterator.Next()) {
-        uint32_t address = iterator.GetHandlerAddress();
-        HBasicBlock* block = FindBlockStartingAt(address);
-        if (block == nullptr) {
-          block = new (arena_) HBasicBlock(graph_, address);
-          branch_targets_.Put(address, block);
-        }
-        block->SetIsCatchBlock();
-      }
-      handlers_ptr = iterator.EndDataPointer();
-    }
-  }
+  CreateBlocksForTryCatch(code_item);
 
   InitializeParameters(code_item.ins_size_);
 
@@ -324,6 +435,8 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
     dex_pc += instruction.SizeInCodeUnits();
     code_ptr += instruction.SizeInCodeUnits();
   }
+
+  InsertTryBoundaryBlocks(code_item);
 
   // Add the exit block at the end to give it the highest id.
   graph_->AddBlock(exit_block_);
@@ -435,7 +548,17 @@ bool HGraphBuilder::ComputeBranchTargets(const uint16_t* code_ptr,
 
 HBasicBlock* HGraphBuilder::FindBlockStartingAt(int32_t index) const {
   DCHECK_GE(index, 0);
+  DCHECK_LT(static_cast<size_t>(index), branch_targets_.Size());
   return branch_targets_.Get(index);
+}
+
+HBasicBlock* HGraphBuilder::FindOrCreateBlockStartingAt(int32_t index) {
+  HBasicBlock* block = FindBlockStartingAt(index);
+  if (block == nullptr) {
+    block = new (arena_) HBasicBlock(graph_, index);
+    branch_targets_.Put(index, block);
+  }
+  return block;
 }
 
 template<typename T>
@@ -2107,10 +2230,24 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
 
     case Instruction::MOVE_RESULT:
     case Instruction::MOVE_RESULT_WIDE:
-    case Instruction::MOVE_RESULT_OBJECT:
-      UpdateLocal(instruction.VRegA(), latest_result_);
+    case Instruction::MOVE_RESULT_OBJECT: {
+      // An Invoke/FilledNewArray and its MoveResult could have landed in
+      // different blocks if there was a try/catch block boundary between them.
+      // We need to insert the StoreLocal after the result definition but before
+      // any potential Temporaries.
+      HStoreLocal* update_local =
+          new (arena_) HStoreLocal(GetLocalAt(instruction.VRegA()), latest_result_);
+      HBasicBlock* block = latest_result_->GetBlock();
+      if (latest_result_->IsInvoke()) {
+        block->InsertInstructionAfter(update_local, latest_result_);
+      } else {
+        DCHECK(latest_result_->IsNewArray());
+        DCHECK(latest_result_->GetNext()->IsTemporary());
+        block->InsertInstructionAfter(update_local, latest_result_->GetNext());
+      }
       latest_result_ = nullptr;
       break;
+    }
 
     case Instruction::CMP_LONG: {
       Binop_23x_cmp(instruction, Primitive::kPrimLong, HCompare::kNoBias, dex_pc);

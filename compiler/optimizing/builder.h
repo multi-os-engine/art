@@ -96,6 +96,10 @@ class HGraphBuilder : public ValueObject {
                             size_t* number_of_branches);
   void MaybeUpdateCurrentBlock(size_t index);
   HBasicBlock* FindBlockStartingAt(int32_t index) const;
+  HBasicBlock* FindOrCreateBlockStartingAt(int32_t index);
+  bool IsBlockOutsidePcRange(HBasicBlock* block, uint32_t pc_start, uint32_t pc_end);
+  void CreateBlocksForTryCatch(const DexFile::CodeItem& code_item);
+  void InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item);
 
   void InitializeLocals(uint16_t count);
   HLocal* GetLocalAt(int register_index) const;

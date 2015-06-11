@@ -39,7 +39,9 @@ class HCurrentMethod;
 class HDoubleConstant;
 class HEnvironment;
 class HFloatConstant;
+class HGraphBuilder;
 class HGraphVisitor;
+class HGraphVisualizerPrinter;
 class HInstruction;
 class HIntConstant;
 class HInvoke;
@@ -201,6 +203,12 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   // Removes `block` from the graph.
   void DeleteDeadBlock(HBasicBlock* block);
+
+  // Splits the edge between `block` and `successor` while preserving the
+  // indices in the predecessor/successor lists. If there are multiple edges
+  // between the blocks, the lowest indices are used.
+  // Returns the new block which is empty and has the same dex pc as `successor`.
+  HBasicBlock* SplitEdge(HBasicBlock* block, HBasicBlock* successor);
 
   void SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor);
   void SimplifyLoop(HBasicBlock* header);
@@ -561,6 +569,15 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   }
 
   bool IsSingleGoto() const;
+  bool IsSingleTryBoundary() const;
+
+  // Returns true if this block emits nothing but a jump.
+  bool IsSingleJump() const {
+    HLoopInformation* loop_info = GetLoopInformation();
+    return (IsSingleGoto() || IsSingleTryBoundary())
+           // Back edges generate a suspend check.
+           && (loop_info == nullptr || !loop_info->IsBackEdge(*this));
+  }
 
   void AddBackEdge(HBasicBlock* back_edge) {
     if (loop_information_ == nullptr) {
@@ -670,7 +687,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     successors_.Put(1, temp);
   }
 
-  size_t GetPredecessorIndexOf(HBasicBlock* predecessor) {
+  size_t GetPredecessorIndexOf(HBasicBlock* predecessor) const {
     for (size_t i = 0, e = predecessors_.Size(); i < e; ++i) {
       if (predecessors_.Get(i) == predecessor) {
         return i;
@@ -679,7 +696,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     return -1;
   }
 
-  size_t GetSuccessorIndexOf(HBasicBlock* successor) {
+  size_t GetSuccessorIndexOf(HBasicBlock* successor) const {
     for (size_t i = 0, e = successors_.Size(); i < e; ++i) {
       if (successors_.Get(i) == successor) {
         return i;
@@ -687,6 +704,16 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     }
     return -1;
   }
+
+  // Returns whether the first occurrence of `predecessor` in the list of
+  // predecessors is at index `idx`.
+  bool IsFirstIndexOfPredecessor(HBasicBlock* predecessor, size_t idx) const {
+    DCHECK_EQ(GetPredecessors().Get(idx), predecessor);
+    return GetPredecessorIndexOf(predecessor) == idx;
+  }
+
+  // Returns whether successor at index `idx` is an exception handler.
+  bool IsExceptionHandlerSuccessor(size_t idx) const;
 
   // Split the block into two blocks just after `cursor`. Returns the newly
   // created block. Note that this method just updates raw block information,
@@ -909,6 +936,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(SuspendCheck, Instruction)                                          \
   M(Temporary, Instruction)                                             \
   M(Throw, Instruction)                                                 \
+  M(TryBoundary, Instruction)                                           \
   M(TypeConversion, Instruction)                                        \
   M(UShr, BinaryOperation)                                              \
   M(Xor, BinaryOperation)                                               \
@@ -1887,6 +1915,53 @@ class HIf : public HTemplateInstruction<1> {
  private:
   DISALLOW_COPY_AND_ASSIGN(HIf);
 };
+
+
+class HTryBoundary : public HTemplateInstruction<0> {
+ public:
+  HTryBoundary(bool is_entry, bool is_exit)
+      : HTemplateInstruction(SideEffects::None()), is_entry_(is_entry), is_exit_(is_exit) {}
+
+  bool IsControlFlow() const OVERRIDE { return true; }
+
+  HBasicBlock* GetNormalFlowSuccessor() const { return GetBlock()->GetSuccessors().Get(0); }
+
+  bool HasExceptionHandler(HBasicBlock* handler) const {
+    DCHECK(handler->IsCatchBlock());
+    return GetBlock()->GetSuccessors().Contains(handler, /* start_from */ 1);
+  }
+
+  bool IsExceptionHandlerSuccessor(size_t idx) const {
+    DCHECK_LT(idx, GetBlock()->GetSuccessors().Size());
+    bool is_handler = idx != 0;
+    DCHECK(!is_handler || GetBlock()->GetSuccessors().Get(idx)->IsCatchBlock());
+    return is_handler;
+  }
+
+  void AddExceptionHandler(HBasicBlock* handler) {
+    if (!HasExceptionHandler(handler)) {
+      GetBlock()->AddSuccessor(handler);
+    }
+  }
+
+  DECLARE_INSTRUCTION(TryBoundary);
+
+ private:
+  // Only for debugging purposes.
+  bool is_entry_;
+  bool is_exit_;
+
+  bool IsTryEntry() const { return is_entry_; }
+  void SetIsTryEntry() { is_entry_ = true; }
+  bool IsTryExit() const { return is_exit_; }
+  void SetIsTryExit() { is_exit_ = true; }
+
+  friend HGraphBuilder;
+  friend HGraphVisualizerPrinter;
+
+  DISALLOW_COPY_AND_ASSIGN(HTryBoundary);
+};
+
 
 // Deoptimize to interpreter, upon checking a condition.
 class HDeoptimize : public HTemplateInstruction<1> {
