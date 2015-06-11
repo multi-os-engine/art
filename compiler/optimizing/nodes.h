@@ -202,6 +202,12 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   // Removes `block` from the graph.
   void DeleteDeadBlock(HBasicBlock* block);
 
+  // Splits the edge between `block` and `successor` while preserving the
+  // indicies in the predecessor/successor lists. If there are multiple edges
+  // between the blocks, the lowest indicies are used.
+  // Returns the new block which is empty and has the same dex pc as `successor`.
+  HBasicBlock* SplitEdge(HBasicBlock* block, HBasicBlock* successor);
+
   void SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor);
   void SimplifyLoop(HBasicBlock* header);
 
@@ -674,6 +680,11 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     return -1;
   }
 
+  bool IsFirstIndexOfPredecessor(HBasicBlock* predecessor, size_t idx) {
+    DCHECK_EQ(GetPredecessors().Get(idx), predecessor);
+    return GetPredecessorIndexOf(predecessor) == idx;
+  }
+
   // Split the block into two blocks just after `cursor`. Returns the newly
   // created block. Note that this method just updates raw block information,
   // like predecessors, successors, dominators, and instruction list. It does not
@@ -895,6 +906,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(SuspendCheck, Instruction)                                          \
   M(Temporary, Instruction)                                             \
   M(Throw, Instruction)                                                 \
+  M(TryBoundary, Instruction)                                           \
   M(TypeConversion, Instruction)                                        \
   M(UShr, BinaryOperation)                                              \
   M(Xor, BinaryOperation)                                               \
@@ -1873,6 +1885,41 @@ class HIf : public HTemplateInstruction<1> {
  private:
   DISALLOW_COPY_AND_ASSIGN(HIf);
 };
+
+
+class HTryBoundary : public HTemplateInstruction<0> {
+ public:
+  HTryBoundary() : HTemplateInstruction(SideEffects::None()), is_entry_(false), is_exit_(false) {}
+
+  bool IsControlFlow() const OVERRIDE { return true; }
+
+  HBasicBlock* GetNormalFlowSuccessor() { return GetBlock()->GetSuccessors().Get(0); }
+
+  bool HasExceptionHandler(HBasicBlock* handler) {
+    DCHECK(handler->IsCatchBlock());
+    return GetBlock()->GetSuccessors().Contains(handler, /* start_from */ 1);
+  }
+
+  void AddExceptionHandler(HBasicBlock* handler) {
+    if (!HasExceptionHandler(handler)) {
+      GetBlock()->AddSuccessor(handler);
+    }
+  }
+
+  bool IsTryEntry() const { return is_entry_; }
+  void SetIsTryEntry() { is_entry_ = true; }
+  bool IsTryExit() const { return is_exit_; }
+  void SetIsTryExit() { is_exit_ = true; }
+
+  DECLARE_INSTRUCTION(TryBoundary);
+
+ private:
+  bool is_entry_;
+  bool is_exit_;
+
+  DISALLOW_COPY_AND_ASSIGN(HTryBoundary);
+};
+
 
 // Deoptimize to interpreter, upon checking a condition.
 class HDeoptimize : public HTemplateInstruction<1> {

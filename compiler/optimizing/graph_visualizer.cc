@@ -176,12 +176,30 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     output_<< std::endl;
   }
 
+  bool IsXhandlerEdge(HBasicBlock* block, size_t succ_id) {
+    return block->GetLastInstruction()->IsTryBoundary() && succ_id != 0;
+  }
+
   void PrintSuccessors(HBasicBlock* block) {
     AddIndent();
     output_ << "successors";
     for (size_t i = 0, e = block->GetSuccessors().Size(); i < e; ++i) {
-      HBasicBlock* successor = block->GetSuccessors().Get(i);
-      output_ << " \"B" << successor->GetBlockId() << "\" ";
+      if (!IsXhandlerEdge(block, i)) {
+        HBasicBlock* successor = block->GetSuccessors().Get(i);
+        output_ << " \"B" << successor->GetBlockId() << "\" ";
+      }
+    }
+    output_<< std::endl;
+  }
+
+  void PrintXhandlers(HBasicBlock* block) {
+    AddIndent();
+    output_ << "xhandlers";
+    for (size_t i = 0, e = block->GetSuccessors().Size(); i < e; ++i) {
+      if (IsXhandlerEdge(block, i)) {
+        HBasicBlock* handler = block->GetSuccessors().Get(i);
+        output_ << " \"B" << handler->GetBlockId() << "\" ";
+      }
     }
     output_<< std::endl;
   }
@@ -286,6 +304,15 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     StartAttributeStream("recursive") << std::boolalpha
                                       << invoke->IsRecursive()
                                       << std::noboolalpha;
+  }
+
+  void VisitTryBoundary(HTryBoundary* try_boundary) OVERRIDE {
+    StartAttributeStream("is_entry") << std::boolalpha
+                                     << try_boundary->IsTryEntry()
+                                     << std::noboolalpha;
+    StartAttributeStream("is_exit") << std::boolalpha
+                                    << try_boundary->IsTryExit()
+                                    << std::noboolalpha;
   }
 
   bool IsPass(const char* name) {
@@ -420,8 +447,14 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     }
     PrintPredecessors(block);
     PrintSuccessors(block);
-    PrintEmptyProperty("xhandlers");
-    PrintEmptyProperty("flags");
+    PrintXhandlers(block);
+
+    if (block->IsCatchBlock()) {
+      PrintProperty("flags", "catch_block");
+    } else {
+      PrintEmptyProperty("flags");
+    }
+
     if (block->GetDominator() != nullptr) {
       PrintProperty("dominator", "B", block->GetDominator()->GetBlockId());
     }
