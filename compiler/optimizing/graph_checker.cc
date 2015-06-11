@@ -81,7 +81,9 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
   }
 
   // Ensure `block` ends with a branch instruction.
-  if (!block->EndsWithControlFlowInstruction()) {
+  // Note: This needn't apply before DCE is run for the first time as DEX may
+  // contain dead code that falls out of the method.
+  if (GetGraph()->IsInSsaForm() && !block->EndsWithControlFlowInstruction()) {
     AddError(StringPrintf("Block %d does not end with a branch instruction.",
                           block->GetBlockId()));
   }
@@ -250,6 +252,22 @@ void GraphChecker::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
                             last_input->DebugName(),
                             last_input->GetId()));
     }
+  }
+}
+
+void GraphChecker::VisitReturn(HReturn* ret) {
+  if (!ret->GetBlock()->GetSingleSuccessor()->IsExitBlock()) {
+    AddError(StringPrintf("%s:%d does not jump to the exit block.",
+                          ret->DebugName(),
+                          ret->GetId()));
+  }
+}
+
+void GraphChecker::VisitReturnVoid(HReturnVoid* ret) {
+  if (!ret->GetBlock()->GetSingleSuccessor()->IsExitBlock()) {
+    AddError(StringPrintf("%s:%d does not jump to the exit block.",
+                          ret->DebugName(),
+                          ret->GetId()));
   }
 }
 

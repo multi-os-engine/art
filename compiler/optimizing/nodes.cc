@@ -189,15 +189,20 @@ void HGraph::TransformToSsa() {
   ssa_builder.BuildSsa();
 }
 
-void HGraph::SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor) {
-  // Insert a new node between `block` and `successor` to split the
-  // critical edge.
+HBasicBlock* HGraph::SplitEdge(HBasicBlock* block, HBasicBlock* successor) {
   HBasicBlock* new_block = new (arena_) HBasicBlock(this, successor->GetDexPc());
   AddBlock(new_block);
-  new_block->AddInstruction(new (arena_) HGoto());
   // Use `InsertBetween` to ensure the predecessor index and successor index of
   // `block` and `successor` are preserved.
   new_block->InsertBetween(block, successor);
+  return new_block;
+}
+
+void HGraph::SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor) {
+  // Insert a new node between `block` and `successor` to split the
+  // critical edge.
+  HBasicBlock* new_block = SplitEdge(block, successor);
+  new_block->AddInstruction(new (arena_) HGoto());
   if (successor->IsLoopHeader()) {
     // If we split at a back edge boundary, make the new block the back edge.
     HLoopInformation* info = successor->GetLoopInformation();
@@ -456,6 +461,12 @@ size_t HLoopInformation::GetLifetimeEnd() const {
     last_position = std::max(back_edges_.Get(i)->GetLifetimeEnd(), last_position);
   }
   return last_position;
+}
+
+bool HBasicBlock::IsExceptionHandlerSuccessor(size_t idx) const {
+  return instructions_.last_instruction_ != nullptr
+      && instructions_.last_instruction_->IsTryBoundary()
+      && instructions_.last_instruction_->AsTryBoundary()->IsExceptionHandlerSuccessor(idx);
 }
 
 bool HBasicBlock::Dominates(HBasicBlock* other) const {
@@ -1019,6 +1030,35 @@ void HInstruction::MoveBefore(HInstruction* cursor) {
   }
 }
 
+HBasicBlock* HBasicBlock::SplitBefore(HInstruction* cursor) {
+  DCHECK(!graph_->IsInSsaForm()) << "Support for SSA form not implemented";
+  DCHECK_EQ(cursor->GetBlock(), this);
+
+  HBasicBlock* new_block = new (GetGraph()->GetArena()) HBasicBlock(GetGraph(), GetDexPc());
+  new_block->instructions_.first_instruction_ = cursor;
+  new_block->instructions_.last_instruction_ = instructions_.last_instruction_;
+  instructions_.last_instruction_ = cursor->previous_;
+  if (cursor->previous_ == nullptr) {
+    instructions_.first_instruction_ = nullptr;
+  } else {
+    cursor->previous_->next_ = nullptr;
+    cursor->previous_ = nullptr;
+  }
+
+  new_block->instructions_.SetBlockOfInstructions(new_block);
+  AddInstruction(new (GetGraph()->GetArena()) HGoto());
+
+  for (size_t i = 0, e = GetSuccessors().Size(); i < e; ++i) {
+    HBasicBlock* successor = GetSuccessors().Get(i);
+    new_block->successors_.Add(successor);
+    successor->predecessors_.Put(successor->GetPredecessorIndexOf(this), new_block);
+  }
+  successors_.Reset();
+  AddSuccessor(new_block);
+
+  return new_block;
+}
+
 HBasicBlock* HBasicBlock::SplitAfter(HInstruction* cursor) {
   DCHECK(!cursor->IsControlFlow());
   DCHECK_NE(instructions_.last_instruction_, cursor);
@@ -1048,14 +1088,18 @@ HBasicBlock* HBasicBlock::SplitAfter(HInstruction* cursor) {
   return new_block;
 }
 
+static bool HasOnlyOneInstruction(const HBasicBlock& block) {
+  return block.GetPhis().IsEmpty()
+      && !block.GetInstructions().IsEmpty()
+      && block.GetFirstInstruction() == block.GetLastInstruction();
+}
+
 bool HBasicBlock::IsSingleGoto() const {
-  HLoopInformation* loop_info = GetLoopInformation();
-  DCHECK(EndsWithControlFlowInstruction());
-  return GetPhis().IsEmpty()
-         && GetFirstInstruction() == GetLastInstruction()
-         && GetLastInstruction()->IsGoto()
-         // Back edges generate the suspend check.
-         && (loop_info == nullptr || !loop_info->IsBackEdge(*this));
+  return HasOnlyOneInstruction(*this) && GetLastInstruction()->IsGoto();
+}
+
+bool HBasicBlock::IsSingleTryBoundary() const {
+  return HasOnlyOneInstruction(*this) && GetLastInstruction()->IsTryBoundary();
 }
 
 bool HBasicBlock::EndsWithControlFlowInstruction() const {
