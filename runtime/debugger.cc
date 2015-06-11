@@ -1693,8 +1693,8 @@ static JDWP::JdwpError GetFieldValueImpl(JDWP::RefTypeId ref_type_id, JDWP::Obje
     }
   } else {
     if (f->IsStatic()) {
-      LOG(WARNING) << "Ignoring non-nullptr receiver for ObjectReference.SetValues on static field "
-          << PrettyField(f);
+      LOG(WARNING) << "Ignoring non-nullptr receiver for ObjectReference.GetValues"
+                   << " on static field " << PrettyField(f);
     }
   }
   if (f->IsStatic()) {
@@ -1703,17 +1703,42 @@ static JDWP::JdwpError GetFieldValueImpl(JDWP::RefTypeId ref_type_id, JDWP::Obje
 
   JDWP::JdwpTag tag = BasicTagFromDescriptor(f->GetTypeDescriptor());
   JValue field_value;
-  if (tag == JDWP::JT_VOID) {
-    LOG(FATAL) << "Unknown tag: " << tag;
-  } else if (!IsPrimitiveTag(tag)) {
-    field_value.SetL(f->GetObject(o));
-  } else if (tag == JDWP::JT_DOUBLE || tag == JDWP::JT_LONG) {
-    field_value.SetJ(f->Get64(o));
-  } else {
-    field_value.SetI(f->Get32(o));
+  switch (tag) {
+    case JDWP::JT_BOOLEAN:
+      field_value.SetZ(f->GetBoolean(o));
+      break;
+    case JDWP::JT_BYTE:
+      field_value.SetB(f->GetByte(o));
+      break;
+    case JDWP::JT_CHAR:
+      field_value.SetC(f->GetChar(o));
+      break;
+    case JDWP::JT_SHORT:
+      field_value.SetS(f->GetShort(o));
+      break;
+    case JDWP::JT_INT:
+    case JDWP::JT_FLOAT:
+      field_value.SetI(f->GetInt(o));
+      break;
+    case JDWP::JT_LONG:
+    case JDWP::JT_DOUBLE:
+      field_value.SetJ(f->GetLong(o));
+      break;
+    case JDWP::JT_OBJECT:
+    case JDWP::JT_ARRAY:
+    case JDWP::JT_CLASS_OBJECT:
+    case JDWP::JT_CLASS_LOADER:
+    case JDWP::JT_STRING:
+    case JDWP::JT_THREAD:
+    case JDWP::JT_THREAD_GROUP: {
+      field_value.SetL(f->GetObject(o));
+      break;
+    }
+    default:
+      LOG(FATAL) << "Attempt to set field of type " << tag;
+      UNREACHABLE();
   }
   Dbg::OutputJValue(tag, &field_value, pReply);
-
   return JDWP::ERR_NONE;
 }
 
@@ -1745,7 +1770,8 @@ static JDWP::JdwpError SetFieldValueImpl(JDWP::ObjectId object_id, JDWP::FieldId
     }
   } else {
     if (f->IsStatic()) {
-      LOG(WARNING) << "Ignoring non-nullptr receiver for ObjectReference.SetValues on static field " << PrettyField(f);
+      LOG(WARNING) << "Ignoring non-nullptr receiver for ObjectReference.SetValues"
+                   << " on static field " << PrettyField(f);
     }
   }
   if (f->IsStatic()) {
@@ -1753,36 +1779,66 @@ static JDWP::JdwpError SetFieldValueImpl(JDWP::ObjectId object_id, JDWP::FieldId
   }
 
   JDWP::JdwpTag tag = BasicTagFromDescriptor(f->GetTypeDescriptor());
-
-  if (IsPrimitiveTag(tag)) {
-    if (tag == JDWP::JT_DOUBLE || tag == JDWP::JT_LONG) {
+  // Debugging only happens at runtime so we know we are not running in a transaction.
+  static constexpr bool kNoTransactionMode = false;
+  switch (tag) {
+    case JDWP::JT_BOOLEAN:
+      CHECK_EQ(width, 1);
+      f->SetBoolean<kNoTransactionMode>(o, static_cast<uint8_t>(value));
+      break;
+    case JDWP::JT_BYTE:
+      CHECK_EQ(width, 1);
+      f->SetByte<kNoTransactionMode>(o, static_cast<uint8_t>(value));
+      break;
+    case JDWP::JT_CHAR:
+      CHECK_EQ(width, 2);
+      f->SetChar<kNoTransactionMode>(o, static_cast<uint16_t>(value));
+      break;
+    case JDWP::JT_SHORT:
+      CHECK_EQ(width, 2);
+      f->SetShort<kNoTransactionMode>(o, static_cast<int16_t>(value));
+      break;
+    case JDWP::JT_INT:
+    case JDWP::JT_FLOAT:
+      CHECK_EQ(width, 4);
+      // Int and Float must be treated as 32-bit values in JDWP.
+      f->SetInt<kNoTransactionMode>(o, static_cast<int32_t>(value));
+      break;
+    case JDWP::JT_LONG:
+    case JDWP::JT_DOUBLE:
       CHECK_EQ(width, 8);
-      // Debugging can't use transactional mode (runtime only).
-      f->Set64<false>(o, value);
-    } else {
-      CHECK_LE(width, 4);
-      // Debugging can't use transactional mode (runtime only).
-      f->Set32<false>(o, value);
-    }
-  } else {
-    mirror::Object* v = Dbg::GetObjectRegistry()->Get<mirror::Object*>(value, &error);
-    if (error != JDWP::ERR_NONE) {
-      return JDWP::ERR_INVALID_OBJECT;
-    }
-    if (v != nullptr) {
-      mirror::Class* field_type;
-      {
-        StackHandleScope<2> hs(Thread::Current());
-        HandleWrapper<mirror::Object> h_v(hs.NewHandleWrapper(&v));
-        HandleWrapper<mirror::Object> h_o(hs.NewHandleWrapper(&o));
-        field_type = f->GetType<true>();
-      }
-      if (!field_type->IsAssignableFrom(v->GetClass())) {
+      // Long and Double must be treated as 64-bit values in JDWP.
+      f->SetLong<kNoTransactionMode>(o, value);
+      break;
+    case JDWP::JT_OBJECT:
+    case JDWP::JT_ARRAY:
+    case JDWP::JT_CLASS_OBJECT:
+    case JDWP::JT_CLASS_LOADER:
+    case JDWP::JT_STRING:
+    case JDWP::JT_THREAD:
+    case JDWP::JT_THREAD_GROUP: {
+      mirror::Object* v = Dbg::GetObjectRegistry()->Get<mirror::Object*>(value, &error);
+      if (error != JDWP::ERR_NONE) {
         return JDWP::ERR_INVALID_OBJECT;
       }
+      if (v != nullptr) {
+        mirror::Class* field_type;
+        {
+          StackHandleScope<2> hs(Thread::Current());
+          HandleWrapper<mirror::Object> h_v(hs.NewHandleWrapper(&v));
+          HandleWrapper<mirror::Object> h_o(hs.NewHandleWrapper(&o));
+          field_type = f->GetType<true>();
+        }
+        if (!field_type->IsAssignableFrom(v->GetClass())) {
+          return JDWP::ERR_INVALID_OBJECT;
+        }
+      }
+      f->SetObject<kNoTransactionMode>(o, v);
+      break;
     }
-    // Debugging can't use transactional mode (runtime only).
-    f->SetObject<false>(o, v);
+    default:
+      LOG(FATAL) << "Attempt to set field of type 'void'";
+      UNREACHABLE();
   }
 
   return JDWP::ERR_NONE;
