@@ -45,13 +45,13 @@
 namespace art {
 
 // Whether OatFile::Open will try DlOpen() first. Fallback is our own ELF loader.
-static constexpr bool kUseDlopen = false;
+static constexpr bool kUseDlopen = true;
 
 // Whether OatFile::Open will try DlOpen() on the host. On the host we're not linking against
 // bionic, so cannot take advantage of the support for changed semantics (loading the same soname
 // multiple times). However, if/when we switch the above, we likely want to switch this, too,
 // to get test coverage of the code paths.
-static constexpr bool kUseDlopenOnHost = false;
+static constexpr bool kUseDlopenOnHost = true;
 
 // For debugging, Open will print DlOpen error message if set to true.
 static constexpr bool kPrintDlOpenErrorMessage = false;
@@ -171,6 +171,7 @@ OatFile* OatFile::OpenDlopen(const std::string& elf_filename,
   std::unique_ptr<OatFile> oat_file(new OatFile(location, true));
   bool success = oat_file->Dlopen(elf_filename, requested_base, abs_dex_location, error_msg);
   if (!success) {
+    LOG(ERROR) << *error_msg;
     return nullptr;
   }
   return oat_file.release();
@@ -217,7 +218,7 @@ bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
   }
 #ifdef HAVE_ANDROID_OS
   android_dlextinfo extinfo;
-  extinfo.flags = ANDROID_DLEXT_FORCE_LOAD;
+  extinfo.flags = ANDROID_DLEXT_FORCE_LOAD | ANDROID_DLEXT_FORCE_FIXED_VADDR;
   dlopen_handle_ = android_dlopen_ext(absolute_path.get(), RTLD_NOW, &extinfo);
 #else
   dlopen_handle_ = dlopen(absolute_path.get(), RTLD_NOW);
