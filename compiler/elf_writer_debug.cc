@@ -358,14 +358,14 @@ void WriteDebugSections(const CompilerDriver* compiler,
       const char* source_file = dex->GetSourceFile(dex_class_def);
       if (source_file != nullptr) {
         std::string file_name(source_file);
-        size_t file_name_slash = file_name.find_last_of('/');
         std::string class_name(dex->GetClassDescriptor(dex_class_def));
         size_t class_name_slash = class_name.find_last_of('/');
         std::string full_path(file_name);
 
         // Guess directory from package name.
         int directory_index = 0;  // 0 - current directory of the compilation.
-        if (file_name_slash == std::string::npos &&  // Just filename.
+        if (file_name.find_last_of('/') == std::string::npos &&  // Just filename.
+            file_name.find_last_of('\\') == std::string::npos &&  // Just filename.
             class_name.front() == 'L' &&  // Type descriptor for a class.
             class_name_slash != std::string::npos) {  // Has package name.
           std::string package_name = class_name.substr(1, class_name_slash - 1);
