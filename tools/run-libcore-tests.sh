@@ -37,6 +37,7 @@ fi
 
 # Packages that currently work correctly with the expectation files.
 working_packages=("com.android.org.conscrypt"
+                  "dalvik.system"
                   "libcore.icu"
                   "libcore.io"
                   "libcore.java.lang"
