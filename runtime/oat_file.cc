@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include <cstdlib>
+#include <link.h>
 #include <sstream>
 
 // dlopen_ext support from bionic.
@@ -35,6 +36,7 @@
 #include "elf_file.h"
 #include "elf_utils.h"
 #include "oat.h"
+#include "mem_map.h"
 #include "mirror/class.h"
 #include "mirror/object-inl.h"
 #include "os.h"
@@ -45,13 +47,13 @@
 namespace art {
 
 // Whether OatFile::Open will try DlOpen() first. Fallback is our own ELF loader.
-static constexpr bool kUseDlopen = false;
+static constexpr bool kUseDlopen = true;
 
 // Whether OatFile::Open will try DlOpen() on the host. On the host we're not linking against
 // bionic, so cannot take advantage of the support for changed semantics (loading the same soname
 // multiple times). However, if/when we switch the above, we likely want to switch this, too,
 // to get test coverage of the code paths.
-static constexpr bool kUseDlopenOnHost = false;
+static constexpr bool kUseDlopenOnHost = true;
 
 // For debugging, Open will print DlOpen error message if set to true.
 static constexpr bool kPrintDlOpenErrorMessage = false;
@@ -217,7 +219,7 @@ bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
   }
 #ifdef HAVE_ANDROID_OS
   android_dlextinfo extinfo;
-  extinfo.flags = ANDROID_DLEXT_FORCE_LOAD;
+  extinfo.flags = ANDROID_DLEXT_FORCE_LOAD | ANDROID_DLEXT_FORCE_FIXED_VADDR;
   dlopen_handle_ = android_dlopen_ext(absolute_path.get(), RTLD_NOW, &extinfo);
 #else
   dlopen_handle_ = dlopen(absolute_path.get(), RTLD_NOW);
@@ -263,6 +265,25 @@ bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
     // Readjust to be non-inclusive upper bound.
     bss_end_ += sizeof(uint32_t);
   }
+
+  // Ask the linker where it mmaped the file and notify our mmap wrapper of the regions.
+  struct dl_iterate_context {
+    static int callback(struct dl_phdr_info *info, size_t /* size */, void *data) {
+      auto* context = reinterpret_cast<dl_iterate_context*>(data);
+      if (info->dlpi_name != nullptr && info->dlpi_name == context->so_name) {
+        for (int i = 0; i < info->dlpi_phnum; i++) {
+          if (info->dlpi_phdr[i].p_type == PT_LOAD) {
+            auto vaddr = reinterpret_cast<uint8_t*>(info->dlpi_addr + info->dlpi_phdr[i].p_vaddr);
+            MemMap::MapDummy(info->dlpi_name, vaddr, info->dlpi_phdr[i].p_memsz);
+          }
+        }
+      }
+      return 0;
+    }
+    std::string so_name;
+  } context;
+  context.so_name = elf_filename;
+  dl_iterate_phdr(dl_iterate_context::callback, &context);
 
   return Setup(abs_dex_location, error_msg);
 }
