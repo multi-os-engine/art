@@ -54,6 +54,7 @@ class HGraphBuilder : public ValueObject {
         return_type_(Primitive::GetType(dex_compilation_unit_->GetShorty()[0])),
         code_start_(nullptr),
         latest_result_(nullptr),
+        latest_cursor_(nullptr),
         compilation_stats_(compiler_stats) {}
 
   // Only for unit testing.
@@ -72,6 +73,7 @@ class HGraphBuilder : public ValueObject {
         return_type_(return_type),
         code_start_(nullptr),
         latest_result_(nullptr),
+        latest_cursor_(nullptr),
         compilation_stats_(nullptr) {}
 
   bool BuildGraph(const DexFile::CodeItem& code);
@@ -96,6 +98,10 @@ class HGraphBuilder : public ValueObject {
                             size_t* number_of_branches);
   void MaybeUpdateCurrentBlock(size_t index);
   HBasicBlock* FindBlockStartingAt(int32_t index) const;
+  HBasicBlock* FindOrCreateBlockStartingAt(int32_t index);
+  bool IsBlockOutsidePcRange(HBasicBlock* block, uint32_t pc_start, uint32_t pc_end);
+  void CreateBlocksForTryCatch(const DexFile::CodeItem& code_item);
+  void InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item);
 
   void InitializeLocals(uint16_t count);
   HLocal* GetLocalAt(int register_index) const;
@@ -272,6 +278,7 @@ class HGraphBuilder : public ValueObject {
   // The last invoke or fill-new-array being built. Only to be
   // used by move-result instructions.
   HInstruction* latest_result_;
+  HInstruction* latest_cursor_;
 
   OptimizingCompilerStats* compilation_stats_;
 
