@@ -202,6 +202,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   // Removes `block` from the graph.
   void DeleteDeadBlock(HBasicBlock* block);
 
+  HBasicBlock* SplitEdge(HBasicBlock* block, HBasicBlock* successor);
   void SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor);
   void SimplifyLoop(HBasicBlock* header);
 
@@ -847,7 +848,9 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(DivZeroCheck, Instruction)                                          \
   M(DoubleConstant, Constant)                                           \
   M(Equal, Condition)                                                   \
+  M(EnterTry, Instruction)                                              \
   M(Exit, Instruction)                                                  \
+  M(ExitTry, Instruction)                                               \
   M(FloatConstant, Constant)                                            \
   M(Goto, Instruction)                                                  \
   M(GreaterThan, Condition)                                             \
@@ -1871,6 +1874,32 @@ class HIf : public HTemplateInstruction<1> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HIf);
+};
+
+// Jumps to the beginning of a try block.
+class HEnterTry : public HTemplateInstruction<0> {
+ public:
+  HEnterTry() : HTemplateInstruction(SideEffects::None()) {}
+
+  bool IsControlFlow() const OVERRIDE { return true; }
+
+  DECLARE_INSTRUCTION(EnterTry);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HEnterTry);
+};
+
+// Jumps to the beginning of a try block.
+class HExitTry : public HTemplateInstruction<0> {
+ public:
+  HExitTry() : HTemplateInstruction(SideEffects::None()) {}
+
+  bool IsControlFlow() const OVERRIDE { return true; }
+
+  DECLARE_INSTRUCTION(ExitTry);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HExitTry);
 };
 
 // Deoptimize to interpreter, upon checking a condition.

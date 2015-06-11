@@ -175,12 +175,29 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     output_<< std::endl;
   }
 
+  bool IsXhandlerEdge(HBasicBlock* block, size_t succ_id) {
+    return succ_id != 0
+        && (block->GetLastInstruction()->IsEnterTry() || block->GetLastInstruction()->IsExitTry());
+  }
+
   void PrintSuccessors(HBasicBlock* block) {
     AddIndent();
     output_ << "successors";
     for (size_t i = 0, e = block->GetSuccessors().Size(); i < e; ++i) {
+      if (IsXhandlerEdge(block, i)) continue;
       HBasicBlock* successor = block->GetSuccessors().Get(i);
       output_ << " \"B" << successor->GetBlockId() << "\" ";
+    }
+    output_<< std::endl;
+  }
+
+  void PrintXhandlers(HBasicBlock* block) {
+    AddIndent();
+    output_ << "xhandlers";
+    for (size_t i = 0, e = block->GetSuccessors().Size(); i < e; ++i) {
+      if (!IsXhandlerEdge(block, i)) continue;
+      HBasicBlock* handler = block->GetSuccessors().Get(i);
+      output_ << " \"B" << handler->GetBlockId() << "\" ";
     }
     output_<< std::endl;
   }
@@ -397,8 +414,16 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
     }
     PrintPredecessors(block);
     PrintSuccessors(block);
-    PrintEmptyProperty("xhandlers");
-    PrintEmptyProperty("flags");
+    PrintXhandlers(block);
+
+    if (block->IsTryBlock()) {
+      PrintProperty("flags", "try_block");
+    } else if (block->IsCatchBlock()) {
+      PrintProperty("flags", "catch_block");
+    } else {
+      PrintEmptyProperty("flags");
+    }
+
     if (block->GetDominator() != nullptr) {
       PrintProperty("dominator", "B", block->GetDominator()->GetBlockId());
     }

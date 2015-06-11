@@ -793,6 +793,26 @@ void InstructionCodeGeneratorX86_64::VisitGoto(HGoto* got) {
   }
 }
 
+void LocationsBuilderX86_64::VisitEnterTry(HEnterTry* enter_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
+void InstructionCodeGeneratorX86_64::VisitEnterTry(HEnterTry* enter_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
+void LocationsBuilderX86_64::VisitExitTry(HExitTry* exit_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
+void InstructionCodeGeneratorX86_64::VisitExitTry(HExitTry* exit_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
 void LocationsBuilderX86_64::VisitExit(HExit* exit) {
   exit->SetLocations(nullptr);
 }

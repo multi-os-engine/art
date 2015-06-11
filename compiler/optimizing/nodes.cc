@@ -174,14 +174,19 @@ void HGraph::TransformToSsa() {
   ssa_builder.BuildSsa();
 }
 
+HBasicBlock* HGraph::SplitEdge(HBasicBlock* block, HBasicBlock* successor) {
+  HBasicBlock* new_block = new (arena_) HBasicBlock(this, successor->GetDexPc());
+  AddBlock(new_block);
+  block->ReplaceSuccessor(successor, new_block);
+  new_block->AddSuccessor(successor);
+  return new_block;
+}
+
 void HGraph::SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor) {
   // Insert a new node between `block` and `successor` to split the
   // critical edge.
-  HBasicBlock* new_block = new (arena_) HBasicBlock(this, successor->GetDexPc());
-  AddBlock(new_block);
+  HBasicBlock* new_block = SplitEdge(block, successor);
   new_block->AddInstruction(new (arena_) HGoto());
-  block->ReplaceSuccessor(successor, new_block);
-  new_block->AddSuccessor(successor);
   if (successor->IsLoopHeader()) {
     // If we split at a back edge boundary, make the new block the back edge.
     HLoopInformation* info = successor->GetLoopInformation();

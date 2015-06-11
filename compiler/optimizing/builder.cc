@@ -259,6 +259,58 @@ bool HGraphBuilder::SkipCompilation(const DexFile::CodeItem& code_item,
   return false;
 }
 
+HBasicBlock* HGraphBuilder::CreateTryEntryOf(HBasicBlock* block,
+                                             HBasicBlock* predecessor,
+                                             const DexFile::CodeItem& code_item,
+                                             const DexFile::TryItem& try_item) {
+  HBasicBlock* try_entry = graph_->SplitEdge(predecessor, block);
+  try_entry->AddInstruction(new (arena_) HEnterTry());
+  AddExceptionHandlerSuccessors(try_entry, code_item, try_item);
+  return try_entry;
+}
+
+HBasicBlock* HGraphBuilder::CreateTryExitOf(HBasicBlock* block,
+                                            HBasicBlock* successor,
+                                            const DexFile::CodeItem& code_item,
+                                            const DexFile::TryItem& try_item) {
+  HBasicBlock* try_exit = graph_->SplitEdge(block, successor);
+  try_exit->AddInstruction(new (arena_) HExitTry());
+  AddExceptionHandlerSuccessors(try_exit, code_item, try_item);
+  return try_exit;
+}
+
+static bool IsExitTryBlock(HBasicBlock* block) {
+  HInstruction* first = block->GetFirstInstruction();
+  HInstruction* last = block->GetLastInstruction();
+  return first == last && last->IsExitTry();
+}
+
+static bool IsBlockOutsidePcRange(HBasicBlock* block, uint32_t pc_start, uint32_t pc_end) {
+  if (block->IsEntryBlock() || block->IsExitBlock()) {
+    return true;
+  }
+
+  uint32_t pc = block->GetDexPc();
+  if (pc < pc_start || pc >= pc_end) {
+    return true;
+  }
+
+  if (pc == pc_start && IsExitTryBlock(block)) {
+    DCHECK(IsBlockOutsidePcRange(block->GetPredecessors().Get(0), pc_start, pc_end));
+    return true;
+  }
+
+  return false;
+}
+
+void HGraphBuilder::AddExceptionHandlerSuccessors(HBasicBlock* block,
+                                                  const DexFile::CodeItem& code_item,
+                                                  const DexFile::TryItem& try_item) {
+  for (CatchHandlerIterator it(code_item, try_item); it.HasNext(); it.Next()) {
+    block->AddSuccessor(FindBlockStartingAt(it.GetHandlerAddress()));
+  }
+}
+
 bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
   DCHECK(graph_->GetBlocks().IsEmpty());
 
@@ -292,19 +344,25 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
     return false;
   }
 
-  // Also create blocks for catch handlers.
+  // Also create blocks for tries and exception handlers.
   if (code_item.tries_size_ != 0) {
+    for (size_t idx = 0; idx < code_item.tries_size_; ++idx) {
+      const DexFile::TryItem* try_item = DexFile::GetTryItems(code_item, idx);
+      uint32_t start_address = try_item->start_addr_;
+      uint32_t end_address = start_address + try_item->insn_count_;
+      FindOrCreateBlockStartingAt(start_address);
+      if (end_address < code_item.insns_size_in_code_units_) {
+        FindOrCreateBlockStartingAt(end_address);
+      }
+    }
+
     const uint8_t* handlers_ptr = DexFile::GetCatchHandlerData(code_item, 0);
     uint32_t handlers_size = DecodeUnsignedLeb128(&handlers_ptr);
     for (uint32_t idx = 0; idx < handlers_size; ++idx) {
       CatchHandlerIterator iterator(handlers_ptr);
       for (; iterator.HasNext(); iterator.Next()) {
         uint32_t address = iterator.GetHandlerAddress();
-        HBasicBlock* block = FindBlockStartingAt(address);
-        if (block == nullptr) {
-          block = new (arena_) HBasicBlock(graph_, address);
-          branch_targets_.Put(address, block);
-        }
+        HBasicBlock* block = FindOrCreateBlockStartingAt(address);
         block->SetIsCatchBlock();
       }
       handlers_ptr = iterator.EndDataPointer();
@@ -323,6 +381,34 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
     }
     dex_pc += instruction.SizeInCodeUnits();
     code_ptr += instruction.SizeInCodeUnits();
+  }
+
+  // Link try blocks to exception handlers.
+  for (size_t idx = 0; idx < code_item.tries_size_; ++idx) {
+    const DexFile::TryItem* try_item = DexFile::GetTryItems(code_item, idx);
+    uint32_t try_start = try_item->start_addr_;
+    uint32_t try_end = try_start + try_item->insn_count_;
+
+    // Iterate over all blocks in the dex pc range of the TryItem and
+    // split edges which enter/leave it.
+    for (uint32_t inner_pc = try_start; inner_pc < try_end; ++inner_pc) {
+      HBasicBlock* block = FindBlockStartingAt(inner_pc);
+      if (block == nullptr) continue;
+
+      for (size_t i = 0, e = block->GetPredecessors().Size(); i < e; ++i) {
+        HBasicBlock* predecessor = block->GetPredecessors().Get(i);
+        if (IsBlockOutsidePcRange(predecessor, try_start, try_end)) {
+          CreateTryEntryOf(block, predecessor, code_item, *try_item);
+        }
+      }
+
+      for (size_t i = 0, e = block->GetSuccessors().Size(); i < e; ++i) {
+        HBasicBlock* successor = block->GetSuccessors().Get(i);
+        if (IsBlockOutsidePcRange(successor, try_start, try_end)) {
+          CreateTryExitOf(block, successor, code_item, *try_item);
+        }
+      }
+    }
   }
 
   // Add the exit block at the end to give it the highest id.
@@ -435,7 +521,17 @@ bool HGraphBuilder::ComputeBranchTargets(const uint16_t* code_ptr,
 
 HBasicBlock* HGraphBuilder::FindBlockStartingAt(int32_t index) const {
   DCHECK_GE(index, 0);
+  DCHECK_LT(index, static_cast<int32_t>(branch_targets_.Size()));
   return branch_targets_.Get(index);
+}
+
+HBasicBlock* HGraphBuilder::FindOrCreateBlockStartingAt(int32_t index) {
+  HBasicBlock* block = FindBlockStartingAt(index);
+  if (block == nullptr) {
+    block = new (arena_) HBasicBlock(graph_, index);
+    branch_targets_.Put(index, block);
+  }
+  return block;
 }
 
 template<typename T>

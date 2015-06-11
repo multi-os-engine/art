@@ -1979,6 +1979,26 @@ void InstructionCodeGeneratorARM64::VisitGoto(HGoto* got) {
   }
 }
 
+void LocationsBuilderARM64::VisitEnterTry(HEnterTry* enter_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
+void InstructionCodeGeneratorARM64::VisitEnterTry(HEnterTry* enter_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
+void LocationsBuilderARM64::VisitExitTry(HExitTry* exit_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
+void InstructionCodeGeneratorARM64::VisitExitTry(HExitTry* exit_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
 void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruction,
                                                           vixl::Label* true_target,
                                                           vixl::Label* false_target,

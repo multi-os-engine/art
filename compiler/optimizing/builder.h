@@ -96,6 +96,18 @@ class HGraphBuilder : public ValueObject {
                             size_t* number_of_branches);
   void MaybeUpdateCurrentBlock(size_t index);
   HBasicBlock* FindBlockStartingAt(int32_t index) const;
+  HBasicBlock* FindOrCreateBlockStartingAt(int32_t index);
+  HBasicBlock* CreateTryEntryOf(HBasicBlock* block,
+                                HBasicBlock* predecessor,
+                                const DexFile::CodeItem& code_item,
+                                const DexFile::TryItem& try_item);
+  HBasicBlock* CreateTryExitOf(HBasicBlock* block,
+                               HBasicBlock* successor,
+                               const DexFile::CodeItem& code_item,
+                               const DexFile::TryItem& try_item);
+  void AddExceptionHandlerSuccessors(HBasicBlock* block,
+                                     const DexFile::CodeItem& code_item,
+                                     const DexFile::TryItem& try_item);
 
   void InitializeLocals(uint16_t count);
   HLocal* GetLocalAt(int register_index) const;

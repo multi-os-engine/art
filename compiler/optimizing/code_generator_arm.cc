@@ -932,6 +932,26 @@ void InstructionCodeGeneratorARM::VisitGoto(HGoto* got) {
   }
 }
 
+void LocationsBuilderARM::VisitEnterTry(HEnterTry* enter_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
+void InstructionCodeGeneratorARM::VisitEnterTry(HEnterTry* enter_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
+void LocationsBuilderARM::VisitExitTry(HExitTry* exit_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
+void InstructionCodeGeneratorARM::VisitExitTry(HExitTry* exit_try ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unimplemented";
+  UNREACHABLE();
+}
+
 void LocationsBuilderARM::VisitExit(HExit* exit) {
   exit->SetLocations(nullptr);
 }
