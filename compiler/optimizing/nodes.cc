@@ -174,14 +174,27 @@ void HGraph::TransformToSsa() {
   ssa_builder.BuildSsa();
 }
 
+HBasicBlock* HGraph::SplitEdge(HBasicBlock* block, HBasicBlock* successor) {
+  HBasicBlock* new_block = new (arena_) HBasicBlock(this, successor->GetDexPc());
+  AddBlock(new_block);
+  size_t successor_index = block->GetSuccessorIndexOf(successor);
+  size_t predecessor_index = successor->GetPredecessorIndexOf(block);
+  DCHECK_NE(successor_index, static_cast<size_t>(-1));
+  DCHECK_NE(predecessor_index, static_cast<size_t>(-1));
+
+  block->successors_.Put(successor_index, new_block);
+  successor->predecessors_.Put(predecessor_index, new_block);
+  new_block->predecessors_.Add(block);
+  new_block->successors_.Add(successor);
+
+  return new_block;
+}
+
 void HGraph::SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor) {
   // Insert a new node between `block` and `successor` to split the
   // critical edge.
-  HBasicBlock* new_block = new (arena_) HBasicBlock(this, successor->GetDexPc());
-  AddBlock(new_block);
+  HBasicBlock* new_block = SplitEdge(block, successor);
   new_block->AddInstruction(new (arena_) HGoto());
-  block->ReplaceSuccessor(successor, new_block);
-  new_block->AddSuccessor(successor);
   if (successor->IsLoopHeader()) {
     // If we split at a back edge boundary, make the new block the back edge.
     HLoopInformation* info = successor->GetLoopInformation();
@@ -1038,7 +1051,7 @@ bool HBasicBlock::IsSingleGoto() const {
   return GetFirstInstruction() != nullptr
          && GetPhis().IsEmpty()
          && GetFirstInstruction() == GetLastInstruction()
-         && GetLastInstruction()->IsGoto()
+         && (GetLastInstruction()->IsGoto() || GetLastInstruction()->IsTryBoundary())
          // Back edges generate the suspend check.
          && (loop_info == nullptr || !loop_info->IsBackEdge(*this));
 }

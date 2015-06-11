@@ -932,12 +932,7 @@ void CodeGeneratorARM::InvokeRuntime(int32_t entry_point_offset,
       || !IsLeafMethod());
 }
 
-void LocationsBuilderARM::VisitGoto(HGoto* got) {
-  got->SetLocations(nullptr);
-}
-
-void InstructionCodeGeneratorARM::VisitGoto(HGoto* got) {
-  HBasicBlock* successor = got->GetSuccessor();
+void InstructionCodeGeneratorARM::HandleGoto(HInstruction* got, HBasicBlock* successor) {
   DCHECK(!successor->IsExitBlock());
 
   HBasicBlock* block = got->GetBlock();
@@ -955,6 +950,25 @@ void InstructionCodeGeneratorARM::VisitGoto(HGoto* got) {
   }
   if (!codegen_->GoesToNextBlock(got->GetBlock(), successor)) {
     __ b(codegen_->GetLabelOf(successor));
+  }
+}
+
+void LocationsBuilderARM::VisitGoto(HGoto* got) {
+  got->SetLocations(nullptr);
+}
+
+void InstructionCodeGeneratorARM::VisitGoto(HGoto* got) {
+  HandleGoto(got, got->GetSuccessor());
+}
+
+void LocationsBuilderARM::VisitTryBoundary(HTryBoundary* try_boundary) {
+  try_boundary->SetLocations(nullptr);
+}
+
+void InstructionCodeGeneratorARM::VisitTryBoundary(HTryBoundary* try_boundary) {
+  HBasicBlock* successor = try_boundary->GetNormalFlowSuccessor();
+  if (!successor->IsExitBlock()) {
+    HandleGoto(try_boundary, successor);
   }
 }
 
