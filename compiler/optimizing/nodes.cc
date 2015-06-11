@@ -174,15 +174,20 @@ void HGraph::TransformToSsa() {
   ssa_builder.BuildSsa();
 }
 
-void HGraph::SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor) {
-  // Insert a new node between `block` and `successor` to split the
-  // critical edge.
+HBasicBlock* HGraph::SplitEdge(HBasicBlock* block, HBasicBlock* successor) {
   HBasicBlock* new_block = new (arena_) HBasicBlock(this, successor->GetDexPc());
   AddBlock(new_block);
-  new_block->AddInstruction(new (arena_) HGoto());
   // Use `InsertBetween` to ensure the predecessor index and successor index of
   // `block` and `successor` are preserved.
   new_block->InsertBetween(block, successor);
+  return new_block;
+}
+
+void HGraph::SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor) {
+  // Insert a new node between `block` and `successor` to split the
+  // critical edge.
+  HBasicBlock* new_block = graph_->SplitEdge(block, successor);
+  new_block->AddInstruction(new (arena_) HGoto());
   if (successor->IsLoopHeader()) {
     // If we split at a back edge boundary, make the new block the back edge.
     HLoopInformation* info = successor->GetLoopInformation();
@@ -248,7 +253,7 @@ void HGraph::SimplifyCFG() {
   for (size_t i = 0; i < blocks_.Size(); ++i) {
     HBasicBlock* block = blocks_.Get(i);
     if (block == nullptr) continue;
-    if (block->GetSuccessors().Size() > 1) {
+    if (block->GetSuccessors().Size() > 1 && block->GetLastInstruction()->IsTryBoundary()) {
       for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
         HBasicBlock* successor = block->GetSuccessors().Get(j);
         if (successor->GetPredecessors().Size() > 1) {
@@ -1039,7 +1044,7 @@ bool HBasicBlock::IsSingleGoto() const {
   return GetFirstInstruction() != nullptr
          && GetPhis().IsEmpty()
          && GetFirstInstruction() == GetLastInstruction()
-         && GetLastInstruction()->IsGoto()
+         && (GetLastInstruction()->IsGoto() || GetLastInstruction()->IsTryBoundary())
          // Back edges generate the suspend check.
          && (loop_info == nullptr || !loop_info->IsBackEdge(*this));
 }
