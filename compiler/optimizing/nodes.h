@@ -1370,6 +1370,7 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
         environment_(nullptr),
         locations_(nullptr),
         live_interval_(nullptr),
+        slow_path_(nullptr),
         lifetime_position_(kNoLifetime),
         side_effects_(side_effects),
         reference_type_info_(ReferenceTypeInfo::CreateTop(/* is_exact */ false)) {}
@@ -1579,6 +1580,10 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   void SetLiveInterval(LiveInterval* interval) { live_interval_ = interval; }
   bool HasLiveInterval() const { return live_interval_ != nullptr; }
 
+  void SetSlowPath(SlowPathCode* slow_path) { slow_path_ = slow_path; }
+  SlowPathCode* GetSlowPath() const { return slow_path_; }
+  bool HasSlowPath() const { return slow_path_ != nullptr; }
+
   bool IsSuspendCheckEntry() const { return IsSuspendCheck() && GetBlock()->IsEntryBlock(); }
 
   // Returns whether the code generation of the instruction will require to have access
@@ -1627,6 +1632,9 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
 
   // Set by the liveness analysis.
   LiveInterval* live_interval_;
+
+  // Only used for code generation.
+  SlowPathCode* slow_path_;
 
   // Set by the liveness analysis, this is the position in a linear
   // order of blocks where this instruction's live interval start.
@@ -3528,24 +3536,18 @@ class HTemporary : public HTemplateInstruction<0> {
 class HSuspendCheck : public HTemplateInstruction<0> {
  public:
   explicit HSuspendCheck(uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::None()), dex_pc_(dex_pc), slow_path_(nullptr) {}
+      : HTemplateInstruction(SideEffects::None()), dex_pc_(dex_pc) {}
 
   bool NeedsEnvironment() const OVERRIDE {
     return true;
   }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
-  void SetSlowPath(SlowPathCode* slow_path) { slow_path_ = slow_path; }
-  SlowPathCode* GetSlowPath() const { return slow_path_; }
 
   DECLARE_INSTRUCTION(SuspendCheck);
 
  private:
   const uint32_t dex_pc_;
-
-  // Only used for code generation, in order to share the same slow path between back edges
-  // of a same loop.
-  SlowPathCode* slow_path_;
 
   DISALLOW_COPY_AND_ASSIGN(HSuspendCheck);
 };

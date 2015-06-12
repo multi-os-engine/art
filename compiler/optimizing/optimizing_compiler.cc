@@ -539,7 +539,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
       CodeGenerator::Create(graph,
                             instruction_set,
                             *compiler_driver->GetInstructionSetFeatures(),
-                            compiler_driver->GetCompilerOptions()));
+                            compiler_driver->GetCompilerOptions(),
+                            compilation_stats_.get()));
   if (codegen.get() == nullptr) {
     CHECK(!shouldCompile) << "Could not find code generator for optimizing compiler";
     MaybeRecordStat(MethodCompilationStat::kNotCompiledNoCodegen);

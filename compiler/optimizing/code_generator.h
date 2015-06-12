@@ -25,6 +25,7 @@
 #include "locations.h"
 #include "memory_region.h"
 #include "nodes.h"
+#include "optimizing_compiler_stats.h"
 #include "stack_map_stream.h"
 
 namespace art {
@@ -64,6 +65,15 @@ class CodeAllocator {
   DISALLOW_COPY_AND_ASSIGN(CodeAllocator);
 };
 
+#define FOR_EACH_SLOW_PATH(M)                                 \
+  M(DivZeroCheckSlowPath)                                     \
+  M(NullCheckSlowPath)                                        \
+
+#define DECLARE_FATAL_SLOW_PATH(type)                         \
+  SlowPathKind GetKind() const OVERRIDE { return k##type; }   \
+  bool IsFatal() const OVERRIDE { return true; }              \
+  bool IsShareable() const OVERRIDE { return true; }          \
+
 class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
  public:
   SlowPathCode() {
@@ -72,6 +82,13 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
       saved_fpu_stack_offsets_[i] = kRegisterNotSaved;
     }
   }
+
+#define DECLARE_SLOW_PATH_KIND(type) k##type,
+  enum SlowPathKind {
+    kDefaultSlowPath,
+    FOR_EACH_SLOW_PATH(DECLARE_SLOW_PATH_KIND)
+  };
+#undef DECLARE_SLOW_PATH_KIND
 
   virtual ~SlowPathCode() {}
 
@@ -97,7 +114,34 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
     return saved_fpu_stack_offsets_[reg];
   }
 
+  virtual SlowPathKind GetKind() const {
+    return SlowPathKind::kDefaultSlowPath;
+  }
+
+  virtual bool IsShareable() const {
+    return false;
+  }
+
+  virtual bool IsFatal() const {
+    return false;
+  }
+
+  bool CanBeMergedWith(SlowPathCode* other) const {
+    DCHECK(IsShareable());
+    DCHECK(IsFatal());
+    return GetKind() == other->GetKind();
+  }
+
+  bool IsShared() const {
+    return is_shared_;
+  }
+
+  void SetShared() {
+    is_shared_ = true;
+  }
+
  protected:
+  bool is_shared_ = false;
   static constexpr size_t kMaximumNumberOfExpectedRegisters = 32;
   static constexpr uint32_t kRegisterNotSaved = -1;
   uint32_t saved_core_stack_offsets_[kMaximumNumberOfExpectedRegisters];
@@ -137,7 +181,8 @@ class CodeGenerator {
   static CodeGenerator* Create(HGraph* graph,
                                InstructionSet instruction_set,
                                const InstructionSetFeatures& isa_features,
-                               const CompilerOptions& compiler_options);
+                               const CompilerOptions& compiler_options,
+                               OptimizingCompilerStats* const stats = nullptr);
   virtual ~CodeGenerator() {}
 
   HGraph* GetGraph() const { return graph_; }
@@ -223,11 +268,7 @@ class CodeGenerator {
   void RecordPcInfo(HInstruction* instruction, uint32_t dex_pc, SlowPathCode* slow_path = nullptr);
   bool CanMoveNullCheckToUser(HNullCheck* null_check);
   void MaybeRecordImplicitNullCheck(HInstruction* instruction);
-
-  void AddSlowPath(SlowPathCode* slow_path) {
-    slow_paths_.Add(slow_path);
-  }
-
+  SlowPathCode* AddSlowPath(SlowPathCode* slow_path);
   void BuildSourceMap(DefaultSrcMap* src_map) const;
   void BuildMappingTable(std::vector<uint8_t>* vector) const;
   void BuildVMapTable(std::vector<uint8_t>* vector) const;
@@ -366,7 +407,8 @@ class CodeGenerator {
         current_block_index_(0),
         is_leaf_(true),
         requires_current_method_(false),
-        stack_map_stream_(graph->GetArena()) {}
+        stack_map_stream_(graph->GetArena()),
+        stats_(nullptr) {}
 
   // Register allocation logic.
   void AllocateRegistersLocally(HInstruction* instruction) const;
@@ -414,6 +456,12 @@ class CodeGenerator {
     block = FirstNonEmptyBlock(block);
     return raw_pointer_to_labels_array + block->GetBlockId();
   }
+
+  void SetStats(OptimizingCompilerStats* stats) {
+    stats_ = stats;
+  }
+
+  void MaybeRecordStat(MethodCompilationStat compilation_stat) const;
 
   // Frame size required for this method.
   uint32_t frame_size_;
@@ -465,6 +513,8 @@ class CodeGenerator {
   bool requires_current_method_;
 
   StackMapStream stack_map_stream_;
+
+  OptimizingCompilerStats* stats_;
 
   friend class OptimizingCFITest;
 

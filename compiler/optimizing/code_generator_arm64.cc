@@ -233,6 +233,8 @@ class DivZeroCheckSlowPathARM64 : public SlowPathCodeARM64 {
     CheckEntrypointTypes<kQuickThrowDivZero, void, void>();
   }
 
+  DECLARE_FATAL_SLOW_PATH(DivZeroCheckSlowPath)
+
  private:
   HDivZeroCheck* const instruction_;
   DISALLOW_COPY_AND_ASSIGN(DivZeroCheckSlowPathARM64);
@@ -336,6 +338,8 @@ class NullCheckSlowPathARM64 : public SlowPathCodeARM64 {
         QUICK_ENTRY_POINT(pThrowNullPointer), instruction_, instruction_->GetDexPc(), this);
     CheckEntrypointTypes<kQuickThrowNullPointer, void, void>();
   }
+
+  DECLARE_FATAL_SLOW_PATH(NullCheckSlowPath)
 
  private:
   HNullCheck* const instruction_;
@@ -1076,15 +1080,58 @@ void CodeGeneratorARM64::InvokeRuntime(int32_t entry_point_offset,
                                        uint32_t dex_pc,
                                        SlowPathCode* slow_path) {
   BlockPoolsScope block_pools(GetVIXLAssembler());
-  __ Ldr(lr, MemOperand(tr, entry_point_offset));
-  __ Blr(lr);
-  RecordPcInfo(instruction, dex_pc, slow_path);
+  UseScratchRegisterScope temps(GetVIXLAssembler());
+  Register temp = temps.AcquireX();
+  __ Ldr(temp, MemOperand(tr, entry_point_offset));
+
+  if (slow_path != nullptr && slow_path->IsShared()) {
+    // We already collected the Pc Info in InvokeSlowPath().
+    __ Br(temp);
+  } else {
+    __ Blr(temp);
+    RecordPcInfo(instruction, dex_pc, slow_path);
+  }
   DCHECK(instruction->IsSuspendCheck()
          || instruction->IsBoundsCheck()
          || instruction->IsNullCheck()
          || instruction->IsDivZeroCheck()
          || !IsLeafMethod());
 }
+
+void CodeGeneratorARM64::InvokeSlowPath(HInstruction* instruction) {
+  SlowPathCodeARM64* slow_path =
+    down_cast<DivZeroCheckSlowPathARM64*>(instruction->GetSlowPath());
+  DCHECK(slow_path->IsFatal());
+  DCHECK(slow_path->IsShareable());
+  DCHECK(instruction->IsNullCheck() || instruction->IsDivZeroCheck());
+
+  if (slow_path->IsShared()) {
+    BlockPoolsScope block_pools(GetVIXLAssembler());
+    __ Bl(slow_path->GetEntryLabel());
+    RecordPcInfo(instruction, instruction->GetDexPc(), slow_path);
+  } else {
+    __ B(slow_path->GetEntryLabel());
+  }
+}
+
+void CodeGeneratorARM64::InvokeSlowPathIfZero(HInstruction* instruction,
+                                              const vixl::Register& reg) {
+  SlowPathCodeARM64* slow_path =
+    down_cast<DivZeroCheckSlowPathARM64*>(instruction->GetSlowPath());
+  DCHECK(slow_path->IsFatal());
+  DCHECK(slow_path->IsShareable());
+  DCHECK(instruction->IsNullCheck() || instruction->IsDivZeroCheck());
+
+  if (slow_path->IsShared()) {
+    vixl::Label done;
+    __ Cbnz(reg, &done);
+    InvokeSlowPath(instruction);
+    __ Bind(&done);
+  } else {
+    __ Cbz(reg, slow_path->GetEntryLabel());
+  }
+}
+
 
 void InstructionCodeGeneratorARM64::GenerateClassInitializationCheck(SlowPathCodeARM64* slow_path,
                                                                      vixl::Register class_reg) {
@@ -1897,14 +1944,17 @@ void LocationsBuilderARM64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
+
+  DCHECK(!instruction->HasSlowPath());
+  SlowPathCodeARM64* slow_path =
+    new (GetGraph()->GetArena()) DivZeroCheckSlowPathARM64(instruction);
+  slow_path = reinterpret_cast<SlowPathCodeARM64*>(codegen_->AddSlowPath(slow_path));
+  instruction->SetSlowPath(slow_path);
 }
 
 void InstructionCodeGeneratorARM64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
-  SlowPathCodeARM64* slow_path =
-      new (GetGraph()->GetArena()) DivZeroCheckSlowPathARM64(instruction);
-  codegen_->AddSlowPath(slow_path);
+  DCHECK(instruction->HasSlowPath());
   Location value = instruction->GetLocations()->InAt(0);
-
   Primitive::Type type = instruction->GetType();
 
   if ((type != Primitive::kPrimInt) && (type != Primitive::kPrimLong)) {
@@ -1915,13 +1965,13 @@ void InstructionCodeGeneratorARM64::VisitDivZeroCheck(HDivZeroCheck* instruction
   if (value.IsConstant()) {
     int64_t divisor = Int64ConstantFrom(value);
     if (divisor == 0) {
-      __ B(slow_path->GetEntryLabel());
+      codegen_->InvokeSlowPath(instruction);
     } else {
       // A division by a non-null constant is valid. We don't need to perform
       // any check, so simply fall through.
     }
   } else {
-    __ Cbz(InputRegisterAt(instruction, 0), slow_path->GetEntryLabel());
+    codegen_->InvokeSlowPathIfZero(instruction, InputRegisterAt(instruction, 0));
   }
 }
 
@@ -2599,6 +2649,15 @@ void LocationsBuilderARM64::VisitNullCheck(HNullCheck* instruction) {
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
+
+  if (!codegen_->GetCompilerOptions().GetImplicitNullChecks()) {
+    // Explicit Null Checks require a slowpath.
+    DCHECK(!instruction->HasSlowPath());
+    SlowPathCodeARM64* slow_path =
+      new (GetGraph()->GetArena()) NullCheckSlowPathARM64(instruction);
+    slow_path = reinterpret_cast<SlowPathCodeARM64*>(codegen_->AddSlowPath(slow_path));
+    instruction->SetSlowPath(slow_path);
+  }
 }
 
 void InstructionCodeGeneratorARM64::GenerateImplicitNullCheck(HNullCheck* instruction) {
@@ -2613,13 +2672,8 @@ void InstructionCodeGeneratorARM64::GenerateImplicitNullCheck(HNullCheck* instru
 }
 
 void InstructionCodeGeneratorARM64::GenerateExplicitNullCheck(HNullCheck* instruction) {
-  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) NullCheckSlowPathARM64(instruction);
-  codegen_->AddSlowPath(slow_path);
-
-  LocationSummary* locations = instruction->GetLocations();
-  Location obj = locations->InAt(0);
-
-  __ Cbz(RegisterFrom(obj, instruction->InputAt(0)->GetType()), slow_path->GetEntryLabel());
+  DCHECK(instruction->HasSlowPath());
+  codegen_->InvokeSlowPathIfZero(instruction, InputRegisterAt(instruction, 0));
 }
 
 void InstructionCodeGeneratorARM64::VisitNullCheck(HNullCheck* instruction) {

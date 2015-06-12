@@ -52,6 +52,7 @@ enum MethodCompilationStat {
   kRemovedCheckedCast,
   kRemovedDeadInstruction,
   kRemovedNullCheck,
+  kRemovedDuplicateFatalSlowPath,
   kLastStat
 };
 
@@ -120,6 +121,7 @@ class OptimizingCompilerStats {
       case kRemovedCheckedCast: return "kRemovedCheckedCast";
       case kRemovedDeadInstruction: return "kRemovedDeadInstruction";
       case kRemovedNullCheck: return "kRemovedNullCheck";
+      case kRemovedDuplicateFatalSlowPath: return "kRemovedDuplicateFatalSlowPath";
 
       case kLastStat: break;  // Invalid to print out.
     }
