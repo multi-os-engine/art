@@ -89,6 +89,7 @@ class StackMapStream : public ValueObject {
   struct StackMapEntry {
     uint32_t dex_pc;
     uint32_t native_pc_offset;
+    uint32_t native_lr_offset;
     uint32_t register_mask;
     BitVector* sp_mask;
     uint32_t num_dex_registers;
@@ -111,6 +112,7 @@ class StackMapStream : public ValueObject {
 
   void BeginStackMapEntry(uint32_t dex_pc,
                           uint32_t native_pc_offset,
+                          uint32_t native_lr_offset,
                           uint32_t register_mask,
                           BitVector* sp_mask,
                           uint32_t num_dex_registers,
@@ -140,6 +142,7 @@ class StackMapStream : public ValueObject {
   }
 
   uint32_t ComputeMaxNativePcOffset() const;
+  uint32_t ComputeMaxNativeLrOffset() const;
 
   // Prepares the stream to fill in a memory region. Must be called before FillIn.
   // Returns the size (in bytes) needed to store this stream.

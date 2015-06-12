@@ -120,6 +120,7 @@ void CodeInfo::Dump(std::ostream& os,
                   << encoding.NumberOfBytesForDexRegisterMap()
               << ", number_of_bytes_for_dex_pc=" << encoding.NumberOfBytesForDexPc()
               << ", number_of_bytes_for_native_pc=" << encoding.NumberOfBytesForNativePc()
+              << ", number_of_bytes_for_native_lr=" << encoding.NumberOfBytesForNativeLr()
               << ", number_of_bytes_for_register_mask=" << encoding.NumberOfBytesForRegisterMask()
               << ")\n";
   // Display the Dex register location catalog.
@@ -193,6 +194,7 @@ void StackMap::Dump(std::ostream& os,
               << " [native_pc=0x" << code_offset + GetNativePcOffset(encoding) << "]"
               << " (dex_pc=0x" << GetDexPc(encoding)
               << ", native_pc_offset=0x" << GetNativePcOffset(encoding)
+              << ", native_lr_offset=0x" << GetNativeLrOffset(encoding)
               << ", dex_register_map_offset=0x" << GetDexRegisterMapOffset(encoding)
               << ", inline_info_offset=0x" << GetInlineDescriptorOffset(encoding)
               << ", register_mask=0x" << GetRegisterMask(encoding)

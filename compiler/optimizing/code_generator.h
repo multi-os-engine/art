@@ -26,6 +26,7 @@
 #include "locations.h"
 #include "memory_region.h"
 #include "nodes.h"
+#include "optimizing_compiler_stats.h"
 #include "stack_map_stream.h"
 
 namespace art {
@@ -65,6 +66,22 @@ class CodeAllocator {
   DISALLOW_COPY_AND_ASSIGN(CodeAllocator);
 };
 
+// If set will enable sharing SlowPaths. For now very **experimental**.
+constexpr bool kShareSlowPaths = true;
+
+#define FOR_EACH_SLOW_PATH(M)                                 \
+  M(DivZeroCheckSlowPath)                                     \
+  M(NullCheckSlowPath)                                        \
+  M(SuspendCheckSlowPath)                                     \
+
+#define DECLARE_SHAREABLE_SLOW_PATH(type)                     \
+  SlowPathKind GetKind() const OVERRIDE { return k##type; }   \
+  bool IsShareable() const OVERRIDE { return true; }          \
+
+#define DECLARE_SHARABLE_FATAL_SLOW_PATH(type)                \
+  DECLARE_SHAREABLE_SLOW_PATH(type)                           \
+  bool IsFatal() const OVERRIDE { return true; }              \
+
 class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
  public:
   SlowPathCode() {
@@ -74,6 +91,13 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
     }
   }
 
+#define DECLARE_SLOW_PATH_KIND(type) k##type,
+  enum SlowPathKind {
+    kDefaultSlowPath,
+    FOR_EACH_SLOW_PATH(DECLARE_SLOW_PATH_KIND)
+  };
+#undef DECLARE_SLOW_PATH_KIND
+
   virtual ~SlowPathCode() {}
 
   virtual void EmitNativeCode(CodeGenerator* codegen) = 0;
@@ -81,6 +105,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
   virtual void SaveLiveRegisters(CodeGenerator* codegen, LocationSummary* locations);
   virtual void RestoreLiveRegisters(CodeGenerator* codegen, LocationSummary* locations);
   void RecordPcInfo(CodeGenerator* codegen, HInstruction* instruction, uint32_t dex_pc);
+  void MaybeRecordPcInfo(CodeGenerator* codegen, HInstruction* instruction);
+  void UpdateSetStackBit(size_t reg, size_t offset, LocationSummary* locations);
 
   bool IsCoreRegisterSaved(int reg) const {
     return saved_core_stack_offsets_[reg] != kRegisterNotSaved;
@@ -100,7 +126,75 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
 
   virtual const char* GetDescription() const = 0;
 
+  virtual SlowPathKind GetKind() const {
+    return SlowPathKind::kDefaultSlowPath;
+  }
+
+  virtual bool IsShareable() const {
+    return false;
+  }
+
+  virtual bool IsFatal() const {
+    return false;
+  }
+
+  bool CanBeMergedWith(SlowPathCode* other) const {
+    DCHECK(IsShareable() && other->IsShareable());
+    return GetKind() == other->GetKind();
+  }
+
+  // Currently we only need a native LR stack slot for non-fatal SlowPaths
+  // with multiple uses.
+  virtual bool NeedsNativeLrSlot() const {
+    return HasMultipleUses() && !IsFatal();
+  }
+
+  void AddUse(HInstruction* instruction, ArenaAllocator* arena) {
+    DCHECK(instruction != nullptr);
+    DCHECK(!instruction->HasSlowPath());
+    instruction->SetSlowPath(this);
+    uses_.AddUse(instruction, uses_.SizeSlow(), arena);
+  }
+
+  bool HasUses() const {
+    return !uses_.IsEmpty();
+  }
+
+  bool HasOnlyOneUse() const {
+    return uses_.HasOnlyOneUse();
+  }
+
+  bool HasMultipleUses() const {
+    return uses_.SizeSlow() > 1;
+  }
+
+  const HUseList<HInstruction*>& GetUses() const {
+    return uses_;
+  }
+
+  size_t GetNumberOfLiveRegisters() const {
+    return live_registers_.GetNumberOfRegisters();
+  }
+
+  size_t GetNumberOfLiveCoreRegisters() const {
+    return live_registers_.GetNumberOfCoreRegisters();
+  }
+
+  size_t GetNumberOfLiveFloatingPointRegisters() const {
+    return live_registers_.GetNumberOfFloatingPointRegisters();
+  }
+
+  RegisterSet* GetLiveRegisters() {
+    return &live_registers_;
+  }
+
+  void AddLiveRegister(Location location) {
+    live_registers_.Add(location);
+  }
+
  protected:
+  HUseList<HInstruction*> uses_;
+  RegisterSet live_registers_;
   static constexpr size_t kMaximumNumberOfExpectedRegisters = 32;
   static constexpr uint32_t kRegisterNotSaved = -1;
   uint32_t saved_core_stack_offsets_[kMaximumNumberOfExpectedRegisters];
@@ -140,7 +234,8 @@ class CodeGenerator {
   static CodeGenerator* Create(HGraph* graph,
                                InstructionSet instruction_set,
                                const InstructionSetFeatures& isa_features,
-                               const CompilerOptions& compiler_options);
+                               const CompilerOptions& compiler_options,
+                               OptimizingCompilerStats* const stats = nullptr);
   virtual ~CodeGenerator() {}
 
   HGraph* GetGraph() const { return graph_; }
@@ -227,11 +322,7 @@ class CodeGenerator {
   void RecordPcInfo(HInstruction* instruction, uint32_t dex_pc, SlowPathCode* slow_path = nullptr);
   bool CanMoveNullCheckToUser(HNullCheck* null_check);
   void MaybeRecordImplicitNullCheck(HInstruction* instruction);
-
-  void AddSlowPath(SlowPathCode* slow_path) {
-    slow_paths_.Add(slow_path);
-  }
-
+  void AddSlowPath(SlowPathCode* slow_path, HInstruction* instruction = nullptr);
   void BuildSourceMap(DefaultSrcMap* src_map) const;
   void BuildMappingTable(std::vector<uint8_t>* vector) const;
   void BuildVMapTable(std::vector<uint8_t>* vector) const;
@@ -258,6 +349,14 @@ class CodeGenerator {
 
   bool RequiresCurrentMethod() const {
     return requires_current_method_;
+  }
+
+  void SetRequiresNativeLrSlot() {
+    requires_native_lr_slot_ = true;
+  }
+
+  bool RequiresNativeLrSlot() const {
+    return requires_native_lr_slot_;
   }
 
   // Clears the spill slots taken by loop phis in the `LocationSummary` of the
@@ -335,6 +434,10 @@ class CodeGenerator {
     }
   }
 
+  size_t GetNativeLrSlotOffset() const {
+    return GetFrameSize() - (FrameEntrySpillSize() + GetWordSize());
+  }
+
   size_t GetFirstRegisterSlotInSlowPath() const {
     return first_register_slot_in_slow_path_;
   }
@@ -350,6 +453,7 @@ class CodeGenerator {
 
   void SetDisassemblyInformation(DisassemblyInformation* info) { disasm_info_ = info; }
   DisassemblyInformation* GetDisassemblyInformation() const { return disasm_info_; }
+  const GrowableArray<SlowPathCode*>& GetSlowPaths() const { return slow_paths_; }
 
  protected:
   CodeGenerator(HGraph* graph,
@@ -380,7 +484,9 @@ class CodeGenerator {
         slow_paths_(graph->GetArena(), 8),
         current_block_index_(0),
         is_leaf_(true),
-        requires_current_method_(false) {}
+        requires_current_method_(false),
+        requires_native_lr_slot_(false),
+        stats_(nullptr) {}
 
   // Register allocation logic.
   void AllocateRegistersLocally(HInstruction* instruction) const;
@@ -428,6 +534,12 @@ class CodeGenerator {
     block = FirstNonEmptyBlock(block);
     return raw_pointer_to_labels_array + block->GetBlockId();
   }
+
+  void SetStats(OptimizingCompilerStats* stats) {
+    stats_ = stats;
+  }
+
+  void MaybeRecordStat(MethodCompilationStat compilation_stat) const;
 
   // Frame size required for this method.
   uint32_t frame_size_;
@@ -482,6 +594,10 @@ class CodeGenerator {
 
   // Whether an instruction in the graph accesses the current method.
   bool requires_current_method_;
+
+  bool requires_native_lr_slot_;
+
+  OptimizingCompilerStats* stats_;
 
   friend class OptimizingCFITest;
 

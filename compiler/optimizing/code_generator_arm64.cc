@@ -153,14 +153,20 @@ static void SaveRestoreLiveRegistersHelper(CodeGenerator* codegen,
 }
 
 void SlowPathCodeARM64::SaveLiveRegisters(CodeGenerator* codegen, LocationSummary* locations) {
-  RegisterSet* register_set = locations->GetLiveRegisters();
+  DCHECK(!IsFatal());
+  RegisterSet* register_set = HasMultipleUses() ? GetLiveRegisters() : locations->GetLiveRegisters();
+
+  if (NeedsNativeLrSlot()) {
+    DCHECK(register_set->Contains(locations->GetLiveRegisters()));
+    DCHECK(codegen->RequiresNativeLrSlot());
+    __ Str(lr, MemOperand(sp, codegen->GetNativeLrSlotOffset()));
+  }
+
   size_t stack_offset = codegen->GetFirstRegisterSlotInSlowPath();
   for (size_t i = 0, e = codegen->GetNumberOfCoreRegisters(); i < e; ++i) {
     if (!codegen->IsCoreCalleeSaveRegister(i) && register_set->ContainsCoreRegister(i)) {
       // If the register holds an object, update the stack mask.
-      if (locations->RegisterContainsObject(i)) {
-        locations->SetStackBit(stack_offset / kVRegSize);
-      }
+      UpdateSetStackBit(i, stack_offset, locations);
       DCHECK_LT(stack_offset, codegen->GetFrameSize() - codegen->FrameEntrySpillSize());
       DCHECK_LT(i, kMaximumNumberOfExpectedRegisters);
       saved_core_stack_offsets_[i] = stack_offset;
@@ -183,30 +189,32 @@ void SlowPathCodeARM64::SaveLiveRegisters(CodeGenerator* codegen, LocationSummar
 }
 
 void SlowPathCodeARM64::RestoreLiveRegisters(CodeGenerator* codegen, LocationSummary* locations) {
-  RegisterSet* register_set = locations->GetLiveRegisters();
+  RegisterSet* register_set = HasMultipleUses() ? GetLiveRegisters() : locations->GetLiveRegisters();
+
   SaveRestoreLiveRegistersHelper(codegen, register_set,
                                  codegen->GetFirstRegisterSlotInSlowPath(), false /* is_save */);
+  if (NeedsNativeLrSlot()) {
+    DCHECK(codegen->RequiresNativeLrSlot());
+    __ Ldr(lr, MemOperand(sp, codegen->GetNativeLrSlotOffset()));
+  }
 }
 
 class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  BoundsCheckSlowPathARM64(HBoundsCheck* instruction,
-                           Location index_location,
-                           Location length_location)
-      : instruction_(instruction),
-        index_location_(index_location),
-        length_location_(length_location) {}
-
+  explicit BoundsCheckSlowPathARM64(HBoundsCheck* instruction)
+      : instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    LocationSummary* locations = instruction_->GetLocations();
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
+
     __ Bind(GetEntryLabel());
     // We're moving two locations to locations that could overlap, so we need a parallel
     // move resolver.
     InvokeRuntimeCallingConvention calling_convention;
     codegen->EmitParallelMoves(
-        index_location_, LocationFrom(calling_convention.GetRegisterAt(0)), Primitive::kPrimInt,
-        length_location_, LocationFrom(calling_convention.GetRegisterAt(1)), Primitive::kPrimInt);
+        locations->InAt(0), LocationFrom(calling_convention.GetRegisterAt(0)), Primitive::kPrimInt,
+        locations->InAt(1), LocationFrom(calling_convention.GetRegisterAt(1)), Primitive::kPrimInt);
     arm64_codegen->InvokeRuntime(
         QUICK_ENTRY_POINT(pThrowArrayBounds), instruction_, instruction_->GetDexPc(), this);
     CheckEntrypointTypes<kQuickThrowArrayBounds, void, int32_t, int32_t>();
@@ -216,8 +224,6 @@ class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
 
  private:
   HBoundsCheck* const instruction_;
-  const Location index_location_;
-  const Location length_location_;
 
   DISALLOW_COPY_AND_ASSIGN(BoundsCheckSlowPathARM64);
 };
@@ -235,6 +241,8 @@ class DivZeroCheckSlowPathARM64 : public SlowPathCodeARM64 {
   }
 
   const char* GetDescription() const OVERRIDE { return "DivZeroCheckSlowPathARM64"; }
+
+  DECLARE_SHARABLE_FATAL_SLOW_PATH(DivZeroCheckSlowPath)
 
  private:
   HDivZeroCheck* const instruction_;
@@ -346,6 +354,8 @@ class NullCheckSlowPathARM64 : public SlowPathCodeARM64 {
 
   const char* GetDescription() const OVERRIDE { return "NullCheckSlowPathARM64"; }
 
+  DECLARE_SHARABLE_FATAL_SLOW_PATH(NullCheckSlowPath)
+
  private:
   HNullCheck* const instruction_;
 
@@ -354,9 +364,8 @@ class NullCheckSlowPathARM64 : public SlowPathCodeARM64 {
 
 class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  explicit SuspendCheckSlowPathARM64(HSuspendCheck* instruction,
-                                     HBasicBlock* successor)
-      : instruction_(instruction), successor_(successor) {}
+  explicit SuspendCheckSlowPathARM64(HSuspendCheck* instruction)
+      : instruction_(instruction), successor_(nullptr) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
@@ -366,28 +375,33 @@ class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
         QUICK_ENTRY_POINT(pTestSuspend), instruction_, instruction_->GetDexPc(), this);
     CheckEntrypointTypes<kQuickTestSuspend, void, void>();
     RestoreLiveRegisters(codegen, instruction_->GetLocations());
-    if (successor_ == nullptr) {
-      __ B(GetReturnLabel());
-    } else {
-      __ B(arm64_codegen->GetLabelOf(successor_));
-    }
-  }
 
-  vixl::Label* GetReturnLabel() {
-    DCHECK(successor_ == nullptr);
-    return &return_label_;
+    if (HasMultipleUses()) {
+      DCHECK(codegen->RequiresNativeLrSlot());
+      __ Ret();
+    } else if (successor_ != nullptr) {
+      __ B(arm64_codegen->GetLabelOf(successor_));
+    } else {
+      __ B(GetExitLabel());
+    }
   }
 
   HBasicBlock* GetSuccessor() const {
     return successor_;
   }
 
+  void SetSuccessor(HBasicBlock* successor) {
+    successor_ = successor;
+  }
+
   const char* GetDescription() const OVERRIDE { return "SuspendCheckSlowPathARM64"; }
+
+  DECLARE_SHAREABLE_SLOW_PATH(SuspendCheckSlowPath);
 
  private:
   HSuspendCheck* const instruction_;
   // If not null, the block to branch to after the suspend check.
-  HBasicBlock* const successor_;
+  HBasicBlock* successor_;
 
   // If `successor_` is null, the label to branch to after the suspend check.
   vixl::Label return_label_;
@@ -395,21 +409,13 @@ class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
   DISALLOW_COPY_AND_ASSIGN(SuspendCheckSlowPathARM64);
 };
 
-class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
+class CheckCastSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  TypeCheckSlowPathARM64(HInstruction* instruction,
-                         Location class_to_check,
-                         Location object_class,
-                         uint32_t dex_pc)
-      : instruction_(instruction),
-        class_to_check_(class_to_check),
-        object_class_(object_class),
-        dex_pc_(dex_pc) {}
+  explicit CheckCastSlowPathARM64(HInstruction* instruction) : instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    DCHECK(instruction_->IsCheckCast());
     LocationSummary* locations = instruction_->GetLocations();
-    DCHECK(instruction_->IsCheckCast()
-           || !locations->GetLiveRegisters()->ContainsCoreRegister(locations->Out().reg()));
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
 
     __ Bind(GetEntryLabel());
@@ -419,36 +425,64 @@ class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
     // move resolver.
     InvokeRuntimeCallingConvention calling_convention;
     codegen->EmitParallelMoves(
-        class_to_check_, LocationFrom(calling_convention.GetRegisterAt(0)), Primitive::kPrimNot,
-        object_class_, LocationFrom(calling_convention.GetRegisterAt(1)), Primitive::kPrimNot);
+        locations->InAt(1), LocationFrom(calling_convention.GetRegisterAt(0)), Primitive::kPrimNot,
+        locations->GetTemp(0), LocationFrom(calling_convention.GetRegisterAt(1)), Primitive::kPrimNot);
 
-    if (instruction_->IsInstanceOf()) {
-      arm64_codegen->InvokeRuntime(
-          QUICK_ENTRY_POINT(pInstanceofNonTrivial), instruction_, dex_pc_, this);
-      Primitive::Type ret_type = instruction_->GetType();
-      Location ret_loc = calling_convention.GetReturnLocation(ret_type);
-      arm64_codegen->MoveLocation(locations->Out(), ret_loc, ret_type);
-      CheckEntrypointTypes<kQuickInstanceofNonTrivial, uint32_t,
-                           const mirror::Class*, const mirror::Class*>();
-    } else {
-      DCHECK(instruction_->IsCheckCast());
-      arm64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pCheckCast), instruction_, dex_pc_, this);
-      CheckEntrypointTypes<kQuickCheckCast, void, const mirror::Class*, const mirror::Class*>();
-    }
+    arm64_codegen->InvokeRuntime(
+      QUICK_ENTRY_POINT(pCheckCast), instruction_, instruction_->GetDexPc(), this);
+    CheckEntrypointTypes<kQuickCheckCast, void, const mirror::Class*, const mirror::Class*>();
 
     RestoreLiveRegisters(codegen, locations);
     __ B(GetExitLabel());
   }
 
-  const char* GetDescription() const OVERRIDE { return "TypeCheckSlowPathARM64"; }
+  const char* GetDescription() const OVERRIDE { return "CheckCastSlowPathARM64"; }
 
  private:
   HInstruction* const instruction_;
-  const Location class_to_check_;
-  const Location object_class_;
-  uint32_t dex_pc_;
 
-  DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathARM64);
+  DISALLOW_COPY_AND_ASSIGN(CheckCastSlowPathARM64);
+};
+
+
+class InstanceCheckSlowPathARM64 : public SlowPathCodeARM64 {
+ public:
+  explicit InstanceCheckSlowPathARM64(HInstruction* instruction) : instruction_(instruction) {}
+
+  void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    DCHECK(instruction_->IsInstanceOf());
+    LocationSummary* locations = instruction_->GetLocations();
+    DCHECK(!locations->GetLiveRegisters()->ContainsCoreRegister(locations->Out().reg()));
+    CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
+
+    __ Bind(GetEntryLabel());
+    SaveLiveRegisters(codegen, locations);
+
+    // We're moving two locations to locations that could overlap, so we need a parallel
+    // move resolver.
+    InvokeRuntimeCallingConvention calling_convention;
+    codegen->EmitParallelMoves(
+        locations->InAt(1), LocationFrom(calling_convention.GetRegisterAt(0)), Primitive::kPrimNot,
+        locations->Out(), LocationFrom(calling_convention.GetRegisterAt(1)), Primitive::kPrimNot);
+
+    arm64_codegen->InvokeRuntime(
+      QUICK_ENTRY_POINT(pInstanceofNonTrivial), instruction_, instruction_->GetDexPc(), this);
+    Primitive::Type ret_type = instruction_->GetType();
+    Location ret_loc = calling_convention.GetReturnLocation(ret_type);
+    arm64_codegen->MoveLocation(locations->Out(), ret_loc, ret_type);
+    CheckEntrypointTypes<kQuickInstanceofNonTrivial, uint32_t,
+                        const mirror::Class*, const mirror::Class*>();
+
+    RestoreLiveRegisters(codegen, locations);
+    __ B(GetExitLabel());
+  }
+
+  const char* GetDescription() const OVERRIDE { return "InstanceCheckSlowPathARM64"; }
+
+ private:
+  HInstruction* const instruction_;
+
+  DISALLOW_COPY_AND_ASSIGN(InstanceCheckSlowPathARM64);
 };
 
 class DeoptimizationSlowPathARM64 : public SlowPathCodeARM64 {
@@ -1090,16 +1124,85 @@ void CodeGeneratorARM64::InvokeRuntime(int32_t entry_point_offset,
                                        HInstruction* instruction,
                                        uint32_t dex_pc,
                                        SlowPathCode* slow_path) {
+  // Blocks pools to prevent any code being generated between the branch
+  // instructions and their associated RecordPcInfo calls.
   BlockPoolsScope block_pools(GetVIXLAssembler());
-  __ Ldr(lr, MemOperand(tr, entry_point_offset));
-  __ Blr(lr);
-  RecordPcInfo(instruction, dex_pc, slow_path);
+  UseScratchRegisterScope temps(GetVIXLAssembler());
+  Register temp = temps.AcquireX();
+  __ Ldr(temp, MemOperand(tr, entry_point_offset));
+
+  if (slow_path != nullptr && slow_path->HasMultipleUses()) {
+    DCHECK(slow_path->IsShareable());
+    if (slow_path->IsFatal()) {
+      // The pc info has been recorded for the caller - see BranchToSlowPath.
+      // Note: We do not use Blr since this will trash the LR register set by
+      // the SlowPath caller.
+      __ Br(temp);
+    } else {
+      __ Blr(temp);
+      slow_path->RecordPcInfo(this, instruction, dex_pc);
+    }
+  } else {
+    __ Blr(temp);
+    RecordPcInfo(instruction, dex_pc, slow_path);
+  }
   DCHECK(instruction->IsSuspendCheck()
          || instruction->IsBoundsCheck()
          || instruction->IsNullCheck()
          || instruction->IsDivZeroCheck()
          || !IsLeafMethod());
 }
+
+void CodeGeneratorARM64::BranchToSlowPath(HInstruction* instruction) {
+  DCHECK(instruction->HasSlowPath());
+  SlowPathCodeARM64* slow_path = down_cast<SlowPathCodeARM64*>(instruction->GetSlowPath());
+  BlockPoolsScope block_pools(GetVIXLAssembler());
+
+  if (slow_path->HasOnlyOneUse()) {
+    __ B(slow_path->GetEntryLabel());
+  } else {
+    DCHECK(slow_path->HasMultipleUses());
+    __ Bl(slow_path->GetEntryLabel());
+  }
+  slow_path->MaybeRecordPcInfo(this, instruction);
+}
+
+void CodeGeneratorARM64::BranchToSlowPathIfZero(HInstruction* instruction,
+                                                const vixl::Register& reg) {
+  DCHECK(instruction->HasSlowPath());
+  SlowPathCodeARM64* slow_path = down_cast<SlowPathCodeARM64*>(instruction->GetSlowPath());
+  BlockPoolsScope block_pools(GetVIXLAssembler());
+
+  if (slow_path->HasOnlyOneUse()) {
+    __ Cbz(reg, slow_path->GetEntryLabel());
+  } else {
+    DCHECK(slow_path->HasMultipleUses());
+    vixl::Label done;
+    __ Cbnz(reg, &done);
+    __ Bl(slow_path->GetEntryLabel());
+    __ Bind(&done);
+  }
+  slow_path->MaybeRecordPcInfo(this, instruction);
+}
+
+void CodeGeneratorARM64::BranchToSlowPathIfNonZero(HInstruction* instruction,
+                                                   const vixl::Register& reg) {
+  DCHECK(instruction->HasSlowPath());
+  SlowPathCodeARM64* slow_path = down_cast<SlowPathCodeARM64*>(instruction->GetSlowPath());
+  BlockPoolsScope block_pools(GetVIXLAssembler());
+
+  if (slow_path->HasOnlyOneUse()) {
+    __ Cbnz(reg, slow_path->GetEntryLabel());
+  } else {
+    DCHECK(slow_path->HasMultipleUses());
+    vixl::Label done;
+    __ Cbz(reg, &done);
+    __ Bl(slow_path->GetEntryLabel());
+    __ Bind(&done);
+  }
+  slow_path->MaybeRecordPcInfo(this, instruction);
+}
+
 
 void InstructionCodeGeneratorARM64::GenerateClassInitializationCheck(SlowPathCodeARM64* slow_path,
                                                                      vixl::Register class_reg) {
@@ -1149,31 +1252,26 @@ void InstructionCodeGeneratorARM64::GenerateMemoryBarrier(MemBarrierKind kind) {
 
 void InstructionCodeGeneratorARM64::GenerateSuspendCheck(HSuspendCheck* instruction,
                                                          HBasicBlock* successor) {
-  SuspendCheckSlowPathARM64* slow_path =
-      down_cast<SuspendCheckSlowPathARM64*>(instruction->GetSlowPath());
-  if (slow_path == nullptr) {
-    slow_path = new (GetGraph()->GetArena()) SuspendCheckSlowPathARM64(instruction, successor);
-    instruction->SetSlowPath(slow_path);
-    codegen_->AddSlowPath(slow_path);
-    if (successor != nullptr) {
-      DCHECK(successor->IsLoopHeader());
-      codegen_->ClearSpillSlotsFromLoopPhisInStackMap(instruction);
-    }
-  } else {
-    DCHECK_EQ(slow_path->GetSuccessor(), successor);
-  }
-
+  DCHECK(instruction->HasSlowPath());
+  SuspendCheckSlowPathARM64* slow_path = down_cast<SuspendCheckSlowPathARM64*>(instruction->GetSlowPath());
   UseScratchRegisterScope temps(codegen_->GetVIXLAssembler());
   Register temp = temps.AcquireW();
 
+  if (successor != nullptr) {
+    DCHECK(successor->IsLoopHeader());
+    slow_path->SetSuccessor(successor);
+    codegen_->ClearSpillSlotsFromLoopPhisInStackMap(instruction);
+  }
+
   __ Ldrh(temp, MemOperand(tr, Thread::ThreadFlagsOffset<kArm64WordSize>().SizeValue()));
-  if (successor == nullptr) {
-    __ Cbnz(temp, slow_path->GetEntryLabel());
-    __ Bind(slow_path->GetReturnLabel());
-  } else {
-    __ Cbz(temp, codegen_->GetLabelOf(successor));
-    __ B(slow_path->GetEntryLabel());
-    // slow_path will return to GetLabelOf(successor).
+  codegen_->BranchToSlowPathIfNonZero(instruction, temp);
+
+  if (successor != nullptr) {
+    if (slow_path->HasMultipleUses()) {
+      __ B(codegen_->GetLabelOf(successor));
+    }
+  } else if (slow_path->HasOnlyOneUse()) {
+    __ Bind(slow_path->GetExitLabel());
   }
 }
 
@@ -1584,13 +1682,14 @@ void LocationsBuilderARM64::VisitBoundsCheck(HBoundsCheck* instruction) {
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
+
+  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) BoundsCheckSlowPathARM64(instruction);
+  codegen_->AddSlowPath(slow_path, instruction);
 }
 
 void InstructionCodeGeneratorARM64::VisitBoundsCheck(HBoundsCheck* instruction) {
-  LocationSummary* locations = instruction->GetLocations();
-  BoundsCheckSlowPathARM64* slow_path = new (GetGraph()->GetArena()) BoundsCheckSlowPathARM64(
-      instruction, locations->InAt(0), locations->InAt(1));
-  codegen_->AddSlowPath(slow_path);
+  DCHECK(instruction->HasSlowPath());
+  BoundsCheckSlowPathARM64* slow_path = down_cast<BoundsCheckSlowPathARM64*>(instruction->GetSlowPath());
 
   __ Cmp(InputRegisterAt(instruction, 0), InputOperandAt(instruction, 1));
   __ B(slow_path->GetEntryLabel(), hs);
@@ -1602,17 +1701,17 @@ void LocationsBuilderARM64::VisitCheckCast(HCheckCast* instruction) {
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
   locations->AddTemp(Location::RequiresRegister());
+
+  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) CheckCastSlowPathARM64(instruction);
+  codegen_->AddSlowPath(slow_path, instruction);
 }
 
 void InstructionCodeGeneratorARM64::VisitCheckCast(HCheckCast* instruction) {
-  LocationSummary* locations = instruction->GetLocations();
+  DCHECK(instruction->HasSlowPath());
   Register obj = InputRegisterAt(instruction, 0);;
   Register cls = InputRegisterAt(instruction, 1);;
   Register obj_cls = WRegisterFrom(instruction->GetLocations()->GetTemp(0));
-
-  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) TypeCheckSlowPathARM64(
-      instruction, locations->InAt(1), LocationFrom(obj_cls), instruction->GetDexPc());
-  codegen_->AddSlowPath(slow_path);
+  CheckCastSlowPathARM64* slow_path = down_cast<CheckCastSlowPathARM64*>(instruction->GetSlowPath());
 
   // Avoid null check if we know obj is not null.
   if (instruction->MustDoNullCheck()) {
@@ -1635,13 +1734,16 @@ void LocationsBuilderARM64::VisitClinitCheck(HClinitCheck* check) {
   if (check->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
+
+  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena())
+      LoadClassSlowPathARM64(check->GetLoadClass(), check, check->GetDexPc(), true);
+  codegen_->AddSlowPath(slow_path, check);
 }
 
 void InstructionCodeGeneratorARM64::VisitClinitCheck(HClinitCheck* check) {
+  DCHECK(check->HasSlowPath());
   // We assume the class is not null.
-  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM64(
-      check->GetLoadClass(), check, check->GetDexPc(), true);
-  codegen_->AddSlowPath(slow_path);
+  LoadClassSlowPathARM64* slow_path = down_cast<LoadClassSlowPathARM64*>(check->GetSlowPath());
   GenerateClassInitializationCheck(slow_path, InputRegisterAt(check, 0));
 }
 
@@ -1979,14 +2081,14 @@ void LocationsBuilderARM64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
+
+  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) DivZeroCheckSlowPathARM64(instruction);
+  codegen_->AddSlowPath(slow_path, instruction);
 }
 
 void InstructionCodeGeneratorARM64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
-  SlowPathCodeARM64* slow_path =
-      new (GetGraph()->GetArena()) DivZeroCheckSlowPathARM64(instruction);
-  codegen_->AddSlowPath(slow_path);
+  DCHECK(instruction->HasSlowPath());
   Location value = instruction->GetLocations()->InAt(0);
-
   Primitive::Type type = instruction->GetType();
 
   if ((type != Primitive::kPrimInt) && (type != Primitive::kPrimLong)) {
@@ -1997,13 +2099,13 @@ void InstructionCodeGeneratorARM64::VisitDivZeroCheck(HDivZeroCheck* instruction
   if (value.IsConstant()) {
     int64_t divisor = Int64ConstantFrom(value);
     if (divisor == 0) {
-      __ B(slow_path->GetEntryLabel());
+      codegen_->BranchToSlowPath(instruction);
     } else {
       // A division by a non-null constant is valid. We don't need to perform
       // any check, so simply fall through.
     }
   } else {
-    __ Cbz(InputRegisterAt(instruction, 0), slow_path->GetEntryLabel());
+    codegen_->BranchToSlowPathIfZero(instruction, InputRegisterAt(instruction, 0));
   }
 }
 
@@ -2190,13 +2292,16 @@ void LocationsBuilderARM64::VisitDeoptimize(HDeoptimize* deoptimize) {
   if (cond->AsCondition()->NeedsMaterialization()) {
     locations->SetInAt(0, Location::RequiresRegister());
   }
+
+  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) DeoptimizationSlowPathARM64(deoptimize);
+  codegen_->AddSlowPath(slow_path, deoptimize);
 }
 
 void InstructionCodeGeneratorARM64::VisitDeoptimize(HDeoptimize* deoptimize) {
-  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena())
-      DeoptimizationSlowPathARM64(deoptimize);
-  codegen_->AddSlowPath(slow_path);
+  DCHECK(deoptimize->HasSlowPath());
+  DeoptimizationSlowPathARM64* slow_path = down_cast<DeoptimizationSlowPathARM64*>(deoptimize->GetSlowPath());
   vixl::Label* slow_path_entry = slow_path->GetEntryLabel();
+
   GenerateTestAndBranch(deoptimize, slow_path_entry, nullptr, slow_path_entry);
 }
 
@@ -2224,6 +2329,12 @@ void LocationsBuilderARM64::VisitInstanceOf(HInstanceOf* instruction) {
   locations->SetInAt(1, Location::RequiresRegister());
   // The output does overlap inputs.
   locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
+
+  if (!instruction->IsClassFinal()) {
+    SlowPathCodeARM64* slow_path =
+        new (GetGraph()->GetArena()) InstanceCheckSlowPathARM64(instruction);
+    codegen_->AddSlowPath(slow_path, instruction);
+  }
 }
 
 void InstructionCodeGeneratorARM64::VisitInstanceOf(HInstanceOf* instruction) {
@@ -2250,16 +2361,14 @@ void InstructionCodeGeneratorARM64::VisitInstanceOf(HInstanceOf* instruction) {
     __ Cset(out, eq);
   } else {
     // If the classes are not equal, we go into a slow path.
+    DCHECK(instruction->HasSlowPath());
     DCHECK(locations->OnlyCallsOnSlowPath());
-    SlowPathCodeARM64* slow_path =
-        new (GetGraph()->GetArena()) TypeCheckSlowPathARM64(
-        instruction, locations->InAt(1), locations->Out(), instruction->GetDexPc());
-    codegen_->AddSlowPath(slow_path);
+    SlowPathCodeARM64* slow_path = down_cast<InstanceCheckSlowPathARM64*>(instruction->GetSlowPath());
+
     __ B(ne, slow_path->GetEntryLabel());
     __ Mov(out, 1);
     __ Bind(slow_path->GetExitLabel());
   }
-
   __ Bind(&done);
 }
 
@@ -2329,7 +2438,7 @@ void InstructionCodeGeneratorARM64::VisitInvokeInterface(HInvokeInterface* invok
 }
 
 void LocationsBuilderARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
-  IntrinsicLocationsBuilderARM64 intrinsic(GetGraph()->GetArena());
+  IntrinsicLocationsBuilderARM64 intrinsic(GetGraph()->GetArena(), codegen_);
   if (intrinsic.TryDispatch(invoke)) {
     return;
   }
@@ -2342,7 +2451,7 @@ void LocationsBuilderARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* inv
   // invokes must have been pruned by art::PrepareForRegisterAllocation.
   DCHECK(codegen_->IsBaseline() || !invoke->IsStaticWithExplicitClinitCheck());
 
-  IntrinsicLocationsBuilderARM64 intrinsic(GetGraph()->GetArena());
+  IntrinsicLocationsBuilderARM64 intrinsic(GetGraph()->GetArena(), codegen_);
   if (intrinsic.TryDispatch(invoke)) {
     return;
   }
@@ -2460,24 +2569,31 @@ void LocationsBuilderARM64::VisitLoadClass(HLoadClass* cls) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(cls, call_kind);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetOut(Location::RequiresRegister());
+
+  if (cls->CanCallRuntime()) {
+    SlowPathCodeARM64* slow_path =
+        new (GetGraph()->GetArena()) LoadClassSlowPathARM64(cls, cls, cls->GetDexPc(),
+                                                        cls->MustGenerateClinitCheck());
+    codegen_->AddSlowPath(slow_path, cls);
+  }
 }
 
 void InstructionCodeGeneratorARM64::VisitLoadClass(HLoadClass* cls) {
   Register out = OutputRegister(cls);
   Register current_method = InputRegisterAt(cls, 0);
+
   if (cls->IsReferrersClass()) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
     __ Ldr(out, MemOperand(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
   } else {
+    DCHECK(cls->HasSlowPath());
     DCHECK(cls->CanCallRuntime());
+    LoadClassSlowPathARM64* slow_path = down_cast<LoadClassSlowPathARM64*>(cls->GetSlowPath());
+
     __ Ldr(out, MemOperand(current_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
     __ Ldr(out, HeapOperand(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
     GetAssembler()->MaybeUnpoisonHeapReference(out.W());
-
-    SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM64(
-        cls, cls, cls->GetDexPc(), cls->MustGenerateClinitCheck());
-    codegen_->AddSlowPath(slow_path);
     __ Cbz(out, slow_path->GetEntryLabel());
     if (cls->MustGenerateClinitCheck()) {
       GenerateClassInitializationCheck(slow_path, out);
@@ -2513,14 +2629,17 @@ void LocationsBuilderARM64::VisitLoadString(HLoadString* load) {
       new (GetGraph()->GetArena()) LocationSummary(load, LocationSummary::kCallOnSlowPath);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetOut(Location::RequiresRegister());
+
+  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathARM64(load);
+  codegen_->AddSlowPath(slow_path, load);
 }
 
 void InstructionCodeGeneratorARM64::VisitLoadString(HLoadString* load) {
-  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathARM64(load);
-  codegen_->AddSlowPath(slow_path);
-
+  DCHECK(load->HasSlowPath());
+  SlowPathCodeARM64* slow_path = down_cast<LoadStringSlowPathARM64*>(load->GetSlowPath());
   Register out = OutputRegister(load);
   Register current_method = InputRegisterAt(load, 0);
+
   __ Ldr(out, MemOperand(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
   __ Ldr(out, HeapOperand(out, mirror::Class::DexCacheStringsOffset()));
   GetAssembler()->MaybeUnpoisonHeapReference(out.W());
@@ -2730,6 +2849,12 @@ void LocationsBuilderARM64::VisitNullCheck(HNullCheck* instruction) {
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
+
+  if (!codegen_->GetCompilerOptions().GetImplicitNullChecks()) {
+    // Explicit Null Checks require a slowpath.
+    SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) NullCheckSlowPathARM64(instruction);
+    codegen_->AddSlowPath(slow_path, instruction);
+  }
 }
 
 void InstructionCodeGeneratorARM64::GenerateImplicitNullCheck(HNullCheck* instruction) {
@@ -2744,13 +2869,8 @@ void InstructionCodeGeneratorARM64::GenerateImplicitNullCheck(HNullCheck* instru
 }
 
 void InstructionCodeGeneratorARM64::GenerateExplicitNullCheck(HNullCheck* instruction) {
-  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) NullCheckSlowPathARM64(instruction);
-  codegen_->AddSlowPath(slow_path);
-
-  LocationSummary* locations = instruction->GetLocations();
-  Location obj = locations->InAt(0);
-
-  __ Cbz(RegisterFrom(obj, instruction->InputAt(0)->GetType()), slow_path->GetEntryLabel());
+  DCHECK(instruction->HasSlowPath());
+  codegen_->BranchToSlowPathIfZero(instruction, InputRegisterAt(instruction, 0));
 }
 
 void InstructionCodeGeneratorARM64::VisitNullCheck(HNullCheck* instruction) {
@@ -2967,6 +3087,9 @@ void InstructionCodeGeneratorARM64::VisitStaticFieldSet(HStaticFieldSet* instruc
 
 void LocationsBuilderARM64::VisitSuspendCheck(HSuspendCheck* instruction) {
   new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
+
+  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) SuspendCheckSlowPathARM64(instruction);
+  codegen_->AddSlowPath(slow_path, instruction);
 }
 
 void InstructionCodeGeneratorARM64::VisitSuspendCheck(HSuspendCheck* instruction) {

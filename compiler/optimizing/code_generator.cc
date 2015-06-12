@@ -121,6 +121,12 @@ size_t CodeGenerator::GetCachePointerOffset(uint32_t index) {
   return mirror::Array::DataOffset(pointer_size).Uint32Value() + pointer_size * index;
 }
 
+void CodeGenerator::MaybeRecordStat(MethodCompilationStat compilation_stat) const {
+  if (stats_ != nullptr) {
+    stats_->RecordStat(compilation_stat);
+  }
+}
+
 void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
   Initialize();
   if (!is_leaf) {
@@ -514,39 +520,50 @@ void CodeGenerator::AllocateLocations(HInstruction* instruction) {
 CodeGenerator* CodeGenerator::Create(HGraph* graph,
                                      InstructionSet instruction_set,
                                      const InstructionSetFeatures& isa_features,
-                                     const CompilerOptions& compiler_options) {
+                                     const CompilerOptions& compiler_options,
+                                     OptimizingCompilerStats* const stats) {
+  CodeGenerator* codegen = nullptr;
+
   switch (instruction_set) {
     case kArm:
     case kThumb2: {
-      return new arm::CodeGeneratorARM(graph,
+      codegen = new arm::CodeGeneratorARM(graph,
           *isa_features.AsArmInstructionSetFeatures(),
           compiler_options);
+      break;
     }
     case kArm64: {
-      return new arm64::CodeGeneratorARM64(graph,
+      codegen = new arm64::CodeGeneratorARM64(graph,
           *isa_features.AsArm64InstructionSetFeatures(),
           compiler_options);
+      break;
     }
     case kMips:
-      return nullptr;
+      break;
     case kMips64: {
-      return new mips64::CodeGeneratorMIPS64(graph,
+      codegen = new mips64::CodeGeneratorMIPS64(graph,
           *isa_features.AsMips64InstructionSetFeatures(),
           compiler_options);
+      break;
     }
     case kX86: {
-      return new x86::CodeGeneratorX86(graph,
+      codegen = new x86::CodeGeneratorX86(graph,
            *isa_features.AsX86InstructionSetFeatures(),
            compiler_options);
+      break;
     }
     case kX86_64: {
-      return new x86_64::CodeGeneratorX86_64(graph,
+      codegen = new x86_64::CodeGeneratorX86_64(graph,
           *isa_features.AsX86_64InstructionSetFeatures(),
           compiler_options);
+      break;
     }
     default:
-      return nullptr;
+      break;
   }
+
+  if (codegen != nullptr) codegen->SetStats(stats);
+  return codegen;
 }
 
 void CodeGenerator::BuildNativeGCMap(
@@ -738,10 +755,11 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
 
   // Collect PC infos for the mapping table.
   uint32_t native_pc = GetAssembler()->CodeSize();
+  uint32_t native_lr = (instruction != nullptr) ? instruction->GetNativeLr() : 0;
 
   if (instruction == nullptr) {
     // For stack overflow checks.
-    stack_map_stream_.BeginStackMapEntry(outer_dex_pc, native_pc, 0, 0, 0, 0);
+    stack_map_stream_.BeginStackMapEntry(outer_dex_pc, native_pc, native_lr, 0, 0, 0, 0);
     stack_map_stream_.EndStackMapEntry();
     return;
   }
@@ -760,6 +778,7 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
   DCHECK_EQ(register_mask & core_callee_save_mask_, register_mask);
   stack_map_stream_.BeginStackMapEntry(outer_dex_pc,
                                        native_pc,
+                                       native_lr,
                                        register_mask,
                                        locations->GetStackMask(),
                                        outer_environment_size,
@@ -1005,8 +1024,73 @@ void CodeGenerator::EmitParallelMoves(Location from1,
   GetMoveResolver()->EmitNativeCode(&parallel_move);
 }
 
+void CodeGenerator::AddSlowPath(SlowPathCode* slow_path, HInstruction* instruction) {
+  // Currently we only try to share SlowPaths when not compiling with baseline
+  // and when we do not need to ensure full debuggability. While further
+  // versions of this code size optimisation should not be enabled for baseline
+  // compilation, full debuggability could probably be supported.
+  if (kShareSlowPaths && !IsBaseline() && !GetGraph()->IsDebuggable()) {
+    if (slow_path->IsShareable()) {
+      // TODO: Iterate over SlowPaths types.
+      for (size_t i = 0; i < slow_paths_.Size(); ++i) {
+        SlowPathCode* current = slow_paths_.Get(i);
+        if (current->IsShareable() && slow_path->CanBeMergedWith(current)) {
+          DCHECK(instruction);
+          current->AddUse(instruction, GetGraph()->GetArena());
+          MaybeRecordStat(current->IsFatal()
+                          ? MethodCompilationStat::kRemovedDuplicateFatalSlowPath
+                          : MethodCompilationStat::kRemovedDuplicateNonFatalSlowPath);
+          return;
+        }
+      }
+    }
+  }
+
+  if (instruction != nullptr) {
+    slow_path->AddUse(instruction, GetGraph()->GetArena());
+  }
+
+  slow_paths_.Add(slow_path);
+}
+
 void SlowPathCode::RecordPcInfo(CodeGenerator* codegen, HInstruction* instruction, uint32_t dex_pc) {
-  codegen->RecordPcInfo(instruction, dex_pc, this);
+  if (HasMultipleUses() && !IsFatal()) {
+    // Iterate over the instruction uses and generate a pc info record for each.
+    for (HUseIterator<HInstruction*> use_it(GetUses()); !use_it.Done(); use_it.Advance()) {
+      HInstruction* current_use = use_it.Current()->GetUser();
+      codegen->RecordPcInfo(current_use, current_use->GetDexPc(), this);
+    }
+  } else {
+    codegen->RecordPcInfo(instruction, dex_pc, this);
+  }
+}
+
+void SlowPathCode::MaybeRecordPcInfo(CodeGenerator* codegen, HInstruction* instruction) {
+  // For SlowPaths with multiple uses we record the pc info or the native lr.
+  if (HasMultipleUses()) {
+    if (IsFatal()) {
+      // For fatal SlowPaths we recod the pc info of the caller.
+      RecordPcInfo(codegen, instruction, instruction->GetDexPc());
+    } else {
+      // For non-fatal SlowPaths we record the native lr (i.e the caller pc).
+      uint32_t native_pc = codegen->GetAssembler()->CodeSize();
+      instruction->SetNativeLr(native_pc);
+    }
+  }
+}
+
+void SlowPathCode::UpdateSetStackBit(size_t reg, size_t offset, LocationSummary* locations) {
+  if (HasOnlyOneUse() && locations->RegisterContainsObject(reg)) {
+      locations->SetStackBit(offset / kVRegSize);
+  } else {
+    for (HUseIterator<HInstruction*> use_it(GetUses()); !use_it.Done(); use_it.Advance()) {
+      HInstruction* current_use = use_it.Current()->GetUser();
+      LocationSummary* current_locations = current_use->GetLocations();
+      if (current_locations->RegisterContainsObject(reg)) {
+        current_locations->SetStackBit(offset / kVRegSize);
+      }
+    }
+  }
 }
 
 void SlowPathCode::SaveLiveRegisters(CodeGenerator* codegen, LocationSummary* locations) {

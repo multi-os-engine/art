@@ -427,6 +427,13 @@ class RegisterSet : public ValueObject {
     }
   }
 
+  bool Contains(RegisterSet* other) const {
+    return (((core_registers_ & other->core_registers_)
+             == other->core_registers_)
+            && ((floating_point_registers_ & other->floating_point_registers_)
+                == other->floating_point_registers_));
+  }
+
   bool ContainsCoreRegister(uint32_t id) const {
     return Contains(core_registers_, id);
   }
@@ -440,7 +447,15 @@ class RegisterSet : public ValueObject {
   }
 
   size_t GetNumberOfRegisters() const {
-    return __builtin_popcount(core_registers_) + __builtin_popcount(floating_point_registers_);
+    return POPCOUNT(core_registers_) + POPCOUNT(floating_point_registers_);
+  }
+
+  size_t GetNumberOfCoreRegisters() const {
+    return POPCOUNT(core_registers_);
+  }
+
+  size_t GetNumberOfFloatingPointRegisters() const {
+    return POPCOUNT(floating_point_registers_);
   }
 
   uint32_t GetCoreRegisters() const {

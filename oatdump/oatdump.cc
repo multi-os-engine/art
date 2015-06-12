@@ -307,6 +307,7 @@ class OatDumperOptions {
                    bool dump_raw_gc_map,
                    bool dump_vmap,
                    bool dump_code_info_stack_maps,
+                   bool dump_size_stats,
                    bool disassemble_code,
                    bool absolute_addresses,
                    const char* class_filter,
@@ -319,6 +320,7 @@ class OatDumperOptions {
       dump_raw_gc_map_(dump_raw_gc_map),
       dump_vmap_(dump_vmap),
       dump_code_info_stack_maps_(dump_code_info_stack_maps),
+      dump_size_stats_(dump_size_stats),
       disassemble_code_(disassemble_code),
       absolute_addresses_(absolute_addresses),
       class_filter_(class_filter),
@@ -333,6 +335,7 @@ class OatDumperOptions {
   const bool dump_raw_gc_map_;
   const bool dump_vmap_;
   const bool dump_code_info_stack_maps_;
+  const bool dump_size_stats_;
   const bool disassemble_code_;
   const bool absolute_addresses_;
   const char* const class_filter_;
@@ -452,8 +455,20 @@ class OatDumper {
     }
 
     os << "SIZE:\n";
-    os << oat_file_.Size() << "\n\n";
+    os << oat_file_.Size() << "\n";
 
+    if (options_.dump_size_stats_) {
+      uint32_t rodata_size = oat_file_.GetOatHeader().GetExecutableOffset();
+      uint32_t text_size = oat_file_.Size() - rodata_size;
+      uint32_t bss_size = oat_file_.BssSize();
+
+      os << "section      size";
+      os << ".bss_size   " << bss_size << "\n";
+      os << ".rodata     " << rodata_size << "\n";
+      os << ".text_size  " << text_size << "\n";
+    }
+
+    os << "\n";
     os << std::flush;
 
     // If set, adjust relative address to be searched
@@ -1348,9 +1363,10 @@ class OatDumper {
       CodeInfo code_info(raw_code_info);
       StackMapEncoding encoding = code_info.ExtractEncoding();
       StackMap stack_map = code_info.GetStackMapForNativePcOffset(offset, encoding);
-      if (stack_map.IsValid()) {
+      while (stack_map.IsValid()) {
         stack_map.Dump(
             os, code_info, encoding, oat_method.GetCodeOffset(), code_item->registers_size_);
+        stack_map = code_info.GetNextStackMapForNativePcOffset(offset, stack_map, encoding);
       }
     }
   }
@@ -2377,6 +2393,8 @@ struct OatdumpArgs : public CmdlineArgs {
       dump_vmap_ = false;
     } else if (option =="--dump:code_info_stack_maps") {
       dump_code_info_stack_maps_ = true;
+    } else if (option =="--dump:size_stats") {
+      dump_size_stats_ = true;
     } else if (option == "--no-disassemble") {
       disassemble_code_ = false;
     } else if (option.starts_with("--symbolize=")) {
@@ -2459,6 +2477,9 @@ struct OatdumpArgs : public CmdlineArgs {
         "  --dump:code_info_stack_maps enables dumping of stack maps in CodeInfo sections.\n"
         "      Example: --dump:code_info_stack_maps\n"
         "\n"
+        "  --dump:size_stats enables dumping of size information for the oat file.\n"
+        "      Example: --dump:size_stats\n"
+        "\n"
         "  --no-disassemble may be used to disable disassembly.\n"
         "      Example: --no-disassemble\n"
         "\n"
@@ -2500,6 +2521,7 @@ struct OatdumpArgs : public CmdlineArgs {
   bool dump_raw_gc_map_ = false;
   bool dump_vmap_ = true;
   bool dump_code_info_stack_maps_ = false;
+  bool dump_size_stats_ = false;
   bool disassemble_code_ = true;
   bool symbolize_ = false;
   bool list_classes_ = false;
@@ -2520,6 +2542,7 @@ struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
         args_->dump_raw_gc_map_,
         args_->dump_vmap_,
         args_->dump_code_info_stack_maps_,
+        args_->dump_size_stats_,
         args_->disassemble_code_,
         absolute_addresses,
         args_->class_filter_,

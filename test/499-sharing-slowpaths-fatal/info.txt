@@ -1,0 +1,3 @@
+Simple test for checking that sharing div zero slowpaths still works.
+
+TODO: Extend this with checker tests.

@@ -19,6 +19,7 @@ namespace art {
 
 void StackMapStream::BeginStackMapEntry(uint32_t dex_pc,
                                         uint32_t native_pc_offset,
+                                        uint32_t native_lr_offset,
                                         uint32_t register_mask,
                                         BitVector* sp_mask,
                                         uint32_t num_dex_registers,
@@ -26,6 +27,7 @@ void StackMapStream::BeginStackMapEntry(uint32_t dex_pc,
   DCHECK_EQ(0u, current_entry_.dex_pc) << "EndStackMapEntry not called after BeginStackMapEntry";
   current_entry_.dex_pc = dex_pc;
   current_entry_.native_pc_offset = native_pc_offset;
+  current_entry_.native_lr_offset = native_lr_offset;
   current_entry_.register_mask = register_mask;
   current_entry_.sp_mask = sp_mask;
   current_entry_.num_dex_registers = num_dex_registers;
@@ -135,17 +137,28 @@ uint32_t StackMapStream::ComputeMaxNativePcOffset() const {
   return max_native_pc_offset;
 }
 
+uint32_t StackMapStream::ComputeMaxNativeLrOffset() const {
+  uint32_t max_native_lr_offset = 0u;
+  for (size_t i = 0, size = stack_maps_.Size(); i != size; ++i) {
+    max_native_lr_offset = std::max(max_native_lr_offset, stack_maps_.Get(i).native_lr_offset);
+  }
+  return max_native_lr_offset;
+}
+
+
 size_t StackMapStream::PrepareForFillIn() {
   int stack_mask_number_of_bits = stack_mask_max_ + 1;  // Need room for max element too.
   stack_mask_size_ = RoundUp(stack_mask_number_of_bits, kBitsPerByte) / kBitsPerByte;
   inline_info_size_ = ComputeInlineInfoSize();
   dex_register_maps_size_ = ComputeDexRegisterMapsSize();
   uint32_t max_native_pc_offset = ComputeMaxNativePcOffset();
+  uint32_t max_native_lr_offset = ComputeMaxNativeLrOffset();
   stack_map_encoding_ = StackMapEncoding::CreateFromSizes(stack_mask_size_,
                                                           inline_info_size_,
                                                           dex_register_maps_size_,
                                                           dex_pc_max_,
                                                           max_native_pc_offset,
+                                                          max_native_lr_offset,
                                                           register_mask_max_);
   stack_maps_size_ = stack_maps_.Size() * stack_map_encoding_.ComputeStackMapSize();
   dex_register_location_catalog_size_ = ComputeDexRegisterLocationCatalogSize();
@@ -271,6 +284,7 @@ void StackMapStream::FillIn(MemoryRegion region) {
 
     stack_map.SetDexPc(stack_map_encoding_, entry.dex_pc);
     stack_map.SetNativePcOffset(stack_map_encoding_, entry.native_pc_offset);
+    stack_map.SetNativeLrOffset(stack_map_encoding_, entry.native_lr_offset);
     stack_map.SetRegisterMask(stack_map_encoding_, entry.register_mask);
     if (entry.sp_mask != nullptr) {
       stack_map.SetStackMask(stack_map_encoding_, *entry.sp_mask);

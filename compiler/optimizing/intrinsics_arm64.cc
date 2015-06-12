@@ -959,11 +959,16 @@ void IntrinsicLocationsBuilderARM64::VisitStringCharAt(HInvoke* invoke) {
   // as the input: the current liveness analysis considers the input to be live
   // at the point of the call.
   locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
+
+  SlowPathCodeARM64* slow_path = new (arena_) IntrinsicSlowPathARM64(invoke);
+  codegen_->AddSlowPath(slow_path, invoke);
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringCharAt(HInvoke* invoke) {
+  DCHECK(invoke->HasSlowPath());
   vixl::MacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
+  SlowPathCodeARM64* slow_path = down_cast<IntrinsicSlowPathARM64*>(invoke->GetSlowPath());
 
   // Location of reference to data array
   const MemberOffset value_offset = mirror::String::ValueOffset();
@@ -982,9 +987,6 @@ void IntrinsicCodeGeneratorARM64::VisitStringCharAt(HInvoke* invoke) {
   //       the cost.
   // TODO: For simplicity, the index parameter is requested in a register, so different from Quick
   //       we will not optimize the code for constants (which would save a register).
-
-  SlowPathCodeARM64* slow_path = new (GetAllocator()) IntrinsicSlowPathARM64(invoke);
-  codegen_->AddSlowPath(slow_path);
 
   __ Ldr(temp, HeapOperand(obj, count_offset));          // temp = str.length.
   codegen_->MaybeRecordImplicitNullCheck(invoke);
@@ -1007,21 +1009,23 @@ void IntrinsicLocationsBuilderARM64::VisitStringCompareTo(HInvoke* invoke) {
   locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
   locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
   locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimInt));
+
+  SlowPathCodeARM64* slow_path = new (arena_) IntrinsicSlowPathARM64(invoke);
+  codegen_->AddSlowPath(slow_path, invoke);
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringCompareTo(HInvoke* invoke) {
+  DCHECK(invoke->HasSlowPath());
   vixl::MacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
+  SlowPathCodeARM64* slow_path = down_cast<IntrinsicSlowPathARM64*>(invoke->GetSlowPath());
 
   // Note that the null check must have been done earlier.
   DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
 
   Register argument = WRegisterFrom(locations->InAt(1));
   __ Cmp(argument, 0);
-  SlowPathCodeARM64* slow_path = new (GetAllocator()) IntrinsicSlowPathARM64(invoke);
-  codegen_->AddSlowPath(slow_path);
   __ B(eq, slow_path->GetEntryLabel());
-
   __ Ldr(
       lr, MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pStringCompareTo).Int32Value()));
   __ Blr(lr);
@@ -1030,9 +1034,8 @@ void IntrinsicCodeGeneratorARM64::VisitStringCompareTo(HInvoke* invoke) {
 
 static void GenerateVisitStringIndexOf(HInvoke* invoke,
                                        vixl::MacroAssembler* masm,
-                                       CodeGeneratorARM64* codegen,
-                                       ArenaAllocator* allocator,
                                        bool start_at_zero) {
+  DCHECK(invoke->HasSlowPath());
   LocationSummary* locations = invoke->GetLocations();
   Register tmp_reg = WRegisterFrom(locations->GetTemp(0));
 
@@ -1041,13 +1044,11 @@ static void GenerateVisitStringIndexOf(HInvoke* invoke,
 
   // Check for code points > 0xFFFF. Either a slow-path check when we don't know statically,
   // or directly dispatch if we have a constant.
-  SlowPathCodeARM64* slow_path = nullptr;
+  SlowPathCodeARM64* slow_path = down_cast<IntrinsicSlowPathARM64*>(invoke->GetSlowPath());
   if (invoke->InputAt(1)->IsIntConstant()) {
     if (static_cast<uint32_t>(invoke->InputAt(1)->AsIntConstant()->GetValue()) > 0xFFFFU) {
       // Always needs the slow-path. We could directly dispatch to it, but this case should be
       // rare, so for simplicity just put the full slow-path down and branch unconditionally.
-      slow_path = new (allocator) IntrinsicSlowPathARM64(invoke);
-      codegen->AddSlowPath(slow_path);
       __ B(slow_path->GetEntryLabel());
       __ Bind(slow_path->GetExitLabel());
       return;
@@ -1056,8 +1057,6 @@ static void GenerateVisitStringIndexOf(HInvoke* invoke,
     Register char_reg = WRegisterFrom(locations->InAt(1));
     __ Mov(tmp_reg, 0xFFFF);
     __ Cmp(char_reg, Operand(tmp_reg));
-    slow_path = new (allocator) IntrinsicSlowPathARM64(invoke);
-    codegen->AddSlowPath(slow_path);
     __ B(hi, slow_path->GetEntryLabel());
   }
 
@@ -1087,10 +1086,13 @@ void IntrinsicLocationsBuilderARM64::VisitStringIndexOf(HInvoke* invoke) {
 
   // Need a temp for slow-path codepoint compare, and need to send start_index=0.
   locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(2)));
+
+  SlowPathCodeARM64* slow_path = new (arena_) IntrinsicSlowPathARM64(invoke);
+  codegen_->AddSlowPath(slow_path, invoke);
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringIndexOf(HInvoke* invoke) {
-  GenerateVisitStringIndexOf(invoke, GetVIXLAssembler(), codegen_, GetAllocator(), true);
+  GenerateVisitStringIndexOf(invoke, GetVIXLAssembler(), true);
 }
 
 void IntrinsicLocationsBuilderARM64::VisitStringIndexOfAfter(HInvoke* invoke) {
@@ -1107,10 +1109,13 @@ void IntrinsicLocationsBuilderARM64::VisitStringIndexOfAfter(HInvoke* invoke) {
 
   // Need a temp for slow-path codepoint compare.
   locations->AddTemp(Location::RequiresRegister());
+
+  SlowPathCodeARM64* slow_path = new (arena_) IntrinsicSlowPathARM64(invoke);
+  codegen_->AddSlowPath(slow_path, invoke);
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringIndexOfAfter(HInvoke* invoke) {
-  GenerateVisitStringIndexOf(invoke, GetVIXLAssembler(), codegen_, GetAllocator(), false);
+  GenerateVisitStringIndexOf(invoke, GetVIXLAssembler(), false);
 }
 
 void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromBytes(HInvoke* invoke) {
@@ -1123,18 +1128,19 @@ void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromBytes(HInvoke* invo
   locations->SetInAt(2, LocationFrom(calling_convention.GetRegisterAt(2)));
   locations->SetInAt(3, LocationFrom(calling_convention.GetRegisterAt(3)));
   locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimNot));
+
+  SlowPathCodeARM64* slow_path = new (arena_) IntrinsicSlowPathARM64(invoke);
+  codegen_->AddSlowPath(slow_path, invoke);
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromBytes(HInvoke* invoke) {
+  DCHECK(invoke->HasSlowPath());
   vixl::MacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
-
   Register byte_array = WRegisterFrom(locations->InAt(0));
-  __ Cmp(byte_array, 0);
-  SlowPathCodeARM64* slow_path = new (GetAllocator()) IntrinsicSlowPathARM64(invoke);
-  codegen_->AddSlowPath(slow_path);
-  __ B(eq, slow_path->GetEntryLabel());
+  SlowPathCodeARM64* slow_path = down_cast<IntrinsicSlowPathARM64*>(invoke->GetSlowPath());
 
+  __ Cbz(byte_array, slow_path->GetEntryLabel());
   __ Ldr(lr,
       MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pAllocStringFromBytes).Int32Value()));
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
@@ -1172,18 +1178,19 @@ void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromString(HInvoke* inv
   locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
   locations->SetInAt(2, LocationFrom(calling_convention.GetRegisterAt(2)));
   locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimNot));
+
+  SlowPathCodeARM64* slow_path = new (arena_) IntrinsicSlowPathARM64(invoke);
+  codegen_->AddSlowPath(slow_path, invoke);
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromString(HInvoke* invoke) {
+  DCHECK(invoke->HasSlowPath());
   vixl::MacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
-
   Register string_to_copy = WRegisterFrom(locations->InAt(0));
-  __ Cmp(string_to_copy, 0);
-  SlowPathCodeARM64* slow_path = new (GetAllocator()) IntrinsicSlowPathARM64(invoke);
-  codegen_->AddSlowPath(slow_path);
-  __ B(eq, slow_path->GetEntryLabel());
+  SlowPathCodeARM64* slow_path = down_cast<IntrinsicSlowPathARM64*>(invoke->GetSlowPath());
 
+  __ Cbz(string_to_copy, slow_path->GetEntryLabel());
   __ Ldr(lr,
       MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pAllocStringFromString).Int32Value()));
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());

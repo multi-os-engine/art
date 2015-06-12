@@ -95,6 +95,7 @@ static bool ShouldProcess(bool processing_core_registers, LiveInterval* interval
 
 void RegisterAllocator::AllocateRegisters() {
   AllocateRegistersInternal();
+  ResolveSlowPaths();
   Resolve();
 
   if (kIsDebugBuild) {
@@ -582,6 +583,49 @@ void RegisterAllocator::DumpAllIntervals(std::ostream& stream) const {
   }
 }
 
+void RegisterAllocator::AddLiveRegistersToSlowPath(LiveInterval* interval) {
+  // Temporary fallback for the other architectures.
+  if (codegen_->GetInstructionSet() != kArm64) {
+    return;
+  }
+  DCHECK(interval->IsSlowPathSafepoint());
+  DCHECK(interval->GetDefinedBy()->HasSlowPath());
+  SlowPathCode* slow_path = interval->GetDefinedBy()->GetSlowPath();
+
+  for (size_t i = 0, e = active_.Size(); i < e; ++i) {
+    LiveInterval* current = active_.Get(i);
+    DCHECK(current->HasRegister());
+    slow_path->AddLiveRegister(current->ToLocation());
+  }
+}
+
+void RegisterAllocator::ResolveSlowPaths() {
+  // Temporary fallback for architectures that do not support sharing SlowPaths.
+  if (codegen_->GetInstructionSet() != kArm64) {
+    return;
+  }
+  const GrowableArray<SlowPathCode*> slow_paths = codegen_->GetSlowPaths();
+  bool needs_native_lr_slot = false;
+
+  for (size_t i = 0; i < slow_paths.Size(); ++i) {
+    SlowPathCode* current = slow_paths.Get(i);
+    needs_native_lr_slot |= current->NeedsNativeLrSlot();
+
+    maximum_number_of_live_core_registers_ =
+        std::max(maximum_number_of_live_core_registers_,
+                 current->GetNumberOfLiveCoreRegisters());
+    maximum_number_of_live_fp_registers_ =
+        std::max(maximum_number_of_live_fp_registers_,
+                 current->GetNumberOfLiveFloatingPointRegisters());
+  }
+
+  if (needs_native_lr_slot) {
+    // Add an extra stack slot for saving LR.
+    maximum_number_of_live_core_registers_++;
+    codegen_->SetRequiresNativeLrSlot();
+  }
+}
+
 // By the book implementation of a linear scan register allocator.
 void RegisterAllocator::LinearScan() {
   while (!unhandled_->IsEmpty()) {
@@ -632,6 +676,11 @@ void RegisterAllocator::LinearScan() {
     }
 
     if (current->IsSlowPathSafepoint()) {
+      // TODO: When the SlowPath infrastructure is merged and available
+      // for all architectures we should only call AddLiveRegistersToSlowPath() once.
+      // Every current->IsSlowPathSafepoint() should be added to a slow_paths_ array.
+      AddLiveRegistersToSlowPath(current);
+
       // Synthesized interval to record the maximum number of live registers
       // at safepoints. No need to allocate a register for it.
       if (processing_core_registers_) {

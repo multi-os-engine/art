@@ -84,6 +84,9 @@ class RegisterAllocator {
   bool AllocateBlockedReg(LiveInterval* interval);
   void Resolve();
 
+  void AddLiveRegistersToSlowPath(LiveInterval* interval);
+  void ResolveSlowPaths();
+
   // Add `interval` in the given sorted list.
   static void AddSorted(GrowableArray<LiveInterval*>* array, LiveInterval* interval);
 

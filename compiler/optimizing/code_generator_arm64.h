@@ -352,6 +352,10 @@ class CodeGeneratorARM64 : public CodeGenerator {
                      uint32_t dex_pc,
                      SlowPathCode* slow_path);
 
+  void BranchToSlowPath(HInstruction* instruction);
+  void BranchToSlowPathIfZero(HInstruction* instruction, const vixl::Register& reg);
+  void BranchToSlowPathIfNonZero(HInstruction* instruction, const vixl::Register& reg);
+
   ParallelMoveResolverARM64* GetMoveResolver() { return &move_resolver_; }
 
   bool NeedsTwoRegisters(Primitive::Type type ATTRIBUTE_UNUSED) const OVERRIDE {
