@@ -705,11 +705,6 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   // `kNoRegister`.
   int FindFirstRegisterHint(size_t* free_until, const SsaLivenessAnalysis& liveness) const;
 
-  // If there is enough at the definition site to find a register (for example
-  // it uses the same input as the first input), returns the register as a hint.
-  // Returns kNoRegister otherwise.
-  int FindHintAtDefinition() const;
-
   // Returns whether the interval needs two (Dex virtual register size `kVRegSize`)
   // slots for spilling.
   bool NeedsTwoSpillSlots() const;

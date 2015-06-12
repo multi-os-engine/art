@@ -325,13 +325,27 @@ int LiveInterval::FindFirstRegisterHint(size_t* free_until,
   DCHECK(!IsHighInterval());
   if (IsTemp()) return kNoRegister;
 
-  if (GetParent() == this && defined_by_ != nullptr) {
+  if (IsDefiningPosition(GetStart())) {
     // This is the first interval for the instruction. Try to find
     // a register based on its definition.
-    DCHECK_EQ(defined_by_->GetLiveInterval(), this);
-    int hint = FindHintAtDefinition();
-    if (hint != kNoRegister && free_until[hint] > GetStart()) {
-      return hint;
+    LocationSummary* locations = GetDefinedBy()->GetLocations();
+    Location out = locations->Out();
+    if (out.IsUnallocated() && out.GetPolicy() == Location::kSameAsFirstInput) {
+      // Try to use the same register as the first input.
+      LiveInterval* input_interval =
+          GetDefinedBy()->InputAt(0)->GetLiveInterval()->GetSiblingAt(GetStart() - 1);
+      if (input_interval->GetEnd() == GetStart()) {
+        // If the input dies at the start of this instruction, we know its register can
+        // be reused.
+        Location location = input_interval->ToLocation();
+        if (location.IsRegisterKind()) {
+          DCHECK(SameRegisterKind(location));
+          int hint = RegisterOrLowRegister(location);
+          if (free_until[hint] > GetStart()) {
+            return hint;
+          }
+        }
+      }
     }
   }
 
@@ -414,45 +428,28 @@ int LiveInterval::FindFirstRegisterHint(size_t* free_until,
     use = use->GetNext();
   }
 
-  return kNoRegister;
-}
-
-int LiveInterval::FindHintAtDefinition() const {
-  if (defined_by_->IsPhi()) {
+  if (IsDefiningPosition(GetStart()) && defined_by_->IsPhi()) {
     // Try to use the same register as one of the inputs.
     const GrowableArray<HBasicBlock*>& predecessors = defined_by_->GetBlock()->GetPredecessors();
     for (size_t i = 0, e = defined_by_->InputCount(); i < e; ++i) {
       HInstruction* input = defined_by_->InputAt(i);
-      size_t end = predecessors.Get(i)->GetLifetimeEnd();
-      LiveInterval* input_interval = input->GetLiveInterval()->GetSiblingAt(end - 1);
-      if (input_interval->GetEnd() == end) {
+      size_t predecessor_end = predecessors.Get(i)->GetLifetimeEnd();
+      LiveInterval* input_interval = input->GetLiveInterval()->GetSiblingAt(predecessor_end - 1);
+      if (input_interval->GetEnd() == predecessor_end) {
         // If the input dies at the end of the predecessor, we know its register can
         // be reused.
         Location input_location = input_interval->ToLocation();
         if (input_location.IsRegisterKind()) {
           DCHECK(SameRegisterKind(input_location));
-          return RegisterOrLowRegister(input_location);
-        }
-      }
-    }
-  } else {
-    LocationSummary* locations = GetDefinedBy()->GetLocations();
-    Location out = locations->Out();
-    if (out.IsUnallocated() && out.GetPolicy() == Location::kSameAsFirstInput) {
-      // Try to use the same register as the first input.
-      LiveInterval* input_interval =
-          GetDefinedBy()->InputAt(0)->GetLiveInterval()->GetSiblingAt(GetStart() - 1);
-      if (input_interval->GetEnd() == GetStart()) {
-        // If the input dies at the start of this instruction, we know its register can
-        // be reused.
-        Location location = input_interval->ToLocation();
-        if (location.IsRegisterKind()) {
-          DCHECK(SameRegisterKind(location));
-          return RegisterOrLowRegister(location);
+          int hint = RegisterOrLowRegister(input_location);
+          if (free_until[hint] > GetStart()) {
+            return hint;
+          }
         }
       }
     }
   }
+
   return kNoRegister;
 }
 
