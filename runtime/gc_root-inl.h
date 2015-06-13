@@ -27,9 +27,9 @@ namespace art {
 
 template<class MirrorType>
 template<ReadBarrierOption kReadBarrierOption>
-inline MirrorType* GcRoot<MirrorType>::Read() const {
+inline MirrorType* GcRoot<MirrorType>::Read(GcRootInfo* gc_root_info) const {
   return down_cast<MirrorType*>(
-      ReadBarrier::BarrierForRoot<mirror::Object, kReadBarrierOption>(&root_));
+      ReadBarrier::BarrierForRoot<mirror::Object, kReadBarrierOption>(&root_, gc_root_info));
 }
 template<class MirrorType>
 inline GcRoot<MirrorType>::GcRoot(MirrorType* ref)
