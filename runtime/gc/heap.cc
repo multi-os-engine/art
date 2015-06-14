@@ -19,6 +19,7 @@
 #define ATRACE_TAG ATRACE_TAG_DALVIK
 #include <cutils/trace.h>
 
+#include <backtrace/Backtrace.h>  // For GC verification.
 #include <limits>
 #include <memory>
 #include <vector>
@@ -113,6 +114,7 @@ static constexpr size_t kDefaultAllocationStackSize = 8 * MB /
 // System.runFinalization can deadlock with native allocations, to deal with this, we have a
 // timeout on how long we wait for finalizers to run. b/21544853
 static constexpr uint64_t kNativeAllocationFinalizeTimeout = MsToNs(250u);
+static constexpr bool kBacktraceGCStress = true;
 
 Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max_free,
            double target_utilization, double foreground_heap_growth_multiplier,
@@ -132,7 +134,7 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       dlmalloc_space_(nullptr),
       main_space_(nullptr),
       collector_type_(kCollectorTypeNone),
-      foreground_collector_type_(foreground_collector_type),
+      foreground_collector_type_(kCollectorTypeSS),
       background_collector_type_(background_collector_type),
       desired_collector_type_(foreground_collector_type_),
       pending_task_lock_(nullptr),
@@ -210,9 +212,17 @@ Heap::Heap(size_t initial_size, size_t growth_limit, size_t min_free, size_t max
       gc_count_rate_histogram_("gc count rate histogram", 1U, kGcCountRateMaxBucketCount),
       blocking_gc_count_rate_histogram_("blocking gc count rate histogram", 1U,
                                         kGcCountRateMaxBucketCount),
-      alloc_tracking_enabled_(false) {
+      alloc_tracking_enabled_(false),
+      backtrace_map_(nullptr),
+      backtrace_lock_(nullptr),
+      seen_backtrace_count_(0u),
+      unique_backtrace_count_(0u) {
   if (VLOG_IS_ON(heap) || VLOG_IS_ON(startup)) {
     LOG(INFO) << "Heap() entering";
+  }
+  if (kBacktraceGCStress) {
+    backtrace_map_ = BacktraceMap::Create(BACKTRACE_CURRENT_PROCESS);
+    backtrace_lock_ = new Mutex("GC complete lock");
   }
   // If we aren't the zygote, switch to the default non zygote allocator. This may update the
   // entrypoints.
@@ -1073,6 +1083,11 @@ Heap::~Heap() {
   STLDeleteElements(&discontinuous_spaces_);
   delete gc_complete_lock_;
   delete pending_task_lock_;
+  delete backtrace_lock_;
+  if (unique_backtrace_count_ != 0 || seen_backtrace_count_ != 0) {
+    LOG(INFO) << "gc stress unique=" << unique_backtrace_count_
+        << " total=" << seen_backtrace_count_ + unique_backtrace_count_;
+  }
   VLOG(heap) << "Finished ~Heap()";
 }
 
@@ -3685,6 +3700,47 @@ void Heap::SweepAllocationRecords(IsMarkedCallback* visitor, void* arg) const {
     MutexLock mu(Thread::Current(), *Locks::alloc_tracker_lock_);
     if (IsAllocTrackingEnabled()) {
       GetAllocationRecords()->SweepAllocationRecords(visitor, arg);
+    }
+  }
+}
+
+void Heap::CheckGCStressMode(Thread* self, mirror::Object** obj) {
+  if (kBacktraceGCStress && Runtime::Current()->GetClassLinker()->IsInitialized()) {
+    // Check if we should GC.
+    bool new_backtrace = false;
+    {
+      // std::unique_ptr<BacktraceMap> backtrace_map(BacktraceMap::Create(BACKTRACE_CURRENT_PROCESS));
+      std::unique_ptr<Backtrace> backtrace(Backtrace::Create(BACKTRACE_CURRENT_PROCESS,
+                                                             BACKTRACE_CURRENT_THREAD));
+      static constexpr size_t kMaxFrames = 10u;
+      if (!backtrace->Unwind(1u)) {
+        LOG(WARNING) << "Failed to unwind callstack.";
+      }
+      const size_t max_frames = std::min(backtrace->NumFrames(), kMaxFrames);
+      uint64_t hash = 0;
+      VLOG(heap) << max_frames;
+      for (size_t i = 0; i < max_frames; ++i) {
+        const backtrace_frame_data_t* const frame = backtrace->GetFrame(i);
+        // LOG(INFO) << frame->num << " " << frame->pc << " " << frame->sp << " " << frame->func_offset << " " << frame->func_name;
+        hash = hash * 2654435761 + frame->pc;
+        hash += (hash >> 13) ^ (hash << 6);
+      }
+      MutexLock mu(self, *backtrace_lock_);
+      new_backtrace = seen_backtraces_.find(hash) == seen_backtraces_.end();
+      if (new_backtrace) {
+        seen_backtraces_.insert(hash);
+      }
+    }
+    if (new_backtrace) {
+      StackHandleScope<1> hs(self);
+      auto h = hs.NewHandleWrapper(obj);
+      // GC needs java lang class to be set up.
+      if (mirror::Class::HasJavaLangClass()) {
+        CollectGarbage(false);
+      }
+      ++unique_backtrace_count_;
+    } else {
+      ++seen_backtrace_count_;
     }
   }
 }

@@ -19,6 +19,7 @@
 
 #include <iosfwd>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "allocator_type.h"
@@ -42,6 +43,8 @@
 #include "safe_map.h"
 #include "thread_pool.h"
 #include "verify_object.h"
+
+class BacktraceMap;
 
 namespace art {
 
@@ -909,6 +912,10 @@ class Heap {
 
   void UpdateGcCountRateHistograms() EXCLUSIVE_LOCKS_REQUIRED(gc_complete_lock_);
 
+  // GC stress mode attempts to do one GC per unique backtrace.
+  void CheckGCStressMode(Thread* self, mirror::Object** obj)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // All-known continuous spaces, where objects lie within fixed bounds.
   std::vector<space::ContinuousSpace*> continuous_spaces_;
 
@@ -1218,6 +1225,15 @@ class Heap {
   Atomic<bool> alloc_tracking_enabled_;
   std::unique_ptr<AllocRecordObjectMap> allocation_records_
       GUARDED_BY(Locks::alloc_tracker_lock_);
+
+  // GC stress related data structures.
+  BacktraceMap* backtrace_map_;
+  Mutex* backtrace_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
+  // Debugging variables, seen backtraces vs unique backtraces.
+  uint64_t seen_backtrace_count_;
+  uint64_t unique_backtrace_count_;
+  // Stack traces that we already saw,
+  std::unordered_set<uint64_t> seen_backtraces_ GUARDED_BY(backtrace_lock_);
 
   friend class CollectorTransitionTask;
   friend class collector::GarbageCollector;

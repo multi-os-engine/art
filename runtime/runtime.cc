@@ -144,7 +144,10 @@ struct TraceConfig {
 };
 
 Runtime::Runtime()
-    : instruction_set_(kNone),
+    : resolution_method_(nullptr),
+      imt_conflict_method_(nullptr),
+      imt_unimplemented_method_(nullptr),
+      instruction_set_(kNone),
       compiler_callbacks_(nullptr),
       is_zygote_(false),
       must_relocate_(false),
