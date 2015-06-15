@@ -659,7 +659,8 @@ void CompilerDriver::PreCompile(jobject class_loader, const std::vector<const De
 
 bool CompilerDriver::IsImageClass(const char* descriptor) const {
   if (!IsImage()) {
-    return true;
+    // NOTE: Currently unreachable, all callers check IsImage().
+    return false;
   } else {
     return image_classes_->find(descriptor) != image_classes_->end();
   }
@@ -990,6 +991,30 @@ void CompilerDriver::UpdateImageClasses(TimingLogger* timings) {
     // Resume threads.
     current->GetThreadList()->ResumeAll();
   }
+}
+
+bool CompilerDriver::CanAssumeClassIsInitialized(mirror::Class* klass) {
+  Runtime* runtime = Runtime::Current();
+  if (!runtime->IsAotCompiler()) {
+    // Without class unloading, JIT can rely on klass->IsInitialized().
+    DCHECK(runtime->UseJit());
+    return klass->IsInitialized();
+  }
+  if (!IsImage()) {
+    // TODO: We can determine whether the class is an image class by checking
+    //     Runtime::Current()->GetHeap()->FindSpaceFromObject(klass, false)->IsImageSpace();
+    // and if the class is initialized in the boot image, we should return true. However,
+    // the klass->IsInitialized() check is insufficient to determine that it's indeed
+    // initialized in the image because it could have been indirectly initialized during
+    // the eager initialization of app classes.
+    return false;
+  }
+  if (!klass->IsInitialized()) {
+    return false;
+  }
+  std::string temp;
+  const char* descriptor = klass->GetDescriptor(&temp);
+  return image_classes_->find(descriptor) != image_classes_->end();
 }
 
 bool CompilerDriver::CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file, uint32_t type_idx) {
