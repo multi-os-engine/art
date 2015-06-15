@@ -194,6 +194,10 @@ class CompilerDriver {
 
   // Callbacks from compiler to see what runtime checks must be generated.
 
+  // Can we assume that the klass is initialized?
+  bool CanAssumeClassIsInitialized(mirror::Class* klass)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   bool CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file, uint32_t type_idx);
 
   bool CanAssumeStringIsPresentInDexCache(const DexFile& dex_file, uint32_t string_idx)
