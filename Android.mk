@@ -387,6 +387,9 @@ build-art-host-tests:   build-art-host $(TEST_ART_RUN_TEST_DEPENDENCIES) $(ART_T
 .PHONY: build-art-target-tests
 build-art-target-tests:   build-art-target $(TEST_ART_RUN_TEST_DEPENDENCIES) $(TEST_ART_TARGET_SYNC_DEPS)
 
+.PHONY: build-art-tests
+build-art-tests: build-art-target-tests build-art-host-tests
+
 ########################################################################
 # targets to switch back and forth from libdvm to libart
 
