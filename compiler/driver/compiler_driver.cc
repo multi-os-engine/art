@@ -659,7 +659,8 @@ void CompilerDriver::PreCompile(jobject class_loader, const std::vector<const De
 
 bool CompilerDriver::IsImageClass(const char* descriptor) const {
   if (!IsImage()) {
-    return true;
+    // NOTE: Currently unreachable, all callers check IsImage().
+    return false;
   } else {
     return image_classes_->find(descriptor) != image_classes_->end();
   }
@@ -990,6 +991,34 @@ void CompilerDriver::UpdateImageClasses(TimingLogger* timings) {
     // Resume threads.
     current->GetThreadList()->ResumeAll();
   }
+}
+
+bool CompilerDriver::CanAssumeClassIsInitialized(mirror::Class* klass) {
+  if (!klass->IsInitialized()) {
+    return false;
+  }
+  Runtime* runtime = Runtime::Current();
+  if (!runtime->IsAotCompiler()) {
+    // Without class unloading, JIT can rely on the klass->IsInitialized() check above.
+    DCHECK(runtime->UseJit());
+    return true;
+  }
+  if (!IsImage()) {
+    // Assume initialized only if klass is an image class that's initialized in the image.
+    // NOTE: When compiling an app, we eagerly initialize app classes but only those that have
+    // a trivial initialization, i.e. without <clinit>() or static values in the dex file for
+    // that class or any of its super classes. If the klass is in the image, it's at least
+    // loaded there and though we could theoretically initialize it as a super class of an
+    // eagerly initialized app class, such initialization would have to be trivial and
+    // unobservable from Java, so we may as well treat it as initialized in the image (and it
+    // would be strange to have an image class that can be trivially initialized but isn't).
+    // So we simply rely on the klass->IsInitialized() check above.
+    bool class_in_image = runtime->GetHeap()->FindSpaceFromObject(klass, false)->IsImageSpace();
+    return class_in_image;
+  }
+  std::string temp;
+  const char* descriptor = klass->GetDescriptor(&temp);
+  return IsImageClass(descriptor);
 }
 
 bool CompilerDriver::CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file, uint32_t type_idx) {

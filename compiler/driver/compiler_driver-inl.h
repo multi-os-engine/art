@@ -233,11 +233,17 @@ inline bool CompilerDriver::IsStaticFieldInReferrerClass(mirror::Class* referrer
   return referrer_class == fields_class;
 }
 
+inline bool CompilerDriver::CanReferrerAssumeClassIsInitialized(mirror::Class* referrer_class,
+                                                                mirror::Class* klass) {
+  return (referrer_class != nullptr && referrer_class->IsSubClass(klass)) ||
+      CanAssumeClassIsInitialized(klass);
+}
+
 inline bool CompilerDriver::IsStaticFieldsClassInitialized(mirror::Class* referrer_class,
                                                            ArtField* resolved_field) {
   DCHECK(resolved_field->IsStatic());
   mirror::Class* fields_class = resolved_field->GetDeclaringClass();
-  return fields_class == referrer_class || fields_class->IsInitialized();
+  return CanReferrerAssumeClassIsInitialized(referrer_class, fields_class);
 }
 
 inline ArtMethod* CompilerDriver::ResolveMethod(
@@ -394,7 +400,7 @@ inline bool CompilerDriver::IsMethodsClassInitialized(mirror::Class* referrer_cl
     return true;
   }
   mirror::Class* methods_class = resolved_method->GetDeclaringClass();
-  return methods_class == referrer_class || methods_class->IsInitialized();
+  return CanReferrerAssumeClassIsInitialized(referrer_class, methods_class);
 }
 
 }  // namespace art
