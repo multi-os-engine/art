@@ -65,7 +65,8 @@ Location ARM64ReturnLocation(Primitive::Type return_type);
 
 class SlowPathCodeARM64 : public SlowPathCode {
  public:
-  SlowPathCodeARM64() : entry_label_(), exit_label_() {}
+  explicit SlowPathCodeARM64(const char* description) :
+      SlowPathCode(description), entry_label_(), exit_label_() {}
 
   vixl::Label* GetEntryLabel() { return &entry_label_; }
   vixl::Label* GetExitLabel() { return &exit_label_; }
