@@ -319,7 +319,8 @@ class CodeGeneratorX86 : public CodeGenerator {
 
 class SlowPathCodeX86 : public SlowPathCode {
  public:
-  SlowPathCodeX86() : entry_label_(), exit_label_() {}
+  explicit SlowPathCodeX86(const char* description) :
+      SlowPathCode(description), entry_label_(), exit_label_() {}
 
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }

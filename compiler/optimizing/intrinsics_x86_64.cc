@@ -118,7 +118,8 @@ static void MoveArguments(HInvoke* invoke, CodeGeneratorX86_64* codegen) {
 //       restored!
 class IntrinsicSlowPathX86_64 : public SlowPathCodeX86_64 {
  public:
-  explicit IntrinsicSlowPathX86_64(HInvoke* invoke) : invoke_(invoke) { }
+  explicit IntrinsicSlowPathX86_64(HInvoke* invoke)
+      : SlowPathCodeX86_64("IntrinsicSlowPathX86_64"), invoke_(invoke) { }
 
   void EmitNativeCode(CodeGenerator* codegen_in) OVERRIDE {
     CodeGeneratorX86_64* codegen = down_cast<CodeGeneratorX86_64*>(codegen_in);

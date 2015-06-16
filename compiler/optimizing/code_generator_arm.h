@@ -119,7 +119,8 @@ class ParallelMoveResolverARM : public ParallelMoveResolverWithSwap {
 
 class SlowPathCodeARM : public SlowPathCode {
  public:
-  SlowPathCodeARM() : entry_label_(), exit_label_() {}
+  explicit SlowPathCodeARM(const char* description)
+      : SlowPathCode(description), entry_label_(), exit_label_() {}
 
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }

@@ -66,7 +66,7 @@ class CodeAllocator {
 
 class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
  public:
-  SlowPathCode() {
+  explicit SlowPathCode(const char* description) : description_(description) {
     for (size_t i = 0; i < kMaximumNumberOfExpectedRegisters; ++i) {
       saved_core_stack_offsets_[i] = kRegisterNotSaved;
       saved_fpu_stack_offsets_[i] = kRegisterNotSaved;
@@ -97,6 +97,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
     return saved_fpu_stack_offsets_[reg];
   }
 
+  const char* GetDescription() const { return description_; }
+
  protected:
   static constexpr size_t kMaximumNumberOfExpectedRegisters = 32;
   static constexpr uint32_t kRegisterNotSaved = -1;
@@ -104,6 +106,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
   uint32_t saved_fpu_stack_offsets_[kMaximumNumberOfExpectedRegisters];
 
  private:
+  const char* description_;
+
   DISALLOW_COPY_AND_ASSIGN(SlowPathCode);
 };
 
