@@ -1,2 +1,2 @@
-Regression test for optimizing's boolean simplifier
-that used to trip when a boolean value was the input of an If.
+Regression test for optimizing's builder which used to trip when compiled code
+contained a packed switch with no targets.
