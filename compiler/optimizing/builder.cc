@@ -1215,9 +1215,8 @@ void HGraphBuilder::BuildPackedSwitch(const Instruction& instruction, uint32_t d
   // Value to test against.
   HInstruction* value = LoadLocal(instruction.VRegA(), Primitive::kPrimInt);
 
+  // Retrieve number of entries. Note that it may be zero (b/21863783).
   uint16_t num_entries = table.GetNumEntries();
-  // There should be at least one entry here.
-  DCHECK_GT(num_entries, 0U);
 
   // Chained cmp-and-branch, starting from starting_key.
   int32_t starting_key = table.GetEntryAt(0);
