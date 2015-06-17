@@ -335,7 +335,6 @@ class ArrayAccessInsideLoopFinder : public ValueObject {
           continue;
         }
 
-        DCHECK(!length_value->IsPhi());
         if (length_value->IsPhi()) {
           // Outer loop shouldn't collect bounds checks inside inner
           // loop because the inner loop body doen't dominate
