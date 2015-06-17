@@ -301,7 +301,8 @@ bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
             uint8_t* vaddr = reinterpret_cast<uint8_t*>(info->dlpi_addr +
                                                         info->dlpi_phdr[i].p_vaddr);
             size_t memsz = info->dlpi_phdr[i].p_memsz;
-            MemMap::MapDummy(info->dlpi_name, vaddr, memsz);
+            MemMap* mmap = MemMap::MapDummy(info->dlpi_name, vaddr, memsz);
+            context->dlopen_mmaps_->push_back(std::unique_ptr<MemMap>(mmap));
           }
         }
         return 1;  // Stop iteration and return 1 from dl_iterate_phdr.
@@ -309,7 +310,8 @@ bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
       return 0;  // Continue iteration and return 0 from dl_iterate_phdr when finished.
     }
     const uint8_t* begin_;
-  } context = { begin_ };
+    std::vector<std::unique_ptr<MemMap>>* dlopen_mmaps_;
+  } context = { begin_, &dlopen_mmaps_ };
 
   if (dl_iterate_phdr(dl_iterate_context::callback, &context) == 0) {
     PrintFileToLog("/proc/self/maps", LogSeverity::WARNING);
