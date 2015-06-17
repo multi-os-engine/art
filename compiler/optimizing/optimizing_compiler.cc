@@ -348,9 +348,9 @@ static void RunOptimizations(HGraph* graph,
 
   HOptimization* optimizations[] = {
     intrinsics,
-    dce1,
     fold1,
     simplify1,
+    dce1,
     type_propagation,
     simplify2,
     inliner,
