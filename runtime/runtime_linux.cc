@@ -28,6 +28,7 @@
 #include "base/macros.h"
 #include "base/mutex.h"
 #include "base/stringprintf.h"
+#include "sigchain.h"
 #include "thread-inl.h"
 #include "thread_list.h"
 #include "utils.h"
@@ -374,7 +375,7 @@ void HandleUnexpectedSignal(int signal_number, siginfo_t* info, void* raw_contex
   memset(&action, 0, sizeof(action));
   sigemptyset(&action.sa_mask);
   action.sa_handler = SIG_DFL;
-  sigaction(signal_number, &action, nullptr);
+  sigaction_art(signal_number, &action, nullptr);
   // ...and re-raise so we die with the appropriate status.
   kill(getpid(), signal_number);
 #else
@@ -394,19 +395,19 @@ void Runtime::InitPlatformSignalHandlers() {
   action.sa_flags |= SA_ONSTACK;
 
   int rc = 0;
-  rc += sigaction(SIGABRT, &action, nullptr);
-  rc += sigaction(SIGBUS, &action, nullptr);
-  rc += sigaction(SIGFPE, &action, nullptr);
-  rc += sigaction(SIGILL, &action, nullptr);
-  rc += sigaction(SIGPIPE, &action, nullptr);
-  rc += sigaction(SIGSEGV, &action, nullptr);
+  rc += sigaction_art(SIGABRT, &action, nullptr);
+  rc += sigaction_art(SIGBUS, &action, nullptr);
+  rc += sigaction_art(SIGFPE, &action, nullptr);
+  rc += sigaction_art(SIGILL, &action, nullptr);
+  rc += sigaction_art(SIGPIPE, &action, nullptr);
+  rc += sigaction_art(SIGSEGV, &action, nullptr);
 #if defined(SIGSTKFLT)
-  rc += sigaction(SIGSTKFLT, &action, nullptr);
+  rc += sigaction_art(SIGSTKFLT, &action, nullptr);
 #endif
-  rc += sigaction(SIGTRAP, &action, nullptr);
+  rc += sigaction_art(SIGTRAP, &action, nullptr);
   // Special dump-all timeout.
   if (GetTimeoutSignal() != -1) {
-    rc += sigaction(GetTimeoutSignal(), &action, nullptr);
+    rc += sigaction_art(GetTimeoutSignal(), &action, nullptr);
   }
   CHECK_EQ(rc, 0);
 }

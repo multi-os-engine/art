@@ -25,6 +25,7 @@
 #include <fstream>
 
 #include "base/stringprintf.h"
+#include "sigchain.h"
 #include "utils.h"  // For Trim.
 
 #if defined(__arm__)
@@ -206,7 +207,7 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromAssembly() {
   struct sigaction sa, osa;
   sa.sa_flags = SA_ONSTACK | SA_RESTART | SA_SIGINFO;
   sa.sa_sigaction = bad_divide_inst_handle;
-  sigaction(SIGILL, &sa, &osa);
+  sigaction_art(SIGILL, &sa, &osa);
 
   bool has_div = false;
 #if defined(__arm__)
@@ -216,7 +217,7 @@ const ArmInstructionSetFeatures* ArmInstructionSetFeatures::FromAssembly() {
 #endif
 
   // Restore the signal handler.
-  sigaction(SIGILL, &osa, nullptr);
+  sigaction_art(SIGILL, &osa, nullptr);
 
   // Use compile time features to "detect" LPAE support.
   // TODO: write an assembly LPAE support test.

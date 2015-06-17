@@ -66,7 +66,7 @@ void Runtime::InitPlatformSignalHandlers() {
     // Use the alternate signal stack so we can catch stack overflows.
     action.sa_flags |= SA_ONSTACK;
     int rc = 0;
-    rc += sigaction(SIGSEGV, &action, &old_action);
+    rc += sigaction_art(SIGSEGV, &action, &old_action);
     CHECK_EQ(rc, 0);
   }
 }

@@ -21,6 +21,10 @@
 
 namespace art {
 
+extern "C" int sigaction_art(int signal, const struct sigaction* new_action, struct sigaction* old_action);
+extern "C" sighandler_t signal_art(int signal, sighandler_t handler);
+extern "C" int sigprocmask_art(int how, const sigset_t* bionic_new_set, sigset_t* bionic_old_set);
+
 extern "C" void InitializeSignalChain();
 
 extern "C" void ClaimSignalChain(int signal, struct sigaction* oldaction);

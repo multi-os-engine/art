@@ -90,7 +90,7 @@ static void art_nested_signal_handler(int sig, siginfo_t* info, void* context) {
 }
 
 FaultManager::FaultManager() : initialized_(false) {
-  sigaction(SIGSEGV, nullptr, &oldaction_);
+  sigaction_art(SIGSEGV, nullptr, &oldaction_);
 }
 
 FaultManager::~FaultManager() {
@@ -121,7 +121,7 @@ void FaultManager::Init() {
   SetUpArtAction(&action);
 
   // Set our signal handler now.
-  int e = sigaction(SIGSEGV, &action, &oldaction_);
+  int e = sigaction_art(SIGSEGV, &action, &oldaction_);
   if (e != 0) {
     VLOG(signals) << "Failed to claim SEGV: " << strerror(errno);
   }
@@ -226,7 +226,7 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
   // Catch handled signals to invoke our nested handler.
   bool success = true;
   for (size_t i = 0; i < num_handled_nested_signals; ++i) {
-    success = sigaction(handled_nested_signals[i], &action, &oldactions[i]) == 0;
+    success = sigaction_art(handled_nested_signals[i], &action, &oldactions[i]) == 0;
     if (!success) {
       PLOG(ERROR) << "Unable to set up nested signal handler";
       break;
@@ -242,7 +242,7 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
           // Restore the signal handlers, reinit the fault manager and return.  Signal was
           // handled.
           for (size_t i = 0; i < num_handled_nested_signals; ++i) {
-            success = sigaction(handled_nested_signals[i], &oldactions[i], nullptr) == 0;
+            success = sigaction_art(handled_nested_signals[i], &oldactions[i], nullptr) == 0;
             if (!success) {
               PLOG(ERROR) << "Unable to restore signal handler";
             }
@@ -257,7 +257,7 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
 
     // Restore the signal handlers.
     for (size_t i = 0; i < num_handled_nested_signals; ++i) {
-      success = sigaction(handled_nested_signals[i], &oldactions[i], nullptr) == 0;
+      success = sigaction_art(handled_nested_signals[i], &oldactions[i], nullptr) == 0;
       if (!success) {
         PLOG(ERROR) << "Unable to restore signal handler";
       }

@@ -20,6 +20,7 @@
 #include <signal.h>
 
 #include "base/logging.h"
+#include "sigchain.h"
 
 namespace art {
 
@@ -38,7 +39,7 @@ class SignalSet {
   }
 
   void Block() {
-    if (sigprocmask(SIG_BLOCK, &set_, nullptr) == -1) {
+    if (sigprocmask_art(SIG_BLOCK, &set_, nullptr) == -1) {
       PLOG(FATAL) << "sigprocmask failed";
     }
   }

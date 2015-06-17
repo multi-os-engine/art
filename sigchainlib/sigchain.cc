@@ -51,7 +51,7 @@ class SignalAction {
   // Unclaim the signal and restore the old action.
   void Unclaim(int signal) {
     claimed_ = false;
-    sigaction(signal, &action_, nullptr);        // Restore old action.
+    sigaction_art(signal, &action_, nullptr);        // Restore old action.
   }
 
   // Get the action associated with this signal.
@@ -161,14 +161,14 @@ extern "C" void InvokeUserSignalHandler(int sig, siginfo_t* info, void* context)
     if (action.sa_handler != nullptr) {
       action.sa_handler(sig);
     } else {
-      signal(sig, SIG_DFL);
+      signal_art(sig, SIG_DFL);
       raise(sig);
     }
   } else {
     if (action.sa_sigaction != nullptr) {
       action.sa_sigaction(sig, info, context);
     } else {
-      signal(sig, SIG_DFL);
+      signal_art(sig, SIG_DFL);
       raise(sig);
     }
   }
@@ -189,7 +189,7 @@ extern "C" void EnsureFrontOfChain(int signal, struct sigaction* expected_action
   }
 }
 
-extern "C" int sigaction(int signal, const struct sigaction* new_action, struct sigaction* old_action) {
+extern "C" int sigaction_art(int signal, const struct sigaction* new_action, struct sigaction* old_action) {
   // If this signal has been claimed as a signal chain, record the user's
   // action but don't pass it on to the kernel.
   // Note that we check that the signal number is in range here.  An out of range signal
@@ -225,7 +225,7 @@ extern "C" int sigaction(int signal, const struct sigaction* new_action, struct 
   return linked_sigaction(signal, new_action, old_action);
 }
 
-extern "C" sighandler_t signal(int signal, sighandler_t handler) {
+extern "C" sighandler_t signal_art(int signal, sighandler_t handler) {
   struct sigaction sa;
   sigemptyset(&sa.sa_mask);
   sa.sa_handler = handler;
@@ -264,7 +264,7 @@ extern "C" sighandler_t signal(int signal, sighandler_t handler) {
   return reinterpret_cast<sighandler_t>(sa.sa_handler);
 }
 
-extern "C" int sigprocmask(int how, const sigset_t* bionic_new_set, sigset_t* bionic_old_set) {
+extern "C" int sigprocmask_art(int how, const sigset_t* bionic_new_set, sigset_t* bionic_old_set) {
   const sigset_t* new_set_ptr = bionic_new_set;
   sigset_t tmpset;
   if (bionic_new_set != nullptr) {
@@ -308,23 +308,23 @@ extern "C" void InitializeSignalChain() {
     // Don't initialize twice.
     return;
   }
-  linked_sigaction_sym = dlsym(RTLD_NEXT, "sigaction");
-  if (linked_sigaction_sym == nullptr) {
-    linked_sigaction_sym = dlsym(RTLD_DEFAULT, "sigaction");
-    if (linked_sigaction_sym == nullptr ||
-        linked_sigaction_sym == reinterpret_cast<void*>(sigaction)) {
-      linked_sigaction_sym = nullptr;
-    }
-  }
+  linked_sigaction_sym = reinterpret_cast<void*>(sigaction);  // dlsym(RTLD_NEXT, "sigaction");
+  // if (linked_sigaction_sym == nullptr) {
+  //   linked_sigaction_sym = dlsym(RTLD_DEFAULT, "sigaction");
+  //   if (linked_sigaction_sym == nullptr ||
+  //       linked_sigaction_sym == reinterpret_cast<void*>(sigaction)) {
+  //     linked_sigaction_sym = nullptr;
+  //   }
+  // }
 
-  linked_sigprocmask_sym = dlsym(RTLD_NEXT, "sigprocmask");
-  if (linked_sigprocmask_sym == nullptr) {
-    linked_sigprocmask_sym = dlsym(RTLD_DEFAULT, "sigprocmask");
-    if (linked_sigprocmask_sym == nullptr ||
-        linked_sigprocmask_sym == reinterpret_cast<void*>(sigprocmask)) {
-      linked_sigprocmask_sym = nullptr;
-    }
-  }
+  linked_sigprocmask_sym = reinterpret_cast<void*>(sigprocmask);  // dlsym(RTLD_NEXT, "sigprocmask");
+  // if (linked_sigprocmask_sym == nullptr) {
+  //   linked_sigprocmask_sym = dlsym(RTLD_DEFAULT, "sigprocmask");
+  //   if (linked_sigprocmask_sym == nullptr ||
+  //       linked_sigprocmask_sym == reinterpret_cast<void*>(sigprocmask)) {
+  //     linked_sigprocmask_sym = nullptr;
+  //   }
+  // }
   initialized = true;
 }
 
