@@ -41,6 +41,10 @@
 #include "ScopedFd.h"
 #include "utils.h"
 
+#ifdef HAVE_ANDROID_OS
+#include "cutils/properties.h"
+#endif
+
 namespace art {
 
 OatFileAssistant::OatFileAssistant(const char* dex_location,
@@ -728,6 +732,15 @@ bool OatFileAssistant::Dex2Oat(const std::vector<std::string>& args,
   argv.insert(argv.end(), compiler_options.begin(), compiler_options.end());
 
   argv.insert(argv.end(), args.begin(), args.end());
+
+#ifdef HAVE_ANDROID_OS
+  char filter_buf[PROPERTY_VALUE_MAX];
+  if (property_get("dalvik.vm.dex2oat-filter", filter_buf, "") > 0) {
+    std::string filter_option("--compiler-filter=");
+    filter_option += filter_buf;
+    argv.push_back(filter_option);
+  }
+#endif
 
   std::string command_line(Join(argv, ' '));
   return Exec(argv, error_msg);
