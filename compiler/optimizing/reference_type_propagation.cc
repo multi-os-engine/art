@@ -21,54 +21,102 @@
 #include "mirror/dex_cache.h"
 #include "scoped_thread_state_change.h"
 
+#include "utils.h"
+
 namespace art {
+
+class NullVisitor : public HContext<NullInfo, HGraphDelegateVisitor> {
+ public:
+  NullVisitor(HGraph* graph)
+    : HContext(graph) {}
+
+  void VisitInvoke(HInvoke* instr) OVERRIDE;
+  void VisitPhi(HPhi* phi) OVERRIDE;
+  void VisitBoundType(HBoundType* instr) {
+      SetProperty(instr, instr->InputAt(0)->CanBeNull());
+  }
+  void VisitInstruction(HInstruction* instr) OVERRIDE {
+    if (instr->GetType() == Primitive::kPrimNot) {
+      SetProperty(instr, instr->CanBeNull());
+    }
+  }
+};
 
 class RTPVisitor : public HGraphDelegateVisitor {
  public:
   RTPVisitor(HGraph* graph, StackHandleScopeCollection* handles)
-    : HGraphDelegateVisitor(graph),
-      handles_(handles) {}
+    : HGraphDelegateVisitor(graph), handles_(handles),
+      worklist_(graph->GetArena(), kDefaultWorklistSize) {}
 
+  void Run();
+
+  /* Visitor */
+  void VisitBasicBlock(HBasicBlock* block);
   void VisitNewInstance(HNewInstance* new_instance) OVERRIDE;
   void VisitLoadClass(HLoadClass* load_class) OVERRIDE;
   void VisitNewArray(HNewArray* instr) OVERRIDE;
-  void UpdateFieldAccessTypeInfo(HInstruction* instr, const FieldInfo& info);
-  void SetClassAsTypeInfo(HInstruction* instr, mirror::Class* klass, bool is_exact);
   void VisitInstanceFieldGet(HInstanceFieldGet* instr) OVERRIDE;
   void VisitStaticFieldGet(HStaticFieldGet* instr) OVERRIDE;
-  void VisitInvoke(HInvoke* instr) OVERRIDE;
   void VisitArrayGet(HArrayGet* instr) OVERRIDE;
+  void VisitPhi(HPhi* phi);
+  void VisitInvoke(HInvoke* instr) OVERRIDE;
+
+  /* Utilities */
+  void BoundTypeForIfNotNull(HBasicBlock* block);
+  void BoundTypeForIfInstanceOf(HBasicBlock* block);
+  void UpdatePhi(HPhi* phi) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void UpdateBoundType(HBoundType* bound_type) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  ReferenceTypeInfo MergeTypes(const ReferenceTypeInfo& a, const ReferenceTypeInfo& b)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
+  void SetClassAsTypeInfo(HInstruction* instr, mirror::Class* klass, bool is_exact);
   void UpdateReferenceTypeInfo(HInstruction* instr,
                                uint16_t type_idx,
                                const DexFile& dex_file,
                                bool is_exact);
+  void UpdateFieldAccessTypeInfo(HInstruction* instr, const FieldInfo& info);
+  bool UpdateReferenceTypeInfo(HInstruction* instr);
+
+  /* Worklist */
+  void AddToWorklist(HInstruction* instruction);
+  void AddDependentInstructionsToWorklist(HInstruction* instruction);
+  void ProcessWorklist();
 
  private:
   StackHandleScopeCollection* handles_;
+
+  GrowableArray<HInstruction*> worklist_;
+
+  static constexpr size_t kDefaultWorklistSize = 8;
 };
 
-void ReferenceTypePropagation::Run() {
+void RTPVisitor::Run() {
   // To properly propagate type info we need to visit in the dominator-based order.
   // Reverse post order guarantees a node's dominators are visited first.
   // We take advantage of this order in `VisitBasicBlock`.
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+  for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
     VisitBasicBlock(it.Current());
   }
   ProcessWorklist();
 }
 
-void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
+void ReferenceTypePropagation::Run() {
+  NullVisitor null(graph_);
+  null.Run();
+
+  RTPVisitor rtp(graph_, handles_);
+  rtp.Run();
+}
+
+void RTPVisitor::VisitBasicBlock(HBasicBlock* block) {
   // TODO: handle other instructions that give type info
   // (array accesses)
 
-  RTPVisitor visitor(graph_, handles_);
-  // Initialize exact types first for faster convergence.
   for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
     HInstruction* instr = it.Current();
-    instr->Accept(&visitor);
+    instr->Accept(this);
   }
 
-  // Handle Phis.
   for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
     VisitPhi(it.Current()->AsPhi());
   }
@@ -78,7 +126,7 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
   BoundTypeForIfInstanceOf(block);
 }
 
-void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
+void RTPVisitor::BoundTypeForIfNotNull(HBasicBlock* block) {
   HIf* ifInstruction = block->GetLastInstruction()->AsIf();
   if (ifInstruction == nullptr) {
     return;
@@ -116,7 +164,8 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
     HInstruction* user = it.Current()->GetUser();
     if (notNullBlock->Dominates(user->GetBlock())) {
       if (bound_type == nullptr) {
-        bound_type = new (graph_->GetArena()) HBoundType(obj, ReferenceTypeInfo::CreateTop(false));
+        bound_type
+          = new (GetGraph()->GetArena()) HBoundType(obj, ReferenceTypeInfo::CreateTop(false));
         notNullBlock->InsertInstructionBefore(bound_type, notNullBlock->GetFirstInstruction());
       }
       user->ReplaceInput(bound_type, it.Current()->GetIndex());
@@ -128,7 +177,7 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
 // `if (x instanceof ClassX) { }`
 // If that's the case insert an HBoundType instruction to bound the type of `x`
 // to `ClassX` in the scope of the dominated blocks.
-void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
+void RTPVisitor::BoundTypeForIfInstanceOf(HBasicBlock* block) {
   HIf* ifInstruction = block->GetLastInstruction()->AsIf();
   if (ifInstruction == nullptr) {
     return;
@@ -175,7 +224,7 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
 
         ReferenceTypeInfo obj_rti = obj->GetReferenceTypeInfo();
         ReferenceTypeInfo class_rti = load_class->GetLoadedClassRTI();
-        bound_type = new (graph_->GetArena()) HBoundType(obj, class_rti);
+        bound_type = new (GetGraph()->GetArena()) HBoundType(obj, class_rti);
 
         // Narrow the type as much as possible.
         {
@@ -266,7 +315,7 @@ void RTPVisitor::VisitLoadClass(HLoadClass* instr) {
   instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(class_handle, /* is_exact */ true));
 }
 
-void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
+void RTPVisitor::VisitPhi(HPhi* phi) {
   if (phi->GetType() != Primitive::kPrimNot) {
     return;
   }
@@ -275,7 +324,6 @@ void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
     // Set the initial type for the phi. Use the non back edge input for reaching
     // a fixed point faster.
     AddToWorklist(phi);
-    phi->SetCanBeNull(phi->InputAt(0)->CanBeNull());
     phi->SetReferenceTypeInfo(phi->InputAt(0)->GetReferenceTypeInfo());
   } else {
     // Eagerly compute the type of the phi, for quicker convergence. Note
@@ -283,13 +331,25 @@ void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
     // doing a reverse post-order visit, therefore either the phi users are
     // non-loop phi and will be visited later in the visit, or are loop-phis,
     // and they are already in the work list.
-    UpdateNullability(phi);
     UpdateReferenceTypeInfo(phi);
   }
 }
 
-ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& a,
-                                                       const ReferenceTypeInfo& b) {
+void NullVisitor::VisitPhi(HPhi* phi) {
+  if (phi->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+
+  bool new_can_be_null = false;
+  for (size_t i = 0; i < phi->InputCount(); i++) {
+    new_can_be_null |= GetProperty(phi->InputAt(i)).can_be_null;
+  }
+  phi->SetCanBeNull(new_can_be_null);
+  SetProperty(phi, NullInfo(new_can_be_null));
+}
+
+ReferenceTypeInfo RTPVisitor::MergeTypes(const ReferenceTypeInfo& a,
+                                         const ReferenceTypeInfo& b) {
   bool is_exact = a.IsExact() && b.IsExact();
   bool is_top = a.IsTop() || b.IsTop();
   Handle<mirror::Class> type_handle;
@@ -315,7 +375,7 @@ ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& 
       : ReferenceTypeInfo::Create(type_handle, is_exact);
 }
 
-bool ReferenceTypePropagation::UpdateReferenceTypeInfo(HInstruction* instr) {
+bool RTPVisitor::UpdateReferenceTypeInfo(HInstruction* instr) {
   ScopedObjectAccess soa(Thread::Current());
 
   ReferenceTypeInfo previous_rti = instr->GetReferenceTypeInfo();
@@ -328,6 +388,16 @@ bool ReferenceTypePropagation::UpdateReferenceTypeInfo(HInstruction* instr) {
   }
 
   return !previous_rti.IsEqual(instr->GetReferenceTypeInfo());
+}
+
+void NullVisitor::VisitInvoke(HInvoke* instr) {
+  if (instr->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+
+  if (!(instr->IsInvokeStaticOrDirect() && instr->AsInvokeStaticOrDirect()->IsStatic())) {
+    SetProperty(instr->InputAt(0), NullInfo(false));
+  }
 }
 
 void RTPVisitor::VisitInvoke(HInvoke* instr) {
@@ -359,7 +429,7 @@ void RTPVisitor::VisitArrayGet(HArrayGet* instr) {
   }
 }
 
-void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
+void RTPVisitor::UpdateBoundType(HBoundType* instr) {
   ReferenceTypeInfo new_rti = instr->InputAt(0)->GetReferenceTypeInfo();
   // Be sure that we don't go over the bounded type.
   ReferenceTypeInfo bound_rti = instr->GetBoundType();
@@ -369,14 +439,29 @@ void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
   instr->SetReferenceTypeInfo(new_rti);
 }
 
-void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
+void RTPVisitor::UpdatePhi(HPhi* instr) {
   ReferenceTypeInfo new_rti = instr->InputAt(0)->GetReferenceTypeInfo();
+
   if (new_rti.IsTop() && !new_rti.IsExact()) {
     // Early return if we are Top and inexact.
     instr->SetReferenceTypeInfo(new_rti);
     return;
   }
+
+  LOG(INFO) << "phi: " << instr->GetId();
+  if (new_rti.IsTop()) {
+    LOG(INFO) << "  java.lang.Object";
+  } else {
+    LOG(INFO) << "  " << PrettyClass(new_rti.GetTypeHandle().Get());
+  }
+
   for (size_t i = 1; i < instr->InputCount(); i++) {
+    const auto& inf = instr->InputAt(i)->GetReferenceTypeInfo();
+    if (inf.IsTop()) {
+      LOG(INFO) << "  java.lang.Object";
+    } else {
+      LOG(INFO) << "  " << PrettyClass(inf.GetTypeHandle().Get());
+    }
     new_rti = MergeTypes(new_rti, instr->InputAt(i)->GetReferenceTypeInfo());
     if (new_rti.IsTop()) {
       if (!new_rti.IsExact()) {
@@ -386,44 +471,26 @@ void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
       }
     }
   }
+
   instr->SetReferenceTypeInfo(new_rti);
 }
 
-// Re-computes and updates the nullability of the instruction. Returns whether or
-// not the nullability was changed.
-bool ReferenceTypePropagation::UpdateNullability(HInstruction* instr) {
-  DCHECK(instr->IsPhi() || instr->IsBoundType());
-
-  if (!instr->IsPhi()) {
-    return false;
-  }
-
-  HPhi* phi = instr->AsPhi();
-  bool existing_can_be_null = phi->CanBeNull();
-  bool new_can_be_null = false;
-  for (size_t i = 0; i < phi->InputCount(); i++) {
-    new_can_be_null |= phi->InputAt(i)->CanBeNull();
-  }
-  phi->SetCanBeNull(new_can_be_null);
-
-  return existing_can_be_null != new_can_be_null;
-}
-
-void ReferenceTypePropagation::ProcessWorklist() {
+void RTPVisitor::ProcessWorklist() {
   while (!worklist_.IsEmpty()) {
     HInstruction* instruction = worklist_.Pop();
-    if (UpdateNullability(instruction) || UpdateReferenceTypeInfo(instruction)) {
+    if (UpdateReferenceTypeInfo(instruction)) {
       AddDependentInstructionsToWorklist(instruction);
     }
   }
 }
 
-void ReferenceTypePropagation::AddToWorklist(HInstruction* instruction) {
+
+void RTPVisitor::AddToWorklist(HInstruction* instruction) {
   DCHECK_EQ(instruction->GetType(), Primitive::kPrimNot) << instruction->GetType();
   worklist_.Add(instruction);
 }
 
-void ReferenceTypePropagation::AddDependentInstructionsToWorklist(HInstruction* instruction) {
+void RTPVisitor::AddDependentInstructionsToWorklist(HInstruction* instruction) {
   for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
     HInstruction* user = it.Current()->GetUser();
     if (user->IsPhi() || user->IsBoundType()) {

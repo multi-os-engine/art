@@ -2572,6 +2572,7 @@ class HNullConstant : public HConstant {
 
  private:
   HNullConstant() : HConstant(Primitive::kPrimNot) {}
+  bool CanBeNull() const OVERRIDE { return true; }
 
   friend class HGraph;
   DISALLOW_COPY_AND_ASSIGN(HNullConstant);

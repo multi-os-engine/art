@@ -22,8 +22,23 @@
 #include "nodes.h"
 #include "optimization.h"
 #include "optimizing_compiler_stats.h"
+#include "context.h"
 
 namespace art {
+
+struct NullInfo {
+  static NullInfo Top() { return NullInfo(false); }
+
+  bool operator==(const NullInfo& ni) const {
+    return can_be_null == ni.can_be_null;
+  }
+
+  static NullInfo Merge(const NullInfo& a, const NullInfo& b) {
+    return NullInfo(a.can_be_null || b.can_be_null);
+  }
+  NullInfo(bool cbn) : can_be_null(cbn) {}
+  bool can_be_null;
+};
 
 /**
  * Propagates reference types to instructions.
@@ -32,35 +47,15 @@ class ReferenceTypePropagation : public HOptimization {
  public:
   ReferenceTypePropagation(HGraph* graph, StackHandleScopeCollection* handles)
     : HOptimization(graph, kReferenceTypePropagationPassName),
-      handles_(handles),
-      worklist_(graph->GetArena(), kDefaultWorklistSize) {}
+      handles_(handles) {}
 
   void Run() OVERRIDE;
 
   static constexpr const char* kReferenceTypePropagationPassName = "reference_type_propagation";
 
  private:
-  void VisitPhi(HPhi* phi);
-  void VisitBasicBlock(HBasicBlock* block);
-  void UpdateBoundType(HBoundType* bound_type) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void UpdatePhi(HPhi* phi) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void BoundTypeForIfNotNull(HBasicBlock* block);
-  void BoundTypeForIfInstanceOf(HBasicBlock* block);
-  void ProcessWorklist();
-  void AddToWorklist(HInstruction* instr);
-  void AddDependentInstructionsToWorklist(HInstruction* instr);
-
-  bool UpdateNullability(HInstruction* instr);
-  bool UpdateReferenceTypeInfo(HInstruction* instr);
-
-  ReferenceTypeInfo MergeTypes(const ReferenceTypeInfo& a, const ReferenceTypeInfo& b)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   StackHandleScopeCollection* handles_;
-
-  GrowableArray<HInstruction*> worklist_;
-
-  static constexpr size_t kDefaultWorklistSize = 8;
 
   DISALLOW_COPY_AND_ASSIGN(ReferenceTypePropagation);
 };
