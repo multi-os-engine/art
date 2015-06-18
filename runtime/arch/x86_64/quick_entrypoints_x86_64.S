@@ -1335,8 +1335,27 @@ DEFINE_FUNCTION art_quick_proxy_invoke_handler
     movq %rsp, %rcx                         // Pass SP.
     call SYMBOL(artQuickProxyInvokeHandler) // (proxy method, receiver, Thread*, SP)
     movq %rax, %xmm0                        // Copy return value in case of float returns.
-    addq LITERAL(168 + 4*8), %rsp           // Pop arguments.
-    CFI_ADJUST_CFA_OFFSET(-168 - 4*8)
+    // Restore FPRs.
+    movq 80(%rsp), %xmm12
+    movq 88(%rsp), %xmm13
+    movq 96(%rsp), %xmm14
+    movq 104(%rsp), %xmm15
+    addq MACRO_LITERAL(80 + 6 * 8), %rsp
+    CFI_ADJUST_CFA_OFFSET(-(80 + 6 * 8))
+    // Restore refs from refs and arg callee save frame.
+    // POP rcx
+    // POP rdx
+    POP rbx
+    POP rbp
+    addq MACRO_LITERAL(3 * 8), %rsp
+    CFI_ADJUST_CFA_OFFSET(-(3 * 8))
+    // POP rsi
+    // POP r8
+    // POP r9
+    POP r12
+    POP r13
+    POP r14
+    POP r15
     RETURN_OR_DELIVER_PENDING_EXCEPTION
 END_FUNCTION art_quick_proxy_invoke_handler
 
