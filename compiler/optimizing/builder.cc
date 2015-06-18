@@ -1257,6 +1257,7 @@ void HGraphBuilder::BuildSwitchCaseHelper(const Instruction& instruction, size_t
                                           HInstruction* value, int32_t case_value_int,
                                           int32_t target_offset, uint32_t dex_pc) {
   HBasicBlock* case_target = FindBlockStartingAt(dex_pc + target_offset);
+  fprintf(stderr, "Jumping to %x\n", dex_pc + target_offset);
   DCHECK(case_target != nullptr);
   PotentiallyAddSuspendCheck(case_target, dex_pc);
 
