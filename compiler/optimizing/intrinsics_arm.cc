@@ -508,6 +508,11 @@ static void GenUnsafeGet(HInvoke* invoke,
   if (is_volatile) {
     __ dmb(ISH);
   }
+
+  if (kPoisonHeapReferences && type == Primitive::kPrimNot) {
+    Register trg = locations->Out().AsRegister<Register>();
+    __ UnpoisonHeapReference(trg);
+  }
 }
 
 static void CreateIntIntIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke) {
@@ -647,8 +652,15 @@ static void GenUnsafePut(LocationSummary* locations,
       __ strd(value_lo, Address(IP));
     }
   } else {
-    value =  locations->InAt(3).AsRegister<Register>();
-    __ str(value, Address(base, offset));
+    value = locations->InAt(3).AsRegister<Register>();
+    Register source = value;
+    if (kPoisonHeapReferences && type == Primitive::kPrimNot) {
+      Register temp = locations->GetTemp(0).AsRegister<Register>();
+      __ Mov(temp, value);
+      __ PoisonHeapReference(temp);
+      source = temp;
+    }
+    __ str(source, Address(base, offset));
   }
 
   if (is_volatile) {
@@ -1044,6 +1056,10 @@ UNIMPLEMENTED_INTRINSIC(UnsafeCASLong)     // High register pressure.
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
+
+#undef UNIMPLEMENTED_INTRINSIC
+
+#undef __
 
 }  // namespace arm
 }  // namespace art
