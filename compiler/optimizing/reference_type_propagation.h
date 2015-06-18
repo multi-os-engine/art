@@ -25,6 +25,17 @@
 
 namespace art {
 
+struct NullInfo
+{
+  static bool Zero() { return false; }
+  static NullInfo Merge(const NullInfo& a, const NullInfo& b) {
+    return NullInfo(a.can_be_null || b.can_be_null);
+  }
+  NullInfo(bool cbn) : can_be_null(cbn) {}
+  bool can_be_null;
+};
+
+
 /**
  * Propagates reference types to instructions.
  */
@@ -33,7 +44,8 @@ class ReferenceTypePropagation : public HOptimization {
   ReferenceTypePropagation(HGraph* graph, StackHandleScopeCollection* handles)
     : HOptimization(graph, kReferenceTypePropagationPassName),
       handles_(handles),
-      worklist_(graph->GetArena(), kDefaultWorklistSize) {}
+      worklist_(graph->GetArena(), kDefaultWorklistSize),
+      ctx_(graph) {}
 
   void Run() OVERRIDE;
 
@@ -59,6 +71,7 @@ class ReferenceTypePropagation : public HOptimization {
   StackHandleScopeCollection* handles_;
 
   GrowableArray<HInstruction*> worklist_;
+  HContext<NullInfo> ctx_;
 
   static constexpr size_t kDefaultWorklistSize = 8;
 

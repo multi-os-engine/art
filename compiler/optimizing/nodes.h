@@ -4440,6 +4440,107 @@ inline int64_t Int64FromConstant(HConstant* constant) {
                                    : constant->AsLongConstant()->GetValue();
 }
 
+template <class T>
+class HContext
+{
+ public:
+   struct Prop {
+     HInstruction* instr;
+     T prop;
+
+     Prop(HInstruction* i, const T& p) : instr(i), prop(p) {}
+   };
+
+  HContext(HGraph* graph)
+      : cur_block_(0),
+        props_(graph->GetArena(), graph->GetBlocks().Size()),
+        arena_(graph->GetArena()) {
+    for (size_t i = 0; i < graph->GetBlocks().Size(); ++i) {
+      props_.Insert(new (arena_) GrowableArray<Prop>(arena_, 0));
+    }
+  }
+
+  void SetProp(HInstruction* instr, const T& prop) {
+    Prop ni(instr, prop);
+    SetProp(ni);
+  }
+
+  void SetProp(const Prop& ni) {
+    GrowableArray<Prop>* block = BlockSafeGet(cur_block_);
+
+    for (size_t i = 0; i < block->Size(); ++i) {
+      if (block->Get(i).instr == ni.instr) {
+        block->Put(i, ni);
+        return;
+      }
+    }
+
+    block->Insert(ni);
+  }
+
+  void PlusProp(const Prop& ni) {
+    GrowableArray<Prop>* block = BlockSafeGet(cur_block_);
+
+    for (size_t i = 0; i < block->Size(); ++i) {
+      if (block->Get(i).instr == ni.instr) {
+        block->Put(i, Prop(ni.instr, T::Merge(block->Get(i).prop, ni.prop)));
+        return;
+      }
+    }
+
+    block->Insert(ni);
+  }
+
+  void StartBlock(HBasicBlock* b) {
+    cur_block_ = b->GetBlockId();
+    const GrowableArray<HBasicBlock*>& preds = b->GetPredecessors();
+
+    if (preds.Size() == 0) {
+      return;
+    }
+
+    const GrowableArray<Prop>* cur_pred = BlockSafeGet(preds.Get(0)->GetBlockId());
+    for (size_t j = 0; j < cur_pred->Size(); ++j) {
+      SetProp(cur_pred->Get(j));
+    }
+
+    for (size_t i = 1; i < preds.Size(); ++i) {
+      cur_pred = BlockSafeGet(preds.Get(i)->GetBlockId());
+      for (size_t j = 0; j < cur_pred->Size(); ++j) {
+        PlusProp(cur_pred->Get(j));
+      }
+    }
+  }
+
+  T GetProp(HInstruction* instr) {
+    GrowableArray<Prop>* block = BlockSafeGet(cur_block_);
+    for (size_t i = 0; i < block->Size(); ++i) {
+      if (block->Get(i).instr == instr) {
+        return block->Get(i).prop;
+      }
+    }
+
+    return T::Zero();
+  }
+
+private:
+  GrowableArray<Prop>* BlockSafeGet(size_t idx) {
+    if (props_.Size() <= idx) {
+      size_t old_size = props_.Size();
+      props_.Resize(idx + 1);
+
+      for (size_t i = old_size; i < idx + 1; ++i) {
+        props_.Insert(new (arena_) GrowableArray<Prop>(arena_, 0));
+      }
+    }
+    return props_.Get(idx);
+  }
+
+  int cur_block_;
+  GrowableArray<GrowableArray<Prop>*> props_;
+  ArenaAllocator* arena_;
+};
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_NODES_H_
