@@ -164,6 +164,7 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
   DCHECK_EQ(current_block_index_, 0u);
   GenerateFrameEntry();
   DCHECK_EQ(GetAssembler()->cfi().GetCurrentCFAOffset(), static_cast<int>(frame_size_));
+
   for (size_t e = block_order_->Size(); current_block_index_ < e; ++current_block_index_) {
     HBasicBlock* block = block_order_->Get(current_block_index_);
     // Don't generate code for an empty block. Its predecessors will branch to its successor
@@ -236,7 +237,6 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
                                              const GrowableArray<HBasicBlock*>& block_order) {
   block_order_ = &block_order;
   DCHECK(block_order_->Get(0) == GetGraph()->GetEntryBlock());
-  DCHECK(GoesToNextBlock(GetGraph()->GetEntryBlock(), block_order_->Get(1)));
   ComputeSpillMask();
   first_register_slot_in_slow_path_ = (number_of_out_slots + number_of_spill_slots) * kVRegSize;
 
