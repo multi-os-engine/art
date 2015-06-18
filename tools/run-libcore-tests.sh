@@ -64,6 +64,7 @@ working_packages=("dalvik.system"
                   "jsr166")
 
 vogar_args=$@
+vogar_args="$vogar_args --vm-arg -Xno-dex-file-fallback"
 while true; do
   if [[ "$1" == "--mode=device" ]]; then
     vogar_args="$vogar_args --device-dir=/data/local/tmp"
