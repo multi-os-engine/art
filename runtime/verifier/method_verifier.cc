@@ -3690,8 +3690,13 @@ void MethodVerifier::VerifyAGet(const Instruction* inst,
     const RegType& array_type = work_line_->GetRegisterType(this, inst->VRegB_23x());
     if (array_type.IsZero()) {
       // Null array class; this code path will fail at runtime. Infer a merge-able type from the
-      // instruction type. TODO: have a proper notion of bottom here.
-      if (!is_primitive || insn_type.IsCategory1Types()) {
+      // instruction type.
+      if (!is_primitive) {
+        // TODO: have a proper notion of bottom here. By not having bottom, we put Object
+        // to ensure the following uses of the aget will be correctly verified.
+        work_line_->SetRegisterType(
+            this, inst->VRegA_23x(), reg_types_.JavaLangObject(/* precise */ false));
+      } else if (insn_type.IsCategory1Types()) {
         // Reference or category 1
         work_line_->SetRegisterType(this, inst->VRegA_23x(), reg_types_.Zero());
       } else {

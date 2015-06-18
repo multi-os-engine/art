@@ -1,0 +1,2 @@
+Regression test for the verifier when seeing null[0].
+See comment in smali file.
