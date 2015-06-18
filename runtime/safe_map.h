@@ -112,6 +112,14 @@ class SafeMap {
     }
   }
 
+  iterator Insert(const K& k, const V& v) {
+    std::pair<iterator, bool> result = map_.insert(std::make_pair(k, v));
+    if (!result.second) {
+      return result.first;
+    }
+    return end();
+  }
+
   bool Equals(const Self& rhs) const {
     return map_ == rhs.map_;
   }

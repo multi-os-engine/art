@@ -226,6 +226,37 @@ public class Main {
     return m;
   }
 
+  /// CHECK-START: Main Main.removeBranchesTest(int, Main) instruction_simplifier_after_types (before)
+  /// CHECK:         NullCheck
+  /// CHECK:         NullCheck
+  /// CHECK:         NullCheck
+  /// CHECK:         NullCheck
+
+  /// CHECK-START: Main Main.removeBranchesTest(int, Main) instruction_simplifier_after_types (after)
+  /// CHECK:         NullCheck
+  /// CHECK:         NullCheck
+  /// CHECK:         NullCheck
+  /// CHECK-NOT:     NullCheck
+  public Main removeBranchesTest(int flag, Main a) {
+    // NullCheck
+    a = a.g();
+    if (flag == 2) {
+      // NullCheck
+      a.g();
+    } else {
+      // NullCheck
+      a.g();
+    }
+    // a is known to be not null
+    Main b = new Main();
+
+    if (flag == 42) {
+      b = a;
+    }
+    // create a phi(b, a) where both branches are known to be non null, NullCheck will be removed
+    return b.g();
+  }
+
   /// CHECK-START: Main Main.scopeIfKeep(Main) instruction_simplifier_after_types (before)
   /// CHECK:         NullCheck
 

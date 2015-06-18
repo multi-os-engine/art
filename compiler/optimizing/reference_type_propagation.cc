@@ -25,16 +25,19 @@ namespace art {
 
 class RTPVisitor : public HGraphDelegateVisitor {
  public:
-  RTPVisitor(HGraph* graph, StackHandleScopeCollection* handles)
+  RTPVisitor(HGraph* graph, StackHandleScopeCollection* handles, HContext<NullInfo>& ctx)
     : HGraphDelegateVisitor(graph),
-      handles_(handles) {}
+      handles_(handles),
+      ctx_(ctx) {}
 
   void VisitNewInstance(HNewInstance* new_instance) OVERRIDE;
   void VisitLoadClass(HLoadClass* load_class) OVERRIDE;
   void VisitNewArray(HNewArray* instr) OVERRIDE;
   void UpdateFieldAccessTypeInfo(HInstruction* instr, const FieldInfo& info);
   void SetClassAsTypeInfo(HInstruction* instr, mirror::Class* klass, bool is_exact);
+  void VisitInstanceFieldSet(HInstanceFieldSet* instr) OVERRIDE;
   void VisitInstanceFieldGet(HInstanceFieldGet* instr) OVERRIDE;
+  void VisitStaticFieldSet(HStaticFieldSet* instruction) OVERRIDE;
   void VisitStaticFieldGet(HStaticFieldGet* instr) OVERRIDE;
   void VisitInvoke(HInvoke* instr) OVERRIDE;
   void VisitArrayGet(HArrayGet* instr) OVERRIDE;
@@ -42,9 +45,15 @@ class RTPVisitor : public HGraphDelegateVisitor {
                                uint16_t type_idx,
                                const DexFile& dex_file,
                                bool is_exact);
-
+  void VisitPhi(HPhi* phi) OVERRIDE;
+  void VisitInstruction(HInstruction* instr) OVERRIDE {
+    if (instr->GetType() == Primitive::kPrimNot) {
+      ctx_.SetProperty(instr, instr->CanBeNull());
+    }
+  }
  private:
   StackHandleScopeCollection* handles_;
+  HContext<NullInfo>& ctx_;
 };
 
 void ReferenceTypePropagation::Run() {
@@ -60,17 +69,18 @@ void ReferenceTypePropagation::Run() {
 void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
   // TODO: handle other instructions that give type info
   // (array accesses)
+  ctx_.StartBlock(block);
 
-  RTPVisitor visitor(graph_, handles_);
+  RTPVisitor visitor(graph_, handles_, ctx_);
+  // Handle Phis.
+  for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
+    VisitPhi(it.Current()->AsPhi());
+  }
+
   // Initialize exact types first for faster convergence.
   for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
     HInstruction* instr = it.Current();
     instr->Accept(&visitor);
-  }
-
-  // Handle Phis.
-  for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
-    VisitPhi(it.Current()->AsPhi());
   }
 
   // Add extra nodes to bound types.
@@ -220,10 +230,12 @@ void RTPVisitor::UpdateReferenceTypeInfo(HInstruction* instr,
 }
 
 void RTPVisitor::VisitNewInstance(HNewInstance* instr) {
+  ctx_.SetProperty(instr, false);
   UpdateReferenceTypeInfo(instr, instr->GetTypeIndex(), instr->GetDexFile(), /* is_exact */ true);
 }
 
 void RTPVisitor::VisitNewArray(HNewArray* instr) {
+  ctx_.SetProperty(instr, false);
   UpdateReferenceTypeInfo(instr, instr->GetTypeIndex(), instr->GetDexFile(), /* is_exact */ true);
 }
 
@@ -266,12 +278,49 @@ void RTPVisitor::VisitLoadClass(HLoadClass* instr) {
   instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(class_handle, /* is_exact */ true));
 }
 
-void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
+void RTPVisitor::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
+  if ((instruction->GetValue()->GetType() == Primitive::kPrimNot)
+      && !ctx_.GetProperty(instruction->GetValue()).can_be_null) {
+    instruction->ClearValueCanBeNull();
+  }
+}
+
+void RTPVisitor::VisitStaticFieldSet(HStaticFieldSet* instruction) {
+  if ((instruction->GetValue()->GetType() == Primitive::kPrimNot)
+      && !ctx_.GetProperty(instruction->GetValue()).can_be_null) {
+    instruction->ClearValueCanBeNull();
+  }
+}
+
+void RTPVisitor::VisitPhi(HPhi* phi) {
   if (phi->GetType() != Primitive::kPrimNot) {
     return;
   }
 
   if (phi->GetBlock()->IsLoopHeader()) {
+    phi->SetCanBeNull(ctx_.GetProperty(phi->InputAt(0)).can_be_null);
+    ctx_.SetProperty(phi, phi->CanBeNull());
+  } else {
+    // Eagerly compute the type of the phi, for quicker convergence. Note
+    // that we don't need to add users to the worklist because we are
+    // doing a reverse post-order visit, therefore either the phi users are
+    // non-loop phi and will be visited later in the visit, or are loop-phis,
+    // and they are already in the work list.
+    bool can_be_null = false;
+    for (size_t i = 0; i < phi->InputCount(); i++) {
+      can_be_null |= ctx_.GetProperty(phi->InputAt(i)).can_be_null;
+    }
+    phi->SetCanBeNull(can_be_null);
+    ctx_.SetProperty(phi, can_be_null);
+  }
+}
+
+void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
+  if (phi->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+
+  if (phi->GetBlock()->IsLoopHeader() && phi->CanBeNull()) {
     // Set the initial type for the phi. Use the non back edge input for reaching
     // a fixed point faster.
     AddToWorklist(phi);
@@ -333,6 +382,10 @@ bool ReferenceTypePropagation::UpdateReferenceTypeInfo(HInstruction* instr) {
 void RTPVisitor::VisitInvoke(HInvoke* instr) {
   if (instr->GetType() != Primitive::kPrimNot) {
     return;
+  }
+
+  if (!(instr->IsInvokeStaticOrDirect() && instr->AsInvokeStaticOrDirect()->IsStatic())) {
+    ctx_.SetProperty(instr->InputAt(0), false);
   }
 
   ScopedObjectAccess soa(Thread::Current());
@@ -402,9 +455,10 @@ bool ReferenceTypePropagation::UpdateNullability(HInstruction* instr) {
   bool existing_can_be_null = phi->CanBeNull();
   bool new_can_be_null = false;
   for (size_t i = 0; i < phi->InputCount(); i++) {
-    new_can_be_null |= phi->InputAt(i)->CanBeNull();
+    new_can_be_null |= ctx_.GetProperty(phi->InputAt(i)).can_be_null;
   }
   phi->SetCanBeNull(new_can_be_null);
+  ctx_.SetProperty(phi, new_can_be_null);
 
   return existing_can_be_null != new_can_be_null;
 }
