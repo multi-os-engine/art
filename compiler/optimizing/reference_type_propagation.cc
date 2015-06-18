@@ -323,9 +323,10 @@ void RTPVisitor::VisitInvoke(HInvoke* instr) {
   mirror::DexCache* dex_cache = cl->FindDexCache(instr->GetDexFile());
   ArtMethod* method = dex_cache->GetResolvedMethod(
       instr->GetDexMethodIndex(), cl->GetImagePointerSize());
-  DCHECK(method != nullptr);
-  mirror::Class* klass = method->GetReturnType(false);
-  SetClassAsTypeInfo(instr, klass, /* is_exact */ false);
+  if (method != nullptr) {
+    mirror::Class* klass = method->GetReturnType(false);
+    SetClassAsTypeInfo(instr, klass, /* is_exact */ false);
+  }
 }
 
 void RTPVisitor::VisitArrayGet(HArrayGet* instr) {
