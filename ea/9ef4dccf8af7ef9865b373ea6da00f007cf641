@@ -1,0 +1,7 @@
+Code-Review+2: Vladimir Marko <vmarko@google.com>
+Verified+1: Nicolas Geoffray <ngeoffray@google.com>
+Submitted-by: Nicolas Geoffray <ngeoffray@google.com>
+Submitted-at: Fri, 19 Jun 2015 09:50:49 +0000
+Reviewed-on: https://android-review.googlesource.com/155623
+Project: platform/art
+Branch: refs/heads/master
