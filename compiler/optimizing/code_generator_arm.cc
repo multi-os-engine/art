@@ -436,6 +436,25 @@ void CodeGeneratorARM::Finalize(CodeAllocator* allocator) {
       __ AdjustLabelPosition(block_label);
     }
   }
+  // Adjust pc offsets for the disassembly information.
+  if (disasm_info_ != nullptr) {
+    GeneratedCodeInterval* frame_entry_interval = disasm_info_->GetFrameEntryInterval();
+    frame_entry_interval->start = __ GetAdjustedPosition(frame_entry_interval->start);
+    frame_entry_interval->end = __ GetAdjustedPosition(frame_entry_interval->end);
+    for (ArenaSafeMap<const HInstruction*, GeneratedCodeInterval>::iterator it =
+             disasm_info_->GetInstructionIntervals()->begin();
+         it != disasm_info_->GetInstructionIntervals()->end();
+         it++) {
+      it->second.start = __ GetAdjustedPosition(it->second.start);
+      it->second.end = __ GetAdjustedPosition(it->second.end);
+    }
+    for (ArenaVector<SlowPathCodeInfo>::iterator it = disasm_info_->GetSlowPathIntervals()->begin();
+         it != disasm_info_->GetSlowPathIntervals()->end();
+         it++) {
+      it->code_interval.start = __ GetAdjustedPosition(it->code_interval.start);
+      it->code_interval.end = __ GetAdjustedPosition(it->code_interval.end);
+    }
+  }
 
   CodeGenerator::Finalize(allocator);
 }
