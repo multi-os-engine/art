@@ -222,9 +222,11 @@ void RTPVisitor::UpdateFieldAccessTypeInfo(HInstruction* instr,
   ClassLinker* cl = Runtime::Current()->GetClassLinker();
   mirror::DexCache* dex_cache = cl->FindDexCache(info.GetDexFile());
   ArtField* field = cl->GetResolvedField(info.GetFieldIndex(), dex_cache);
-  DCHECK(field != nullptr);
-  mirror::Class* klass = field->GetType<false>();
-  SetClassAsTypeInfo(instr, klass, /* is_exact */ false);
+  if (field != nullptr) {
+    DCHECK(field != nullptr);
+    mirror::Class* klass = field->GetType<false>();
+    SetClassAsTypeInfo(instr, klass, /* is_exact */ false);
+  }
 }
 
 void RTPVisitor::VisitInstanceFieldGet(HInstanceFieldGet* instr) {
