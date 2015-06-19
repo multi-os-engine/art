@@ -625,6 +625,17 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     predecessors_.Put(predecessor_index, new_block);
   }
 
+  void InsertBetween(HBasicBlock* predecessor, HBasicBlock* successor) {
+    size_t predecessor_index = successor->GetPredecessorIndexOf(predecessor);
+    DCHECK_NE(predecessor_index, static_cast<size_t>(-1));
+    successor->predecessors_.Put(predecessor_index, this);
+    size_t successor_index = predecessor->GetSuccessorIndexOf(successor);
+    DCHECK_NE(successor_index, static_cast<size_t>(-1));
+    predecessor->successors_.Put(successor_index, this);
+    successors_.Add(successor);
+    predecessors_.Add(predecessor);
+  }
+
   void RemovePredecessor(HBasicBlock* block) {
     predecessors_.Delete(block);
   }
