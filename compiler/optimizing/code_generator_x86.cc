@@ -1315,9 +1315,13 @@ void InstructionCodeGeneratorX86::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   LocationSummary* locations = invoke->GetLocations();
   Location receiver = locations->InAt(0);
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
+  // temp = object->GetClass();
   DCHECK(receiver.IsRegister());
   __ movl(temp, Address(receiver.AsRegister<Register>(), class_offset));
   codegen_->MaybeRecordImplicitNullCheck(invoke);
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(temp);
+  }
   // temp = temp->GetMethodAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
@@ -1354,7 +1358,10 @@ void InstructionCodeGeneratorX86::VisitInvokeInterface(HInvokeInterface* invoke)
   } else {
     __ movl(temp, Address(receiver.AsRegister<Register>(), class_offset));
   }
-    codegen_->MaybeRecordImplicitNullCheck(invoke);
+  codegen_->MaybeRecordImplicitNullCheck(invoke);
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(temp);
+  }
   // temp = temp->GetImtEntryAt(method_offset);
   __ movl(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
@@ -3001,6 +3008,8 @@ void LocationsBuilderX86::VisitNewInstance(HNewInstance* instruction) {
 void InstructionCodeGeneratorX86::VisitNewInstance(HNewInstance* instruction) {
   InvokeRuntimeCallingConvention calling_convention;
   __ movl(calling_convention.GetRegisterAt(0), Immediate(instruction->GetTypeIndex()));
+  // Note: if heap poisoning is enabled, the entry point takes cares
+  // of poisoning the reference.
   __ fs()->call(Address::Absolute(GetThreadOffset<kX86WordSize>(instruction->GetEntrypoint())));
 
   codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
@@ -3021,6 +3030,8 @@ void InstructionCodeGeneratorX86::VisitNewArray(HNewArray* instruction) {
   InvokeRuntimeCallingConvention calling_convention;
   __ movl(calling_convention.GetRegisterAt(0), Immediate(instruction->GetTypeIndex()));
 
+  // Note: if heap poisoning is enabled, the entry point takes cares
+  // of poisoning the reference.
   __ fs()->call(Address::Absolute(GetThreadOffset<kX86WordSize>(instruction->GetEntrypoint())));
 
   codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
@@ -3397,6 +3408,10 @@ void InstructionCodeGeneratorX86::HandleFieldGet(HInstruction* instruction,
   if (is_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kLoadAny);
   }
+
+  if (kPoisonHeapReferences && field_type == Primitive::kPrimNot) {
+    __ UnpoisonHeapReference(out.AsRegister<Register>());
+  }
 }
 
 void LocationsBuilderX86::HandleFieldSet(HInstruction* instruction, const FieldInfo& field_info) {
@@ -3420,9 +3435,9 @@ void LocationsBuilderX86::HandleFieldSet(HInstruction* instruction, const FieldI
   } else {
     locations->SetInAt(1, Location::RequiresRegister());
   }
-  // Temporary registers for the write barrier.
   if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
-    locations->AddTemp(Location::RequiresRegister());
+    // Temporary registers for the write barrier.
+    locations->AddTemp(Location::RequiresRegister());  // Possibly used for reference poisoning too.
     // Ensure the card is in a byte register.
     locations->AddTemp(Location::RegisterLocation(ECX));
   } else if (is_volatile && (field_type == Primitive::kPrimLong)) {
@@ -3447,6 +3462,8 @@ void InstructionCodeGeneratorX86::HandleFieldSet(HInstruction* instruction,
   bool is_volatile = field_info.IsVolatile();
   Primitive::Type field_type = field_info.GetFieldType();
   uint32_t offset = field_info.GetFieldOffset().Uint32Value();
+  bool needs_write_barrier =
+      CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1));
 
   if (is_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kAnyStore);
@@ -3467,7 +3484,14 @@ void InstructionCodeGeneratorX86::HandleFieldSet(HInstruction* instruction,
 
     case Primitive::kPrimInt:
     case Primitive::kPrimNot: {
-      __ movl(Address(base, offset), value.AsRegister<Register>());
+      if (kPoisonHeapReferences && needs_write_barrier) {
+        Register temp = locations->GetTemp(0).AsRegister<Register>();
+        __ movl(temp, value.AsRegister<Register>());
+        __ PoisonHeapReference(temp);
+        __ movl(Address(base, offset), temp);
+      } else {
+        __ movl(Address(base, offset), value.AsRegister<Register>());
+      }
       break;
     }
 
@@ -3508,7 +3532,7 @@ void InstructionCodeGeneratorX86::HandleFieldSet(HInstruction* instruction,
     codegen_->MaybeRecordImplicitNullCheck(instruction);
   }
 
-  if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
+  if (needs_write_barrier) {
     Register temp = locations->GetTemp(0).AsRegister<Register>();
     Register card = locations->GetTemp(1).AsRegister<Register>();
     codegen_->MarkGCCard(temp, card, base, value.AsRegister<Register>(), value_can_be_null);
@@ -3737,6 +3761,11 @@ void InstructionCodeGeneratorX86::VisitArrayGet(HArrayGet* instruction) {
   if (type != Primitive::kPrimLong) {
     codegen_->MaybeRecordImplicitNullCheck(instruction);
   }
+
+  if (kPoisonHeapReferences && type == Primitive::kPrimNot) {
+    Register out = locations->Out().AsRegister<Register>();
+    __ UnpoisonHeapReference(out);
+  }
 }
 
 void LocationsBuilderX86::VisitArraySet(HArraySet* instruction) {
@@ -3776,9 +3805,9 @@ void LocationsBuilderX86::VisitArraySet(HArraySet* instruction) {
     } else {
       locations->SetInAt(2, Location::RegisterOrConstant(instruction->InputAt(2)));
     }
-    // Temporary registers for the write barrier.
     if (needs_write_barrier) {
-      locations->AddTemp(Location::RequiresRegister());
+      // Temporary registers for the write barrier.
+      locations->AddTemp(Location::RequiresRegister());  // Possibly used for ref. poisoning too.
       // Ensure the card is in a byte register.
       locations->AddTemp(Location::RegisterLocation(ECX));
     }
@@ -3852,21 +3881,43 @@ void InstructionCodeGeneratorX86::VisitArraySet(HArraySet* instruction) {
           size_t offset =
               (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_4) + data_offset;
           if (value.IsRegister()) {
-            __ movl(Address(obj, offset), value.AsRegister<Register>());
+            if (kPoisonHeapReferences && value_type == Primitive::kPrimNot) {
+              Register temp = locations->GetTemp(0).AsRegister<Register>();
+              __ movl(temp, value.AsRegister<Register>());
+              __ PoisonHeapReference(temp);
+              __ movl(Address(obj, offset), temp);
+            } else {
+              __ movl(Address(obj, offset), value.AsRegister<Register>());
+            }
           } else {
             DCHECK(value.IsConstant()) << value;
-            __ movl(Address(obj, offset),
-                    Immediate(value.GetConstant()->AsIntConstant()->GetValue()));
+            int32_t v = value.GetConstant()->AsIntConstant()->GetValue();
+            // `value_type == Primitive::kPrimNot` implies `v == 0`.
+            DCHECK((value_type != Primitive::kPrimNot) || (v == 0));
+            // Note: if heap poisoning is enabled, no need to poison
+            // (negate) `v` if it is a reference, as it would be null.
+            __ movl(Address(obj, offset), Immediate(v));
           }
         } else {
           DCHECK(index.IsRegister()) << index;
           if (value.IsRegister()) {
-            __ movl(Address(obj, index.AsRegister<Register>(), TIMES_4, data_offset),
-                    value.AsRegister<Register>());
+            if (kPoisonHeapReferences && value_type == Primitive::kPrimNot) {
+              Register temp = locations->GetTemp(0).AsRegister<Register>();
+              __ movl(temp, value.AsRegister<Register>());
+              __ PoisonHeapReference(temp);
+              __ movl(Address(obj, index.AsRegister<Register>(), TIMES_4, data_offset), temp);
+            } else {
+              __ movl(Address(obj, index.AsRegister<Register>(), TIMES_4, data_offset),
+                      value.AsRegister<Register>());
+            }
           } else {
             DCHECK(value.IsConstant()) << value;
-            __ movl(Address(obj, index.AsRegister<Register>(), TIMES_4, data_offset),
-                    Immediate(value.GetConstant()->AsIntConstant()->GetValue()));
+            int32_t v = value.GetConstant()->AsIntConstant()->GetValue();
+            // `value_type == Primitive::kPrimNot` implies `v == 0`.
+            DCHECK((value_type != Primitive::kPrimNot) || (v == 0));
+            // Note: if heap poisoning is enabled, no need to poison
+            // (negate) `v` if it is a reference, as it would be null.
+            __ movl(Address(obj, index.AsRegister<Register>(), TIMES_4, data_offset), Immediate(v));
           }
         }
         codegen_->MaybeRecordImplicitNullCheck(instruction);
@@ -3880,6 +3931,8 @@ void InstructionCodeGeneratorX86::VisitArraySet(HArraySet* instruction) {
       } else {
         DCHECK_EQ(value_type, Primitive::kPrimNot);
         DCHECK(!codegen_->IsLeafMethod());
+        // Note: if heap poisoning is enabled, pAputObject takes cares
+        // of poisoning the reference.
         __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAputObject)));
         codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
       }
@@ -4343,6 +4396,9 @@ void InstructionCodeGeneratorX86::VisitLoadClass(HLoadClass* cls) {
     __ movl(out, Address(
         current_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
     __ movl(out, Address(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
+    if (kPoisonHeapReferences) {
+      __ UnpoisonHeapReference(out);
+    }
 
     SlowPathCodeX86* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathX86(
         cls, cls, cls->GetDexPc(), cls->MustGenerateClinitCheck());
@@ -4400,7 +4456,13 @@ void InstructionCodeGeneratorX86::VisitLoadString(HLoadString* load) {
   Register current_method = locations->InAt(0).AsRegister<Register>();
   __ movl(out, Address(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
   __ movl(out, Address(out, mirror::Class::DexCacheStringsOffset().Int32Value()));
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(out);
+  }
   __ movl(out, Address(out, CodeGenerator::GetCacheOffset(load->GetStringIndex())));
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(out);
+  }
   __ testl(out, out);
   __ j(kEqual, slow_path->GetEntryLabel());
   __ Bind(slow_path->GetExitLabel());
@@ -4455,8 +4517,11 @@ void InstructionCodeGeneratorX86::VisitInstanceOf(HInstanceOf* instruction) {
     __ testl(obj, obj);
     __ j(kEqual, &zero);
   }
-  __ movl(out, Address(obj, class_offset));
   // Compare the class of `obj` with `cls`.
+  __ movl(out, Address(obj, class_offset));
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(out);
+  }
   if (cls.IsRegister()) {
     __ cmpl(out, cls.AsRegister<Register>());
   } else {
@@ -4514,16 +4579,18 @@ void InstructionCodeGeneratorX86::VisitCheckCast(HCheckCast* instruction) {
     __ testl(obj, obj);
     __ j(kEqual, slow_path->GetExitLabel());
   }
-
-  __ movl(temp, Address(obj, class_offset));
   // Compare the class of `obj` with `cls`.
+  __ movl(temp, Address(obj, class_offset));
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(temp);
+  }
   if (cls.IsRegister()) {
     __ cmpl(temp, cls.AsRegister<Register>());
   } else {
     DCHECK(cls.IsStackSlot()) << cls;
     __ cmpl(temp, Address(ESP, cls.GetStackIndex()));
   }
-
+  // Classes must be equal for the checkcast to succeed.
   __ j(kNotEqual, slow_path->GetEntryLabel());
   __ Bind(slow_path->GetExitLabel());
 }
@@ -4686,6 +4753,8 @@ void InstructionCodeGeneratorX86::VisitBoundType(HBoundType* instruction) {
   UNUSED(instruction);
   LOG(FATAL) << "Unreachable";
 }
+
+#undef __
 
 }  // namespace x86
 }  // namespace art

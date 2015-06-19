@@ -653,6 +653,14 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
                                        uint32_t method_idx,
                                        jobject class_loader,
                                        const DexFile& dex_file) const {
+  // Do not delegate the compilation to Quick, as it does not have
+  // support for heap poisoning.
+  if (kPoisonHeapReferences) {
+    VLOG(compiler) << "Skipping method : " << PrettyMethod(method_idx, dex_file)
+                   << "  Reason = Quick does not support heap poisoning.";
+    return nullptr;
+  }
+
   // TODO: check method fingerprint here to determine appropriate backend type.  Until then, use
   // build default.
   CompilerDriver* driver = GetCompilerDriver();
