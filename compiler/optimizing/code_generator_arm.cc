@@ -316,8 +316,6 @@ class DeoptimizationSlowPathARM : public SlowPathCodeARM {
 };
 
 #undef __
-
-#undef __
 #define __ down_cast<ArmAssembler*>(GetAssembler())->
 
 inline Condition ARMCondition(IfCondition cond) {
@@ -1340,6 +1338,9 @@ void InstructionCodeGeneratorARM::VisitInvokeVirtual(HInvokeVirtual* invoke) {
   DCHECK(receiver.IsRegister());
   __ LoadFromOffset(kLoadWord, temp, receiver.AsRegister<Register>(), class_offset);
   codegen_->MaybeRecordImplicitNullCheck(invoke);
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(temp);
+  }
   // temp = temp->GetMethodAt(method_offset);
   uint32_t entry_point = ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kArmWordSize).Int32Value();
@@ -1379,6 +1380,9 @@ void InstructionCodeGeneratorARM::VisitInvokeInterface(HInvokeInterface* invoke)
     __ LoadFromOffset(kLoadWord, temp, receiver.AsRegister<Register>(), class_offset);
   }
   codegen_->MaybeRecordImplicitNullCheck(invoke);
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(temp);
+  }
   // temp = temp->GetImtEntryAt(method_offset);
   uint32_t entry_point = ArtMethod::EntryPointFromQuickCompiledCodeOffset(
       kArmWordSize).Int32Value();
@@ -2734,6 +2738,8 @@ void LocationsBuilderARM::VisitNewInstance(HNewInstance* instruction) {
 void InstructionCodeGeneratorARM::VisitNewInstance(HNewInstance* instruction) {
   InvokeRuntimeCallingConvention calling_convention;
   __ LoadImmediate(calling_convention.GetRegisterAt(0), instruction->GetTypeIndex());
+  // Note: if heap poisoning is enabled, the Quick entry point takes cares
+  // of poisoning the reference.
   codegen_->InvokeRuntime(GetThreadOffset<kArmWordSize>(instruction->GetEntrypoint()).Int32Value(),
                           instruction,
                           instruction->GetDexPc(),
@@ -2753,6 +2759,8 @@ void LocationsBuilderARM::VisitNewArray(HNewArray* instruction) {
 void InstructionCodeGeneratorARM::VisitNewArray(HNewArray* instruction) {
   InvokeRuntimeCallingConvention calling_convention;
   __ LoadImmediate(calling_convention.GetRegisterAt(0), instruction->GetTypeIndex());
+  // Note: if heap poisoning is enabled, the Quick entry point takes cares
+  // of poisoning the reference.
   codegen_->InvokeRuntime(GetThreadOffset<kArmWordSize>(instruction->GetEntrypoint()).Int32Value(),
                           instruction,
                           instruction->GetDexPc(),
@@ -2990,7 +2998,7 @@ void LocationsBuilderARM::HandleFieldSet(HInstruction* instruction, const FieldI
   // Temporary registers for the write barrier.
   // TODO: consider renaming StoreNeedsWriteBarrier to StoreNeedsGCMark.
   if (CodeGenerator::StoreNeedsWriteBarrier(field_type, instruction->InputAt(1))) {
-    locations->AddTemp(Location::RequiresRegister());
+    locations->AddTemp(Location::RequiresRegister());  // Possibly used for reference poisoning too.
     locations->AddTemp(Location::RequiresRegister());
   } else if (generate_volatile) {
     // Arm encoding have some additional constraints for ldrexd/strexd:
@@ -3007,6 +3015,9 @@ void LocationsBuilderARM::HandleFieldSet(HInstruction* instruction, const FieldI
       locations->AddTemp(Location::RegisterLocation(R2));
       locations->AddTemp(Location::RegisterLocation(R3));
     }
+  } else if (kPoisonHeapReferences && field_type == Primitive::kPrimNot) {
+    // Temporary register for the reference poisoning.
+    locations->AddTemp(Location::RequiresRegister());
   }
 }
 
@@ -3043,7 +3054,14 @@ void InstructionCodeGeneratorARM::HandleFieldSet(HInstruction* instruction,
 
     case Primitive::kPrimInt:
     case Primitive::kPrimNot: {
-      __ StoreToOffset(kStoreWord, value.AsRegister<Register>(), base, offset);
+      if (kPoisonHeapReferences && field_type == Primitive::kPrimNot) {
+        Register temp = locations->GetTemp(0).AsRegister<Register>();
+        __ Mov(temp, value.AsRegister<Register>());
+        __ PoisonHeapReference(temp);
+        __ StoreToOffset(kStoreWord, temp, base, offset);
+      } else {
+        __ StoreToOffset(kStoreWord, value.AsRegister<Register>(), base, offset);
+      }
       break;
     }
 
@@ -3222,6 +3240,10 @@ void InstructionCodeGeneratorARM::HandleFieldGet(HInstruction* instruction,
   if (is_volatile) {
     GenerateMemoryBarrier(MemBarrierKind::kLoadAny);
   }
+
+  if (kPoisonHeapReferences && field_type == Primitive::kPrimNot) {
+    __ UnpoisonHeapReference(out.AsRegister<Register>());
+  }
 }
 
 void LocationsBuilderARM::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
@@ -3310,8 +3332,9 @@ void InstructionCodeGeneratorARM::VisitArrayGet(HArrayGet* instruction) {
   LocationSummary* locations = instruction->GetLocations();
   Register obj = locations->InAt(0).AsRegister<Register>();
   Location index = locations->InAt(1);
+  Primitive::Type type = instruction->GetType();
 
-  switch (instruction->GetType()) {
+  switch (type) {
     case Primitive::kPrimBoolean: {
       uint32_t data_offset = mirror::Array::DataOffset(sizeof(uint8_t)).Uint32Value();
       Register out = locations->Out().AsRegister<Register>();
@@ -3427,10 +3450,15 @@ void InstructionCodeGeneratorARM::VisitArrayGet(HArrayGet* instruction) {
     }
 
     case Primitive::kPrimVoid:
-      LOG(FATAL) << "Unreachable type " << instruction->GetType();
+      LOG(FATAL) << "Unreachable type " << type;
       UNREACHABLE();
   }
   codegen_->MaybeRecordImplicitNullCheck(instruction);
+
+  if (kPoisonHeapReferences && type == Primitive::kPrimNot) {
+    Register out = locations->Out().AsRegister<Register>();
+    __ UnpoisonHeapReference(out);
+  }
 }
 
 void LocationsBuilderARM::VisitArraySet(HArraySet* instruction) {
@@ -3447,6 +3475,10 @@ void LocationsBuilderARM::VisitArraySet(HArraySet* instruction) {
     locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
     locations->SetInAt(1, Location::RegisterLocation(calling_convention.GetRegisterAt(1)));
     locations->SetInAt(2, Location::RegisterLocation(calling_convention.GetRegisterAt(2)));
+    if (kPoisonHeapReferences && value_type == Primitive::kPrimNot) {
+      // Temporary register for the reference poisoning.
+      locations->AddTemp(Location::RequiresRegister());
+    }
   } else {
     locations->SetInAt(0, Location::RequiresRegister());
     locations->SetInAt(1, Location::RegisterOrConstant(instruction->InputAt(1)));
@@ -3458,7 +3490,10 @@ void LocationsBuilderARM::VisitArraySet(HArraySet* instruction) {
 
     if (needs_write_barrier) {
       // Temporary registers for the write barrier.
+      locations->AddTemp(Location::RequiresRegister());  // Possibly used for ref. poisoning too.
       locations->AddTemp(Location::RequiresRegister());
+    } else if (kPoisonHeapReferences && value_type == Primitive::kPrimNot) {
+      // Temporary register for the reference poisoning.
       locations->AddTemp(Location::RequiresRegister());
     }
   }
@@ -3509,14 +3544,21 @@ void InstructionCodeGeneratorARM::VisitArraySet(HArraySet* instruction) {
       if (!needs_runtime_call) {
         uint32_t data_offset = mirror::Array::DataOffset(sizeof(int32_t)).Uint32Value();
         Register value = locations->InAt(2).AsRegister<Register>();
+        Register source = value;
+        if (kPoisonHeapReferences && value_type == Primitive::kPrimNot) {
+          Register temp = locations->GetTemp(0).AsRegister<Register>();
+          __ Mov(temp, value);
+          __ PoisonHeapReference(temp);
+          source = temp;
+        }
         if (index.IsConstant()) {
           size_t offset =
               (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_4) + data_offset;
-          __ StoreToOffset(kStoreWord, value, obj, offset);
+          __ StoreToOffset(kStoreWord, source, obj, offset);
         } else {
           DCHECK(index.IsRegister()) << index;
           __ add(IP, obj, ShifterOperand(index.AsRegister<Register>(), LSL, TIMES_4));
-          __ StoreToOffset(kStoreWord, value, IP, data_offset);
+          __ StoreToOffset(kStoreWord, source, IP, data_offset);
         }
         codegen_->MaybeRecordImplicitNullCheck(instruction);
         if (needs_write_barrier) {
@@ -3527,6 +3569,8 @@ void InstructionCodeGeneratorARM::VisitArraySet(HArraySet* instruction) {
         }
       } else {
         DCHECK_EQ(value_type, Primitive::kPrimNot);
+        // Note: if heap poisoning is enabled, pAputObject takes cares
+        // of poisoning the reference.
         codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAputObject),
                                 instruction,
                                 instruction->GetDexPc(),
@@ -3953,6 +3997,9 @@ void InstructionCodeGeneratorARM::VisitLoadClass(HLoadClass* cls) {
                       current_method,
                       ArtMethod::DexCacheResolvedTypesOffset().Int32Value());
     __ LoadFromOffset(kLoadWord, out, out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex()));
+    if (kPoisonHeapReferences) {
+      __ UnpoisonHeapReference(out);
+    }
 
     SlowPathCodeARM* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM(
         cls, cls, cls->GetDexPc(), cls->MustGenerateClinitCheck());
@@ -4013,7 +4060,13 @@ void InstructionCodeGeneratorARM::VisitLoadString(HLoadString* load) {
   __ LoadFromOffset(
       kLoadWord, out, current_method, ArtMethod::DeclaringClassOffset().Int32Value());
   __ LoadFromOffset(kLoadWord, out, out, mirror::Class::DexCacheStringsOffset().Int32Value());
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(out);
+  }
   __ LoadFromOffset(kLoadWord, out, out, CodeGenerator::GetCacheOffset(load->GetStringIndex()));
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(out);
+  }
   __ cmp(out, ShifterOperand(0));
   __ b(slow_path->GetEntryLabel(), EQ);
   __ Bind(slow_path->GetExitLabel());
@@ -4072,6 +4125,9 @@ void InstructionCodeGeneratorARM::VisitInstanceOf(HInstanceOf* instruction) {
   }
   // Compare the class of `obj` with `cls`.
   __ LoadFromOffset(kLoadWord, out, obj, class_offset);
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(out);
+  }
   __ cmp(out, ShifterOperand(cls));
   if (instruction->IsClassFinal()) {
     // Classes must be equal for the instanceof to succeed.
@@ -4125,7 +4181,11 @@ void InstructionCodeGeneratorARM::VisitCheckCast(HCheckCast* instruction) {
   }
   // Compare the class of `obj` with `cls`.
   __ LoadFromOffset(kLoadWord, temp, obj, class_offset);
+  if (kPoisonHeapReferences) {
+    __ UnpoisonHeapReference(temp);
+  }
   __ cmp(temp, ShifterOperand(cls));
+  // Classes must be equal for the checkcast to succeed.
   __ b(slow_path->GetEntryLabel(), NE);
   __ Bind(slow_path->GetExitLabel());
 }
@@ -4276,6 +4336,9 @@ void InstructionCodeGeneratorARM::VisitBoundType(HBoundType* instruction) {
   UNUSED(instruction);
   LOG(FATAL) << "Unreachable";
 }
+
+#undef __
+#undef QUICK_ENTRY_POINT
 
 }  // namespace arm
 }  // namespace art

@@ -639,12 +639,17 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
   if (method != nullptr) {
     return method;
   }
-  method = delegate_->Compile(code_item, access_flags, invoke_type, class_def_idx, method_idx,
-                              jclass_loader, dex_file);
 
-  if (method != nullptr) {
-    MaybeRecordStat(MethodCompilationStat::kCompiledQuick);
+  if (!kPoisonHeapReferences) {
+    // Do not delegate the compilation to Quick, as it does not have
+    // support for heap poisoning.
+    method = delegate_->Compile(code_item, access_flags, invoke_type, class_def_idx, method_idx,
+                                jclass_loader, dex_file);
+    if (method != nullptr) {
+      MaybeRecordStat(MethodCompilationStat::kCompiledQuick);
+    }
   }
+
   return method;
 }
 

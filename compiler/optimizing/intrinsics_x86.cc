@@ -1333,9 +1333,14 @@ static void GenUnsafeGet(LocationSummary* locations, Primitive::Type type,
 
   switch (type) {
     case Primitive::kPrimInt:
-    case Primitive::kPrimNot:
-      __ movl(output.AsRegister<Register>(), Address(base, offset, ScaleFactor::TIMES_1, 0));
+    case Primitive::kPrimNot: {
+      Register output_reg = output.AsRegister<Register>();
+      __ movl(output_reg, Address(base, offset, ScaleFactor::TIMES_1, 0));
+      if (kPoisonHeapReferences && type == Primitive::kPrimNot) {
+        __ UnpoisonHeapReference(output_reg);
+      }
       break;
+    }
 
     case Primitive::kPrimLong: {
         Register output_lo = output.AsRegisterPairLow<Register>();
@@ -1434,7 +1439,7 @@ static void CreateIntIntIntIntToVoidPlusTempsLocations(ArenaAllocator* arena,
   locations->SetInAt(3, Location::RequiresRegister());
   if (type == Primitive::kPrimNot) {
     // Need temp registers for card-marking.
-    locations->AddTemp(Location::RequiresRegister());
+    locations->AddTemp(Location::RequiresRegister());  // Possibly used for reference poisoning too.
     // Ensure the value is in a byte register.
     locations->AddTemp(Location::RegisterLocation(ECX));
   } else if (type == Primitive::kPrimLong && is_volatile) {
@@ -1496,6 +1501,11 @@ static void GenUnsafePut(LocationSummary* locations,
       __ movl(Address(base, offset, ScaleFactor::TIMES_1, 0), value_lo);
       __ movl(Address(base, offset, ScaleFactor::TIMES_1, 4), value_hi);
     }
+  } else if (kPoisonHeapReferences && type == Primitive::kPrimNot) {
+    Register temp = locations->GetTemp(0).AsRegister<Register>();
+    __ movl(temp, value_loc.AsRegister<Register>());
+    __ PoisonHeapReference(temp);
+    __ movl(Address(base, offset, ScaleFactor::TIMES_1, 0), temp);
   } else {
     __ movl(Address(base, offset, ScaleFactor::TIMES_1, 0), value_loc.AsRegister<Register>());
   }
@@ -1731,6 +1741,10 @@ UNIMPLEMENTED_INTRINSIC(MathRoundDouble)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
+
+#undef UNIMPLEMENTED_INTRINSIC
+
+#undef __
 
 }  // namespace x86
 }  // namespace art

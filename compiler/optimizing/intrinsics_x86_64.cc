@@ -1249,6 +1249,9 @@ static void GenUnsafeGet(LocationSummary* locations, Primitive::Type type,
     case Primitive::kPrimInt:
     case Primitive::kPrimNot:
       __ movl(trg, Address(base, offset, ScaleFactor::TIMES_1, 0));
+      if (kPoisonHeapReferences && type == Primitive::kPrimNot) {
+        __ UnpoisonHeapReference(trg);
+      }
       break;
 
     case Primitive::kPrimLong:
@@ -1323,7 +1326,7 @@ static void CreateIntIntIntIntToVoidPlusTempsLocations(ArenaAllocator* arena,
   locations->SetInAt(3, Location::RequiresRegister());
   if (type == Primitive::kPrimNot) {
     // Need temp registers for card-marking.
-    locations->AddTemp(Location::RequiresRegister());
+    locations->AddTemp(Location::RequiresRegister());  // Possibly used for reference poisoning too.
     locations->AddTemp(Location::RequiresRegister());
   }
 }
@@ -1367,6 +1370,11 @@ static void GenUnsafePut(LocationSummary* locations, Primitive::Type type, bool 
 
   if (type == Primitive::kPrimLong) {
     __ movq(Address(base, offset, ScaleFactor::TIMES_1, 0), value);
+  } else if (kPoisonHeapReferences && type == Primitive::kPrimNot) {
+    CpuRegister temp = locations->GetTemp(0).AsRegister<CpuRegister>();
+    __ movl(temp, value);
+    __ PoisonHeapReference(temp);
+    __ movl(Address(base, offset, ScaleFactor::TIMES_1, 0), temp);
   } else {
     __ movl(Address(base, offset, ScaleFactor::TIMES_1, 0), value);
   }
@@ -1595,6 +1603,10 @@ void IntrinsicCodeGeneratorX86_64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSE
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
+
+#undef UNIMPLEMENTED_INTRINSIC
+
+#undef __
 
 }  // namespace x86_64
 }  // namespace art
