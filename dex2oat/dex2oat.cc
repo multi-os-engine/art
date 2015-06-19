@@ -1068,7 +1068,7 @@ class Dex2Oat FINAL {
     if (!image_) {
       runtime_options.push_back(std::make_pair("-Xno-dex-file-fallback", nullptr));
     }
-
+    runtime_options.push_back(std::make_pair("-Xis-dex2oat", nullptr));
     if (!CreateRuntime(runtime_options)) {
       return false;
     }

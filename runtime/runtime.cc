@@ -147,6 +147,7 @@ Runtime::Runtime()
     : instruction_set_(kNone),
       compiler_callbacks_(nullptr),
       is_zygote_(false),
+      is_dex2oat_(false),
       must_relocate_(false),
       is_concurrent_gc_enabled_(true),
       is_explicit_gc_disabled_(false),
@@ -834,6 +835,8 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   verify_ = runtime_options.GetOrDefault(Opt::Verify);
   allow_dex_file_fallback_ = !runtime_options.Exists(Opt::NoDexFileFallback);
 
+  is_dex2oat_ = runtime_options.Exists(Opt::IsDex2Oat);
+
   Split(runtime_options.GetOrDefault(Opt::CpuAbiList), ',', &cpu_abilist_);
 
   if (runtime_options.GetOrDefault(Opt::Interpret)) {
@@ -927,33 +930,37 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
       break;
   }
 
-  // Always initialize the signal chain so that any calls to sigaction get
-  // correctly routed to the next in the chain regardless of whether we
-  // have claimed the signal or not.
-  InitializeSignalChain();
+  if (!is_dex2oat_) {
+    // Dex2Oat's Runtime does not need the signal chain or the fault handler.
 
-  if (implicit_null_checks_ || implicit_so_checks_ || implicit_suspend_checks_) {
-    fault_manager.Init();
+    // Initialize the signal chain so that any calls to sigaction get
+    // correctly routed to the next in the chain regardless of whether we
+    // have claimed the signal or not.
+    InitializeSignalChain();
 
-    // These need to be in a specific order.  The null point check handler must be
-    // after the suspend check and stack overflow check handlers.
-    //
-    // Note: the instances attach themselves to the fault manager and are handled by it. The manager
-    //       will delete the instance on Shutdown().
-    if (implicit_suspend_checks_) {
-      new SuspensionHandler(&fault_manager);
-    }
+    if (implicit_null_checks_ || implicit_so_checks_ || implicit_suspend_checks_) {
+      fault_manager.Init();
 
-    if (implicit_so_checks_) {
-      new StackOverflowHandler(&fault_manager);
-    }
+      // These need to be in a specific order.  The null point check handler must be
+      // after the suspend check and stack overflow check handlers.
+      //
+      // Note: the instances attach themselves to the fault manager and are handled by it. The manager
+      //       will delete the instance on Shutdown().
+      if (implicit_suspend_checks_) {
+        new SuspensionHandler(&fault_manager);
+      }
 
-    if (implicit_null_checks_) {
-      new NullPointerHandler(&fault_manager);
-    }
+      if (implicit_so_checks_) {
+        new StackOverflowHandler(&fault_manager);
+      }
 
-    if (kEnableJavaStackTraceHandler) {
-      new JavaStackTraceHandler(&fault_manager);
+      if (implicit_null_checks_) {
+        new NullPointerHandler(&fault_manager);
+      }
+
+      if (kEnableJavaStackTraceHandler) {
+        new JavaStackTraceHandler(&fault_manager);
+      }
     }
   }
 

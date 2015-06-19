@@ -69,6 +69,8 @@ std::unique_ptr<RuntimeParser> ParsedOptions::MakeParser(bool ignore_unrecognize
   parser_builder->
        Define("-Xzygote")
           .IntoKey(M::Zygote)
+      .Define("-Xis-dex2oat")
+          .IntoKey(M::IsDex2Oat)
       .Define("-help")
           .IntoKey(M::Help)
       .Define("-showversion")

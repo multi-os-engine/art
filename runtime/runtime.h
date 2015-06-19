@@ -590,6 +590,7 @@ class Runtime {
 
   CompilerCallbacks* compiler_callbacks_;
   bool is_zygote_;
+  bool is_dex2oat_;
   bool must_relocate_;
   bool is_concurrent_gc_enabled_;
   bool is_explicit_gc_disabled_;
