@@ -146,7 +146,6 @@ TEST_F(CompilerDriverTest, DISABLED_LARGE_CompileDexLibCore) {
 }
 
 TEST_F(CompilerDriverTest, AbstractMethodErrorStub) {
-  TEST_DISABLED_FOR_HEAP_REFERENCE_POISONING();
   jobject class_loader;
   {
     ScopedObjectAccess soa(Thread::Current());

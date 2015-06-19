@@ -115,7 +115,7 @@ class Arm64Assembler FINAL : public Assembler {
   void LoadFromThread64(ManagedRegister dest, ThreadOffset<8> src, size_t size) OVERRIDE;
   void LoadRef(ManagedRegister dest, FrameOffset src) OVERRIDE;
   void LoadRef(ManagedRegister dest, ManagedRegister base, MemberOffset offs,
-               bool poison_reference) OVERRIDE;
+               bool unpoison_reference) OVERRIDE;
   void LoadRawPtr(ManagedRegister dest, ManagedRegister base, Offset offs) OVERRIDE;
   void LoadRawPtrFromThread64(ManagedRegister dest, ThreadOffset<8> offs) OVERRIDE;
 
@@ -180,6 +180,15 @@ class Arm64Assembler FINAL : public Assembler {
   // Generate code to check if Thread::Current()->exception_ is non-null
   // and branch to a ExceptionSlowPath if it is.
   void ExceptionPoll(ManagedRegister scratch, size_t stack_adjust) OVERRIDE;
+
+  //
+  // Heap poisoning.
+  //
+
+  // Poison a heap reference contained in `reg`.
+  void PoisonHeapReference(vixl::Register reg);
+  // Unpoison a heap reference contained in `reg`.
+  void UnpoisonHeapReference(vixl::Register reg);
 
  private:
   static vixl::Register reg_x(int code) {

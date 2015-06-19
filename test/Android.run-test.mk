@@ -456,18 +456,318 @@ endif
 
 TEST_ART_BROKEN_READ_BARRIER_RUN_TESTS :=
 
-# Tests that should fail in the heap poisoning configuration.
-# 137: Heap poisoning forces interpreter. Cannot run this with the interpreter.
-TEST_ART_BROKEN_HEAP_POISONING_RUN_TESTS := \
+# Tests that should fail in the heap poisoning configuration with the default (Quick) compiler.
+# Currently most of the tests are failing as Quick does not have support for heap poisoning.
+TEST_ART_BROKEN_DEFAULT_HEAP_POISONING_RUN_TESTS := \
+  001-HelloWorld \
+  001-Main \
+  002-sleep \
+  003-omnibus-opcodes \
+  004-InterfaceTest \
+  004-JniTest \
+  004-NativeAllocations \
+  004-ReferenceMap \
+  004-SignalTest \
+  004-StackWalk \
+  004-ThreadStress \
+  004-UnsafeTest \
+  005-annotations \
+  006-args \
+  007-count10 \
+  008-exceptions \
+  009-instanceof \
+  010-instance \
+  011-array-copy \
+  012-math \
+  013-math2 \
+  014-math3 \
+  015-switch \
+  016-intern \
+  017-float \
+  018-stack-overflow \
+  019-wrong-array-type \
+  020-string \
+  021-string2 \
+  022-interface \
+  023-many-interfaces \
+  024-illegal-access \
+  025-access-controller \
+  026-access \
+  027-arithmetic \
+  028-array-write \
+  029-assert \
+  030-bad-finalizer \
+  031-class-attributes \
+  032-concrete-sub \
+  033-class-init-deadlock \
+  034-call-null \
+  035-enum \
+  036-finalizer \
+  037-inherit \
+  038-inner-null \
+  039-join-main \
+  040-miranda \
+  041-narrowing \
+  042-new-instance \
+  043-privates \
+  044-proxy \
+  045-reflect-array \
+  046-reflect \
+  047-returns \
+  049-show-object \
+  050-sync-test \
+  051-thread \
+  052-verifier-fun \
+  053-wait-some \
+  054-uncaught \
+  055-enum-performance \
+  056-const-string-jumbo \
+  058-enum-order \
+  059-finalizer-throw \
+  061-out-of-memory \
+  062-character-encodings \
+  063-process-manager \
+  064-field-access \
+  065-mismatched-implements \
+  066-mismatched-super \
+  067-preemptive-unpark \
+  068-classloader \
+  069-field-type \
+  070-nio-buffer \
+  071-dexfile \
+  072-precise-gc \
+  073-mismatched-field \
+  074-gc-thrash \
+  075-verification-error \
+  076-boolean-put \
+  077-method-override \
+  078-polymorphic-virtual \
+  079-phantom \
+  080-oom-throw \
+  080-oom-throw-with-finalizer \
+  081-hot-exceptions \
+  082-inline-execute \
+  083-compiler-regressions \
+  084-class-init \
+  085-old-style-inner-class \
+  086-null-super \
+  087-gc-after-link \
+  088-monitor-verification \
+  090-loop-formation \
+  092-locale \
+  093-serialization \
+  094-pattern \
+  095-switch-MAX_INT \
+  096-array-copy-concurrent-gc \
+  097-duplicate-method \
+  098-ddmc \
+  099-vmdebug \
+  100-reflect2 \
+  101-fibonacci \
+  102-concurrent-gc \
+  103-string-append \
+  104-growth-limit \
+  105-invoke \
+  106-exceptions2 \
+  107-int-math2 \
+  108-check-cast \
+  109-suspend-check \
+  110-field-access \
+  111-unresolvable-exception \
+  112-double-math \
+  113-multidex \
+  114-ParallelGC \
+  115-native-bridge \
+  117-nopatchoat \
+  119-noimage-patchoat \
+  120-hashcode \
+  121-modifiers \
+  121-simple-suspend-check \
+  122-npe \
+  123-compiler-regressions-mt \
+  124-missing-classes \
+  125-gc-and-classloading \
+  126-miranda-multidex \
+  127-secondarydex \
+  128-reg-spilling-on-implicit-nullcheck \
+  129-ThreadGetId \
+  130-hprof \
+  132-daemon-locks-shutdown \
+  133-static-invoke-super \
+  134-reg-promotion \
+  137-cfi \
+  135-MirandaDispatch \
+  138-duplicate-classes-check2 \
+  139-register-natives \
+  201-built-in-exception-detail-messages \
+  202-thread-oome \
+  300-package-override \
+  301-abstract-protected \
+  302-float-conversion \
+  303-verification-stress \
+  304-method-tracing \
+  401-optimizing-compiler \
+  402-optimizing-control-flow \
+  403-optimizing-long \
+  404-optimizing-allocator \
+  405-optimizing-long-allocator \
+  406-fields \
+  407-arrays \
+  408-move-bug \
+  409-materialized-condition \
+  410-floats \
+  411-optimizing-arith \
+  412-new-array \
+  413-regalloc-regression \
+  414-optimizing-arith-sub \
+  414-static-fields \
+  415-optimizing-arith-neg \
+  416-optimizing-arith-not \
+  417-optimizing-arith-div \
+  418-const-string \
+  419-long-parameter \
+  420-const-class \
+  421-exceptions \
+  421-large-frame \
+  422-instanceof \
+  422-type-conversion \
+  423-invoke-interface \
+  424-checkcast \
+  425-invoke-super \
+  426-monitor \
+  427-bitwise \
+  427-bounds \
+  428-optimizing-arith-rem \
+  429-ssa-builder \
+  430-live-register-slow-path \
+  431-optimizing-arith-shifts \
+  431-type-propagation \
+  432-optimizing-cmp \
+  433-gvn \
+  434-invoke-direct \
+  434-shifter-operand \
+  435-new-instance \
+  435-try-finally-without-catch \
+  436-rem-float \
+  436-shift-constant \
+  437-inline \
+  438-volatile \
+  439-npe \
+  439-swap-double \
+  440-stmp \
+  441-checker-inliner \
+  442-checker-constant-folding \
+  443-not-bool-inline \
+  444-checker-nce \
+  445-checker-licm \
+  446-checker-inliner2 \
+  447-checker-inliner3 \
+  448-multiple-returns \
+  449-checker-bce \
+  450-checker-types \
+  451-regression-add-float \
+  451-spill-splot \
+  452-multiple-returns2 \
+  453-not-byte \
+  454-get-vreg \
+  455-checker-gvn \
+  455-set-vreg \
+  456-baseline-array-set \
+  458-checker-instruction-simplification \
+  458-long-to-fpu \
+  459-dead-phi \
+  460-multiple-returns3 \
+  461-get-reference-vreg \
+  462-checker-inlining-across-dex-files \
+  463-checker-boolean-simplifier \
+  464-checker-inline-sharpen-calls \
+  465-checker-clinit-gvn \
+  466-get-live-vreg \
+  467-regalloc-pair \
+  468-checker-bool-simplifier-regression \
+  469-condition-materialization-regression \
+  470-huge-method \
+  471-deopt-environment \
+  471-uninitialized-locals \
+  472-type-propagation \
+  472-unreachable-if-regression \
+  473-checker-inliner-constants \
+  473-remove-dead-block \
+  474-checker-boolean-input \
+  474-fp-sub-neg \
+  475-regression-inliner-ids \
+  475-simplify-mul-zero \
+  476-checker-ctor-memory-barrier \
+  476-clinit-check-inlining-static-invoke \
+  477-checker-bound-type \
+  477-long-to-float-conversion-precision \
+  478-checker-clinit-check-pruning \
+  478-checker-inliner-nested-loop \
+  479-regression-implicit-null-check \
+  480-checker-dead-blocks \
+  481-regression-phi-cond \
+  482-checker-loop-back-edge-use \
+  483-dce-block \
+  484-checker-register-hints \
+  485-checker-dce-loop-update \
+  486-checker-must-do-null-check \
+  487-checker-inline-calls \
+  488-checker-inline-recursive-calls \
+  489-current-method-regression \
+  490-checker-inline \
+  491-current-method \
+  492-checker-inline-invoke-interface \
+  493-checker-inline-invoke-interface \
+  494-checker-instanceof-tests \
+  495-checker-checkcast-tests \
+  497-inlining-and-class-loader \
+  498-type-propagation \
+  499-bce-phi-array-length \
+  500-instanceof \
+  700-LoadArgRegs \
+  701-easy-div-rem \
+  702-LargeBranchOffset \
+  703-floating-point-div \
+  704-multiply-accumulate \
+  705-register-conflict \
+  800-smali \
+  801-VoidCheckCast \
+  802-deoptimization
+# Tests that should fail in the heap poisoning configuration with the Optimizing compiler.
+# 055-enum-performance: Exceeds run time limits due to heap poisoning instrumentation.
+TEST_ART_BROKEN_OPTIMIZING_HEAP_POISONING_RUN_TESTS := \
+  055-enum-performance
+# Tests that should fail in the heap poisoning configuration with the interpreter.
+# 137: Cannot run this with the interpreter.
+TEST_ART_BROKEN_INTERPRETER_HEAP_POISONING_RUN_TESTS := \
   137-cfi
 
 ifeq ($(ART_HEAP_POISONING),true)
-  ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES),$(PREBUILD_TYPES), \
-      $(COMPILER_TYPES),$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
-      $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES),$(TEST_ART_BROKEN_HEAP_POISONING_RUN_TESTS),$(ALL_ADDRESS_SIZES))
+  ifneq (,$(filter default,$(COMPILER_TYPES)))
+    ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES), \
+        $(PREBUILD_TYPES),default,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+        $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES), \
+        $(TEST_ART_BROKEN_DEFAULT_HEAP_POISONING_RUN_TESTS),$(ALL_ADDRESS_SIZES))
+  endif
+
+  ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
+    ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES), \
+        $(PREBUILD_TYPES),optimizing,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+        $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES), \
+        $(TEST_ART_BROKEN_OPTIMIZING_HEAP_POISONING_RUN_TESTS),$(ALL_ADDRESS_SIZES))
+  endif
+
+  ifneq (,$(filter interpreter,$(COMPILER_TYPES)))
+    ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES), \
+        $(PREBUILD_TYPES),interpreter,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+        $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES), \
+        $(TEST_ART_BROKEN_INTERPRETER_HEAP_POISONING_RUN_TESTS),$(ALL_ADDRESS_SIZES))
+  endif
 endif
 
-TEST_ART_BROKEN_HEAP_POISONING_RUN_TESTS :=
+TEST_ART_BROKEN_INTERPRETER_HEAP_POISONING_RUN_TESTS :=
+TEST_ART_BROKEN_OPTIMIZING_HEAP_POISONING_RUN_TESTS :=
+TEST_ART_BROKEN_DEFAULT_HEAP_POISONING_RUN_TESTS :=
 
 # Clear variables ahead of appending to them when defining tests.
 $(foreach target, $(TARGET_TYPES), $(eval ART_RUN_TEST_$(call name-to-var,$(target))_RULES :=))
