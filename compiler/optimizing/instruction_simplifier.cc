@@ -312,14 +312,16 @@ void InstructionSimplifierVisitor::VisitEqual(HEqual* equal) {
     HInstruction* input_value = equal->GetLeastConstantLeft();
     if (input_value->GetType() == Primitive::kPrimBoolean && input_const->IsIntConstant()) {
       HBasicBlock* block = equal->GetBlock();
+      // Check if the constant is zero or one. Note that it may be something else:
+      // the compiler may change the Java expression (a ? 1 : 0) to a HBooleanNot,
+      // but it is valid Java to compare this expression with any constant.
       if (input_const->AsIntConstant()->IsOne()) {
         // Replace (bool_value == true) with bool_value
         equal->ReplaceWith(input_value);
         block->RemoveInstruction(equal);
         RecordSimplification();
-      } else {
+      } else if (input_const->AsIntConstant()->IsZero()) {
         // Replace (bool_value == false) with !bool_value
-        DCHECK(input_const->AsIntConstant()->IsZero());
         block->ReplaceAndRemoveInstructionWith(
             equal, new (block->GetGraph()->GetArena()) HBooleanNot(input_value));
         RecordSimplification();
@@ -334,14 +336,16 @@ void InstructionSimplifierVisitor::VisitNotEqual(HNotEqual* not_equal) {
     HInstruction* input_value = not_equal->GetLeastConstantLeft();
     if (input_value->GetType() == Primitive::kPrimBoolean && input_const->IsIntConstant()) {
       HBasicBlock* block = not_equal->GetBlock();
+      // Check if the constant is zero or one. Note that it may be something else:
+      // the compiler may change the Java expression (a ? 1 : 0) to a HBooleanNot,
+      // but it is valid Java to compare this expression with any constant.
       if (input_const->AsIntConstant()->IsOne()) {
         // Replace (bool_value != true) with !bool_value
         block->ReplaceAndRemoveInstructionWith(
             not_equal, new (block->GetGraph()->GetArena()) HBooleanNot(input_value));
         RecordSimplification();
-      } else {
+      } else if (input_const->AsIntConstant()->IsZero()) {
         // Replace (bool_value != false) with bool_value
-        DCHECK(input_const->AsIntConstant()->IsZero());
         not_equal->ReplaceWith(input_value);
         block->RemoveInstruction(not_equal);
         RecordSimplification();
