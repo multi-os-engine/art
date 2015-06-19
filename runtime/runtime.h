@@ -711,6 +711,11 @@ class Runtime {
   bool implicit_so_checks_;         // StackOverflow checks are implicit.
   bool implicit_suspend_checks_;    // Thread suspension checks are implicit.
 
+  // Whether or not the sig chain (and implicitly the fault handler) should be
+  // disabled. Tools like dex2oat or patchoat don't need them. This enables
+  // building a statically link version of dex2oat.
+  bool disable_sig_chain_;
+
   // Whether or not a native bridge has been loaded.
   //
   // The native bridge allows running native code compiled for a foreign ISA. The way it works is,

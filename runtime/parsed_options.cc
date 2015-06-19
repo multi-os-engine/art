@@ -257,6 +257,8 @@ std::unique_ptr<RuntimeParser> ParsedOptions::MakeParser(bool ignore_unrecognize
           .IntoKey(M::ZygoteMaxFailedBoots)
       .Define("-Xno-dex-file-fallback")
           .IntoKey(M::NoDexFileFallback)
+      .Define("-Xdisable-sig-chain")
+          .IntoKey(M::DisableSigChain)
       .Define("--cpu-abilist=_")
           .WithType<std::string>()
           .IntoKey(M::CpuAbiList)
