@@ -697,7 +697,8 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
                                                                    &storage_index);
       }
 
-      if (referrer_class.Get()->IsSubClass(resolved_method->GetDeclaringClass())) {
+      if (!referrer_class->IsInterface()
+          && referrer_class->IsSubClass(resolved_method->GetDeclaringClass())) {
         // If the referrer class is the declaring class or a subclass
         // of the declaring class, no class initialization is needed
         // before the static method call.
