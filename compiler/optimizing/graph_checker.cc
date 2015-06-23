@@ -28,6 +28,15 @@ namespace art {
 void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
   current_block_ = block;
 
+  // Skip empty blocks. These are typically created for NOP instructions which
+  // align switch payloads.
+  if (block->GetInstructions().IsEmpty()
+      && block->GetPhis().IsEmpty()
+      && block->GetPredecessors().IsEmpty()
+      && block->GetSuccessors().IsEmpty()) {
+    return;
+  }
+
   // Check consistency with respect to predecessors of `block`.
   const GrowableArray<HBasicBlock*>& predecessors = block->GetPredecessors();
   std::map<HBasicBlock*, size_t> predecessors_count;
