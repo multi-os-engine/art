@@ -41,7 +41,6 @@ inline mirror::Class* ClassLinker::FindArrayClass(Thread* self, mirror::Class** 
       return array_class;
     }
   }
-  DCHECK(!(*element_class)->IsPrimitiveVoid());
   std::string descriptor = "[";
   std::string temp;
   descriptor += (*element_class)->GetDescriptor(&temp);
