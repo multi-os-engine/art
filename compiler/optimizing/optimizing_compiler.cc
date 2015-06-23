@@ -38,6 +38,7 @@
 #include "driver/compiler_options.h"
 #include "driver/dex_compilation_unit.h"
 #include "elf_writer_quick.h"
+#include "graph_checker.h"
 #include "graph_visualizer.h"
 #include "gvn.h"
 #include "inliner.h"
@@ -86,21 +87,23 @@ class CodeVectorAllocator FINAL : public CodeAllocator {
  */
 static const char* kStringFilter = "";
 
-class PassInfo;
+class PassScope;
 
-class PassInfoPrinter : public ValueObject {
+class PassObserver : public ValueObject {
  public:
-  PassInfoPrinter(HGraph* graph,
+  PassObserver(HGraph* graph,
                   const char* method_name,
                   CodeGenerator* codegen,
                   std::ostream* visualizer_output,
                   CompilerDriver* compiler_driver)
-      : method_name_(method_name),
+      : graph_(graph),
+        method_name_(method_name),
         timing_logger_enabled_(compiler_driver->GetDumpPasses()),
         timing_logger_(method_name, true, true),
         disasm_info_(graph->GetArena()),
         visualizer_enabled_(!compiler_driver->GetDumpCfgFileName().empty()),
-        visualizer_(visualizer_output, graph, *codegen) {
+        visualizer_(visualizer_output, graph, *codegen),
+        is_failed_compilation_(false) {
     if (strstr(method_name, kStringFilter) == nullptr) {
       timing_logger_enabled_ = visualizer_enabled_ = false;
     }
@@ -110,7 +113,7 @@ class PassInfoPrinter : public ValueObject {
     }
   }
 
-  ~PassInfoPrinter() {
+  ~PassObserver() {
     if (timing_logger_enabled_) {
       LOG(INFO) << "TIMINGS " << method_name_;
       LOG(INFO) << Dumpable<TimingLogger>(timing_logger_);
@@ -123,6 +126,8 @@ class PassInfoPrinter : public ValueObject {
     }
   }
 
+  void SetIsFailedCompilation() { is_failed_compilation_ = true; }
+
  private:
   void StartPass(const char* pass_name) {
     // Dump graph first, then start timer.
@@ -134,7 +139,7 @@ class PassInfoPrinter : public ValueObject {
     }
   }
 
-  void EndPass(const char* pass_name) {
+  void EndPass(const char* pass_name, bool is_in_ssa_form) {
     // Pause timer first, then dump graph.
     if (timing_logger_enabled_) {
       timing_logger_.EndTiming();
@@ -142,8 +147,28 @@ class PassInfoPrinter : public ValueObject {
     if (visualizer_enabled_) {
       visualizer_.DumpGraph(pass_name, /* is_after_pass */ true);
     }
+
+    // Validate the HGraph if running in debug mode.
+    if (kIsDebugBuild) {
+      if (!is_failed_compilation_) {
+        if (is_in_ssa_form) {
+          SSAChecker checker(graph_->GetArena(), graph_);
+          checker.Run();
+          if (!checker.IsValid()) {
+            LOG(FATAL) << "Error after " << pass_name << ": " << Dumpable<SSAChecker>(checker);
+          }
+        } else {
+          GraphChecker checker(graph_->GetArena(), graph_);
+          checker.Run();
+          if (!checker.IsValid()) {
+            LOG(FATAL) << "Error after " << pass_name << ": " << Dumpable<GraphChecker>(checker);
+          }
+        }
+      }
+    }
   }
 
+  HGraph* const graph_;
   const char* method_name_;
 
   bool timing_logger_enabled_;
@@ -154,26 +179,30 @@ class PassInfoPrinter : public ValueObject {
   bool visualizer_enabled_;
   HGraphVisualizer visualizer_;
 
-  friend PassInfo;
+  bool is_failed_compilation_;
 
-  DISALLOW_COPY_AND_ASSIGN(PassInfoPrinter);
+  friend PassScope;
+
+  DISALLOW_COPY_AND_ASSIGN(PassObserver);
 };
 
-class PassInfo : public ValueObject {
+class PassScope : public ValueObject {
  public:
-  PassInfo(const char *pass_name, PassInfoPrinter* pass_info_printer)
+  PassScope(const char *pass_name, bool is_in_ssa_form, PassObserver* pass_observer)
       : pass_name_(pass_name),
-        pass_info_printer_(pass_info_printer) {
-    pass_info_printer_->StartPass(pass_name_);
+        is_in_ssa_form_(is_in_ssa_form),
+        pass_observer_(pass_observer) {
+    pass_observer_->StartPass(pass_name_);
   }
 
-  ~PassInfo() {
-    pass_info_printer_->EndPass(pass_name_);
+  ~PassScope() {
+    pass_observer_->EndPass(pass_name_, is_in_ssa_form_);
   }
 
  private:
   const char* const pass_name_;
-  PassInfoPrinter* const pass_info_printer_;
+  const bool is_in_ssa_form_;
+  PassObserver* const pass_observer_;
 };
 
 class OptimizingCompiler FINAL : public Compiler {
@@ -234,13 +263,13 @@ class OptimizingCompiler FINAL : public Compiler {
                                    CodeGenerator* codegen,
                                    CompilerDriver* driver,
                                    const DexCompilationUnit& dex_compilation_unit,
-                                   PassInfoPrinter* pass_info_printer) const;
+                                   PassObserver* pass_observer) const;
 
   // Just compile without doing optimizations.
   CompiledMethod* CompileBaseline(CodeGenerator* codegen,
                                   CompilerDriver* driver,
                                   const DexCompilationUnit& dex_compilation_unit,
-                                  PassInfoPrinter* pass_info_printer) const;
+                                  PassObserver* pass_observer) const;
 
   std::unique_ptr<OptimizingCompilerStats> compilation_stats_;
 
@@ -313,14 +342,10 @@ static bool CanOptimize(const DexFile::CodeItem& code_item) {
 
 static void RunOptimizations(HOptimization* optimizations[],
                              size_t length,
-                             PassInfoPrinter* pass_info_printer) {
+                             PassObserver* pass_observer) {
   for (size_t i = 0; i < length; ++i) {
-    HOptimization* optimization = optimizations[i];
-    {
-      PassInfo pass_info(optimization->GetPassName(), pass_info_printer);
-      optimization->Run();
-    }
-    optimization->Check();
+    PassScope scope(optimizations[i]->GetPassName(), /* ssa */ true, pass_observer);
+    optimizations[i]->Run();
   }
 }
 
@@ -328,7 +353,7 @@ static void RunOptimizations(HGraph* graph,
                              CompilerDriver* driver,
                              OptimizingCompilerStats* stats,
                              const DexCompilationUnit& dex_compilation_unit,
-                             PassInfoPrinter* pass_info_printer,
+                             PassObserver* pass_observer,
                              StackHandleScopeCollection* handles) {
   ArenaAllocator* arena = graph->GetArena();
   HDeadCodeElimination* dce1 = new (arena) HDeadCodeElimination(
@@ -387,7 +412,7 @@ static void RunOptimizations(HGraph* graph,
     simplify4,
   };
 
-  RunOptimizations(optimizations, arraysize(optimizations), pass_info_printer);
+  RunOptimizations(optimizations, arraysize(optimizations), pass_observer);
 }
 
 // The stack map we generate must be 4-byte aligned on ARM. Since existing
@@ -403,15 +428,15 @@ static ArrayRef<const uint8_t> AlignVectorSize(std::vector<uint8_t>& vector) {
 
 static void AllocateRegisters(HGraph* graph,
                               CodeGenerator* codegen,
-                              PassInfoPrinter* pass_info_printer) {
+                              PassObserver* pass_observer) {
   PrepareForRegisterAllocation(graph).Run();
   SsaLivenessAnalysis liveness(graph, codegen);
   {
-    PassInfo pass_info(SsaLivenessAnalysis::kLivenessPassName, pass_info_printer);
+    PassScope scope(SsaLivenessAnalysis::kLivenessPassName, /* ssa */ true, pass_observer);
     liveness.Analyze();
   }
   {
-    PassInfo pass_info(RegisterAllocator::kRegisterAllocatorPassName, pass_info_printer);
+    PassScope scope(RegisterAllocator::kRegisterAllocatorPassName, /* ssa */ true, pass_observer);
     RegisterAllocator(graph->GetArena(), codegen, liveness).AllocateRegisters();
   }
 }
@@ -420,12 +445,12 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
                                                      CodeGenerator* codegen,
                                                      CompilerDriver* compiler_driver,
                                                      const DexCompilationUnit& dex_compilation_unit,
-                                                     PassInfoPrinter* pass_info_printer) const {
+                                                     PassObserver* pass_observer) const {
   StackHandleScopeCollection handles(Thread::Current());
   RunOptimizations(graph, compiler_driver, compilation_stats_.get(),
-                   dex_compilation_unit, pass_info_printer, &handles);
+                   dex_compilation_unit, pass_observer, &handles);
 
-  AllocateRegisters(graph, codegen, pass_info_printer);
+  AllocateRegisters(graph, codegen, pass_observer);
 
   CodeVectorAllocator allocator;
   codegen->CompileOptimized(&allocator);
@@ -456,7 +481,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
       ArrayRef<const uint8_t>(),  // native_gc_map.
       ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()),
       ArrayRef<const LinkerPatch>());
-  pass_info_printer->DumpDisassembly();
+  pass_observer->DumpDisassembly();
   return compiled_method;
 }
 
@@ -464,7 +489,7 @@ CompiledMethod* OptimizingCompiler::CompileBaseline(
     CodeGenerator* codegen,
     CompilerDriver* compiler_driver,
     const DexCompilationUnit& dex_compilation_unit,
-    PassInfoPrinter* pass_info_printer) const {
+    PassObserver* pass_observer) const {
   CodeVectorAllocator allocator;
   codegen->CompileBaseline(&allocator);
 
@@ -496,7 +521,7 @@ CompiledMethod* OptimizingCompiler::CompileBaseline(
       AlignVectorSize(gc_map),
       ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()),
       ArrayRef<const LinkerPatch>());
-  pass_info_printer->DumpDisassembly();
+  pass_observer->DumpDisassembly();
   return compiled_method;
 }
 
@@ -571,11 +596,11 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   codegen->GetAssembler()->cfi().SetEnabled(
       compiler_driver->GetCompilerOptions().GetGenerateDebugInfo());
 
-  PassInfoPrinter pass_info_printer(graph,
-                                    method_name.c_str(),
-                                    codegen.get(),
-                                    visualizer_output_.get(),
-                                    compiler_driver);
+  PassObserver pass_observer(graph,
+                             method_name.c_str(),
+                             codegen.get(),
+                             visualizer_output_.get(),
+                             compiler_driver);
 
   HGraphBuilder builder(graph,
                         &dex_compilation_unit,
@@ -587,9 +612,10 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   VLOG(compiler) << "Building " << method_name;
 
   {
-    PassInfo pass_info(HGraphBuilder::kBuilderPassName, &pass_info_printer);
+    PassScope scope(HGraphBuilder::kBuilderPassName, /* ssa */ false, &pass_observer);
     if (!builder.BuildGraph(*code_item)) {
       CHECK(!shouldCompile) << "Could not build graph in optimizing compiler";
+      pass_observer.SetIsFailedCompilation();
       return nullptr;
     }
   }
@@ -605,11 +631,12 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     VLOG(compiler) << "Optimizing " << method_name;
 
     {
-      PassInfo pass_info(SsaBuilder::kSsaBuilderPassName, &pass_info_printer);
+      PassScope scope(SsaBuilder::kSsaBuilderPassName, /* ssa */ true, &pass_observer);
       if (!graph->TryBuildingSsa()) {
         // We could not transform the graph to SSA, bailout.
         LOG(INFO) << "Skipping compilation of " << method_name << ": it contains a non natural loop";
         MaybeRecordStat(MethodCompilationStat::kNotCompiledCannotBuildSSA);
+        pass_observer.SetIsFailedCompilation();
         return nullptr;
       }
     }
@@ -618,7 +645,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                             codegen.get(),
                             compiler_driver,
                             dex_compilation_unit,
-                            &pass_info_printer);
+                            &pass_observer);
   } else if (shouldOptimize && can_allocate_registers) {
     LOG(FATAL) << "Could not allocate registers in optimizing compiler";
     UNREACHABLE();
@@ -636,7 +663,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     return CompileBaseline(codegen.get(),
                            compiler_driver,
                            dex_compilation_unit,
-                           &pass_info_printer);
+                           &pass_observer);
   } else {
     return nullptr;
   }
