@@ -4056,10 +4056,12 @@ void MethodVerifier::VerifyISFieldAccess(const Instruction* inst, const RegType&
       VerifyPrimitivePut(*field_type, insn_type, vregA);
     } else {
       if (!insn_type.IsAssignableFrom(*field_type)) {
-        Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "expected field " << PrettyField(field)
-                                                << " to be compatible with type '" << insn_type
-                                                << "' but found type '" << *field_type
-                                                << "' in put-object";
+        VerifyError error = field_type->IsReferenceTypes() ? VERIFY_ERROR_BAD_CLASS_SOFT
+                                                           : VERIFY_ERROR_BAD_CLASS_HARD;
+        Fail(error) << "expected field " << PrettyField(field)
+                    << " to be compatible with type '" << insn_type
+                    << "' but found type '" << *field_type
+                    << "' in put-object";
         return;
       }
       work_line_->VerifyRegisterType(this, vregA, *field_type);
@@ -4083,10 +4085,12 @@ void MethodVerifier::VerifyISFieldAccess(const Instruction* inst, const RegType&
       }
     } else {
       if (!insn_type.IsAssignableFrom(*field_type)) {
-        Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "expected field " << PrettyField(field)
-                                          << " to be compatible with type '" << insn_type
-                                          << "' but found type '" << *field_type
-                                          << "' in get-object";
+        VerifyError error = field_type->IsReferenceTypes() ? VERIFY_ERROR_BAD_CLASS_SOFT
+                                                           : VERIFY_ERROR_BAD_CLASS_HARD;
+        Fail(error) << "expected field " << PrettyField(field)
+                    << " to be compatible with type '" << insn_type
+                    << "' but found type '" << *field_type
+                    << "' in get-object";
         work_line_->SetRegisterType(this, vregA, reg_types_.Conflict());
         return;
       }
