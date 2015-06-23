@@ -711,6 +711,10 @@ class Heap {
   void SweepAllocationRecords(IsMarkedCallback* visitor, void* arg) const
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  void DisallowNewAllocationRecords() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void AllowNewAllocationRecords() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void EnsureNewAllocationRecordsDisallowed() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
  private:
   class ConcurrentGCTask;
   class CollectorTransitionTask;

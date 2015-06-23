@@ -170,7 +170,7 @@ inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self, mirror::Clas
   }
   if (kInstrumented) {
     if (IsAllocTrackingEnabled()) {
-      AllocRecordObjectMap::RecordAllocation(self, obj, bytes_allocated);
+      AllocRecordObjectMap::RecordAllocation(self, obj, klass, bytes_allocated);
     }
   } else {
     DCHECK(!IsAllocTrackingEnabled());
