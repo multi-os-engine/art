@@ -32,6 +32,20 @@ public class Main {
     return result;
   }
 
+  public static int bar(int start, int[] array) {
+    int result = 0;
+    for (int i = start; i < 3; i++) {
+      result += array[i];
+      for (int j = 0; j < 2; ++j) {
+        result += array[j];
+        result += array[0];
+        result += array[1];
+        result += array[2];
+      }
+    }
+    return result;
+  }
+
   public static void main(String[] args) {
     int[] a = new int[] { 1, 2, 3, 4, 5 };
     int result = foo(1, a);
