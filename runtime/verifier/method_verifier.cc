@@ -1796,7 +1796,11 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
             Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "returning uninitialized object '"
                                               << reg_type << "'";
           } else if (!return_type.IsAssignableFrom(reg_type)) {
-            if (reg_type.IsUnresolvedTypes() || return_type.IsUnresolvedTypes()) {
+            if (reg_type.IsUndefined()) {
+              Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "returning undefined register";
+            } else if (reg_type.IsConflict()) {
+              Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "returning register with conflict";
+            } else if (reg_type.IsUnresolvedTypes() || return_type.IsUnresolvedTypes()) {
               Fail(VERIFY_ERROR_NO_CLASS) << " can't resolve returned type '" << return_type
                   << "' or '" << reg_type << "'";
             } else {
