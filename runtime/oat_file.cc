@@ -233,6 +233,12 @@ bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
   extinfo.flags = ANDROID_DLEXT_FORCE_LOAD | ANDROID_DLEXT_FORCE_FIXED_VADDR;
   dlopen_handle_ = android_dlopen_ext(absolute_path.get(), RTLD_NOW, &extinfo);
 #else
+  if (requested_base != nullptr && getenv("LD_USE_LOAD_BIAS") == nullptr) {
+    // It is necessary to have ASLR disabled otherwise dlopen will not load the file
+    // at the fixed address.  Do not even try to avoid extra mmaps and extra logging.
+    *error_msg = StringPrintf("Skipping dlopen because LD_USE_LOAD_BIAS is not set.");
+    return false;
+  }
   dlopen_handle_ = dlopen(absolute_path.get(), RTLD_NOW);
 #endif
   if (dlopen_handle_ == nullptr) {
