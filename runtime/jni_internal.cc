@@ -554,15 +554,13 @@ class JNI {
     return soa.AddLocalReference<jobject>(decoded_obj);
   }
 
-  static void DeleteLocalRef(JNIEnv* env, jobject obj)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  static void DeleteLocalRef(JNIEnv* env, jobject obj) {
     if (obj == nullptr) {
       return;
     }
-    IndirectReferenceTable& locals = reinterpret_cast<JNIEnvExt*>(env)->locals;
-
-    uint32_t cookie = reinterpret_cast<JNIEnvExt*>(env)->local_ref_cookie;
-    if (!locals.Remove(cookie, obj)) {
+    ScopedObjectAccess soa(env);
+    auto* ext_env = reinterpret_cast<JNIEnvExt*>(env);
+    if (!ext_env->locals.Remove(ext_env->local_ref_cookie, obj)) {
       // Attempting to delete a local reference that is not in the
       // topmost local reference frame is a no-op.  DeleteLocalRef returns
       // void and doesn't throw any exceptions, but we should probably
