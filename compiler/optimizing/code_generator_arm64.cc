@@ -741,7 +741,6 @@ void CodeGeneratorARM64::SetupBlockedRegisters(bool is_baseline) const {
   // Blocked core registers:
   //      lr        : Runtime reserved.
   //      tr        : Runtime reserved.
-  //      xSuspend  : Runtime reserved. TODO: Unblock this when the runtime stops using it.
   //      ip1       : VIXL core temp.
   //      ip0       : VIXL core temp.
   //
@@ -846,6 +845,31 @@ static bool CoherentConstantAndType(Location constant, Primitive::Type type) {
          (cst->IsDoubleConstant() && type == Primitive::kPrimDouble);
 }
 
+// Return true if the constant value can be presented as zero register. According to IEEE-754
+// specification, -0.0f(0x80000000) is equal to 0.0f(0x0). So float point IsZero() cannot be used
+// here.
+static bool IsExactZero(HConstant* cst) {
+  if (cst->IsNullConstant()) {
+    // The value of null reference is not defined in the VM spec. And in ART, we use zero address to
+    // present null reference on ARM64 for now.
+    return true;
+  } else if (cst->IsIntConstant() || cst->IsLongConstant()) {
+    return cst->IsZero();
+  } else if (cst->IsFloatConstant()) {
+    float value = cst->AsFloatConstant()->GetValue();
+    if (bit_cast<int32_t, float>(value) == 0) {
+      return true;
+    }
+  } else {
+    DCHECK(cst->IsDoubleConstant());
+    double value = cst->AsDoubleConstant()->GetValue();
+    if (bit_cast<int64_t, double>(value) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void CodeGeneratorARM64::MoveLocation(Location destination, Location source, Primitive::Type type) {
   if (source.Equals(destination)) {
     return;
@@ -909,24 +933,28 @@ void CodeGeneratorARM64::MoveLocation(Location destination, Location source, Pri
       UseScratchRegisterScope temps(GetVIXLAssembler());
       HConstant* src_cst = source.GetConstant();
       CPURegister temp;
-      if (src_cst->IsIntConstant() || src_cst->IsNullConstant()) {
-        temp = temps.AcquireW();
-      } else if (src_cst->IsLongConstant()) {
-        temp = temps.AcquireX();
-      } else if (src_cst->IsFloatConstant()) {
-        temp = temps.AcquireS();
+      if (IsExactZero(src_cst)) {
+        temp = src_cst->IsLongConstant() || src_cst->IsDoubleConstant() ? xzr : wzr;
       } else {
-        DCHECK(src_cst->IsDoubleConstant());
-        temp = temps.AcquireD();
+        if (src_cst->IsIntConstant()) {
+          temp = temps.AcquireW();
+        } else if (src_cst->IsLongConstant()) {
+          temp = temps.AcquireX();
+        } else if (src_cst->IsFloatConstant()) {
+          temp = temps.AcquireS();
+        } else {
+          DCHECK(src_cst->IsDoubleConstant());
+          temp = temps.AcquireD();
+        }
+        MoveConstant(temp, src_cst);
       }
-      MoveConstant(temp, src_cst);
       __ Str(temp, StackOperandFrom(destination));
     } else {
       DCHECK(source.IsStackSlot() || source.IsDoubleStackSlot());
       DCHECK(source.IsDoubleStackSlot() == destination.IsDoubleStackSlot());
       UseScratchRegisterScope temps(GetVIXLAssembler());
-      // There is generally less pressure on FP registers.
-      FPRegister temp = destination.IsDoubleStackSlot() ? temps.AcquireD() : temps.AcquireS();
+      // Load/store on core registers is a bit faster than on fp registers.
+      Register temp = destination.IsDoubleStackSlot() ? temps.AcquireX() : temps.AcquireW();
       __ Ldr(temp, StackOperandFrom(source));
       __ Str(temp, StackOperandFrom(destination));
     }
