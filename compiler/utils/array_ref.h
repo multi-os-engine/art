@@ -161,6 +161,30 @@ class ArrayRef {
   value_type* data() { return array_; }
   const value_type* data() const { return array_; }
 
+  // Sub-array.
+
+  ArrayRef<T> SubArray(size_type pos, size_type len) {
+    DCHECK_LE(pos, size());
+    DCHECK_LE(len, size() - pos);
+    return ArrayRef<T>(array_ + pos, len);
+  }
+
+  ArrayRef<const T> SubArray(size_type pos, size_type len) const {
+    DCHECK_LE(pos, size());
+    DCHECK_LE(len, size() - pos);
+    return ArrayRef<const T>(array_ + pos, len);
+  }
+
+  ArrayRef<T> SubArray(size_type pos) {
+    DCHECK_LE(pos, size());
+    return SubArray(pos, size() - pos);
+  }
+
+  ArrayRef<const T> SubArray(size_type pos) const {
+    DCHECK_LE(pos, size());
+    return SubArray(pos, size() - pos);
+  }
+
  private:
   T* array_;
   size_t size_;
@@ -177,6 +201,5 @@ bool operator!=(const ArrayRef<T>& lhs, const ArrayRef<T>& rhs) {
 }
 
 }  // namespace art
-
 
 #endif  // ART_COMPILER_UTILS_ARRAY_REF_H_
