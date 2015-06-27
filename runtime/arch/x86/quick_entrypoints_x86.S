@@ -1200,6 +1200,7 @@ DEFINE_FUNCTION art_quick_aput_obj
     shrl LITERAL(7), %eax
     movb %dl, (%edx, %eax)
     ret
+    CFI_ADJUST_CFA_OFFSET(12)  // 3 POP after the jz for unwinding.
 .Lthrow_array_store_exception:
     POP  edx
     POP  ecx
