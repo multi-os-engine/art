@@ -855,6 +855,96 @@ void IntrinsicCodeGeneratorARM::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
+void IntrinsicLocationsBuilderARM::VisitStringEquals(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kNoCall,
+                                                            kIntrinsified);
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+  // Temporary registers to store lengths of strings and for calculations
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+
+  locations->SetOut(Location::RegisterLocation(R0));
+}
+
+void IntrinsicCodeGeneratorARM::VisitStringEquals(HInvoke* invoke) {
+  ArmAssembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  Register str = locations->InAt(0).AsRegister<Register>();
+  Register argument = locations->InAt(1).AsRegister<Register>();
+  Register out = locations->Out().AsRegister<Register>();
+
+  Register count_str = locations->GetTemp(0).AsRegister<Register>();
+  Register count_arg = locations->GetTemp(1).AsRegister<Register>();
+  Register temp = locations->GetTemp(2).AsRegister<Register>();
+  Register temp_str = locations->GetTemp(3).AsRegister<Register>();
+  Register temp_arg = locations->GetTemp(4).AsRegister<Register>();
+
+  Label loop;
+  Label end;
+
+  // Get offset of count field within a string object
+  const MemberOffset count_offset = mirror::String::CountOffset();
+  const MemberOffset value_offset = mirror::String::ValueOffset();
+
+  // Instanceof check for the argument by comparing class fields
+  // All string objects must have the same type since String cannot be subclassed
+  // Reciever must be a string object, so its class field is equal to all strings' class fields
+  // If the argument is a string object, its class field must be equal to reciever's class field
+  __ ldr(temp_str, Address(str));
+  __ ldr(temp_arg, Address(argument));
+  __ cmp(temp_str, ShifterOperand(temp_arg));
+  __ it(NE);
+  __ LoadImmediate(out, 0, NE);
+  __ b(&end, NE);
+
+  // Check if input is null, return false if it is
+  __ cmp(argument, ShifterOperand(0));
+  __ it(EQ);
+  __ LoadImmediate(out, 0, EQ);
+  __ b(&end, EQ);
+
+  // Load lengths of this and argument strings
+  __ ldrh(count_str, Address(str, count_offset.Int32Value()));
+  __ ldrh(count_arg, Address(argument, count_offset.Int32Value()));
+  // Check if lengths are equal, return false if they're not
+  __ cmp(count_str, ShifterOperand(count_arg));
+  __ it(NE);
+  __ LoadImmediate(out, 0, NE);
+  __ b(&end, NE);
+
+  // Reference equality check, return true if same reference
+  __ cmp(str, ShifterOperand(argument));
+  __ it(EQ);
+  __ LoadImmediate(out, 1, EQ);
+  __ b(&end, EQ);
+
+  // Move inputs to temporary registers so they are not overwritten
+  // Add value offset to addresses to easily access first character in loop
+  __ add(temp_str, str, ShifterOperand(value_offset.Int32Value()));
+  __ add(temp_arg, argument, ShifterOperand(value_offset.Int32Value()));
+
+  // Loop to compare strings character by character
+  __ Bind(&loop);
+  __ ldrh(out, Address(temp_str, 2, Address::PostIndex));
+  __ ldrh(temp, Address(temp_arg, 2, Address::PostIndex));
+  __ subs(out, out, ShifterOperand(temp));
+  __ it(NE);
+  __ LoadImmediate(out, 0, NE);
+  __ b(&end, NE);
+  // Use count_str register as counter for loop iterations, knowing strings have equal length
+  __ subs(count_str, count_str, ShifterOperand(1));
+  __ b(&loop, NE);
+  __ LoadImmediate(out, 1);
+  __ Bind(&end);
+}
+
 static void GenerateVisitStringIndexOf(HInvoke* invoke,
                                        ArmAssembler* assembler,
                                        CodeGeneratorARM* codegen,
