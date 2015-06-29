@@ -855,6 +855,106 @@ void IntrinsicCodeGeneratorARM::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
+void IntrinsicLocationsBuilderARM::VisitStringEquals(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kNoCall,
+                                                            kIntrinsified);
+  InvokeRuntimeCallingConvention calling_convention;
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+  // Temporary registers to store lengths of strings and for calculations.
+  // Using instruction cbz requires a low register, so explicitly set a temp to be R0.
+  locations->AddTemp(Location::RegisterLocation(R0));
+  locations->AddTemp(Location::RequiresRegister());
+
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorARM::VisitStringEquals(HInvoke* invoke) {
+  ArmAssembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  Register str = locations->InAt(0).AsRegister<Register>();
+  Register arg = locations->InAt(1).AsRegister<Register>();
+  Register out = locations->Out().AsRegister<Register>();
+
+  Register temp = locations->GetTemp(0).AsRegister<Register>();
+  Register temp1 = locations->GetTemp(1).AsRegister<Register>();
+
+  Label loop;
+  Label end;
+  Label return_true;
+  Label return_false;
+
+  // Get offsets of count, value, and class fields within a string object.
+  const uint32_t count_offset = mirror::String::CountOffset().Int32Value();
+  const uint32_t value_offset = mirror::String::ValueOffset().Int32Value();
+  const uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
+
+  // Note that the null check must have been done earlier.
+  DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
+
+  // Check if input is null, return false if it is.
+  __ cmp(arg, ShifterOperand(0));
+  __ b(&return_false, EQ);
+
+  // Instanceof check for the argument by comparing class fields.
+  // All string objects must have the same type since String cannot be subclassed.
+  // Receiver must be a string object, so its class field is equal to all strings' class fields.
+  // If the argument is a string object, its class field must be equal to receiver's class field.
+  __ ldr(temp, Address(str, class_offset));
+  __ ldr(temp1, Address(arg, class_offset));
+  __ cmp(temp, ShifterOperand(temp1));
+  __ b(&return_false, NE);
+
+  // Load lengths of this and argument strings.
+  __ ldr(temp, Address(str, count_offset));
+  __ ldr(temp1, Address(arg, count_offset));
+  // Check if lengths are equal, return false if they're not.
+  __ cmp(temp, ShifterOperand(temp1));
+  __ b(&return_false, NE);
+  // Return true if both strings are empty.
+  __ cbz(temp, &return_true);
+
+  // Reference equality check, return true if same reference.
+  __ cmp(str, ShifterOperand(arg));
+  __ b(&return_true, EQ);
+
+  // Assertions that must hold in order to compare strings 2 characters at a time.
+  DCHECK_EQ(value_offset % 4, (uint32_t) 0);
+  DCHECK_EQ(kObjectAlignment % 4, (uint32_t) 0);
+
+  // Load the value field's offset plus the length of the string into a register.
+  __ Lsl(temp, temp, 1);
+  __ add(temp1, temp, ShifterOperand(value_offset));
+  // Adjust results to account for even/odd string lengths.
+  __ sub(temp1, temp1, ShifterOperand(2));
+  __ bic(temp1, temp1, ShifterOperand(2));
+
+  // Loop to compare strings 2 characters at a time starting at the end of the string.
+  // Ok to do this because strings with an odd length are zero-padded, asserted above.
+  __ Bind(&loop);
+  __ cmp(temp1, ShifterOperand(value_offset));
+  __ b(&return_true, EQ);
+  __ ldr(out, Address(str, temp1));
+  __ ldr(temp, Address(arg, temp1));
+  __ cmp(out, ShifterOperand(temp));
+  __ b(&return_false, NE);
+  __ sub(temp1, temp1, ShifterOperand(sizeof(uint32_t)));
+  __ b(&loop);
+
+  // Return true and exit the function.
+  // If loop does not result in returning false, we return true.
+  __ Bind(&return_true);
+  __ LoadImmediate(out, 1);
+  __ b(&end);
+
+  // Return false and exit the function.
+  __ Bind(&return_false);
+  __ LoadImmediate(out, 0);
+  __ Bind(&end);
+}
+
 static void GenerateVisitStringIndexOf(HInvoke* invoke,
                                        ArmAssembler* assembler,
                                        CodeGeneratorARM* codegen,
