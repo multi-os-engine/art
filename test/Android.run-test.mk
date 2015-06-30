@@ -521,9 +521,7 @@ endif
 TEST_ART_BROKEN_READ_BARRIER_RUN_TESTS :=
 
 # Tests that should fail in the heap poisoning configuration with the default (Quick) compiler.
-# 137: Quick punts to the interpreter, and this test cannot run this with the interpreter.
-TEST_ART_BROKEN_DEFAULT_HEAP_POISONING_RUN_TESTS := \
-  137-cfi
+TEST_ART_BROKEN_DEFAULT_HEAP_POISONING_RUN_TESTS :=
 # Tests that should fail in the heap poisoning configuration with the Optimizing compiler.
 # 055-enum-performance: Exceeds run time limits due to heap poisoning instrumentation.
 TEST_ART_BROKEN_OPTIMIZING_HEAP_POISONING_RUN_TESTS := \

@@ -293,6 +293,9 @@ bool Mir2Lir::GenSpecialIGet(MIR* mir, const InlineMethod& special) {
   }
   if (IsRef(size)) {
     LoadRefDisp(reg_obj, data.field_offset, r_result, data.is_volatile ? kVolatile : kNotVolatile);
+    if (kPoisonHeapReferences) {
+      GenHeapReferenceUnpoisoning(r_result);
+    }
   } else {
     LoadBaseDisp(reg_obj, data.field_offset, r_result, size, data.is_volatile ? kVolatile :
         kNotVolatile);
@@ -360,7 +363,17 @@ bool Mir2Lir::GenSpecialIPut(MIR* mir, const InlineMethod& special) {
   RegisterClass reg_class = RegClassForFieldLoadStore(size, data.is_volatile);
   RegStorage reg_src = LoadArg(data.src_arg, reg_class, IsWide(size));
   if (IsRef(size)) {
-    StoreRefDisp(reg_obj, data.field_offset, reg_src, data.is_volatile ? kVolatile : kNotVolatile);
+    if (kPoisonHeapReferences) {
+      RegStorage temp = AllocTempRef();
+      OpRegCopy(temp, reg_src);
+      GenHeapReferencePoisoning(temp);
+      StoreRefDisp(
+          reg_obj, data.field_offset, temp, data.is_volatile ? kVolatile : kNotVolatile);
+      FreeTemp(temp);
+    } else {
+      StoreRefDisp(
+          reg_obj, data.field_offset, reg_src, data.is_volatile ? kVolatile : kNotVolatile);
+    }
   } else {
     StoreBaseDisp(reg_obj, data.field_offset, reg_src, size, data.is_volatile ? kVolatile :
         kNotVolatile);

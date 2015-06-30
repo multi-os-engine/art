@@ -277,6 +277,14 @@ class ArmMir2Lir FINAL : public Mir2Lir {
     bool HandleEasyDivRem(Instruction::Code dalvik_opcode, bool is_div,
                           RegLocation rl_src, RegLocation rl_dest, int lit) OVERRIDE;
 
+    /*
+     * @brief Heap poisoning.
+     */
+    // Poison a heap reference contained in `reg`.
+    void GenHeapReferencePoisoning(RegStorage reg) OVERRIDE;
+    // Unpoison a heap reference contained in `reg`.
+    void GenHeapReferenceUnpoisoning(RegStorage reg) OVERRIDE;
+
   private:
     void GenNegLong(RegLocation rl_dest, RegLocation rl_src);
     void GenMulLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,

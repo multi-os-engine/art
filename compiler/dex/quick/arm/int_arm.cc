@@ -828,6 +828,11 @@ bool ArmMir2Lir::GenInlinedPoke(CallInfo* info, OpSize size) {
 
 // Generate a CAS with memory_order_seq_cst semantics.
 bool ArmMir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
+  if (kPoisonHeapReferences) {
+    // The GenInlinedCas intrinsic does not support heap poisoning.
+    // TODO: Implement it?
+    return false;
+  }
   DCHECK_EQ(cu_->instruction_set, kThumb2);
   // Unused - RegLocation rl_src_unsafe = info->args[0];
   RegLocation rl_src_obj = info->args[1];  // Object - known non-null
@@ -1432,6 +1437,9 @@ void ArmMir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
     if (!constant_index) {
       FreeTemp(reg_ptr);
     }
+    if (kPoisonHeapReferences && IsRef(size)) {
+      GenHeapReferenceUnpoisoning(rl_result.reg);
+    }
     if (rl_dest.wide) {
       StoreValueWide(rl_dest, rl_result);
     } else {
@@ -1450,6 +1458,9 @@ void ArmMir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
     }
     LoadBaseIndexed(reg_ptr, rl_index.reg, rl_result.reg, scale, size);
     FreeTemp(reg_ptr);
+    if (kPoisonHeapReferences && IsRef(size)) {
+      GenHeapReferenceUnpoisoning(rl_result.reg);
+    }
     StoreValue(rl_dest, rl_result);
   }
 }
@@ -1526,7 +1537,15 @@ void ArmMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
       FreeTemp(reg_len);
     }
 
-    StoreBaseDisp(reg_ptr, data_offset, rl_src.reg, size, kNotVolatile);
+    if (kPoisonHeapReferences && IsRef(size)) {
+      RegStorage temp = AllocTempRef();
+      OpRegCopy(temp, rl_src.reg);
+      GenHeapReferencePoisoning(temp);
+      StoreBaseDisp(reg_ptr, data_offset, temp, size, kNotVolatile);
+      FreeTemp(temp);
+    } else {
+      StoreBaseDisp(reg_ptr, data_offset, rl_src.reg, size, kNotVolatile);
+    }
   } else {
     /* reg_ptr -> array data */
     OpRegRegImm(kOpAdd, reg_ptr, rl_array.reg, data_offset);
@@ -1535,7 +1554,16 @@ void ArmMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
       GenArrayBoundsCheck(rl_index.reg, reg_len);
       FreeTemp(reg_len);
     }
-    StoreBaseIndexed(reg_ptr, rl_index.reg, rl_src.reg, scale, size);
+
+    if (kPoisonHeapReferences && IsRef(size)) {
+      RegStorage temp = AllocTempRef();
+      OpRegCopy(temp, rl_src.reg);
+      GenHeapReferencePoisoning(temp);
+      StoreBaseIndexed(reg_ptr, rl_index.reg, temp, scale, size);
+      FreeTemp(temp);
+    } else {
+      StoreBaseIndexed(reg_ptr, rl_index.reg, rl_src.reg, scale, size);
+    }
   }
   if (allocated_reg_ptr_temp) {
     FreeTemp(reg_ptr);

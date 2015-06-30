@@ -264,6 +264,14 @@ class Arm64Mir2Lir FINAL : public Mir2Lir {
 
   LIR* InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) OVERRIDE;
 
+  /*
+   * @brief Heap poisoning.
+   */
+  // Poison a heap reference contained in `reg`.
+  void GenHeapReferencePoisoning(RegStorage reg) OVERRIDE;
+  // Unpoison a heap reference contained in `reg`.
+  void GenHeapReferenceUnpoisoning(RegStorage reg) OVERRIDE;
+
  private:
   /**
    * @brief Given register xNN (dNN), returns register wNN (sNN).

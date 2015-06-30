@@ -1504,6 +1504,12 @@ class Mir2Lir {
      */
     dwarf::LazyDebugFrameOpCodeWriter& cfi() { return cfi_; }
 
+    /*
+     * @brief Heap poisoning.
+     */
+    virtual void GenHeapReferencePoisoning(RegStorage reg) = 0;
+    virtual void GenHeapReferenceUnpoisoning(RegStorage reg) = 0;
+
   protected:
     Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
 

@@ -98,6 +98,9 @@ RegStorage Mir2Lir::GenGetOtherTypeForSgetSput(const MirSFieldLoweringInfo& fiel
   if (CanUseOpPcRelDexCacheArrayLoad()) {
     uint32_t offset = dex_cache_arrays_layout_.TypeOffset(field_info.StorageIndex());
     OpPcRelDexCacheArrayLoad(cu_->dex_file, offset, r_base, false);
+    if (kPoisonHeapReferences) {
+      GenHeapReferenceUnpoisoning(r_base);
+    }
   } else {
     // Using fixed register to sync with possible call to runtime support.
     RegStorage r_method = LoadCurrMethodWithHint(r_base);
@@ -105,6 +108,9 @@ RegStorage Mir2Lir::GenGetOtherTypeForSgetSput(const MirSFieldLoweringInfo& fiel
                 kNotVolatile);
     int32_t offset_of_field = ObjArray::OffsetOfElement(field_info.StorageIndex()).Int32Value();
     LoadRefDisp(r_base, offset_of_field, r_base, kNotVolatile);
+    if (kPoisonHeapReferences) {
+      GenHeapReferenceUnpoisoning(r_base);
+    }
   }
   // r_base now points at static storage (Class*) or null if the type is not yet resolved.
   LIR* unresolved_branch = nullptr;
@@ -633,9 +639,19 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
       RegLocation rl_arg;
       if (info->args[i].ref) {
         rl_arg = LoadValue(info->args[i], kRefReg);
-        StoreRefDisp(ref_reg,
-                    mirror::Array::DataOffset(component_size).Int32Value() + i * 4, rl_arg.reg,
-                    kNotVolatile);
+        if (kPoisonHeapReferences) {
+          RegStorage temp = AllocTempRef();
+          OpRegCopy(temp, rl_arg.reg);
+          GenHeapReferencePoisoning(temp);
+          StoreRefDisp(ref_reg,
+                       mirror::Array::DataOffset(component_size).Int32Value() + i * 4, temp,
+                       kNotVolatile);
+          FreeTemp(temp);
+        } else {
+          StoreRefDisp(ref_reg,
+                       mirror::Array::DataOffset(component_size).Int32Value() + i * 4, rl_arg.reg,
+                       kNotVolatile);
+        }
       } else {
         rl_arg = LoadValue(info->args[i], kCoreReg);
         Store32Disp(ref_reg,
@@ -717,8 +733,17 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, OpSize size) {
       rl_src = LoadValue(rl_src, reg_class);
     }
     if (IsRef(size)) {
-      StoreRefDisp(r_base, field_info.FieldOffset().Int32Value(), rl_src.reg,
-                   field_info.IsVolatile() ? kVolatile : kNotVolatile);
+      if (kPoisonHeapReferences) {
+        RegStorage temp = AllocTempRef();
+        OpRegCopy(temp, rl_src.reg);
+        GenHeapReferencePoisoning(temp);
+        StoreRefDisp(r_base, field_info.FieldOffset().Int32Value(), temp,
+                     field_info.IsVolatile() ? kVolatile : kNotVolatile);
+        FreeTemp(temp);
+      } else {
+        StoreRefDisp(r_base, field_info.FieldOffset().Int32Value(), rl_src.reg,
+                     field_info.IsVolatile() ? kVolatile : kNotVolatile);
+      }
     } else {
       StoreBaseDisp(r_base, field_info.FieldOffset().Int32Value(), rl_src.reg, size,
                     field_info.IsVolatile() ? kVolatile : kNotVolatile);
@@ -755,6 +780,8 @@ void Mir2Lir::GenSput(MIR* mir, RegLocation rl_src, OpSize size) {
         LOG(FATAL) << "Can't determine entrypoint for: " << size;
         target = kQuickSet32Static;
     }
+    // Note: if heap poisoning is enabled, the runtime helper takes
+    // cares of poisoning the reference.
     CallRuntimeHelperImmRegLocation(target, field_info.FieldIndex(), rl_src, true);
   }
 }
@@ -792,6 +819,9 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest, OpSize size, Primitive::Typ
       // TODO: DCHECK?
       LoadRefDisp(r_base, field_offset, rl_result.reg, field_info.IsVolatile() ? kVolatile :
           kNotVolatile);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(rl_result.reg);
+      }
     } else {
       LoadBaseDisp(r_base, field_offset, rl_result.reg, size, field_info.IsVolatile() ?
           kVolatile : kNotVolatile);
@@ -836,6 +866,8 @@ void Mir2Lir::GenSget(MIR* mir, RegLocation rl_dest, OpSize size, Primitive::Typ
         LOG(FATAL) << "Can't determine entrypoint for: " << type;
         target = kQuickGet32Static;
     }
+    // Note: if heap poisoning is enabled, the runtime helper takes
+    // cares of poisoning the reference.
     CallRuntimeHelperImm(target, field_info.FieldIndex(), true);
 
     // FIXME: pGetXXStatic always return an int or int64 regardless of rl_dest.fp.
@@ -886,6 +918,9 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size, Primitive::Type type
                               field_info.IsVolatile() ? kVolatile : kNotVolatile);
     }
     MarkPossibleNullPointerExceptionAfter(opt_flags, load_lir);
+    if (kPoisonHeapReferences && IsRef(size)) {
+      GenHeapReferenceUnpoisoning(rl_result.reg);
+    }
     if (IsWide(size)) {
       StoreValueWide(rl_dest, rl_result);
     } else {
@@ -925,6 +960,8 @@ void Mir2Lir::GenIGet(MIR* mir, int opt_flags, OpSize size, Primitive::Type type
     }
     // Second argument of pGetXXInstance is always a reference.
     DCHECK_EQ(static_cast<unsigned int>(rl_obj.wide), 0U);
+    // Note: if heap poisoning is enabled, the runtime helper takes
+    // cares of unpoisoning the reference.
     CallRuntimeHelperImmRegLocation(target, field_info.FieldIndex(), rl_obj, true);
 
     // FIXME: pGetXXInstance always return an int or int64 regardless of rl_dest.fp.
@@ -963,8 +1000,17 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
     int field_offset = field_info.FieldOffset().Int32Value();
     LIR* null_ck_insn;
     if (IsRef(size)) {
-      null_ck_insn = StoreRefDisp(rl_obj.reg, field_offset, rl_src.reg, field_info.IsVolatile() ?
-          kVolatile : kNotVolatile);
+      if (kPoisonHeapReferences) {
+        RegStorage temp = AllocTempRef();
+        OpRegCopy(temp, rl_src.reg);
+        GenHeapReferencePoisoning(temp);
+        null_ck_insn = StoreRefDisp(rl_obj.reg, field_offset, temp, field_info.IsVolatile() ?
+                                    kVolatile : kNotVolatile);
+        FreeTemp(temp);
+      } else {
+        null_ck_insn = StoreRefDisp(rl_obj.reg, field_offset, rl_src.reg, field_info.IsVolatile() ?
+                                    kVolatile : kNotVolatile);
+      }
     } else {
       null_ck_insn = StoreBaseDisp(rl_obj.reg, field_offset, rl_src.reg, size,
                                    field_info.IsVolatile() ? kVolatile : kNotVolatile);
@@ -1000,6 +1046,8 @@ void Mir2Lir::GenIPut(MIR* mir, int opt_flags, OpSize size,
         LOG(FATAL) << "Can't determine entrypoint for: " << size;
         target = kQuickSet32Instance;
     }
+    // Note: if heap poisoning is enabled, the runtime helper takes
+    // cares of poisoning the reference.
     CallRuntimeHelperImmRegLocationRegLocation(target, field_info.FieldIndex(), rl_obj, rl_src,
                                                true);
   }
@@ -1014,6 +1062,8 @@ void Mir2Lir::GenArrayObjPut(int opt_flags, RegLocation rl_array, RegLocation rl
         ? (needs_null_check ? kQuickAputObjectWithNullAndBoundCheck
                             : kQuickAputObjectWithBoundCheck)
         : kQuickAputObject;
+  // Note: if heap poisoning is enabled, the runtime helper takes
+  // cares of poisoning the reference.
   CallRuntimeHelperRegLocationRegLocationRegLocation(target, rl_array, rl_index, rl_src, true);
 }
 
@@ -1032,6 +1082,9 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
     if (CanUseOpPcRelDexCacheArrayLoad()) {
       size_t offset = dex_cache_arrays_layout_.TypeOffset(type_idx);
       OpPcRelDexCacheArrayLoad(cu_->dex_file, offset, rl_result.reg, false);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(rl_result.reg);
+      }
     } else {
       int32_t dex_cache_offset =
           ArtMethod::DexCacheResolvedTypesOffset().Int32Value();
@@ -1041,6 +1094,9 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
       int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
       LoadRefDisp(res_reg, offset_of_type, rl_result.reg, kNotVolatile);
       FreeTemp(res_reg);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(rl_result.reg);
+      }
     }
     if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file,
         type_idx) || ForceSlowTypePath(cu_)) {
@@ -1067,6 +1123,9 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
     if (CanUseOpPcRelDexCacheArrayLoad()) {
       size_t offset = dex_cache_arrays_layout_.StringOffset(string_idx);
       OpPcRelDexCacheArrayLoad(cu_->dex_file, offset, ret0, false);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(ret0);
+      }
     } else {
       // Method to declaring class.
       RegStorage arg0 = TargetReg(kArg0, kRef);
@@ -1074,8 +1133,13 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
       LoadRefDisp(r_method, ArtMethod::DeclaringClassOffset().Int32Value(), arg0, kNotVolatile);
       // Declaring class to dex cache strings.
       LoadRefDisp(arg0, mirror::Class::DexCacheStringsOffset().Int32Value(), arg0, kNotVolatile);
-
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(arg0);
+      }
       LoadRefDisp(arg0, offset_of_string, ret0, kNotVolatile);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(ret0);
+      }
     }
     GenIfNullUseHelperImm(ret0, kQuickResolveString, string_idx);
 
@@ -1086,6 +1150,9 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
     if (CanUseOpPcRelDexCacheArrayLoad()) {
       size_t offset = dex_cache_arrays_layout_.StringOffset(string_idx);
       OpPcRelDexCacheArrayLoad(cu_->dex_file, offset, rl_result.reg, false);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(rl_result.reg);
+      }
     } else {
       RegLocation rl_method = LoadCurrMethod();
       RegStorage res_reg = AllocTempRef();
@@ -1093,7 +1160,13 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
                   kNotVolatile);
       LoadRefDisp(res_reg, mirror::Class::DexCacheStringsOffset().Int32Value(), res_reg,
                   kNotVolatile);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(res_reg);
+      }
       LoadRefDisp(res_reg, offset_of_string, rl_result.reg, kNotVolatile);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(rl_result.reg);
+      }
       FreeTemp(res_reg);
     }
     StoreValue(rl_dest, rl_result);
@@ -1176,19 +1249,34 @@ void Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx, Re
                 kNotVolatile);
     LoadRefDisp(object.reg,  mirror::Object::ClassOffset().Int32Value(), object_class,
                 kNotVolatile);
+    if (kPoisonHeapReferences) {
+      GenHeapReferenceUnpoisoning(object_class);
+    }
   } else if (CanUseOpPcRelDexCacheArrayLoad()) {
     size_t offset = dex_cache_arrays_layout_.TypeOffset(type_idx);
     OpPcRelDexCacheArrayLoad(cu_->dex_file, offset, check_class, false);
+    if (kPoisonHeapReferences) {
+      GenHeapReferenceUnpoisoning(check_class);
+    }
     LoadRefDisp(object.reg,  mirror::Object::ClassOffset().Int32Value(), object_class,
                 kNotVolatile);
+    if (kPoisonHeapReferences) {
+      GenHeapReferenceUnpoisoning(object_class);
+    }
   } else {
     RegStorage r_method = LoadCurrMethodWithHint(check_class);
     LoadRefDisp(r_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                 check_class, kNotVolatile);
     LoadRefDisp(object.reg,  mirror::Object::ClassOffset().Int32Value(), object_class,
                 kNotVolatile);
+    if (kPoisonHeapReferences) {
+      GenHeapReferenceUnpoisoning(object_class);
+    }
     int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
     LoadRefDisp(check_class, offset_of_type, check_class, kNotVolatile);
+    if (kPoisonHeapReferences) {
+      GenHeapReferenceUnpoisoning(check_class);
+    }
   }
 
   // FIXME: what should we be comparing here? compressed or decompressed references?
@@ -1242,6 +1330,9 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
     if (CanUseOpPcRelDexCacheArrayLoad()) {
       size_t offset = dex_cache_arrays_layout_.TypeOffset(type_idx);
       OpPcRelDexCacheArrayLoad(cu_->dex_file, offset, class_reg, false);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(class_reg);
+      }
     } else {
       RegStorage r_method = LoadCurrMethodWithHint(class_reg);
       // Load dex cache entry into class_reg (kArg2)
@@ -1249,6 +1340,9 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
                   class_reg, kNotVolatile);
       int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
       LoadRefDisp(class_reg, offset_of_type, class_reg, kNotVolatile);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(class_reg);
+      }
     }
     if (!can_assume_type_is_in_dex_cache) {
       GenIfNullUseHelperImm(class_reg, kQuickInitializeType, type_idx);
@@ -1270,6 +1364,9 @@ void Mir2Lir::GenInstanceofCallingHelper(bool needs_access_check, bool type_know
   DCHECK_EQ(mirror::Object::ClassOffset().Int32Value(), 0);
   LoadRefDisp(ref_reg, mirror::Object::ClassOffset().Int32Value(),
               ref_class_reg, kNotVolatile);
+  if (kPoisonHeapReferences) {
+    GenHeapReferenceUnpoisoning(ref_class_reg);
+  }
   /* kArg0 is ref, kArg1 is ref->klass_, kArg2 is class */
   LIR* branchover = nullptr;
   if (type_known_final) {
@@ -1373,6 +1470,9 @@ void Mir2Lir::GenCheckCast(int opt_flags, uint32_t insn_idx, uint32_t type_idx,
     if (CanUseOpPcRelDexCacheArrayLoad()) {
       size_t offset = dex_cache_arrays_layout_.TypeOffset(type_idx);
       OpPcRelDexCacheArrayLoad(cu_->dex_file, offset, class_reg, false);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(class_reg);
+      }
     } else {
       RegStorage r_method = LoadCurrMethodWithHint(class_reg);
 
@@ -1380,6 +1480,9 @@ void Mir2Lir::GenCheckCast(int opt_flags, uint32_t insn_idx, uint32_t type_idx,
                   class_reg, kNotVolatile);
       int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
       LoadRefDisp(class_reg, offset_of_type, class_reg, kNotVolatile);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(class_reg);
+      }
     }
     if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file, type_idx)) {
       // Need to test presence of type in dex cache at runtime
@@ -1403,6 +1506,9 @@ void Mir2Lir::GenCheckCast(int opt_flags, uint32_t insn_idx, uint32_t type_idx,
       if (load_) {
         m2l_->LoadRefDisp(m2l_->TargetReg(kArg0, kRef), mirror::Object::ClassOffset().Int32Value(),
                           m2l_->TargetReg(kArg1, kRef), kNotVolatile);
+        if (kPoisonHeapReferences) {
+          m2l_->GenHeapReferenceUnpoisoning(m2l_->TargetReg(kArg1, kRef));
+        }
       }
       m2l_->CallRuntimeHelperRegReg(kQuickCheckCast, m2l_->TargetReg(kArg2, kRef),
                                     m2l_->TargetReg(kArg1, kRef), true);
@@ -1429,6 +1535,9 @@ void Mir2Lir::GenCheckCast(int opt_flags, uint32_t insn_idx, uint32_t type_idx,
     DCHECK_EQ(mirror::Object::ClassOffset().Int32Value(), 0);
     LoadRefDisp(TargetReg(kArg0, kRef), mirror::Object::ClassOffset().Int32Value(),
                 TargetReg(kArg1, kRef), kNotVolatile);
+    if (kPoisonHeapReferences) {
+      GenHeapReferenceUnpoisoning(TargetReg(kArg1, kRef));
+    }
 
     LIR* branch2 = OpCmpBranch(kCondNe, TargetReg(kArg1, kRef), class_reg, nullptr);
     LIR* cont = NewLIR0(kPseudoTargetLabel);

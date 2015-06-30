@@ -1158,4 +1158,14 @@ void X86Mir2Lir::DoPromotion() {
   }
 }
 
+void X86Mir2Lir::GenHeapReferencePoisoning(RegStorage reg) {
+  // reg = -reg
+  OpReg(kOpNeg, reg.Is64Bit() ? As32BitReg(reg) : reg);
+}
+
+void X86Mir2Lir::GenHeapReferenceUnpoisoning(RegStorage reg) {
+  // reg = -reg
+  OpReg(kOpNeg, reg.Is64Bit() ? As32BitReg(reg) : reg);
+}
+
 }  // namespace art

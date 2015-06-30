@@ -498,6 +498,9 @@ static void CommonCallCodeLoadClassIntoArg0(const CallInfo* info, Mir2Lir* cg) {
                   cg->TargetReg(kArg0, kRef),
                   kNotVolatile);
   cg->MarkPossibleNullPointerException(info->opt_flags);
+  if (kPoisonHeapReferences) {
+    cg->GenHeapReferenceUnpoisoning(cg->TargetReg(kArg0, kRef));
+  }
 }
 
 static bool CommonCallCodeLoadCodePointerIntoInvokeTgt(const RegStorage* alt_from,
@@ -539,7 +542,7 @@ static int NextVCallInsn(CompilationUnit* cu, CallInfo* info,
                                                   // Includes a null-check.
       break;
     case 2: {
-      // Get this->klass_.embedded_vtable[method_idx] [usr kArg0, set kArg0]
+      // Get this->klass_.embedded_vtable[method_idx] [use kArg0, set kArg0]
       const size_t pointer_size = InstructionSetPointerSize(
           cu->compiler_driver->GetInstructionSet());
       int32_t offset = mirror::Class::EmbeddedVTableEntryOffset(
@@ -978,6 +981,9 @@ bool Mir2Lir::GenInlinedReferenceGetReferent(CallInfo* info) {
   LoadRefDisp(rl_obj.reg, mirror::Reference::ReferentOffset().Int32Value(), rl_result.reg,
               kNotVolatile);
   MarkPossibleNullPointerException(info->opt_flags);
+  if (kPoisonHeapReferences) {
+    GenHeapReferenceUnpoisoning(rl_result.reg);
+  }
   StoreValue(rl_dest, rl_result);
 
   LIR* intrinsic_finish = NewLIR0(kPseudoTargetLabel);
@@ -1466,6 +1472,9 @@ bool Mir2Lir::GenInlinedUnsafeGet(CallInfo* info,
   } else {
     if (rl_result.ref) {
       LoadRefIndexed(rl_object.reg, rl_offset.reg, rl_result.reg, 0);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(rl_result.reg);
+      }
     } else {
       LoadBaseIndexed(rl_object.reg, rl_offset.reg, rl_result.reg, 0, k32);
     }
@@ -1514,7 +1523,15 @@ bool Mir2Lir::GenInlinedUnsafePut(CallInfo* info, bool is_long,
   } else {
     rl_value = LoadValue(rl_src_value, is_object ? kRefReg : kCoreReg);
     if (rl_value.ref) {
-      StoreRefIndexed(rl_object.reg, rl_offset.reg, rl_value.reg, 0);
+      if (kPoisonHeapReferences) {
+        RegStorage temp = AllocTempRef();
+        OpRegCopy(temp, rl_value.reg);
+        GenHeapReferencePoisoning(temp);
+        StoreRefIndexed(rl_object.reg, rl_offset.reg, temp, 0);
+        FreeTemp(temp);
+      } else {
+        StoreRefIndexed(rl_object.reg, rl_offset.reg, rl_value.reg, 0);
+      }
     } else {
       StoreBaseIndexed(rl_object.reg, rl_offset.reg, rl_value.reg, 0, k32);
     }

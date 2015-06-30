@@ -1302,4 +1302,14 @@ void ArmMir2Lir::DoPromotion() {
   }
 }
 
+void ArmMir2Lir::GenHeapReferencePoisoning(RegStorage reg) {
+  // reg = -reg
+  OpRegReg(kOpNeg, reg, reg);
+}
+
+void ArmMir2Lir::GenHeapReferenceUnpoisoning(RegStorage reg) {
+  // reg = -reg
+  OpRegReg(kOpNeg, reg, reg);
+}
+
 }  // namespace art

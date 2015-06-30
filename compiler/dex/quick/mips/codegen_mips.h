@@ -259,6 +259,14 @@ class MipsMir2Lir FINAL : public Mir2Lir {
     return false;
   }
 
+  /*
+   * @brief Heap poisoning.
+   */
+  // Poison a heap reference contained in `reg`.
+  void GenHeapReferencePoisoning(RegStorage reg) OVERRIDE;
+  // Unpoison a heap reference contained in `reg`.
+  void GenHeapReferenceUnpoisoning(RegStorage reg) OVERRIDE;
+
   // True if isa is rev R6.
   const bool isaIsR6_;
 

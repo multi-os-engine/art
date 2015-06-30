@@ -738,6 +738,11 @@ bool Arm64Mir2Lir::GenInlinedPoke(CallInfo* info, OpSize size) {
 }
 
 bool Arm64Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
+  if (kPoisonHeapReferences) {
+    // The GenInlinedCas intrinsic does not support heap poisoning.
+    // TODO: Implement it?
+    return false;
+  }
   DCHECK_EQ(cu_->instruction_set, kArm64);
   // Unused - RegLocation rl_src_unsafe = info->args[0];
   RegLocation rl_src_obj = info->args[1];  // Object - known non-null
@@ -1183,7 +1188,7 @@ void Arm64Mir2Lir::GenArithOpLong(Instruction::Code opcode, RegLocation rl_dest,
  * Generate array load
  */
 void Arm64Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
-                             RegLocation rl_index, RegLocation rl_dest, int scale) {
+                               RegLocation rl_index, RegLocation rl_dest, int scale) {
   RegisterClass reg_class = RegClassBySize(size);
   int len_offset = mirror::Array::LengthOffset().Int32Value();
   int data_offset;
@@ -1244,6 +1249,9 @@ void Arm64Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
       LoadBaseIndexed(reg_ptr, rl_index.reg, rl_result.reg, scale, size);
     }
     FreeTemp(reg_ptr);
+  }
+  if (kPoisonHeapReferences && IsRef(size)) {
+    GenHeapReferenceUnpoisoning(rl_result.reg);
   }
   if (rl_dest.wide) {
     StoreValueWide(rl_dest, rl_result);
@@ -1314,7 +1322,15 @@ void Arm64Mir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
     // Fold the constant index into the data offset.
     data_offset += mir_graph_->ConstantValue(rl_index) << scale;
     if (rl_src.ref) {
-      StoreRefDisp(reg_ptr, data_offset, rl_src.reg, kNotVolatile);
+      if (kPoisonHeapReferences) {
+        RegStorage temp = AllocTempRef();
+        OpRegCopy(temp, rl_src.reg);
+        GenHeapReferencePoisoning(temp);
+        StoreRefDisp(reg_ptr, data_offset, temp, kNotVolatile);
+        FreeTemp(temp);
+      } else {
+        StoreRefDisp(reg_ptr, data_offset, rl_src.reg, kNotVolatile);
+      }
     } else {
       StoreBaseDisp(reg_ptr, data_offset, rl_src.reg, size, kNotVolatile);
     }
@@ -1326,7 +1342,15 @@ void Arm64Mir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
       FreeTemp(reg_len);
     }
     if (rl_src.ref) {
-      StoreRefIndexed(reg_ptr, rl_index.reg, rl_src.reg, scale);
+      if (kPoisonHeapReferences) {
+        RegStorage temp = AllocTempRef();
+        OpRegCopy(temp, rl_src.reg);
+        GenHeapReferencePoisoning(temp);
+        StoreRefIndexed(reg_ptr, rl_index.reg, temp, scale);
+        FreeTemp(temp);
+      } else {
+        StoreRefIndexed(reg_ptr, rl_index.reg, rl_src.reg, scale);
+      }
     } else {
       StoreBaseIndexed(reg_ptr, rl_index.reg, rl_src.reg, scale, size);
     }

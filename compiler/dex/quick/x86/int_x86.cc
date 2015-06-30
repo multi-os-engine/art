@@ -1107,6 +1107,11 @@ static bool IsInReg(X86Mir2Lir *pMir2Lir, const RegLocation &rl, RegStorage reg)
 }
 
 bool X86Mir2Lir::GenInlinedCas(CallInfo* info, bool is_long, bool is_object) {
+  if (kPoisonHeapReferences) {
+    // The GenInlinedCas intrinsic does not support heap poisoning.
+    // TODO: Implement it?
+    return false;
+  }
   DCHECK(cu_->instruction_set == kX86 || cu_->instruction_set == kX86_64);
   // Unused - RegLocation rl_src_unsafe = info->args[0];
   RegLocation rl_src_obj = info->args[1];  // Object - known non-null
@@ -2480,6 +2485,9 @@ void X86Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
   }
   rl_result = EvalLoc(rl_dest, reg_class, true);
   LoadBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_result.reg, size);
+  if (kPoisonHeapReferences && IsRef(size)) {
+    GenHeapReferenceUnpoisoning(rl_result.reg);
+  }
   if ((size == k64) || (size == kDouble)) {
     StoreValueWide(rl_dest, rl_result);
   } else {
@@ -2536,6 +2544,13 @@ void X86Mir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
     RegStorage temp = AllocTemp();
     OpRegCopy(temp, rl_src.reg);
     StoreBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, temp, size, opt_flags);
+    FreeTemp(temp);
+  } else if (kPoisonHeapReferences && IsRef(size)) {
+    RegStorage temp = AllocTempRef();
+    OpRegCopy(temp, rl_src.reg);
+    GenHeapReferencePoisoning(temp);
+    StoreBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, temp, size, opt_flags);
+    FreeTemp(temp);
   } else {
     StoreBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_src.reg, size, opt_flags);
   }
@@ -3045,6 +3060,9 @@ void X86Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,
       LoadRefDisp(rl_method.reg, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                   check_class, kNotVolatile);
       LoadRefDisp(check_class, offset_of_type, check_class, kNotVolatile);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(check_class);
+      }
     }
   } else {
     LoadCurrMethodDirect(check_class);
@@ -3055,12 +3073,24 @@ void X86Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,
       LoadRefDisp(check_class, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
                   check_class, kNotVolatile);
       LoadRefDisp(check_class, offset_of_type, check_class, kNotVolatile);
+      if (kPoisonHeapReferences) {
+        GenHeapReferenceUnpoisoning(check_class);
+      }
     }
   }
 
   // Compare the computed class to the class in the object.
-  DCHECK_EQ(object.location, kLocPhysReg);
-  OpRegMem(kOpCmp, check_class, object.reg, mirror::Object::ClassOffset().Int32Value());
+  if (kPoisonHeapReferences) {
+    RegStorage object_class = AllocTempRef();
+    LoadRefDisp(object.reg,  mirror::Object::ClassOffset().Int32Value(), object_class,
+                kNotVolatile);
+    GenHeapReferenceUnpoisoning(object_class);
+    OpRegReg(kOpCmp, check_class, object_class);
+    FreeTemp(object_class);
+  } else {
+    DCHECK_EQ(object.location, kLocPhysReg);
+    OpRegMem(kOpCmp, check_class, object.reg, mirror::Object::ClassOffset().Int32Value());
+  }
 
   // Set the low byte of the result to 0 or 1 from the compare condition code.
   NewLIR2(kX86Set8R, result_reg.GetReg(), kX86CondEq);

@@ -1399,4 +1399,14 @@ LIR* Arm64Mir2Lir::InvokeTrampoline(OpKind op, RegStorage r_tgt,
   return OpReg(op, r_tgt);
 }
 
+void Arm64Mir2Lir::GenHeapReferencePoisoning(RegStorage reg) {
+  // reg = -reg
+  OpRegRegShift(kOpNeg, reg, reg, ENCODE_NO_SHIFT);
+}
+
+void Arm64Mir2Lir::GenHeapReferenceUnpoisoning(RegStorage reg) {
+  // reg = -reg
+  OpRegRegShift(kOpNeg, reg, reg, ENCODE_NO_SHIFT);
+}
+
 }  // namespace art

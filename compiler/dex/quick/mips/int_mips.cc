@@ -737,6 +737,12 @@ void MipsMir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
       LoadBaseIndexed(reg_ptr, rl_index.reg, rl_result.reg, scale, size);
     }
 
+    if (kPoisonHeapReferences && IsRef(size)) {
+      // TODO: In the case of `cu_->target64`, should we use
+      // `As32BitReg(rl_result.reg)` instead?  (Maybe implement this in
+      // GenHeapReference{Poisoning,Unpoisoning}?).
+      GenHeapReferenceUnpoisoning(rl_result.reg);
+    }
     FreeTemp(reg_ptr);
     StoreValue(rl_dest, rl_result);
   }
@@ -815,7 +821,15 @@ void MipsMir2Lir::GenArrayPut(int opt_flags, OpSize size, RegLocation rl_array,
       GenArrayBoundsCheck(rl_index.reg, reg_len);
       FreeTemp(reg_len);
     }
-    StoreBaseIndexed(reg_ptr, rl_index.reg, rl_src.reg, scale, size);
+    if (kPoisonHeapReferences && IsRef(size)) {
+      RegStorage temp = AllocTempRef();
+      OpRegCopy(temp, rl_src.reg);
+      GenHeapReferencePoisoning(temp);
+      StoreBaseIndexed(reg_ptr, rl_index.reg, temp, scale, size);
+      FreeTemp(temp);
+    } else {
+      StoreBaseIndexed(reg_ptr, rl_index.reg, rl_src.reg, scale, size);
+    }
   }
   if (allocated_reg_ptr_temp) {
     FreeTemp(reg_ptr);

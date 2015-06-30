@@ -1063,4 +1063,14 @@ RegStorage MipsMir2Lir::AllocPtrSizeTemp(bool required) {
   return cu_->target64 ? AllocTempWide(required) : AllocTemp(required);
 }
 
+void MipsMir2Lir::GenHeapReferencePoisoning(RegStorage reg) {
+  // reg = -reg
+  OpRegReg(kOpNeg, reg, reg);
+}
+
+void MipsMir2Lir::GenHeapReferenceUnpoisoning(RegStorage reg) {
+  // reg = -reg
+  OpRegReg(kOpNeg, reg, reg);
+}
+
 }  // namespace art
