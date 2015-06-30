@@ -267,7 +267,7 @@ void HGraph::SimplifyCFG() {
   // (2): Simplify loops by having only one back edge, and one preheader.
   for (size_t i = 0; i < blocks_.Size(); ++i) {
     HBasicBlock* block = blocks_.Get(i);
-    if (block == nullptr) continue;
+    if (block == nullptr || block->EndsWithTryBoundary()) continue;
     if (block->GetSuccessors().Size() > 1) {
       for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
         HBasicBlock* successor = block->GetSuccessors().Get(j);
@@ -795,6 +795,15 @@ void HPhi::AddInput(HInstruction* input) {
   input->AddUseAt(this, inputs_.Size() - 1);
 }
 
+void HPhi::AddInputIfUnique(HInstruction* input) {
+  for (HInputIterator it(this); !it.Done(); it.Advance()) {
+    if (it.Current() == input) {
+      return;
+    }
+  }
+  AddInput(input);
+}
+
 void HPhi::RemoveInputAt(size_t index) {
   RemoveAsUserOfInput(index);
   inputs_.DeleteAt(index);
@@ -1109,6 +1118,10 @@ bool HBasicBlock::EndsWithControlFlowInstruction() const {
 
 bool HBasicBlock::EndsWithIf() const {
   return !GetInstructions().IsEmpty() && GetLastInstruction()->IsIf();
+}
+
+bool HBasicBlock::EndsWithTryBoundary() const {
+  return !GetInstructions().IsEmpty() && GetLastInstruction()->IsTryBoundary();
 }
 
 bool HBasicBlock::HasSinglePhi() const {

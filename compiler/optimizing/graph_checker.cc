@@ -304,7 +304,7 @@ void SSAChecker::VisitBasicBlock(HBasicBlock* block) {
   // Ensure there is no critical edge (i.e., an edge connecting a
   // block with multiple successors to a block with multiple
   // predecessors).
-  if (block->GetSuccessors().Size() > 1) {
+  if (block->GetSuccessors().Size() > 1 && !block->EndsWithTryBoundary()) {
     for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
       HBasicBlock* successor = block->GetSuccessors().Get(j);
       if (successor->GetPredecessors().Size() > 1) {
@@ -474,30 +474,33 @@ void SSAChecker::VisitPhi(HPhi* phi) {
 
   // Ensure the number of inputs of a phi is the same as the number of
   // its predecessors.
-  const GrowableArray<HBasicBlock*>& predecessors =
-    phi->GetBlock()->GetPredecessors();
-  if (phi->InputCount() != predecessors.Size()) {
-    AddError(StringPrintf(
-        "Phi %d in block %d has %zu inputs, "
-        "but block %d has %zu predecessors.",
-        phi->GetId(), phi->GetBlock()->GetBlockId(), phi->InputCount(),
-        phi->GetBlock()->GetBlockId(), predecessors.Size()));
-  } else {
-    // Ensure phi input at index I either comes from the Ith
-    // predecessor or from a block that dominates this predecessor.
-    for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
-      HInstruction* input = phi->InputAt(i);
-      HBasicBlock* predecessor = predecessors.Get(i);
-      if (!(input->GetBlock() == predecessor
-            || input->GetBlock()->Dominates(predecessor))) {
-        AddError(StringPrintf(
-            "Input %d at index %zu of phi %d from block %d is not defined in "
-            "predecessor number %zu nor in a block dominating it.",
-            input->GetId(), i, phi->GetId(), phi->GetBlock()->GetBlockId(),
-            i));
+  if (!phi->GetBlock()->IsCatchBlock()) {
+    const GrowableArray<HBasicBlock*>& predecessors =
+      phi->GetBlock()->GetPredecessors();
+    if (phi->InputCount() != predecessors.Size()) {
+      AddError(StringPrintf(
+          "Phi %d in block %d has %zu inputs, "
+          "but block %d has %zu predecessors.",
+          phi->GetId(), phi->GetBlock()->GetBlockId(), phi->InputCount(),
+          phi->GetBlock()->GetBlockId(), predecessors.Size()));
+    } else {
+      // Ensure phi input at index I either comes from the Ith
+      // predecessor or from a block that dominates this predecessor.
+      for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
+        HInstruction* input = phi->InputAt(i);
+        HBasicBlock* predecessor = predecessors.Get(i);
+        if (!(input->GetBlock() == predecessor
+              || input->GetBlock()->Dominates(predecessor))) {
+          AddError(StringPrintf(
+              "Input %d at index %zu of phi %d from block %d is not defined in "
+              "predecessor number %zu nor in a block dominating it.",
+              input->GetId(), i, phi->GetId(), phi->GetBlock()->GetBlockId(),
+              i));
+        }
       }
     }
-  }
+    }
+
   // Ensure that the inputs have the same primitive kind as the phi.
   for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
     HInstruction* input = phi->InputAt(i);

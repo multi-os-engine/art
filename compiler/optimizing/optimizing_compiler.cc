@@ -610,6 +610,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                         compilation_stats_.get());
 
   VLOG(compiler) << "Building " << method_name;
+  LOG(INFO) << method_name;
 
   {
     PassScope scope(HGraphBuilder::kBuilderPassName, &pass_observer);
@@ -621,14 +622,13 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     }
   }
 
-  bool can_optimize = CanOptimize(*code_item);
   bool can_allocate_registers = RegisterAllocator::CanAllocateRegistersFor(*graph, instruction_set);
 
   // `run_optimizations_` is set explicitly (either through a compiler filter
   // or the debuggable flag). If it is set, we can run baseline. Otherwise, we fall back
   // to Quick.
   bool can_use_baseline = !run_optimizations_;
-  if (run_optimizations_ && can_optimize && can_allocate_registers) {
+  if (run_optimizations_ && can_allocate_registers) {
     VLOG(compiler) << "Optimizing " << method_name;
 
     {
@@ -639,6 +639,11 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
         MaybeRecordStat(MethodCompilationStat::kNotCompiledCannotBuildSSA);
         return nullptr;
       }
+    }
+
+    if (!CanOptimize(*code_item)) {
+      MaybeRecordStat(MethodCompilationStat::kNotOptimizedTryCatch);
+      return nullptr;
     }
 
     return CompileOptimized(graph,
@@ -654,8 +659,6 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
 
     if (!run_optimizations_) {
       MaybeRecordStat(MethodCompilationStat::kNotOptimizedDisabled);
-    } else if (!can_optimize) {
-      MaybeRecordStat(MethodCompilationStat::kNotOptimizedTryCatch);
     } else if (!can_allocate_registers) {
       MaybeRecordStat(MethodCompilationStat::kNotOptimizedRegisterAllocator);
     }

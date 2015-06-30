@@ -347,10 +347,41 @@ HInstruction* SsaBuilder::ValueOfLocal(HBasicBlock* block, size_t local) {
   return GetLocalsFor(block)->Get(local);
 }
 
+HTryBoundary* SsaBuilder::GetTryBlockFor(HBasicBlock* block) const {
+  if (block->GetPredecessors().IsEmpty()) {
+    DCHECK(block->IsEntryBlock());
+    return nullptr;
+  }
+
+  if (block->IsCatchBlock()) {
+    // After CFG simplification, catch blocks don't have normal-flow
+    // predecessors and therefore cannot be in a try block.
+    return nullptr;
+  }
+
+  // We assume that all predecessors were already visited. If `block` is in
+  // a try block, all predecessors must agree on which it is.
+  HBasicBlock* first_predecessor = block->GetPredecessors().Get(0);
+  HTryBoundary* try_entry = try_entry_for_.Get(first_predecessor->GetBlockId());
+
+  if (kIsDebugBuild) {
+    DCHECK(try_entry == nullptr || try_entry->IsEntry());
+    for (size_t i = 1, e = block->GetPredecessors().Size(); i < e; ++i) {
+      HBasicBlock* predecessor = block->GetPredecessors().Get(i);
+      DCHECK_EQ(try_entry, try_entry_for_.Get(predecessor->GetBlockId()));
+    }
+  }
+
+  return try_entry;
+}
+
 void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
   current_locals_ = GetLocalsFor(block);
+  current_try_block_ = GetTryBlockFor(block);
 
-  if (block->IsLoopHeader()) {
+  if (block->IsCatchBlock()) {
+    // Everything should be ready. Phis created, current_locals_ updated.
+  } else if (block->IsLoopHeader()) {
     // If the block is a loop header, we know we only have visited the pre header
     // because we are visiting in reverse post order. We create phis for all initialized
     // locals from the pre header. Their inputs will be populated at the end of
@@ -413,6 +444,8 @@ void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
   for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
     it.Current()->Accept(this);
   }
+
+  try_entry_for_.Put(block->GetBlockId(), current_try_block_);
 }
 
 /**
@@ -554,6 +587,7 @@ void SsaBuilder::VisitInstruction(HInstruction* instruction) {
   if (!instruction->NeedsEnvironment()) {
     return;
   }
+
   HEnvironment* environment = new (GetGraph()->GetArena()) HEnvironment(
       GetGraph()->GetArena(),
       current_locals_->Size(),
@@ -564,11 +598,52 @@ void SsaBuilder::VisitInstruction(HInstruction* instruction) {
       instruction);
   environment->CopyFrom(*current_locals_);
   instruction->SetRawEnvironment(environment);
+
+  if (instruction->CanThrow() && current_try_block_ != nullptr) {
+    for (size_t local = 0, e = current_locals_->Size(); local < e; ++local) {
+      HInstruction* value = current_locals_->Get(local);
+      if (value == nullptr) {
+        continue;
+      }
+
+      // Starting from 1 iterates over exceptional edges.
+      // TODO: Iterator
+      for (size_t succ_idx = 1, f = current_try_block_->GetBlock()->GetSuccessors().Size();
+           succ_idx < f; ++succ_idx) {
+        HBasicBlock* catch_block = current_try_block_->GetBlock()->GetSuccessors().Get(succ_idx);
+        DCHECK(catch_block->IsCatchBlock());
+
+        HInstruction* existing_value = ValueOfLocal(catch_block, local);
+        if (existing_value == nullptr) {
+          GetLocalsFor(catch_block)->Put(local, value);
+        } else if (existing_value->IsPhi()) {
+          existing_value->AsPhi()->AddInputIfUnique(value);
+        } else if (existing_value != value) {
+          HPhi* phi =  new (GetGraph()->GetArena()) HPhi(
+              GetGraph()->GetArena(), local, /* number_of_inputs */ 2, Primitive::kPrimVoid);
+          phi->SetRawInputAt(0, existing_value);
+          phi->SetRawInputAt(1, value);
+          catch_block->AddPhi(phi);
+          GetLocalsFor(catch_block)->Put(local, phi);
+        }
+      }
+    }
+  }
 }
 
 void SsaBuilder::VisitTemporary(HTemporary* temp) {
   // Temporaries are only used by the baseline register allocator.
   temp->GetBlock()->RemoveInstruction(temp);
+}
+
+void SsaBuilder::VisitTryBoundary(HTryBoundary* try_boundary) {
+  if (try_boundary->IsEntry()) {
+    DCHECK(current_try_block_ == nullptr);
+    current_try_block_ = try_boundary;
+  } else {
+    DCHECK(current_try_block_ != nullptr);
+    current_try_block_ = nullptr;
+  }
 }
 
 }  // namespace art
