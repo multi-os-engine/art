@@ -841,6 +841,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
 
   bool EndsWithControlFlowInstruction() const;
   bool EndsWithIf() const;
+  bool EndsWithTryBoundary() const;
   bool HasSinglePhi() const;
 
  private:
@@ -3288,6 +3289,7 @@ class HPhi : public HInstruction {
   size_t InputCount() const OVERRIDE { return inputs_.Size(); }
 
   void AddInput(HInstruction* input);
+  void AddInputIfUnique(HInstruction* input);
   void RemoveInputAt(size_t index);
 
   Primitive::Type GetType() const OVERRIDE { return type_; }

@@ -52,8 +52,10 @@ class SsaBuilder : public HGraphVisitor {
       : HGraphVisitor(graph),
         current_locals_(nullptr),
         loop_headers_(graph->GetArena(), kDefaultNumberOfLoops),
-        locals_for_(graph->GetArena(), graph->GetBlocks().Size()) {
+        locals_for_(graph->GetArena(), graph->GetBlocks().Size()),
+        try_entry_for_(graph->GetArena(), graph->GetBlocks().Size()) {
     locals_for_.SetSize(graph->GetBlocks().Size());
+    try_entry_for_.SetSize(graph->GetBlocks().Size());
   }
 
   void BuildSsa();
@@ -76,6 +78,7 @@ class SsaBuilder : public HGraphVisitor {
   void VisitStoreLocal(HStoreLocal* store);
   void VisitInstruction(HInstruction* instruction);
   void VisitTemporary(HTemporary* instruction);
+  void VisitTryBoundary(HTryBoundary* try_boundary);
 
   static HInstruction* GetFloatOrDoubleEquivalent(HInstruction* user,
                                                   HInstruction* instruction,
@@ -89,6 +92,9 @@ class SsaBuilder : public HGraphVisitor {
   void FixNullConstantType();
   void EquivalentPhisCleanup();
 
+  void RecordLocalInCatchPhis(size_t reg_number, HInstruction* value);
+  HTryBoundary* GetTryBlockFor(HBasicBlock* block) const;
+
   static HFloatConstant* GetFloatEquivalent(HIntConstant* constant);
   static HDoubleConstant* GetDoubleEquivalent(HLongConstant* constant);
   static HPhi* GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive::Type type);
@@ -96,12 +102,17 @@ class SsaBuilder : public HGraphVisitor {
   // Locals for the current block being visited.
   GrowableArray<HInstruction*>* current_locals_;
 
+  HTryBoundary* current_try_block_;
+
   // Keep track of loop headers found. The last phase of the analysis iterates
   // over these blocks to set the inputs of their phis.
   GrowableArray<HBasicBlock*> loop_headers_;
 
   // HEnvironment for each block.
   GrowableArray<GrowableArray<HInstruction*>*> locals_for_;
+
+  // Try block for each block.
+  GrowableArray<HTryBoundary*> try_entry_for_;
 
   DISALLOW_COPY_AND_ASSIGN(SsaBuilder);
 };
