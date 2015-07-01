@@ -209,6 +209,8 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
     Location temp = locations->GetTemp(i);
     if (temp.IsRegister() || temp.IsFpuRegister()) {
       BlockRegister(temp, position, position + 1);
+      // Ensure that a temporary register is marked as being allocated.
+      codegen_->AddAllocatedRegister(temp);
     } else {
       DCHECK(temp.IsUnallocated());
       switch (temp.GetPolicy()) {
