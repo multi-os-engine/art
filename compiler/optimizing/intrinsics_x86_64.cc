@@ -807,9 +807,9 @@ void IntrinsicLocationsBuilderX86_64::VisitStringCharAt(HInvoke* invoke) {
 void IntrinsicCodeGeneratorX86_64::VisitStringCharAt(HInvoke* invoke) {
   LocationSummary* locations = invoke->GetLocations();
 
-  // Location of reference to data array
+  // Location of reference to data array.
   const int32_t value_offset = mirror::String::ValueOffset().Int32Value();
-  // Location of count
+  // Location of count.
   const int32_t count_offset = mirror::String::CountOffset().Int32Value();
 
   CpuRegister obj = locations->InAt(0).AsRegister<CpuRegister>();
@@ -833,6 +833,174 @@ void IntrinsicCodeGeneratorX86_64::VisitStringCharAt(HInvoke* invoke) {
   // out = out[2*idx].
   __ movzxw(out, Address(out, idx, ScaleFactor::TIMES_2, value_offset));
 
+  __ Bind(slow_path->GetExitLabel());
+}
+
+void IntrinsicLocationsBuilderX86_64::VisitSystemArrayCopyChar(HInvoke* invoke) {
+  // Check to see if we have known failures that will cause us to have to bail
+  // to the usual runtime, and just generate the runtime call directly.
+  HIntConstant* src_pos = invoke->InputAt(1)->AsIntConstant();
+  HIntConstant* dest_pos = invoke->InputAt(3)->AsIntConstant();
+
+  // The positions must be >= 0.
+  if ((src_pos != nullptr && src_pos->GetValue() < 0) ||
+      (dest_pos != nullptr && dest_pos->GetValue() < 0)) {
+    // We will have to fail anyways.
+    return;
+  }
+
+  // And the length must be > 0 and < 128 characters.
+  HIntConstant* length = invoke->InputAt(4)->AsIntConstant();
+  if (length != nullptr) {
+    int32_t len = length->GetValue();
+    if (len < 0 || len > 128) {
+      // Just call as normal.
+      return;
+    }
+  }
+
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kCallOnSlowPath,
+                                                            kIntrinsified);
+  // arraycopy(Object src, int srcPos, Object dest, int destPos, int length).
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RegisterOrConstant(invoke->InputAt(1)));
+  locations->SetInAt(2, Location::RequiresRegister());
+  locations->SetInAt(3, Location::RegisterOrConstant(invoke->InputAt(3)));
+  locations->SetInAt(4, Location::RegisterOrConstant(invoke->InputAt(4)));
+
+  // And we need some temporaries.  We will use REP STOSW, so we need fixed registers.
+  locations->AddTemp(Location::RegisterLocation(RSI));
+  locations->AddTemp(Location::RegisterLocation(RDI));
+  locations->AddTemp(Location::RegisterLocation(RCX));
+}
+
+static void CheckPosition(X86_64Assembler* assembler,
+                          Location pos,
+                          CpuRegister input,
+                          CpuRegister length,
+                          SlowPathCodeX86_64* slow_path,
+                          CpuRegister input_len,
+                          CpuRegister temp) {
+  int32_t pos_const = pos.IsConstant() ? pos.GetConstant()->AsIntConstant()->GetValue() : 0;
+
+  // Where is the length in the String?
+  const int32_t length_offset = mirror::Array::LengthOffset().Int32Value();
+
+  if (pos.IsConstant()) {
+    if (pos_const == 0) {
+      // Check that the length <= src_length.
+        __ cmpl(Address(input, length_offset), length);
+      __ j(kLess, slow_path->GetEntryLabel());
+    } else {
+      // pos is constant, but not 0.
+      // pos must be less than source length.
+      __ movl(input_len, Address(input, length_offset));
+      __ cmpl(input_len, Immediate(pos_const));
+      __ j(kLess, slow_path->GetEntryLabel());
+
+      // source length - pos must be <= length.
+      __ leal(temp, Address(input_len, -pos_const));
+      __ cmpl(temp, length);
+      __ j(kLess, slow_path->GetEntryLabel());
+    }
+  } else {
+    CpuRegister pos_reg = pos.AsRegister<CpuRegister>();
+    // pos must not be negative.
+    __ testl(pos_reg, pos_reg);
+    __ j(kLess, slow_path->GetEntryLabel());
+
+    // pos must be less than source length.
+    __ cmpl(Address(input, length_offset), pos_reg);
+    __ j(kLess, slow_path->GetEntryLabel());
+
+    // source length - pos must be <= length.
+    __ movl(temp, Address(input, length_offset));
+    __ subl(temp, pos_reg);
+    __ cmpl(temp, length);
+    __ j(kLess, slow_path->GetEntryLabel());
+  }
+}
+
+void IntrinsicCodeGeneratorX86_64::VisitSystemArrayCopyChar(HInvoke* invoke) {
+  X86_64Assembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  CpuRegister src = locations->InAt(0).AsRegister<CpuRegister>();
+  Location srcPos = locations->InAt(1);
+  CpuRegister dest = locations->InAt(2).AsRegister<CpuRegister>();
+  Location destPos = locations->InAt(3);
+  Location length = locations->InAt(4);
+
+  int32_t srcPos_const =
+    srcPos.IsConstant() ? srcPos.GetConstant()->AsIntConstant()->GetValue() : 0;
+  int32_t destPos_const =
+    destPos.IsConstant() ? destPos.GetConstant()->AsIntConstant()->GetValue() : 0;
+
+  SlowPathCodeX86_64* slow_path = new (GetAllocator()) IntrinsicSlowPathX86_64(invoke);
+  codegen_->AddSlowPath(slow_path);
+
+  // Bail if the source and destination are the same.
+  __ cmpl(src, dest);
+  __ j(kEqual, slow_path->GetEntryLabel());
+
+  // Bail if the source is null.
+  __ testl(src, src);
+  __ j(kEqual, slow_path->GetEntryLabel());
+
+  // Bail if the destination is null.
+  __ testl(dest, dest);
+  __ j(kEqual, slow_path->GetEntryLabel());
+
+  // If the length is > 128 elements (256 bytes) or negative, bail.
+  if (!length.IsConstant()) {
+    // Runtime test to check the length.
+    __ cmpl(length.AsRegister<CpuRegister>(), Immediate(128));
+    __ j(kAbove, slow_path->GetEntryLabel());
+  }
+
+  // Use ESI/EDI as temps first.
+  CpuRegister src_base = locations->GetTemp(0).AsRegister<CpuRegister>();
+  CpuRegister dest_base = locations->GetTemp(1).AsRegister<CpuRegister>();
+
+  // We need the count in RCX.
+  CpuRegister count = locations->GetTemp(2).AsRegister<CpuRegister>();
+  DCHECK_EQ(count.AsRegister(), RCX);
+  if (length.IsConstant()) {
+    __ movl(count, Immediate(length.GetConstant()->AsIntConstant()->GetValue()));
+  } else {
+    __ movl(count, length.AsRegister<CpuRegister>());
+  }
+
+  // Validity checks: source.
+  CheckPosition(assembler, srcPos, src, count, slow_path, src_base, dest_base);
+
+  // Validity checks: dest.
+  CheckPosition(assembler, destPos, dest, count, slow_path, src_base, dest_base);
+
+  // Okay, everything checks out.  Finally time to do the copy.
+  int32_t data_offset = mirror::Array::DataOffset(2).Int32Value();
+
+  DCHECK_EQ(src_base.AsRegister(), RSI);
+  DCHECK_EQ(dest_base.AsRegister(), RDI);
+
+  if (srcPos.IsConstant()) {
+    __ leal(src_base, Address(src, 2 * srcPos_const + data_offset));
+  } else {
+    __ leal(src_base, Address(src, srcPos.AsRegister<CpuRegister>(),
+                              ScaleFactor::TIMES_2, data_offset));
+  }
+  if (destPos.IsConstant()) {
+    __ leal(dest_base, Address(dest, 2 * destPos_const + data_offset));
+  } else {
+    __ leal(dest_base, Address(dest, destPos.AsRegister<CpuRegister>(),
+                               ScaleFactor::TIMES_2, data_offset));
+  }
+
+  // Do the move.
+  __ rep_movsw();
+
+  // Finished!
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -1613,7 +1781,6 @@ void IntrinsicCodeGeneratorX86_64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSE
 }
 
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
-UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 
 #undef UNIMPLEMENTED_INTRINSIC
