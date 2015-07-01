@@ -331,7 +331,7 @@ bool FaultManager::IsInGeneratedCode(siginfo_t* siginfo, void* context, bool che
   // If we don't have a potential method, we're outta here.
   VLOG(signals) << "potential method: " << method_obj;
   // TODO: Check linear alloc and image.
-  if (method_obj == 0 || !IsAligned<kObjectAlignment>(method_obj)) {
+  if (method_obj == 0) {
     VLOG(signals) << "no method";
     return false;
   }
