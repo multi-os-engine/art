@@ -465,6 +465,7 @@ class X86Assembler FINAL : public Assembler {
   void jmp(Label* label);
 
   void repne_scasw();
+  void rep_movsw();
 
   X86Assembler* lock();
   void cmpxchgl(const Address& address, Register reg);
@@ -644,7 +645,6 @@ class X86Assembler FINAL : public Assembler {
   void EmitComplex(int rm, const Operand& operand, const Immediate& immediate);
   void EmitLabel(Label* label, int instruction_size);
   void EmitLabelLink(Label* label);
-  void EmitNearLabelLink(Label* label);
 
   void EmitGenericShift(int rm, const Operand& operand, const Immediate& imm);
   void EmitGenericShift(int rm, const Operand& operand, Register shifter);
