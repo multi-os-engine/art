@@ -1639,8 +1639,8 @@ void HGraph::TransformLoopHeaderForBCE(HBasicBlock* header) {
 std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
   ScopedObjectAccess soa(Thread::Current());
   os << "["
-     << " is_top=" << rhs.IsTop()
-     << " type=" << (rhs.IsTop() ? "?" : PrettyClass(rhs.GetTypeHandle().Get()))
+     << " is_valid" << rhs.IsValid()
+     << " type=" << (rhs.IsValid() ? "?" : PrettyClass(rhs.GetTypeHandle().Get()))
      << " is_exact=" << rhs.IsExact()
      << " ]";
   return os;

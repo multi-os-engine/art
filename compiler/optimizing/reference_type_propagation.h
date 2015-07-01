@@ -30,10 +30,7 @@ namespace art {
  */
 class ReferenceTypePropagation : public HOptimization {
  public:
-  ReferenceTypePropagation(HGraph* graph, StackHandleScopeCollection* handles)
-    : HOptimization(graph, kReferenceTypePropagationPassName),
-      handles_(handles),
-      worklist_(graph->GetArena(), kDefaultWorklistSize) {}
+  ReferenceTypePropagation(HGraph* graph, StackHandleScopeCollection* handles);
 
   void Run() OVERRIDE;
 
@@ -60,7 +57,10 @@ class ReferenceTypePropagation : public HOptimization {
 
   GrowableArray<HInstruction*> worklist_;
 
+  ReferenceTypeInfo::TypeHandle object_class_handle_;
+
   static constexpr size_t kDefaultWorklistSize = 8;
+
 
   DISALLOW_COPY_AND_ASSIGN(ReferenceTypePropagation);
 };
