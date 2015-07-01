@@ -2006,6 +2006,14 @@ void X86_64Assembler::jmp(Label* label) {
 }
 
 
+void X86_64Assembler::rep_movsw() {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitUint8(0xF3);
+  EmitUint8(0x66);
+  EmitUint8(0xa5);
+}
+
+
 X86_64Assembler* X86_64Assembler::lock() {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitUint8(0xF0);
@@ -2087,8 +2095,8 @@ void X86_64Assembler::bswapq(CpuRegister dst) {
 
 void X86_64Assembler::repne_scasw() {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
-  EmitUint8(0x66);
   EmitUint8(0xF2);
+  EmitUint8(0x66);
   EmitUint8(0xAF);
 }
 
