@@ -19,6 +19,7 @@
 #include <cmath>
 
 #include "debugger.h"
+#include "entrypoints/runtime_asm_entrypoints.h"
 #include "mirror/array-inl.h"
 #include "unstarted_runtime.h"
 #include "verifier/method_verifier.h"
@@ -660,28 +661,15 @@ static inline bool DoCallCommon(ArtMethod* called_method,
 
   // Do the call now.
   if (LIKELY(Runtime::Current()->IsStarted())) {
-    if (kIsDebugBuild && new_shadow_frame->GetMethod()->GetEntryPointFromInterpreter() == nullptr) {
-      LOG(FATAL) << "Attempt to invoke non-executable method: "
-          << PrettyMethod(new_shadow_frame->GetMethod());
-      UNREACHABLE();
-    }
-    if (kIsDebugBuild && Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly() &&
-        !new_shadow_frame->GetMethod()->IsNative() &&
-        !new_shadow_frame->GetMethod()->IsProxyMethod() &&
-        new_shadow_frame->GetMethod()->GetEntryPointFromInterpreter()
-            == artInterpreterToCompiledCodeBridge) {
-      LOG(FATAL) << "Attempt to call compiled code when -Xint: "
-          << PrettyMethod(new_shadow_frame->GetMethod());
-      UNREACHABLE();
-    }
     // Force the use of interpreter when it is required by the debugger.
-    EntryPointFromInterpreter* entry;
-    if (UNLIKELY(Dbg::IsForcedInterpreterNeededForCalling(self, new_shadow_frame->GetMethod()))) {
-      entry = &art::artInterpreterToInterpreterBridge;
+    if (Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly()
+        // Doing this check avoids doing compiled/interpreter transitions.
+        || (new_shadow_frame->GetMethod()->GetEntryPointFromQuickCompiledCode() == GetQuickToInterpreterBridge())
+        || UNLIKELY(Dbg::IsForcedInterpreterNeededForCalling(self, new_shadow_frame->GetMethod()))) {
+      artInterpreterToInterpreterBridge(self, code_item, new_shadow_frame, result);
     } else {
-      entry = new_shadow_frame->GetMethod()->GetEntryPointFromInterpreter();
+      artInterpreterToCompiledCodeBridge(self, code_item, new_shadow_frame, result);
     }
-    entry(self, code_item, new_shadow_frame, result);
   } else {
     UnstartedRuntime::Invoke(self, code_item, new_shadow_frame, result, first_dest_reg);
   }
