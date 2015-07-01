@@ -468,12 +468,9 @@ class HGraphVisualizerPrinter : public HGraphVisitor {
           }
         } else {
           ReferenceTypeInfo info = instruction->GetReferenceTypeInfo();
-          if (info.IsTop()) {
-            StartAttributeStream("klass") << "java.lang.Object";
-          } else {
-            ScopedObjectAccess soa(Thread::Current());
-            StartAttributeStream("klass") << PrettyClass(info.GetTypeHandle().Get());
-          }
+          DCHECK(info.IsValid());
+          ScopedObjectAccess soa(Thread::Current());
+          StartAttributeStream("klass") << PrettyClass(info.GetTypeHandle().Get());
           StartAttributeStream("exact") << std::boolalpha << info.IsExact() << std::noboolalpha;
         }
       }

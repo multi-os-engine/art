@@ -16,6 +16,7 @@
 
 #include "reference_type_propagation.h"
 
+#include "class_linker.h"
 #include "class_linker-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/dex_cache.h"
@@ -46,6 +47,14 @@ class RTPVisitor : public HGraphDelegateVisitor {
  private:
   StackHandleScopeCollection* handles_;
 };
+
+ReferenceTypePropagation::ReferenceTypePropagation(HGraph* graph, StackHandleScopeCollection* handles)
+    : HOptimization(graph, kReferenceTypePropagationPassName),
+      handles_(handles),
+      worklist_(graph->GetArena(), kDefaultWorklistSize) {
+  object_class_handle_ = handles_->NewHandle(
+      Runtime::Current()->GetClassLinker()->GetClassRoot(ClassLinker::kJavaLangObject));
+}
 
 void ReferenceTypePropagation::Run() {
   // To properly propagate type info we need to visit in the dominator-based order.
@@ -106,11 +115,18 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
       ? ifInstruction->IfTrueSuccessor()
       : ifInstruction->IfFalseSuccessor();
 
+
+  ReferenceTypeInfo null_ref_type = ReferenceTypeInfo::CreateInvalid();
+  {
+    ScopedObjectAccess soa(Thread::Current());
+    null_ref_type = ReferenceTypeInfo::Create(object_class_handle_, false);
+  }
+
   for (HUseIterator<HInstruction*> it(obj->GetUses()); !it.Done(); it.Advance()) {
     HInstruction* user = it.Current()->GetUser();
     if (notNullBlock->Dominates(user->GetBlock())) {
       if (bound_type == nullptr) {
-        bound_type = new (graph_->GetArena()) HBoundType(obj, ReferenceTypeInfo::CreateTop(false));
+        bound_type = new (graph_->GetArena()) HBoundType(obj, null_ref_type);
         notNullBlock->InsertInstructionBefore(bound_type, notNullBlock->GetFirstInstruction());
       }
       user->ReplaceInput(bound_type, it.Current()->GetIndex());
@@ -284,28 +300,23 @@ void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
 ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& a,
                                                        const ReferenceTypeInfo& b) {
   bool is_exact = a.IsExact() && b.IsExact();
-  bool is_top = a.IsTop() || b.IsTop();
   Handle<mirror::Class> type_handle;
 
-  if (!is_top) {
-    if (a.GetTypeHandle().Get() == b.GetTypeHandle().Get()) {
-      type_handle = a.GetTypeHandle();
-    } else if (a.IsSupertypeOf(b)) {
-      type_handle = a.GetTypeHandle();
-      is_exact = false;
-    } else if (b.IsSupertypeOf(a)) {
-      type_handle = b.GetTypeHandle();
-      is_exact = false;
-    } else {
-      // TODO: Find a common super class.
-      is_top = true;
-      is_exact = false;
-    }
+  if (a.GetTypeHandle().Get() == b.GetTypeHandle().Get()) {
+    type_handle = a.GetTypeHandle();
+  } else if (a.IsSupertypeOf(b)) {
+    type_handle = a.GetTypeHandle();
+    is_exact = false;
+  } else if (b.IsSupertypeOf(a)) {
+    type_handle = b.GetTypeHandle();
+    is_exact = false;
+  } else {
+    // TODO: Find the first common super class.
+    type_handle = object_class_handle_;
+    is_exact = false;
   }
 
-  return is_top
-      ? ReferenceTypeInfo::CreateTop(is_exact)
-      : ReferenceTypeInfo::Create(type_handle, is_exact);
+  return ReferenceTypeInfo::Create(type_handle, is_exact);
 }
 
 bool ReferenceTypePropagation::UpdateReferenceTypeInfo(HInstruction* instr) {
@@ -364,14 +375,14 @@ void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
 
 void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
   ReferenceTypeInfo new_rti = instr->InputAt(0)->GetReferenceTypeInfo();
-  if (new_rti.IsTop() && !new_rti.IsExact()) {
-    // Early return if we are Top and inexact.
+  if (new_rti.IsObjectClass() && !new_rti.IsExact()) {
+    // Early return if we are Object and inexact.
     instr->SetReferenceTypeInfo(new_rti);
     return;
   }
   for (size_t i = 1; i < instr->InputCount(); i++) {
     new_rti = MergeTypes(new_rti, instr->InputAt(i)->GetReferenceTypeInfo());
-    if (new_rti.IsTop()) {
+    if (new_rti.IsObjectClass()) {
       if (!new_rti.IsExact()) {
         break;
       } else {
