@@ -2295,6 +2295,19 @@ void CompilerDriver::CompileMethod(Thread* self, const DexFile::CodeItem* code_i
                               invoke_type, class_def_idx,
                               method_idx, class_loader, dex_file,
                               has_verified_method ? dex_to_dex_compilation_level : kRequired);
+      compiled_method = CompiledMethod::SwapAllocCompiledMethod(
+        this,
+        instruction_set_,
+        ArrayRef<const uint8_t>(),
+        0,
+        0,
+        0,
+        nullptr,
+        ArrayRef<const uint8_t>(),  // mapping_table.
+        ArrayRef<const uint8_t>(),
+        ArrayRef<const uint8_t>(),  // native_gc_map.
+        ArrayRef<const uint8_t>(),
+        ArrayRef<const LinkerPatch>());
     }
   }
   if (kTimeCompileMethod) {
