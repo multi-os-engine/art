@@ -963,7 +963,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)
 
-#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
+#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                          \
+  M(Arm64IntermediateAddress, Instruction)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
@@ -3657,6 +3658,8 @@ class HBoundsCheck : public HExpression<2> {
   bool NeedsEnvironment() const OVERRIDE { return true; }
 
   bool CanThrow() const OVERRIDE { return true; }
+
+  HInstruction* GetIndex() const { return InputAt(0); }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
