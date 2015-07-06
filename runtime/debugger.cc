@@ -3483,6 +3483,12 @@ bool Dbg::IsForcedInterpreterNeededForUpcallImpl(Thread* thread, ArtMethod* m) {
       return true;
     }
   }
+  if (thread->HasDebuggerShadowFrames()) {
+    // We need to do this for the exception handling flow so that we don't
+    // miss any deoptimization that should be done when there are debugger
+    // shadow frames.
+    return true;
+  }
   // We have to require stack deoptimization if the upcall is deoptimized.
   return instrumentation->IsDeoptimized(m);
 }
