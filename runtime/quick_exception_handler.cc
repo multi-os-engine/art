@@ -210,7 +210,20 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
                                       m, m->GetAccessFlags(), true, true, true, true);
     bool verifier_success = verifier.Verify();
     CHECK(verifier_success) << PrettyMethod(m);
-    ShadowFrame* new_frame = ShadowFrame::CreateDeoptimizedFrame(num_regs, nullptr, m, dex_pc);
+    // Check if a shadow frame already exists for debugger's set-local-value purpose.
+    ShadowFrame* new_frame = self_->FindDebuggerShadowFrame(GetFrameId());
+    bool new_frame_is_debugger_frame;
+    bool* updated_vreg_flags = nullptr;
+    if (new_frame == nullptr) {
+      new_frame = ShadowFrame::CreateDeoptimizedFrame(num_regs, nullptr, m, dex_pc);
+      new_frame_is_debugger_frame = false;
+    } else {
+      new_frame_is_debugger_frame = true;
+      updated_vreg_flags = self_->GetUpdatedVRegFlags(GetFrameId());
+      DCHECK(updated_vreg_flags != nullptr);
+      self_->RemoveDebuggerShadowFrameMapping(GetFrameId());
+      DCHECK(self_->FindDebuggerShadowFrame(GetFrameId()) == nullptr);
+    }
     {
       ScopedStackedShadowFramePusher pusher(self_, new_frame,
                                             StackedShadowFrameType::kShadowFrameUnderConstruction);
@@ -222,6 +235,10 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
       static constexpr uint32_t kDeadValue = 0xEBADDE09;
       static constexpr uint64_t kLongDeadValue = 0xEBADDE09EBADDE09;
       for (uint16_t reg = 0; reg < num_regs; ++reg) {
+        if (new_frame_is_debugger_frame && updated_vreg_flags[reg]) {
+          // Keep the value set by debugger.
+          continue;
+        }
         VRegKind kind = GetVRegKind(reg, kinds);
         switch (kind) {
           case kUndefined:
