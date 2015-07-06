@@ -297,6 +297,11 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
   thread->VerifyStack();
 }
 
+void Instrumentation::InstrumentThreadStack(Thread* thread) {
+  instrumentation_stubs_installed_ = true;
+  InstrumentationInstallStack(thread, this);
+}
+
 // Removes the instrumentation exit pc as the return PC for every quick frame.
 static void InstrumentationRestoreStack(Thread* thread, void* arg)
     SHARED_REQUIRES(Locks::mutator_lock_) {

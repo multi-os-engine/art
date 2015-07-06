@@ -2634,7 +2634,7 @@ JDWP::JdwpError Dbg::SetLocalValues(JDWP::Request* request) {
     uint64_t value = request->ReadValue(width);
 
     VLOG(jdwp) << "    --> slot " << slot << " " << sigByte << " " << value;
-    error = Dbg::SetLocalValue(visitor, slot, sigByte, value, width);
+    error = Dbg::SetLocalValue(thread, visitor, slot, sigByte, value, width);
     if (error != JDWP::ERR_NONE) {
       return error;
     }
@@ -2652,8 +2652,8 @@ static JDWP::JdwpError FailSetLocalValue(const StackVisitor& visitor, uint16_t v
   return kStackFrameLocalAccessError;
 }
 
-JDWP::JdwpError Dbg::SetLocalValue(StackVisitor& visitor, int slot, JDWP::JdwpTag tag,
-                                   uint64_t value, size_t width) {
+JDWP::JdwpError Dbg::SetLocalValue(Thread* thread, StackVisitor& visitor, int slot,
+                                   JDWP::JdwpTag tag, uint64_t value, size_t width) {
   ArtMethod* m = visitor.GetMethod();
   JDWP::JdwpError error = JDWP::ERR_NONE;
   uint16_t vreg = DemangleSlot(slot, m, &error);
@@ -2726,6 +2726,15 @@ JDWP::JdwpError Dbg::SetLocalValue(StackVisitor& visitor, int slot, JDWP::JdwpTa
       LOG(FATAL) << "Unknown tag " << tag;
       UNREACHABLE();
   }
+
+  // If we set the local variable in a compiled frame, we need to trigger a deoptimization of
+  // the stack so we continue execution with the interpreter using the new value(s) of the updated
+  // local variable(s). To achieve this, we install instrumentation exit stub on each method of the
+  // thread's stack. The stub will cause the deoptimization to happen.
+  if (!visitor.IsShadowFrame() && thread->HasDebuggerShadowFrames()) {
+    Runtime::Current()->GetInstrumentation()->InstrumentThreadStack(thread);
+  }
+
   return JDWP::ERR_NONE;
 }
 
@@ -3482,6 +3491,12 @@ bool Dbg::IsForcedInterpreterNeededForUpcallImpl(Thread* thread, ArtMethod* m) {
     if (ssc->GetStackDepth() >= GetStackDepth(thread)) {
       return true;
     }
+  }
+  if (thread->HasDebuggerShadowFrames()) {
+    // We need to do this for the exception handling flow so that we don't
+    // miss any deoptimization that should be done when there are debugger
+    // shadow frames.
+    return true;
   }
   // We have to require stack deoptimization if the upcall is deoptimized.
   return instrumentation->IsDeoptimized(m);
