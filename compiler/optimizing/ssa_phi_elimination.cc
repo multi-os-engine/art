@@ -114,6 +114,13 @@ void SsaRedundantPhiElimination::Run() {
       continue;
     }
 
+    // Empty catch phis are created for undefined locals. These must be dead.
+    if (phi->InputCount() < 1) {
+      DCHECK(phi->IsCatchPhi());
+      DCHECK(phi->IsDead());
+      continue;
+    }
+
     // Find if the inputs of the phi are the same instruction.
     HInstruction* candidate = phi->InputAt(0);
     // A loop phi cannot have itself as the first phi. Note that this
@@ -134,6 +141,12 @@ void SsaRedundantPhiElimination::Run() {
 
     // If the inputs are not the same, continue.
     if (candidate == nullptr) {
+      continue;
+    }
+
+    // The candidate may not dominate a phi in a catch block.
+    if (!candidate->StrictlyDominates(phi)) {
+      DCHECK(phi->IsCatchPhi());
       continue;
     }
 
