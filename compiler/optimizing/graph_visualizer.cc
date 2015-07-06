@@ -351,6 +351,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
 
   void VisitPhi(HPhi* phi) OVERRIDE {
     StartAttributeStream("reg") << phi->GetRegNumber();
+    StartAttributeStream("is_catch_phi") << std::boolalpha << phi->IsCatchPhi() << std::noboolalpha;
   }
 
   void VisitMemoryBarrier(HMemoryBarrier* barrier) OVERRIDE {

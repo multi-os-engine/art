@@ -19,5 +19,11 @@ public class Main {
   // Workaround for b/18051191.
   class InnerClass {}
 
+  public int foo(Object o) {
+  	synchronized(o) {
+	  return o.hashCode();
+  	}
+  }
+
   public static void main(String[] args) {}
 }

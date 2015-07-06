@@ -49,10 +49,12 @@ class HLongConstant;
 class HNullConstant;
 class HPhi;
 class HSuspendCheck;
+class HTryBoundary;
 class LiveInterval;
 class LocationSummary;
 class SlowPathCode;
 class SsaBuilder;
+class SSAChecker;
 
 static const int kDefaultNumberOfBlocks = 8;
 static const int kDefaultNumberOfSuccessors = 2;
@@ -193,6 +195,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   void BuildDominatorTree();
   void TransformToSsa();
   void SimplifyCFG();
+  void SimplifyCatchBlocks();
 
   // Analyze all natural loops in this graph. Returns false if one
   // loop is not natural, that is the header does not dominate the
@@ -730,8 +733,18 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     return GetPredecessorIndexOf(predecessor) == idx;
   }
 
+  bool IsExceptionalPredecessor(size_t idx) const;
+
   // Returns whether successor at index `idx` is an exception handler.
-  bool IsExceptionalSuccessor(size_t idx) const;
+  bool IsExceptionalSuccessor(size_t idx) const {
+    DCHECK_LT(idx, GetSuccessors().Size());
+    return EndsWithTryBoundary() && (idx != 0);
+  }
+
+  // Returns the number of non-exceptional successors.
+  size_t NumberOfNormalSuccessors() const {
+    return EndsWithTryBoundary() ? 1 : GetSuccessors().Size();
+  }
 
   // Split the block into two blocks just before `cursor`. Returns the newly
   // created, latter block. Note that this method will add the block to the
@@ -846,9 +859,14 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
 
   bool EndsWithControlFlowInstruction() const;
   bool EndsWithIf() const;
+  bool EndsWithTryBoundary() const;
   bool HasSinglePhi() const;
 
+  HTryBoundary* GetTryBlock() const;
+
  private:
+  HTryBoundary* GetTryBlockFromPredecessor(size_t pred_idx) const;
+
   HGraph* graph_;
   GrowableArray<HBasicBlock*> predecessors_;
   GrowableArray<HBasicBlock*> successors_;
@@ -864,6 +882,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   size_t lifetime_end_;
   bool is_catch_block_;
 
+  friend SSAChecker;
   friend class HGraph;
   friend class HInstruction;
 
@@ -1940,7 +1959,6 @@ class HIf : public HTemplateInstruction<1> {
   DISALLOW_COPY_AND_ASSIGN(HIf);
 };
 
-
 // Abstract instruction which marks the beginning and/or end of a try block and
 // links it to the respective exception handlers. Behaves the same as a Goto in
 // non-exceptional control flow.
@@ -1968,14 +1986,6 @@ class HTryBoundary : public HTemplateInstruction<0> {
     return GetBlock()->GetSuccessors().Contains(handler, /* start_from */ 1);
   }
 
-  // Returns whether successor at index `idx` is an exception handler.
-  bool IsExceptionalSuccessor(size_t idx) const {
-    DCHECK_LT(idx, GetBlock()->GetSuccessors().Size());
-    bool is_handler = (idx != 0);
-    DCHECK(!is_handler || GetBlock()->GetSuccessors().Get(idx)->IsCatchBlock());
-    return is_handler;
-  }
-
   // If not present already, adds `handler` to its block's list of exception
   // handlers.
   void AddExceptionHandler(HBasicBlock* handler) {
@@ -1986,6 +1996,8 @@ class HTryBoundary : public HTemplateInstruction<0> {
 
   bool IsEntry() const { return kind_ == BoundaryKind::kEntry; }
 
+  bool HasSameExceptionHandlersAs(const HTryBoundary& other) const;
+
   DECLARE_INSTRUCTION(TryBoundary);
 
  private:
@@ -1994,6 +2006,25 @@ class HTryBoundary : public HTemplateInstruction<0> {
   DISALLOW_COPY_AND_ASSIGN(HTryBoundary);
 };
 
+class HExceptionHandlerIterator : public ValueObject {
+ public:
+  explicit HExceptionHandlerIterator(const HBasicBlock& block)
+    : block_(block),
+      index_(block.EndsWithTryBoundary() ? 1 : block_.GetSuccessors().Size()) {}
+
+  explicit HExceptionHandlerIterator(const HTryBoundary& try_boundary)
+    : HExceptionHandlerIterator(*try_boundary.GetBlock()) {}
+
+  bool Done() const { return index_ == block_.GetSuccessors().Size(); }
+  HBasicBlock* Current() const { return block_.GetSuccessors().Get(index_); }
+  void Advance() { ++index_; }
+
+ private:
+  const HBasicBlock& block_;
+  size_t index_;
+
+  DISALLOW_COPY_AND_ASSIGN(HExceptionHandlerIterator);
+};
 
 // Deoptimize to interpreter, upon checking a condition.
 class HDeoptimize : public HTemplateInstruction<1> {
@@ -3323,6 +3354,8 @@ class HPhi : public HInstruction {
         return type;
     }
   }
+
+  bool IsCatchPhi() const { return GetBlock()->IsCatchBlock(); }
 
   size_t InputCount() const OVERRIDE { return inputs_.Size(); }
 

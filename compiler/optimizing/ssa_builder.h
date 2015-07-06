@@ -51,6 +51,7 @@ class SsaBuilder : public HGraphVisitor {
   explicit SsaBuilder(HGraph* graph)
       : HGraphVisitor(graph),
         current_locals_(nullptr),
+        current_try_block_(nullptr),
         loop_headers_(graph->GetArena(), kDefaultNumberOfLoops),
         locals_for_(graph->GetArena(), graph->GetBlocks().Size()) {
     locals_for_.SetSize(graph->GetBlocks().Size());
@@ -59,15 +60,27 @@ class SsaBuilder : public HGraphVisitor {
   void BuildSsa();
 
   GrowableArray<HInstruction*>* GetLocalsFor(HBasicBlock* block) {
-    GrowableArray<HInstruction*>* locals = locals_for_.Get(block->GetBlockId());
+    auto locals = locals_for_.Get(block->GetBlockId());
     if (locals == nullptr) {
-      locals = new (GetGraph()->GetArena()) GrowableArray<HInstruction*>(
-          GetGraph()->GetArena(), GetGraph()->GetNumberOfVRegs());
-      locals->SetSize(GetGraph()->GetNumberOfVRegs());
+      const size_t vregs = GetGraph()->GetNumberOfVRegs();
+      ArenaAllocator* arena = GetGraph()->GetArena();
+      locals = new (arena) GrowableArray<HInstruction*>(arena, vregs);
+      locals->SetSize(vregs);
+
+      if (block->IsCatchBlock()) {
+        for (size_t i = 0; i < vregs; ++i) {
+          HPhi* phi = new (arena) HPhi(arena, i, 0, Primitive::kPrimVoid);
+          block->AddPhi(phi);
+          locals->Put(i, phi);
+        }
+      }
+
       locals_for_.Put(block->GetBlockId(), locals);
     }
     return locals;
   }
+
+  GrowableArray<HInstruction*>* GetLocalsForCatchBlock(HBasicBlock* block);
 
   HInstruction* ValueOfLocal(HBasicBlock* block, size_t local);
 
@@ -95,6 +108,8 @@ class SsaBuilder : public HGraphVisitor {
 
   // Locals for the current block being visited.
   GrowableArray<HInstruction*>* current_locals_;
+
+  HTryBoundary* current_try_block_;
 
   // Keep track of loop headers found. The last phase of the analysis iterates
   // over these blocks to set the inputs of their phis.
