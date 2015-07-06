@@ -210,7 +210,15 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
                                       m, m->GetAccessFlags(), true, true, true, true);
     bool verifier_success = verifier.Verify();
     CHECK(verifier_success) << PrettyMethod(m);
-    ShadowFrame* new_frame = ShadowFrame::CreateDeoptimizedFrame(num_regs, nullptr, m, dex_pc);
+    ShadowFrame* new_frame;
+    // Check if one already exists for debugger's set-local-value purpose.
+    new_frame = self_->FindDebuggerShadowFrame(GetFrameId());
+    if (new_frame == nullptr) {
+      new_frame = ShadowFrame::CreateDebuggerFrame(num_regs, m);
+    } else {
+      self_->RemoveDebuggerShadowFrame(GetFrameId());
+      DCHECK(self_->FindDebuggerShadowFrame(GetFrameId()) == nullptr);
+    }
     {
       ScopedStackedShadowFramePusher pusher(self_, new_frame,
                                             StackedShadowFrameType::kShadowFrameUnderConstruction);
@@ -222,6 +230,10 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
       static constexpr uint32_t kDeadValue = 0xEBADDE09;
       static constexpr uint64_t kLongDeadValue = 0xEBADDE09EBADDE09;
       for (uint16_t reg = 0; reg < num_regs; ++reg) {
+        if (new_frame->IsDebuggerFrame() && new_frame->IsSetByDebugger(reg)) {
+          // Keep the value set by debugger.
+          continue;
+        }
         VRegKind kind = GetVRegKind(reg, kinds);
         switch (kind) {
           case kUndefined:
@@ -312,6 +324,10 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
             break;
         }
       }
+    }
+    if (new_frame->IsDebuggerFrame()) {
+      // Restore the real dex_pc.
+      new_frame->SetDexPC(dex_pc);
     }
     if (prev_shadow_frame_ != nullptr) {
       prev_shadow_frame_->SetLink(new_frame);
