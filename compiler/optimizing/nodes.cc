@@ -98,26 +98,31 @@ void HGraph::VisitBlockForBackEdges(HBasicBlock* block,
 }
 
 void HGraph::BuildDominatorTree() {
+  // (1) Simplify the CFG so that catch blocks have only exceptional incoming
+  //     edges. This invariant simplifies building SSA form because Phis cannot
+  //     collect both normal- and exceptional-flow values at the same time.
+  SimplifyCatchBlocks();
+
   ArenaBitVector visited(arena_, blocks_.Size(), false);
 
-  // (1) Find the back edges in the graph doing a DFS traversal.
+  // (2) Find the back edges in the graph doing a DFS traversal.
   FindBackEdges(&visited);
 
-  // (2) Remove instructions and phis from blocks not visited during
+  // (3) Remove instructions and phis from blocks not visited during
   //     the initial DFS as users from other instructions, so that
   //     users can be safely removed before uses later.
   RemoveInstructionsAsUsersFromDeadBlocks(visited);
 
-  // (3) Remove blocks not visited during the initial DFS.
+  // (4) Remove blocks not visited during the initial DFS.
   //     Step (4) requires dead blocks to be removed from the
   //     predecessors list of live blocks.
   RemoveDeadBlocks(visited);
 
-  // (4) Simplify the CFG now, so that we don't need to recompute
+  // (5) Simplify the CFG now, so that we don't need to recompute
   //     dominators and the reverse post order.
   SimplifyCFG();
 
-  // (5) Compute the dominance information and the reverse post order.
+  // (6) Compute the dominance information and the reverse post order.
   ComputeDominanceInformation();
 }
 
@@ -261,6 +266,61 @@ void HGraph::SimplifyLoop(HBasicBlock* header) {
   info->SetSuspendCheck(first_instruction->AsSuspendCheck());
 }
 
+void HGraph::SimplifyCatchBlocks() {
+  for (size_t i = 0; i < blocks_.Size(); ++i) {
+    HBasicBlock* catch_block = blocks_.Get(i);
+    if (!catch_block->IsCatchBlock()) {
+      continue;
+    }
+
+    bool exceptional_predecessors_only = true;
+    for (size_t j = 0; j < catch_block->GetPredecessors().Size(); ++j) {
+      if (!catch_block->IsExceptionalPredecessor(j)) {
+        exceptional_predecessors_only = false;
+        break;
+      }
+    }
+
+    if (!exceptional_predecessors_only) {
+      // Catch block has normal-flow predecessors and needs to be simplified.
+      // Splitting the block before its first instruction moves all its
+      // instructions into `normal_block` and links the two blocks with a Goto.
+      // Afterwards, incoming normal-flow edges are re-linked to `normal_block`,
+      // leaving `catch_block` with the exceptional edges only.
+      // Note that catch blocks with normal-flow predecessors cannot begin with
+      // a MOVE_EXCEPTION instruction, as guaranteed by the verifier.
+      DCHECK(!catch_block->GetFirstInstruction()->IsLoadException());
+      HBasicBlock* normal_block = catch_block->SplitBefore(catch_block->GetFirstInstruction());
+      for (size_t j = 0; j < catch_block->GetPredecessors().Size(); ++j) {
+        if (!catch_block->IsExceptionalPredecessor(j)) {
+          catch_block->GetPredecessors().Get(j)->ReplaceSuccessor(catch_block, normal_block);
+          --j;
+        }
+      }
+    }
+  }
+}
+
+void HGraph::ComputeTryBlockInformation() {
+  // Iterate in reverse post order to propagate try membership information from
+  // predecessors to their successors.
+  for (HReversePostOrderIterator it(*this); !it.Done(); it.Advance()) {
+    HBasicBlock* block = it.Current();
+    if (block->IsEntryBlock() || block->IsCatchBlock()) {
+      // Catch blocks after simplification have only exceptional predecessors
+      // and hence are never in tries.
+      continue;
+    }
+
+    // Infer try membership from the first predecessor. Having simplified loops,
+    // the first predecessor can never be a back edge and therefore it must have
+    // been visited already and had its try membership set.
+    HBasicBlock* first_predecessor = block->GetPredecessors().Get(0);
+    DCHECK(!block->IsLoopHeader() || !block->GetLoopInformation()->IsBackEdge(*first_predecessor));
+    block->SetTryEntry(first_predecessor->ComputeTryEntryOfSuccessors());
+  }
+}
+
 void HGraph::SimplifyCFG() {
   // Simplify the CFG for future analysis, and code generation:
   // (1): Split critical edges.
@@ -268,9 +328,10 @@ void HGraph::SimplifyCFG() {
   for (size_t i = 0; i < blocks_.Size(); ++i) {
     HBasicBlock* block = blocks_.Get(i);
     if (block == nullptr) continue;
-    if (block->GetSuccessors().Size() > 1) {
+    if (block->NumberOfNormalSuccessors() > 1) {
       for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
         HBasicBlock* successor = block->GetSuccessors().Get(j);
+        DCHECK(!successor->IsCatchBlock());
         if (successor->GetPredecessors().Size() > 1) {
           SplitCriticalEdge(block, successor);
           --j;
@@ -288,6 +349,11 @@ bool HGraph::AnalyzeNaturalLoops() const {
   for (HReversePostOrderIterator it(*this); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     if (block->IsLoopHeader()) {
+      if (block->IsCatchBlock()) {
+        // TODO: Dealing with exceptional back edges could be tricky because
+        //       they only approximate the real control flow. Bail out for now.
+        return false;
+      }
       HLoopInformation* info = block->GetLoopInformation();
       if (!info->Populate()) {
         // Abort if the loop is non natural. We currently bailout in such cases.
@@ -1086,10 +1152,41 @@ HBasicBlock* HBasicBlock::SplitAfter(HInstruction* cursor) {
   return new_block;
 }
 
-bool HBasicBlock::IsExceptionalSuccessor(size_t idx) const {
-  return !GetInstructions().IsEmpty()
-      && GetLastInstruction()->IsTryBoundary()
-      && GetLastInstruction()->AsTryBoundary()->IsExceptionalSuccessor(idx);
+bool HBasicBlock::IsExceptionalPredecessor(size_t idx) const {
+  HBasicBlock* predecessor = GetPredecessors().Get(idx);
+  if (!predecessor->EndsWithTryBoundary()) {
+    // Only edges from HTryBoundary can be exceptional.
+    return false;
+  }
+  HTryBoundary* try_boundary = predecessor->GetLastInstruction()->AsTryBoundary();
+  if (try_boundary->GetNormalFlowSuccessor() == this) {
+    // This is the normal-flow successor of `try_boundary` but it could also be
+    // its exception handler. Predecessors are unordered, so we will consider
+    // the first occurrence the normal edge and a possible second occurence the
+    // exceptional edge.
+    return !IsFirstIndexOfPredecessor(predecessor, idx);
+  } else {
+    // This is not the normal-flow successor of `try_boundary`, hence it must be
+    // its exception handler.
+    DCHECK(try_boundary->HasExceptionHandler(*this));
+    return true; 
+  }
+}
+
+HTryBoundary* HBasicBlock::ComputeTryEntryOfSuccessors() const {
+  if (EndsWithTryBoundary()) {
+    HTryBoundary* try_boundary = GetLastInstruction()->AsTryBoundary();
+    if (try_boundary->IsEntry()) {
+      DCHECK(try_entry_ == nullptr);
+      return try_boundary;
+    } else {
+      DCHECK(try_entry_ != nullptr);
+      DCHECK(try_entry_->HasSameExceptionHandlersAs(*try_boundary));
+      return nullptr;
+    }
+  } else {
+    return try_entry_;
+  }
 }
 
 static bool HasOnlyOneInstruction(const HBasicBlock& block) {
@@ -1114,8 +1211,27 @@ bool HBasicBlock::EndsWithIf() const {
   return !GetInstructions().IsEmpty() && GetLastInstruction()->IsIf();
 }
 
+bool HBasicBlock::EndsWithTryBoundary() const {
+  return !GetInstructions().IsEmpty() && GetLastInstruction()->IsTryBoundary();
+}
+
 bool HBasicBlock::HasSinglePhi() const {
   return !GetPhis().IsEmpty() && GetFirstPhi()->GetNext() == nullptr;
+}
+
+bool HTryBoundary::HasSameExceptionHandlersAs(const HTryBoundary& other) const {
+  if (GetBlock()->GetSuccessors().Size() != other.GetBlock()->GetSuccessors().Size()) {
+    return false;
+  }
+
+  // Exception handler lists cannot contain duplicates, which makes it
+  // sufficient to test inclusion only in one direction.
+  for (HExceptionHandlerIterator it(other); !it.Done(); it.Advance()) {
+    if (!HasExceptionHandler(*it.Current())) {
+      return false;
+    }
+  }
+  return true;
 }
 
 size_t HInstructionList::CountSize() const {
