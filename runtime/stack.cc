@@ -429,17 +429,17 @@ bool StackVisitor::GetRegisterPairIfAccessible(uint32_t reg_lo, uint32_t reg_hi,
 bool StackVisitor::SetVReg(ArtMethod* m, uint16_t vreg, uint32_t new_value,
                            VRegKind kind) {
   if (cur_quick_frame_ != nullptr) {
-      DCHECK(context_ != nullptr);  // You can't reliably write registers without a context.
-      DCHECK(m == GetMethod());
-      if (m->IsOptimized(sizeof(void*))) {
-        return false;
-      } else {
-        return SetVRegFromQuickCode(m, vreg, new_value, kind);
-      }
+    DCHECK(context_ != nullptr);  // You can't reliably write registers without a context.
+    DCHECK(m == GetMethod());
+    if (m->IsOptimized(sizeof(void*))) {
+      return SetVRegFromOptimizedCode(m, vreg, new_value);
     } else {
-      cur_shadow_frame_->SetVReg(vreg, new_value);
-      return true;
+      return SetVRegFromQuickCode(m, vreg, new_value, kind);
     }
+  } else {
+    cur_shadow_frame_->SetVReg(vreg, new_value);
+    return true;
+  }
 }
 
 bool StackVisitor::SetVRegFromQuickCode(ArtMethod* m, uint16_t vreg, uint32_t new_value,
@@ -467,6 +467,22 @@ bool StackVisitor::SetVRegFromQuickCode(ArtMethod* m, uint16_t vreg, uint32_t ne
     *addr = new_value;
     return true;
   }
+}
+
+bool StackVisitor::SetVRegFromOptimizedCode(ArtMethod* m, uint16_t vreg, uint32_t new_value) {
+  const DexFile::CodeItem* code_item = m->GetCodeItem();
+  if (code_item == nullptr) {
+    return false;
+  }
+  uint16_t num_regs = code_item->registers_size_;
+  uint32_t dex_pc = GetDexPc();
+  ShadowFrame* shadow_frame = thread_->GetDebuggerShadowFrameForFrameId(
+      GetFrameId(), false, num_regs, m, dex_pc);
+  if (shadow_frame != nullptr) {
+    shadow_frame->SetVReg(vreg, new_value);
+    return true;
+  }
+  return false;
 }
 
 bool StackVisitor::SetRegisterIfAccessible(uint32_t reg, uint32_t new_value, VRegKind kind) {

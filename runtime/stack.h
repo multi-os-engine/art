@@ -665,6 +665,8 @@ class StackVisitor {
   bool SetVRegFromQuickCode(ArtMethod* m, uint16_t vreg, uint32_t new_value,
                             VRegKind kind)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  bool SetVRegFromOptimizedCode(ArtMethod* m, uint16_t vreg, uint32_t new_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool SetRegisterIfAccessible(uint32_t reg, uint32_t new_value, VRegKind kind)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 

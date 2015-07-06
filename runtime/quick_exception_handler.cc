@@ -210,7 +210,16 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
                                       m, m->GetAccessFlags(), true, true, true, true);
     bool verifier_success = verifier.Verify();
     CHECK(verifier_success) << PrettyMethod(m);
-    ShadowFrame* new_frame = ShadowFrame::CreateDeoptimizedFrame(num_regs, nullptr, m, dex_pc);
+    ShadowFrame* new_frame;
+    // Check if one already exists for debugger's set-local-value purpose.
+    new_frame = self_->GetDebuggerShadowFrameForFrameId(GetFrameId(), true, num_regs, m, dex_pc);
+    if (new_frame == nullptr) {
+      new_frame = ShadowFrame::CreateDeoptimizedFrame(num_regs, nullptr, m, dex_pc);
+    } else {
+      self_->RemoveDebuggerShadowFrameForFrameId(GetFrameId());
+      DCHECK(self_->GetDebuggerShadowFrameForFrameId(GetFrameId(), true, num_regs, m, dex_pc)
+          == nullptr);
+    }
     {
       ScopedStackedShadowFramePusher pusher(self_, new_frame,
                                             StackedShadowFrameType::kShadowFrameUnderConstruction);
