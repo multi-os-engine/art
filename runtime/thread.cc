@@ -225,6 +225,67 @@ ShadowFrame* Thread::PopStackedShadowFrame(StackedShadowFrameType type) {
   return shadow_frame;
 }
 
+class FrameIdToShadowFrame {
+ public:
+  FrameIdToShadowFrame(size_t frame_id,
+                       ShadowFrame* shadow_frame,
+                       FrameIdToShadowFrame* next)
+      : frame_id_(frame_id),
+        shadow_frame_(shadow_frame),
+        next_(next) {}
+
+  size_t GetFrameId() const { return frame_id_; }
+  ShadowFrame* GetShadowFrame() const { return shadow_frame_; }
+  FrameIdToShadowFrame* GetNext() const { return next_; }
+  void SetNext(FrameIdToShadowFrame* next) { next_ = next; }
+
+ private:
+  size_t frame_id_;
+  ShadowFrame* shadow_frame_;
+  FrameIdToShadowFrame* next_;
+};
+
+ShadowFrame* Thread::GetDebuggerShadowFrameForFrameId(size_t frame_id, bool search_only,
+                                                      uint32_t num_vregs, ArtMethod* method,
+                                                      uint32_t dex_pc) {
+  // Search frame_id_to_shadow_frame.
+  for (FrameIdToShadowFrame* record = tlsPtr_.frame_id_to_shadow_frame;
+       record != nullptr;
+       record = record->GetNext()) {
+    if (record->GetFrameId() == frame_id) {
+      return record->GetShadowFrame();
+    }
+  }
+  if (search_only) {
+    return nullptr;
+  }
+  ShadowFrame* shadow_frame = ShadowFrame::CreateDeoptimizedFrame(
+      num_vregs, nullptr, method, dex_pc);
+  FrameIdToShadowFrame* record = new FrameIdToShadowFrame(
+      frame_id, shadow_frame, tlsPtr_.frame_id_to_shadow_frame);
+  tlsPtr_.frame_id_to_shadow_frame = record;
+  return shadow_frame;
+}
+
+void Thread::RemoveDebuggerShadowFrameForFrameId(size_t frame_id) {
+  FrameIdToShadowFrame* head = tlsPtr_.frame_id_to_shadow_frame;
+  if (head->GetFrameId() == frame_id) {
+    tlsPtr_.frame_id_to_shadow_frame = head->GetNext();
+    delete head;
+    return;
+  }
+  FrameIdToShadowFrame* prev = head;
+  for (FrameIdToShadowFrame* record = head->GetNext();
+       record != nullptr;
+       prev = record, record = record->GetNext()) {
+    if (record->GetFrameId() == frame_id) {
+      prev->SetNext(record->GetNext());
+      return;
+    }
+  }
+  UNREACHABLE();
+}
+
 void Thread::InitTid() {
   tls32_.tid = ::art::GetTid();
 }
@@ -2453,14 +2514,22 @@ void Thread::VisitRoots(RootVisitor* visitor) {
       }
     }
   }
-  if (tlsPtr_.deoptimization_return_value_stack != nullptr) {
-    for (DeoptimizationReturnValueRecord* record = tlsPtr_.deoptimization_return_value_stack;
+  for (DeoptimizationReturnValueRecord* record = tlsPtr_.deoptimization_return_value_stack;
+       record != nullptr;
+       record = record->GetLink()) {
+    if (record->IsReference()) {
+      visitor->VisitRootIfNonNull(record->GetGCRoot(),
+          RootInfo(kRootThreadObject, thread_id));
+    }
+  }
+  if (tlsPtr_.frame_id_to_shadow_frame != nullptr) {
+    RootCallbackVisitor visitor_to_callback(visitor, thread_id);
+    ReferenceMapVisitor<RootCallbackVisitor> mapper(this, nullptr, visitor_to_callback);
+    for (FrameIdToShadowFrame* record = tlsPtr_.frame_id_to_shadow_frame;
          record != nullptr;
-         record = record->GetLink()) {
-      if (record->IsReference()) {
-        visitor->VisitRootIfNonNull(record->GetGCRoot(),
-            RootInfo(kRootThreadObject, thread_id));
-      }
+         record = record->GetNext()) {
+      ShadowFrame* shadow_frame = record->GetShadowFrame();
+      mapper.VisitShadowFrame(shadow_frame);
     }
   }
   for (auto* verifier = tlsPtr_.method_verifier; verifier != nullptr; verifier = verifier->link_) {
