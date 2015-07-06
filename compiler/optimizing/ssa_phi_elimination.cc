@@ -137,6 +137,12 @@ void SsaRedundantPhiElimination::Run() {
       continue;
     }
 
+    // The candidate may not dominate a phi in a catch block.
+    if (!candidate->StrictlyDominates(phi)) {
+      DCHECK(phi->IsCatchPhi());
+      continue;
+    }
+
     if (phi->IsInLoop()) {
       // Because we're updating the users of this phi, we may have new
       // phis candidate for elimination if this phi is in a loop. Add phis that
