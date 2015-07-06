@@ -114,6 +114,10 @@ void SsaRedundantPhiElimination::Run() {
       continue;
     }
 
+    if (phi->IsCatchPhi()) {
+      continue;
+    }
+
     // Find if the inputs of the phi are the same instruction.
     HInstruction* candidate = phi->InputAt(0);
     // A loop phi cannot have itself as the first phi. Note that this
