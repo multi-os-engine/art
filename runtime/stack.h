@@ -43,6 +43,8 @@ class ShadowFrame;
 class StackVisitor;
 class Thread;
 
+static const uint32_t kDexPcForDebuggerFrame = 0xffffffff;
+
 // The kind of vreg being accessed in calls to Set/GetVReg.
 enum VRegKind {
   kReferenceVReg,
@@ -79,6 +81,19 @@ class ShadowFrame {
                                              ArtMethod* method, uint32_t dex_pc) {
     uint8_t* memory = new uint8_t[ComputeSize(num_vregs)];
     return Create(num_vregs, link, method, dex_pc, memory);
+  }
+
+  // Create ShadowFrame in heap for keeping local values set by the debugger.
+  static ShadowFrame* CreateDebuggerFrame(uint32_t num_vregs,
+                                          ArtMethod* method) {
+    // Need a bool array at the end to keep track of which vregs are set
+    // by the debugger.
+    uint8_t* memory = new uint8_t[ComputeSize(num_vregs) + sizeof(bool) * num_vregs];
+    ShadowFrame* shadow_frame = Create(num_vregs, nullptr, method, kDexPcForDebuggerFrame, memory);
+    for (size_t i = 0; i < num_vregs; i++) {
+      shadow_frame->ValueIsSetByDebugger()[i] = false;
+    }
+    return shadow_frame;
   }
 
   // Delete a ShadowFrame allocated on the heap for deoptimization.
@@ -120,6 +135,14 @@ class ShadowFrame {
   void SetLink(ShadowFrame* frame) {
     DCHECK_NE(this, frame);
     link_ = frame;
+  }
+
+  bool IsDebuggerFrame() const {
+    return dex_pc_ == kDexPcForDebuggerFrame;
+  }
+
+  bool IsSetByDebugger(uint32_t vreg) const {
+    return ValueIsSetByDebugger()[vreg];
   }
 
   int32_t GetVReg(size_t i) const {
@@ -189,6 +212,11 @@ class ShadowFrame {
     }
   }
 
+  void SetVRegForDebugger(size_t i, int32_t val) {
+    SetVReg(i, val);
+    ValueIsSetByDebugger()[i] = true;
+  }
+
   void SetVRegFloat(size_t i, float val) {
     DCHECK_LT(i, NumberOfVRegs());
     uint32_t* vreg = &vregs_[i];
@@ -212,6 +240,12 @@ class ShadowFrame {
       References()[i].Clear();
       References()[i + 1].Clear();
     }
+  }
+
+  void SetVRegLongForDebugger(size_t i, int64_t val) {
+    SetVRegLong(i, val);
+    ValueIsSetByDebugger()[i] = true;
+    ValueIsSetByDebugger()[i + 1] = true;
   }
 
   void SetVRegDouble(size_t i, double val) {
@@ -306,6 +340,16 @@ class ShadowFrame {
   StackReference<mirror::Object>* References() {
     return const_cast<StackReference<mirror::Object>*>(
         const_cast<const ShadowFrame*>(this)->References());
+  }
+
+  const bool* ValueIsSetByDebugger() const {
+    DCHECK(IsDebuggerFrame());
+    const StackReference<mirror::Object>* ref_end = &References()[NumberOfVRegs()];
+    return reinterpret_cast<const bool*>(ref_end);
+  }
+
+  bool* ValueIsSetByDebugger() {
+    return const_cast<bool*>(const_cast<const ShadowFrame*>(this)->ValueIsSetByDebugger());
   }
 
   const uint32_t number_of_vregs_;
@@ -665,11 +709,15 @@ class StackVisitor {
   bool SetVRegFromQuickCode(ArtMethod* m, uint16_t vreg, uint32_t new_value,
                             VRegKind kind)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  bool SetVRegFromOptimizedCode(ArtMethod* m, uint16_t vreg, uint32_t new_value)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool SetRegisterIfAccessible(uint32_t reg, uint32_t new_value, VRegKind kind)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   bool SetVRegPairFromQuickCode(ArtMethod* m, uint16_t vreg, uint64_t new_value,
                                 VRegKind kind_lo, VRegKind kind_hi)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  bool SetVRegPairFromOptimizedCode(ArtMethod* m, uint16_t vreg, uint64_t new_value)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   bool SetRegisterPairIfAccessible(uint32_t reg_lo, uint32_t reg_hi, uint64_t new_value,
                                    bool is_float)

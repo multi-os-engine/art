@@ -3488,6 +3488,9 @@ bool Dbg::IsForcedInterpreterNeededForUpcallImpl(Thread* thread, ArtMethod* m) {
       return true;
     }
   }
+  if (thread->HasDebuggerShadowFrames()) {
+    return true;
+  }
   // We have to require stack deoptimization if the upcall is deoptimized.
   return instrumentation->IsDeoptimized(m);
 }

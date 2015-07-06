@@ -660,10 +660,11 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
       MaybeRecordStat(MethodCompilationStat::kNotOptimizedRegisterAllocator);
     }
 
-    return CompileBaseline(codegen.get(),
-                           compiler_driver,
-                           dex_compilation_unit,
-                           &pass_observer);
+    return CompileOptimized(graph,
+                            codegen.get(),
+                            compiler_driver,
+                            dex_compilation_unit,
+                            &pass_observer);
   } else {
     return nullptr;
   }
