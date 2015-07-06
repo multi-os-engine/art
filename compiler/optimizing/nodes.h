@@ -2149,7 +2149,7 @@ class HBinaryOperation : public HExpression<2> {
 
 // The comparison bias applies for floating point operations and indicates how NaN
 // comparisons are treated:
-enum ComparisonBias {
+enum class ComparisonBias {
   kNoBias,  // bias is not applicable (i.e. for long operation)
   kGtBias,  // return 1 for NaN comparisons
   kLtBias,  // return -1 for NaN comparisons
@@ -2160,7 +2160,7 @@ class HCondition : public HBinaryOperation {
   HCondition(HInstruction* first, HInstruction* second)
       : HBinaryOperation(Primitive::kPrimBoolean, first, second),
         needs_materialization_(true),
-        bias_(kNoBias) {}
+        bias_(ComparisonBias::kNoBias) {}
 
   bool NeedsMaterialization() const { return needs_materialization_; }
   void ClearNeedsMaterialization() { needs_materialization_ = false; }
@@ -2175,7 +2175,7 @@ class HCondition : public HBinaryOperation {
 
   virtual IfCondition GetOppositeCondition() const = 0;
 
-  bool IsGtBias() { return bias_ == kGtBias; }
+  bool IsGtBias() { return bias_ == ComparisonBias::kGtBias; }
 
   void SetBias(ComparisonBias bias) { bias_ = bias; }
 
@@ -2390,7 +2390,7 @@ class HCompare : public HBinaryOperation {
 
   ComparisonBias GetBias() const { return bias_; }
 
-  bool IsGtBias() { return bias_ == kGtBias; }
+  bool IsGtBias() { return bias_ == ComparisonBias::kGtBias; }
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
