@@ -347,10 +347,61 @@ HInstruction* SsaBuilder::ValueOfLocal(HBasicBlock* block, size_t local) {
   return GetLocalsFor(block)->Get(local);
 }
 
+static HTryBoundary* ComputeTryBlockAfter(const HBasicBlock& block) {
+  HTryBoundary* try_entry = block.GetTryBlockEntry();
+
+  if (block.EndsWithTryBoundary()) {
+    HTryBoundary* try_boundary = block.GetLastInstruction()->AsTryBoundary();
+    if (try_boundary->IsEntry()) {
+      DCHECK(try_entry == nullptr);
+      try_entry = try_boundary;
+    } else {
+      DCHECK(try_entry != nullptr);
+      DCHECK(try_entry->HasSameExceptionHandlersAs(*try_boundary));
+      try_entry = nullptr;
+    }
+  }
+
+  return try_entry;
+}
+
+static HTryBoundary* ComputeTryBlockAtTheTopOf(const HBasicBlock& block) {
+  if (block.IsCatchBlock() || block.GetPredecessors().IsEmpty()) {
+    return nullptr;
+  }
+
+  HBasicBlock* first_predecessor = block.GetPredecessors().Get(0);
+  DCHECK(!block.IsLoopHeader() || !block.GetLoopInformation()->IsBackEdge(*first_predecessor));
+  HTryBoundary* try_block = ComputeTryBlockAfter(*first_predecessor);
+
+  if (kIsDebugBuild) {
+    for (size_t i = 1, e = block.GetPredecessors().Size(); i < e; ++i) {
+      HBasicBlock* other_predecessor = block.GetPredecessors().Get(i);
+      if (!block.IsLoopHeader() || !block.GetLoopInformation()->IsBackEdge(*other_predecessor)) {
+        HTryBoundary* other_try_block = ComputeTryBlockAfter(*other_predecessor);
+        if (try_block == nullptr) {
+          DCHECK(other_try_block == nullptr);
+        } else {
+          DCHECK(other_try_block != nullptr);
+          DCHECK(try_block->HasSameExceptionHandlersAs(*other_try_block));
+        }
+      }
+    }
+  }
+
+  return try_block;
+}
+
 void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
   current_locals_ = GetLocalsFor(block);
 
-  if (block->IsLoopHeader()) {
+  // Merge the try block information of predecessors.
+  block->SetTryBlockEntry(ComputeTryBlockAtTheTopOf(*block));
+
+  if (block->IsCatchBlock()) {
+    // Locals of catch blocks are initialized from throwing instructions. Phis,
+    // if needed, have therefore already been created.
+  } else if (block->IsLoopHeader()) {
     // If the block is a loop header, we know we only have visited the pre header
     // because we are visiting in reverse post order. We create phis for all initialized
     // locals from the pre header. Their inputs will be populated at the end of
@@ -551,19 +602,38 @@ void SsaBuilder::VisitStoreLocal(HStoreLocal* store) {
 }
 
 void SsaBuilder::VisitInstruction(HInstruction* instruction) {
-  if (!instruction->NeedsEnvironment()) {
-    return;
+  if (instruction->NeedsEnvironment()) {
+    HEnvironment* environment = new (GetGraph()->GetArena()) HEnvironment(
+        GetGraph()->GetArena(),
+        current_locals_->Size(),
+        GetGraph()->GetDexFile(),
+        GetGraph()->GetMethodIdx(),
+        instruction->GetDexPc(),
+        GetGraph()->GetInvokeType(),
+        instruction);
+    environment->CopyFrom(*current_locals_);
+    instruction->SetRawEnvironment(environment);
   }
-  HEnvironment* environment = new (GetGraph()->GetArena()) HEnvironment(
-      GetGraph()->GetArena(),
-      current_locals_->Size(),
-      GetGraph()->GetDexFile(),
-      GetGraph()->GetMethodIdx(),
-      instruction->GetDexPc(),
-      GetGraph()->GetInvokeType(),
-      instruction);
-  environment->CopyFrom(*current_locals_);
-  instruction->SetRawEnvironment(environment);
+
+  // If in a try block, propagate values of locals into catch blocks.
+  if (instruction->CanThrow() && instruction->GetBlock()->IsInTryBlock()) {
+    HTryBoundary* current_try_block = instruction->GetBlock()->GetTryBlockEntry();
+    for (HExceptionHandlerIterator it(*current_try_block); !it.Done(); it.Advance()) {
+      auto handler_locals = GetLocalsFor(it.Current());
+      for (size_t i = 0, e = current_locals_->Size(); i < e; ++i) {
+        HInstruction* current_value = current_locals_->Get(i);
+        HInstruction* handler_phi = handler_locals->Get(i);
+        DCHECK(handler_phi == nullptr || handler_phi->IsPhi());
+        if (handler_phi != nullptr) {
+          if (current_value == nullptr) {
+            handler_locals->Put(i, nullptr);
+          } else {
+            handler_phi->AsPhi()->AddInput(current_value);
+          }
+        }
+      }
+    }
+  }
 }
 
 void SsaBuilder::VisitTemporary(HTemporary* temp) {

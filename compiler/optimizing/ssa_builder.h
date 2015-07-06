@@ -59,11 +59,21 @@ class SsaBuilder : public HGraphVisitor {
   void BuildSsa();
 
   GrowableArray<HInstruction*>* GetLocalsFor(HBasicBlock* block) {
-    GrowableArray<HInstruction*>* locals = locals_for_.Get(block->GetBlockId());
+    auto locals = locals_for_.Get(block->GetBlockId());
     if (locals == nullptr) {
-      locals = new (GetGraph()->GetArena()) GrowableArray<HInstruction*>(
-          GetGraph()->GetArena(), GetGraph()->GetNumberOfVRegs());
-      locals->SetSize(GetGraph()->GetNumberOfVRegs());
+      const size_t vregs = GetGraph()->GetNumberOfVRegs();
+      ArenaAllocator* arena = GetGraph()->GetArena();
+      locals = new (arena) GrowableArray<HInstruction*>(arena, vregs);
+      locals->SetSize(vregs);
+
+      if (block->IsCatchBlock()) {
+        for (size_t i = 0; i < vregs; ++i) {
+          HPhi* phi = new (arena) HPhi(arena, i, 0, Primitive::kPrimVoid);
+          block->AddPhi(phi);
+          locals->Put(i, phi);
+        }
+      }
+
       locals_for_.Put(block->GetBlockId(), locals);
     }
     return locals;
