@@ -98,26 +98,31 @@ void HGraph::VisitBlockForBackEdges(HBasicBlock* block,
 }
 
 void HGraph::BuildDominatorTree() {
+  // (1) Simplify the CFG so that catch blocks have only exceptional incoming
+  //     edges. This invariant simplifies building SSA form because Phis cannot
+  //     collect both normal- and exceptional-flow values at the same time.
+  SimplifyCatchBlocks();
+
   ArenaBitVector visited(arena_, blocks_.Size(), false);
 
-  // (1) Find the back edges in the graph doing a DFS traversal.
+  // (2) Find the back edges in the graph doing a DFS traversal.
   FindBackEdges(&visited);
 
-  // (2) Remove instructions and phis from blocks not visited during
+  // (3) Remove instructions and phis from blocks not visited during
   //     the initial DFS as users from other instructions, so that
   //     users can be safely removed before uses later.
   RemoveInstructionsAsUsersFromDeadBlocks(visited);
 
-  // (3) Remove blocks not visited during the initial DFS.
+  // (4) Remove blocks not visited during the initial DFS.
   //     Step (4) requires dead blocks to be removed from the
   //     predecessors list of live blocks.
   RemoveDeadBlocks(visited);
 
-  // (4) Simplify the CFG now, so that we don't need to recompute
+  // (5) Simplify the CFG now, so that we don't need to recompute
   //     dominators and the reverse post order.
   SimplifyCFG();
 
-  // (5) Compute the dominance information and the reverse post order.
+  // (6) Compute the dominance information and the reverse post order.
   ComputeDominanceInformation();
 }
 
@@ -261,6 +266,34 @@ void HGraph::SimplifyLoop(HBasicBlock* header) {
   info->SetSuspendCheck(first_instruction->AsSuspendCheck());
 }
 
+void HGraph::SimplifyCatchBlocks() {
+  for (size_t i = 0; i < blocks_.Size(); ++i) {
+    HBasicBlock* block = blocks_.Get(i);
+    if (!block->IsCatchBlock()) {
+      continue;
+    }
+
+    bool exceptional_predecessors_only = true;
+    for (size_t j = 0; j < block->GetPredecessors().Size(); ++j) {
+      if (!block->IsExceptionalPredecessor(j)) {
+        exceptional_predecessors_only = false;
+        break;
+      }
+    }
+
+    if (!exceptional_predecessors_only) {
+      DCHECK(!block->GetFirstInstruction()->IsLoadException());
+      HBasicBlock* new_block = block->SplitBefore(block->GetFirstInstruction());
+      for (size_t j = 0; j < block->GetPredecessors().Size(); ++j) {
+        if (!block->IsExceptionalPredecessor(j)) {
+          block->GetPredecessors().Get(j)->ReplaceSuccessor(block, new_block);
+          --j;
+        }
+      }
+    }
+  }
+}
+
 void HGraph::SimplifyCFG() {
   // Simplify the CFG for future analysis, and code generation:
   // (1): Split critical edges.
@@ -268,9 +301,10 @@ void HGraph::SimplifyCFG() {
   for (size_t i = 0; i < blocks_.Size(); ++i) {
     HBasicBlock* block = blocks_.Get(i);
     if (block == nullptr) continue;
-    if (block->GetSuccessors().Size() > 1) {
+    if (block->NumberOfNormalSuccessors() > 1) {
       for (size_t j = 0; j < block->GetSuccessors().Size(); ++j) {
         HBasicBlock* successor = block->GetSuccessors().Get(j);
+        DCHECK(!successor->IsCatchBlock());
         if (successor->GetPredecessors().Size() > 1) {
           SplitCriticalEdge(block, successor);
           --j;
@@ -288,6 +322,11 @@ bool HGraph::AnalyzeNaturalLoops() const {
   for (HReversePostOrderIterator it(*this); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     if (block->IsLoopHeader()) {
+      if (block->IsCatchBlock()) {
+        // TODO: Dealing with exceptional back edges could be tricky because
+        //       they only approximate the real control flow. Bail out for now.
+        return false;
+      }
       HLoopInformation* info = block->GetLoopInformation();
       if (!info->Populate()) {
         // Abort if the loop is non natural. We currently bailout in such cases.
@@ -1086,10 +1125,32 @@ HBasicBlock* HBasicBlock::SplitAfter(HInstruction* cursor) {
   return new_block;
 }
 
-bool HBasicBlock::IsExceptionalSuccessor(size_t idx) const {
-  return !GetInstructions().IsEmpty()
-      && GetLastInstruction()->IsTryBoundary()
-      && GetLastInstruction()->AsTryBoundary()->IsExceptionalSuccessor(idx);
+bool HBasicBlock::IsExceptionalPredecessor(size_t idx) const {
+  DCHECK_LT(idx, GetPredecessors().Size());
+  if (GetGraph()->IsInSsaForm()) {
+    return IsCatchBlock();
+  } else {
+    HBasicBlock* predecessor = GetPredecessors().Get(idx);
+    return predecessor->EndsWithTryBoundary()
+        && (predecessor->GetLastInstruction()->AsTryBoundary()->GetNormalFlowSuccessor() != this
+            || !IsFirstIndexOfPredecessor(predecessor, idx));
+  }
+}
+
+HTryBoundary* HBasicBlock::ComputeTryEntryAfter() const {
+  if (EndsWithTryBoundary()) {
+    HTryBoundary* try_boundary = GetLastInstruction()->AsTryBoundary();
+    if (try_boundary->IsEntry()) {
+      DCHECK(try_entry_ == nullptr);
+      return try_boundary;
+    } else {
+      DCHECK(try_entry_ != nullptr);
+      DCHECK(try_entry_->HasSameExceptionHandlersAs(*try_boundary));
+      return nullptr;
+    }
+  } else {
+    return try_entry_;
+  }
 }
 
 static bool HasOnlyOneInstruction(const HBasicBlock& block) {
@@ -1114,8 +1175,27 @@ bool HBasicBlock::EndsWithIf() const {
   return !GetInstructions().IsEmpty() && GetLastInstruction()->IsIf();
 }
 
+bool HBasicBlock::EndsWithTryBoundary() const {
+  return !GetInstructions().IsEmpty() && GetLastInstruction()->IsTryBoundary();
+}
+
 bool HBasicBlock::HasSinglePhi() const {
   return !GetPhis().IsEmpty() && GetFirstPhi()->GetNext() == nullptr;
+}
+
+bool HTryBoundary::HasSameExceptionHandlersAs(const HTryBoundary& other) const {
+  if (GetBlock()->GetSuccessors().Size() != other.GetBlock()->GetSuccessors().Size()) {
+    return false;
+  }
+
+  // Exception handlers are stored as a set, hence it is sufficient to check
+  // inclusion only one way.
+  for (HExceptionHandlerIterator it(other); !it.Done(); it.Advance()) {
+    if (!HasExceptionHandler(it.Current())) {
+      return false;
+    }
+  }
+  return true;
 }
 
 size_t HInstructionList::CountSize() const {
