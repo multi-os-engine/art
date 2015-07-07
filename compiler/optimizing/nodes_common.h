@@ -1149,15 +1149,17 @@ class HUserRecord : public ValueObject {
   HUseListNode<T>* use_node_;
 };
 
-// TODO: Add better documentation to this class and maybe refactor with more suggestive names.
-// - Has(All)SideEffects suggests that all the side effects are present but only ChangesSomething
-//   flag is consider.
-// - DependsOn suggests that there is a real dependency between side effects but it only
-//   checks DependendsOnSomething flag.
-//
 // Represents the side effects an instruction may have.
 class SideEffects : public ValueObject {
  public:
+  // The list of side effects.
+  // 'kUnspecified' groups all side effects that have not yet been singled out.
+  enum SideEffect {
+    kUnspecified,
+    kGC,
+    kNumberOfSideEffects
+  };
+
   SideEffects() : flags_(0) {}
 
   static SideEffects None() {
@@ -1165,30 +1167,30 @@ class SideEffects : public ValueObject {
   }
 
   static SideEffects All() {
-    return SideEffects(ChangesSomething().flags_ | DependsOnSomething().flags_);
+    return SideEffects(ChangesAll().flags_ | DependsOnAll().flags_);
   }
 
-  static SideEffects ChangesSomething() {
-    return SideEffects((1 << kFlagChangesCount) - 1);
+  static SideEffects ChangesAll() {
+    return SideEffects((1 << kNumberOfSideEffects) - 1);
   }
 
-  static SideEffects DependsOnSomething() {
-    int count = kFlagDependsOnCount - kFlagChangesCount;
-    return SideEffects(((1 << count) - 1) << kFlagChangesCount);
-  }
-
-  SideEffects Union(SideEffects other) const {
-    return SideEffects(flags_ | other.flags_);
+  static SideEffects DependsOnAll() {
+    return SideEffects(((1 << kNumberOfSideEffects) - 1) << kNumberOfSideEffects);
   }
 
   bool HasSideEffects() const {
-    size_t all_bits_set = (1 << kFlagChangesCount) - 1;
+    size_t all_bits_set = (1 << kNumberOfSideEffects) - 1;
     return (flags_ & all_bits_set) != 0;
   }
 
   bool HasAllSideEffects() const {
-    size_t all_bits_set = (1 << kFlagChangesCount) - 1;
+    size_t all_bits_set = (1 << kNumberOfSideEffects) - 1;
     return all_bits_set == (flags_ & all_bits_set);
+  }
+
+  bool HasDependencies() const {
+    size_t all_bits_set = (1 << kNumberOfSideEffects) - 1;
+    return ((flags_ >> kNumberOfSideEffects) & all_bits_set) != 0;
   }
 
   bool DependsOn(SideEffects other) const {
@@ -1196,25 +1198,56 @@ class SideEffects : public ValueObject {
     return (flags_ & depends_flags) != 0;
   }
 
-  bool HasDependencies() const {
-    int count = kFlagDependsOnCount - kFlagChangesCount;
-    size_t all_bits_set = (1 << count) - 1;
-    return ((flags_ >> kFlagChangesCount) & all_bits_set) != 0;
+  SideEffects Union(SideEffects other) const {
+    return SideEffects(flags_ | other.flags_);
   }
+
+  SideEffects Exclusion(SideEffects other) {
+    return SideEffects(flags_ &= ~other.flags_);
+  }
+
+  // Test whether the side effects have the specified dependency or change the
+  // specified side effect.
+  bool HasDependency(SideEffect se) const {
+    return flags_ & DependsOnBit(se);
+  }
+
+  bool HasChange(SideEffect se) const {
+    return flags_ & ChangesBit(se);
+  }
+
+  static SideEffects Changes(SideEffect se) {
+    return SideEffects(ChangesBit(se));
+  }
+
+  static SideEffects Changes(SideEffect se_1, SideEffect se_2) {
+    return SideEffects(ChangesBit(se_1) | ChangesBit(se_2));
+  }
+
+  static SideEffects DependsOn(SideEffect se) {
+    return SideEffects(DependsOnBit(se));
+  }
+
+  static SideEffects ChangesUnspecified() { return Changes(kUnspecified); }
+  static SideEffects DependsOnUnspecified() { return DependsOn(kUnspecified); }
+  static SideEffects ChangesGC() { return Changes(kGC); }
+  static SideEffects DependsOnGC() { return DependsOn(kGC); }
+
+  bool Equals(const SideEffects& other) { return flags_ == other.flags_; }
 
  private:
-  static constexpr int kFlagChangesSomething = 0;
-  static constexpr int kFlagChangesCount = kFlagChangesSomething + 1;
-
-  static constexpr int kFlagDependsOnSomething = kFlagChangesCount;
-  static constexpr int kFlagDependsOnCount = kFlagDependsOnSomething + 1;
-
   explicit SideEffects(size_t flags) : flags_(flags) {}
 
+  static constexpr size_t ChangesBit(SideEffect se) { return 1 << se; }
+  static constexpr size_t DependsOnBit(SideEffect se) { return 1 << (se + kNumberOfSideEffects); }
+
   size_t ComputeDependsFlags() const {
-    return flags_ << kFlagChangesCount;
+    return flags_ << kNumberOfSideEffects;
   }
 
+  // The `flags_` bitfield looks like the following, where `N` stands for `kNumberOfSideEffects`.
+  // |             2N|2N-1               N|N-1                0|
+  // |  unused bits  |   'Changes' bits   |  'DependsOn' bits  |
   size_t flags_;
 };
 
@@ -1480,6 +1513,9 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   virtual bool IsControlFlow() const { return false; }
   virtual bool CanThrow() const { return false; }
   bool HasSideEffects() const { return side_effects_.HasSideEffects(); }
+  void AddSideEffect(SideEffects new_effect) {
+    side_effects_ = side_effects_.Union(new_effect);
+  }
 
   // Does not apply for all instructions, but having this at top level greatly
   // simplifies the null check elimination.
@@ -1698,7 +1734,7 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   // order of blocks where this instruction's live interval start.
   size_t lifetime_position_;
 
-  const SideEffects side_effects_;
+  SideEffects side_effects_;
 
   // TODO: for primitive types this should be marked as invalid.
   ReferenceTypeInfo reference_type_info_;
@@ -1998,7 +2034,7 @@ class HTryBoundary : public HTemplateInstruction<0> {
 class HDeoptimize : public HTemplateInstruction<1> {
  public:
   HDeoptimize(HInstruction* cond, uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::None()),
+      : HTemplateInstruction(SideEffects::ChangesGC()),
         dex_pc_(dex_pc) {
     SetRawInputAt(0, cond);
   }
@@ -2825,7 +2861,7 @@ class HNewInstance : public HExpression<1> {
                uint16_t type_index,
                const DexFile& dex_file,
                QuickEntrypointEnum entrypoint)
-      : HExpression(Primitive::kPrimNot, SideEffects::None()),
+      : HExpression(Primitive::kPrimNot, SideEffects::ChangesGC()),
         dex_pc_(dex_pc),
         type_index_(type_index),
         dex_file_(dex_file),
@@ -2882,7 +2918,7 @@ class HNewArray : public HExpression<2> {
             uint16_t type_index,
             const DexFile& dex_file,
             QuickEntrypointEnum entrypoint)
-      : HExpression(Primitive::kPrimNot, SideEffects::None()),
+      : HExpression(Primitive::kPrimNot, SideEffects::ChangesGC()),
         dex_pc_(dex_pc),
         type_index_(type_index),
         dex_file_(dex_file),
@@ -2973,7 +3009,9 @@ class HMul : public HBinaryOperation {
 class HDiv : public HBinaryOperation {
  public:
   HDiv(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
-      : HBinaryOperation(result_type, left, right), dex_pc_(dex_pc) {}
+      : HBinaryOperation(result_type, left, right), dex_pc_(dex_pc) {
+    AddSideEffect(SideEffects::ChangesGC());
+  }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE {
     // Our graph structure ensures we never have 0 for `y` during constant folding.
@@ -3001,7 +3039,10 @@ class HDiv : public HBinaryOperation {
 class HRem : public HBinaryOperation {
  public:
   HRem(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
-      : HBinaryOperation(result_type, left, right), dex_pc_(dex_pc) {}
+      : HBinaryOperation(result_type, left, right), dex_pc_(dex_pc) {
+    // ARM uses a runtime call almost all the time.
+    AddSideEffect(SideEffects::ChangesGC());
+  }
 
   int32_t Evaluate(int32_t x, int32_t y) const OVERRIDE {
     DCHECK_NE(y, 0);
@@ -3028,7 +3069,7 @@ class HRem : public HBinaryOperation {
 class HDivZeroCheck : public HExpression<1> {
  public:
   HDivZeroCheck(HInstruction* value, uint32_t dex_pc)
-      : HExpression(value->GetType(), SideEffects::None()), dex_pc_(dex_pc) {
+      : HExpression(value->GetType(), SideEffects::ChangesGC()), dex_pc_(dex_pc) {
     SetRawInputAt(0, value);
   }
 
@@ -3229,6 +3270,12 @@ class HTypeConversion : public HExpression<1> {
   // Instantiate a type conversion of `input` to `result_type`.
   HTypeConversion(Primitive::Type result_type, HInstruction* input, uint32_t dex_pc)
       : HExpression(result_type, SideEffects::None()), dex_pc_(dex_pc) {
+    // Multiple architectures use runtime calls for conversions.
+    if (((input->GetType() == Primitive::kPrimFloat || input->GetType() == Primitive::kPrimDouble)
+         && result_type == Primitive::kPrimLong)
+        || (input->GetType() == Primitive::kPrimLong && result_type == Primitive::kPrimFloat)) {
+      AddSideEffect(SideEffects::ChangesGC());
+    }
     SetRawInputAt(0, input);
     DCHECK_NE(input->GetType(), result_type);
   }
@@ -3337,7 +3384,7 @@ class HPhi : public HInstruction {
 class HNullCheck : public HExpression<1> {
  public:
   HNullCheck(HInstruction* value, uint32_t dex_pc)
-      : HExpression(value->GetType(), SideEffects::None()), dex_pc_(dex_pc) {
+      : HExpression(value->GetType(), SideEffects::ChangesGC()), dex_pc_(dex_pc) {
     SetRawInputAt(0, value);
   }
 
@@ -3398,7 +3445,7 @@ class HInstanceFieldGet : public HExpression<1> {
                     bool is_volatile,
                     uint32_t field_idx,
                     const DexFile& dex_file)
-      : HExpression(field_type, SideEffects::DependsOnSomething()),
+      : HExpression(field_type, SideEffects::DependsOnUnspecified()),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file) {
     SetRawInputAt(0, value);
   }
@@ -3440,7 +3487,7 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     bool is_volatile,
                     uint32_t field_idx,
                     const DexFile& dex_file)
-      : HTemplateInstruction(SideEffects::ChangesSomething()),
+      : HTemplateInstruction(SideEffects::ChangesUnspecified()),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
         value_can_be_null_(true) {
     SetRawInputAt(0, object);
@@ -3471,7 +3518,7 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 class HArrayGet : public HExpression<2> {
  public:
   HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type)
-      : HExpression(type, SideEffects::DependsOnSomething()) {
+      : HExpression(type, SideEffects::DependsOnUnspecified()) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -3509,7 +3556,7 @@ class HArraySet : public HTemplateInstruction<3> {
             HInstruction* value,
             Primitive::Type expected_component_type,
             uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::ChangesSomething()),
+      : HTemplateInstruction(SideEffects::ChangesUnspecified()),
         dex_pc_(dex_pc),
         expected_component_type_(expected_component_type),
         needs_type_check_(value->GetType() == Primitive::kPrimNot),
@@ -3517,6 +3564,9 @@ class HArraySet : public HTemplateInstruction<3> {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
     SetRawInputAt(2, value);
+    if (needs_type_check_) {
+      AddSideEffect(SideEffects::ChangesGC());
+    }
   }
 
   bool NeedsEnvironment() const OVERRIDE {
@@ -3600,7 +3650,7 @@ class HArrayLength : public HExpression<1> {
 class HBoundsCheck : public HExpression<2> {
  public:
   HBoundsCheck(HInstruction* index, HInstruction* length, uint32_t dex_pc)
-      : HExpression(index->GetType(), SideEffects::None()), dex_pc_(dex_pc) {
+      : HExpression(index->GetType(), SideEffects::ChangesGC()), dex_pc_(dex_pc) {
     DCHECK(index->GetType() == Primitive::kPrimInt);
     SetRawInputAt(0, index);
     SetRawInputAt(1, length);
@@ -3656,7 +3706,7 @@ class HTemporary : public HTemplateInstruction<0> {
 class HSuspendCheck : public HTemplateInstruction<0> {
  public:
   explicit HSuspendCheck(uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::None()), dex_pc_(dex_pc), slow_path_(nullptr) {}
+      : HTemplateInstruction(SideEffects::ChangesGC()), dex_pc_(dex_pc), slow_path_(nullptr) {}
 
   bool NeedsEnvironment() const OVERRIDE {
     return true;
@@ -3688,7 +3738,7 @@ class HLoadClass : public HExpression<1> {
              const DexFile& dex_file,
              bool is_referrers_class,
              uint32_t dex_pc)
-      : HExpression(Primitive::kPrimNot, SideEffects::None()),
+      : HExpression(Primitive::kPrimNot, SideEffects::ChangesGC()),
         type_index_(type_index),
         dex_file_(dex_file),
         is_referrers_class_(is_referrers_class),
@@ -3772,7 +3822,7 @@ class HLoadClass : public HExpression<1> {
 class HLoadString : public HExpression<1> {
  public:
   HLoadString(HCurrentMethod* current_method, uint32_t string_index, uint32_t dex_pc)
-      : HExpression(Primitive::kPrimNot, SideEffects::None()),
+      : HExpression(Primitive::kPrimNot, SideEffects::ChangesGC()),
         string_index_(string_index),
         dex_pc_(dex_pc) {
     SetRawInputAt(0, current_method);
@@ -3808,8 +3858,10 @@ class HLoadString : public HExpression<1> {
 class HClinitCheck : public HExpression<1> {
  public:
   explicit HClinitCheck(HLoadClass* constant, uint32_t dex_pc)
-      : HExpression(Primitive::kPrimNot, SideEffects::ChangesSomething()),
+      : HExpression(Primitive::kPrimNot, SideEffects::Changes(SideEffects::kGC,
+                                                              SideEffects::kUnspecified)),
         dex_pc_(dex_pc) {
+    AddSideEffect(SideEffects::ChangesGC());
     SetRawInputAt(0, constant);
   }
 
@@ -3844,7 +3896,7 @@ class HStaticFieldGet : public HExpression<1> {
                   bool is_volatile,
                   uint32_t field_idx,
                   const DexFile& dex_file)
-      : HExpression(field_type, SideEffects::DependsOnSomething()),
+      : HExpression(field_type, SideEffects::DependsOnUnspecified()),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file) {
     SetRawInputAt(0, cls);
   }
@@ -3883,7 +3935,7 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                   bool is_volatile,
                   uint32_t field_idx,
                   const DexFile& dex_file)
-      : HTemplateInstruction(SideEffects::ChangesSomething()),
+      : HTemplateInstruction(SideEffects::ChangesUnspecified()),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
         value_can_be_null_(true) {
     SetRawInputAt(0, cls);
@@ -3922,7 +3974,7 @@ class HLoadException : public HExpression<0> {
 class HThrow : public HTemplateInstruction<1> {
  public:
   HThrow(HInstruction* exception, uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::None()), dex_pc_(dex_pc) {
+      : HTemplateInstruction(SideEffects::ChangesGC()), dex_pc_(dex_pc) {
     SetRawInputAt(0, exception);
   }
 
@@ -3948,7 +4000,7 @@ class HInstanceOf : public HExpression<2> {
               HLoadClass* constant,
               bool class_is_final,
               uint32_t dex_pc)
-      : HExpression(Primitive::kPrimBoolean, SideEffects::None()),
+      : HExpression(Primitive::kPrimBoolean, SideEffects::ChangesGC()),
         class_is_final_(class_is_final),
         must_do_null_check_(true),
         dex_pc_(dex_pc) {
@@ -4017,7 +4069,7 @@ class HCheckCast : public HTemplateInstruction<2> {
              HLoadClass* constant,
              bool class_is_final,
              uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::None()),
+      : HTemplateInstruction(SideEffects::ChangesGC()),
         class_is_final_(class_is_final),
         must_do_null_check_(true),
         dex_pc_(dex_pc) {
@@ -4079,7 +4131,7 @@ class HMonitorOperation : public HTemplateInstruction<1> {
   };
 
   HMonitorOperation(HInstruction* object, OperationKind kind, uint32_t dex_pc)
-    : HTemplateInstruction(SideEffects::None()), kind_(kind), dex_pc_(dex_pc) {
+    : HTemplateInstruction(SideEffects::ChangesGC()), kind_(kind), dex_pc_(dex_pc) {
     SetRawInputAt(0, object);
   }
 
