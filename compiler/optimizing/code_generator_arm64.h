@@ -181,6 +181,7 @@ class InstructionCodeGeneratorARM64 : public HGraphVisitor {
   void DivRemByPowerOfTwo(HBinaryOperation* instruction);
   void GenerateDivRemWithAnyConstant(HBinaryOperation* instruction);
   void GenerateDivRemIntegral(HBinaryOperation* instruction);
+  void GenerateFPJumps(HCondition* cond, vixl::Label* true_label, vixl::Label* false_label);
   void HandleGoto(HInstruction* got, HBasicBlock* successor);
 
   Arm64Assembler* const assembler_;
