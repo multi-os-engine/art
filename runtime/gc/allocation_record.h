@@ -188,7 +188,7 @@ class AllocRecord {
     return klass_.Read();
   }
 
-  GcRoot<mirror::Class>& GetClassGcRoot() {
+  GcRoot<mirror::Class>& GetClassGcRoot() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
     return klass_;
   }
 
@@ -262,13 +262,16 @@ class AllocRecordObjectMap {
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_);
 
+  // Allocation tracking could be enabled by user in between DisallowNewAllocationRecords() and
+  // AllowNewAllocationRecords(), in which case new allocation records can be added although they
+  // should be disallowed. However, this is GC-safe because new objects are not processed in this GC
+  // cycle. The only downside of not handling this case is that such new allocation records can be
+  // swept from the list. But missing the first few records is acceptable for using the button to
+  // enable allocation tracking.
   void DisallowNewAllocationRecords()
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_);
   void AllowNewAllocationRecords()
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
-      EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_);
-  void EnsureNewAllocationRecordsDisallowed()
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
       EXCLUSIVE_LOCKS_REQUIRED(Locks::alloc_tracker_lock_);
 

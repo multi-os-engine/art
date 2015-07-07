@@ -97,7 +97,7 @@ void AllocRecordObjectMap::VisitRoots(RootVisitor* visitor) {
   // Only visit the last recent_record_max_ number of allocation records in entries_ and mark the
   // klass_ fields as strong roots.
   for (auto it = entries_.rbegin(), end = entries_.rend(); count > 0 && it != end; count--, ++it) {
-    buffered_visitor.VisitRoot(it->second->GetClassGcRoot());
+    buffered_visitor.VisitRootIfNonNull(it->second->GetClassGcRoot());
   }
 }
 
@@ -107,6 +107,8 @@ static inline void SweepClassObject(AllocRecord* record, IsMarkedCallback* callb
   GcRoot<mirror::Class>& klass = record->GetClassGcRoot();
   // This does not need a read barrier because this is called by GC.
   mirror::Object* old_object = klass.Read<kWithoutReadBarrier>();
+  // The class object can become null if we implement class unloading.
+  // In that case we might still want to keep the class name string (not implemented).
   mirror::Object* new_object = UNLIKELY(old_object == nullptr) ?
       nullptr : callback(old_object, arg);
   if (UNLIKELY(old_object != new_object)) {
@@ -162,11 +164,6 @@ void AllocRecordObjectMap::AllowNewAllocationRecords() {
 void AllocRecordObjectMap::DisallowNewAllocationRecords() {
   allow_new_record_ = false;
 }
-
-void AllocRecordObjectMap::EnsureNewAllocationRecordsDisallowed() {
-  CHECK(!allow_new_record_);
-}
-
 
 struct AllocRecordStackVisitor : public StackVisitor {
   AllocRecordStackVisitor(Thread* thread, AllocRecordStackTrace* trace_in, size_t max)
