@@ -17,6 +17,7 @@
 #ifndef ART_COMPILER_OPTIMIZING_NODES_H_
 #define ART_COMPILER_OPTIMIZING_NODES_H_
 
+#include "nodes_arm64.h"
 #include "nodes_common.h"
 
 namespace art {

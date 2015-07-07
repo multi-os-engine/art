@@ -441,6 +441,7 @@ TEST_ART_BROKEN_OPTIMIZING_MIPS64_32BIT_RUN_TESTS :=
 # ARM64-specific tests.
 TEST_ART_OPTIMIZING_ARM64_ONLY_RUN_TESTS := \
   510-checker-arm64-caller-callee \
+  511-checker-arm64-array-access-split
 
 # Skip the 32bit variant of the tests.
 ifneq (,$(filter optimizing,$(COMPILER_TYPES)))

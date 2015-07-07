@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 The Android Open Source Project
+ * Copyright (C) 2015 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,28 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_OPTIMIZING_GVN_H_
-#define ART_COMPILER_OPTIMIZING_GVN_H_
+#ifndef ART_COMPILER_OPTIMIZING_INSTRUCTION_SIMPLIFIER_ARCH_H_
+#define ART_COMPILER_OPTIMIZING_INSTRUCTION_SIMPLIFIER_ARCH_H_
 
 #include "nodes.h"
 #include "optimization.h"
 
 namespace art {
 
-class SideEffectsAnalysis;
-
-class GVNOptimization : public HOptimization {
+class InstructionSimplifierArch : public HOptimization {
  public:
-  GVNOptimization(HGraph* graph,
-                  const SideEffectsAnalysis& side_effects,
-                  const char* pass_name = kGlobalValueNumberingPassName)
-      : HOptimization(graph, pass_name), side_effects_(side_effects) {}
+  explicit InstructionSimplifierArch(HGraph* graph,
+                                     InstructionSet instruction_set,
+                                     OptimizingCompilerStats* stats)
+    : HOptimization(graph, "instruction_simplifier_arch", stats),
+      instruction_set_(instruction_set) {}
 
   void Run() OVERRIDE;
 
-  static constexpr const char* kGlobalValueNumberingPassName = "GVN";
-
  private:
-  const SideEffectsAnalysis& side_effects_;
-
-  DISALLOW_COPY_AND_ASSIGN(GVNOptimization);
+  InstructionSet instruction_set_;
 };
 
 }  // namespace art
 
-#endif  // ART_COMPILER_OPTIMIZING_GVN_H_
+#endif  // ART_COMPILER_OPTIMIZING_INSTRUCTION_SIMPLIFIER_ARCH_H_

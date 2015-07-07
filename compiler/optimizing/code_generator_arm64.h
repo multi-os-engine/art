@@ -182,6 +182,8 @@ class InstructionCodeGeneratorARM64 : public HGraphVisitor {
   void GenerateDivRemWithAnyConstant(HBinaryOperation* instruction);
   void GenerateDivRemIntegral(HBinaryOperation* instruction);
   void HandleGoto(HInstruction* got, HBasicBlock* successor);
+  vixl::MemOperand PrepareArrayAccess(HInstruction* access,
+                                      vixl::UseScratchRegisterScope* scratch_scope);
 
   Arm64Assembler* const assembler_;
   CodeGeneratorARM64* const codegen_;
