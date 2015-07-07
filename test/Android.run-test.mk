@@ -424,6 +424,45 @@ endif
 
 TEST_ART_BROKEN_OPTIMIZING_MIPS64_64BIT_RUN_TESTS :=
 
+# Known broken tests for the MIPS64 optimizing compiler backend in 32-bit mode.  b/21555893
+TEST_ART_BROKEN_OPTIMIZING_MIPS64_32BIT_RUN_TESTS := \
+  496-checker-inlining-and-class-loader
+
+ifeq ($(TARGET_ARCH),mips64)
+  ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
+    ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUILD_TYPES), \
+        optimizing,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+        $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES),$(TEST_ART_BROKEN_OPTIMIZING_MIPS64_32BIT_RUN_TESTS),32)
+  endif
+endif
+
+TEST_ART_BROKEN_OPTIMIZING_MIPS64_32BIT_RUN_TESTS :=
+
+# ARM64-specific tests.
+TEST_ART_OPTIMIZING_ARM64_ONLY_RUN_TESTS := \
+  510-checker-arm64-caller-callee \
+
+# Skip the 32bit variant of the tests.
+ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
+  ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUILD_TYPES), \
+      optimizing,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+      $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES),$(TEST_ART_OPTIMIZING_ARM64_ONLY_RUN_TESTS),32)
+endif
+# Only run the 64bit variant on arm64 targets.
+ifneq ($(TARGET_ARCH),arm64)
+  ifneq ($(TARGET_ARCH_VARIANT),arm64)
+    ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
+      ifneq (,$(filter host,$(TARGET_TYPES)))
+        ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUILD_TYPES), \
+            optimizing,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+            $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES),$(TEST_ART_OPTIMIZING_ARM64_ONLY_RUN_TESTS),64)
+      endif
+    endif
+  endif
+endif
+
+TEST_ART_OPTIMIZING_ARM64_ONLY_RUN_TESTS :=
+
 # Known broken tests for the optimizing compiler.
 TEST_ART_BROKEN_OPTIMIZING_RUN_TESTS :=
 
