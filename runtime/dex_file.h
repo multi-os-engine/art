@@ -786,7 +786,9 @@ class DexFile {
 
   // Get the pointer to the start of the debugging data
   const uint8_t* GetDebugInfoStream(const CodeItem* code_item) const {
-    if (code_item->debug_info_off_ == 0) {
+    // The specification says that 0 should be used if there is no debug information,
+    // however some applications incorrectly use 0xFFFFFFFF.
+    if (code_item->debug_info_off_ == 0 || code_item->debug_info_off_ >= size_) {
       return nullptr;
     } else {
       return begin_ + code_item->debug_info_off_;
