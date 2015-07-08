@@ -1,0 +1,1 @@
+Regression test for removal of monitor-exit due to lack of specified side-effects.
