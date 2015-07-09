@@ -334,7 +334,7 @@ void HGraphBuilder::InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item) 
   }
 
   const size_t num_blocks = graph_->GetBlocks().Size();
-  ArenaBitVector can_block_throw(arena_, num_blocks, false);
+  ArenaBitVector can_block_throw(arena_, num_blocks, /* expandable */ true);
 
   // Scan blocks and mark those which contain throwing instructions.
   for (size_t block_id = 0; block_id < num_blocks; ++block_id) {
@@ -386,6 +386,8 @@ void HGraphBuilder::InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item) 
       DCHECK(split_position != nullptr);
       HBasicBlock* catch_block = try_block;
       try_block = catch_block->SplitBefore(split_position);
+      can_block_throw.ClearBit(catch_block->GetBlockId());
+      can_block_throw.SetBit(try_block->GetBlockId());
       SplitTryBoundaryEdge(catch_block, try_block, HTryBoundary::kEntry, code_item, *try_item);
     } else {
       // For non-catch blocks, find predecessors which are not covered by the
