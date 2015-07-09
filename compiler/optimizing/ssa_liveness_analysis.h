@@ -401,6 +401,11 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     }
   }
 
+  void SetEnd(size_t end) const {
+    DCHECK_EQ(first_range_, last_range_);
+    first_range_->end_ = end;
+  }
+
   LiveInterval* GetParent() const { return parent_; }
 
   // Returns whether this interval is the parent interval, that is, the interval
@@ -867,6 +872,10 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
   // Intervals must be reset prior to starting a new linear scan over them.
   void ResetSearchCache() {
     range_search_start_ = first_range_;
+  }
+
+  void ClearNextSibling() {
+    next_sibling_ = nullptr;
   }
 
  private:

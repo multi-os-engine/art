@@ -264,6 +264,10 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
 
     if (block->IsLoopHeader()) {
       size_t last_position = block->GetLoopInformation()->GetLifetimeEnd();
+      LiveInterval* suspend_interval = block->GetLoopInformation()->GetSuspendCheck()->GetLiveInterval();
+      if (suspend_interval != nullptr) {
+        suspend_interval->SetEnd(last_position);
+      }
       // For all live_in instructions at the loop header, we need to create a range
       // that covers the full loop.
       for (uint32_t idx : live_in->Indexes()) {

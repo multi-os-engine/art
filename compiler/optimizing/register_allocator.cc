@@ -582,6 +582,15 @@ void RegisterAllocator::DumpAllIntervals(std::ostream& stream) const {
   }
 }
 
+static void SpecialCaseSuspendCheck(LiveInterval* interval) {
+  // We special case a `HSuspendCheck` to not have any register if none is available.
+  // This avoids having to move its location to different places. Not special-casing
+  // would require the notion of immutable heap memory in Location.
+  LiveInterval* parent = interval->GetParent();
+  parent->ClearNextSibling();
+  parent->SetRegister(kNoRegister);
+}
+
 // By the book implementation of a linear scan register allocator.
 void RegisterAllocator::LinearScan() {
   while (!unhandled_->IsEmpty()) {
@@ -590,6 +599,12 @@ void RegisterAllocator::LinearScan() {
     DCHECK(!current->IsFixed() && !current->HasSpillSlot());
     DCHECK(unhandled_->IsEmpty() || unhandled_->Peek()->GetStart() >= current->GetStart());
     DCHECK(!current->IsLowInterval() || unhandled_->Peek()->IsHighInterval());
+
+    if (current->IsSplit() && current->GetParent()->GetDefinedBy()->IsSuspendCheck()) {
+      // If we ever need to split a suspend check, just don't handle it.
+      SpecialCaseSuspendCheck(current);
+      continue;
+    }
 
     size_t position = current->GetStart();
 
@@ -1269,6 +1284,12 @@ void RegisterAllocator::AllocateSpillSlotFor(LiveInterval* interval) {
     return;
   }
 
+  if (defined_by->IsSuspendCheck()) {
+    SpecialCaseSuspendCheck(interval);
+    // A suspend check already has its value in memory, no need to have a spill slot for it.
+    return;
+  }
+
   LiveInterval* last_sibling = interval;
   while (last_sibling->GetNextSibling() != nullptr) {
     last_sibling = last_sibling->GetNextSibling();
@@ -1653,6 +1674,12 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
           // Nothing to do.
           break;
         }
+
+        case Location::kInvalid: {
+          DCHECK(interval->GetParent()->GetDefinedBy()->IsSuspendCheck());
+          break;
+        }
+
         default: {
           LOG(FATAL) << "Unexpected location for object";
         }

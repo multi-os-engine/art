@@ -41,7 +41,6 @@ IntrinsicLocationsBuilderX86::IntrinsicLocationsBuilderX86(CodeGeneratorX86* cod
   : arena_(codegen->GetGraph()->GetArena()), codegen_(codegen) {
 }
 
-
 X86Assembler* IntrinsicCodeGeneratorX86::GetAssembler() {
   return reinterpret_cast<X86Assembler*>(codegen_->GetAssembler());
 }

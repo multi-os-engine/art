@@ -3714,6 +3714,7 @@ class HSuspendCheck : public HTemplateInstruction<0> {
     return true;
   }
 
+  Primitive::Type GetType() const OVERRIDE { return Primitive::kPrimInt; }
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
   void SetSlowPath(SlowPathCode* slow_path) { slow_path_ = slow_path; }
   SlowPathCode* GetSlowPath() const { return slow_path_; }

@@ -85,7 +85,7 @@ class CodeVectorAllocator FINAL : public CodeAllocator {
  * Filter to apply to the visualizer. Methods whose name contain that filter will
  * be dumped.
  */
-static const char* kStringFilter = "";
+static const char* kStringFilter = "qx.a";
 
 class PassScope;
 
