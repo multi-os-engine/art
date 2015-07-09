@@ -415,11 +415,11 @@ public class Main {
   }
 
   /// CHECK-START: SubclassC Main.inlineGenerics() reference_type_propagation (after)
-  /// CHECK:      <<Invoke:l\d+>>    InvokeStaticOrDirect klass:SubclassC
+  /// CHECK:      <<Invoke:l\d+>>    InvokeStaticOrDirect klass:SubclassC exact:false
   /// CHECK-NEXT:                    Return [<<Invoke>>]
 
   /// CHECK-START: SubclassC Main.inlineGenerics() reference_type_propagation_after_inlining (after)
-  /// CHECK:      <<BoundType:l\d+>> BoundType klass:SubclassC
+  /// CHECK:      <<BoundType:l\d+>> BoundType klass:SubclassC exact:false
   /// CHECK:                         Return [<<BoundType>>]
   private SubclassC inlineGenerics() {
     SubclassC c = get();
