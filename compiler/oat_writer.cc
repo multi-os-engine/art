@@ -374,14 +374,14 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
       uint32_t quick_code_offset = 0;
 
       const SwapVector<uint8_t>* quick_code = compiled_method->GetQuickCode();
-      CHECK(quick_code != nullptr);
-      uint32_t code_size = quick_code->size() * sizeof(uint8_t);
-      CHECK_NE(code_size, 0U);
+      uint32_t code_size = (quick_code == nullptr) ? 0 : quick_code->size() * sizeof(uint8_t);
       uint32_t thumb_offset = compiled_method->CodeDelta();
 
       // Deduplicate code arrays if we are not producing debuggable code.
       bool deduped = false;
-      if (debuggable_) {
+      if (code_size == 0) {
+        deduped = true;
+      } else if (debuggable_) {
         quick_code_offset = NewQuickCodeOffset(compiled_method, it, thumb_offset);
       } else {
         auto lb = dedupe_map_.lower_bound(compiled_method);
@@ -415,15 +415,15 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
       // The code offset was 0 when the mapping/vmap table offset was set, so it's set
       // to 0-offset and we need to adjust it by code_offset.
       uint32_t code_offset = quick_code_offset - thumb_offset;
-      if (mapping_table_offset != 0u) {
+      if (mapping_table_offset != 0u && code_offset != 0u) {
         mapping_table_offset += code_offset;
         DCHECK_LT(mapping_table_offset, code_offset);
       }
-      if (vmap_table_offset != 0u) {
+      if (vmap_table_offset != 0u && code_offset != 0u) {
         vmap_table_offset += code_offset;
         DCHECK_LT(vmap_table_offset, code_offset);
       }
-      if (gc_map_offset != 0u) {
+      if (gc_map_offset != 0u && code_offset != 0u) {
         gc_map_offset += code_offset;
         DCHECK_LT(gc_map_offset, code_offset);
       }
@@ -689,15 +689,16 @@ class OatWriter::WriteCodeMethodVisitor : public OatDexMethodVisitor {
       OutputStream* out = out_;
 
       const SwapVector<uint8_t>* quick_code = compiled_method->GetQuickCode();
-      if (quick_code != nullptr) {
         // Need a wrapper if we create a copy for patching.
-        ArrayRef<const uint8_t> wrapped(*quick_code);
-        uint32_t code_size = quick_code->size() * sizeof(uint8_t);
-        CHECK_NE(code_size, 0U);
+        ArrayRef<const uint8_t> wrapped;
+        if (quick_code != nullptr) {
+          wrapped = (*quick_code);
+        }
+        uint32_t code_size = (quick_code == nullptr) ? 0 : quick_code->size() * sizeof(uint8_t);
 
         // Deduplicate code arrays.
         const OatMethodOffsets& method_offsets = oat_class->method_offsets_[method_offsets_index_];
-        if (method_offsets.code_offset_ >= offset_) {
+        if (method_offsets.code_offset_ > offset_) {
           offset_ = writer_->relative_patcher_->WriteThunks(out, offset_);
           if (offset_ == 0u) {
             ReportWriteFailure("relative call thunk", it);
@@ -767,7 +768,6 @@ class OatWriter::WriteCodeMethodVisitor : public OatDexMethodVisitor {
           offset_ += code_size;
         }
         DCHECK_OFFSET_();
-      }
       ++method_offsets_index_;
     }
 
