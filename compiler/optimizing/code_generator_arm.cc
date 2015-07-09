@@ -3749,11 +3749,21 @@ void InstructionCodeGeneratorARM::VisitParallelMove(HParallelMove* instruction) 
 }
 
 void LocationsBuilderARM::VisitSuspendCheck(HSuspendCheck* instruction) {
-  new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
+  locations->SetOut(Location::Any());
 }
 
 void InstructionCodeGeneratorARM::VisitSuspendCheck(HSuspendCheck* instruction) {
   HBasicBlock* block = instruction->GetBlock();
+  LocationSummary* locations = instruction->GetLocations();
+  Location out = locations->Out();
+  if (out.IsValid()) {
+    __ LoadFromOffset(kLoadUnsignedHalfword,
+                      out.AsRegister<Register>(),
+                      TR,
+                      Thread::ThreadFlagsOffset<kArmWordSize>().Int32Value());
+  }
   if (block->GetLoopInformation() != nullptr) {
     DCHECK(block->GetLoopInformation()->GetSuspendCheck() == instruction);
     // The back edge will generate the suspend check.
@@ -3782,13 +3792,21 @@ void InstructionCodeGeneratorARM::GenerateSuspendCheck(HSuspendCheck* instructio
     DCHECK_EQ(slow_path->GetSuccessor(), successor);
   }
 
-  __ LoadFromOffset(
-      kLoadUnsignedHalfword, IP, TR, Thread::ThreadFlagsOffset<kArmWordSize>().Int32Value());
+  LocationSummary* locations = instruction->GetLocations();
+  Location out = locations->Out();
+  Register reg = IP;
+  if (out.IsValid()) {
+    reg = locations->Out().AsRegister<Register>();
+  } else {
+    __ LoadFromOffset(
+        kLoadUnsignedHalfword, reg, TR, Thread::ThreadFlagsOffset<kArmWordSize>().Int32Value());
+  }
+
   if (successor == nullptr) {
-    __ CompareAndBranchIfNonZero(IP, slow_path->GetEntryLabel());
+    __ CompareAndBranchIfNonZero(reg, slow_path->GetEntryLabel());
     __ Bind(slow_path->GetReturnLabel());
   } else {
-    __ CompareAndBranchIfZero(IP, codegen_->GetLabelOf(successor));
+    __ CompareAndBranchIfZero(reg, codegen_->GetLabelOf(successor));
     __ b(slow_path->GetEntryLabel());
   }
 }
