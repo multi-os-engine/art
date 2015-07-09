@@ -6,6 +6,9 @@
 .registers 6
        if-eqz v5, :Label2
 
+       # Make v4 defined, just use null.
+       const v4, 0
+
 :Label1
        # Construct a java.lang.Object completely, and throw a new exception.
        new-instance v4, Ljava/lang/Object;
