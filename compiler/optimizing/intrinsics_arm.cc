@@ -224,6 +224,49 @@ static void CreateFPToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
   locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
 }
 
+static void GenNumberOfLeadingZeros(LocationSummary* locations,
+                                    Primitive::Type type,
+                                    ArmAssembler* assembler) {
+  Location in = locations->InAt(0);
+  Register out = locations->Out().AsRegister<Register>();
+
+  DCHECK((type == Primitive::kPrimInt) || (type == Primitive::kPrimLong));
+
+  if (type == Primitive::kPrimLong) {
+    Register in_reg_lo = in.AsRegisterPairLow<Register>();
+    Register in_reg_hi = in.AsRegisterPairHigh<Register>();
+    DCHECK(assembler->IsLowRegister(in_reg_hi));  // must be in low register bank for cbnz.
+    Label end;
+    __ clz(out, in_reg_hi);
+    __ cbnz(in_reg_hi, &end);
+    __ clz(out, in_reg_lo);
+    __ AddConstant(out, 32);
+    __ Bind(&end);
+  } else {
+    __ clz(out, in.AsRegister<Register>());
+  }
+}
+
+void IntrinsicLocationsBuilderARM::VisitIntegerNumberOfLeadingZeros(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorARM::VisitIntegerNumberOfLeadingZeros(HInvoke* invoke) {
+  GenNumberOfLeadingZeros(invoke->GetLocations(), Primitive::kPrimInt, GetAssembler());
+}
+
+void IntrinsicLocationsBuilderARM::VisitLongNumberOfLeadingZeros(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  locations->SetInAt(0, Location::RegisterPairLocation(R0, R1));
+  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
+}
+
+void IntrinsicCodeGeneratorARM::VisitLongNumberOfLeadingZeros(HInvoke* invoke) {
+  GenNumberOfLeadingZeros(invoke->GetLocations(), Primitive::kPrimLong, GetAssembler());
+}
+
 static void MathAbsFP(LocationSummary* locations, bool is64bit, ArmAssembler* assembler) {
   Location in = locations->InAt(0);
   Location out = locations->Out();
