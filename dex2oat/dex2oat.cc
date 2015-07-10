@@ -392,7 +392,7 @@ class WatchDog {
     exit(1);
   }
 
-  void Wait() {
+  void Wait() NO_THREAD_SAFETY_ANALYSIS {
     // TODO: tune the multiplier for GC verification, the following is just to make the timeout
     //       large.
     constexpr int64_t multiplier = kVerifyObjectSupport > kVerifyObjectModeFast ? 100 : 1;
@@ -403,6 +403,7 @@ class WatchDog {
     while (!shutting_down_) {
       int rc = TEMP_FAILURE_RETRY(pthread_cond_timedwait(&cond_, &mutex_, &timeout_ts));
       if (rc == ETIMEDOUT) {
+        Runtime::Current()->GetThreadList()->SuspendAll();
         Fatal(StringPrintf("dex2oat did not finish after %" PRId64 " seconds",
                            kWatchDogTimeoutSeconds));
       } else if (rc != 0) {
