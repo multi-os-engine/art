@@ -838,12 +838,12 @@ void mirror::Class::VisitNativeRoots(Visitor& visitor, size_t pointer_size) {
   // In this case, it is safe to avoid marking the roots since we must be either the CC or CMS. If
   // we are CMS then the roots are already marked through other sources, otherwise the roots are
   // already marked due to the to-space invariant.
-  if (GetDirectMethodsPtr() != nullptr) {
+  if (GetDirectMethodsPtrUnchecked() != nullptr) {
     for (auto& m : GetDirectMethods(pointer_size)) {
       m.VisitRoots(visitor);
     }
   }
-  if (GetVirtualMethodsPtr() != nullptr) {
+  if (GetVirtualMethodsPtrUnchecked() != nullptr) {
     for (auto& m : GetVirtualMethods(pointer_size)) {
       m.VisitRoots(visitor);
     }
