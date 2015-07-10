@@ -75,6 +75,7 @@
 #include "jit/jit.h"
 #include "jni_internal.h"
 #include "linear_alloc.h"
+#include "lambda/box_table.h"
 #include "mirror/array.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
@@ -403,6 +404,7 @@ void Runtime::SweepSystemWeaks(IsMarkedCallback* visitor, void* arg) {
   GetInternTable()->SweepInternTableWeaks(visitor, arg);
   GetMonitorList()->SweepMonitorList(visitor, arg);
   GetJavaVM()->SweepJniWeakGlobals(visitor, arg);
+  GetLambdaBoxTable()->SweepWeakBoxedLambdas(visitor, arg);
 }
 
 bool Runtime::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
@@ -892,6 +894,9 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     // null and we don't create the jit.
     jit_options_->SetUseJIT(false);
   }
+
+  // Allocate a global table of boxed lambda objects <-> closures.
+  lambda_box_table_ = MakeUnique<lambda::BoxTable>();
 
   // Use MemMap arena pool for jit, malloc otherwise. Malloc arenas are faster to allocate but
   // can't be trimmed as easily.

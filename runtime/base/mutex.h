@@ -67,6 +67,7 @@ enum LockLevel {
   kReferenceQueueWeakReferencesLock,
   kReferenceQueueClearedReferencesLock,
   kReferenceProcessorLock,
+  kLambdaTableLock,
   kJitCodeCacheLock,
   kRosAllocGlobalLock,
   kRosAllocBracketLock,
@@ -638,6 +639,9 @@ class Locks {
 
   // Have an exclusive logging thread.
   static Mutex* logging_lock_ ACQUIRED_AFTER(unexpected_signal_lock_);
+
+  // Allow reader-writer mutual exclusion on the boxed table of lambda objects.
+  static ReaderWriterMutex* lambda_table_lock_ ACQUIRED_AFTER(mutator_lock_);
 };
 
 }  // namespace art
