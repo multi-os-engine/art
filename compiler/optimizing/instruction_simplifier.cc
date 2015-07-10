@@ -70,6 +70,7 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitUShr(HUShr* instruction) OVERRIDE;
   void VisitXor(HXor* instruction) OVERRIDE;
   void VisitInstanceOf(HInstanceOf* instruction) OVERRIDE;
+  void VisitFakeString(HFakeString* fake_string) OVERRIDE;
   bool IsDominatedByInputNullCheck(HInstruction* instr);
 
   OptimizingCompilerStats* stats_;
@@ -901,6 +902,38 @@ void InstructionSimplifierVisitor::VisitXor(HXor* instruction) {
     RecordSimplification();
     return;
   }
+}
+
+void InstructionSimplifierVisitor::VisitFakeString(HFakeString* instruction) {
+  HInstruction* actual_string = nullptr;
+
+  // Find the string we need to replace this instruction with. The actual string is
+  // the return value of a StringFactory call.
+  for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
+    HInstruction* use = it.Current()->GetUser();
+    if (use->IsInvokeStaticOrDirect()
+        && use->AsInvokeStaticOrDirect()->IsStringFactoryFor(instruction)) {
+      use->AsInvokeStaticOrDirect()->RemoveFakeStringArgumentAsLastInput();
+      actual_string = use;
+      break;
+    }
+  }
+  DCHECK(actual_string != nullptr);
+
+  // We need to remove any environment uses of the fake string that are not dominated by
+  // `actual_string` to null.
+  for (HUseIterator<HEnvironment*> it(instruction->GetEnvUses()); !it.Done(); it.Advance()) {
+    HEnvironment* environment = it.Current()->GetUser();
+    if (!actual_string->StrictlyDominates(environment->GetHolder())) {
+      environment->RemoveAsUserOfInput(it.Current()->GetIndex());
+      environment->SetRawEnvAt(it.Current()->GetIndex(), nullptr);
+    }
+  }
+
+  // Only uses dominated by `actual_string` must remain. We can safely replace and remove
+  // `instruction`.
+  instruction->ReplaceWith(actual_string);
+  instruction->GetBlock()->RemoveInstruction(instruction);
 }
 
 }  // namespace art
