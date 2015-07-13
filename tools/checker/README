@@ -52,3 +52,10 @@ Example:
   The engine will attempt to match the check lines against the output of the
   group named on the first line. Together they verify that the CFG after
   constant folding returns an integer constant with value either 11 or 22.
+
+A group of check lines can be made architecture-specific by inserting '-<arch>'
+after the 'CHECK' prefix. The previous example can be updated to run for arm64
+only with:
+  // CHECK-arm64-START: int MyClass.MyMethod() constant_folding (after)
+  // CHECK-arm64:         <<ID:i\d+>>  IntConstant {{11|22}}
+  // CHECK-arm64:                      Return [<<ID>>]
