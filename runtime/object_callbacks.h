@@ -47,6 +47,19 @@ typedef bool (IsHeapReferenceMarkedCallback)(mirror::HeapReference<mirror::Objec
     void* arg) WARN_UNUSED;
 typedef void (ProcessMarkStackCallback)(void* arg);
 
+class IsMarkedVisitor {
+ public:
+  virtual ~IsMarkedVisitor() {}
+  virtual mirror::Object* IsMarked(mirror::Object* obj) = 0;
+};
+
+class MarkObjectVisitor {
+ public:
+  virtual ~MarkObjectVisitor() {}
+  virtual mirror::Object* MarkObject(mirror::Object* obj) = 0;
+  virtual void MarkHeapReference(mirror::HeapReference<mirror::Object>* obj) = 0;
+};
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_OBJECT_CALLBACKS_H_

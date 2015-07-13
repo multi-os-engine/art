@@ -36,6 +36,10 @@ class Reference;
 
 namespace gc {
 
+namespace collector {
+class GarbageCollector;
+}  // namespace collector
+
 class Heap;
 
 // Used to temporarily store java.lang.ref.Reference(s) during GC and prior to queueing on the
@@ -65,8 +69,7 @@ class ReferenceQueue {
   // Enqueues finalizer references with white referents.  White referents are blackened, moved to
   // the zombie field, and the referent field is cleared.
   void EnqueueFinalizerReferences(ReferenceQueue* cleared_references,
-                                  IsHeapReferenceMarkedCallback* is_marked_callback,
-                                  MarkObjectCallback* mark_object_callback, void* arg)
+                                  collector::GarbageCollector* collector)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Walks the reference list marking any references subject to the reference clearing policy.
@@ -78,7 +81,7 @@ class ReferenceQueue {
   // Unlink the reference list clearing references objects with white referents. Cleared references
   // registered to a reference queue are scheduled for appending by the heap worker thread.
   void ClearWhiteReferences(ReferenceQueue* cleared_references,
-                            IsHeapReferenceMarkedCallback* is_marked_callback, void* arg)
+                            collector::GarbageCollector* collector)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   void Dump(std::ostream& os) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -95,7 +98,7 @@ class ReferenceQueue {
   }
 
   // Visits list_, currently only used for the mark compact GC.
-  void UpdateRoots(IsMarkedCallback* callback, void* arg)
+  void UpdateRoots(IsMarkedVisitor* visitor)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
  private:

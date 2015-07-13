@@ -403,11 +403,11 @@ void Runtime::CallExitHook(jint status) {
   }
 }
 
-void Runtime::SweepSystemWeaks(IsMarkedCallback* visitor, void* arg) {
-  GetInternTable()->SweepInternTableWeaks(visitor, arg);
-  GetMonitorList()->SweepMonitorList(visitor, arg);
-  GetJavaVM()->SweepJniWeakGlobals(visitor, arg);
-  GetHeap()->SweepAllocationRecords(visitor, arg);
+void Runtime::SweepSystemWeaks(IsMarkedVisitor* collector) {
+  GetInternTable()->SweepInternTableWeaks(collector);
+  GetMonitorList()->SweepMonitorList(collector);
+  GetJavaVM()->SweepJniWeakGlobals(collector);
+  GetHeap()->SweepAllocationRecords(collector);
 }
 
 bool Runtime::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
