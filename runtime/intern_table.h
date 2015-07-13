@@ -19,10 +19,12 @@
 
 #include <unordered_set>
 
+#include "atomic.h"
 #include "base/allocator.h"
 #include "base/hash_set.h"
 #include "base/mutex.h"
 #include "gc_root.h"
+#include "gc/weak_root_state.h"
 #include "object_callbacks.h"
 
 namespace art {
@@ -58,6 +60,10 @@ class InternTable {
   mirror::String* InternStrong(int32_t utf16_length, const char* utf8_data)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Only used by image writer.
+  mirror::String* InternImageString(mirror::String* s)
+      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+
   // Interns a potentially new string in the 'strong' table. (See above.)
   mirror::String* InternStrong(const char* utf8_data)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
@@ -89,6 +95,7 @@ class InternTable {
   void AllowNewInterns() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void EnsureNewInternsDisallowed() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
   void BroadcastForNewInterns() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void EnsureNewWeakInternsDisallowed() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Adds all of the resolved image strings from the image space into the intern table. The
   // advantage of doing this is preventing expensive DexFile::FindStringId calls.
@@ -110,6 +117,10 @@ class InternTable {
   // Write the post zygote intern table to a pointer. Only writes the strong interns since it is
   // expected that there is no weak interns since this is called from the image writer.
   size_t WriteToMemory(uint8_t* ptr) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_)
+      LOCKS_EXCLUDED(Locks::intern_table_lock_);
+
+  // Change the weak root state. May broadcast to waiters.
+  void ChangeWeakRootState(gc::WeakRootState new_state)
       LOCKS_EXCLUDED(Locks::intern_table_lock_);
 
  private:
@@ -176,7 +187,7 @@ class InternTable {
   };
 
   // Insert if non null, otherwise return null.
-  mirror::String* Insert(mirror::String* s, bool is_strong)
+  mirror::String* Insert(mirror::String* s, bool is_strong, bool holding_locks)
       LOCKS_EXCLUDED(Locks::intern_table_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
@@ -221,10 +232,13 @@ class InternTable {
       EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
+  // Change the weak root state. May broadcast to waiters.
+  void ChangeWeakRootStateLocked(gc::WeakRootState new_state)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::intern_table_lock_);
+
   bool image_added_to_intern_table_ GUARDED_BY(Locks::intern_table_lock_);
   bool log_new_roots_ GUARDED_BY(Locks::intern_table_lock_);
-  bool allow_new_interns_ GUARDED_BY(Locks::intern_table_lock_);
-  ConditionVariable new_intern_condition_ GUARDED_BY(Locks::intern_table_lock_);
+  ConditionVariable weak_intern_condition_ GUARDED_BY(Locks::intern_table_lock_);
   // Since this contains (strong) roots, they need a read barrier to
   // enable concurrent intern table (strong) root scan. Do not
   // directly access the strings in it. Use functions that contain
@@ -236,6 +250,8 @@ class InternTable {
   // not directly access the strings in it. Use functions that contain
   // read barriers.
   Table weak_interns_ GUARDED_BY(Locks::intern_table_lock_);
+  // Weak root state, used for concurrent references processing and more.
+  Atomic<gc::WeakRootState> weak_root_state_ GUARDED_BY(Locks::intern_table_lock_);
 };
 
 }  // namespace art
