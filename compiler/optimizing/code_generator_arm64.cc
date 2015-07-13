@@ -663,8 +663,9 @@ void CodeGeneratorARM64::Move(HInstruction* instruction,
     return;
   } else if (instruction->IsIntConstant()
              || instruction->IsLongConstant()
-             || instruction->IsNullConstant()) {
-    int64_t value = GetInt64ValueOf(instruction->AsConstant());
+             || instruction->IsNullConstant()
+             || instruction->IsFakeString()) {
+    int64_t value = instruction->IsFakeString() ? 0 : GetInt64ValueOf(instruction->AsConstant());
     if (location.IsRegister()) {
       Register dst = RegisterFrom(location, type);
       DCHECK(((instruction->IsIntConstant() || instruction->IsNullConstant()) && dst.Is32Bits()) ||
@@ -905,7 +906,7 @@ void CodeGeneratorARM64::MoveLocation(Location destination, Location source, Pri
              (source.IsFpuRegister() == Primitive::IsFloatingPointType(type)));
       __ Str(CPURegisterFrom(source, type), StackOperandFrom(destination));
     } else if (source.IsConstant()) {
-      DCHECK(unspecified_type || CoherentConstantAndType(source, type));
+      DCHECK(unspecified_type || CoherentConstantAndType(source, type)) << source << " " << type;
       UseScratchRegisterScope temps(GetVIXLAssembler());
       HConstant* src_cst = source.GetConstant();
       CPURegister temp;
