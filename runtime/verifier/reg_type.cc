@@ -585,22 +585,19 @@ const RegType& RegType::Merge(const RegType& incoming_type, RegTypeCache* reg_ty
   DCHECK(!Equals(incoming_type));  // Trivial equality handled by caller
   // Perform pointer equality tests for conflict to avoid virtual method dispatch.
   const ConflictType& conflict = reg_types->Conflict();
-  if (IsUndefined() || incoming_type.IsUndefined()) {
-    // There is a difference between undefined and conflict. Conflicts may be copied around, but
-    // not used. Undefined registers must not be copied. So any merge with undefined should return
-    // undefined.
-    if (IsUndefined()) {
-      return *this;
-    }
-    return incoming_type;
+  // There is a difference between undefined and conflict. Conflicts may be copied around, but
+  // not used. Undefined registers must not be copied. So any merge with undefined should return
+  // undefined.
+  if (IsUndefined()) {
+    return *this;                                           // Undefined MERGE * => Undefined.
+  } else if (incoming_type.IsUndefined()) {
+    return incoming_type;                                   // * MERGE Undefined => Undefined.
   } else if (this == &conflict) {
     DCHECK(IsConflict());
-    return *this;  // Conflict MERGE * => Conflict
+    return *this;                                           // Conflict MERGE * => Conflict.
   } else if (&incoming_type == &conflict) {
     DCHECK(incoming_type.IsConflict());
-    return incoming_type;  // * MERGE Conflict => Conflict
-  } else if (IsUndefined() || incoming_type.IsUndefined()) {
-    return conflict;  // Unknown MERGE * => Conflict
+    return incoming_type;                                   // * MERGE Conflict => Conflict.
   } else if (IsConstant() && incoming_type.IsConstant()) {
     const ConstantType& type1 = *down_cast<const ConstantType*>(this);
     const ConstantType& type2 = *down_cast<const ConstantType*>(&incoming_type);
@@ -694,6 +691,12 @@ const RegType& RegType::Merge(const RegType& incoming_type, RegTypeCache* reg_ty
   } else if (IsReferenceTypes() && incoming_type.IsReferenceTypes()) {
     if (IsZero() || incoming_type.IsZero()) {
       return SelectNonConstant(*this, incoming_type);  // 0 MERGE ref => ref
+    } else if (IsUninitializedTypes() || incoming_type.IsUninitializedTypes()) {
+      // Something that is uninitialized hasn't had its constructor called. Unitialized types are
+      // special. They may only ever be merged with themselves (taken care of by the caller). Mark
+      // any other merge as conflicting.
+      // Note: back-edge merges forbid even conflicts. This has to be handled by the caller.
+      return conflict;
     } else if (IsJavaLangObject() || incoming_type.IsJavaLangObject()) {
       return reg_types->JavaLangObject(false);  // Object MERGE ref => Object
     } else if (IsUnresolvedTypes() || incoming_type.IsUnresolvedTypes()) {
@@ -702,11 +705,6 @@ const RegType& RegType::Merge(const RegType& incoming_type, RegTypeCache* reg_ty
       // type that reflects our lack of knowledge and that allows the rest of the unresolved
       // mechanics to continue.
       return reg_types->FromUnresolvedMerge(*this, incoming_type);
-    } else if (IsUninitializedTypes() || incoming_type.IsUninitializedTypes()) {
-      // Something that is uninitialized hasn't had its constructor called. Mark any merge
-      // of this type with something that is initialized as conflicting. The cases of a merge
-      // with itself, 0 or Object are handled above.
-      return conflict;
     } else {  // Two reference types, compute Join
       mirror::Class* c1 = GetClass();
       mirror::Class* c2 = incoming_type.GetClass();
