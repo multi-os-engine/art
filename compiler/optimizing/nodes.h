@@ -1155,13 +1155,22 @@ class HUserRecord : public ValueObject {
   HUseListNode<T>* use_node_;
 };
 
-// TODO: Add better documentation to this class and maybe refactor with more suggestive names.
-// - Has(All)SideEffects suggests that all the side effects are present but only ChangesSomething
-//   flag is consider.
-// - DependsOn suggests that there is a real dependency between side effects but it only
-//   checks DependendsOnSomething flag.
-//
-// Represents the side effects an instruction may have.
+/**
+ * Side-effects representation for use-def analysis on fields and arrays.
+ * <p>
+ * The analysis uses type disambiguation (e.g. a float field write cannot
+ * modify the value of an integer field read, nor can an array reference
+ * write modify the value of an reference field read) but is otherwise still
+ * conservative (e.g. any field integer write may modify any field integer
+ * read,regardless of what object is actually referenced).
+ * <p>
+ * The internal representation uses the following 40-bit flags assignments:
+ *
+ *    ARRAY-USE |FIELD-USE |ARRAY-DEF |FIELD-DEF
+ *    ----------+----------+----------+----------
+ *    9876543210|9876543210|9876543210|9876543210
+ *    VDFJISCBZL|VDFJISCBZL|VDFJISCBZL|VDFJISCBZL
+ */
 class SideEffects : public ValueObject {
  public:
   SideEffects() : flags_(0) {}
@@ -1171,57 +1180,92 @@ class SideEffects : public ValueObject {
   }
 
   static SideEffects All() {
-    return SideEffects(ChangesSomething().flags_ | DependsOnSomething().flags_);
+    return SideEffects(kAllDefs | kAllUses);
   }
 
-  static SideEffects ChangesSomething() {
-    return SideEffects((1 << kFlagChangesCount) - 1);
+  static SideEffects FieldDefOfThisType(Primitive::Type type) {
+    return SideEffects(TypeFlag(type, kFieldDefOffset));
   }
 
-  static SideEffects DependsOnSomething() {
-    int count = kFlagDependsOnCount - kFlagChangesCount;
-    return SideEffects(((1 << count) - 1) << kFlagChangesCount);
+  static SideEffects ArrayDefOfThisType(Primitive::Type type) {
+    return SideEffects(TypeFlag(type, kArrayDefOffset));
   }
 
+  static SideEffects FieldUseOfThisType(Primitive::Type type) {
+    return SideEffects(TypeFlag(type, kFieldUseOffset));
+  }
+
+  static SideEffects ArrayUseOfThisType(Primitive::Type type) {
+    return SideEffects(TypeFlag(type, kArrayUseOffset));
+  }
+
+  // Combines the side-effects of this and the other.
   SideEffects Union(SideEffects other) const {
     return SideEffects(flags_ | other.flags_);
   }
 
-  bool HasSideEffects() const {
-    size_t all_bits_set = (1 << kFlagChangesCount) - 1;
-    return (flags_ & all_bits_set) != 0;
+  // Returns true if this defines something.
+  bool HasAnyDef() const {
+    return (flags_ & kAllDefs);
   }
 
-  bool HasAllSideEffects() const {
-    size_t all_bits_set = (1 << kFlagChangesCount) - 1;
-    return all_bits_set == (flags_ & all_bits_set);
+  // Returns true if this uses something.
+  bool HasAnyUse() const {
+    return (flags_ & kAllUses);
   }
 
-  bool DependsOn(SideEffects other) const {
-    size_t depends_flags = other.ComputeDependsFlags();
-    return (flags_ & depends_flags) != 0;
+  // Returns true if this represents no defs or uses.
+  bool IsNone() const {
+    return flags_ == 0;
   }
 
-  bool HasDependencies() const {
-    int count = kFlagDependsOnCount - kFlagChangesCount;
-    size_t all_bits_set = (1 << count) - 1;
-    return ((flags_ >> kFlagChangesCount) & all_bits_set) != 0;
+  // Returns true if this represents all defs and uses.
+  bool IsAll() const {
+    return flags_ == (kAllDefs | kAllUses);
+  }
+
+  // Returns true if this representation may depend on something defined by other.
+  bool MayDependOn(SideEffects other) const {
+    const uint64_t uses = (flags_ & kAllUses) >> kFieldUseOffset;
+    return (other.flags_ & uses);
+  }
+
+  // Returns string representation of flags (for debugging only).
+  std::string ToString() const {
+    static const char *kDebug = "LZBCSIJFDV";
+    std::string flags = "|";
+    for (int s = 39; s >= 0; s--) {
+      const int t = s % 10;
+      if ((flags_ >> s) & 1)
+        flags += kDebug[t];
+      if (t == 0)
+        flags += "|";
+    }
+    return flags;
   }
 
  private:
-  static constexpr int kFlagChangesSomething = 0;
-  static constexpr int kFlagChangesCount = kFlagChangesSomething + 1;
+  static constexpr int kFieldDefOffset = 0;
+  static constexpr int kArrayDefOffset = 10;
+  static constexpr int kFieldUseOffset = 20;
+  static constexpr int kArrayUseOffset = 30;
 
-  static constexpr int kFlagDependsOnSomething = kFlagChangesCount;
-  static constexpr int kFlagDependsOnCount = kFlagDependsOnSomething + 1;
+  static constexpr uint64_t kAllDefs = 0x000fffff;
+  static constexpr uint64_t kAllUses = kAllDefs << kFieldUseOffset;
 
-  explicit SideEffects(size_t flags) : flags_(flags) {}
-
-  size_t ComputeDependsFlags() const {
-    return flags_ << kFlagChangesCount;
+  // Translates type to bit flag.
+  static uint64_t TypeFlag(Primitive::Type type, int off) {
+    const uint64_t one = 1;
+    const int shift = type;  // 0-based consecutive enum
+    DCHECK_LE(kFieldDefOffset, shift);
+    DCHECK_LT(shift, kArrayDefOffset);
+    return one << (type + off);
   }
 
-  size_t flags_;
+  // Private constructor on direct flags value.
+  explicit SideEffects(uint64_t flags) : flags_(flags) {}
+
+  uint64_t flags_;
 };
 
 // A HEnvironment object contains the values of virtual registers at a given location.
@@ -1484,7 +1528,8 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   }
   virtual bool IsControlFlow() const { return false; }
   virtual bool CanThrow() const { return false; }
-  bool HasSideEffects() const { return side_effects_.HasSideEffects(); }
+
+  bool HasAnyDef() const { return side_effects_.HasAnyDef(); }
 
   // Does not apply for all instructions, but having this at top level greatly
   // simplifies the null check elimination.
@@ -2692,7 +2737,7 @@ class HInvoke : public HInstruction {
           uint32_t dex_pc,
           uint32_t dex_method_index,
           InvokeType original_invoke_type)
-    : HInstruction(SideEffects::All()),
+    : HInstruction(SideEffects::All()),  // def/use on all fields/arrays
       number_of_arguments_(number_of_arguments),
       inputs_(arena, number_of_arguments),
       return_type_(return_type),
@@ -3482,7 +3527,7 @@ class HInstanceFieldGet : public HExpression<1> {
                     bool is_volatile,
                     uint32_t field_idx,
                     const DexFile& dex_file)
-      : HExpression(field_type, SideEffects::DependsOnSomething()),
+      : HExpression(field_type, SideEffects::SideEffects::FieldUseOfThisType(field_type)),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file) {
     SetRawInputAt(0, value);
   }
@@ -3524,7 +3569,7 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     bool is_volatile,
                     uint32_t field_idx,
                     const DexFile& dex_file)
-      : HTemplateInstruction(SideEffects::ChangesSomething()),
+      : HTemplateInstruction(SideEffects::FieldDefOfThisType(field_type)),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
         value_can_be_null_(true) {
     SetRawInputAt(0, object);
@@ -3555,7 +3600,7 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 class HArrayGet : public HExpression<2> {
  public:
   HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type)
-      : HExpression(type, SideEffects::DependsOnSomething()) {
+      : HExpression(type, SideEffects::ArrayUseOfThisType(type)) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -3593,7 +3638,7 @@ class HArraySet : public HTemplateInstruction<3> {
             HInstruction* value,
             Primitive::Type expected_component_type,
             uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::ChangesSomething()),
+      : HTemplateInstruction(SideEffects::ArrayDefOfThisType(expected_component_type)),
         dex_pc_(dex_pc),
         expected_component_type_(expected_component_type),
         needs_type_check_(value->GetType() == Primitive::kPrimNot),
@@ -3892,7 +3937,7 @@ class HLoadString : public HExpression<1> {
 class HClinitCheck : public HExpression<1> {
  public:
   explicit HClinitCheck(HLoadClass* constant, uint32_t dex_pc)
-      : HExpression(Primitive::kPrimNot, SideEffects::ChangesSomething()),
+      : HExpression(Primitive::kPrimNot, SideEffects::All()),  // BIK: fix
         dex_pc_(dex_pc) {
     SetRawInputAt(0, constant);
   }
@@ -3928,7 +3973,7 @@ class HStaticFieldGet : public HExpression<1> {
                   bool is_volatile,
                   uint32_t field_idx,
                   const DexFile& dex_file)
-      : HExpression(field_type, SideEffects::DependsOnSomething()),
+      : HExpression(field_type, SideEffects::SideEffects::FieldUseOfThisType(field_type)),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file) {
     SetRawInputAt(0, cls);
   }
@@ -3967,7 +4012,7 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                   bool is_volatile,
                   uint32_t field_idx,
                   const DexFile& dex_file)
-      : HTemplateInstruction(SideEffects::ChangesSomething()),
+      : HTemplateInstruction(SideEffects::FieldDefOfThisType(field_type)),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
         value_can_be_null_(true) {
     SetRawInputAt(0, cls);
@@ -4163,7 +4208,7 @@ class HMonitorOperation : public HTemplateInstruction<1> {
   };
 
   HMonitorOperation(HInstruction* object, OperationKind kind, uint32_t dex_pc)
-    : HTemplateInstruction(SideEffects::ChangesSomething()), kind_(kind), dex_pc_(dex_pc) {
+    : HTemplateInstruction(SideEffects::All()), kind_(kind), dex_pc_(dex_pc) {  // BIK:fix
     SetRawInputAt(0, object);
   }
 
