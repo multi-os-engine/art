@@ -173,7 +173,7 @@ def main():
   print('')
 
   for header_file in header_files:
-    header_file = header_file.replace(local_path + '/', '')
+    header_file = os.path.relpath(header_file, local_path)
     print('#include "%s"' % header_file)
 
   print('')
