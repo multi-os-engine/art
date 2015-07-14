@@ -31,4 +31,9 @@ b/22244733
 b/22331663
 b/22331663 (pass)
 b/22331663 (fail)
+b/22411633
+b/22411633 (obj)
+b/22411633 (fwd conflict)
+b/22411633 (bwd conflict)
+b/22411633 (bwd <init>)
 Done!
