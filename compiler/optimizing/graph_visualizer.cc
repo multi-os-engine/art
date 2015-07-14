@@ -406,6 +406,9 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       }
       StartAttributeStream() << inputs;
     }
+    if (!instruction->GetSideEffects().DoesNone()) {
+      output_ << " " << instruction->GetSideEffects().ToString();
+    }
     instruction->Accept(this);
     if (instruction->HasEnvironment()) {
       StringList envs;
