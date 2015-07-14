@@ -159,6 +159,11 @@ inline uint32_t ArtMethod::GetCodeSize() {
   return GetCodeSize(EntryPointToCodePointer(GetEntryPointFromQuickCompiledCode()));
 }
 
+inline uint32_t ArtMethod::GetCodeSizePtrSize(size_t ptr_size) {
+  DCHECK(!IsRuntimeMethod() && !IsProxyMethod()) << PrettyMethod(this);
+  return GetCodeSize(EntryPointToCodePointer(GetEntryPointFromQuickCompiledCodePtrSize(ptr_size)));
+}
+
 inline uint32_t ArtMethod::GetCodeSize(const void* code) {
   if (code == nullptr) {
     return 0u;

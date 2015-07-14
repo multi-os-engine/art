@@ -288,6 +288,7 @@ class ArtMethod FINAL {
   }
 
   uint32_t GetCodeSize() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  uint32_t GetCodeSizePtrSize(size_t pointer_size) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Check whether the given PC is within the quick compiled code associated with this method's
   // quick entrypoint. This code isn't robust for instrumentation, etc. and is only used for
