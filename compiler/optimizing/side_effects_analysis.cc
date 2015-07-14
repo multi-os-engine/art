@@ -28,10 +28,10 @@ void SideEffectsAnalysis::Run() {
     for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
       HBasicBlock* block = it.Current();
       SideEffects effects = GetBlockEffects(block);
-      DCHECK(!effects.HasSideEffects() && !effects.HasDependencies());
+      DCHECK(effects.DoesNone());
       if (block->IsLoopHeader()) {
         effects = GetLoopEffects(block);
-        DCHECK(!effects.HasSideEffects() && !effects.HasDependencies());
+        DCHECK(effects.DoesNone());
       }
     }
   }
@@ -46,7 +46,9 @@ void SideEffectsAnalysis::Run() {
          inst_it.Advance()) {
       HInstruction* instruction = inst_it.Current();
       effects = effects.Union(instruction->GetSideEffects());
-      if (effects.HasAllSideEffects()) {
+      // If every possible write/read is represented, scanning further
+      // will not add any more information to side-effects of this block.
+      if (effects.DoesAll()) {
         break;
       }
     }
