@@ -193,4 +193,54 @@ MACRO1(UNPOISON_HEAP_REF, rRef)
 #endif  // USE_HEAP_POISONING
 END_MACRO
 
+// Macros to insert read barrier
+// TODO: When read barrier has a fast path, add heap unpoisoning support for the fast path.
+// obj and dest are registers, offset is a defined literal such as MIRROR_OBJECT_CLASS_OFFSET.
+MACRO3(READ_BARRIER, obj, offset, dest)
+#ifdef USE_READ_BARRIER
+    // TODO: Write a macro that only saves GPRs
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME ebx, ebx  // save regs that might contain useful data
+    // Outgoing argument set up
+    PUSH eax                        // push padding and save eax as well
+    pushl MACRO_LITERAL((RAW_VAR(offset, 1)))  // pass offset, double parentheses are necessary
+    CFI_ADJUST_CFA_OFFSET(4)
+    .ifc RAW_VAR(obj, 0), ebx       // ebx is clobbered in SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME
+      pushl 52(%esp)                // pass real obj value from stack
+      CFI_ADJUST_CFA_OFFSET(4)
+    .else
+      PUSH RAW_VAR(obj, 0)          // pass obj
+    .endif
+    PUSH eax                        // pass ref (just pass eax for now since ref is unused)
+    call SYMBOL(ReadBarrierSlow)    // ReadBarrierSlow(ref, obj, offset)
+    // No need to unpoison return value in eax, ReadBarrierSlow() would do the unpoisoning.
+    .ifnc RAW_VAR(dest, 2), eax
+      movl %eax, REG_VAR(dest, 2)   // save loaded ref in dest
+      POP eax                       // restore eax
+      addl MACRO_LITERAL(12 + 36), %esp  // pop arguments and FPRs
+      CFI_ADJUST_CFA_OFFSET(-(12 + 36))
+    .else                           // dest is eax, no need to restore eax
+      addl MACRO_LITERAL(16 + 36), %esp  // pop arguments and FPRs
+      CFI_ADJUST_CFA_OFFSET(-(16 + 36))
+    .endif
+    // Restore callee saves
+    POP_REG_NE RAW_VAR(dest, 2), ecx
+    POP_REG_NE RAW_VAR(dest, 2), edx
+    POP_REG_NE RAW_VAR(dest, 2), ebx
+    POP ebp
+    POP esi
+    POP edi
+#else
+    movl RAW_VAR(offset, 1)(REG_VAR(obj, 0)), REG_VAR(dest, 2)
+    UNPOISON_HEAP_REF RAW_VAR(dest, 2)
+#endif  // USE_READ_BARRIER
+END_MACRO
+
+MACRO2(POP_REG_NE, dest, reg)
+    .ifc RAW_VAR(dest, 0), RAW_VAR(reg, 1)
+      addl MACRO_LITERAL(4), %esp
+      CFI_ADJUST_CFA_OFFSET(-4)
+    .else
+      POP RAW_VAR(reg, 1)
+    .endif
+END_MACRO
 #endif  // ART_RUNTIME_ARCH_X86_ASM_SUPPORT_X86_S_

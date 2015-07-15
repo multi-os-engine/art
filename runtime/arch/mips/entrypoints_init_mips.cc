@@ -279,6 +279,8 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
 
   qpoints->pReadBarrierJni = ReadBarrierJni;
   static_assert(!IsDirectEntrypoint(kQuickReadBarrierJni), "Non-direct C stub marked direct.");
+  qpoints->pReadBarrierSlow = ReadBarrierSlow;
+  static_assert(!IsDirectEntrypoint(kQuickReadBarrierSlow), "Non-direct C stub marked direct.");
 };
 
 }  // namespace art

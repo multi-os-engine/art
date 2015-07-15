@@ -22,6 +22,7 @@
 #include "mirror/class-inl.h"
 
 #include <stdint.h>
+#include <iostream>
 
 namespace art {
 
@@ -555,6 +556,19 @@ extern "C" int artSetObjInstanceFromCode(uint32_t field_idx, mirror::Object* obj
     }
   }
   return -1;  // failure
+}
+
+extern "C" mirror::Object* ReadBarrierSlow(mirror::Object* ref, mirror::Object* obj,
+                                           uint32_t offset) {
+  UNUSED(ref);
+  DCHECK(kUseReadBarrier);
+  // TODO: Remove.
+  // std::cout << "In ReadBarrierSlow(), obj: " << obj << ", offset: " << offset << "\n";
+  uint8_t* raw_addr = reinterpret_cast<uint8_t*>(obj) + offset;
+  mirror::HeapReference<mirror::Object>* ref_addr =
+      reinterpret_cast<mirror::HeapReference<mirror::Object>*>(raw_addr);
+  return ReadBarrier::Barrier<mirror::Object, kWithReadBarrier, true>(obj, MemberOffset(offset),
+                                                                      ref_addr);
 }
 
 }  // namespace art
