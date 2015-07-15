@@ -38,6 +38,7 @@ class RTPVisitor : public HGraphDelegateVisitor {
   void VisitStaticFieldGet(HStaticFieldGet* instr) OVERRIDE;
   void VisitInvoke(HInvoke* instr) OVERRIDE;
   void VisitArrayGet(HArrayGet* instr) OVERRIDE;
+  void VisitCheckCast(HCheckCast* instr) OVERRIDE;
   void UpdateReferenceTypeInfo(HInstruction* instr,
                                uint16_t type_idx,
                                const DexFile& dex_file,
@@ -180,7 +181,10 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
         // Narrow the type as much as possible.
         {
           ScopedObjectAccess soa(Thread::Current());
-          if (!load_class->IsResolved() || class_rti.IsSupertypeOf(obj_rti)) {
+          if (load_class->IsResolved() && class_rti.GetTypeHandle()->IsFinal()) {
+            bound_type->SetReferenceTypeInfo(
+                ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ true));
+          } else if (!load_class->IsResolved() || class_rti.IsSupertypeOf(obj_rti)) {
             bound_type->SetReferenceTypeInfo(obj_rti);
           } else {
             bound_type->SetReferenceTypeInfo(
@@ -264,6 +268,45 @@ void RTPVisitor::VisitLoadClass(HLoadClass* instr) {
   }
   Handle<mirror::Class> class_handle = handles_->NewHandle(mirror::Class::GetJavaLangClass());
   instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(class_handle, /* is_exact */ true));
+}
+
+void RTPVisitor::VisitCheckCast(HCheckCast* check_cast) {
+  HInstruction* obj = check_cast->InputAt(0);
+  HBoundType* bound_type = nullptr;
+  for (HUseIterator<HInstruction*> it(obj->GetUses()); !it.Done(); it.Advance()) {
+    HInstruction* user = it.Current()->GetUser();
+    if (check_cast->StrictlyDominates(user)) {
+      // TODO: Similar logic exists in BoundTypeForInstanceOf(). Remove duplication.
+      if (bound_type == nullptr) {
+        ScopedObjectAccess soa(Thread::Current());
+        HLoadClass* load_class = check_cast->InputAt(1)->AsLoadClass();
+        ReferenceTypeInfo obj_rti = obj->GetReferenceTypeInfo();
+        ReferenceTypeInfo class_rti = load_class->GetLoadedClassRTI();
+        // Because of inlining and the fact we run RTP more than once and we might
+        // have one HBoundType already
+        if (user->IsBoundType() && user->AsBoundType()->GetBoundType().IsSupertypeOf(class_rti)) {
+          // TODO: if we are a refinement we could just update the bounded type but that needs
+          // an update on the instruction and possible its dependents.
+          // TODO: do this for BoundTypeForInstanceOf() as well.
+          continue;
+        }
+        bound_type = new (GetGraph()->GetArena()) HBoundType(obj, class_rti);
+        // Narrow the type as much as possible.
+        if (load_class->IsResolved() && class_rti.GetTypeHandle()->IsFinal()) {
+          bound_type->SetReferenceTypeInfo(
+              ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ true));
+        } else if (!load_class->IsResolved() || class_rti.IsSupertypeOf(obj_rti)) {
+          bound_type->SetReferenceTypeInfo(obj_rti);
+        } else {
+          bound_type->SetReferenceTypeInfo(
+              ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ false));
+        }
+
+        check_cast->GetBlock()->InsertInstructionAfter(bound_type, check_cast);
+      }
+      user->ReplaceInput(bound_type, it.Current()->GetIndex());
+    }
+  }
 }
 
 void ReferenceTypePropagation::VisitPhi(HPhi* phi) {

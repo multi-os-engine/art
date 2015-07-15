@@ -14,7 +14,6 @@
 * limitations under the License.
 */
 
-
 interface Interface {
   void $noinline$f();
 }
@@ -51,6 +50,15 @@ class SubclassB extends Super {
     throw new RuntimeException();
   }
 }
+
+class Generic<A> {
+  public A a = null;
+  public A get() {
+    return a;
+  }
+}
+
+final class Final {}
 
 public class Main {
 
@@ -393,6 +401,41 @@ public class Main {
   public void testArrayGetSimpleRemove() {
     Super[] a = new SubclassA[10];
     ((SubclassA)a[0]).$noinline$g();
+  }
+
+  private Generic<SubclassC> genericC = new Generic<SubclassC>();
+  private Generic<Final> genericFinal = new Generic<Final>();
+
+  private SubclassC get() {
+    return genericC.get();
+  }
+
+  private Final getFinal() {
+    return genericFinal.get();
+  }
+
+  /// CHECK-START: SubclassC Main.inlineGenerics() reference_type_propagation (after)
+  /// CHECK:      <<Invoke:l\d+>>    InvokeStaticOrDirect klass:SubclassC
+  /// CHECK-NEXT:                    Return [<<Invoke>>]
+
+  /// CHECK-START: SubclassC Main.inlineGenerics() reference_type_propagation_after_inlining (after)
+  /// CHECK:      <<BoundType:l\d+>> BoundType klass:SubclassC
+  /// CHECK:                         Return [<<BoundType>>]
+  private SubclassC inlineGenerics() {
+    SubclassC c = get();
+    return c;
+  }
+
+  /// CHECK-START: Final Main.inlineGenericsFinal() reference_type_propagation (after)
+  /// CHECK:      <<Invoke:l\d+>>    InvokeStaticOrDirect klass:Final exact:true
+  /// CHECK-NEXT:                    Return [<<Invoke>>]
+
+  /// CHECK-START: Final Main.inlineGenericsFinal() reference_type_propagation_after_inlining (after)
+  /// CHECK:      <<BoundType:l\d+>> BoundType klass:Final exact:true
+  /// CHECK:                         Return [<<BoundType>>]
+  private Final inlineGenericsFinal() {
+    Final f = getFinal();
+    return f;
   }
 
   public static void main(String[] args) {
