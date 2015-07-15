@@ -20,6 +20,7 @@
 #include <jni.h>
 
 #include "base/macros.h"
+#include "base/mutex.h"
 #include "offsets.h"
 
 #define QUICK_ENTRYPOINT_OFFSET(ptr_size, x) \
@@ -70,6 +71,14 @@ extern mirror::Object* JniMethodEndWithReferenceSynchronized(jobject result,
 extern void ReadBarrierJni(mirror::CompressedReference<mirror::Object>* handle_on_stack,
                            Thread* self)
     NO_THREAD_SAFETY_ANALYSIS HOT_ATTR;
+
+// Read barrier entrypoint.
+// This is the read barrier slow path for instance and static fields and reference-type arrays.
+// TODO: Currently the read barrier does not have a fast path for compilers to directly generate.
+// Ideally the slow path should only take one parameter "ref".
+extern "C" mirror::Object* artReadBarrierSlow(mirror::Object* ref, mirror::Object* obj,
+                                              uint32_t offset)
+    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) HOT_ATTR;
 
 }  // namespace art
 
