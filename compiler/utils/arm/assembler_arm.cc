@@ -252,11 +252,11 @@ uint32_t Address::encodingThumbLdrdStrd() const {
   if (offset_ < 0) {
     int32_t off = -offset_;
     CHECK_LT(off, 1024);
-    CHECK_EQ((off & 3 /* 0b11 */), 0);    // Must be multiple of 4.
+    CHECK(IsAligned<4>(off)) << off;
     encoding = (am ^ (1 << kUShift)) | off >> 2;  // Flip U to adjust sign.
   } else {
     CHECK_LT(offset_, 1024);
-    CHECK_EQ((offset_ & 3 /* 0b11 */), 0);    // Must be multiple of 4.
+    CHECK(IsAligned<4>(offset_)) << offset_;
     encoding =  am | offset_ >> 2;
   }
   encoding |= static_cast<uint32_t>(rn_) << 16;
