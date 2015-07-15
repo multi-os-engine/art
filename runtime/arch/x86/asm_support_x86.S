@@ -23,8 +23,8 @@
     // Clang's as(1) doesn't let you name macro parameters prior to 3.5.
     #define MACRO0(macro_name) .macro macro_name
     #define MACRO1(macro_name, macro_arg1) .macro macro_name
-    #define MACRO2(macro_name, macro_arg1, macro_args2) .macro macro_name
-    #define MACRO3(macro_name, macro_arg1, macro_args2, macro_args3) .macro macro_name
+    #define MACRO2(macro_name, macro_arg1, macro_arg2) .macro macro_name
+    #define MACRO3(macro_name, macro_arg1, macro_arg2, macro_arg3) .macro macro_name
     #define MACRO4(macro_name, macro_arg1, macro_arg2, macro_arg3, macro_arg4) .macro macro_name
     #define MACRO5(macro_name, macro_arg1, macro_arg2, macro_arg3, macro_arg4, macro_arg5) .macro macro_name
     #define END_MACRO .endmacro

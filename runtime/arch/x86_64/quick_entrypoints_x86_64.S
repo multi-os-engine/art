@@ -66,7 +66,6 @@ MACRO0(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME)
     movq %xmm14, 24(%rsp)
     movq %xmm15, 32(%rsp)
     // R10 := ArtMethod* for save all callee save frame method.
-    THIS_LOAD_REQUIRES_READ_BARRIER
     movq RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
@@ -109,7 +108,6 @@ MACRO0(SETUP_REFS_ONLY_CALLEE_SAVE_FRAME)
     movq %xmm14, 24(%rsp)
     movq %xmm15, 32(%rsp)
     // R10 := ArtMethod* for refs only callee save frame method.
-    THIS_LOAD_REQUIRES_READ_BARRIER
     movq RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
     // Store ArtMethod* to bottom of stack.
     movq %r10, 0(%rsp)
@@ -168,7 +166,6 @@ MACRO0(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME)
     subq MACRO_LITERAL(80 + 4 * 8), %rsp
     CFI_ADJUST_CFA_OFFSET(80 + 4 * 8)
     // R10 := ArtMethod* for ref and args callee save frame method.
-    THIS_LOAD_REQUIRES_READ_BARRIER
     movq RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET(%r10), %r10
     // Save FPRs.
     movq %xmm0, 16(%rsp)
@@ -920,8 +917,12 @@ DEFINE_FUNCTION art_quick_alloc_object_tlab
     // Fast path tlab allocation.
     // RDI: uint32_t type_idx, RSI: ArtMethod*
     // RDX, RCX, R8, R9: free. RAX: return val.
+    // TODO: Add read barrier when this function is used.
+    // Might need a special macro since rsi and edx is 32b/64b mismatched.
     movl ART_METHOD_DEX_CACHE_TYPES_OFFSET(%rsi), %edx  // Load dex cache resolved types array
     UNPOISON_HEAP_REF edx
+    // TODO: Add read barrier when this function is used.
+    // Might need to break down into multiple instructions to get the base address in a register.
                                                                // Load the class
     movl MIRROR_OBJECT_ARRAY_DATA_OFFSET(%rdx, %rdi, MIRROR_OBJECT_ARRAY_COMPONENT_SIZE), %edx
     UNPOISON_HEAP_REF edx
@@ -1127,19 +1128,22 @@ END_FUNCTION art_quick_unlock_object
 DEFINE_FUNCTION art_quick_check_cast
     PUSH rdi                          // Save args for exc
     PUSH rsi
+    subq LITERAL(8), %rsp             // Alignment padding.
+    CFI_ADJUST_CFA_OFFSET(8)
     SETUP_FP_CALLEE_SAVE_FRAME
     call SYMBOL(artIsAssignableFromCode)  // (Class* klass, Class* ref_klass)
     testq %rax, %rax
     jz 1f                             // jump forward if not assignable
     RESTORE_FP_CALLEE_SAVE_FRAME
-    addq LITERAL(16), %rsp            // pop arguments
-    CFI_ADJUST_CFA_OFFSET(-16)
-
+    addq LITERAL(24), %rsp            // pop arguments and padding
+    CFI_ADJUST_CFA_OFFSET(-24)
     ret
 
-    CFI_ADJUST_CFA_OFFSET(16 + 4 * 8)  // Reset unwind info so following code unwinds.
+    CFI_ADJUST_CFA_OFFSET(24 + 4 * 8)  // Reset unwind info so following code unwinds.
 1:
     RESTORE_FP_CALLEE_SAVE_FRAME
+    addq LITERAL(8), %rsp             // pop padding
+    CFI_ADJUST_CFA_OFFSET(-8)
     POP rsi                           // Pop arguments
     POP rdi
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME  // save all registers as basis for long jump context
@@ -1148,6 +1152,60 @@ DEFINE_FUNCTION art_quick_check_cast
     int3                              // unreached
 END_FUNCTION art_quick_check_cast
 
+
+// Restore reg's value if reg is not the same as exclude_reg, otherwise just adjust stack.
+MACRO2(POP_REG_NE, reg, exclude_reg)
+    .ifc RAW_VAR(reg, 0), RAW_VAR(exclude_reg, 1)
+      addq MACRO_LITERAL(8), %rsp
+      CFI_ADJUST_CFA_OFFSET(-8)
+    .else
+      POP RAW_VAR(reg, 0)
+    .endif
+END_MACRO
+
+    /*
+     * Macro to insert read barrier, used in art_quick_aput_obj and art_quick_alloc_object_tlab.
+     * obj_reg and dest_reg{32|64} are registers, offset is a defined literal such as
+     * MIRROR_OBJECT_CLASS_OFFSET. dest_reg needs two versions to handle the mismatch between
+     * 64b PUSH/POP and 32b argument.
+     * TODO: When read barrier has a fast path, add heap unpoisoning support for the fast path.
+     *
+     * As with art_quick_aput_obj* functions, the 64b versions are in comments.
+     */
+MACRO4(READ_BARRIER, obj_reg, offset, dest_reg32, dest_reg64)
+#ifdef USE_READ_BARRIER
+    PUSH rax                        // save registers that might be used
+    PUSH rdi
+    PUSH rsi
+    PUSH rdx
+    PUSH rcx
+    SETUP_FP_CALLEE_SAVE_FRAME
+    // Outgoing argument set up
+    // movl %edi, %edi              // pass ref, no-op for now since parameter ref is unused
+    // movq %rdi, %rdi
+    movl REG_VAR(obj_reg, 0), %esi  // pass obj_reg
+    // movq REG_VAR(obj_reg, 0), %rsi
+    movl MACRO_LITERAL((RAW_VAR(offset, 1))), %edx // pass offset, double parentheses are necessary
+    // movq MACRO_LITERAL((RAW_VAR(offset, 1))), %rdx
+    call SYMBOL(artReadBarrierSlow) // artReadBarrierSlow(ref, obj_reg, offset)
+    // No need to unpoison return value in rax, artReadBarrierSlow() would do the unpoisoning.
+    .ifnc RAW_VAR(dest_reg32, 2), eax
+    // .ifnc RAW_VAR(dest_reg64, 3), rax
+      movl %eax, REG_VAR(dest_reg32, 2)  // save loaded ref in dest_reg
+      // movq %rax, REG_VAR(dest_reg64, 3)
+    .endif
+    RESTORE_FP_CALLEE_SAVE_FRAME
+    POP_REG_NE rcx, RAW_VAR(dest_reg64, 3) // Restore registers except dest_reg
+    POP_REG_NE rdx, RAW_VAR(dest_reg64, 3)
+    POP_REG_NE rsi, RAW_VAR(dest_reg64, 3)
+    POP_REG_NE rdi, RAW_VAR(dest_reg64, 3)
+    POP_REG_NE rax, RAW_VAR(dest_reg64, 3)
+#else
+    movl RAW_VAR(offset, 1)(REG_VAR(obj_reg, 0)), REG_VAR(dest_reg32, 2)
+    // movq RAW_VAR(offset, 1)(REG_VAR(obj_reg, 0)), REG_VAR(dest_reg64, 3)
+    UNPOISON_HEAP_REF RAW_VAR(dest_reg32, 2) // UNPOISON_HEAP_REF only takes a 32b register
+#endif  // USE_READ_BARRIER
+END_MACRO
 
     /*
      * Entry from managed code for array put operations of objects where the value being stored
@@ -1193,15 +1251,13 @@ DEFINE_FUNCTION art_quick_aput_obj
     testl %edx, %edx                // store of null
 //  test %rdx, %rdx
     jz .Ldo_aput_null
-    movl MIRROR_OBJECT_CLASS_OFFSET(%edi), %ecx
-//  movq MIRROR_OBJECT_CLASS_OFFSET(%rdi), %rcx
-    UNPOISON_HEAP_REF ecx
-    movl MIRROR_CLASS_COMPONENT_TYPE_OFFSET(%ecx), %ecx
-//  movq MIRROR_CLASS_COMPONENT_TYPE_OFFSET(%rcx), %rcx
-    UNPOISON_HEAP_REF ecx
-#ifdef USE_HEAP_POISONING
-    movl MIRROR_OBJECT_CLASS_OFFSET(%edx), %eax  // rax is free.
-    UNPOISON_HEAP_REF eax
+    READ_BARRIER edi, MIRROR_OBJECT_CLASS_OFFSET, ecx, rcx
+    // READ_BARRIER rdi, MIRROR_OBJECT_CLASS_OFFSET, ecx, rcx
+    READ_BARRIER ecx, MIRROR_CLASS_COMPONENT_TYPE_OFFSET, ecx, rcx
+    // READ_BARRIER rcx, MIRROR_CLASS_COMPONENT_TYPE_OFFSET, ecx, rcx
+#if defined(USE_HEAP_POISONING) || defined(USE_READ_BARRIER)
+    READ_BARRIER edx, MIRROR_OBJECT_CLASS_OFFSET, eax, rax  // rax is free.
+    // READ_BARRIER rdx, MIRROR_OBJECT_CLASS_OFFSET, eax, rax
     cmpl %eax, %ecx  // value's type == array's component type - trivial assignability
 #else
     cmpl MIRROR_OBJECT_CLASS_OFFSET(%edx), %ecx // value's type == array's component type - trivial assignability
@@ -1226,13 +1282,16 @@ DEFINE_FUNCTION art_quick_aput_obj
     PUSH rdi
     PUSH rsi
     PUSH rdx
-    subq LITERAL(8), %rsp        // Alignment padding.
-    CFI_ADJUST_CFA_OFFSET(8)
     SETUP_FP_CALLEE_SAVE_FRAME
 
-                                  // "Uncompress" = do nothing, as already zero-extended on load.
-    movl MIRROR_OBJECT_CLASS_OFFSET(%edx), %esi // Pass arg2 = value's class.
-    UNPOISON_HEAP_REF esi
+#if defined(USE_HEAP_POISONING) || defined(USE_READ_BARRIER)
+    // The load of MIRROR_OBJECT_CLASS_OFFSET(%edx) is redundant, eax still holds the value.
+    movl %eax, %esi               // Pass arg2 = value's class.
+    // movq %rax, %rsi
+#else
+                                     // "Uncompress" = do nothing, as already zero-extended on load.
+    movl MIRROR_OBJECT_CLASS_OFFSET(%edx), %esi  // Pass arg2 = value's class.
+#endif
     movq %rcx, %rdi               // Pass arg1 = array's component type.
 
     call SYMBOL(artIsAssignableFromCode)  // (Class* a, Class* b)
@@ -1243,8 +1302,6 @@ DEFINE_FUNCTION art_quick_aput_obj
 
     RESTORE_FP_CALLEE_SAVE_FRAME
     // Restore arguments.
-    addq LITERAL(8), %rsp
-    CFI_ADJUST_CFA_OFFSET(-8)
     POP  rdx
     POP  rsi
     POP  rdi
@@ -1258,12 +1315,10 @@ DEFINE_FUNCTION art_quick_aput_obj
     movb %dl, (%rdx, %rdi)                       // Note: this assumes that top 32b of %rdi are zero
 //  movb %dl, (%rdx, %rdi)
     ret
-    CFI_ADJUST_CFA_OFFSET(32 + 4 * 8)  // Reset unwind info so following code unwinds.
+    CFI_ADJUST_CFA_OFFSET(24 + 4 * 8)  // Reset unwind info so following code unwinds.
 .Lthrow_array_store_exception:
     RESTORE_FP_CALLEE_SAVE_FRAME
     // Restore arguments.
-    addq LITERAL(8), %rsp
-    CFI_ADJUST_CFA_OFFSET(-8)
     POP  rdx
     POP  rsi
     POP  rdi
@@ -1717,7 +1772,11 @@ UNIMPLEMENTED art_quick_memcmp16
 
 DEFINE_FUNCTION art_quick_assignable_from_code
     SETUP_FP_CALLEE_SAVE_FRAME
+    subq LITERAL(8), %rsp                      // Alignment padding.
+    CFI_ADJUST_CFA_OFFSET(8)
     call SYMBOL(artIsAssignableFromCode)       // (const mirror::Class*, const mirror::Class*)
+    addq LITERAL(8), %rsp
+    CFI_ADJUST_CFA_OFFSET(-8)
     RESTORE_FP_CALLEE_SAVE_FRAME
     ret
 END_FUNCTION art_quick_assignable_from_code
