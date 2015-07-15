@@ -31,8 +31,6 @@
     ldr xIP0, [xIP0]  // xIP0 = & (art::Runtime * art::Runtime.instance_) .
 
     // xIP0 = (ArtMethod*) Runtime.instance_.callee_save_methods[kRefAndArgs]  .
-    THIS_LOAD_REQUIRES_READ_BARRIER
-
     // Loads appropriate callee-save-method.
     ldr xIP0, [xIP0, RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET ]
 
@@ -95,8 +93,6 @@
     ldr xIP0, [xIP0]  // xIP0 = & (art::Runtime * art::Runtime.instance_) .
 
     // xIP0 = (ArtMethod*) Runtime.instance_.callee_save_methods[kRefOnly]  .
-    THIS_LOAD_REQUIRES_READ_BARRIER
-
     // Loads appropriate callee-save-method.
     ldr xIP0, [xIP0, RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET ]
 
@@ -251,7 +247,6 @@
     ldr xIP0, [xIP0]  // xIP0 = & (art::Runtime * art::Runtime.instance_) .
 
     // xIP0 = (ArtMethod*) Runtime.instance_.callee_save_methods[kRefAndArgs]  .
-    THIS_LOAD_REQUIRES_READ_BARRIER
     ldr xIP0, [xIP0, RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET ]
 
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_INTERNAL
