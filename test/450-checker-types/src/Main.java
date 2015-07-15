@@ -14,7 +14,6 @@
 * limitations under the License.
 */
 
-
 interface Interface {
   void $noinline$f();
 }
@@ -49,6 +48,13 @@ class SubclassB extends Super {
 
   void $noinline$g() {
     throw new RuntimeException();
+  }
+}
+
+class Generic<A> {
+  public A a = null;
+  public A get() {
+    return a;
   }
 }
 
@@ -393,6 +399,24 @@ public class Main {
   public void testArrayGetSimpleRemove() {
     Super[] a = new SubclassA[10];
     ((SubclassA)a[0]).$noinline$g();
+  }
+
+  private Generic<SubclassC> genericC = new Generic<SubclassC>();
+
+  private SubclassC get() {
+    return genericC.get();
+  }
+
+  /// CHECK-START: SubclassC Main.inlineGenerics() reference_type_propagation (after)
+  /// CHECK:      <<Invoke:l\d+>>    InvokeStaticOrDirect klass:SubclassC
+  /// CHECK-NEXT:                    Return [<<Invoke>>]
+
+  /// CHECK-START: SubclassC Main.inlineGenerics() reference_type_propagation_after_inlining (after)
+  /// CHECK:      <<BoundType:l\d+>> BoundType klass:SubclassC
+  /// CHECK:                         Return [<<BoundType>>]
+  private SubclassC inlineGenerics() {
+    SubclassC c = get();
+    return c;
   }
 
   public static void main(String[] args) {
