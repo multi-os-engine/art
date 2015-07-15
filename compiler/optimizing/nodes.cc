@@ -579,6 +579,18 @@ void HBasicBlock::RemoveInstructionOrPhi(HInstruction* instruction, bool ensure_
   }
 }
 
+bool HBasicBlock::RemoveInstructionOrPhiIfDead(HInstruction* instruction) {
+  if (!instruction->HasSideEffects()
+      && !instruction->CanThrow()
+      && !instruction->IsSuspendCheck()
+      && !instruction->IsMemoryBarrier()  // If we added an explicit barrier then we should keep it.
+      && !instruction->HasUses()) {
+    RemoveInstructionOrPhi(instruction);
+    return true;
+  }
+  return false;
+}
+
 void HEnvironment::CopyFrom(const GrowableArray<HInstruction*>& locals) {
   for (size_t i = 0; i < locals.Size(); i++) {
     HInstruction* instruction = locals.Get(i);

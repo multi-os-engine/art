@@ -788,6 +788,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   void RemoveInstruction(HInstruction* instruction, bool ensure_safety = true);
   void RemovePhi(HPhi* phi, bool ensure_safety = true);
   void RemoveInstructionOrPhi(HInstruction* instruction, bool ensure_safety = true);
+  bool RemoveInstructionOrPhiIfDead(HInstruction* instruction);
 
   bool IsLoopHeader() const {
     return IsInLoop() && (loop_information_->GetHeader() == this);
