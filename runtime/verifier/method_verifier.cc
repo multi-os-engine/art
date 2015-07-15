@@ -364,7 +364,7 @@ MethodVerifier* MethodVerifier::VerifyMethodAndDump(Thread* self,
                                                 method_access_flags, true, true, true, true);
   verifier->Verify();
   verifier->DumpFailures(vios->Stream());
-  vios->Stream() << verifier->info_messages_.str();
+  *vios << verifier->info_messages_.str();
   // Only dump and return if no hard failures. Otherwise the verifier may be not fully initialized
   // and querying any info is dangerous/can abort.
   if (verifier->have_pending_hard_failure_) {
@@ -1288,30 +1288,29 @@ void MethodVerifier::Dump(std::ostream& os) {
 
 void MethodVerifier::Dump(VariableIndentationOutputStream* vios) {
   if (code_item_ == nullptr) {
-    vios->Stream() << "Native method\n";
+    *vios << "Native method\n";
     return;
   }
   {
-    vios->Stream() << "Register Types:\n";
+    *vios << "Register Types:\n";
     ScopedIndentation indent1(vios);
     reg_types_.Dump(vios->Stream());
   }
-  vios->Stream() << "Dumping instructions and register lines:\n";
+  *vios << "Dumping instructions and register lines:\n";
   ScopedIndentation indent1(vios);
   const Instruction* inst = Instruction::At(code_item_->insns_);
   for (size_t dex_pc = 0; dex_pc < code_item_->insns_size_in_code_units_;
       dex_pc += inst->SizeInCodeUnits()) {
     RegisterLine* reg_line = reg_table_.GetLine(dex_pc);
     if (reg_line != nullptr) {
-      vios->Stream() << reg_line->Dump(this) << "\n";
+      *vios << reg_line->Dump(this) << "\n";
     }
-    vios->Stream()
-        << StringPrintf("0x%04zx", dex_pc) << ": " << insn_flags_[dex_pc].ToString() << " ";
+    *vios << StringPrintf("0x%04zx", dex_pc) << ": " << insn_flags_[dex_pc].ToString() << " ";
     const bool kDumpHexOfInstruction = false;
     if (kDumpHexOfInstruction) {
-      vios->Stream() << inst->DumpHex(5) << " ";
+      *vios << inst->DumpHex(5) << " ";
     }
-    vios->Stream() << inst->DumpString(dex_file_) << "\n";
+    *vios << inst->DumpString(dex_file_) << "\n";
     inst = inst->Next();
   }
 }
