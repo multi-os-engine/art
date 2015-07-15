@@ -266,6 +266,8 @@ TEST(GVNTest, LoopSideEffects) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
 
+  static const SideEffects kChangesGC = SideEffects::ChangesGC();
+
   HGraph* graph = CreateGraph(&allocator);
   HBasicBlock* entry = new (&allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
@@ -309,7 +311,7 @@ TEST(GVNTest, LoopSideEffects) {
   ASSERT_TRUE(inner_loop_header->GetLoopInformation()->IsIn(
       *outer_loop_header->GetLoopInformation()));
 
-  // Check that the loops don't have side effects.
+  // Check that the only side effect of loop is to potentially trigger GC.
   {
     // Make one block with a side effect.
     entry->AddInstruction(new (&allocator) HInstanceFieldSet(parameter,
@@ -324,8 +326,8 @@ TEST(GVNTest, LoopSideEffects) {
     side_effects.Run();
 
     ASSERT_TRUE(side_effects.GetBlockEffects(entry).HasSideEffects());
-    ASSERT_FALSE(side_effects.GetLoopEffects(outer_loop_header).HasSideEffects());
-    ASSERT_FALSE(side_effects.GetLoopEffects(inner_loop_header).HasSideEffects());
+    ASSERT_TRUE(side_effects.GetLoopEffects(outer_loop_header).Equals(kChangesGC));
+    ASSERT_TRUE(side_effects.GetLoopEffects(inner_loop_header).Equals(kChangesGC));
   }
 
   // Check that the side effects of the outer loop does not affect the inner loop.
@@ -345,8 +347,9 @@ TEST(GVNTest, LoopSideEffects) {
 
     ASSERT_TRUE(side_effects.GetBlockEffects(entry).HasSideEffects());
     ASSERT_TRUE(side_effects.GetBlockEffects(outer_loop_body).HasSideEffects());
-    ASSERT_TRUE(side_effects.GetLoopEffects(outer_loop_header).HasSideEffects());
-    ASSERT_FALSE(side_effects.GetLoopEffects(inner_loop_header).HasSideEffects());
+    ASSERT_TRUE(
+        side_effects.GetLoopEffects(outer_loop_header).Exclusion(kChangesGC).HasSideEffects());
+    ASSERT_TRUE(side_effects.GetLoopEffects(inner_loop_header).Equals(kChangesGC));
   }
 
   // Check that the side effects of the inner loop affects the outer loop.
@@ -367,8 +370,10 @@ TEST(GVNTest, LoopSideEffects) {
 
     ASSERT_TRUE(side_effects.GetBlockEffects(entry).HasSideEffects());
     ASSERT_FALSE(side_effects.GetBlockEffects(outer_loop_body).HasSideEffects());
-    ASSERT_TRUE(side_effects.GetLoopEffects(outer_loop_header).HasSideEffects());
-    ASSERT_TRUE(side_effects.GetLoopEffects(inner_loop_header).HasSideEffects());
+    ASSERT_TRUE(
+        side_effects.GetLoopEffects(outer_loop_header).Exclusion(kChangesGC).HasSideEffects());
+    ASSERT_TRUE(
+        side_effects.GetLoopEffects(inner_loop_header).Exclusion(kChangesGC).HasSideEffects());
   }
 }
 }  // namespace art

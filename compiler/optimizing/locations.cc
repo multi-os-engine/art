@@ -31,6 +31,7 @@ LocationSummary::LocationSummary(HInstruction* instruction,
       register_mask_(0),
       live_registers_(),
       intrinsified_(intrinsified) {
+  DCHECK(call_kind == kNoCall || instruction->GetSideEffects().HasChange(SideEffects::kGC));
   inputs_.SetSize(instruction->InputCount());
   for (size_t i = 0; i < instruction->InputCount(); ++i) {
     inputs_.Put(i, Location());
