@@ -31,7 +31,6 @@
 #include "utils/arena_bit_vector.h"
 #include "utils/growable_array.h"
 
-
 namespace art {
 
 class GraphChecker;
@@ -970,7 +969,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)
 
-#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
+#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                          \
+  M(Arm64IntermediateAddress, Instruction)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
@@ -3614,8 +3614,11 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 
 class HArrayGet : public HExpression<2> {
  public:
-  HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type)
-      : HExpression(type, SideEffects::DependsOnUnspecified()) {
+  HArrayGet(HInstruction* array,
+            HInstruction* index,
+            Primitive::Type type,
+            SideEffects additional_side_effects = SideEffects::None())
+      : HExpression(type, SideEffects::DependsOnUnspecified().Union(additional_side_effects)) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -3663,8 +3666,9 @@ class HArraySet : public HTemplateInstruction<3> {
             HInstruction* index,
             HInstruction* value,
             Primitive::Type expected_component_type,
-            uint32_t dex_pc)
-      : HTemplateInstruction(ArraySetSideEffects(value->GetType())),
+            uint32_t dex_pc,
+            SideEffects additional_side_effects = SideEffects::None())
+      : HTemplateInstruction(ArraySetSideEffects(value->GetType()).Union(additional_side_effects)),
         dex_pc_(dex_pc),
         expected_component_type_(expected_component_type),
         needs_type_check_(value->GetType() == Primitive::kPrimNot),
@@ -3715,6 +3719,10 @@ class HArraySet : public HTemplateInstruction<3> {
     return ((value_type == Primitive::kPrimFloat) || (value_type == Primitive::kPrimDouble))
         ? value_type
         : expected_component_type_;
+  }
+
+  Primitive::Type GetRawExpectedComponentType() const {
+    return expected_component_type_;
   }
 
   DECLARE_INSTRUCTION(ArraySet);
@@ -3770,6 +3778,8 @@ class HBoundsCheck : public HExpression<2> {
   bool NeedsEnvironment() const OVERRIDE { return true; }
 
   bool CanThrow() const OVERRIDE { return true; }
+
+  HInstruction* GetIndex() const { return InputAt(0); }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
@@ -4410,6 +4420,33 @@ class HParallelMove : public HTemplateInstruction<0> {
 
   DISALLOW_COPY_AND_ASSIGN(HParallelMove);
 };
+
+// ARM64-specific HInstructions --------------------------------------------------------------------
+
+// This instruction computes an intermediate address pointing in the 'middle' of an object. The
+// result pointer cannot be handled by GC, so extra care is taken to make sure that this value is
+// never used across anything that can trigger GCt
+class HArm64IntermediateAddress : public HExpression<2> {
+ public:
+  explicit HArm64IntermediateAddress(HInstruction* base_address, HInstruction* offset)
+      : HExpression(Primitive::kPrimNot, SideEffects::DependsOnGC()) {
+    SetRawInputAt(0, base_address);
+    SetRawInputAt(1, offset);
+  }
+
+  bool CanBeMoved() const OVERRIDE { return true; }
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE { return true; }
+
+  HInstruction* GetBaseAddress() const { return InputAt(0); }
+  HInstruction* GetOffset() const { return InputAt(1); }
+
+  DECLARE_INSTRUCTION(Arm64IntermediateAddress);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HArm64IntermediateAddress);
+};
+
+// End of ARM64-specific HInstructions -------------------------------------------------------------
 
 class HGraphVisitor : public ValueObject {
  public:

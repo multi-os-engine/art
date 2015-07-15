@@ -203,8 +203,12 @@ static bool CanEncodeConstantAsImmediate(HConstant* constant, HInstruction* inst
 
   int64_t value = CodeGenerator::GetInt64ValueOf(constant);
 
-  if (instr->IsAdd() || instr->IsSub() || instr->IsCondition() ||
-      instr->IsCompare() || instr->IsBoundsCheck()) {
+  if (instr->IsAdd() ||
+      instr->IsArm64IntermediateAddress() ||
+      instr->IsBoundsCheck() ||
+      instr->IsCompare() ||
+      instr->IsCondition() ||
+      instr->IsSub()) {
     // Uses aliases of ADD/SUB instructions.
     return vixl::Assembler::IsImmAddSub(value);
   } else if (instr->IsAnd() || instr->IsOr() || instr->IsXor()) {

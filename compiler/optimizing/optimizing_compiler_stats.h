@@ -32,6 +32,7 @@ enum MethodCompilationStat {
   kCompiledQuick,
   kInlinedInvoke,
   kInstructionSimplifications,
+  kInstructionSimplificationsArchSpecific,
   kNotCompiledBranchOutsideMethodCode,
   kNotCompiledCannotBuildSSA,
   kNotCompiledCantAccesType,
@@ -101,6 +102,7 @@ class OptimizingCompilerStats {
       case kCompiledQuick : return "kCompiledQuick";
       case kInlinedInvoke : return "kInlinedInvoke";
       case kInstructionSimplifications: return "kInstructionSimplifications";
+      case kInstructionSimplificationsArchSpecific: return "kInstructionSimplificationsArchSpecific";
       case kNotCompiledBranchOutsideMethodCode: return "kNotCompiledBranchOutsideMethodCode";
       case kNotCompiledCannotBuildSSA : return "kNotCompiledCannotBuildSSA";
       case kNotCompiledCantAccesType : return "kNotCompiledCantAccesType";
