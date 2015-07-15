@@ -4070,19 +4070,23 @@ class HInstanceOf : public HExpression<2> {
 
 class HBoundType : public HExpression<1> {
  public:
-  HBoundType(HInstruction* input, ReferenceTypeInfo bound_type)
+  HBoundType(HInstruction* input, ReferenceTypeInfo bound_type, bool bound_can_be_null)
       : HExpression(Primitive::kPrimNot, SideEffects::None()),
-        bound_type_(bound_type) {
+        bound_type_(bound_type),
+        bound_can_be_null_(bound_can_be_null) {
     DCHECK_EQ(input->GetType(), Primitive::kPrimNot);
     SetRawInputAt(0, input);
   }
 
   const ReferenceTypeInfo& GetBoundType() const { return bound_type_; }
 
-  bool CanBeNull() const OVERRIDE {
-    // `null instanceof ClassX` always return false so we can't be null.
-    return false;
+  void SetCanBeNull(bool can_be_null) {
+    DCHECK(bound_can_be_null_ || !can_be_null);
+    can_be_null_ = can_be_null;
   }
+
+  bool CanBeNull() const OVERRIDE { return can_be_null_; }
+  bool GetBoundCanBeNull() const { return bound_can_be_null_; }
 
   DECLARE_INSTRUCTION(BoundType);
 
@@ -4091,6 +4095,11 @@ class HBoundType : public HExpression<1> {
   // it is always the case that GetBoundType().IsSupertypeOf(GetReferenceType()).
   // It is used to bound the type in cases like `if (x instanceof ClassX) {}`
   const ReferenceTypeInfo bound_type_;
+
+  // Represents the top constraint that can_be_null_ cannot exceed (i.e. if this
+  // is false then can_be_null_ cannot be true).
+  const bool bound_can_be_null_;
+  bool can_be_null_;
 
   DISALLOW_COPY_AND_ASSIGN(HBoundType);
 };
