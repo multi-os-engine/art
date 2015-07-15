@@ -156,6 +156,16 @@ MACRO1(POP, reg)
     CFI_RESTORE(REG_VAR(reg,0))
 END_MACRO
 
+// Restore reg's value if reg is not the same as exclude, otherwise just adjust stack.
+MACRO2(POP_REG_NE, reg, exclude)
+    .ifc RAW_VAR(reg, 0), RAW_VAR(exclude, 1)
+      addl MACRO_LITERAL(4), %esp
+      CFI_ADJUST_CFA_OFFSET(-4)
+    .else
+      POP RAW_VAR(reg, 0)
+    .endif
+END_MACRO
+
 MACRO1(UNIMPLEMENTED,name)
     FUNCTION_TYPE(\name, 0)
     .globl VAR(name, 0)
