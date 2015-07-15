@@ -19,7 +19,7 @@
 
 #include "asm_support_x86_64.h"
 
-#if defined(__APPLE__) || (defined(__clang__) && (__clang_major__ < 4) && (__clang_minor__ < 5))
+#if defined(__APPLE__)
     // Clang's as(1) doesn't let you name macro parameters prior to 3.5.
     #define MACRO0(macro_name) .macro macro_name
     #define MACRO1(macro_name, macro_arg1) .macro macro_name
@@ -38,24 +38,35 @@
     #define LITERAL(value) $value
     #define MACRO_LITERAL(value) $$value
 #else
-    // Regular gas(1) lets you name macro parameters.
+    // Regular gas(1) & newer clang/llvm assembler support named macro parameters.
     #define MACRO0(macro_name) .macro macro_name
     #define MACRO1(macro_name, macro_arg1) .macro macro_name macro_arg1
     #define MACRO2(macro_name, macro_arg1, macro_arg2) .macro macro_name macro_arg1, macro_arg2
     #define MACRO3(macro_name, macro_arg1, macro_arg2, macro_arg3) .macro macro_name macro_arg1, macro_arg2, macro_arg3
     #define END_MACRO .endm
 
-    // Regular gas(1) uses \argument_name for macro arguments.
-    // We need to turn on alternate macro syntax so we can use & instead or the preprocessor
-    // will screw us by inserting a space between the \ and the name. Even in this mode there's
-    // no special meaning to $, so literals are still just $x. The use of altmacro means % is a
-    // special character meaning care needs to be taken when passing registers as macro arguments.
-    .altmacro
-    #define RAW_VAR(name,index) name&
-    #define VAR(name,index) name&
-    #define PLT_VAR(name, index) name&@PLT
-    #define REG_VAR(name,index) %name
-    #define CALL_MACRO(name,index) name&
+    #if defined(__clang__)
+        // Clang/llvm does not support .altmacro. However, the clang/llvm preprocessor doesn't
+        // separate the backslash and parameter by a space. Everything just works.
+        #define RAW_VAR(name,index) name
+        #define VAR(name,index) \name
+        #define PLT_VAR(name, index) \name@PLT
+        #define REG_VAR(name,index) %\name
+        #define CALL_MACRO(name,index) \name
+    #else
+        // Regular gas(1) uses \argument_name for macro arguments.
+        // We need to turn on alternate macro syntax so we can use & instead or the preprocessor
+        // will screw us by inserting a space between the \ and the name. Even in this mode there's
+        // no special meaning to $, so literals are still just $x. The use of altmacro means % is a
+        // special character meaning care needs to be taken when passing registers as macro
+        // arguments.
+        .altmacro
+        #define RAW_VAR(name,index) name&
+        #define VAR(name,index) name&
+        #define PLT_VAR(name, index) name&@PLT
+        #define REG_VAR(name,index) %name
+        #define CALL_MACRO(name,index) name&
+    #endif
 
     #define LITERAL(value) $value
     #define MACRO_LITERAL(value) $value
@@ -64,11 +75,8 @@
 #if defined(__APPLE__)
     #define FUNCTION_TYPE(name,index)
     #define SIZE(name,index)
-#elif defined(__clang__) && (__clang_major__ < 4) && (__clang_minor__ < 5)
-    #define FUNCTION_TYPE(name,index) .type $index, @function
-    #define SIZE(name,index) .size $index, .-$index
 #else
-    #define FUNCTION_TYPE(name,index) .type name&, @function
+    #define FUNCTION_TYPE(name,index) .type RAW_VAR(name,index), @function
     #define SIZE(name,index) .size name, .-name
 #endif
 
@@ -95,13 +103,7 @@
     // Symbols.
 #if !defined(__APPLE__)
     #define SYMBOL(name) name
-    #if defined(__clang__) && (__clang_major__ < 4) && (__clang_minor__ < 5)
-        // TODO: Disabled for old clang 3.3, this leads to text relocations and there should be a
-        // better fix.
-        #define PLT_SYMBOL(name) name // ## @PLT
-    #else
-        #define PLT_SYMBOL(name) name ## @PLT
-    #endif
+    #define PLT_SYMBOL(name) name ## @PLT
 #else
     #define SYMBOL(name) _ ## name
     #define PLT_SYMBOL(name) _ ## name
@@ -151,7 +153,7 @@ END_MACRO
 
 MACRO1(UNIMPLEMENTED,name)
     FUNCTION_TYPE(\name, 0)
-    ASM_HIDDEN VAR(c_name, 0)
+    ASM_HIDDEN VAR(name, 0)
     .globl VAR(name, 0)
     ALIGN_FUNCTION_ENTRY
 VAR(name, 0):
