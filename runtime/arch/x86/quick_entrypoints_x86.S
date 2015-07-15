@@ -33,7 +33,6 @@ MACRO2(SETUP_SAVE_ALL_CALLEE_SAVE_FRAME, got_reg, temp_reg)
     movl SYMBOL(_ZN3art7Runtime9instance_E)@GOT(REG_VAR(got_reg, 0)), REG_VAR(temp_reg, 1)
     movl (REG_VAR(temp_reg, 1)), REG_VAR(temp_reg, 1)
     // Push save all callee-save method.
-    THIS_LOAD_REQUIRES_READ_BARRIER
     pushl RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET(REG_VAR(temp_reg, 1))
     CFI_ADJUST_CFA_OFFSET(4)
     // Store esp as the top quick frame.
@@ -60,7 +59,6 @@ MACRO2(SETUP_REFS_ONLY_CALLEE_SAVE_FRAME, got_reg, temp_reg)
     movl SYMBOL(_ZN3art7Runtime9instance_E)@GOT(REG_VAR(got_reg, 0)), REG_VAR(temp_reg, 1)
     movl (REG_VAR(temp_reg, 1)), REG_VAR(temp_reg, 1)
     // Push save all callee-save method.
-    THIS_LOAD_REQUIRES_READ_BARRIER
     pushl RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET(REG_VAR(temp_reg, 1))
     CFI_ADJUST_CFA_OFFSET(4)
     // Store esp as the top quick frame.
@@ -106,7 +104,6 @@ MACRO2(SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME, got_reg, temp_reg)
     movl SYMBOL(_ZN3art7Runtime9instance_E)@GOT(REG_VAR(got_reg, 0)), REG_VAR(temp_reg, 1)
     movl (REG_VAR(temp_reg, 1)), REG_VAR(temp_reg, 1)
     // Push save all callee-save method.
-    THIS_LOAD_REQUIRES_READ_BARRIER
     pushl RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET(REG_VAR(temp_reg, 1))
     CFI_ADJUST_CFA_OFFSET(4)
     // Store esp as the stop quick frame.
@@ -1125,6 +1122,51 @@ DEFINE_FUNCTION art_quick_check_cast
     int3                          // unreached
 END_FUNCTION art_quick_check_cast
 
+// Restore reg's value if reg is not the same as exclude, otherwise just adjust stack.
+MACRO2(POP_REG_NE, reg, exclude)
+    .ifc RAW_VAR(reg, 0), RAW_VAR(exclude, 1)
+      addl MACRO_LITERAL(4), %esp
+      CFI_ADJUST_CFA_OFFSET(-4)
+    .else
+      POP RAW_VAR(reg, 0)
+    .endif
+END_MACRO
+
+// Macros to insert read barrier, only used in art_quick_aput_obj.
+// TODO: When read barrier has a fast path, add heap unpoisoning support for the fast path.
+// obj and dest are registers, offset is a defined literal such as MIRROR_OBJECT_CLASS_OFFSET.
+// pop_eax is a boolean flag, indicating if eax is popped after the call.
+MACRO4(READ_BARRIER, obj, offset, dest, pop_eax)
+#ifdef USE_READ_BARRIER
+    PUSH eax                      // save registers used in art_quick_aput_obj
+    PUSH ebx
+    PUSH edx
+    PUSH ecx
+    // Outgoing argument set up
+    PUSH eax                        // push padding
+    pushl MACRO_LITERAL((RAW_VAR(offset, 1)))  // pass offset, double parentheses are necessary
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH RAW_VAR(obj, 0)            // pass obj
+    PUSH eax                        // pass ref (just pass eax for now since ref is unused)
+    call SYMBOL(artReadBarrierSlow) // artReadBarrierSlow(ref, obj, offset)
+    // No need to unpoison return value in eax, artReadBarrierSlow() would do the unpoisoning.
+    .ifnc RAW_VAR(dest, 2), eax
+      movl %eax, REG_VAR(dest, 2)   // save loaded ref in dest
+    .endif
+    addl MACRO_LITERAL(16), %esp    // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-16)
+    POP_REG_NE ecx, RAW_VAR(dest, 2) // Restore args except dest
+    POP_REG_NE edx, RAW_VAR(dest, 2)
+    POP_REG_NE ebx, RAW_VAR(dest, 2)
+    .ifc RAW_VAR(pop_eax, 3), true
+      POP_REG_NE eax, RAW_VAR(dest, 2)
+    .endif
+#else
+    movl RAW_VAR(offset, 1)(REG_VAR(obj, 0)), REG_VAR(dest, 2)
+    UNPOISON_HEAP_REF RAW_VAR(dest, 2)
+#endif  // USE_READ_BARRIER
+END_MACRO
+
     /*
      * Entry from managed code for array put operations of objects where the value being stored
      * needs to be checked for compatibility.
@@ -1148,17 +1190,20 @@ END_FUNCTION art_quick_aput_obj_with_bound_check
 DEFINE_FUNCTION art_quick_aput_obj
     test %edx, %edx              // store of null
     jz .Ldo_aput_null
-    movl MIRROR_OBJECT_CLASS_OFFSET(%eax), %ebx
-    UNPOISON_HEAP_REF ebx
-    movl MIRROR_CLASS_COMPONENT_TYPE_OFFSET(%ebx), %ebx
-    UNPOISON_HEAP_REF ebx
+    READ_BARRIER eax, MIRROR_OBJECT_CLASS_OFFSET, ebx, true
+    READ_BARRIER ebx, MIRROR_CLASS_COMPONENT_TYPE_OFFSET, ebx, true
     // value's type == array's component type - trivial assignability
-#ifdef USE_HEAP_POISONING
+#if defined(USE_READ_BARRIER)
+    READ_BARRIER edx, MIRROR_OBJECT_CLASS_OFFSET, eax, false
+    cmpl %eax, %ebx
+    POP eax   // restore eax from the push in the beginning of READ_BARRIER macro
+#elif defined(USE_HEAP_POISONING)
     PUSH eax  // save eax
+    // Cannot call READ_BARRIER macro here, because the above push messes up stack alignment.
     movl MIRROR_OBJECT_CLASS_OFFSET(%edx), %eax
     UNPOISON_HEAP_REF eax
     cmpl %eax, %ebx
-    POP  eax  // restore eax
+    POP eax  // restore eax
 #else
     cmpl MIRROR_OBJECT_CLASS_OFFSET(%edx), %ebx
 #endif
@@ -1179,10 +1224,9 @@ DEFINE_FUNCTION art_quick_aput_obj
     PUSH edx
     subl LITERAL(8), %esp        // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
-#ifdef USE_HEAP_POISONING
-    movl MIRROR_OBJECT_CLASS_OFFSET(%edx), %eax  // pass arg2 - type of the value to be stored
-    UNPOISON_HEAP_REF eax
-    PUSH eax
+#if defined(USE_HEAP_POISONING) || defined(USE_READ_BARRIER)
+    READ_BARRIER edx, MIRROR_OBJECT_CLASS_OFFSET, eax, true
+    PUSH eax                     // pass arg2 - type of the value to be stored
 #else
     pushl MIRROR_OBJECT_CLASS_OFFSET(%edx)  // pass arg2 - type of the value to be stored
     CFI_ADJUST_CFA_OFFSET(4)

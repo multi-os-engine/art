@@ -44,7 +44,6 @@
     sub sp, #12                                   @ 3 words of space, bottom word will hold Method*
     .cfi_adjust_cfa_offset 12
     RUNTIME_CURRENT1 \rTemp1, \rTemp2             @ Load Runtime::Current into rTemp1.
-    THIS_LOAD_REQUIRES_READ_BARRIER
     ldr \rTemp1, [\rTemp1, #RUNTIME_SAVE_ALL_CALLEE_SAVE_FRAME_OFFSET] @ rTemp1 is kSaveAll Method*.
     str \rTemp1, [sp, #0]                         @ Place Method* at bottom of stack.
     str sp, [r9, #THREAD_TOP_QUICK_FRAME_OFFSET]  @ Place sp in Thread::Current()->top_quick_frame.
@@ -72,7 +71,6 @@
     sub sp, #4                                    @ bottom word will hold Method*
     .cfi_adjust_cfa_offset 4
     RUNTIME_CURRENT2 \rTemp1, \rTemp2             @ Load Runtime::Current into rTemp1.
-    THIS_LOAD_REQUIRES_READ_BARRIER
     ldr \rTemp1, [\rTemp1, #RUNTIME_REFS_ONLY_CALLEE_SAVE_FRAME_OFFSET] @ rTemp1 is kRefsOnly Method*.
     str \rTemp1, [sp, #0]                         @ Place Method* at bottom of stack.
     str sp, [r9, #THREAD_TOP_QUICK_FRAME_OFFSET]  @ Place sp in Thread::Current()->top_quick_frame.
@@ -132,7 +130,6 @@
 .macro SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME rTemp1, rTemp2
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_REGISTERS_ONLY
     RUNTIME_CURRENT3 \rTemp1, \rTemp2  @ Load Runtime::Current into rTemp1.
-    THIS_LOAD_REQUIRES_READ_BARRIER
      @ rTemp1 is kRefsAndArgs Method*.
     ldr \rTemp1, [\rTemp1, #RUNTIME_REFS_AND_ARGS_CALLEE_SAVE_FRAME_OFFSET]
     str \rTemp1, [sp, #0]                         @ Place Method* at bottom of stack.
@@ -163,7 +160,6 @@
     .cfi_restore lr
     .cfi_adjust_cfa_offset -40
 .endm
-
 
 .macro RETURN_IF_RESULT_IS_ZERO
     cbnz   r0, 1f              @ result non-zero branch over
@@ -591,6 +587,58 @@ ENTRY art_quick_check_cast
     bkpt
 END art_quick_check_cast
 
+// Restore reg's value if reg is not the same as exclude, otherwise just adjust stack.
+.macro POP_REG_NE reg, exclude
+    .ifnc \reg, \exclude
+        pop {\reg}             @ restore reg
+        .cfi_restore \reg
+    .else
+        add sp, #4             @ skip reg
+    .endif
+    .cfi_adjust_cfa_offset -4
+.endm
+
+// Macros to insert read barrier, only used in art_quick_aput_obj.
+// TODO: When read barrier has a fast path, add heap unpoisoning support for the fast path.
+// obj and dest are registers, offset is a defined literal such as MIRROR_OBJECT_CLASS_OFFSET.
+.macro READ_BARRIER obj, offset, dest
+#ifdef USE_READ_BARRIER
+    .extern artReadBarrierSlow
+    push {r0-r3, ip, lr}            @ 6 words for saved registers (used in art_quick_aput_obj)
+    .cfi_adjust_cfa_offset 24
+    .cfi_rel_offset r1, 0
+    .cfi_rel_offset r2, 4
+    .cfi_rel_offset r3, 8
+    .cfi_rel_offset ip, 12
+    .cfi_rel_offset lr, 16
+    sub sp, #8                      @ push padding
+    .cfi_adjust_cfa_offset 8
+    @ mov r0, r0                    @ pass ref in r0 (no-op for now since ref is unused)
+    .ifnc \obj, r1
+        mov r1, \obj                @ pass obj
+    .endif
+    mov r2, #(\offset)              @ pass offset
+    bl artReadBarrierSlow           @ artReadBarrierSlow(ref, obj, offset)
+    @ No need to unpoison return value in r0, artReadBarrierSlow() would do the unpoisoning.
+    .ifnc \dest, r0
+        mov \dest, r0               @ save return value in dest
+    .endif
+    add sp, #8                      @ pop padding
+    .cfi_adjust_cfa_offset -8
+    POP_REG_NE r0, \dest            @ conditionally restore saved registers
+    POP_REG_NE r1, \dest
+    POP_REG_NE r2, \dest
+    POP_REG_NE r3, \dest
+    POP_REG_NE ip, \dest
+    pop {lr}                        @ restore lr
+    .cfi_adjust_cfa_offset -4
+    .cfi_restore lr
+#else
+    ldr \dest, [\obj, #(\offset)]
+    UNPOISON_HEAP_REF \dest
+#endif  // USE_READ_BARRIER
+.endm
+
     /*
      * Entry from managed code for array put operations of objects where the value being stored
      * needs to be checked for compatibility.
@@ -614,13 +662,15 @@ END art_quick_aput_obj_with_bound_check
 
     .hidden art_quick_aput_obj
 ENTRY art_quick_aput_obj
+#ifdef USE_READ_BARRIER
+    tst r2, r2
+    beq .Ldo_aput_null
+#else
     cbz r2, .Ldo_aput_null
-    ldr r3, [r0, #MIRROR_OBJECT_CLASS_OFFSET]
-    UNPOISON_HEAP_REF r3
-    ldr ip, [r2, #MIRROR_OBJECT_CLASS_OFFSET]
-    UNPOISON_HEAP_REF ip
-    ldr r3, [r3, #MIRROR_CLASS_COMPONENT_TYPE_OFFSET]
-    UNPOISON_HEAP_REF r3
+#endif  // USE_READ_BARRIER
+    READ_BARRIER r0, MIRROR_OBJECT_CLASS_OFFSET, r3
+    READ_BARRIER r2, MIRROR_OBJECT_CLASS_OFFSET, ip
+    READ_BARRIER r3, MIRROR_CLASS_COMPONENT_TYPE_OFFSET, r3
     cmp r3, ip  @ value's type == array's component type - trivial assignability
     bne .Lcheck_assignability
 .Ldo_aput:
