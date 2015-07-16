@@ -120,6 +120,16 @@ class VariableIndentationOutputStream {
     return indented_os_;
   }
 
+  template <typename T>
+  std::ostream& operator<<(T&& rhs) {
+    return indented_os_ << std::forward<T>(rhs);
+  }
+
+  std::ostream& operator<<(std::ostream& (*manipulator)(std::ostream&)) {
+    return indented_os_ << manipulator;
+  }
+
+ private:
   void IncreaseIndentation(size_t adjustment) {
     indenter_.count_ += adjustment;
   }
@@ -129,9 +139,10 @@ class VariableIndentationOutputStream {
     indenter_.count_ -= adjustment;
   }
 
- private:
   Indenter indenter_;
   std::ostream indented_os_;
+
+  friend class ScopedIndentation;
 
   DISALLOW_COPY_AND_ASSIGN(VariableIndentationOutputStream);
 };
