@@ -23,7 +23,7 @@
 #define __has_feature(x) 0
 #endif
 
-#if __has_feature(address_sanitizer)
+#if __has_feature(address_sanitizer) && defined(ART_ENABLE_ADDRESS_SANITIZER)
 
 #include <sanitizer/asan_interface.h>
 #define ADDRESS_SANITIZER
