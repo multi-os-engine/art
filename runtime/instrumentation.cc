@@ -832,7 +832,6 @@ const void* Instrumentation::GetQuickCodeFor(ArtMethod* method, size_t pointer_s
   Runtime* runtime = Runtime::Current();
   if (LIKELY(!instrumentation_stubs_installed_)) {
     const void* code = method->GetEntryPointFromQuickCompiledCodePtrSize(pointer_size);
-    DCHECK(code != nullptr);
     ClassLinker* class_linker = runtime->GetClassLinker();
     if (LIKELY(!class_linker->IsQuickResolutionStub(code) &&
                !class_linker->IsQuickToInterpreterBridge(code)) &&

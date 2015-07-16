@@ -1359,9 +1359,15 @@ class OatDumper {
   // the dextodex compiler?
   static bool IsMethodGeneratedByDexToDexCompiler(const OatFile::OatMethod& oat_method,
                                                   const DexFile::CodeItem* code_item) {
+<<<<<<< HEAD
     // If the quick code is null, the Dex `code_item` is not
     // null, and the vmap table is not null, then this method has been compiled
     // with the dextodex compiler.
+=======
+    // If the native GC map is null and the Dex `code_item` is not
+    // null, then this method has been compiled with the optimizing
+    // compiler.
+>>>>>>> Use the quickened metadata to compile -QUICK opcodes.
     return oat_method.GetQuickCode() == nullptr &&
            oat_method.GetVmapTable() != nullptr &&
            code_item != nullptr;
