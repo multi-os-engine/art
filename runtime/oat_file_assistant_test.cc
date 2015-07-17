@@ -446,6 +446,25 @@ TEST_F(OatFileAssistantTest, OatOutOfDate) {
   EXPECT_TRUE(oat_file_assistant.HasOriginalDexFiles());
 }
 
+// Some tests very occasionally fail: we expect to have an unrelocated non-pic
+// odex file that is reported as needing relocation, but it is reported
+// instead as being up to date.
+//
+// This function adds extra checks for diagnosing why the given oat file is
+// reported up to date, when it should be non-pic needing relocation.
+static void DiagnoseFlakyTestFailure(const OatFile& oat_file) {
+  Runtime* runtime = Runtime::Current();
+  const gc::space::ImageSpace* image_space = runtime->GetHeap()->GetImageSpace();
+  ASSERT_TRUE(image_space != nullptr);
+  const ImageHeader& image_header = image_space->GetImageHeader();
+  const OatHeader& oat_header = oat_file.GetOatHeader();
+  EXPECT_FALSE(oat_file.IsPic());
+  EXPECT_EQ(image_header.GetOatChecksum(), oat_header.GetImageFileLocationOatChecksum());
+  EXPECT_NE(reinterpret_cast<uintptr_t>(image_header.GetOatDataBegin()),
+      oat_header.GetImageFileLocationOatDataBegin());
+  EXPECT_NE(image_header.GetPatchDelta(), oat_header.GetImagePatchDelta());
+}
+
 // Case: We have a DEX file and an ODEX file, but no OAT file.
 // Expect: The status is kPatchOatNeeded.
 TEST_F(OatFileAssistantTest, DexOdexNoOat) {
@@ -470,6 +489,12 @@ TEST_F(OatFileAssistantTest, DexOdexNoOat) {
   EXPECT_TRUE(oat_file_assistant.OatFileIsOutOfDate());
   EXPECT_FALSE(oat_file_assistant.OatFileIsUpToDate());
   EXPECT_TRUE(oat_file_assistant.HasOriginalDexFiles());
+
+  // We should still be able to get the non-executable odex file to run from.
+  std::unique_ptr<OatFile> oat_file = oat_file_assistant.GetBestOatFile();
+  ASSERT_TRUE(oat_file.get() != nullptr);
+
+  DiagnoseFlakyTestFailure(*oat_file);
 }
 
 // Case: We have a stripped DEX file and an ODEX file, but no OAT file.
@@ -712,17 +737,7 @@ TEST_F(OatFileAssistantTest, OdexOatOverlap) {
   dex_files = oat_file_assistant.LoadDexFiles(*oat_file, dex_location.c_str());
   EXPECT_EQ(1u, dex_files.size());
 
-  // Add some extra checks to help diagnose apparently flaky test failures.
-  Runtime* runtime = Runtime::Current();
-  const gc::space::ImageSpace* image_space = runtime->GetHeap()->GetImageSpace();
-  ASSERT_TRUE(image_space != nullptr);
-  const ImageHeader& image_header = image_space->GetImageHeader();
-  const OatHeader& oat_header = oat_file->GetOatHeader();
-  EXPECT_FALSE(oat_file->IsPic());
-  EXPECT_EQ(image_header.GetOatChecksum(), oat_header.GetImageFileLocationOatChecksum());
-  EXPECT_NE(reinterpret_cast<uintptr_t>(image_header.GetOatDataBegin()),
-      oat_header.GetImageFileLocationOatDataBegin());
-  EXPECT_NE(image_header.GetPatchDelta(), oat_header.GetImagePatchDelta());
+  DiagnoseFlakyTestFailure(*oat_file);
 }
 
 // Case: We have a DEX file and a PIC ODEX file, but no OAT file.
