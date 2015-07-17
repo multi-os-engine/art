@@ -35,19 +35,18 @@ class SignalCatcher {
   explicit SignalCatcher(const std::string& stack_trace_file);
   ~SignalCatcher();
 
-  void HandleSigQuit() LOCKS_EXCLUDED(Locks::mutator_lock_,
-                                      Locks::thread_list_lock_,
-                                      Locks::thread_suspend_count_lock_);
+  void HandleSigQuit() REQUIRES(!Locks::mutator_lock_, !Locks::thread_list_lock_,
+                                !Locks::thread_suspend_count_lock_);
 
 
  private:
-  static void* Run(void* arg);
+  static void* Run(void* arg) NO_THREAD_SAFETY_ANALYSIS;
 
   void HandleSigUsr1();
   void Output(const std::string& s);
-  void SetHaltFlag(bool new_value);
-  bool ShouldHalt();
-  int WaitForSignal(Thread* self, SignalSet& signals);
+  void SetHaltFlag(bool new_value) REQUIRES(!lock_);
+  bool ShouldHalt() REQUIRES(!lock_);
+  int WaitForSignal(Thread* self, SignalSet& signals) REQUIRES(!lock_);
 
   std::string stack_trace_file_;
 

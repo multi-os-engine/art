@@ -43,8 +43,8 @@
 
 namespace art {
 
-class LOCKABLE ReaderWriterMutex;
-class LOCKABLE MutatorMutex;
+class SHARED_LOCKABLE ReaderWriterMutex;
+class SHARED_LOCKABLE MutatorMutex;
 class ScopedContentionRecorder;
 class Thread;
 
@@ -228,20 +228,22 @@ class LOCKABLE Mutex : public BaseMutex {
   bool IsExclusiveHeld(const Thread* self) const;
 
   // Assert that the Mutex is exclusively held by the current thread.
-  void AssertExclusiveHeld(const Thread* self) {
+  void AssertExclusiveHeld(const Thread* self) ASSERT_CAPABILITY(this) {
     if (kDebugLocking && (gAborting == 0)) {
       CHECK(IsExclusiveHeld(self)) << *this;
     }
   }
-  void AssertHeld(const Thread* self) { AssertExclusiveHeld(self); }
+  void AssertHeld(const Thread* self) ASSERT_CAPABILITY(this) { AssertExclusiveHeld(self); }
 
   // Assert that the Mutex is not held by the current thread.
-  void AssertNotHeldExclusive(const Thread* self) {
+  void AssertNotHeldExclusive(const Thread* self) ASSERT_CAPABILITY(!*this) {
     if (kDebugLocking && (gAborting == 0)) {
       CHECK(!IsExclusiveHeld(self)) << *this;
     }
   }
-  void AssertNotHeld(const Thread* self) { AssertNotHeldExclusive(self); }
+  void AssertNotHeld(const Thread* self) ASSERT_CAPABILITY(!*this) {
+    AssertNotHeldExclusive(self);
+  }
 
   // Id associated with exclusive owner. No memory ordering semantics if called from a thread other
   // than the owner.
@@ -253,6 +255,9 @@ class LOCKABLE Mutex : public BaseMutex {
   }
 
   virtual void Dump(std::ostream& os) const;
+
+  // For negative capabilities in clang annotations.
+  const Mutex& operator!() const { return *this; }
 
  private:
 #if ART_USE_FUTEXES
@@ -289,7 +294,7 @@ class LOCKABLE Mutex : public BaseMutex {
 // Shared(n) | Block         | error           | SharedLock(n+1)* | Shared(n-1) or Free
 // * for large values of n the SharedLock may block.
 std::ostream& operator<<(std::ostream& os, const ReaderWriterMutex& mu);
-class LOCKABLE ReaderWriterMutex : public BaseMutex {
+class SHARED_LOCKABLE ReaderWriterMutex : public BaseMutex {
  public:
   explicit ReaderWriterMutex(const char* name, LockLevel level = kDefaultMutexLevel);
   ~ReaderWriterMutex();
@@ -367,6 +372,9 @@ class LOCKABLE ReaderWriterMutex : public BaseMutex {
 
   virtual void Dump(std::ostream& os) const;
 
+  // For negative capabilities in clang annotations.
+  const ReaderWriterMutex& operator!() const { return *this; }
+
  private:
 #if ART_USE_FUTEXES
   // Out-of-inline path for handling contention for a SharedLock.
@@ -401,13 +409,16 @@ class LOCKABLE ReaderWriterMutex : public BaseMutex {
 // suspended states before exclusive ownership of the mutator mutex is sought.
 //
 std::ostream& operator<<(std::ostream& os, const MutatorMutex& mu);
-class LOCKABLE MutatorMutex : public ReaderWriterMutex {
+class SHARED_LOCKABLE MutatorMutex : public ReaderWriterMutex {
  public:
   explicit MutatorMutex(const char* name, LockLevel level = kDefaultMutexLevel)
     : ReaderWriterMutex(name, level) {}
   ~MutatorMutex() {}
 
   virtual bool IsMutatorMutex() const { return true; }
+
+  // For negative capabilities in clang annotations.
+  const MutatorMutex& operator!() const { return *this; }
 
  private:
   friend class Thread;
