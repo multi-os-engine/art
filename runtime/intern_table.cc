@@ -184,7 +184,7 @@ void InternTable::AddImageStringsToTable(gc::space::ImageSpace* image_space) {
 }
 
 mirror::String* InternTable::LookupStringFromImage(mirror::String* s)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   if (image_added_to_intern_table_) {
     return nullptr;
   }

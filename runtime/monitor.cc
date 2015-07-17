@@ -298,7 +298,7 @@ static void ThrowIllegalMonitorStateExceptionF(const char* fmt, ...)
                                               __attribute__((format(printf, 1, 2)));
 
 static void ThrowIllegalMonitorStateExceptionF(const char* fmt, ...)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   va_list args;
   va_start(args, fmt);
   Thread* self = Thread::Current();
@@ -1083,7 +1083,7 @@ bool Monitor::IsValidLockWord(LockWord lock_word) {
   }
 }
 
-bool Monitor::IsLocked() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+bool Monitor::IsLocked() SHARED_REQUIRES(Locks::mutator_lock_) {
   MutexLock mu(Thread::Current(), monitor_lock_);
   return owner_ != nullptr;
 }
@@ -1189,7 +1189,7 @@ class MonitorDeflateVisitor : public IsMarkedVisitor {
   MonitorDeflateVisitor() : self_(Thread::Current()), deflate_count_(0) {}
 
   virtual mirror::Object* IsMarked(mirror::Object* object) OVERRIDE
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      SHARED_REQUIRES(Locks::mutator_lock_) {
     if (Monitor::Deflate(self_, object)) {
       DCHECK_NE(object->GetLockWord(true).GetState(), LockWord::kFatLocked);
       ++deflate_count_;

@@ -61,7 +61,7 @@ class ThreadPoolWorker {
 
  protected:
   ThreadPoolWorker(ThreadPool* thread_pool, const std::string& name, size_t stack_size);
-  static void* Callback(void* arg) LOCKS_EXCLUDED(Locks::mutator_lock_);
+  static void* Callback(void* arg) REQUIRES(!Locks::mutator_lock_);
   virtual void Run();
 
   ThreadPool* const thread_pool_;
@@ -114,10 +114,10 @@ class ThreadPool {
 
   // Try to get a task, returning null if there is none available.
   Task* TryGetTask(Thread* self);
-  Task* TryGetTaskLocked() EXCLUSIVE_LOCKS_REQUIRED(task_queue_lock_);
+  Task* TryGetTaskLocked() REQUIRES(task_queue_lock_);
 
   // Are we shutting down?
-  bool IsShuttingDown() const EXCLUSIVE_LOCKS_REQUIRED(task_queue_lock_) {
+  bool IsShuttingDown() const REQUIRES(task_queue_lock_) {
     return shutting_down_;
   }
 
