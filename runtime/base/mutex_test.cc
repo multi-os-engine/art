@@ -101,7 +101,7 @@ struct RecursiveLockWait {
       : mu("test mutex", kDefaultMutexLevel, true), cv("test condition variable", mu) {
   }
 
-  static void* Callback(void* arg) {
+  static void* Callback(void* arg) NO_THREAD_SAFETY_ANALYSIS {
     RecursiveLockWait* state = reinterpret_cast<RecursiveLockWait*>(arg);
     state->mu.Lock(Thread::Current());
     state->cv.Signal(Thread::Current());
