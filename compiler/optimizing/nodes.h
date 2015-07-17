@@ -1467,26 +1467,26 @@ class ReferenceTypeInfo : ValueObject {
 
   static ReferenceTypeInfo CreateInvalid() { return ReferenceTypeInfo(); }
 
-  static bool IsValidHandle(TypeHandle handle) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  static bool IsValidHandle(TypeHandle handle) SHARED_REQUIRES(Locks::mutator_lock_) {
     return handle.GetReference() != nullptr;
   }
 
-  bool IsValid() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  bool IsValid() const SHARED_REQUIRES(Locks::mutator_lock_) {
     return IsValidHandle(type_handle_);
   }
   bool IsExact() const { return is_exact_; }
-  bool IsObjectClass() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  bool IsObjectClass() const SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(IsValid());
     return GetTypeHandle()->IsObjectClass();
   }
-  bool IsInterface() const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  bool IsInterface() const SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(IsValid());
     return GetTypeHandle()->IsInterface();
   }
 
   Handle<mirror::Class> GetTypeHandle() const { return type_handle_; }
 
-  bool IsSupertypeOf(ReferenceTypeInfo rti) const SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  bool IsSupertypeOf(ReferenceTypeInfo rti) const SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(IsValid());
     DCHECK(rti.IsValid());
     return GetTypeHandle()->IsAssignableFrom(rti.GetTypeHandle().Get());
@@ -1495,7 +1495,7 @@ class ReferenceTypeInfo : ValueObject {
   // Returns true if the type information provide the same amount of details.
   // Note that it does not mean that the instructions have the same actual type
   // (because the type can be the result of a merge).
-  bool IsEqual(ReferenceTypeInfo rti) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  bool IsEqual(ReferenceTypeInfo rti) SHARED_REQUIRES(Locks::mutator_lock_) {
     if (!IsValid() && !rti.IsValid()) {
       // Invalid types are equal.
       return true;

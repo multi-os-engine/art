@@ -153,7 +153,7 @@ static HBoundType* CreateBoundType(ArenaAllocator* arena,
                                    HInstruction* obj,
                                    HLoadClass* load_class,
                                    bool upper_can_be_null)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      SHARED_REQUIRES(Locks::mutator_lock_) {
   ReferenceTypeInfo obj_rti = obj->GetReferenceTypeInfo();
   ReferenceTypeInfo class_rti = load_class->GetLoadedClassRTI();
   HBoundType* bound_type = new (arena) HBoundType(obj, class_rti, upper_can_be_null);
@@ -180,7 +180,7 @@ static bool ShouldCreateBoundType(HInstruction* position,
                                   ReferenceTypeInfo upper_bound,
                                   HInstruction* dominator_instr,
                                   HBasicBlock* dominator_block)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   // If the position where we should insert the bound type is not already a
   // a bound type then we need to create one.
   if (position == nullptr || !position->IsBoundType()) {
@@ -546,7 +546,7 @@ ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& 
 static void UpdateArrayGet(HArrayGet* instr,
                            StackHandleScopeCollection* handles,
                            ReferenceTypeInfo::TypeHandle object_class_handle)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   DCHECK_EQ(Primitive::kPrimNot, instr->GetType());
 
   ReferenceTypeInfo parent_rti = instr->InputAt(0)->GetReferenceTypeInfo();
