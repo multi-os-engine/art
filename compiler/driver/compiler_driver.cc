@@ -167,69 +167,69 @@ class CompilerDriver::AOTCompilationStats {
 #define STATS_LOCK()
 #endif
 
-  void TypeInDexCache() {
+  void TypeInDexCache() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     types_in_dex_cache_++;
   }
 
-  void TypeNotInDexCache() {
+  void TypeNotInDexCache() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     types_not_in_dex_cache_++;
   }
 
-  void StringInDexCache() {
+  void StringInDexCache() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     strings_in_dex_cache_++;
   }
 
-  void StringNotInDexCache() {
+  void StringNotInDexCache() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     strings_not_in_dex_cache_++;
   }
 
-  void TypeDoesntNeedAccessCheck() {
+  void TypeDoesntNeedAccessCheck() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     resolved_types_++;
   }
 
-  void TypeNeedsAccessCheck() {
+  void TypeNeedsAccessCheck() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     unresolved_types_++;
   }
 
-  void ResolvedInstanceField() {
+  void ResolvedInstanceField() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     resolved_instance_fields_++;
   }
 
-  void UnresolvedInstanceField() {
+  void UnresolvedInstanceField() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     unresolved_instance_fields_++;
   }
 
-  void ResolvedLocalStaticField() {
+  void ResolvedLocalStaticField() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     resolved_local_static_fields_++;
   }
 
-  void ResolvedStaticField() {
+  void ResolvedStaticField() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     resolved_static_fields_++;
   }
 
-  void UnresolvedStaticField() {
+  void UnresolvedStaticField() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     unresolved_static_fields_++;
   }
 
   // Indicate that type information from the verifier led to devirtualization.
-  void PreciseTypeDevirtualization() {
+  void PreciseTypeDevirtualization() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     type_based_devirtualization_++;
   }
 
   // Indicate that a method of the given type was resolved at compile time.
-  void ResolvedMethod(InvokeType type) {
+  void ResolvedMethod(InvokeType type) REQUIRES(!stats_lock_) {
     DCHECK_LE(type, kMaxInvokeType);
     STATS_LOCK();
     resolved_methods_[type]++;
@@ -237,7 +237,7 @@ class CompilerDriver::AOTCompilationStats {
 
   // Indicate that a method of the given type was unresolved at compile time as it was in an
   // unknown dex file.
-  void UnresolvedMethod(InvokeType type) {
+  void UnresolvedMethod(InvokeType type) REQUIRES(!stats_lock_) {
     DCHECK_LE(type, kMaxInvokeType);
     STATS_LOCK();
     unresolved_methods_[type]++;
@@ -245,27 +245,27 @@ class CompilerDriver::AOTCompilationStats {
 
   // Indicate that a type of virtual method dispatch has been converted into a direct method
   // dispatch.
-  void VirtualMadeDirect(InvokeType type) {
+  void VirtualMadeDirect(InvokeType type) REQUIRES(!stats_lock_) {
     DCHECK(type == kVirtual || type == kInterface || type == kSuper);
     STATS_LOCK();
     virtual_made_direct_[type]++;
   }
 
   // Indicate that a method of the given type was able to call directly into boot.
-  void DirectCallsToBoot(InvokeType type) {
+  void DirectCallsToBoot(InvokeType type) REQUIRES(!stats_lock_) {
     DCHECK_LE(type, kMaxInvokeType);
     STATS_LOCK();
     direct_calls_to_boot_[type]++;
   }
 
   // Indicate that a method of the given type was able to be resolved directly from boot.
-  void DirectMethodsToBoot(InvokeType type) {
+  void DirectMethodsToBoot(InvokeType type) REQUIRES(!stats_lock_) {
     DCHECK_LE(type, kMaxInvokeType);
     STATS_LOCK();
     direct_methods_to_boot_[type]++;
   }
 
-  void ProcessedInvoke(InvokeType type, int flags) {
+  void ProcessedInvoke(InvokeType type, int flags) REQUIRES(!stats_lock_) {
     STATS_LOCK();
     if (flags == 0) {
       unresolved_methods_[type]++;
@@ -290,13 +290,13 @@ class CompilerDriver::AOTCompilationStats {
   }
 
   // A check-cast could be eliminated due to verifier type analysis.
-  void SafeCast() {
+  void SafeCast() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     safe_casts_++;
   }
 
   // A check-cast couldn't be eliminated due to verifier type analysis.
-  void NotASafeCast() {
+  void NotASafeCast() REQUIRES(!stats_lock_) {
     STATS_LOCK();
     not_safe_casts_++;
   }
@@ -692,7 +692,7 @@ bool CompilerDriver::IsMethodToCompile(const MethodReference& method_ref) const 
 
 static void ResolveExceptionsForMethod(
     ArtMethod* method_handle, std::set<std::pair<uint16_t, const DexFile*>>& exceptions_to_resolve)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   const DexFile::CodeItem* code_item = method_handle->GetCodeItem();
   if (code_item == nullptr) {
     return;  // native or abstract method
@@ -729,7 +729,7 @@ static void ResolveExceptionsForMethod(
 }
 
 static bool ResolveCatchBlockExceptionsClassVisitor(mirror::Class* c, void* arg)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   auto* exceptions_to_resolve =
       reinterpret_cast<std::set<std::pair<uint16_t, const DexFile*>>*>(arg);
   const auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
@@ -743,7 +743,7 @@ static bool ResolveCatchBlockExceptionsClassVisitor(mirror::Class* c, void* arg)
 }
 
 static bool RecordImageClassesVisitor(mirror::Class* klass, void* arg)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   std::unordered_set<std::string>* image_classes =
       reinterpret_cast<std::unordered_set<std::string>*>(arg);
   std::string temp;
@@ -753,7 +753,7 @@ static bool RecordImageClassesVisitor(mirror::Class* klass, void* arg)
 
 // Make a list of descriptors for classes to include in the image
 void CompilerDriver::LoadImageClasses(TimingLogger* timings)
-      LOCKS_EXCLUDED(Locks::mutator_lock_) {
+      REQUIRES(!Locks::mutator_lock_) {
   CHECK(timings != nullptr);
   if (!IsImage()) {
     return;
@@ -819,7 +819,7 @@ void CompilerDriver::LoadImageClasses(TimingLogger* timings)
 
 static void MaybeAddToImageClasses(Handle<mirror::Class> c,
                                    std::unordered_set<std::string>* image_classes)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   Thread* self = Thread::Current();
   StackHandleScope<1> hs(self);
   // Make a copy of the handle so that we don't clobber it doing Assign.
@@ -876,7 +876,7 @@ class ClinitImageUpdate {
 
   // Visitor for VisitReferences.
   void operator()(mirror::Object* object, MemberOffset field_offset, bool /* is_static */) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      SHARED_REQUIRES(Locks::mutator_lock_) {
     mirror::Object* ref = object->GetFieldObject<mirror::Object>(field_offset);
     if (ref != nullptr) {
       VisitClinitClassesObject(ref);
@@ -887,7 +887,7 @@ class ClinitImageUpdate {
   void operator()(mirror::Class* /* klass */, mirror::Reference* /* ref */) const {
   }
 
-  void Walk() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+  void Walk() SHARED_REQUIRES(Locks::mutator_lock_) {
     // Use the initial classes as roots for a search.
     for (mirror::Class* klass_root : image_classes_) {
       VisitClinitClassesObject(klass_root);
@@ -897,7 +897,7 @@ class ClinitImageUpdate {
  private:
   ClinitImageUpdate(std::unordered_set<std::string>* image_class_descriptors, Thread* self,
                     ClassLinker* linker)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) :
+      SHARED_REQUIRES(Locks::mutator_lock_) :
       image_class_descriptors_(image_class_descriptors), self_(self) {
     CHECK(linker != nullptr);
     CHECK(image_class_descriptors != nullptr);
@@ -915,7 +915,7 @@ class ClinitImageUpdate {
   }
 
   static bool FindImageClasses(mirror::Class* klass, void* arg)
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      SHARED_REQUIRES(Locks::mutator_lock_) {
     ClinitImageUpdate* data = reinterpret_cast<ClinitImageUpdate*>(arg);
     std::string temp;
     const char* name = klass->GetDescriptor(&temp);
@@ -933,7 +933,7 @@ class ClinitImageUpdate {
   }
 
   void VisitClinitClassesObject(mirror::Object* object) const
-      SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+      SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(object != nullptr);
     if (marked_objects_.find(object) != marked_objects_.end()) {
       // Already processed.
@@ -1569,10 +1569,13 @@ bool CompilerDriver::IsSafeCast(const DexCompilationUnit* mUnit, uint32_t dex_pc
   return result;
 }
 
+class CompilationVisitor {
+ public:
+  virtual void Visit(size_t index) = 0;
+};
+
 class ParallelCompilationManager {
  public:
-  typedef void Callback(const ParallelCompilationManager* manager, size_t index);
-
   ParallelCompilationManager(ClassLinker* class_linker,
                              jobject class_loader,
                              CompilerDriver* compiler,
@@ -1610,14 +1613,14 @@ class ParallelCompilationManager {
     return dex_files_;
   }
 
-  void ForAll(size_t begin, size_t end, Callback callback, size_t work_units) {
+  void ForAll(size_t begin, size_t end, CompilationVisitor* visitor, size_t work_units) {
     Thread* self = Thread::Current();
     self->AssertNoPendingException();
     CHECK_GT(work_units, 0U);
 
     index_.StoreRelaxed(begin);
     for (size_t i = 0; i < work_units; ++i) {
-      thread_pool_->AddTask(self, new ForAllClosure(this, end, callback));
+      thread_pool_->AddTask(self, new ForAllClosure(this, end, visitor));
     }
     thread_pool_->StartWorkers(self);
 
@@ -1636,10 +1639,10 @@ class ParallelCompilationManager {
  private:
   class ForAllClosure : public Task {
    public:
-    ForAllClosure(ParallelCompilationManager* manager, size_t end, Callback* callback)
+    ForAllClosure(ParallelCompilationManager* manager, size_t end, CompilationVisitor* visitor)
         : manager_(manager),
           end_(end),
-          callback_(callback) {}
+          visitor_(visitor) {}
 
     virtual void Run(Thread* self) {
       while (true) {
@@ -1647,7 +1650,7 @@ class ParallelCompilationManager {
         if (UNLIKELY(index >= end_)) {
           break;
         }
-        callback_(manager_, index);
+        visitor_->Visit(index);
         self->AssertNoPendingException();
       }
     }
@@ -1659,7 +1662,7 @@ class ParallelCompilationManager {
    private:
     ParallelCompilationManager* const manager_;
     const size_t end_;
-    Callback* const callback_;
+    Visitor* const visitor_;
   };
 
   AtomicInteger index_;
@@ -1676,7 +1679,7 @@ class ParallelCompilationManager {
 // A fast version of SkipClass above if the class pointer is available
 // that avoids the expensive FindInClassPath search.
 static bool SkipClass(jobject class_loader, const DexFile& dex_file, mirror::Class* klass)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   DCHECK(klass != nullptr);
   const DexFile& original_dex_file = *klass->GetDexCache()->GetDexFile();
   if (&dex_file != &original_dex_file) {
@@ -1691,7 +1694,7 @@ static bool SkipClass(jobject class_loader, const DexFile& dex_file, mirror::Cla
 }
 
 static void CheckAndClearResolveException(Thread* self)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   CHECK(self->IsExceptionPending());
   mirror::Throwable* exception = self->GetException();
   std::string temp;
@@ -1719,7 +1722,7 @@ static void CheckAndClearResolveException(Thread* self)
 
 static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manager,
                                          size_t class_def_index)
-    LOCKS_EXCLUDED(Locks::mutator_lock_) {
+    REQUIRES(!Locks::mutator_lock_) {
   ATRACE_CALL();
   Thread* self = Thread::Current();
   jobject jclass_loader = manager->GetClassLoader();
@@ -1823,7 +1826,7 @@ static void ResolveClassFieldsAndMethods(const ParallelCompilationManager* manag
 }
 
 static void ResolveType(const ParallelCompilationManager* manager, size_t type_idx)
-    LOCKS_EXCLUDED(Locks::mutator_lock_) {
+    REQUIRES(!Locks::mutator_lock_) {
   // Class derived values are more complicated, they require the linker and loader.
   ScopedObjectAccess soa(Thread::Current());
   ClassLinker* class_linker = manager->GetClassLinker();
@@ -1886,7 +1889,7 @@ void CompilerDriver::Verify(jobject class_loader, const std::vector<const DexFil
 }
 
 static void VerifyClass(const ParallelCompilationManager* manager, size_t class_def_index)
-    LOCKS_EXCLUDED(Locks::mutator_lock_) {
+    REQUIRES(!Locks::mutator_lock_) {
   ATRACE_CALL();
   ScopedObjectAccess soa(Thread::Current());
   const DexFile& dex_file = *manager->GetDexFile();
@@ -1951,7 +1954,7 @@ void CompilerDriver::VerifyDexFile(jobject class_loader, const DexFile& dex_file
 }
 
 static void SetVerifiedClass(const ParallelCompilationManager* manager, size_t class_def_index)
-    LOCKS_EXCLUDED(Locks::mutator_lock_) {
+    REQUIRES(!Locks::mutator_lock_) {
   ATRACE_CALL();
   ScopedObjectAccess soa(Thread::Current());
   const DexFile& dex_file = *manager->GetDexFile();
@@ -2001,7 +2004,7 @@ void CompilerDriver::SetVerifiedDexFile(jobject class_loader, const DexFile& dex
 }
 
 static void InitializeClass(const ParallelCompilationManager* manager, size_t class_def_index)
-    LOCKS_EXCLUDED(Locks::mutator_lock_) {
+    REQUIRES(!Locks::mutator_lock_) {
   ATRACE_CALL();
   jobject jclass_loader = manager->GetClassLoader();
   const DexFile& dex_file = *manager->GetDexFile();
@@ -2453,7 +2456,7 @@ bool CompilerDriver::WriteElf(const std::string& android_root,
                               const std::vector<const art::DexFile*>& dex_files,
                               OatWriter* oat_writer,
                               art::File* file)
-    SHARED_LOCKS_REQUIRED(Locks::mutator_lock_) {
+    SHARED_REQUIRES(Locks::mutator_lock_) {
   if (kProduce64BitELFFiles && Is64BitInstructionSet(GetInstructionSet())) {
     return art::ElfWriterQuick64::Create(file, oat_writer, dex_files, android_root, is_host, *this);
   } else {

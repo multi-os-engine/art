@@ -168,17 +168,17 @@ class BackgroundMethodSamplingProfiler {
   // Start a profile thread with the user-supplied arguments.
   // Returns true if the profile was started or if it was already running. Returns false otherwise.
   static bool Start(const std::string& output_filename, const ProfilerOptions& options)
-  LOCKS_EXCLUDED(Locks::mutator_lock_,
+  REQUIRES(!Locks::mutator_lock_,
                  Locks::thread_list_lock_,
                  Locks::thread_suspend_count_lock_,
                  Locks::profiler_lock_);
 
-  static void Stop() LOCKS_EXCLUDED(Locks::profiler_lock_, wait_lock_);
-  static void Shutdown() LOCKS_EXCLUDED(Locks::profiler_lock_);
+  static void Stop() REQUIRES(!Locks::profiler_lock_, wait_lock_);
+  static void Shutdown() REQUIRES(!Locks::profiler_lock_);
 
-  void RecordMethod(ArtMethod *method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  void RecordStack(const std::vector<InstructionLocation>& stack) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  bool ProcessMethod(ArtMethod* method) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  void RecordMethod(ArtMethod *method) SHARED_REQUIRES(Locks::mutator_lock_);
+  void RecordStack(const std::vector<InstructionLocation>& stack) SHARED_REQUIRES(Locks::mutator_lock_);
+  bool ProcessMethod(ArtMethod* method) SHARED_REQUIRES(Locks::mutator_lock_);
   const ProfilerOptions& GetProfilerOptions() const { return options_; }
 
   Barrier& GetBarrier() {
@@ -190,13 +190,13 @@ class BackgroundMethodSamplingProfiler {
     const std::string& output_filename, const ProfilerOptions& options);
 
   // The sampling interval in microseconds is passed as an argument.
-  static void* RunProfilerThread(void* arg) LOCKS_EXCLUDED(Locks::profiler_lock_);
+  static void* RunProfilerThread(void* arg) REQUIRES(!Locks::profiler_lock_);
 
-  uint32_t WriteProfile() SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
+  uint32_t WriteProfile() SHARED_REQUIRES(Locks::mutator_lock_);
 
   void CleanProfile();
-  uint32_t DumpProfile(std::ostream& os) SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
-  static bool ShuttingDown(Thread* self) LOCKS_EXCLUDED(Locks::profiler_lock_);
+  uint32_t DumpProfile(std::ostream& os) SHARED_REQUIRES(Locks::mutator_lock_);
+  static bool ShuttingDown(Thread* self) REQUIRES(!Locks::profiler_lock_);
 
   static BackgroundMethodSamplingProfiler* profiler_ GUARDED_BY(Locks::profiler_lock_);
 

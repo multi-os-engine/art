@@ -60,8 +60,8 @@ class SwapSpace {
  public:
   SwapSpace(int fd, size_t initial_size);
   ~SwapSpace();
-  void* Alloc(size_t size) LOCKS_EXCLUDED(lock_);
-  void Free(void* ptr, size_t size) LOCKS_EXCLUDED(lock_);
+  void* Alloc(size_t size) REQUIRES(!lock_);
+  void Free(void* ptr, size_t size) REQUIRES(!lock_);
 
   size_t GetSize() {
     return size_;

@@ -35,7 +35,7 @@ class SignalCatcher {
   explicit SignalCatcher(const std::string& stack_trace_file);
   ~SignalCatcher();
 
-  void HandleSigQuit() LOCKS_EXCLUDED(Locks::mutator_lock_,
+  void HandleSigQuit() REQUIRES(!Locks::mutator_lock_,
                                       Locks::thread_list_lock_,
                                       Locks::thread_suspend_count_lock_);
 
