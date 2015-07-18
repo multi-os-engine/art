@@ -292,6 +292,9 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     include $(BUILD_SHARED_LIBRARY)
   else # host
     LOCAL_MULTILIB := both
+    ifdef ART_HOST_MULTILIB_OVERRIDE
+      LOCAL_MULTILIB := $(ART_HOST_MULTILIB_OVERRIDE)
+    endif
     ifeq ($$(art_static_or_shared), static)
       include $(BUILD_HOST_STATIC_LIBRARY)
     else

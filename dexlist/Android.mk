@@ -51,4 +51,9 @@ LOCAL_CFLAGS += -Wall
 LOCAL_SHARED_LIBRARIES += $(dexlist_libraries)
 LOCAL_MODULE := dexlist2
 LOCAL_MODULE_TAGS := optional
+ifeq ($(HOST_OS),darwin)
+  # Mac OS doesn't support low-4GB allocation in a 64-bit process. So we won't be able to create
+  # our heaps.
+  LOCAL_MULTILIB := 32
+endif
 include $(BUILD_HOST_EXECUTABLE)

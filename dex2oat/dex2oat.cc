@@ -389,6 +389,7 @@ class WatchDog {
     //       LogLine also avoids ART logging lock issues, as it's really only a wrapper around
     //       logcat logging or stderr output.
     LogMessage::LogLine(__FILE__, __LINE__, LogSeverity::FATAL, message.c_str());
+    LOG(FATAL) << "BAAAAAAAAD";
     exit(1);
   }
 
@@ -416,10 +417,10 @@ class WatchDog {
 
   // When setting timeouts, keep in mind that the build server may not be as fast as your desktop.
   // Debug builds are slower so they have larger timeouts.
-  static constexpr int64_t kSlowdownFactor = kIsDebugBuild ? 5U : 1U;
+  static constexpr int64_t kSlowdownFactor = kIsDebugBuild ? 1U : 1U;
 
   // 10 minutes scaled by kSlowdownFactor.
-  static constexpr int64_t kWatchDogTimeoutSeconds = kSlowdownFactor * 10 * 60;
+  static constexpr int64_t kWatchDogTimeoutSeconds = kSlowdownFactor * 60;
 
   bool is_watch_dog_enabled_;
   bool shutting_down_;
