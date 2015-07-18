@@ -298,7 +298,7 @@ bool PatchOat::Patch(File* input_oat, const std::string& image_location, off_t d
 
   t.NewTiming("Writing files");
   if (!skip_patching_oat && !p.WriteElf(output_oat)) {
-    LOG(ERROR) << "Failed to write oat file " << input_oat->GetPath();
+    PLOG(ERROR) << "Failed to write oat file " << input_oat->GetPath();
     return false;
   }
   if (!p.WriteImage(output_image)) {
