@@ -127,7 +127,15 @@ define build-art-executable
     LOCAL_MODULE_TARGET_ARCH := $(ART_SUPPORTED_ARCH)
   endif
 
+  ifeq ($$(art_target_or_host),host)
+    ifdef ART_HOST_MULTILIB_OVERRIDE
+      ifneq ($$(art_target_or_host),$(ART_HOST_MULTILIB_OVERRIDE))
+        art_multilib := $(ART_HOST_MULTILIB_OVERRIDE)
+      endif
+    endif
+  endif
   LOCAL_MULTILIB := $$(art_multilib)
+
   art_out_binary_name := $$(LOCAL_MODULE)
 
   # If multilib=both (potentially building both 32-bit and 64-bit), need to provide stem.
