@@ -166,6 +166,12 @@ TEST(SideEffectsTest, BitStrings) {
       "|DFJISCBZL|DFJISCBZL|DFJISCBZL|DFJISCBZL|",
       SideEffects::All().ToString().c_str());
   EXPECT_STREQ(
+      "|||DFJISCBZL|DFJISCBZL|",
+      SideEffects::AllWrites().ToString().c_str());
+  EXPECT_STREQ(
+      "|DFJISCBZL|DFJISCBZL|||",
+      SideEffects::AllReads().ToString().c_str());
+  EXPECT_STREQ(
       "||||L|",
       SideEffects::FieldWriteOfType(Primitive::kPrimNot).ToString().c_str());
   EXPECT_STREQ(
