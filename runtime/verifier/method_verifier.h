@@ -719,6 +719,8 @@ class MethodVerifier {
   // to be unreachable. This is set by Fail and used to ensure we don't process unreachable
   // instructions that would hard fail the verification.
   bool have_pending_runtime_throw_failure_;
+  // Is there a pending experimental failure?
+  bool have_pending_experimental_failure_;
 
   // Info message log use primarily for verifier diagnostics.
   std::ostringstream info_messages_;
