@@ -226,6 +226,8 @@ class CodeGenerator {
   }
 
   void RecordPcInfo(HInstruction* instruction, uint32_t dex_pc, SlowPathCode* slow_path = nullptr);
+  void RecordPcInfoDebug(uint32_t dex_pc, uintptr_t native_pc_begin, uintptr_t native_pc_end);
+
   bool CanMoveNullCheckToUser(HNullCheck* null_check);
   void MaybeRecordImplicitNullCheck(HInstruction* instruction);
 
@@ -233,7 +235,8 @@ class CodeGenerator {
     slow_paths_.Add(slow_path);
   }
 
-  void BuildSourceMap(DefaultSrcMap* src_map) const;
+  void SetSrcMap(DefaultSrcMap* src_map) { src_map_ = src_map; }
+
   void BuildMappingTable(std::vector<uint8_t>* vector) const;
   void BuildVMapTable(std::vector<uint8_t>* vector) const;
   void BuildNativeGCMap(
@@ -379,6 +382,7 @@ class CodeGenerator {
         disasm_info_(nullptr),
         graph_(graph),
         compiler_options_(compiler_options),
+        src_map_(nullptr),
         slow_paths_(graph->GetArena(), 8),
         current_block_index_(0),
         is_leaf_(true),
@@ -473,6 +477,7 @@ class CodeGenerator {
   HGraph* const graph_;
   const CompilerOptions& compiler_options_;
 
+  DefaultSrcMap* src_map_;
   GrowableArray<SlowPathCode*> slow_paths_;
 
   // The current block index in `block_order_` of the block
