@@ -1731,9 +1731,7 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
 
   virtual bool NeedsEnvironment() const { return false; }
   virtual uint32_t GetDexPc() const {
-    LOG(FATAL) << "GetDexPc() cannot be called on an instruction that"
-                  " does not need an environment";
-    UNREACHABLE();
+    return kNoDexPc;
   }
   virtual bool IsControlFlow() const { return false; }
 
