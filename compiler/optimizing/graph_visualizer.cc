@@ -375,6 +375,13 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         << instance_of->MustDoNullCheck() << std::noboolalpha;
   }
 
+  void VisitCompare(HCompare* compare) OVERRIDE {
+    ComparisonBias bias = compare->GetBias();
+    StartAttributeStream("bias") << (bias == ComparisonBias::kGtBias
+                                     ? "gt"
+                                     : (bias == ComparisonBias::kLtBias ? "lt" : "none"));
+  }
+
   void VisitInvoke(HInvoke* invoke) OVERRIDE {
     StartAttributeStream("dex_file_index") << invoke->GetDexMethodIndex();
     StartAttributeStream("method_name") << PrettyMethod(

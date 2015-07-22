@@ -2112,6 +2112,86 @@ class HLongConstant : public HConstant {
   DISALLOW_COPY_AND_ASSIGN(HLongConstant);
 };
 
+class HFloatConstant : public HConstant {
+ public:
+  float GetValue() const { return value_; }
+
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    DCHECK(other->IsFloatConstant());
+    return bit_cast<uint32_t, float>(other->AsFloatConstant()->value_) ==
+        bit_cast<uint32_t, float>(value_);
+  }
+
+  size_t ComputeHashCode() const OVERRIDE { return static_cast<size_t>(GetValue()); }
+
+  bool IsMinusOne() const OVERRIDE {
+    return bit_cast<uint32_t, float>(value_) == bit_cast<uint32_t, float>((-1.0f));
+  }
+  bool IsZero() const OVERRIDE {
+    return value_ == 0.0f;
+  }
+  bool IsOne() const OVERRIDE {
+    return bit_cast<uint32_t, float>(value_) == bit_cast<uint32_t, float>(1.0f);
+  }
+  bool IsNaN() const {
+    return std::isnan(value_);
+  }
+
+  DECLARE_INSTRUCTION(FloatConstant);
+
+ private:
+  explicit HFloatConstant(float value) : HConstant(Primitive::kPrimFloat), value_(value) {}
+  explicit HFloatConstant(int32_t value)
+      : HConstant(Primitive::kPrimFloat), value_(bit_cast<float, int32_t>(value)) {}
+
+  const float value_;
+
+  // Only the SsaBuilder and HGraph can create floating-point constants.
+  friend class SsaBuilder;
+  friend class HGraph;
+  DISALLOW_COPY_AND_ASSIGN(HFloatConstant);
+};
+
+class HDoubleConstant : public HConstant {
+ public:
+  double GetValue() const { return value_; }
+
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    DCHECK(other->IsDoubleConstant());
+    return bit_cast<uint64_t, double>(other->AsDoubleConstant()->value_) ==
+        bit_cast<uint64_t, double>(value_);
+  }
+
+  size_t ComputeHashCode() const OVERRIDE { return static_cast<size_t>(GetValue()); }
+
+  bool IsMinusOne() const OVERRIDE {
+    return bit_cast<uint64_t, double>(value_) == bit_cast<uint64_t, double>((-1.0));
+  }
+  bool IsZero() const OVERRIDE {
+    return value_ == 0.0;
+  }
+  bool IsOne() const OVERRIDE {
+    return bit_cast<uint64_t, double>(value_) == bit_cast<uint64_t, double>(1.0);
+  }
+  bool IsNaN() const {
+    return std::isnan(value_);
+  }
+
+  DECLARE_INSTRUCTION(DoubleConstant);
+
+ private:
+  explicit HDoubleConstant(double value) : HConstant(Primitive::kPrimDouble), value_(value) {}
+  explicit HDoubleConstant(int64_t value)
+      : HConstant(Primitive::kPrimDouble), value_(bit_cast<double, int64_t>(value)) {}
+
+  const double value_;
+
+  // Only the SsaBuilder and HGraph can create floating-point constants.
+  friend class SsaBuilder;
+  friend class HGraph;
+  DISALLOW_COPY_AND_ASSIGN(HDoubleConstant);
+};
+
 // Conditional branch. A block ending with an HIf instruction must have
 // two successors.
 class HIf : public HTemplateInstruction<1> {
@@ -2254,14 +2334,16 @@ class HUnaryOperation : public HExpression<1> {
     return true;
   }
 
-  // Try to statically evaluate `operation` and return a HConstant
-  // containing the result of this evaluation.  If `operation` cannot
+  // Try to statically evaluate `this` and return a HConstant
+  // containing the result of this evaluation.  If `this` cannot
   // be evaluated as a constant, return null.
   HConstant* TryStaticEvaluation() const;
 
   // Apply this operation to `x`.
   virtual HConstant* Evaluate(HIntConstant* x) const = 0;
   virtual HConstant* Evaluate(HLongConstant* x) const = 0;
+  virtual HConstant* Evaluate(HFloatConstant* x) const = 0;
+  virtual HConstant* Evaluate(HDoubleConstant* x) const = 0;
 
   DECLARE_INSTRUCTION(UnaryOperation);
 
@@ -2322,14 +2404,16 @@ class HBinaryOperation : public HExpression<2> {
     return true;
   }
 
-  // Try to statically evaluate `operation` and return a HConstant
-  // containing the result of this evaluation.  If `operation` cannot
+  // Try to statically evaluate `this` and return a HConstant
+  // containing the result of this evaluation.  If `this` cannot
   // be evaluated as a constant, return null.
   HConstant* TryStaticEvaluation() const;
 
   // Apply this operation to `x` and `y`.
   virtual HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const = 0;
   virtual HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const = 0;
+  virtual HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const = 0;
+  virtual HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const = 0;
 
   // Returns an input that can legally be used as the right input and is
   // constant, or null.
@@ -2374,7 +2458,7 @@ class HCondition : public HBinaryOperation {
   virtual IfCondition GetOppositeCondition() const = 0;
 
   bool IsGtBias() const { return bias_ == ComparisonBias::kGtBias; }
-
+  ComparisonBias GetBias() const { return bias_; }
   void SetBias(ComparisonBias bias) { bias_ = bias; }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
@@ -2382,15 +2466,32 @@ class HCondition : public HBinaryOperation {
   }
 
   bool IsFPConditionTrueIfNaN() const {
-    DCHECK(Primitive::IsFloatingPointType(InputAt(0)->GetType()));
+    DCHECK(Primitive::IsFloatingPointType(InputAt(0)->GetType())) << InputAt(0)->GetType();
     IfCondition if_cond = GetCondition();
     return IsGtBias() ? ((if_cond == kCondGT) || (if_cond == kCondGE)) : (if_cond == kCondNE);
   }
 
   bool IsFPConditionFalseIfNaN() const {
-    DCHECK(Primitive::IsFloatingPointType(InputAt(0)->GetType()));
+    DCHECK(Primitive::IsFloatingPointType(InputAt(0)->GetType())) << InputAt(0)->GetType();
     IfCondition if_cond = GetCondition();
     return IsGtBias() ? ((if_cond == kCondLT) || (if_cond == kCondLE)) : (if_cond == kCondEQ);
+  }
+
+ protected:
+  template <typename T>
+  int32_t Compare(T x, T y) const { return x > y ? 1 : (x < y ? -1 : 0); }
+
+  template <typename T>
+  int32_t CompareFP(T x, T y) const {
+    DCHECK(Primitive::IsFloatingPointType(InputAt(0)->GetType())) << InputAt(0)->GetType();
+    DCHECK(GetBias() != ComparisonBias::kNoBias);
+    // Handle the bias.
+    return std::isunordered(x, y) ? (IsGtBias() ? 1 : -1) : Compare(x, y);
+  }
+
+  // Return an integer constant containing the result of a condition evaluated at compile time.
+  HIntConstant* MakeConstantCondition (bool value) const {
+    return GetBlock()->GetGraph()->GetIntConstant(value);
   }
 
  private:
@@ -2415,10 +2516,19 @@ class HEqual : public HCondition {
   template <typename T> bool Compute(T x, T y) const { return x == y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(x->GetValue(), y->GetValue()));
   }
+  // In the following Evaluate methods, a HCompare instruction has
+  // been merged into this HEqual instruction; evaluate it as
+  // `Compare(x, y) == 0`.
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(this->Compare(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
   }
 
   DECLARE_INSTRUCTION(Equal);
@@ -2445,10 +2555,19 @@ class HNotEqual : public HCondition {
   template <typename T> bool Compute(T x, T y) const { return x != y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(x->GetValue(), y->GetValue()));
   }
+  // In the following Evaluate methods, a HCompare instruction has
+  // been merged into this HNotEqual instruction; evaluate it as
+  // `Compare(x, y) != 0`.
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(this->Compare(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
   }
 
   DECLARE_INSTRUCTION(NotEqual);
@@ -2473,10 +2592,19 @@ class HLessThan : public HCondition {
   template <typename T> bool Compute(T x, T y) const { return x < y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(x->GetValue(), y->GetValue()));
   }
+  // In the following Evaluate methods, a HCompare instruction has
+  // been merged into this HLessThan instruction; evaluate it as
+  // `Compare(x, y) < 0`.
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(this->Compare(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
   }
 
   DECLARE_INSTRUCTION(LessThan);
@@ -2501,10 +2629,19 @@ class HLessThanOrEqual : public HCondition {
   template <typename T> bool Compute(T x, T y) const { return x <= y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(x->GetValue(), y->GetValue()));
   }
+  // In the following Evaluate methods, a HCompare instruction has
+  // been merged into this HLessThanOrEqual instruction; evaluate it as
+  // `Compare(x, y) <= 0`.
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(this->Compare(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
   }
 
   DECLARE_INSTRUCTION(LessThanOrEqual);
@@ -2529,10 +2666,19 @@ class HGreaterThan : public HCondition {
   template <typename T> bool Compute(T x, T y) const { return x > y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(x->GetValue(), y->GetValue()));
   }
+  // In the following Evaluate methods, a HCompare instruction has
+  // been merged into this HGreaterThan instruction; evaluate it as
+  // `Compare(x, y) > 0`.
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(this->Compare(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
   }
 
   DECLARE_INSTRUCTION(GreaterThan);
@@ -2557,10 +2703,19 @@ class HGreaterThanOrEqual : public HCondition {
   template <typename T> bool Compute(T x, T y) const { return x >= y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(x->GetValue(), y->GetValue()));
   }
+  // In the following Evaluate methods, a HCompare instruction has
+  // been merged into this HGreaterThanOrEqual instruction; evaluate it as
+  // `Compare(x, y) >= 0`.
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return this->MakeConstantCondition(Compute(this->Compare(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return this->MakeConstantCondition(Compute(this->CompareFP(x->GetValue(), y->GetValue()), 0));
   }
 
   DECLARE_INSTRUCTION(GreaterThanOrEqual);
@@ -2593,13 +2748,29 @@ class HCompare : public HBinaryOperation {
   }
 
   template <typename T>
-  int32_t Compute(T x, T y) const { return x == y ? 0 : x > y ? 1 : -1; }
+  int32_t Compute(T x, T y) const { return x > y ? 1 : (x < y ? -1 : 0); }
 
-  HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+  template <typename T>
+  int32_t ComputeFP(T x, T y) const {
+    DCHECK(Primitive::IsFloatingPointType(InputAt(0)->GetType())) << InputAt(0)->GetType();
+    DCHECK(GetBias() != ComparisonBias::kNoBias);
+    // Handle the bias.
+    return std::isunordered(x, y) ? (IsGtBias() ? 1 : -1) : Compute(x, y);
+  }
+
+  HConstant* Evaluate(HIntConstant* x ATTRIBUTE_UNUSED,
+                      HIntConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for int values";
+    UNREACHABLE();
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(ComputeFP(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(ComputeFP(x->GetValue(), y->GetValue()));
   }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
@@ -2608,7 +2779,12 @@ class HCompare : public HBinaryOperation {
 
   ComparisonBias GetBias() const { return bias_; }
 
-  bool IsGtBias() { return bias_ == ComparisonBias::kGtBias; }
+  // Does this compare instruction have a "gt bias" (vs an "lt bias")?
+  // Only meaninfgul for floating-point comparisons.
+  bool IsGtBias() const {
+    DCHECK(Primitive::IsFloatingPointType(InputAt(0)->GetType())) << InputAt(0)->GetType();
+    return bias_ == ComparisonBias::kGtBias;
+  }
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
@@ -2669,86 +2845,6 @@ class HStoreLocal : public HTemplateInstruction<2> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HStoreLocal);
-};
-
-class HFloatConstant : public HConstant {
- public:
-  float GetValue() const { return value_; }
-
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    DCHECK(other->IsFloatConstant());
-    return bit_cast<uint32_t, float>(other->AsFloatConstant()->value_) ==
-        bit_cast<uint32_t, float>(value_);
-  }
-
-  size_t ComputeHashCode() const OVERRIDE { return static_cast<size_t>(GetValue()); }
-
-  bool IsMinusOne() const OVERRIDE {
-    return bit_cast<uint32_t, float>(value_) == bit_cast<uint32_t, float>((-1.0f));
-  }
-  bool IsZero() const OVERRIDE {
-    return value_ == 0.0f;
-  }
-  bool IsOne() const OVERRIDE {
-    return bit_cast<uint32_t, float>(value_) == bit_cast<uint32_t, float>(1.0f);
-  }
-  bool IsNaN() const {
-    return std::isnan(value_);
-  }
-
-  DECLARE_INSTRUCTION(FloatConstant);
-
- private:
-  explicit HFloatConstant(float value) : HConstant(Primitive::kPrimFloat), value_(value) {}
-  explicit HFloatConstant(int32_t value)
-      : HConstant(Primitive::kPrimFloat), value_(bit_cast<float, int32_t>(value)) {}
-
-  const float value_;
-
-  // Only the SsaBuilder and HGraph can create floating-point constants.
-  friend class SsaBuilder;
-  friend class HGraph;
-  DISALLOW_COPY_AND_ASSIGN(HFloatConstant);
-};
-
-class HDoubleConstant : public HConstant {
- public:
-  double GetValue() const { return value_; }
-
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    DCHECK(other->IsDoubleConstant());
-    return bit_cast<uint64_t, double>(other->AsDoubleConstant()->value_) ==
-        bit_cast<uint64_t, double>(value_);
-  }
-
-  size_t ComputeHashCode() const OVERRIDE { return static_cast<size_t>(GetValue()); }
-
-  bool IsMinusOne() const OVERRIDE {
-    return bit_cast<uint64_t, double>(value_) == bit_cast<uint64_t, double>((-1.0));
-  }
-  bool IsZero() const OVERRIDE {
-    return value_ == 0.0;
-  }
-  bool IsOne() const OVERRIDE {
-    return bit_cast<uint64_t, double>(value_) == bit_cast<uint64_t, double>(1.0);
-  }
-  bool IsNaN() const {
-    return std::isnan(value_);
-  }
-
-  DECLARE_INSTRUCTION(DoubleConstant);
-
- private:
-  explicit HDoubleConstant(double value) : HConstant(Primitive::kPrimDouble), value_(value) {}
-  explicit HDoubleConstant(int64_t value)
-      : HConstant(Primitive::kPrimDouble), value_(bit_cast<double, int64_t>(value)) {}
-
-  const double value_;
-
-  // Only the SsaBuilder and HGraph can create floating-point constants.
-  friend class SsaBuilder;
-  friend class HGraph;
-  DISALLOW_COPY_AND_ASSIGN(HDoubleConstant);
 };
 
 enum class Intrinsics {
@@ -3077,6 +3173,12 @@ class HNeg : public HUnaryOperation {
   HConstant* Evaluate(HLongConstant* x) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue()));
   }
+  HConstant* Evaluate(HFloatConstant* x) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetFloatConstant(Compute(x->GetValue()));
+  }
+  HConstant* Evaluate(HDoubleConstant* x) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetDoubleConstant(Compute(x->GetValue()));
+  }
 
   DECLARE_INSTRUCTION(Neg);
 
@@ -3141,6 +3243,12 @@ class HAdd : public HBinaryOperation {
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
   }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetFloatConstant(Compute(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetDoubleConstant(Compute(x->GetValue(), y->GetValue()));
+  }
 
   DECLARE_INSTRUCTION(Add);
 
@@ -3160,6 +3268,12 @@ class HSub : public HBinaryOperation {
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetFloatConstant(Compute(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetDoubleConstant(Compute(x->GetValue(), y->GetValue()));
   }
 
   DECLARE_INSTRUCTION(Sub);
@@ -3183,6 +3297,12 @@ class HMul : public HBinaryOperation {
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
   }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetFloatConstant(Compute(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetDoubleConstant(Compute(x->GetValue(), y->GetValue()));
+  }
 
   DECLARE_INSTRUCTION(Mul);
 
@@ -3196,7 +3316,8 @@ class HDiv : public HBinaryOperation {
       : HBinaryOperation(result_type, left, right), dex_pc_(dex_pc) {}
 
   template <typename T>
-  T Compute(T x, T y) const {
+  T ComputeIntegral(T x, T y) const {
+    DCHECK(!Primitive::IsFloatingPointType(GetType())) << GetType();
     // Our graph structure ensures we never have 0 for `y` during
     // constant folding.
     DCHECK_NE(y, 0);
@@ -3204,11 +3325,23 @@ class HDiv : public HBinaryOperation {
     return (y == -1) ? -x : x / y;
   }
 
+  template <typename T>
+  T ComputeFP(T x, T y) const {
+    DCHECK(Primitive::IsFloatingPointType(GetType())) << GetType();
+    return x / y;
+  }
+
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(ComputeIntegral(x->GetValue(), y->GetValue()));
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(ComputeIntegral(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetFloatConstant(ComputeFP(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetDoubleConstant(ComputeFP(x->GetValue(), y->GetValue()));
   }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
@@ -3227,7 +3360,8 @@ class HRem : public HBinaryOperation {
       : HBinaryOperation(result_type, left, right), dex_pc_(dex_pc) {}
 
   template <typename T>
-  T Compute(T x, T y) const {
+  T ComputeIntegral(T x, T y) const {
+    DCHECK(!Primitive::IsFloatingPointType(GetType())) << GetType();
     // Our graph structure ensures we never have 0 for `y` during
     // constant folding.
     DCHECK_NE(y, 0);
@@ -3235,11 +3369,23 @@ class HRem : public HBinaryOperation {
     return (y == -1) ? 0 : x % y;
   }
 
+  template <typename T>
+  T ComputeFP(T x, T y) const {
+    DCHECK(Primitive::IsFloatingPointType(GetType())) << GetType();
+    return std::fmod(x, y);
+  }
+
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(ComputeIntegral(x->GetValue(), y->GetValue()));
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(ComputeIntegral(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetFloatConstant(ComputeFP(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetDoubleConstant(ComputeFP(x->GetValue(), y->GetValue()));
   }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
@@ -3299,6 +3445,16 @@ class HShl : public HBinaryOperation {
     return GetBlock()->GetGraph()->GetLongConstant(
         Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue));
   }
+  HConstant* Evaluate(HFloatConstant* x ATTRIBUTE_UNUSED,
+                      HFloatConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for float values";
+    UNREACHABLE();
+  }
+  HConstant* Evaluate(HDoubleConstant* x ATTRIBUTE_UNUSED,
+                      HDoubleConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for double values";
+    UNREACHABLE();
+  }
 
   DECLARE_INSTRUCTION(Shl);
 
@@ -3325,6 +3481,16 @@ class HShr : public HBinaryOperation {
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(
         Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue));
+  }
+  HConstant* Evaluate(HFloatConstant* x ATTRIBUTE_UNUSED,
+                      HFloatConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for float values";
+    UNREACHABLE();
+  }
+  HConstant* Evaluate(HDoubleConstant* x ATTRIBUTE_UNUSED,
+                      HDoubleConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for double values";
+    UNREACHABLE();
   }
 
   DECLARE_INSTRUCTION(Shr);
@@ -3355,6 +3521,16 @@ class HUShr : public HBinaryOperation {
     return GetBlock()->GetGraph()->GetLongConstant(
         Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue));
   }
+  HConstant* Evaluate(HFloatConstant* x ATTRIBUTE_UNUSED,
+                      HFloatConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for float values";
+    UNREACHABLE();
+  }
+  HConstant* Evaluate(HDoubleConstant* x ATTRIBUTE_UNUSED,
+                      HDoubleConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for double values";
+    UNREACHABLE();
+  }
 
   DECLARE_INSTRUCTION(UShr);
 
@@ -3376,6 +3552,16 @@ class HAnd : public HBinaryOperation {
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HFloatConstant* x ATTRIBUTE_UNUSED,
+                      HFloatConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for float values";
+    UNREACHABLE();
+  }
+  HConstant* Evaluate(HDoubleConstant* x ATTRIBUTE_UNUSED,
+                      HDoubleConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for double values";
+    UNREACHABLE();
   }
 
   DECLARE_INSTRUCTION(And);
@@ -3399,6 +3585,16 @@ class HOr : public HBinaryOperation {
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
   }
+  HConstant* Evaluate(HFloatConstant* x ATTRIBUTE_UNUSED,
+                      HFloatConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for float values";
+    UNREACHABLE();
+  }
+  HConstant* Evaluate(HDoubleConstant* x ATTRIBUTE_UNUSED,
+                      HDoubleConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for double values";
+    UNREACHABLE();
+  }
 
   DECLARE_INSTRUCTION(Or);
 
@@ -3420,6 +3616,16 @@ class HXor : public HBinaryOperation {
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+  }
+  HConstant* Evaluate(HFloatConstant* x ATTRIBUTE_UNUSED,
+                      HFloatConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for float values";
+    UNREACHABLE();
+  }
+  HConstant* Evaluate(HDoubleConstant* x ATTRIBUTE_UNUSED,
+                      HDoubleConstant* y ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for double values";
+    UNREACHABLE();
   }
 
   DECLARE_INSTRUCTION(Xor);
@@ -3473,6 +3679,14 @@ class HNot : public HUnaryOperation {
   HConstant* Evaluate(HLongConstant* x) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue()));
   }
+  HConstant* Evaluate(HFloatConstant* x ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for float values";
+    UNREACHABLE();
+  }
+  HConstant* Evaluate(HDoubleConstant* x ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for double values";
+    UNREACHABLE();
+  }
 
   DECLARE_INSTRUCTION(Not);
 
@@ -3501,6 +3715,14 @@ class HBooleanNot : public HUnaryOperation {
   }
   HConstant* Evaluate(HLongConstant* x ATTRIBUTE_UNUSED) const OVERRIDE {
     LOG(FATAL) << DebugName() << " is not defined for long values";
+    UNREACHABLE();
+  }
+  HConstant* Evaluate(HFloatConstant* x ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for float values";
+    UNREACHABLE();
+  }
+  HConstant* Evaluate(HDoubleConstant* x ATTRIBUTE_UNUSED) const OVERRIDE {
+    LOG(FATAL) << DebugName() << " is not defined for double values";
     UNREACHABLE();
   }
 
