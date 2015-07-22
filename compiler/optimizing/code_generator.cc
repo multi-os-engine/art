@@ -185,14 +185,14 @@ class DisassemblyScope {
 
 
 void CodeGenerator::GenerateSlowPaths() {
-  size_t code_start = 0;
   for (size_t i = 0, e = slow_paths_.Size(); i < e; ++i) {
+    SlowPathCode* slow_paths_code = slow_paths_.Get(i);
+    size_t code_start = GetAssembler()->CodeSize();
+    slow_paths_code->EmitNativeCode(this);
+    size_t code_end = GetAssembler()->CodeSize();
+    RecordPcInfoDebug(slow_paths_code->GetDexPc(), code_start, code_end);
     if (disasm_info_ != nullptr) {
-      code_start = GetAssembler()->CodeSize();
-    }
-    slow_paths_.Get(i)->EmitNativeCode(this);
-    if (disasm_info_ != nullptr) {
-      disasm_info_->AddSlowPathInterval(slow_paths_.Get(i), code_start, GetAssembler()->CodeSize());
+      disasm_info_->AddSlowPathInterval(slow_paths_.Get(i), code_start, code_end);
     }
   }
 }
@@ -223,7 +223,10 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
         InitLocationsBaseline(current);
       }
       DCHECK(CheckTypeConsistency(current));
+      uintptr_t native_pc_begin = GetAssembler()->CodeSize();
       current->Accept(instruction_visitor);
+      uintptr_t native_pc_end = GetAssembler()->CodeSize();
+      RecordPcInfoDebug(current->GetDexPc(), native_pc_begin, native_pc_end);
     }
   }
 
@@ -569,15 +572,6 @@ void CodeGenerator::BuildNativeGCMap(
   }
 }
 
-void CodeGenerator::BuildSourceMap(DefaultSrcMap* src_map) const {
-  for (size_t i = 0, num = stack_map_stream_.GetNumberOfStackMaps(); i != num; ++i) {
-    const StackMapStream::StackMapEntry& stack_map_entry = stack_map_stream_.GetStackMap(i);
-    uint32_t pc2dex_offset = stack_map_entry.native_pc_offset;
-    int32_t pc2dex_dalvik_offset = stack_map_entry.dex_pc;
-    src_map->push_back(SrcMapElem({pc2dex_offset, pc2dex_dalvik_offset}));
-  }
-}
-
 void CodeGenerator::BuildMappingTable(std::vector<uint8_t>* data) const {
   uint32_t pc2dex_data_size = 0u;
   uint32_t pc2dex_entries = stack_map_stream_.GetNumberOfStackMaps();
@@ -693,6 +687,14 @@ void CodeGenerator::BuildStackMaps(std::vector<uint8_t>* data) {
   data->resize(size);
   MemoryRegion region(data->data(), size);
   stack_map_stream_.FillIn(region);
+}
+
+void CodeGenerator::RecordPcInfoDebug(uint32_t dex_pc, uintptr_t native_pc_begin,
+                                      uintptr_t native_pc_end) {
+  if (src_map_ != nullptr && dex_pc != kNoDexPc && native_pc_begin != native_pc_end) {
+    src_map_->push_back(SrcMapElem({static_cast<uint32_t>(native_pc_begin),
+                                    static_cast<int32_t>(dex_pc)}));
+  }
 }
 
 void CodeGenerator::RecordPcInfo(HInstruction* instruction,
