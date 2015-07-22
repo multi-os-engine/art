@@ -554,14 +554,13 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   AllocateRegisters(graph, codegen, pass_observer);
 
   CodeVectorAllocator allocator;
+
+  DefaultSrcMap src_mapping_table;
+  codegen->SetSrcMap(compiler_driver->GetCompilerOptions().GetGenerateDebugInfo() ?
+                     &src_mapping_table : nullptr);
   codegen->CompileOptimized(&allocator);
 
   ArenaVector<LinkerPatch> linker_patches = EmitAndSortLinkerPatches(codegen);
-
-  DefaultSrcMap src_mapping_table;
-  if (compiler_driver->GetCompilerOptions().GetGenerateDebugInfo()) {
-    codegen->BuildSourceMap(&src_mapping_table);
-  }
 
   std::vector<uint8_t> stack_map;
   codegen->BuildStackMaps(&stack_map);
@@ -596,16 +595,15 @@ CompiledMethod* OptimizingCompiler::CompileBaseline(
     const DexCompilationUnit& dex_compilation_unit,
     PassObserver* pass_observer) const {
   CodeVectorAllocator allocator;
+  DefaultSrcMap src_mapping_table;
+  codegen->SetSrcMap(compiler_driver->GetCompilerOptions().GetGenerateDebugInfo() ?
+                     &src_mapping_table : nullptr);
   codegen->CompileBaseline(&allocator);
 
   ArenaVector<LinkerPatch> linker_patches = EmitAndSortLinkerPatches(codegen);
 
   std::vector<uint8_t> mapping_table;
   codegen->BuildMappingTable(&mapping_table);
-  DefaultSrcMap src_mapping_table;
-  if (compiler_driver->GetCompilerOptions().GetGenerateDebugInfo()) {
-    codegen->BuildSourceMap(&src_mapping_table);
-  }
   std::vector<uint8_t> vmap_table;
   codegen->BuildVMapTable(&vmap_table);
   std::vector<uint8_t> gc_map;
