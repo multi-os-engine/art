@@ -86,7 +86,7 @@ class CodeVectorAllocator FINAL : public CodeAllocator {
  * Filter to apply to the visualizer. Methods whose name contain that filter will
  * be dumped.
  */
-static const char* kStringFilter = "";
+static constexpr const char kStringFilter[] = "";
 
 class PassScope;
 
@@ -105,12 +105,16 @@ class PassObserver : public ValueObject {
         visualizer_enabled_(!compiler_driver->GetDumpCfgFileName().empty()),
         visualizer_(visualizer_output, graph, *codegen),
         graph_in_bad_state_(false) {
-    if (strstr(method_name, kStringFilter) == nullptr) {
-      timing_logger_enabled_ = visualizer_enabled_ = false;
-    }
-    if (visualizer_enabled_) {
-      visualizer_.PrintHeader(method_name_);
-      codegen->SetDisassemblyInformation(&disasm_info_);
+    if (compiler_driver->GetCompilerOptions().HasVerboseMethods() ||
+        arraysize(kStringFilter) > 1) {
+      if (!compiler_driver->GetCompilerOptions().IsVerboseMethod(method_name) &&
+          strstr(method_name, kStringFilter) == nullptr) {
+        timing_logger_enabled_ = visualizer_enabled_ = false;
+      }
+      if (visualizer_enabled_) {
+        visualizer_.PrintHeader(method_name_);
+        codegen->SetDisassemblyInformation(&disasm_info_);
+      }
     }
   }
 
