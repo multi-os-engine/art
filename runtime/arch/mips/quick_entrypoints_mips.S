@@ -172,45 +172,47 @@
      * callee-save: $a1-$a3, $s2-$s8 + $gp + $ra, 12 total + 3 words padding + method*
      */
 .macro SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_REGISTERS_ONLY
-    addiu  $sp, $sp, -64
-    .cfi_adjust_cfa_offset 64
+    addiu  $sp, $sp, -80
+    .cfi_adjust_cfa_offset 80
 
     // Ugly compile-time check, but we only have the preprocessor.
-#if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != 64)
+#if (FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE != 80)
 #error "REFS_AND_ARGS_CALLEE_SAVE_FRAME(MIPS) size not as expected."
 #endif
 
-    sw     $ra, 60($sp)
-    .cfi_rel_offset 31, 60
-    sw     $s8, 56($sp)
-    .cfi_rel_offset 30, 56
-    sw     $gp, 52($sp)
-    .cfi_rel_offset 28, 52
-    sw     $s7, 48($sp)
-    .cfi_rel_offset 23, 48
-    sw     $s6, 44($sp)
-    .cfi_rel_offset 22, 44
-    sw     $s5, 40($sp)
-    .cfi_rel_offset 21, 40
-    sw     $s4, 36($sp)
-    .cfi_rel_offset 20, 36
-    sw     $s3, 32($sp)
-    .cfi_rel_offset 19, 32
-    sw     $s2, 28($sp)
-    .cfi_rel_offset 18, 28
-    sw     $a3, 24($sp)
-    .cfi_rel_offset 7, 24
-    sw     $a2, 20($sp)
-    .cfi_rel_offset 6, 20
-    sw     $a1, 16($sp)
-    .cfi_rel_offset 5, 16
+    sw     $ra, 76($sp)
+    .cfi_rel_offset 31, 76
+    sw     $s8, 72($sp)
+    .cfi_rel_offset 30, 72
+    sw     $gp, 68($sp)
+    .cfi_rel_offset 28, 68
+    sw     $s7, 64($sp)
+    .cfi_rel_offset 23, 64
+    sw     $s6, 60($sp)
+    .cfi_rel_offset 22, 60
+    sw     $s5, 56($sp)
+    .cfi_rel_offset 21, 56
+    sw     $s4, 52($sp)
+    .cfi_rel_offset 20, 52
+    sw     $s3, 48($sp)
+    .cfi_rel_offset 19, 48
+    sw     $s2, 44($sp)
+    .cfi_rel_offset 18, 44
+    sw     $a3, 40($sp)
+    .cfi_rel_offset 7, 40
+    sw     $a2, 36($sp)
+    .cfi_rel_offset 6, 36
+    sw     $a1, 32($sp)
+    .cfi_rel_offset 5, 32
+    SDu $f14, $f15, 24, $sp, $t1
+    SDu $f12, $f13, 16, $sp, $t1
     # bottom will hold Method*
 .endm
 
     /*
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kRefsAndArgs). Restoration assumes non-moving GC.
-     * callee-save: $a1-$a3, $s2-$s8 + $gp + $ra, 12 total + 3 words padding + method*
+     * callee-save: $a1-$a3, $f12-$f15, $s2-$s8 + $gp + $ra, 12 total + 3 words padding + method*
      * Clobbers $t0 and $sp
      * Allocates ARG_SLOT_SIZE bytes at the bottom of the stack for arg slots.
      * Reserves FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE + ARG_SLOT_SIZE bytes on the stack
@@ -230,7 +232,7 @@
     /*
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kRefsAndArgs). Restoration assumes non-moving GC.
-     * callee-save: $a1-$a3, $s2-$s8 + $gp + $ra, 12 total + 3 words padding + method*
+     * callee-save: $a1-$a3, $f12-$f15, $s2-$s8 + $gp + $ra, 12 total + 3 words padding + method*
      * Clobbers $sp
      * Use $a0 as the Method* and loads it into bottom of stack.
      * Allocates ARG_SLOT_SIZE bytes at the bottom of the stack for arg slots.
@@ -247,32 +249,34 @@
 .macro RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
     addiu  $sp, $sp, ARG_SLOT_SIZE                # remove argument slots on the stack
     .cfi_adjust_cfa_offset -ARG_SLOT_SIZE
-    lw     $ra, 60($sp)
+    lw     $ra, 76($sp)
     .cfi_restore 31
-    lw     $s8, 56($sp)
+    lw     $s8, 72($sp)
     .cfi_restore 30
-    lw     $gp, 52($sp)
+    lw     $gp, 68($sp)
     .cfi_restore 28
-    lw     $s7, 48($sp)
+    lw     $s7, 64($sp)
     .cfi_restore 23
-    lw     $s6, 44($sp)
+    lw     $s6, 60($sp)
     .cfi_restore 22
-    lw     $s5, 40($sp)
+    lw     $s5, 56($sp)
     .cfi_restore 21
-    lw     $s4, 36($sp)
+    lw     $s4, 52($sp)
     .cfi_restore 20
-    lw     $s3, 32($sp)
+    lw     $s3, 48($sp)
     .cfi_restore 19
-    lw     $s2, 28($sp)
+    lw     $s2, 44($sp)
     .cfi_restore 18
-    lw     $a3, 24($sp)
+    lw     $a3, 40($sp)
     .cfi_restore 7
-    lw     $a2, 20($sp)
+    lw     $a2, 36($sp)
     .cfi_restore 6
-    lw     $a1, 16($sp)
+    lw     $a1, 32($sp)
     .cfi_restore 5
-    addiu  $sp, $sp, 64           # pop frame
-    .cfi_adjust_cfa_offset -64
+    LDu $f14, $f15, 24, $sp, $t1
+    LDu $f12, $f13, 16, $sp, $t1
+    addiu  $sp, $sp, 80           # pop frame
+    .cfi_adjust_cfa_offset -80
 .endm
 
     /*
@@ -495,9 +499,11 @@ INVOKE_TRAMPOLINE art_quick_invoke_virtual_trampoline_with_access_check, artInvo
      *   a2 = size of argument array in bytes
      *   a3 = (managed) thread pointer
      *   [sp + 16] = JValue* result
-     *   [sp + 20] = shorty
+     *   [sp + 20] = result_in_float
+     *   [sp + 24] = core register argument array
+     *   [sp + 28] = fpu register argument array
      */
-ENTRY art_quick_invoke_stub
+ENTRY art_quick_invoke_stub_internal
     sw    $a0, 0($sp)           # save out a0
     addiu $sp, $sp, -16         # spill s0, s1, fp, ra
     .cfi_adjust_cfa_offset 16
@@ -522,9 +528,13 @@ ENTRY art_quick_invoke_stub
     addiu $sp, $sp, -16         # make space for argument slots for memcpy
     addiu $sp, $sp, 16          # restore stack after memcpy
     lw    $a0, 16($fp)          # restore method*
-    lw    $a1, 4($sp)           # copy arg value for a1
-    lw    $a2, 8($sp)           # copy arg value for a2
-    lw    $a3, 12($sp)          # copy arg value for a3
+    lw    $t0, 40($fp)          # core register argument array
+    lw    $a1, 4($t0)           # copy arg value for a1
+    lw    $a2, 8($t0)           # copy arg value for a2
+    lw    $a3, 12($t0)          # copy arg value for a3
+    lw    $t0, 44($fp)          # fpu register argument array
+    LDu   $f12, $f13, 0, $t0, $t1
+    LDu   $f14, $f15, 8, $t0, $t1
     lw    $t9, ART_METHOD_QUICK_CODE_OFFSET_32($a0)  # get pointer to the code
     jalr  $t9                   # call the method
     sw    $zero, 0($sp)         # store null for method* at bottom of frame
@@ -540,12 +550,10 @@ ENTRY art_quick_invoke_stub
     addiu $sp, $sp, 16
     .cfi_adjust_cfa_offset -16
     lw    $t0, 16($sp)          # get result pointer
-    lw    $t1, 20($sp)          # get shorty
-    lb    $t1, 0($t1)           # get result type char
-    li    $t2, 68               # put char 'D' into t2
-    beq   $t1, $t2, 1f          # branch if result type char == 'D'
-    li    $t3, 70               # put char 'F' into t3
-    beq   $t1, $t3, 1f          # branch if result type char == 'F'
+    lw    $t1, 20($sp)          # get result_in_float
+    li    $t2, 1                # put 1 (true) into t1
+    beq   $t1, $t2, 1f          # branch if result type is float or double
+    nop
     sw    $v0, 0($t0)           # store the result
     jalr  $zero, $ra
     sw    $v1, 4($t0)           # store the other half of the result
@@ -553,7 +561,7 @@ ENTRY art_quick_invoke_stub
     SDu   $f0, $f1, 0, $t0, $t1 # store floating point result
     jalr  $zero, $ra
     nop
-END art_quick_invoke_stub
+END art_quick_invoke_stub_internal
 
     /*
      * Entry from managed code that calls artHandleFillArrayDataFromCode and delivers exception on
