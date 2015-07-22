@@ -455,7 +455,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   // When merging the graph we might create a new NullConstant in the caller graph which does
   // not have the chance to be typed. We assign the correct type here so that we can keep the
   // assertion that every reference has a valid type. This also simplifies checks along the way.
-  HNullConstant* null_constant = graph_->GetNullConstant();
+  HNullConstant* null_constant = graph_->GetNullConstant(invoke_instruction->GetDexPc());
   if (!null_constant->GetReferenceTypeInfo().IsValid()) {
     ReferenceTypeInfo::TypeHandle obj_handle =
             handles_->NewHandle(class_linker->GetClassRoot(ClassLinker::kJavaLangObject));

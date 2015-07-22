@@ -70,8 +70,9 @@ class SsaBuilder : public HGraphVisitor {
         // We record incoming inputs of catch phis at throwing instructions and
         // must therefore eagerly create the phis. Unused phis will be removed
         // in the dead phi analysis.
+        uint32_t dex_pc = block->GetLastDexPc();
         for (size_t i = 0; i < vregs; ++i) {
-          HPhi* phi = new (arena) HPhi(arena, i, 0, Primitive::kPrimVoid);
+          HPhi* phi = new (arena) HPhi(arena, i, 0, Primitive::kPrimVoid, dex_pc);
           block->AddPhi(phi);
           locals->Put(i, phi);
         }

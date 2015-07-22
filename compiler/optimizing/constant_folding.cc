@@ -131,7 +131,8 @@ void InstructionWithAbsorbingInputSimplifier::VisitCompare(HCompare* instruction
       // or
       //    CONSTANT -1 (lt bias)
       instruction->ReplaceWith(GetGraph()->GetConstant(Primitive::kPrimInt,
-                                                       (instruction->IsGtBias() ? 1 : -1)));
+                                                       (instruction->IsGtBias() ? 1 : -1),
+                                                       instruction->GetDexPc()));
       instruction->GetBlock()->RemoveInstruction(instruction);
     }
   }
@@ -202,7 +203,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitRem(HRem* instruction) {
     //    REM dst, src, src
     // with
     //    CONSTANT 0
-    instruction->ReplaceWith(GetGraph()->GetConstant(type, 0));
+    instruction->ReplaceWith(GetGraph()->GetConstant(type, 0, instruction->GetDexPc()));
     block->RemoveInstruction(instruction);
   }
 }
@@ -235,7 +236,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitSub(HSub* instruction) {
     //    CONSTANT 0
     // Note that we cannot optimise `x - x` to `0` for floating-point. It does
     // not work when `x` is an infinity.
-    instruction->ReplaceWith(GetGraph()->GetConstant(type, 0));
+    instruction->ReplaceWith(GetGraph()->GetConstant(type, 0, instruction->GetDexPc()));
     block->RemoveInstruction(instruction);
   }
 }
@@ -252,7 +253,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitXor(HXor* instruction) {
     //    CONSTANT 0
     Primitive::Type type = instruction->GetType();
     HBasicBlock* block = instruction->GetBlock();
-    instruction->ReplaceWith(GetGraph()->GetConstant(type, 0));
+    instruction->ReplaceWith(GetGraph()->GetConstant(type, 0, instruction->GetDexPc()));
     block->RemoveInstruction(instruction);
   }
 }

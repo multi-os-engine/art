@@ -152,11 +152,12 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
 static HBoundType* CreateBoundType(ArenaAllocator* arena,
                                    HInstruction* obj,
                                    HLoadClass* load_class,
-                                   bool upper_can_be_null)
+                                   bool upper_can_be_null,
+                                   uint32_t dex_pc)
       SHARED_REQUIRES(Locks::mutator_lock_) {
   ReferenceTypeInfo obj_rti = obj->GetReferenceTypeInfo();
   ReferenceTypeInfo class_rti = load_class->GetLoadedClassRTI();
-  HBoundType* bound_type = new (arena) HBoundType(obj, class_rti, upper_can_be_null);
+  HBoundType* bound_type = new (arena) HBoundType(obj, class_rti, upper_can_be_null, dex_pc);
   // Narrow the type as much as possible.
   if (class_rti.GetTypeHandle()->IsFinal()) {
     bound_type->SetReferenceTypeInfo(
@@ -256,7 +257,7 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
             object_class_handle_, /* is_exact */ true);
         if (ShouldCreateBoundType(insert_point, obj, object_rti, nullptr, notNullBlock)) {
           bound_type = new (graph_->GetArena()) HBoundType(
-              obj, object_rti, /* bound_can_be_null */ false);
+              obj, object_rti, /* bound_can_be_null */ false, ifInstruction->GetDexPc());
           if (obj->GetReferenceTypeInfo().IsValid()) {
             bound_type->SetReferenceTypeInfo(obj->GetReferenceTypeInfo());
           }
@@ -329,7 +330,8 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
               graph_->GetArena(),
               obj,
               load_class,
-              false /* InstanceOf ensures the object is not null. */);
+              false,  // InstanceOf ensures the object is not null.
+              ifInstruction->GetDexPc());
           instanceOfTrueBlock->InsertInstructionBefore(bound_type, insert_point);
         } else {
           // We already have a bound type on the position we would need to insert
@@ -482,7 +484,8 @@ void RTPVisitor::VisitCheckCast(HCheckCast* check_cast) {
               GetGraph()->GetArena(),
               obj,
               load_class,
-              true /* CheckCast succeeds for nulls. */);
+              true, // CheckCast succeeds for nulls.
+              check_cast->GetDexPc());
           check_cast->GetBlock()->InsertInstructionAfter(bound_type, check_cast);
         } else {
           // We already have a bound type on the position we would need to insert

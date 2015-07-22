@@ -201,7 +201,8 @@ void SsaBuilder::FixNullConstantType() {
       // can only be the 0 constant.
       DCHECK(int_operand->IsIntConstant());
       DCHECK_EQ(0, int_operand->AsIntConstant()->GetValue());
-      equality_instr->ReplaceInput(GetGraph()->GetNullConstant(), int_operand == right ? 1 : 0);
+      equality_instr->ReplaceInput(GetGraph()->GetNullConstant(
+              (int_operand == right ? right : left)->GetDexPc()), int_operand == right ? 1 : 0);
     }
   }
 }
@@ -361,7 +362,7 @@ void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
       HInstruction* incoming = ValueOfLocal(block->GetLoopInformation()->GetPreHeader(), local);
       if (incoming != nullptr) {
         HPhi* phi = new (GetGraph()->GetArena()) HPhi(
-            GetGraph()->GetArena(), local, 0, Primitive::kPrimVoid);
+            GetGraph()->GetArena(), local, 0, Primitive::kPrimVoid, block->GetDexPc());
         block->AddPhi(phi);
         current_locals_->Put(local, phi);
       }
@@ -395,7 +396,8 @@ void SsaBuilder::VisitBasicBlock(HBasicBlock* block) {
 
       if (is_different) {
         HPhi* phi = new (GetGraph()->GetArena()) HPhi(
-            GetGraph()->GetArena(), local, block->GetPredecessors().Size(), Primitive::kPrimVoid);
+            GetGraph()->GetArena(), local, block->GetPredecessors().Size(), Primitive::kPrimVoid,
+            block->GetDexPc());
         for (size_t i = 0; i < block->GetPredecessors().Size(); i++) {
           HInstruction* pred_value = ValueOfLocal(block->GetPredecessors().Get(i), local);
           phi->SetRawInputAt(i, pred_value);
@@ -429,7 +431,8 @@ HFloatConstant* SsaBuilder::GetFloatEquivalent(HIntConstant* constant) {
   if (result == nullptr) {
     HGraph* graph = constant->GetBlock()->GetGraph();
     ArenaAllocator* allocator = graph->GetArena();
-    result = new (allocator) HFloatConstant(bit_cast<float, int32_t>(constant->GetValue()));
+    result = new (allocator) HFloatConstant(bit_cast<float, int32_t>(constant->GetValue()),
+                                            constant->GetDexPc());
     constant->GetBlock()->InsertInstructionBefore(result, constant->GetNext());
     graph->CacheFloatConstant(result);
   } else {
@@ -452,7 +455,8 @@ HDoubleConstant* SsaBuilder::GetDoubleEquivalent(HLongConstant* constant) {
   if (result == nullptr) {
     HGraph* graph = constant->GetBlock()->GetGraph();
     ArenaAllocator* allocator = graph->GetArena();
-    result = new (allocator) HDoubleConstant(bit_cast<double, int64_t>(constant->GetValue()));
+    result = new (allocator) HDoubleConstant(bit_cast<double, int64_t>(constant->GetValue()),
+                                            constant->GetDexPc());
     constant->GetBlock()->InsertInstructionBefore(result, constant->GetNext());
     graph->CacheDoubleConstant(result);
   } else {
@@ -484,7 +488,8 @@ HPhi* SsaBuilder::GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive:
       || (next->AsPhi()->GetRegNumber() != phi->GetRegNumber())
       || (next->GetType() != type)) {
     ArenaAllocator* allocator = phi->GetBlock()->GetGraph()->GetArena();
-    HPhi* new_phi = new (allocator) HPhi(allocator, phi->GetRegNumber(), phi->InputCount(), type);
+    HPhi* new_phi = new (allocator) HPhi(allocator, phi->GetRegNumber(), phi->InputCount(),
+                                         type, phi->GetBlock()->GetDexPc());
     for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
       // Copy the inputs. Note that the graph may not be correctly typed by doing this copy,
       // but the type propagation phase will fix it.
@@ -525,7 +530,7 @@ HInstruction* SsaBuilder::GetFloatOrDoubleEquivalent(HInstruction* user,
 
 HInstruction* SsaBuilder::GetReferenceTypeEquivalent(HInstruction* value) {
   if (value->IsIntConstant() && value->AsIntConstant()->GetValue() == 0) {
-    return value->GetBlock()->GetGraph()->GetNullConstant();
+    return value->GetBlock()->GetGraph()->GetNullConstant(value->GetDexPc());
   } else if (value->IsPhi()) {
     return GetFloatDoubleOrReferenceEquivalentOfPhi(value->AsPhi(), Primitive::kPrimNot);
   } else {

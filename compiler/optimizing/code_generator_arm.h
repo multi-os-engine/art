@@ -120,7 +120,7 @@ class ParallelMoveResolverARM : public ParallelMoveResolverWithSwap {
 
 class SlowPathCodeARM : public SlowPathCode {
  public:
-  SlowPathCodeARM() : entry_label_(), exit_label_() {}
+  SlowPathCodeARM(uint32_t dex_pc) : SlowPathCode(dex_pc), entry_label_(), exit_label_() {}
 
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }
@@ -295,7 +295,7 @@ class CodeGeneratorARM : public CodeGenerator {
   // Helper method to move a 32bits value between two locations.
   void Move32(Location destination, Location source);
   // Helper method to move a 64bits value between two locations.
-  void Move64(Location destination, Location source);
+  void Move64(Location destination, Location source, uint32_t dex_pc);
 
   // Generate code to invoke a runtime entry point.
   void InvokeRuntime(

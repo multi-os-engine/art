@@ -182,9 +182,9 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   void GenerateShlLong(const Location& loc, Register shifter);
   void GenerateShrLong(const Location& loc, Register shifter);
   void GenerateUShrLong(const Location& loc, Register shifter);
-  void GenerateShlLong(const Location& loc, int shift);
+  void GenerateShlLong(const Location& loc, int shift, uint32_t dex_pc);
   void GenerateShrLong(const Location& loc, int shift);
-  void GenerateUShrLong(const Location& loc, int shift);
+  void GenerateUShrLong(const Location& loc, int shift, uint32_t dex_pc);
   void GenerateMemoryBarrier(MemBarrierKind kind);
   void HandleFieldSet(HInstruction* instruction,
                       const FieldInfo& field_info,
@@ -193,7 +193,7 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   // Push value to FPU stack. `is_fp` specifies whether the value is floating point or not.
   // `is_wide` specifies whether it is long/double or not.
   void PushOntoFPStack(Location source, uint32_t temp_offset,
-                       uint32_t stack_adjustment, bool is_fp, bool is_wide);
+                       uint32_t stack_adjustment, bool is_fp, bool is_wide, uint32_t dex_pc);
 
   void GenerateImplicitNullCheck(HNullCheck* instruction);
   void GenerateExplicitNullCheck(HNullCheck* instruction);
@@ -284,7 +284,7 @@ class CodeGeneratorX86 : public CodeGenerator {
   // Helper method to move a 32bits value between two locations.
   void Move32(Location destination, Location source);
   // Helper method to move a 64bits value between two locations.
-  void Move64(Location destination, Location source);
+  void Move64(Location destination, Location source, uint32_t dex_pc);
 
   // Generate a call to a static or direct method.
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp);
@@ -331,7 +331,7 @@ class CodeGeneratorX86 : public CodeGenerator {
 
 class SlowPathCodeX86 : public SlowPathCode {
  public:
-  SlowPathCodeX86() : entry_label_(), exit_label_() {}
+  SlowPathCodeX86(uint32_t dex_pc) : SlowPathCode(dex_pc), entry_label_(), exit_label_() {}
 
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }

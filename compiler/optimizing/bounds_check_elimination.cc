@@ -800,9 +800,9 @@ class MonotonicValueRange : public ValueRange {
     HBasicBlock* dummy_block = if_block->GetSuccessors().Get(0);  // True successor.
     HBasicBlock* deopt_block = if_block->GetSuccessors().Get(1);  // False successor.
 
-    dummy_block->AddInstruction(new (graph->GetArena()) HGoto());
-    deopt_block->AddInstruction(new (graph->GetArena()) HGoto());
-    new_pre_header->AddInstruction(new (graph->GetArena()) HGoto());
+    dummy_block->AddInstruction(new (graph->GetArena()) HGoto(header->GetDexPc()));
+    deopt_block->AddInstruction(new (graph->GetArena()) HGoto(header->GetDexPc()));
+    new_pre_header->AddInstruction(new (graph->GetArena()) HGoto(header->GetDexPc()));
     return deopt_block;
   }
 
@@ -819,19 +819,19 @@ class MonotonicValueRange : public ValueRange {
     HCondition* cond;
     if (increment_ == 1) {
       if (inclusive_) {
-        cond = new (graph->GetArena()) HGreaterThan(initial_, end_);
+        cond = new (graph->GetArena()) HGreaterThan(initial_, end_, if_block->GetDexPc());
       } else {
-        cond = new (graph->GetArena()) HGreaterThanOrEqual(initial_, end_);
+        cond = new (graph->GetArena()) HGreaterThanOrEqual(initial_, end_, if_block->GetDexPc());
       }
     } else {
       DCHECK_EQ(increment_, -1);
       if (inclusive_) {
-        cond = new (graph->GetArena()) HLessThan(initial_, end_);
+        cond = new (graph->GetArena()) HLessThan(initial_, end_, if_block->GetDexPc());
       } else {
-        cond = new (graph->GetArena()) HLessThanOrEqual(initial_, end_);
+        cond = new (graph->GetArena()) HLessThanOrEqual(initial_, end_, if_block->GetDexPc());
       }
     }
-    HIf* h_if = new (graph->GetArena()) HIf(cond);
+    HIf* h_if = new (graph->GetArena()) HIf(cond, if_block->GetDexPc());
     if_block->AddInstruction(cond);
     if_block->AddInstruction(h_if);
   }
@@ -855,8 +855,8 @@ class MonotonicValueRange : public ValueRange {
       DCHECK_EQ(deopt_block, header->GetDominator()->GetDominator()->GetSuccessors().Get(1));
     }
 
-    HIntConstant* const_instr = graph->GetIntConstant(constant);
-    HCondition* cond = new (graph->GetArena()) HLessThan(value, const_instr);
+    HIntConstant* const_instr = graph->GetIntConstant(constant, value->GetDexPc());
+    HCondition* cond = new (graph->GetArena()) HLessThan(value, const_instr, value->GetDexPc());
     HDeoptimize* deoptimize = new (graph->GetArena())
         HDeoptimize(cond, suspend_check->GetDexPc());
     deopt_block->InsertInstructionBefore(cond, deopt_block->GetLastInstruction());
@@ -949,8 +949,9 @@ class MonotonicValueRange : public ValueRange {
       DCHECK(array->GetBlock()->Dominates(deopt_block));
       if (null_check != nullptr && !null_check->GetBlock()->Dominates(deopt_block)) {
         // Hoist null check out of loop with a deoptimization.
-        HNullConstant* null_constant = graph->GetNullConstant();
-        HCondition* null_check_cond = new (graph->GetArena()) HEqual(array, null_constant);
+        HNullConstant* null_constant = graph->GetNullConstant(value->GetDexPc());
+        HCondition* null_check_cond = new (graph->GetArena()) HEqual(array, null_constant,
+                                                                     value->GetDexPc());
         // TODO: for one dex_pc, share the same deoptimization slow path.
         HDeoptimize* null_check_deoptimize = new (graph->GetArena())
             HDeoptimize(null_check_cond, suspend_check->GetDexPc());
@@ -965,7 +966,8 @@ class MonotonicValueRange : public ValueRange {
             suspend_check->GetEnvironment(), header);
       }
 
-      HArrayLength* new_array_length = new (graph->GetArena()) HArrayLength(array);
+      HArrayLength* new_array_length = new (graph->GetArena()) HArrayLength(array,
+                                            deopt_block->GetLastDexPc());
       deopt_block->InsertInstructionBefore(new_array_length, deopt_block->GetLastInstruction());
 
       if (loop_entry_test_block_added) {
@@ -973,9 +975,10 @@ class MonotonicValueRange : public ValueRange {
         // array_length_in_loop_body_if_needed. This is a synthetic phi so there is
         // no vreg number for it.
         HPhi* phi = new (graph->GetArena()) HPhi(
-            graph->GetArena(), kNoRegNumber, 2, Primitive::kPrimInt);
+            graph->GetArena(), kNoRegNumber, 2, Primitive::kPrimInt,
+            pre_header->GetLastDexPc());
         // Set to 0 if the loop body isn't entered.
-        phi->SetRawInputAt(0, graph->GetIntConstant(0));
+        phi->SetRawInputAt(0, graph->GetIntConstant(0, phi->GetDexPc()));
         // Set to array.length if the loop body is entered.
         phi->SetRawInputAt(1, new_array_length);
         pre_header->AddPhi(phi);
@@ -1000,11 +1003,13 @@ class MonotonicValueRange : public ValueRange {
 
     HInstruction* added = array_length;
     if (offset != 0) {
-      HIntConstant* offset_instr = graph->GetIntConstant(offset);
-      added = new (graph->GetArena()) HAdd(Primitive::kPrimInt, array_length, offset_instr);
+      HIntConstant* offset_instr = graph->GetIntConstant(offset, deopt_block->GetLastDexPc());
+      added = new (graph->GetArena()) HAdd(Primitive::kPrimInt, array_length, offset_instr,
+                                           deopt_block->GetLastDexPc());
       deopt_block->InsertInstructionBefore(added, deopt_block->GetLastInstruction());
     }
-    HCondition* cond = new (graph->GetArena()) HGreaterThan(value, added);
+    HCondition* cond = new (graph->GetArena()) HGreaterThan(value, added,
+                                                            suspend_check->GetDexPc());
     HDeoptimize* deopt = new (graph->GetArena()) HDeoptimize(cond, suspend_check->GetDexPc());
     deopt_block->InsertInstructionBefore(cond, deopt_block->GetLastInstruction());
     deopt_block->InsertInstructionBefore(deopt, deopt_block->GetLastInstruction());
@@ -1768,7 +1773,8 @@ class BCEVisitor : public HGraphVisitor {
     // If array_length is less than lower_const, deoptimize.
     HBoundsCheck* bounds_check = first_constant_index_bounds_check_map_.Get(
         array_length->GetId())->AsBoundsCheck();
-    HCondition* cond = new (GetGraph()->GetArena()) HLessThanOrEqual(array_length, const_instr);
+    HCondition* cond = new (GetGraph()->GetArena())
+        HLessThanOrEqual(array_length, const_instr, bounds_check->GetDexPc());
     HDeoptimize* deoptimize = new (GetGraph()->GetArena())
         HDeoptimize(cond, bounds_check->GetDexPc());
     block->InsertInstructionBefore(cond, bounds_check);

@@ -114,8 +114,9 @@ class BoundsCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
  public:
   BoundsCheckSlowPathMIPS64(HBoundsCheck* instruction,
                             Location index_location,
-                            Location length_location)
-      : instruction_(instruction),
+                            Location length_location, uint32_t dex_pc)
+      : SlowPathCodeMIPS64(dex_pc),
+        instruction_(instruction),
         index_location_(index_location),
         length_location_(length_location) {}
 
@@ -130,7 +131,8 @@ class BoundsCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
                                Primitive::kPrimInt,
                                length_location_,
                                Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
-                               Primitive::kPrimInt);
+                               Primitive::kPrimInt,
+                               instruction_->GetDexPc());
     mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pThrowArrayBounds),
                                   instruction_,
                                   instruction_->GetDexPc(),
@@ -150,7 +152,8 @@ class BoundsCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
 
 class DivZeroCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
  public:
-  explicit DivZeroCheckSlowPathMIPS64(HDivZeroCheck* instruction) : instruction_(instruction) {}
+  explicit DivZeroCheckSlowPathMIPS64(HDivZeroCheck* instruction, uint32_t dex_pc)
+          : SlowPathCodeMIPS64(dex_pc), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorMIPS64* mips64_codegen = down_cast<CodeGeneratorMIPS64*>(codegen);
@@ -175,7 +178,7 @@ class LoadClassSlowPathMIPS64 : public SlowPathCodeMIPS64 {
                           HInstruction* at,
                           uint32_t dex_pc,
                           bool do_clinit)
-      : cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
+      : SlowPathCodeMIPS64(dex_pc), cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
     DCHECK(at->IsLoadClass() || at->IsClinitCheck());
   }
 
@@ -230,7 +233,8 @@ class LoadClassSlowPathMIPS64 : public SlowPathCodeMIPS64 {
 
 class LoadStringSlowPathMIPS64 : public SlowPathCodeMIPS64 {
  public:
-  explicit LoadStringSlowPathMIPS64(HLoadString* instruction) : instruction_(instruction) {}
+  explicit LoadStringSlowPathMIPS64(HLoadString* instruction, uint32_t dex_pc)
+      : SlowPathCodeMIPS64(dex_pc), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -266,7 +270,8 @@ class LoadStringSlowPathMIPS64 : public SlowPathCodeMIPS64 {
 
 class NullCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
  public:
-  explicit NullCheckSlowPathMIPS64(HNullCheck* instr) : instruction_(instr) {}
+  explicit NullCheckSlowPathMIPS64(HNullCheck* instr, uint32_t dex_pc)
+      : SlowPathCodeMIPS64(dex_pc), instruction_(instr) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorMIPS64* mips64_codegen = down_cast<CodeGeneratorMIPS64*>(codegen);
@@ -289,8 +294,8 @@ class NullCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
 class SuspendCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
  public:
   explicit SuspendCheckSlowPathMIPS64(HSuspendCheck* instruction,
-                                      HBasicBlock* successor)
-      : instruction_(instruction), successor_(successor) {}
+                                      HBasicBlock* successor, uint32_t dex_pc)
+      : SlowPathCodeMIPS64(dex_pc), instruction_(instruction), successor_(successor) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorMIPS64* mips64_codegen = down_cast<CodeGeneratorMIPS64*>(codegen);
@@ -333,10 +338,10 @@ class TypeCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
                           Location class_to_check,
                           Location object_class,
                           uint32_t dex_pc)
-      : instruction_(instruction),
+      : SlowPathCodeMIPS64(dex_pc),
+        instruction_(instruction),
         class_to_check_(class_to_check),
-        object_class_(object_class),
-        dex_pc_(dex_pc) {}
+        object_class_(object_class) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -355,7 +360,8 @@ class TypeCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
                                Primitive::kPrimNot,
                                object_class_,
                                Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
-                               Primitive::kPrimNot);
+                               Primitive::kPrimNot,
+                               dex_pc_);
 
     if (instruction_->IsInstanceOf()) {
       mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pInstanceofNonTrivial),
@@ -385,15 +391,14 @@ class TypeCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
   HInstruction* const instruction_;
   const Location class_to_check_;
   const Location object_class_;
-  uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathMIPS64);
 };
 
 class DeoptimizationSlowPathMIPS64 : public SlowPathCodeMIPS64 {
  public:
-  explicit DeoptimizationSlowPathMIPS64(HInstruction* instruction)
-    : instruction_(instruction) {}
+  explicit DeoptimizationSlowPathMIPS64(HInstruction* instruction, uint32_t dex_pc)
+      : SlowPathCodeMIPS64(dex_pc), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -998,7 +1003,8 @@ void InstructionCodeGeneratorMIPS64::GenerateMemoryBarrier(MemBarrierKind kind A
 void InstructionCodeGeneratorMIPS64::GenerateSuspendCheck(HSuspendCheck* instruction,
                                                           HBasicBlock* successor) {
   SuspendCheckSlowPathMIPS64* slow_path =
-    new (GetGraph()->GetArena()) SuspendCheckSlowPathMIPS64(instruction, successor);
+    new (GetGraph()->GetArena()) SuspendCheckSlowPathMIPS64(instruction, successor,
+                                                            instruction->GetDexPc());
   codegen_->AddSlowPath(slow_path);
 
   __ LoadFromOffset(kLoadUnsignedHalfword,
@@ -1592,7 +1598,8 @@ void InstructionCodeGeneratorMIPS64::VisitBoundsCheck(HBoundsCheck* instruction)
   BoundsCheckSlowPathMIPS64* slow_path = new (GetGraph()->GetArena()) BoundsCheckSlowPathMIPS64(
       instruction,
       locations->InAt(0),
-      locations->InAt(1));
+      locations->InAt(1),
+      instruction->GetDexPc());
   codegen_->AddSlowPath(slow_path);
 
   GpuRegister index = locations->InAt(0).AsRegister<GpuRegister>();
@@ -1888,7 +1895,8 @@ void LocationsBuilderMIPS64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
 
 void InstructionCodeGeneratorMIPS64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
   SlowPathCodeMIPS64* slow_path =
-      new (GetGraph()->GetArena()) DivZeroCheckSlowPathMIPS64(instruction);
+      new (GetGraph()->GetArena()) DivZeroCheckSlowPathMIPS64(instruction,
+                                                              instruction->GetDexPc());
   codegen_->AddSlowPath(slow_path);
   Location value = instruction->GetLocations()->InAt(0);
 
@@ -2120,7 +2128,7 @@ void LocationsBuilderMIPS64::VisitDeoptimize(HDeoptimize* deoptimize) {
 
 void InstructionCodeGeneratorMIPS64::VisitDeoptimize(HDeoptimize* deoptimize) {
   SlowPathCodeMIPS64* slow_path = new (GetGraph()->GetArena())
-      DeoptimizationSlowPathMIPS64(deoptimize);
+      DeoptimizationSlowPathMIPS64(deoptimize, deoptimize->GetDexPc());
   codegen_->AddSlowPath(slow_path);
   Label* slow_path_entry = slow_path->GetEntryLabel();
   GenerateTestAndBranch(deoptimize, slow_path_entry, nullptr, slow_path_entry);
@@ -2572,7 +2580,8 @@ void LocationsBuilderMIPS64::VisitLoadString(HLoadString* load) {
 }
 
 void InstructionCodeGeneratorMIPS64::VisitLoadString(HLoadString* load) {
-  SlowPathCodeMIPS64* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathMIPS64(load);
+  SlowPathCodeMIPS64* slow_path = new (GetGraph()->GetArena())
+                                      LoadStringSlowPathMIPS64(load, load->GetDexPc());
   codegen_->AddSlowPath(slow_path);
 
   LocationSummary* locations = load->GetLocations();
@@ -2826,7 +2835,8 @@ void InstructionCodeGeneratorMIPS64::GenerateImplicitNullCheck(HNullCheck* instr
 }
 
 void InstructionCodeGeneratorMIPS64::GenerateExplicitNullCheck(HNullCheck* instruction) {
-  SlowPathCodeMIPS64* slow_path = new (GetGraph()->GetArena()) NullCheckSlowPathMIPS64(instruction);
+  SlowPathCodeMIPS64* slow_path = new (GetGraph()->GetArena())
+                                      NullCheckSlowPathMIPS64(instruction, instruction->GetDexPc());
   codegen_->AddSlowPath(slow_path);
 
   Location obj = instruction->GetLocations()->InAt(0);
@@ -3296,7 +3306,7 @@ void LocationsBuilderMIPS64::VisitFakeString(HFakeString* instruction) {
   DCHECK(codegen_->IsBaseline());
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  locations->SetOut(Location::ConstantLocation(GetGraph()->GetNullConstant()));
+  locations->SetOut(Location::ConstantLocation(GetGraph()->GetNullConstant(instruction->GetDexPc())));
 }
 
 void InstructionCodeGeneratorMIPS64::VisitFakeString(HFakeString* instruction ATTRIBUTE_UNUSED) {
