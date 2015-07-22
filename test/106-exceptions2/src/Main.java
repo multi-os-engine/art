@@ -178,13 +178,13 @@ class Main {
       return res;
     }
 
-    static int throwImplicitDivZero(int x, int y) {
+    static int $noinline$ThrowImplicitDivZero(int x, int y) {
       return x / y;
     }
 
     static int checkDivZero() {
       try {
-        throwImplicitDivZero(100, 0);
+        $noinline$ThrowImplicitDivZero(100, 0);
         return 123;
       } catch (NullPointerException npe) {
         return 768;

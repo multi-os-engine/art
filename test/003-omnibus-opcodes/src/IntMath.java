@@ -19,8 +19,15 @@
  */
 public class IntMath {
 
-    static void shiftTest1() {
-        System.out.println("IntMath.shiftTest1");
+    static boolean doThrow = false;
+
+    static void $noinline$ShiftTest1() {
+        System.out.println("IntMath.$noinline$ShiftTest1");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         final int[] mBytes = {
             0x11, 0x22, 0x33, 0x44, 0x88, 0x99, 0xaa, 0xbb
@@ -48,8 +55,13 @@ public class IntMath {
         Main.assertTrue(l == 0xbbaa998844332211L);
     }
 
-    static void shiftTest2() {
-        System.out.println("IntMath.shiftTest2");
+    static void $noinline$ShiftTest2() {
+        System.out.println("IntMath.$noinline$ShiftTest2");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         long    a = 0x11;
         long    b = 0x22;
@@ -66,8 +78,13 @@ public class IntMath {
         Main.assertTrue(result == 0x1122334455667788L);
     }
 
-    static void unsignedShiftTest() {
-        System.out.println("IntMath.unsignedShiftTest");
+    static void $noinline$UnsignedShiftTest() {
+        System.out.println("IntMath.$noinline$UnsignedShiftTest");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         byte b = -4;
         short s = -4;
@@ -85,8 +102,13 @@ public class IntMath {
         Main.assertTrue(i == 268435455);
     }
 
-    static void shiftTest3(int thirtyTwo) {
-        System.out.println("IntMath.shiftTest3");
+    static void $noinline$ShiftTest3(int thirtyTwo) {
+        System.out.println("IntMath.$noinline$ShiftTest3");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         int one = thirtyTwo / 32;
         int sixteen = thirtyTwo / 2;
@@ -118,8 +140,13 @@ public class IntMath {
         Main.assertTrue(-4 >>> thirtyThree == 2147483646);
     }
 
-    static void convTest() {
-        System.out.println("IntMath.convTest");
+    static void $noinline$ConvTest() {
+        System.out.println("IntMath.$noinline$ConvTest");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         float f;
         double d;
@@ -145,8 +172,13 @@ public class IntMath {
         Main.assertTrue(i == -1383989493);
     }
 
-    static void charSubTest() {
-        System.out.println("IntMath.charSubTest");
+    static void $noinline$CharSubTest() {
+        System.out.println("IntMath.$noinline$CharSubTest");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         char char1 = 0x00e9;
         char char2 = 0xffff;
@@ -161,8 +193,13 @@ public class IntMath {
      * We pass in the arguments and return the results so the compiler
      * doesn't do the math for us.  (x=70000, y=-3)
      */
-    static int[] intOperTest(int x, int y) {
-        System.out.println("IntMath.intOperTest");
+    static int[] $noinline$IntOperTest(int x, int y) {
+        System.out.println("IntMath.$noinline$IntOperTest");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         int[] results = new int[10];
 
@@ -207,8 +244,13 @@ public class IntMath {
     /*
      * More operations, this time with 16-bit constants.  (x=77777)
      */
-    static int[] lit16Test(int x) {
-        System.out.println("IntMath.lit16Test");
+    static int[] $noinline$Lit16Test(int x) {
+        System.out.println("IntMath.$noinline$Lit16Test");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         int[] results = new int[8];
 
@@ -237,8 +279,13 @@ public class IntMath {
     /*
      * More operations, this time with 8-bit constants.  (x=-55555)
      */
-    static int[] lit8Test(int x) {
-        System.out.println("IntMath.lit8Test");
+    static int[] $noinline$Lit8Test(int x) {
+        System.out.println("IntMath.$noinline$Lit8Test");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         int[] results = new int[8];
 
@@ -276,7 +323,12 @@ public class IntMath {
      * Make sure special-cased literal division matches
      * normal division.
      */
-    static void divLiteralTestBody(int start, int count) {
+    static void $noinline$DivLiteralTestBody(int start, int count) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
        int normal = 0;
        int special = 0;
        for (int i = 0; i < count; i++) {
@@ -342,16 +394,21 @@ public class IntMath {
 
     static void divLiteralTest() {
        System.out.println("IntMath.divLiteralTest");
-       divLiteralTestBody(-1000, 2000);
-       divLiteralTestBody(0x7fffffff-2000, 2000);
-       divLiteralTestBody(0xfff0ffff, 2000);
+       $noinline$DivLiteralTestBody(-1000, 2000);
+       $noinline$DivLiteralTestBody(0x7fffffff-2000, 2000);
+       $noinline$DivLiteralTestBody(0xfff0ffff, 2000);
     }
 
     /*
      * Shift some data.  (value=0xff00aa01, dist=8)
      */
-    static int[] intShiftTest(int value, int dist) {
-        System.out.println("IntMath.intShiftTest");
+    static int[] $noinline$IntShiftTest(int value, int dist) {
+        System.out.println("IntMath.$noinline$IntShiftTest");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         int results[] = new int[4];
 
@@ -375,8 +432,13 @@ public class IntMath {
      * We pass in the arguments and return the results so the compiler
      * doesn't do the math for us.  (x=70000000000, y=-3)
      */
-    static long[] longOperTest(long x, long y) {
-        System.out.println("IntMath.longOperTest");
+    static long[] $noinline$LongOperTest(long x, long y) {
+        System.out.println("IntMath.$noinline$LongOperTest");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         long[] results = new long[10];
 
@@ -423,8 +485,13 @@ public class IntMath {
     /*
      * Shift some data.  (value=0xd5aa96deff00aa01, dist=8)
      */
-    static long[] longShiftTest(long value, int dist) {
-        System.out.println("IntMath.longShiftTest");
+    static long[] $noinline$LongShiftTest(long value, int dist) {
+        System.out.println("IntMath.$noinline$LongShiftTest");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         long results[] = new long[4];
 
@@ -452,7 +519,11 @@ public class IntMath {
     /*
      * Try to cause some unary operations.
      */
-    static int unopTest(int x) {
+    static int $noinline$UnopTest(int x) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
         x = -x;
         x ^= 0xffffffff;
         return x;
@@ -470,8 +541,14 @@ public class IntMath {
     /*
      * Truncate an int.
      */
-    static Shorty truncateTest(int x) {
-        System.out.println("IntMath.truncateTest");
+    static Shorty $noinline$TruncateTest(int x) {
+        System.out.println("IntMath.$noinline$TruncateTest");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
         Shorty shorts = new Shorty();
 
         shorts.mShort = (short) x;
@@ -488,8 +565,13 @@ public class IntMath {
     /*
      * Verify that we get a divide-by-zero exception.
      */
-    static void divideByZero(int z) {
-        System.out.println("IntMath.divideByZero");
+    static void $noinline$DivideByZero(int z) {
+        System.out.println("IntMath.$noinline$DivideByZero");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         try {
             int x = 100 / z;
@@ -522,8 +604,14 @@ public class IntMath {
      *
      * Pass in -1, -1L.
      */
-    static void bigDivideOverflow(int idiv, long ldiv) {
-        System.out.println("IntMath.bigDivideOverflow");
+    static void $noinline$BigDivideOverflow(int idiv, long ldiv) {
+        System.out.println("IntMath.$noinline$BigDivideOverflow");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
         int mostNegInt = (int) 0x80000000;
         long mostNegLong = (long) 0x8000000000000000L;
 
@@ -573,42 +661,42 @@ public class IntMath {
     }
 
     public static void run() {
-        shiftTest1();
-        shiftTest2();
-        unsignedShiftTest();
-        shiftTest3(32);
-        convTest();
-        charSubTest();
+        $noinline$ShiftTest1();
+        $noinline$ShiftTest2();
+        $noinline$UnsignedShiftTest();
+        $noinline$ShiftTest3(32);
+        $noinline$ConvTest();
+        $noinline$CharSubTest();
 
         int[] intResults;
         long[] longResults;
 
-        intResults = intOperTest(70000, -3);
+        intResults = $noinline$IntOperTest(70000, -3);
         intOperCheck(intResults);
-        longResults = longOperTest(70000000000L, -3L);
+        longResults = $noinline$LongOperTest(70000000000L, -3L);
         longOperCheck(longResults);
 
-        intResults = lit16Test(77777);
+        intResults = $noinline$Lit16Test(77777);
         lit16Check(intResults);
-        intResults = lit8Test(-55555);
+        intResults = $noinline$Lit8Test(-55555);
         lit8Check(intResults);
         divLiteralTest();
 
-        intResults = intShiftTest(0xff00aa01, 8);
+        intResults = $noinline$IntShiftTest(0xff00aa01, 8);
         intShiftCheck(intResults);
-        longResults = longShiftTest(0xd5aa96deff00aa01L, 16);
+        longResults = $noinline$LongShiftTest(0xd5aa96deff00aa01L, 16);
         long longRet = longShiftCheck(longResults);
         Main.assertTrue(longRet == 0x96deff00aa010000L);
 
-        Shorty shorts = truncateTest(-16717277);    // 0xff00ea23
+        Shorty shorts = $noinline$TruncateTest(-16717277);    // 0xff00ea23
         truncateCheck(shorts);
 
-        divideByZero(0);
-        bigDivideOverflow(-1, -1L);
+        $noinline$DivideByZero(0);
+        $noinline$BigDivideOverflow(-1, -1L);
 
         checkConsts((byte) 1, (short) -256, -88888, 0x9922334455667788L);
 
-        unopCheck(unopTest(38));
+        unopCheck($noinline$UnopTest(38));
 
         jlmTests(12345, 0x1122334455667788L);
     }

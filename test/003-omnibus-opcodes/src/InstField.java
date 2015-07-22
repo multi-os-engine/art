@@ -26,7 +26,7 @@ public class InstField {
     public volatile long mVolatileLong1, mVolatileLong2;
 
     public void run() {
-        assignFields();
+        $noinline$AssignFields();
         checkFields();
         InstField.nullCheck(null);
     }
@@ -62,8 +62,16 @@ public class InstField {
         }
     }
 
-    public void assignFields() {
+    static boolean doThrow = false;
+
+    public void $noinline$AssignFields() {
         System.out.println("InstField assign...");
+
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
         mBoolean1 = true;
         mBoolean2 = false;
         mByte1 = 127;

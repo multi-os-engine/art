@@ -39,8 +39,15 @@ class Main extends IntMathBase {
         foo_ = 123;
     }
 
+    static boolean doThrow = false;
+
     /* Regression test: triggered an SSA renaming bug. */
-    static long divideLongByBillion(long a) {
+    static long $noinline$DivideLongByBillion(long a) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
         long quot;
         long rem;
 
@@ -194,7 +201,11 @@ class Main extends IntMathBase {
     /*
      * Try to cause some unary operations.
      */
-    static int unopTest(int x) {
+    static int $noinline$UnopTest(int x) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
         x = -x;
         x ^= 0xffffffff;
         return x;
@@ -334,7 +345,12 @@ class Main extends IntMathBase {
      * We pass in the arguments and return the results so the compiler
      * doesn't do the math for us.  (x=70000, y=-3)
      */
-    static int intOperTest(int x, int y) {
+    static int $noinline$IntOperTest(int x, int y) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
         int[] results = new int[10];
 
         /* this seems to generate "op-int" instructions */
@@ -377,7 +393,11 @@ class Main extends IntMathBase {
     /*
      * More operations, this time with 16-bit constants.  (x=77777)
      */
-    static int lit16Test(int x) {
+    static int $noinline$Lit16Test(int x) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         int[] results = new int[10];
 
@@ -410,7 +430,11 @@ class Main extends IntMathBase {
     /*
      * More operations, this time with 8-bit constants.  (x=-55555)
      */
-    static int lit8Test(int x) {
+    static int $noinline$Lit8Test(int x) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         int[] results = new int[8];
 
@@ -441,7 +465,11 @@ class Main extends IntMathBase {
     /*
      * Shift some data.  (value=0xff00aa01, dist=8)
      */
-    static int intShiftTest(int value, int dist) {
+    static int $noinline$IntShiftTest(int value, int dist) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
         int results[] = new int[4];
         results[0] = value << dist;
         results[1] = value >> dist;
@@ -458,7 +486,12 @@ class Main extends IntMathBase {
      * We pass in the arguments and return the results so the compiler
      * doesn't do the math for us.  (x=70000000000, y=-3)
      */
-    static int longOperTest(long x, long y) {
+    static int $noinline$LongOperTest(long x, long y) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
         long[] results = new long[10];
 
         /* this seems to generate "op-long" instructions */
@@ -496,7 +529,11 @@ class Main extends IntMathBase {
     /*
      * Shift some data.  (value=0xd5aa96deff00aa01, dist=16)
      */
-    static long longShiftTest(long value, int dist) {
+    static long $noinline$LongShiftTest(long value, int dist) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
         long results[] = new long[4];
         results[0] = value << dist;
         results[1] = value >> dist;
@@ -566,7 +603,12 @@ class Main extends IntMathBase {
     /*
      * Test the integer comparisons in various ways.
      */
-    static int testIntCompare(int minus, int plus, int plus2, int zero) {
+    static int $noinline$TestIntCompare(int minus, int plus, int plus2, int zero) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
         int res = 1111;
 
         if (minus > plus)
@@ -615,8 +657,13 @@ class Main extends IntMathBase {
      *
      * minus=-5, alsoMinus=0xFFFFFFFF00000009, plus=4, alsoPlus=8
      */
-    static int testLongCompare(long minus, long alsoMinus, long plus,
-                               long alsoPlus) {
+    static int $noinline$TestLongCompare(long minus, long alsoMinus, long plus,
+                                         long alsoPlus) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
         int res = 2222;
 
         if (minus > plus)
@@ -660,8 +707,13 @@ class Main extends IntMathBase {
     /*
      * Test cmpl-float and cmpg-float.
      */
-    static int testFloatCompare(float minus, float plus, float plus2,
-                                float nan) {
+    static int $noinline$TestFloatCompare(float minus, float plus, float plus2,
+                                          float nan) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
+
         if (minus > plus)
             return 1;
         if (plus < minus)
@@ -690,8 +742,12 @@ class Main extends IntMathBase {
         return 3333;
     }
 
-    static int testDoubleCompare(double minus, double plus, double plus2,
-                                 double nan) {
+    static int $noinline$TestDoubleCompare(double minus, double plus, double plus2,
+                                           double nan) {
+        if (doThrow) {
+          // Try defeating inlining.
+          throw new Error();
+        }
 
         int res = 4444;
 
@@ -896,18 +952,18 @@ class Main extends IntMathBase {
         int res;
         long lres;
 
-        lres = divideLongByBillion(123000000000L);
+        lres = $noinline$DivideLongByBillion(123000000000L);
         if (lres == 123) {
-            System.out.println("divideLongByBillion PASSED");
+            System.out.println("$noinline$DivideLongByBillion PASSED");
         } else {
-            System.out.println("divideLongByBillion FAILED: " + lres);
+            System.out.println("$noinline$DivideLongByBillion FAILED: " + lres);
             failure = true;
         }
-        res = unopTest(38);
+        res = $noinline$UnopTest(38);
         if (res == 37) {
-            System.out.println("unopTest PASSED");
+            System.out.println("$noinline$UnopTest PASSED");
         } else {
-            System.out.println("unopTest FAILED: " + res);
+            System.out.println("$noinline$UnopTest FAILED: " + res);
             failure = true;
         }
         res = shiftTest1();
@@ -945,46 +1001,46 @@ class Main extends IntMathBase {
             System.out.println("charSubTest FAILED: " + res);
             failure = true;
         }
-        res = intOperTest(70000, -3);
+        res = $noinline$IntOperTest(70000, -3);
         if (res == 0) {
-            System.out.println("intOperTest PASSED");
+            System.out.println("$noinline$IntOperTest PASSED");
         } else {
-            System.out.println("intOperTest FAILED: " + res);
+            System.out.println("$noinline$IntOperTest FAILED: " + res);
             failure = true;
         }
-        res = lit16Test(77777);
+        res = $noinline$Lit16Test(77777);
         if (res == 0) {
-            System.out.println("lit16Test PASSED");
+            System.out.println("$noinline$Lit16Test PASSED");
         } else {
-            System.out.println("lit16Test FAILED: " + res);
+            System.out.println("$noinline$Lit16Test FAILED: " + res);
             failure = true;
         }
-        res = lit8Test(-55555);
+        res = $noinline$Lit8Test(-55555);
         if (res == 0) {
-            System.out.println("lit8Test PASSED");
+            System.out.println("$noinline$Lit8Test PASSED");
         } else {
-            System.out.println("lit8Test FAILED: " + res);
+            System.out.println("$noinline$Lit8Test FAILED: " + res);
             failure = true;
         }
-        res = intShiftTest(0xff00aa01, 8);
+        res = $noinline$IntShiftTest(0xff00aa01, 8);
         if (res == 0) {
-            System.out.println("intShiftTest PASSED");
+            System.out.println("$noinline$IntShiftTest PASSED");
         } else {
-            System.out.println("intShiftTest FAILED: " + res);
+            System.out.println("$noinline$IntShiftTest FAILED: " + res);
             failure = true;
         }
-        res = longOperTest(70000000000L, -3L);
+        res = $noinline$LongOperTest(70000000000L, -3L);
         if (res == 0) {
-            System.out.println("longOperTest PASSED");
+            System.out.println("$noinline$LongOperTest PASSED");
         } else {
-            System.out.println("longOperTest FAILED: " + res);
+            System.out.println("$noinline$LongOperTest FAILED: " + res);
             failure = true;
         }
-        lres = longShiftTest(0xd5aa96deff00aa01L, 16);
+        lres = $noinline$LongShiftTest(0xd5aa96deff00aa01L, 16);
         if (lres == 0x96deff00aa010000L) {
-            System.out.println("longShiftTest PASSED");
+            System.out.println("$noinline$LongShiftTest PASSED");
         } else {
-            System.out.println("longShiftTest FAILED: " + lres);
+            System.out.println("$noinline$LongShiftTest FAILED: " + lres);
             failure = true;
         }
 
@@ -996,35 +1052,35 @@ class Main extends IntMathBase {
             failure = true;
         }
 
-        res = testIntCompare(-5, 4, 4, 0);
+        res = $noinline$TestIntCompare(-5, 4, 4, 0);
         if (res == 1111) {
-            System.out.println("testIntCompare PASSED");
+            System.out.println("$noinline$TestIntCompare PASSED");
         } else {
-            System.out.println("testIntCompare FAILED: " + res);
+            System.out.println("$noinline$TestIntCompare FAILED: " + res);
             failure = true;
         }
 
-        res = testLongCompare(-5L, -4294967287L, 4L, 8L);
+        res = $noinline$TestLongCompare(-5L, -4294967287L, 4L, 8L);
         if (res == 2222) {
-            System.out.println("testLongCompare PASSED");
+            System.out.println("$noinline$TestLongCompare PASSED");
         } else {
-            System.out.println("testLongCompare FAILED: " + res);
+            System.out.println("$noinline$TestLongCompare FAILED: " + res);
             failure = true;
         }
 
-        res = testFloatCompare(-5.0f, 4.0f, 4.0f, (1.0f/0.0f) / (1.0f/0.0f));
+        res = $noinline$TestFloatCompare(-5.0f, 4.0f, 4.0f, (1.0f/0.0f) / (1.0f/0.0f));
         if (res == 3333) {
-            System.out.println("testFloatCompare PASSED");
+            System.out.println("$noinline$TestFloatCompare PASSED");
         } else {
-            System.out.println("testFloatCompare FAILED: " + res);
+            System.out.println("$noinline$TestFloatCompare FAILED: " + res);
             failure = true;
         }
 
-        res = testDoubleCompare(-5.0, 4.0, 4.0, (1.0/0.0) / (1.0/0.0));
+        res = $noinline$TestDoubleCompare(-5.0, 4.0, 4.0, (1.0/0.0) / (1.0/0.0));
         if (res == 4444) {
-            System.out.println("testDoubleCompare PASSED");
+            System.out.println("$noinline$TestDoubleCompare PASSED");
         } else {
-            System.out.println("testDoubleCompare FAILED: " + res);
+            System.out.println("$noinline$TestDoubleCompare FAILED: " + res);
             failure = true;
         }
 
