@@ -35,6 +35,7 @@
 #include "thread.h"
 #include "dex/verified_method.h"
 #include "dex/verification_results.h"
+#include "intrinsics.h"
 
 namespace art {
 
@@ -358,8 +359,10 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   HConstantFolding fold(callee_graph);
   ReferenceTypePropagation type_propagation(callee_graph, handles_);
   InstructionSimplifier simplify(callee_graph, stats_);
+  IntrinsicsRecognizer intrinsics(callee_graph, compiler_driver_);
 
   HOptimization* optimizations[] = {
+    &intrinsics,
     &dce,
     &fold,
     &type_propagation,
