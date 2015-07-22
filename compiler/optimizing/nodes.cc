@@ -16,6 +16,8 @@
 
 #include "nodes.h"
 
+#include <cfloat>
+
 #include "code_generator.h"
 #include "ssa_builder.h"
 #include "base/bit_vector-inl.h"
@@ -1008,6 +1010,15 @@ HConstant* HUnaryOperation::TryStaticEvaluation() const {
     return Evaluate(GetInput()->AsIntConstant());
   } else if (GetInput()->IsLongConstant()) {
     return Evaluate(GetInput()->AsLongConstant());
+  } else if (FLT_EVAL_METHOD == 0) {
+    // All floating-point operations and constants evaluate in the
+    // range and precision of the type used (i.e., 32-bit float,
+    // 64-bit double).
+    if (GetInput()->IsFloatConstant()) {
+      return Evaluate(GetInput()->AsFloatConstant());
+    } else if (GetInput()->IsDoubleConstant()) {
+      return Evaluate(GetInput()->AsDoubleConstant());
+    }
   }
   return nullptr;
 }
@@ -1024,6 +1035,15 @@ HConstant* HBinaryOperation::TryStaticEvaluation() const {
       return Evaluate(GetLeft()->AsLongConstant(), GetRight()->AsIntConstant());
     } else if (GetRight()->IsLongConstant()) {
       return Evaluate(GetLeft()->AsLongConstant(), GetRight()->AsLongConstant());
+    }
+  } else if (FLT_EVAL_METHOD == 0) {
+    // All floating-point operations and constants evaluate in the
+    // range and precision of the type used (i.e., 32-bit float,
+    // 64-bit double).
+    if (GetLeft()->IsFloatConstant() && GetRight()->IsFloatConstant()) {
+      return Evaluate(GetLeft()->AsFloatConstant(), GetRight()->AsFloatConstant());
+    } else if (GetLeft()->IsDoubleConstant() && GetRight()->IsDoubleConstant()) {
+      return Evaluate(GetLeft()->AsDoubleConstant(), GetRight()->AsDoubleConstant());
     }
   }
   return nullptr;
