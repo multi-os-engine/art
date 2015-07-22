@@ -1201,8 +1201,11 @@ class SsaLivenessAnalysis : public ValueObject {
   // Update the live_out set of the block and returns whether it has changed.
   bool UpdateLiveOut(const HBasicBlock& block);
 
-  static bool ShouldBeLiveForEnvironment(HInstruction* instruction) {
+  static bool ShouldBeLiveForEnvironment(HInstruction* current, HInstruction* instruction) {
     if (instruction == nullptr) return false;
+    // A value that's not live in compiled code may still be needed in interpreter,
+    // due to code motion, etc.
+    if (current->IsDeoptimize()) return true;
     if (instruction->GetBlock()->GetGraph()->IsDebuggable()) return true;
     return instruction->GetType() == Primitive::kPrimNot;
   }
