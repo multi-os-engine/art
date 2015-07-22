@@ -1008,6 +1008,10 @@ HConstant* HUnaryOperation::TryStaticEvaluation() const {
     return Evaluate(GetInput()->AsIntConstant());
   } else if (GetInput()->IsLongConstant()) {
     return Evaluate(GetInput()->AsLongConstant());
+  } else if (GetInput()->IsFloatConstant()) {
+    return Evaluate(GetInput()->AsFloatConstant());
+  } else if (GetInput()->IsDoubleConstant()) {
+    return Evaluate(GetInput()->AsDoubleConstant());
   }
   return nullptr;
 }
@@ -1025,6 +1029,10 @@ HConstant* HBinaryOperation::TryStaticEvaluation() const {
     } else if (GetRight()->IsLongConstant()) {
       return Evaluate(GetLeft()->AsLongConstant(), GetRight()->AsLongConstant());
     }
+  } else if (GetLeft()->IsFloatConstant() && GetRight()->IsFloatConstant()) {
+    return Evaluate(GetLeft()->AsFloatConstant(), GetRight()->AsFloatConstant());
+  } else if (GetLeft()->IsDoubleConstant() && GetRight()->IsDoubleConstant()) {
+    return Evaluate(GetLeft()->AsDoubleConstant(), GetRight()->AsDoubleConstant());
   }
   return nullptr;
 }
