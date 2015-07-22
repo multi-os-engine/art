@@ -474,7 +474,8 @@ static HGraph* BuildIfElseWithPhi(ArenaAllocator* allocator,
   HBasicBlock* entry = new (allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot);
+  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot,
+                                                            false, entry->GetLastDexPc());
   entry->AddInstruction(parameter);
 
   HBasicBlock* block = new (allocator) HBasicBlock(graph);
@@ -616,7 +617,8 @@ static HGraph* BuildFieldReturn(ArenaAllocator* allocator,
   HBasicBlock* entry = new (allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot);
+  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot,
+                                                            false, entry->GetLastDexPc());
   entry->AddInstruction(parameter);
 
   HBasicBlock* block = new (allocator) HBasicBlock(graph);
@@ -688,7 +690,8 @@ static HGraph* BuildTwoSubs(ArenaAllocator* allocator,
   HBasicBlock* entry = new (allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimInt);
+  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimInt,
+                                                            false, entry->GetLastDexPc());
   entry->AddInstruction(parameter);
 
   HInstruction* constant1 = graph->GetIntConstant(1);
@@ -758,8 +761,10 @@ static HGraph* BuildDiv(ArenaAllocator* allocator,
   HBasicBlock* entry = new (allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* first = new (allocator) HParameterValue(0, Primitive::kPrimInt);
-  HInstruction* second = new (allocator) HParameterValue(0, Primitive::kPrimInt);
+  HInstruction* first = new (allocator) HParameterValue(0, Primitive::kPrimInt,
+                                                        false, entry->GetLastDexPc());
+  HInstruction* second = new (allocator) HParameterValue(0, Primitive::kPrimInt,
+                                                         false, entry->GetLastDexPc());
   entry->AddInstruction(first);
   entry->AddInstruction(second);
 
@@ -810,10 +815,14 @@ TEST(RegisterAllocatorTest, SpillInactive) {
   HBasicBlock* entry = new (&allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* one = new (&allocator) HParameterValue(0, Primitive::kPrimInt);
-  HInstruction* two = new (&allocator) HParameterValue(0, Primitive::kPrimInt);
-  HInstruction* three = new (&allocator) HParameterValue(0, Primitive::kPrimInt);
-  HInstruction* four = new (&allocator) HParameterValue(0, Primitive::kPrimInt);
+  HInstruction* one = new (&allocator) HParameterValue(0, Primitive::kPrimInt,
+                                                       false, entry->GetLastDexPc());
+  HInstruction* two = new (&allocator) HParameterValue(0, Primitive::kPrimInt,
+                                                       false, entry->GetLastDexPc());
+  HInstruction* three = new (&allocator) HParameterValue(0, Primitive::kPrimInt,
+                                                         false, entry->GetLastDexPc());
+  HInstruction* four = new (&allocator) HParameterValue(0, Primitive::kPrimInt,
+                                                        false, entry->GetLastDexPc());
   entry->AddInstruction(one);
   entry->AddInstruction(two);
   entry->AddInstruction(three);

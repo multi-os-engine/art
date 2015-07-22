@@ -60,7 +60,8 @@ static constexpr DRegister DTMP = D31;
 
 class NullCheckSlowPathARM : public SlowPathCodeARM {
  public:
-  explicit NullCheckSlowPathARM(HNullCheck* instruction) : instruction_(instruction) {}
+  explicit NullCheckSlowPathARM(HNullCheck* instruction)
+      : SlowPathCodeARM(instruction->GetDexPc()), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -78,7 +79,8 @@ class NullCheckSlowPathARM : public SlowPathCodeARM {
 
 class DivZeroCheckSlowPathARM : public SlowPathCodeARM {
  public:
-  explicit DivZeroCheckSlowPathARM(HDivZeroCheck* instruction) : instruction_(instruction) {}
+  explicit DivZeroCheckSlowPathARM(HDivZeroCheck* instruction)
+      : SlowPathCodeARM(instruction->GetDexPc()), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -97,7 +99,7 @@ class DivZeroCheckSlowPathARM : public SlowPathCodeARM {
 class SuspendCheckSlowPathARM : public SlowPathCodeARM {
  public:
   SuspendCheckSlowPathARM(HSuspendCheck* instruction, HBasicBlock* successor)
-      : instruction_(instruction), successor_(successor) {}
+      : SlowPathCodeARM(instruction->GetDexPc()), instruction_(instruction), successor_(successor) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
@@ -140,7 +142,8 @@ class BoundsCheckSlowPathARM : public SlowPathCodeARM {
   BoundsCheckSlowPathARM(HBoundsCheck* instruction,
                          Location index_location,
                          Location length_location)
-      : instruction_(instruction),
+      : SlowPathCodeARM(instruction->GetDexPc()),
+        instruction_(instruction),
         index_location_(index_location),
         length_location_(length_location) {}
 
@@ -156,7 +159,8 @@ class BoundsCheckSlowPathARM : public SlowPathCodeARM {
         Primitive::kPrimInt,
         length_location_,
         Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
-        Primitive::kPrimInt);
+        Primitive::kPrimInt,
+        instruction_->GetDexPc());
     arm_codegen->InvokeRuntime(
         QUICK_ENTRY_POINT(pThrowArrayBounds), instruction_, instruction_->GetDexPc(), this);
   }
@@ -177,7 +181,8 @@ class LoadClassSlowPathARM : public SlowPathCodeARM {
                        HInstruction* at,
                        uint32_t dex_pc,
                        bool do_clinit)
-      : cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
+      : SlowPathCodeARM(dex_pc),
+        cls_(cls), at_(at), do_clinit_(do_clinit) {
     DCHECK(at->IsLoadClass() || at->IsClinitCheck());
   }
 
@@ -215,9 +220,6 @@ class LoadClassSlowPathARM : public SlowPathCodeARM {
   // (Might be the load class or an initialization check).
   HInstruction* const at_;
 
-  // The dex PC of `at_`.
-  const uint32_t dex_pc_;
-
   // Whether to initialize the class.
   const bool do_clinit_;
 
@@ -226,7 +228,8 @@ class LoadClassSlowPathARM : public SlowPathCodeARM {
 
 class LoadStringSlowPathARM : public SlowPathCodeARM {
  public:
-  explicit LoadStringSlowPathARM(HLoadString* instruction) : instruction_(instruction) {}
+  explicit LoadStringSlowPathARM(HLoadString* instruction)
+      : SlowPathCodeARM(instruction->GetDexPc()), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -260,10 +263,10 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
                        Location class_to_check,
                        Location object_class,
                        uint32_t dex_pc)
-      : instruction_(instruction),
+      : SlowPathCodeARM(dex_pc),
+        instruction_(instruction),
         class_to_check_(class_to_check),
-        object_class_(object_class),
-        dex_pc_(dex_pc) {}
+        object_class_(object_class) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -283,7 +286,8 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
         Primitive::kPrimNot,
         object_class_,
         Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
-        Primitive::kPrimNot);
+        Primitive::kPrimNot,
+        dex_pc_);
 
     if (instruction_->IsInstanceOf()) {
       arm_codegen->InvokeRuntime(
@@ -304,7 +308,6 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
   HInstruction* const instruction_;
   const Location class_to_check_;
   const Location object_class_;
-  uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathARM);
 };
@@ -312,7 +315,7 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
 class DeoptimizationSlowPathARM : public SlowPathCodeARM {
  public:
   explicit DeoptimizationSlowPathARM(HInstruction* instruction)
-    : instruction_(instruction) {}
+    : SlowPathCodeARM(instruction->GetDexPc()), instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -801,7 +804,7 @@ void CodeGeneratorARM::Move32(Location destination, Location source) {
   }
 }
 
-void CodeGeneratorARM::Move64(Location destination, Location source) {
+void CodeGeneratorARM::Move64(Location destination, Location source, uint32_t dex_pc) {
   if (source.Equals(destination)) {
     return;
   }
@@ -813,7 +816,8 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
           Primitive::kPrimInt,
           Location::RegisterLocation(source.AsRegisterPairLow<Register>()),
           Location::RegisterLocation(destination.AsRegisterPairLow<Register>()),
-          Primitive::kPrimInt);
+          Primitive::kPrimInt,
+          dex_pc);
     } else if (source.IsFpuRegister()) {
       UNIMPLEMENTED(FATAL);
     } else {
@@ -854,7 +858,8 @@ void CodeGeneratorARM::Move64(Location destination, Location source) {
           Primitive::kPrimInt,
           Location::StackSlot(source.GetHighStackIndex(kArmWordSize)),
           Location::StackSlot(destination.GetHighStackIndex(kArmWordSize)),
-          Primitive::kPrimInt);
+          Primitive::kPrimInt,
+          dex_pc);
     }
   }
 }
@@ -905,7 +910,7 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
 
       case Primitive::kPrimLong:
       case Primitive::kPrimDouble:
-        Move64(location, Location::DoubleStackSlot(stack_slot));
+        Move64(location, Location::DoubleStackSlot(stack_slot), instruction->GetDexPc());
         break;
 
       default:
@@ -917,7 +922,7 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
       Move32(location, temp_location);
     } else {
       DCHECK(temp_location.IsDoubleStackSlot());
-      Move64(location, temp_location);
+      Move64(location, temp_location, instruction->GetDexPc());
     }
   } else {
     DCHECK((instruction->GetNext() == move_for) || instruction->GetNext()->IsTemporary());
@@ -934,7 +939,7 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
 
       case Primitive::kPrimLong:
       case Primitive::kPrimDouble:
-        Move64(location, locations->Out());
+        Move64(location, locations->Out(), instruction->GetDexPc());
         break;
 
       default:
@@ -4556,7 +4561,7 @@ void LocationsBuilderARM::VisitFakeString(HFakeString* instruction) {
   DCHECK(codegen_->IsBaseline());
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  locations->SetOut(Location::ConstantLocation(GetGraph()->GetNullConstant()));
+  locations->SetOut(Location::ConstantLocation(GetGraph()->GetNullConstant(instruction->GetDexPc())));
 }
 
 void InstructionCodeGeneratorARM::VisitFakeString(HFakeString* instruction ATTRIBUTE_UNUSED) {

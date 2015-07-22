@@ -89,7 +89,7 @@ class CodeGeneratorX86_64;
 
 class SlowPathCodeX86_64 : public SlowPathCode {
  public:
-  SlowPathCodeX86_64() : entry_label_(), exit_label_() {}
+  SlowPathCodeX86_64(uint32_t dex_pc) : SlowPathCode(dex_pc), entry_label_(), exit_label_() {}
 
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }

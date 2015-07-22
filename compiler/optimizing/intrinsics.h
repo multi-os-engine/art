@@ -96,7 +96,7 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
 
     // We're moving potentially two or more locations to locations that could overlap, so we need
     // a parallel move resolver.
-    HParallelMove parallel_move(codegen->GetGraph()->GetArena());
+    HParallelMove parallel_move(codegen->GetGraph()->GetArena(), invoke->GetDexPc());
 
     for (size_t i = 0; i < invoke->GetNumberOfArguments(); i++) {
       HInstruction* input = invoke->InputAt(i);

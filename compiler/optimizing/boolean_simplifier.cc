@@ -70,31 +70,31 @@ static HInstruction* GetOppositeCondition(HInstruction* cond) {
     HInstruction* lhs = cond->InputAt(0);
     HInstruction* rhs = cond->InputAt(1);
     if (cond->IsEqual()) {
-      return new (allocator) HNotEqual(lhs, rhs);
+      return new (allocator) HNotEqual(lhs, rhs, cond->GetDexPc());
     } else if (cond->IsNotEqual()) {
-      return new (allocator) HEqual(lhs, rhs);
+      return new (allocator) HEqual(lhs, rhs, cond->GetDexPc());
     } else if (cond->IsLessThan()) {
-      return new (allocator) HGreaterThanOrEqual(lhs, rhs);
+      return new (allocator) HGreaterThanOrEqual(lhs, rhs, cond->GetDexPc());
     } else if (cond->IsLessThanOrEqual()) {
-      return new (allocator) HGreaterThan(lhs, rhs);
+      return new (allocator) HGreaterThan(lhs, rhs, cond->GetDexPc());
     } else if (cond->IsGreaterThan()) {
-      return new (allocator) HLessThanOrEqual(lhs, rhs);
+      return new (allocator) HLessThanOrEqual(lhs, rhs, cond->GetDexPc());
     } else {
       DCHECK(cond->IsGreaterThanOrEqual());
-      return new (allocator) HLessThan(lhs, rhs);
+      return new (allocator) HLessThan(lhs, rhs, cond->GetDexPc());
     }
   } else if (cond->IsIntConstant()) {
     HIntConstant* int_const = cond->AsIntConstant();
     if (int_const->IsZero()) {
-      return graph->GetIntConstant(1);
+      return graph->GetIntConstant(1, cond->GetDexPc());
     } else {
       DCHECK(int_const->IsOne());
-      return graph->GetIntConstant(0);
+      return graph->GetIntConstant(0, cond->GetDexPc());
     }
   } else {
     // General case when 'cond' is another instruction of type boolean,
     // as verified by SSAChecker.
-    return new (allocator) HBooleanNot(cond);
+    return new (allocator) HBooleanNot(cond, cond->GetDexPc());
   }
 }
 

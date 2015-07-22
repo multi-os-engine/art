@@ -297,7 +297,8 @@ TEST(BoundsCheckEliminationTest, ConstantArrayBoundsElimination) {
   HBasicBlock* entry = new (&allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* parameter = new (&allocator) HParameterValue(0, Primitive::kPrimNot);
+  HInstruction* parameter = new (&allocator) HParameterValue(0, Primitive::kPrimNot,
+                                                             false, entry->GetLastDexPc());
   entry->AddInstruction(parameter);
 
   HInstruction* constant_5 = graph->GetIntConstant(5);
@@ -370,7 +371,8 @@ static HGraph* BuildSSAGraph1(ArenaAllocator* allocator,
   HBasicBlock* entry = new (allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot);
+  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot,
+                                                            false, entry->GetLastDexPc());
   entry->AddInstruction(parameter);
 
   HInstruction* constant_initial = graph->GetIntConstant(initial);
@@ -505,7 +507,8 @@ static HGraph* BuildSSAGraph2(ArenaAllocator* allocator,
   HBasicBlock* entry = new (allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot);
+  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot,
+                                                            false, entry->GetLastDexPc());
   entry->AddInstruction(parameter);
 
   HInstruction* constant_initial = graph->GetIntConstant(initial);
@@ -753,7 +756,8 @@ static HGraph* BuildSSAGraph4(ArenaAllocator* allocator,
   HBasicBlock* entry = new (allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot);
+  HInstruction* parameter = new (allocator) HParameterValue(0, Primitive::kPrimNot,
+                                                            false, entry->GetLastDexPc());
   entry->AddInstruction(parameter);
 
   HInstruction* constant_initial = graph->GetIntConstant(initial);
@@ -873,7 +877,8 @@ TEST(BoundsCheckEliminationTest, BubbleSortArrayBoundsElimination) {
   HBasicBlock* entry = new (&allocator) HBasicBlock(graph);
   graph->AddBlock(entry);
   graph->SetEntryBlock(entry);
-  HInstruction* parameter = new (&allocator) HParameterValue(0, Primitive::kPrimNot);
+  HInstruction* parameter = new (&allocator) HParameterValue(0, Primitive::kPrimNot,
+                                                             false, entry->GetLastDexPc());
   entry->AddInstruction(parameter);
 
   HInstruction* constant_0 = graph->GetIntConstant(0);

@@ -116,7 +116,8 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
     HInstruction* user = it.Current()->GetUser();
     if (notNullBlock->Dominates(user->GetBlock())) {
       if (bound_type == nullptr) {
-        bound_type = new (graph_->GetArena()) HBoundType(obj, ReferenceTypeInfo::CreateTop(false));
+        bound_type = new (graph_->GetArena()) HBoundType(obj, ReferenceTypeInfo::CreateTop(false),
+                          ifInstruction->GetDexPc());
         notNullBlock->InsertInstructionBefore(bound_type, notNullBlock->GetFirstInstruction());
       }
       user->ReplaceInput(bound_type, it.Current()->GetIndex());
@@ -175,7 +176,7 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
 
         ReferenceTypeInfo obj_rti = obj->GetReferenceTypeInfo();
         ReferenceTypeInfo class_rti = load_class->GetLoadedClassRTI();
-        bound_type = new (graph_->GetArena()) HBoundType(obj, class_rti);
+        bound_type = new (graph_->GetArena()) HBoundType(obj, class_rti, ifInstruction->GetDexPc());
 
         // Narrow the type as much as possible.
         {

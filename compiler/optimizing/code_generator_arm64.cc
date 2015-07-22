@@ -193,7 +193,8 @@ class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
   BoundsCheckSlowPathARM64(HBoundsCheck* instruction,
                            Location index_location,
                            Location length_location)
-      : instruction_(instruction),
+      : SlowPathCodeARM64(instruction->GetDexPc()),
+        instruction_(instruction),
         index_location_(index_location),
         length_location_(length_location) {}
 
@@ -206,7 +207,8 @@ class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
     InvokeRuntimeCallingConvention calling_convention;
     codegen->EmitParallelMoves(
         index_location_, LocationFrom(calling_convention.GetRegisterAt(0)), Primitive::kPrimInt,
-        length_location_, LocationFrom(calling_convention.GetRegisterAt(1)), Primitive::kPrimInt);
+        length_location_, LocationFrom(calling_convention.GetRegisterAt(1)), Primitive::kPrimInt,
+        instruction_->GetDexPc());
     arm64_codegen->InvokeRuntime(
         QUICK_ENTRY_POINT(pThrowArrayBounds), instruction_, instruction_->GetDexPc(), this);
     CheckEntrypointTypes<kQuickThrowArrayBounds, void, int32_t, int32_t>();
@@ -224,7 +226,9 @@ class BoundsCheckSlowPathARM64 : public SlowPathCodeARM64 {
 
 class DivZeroCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  explicit DivZeroCheckSlowPathARM64(HDivZeroCheck* instruction) : instruction_(instruction) {}
+  explicit DivZeroCheckSlowPathARM64(HDivZeroCheck* instruction)
+      : SlowPathCodeARM64(instruction->GetDexPc()),
+        instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
@@ -247,7 +251,8 @@ class LoadClassSlowPathARM64 : public SlowPathCodeARM64 {
                          HInstruction* at,
                          uint32_t dex_pc,
                          bool do_clinit)
-      : cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
+      : SlowPathCodeARM64(dex_pc),
+        cls_(cls), at_(at), do_clinit_(do_clinit) {
     DCHECK(at->IsLoadClass() || at->IsClinitCheck());
   }
 
@@ -291,9 +296,6 @@ class LoadClassSlowPathARM64 : public SlowPathCodeARM64 {
   // (Might be the load class or an initialization check).
   HInstruction* const at_;
 
-  // The dex PC of `at_`.
-  const uint32_t dex_pc_;
-
   // Whether to initialize the class.
   const bool do_clinit_;
 
@@ -302,7 +304,9 @@ class LoadClassSlowPathARM64 : public SlowPathCodeARM64 {
 
 class LoadStringSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  explicit LoadStringSlowPathARM64(HLoadString* instruction) : instruction_(instruction) {}
+  explicit LoadStringSlowPathARM64(HLoadString* instruction)
+      : SlowPathCodeARM64(instruction->GetDexPc()),
+        instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -334,7 +338,9 @@ class LoadStringSlowPathARM64 : public SlowPathCodeARM64 {
 
 class NullCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
-  explicit NullCheckSlowPathARM64(HNullCheck* instr) : instruction_(instr) {}
+  explicit NullCheckSlowPathARM64(HNullCheck* instr)
+      : SlowPathCodeARM64(instr->GetDexPc()),
+        instruction_(instr) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
@@ -356,7 +362,8 @@ class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
  public:
   explicit SuspendCheckSlowPathARM64(HSuspendCheck* instruction,
                                      HBasicBlock* successor)
-      : instruction_(instruction), successor_(successor) {}
+      : SlowPathCodeARM64(instruction->GetDexPc()),
+        instruction_(instruction), successor_(successor) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
@@ -401,10 +408,10 @@ class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
                          Location class_to_check,
                          Location object_class,
                          uint32_t dex_pc)
-      : instruction_(instruction),
+      : SlowPathCodeARM64(dex_pc),
+        instruction_(instruction),
         class_to_check_(class_to_check),
-        object_class_(object_class),
-        dex_pc_(dex_pc) {}
+        object_class_(object_class) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -420,7 +427,8 @@ class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
     InvokeRuntimeCallingConvention calling_convention;
     codegen->EmitParallelMoves(
         class_to_check_, LocationFrom(calling_convention.GetRegisterAt(0)), Primitive::kPrimNot,
-        object_class_, LocationFrom(calling_convention.GetRegisterAt(1)), Primitive::kPrimNot);
+        object_class_, LocationFrom(calling_convention.GetRegisterAt(1)), Primitive::kPrimNot,
+        dex_pc_);
 
     if (instruction_->IsInstanceOf()) {
       arm64_codegen->InvokeRuntime(
@@ -446,7 +454,6 @@ class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
   HInstruction* const instruction_;
   const Location class_to_check_;
   const Location object_class_;
-  uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathARM64);
 };
@@ -454,7 +461,8 @@ class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
 class DeoptimizationSlowPathARM64 : public SlowPathCodeARM64 {
  public:
   explicit DeoptimizationSlowPathARM64(HInstruction* instruction)
-    : instruction_(instruction) {}
+      : SlowPathCodeARM64(instruction->GetDexPc()),
+        instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -3104,7 +3112,7 @@ void LocationsBuilderARM64::VisitFakeString(HFakeString* instruction) {
   DCHECK(codegen_->IsBaseline());
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  locations->SetOut(Location::ConstantLocation(GetGraph()->GetNullConstant()));
+  locations->SetOut(Location::ConstantLocation(GetGraph()->GetNullConstant(instruction->GetDexPc())));
 }
 
 void InstructionCodeGeneratorARM64::VisitFakeString(HFakeString* instruction ATTRIBUTE_UNUSED) {

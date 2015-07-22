@@ -48,7 +48,9 @@ static constexpr int kFakeReturnRegister = Register(8);
 
 class NullCheckSlowPathX86 : public SlowPathCodeX86 {
  public:
-  explicit NullCheckSlowPathX86(HNullCheck* instruction) : instruction_(instruction) {}
+  explicit NullCheckSlowPathX86(HNullCheck* instruction)
+      : SlowPathCodeX86(instruction->GetDexPc()),
+        instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -65,7 +67,9 @@ class NullCheckSlowPathX86 : public SlowPathCodeX86 {
 
 class DivZeroCheckSlowPathX86 : public SlowPathCodeX86 {
  public:
-  explicit DivZeroCheckSlowPathX86(HDivZeroCheck* instruction) : instruction_(instruction) {}
+  explicit DivZeroCheckSlowPathX86(HDivZeroCheck* instruction)
+      : SlowPathCodeX86(instruction->GetDexPc()),
+        instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -82,7 +86,9 @@ class DivZeroCheckSlowPathX86 : public SlowPathCodeX86 {
 
 class DivRemMinusOneSlowPathX86 : public SlowPathCodeX86 {
  public:
-  explicit DivRemMinusOneSlowPathX86(Register reg, bool is_div) : reg_(reg), is_div_(is_div) {}
+  explicit DivRemMinusOneSlowPathX86(Register reg, bool is_div, uint32_t dex_pc)
+      : SlowPathCodeX86(dex_pc),
+        reg_(reg), is_div_(is_div) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -107,7 +113,8 @@ class BoundsCheckSlowPathX86 : public SlowPathCodeX86 {
   BoundsCheckSlowPathX86(HBoundsCheck* instruction,
                          Location index_location,
                          Location length_location)
-      : instruction_(instruction),
+      : SlowPathCodeX86(instruction->GetDexPc()),
+        instruction_(instruction),
         index_location_(index_location),
         length_location_(length_location) {}
 
@@ -123,7 +130,8 @@ class BoundsCheckSlowPathX86 : public SlowPathCodeX86 {
         Primitive::kPrimInt,
         length_location_,
         Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
-        Primitive::kPrimInt);
+        Primitive::kPrimInt,
+        instruction_->GetDexPc());
     __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pThrowArrayBounds)));
     RecordPcInfo(codegen, instruction_, instruction_->GetDexPc());
   }
@@ -141,7 +149,8 @@ class BoundsCheckSlowPathX86 : public SlowPathCodeX86 {
 class SuspendCheckSlowPathX86 : public SlowPathCodeX86 {
  public:
   SuspendCheckSlowPathX86(HSuspendCheck* instruction, HBasicBlock* successor)
-      : instruction_(instruction), successor_(successor) {}
+      : SlowPathCodeX86(instruction->GetDexPc()),
+        instruction_(instruction), successor_(successor) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     CodeGeneratorX86* x86_codegen = down_cast<CodeGeneratorX86*>(codegen);
@@ -178,7 +187,9 @@ class SuspendCheckSlowPathX86 : public SlowPathCodeX86 {
 
 class LoadStringSlowPathX86 : public SlowPathCodeX86 {
  public:
-  explicit LoadStringSlowPathX86(HLoadString* instruction) : instruction_(instruction) {}
+  explicit LoadStringSlowPathX86(HLoadString* instruction)
+      : SlowPathCodeX86(instruction->GetDexPc()),
+        instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -212,7 +223,8 @@ class LoadClassSlowPathX86 : public SlowPathCodeX86 {
                        HInstruction* at,
                        uint32_t dex_pc,
                        bool do_clinit)
-      : cls_(cls), at_(at), dex_pc_(dex_pc), do_clinit_(do_clinit) {
+      : SlowPathCodeX86(dex_pc),
+        cls_(cls), at_(at), do_clinit_(do_clinit) {
     DCHECK(at->IsLoadClass() || at->IsClinitCheck());
   }
 
@@ -250,9 +262,6 @@ class LoadClassSlowPathX86 : public SlowPathCodeX86 {
   // (Might be the load class or an initialization check).
   HInstruction* const at_;
 
-  // The dex PC of `at_`.
-  const uint32_t dex_pc_;
-
   // Whether to initialize the class.
   const bool do_clinit_;
 
@@ -265,10 +274,10 @@ class TypeCheckSlowPathX86 : public SlowPathCodeX86 {
                        Location class_to_check,
                        Location object_class,
                        uint32_t dex_pc)
-      : instruction_(instruction),
+      : SlowPathCodeX86(dex_pc),
+        instruction_(instruction),
         class_to_check_(class_to_check),
-        object_class_(object_class),
-        dex_pc_(dex_pc) {}
+        object_class_(object_class) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     LocationSummary* locations = instruction_->GetLocations();
@@ -288,7 +297,8 @@ class TypeCheckSlowPathX86 : public SlowPathCodeX86 {
         Primitive::kPrimNot,
         object_class_,
         Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
-        Primitive::kPrimNot);
+        Primitive::kPrimNot,
+        instruction_->GetDexPc());
 
     if (instruction_->IsInstanceOf()) {
       __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize,
@@ -313,7 +323,6 @@ class TypeCheckSlowPathX86 : public SlowPathCodeX86 {
   HInstruction* const instruction_;
   const Location class_to_check_;
   const Location object_class_;
-  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathX86);
 };
@@ -321,7 +330,8 @@ class TypeCheckSlowPathX86 : public SlowPathCodeX86 {
 class DeoptimizationSlowPathX86 : public SlowPathCodeX86 {
  public:
   explicit DeoptimizationSlowPathX86(HInstruction* instruction)
-    : instruction_(instruction) {}
+      : SlowPathCodeX86(instruction->GetDexPc()),
+        instruction_(instruction) {}
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
@@ -706,7 +716,7 @@ void CodeGeneratorX86::Move32(Location destination, Location source) {
   }
 }
 
-void CodeGeneratorX86::Move64(Location destination, Location source) {
+void CodeGeneratorX86::Move64(Location destination, Location source, uint32_t dex_pc) {
   if (source.Equals(destination)) {
     return;
   }
@@ -718,7 +728,8 @@ void CodeGeneratorX86::Move64(Location destination, Location source) {
           Primitive::kPrimInt,
           Location::RegisterLocation(source.AsRegisterPairLow<Register>()),
           Location::RegisterLocation(destination.AsRegisterPairLow<Register>()),
-          Primitive::kPrimInt);
+          Primitive::kPrimInt,
+          dex_pc);
     } else if (source.IsFpuRegister()) {
       LOG(FATAL) << "Unimplemented";
     } else {
@@ -764,7 +775,8 @@ void CodeGeneratorX86::Move64(Location destination, Location source) {
           Primitive::kPrimInt,
           Location::StackSlot(source.GetHighStackIndex(kX86WordSize)),
           Location::StackSlot(destination.GetHighStackIndex(kX86WordSize)),
-          Primitive::kPrimInt);
+          Primitive::kPrimInt,
+          dex_pc);
     }
   }
 }
@@ -807,7 +819,7 @@ void CodeGeneratorX86::Move(HInstruction* instruction, Location location, HInstr
       Move32(location, temp_location);
     } else {
       DCHECK(temp_location.IsDoubleStackSlot());
-      Move64(location, temp_location);
+      Move64(location, temp_location, instruction->GetDexPc());
     }
   } else if (instruction->IsLoadLocal()) {
     int slot = GetStackSlot(instruction->AsLoadLocal()->GetLocal());
@@ -824,7 +836,7 @@ void CodeGeneratorX86::Move(HInstruction* instruction, Location location, HInstr
 
       case Primitive::kPrimLong:
       case Primitive::kPrimDouble:
-        Move64(location, Location::DoubleStackSlot(slot));
+        Move64(location, Location::DoubleStackSlot(slot), instruction->GetDexPc());
         break;
 
       default:
@@ -845,7 +857,7 @@ void CodeGeneratorX86::Move(HInstruction* instruction, Location location, HInstr
 
       case Primitive::kPrimLong:
       case Primitive::kPrimDouble:
-        Move64(location, locations->Out());
+        Move64(location, locations->Out(), instruction->GetDexPc());
         break;
 
       default:
@@ -2081,7 +2093,7 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
           }
 
           // Load the value to the FP stack, using temporaries if needed.
-          PushOntoFPStack(in, 0, adjustment, false, true);
+          PushOntoFPStack(in, 0, adjustment, false, true, conversion->GetDexPc());
 
           if (out.IsStackSlot()) {
             __ fstps(Address(ESP, out.GetStackIndex() + adjustment));
@@ -2134,14 +2146,14 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
           }
 
           // Load the value to the FP stack, using temporaries if needed.
-          PushOntoFPStack(in, 0, adjustment, false, true);
+          PushOntoFPStack(in, 0, adjustment, false, true, conversion->GetDexPc());
 
           if (out.IsDoubleStackSlot()) {
             __ fstpl(Address(ESP, out.GetStackIndex() + adjustment));
           } else {
             __ fstpl(Address(ESP, 0));
             Location stack_temp = Location::DoubleStackSlot(0);
-            codegen_->Move64(out, stack_temp);
+            codegen_->Move64(out, stack_temp, conversion->GetDexPc());
           }
 
           // Remove the temporary stack space we allocated.
@@ -2493,7 +2505,8 @@ void InstructionCodeGeneratorX86::PushOntoFPStack(Location source,
                                                   uint32_t temp_offset,
                                                   uint32_t stack_adjustment,
                                                   bool is_fp,
-                                                  bool is_wide) {
+                                                  bool is_wide,
+                                                  uint32_t dex_pc) {
   if (source.IsStackSlot()) {
     DCHECK(!is_wide);
     if (is_fp) {
@@ -2520,7 +2533,7 @@ void InstructionCodeGeneratorX86::PushOntoFPStack(Location source,
       }
     } else {
       Location stack_temp = Location::DoubleStackSlot(temp_offset);
-      codegen_->Move64(stack_temp, source);
+      codegen_->Move64(stack_temp, source, dex_pc);
       if (is_fp) {
         __ fldl(Address(ESP, temp_offset));
       } else {
@@ -2545,8 +2558,8 @@ void InstructionCodeGeneratorX86::GenerateRemFP(HRem *rem) {
 
   // Load the values to the FP stack in reverse order, using temporaries if needed.
   const bool is_wide = !is_float;
-  PushOntoFPStack(second, elem_size, 2 * elem_size, /* is_fp */ true, is_wide);
-  PushOntoFPStack(first, 0, 2 * elem_size, /* is_fp */ true, is_wide);
+  PushOntoFPStack(second, elem_size, 2 * elem_size, /* is_fp */ true, is_wide, rem->GetDexPc());
+  PushOntoFPStack(first, 0, 2 * elem_size, /* is_fp */ true, is_wide, rem->GetDexPc());
 
   // Loop doing FPREM until we stabilize.
   Label retry;
@@ -2741,7 +2754,7 @@ void InstructionCodeGeneratorX86::GenerateDivRemIntegral(HBinaryOperation* instr
       } else {
         SlowPathCodeX86* slow_path =
           new (GetGraph()->GetArena()) DivRemMinusOneSlowPathX86(out.AsRegister<Register>(),
-              is_div);
+              is_div, instruction->GetDexPc());
         codegen_->AddSlowPath(slow_path);
 
         Register second_reg = second.AsRegister<Register>();
@@ -3066,11 +3079,11 @@ void InstructionCodeGeneratorX86::HandleShift(HBinaryOperation* op) {
         // Nothing to do if the shift is 0, as the input is already the output.
         if (shift != 0) {
           if (op->IsShl()) {
-            GenerateShlLong(first, shift);
+            GenerateShlLong(first, shift, op->GetDexPc());
           } else if (op->IsShr()) {
             GenerateShrLong(first, shift);
           } else {
-            GenerateUShrLong(first, shift);
+            GenerateUShrLong(first, shift, op->GetDexPc());
           }
         }
       }
@@ -3081,7 +3094,7 @@ void InstructionCodeGeneratorX86::HandleShift(HBinaryOperation* op) {
   }
 }
 
-void InstructionCodeGeneratorX86::GenerateShlLong(const Location& loc, int shift) {
+void InstructionCodeGeneratorX86::GenerateShlLong(const Location& loc, int shift, uint32_t dex_pc) {
   Register low = loc.AsRegisterPairLow<Register>();
   Register high = loc.AsRegisterPairHigh<Register>();
   if (shift == 1) {
@@ -3094,9 +3107,10 @@ void InstructionCodeGeneratorX86::GenerateShlLong(const Location& loc, int shift
         loc.ToLow(),
         loc.ToHigh(),
         Primitive::kPrimInt,
-        Location::ConstantLocation(GetGraph()->GetIntConstant(0)),
+        Location::ConstantLocation(GetGraph()->GetIntConstant(0, dex_pc)),
         loc.ToLow(),
-        Primitive::kPrimInt);
+        Primitive::kPrimInt,
+        dex_pc);
   } else if (shift > 32) {
     // Low part becomes 0.  High part is low part << (shift-32).
     __ movl(high, low);
@@ -3152,7 +3166,7 @@ void InstructionCodeGeneratorX86::GenerateShrLong(const Location& loc, Register 
   __ Bind(&done);
 }
 
-void InstructionCodeGeneratorX86::GenerateUShrLong(const Location& loc, int shift) {
+void InstructionCodeGeneratorX86::GenerateUShrLong(const Location& loc, int shift, uint32_t dex_pc) {
   Register low = loc.AsRegisterPairLow<Register>();
   Register high = loc.AsRegisterPairHigh<Register>();
   if (shift == 32) {
@@ -3161,9 +3175,10 @@ void InstructionCodeGeneratorX86::GenerateUShrLong(const Location& loc, int shif
         loc.ToHigh(),
         loc.ToLow(),
         Primitive::kPrimInt,
-        Location::ConstantLocation(GetGraph()->GetIntConstant(0)),
+        Location::ConstantLocation(GetGraph()->GetIntConstant(0, dex_pc)),
         loc.ToHigh(),
-        Primitive::kPrimInt);
+        Primitive::kPrimInt,
+        dex_pc);
   } else if (shift > 32) {
     // Low part is high >> (shift - 32). High part becomes 0.
     __ movl(low, high);
@@ -4968,7 +4983,7 @@ void LocationsBuilderX86::VisitFakeString(HFakeString* instruction) {
   DCHECK(codegen_->IsBaseline());
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  locations->SetOut(Location::ConstantLocation(GetGraph()->GetNullConstant()));
+  locations->SetOut(Location::ConstantLocation(GetGraph()->GetNullConstant(instruction->GetDexPc())));
 }
 
 void InstructionCodeGeneratorX86::VisitFakeString(HFakeString* instruction ATTRIBUTE_UNUSED) {

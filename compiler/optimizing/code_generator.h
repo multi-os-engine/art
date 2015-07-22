@@ -20,6 +20,7 @@
 #include "arch/instruction_set.h"
 #include "arch/instruction_set_features.h"
 #include "base/bit_field.h"
+#include "compiled_method.h"
 #include "driver/compiler_options.h"
 #include "globals.h"
 #include "graph_visualizer.h"
@@ -46,13 +47,8 @@ static int32_t constexpr kPrimIntMax = 0x7fffffff;
 static int64_t constexpr kPrimLongMax = INT64_C(0x7fffffffffffffff);
 
 class Assembler;
-class CodeGenerator;
 class DexCompilationUnit;
 class ParallelMoveResolver;
-class SrcMapElem;
-template <class Alloc>
-class SrcMap;
-using DefaultSrcMap = SrcMap<std::allocator<SrcMapElem>>;
 
 class CodeAllocator {
  public:
@@ -67,7 +63,7 @@ class CodeAllocator {
 
 class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
  public:
-  SlowPathCode() {
+  SlowPathCode(uint32_t dex_pc) : dex_pc_(dex_pc) {
     for (size_t i = 0; i < kMaximumNumberOfExpectedRegisters; ++i) {
       saved_core_stack_offsets_[i] = kRegisterNotSaved;
       saved_fpu_stack_offsets_[i] = kRegisterNotSaved;
@@ -98,9 +94,14 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
     return saved_fpu_stack_offsets_[reg];
   }
 
+  uint32_t GetDexPc() const {
+    return dex_pc_;
+  }
+
   virtual const char* GetDescription() const = 0;
 
  protected:
+  const uint32_t dex_pc_;
   static constexpr size_t kMaximumNumberOfExpectedRegisters = 32;
   static constexpr uint32_t kRegisterNotSaved = -1;
   uint32_t saved_core_stack_offsets_[kMaximumNumberOfExpectedRegisters];
@@ -282,7 +283,8 @@ class CodeGenerator {
                          Primitive::Type type1,
                          Location from2,
                          Location to2,
-                         Primitive::Type type2);
+                         Primitive::Type type2,
+                         uint32_t dex_pc);
 
   static bool StoreNeedsWriteBarrier(Primitive::Type type, HInstruction* value) {
     // Check that null value is not represented as an integer constant.
