@@ -4984,6 +4984,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass
         self, old_virtuals, old_method_count * method_size, new_method_count * method_size));
     if (UNLIKELY(virtuals == nullptr)) {
       self->AssertPendingOOMException();
+      self->EndAssertNoThreadSuspension(old_cause);
       return false;
     }
     ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*> move_table(allocator.Adapter());
