@@ -40,6 +40,7 @@ enum InlineMethodOpcode : uint16_t {
   kIntrinsicReverseBits,
   kIntrinsicReverseBytes,
   kIntrinsicNumberOfLeadingZeros,
+  kIntrinsicNumberOfTrailingZeros,
   kIntrinsicAbsInt,
   kIntrinsicAbsLong,
   kIntrinsicAbsFloat,
@@ -71,6 +72,8 @@ enum InlineMethodOpcode : uint16_t {
   kIntrinsicUnsafeGet,
   kIntrinsicUnsafePut,
   kIntrinsicSystemArrayCopyCharArray,
+  kIntrinsicRotateRight,
+  kIntrinsicRotateLeft,
 
   kInlineOpNop,
   kInlineOpReturnArg,
