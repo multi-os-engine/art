@@ -457,6 +457,18 @@ void HGraph::CacheDoubleConstant(HDoubleConstant* constant) {
   cached_double_constants_.Overwrite(value, constant);
 }
 
+bool HGraph::HasTryCatch() const {
+  for (size_t i = 0, e = blocks_.Size(); i < e; ++i) {
+    HBasicBlock* block = blocks_.Get(i);
+    if (block == nullptr) {
+      continue;
+    } else if (block->IsInTry() || block->IsCatchBlock()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void HLoopInformation::Add(HBasicBlock* block) {
   blocks_.SetBit(block->GetBlockId());
 }
@@ -647,6 +659,17 @@ static void Remove(HInstructionList* instruction_list,
     DCHECK(instruction->GetUses().IsEmpty());
     DCHECK(instruction->GetEnvUses().IsEmpty());
     RemoveAsUser(instruction);
+    if (instruction->CanThrow() && block->IsInTry()) {
+      for (HExceptionHandlerIterator it(*block->GetTryEntry()); !it.Done(); it.Advance()) {
+        HBasicBlock* handler = it.Current();
+        size_t predecessor_index = handler->GetExceptionalPredecessorIndexOf(instruction);
+        DCHECK_NE(predecessor_index, static_cast<size_t>(-1));
+        handler->RemoveExceptionalPredecessor(instruction);
+        for (HInstructionIterator phi(handler->GetPhis()); !phi.Done(); phi.Advance()) {
+          phi.Current()->AsPhi()->RemoveInputAt(predecessor_index);
+        }
+      }
+    }
   }
 }
 
@@ -665,6 +688,14 @@ void HBasicBlock::RemoveInstructionOrPhi(HInstruction* instruction, bool ensure_
   } else {
     RemoveInstruction(instruction, ensure_safety);
   }
+}
+
+void HBasicBlock::AddExceptionalPredecessor(HInstruction* throwing_instruction) {
+  DCHECK(IsCatchBlock());
+  DCHECK(throwing_instruction->CanThrow());
+  DCHECK(throwing_instruction->GetBlock()->IsInTry());
+  DCHECK(throwing_instruction->GetBlock()->GetTryEntry()->HasExceptionHandler(*this));
+  exceptional_predecessors_.Add(throwing_instruction);
 }
 
 void HEnvironment::CopyFrom(const GrowableArray<HInstruction*>& locals) {

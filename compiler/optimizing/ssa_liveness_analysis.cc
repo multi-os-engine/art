@@ -185,12 +185,12 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
 
     // Set phi inputs of successors of this block corresponding to this block
     // as live_in.
-    for (size_t i = 0, e = block->GetSuccessors().Size(); i < e; ++i) {
+    for (size_t i = 0, e = block->NumberOfNormalSuccessors(); i < e; ++i) {
       HBasicBlock* successor = block->GetSuccessors().Get(i);
       live_in->Union(GetLiveInSet(*successor));
       size_t phi_input_index = successor->GetPredecessorIndexOf(block);
-      for (HInstructionIterator inst_it(successor->GetPhis()); !inst_it.Done(); inst_it.Advance()) {
-        HInstruction* phi = inst_it.Current();
+      for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+        HPhi* phi = phi_it.Current()->AsPhi();
         HInstruction* input = phi->InputAt(phi_input_index);
         input->GetLiveInterval()->AddPhiUse(phi, phi_input_index, block);
         // A phi input whose last user is the phi dies at the end of the predecessor block,
@@ -231,8 +231,7 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
             live_in->SetBit(instruction->GetSsaIndex());
           }
           if (instruction != nullptr) {
-            instruction->GetLiveInterval()->AddUse(
-                current, environment, i, should_be_live);
+            instruction->GetLiveInterval()->AddUse(current, environment, i, should_be_live);
           }
         }
       }
@@ -247,6 +246,27 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
           input->GetLiveInterval()->AddUse(current, /* environment */ nullptr, i);
         }
       }
+
+      if (current->CanThrow() && block->IsInTry()) {
+        for (HExceptionHandlerIterator handler_it(*block->GetTryEntry()); !handler_it.Done(); handler_it.Advance()) {
+          HBasicBlock* handler = handler_it.Current();
+          live_in->Union(GetLiveInSet(*handler));
+          size_t phi_input_index = handler->GetExceptionalPredecessorIndexOf(current);
+          for (HInstructionIterator phi_it(handler->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+            HPhi* phi = phi_it.Current()->AsPhi();
+            HInstruction* input = phi->InputAt(phi_input_index);
+            // DCHECK(input->IsCurrentMethod() || input->IsConstant() ||
+            //        current->GetEnvironment()->Contains(input)) << input->DebugName();
+            input->GetLiveInterval()->AddCatchPhiUse(phi, phi_input_index, current);
+            live_in->SetBit(input->GetSsaIndex());
+          }
+        }
+      }
+
+      for (uint32_t idx : live_in->Indexes()) {
+        LiveInterval* interval = instructions_from_ssa_index_.Get(idx)->GetLiveInterval();
+        interval->AddRange(block->GetLifetimeStart(), current->GetLifetimePosition());
+      }
     }
 
     // Kill phis defined in this block.
@@ -257,7 +277,7 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
         live_in->ClearBit(current->GetSsaIndex());
         LiveInterval* interval = current->GetLiveInterval();
         DCHECK((interval->GetFirstRange() == nullptr)
-               || (interval->GetStart() == current->GetLifetimePosition()));
+               || (interval->GetStart() == current->GetLifetimePosition())) << current->GetId() << ", " << interval->GetStart();
         interval->SetFrom(current->GetLifetimePosition());
       }
     }
@@ -296,7 +316,7 @@ bool SsaLivenessAnalysis::UpdateLiveOut(const HBasicBlock& block) {
   BitVector* live_out = GetLiveOutSet(block);
   bool changed = false;
   // The live_out set of a block is the union of live_in sets of its successors.
-  for (size_t i = 0, e = block.GetSuccessors().Size(); i < e; ++i) {
+  for (size_t i = 0, e = block.NumberOfNormalSuccessors(); i < e; ++i) {
     HBasicBlock* successor = block.GetSuccessors().Get(i);
     if (live_out->Union(GetLiveInSet(*successor))) {
       changed = true;
@@ -318,6 +338,12 @@ bool SsaLivenessAnalysis::UpdateLiveIn(const HBasicBlock& block) {
 
 static int RegisterOrLowRegister(Location location) {
   return location.IsPair() ? location.low() : location.reg();
+}
+
+static int PhiInputLifetimePosition(HPhi* phi, size_t input_index) {
+  return phi->IsCatchPhi()
+      ? phi->GetBlock()->GetExceptionalPredecessors().Get(input_index)->GetLifetimePosition()
+      : phi->GetBlock()->GetPredecessors().Get(input_index)->GetLifetimeEnd();
 }
 
 int LiveInterval::FindFirstRegisterHint(size_t* free_until,
@@ -376,17 +402,18 @@ int LiveInterval::FindFirstRegisterHint(size_t* free_until,
             return reg;
           }
         }
-        const GrowableArray<HBasicBlock*>& predecessors = user->GetBlock()->GetPredecessors();
+
         // If the instruction dies at the phi assignment, we can try having the
         // same register.
-        if (end == predecessors.Get(input_index)->GetLifetimeEnd()) {
+        size_t input_end = PhiInputLifetimePosition(user->AsPhi(), input_index);
+        if (end == input_end) {
           for (size_t i = 0, e = user->InputCount(); i < e; ++i) {
             if (i == input_index) {
               continue;
             }
+            size_t predecessor_end = PhiInputLifetimePosition(user->AsPhi(), i);
             HInstruction* input = user->InputAt(i);
-            Location location = input->GetLiveInterval()->GetLocationAt(
-                predecessors.Get(i)->GetLifetimeEnd() - 1);
+            Location location = input->GetLiveInterval()->GetLocationAt(predecessor_end - 1);
             if (location.IsRegisterKind()) {
               int reg = RegisterOrLowRegister(location);
               if (free_until[reg] >= use_position) {
@@ -497,20 +524,25 @@ Location LiveInterval::ToLocation() const {
     if (defined_by->IsConstant()) {
       return defined_by->GetLocations()->Out();
     } else if (GetParent()->HasSpillSlot()) {
-      if (NeedsTwoSpillSlots()) {
-        return Location::DoubleStackSlot(GetParent()->GetSpillSlot());
-      } else {
-        return Location::StackSlot(GetParent()->GetSpillSlot());
-      }
+      return ToStackLocation();
     } else {
       return Location();
     }
   }
 }
 
+Location LiveInterval::ToStackLocation() const {
+  DCHECK(GetParent()->HasSpillSlot()) << GetParent()->GetDefinedBy()->GetId();
+  if (NeedsTwoSpillSlots()) {
+    return Location::DoubleStackSlot(GetParent()->GetSpillSlot());
+  } else {
+    return Location::StackSlot(GetParent()->GetSpillSlot());
+  }
+}
+
 Location LiveInterval::GetLocationAt(size_t position) {
   LiveInterval* sibling = GetSiblingAt(position);
-  DCHECK(sibling != nullptr);
+  DCHECK(sibling != nullptr) << position << ", " << GetParent()->GetDefinedBy()->GetId();
   return sibling->ToLocation();
 }
 

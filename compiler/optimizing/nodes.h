@@ -58,6 +58,7 @@ class SsaBuilder;
 static const int kDefaultNumberOfBlocks = 8;
 static const int kDefaultNumberOfSuccessors = 2;
 static const int kDefaultNumberOfPredecessors = 2;
+static const int kDefaultNumberOfExceptionalPredecessors = 0;
 static const int kDefaultNumberOfDominatedBlocks = 1;
 static const int kDefaultNumberOfBackEdges = 1;
 
@@ -301,6 +302,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   }
 
   bool IsDebuggable() const { return debuggable_; }
+
+  bool HasTryCatch() const;
 
   // Returns a constant of the given type and value. If it does not exist
   // already, it is created and inserted into the graph. This method is only for
@@ -565,10 +568,15 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
         dex_pc_(dex_pc),
         lifetime_start_(kNoLifetime),
         lifetime_end_(kNoLifetime),
-        is_catch_block_(false) {}
+        is_catch_block_(false),
+        exceptional_predecessors_(graph->GetArena(), kDefaultNumberOfExceptionalPredecessors) {}
 
   const GrowableArray<HBasicBlock*>& GetPredecessors() const {
     return predecessors_;
+  }
+
+  const GrowableArray<HInstruction*>& GetExceptionalPredecessors() const {
+    return exceptional_predecessors_;
   }
 
   const GrowableArray<HBasicBlock*>& GetSuccessors() const {
@@ -678,6 +686,10 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
     predecessors_.Delete(block);
   }
 
+  void RemoveExceptionalPredecessor(HInstruction* instruction) {
+    exceptional_predecessors_.Delete(instruction);
+  }
+
   void RemoveSuccessor(HBasicBlock* block) {
     successors_.Delete(block);
   }
@@ -708,6 +720,15 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   size_t GetPredecessorIndexOf(HBasicBlock* predecessor) const {
     for (size_t i = 0, e = predecessors_.Size(); i < e; ++i) {
       if (predecessors_.Get(i) == predecessor) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  size_t GetExceptionalPredecessorIndexOf(HInstruction* predecessor) const {
+    for (size_t i = 0, e = exceptional_predecessors_.Size(); i < e; ++i) {
+      if (exceptional_predecessors_.Get(i) == predecessor) {
         return i;
       }
     }
@@ -802,6 +823,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   void RemovePhi(HPhi* phi, bool ensure_safety = true);
   void RemoveInstructionOrPhi(HInstruction* instruction, bool ensure_safety = true);
 
+  void AddExceptionalPredecessor(HInstruction* throwing_instruction);
+
   bool IsLoopHeader() const {
     return IsInLoop() && (loop_information_->GetHeader() == this);
   }
@@ -885,7 +908,9 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   const uint32_t dex_pc_;
   size_t lifetime_start_;
   size_t lifetime_end_;
+
   bool is_catch_block_;
+  GrowableArray<HInstruction*> exceptional_predecessors_;
 
   // If this block is in a try block, `try_entry_` stores one of, possibly
   // several, TryBoundary instructions entering it.
@@ -1395,6 +1420,15 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
 
   HInstruction* GetInstructionAt(size_t index) const {
     return vregs_.Get(index).GetInstruction();
+  }
+
+  bool Contains(HInstruction* instruction) const {
+    for (size_t i = 0, e = Size(); i < e; ++i) {
+      if (instruction == GetInstructionAt(i)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   void RemoveAsUserOfInput(size_t index) const;
