@@ -80,13 +80,6 @@ enum EntryPointCallingConvention {
   kQuickAbi
 };
 
-enum DexToDexCompilationLevel {
-  kDontDexToDexCompile,   // Only meaning wrt image time interpretation.
-  kRequired,              // Dex-to-dex compilation required for correctness.
-  kOptimize               // Perform required transformation and peep-hole optimizations.
-};
-std::ostream& operator<<(std::ostream& os, const DexToDexCompilationLevel& rhs);
-
 static constexpr bool kUseMurmur3Hash = true;
 
 class CompilerDriver {
@@ -546,10 +539,6 @@ class CompilerDriver {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:
-  DexToDexCompilationLevel GetDexToDexCompilationlevel(
-      Thread* self, Handle<mirror::ClassLoader> class_loader, const DexFile& dex_file,
-      const DexFile::ClassDef& class_def) SHARED_REQUIRES(Locks::mutator_lock_);
-
   void PreCompile(jobject class_loader, const std::vector<const DexFile*>& dex_files,
                   ThreadPool* thread_pool, TimingLogger* timings)
       REQUIRES(!Locks::mutator_lock_, !compiled_classes_lock_);
@@ -599,12 +588,6 @@ class CompilerDriver {
                       const std::vector<const DexFile*>& dex_files,
                       ThreadPool* thread_pool, TimingLogger* timings)
       REQUIRES(!Locks::mutator_lock_);
-  void CompileMethod(Thread* self, const DexFile::CodeItem* code_item, uint32_t access_flags,
-                     InvokeType invoke_type, uint16_t class_def_idx, uint32_t method_idx,
-                     jobject class_loader, const DexFile& dex_file,
-                     DexToDexCompilationLevel dex_to_dex_compilation_level,
-                     bool compilation_enabled)
-      REQUIRES(!compiled_methods_lock_);
 
   // Swap pool and allocator used for native allocations. May be file-backed. Needs to be first
   // as other fields rely on this.
@@ -674,15 +657,6 @@ class CompilerDriver {
 
   typedef void (*CompilerCallbackFn)(CompilerDriver& driver);
   typedef MutexLock* (*CompilerMutexLockFn)(CompilerDriver& driver);
-
-  typedef CompiledMethod* (*DexToDexCompilerFn)(
-      CompilerDriver& driver,
-      const DexFile::CodeItem* code_item,
-      uint32_t access_flags, InvokeType invoke_type,
-      uint32_t class_dex_idx, uint32_t method_idx,
-      jobject class_loader, const DexFile& dex_file,
-      DexToDexCompilationLevel dex_to_dex_compilation_level);
-  DexToDexCompilerFn dex_to_dex_compiler_;
 
   void* compiler_context_;
 
@@ -777,6 +751,7 @@ class CompilerDriver {
             SwapVector<uint8_t>, size_t, DedupeHashFunc<const uint8_t>, 4> dedupe_cfi_info_;
 
   friend class CompileClassVisitor;
+  friend class CompileMethodHelper;
   DISALLOW_COPY_AND_ASSIGN(CompilerDriver);
 };
 
