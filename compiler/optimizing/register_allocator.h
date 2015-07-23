@@ -94,6 +94,11 @@ class RegisterAllocator {
   // to find an optimal split position.
   LiveInterval* SplitBetween(LiveInterval* interval, size_t from, size_t to);
 
+  LiveInterval* SplitBeforeFirstRegisterUse(LiveInterval* interval);
+  void AddUnhandledInterval(HInstruction* instruction,
+                            LiveInterval* interval,
+                            GrowableArray<LiveInterval*>& unhandled);
+
   // Returns whether `reg` is blocked by the code generator.
   bool IsBlocked(int reg) const;
 
@@ -107,7 +112,7 @@ class RegisterAllocator {
   void ConnectSiblings(LiveInterval* interval);
 
   // Connect siblings between block entries and exits.
-  void ConnectSplitSiblings(LiveInterval* interval, HBasicBlock* from, HBasicBlock* to) const;
+  void ConnectSplitSiblings(LiveInterval* interval, HBasicBlock* from, HBasicBlock* to, size_t from_position) const;
 
   // Helper methods to insert parallel moves in the graph.
   void InsertParallelMoveAtExitOf(HBasicBlock* block,
@@ -118,6 +123,10 @@ class RegisterAllocator {
                                    HInstruction* instruction,
                                    Location source,
                                    Location destination) const;
+  void InsertParallelMoveBefore(HInstruction* cursor,
+                                HInstruction* instruction,
+                                Location source,
+                                Location destination) const;
   void InsertMoveAfter(HInstruction* instruction, Location source, Location destination) const;
   void AddInputMoveFor(HInstruction* input,
                        HInstruction* user,
@@ -204,6 +213,9 @@ class RegisterAllocator {
 
   // Instructions that need a safepoint.
   GrowableArray<HInstruction*> safepoints_;
+
+  // Catch blocks sorted according to lifetime start.
+  GrowableArray<HBasicBlock*> catch_blocks_;
 
   // True if processing core registers. False if processing floating
   // point registers.

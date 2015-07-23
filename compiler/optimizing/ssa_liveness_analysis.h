@@ -137,7 +137,7 @@ class UsePosition : public ArenaObject<kArenaAllocMisc> {
   size_t GetInputIndex() const { return input_index_; }
 
   void Dump(std::ostream& stream) const {
-    stream << position_;
+    stream << position_ << (RequiresRegister() ? "r" : "");
   }
 
   HLoopInformation* GetLoopInformation() const {
@@ -328,13 +328,27 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     }
   }
 
-  void AddPhiUse(HInstruction* instruction, size_t input_index, HBasicBlock* block) {
-    DCHECK(instruction->IsPhi());
+  void AddPhiUse(HPhi* phi, size_t input_index, HBasicBlock* block) {
+    DCHECK(!phi->IsCatchPhi());
     if (block->IsInLoop()) {
       AddBackEdgeUses(*block);
     }
     first_use_ = new (allocator_) UsePosition(
-        instruction, /* environment */ nullptr, input_index, block->GetLifetimeEnd(), first_use_);
+        phi, /* environment */ nullptr, input_index, block->GetLifetimeEnd(), first_use_);
+  }
+
+  void AddCatchPhiUse(HPhi* phi, size_t input_index, HInstruction* thrower) {
+    DCHECK(phi->IsCatchPhi());
+    HBasicBlock* block = thrower->GetBlock();
+    if (block->IsInLoop()) {
+      AddBackEdgeUses(*block);
+    }
+    first_use_ = new (allocator_) UsePosition(
+        phi,
+        /* environment */ nullptr,
+        input_index,
+        thrower->GetLifetimePosition(),
+        first_use_);
   }
 
   void AddRange(size_t start, size_t end) {
@@ -344,8 +358,8 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     } else if (first_range_->GetStart() == end) {
       // There is a use in the following block.
       first_range_->start_ = start;
-    } else if (first_range_->GetStart() == start && first_range_->GetEnd() == end) {
-      DCHECK(is_fixed_);
+    } else if (first_range_->GetStart() == start) {
+      // Fixed or coming from a catch use.
     } else {
       DCHECK_GT(first_range_->GetStart(), end);
       // There is a hole in the interval. Create a new range.
@@ -720,6 +734,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
 
   // Converts the location of the interval to a `Location` object.
   Location ToLocation() const;
+  Location ToStackLocation() const;
 
   // Returns the location of the interval following its siblings at `position`.
   Location GetLocationAt(size_t position);
@@ -869,6 +884,14 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     range_search_start_ = first_range_;
   }
 
+  bool NeedsCatchSlot() const {
+    return parent_->needs_catch_slot_;
+  }
+
+  void SetNeedsCatchSlot() {
+    parent_->needs_catch_slot_ = true;
+  }
+
  private:
   LiveInterval(ArenaAllocator* allocator,
                Primitive::Type type,
@@ -895,6 +918,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
         is_temp_(is_temp),
         is_slow_path_safepoint_(is_slow_path_safepoint),
         is_high_interval_(is_high_interval),
+        needs_catch_slot_(false),
         high_or_low_interval_(nullptr),
         defined_by_(defined_by) {}
 
@@ -993,7 +1017,7 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
       if ((first_use_ != nullptr) && (first_use_->GetPosition() <= back_edge_use_position)) {
         // There was a use already seen in this loop. Therefore the previous call to `AddUse`
         // already inserted the backedge use. We can stop going outward.
-        DCHECK(HasSynthesizeUseAt(back_edge_use_position));
+        DCHECK(HasSynthesizeUseAt(back_edge_use_position)) << GetParent()->GetDefinedBy()->GetId() << ", " << first_use_->GetPosition() << ", " << back_edge_use_position;
         break;
       }
 
@@ -1069,6 +1093,8 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
 
   // Whether this interval is a synthesized interval for register pair.
   const bool is_high_interval_;
+
+  bool needs_catch_slot_;
 
   // If this interval needs a register pair, the high or low equivalent.
   // `is_high_interval_` tells whether this holds the low or the high.

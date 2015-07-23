@@ -641,7 +641,7 @@ void SSAChecker::VisitPhi(HPhi* phi) {
   VisitInstruction(phi);
 
   // Ensure the first input of a phi is not itself.
-  if (phi->InputAt(0) == phi) {
+  if (phi->InputCount() > 0 && phi->InputAt(0) == phi) {
     AddError(StringPrintf("Loop phi %d in block %d is its own first input.",
                           phi->GetId(),
                           phi->GetBlock()->GetBlockId()));

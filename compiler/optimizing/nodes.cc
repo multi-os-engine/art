@@ -49,6 +49,8 @@ static void RemoveAsUser(HInstruction* instruction) {
       }
     }
   }
+
+  instruction->RemoveAsExceptionalPredecessor();
 }
 
 void HGraph::RemoveInstructionsAsUsersFromDeadBlocks(const ArenaBitVector& visited) const {
@@ -457,6 +459,18 @@ void HGraph::CacheDoubleConstant(HDoubleConstant* constant) {
   cached_double_constants_.Overwrite(value, constant);
 }
 
+bool HGraph::HasTryCatch() const {
+  for (size_t i = 0, e = blocks_.Size(); i < e; ++i) {
+    HBasicBlock* block = blocks_.Get(i);
+    if (block == nullptr) {
+      continue;
+    } else if (block->IsInTry() || block->IsCatchBlock()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void HLoopInformation::Add(HBasicBlock* block) {
   blocks_.SetBit(block->GetBlockId());
 }
@@ -648,13 +662,13 @@ static void Remove(HInstructionList* instruction_list,
                    HInstruction* instruction,
                    bool ensure_safety) {
   DCHECK_EQ(block, instruction->GetBlock());
-  instruction->SetBlock(nullptr);
-  instruction_list->RemoveInstruction(instruction);
   if (ensure_safety) {
     DCHECK(instruction->GetUses().IsEmpty());
     DCHECK(instruction->GetEnvUses().IsEmpty());
     RemoveAsUser(instruction);
   }
+  instruction_list->RemoveInstruction(instruction);
+  instruction->SetBlock(nullptr);
 }
 
 void HBasicBlock::RemoveInstruction(HInstruction* instruction, bool ensure_safety) {
@@ -878,6 +892,23 @@ void HInstruction::ReplaceInput(HInstruction* replacement, size_t index) {
   RemoveAsUserOfInput(index);
   SetRawInputAt(index, replacement);
   replacement->AddUseAt(this, index);
+}
+
+void HInstruction::RemoveAsExceptionalPredecessor() {
+  if (!CanThrow() || !GetBlock()->IsInTry()) {
+    return;
+  }
+
+  const HTryBoundary& try_entry = *GetBlock()->GetTryEntry();
+  for (HExceptionHandlerIterator handler_it(try_entry); !handler_it.Done(); handler_it.Advance()) {
+    HBasicBlock* handler = handler_it.Current();
+    size_t phi_input_index = handler->GetExceptionalPredecessorIndexOf(this);
+    DCHECK_NE(phi_input_index, static_cast<size_t>(-1));
+    for (HInstructionIterator phi_it(handler->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+      phi_it.Current()->AsPhi()->RemoveInputAt(phi_input_index);
+    }
+    handler->RemoveExceptionalPredecessor(this);
+  }
 }
 
 size_t HInstruction::EnvironmentSize() const {

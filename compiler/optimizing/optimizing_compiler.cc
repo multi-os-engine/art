@@ -355,11 +355,6 @@ static bool IsInstructionSetSupported(InstructionSet instruction_set) {
       || instruction_set == kX86_64;
 }
 
-static bool CanOptimize(const DexFile::CodeItem& code_item) {
-  // TODO: We currently cannot optimize methods with try/catch.
-  return code_item.tries_size_ == 0;
-}
-
 static void RunOptimizations(HOptimization* optimizations[],
                              size_t length,
                              PassObserver* pass_observer) {
@@ -429,37 +424,46 @@ static void RunOptimizations(HGraph* graph,
 
   IntrinsicsRecognizer* intrinsics = new (arena) IntrinsicsRecognizer(graph, driver);
 
-  HOptimization* optimizations1[] = {
-    intrinsics,
-    fold1,
-    simplify1,
-    type_propagation,
-    dce1,
-    simplify2
-  };
+  if (graph->HasTryCatch()) {
+    HOptimization* optimizations[] = {
+      intrinsics,
+      dce1,
+      simplify1,
+    };
+    RunOptimizations(optimizations, arraysize(optimizations), pass_observer);
+  } else {
+    HOptimization* optimizations1[] = {
+      intrinsics,
+      fold1,
+      simplify1,
+      type_propagation,
+      dce1,
+      simplify2
+    };
 
-  RunOptimizations(optimizations1, arraysize(optimizations1), pass_observer);
+    RunOptimizations(optimizations1, arraysize(optimizations1), pass_observer);
 
-  MaybeRunInliner(graph, driver, stats, dex_compilation_unit, pass_observer, handles);
+    MaybeRunInliner(graph, driver, stats, dex_compilation_unit, pass_observer, handles);
 
-  HOptimization* optimizations2[] = {
-    // BooleanSimplifier depends on the InstructionSimplifier removing redundant
-    // suspend checks to recognize empty blocks.
-    boolean_simplify,
-    fold2,  // TODO: if we don't inline we can also skip fold2.
-    side_effects,
-    gvn,
-    licm,
-    bce,
-    simplify3,
-    dce2,
-    // The codegen has a few assumptions that only the instruction simplifier can
-    // satisfy. For example, the code generator does not expect to see a
-    // HTypeConversion from a type to the same type.
-    simplify4,
-  };
+    HOptimization* optimizations2[] = {
+      // BooleanSimplifier depends on the InstructionSimplifier removing redundant
+      // suspend checks to recognize empty blocks.
+      boolean_simplify,
+      fold2,  // TODO: if we don't inline we can also skip fold2.
+      side_effects,
+      gvn,
+      licm,
+      bce,
+      simplify3,
+      dce2,
+      // The codegen has a few assumptions that only the instruction simplifier can
+      // satisfy. For example, the code generator does not expect to see a
+      // HTypeConversion from a type to the same type.
+      simplify4,
+    };
 
-  RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
+    RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
+  }
 }
 
 // The stack map we generate must be 4-byte aligned on ARM. Since existing
@@ -502,6 +506,9 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   CodeVectorAllocator allocator;
   codegen->CompileOptimized(&allocator);
 
+  std::vector<uint8_t> mapping_table;
+  codegen->BuildMappingTable(&mapping_table);
+
   DefaultSrcMap src_mapping_table;
   if (compiler_driver->GetCompilerOptions().GetGenerateDebugInfo()) {
     codegen->BuildSourceMap(&src_mapping_table);
@@ -523,7 +530,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
       codegen->GetCoreSpillMask(),
       codegen->GetFpuSpillMask(),
       &src_mapping_table,
-      ArrayRef<const uint8_t>(),  // mapping_table.
+      ArrayRef<const uint8_t>(mapping_table),  // mapping_table.
       ArrayRef<const uint8_t>(stack_map),
       ArrayRef<const uint8_t>(),  // native_gc_map.
       ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()),
@@ -674,6 +681,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                         interpreter_metadata);
 
   VLOG(compiler) << "Building " << method_name;
+  // LOG(INFO) << method_name;
 
   {
     PassScope scope(HGraphBuilder::kBuilderPassName, &pass_observer);
@@ -685,7 +693,6 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     }
   }
 
-  bool can_optimize = CanOptimize(*code_item);
   bool can_allocate_registers = RegisterAllocator::CanAllocateRegistersFor(*graph, instruction_set);
 
   // `run_optimizations_` is set explicitly (either through a compiler filter
@@ -706,13 +713,11 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
       }
     }
 
-    if (can_optimize) {
-      return CompileOptimized(graph,
-                              codegen.get(),
-                              compiler_driver,
-                              dex_compilation_unit,
-                              &pass_observer);
-    }
+    return CompileOptimized(graph,
+                            codegen.get(),
+                            compiler_driver,
+                            dex_compilation_unit,
+                            &pass_observer);
   }
 
   if (shouldOptimize && can_allocate_registers) {
@@ -723,8 +728,6 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
 
     if (!run_optimizations_) {
       MaybeRecordStat(MethodCompilationStat::kNotOptimizedDisabled);
-    } else if (!can_optimize) {
-      MaybeRecordStat(MethodCompilationStat::kNotOptimizedTryCatch);
     } else if (!can_allocate_registers) {
       MaybeRecordStat(MethodCompilationStat::kNotOptimizedRegisterAllocator);
     }

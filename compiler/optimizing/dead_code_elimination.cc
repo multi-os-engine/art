@@ -99,7 +99,7 @@ void HDeadCodeElimination::RemoveDeadBlocks() {
   // Connect successive blocks created by dead branches. Order does not matter.
   for (HReversePostOrderIterator it(*graph_); !it.Done();) {
     HBasicBlock* block  = it.Current();
-    if (block->IsEntryBlock() || block->GetSuccessors().Size() != 1u) {
+    if (block->IsEntryBlock() || block->GetSuccessors().Size() != 1u || !block->GetLastInstruction()->IsGoto()) {
       it.Advance();
       continue;
     }
@@ -133,6 +133,10 @@ void HDeadCodeElimination::RemoveDeadInstructions() {
           && !inst->IsSuspendCheck()
           // If we added an explicit barrier then we should keep it.
           && !inst->IsMemoryBarrier()
+          // We must not remove a LoadException because the runtime decides
+          // whether it should deliver an exception based on the presence of
+          // MOVE_EXCEPTION in the original DEX.
+          && !inst->IsLoadException()
           && !inst->HasUses()) {
         block->RemoveInstruction(inst);
         MaybeRecordStat(MethodCompilationStat::kRemovedDeadInstruction);

@@ -116,7 +116,6 @@ void SsaRedundantPhiElimination::Run() {
 
     if (phi->InputCount() == 0) {
       DCHECK(phi->IsCatchPhi());
-      DCHECK(phi->IsDead());
       continue;
     }
 

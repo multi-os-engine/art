@@ -305,6 +305,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   bool IsDebuggable() const { return debuggable_; }
 
+  bool HasTryCatch() const;
+
   // Returns a constant of the given type and value. If it does not exist
   // already, it is created and inserted into the graph. This method is only for
   // integral types.
@@ -914,6 +916,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   const uint32_t dex_pc_;
   size_t lifetime_start_;
   size_t lifetime_end_;
+
   bool is_catch_block_;
 
   // If this block is in a try block, `try_entry_` stores one of, possibly
@@ -1426,6 +1429,15 @@ class HEnvironment : public ArenaObject<kArenaAllocMisc> {
     return vregs_.Get(index).GetInstruction();
   }
 
+  bool Contains(HInstruction* instruction) const {
+    for (size_t i = 0, e = Size(); i < e; ++i) {
+      if (instruction == GetInstructionAt(i)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void RemoveAsUserOfInput(size_t index) const;
 
   size_t Size() const { return vregs_.Size(); }
@@ -1646,6 +1658,10 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
     HUserRecord<HInstruction*> input_use = InputRecordAt(input);
     input_use.GetInstruction()->uses_.Remove(input_use.GetUseNode());
   }
+
+  // Iterates over catch blocks this instruction can throw into, removes
+  // its inputs in catch phis and itself from lists of exceptional predecessors.
+  void RemoveAsExceptionalPredecessor();
 
   const HUseList<HInstruction*>& GetUses() const { return uses_; }
   const HUseList<HEnvironment*>& GetEnvUses() const { return env_uses_; }
@@ -3757,6 +3773,7 @@ class HArraySet : public HTemplateInstruction<3> {
   }
 
   void ClearNeedsTypeCheck() {
+    RemoveAsExceptionalPredecessor();
     needs_type_check_ = false;
   }
 
