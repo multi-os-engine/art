@@ -79,18 +79,12 @@ public class Main {
   static boolean doThrow = false;
 
   public static double $noinline$computeDouble() {
-    if (doThrow) {
-      // Try defeating inlining.
-      throw new Error();
-    }
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return 2.0;
   }
 
   public static float $noinline$computeFloat() {
-    if (doThrow) {
-      // Try defeating inlining.
-      throw new Error();
-    }
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return 4.0f;
   }
 }

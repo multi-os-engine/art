@@ -41,10 +41,10 @@ public class Main {
     l = $opt$TakeOneLong4(0, 1, 2, 42);
     expectEquals(42, l);
 
-    l = $opt$AddTwoLongs(42, 41);
+    l = $opt$noinline$AddTwoLongs(42, 41);
     expectEquals(83, l);
 
-    l = $opt$SubTwoLongs(42, 41);
+    l = $opt$noinline$SubTwoLongs(42, 41);
     expectEquals(1, l);
 
     l = $opt$MakeCallsWithLongs1();
@@ -53,18 +53,18 @@ public class Main {
     l = $opt$MakeCallsWithLongs2();
     expectEquals(900000000006L, l);
 
-    l = $opt$SubTwoLongs(-600000000006L, -200000000002L);
+    l = $opt$noinline$SubTwoLongs(-600000000006L, -200000000002L);
     expectEquals(-400000000004L, l);
 
-    l = $opt$AddTwoLongs(-600000000006L, -200000000002L);
+    l = $opt$noinline$AddTwoLongs(-600000000006L, -200000000002L);
     expectEquals(-800000000008L, l);
   }
 
   static long $opt$MakeCallsWithLongs1() {
-    long l = $opt$SubTwoLongs(-600000000006L, -200000000002L);
+    long l = $opt$noinline$SubTwoLongs(-600000000006L, -200000000002L);
     expectEquals(-400000000004L, l);
 
-    l = $opt$AddTwoLongs(-600000000006L, -200000000002L);
+    l = $opt$noinline$AddTwoLongs(-600000000006L, -200000000002L);
     expectEquals(-800000000008L, l);
 
     return $opt$ReturnLong() + $opt$TakeOneLong1(1) + $opt$TakeOneLong2(0, 2)
@@ -74,7 +74,7 @@ public class Main {
   }
 
   static long $opt$MakeCallsWithLongs2() {
-    return $opt$AddThreeLongs(400000000003L, 200000000002L, 300000000001L);
+    return $opt$noinline$AddThreeLongs(400000000003L, 200000000002L, 300000000001L);
   }
 
   static long $opt$ReturnLong() {
@@ -101,15 +101,20 @@ public class Main {
     return l;
   }
 
-  static long $opt$AddTwoLongs(long a, long b) {
+  static boolean doThrow = false;
+
+  static long $opt$noinline$AddTwoLongs(long a, long b) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a + b;
   }
 
-  static long $opt$AddThreeLongs(long a, long b, long c) {
+  static long $opt$noinline$AddThreeLongs(long a, long b, long c) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a + b + c;
   }
 
-  static long $opt$SubTwoLongs(long a, long b) {
+  static long $opt$noinline$SubTwoLongs(long a, long b) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a - b;
   }
 }

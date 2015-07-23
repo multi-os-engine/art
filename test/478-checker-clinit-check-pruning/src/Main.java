@@ -101,10 +101,7 @@ public class Main {
     static boolean doThrow = false;
 
     static void $noinline$staticMethod() {
-      if (doThrow) {
-        // Try defeating inlining.
-        throw new Error();
-      }
+      if (doThrow) { throw new Error(); }  // Try defeating inlining.
     }
   }
 
@@ -179,10 +176,7 @@ public class Main {
     static boolean doThrow = false;
 
     static void $noinline$staticMethod() {
-      if (doThrow) {
-        // Try defeating inlining.
-        throw new Error();
-      }
+      if (doThrow) { throw new Error(); }  // Try defeating inlining.
     }
   }
 
@@ -243,10 +237,7 @@ public class Main {
     static boolean doThrow = false;
 
     static void $noinline$staticMethod() {
-      if (doThrow) {
-        // Try defeating inlining.
-        throw new Error();
-      }
+      if (doThrow) { throw new Error(); }  // Try defeating inlining.
     }
 
     static {

@@ -102,27 +102,35 @@ public class Main {
     expectEquals(-1, smaliCmpLtDouble(Float.NaN, 5D));
   }
 
- static boolean $opt$lt(long a, long b) {
+  static boolean doThrow = false;
+
+  static boolean $opt$noinline$lt(long a, long b) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a < b;
   }
 
-  static boolean $opt$lt(float a, float b) {
+  static boolean $opt$noinline$lt(float a, float b) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a < b;
   }
 
-  static boolean $opt$lt(double a, double b) {
+  static boolean $opt$noinline$lt(double a, double b) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a < b;
   }
 
-  static boolean $opt$gt(long a, long b) {
+  static boolean $opt$noinline$gt(long a, long b) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a > b;
   }
 
-  static boolean $opt$gt(float a, float b) {
+  static boolean $opt$noinline$gt(float a, float b) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a > b;
   }
 
-  static boolean $opt$gt(double a, double b) {
+  static boolean $opt$noinline$gt(double a, double b) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a > b;
   }
 
@@ -170,58 +178,57 @@ public class Main {
   }
 
   public static void expectLt(long a, long b) {
-    if (!$opt$lt(a, b)) {
+    if (!$opt$noinline$lt(a, b)) {
       throw new Error("Expected: " + a + " < " + b);
     }
   }
 
   public static void expectGt(long a, long b) {
-    if (!$opt$gt(a, b)) {
+    if (!$opt$noinline$gt(a, b)) {
       throw new Error("Expected: " + a + " > " + b);
     }
   }
 
   public static void expectLt(float a, float b) {
-    if (!$opt$lt(a, b)) {
+    if (!$opt$noinline$lt(a, b)) {
       throw new Error("Expected: " + a + " < " + b);
     }
   }
 
   public static void expectGt(float a, float b) {
-    if (!$opt$gt(a, b)) {
+    if (!$opt$noinline$gt(a, b)) {
       throw new Error("Expected: " + a + " > " + b);
     }
   }
 
   public static void expectFalse(float a, float b) {
-    if ($opt$lt(a, b)) {
+    if ($opt$noinline$lt(a, b)) {
       throw new Error("Not expecting: " + a + " < " + b);
     }
-    if ($opt$gt(a, b)) {
+    if ($opt$noinline$gt(a, b)) {
       throw new Error("Not expecting: " + a + " > " + b);
     }
   }
 
   public static void expectLt(double a, double b) {
-    if (!$opt$lt(a, b)) {
+    if (!$opt$noinline$lt(a, b)) {
       throw new Error("Expected: " + a + " < " + b);
     }
   }
 
   public static void expectGt(double a, double b) {
-    if (!$opt$gt(a, b)) {
+    if (!$opt$noinline$gt(a, b)) {
       throw new Error("Expected: " + a + " > " + b);
     }
   }
 
   public static void expectFalse(double a, double b) {
-    if ($opt$lt(a, b)) {
+    if ($opt$noinline$lt(a, b)) {
       throw new Error("Not expecting: " + a + " < " + b);
     }
-    if ($opt$gt(a, b)) {
+    if ($opt$noinline$gt(a, b)) {
       throw new Error("Not expecting: " + a + " > " + b);
     }
   }
 
 }
-

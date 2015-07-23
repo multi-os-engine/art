@@ -3,31 +3,31 @@ InstField check...
 InstField.nullCheck
 StaticField assign...
 StaticField check...
-IntMath.shiftTest1
-IntMath.shiftTest2
-IntMath.unsignedShiftTest
-IntMath.shiftTest3
-IntMath.convTest
-IntMath.charSubTest
-IntMath.intOperTest
+IntMath.$noinline$ShiftTest1
+IntMath.$noinline$ShiftTest2
+IntMath.$noinline$UnsignedShiftTest
+IntMath.$noinline$ShiftTest3
+IntMath.$noinline$ConvTest
+IntMath.$noinline$CharSubTest
+IntMath.$noinline$IntOperTest
 IntMath.intOperCheck
-IntMath.longOperTest
+IntMath.$noinline$LongOperTest
 IntMath.longOperCheck
-IntMath.lit16Test
-IntMath.lit8Test
+IntMath.$noinline$Lit16Test
+IntMath.$noinline$Lit8Test
 IntMath.divLiteralTest
-IntMath.intShiftTest
+IntMath.$noinline$IntShiftTest
 IntMath.intShiftCheck
-IntMath.longShiftTest
+IntMath.$noinline$LongShiftTest
 IntMath.longShiftCheck
-IntMath.truncateTest
-IntMath.divideByZero
-IntMath.bigDivideOverflow
+IntMath.$noinline$TruncateTest
+IntMath.$noinline$DivideByZero
+IntMath.$noinline$BigDivideOverflow
 IntMath.checkConsts
 IntMath.jlmTests
-FloatMath.convTest
-FloatMath.floatOperTest
-FloatMath.doubleOperTest
+FloatMath.$noinline$ConvTest
+FloatMath.$noinline$FloatOperTest
+FloatMath.$noinline$DoubleOperTest
 FloatMath.checkConvI
 FloatMath.checkConvL
 FloatMath.checkConvF
@@ -40,12 +40,12 @@ FloatMath.checkConvD
  1: -8.613303245920329E18
  2: 123.45600128173828
 -2.005440939E9, -8.6133032459203287E18, 123.4560012817382
-FloatMath.checkConsts
+FloatMath.$noinline$CheckConsts
 FloatMath.jlmTests
-IntMath.testIntCompare
-IntMath.testLongCompare
-IntMath.testFloatCompare
-IntMath.testDoubleCompare
+Compare.$noinline$TestIntCompare
+Compare.$noinline$TestLongCompare
+Compare.$noinline$TestFloatCompare
+Compare.$noinline$TestDoubleCompare
 Monitor.run
 Switch.testSwitch
 Array check...

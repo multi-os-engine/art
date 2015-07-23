@@ -15,7 +15,8 @@
  */
 
 // Note that $opt$ is a marker for the optimizing compiler to ensure
-// it does compile the method.
+// it does compile the method, and that $noinline$ is a marker to
+// ensure that it does inline it.
 public class Main {
 
   public static void assertFloatEquals(float expected, float result) {
@@ -32,9 +33,15 @@ public class Main {
   private static void longToFloat() {
     // The result for this test case used to be slightly less accurate
     // on ARM (both in Quick and Optimizing).
-    assertFloatEquals(Float.intBitsToFloat(-555858671), $opt$LongToFloat(-8008112895877447681L));
+    assertFloatEquals(Float.intBitsToFloat(-555858671),
+                      $opt$noinline$LongToFloat(-8008112895877447681L));
   }
 
+  static boolean doThrow = false;
+
   // This method produces a long-to-float Dex instruction.
-  static float $opt$LongToFloat(long a) { return (float)a; }
+  static float $opt$noinline$LongToFloat(long a) {
+    if (doThrow) { throw new Error(); }  // Try defeating inlining.
+    return (float)a;
+  }
 }
