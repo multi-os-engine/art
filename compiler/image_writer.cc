@@ -1189,6 +1189,13 @@ class FixupVisitor {
   FixupVisitor(ImageWriter* image_writer, Object* copy) : image_writer_(image_writer), copy_(copy) {
   }
 
+  // Ignore class roots since we don't have a way to map them to the destination. These are handled
+  // with other logic.
+  void VisitRootIfNonNull(mirror::CompressedReference<mirror::Object>* root ATTRIBUTE_UNUSED)
+      const {}
+  void VisitRoot(mirror::CompressedReference<mirror::Object>* root ATTRIBUTE_UNUSED) const {}
+
+
   void operator()(Object* obj, MemberOffset offset, bool is_static ATTRIBUTE_UNUSED) const
       REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
     Object* ref = obj->GetFieldObject<Object, kVerifyNone>(offset);
@@ -1215,6 +1222,11 @@ class FixupClassVisitor FINAL : public FixupVisitor {
  public:
   FixupClassVisitor(ImageWriter* image_writer, Object* copy) : FixupVisitor(image_writer, copy) {
   }
+
+  // Ignore references from native roots.
+  void VisitRootIfNonNull(mirror::CompressedReference<mirror::Object>* root ATTRIBUTE_UNUSED)
+      const {}
+  void VisitRoot(mirror::CompressedReference<mirror::Object>* root ATTRIBUTE_UNUSED) const {}
 
   void operator()(Object* obj, MemberOffset offset, bool is_static ATTRIBUTE_UNUSED) const
       REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {

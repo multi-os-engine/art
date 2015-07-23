@@ -597,8 +597,7 @@ class ScanObjectVisitor {
       : mark_sweep_(mark_sweep) {}
 
   void operator()(mirror::Object* obj) const ALWAYS_INLINE
-      SHARED_REQUIRES(Locks::mutator_lock_)
-      REQUIRES(Locks::heap_bitmap_lock_) {
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::heap_bitmap_lock_) {
     if (kCheckLocks) {
       Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
       Locks::heap_bitmap_lock_->AssertExclusiveHeld(Thread::Current());
@@ -655,7 +654,28 @@ class MarkStackTask : public Task {
 
     void operator()(mirror::Object* obj, MemberOffset offset, bool /* static */) const ALWAYS_INLINE
         SHARED_REQUIRES(Locks::mutator_lock_) {
-      mirror::Object* ref = obj->GetFieldObject<mirror::Object>(offset);
+      Mark(obj->GetFieldObject<mirror::Object>(offset));
+    }
+
+    // TODO: Remove NO_THREAD_SAFETY_ANALYSIS when clang better understands visitors.
+    void VisitRootIfNonNull(mirror::CompressedReference<mirror::Object>* root) const
+        NO_THREAD_SAFETY_ANALYSIS {
+      if (!root->IsNull()) {
+        VisitRoot(root);
+      }
+    }
+
+    void VisitRoot(mirror::CompressedReference<mirror::Object>* root) const
+        NO_THREAD_SAFETY_ANALYSIS {
+      if (kCheckLocks) {
+        Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
+        Locks::heap_bitmap_lock_->AssertExclusiveHeld(Thread::Current());
+      }
+      Mark(root->AsMirrorPtr());
+    }
+
+   private:
+    void Mark(mirror::Object* ref) const ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
       if (ref != nullptr && mark_sweep_->MarkObjectParallel(ref)) {
         if (kUseFinger) {
           std::atomic_thread_fence(std::memory_order_seq_cst);
@@ -668,7 +688,6 @@ class MarkStackTask : public Task {
       }
     }
 
-   private:
     MarkStackTask<kUseFinger>* const chunk_task_;
     MarkSweep* const mark_sweep_;
   };
@@ -1266,6 +1285,23 @@ class MarkVisitor {
       Locks::heap_bitmap_lock_->AssertExclusiveHeld(Thread::Current());
     }
     mark_sweep_->MarkObject(obj->GetFieldObject<mirror::Object>(offset), obj, offset);
+  }
+
+  // TODO: Remove NO_THREAD_SAFETY_ANALYSIS when clang better understands visitors.
+  void VisitRootIfNonNull(mirror::CompressedReference<mirror::Object>* root) const
+      NO_THREAD_SAFETY_ANALYSIS {
+    if (!root->IsNull()) {
+      VisitRoot(root);
+    }
+  }
+
+  void VisitRoot(mirror::CompressedReference<mirror::Object>* root) const
+      NO_THREAD_SAFETY_ANALYSIS {
+    if (kCheckLocks) {
+      Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
+      Locks::heap_bitmap_lock_->AssertExclusiveHeld(Thread::Current());
+    }
+    mark_sweep_->MarkObject(root->AsMirrorPtr());
   }
 
  private:
