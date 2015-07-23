@@ -267,13 +267,13 @@ size_t ImageWriter::GetImageOffset(mirror::Object* object) const {
   return offset;
 }
 
-void ImageWriter::SetImageBinSlot(mirror::Object* object, BinSlot bin_slot) {
+void ImageWriter::SetImageBinSlot(Thread* self, mirror::Object* object, BinSlot bin_slot) {
   DCHECK(object != nullptr);
   DCHECK(!IsImageOffsetAssigned(object));
   DCHECK(!IsImageBinSlotAssigned(object));
 
   // Before we stomp over the lock word, save the hash code for later.
-  Monitor::Deflate(Thread::Current(), object);;
+  Monitor::Deflate(self, object);;
   LockWord lw(object->GetLockWord(false));
   switch (lw.GetState()) {
     case LockWord::kFatLocked: {
@@ -354,7 +354,7 @@ void ImageWriter::AddMethodPointerArray(mirror::PointerArray* arr) {
   pointer_arrays_.emplace(arr, kBinArtMethodClean);
 }
 
-void ImageWriter::AssignImageBinSlot(mirror::Object* object) {
+void ImageWriter::AssignImageBinSlot(Thread* self, mirror::Object* object) {
   DCHECK(object != nullptr);
   size_t object_size = object->SizeOf();
 
@@ -469,7 +469,7 @@ void ImageWriter::AssignImageBinSlot(mirror::Object* object) {
   }
 
   BinSlot new_bin_slot(bin, current_offset);
-  SetImageBinSlot(object, new_bin_slot);
+  SetImageBinSlot(self, object, new_bin_slot);
 
   ++bin_slot_count_[bin];
 
@@ -706,7 +706,7 @@ void ImageWriter::DumpImageClasses() {
   }
 }
 
-void ImageWriter::CalculateObjectBinSlots(Object* obj) {
+void ImageWriter::CalculateObjectBinSlots(Thread* self, Object* obj) {
   DCHECK(obj != nullptr);
   // if it is a string, we want to intern it if its not interned.
   if (obj->GetClass()->IsStringClass()) {
@@ -718,20 +718,20 @@ void ImageWriter::CalculateObjectBinSlots(Object* obj) {
     // InternImageString allows us to intern while holding the heap bitmap lock. This is safe since
     // we are guaranteed to not have GC during image writing.
     mirror::String* const interned = Runtime::Current()->GetInternTable()->InternImageString(
-        obj->AsString());
+        self, obj->AsString());
     if (obj != interned) {
       if (!IsImageBinSlotAssigned(interned)) {
         // interned obj is after us, allocate its location early
-        AssignImageBinSlot(interned);
+        AssignImageBinSlot(self, interned);
       }
       // point those looking for this object to the interned version.
-      SetImageBinSlot(obj, GetImageBinSlot(interned));
+      SetImageBinSlot(self, obj, GetImageBinSlot(interned));
       return;
     }
     // else (obj == interned), nothing to do but fall through to the normal case
   }
 
-  AssignImageBinSlot(obj);
+  AssignImageBinSlot(self, obj);
 }
 
 ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
@@ -778,13 +778,13 @@ ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
 
 // Walk instance fields of the given Class. Separate function to allow recursion on the super
 // class.
-void ImageWriter::WalkInstanceFields(mirror::Object* obj, mirror::Class* klass) {
+void ImageWriter::WalkInstanceFields(Thread* self, mirror::Object* obj, mirror::Class* klass) {
   // Visit fields of parent classes first.
-  StackHandleScope<1> hs(Thread::Current());
+  StackHandleScope<1> hs(self);
   Handle<mirror::Class> h_class(hs.NewHandle(klass));
   mirror::Class* super = h_class->GetSuperClass();
   if (super != nullptr) {
-    WalkInstanceFields(obj, super);
+    WalkInstanceFields(self, obj, super);
   }
   //
   size_t num_reference_fields = h_class->NumReferenceInstanceFields();
@@ -792,7 +792,7 @@ void ImageWriter::WalkInstanceFields(mirror::Object* obj, mirror::Class* klass) 
   for (size_t i = 0; i < num_reference_fields; ++i) {
     mirror::Object* value = obj->GetFieldObject<mirror::Object>(field_offset);
     if (value != nullptr) {
-      WalkFieldsInOrder(value);
+      WalkFieldsInOrder(self, value);
     }
     field_offset = MemberOffset(field_offset.Uint32Value() +
                                 sizeof(mirror::HeapReference<mirror::Object>));
@@ -800,17 +800,17 @@ void ImageWriter::WalkInstanceFields(mirror::Object* obj, mirror::Class* klass) 
 }
 
 // For an unvisited object, visit it then all its children found via fields.
-void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
+void ImageWriter::WalkFieldsInOrder(Thread* self, mirror::Object* obj) {
   // Use our own visitor routine (instead of GC visitor) to get better locality between
   // an object and its fields
   if (!IsImageBinSlotAssigned(obj)) {
     // Walk instance fields of all objects
-    StackHandleScope<2> hs(Thread::Current());
+    StackHandleScope<2> hs(self);
     Handle<mirror::Object> h_obj(hs.NewHandle(obj));
     Handle<mirror::Class> klass(hs.NewHandle(obj->GetClass()));
     // visit the object itself.
-    CalculateObjectBinSlots(h_obj.Get());
-    WalkInstanceFields(h_obj.Get(), klass.Get());
+    CalculateObjectBinSlots(self, h_obj.Get());
+    WalkInstanceFields(self, h_obj.Get(), klass.Get());
     // Walk static fields of a Class.
     if (h_obj->IsClass()) {
       size_t num_reference_static_fields = klass->NumReferenceStaticFields();
@@ -818,7 +818,7 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
       for (size_t i = 0; i < num_reference_static_fields; ++i) {
         mirror::Object* value = h_obj->GetFieldObject<mirror::Object>(field_offset);
         if (value != nullptr) {
-          WalkFieldsInOrder(value);
+          WalkFieldsInOrder(self, value);
         }
         field_offset = MemberOffset(field_offset.Uint32Value() +
                                     sizeof(mirror::HeapReference<mirror::Object>));
@@ -862,7 +862,7 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
         mirror::ObjectArray<mirror::Object>* obj_array = h_obj->AsObjectArray<mirror::Object>();
         mirror::Object* value = obj_array->Get(i);
         if (value != nullptr) {
-          WalkFieldsInOrder(value);
+          WalkFieldsInOrder(self, value);
         }
       }
     }
@@ -880,7 +880,7 @@ void ImageWriter::AssignMethodOffset(ArtMethod* method, Bin bin) {
 void ImageWriter::WalkFieldsCallback(mirror::Object* obj, void* arg) {
   ImageWriter* writer = reinterpret_cast<ImageWriter*>(arg);
   DCHECK(writer != nullptr);
-  writer->WalkFieldsInOrder(obj);
+  writer->WalkFieldsInOrder(Thread::Current(), obj);
 }
 
 void ImageWriter::UnbinObjectsIntoOffsetCallback(mirror::Object* obj, void* arg) {

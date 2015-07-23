@@ -1027,7 +1027,7 @@ ConditionCode Mir2Lir::NegateComparison(ConditionCode before) {
 }
 
 // TODO: move to mir_to_lir.cc
-Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
+Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena, Thread* self)
     : literal_list_(nullptr),
       method_literal_list_(nullptr),
       class_literal_list_(nullptr),
@@ -1073,7 +1073,8 @@ Mir2Lir::Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena
       cfi_(&last_lir_insn_,
            cu->compiler_driver->GetCompilerOptions().GetGenerateDebugInfo(),
            arena),
-      in_to_reg_storage_mapping_(arena) {
+      in_to_reg_storage_mapping_(arena),
+      self_(self) {
   switch_tables_.reserve(4);
   fill_array_data_.reserve(4);
   tempreg_info_.reserve(20);
@@ -1094,8 +1095,9 @@ void Mir2Lir::Materialize() {
 
   /* First try the custom light codegen for special cases. */
   DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
-  bool special_worked = cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
-      ->GenSpecial(this, cu_->method_idx);
+  bool special_worked = cu_->compiler_driver->GetMethodInlinerMap()
+      ->GetMethodInliner(cu_->dex_file, self_)
+      ->GenSpecial(this, cu_->method_idx, self_);
 
   /* Take normal path for converting MIR to LIR only if the special codegen did not succeed. */
   if (special_worked == false) {
@@ -1158,7 +1160,7 @@ CompiledMethod* Mir2Lir::GetCompiledMethod() {
   });
 
   return CompiledMethod::SwapAllocCompiledMethod(
-      cu_->compiler_driver, cu_->instruction_set,
+      self_, cu_->compiler_driver, cu_->instruction_set,
       ArrayRef<const uint8_t>(code_buffer_),
       frame_size_, core_spill_mask_, fp_spill_mask_,
       &src_mapping_table_,

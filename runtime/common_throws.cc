@@ -28,7 +28,7 @@
 #include "mirror/class-inl.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
-#include "thread.h"
+#include "thread-inl.h"
 #include "verifier/method_verifier.h"
 
 namespace art {
@@ -407,7 +407,8 @@ void ThrowNullPointerExceptionFromDexPC() {
     case Instruction::IGET_CHAR:
     case Instruction::IGET_SHORT: {
       ArtField* field =
-          Runtime::Current()->GetClassLinker()->ResolveField(instr->VRegC_22c(), method, false);
+          Runtime::Current()->GetClassLinker()->ResolveField(
+              Thread::Current(), instr->VRegC_22c(), method, false);
       ThrowNullPointerExceptionForFieldAccess(field, true /* read */);
       break;
     }
@@ -439,7 +440,8 @@ void ThrowNullPointerExceptionFromDexPC() {
     case Instruction::IPUT_CHAR:
     case Instruction::IPUT_SHORT: {
       ArtField* field =
-          Runtime::Current()->GetClassLinker()->ResolveField(instr->VRegC_22c(), method, false);
+          Runtime::Current()->GetClassLinker()->ResolveField(
+              Thread::Current(), instr->VRegC_22c(), method, false);
       ThrowNullPointerExceptionForFieldAccess(field, false /* write */);
       break;
     }

@@ -18,6 +18,7 @@
 
 #include "arena_allocator.h"
 #include "base/memory_tool.h"
+#include "thread-inl.h"
 
 namespace art {
 
@@ -35,12 +36,12 @@ ArenaStack::ArenaStack(ArenaPool* arena_pool)
 
 ArenaStack::~ArenaStack() {
   DebugStackRefCounter::CheckNoRefs();
-  stats_and_pool_.pool->FreeArenaChain(bottom_arena_);
+  stats_and_pool_.pool->FreeArenaChain(Thread::Current(), bottom_arena_);
 }
 
-void ArenaStack::Reset() {
+void ArenaStack::Reset(Thread* self) {
   DebugStackRefCounter::CheckNoRefs();
-  stats_and_pool_.pool->FreeArenaChain(bottom_arena_);
+  stats_and_pool_.pool->FreeArenaChain(self, bottom_arena_);
   bottom_arena_ = nullptr;
   top_arena_  = nullptr;
   top_ptr_ = nullptr;
@@ -57,13 +58,14 @@ uint8_t* ArenaStack::AllocateFromNextArena(size_t rounded_bytes) {
   UpdateBytesAllocated();
   size_t allocation_size = std::max(Arena::kDefaultSize, rounded_bytes);
   if (UNLIKELY(top_arena_ == nullptr)) {
-    top_arena_ = bottom_arena_ = stats_and_pool_.pool->AllocArena(allocation_size);
+    top_arena_ = bottom_arena_ = stats_and_pool_.pool->AllocArena(Thread::Current(),
+                                                                  allocation_size);
     top_arena_->next_ = nullptr;
   } else if (top_arena_->next_ != nullptr && top_arena_->next_->Size() >= allocation_size) {
     top_arena_ = top_arena_->next_;
   } else {
     Arena* tail = top_arena_->next_;
-    top_arena_->next_ = stats_and_pool_.pool->AllocArena(allocation_size);
+    top_arena_->next_ = stats_and_pool_.pool->AllocArena(Thread::Current(), allocation_size);
     top_arena_ = top_arena_->next_;
     top_arena_->next_ = tail;
   }

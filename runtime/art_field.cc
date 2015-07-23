@@ -84,7 +84,7 @@ mirror::String* ArtField::ResolveGetStringName(Thread* self, const DexFile& dex_
                                                uint32_t string_idx, mirror::DexCache* dex_cache) {
   StackHandleScope<1> hs(self);
   return Runtime::Current()->GetClassLinker()->ResolveString(
-      dex_file, string_idx, hs.NewHandle(dex_cache));
+      self, dex_file, string_idx, hs.NewHandle(dex_cache));
 }
 
 }  // namespace art

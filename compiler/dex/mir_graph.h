@@ -40,6 +40,7 @@ class DexFileMethodInliner;
 class GlobalValueNumbering;
 class GvnDeadCodeElimination;
 class PassManager;
+class Thread;
 class TypeInference;
 
 // Forward declaration.
@@ -544,7 +545,7 @@ const RegLocation bad_loc = {kLocDalvikFrame, 0, 0, 0, 0, 0, 0, 0, 0, RegStorage
 
 class MIRGraph {
  public:
-  MIRGraph(CompilationUnit* cu, ArenaAllocator* arena);
+  MIRGraph(CompilationUnit* cu, ArenaAllocator* arena, Thread* self);
   virtual ~MIRGraph();
 
   /*
@@ -1457,6 +1458,9 @@ class MIRGraph {
   // The bb->id is index into suspend_checks_in_loops_ and the loop head's depth is bit index
   // in a suspend_checks_in_loops_[bb->id].
   uint32_t* suspend_checks_in_loops_;
+
+  // The thread that is working on this graph.
+  Thread* self_;
 
   static const uint64_t oat_data_flow_attributes_[kMirOpLast];
 

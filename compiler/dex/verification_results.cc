@@ -45,7 +45,8 @@ VerificationResults::~VerificationResults() {
   }
 }
 
-bool VerificationResults::ProcessVerifiedMethod(verifier::MethodVerifier* method_verifier) {
+bool VerificationResults::ProcessVerifiedMethod(verifier::MethodVerifier* method_verifier,
+                                                Thread* self) {
   DCHECK(method_verifier != nullptr);
   MethodReference ref = method_verifier->GetMethodReference();
   bool compile = IsCandidateForCompilation(ref, method_verifier->GetAccessFlags());
@@ -55,7 +56,7 @@ bool VerificationResults::ProcessVerifiedMethod(verifier::MethodVerifier* method
     return true;
   }
 
-  WriterMutexLock mu(Thread::Current(), verified_methods_lock_);
+  WriterMutexLock mu(self, verified_methods_lock_);
   auto it = verified_methods_.find(ref);
   if (it != verified_methods_.end()) {
     // TODO: Investigate why are we doing the work again for this method and try to avoid it.
@@ -77,14 +78,14 @@ bool VerificationResults::ProcessVerifiedMethod(verifier::MethodVerifier* method
   return true;
 }
 
-const VerifiedMethod* VerificationResults::GetVerifiedMethod(MethodReference ref) {
-  ReaderMutexLock mu(Thread::Current(), verified_methods_lock_);
+const VerifiedMethod* VerificationResults::GetVerifiedMethod(MethodReference ref, Thread* self) {
+  ReaderMutexLock mu(self, verified_methods_lock_);
   auto it = verified_methods_.find(ref);
   return (it != verified_methods_.end()) ? it->second : nullptr;
 }
 
-void VerificationResults::RemoveVerifiedMethod(MethodReference ref) {
-  WriterMutexLock mu(Thread::Current(), verified_methods_lock_);
+void VerificationResults::RemoveVerifiedMethod(MethodReference ref, Thread* self) {
+  WriterMutexLock mu(self, verified_methods_lock_);
   auto it = verified_methods_.find(ref);
   if (it != verified_methods_.end()) {
     delete it->second;
@@ -92,16 +93,16 @@ void VerificationResults::RemoveVerifiedMethod(MethodReference ref) {
   }
 }
 
-void VerificationResults::AddRejectedClass(ClassReference ref) {
+void VerificationResults::AddRejectedClass(ClassReference ref, Thread* self) {
   {
-    WriterMutexLock mu(Thread::Current(), rejected_classes_lock_);
+    WriterMutexLock mu(self, rejected_classes_lock_);
     rejected_classes_.insert(ref);
   }
-  DCHECK(IsClassRejected(ref));
+  DCHECK(IsClassRejected(ref, self));
 }
 
-bool VerificationResults::IsClassRejected(ClassReference ref) {
-  ReaderMutexLock mu(Thread::Current(), rejected_classes_lock_);
+bool VerificationResults::IsClassRejected(ClassReference ref, Thread* self) {
+  ReaderMutexLock mu(self, rejected_classes_lock_);
   return (rejected_classes_.find(ref) != rejected_classes_.end());
 }
 

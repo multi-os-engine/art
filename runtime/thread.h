@@ -1331,6 +1331,10 @@ class Thread {
   // Thread "interrupted" status; stays raised until queried or thrown.
   bool interrupted_ GUARDED_BY(wait_mutex_);
 
+ public:
+  static AtomicInteger current_counter_;
+
+ private:
   friend class Dbg;  // For SetStateUnsafe.
   friend class gc::collector::SemiSpace;  // For getting stack traces.
   friend class Runtime;  // For CreatePeer.

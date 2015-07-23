@@ -67,8 +67,13 @@ inline ArtMethod* GetResolvedMethod(ArtMethod* outer_method,
     class_loader.Assign(caller->GetClassLoader());
   }
 
-  return class_linker->ResolveMethod(
-      *outer_method->GetDexFile(), method_index, dex_cache, class_loader, nullptr, invoke_type);
+  return class_linker->ResolveMethod(Thread::Current(),
+                                     *outer_method->GetDexFile(),
+                                     method_index,
+                                     dex_cache,
+                                     class_loader,
+                                     nullptr,
+                                     invoke_type);
 }
 
 inline ArtMethod* GetCalleeSaveMethodCaller(ArtMethod** sp,
@@ -349,7 +354,7 @@ inline ArtField* FindFieldFromCode(uint32_t field_idx, ArtMethod* referrer,
     default:                     is_primitive = true;  is_set = true;  is_static = true;  break;
   }
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  ArtField* resolved_field = class_linker->ResolveField(field_idx, referrer, is_static);
+  ArtField* resolved_field = class_linker->ResolveField(self, field_idx, referrer, is_static);
   if (UNLIKELY(resolved_field == nullptr)) {
     DCHECK(self->IsExceptionPending());  // Throw exception and unwind.
     return nullptr;  // Failure.

@@ -26,6 +26,7 @@
 #include "gc/heap.h"
 #include "jni_env_ext.h"
 #include "thread_pool.h"
+#include "utils.h"
 
 namespace art {
 
@@ -33,17 +34,6 @@ namespace art {
 static inline Thread* ThreadForEnv(JNIEnv* env) {
   JNIEnvExt* full_env(down_cast<JNIEnvExt*>(env));
   return full_env->self;
-}
-
-inline Thread* Thread::Current() {
-  // We rely on Thread::Current returning null for a detached thread, so it's not obvious
-  // that we can replace this with a direct %fs access on x86.
-  if (!is_started_) {
-    return nullptr;
-  } else {
-    void* thread = pthread_getspecific(Thread::pthread_key_self_);
-    return reinterpret_cast<Thread*>(thread);
-  }
 }
 
 inline void Thread::AllowThreadSuspension() {

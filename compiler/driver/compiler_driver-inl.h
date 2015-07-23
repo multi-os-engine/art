@@ -30,8 +30,9 @@
 
 namespace art {
 
-inline mirror::DexCache* CompilerDriver::GetDexCache(const DexCompilationUnit* mUnit) {
-  return mUnit->GetClassLinker()->FindDexCache(*mUnit->GetDexFile());
+inline mirror::DexCache* CompilerDriver::GetDexCache(const DexCompilationUnit* mUnit,
+                                                     Thread* self) {
+  return mUnit->GetClassLinker()->FindDexCache(self, *mUnit->GetDexFile());
 }
 
 inline mirror::ClassLoader* CompilerDriver::GetClassLoader(ScopedObjectAccess& soa,
@@ -46,7 +47,7 @@ inline mirror::Class* CompilerDriver::ResolveClass(
   DCHECK_EQ(dex_cache->GetDexFile(), mUnit->GetDexFile());
   DCHECK_EQ(class_loader.Get(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
   mirror::Class* cls = mUnit->GetClassLinker()->ResolveType(
-      *mUnit->GetDexFile(), cls_index, dex_cache, class_loader);
+      soa.Self(), *mUnit->GetDexFile(), cls_index, dex_cache, class_loader);
   DCHECK_EQ(cls == nullptr, soa.Self()->IsExceptionPending());
   if (UNLIKELY(cls == nullptr)) {
     // Clean up any exception left by type resolution.
@@ -71,7 +72,7 @@ inline ArtField* CompilerDriver::ResolveFieldWithDexFile(
     uint32_t field_idx, bool is_static) {
   DCHECK_EQ(dex_cache->GetDexFile(), dex_file);
   ArtField* resolved_field = Runtime::Current()->GetClassLinker()->ResolveField(
-      *dex_file, field_idx, dex_cache, class_loader, is_static);
+      soa.Self(), *dex_file, field_idx, dex_cache, class_loader, is_static);
   DCHECK_EQ(resolved_field == nullptr, soa.Self()->IsExceptionPending());
   if (UNLIKELY(resolved_field == nullptr)) {
     // Clean up any exception left by type resolution.
@@ -86,8 +87,8 @@ inline ArtField* CompilerDriver::ResolveFieldWithDexFile(
   return resolved_field;
 }
 
-inline mirror::DexCache* CompilerDriver::FindDexCache(const DexFile* dex_file) {
-  return Runtime::Current()->GetClassLinker()->FindDexCache(*dex_file);
+inline mirror::DexCache* CompilerDriver::FindDexCache(const DexFile* dex_file, Thread* self) {
+  return Runtime::Current()->GetClassLinker()->FindDexCache(self, *dex_file);
 }
 
 inline ArtField* CompilerDriver::ResolveField(
@@ -270,7 +271,7 @@ inline ArtMethod* CompilerDriver::ResolveMethod(
   DCHECK_EQ(dex_cache->GetDexFile(), mUnit->GetDexFile());
   DCHECK_EQ(class_loader.Get(), soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader()));
   ArtMethod* resolved_method = mUnit->GetClassLinker()->ResolveMethod(
-      *mUnit->GetDexFile(), method_idx, dex_cache, class_loader, nullptr, invoke_type);
+      soa.Self(), *mUnit->GetDexFile(), method_idx, dex_cache, class_loader, nullptr, invoke_type);
   DCHECK_EQ(resolved_method == nullptr, soa.Self()->IsExceptionPending());
   if (UNLIKELY(resolved_method == nullptr)) {
     // Clean up any exception left by type resolution.
@@ -366,13 +367,14 @@ inline int CompilerDriver::IsFastInvoke(
     ClassLinker* class_linker = mUnit->GetClassLinker();
     if (LIKELY(devirt_target->dex_file == mUnit->GetDexFile())) {
       called_method = class_linker->ResolveMethod(
-          *devirt_target->dex_file, devirt_target->dex_method_index, dex_cache, class_loader,
-          nullptr, kVirtual);
+          soa.Self(), *devirt_target->dex_file, devirt_target->dex_method_index, dex_cache,
+          class_loader, nullptr, kVirtual);
     } else {
       StackHandleScope<1> hs(soa.Self());
-      auto target_dex_cache(hs.NewHandle(class_linker->FindDexCache(*devirt_target->dex_file)));
+      auto target_dex_cache(hs.NewHandle(class_linker->FindDexCache(soa.Self(),
+                                                                    *devirt_target->dex_file)));
       called_method = class_linker->ResolveMethod(
-          *devirt_target->dex_file, devirt_target->dex_method_index, target_dex_cache,
+          soa.Self(), *devirt_target->dex_file, devirt_target->dex_method_index, target_dex_cache,
           class_loader, nullptr, kVirtual);
     }
     CHECK(called_method != nullptr);

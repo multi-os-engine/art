@@ -25,6 +25,7 @@
 #include "jit_instrumentation.h"
 #include "runtime.h"
 #include "runtime_options.h"
+#include "thread-inl.h"
 #include "thread_list.h"
 #include "utils.h"
 
@@ -52,7 +53,7 @@ void Jit::DumpInfo(std::ostream& os) {
 }
 
 void Jit::AddTimingLogger(const TimingLogger& logger) {
-  cumulative_timings_.AddLogger(logger);
+  cumulative_timings_.AddLogger(Thread::Current(), logger);
 }
 
 Jit::Jit()

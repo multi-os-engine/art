@@ -18,6 +18,7 @@
 
 #include <memory>
 
+#include "base/mutex-inl.h"
 #include "gc_root-inl.h"
 #include "gc/collector/garbage_collector.h"
 #include "gc/space/image_space.h"
@@ -239,11 +240,13 @@ void InternTable::WaitUntilAccessible(Thread* self) {
   Locks::intern_table_lock_->ExclusiveLock(self);
 }
 
-mirror::String* InternTable::Insert(mirror::String* s, bool is_strong, bool holding_locks) {
+mirror::String* InternTable::Insert(Thread* self,
+                                    mirror::String* s,
+                                    bool is_strong,
+                                    bool holding_locks) {
   if (s == nullptr) {
     return nullptr;
   }
-  Thread* const self = Thread::Current();
   MutexLock mu(self, *Locks::intern_table_lock_);
   if (kDebugLocking && !holding_locks) {
     Locks::mutator_lock_->AssertSharedHeld(self);
@@ -287,28 +290,29 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong, bool hold
   return is_strong ? InsertStrong(s) : InsertWeak(s);
 }
 
-mirror::String* InternTable::InternStrong(int32_t utf16_length, const char* utf8_data) {
+mirror::String* InternTable::InternStrong(Thread* self,
+                                          int32_t utf16_length,
+                                          const char* utf8_data) {
   DCHECK(utf8_data != nullptr);
-  return InternStrong(mirror::String::AllocFromModifiedUtf8(
-      Thread::Current(), utf16_length, utf8_data));
+  return InternStrong(self, mirror::String::AllocFromModifiedUtf8(self, utf16_length, utf8_data));
 }
 
-mirror::String* InternTable::InternStrong(const char* utf8_data) {
+mirror::String* InternTable::InternStrong(Thread* self, const char* utf8_data) {
   DCHECK(utf8_data != nullptr);
-  return InternStrong(mirror::String::AllocFromModifiedUtf8(Thread::Current(), utf8_data));
+  return InternStrong(self, mirror::String::AllocFromModifiedUtf8(Thread::Current(), utf8_data));
 }
 
-mirror::String* InternTable::InternImageString(mirror::String* s) {
+mirror::String* InternTable::InternImageString(Thread* self, mirror::String* s) {
   // May be holding the heap bitmap lock.
-  return Insert(s, true, true);
+  return Insert(self, s, true, true);
 }
 
-mirror::String* InternTable::InternStrong(mirror::String* s) {
-  return Insert(s, true, false);
+mirror::String* InternTable::InternStrong(Thread* self, mirror::String* s) {
+  return Insert(self, s, true, false);
 }
 
-mirror::String* InternTable::InternWeak(mirror::String* s) {
-  return Insert(s, false, false);
+mirror::String* InternTable::InternWeak(Thread* self, mirror::String* s) {
+  return Insert(self, s, false, false);
 }
 
 bool InternTable::ContainsWeak(mirror::String* s) {
@@ -348,7 +352,7 @@ size_t InternTable::WriteToMemory(uint8_t* ptr) {
 
 std::size_t InternTable::StringHashEquals::operator()(const GcRoot<mirror::String>& root) const {
   if (kIsDebugBuild) {
-    Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
+    Locks::mutator_lock_->AssertSharedHeld();
   }
   return static_cast<size_t>(root.Read()->GetHashCode());
 }
@@ -356,7 +360,7 @@ std::size_t InternTable::StringHashEquals::operator()(const GcRoot<mirror::Strin
 bool InternTable::StringHashEquals::operator()(const GcRoot<mirror::String>& a,
                                                const GcRoot<mirror::String>& b) const {
   if (kIsDebugBuild) {
-    Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
+    Locks::mutator_lock_->AssertSharedHeld();
   }
   return a.Read()->Equals(b.Read());
 }
@@ -384,7 +388,7 @@ void InternTable::Table::Remove(mirror::String* s) {
 }
 
 mirror::String* InternTable::Table::Find(mirror::String* s) {
-  Locks::intern_table_lock_->AssertHeld(Thread::Current());
+  Locks::intern_table_lock_->AssertHeld();
   auto it = pre_zygote_table_.Find(GcRoot<mirror::String>(s));
   if (it != pre_zygote_table_.end()) {
     return it->Read();

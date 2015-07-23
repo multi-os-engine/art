@@ -239,7 +239,8 @@ class OptimizingCompiler FINAL : public Compiler {
                           uint16_t class_def_idx,
                           uint32_t method_idx,
                           jobject class_loader,
-                          const DexFile& dex_file) const OVERRIDE;
+                          const DexFile& dex_file,
+                          Thread* self) const OVERRIDE;
 
   CompiledMethod* TryCompile(const DexFile::CodeItem* code_item,
                              uint32_t access_flags,
@@ -247,7 +248,8 @@ class OptimizingCompiler FINAL : public Compiler {
                              uint16_t class_def_idx,
                              uint32_t method_idx,
                              jobject class_loader,
-                             const DexFile& dex_file) const;
+                             const DexFile& dex_file,
+                             Thread* self) const;
 
   CompiledMethod* JniCompile(uint32_t access_flags,
                              uint32_t method_idx,
@@ -283,13 +285,15 @@ class OptimizingCompiler FINAL : public Compiler {
                                    CodeGenerator* codegen,
                                    CompilerDriver* driver,
                                    const DexCompilationUnit& dex_compilation_unit,
-                                   PassObserver* pass_observer) const;
+                                   PassObserver* pass_observer,
+                                   Thread* self) const;
 
   // Just compile without doing optimizations.
   CompiledMethod* CompileBaseline(CodeGenerator* codegen,
                                   CompilerDriver* driver,
                                   const DexCompilationUnit& dex_compilation_unit,
-                                  PassObserver* pass_observer) const;
+                                  PassObserver* pass_observer,
+                                  Thread* self) const;
 
   std::unique_ptr<OptimizingCompilerStats> compilation_stats_;
 
@@ -374,18 +378,19 @@ static void RunOptimizations(HGraph* graph,
                              OptimizingCompilerStats* stats,
                              const DexCompilationUnit& dex_compilation_unit,
                              PassObserver* pass_observer,
-                             StackHandleScopeCollection* handles) {
+                             StackHandleScopeCollection* handles,
+                             Thread* self) {
   ArenaAllocator* arena = graph->GetArena();
   HDeadCodeElimination* dce1 = new (arena) HDeadCodeElimination(
       graph, stats, HDeadCodeElimination::kInitialDeadCodeEliminationPassName);
   HDeadCodeElimination* dce2 = new (arena) HDeadCodeElimination(
       graph, stats, HDeadCodeElimination::kFinalDeadCodeEliminationPassName);
   HConstantFolding* fold1 = new (arena) HConstantFolding(graph);
-  InstructionSimplifier* simplify1 = new (arena) InstructionSimplifier(graph, stats);
+  InstructionSimplifier* simplify1 = new (arena) InstructionSimplifier(graph, self, stats);
   HBooleanSimplifier* boolean_simplify = new (arena) HBooleanSimplifier(graph);
 
   HInliner* inliner = new (arena) HInliner(
-      graph, dex_compilation_unit, dex_compilation_unit, driver, handles, stats);
+      graph, dex_compilation_unit, dex_compilation_unit, driver, handles, stats, self);
 
   HConstantFolding* fold2 = new (arena) HConstantFolding(graph, "constant_folding_after_inlining");
   SideEffectsAnalysis* side_effects = new (arena) SideEffectsAnalysis(graph);
@@ -393,17 +398,17 @@ static void RunOptimizations(HGraph* graph,
   LICM* licm = new (arena) LICM(graph, *side_effects);
   BoundsCheckElimination* bce = new (arena) BoundsCheckElimination(graph);
   ReferenceTypePropagation* type_propagation =
-      new (arena) ReferenceTypePropagation(graph, handles);
+      new (arena) ReferenceTypePropagation(graph, handles, self);
   InstructionSimplifier* simplify2 = new (arena) InstructionSimplifier(
-      graph, stats, "instruction_simplifier_after_types");
+      graph, self, stats, "instruction_simplifier_after_types");
   InstructionSimplifier* simplify3 = new (arena) InstructionSimplifier(
-      graph, stats, "instruction_simplifier_after_bce");
+      graph, self, stats, "instruction_simplifier_after_bce");
   ReferenceTypePropagation* type_propagation2 =
-      new (arena) ReferenceTypePropagation(graph, handles);
+      new (arena) ReferenceTypePropagation(graph, handles, self);
   InstructionSimplifier* simplify4 = new (arena) InstructionSimplifier(
-      graph, stats, "instruction_simplifier_before_codegen");
+      graph, self, stats, "instruction_simplifier_before_codegen");
 
-  IntrinsicsRecognizer* intrinsics = new (arena) IntrinsicsRecognizer(graph, driver);
+  IntrinsicsRecognizer* intrinsics = new (arena) IntrinsicsRecognizer(graph, driver, self);
 
   HOptimization* optimizations[] = {
     intrinsics,
@@ -465,10 +470,11 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
                                                      CodeGenerator* codegen,
                                                      CompilerDriver* compiler_driver,
                                                      const DexCompilationUnit& dex_compilation_unit,
-                                                     PassObserver* pass_observer) const {
-  StackHandleScopeCollection handles(Thread::Current());
+                                                     PassObserver* pass_observer,
+                                                     Thread* self) const {
+  StackHandleScopeCollection handles(self);
   RunOptimizations(graph, compiler_driver, compilation_stats_.get(),
-                   dex_compilation_unit, pass_observer, &handles);
+                   dex_compilation_unit, pass_observer, &handles, self);
 
   AllocateRegisters(graph, codegen, pass_observer);
 
@@ -486,6 +492,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   MaybeRecordStat(MethodCompilationStat::kCompiledOptimized);
 
   CompiledMethod* compiled_method = CompiledMethod::SwapAllocCompiledMethod(
+      self,
       compiler_driver,
       codegen->GetInstructionSet(),
       ArrayRef<const uint8_t>(allocator.GetMemory()),
@@ -509,7 +516,8 @@ CompiledMethod* OptimizingCompiler::CompileBaseline(
     CodeGenerator* codegen,
     CompilerDriver* compiler_driver,
     const DexCompilationUnit& dex_compilation_unit,
-    PassObserver* pass_observer) const {
+    PassObserver* pass_observer,
+    Thread* self) const {
   CodeVectorAllocator allocator;
   codegen->CompileBaseline(&allocator);
 
@@ -526,6 +534,7 @@ CompiledMethod* OptimizingCompiler::CompileBaseline(
 
   MaybeRecordStat(MethodCompilationStat::kCompiledBaseline);
   CompiledMethod* compiled_method = CompiledMethod::SwapAllocCompiledMethod(
+      self,
       compiler_driver,
       codegen->GetInstructionSet(),
       ArrayRef<const uint8_t>(allocator.GetMemory()),
@@ -551,7 +560,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                                                uint16_t class_def_idx,
                                                uint32_t method_idx,
                                                jobject class_loader,
-                                               const DexFile& dex_file) const {
+                                               const DexFile& dex_file,
+                                               Thread* self) const {
   UNUSED(invoke_type);
   std::string method_name = PrettyMethod(method_idx, dex_file);
   MaybeRecordStat(MethodCompilationStat::kAttemptCompilation);
@@ -587,10 +597,10 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   DexCompilationUnit dex_compilation_unit(
     nullptr, class_loader, Runtime::Current()->GetClassLinker(), dex_file, code_item,
     class_def_idx, method_idx, access_flags,
-    compiler_driver->GetVerifiedMethod(&dex_file, method_idx));
+    compiler_driver->GetVerifiedMethod(&dex_file, method_idx, self));
 
   bool requires_barrier = dex_compilation_unit.IsConstructor()
-      && compiler_driver->RequiresConstructorBarrier(Thread::Current(),
+      && compiler_driver->RequiresConstructorBarrier(self,
                                                      dex_compilation_unit.GetDexFile(),
                                                      dex_compilation_unit.GetClassDefIndex());
   ArenaAllocator arena(Runtime::Current()->GetArenaPool());
@@ -624,10 +634,10 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
 
   const uint8_t* interpreter_metadata = nullptr;
   {
-    ScopedObjectAccess soa(Thread::Current());
+    ScopedObjectAccess soa(self);
     StackHandleScope<4> hs(soa.Self());
     ClassLinker* class_linker = dex_compilation_unit.GetClassLinker();
-    Handle<mirror::DexCache> dex_cache(hs.NewHandle(class_linker->FindDexCache(dex_file)));
+    Handle<mirror::DexCache> dex_cache(hs.NewHandle(class_linker->FindDexCache(self, dex_file)));
     Handle<mirror::ClassLoader> loader(hs.NewHandle(
         soa.Decode<mirror::ClassLoader*>(class_loader)));
     ArtMethod* art_method = compiler_driver->ResolveMethod(
@@ -644,7 +654,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                         &dex_file,
                         compiler_driver,
                         compilation_stats_.get(),
-                        interpreter_metadata);
+                        interpreter_metadata,
+                        self);
 
   VLOG(compiler) << "Building " << method_name;
 
@@ -684,7 +695,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                               codegen.get(),
                               compiler_driver,
                               dex_compilation_unit,
-                              &pass_observer);
+                              &pass_observer,
+                              self);
     }
   }
 
@@ -705,7 +717,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     return CompileBaseline(codegen.get(),
                            compiler_driver,
                            dex_compilation_unit,
-                           &pass_observer);
+                           &pass_observer,
+                           self);
   } else {
     return nullptr;
   }
@@ -717,13 +730,14 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
                                             uint16_t class_def_idx,
                                             uint32_t method_idx,
                                             jobject jclass_loader,
-                                            const DexFile& dex_file) const {
+                                            const DexFile& dex_file,
+                                            Thread* self) const {
   CompilerDriver* compiler_driver = GetCompilerDriver();
   CompiledMethod* method = nullptr;
-  if (compiler_driver->IsMethodVerifiedWithoutFailures(method_idx, class_def_idx, dex_file) &&
-      !compiler_driver->GetVerifiedMethod(&dex_file, method_idx)->HasRuntimeThrow()) {
+  if (compiler_driver->IsMethodVerifiedWithoutFailures(method_idx, class_def_idx, dex_file, self) &&
+      !compiler_driver->GetVerifiedMethod(&dex_file, method_idx, self)->HasRuntimeThrow()) {
      method = TryCompile(code_item, access_flags, invoke_type, class_def_idx,
-                         method_idx, jclass_loader, dex_file);
+                         method_idx, jclass_loader, dex_file, self);
   } else {
     if (compiler_driver->GetCompilerOptions().VerifyAtRuntime()) {
       MaybeRecordStat(MethodCompilationStat::kNotCompiledVerifyAtRuntime);
@@ -736,7 +750,7 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     return method;
   }
   method = delegate_->Compile(code_item, access_flags, invoke_type, class_def_idx, method_idx,
-                              jclass_loader, dex_file);
+                              jclass_loader, dex_file, self);
 
   if (method != nullptr) {
     MaybeRecordStat(MethodCompilationStat::kCompiledQuick);

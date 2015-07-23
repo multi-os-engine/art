@@ -34,6 +34,7 @@ class ArenaStack;
 class ScopedArenaAllocator;
 class MemMap;
 class MemStats;
+class Thread;
 
 template <typename T>
 class ArenaAllocatorAdapter;
@@ -182,8 +183,8 @@ class ArenaPool {
  public:
   explicit ArenaPool(bool use_malloc = true, bool low_4gb = false);
   ~ArenaPool();
-  Arena* AllocArena(size_t size) REQUIRES(!lock_);
-  void FreeArenaChain(Arena* first) REQUIRES(!lock_);
+  Arena* AllocArena(Thread* self, size_t size) REQUIRES(!lock_);
+  void FreeArenaChain(Thread* self, Arena* first) REQUIRES(!lock_);
   size_t GetBytesAllocated() const REQUIRES(!lock_);
   // Trim the maps in arenas by madvising, used by JIT to reduce memory usage. This only works
   // use_malloc is false.
@@ -255,6 +256,7 @@ class ArenaAllocator : private DebugStackRefCounter, private ArenaAllocatorStats
   void* AllocValgrind(size_t bytes, ArenaAllocKind kind);
 
   void ObtainNewArenaForAllocation(size_t allocation_size);
+  void ObtainNewArenaForAllocation(Thread* self, size_t allocation_size);
 
   size_t BytesAllocated() const;
 

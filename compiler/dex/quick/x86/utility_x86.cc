@@ -1072,9 +1072,9 @@ bool X86Mir2Lir::AnalyzeInvokeStaticIntrinsic(MIR* mir) {
   MethodReference method_ref = mir_graph_->GetMethodLoweringInfo(mir).GetTargetMethod();
   DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
   DexFileMethodInliner* method_inliner =
-    cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(method_ref.dex_file);
+    cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(method_ref.dex_file, self_);
   InlineMethod method;
-  bool is_intrinsic = method_inliner->IsIntrinsic(method_ref.dex_method_index, &method);
+  bool is_intrinsic = method_inliner->IsIntrinsic(method_ref.dex_method_index, &method, self_);
   DCHECK(is_intrinsic);
 
   switch (method.opcode) {

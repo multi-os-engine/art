@@ -173,14 +173,14 @@ static uint32_t FindMethodIndexIn(ArtMethod* method,
 }
 
 bool HInliner::TryInline(HInvoke* invoke_instruction, uint32_t method_index) const {
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
   const DexFile& caller_dex_file = *caller_compilation_unit_.GetDexFile();
   VLOG(compiler) << "Try inlining " << PrettyMethod(method_index, caller_dex_file);
 
   ClassLinker* class_linker = caller_compilation_unit_.GetClassLinker();
   // We can query the dex cache directly. The verifier has populated it already.
-  ArtMethod* resolved_method = class_linker->FindDexCache(caller_dex_file)->GetResolvedMethod(
-      method_index, class_linker->GetImagePointerSize());
+  ArtMethod* resolved_method = class_linker->FindDexCache(self_, caller_dex_file)
+      ->GetResolvedMethod(method_index, class_linker->GetImagePointerSize());
 
   if (resolved_method == nullptr) {
     // Method cannot be resolved if it is in another dex file we do not have access to.
@@ -234,8 +234,10 @@ bool HInliner::TryInline(HInvoke* invoke_instruction, uint32_t method_index) con
   }
 
   uint16_t class_def_idx = resolved_method->GetDeclaringClass()->GetDexClassDefIndex();
-  if (!compiler_driver_->IsMethodVerifiedWithoutFailures(
-        resolved_method->GetDexMethodIndex(), class_def_idx, *resolved_method->GetDexFile())) {
+  if (!compiler_driver_->IsMethodVerifiedWithoutFailures(resolved_method->GetDexMethodIndex(),
+                                                         class_def_idx,
+                                                         *resolved_method->GetDexFile(),
+                                                         self_)) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
                    << " couldn't be verified, so it cannot be inlined";
     return false;
@@ -269,7 +271,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction, uint32_t method_index) con
 bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
                                  HInvoke* invoke_instruction,
                                  bool same_dex_file) const {
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
   const DexFile::CodeItem* code_item = resolved_method->GetCodeItem();
   const DexFile& callee_dex_file = *resolved_method->GetDexFile();
   uint32_t method_index = resolved_method->GetDexMethodIndex();
@@ -297,8 +299,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     if (is_super_invocation && graph_->ShouldGenerateConstructorBarrier()) {
       requires_ctor_barrier = false;
     } else {
-      Thread* self = Thread::Current();
-      requires_ctor_barrier = compiler_driver_->RequiresConstructorBarrier(self,
+      requires_ctor_barrier = compiler_driver_->RequiresConstructorBarrier(self_,
           dex_compilation_unit.GetDexFile(),
           dex_compilation_unit.GetClassDefIndex());
     }
@@ -327,7 +328,8 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
                         resolved_method->GetDexFile(),
                         compiler_driver_,
                         &inline_stats,
-                        resolved_method->GetQuickenedInfo());
+                        resolved_method->GetQuickenedInfo(),
+                        self_);
 
   if (!builder.BuildGraph(*code_item)) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
@@ -356,8 +358,8 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   // Run simple optimizations on the graph.
   HDeadCodeElimination dce(callee_graph, stats_);
   HConstantFolding fold(callee_graph);
-  ReferenceTypePropagation type_propagation(callee_graph, handles_);
-  InstructionSimplifier simplify(callee_graph, stats_);
+  ReferenceTypePropagation type_propagation(callee_graph, handles_, self_);
+  InstructionSimplifier simplify(callee_graph, self_, stats_);
 
   HOptimization* optimizations[] = {
     &dce,
@@ -378,6 +380,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
                      compiler_driver_,
                      handles_,
                      stats_,
+                     self_,
                      depth_ + 1);
     inliner.Run();
   }

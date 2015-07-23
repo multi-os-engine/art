@@ -28,6 +28,8 @@
 
 namespace art {
 
+class Thread;
+
 class X86Mir2Lir FINAL : public Mir2Lir {
  protected:
   class InToRegStorageX86_64Mapper : public InToRegStorageMapper {
@@ -77,7 +79,7 @@ class X86Mir2Lir FINAL : public Mir2Lir {
   virtual int GenDalvikArgsBulkCopy(CallInfo* info, int first, int count) OVERRIDE;
 
  public:
-  X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
+  X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena, Thread* self);
 
   // Required for target - codegen helpers.
   bool SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div, RegLocation rl_src,

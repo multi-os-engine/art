@@ -24,6 +24,7 @@
 namespace art {
 
 struct CompilationUnit;
+class Thread;
 
 class MipsMir2Lir FINAL : public Mir2Lir {
  protected:
@@ -67,7 +68,7 @@ class MipsMir2Lir FINAL : public Mir2Lir {
   }
 
  public:
-  MipsMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
+  MipsMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena, Thread* self);
 
   // Required for target - codegen utilities.
   bool SmallLiteralDivRem(Instruction::Code dalvik_opcode, bool is_div, RegLocation rl_src,

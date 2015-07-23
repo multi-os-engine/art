@@ -37,8 +37,8 @@ DexFileToMethodInlinerMap::~DexFileToMethodInlinerMap() {
   }
 }
 
-DexFileMethodInliner* DexFileToMethodInlinerMap::GetMethodInliner(const DexFile* dex_file) {
-  Thread* self = Thread::Current();
+DexFileMethodInliner* DexFileToMethodInlinerMap::GetMethodInliner(const DexFile* dex_file,
+                                                                  Thread* self) {
   {
     ReaderMutexLock mu(self, lock_);
     auto it = inliners_.find(dex_file);

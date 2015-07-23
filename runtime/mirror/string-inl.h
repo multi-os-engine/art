@@ -23,7 +23,7 @@
 #include "intern_table.h"
 #include "runtime.h"
 #include "string.h"
-#include "thread.h"
+#include "thread-inl.h"
 #include "utf.h"
 #include "utils.h"
 
@@ -126,7 +126,7 @@ class SetStringCountAndValueVisitorFromString {
 };
 
 inline String* String::Intern() {
-  return Runtime::Current()->GetInternTable()->InternWeak(this);
+  return Runtime::Current()->GetInternTable()->InternWeak(Thread::Current(), this);
 }
 
 inline uint16_t String::CharAt(int32_t index) {

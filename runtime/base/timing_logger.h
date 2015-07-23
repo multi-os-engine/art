@@ -26,6 +26,9 @@
 #include <vector>
 
 namespace art {
+
+class Thread;
+
 class TimingLogger;
 
 class CumulativeLogger {
@@ -42,7 +45,7 @@ class CumulativeLogger {
   // Allow the name to be modified, particularly when the cumulative logger is a field within a
   // parent class that is unable to determine the "name" of a sub-class.
   void SetName(const std::string& name) REQUIRES(!lock_);
-  void AddLogger(const TimingLogger& logger) REQUIRES(!lock_);
+  void AddLogger(Thread* self, const TimingLogger& logger) REQUIRES(!lock_);
   size_t GetIterations() const REQUIRES(!lock_);
 
  private:

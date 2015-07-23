@@ -23,9 +23,10 @@ namespace art {
 
 class InstructionSimplifierVisitor : public HGraphVisitor {
  public:
-  InstructionSimplifierVisitor(HGraph* graph, OptimizingCompilerStats* stats)
+  InstructionSimplifierVisitor(HGraph* graph, OptimizingCompilerStats* stats, Thread* self)
       : HGraphVisitor(graph),
-        stats_(stats) {}
+        stats_(stats),
+        self_(self) {}
 
   void Run();
 
@@ -76,13 +77,14 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   OptimizingCompilerStats* stats_;
   bool simplification_occurred_ = false;
   int simplifications_at_current_position_ = 0;
+  Thread* self_;
   // We ensure we do not loop infinitely. The value is a finger in the air guess
   // that should allow enough simplification.
   static constexpr int kMaxSamePositionSimplifications = 10;
 };
 
 void InstructionSimplifier::Run() {
-  InstructionSimplifierVisitor visitor(graph_, stats_);
+  InstructionSimplifierVisitor visitor(graph_, stats_, self_);
   visitor.Run();
 }
 
@@ -194,7 +196,10 @@ bool InstructionSimplifierVisitor::IsDominatedByInputNullCheck(HInstruction* ins
 
 // Returns whether doing a type test between the class of `object` against `klass` has
 // a statically known outcome. The result of the test is stored in `outcome`.
-static bool TypeCheckHasKnownOutcome(HLoadClass* klass, HInstruction* object, bool* outcome) {
+static bool TypeCheckHasKnownOutcome(HLoadClass* klass,
+                                     HInstruction* object,
+                                     Thread* self,
+                                     bool* outcome) {
   if (!klass->IsResolved()) {
     // If the class couldn't be resolve it's not safe to compare against it. It's
     // default type would be Top which might be wider that the actual class type
@@ -204,7 +209,7 @@ static bool TypeCheckHasKnownOutcome(HLoadClass* klass, HInstruction* object, bo
 
   ReferenceTypeInfo obj_rti = object->GetReferenceTypeInfo();
   ReferenceTypeInfo class_rti = klass->GetLoadedClassRTI();
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self);
   if (class_rti.IsSupertypeOf(obj_rti)) {
     *outcome = true;
     return true;
@@ -237,7 +242,7 @@ void InstructionSimplifierVisitor::VisitCheckCast(HCheckCast* check_cast) {
   }
 
   bool outcome;
-  if (TypeCheckHasKnownOutcome(check_cast->InputAt(1)->AsLoadClass(), object, &outcome)) {
+  if (TypeCheckHasKnownOutcome(check_cast->InputAt(1)->AsLoadClass(), object, self_, &outcome)) {
     if (outcome) {
       check_cast->GetBlock()->RemoveInstruction(check_cast);
       if (stats_ != nullptr) {
@@ -267,7 +272,7 @@ void InstructionSimplifierVisitor::VisitInstanceOf(HInstanceOf* instruction) {
   }
 
   bool outcome;
-  if (TypeCheckHasKnownOutcome(instruction->InputAt(1)->AsLoadClass(), object, &outcome)) {
+  if (TypeCheckHasKnownOutcome(instruction->InputAt(1)->AsLoadClass(), object, self_, &outcome)) {
     if (outcome && can_be_null) {
       // Type test will succeed, we just need a null test.
       HNotEqual* test = new (graph->GetArena()) HNotEqual(graph->GetNullConstant(), object);

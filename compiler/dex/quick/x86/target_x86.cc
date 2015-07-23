@@ -833,8 +833,11 @@ RegisterClass X86Mir2Lir::RegClassForFieldLoadStore(OpSize size, bool is_volatil
   return RegClassBySize(size);
 }
 
-X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
-    : Mir2Lir(cu, mir_graph, arena),
+X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu,
+                       MIRGraph* mir_graph,
+                       ArenaAllocator* arena,
+                       Thread* self)
+    : Mir2Lir(cu, mir_graph, arena, self),
       in_to_reg_storage_x86_64_mapper_(this), in_to_reg_storage_x86_mapper_(this),
       pc_rel_base_reg_(RegStorage::InvalidReg()),
       pc_rel_base_reg_used_(false),
@@ -855,9 +858,11 @@ X86Mir2Lir::X86Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator*
   }
 }
 
-Mir2Lir* X86CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
-                          ArenaAllocator* const arena) {
-  return new X86Mir2Lir(cu, mir_graph, arena);
+Mir2Lir* X86CodeGenerator(CompilationUnit* const cu,
+                          MIRGraph* const mir_graph,
+                          ArenaAllocator* const arena,
+                          Thread* self) {
+  return new X86Mir2Lir(cu, mir_graph, arena, self);
 }
 
 // Not used in x86(-64)

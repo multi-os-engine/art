@@ -26,6 +26,7 @@ namespace art {
 
 class CompilerDriver;
 class DexCompilationUnit;
+class Thread;
 
 /*
  * Field info is calculated from the perspective of the compilation unit that accesses
@@ -134,7 +135,7 @@ class MirIFieldLoweringInfo : public MirFieldInfo {
   // index and field index) and volatility and compute whether we can fast path the access
   // with IGET/IPUT. For fast path fields, retrieve the field offset.
   static void Resolve(CompilerDriver* compiler_driver, const DexCompilationUnit* mUnit,
-                      MirIFieldLoweringInfo* field_infos, size_t count)
+                      MirIFieldLoweringInfo* field_infos, size_t count, Thread* self)
       REQUIRES(!Locks::mutator_lock_);
 
   // Construct an unresolved instance field lowering info.
@@ -191,7 +192,7 @@ class MirSFieldLoweringInfo : public MirFieldInfo {
   // method being compiled, whether the declaring class can be safely assumed to be initialized
   // and the type index of the declaring class in the compiled method's dex file.
   static void Resolve(CompilerDriver* compiler_driver, const DexCompilationUnit* mUnit,
-                      MirSFieldLoweringInfo* field_infos, size_t count)
+                      MirSFieldLoweringInfo* field_infos, size_t count, Thread* self)
       REQUIRES(!Locks::mutator_lock_);
 
   // Construct an unresolved static field lowering info.

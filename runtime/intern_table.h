@@ -40,6 +40,7 @@ enum VisitRootFlags : uint8_t;
 namespace mirror {
 class String;
 }  // namespace mirror
+class Thread;
 class Transaction;
 
 /**
@@ -57,20 +58,24 @@ class InternTable {
   InternTable();
 
   // Interns a potentially new string in the 'strong' table. May cause thread suspension.
-  mirror::String* InternStrong(int32_t utf16_length, const char* utf8_data)
+  mirror::String* InternStrong(Thread* self, int32_t utf16_length, const char* utf8_data)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Only used by image writer.
-  mirror::String* InternImageString(mirror::String* s) SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::String* InternImageString(Thread* self, mirror::String* s)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Interns a potentially new string in the 'strong' table. May cause thread suspension.
-  mirror::String* InternStrong(const char* utf8_data) SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::String* InternStrong(Thread* self, const char* utf8_data)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Interns a potentially new string in the 'strong' table. May cause thread suspension.
-  mirror::String* InternStrong(mirror::String* s) SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::String* InternStrong(Thread* self, mirror::String* s)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Interns a potentially new string in the 'weak' table. May cause thread suspension.
-  mirror::String* InternWeak(mirror::String* s) SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::String* InternWeak(Thread* self, mirror::String* s)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SweepInternTableWeaks(IsMarkedVisitor* visitor) SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!Locks::intern_table_lock_);
@@ -185,7 +190,7 @@ class InternTable {
   };
 
   // Insert if non null, otherwise return null.
-  mirror::String* Insert(mirror::String* s, bool is_strong, bool holding_locks)
+  mirror::String* Insert(Thread* self, mirror::String* s, bool is_strong, bool holding_locks)
       REQUIRES(!Locks::intern_table_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
 
   mirror::String* LookupStrong(mirror::String* s)

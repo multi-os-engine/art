@@ -532,7 +532,7 @@ void Mir2Lir::CompileDalvikInstruction(MIR* mir, BasicBlock* bb, LIR* label_list
     case Instruction::RETURN_VOID_NO_BARRIER:
     case Instruction::RETURN_VOID:
       if (((cu_->access_flags & kAccConstructor) != 0) &&
-          cu_->compiler_driver->RequiresConstructorBarrier(Thread::Current(), cu_->dex_file,
+          cu_->compiler_driver->RequiresConstructorBarrier(self_, cu_->dex_file,
                                                           cu_->class_def_idx)) {
         GenMemBarrier(kStoreStore);
       }

@@ -88,7 +88,7 @@ void GarbageCollector::Run(GcCause gc_cause, bool clear_soft_references) {
   current_iteration->Reset(gc_cause, clear_soft_references);
   RunPhases();  // Run all the GC phases.
   // Add the current timings to the cumulative timings.
-  cumulative_timings_.AddLogger(*GetTimings());
+  cumulative_timings_.AddLogger(self, *GetTimings());
   // Update cumulative statistics with how many bytes the GC iteration freed.
   total_freed_objects_ += current_iteration->GetFreedObjects() +
       current_iteration->GetFreedLargeObjects();

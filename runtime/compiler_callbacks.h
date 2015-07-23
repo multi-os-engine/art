@@ -22,6 +22,8 @@
 
 namespace art {
 
+class Thread;
+
 namespace verifier {
 
 class MethodVerifier;
@@ -37,8 +39,8 @@ class CompilerCallbacks {
 
   virtual ~CompilerCallbacks() { }
 
-  virtual bool MethodVerified(verifier::MethodVerifier* verifier)
-  SHARED_REQUIRES(Locks::mutator_lock_) = 0;
+  virtual bool MethodVerified(Thread* self, verifier::MethodVerifier* verifier)
+      SHARED_REQUIRES(Locks::mutator_lock_) = 0;
   virtual void ClassRejected(ClassReference ref) = 0;
 
   // Return true if we should attempt to relocate to a random base address if we have not already

@@ -30,11 +30,12 @@
 namespace art {
 
 class CompilerDriver;
+class Thread;
 
 class CompiledCode {
  public:
   // For Quick to supply an code blob
-  CompiledCode(CompilerDriver* compiler_driver, InstructionSet instruction_set,
+  CompiledCode(Thread* self, CompilerDriver* compiler_driver, InstructionSet instruction_set,
                const ArrayRef<const uint8_t>& quick_code, bool owns_code_array);
 
   virtual ~CompiledCode();
@@ -307,7 +308,8 @@ class CompiledMethod FINAL : public CompiledCode {
   // Constructs a CompiledMethod.
   // Note: Consider using the static allocation methods below that will allocate the CompiledMethod
   //       in the swap space.
-  CompiledMethod(CompilerDriver* driver,
+  CompiledMethod(Thread* self,
+                 CompilerDriver* driver,
                  InstructionSet instruction_set,
                  const ArrayRef<const uint8_t>& quick_code,
                  const size_t frame_size_in_bytes,
@@ -323,6 +325,7 @@ class CompiledMethod FINAL : public CompiledCode {
   virtual ~CompiledMethod();
 
   static CompiledMethod* SwapAllocCompiledMethod(
+      Thread* self,
       CompilerDriver* driver,
       InstructionSet instruction_set,
       const ArrayRef<const uint8_t>& quick_code,

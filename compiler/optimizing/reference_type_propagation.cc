@@ -25,9 +25,10 @@ namespace art {
 
 class RTPVisitor : public HGraphDelegateVisitor {
  public:
-  RTPVisitor(HGraph* graph, StackHandleScopeCollection* handles)
+  RTPVisitor(HGraph* graph, StackHandleScopeCollection* handles, Thread* self)
     : HGraphDelegateVisitor(graph),
-      handles_(handles) {}
+      handles_(handles),
+      self_(self) {}
 
   void VisitNewInstance(HNewInstance* new_instance) OVERRIDE;
   void VisitLoadClass(HLoadClass* load_class) OVERRIDE;
@@ -45,6 +46,7 @@ class RTPVisitor : public HGraphDelegateVisitor {
 
  private:
   StackHandleScopeCollection* handles_;
+  Thread* self_;
 };
 
 void ReferenceTypePropagation::Run() {
@@ -61,7 +63,7 @@ void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
   // TODO: handle other instructions that give type info
   // (array accesses)
 
-  RTPVisitor visitor(graph_, handles_);
+  RTPVisitor visitor(graph_, handles_, self_);
   // Initialize exact types first for faster convergence.
   for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
     HInstruction* instr = it.Current();
@@ -179,7 +181,7 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
 
         // Narrow the type as much as possible.
         {
-          ScopedObjectAccess soa(Thread::Current());
+          ScopedObjectAccess soa(self_);
           if (!load_class->IsResolved() || class_rti.IsSupertypeOf(obj_rti)) {
             bound_type->SetReferenceTypeInfo(obj_rti);
           } else {
@@ -200,7 +202,7 @@ void RTPVisitor::SetClassAsTypeInfo(HInstruction* instr,
                                     mirror::Class* klass,
                                     bool is_exact) {
   if (klass != nullptr) {
-    ScopedObjectAccess soa(Thread::Current());
+    ScopedObjectAccess soa(self_);
     MutableHandle<mirror::Class> handle = handles_->NewHandle(klass);
     is_exact = is_exact || klass->IsFinal();
     instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(handle, is_exact));
@@ -213,8 +215,8 @@ void RTPVisitor::UpdateReferenceTypeInfo(HInstruction* instr,
                                          bool is_exact) {
   DCHECK_EQ(instr->GetType(), Primitive::kPrimNot);
 
-  ScopedObjectAccess soa(Thread::Current());
-  mirror::DexCache* dex_cache = Runtime::Current()->GetClassLinker()->FindDexCache(dex_file);
+  ScopedObjectAccess soa(self_);
+  mirror::DexCache* dex_cache = Runtime::Current()->GetClassLinker()->FindDexCache(self_, dex_file);
   // Get type from dex cache assuming it was populated by the verifier.
   SetClassAsTypeInfo(instr, dex_cache->GetResolvedType(type_idx), is_exact);
 }
@@ -234,9 +236,9 @@ void RTPVisitor::UpdateFieldAccessTypeInfo(HInstruction* instr,
     return;
   }
 
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
   ClassLinker* cl = Runtime::Current()->GetClassLinker();
-  mirror::DexCache* dex_cache = cl->FindDexCache(info.GetDexFile());
+  mirror::DexCache* dex_cache = cl->FindDexCache(self_, info.GetDexFile());
   ArtField* field = cl->GetResolvedField(info.GetFieldIndex(), dex_cache);
   if (field != nullptr) {
     mirror::Class* klass = field->GetType<false>();
@@ -253,9 +255,9 @@ void RTPVisitor::VisitStaticFieldGet(HStaticFieldGet* instr) {
 }
 
 void RTPVisitor::VisitLoadClass(HLoadClass* instr) {
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
   mirror::DexCache* dex_cache =
-      Runtime::Current()->GetClassLinker()->FindDexCache(instr->GetDexFile());
+      Runtime::Current()->GetClassLinker()->FindDexCache(self_, instr->GetDexFile());
   // Get type from dex cache assuming it was populated by the verifier.
   mirror::Class* resolved_class = dex_cache->GetResolvedType(instr->GetTypeIndex());
   if (resolved_class != nullptr) {
@@ -316,7 +318,7 @@ ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& 
 }
 
 bool ReferenceTypePropagation::UpdateReferenceTypeInfo(HInstruction* instr) {
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
 
   ReferenceTypeInfo previous_rti = instr->GetReferenceTypeInfo();
   if (instr->IsBoundType()) {
@@ -335,9 +337,9 @@ void RTPVisitor::VisitInvoke(HInvoke* instr) {
     return;
   }
 
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
   ClassLinker* cl = Runtime::Current()->GetClassLinker();
-  mirror::DexCache* dex_cache = cl->FindDexCache(instr->GetDexFile());
+  mirror::DexCache* dex_cache = cl->FindDexCache(self_, instr->GetDexFile());
   ArtMethod* method = dex_cache->GetResolvedMethod(
       instr->GetDexMethodIndex(), cl->GetImagePointerSize());
   if (method != nullptr) {
@@ -352,7 +354,7 @@ void RTPVisitor::VisitArrayGet(HArrayGet* instr) {
   }
 
   HInstruction* parent = instr->InputAt(0);
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
   Handle<mirror::Class> handle = parent->GetReferenceTypeInfo().GetTypeHandle();
   if (handle.GetReference() != nullptr && handle->IsObjectArrayClass()) {
     SetClassAsTypeInfo(instr, handle->GetComponentType(), /* is_exact */ false);

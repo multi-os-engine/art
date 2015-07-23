@@ -31,7 +31,9 @@ namespace art {
 
 void MirIFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
                                     const DexCompilationUnit* mUnit,
-                                    MirIFieldLoweringInfo* field_infos, size_t count) {
+                                    MirIFieldLoweringInfo* field_infos,
+                                    size_t count,
+                                    Thread* self) {
   if (kIsDebugBuild) {
     DCHECK(field_infos != nullptr);
     DCHECK_NE(count, 0u);
@@ -44,9 +46,9 @@ void MirIFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
 
   // We're going to resolve fields and check access in a tight loop. It's better to hold
   // the lock and needed references once than re-acquiring them again and again.
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self);
   StackHandleScope<3> hs(soa.Self());
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(compiler_driver->GetDexCache(mUnit)));
+  Handle<mirror::DexCache> dex_cache(hs.NewHandle(compiler_driver->GetDexCache(mUnit, self)));
   Handle<mirror::ClassLoader> class_loader(
       hs.NewHandle(compiler_driver->GetClassLoader(soa, mUnit)));
   Handle<mirror::Class> referrer_class(hs.NewHandle(
@@ -69,7 +71,8 @@ void MirIFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
       CHECK(field_idx_ptr != nullptr);
       field_idx = field_idx_ptr->index;
       StackHandleScope<1> hs2(soa.Self());
-      auto h_dex_cache = hs2.NewHandle(compiler_driver->FindDexCache(field_idx_ptr->dex_file));
+      auto h_dex_cache = hs2.NewHandle(compiler_driver->FindDexCache(field_idx_ptr->dex_file,
+                                                                     self));
       resolved_field = compiler_driver->ResolveFieldWithDexFile(
           soa, h_dex_cache, class_loader, field_idx_ptr->dex_file, field_idx, false);
       // Since we don't have a valid field index we can't go slow path later.
@@ -94,7 +97,9 @@ void MirIFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
 
 void MirSFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
                                     const DexCompilationUnit* mUnit,
-                                    MirSFieldLoweringInfo* field_infos, size_t count) {
+                                    MirSFieldLoweringInfo* field_infos,
+                                    size_t count,
+                                    Thread* self) {
   if (kIsDebugBuild) {
     DCHECK(field_infos != nullptr);
     DCHECK_NE(count, 0u);
@@ -109,9 +114,9 @@ void MirSFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
 
   // We're going to resolve fields and check access in a tight loop. It's better to hold
   // the lock and needed references once than re-acquiring them again and again.
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self);
   StackHandleScope<3> hs(soa.Self());
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(compiler_driver->GetDexCache(mUnit)));
+  Handle<mirror::DexCache> dex_cache(hs.NewHandle(compiler_driver->GetDexCache(mUnit, self)));
   Handle<mirror::ClassLoader> class_loader(
       hs.NewHandle(compiler_driver->GetClassLoader(soa, mUnit)));
   Handle<mirror::Class> referrer_class_handle(hs.NewHandle(
@@ -146,7 +151,8 @@ void MirSFieldLoweringInfo::Resolve(CompilerDriver* compiler_driver,
           compiler_driver->IsStaticFieldsClassInitialized(referrer_class, resolved_field);
       bool is_class_in_dex_cache = !is_referrers_class &&  // If referrer's class, we don't care.
           compiler_driver->CanAssumeTypeIsPresentInDexCache(*dex_cache->GetDexFile(),
-                                                            it->storage_index_);
+                                                            it->storage_index_,
+                                                            self);
       flags |= (is_referrers_class ? kFlagIsReferrersClass : 0u) |
           (is_class_initialized ? kFlagClassIsInitialized : 0u) |
           (is_class_in_dex_cache ? kFlagClassIsInDexCache : 0u);

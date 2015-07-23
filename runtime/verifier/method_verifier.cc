@@ -42,6 +42,7 @@
 #include "register_line-inl.h"
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
+#include "thread-inl.h"
 #include "utils.h"
 #include "handle_scope-inl.h"
 #include "verifier/dex_gc_map.h"
@@ -206,7 +207,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
     previous_direct_method_idx = method_idx;
     InvokeType type = it.GetMethodInvokeType(*class_def);
     ArtMethod* method = linker->ResolveMethod(
-        *dex_file, method_idx, dex_cache, class_loader, nullptr, type);
+        self, *dex_file, method_idx, dex_cache, class_loader, nullptr, type);
     if (method == nullptr) {
       DCHECK(self->IsExceptionPending());
       // We couldn't resolve the method, but continue regardless.
@@ -251,7 +252,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
     previous_virtual_method_idx = method_idx;
     InvokeType type = it.GetMethodInvokeType(*class_def);
     ArtMethod* method = linker->ResolveMethod(
-        *dex_file, method_idx, dex_cache, class_loader, nullptr, type);
+        self, *dex_file, method_idx, dex_cache, class_loader, nullptr, type);
     if (method == nullptr) {
       DCHECK(self->IsExceptionPending());
       // We couldn't resolve the method, but continue regardless.
@@ -426,7 +427,7 @@ MethodVerifier::MethodVerifier(Thread* self,
 }
 
 MethodVerifier::~MethodVerifier() {
-  Thread::Current()->PopVerifier(this);
+  self_->PopVerifier(this);
   STLDeleteElements(&failure_messages_);
 }
 
@@ -578,7 +579,7 @@ bool MethodVerifier::Verify() {
   result = result && VerifyCodeFlow();
   // Compute information for compiler.
   if (result && Runtime::Current()->IsCompiler()) {
-    result = Runtime::Current()->GetCompilerCallbacks()->MethodVerified(this);
+    result = Runtime::Current()->GetCompilerCallbacks()->MethodVerified(self_, this);
   }
   return result;
 }
@@ -770,7 +771,8 @@ bool MethodVerifier::ScanTryCatchBlocks() {
       // Ensure exception types are resolved so that they don't need resolution to be delivered,
       // unresolved exception types will be ignored by exception delivery
       if (iterator.GetHandlerTypeIndex() != DexFile::kDexNoIndex16) {
-        mirror::Class* exception_type = linker->ResolveType(*dex_file_,
+        mirror::Class* exception_type = linker->ResolveType(self_,
+                                                            *dex_file_,
                                                             iterator.GetHandlerTypeIndex(),
                                                             dex_cache_, class_loader_);
         if (exception_type == nullptr) {
@@ -3138,7 +3140,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
         has_catch_all_handler = true;
       } else {
         // It is also a catch-all if it is java.lang.Throwable.
-        mirror::Class* klass = linker->ResolveType(*dex_file_, handler_type_idx, dex_cache_,
+        mirror::Class* klass = linker->ResolveType(self_, *dex_file_, handler_type_idx, dex_cache_,
                                                    class_loader_);
         if (klass != nullptr) {
           if (klass == mirror::Throwable::GetJavaLangThrowable()) {

@@ -187,14 +187,17 @@ class ClassLinker {
 
   // Resolve a String with the given index from the DexFile, storing the
   // result in the DexCache.
-  mirror::String* ResolveString(const DexFile& dex_file, uint32_t string_idx,
+  mirror::String* ResolveString(Thread* self, const DexFile& dex_file, uint32_t string_idx,
                                 Handle<mirror::DexCache> dex_cache)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Resolve a Type with the given index from the DexFile, storing the
   // result in the DexCache. The referrer is used to identity the
   // target DexCache and ClassLoader to use for resolution.
-  mirror::Class* ResolveType(const DexFile& dex_file, uint16_t type_idx, mirror::Class* referrer)
+  mirror::Class* ResolveType(Thread* self,
+                             const DexFile& dex_file,
+                             uint16_t type_idx,
+                             mirror::Class* referrer)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!dex_lock_, !Roles::uninterruptible_);
 
   // Resolve a Type with the given index from the DexFile, storing the
@@ -214,13 +217,17 @@ class ClassLinker {
                              Handle<mirror::DexCache> dex_cache,
                              Handle<mirror::ClassLoader> class_loader)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!dex_lock_, !Roles::uninterruptible_);
+  mirror::Class* ResolveType(Thread* self, const DexFile& dex_file, uint16_t type_idx,
+                             Handle<mirror::DexCache> dex_cache,
+                             Handle<mirror::ClassLoader> class_loader)
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!dex_lock_, !Roles::uninterruptible_);
 
   // Resolve a method with a given ID from the DexFile, storing the
   // result in DexCache. The ClassLinker and ClassLoader are used as
   // in ResolveType. What is unique is the method type argument which
   // is used to determine if this method is a direct, static, or
   // virtual method.
-  ArtMethod* ResolveMethod(const DexFile& dex_file, uint32_t method_idx,
+  ArtMethod* ResolveMethod(Thread* self, const DexFile& dex_file, uint32_t method_idx,
                            Handle<mirror::DexCache> dex_cache,
                            Handle<mirror::ClassLoader> class_loader, ArtMethod* referrer,
                            InvokeType type)
@@ -235,7 +242,7 @@ class ClassLinker {
       SHARED_REQUIRES(Locks::mutator_lock_);
   ArtField* GetResolvedField(uint32_t field_idx, mirror::DexCache* dex_cache)
       SHARED_REQUIRES(Locks::mutator_lock_);
-  ArtField* ResolveField(uint32_t field_idx, ArtMethod* referrer, bool is_static)
+  ArtField* ResolveField(Thread* self, uint32_t field_idx, ArtMethod* referrer, bool is_static)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!dex_lock_, !Roles::uninterruptible_);
 
   // Resolve a field with a given ID from the DexFile, storing the
@@ -244,6 +251,10 @@ class ClassLinker {
   // used to determine if we are resolving a static or non-static
   // field.
   ArtField* ResolveField(const DexFile& dex_file, uint32_t field_idx,
+                         Handle<mirror::DexCache> dex_cache,
+                         Handle<mirror::ClassLoader> class_loader, bool is_static)
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!dex_lock_, !Roles::uninterruptible_);
+  ArtField* ResolveField(Thread* self, const DexFile& dex_file, uint32_t field_idx,
                          Handle<mirror::DexCache> dex_cache,
                          Handle<mirror::ClassLoader> class_loader, bool is_static)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!dex_lock_, !Roles::uninterruptible_);
@@ -305,6 +316,8 @@ class ClassLinker {
       REQUIRES(!dex_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
 
   mirror::DexCache* FindDexCache(const DexFile& dex_file)
+      REQUIRES(!dex_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::DexCache* FindDexCache(Thread* self, const DexFile& dex_file)
       REQUIRES(!dex_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
   bool IsDexFileRegistered(const DexFile& dex_file)
       REQUIRES(!dex_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
@@ -424,13 +437,6 @@ class ClassLinker {
 
   // Set the entrypoints up for method to the enter the interpreter.
   void SetEntryPointsToInterpreter(ArtMethod* method) const
-      SHARED_REQUIRES(Locks::mutator_lock_);
-
-  // Attempts to insert a class into a class table.  Returns null if
-  // the class was inserted, otherwise returns an existing class with
-  // the same descriptor and ClassLoader.
-  mirror::Class* InsertClass(const char* descriptor, mirror::Class* klass, size_t hash)
-      REQUIRES(!Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   mirror::ObjectArray<mirror::Class>* GetClassRoots() SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -573,7 +579,7 @@ class ClassLinker {
   bool LinkSuperClass(Handle<mirror::Class> klass)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  bool LoadSuperAndInterfaces(Handle<mirror::Class> klass, const DexFile& dex_file)
+  bool LoadSuperAndInterfaces(Thread* self, Handle<mirror::Class> klass, const DexFile& dex_file)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!dex_lock_);
 
   bool LinkMethods(Thread* self, Handle<mirror::Class> klass,
@@ -637,7 +643,8 @@ class ClassLinker {
                                             size_t hash)
       SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
 
-  mirror::Class* UpdateClass(const char* descriptor, mirror::Class* klass, size_t hash)
+  mirror::Class* UpdateClass(Thread* self, const char* descriptor, mirror::Class* klass,
+                             size_t hash)
       REQUIRES(!Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -681,6 +688,16 @@ class ClassLinker {
   void UpdateClassVirtualMethods(mirror::Class* klass, ArtMethod* new_methods,
                                  size_t new_num_methods)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Locks::classlinker_classes_lock_);
+
+  // Attempts to insert a class into a class table.  Returns null if
+  // the class was inserted, otherwise returns an existing class with
+  // the same descriptor and ClassLoader.
+  mirror::Class* InsertClass(Thread* self,
+                             const char* descriptor,
+                             mirror::Class* klass,
+                             size_t hash)
+      REQUIRES(!Locks::classlinker_classes_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   std::vector<const DexFile*> boot_class_path_;
   std::vector<std::unique_ptr<const DexFile>> opened_dex_files_;

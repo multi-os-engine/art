@@ -121,7 +121,7 @@ void ArenaAllocatorStatsImpl<kCount>::Dump(std::ostream& os, const Arena* first,
 // Explicitly instantiate the used implementation.
 template class ArenaAllocatorStatsImpl<kArenaAllocatorCountAllocations>;
 
-Arena::Arena() : bytes_allocated_(0), next_(nullptr) {
+Arena::Arena() : bytes_allocated_(0), memory_(nullptr), size_(0), next_(nullptr) {
 }
 
 MallocArena::MallocArena(size_t size) {
@@ -179,8 +179,7 @@ ArenaPool::~ArenaPool() {
   }
 }
 
-Arena* ArenaPool::AllocArena(size_t size) {
-  Thread* self = Thread::Current();
+Arena* ArenaPool::AllocArena(Thread* self, size_t size) {
   Arena* ret = nullptr;
   {
     MutexLock lock(self, lock_);
@@ -216,7 +215,7 @@ size_t ArenaPool::GetBytesAllocated() const {
   return total;
 }
 
-void ArenaPool::FreeArenaChain(Arena* first) {
+void ArenaPool::FreeArenaChain(Thread* self, Arena* first) {
   if (UNLIKELY(RUNNING_ON_MEMORY_TOOL > 0)) {
     for (Arena* arena = first; arena != nullptr; arena = arena->next_) {
       MEMORY_TOOL_MAKE_UNDEFINED(arena->memory_, arena->bytes_allocated_);
@@ -227,7 +226,6 @@ void ArenaPool::FreeArenaChain(Arena* first) {
     while (last->next_ != nullptr) {
       last = last->next_;
     }
-    Thread* self = Thread::Current();
     MutexLock lock(self, lock_);
     last->next_ = free_arenas_;
     free_arenas_ = first;
@@ -270,7 +268,7 @@ void* ArenaAllocator::AllocValgrind(size_t bytes, ArenaAllocKind kind) {
   size_t rounded_bytes = RoundUp(bytes + kMemoryToolRedZoneBytes, 8);
   if (UNLIKELY(ptr_ + rounded_bytes > end_)) {
     // Obtain a new block.
-    ObtainNewArenaForAllocation(rounded_bytes);
+    ObtainNewArenaForAllocation(Thread::Current(), rounded_bytes);
     if (UNLIKELY(ptr_ == nullptr)) {
       return nullptr;
     }
@@ -289,12 +287,15 @@ void* ArenaAllocator::AllocValgrind(size_t bytes, ArenaAllocKind kind) {
 ArenaAllocator::~ArenaAllocator() {
   // Reclaim all the arenas by giving them back to the thread pool.
   UpdateBytesAllocated();
-  pool_->FreeArenaChain(arena_head_);
+  pool_->FreeArenaChain(Thread::Current(), arena_head_);
 }
 
 void ArenaAllocator::ObtainNewArenaForAllocation(size_t allocation_size) {
+  return ObtainNewArenaForAllocation(Thread::Current(), allocation_size);
+}
+void ArenaAllocator::ObtainNewArenaForAllocation(Thread* self, size_t allocation_size) {
   UpdateBytesAllocated();
-  Arena* new_arena = pool_->AllocArena(std::max(Arena::kDefaultSize, allocation_size));
+  Arena* new_arena = pool_->AllocArena(self, std::max(Arena::kDefaultSize, allocation_size));
   new_arena->next_ = arena_head_;
   arena_head_ = new_arena;
   // Update our internal data structures.

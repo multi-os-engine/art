@@ -23,9 +23,10 @@ struct CompilationUnit;
 class Mir2Lir;
 class MIRGraph;
 class ArenaAllocator;
+class Thread;
 
 Mir2Lir* ArmCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
-                          ArenaAllocator* const arena);
+                          ArenaAllocator* const arena, Thread* self);
 
 }  // namespace art
 

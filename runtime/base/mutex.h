@@ -229,11 +229,14 @@ class LOCKABLE Mutex : public BaseMutex {
   bool IsExclusiveHeld(const Thread* self) const;
 
   // Assert that the Mutex is exclusively held by the current thread.
+  inline void AssertExclusiveHeld() ASSERT_CAPABILITY(this);
+  // Assert that the Mutex is exclusively held by the given thread.
   void AssertExclusiveHeld(const Thread* self) ASSERT_CAPABILITY(this) {
     if (kDebugLocking && (gAborting == 0)) {
       CHECK(IsExclusiveHeld(self)) << *this;
     }
   }
+  inline void AssertHeld() ASSERT_CAPABILITY(this);
   void AssertHeld(const Thread* self) ASSERT_CAPABILITY(this) { AssertExclusiveHeld(self); }
 
   // Assert that the Mutex is not held by the current thread.
@@ -357,6 +360,9 @@ class SHARED_LOCKABLE ReaderWriterMutex : public BaseMutex {
       CHECK(IsSharedHeld(self) || self == nullptr) << *this;
     }
   }
+  // A version of the above that will use Thread::Current. This can avoid a Thread::Current call
+  // at the call-site in non-debug builds.
+  inline void AssertSharedHeld();
   void AssertReaderHeld(const Thread* self) { AssertSharedHeld(self); }
 
   // Assert the current thread doesn't hold this ReaderWriterMutex either in shared or exclusive

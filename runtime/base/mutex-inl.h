@@ -24,7 +24,7 @@
 #include "base/stringprintf.h"
 #include "base/value_object.h"
 #include "runtime.h"
-#include "thread.h"
+#include "thread-inl.h"
 #include "utils.h"
 
 #if ART_USE_FUTEXES
@@ -175,6 +175,14 @@ inline void ReaderWriterMutex::SharedUnlock(Thread* self) {
 #endif
 }
 
+inline void ReaderWriterMutex::AssertSharedHeld() {
+  if (kDebugLocking && (gAborting == 0)) {
+    // TODO: we can only assert this well when self != null.
+    Thread* self = Thread::Current();
+    CHECK(IsSharedHeld(self) || self == nullptr) << *this;
+  }
+}
+
 inline bool Mutex::IsExclusiveHeld(const Thread* self) const {
   DCHECK(self == nullptr || self == Thread::Current());
   bool result = (GetExclusiveOwnerTid() == SafeGetTid(self));
@@ -189,6 +197,16 @@ inline bool Mutex::IsExclusiveHeld(const Thread* self) const {
 
 inline uint64_t Mutex::GetExclusiveOwnerTid() const {
   return exclusive_owner_;
+}
+
+// Assert that the Mutex is exclusively held by the current thread.
+inline void Mutex::AssertExclusiveHeld() {
+  if (kDebugLocking && (gAborting == 0)) {
+    CHECK(IsExclusiveHeld(Thread::Current())) << *this;
+  }
+}
+inline void Mutex::AssertHeld() {
+  AssertExclusiveHeld();
 }
 
 inline bool ReaderWriterMutex::IsExclusiveHeld(const Thread* self) const {

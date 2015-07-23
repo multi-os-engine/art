@@ -40,6 +40,8 @@
 
 namespace art {
 
+class Thread;
+
 // Write a Space built during compilation for use during execution.
 class ImageWriter FINAL {
  public:
@@ -175,8 +177,9 @@ class ImageWriter FINAL {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void PrepareDexCacheArraySlots() SHARED_REQUIRES(Locks::mutator_lock_);
-  void AssignImageBinSlot(mirror::Object* object) SHARED_REQUIRES(Locks::mutator_lock_);
-  void SetImageBinSlot(mirror::Object* object, BinSlot bin_slot)
+  void AssignImageBinSlot(Thread* self, mirror::Object* object)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  void SetImageBinSlot(Thread* self, mirror::Object* object, BinSlot bin_slot)
       SHARED_REQUIRES(Locks::mutator_lock_);
   bool IsImageBinSlotAssigned(mirror::Object* object) const
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -242,14 +245,14 @@ class ImageWriter FINAL {
       SHARED_REQUIRES(Locks::mutator_lock_);
   mirror::ObjectArray<mirror::Object>* CreateImageRoots() const
       SHARED_REQUIRES(Locks::mutator_lock_);
-  void CalculateObjectBinSlots(mirror::Object* obj)
+  void CalculateObjectBinSlots(Thread* self, mirror::Object* obj)
       SHARED_REQUIRES(Locks::mutator_lock_);
   void UnbinObjectsIntoOffset(mirror::Object* obj)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  void WalkInstanceFields(mirror::Object* obj, mirror::Class* klass)
+  void WalkInstanceFields(Thread* self, mirror::Object* obj, mirror::Class* klass)
       SHARED_REQUIRES(Locks::mutator_lock_);
-  void WalkFieldsInOrder(mirror::Object* obj)
+  void WalkFieldsInOrder(Thread* self, mirror::Object* obj)
       SHARED_REQUIRES(Locks::mutator_lock_);
   static void WalkFieldsCallback(mirror::Object* obj, void* arg)
       SHARED_REQUIRES(Locks::mutator_lock_);

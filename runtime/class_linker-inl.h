@@ -18,6 +18,7 @@
 #define ART_RUNTIME_CLASS_LINKER_INL_H_
 
 #include "art_field.h"
+#include "base/mutex-inl.h"
 #include "class_linker.h"
 #include "gc_root-inl.h"
 #include "gc/heap-inl.h"
@@ -68,7 +69,7 @@ inline mirror::String* ClassLinker::ResolveString(uint32_t string_idx,
     StackHandleScope<1> hs(Thread::Current());
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
     const DexFile& dex_file = *dex_cache->GetDexFile();
-    resolved_string = ResolveString(dex_file, string_idx, dex_cache);
+    resolved_string = ResolveString(Thread::Current(), dex_file, string_idx, dex_cache);
     if (resolved_string != nullptr) {
       DCHECK_EQ(dex_cache->GetResolvedString(string_idx), resolved_string);
     }
@@ -126,8 +127,8 @@ inline ArtMethod* ClassLinker::ResolveMethod(Thread* self, uint32_t method_idx,
     Handle<mirror::DexCache> h_dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
     Handle<mirror::ClassLoader> h_class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
     const DexFile* dex_file = h_dex_cache->GetDexFile();
-    resolved_method = ResolveMethod(*dex_file, method_idx, h_dex_cache, h_class_loader, referrer,
-                                    type);
+    resolved_method = ResolveMethod(self, *dex_file, method_idx, h_dex_cache, h_class_loader,
+                                    referrer, type);
   }
   // Note: We cannot check here to see whether we added the method to the cache. It
   //       might be an erroneous class, which results in it being hidden from us.
@@ -143,16 +144,16 @@ inline ArtField* ClassLinker::GetResolvedField(
   return GetResolvedField(field_idx, field_declaring_class->GetDexCache());
 }
 
-inline ArtField* ClassLinker::ResolveField(uint32_t field_idx, ArtMethod* referrer,
+inline ArtField* ClassLinker::ResolveField(Thread* self, uint32_t field_idx, ArtMethod* referrer,
                                            bool is_static) {
   mirror::Class* declaring_class = referrer->GetDeclaringClass();
   ArtField* resolved_field = GetResolvedField(field_idx, declaring_class);
   if (UNLIKELY(resolved_field == nullptr)) {
-    StackHandleScope<2> hs(Thread::Current());
+    StackHandleScope<2> hs(self);
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
     Handle<mirror::ClassLoader> class_loader(hs.NewHandle(declaring_class->GetClassLoader()));
     const DexFile& dex_file = *dex_cache->GetDexFile();
-    resolved_field = ResolveField(dex_file, field_idx, dex_cache, class_loader, is_static);
+    resolved_field = ResolveField(self, dex_file, field_idx, dex_cache, class_loader, is_static);
     // Note: We cannot check here to see whether we added the field to the cache. The type
     //       might be an erroneous class, which results in it being hidden from us.
   }
@@ -196,7 +197,7 @@ inline mirror::Class* ClassLinker::GetClassRoot(ClassRoot class_root)
 }
 
 inline mirror::DexCache* ClassLinker::GetDexCache(size_t idx) {
-  dex_lock_.AssertSharedHeld(Thread::Current());
+  dex_lock_.AssertSharedHeld();
   DCHECK(idx < dex_caches_.size());
   return dex_caches_[idx].Read();
 }

@@ -348,7 +348,7 @@ static inline String* ResolveString(Thread* self, ShadowFrame& shadow_frame, uin
   if (UNLIKELY(s == nullptr)) {
     StackHandleScope<1> hs(self);
     Handle<mirror::DexCache> dex_cache(hs.NewHandle(declaring_class->GetDexCache()));
-    s = Runtime::Current()->GetClassLinker()->ResolveString(*method->GetDexFile(), string_idx,
+    s = Runtime::Current()->GetClassLinker()->ResolveString(self, *method->GetDexFile(), string_idx,
                                                             dex_cache);
   }
   return s;

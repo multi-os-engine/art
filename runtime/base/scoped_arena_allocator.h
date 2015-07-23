@@ -27,6 +27,7 @@ namespace art {
 
 class ArenaStack;
 class ScopedArenaAllocator;
+class Thread;
 
 template <typename T>
 class ScopedArenaAllocatorAdapter;
@@ -37,7 +38,7 @@ class ArenaStack : private DebugStackRefCounter {
   explicit ArenaStack(ArenaPool* arena_pool);
   ~ArenaStack();
 
-  void Reset();
+  void Reset(Thread* self);
 
   size_t PeakBytesAllocated() {
     return PeakStats()->BytesAllocated();

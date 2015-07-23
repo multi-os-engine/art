@@ -35,6 +35,7 @@
 #include "leb128.h"
 #include "pass_driver_me_post_opt.h"
 #include "stack.h"
+#include "thread-inl.h"
 #include "utils.h"
 
 namespace art {
@@ -80,7 +81,7 @@ const char* MIRGraph::extended_mir_op_names_[kMirOpLast - kMirOpFirst] = {
   "MsubLong",
 };
 
-MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
+MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena, Thread* self)
     : reg_location_(nullptr),
       block_id_map_(std::less<unsigned int>(), arena->Adapter()),
       cu_(cu),
@@ -136,7 +137,8 @@ MIRGraph::MIRGraph(CompilationUnit* cu, ArenaAllocator* arena)
       ifield_lowering_infos_(arena->Adapter(kArenaAllocLoweringInfo)),
       sfield_lowering_infos_(arena->Adapter(kArenaAllocLoweringInfo)),
       method_lowering_infos_(arena->Adapter(kArenaAllocLoweringInfo)),
-      suspend_checks_in_loops_(nullptr) {
+      suspend_checks_in_loops_(nullptr),
+      self_(self) {
   memset(&temp_, 0, sizeof(temp_));
   use_counts_.reserve(256);
   raw_use_counts_.reserve(256);
@@ -708,7 +710,7 @@ void MIRGraph::InlineMethod(const DexFile::CodeItem* code_item, uint32_t access_
   m_units_.push_back(new (arena_) DexCompilationUnit(
       cu_, class_loader, Runtime::Current()->GetClassLinker(), dex_file,
       current_code_item_, class_def_idx, method_idx, access_flags,
-      cu_->compiler_driver->GetVerifiedMethod(&dex_file, method_idx)));
+      cu_->compiler_driver->GetVerifiedMethod(&dex_file, method_idx, self_)));
   const uint16_t* code_ptr = current_code_item_->insns_;
   const uint16_t* code_end =
       current_code_item_->insns_ + current_code_item_->insns_size_in_code_units_;

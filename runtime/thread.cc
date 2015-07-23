@@ -89,6 +89,7 @@ bool Thread::is_started_ = false;
 pthread_key_t Thread::pthread_key_self_;
 ConditionVariable* Thread::resume_cond_ = nullptr;
 const size_t Thread::kStackOverflowImplicitCheckSize = GetStackOverflowReservedBytes(kRuntimeISA);
+AtomicInteger Thread::current_counter_(0);
 
 // For implicit overflow checks we reserve an extra piece of memory at the bottom
 // of the stack (lowest memory).  The higher portion of the memory
@@ -2738,6 +2739,27 @@ size_t Thread::NumberOfHeldMutexes() const {
     count += static_cast<size_t>(mu != nullptr);
   }
   return count;
+}
+
+Thread* Thread::Current() {
+  // We rely on Thread::Current returning null for a detached thread, so it's not obvious
+  // that we can replace this with a direct %fs access on x86.
+  if (!is_started_) {
+    return nullptr;
+  } else {
+    int32_t i = current_counter_.FetchAndAddSequentiallyConsistent(1);
+    UNUSED(i);
+    void* thread = pthread_getspecific(Thread::pthread_key_self_);
+    if (i > 2700 && i < 361000) {
+      Thread* self = reinterpret_cast<Thread*>(thread);
+      if (self != nullptr) {
+        std::ostringstream oss;
+        DumpNativeStack(oss, self->GetTid(), "Thread::Current() ");
+        LogMessage::LogLine(__FILE__, __LINE__, LogSeverity::DEBUG, oss.str().c_str());
+      }
+    }
+    return reinterpret_cast<Thread*>(thread);
+  }
 }
 
 }  // namespace art

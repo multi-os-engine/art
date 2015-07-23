@@ -1273,7 +1273,10 @@ void EncodedStaticFieldValueIterator::ReadValueToField(ArtField* field) const {
     case kDouble:  field->SetDouble<kTransactionActive>(field->GetDeclaringClass(), jval_.d); break;
     case kNull:    field->SetObject<kTransactionActive>(field->GetDeclaringClass(), nullptr); break;
     case kString: {
-      mirror::String* resolved = linker_->ResolveString(dex_file_, jval_.i, *dex_cache_);
+      mirror::String* resolved = linker_->ResolveString(Thread::Current(),
+                                                        dex_file_,
+                                                        jval_.i,
+                                                        *dex_cache_);
       field->SetObject<kTransactionActive>(field->GetDeclaringClass(), resolved);
       break;
     }

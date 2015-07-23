@@ -67,8 +67,8 @@ void CumulativeLogger::Reset() {
   STLDeleteElements(&histograms_);
 }
 
-void CumulativeLogger::AddLogger(const TimingLogger &logger) {
-  MutexLock mu(Thread::Current(), lock_);
+void CumulativeLogger::AddLogger(Thread* self, const TimingLogger &logger) {
+  MutexLock mu(self, lock_);
   TimingLogger::TimingData timing_data(logger.CalculateTimingData());
   const std::vector<TimingLogger::Timing>& timings = logger.GetTimings();
   for (size_t i = 0; i < timings.size(); ++i) {
