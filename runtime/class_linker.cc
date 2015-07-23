@@ -30,6 +30,7 @@
 #include "base/arena_allocator.h"
 #include "base/casts.h"
 #include "base/logging.h"
+#include "base/out.h"
 #include "base/scoped_arena_containers.h"
 #include "base/scoped_flock.h"
 #include "base/stl_util.h"
@@ -4995,7 +4996,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass
       StrideIterator<ArtMethod> out(reinterpret_cast<uintptr_t>(virtuals), method_size);
       // Copy over the old methods + miranda methods.
       for (auto& m : klass->GetVirtualMethods(image_pointer_size_)) {
-        move_table.emplace(&m, &*out);
+        move_table.emplace(&m, outof_iterator(out));
         // The CopyFrom is only necessary to not miss read barriers since Realloc won't do read
         // barriers when it copies.
         out->CopyFrom(&m, image_pointer_size_);
@@ -5009,7 +5010,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass
     for (ArtMethod* mir_method : miranda_methods) {
       out->CopyFrom(mir_method, image_pointer_size_);
       out->SetAccessFlags(out->GetAccessFlags() | kAccMiranda);
-      move_table.emplace(mir_method, &*out);
+      move_table.emplace(mir_method, outof_iterator(out));
       ++out;
     }
     UpdateClassVirtualMethods(klass.Get(), virtuals, new_method_count);
@@ -5031,7 +5032,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass
     for (size_t i = old_method_count; i < new_method_count; ++i) {
       // Leave the declaring class alone as type indices are relative to it
       out->SetMethodIndex(0xFFFF & vtable_pos);
-      vtable->SetElementPtrSize(vtable_pos, &*out, image_pointer_size_);
+      vtable->SetElementPtrSize(vtable_pos, std::addressof(*out), image_pointer_size_);
       ++out;
       ++vtable_pos;
     }
