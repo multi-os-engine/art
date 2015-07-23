@@ -18,6 +18,7 @@
 
 #include "base/allocator.h"
 #include "base/hash_map.h"
+#include "base/out.h"
 #include "gc_root.h"
 #include "base/macros.h"
 #include "base/mutex.h"
@@ -52,7 +53,7 @@ class BoxTable FINAL {
       LOCKS_EXCLUDED(Locks::lambda_table_lock_);
 
   // Unboxes an object back into the lambda. Returns false and throws an exception on failure.
-  bool UnboxLambda(mirror::Object* object, ClosureType* out_closure)
+  bool UnboxLambda(mirror::Object* object, out<ClosureType> out_closure)
       SHARED_LOCKS_REQUIRED(Locks::mutator_lock_);
 
   // Sweep weak references to lambda boxes. Update the addresses if the objects have been
