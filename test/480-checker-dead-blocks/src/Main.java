@@ -22,11 +22,11 @@ public class Main {
     }
   }
 
-  public static boolean inlineTrue() {
+  public static boolean $inline$True() {
     return true;
   }
 
-  public static boolean inlineFalse() {
+  public static boolean $inline$False() {
     return false;
   }
 
@@ -52,7 +52,7 @@ public class Main {
 
   public static int testTrueBranch(int x, int y) {
     int z;
-    if (inlineTrue()) {
+    if ($inline$True()) {
       z = x + y;
     } else {
       z = x - y;
@@ -82,7 +82,7 @@ public class Main {
 
   public static int testFalseBranch(int x, int y) {
     int z;
-    if (inlineFalse()) {
+    if ($inline$False()) {
       z = x + y;
     } else {
       z = x - y;
@@ -97,7 +97,7 @@ public class Main {
   /// CHECK-NOT:                      Mul
 
   public static int testRemoveLoop(int x) {
-    if (inlineFalse()) {
+    if ($inline$False()) {
       for (int i = 0; i < x; ++i) {
         x *= x;
       }
@@ -114,7 +114,7 @@ public class Main {
   /// CHECK-NOT:                      Exit
 
   public static int testInfiniteLoop(int x) {
-    while (inlineTrue()) {
+    while ($inline$True()) {
       x++;
     }
     return x;
@@ -133,7 +133,7 @@ public class Main {
   /// CHECK-NOT:                      Add
 
   public static int testDeadLoop(int x) {
-    while (inlineFalse()) {
+    while ($inline$False()) {
       x++;
     }
     return x;
@@ -155,7 +155,7 @@ public class Main {
   public static int testUpdateLoopInformation(int x) {
     // Use of Or in the condition generates a dead loop where not all of its
     // blocks are removed. This forces DCE to update their loop information.
-    while (inlineFalse() || !inlineTrue()) {
+    while ($inline$False() || !$inline$True()) {
       x++;
     }
     return x;
@@ -176,7 +176,7 @@ public class Main {
     // Inner loop will leave behind the header with its SuspendCheck. DCE must
     // remove it, otherwise the outer loop would end up with two.
     while (y > 0) {
-      while (inlineFalse() || !inlineTrue()) {
+      while ($inline$False() || !$inline$True()) {
         x++;
       }
       y--;

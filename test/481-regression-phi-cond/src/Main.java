@@ -22,7 +22,7 @@ public class Main {
     }
   }
 
-  public static boolean inlinePhi(boolean x, boolean y, boolean z) {
+  public static boolean $inline$Phi(boolean x, boolean y, boolean z) {
     boolean phi;
     if (z) {
       phi = x;
@@ -38,7 +38,7 @@ public class Main {
 
   public static boolean testCase(boolean x, boolean y, boolean z) {
     // First create a Phi(x, y).
-    boolean phi = inlinePhi(x, y, z);
+    boolean phi = $inline$Phi(x, y, z);
     // Now use the phi as a condition which the boolean simplifier will try to
     // optimize out. If the result is not used, the algorithm will try to remove
     // the original condition (phi) and crash.

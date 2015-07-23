@@ -29,9 +29,9 @@ public class ZeroTests {
     private static void longTest(String name, boolean divide) throws Exception {
       try {
         if (divide) {
-          longDiv(1, 0);
+          $noinline$LongDiv(1, 0);
         } else {
-          longMod(1, 0);
+          $noinline$LongMod(1, 0);
         }
         throw new AssertionError(name + " failed to throw");
       } catch (ArithmeticException expected) {
@@ -39,11 +39,11 @@ public class ZeroTests {
       }
     }
 
-    private static long longDiv(long lhs, long rhs) {
+    private static long $noinline$LongDiv(long lhs, long rhs) {
       return lhs / rhs;
     }
 
-    private static long longMod(long lhs, long rhs) {
+    private static long $noinline$LongMod(long lhs, long rhs) {
       return lhs % rhs;
     }
 }

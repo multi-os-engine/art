@@ -18,25 +18,43 @@
 public class Main {
 
   public static void main(String[] args) {
-    assertEqual(4, add3(1));
-    assertEqual(4l, add3(1l));
-    assertEqual(4f, add3(1f));
-    assertEqual(4d, add3(1d));
+    assertEqual(4, $opt$noinline$add3(1));
+    assertEqual(4l, $opt$noinline$add3(1l));
+    assertEqual(4f, $opt$noinline$add3(1f));
+    assertEqual(4d, $opt$noinline$add3(1d));
   }
 
-  public static int add3(int a) {
+  static boolean doThrow = false;
+
+  public static int $opt$noinline$add3(int a) {
+    if (doThrow) {
+      // Try defeating inlining.
+      throw new Error();
+    }
     return 1 + a + 2;
   }
 
-  public static long add3(long a) {
+  public static long $opt$noinline$add3(long a) {
+    if (doThrow) {
+      // Try defeating inlining.
+      throw new Error();
+    }
     return 1l + a + 2l;
   }
 
-  public static float add3(float a) {
+  public static float $opt$noinline$add3(float a) {
+    if (doThrow) {
+      // Try defeating inlining.
+      throw new Error();
+    }
     return 1f + a + 2f;
   }
 
-  public static double add3(double a) {
+  public static double $opt$noinline$add3(double a) {
+    if (doThrow) {
+      // Try defeating inlining.
+      throw new Error();
+    }
     return 1d + a + 2d;
   }
 
