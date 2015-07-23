@@ -454,16 +454,22 @@ endif
 
 TEST_ART_BROKEN_DEFAULT_RUN_TESTS :=
 
-# Known broken tests for the arm64 optimizing compiler backend.
-TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS :=
+# Known broken tests on non-x86 and non-x86_64 optimizing compiler backends.
+TEST_ART_BROKEN_OPTIMIZING_NON_X86_RUN_TESTS := \
+  482-checker-loop-back-edge-use
 
 ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
   ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUILD_TYPES), \
       optimizing,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
-      $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES),$(TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS),64)
+      $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES),$(TEST_ART_BROKEN_OPTIMIZING_NON_X86_RUN_TESTS),64)
+endif
+ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
+  ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUILD_TYPES), \
+      optimizing,$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES), \
+      $(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES),$(TEST_ART_BROKEN_OPTIMIZING_NON_X86_RUN_TESTS),32)
 endif
 
-TEST_ART_BROKEN_OPTIMIZING_ARM64_RUN_TESTS :=
+TEST_ART_BROKEN_OPTIMIZING_NON_X86_RUN_TESTS :=
 
 # Known broken tests for the optimizing compiler.
 TEST_ART_BROKEN_OPTIMIZING_RUN_TESTS :=

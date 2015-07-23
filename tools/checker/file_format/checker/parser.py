@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from common.archs               import archs_list
 from common.logger              import Logger
 from file_format.common         import SplitStream
 from file_format.checker.struct import CheckerFile, TestCase, TestAssertion, RegexExpression
@@ -21,11 +22,17 @@ import re
 def __isCheckerLine(line):
   return line.startswith("///") or line.startswith("##")
 
-def __extractLine(prefix, line):
+def __extractLine(check_prefix, check_type, line, targetArch):
   """ Attempts to parse a check line. The regex searches for a comment symbol
       followed by the CHECK keyword, given attribute and a colon at the very
       beginning of the line. Whitespaces are ignored.
   """
+  prefix = check_prefix
+  # The architecture specifier is optional.
+  arch = r"(-(" + r"|".join(archs_list) + r"))"
+  prefix += arch + r"?"
+  if check_type is not None:
+    prefix += '-' + check_type
   rIgnoreWhitespace = r"\s*"
   rCommentSymbols = [r"///", r"##"]
   regexPrefix = rIgnoreWhitespace + \
@@ -36,12 +43,21 @@ def __extractLine(prefix, line):
   # The 'match' function succeeds only if the pattern is matched at the
   # beginning of the line.
   match = re.match(regexPrefix, line)
+  # The function returns a tuple. The first value indicates whether the line
+  # should be ignored by the parser because it does not match the target
+  # architecture to be tested. The second value in the tuple is the text on the
+  # right of the prefix.
   if match is not None:
-    return line[match.end():].strip()
+    testArch = match.groups()[2]
+    if testArch is not None and testArch != targetArch:
+      # Ignore this line, and do not raise a parsing error.
+      return True, None
+    else:
+      return False, line[match.end():].strip()
   else:
-    return None
+    return False, None
 
-def __processLine(line, lineNo, prefix, fileName):
+def __processLine(line, lineNo, prefix, fileName, targetArch):
   """ This function is invoked on each line of the check file and returns a pair
       which instructs the parser how the line should be handled. If the line is
       to be included in the current check group, it is returned in the first
@@ -52,27 +68,37 @@ def __processLine(line, lineNo, prefix, fileName):
     return None, None
 
   # Lines beginning with 'CHECK-START' start a new test case.
-  startLine = __extractLine(prefix + "-START", line)
+  ignoreMatchedLine, startLine = __extractLine(prefix, "START", line, targetArch)
+  if ignoreMatchedLine:
+    return None, None
   if startLine is not None:
     return None, startLine
 
   # Lines starting only with 'CHECK' are matched in order.
-  plainLine = __extractLine(prefix, line)
+  ignoreMatchedLine, plainLine = __extractLine(prefix, None, line, targetArch)
+  if ignoreMatchedLine:
+    return None, None
   if plainLine is not None:
     return (plainLine, TestAssertion.Variant.InOrder, lineNo), None
 
   # 'CHECK-NEXT' lines are in-order but must match the very next line.
-  nextLine = __extractLine(prefix + "-NEXT", line)
+  ignoreMatchedLine, nextLine = __extractLine(prefix, "NEXT", line, targetArch)
+  if ignoreMatchedLine:
+    return None, None
   if nextLine is not None:
     return (nextLine, TestAssertion.Variant.NextLine, lineNo), None
 
   # 'CHECK-DAG' lines are no-order assertions.
-  dagLine = __extractLine(prefix + "-DAG", line)
+  ignoreMatchedLine, dagLine = __extractLine(prefix, "DAG", line, targetArch)
+  if ignoreMatchedLine:
+    return None, None
   if dagLine is not None:
     return (dagLine, TestAssertion.Variant.DAG, lineNo), None
 
   # 'CHECK-NOT' lines are no-order negative assertions.
-  notLine = __extractLine(prefix + "-NOT", line)
+  ignoreMatchedLine, notLine = __extractLine(prefix, "NOT", line, targetArch)
+  if ignoreMatchedLine:
+    return None, None
   if notLine is not None:
     return (notLine, TestAssertion.Variant.Not, lineNo), None
 
@@ -141,9 +167,9 @@ def ParseCheckerAssertion(parent, line, variant, lineNo):
       assertion.addExpression(RegexExpression.createText(text))
   return assertion
 
-def ParseCheckerStream(fileName, prefix, stream):
+def ParseCheckerStream(fileName, prefix, stream, targetArch = None):
   checkerFile = CheckerFile(fileName)
-  fnProcessLine = lambda line, lineNo: __processLine(line, lineNo, prefix, fileName)
+  fnProcessLine = lambda line, lineNo: __processLine(line, lineNo, prefix, fileName, targetArch)
   fnLineOutsideChunk = lambda line, lineNo: \
       Logger.fail("Checker line not inside a group", fileName, lineNo)
   for caseName, caseLines, startLineNo in SplitStream(stream, fnProcessLine, fnLineOutsideChunk):
