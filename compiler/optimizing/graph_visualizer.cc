@@ -350,6 +350,14 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
   void VisitPhi(HPhi* phi) OVERRIDE {
     StartAttributeStream("reg") << phi->GetRegNumber();
     StartAttributeStream("is_catch_phi") << std::boolalpha << phi->IsCatchPhi() << std::noboolalpha;
+    if (phi->IsCatchPhi()) {
+      StringList throwers;
+      for (size_t i = 0, e = phi->GetBlock()->GetExceptionalPredecessors().Size(); i < e; ++i) {
+        HInstruction* thrower = phi->GetBlock()->GetExceptionalPredecessors().Get(i);
+        throwers.NewEntryStream() << GetTypeId(thrower->GetType()) << thrower->GetId();
+      }
+      StartAttributeStream("throwers") << throwers;
+    }
   }
 
   void VisitMemoryBarrier(HMemoryBarrier* barrier) OVERRIDE {
@@ -612,7 +620,11 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     PrintSuccessors(block);
     PrintExceptionHandlers(block);
 
-    if (block->IsCatchBlock()) {
+    if (block->IsInTry() && block->IsCatchBlock()) {
+      PrintProperty("flags", "try_block,catch_block");
+    } else if (block->IsInTry()) {
+      PrintProperty("flags", "try_block");
+    } else if (block->IsCatchBlock()) {
       PrintProperty("flags", "catch_block");
     } else {
       PrintEmptyProperty("flags");

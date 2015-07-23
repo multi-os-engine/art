@@ -69,6 +69,9 @@ class DivZeroCheckSlowPathX86 : public SlowPathCodeX86 {
 
   void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
     __ Bind(GetEntryLabel());
+    if (instruction_->GetBlock()->IsInTry()) {
+      SaveLiveRegisters(codegen, instruction_->GetLocations());
+    }
     __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pThrowDivZero)));
     RecordPcInfo(codegen, instruction_, instruction_->GetDexPc());
   }
