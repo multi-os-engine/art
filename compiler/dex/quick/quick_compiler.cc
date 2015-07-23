@@ -652,7 +652,8 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
                                        uint16_t class_def_idx,
                                        uint32_t method_idx,
                                        jobject class_loader,
-                                       const DexFile& dex_file) const {
+                                       const DexFile& dex_file,
+                                       Thread* self) const {
   if (kPoisonHeapReferences) {
     VLOG(compiler) << "Skipping method : " << PrettyMethod(method_idx, dex_file)
                    << "  Reason = Quick does not support heap poisoning.";
@@ -668,7 +669,7 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
     return nullptr;
   }
 
-  if (driver->GetVerifiedMethod(&dex_file, method_idx)->HasRuntimeThrow()) {
+  if (driver->GetVerifiedMethod(&dex_file, method_idx, self)->HasRuntimeThrow()) {
     return nullptr;
   }
 
@@ -725,14 +726,14 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
   InitCompilationUnit(cu);
 
   cu.StartTimingSplit("BuildMIRGraph");
-  cu.mir_graph.reset(new MIRGraph(&cu, &cu.arena));
+  cu.mir_graph.reset(new MIRGraph(&cu, &cu.arena, self));
 
   /*
    * After creation of the MIR graph, also create the code generator.
    * The reason we do this is that optimizations on the MIR graph may need to get information
    * that is only available if a CG exists.
    */
-  cu.cg.reset(GetCodeGenerator(&cu, nullptr));
+  cu.cg.reset(GetCodeGenerator(&cu, nullptr, self));
 
   /* Gathering opcode stats? */
   if (kCompilerDebugFlags & (1 << kDebugCountOpcodes)) {
@@ -840,25 +841,27 @@ uintptr_t QuickCompiler::GetEntryPointOf(ArtMethod* method) const {
       InstructionSetPointerSize(GetCompilerDriver()->GetInstructionSet())));
 }
 
-Mir2Lir* QuickCompiler::GetCodeGenerator(CompilationUnit* cu, void* compilation_unit) {
+Mir2Lir* QuickCompiler::GetCodeGenerator(CompilationUnit* cu,
+                                         void* compilation_unit,
+                                         Thread* self) {
   UNUSED(compilation_unit);
   Mir2Lir* mir_to_lir = nullptr;
   switch (cu->instruction_set) {
     case kThumb2:
-      mir_to_lir = ArmCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+      mir_to_lir = ArmCodeGenerator(cu, cu->mir_graph.get(), &cu->arena, self);
       break;
     case kArm64:
-      mir_to_lir = Arm64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+      mir_to_lir = Arm64CodeGenerator(cu, cu->mir_graph.get(), &cu->arena, self);
       break;
     case kMips:
       // Fall-through.
     case kMips64:
-      mir_to_lir = MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+      mir_to_lir = MipsCodeGenerator(cu, cu->mir_graph.get(), &cu->arena, self);
       break;
     case kX86:
       // Fall-through.
     case kX86_64:
-      mir_to_lir = X86CodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
+      mir_to_lir = X86CodeGenerator(cu, cu->mir_graph.get(), &cu->arena, self);
       break;
     default:
       LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;

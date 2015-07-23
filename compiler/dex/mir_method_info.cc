@@ -33,7 +33,9 @@ namespace art {
 
 void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
                                     const DexCompilationUnit* mUnit,
-                                    MirMethodLoweringInfo* method_infos, size_t count) {
+                                    MirMethodLoweringInfo* method_infos,
+                                    size_t count,
+                                    Thread* self) {
   if (kIsDebugBuild) {
     DCHECK(method_infos != nullptr);
     DCHECK_NE(count, 0u);
@@ -53,7 +55,7 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
 
   // We're going to resolve methods and check access in a tight loop. It's better to hold
   // the lock and needed references once than re-acquiring them again and again.
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self);
   StackHandleScope<4> hs(soa.Self());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(compiler_driver->GetDexCache(mUnit)));
   Handle<mirror::ClassLoader> class_loader(
@@ -69,7 +71,7 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
   const VerifiedMethod* const verified_method = mUnit->GetVerifiedMethod();
   DexFileToMethodInlinerMap* inliner_map = compiler_driver->GetMethodInlinerMap();
   DexFileMethodInliner* default_inliner =
-      (inliner_map != nullptr) ? inliner_map->GetMethodInliner(dex_file) : nullptr;
+      (inliner_map != nullptr) ? inliner_map->GetMethodInliner(dex_file, self) : nullptr;
 
   for (auto it = method_infos, end = method_infos + count; it != end; ++it) {
     // For quickened invokes, the dex method idx is actually the mir offset.
@@ -86,7 +88,7 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
     ArtMethod* resolved_method = nullptr;
 
     bool string_init = false;
-    if (default_inliner->IsStringInitMethodIndex(it->MethodIndex())) {
+    if (default_inliner->IsStringInitMethodIndex(it->MethodIndex(), self)) {
       string_init = true;
       invoke_type = kDirect;
     }
@@ -161,8 +163,9 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
     if (inliner_map != nullptr) {
       auto* inliner = (target_method.dex_file == dex_file)
           ? default_inliner
-          : inliner_map->GetMethodInliner(target_method.dex_file);
-      is_intrinsic_or_special = inliner->IsIntrinsicOrSpecial(target_method.dex_method_index);
+          : inliner_map->GetMethodInliner(target_method.dex_file, self);
+      is_intrinsic_or_special = inliner->IsIntrinsicOrSpecial(target_method.dex_method_index,
+                                                              self);
     }
 
     uint16_t other_flags = it->flags_ &

@@ -23,17 +23,18 @@
 namespace art {
 
 bool QuickCompilerCallbacks::MethodVerified(verifier::MethodVerifier* verifier) {
-  bool result = verification_results_->ProcessVerifiedMethod(verifier);
+  Thread* self = Thread::Current();
+  bool result = verification_results_->ProcessVerifiedMethod(verifier, self);
   if (result) {
     MethodReference ref = verifier->GetMethodReference();
-    method_inliner_map_->GetMethodInliner(ref.dex_file)
-        ->AnalyseMethodCode(verifier);
+    method_inliner_map_->GetMethodInliner(ref.dex_file, self)
+        ->AnalyseMethodCode(verifier, self);
   }
   return result;
 }
 
 void QuickCompilerCallbacks::ClassRejected(ClassReference ref) {
-  verification_results_->AddRejectedClass(ref);
+  verification_results_->AddRejectedClass(ref, Thread::Current());
 }
 
 }  // namespace art

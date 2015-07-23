@@ -46,10 +46,12 @@ class DexCompiler {
  public:
   DexCompiler(art::CompilerDriver& compiler,
               const DexCompilationUnit& unit,
-              DexToDexCompilationLevel dex_to_dex_compilation_level)
+              DexToDexCompilationLevel dex_to_dex_compilation_level,
+              Thread* self)
     : driver_(compiler),
       unit_(unit),
-      dex_to_dex_compilation_level_(dex_to_dex_compilation_level) {}
+      dex_to_dex_compilation_level_(dex_to_dex_compilation_level),
+      self_(self) {}
 
   ~DexCompiler() {}
 
@@ -103,6 +105,8 @@ class DexCompiler {
   // in the .oat file. The runtime will use that information to get to the original
   // opcodes.
   std::vector<QuickenedInfo> quickened_info_;
+
+  Thread* self_;
 
   DISALLOW_COPY_AND_ASSIGN(DexCompiler);
 };
@@ -201,8 +205,7 @@ void DexCompiler::CompileReturnVoid(Instruction* inst, uint32_t dex_pc) {
   if (unit_.IsConstructor()) {
     // Are we compiling a non clinit constructor which needs a barrier ?
     if (!unit_.IsStatic() &&
-        driver_.RequiresConstructorBarrier(Thread::Current(), unit_.GetDexFile(),
-                                           unit_.GetClassDefIndex())) {
+        driver_.RequiresConstructorBarrier(self_, unit_.GetDexFile(), unit_.GetClassDefIndex())) {
       return;
     }
   }
@@ -252,7 +255,7 @@ void DexCompiler::CompileInstanceFieldAccess(Instruction* inst,
   uint32_t field_idx = inst->VRegC_22c();
   MemberOffset field_offset(0u);
   bool is_volatile;
-  bool fast_path = driver_.ComputeInstanceFieldInfo(field_idx, &unit_, is_put,
+  bool fast_path = driver_.ComputeInstanceFieldInfo(field_idx, &unit_, is_put, self_,
                                                     &field_offset, &is_volatile);
   if (fast_path && !is_volatile && IsUint<16>(field_offset.Int32Value())) {
     VLOG(compiler) << "Quickening " << Instruction::Name(inst->Opcode())
@@ -285,6 +288,7 @@ void DexCompiler::CompileInvokeVirtual(Instruction* inst, uint32_t dex_pc,
   const bool kEnableDevirtualization = false;
   bool fast_path = driver_.ComputeInvokeInfo(&unit_, dex_pc,
                                              false, kEnableDevirtualization,
+                                             self_,
                                              &invoke_type,
                                              &target_method, &vtable_idx,
                                              &direct_code, &direct_method);
@@ -319,12 +323,13 @@ extern "C" CompiledMethod* ArtCompileDEX(
     uint32_t method_idx,
     jobject class_loader,
     const art::DexFile& dex_file,
-    art::DexToDexCompilationLevel dex_to_dex_compilation_level) {
+    art::DexToDexCompilationLevel dex_to_dex_compilation_level,
+    Thread* self) {
   if (dex_to_dex_compilation_level != art::kDontDexToDexCompile) {
     art::DexCompilationUnit unit(nullptr, class_loader, art::Runtime::Current()->GetClassLinker(),
                                  dex_file, code_item, class_def_idx, method_idx, access_flags,
-                                 driver.GetVerifiedMethod(&dex_file, method_idx));
-    art::optimizer::DexCompiler dex_compiler(driver, unit, dex_to_dex_compilation_level);
+                                 driver.GetVerifiedMethod(&dex_file, method_idx, self));
+    art::optimizer::DexCompiler dex_compiler(driver, unit, dex_to_dex_compilation_level, self);
     dex_compiler.Compile();
     if (dex_compiler.GetQuickenedInfo().empty()) {
       // No need to create a CompiledMethod if there are no quickened opcodes.
@@ -343,6 +348,7 @@ extern "C" CompiledMethod* ArtCompileDEX(
       instruction_set = kArm;
     }
     return CompiledMethod::SwapAllocCompiledMethod(
+        self,
         &driver,
         instruction_set,
         ArrayRef<const uint8_t>(),                   // no code

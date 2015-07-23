@@ -89,6 +89,7 @@ bool Thread::is_started_ = false;
 pthread_key_t Thread::pthread_key_self_;
 ConditionVariable* Thread::resume_cond_ = nullptr;
 const size_t Thread::kStackOverflowImplicitCheckSize = GetStackOverflowReservedBytes(kRuntimeISA);
+AtomicInteger Thread::current_counter_(0);
 
 // For implicit overflow checks we reserve an extra piece of memory at the bottom
 // of the stack (lowest memory).  The higher portion of the memory

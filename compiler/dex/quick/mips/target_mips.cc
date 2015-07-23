@@ -892,8 +892,11 @@ RegisterClass MipsMir2Lir::RegClassForFieldLoadStore(OpSize size, bool is_volati
   return RegClassBySize(size);
 }
 
-MipsMir2Lir::MipsMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
-    : Mir2Lir(cu, mir_graph, arena), in_to_reg_storage_mips64_mapper_(this),
+MipsMir2Lir::MipsMir2Lir(CompilationUnit* cu,
+                         MIRGraph* mir_graph,
+                         ArenaAllocator* arena,
+                         Thread* self)
+    : Mir2Lir(cu, mir_graph, arena, self), in_to_reg_storage_mips64_mapper_(this),
     in_to_reg_storage_mips_mapper_(this),
     isaIsR6_(cu_->target64 ? true : cu->compiler_driver->GetInstructionSetFeatures()
                 ->AsMipsInstructionSetFeatures()->IsR6()),
@@ -907,9 +910,11 @@ MipsMir2Lir::MipsMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocato
   }
 }
 
-Mir2Lir* MipsCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
-                           ArenaAllocator* const arena) {
-  return new MipsMir2Lir(cu, mir_graph, arena);
+Mir2Lir* MipsCodeGenerator(CompilationUnit* const cu,
+                           MIRGraph* const mir_graph,
+                           ArenaAllocator* const arena,
+                           Thread* self) {
+  return new MipsMir2Lir(cu, mir_graph, arena, self);
 }
 
 uint64_t MipsMir2Lir::GetTargetInstFlags(int opcode) {

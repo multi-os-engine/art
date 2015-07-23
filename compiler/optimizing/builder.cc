@@ -731,8 +731,9 @@ void HGraphBuilder::Binop_22b(const Instruction& instruction, bool reverse) {
   UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
 }
 
-static bool RequiresConstructorBarrier(const DexCompilationUnit* cu, const CompilerDriver& driver) {
-  Thread* self = Thread::Current();
+static bool RequiresConstructorBarrier(const DexCompilationUnit* cu,
+                                       const CompilerDriver& driver,
+                                       Thread* self) {
   return cu->IsConstructor()
       && driver.RequiresConstructorBarrier(self, cu->GetDexFile(), cu->GetClassDefIndex());
 }
@@ -742,7 +743,7 @@ void HGraphBuilder::BuildReturn(const Instruction& instruction, Primitive::Type 
     if (graph_->ShouldGenerateConstructorBarrier()) {
       // The compilation unit is null during testing.
       if (dex_compilation_unit_ != nullptr) {
-        DCHECK(RequiresConstructorBarrier(dex_compilation_unit_, *compiler_driver_))
+        DCHECK(RequiresConstructorBarrier(dex_compilation_unit_, *compiler_driver_, self_))
           << "Inconsistent use of ShouldGenerateConstructorBarrier. Should not generate a barrier.";
       }
       current_block_->AddInstruction(new (arena_) HMemoryBarrier(kStoreStore));
@@ -767,7 +768,9 @@ void HGraphBuilder::PotentiallySimplifyFakeString(uint16_t original_dex_register
     return;
   }
   const VerifiedMethod* verified_method =
-      compiler_driver_->GetVerifiedMethod(dex_file_, dex_compilation_unit_->GetDexMethodIndex());
+      compiler_driver_->GetVerifiedMethod(dex_file_,
+                                          dex_compilation_unit_->GetDexMethodIndex(),
+                                          self_);
   if (verified_method != nullptr) {
     UpdateLocal(original_dex_register, actual_string);
     const SafeMap<uint32_t, std::set<uint32_t>>& string_init_map =
@@ -840,7 +843,7 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   int table_index;
   InvokeType optimized_invoke_type = invoke_type;
 
-  if (!compiler_driver_->ComputeInvokeInfo(dex_compilation_unit_, dex_pc, true, true,
+  if (!compiler_driver_->ComputeInvokeInfo(dex_compilation_unit_, dex_pc, true, true, self_,
                                            &optimized_invoke_type, &target_method, &table_index,
                                            &direct_code, &direct_method)) {
     VLOG(compiler) << "Did not compile "
@@ -859,7 +862,10 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   HClinitCheck* clinit_check = nullptr;
   // Replace calls to String.<init> with StringFactory.
   int32_t string_init_offset = 0;
-  bool is_string_init = compiler_driver_->IsStringInit(method_idx, dex_file_, &string_init_offset);
+  bool is_string_init = compiler_driver_->IsStringInit(method_idx,
+                                                       dex_file_,
+                                                       &string_init_offset,
+                                                       self_);
   if (is_string_init) {
     return_type = Primitive::kPrimNot;
     is_instance_call = false;
@@ -886,7 +892,7 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
         && (target_method.dex_file == outer_compilation_unit_->GetDexFile());
 
     if (optimized_invoke_type == kStatic && !is_string_init) {
-      ScopedObjectAccess soa(Thread::Current());
+      ScopedObjectAccess soa(self_);
       StackHandleScope<4> hs(soa.Self());
       Handle<mirror::DexCache> dex_cache(hs.NewHandle(
           dex_compilation_unit_->GetClassLinker()->FindDexCache(
@@ -936,7 +942,7 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
 
         // TODO: find out why this check is needed.
         bool is_in_dex_cache = compiler_driver_->CanAssumeTypeIsPresentInDexCache(
-            *outer_compilation_unit_->GetDexFile(), storage_index);
+            *outer_compilation_unit_->GetDexFile(), storage_index, self_);
         bool is_initialized =
             resolved_method->GetDeclaringClass()->IsInitialized() && is_in_dex_cache;
 
@@ -1063,7 +1069,7 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
     field_index = instruction.VRegC_22c();
   }
 
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
   ArtField* resolved_field =
       compiler_driver_->ComputeInstanceFieldInfo(field_index, dex_compilation_unit_, is_put, soa);
 
@@ -1105,8 +1111,9 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
 }
 
 static mirror::Class* GetClassFrom(CompilerDriver* driver,
-                                   const DexCompilationUnit& compilation_unit) {
-  ScopedObjectAccess soa(Thread::Current());
+                                   const DexCompilationUnit& compilation_unit,
+                                   Thread* self) {
+  ScopedObjectAccess soa(self);
   StackHandleScope<2> hs(soa.Self());
   const DexFile& dex_file = *compilation_unit.GetDexFile();
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
@@ -1118,15 +1125,15 @@ static mirror::Class* GetClassFrom(CompilerDriver* driver,
 }
 
 mirror::Class* HGraphBuilder::GetOutermostCompilingClass() const {
-  return GetClassFrom(compiler_driver_, *outer_compilation_unit_);
+  return GetClassFrom(compiler_driver_, *outer_compilation_unit_, self_);
 }
 
 mirror::Class* HGraphBuilder::GetCompilingClass() const {
-  return GetClassFrom(compiler_driver_, *dex_compilation_unit_);
+  return GetClassFrom(compiler_driver_, *dex_compilation_unit_, self_);
 }
 
 bool HGraphBuilder::IsOutermostCompilingClass(uint16_t type_index) const {
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
   StackHandleScope<4> hs(soa.Self());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(
       dex_compilation_unit_->GetClassLinker()->FindDexCache(*dex_compilation_unit_->GetDexFile())));
@@ -1145,7 +1152,7 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
   uint32_t source_or_dest_reg = instruction.VRegA_21c();
   uint16_t field_index = instruction.VRegB_21c();
 
-  ScopedObjectAccess soa(Thread::Current());
+  ScopedObjectAccess soa(self_);
   StackHandleScope<4> hs(soa.Self());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(
       dex_compilation_unit_->GetClassLinker()->FindDexCache(*dex_compilation_unit_->GetDexFile())));
@@ -1187,7 +1194,7 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
 
   // TODO: find out why this check is needed.
   bool is_in_dex_cache = compiler_driver_->CanAssumeTypeIsPresentInDexCache(
-      *outer_compilation_unit_->GetDexFile(), storage_index);
+      *outer_compilation_unit_->GetDexFile(), storage_index, self_);
   bool is_initialized = resolved_field->GetDeclaringClass()->IsInitialized() && is_in_dex_cache;
 
   HLoadClass* constant = new (arena_) HLoadClass(graph_->GetCurrentMethod(),
@@ -1434,7 +1441,7 @@ bool HGraphBuilder::BuildTypeCheck(const Instruction& instruction,
   // work for inlining, so we use `IsOutermostCompilingClass` instead.
   bool dont_use_is_referrers_class;
   bool can_access = compiler_driver_->CanAccessTypeWithoutChecks(
-      dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index,
+      dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index, self_,
       &type_known_final, &type_known_abstract, &dont_use_is_referrers_class);
   if (!can_access) {
     MaybeRecordStat(MethodCompilationStat::kNotCompiledCantAccesType);
@@ -1465,7 +1472,7 @@ bool HGraphBuilder::BuildTypeCheck(const Instruction& instruction,
 
 bool HGraphBuilder::NeedsAccessCheck(uint32_t type_index) const {
   return !compiler_driver_->CanAccessInstantiableTypeWithoutChecks(
-      dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index);
+      dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index, self_);
 }
 
 void HGraphBuilder::BuildPackedSwitch(const Instruction& instruction, uint32_t dex_pc) {
@@ -2533,7 +2540,7 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       // code can optimize for this case. However, the optimization does not
       // work for inlining, so we use `IsOutermostCompilingClass` instead.
       bool can_access = compiler_driver_->CanAccessTypeWithoutChecks(
-          dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index,
+          dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index, self_,
           &type_known_final, &type_known_abstract, &dont_use_is_referrers_class);
       if (!can_access) {
         MaybeRecordStat(MethodCompilationStat::kNotCompiledCantAccesType);

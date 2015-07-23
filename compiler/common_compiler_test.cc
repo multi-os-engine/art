@@ -50,7 +50,8 @@ void CommonCompilerTest::MakeExecutable(ArtMethod* method) {
     const DexFile& dex_file = *dex_cache->GetDexFile();
     compiled_method =
         compiler_driver_->GetCompiledMethod(MethodReference(&dex_file,
-                                                            method->GetDexMethodIndex()));
+                                                            method->GetDexMethodIndex()),
+                                            Thread::Current());
   }
   if (compiled_method != nullptr) {
     const SwapVector<uint8_t>* code = compiled_method->GetQuickCode();

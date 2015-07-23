@@ -159,7 +159,7 @@ class Thread {
   // Get the currently executing thread, frequently referred to as 'self'. This call has reasonably
   // high cost and so we favor passing self around when possible.
   // TODO: mark as PURE so the compiler may coalesce and remove?
-  static Thread* Current();
+  ALWAYS_INLINE static Thread* Current();
 
   // On a runnable thread, check for pending thread suspension request and handle if pending.
   void AllowThreadSuspension() SHARED_REQUIRES(Locks::mutator_lock_);
@@ -1331,6 +1331,10 @@ class Thread {
   // Thread "interrupted" status; stays raised until queried or thrown.
   bool interrupted_ GUARDED_BY(wait_mutex_);
 
+ public:
+  static AtomicInteger current_counter_;
+
+ private:
   friend class Dbg;  // For SetStateUnsafe.
   friend class gc::collector::SemiSpace;  // For getting stack traces.
   friend class Runtime;  // For CreatePeer.

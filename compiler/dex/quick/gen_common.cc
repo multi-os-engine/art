@@ -489,14 +489,17 @@ void Mir2Lir::GenNewArray(uint32_t type_idx, RegLocation rl_dest,
   FlushAllRegs();  /* Everything to home location */
   const DexFile* dex_file = cu_->dex_file;
   CompilerDriver* driver = cu_->compiler_driver;
-  if (cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx, *dex_file, type_idx)) {
+  if (cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx,
+                                                       *dex_file,
+                                                       type_idx,
+                                                       self_)) {
     bool is_type_initialized;  // Ignored as an array does not have an initializer.
     bool use_direct_type_ptr;
     uintptr_t direct_type_ptr;
     bool is_finalizable;
     if (kEmbedClassInCode &&
-        driver->CanEmbedTypeInCode(*dex_file, type_idx, &is_type_initialized, &use_direct_type_ptr,
-                                   &direct_type_ptr, &is_finalizable)) {
+        driver->CanEmbedTypeInCode(*dex_file, type_idx, self_, &is_type_initialized,
+                                   &use_direct_type_ptr, &direct_type_ptr, &is_finalizable)) {
       // The fast path.
       if (!use_direct_type_ptr) {
         LoadClassType(*dex_file, type_idx, kArg0);
@@ -529,7 +532,7 @@ void Mir2Lir::GenFilledNewArray(CallInfo* info) {
   FlushAllRegs();  /* Everything to home location */
   QuickEntrypointEnum target;
   if (cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx, *cu_->dex_file,
-                                                       type_idx)) {
+                                                       type_idx, self_)) {
     target = kQuickCheckAndAllocArray;
   } else {
     target = kQuickCheckAndAllocArrayWithAccessCheck;
@@ -1021,7 +1024,8 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
   RegLocation rl_result;
   if (!cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx,
                                                         *cu_->dex_file,
-                                                        type_idx)) {
+                                                        type_idx,
+                                                        self_)) {
     // Call out to helper which resolves type and verifies access.
     // Resolved type returned in kRet0.
     CallRuntimeHelperImm(kQuickInitializeTypeAndVerifyAccess, type_idx, true);
@@ -1042,8 +1046,8 @@ void Mir2Lir::GenConstClass(uint32_t type_idx, RegLocation rl_dest) {
       LoadRefDisp(res_reg, offset_of_type, rl_result.reg, kNotVolatile);
       FreeTemp(res_reg);
     }
-    if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file,
-        type_idx) || ForceSlowTypePath(cu_)) {
+    if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file, type_idx, self_) ||
+        ForceSlowTypePath(cu_)) {
       // Slow path, at runtime test if type is null and if so initialize
       FlushAllRegs();
       GenIfNullUseHelperImm(rl_result.reg, kQuickInitializeType, type_idx);
@@ -1057,7 +1061,7 @@ void Mir2Lir::GenConstString(uint32_t string_idx, RegLocation rl_dest) {
   int32_t offset_of_string = mirror::ObjectArray<mirror::String>::OffsetOfElement(string_idx).
                                                                                       Int32Value();
   if (!cu_->compiler_driver->CanAssumeStringIsPresentInDexCache(
-      *cu_->dex_file, string_idx) || ForceSlowStringPath(cu_)) {
+      *cu_->dex_file, string_idx, self_) || ForceSlowStringPath(cu_)) {
     // slow path, resolve string if not in dex cache
     FlushAllRegs();
     LockCallTemps();  // Using explicit registers
@@ -1110,14 +1114,14 @@ void Mir2Lir::GenNewInstance(uint32_t type_idx, RegLocation rl_dest) {
   // access because the verifier was unable to?
   const DexFile* dex_file = cu_->dex_file;
   CompilerDriver* driver = cu_->compiler_driver;
-  if (driver->CanAccessInstantiableTypeWithoutChecks(cu_->method_idx, *dex_file, type_idx)) {
+  if (driver->CanAccessInstantiableTypeWithoutChecks(cu_->method_idx, *dex_file, type_idx, self_)) {
     bool is_type_initialized;
     bool use_direct_type_ptr;
     uintptr_t direct_type_ptr;
     bool is_finalizable;
     if (kEmbedClassInCode &&
-        driver->CanEmbedTypeInCode(*dex_file, type_idx, &is_type_initialized, &use_direct_type_ptr,
-                                   &direct_type_ptr, &is_finalizable) &&
+        driver->CanEmbedTypeInCode(*dex_file, type_idx, self_, &is_type_initialized,
+                                   &use_direct_type_ptr, &direct_type_ptr, &is_finalizable) &&
                                    !is_finalizable) {
       // The fast path.
       if (!use_direct_type_ptr) {
@@ -1319,11 +1323,12 @@ void Mir2Lir::GenInstanceof(uint32_t type_idx, RegLocation rl_dest, RegLocation 
   bool needs_access_check = !cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx,
                                                                               *cu_->dex_file,
                                                                               type_idx,
+                                                                              self_,
                                                                               &type_known_final,
                                                                               &type_known_abstract,
                                                                               &use_declaring_class);
   bool can_assume_type_is_in_dex_cache = !needs_access_check &&
-      cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file, type_idx);
+      cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file, type_idx, self_);
 
   if ((use_declaring_class || can_assume_type_is_in_dex_cache) && type_known_final) {
     GenInstanceofFinal(use_declaring_class, type_idx, rl_dest, rl_src);
@@ -1344,6 +1349,7 @@ void Mir2Lir::GenCheckCast(int opt_flags, uint32_t insn_idx, uint32_t type_idx,
   bool needs_access_check = !cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx,
                                                                               *cu_->dex_file,
                                                                               type_idx,
+                                                                              self_,
                                                                               &type_known_final,
                                                                               &type_known_abstract,
                                                                               &use_declaring_class);
@@ -1381,7 +1387,7 @@ void Mir2Lir::GenCheckCast(int opt_flags, uint32_t insn_idx, uint32_t type_idx,
       int32_t offset_of_type = ClassArray::OffsetOfElement(type_idx).Int32Value();
       LoadRefDisp(class_reg, offset_of_type, class_reg, kNotVolatile);
     }
-    if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file, type_idx)) {
+    if (!cu_->compiler_driver->CanAssumeTypeIsPresentInDexCache(*cu_->dex_file, type_idx, self_)) {
       // Need to test presence of type in dex cache at runtime
       GenIfNullUseHelperImm(class_reg, kQuickInitializeType, type_idx);
     }

@@ -601,8 +601,11 @@ RegisterClass Arm64Mir2Lir::RegClassForFieldLoadStore(OpSize size, bool is_volat
   return RegClassBySize(size);
 }
 
-Arm64Mir2Lir::Arm64Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
-    : Mir2Lir(cu, mir_graph, arena),
+Arm64Mir2Lir::Arm64Mir2Lir(CompilationUnit* cu,
+                           MIRGraph* mir_graph,
+                           ArenaAllocator* arena,
+                           Thread* self)
+    : Mir2Lir(cu, mir_graph, arena, self),
       call_method_insns_(arena->Adapter()),
       dex_cache_access_insns_(arena->Adapter()) {
   // Sanity check - make sure encoding map lines up.
@@ -614,9 +617,11 @@ Arm64Mir2Lir::Arm64Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAlloca
   }
 }
 
-Mir2Lir* Arm64CodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
-                            ArenaAllocator* const arena) {
-  return new Arm64Mir2Lir(cu, mir_graph, arena);
+Mir2Lir* Arm64CodeGenerator(CompilationUnit* const cu,
+                            MIRGraph* const mir_graph,
+                            ArenaAllocator* const arena,
+                            Thread* self) {
+  return new Arm64Mir2Lir(cu, mir_graph, arena, self);
 }
 
 void Arm64Mir2Lir::CompilerInitializeRegAlloc() {

@@ -28,7 +28,7 @@
 #include "mirror/class-inl.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
-#include "thread.h"
+#include "thread-inl.h"
 #include "verifier/method_verifier.h"
 
 namespace art {

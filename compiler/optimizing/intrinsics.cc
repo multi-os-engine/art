@@ -336,9 +336,9 @@ void IntrinsicsRecognizer::Run() {
         HInvoke* invoke = inst->AsInvoke();
         InlineMethod method;
         DexFileMethodInliner* inliner =
-            driver_->GetMethodInlinerMap()->GetMethodInliner(&invoke->GetDexFile());
+            driver_->GetMethodInlinerMap()->GetMethodInliner(&invoke->GetDexFile(), self_);
         DCHECK(inliner != nullptr);
-        if (inliner->IsIntrinsic(invoke->GetDexMethodIndex(), &method)) {
+        if (inliner->IsIntrinsic(invoke->GetDexMethodIndex(), &method, self_)) {
           Intrinsics intrinsic = GetIntrinsic(method);
 
           if (intrinsic != Intrinsics::kNone) {

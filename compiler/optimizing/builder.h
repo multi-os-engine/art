@@ -31,6 +31,7 @@ namespace art {
 
 class Instruction;
 class SwitchTable;
+class Thread;
 
 class HGraphBuilder : public ValueObject {
  public:
@@ -40,7 +41,8 @@ class HGraphBuilder : public ValueObject {
                 const DexFile* dex_file,
                 CompilerDriver* driver,
                 OptimizingCompilerStats* compiler_stats,
-                const uint8_t* interpreter_metadata)
+                const uint8_t* interpreter_metadata,
+                Thread* self)
       : arena_(graph->GetArena()),
         branch_targets_(graph->GetArena(), 0),
         locals_(graph->GetArena(), 0),
@@ -57,7 +59,8 @@ class HGraphBuilder : public ValueObject {
         latest_result_(nullptr),
         can_use_baseline_for_string_init_(true),
         compilation_stats_(compiler_stats),
-        interpreter_metadata_(interpreter_metadata) {}
+        interpreter_metadata_(interpreter_metadata),
+        self_(self) {}
 
   // Only for unit testing.
   HGraphBuilder(HGraph* graph, Primitive::Type return_type = Primitive::kPrimInt)
@@ -76,7 +79,9 @@ class HGraphBuilder : public ValueObject {
         code_start_(nullptr),
         latest_result_(nullptr),
         can_use_baseline_for_string_init_(true),
-        compilation_stats_(nullptr) {}
+        compilation_stats_(nullptr),
+        interpreter_metadata_(nullptr),
+        self_(Thread::Current()) {}
 
   bool BuildGraph(const DexFile::CodeItem& code);
 
@@ -313,6 +318,9 @@ class HGraphBuilder : public ValueObject {
   OptimizingCompilerStats* compilation_stats_;
 
   const uint8_t* interpreter_metadata_;
+
+  // The thread running this builder.
+  Thread* self_;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphBuilder);
 };

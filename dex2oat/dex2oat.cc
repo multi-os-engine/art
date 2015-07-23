@@ -71,6 +71,7 @@
 #include "runtime.h"
 #include "ScopedLocalRef.h"
 #include "scoped_thread_state_change.h"
+#include "thread.h"
 #include "utils.h"
 #include "vector_output_stream.h"
 #include "well_known_classes.h"
@@ -2003,6 +2004,7 @@ int main(int argc, char** argv) {
   // Everything was done, do an explicit exit here to avoid running Runtime destructors that take
   // time (bug 10645725) unless we're a debug build or running on valgrind. Note: The Dex2Oat class
   // should not destruct the runtime in this case.
+  LOG(art::INFO) << "Thread::Current() counter: " << art::Thread::current_counter_.LoadRelaxed();
   if (!art::kIsDebugBuild && (RUNNING_ON_MEMORY_TOOL == 0)) {
     exit(result);
   }

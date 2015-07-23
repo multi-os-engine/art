@@ -27,6 +27,7 @@ class DexCompilationUnit;
 class HGraph;
 class HInvoke;
 class OptimizingCompilerStats;
+class Thread;
 
 class HInliner : public HOptimization {
  public:
@@ -36,13 +37,15 @@ class HInliner : public HOptimization {
            CompilerDriver* compiler_driver,
            StackHandleScopeCollection* handles,
            OptimizingCompilerStats* stats,
+           Thread* self,
            size_t depth = 0)
       : HOptimization(outer_graph, kInlinerPassName, stats),
         outer_compilation_unit_(outer_compilation_unit),
         caller_compilation_unit_(caller_compilation_unit),
         compiler_driver_(compiler_driver),
         depth_(depth),
-        handles_(handles) {}
+        handles_(handles),
+        self_(self) {}
 
   void Run() OVERRIDE;
 
@@ -59,6 +62,7 @@ class HInliner : public HOptimization {
   CompilerDriver* const compiler_driver_;
   const size_t depth_;
   StackHandleScopeCollection* const handles_;
+  Thread* self_;
 
   DISALLOW_COPY_AND_ASSIGN(HInliner);
 };

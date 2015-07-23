@@ -47,7 +47,8 @@ class OatTest : public CommonCompilerTest {
       SHARED_REQUIRES(Locks::mutator_lock_) {
     const CompiledMethod* compiled_method =
         compiler_driver_->GetCompiledMethod(MethodReference(&dex_file,
-                                                            method->GetDexMethodIndex()));
+                                                            method->GetDexMethodIndex()),
+                                            Thread::Current());
 
     if (compiled_method == nullptr) {
       EXPECT_TRUE(oat_method.GetQuickCode() == nullptr) << PrettyMethod(method) << " "

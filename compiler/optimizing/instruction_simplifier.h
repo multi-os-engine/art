@@ -23,21 +23,26 @@
 
 namespace art {
 
+class Thread;
+
 /**
  * Implements optimizations specific to each instruction.
  */
 class InstructionSimplifier : public HOptimization {
  public:
   InstructionSimplifier(HGraph* graph,
+                        Thread* self,
                         OptimizingCompilerStats* stats = nullptr,
                         const char* name = kInstructionSimplifierPassName)
-      : HOptimization(graph, name, stats) {}
+      : HOptimization(graph, name, stats), self_(self) {}
 
   static constexpr const char* kInstructionSimplifierPassName = "instruction_simplifier";
 
   void Run() OVERRIDE;
 
  private:
+  Thread* self_;
+
   DISALLOW_COPY_AND_ASSIGN(InstructionSimplifier);
 };
 

@@ -497,14 +497,14 @@ DexFileMethodInliner::DexFileMethodInliner()
 DexFileMethodInliner::~DexFileMethodInliner() {
 }
 
-bool DexFileMethodInliner::AnalyseMethodCode(verifier::MethodVerifier* verifier) {
+bool DexFileMethodInliner::AnalyseMethodCode(verifier::MethodVerifier* verifier, Thread* self) {
   InlineMethod method;
   bool success = InlineMethodAnalyser::AnalyseMethodCode(verifier, &method);
-  return success && AddInlineMethod(verifier->GetMethodReference().dex_method_index, method);
+  return success && AddInlineMethod(verifier->GetMethodReference().dex_method_index, method, self);
 }
 
-InlineMethodFlags DexFileMethodInliner::IsIntrinsicOrSpecial(uint32_t method_index) {
-  ReaderMutexLock mu(Thread::Current(), lock_);
+InlineMethodFlags DexFileMethodInliner::IsIntrinsicOrSpecial(uint32_t method_index, Thread* self) {
+  ReaderMutexLock mu(self, lock_);
   auto it = inline_methods_.find(method_index);
   if (it != inline_methods_.end()) {
     DCHECK_NE(it->second.flags & (kInlineIntrinsic | kInlineSpecial), 0);
@@ -514,8 +514,10 @@ InlineMethodFlags DexFileMethodInliner::IsIntrinsicOrSpecial(uint32_t method_ind
   }
 }
 
-bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index, InlineMethod* intrinsic) {
-  ReaderMutexLock mu(Thread::Current(), lock_);
+bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index,
+                                       InlineMethod* intrinsic,
+                                       Thread* self) {
+  ReaderMutexLock mu(self, lock_);
   auto it = inline_methods_.find(method_index);
   bool res = (it != inline_methods_.end() && (it->second.flags & kInlineIntrinsic) != 0);
   if (res && intrinsic != nullptr) {
@@ -524,10 +526,10 @@ bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index, InlineMethod* intr
   return res;
 }
 
-bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
+bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info, Thread* self) {
   InlineMethod intrinsic;
   {
-    ReaderMutexLock mu(Thread::Current(), lock_);
+    ReaderMutexLock mu(self, lock_);
     auto it = inline_methods_.find(info->method_ref.dex_method_index);
     if (it == inline_methods_.end() || (it->second.flags & kInlineIntrinsic) == 0) {
       return false;
@@ -620,16 +622,16 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
   }
 }
 
-bool DexFileMethodInliner::IsSpecial(uint32_t method_index) {
-  ReaderMutexLock mu(Thread::Current(), lock_);
+bool DexFileMethodInliner::IsSpecial(uint32_t method_index, Thread* self) {
+  ReaderMutexLock mu(self, lock_);
   auto it = inline_methods_.find(method_index);
   return it != inline_methods_.end() && (it->second.flags & kInlineSpecial) != 0;
 }
 
-bool DexFileMethodInliner::GenSpecial(Mir2Lir* backend, uint32_t method_idx) {
+bool DexFileMethodInliner::GenSpecial(Mir2Lir* backend, uint32_t method_idx, Thread* self) {
   InlineMethod special;
   {
-    ReaderMutexLock mu(Thread::Current(), lock_);
+    ReaderMutexLock mu(self, lock_);
     auto it = inline_methods_.find(method_idx);
     if (it == inline_methods_.end() || (it->second.flags & kInlineSpecial) == 0) {
       return false;
@@ -640,10 +642,10 @@ bool DexFileMethodInliner::GenSpecial(Mir2Lir* backend, uint32_t method_idx) {
 }
 
 bool DexFileMethodInliner::GenInline(MIRGraph* mir_graph, BasicBlock* bb, MIR* invoke,
-                                     uint32_t method_idx) {
+                                     uint32_t method_idx, Thread* self) {
   InlineMethod method;
   {
-    ReaderMutexLock mu(Thread::Current(), lock_);
+    ReaderMutexLock mu(self, lock_);
     auto it = inline_methods_.find(method_idx);
     if (it == inline_methods_.end() || (it->second.flags & kInlineSpecial) == 0) {
       return false;
@@ -821,8 +823,10 @@ void DexFileMethodInliner::FindIntrinsics(const DexFile* dex_file) {
   dex_file_ = dex_file;
 }
 
-bool DexFileMethodInliner::AddInlineMethod(int32_t method_idx, const InlineMethod& method) {
-  WriterMutexLock mu(Thread::Current(), lock_);
+bool DexFileMethodInliner::AddInlineMethod(int32_t method_idx,
+                                           const InlineMethod& method,
+                                           Thread* self) {
+  WriterMutexLock mu(self, lock_);
   if (LIKELY(inline_methods_.find(method_idx) == inline_methods_.end())) {
     inline_methods_.Put(method_idx, method);
     return true;
@@ -1021,8 +1025,10 @@ bool DexFileMethodInliner::GenInlineIPut(MIRGraph* mir_graph, BasicBlock* bb, MI
   return true;
 }
 
-uint32_t DexFileMethodInliner::GetOffsetForStringInit(uint32_t method_index, size_t pointer_size) {
-  ReaderMutexLock mu(Thread::Current(), lock_);
+uint32_t DexFileMethodInliner::GetOffsetForStringInit(uint32_t method_index,
+                                                      size_t pointer_size,
+                                                      Thread* self) {
+  ReaderMutexLock mu(self, lock_);
   auto it = inline_methods_.find(method_index);
   if (it != inline_methods_.end() && (it->second.opcode == kInlineStringInit)) {
     uint32_t string_init_base_offset = Thread::QuickEntryPointOffsetWithSize(
@@ -1032,8 +1038,8 @@ uint32_t DexFileMethodInliner::GetOffsetForStringInit(uint32_t method_index, siz
   return 0;
 }
 
-bool DexFileMethodInliner::IsStringInitMethodIndex(uint32_t method_index) {
-  ReaderMutexLock mu(Thread::Current(), lock_);
+bool DexFileMethodInliner::IsStringInitMethodIndex(uint32_t method_index, Thread* self) {
+  ReaderMutexLock mu(self, lock_);
   auto it = inline_methods_.find(method_index);
   return (it != inline_methods_.end()) && (it->second.opcode == kInlineStringInit);
 }

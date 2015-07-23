@@ -26,13 +26,15 @@ namespace art {
 
 class CompilerDriver;
 class DexFile;
+class Thread;
 
 // Recognize intrinsics from HInvoke nodes.
 class IntrinsicsRecognizer : public HOptimization {
  public:
-  IntrinsicsRecognizer(HGraph* graph, CompilerDriver* driver)
+  IntrinsicsRecognizer(HGraph* graph, CompilerDriver* driver, Thread* self)
       : HOptimization(graph, kIntrinsicsRecognizerPassName),
-        driver_(driver) {}
+        driver_(driver),
+        self_(self) {}
 
   void Run() OVERRIDE;
 
@@ -40,6 +42,7 @@ class IntrinsicsRecognizer : public HOptimization {
 
  private:
   CompilerDriver* driver_;
+  Thread* self_;
 
   DISALLOW_COPY_AND_ASSIGN(IntrinsicsRecognizer);
 };

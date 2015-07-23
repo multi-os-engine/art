@@ -30,6 +30,7 @@
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
 #include "driver/dex_compilation_unit.h"
+#include "thread-inl.h"
 #include "utils.h"
 
 namespace art {
@@ -1176,8 +1177,8 @@ bool MIRGraph::SkipCompilation(std::string* skip_message) {
 
   // Filter 3: if this method is a special pattern, go ahead and emit the canned pattern.
   if (cu_->compiler_driver->GetMethodInlinerMap() != nullptr &&
-      cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file)
-          ->IsSpecial(cu_->method_idx)) {
+      cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file, self_)
+          ->IsSpecial(cu_->method_idx, self_)) {
     return false;
   }
 
@@ -1284,7 +1285,7 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
           MirIFieldLoweringInfo(masked_field_idx, field_types[pos], is_quickened));
     }
     MirIFieldLoweringInfo::Resolve(cu_->compiler_driver, GetCurrentDexCompilationUnit(),
-                                   ifield_lowering_infos_.data(), ifield_pos);
+                                   ifield_lowering_infos_.data(), ifield_pos, self_);
   }
 
   if (sfield_pos != max_refs) {
@@ -1296,7 +1297,7 @@ void MIRGraph::DoCacheFieldLoweringInfo() {
       sfield_lowering_infos_.push_back(MirSFieldLoweringInfo(field_idxs[pos], field_types[pos]));
     }
     MirSFieldLoweringInfo::Resolve(cu_->compiler_driver, GetCurrentDexCompilationUnit(),
-                                   sfield_lowering_infos_.data(), max_refs - sfield_pos);
+                                   sfield_lowering_infos_.data(), max_refs - sfield_pos, self_);
   }
 }
 
@@ -1422,7 +1423,7 @@ void MIRGraph::DoCacheMethodLoweringInfo() {
     method_lowering_infos_.push_back(method_info);
   }
   MirMethodLoweringInfo::Resolve(cu_->compiler_driver, GetCurrentDexCompilationUnit(),
-                                 method_lowering_infos_.data(), count);
+                                 method_lowering_infos_.data(), count, self_);
 }
 
 bool MIRGraph::SkipCompilationByName(const std::string& methodname) {

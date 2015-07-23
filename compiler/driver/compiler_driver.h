@@ -67,6 +67,7 @@ template <class Allocator> class SrcMap;
 class SrcMapElem;
 using SwapSrcMap = SrcMap<SwapAllocator<SrcMapElem>>;
 template<class T> class Handle;
+class Thread;
 class TimingLogger;
 class VerificationResults;
 class VerifiedMethod;
@@ -177,10 +178,10 @@ class CompilerDriver {
   const std::vector<uint8_t>* CreateQuickToInterpreterBridge() const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  CompiledClass* GetCompiledClass(ClassReference ref) const
+  CompiledClass* GetCompiledClass(ClassReference ref, Thread* self) const
       REQUIRES(!compiled_classes_lock_);
 
-  CompiledMethod* GetCompiledMethod(MethodReference ref) const
+  CompiledMethod* GetCompiledMethod(MethodReference ref, Thread* self) const
       REQUIRES(!compiled_methods_lock_);
   size_t GetNonRelativeLinkerPatchCount() const
       REQUIRES(!compiled_methods_lock_);
@@ -197,29 +198,36 @@ class CompilerDriver {
 
   // Callbacks from compiler to see what runtime checks must be generated.
 
-  bool CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file, uint32_t type_idx);
+  bool CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file,
+                                        uint32_t type_idx,
+                                        Thread* self);
 
-  bool CanAssumeStringIsPresentInDexCache(const DexFile& dex_file, uint32_t string_idx)
+  bool CanAssumeStringIsPresentInDexCache(const DexFile& dex_file,
+                                          uint32_t string_idx,
+                                          Thread* self)
       REQUIRES(!Locks::mutator_lock_);
 
   // Are runtime access checks necessary in the compiled code?
   bool CanAccessTypeWithoutChecks(uint32_t referrer_idx, const DexFile& dex_file,
-                                  uint32_t type_idx, bool* type_known_final = nullptr,
+                                  uint32_t type_idx, Thread* self,
+                                  bool* type_known_final = nullptr,
                                   bool* type_known_abstract = nullptr,
                                   bool* equals_referrers_class = nullptr)
       REQUIRES(!Locks::mutator_lock_);
 
   // Are runtime access and instantiable checks necessary in the code?
-  bool CanAccessInstantiableTypeWithoutChecks(uint32_t referrer_idx, const DexFile& dex_file,
-                                              uint32_t type_idx)
+  bool CanAccessInstantiableTypeWithoutChecks(uint32_t referrer_idx,
+                                              const DexFile& dex_file,
+                                              uint32_t type_idx,
+                                              Thread* self)
       REQUIRES(!Locks::mutator_lock_);
 
-  bool CanEmbedTypeInCode(const DexFile& dex_file, uint32_t type_idx,
+  bool CanEmbedTypeInCode(const DexFile& dex_file, uint32_t type_idx, Thread* self,
                           bool* is_type_initialized, bool* use_direct_type_ptr,
                           uintptr_t* direct_type_ptr, bool* out_is_finalizable);
 
   // Query methods for the java.lang.ref.Reference class.
-  bool CanEmbedReferenceTypeInCode(ClassReference* ref,
+  bool CanEmbedReferenceTypeInCode(ClassReference* ref, Thread* self,
                                    bool* use_direct_type_ptr, uintptr_t* direct_type_ptr);
   uint32_t GetReferenceSlowFlagOffset() const;
   uint32_t GetReferenceDisableFlagOffset() const;
@@ -356,20 +364,20 @@ class CompilerDriver {
 
   // Can we fast path instance field access? Computes field's offset and volatility.
   bool ComputeInstanceFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit, bool is_put,
-                                MemberOffset* field_offset, bool* is_volatile)
+                                Thread* self, MemberOffset* field_offset, bool* is_volatile)
       REQUIRES(!Locks::mutator_lock_);
 
   ArtField* ComputeInstanceFieldInfo(uint32_t field_idx,
-                                             const DexCompilationUnit* mUnit,
-                                             bool is_put,
-                                             const ScopedObjectAccess& soa)
+                                     const DexCompilationUnit* mUnit,
+                                     bool is_put,
+                                     const ScopedObjectAccess& soa)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
 
   // Can we fastpath static field access? Computes field's offset, volatility and whether the
   // field is within the referrer (which can avoid checking class initialization).
   bool ComputeStaticFieldInfo(uint32_t field_idx, const DexCompilationUnit* mUnit, bool is_put,
-                              MemberOffset* field_offset, uint32_t* storage_index,
+                              Thread* self, MemberOffset* field_offset, uint32_t* storage_index,
                               bool* is_referrers_class, bool* is_volatile, bool* is_initialized,
                               Primitive::Type* type)
       REQUIRES(!Locks::mutator_lock_);
@@ -377,12 +385,14 @@ class CompilerDriver {
   // Can we fastpath a interface, super class or virtual method call? Computes method's vtable
   // index.
   bool ComputeInvokeInfo(const DexCompilationUnit* mUnit, const uint32_t dex_pc,
-                         bool update_stats, bool enable_devirtualization,
+                         bool update_stats, bool enable_devirtualization, Thread* self,
                          InvokeType* type, MethodReference* target_method, int* vtable_idx,
                          uintptr_t* direct_code, uintptr_t* direct_method)
       REQUIRES(!Locks::mutator_lock_);
 
-  const VerifiedMethod* GetVerifiedMethod(const DexFile* dex_file, uint32_t method_idx) const;
+  const VerifiedMethod* GetVerifiedMethod(const DexFile* dex_file,
+                                          uint32_t method_idx,
+                                          Thread* self) const;
   bool IsSafeCast(const DexCompilationUnit* mUnit, uint32_t dex_pc);
 
   bool GetSupportBootImageFixup() const {
@@ -447,21 +457,22 @@ class CompilerDriver {
   // Checks whether the provided method should be compiled, i.e., is in method_to_compile_.
   bool IsMethodToCompile(const MethodReference& method_ref) const;
 
-  void RecordClassStatus(ClassReference ref, mirror::Class::Status status)
+  void RecordClassStatus(ClassReference ref, mirror::Class::Status status, Thread* self)
       REQUIRES(!compiled_classes_lock_);
 
   // Checks if the specified method has been verified without failures. Returns
   // false if the method is not in the verification results (GetVerificationResults).
   bool IsMethodVerifiedWithoutFailures(uint32_t method_idx,
                                        uint16_t class_def_idx,
-                                       const DexFile& dex_file) const;
+                                       const DexFile& dex_file,
+                                       Thread* self) const;
 
-  SwapVector<uint8_t>* DeduplicateCode(const ArrayRef<const uint8_t>& code);
-  SwapSrcMap* DeduplicateSrcMappingTable(const ArrayRef<SrcMapElem>& src_map);
-  SwapVector<uint8_t>* DeduplicateMappingTable(const ArrayRef<const uint8_t>& code);
-  SwapVector<uint8_t>* DeduplicateVMapTable(const ArrayRef<const uint8_t>& code);
-  SwapVector<uint8_t>* DeduplicateGCMap(const ArrayRef<const uint8_t>& code);
-  SwapVector<uint8_t>* DeduplicateCFIInfo(const ArrayRef<const uint8_t>& cfi_info);
+  SwapVector<uint8_t>* DeduplicateCode(const ArrayRef<const uint8_t>& code, Thread* self);
+  SwapSrcMap* DeduplicateSrcMappingTable(const ArrayRef<SrcMapElem>& src_map, Thread* self);
+  SwapVector<uint8_t>* DeduplicateMappingTable(const ArrayRef<const uint8_t>& code, Thread* self);
+  SwapVector<uint8_t>* DeduplicateVMapTable(const ArrayRef<const uint8_t>& code, Thread* self);
+  SwapVector<uint8_t>* DeduplicateGCMap(const ArrayRef<const uint8_t>& code, Thread* self);
+  SwapVector<uint8_t>* DeduplicateCFIInfo(const ArrayRef<const uint8_t>& cfi_info, Thread* self);
 
   // Should the compiler run on this method given profile information?
   bool SkipCompilation(const std::string& method_name);
@@ -470,7 +481,7 @@ class CompilerDriver {
   std::string GetMemoryUsageString(bool extended) const;
 
   bool IsStringTypeIndex(uint16_t type_index, const DexFile* dex_file);
-  bool IsStringInit(uint32_t method_index, const DexFile* dex_file, int32_t* offset);
+  bool IsStringInit(uint32_t method_index, const DexFile* dex_file, int32_t* offset, Thread* self);
 
   void SetHadHardVerifierFailure() {
     had_hard_verifier_failure_ = true;
@@ -674,15 +685,6 @@ class CompilerDriver {
 
   typedef void (*CompilerCallbackFn)(CompilerDriver& driver);
   typedef MutexLock* (*CompilerMutexLockFn)(CompilerDriver& driver);
-
-  typedef CompiledMethod* (*DexToDexCompilerFn)(
-      CompilerDriver& driver,
-      const DexFile::CodeItem* code_item,
-      uint32_t access_flags, InvokeType invoke_type,
-      uint32_t class_dex_idx, uint32_t method_idx,
-      jobject class_loader, const DexFile& dex_file,
-      DexToDexCompilationLevel dex_to_dex_compilation_level);
-  DexToDexCompilerFn dex_to_dex_compiler_;
 
   void* compiler_context_;
 

@@ -43,7 +43,8 @@ class QuickCompiler : public Compiler {
                           uint16_t class_def_idx,
                           uint32_t method_idx,
                           jobject class_loader,
-                          const DexFile& dex_file) const OVERRIDE;
+                          const DexFile& dex_file,
+                          Thread* self) const OVERRIDE;
 
   CompiledMethod* JniCompile(uint32_t access_flags,
                              uint32_t method_idx,
@@ -52,7 +53,7 @@ class QuickCompiler : public Compiler {
   uintptr_t GetEntryPointOf(ArtMethod* method) const OVERRIDE
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  static Mir2Lir* GetCodeGenerator(CompilationUnit* cu, void* compilation_unit);
+  static Mir2Lir* GetCodeGenerator(CompilationUnit* cu, void* compilation_unit, Thread* self);
 
   void InitCompilationUnit(CompilationUnit& cu) const OVERRIDE;
 

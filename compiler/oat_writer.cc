@@ -296,7 +296,8 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
   InitOatClassesMethodVisitor(OatWriter* writer, size_t offset)
     : DexMethodVisitor(writer, offset),
       compiled_methods_(),
-      num_non_null_compiled_methods_(0u) {
+      num_non_null_compiled_methods_(0u),
+      self_(Thread::Current()) {
     compiled_methods_.reserve(256u);
   }
 
@@ -314,7 +315,7 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
     // OatMethodOffsets for the compiled methods.
     uint32_t method_idx = it.GetMemberIndex();
     CompiledMethod* compiled_method =
-        writer_->compiler_driver_->GetCompiledMethod(MethodReference(dex_file_, method_idx));
+        writer_->compiler_driver_->GetCompiledMethod(MethodReference(dex_file_, method_idx), self_);
     compiled_methods_.push_back(compiled_method);
     if (compiled_method != nullptr) {
         ++num_non_null_compiled_methods_;
@@ -324,11 +325,12 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
 
   bool EndClass() {
     ClassReference class_ref(dex_file_, class_def_index_);
-    CompiledClass* compiled_class = writer_->compiler_driver_->GetCompiledClass(class_ref);
+    CompiledClass* compiled_class = writer_->compiler_driver_->GetCompiledClass(class_ref, self_);
     mirror::Class::Status status;
     if (compiled_class != nullptr) {
       status = compiled_class->GetStatus();
-    } else if (writer_->compiler_driver_->GetVerificationResults()->IsClassRejected(class_ref)) {
+    } else if (writer_->compiler_driver_->GetVerificationResults()->IsClassRejected(class_ref,
+                                                                                    self_)) {
       status = mirror::Class::kStatusError;
     } else {
       status = mirror::Class::kStatusNotReady;
@@ -345,13 +347,15 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
  private:
   std::vector<CompiledMethod*> compiled_methods_;
   size_t num_non_null_compiled_methods_;
+  Thread* self_;
 };
 
 class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
  public:
   InitCodeMethodVisitor(OatWriter* writer, size_t offset)
     : OatDexMethodVisitor(writer, offset),
-      debuggable_(writer->GetCompilerDriver()->GetCompilerOptions().GetDebuggable()) {
+      debuggable_(writer->GetCompilerDriver()->GetCompilerOptions().GetDebuggable()),
+      self_(Thread::Current()) {
     writer_->absolute_patch_locations_.reserve(
         writer_->compiler_driver_->GetNonRelativeLinkerPatchCount());
   }
@@ -472,11 +476,12 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
         // We expect GC maps except when the class hasn't been verified or the method is native.
         const CompilerDriver* compiler_driver = writer_->compiler_driver_;
         ClassReference class_ref(dex_file_, class_def_index_);
-        CompiledClass* compiled_class = compiler_driver->GetCompiledClass(class_ref);
+        CompiledClass* compiled_class = compiler_driver->GetCompiledClass(class_ref, self_);
         mirror::Class::Status status;
         if (compiled_class != nullptr) {
           status = compiled_class->GetStatus();
-        } else if (compiler_driver->GetVerificationResults()->IsClassRejected(class_ref)) {
+        } else if (compiler_driver->GetVerificationResults()->IsClassRejected(class_ref,
+                                                                              self_)) {
           status = mirror::Class::kStatusError;
         } else {
           status = mirror::Class::kStatusNotReady;
@@ -550,6 +555,7 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
 
   // Cache of compiler's --debuggable option.
   const bool debuggable_;
+  Thread* self_;
 };
 
 template <typename DataAccess>

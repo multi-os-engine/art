@@ -928,7 +928,7 @@ bool Mir2Lir::GenInlinedReferenceGetReferent(CallInfo* info) {
   bool use_direct_type_ptr;
   uintptr_t direct_type_ptr;
   ClassReference ref;
-  if (!cu_->compiler_driver->CanEmbedReferenceTypeInCode(&ref,
+  if (!cu_->compiler_driver->CanEmbedReferenceTypeInCode(&ref, self_,
         &use_direct_type_ptr, &direct_type_ptr)) {
     return false;
   }
@@ -1538,8 +1538,8 @@ void Mir2Lir::GenInvoke(CallInfo* info) {
   DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
   if (mir_graph_->GetMethodLoweringInfo(info->mir).IsIntrinsic()) {
     const DexFile* dex_file = info->method_ref.dex_file;
-    auto* inliner = cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(dex_file);
-    if (inliner->GenIntrinsic(this, info)) {
+    auto* inliner = cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(dex_file, self_);
+    if (inliner->GenIntrinsic(this, info, self_)) {
       return;
     }
   }
@@ -1562,13 +1562,13 @@ void Mir2Lir::GenInvokeNoInline(CallInfo* info) {
   info->type = method_info.GetSharpType();
   bool is_string_init = false;
   if (method_info.IsSpecial()) {
-    DexFileMethodInliner* inliner = cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(
-        target_method.dex_file);
-    if (inliner->IsStringInitMethodIndex(target_method.dex_method_index)) {
+    DexFileMethodInliner* inliner = cu_->compiler_driver->GetMethodInlinerMap()
+        ->GetMethodInliner(target_method.dex_file, self_);
+    if (inliner->IsStringInitMethodIndex(target_method.dex_method_index, self_)) {
       is_string_init = true;
       size_t pointer_size = GetInstructionSetPointerSize(cu_->instruction_set);
       info->string_init_offset = inliner->GetOffsetForStringInit(target_method.dex_method_index,
-                                                                 pointer_size);
+                                                                 pointer_size, self_);
       info->type = kStatic;
     }
   }

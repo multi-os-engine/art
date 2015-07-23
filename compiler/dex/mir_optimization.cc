@@ -30,6 +30,7 @@
 #include "quick/dex_file_method_inliner.h"
 #include "quick/dex_file_to_method_inliner_map.h"
 #include "stack.h"
+#include "thread-inl.h"
 #include "type_inference.h"
 #include "utils.h"
 
@@ -1475,7 +1476,8 @@ void MIRGraph::ComputeInlineIFieldLoweringInfo(uint16_t field_idx, MIR* invoke, 
       0u /* access_flags not used */, nullptr /* verified_method not used */);
   DexMemAccessType type = IGetOrIPutMemAccessType(iget_or_iput->dalvikInsn.opcode);
   MirIFieldLoweringInfo inlined_field_info(field_idx, type, false);
-  MirIFieldLoweringInfo::Resolve(cu_->compiler_driver, &inlined_unit, &inlined_field_info, 1u);
+  MirIFieldLoweringInfo::Resolve(cu_->compiler_driver, &inlined_unit, &inlined_field_info, 1u,
+                                 self_);
   DCHECK(inlined_field_info.IsResolved());
 
   uint32_t field_info_index = ifield_lowering_infos_.size();
@@ -1542,8 +1544,8 @@ void MIRGraph::InlineSpecialMethods(BasicBlock* bb) {
 
     DCHECK(cu_->compiler_driver->GetMethodInlinerMap() != nullptr);
     MethodReference target = method_info.GetTargetMethod();
-    if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(target.dex_file)
-            ->GenInline(this, bb, mir, target.dex_method_index)) {
+    if (cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(target.dex_file, self_)
+            ->GenInline(this, bb, mir, target.dex_method_index, self_)) {
       if (cu_->verbose || cu_->print_pass) {
         LOG(INFO) << "SpecialMethodInliner: Inlined " << method_info.GetInvokeType() << " ("
             << sharp_type << ") call to \"" << PrettyMethod(target.dex_method_index,
@@ -1675,8 +1677,8 @@ void MIRGraph::StringChange() {
                  (opcode == Instruction::INVOKE_DIRECT_RANGE)) {
         uint32_t method_idx = mir->dalvikInsn.vB;
         DexFileMethodInliner* inliner =
-            cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file);
-        if (inliner->IsStringInitMethodIndex(method_idx)) {
+            cu_->compiler_driver->GetMethodInlinerMap()->GetMethodInliner(cu_->dex_file, self_);
+        if (inliner->IsStringInitMethodIndex(method_idx, self_)) {
           bool is_range = (opcode == Instruction::INVOKE_DIRECT_RANGE);
           uint32_t orig_this_reg = is_range ? mir->dalvikInsn.vC : mir->dalvikInsn.arg[0];
           // Remove this pointer from string init and change to static call.
@@ -1699,7 +1701,7 @@ void MIRGraph::StringChange() {
           bb->InsertMIRAfter(mir, move_result_mir);
           // Add additional moves if this pointer was copied to other registers.
           const VerifiedMethod* verified_method =
-              cu_->compiler_driver->GetVerifiedMethod(cu_->dex_file, cu_->method_idx);
+              cu_->compiler_driver->GetVerifiedMethod(cu_->dex_file, cu_->method_idx, self_);
           DCHECK(verified_method != nullptr);
           const SafeMap<uint32_t, std::set<uint32_t>>& string_init_map =
               verified_method->GetStringInitPcRegMap();

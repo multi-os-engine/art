@@ -138,7 +138,7 @@ bool JitCompiler::CompileMethod(Thread* self, ArtMethod* method) {
   const DexFile* dex_file = h_class->GetDexCache()->GetDexFile();
   MethodReference method_ref(dex_file, method->GetDexMethodIndex());
   // Only verify if we don't already have verification results.
-  if (verification_results_->GetVerifiedMethod(method_ref) == nullptr) {
+  if (verification_results_->GetVerifiedMethod(method_ref, self) == nullptr) {
     TimingLogger::ScopedTiming t2("Verifying", &logger);
     std::string error;
     if (verifier::MethodVerifier::VerifyMethod(method, true, &error) ==

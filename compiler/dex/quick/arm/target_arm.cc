@@ -573,8 +573,11 @@ RegisterClass ArmMir2Lir::RegClassForFieldLoadStore(OpSize size, bool is_volatil
   return RegClassBySize(size);
 }
 
-ArmMir2Lir::ArmMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena)
-    : Mir2Lir(cu, mir_graph, arena),
+ArmMir2Lir::ArmMir2Lir(CompilationUnit* cu,
+                       MIRGraph* mir_graph,
+                       ArenaAllocator* arena,
+                       Thread* self)
+    : Mir2Lir(cu, mir_graph, arena, self),
       call_method_insns_(arena->Adapter()),
       dex_cache_access_insns_(arena->Adapter()),
       dex_cache_arrays_base_reg_(RegStorage::InvalidReg()) {
@@ -588,9 +591,11 @@ ArmMir2Lir::ArmMir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator*
   }
 }
 
-Mir2Lir* ArmCodeGenerator(CompilationUnit* const cu, MIRGraph* const mir_graph,
-                          ArenaAllocator* const arena) {
-  return new ArmMir2Lir(cu, mir_graph, arena);
+Mir2Lir* ArmCodeGenerator(CompilationUnit* const cu,
+                          MIRGraph* const mir_graph,
+                          ArenaAllocator* const arena,
+                          Thread* self) {
+  return new ArmMir2Lir(cu, mir_graph, arena, self);
 }
 
 void ArmMir2Lir::CompilerInitializeRegAlloc() {

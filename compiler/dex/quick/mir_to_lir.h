@@ -146,6 +146,7 @@ class DexFileMethodInliner;
 class MIRGraph;
 class MirMethodLoweringInfo;
 class MirSFieldLoweringInfo;
+class Thread;
 
 typedef int (*NextCallInsn)(CompilationUnit*, CallInfo*, int,
                             const MethodReference& target_method,
@@ -1505,7 +1506,7 @@ class Mir2Lir {
     dwarf::LazyDebugFrameOpCodeWriter& cfi() { return cfi_; }
 
   protected:
-    Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena);
+    Mir2Lir(CompilationUnit* cu, MIRGraph* mir_graph, ArenaAllocator* arena, Thread* self);
 
     CompilationUnit* GetCompilationUnit() {
       return cu_;
@@ -1917,6 +1918,8 @@ class Mir2Lir {
   // Cached mapping of method input to reg storage according to ABI.
   InToRegStorageMapping in_to_reg_storage_mapping_;
   virtual InToRegStorageMapper* GetResetedInToRegStorageMapper() = 0;
+
+  Thread* self_;
 
   private:
     static bool SizeMatchesTypeForEntrypoint(OpSize size, Primitive::Type type);

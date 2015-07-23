@@ -26,6 +26,7 @@
 #include "gc/heap.h"
 #include "jni_env_ext.h"
 #include "thread_pool.h"
+#include "utils.h"
 
 namespace art {
 
@@ -41,6 +42,7 @@ inline Thread* Thread::Current() {
   if (!is_started_) {
     return nullptr;
   } else {
+    current_counter_.FetchAndAddSequentiallyConsistent(1);
     void* thread = pthread_getspecific(Thread::pthread_key_self_);
     return reinterpret_cast<Thread*>(thread);
   }

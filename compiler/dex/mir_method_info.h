@@ -28,6 +28,7 @@ namespace art {
 class CompilerDriver;
 class DexCompilationUnit;
 class DexFile;
+class Thread;
 
 class MirMethodInfo {
  public:
@@ -98,7 +99,7 @@ class MirMethodLoweringInfo : public MirMethodInfo {
   // index and method index) and compute whether we can fast path the method call. For fast
   // path methods, retrieve the method's vtable index and direct code and method when applicable.
   static void Resolve(CompilerDriver* compiler_driver, const DexCompilationUnit* mUnit,
-                      MirMethodLoweringInfo* method_infos, size_t count)
+                      MirMethodLoweringInfo* method_infos, size_t count, Thread* self)
       REQUIRES(!Locks::mutator_lock_);
 
   MirMethodLoweringInfo(uint16_t method_idx, InvokeType type, bool is_quickened)

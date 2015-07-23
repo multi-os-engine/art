@@ -16,11 +16,15 @@
 
 #include "compiled_method.h"
 #include "driver/compiler_driver.h"
+#include "thread.h"
 
 namespace art {
 
-CompiledCode::CompiledCode(CompilerDriver* compiler_driver, InstructionSet instruction_set,
-                           const ArrayRef<const uint8_t>& quick_code, bool owns_code_array)
+CompiledCode::CompiledCode(Thread* self,
+                           CompilerDriver* compiler_driver,
+                           InstructionSet instruction_set,
+                           const ArrayRef<const uint8_t>& quick_code,
+                           bool owns_code_array)
     : compiler_driver_(compiler_driver), instruction_set_(instruction_set),
       owns_code_array_(owns_code_array), quick_code_(nullptr) {
   if (owns_code_array_) {
@@ -28,7 +32,7 @@ CompiledCode::CompiledCode(CompilerDriver* compiler_driver, InstructionSet instr
     quick_code_ = new SwapVector<uint8_t>(quick_code.begin(), quick_code.end(),
                                           compiler_driver_->GetSwapSpaceAllocator());
   } else {
-    quick_code_ = compiler_driver_->DeduplicateCode(quick_code);
+    quick_code_ = compiler_driver_->DeduplicateCode(quick_code, self);
   }
 }
 
@@ -113,7 +117,8 @@ void CompiledCode::AddOatdataOffsetToCompliledCodeOffset(uint32_t offset) {
   oatdata_offsets_to_compiled_code_offset_.push_back(offset);
 }
 
-CompiledMethod::CompiledMethod(CompilerDriver* driver,
+CompiledMethod::CompiledMethod(Thread* self,
+                               CompilerDriver* driver,
                                InstructionSet instruction_set,
                                const ArrayRef<const uint8_t>& quick_code,
                                const size_t frame_size_in_bytes,
@@ -125,7 +130,7 @@ CompiledMethod::CompiledMethod(CompilerDriver* driver,
                                const ArrayRef<const uint8_t>& native_gc_map,
                                const ArrayRef<const uint8_t>& cfi_info,
                                const ArrayRef<const LinkerPatch>& patches)
-    : CompiledCode(driver, instruction_set, quick_code, !driver->DedupeEnabled()),
+    : CompiledCode(self, driver, instruction_set, quick_code, !driver->DedupeEnabled()),
       owns_arrays_(!driver->DedupeEnabled()),
       frame_size_in_bytes_(frame_size_in_bytes), core_spill_mask_(core_spill_mask),
       fp_spill_mask_(fp_spill_mask),
@@ -149,17 +154,18 @@ CompiledMethod::CompiledMethod(CompilerDriver* driver,
         new SwapVector<uint8_t>(cfi_info.begin(), cfi_info.end(), driver->GetSwapSpaceAllocator());
   } else {
     src_mapping_table_ = src_mapping_table == nullptr ?
-        driver->DeduplicateSrcMappingTable(ArrayRef<SrcMapElem>()) :
-        driver->DeduplicateSrcMappingTable(ArrayRef<SrcMapElem>(*src_mapping_table));
+        driver->DeduplicateSrcMappingTable(ArrayRef<SrcMapElem>(), self) :
+        driver->DeduplicateSrcMappingTable(ArrayRef<SrcMapElem>(*src_mapping_table), self);
     mapping_table_ = mapping_table.empty() ?
-        nullptr : driver->DeduplicateMappingTable(mapping_table);
-    vmap_table_ = driver->DeduplicateVMapTable(vmap_table);
-    gc_map_ = native_gc_map.empty() ? nullptr : driver->DeduplicateGCMap(native_gc_map);
-    cfi_info_ = cfi_info.empty() ? nullptr : driver->DeduplicateCFIInfo(cfi_info);
+        nullptr : driver->DeduplicateMappingTable(mapping_table, self);
+    vmap_table_ = driver->DeduplicateVMapTable(vmap_table, self);
+    gc_map_ = native_gc_map.empty() ? nullptr : driver->DeduplicateGCMap(native_gc_map, self);
+    cfi_info_ = cfi_info.empty() ? nullptr : driver->DeduplicateCFIInfo(cfi_info, self);
   }
 }
 
 CompiledMethod* CompiledMethod::SwapAllocCompiledMethod(
+    Thread* self,
     CompilerDriver* driver,
     InstructionSet instruction_set,
     const ArrayRef<const uint8_t>& quick_code,
@@ -174,9 +180,9 @@ CompiledMethod* CompiledMethod::SwapAllocCompiledMethod(
     const ArrayRef<const LinkerPatch>& patches) {
   SwapAllocator<CompiledMethod> alloc(driver->GetSwapSpaceAllocator());
   CompiledMethod* ret = alloc.allocate(1);
-  alloc.construct(ret, driver, instruction_set, quick_code, frame_size_in_bytes, core_spill_mask,
-                  fp_spill_mask, src_mapping_table, mapping_table, vmap_table, native_gc_map,
-                  cfi_info, patches);
+  alloc.construct(ret, self, driver, instruction_set, quick_code, frame_size_in_bytes,
+                  core_spill_mask, fp_spill_mask, src_mapping_table, mapping_table, vmap_table,
+                  native_gc_map, cfi_info, patches);
   return ret;
 }
 

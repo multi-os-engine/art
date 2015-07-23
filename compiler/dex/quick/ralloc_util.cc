@@ -1149,7 +1149,7 @@ void Mir2Lir::AnalyzeMIR(RefCounts* core_counts, MIR* mir, uint32_t weight) {
           (opcode == Instruction::CHECK_CAST) ? mir->dalvikInsn.vB : mir->dalvikInsn.vC;
       bool type_known_final, type_known_abstract, use_declaring_class;
       bool needs_access_check = !cu_->compiler_driver->CanAccessTypeWithoutChecks(
-          cu_->method_idx, *cu_->dex_file, type_idx,
+          cu_->method_idx, *cu_->dex_file, type_idx, self_,
           &type_known_final, &type_known_abstract, &use_declaring_class);
       if (opcode == Instruction::CHECK_CAST && !needs_access_check &&
           cu_->compiler_driver->IsSafeCast(
@@ -1168,7 +1168,7 @@ void Mir2Lir::AnalyzeMIR(RefCounts* core_counts, MIR* mir, uint32_t weight) {
     case Instruction::CONST_CLASS:
       if (CanUseOpPcRelDexCacheArrayLoad() &&
           cu_->compiler_driver->CanAccessTypeWithoutChecks(cu_->method_idx, *cu_->dex_file,
-                                                           mir->dalvikInsn.vB)) {
+                                                           mir->dalvikInsn.vB, self_)) {
         uses_pc_rel_load = true;  // And ignore method use in slow path.
         dex_cache_array_offset = dex_cache_arrays_layout_.TypeOffset(mir->dalvikInsn.vB);
       } else {

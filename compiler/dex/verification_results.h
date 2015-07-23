@@ -29,6 +29,8 @@
 
 namespace art {
 
+class Thread;
+
 namespace verifier {
 class MethodVerifier;
 }  // namespace verifier
@@ -42,16 +44,17 @@ class VerificationResults {
     explicit VerificationResults(const CompilerOptions* compiler_options);
     ~VerificationResults();
 
-    bool ProcessVerifiedMethod(verifier::MethodVerifier* method_verifier)
+    bool ProcessVerifiedMethod(verifier::MethodVerifier* method_verifier, Thread* self)
         SHARED_REQUIRES(Locks::mutator_lock_)
         REQUIRES(!verified_methods_lock_);
 
-    const VerifiedMethod* GetVerifiedMethod(MethodReference ref)
+    const VerifiedMethod* GetVerifiedMethod(MethodReference ref, Thread* self)
         REQUIRES(!verified_methods_lock_);
-    void RemoveVerifiedMethod(MethodReference ref) REQUIRES(!verified_methods_lock_);
+    void RemoveVerifiedMethod(MethodReference ref, Thread* self) REQUIRES(!verified_methods_lock_);
 
-    void AddRejectedClass(ClassReference ref) REQUIRES(!rejected_classes_lock_);
-    bool IsClassRejected(ClassReference ref) REQUIRES(!rejected_classes_lock_);
+    void AddRejectedClass(ClassReference ref, Thread* self) REQUIRES(!rejected_classes_lock_);
+    bool IsClassRejected(ClassReference ref, Thread* self) REQUIRES(!rejected_classes_lock_);
+
 
     bool IsCandidateForCompilation(MethodReference& method_ref,
                                    const uint32_t access_flags);

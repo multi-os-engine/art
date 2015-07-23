@@ -39,7 +39,7 @@
 #include "utils/mips/managed_register_mips.h"
 #include "utils/mips64/managed_register_mips64.h"
 #include "utils/x86/managed_register_x86.h"
-#include "thread.h"
+#include "thread-inl.h"
 
 #define __ jni_asm->
 
@@ -480,7 +480,8 @@ CompiledMethod* ArtJniCompileMethodInternal(CompilerDriver* driver,
   MemoryRegion code(&managed_code[0], managed_code.size());
   __ FinalizeInstructions(code);
 
-  return CompiledMethod::SwapAllocCompiledMethod(driver,
+  return CompiledMethod::SwapAllocCompiledMethod(Thread::Current(),
+                                                 driver,
                                                  instruction_set,
                                                  ArrayRef<const uint8_t>(managed_code),
                                                  frame_size,
