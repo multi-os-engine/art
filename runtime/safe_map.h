@@ -86,6 +86,15 @@ class SafeMap {
     return it->second;
   }
 
+  // Returns the value associated with `k`. If there is none, returns `default_value`.
+  V OptionGet(const K& k, const V& default_value) const {
+    const_iterator it = map_.find(k);
+    if (it != map_.end()) {
+      return it->second;
+    }
+    return default_value;
+  }
+
   // Used to insert a new mapping.
   iterator Put(const K& k, const V& v) {
     std::pair<iterator, bool> result = map_.emplace(k, v);
@@ -110,6 +119,13 @@ class SafeMap {
       // Already there - update the value for the existing key
       result.first->second = v;
     }
+  }
+
+  // Wrapper around std::map::insert. Try to insert (k, v); if `k` was already in the map, don't
+  // do anything. The iterator returned points to the (k, v) pair. The boolean indicates whether
+  // the insertion actually happened.
+  std::pair<iterator, bool> Insert(const K& k, const V& v) {
+    return map_.insert(std::make_pair(k, v));
   }
 
   bool Equals(const Self& rhs) const {
