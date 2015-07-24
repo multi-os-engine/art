@@ -1235,6 +1235,30 @@ bool HTryBoundary::HasSameExceptionHandlersAs(const HTryBoundary& other) const {
   return true;
 }
 
+bool HBasicBlock::IsTrueBranch() const {
+  if (predecessors_.Size() != 1) {
+    return false;
+  }
+  HInstruction* last = GetSinglePredecessor()->GetLastInstruction();
+  if (!last->IsIf()) {
+    return false;
+  }
+  HIf* condition = last->AsIf();
+  return condition->IfTrueSuccessor() == this;
+}
+
+bool HBasicBlock::IsFalseBranch() const {
+  if (predecessors_.Size() != 1) {
+    return false;
+  }
+  HInstruction* last = GetSinglePredecessor()->GetLastInstruction();
+  if (!last->IsIf()) {
+    return false;
+  }
+  HIf* condition = last->AsIf();
+  return condition->IfFalseSuccessor() == this;
+}
+
 size_t HInstructionList::CountSize() const {
   size_t size = 0;
   HInstruction* current = first_instruction_;

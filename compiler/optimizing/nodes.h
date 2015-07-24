@@ -859,6 +859,9 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   // the appropriate try entry will be returned.
   HTryBoundary* ComputeTryEntryOfSuccessors() const;
 
+  bool IsTrueBranch() const;
+  bool IsFalseBranch() const;
+
   // Returns whether this block dominates the blocked passed as parameter.
   bool Dominates(HBasicBlock* block) const;
 
