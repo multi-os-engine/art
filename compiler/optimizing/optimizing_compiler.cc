@@ -49,6 +49,7 @@
 #include "jni/quick/jni_compiler.h"
 #include "nodes.h"
 #include "prepare_for_register_allocation.h"
+#include "ranges.h"
 #include "reference_type_propagation.h"
 #include "register_allocator.h"
 #include "side_effects_analysis.h"
@@ -426,6 +427,7 @@ static void RunOptimizations(HGraph* graph,
       graph, stats, "instruction_simplifier_after_bce");
   InstructionSimplifier* simplify4 = new (arena) InstructionSimplifier(
       graph, stats, "instruction_simplifier_before_codegen");
+  RangePropagation* rp = new (arena) RangePropagation(graph);
 
   IntrinsicsRecognizer* intrinsics = new (arena) IntrinsicsRecognizer(graph, driver);
 
@@ -434,6 +436,7 @@ static void RunOptimizations(HGraph* graph,
     fold1,
     simplify1,
     type_propagation,
+    rp,
     dce1,
     simplify2
   };
