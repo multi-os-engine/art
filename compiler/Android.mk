@@ -122,11 +122,13 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/licm.cc \
 	optimizing/locations.cc \
 	optimizing/nodes.cc \
+	optimizing/null_propagation.cc \
 	optimizing/optimization.cc \
 	optimizing/optimizing_compiler.cc \
 	optimizing/parallel_move_resolver.cc \
 	optimizing/prepare_for_register_allocation.cc \
 	optimizing/primitive_type_propagation.cc \
+	optimizing/ranges.cc \
 	optimizing/reference_type_propagation.cc \
 	optimizing/register_allocator.cc \
 	optimizing/side_effects_analysis.cc \
