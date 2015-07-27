@@ -39,12 +39,8 @@ class Main extends IntMathBase {
         foo_ = 123;
     }
 
-    static boolean doThrow = false;
-
     /* Regression test: triggered an SSA renaming bug. */
     static long $noinline$DivideLongByBillion(long a) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         long quot;
         long rem;
 
@@ -199,7 +195,6 @@ class Main extends IntMathBase {
      * Try to cause some unary operations.
      */
     static int $noinline$UnopTest(int x) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
         x = -x;
         x ^= 0xffffffff;
         return x;
@@ -340,8 +335,6 @@ class Main extends IntMathBase {
      * doesn't do the math for us.  (x=70000, y=-3)
      */
     static int $noinline$IntOperTest(int x, int y) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         int[] results = new int[10];
 
         /* this seems to generate "op-int" instructions */
@@ -385,8 +378,6 @@ class Main extends IntMathBase {
      * More operations, this time with 16-bit constants.  (x=77777)
      */
     static int $noinline$Lit16Test(int x) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         int[] results = new int[10];
 
         /* try to generate op-int/lit16" instructions */
@@ -419,8 +410,6 @@ class Main extends IntMathBase {
      * More operations, this time with 8-bit constants.  (x=-55555)
      */
     static int $noinline$Lit8Test(int x) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         int[] results = new int[8];
 
         /* try to generate op-int/lit8" instructions */
@@ -451,7 +440,6 @@ class Main extends IntMathBase {
      * Shift some data.  (value=0xff00aa01, dist=8)
      */
     static int $noinline$IntShiftTest(int value, int dist) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
         int results[] = new int[4];
         results[0] = value << dist;
         results[1] = value >> dist;
@@ -469,8 +457,6 @@ class Main extends IntMathBase {
      * doesn't do the math for us.  (x=70000000000, y=-3)
      */
     static int $noinline$LongOperTest(long x, long y) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         long[] results = new long[10];
 
         /* this seems to generate "op-long" instructions */
@@ -509,7 +495,6 @@ class Main extends IntMathBase {
      * Shift some data.  (value=0xd5aa96deff00aa01, dist=16)
      */
     static long $noinline$LongShiftTest(long value, int dist) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
         long results[] = new long[4];
         results[0] = value << dist;
         results[1] = value >> dist;
@@ -580,8 +565,6 @@ class Main extends IntMathBase {
      * Test the integer comparisons in various ways.
      */
     static int $noinline$TestIntCompare(int minus, int plus, int plus2, int zero) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         int res = 1111;
 
         if (minus > plus)
@@ -632,8 +615,6 @@ class Main extends IntMathBase {
      */
     static int $noinline$TestLongCompare(long minus, long alsoMinus, long plus,
                                          long alsoPlus) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         int res = 2222;
 
         if (minus > plus)
@@ -679,8 +660,6 @@ class Main extends IntMathBase {
      */
     static int $noinline$TestFloatCompare(float minus, float plus, float plus2,
                                           float nan) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         if (minus > plus)
             return 1;
         if (plus < minus)
@@ -711,8 +690,6 @@ class Main extends IntMathBase {
 
     static int $noinline$TestDoubleCompare(double minus, double plus, double plus2,
                                            double nan) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         int res = 4444;
 
         if (minus > plus)
@@ -911,7 +888,7 @@ class Main extends IntMathBase {
       return res;
     }
 
-    public static void main(String[] args) {
+    static void $stopinliner$Run() {
         boolean failure = false;
         int res;
         long lres;
@@ -1185,6 +1162,10 @@ class Main extends IntMathBase {
         }
 
         System.exit(failure ? 1 : 0);
+    }
+
+    public static void main(String[] args) {
+      $stopinliner$Run();
     }
 }
 

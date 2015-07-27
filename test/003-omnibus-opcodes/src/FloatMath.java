@@ -19,12 +19,8 @@
  */
 public class FloatMath {
 
-    static boolean doThrow = false;
-
     static void $noinline$ConvTest() {
         System.out.println("FloatMath.$noinline$ConvTest");
-
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
 
         float f;
         double d;
@@ -139,8 +135,6 @@ public class FloatMath {
     static float[] $noinline$FloatOperTest(float x, float y) {
         System.out.println("FloatMath.$noinline$FloatOperTest");
 
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         float[] results = new float[9];
 
         /* this seems to generate "op-float" instructions */
@@ -171,8 +165,6 @@ public class FloatMath {
     static double[] $noinline$DoubleOperTest(double x, double y) {
         System.out.println("FloatMath.$noinline$DoubleOperTest");
 
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         double[] results = new double[9];
 
         /* this seems to generate "op-double" instructions */
@@ -200,13 +192,11 @@ public class FloatMath {
      * Try to cause some unary operations.
      */
     static float $noinline$UnopTest(float f) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
         f = -f;
         return f;
     }
 
     static int[] $noinline$ConvI(long l, float f, double d, float zero) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
         int[] results = new int[6];
         results[0] = (int) l;
         results[1] = (int) f;
@@ -227,7 +217,6 @@ public class FloatMath {
     }
 
     static long[] $noinline$ConvL(int i, float f, double d, double zero) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
         long[] results = new long[6];
         results[0] = (long) i;
         results[1] = (long) f;
@@ -248,7 +237,6 @@ public class FloatMath {
     }
 
     static float[] $noinline$ConvF(int i, long l, double d) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
         float[] results = new float[3];
         results[0] = (float) i;
         results[1] = (float) l;
@@ -264,7 +252,6 @@ public class FloatMath {
     }
 
     static double[] $noinline$ConvD(int i, long l, float f) {
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
         double[] results = new double[3];
         results[0] = (double) i;
         results[1] = (double) l;
@@ -281,8 +268,6 @@ public class FloatMath {
 
     static void $noinline$CheckConsts() {
         System.out.println("FloatMath.$noinline$CheckConsts");
-
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
 
         float f = 10.0f;        // const/special
         Main.assertTrue(f > 9.9 && f < 10.1);
@@ -335,7 +320,7 @@ public class FloatMath {
         Main.assertTrue(approxEqual(0.8414709848078965, Math.sin(1.0), 0.00000001));
     }
 
-    public static void run() {
+    public static void $stopinliner$Run() {
         $noinline$ConvTest();
 
         float[] floatResults;

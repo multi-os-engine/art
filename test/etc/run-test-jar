@@ -320,6 +320,14 @@ if [ "$HOST" = "n" ]; then
   fi
 fi
 
+# Prevent the inliner from processing `main` and methods tagged `$stopinliner$`.
+# In the VM.
+OPTIMIZATIONS_OPTS="\
+-Xcompiler-option --disable-optimization-passes-for=inline,main \
+-Xcompiler-option --disable-optimization-passes-for=inline,\$stopinliner\$"
+# In the compiler.
+COMPILE_FLAGS="$COMPILE_FLAGS $(echo $OPTIMIZATIONS_OPTS | sed 's/-Xcompiler-option//g')"
+
 dex2oat_cmdline="true"
 mkdir_cmdline="mkdir -p ${DEX_LOCATION}/dalvik-cache/$ISA"
 
@@ -342,6 +350,7 @@ dalvikvm_cmdline="$INVOKE_WITH $GDB $ANDROID_ROOT/bin/$DALVIKVM \
                   $ZYGOTE \
                   $JNI_OPTS \
                   $INT_OPTS \
+                  $OPTIMIZATIONS_OPTS \
                   $DEBUGGER_OPTS \
                   $DALVIKVM_BOOT_OPT \
                   -cp $DEX_LOCATION/$TEST_NAME.jar$SECONDARY_DEX $MAIN"

@@ -77,67 +77,67 @@ public class Main {
 
   public static void main(String[] args) {
     // Generate, compile and check int-to-long Dex instructions.
-    byteToLong();
-    shortToLong();
-    intToLong();
-    charToLong();
+    $stopinliner$ByteToLong();
+    $stopinliner$ShortToLong();
+    $stopinliner$IntToLong();
+    $stopinliner$CharToLong();
 
     // Generate, compile and check int-to-float Dex instructions.
-    byteToFloat();
-    shortToFloat();
-    intToFloat();
-    charToFloat();
+    $stopinliner$ByteToFloat();
+    $stopinliner$ShortToFloat();
+    $stopinliner$IntToFloat();
+    $stopinliner$CharToFloat();
 
     // Generate, compile and check int-to-double Dex instructions.
-    byteToDouble();
-    shortToDouble();
-    intToDouble();
-    charToDouble();
+    $stopinliner$ByteToDouble();
+    $stopinliner$ShortToDouble();
+    $stopinliner$IntToDouble();
+    $stopinliner$CharToDouble();
 
     // Generate, compile and check long-to-int Dex instructions.
-    longToInt();
+    $stopinliner$LongToInt();
 
     // Generate, compile and check long-to-float Dex instructions.
-    longToFloat();
+    $stopinliner$LongToFloat();
 
     // Generate, compile and check long-to-double Dex instructions.
-    longToDouble();
+    $stopinliner$LongToDouble();
 
     // Generate, compile and check float-to-int Dex instructions.
-    floatToInt();
+    $stopinliner$FloatToInt();
 
     // Generate, compile and check float-to-long Dex instructions.
-    floatToLong();
+    $stopinliner$FloatToLong();
 
     // Generate, compile and check float-to-double Dex instructions.
-    floatToDouble();
+    $stopinliner$FloatToDouble();
 
     // Generate, compile and check double-to-int Dex instructions.
-    doubleToInt();
+    $stopinliner$DoubleToInt();
 
     // Generate, compile and check double-to-long Dex instructions.
-    doubleToLong();
+    $stopinliner$DoubleToLong();
 
     // Generate, compile and check double-to-float Dex instructions.
-    doubleToFloat();
+    $stopinliner$DoubleToFloat();
 
     // Generate, compile and check int-to-byte Dex instructions.
-    shortToByte();
-    intToByte();
-    charToByte();
+    $stopinliner$ShortToByte();
+    $stopinliner$IntToByte();
+    $stopinliner$CharToByte();
 
     // Generate, compile and check int-to-short Dex instructions.
-    byteToShort();
-    intToShort();
-    charToShort();
+    $stopinliner$ByteToShort();
+    $stopinliner$IntToShort();
+    $stopinliner$CharToShort();
 
     // Generate, compile and check int-to-char Dex instructions.
-    byteToChar();
-    shortToChar();
-    intToChar();
+    $stopinliner$ByteToChar();
+    $stopinliner$ShortToChar();
+    $stopinliner$IntToChar();
   }
 
-  private static void byteToLong() {
+  private static void $stopinliner$ByteToLong() {
     assertLongEquals(1L, $opt$noinline$ByteToLong((byte)1));
     assertLongEquals(0L, $opt$noinline$ByteToLong((byte)0));
     assertLongEquals(-1L, $opt$noinline$ByteToLong((byte)-1));
@@ -148,7 +148,7 @@ public class Main {
     assertLongEquals(-128L, $opt$noinline$ByteToLong((byte)-128));  // -(2^7)
   }
 
-  private static void shortToLong() {
+  private static void $stopinliner$ShortToLong() {
     assertLongEquals(1L, $opt$noinline$ShortToLong((short)1));
     assertLongEquals(0L, $opt$noinline$ShortToLong((short)0));
     assertLongEquals(-1L, $opt$noinline$ShortToLong((short)-1));
@@ -159,7 +159,7 @@ public class Main {
     assertLongEquals(-32768L, $opt$noinline$ShortToLong((short)-32768));  // -(2^15)
   }
 
-  private static void intToLong() {
+  private static void $stopinliner$IntToLong() {
     assertLongEquals(1L, $opt$noinline$IntToLong(1));
     assertLongEquals(0L, $opt$noinline$IntToLong(0));
     assertLongEquals(-1L, $opt$noinline$IntToLong(-1));
@@ -170,7 +170,7 @@ public class Main {
     assertLongEquals(-2147483648L, $opt$noinline$IntToLong(-2147483648));  // -(2^31)
   }
 
-  private static void charToLong() {
+  private static void $stopinliner$CharToLong() {
     assertLongEquals(1L, $opt$noinline$CharToLong((char)1));
     assertLongEquals(0L, $opt$noinline$CharToLong((char)0));
     assertLongEquals(51L, $opt$noinline$CharToLong((char)51));
@@ -182,7 +182,7 @@ public class Main {
     assertLongEquals(32768L, $opt$noinline$CharToLong((char)-32768));  // -(2^15)
   }
 
-  private static void byteToFloat() {
+  private static void $stopinliner$ByteToFloat() {
     assertFloatEquals(1F, $opt$noinline$ByteToFloat((byte)1));
     assertFloatEquals(0F, $opt$noinline$ByteToFloat((byte)0));
     assertFloatEquals(-1F, $opt$noinline$ByteToFloat((byte)-1));
@@ -193,7 +193,7 @@ public class Main {
     assertFloatEquals(-128F, $opt$noinline$ByteToFloat((byte)-128));  // -(2^7)
   }
 
-  private static void shortToFloat() {
+  private static void $stopinliner$ShortToFloat() {
     assertFloatEquals(1F, $opt$noinline$ShortToFloat((short)1));
     assertFloatEquals(0F, $opt$noinline$ShortToFloat((short)0));
     assertFloatEquals(-1F, $opt$noinline$ShortToFloat((short)-1));
@@ -204,7 +204,7 @@ public class Main {
     assertFloatEquals(-32768F, $opt$noinline$ShortToFloat((short)-32768));  // -(2^15)
   }
 
-  private static void intToFloat() {
+  private static void $stopinliner$IntToFloat() {
     assertFloatEquals(1F, $opt$noinline$IntToFloat(1));
     assertFloatEquals(0F, $opt$noinline$IntToFloat(0));
     assertFloatEquals(-1F, $opt$noinline$IntToFloat(-1));
@@ -218,7 +218,7 @@ public class Main {
     assertFloatEquals(-2147483648F, $opt$noinline$IntToFloat(-2147483648));  // -(2^31)
   }
 
-  private static void charToFloat() {
+  private static void $stopinliner$CharToFloat() {
     assertFloatEquals(1F, $opt$noinline$CharToFloat((char)1));
     assertFloatEquals(0F, $opt$noinline$CharToFloat((char)0));
     assertFloatEquals(51F, $opt$noinline$CharToFloat((char)51));
@@ -230,7 +230,7 @@ public class Main {
     assertFloatEquals(32768F, $opt$noinline$CharToFloat((char)-32768));  // -(2^15)
   }
 
-  private static void byteToDouble() {
+  private static void $stopinliner$ByteToDouble() {
     assertDoubleEquals(1D, $opt$noinline$ByteToDouble((byte)1));
     assertDoubleEquals(0D, $opt$noinline$ByteToDouble((byte)0));
     assertDoubleEquals(-1D, $opt$noinline$ByteToDouble((byte)-1));
@@ -241,7 +241,7 @@ public class Main {
     assertDoubleEquals(-128D, $opt$noinline$ByteToDouble((byte)-128));  // -(2^7)
   }
 
-  private static void shortToDouble() {
+  private static void $stopinliner$ShortToDouble() {
     assertDoubleEquals(1D, $opt$noinline$ShortToDouble((short)1));
     assertDoubleEquals(0D, $opt$noinline$ShortToDouble((short)0));
     assertDoubleEquals(-1D, $opt$noinline$ShortToDouble((short)-1));
@@ -252,7 +252,7 @@ public class Main {
     assertDoubleEquals(-32768D, $opt$noinline$ShortToDouble((short)-32768));  // -(2^15)
   }
 
-  private static void intToDouble() {
+  private static void $stopinliner$IntToDouble() {
     assertDoubleEquals(1D, $opt$noinline$IntToDouble(1));
     assertDoubleEquals(0D, $opt$noinline$IntToDouble(0));
     assertDoubleEquals(-1D, $opt$noinline$IntToDouble(-1));
@@ -264,7 +264,7 @@ public class Main {
     assertDoubleEquals(-2147483648D, $opt$noinline$IntToDouble(-2147483648));  // -(2^31)
   }
 
-  private static void charToDouble() {
+  private static void $stopinliner$CharToDouble() {
     assertDoubleEquals(1D, $opt$noinline$CharToDouble((char)1));
     assertDoubleEquals(0D, $opt$noinline$CharToDouble((char)0));
     assertDoubleEquals(51D, $opt$noinline$CharToDouble((char)51));
@@ -276,7 +276,7 @@ public class Main {
     assertDoubleEquals(32768D, $opt$noinline$CharToDouble((char)-32768));  // -(2^15)
   }
 
-  private static void longToInt() {
+  private static void $stopinliner$LongToInt() {
     assertIntEquals(1, $opt$noinline$LongToInt(1L));
     assertIntEquals(0, $opt$noinline$LongToInt(0L));
     assertIntEquals(-1, $opt$noinline$LongToInt(-1L));
@@ -303,7 +303,7 @@ public class Main {
     assertLongEquals(-1, $opt$noinline$IntToLong($opt$noinline$LongToInt(-4294967297L)));  // -(2^32 + 1)
   }
 
-  private static void longToFloat() {
+  private static void $stopinliner$LongToFloat() {
     assertFloatEquals(1F, $opt$noinline$LongToFloat(1L));
     assertFloatEquals(0F, $opt$noinline$LongToFloat(0L));
     assertFloatEquals(-1F, $opt$noinline$LongToFloat(-1L));
@@ -323,7 +323,7 @@ public class Main {
     assertFloatEquals(-9223372036854775808F, $opt$noinline$LongToFloat(-9223372036854775808L));  // -(2^63)
   }
 
-  private static void longToDouble() {
+  private static void $stopinliner$LongToDouble() {
     assertDoubleEquals(1D, $opt$noinline$LongToDouble(1L));
     assertDoubleEquals(0D, $opt$noinline$LongToDouble(0L));
     assertDoubleEquals(-1D, $opt$noinline$LongToDouble(-1L));
@@ -343,7 +343,7 @@ public class Main {
     assertDoubleEquals(-9223372036854775808D, $opt$noinline$LongToDouble(-9223372036854775808L));  // -(2^63)
   }
 
-  private static void floatToInt() {
+  private static void $stopinliner$FloatToInt() {
     assertIntEquals(1, $opt$noinline$FloatToInt(1F));
     assertIntEquals(0, $opt$noinline$FloatToInt(0F));
     assertIntEquals(0, $opt$noinline$FloatToInt(-0F));
@@ -369,7 +369,7 @@ public class Main {
     assertIntEquals(-2147483648, $opt$noinline$FloatToInt(Float.NEGATIVE_INFINITY));
   }
 
-  private static void floatToLong() {
+  private static void $stopinliner$FloatToLong() {
     assertLongEquals(1L, $opt$noinline$FloatToLong(1F));
     assertLongEquals(0L, $opt$noinline$FloatToLong(0F));
     assertLongEquals(0L, $opt$noinline$FloatToLong(-0F));
@@ -395,7 +395,7 @@ public class Main {
     assertLongEquals(-9223372036854775808L, $opt$noinline$FloatToLong(Float.NEGATIVE_INFINITY));
   }
 
-  private static void floatToDouble() {
+  private static void $stopinliner$FloatToDouble() {
     assertDoubleEquals(1D, $opt$noinline$FloatToDouble(1F));
     assertDoubleEquals(0D, $opt$noinline$FloatToDouble(0F));
     assertDoubleEquals(0D, $opt$noinline$FloatToDouble(-0F));
@@ -421,7 +421,7 @@ public class Main {
     assertDoubleEquals(Double.NEGATIVE_INFINITY, $opt$noinline$FloatToDouble(Float.NEGATIVE_INFINITY));
   }
 
-  private static void doubleToInt() {
+  private static void $stopinliner$DoubleToInt() {
     assertIntEquals(1, $opt$noinline$DoubleToInt(1D));
     assertIntEquals(0, $opt$noinline$DoubleToInt(0D));
     assertIntEquals(0, $opt$noinline$DoubleToInt(-0D));
@@ -447,7 +447,7 @@ public class Main {
     assertIntEquals(-2147483648, $opt$noinline$DoubleToInt(Double.NEGATIVE_INFINITY));
   }
 
-  private static void doubleToLong() {
+  private static void $stopinliner$DoubleToLong() {
     assertLongEquals(1L, $opt$noinline$DoubleToLong(1D));
     assertLongEquals(0L, $opt$noinline$DoubleToLong(0D));
     assertLongEquals(0L, $opt$noinline$DoubleToLong(-0D));
@@ -473,7 +473,7 @@ public class Main {
     assertLongEquals(-9223372036854775808L, $opt$noinline$DoubleToLong(Double.NEGATIVE_INFINITY));
   }
 
-  private static void doubleToFloat() {
+  private static void $stopinliner$DoubleToFloat() {
     assertFloatEquals(1F, $opt$noinline$DoubleToFloat(1D));
     assertFloatEquals(0F, $opt$noinline$DoubleToFloat(0D));
     assertFloatEquals(0F, $opt$noinline$DoubleToFloat(-0D));
@@ -499,7 +499,7 @@ public class Main {
     assertFloatEquals(Float.NEGATIVE_INFINITY, $opt$noinline$DoubleToFloat(Double.NEGATIVE_INFINITY));
   }
 
-  private static void shortToByte() {
+  private static void $stopinliner$ShortToByte() {
     assertByteEquals((byte)1, $opt$noinline$ShortToByte((short)1));
     assertByteEquals((byte)0, $opt$noinline$ShortToByte((short)0));
     assertByteEquals((byte)-1, $opt$noinline$ShortToByte((short)-1));
@@ -514,7 +514,7 @@ public class Main {
     assertByteEquals((byte)0, $opt$noinline$ShortToByte((short)-32768));  // -(2^15)
   }
 
-  private static void intToByte() {
+  private static void $stopinliner$IntToByte() {
     assertByteEquals((byte)1, $opt$noinline$IntToByte(1));
     assertByteEquals((byte)0, $opt$noinline$IntToByte(0));
     assertByteEquals((byte)-1, $opt$noinline$IntToByte(-1));
@@ -529,7 +529,7 @@ public class Main {
     assertByteEquals((byte)0, $opt$noinline$IntToByte(-2147483648));  // -(2^31)
   }
 
-  private static void charToByte() {
+  private static void $stopinliner$CharToByte() {
     assertByteEquals((byte)1, $opt$noinline$CharToByte((char)1));
     assertByteEquals((byte)0, $opt$noinline$CharToByte((char)0));
     assertByteEquals((byte)51, $opt$noinline$CharToByte((char)51));
@@ -544,7 +544,7 @@ public class Main {
     assertByteEquals((byte)127, $opt$noinline$CharToByte((char)-129));  // -(2^7 + 1)
   }
 
-  private static void byteToShort() {
+  private static void $stopinliner$ByteToShort() {
     assertShortEquals((short)1, $opt$noinline$ByteToShort((byte)1));
     assertShortEquals((short)0, $opt$noinline$ByteToShort((byte)0));
     assertShortEquals((short)-1, $opt$noinline$ByteToShort((byte)-1));
@@ -555,7 +555,7 @@ public class Main {
     assertShortEquals((short)-128, $opt$noinline$ByteToShort((byte)-128));  // -(2^7)
   }
 
-  private static void intToShort() {
+  private static void $stopinliner$IntToShort() {
     assertShortEquals((short)1, $opt$noinline$IntToShort(1));
     assertShortEquals((short)0, $opt$noinline$IntToShort(0));
     assertShortEquals((short)-1, $opt$noinline$IntToShort(-1));
@@ -570,7 +570,7 @@ public class Main {
     assertShortEquals((short)0, $opt$noinline$IntToShort(-2147483648));  // -(2^31)
   }
 
-  private static void charToShort() {
+  private static void $stopinliner$CharToShort() {
     assertShortEquals((short)1, $opt$noinline$CharToShort((char)1));
     assertShortEquals((short)0, $opt$noinline$CharToShort((char)0));
     assertShortEquals((short)51, $opt$noinline$CharToShort((char)51));
@@ -585,7 +585,7 @@ public class Main {
     assertShortEquals((short)32767, $opt$noinline$CharToShort((char)-32769));  // -(2^15 + 1)
   }
 
-  private static void byteToChar() {
+  private static void $stopinliner$ByteToChar() {
     assertCharEquals((char)1, $opt$noinline$ByteToChar((byte)1));
     assertCharEquals((char)0, $opt$noinline$ByteToChar((byte)0));
     assertCharEquals((char)65535, $opt$noinline$ByteToChar((byte)-1));
@@ -596,7 +596,7 @@ public class Main {
     assertCharEquals((char)65408, $opt$noinline$ByteToChar((byte)-128));  // -(2^7)
   }
 
-  private static void shortToChar() {
+  private static void $stopinliner$ShortToChar() {
     assertCharEquals((char)1, $opt$noinline$ShortToChar((short)1));
     assertCharEquals((char)0, $opt$noinline$ShortToChar((short)0));
     assertCharEquals((char)65535, $opt$noinline$ShortToChar((short)-1));
@@ -607,7 +607,7 @@ public class Main {
     assertCharEquals((char)32768, $opt$noinline$ShortToChar((short)-32768));  // -(2^15)
   }
 
-  private static void intToChar() {
+  private static void $stopinliner$IntToChar() {
     assertCharEquals((char)1, $opt$noinline$IntToChar(1));
     assertCharEquals((char)0, $opt$noinline$IntToChar(0));
     assertCharEquals((char)65535, $opt$noinline$IntToChar(-1));
@@ -625,67 +625,64 @@ public class Main {
     assertCharEquals((char)0, $opt$noinline$IntToChar(-2147483648));  // -(2^31)
   }
 
-  // A dummy value to defeat inlining of these routines.
-  static boolean doThrow = false;
-
   // These methods produce int-to-long Dex instructions.
-  static long $opt$noinline$ByteToLong(byte a) { if (doThrow) throw new Error(); return (long)a; }
-  static long $opt$noinline$ShortToLong(short a) { if (doThrow) throw new Error(); return (long)a; }
-  static long $opt$noinline$IntToLong(int a) { if (doThrow) throw new Error(); return (long)a; }
-  static long $opt$noinline$CharToLong(int a) { if (doThrow) throw new Error(); return (long)a; }
+  static long $opt$noinline$ByteToLong(byte a) { return (long)a; }
+  static long $opt$noinline$ShortToLong(short a) { return (long)a; }
+  static long $opt$noinline$IntToLong(int a) { return (long)a; }
+  static long $opt$noinline$CharToLong(int a) { return (long)a; }
 
   // These methods produce int-to-float Dex instructions.
-  static float $opt$noinline$ByteToFloat(byte a) { if (doThrow) throw new Error(); return (float)a; }
-  static float $opt$noinline$ShortToFloat(short a) { if (doThrow) throw new Error(); return (float)a; }
-  static float $opt$noinline$IntToFloat(int a) { if (doThrow) throw new Error(); return (float)a; }
-  static float $opt$noinline$CharToFloat(char a) { if (doThrow) throw new Error(); return (float)a; }
+  static float $opt$noinline$ByteToFloat(byte a) { return (float)a; }
+  static float $opt$noinline$ShortToFloat(short a) { return (float)a; }
+  static float $opt$noinline$IntToFloat(int a) { return (float)a; }
+  static float $opt$noinline$CharToFloat(char a) { return (float)a; }
 
   // These methods produce int-to-double Dex instructions.
-  static double $opt$noinline$ByteToDouble(byte a) { if (doThrow) throw new Error(); return (double)a; }
-  static double $opt$noinline$ShortToDouble(short a) { if (doThrow) throw new Error(); return (double)a; }
-  static double $opt$noinline$IntToDouble(int a) { if (doThrow) throw new Error(); return (double)a; }
-  static double $opt$noinline$CharToDouble(int a) { if (doThrow) throw new Error(); return (double)a; }
+  static double $opt$noinline$ByteToDouble(byte a) { return (double)a; }
+  static double $opt$noinline$ShortToDouble(short a) { return (double)a; }
+  static double $opt$noinline$IntToDouble(int a) { return (double)a; }
+  static double $opt$noinline$CharToDouble(int a) { return (double)a; }
 
   // These methods produce long-to-int Dex instructions.
-  static int $opt$noinline$LongToInt(long a) { if (doThrow) throw new Error(); return (int)a; }
-  static int $opt$noinline$LongLiteralToInt() { if (doThrow) throw new Error(); return (int)42L; }
+  static int $opt$noinline$LongToInt(long a) { return (int)a; }
+  static int $opt$noinline$LongLiteralToInt() { return (int)42L; }
 
   // This method produces a long-to-float Dex instruction.
-  static float $opt$noinline$LongToFloat(long a) { if (doThrow) throw new Error(); return (float)a; }
+  static float $opt$noinline$LongToFloat(long a) { return (float)a; }
 
   // This method produces a long-to-double Dex instruction.
-  static double $opt$noinline$LongToDouble(long a) { if (doThrow) throw new Error(); return (double)a; }
+  static double $opt$noinline$LongToDouble(long a) { return (double)a; }
 
   // This method produces a float-to-int Dex instruction.
-  static int $opt$noinline$FloatToInt(float a) { if (doThrow) throw new Error(); return (int)a; }
+  static int $opt$noinline$FloatToInt(float a) { return (int)a; }
 
   // This method produces a float-to-long Dex instruction.
-  static long $opt$noinline$FloatToLong(float a){ if (doThrow) throw new Error(); return (long)a; }
+  static long $opt$noinline$FloatToLong(float a){ return (long)a; }
 
   // This method produces a float-to-double Dex instruction.
-  static double $opt$noinline$FloatToDouble(float a) { if (doThrow) throw new Error(); return (double)a; }
+  static double $opt$noinline$FloatToDouble(float a) { return (double)a; }
 
   // This method produces a double-to-int Dex instruction.
-  static int $opt$noinline$DoubleToInt(double a){ if (doThrow) throw new Error(); return (int)a; }
+  static int $opt$noinline$DoubleToInt(double a){ return (int)a; }
 
   // This method produces a double-to-long Dex instruction.
-  static long $opt$noinline$DoubleToLong(double a){ if (doThrow) throw new Error(); return (long)a; }
+  static long $opt$noinline$DoubleToLong(double a){ return (long)a; }
 
   // This method produces a double-to-float Dex instruction.
-  static float $opt$noinline$DoubleToFloat(double a) { if (doThrow) throw new Error(); return (float)a; }
+  static float $opt$noinline$DoubleToFloat(double a) { return (float)a; }
 
   // These methods produce int-to-byte Dex instructions.
-  static byte $opt$noinline$ShortToByte(short a) { if (doThrow) throw new Error(); return (byte)a; }
-  static byte $opt$noinline$IntToByte(int a) { if (doThrow) throw new Error(); return (byte)a; }
-  static byte $opt$noinline$CharToByte(char a) { if (doThrow) throw new Error(); return (byte)a; }
+  static byte $opt$noinline$ShortToByte(short a) { return (byte)a; }
+  static byte $opt$noinline$IntToByte(int a) { return (byte)a; }
+  static byte $opt$noinline$CharToByte(char a) { return (byte)a; }
 
   // These methods produce int-to-short Dex instructions.
-  static short $opt$noinline$ByteToShort(byte a) { if (doThrow) throw new Error(); return (short)a; }
-  static short $opt$noinline$IntToShort(int a) { if (doThrow) throw new Error(); return (short)a; }
-  static short $opt$noinline$CharToShort(char a) { if (doThrow) throw new Error(); return (short)a; }
+  static short $opt$noinline$ByteToShort(byte a) { return (short)a; }
+  static short $opt$noinline$IntToShort(int a) { return (short)a; }
+  static short $opt$noinline$CharToShort(char a) { return (short)a; }
 
   // These methods produce int-to-char Dex instructions.
-  static char $opt$noinline$ByteToChar(byte a) { if (doThrow) throw new Error(); return (char)a; }
-  static char $opt$noinline$ShortToChar(short a) { if (doThrow) throw new Error(); return (char)a; }
-  static char $opt$noinline$IntToChar(int a) { if (doThrow) throw new Error(); return (char)a; }
+  static char $opt$noinline$ByteToChar(byte a) { return (char)a; }
+  static char $opt$noinline$ShortToChar(short a) { return (char)a; }
+  static char $opt$noinline$IntToChar(int a) { return (char)a; }
 }

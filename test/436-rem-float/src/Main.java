@@ -17,11 +17,11 @@
 public class Main {
 
   public static void main(String[] args) {
-    remFloat();
-    remDouble();
+    $stopinliner$RemFloat();
+    $stopinliner$RemDouble();
   }
 
-  private static void remFloat() {
+  private static void $stopinliner$RemFloat() {
     expectApproxEquals(1.98F, $opt$noinline$Rem(1.98F, 2F));
     expectApproxEquals(0F, $opt$noinline$Rem(2F, 0.5F));
     expectApproxEquals(0.09999F, $opt$noinline$Rem(1.0F, 0.1F));
@@ -120,7 +120,7 @@ public class Main {
     expectNaN($opt$noinline$Rem(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY));
   }
 
-  private static void remDouble() {
+  private static void $stopinliner$RemDouble() {
     expectApproxEquals(1.98D, $opt$noinline$Rem(1.98D, 2D));
     expectApproxEquals(0D, $opt$noinline$Rem(2D, 0.5D));
     expectApproxEquals(0.09999D, $opt$noinline$Rem(1.0D, 0.1D));
@@ -215,25 +215,19 @@ public class Main {
     expectNaN($opt$noinline$Rem(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY));
   }
 
-  static boolean doThrow = false;
-
   static float $opt$noinline$Rem(float a, float b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % b;
   }
 
  static float $opt$noinline$RemConst(float a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % 4F;
   }
 
   static double $opt$noinline$Rem(double a, double b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % b;
   }
 
   static double $opt$noinline$RemConst(double a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % 4D;
   }
 

@@ -77,13 +77,13 @@ public class Main {
   }
 
   public static void mul() {
-    mulInt();
-    mulLong();
-    mulFloat();
-    mulDouble();
+    $stopinliner$MulInt();
+    $stopinliner$MulLong();
+    $stopinliner$MulFloat();
+    $stopinliner$MulDouble();
   }
 
-  private static void mulInt() {
+  private static void $stopinliner$MulInt() {
     expectEquals(15, $opt$noinline$Mul(5, 3));
     expectEquals(0, $opt$noinline$Mul(0, 0));
     expectEquals(0, $opt$noinline$Mul(0, 3));
@@ -94,7 +94,7 @@ public class Main {
     expectEquals(671088645, $opt$noinline$Mul(134217729, 5)); // (2^27 + 1) * 5
   }
 
-  private static void mulLong() {
+  private static void $stopinliner$MulLong() {
     expectEquals(15L, $opt$noinline$Mul(5L, 3L));
     expectEquals(0L, $opt$noinline$Mul(0L, 0L));
     expectEquals(0L, $opt$noinline$Mul(0L, 3L));
@@ -105,7 +105,7 @@ public class Main {
     expectEquals(240518168583L, $opt$noinline$Mul(34359738369L, 7L)); // (2^35 + 1) * 7
   }
 
-  private static void mulFloat() {
+  private static void $stopinliner$MulFloat() {
     expectApproxEquals(15F, $opt$noinline$Mul(5F, 3F), 0.0001F);
     expectApproxEquals(0F, $opt$noinline$Mul(0F, 0F), 0.0001F);
     expectApproxEquals(0F, $opt$noinline$Mul(0F, 3F), 0.0001F);
@@ -134,7 +134,7 @@ public class Main {
     expectEquals(Float.POSITIVE_INFINITY, $opt$noinline$Mul(Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY));
   }
 
-  private static void mulDouble() {
+  private static void $stopinliner$MulDouble() {
     expectApproxEquals(15D, $opt$noinline$Mul(5D, 3D), 0.0001D);
     expectApproxEquals(0D, $opt$noinline$Mul(0D, 0D), 0.0001D);
     expectApproxEquals(0D, $opt$noinline$Mul(0D, 3D), 0.0001D);
@@ -163,25 +163,19 @@ public class Main {
     expectEquals(Double.POSITIVE_INFINITY, $opt$noinline$Mul(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY));
   }
 
-  static boolean doThrow = false;
-
   static int $opt$noinline$Mul(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a * b;
   }
 
   static long $opt$noinline$Mul(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a * b;
   }
 
   static float $opt$noinline$Mul(float a, float b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a * b;
   }
 
   static double $opt$noinline$Mul(double a, double b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a * b;
   }
 }

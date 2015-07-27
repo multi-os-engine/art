@@ -27,21 +27,18 @@ public class Main {
 
   public static void main(String[] args) {
     // Generate, compile and check long-to-float Dex instructions.
-    longToFloat();
+    $stopinliner$LongToFloat();
   }
 
-  private static void longToFloat() {
+  private static void $stopinliner$LongToFloat() {
     // The result for this test case used to be slightly less accurate
     // on ARM (both in Quick and Optimizing).
     assertFloatEquals(Float.intBitsToFloat(-555858671),
                       $opt$noinline$LongToFloat(-8008112895877447681L));
   }
 
-  static boolean doThrow = false;
-
   // This method produces a long-to-float Dex instruction.
   static float $opt$noinline$LongToFloat(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return (float)a;
   }
 }

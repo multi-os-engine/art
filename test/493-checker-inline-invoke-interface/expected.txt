@@ -2,4 +2,5 @@ Hello from clinit
 java.lang.Exception
 	at ForceStatic.<clinit>(Main.java:24)
 	at Main.foo(Main.java:31)
-	at Main.main(Main.java:42)
+	at Main.run(Main.java:42)
+	at Main.main(Main.java:46)

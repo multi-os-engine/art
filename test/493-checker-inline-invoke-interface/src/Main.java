@@ -31,15 +31,19 @@ public class Main implements Itf {
     int a = ForceStatic.field;
   }
 
-  /// CHECK-START: void Main.main(java.lang.String[]) inliner (before)
+  /// CHECK-START: void Main.run() inliner (before)
   /// CHECK:           InvokeStaticOrDirect
   /// CHECK:           InvokeInterface
 
-  /// CHECK-START: void Main.main(java.lang.String[]) inliner (after)
+  /// CHECK-START: void Main.run() inliner (after)
   /// CHECK-NOT:       Invoke{{.*}}
-  public static void main(String[] args) {
+  static void run() {
     Itf itf = bar();
     itf.foo();
+  }
+
+  public static void main(String[] args) {
+    run();
   }
 
   public static Itf bar() {

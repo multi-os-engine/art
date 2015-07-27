@@ -66,12 +66,12 @@ public class Main {
    * initialization check of the called method's declaring class.
    */
 
-  /// CHECK-START: void Main.invokeStaticNotInlined() builder (after)
+  /// CHECK-START: void Main.$stopinliner$InvokeStaticNotInlined() builder (after)
   /// CHECK-DAG:     <<LoadClass:l\d+>>    LoadClass gen_clinit_check:false
   /// CHECK-DAG:     <<ClinitCheck:l\d+>>  ClinitCheck [<<LoadClass>>]
   /// CHECK-DAG:                           InvokeStaticOrDirect [{{[ij]\d+}},<<ClinitCheck>>]
 
-  /// CHECK-START: void Main.invokeStaticNotInlined() inliner (after)
+  /// CHECK-START: void Main.$stopinliner$InvokeStaticNotInlined() inliner (after)
   /// CHECK-DAG:     <<LoadClass:l\d+>>    LoadClass gen_clinit_check:false
   /// CHECK-DAG:     <<ClinitCheck:l\d+>>  ClinitCheck [<<LoadClass>>]
   /// CHECK-DAG:                           InvokeStaticOrDirect [{{[ij]\d+}},<<ClinitCheck>>]
@@ -82,14 +82,14 @@ public class Main {
   // dumped after (nor before) this step, we check the CFG as it is
   // before the next pass (liveness analysis) instead.
 
-  /// CHECK-START: void Main.invokeStaticNotInlined() liveness (before)
+  /// CHECK-START: void Main.$stopinliner$InvokeStaticNotInlined() liveness (before)
   /// CHECK-DAG:                           InvokeStaticOrDirect
 
-  /// CHECK-START: void Main.invokeStaticNotInlined() liveness (before)
+  /// CHECK-START: void Main.$stopinliner$InvokeStaticNotInlined() liveness (before)
   /// CHECK-NOT:                           LoadClass
   /// CHECK-NOT:                           ClinitCheck
 
-  static void invokeStaticNotInlined() {
+  static void $stopinliner$InvokeStaticNotInlined() {
     ClassWithClinit2.$noinline$staticMethod();
   }
 
@@ -98,10 +98,9 @@ public class Main {
       System.out.println("Main$ClassWithClinit2's static initializer");
     }
 
-    static boolean doThrow = false;
+    static boolean staticField = false;
 
     static void $noinline$staticMethod() {
-      if (doThrow) { throw new Error(); }  // Try defeating inlining.
     }
   }
 
@@ -146,23 +145,23 @@ public class Main {
    * require an explicit clinit check.
    */
 
-  /// CHECK-START: void Main$ClassWithClinit4.invokeStaticNotInlined() builder (after)
+  /// CHECK-START: void Main$ClassWithClinit4.$stopinliner$InvokeStaticNotInlined() builder (after)
   /// CHECK-DAG:                           InvokeStaticOrDirect
 
-  /// CHECK-START: void Main$ClassWithClinit4.invokeStaticNotInlined() builder (after)
+  /// CHECK-START: void Main$ClassWithClinit4.$stopinliner$InvokeStaticNotInlined() builder (after)
   /// CHECK-NOT:                           LoadClass
   /// CHECK-NOT:                           ClinitCheck
 
-  /// CHECK-START: void Main$ClassWithClinit4.invokeStaticNotInlined() inliner (after)
+  /// CHECK-START: void Main$ClassWithClinit4.$stopinliner$InvokeStaticNotInlined() inliner (after)
   /// CHECK-DAG:                           InvokeStaticOrDirect
 
-  /// CHECK-START: void Main$ClassWithClinit4.invokeStaticNotInlined() inliner (after)
+  /// CHECK-START: void Main$ClassWithClinit4.$stopinliner$InvokeStaticNotInlined() inliner (after)
   /// CHECK-NOT:                           LoadClass
   /// CHECK-NOT:                           ClinitCheck
 
   static class ClassWithClinit4 {
-    static void invokeStaticNotInlined() {
-      // The invocation of invokeStaticNotInlined triggers the
+    static void $stopinliner$InvokeStaticNotInlined() {
+      // The invocation of $stopinliner$InvokeStaticNotInlined triggers the
       // initialization of ClassWithClinit4, meaning that the
       // call to staticMethod below does not need a clinit
       // check.
@@ -173,10 +172,7 @@ public class Main {
       System.out.println("Main$ClassWithClinit4's static initializer");
     }
 
-    static boolean doThrow = false;
-
     static void $noinline$staticMethod() {
-      if (doThrow) { throw new Error(); }  // Try defeating inlining.
     }
   }
 
@@ -219,25 +215,22 @@ public class Main {
    * explicit clinit check.
    */
 
-  /// CHECK-START: void Main$SubClassOfClassWithClinit6.invokeStaticNotInlined() builder (after)
+  /// CHECK-START: void Main$SubClassOfClassWithClinit6.$stopinliner$InvokeStaticNotInlined() builder (after)
   /// CHECK-DAG:                           InvokeStaticOrDirect
 
-  /// CHECK-START: void Main$SubClassOfClassWithClinit6.invokeStaticNotInlined() builder (after)
+  /// CHECK-START: void Main$SubClassOfClassWithClinit6.$stopinliner$InvokeStaticNotInlined() builder (after)
   /// CHECK-NOT:                           LoadClass
   /// CHECK-NOT:                           ClinitCheck
 
-  /// CHECK-START: void Main$SubClassOfClassWithClinit6.invokeStaticNotInlined() inliner (after)
+  /// CHECK-START: void Main$SubClassOfClassWithClinit6.$stopinliner$InvokeStaticNotInlined() inliner (after)
   /// CHECK-DAG:                           InvokeStaticOrDirect
 
-  /// CHECK-START: void Main$SubClassOfClassWithClinit6.invokeStaticNotInlined() inliner (after)
+  /// CHECK-START: void Main$SubClassOfClassWithClinit6.$stopinliner$InvokeStaticNotInlined() inliner (after)
   /// CHECK-NOT:                           LoadClass
   /// CHECK-NOT:                           ClinitCheck
 
   static class ClassWithClinit6 {
-    static boolean doThrow = false;
-
     static void $noinline$staticMethod() {
-      if (doThrow) { throw new Error(); }  // Try defeating inlining.
     }
 
     static {
@@ -246,7 +239,7 @@ public class Main {
   }
 
   static class SubClassOfClassWithClinit6 extends ClassWithClinit6 {
-    static void invokeStaticNotInlined() {
+    static void $stopinliner$InvokeStaticNotInlined() {
       ClassWithClinit6.$noinline$staticMethod();
     }
   }
@@ -257,18 +250,18 @@ public class Main {
    * we don't do generate a clinit check.
    */
 
-  /// CHECK-START: void Main.noClinitBecauseOfInvokeStatic() liveness (before)
+  /// CHECK-START: void Main.$stopinliner$NoClinitBecauseOfInvokeStatic() liveness (before)
   /// CHECK-DAG:     <<IntConstant:i\d+>>  IntConstant 0
   /// CHECK-DAG:     <<LoadClass:l\d+>>    LoadClass gen_clinit_check:false
   /// CHECK-DAG:                           InvokeStaticOrDirect
   /// CHECK-DAG:                           StaticFieldSet [<<LoadClass>>,<<IntConstant>>]
 
-  /// CHECK-START: void Main.noClinitBecauseOfInvokeStatic() liveness (before)
+  /// CHECK-START: void Main.$stopinliner$NoClinitBecauseOfInvokeStatic() liveness (before)
   /// CHECK-NOT:                           ClinitCheck
 
-  static void noClinitBecauseOfInvokeStatic() {
+  static void $stopinliner$NoClinitBecauseOfInvokeStatic() {
     ClassWithClinit2.$noinline$staticMethod();
-    ClassWithClinit2.doThrow = false;
+    ClassWithClinit2.staticField = false;
   }
 
   /*
@@ -276,16 +269,16 @@ public class Main {
    * will generate a clinit check.
    */
 
-  /// CHECK-START: void Main.clinitBecauseOfFieldAccess() liveness (before)
+  /// CHECK-START: void Main.$stopinliner$ClinitBecauseOfFieldAccess() liveness (before)
   /// CHECK-DAG:     <<IntConstant:i\d+>>  IntConstant 0
   /// CHECK-DAG:     <<LoadClass:l\d+>>    LoadClass gen_clinit_check:true
   /// CHECK-DAG:                           StaticFieldSet [<<LoadClass>>,<<IntConstant>>]
   /// CHECK-DAG:                           InvokeStaticOrDirect
 
-  /// CHECK-START: void Main.clinitBecauseOfFieldAccess() liveness (before)
+  /// CHECK-START: void Main.$stopinliner$ClinitBecauseOfFieldAccess() liveness (before)
   /// CHECK-NOT:                           ClinitCheck
-  static void clinitBecauseOfFieldAccess() {
-    ClassWithClinit2.doThrow = false;
+  static void $stopinliner$ClinitBecauseOfFieldAccess() {
+    ClassWithClinit2.staticField = false;
     ClassWithClinit2.$noinline$staticMethod();
   }
 
@@ -296,10 +289,10 @@ public class Main {
 
   public static void main(String[] args) {
     invokeStaticInlined();
-    invokeStaticNotInlined();
+    $stopinliner$InvokeStaticNotInlined();
     ClassWithClinit3.invokeStaticInlined();
-    ClassWithClinit4.invokeStaticNotInlined();
+    ClassWithClinit4.$stopinliner$InvokeStaticNotInlined();
     SubClassOfClassWithClinit5.invokeStaticInlined();
-    SubClassOfClassWithClinit6.invokeStaticNotInlined();
+    SubClassOfClassWithClinit6.$stopinliner$InvokeStaticNotInlined();
   }
 }

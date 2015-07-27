@@ -31,17 +31,17 @@ public class Main {
   }
 
   public static void main(String[] args) {
-    andInt();
-    andLong();
+    $stopinliner$AndInt();
+    $stopinliner$AndLong();
 
-    orInt();
-    orLong();
+    $stopinliner$OrInt();
+    $stopinliner$OrLong();
 
-    xorInt();
-    xorLong();
+    $stopinliner$XorInt();
+    $stopinliner$XorLong();
   }
 
-  private static void andInt() {
+  private static void $stopinliner$AndInt() {
     expectEquals(1, $opt$noinline$And(5, 3));
     expectEquals(0, $opt$noinline$And(0, 0));
     expectEquals(0, $opt$noinline$And(0, 3));
@@ -62,7 +62,7 @@ public class Main {
     expectEquals(65280, $opt$noinline$AndLit16(-12));
   }
 
-  private static void andLong() {
+  private static void $stopinliner$AndLong() {
     expectEquals(1L, $opt$noinline$And(5L, 3L));
     expectEquals(0L, $opt$noinline$And(0L, 0L));
     expectEquals(0L, $opt$noinline$And(0L, 3L));
@@ -83,39 +83,31 @@ public class Main {
     expectEquals(65280L, $opt$noinline$AndLit16(-12L));
   }
 
-  static boolean doThrow = false;
-
   static int $opt$noinline$And(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a & b;
   }
 
   static int $opt$noinline$AndLit8(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a & 0xF;
   }
 
   static int $opt$noinline$AndLit16(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a & 0xFF00;
   }
 
   static long $opt$noinline$And(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a & b;
   }
 
   static long $opt$noinline$AndLit8(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a & 0xF;
   }
 
   static long $opt$noinline$AndLit16(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a & 0xFF00;
   }
 
-  private static void orInt() {
+  private static void $stopinliner$OrInt() {
     expectEquals(7, $opt$noinline$Or(5, 3));
     expectEquals(0, $opt$noinline$Or(0, 0));
     expectEquals(3, $opt$noinline$Or(0, 3));
@@ -134,7 +126,7 @@ public class Main {
     expectEquals(-12, $opt$noinline$OrLit16(-12));
   }
 
-  private static void orLong() {
+  private static void $stopinliner$OrLong() {
     expectEquals(7L, $opt$noinline$Or(5L, 3L));
     expectEquals(0L, $opt$noinline$Or(0L, 0L));
     expectEquals(3L, $opt$noinline$Or(0L, 3L));
@@ -154,36 +146,30 @@ public class Main {
   }
 
   static int $opt$noinline$Or(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a | b;
   }
 
   static int $opt$noinline$OrLit8(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a | 0xF;
   }
 
   static int $opt$noinline$OrLit16(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a | 0xFF00;
   }
 
   static long $opt$noinline$Or(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a | b;
   }
 
   static long $opt$noinline$OrLit8(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a | 0xF;
   }
 
   static long $opt$noinline$OrLit16(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a | 0xFF00;
   }
 
-  private static void xorInt() {
+  private static void $stopinliner$XorInt() {
     expectEquals(6, $opt$noinline$Xor(5, 3));
     expectEquals(0, $opt$noinline$Xor(0, 0));
     expectEquals(3, $opt$noinline$Xor(0, 3));
@@ -202,7 +188,7 @@ public class Main {
     expectEquals(-0xFF0c, $opt$noinline$XorLit16(-12));
   }
 
-  private static void xorLong() {
+  private static void $stopinliner$XorLong() {
     expectEquals(6L, $opt$noinline$Xor(5L, 3L));
     expectEquals(0L, $opt$noinline$Xor(0L, 0L));
     expectEquals(3L, $opt$noinline$Xor(0L, 3L));
@@ -222,32 +208,26 @@ public class Main {
   }
 
   static int $opt$noinline$Xor(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a ^ b;
   }
 
   static int $opt$noinline$XorLit8(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a ^ 0xF;
   }
 
   static int $opt$noinline$XorLit16(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a ^ 0xFF00;
   }
 
   static long $opt$noinline$Xor(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a ^ b;
   }
 
   static long $opt$noinline$XorLit8(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a ^ 0xF;
   }
 
   static long $opt$noinline$XorLit16(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a ^ 0xFF00;
   }
 }
