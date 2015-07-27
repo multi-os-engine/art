@@ -25,6 +25,11 @@ namespace art {
 
 /**
  * Implements optimizations specific to each instruction.
+ *
+ * Note that graph simplifications producing a constant should be
+ * implemented in art::HConstantFolding, while graph simplifications
+ * not producing constants should be implemented in
+ * art::InstructionSimplifier.
  */
 class InstructionSimplifier : public HOptimization {
  public:
