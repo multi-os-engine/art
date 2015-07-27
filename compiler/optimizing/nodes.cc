@@ -577,9 +577,15 @@ static void UpdateInputsUsers(HInstruction* instruction) {
 void HBasicBlock::ReplaceAndRemoveInstructionWith(HInstruction* initial,
                                                   HInstruction* replacement) {
   DCHECK(initial->GetBlock() == this);
-  InsertInstructionBefore(replacement, initial);
   initial->ReplaceWith(replacement);
   RemoveInstruction(initial);
+}
+
+void HBasicBlock::InsertAndReplaceAndRemoveInstructionWith(HInstruction* initial,
+                                                           HInstruction* replacement) {
+  DCHECK(initial->GetBlock() == this);
+  InsertInstructionBefore(replacement, initial);
+  ReplaceAndRemoveInstructionWith(initial, replacement);
 }
 
 static void Add(HInstructionList* instruction_list,

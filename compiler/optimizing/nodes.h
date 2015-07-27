@@ -792,9 +792,14 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   // Insert `instruction` before/after an existing instruction `cursor`.
   void InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor);
   void InsertInstructionAfter(HInstruction* instruction, HInstruction* cursor);
-  // Replace instruction `initial` with `replacement` within this block.
-  void ReplaceAndRemoveInstructionWith(HInstruction* initial,
-                                       HInstruction* replacement);
+  // Replace instruction `initial` with `replacement` within this
+  // block and remove `initial`, where `replacement` in an insruction
+  // already present in the graph.
+  void ReplaceAndRemoveInstructionWith(HInstruction* initial, HInstruction* replacement);
+  // Insert instruction `replacement` before `initial` within this
+  // block, replace `initial` with `replacement`, and remove `initial`
+  // from the graph.
+  void InsertAndReplaceAndRemoveInstructionWith(HInstruction* initial, HInstruction* replacement);
   void AddPhi(HPhi* phi);
   void InsertPhiAfter(HPhi* instruction, HPhi* cursor);
   // RemoveInstruction and RemovePhi delete a given instruction from the respective
@@ -4856,9 +4861,10 @@ class HGraphVisitor : public ValueObject {
 
 #undef DECLARE_VISIT_INSTRUCTION
 
- private:
+ protected:
   HGraph* const graph_;
 
+ private:
   DISALLOW_COPY_AND_ASSIGN(HGraphVisitor);
 };
 
