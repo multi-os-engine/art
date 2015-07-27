@@ -332,6 +332,10 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
     return method_idx_;
   }
 
+  std::string GetMethodName() const {
+    return PrettyMethod(method_idx_, dex_file_);
+  }
+
   InvokeType GetInvokeType() const {
     return invoke_type_;
   }

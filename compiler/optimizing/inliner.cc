@@ -22,6 +22,7 @@
 #include "constant_folding.h"
 #include "dead_code_elimination.h"
 #include "driver/compiler_driver-inl.h"
+#include "driver/compiler_options.h"
 #include "driver/dex_compilation_unit.h"
 #include "instruction_simplifier.h"
 #include "mirror/class_loader.h"
@@ -68,15 +69,21 @@ void HInliner::Run() {
           if (kIsDebugBuild && IsCompilingWithCoreImage()) {
             std::string callee_name =
                 PrettyMethod(call->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
+            std::string caller_name = graph_->GetMethodName();
             bool should_inline = callee_name.find("$inline$") != std::string::npos;
-            CHECK(!should_inline) << "Could not inline " << callee_name;
+            CHECK(!should_inline)
+                << "Could not inline " << callee_name << " within " << caller_name
+                << " from " << outermost_caller_name_;
           }
         } else {
           if (kIsDebugBuild && IsCompilingWithCoreImage()) {
             std::string callee_name =
                 PrettyMethod(call->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
+            std::string caller_name = graph_->GetMethodName();
             bool must_not_inline = callee_name.find("$noinline$") != std::string::npos;
-            CHECK(!must_not_inline) << "Should not have inlined " << callee_name;
+            CHECK(!must_not_inline)
+                << "Should not have inlined " << callee_name << " within " << caller_name
+                << " from " << outermost_caller_name_;
           }
         }
       }
@@ -327,8 +334,10 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
                         &inline_stats,
                         resolved_method->GetQuickenedInfo());
 
+  std::string method_name = PrettyMethod(method_index, callee_dex_file);
+
   if (!builder.BuildGraph(*code_item)) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
+    VLOG(compiler) << "Method " << method_name
                    << " could not be built, so cannot be inlined";
     // There could be multiple reasons why the graph could not be built, including
     // unaccessible methods/fields due to using a different dex cache. We do not mark
@@ -338,24 +347,24 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
 
   if (!RegisterAllocator::CanAllocateRegistersFor(*callee_graph,
                                                   compiler_driver_->GetInstructionSet())) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
+    VLOG(compiler) << "Method " << method_name
                    << " cannot be inlined because of the register allocator";
     resolved_method->SetShouldNotInline();
     return false;
   }
 
   if (!callee_graph->TryBuildingSsa()) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                   << " could not be transformed to SSA";
+    VLOG(compiler) << "Method " << method_name << " could not be transformed to SSA";
     resolved_method->SetShouldNotInline();
     return false;
   }
 
   // Run simple optimizations on the graph.
-  HDeadCodeElimination dce(callee_graph, stats_);
-  HConstantFolding fold(callee_graph);
-  ReferenceTypePropagation type_propagation(callee_graph, handles_);
-  InstructionSimplifier simplify(callee_graph, stats_);
+  HDeadCodeElimination dce(callee_graph, stats_, "dead_code_elimination_within_inlining");
+  HConstantFolding fold(callee_graph, "constant_folding_within_inlining");
+  ReferenceTypePropagation type_propagation(
+      callee_graph, handles_, "reference_type_propagation_within_inlining");
+  InstructionSimplifier simplify(callee_graph, stats_, "instruction_simplifier_within_inlining");
 
   HOptimization* optimizations[] = {
     &dce,
@@ -364,20 +373,36 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     &simplify,
   };
 
+  const CompilerOptions& compiler_options = compiler_driver_->GetCompilerOptions();
+
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
     HOptimization* optimization = optimizations[i];
-    optimization->Run();
+    const char* pass_name = optimization->GetPassName();
+    if (compiler_options.HasDisabledOptimizationPasses()
+        && compiler_options.IsDisabledOptimizationPassesForMethod(pass_name, method_name)) {
+      VLOG(compiler) << "Optimization pass " << pass_name << " disabled for " << method_name;
+    } else {
+      optimization->Run();
+    }
   }
 
   if (depth_ + 1 < kDepthLimit) {
     HInliner inliner(callee_graph,
                      outer_compilation_unit_,
                      dex_compilation_unit,
+                     outermost_caller_name_,
                      compiler_driver_,
                      handles_,
                      stats_,
-                     depth_ + 1);
-    inliner.Run();
+                     depth_ + 1,
+                     "inliner_within_inlining");
+    const char* pass_name = inliner.GetPassName();
+    if (compiler_options.HasDisabledOptimizationPasses()
+        && compiler_options.IsDisabledOptimizationPassesForMethod(pass_name, method_name)) {
+      VLOG(compiler) << "Optimization pass " << pass_name << " disabled for " << method_name;
+    } else {
+      inliner.Run();
+    }
   }
 
   // TODO: We should abort only if all predecessors throw. However,
@@ -385,7 +410,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   // a throw predecessor.
   HBasicBlock* exit_block = callee_graph->GetExitBlock();
   if (exit_block == nullptr) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
+    VLOG(compiler) << "Method " << method_name
                    << " could not be inlined because it has an infinite loop";
     resolved_method->SetShouldNotInline();
     return false;
@@ -399,7 +424,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     }
   }
   if (has_throw_predecessor) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
+    VLOG(compiler) << "Method " << method_name
                    << " could not be inlined because one branch always throws";
     resolved_method->SetShouldNotInline();
     return false;
@@ -410,7 +435,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   for (; !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     if (block->IsLoopHeader()) {
-      VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
+      VLOG(compiler) << "Method " << method_name
                      << " could not be inlined because it contains a loop";
       resolved_method->SetShouldNotInline();
       return false;
@@ -424,22 +449,22 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
       if (current->IsInvokeInterface()) {
         // Disable inlining of interface calls. The cost in case of entering the
         // resolution conflict is currently too high.
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
+        VLOG(compiler) << "Method " << method_name
                        << " could not be inlined because it has an interface call.";
         resolved_method->SetShouldNotInline();
         return false;
       }
 
       if (!same_dex_file && current->NeedsEnvironment()) {
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                       << " could not be inlined because " << current->DebugName()
+        VLOG(compiler) << "Method " << method_name << " could not be inlined because "
+                       << current->DebugName()
                        << " needs an environment and is in a different dex file";
         return false;
       }
 
       if (!same_dex_file && current->NeedsDexCache()) {
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                       << " could not be inlined because " << current->DebugName()
+        VLOG(compiler) << "Method " << method_name << " could not be inlined because "
+                       << current->DebugName()
                        << " it is in a different dex file and requires access to the dex cache";
         // Do not flag the method as not-inlineable. A caller within the same
         // dex file could still successfully inline it.

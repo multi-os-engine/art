@@ -317,6 +317,15 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      Used to specify a pass specific option. The setting itself must be integer.");
   UsageError("      Separator used between options is a comma.");
   UsageError("");
+  UsageError("  --disable-optimization-passes-for=<pass-marker>,<method-marker>:");
+  UsageError("      Disable optimization passes whose name contain <pass-marker>");
+  UsageError("      for compiled methods whose name contain <method-marker>.");
+  UsageError("      Example: --disable-optimization-passes-for=inlining,getFoo");
+  UsageError("");
+  UsageError("  --dump-cfg=<file.cfg>: dump the control flow graph into <file.cfg>," );
+  UsageError("      using the C1visualizer format." );
+  UsageError("      Example: --dump-cfg=out.cfg");
+  UsageError("");
   UsageError("  --swap-file=<file-name>:  specifies a file to use for swap.");
   UsageError("      Example: --swap-file=/data/tmp/swap.001");
   UsageError("");
@@ -770,6 +779,20 @@ class Dex2Oat FINAL {
       } else if (option.starts_with("--pass-options=")) {
         const std::string options = option.substr(strlen("--pass-options=")).data();
         pass_manager_options.SetOverriddenPassOptions(options);
+      } else if (option.starts_with("--disable-optimization-passes-for=")) {
+        // Note: `--disable-optimization-passes-for` is not honored by Quick.
+        const std::string disabled_passes =
+            option.substr(strlen("--disable-optimization-passes-for=")).data();
+        // Split the option's argument.
+        size_t comma_pos = disabled_passes.find_first_of(",");
+        if (comma_pos == std::string::npos) {
+          Usage("Failed to parse the argument of --disable-optimization-passes-for as "
+                "<pass-marker>,<method-marker>");
+        }
+        std::string pass_marker = disabled_passes.substr(0, comma_pos);
+        std::string method_marker = disabled_passes.substr(comma_pos + 1);
+        disabled_optimization_passes_.emplace_back(disabled_passes.substr(0, comma_pos),
+                                                   disabled_passes.substr(comma_pos + 1));
       } else if (option == "--include-patch-information") {
         include_patch_information = true;
       } else if (option == "--no-include-patch-information") {
@@ -1003,6 +1026,9 @@ class Dex2Oat FINAL {
                                                 verbose_methods_.empty() ?
                                                     nullptr :
                                                     &verbose_methods_,
+                                                disabled_optimization_passes_.empty() ?
+                                                    nullptr :
+                                                    &disabled_optimization_passes_,
                                                 new PassManagerOptions(pass_manager_options),
                                                 init_failure_output_.get(),
                                                 abort_on_hard_verifier_error));
@@ -1843,6 +1869,7 @@ class Dex2Oat FINAL {
   std::vector<std::unique_ptr<const DexFile>> opened_dex_files_;
   std::unique_ptr<CompilerDriver> driver_;
   std::vector<std::string> verbose_methods_;
+  std::vector<DisabledOptimizationPasses> disabled_optimization_passes_;
   bool dump_stats_;
   bool dump_passes_;
   bool dump_timing_;
