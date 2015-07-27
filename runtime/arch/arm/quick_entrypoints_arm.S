@@ -173,6 +173,7 @@
 
 
 .macro RETURN_IF_RESULT_IS_ZERO
+    .thumb
     cbnz   r0, 1f              @ result non-zero branch over
     bx     lr                  @ return
 1:
@@ -1302,6 +1303,7 @@ END art_quick_indexof
      */
     .extern __memcmp16
 ENTRY art_quick_string_compareto
+    .thumb
     mov    r2, r0         @ this to r2, opening up r0 for return value
     sub    r0, r2, r1     @ Same?
     cbnz   r0,1f
