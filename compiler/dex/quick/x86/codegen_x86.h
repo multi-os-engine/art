@@ -103,6 +103,10 @@ class X86Mir2Lir FINAL : public Mir2Lir {
 
   /// @copydoc Mir2Lir::UnconditionallyMarkGCCard(RegStorage)
   void UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) OVERRIDE;
+  LIR* LoadRefDispWithReadBarrier(RegStorage r_base, int displacement, RegStorage r_dest,
+                                  VolatileKind is_volatile) OVERRIDE;
+  LIR* LoadRefIndexedWithReadBarrier(RegStorage r_base, RegStorage r_index, RegStorage r_dest,
+                                     int scale) OVERRIDE;
 
   bool CanUseOpPcRelDexCacheArrayLoad() const OVERRIDE;
   void OpPcRelDexCacheArrayLoad(const DexFile* dex_file, int offset, RegStorage r_dest, bool wide)
@@ -430,6 +434,8 @@ class X86Mir2Lir FINAL : public Mir2Lir {
                            RegStorage r_dest, OpSize size);
   LIR* StoreBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int scale, int displacement,
                             RegStorage r_src, OpSize size, int opt_flags = 0);
+  LIR* LoadBaseIndexedDispReadBarrier(RegStorage r_base, RegStorage r_index, int scale,
+                                      int displacement, RegStorage r_dest);
 
   int AssignInsnOffsets();
   void AssignOffsets();
