@@ -19,15 +19,11 @@
  */
 public class Compare {
 
-    static boolean doThrow = false;
-
     /*
      * Test the integer comparisons in various ways.
      */
     static void $noinline$TestIntCompare(int minus, int plus, int plus2, int zero) {
         System.out.println("Compare.$noinline$TestIntCompare");
-
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
 
         if (minus > plus)
             Main.assertTrue(false);
@@ -78,8 +74,6 @@ public class Compare {
         long alsoPlus) {
         System.out.println("Compare.$noinline$TestLongCompare");
 
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         if (minus > plus)
             Main.assertTrue(false);
         if (plus < minus)
@@ -123,8 +117,6 @@ public class Compare {
         float nan) {
         System.out.println("Compare.$noinline$TestFloatCompare");
 
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         if (minus > plus)
             Main.assertTrue(false);
         if (plus < minus)
@@ -155,8 +147,6 @@ public class Compare {
         double nan) {
         System.out.println("Compare.$noinline$TestDoubleCompare");
 
-        if (doThrow) { throw new Error(); }  // Try defeating inlining.
-
         if (minus > plus)
             Main.assertTrue(false);
         if (plus < minus)
@@ -183,7 +173,7 @@ public class Compare {
             Main.assertTrue(false);
     }
 
-    public static void run() {
+    public static void $stopinliner$Run() {
         $noinline$TestIntCompare(-5, 4, 4, 0);
         $noinline$TestLongCompare(-5L, -4294967287L, 4L, 8L);
 

@@ -71,13 +71,13 @@ public class Main {
   }
 
   public static void main(String[] args) {
-    subInt();
-    subLong();
-    subFloat();
-    subDouble();
+    $stopinliner$SubInt();
+    $stopinliner$SubLong();
+    $stopinliner$SubFloat();
+    $stopinliner$SubDouble();
   }
 
-  private static void subInt() {
+  private static void $stopinliner$SubInt() {
     expectEquals(2, $opt$noinline$Sub(5, 3));
     expectEquals(0, $opt$noinline$Sub(0, 0));
     expectEquals(-3, $opt$noinline$Sub(0, 3));
@@ -87,7 +87,7 @@ public class Main {
     expectEquals(134217724, $opt$noinline$Sub(134217729, 5)); // (2^27 + 1) - 5
   }
 
-  private static void subLong() {
+  private static void $stopinliner$SubLong() {
     expectEquals(2L, $opt$noinline$Sub(5L, 3L));
     expectEquals(0L, $opt$noinline$Sub(0L, 0L));
     expectEquals(-3L, $opt$noinline$Sub(0L, 3L));
@@ -98,7 +98,7 @@ public class Main {
     expectEquals(34359738362L, $opt$noinline$Sub(34359738369L, 7L)); // (2^35 + 1) - 7
   }
 
-  private static void subFloat() {
+  private static void $stopinliner$SubFloat() {
     expectApproxEquals(2F, $opt$noinline$Sub(5F, 3F));
     expectApproxEquals(0F, $opt$noinline$Sub(0F, 0F));
     expectApproxEquals(-3F, $opt$noinline$Sub(0F, 3F));
@@ -124,7 +124,7 @@ public class Main {
     expectEquals(Float.NEGATIVE_INFINITY, $opt$noinline$Sub(Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY));
   }
 
-  private static void subDouble() {
+  private static void $stopinliner$SubDouble() {
     expectApproxEquals(2D, $opt$noinline$Sub(5D, 3D));
     expectApproxEquals(0D, $opt$noinline$Sub(0D, 0D));
     expectApproxEquals(-3D, $opt$noinline$Sub(0D, 3D));
@@ -151,25 +151,19 @@ public class Main {
     expectEquals(Double.NEGATIVE_INFINITY, $opt$noinline$Sub(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY));
   }
 
-  static boolean doThrow = false;
-
   static int $opt$noinline$Sub(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a - b;
   }
 
   static long $opt$noinline$Sub(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a - b;
   }
 
   static float $opt$noinline$Sub(float a, float b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a - b;
   }
 
   static double $opt$noinline$Sub(double a, double b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a - b;
   }
 

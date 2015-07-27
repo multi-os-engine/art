@@ -103,13 +103,13 @@ public class Main {
   }
 
   public static void div() {
-    divInt();
-    divLong();
-    divFloat();
-    divDouble();
+    $stopinliner$DivInt();
+    $stopinliner$DivLong();
+    $stopinliner$DivFloat();
+    $stopinliner$DivDouble();
   }
 
-  private static void divInt() {
+  private static void $stopinliner$DivInt() {
     expectEquals(2, $opt$noinline$DivConst(6));
     expectEquals(2, $opt$noinline$Div(6, 3));
     expectEquals(6, $opt$noinline$Div(6, 1));
@@ -132,7 +132,7 @@ public class Main {
     expectDivisionByZero(Integer.MIN_VALUE);
   }
 
-  private static void divLong() {
+  private static void $stopinliner$DivLong() {
     expectEquals(2L, $opt$noinline$DivConst(6L));
     expectEquals(2L, $opt$noinline$Div(6L, 3L));
     expectEquals(6L, $opt$noinline$Div(6L, 1L));
@@ -161,7 +161,7 @@ public class Main {
     expectDivisionByZero(Long.MIN_VALUE);
   }
 
-  private static void divFloat() {
+  private static void $stopinliner$DivFloat() {
     expectApproxEquals(1.6666666F, $opt$noinline$Div(5F, 3F));
     expectApproxEquals(0F, $opt$noinline$Div(0F, 3F));
     expectApproxEquals(-0.3333333F, $opt$noinline$Div(1F, -3F));
@@ -190,7 +190,7 @@ public class Main {
     expectEquals(Float.NEGATIVE_INFINITY, $opt$noinline$Div(-Float.MAX_VALUE, Float.MIN_VALUE));
   }
 
-  private static void divDouble() {
+  private static void $stopinliner$DivDouble() {
     expectApproxEquals(1.6666666D, $opt$noinline$Div(5D, 3D));
     expectApproxEquals(0D, $opt$noinline$Div(0D, 3D));
     expectApproxEquals(-0.3333333D, $opt$noinline$Div(1D, -3D));
@@ -219,46 +219,36 @@ public class Main {
     expectEquals(Float.NEGATIVE_INFINITY, $opt$noinline$Div(-Float.MAX_VALUE, Float.MIN_VALUE));
   }
 
-  static boolean doThrow = false;
-
   static int $opt$noinline$Div(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a / b;
   }
 
   static int $opt$noinline$DivZero(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a / 0;
   }
 
   // Division by literals != 0 should not generate checks.
   static int $opt$noinline$DivConst(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a / 3;
   }
 
   static long $opt$noinline$DivConst(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a / 3L;
   }
 
   static long $opt$noinline$Div(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a / b;
   }
 
   static long $opt$noinline$DivZero(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a / 0L;
   }
 
   static float $opt$noinline$Div(float a, float b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a / b;
   }
 
   static double $opt$noinline$Div(double a, double b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a / b;
   }
 }

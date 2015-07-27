@@ -5,11 +5,6 @@ public class Main {
   int $noinline$f() throws Exception {
     g(1);
     g(2);
-
-    // This loop currently defeats inlining of `f`.
-    for (int i = 0; i < 10; i++) {
-      Thread.sleep(0);
-    }
     return 0;
   }
 
@@ -91,8 +86,12 @@ public class Main {
     System.loadLibrary("arttest");
   }
 
-  public static void main(String[] args) throws Exception {
+  static void $stopinliner$Run() throws Exception {
     Main st = new Main();
     st.$noinline$f();
+  }
+
+  public static void main(String[] args) throws Exception {
+    $stopinliner$Run();
   }
 }

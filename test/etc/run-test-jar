@@ -96,6 +96,10 @@ while true; do
         ANDROID_ROOT="$ANDROID_HOST_OUT"
         shift
     elif [ "x$1" = "x--no-prebuild" ]; then
+        # Prevent the inliner from processing `main` and methods tagged `$stopinliner$`.
+        DEX2OAT="$DEX2OAT \
+                   -Xcompiler-option --disable-optimization-passes-for=inline,main \
+                   -Xcompiler-option --disable-optimization-passes-for=inline,\$stopinliner\$"
         PREBUILD="n"
         shift
     elif [ "x$1" = "x--no-image" ]; then
@@ -330,6 +334,10 @@ if [ "$PREBUILD" = "y" ]; then
                       --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
                       --oat-file=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g") \
                       --instruction-set=$ISA"
+  # Prevent the inliner from processing `main` and methods tagged `$stopinliner$`.
+  dex2oat_cmdline="$dex2oat_cmdline \
+                     --disable-optimization-passes-for=inline,main \
+                     --disable-optimization-passes-for=inline,\$stopinliner\$"
 fi
 
 dalvikvm_cmdline="$INVOKE_WITH $GDB $ANDROID_ROOT/bin/$DALVIKVM \

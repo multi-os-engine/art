@@ -17,11 +17,11 @@
 public class Main {
 
   public static void main(String[] args) {
-    remInt();
-    remLong();
+    $stopinliner$RemInt();
+    $stopinliner$RemLong();
   }
 
-  private static void remInt() {
+  private static void $stopinliner$RemInt() {
     expectEquals(2, $opt$noinline$RemConst(6));
     expectEquals(2, $opt$noinline$Rem(6, 4));
     expectEquals(2, $opt$noinline$Rem(6, -4));
@@ -56,7 +56,7 @@ public class Main {
     expectDivisionByZero(Integer.MIN_VALUE);
   }
 
-  private static void remLong() {
+  private static void $stopinliner$RemLong() {
     expectEquals(2L, $opt$noinline$RemConst(6L));
     expectEquals(2L, $opt$noinline$Rem(6L, 4L));
     expectEquals(2L, $opt$noinline$Rem(6L, -4L));
@@ -91,36 +91,28 @@ public class Main {
     expectDivisionByZero(Long.MIN_VALUE);
   }
 
-  static boolean doThrow = false;
-
   static int $opt$noinline$Rem(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % b;
   }
 
   static int $opt$noinline$RemZero(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % 0;
   }
 
   // Modulo by literals != 0 should not generate checks.
   static int $opt$noinline$RemConst(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % 4;
   }
 
   static long $opt$noinline$RemConst(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % 4L;
   }
 
   static long $opt$noinline$Rem(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % b;
   }
 
   static long $opt$noinline$RemZero(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a % 0L;
   }
 
