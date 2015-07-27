@@ -33,13 +33,13 @@ public class Main {
 
     public void run() {
         InstField instField = new InstField();
-        instField.run();
+        instField.$stopinliner$Run();
 
         StaticField.run();
 
-        IntMath.run();
-        FloatMath.run();
-        Compare.run();
+        IntMath.$stopinliner$Run();
+        FloatMath.$stopinliner$Run();
+        Compare.$stopinliner$Run();
 
         Monitor.run();
         Switch.run();

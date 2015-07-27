@@ -25,6 +25,10 @@ public class Main {
   }
 
   public static void main(String[] args) {
+    $stopinliner$Run();
+  }
+
+  static void $stopinliner$Run() {
     long l = $opt$ReturnLong();
     expectEquals(42, l);
     System.out.println("Long: " + l);
@@ -47,10 +51,10 @@ public class Main {
     l = $opt$noinline$SubTwoLongs(42, 41);
     expectEquals(1, l);
 
-    l = $opt$MakeCallsWithLongs1();
+    l = $stopinliner$opt$MakeCallsWithLongs1();
     expectEquals(57, l);
 
-    l = $opt$MakeCallsWithLongs2();
+    l = $stopinliner$opt$MakeCallsWithLongs2();
     expectEquals(900000000006L, l);
 
     l = $opt$noinline$SubTwoLongs(-600000000006L, -200000000002L);
@@ -60,7 +64,7 @@ public class Main {
     expectEquals(-800000000008L, l);
   }
 
-  static long $opt$MakeCallsWithLongs1() {
+  static long $stopinliner$opt$MakeCallsWithLongs1() {
     long l = $opt$noinline$SubTwoLongs(-600000000006L, -200000000002L);
     expectEquals(-400000000004L, l);
 
@@ -73,7 +77,7 @@ public class Main {
         + $opt$TakeOneLong5(0, 0, 0, 0, 5);
   }
 
-  static long $opt$MakeCallsWithLongs2() {
+  static long $stopinliner$opt$MakeCallsWithLongs2() {
     return $opt$noinline$AddThreeLongs(400000000003L, 200000000002L, 300000000001L);
   }
 
@@ -101,20 +105,15 @@ public class Main {
     return l;
   }
 
-  static boolean doThrow = false;
-
   static long $opt$noinline$AddTwoLongs(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a + b;
   }
 
   static long $opt$noinline$AddThreeLongs(long a, long b, long c) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a + b + c;
   }
 
   static long $opt$noinline$SubTwoLongs(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a - b;
   }
 }

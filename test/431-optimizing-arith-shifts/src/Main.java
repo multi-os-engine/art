@@ -29,15 +29,15 @@ public class Main {
   }
 
   public static void main(String[] args) {
-    shlInt();
-    shlLong();
-    shrInt();
-    shrLong();
-    ushrInt();
-    ushrLong();
+    $stopinliner$ShlInt();
+    $stopinliner$ShlLong();
+    $stopinliner$ShrInt();
+    $stopinliner$ShrLong();
+    $stopinliner$UshrInt();
+    $stopinliner$UshrLong();
   }
 
-  private static void shlInt() {
+  private static void $stopinliner$ShlInt() {
     expectEquals(48, $opt$noinline$ShlConst2(12));
     expectEquals(12, $opt$noinline$ShlConst0(12));
     expectEquals(-48, $opt$noinline$Shl(-12, 2));
@@ -66,7 +66,7 @@ public class Main {
     expectEquals(7, $opt$noinline$Shl(7, Integer.MIN_VALUE));
   }
 
-  private static void shlLong() {
+  private static void $stopinliner$ShlLong() {
     expectEquals(48L, $opt$noinline$ShlConst2(12L));
     expectEquals(12L, $opt$noinline$ShlConst0(12L));
     expectEquals(-48L, $opt$noinline$Shl(-12L, 2L));
@@ -106,7 +106,7 @@ public class Main {
     expectEquals(0x9240924000000000L, $opt$noinline$ShlConst35(0x12481248L));
   }
 
-  private static void shrInt() {
+  private static void $stopinliner$ShrInt() {
     expectEquals(3, $opt$noinline$ShrConst2(12));
     expectEquals(12, $opt$noinline$ShrConst0(12));
     expectEquals(-3, $opt$noinline$Shr(-12, 2));
@@ -134,7 +134,7 @@ public class Main {
     expectEquals(7, $opt$noinline$Shr(7, Integer.MIN_VALUE));
   }
 
-  private static void shrLong() {
+  private static void $stopinliner$ShrLong() {
     expectEquals(3L, $opt$noinline$ShrConst2(12L));
     expectEquals(12L, $opt$noinline$ShrConst0(12L));
     expectEquals(-3L, $opt$noinline$Shr(-12L, 2L));
@@ -171,7 +171,7 @@ public class Main {
     expectEquals(7L, $opt$noinline$Shr(7L, Long.MIN_VALUE));
   }
 
-  private static void ushrInt() {
+  private static void $stopinliner$UshrInt() {
     expectEquals(3, $opt$noinline$UShrConst2(12));
     expectEquals(12, $opt$noinline$UShrConst0(12));
     expectEquals(1073741821, $opt$noinline$UShr(-12, 2));
@@ -199,7 +199,7 @@ public class Main {
     expectEquals(7, $opt$noinline$UShr(7, Integer.MIN_VALUE));
   }
 
-  private static void ushrLong() {
+  private static void $stopinliner$UshrLong() {
     expectEquals(3L, $opt$noinline$UShrConst2(12L));
     expectEquals(12L, $opt$noinline$UShrConst0(12L));
     expectEquals(4611686018427387901L, $opt$noinline$UShr(-12L, 2L));
@@ -236,120 +236,95 @@ public class Main {
     expectEquals(7L, $opt$noinline$UShr(7L, Long.MIN_VALUE));
   }
 
-  static boolean doThrow = false;
-
   static int $opt$noinline$Shl(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << b;
   }
 
   static long $opt$noinline$Shl(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << b;
   }
 
   static int $opt$noinline$Shr(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >> b;
   }
 
   static long $opt$noinline$Shr(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >> b;
   }
 
   static int $opt$noinline$UShr(int a, int b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >>> b;
   }
 
   static long $opt$noinline$UShr(long a, long b) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >>> b;
   }
 
   static int $opt$noinline$ShlConst2(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << 2;
   }
 
   static long $opt$noinline$ShlConst2(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << 2L;
   }
 
   static int $opt$noinline$ShrConst2(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >> 2;
   }
 
   static long $opt$noinline$ShrConst2(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >> 2L;
   }
 
   static int $opt$noinline$UShrConst2(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >>> 2;
   }
 
   static long $opt$noinline$UShrConst2(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >>> 2L;
   }
 
   static int $opt$noinline$ShlConst0(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << 0;
   }
 
   static long $opt$noinline$ShlConst0(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << 0L;
   }
 
   static int $opt$noinline$ShrConst0(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >> 0;
   }
 
   static long $opt$noinline$ShrConst0(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >> 0L;
   }
 
   static int $opt$noinline$UShrConst0(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >>> 0;
   }
 
   static long $opt$noinline$UShrConst0(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a >>> 0L;
   }
 
   static long $opt$noinline$ShlConst1(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << 1L;
   }
 
   static long $opt$noinline$ShlConst32(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << 32L;
   }
 
   static long $opt$noinline$ShlConst33(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << 33L;
   }
 
   static long $opt$noinline$ShlConst34(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << 34L;
   }
 
   static long $opt$noinline$ShlConst35(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return a << 35L;
   }
 

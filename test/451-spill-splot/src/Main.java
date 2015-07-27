@@ -16,6 +16,10 @@
 
 public class Main {
   public static void main(String[] args) {
+    $stopinliner$Run();
+  }
+
+  static void $stopinliner$Run() {
     // Create a few local variables to make sure some get spilled, and we get
     // a conflict of swapping a single entry stack slot (float) with a double entry
     // stack slot (double).
@@ -76,15 +80,11 @@ public class Main {
     }
   }
 
-  static boolean doThrow = false;
-
   public static double $noinline$computeDouble() {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return 2.0;
   }
 
   public static float $noinline$computeFloat() {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return 4.0f;
   }
 }

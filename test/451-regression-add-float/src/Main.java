@@ -18,31 +18,29 @@
 public class Main {
 
   public static void main(String[] args) {
+    $stopinliner$Run();
+  }
+
+  static void $stopinliner$Run() {
     assertEqual(4, $opt$noinline$add3(1));
     assertEqual(4l, $opt$noinline$add3(1l));
     assertEqual(4f, $opt$noinline$add3(1f));
     assertEqual(4d, $opt$noinline$add3(1d));
   }
 
-  static boolean doThrow = false;
-
   public static int $opt$noinline$add3(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return 1 + a + 2;
   }
 
   public static long $opt$noinline$add3(long a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return 1l + a + 2l;
   }
 
   public static float $opt$noinline$add3(float a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return 1f + a + 2f;
   }
 
   public static double $opt$noinline$add3(double a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     return 1d + a + 2d;
   }
 

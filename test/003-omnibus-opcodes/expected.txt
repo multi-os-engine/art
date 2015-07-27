@@ -15,7 +15,7 @@ IntMath.$noinline$LongOperTest
 IntMath.longOperCheck
 IntMath.$noinline$Lit16Test
 IntMath.$noinline$Lit8Test
-IntMath.divLiteralTest
+IntMath.$stopinliner$DivLiteralTest
 IntMath.$noinline$IntShiftTest
 IntMath.intShiftCheck
 IntMath.$noinline$LongShiftTest

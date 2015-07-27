@@ -26,6 +26,10 @@ public class Main {
   }
 
   public static void main(String[] args) {
+    $stopinliner$Run();
+  }
+
+  static void $stopinliner$Run() {
     int result = $opt$noinline$TestIfEq1(42);
     expectEquals(42, result);
 
@@ -45,10 +49,7 @@ public class Main {
     expectEquals(7, result);
   }
 
-  static boolean doThrow = false;
-
   static int $opt$noinline$TestIfEq1(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     if (a + 1 == 43) {
       return 42;
     } else {
@@ -57,7 +58,6 @@ public class Main {
   }
 
   static int $opt$noinline$TestIfEq2(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     if (a + 1 == 41) {
       return 42;
     } else {
@@ -82,7 +82,6 @@ public class Main {
   }
 
   static int $opt$noinline$TestIfWithLocal(int a) {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     if (a == 5) {
       int f = 2;
       a += f;

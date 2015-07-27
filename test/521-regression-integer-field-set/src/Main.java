@@ -22,6 +22,10 @@ class Main {
   }
 
   public static void main(String[] args) {
+    $stopinliner$Run();
+  }
+
+  static void $stopinliner$Run() {
     Main m = new Main();
 
     m.$noinline$SetInstanceField();
@@ -31,16 +35,12 @@ class Main {
     assertIntEquals(456789, s);
   }
 
-  private static boolean doThrow = false;
-
   private void $noinline$SetInstanceField() {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     // Set a value than does not fit in a 16-bit (signed) integer.
     i = 123456;
   }
 
   private static void $noinline$SetStaticField() {
-    if (doThrow) { throw new Error(); }  // Try defeating inlining.
     // Set a value than does not fit in a 16-bit (signed) integer.
     s = 456789;
   }
