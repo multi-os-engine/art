@@ -40,6 +40,30 @@ struct descriptor_table_entry_t {
 
 namespace art {
 
+#if !defined(HAVE_ANDROID_OS)
+enum X87PrecisionMode {
+  kX87Single = 0,
+  kX87Double = 2,
+  kX87Extended
+};
+uint16_t oldX87Mode;
+
+static uint16_t getX87PrecisionMode() {
+  uint16_t mode;
+  asm("fstcw %0" : : "m" (*&mode));
+  mode >>= 8;
+  mode &= 3;
+  return mode;
+}
+
+void setX87PrecisionMode(uint16_t mode) {
+  uint16_t old_mode;
+  asm("fstcw %0" : : "m" (*&old_mode));
+  old_mode = (old_mode & 0xfcff) | (mode << 8);
+  asm("fldcw %0" : : "m" (*&old_mode));
+}
+#endif
+
 void Thread::InitCpu() {
   // Take the ldt lock, Thread::Current isn't yet established.
   MutexLock mu(nullptr, *Locks::modify_ldt_lock_);
@@ -131,6 +155,27 @@ void Thread::InitCpu() {
       :);  // clobber
   CHECK_EQ(self_check, this);
 
+#if !defined(HAVE_ANDROID_OS)
+  // When Java-application runs interpreter mode on
+  // x86 host and invokes math functions, like
+  // Math.sqrt(), it sometimes gets result with
+  // higher accuracy than on x86_64 host or target.
+  // This is because x86 host uses glibc libm.so,
+  // which operates on x87 with "double-extended"
+  // precision (64-bit). Such a behavior is
+  // unallowable because results must be the same
+  // regardless of mode. To be consistent with
+  // other modes we should switch x87 to "double"
+  // precision (53-bit).
+
+  // Save current x87 precision mode.
+  oldX87Mode = getX87PrecisionMode();
+
+  // To be consistent with SSE precision mode
+  // we set x87 precision mode to "double".
+  setX87PrecisionMode(kX87Double);
+#endif
+
   // Sanity check other offsets.
   CHECK_EQ(THREAD_EXCEPTION_OFFSET, ExceptionOffset<4>().Int32Value());
   CHECK_EQ(THREAD_CARD_TABLE_OFFSET, CardTableOffset<4>().Int32Value());
@@ -170,6 +215,11 @@ void Thread::CleanupCpu() {
   ldt_entry.seg_not_present = 1;
 
   syscall(__NR_modify_ldt, 1, &ldt_entry, sizeof(ldt_entry));
+#endif
+
+#if !defined(HAVE_ANDROID_OS)
+  // Restore x87 precision mode.
+  setX87PrecisionMode(oldX87Mode);
 #endif
 }
 
