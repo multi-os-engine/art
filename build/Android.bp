@@ -20,4 +20,5 @@ bootstrap_go_package {
     srcs: [
         "art.go",
     ],
+    plugin: true,
 }
