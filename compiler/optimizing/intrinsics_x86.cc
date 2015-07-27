@@ -945,6 +945,93 @@ void IntrinsicCodeGeneratorX86::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
+void IntrinsicLocationsBuilderX86::VisitStringEquals(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kNoCall,
+                                                            kIntrinsified);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+
+  // Request temporary registers, ECX and EDI needed for repe_cmpsw instruction
+  locations->AddTemp(Location::RegisterLocation(ECX));
+  locations->AddTemp(Location::RegisterLocation(EDI));
+
+  // Set output, ESI needed for repe_cmpsw instruction anyways
+  locations->SetOut(Location::RegisterLocation(ESI));
+}
+
+void IntrinsicCodeGeneratorX86::VisitStringEquals(HInvoke* invoke) {
+  X86Assembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  Register str = locations->InAt(0).AsRegister<Register>();
+  Register arg = locations->InAt(1).AsRegister<Register>();
+  Register ECX = locations->GetTemp(0).AsRegister<Register>();
+  Register EDI = locations->GetTemp(1).AsRegister<Register>();
+  Register out_ESI = locations->Out().AsRegister<Register>();
+
+  Label end;
+  Label return_true;
+  Label return_false;
+
+  // Get offsets of count, value, and class fields within a string object.
+  const uint32_t count_offset = mirror::String::CountOffset().Uint32Value();
+  const uint32_t value_offset = mirror::String::ValueOffset().Uint32Value();
+  const uint32_t class_offset = mirror::Object::ClassOffset().Uint32Value();
+
+  // Note that the null check must have been done earlier.
+  DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
+
+  // Check if input is null, return false if it is.
+  __ cmpl(arg, Immediate(0));
+  __ j(kEqual, &return_false);
+
+  // Instanceof check for the argument by comparing class fields.
+  // All string objects must have the same type since String cannot be subclassed.
+  // Receiver must be a string object, so its class field is equal to all strings' class fields.
+  // If the argument is a string object, its class field must be equal to receiver's class field.
+  __ movl(ECX, Address(str, class_offset));
+  __ movl(EDI, Address(arg, class_offset));
+  __ cmpl(ECX, EDI);
+  __ j(kNotEqual, &return_false);
+
+  // Reference equality check, return true if same reference.
+  __ cmpl(str, arg);
+  __ j(kEqual, &return_true);
+
+  // Load lengths of this and argument strings.
+  __ movl(ECX, Address(str, count_offset));
+  __ movl(EDI, Address(arg, count_offset));
+  // Check if lengths are equal, return false if they're not.
+  __ cmpl(ECX, EDI);
+  __ j(kNotEqual, &return_false);
+  // Return true if both strings are empty.
+  __ cmpl(ECX, Immediate(0));
+  __ j(kEqual, &return_true);
+
+  // Load starting addresses of string values into ESI/EDI as required for repe_cmpsw instruction.
+  __ movl(out_ESI, str);
+  __ movl(EDI, arg);
+  __ addl(out_ESI, Immediate(value_offset));
+  __ addl(EDI, Immediate(value_offset));
+
+  // Loop to compare strings 1 character at a time starting at the beginning of the string.
+  __ repe_cmpsw();
+  // If strings are not equal, zero flag will be cleared.
+  __ j(kNotEqual, &return_false);
+
+  // Return true and exit the function.
+  // If loop does not result in returning false, we return true.
+  __ Bind(&return_true);
+  __ movl(out_ESI, Immediate(1));
+  __ jmp(&end);
+
+  // Return false and exit the function.
+  __ Bind(&return_false);
+  __ movl(out_ESI, Immediate(0));
+  __ Bind(&end);
+}
+
 static void CreateStringIndexOfLocations(HInvoke* invoke,
                                          ArenaAllocator* allocator,
                                          bool start_at_zero) {
