@@ -77,7 +77,7 @@
 
 // A thumb2 style ENTRY.
 .macro ENTRY name
-    DEF_ENTRY .thumb_func, \name
+    DEF_ENTRY .thumb, \name
 .endm
 
 // A ARM style ENTRY.
