@@ -27,5 +27,13 @@ public class Main {
         } else {
             System.out.println("cond_neg_double FAILED " + result);
         }
+
+        double d = Double.longBitsToDouble(4638648202453526795L /* approximately 127.15568 */);
+        long result_l = Double.doubleToRawLongBits(Math.sqrt(d));
+        if (result_l == 4622537629043927147L) {
+            System.out.println("sqrt PASSED");
+        } else {
+            System.out.println("sqrt FAILED " + result_l);
+        }
     }
 }
