@@ -389,12 +389,13 @@ define build-libart
   art_static_or_shared := $(3)
 
   include $$(CLEAR_VARS)
-  # Clang assembler has problem with macros in asm_support_x86.S, http://b/17443165,
+  # Clang assembler has problem with arm/quick_entrypoints_arm.S, http://b/22762844,
   # on linux. Yet sdk on mac needs integrated assembler.
   ifeq ($$(HOST_OS),darwin)
     LOCAL_CLANG_ASFLAGS += -integrated-as
   else
-    LOCAL_CLANG_ASFLAGS += -no-integrated-as
+    LOCAL_CLANG_ASFLAGS_arm += -no-integrated-as
+    LOCAL_CLANG_ASFLAGS_arm64 += -no-integrated-as
   endif
   LOCAL_CPP_EXTENSION := $$(ART_CPP_EXTENSION)
   ifeq ($$(art_ndebug_or_debug),ndebug)
