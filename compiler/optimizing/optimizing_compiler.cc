@@ -99,6 +99,7 @@ class PassObserver : public ValueObject {
                CompilerDriver* compiler_driver)
       : graph_(graph),
         method_name_(method_name),
+        compiler_driver_(compiler_driver),
         timing_logger_enabled_(compiler_driver->GetDumpPasses()),
         timing_logger_(method_name, true, true),
         disasm_info_(graph->GetArena()),
@@ -121,6 +122,15 @@ class PassObserver : public ValueObject {
     }
   }
 
+  // Is optimization `pass_name` disabled for the observed (i.e.
+  // currently compiled) method?
+  bool IsOptimizationPassDisabledForThisMethod(std::string pass_name) {
+    const CompilerOptions& compiler_options = compiler_driver_->GetCompilerOptions();
+    return compiler_options.HasDisabledOptimizationPasses()
+        ? compiler_options.IsDisabledOptimizationPassesForMethod(pass_name, method_name_)
+        : false;
+  }
+
   void DumpDisassembly() const {
     if (visualizer_enabled_) {
       visualizer_.DumpGraphWithDisassembly();
@@ -128,6 +138,10 @@ class PassObserver : public ValueObject {
   }
 
   void SetGraphInBadState() { graph_in_bad_state_ = true; }
+
+  const char* GetMethodName() const {
+    return method_name_;
+  }
 
  private:
   void StartPass(const char* pass_name) {
@@ -171,6 +185,7 @@ class PassObserver : public ValueObject {
 
   HGraph* const graph_;
   const char* method_name_;
+  CompilerDriver* compiler_driver_;
 
   bool timing_logger_enabled_;
   TimingLogger timing_logger_;
@@ -345,7 +360,11 @@ static void RunOptimizations(HOptimization* optimizations[],
                              size_t length,
                              PassObserver* pass_observer) {
   for (size_t i = 0; i < length; ++i) {
-    PassScope scope(optimizations[i]->GetPassName(), pass_observer);
+    const char* pass_name = optimizations[i]->GetPassName();
+    PassScope scope(pass_name, pass_observer);
+    if (pass_observer->IsOptimizationPassDisabledForThisMethod(pass_name)) {
+      continue;
+    }
     optimizations[i]->Run();
   }
 }
@@ -365,8 +384,9 @@ static void RunOptimizations(HGraph* graph,
   InstructionSimplifier* simplify1 = new (arena) InstructionSimplifier(graph, stats);
   HBooleanSimplifier* boolean_simplify = new (arena) HBooleanSimplifier(graph);
 
+  std::string method_name = pass_observer->GetMethodName();
   HInliner* inliner = new (arena) HInliner(
-      graph, dex_compilation_unit, dex_compilation_unit, driver, handles, stats);
+      graph, dex_compilation_unit, dex_compilation_unit, method_name, driver, handles, stats);
 
   HConstantFolding* fold2 = new (arena) HConstantFolding(graph, "constant_folding_after_inlining");
   SideEffectsAnalysis* side_effects = new (arena) SideEffectsAnalysis(graph);

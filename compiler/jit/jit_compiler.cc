@@ -80,6 +80,7 @@ JitCompiler::JitCompiler() : total_time_(0) {
       /* implicit_suspend_checks */ false,
       /* pic */ true,  // TODO: Support non-PIC in optimizing.
       /* verbose_methods */ nullptr,
+      /* disabled_optimization_passes */ nullptr,
       pass_manager_options,
       /* init_failure_output */ nullptr,
       /* abort_on_hard_verifier_failure */ false));

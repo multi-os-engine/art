@@ -33,6 +33,7 @@ class HInliner : public HOptimization {
   HInliner(HGraph* outer_graph,
            const DexCompilationUnit& outer_compilation_unit,
            const DexCompilationUnit& caller_compilation_unit,
+           const std::string& outermost_caller_name,
            CompilerDriver* compiler_driver,
            StackHandleScopeCollection* handles,
            OptimizingCompilerStats* stats,
@@ -40,6 +41,7 @@ class HInliner : public HOptimization {
       : HOptimization(outer_graph, kInlinerPassName, stats),
         outer_compilation_unit_(outer_compilation_unit),
         caller_compilation_unit_(caller_compilation_unit),
+        outermost_caller_name_(outermost_caller_name),
         compiler_driver_(compiler_driver),
         depth_(depth),
         handles_(handles) {}
@@ -56,6 +58,7 @@ class HInliner : public HOptimization {
 
   const DexCompilationUnit& outer_compilation_unit_;
   const DexCompilationUnit& caller_compilation_unit_;
+  const std::string& outermost_caller_name_;
   CompilerDriver* const compiler_driver_;
   const size_t depth_;
   StackHandleScopeCollection* const handles_;

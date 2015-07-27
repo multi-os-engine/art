@@ -21,12 +21,29 @@
 #include <string>
 #include <vector>
 
+#include "base/logging.h"
 #include "base/macros.h"
 #include "globals.h"
 
 namespace art {
 
 class PassManagerOptions;
+
+// A (pass-marker, method-marker) pair recording the information that
+// for every compiled method whose name contains `method_marker`, all
+// optimization passes whose name contain `pass_marker` should be
+// disabled.
+struct DisabledOptimizationPasses {
+  DisabledOptimizationPasses(std::string&& rhs_pass_marker,
+                             std::string&& rhs_method_marker) noexcept
+      : pass_marker(std::move(rhs_pass_marker)),
+        method_marker(std::move(rhs_method_marker)) {}
+
+  // Substring identifying the targeted passes.
+  std::string pass_marker;
+  // Substring identifying the targeted compiled methods.
+  std::string method_marker;
+};
 
 class CompilerOptions FINAL {
  public:
@@ -70,6 +87,7 @@ class CompilerOptions FINAL {
                   bool implicit_suspend_checks,
                   bool compile_pic,
                   const std::vector<std::string>* verbose_methods,
+                  const std::vector<DisabledOptimizationPasses>* disabled_optimization_passes,
                   PassManagerOptions* pass_manager_options,
                   std::ostream* init_failure_output,
                   bool abort_on_hard_verifier_failure);
@@ -175,10 +193,26 @@ class CompilerOptions FINAL {
   }
 
   bool IsVerboseMethod(const std::string& pretty_method) const {
+    DCHECK(verbose_methods_ != nullptr);
     for (const std::string& cur_method : *verbose_methods_) {
       if (pretty_method.find(cur_method) != std::string::npos) {
         return true;
       }
+    }
+    return false;
+  }
+
+  bool HasDisabledOptimizationPasses() const {
+    return disabled_optimization_passes_ != nullptr && !disabled_optimization_passes_->empty();
+  }
+
+  bool IsDisabledOptimizationPassesForMethod(std::string pass_name,
+                                             std::string method_name) const {
+    DCHECK(disabled_optimization_passes_ != nullptr);
+    for (const DisabledOptimizationPasses& disabled_pass : *disabled_optimization_passes_) {
+      if ((pass_name.find(disabled_pass.pass_marker) != std::string::npos) &&
+          (method_name.find(disabled_pass.method_marker) != std::string::npos))
+        return true;
     }
     return false;
   }
@@ -214,6 +248,9 @@ class CompilerOptions FINAL {
 
   // Vector of methods to have verbose output enabled for.
   const std::vector<std::string>* const verbose_methods_;
+
+  // Disabled optimization passes expressed as (pass-marker, method-marker) pairs.
+  const std::vector<DisabledOptimizationPasses>* disabled_optimization_passes_;
 
   std::unique_ptr<PassManagerOptions> pass_manager_options_;
 

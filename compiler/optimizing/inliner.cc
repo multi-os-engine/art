@@ -68,15 +68,21 @@ void HInliner::Run() {
           if (kIsDebugBuild && IsCompilingWithCoreImage()) {
             std::string callee_name =
                 PrettyMethod(call->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
+            std::string caller_name = graph_->GetMethodName();
             bool should_inline = callee_name.find("$inline$") != std::string::npos;
-            CHECK(!should_inline) << "Could not inline " << callee_name;
+            CHECK(!should_inline)
+                << "Could not inline " << callee_name << " within " << caller_name
+                << " from " << outermost_caller_name_;
           }
         } else {
           if (kIsDebugBuild && IsCompilingWithCoreImage()) {
             std::string callee_name =
                 PrettyMethod(call->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
+            std::string caller_name = graph_->GetMethodName();
             bool must_not_inline = callee_name.find("$noinline$") != std::string::npos;
-            CHECK(!must_not_inline) << "Should not have inlined " << callee_name;
+            CHECK(!must_not_inline)
+                << "Should not have inlined " << callee_name << " within " << caller_name
+                << " from " << outermost_caller_name_;
           }
         }
       }
@@ -373,6 +379,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     HInliner inliner(callee_graph,
                      outer_compilation_unit_,
                      dex_compilation_unit,
+                     outermost_caller_name_,
                      compiler_driver_,
                      handles_,
                      stats_,
