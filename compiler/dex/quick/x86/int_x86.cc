@@ -2479,7 +2479,11 @@ void X86Mir2Lir::GenArrayGet(int opt_flags, OpSize size, RegLocation rl_array,
     }
   }
   rl_result = EvalLoc(rl_dest, reg_class, true);
-  LoadBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_result.reg, size);
+  if (kUseReadBarrier && size == kReference) {
+    LoadBaseIndexedDispReadBarrier(rl_array.reg, rl_index.reg, scale, data_offset, rl_result.reg);
+  } else {
+    LoadBaseIndexedDisp(rl_array.reg, rl_index.reg, scale, data_offset, rl_result.reg, size);
+  }
   if ((size == k64) || (size == kDouble)) {
     StoreValueWide(rl_dest, rl_result);
   } else {

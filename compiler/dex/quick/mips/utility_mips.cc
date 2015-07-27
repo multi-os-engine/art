@@ -871,6 +871,20 @@ LIR* MipsMir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r
   return load;
 }
 
+LIR* MipsMir2Lir::LoadRefDispWithReadBarrier(RegStorage r_base, int displacement, RegStorage r_dest,
+                                             VolatileKind is_volatile) {
+  UNUSED(r_base, displacement, r_dest, is_volatile);
+  UNIMPLEMENTED(FATAL);
+  UNREACHABLE();
+}
+
+LIR* MipsMir2Lir::LoadRefIndexedWithReadBarrier(RegStorage r_base, RegStorage r_index,
+                                                RegStorage r_dest, int scale) {
+  UNUSED(r_base, r_index, r_dest, scale);
+  UNIMPLEMENTED(FATAL);
+  UNREACHABLE();
+}
+
 // FIXME: don't split r_dest into 2 containers.
 LIR* MipsMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegStorage r_src,
                                     OpSize size) {

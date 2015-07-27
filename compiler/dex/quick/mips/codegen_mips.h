@@ -96,6 +96,10 @@ class MipsMir2Lir FINAL : public Mir2Lir {
 
   /// @copydoc Mir2Lir::UnconditionallyMarkGCCard(RegStorage)
   void UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) OVERRIDE;
+  LIR* LoadRefDispWithReadBarrier(RegStorage r_base, int displacement, RegStorage r_dest,
+                                  VolatileKind is_volatile) OVERRIDE;
+  LIR* LoadRefIndexedWithReadBarrier(RegStorage r_base, RegStorage r_index, RegStorage r_dest,
+                                     int scale) OVERRIDE;
 
   // Required for target - register utilities.
   RegStorage Solo64ToPair64(RegStorage reg);

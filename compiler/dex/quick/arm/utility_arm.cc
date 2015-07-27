@@ -1056,6 +1056,19 @@ LIR* ArmMir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_
   return load;
 }
 
+LIR* ArmMir2Lir::LoadRefDispWithReadBarrier(RegStorage r_base, int displacement, RegStorage r_dest,
+                                            VolatileKind is_volatile) {
+  UNUSED(r_base, displacement, r_dest, is_volatile);
+  UNIMPLEMENTED(FATAL);
+  UNREACHABLE();
+}
+
+LIR* ArmMir2Lir::LoadRefIndexedWithReadBarrier(RegStorage r_base, RegStorage r_index,
+                                               RegStorage r_dest, int scale) {
+  UNUSED(r_base, r_index, r_dest, scale);
+  UNIMPLEMENTED(FATAL);
+  UNREACHABLE();
+}
 
 LIR* ArmMir2Lir::StoreBaseDispBody(RegStorage r_base, int displacement, RegStorage r_src,
                                    OpSize size) {

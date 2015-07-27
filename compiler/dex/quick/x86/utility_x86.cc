@@ -767,6 +767,50 @@ LIR* X86Mir2Lir::LoadBaseIndexedDisp(RegStorage r_base, RegStorage r_index, int 
   return load;
 }
 
+LIR* X86Mir2Lir::LoadBaseIndexedDispReadBarrier(RegStorage r_base, RegStorage r_index, int scale,
+                                                int displacement, RegStorage r_dest) {
+  // LIR *load = nullptr;
+  DCHECK(!r_dest.IsPair());
+  DCHECK(!r_dest.IsFloat());
+  bool is_array = r_index.Valid();
+  X86OpCode opcode = is_array ? kX86Mov32RA : kX86Mov32RM;
+  DCHECK_EQ((displacement & 0x3), 0);
+  DCHECK_EQ(mem_ref_type_, ResourceMask::kHeapRef);
+  DCHECK_NE(r_base, cu_->target64 ? rs_rX86_SP_64 : rs_rX86_SP_32);
+  // Pass RDI or EAX as first argument, as the first argument "ref" is unused in artReadBarrierSlow.
+  RegStorage r_arg0 = cu_->target64 ? rs_rDI : rs_rAX;
+  FlushAllRegs();
+  // May generate a call - use explicit registers
+  LockCallTemps();
+  if (!is_array || !r_index.Valid()) {
+    // load = NewLIR3(opcode, r_dest.GetReg(), r_base.GetReg(), displacement + LOWORD_OFFSET);
+    int offset = displacement + LOWORD_OFFSET;
+    CallRuntimeHelperRegRegImm(kQuickReadBarrierSlow, r_arg0, r_base, offset, false);
+  } else {
+    /*
+    RegStorage r_offset = AllocTypedTemp(false, kCoreReg);
+    OpRegRegImm(kOpLsl, r_offset, r_index, scale);
+    OpRegImm(kOpAdd, r_offset,  displacement + LOWORD_OFFSET);
+    // CallRuntimeHelperRegRegReg(kQuickReadBarrierSlow, r_arg0, r_base, r_offset, false);
+    Clobber(r_offset);
+    FreeTemp(r_offset);
+    */
+    // TODO: remove this when figure out how to do CallRuntimeHelperRegRegReg()
+    LIR* load = NewLIR5(opcode, r_dest.GetReg(), r_base.GetReg(), r_index.GetReg(), scale,
+                   displacement + LOWORD_OFFSET);
+    FreeCallTemps();
+    return load;
+  }
+  FreeCallTemps();
+
+  RegStorage r_result = GetReturn(kRefReg).reg;
+  if (!IsSameReg(r_result, r_dest)) {
+    OpRegCopy(r_dest, r_result);
+  }
+
+  return last_lir_insn_;
+}
+
 /* Load value from base + scaled index. */
 LIR* X86Mir2Lir::LoadBaseIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_dest,
                                  int scale, OpSize size) {
@@ -780,6 +824,23 @@ LIR* X86Mir2Lir::LoadBaseDisp(RegStorage r_base, int displacement, RegStorage r_
 
   LIR* load = LoadBaseIndexedDisp(r_base, RegStorage::InvalidReg(), 0, displacement, r_dest,
                                   size);
+
+  if (UNLIKELY(is_volatile == kVolatile)) {
+    GenMemBarrier(kLoadAny);  // Only a scheduling barrier.
+  }
+
+  return load;
+}
+
+LIR* X86Mir2Lir::LoadRefIndexedWithReadBarrier(RegStorage r_base, RegStorage r_index,
+                                               RegStorage r_dest, int scale) {
+  return LoadBaseIndexedDispReadBarrier(r_base, r_index, scale, 0, r_dest);
+}
+
+LIR* X86Mir2Lir::LoadRefDispWithReadBarrier(RegStorage r_base, int displacement, RegStorage r_dest,
+                                            VolatileKind is_volatile) {
+  LIR* load = LoadBaseIndexedDispReadBarrier(r_base, RegStorage::InvalidReg(), 0, displacement,
+                                             r_dest);
 
   if (UNLIKELY(is_volatile == kVolatile)) {
     GenMemBarrier(kLoadAny);  // Only a scheduling barrier.

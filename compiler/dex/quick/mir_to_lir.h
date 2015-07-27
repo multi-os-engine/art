@@ -983,11 +983,19 @@ class Mir2Lir {
     // Load a reference at base + displacement and decompress into register.
     LIR* LoadRefDisp(RegStorage r_base, int displacement, RegStorage r_dest,
                      VolatileKind is_volatile) {
-      return LoadBaseDisp(r_base, displacement, r_dest, kReference, is_volatile);
+      if (kUseReadBarrier && (mem_ref_type_ == ResourceMask::kHeapRef)) {
+        return LoadRefDispWithReadBarrier(r_base, displacement, r_dest, is_volatile);
+      } else {
+        return LoadBaseDisp(r_base, displacement, r_dest, kReference, is_volatile);
+      }
     }
     // Load a reference at base + index and decompress into register.
     LIR* LoadRefIndexed(RegStorage r_base, RegStorage r_index, RegStorage r_dest, int scale) {
-      return LoadBaseIndexed(r_base, r_index, r_dest, scale, kReference);
+      if (kUseReadBarrier && (mem_ref_type_ == ResourceMask::kHeapRef)) {
+        return LoadRefIndexedWithReadBarrier(r_base, r_index, r_dest, scale);
+      } else {
+        return LoadBaseIndexed(r_base, r_index, r_dest, scale, kReference);
+      }
     }
     // Load Dalvik value with 32-bit memory storage.  If compressed object reference, decompress.
     virtual RegLocation LoadValue(RegLocation rl_src, RegisterClass op_kind);
@@ -1164,6 +1172,11 @@ class Mir2Lir {
      * @param tgt_addr_reg the address of the object or array where the value was stored.
      */
     virtual void UnconditionallyMarkGCCard(RegStorage tgt_addr_reg) = 0;
+
+    virtual LIR* LoadRefDispWithReadBarrier(RegStorage r_base, int displacement, RegStorage r_dest,
+                                            VolatileKind is_volatile) = 0;
+    virtual LIR* LoadRefIndexedWithReadBarrier(RegStorage r_base, RegStorage r_index,
+                                               RegStorage r_dest, int scale) = 0;
 
     // Required for target - register utilities.
 
