@@ -109,10 +109,8 @@ static ArtMethod* FindVirtualOrInterfaceTarget(HInvoke* invoke, ArtMethod* resol
     receiver = receiver->InputAt(0);
   }
   ReferenceTypeInfo info = receiver->GetReferenceTypeInfo();
-  if (info.IsTop()) {
-    // We have no information on the receiver.
-    return nullptr;
-  } else if (!info.IsExact()) {
+  DCHECK(info.IsValid()) << "Invalid RTI for " << receiver->DebugName();
+  if (!info.IsExact()) {
     // We currently only support inlining with known receivers.
     // TODO: Remove this check, we should be able to inline final methods
     // on unknown receivers.
@@ -273,11 +271,11 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   const DexFile::CodeItem* code_item = resolved_method->GetCodeItem();
   const DexFile& callee_dex_file = *resolved_method->GetDexFile();
   uint32_t method_index = resolved_method->GetDexMethodIndex();
-
+  ClassLinker* class_linker = caller_compilation_unit_.GetClassLinker();
   DexCompilationUnit dex_compilation_unit(
     nullptr,
     caller_compilation_unit_.GetClassLoader(),
-    caller_compilation_unit_.GetClassLinker(),
+    class_linker,
     *resolved_method->GetDexFile(),
     code_item,
     resolved_method->GetDeclaringClass()->GetDexClassDefIndex(),
@@ -450,7 +448,30 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     }
   }
 
-  callee_graph->InlineInto(graph_, invoke_instruction);
+  HInstruction* return_replacement = callee_graph->InlineInto(graph_, invoke_instruction);
+
+  if ((return_replacement != nullptr)
+      && (return_replacement->GetType() == Primitive::kPrimNot)) {
+    if (!return_replacement->GetReferenceTypeInfo().IsValid()) {
+      // Make sure that we have a valid type for the return. We may get an invalid one when:
+      //   - we inline invokes with multiple branches and create a Phi for the result.
+      //   - we create an HNullConstant when building the graph and return it/
+      // TODO: we could be more precise by merging the phi inputs but that requires
+      // some functionality from the reference type propagation.
+      DCHECK(return_replacement->IsPhi() || return_replacement->IsNullConstant());
+      if (return_replacement->IsPhi()) {
+        return_replacement->SetReferenceTypeInfo(ReferenceTypeInfo::Create(
+            handles_->NewHandle(resolved_method->GetReturnType()), false /* is_exact */));
+      } else {
+        // For null constant we use the object type as it may be use in some other parts as well.
+        // TODO: This can be refined with a bound type.
+        ReferenceTypeInfo::TypeHandle obj_handle =
+            handles_->NewHandle(class_linker->GetClassRoot(ClassLinker::kJavaLangObject));
+        return_replacement->SetReferenceTypeInfo(
+            ReferenceTypeInfo::Create(obj_handle, false /* is_exact */));
+      }
+    }
+  }
 
   return true;
 }
