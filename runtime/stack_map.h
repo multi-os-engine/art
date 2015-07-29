@@ -364,7 +364,7 @@ class DexRegisterLocationCatalog {
     return region_.size();
   }
 
-  void Dump(VariableIndentationOutputStream* vios, const CodeInfo& code_info);
+  void Dump(VariableIndentationOutputStream& vios, const CodeInfo& code_info);
 
   // Special (invalid) Dex register location catalog entry index meaning
   // that there is no location for a given Dex register (i.e., it is
@@ -617,7 +617,7 @@ class DexRegisterMap {
     return region_.size();
   }
 
-  void Dump(VariableIndentationOutputStream* vios,
+  void Dump(VariableIndentationOutputStream& vios,
             const CodeInfo& code_info, uint16_t number_of_dex_registers) const;
 
  private:
@@ -845,7 +845,7 @@ class StackMap {
        && region_.size() == other.region_.size();
   }
 
-  void Dump(VariableIndentationOutputStream* vios,
+  void Dump(VariableIndentationOutputStream& vios,
             const CodeInfo& code_info,
             const StackMapEncoding& encoding,
             uint32_t code_offset,
@@ -939,7 +939,7 @@ class InlineInfo {
     return kFixedEntrySize;
   }
 
-  void Dump(VariableIndentationOutputStream* vios,
+  void Dump(VariableIndentationOutputStream& vios,
             const CodeInfo& info, uint16_t* number_of_dex_registers) const;
 
  private:
@@ -1123,7 +1123,7 @@ class CodeInfo {
   // number of Dex virtual registers used in this method.  If
   // `dump_stack_maps` is true, also dump the stack maps and the
   // associated Dex register maps.
-  void Dump(VariableIndentationOutputStream* vios,
+  void Dump(VariableIndentationOutputStream& vios,
             uint32_t code_offset,
             uint16_t number_of_dex_registers,
             bool dump_stack_maps) const;
