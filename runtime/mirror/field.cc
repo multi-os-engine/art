@@ -61,10 +61,10 @@ ArtField* Field::GetArtField() {
     DCHECK_EQ(declaring_class->NumStaticFields(), 2U);
     // 0 == Class[] interfaces; 1 == Class[][] throws;
     if (GetDexFieldIndex() == 0) {
-      return &declaring_class->GetSFields()[0];
+      return &declaring_class->GetSFieldsPtr()->At(0, sizeof(ArtField));
     } else {
       DCHECK_EQ(GetDexFieldIndex(), 1U);
-      return &declaring_class->GetSFields()[1];
+      return &declaring_class->GetSFieldsPtr()->At(1, sizeof(ArtField));
     }
   }
   mirror::DexCache* const dex_cache = declaring_class->GetDexCache();

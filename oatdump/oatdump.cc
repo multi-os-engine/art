@@ -1739,9 +1739,8 @@ class ImageDumper {
     if (super != nullptr) {
       DumpFields(os, obj, super);
     }
-    ArtField* fields = klass->GetIFields();
-    for (size_t i = 0, count = klass->NumInstanceFields(); i < count; i++) {
-      PrintField(os, &fields[i], obj);
+    for (ArtField& field : klass->GetIFields()) {
+      PrintField(os, &field, obj);
     }
   }
 
@@ -1837,13 +1836,11 @@ class ImageDumper {
       }
     } else if (obj->IsClass()) {
       mirror::Class* klass = obj->AsClass();
-      ArtField* sfields = klass->GetSFields();
-      const size_t num_fields = klass->NumStaticFields();
-      if (num_fields != 0) {
+      if (klass->NumStaticFields() != 0) {
         os << "STATICS:\n";
         ScopedIndentation indent2(&state->vios_);
-        for (size_t i = 0; i < num_fields; i++) {
-          PrintField(os, &sfields[i], sfields[i].GetDeclaringClass());
+        for (ArtField& field : klass->GetSFields()) {
+          PrintField(os, &field, field.GetDeclaringClass());
         }
       }
     } else {
