@@ -29,6 +29,8 @@
 #include "globals.h"
 #include "invoke_type.h"
 #include "jni.h"
+#include "jvalue.h"
+#include "mirror/object_array.h"
 #include "modifiers.h"
 #include "utf.h"
 
@@ -381,6 +383,17 @@ class DexFile {
 
    private:
     DISALLOW_COPY_AND_ASSIGN(AnnotationItem);
+  };
+
+  struct AnnotationValue {
+    JValue value_;
+    uint8_t type_;
+  };
+
+  enum AnnotationResultStyle {  // private
+    kAllObjects,
+    kPrimitivesOrObjects,
+    kAllRaw
   };
 
   // Returns the checksum of a file for comparison with GetLocationChecksum().
@@ -810,6 +823,174 @@ class DexFile {
                                      const char* signature);
 
   static bool LineNumForPcCb(void* context, uint32_t address, uint32_t line_num);
+
+  const AnnotationsDirectoryItem* GetAnnotationsDirectory(const ClassDef& class_def) const {
+    if (class_def.annotations_off_ == 0) {
+      return nullptr;
+    } else {
+      return reinterpret_cast<const AnnotationsDirectoryItem*>(begin_ + class_def.annotations_off_);
+    }
+  }
+
+  const AnnotationSetItem* GetClassAnnotationSet(const AnnotationsDirectoryItem* anno_dir) const {
+    if (anno_dir->class_annotations_off_ == 0) {
+      return nullptr;
+    } else {
+      return reinterpret_cast<const AnnotationSetItem*>(begin_ + anno_dir->class_annotations_off_);
+    }
+  }
+
+  const FieldAnnotationsItem* GetFieldAnnotations(const AnnotationsDirectoryItem* anno_dir) const {
+    if (anno_dir->fields_size_ == 0) {
+      return nullptr;
+    } else {
+      return reinterpret_cast<const FieldAnnotationsItem*>(&anno_dir[1]);
+    }
+  }
+
+  const MethodAnnotationsItem* GetMethodAnnotations(const AnnotationsDirectoryItem* anno_dir) const {
+    if (anno_dir->methods_size_ == 0) {
+      return nullptr;
+    } else {
+      // Skip past the header and field annotations.
+      const uint8_t* addr = reinterpret_cast<const uint8_t*>(&anno_dir[1]);
+      addr += anno_dir->fields_size_ * sizeof(FieldAnnotationsItem);
+      return reinterpret_cast<const MethodAnnotationsItem*>(addr);
+    }
+  }
+
+  const ParameterAnnotationsItem* GetParameterAnnotations(const AnnotationsDirectoryItem* anno_dir) const {
+    if (anno_dir->parameters_size_ == 0) {
+      return nullptr;
+    } else {
+      // Skip past the header, field annotations, and method annotations.
+      const uint8_t* addr = reinterpret_cast<const uint8_t*>(&anno_dir[1]);
+      addr += anno_dir->fields_size_ * sizeof(FieldAnnotationsItem);
+      addr += anno_dir->methods_size_ * sizeof(MethodAnnotationsItem);
+      return reinterpret_cast<const ParameterAnnotationsItem*>(addr);
+    }
+  }
+
+  const AnnotationSetItem* GetFieldAnnotationSetItem(const FieldAnnotationsItem& anno_item) const {
+    uint32_t offset = anno_item.annotations_off_;
+    if (offset == 0) {
+      return nullptr;
+    } else {
+      return reinterpret_cast<const AnnotationSetItem*>(begin_ + offset);
+    }
+  }
+
+  const AnnotationSetItem* GetMethodAnnotationSetItem(const MethodAnnotationsItem& anno_item) const {
+    uint32_t offset = anno_item.annotations_off_;
+    if (offset == 0) {
+      return nullptr;
+    } else {
+      return reinterpret_cast<const AnnotationSetItem*>(begin_ + offset);
+    }
+  }
+
+  const AnnotationSetRefList* GetParameterAnnotationSetRefList(const ParameterAnnotationsItem* anno_item) const {
+    uint32_t offset = anno_item->annotations_off_;
+    if (offset == 0) {
+      return nullptr;
+    }
+    return reinterpret_cast<const AnnotationSetRefList*>(begin_ + offset);
+  }
+
+  const AnnotationItem* GetAnnotationItem(const AnnotationSetItem* set_item, uint32_t index) const {
+    DCHECK_LE(index, set_item->size_);
+    uint32_t offset = set_item->entries_[index];
+    if (offset == 0) {
+      return nullptr;
+    } else {
+      return reinterpret_cast<const AnnotationItem*>(begin_ + offset);
+    }
+  }
+
+  const AnnotationSetItem* GetSetRefItemItem(const AnnotationSetRefItem* anno_item) const {
+    uint32_t offset = anno_item->annotations_off_;
+    if (offset == 0) {
+      return nullptr;
+    }
+    return reinterpret_cast<const AnnotationSetItem*>(begin_ + offset);
+  }
+
+  const AnnotationSetItem* FindAnnotationSetForField(ArtField* field) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Object* GetAnnotationForField(ArtField* field, mirror::Class* annotation_class) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* GetAnnotationsForField(ArtField* field) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* GetSignatureAnnotationForField(ArtField* field) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  bool IsFieldAnnotationPresent(ArtField* field, mirror::Class* annotation_class) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  const AnnotationSetItem* FindAnnotationSetForMethod(ArtMethod* method) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  const ParameterAnnotationsItem* FindAnnotationsItemForMethod(ArtMethod* method) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Object* GetAnnotationDefaultValue(ArtMethod* method) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Object* GetAnnotationForMethod(ArtMethod* method, mirror::Class* annotation_class) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* GetAnnotationsForMethod(ArtMethod* method) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* GetExceptionTypesForMethod(ArtMethod* method) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* GetParameterAnnotations(ArtMethod* method) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  bool IsMethodAnnotationPresent(ArtMethod* method, mirror::Class* annotation_class) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  const AnnotationSetItem* FindAnnotationSetForClass(mirror::Class* klass) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Object* GetAnnotationForClass(mirror::Class* klass, mirror::Class* annotation_class) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* GetAnnotationsForClass(mirror::Class* klass) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  bool IsClassAnnotationPresent(mirror::Class* klass, mirror::Class* annotation_class) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  const AnnotationItem* GetAnnotationItemFromAnnotationSet(mirror::Class* klass,
+      const AnnotationSetItem* annotation_set, uint32_t visibility,
+      mirror::Class* annotation_class) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Object* GetAnnotationObjectFromAnnotationSet(mirror::Class* klass,
+      const AnnotationSetItem* annotation_set, uint32_t visibility,
+      mirror::Class* annotation_class) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* GetSignatureValue(mirror::Class* klass,
+      const AnnotationSetItem* annotation_set) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* GetThrowsValue(mirror::Class* klass,
+      const AnnotationSetItem* annotation_set) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  const AnnotationItem* SearchAnnotationSet(const AnnotationSetItem* annotation_set,
+      const char* descriptor, uint32_t visibility) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Object* GetAnnotationValue(mirror::Class* klass, const AnnotationItem* annotation_item,
+      const char* annotation_name, mirror::Class* array_class, uint32_t expected_type) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  const uint8_t* SearchEncodedAnnotation(mirror::Class* klass, const uint8_t* annotation,
+      const char* name) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  bool SkipAnnotationValue(mirror::Class* klass, const uint8_t** annotation_ptr) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* ProcessAnnotationSet(mirror::Class* klass,
+      const AnnotationSetItem* annotation_set, uint32_t visibility) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Object* ProcessEncodedAnnotation(mirror::Class* klass, const uint8_t** annotation) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Object* CreateAnnotationMember(mirror::Class* klass, mirror::Class* annotation_class,
+      const uint8_t** annotation) const SHARED_REQUIRES(Locks::mutator_lock_);
+  bool ProcessAnnotationValue(mirror::Class* klass, const uint8_t** annotation_ptr,
+      AnnotationValue* annotation_value, mirror::Class* return_class,
+      DexFile::AnnotationResultStyle result_style) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::ObjectArray<mirror::Object>* ProcessAnnotationSetRefList(mirror::Class* klass,
+      const AnnotationSetRefList* set_ref_list, uint32_t size) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Debug info opcodes and constants
   enum {
