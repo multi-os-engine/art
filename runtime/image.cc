@@ -147,4 +147,26 @@ std::ostream& operator<<(std::ostream& os, const ImageSection& section) {
   return os << "size=" << section.Size() << " range=" << section.Offset() << "-" << section.End();
 }
 
+void ImageSection::VisitPackedArtFields(ArtFieldVisitor* visitor, uint8_t* base) const {
+  for (size_t pos = 0; pos < Size(); ) {
+    auto* array = reinterpret_cast<LengthPrefixedArray<ArtField>*>(base + Offset() + pos);
+    for (size_t i = 0; i < array->Length(); ++i) {
+      visitor->Visit(&array->At(i, sizeof(ArtField)));
+    }
+    pos += array->ComputeSize(array->Length(), sizeof(ArtField));
+  }
+}
+
+void ImageSection::VisitPackedArtMethods(ArtMethodVisitor* visitor,
+                                         uint8_t* base,
+                                         size_t method_size) const {
+  for (size_t pos = 0; pos < Size(); ) {
+    auto* array = reinterpret_cast<LengthPrefixedArray<ArtMethod>*>(base + Offset() + pos);
+    for (size_t i = 0; i < array->Length(); ++i) {
+      visitor->Visit(&array->At(i, method_size));
+    }
+    pos += array->ComputeSize(array->Length(), method_size);
+  }
+}
+
 }  // namespace art
