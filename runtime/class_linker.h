@@ -399,9 +399,9 @@ class ClassLinker {
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!Roles::uninterruptible_);
 
-  ArtField* AllocArtFieldArray(Thread* self, size_t length);
+  LengthPrefixedArray<ArtField>* AllocArtFieldArray(Thread* self, size_t length);
 
-  ArtMethod* AllocArtMethodArray(Thread* self, size_t length);
+  LengthPrefixedArray<ArtMethod>* AllocArtMethodArray(Thread* self, size_t length);
 
   mirror::PointerArray* AllocPointerArray(Thread* self, size_t length)
       SHARED_REQUIRES(Locks::mutator_lock_)
@@ -801,8 +801,7 @@ class ClassLinker {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void UpdateClassVirtualMethods(mirror::Class* klass,
-                                 ArtMethod* new_methods,
-                                 size_t new_num_methods)
+                                 LengthPrefixedArray<ArtMethod>* new_methods)
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!Locks::classlinker_classes_lock_);
 
