@@ -415,11 +415,18 @@ static void Field_setShort(JNIEnv* env, jobject javaField, jobject javaObj, jsho
   SetPrimitiveField<Primitive::kPrimShort>(env, javaField, javaObj, value);
 }
 
+static jobjectArray Field_getDeclaredAnnotations(JNIEnv* env, jobject javaField) {
+  ScopedFastNativeObjectAccess soa(env);
+  ArtField* field = soa.Decode<mirror::Field*>(javaField)->GetArtField();
+  return soa.AddLocalReference<jobjectArray>(field->GetDexFile()->GetAnnotationsForField(field));
+}
+
 static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(Field, get,        "!(Ljava/lang/Object;)Ljava/lang/Object;"),
   NATIVE_METHOD(Field, getBoolean, "!(Ljava/lang/Object;)Z"),
   NATIVE_METHOD(Field, getByte,    "!(Ljava/lang/Object;)B"),
   NATIVE_METHOD(Field, getChar,    "!(Ljava/lang/Object;)C"),
+  NATIVE_METHOD(Field, getDeclaredAnnotations, "!()[Ljava/lang/annotation/Annotation;"),
   NATIVE_METHOD(Field, getDouble,  "!(Ljava/lang/Object;)D"),
   NATIVE_METHOD(Field, getFloat,   "!(Ljava/lang/Object;)F"),
   NATIVE_METHOD(Field, getInt,     "!(Ljava/lang/Object;)I"),

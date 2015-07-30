@@ -32,12 +32,15 @@
 #include "base/logging.h"
 #include "base/stringprintf.h"
 #include "class_linker.h"
+#include "class_linker-inl.h"
 #include "dex_file-inl.h"
 #include "dex_file_verifier.h"
 #include "globals.h"
 #include "leb128.h"
+#include "mirror/method.h"
 #include "mirror/string.h"
 #include "os.h"
+#include "reflection.h"
 #include "safe_map.h"
 #include "handle_scope-inl.h"
 #include "thread.h"
@@ -1043,6 +1046,431 @@ std::string DexFile::GetDexCanonicalLocation(const char* dex_location) {
   }
 }
 
+// Read a signed integer.  "zwidth" is the zero-based byte count.
+static int32_t ReadSignedInt(const uint8_t* ptr, int zwidth) {
+  int32_t val = 0;
+  for (int i = zwidth; i >= 0; --i) {
+    val = ((uint32_t)val >> 8) | (((int32_t)*ptr++) << 24);
+  }
+  val >>= (3 - zwidth) * 8;
+  return val;
+}
+
+// Read an unsigned integer.  "zwidth" is the zero-based byte count,
+// "fill_on_right" indicates which side we want to zero-fill from.
+static uint32_t ReadUnsignedInt(const uint8_t* ptr, int zwidth, bool fill_on_right) {
+  uint32_t val = 0;
+  if (!fill_on_right) {
+    for (int i = zwidth; i >= 0; --i) {
+      val = (val >> 8) | (((uint32_t)*ptr++) << 24);
+    }
+    val >>= (3 - zwidth) * 8;
+  } else {
+    for (int i = zwidth; i >= 0; --i) {
+      val = (val >> 8) | (((uint32_t)*ptr++) << 24);
+    }
+  }
+  return val;
+}
+
+// Read a signed long.  "zwidth" is the zero-based byte count.
+static int64_t ReadSignedLong(const uint8_t* ptr, int zwidth) {
+  int64_t val = 0;
+  for (int i = zwidth; i >= 0; --i) {
+    val = ((uint64_t)val >> 8) | (((int64_t)*ptr++) << 56);
+  }
+  val >>= (7 - zwidth) * 8;
+  return val;
+}
+
+// Read an unsigned long.  "zwidth" is the zero-based byte count,
+// "fill_on_right" indicates which side we want to zero-fill from.
+static uint64_t ReadUnsignedLong(const uint8_t* ptr, int zwidth, bool fill_on_right) {
+  uint64_t val = 0;
+  if (!fill_on_right) {
+    for (int i = zwidth; i >= 0; --i) {
+      val = (val >> 8) | (((uint64_t)*ptr++) << 56);
+    }
+    val >>= (7 - zwidth) * 8;
+  } else {
+    for (int i = zwidth; i >= 0; --i) {
+      val = (val >> 8) | (((uint64_t)*ptr++) << 56);
+    }
+  }
+  return val;
+}
+
+const DexFile::AnnotationSetItem* DexFile::FindAnnotationSetForField(ArtField* field) const {
+  mirror::Class* klass = field->GetDeclaringClass();
+  const AnnotationsDirectoryItem* annotations_dir = GetAnnotationsDirectory(*klass->GetClassDef());
+  if (annotations_dir == nullptr) {
+    return nullptr;
+  }
+
+  const FieldAnnotationsItem* field_annotations = GetFieldAnnotations(annotations_dir);
+  if (field_annotations == nullptr) {
+    return nullptr;
+  }
+
+  uint32_t field_index = field->GetDexFieldIndex();
+  uint32_t field_count = annotations_dir->fields_size_;
+  for (uint32_t i = 0; i < field_count; ++i) {
+    if (field_annotations[i].field_idx_ == field_index) {
+      return GetFieldAnnotationSetItem(field_annotations[i]);
+    }
+  }
+
+  return nullptr;
+}
+
+mirror::ObjectArray<mirror::Object>* DexFile::GetAnnotationsForField(ArtField* field) const {
+  const AnnotationSetItem* annotation_set = FindAnnotationSetForField(field);
+  LOG(INFO) << "FIND ANNOTATION SET FOR FIELD - annotation_set:" << std::hex << annotation_set << std::dec;
+  return ProcessAnnotationSet(field, annotation_set, kDexVisibilityRuntime);
+}
+
+mirror::ObjectArray<mirror::Object>* DexFile::ProcessAnnotationSet(ArtField* field,
+    const AnnotationSetItem* annotation_set, uint32_t visibility) const {
+  Thread* self = Thread::Current();
+  ScopedObjectAccessUnchecked soa(self);
+  mirror::Class* annotation_array_class =
+      soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_annotation_Annotation__array);
+  if (annotation_set == nullptr) {
+    return mirror::ObjectArray<mirror::Object>::Alloc(self, annotation_array_class, 0);
+  }
+
+  uint32_t size = annotation_set->size_;
+  mirror::ObjectArray<mirror::Object>* result =
+      mirror::ObjectArray<mirror::Object>::Alloc(self, annotation_array_class, size);
+  LOG(INFO) << "PROCESS ANNOTATION SET - size:" << size << " result:" << std::hex << result << std::dec;
+  if (result == nullptr) {
+    return nullptr;
+  }
+
+  // extra visibility pass?
+  uint32_t dest_index = 0;
+  for (uint32_t i = 0; i < size; ++i) {
+    const AnnotationItem* annotation_item = GetAnnotationItem(annotation_set, i);
+    if (annotation_item->visibility_ != visibility) {
+      continue;
+    }
+    const uint8_t* annotation = annotation_item->annotation_;
+    mirror::Object* annotation_obj = ProcessEncodedAnnotation(field, &annotation);
+    if (annotation_obj != nullptr) {
+      result->SetWithoutChecks<false>(dest_index, annotation_obj);
+      ++dest_index;
+    }
+  }
+
+  if (dest_index == size) {
+    return result;
+  }
+
+  mirror::ObjectArray<mirror::Object>* trimmed_result =
+      mirror::ObjectArray<mirror::Object>::Alloc(self, annotation_array_class, dest_index);
+  for (uint32_t i = 0; i < dest_index; ++i) {
+    mirror::Object* obj = result->GetWithoutChecks(i);
+    trimmed_result->SetWithoutChecks<false>(i, obj);
+  }
+  // free result?
+
+  return trimmed_result;
+}
+
+mirror::Object* DexFile::ProcessEncodedAnnotation(ArtField* field, const uint8_t** annotation) const {
+  uint32_t type_index = DecodeUnsignedLeb128(annotation);
+  uint32_t size = DecodeUnsignedLeb128(annotation);
+
+  mirror::Class* klass = field->GetDeclaringClass();
+  mirror::Class* annotation_class = Runtime::Current()->GetClassLinker()->ResolveType(type_index, field);
+  LOG(INFO) << "PROCESS ENCODED ANNOTATION - type_index:" << std::hex << type_index << " size:" << size << std::dec
+            << " annotation_class:" << PrettyClass(annotation_class);
+  if (annotation_class == nullptr) {
+    LOG(INFO) << "Unable to resolve " << PrettyClass(klass) << " annotation class " << type_index;
+    DCHECK(Thread::Current()->IsExceptionPending());
+    Thread::Current()->ClearException();
+    return nullptr;
+  }
+
+  Thread* self = Thread::Current();
+  ScopedObjectAccessUnchecked soa(self);
+  mirror::Class* annotation_member_array_class =
+      soa.Decode<mirror::Class*>(WellKnownClasses::libcore_reflect_AnnotationMember__array);
+  mirror::ObjectArray<mirror::Object>* element_array = nullptr;
+
+  if (size > 0) {
+    element_array = mirror::ObjectArray<mirror::Object>::Alloc(self, annotation_member_array_class, size);
+    if (element_array == nullptr) {
+      LOG(ERROR) << "Failed to allocate annotation member array (" << size << " elements)";
+      return nullptr;
+    }
+  }
+
+  for (uint32_t i = 0; i < size; ++i) {
+    mirror::Object* new_member = CreateAnnotationMember(klass, annotation_class, annotation);
+    if (new_member == nullptr) {
+      return nullptr;
+    }
+    element_array->SetWithoutChecks<false>(i, new_member);
+  }
+
+  JValue result;
+  ArtMethod* create_annotation_method = soa.DecodeMethod(WellKnownClasses::libcore_reflect_AnnotationFactory_createAnnotation);
+  uint32_t args[2] = { static_cast<uint32_t>(reinterpret_cast<uintptr_t>(annotation_class)),
+                       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(element_array)) };
+  create_annotation_method->Invoke(self, args, sizeof(args), &result, "LLL");
+  if (self->IsExceptionPending()) {
+    LOG(INFO) << "Exception in AnnotationFactory.createAnnotation";
+    return nullptr;
+  }
+
+  // handle bailing properly...
+  soa.AddLocalReference<jobject>(result.GetL());
+  return result.GetL();
+}
+
+mirror::Object* DexFile::CreateAnnotationMember(mirror::Class* klass,
+    mirror::Class* annotation_class, const uint8_t** annotation) const {
+  Thread* self = Thread::Current();
+  ScopedObjectAccessUnchecked soa(self);
+  uint32_t element_name_index = DecodeUnsignedLeb128(annotation);
+  const char* name = StringDataByIdx(element_name_index);
+  mirror::String* name_object = mirror::String::AllocFromModifiedUtf8(self, name);
+  mirror::Object* method_object = nullptr;
+  mirror::Class* method_return = nullptr;
+  LOG(INFO) << "CreateAnnotationMember - element_name_index:" << std::hex << element_name_index << std::dec
+            << " name:" << name;
+
+  if (name != nullptr) {
+    size_t pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+    ArtMethod* annotation_method = annotation_class->FindDeclaredVirtualMethodByName(name, pointer_size);
+    if (annotation_method == nullptr) {
+      LOG(WARNING) << "Could not find annotation member " << name << " in " << annotation_class->GetName();
+    } else {
+      method_object = mirror::Method::CreateFromArtMethod(self, annotation_method);
+      method_return = annotation_method->GetReturnType();
+    }
+  }
+
+  AnnotationValue annotation_value;
+  if (!ProcessAnnotationValue(klass, annotation, &annotation_value, method_return, kAllObjects)) {
+    return nullptr;
+  }
+
+  mirror::Object* value_object = annotation_value.value.GetL();
+  mirror::Class* annotation_member_class = WellKnownClasses::ToClass(WellKnownClasses::libcore_reflect_AnnotationMember__array)->GetComponentType();
+  mirror::Object* new_member = annotation_member_class->AllocObject(self);
+
+  if (new_member == nullptr || name_object == nullptr || method_object == nullptr ||
+      method_return == nullptr) {
+    LOG(ERROR) << StringPrintf("Failed creating annotation element (m=%p n=%p a=%p r=%p",
+        new_member, name_object, method_object, method_return);
+  }
+
+  JValue result;
+  ArtMethod* annotation_member_init = soa.DecodeMethod(WellKnownClasses::libcore_reflect_AnnotationMember_init);
+  uint32_t args[5] = { static_cast<uint32_t>(reinterpret_cast<uintptr_t>(new_member)),
+                       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(name_object)),
+                       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(value_object)),
+                       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(method_return)),
+                       static_cast<uint32_t>(reinterpret_cast<uintptr_t>(method_object))
+  };
+  annotation_member_init->Invoke(self, args, sizeof(args), &result, "VLLLL");
+  if (self->IsExceptionPending()) {
+    LOG(INFO) << "Exception in AnnotationMember.<init>";
+    return nullptr;
+  }
+
+  soa.AddLocalReference<jobject>(new_member);
+  return new_member;
+}
+
+bool DexFile::ProcessAnnotationValue(mirror::Class* klass, const uint8_t** annotation_ptr,
+    AnnotationValue* annotation_value, mirror::Class* return_class,
+    DexFile::AnnotationResultStyle result_style) const {
+  Thread* self = Thread::Current();
+  mirror::Object* element_object = nullptr;
+  bool set_object = false;
+  Primitive::Type primitive_type = Primitive::kPrimVoid;
+  const uint8_t* annotation = *annotation_ptr;
+  uint8_t header_byte = *(annotation++);
+  uint8_t value_type = header_byte & kDexAnnotationValueTypeMask;
+  uint8_t value_arg = header_byte >> kDexAnnotationValueArgShift;
+  int32_t width = value_arg + 1;
+  annotation_value->type = value_type;
+  LOG(INFO) << StringPrintf("ProcessAnnotationValue - value_type:%02x %d, ptr=%p", value_type, value_arg, annotation - 1);
+
+  switch (value_type) {
+    case kDexAnnotationByte:
+      annotation_value->value.SetB(static_cast<int8_t>(ReadSignedInt(annotation, value_arg)));
+      primitive_type = Primitive::kPrimByte;
+      break;
+    case kDexAnnotationShort:
+      annotation_value->value.SetS(static_cast<int16_t>(ReadSignedInt(annotation, value_arg)));
+      primitive_type = Primitive::kPrimShort;
+      break;
+    case kDexAnnotationChar:
+      annotation_value->value.SetC(static_cast<uint16_t>(ReadUnsignedInt(annotation, value_arg, false)));
+      primitive_type = Primitive::kPrimChar;
+      break;
+    case kDexAnnotationInt:
+      annotation_value->value.SetI(ReadSignedInt(annotation, value_arg));
+      primitive_type = Primitive::kPrimInt;
+      break;
+    case kDexAnnotationLong:
+      annotation_value->value.SetJ(ReadSignedLong(annotation, value_arg));
+      primitive_type = Primitive::kPrimLong;
+      break;
+    case kDexAnnotationFloat:
+      annotation_value->value.SetI(ReadUnsignedInt(annotation, value_arg, true));
+      primitive_type = Primitive::kPrimFloat;
+      break;
+    case kDexAnnotationDouble:
+      annotation_value->value.SetJ(ReadUnsignedLong(annotation, value_arg, true));
+      primitive_type = Primitive::kPrimDouble;
+      break;
+    case kDexAnnotationBoolean:
+      annotation_value->value.SetZ(value_arg != 0);
+      primitive_type = Primitive::kPrimBoolean;
+      width = 0;
+      break;
+    case kDexAnnotationString:
+    {
+      uint32_t index = ReadUnsignedInt(annotation, value_arg, false);
+      if (result_style == kAllRaw) {
+        annotation_value->value.SetI(index);
+      } else {
+        StackHandleScope<1> hs(self);
+        Handle<mirror::DexCache> dex_cache(hs.NewHandle(klass->GetDexCache()));
+        element_object = Runtime::Current()->GetClassLinker()->ResolveString(klass->GetDexFile(),
+            index, dex_cache);
+        set_object = true;
+        if (element_object == nullptr) {
+          return false;
+        }
+        // AddLocalReference
+      }
+      break;
+    }
+    case kDexAnnotationType:
+    {
+      /*
+      uint32_t index = ReadUnsignedInt(annotation, value_arg, false);
+      if (result_style == kAllRaw) {
+        annotation_value->value.SetI(index);
+      } else {
+        element_object = reinterpret_cast<mirror::Object*>(Runtime::Current()->GetClassLinker()->ResolveType());
+        set_object = true;
+        if (element_object == nullptr) {
+        } else {
+          // AddLocalReference
+        }
+      }
+      */
+      LOG(FATAL) << "Unimplemented kDexAnnotationType";
+      break;
+    }
+    case kDexAnnotationMethod:
+      LOG(FATAL) << "Unimplemented kDexAnnotationMethod";
+      break;
+    case kDexAnnotationField:
+      LOG(FATAL) << "Unimplemented kDexAnnotationField";
+      break;
+    case kDexAnnotationEnum:
+      LOG(FATAL) << "Unimplemented kDexAnnotationEnum";
+      break;
+    case kDexAnnotationArray:
+      if (result_style == kAllRaw) {
+        return false;
+      } else {
+        ScopedObjectAccessUnchecked soa(self);
+        uint32_t size = DecodeUnsignedLeb128(&annotation);
+        bool boxed_arrays = (result_style == kAllObjectsWithBoxedArrays);
+        LOG(INFO) << "PROCESS AnnotationArray - size:" << size;
+        mirror::Class* array_class = boxed_arrays ?
+            soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_Object__array) : return_class;
+        mirror::Class* component_type = array_class->GetComponentType();
+        mirror::Array* new_array = mirror::Array::Alloc<true>(self, array_class, size,
+            array_class->GetComponentSizeShift(), Runtime::Current()->GetHeap()->GetCurrentAllocator());
+        if (new_array == nullptr) {
+          LOG(ERROR) << "Annotation element array allocation failed with size " << size;
+          return false;
+        }
+        AnnotationValue new_annotation_value;
+        for (uint32_t i = 0; i < size; ++i) {
+          AnnotationResultStyle new_result_style = boxed_arrays ? kAllObjectsWithBoxedArrays : kPrimitivesOrObjects;
+          if (!ProcessAnnotationValue(klass, &annotation, &new_annotation_value, nullptr, new_result_style)) {
+            // collect new_array?
+            return false;
+          }
+          if (!component_type->IsPrimitive()) {
+            mirror::Object* obj = new_annotation_value.value.GetL();
+            new_array->AsObjectArray<mirror::Object>()->SetWithoutChecks<false>(i, obj);
+          // collect obj?
+          } else {
+            switch (new_annotation_value.type) {
+              case kDexAnnotationByte:
+                new_array->AsByteArray()->SetWithoutChecks<false>(i, new_annotation_value.value.GetB());
+                break;
+              case kDexAnnotationShort:
+                new_array->AsShortArray()->SetWithoutChecks<false>(i, new_annotation_value.value.GetS());
+                break;
+              case kDexAnnotationChar:
+                new_array->AsCharArray()->SetWithoutChecks<false>(i, new_annotation_value.value.GetC());
+                break;
+              case kDexAnnotationInt:
+                new_array->AsIntArray()->SetWithoutChecks<false>(i, new_annotation_value.value.GetI());
+                break;
+              case kDexAnnotationLong:
+                new_array->AsLongArray()->SetWithoutChecks<false>(i, new_annotation_value.value.GetJ());
+                break;
+              case kDexAnnotationFloat:
+                new_array->AsFloatArray()->SetWithoutChecks<false>(i, new_annotation_value.value.GetF());
+                break;
+              case kDexAnnotationDouble:
+                new_array->AsDoubleArray()->SetWithoutChecks<false>(i, new_annotation_value.value.GetD());
+                break;
+              case kDexAnnotationBoolean:
+                new_array->AsBooleanArray()->SetWithoutChecks<false>(i, new_annotation_value.value.GetZ());
+                break;
+              default:
+                LOG(FATAL) << "Found invalid annotation value type while building annotation array";
+                return false;
+            }
+          }
+        }
+        element_object = new_array;
+        set_object = true;
+      }
+      width = 0;
+      break;
+    case kDexAnnotationAnnotation:
+      LOG(FATAL) << "Unimplemented kDexAnnotationAnnotation";
+      break;
+    case kDexAnnotationNull:
+      LOG(FATAL) << "Unimplemented kDexAnnotationNull";
+      break;
+    default:
+      LOG(ERROR) << StringPrintf("Bad annotation element value type 0x%02x", value_type);
+      return false;
+  }
+
+  annotation += width;
+  *annotation_ptr = annotation;
+
+  if ((result_style == kAllObjectsWithBoxedArrays || result_style == kAllObjects)
+      && primitive_type != Primitive::kPrimVoid) {
+    element_object = BoxPrimitive(primitive_type, annotation_value->value);
+    set_object = true;
+  }
+
+  if (set_object) {
+    annotation_value->value.SetL(element_object);
+  }
+
+  return true;
+}
+
 std::ostream& operator<<(std::ostream& os, const DexFile& dex_file) {
   os << StringPrintf("[DexFile: %s dex-checksum=%08x location-checksum=%08x %p-%p]",
                      dex_file.GetLocation().c_str(),
@@ -1124,60 +1552,6 @@ void ClassDataItemIterator::ReadClassDataMethod() {
   if (last_idx_ != 0 && method_.method_idx_delta_ == 0) {
     LOG(WARNING) << "Duplicate method in " << dex_file_.GetLocation();
   }
-}
-
-// Read a signed integer.  "zwidth" is the zero-based byte count.
-static int32_t ReadSignedInt(const uint8_t* ptr, int zwidth) {
-  int32_t val = 0;
-  for (int i = zwidth; i >= 0; --i) {
-    val = ((uint32_t)val >> 8) | (((int32_t)*ptr++) << 24);
-  }
-  val >>= (3 - zwidth) * 8;
-  return val;
-}
-
-// Read an unsigned integer.  "zwidth" is the zero-based byte count,
-// "fill_on_right" indicates which side we want to zero-fill from.
-static uint32_t ReadUnsignedInt(const uint8_t* ptr, int zwidth, bool fill_on_right) {
-  uint32_t val = 0;
-  if (!fill_on_right) {
-    for (int i = zwidth; i >= 0; --i) {
-      val = (val >> 8) | (((uint32_t)*ptr++) << 24);
-    }
-    val >>= (3 - zwidth) * 8;
-  } else {
-    for (int i = zwidth; i >= 0; --i) {
-      val = (val >> 8) | (((uint32_t)*ptr++) << 24);
-    }
-  }
-  return val;
-}
-
-// Read a signed long.  "zwidth" is the zero-based byte count.
-static int64_t ReadSignedLong(const uint8_t* ptr, int zwidth) {
-  int64_t val = 0;
-  for (int i = zwidth; i >= 0; --i) {
-    val = ((uint64_t)val >> 8) | (((int64_t)*ptr++) << 56);
-  }
-  val >>= (7 - zwidth) * 8;
-  return val;
-}
-
-// Read an unsigned long.  "zwidth" is the zero-based byte count,
-// "fill_on_right" indicates which side we want to zero-fill from.
-static uint64_t ReadUnsignedLong(const uint8_t* ptr, int zwidth, bool fill_on_right) {
-  uint64_t val = 0;
-  if (!fill_on_right) {
-    for (int i = zwidth; i >= 0; --i) {
-      val = (val >> 8) | (((uint64_t)*ptr++) << 56);
-    }
-    val >>= (7 - zwidth) * 8;
-  } else {
-    for (int i = zwidth; i >= 0; --i) {
-      val = (val >> 8) | (((uint64_t)*ptr++) << 56);
-    }
-  }
-  return val;
 }
 
 EncodedStaticFieldValueIterator::EncodedStaticFieldValueIterator(
