@@ -321,7 +321,7 @@ static void GenAbsInteger(LocationSummary* locations,
     DCHECK_NE(out_reg_lo, in_reg_hi) << "Diagonal overlap unexpected.";
 
     __ Asr(mask, in_reg_hi, 31);
-    __ adds(out_reg_lo, in_reg_lo, ShifterOperand(mask));
+    __ add(out_reg_lo, in_reg_lo, ShifterOperand(mask), AL, kCcSet);
     __ adc(out_reg_hi, in_reg_hi, ShifterOperand(mask));
     __ eor(out_reg_lo, mask, ShifterOperand(out_reg_lo));
     __ eor(out_reg_hi, mask, ShifterOperand(out_reg_hi));
@@ -807,7 +807,7 @@ static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGenerat
 
   __ ldrex(tmp_lo, tmp_ptr);
 
-  __ subs(tmp_lo, tmp_lo, ShifterOperand(expected_lo));
+  __ sub(tmp_lo, tmp_lo, ShifterOperand(expected_lo), AL, kCcSet);
 
   __ it(EQ, ItState::kItT);
   __ strex(tmp_lo, value_lo, tmp_ptr, EQ);
@@ -817,7 +817,7 @@ static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGenerat
 
   __ dmb(ISH);
 
-  __ rsbs(out, tmp_lo, ShifterOperand(1));
+  __ rsb(out, tmp_lo, ShifterOperand(1), AL, kCcSet);
   __ it(CC);
   __ mov(out, ShifterOperand(0), CC);
 
