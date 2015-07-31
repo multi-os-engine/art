@@ -94,7 +94,7 @@ def testNotGroup(assertions, c1Pass, scope, variables):
       if MatchLines(assertion, line, variables) is not None:
         raise MatchFailedException(assertion, i)
 
-def MatchTestCase(testCase, c1Pass):
+def MatchTestCase(testCase, c1Pass, targetArch = None):
   """ Runs a test case against a C1visualizer graph dump.
 
   Raises MatchFailedException when an assertion cannot be satisfied.
@@ -150,8 +150,10 @@ def MatchTestCase(testCase, c1Pass):
     matchFrom = match.scope.end + 1
     variables = match.variables
 
-def MatchFiles(checkerFile, c1File):
+def MatchFiles(checkerFile, c1File, targetArch):
   for testCase in checkerFile.testCases:
+    if testCase.testArch != targetArch:
+      continue
     # TODO: Currently does not handle multiple occurrences of the same group
     # name, e.g. when a pass is run multiple times. It will always try to
     # match a check group against the first output group of the same name.
@@ -162,7 +164,7 @@ def MatchFiles(checkerFile, c1File):
 
     Logger.startTest(testCase.name)
     try:
-      MatchTestCase(testCase, c1Pass)
+      MatchTestCase(testCase, c1Pass, targetArch)
       Logger.testPassed()
     except MatchFailedException as e:
       lineNo = c1Pass.startLineNo + e.lineNo
