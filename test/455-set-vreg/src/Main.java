@@ -38,6 +38,11 @@ public class Main {
     return a - b - c - d - e;
   }
 
+  boolean testReferenceVReg(Object a, Object b, Object c, Object d, Object e) {
+    doNativeCallSetVReg();
+    return a != null && b != null && c != null && d != null && e != null;
+  }
+
   native void doNativeCallSetVReg();
 
   public static void main(String[] args) {
@@ -65,6 +70,11 @@ public class Main {
     double doubleResult = rm.testDoubleVReg(0.0, 0.0, 0.0, 0.0, 0.0);
     if (doubleResult != doubleExpected) {
       throw new Error("Expected " + doubleExpected + ", got " + doubleResult);
+    }
+
+    boolean referenceResult = rm.testReferenceVReg(null, null, null, null, null);
+    if (!referenceResult) {
+      throw new Error("Expected true, got false");
     }
   }
 }
