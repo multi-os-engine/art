@@ -430,17 +430,21 @@ bool StackVisitor::GetRegisterPairIfAccessible(uint32_t reg_lo, uint32_t reg_hi,
 bool StackVisitor::SetVReg(ArtMethod* m, uint16_t vreg, uint32_t new_value,
                            VRegKind kind) {
   if (cur_quick_frame_ != nullptr) {
-      DCHECK(context_ != nullptr);  // You can't reliably write registers without a context.
-      DCHECK(m == GetMethod());
-      if (m->IsOptimized(sizeof(void*))) {
-        return false;
-      } else {
-        return SetVRegFromQuickCode(m, vreg, new_value, kind);
-      }
+    DCHECK(context_ != nullptr);  // You can't reliably write registers without a context.
+    DCHECK(m == GetMethod());
+    if (m->IsOptimized(sizeof(void*))) {
+      return false;
+    } else {
+      return SetVRegFromQuickCode(m, vreg, new_value, kind);
+    }
+  } else {
+    if (kind == kReferenceVReg) {
+      cur_shadow_frame_->SetVRegReference(vreg, reinterpret_cast<mirror::Object*>(new_value));
     } else {
       cur_shadow_frame_->SetVReg(vreg, new_value);
-      return true;
     }
+    return true;
+  }
 }
 
 bool StackVisitor::SetVRegFromQuickCode(ArtMethod* m, uint16_t vreg, uint32_t new_value,
