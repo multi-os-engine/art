@@ -535,8 +535,11 @@ class LocationSummary : public ArenaObject<kArenaAllocMisc> {
   bool CallsOnMainPath() const { return (call_kind_ & kCall) != 0; }
   bool CallsOnSlowPath() const { return (call_kind_ & kCallOnSlowPathMask) != 0; }
   bool OnlyCallsOnSlowPath() const { return (call_kind_ & kCallOnSlowPathMask) == call_kind_; }
-  bool OnlyCallsOnSlowPathNotRequiringSafepoint() const {
+  bool OnlyFatalCallsOnSlowPath() const {
     return call_kind_ == kFatalCallOnSlowPath;
+  }
+  bool OnlyCallsOnSlowPathNotRequiringSafepoint() const {
+    return OnlyFatalCallsOnSlowPath();
   }
   bool OnlyCallsOnSlowPathAndRequiresSafepoint() const {
     return !WillCall() && ((call_kind_ & kCallOnSlowPath) != 0);

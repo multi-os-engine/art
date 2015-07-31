@@ -31,6 +31,11 @@ LocationSummary::LocationSummary(HInstruction* instruction,
       register_mask_(0),
       live_registers_(),
       intrinsified_(intrinsified) {
+  DCHECK((!CanCall() || OnlyFatalCallsOnSlowPath()) ||
+         instruction->GetSideEffects().Includes(SideEffects::CanTriggerGC()) ||
+         // HDeoptimize is a special case. We know we are not coming back from
+         // it into the code.
+         instruction->IsDeoptimize());
   inputs_.SetSize(instruction->InputCount());
   for (size_t i = 0; i < instruction->InputCount(); ++i) {
     inputs_.Put(i, Location());
