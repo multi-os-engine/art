@@ -135,9 +135,15 @@ class LocationsBuilderX86_64 : public HGraphVisitor {
   void Visit##name(H##name* instr) OVERRIDE;
 
   FOR_EACH_CONCRETE_INSTRUCTION_COMMON(DECLARE_VISIT_INSTRUCTION)
-  FOR_EACH_CONCRETE_INSTRUCTION_X86_64(DECLARE_VISIT_INSTRUCTION)
 
 #undef DECLARE_VISIT_INSTRUCTION
+
+#define DECLARE_VISIT_INSTRUCTION_ARCH(name, super, arch) \
+  void Visit##name(arch::H##name* instr) OVERRIDE;
+
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_64(DECLARE_VISIT_INSTRUCTION_ARCH)
+
+#undef DECLARE_VISIT_INSTRUCTION_ARCH
 
   void VisitInstruction(HInstruction* instruction) OVERRIDE {
     LOG(FATAL) << "Unreachable instruction " << instruction->DebugName()
@@ -165,9 +171,15 @@ class InstructionCodeGeneratorX86_64 : public HGraphVisitor {
   void Visit##name(H##name* instr) OVERRIDE;
 
   FOR_EACH_CONCRETE_INSTRUCTION_COMMON(DECLARE_VISIT_INSTRUCTION)
-  FOR_EACH_CONCRETE_INSTRUCTION_X86_64(DECLARE_VISIT_INSTRUCTION)
 
 #undef DECLARE_VISIT_INSTRUCTION
+
+#define DECLARE_VISIT_INSTRUCTION_ARCH(name, super, arch) \
+  void Visit##name(arch::H##name* instr) OVERRIDE;
+
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_64(DECLARE_VISIT_INSTRUCTION_ARCH)
+
+#undef DECLARE_VISIT_INSTRUCTION_ARCH
 
   void VisitInstruction(HInstruction* instruction) OVERRIDE {
     LOG(FATAL) << "Unreachable instruction " << instruction->DebugName()

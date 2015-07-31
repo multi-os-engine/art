@@ -1023,9 +1023,17 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(UShr, BinaryOperation)                                              \
   M(Xor, BinaryOperation)                                               \
 
+#define FOR_EACH_INSTRUCTION(M)                                         \
+  FOR_EACH_CONCRETE_INSTRUCTION_COMMON(M)                               \
+  M(Constant, Instruction)                                              \
+  M(UnaryOperation, Instruction)                                        \
+  M(BinaryOperation, Instruction)                                       \
+  M(Invoke, Instruction)
+
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)
 
-#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
+#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                          \
+  M(IntermediateAddress, Instruction, arm64)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
@@ -1033,27 +1041,34 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
-#define FOR_EACH_CONCRETE_INSTRUCTION(M)                                \
-  FOR_EACH_CONCRETE_INSTRUCTION_COMMON(M)                               \
+#define FOR_EACH_INSTRUCTION_ARCH(M)                                    \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                                \
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)                               \
   FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
-#define FOR_EACH_INSTRUCTION(M)                                         \
-  FOR_EACH_CONCRETE_INSTRUCTION(M)                                      \
-  M(Constant, Instruction)                                              \
-  M(UnaryOperation, Instruction)                                        \
-  M(BinaryOperation, Instruction)                                       \
-  M(Invoke, Instruction)
-
 #define FORWARD_DECLARATION(type, super) class H##type;
 FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
 #undef FORWARD_DECLARATION
 
+#define FORWARD_DECLARATION_ARCH(type, super, arch) \
+  namespace arch { class H##type; }
+FOR_EACH_INSTRUCTION_ARCH(FORWARD_DECLARATION_ARCH)
+#undef FORWARD_DECLARATION_ARCH
+
 #define DECLARE_INSTRUCTION(type)                                       \
   InstructionKind GetKind() const OVERRIDE { return k##type; }          \
+  const char* DebugName() const OVERRIDE { return #type; }              \
+  const H##type* As##type() const OVERRIDE { return this; }             \
+  H##type* As##type() OVERRIDE { return this; }                         \
+  bool InstructionTypeEquals(HInstruction* other) const OVERRIDE {      \
+    return other->Is##type();                                           \
+  }                                                                     \
+  void Accept(HGraphVisitor* visitor) OVERRIDE
+
+#define DECLARE_INSTRUCTION_ARCH(type, arch)                            \
+  InstructionKind GetKind() const OVERRIDE { return k##arch##type; }    \
   const char* DebugName() const OVERRIDE { return #type; }              \
   const H##type* As##type() const OVERRIDE { return this; }             \
   H##type* As##type() OVERRIDE { return this; }                         \
@@ -1649,10 +1664,13 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   virtual ~HInstruction() {}
 
 #define DECLARE_KIND(type, super) k##type,
+#define DECLARE_KIND_ARCH(type, super, arch) k##arch##type,
   enum InstructionKind {
     FOR_EACH_INSTRUCTION(DECLARE_KIND)
+    FOR_EACH_INSTRUCTION_ARCH(DECLARE_KIND_ARCH)
   };
 #undef DECLARE_KIND
+#undef DECLARE_KIND_ARCH
 
   HInstruction* GetNext() const { return next_; }
   HInstruction* GetPrevious() const { return previous_; }
@@ -1810,6 +1828,15 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
 
   FOR_EACH_INSTRUCTION(INSTRUCTION_TYPE_CHECK)
 #undef INSTRUCTION_TYPE_CHECK
+
+#define INSTRUCTION_TYPE_CHECK_ARCH(type, super, arch)                         \
+  bool Is##type() const { return (As##type() != nullptr); }                    \
+  virtual const arch::H##type* As##type() const { return nullptr; }            \
+  virtual arch::H##type* As##type() { return nullptr; }
+
+  FOR_EACH_INSTRUCTION_ARCH(INSTRUCTION_TYPE_CHECK_ARCH)
+#undef INSTRUCTION_TYPE_CHECK
+
 
   // Returns whether the instruction can be moved within the graph.
   virtual bool CanBeMoved() const { return false; }
@@ -3812,8 +3839,11 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 
 class HArrayGet : public HExpression<2> {
  public:
-  HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type)
-      : HExpression(type, SideEffects::ArrayReadOfType(type)) {
+  HArrayGet(HInstruction* array,
+            HInstruction* index,
+            Primitive::Type type,
+            SideEffects additional_side_effects = SideEffects::None())
+      : HExpression(type, SideEffects::ArrayReadOfType(type).Union(additional_side_effects)) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -3850,10 +3880,12 @@ class HArraySet : public HTemplateInstruction<3> {
             HInstruction* index,
             HInstruction* value,
             Primitive::Type expected_component_type,
-            uint32_t dex_pc)
+            uint32_t dex_pc,
+            SideEffects additional_side_effects = SideEffects::None())
       : HTemplateInstruction(
           SideEffects::ArrayWriteOfType(expected_component_type).Union(
-              SideEffectsForArchRuntimeCalls(value->GetType()))),
+              SideEffectsForArchRuntimeCalls(value->GetType())).Union(
+                  additional_side_effects)),
         dex_pc_(dex_pc),
         expected_component_type_(expected_component_type),
         needs_type_check_(value->GetType() == Primitive::kPrimNot),
@@ -3904,6 +3936,10 @@ class HArraySet : public HTemplateInstruction<3> {
     return ((value_type == Primitive::kPrimFloat) || (value_type == Primitive::kPrimDouble))
         ? value_type
         : expected_component_type_;
+  }
+
+  Primitive::Type GetRawExpectedComponentType() const {
+    return expected_component_type_;
   }
 
   static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type value_type) {
@@ -3963,6 +3999,8 @@ class HBoundsCheck : public HExpression<2> {
   bool NeedsEnvironment() const OVERRIDE { return true; }
 
   bool CanThrow() const OVERRIDE { return true; }
+
+  HInstruction* GetIndex() const { return InputAt(0); }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
@@ -4635,6 +4673,33 @@ class HParallelMove : public HTemplateInstruction<0> {
   DISALLOW_COPY_AND_ASSIGN(HParallelMove);
 };
 
+namespace arm64 {
+
+// This instruction computes an intermediate address pointing in the 'middle' of an object. The
+// result pointer cannot be handled by GC, so extra care is taken to make sure that this value is
+// never used across anything that can trigger GC.
+class HIntermediateAddress : public HExpression<2> {
+ public:
+  explicit HIntermediateAddress(HInstruction* base_address, HInstruction* offset)
+      : HExpression(Primitive::kPrimNot, SideEffects::DependsOnGC()) {
+    SetRawInputAt(0, base_address);
+    SetRawInputAt(1, offset);
+  }
+
+  bool CanBeMoved() const OVERRIDE { return true; }
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE { return true; }
+
+  HInstruction* GetBaseAddress() const { return InputAt(0); }
+  HInstruction* GetOffset() const { return InputAt(1); }
+
+  DECLARE_INSTRUCTION_ARCH(IntermediateAddress, arm64);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HIntermediateAddress);
+};
+
+}  // namespace arm64
+
 class HGraphVisitor : public ValueObject {
  public:
   explicit HGraphVisitor(HGraph* graph) : graph_(graph) {}
@@ -4659,6 +4724,13 @@ class HGraphVisitor : public ValueObject {
 
 #undef DECLARE_VISIT_INSTRUCTION
 
+#define DECLARE_VISIT_INSTRUCTION_ARCH(name, super, arch)                             \
+  virtual void Visit##name(arch::H##name* instr) { VisitInstruction(instr); }
+
+  FOR_EACH_INSTRUCTION_ARCH(DECLARE_VISIT_INSTRUCTION_ARCH)
+
+#undef DECLARE_VISIT_INSTRUCTION_ARCH
+
  private:
   HGraph* const graph_;
 
@@ -4677,6 +4749,13 @@ class HGraphDelegateVisitor : public HGraphVisitor {
   FOR_EACH_INSTRUCTION(DECLARE_VISIT_INSTRUCTION)
 
 #undef DECLARE_VISIT_INSTRUCTION
+
+#define DECLARE_VISIT_INSTRUCTION_ARCH(name, super, arch)                             \
+  virtual void Visit##name(arch::H##name* instr) OVERRIDE { Visit##super(instr); }
+
+  FOR_EACH_INSTRUCTION_ARCH(DECLARE_VISIT_INSTRUCTION_ARCH)
+
+#undef DECLARE_VISIT_INSTRUCTION_ARCH
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HGraphDelegateVisitor);
