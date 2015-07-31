@@ -1784,13 +1784,6 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       work_line_->SetRegisterType(this, inst->VRegA_11x(), res_type);
       break;
     }
-    case Instruction::RETURN_VOID:
-      if (!IsConstructor() || work_line_->CheckConstructorReturn(this)) {
-        if (!GetMethodReturnType().IsConflict()) {
-          Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "return-void not expected";
-        }
-      }
-      break;
     case Instruction::RETURN:
       if (!IsConstructor() || work_line_->CheckConstructorReturn(this)) {
         /* check the method signature */
@@ -2872,6 +2865,13 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
                 << PrettyField(klass->GetInstanceField(i));
             break;
           }
+        }
+      }
+      FALLTHROUGH_INTENDED;
+    case Instruction::RETURN_VOID:
+      if (!IsConstructor() || work_line_->CheckConstructorReturn(this)) {
+        if (!GetMethodReturnType().IsConflict()) {
+          Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "return-void not expected";
         }
       }
       break;
