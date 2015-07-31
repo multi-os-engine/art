@@ -16,6 +16,8 @@
 
 
 public class Main {
+  // TODO: Fix the test for non-x86 and non-x86_64 backends: the live ranges
+  // bounds differ.
 
   /// CHECK-START: void Main.loop1(boolean) liveness (after)
   /// CHECK:         ParameterValue  liveness:2  ranges:{[2,22)} uses:[17,22]
