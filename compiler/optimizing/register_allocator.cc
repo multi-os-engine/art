@@ -248,7 +248,7 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
   bool core_register = (instruction->GetType() != Primitive::kPrimDouble)
       && (instruction->GetType() != Primitive::kPrimFloat);
 
-  if (locations->CanCall()) {
+  if (locations->NeedsSafepoint()) {
     if (codegen_->IsLeafMethod()) {
       // TODO: We do this here because we do not want the suspend check to artificially
       // create live registers. We should find another place, but this is currently the
@@ -258,7 +258,7 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
       return;
     }
     safepoints_.Add(instruction);
-    if (locations->OnlyCallsOnSlowPath()) {
+    if (locations->OnlyCallsOnSlowPathAndRequiresSafepoint()) {
       // We add a synthesized range at this position to record the live registers
       // at this position. Ideally, we could just update the safepoints when locations
       // are updated, but we currently need to know the full stack size before updating
@@ -1626,7 +1626,7 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
       switch (source.GetKind()) {
         case Location::kRegister: {
           locations->AddLiveRegister(source);
-          if (kIsDebugBuild && locations->OnlyCallsOnSlowPath()) {
+          if (kIsDebugBuild && locations->OnlyCallsOnSlowPathAndRequiresSafepoint()) {
             DCHECK_LE(locations->GetNumberOfLiveRegisters(),
                       maximum_number_of_live_core_registers_ +
                       maximum_number_of_live_fp_registers_);

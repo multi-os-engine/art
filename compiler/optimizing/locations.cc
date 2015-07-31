@@ -21,7 +21,7 @@
 namespace art {
 
 LocationSummary::LocationSummary(HInstruction* instruction,
-                                 CallKind call_kind,
+                                 unsigned call_kind,
                                  bool intrinsified)
     : inputs_(instruction->GetBlock()->GetGraph()->GetArena(), instruction->InputCount()),
       temps_(instruction->GetBlock()->GetGraph()->GetArena(), 0),

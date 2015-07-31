@@ -947,6 +947,8 @@ void CodeGeneratorARM::InvokeRuntime(int32_t entry_point_offset,
                                      HInstruction* instruction,
                                      uint32_t dex_pc,
                                      SlowPathCode* slow_path) {
+  DCHECK((slow_path != nullptr) || instruction->GetLocations()->CallsOnMainPath());
+  DCHECK((slow_path == nullptr) || instruction->GetLocations()->CallsOnSlowPath());
   __ LoadFromOffset(kLoadWord, LR, TR, entry_point_offset);
   __ blx(LR);
   RecordPcInfo(instruction, dex_pc, slow_path);
@@ -2759,8 +2761,8 @@ void InstructionCodeGeneratorARM::VisitRem(HRem* rem) {
 }
 
 void LocationsBuilderARM::VisitDivZeroCheck(HDivZeroCheck* instruction) {
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(
+      instruction, LocationSummary::kFatalCallOnSlowPath);
   locations->SetInAt(0, Location::RegisterOrConstant(instruction->InputAt(0)));
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
@@ -3510,8 +3512,11 @@ void InstructionCodeGeneratorARM::VisitStaticFieldSet(HStaticFieldSet* instructi
 }
 
 void LocationsBuilderARM::VisitNullCheck(HNullCheck* instruction) {
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(
+          instruction,
+          codegen_->GetCompilerOptions().GetImplicitNullChecks()
+              ? LocationSummary::kNoCall
+              : LocationSummary::kFatalCallOnSlowPath);
   locations->SetInAt(0, Location::RequiresRegister());
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
@@ -3878,8 +3883,8 @@ void InstructionCodeGeneratorARM::VisitArrayLength(HArrayLength* instruction) {
 }
 
 void LocationsBuilderARM::VisitBoundsCheck(HBoundsCheck* instruction) {
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(
+      instruction, LocationSummary::kFatalCallOnSlowPath);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
   if (instruction->HasUses()) {

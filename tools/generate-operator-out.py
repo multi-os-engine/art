@@ -133,9 +133,9 @@ def ProcessFile(filename):
       if enum_text.startswith('k'):
         enum_text = enum_text[1:]
 
-    # Lose literal values because we don't care; turn "= 123, // blah" into ", // blah".
+    # Lose literal values because we don't care; turn "= 123 << 2, // blah" into ", // blah".
     rest = m.group(2).strip()
-    m_literal = re.compile(r'= (0x[0-9a-f]+|-?[0-9]+|\'.\')').search(rest)
+    m_literal = re.compile(r'=\s+(0x[0-9a-f]+|-?[0-9]+|\'.\')(\s+<<\s+[0-9]+)?').search(rest)
     if m_literal:
       rest = rest[(len(m_literal.group(0))):]
 

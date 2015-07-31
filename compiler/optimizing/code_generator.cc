@@ -748,7 +748,7 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
   LocationSummary* locations = instruction->GetLocations();
 
   uint32_t register_mask = locations->GetRegisterMask();
-  if (locations->OnlyCallsOnSlowPath()) {
+  if (locations->OnlyCallsOnSlowPathAndRequiresSafepoint()) {
     // In case of slow path, we currently set the location of caller-save registers
     // to register (instead of their stack location when pushed before the slow-path
     // call). Therefore register_mask contains both callee-save and caller-save

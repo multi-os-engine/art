@@ -471,13 +471,15 @@ static constexpr bool kIntrinsified = true;
 class LocationSummary : public ArenaObject<kArenaAllocMisc> {
  public:
   enum CallKind {
-    kNoCall,
-    kCallOnSlowPath,
-    kCall
+    kNoCall = 0,
+    kCall = 1 << 0,
+    kCallOnSlowPath = 1 << 1,
+    kFatalCallOnSlowPath = 1 << 2
   };
+  static constexpr int kCallOnSlowPathMask = kCallOnSlowPath | kFatalCallOnSlowPath;
 
   LocationSummary(HInstruction* instruction,
-                  CallKind call_kind = kNoCall,
+                  unsigned call_kind = kNoCall,
                   bool intrinsified = false);
 
   void SetInAt(uint32_t at, Location location) {
@@ -529,9 +531,17 @@ class LocationSummary : public ArenaObject<kArenaAllocMisc> {
   Location Out() const { return output_; }
 
   bool CanCall() const { return call_kind_ != kNoCall; }
-  bool WillCall() const { return call_kind_ == kCall; }
-  bool OnlyCallsOnSlowPath() const { return call_kind_ == kCallOnSlowPath; }
-  bool NeedsSafepoint() const { return CanCall(); }
+  bool WillCall() const { return CallsOnMainPath(); }
+  bool CallsOnMainPath() const { return (call_kind_ & kCall) != 0; }
+  bool CallsOnSlowPath() const { return (call_kind_ & kCallOnSlowPathMask) != 0; }
+  bool OnlyCallsOnSlowPath() const { return (call_kind_ & kCallOnSlowPathMask) == call_kind_; }
+  bool OnlyCallsOnSlowPathNotRequiringSafepoint() const {
+    return call_kind_ == kFatalCallOnSlowPath;
+  }
+  bool OnlyCallsOnSlowPathAndRequiresSafepoint() const {
+    return !WillCall() && ((call_kind_ & kCallOnSlowPath) != 0);
+  }
+  bool NeedsSafepoint() const { return (call_kind_ & (kCall | kCallOnSlowPath)) != 0; }
 
   void SetStackBit(uint32_t index) {
     stack_mask_->SetBit(index);
@@ -599,7 +609,7 @@ class LocationSummary : public ArenaObject<kArenaAllocMisc> {
   // share the same register as the inputs.
   Location::OutputOverlap output_overlaps_;
   Location output_;
-  const CallKind call_kind_;
+  const unsigned call_kind_;
 
   // Mask of objects that live in the stack.
   BitVector* stack_mask_;
