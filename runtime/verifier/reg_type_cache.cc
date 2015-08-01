@@ -16,6 +16,9 @@
 
 #include "reg_type_cache-inl.h"
 
+#include <iostream>
+#include <fstream>
+
 #include "base/casts.h"
 #include "class_linker-inl.h"
 #include "dex_file-inl.h"
@@ -316,6 +319,51 @@ void RegTypeCache::CreatePrimitiveAndSmallConstantTypes() {
   }
 }
 
+// Merge the resolved types in the set. Return true if the result is not a conflict.
+static bool MergeResolvedTypes(RegTypeCache* cache, std::set<uint16_t>* types)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  // Collapse the types that are not base unresolved types. This may produce a
+  // conflict, in which case the result is a conflict.
+
+  // 0 is special, it's always Undefined (see
+  // FillPrimitiveAndSmallConstantTypes). As merged with
+  // Undefined never result in anything but Undefined, we can use it as a
+  // sentinel.
+  uint16_t merged_id = 0;
+
+  for (auto it = types->begin(); it != types->end();) {
+    // Copy the iterator, as we may erase the element.
+    auto current = it++;
+    const RegType& cur_entry = cache->GetFromId(*current);
+    DCHECK(!cur_entry.IsUndefined());
+    if (!cur_entry.IsUnresolvedTypes()) {
+      // Something we could merge.
+      if (merged_id == 0) {
+        // First non-unresolved type we found. Just store.
+        merged_id = cur_entry.GetId();
+      } else {
+        const RegType& stored_entry = cache->GetFromId(merged_id);
+        const RegType& merged = stored_entry.Merge(cur_entry, cache);
+        merged_id = merged.GetId();
+      }
+      // And remove the element.
+      types->erase(current);
+    }
+  }
+  if (merged_id != 0) {
+    // We have a resulting type. This is either a conflict, in which case we
+    // return it. Or it is
+    // the merge of all the resolved types. This needs to be added back.
+    if (merged_id == 1) {
+      DCHECK(cache->GetFromId(1).IsConflict());
+      return false;
+    }
+    DCHECK(!cache->GetFromId(merged_id).IsConflict());
+    types->insert(merged_id);
+  }
+  return true;
+}
+
 const RegType& RegTypeCache::FromUnresolvedMerge(const RegType& left, const RegType& right) {
   std::set<uint16_t> types;
   if (left.IsUnresolvedMergedReference()) {
@@ -331,23 +379,34 @@ const RegType& RegTypeCache::FromUnresolvedMerge(const RegType& left, const RegT
   } else {
     types.insert(right.GetId());
   }
-  // Check if entry already exists.
+
+  // Try to merge and see whether we can derive a conflict. In that case return early.
+  if (!MergeResolvedTypes(this, &types)) {
+    return Conflict();
+  }
+
+  // Check if an equivalent (resolved-merged) entry already exists.
   for (size_t i = primitive_count_; i < entries_.size(); i++) {
     const RegType* cur_entry = entries_[i];
     if (cur_entry->IsUnresolvedMergedReference()) {
       std::set<uint16_t> cur_entry_types =
           (down_cast<const UnresolvedMergedType*>(cur_entry))->GetMergedTypes();
+      MergeResolvedTypes(this, &cur_entry_types);
       if (cur_entry_types == types) {
         return *cur_entry;
       }
     }
   }
-  // Create entry.
+
+  // Create entry. Fall back to the original "left" and "right," even if we could merge some of
+  // their types. This is easier to represent.
   RegType* entry = new UnresolvedMergedType(left.GetId(), right.GetId(), this, entries_.size());
   AddEntry(entry);
   if (kIsDebugBuild) {
     UnresolvedMergedType* tmp_entry = down_cast<UnresolvedMergedType*>(entry);
     std::set<uint16_t> check_types = tmp_entry->GetMergedTypes();
+    bool not_conflict = MergeResolvedTypes(this, &check_types);
+    CHECK(not_conflict);
     CHECK(check_types == types);
   }
   return *entry;
@@ -564,6 +623,13 @@ void RegTypeCache::Dump(std::ostream& os) {
       os << i << ": " << cur_entry->Dump() << "\n";
     }
   }
+}
+
+void RegTypeCache::DumpToFile(const char* file) {
+  std::ofstream fos;
+  fos.open(file);
+  Dump(fos);
+  fos.close();
 }
 
 void RegTypeCache::VisitStaticRoots(RootVisitor* visitor) {

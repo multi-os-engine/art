@@ -135,6 +135,7 @@ class RegTypeCache {
   const RegType& GetComponentType(const RegType& array, mirror::ClassLoader* loader)
       SHARED_REQUIRES(Locks::mutator_lock_);
   void Dump(std::ostream& os) SHARED_REQUIRES(Locks::mutator_lock_);
+  void DumpToFile(const char* file) SHARED_REQUIRES(Locks::mutator_lock_);
   const RegType& RegTypeFromPrimitiveType(Primitive::Type) const;
 
   void VisitRoots(RootVisitor* visitor, const RootInfo& root_info)
