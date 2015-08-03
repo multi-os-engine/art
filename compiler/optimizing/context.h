@@ -56,7 +56,25 @@ class HContextualizedPass : public Visitor {
       in_(std::less<HBasicBlock*>(), graph->GetArena()->Adapter()),
       out_(std::less<HBasicBlock*>(), graph->GetArena()->Adapter()) {}
 
-  void Run() {
+  void RunToConvergence() {
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      for (HReversePostOrderIterator it(*Visitor::GetGraph()); !it.Done(); it.Advance()) {
+        current_block_id_ = it.Current()->GetBlockId();
+        MergePredecessors();
+        HBasicBlock* block = Visitor::GetGraph()->GetBlock(current_block_id_);
+        BlockProperties* in = BlockSafeGet(&in_, current_block_id_);
+        BeforeBlock(block);
+        VisitBasicBlock(it.Current());
+
+        changed = changed || *in != *BlockSafeGet(&out_, current_block_id_);
+        ReplaceOutWithIn(current_block_id_);
+      }
+    }
+  }
+
+  void RunOnce() {
     for (HReversePostOrderIterator it(*Visitor::GetGraph()); !it.Done(); it.Advance()) {
       current_block_ = it.Current();
       MergePredecessors();
