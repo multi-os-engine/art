@@ -318,7 +318,7 @@ void RangeVisitor::BeforeBlock(HBasicBlock* block) {
 
 void RangePropagation::Run() {
   RangeVisitor visitor(graph_);
-  visitor.Run();
+  visitor.RunOnce();
 
   const GrowableArray<HCondition*>& trues = visitor.GetAlwaysTrueConditions();
   for (size_t i = 0, size = trues.Size(); i < size; ++i) {
