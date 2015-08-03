@@ -450,8 +450,9 @@ void CodeGeneratorX86_64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invo
         __ movq(reg, Address(CpuRegister(RSP), kCurrentMethodStackOffset));
       }
       // temp = temp->dex_cache_resolved_methods_;
-      __ movl(reg, Address(CpuRegister(method_reg),
-                           ArtMethod::DexCacheResolvedMethodsOffset().SizeValue()));
+      __ movq(reg,
+              Address(CpuRegister(method_reg),
+                      ArtMethod::DexCacheResolvedMethodsOffset(kX86_64PointerSize).SizeValue()));
       // temp = temp[index_in_cache]
       uint32_t index_in_cache = invoke->GetTargetMethod().dex_method_index;
       __ movq(reg, Address(reg, CodeGenerator::GetCachePointerOffset(index_in_cache)));
@@ -4550,8 +4551,8 @@ void InstructionCodeGeneratorX86_64::VisitLoadClass(HLoadClass* cls) {
     __ movl(out, Address(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
   } else {
     DCHECK(cls->CanCallRuntime());
-    __ movl(out, Address(
-        current_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
+    __ movq(out, Address(
+        current_method, ArtMethod::DexCacheResolvedTypesOffset(kX86_64PointerSize).Int32Value()));
     __ movl(out, Address(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
     __ MaybeUnpoisonHeapReference(out);
 
@@ -4601,8 +4602,7 @@ void InstructionCodeGeneratorX86_64::VisitLoadString(HLoadString* load) {
   CpuRegister out = locations->Out().AsRegister<CpuRegister>();
   CpuRegister current_method = locations->InAt(0).AsRegister<CpuRegister>();
   __ movl(out, Address(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
-  __ movl(out, Address(out, mirror::Class::DexCacheStringsOffset().Int32Value()));
-  __ MaybeUnpoisonHeapReference(out);
+  __ movq(out, Address(out, mirror::Class::DexCacheStringsOffset().Int32Value()));
   __ movl(out, Address(out, CodeGenerator::GetCacheOffset(load->GetStringIndex())));
   __ MaybeUnpoisonHeapReference(out);
   __ testl(out, out);
