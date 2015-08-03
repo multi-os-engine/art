@@ -2404,8 +2404,9 @@ void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invok
     }
 
     // temp = current_method->dex_cache_resolved_methods_;
-    __ Ldr(reg.W(), MemOperand(method_reg.X(),
-                               ArtMethod::DexCacheResolvedMethodsOffset().Int32Value()));
+    __ Ldr(reg.W(),
+           MemOperand(method_reg.X(),
+                      ArtMethod::DexCacheResolvedMethodsOffset(kArm64PointerSize).Int32Value()));
     // temp = temp[index_in_cache];
     __ Ldr(reg.X(), MemOperand(reg, index_in_cache));
     // lr = temp->entry_point_from_quick_compiled_code_;
@@ -2480,7 +2481,8 @@ void InstructionCodeGeneratorARM64::VisitLoadClass(HLoadClass* cls) {
     __ Ldr(out, MemOperand(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
   } else {
     DCHECK(cls->CanCallRuntime());
-    __ Ldr(out, MemOperand(current_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
+    MemberOffset resolved_types_offset = ArtMethod::DexCacheResolvedTypesOffset(kArm64PointerSize);
+    __ Ldr(out, MemOperand(current_method, resolved_types_offset.Int32Value()));
     __ Ldr(out, HeapOperand(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
     GetAssembler()->MaybeUnpoisonHeapReference(out.W());
 

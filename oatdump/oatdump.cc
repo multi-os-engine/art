@@ -44,6 +44,7 @@
 #include "mapping_table.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/dex_cache-inl.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
 #include "oat.h"
@@ -1596,13 +1597,12 @@ class ImageDumper {
     }
     {
       // Mark dex caches.
-      dex_cache_arrays_.clear();
+      dex_caches_.clear();
       {
         ReaderMutexLock mu(self, *class_linker->DexLock());
         for (size_t i = 0; i < class_linker->GetDexCacheCount(); ++i) {
           auto* dex_cache = class_linker->GetDexCache(i);
-          dex_cache_arrays_.insert(dex_cache->GetResolvedFields());
-          dex_cache_arrays_.insert(dex_cache->GetResolvedMethods());
+          dex_caches_.insert(dex_cache);
         }
       }
       ReaderMutexLock mu(self, *Locks::heap_bitmap_lock_);
@@ -1847,33 +1847,73 @@ class ImageDumper {
         }
       }
     } else {
-      auto it = state->dex_cache_arrays_.find(obj);
-      if (it != state->dex_cache_arrays_.end()) {
+      auto it = state->dex_caches_.find(obj);
+      if (it != state->dex_caches_.end()) {
+        auto* dex_cache = down_cast<mirror::DexCache*>(obj);
         const auto& field_section = state->image_header_.GetImageSection(
             ImageHeader::kSectionArtFields);
         const auto& method_section = state->image_header_.GetMethodsSection();
-        auto* arr = down_cast<mirror::PointerArray*>(obj);
-        for (int32_t i = 0, length = arr->GetLength(); i < length; i++) {
-          void* elem = arr->GetElementPtrSize<void*>(i, image_pointer_size);
-          size_t run = 0;
-          for (int32_t j = i + 1; j < length &&
-              elem == arr->GetElementPtrSize<void*>(j, image_pointer_size); j++, run++) { }
-          if (run == 0) {
-            os << StringPrintf("%d: ", i);
-          } else {
-            os << StringPrintf("%d to %zd: ", i, i + run);
-            i = i + run;
+        size_t num_methods = dex_cache->NumResolvedMethods();
+        if (num_methods != 0u) {
+          os << "Methods (size=" << num_methods << "):";
+          ScopedIndentation indent2(&state->vios_);
+          auto* resolved_methods = dex_cache->GetResolvedMethods();
+          for (size_t i = 0, length = dex_cache->NumResolvedMethods(); i < length; ++i) {
+            auto* elem = mirror::DexCache::GetElementPtrSize(resolved_methods, i, image_pointer_size);
+            size_t run = 0;
+            for (size_t j = i + 1;
+                j != length && elem == mirror::DexCache::GetElementPtrSize(resolved_methods,
+                                                                           j,
+                                                                           image_pointer_size);
+                ++j, ++run) {}
+            if (run == 0) {
+              os << StringPrintf("%zd: ", i);
+            } else {
+              os << StringPrintf("%zd to %zd: ", i, i + run);
+              i = i + run;
+            }
+            std::string msg;
+            if (elem == nullptr) {
+              msg = "null";
+            } else if (method_section.Contains(
+                reinterpret_cast<uint8_t*>(elem) - state->image_space_.Begin())) {
+              msg = PrettyMethod(reinterpret_cast<ArtMethod*>(elem));
+            } else {
+              msg = "<not in method section>";
+            }
+            os << StringPrintf("%p   %s\n", elem, msg.c_str());
           }
-          auto offset = reinterpret_cast<uint8_t*>(elem) - state->image_space_.Begin();
-          std::string msg;
-          if (field_section.Contains(offset)) {
-            msg = PrettyField(reinterpret_cast<ArtField*>(elem));
-          } else if (method_section.Contains(offset)) {
-            msg = PrettyMethod(reinterpret_cast<ArtMethod*>(elem));
-          } else {
-            msg = "Unknown type";
+        }
+        size_t num_fields = dex_cache->NumResolvedFields();
+        if (num_fields != 0u) {
+          os << "Fields (size=" << num_fields << "):";
+          ScopedIndentation indent2(&state->vios_);
+          auto* resolved_fields = dex_cache->GetResolvedFields();
+          for (size_t i = 0, length = dex_cache->NumResolvedFields(); i < length; ++i) {
+            auto* elem = mirror::DexCache::GetElementPtrSize(resolved_fields, i, image_pointer_size);
+            size_t run = 0;
+            for (size_t j = i + 1;
+                j != length && elem == mirror::DexCache::GetElementPtrSize(resolved_fields,
+                                                                           j,
+                                                                           image_pointer_size);
+                ++j, ++run) {}
+            if (run == 0) {
+              os << StringPrintf("%zd: ", i);
+            } else {
+              os << StringPrintf("%zd to %zd: ", i, i + run);
+              i = i + run;
+            }
+            std::string msg;
+            if (elem == nullptr) {
+              msg = "null";
+            } else if (field_section.Contains(
+                reinterpret_cast<uint8_t*>(elem) - state->image_space_.Begin())) {
+              msg = PrettyField(reinterpret_cast<ArtField*>(elem));
+            } else {
+              msg = "<not in field section>";
+            }
+            os << StringPrintf("%p   %s\n", elem, msg.c_str());
           }
-          os << StringPrintf("%p   %s\n", elem, msg.c_str());
         }
       }
     }
@@ -2278,7 +2318,7 @@ class ImageDumper {
   const ImageHeader& image_header_;
   std::unique_ptr<OatDumper> oat_dumper_;
   OatDumperOptions* oat_dumper_options_;
-  std::set<mirror::Object*> dex_cache_arrays_;
+  std::set<mirror::Object*> dex_caches_;
 
   DISALLOW_COPY_AND_ASSIGN(ImageDumper);
 };

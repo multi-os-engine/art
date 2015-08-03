@@ -3042,8 +3042,10 @@ void X86Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,
       LoadRefDisp(rl_method.reg, ArtMethod::DeclaringClassOffset().Int32Value(),
                   check_class, kNotVolatile);
     } else {
-      LoadRefDisp(rl_method.reg, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
-                  check_class, kNotVolatile);
+      LoadRefDisp(rl_method.reg,
+                  ArtMethod::DexCacheResolvedTypesOffset(kX86PointerSize).Int32Value(),
+                  check_class,
+                  kNotVolatile);
       LoadRefDisp(check_class, offset_of_type, check_class, kNotVolatile);
     }
   } else {
@@ -3052,8 +3054,10 @@ void X86Mir2Lir::GenInstanceofFinal(bool use_declaring_class, uint32_t type_idx,
       LoadRefDisp(check_class, ArtMethod::DeclaringClassOffset().Int32Value(),
                   check_class, kNotVolatile);
     } else {
-      LoadRefDisp(check_class, ArtMethod::DexCacheResolvedTypesOffset().Int32Value(),
-                  check_class, kNotVolatile);
+      LoadRefDisp(check_class,
+                  ArtMethod::DexCacheResolvedTypesOffset(kX86PointerSize).Int32Value(),
+                  check_class,
+                  kNotVolatile);
       LoadRefDisp(check_class, offset_of_type, check_class, kNotVolatile);
     }
   }

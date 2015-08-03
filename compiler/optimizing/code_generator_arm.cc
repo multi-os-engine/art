@@ -4221,7 +4221,7 @@ void InstructionCodeGeneratorARM::VisitLoadClass(HLoadClass* cls) {
     __ LoadFromOffset(kLoadWord,
                       out,
                       current_method,
-                      ArtMethod::DexCacheResolvedTypesOffset().Int32Value());
+                      ArtMethod::DexCacheResolvedTypesOffset(kArmPointerSize).Int32Value());
     __ LoadFromOffset(kLoadWord, out, out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex()));
     __ MaybeUnpoisonHeapReference(out);
 
@@ -4525,8 +4525,10 @@ void CodeGeneratorARM::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke,
       __ LoadFromOffset(kLoadWord, reg, SP, kCurrentMethodStackOffset);
     }
     // reg = current_method->dex_cache_resolved_methods_;
-    __ LoadFromOffset(
-        kLoadWord, reg, method_reg, ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
+    __ LoadFromOffset(kLoadWord,
+                      reg,
+                      method_reg,
+                      ArtMethod::DexCacheResolvedMethodsOffset(kArmPointerSize).Int32Value());
     // reg = reg[index_in_cache]
     __ LoadFromOffset(
         kLoadWord, reg, reg, CodeGenerator::GetCacheOffset(invoke->GetDexMethodIndex()));

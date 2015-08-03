@@ -346,6 +346,9 @@ class ClassLinker {
   void VisitClassRoots(RootVisitor* visitor, VisitRootFlags flags)
       REQUIRES(!Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
+  void VisitDexCacheRoots(RootVisitor* visitor, GcRoot<mirror::DexCache>* dex_cache_root)
+      REQUIRES(dex_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
   void VisitRoots(RootVisitor* visitor, VisitRootFlags flags)
       REQUIRES(!dex_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);

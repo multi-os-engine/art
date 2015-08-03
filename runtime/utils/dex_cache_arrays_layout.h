@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_UTILS_DEX_CACHE_ARRAYS_LAYOUT_H_
-#define ART_COMPILER_UTILS_DEX_CACHE_ARRAYS_LAYOUT_H_
+#ifndef ART_RUNTIME_UTILS_DEX_CACHE_ARRAYS_LAYOUT_H_
+#define ART_RUNTIME_UTILS_DEX_CACHE_ARRAYS_LAYOUT_H_
 
 namespace art {
 
@@ -94,4 +94,4 @@ class DexCacheArraysLayout {
 
 }  // namespace art
 
-#endif  // ART_COMPILER_UTILS_DEX_CACHE_ARRAYS_LAYOUT_H_
+#endif  // ART_RUNTIME_UTILS_DEX_CACHE_ARRAYS_LAYOUT_H_

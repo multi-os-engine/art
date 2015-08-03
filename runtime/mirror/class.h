@@ -1088,8 +1088,8 @@ class MANAGED Class FINAL : public Object {
   bool GetSlowPathEnabled() SHARED_REQUIRES(Locks::mutator_lock_);
   void SetSlowPath(bool enabled) SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ObjectArray<String>* GetDexCacheStrings() SHARED_REQUIRES(Locks::mutator_lock_);
-  void SetDexCacheStrings(ObjectArray<String>* new_dex_cache_strings)
+  GcRoot<String>* GetDexCacheStrings() SHARED_REQUIRES(Locks::mutator_lock_);
+  void SetDexCacheStrings(GcRoot<String>* new_dex_cache_strings)
       SHARED_REQUIRES(Locks::mutator_lock_);
   static MemberOffset DexCacheStringsOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Class, dex_cache_strings_);
@@ -1176,9 +1176,6 @@ class MANAGED Class FINAL : public Object {
   // runtime such as arrays and primitive classes).
   HeapReference<DexCache> dex_cache_;
 
-  // Short cuts to dex_cache_ member for fast compiled code access.
-  HeapReference<ObjectArray<String>> dex_cache_strings_;
-
   // The interface table (iftable_) contains pairs of a interface class and an array of the
   // interface methods. There is one pair per interface supported by this class.  That means one
   // pair for each interface we support directly, indirectly via superclass, or indirectly via a
@@ -1212,9 +1209,8 @@ class MANAGED Class FINAL : public Object {
   // virtual_ methods_ for miranda methods.
   HeapReference<PointerArray> vtable_;
 
-  // Access flags; low 16 bits are defined by VM spec.
-  // Note: Shuffled back.
-  uint32_t access_flags_;
+  // Short cuts to dex_cache_ member for fast compiled code access.
+  uint64_t dex_cache_strings_;
 
   // static, private, and <init> methods. Pointer to an ArtMethod array.
   uint64_t direct_methods_;
@@ -1234,6 +1230,9 @@ class MANAGED Class FINAL : public Object {
 
   // Virtual methods defined in this class; invoked through vtable. Pointer to an ArtMethod array.
   uint64_t virtual_methods_;
+
+  // Access flags; low 16 bits are defined by VM spec.
+  uint32_t access_flags_;
 
   // Total size of the Class instance; used when allocating storage on gc heap.
   // See also object_size_.

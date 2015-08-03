@@ -478,18 +478,54 @@ void PatchOat::PatchDexFileArrays(mirror::ObjectArray<mirror::Object>* img_roots
   auto* dex_caches = down_cast<mirror::ObjectArray<mirror::DexCache>*>(
       img_roots->Get(ImageHeader::kDexCaches));
   for (size_t i = 0, count = dex_caches->GetLength(); i < count; ++i) {
-    auto* dex_cache = dex_caches->GetWithoutChecks(i);
-    auto* fields = dex_cache->GetResolvedFields();
-    if (fields != nullptr) {
-      CHECK(!fields->IsObjectArray());
-      CHECK(fields->IsArrayInstance());
-      FixupNativePointerArray(fields);
+    auto* orig_dex_cache = dex_caches->GetWithoutChecks(i);
+    auto* copy_dex_cache = RelocatedCopyOf(orig_dex_cache);
+    const size_t pointer_size = InstructionSetPointerSize(isa_);
+    // Though the DexCache array fields are usually treated as native pointers, we set
+    // the full 64-bit values here, clearing the top 32 bits for 32-bit targets.
+    GcRoot<mirror::String>* orig_strings = orig_dex_cache->GetStrings();
+    if (orig_strings != nullptr) {
+      GcRoot<mirror::String>* copy_strings = RelocatedAddressOfPointer(orig_strings);
+      copy_dex_cache->SetField64<false>(
+          mirror::DexCache::StringsOffset(),
+          static_cast<int64_t>(reinterpret_cast<uintptr_t>(copy_strings)));
+      for (size_t j = 0, num = orig_dex_cache->NumStrings(); j != num; ++j) {
+        copy_strings[j] = GcRoot<mirror::String>(RelocatedAddressOfPointer(orig_strings[j].Read()));
+      }
     }
-    auto* methods = dex_cache->GetResolvedMethods();
-    if (methods != nullptr) {
-      CHECK(!methods->IsObjectArray());
-      CHECK(methods->IsArrayInstance());
-      FixupNativePointerArray(methods);
+    GcRoot<mirror::Class>* orig_types = orig_dex_cache->GetResolvedTypes();
+    if (orig_types != nullptr) {
+      GcRoot<mirror::Class>* copy_types = RelocatedAddressOfPointer(orig_types);
+      copy_dex_cache->SetField64<false>(
+          mirror::DexCache::ResolvedTypesOffset(),
+          static_cast<int64_t>(reinterpret_cast<uintptr_t>(copy_types)));
+      for (size_t j = 0, num = orig_dex_cache->NumResolvedTypes(); j != num; ++j) {
+        copy_types[j] = GcRoot<mirror::Class>(RelocatedAddressOfPointer(orig_types[j].Read()));
+      }
+    }
+    ArtMethod** orig_methods = orig_dex_cache->GetResolvedMethods();
+    if (orig_methods != nullptr) {
+      ArtMethod** copy_methods = RelocatedAddressOfPointer(orig_methods);
+      copy_dex_cache->SetField64<false>(
+          mirror::DexCache::ResolvedMethodsOffset(),
+          static_cast<int64_t>(reinterpret_cast<uintptr_t>(copy_methods)));
+      for (size_t j = 0, num = orig_dex_cache->NumResolvedMethods(); j != num; ++j) {
+        ArtMethod* orig = mirror::DexCache::GetElementPtrSize(orig_methods, j, pointer_size);
+        ArtMethod* copy = RelocatedAddressOfPointer(orig);
+        mirror::DexCache::SetElementPtrSize(copy_methods, j, copy, pointer_size);
+      }
+    }
+    auto* orig_fields = orig_dex_cache->GetResolvedFields();
+    if (orig_fields != nullptr) {
+      ArtField** copy_fields = RelocatedAddressOfPointer(orig_fields);
+      copy_dex_cache->SetField64<false>(
+          mirror::DexCache::ResolvedFieldsOffset(),
+          static_cast<int64_t>(reinterpret_cast<uintptr_t>(copy_fields)));
+      for (size_t j = 0, num = orig_dex_cache->NumResolvedFields(); j != num; ++j) {
+        ArtField* orig = mirror::DexCache::GetElementPtrSize(orig_fields, j, pointer_size);
+        ArtField* copy = RelocatedAddressOfPointer(orig);
+        mirror::DexCache::SetElementPtrSize(copy_fields, j, copy, pointer_size);
+      }
     }
   }
 }
@@ -647,8 +683,10 @@ void PatchOat::FixupMethod(ArtMethod* object, ArtMethod* copy) {
   // Just update the entry points if it looks like we should.
   // TODO: sanity check all the pointers' values
   copy->SetDeclaringClass(RelocatedAddressOfPointer(object->GetDeclaringClass()));
-  copy->SetDexCacheResolvedMethods(RelocatedAddressOfPointer(object->GetDexCacheResolvedMethods()));
-  copy->SetDexCacheResolvedTypes(RelocatedAddressOfPointer(object->GetDexCacheResolvedTypes()));
+  copy->SetDexCacheResolvedMethods(
+      RelocatedAddressOfPointer(object->GetDexCacheResolvedMethods(pointer_size)));
+  copy->SetDexCacheResolvedTypes(
+      RelocatedAddressOfPointer(object->GetDexCacheResolvedTypes(pointer_size)));
   copy->SetEntryPointFromQuickCompiledCodePtrSize(RelocatedAddressOfPointer(
       object->GetEntryPointFromQuickCompiledCodePtrSize(pointer_size)), pointer_size);
   copy->SetEntryPointFromJniPtrSize(RelocatedAddressOfPointer(

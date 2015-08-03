@@ -311,30 +311,25 @@ void ImageWriter::PrepareDexCacheArraySlots() {
     dex_cache_array_starts_.Put(dex_file, size);
     DexCacheArraysLayout layout(target_ptr_size_, dex_file);
     DCHECK(layout.Valid());
-    auto types_size = layout.TypesSize(dex_file->NumTypeIds());
-    auto methods_size = layout.MethodsSize(dex_file->NumMethodIds());
-    auto fields_size = layout.FieldsSize(dex_file->NumFieldIds());
-    auto strings_size = layout.StringsSize(dex_file->NumStringIds());
-    dex_cache_array_indexes_.Put(
-        dex_cache->GetResolvedTypes(),
-        DexCacheArrayLocation {size + layout.TypesOffset(), types_size, kBinRegular});
-    dex_cache_array_indexes_.Put(
-        dex_cache->GetResolvedMethods(),
-        DexCacheArrayLocation {size + layout.MethodsOffset(), methods_size, kBinArtMethodClean});
-    AddMethodPointerArray(dex_cache->GetResolvedMethods());
-    dex_cache_array_indexes_.Put(
-        dex_cache->GetResolvedFields(),
-        DexCacheArrayLocation {size + layout.FieldsOffset(), fields_size, kBinArtField});
-    pointer_arrays_.emplace(dex_cache->GetResolvedFields(), kBinArtField);
-    dex_cache_array_indexes_.Put(
-        dex_cache->GetStrings(),
-        DexCacheArrayLocation {size + layout.StringsOffset(), strings_size, kBinRegular});
+    DCHECK_EQ(dex_file->NumTypeIds() != 0u, dex_cache->GetResolvedTypes() != nullptr);
+    AddDexCacheArrayReloc(dex_cache->GetResolvedTypes(), size + layout.TypesOffset());
+    DCHECK_EQ(dex_file->NumMethodIds() != 0u, dex_cache->GetResolvedMethods() != nullptr);
+    AddDexCacheArrayReloc(dex_cache->GetResolvedMethods(), size + layout.MethodsOffset());
+    DCHECK_EQ(dex_file->NumFieldIds() != 0u, dex_cache->GetResolvedFields() != nullptr);
+    AddDexCacheArrayReloc(dex_cache->GetResolvedFields(), size + layout.FieldsOffset());
+    DCHECK_EQ(dex_file->NumStringIds() != 0u, dex_cache->GetStrings() != nullptr);
+    AddDexCacheArrayReloc(dex_cache->GetStrings(), size + layout.StringsOffset());
     size += layout.Size();
-    CHECK_EQ(layout.Size(), types_size + methods_size + fields_size + strings_size);
   }
   // Set the slot size early to avoid DCHECK() failures in IsImageBinSlotAssigned()
   // when AssignImageBinSlot() assigns their indexes out or order.
   bin_slot_sizes_[kBinDexCacheArray] = size;
+}
+
+void ImageWriter::AddDexCacheArrayReloc(void* array, size_t offset) {
+  if (array != nullptr) {
+    native_object_reloc_.emplace(array, NativeObjectReloc { offset, kBinDexCacheArray });
+  }
 }
 
 void ImageWriter::AddMethodPointerArray(mirror::PointerArray* arr) {
@@ -383,7 +378,7 @@ void ImageWriter::AssignImageBinSlot(mirror::Object* object) {
     //   so we pre-calculate their offsets separately in PrepareDexCacheArraySlots().
     //   Since these arrays are huge, most pages do not overlap other objects and it's not
     //   really important where they are for the clean/dirty separation. Due to their
-    //   special PC-relative addressing, we arbitrarily keep them at the beginning.
+    //   special PC-relative addressing, we arbitrarily keep them at the end.
     // * Class'es which are verified [their clinit runs only at runtime]
     //   - classes in general [because their static fields get overwritten]
     //   - initialized classes with all-final statics are unlikely to be ever dirty,
@@ -445,28 +440,13 @@ void ImageWriter::AssignImageBinSlot(mirror::Object* object) {
       }
     } else if (object->GetClass<kVerifyNone>()->IsStringClass()) {
       bin = kBinString;  // Strings are almost always immutable (except for object header).
-    } else if (object->IsArrayInstance()) {
-      mirror::Class* klass = object->GetClass<kVerifyNone>();
-      if (klass->IsObjectArrayClass() || klass->IsIntArrayClass() || klass->IsLongArrayClass()) {
-        auto it = dex_cache_array_indexes_.find(object);
-        if (it != dex_cache_array_indexes_.end()) {
-          bin = kBinDexCacheArray;
-          // Use prepared offset defined by the DexCacheLayout.
-          current_offset = it->second.offset_;
-          // Override incase of cross compilation.
-          object_size = it->second.length_;
-        }  // else bin = kBinRegular
-      }
     }  // else bin = kBinRegular
   }
 
   size_t offset_delta = RoundUp(object_size, kObjectAlignment);  // 64-bit alignment
-  if (bin != kBinDexCacheArray) {
-    DCHECK(dex_cache_array_indexes_.find(object) == dex_cache_array_indexes_.end()) << object;
-    current_offset = bin_slot_sizes_[bin];  // How many bytes the current bin is at (aligned).
-    // Move the current bin size up to accomodate the object we just assigned a bin slot.
-    bin_slot_sizes_[bin] += offset_delta;
-  }
+  current_offset = bin_slot_sizes_[bin];  // How many bytes the current bin is at (aligned).
+  // Move the current bin size up to accomodate the object we just assigned a bin slot.
+  bin_slot_sizes_[bin] += offset_delta;
 
   BinSlot new_bin_slot(bin, current_offset);
   SetImageBinSlot(object, new_bin_slot);
@@ -630,7 +610,7 @@ void ImageWriter::PruneNonImageClasses() {
   }
 
   // Clear references to removed classes from the DexCaches.
-  const ArtMethod* resolution_method = runtime->GetResolutionMethod();
+  ArtMethod* resolution_method = runtime->GetResolutionMethod();
   size_t dex_cache_count;
   {
     ReaderMutexLock mu(self, *class_linker->DexLock());
@@ -648,16 +628,19 @@ void ImageWriter::PruneNonImageClasses() {
         dex_cache->SetResolvedType(i, nullptr);
       }
     }
-    auto* resolved_methods = down_cast<mirror::PointerArray*>(dex_cache->GetResolvedMethods());
-    for (size_t i = 0, len = resolved_methods->GetLength(); i < len; i++) {
-      auto* method = resolved_methods->GetElementPtrSize<ArtMethod*>(i, target_ptr_size_);
+    auto* resolved_methods = dex_cache->GetResolvedMethods();
+    for (size_t i = 0, num = dex_cache->NumResolvedMethods(); i != num; ++i) {
+      auto* method = mirror::DexCache::GetElementPtrSize(resolved_methods, i, target_ptr_size_);
       if (method != nullptr) {
         auto* declaring_class = method->GetDeclaringClass();
         // Miranda methods may be held live by a class which was not an image class but have a
         // declaring class which is an image class. Set it to the resolution method to be safe and
         // prevent dangling pointers.
         if (method->IsMiranda() || !IsImageClass(declaring_class)) {
-          resolved_methods->SetElementPtrSize(i, resolution_method, target_ptr_size_);
+          mirror::DexCache::SetElementPtrSize(resolved_methods,
+                                              i,
+                                              resolution_method,
+                                              target_ptr_size_);
         } else {
           // Check that the class is still in the classes table.
           DCHECK(class_linker->ClassInClassTable(declaring_class)) << "Class "
@@ -917,8 +900,6 @@ void ImageWriter::CalculateNewObjectOffsets() {
   image_end_ += RoundUp(sizeof(ImageHeader), kObjectAlignment);  // 64-bit-alignment
 
   image_objects_offset_begin_ = image_end_;
-  // Prepare bin slots for dex cache arrays.
-  PrepareDexCacheArraySlots();
   // Clear any pre-existing monitors which may have been in the monitor words, assign bin slots.
   heap->VisitObjects(WalkFieldsCallback, this);
   // Write the image runtime methods.
@@ -935,6 +916,8 @@ void ImageWriter::CalculateNewObjectOffsets() {
     CHECK(m->IsRuntimeMethod());
     AssignMethodOffset(m, kBinArtMethodDirty);
   }
+  // Calculate size of the dex cache arrays slot and prepare offsets.
+  PrepareDexCacheArraySlots();
 
   // Calculate cumulative bin slot sizes.
   size_t previous_sizes = 0u;
@@ -993,6 +976,12 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
   CHECK_EQ(image_objects_offset_begin_ + bin_slot_previous_sizes_[kBinArtMethodClean],
            methods_section->Offset());
   cur_pos = methods_section->End();
+  // Add dex cache arrays section.
+  auto* dex_cache_arrays_section = &sections[ImageHeader::kSectionDexCacheArrays];
+  *dex_cache_arrays_section = ImageSection(cur_pos, bin_slot_sizes_[kBinDexCacheArray]);
+  CHECK_EQ(image_objects_offset_begin_ + bin_slot_previous_sizes_[kBinDexCacheArray],
+           dex_cache_arrays_section->Offset());
+  cur_pos = dex_cache_arrays_section->End();
   // Round up to the alignment the string table expects. See HashSet::WriteToMemory.
   cur_pos = RoundUp(cur_pos, sizeof(uint64_t));
   // Calculate the size of the interned strings.
@@ -1062,6 +1051,39 @@ class FixupRootVisitor : public RootVisitor {
   }
 };
 
+template <typename T>
+uintptr_t ImageWriter::GetNativeObjectImageOffset(T* orig, Bin bin) {
+  DCHECK(orig != nullptr);
+  auto it = native_object_reloc_.find(orig);
+  if (LIKELY(it != native_object_reloc_.end())) {
+    DCHECK(it->second.bin_type == bin ||
+           (IsArtMethodBin(it->second.bin_type) && IsArtMethodBin(bin)))
+        << it->second.bin_type << " != " << bin;
+    return it->second.offset;
+  }
+  if (IsArtMethodBin(bin)) {
+    auto* method = reinterpret_cast<ArtMethod*>(orig);
+    LOG(FATAL) << "No relocation entry for ArtMethod " << PrettyMethod(method) << " @ "
+        << method << " with declaring class " << PrettyClass(method->GetDeclaringClass());
+  } else if (bin == kBinArtField) {
+    auto* field = reinterpret_cast<ArtField*>(orig);
+    LOG(FATAL) << "No relocation entry for ArtField " << PrettyField(field) << " @ "
+        << field << " with declaring class " << PrettyClass(field->GetDeclaringClass());
+  } else {
+    // Should be kBinDexCacheArray but just log the address and type.
+    LOG(FATAL) << "No relocation entry for native object @" << orig << " in " << bin;
+  }
+  UNREACHABLE();
+}
+
+template <typename T>
+T* ImageWriter::GetNativeObjectImageAddress(T* orig, Bin bin) {
+  if (orig == nullptr) {
+    return nullptr;
+  }
+  return reinterpret_cast<T*>(image_begin_ + GetNativeObjectImageOffset(orig, bin));
+}
+
 void ImageWriter::CopyAndFixupNativeData() {
   // Copy ArtFields and methods to their locations and update the array for convenience.
   for (auto& pair : native_object_reloc_) {
@@ -1072,6 +1094,8 @@ void ImageWriter::CopyAndFixupNativeData() {
       memcpy(dest, pair.first, sizeof(ArtField));
       reinterpret_cast<ArtField*>(dest)->SetDeclaringClass(
           GetImageAddress(reinterpret_cast<ArtField*>(pair.first)->GetDeclaringClass()));
+    } else if (native_reloc.bin_type == kBinDexCacheArray) {
+      // DexCache arrays are fixed up in FixupDexCacheArrays().
     } else {
       CHECK(IsArtMethodBin(native_reloc.bin_type)) << native_reloc.bin_type;
       auto* dest = image_->Begin() + native_reloc.offset;
@@ -1115,8 +1139,11 @@ void ImageWriter::CopyAndFixupNativeData() {
 }
 
 void ImageWriter::CopyAndFixupObjects() {
+  // Copy and fix up objects.
   gc::Heap* heap = Runtime::Current()->GetHeap();
   heap->VisitObjects(CopyAndFixupObjectsCallback, this);
+  // Fix up dex cache arrays.
+  FixupDexCacheArrays();
   // Fix up the object previously had hash codes.
   for (const auto& hash_pair : saved_hashcode_map_) {
     Object* obj = hash_pair.first;
@@ -1144,7 +1171,7 @@ void ImageWriter::FixupPointerArray(mirror::Object* dst, mirror::PointerArray* a
     auto* elem = arr->GetElementPtrSize<void*>(i, target_ptr_size_);
     if (elem != nullptr) {
       auto it = native_object_reloc_.find(elem);
-      if (it == native_object_reloc_.end()) {
+      if (UNLIKELY(it == native_object_reloc_.end())) {
         if (IsArtMethodBin(array_type)) {
           auto* method = reinterpret_cast<ArtMethod*>(elem);
           LOG(FATAL) << "No relocation entry for ArtMethod " << PrettyMethod(method) << " @ "
@@ -1157,6 +1184,7 @@ void ImageWriter::FixupPointerArray(mirror::Object* dst, mirror::PointerArray* a
               << field << " idx=" << i << "/" << num_elements << " with declaring class "
               << PrettyClass(field->GetDeclaringClass());
         }
+        UNREACHABLE();
       } else {
         elem = image_begin_ + it->second.offset;
       }
@@ -1271,6 +1299,11 @@ void ImageWriter::FixupClass(mirror::Class* orig, mirror::Class* copy) {
     copy->SetVirtualMethodsPtr(
         reinterpret_cast<ArtMethod*>(image_begin_ + it->second.offset));
   }
+  // Update dex cache strings.
+  auto* orig_strings = orig->GetDexCacheStrings();
+  if (orig_strings != nullptr) {
+    copy->SetDexCacheStrings(GetNativeObjectImageAddress(orig_strings, kBinDexCacheArray));
+  }
   // Fix up embedded tables.
   if (orig->ShouldHaveEmbeddedImtAndVTable()) {
     for (int32_t i = 0; i < orig->GetEmbeddedVTableLength(); ++i) {
@@ -1311,8 +1344,6 @@ void ImageWriter::FixupObject(Object* orig, Object* copy) {
       pointer_arrays_.erase(it);
       return;
     }
-    CHECK(dex_cache_array_indexes_.find(orig) == dex_cache_array_indexes_.end())
-        << "Should have been pointer array.";
   }
   if (orig->IsClass()) {
     FixupClass(orig->AsClass<kVerifyNone>(), down_cast<mirror::Class*>(copy));
@@ -1330,6 +1361,71 @@ void ImageWriter::FixupObject(Object* orig, Object* copy) {
     }
     FixupVisitor visitor(this, copy);
     orig->VisitReferences<true /*visit class*/>(visitor, visitor);
+  }
+}
+
+void ImageWriter::FixupDexCacheArrays() {
+  ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+  ReaderMutexLock mu(Thread::Current(), *class_linker->DexLock());
+  size_t dex_cache_count = class_linker->GetDexCacheCount();
+  for (size_t idx = 0; idx < dex_cache_count; ++idx) {
+    mirror::DexCache* orig_dex_cache = class_linker->GetDexCache(idx);
+    mirror::DexCache* copy_dex_cache =
+        reinterpret_cast<mirror::DexCache*>(image_->Begin() + GetImageOffset(orig_dex_cache));
+    // Though the DexCache array fields are usually treated as native pointers, we set
+    // the full 64-bit values here, clearing the top 32 bits for 32-bit targets.
+    GcRoot<mirror::String>* orig_strings = orig_dex_cache->GetStrings();
+    if (orig_strings != nullptr) {
+      uintptr_t copy_strings_offset = GetNativeObjectImageOffset(orig_strings, kBinDexCacheArray);
+      copy_dex_cache->SetField64<false>(
+          mirror::DexCache::StringsOffset(),
+          static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + copy_strings_offset)));
+      auto* copy_strings =
+          reinterpret_cast<GcRoot<mirror::String>*>(image_->Begin() + copy_strings_offset);
+      for (size_t i = 0, num = orig_dex_cache->NumStrings(); i != num; ++i) {
+        copy_strings[i] = GcRoot<mirror::String>(GetImageAddress(orig_strings[i].Read()));
+      }
+    }
+    GcRoot<mirror::Class>* orig_types = orig_dex_cache->GetResolvedTypes();
+    if (orig_types != nullptr) {
+      uintptr_t copy_types_offset = GetNativeObjectImageOffset(orig_types, kBinDexCacheArray);
+      copy_dex_cache->SetField64<false>(
+          mirror::DexCache::ResolvedTypesOffset(),
+          static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + copy_types_offset)));
+      GcRoot<mirror::Class>* copy_types =
+          reinterpret_cast<GcRoot<mirror::Class>*>(image_->Begin() + copy_types_offset);
+      for (size_t i = 0, num = orig_dex_cache->NumResolvedTypes(); i != num; ++i) {
+        copy_types[i] = GcRoot<mirror::Class>(GetImageAddress(orig_types[i].Read()));
+      }
+    }
+    ArtMethod** orig_methods = orig_dex_cache->GetResolvedMethods();
+    if (orig_methods != nullptr) {
+      uintptr_t copy_methods_offset = GetNativeObjectImageOffset(orig_methods, kBinDexCacheArray);
+      copy_dex_cache->SetField64<false>(
+          mirror::DexCache::ResolvedMethodsOffset(),
+          static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + copy_methods_offset)));
+      ArtMethod** copy_methods =
+          reinterpret_cast<ArtMethod**>(image_->Begin() + copy_methods_offset);
+      for (size_t i = 0, num = orig_dex_cache->NumResolvedMethods(); i != num; ++i) {
+        ArtMethod* orig = mirror::DexCache::GetElementPtrSize(orig_methods, i, target_ptr_size_);
+        ArtMethod* copy =
+            GetNativeObjectImageAddress(orig, kBinArtMethodClean /* arbitrary method bin */);
+        mirror::DexCache::SetElementPtrSize(copy_methods, i, copy, target_ptr_size_);
+      }
+    }
+    ArtField** orig_fields = orig_dex_cache->GetResolvedFields();
+    if (orig_fields != nullptr) {
+      uintptr_t copy_fields_offset = GetNativeObjectImageOffset(orig_fields, kBinDexCacheArray);
+      copy_dex_cache->SetField64<false>(
+          mirror::DexCache::ResolvedFieldsOffset(),
+          static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + copy_fields_offset)));
+      auto* copy_fields = reinterpret_cast<ArtField**>(image_->Begin() + copy_fields_offset);
+      for (size_t i = 0, num = orig_dex_cache->NumResolvedFields(); i != num; ++i) {
+        ArtField* orig = mirror::DexCache::GetElementPtrSize(orig_fields, i, target_ptr_size_);
+        ArtField* copy = GetNativeObjectImageAddress(orig, kBinArtField);
+        mirror::DexCache::SetElementPtrSize(copy_fields, i, copy, target_ptr_size_);
+      }
+    }
   }
 }
 
@@ -1395,8 +1491,17 @@ void ImageWriter::CopyAndFixupMethod(ArtMethod* orig, ArtMethod* copy) {
   memcpy(copy, orig, ArtMethod::ObjectSize(target_ptr_size_));
 
   copy->SetDeclaringClass(GetImageAddress(orig->GetDeclaringClassUnchecked()));
-  copy->SetDexCacheResolvedMethods(GetImageAddress(orig->GetDexCacheResolvedMethods()));
-  copy->SetDexCacheResolvedTypes(GetImageAddress(orig->GetDexCacheResolvedTypes()));
+
+  ArtMethod** orig_resolved_methods = orig->GetDexCacheResolvedMethods(target_ptr_size_);
+  if (orig_resolved_methods != nullptr) {
+    copy->SetDexCacheResolvedMethods(
+        GetNativeObjectImageAddress(orig_resolved_methods, kBinDexCacheArray));
+  }
+  GcRoot<mirror::Class>* orig_resolved_types = orig->GetDexCacheResolvedTypes(target_ptr_size_);
+  if (orig_resolved_types != nullptr) {
+    copy->SetDexCacheResolvedTypes(
+        GetNativeObjectImageAddress(orig_resolved_types, kBinDexCacheArray));
+  }
 
   // OatWriter replaces the code_ with an offset value. Here we re-adjust to a pointer relative to
   // oat_begin_
@@ -1499,9 +1604,11 @@ uint32_t ImageWriter::BinSlot::GetIndex() const {
 
 uint8_t* ImageWriter::GetOatFileBegin() const {
   DCHECK_GT(intern_table_bytes_, 0u);
-  return image_begin_ + RoundUp(
-      image_end_ + bin_slot_sizes_[kBinArtField] + bin_slot_sizes_[kBinArtMethodDirty] +
-      bin_slot_sizes_[kBinArtMethodClean] + intern_table_bytes_, kPageSize);
+  size_t native_sections_size =
+      bin_slot_sizes_[kBinArtField] + bin_slot_sizes_[kBinArtMethodDirty] +
+      bin_slot_sizes_[kBinArtMethodClean] + bin_slot_sizes_[kBinDexCacheArray] +
+      intern_table_bytes_;
+  return image_begin_ + RoundUp(image_end_ + native_sections_size, kPageSize);
 }
 
 }  // namespace art

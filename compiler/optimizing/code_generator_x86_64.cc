@@ -422,8 +422,9 @@ void CodeGeneratorX86_64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invo
       __ movq(reg, Address(CpuRegister(RSP), kCurrentMethodStackOffset));
     }
     // temp = temp->dex_cache_resolved_methods_;
-    __ movl(reg, Address(CpuRegister(method_reg),
-                         ArtMethod::DexCacheResolvedMethodsOffset().SizeValue()));
+    __ movl(reg,
+            Address(CpuRegister(method_reg),
+                    ArtMethod::DexCacheResolvedMethodsOffset(kX86_64PointerSize).SizeValue()));
     // temp = temp[index_in_cache]
     __ movq(reg, Address(
         reg, CodeGenerator::GetCachePointerOffset(invoke->GetDexMethodIndex())));
@@ -4448,7 +4449,7 @@ void InstructionCodeGeneratorX86_64::VisitLoadClass(HLoadClass* cls) {
   } else {
     DCHECK(cls->CanCallRuntime());
     __ movl(out, Address(
-        current_method, ArtMethod::DexCacheResolvedTypesOffset().Int32Value()));
+        current_method, ArtMethod::DexCacheResolvedTypesOffset(kX86_64PointerSize).Int32Value()));
     __ movl(out, Address(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
     __ MaybeUnpoisonHeapReference(out);
 

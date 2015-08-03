@@ -2447,7 +2447,7 @@ void CodeGeneratorMIPS64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invo
     __ LoadFromOffset(kLoadUnsignedWord,
                       reg,
                       method_reg,
-                      ArtMethod::DexCacheResolvedMethodsOffset().Int32Value());
+                      ArtMethod::DexCacheResolvedMethodsOffset(kMips64PointerSize).Int32Value());
     // temp = temp[index_in_cache]
     __ LoadFromOffset(kLoadDoubleword,
                       reg,
@@ -2527,7 +2527,7 @@ void InstructionCodeGeneratorMIPS64::VisitLoadClass(HLoadClass* cls) {
   } else {
     DCHECK(cls->CanCallRuntime());
     __ LoadFromOffset(kLoadUnsignedWord, out, current_method,
-                      ArtMethod::DexCacheResolvedTypesOffset().Int32Value());
+                      ArtMethod::DexCacheResolvedTypesOffset(kMips64PointerSize).Int32Value());
     __ LoadFromOffset(kLoadUnsignedWord, out, out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex()));
     SlowPathCodeMIPS64* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathMIPS64(
         cls,

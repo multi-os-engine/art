@@ -395,7 +395,8 @@ int X86Mir2Lir::X86NextSDCallInsn(CompilationUnit* cu, CallInfo* info,
       break;
     case 1:  // Get method->dex_cache_resolved_methods_
       cg->LoadRefDisp(arg0_ref,
-                      ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
+                      ArtMethod::DexCacheResolvedMethodsOffset(
+                          cu->target64 ? kX86_64PointerSize : kX86PointerSize).Int32Value(),
                       arg0_ref,
                       kNotVolatile);
       break;

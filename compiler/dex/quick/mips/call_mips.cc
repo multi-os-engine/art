@@ -470,7 +470,8 @@ static int NextSDCallInsn(CompilationUnit* cu, CallInfo* info, int state,
         break;
       case 1:  // Get method->dex_cache_resolved_methods_
         cg->LoadRefDisp(arg0_ref,
-                        ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
+                        ArtMethod::DexCacheResolvedMethodsOffset(
+                            cu->target64 ? kMips64PointerSize : kMipsPointerSize).Int32Value(),
                         arg0_ref,
                         kNotVolatile);
         // Set up direct code if known.

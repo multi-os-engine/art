@@ -678,7 +678,7 @@ int ArmMir2Lir::ArmNextSDCallInsn(CompilationUnit* cu, CallInfo* info,
     case 1:  // Get method->dex_cache_resolved_methods_
       if (!use_pc_rel) {
         cg->LoadRefDisp(arg0_ref,
-                        ArtMethod::DexCacheResolvedMethodsOffset().Int32Value(),
+                        ArtMethod::DexCacheResolvedMethodsOffset(kArmPointerSize).Int32Value(),
                         arg0_ref,
                         kNotVolatile);
       }
