@@ -45,8 +45,10 @@ class PointerArray;
 
 class ArtMethod FINAL {
  public:
+  static constexpr uint16_t kMaxMethodID = 0xFFFF;
+
   ArtMethod() : access_flags_(0), dex_code_item_offset_(0), dex_method_index_(0),
-      method_index_(0) { }
+      method_index_(0), method_id_(0) { }
 
   ArtMethod(const ArtMethod& src, size_t image_pointer_size) {
     CopyFrom(&src, image_pointer_size);
@@ -191,10 +193,13 @@ class ArtMethod FINAL {
     method_index_ = new_method_index;
   }
 
+  ALWAYS_INLINE uint16_t GetOrSetMethodID();
+
   static MemberOffset DexMethodIndexOffset() {
     return OFFSET_OF_OBJECT_MEMBER(ArtMethod, dex_method_index_);
   }
 
+  // Currently this method is unused.
   static MemberOffset MethodIndexOffset() {
     return OFFSET_OF_OBJECT_MEMBER(ArtMethod, method_index_);
   }
@@ -517,7 +522,6 @@ class ArtMethod FINAL {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
  protected:
-  // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   // The class we are a part of.
   GcRoot<mirror::Class> declaring_class_;
 
@@ -543,7 +547,11 @@ class ArtMethod FINAL {
   // Entry within a dispatch table for this method. For static/direct methods the index is into
   // the declaringClass.directMethods, for virtual methods the vtable and for interface methods the
   // ifTable.
-  uint32_t method_index_;
+  uint16_t method_index_;
+
+  // If JIT is enabled, this field stores a unique method ID for each ArtMethod
+  // that has been executed at least once. 0 means uninitialized.
+  Atomic<uint16_t> method_id_;
 
   // Fake padding field gets inserted here.
 
@@ -608,6 +616,8 @@ class ArtMethod FINAL {
     return code <= pc && pc <= code + GetCodeSize(
         EntryPointToCodePointer(reinterpret_cast<const void*>(code)));
   }
+
+  static Atomic<uint16_t> next_method_id_;
 
   DISALLOW_COPY_AND_ASSIGN(ArtMethod);  // Need to use CopyFrom to deal with 32 vs 64 bits.
 };

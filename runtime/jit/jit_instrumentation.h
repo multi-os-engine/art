@@ -21,6 +21,7 @@
 
 #include "instrumentation.h"
 
+#include "art_method.h"
 #include "atomic.h"
 #include "base/macros.h"
 #include "base/mutex.h"
@@ -36,7 +37,6 @@ namespace mirror {
   class Throwable;
 }  // namespace mirror
 class ArtField;
-class ArtMethod;
 union JValue;
 class Thread;
 
@@ -46,7 +46,7 @@ namespace jit {
 class JitInstrumentationCache {
  public:
   explicit JitInstrumentationCache(size_t hot_method_threshold);
-  void AddSamples(Thread* self, ArtMethod* method, size_t samples)
+  void AddSamples(Thread* self, ArtMethod* method)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!lock_);
   void SignalCompiled(Thread* self, ArtMethod* method)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!lock_);
@@ -55,7 +55,10 @@ class JitInstrumentationCache {
 
  private:
   Mutex lock_;
-  std::unordered_map<jmethodID, size_t> samples_;
+  // counter array for ArtMethod with method_id_ < ArtMethod::kMaxMethodID;
+  Atomic<size_t> samples_array_[ArtMethod::kMaxMethodID];
+  // fall-back counter map for ArtMethod with method_id_ == ArtMethod::kMaxMethodID
+  std::unordered_map<ArtMethod*, size_t> samples_map_ GUARDED_BY(lock_);
   size_t hot_method_threshold_;
   std::unique_ptr<ThreadPool> thread_pool_;
 
@@ -69,7 +72,7 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
   virtual void MethodEntered(Thread* thread, mirror::Object* /*this_object*/,
                              ArtMethod* method, uint32_t /*dex_pc*/)
       OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
-    instrumentation_cache_->AddSamples(thread, method, 1);
+    instrumentation_cache_->AddSamples(thread, method);
   }
   virtual void MethodExited(Thread* /*thread*/, mirror::Object* /*this_object*/,
                             ArtMethod* /*method*/, uint32_t /*dex_pc*/,
@@ -94,7 +97,7 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
   virtual void BackwardBranch(Thread* thread, ArtMethod* method, int32_t dex_pc_offset)
       OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
     CHECK_LE(dex_pc_offset, 0);
-    instrumentation_cache_->AddSamples(thread, method, 1);
+    instrumentation_cache_->AddSamples(thread, method);
   }
 
  private:
