@@ -122,6 +122,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/licm.cc \
 	optimizing/locations.cc \
 	optimizing/nodes.cc \
+	optimizing/null_propagation.cc \
 	optimizing/optimization.cc \
 	optimizing/optimizing_compiler.cc \
 	optimizing/parallel_move_resolver.cc \

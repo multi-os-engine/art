@@ -48,6 +48,7 @@
 #include "licm.h"
 #include "jni/quick/jni_compiler.h"
 #include "nodes.h"
+#include "null_propagation.h"
 #include "prepare_for_register_allocation.h"
 #include "ranges.h"
 #include "reference_type_propagation.h"
@@ -428,6 +429,7 @@ static void RunOptimizations(HGraph* graph,
   InstructionSimplifier* simplify4 = new (arena) InstructionSimplifier(
       graph, stats, "instruction_simplifier_before_codegen");
   RangePropagation* rp = new (arena) RangePropagation(graph);
+  NullPropagation* np = new (arena) NullPropagation(graph);
 
   IntrinsicsRecognizer* intrinsics = new (arena) IntrinsicsRecognizer(graph, driver);
 
@@ -436,6 +438,7 @@ static void RunOptimizations(HGraph* graph,
     fold1,
     simplify1,
     type_propagation,
+    np,
     rp,
     dce1,
     simplify2

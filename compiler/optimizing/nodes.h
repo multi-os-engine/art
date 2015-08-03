@@ -3548,7 +3548,7 @@ class HNullCheck : public HExpression<1> {
 
   bool CanThrow() const OVERRIDE { return true; }
 
-  bool CanBeNull() const OVERRIDE { return false; }
+  bool CanBeNull() const OVERRIDE { return true; }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
