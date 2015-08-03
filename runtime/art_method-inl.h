@@ -79,6 +79,16 @@ inline uint16_t ArtMethod::GetMethodIndexDuringLinking() {
   return method_index_;
 }
 
+inline uint16_t ArtMethod::GetMethodID() {
+  DCHECK(!IsRuntimeMethod());  // JIT profiling shouldn't happen for runtime methods
+  uint16_t id = method_id_.LoadRelaxed();
+  // Try to set the ID. It can happen only once for each ArtMethod instance.
+  if (UNLIKELY(id == 0U)) {
+    return SetMethodID();
+  }
+  return id;
+}
+
 inline uint32_t ArtMethod::GetDexMethodIndex() {
   DCHECK(IsRuntimeMethod() || GetDeclaringClass()->IsIdxLoaded() ||
          GetDeclaringClass()->IsErroneous());

@@ -2371,6 +2371,7 @@ void ClassLinker::LoadClassMembers(Thread* self, const DexFile& dex_file,
       ArtMethod* method = klass->GetDirectMethodUnchecked(i, image_pointer_size_);
       LoadMethod(self, dex_file, it, klass, method);
       LinkCode(method, oat_class, class_def_method_index);
+      DCHECK_LE(class_def_method_index, 0xFFFFu);
       uint32_t it_method_index = it.GetMemberIndex();
       if (last_dex_method_index == it_method_index) {
         // duplicate case
@@ -4400,6 +4401,7 @@ bool ClassLinker::LinkMethods(Thread* self, Handle<mirror::Class> klass,
       ThrowClassFormatError(klass.Get(), "Too many methods on interface: %zd", count);
       return false;
     }
+    DCHECK_LE(count, 0xFFFFu);
     for (size_t i = 0; i < count; ++i) {
       klass->GetVirtualMethodDuringLinking(i, image_pointer_size_)->SetMethodIndex(i);
     }
@@ -4525,9 +4527,11 @@ const uint32_t LinkVirtualHashTable::removed_index_ = std::numeric_limits<uint32
 
 bool ClassLinker::LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass) {
   const size_t num_virtual_methods = klass->NumVirtualMethods();
+  DCHECK_LE(num_virtual_methods, 0xFFFFu);
   if (klass->HasSuperClass()) {
     const size_t super_vtable_length = klass->GetSuperClass()->GetVTableLength();
     const size_t max_count = num_virtual_methods + super_vtable_length;
+    DCHECK_LE(max_count, 0xFFFFu);
     StackHandleScope<2> hs(self);
     Handle<mirror::Class> super_class(hs.NewHandle(klass->GetSuperClass()));
     MutableHandle<mirror::PointerArray> vtable;
@@ -4656,7 +4660,7 @@ bool ClassLinker::LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass) 
     for (size_t i = 0; i < num_virtual_methods; ++i) {
       ArtMethod* virtual_method = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
       vtable->SetElementPtrSize(i, virtual_method, image_pointer_size_);
-      virtual_method->SetMethodIndex(i & 0xFFFF);
+      virtual_method->SetMethodIndex(i);
     }
     klass->SetVTable(vtable);
   }
@@ -5007,8 +5011,9 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass
         reinterpret_cast<uintptr_t>(virtuals) + old_method_count * method_size, method_size);
     size_t vtable_pos = old_vtable_count;
     for (size_t i = old_method_count; i < new_method_count; ++i) {
+      DCHECK_LE(vtable_pos, 0xFFFFu);
       // Leave the declaring class alone as type indices are relative to it
-      out->SetMethodIndex(0xFFFF & vtable_pos);
+      out->SetMethodIndex(vtable_pos);
       vtable->SetElementPtrSize(vtable_pos, &*out, image_pointer_size_);
       ++out;
       ++vtable_pos;

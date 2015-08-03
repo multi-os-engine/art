@@ -41,6 +41,8 @@
 
 namespace art {
 
+Atomic<uint16_t> ArtMethod::next_method_id_(1);
+
 extern "C" void art_quick_invoke_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*,
                                       const char*);
 #if defined(__LP64__) || defined(__arm__) || defined(__i386__)
@@ -570,6 +572,31 @@ const uint8_t* ArtMethod::GetQuickenedInfo() {
     return nullptr;
   }
   return oat_method.GetVmapTable();
+}
+
+uint16_t ArtMethod::SetMethodID() {
+  uint16_t id;
+  while (true) {
+    uint16_t next_id = next_method_id_.LoadRelaxed();
+    if (UNLIKELY(next_id == kMaxMethodID)) {
+      id = kMaxMethodID;
+      break;
+    } else {
+      bool result = next_method_id_.CompareExchangeWeakRelaxed(next_id, next_id + 1);
+      if (LIKELY(result)) {
+        id = next_id;
+        break;
+      }
+    }
+  }
+  bool result = method_id_.CompareExchangeStrongRelaxed(0U, id);
+  // If the CAS fails, another thread must have set the method_id_, we can just reload it.
+  // If this happens, we waste an increment of next_method_id_, but it is OK.
+  if (UNLIKELY(!result)) {
+    id = method_id_.LoadRelaxed();
+    CHECK_GT(id, 0U);
+  }
+  return id;
 }
 
 }  // namespace art

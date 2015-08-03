@@ -24,6 +24,8 @@
 namespace art {
 namespace jit {
 
+static constexpr size_t kNumJitCompilerThreads = 1;
+
 class JitCompileTask : public Task {
  public:
   explicit JitCompileTask(ArtMethod* method, JitInstrumentationCache* cache)
@@ -51,12 +53,19 @@ class JitCompileTask : public Task {
   DISALLOW_IMPLICIT_CONSTRUCTORS(JitCompileTask);
 };
 
-JitInstrumentationCache::JitInstrumentationCache(size_t hot_method_threshold)
+JitInstrumentationCache::JitInstrumentationCache(uint16_t hot_method_threshold)
     : lock_("jit instrumentation lock"), hot_method_threshold_(hot_method_threshold) {
+  size_t capacity = sizeof(Atomic<uint16_t>) * ArtMethod::kMaxMethodID;
+  std::string error_str;
+  MemMap* map = MemMap::MapAnonymous("jit-instrumentation-samples", nullptr, capacity,
+                                     PROT_READ | PROT_WRITE, false, false, &error_str);
+  CHECK(map != nullptr) << "Failed to create JitInstrumentationCache: " << error_str;
+  mem_map_.reset(map);
+  samples_array_ = reinterpret_cast<Atomic<uint16_t>*>(map->Begin());
 }
 
 void JitInstrumentationCache::CreateThreadPool() {
-  thread_pool_.reset(new ThreadPool("Jit thread pool", 1));
+  thread_pool_.reset(new ThreadPool("Jit thread pool", kNumJitCompilerThreads));
 }
 
 void JitInstrumentationCache::DeleteThreadPool() {
@@ -64,42 +73,40 @@ void JitInstrumentationCache::DeleteThreadPool() {
 }
 
 void JitInstrumentationCache::SignalCompiled(Thread* self, ArtMethod* method) {
-  ScopedObjectAccessUnchecked soa(self);
-  jmethodID method_id = soa.EncodeMethod(method);
-  MutexLock mu(self, lock_);
-  auto it = samples_.find(method_id);
-  if (it != samples_.end()) {
-    samples_.erase(it);
+  uint16_t id = method->GetMethodID();
+  if (UNLIKELY(id == ArtMethod::kMaxMethodID)) {
+    MutexLock mu(self, lock_);
+    auto it = samples_map_.find(method);
+    if (it != samples_map_.end()) {
+      samples_map_.erase(it);
+    }
   }
 }
 
-void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t count) {
-  ScopedObjectAccessUnchecked soa(self);
+void JitInstrumentationCache::AddSample(Thread* self, ArtMethod* method) {
   // Since we don't have on-stack replacement, some methods can remain in the interpreter longer
   // than we want resulting in samples even after the method is compiled.
   if (method->IsClassInitializer() || method->IsNative() ||
       Runtime::Current()->GetJit()->GetCodeCache()->ContainsMethod(method)) {
     return;
   }
-  jmethodID method_id = soa.EncodeMethod(method);
-  bool is_hot = false;
-  {
+  size_t sample_count;
+  uint16_t id = method->GetMethodID();
+  if (UNLIKELY(id == ArtMethod::kMaxMethodID)) {
     MutexLock mu(self, lock_);
-    size_t sample_count = 0;
-    auto it = samples_.find(method_id);
-    if (it != samples_.end()) {
-      it->second += count;
+    auto it = samples_map_.find(method);
+    if (it != samples_map_.end()) {
+      ++it->second;
       sample_count = it->second;
     } else {
-      sample_count = count;
-      samples_.insert(std::make_pair(method_id, count));
+      sample_count = 1;
+      samples_map_.insert(std::make_pair(method, 1));
     }
-    // If we have enough samples, mark as hot and request Jit compilation.
-    if (sample_count >= hot_method_threshold_ && sample_count - count < hot_method_threshold_) {
-      is_hot = true;
-    }
+  } else {
+    sample_count = samples_array_[id].fetch_add(1, std::memory_order_relaxed) + 1;
   }
-  if (is_hot) {
+  // If we have enough samples, request or perform Jit compilation.
+  if (sample_count >= hot_method_threshold_) {
     if (thread_pool_.get() != nullptr) {
       thread_pool_->AddTask(self, new JitCompileTask(
           method->GetInterfaceMethodIfProxy(sizeof(void*)), this));
