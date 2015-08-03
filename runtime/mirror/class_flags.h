@@ -34,14 +34,17 @@ static constexpr uint32_t kClassFlagClass              = 0x00000010;
 // class is ClassLoader or one of its subclasses
 static constexpr uint32_t kClassFlagClassLoader        = 0x00000020;
 
+// class is DexCache.
+static constexpr uint32_t kClassFlagDexCache           = 0x00000040;
+
 // class is a soft/weak/phantom ref
-static constexpr uint32_t kClassFlagSoftReference      = 0x00000040;
+static constexpr uint32_t kClassFlagSoftReference      = 0x00000080;
 // class is a weak reference
-static constexpr uint32_t kClassFlagWeakReference      = 0x00000080;
+static constexpr uint32_t kClassFlagWeakReference      = 0x00000100;
 // class is a finalizer reference
-static constexpr uint32_t kClassFlagFinalizerReference = 0x00000100;
+static constexpr uint32_t kClassFlagFinalizerReference = 0x00000200;
 // class is a phantom reference
-static constexpr uint32_t kClassFlagPhantomReference   = 0x00000200;
+static constexpr uint32_t kClassFlagPhantomReference   = 0x00000400;
 
 static constexpr uint32_t kClassFlagReference =
     kClassFlagSoftReference |
