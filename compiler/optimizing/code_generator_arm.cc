@@ -2775,6 +2775,12 @@ void InstructionCodeGeneratorARM::VisitDivZeroCheck(HDivZeroCheck* instruction) 
   Location value = locations->InAt(0);
 
   switch (instruction->GetType()) {
+    case Primitive::kPrimByte:
+      FALLTHROUGH_INTENDED;
+    case Primitive::kPrimChar:
+      FALLTHROUGH_INTENDED;
+    case Primitive::kPrimShort:
+      FALLTHROUGH_INTENDED;
     case Primitive::kPrimInt: {
       if (value.IsRegister()) {
         __ CompareAndBranchIfZero(value.AsRegister<Register>(), slow_path->GetEntryLabel());

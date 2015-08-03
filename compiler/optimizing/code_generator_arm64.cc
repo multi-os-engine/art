@@ -1998,7 +1998,9 @@ void InstructionCodeGeneratorARM64::VisitDivZeroCheck(HDivZeroCheck* instruction
 
   Primitive::Type type = instruction->GetType();
 
-  if ((type != Primitive::kPrimInt) && (type != Primitive::kPrimLong)) {
+  if ((type != Primitive::kPrimInt) && (type != Primitive::kPrimLong) &&
+      (type != Primitive::kPrimByte) && (type != Primitive::kPrimShort) &&
+      (type != Primitive::kPrimChar)) {
       LOG(FATAL) << "Unexpected type " << type << "for DivZeroCheck.";
     return;
   }
