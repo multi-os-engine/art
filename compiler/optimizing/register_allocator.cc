@@ -949,7 +949,9 @@ bool RegisterAllocator::PotentiallyRemoveOtherHalf(LiveInterval* interval,
 // we spill `current` instead.
 bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
   size_t first_register_use = current->FirstRegisterUse();
-  if (first_register_use == kNoLifetime) {
+  if (current->HasRegister()) {
+    DCHECK(current->IsHighInterval());
+  } else if (first_register_use == kNoLifetime) {
     AllocateSpillSlotFor(current);
     return false;
   }
@@ -1016,6 +1018,7 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
     // When allocating the low part, we made sure the high register was available.
     DCHECK_LT(first_use, next_use[reg]);
   } else if (current->IsLowInterval()) {
+    DCHECK_NE(first_register_use, kNoLifetime);
     reg = FindAvailableRegisterPair(next_use, first_register_use);
     // We should spill if both registers are not available.
     should_spill = (first_use >= next_use[reg])
@@ -1029,6 +1032,7 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
   DCHECK_NE(reg, kNoRegister);
   if (should_spill) {
     DCHECK(!current->IsHighInterval());
+    DCHECK_NE(first_register_use, kNoLifetime);
     bool is_allocation_at_use_site = (current->GetStart() >= (first_register_use - 1));
     if (current->IsLowInterval()
         && is_allocation_at_use_site
