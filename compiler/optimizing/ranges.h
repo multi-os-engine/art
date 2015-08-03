@@ -94,7 +94,7 @@ class RangePropagation : public HOptimization {
  public:
   RangePropagation(HGraph* graph) : HOptimization(graph, kNullPropagationName), visitor_(graph) {}
 
-  void Run() OVERRIDE { visitor_.Run(); }
+  void Run() OVERRIDE { visitor_.RunOnce(); }
 
   static constexpr const char* kNullPropagationName = "range_propagation";
 
