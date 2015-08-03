@@ -26,6 +26,7 @@
 #include "disassembler.h"
 #include "licm.h"
 #include "nodes.h"
+#include "null_propagation.h"
 #include "optimization.h"
 #include "reference_type_propagation.h"
 #include "register_allocator.h"
@@ -402,6 +403,11 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         != nullptr;
   }
 
+  bool IsNullPropagationPass() {
+    return strstr(pass_name_, NullPropagation::kNullPropagationName)
+        != nullptr;
+  }
+
   void PrintInstruction(HInstruction* instruction) {
     output_ << instruction->DebugName();
     if (instruction->InputCount() > 0) {
@@ -479,6 +485,9 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       } else {
         DCHECK(!is_after_pass_) << "Type info should be valid after reference type propagation";
       }
+    } else if (IsNullPropagationPass() && instruction->GetType() == Primitive::kPrimNot) {
+        StartAttributeStream("can_be_null")
+            << std::boolalpha << instruction->CanBeNull() << std::noboolalpha;
     }
     if (disasm_info_ != nullptr) {
       DCHECK(disassembler_ != nullptr);

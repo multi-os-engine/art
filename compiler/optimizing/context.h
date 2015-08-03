@@ -55,7 +55,25 @@ class HContextualizedPass : public Visitor
   HContextualizedPass(HGraph* graph)
     : Visitor(graph), graph_(graph) {}
 
-  void Run() {
+  void RunToConvergence() {
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+        cur_block_ = it.Current()->GetBlockId();
+        MergePredecessors();
+        HBasicBlock* block = graph_->GetBlock(cur_block_);
+        BlockProperties* in = BlockSafeGet(in_, cur_block_);
+        BeforeBlock(block);
+        VisitBasicBlock(it.Current());
+
+        changed = changed || *in != *BlockSafeGet(out_, cur_block_);
+        ReplaceOutWithIn(cur_block_);
+      }
+    }
+  }
+
+  void RunOnce() {
     for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
       cur_block_ = it.Current()->GetBlockId();
       MergePredecessors();
@@ -67,7 +85,7 @@ class HContextualizedPass : public Visitor
     }
   }
 
-  ~HContextualizedPass() {
+  virtual ~HContextualizedPass() {
     for (typename GraphProperties::iterator i = in_.begin(); i != in_.end(); ++i) {
       delete i->second;
     }
