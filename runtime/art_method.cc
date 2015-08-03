@@ -41,6 +41,8 @@
 
 namespace art {
 
+Atomic<uint16_t> ArtMethod::next_method_id_(1);
+
 extern "C" void art_quick_invoke_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*,
                                       const char*);
 #if defined(__LP64__) || defined(__arm__) || defined(__i386__)

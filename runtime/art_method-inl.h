@@ -79,6 +79,35 @@ inline uint16_t ArtMethod::GetMethodIndexDuringLinking() {
   return method_index_;
 }
 
+inline uint16_t ArtMethod::GetOrSetMethodID() {
+  DCHECK(!IsRuntimeMethod());  // JIT profiling shouldn't happen for runtime methods
+  uint16_t id = method_id_.LoadRelaxed();
+  // Try to set the ID. It can happen only once for each ArtMethod instance.
+  if (UNLIKELY(id == 0U)) {
+    while (true) {
+      uint16_t next_id = next_method_id_.LoadRelaxed();
+      if (UNLIKELY(next_id == kMaxMethodID)) {
+        id = kMaxMethodID;
+        break;
+      } else {
+        bool result = next_method_id_.CompareExchangeWeakRelaxed(next_id, next_id + 1);
+        if (LIKELY(result)) {
+          id = next_id;
+          break;
+        }
+      }
+    }
+    bool result = method_id_.CompareExchangeStrongRelaxed(0U, id);
+    // If the CAS fails, another thread must have set the method_id_, we can just reload it.
+    // If this happens, we waste an increment of next_method_id_, but it is OK.
+    if (UNLIKELY(!result)) {
+      id = method_id_.LoadRelaxed();
+      CHECK_GT(id, 0U);
+    }
+  }
+  return id;
+}
+
 inline uint32_t ArtMethod::GetDexMethodIndex() {
   DCHECK(IsRuntimeMethod() || GetDeclaringClass()->IsIdxLoaded() ||
          GetDeclaringClass()->IsErroneous());
