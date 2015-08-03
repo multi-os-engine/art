@@ -948,8 +948,10 @@ bool RegisterAllocator::PotentiallyRemoveOtherHalf(LiveInterval* interval,
 // that holds it. If the first use of `current` is after that register
 // we spill `current` instead.
 bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
+  DCHECK(!current->HasRegister() || current->IsHighInterval());
+
   size_t first_register_use = current->FirstRegisterUse();
-  if (first_register_use == kNoLifetime) {
+  if (first_register_use == kNoLifetime && !current->HasRegister()) {
     AllocateSpillSlotFor(current);
     return false;
   }
