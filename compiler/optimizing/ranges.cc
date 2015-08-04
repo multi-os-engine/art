@@ -94,6 +94,10 @@ class RangeVisitor : public HContextualizedPass<IntRange, HGraphDelegateVisitor>
   }
 
   void VisitPhi(HPhi* phi) OVERRIDE;
+  void VisitAdd(HAdd* add) OVERRIDE;
+  void VisitSub(HSub* sub) OVERRIDE;
+  void VisitDiv(HDiv* div) OVERRIDE;
+  void VisitMul(HMul* mul) OVERRIDE;
 
   void HandleComingFromIf(HBasicBlock* block);
   void BeforeBlock(HBasicBlock* block) OVERRIDE;
@@ -102,6 +106,8 @@ class RangeVisitor : public HContextualizedPass<IntRange, HGraphDelegateVisitor>
   const GrowableArray<HCondition*>& GetAlwaysFalseConditions() const { return always_false_; }
 
  private:
+  void SetBoundsCheckingForOverflows(HInstruction* instr, int64_t lower, int64_t upper);
+
   GrowableArray<HCondition*> always_true_;
   GrowableArray<HCondition*> always_false_;
 };
@@ -126,6 +132,104 @@ static bool IsFalseBranchOfIfInstruction(HBasicBlock* block) {
   DCHECK(IsBranchOfIfInstruction(block));
   HIf* condition = block->GetSinglePredecessor()->GetLastInstruction()->AsIf();
   return condition->IfFalseSuccessor() == block;
+}
+
+void RangeVisitor::SetBoundsCheckingForOverflows(HInstruction* instr, int64_t lower, int64_t upper) {
+  if (lower < IntRange::min() || upper > IntRange::max()) {
+    // An overflow / underflow occured, use the maximum range
+    SetProperty(instr, IntRange::Default());
+  } else {
+    SetProperty(instr, IntRange(lower, upper));
+  }
+}
+
+void RangeVisitor::VisitAdd(HAdd* add) {
+  if (add->GetType() != Primitive::kPrimInt) {
+    return;
+  }
+  IntRange a = GetProperty(add->InputAt(0));
+  IntRange b = GetProperty(add->InputAt(1));
+
+  if (a.IsEmpty() || b.IsEmpty()) {
+    SetProperty(add, IntRange::Empty());
+    return;
+  }
+
+  int64_t lower = static_cast<int64_t>(a.Lower()) + b.Lower();
+  int64_t upper = static_cast<int64_t>(a.Upper()) + b.Upper();
+
+  SetBoundsCheckingForOverflows(add, lower, upper);
+}
+
+void RangeVisitor::VisitSub(HSub* sub) {
+  if (sub->GetType() != Primitive::kPrimInt) {
+    return;
+  }
+
+  IntRange a = GetProperty(sub->InputAt(0));
+  IntRange b = GetProperty(sub->InputAt(1));
+
+  if (a.IsEmpty() || b.IsEmpty()) {
+    SetProperty(sub, IntRange::Empty());
+    return;
+  }
+
+  int64_t lower = static_cast<int64_t>(a.Lower()) - b.Upper();
+  int64_t upper = static_cast<int64_t>(a.Upper()) - b.Lower();
+
+  SetBoundsCheckingForOverflows(sub, lower, upper);
+}
+
+void RangeVisitor::VisitDiv(HDiv* div) {
+  if (div->GetType() != Primitive::kPrimInt) {
+    return;
+  }
+
+  IntRange a = GetProperty(div->InputAt(0));
+  IntRange b = GetProperty(div->InputAt(1));
+
+  if (a.IsEmpty() || b.IsEmpty()) {
+    SetProperty(div, IntRange::Empty());
+    return;
+  }
+
+  if (b.Lower() == 0) {
+    b = b.ReduceLowerBound(1);
+  } else if (b.Upper() == 0) {
+    b = b.ReduceUpperBound(-1);
+  }
+
+  int64_t val0 = static_cast<int64_t>(a.Lower()) / b.Lower();
+  int64_t val1 = static_cast<int64_t>(a.Lower()) / b.Upper();
+  int64_t val2 = static_cast<int64_t>(a.Upper()) / b.Lower();
+  int64_t val3 = static_cast<int64_t>(a.Upper()) / b.Upper();
+
+  SetBoundsCheckingForOverflows(div,
+      std::min({val0, val1, val2, val3}), std::max({val0, val1, val2, val3}));
+}
+
+void RangeVisitor::VisitMul(HMul* mul) {
+  if (mul->GetType() != Primitive::kPrimInt) {
+    return;
+  }
+
+  IntRange a = GetProperty(mul->InputAt(0));
+  IntRange b = GetProperty(mul->InputAt(1));
+
+  if (a.IsEmpty() || b.IsEmpty()) {
+    SetProperty(mul, IntRange::Empty());
+    return;
+  }
+
+  int64_t val0 = static_cast<int64_t>(a.Lower()) * b.Lower();
+  int64_t val1 = static_cast<int64_t>(a.Lower()) * b.Upper();
+  int64_t val2 = static_cast<int64_t>(a.Upper()) * b.Lower();
+  int64_t val3 = static_cast<int64_t>(a.Upper()) * b.Upper();
+
+  int64_t min = std::min({val0, val1, val2, val3});
+  int64_t max = std::max({val0, val1, val2, val3});
+
+  SetBoundsCheckingForOverflows(mul, min, max);
 }
 
 void RangeVisitor::HandleComingFromIf(HBasicBlock* block) {
