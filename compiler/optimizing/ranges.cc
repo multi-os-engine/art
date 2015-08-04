@@ -160,6 +160,27 @@ bool RangeVisitor::IsFalseBranchOfIfInstruction(HBasicBlock* block) {
   return condition->IfFalseSuccessor() == block;
 }
 
+Range operator/(const Range& a, const Range& b) {
+  Range div = b;
+
+  if (b.min_value == 0) {
+    div.NarrowLowerBound(1);
+  } else if (b.max_value == 0) {
+    div.NarrowUpperBound(-1);
+  }
+
+  if (!a.IsValid() || !b.IsValid()) {
+    return Range::Invalid();
+  }
+
+  long val0 = static_cast<long>(a.min_value) / div.min_value;
+  long val1 = static_cast<long>(a.min_value) / div.max_value;
+  long val2 = static_cast<long>(a.max_value) / div.min_value;
+  long val3 = static_cast<long>(a.max_value) / div.max_value;
+
+  return Range::FromLongs(std::min({val0, val1, val2, val3}), std::max({val0, val1, val2, val3}));
+}
+
 void RangeVisitor::HandleComingFromIf(HBasicBlock* block) {
   DCHECK(block->GetSinglePredecessor()->GetLastInstruction()->IsIf());
   HInstruction* cond =
