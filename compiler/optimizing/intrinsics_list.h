@@ -62,6 +62,7 @@
   V(MemoryPokeShortNative, kStatic) \
   V(StringCharAt, kDirect) \
   V(StringCompareTo, kDirect) \
+  V(StringEquals, kDirect) \
   V(StringGetCharsNoCheck, kDirect) \
   V(StringIndexOf, kDirect) \
   V(StringIndexOfAfter, kDirect) \
