@@ -19,7 +19,7 @@
 
 #include "thread.h"
 
-#ifdef HAVE_ANDROID_OS
+#ifdef __ANDROID__
 #include <bionic_tls.h>  // Access to our own TLS slot.
 #endif
 
