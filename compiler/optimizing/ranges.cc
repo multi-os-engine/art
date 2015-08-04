@@ -112,6 +112,10 @@ class RangeVisitor : public HContextualizedPass<IntRange, HGraphDelegateVisitor>
       SetProperty(instr, GetProperty(instr->InputAt(0)));
   }
 
+  void VisitSub(HSub* sub) OVERRIDE;
+  void VisitDiv(HDiv* div) OVERRIDE;
+  void VisitMul(HMul* mul) OVERRIDE;
+
   void HandleComingFromIf(HBasicBlock* block);
   void BeforeBlock(HBasicBlock* block) OVERRIDE;
 
@@ -149,6 +153,78 @@ bool RangeVisitor::IsFalseBranchOfIfInstruction(HBasicBlock* block) {
   DCHECK(IsBranchOfIfInstruction(block));
   HIf* condition = block->GetSinglePredecessor()->GetLastInstruction()->AsIf();
   return condition->IfFalseSuccessor() == block;
+}
+
+void RangeVisitor::VisitSub(HSub* sub) {
+  if (sub->GetType() != Primitive::kPrimInt) {
+    return;
+  }
+
+  IntRange a = GetProperty(sub->InputAt(0));
+  IntRange b = GetProperty(sub->InputAt(1));
+
+  if (!a.IsValid() || !b.IsValid()) {
+    SetProperty(sub, IntRange::Invalid());
+    return;
+  }
+
+  SetProperty(sub, IntRange(a.Lower() - b.Upper(), a.Upper() - b.Lower()));
+}
+
+void RangeVisitor::VisitDiv(HDiv* div) {
+  if (div->GetType() != Primitive::kPrimInt) {
+    return;
+  }
+
+  IntRange a = GetProperty(div->InputAt(0));
+  IntRange b = GetProperty(div->InputAt(1));
+
+  if (!a.IsValid() || !b.IsValid()) {
+    SetProperty(div, IntRange::Invalid());
+    return;
+  }
+
+  if (b.Lower() == 0) {
+    b = b.ReduceLowerBound(1);
+  } else if (b.Upper() == 0) {
+    b = b.ReduceUpperBound(-1);
+  }
+
+  long val0 = static_cast<long>(a.Lower()) / b.Lower();
+  long val1 = static_cast<long>(a.Lower()) / b.Upper();
+  long val2 = static_cast<long>(a.Upper()) / b.Lower();
+  long val3 = static_cast<long>(a.Upper()) / b.Upper();
+
+  SetProperty(div,
+      IntRange(std::min({val0, val1, val2, val3}), std::max({val0, val1, val2, val3})));
+}
+
+void RangeVisitor::VisitMul(HMul* mul) {
+  if (mul->GetType() != Primitive::kPrimInt) {
+    return;
+  }
+
+  IntRange a = GetProperty(mul->InputAt(0));
+  IntRange b = GetProperty(mul->InputAt(1));
+
+  if (!a.IsValid() || !b.IsValid()) {
+    SetProperty(mul, IntRange::Invalid());
+    return;
+  }
+
+  long val0 = static_cast<long>(a.Lower()) * b.Lower();
+  long val1 = static_cast<long>(a.Lower()) * b.Upper();
+  long val2 = static_cast<long>(a.Upper()) * b.Lower();
+  long val3 = static_cast<long>(a.Upper()) * b.Upper();
+
+  long min = std::min({val0, val1, val2, val3});
+  long max = std::max({val0, val1, val2, val3});
+
+  if (min < IntRange::min() || max > IntRange::max()) {
+    SetProperty(mul, IntRange::Invalid());
+  } else {
+    SetProperty(mul, IntRange(min, max));
+  }
 }
 
 void RangeVisitor::HandleComingFromIf(HBasicBlock* block) {
