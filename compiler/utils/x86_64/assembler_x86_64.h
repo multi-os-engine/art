@@ -607,6 +607,7 @@ class X86_64Assembler FINAL : public Assembler {
   void bswapq(CpuRegister dst);
 
   void repne_scasw();
+  void rep_movsw();
   void repe_cmpsw();
   void repe_cmpsl();
   void repe_cmpsq();

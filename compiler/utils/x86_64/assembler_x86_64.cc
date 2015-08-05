@@ -2093,6 +2093,14 @@ void X86_64Assembler::repne_scasw() {
 }
 
 
+void X86_64Assembler::rep_movsw() {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitUint8(0xF3);
+  EmitUint8(0x66);
+  EmitUint8(0xa5);
+}
+
+
 void X86_64Assembler::repe_cmpsw() {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitUint8(0x66);

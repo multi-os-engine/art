@@ -1303,6 +1303,12 @@ TEST_F(AssemblerX86_64Test, Repnescasw) {
   DriverStr(expected, "Repnescasw");
 }
 
+TEST_F(AssemblerX86_64Test, RepMovsw) {
+  GetAssembler()->rep_movsw();
+  const char* expected = "rep movsw\n";
+  DriverStr(expected, "rep_movsw");
+}
+
 TEST_F(AssemblerX86_64Test, Repecmpsw) {
   GetAssembler()->repe_cmpsw();
   const char* expected = "repe cmpsw\n";

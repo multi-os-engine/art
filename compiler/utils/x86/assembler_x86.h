@@ -468,6 +468,7 @@ class X86Assembler FINAL : public Assembler {
   void jmp(Label* label);
 
   void repne_scasw();
+  void rep_movsw();
   void repe_cmpsw();
   void repe_cmpsl();
 
