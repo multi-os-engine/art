@@ -164,7 +164,7 @@ void InstructionSimplifierVisitor::VisitShift(HBinaryOperation* instruction) {
       HAdd *add = new(GetGraph()->GetArena()) HAdd(instruction->GetType(),
                                                    input_other,
                                                    input_other);
-      instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, add);
+      instruction->GetBlock()->InsertAndReplaceAndRemoveInstructionWith(instruction, add);
       RecordSimplification();
     }
   }
@@ -327,7 +327,7 @@ void InstructionSimplifierVisitor::VisitEqual(HEqual* equal) {
         RecordSimplification();
       } else if (input_const->AsIntConstant()->IsZero()) {
         // Replace (bool_value == false) with !bool_value
-        block->ReplaceAndRemoveInstructionWith(
+        block->InsertAndReplaceAndRemoveInstructionWith(
             equal, new (block->GetGraph()->GetArena()) HBooleanNot(input_value));
         RecordSimplification();
       } else {
@@ -354,7 +354,7 @@ void InstructionSimplifierVisitor::VisitNotEqual(HNotEqual* not_equal) {
       // be any constant.
       if (input_const->AsIntConstant()->IsOne()) {
         // Replace (bool_value != true) with !bool_value
-        block->ReplaceAndRemoveInstructionWith(
+        block->InsertAndReplaceAndRemoveInstructionWith(
             not_equal, new (block->GetGraph()->GetArena()) HBooleanNot(input_value));
         RecordSimplification();
       } else if (input_const->AsIntConstant()->IsZero()) {
@@ -466,7 +466,7 @@ void InstructionSimplifierVisitor::VisitAdd(HAdd* instruction) {
     // not sure the initial 'NEG' instruction can be removed.
     HInstruction* other = left_is_neg ? right : left;
     HSub* sub = new(GetGraph()->GetArena()) HSub(instruction->GetType(), other, neg->GetInput());
-    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, sub);
+    instruction->GetBlock()->InsertAndReplaceAndRemoveInstructionWith(instruction, sub);
     RecordSimplification();
     neg->GetBlock()->RemoveInstruction(neg);
   }
@@ -589,7 +589,7 @@ void InstructionSimplifierVisitor::VisitDiv(HDiv* instruction) {
     //    DIV dst, src, -1
     // with
     //    NEG dst, src
-    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(
+    instruction->GetBlock()->InsertAndReplaceAndRemoveInstructionWith(
         instruction, new (GetGraph()->GetArena()) HNeg(type, input_other));
     RecordSimplification();
     return;
@@ -615,7 +615,7 @@ void InstructionSimplifierVisitor::VisitDiv(HDiv* instruction) {
     }
 
     if (reciprocal != nullptr) {
-      instruction->GetBlock()->ReplaceAndRemoveInstructionWith(
+      instruction->GetBlock()->InsertAndReplaceAndRemoveInstructionWith(
           instruction, new (GetGraph()->GetArena()) HMul(type, input_other, reciprocal));
       RecordSimplification();
       return;
@@ -651,7 +651,7 @@ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
     // with
     //    NEG dst, src
     HNeg* neg = new (allocator) HNeg(type, input_other);
-    block->ReplaceAndRemoveInstructionWith(instruction, neg);
+    block->InsertAndReplaceAndRemoveInstructionWith(instruction, neg);
     RecordSimplification();
     return;
   }
@@ -664,8 +664,8 @@ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
     // with
     //    FP_ADD dst, src, src
     // The 'int' and 'long' cases are handled below.
-    block->ReplaceAndRemoveInstructionWith(instruction,
-                                           new (allocator) HAdd(type, input_other, input_other));
+    block->InsertAndReplaceAndRemoveInstructionWith(
+        instruction, new (allocator) HAdd(type, input_other, input_other));
     RecordSimplification();
     return;
   }
@@ -688,7 +688,7 @@ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
       //    SHL dst, src, log2(pow_of_2)
       HIntConstant* shift = GetGraph()->GetIntConstant(WhichPowerOf2(factor));
       HShl* shl = new(allocator) HShl(type, input_other, shift);
-      block->ReplaceAndRemoveInstructionWith(instruction, shl);
+      block->InsertAndReplaceAndRemoveInstructionWith(instruction, shl);
       RecordSimplification();
     }
   }
@@ -731,7 +731,7 @@ void InstructionSimplifierVisitor::VisitNeg(HNeg* instruction) {
     HSub* sub = input->AsSub();
     HSub* new_sub =
         new (GetGraph()->GetArena()) HSub(instruction->GetType(), sub->GetRight(), sub->GetLeft());
-    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, new_sub);
+    instruction->GetBlock()->InsertAndReplaceAndRemoveInstructionWith(instruction, new_sub);
     if (!sub->HasUses()) {
       sub->GetBlock()->RemoveInstruction(sub);
     }
@@ -829,7 +829,7 @@ void InstructionSimplifierVisitor::VisitSub(HSub* instruction) {
       // `x` is `0.0`, the former expression yields `0.0`, while the later
       // yields `-0.0`.
       HNeg* neg = new (allocator) HNeg(type, right);
-      block->ReplaceAndRemoveInstructionWith(instruction, neg);
+      block->InsertAndReplaceAndRemoveInstructionWith(instruction, neg);
       RecordSimplification();
       return;
     }
@@ -848,7 +848,7 @@ void InstructionSimplifierVisitor::VisitSub(HSub* instruction) {
     // with
     //    ADD dst, a, b
     HAdd* add = new(GetGraph()->GetArena()) HAdd(type, left, right->AsNeg()->GetInput());
-    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, add);
+    instruction->GetBlock()->InsertAndReplaceAndRemoveInstructionWith(instruction, add);
     RecordSimplification();
     right->GetBlock()->RemoveInstruction(right);
     return;
@@ -898,7 +898,7 @@ void InstructionSimplifierVisitor::VisitXor(HXor* instruction) {
     // with
     //    NOT dst, src
     HNot* bitwise_not = new (GetGraph()->GetArena()) HNot(instruction->GetType(), input_other);
-    instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, bitwise_not);
+    instruction->GetBlock()->InsertAndReplaceAndRemoveInstructionWith(instruction, bitwise_not);
     RecordSimplification();
     return;
   }
