@@ -1398,7 +1398,7 @@ class BCEVisitor : public HGraphVisitor {
         ValueRange* array_range = new (GetGraph()->GetArena())
             ValueRange(GetGraph()->GetArena(), lower, upper);
         if (index_range->FitsIn(array_range)) {
-          ReplaceBoundsCheck(bounds_check, index);
+          Replace(bounds_check, index);
           return;
         }
       }
@@ -1410,7 +1410,7 @@ class BCEVisitor : public HGraphVisitor {
       }
       if (array_length->IsIntConstant()) {
         if (constant < array_length->AsIntConstant()->GetValue()) {
-          ReplaceBoundsCheck(bounds_check, index);
+          Replace(bounds_check, index);
         }
         return;
       }
@@ -1421,7 +1421,7 @@ class BCEVisitor : public HGraphVisitor {
         ValueBound lower = existing_range->GetLower();
         DCHECK(lower.IsConstant());
         if (constant < lower.GetConstant()) {
-          ReplaceBoundsCheck(bounds_check, index);
+          Replace(bounds_check, index);
           return;
         } else {
           // Existing range isn't strong enough to eliminate the bounds check.
@@ -1456,11 +1456,6 @@ class BCEVisitor : public HGraphVisitor {
           ValueRange(GetGraph()->GetArena(), lower, upper);
       GetValueRangeMap(block)->Overwrite(array_length->GetId(), range);
     }
-  }
-
-  void ReplaceBoundsCheck(HInstruction* bounds_check, HInstruction* index) {
-    bounds_check->ReplaceWith(index);
-    bounds_check->GetBlock()->RemoveInstruction(bounds_check);
   }
 
   static bool HasSameInputAtBackEdges(HPhi* phi) {

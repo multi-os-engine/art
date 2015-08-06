@@ -574,10 +574,13 @@ static void UpdateInputsUsers(HInstruction* instruction) {
   DCHECK(!instruction->HasEnvironment());
 }
 
-void HBasicBlock::ReplaceAndRemoveInstructionWith(HInstruction* initial,
-                                                  HInstruction* replacement) {
+void HBasicBlock::ReplaceInstruction(HInstruction* initial,
+                                     HInstruction* replacement,
+                                     bool insert_replacement) {
   DCHECK(initial->GetBlock() == this);
-  InsertInstructionBefore(replacement, initial);
+  if (insert_replacement) {
+    InsertInstructionBefore(replacement, initial);
+  }
   initial->ReplaceWith(replacement);
   RemoveInstruction(initial);
 }

@@ -543,8 +543,7 @@ void SsaBuilder::VisitLoadLocal(HLoadLocal* load) {
       value = GetReferenceTypeEquivalent(value);
     }
   }
-  load->ReplaceWith(value);
-  load->GetBlock()->RemoveInstruction(load);
+  Replace(load, value);
 }
 
 void SsaBuilder::VisitStoreLocal(HStoreLocal* store) {

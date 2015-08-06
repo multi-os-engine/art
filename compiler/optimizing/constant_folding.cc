@@ -84,8 +84,7 @@ void HConstantFoldingVisitor::VisitUnaryOperation(HUnaryOperation* inst) {
   // time if `a' is a constant.
   HConstant* constant = inst->TryStaticEvaluation();
   if (constant != nullptr) {
-    inst->ReplaceWith(constant);
-    inst->GetBlock()->RemoveInstruction(inst);
+    Replace(inst, constant);
   }
 }
 
@@ -94,8 +93,7 @@ void HConstantFoldingVisitor::VisitBinaryOperation(HBinaryOperation* inst) {
   // compile time if `a' and `b' are both constants.
   HConstant* constant = inst->TryStaticEvaluation();
   if (constant != nullptr) {
-    inst->ReplaceWith(constant);
-    inst->GetBlock()->RemoveInstruction(inst);
+    Replace(inst, constant);
   } else {
     InstructionWithAbsorbingInputSimplifier simplifier(GetGraph());
     inst->Accept(&simplifier);
@@ -107,8 +105,7 @@ void HConstantFoldingVisitor::VisitTypeConversion(HTypeConversion* inst) {
   // compile time if `a' is a constant.
   HConstant* constant = inst->AsTypeConversion()->TryStaticEvaluation();
   if (constant != nullptr) {
-    inst->ReplaceWith(constant);
-    inst->GetBlock()->RemoveInstruction(inst);
+    Replace(inst, constant);
   }
 }
 
@@ -116,8 +113,7 @@ void HConstantFoldingVisitor::VisitDivZeroCheck(HDivZeroCheck* inst) {
   // We can safely remove the check if the input is a non-null constant.
   HInstruction* check_input = inst->InputAt(0);
   if (check_input->IsConstant() && !check_input->AsConstant()->IsZero()) {
-    inst->ReplaceWith(check_input);
-    inst->GetBlock()->RemoveInstruction(inst);
+    Replace(inst, check_input);
   }
 }
 
@@ -130,8 +126,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitShift(HBinaryOperation* instr
     //    SHL dst, 0, shift_amount
     // with
     //    CONSTANT 0
-    instruction->ReplaceWith(left);
-    instruction->GetBlock()->RemoveInstruction(instruction);
+    Replace(instruction, left);
   }
 }
 
@@ -142,8 +137,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitAnd(HAnd* instruction) {
     //    AND dst, src, 0
     // with
     //    CONSTANT 0
-    instruction->ReplaceWith(input_cst);
-    instruction->GetBlock()->RemoveInstruction(instruction);
+    Replace(instruction, input_cst);
   }
 }
 
@@ -160,9 +154,8 @@ void InstructionWithAbsorbingInputSimplifier::VisitCompare(HCompare* instruction
       //    CONSTANT +1 (gt bias)
       // or
       //    CONSTANT -1 (lt bias)
-      instruction->ReplaceWith(GetGraph()->GetConstant(Primitive::kPrimInt,
-                                                       (instruction->IsGtBias() ? 1 : -1)));
-      instruction->GetBlock()->RemoveInstruction(instruction);
+      Replace(instruction,
+              GetGraph()->GetConstant(Primitive::kPrimInt, (instruction->IsGtBias() ? 1 : -1)));
     }
   }
 }
@@ -179,8 +172,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitMul(HMul* instruction) {
     // Integral multiplication by zero always yields zero, but floating-point
     // multiplication by zero does not always do. For example `Infinity * 0.0`
     // should yield a NaN.
-    instruction->ReplaceWith(input_cst);
-    instruction->GetBlock()->RemoveInstruction(instruction);
+    Replace(instruction, input_cst);
   }
 }
 
@@ -196,8 +188,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitOr(HOr* instruction) {
     //    OR dst, src, 0xFFF...FF
     // with
     //    CONSTANT 0xFFF...FF
-    instruction->ReplaceWith(input_cst);
-    instruction->GetBlock()->RemoveInstruction(instruction);
+    Replace(instruction, input_cst);
   }
 }
 
@@ -208,16 +199,13 @@ void InstructionWithAbsorbingInputSimplifier::VisitRem(HRem* instruction) {
     return;
   }
 
-  HBasicBlock* block = instruction->GetBlock();
-
   if (instruction->GetLeft()->IsConstant() &&
       instruction->GetLeft()->AsConstant()->IsZero()) {
     // Replace code looking like
     //    REM dst, 0, src
     // with
     //    CONSTANT 0
-    instruction->ReplaceWith(instruction->GetLeft());
-    block->RemoveInstruction(instruction);
+    Replace(instruction, instruction->GetLeft());
   }
 
   HConstant* cst_right = instruction->GetRight()->AsConstant();
@@ -232,8 +220,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitRem(HRem* instruction) {
     //    REM dst, src, src
     // with
     //    CONSTANT 0
-    instruction->ReplaceWith(GetGraph()->GetConstant(type, 0));
-    block->RemoveInstruction(instruction);
+    Replace(instruction, GetGraph()->GetConstant(type, 0));
   }
 }
 
@@ -252,8 +239,6 @@ void InstructionWithAbsorbingInputSimplifier::VisitSub(HSub* instruction) {
     return;
   }
 
-  HBasicBlock* block = instruction->GetBlock();
-
   // We assume that GVN has run before, so we only perform a pointer
   // comparison.  If for some reason the values are equal but the pointers are
   // different, we are still correct and only miss an optimisation
@@ -265,8 +250,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitSub(HSub* instruction) {
     //    CONSTANT 0
     // Note that we cannot optimise `x - x` to `0` for floating-point. It does
     // not work when `x` is an infinity.
-    instruction->ReplaceWith(GetGraph()->GetConstant(type, 0));
-    block->RemoveInstruction(instruction);
+    Replace(instruction, GetGraph()->GetConstant(type, 0));
   }
 }
 
@@ -281,9 +265,7 @@ void InstructionWithAbsorbingInputSimplifier::VisitXor(HXor* instruction) {
     // with
     //    CONSTANT 0
     Primitive::Type type = instruction->GetType();
-    HBasicBlock* block = instruction->GetBlock();
-    instruction->ReplaceWith(GetGraph()->GetConstant(type, 0));
-    block->RemoveInstruction(instruction);
+    Replace(instruction, GetGraph()->GetConstant(type, 0));
   }
 }
 

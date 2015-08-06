@@ -792,9 +792,12 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   // Insert `instruction` before/after an existing instruction `cursor`.
   void InsertInstructionBefore(HInstruction* instruction, HInstruction* cursor);
   void InsertInstructionAfter(HInstruction* instruction, HInstruction* cursor);
-  // Replace instruction `initial` with `replacement` within this block.
-  void ReplaceAndRemoveInstructionWith(HInstruction* initial,
-                                       HInstruction* replacement);
+  // Replace instruction `initial` with `replacement` within this
+  // block and remove `initial` from the graph. If `insert_replacement`
+  // is true, insert `replacement` before `initial`.
+  void ReplaceInstruction(HInstruction* initial,
+                          HInstruction* replacement,
+                          bool insert_replacement);
   void AddPhi(HPhi* phi);
   void InsertPhiAfter(HPhi* instruction, HPhi* cursor);
   // RemoveInstruction and RemovePhi delete a given instruction from the respective
@@ -1682,7 +1685,11 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   LocationSummary* GetLocations() const { return locations_; }
   void SetLocations(LocationSummary* locations) { locations_ = locations; }
 
+  // Replace `this` instruction with `instruction` with respect to
+  // its users, but do not remove `this` from the its basic block.
   void ReplaceWith(HInstruction* instruction);
+  // Replace the input a position `index` with `replacement`, but do
+  // not remove that initial input from its basic block.
   void ReplaceInput(HInstruction* replacement, size_t index);
 
   // This is almost the same as doing `ReplaceWith()`. But in this helper, the
@@ -4855,6 +4862,15 @@ class HGraphVisitor : public ValueObject {
   FOR_EACH_INSTRUCTION(DECLARE_VISIT_INSTRUCTION)
 
 #undef DECLARE_VISIT_INSTRUCTION
+
+ protected:
+  // Syntactic sugar over art::HBasicBlock::ReplaceInstruction.
+  static void Replace(HInstruction* initial, HInstruction* replacement) {
+    initial->GetBlock()->ReplaceInstruction(initial, replacement, /* insert_replacement */ false);
+  }
+  static void InsertAndReplace(HInstruction* initial, HInstruction* replacement) {
+    initial->GetBlock()->ReplaceInstruction(initial, replacement, /* insert_replacement */ true);
+  }
 
  private:
   HGraph* const graph_;
