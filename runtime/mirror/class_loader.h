@@ -26,6 +26,8 @@ class ClassTable;
 
 namespace mirror {
 
+class Class;
+
 // C++ mirror of java.lang.ClassLoader
 class MANAGED ClassLoader : public Object {
  public:
@@ -44,6 +46,9 @@ class MANAGED ClassLoader : public Object {
     SetField64<false>(OFFSET_OF_OBJECT_MEMBER(ClassLoader, class_table_),
                       reinterpret_cast<uint64_t>(class_table));
   }
+  template <const bool kVisitClass, VerifyObjectFlags kVerifyFlags, typename Visitor>
+  void VisitReferences(mirror::Class* klass, const Visitor& visitor)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
