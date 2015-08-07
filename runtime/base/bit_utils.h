@@ -143,7 +143,7 @@ static constexpr bool IsAligned(T x) {
 }
 
 template<int n, typename T>
-static inline bool IsAligned(T* x) {
+static constexpr inline bool IsAligned(T* x) {
   return IsAligned<n>(reinterpret_cast<const uintptr_t>(x));
 }
 
