@@ -485,11 +485,20 @@ void CodeGeneratorX86_64::InvokeRuntime(Address entry_point,
                                         uint32_t dex_pc,
                                         SlowPathCode* slow_path) {
   // Ensure that the call kind indication given to the register allocator is
-  // coherent with the runtime call generated.
+  // coherent with the runtime call generated, and that the GC side effect is
+  // set when required.
   if (slow_path == nullptr) {
     DCHECK(instruction->GetLocations()->WillCall());
+    DCHECK(instruction->GetSideEffects().Includes(SideEffects::CanTriggerGC()));
   } else {
     DCHECK(instruction->GetLocations()->OnlyCallsOnSlowPath() || slow_path->IsFatal());
+    DCHECK(instruction->GetSideEffects().Includes(SideEffects::CanTriggerGC()) ||
+           // Control flow would not come back into the code if a fatal slow
+           // path is taken, so we do not care if it triggers GC.
+           slow_path->IsFatal() ||
+           // HDeoptimize is a special case: we know we are not coming back from
+           // it into the code.
+           instruction->IsDeoptimize());
   }
 
   __ gs()->call(entry_point);
