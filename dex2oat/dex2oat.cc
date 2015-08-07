@@ -982,6 +982,12 @@ class Dex2Oat FINAL {
       compiler_filter = CompilerOptions::kVerifyAtRuntime;
     } else if (strcmp(compiler_filter_string, "space") == 0) {
       compiler_filter = CompilerOptions::kSpace;
+      // Implementation of the space filter: override default values
+      // for inlining settings.
+      static const size_t kSpaceFilterInlineDepthLimit = 3;
+      static const size_t kSpaceFilterInlineMaxCodeUnits = 10;
+      inline_depth_limit = kSpaceFilterInlineDepthLimit;
+      inline_max_code_units = kSpaceFilterInlineMaxCodeUnits;
     } else if (strcmp(compiler_filter_string, "balanced") == 0) {
       compiler_filter = CompilerOptions::kBalanced;
     } else if (strcmp(compiler_filter_string, "speed") == 0) {
