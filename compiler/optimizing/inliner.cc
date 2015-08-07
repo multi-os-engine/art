@@ -281,7 +281,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     resolved_method->GetDeclaringClass()->GetDexClassDefIndex(),
     resolved_method->GetDexMethodIndex(),
     resolved_method->GetAccessFlags(),
-    nullptr);
+    compiler_driver_->GetVerifiedMethod(&callee_dex_file, method_index));
 
   bool requires_ctor_barrier = false;
 
