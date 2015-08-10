@@ -28,6 +28,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <string>
+
 namespace art {
 
 /* Supported output formats. */
@@ -45,6 +47,7 @@ struct Options {
   bool showFileHeaders;
   bool showSectionHeaders;
   bool verbose;
+  bool cfg;
   OutputFormat outputFormat;
   const char* outputFileName;
   const char* tempFileName;
