@@ -484,20 +484,11 @@ void CodeGeneratorX86_64::InvokeRuntime(Address entry_point,
                                         HInstruction* instruction,
                                         uint32_t dex_pc,
                                         SlowPathCode* slow_path) {
-  // Ensure that the call kind indication given to the register allocator is
-  // coherent with the runtime call generated.
-  if (slow_path == nullptr) {
-    DCHECK(instruction->GetLocations()->WillCall());
-  } else {
-    DCHECK(instruction->GetLocations()->OnlyCallsOnSlowPath() || slow_path->IsFatal());
-  }
-
+  ValidateInvokeRuntime(instruction, dex_pc, slow_path);
   __ gs()->call(entry_point);
   RecordPcInfo(instruction, dex_pc, slow_path);
   DCHECK(instruction->IsSuspendCheck()
-         || instruction->IsBoundsCheck()
-         || instruction->IsNullCheck()
-         || instruction->IsDivZeroCheck()
+         || slow_path->IsFatal()
          || !IsLeafMethod());
 }
 

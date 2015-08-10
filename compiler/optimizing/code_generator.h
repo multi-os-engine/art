@@ -292,6 +292,10 @@ class CodeGenerator {
     return type == Primitive::kPrimNot && !value->IsNullConstant();
   }
 
+  void ValidateInvokeRuntime(HInstruction* instruction,
+                             uint32_t dex_pc,
+                             SlowPathCode* slow_path);
+
   void AddAllocatedRegister(Location location) {
     allocated_registers_.Add(location);
   }
