@@ -19,6 +19,7 @@ LOCAL_PATH := art/test
 
 include art/build/Android.common_test.mk
 include art/build/Android.common_path.mk
+include art/build/Android.common_build.mk
 
 # Subdirectories in art/test which contain dex files used as inputs for gtests.
 GTEST_DEX_DIRECTORIES := \
@@ -558,20 +559,28 @@ valgrind-test-art-host-gtest-$$(art_gtest_name): $$(ART_TEST_HOST_VALGRIND_GTEST
   2nd_library_path :=
 endef  # define-art-gtest
 
-ifeq ($(ART_BUILD_TARGET),true)
-  $(foreach file,$(RUNTIME_GTEST_TARGET_SRC_FILES), $(eval $(call define-art-gtest,target,$(file),,libbacktrace)))
-  $(foreach file,$(COMPILER_GTEST_TARGET_SRC_FILES), $(eval $(call define-art-gtest,target,$(file),art/compiler,libartd-compiler libbacktrace)))
-endif
-ifeq ($(ART_BUILD_HOST),true)
-  $(foreach file,$(RUNTIME_GTEST_HOST_SRC_FILES), $(eval $(call define-art-gtest,host,$(file),,libbacktrace)))
-  $(foreach file,$(COMPILER_GTEST_HOST_SRC_FILES), $(eval $(call define-art-gtest,host,$(file),art/compiler,libartd-compiler libbacktrace)))
-endif
-
-# Used outside the art project to get a list of the current tests
 RUNTIME_TARGET_GTEST_MAKE_TARGETS :=
 $(foreach file, $(RUNTIME_GTEST_TARGET_SRC_FILES), $(eval RUNTIME_TARGET_GTEST_MAKE_TARGETS += $$(notdir $$(basename $$(file)))))
 COMPILER_TARGET_GTEST_MAKE_TARGETS :=
-$(foreach file, $(COMPILER_GTEST_TARGET_SRC_FILES), $(eval COMPILER_TARGET_GTEST_MAKE_TARGETS += $$(notdir $$(basename $$(file)))))
+ifeq ($(ART_BUILD_TARGET),true)
+  $(foreach file,$(RUNTIME_GTEST_TARGET_SRC_FILES), $(eval $(call define-art-gtest,target,$(file),,libbacktrace)))
+  ifeq (true,$(ART_TARGET_COMPILER_TESTS))
+    $(foreach file,$(COMPILER_GTEST_TARGET_SRC_FILES), $(eval $(call define-art-gtest,target,$(file),art/compiler,libartd-compiler libbacktrace)))
+  else
+    $(warning Disabling art tests on target because of svelte build.)
+  endif
+endif
+ifeq ($(ART_BUILD_HOST),true)
+  $(foreach file,$(RUNTIME_GTEST_HOST_SRC_FILES), $(eval $(call define-art-gtest,host,$(file),,libbacktrace)))
+  ifeq (true,$(ART_HOST_COMPILER_TESTS))
+    $(foreach file,$(COMPILER_GTEST_HOST_SRC_FILES), $(eval $(call define-art-gtest,host,$(file),art/compiler,libartd-compiler libbacktrace)))
+    $(foreach file, $(COMPILER_GTEST_TARGET_SRC_FILES), $(eval COMPILER_TARGET_GTEST_MAKE_TARGETS += $$(notdir $$(basename $$(file)))))
+  else
+    $(warning Disabling art tests on host because of svelte build.)
+  endif
+endif
+
+# Used outside the art project to get a list of the current tests
 
 # Define all the combinations of host/target, valgrind and suffix such as:
 # test-art-host-gtest or valgrind-test-art-host-gtest64
