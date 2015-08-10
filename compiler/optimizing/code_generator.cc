@@ -599,7 +599,7 @@ void CodeGenerator::BuildMappingTable(std::vector<uint8_t>* data) const {
   // Walk over the blocks and find which ones correspond to catch block entries.
   for (size_t i = 0; i < graph_->GetBlocks().Size(); ++i) {
     HBasicBlock* block = graph_->GetBlocks().Get(i);
-    if (block->IsCatchBlock()) {
+    if (block != nullptr && block->IsCatchBlock()) {
       intptr_t native_pc = GetAddressOf(block);
       ++dex2pc_entries;
       dex2pc_data_size += UnsignedLeb128Size(native_pc - dex2pc_offset);
@@ -638,7 +638,7 @@ void CodeGenerator::BuildMappingTable(std::vector<uint8_t>* data) const {
 
   for (size_t i = 0; i < graph_->GetBlocks().Size(); ++i) {
     HBasicBlock* block = graph_->GetBlocks().Get(i);
-    if (block->IsCatchBlock()) {
+    if (block != nullptr && block->IsCatchBlock()) {
       intptr_t native_pc = GetAddressOf(block);
       write_pos2 = EncodeUnsignedLeb128(write_pos2, native_pc - dex2pc_offset);
       write_pos2 = EncodeSignedLeb128(write_pos2, block->GetDexPc() - dex2pc_dalvik_offset);
@@ -666,7 +666,7 @@ void CodeGenerator::BuildMappingTable(std::vector<uint8_t>* data) const {
     }
     for (size_t i = 0; i < graph_->GetBlocks().Size(); ++i) {
       HBasicBlock* block = graph_->GetBlocks().Get(i);
-      if (block->IsCatchBlock()) {
+      if (block != nullptr && block->IsCatchBlock()) {
         CHECK_EQ(GetAddressOf(block), it2.NativePcOffset());
         CHECK_EQ(block->GetDexPc(), it2.DexPc());
         ++it2;

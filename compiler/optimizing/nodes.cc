@@ -49,6 +49,26 @@ static void RemoveAsUser(HInstruction* instruction) {
       }
     }
   }
+
+  instruction->RemoveAsExceptionalPredecessor();
+}
+
+void HInstruction::RemoveAsExceptionalPredecessor() {
+  if (!CanThrow() || !block_->IsInTry()) {
+    return;
+  }
+
+  for (HExceptionHandlerIterator handler_it(*block_->GetTryEntry());
+       !handler_it.Done();
+       handler_it.Advance()) {
+    HBasicBlock* handler = handler_it.Current();
+    DCHECK(handler->GetExceptionalPredecessors().Contains(this));
+    size_t predecessor_idx = handler->GetExceptionalPredecessorIndexOf(this);
+    handler->RemoveExceptionalPredecessor(this);
+    for (HInstructionIterator phi_it(handler->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+      phi_it.Current()->AsPhi()->RemoveInputAt(predecessor_idx);
+    }
+  }
 }
 
 void HGraph::RemoveInstructionsAsUsersFromDeadBlocks(const ArenaBitVector& visited) const {
@@ -341,6 +361,16 @@ void HGraph::ComputeTryBlockInformation() {
     DCHECK(!block->IsLoopHeader() || !block->GetLoopInformation()->IsBackEdge(*first_predecessor));
     block->SetTryEntry(first_predecessor->ComputeTryEntryOfSuccessors());
   }
+}
+
+bool HGraph::HasTryCatch() const {
+  for (size_t i = 0, e = blocks_.Size(); i < e; ++i) {
+    HBasicBlock* block = blocks_.Get(i);
+    if (block != nullptr && (block->IsInTry() || block->IsCatchBlock())) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void HGraph::SimplifyCFG() {
@@ -648,13 +678,13 @@ static void Remove(HInstructionList* instruction_list,
                    HInstruction* instruction,
                    bool ensure_safety) {
   DCHECK_EQ(block, instruction->GetBlock());
-  instruction->SetBlock(nullptr);
-  instruction_list->RemoveInstruction(instruction);
   if (ensure_safety) {
     DCHECK(instruction->GetUses().IsEmpty());
     DCHECK(instruction->GetEnvUses().IsEmpty());
     RemoveAsUser(instruction);
   }
+  instruction->SetBlock(nullptr);
+  instruction_list->RemoveInstruction(instruction);
 }
 
 void HBasicBlock::RemoveInstruction(HInstruction* instruction, bool ensure_safety) {

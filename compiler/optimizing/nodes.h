@@ -350,6 +350,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
     return instruction_set_;
   }
 
+  bool HasTryCatch() const;
+
  private:
   void VisitBlockForDominatorTree(HBasicBlock* block,
                                   HBasicBlock* predecessor,
@@ -555,6 +557,19 @@ class HLoopInformation : public ArenaObject<kArenaAllocMisc> {
   DISALLOW_COPY_AND_ASSIGN(HLoopInformation);
 };
 
+class CatchInformation : public ArenaObject<kArenaAllocMisc> {
+ public:
+  CatchInformation(uint16_t type_index, const DexFile& dex_file)
+      : type_index_(type_index), dex_file_(dex_file) {}
+
+  uint16_t GetTypeIndex() const { return type_index_; }
+  const DexFile& GetDexFile() const { return dex_file_; }
+
+ private:
+  const uint16_t type_index_;
+  const DexFile& dex_file_;
+};
+
 static constexpr size_t kNoLifetime = -1;
 static constexpr uint32_t kNoDexPc = -1;
 
@@ -576,7 +591,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
         dex_pc_(dex_pc),
         lifetime_start_(kNoLifetime),
         lifetime_end_(kNoLifetime),
-        is_catch_block_(false) {}
+        catch_info_(nullptr),
+        try_entry_(nullptr) {}
 
   const GrowableArray<HBasicBlock*>& GetPredecessors() const {
     return predecessors_;
@@ -893,8 +909,9 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
-  bool IsCatchBlock() const { return is_catch_block_; }
-  void SetIsCatchBlock() { is_catch_block_ = true; }
+  bool IsCatchBlock() const { return catch_info_ != nullptr; }
+  const CatchInformation& GetCatchInformation() const { return *catch_info_; }
+  void SetCatchInformation(CatchInformation* catch_info) { catch_info_ = catch_info; }
 
   bool EndsWithControlFlowInstruction() const;
   bool EndsWithIf() const;
@@ -916,7 +933,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   const uint32_t dex_pc_;
   size_t lifetime_start_;
   size_t lifetime_end_;
-  bool is_catch_block_;
+
+  CatchInformation* catch_info_;
 
   // If this block is in a try block, `try_entry_` stores one of, possibly
   // several, TryBoundary instructions entering it.
@@ -1650,6 +1668,8 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
     HUserRecord<HInstruction*> input_use = InputRecordAt(input);
     input_use.GetInstruction()->uses_.Remove(input_use.GetUseNode());
   }
+
+  void RemoveAsExceptionalPredecessor();
 
   const HUseList<HInstruction*>& GetUses() const { return uses_; }
   const HUseList<HEnvironment*>& GetEnvUses() const { return env_uses_; }
@@ -3905,6 +3925,9 @@ class HArraySet : public HTemplateInstruction<3> {
   }
 
   void ClearNeedsTypeCheck() {
+    if (needs_type_check_) {
+      RemoveAsExceptionalPredecessor();
+    }
     needs_type_check_ = false;
   }
 

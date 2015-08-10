@@ -328,13 +328,12 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     }
   }
 
-  void AddPhiUse(HInstruction* instruction, size_t input_index, HBasicBlock* block) {
-    DCHECK(instruction->IsPhi());
+  void AddPhiUse(HPhi* phi, size_t input_index, HBasicBlock* block) {
     if (block->IsInLoop()) {
       AddBackEdgeUses(*block);
     }
     first_use_ = new (allocator_) UsePosition(
-        instruction, /* environment */ nullptr, input_index, block->GetLifetimeEnd(), first_use_);
+        phi, /* environment */ nullptr, input_index, block->GetLifetimeEnd(), first_use_);
   }
 
   void AddRange(size_t start, size_t end) {
@@ -720,6 +719,8 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
 
   // Converts the location of the interval to a `Location` object.
   Location ToLocation() const;
+
+  Location ToNonRegisterLocation() const;
 
   // Returns the location of the interval following its siblings at `position`.
   Location GetLocationAt(size_t position);
@@ -1146,6 +1147,10 @@ class SsaLivenessAnalysis : public ValueObject {
 
   bool IsAtBlockBoundary(size_t index) const {
     return GetInstructionFromPosition(index) == nullptr;
+  }
+
+  bool IsAtCatchBlockBoundary(size_t index) const {
+    return IsAtBlockBoundary(index) && GetBlockFromPosition(index)->IsCatchBlock();
   }
 
   HInstruction* GetTempUser(LiveInterval* temp) const {

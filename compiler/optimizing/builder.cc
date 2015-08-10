@@ -306,7 +306,8 @@ void HGraphBuilder::CreateBlocksForTryCatch(const DexFile::CodeItem& code_item) 
     for (; iterator.HasNext(); iterator.Next()) {
       uint32_t address = iterator.GetHandlerAddress();
       HBasicBlock* block = FindOrCreateBlockStartingAt(address);
-      block->SetIsCatchBlock();
+      block->SetCatchInformation(
+          new (arena_) CatchInformation(iterator.GetHandlerTypeIndex(), *dex_file_));
     }
     handlers_ptr = iterator.EndDataPointer();
   }

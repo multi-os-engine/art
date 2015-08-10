@@ -100,6 +100,8 @@ class RegisterAllocator {
   // Update the interval for the register in `location` to cover [start, end).
   void BlockRegister(Location location, size_t start, size_t end);
 
+  void BlockAllRegisters(size_t start, size_t end);
+
   // Allocate a spill slot for the given interval.
   void AllocateSpillSlotFor(LiveInterval* interval);
 
@@ -108,6 +110,9 @@ class RegisterAllocator {
 
   // Connect siblings between block entries and exits.
   void ConnectSplitSiblings(LiveInterval* interval, HBasicBlock* from, HBasicBlock* to) const;
+  void ConnectSplitSiblings(LiveInterval* interval, HBasicBlock* to) const;
+
+  void MaybeAllocateSpillSlotForCatchUse(HInstruction* instruction, HBasicBlock* catch_block);
 
   // Helper methods to insert parallel moves in the graph.
   void InsertParallelMoveAtExitOf(HBasicBlock* block,
@@ -118,6 +123,10 @@ class RegisterAllocator {
                                    HInstruction* instruction,
                                    Location source,
                                    Location destination) const;
+  void InsertParallelMoveBefore(HInstruction* cursor,
+                                HInstruction* instruction,
+                                Location source,
+                                Location destination) const;
   void InsertMoveAfter(HInstruction* instruction, Location source, Location destination) const;
   void AddInputMoveFor(HInstruction* input,
                        HInstruction* user,
