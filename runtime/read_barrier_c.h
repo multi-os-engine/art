@@ -25,6 +25,7 @@
 // Object.java (libcore) to enable baker, brooks (unimplemented), or
 // table-lookup read barriers.
 
+#define ART_USE_READ_BARRIER
 #ifdef ART_USE_READ_BARRIER
 #define USE_BAKER_READ_BARRIER
 // #define USE_BROOKS_READ_BARRIER
