@@ -56,17 +56,18 @@ ImageSpace::ImageSpace(const std::string& image_filename, const char* image_loca
 static int32_t ChooseRelocationOffsetDelta(int32_t min_delta, int32_t max_delta) {
   CHECK_ALIGNED(min_delta, kPageSize);
   CHECK_ALIGNED(max_delta, kPageSize);
-  CHECK_LT(min_delta, max_delta);
+  int32_t min_page_delta = min_delta / kPageSize;
+  int32_t max_page_delta = max_delta / kPageSize;
+
+  // Only allow relocation to a positive address so that we don't
+  // randomly relocate by zero (b/22599792).
+  CHECK_LT(0, min_page_delta);
+  CHECK_LT(min_page_delta, max_page_delta);
 
   std::default_random_engine generator;
   generator.seed(NanoTime() * getpid());
-  std::uniform_int_distribution<int32_t> distribution(min_delta, max_delta);
-  int32_t r = distribution(generator);
-  if (r % 2 == 0) {
-    r = RoundUp(r, kPageSize);
-  } else {
-    r = RoundDown(r, kPageSize);
-  }
+  std::uniform_int_distribution<int32_t> distribution(min_page_delta, max_page_delta);
+  int32_t r = distribution(generator) * kPageSize;
   CHECK_LE(min_delta, r);
   CHECK_GE(max_delta, r);
   CHECK_ALIGNED(r, kPageSize);
