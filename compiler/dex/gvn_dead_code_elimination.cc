@@ -715,6 +715,7 @@ void GvnDeadCodeElimination::RecordPassTryToKillOverwrittenMoveOrMoveSrc(uint16_
     // Try to find a MOVE to a vreg that wasn't changed since check_change.
     uint16_t value_name =
         data->wide_def ? lvn_->GetSregValueWide(dest_s_reg) : lvn_->GetSregValue(dest_s_reg);
+    uint32_t dest_v_reg = mir_graph_->SRegToVReg(dest_s_reg);
     for (size_t c = check_change + 1u, size = vreg_chains_.NumMIRs(); c != size; ++c) {
       MIRData* d = vreg_chains_.GetMIRData(c);
       if (d->is_move && d->wide_def == data->wide_def &&
@@ -726,13 +727,26 @@ void GvnDeadCodeElimination::RecordPassTryToKillOverwrittenMoveOrMoveSrc(uint16_
         uint16_t src_name =
             (d->wide_def ? lvn_->GetSregValueWide(src_s_reg) : lvn_->GetSregValue(src_s_reg));
         if (value_name == src_name) {
+          // We are doing something as following:
+          //   mov a, b
+          //   ...
+          //   mov c, b
+          // We want to replace a with c. To do that we must ensure that c is not used between
+          // this two moves, otherwise we cannot shift the definition of c earlier.
           // Check if the move's destination vreg is unused between check_change and the move.
           uint32_t new_dest_v_reg = mir_graph_->SRegToVReg(d->mir->ssa_rep->defs[0]);
           if (!vreg_chains_.IsVRegUsed(check_change + 1u, c, new_dest_v_reg, mir_graph_) &&
               (!d->wide_def ||
                !vreg_chains_.IsVRegUsed(check_change + 1u, c, new_dest_v_reg + 1, mir_graph_))) {
-            RecordPassKillMoveByRenamingSrcDef(check_change, c);
-            return;
+            // Additionally, we must ensure that a is not used after the re-definition of c or
+            // a has already been re-defined itself.
+            uint16_t a_change = vreg_chains_.FindFirstChangeAfter(dest_v_reg, check_change);
+            uint16_t c_change = vreg_chains_.FindFirstChangeAfter(new_dest_v_reg, c);
+            if ((a_change <= c_change) ||
+                 !vreg_chains_.IsVRegUsed(c_change + 1u, a_change, dest_v_reg, mir_graph_)) {
+              RecordPassKillMoveByRenamingSrcDef(check_change, c);
+              return;
+            }
           }
         }
       }
