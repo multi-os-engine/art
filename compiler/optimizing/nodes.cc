@@ -907,6 +907,15 @@ FOR_EACH_INSTRUCTION(DEFINE_ACCEPT)
 
 #undef DEFINE_ACCEPT
 
+#define DEFINE_ACCEPT_ARCH(arch, name, super)                                  \
+void arch::H##name::Accept(HGraphVisitor* visitor) {                           \
+  visitor->Visit##name(this);                                                  \
+}
+
+FOR_EACH_INSTRUCTION_ARCH(DEFINE_ACCEPT_ARCH)
+
+#undef DEFINE_ACCEPT_ARCH
+
 void HGraphVisitor::VisitInsertionOrder() {
   const GrowableArray<HBasicBlock*>& blocks = graph_->GetBlocks();
   for (size_t i = 0 ; i < blocks.Size(); i++) {
