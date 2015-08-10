@@ -43,6 +43,7 @@ class RTPVisitor : public HGraphDelegateVisitor {
   void VisitLoadClass(HLoadClass* load_class) OVERRIDE;
   void VisitClinitCheck(HClinitCheck* clinit_check) OVERRIDE;
   void VisitLoadString(HLoadString* instr) OVERRIDE;
+  void VisitLoadException(HLoadException* instr) OVERRIDE;
   void VisitNewArray(HNewArray* instr) OVERRIDE;
   void VisitParameterValue(HParameterValue* instr) OVERRIDE;
   void UpdateFieldAccessTypeInfo(HInstruction* instr, const FieldInfo& info);
@@ -454,6 +455,14 @@ void RTPVisitor::VisitClinitCheck(HClinitCheck* instr) {
 
 void RTPVisitor::VisitLoadString(HLoadString* instr) {
   instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(string_class_handle_, /* is_exact */ true));
+}
+
+void RTPVisitor::VisitLoadException(HLoadException* instr) {
+  HBasicBlock* catch_block = instr->GetBlock();
+  DCHECK(catch_block->IsCatchBlock());
+  const CatchInformation& catch_info = catch_block->GetCatchInformation();
+  UpdateReferenceTypeInfo(
+      instr, catch_info.GetTypeIndex(), catch_info.GetDexFile(), /* is_exact */ false);
 }
 
 void RTPVisitor::VisitNullCheck(HNullCheck* instr) {

@@ -328,13 +328,12 @@ class LiveInterval : public ArenaObject<kArenaAllocMisc> {
     }
   }
 
-  void AddPhiUse(HInstruction* instruction, size_t input_index, HBasicBlock* block) {
-    DCHECK(instruction->IsPhi());
+  void AddPhiUse(HPhi* phi, size_t input_index, HBasicBlock* block) {
     if (block->IsInLoop()) {
       AddBackEdgeUses(*block);
     }
     first_use_ = new (allocator_) UsePosition(
-        instruction, /* environment */ nullptr, input_index, block->GetLifetimeEnd(), first_use_);
+        phi, /* environment */ nullptr, input_index, block->GetLifetimeEnd(), first_use_);
   }
 
   void AddRange(size_t start, size_t end) {

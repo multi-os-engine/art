@@ -108,6 +108,7 @@ void HDeadCodeElimination::RemoveDeadBlocks() {
       it.Advance();
       continue;
     }
+    DCHECK(block->GetLastInstruction()->IsGoto());
     block->MergeWith(successor);
 
     // Reiterate on this block in case it can be merged with its new successor.
