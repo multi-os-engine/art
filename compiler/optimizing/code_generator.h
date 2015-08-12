@@ -26,6 +26,7 @@
 #include "locations.h"
 #include "memory_region.h"
 #include "nodes.h"
+#include "optimization.h"
 #include "stack_map_stream.h"
 
 namespace art {
