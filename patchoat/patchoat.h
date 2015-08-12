@@ -42,13 +42,14 @@ class Class;
 class PatchOat {
  public:
   // Patch only the oat file
-  static bool Patch(File* oat_in, off_t delta, File* oat_out, TimingLogger* timings,
+  static bool Patch(File* oat_in, off_t delta, bool match_delta, File* oat_out,
+                    TimingLogger* timings,
                     bool output_oat_opened_from_fd,  // Was this using --oatput-oat-fd ?
                     bool new_oat_out);               // Output oat was a new file created by us?
 
   // Patch only the image (art file)
-  static bool Patch(const std::string& art_location, off_t delta, File* art_out, InstructionSet isa,
-                    TimingLogger* timings);
+  static bool Patch(const std::string& art_location, off_t delta, File* art_out,
+                    InstructionSet isa, TimingLogger* timings);
 
   // Patch both the image and the oat file
   static bool Patch(File* oat_in, const std::string& art_location,
