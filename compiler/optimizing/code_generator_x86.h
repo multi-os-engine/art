@@ -325,6 +325,13 @@ class CodeGeneratorX86 : public CodeGenerator {
     return isa_features_;
   }
 
+  void GenerateReadBarrier(HInstruction* instruction,
+                           Location out,
+                           Location ref,
+                           Location obj,
+                           uint32_t offset,
+                           Location index = Location());
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
