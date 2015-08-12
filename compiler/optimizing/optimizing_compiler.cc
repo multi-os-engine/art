@@ -44,6 +44,7 @@
 #include "gvn.h"
 #include "inliner.h"
 #include "instruction_simplifier.h"
+#include "instruction_simplifier_arm64.h"
 #include "intrinsics.h"
 #include "licm.h"
 #include "jni/quick/jni_compiler.h"
@@ -462,6 +463,14 @@ static void RunOptimizations(HGraph* graph,
   RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
 }
 
+static void RunArchOptimizations(HGraph* graph,
+                                 CodeGenerator* codegen,
+                                 OptimizingCompilerStats* stats,
+                                 PassObserver* pass_observer) {
+  std::vector<HOptimization*> arch_opts = codegen->ListArchOptimizations(graph, stats);
+  RunOptimizations(arch_opts.data(), arch_opts.size(), pass_observer);
+}
+
 // The stack map we generate must be 4-byte aligned on ARM. Since existing
 // maps are generated alongside these stack maps, we must also align them.
 static ArrayRef<const uint8_t> AlignVectorSize(std::vector<uint8_t>& vector) {
@@ -496,6 +505,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   StackHandleScopeCollection handles(Thread::Current());
   RunOptimizations(graph, compiler_driver, compilation_stats_.get(),
                    dex_compilation_unit, pass_observer, &handles);
+  RunArchOptimizations(graph, codegen, compilation_stats_.get(), pass_observer);
 
   AllocateRegisters(graph, codegen, pass_observer);
 
