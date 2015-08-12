@@ -26,6 +26,7 @@
 #include "locations.h"
 #include "memory_region.h"
 #include "nodes.h"
+#include "optimization.h"
 #include "stack_map_stream.h"
 
 namespace art {
@@ -354,6 +355,10 @@ class CodeGenerator {
 
   void SetDisassemblyInformation(DisassemblyInformation* info) { disasm_info_ = info; }
   DisassemblyInformation* GetDisassemblyInformation() const { return disasm_info_; }
+
+  virtual void ListArchOptimizations(ArenaVector<HOptimization*>* list ATTRIBUTE_UNUSED,
+                                     HGraph* graph ATTRIBUTE_UNUSED,
+                                     OptimizingCompilerStats* stats ATTRIBUTE_UNUSED) {}
 
  protected:
   CodeGenerator(HGraph* graph,

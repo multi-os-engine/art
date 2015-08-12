@@ -1583,6 +1583,8 @@ void InstructionCodeGeneratorX86::VisitInvokeVirtual(HInvokeVirtual* invoke) {
 
   DCHECK(!codegen_->IsLeafMethod());
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
+  // Validate the call to the quick entry point.
+  codegen_->ValidateInvokeRuntime(invoke, nullptr);  // TODO
 }
 
 void LocationsBuilderX86::VisitInvokeInterface(HInvokeInterface* invoke) {
