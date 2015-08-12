@@ -95,47 +95,47 @@ TEST(SideEffectsTest, DependencesAndNoDependences) {
       type = Primitive::Type(type + 1)) {
     // Same primitive type and access type: proper write/read dep.
     testWriteAndReadDependence(
-        SideEffects::FieldWriteOfType(type, false),
-        SideEffects::FieldReadOfType(type, false));
+        SideEffects::FieldWriteOfType(type, false, MemberOffset(0)),
+        SideEffects::FieldReadOfType(type, false, MemberOffset(0)));
     testWriteAndReadDependence(
-        SideEffects::ArrayWriteOfType(type),
-        SideEffects::ArrayReadOfType(type));
+        SideEffects::ArrayWriteOfType(type, nullptr),
+        SideEffects::ArrayReadOfType(type, nullptr));
     // Same primitive type but different access type: no write/read dep.
     testNoWriteAndReadDependence(
-        SideEffects::FieldWriteOfType(type, false),
-        SideEffects::ArrayReadOfType(type));
+        SideEffects::FieldWriteOfType(type, false, MemberOffset(0)),
+        SideEffects::ArrayReadOfType(type, nullptr));
     testNoWriteAndReadDependence(
-        SideEffects::ArrayWriteOfType(type),
-        SideEffects::FieldReadOfType(type, false));
+        SideEffects::ArrayWriteOfType(type, nullptr),
+        SideEffects::FieldReadOfType(type, false, MemberOffset(0)));
   }
 }
 
 TEST(SideEffectsTest, NoDependences) {
   // Different primitive type, same access type: no write/read dep.
   testNoWriteAndReadDependence(
-      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false),
-      SideEffects::FieldReadOfType(Primitive::kPrimDouble, false));
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(0)),
+      SideEffects::FieldReadOfType(Primitive::kPrimDouble, false, MemberOffset(0)));
   testNoWriteAndReadDependence(
-      SideEffects::ArrayWriteOfType(Primitive::kPrimInt),
-      SideEffects::ArrayReadOfType(Primitive::kPrimDouble));
+      SideEffects::ArrayWriteOfType(Primitive::kPrimInt, nullptr),
+      SideEffects::ArrayReadOfType(Primitive::kPrimDouble, nullptr));
   // Everything different: no write/read dep.
   testNoWriteAndReadDependence(
-      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false),
-      SideEffects::ArrayReadOfType(Primitive::kPrimDouble));
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(0)),
+      SideEffects::ArrayReadOfType(Primitive::kPrimDouble, nullptr));
   testNoWriteAndReadDependence(
-      SideEffects::ArrayWriteOfType(Primitive::kPrimInt),
-      SideEffects::FieldReadOfType(Primitive::kPrimDouble, false));
+      SideEffects::ArrayWriteOfType(Primitive::kPrimInt, nullptr),
+      SideEffects::FieldReadOfType(Primitive::kPrimDouble, false, MemberOffset(0)));
 }
 
 TEST(SideEffectsTest, VolatileDependences) {
   SideEffects volatile_write =
-      SideEffects::FieldWriteOfType(Primitive::kPrimInt, true);
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, true, MemberOffset(0));
   SideEffects any_write =
-      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false);
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(0));
   SideEffects volatile_read =
-      SideEffects::FieldReadOfType(Primitive::kPrimByte, true);
+      SideEffects::FieldReadOfType(Primitive::kPrimByte, true, MemberOffset(0));
   SideEffects any_read =
-      SideEffects::FieldReadOfType(Primitive::kPrimByte, false);
+      SideEffects::FieldReadOfType(Primitive::kPrimByte, false, MemberOffset(0));
 
   EXPECT_FALSE(volatile_write.MayDependOn(any_read));
   EXPECT_TRUE(any_read.MayDependOn(volatile_write));
@@ -151,18 +151,60 @@ TEST(SideEffectsTest, VolatileDependences) {
 TEST(SideEffectsTest, SameWidthTypes) {
   // Type I/F.
   testWriteAndReadDependence(
-      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false),
-      SideEffects::FieldReadOfType(Primitive::kPrimFloat, false));
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(0)),
+      SideEffects::FieldReadOfType(Primitive::kPrimFloat, false, MemberOffset(0)));
   testWriteAndReadDependence(
-      SideEffects::ArrayWriteOfType(Primitive::kPrimInt),
-      SideEffects::ArrayReadOfType(Primitive::kPrimFloat));
+      SideEffects::ArrayWriteOfType(Primitive::kPrimInt, nullptr),
+      SideEffects::ArrayReadOfType(Primitive::kPrimFloat, nullptr));
   // Type L/D.
   testWriteAndReadDependence(
-      SideEffects::FieldWriteOfType(Primitive::kPrimLong, false),
-      SideEffects::FieldReadOfType(Primitive::kPrimDouble, false));
+      SideEffects::FieldWriteOfType(Primitive::kPrimLong, false, MemberOffset(0)),
+      SideEffects::FieldReadOfType(Primitive::kPrimDouble, false, MemberOffset(0)));
   testWriteAndReadDependence(
-      SideEffects::ArrayWriteOfType(Primitive::kPrimLong),
-      SideEffects::ArrayReadOfType(Primitive::kPrimDouble));
+      SideEffects::ArrayWriteOfType(Primitive::kPrimLong, nullptr),
+      SideEffects::ArrayReadOfType(Primitive::kPrimDouble, nullptr));
+}
+
+TEST(SideEffectsTest, OffsetDependences) {
+  HIntConstant const_0(0);
+  HIntConstant const_1(1);
+  // Same offsets.
+  testWriteAndReadDependence(
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(0)),
+      SideEffects::FieldReadOfType(Primitive::kPrimInt, false, MemberOffset(0)));
+  testWriteAndReadDependence(
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(4)),
+      SideEffects::FieldReadOfType(Primitive::kPrimInt, false, MemberOffset(4)));
+  testWriteAndReadDependence(
+      SideEffects::ArrayWriteOfType(Primitive::kPrimInt, &const_0),
+      SideEffects::ArrayReadOfType(Primitive::kPrimInt, &const_0));
+  testWriteAndReadDependence(
+      SideEffects::ArrayWriteOfType(Primitive::kPrimInt, &const_1),
+      SideEffects::ArrayReadOfType(Primitive::kPrimInt, &const_1));
+  // Different offsets.
+  testNoWriteAndReadDependence(
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(0)),
+      SideEffects::FieldReadOfType(Primitive::kPrimInt, false, MemberOffset(4)));
+  testNoWriteAndReadDependence(
+      SideEffects::ArrayWriteOfType(Primitive::kPrimInt, &const_0),
+      SideEffects::ArrayReadOfType(Primitive::kPrimInt, &const_1));
+  // SideEffects union.
+  testWriteAndReadDependence(
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(0)).Union(
+          SideEffects::ArrayWriteOfType(Primitive::kPrimInt, &const_0)),
+      SideEffects::FieldReadOfType(Primitive::kPrimInt, false, MemberOffset(0)));
+  testNoWriteAndReadDependence(
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(0)).Union(
+          SideEffects::ArrayWriteOfType(Primitive::kPrimInt, &const_0)),
+      SideEffects::FieldReadOfType(Primitive::kPrimInt, false, MemberOffset(4)));
+  testWriteAndReadDependence(
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(0)),
+      SideEffects::FieldReadOfType(Primitive::kPrimInt, false, MemberOffset(0)).Union(
+          SideEffects::ArrayReadOfType(Primitive::kPrimInt, &const_0)));
+  testNoWriteAndReadDependence(
+      SideEffects::FieldWriteOfType(Primitive::kPrimInt, false, MemberOffset(4)),
+      SideEffects::FieldReadOfType(Primitive::kPrimInt, false, MemberOffset(0)).Union(
+          SideEffects::ArrayReadOfType(Primitive::kPrimInt, &const_0)));
 }
 
 TEST(SideEffectsTest, AllWritesAndReads) {
@@ -171,10 +213,10 @@ TEST(SideEffectsTest, AllWritesAndReads) {
   for (Primitive::Type type = Primitive::kPrimNot;
         type < Primitive::kPrimVoid;
         type = Primitive::Type(type + 1)) {
-    s = s.Union(SideEffects::FieldWriteOfType(type, false));
-    s = s.Union(SideEffects::ArrayWriteOfType(type));
-    s = s.Union(SideEffects::FieldReadOfType(type, false));
-    s = s.Union(SideEffects::ArrayReadOfType(type));
+    s = s.Union(SideEffects::FieldWriteOfType(type, false, MemberOffset(0)));
+    s = s.Union(SideEffects::ArrayWriteOfType(type, nullptr));
+    s = s.Union(SideEffects::FieldReadOfType(type, false, MemberOffset(0)));
+    s = s.Union(SideEffects::ArrayReadOfType(type, nullptr));
   }
   EXPECT_TRUE(s.DoesAll());
 }
@@ -194,23 +236,23 @@ TEST(SideEffectsTest, BitStrings) {
       SideEffects::AllReads().ToString().c_str());
   EXPECT_STREQ(
       "||||L|",
-      SideEffects::FieldWriteOfType(Primitive::kPrimNot, false).ToString().c_str());
+      SideEffects::FieldWriteOfType(Primitive::kPrimNot, false, MemberOffset(0)).ToString().c_str());
   EXPECT_STREQ(
       "|||Z||",
-      SideEffects::ArrayWriteOfType(Primitive::kPrimBoolean).ToString().c_str());
+      SideEffects::ArrayWriteOfType(Primitive::kPrimBoolean, nullptr).ToString().c_str());
   EXPECT_STREQ(
       "||B|||",
-      SideEffects::FieldReadOfType(Primitive::kPrimByte, false).ToString().c_str());
+      SideEffects::FieldReadOfType(Primitive::kPrimByte, false, MemberOffset(0)).ToString().c_str());
   EXPECT_STREQ(
       "|DJ||||",  // note: DJ alias
-      SideEffects::ArrayReadOfType(Primitive::kPrimDouble).ToString().c_str());
+      SideEffects::ArrayReadOfType(Primitive::kPrimDouble, nullptr).ToString().c_str());
   SideEffects s = SideEffects::None();
-  s = s.Union(SideEffects::FieldWriteOfType(Primitive::kPrimChar, false));
-  s = s.Union(SideEffects::FieldWriteOfType(Primitive::kPrimLong, false));
-  s = s.Union(SideEffects::ArrayWriteOfType(Primitive::kPrimShort));
-  s = s.Union(SideEffects::FieldReadOfType(Primitive::kPrimInt, false));
-  s = s.Union(SideEffects::ArrayReadOfType(Primitive::kPrimFloat));
-  s = s.Union(SideEffects::ArrayReadOfType(Primitive::kPrimDouble));
+  s = s.Union(SideEffects::FieldWriteOfType(Primitive::kPrimChar, false, MemberOffset(0)));
+  s = s.Union(SideEffects::FieldWriteOfType(Primitive::kPrimLong, false, MemberOffset(0)));
+  s = s.Union(SideEffects::ArrayWriteOfType(Primitive::kPrimShort, nullptr));
+  s = s.Union(SideEffects::FieldReadOfType(Primitive::kPrimInt, false, MemberOffset(0)));
+  s = s.Union(SideEffects::ArrayReadOfType(Primitive::kPrimFloat, nullptr));
+  s = s.Union(SideEffects::ArrayReadOfType(Primitive::kPrimDouble, nullptr));
   EXPECT_STREQ(
       "|DFJI|FI|S|DJC|",   // note: DJ/FI alias.
       s.ToString().c_str());

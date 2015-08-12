@@ -46,6 +46,7 @@ void SideEffectsAnalysis::Run() {
     for (HInstructionIterator inst_it(block->GetInstructions()); !inst_it.Done();
          inst_it.Advance()) {
       HInstruction* instruction = inst_it.Current();
+      UpdateInstructionEffects(instruction);
       effects = effects.Union(instruction->GetSideEffects());
       // If every possible write/read is represented, scanning further
       // will not add any more information to side-effects of this block.
@@ -86,6 +87,26 @@ SideEffects SideEffectsAnalysis::GetBlockEffects(HBasicBlock* block) const {
 void SideEffectsAnalysis::UpdateLoopEffects(HLoopInformation* info, SideEffects effects) {
   int id = info->GetHeader()->GetBlockId();
   loop_effects_.Put(id, loop_effects_.Get(id).Union(effects));
+}
+
+void SideEffectsAnalysis::UpdateInstructionEffects(HInstruction* instruction) {
+  // Index of array get/set might be replaced by a constant. In this case, we
+  // can have more accurate side effects.
+  if (instruction->IsArrayGet() || instruction->IsArraySet()) {
+    SideEffects effects = instruction->GetSideEffects();
+    if (kIsDebugBuild) {
+      if (instruction->IsArrayGet()) {
+        HArrayGet* get = instruction->AsArrayGet();
+        DCHECK(effects.Includes(SideEffects::ArrayReadOfType(get->GetType(), get->InputAt(1))));
+      } else {
+        HArraySet* set = instruction->AsArraySet();
+        DCHECK(effects.Includes(SideEffects::ArrayWriteOfType(set->GetComponentType(),
+                                set->InputAt(1))));
+      }
+    }
+    effects.SetArrayAccessIndex(instruction->InputAt(1));
+    instruction->SetSideEffects(effects);
+  }
 }
 
 }  // namespace art

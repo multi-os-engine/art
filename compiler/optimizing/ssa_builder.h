@@ -84,11 +84,11 @@ class SsaBuilder : public HGraphVisitor {
 
   HInstruction* ValueOfLocal(HBasicBlock* block, size_t local);
 
-  void VisitBasicBlock(HBasicBlock* block);
-  void VisitLoadLocal(HLoadLocal* load);
-  void VisitStoreLocal(HStoreLocal* store);
-  void VisitInstruction(HInstruction* instruction);
-  void VisitTemporary(HTemporary* instruction);
+  void VisitBasicBlock(HBasicBlock* block) OVERRIDE;
+  void VisitLoadLocal(HLoadLocal* load) OVERRIDE;
+  void VisitStoreLocal(HStoreLocal* store) OVERRIDE;
+  void VisitInstruction(HInstruction* instruction) OVERRIDE;
+  void VisitTemporary(HTemporary* instruction) OVERRIDE;
 
   static HInstruction* GetFloatOrDoubleEquivalent(HInstruction* user,
                                                   HInstruction* instruction,
