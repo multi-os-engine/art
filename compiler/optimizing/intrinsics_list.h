@@ -18,73 +18,74 @@
 #define ART_COMPILER_OPTIMIZING_INTRINSICS_LIST_H_
 
 // All intrinsics supported by the optimizing compiler. Format is name, then whether it is expected
-// to be a HInvokeStaticOrDirect node (compared to HInvokeVirtual).
+// to be a HInvokeStaticOrDirect node (compared to HInvokeVirtual), then whether it requires an
+// environment.
 
 #define INTRINSICS_LIST(V) \
-  V(DoubleDoubleToRawLongBits, kStatic) \
-  V(DoubleLongBitsToDouble, kStatic) \
-  V(FloatFloatToRawIntBits, kStatic) \
-  V(FloatIntBitsToFloat, kStatic) \
-  V(IntegerReverse, kStatic) \
-  V(IntegerReverseBytes, kStatic) \
-  V(LongReverse, kStatic) \
-  V(LongReverseBytes, kStatic) \
-  V(ShortReverseBytes, kStatic) \
-  V(MathAbsDouble, kStatic) \
-  V(MathAbsFloat, kStatic) \
-  V(MathAbsLong, kStatic) \
-  V(MathAbsInt, kStatic) \
-  V(MathMinDoubleDouble, kStatic) \
-  V(MathMinFloatFloat, kStatic) \
-  V(MathMinLongLong, kStatic) \
-  V(MathMinIntInt, kStatic) \
-  V(MathMaxDoubleDouble, kStatic) \
-  V(MathMaxFloatFloat, kStatic) \
-  V(MathMaxLongLong, kStatic) \
-  V(MathMaxIntInt, kStatic) \
-  V(MathSqrt, kStatic) \
-  V(MathCeil, kStatic) \
-  V(MathFloor, kStatic) \
-  V(MathRint, kStatic) \
-  V(MathRoundDouble, kStatic) \
-  V(MathRoundFloat, kStatic) \
-  V(SystemArrayCopyChar, kStatic) \
-  V(ThreadCurrentThread, kStatic) \
-  V(MemoryPeekByte, kStatic) \
-  V(MemoryPeekIntNative, kStatic) \
-  V(MemoryPeekLongNative, kStatic) \
-  V(MemoryPeekShortNative, kStatic) \
-  V(MemoryPokeByte, kStatic) \
-  V(MemoryPokeIntNative, kStatic) \
-  V(MemoryPokeLongNative, kStatic) \
-  V(MemoryPokeShortNative, kStatic) \
-  V(StringCharAt, kDirect) \
-  V(StringCompareTo, kDirect) \
-  V(StringGetCharsNoCheck, kDirect) \
-  V(StringIndexOf, kDirect) \
-  V(StringIndexOfAfter, kDirect) \
-  V(StringNewStringFromBytes, kStatic) \
-  V(StringNewStringFromChars, kStatic) \
-  V(StringNewStringFromString, kStatic) \
-  V(UnsafeCASInt, kDirect) \
-  V(UnsafeCASLong, kDirect) \
-  V(UnsafeCASObject, kDirect) \
-  V(UnsafeGet, kDirect) \
-  V(UnsafeGetVolatile, kDirect) \
-  V(UnsafeGetObject, kDirect) \
-  V(UnsafeGetObjectVolatile, kDirect) \
-  V(UnsafeGetLong, kDirect) \
-  V(UnsafeGetLongVolatile, kDirect) \
-  V(UnsafePut, kDirect) \
-  V(UnsafePutOrdered, kDirect) \
-  V(UnsafePutVolatile, kDirect) \
-  V(UnsafePutObject, kDirect) \
-  V(UnsafePutObjectOrdered, kDirect) \
-  V(UnsafePutObjectVolatile, kDirect) \
-  V(UnsafePutLong, kDirect) \
-  V(UnsafePutLongOrdered, kDirect) \
-  V(UnsafePutLongVolatile, kDirect) \
-  V(ReferenceGetReferent, kDirect)
+  V(DoubleDoubleToRawLongBits, kStatic, kNeedsEnv) \
+  V(DoubleLongBitsToDouble, kStatic, kNeedsEnv) \
+  V(FloatFloatToRawIntBits, kStatic, kNeedsEnv) \
+  V(FloatIntBitsToFloat, kStatic, kNeedsEnv) \
+  V(IntegerReverse, kStatic, kNeedsEnv) \
+  V(IntegerReverseBytes, kStatic, kNeedsEnv) \
+  V(LongReverse, kStatic, kNeedsEnv) \
+  V(LongReverseBytes, kStatic, kNeedsEnv) \
+  V(ShortReverseBytes, kStatic, kNeedsEnv) \
+  V(MathAbsDouble, kStatic, kNeedsEnv) \
+  V(MathAbsFloat, kStatic, kNeedsEnv) \
+  V(MathAbsLong, kStatic, kNeedsEnv) \
+  V(MathAbsInt, kStatic, kNeedsEnv) \
+  V(MathMinDoubleDouble, kStatic, kNeedsEnv) \
+  V(MathMinFloatFloat, kStatic, kNeedsEnv) \
+  V(MathMinLongLong, kStatic, kNeedsEnv) \
+  V(MathMinIntInt, kStatic, kNeedsEnv) \
+  V(MathMaxDoubleDouble, kStatic, kNeedsEnv) \
+  V(MathMaxFloatFloat, kStatic, kNeedsEnv) \
+  V(MathMaxLongLong, kStatic, kNeedsEnv) \
+  V(MathMaxIntInt, kStatic, kNeedsEnv) \
+  V(MathSqrt, kStatic, kNeedsEnv) \
+  V(MathCeil, kStatic, kNeedsEnv) \
+  V(MathFloor, kStatic, kNeedsEnv) \
+  V(MathRint, kStatic, kNeedsEnv) \
+  V(MathRoundDouble, kStatic, kNeedsEnv) \
+  V(MathRoundFloat, kStatic, kNeedsEnv) \
+  V(SystemArrayCopyChar, kStatic, kNeedsEnv) \
+  V(ThreadCurrentThread, kStatic, kNeedsEnv) \
+  V(MemoryPeekByte, kStatic, kNeedsEnv) \
+  V(MemoryPeekIntNative, kStatic, kNeedsEnv) \
+  V(MemoryPeekLongNative, kStatic, kNeedsEnv) \
+  V(MemoryPeekShortNative, kStatic, kNeedsEnv) \
+  V(MemoryPokeByte, kStatic, kNeedsEnv) \
+  V(MemoryPokeIntNative, kStatic, kNeedsEnv) \
+  V(MemoryPokeLongNative, kStatic, kNeedsEnv) \
+  V(MemoryPokeShortNative, kStatic, kNeedsEnv) \
+  V(StringCharAt, kDirect, kNeedsEnv) \
+  V(StringCompareTo, kDirect, kNeedsEnv) \
+  V(StringGetCharsNoCheck, kDirect, kNeedsEnv) \
+  V(StringIndexOf, kDirect, kNeedsEnv) \
+  V(StringIndexOfAfter, kDirect, kNeedsEnv) \
+  V(StringNewStringFromBytes, kStatic, kNeedsEnv) \
+  V(StringNewStringFromChars, kStatic, kNeedsEnv) \
+  V(StringNewStringFromString, kStatic, kNeedsEnv) \
+  V(UnsafeCASInt, kDirect, kNeedsEnv) \
+  V(UnsafeCASLong, kDirect, kNeedsEnv) \
+  V(UnsafeCASObject, kDirect, kNeedsEnv) \
+  V(UnsafeGet, kDirect, kNeedsEnv) \
+  V(UnsafeGetVolatile, kDirect, kNeedsEnv) \
+  V(UnsafeGetObject, kDirect, kNeedsEnv) \
+  V(UnsafeGetObjectVolatile, kDirect, kNeedsEnv) \
+  V(UnsafeGetLong, kDirect, kNeedsEnv) \
+  V(UnsafeGetLongVolatile, kDirect, kNeedsEnv) \
+  V(UnsafePut, kDirect, kNeedsEnv) \
+  V(UnsafePutOrdered, kDirect, kNeedsEnv) \
+  V(UnsafePutVolatile, kDirect, kNeedsEnv) \
+  V(UnsafePutObject, kDirect, kNeedsEnv) \
+  V(UnsafePutObjectOrdered, kDirect, kNeedsEnv) \
+  V(UnsafePutObjectVolatile, kDirect, kNeedsEnv) \
+  V(UnsafePutLong, kDirect, kNeedsEnv) \
+  V(UnsafePutLongOrdered, kDirect, kNeedsEnv) \
+  V(UnsafePutLongVolatile, kDirect, kNeedsEnv) \
+  V(ReferenceGetReferent, kDirect, kNeedsEnv)
 
 #endif  // ART_COMPILER_OPTIMIZING_INTRINSICS_LIST_H_
 #undef ART_COMPILER_OPTIMIZING_INTRINSICS_LIST_H_   // #define is only for lint.

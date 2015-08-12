@@ -671,6 +671,12 @@ enum WideKind {
 };
 std::ostream& operator<<(std::ostream& os, const WideKind& kind);
 
+enum IntrinsicNeedsEnvironment {
+  kNoEnv,        // Intrinsic does not require an environment.
+  kNeedsEnv      // Intrinsic requires an environment.
+};
+std::ostream& operator<<(std::ostream& os, const IntrinsicNeedsEnvironment& kind);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_DEX_COMPILER_ENUMS_H_

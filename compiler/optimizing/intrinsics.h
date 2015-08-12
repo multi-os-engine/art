@@ -54,7 +54,7 @@ class IntrinsicVisitor : public ValueObject {
     switch (invoke->GetIntrinsic()) {
       case Intrinsics::kNone:
         return;
-#define OPTIMIZING_INTRINSICS(Name, IsStatic) \
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnv) \
       case Intrinsics::k ## Name:             \
         Visit ## Name(invoke);                \
         return;
@@ -69,7 +69,7 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
 
   // Define visitor methods.
 
-#define OPTIMIZING_INTRINSICS(Name, IsStatic)                    \
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnv)                    \
   virtual void Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) { \
   }
 #include "intrinsics_list.h"

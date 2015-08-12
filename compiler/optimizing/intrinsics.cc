@@ -18,6 +18,7 @@
 
 #include "dex/quick/dex_file_method_inliner.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
+#include "dex/compiler_enums.h"
 #include "driver/compiler_driver.h"
 #include "invoke_type.h"
 #include "nodes.h"
@@ -31,7 +32,7 @@ static inline InvokeType GetIntrinsicInvokeType(Intrinsics i) {
   switch (i) {
     case Intrinsics::kNone:
       return kInterface;  // Non-sensical for intrinsic.
-#define OPTIMIZING_INTRINSICS(Name, IsStatic) \
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnv) \
     case Intrinsics::k ## Name:               \
       return IsStatic;
 #include "intrinsics_list.h"
@@ -42,7 +43,21 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
   return kInterface;
 }
 
-
+// Function that returns whether an intrinsic needs an environment or not.
+static inline bool IntrinsicNeedsEnv(Intrinsics i) {
+  switch (i) {
+    case Intrinsics::kNone:
+      return kNeedsEnv;  // Non-sensical for intrinsic.
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnv) \
+    case Intrinsics::k ## Name:               \
+      return NeedsEnv;
+#include "intrinsics_list.h"
+INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
+#undef INTRINSICS_LIST
+#undef OPTIMIZING_INTRINSICS
+  }
+  return kNeedsEnv;
+}
 
 static Primitive::Type GetType(uint64_t data, bool is_op_size) {
   if (is_op_size) {
@@ -347,7 +362,7 @@ void IntrinsicsRecognizer::Run() {
                            << intrinsic << " for "
                            << PrettyMethod(invoke->GetDexMethodIndex(), invoke->GetDexFile());
             } else {
-              invoke->SetIntrinsic(intrinsic);
+              invoke->SetIntrinsic(intrinsic, IntrinsicNeedsEnv(intrinsic));
             }
           }
         }
@@ -361,7 +376,7 @@ std::ostream& operator<<(std::ostream& os, const Intrinsics& intrinsic) {
     case Intrinsics::kNone:
       os << "None";
       break;
-#define OPTIMIZING_INTRINSICS(Name, IsStatic) \
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnv) \
     case Intrinsics::k ## Name: \
       os << # Name; \
       break;

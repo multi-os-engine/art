@@ -2765,7 +2765,7 @@ class HLongConstant : public HConstant {
 };
 
 enum class Intrinsics {
-#define OPTIMIZING_INTRINSICS(Name, IsStatic) k ## Name,
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnv) k ## Name,
 #include "intrinsics_list.h"
   kNone,
   INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
@@ -2780,7 +2780,7 @@ class HInvoke : public HInstruction {
 
   // Runtime needs to walk the stack, so Dex -> Dex calls need to
   // know their environment.
-  bool NeedsEnvironment() const OVERRIDE { return true; }
+  bool NeedsEnvironment() const OVERRIDE { return needs_env_; }
 
   void SetArgumentAt(size_t index, HInstruction* argument) {
     SetRawInputAt(index, argument);
@@ -2805,8 +2805,9 @@ class HInvoke : public HInstruction {
     return intrinsic_;
   }
 
-  void SetIntrinsic(Intrinsics intrinsic) {
+  void SetIntrinsic(Intrinsics intrinsic, bool needs_env) {
     intrinsic_ = intrinsic;
+    needs_env_ = needs_env;
   }
 
   bool IsFromInlinedInvoke() const {
@@ -2832,7 +2833,8 @@ class HInvoke : public HInstruction {
       dex_pc_(dex_pc),
       dex_method_index_(dex_method_index),
       original_invoke_type_(original_invoke_type),
-      intrinsic_(Intrinsics::kNone) {
+      intrinsic_(Intrinsics::kNone),
+      needs_env_(kNeedsEnv) {
     uint32_t number_of_inputs = number_of_arguments + number_of_other_inputs;
     inputs_.SetSize(number_of_inputs);
   }
@@ -2849,6 +2851,7 @@ class HInvoke : public HInstruction {
   const uint32_t dex_method_index_;
   const InvokeType original_invoke_type_;
   Intrinsics intrinsic_;
+  bool needs_env_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HInvoke);
