@@ -239,12 +239,6 @@ bool HInliner::TryInline(HInvoke* invoke_instruction, uint32_t method_index) con
     return false;
   }
 
-  if (resolved_method->ShouldNotInline()) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
-                   << " was already flagged as non inlineable";
-    return false;
-  }
-
   if (invoke_instruction->IsInvokeStaticOrDirect() &&
       invoke_instruction->AsInvokeStaticOrDirect()->IsStaticWithImplicitClinitCheck()) {
     // Case of a static method that cannot be inlined because it implicitly
@@ -340,15 +334,38 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
                                                   compiler_driver_->GetInstructionSet())) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                    << " cannot be inlined because of the register allocator";
-    resolved_method->SetShouldNotInline();
     return false;
   }
 
   if (!callee_graph->TryBuildingSsa()) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                    << " could not be transformed to SSA";
-    resolved_method->SetShouldNotInline();
     return false;
+  }
+
+  size_t parameter_index = 0;
+  for (HInstructionIterator instructions(callee_graph->GetEntryBlock()->GetInstructions());
+       !instructions.Done();
+       instructions.Advance()) {
+    HInstruction* current = instructions.Current();
+    if (current->IsParameterValue()) {
+      HInstruction* argument = invoke_instruction->InputAt(parameter_index++);
+      if (argument->IsNullConstant()) {
+        current->ReplaceWith(callee_graph->GetNullConstant());
+      } else if (argument->IsIntConstant()) {
+        current->ReplaceWith(callee_graph->GetIntConstant(argument->AsIntConstant()->GetValue()));
+      } else if (argument->IsLongConstant()) {
+        current->ReplaceWith(callee_graph->GetLongConstant(argument->AsLongConstant()->GetValue()));
+      } else if (argument->IsFloatConstant()) {
+        current->ReplaceWith(callee_graph->GetFloatConstant(argument->AsFloatConstant()->GetValue()));
+      } else if (argument->IsDoubleConstant()) {
+        current->ReplaceWith(
+            callee_graph->GetDoubleConstant(argument->AsDoubleConstant()->GetValue()));
+      } else if (argument->GetType() == Primitive::kPrimNot) {
+        current->SetReferenceTypeInfo(argument->GetReferenceTypeInfo());
+        current->AsParameterValue()->SetCanBeNull(argument->CanBeNull());
+      }
+    }
   }
 
   // Run simple optimizations on the graph.
@@ -360,10 +377,10 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
 
   HOptimization* optimizations[] = {
     &intrinsics,
-    &dce,
-    &fold,
     &type_propagation,
     &simplify,
+    &dce,
+    &fold,
   };
 
   for (size_t i = 0; i < arraysize(optimizations); ++i) {
@@ -389,7 +406,6 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   if (exit_block == nullptr) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                    << " could not be inlined because it has an infinite loop";
-    resolved_method->SetShouldNotInline();
     return false;
   }
 
@@ -403,7 +419,6 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   if (has_throw_predecessor) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                    << " could not be inlined because one branch always throws";
-    resolved_method->SetShouldNotInline();
     return false;
   }
 
@@ -414,7 +429,6 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     if (block->IsLoopHeader()) {
       VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                      << " could not be inlined because it contains a loop";
-      resolved_method->SetShouldNotInline();
       return false;
     }
 
@@ -428,7 +442,6 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
         // resolution conflict is currently too high.
         VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                        << " could not be inlined because it has an interface call.";
-        resolved_method->SetShouldNotInline();
         return false;
       }
 

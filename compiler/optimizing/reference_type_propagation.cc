@@ -167,6 +167,9 @@ static HBoundType* CreateBoundType(ArenaAllocator* arena,
     bound_type->SetReferenceTypeInfo(
         ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ false));
   }
+  if (upper_can_be_null) {
+    bound_type->SetCanBeNull(obj->CanBeNull());
+  }
   return bound_type;
 }
 
@@ -403,7 +406,8 @@ void RTPVisitor::VisitNewArray(HNewArray* instr) {
 }
 
 void RTPVisitor::VisitParameterValue(HParameterValue* instr) {
-  if (instr->GetType() == Primitive::kPrimNot) {
+  ScopedObjectAccess soa(Thread::Current());
+  if (instr->GetType() == Primitive::kPrimNot && !instr->GetReferenceTypeInfo().IsValid()) {
     // TODO: parse the signature and add precise types for the parameters.
     SetClassAsTypeInfo(instr, nullptr, /* is_exact */ false);
   }
