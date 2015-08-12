@@ -92,7 +92,33 @@ static bool LocationToFilename(const std::string& location, InstructionSet isa,
   }
 }
 
-bool PatchOat::Patch(const std::string& image_location, off_t delta,
+template <typename ElfFileImpl>
+static bool ReadOatBaseDelta(ElfFileImpl* oat_file, off_t* delta, std::string* error_msg) {
+  auto rodata_sec = oat_file->FindSectionByName(".rodata");
+  if (rodata_sec == nullptr) {
+    return false;
+  }
+  OatHeader* oat_header = reinterpret_cast<OatHeader*>(oat_file->Begin() + rodata_sec->sh_offset);
+  if (!oat_header->IsValid()) {
+    *error_msg = "Elf file has an invalid oat header";
+    return false;
+  }
+  *delta = oat_header->GetImagePatchDelta();
+  return true;
+}
+
+
+static bool ReadOatBaseDelta(ElfFile* elf_file, off_t* delta, std::string* error_msg) {
+  CHECK(delta != nullptr);
+  CHECK(elf_file != nullptr);
+  if (elf_file->Is64Bit()) {
+    return ReadOatBaseDelta<ElfFileImpl64>(elf_file->GetImpl64(), delta, error_msg);
+  } else {
+    return ReadOatBaseDelta<ElfFileImpl32>(elf_file->GetImpl32(), delta, error_msg);
+  }
+}
+
+bool PatchOat::Patch(const std::string& image_location, off_t delta, bool match_delta,
                      File* output_image, InstructionSet isa,
                      TimingLogger* timings) {
   CHECK(Runtime::Current() == nullptr);
@@ -161,8 +187,9 @@ bool PatchOat::Patch(const std::string& image_location, off_t delta,
   }
   gc::space::ImageSpace* ispc = Runtime::Current()->GetHeap()->GetImageSpace();
 
+  off_t current_delta = (match_delta) ? image_header.GetPatchDelta() : 0;
   PatchOat p(isa, image.release(), ispc->GetLiveBitmap(), ispc->GetMemMap(),
-             delta, timings);
+             delta - current_delta, timings);
   t.NewTiming("Patching files");
   if (!p.PatchImage()) {
     LOG(ERROR) << "Failed to patch image file " << input_image->GetPath();
@@ -177,8 +204,8 @@ bool PatchOat::Patch(const std::string& image_location, off_t delta,
 }
 
 bool PatchOat::Patch(File* input_oat, const std::string& image_location, off_t delta,
-                     File* output_oat, File* output_image, InstructionSet isa,
-                     TimingLogger* timings,
+                     bool match_delta, File* output_oat, File* output_image,
+                     InstructionSet isa, TimingLogger* timings,
                      bool output_oat_opened_from_fd,
                      bool new_oat_out) {
   CHECK(Runtime::Current() == nullptr);
@@ -284,8 +311,16 @@ bool PatchOat::Patch(File* input_oat, const std::string& image_location, off_t d
     CHECK(is_oat_pic == NOT_PIC);
   }
 
+  off_t current_delta = 0;
+  if (match_delta) {
+    if (!ReadOatBaseDelta(elf.get(), &current_delta, &error_msg)) {
+      LOG(ERROR) << "Unable to get current delta: " << error_msg;
+      return false;
+    }
+    CHECK_EQ(current_delta, image_header.GetPatchDelta());
+  }
   PatchOat p(isa, elf.release(), image.release(), ispc->GetLiveBitmap(), ispc->GetMemMap(),
-             delta, timings);
+             delta - current_delta, timings);
   t.NewTiming("Patching files");
   if (!skip_patching_oat && !p.PatchElf()) {
     LOG(ERROR) << "Failed to patch oat file " << input_oat->GetPath();
@@ -675,7 +710,7 @@ void PatchOat::FixupMethod(ArtMethod* object, ArtMethod* copy) {
       object->GetEntryPointFromJniPtrSize(pointer_size)), pointer_size);
 }
 
-bool PatchOat::Patch(File* input_oat, off_t delta, File* output_oat, TimingLogger* timings,
+bool PatchOat::Patch(File* input_oat, off_t delta, bool match_delta, File* output_oat, TimingLogger* timings,
                      bool output_oat_opened_from_fd, bool new_oat_out) {
   CHECK(input_oat != nullptr);
   CHECK(output_oat != nullptr);
@@ -706,7 +741,14 @@ bool PatchOat::Patch(File* input_oat, off_t delta, File* output_oat, TimingLogge
     CHECK(is_oat_pic == NOT_PIC);
   }
 
-  PatchOat p(elf.release(), delta, timings);
+  off_t current_delta = 0;
+  if (match_delta) {
+    if (!ReadOatBaseDelta(elf.get(), &current_delta, &error_msg)) {
+      LOG(ERROR) << "Unable to get current delta: " << error_msg;
+      return false;
+    }
+  }
+  PatchOat p(elf.release(), delta - current_delta, timings);
   t.NewTiming("Patch Oat file");
   if (!p.PatchElf()) {
     return false;
@@ -991,6 +1033,7 @@ static int patchoat(int argc, char **argv) {
   bool orig_base_offset_set = false;
   off_t base_delta = 0;
   bool base_delta_set = false;
+  bool match_delta = false;
   std::string patched_image_filename;
   std::string patched_image_location;
   bool dump_timings = kIsDebugBuild;
@@ -1190,6 +1233,7 @@ static int patchoat(int argc, char **argv) {
       base_delta = base_offset - orig_base_offset;
     } else if (!patched_image_filename.empty()) {
       base_delta_set = true;
+      match_delta = true;
       std::string error_msg;
       if (!ReadBaseDelta(patched_image_filename.c_str(), &base_delta, &error_msg)) {
         Usage(error_msg.c_str(), patched_image_filename.c_str());
@@ -1327,7 +1371,7 @@ static int patchoat(int argc, char **argv) {
   bool ret;
   if (have_image_files && have_oat_files) {
     TimingLogger::ScopedTiming pt("patch image and oat", &timings);
-    ret = PatchOat::Patch(input_oat.get(), input_image_location, base_delta,
+    ret = PatchOat::Patch(input_oat.get(), input_image_location, base_delta, match_delta,
                           output_oat.get(), output_image.get(), isa, &timings,
                           output_oat_fd >= 0,  // was it opened from FD?
                           new_oat_out);
@@ -1337,13 +1381,14 @@ static int patchoat(int argc, char **argv) {
     ret = ret && FinishFile(output_oat.get(), ret);
   } else if (have_oat_files) {
     TimingLogger::ScopedTiming pt("patch oat", &timings);
-    ret = PatchOat::Patch(input_oat.get(), base_delta, output_oat.get(), &timings,
+    ret = PatchOat::Patch(input_oat.get(), base_delta, match_delta, output_oat.get(), &timings,
                           output_oat_fd >= 0,  // was it opened from FD?
                           new_oat_out);
     ret = ret && FinishFile(output_oat.get(), ret);
   } else if (have_image_files) {
     TimingLogger::ScopedTiming pt("patch image", &timings);
-    ret = PatchOat::Patch(input_image_location, base_delta, output_image.get(), isa, &timings);
+    ret = PatchOat::Patch(input_image_location, base_delta, match_delta, output_image.get(), isa,
+                          &timings);
     ret = ret && FinishFile(output_image.get(), ret);
   } else {
     CHECK(false);
