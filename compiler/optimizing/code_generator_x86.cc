@@ -321,7 +321,7 @@ class TypeCheckSlowPathX86 : public SlowPathCodeX86 {
                                  this);
     }
 
-    RecordPcInfo(codegen, instruction_, dex_pc_);
+    codegen->RecordPcInfo(instruction_, dex_pc_, this);
     if (instruction_->IsInstanceOf()) {
       x86_codegen->Move32(locations->Out(), Location::RegisterLocation(EAX));
     }
