@@ -44,7 +44,6 @@
 #include "gvn.h"
 #include "inliner.h"
 #include "instruction_simplifier.h"
-#include "instruction_simplifier_arm64.h"
 #include "intrinsics.h"
 #include "licm.h"
 #include "jni/quick/jni_compiler.h"
