@@ -43,6 +43,10 @@ class SideEffectsAnalysis : public HOptimization {
  private:
   void UpdateLoopEffects(HLoopInformation* info, SideEffects effects);
 
+  // Instruction side effects might be able to be replaced by a more accurate
+  // one with some optimizations being applied.
+  void UpdateInstructionEffects(HInstruction* instruction);
+
   HGraph* graph_;
 
   // Checked in debug build, to ensure the pass has been run prior to

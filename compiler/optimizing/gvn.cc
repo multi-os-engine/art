@@ -329,7 +329,6 @@ class GlobalValueNumberer : public ValueObject {
 
 void GlobalValueNumberer::Run() {
   DCHECK(side_effects_.HasRun());
-  sets_.Put(graph_->GetEntryBlock()->GetBlockId(), new (allocator_) ValueSet(allocator_));
 
   // Use the reverse post order to ensure the non back-edge predecessors of a block are
   // visited before the block itself.

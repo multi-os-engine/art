@@ -17,6 +17,12 @@
 public class Main {
   public static void main(String[] args) {
     System.out.println(foo(3, 4));
+
+    field_get();
+    System.out.println(a + b + c);
+
+    int arr[] = array_get(new int[]{4, 5, 6});
+    System.out.println(arr[0] + arr[1] + arr[2]);
   }
 
   /// CHECK-START: int Main.foo(int, int) GVN (before)
@@ -38,4 +44,35 @@ public class Main {
   public static long bar(int i) {
     return i;
   }
+
+  /// CHECK-START: void Main.field_get() GVN (before)
+  /// CHECK: StaticFieldGet
+  /// CHECK: StaticFieldGet
+
+  /// CHECK-START: void Main.field_get() GVN (after)
+  /// CHECK: StaticFieldGet
+  /// CHECK-NOT: StaticFieldGet
+
+  public static void field_get() {
+      b = a;
+      c = a;
+  }
+
+  /// CHECK-START: int[] Main.array_get(int[]) GVN (before)
+  /// CHECK: ArrayGet
+  /// CHECK: ArrayGet
+
+  /// CHECK-START: int[] Main.array_get(int[]) GVN (after)
+  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
+
+  public static int[] array_get(int arr[]) {
+      arr[1] = arr[0];
+      arr[2] = arr[0];
+      return arr;
+  }
+
+  public static int a = 1;
+  public static int b = 2;
+  public static int c = 3;
 }
