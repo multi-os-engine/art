@@ -360,6 +360,10 @@ class CodeGeneratorARM64 : public CodeGenerator {
 
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp);
 
+  std::vector<HOptimization*> ListArchOptimizations(
+      HGraph* graph ATTRIBUTE_UNUSED,
+      OptimizingCompilerStats* stats ATTRIBUTE_UNUSED) const OVERRIDE;
+
  private:
   // Labels for each block that will be compiled.
   vixl::Label* block_labels_;
