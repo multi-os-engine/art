@@ -1309,18 +1309,6 @@ class Heap {
   friend class VerifyObjectVisitor;
   friend class space::SpaceTest;
 
-  class AllocationTimer {
-   public:
-    ALWAYS_INLINE AllocationTimer(Heap* heap, mirror::Object** allocated_obj_ptr);
-    ALWAYS_INLINE ~AllocationTimer();
-   private:
-    Heap* const heap_;
-    mirror::Object** allocated_obj_ptr_;
-    const uint64_t allocation_start_time_;
-
-    DISALLOW_IMPLICIT_CONSTRUCTORS(AllocationTimer);
-  };
-
   DISALLOW_IMPLICIT_CONSTRUCTORS(Heap);
 };
 
