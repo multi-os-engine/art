@@ -23,11 +23,14 @@
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
+#include "gvn.h"
+#include "instruction_simplifier_arm64.h"
 #include "intrinsics.h"
 #include "intrinsics_arm64.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
 #include "offsets.h"
+#include "side_effects_analysis.h"
 #include "thread.h"
 #include "utils/arm64/assembler_arm64.h"
 #include "utils/assembler.h"
@@ -1457,6 +1460,21 @@ void InstructionCodeGeneratorARM64::VisitAnd(HAnd* instruction) {
   HandleBinaryOp(instruction);
 }
 
+void LocationsBuilderARM64::VisitArm64IntermediateAddress(HArm64IntermediateAddress* instruction) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, ARM64EncodableConstantOrRegister(instruction->GetOffset(), instruction));
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorARM64::VisitArm64IntermediateAddress(
+    HArm64IntermediateAddress* instruction) {
+  __ Add(OutputRegister(instruction),
+         InputRegisterAt(instruction, 0),
+         Operand(InputOperandAt(instruction, 1)));
+}
+
 void LocationsBuilderARM64::VisitArrayGet(HArrayGet* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
@@ -1470,14 +1488,16 @@ void LocationsBuilderARM64::VisitArrayGet(HArrayGet* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::VisitArrayGet(HArrayGet* instruction) {
-  LocationSummary* locations = instruction->GetLocations();
   Primitive::Type type = instruction->GetType();
   Register obj = InputRegisterAt(instruction, 0);
-  Location index = locations->InAt(1);
+  Location index = instruction->GetLocations()->InAt(1);
   size_t offset = mirror::Array::DataOffset(Primitive::ComponentSize(type)).Uint32Value();
   MemOperand source = HeapOperand(obj);
+  CPURegister dest = OutputCPURegister(instruction);
+
   MacroAssembler* masm = GetVIXLAssembler();
   UseScratchRegisterScope temps(masm);
+  // Block pools between `Load` and `MaybeRecordImplicitNullCheck`.
   BlockPoolsScope block_pools(masm);
 
   if (index.IsConstant()) {
@@ -1485,15 +1505,22 @@ void InstructionCodeGeneratorARM64::VisitArrayGet(HArrayGet* instruction) {
     source = HeapOperand(obj, offset);
   } else {
     Register temp = temps.AcquireSameSizeAs(obj);
-    __ Add(temp, obj, offset);
+    if (instruction->GetArray()->IsArm64IntermediateAddress()) {
+      // We do not need to compute the intermediate address from the array: the
+      // input instruction has done it already. See the comment in
+      // `InstructionSimplifierArm64::TryExtractArrayAccessAddress()`.
+      temp = obj;
+    } else {
+      __ Add(temp, obj, offset);
+    }
     source = HeapOperand(temp, XRegisterFrom(index), LSL, Primitive::ComponentSizeShift(type));
   }
 
-  codegen_->Load(type, OutputCPURegister(instruction), source);
+  codegen_->Load(type, dest, source);
   codegen_->MaybeRecordImplicitNullCheck(instruction);
 
-  if (type == Primitive::kPrimNot) {
-    GetAssembler()->MaybeUnpoisonHeapReference(OutputCPURegister(instruction).W());
+  if (instruction->GetType() == Primitive::kPrimNot) {
+    GetAssembler()->MaybeUnpoisonHeapReference(dest.W());
   }
 }
 
@@ -1536,6 +1563,9 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
   LocationSummary* locations = instruction->GetLocations();
   bool needs_runtime_call = locations->WillCall();
 
+  // Only the real array must be passed to a runtime call.
+  DCHECK(!needs_runtime_call || !instruction->GetArray()->IsArm64IntermediateAddress());
+
   if (needs_runtime_call) {
     // Note: if heap poisoning is enabled, pAputObject takes cares
     // of poisoning the reference.
@@ -1550,6 +1580,8 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
     size_t offset = mirror::Array::DataOffset(Primitive::ComponentSize(value_type)).Uint32Value();
     MemOperand destination = HeapOperand(obj);
     MacroAssembler* masm = GetVIXLAssembler();
+
+    // Block pools between `Store` and `MaybeRecordImplicitNullCheck`.
     BlockPoolsScope block_pools(masm);
     {
       // We use a block to end the scratch scope before the write barrier, thus
@@ -1569,7 +1601,14 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
         destination = HeapOperand(obj, offset);
       } else {
         Register temp = temps.AcquireSameSizeAs(obj);
-        __ Add(temp, obj, offset);
+        if (instruction->GetArray()->IsArm64IntermediateAddress()) {
+          // We do not need to compute the intermediate address from the array: the
+          // input instruction has done it already. See the comment in
+          // `InstructionSimplifierArm64::TryExtractArrayAccessAddress()`.
+          temp = obj;
+        } else {
+          __ Add(temp, obj, offset);
+        }
         destination = HeapOperand(temp,
                                   XRegisterFrom(index),
                                   LSL,
@@ -2418,6 +2457,22 @@ void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invok
   }
 
   DCHECK(!IsLeafMethod());
+}
+
+std::vector<HOptimization*> CodeGeneratorARM64::ListArchOptimizations(
+    HGraph* graph, OptimizingCompilerStats* stats) const {
+  ArenaAllocator* arena = graph->GetArena();
+  arm64::InstructionSimplifierArm64* arch_simplifier =
+      new (arena) arm64::InstructionSimplifierArm64(graph, stats);
+  SideEffectsAnalysis* side_effects = new (arena) SideEffectsAnalysis(graph);
+  GVNOptimization* gvn = new (arena) GVNOptimization(graph, *side_effects, "GVN_after_arch");
+
+  std::vector<HOptimization*> list;
+  list.push_back(arch_simplifier);
+  list.push_back(side_effects);
+  list.push_back(gvn);
+
+  return list;
 }
 
 void InstructionCodeGeneratorARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {

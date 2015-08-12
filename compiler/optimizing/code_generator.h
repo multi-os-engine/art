@@ -26,6 +26,7 @@
 #include "locations.h"
 #include "memory_region.h"
 #include "nodes.h"
+#include "optimization.h"
 #include "stack_map_stream.h"
 
 namespace art {
@@ -354,6 +355,12 @@ class CodeGenerator {
 
   void SetDisassemblyInformation(DisassemblyInformation* info) { disasm_info_ = info; }
   DisassemblyInformation* GetDisassemblyInformation() const { return disasm_info_; }
+
+  virtual std::vector<HOptimization*> ListArchOptimizations(
+      HGraph* graph ATTRIBUTE_UNUSED, OptimizingCompilerStats* stats ATTRIBUTE_UNUSED) const {
+    // Return an empty list.
+    return std::vector<HOptimization*>();
+  }
 
  protected:
   CodeGenerator(HGraph* graph,

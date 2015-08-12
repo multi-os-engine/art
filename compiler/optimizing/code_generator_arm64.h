@@ -352,13 +352,17 @@ class CodeGeneratorARM64 : public CodeGenerator {
                      uint32_t dex_pc,
                      SlowPathCode* slow_path);
 
-  ParallelMoveResolverARM64* GetMoveResolver() { return &move_resolver_; }
+  ParallelMoveResolverARM64* GetMoveResolver() OVERRIDE { return &move_resolver_; }
 
   bool NeedsTwoRegisters(Primitive::Type type ATTRIBUTE_UNUSED) const OVERRIDE {
     return false;
   }
 
   void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp);
+
+  std::vector<HOptimization*> ListArchOptimizations(
+      HGraph* graph ATTRIBUTE_UNUSED,
+      OptimizingCompilerStats* stats ATTRIBUTE_UNUSED) const OVERRIDE;
 
  private:
   // Labels for each block that will be compiled.
