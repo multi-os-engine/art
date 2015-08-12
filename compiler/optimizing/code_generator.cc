@@ -150,6 +150,8 @@ void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
                            0, /* the baseline compiler does not have live registers at slow path */
                            GetGraph()->GetMaximumNumberOfOutVRegs()
                              + (is_64_bit ? 2 : 1) /* current method */,
+                           kForceReadBarrier || kUseReadBarrier,
+                             /* save parameter registers if use read barrier */
                            GetGraph()->GetBlocks());
   CompileInternal(allocator, /* is_baseline */ true);
 }
@@ -296,6 +298,7 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
                                              size_t maximum_number_of_live_core_registers,
                                              size_t maximum_number_of_live_fp_registers,
                                              size_t number_of_out_slots,
+                                             bool should_save_parameter_registers,
                                              const GrowableArray<HBasicBlock*>& block_order) {
   block_order_ = &block_order;
   DCHECK(block_order_->Get(0) == GetGraph()->GetEntryBlock());
@@ -303,6 +306,7 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
   first_register_slot_in_slow_path_ = (number_of_out_slots + number_of_spill_slots) * kVRegSize;
 
   if (number_of_spill_slots == 0
+      && !should_save_parameter_registers
       && !HasAllocatedCalleeSaveRegisters()
       && IsLeafMethod()
       && !RequiresCurrentMethod()) {
@@ -310,10 +314,13 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
     DCHECK_EQ(maximum_number_of_live_fp_registers, 0u);
     SetFrameSize(CallPushesPC() ? GetWordSize() : 0);
   } else {
+    size_t core_registers_to_save = should_save_parameter_registers ?
+        std::max(number_of_parameter_core_registers_, maximum_number_of_live_core_registers) :
+        maximum_number_of_live_core_registers;
     SetFrameSize(RoundUp(
         number_of_spill_slots * kVRegSize
         + number_of_out_slots * kVRegSize
-        + maximum_number_of_live_core_registers * GetWordSize()
+        + core_registers_to_save * GetWordSize()
         + maximum_number_of_live_fp_registers * GetFloatingPointSpillSlotSize()
         + FrameEntrySpillSize(),
         kStackAlignment));

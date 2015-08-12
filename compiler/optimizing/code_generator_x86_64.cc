@@ -553,6 +553,7 @@ CodeGeneratorX86_64::CodeGeneratorX86_64(HGraph* graph,
                       kNumberOfCpuRegisters,
                       kNumberOfFloatRegisters,
                       kNumberOfCpuRegisterPairs,
+                      kParameterCoreRegistersLength,
                       ComputeRegisterMask(reinterpret_cast<const int*>(kCoreCalleeSaves),
                                           arraysize(kCoreCalleeSaves))
                           | (1 << kFakeReturnRegister),
@@ -1708,7 +1709,8 @@ void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) 
     return;
   }
 
-  CpuRegister temp = invoke->GetLocations()->GetTemp(0).AsRegister<CpuRegister>();
+  Location temp_loc = invoke->GetLocations()->GetTemp(0);
+  CpuRegister temp = temp_loc.AsRegister<CpuRegister>();
   size_t method_offset = mirror::Class::EmbeddedVTableEntryOffset(
       invoke->GetVTableIndex(), kX86_64PointerSize).SizeValue();
   LocationSummary* locations = invoke->GetLocations();

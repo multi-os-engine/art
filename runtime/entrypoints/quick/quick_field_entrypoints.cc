@@ -22,6 +22,7 @@
 #include "mirror/class-inl.h"
 
 #include <stdint.h>
+#include <iostream>
 
 namespace art {
 
@@ -559,14 +560,21 @@ extern "C" int artSetObjInstanceFromCode(uint32_t field_idx, mirror::Object* obj
 
 // TODO: Currently the read barrier does not have a fast path. Ideally the slow path should only
 // take one parameter "ref", which is given by the fast path.
-extern "C" mirror::Object* artReadBarrierSlow(mirror::Object* ref ATTRIBUTE_UNUSED,
+extern "C" mirror::Object* artReadBarrierSlow(mirror::Object* ref,
                                               mirror::Object* obj, uint32_t offset) {
-  DCHECK(kUseReadBarrier);
+  // TODO: revert changes to this method if we want to use CC collector.
+  // DCHECK(kUseReadBarrier);
+  // std::cout << "In artReadBarrierSlow(), obj: " << obj << ", offset: " << offset << "\n";
+  // LOG(INFO) << "In artReadBarrierSlow(), obj: " << obj << ", offset: " << offset << "\n";
   uint8_t* raw_addr = reinterpret_cast<uint8_t*>(obj) + offset;
-  mirror::HeapReference<mirror::Object>* ref_addr =
-      reinterpret_cast<mirror::HeapReference<mirror::Object>*>(raw_addr);
-  return ReadBarrier::Barrier<mirror::Object, kWithReadBarrier, true>(obj, MemberOffset(offset),
-                                                                      ref_addr);
+  // mirror::HeapReference<mirror::Object>* ref_addr =
+  //    reinterpret_cast<mirror::HeapReference<mirror::Object>*>(raw_addr);
+  // return ReadBarrier::Barrier<mirror::Object, kWithReadBarrier, true>(obj, MemberOffset(offset),
+  //                                                                    ref_addr);
+  mirror::Object* result = *(reinterpret_cast<mirror::Object**>(raw_addr));
+  // This check is not completely reliable as the object could move between the two loads.
+  CHECK(ref == result);
+  return result;
 }
 
 }  // namespace art

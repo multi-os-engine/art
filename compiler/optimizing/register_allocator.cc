@@ -64,7 +64,8 @@ RegisterAllocator::RegisterAllocator(ArenaAllocator* allocator,
         blocked_fp_registers_(codegen->GetBlockedFloatingPointRegisters()),
         reserved_out_slots_(0),
         maximum_number_of_live_core_registers_(0),
-        maximum_number_of_live_fp_registers_(0) {
+        maximum_number_of_live_fp_registers_(0),
+        should_save_parameter_registers_(false) {
   static constexpr bool kIsBaseline = false;
   codegen->SetupBlockedRegisters(kIsBaseline);
   physical_core_register_intervals_.SetSize(codegen->GetNumberOfCoreRegisters());
@@ -299,6 +300,12 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
     } else if (input.IsPair()) {
       BlockRegister(input.ToLow(), position, position + 1);
       BlockRegister(input.ToHigh(), position, position + 1);
+    }
+  }
+
+  if (kForceReadBarrier || kUseReadBarrier) {
+    if (instruction->IsInvokeVirtual() || instruction->IsInvokeInterface()) {
+      should_save_parameter_registers_ = true;
     }
   }
 
@@ -1744,6 +1751,7 @@ void RegisterAllocator::Resolve() {
                                      maximum_number_of_live_core_registers_,
                                      maximum_number_of_live_fp_registers_,
                                      reserved_out_slots_,
+                                     should_save_parameter_registers_,
                                      codegen_->GetGraph()->GetLinearOrder());
 
   // Adjust the Out Location of instructions.
