@@ -355,6 +355,11 @@ class CodeGenerator {
   void SetDisassemblyInformation(DisassemblyInformation* info) { disasm_info_ = info; }
   DisassemblyInformation* GetDisassemblyInformation() const { return disasm_info_; }
 
+  virtual std::vector<HOptimization*> ListArchOptimizations(
+      HGraph* graph ATTRIBUTE_UNUSED, OptimizingCompilerStats* stats ATTRIBUTE_UNUSED) const {
+    return {};
+  }
+
  protected:
   CodeGenerator(HGraph* graph,
                 size_t number_of_core_registers,

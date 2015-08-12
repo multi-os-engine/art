@@ -23,11 +23,14 @@
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
+#include "gvn.h"
+#include "instruction_simplifier_arm64.h"
 #include "intrinsics.h"
 #include "intrinsics_arm64.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
 #include "offsets.h"
+#include "side_effects_analysis.h"
 #include "thread.h"
 #include "utils/arm64/assembler_arm64.h"
 #include "utils/assembler.h"
@@ -1439,6 +1442,23 @@ void InstructionCodeGeneratorARM64::HandleShift(HBinaryOperation* instr) {
     default:
       LOG(FATAL) << "Unexpected shift operation type " << type;
   }
+}
+
+std::vector<HOptimization*> CodeGeneratorARM64::ListArchOptimizations(
+    HGraph* graph, OptimizingCompilerStats* stats) const {
+  ArenaAllocator* arena = graph->GetArena();
+  arm64::InstructionSimplifierArm64* arch_simplifier =
+      new (arena) arm64::InstructionSimplifierArm64(graph, stats);
+  SideEffectsAnalysis* side_effects = new (arena) SideEffectsAnalysis(graph);
+  GVNOptimization* gvn = new (arena) GVNOptimization(graph, *side_effects, "GVN_after_arch");
+
+  std::vector<HOptimization*> list = {
+    arch_simplifier,
+    side_effects,
+    gvn
+  };
+
+  return list;
 }
 
 void LocationsBuilderARM64::VisitAdd(HAdd* instruction) {
