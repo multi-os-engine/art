@@ -1419,8 +1419,10 @@ void IntrinsicCodeGeneratorX86::VisitThreadCurrentThread(HInvoke* invoke) {
   GetAssembler()->fs()->movl(out, Address::Absolute(Thread::PeerOffset<kX86WordSize>()));
 }
 
-static void GenUnsafeGet(LocationSummary* locations, Primitive::Type type,
-                         bool is_volatile, X86Assembler* assembler) {
+static void GenUnsafeGet(HInvoke* invoke, Primitive::Type type,
+                         bool is_volatile, CodeGeneratorX86* codegen) {
+  X86Assembler* assembler = down_cast<X86Assembler*>(codegen->GetAssembler());
+  LocationSummary* locations = invoke->GetLocations();
   Register base = locations->InAt(1).AsRegister<Register>();
   Register offset = locations->InAt(2).AsRegisterPairLow<Register>();
   Location output = locations->Out();
@@ -1431,7 +1433,8 @@ static void GenUnsafeGet(LocationSummary* locations, Primitive::Type type,
       Register output_reg = output.AsRegister<Register>();
       __ movl(output_reg, Address(base, offset, ScaleFactor::TIMES_1, 0));
       if (type == Primitive::kPrimNot) {
-        __ MaybeUnpoisonHeapReference(output_reg);
+        codegen->GenerateReadBarrier(invoke, output, output, locations->InAt(1), 0U,
+                                     locations->InAt(2));
       }
       break;
     }
@@ -1461,8 +1464,13 @@ static void GenUnsafeGet(LocationSummary* locations, Primitive::Type type,
 
 static void CreateIntIntIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke,
                                           bool is_long, bool is_volatile) {
+  bool can_call = (kForceReadBarrier || kUseReadBarrier)
+     && (invoke->GetIntrinsic() == Intrinsics::kUnsafeGetObject
+         || invoke->GetIntrinsic() == Intrinsics::kUnsafeGetObjectVolatile);
   LocationSummary* locations = new (arena) LocationSummary(invoke,
-                                                           LocationSummary::kNoCall,
+                                                           can_call ?
+                                                               LocationSummary::kCallOnSlowPath :
+                                                               LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::NoLocation());        // Unused receiver.
   locations->SetInAt(1, Location::RequiresRegister());
@@ -1501,22 +1509,22 @@ void IntrinsicLocationsBuilderX86::VisitUnsafeGetObjectVolatile(HInvoke* invoke)
 
 
 void IntrinsicCodeGeneratorX86::VisitUnsafeGet(HInvoke* invoke) {
-  GenUnsafeGet(invoke->GetLocations(), Primitive::kPrimInt, false, GetAssembler());
+  GenUnsafeGet(invoke, Primitive::kPrimInt, false, codegen_);
 }
 void IntrinsicCodeGeneratorX86::VisitUnsafeGetVolatile(HInvoke* invoke) {
-  GenUnsafeGet(invoke->GetLocations(), Primitive::kPrimInt, true, GetAssembler());
+  GenUnsafeGet(invoke, Primitive::kPrimInt, true, codegen_);
 }
 void IntrinsicCodeGeneratorX86::VisitUnsafeGetLong(HInvoke* invoke) {
-  GenUnsafeGet(invoke->GetLocations(), Primitive::kPrimLong, false, GetAssembler());
+  GenUnsafeGet(invoke, Primitive::kPrimLong, false, codegen_);
 }
 void IntrinsicCodeGeneratorX86::VisitUnsafeGetLongVolatile(HInvoke* invoke) {
-  GenUnsafeGet(invoke->GetLocations(), Primitive::kPrimLong, true, GetAssembler());
+  GenUnsafeGet(invoke, Primitive::kPrimLong, true, codegen_);
 }
 void IntrinsicCodeGeneratorX86::VisitUnsafeGetObject(HInvoke* invoke) {
-  GenUnsafeGet(invoke->GetLocations(), Primitive::kPrimNot, false, GetAssembler());
+  GenUnsafeGet(invoke, Primitive::kPrimNot, false, codegen_);
 }
 void IntrinsicCodeGeneratorX86::VisitUnsafeGetObjectVolatile(HInvoke* invoke) {
-  GenUnsafeGet(invoke->GetLocations(), Primitive::kPrimNot, true, GetAssembler());
+  GenUnsafeGet(invoke, Primitive::kPrimNot, true, codegen_);
 }
 
 
@@ -1734,6 +1742,7 @@ static void GenCAS(Primitive::Type type, HInvoke* invoke, CodeGeneratorX86* code
   __ setb(kZero, out.AsRegister<Register>());
   __ movzxb(out.AsRegister<Register>(), out.AsRegister<ByteRegister>());
 
+  // TODO: Add read barrier for this, it looks a little different from other places.
   if (kPoisonHeapReferences && type == Primitive::kPrimNot) {
     Register value = locations->InAt(4).AsRegister<Register>();
     __ UnpoisonHeapReference(value);

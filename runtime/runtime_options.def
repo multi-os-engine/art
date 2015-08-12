@@ -82,7 +82,7 @@ RUNTIME_OPTIONS_KEY (bool,                ImageDex2Oat,                   true)
                                                         // kUseReadBarrier currently works with
                                                         // the interpreter only.
                                                         // TODO: make it work with the compiler.
-RUNTIME_OPTIONS_KEY (bool,                Interpret,                      kUseReadBarrier) // -Xint
+RUNTIME_OPTIONS_KEY (bool,                Interpret,                      false) // -Xint
                                                         // Disable the compiler for CC (for now).
 RUNTIME_OPTIONS_KEY (XGcOption,           GcOption)  // -Xgc:
 RUNTIME_OPTIONS_KEY (gc::space::LargeObjectSpaceType, \
