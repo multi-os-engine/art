@@ -18,6 +18,7 @@
 #define ART_RUNTIME_GC_SPACE_IMAGE_SPACE_H_
 
 #include "gc/accounting/space_bitmap.h"
+#include "image_assistant.h"
 #include "runtime.h"
 #include "space.h"
 
@@ -45,18 +46,6 @@ class ImageSpace : public MemMapSpace {
   // it is initialized.
   static ImageSpace* Create(const char* image, InstructionSet image_isa, std::string* error_msg)
       SHARED_REQUIRES(Locks::mutator_lock_);
-
-  // Reads the image header from the specified image location for the
-  // instruction set image_isa or dies trying.
-  static ImageHeader* ReadImageHeaderOrDie(const char* image_location,
-                                           InstructionSet image_isa);
-
-  // Reads the image header from the specified image location for the
-  // instruction set image_isa. Returns null on failure, with
-  // reason in error_msg.
-  static ImageHeader* ReadImageHeader(const char* image_location,
-                                      InstructionSet image_isa,
-                                      std::string* error_msg);
 
   // Give access to the OatFile.
   const OatFile* GetOatFile() const;
@@ -105,21 +94,6 @@ class ImageSpace : public MemMapSpace {
     return false;
   }
 
-  // Returns the filename of the image corresponding to
-  // requested image_location, or the filename where a new image
-  // should be written if one doesn't exist. Looks for a generated
-  // image in the specified location and then in the dalvik-cache.
-  //
-  // Returns true if an image was found, false otherwise.
-  static bool FindImageFilename(const char* image_location,
-                                InstructionSet image_isa,
-                                std::string* system_location,
-                                bool* has_system,
-                                std::string* data_location,
-                                bool* dalvik_cache_exists,
-                                bool* has_data,
-                                bool *is_global_cache);
-
  private:
   // Tries to initialize an ImageSpace from the given image path,
   // returning null on error.
@@ -130,6 +104,13 @@ class ImageSpace : public MemMapSpace {
   // the OatFile in /data/dalvik-cache if necessary.
   static ImageSpace* Init(const char* image_filename, const char* image_location,
                           bool validate_oat_file, std::string* error_msg)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Private helper to generate an image from scratch, It uses the given ImageAssistant to figure
+  // out where to put the image. This should only be called from Init.
+  static ImageSpace* GenerateAndLoadImage(const ImageAssistant& image_assistant,
+                                          const InstructionSet image_isa,
+                                          std::string* error_msg)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   OatFile* OpenOatFile(const char* image, std::string* error_msg) const

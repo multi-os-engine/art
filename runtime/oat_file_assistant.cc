@@ -34,6 +34,7 @@
 #include "gc/heap.h"
 #include "gc/space/image_space.h"
 #include "image.h"
+#include "image_assistant.h"
 #include "oat.h"
 #include "os.h"
 #include "profiler.h"
@@ -941,12 +942,14 @@ const OatFileAssistant::ImageInfo* OatFileAssistant::GetImageInfo() {
         cached_image_info_.oat_data_begin = reinterpret_cast<uintptr_t>(image_header.GetOatDataBegin());
         cached_image_info_.patch_delta = image_header.GetPatchDelta();
       } else {
-        std::unique_ptr<ImageHeader> image_header(
-            gc::space::ImageSpace::ReadImageHeaderOrDie(
-                cached_image_info_.location.c_str(), isa_));
-        cached_image_info_.oat_checksum = image_header->GetOatChecksum();
-        cached_image_info_.oat_data_begin = reinterpret_cast<uintptr_t>(image_header->GetOatDataBegin());
-        cached_image_info_.patch_delta = image_header->GetPatchDelta();
+        ImageAssistant image_assistant(cached_image_info_.location.c_str(), isa_);
+        ImageHeader image_header;
+        if (!image_assistant.GetImageInfo().GetImageHeader(&image_header)) {
+          LOG(FATAL) << "Unable to read image header " << cached_image_info_.location.c_str();
+        }
+        cached_image_info_.oat_checksum = image_header.GetOatChecksum();
+        cached_image_info_.oat_data_begin = reinterpret_cast<uintptr_t>(image_header.GetOatDataBegin());
+        cached_image_info_.patch_delta = image_header.GetPatchDelta();
       }
     }
     image_info_load_succeeded_ = (image_space != nullptr);
