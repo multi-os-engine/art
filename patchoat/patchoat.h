@@ -73,9 +73,6 @@ class PatchOat {
         delta_(delta), isa_(isa), timings_(timings) {}
   ~PatchOat() {}
 
-  // Was the .art image at image_path made with --compile-pic ?
-  static bool IsImagePic(const ImageHeader& image_header, const std::string& image_path);
-
   enum MaybePic {
       NOT_PIC,            // Code not pic. Patch as usual.
       PIC,                // Code was pic. Create symlink; skip OAT patching.

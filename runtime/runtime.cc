@@ -70,6 +70,7 @@
 #include "gc/space/space-inl.h"
 #include "handle_scope-inl.h"
 #include "image.h"
+#include "image_assistant.h"
 #include "instrumentation.h"
 #include "intern_table.h"
 #include "interpreter/interpreter.h"
@@ -716,32 +717,22 @@ void Runtime::StartDaemonThreads() {
   VLOG(startup) << "Runtime::StartDaemonThreads exiting";
 }
 
+// This function is used to open the dex files associated with an image if the loading of that image
+// fails (for example due to lack of space preventing relocation). This will use the image location
+// to figure out the oat file location and pull it apart to get at the embedded dex files.
 static bool OpenDexFilesFromImage(const std::string& image_location,
                                   std::vector<std::unique_ptr<const DexFile>>* dex_files,
                                   size_t* failures) {
   DCHECK(dex_files != nullptr) << "OpenDexFilesFromImage: out-param is nullptr";
-  std::string system_filename;
-  bool has_system = false;
-  std::string cache_filename_unused;
-  bool dalvik_cache_exists_unused;
-  bool has_cache_unused;
-  bool is_global_cache_unused;
-  bool found_image = gc::space::ImageSpace::FindImageFilename(image_location.c_str(),
-                                                              kRuntimeISA,
-                                                              &system_filename,
-                                                              &has_system,
-                                                              &cache_filename_unused,
-                                                              &dalvik_cache_exists_unused,
-                                                              &has_cache_unused,
-                                                              &is_global_cache_unused);
-  *failures = 0;
-  if (!found_image || !has_system) {
+  ImageInfo info = ImageAssistant(image_location, kRuntimeISA).GetSystemImageInfo();
+  if (!info.IsImageValid()) {
     return false;
   }
   std::string error_msg;
   // We are falling back to non-executable use of the oat file because patching failed, presumably
   // due to lack of space.
-  std::string oat_filename = ImageHeader::GetOatLocationFromImageLocation(system_filename.c_str());
+  std::string oat_filename =
+      ImageHeader::GetOatLocationFromImageLocation(info.GetFilename().c_str());
   std::string oat_location = ImageHeader::GetOatLocationFromImageLocation(image_location.c_str());
   std::unique_ptr<File> file(OS::OpenFileForReading(oat_filename.c_str()));
   if (file.get() == nullptr) {
@@ -775,6 +766,8 @@ static bool OpenDexFilesFromImage(const std::string& image_location,
 }
 
 
+// This will attempt to open the given dex files in order to run using interpretation when loading
+// the boot image and oat file fails.
 static size_t OpenDexFiles(const std::vector<std::string>& dex_filenames,
                            const std::vector<std::string>& dex_locations,
                            const std::string& image_location,
