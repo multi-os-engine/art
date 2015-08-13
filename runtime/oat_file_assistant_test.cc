@@ -55,7 +55,6 @@ class OatFileAssistantTest : public CommonRuntimeTest {
     odex_dir_ = odex_oat_dir_ + "/" + std::string(GetInstructionSetString(kRuntimeISA));
     ASSERT_EQ(0, mkdir(odex_dir_.c_str(), 0700));
 
-
     // Verify the environment is as we expect
     uint32_t checksum;
     std::string error_msg;

@@ -241,6 +241,9 @@ std::string GetDalvikCache(const char* subdir, bool create_if_absent = true);
 // Returns the dalvik-cache location, or dies trying. subdir will be
 // appended to the cache location.
 std::string GetDalvikCacheOrDie(const char* subdir, bool create_if_absent = true);
+// Attempts to create dalvik-cache at subdir, if it does not already exit. Returns true if there is
+// a dalvik-cache at this directory by the end of the call or false otherwise.
+bool CreateDalvikCache(const char* subdir);
 // Return true if we found the dalvik cache and stored it in the dalvik_cache argument.
 // have_android_data will be set to true if we have an ANDROID_DATA that exists,
 // dalvik_cache_exists will be true if there is a dalvik-cache directory that is present.
