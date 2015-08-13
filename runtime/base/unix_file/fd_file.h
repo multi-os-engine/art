@@ -37,6 +37,16 @@ class FdFile : public RandomAccessFile {
   // file descriptor. (Use DisableAutoClose to retain ownership.)
   FdFile(int fd, bool checkUsage);
   FdFile(int fd, const std::string& path, bool checkUsage);
+  FdFile(const std::string& path, int flags, bool checkUsage)
+      : FdFile(path, flags, 0640, checkUsage) {}
+  FdFile(const std::string& path, int flags, mode_t mode, bool checkUsage);
+
+  // Move constructor.
+  explicit FdFile(FdFile&& src);
+
+  // Release the file descriptor. This will make further accesses to this FdFile invalid. Disables
+  // all further state checking.
+  int Release();
 
   // Destroys an FdFile, closing the file descriptor if Close hasn't already
   // been called. (If you care about the return value of Close, call it
@@ -44,10 +54,6 @@ class FdFile : public RandomAccessFile {
   // Note though that calling Close and checking its return value is still no
   // guarantee that data actually made it to stable storage.)
   virtual ~FdFile();
-
-  // Opens file 'file_path' using 'flags' and 'mode'.
-  bool Open(const std::string& file_path, int flags);
-  bool Open(const std::string& file_path, int flags, mode_t mode);
 
   // RandomAccessFile API.
   virtual int Close() WARN_UNUSED;
@@ -106,6 +112,10 @@ class FdFile : public RandomAccessFile {
   }
 
   GuardState guard_state_;
+
+  // Opens file 'file_path' using 'flags' and 'mode'.
+  bool Open(const std::string& file_path, int flags);
+  bool Open(const std::string& file_path, int flags, mode_t mode);
 
  private:
   int fd_;

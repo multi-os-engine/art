@@ -49,29 +49,28 @@ TEST_F(FdFileTest, UnopenedFile) {
 
 TEST_F(FdFileTest, OpenClose) {
   std::string good_path(GetTmpPath("some-file.txt"));
-  FdFile file;
-  ASSERT_TRUE(file.Open(good_path, O_CREAT | O_WRONLY));
+  FdFile file(good_path, O_CREAT | O_WRONLY, true);
+  ASSERT_TRUE(file.IsOpened());
   EXPECT_GE(file.Fd(), 0);
   EXPECT_TRUE(file.IsOpened());
   EXPECT_EQ(0, file.Flush());
   EXPECT_EQ(0, file.Close());
   EXPECT_EQ(-1, file.Fd());
   EXPECT_FALSE(file.IsOpened());
-  EXPECT_TRUE(file.Open(good_path,  O_RDONLY));
-  EXPECT_GE(file.Fd(), 0);
-  EXPECT_TRUE(file.IsOpened());
+  FdFile file2(good_path,  O_RDONLY, true);
+  EXPECT_TRUE(file2.IsOpened());
+  EXPECT_GE(file2.Fd(), 0);
 
-  ASSERT_EQ(file.Close(), 0);
+  ASSERT_EQ(file2.Close(), 0);
   ASSERT_EQ(unlink(good_path.c_str()), 0);
 }
 
 TEST_F(FdFileTest, ReadFullyEmptyFile) {
   // New scratch file, zero-length.
   art::ScratchFile tmp;
-  FdFile file;
-  ASSERT_TRUE(file.Open(tmp.GetFilename(), O_RDONLY));
+  FdFile file(tmp.GetFilename(), O_RDONLY, false);
+  ASSERT_TRUE(file.IsOpened());
   EXPECT_GE(file.Fd(), 0);
-  EXPECT_TRUE(file.IsOpened());
   uint8_t buffer[16];
   EXPECT_FALSE(file.ReadFully(&buffer, 4));
 }
@@ -84,10 +83,9 @@ static void NullTerminateCharArray(char (&array)[Size]) {
 TEST_F(FdFileTest, ReadFullyWithOffset) {
   // New scratch file, zero-length.
   art::ScratchFile tmp;
-  FdFile file;
-  ASSERT_TRUE(file.Open(tmp.GetFilename(), O_RDWR));
+  FdFile file(tmp.GetFilename(), O_RDWR, false);
+  ASSERT_TRUE(file.IsOpened());
   EXPECT_GE(file.Fd(), 0);
-  EXPECT_TRUE(file.IsOpened());
 
   char ignore_prefix[20] = {'a', };
   NullTerminateCharArray(ignore_prefix);
@@ -108,6 +106,24 @@ TEST_F(FdFileTest, ReadFullyWithOffset) {
   EXPECT_STREQ(&read_suffix[0], &buffer[0]);
 
   ASSERT_EQ(file.Close(), 0);
+}
+
+TEST_F(FdFileTest, MoveConstructor) {
+  // New scratch file, zero-length.
+  art::ScratchFile tmp;
+  FdFile file(tmp.GetFilename(), O_RDWR, false);
+  ASSERT_TRUE(file.IsOpened());
+  EXPECT_GE(file.Fd(), 0);
+
+  int old_fd = file.Fd();
+
+  FdFile file2(std::move(file));
+  EXPECT_FALSE(file.IsOpened());
+  EXPECT_TRUE(file2.IsOpened());
+  EXPECT_EQ(old_fd, file2.Fd());
+
+  ASSERT_EQ(file2.Flush(), 0);
+  ASSERT_EQ(file2.Close(), 0);
 }
 
 }  // namespace unix_file
