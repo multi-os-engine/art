@@ -1255,6 +1255,17 @@ const char* GetAndroidDataSafe(std::string* error_msg) {
   return android_data;
 }
 
+bool CreateDalvikCache(const char* subdir) {
+  DCHECK(subdir != nullptr);
+  bool have_android_data = false;
+  bool dalvik_cache_exists = false;
+  bool is_global_cache = false;
+  std::string dalvik_cache;
+  GetDalvikCache(subdir, true, &dalvik_cache,
+                 &have_android_data, &dalvik_cache_exists, &is_global_cache);
+  return dalvik_cache_exists;
+}
+
 void GetDalvikCache(const char* subdir, const bool create_if_absent, std::string* dalvik_cache,
                     bool* have_android_data, bool* dalvik_cache_exists, bool* is_global_cache) {
   CHECK(subdir != nullptr);

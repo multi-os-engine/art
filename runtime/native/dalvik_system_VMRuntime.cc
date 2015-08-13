@@ -39,6 +39,7 @@ extern "C" void android_set_application_target_sdk_version(uint32_t version);
 #include "gc/space/dlmalloc_space.h"
 #include "gc/space/image_space.h"
 #include "gc/task_processor.h"
+#include "image_assistant.h"
 #include "intern_table.h"
 #include "jni_internal.h"
 #include "mirror/class-inl.h"
@@ -585,9 +586,8 @@ static jboolean VMRuntime_isBootClassPathOnDisk(JNIEnv* env, jclass, jstring jav
     return JNI_FALSE;
   }
   std::string error_msg;
-  std::unique_ptr<ImageHeader> image_header(gc::space::ImageSpace::ReadImageHeader(
-      Runtime::Current()->GetImageLocation().c_str(), isa, &error_msg));
-  return image_header.get() != nullptr;
+  ImageAssistant image_assistant(Runtime::Current()->GetImageLocation().c_str(), isa);
+  return image_assistant.GetImageInfo().GetImageState() == ImageState::kImageUsable;
 }
 
 static jstring VMRuntime_getCurrentInstructionSet(JNIEnv* env, jclass) {
