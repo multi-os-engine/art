@@ -867,7 +867,7 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
         bool any_dirty = false;
         size_t count = 0;
         const size_t method_size = ArtMethod::ObjectSize(target_ptr_size_);
-        auto iteration_range = MakeIterationRangeFromLengthPrefixedArray(array, method_size);
+        auto iteration_range = MakeIterationRangeFromLengthPrefixedArray(array);
         for (auto& m : iteration_range) {
           any_dirty = any_dirty || WillMethodBeDirty(&m);
           ++count;
@@ -967,13 +967,15 @@ void ImageWriter::CalculateNewObjectOffsets() {
 
   // Add room for fake length prefixed array.
   const auto image_method_type = kNativeObjectRelocationTypeArtMethodArrayClean;
+  const size_t method_size = ArtMethod::ObjectSize(target_ptr_size_);
+  image_method_array_.reset(new LengthPrefixedArray<ArtMethod>(ImageHeader::kImageMethodsCount,
+                                                               method_size));
   auto it = native_object_relocations_.find(&image_method_array_);
   CHECK(it == native_object_relocations_.end());
   size_t& offset = bin_slot_sizes_[BinTypeForNativeRelocationType(image_method_type)];
-  native_object_relocations_.emplace(&image_method_array_,
+  native_object_relocations_.emplace(image_method_array_.get(),
                                      NativeObjectRelocation { offset, image_method_type });
-  const size_t array_size = LengthPrefixedArray<ArtMethod>::ComputeSize(
-      0, ArtMethod::ObjectSize(target_ptr_size_));
+  const size_t array_size = LengthPrefixedArray<ArtMethod>::ComputeSize(0, method_size);
   CHECK_ALIGNED(array_size, 8u);
   offset += array_size;
   for (auto* m : image_methods_) {

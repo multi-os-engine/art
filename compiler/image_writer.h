@@ -55,8 +55,7 @@ class ImageWriter FINAL {
         quick_to_interpreter_bridge_offset_(0), compile_pic_(compile_pic),
         target_ptr_size_(InstructionSetPointerSize(compiler_driver_.GetInstructionSet())),
         bin_slot_sizes_(), bin_slot_previous_sizes_(), bin_slot_count_(),
-        intern_table_bytes_(0u), image_method_array_(ImageHeader::kImageMethodsCount),
-        dirty_methods_(0u), clean_methods_(0u) {
+        intern_table_bytes_(0u), dirty_methods_(0u), clean_methods_(0u) {
     CHECK_NE(image_begin, 0U);
     std::fill(image_methods_, image_methods_ + arraysize(image_methods_), nullptr);
   }
@@ -383,7 +382,7 @@ class ImageWriter FINAL {
   ArtMethod* image_methods_[ImageHeader::kImageMethodsCount];
   // Fake length prefixed array for image methods. This array does not contain the actual
   // ArtMethods. We only use it for the header and relocation addresses.
-  LengthPrefixedArray<ArtMethod> image_method_array_;
+  std::unique_ptr<LengthPrefixedArray<ArtMethod>> image_method_array_;
 
   // Counters for measurements, used for logging only.
   uint64_t dirty_methods_;
