@@ -39,6 +39,29 @@ FdFile::FdFile(int fd, const std::string& path, bool check_usage)
   CHECK_NE(0U, path.size());
 }
 
+FdFile::FdFile(const std::string& path, int flags, mode_t mode, bool check_usage) : fd_(-1) {
+  Open(path, flags, mode);
+  if (!check_usage || !IsOpened()) {
+    guard_state_ = GuardState::kNoCheck;
+  }
+}
+
+FdFile::FdFile(FdFile&& src)
+    : guard_state_(src.guard_state_),
+      fd_(src.fd_),
+      file_path_(src.file_path_),
+      auto_close_(src.auto_close_) {
+  src.Release();  // Release the src.
+}
+
+int FdFile::Release() {
+  int tmp_fd = fd_;
+  fd_ = -1;
+  guard_state_ = GuardState::kNoCheck;
+  auto_close_ = false;
+  return tmp_fd;
+}
+
 FdFile::~FdFile() {
   if (kCheckSafeUsage && (guard_state_ < GuardState::kNoCheck)) {
     if (guard_state_ < GuardState::kFlushed) {
