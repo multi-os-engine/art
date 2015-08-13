@@ -79,6 +79,7 @@ LIBART_COMMON_SRC_FILES := \
   gc/task_processor.cc \
   hprof/hprof.cc \
   image.cc \
+  image_assistant.cc \
   indirect_reference_table.cc \
   instrumentation.cc \
   intern_table.cc \

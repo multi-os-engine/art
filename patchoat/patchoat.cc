@@ -36,6 +36,7 @@
 #include "elf_file_impl.h"
 #include "gc/space/image_space.h"
 #include "image.h"
+#include "image_assistant.h"
 #include "mirror/abstract_method.h"
 #include "mirror/object-inl.h"
 #include "mirror/method.h"
@@ -118,6 +119,17 @@ static bool ReadOatPatchDelta(const ElfFile* elf_file, off_t* delta, std::string
   return true;
 }
 
+// Gets an image info for the given location. Prefers /system over all else.
+static ImageInfo GetImageInfo(const std::string& image_location, InstructionSet isa) {
+  ImageAssistant image_assistant(image_location, isa);
+  ImageInfo info = image_assistant.GetSystemImageInfo();
+  if (!info.IsImageValid()) {
+    return image_assistant.GetCacheImageInfo();
+  } else {
+    return info;
+  }
+}
+
 bool PatchOat::Patch(const std::string& image_location, off_t delta,
                      File* output_image, InstructionSet isa,
                      TimingLogger* timings) {
@@ -129,14 +141,16 @@ bool PatchOat::Patch(const std::string& image_location, off_t delta,
 
   TimingLogger::ScopedTiming t("Runtime Setup", timings);
   const char *isa_name = GetInstructionSetString(isa);
-  std::string image_filename;
-  if (!LocationToFilename(image_location, isa, &image_filename)) {
-    LOG(ERROR) << "Unable to find image at location " << image_location;
+
+  ImageInfo info = GetImageInfo(image_location, isa);
+  if (!info.IsImageValid()) {
+    LOG(ERROR) << "Unable to find a valid image to relocate for location '"
+               << image_location << "' and isa '" << isa_name << "'.";
     return false;
   }
-  std::unique_ptr<File> input_image(OS::OpenFileForReading(image_filename.c_str()));
+  std::unique_ptr<File> input_image(info.OpenImage());
   if (input_image.get() == nullptr) {
-    LOG(ERROR) << "unable to open input image file at " << image_filename
+    LOG(ERROR) << "unable to open input image file " << info.GetFilename()
                << " for location " << image_location;
     return false;
   }
@@ -147,8 +161,7 @@ bool PatchOat::Patch(const std::string& image_location, off_t delta,
     return false;
   }
   ImageHeader image_header;
-  if (sizeof(image_header) != input_image->Read(reinterpret_cast<char*>(&image_header),
-                                                sizeof(image_header), 0)) {
+  if (!info.GetImageHeader(&image_header)) {
     LOG(ERROR) << "Unable to read image header from image file " << input_image->GetPath();
     return false;
   }
@@ -173,6 +186,8 @@ bool PatchOat::Patch(const std::string& image_location, off_t delta,
   // give it away now and then switch to a more manageable ScopedObjectAccess.
   Thread::Current()->TransitionFromRunnableToSuspended(kNative);
   ScopedObjectAccess soa(Thread::Current());
+
+  CHECK(info.IsImageLoaded());
 
   t.NewTiming("Image and oat Patching setup");
   // Create the map where we will write the image patches to.
@@ -227,26 +242,29 @@ bool PatchOat::Patch(File* input_oat, const std::string& image_location, off_t d
     isa = GetInstructionSetFromELF(elf_hdr.e_machine, elf_hdr.e_flags);
   }
   const char* isa_name = GetInstructionSetString(isa);
-  std::string image_filename;
-  if (!LocationToFilename(image_location, isa, &image_filename)) {
-    LOG(ERROR) << "Unable to find image at location " << image_location;
+  ImageInfo info = GetImageInfo(image_location, isa);
+  if (!info.IsImageValid()) {
+    LOG(ERROR) << "Unable to find a valid image to relocate for location '"
+               << image_location << "' and isa '" << isa_name << "'.";
     return false;
   }
-  std::unique_ptr<File> input_image(OS::OpenFileForReading(image_filename.c_str()));
+
+  std::unique_ptr<File> input_image(info.OpenImage());
   if (input_image.get() == nullptr) {
-    LOG(ERROR) << "unable to open input image file at " << image_filename
+    LOG(ERROR) << "unable to open input image file " << info.GetFilename()
                << " for location " << image_location;
     return false;
   }
+
   int64_t image_len = input_image->GetLength();
   if (image_len < 0) {
     LOG(ERROR) << "Error while getting image length";
     return false;
   }
   ImageHeader image_header;
-  if (sizeof(image_header) != input_image->Read(reinterpret_cast<char*>(&image_header),
-                                              sizeof(image_header), 0)) {
+  if (!info.GetImageHeader(&image_header)) {
     LOG(ERROR) << "Unable to read image header from image file " << input_image->GetPath();
+    return false;
   }
 
   /*bool is_image_pic = */IsImagePic(image_header, input_image->GetPath());
@@ -269,6 +287,8 @@ bool PatchOat::Patch(File* input_oat, const std::string& image_location, off_t d
   // give it away now and then switch to a more manageable ScopedObjectAccess.
   Thread::Current()->TransitionFromRunnableToSuspended(kNative);
   ScopedObjectAccess soa(Thread::Current());
+
+  CHECK(info.IsImageLoaded());
 
   t.NewTiming("Image and oat Patching setup");
   // Create the map where we will write the image patches to.
@@ -1131,11 +1151,11 @@ static int patchoat(int argc, char **argv) {
   }
 
   if (have_input_oat != have_output_oat) {
-    Usage("Either both input and output oat must be supplied or niether must be.");
+    Usage("Either both input and output oat must be supplied or neither must be.");
   }
 
   if ((!input_image_location.empty()) != have_output_image) {
-    Usage("Either both input and output image must be supplied or niether must be.");
+    Usage("Either both input and output image must be supplied or neither must be.");
   }
 
   // We know we have both the input and output so rename for clarity.
@@ -1165,27 +1185,17 @@ static int patchoat(int argc, char **argv) {
     if (!isa_set) {
       Usage("specifying a location requires specifying an instruction set");
     }
-    std::string system_filename;
-    bool has_system = false;
-    std::string cache_filename;
-    bool has_cache = false;
-    bool has_android_data_unused = false;
-    bool is_global_cache = false;
-    if (!gc::space::ImageSpace::FindImageFilename(patched_image_location.c_str(), isa,
-                                                  &system_filename, &has_system, &cache_filename,
-                                                  &has_android_data_unused, &has_cache,
-                                                  &is_global_cache)) {
+    ImageAssistant image_assistant(patched_image_location, isa);
+    ImageInfo info = image_assistant.GetImageInfo();
+    if (!info.IsImageValid()) {
       Usage("Unable to determine image file for location %s", patched_image_location.c_str());
+    } else if (!info.IsImageUsable()) {
+      // If we don't have a usable one but it is there (see above) then we are out of date.
+      Usage("The patched image file '%s' for location '%s' is not suitable as a relocation target "
+            "because it is not present or out of date",
+            info.GetFilename().c_str(), patched_image_location.c_str());
     }
-    if (has_cache) {
-      patched_image_filename = cache_filename;
-    } else if (has_system) {
-      LOG(WARNING) << "Only image file found was in /system for image location "
-                   << patched_image_location;
-      patched_image_filename = system_filename;
-    } else {
-      Usage("Unable to determine image file for location %s", patched_image_location.c_str());
-    }
+    patched_image_filename = info.GetFilename();
     if (debug) {
       LOG(INFO) << "Using patched-image-file " << patched_image_filename;
     }
@@ -1215,7 +1225,7 @@ static int patchoat(int argc, char **argv) {
   }
 
   if (!IsAligned<kPageSize>(base_delta)) {
-    Usage("Base offset/delta must be alligned to a pagesize (0x%08x) boundary.", kPageSize);
+    Usage("Base offset/delta must be aligned to a pagesize (0x%08x) boundary.", kPageSize);
   }
 
   // Do we need to cleanup output files if we fail?
