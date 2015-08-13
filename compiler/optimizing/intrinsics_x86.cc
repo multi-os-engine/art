@@ -1744,6 +1744,99 @@ void IntrinsicCodeGeneratorX86::VisitLongReverse(HInvoke* invoke) {
   SwapBits(reg_high, temp, 4, 0x0f0f0f0f, assembler);
 }
 
+static void CreateLeadingZero(ArenaAllocator* arena, HInvoke* invoke, bool is_long) {
+  LocationSummary* locations = new (arena) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  if (is_long) {
+    locations->SetInAt(0, Location::RequiresRegister());
+  } else {
+    locations->SetInAt(0, Location::Any());
+  }
+  locations->SetOut(Location::RequiresRegister());
+}
+
+static void GenLeadingZeros(X86Assembler* assembler, HInvoke* invoke, bool is_long) {
+  LocationSummary* locations = invoke->GetLocations();
+  Location src = locations->InAt(0);
+  Register out = locations->Out().AsRegister<Register>();
+
+  int zero_value_result = is_long ? 64 : 32;
+  if (invoke->InputAt(0)->IsConstant()) {
+    // We can just figure it out now.
+    int64_t value = is_long ?
+                      invoke->InputAt(0)->AsLongConstant()->GetValue() :
+                      invoke->InputAt(0)->AsIntConstant()->GetValue();
+    if (value == 0) {
+      value = zero_value_result;
+    } else {
+      value = __builtin_clzl(value);
+    }
+    __ movl(out, Immediate(value));
+    return;
+  }
+
+  // Handle the non-constant cases.
+  // 32 bit is easier.
+  if (!is_long) {
+    if (src.IsRegister()) {
+      __ bsrl(out, src.AsRegister<Register>());
+    } else {
+      DCHECK(src.IsStackSlot());
+      __ bsrl(out, Address(ESP, src.GetStackIndex()));
+    }
+
+    // Correct the result, since BSR returns index from bit 0.
+    __ xorl(out, Immediate(zero_value_result-1));
+
+    return;
+  }
+
+  // 64 bit case needs to worry about both parts of the register.
+  DCHECK(src.IsRegisterPair());
+  Register src_lo = src.AsRegisterPairLow<Register>();
+  Register src_hi = src.AsRegisterPairHigh<Register>();
+
+  // Is the high word zero?
+  __ testl(src_hi, src_hi);
+  Label do_low, done;
+  __ j(kEqual, &do_low);
+
+  // High word is not zero, so work on it.
+  __ bsrl(out, src_hi);
+  __ xorl(out, Immediate(31));
+  __ jmp(&done);
+
+  // High word was zero.
+  __ Bind(&do_low);
+  __ bsrl(out, src_lo);
+  __ xorl(out, Immediate(31));
+  __ addl(out, Immediate(32));
+
+  // Finished.
+  __ Bind(&done);
+}
+
+void IntrinsicLocationsBuilderX86::VisitIntegerNumberOfLeadingZeros(HInvoke* invoke) {
+  CreateLeadingZero(arena_, invoke, false);
+}
+
+void IntrinsicCodeGeneratorX86::VisitIntegerNumberOfLeadingZeros(HInvoke* invoke) {
+  X86Assembler* assembler = reinterpret_cast<X86Assembler*>(codegen_->GetAssembler());
+
+  GenLeadingZeros(assembler, invoke, false);
+}
+
+void IntrinsicLocationsBuilderX86::VisitLongNumberOfLeadingZeros(HInvoke* invoke) {
+  CreateLeadingZero(arena_, invoke, true);
+}
+
+void IntrinsicCodeGeneratorX86::VisitLongNumberOfLeadingZeros(HInvoke* invoke) {
+  X86Assembler* assembler = reinterpret_cast<X86Assembler*>(codegen_->GetAssembler());
+
+  GenLeadingZeros(assembler, invoke, true);
+}
+
 // Unimplemented intrinsics.
 
 #define UNIMPLEMENTED_INTRINSIC(Name)                                                   \
@@ -1756,8 +1849,6 @@ UNIMPLEMENTED_INTRINSIC(MathRoundDouble)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
-UNIMPLEMENTED_INTRINSIC(IntegerNumberOfLeadingZeros)
-UNIMPLEMENTED_INTRINSIC(LongNumberOfLeadingZeros)
 
 #undef UNIMPLEMENTED_INTRINSIC
 
