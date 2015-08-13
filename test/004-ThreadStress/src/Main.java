@@ -546,6 +546,7 @@ public class Main implements Runnable {
                     operation.perform();
                     i = (i + 1) % operations.length;
                 }
+            } catch (OutOfMemoryError e) {
             } finally {
                 if (DEBUG) {
                     System.out.println("Finishing ThreadStress Daemon for " + id);
