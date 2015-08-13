@@ -84,241 +84,243 @@ static Primitive::Type GetType(uint64_t data, bool is_op_size) {
   }
 }
 
-static Intrinsics GetIntrinsic(InlineMethod method) {
-  switch (method.opcode) {
-    // Floating-point conversions.
-    case kIntrinsicDoubleCvt:
-      return ((method.d.data & kIntrinsicFlagToFloatingPoint) == 0) ?
-          Intrinsics::kDoubleDoubleToRawLongBits : Intrinsics::kDoubleLongBitsToDouble;
-    case kIntrinsicFloatCvt:
-      return ((method.d.data & kIntrinsicFlagToFloatingPoint) == 0) ?
-          Intrinsics::kFloatFloatToRawIntBits : Intrinsics::kFloatIntBitsToFloat;
+static Intrinsics GetIntrinsic(InlineMethod method, InstructionSet instruction_set) {
+  if (instruction_set != kMips && instruction_set != kMips64) {
+    switch (method.opcode) {
+      // Floating-point conversions.
+      case kIntrinsicDoubleCvt:
+        return ((method.d.data & kIntrinsicFlagToFloatingPoint) == 0) ?
+            Intrinsics::kDoubleDoubleToRawLongBits : Intrinsics::kDoubleLongBitsToDouble;
+      case kIntrinsicFloatCvt:
+        return ((method.d.data & kIntrinsicFlagToFloatingPoint) == 0) ?
+            Intrinsics::kFloatFloatToRawIntBits : Intrinsics::kFloatIntBitsToFloat;
 
-    // Bit manipulations.
-    case kIntrinsicReverseBits:
-      switch (GetType(method.d.data, true)) {
-        case Primitive::kPrimInt:
-          return Intrinsics::kIntegerReverse;
-        case Primitive::kPrimLong:
-          return Intrinsics::kLongReverse;
-        default:
-          LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
-          UNREACHABLE();
+      // Bit manipulations.
+      case kIntrinsicReverseBits:
+        switch (GetType(method.d.data, true)) {
+          case Primitive::kPrimInt:
+            return Intrinsics::kIntegerReverse;
+          case Primitive::kPrimLong:
+            return Intrinsics::kLongReverse;
+          default:
+            LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
+            UNREACHABLE();
+        }
+      case kIntrinsicReverseBytes:
+        switch (GetType(method.d.data, true)) {
+          case Primitive::kPrimShort:
+            return Intrinsics::kShortReverseBytes;
+          case Primitive::kPrimInt:
+            return Intrinsics::kIntegerReverseBytes;
+          case Primitive::kPrimLong:
+            return Intrinsics::kLongReverseBytes;
+          default:
+            LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
+            UNREACHABLE();
+        }
+      case kIntrinsicNumberOfLeadingZeros:
+        switch (GetType(method.d.data, true)) {
+          case Primitive::kPrimInt:
+            return Intrinsics::kIntegerNumberOfLeadingZeros;
+          case Primitive::kPrimLong:
+            return Intrinsics::kLongNumberOfLeadingZeros;
+          default:
+            LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
+            UNREACHABLE();
+        }
+
+      // Abs.
+      case kIntrinsicAbsDouble:
+        return Intrinsics::kMathAbsDouble;
+      case kIntrinsicAbsFloat:
+        return Intrinsics::kMathAbsFloat;
+      case kIntrinsicAbsInt:
+        return Intrinsics::kMathAbsInt;
+      case kIntrinsicAbsLong:
+        return Intrinsics::kMathAbsLong;
+
+      // Min/max.
+      case kIntrinsicMinMaxDouble:
+        return ((method.d.data & kIntrinsicFlagMin) == 0) ?
+            Intrinsics::kMathMaxDoubleDouble : Intrinsics::kMathMinDoubleDouble;
+      case kIntrinsicMinMaxFloat:
+        return ((method.d.data & kIntrinsicFlagMin) == 0) ?
+            Intrinsics::kMathMaxFloatFloat : Intrinsics::kMathMinFloatFloat;
+      case kIntrinsicMinMaxInt:
+        return ((method.d.data & kIntrinsicFlagMin) == 0) ?
+            Intrinsics::kMathMaxIntInt : Intrinsics::kMathMinIntInt;
+      case kIntrinsicMinMaxLong:
+        return ((method.d.data & kIntrinsicFlagMin) == 0) ?
+            Intrinsics::kMathMaxLongLong : Intrinsics::kMathMinLongLong;
+
+      // Misc math.
+      case kIntrinsicSqrt:
+        return Intrinsics::kMathSqrt;
+      case kIntrinsicCeil:
+        return Intrinsics::kMathCeil;
+      case kIntrinsicFloor:
+        return Intrinsics::kMathFloor;
+      case kIntrinsicRint:
+        return Intrinsics::kMathRint;
+      case kIntrinsicRoundDouble:
+        return Intrinsics::kMathRoundDouble;
+      case kIntrinsicRoundFloat:
+        return Intrinsics::kMathRoundFloat;
+
+      // System.arraycopy.
+      case kIntrinsicSystemArrayCopyCharArray:
+        return Intrinsics::kSystemArrayCopyChar;
+
+      // Thread.currentThread.
+      case kIntrinsicCurrentThread:
+        return  Intrinsics::kThreadCurrentThread;
+
+      // Memory.peek.
+      case kIntrinsicPeek:
+        switch (GetType(method.d.data, true)) {
+          case Primitive::kPrimByte:
+            return Intrinsics::kMemoryPeekByte;
+          case Primitive::kPrimShort:
+            return Intrinsics::kMemoryPeekShortNative;
+          case Primitive::kPrimInt:
+            return Intrinsics::kMemoryPeekIntNative;
+          case Primitive::kPrimLong:
+            return Intrinsics::kMemoryPeekLongNative;
+          default:
+            LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
+            UNREACHABLE();
+        }
+
+      // Memory.poke.
+      case kIntrinsicPoke:
+        switch (GetType(method.d.data, true)) {
+          case Primitive::kPrimByte:
+            return Intrinsics::kMemoryPokeByte;
+          case Primitive::kPrimShort:
+            return Intrinsics::kMemoryPokeShortNative;
+          case Primitive::kPrimInt:
+            return Intrinsics::kMemoryPokeIntNative;
+          case Primitive::kPrimLong:
+            return Intrinsics::kMemoryPokeLongNative;
+          default:
+            LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
+            UNREACHABLE();
+        }
+
+      // String.
+      case kIntrinsicCharAt:
+        return Intrinsics::kStringCharAt;
+      case kIntrinsicCompareTo:
+        return Intrinsics::kStringCompareTo;
+      case kIntrinsicGetCharsNoCheck:
+        return Intrinsics::kStringGetCharsNoCheck;
+      case kIntrinsicIsEmptyOrLength:
+        // The inliner can handle these two cases - and this is the preferred approach
+        // since after inlining the call is no longer visible (as opposed to waiting
+        // until codegen to handle intrinsic).
+        return Intrinsics::kNone;
+      case kIntrinsicIndexOf:
+        return ((method.d.data & kIntrinsicFlagBase0) == 0) ?
+            Intrinsics::kStringIndexOfAfter : Intrinsics::kStringIndexOf;
+      case kIntrinsicNewStringFromBytes:
+        return Intrinsics::kStringNewStringFromBytes;
+      case kIntrinsicNewStringFromChars:
+        return Intrinsics::kStringNewStringFromChars;
+      case kIntrinsicNewStringFromString:
+        return Intrinsics::kStringNewStringFromString;
+
+      case kIntrinsicCas:
+        switch (GetType(method.d.data, false)) {
+          case Primitive::kPrimNot:
+            return Intrinsics::kUnsafeCASObject;
+          case Primitive::kPrimInt:
+            return Intrinsics::kUnsafeCASInt;
+          case Primitive::kPrimLong:
+            return Intrinsics::kUnsafeCASLong;
+          default:
+            LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
+            UNREACHABLE();
+        }
+      case kIntrinsicUnsafeGet: {
+        const bool is_volatile = (method.d.data & kIntrinsicFlagIsVolatile);
+        switch (GetType(method.d.data, false)) {
+          case Primitive::kPrimInt:
+            return is_volatile ? Intrinsics::kUnsafeGetVolatile : Intrinsics::kUnsafeGet;
+          case Primitive::kPrimLong:
+            return is_volatile ? Intrinsics::kUnsafeGetLongVolatile : Intrinsics::kUnsafeGetLong;
+          case Primitive::kPrimNot:
+            return is_volatile ? Intrinsics::kUnsafeGetObjectVolatile : Intrinsics::kUnsafeGetObject;
+          default:
+            LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
+            UNREACHABLE();
+        }
       }
-    case kIntrinsicReverseBytes:
-      switch (GetType(method.d.data, true)) {
-        case Primitive::kPrimShort:
-          return Intrinsics::kShortReverseBytes;
-        case Primitive::kPrimInt:
-          return Intrinsics::kIntegerReverseBytes;
-        case Primitive::kPrimLong:
-          return Intrinsics::kLongReverseBytes;
-        default:
-          LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
-          UNREACHABLE();
-      }
-    case kIntrinsicNumberOfLeadingZeros:
-      switch (GetType(method.d.data, true)) {
-        case Primitive::kPrimInt:
-          return Intrinsics::kIntegerNumberOfLeadingZeros;
-        case Primitive::kPrimLong:
-          return Intrinsics::kLongNumberOfLeadingZeros;
-        default:
-          LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
-          UNREACHABLE();
-      }
-
-    // Abs.
-    case kIntrinsicAbsDouble:
-      return Intrinsics::kMathAbsDouble;
-    case kIntrinsicAbsFloat:
-      return Intrinsics::kMathAbsFloat;
-    case kIntrinsicAbsInt:
-      return Intrinsics::kMathAbsInt;
-    case kIntrinsicAbsLong:
-      return Intrinsics::kMathAbsLong;
-
-    // Min/max.
-    case kIntrinsicMinMaxDouble:
-      return ((method.d.data & kIntrinsicFlagMin) == 0) ?
-          Intrinsics::kMathMaxDoubleDouble : Intrinsics::kMathMinDoubleDouble;
-    case kIntrinsicMinMaxFloat:
-      return ((method.d.data & kIntrinsicFlagMin) == 0) ?
-          Intrinsics::kMathMaxFloatFloat : Intrinsics::kMathMinFloatFloat;
-    case kIntrinsicMinMaxInt:
-      return ((method.d.data & kIntrinsicFlagMin) == 0) ?
-          Intrinsics::kMathMaxIntInt : Intrinsics::kMathMinIntInt;
-    case kIntrinsicMinMaxLong:
-      return ((method.d.data & kIntrinsicFlagMin) == 0) ?
-          Intrinsics::kMathMaxLongLong : Intrinsics::kMathMinLongLong;
-
-    // Misc math.
-    case kIntrinsicSqrt:
-      return Intrinsics::kMathSqrt;
-    case kIntrinsicCeil:
-      return Intrinsics::kMathCeil;
-    case kIntrinsicFloor:
-      return Intrinsics::kMathFloor;
-    case kIntrinsicRint:
-      return Intrinsics::kMathRint;
-    case kIntrinsicRoundDouble:
-      return Intrinsics::kMathRoundDouble;
-    case kIntrinsicRoundFloat:
-      return Intrinsics::kMathRoundFloat;
-
-    // System.arraycopy.
-    case kIntrinsicSystemArrayCopyCharArray:
-      return Intrinsics::kSystemArrayCopyChar;
-
-    // Thread.currentThread.
-    case kIntrinsicCurrentThread:
-      return  Intrinsics::kThreadCurrentThread;
-
-    // Memory.peek.
-    case kIntrinsicPeek:
-      switch (GetType(method.d.data, true)) {
-        case Primitive::kPrimByte:
-          return Intrinsics::kMemoryPeekByte;
-        case Primitive::kPrimShort:
-          return Intrinsics::kMemoryPeekShortNative;
-        case Primitive::kPrimInt:
-          return Intrinsics::kMemoryPeekIntNative;
-        case Primitive::kPrimLong:
-          return Intrinsics::kMemoryPeekLongNative;
-        default:
-          LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
-          UNREACHABLE();
+      case kIntrinsicUnsafePut: {
+        enum Sync { kNoSync, kVolatile, kOrdered };
+        const Sync sync =
+            ((method.d.data & kIntrinsicFlagIsVolatile) != 0) ? kVolatile :
+            ((method.d.data & kIntrinsicFlagIsOrdered) != 0)  ? kOrdered :
+                                                                kNoSync;
+        switch (GetType(method.d.data, false)) {
+          case Primitive::kPrimInt:
+            switch (sync) {
+              case kNoSync:
+                return Intrinsics::kUnsafePut;
+              case kVolatile:
+                return Intrinsics::kUnsafePutVolatile;
+              case kOrdered:
+                return Intrinsics::kUnsafePutOrdered;
+            }
+            break;
+          case Primitive::kPrimLong:
+            switch (sync) {
+              case kNoSync:
+                return Intrinsics::kUnsafePutLong;
+              case kVolatile:
+                return Intrinsics::kUnsafePutLongVolatile;
+              case kOrdered:
+                return Intrinsics::kUnsafePutLongOrdered;
+            }
+            break;
+          case Primitive::kPrimNot:
+            switch (sync) {
+              case kNoSync:
+                return Intrinsics::kUnsafePutObject;
+              case kVolatile:
+                return Intrinsics::kUnsafePutObjectVolatile;
+              case kOrdered:
+                return Intrinsics::kUnsafePutObjectOrdered;
+            }
+            break;
+          default:
+            LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
+            UNREACHABLE();
+        }
+        break;
       }
 
-    // Memory.poke.
-    case kIntrinsicPoke:
-      switch (GetType(method.d.data, true)) {
-        case Primitive::kPrimByte:
-          return Intrinsics::kMemoryPokeByte;
-        case Primitive::kPrimShort:
-          return Intrinsics::kMemoryPokeShortNative;
-        case Primitive::kPrimInt:
-          return Intrinsics::kMemoryPokeIntNative;
-        case Primitive::kPrimLong:
-          return Intrinsics::kMemoryPokeLongNative;
-        default:
-          LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
-          UNREACHABLE();
-      }
+      // Virtual cases.
 
-    // String.
-    case kIntrinsicCharAt:
-      return Intrinsics::kStringCharAt;
-    case kIntrinsicCompareTo:
-      return Intrinsics::kStringCompareTo;
-    case kIntrinsicGetCharsNoCheck:
-      return Intrinsics::kStringGetCharsNoCheck;
-    case kIntrinsicIsEmptyOrLength:
-      // The inliner can handle these two cases - and this is the preferred approach
-      // since after inlining the call is no longer visible (as opposed to waiting
-      // until codegen to handle intrinsic).
-      return Intrinsics::kNone;
-    case kIntrinsicIndexOf:
-      return ((method.d.data & kIntrinsicFlagBase0) == 0) ?
-          Intrinsics::kStringIndexOfAfter : Intrinsics::kStringIndexOf;
-    case kIntrinsicNewStringFromBytes:
-      return Intrinsics::kStringNewStringFromBytes;
-    case kIntrinsicNewStringFromChars:
-      return Intrinsics::kStringNewStringFromChars;
-    case kIntrinsicNewStringFromString:
-      return Intrinsics::kStringNewStringFromString;
+      case kIntrinsicReferenceGetReferent:
+        return Intrinsics::kReferenceGetReferent;
 
-    case kIntrinsicCas:
-      switch (GetType(method.d.data, false)) {
-        case Primitive::kPrimNot:
-          return Intrinsics::kUnsafeCASObject;
-        case Primitive::kPrimInt:
-          return Intrinsics::kUnsafeCASInt;
-        case Primitive::kPrimLong:
-          return Intrinsics::kUnsafeCASLong;
-        default:
-          LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
-          UNREACHABLE();
-      }
-    case kIntrinsicUnsafeGet: {
-      const bool is_volatile = (method.d.data & kIntrinsicFlagIsVolatile);
-      switch (GetType(method.d.data, false)) {
-        case Primitive::kPrimInt:
-          return is_volatile ? Intrinsics::kUnsafeGetVolatile : Intrinsics::kUnsafeGet;
-        case Primitive::kPrimLong:
-          return is_volatile ? Intrinsics::kUnsafeGetLongVolatile : Intrinsics::kUnsafeGetLong;
-        case Primitive::kPrimNot:
-          return is_volatile ? Intrinsics::kUnsafeGetObjectVolatile : Intrinsics::kUnsafeGetObject;
-        default:
-          LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
-          UNREACHABLE();
-      }
+      // Quick inliner cases. Remove after refactoring. They are here so that we can use the
+      // compiler to warn on missing cases.
+
+      case kInlineOpNop:
+      case kInlineOpReturnArg:
+      case kInlineOpNonWideConst:
+      case kInlineOpIGet:
+      case kInlineOpIPut:
+        return Intrinsics::kNone;
+
+      // String init cases, not intrinsics.
+
+      case kInlineStringInit:
+        return Intrinsics::kNone;
+
+      // No default case to make the compiler warn on missing cases.
     }
-    case kIntrinsicUnsafePut: {
-      enum Sync { kNoSync, kVolatile, kOrdered };
-      const Sync sync =
-          ((method.d.data & kIntrinsicFlagIsVolatile) != 0) ? kVolatile :
-          ((method.d.data & kIntrinsicFlagIsOrdered) != 0)  ? kOrdered :
-                                                              kNoSync;
-      switch (GetType(method.d.data, false)) {
-        case Primitive::kPrimInt:
-          switch (sync) {
-            case kNoSync:
-              return Intrinsics::kUnsafePut;
-            case kVolatile:
-              return Intrinsics::kUnsafePutVolatile;
-            case kOrdered:
-              return Intrinsics::kUnsafePutOrdered;
-          }
-          break;
-        case Primitive::kPrimLong:
-          switch (sync) {
-            case kNoSync:
-              return Intrinsics::kUnsafePutLong;
-            case kVolatile:
-              return Intrinsics::kUnsafePutLongVolatile;
-            case kOrdered:
-              return Intrinsics::kUnsafePutLongOrdered;
-          }
-          break;
-        case Primitive::kPrimNot:
-          switch (sync) {
-            case kNoSync:
-              return Intrinsics::kUnsafePutObject;
-            case kVolatile:
-              return Intrinsics::kUnsafePutObjectVolatile;
-            case kOrdered:
-              return Intrinsics::kUnsafePutObjectOrdered;
-          }
-          break;
-        default:
-          LOG(FATAL) << "Unknown/unsupported op size " << method.d.data;
-          UNREACHABLE();
-      }
-      break;
-    }
-
-    // Virtual cases.
-
-    case kIntrinsicReferenceGetReferent:
-      return Intrinsics::kReferenceGetReferent;
-
-    // Quick inliner cases. Remove after refactoring. They are here so that we can use the
-    // compiler to warn on missing cases.
-
-    case kInlineOpNop:
-    case kInlineOpReturnArg:
-    case kInlineOpNonWideConst:
-    case kInlineOpIGet:
-    case kInlineOpIPut:
-      return Intrinsics::kNone;
-
-    // String init cases, not intrinsics.
-
-    case kInlineStringInit:
-      return Intrinsics::kNone;
-
-    // No default case to make the compiler warn on missing cases.
   }
   return Intrinsics::kNone;
 }
@@ -363,7 +365,8 @@ void IntrinsicsRecognizer::Run() {
             driver_->GetMethodInlinerMap()->GetMethodInliner(&invoke->GetDexFile());
         DCHECK(inliner != nullptr);
         if (inliner->IsIntrinsic(invoke->GetDexMethodIndex(), &method)) {
-          Intrinsics intrinsic = GetIntrinsic(method);
+          InstructionSet instruction_set = block->GetGraph()->GetInstructionSet();
+          Intrinsics intrinsic = GetIntrinsic(method, instruction_set);
 
           if (intrinsic != Intrinsics::kNone) {
             if (!CheckInvokeType(intrinsic, invoke)) {
