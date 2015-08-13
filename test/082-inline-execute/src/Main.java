@@ -1045,6 +1045,8 @@ public class Main {
 
   public static void test_Integer_numberOfLeadingZeros() {
     Assert.assertEquals(Integer.numberOfLeadingZeros(0), Integer.SIZE);
+    Assert.assertEquals(Integer.numberOfLeadingZeros(1), Integer.SIZE - 1);
+    Assert.assertEquals(Integer.numberOfLeadingZeros(1 << (Integer.SIZE-1)), 0);
     for (int i = 0; i < Integer.SIZE; i++) {
         Assert.assertEquals(Integer.numberOfLeadingZeros(1 << i), Integer.SIZE - 1 - i);
         Assert.assertEquals(Integer.numberOfLeadingZeros((1 << i) | 1), Integer.SIZE - 1 - i);
@@ -1054,6 +1056,9 @@ public class Main {
 
   public static void test_Long_numberOfLeadingZeros() {
     Assert.assertEquals(Long.numberOfLeadingZeros(0L), Long.SIZE);
+    Assert.assertEquals(Long.numberOfLeadingZeros(1L), Long.SIZE - 1);
+    Assert.assertEquals(Long.numberOfLeadingZeros(1L << ((Long.SIZE/2)-1)), Long.SIZE/2);
+    Assert.assertEquals(Long.numberOfLeadingZeros(1L << (Long.SIZE-1)), 0);
     for (int i = 0; i < Long.SIZE; i++) {
         Assert.assertEquals(Long.numberOfLeadingZeros(1L << i), Long.SIZE - 1 - i);
         Assert.assertEquals(Long.numberOfLeadingZeros((1L << i) | 1L), Long.SIZE - 1 - i);
