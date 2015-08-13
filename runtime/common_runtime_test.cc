@@ -296,6 +296,11 @@ void CommonRuntimeTest::SetUp() {
   dalvik_cache_.append("/dalvik-cache");
   int mkdir_result = mkdir(dalvik_cache_.c_str(), 0700);
   ASSERT_EQ(mkdir_result, 0);
+  std::string isa_dir(dalvik_cache_);
+  isa_dir.append("/");
+  isa_dir.append(GetInstructionSetString(kRuntimeISA));
+  mkdir_result = mkdir(isa_dir.c_str(), 0700);
+  ASSERT_EQ(mkdir_result, 0);
 
   std::string min_heap_string(StringPrintf("-Xms%zdm", gc::Heap::kDefaultInitialSize / MB));
   std::string max_heap_string(StringPrintf("-Xmx%zdm", gc::Heap::kDefaultMaximumSize / MB));
