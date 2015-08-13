@@ -61,6 +61,9 @@ class RandomAccessFile {
 
   // Flushes file data.
   virtual int Flush() = 0;
+
+  // Seek in the file.
+  virtual off_t Seek(off_t offset, int whence) = 0;
 };
 
 }  // namespace unix_file

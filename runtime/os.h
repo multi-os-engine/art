@@ -32,8 +32,14 @@ class OS {
   // Open an existing file with read only access.
   static File* OpenFileForReading(const char* name);
 
+  // Open an existing file with read only access.
+  static File OpenFileForReadingValue(const char* name);
+
   // Open an existing file with read/write access.
   static File* OpenFileReadWrite(const char* name);
+
+  // Open an existing file with read/write access.
+  static File OpenFileReadWriteValue(const char* name);
 
   // Create an empty file with read/write access. This is a *new* file, that is, if the file
   // already exists, it is *not* overwritten, but unlinked, and a new inode will be used.
@@ -41,6 +47,9 @@ class OS {
 
   // Open a file with the specified open(2) flags.
   static File* OpenFileWithFlags(const char* name, int flags);
+
+  // Open a file with the specified open(2) flags.
+  static File OpenFileWithFlagsValue(const char* name, int flags);
 
   // Check if a file exists.
   static bool FileExists(const char* name);

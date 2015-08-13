@@ -31,8 +31,16 @@ File* OS::OpenFileForReading(const char* name) {
   return OpenFileWithFlags(name, O_RDONLY);
 }
 
+File OS::OpenFileForReadingValue(const char* name) {
+  return OpenFileWithFlagsValue(name, O_RDONLY);
+}
+
 File* OS::OpenFileReadWrite(const char* name) {
   return OpenFileWithFlags(name, O_RDWR);
+}
+
+File OS::OpenFileReadWriteValue(const char* name) {
+  return OpenFileWithFlagsValue(name, O_RDWR);
 }
 
 File* OS::CreateEmptyFile(const char* name) {
@@ -45,11 +53,17 @@ File* OS::CreateEmptyFile(const char* name) {
 
 File* OS::OpenFileWithFlags(const char* name, int flags) {
   CHECK(name != nullptr);
-  std::unique_ptr<File> file(new File);
-  if (!file->Open(name, flags, 0666)) {
+  bool read_only = (flags == O_RDONLY);
+  std::unique_ptr<File> file(new File(name, flags, 0666, !read_only));
+  if (!file->IsOpened()) {
     return nullptr;
   }
   return file.release();
+}
+
+File OS::OpenFileWithFlagsValue(const char* name, int flags) {
+  bool read_only = (flags == O_RDONLY);
+  return File(name, flags, 0666, !read_only);
 }
 
 bool OS::FileExists(const char* name) {

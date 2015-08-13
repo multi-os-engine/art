@@ -37,6 +37,43 @@ class FdFile : public RandomAccessFile {
   // file descriptor. (Use DisableAutoClose to retain ownership.)
   FdFile(int fd, bool checkUsage);
   FdFile(int fd, const std::string& path, bool checkUsage);
+  FdFile(const std::string& path, int flags, bool checkUsage)
+      : FdFile(path, flags, 0640, checkUsage) {}
+  FdFile(const std::string& path, int flags, mode_t mode, bool checkUsage);
+
+  // Move constructor.
+  FdFile(FdFile&& other) : guard_state_(other.guard_state_),
+                           fd_(other.fd_),
+                           file_path_(std::move(other.file_path_)),
+                           auto_close_(other.auto_close_) {
+    other.Release();  // Release the src.
+  }
+
+  // Move assignment operator.
+  FdFile& operator=(FdFile&& other);
+
+  // Release the file descriptor. This will make further accesses to this FdFile invalid. Disables
+  // all further state checking.
+  int Release() {
+    int tmp_fd = fd_;
+    fd_ = -1;
+    guard_state_ = GuardState::kNoCheck;
+    auto_close_ = false;
+    return tmp_fd;
+  }
+
+  void Reset(int fd, bool check_usage) {
+    if (fd_ != -1) {
+      Destroy();
+    }
+    fd_ = fd;
+    if (check_usage) {
+      guard_state_ = fd == -1 ? GuardState::kNoCheck : GuardState::kBase;
+    } else {
+      guard_state_ = GuardState::kNoCheck;
+    }
+    // Keep the auto_close_ state.
+  }
 
   // Destroys an FdFile, closing the file descriptor if Close hasn't already
   // been called. (If you care about the return value of Close, call it
@@ -44,10 +81,6 @@ class FdFile : public RandomAccessFile {
   // Note though that calling Close and checking its return value is still no
   // guarantee that data actually made it to stable storage.)
   virtual ~FdFile();
-
-  // Opens file 'file_path' using 'flags' and 'mode'.
-  bool Open(const std::string& file_path, int flags);
-  bool Open(const std::string& file_path, int flags, mode_t mode);
 
   // RandomAccessFile API.
   virtual int Close() WARN_UNUSED;
@@ -88,6 +121,8 @@ class FdFile : public RandomAccessFile {
   // WARNING: Only use this when you know what you're doing!
   void MarkUnchecked();
 
+  off_t Seek(off_t offset, int whence) OVERRIDE;
+
  protected:
   // If the guard state indicates checking (!=kNoCheck), go to the target state "target". Print the
   // given warning if the current state is or exceeds warn_threshold.
@@ -107,7 +142,13 @@ class FdFile : public RandomAccessFile {
 
   GuardState guard_state_;
 
+  // Opens file 'file_path' using 'flags' and 'mode'.
+  bool Open(const std::string& file_path, int flags);
+  bool Open(const std::string& file_path, int flags, mode_t mode);
+
  private:
+  void Destroy();  // For ~FdFile and operator=(&&).
+
   int fd_;
   std::string file_path_;
   bool auto_close_;
