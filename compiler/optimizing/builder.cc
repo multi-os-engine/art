@@ -160,11 +160,11 @@ void HGraphBuilder::InitializeParameters(uint16_t number_of_parameters) {
 
   if (!dex_compilation_unit_->IsStatic()) {
     // Add the implicit 'this' argument, not expressed in the signature.
-    HParameterValue* parameter =
+    this_parameter_ =
         new (arena_) HParameterValue(parameter_index++, Primitive::kPrimNot, true);
-    entry_block_->AddInstruction(parameter);
+    entry_block_->AddInstruction(this_parameter_);
     HLocal* local = GetLocalAt(locals_index++);
-    entry_block_->AddInstruction(new (arena_) HStoreLocal(local, parameter));
+    entry_block_->AddInstruction(new (arena_) HStoreLocal(local, this_parameter_));
     number_of_parameters--;
   }
 
@@ -746,7 +746,8 @@ void HGraphBuilder::BuildReturn(const Instruction& instruction, Primitive::Type 
         DCHECK(RequiresConstructorBarrier(dex_compilation_unit_, *compiler_driver_))
           << "Inconsistent use of ShouldGenerateConstructorBarrier. Should not generate a barrier.";
       }
-      current_block_->AddInstruction(new (arena_) HMemoryBarrier(kStoreStore));
+      DCHECK(this_parameter_ != nullptr) << "Couldn't find this object for constructor";
+      current_block_->AddInstruction(new (arena_) HMemoryBarrier(this_parameter_, kStoreStore));
     }
     current_block_->AddInstruction(new (arena_) HReturnVoid());
   } else {

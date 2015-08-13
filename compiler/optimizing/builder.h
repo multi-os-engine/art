@@ -55,6 +55,7 @@ class HGraphBuilder : public ValueObject {
         return_type_(Primitive::GetType(dex_compilation_unit_->GetShorty()[0])),
         code_start_(nullptr),
         latest_result_(nullptr),
+        this_parameter_(nullptr),
         can_use_baseline_for_string_init_(true),
         compilation_stats_(compiler_stats),
         interpreter_metadata_(interpreter_metadata) {}
@@ -75,6 +76,7 @@ class HGraphBuilder : public ValueObject {
         return_type_(return_type),
         code_start_(nullptr),
         latest_result_(nullptr),
+        this_parameter_(nullptr),
         can_use_baseline_for_string_init_(true),
         compilation_stats_(nullptr) {}
 
@@ -304,6 +306,10 @@ class HGraphBuilder : public ValueObject {
   // The last invoke or fill-new-array being built. Only to be
   // used by move-result instructions.
   HInstruction* latest_result_;
+
+  // Reference to `this` parameter when compiling instance methods and constructors.
+  // It is null for static methods.
+  HParameterValue* this_parameter_;
 
   // We need to know whether we have built a graph that has calls to StringFactory
   // and hasn't gone through the verifier. If the following flag is `false`, then
