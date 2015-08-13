@@ -123,6 +123,28 @@ public class Main {
                 null));
         testCases.add(new TestCase("b/22881413", "B22881413", "run", null, null, null));
         testCases.add(new TestCase("b/20843113", "B20843113", "run", null, null, null));
+        testCases.add(new TestCase("b/20036522 (1)", "B20036522_1", "run",
+                new Object[] { new Object(), 0}, new VerifyError(), null));
+        testCases.add(new TestCase("b/20036522 (2)", "B20036522_2", "run",
+                new Object[] { new Object(), 0}, new VerifyError(), null));
+        testCases.add(new TestCase("b/20036522 (3)", "B20036522_3", "run",
+                new Object[] { new Object(), 0}, new VerifyError(), null));
+        testCases.add(new TestCase("b/20036522 (4.1)", "B20036522", "run4",
+                new Object[] { new Object(), 0, 0}, null, null));
+        testCases.add(new TestCase("b/20036522 (4.2)", "B20036522", "run4",
+                new Object[] { new Object(), 1, 1}, null, null));
+        testCases.add(new TestCase("b/20036522 (4.3)", "B20036522", "run4",
+                new Object[] { new Object(), 0, 1}, new IllegalMonitorStateException(), null));
+        testCases.add(new TestCase("b/20036522 (4.4)", "B20036522", "run4",
+                new Object[] { new Object(), 1, 0}, null, null));
+        testCases.add(new TestCase("b/20036522 (5.1)", "B20036522", "run5",
+                new Object[] { new Object(), 0, 0}, null, null));
+        testCases.add(new TestCase("b/20036522 (5.2)", "B20036522", "run5",
+                new Object[] { new Object(), 1, 1}, null, null));
+        testCases.add(new TestCase("b/20036522 (5.3)", "B20036522", "run5",
+                new Object[] { new Object(), 0, 1}, null, null));
+        testCases.add(new TestCase("b/20036522 (5.4)", "B20036522", "run5",
+                new Object[] { new Object(), 1, 0}, new IllegalMonitorStateException(), null));
     }
 
     public void runTests() {
