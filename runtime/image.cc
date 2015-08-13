@@ -24,7 +24,7 @@
 namespace art {
 
 const uint8_t ImageHeader::kImageMagic[] = { 'a', 'r', 't', '\n' };
-const uint8_t ImageHeader::kImageVersion[] = { '0', '1', '8', '\0' };
+const uint8_t ImageHeader::kImageVersion[] = { '0', '1', '9', '\0' };
 
 ImageHeader::ImageHeader(uint32_t image_begin,
                          uint32_t image_size,
@@ -151,9 +151,9 @@ void ImageSection::VisitPackedArtFields(ArtFieldVisitor* visitor, uint8_t* base)
   for (size_t pos = 0; pos < Size(); ) {
     auto* array = reinterpret_cast<LengthPrefixedArray<ArtField>*>(base + Offset() + pos);
     for (size_t i = 0; i < array->Length(); ++i) {
-      visitor->Visit(&array->At(i, sizeof(ArtField)));
+      visitor->Visit(&array->At(i));
     }
-    pos += array->ComputeSize(array->Length(), sizeof(ArtField));
+    pos += array->ComputeSize(array->Length());
   }
 }
 
@@ -163,7 +163,7 @@ void ImageSection::VisitPackedArtMethods(ArtMethodVisitor* visitor,
   for (size_t pos = 0; pos < Size(); ) {
     auto* array = reinterpret_cast<LengthPrefixedArray<ArtMethod>*>(base + Offset() + pos);
     for (size_t i = 0; i < array->Length(); ++i) {
-      visitor->Visit(&array->At(i, method_size));
+      visitor->Visit(&array->At(i));
     }
     pos += array->ComputeSize(array->Length(), method_size);
   }
