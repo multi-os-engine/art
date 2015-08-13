@@ -1473,7 +1473,9 @@ void InstructionCodeGeneratorARM::VisitDoubleConstant(HDoubleConstant* constant)
 }
 
 void LocationsBuilderARM::VisitMemoryBarrier(HMemoryBarrier* memory_barrier) {
-  memory_barrier->SetLocations(nullptr);
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(memory_barrier, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::NoLocation());
 }
 
 void InstructionCodeGeneratorARM::VisitMemoryBarrier(HMemoryBarrier* memory_barrier) {

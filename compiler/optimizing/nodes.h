@@ -4452,12 +4452,13 @@ class HCheckCast : public HTemplateInstruction<2> {
   DISALLOW_COPY_AND_ASSIGN(HCheckCast);
 };
 
-class HMemoryBarrier : public HTemplateInstruction<0> {
+class HMemoryBarrier : public HTemplateInstruction<1> {
  public:
-  explicit HMemoryBarrier(MemBarrierKind barrier_kind)
-      : HTemplateInstruction(
-          SideEffects::All()),  // assume write/read on all fields/arrays
-        barrier_kind_(barrier_kind) {}
+  HMemoryBarrier(HInstruction* object, MemBarrierKind barrier_kind)
+      : HTemplateInstruction(SideEffects::All()),  // assume write/read on all fields/arrays
+        barrier_kind_(barrier_kind) {
+    SetRawInputAt(0, object);
+  }
 
   MemBarrierKind GetBarrierKind() { return barrier_kind_; }
 
