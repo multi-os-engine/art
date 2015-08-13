@@ -746,7 +746,16 @@ void HGraphBuilder::BuildReturn(const Instruction& instruction, Primitive::Type 
         DCHECK(RequiresConstructorBarrier(dex_compilation_unit_, *compiler_driver_))
           << "Inconsistent use of ShouldGenerateConstructorBarrier. Should not generate a barrier.";
       }
-      current_block_->AddInstruction(new (arena_) HMemoryBarrier(kStoreStore));
+      HParameterValue* this_param = nullptr;
+      for (HInstructionIterator it(entry_block_->GetInstructions()); !it.Done(); it.Advance()) {
+        HParameterValue* param = it.Current()->AsParameterValue();
+        if (param != nullptr && param->IsThis()) {
+          this_param = param;
+          break;
+        }
+      }
+      DCHECK(this_param != nullptr) << "Couldn't find this object for constructor";
+      current_block_->AddInstruction(new (arena_) HMemoryBarrier(this_param, kStoreStore));
     }
     current_block_->AddInstruction(new (arena_) HReturnVoid());
   } else {

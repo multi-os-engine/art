@@ -2968,7 +2968,9 @@ void InstructionCodeGeneratorMIPS64::VisitRem(HRem* instruction) {
 }
 
 void LocationsBuilderMIPS64::VisitMemoryBarrier(HMemoryBarrier* memory_barrier) {
-  memory_barrier->SetLocations(nullptr);
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(memory_barrier, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::NoLocation());
 }
 
 void InstructionCodeGeneratorMIPS64::VisitMemoryBarrier(HMemoryBarrier* memory_barrier) {

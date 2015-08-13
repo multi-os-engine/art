@@ -2890,7 +2890,9 @@ void InstructionCodeGeneratorARM64::VisitRem(HRem* rem) {
 }
 
 void LocationsBuilderARM64::VisitMemoryBarrier(HMemoryBarrier* memory_barrier) {
-  memory_barrier->SetLocations(nullptr);
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(memory_barrier, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::NoLocation());
 }
 
 void InstructionCodeGeneratorARM64::VisitMemoryBarrier(HMemoryBarrier* memory_barrier) {
