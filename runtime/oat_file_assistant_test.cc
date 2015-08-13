@@ -55,6 +55,7 @@ class OatFileAssistantTest : public CommonRuntimeTest {
     odex_dir_ = odex_oat_dir_ + "/" + std::string(GetInstructionSetString(kRuntimeISA));
     ASSERT_EQ(0, mkdir(odex_dir_.c_str(), 0700));
 
+    ASSERT_TRUE(CreateDalvikCache(GetInstructionSetString(kRuntimeISA)));
 
     // Verify the environment is as we expect
     uint32_t checksum;
@@ -98,6 +99,8 @@ class OatFileAssistantTest : public CommonRuntimeTest {
   }
 
   virtual void PreRuntimeCreate() {
+    ASSERT_TRUE(CreateDalvikCache(GetInstructionSetString(kRuntimeISA)));
+
     UnreserveImageSpace();
   }
 
