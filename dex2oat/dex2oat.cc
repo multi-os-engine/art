@@ -1324,8 +1324,9 @@ class Dex2Oat FINAL {
       compiled_methods_.reset(nullptr);  // By default compile everything.
     }
 
+    ClassLinker* const class_linker = Runtime::Current()->GetClassLinker();
     if (boot_image_option_.empty()) {
-      dex_files_ = Runtime::Current()->GetClassLinker()->GetBootClassPath();
+      dex_files_ = class_linker->GetBootClassPath();
     } else {
       if (dex_filenames_.empty()) {
         ATRACE_BEGIN("Opening zip archive from file descriptor");
@@ -1383,6 +1384,9 @@ class Dex2Oat FINAL {
       if (!dex_file->EnableWrite()) {
         PLOG(ERROR) << "Failed to make .dex file writeable '" << dex_file->GetLocation() << "'\n";
       }
+      ScopedObjectAccess soa(self);
+      dex_caches_.push_back(soa.AddLocalReference<jobject>(
+          class_linker->RegisterDexFile(*dex_file)));
     }
 
     // If we use a swap file, ensure we are above the threshold to make it necessary.
@@ -1427,6 +1431,7 @@ class Dex2Oat FINAL {
     // Handle and ClassLoader creation needs to come after Runtime::Create
     jobject class_loader = nullptr;
     Thread* self = Thread::Current();
+
     if (!boot_image_option_.empty()) {
       ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
       OpenClassPathFiles(runtime_->GetClassPathString(), dex_files_, &class_path_files_);
@@ -1961,6 +1966,7 @@ class Dex2Oat FINAL {
   bool is_host_;
   std::string android_root_;
   std::vector<const DexFile*> dex_files_;
+  std::vector<jobject> dex_caches_;
   std::vector<std::unique_ptr<const DexFile>> opened_dex_files_;
   std::unique_ptr<CompilerDriver> driver_;
   std::vector<std::string> verbose_methods_;
