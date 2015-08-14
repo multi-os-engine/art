@@ -20,6 +20,7 @@
 #include "runtime.h"
 
 #include "art_method.h"
+#include "class_linker.h"
 #include "read_barrier-inl.h"
 
 namespace art {
@@ -30,7 +31,10 @@ inline bool Runtime::IsClearedJniWeakGlobal(mirror::Object* obj) {
 
 inline mirror::Object* Runtime::GetClearedJniWeakGlobal() {
   mirror::Object* obj = sentinel_.Read();
-  DCHECK(obj != nullptr);
+  if (obj == nullptr) {
+    // May be null if the class linker isn't done initializing or the runtime is not started.
+    DCHECK(!GetClassLinker()->IsInitialized());
+  }
   return obj;
 }
 
