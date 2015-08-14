@@ -369,11 +369,11 @@ JavaVMExt::JavaVMExt(Runtime* runtime, const RuntimeArgumentMap& runtime_options
       tracing_enabled_(runtime_options.Exists(RuntimeArgumentMap::JniTrace)
                        || VLOG_IS_ON(third_party_jni)),
       trace_(runtime_options.GetOrDefault(RuntimeArgumentMap::JniTrace)),
-      globals_lock_("JNI global reference table lock"),
+      globals_lock_("JNI global reference table lock", kAllocSpaceLock),
       globals_(gGlobalsInitial, gGlobalsMax, kGlobal),
       libraries_(new Libraries),
       unchecked_functions_(&gJniInvokeInterface),
-      weak_globals_lock_("JNI weak global reference table lock"),
+      weak_globals_lock_("JNI weak global reference table lock", kWeakGlobalsLock),
       weak_globals_(kWeakGlobalsInitial, kWeakGlobalsMax, kWeakGlobal),
       allow_new_weak_globals_(true),
       weak_globals_add_condition_("weak globals add condition", weak_globals_lock_) {
