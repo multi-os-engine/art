@@ -3885,8 +3885,22 @@ void LocationsBuilderARM::VisitBoundsCheck(HBoundsCheck* instruction) {
 
 void InstructionCodeGeneratorARM::VisitBoundsCheck(HBoundsCheck* instruction) {
   LocationSummary* locations = instruction->GetLocations();
+  Location index_loc = locations->InAt(0);
+  Location length_loc = locations->InAt(1);
   SlowPathCodeARM* slow_path =
       new (GetGraph()->GetArena()) BoundsCheckSlowPathARM(instruction);
+
+  if (length_loc.IsConstant() && index_loc.IsConstant()) {
+    int32_t length = CodeGenerator::GetInt32ValueOf(length_loc.GetConstant());
+    int32_t index = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
+    if (index < 0 || index >= length) {
+      codegen_->AddSlowPath(slow_path);
+      __ b(slow_path->GetEntryLabel());
+    } else {
+      // No need for a bounds check, the current index is within the length range.
+    }
+    return;
+  }
   codegen_->AddSlowPath(slow_path);
 
   Register index = locations->InAt(0).AsRegister<Register>();
