@@ -273,7 +273,6 @@ ClassLinker::ClassLinker(InternTable* intern_table)
       array_iftable_(nullptr),
       find_array_class_cache_next_victim_(0),
       init_done_(false),
-      log_new_dex_caches_roots_(false),
       log_new_class_table_roots_(false),
       intern_table_(intern_table),
       quick_resolution_trampoline_(nullptr),
@@ -1306,27 +1305,6 @@ void ClassLinker::VisitClassRoots(RootVisitor* visitor, VisitRootFlags flags) {
 // mapped image.
 void ClassLinker::VisitRoots(RootVisitor* visitor, VisitRootFlags flags) {
   class_roots_.VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
-  Thread* const self = Thread::Current();
-  {
-    ReaderMutexLock mu(self, dex_lock_);
-    if ((flags & kVisitRootFlagAllRoots) != 0) {
-      for (GcRoot<mirror::DexCache>& dex_cache : dex_caches_) {
-        dex_cache.VisitRoot(visitor, RootInfo(kRootVMInternal));
-      }
-    } else if ((flags & kVisitRootFlagNewRoots) != 0) {
-      for (size_t index : new_dex_cache_roots_) {
-        dex_caches_[index].VisitRoot(visitor, RootInfo(kRootVMInternal));
-      }
-    }
-    if ((flags & kVisitRootFlagClearRootLog) != 0) {
-      new_dex_cache_roots_.clear();
-    }
-    if ((flags & kVisitRootFlagStartLoggingNewRoots) != 0) {
-      log_new_dex_caches_roots_ = true;
-    } else if ((flags & kVisitRootFlagStopLoggingNewRoots) != 0) {
-      log_new_dex_caches_roots_ = false;
-    }
-  }
   VisitClassRoots(visitor, flags);
   array_iftable_.VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
   for (GcRoot<mirror::Class>& root : find_array_class_cache_) {
@@ -1701,7 +1679,6 @@ bool ClassLinker::FindClassInPathClassLoader(ScopedObjectAccessAlreadyRunnable& 
                 long_array->GetWithoutChecks(j)));
             const DexFile::ClassDef* dex_class_def = cp_dex_file->FindClassDef(descriptor, hash);
             if (dex_class_def != nullptr) {
-              RegisterDexFile(*cp_dex_file);
               mirror::Class* klass = DefineClass(self, descriptor, hash, class_loader,
                                                  *cp_dex_file, *dex_class_def);
               if (klass == nullptr) {
@@ -1847,7 +1824,7 @@ mirror::Class* ClassLinker::DefineClass(Thread* self, const char* descriptor, si
     CHECK(self->IsExceptionPending());  // Expect an OOME.
     return nullptr;
   }
-  klass->SetDexCache(FindDexCache(dex_file));
+  klass->SetDexCache(RegisterDexFile(dex_file));
 
   SetupClass(dex_file, dex_class_def, klass, class_loader.Get());
 
@@ -2481,58 +2458,49 @@ void ClassLinker::AppendToBootClassPath(const DexFile& dex_file,
   RegisterDexFile(dex_file, dex_cache);
 }
 
-bool ClassLinker::IsDexFileRegisteredLocked(const DexFile& dex_file) {
-  dex_lock_.AssertSharedHeld(Thread::Current());
-  for (GcRoot<mirror::DexCache>& root : dex_caches_) {
-    mirror::DexCache* dex_cache = root.Read();
-    if (dex_cache->GetDexFile() == &dex_file) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool ClassLinker::IsDexFileRegistered(const DexFile& dex_file) {
-  ReaderMutexLock mu(Thread::Current(), dex_lock_);
-  return IsDexFileRegisteredLocked(dex_file);
-}
-
 void ClassLinker::RegisterDexFileLocked(const DexFile& dex_file,
                                         Handle<mirror::DexCache> dex_cache) {
-  dex_lock_.AssertExclusiveHeld(Thread::Current());
+  Thread* const self = Thread::Current();
+  dex_lock_.AssertExclusiveHeld(self);
   CHECK(dex_cache.Get() != nullptr) << dex_file.GetLocation();
   CHECK(dex_cache->GetLocation()->Equals(dex_file.GetLocation()))
       << dex_cache->GetLocation()->ToModifiedUtf8() << " " << dex_file.GetLocation();
-  dex_caches_.push_back(GcRoot<mirror::DexCache>(dex_cache.Get()));
-  dex_cache->SetDexFile(&dex_file);
-  if (log_new_dex_caches_roots_) {
-    // TODO: This is not safe if we can remove dex caches.
-    new_dex_cache_roots_.push_back(dex_caches_.size() - 1);
+  // Clean up pass to remove null dex caches.
+  for (auto it = dex_caches_.begin(); it != dex_caches_.end();) {
+    mirror::Object* dex_cache_root = self->DecodeJObject(*it);
+    if (dex_cache_root == nullptr) {
+      it = dex_caches_.erase(it);
+    } else {
+      ++it;
+    }
   }
+  dex_caches_.push_back(self->GetJniEnv()->vm->AddWeakGlobalRef(self, dex_cache.Get()));
+  dex_cache->SetDexFile(&dex_file);
 }
 
-void ClassLinker::RegisterDexFile(const DexFile& dex_file) {
+mirror::DexCache* ClassLinker::RegisterDexFile(const DexFile& dex_file) {
   Thread* self = Thread::Current();
   {
     ReaderMutexLock mu(self, dex_lock_);
-    if (IsDexFileRegisteredLocked(dex_file)) {
-      return;
+    mirror::DexCache* dex_cache = FindDexCacheLocked(dex_file, true);
+    if (dex_cache != nullptr) {
+      return dex_cache;
     }
   }
   // Don't alloc while holding the lock, since allocation may need to
   // suspend all threads and another thread may need the dex_lock_ to
   // get to a suspend point.
   StackHandleScope<1> hs(self);
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(AllocDexCache(self, dex_file)));
-  CHECK(dex_cache.Get() != nullptr) << "Failed to allocate dex cache for "
-                                    << dex_file.GetLocation();
-  {
-    WriterMutexLock mu(self, dex_lock_);
-    if (IsDexFileRegisteredLocked(dex_file)) {
-      return;
-    }
-    RegisterDexFileLocked(dex_file, dex_cache);
+  Handle<mirror::DexCache> h_dex_cache(hs.NewHandle(AllocDexCache(self, dex_file)));
+  CHECK(h_dex_cache.Get() != nullptr) << "Failed to allocate dex cache for "
+                                      << dex_file.GetLocation();
+  WriterMutexLock mu(self, dex_lock_);
+  mirror::DexCache* dex_cache = FindDexCacheLocked(dex_file, true);
+  if (dex_cache != nullptr) {
+    return dex_cache;
   }
+  RegisterDexFileLocked(dex_file, h_dex_cache);
+  return h_dex_cache.Get();
 }
 
 void ClassLinker::RegisterDexFile(const DexFile& dex_file,
@@ -2541,36 +2509,44 @@ void ClassLinker::RegisterDexFile(const DexFile& dex_file,
   RegisterDexFileLocked(dex_file, dex_cache);
 }
 
-mirror::DexCache* ClassLinker::FindDexCache(const DexFile& dex_file) {
-  ReaderMutexLock mu(Thread::Current(), dex_lock_);
+mirror::DexCache* ClassLinker::FindDexCache(const DexFile& dex_file, bool allow_failure) {
+  Thread* const self = Thread::Current();
+  ReaderMutexLock mu(self, dex_lock_);
+  return FindDexCacheLocked(dex_file, allow_failure);
+}
+
+mirror::DexCache* ClassLinker::FindDexCacheLocked(const DexFile& dex_file, bool allow_failure) {
+  Thread* const self = Thread::Current();
   // Search assuming unique-ness of dex file.
-  for (size_t i = 0; i != dex_caches_.size(); ++i) {
-    mirror::DexCache* dex_cache = GetDexCache(i);
-    if (dex_cache->GetDexFile() == &dex_file) {
+  for (jobject weak_root : dex_caches_) {
+    mirror::DexCache* dex_cache = down_cast<mirror::DexCache*>(self->DecodeJObject(weak_root));
+    if (dex_cache != nullptr && dex_cache->GetDexFile() == &dex_file) {
       return dex_cache;
     }
   }
-  // Search matching by location name.
+  if (allow_failure) {
+    return nullptr;
+  }
   std::string location(dex_file.GetLocation());
-  for (size_t i = 0; i != dex_caches_.size(); ++i) {
-    mirror::DexCache* dex_cache = GetDexCache(i);
-    if (dex_cache->GetDexFile()->GetLocation() == location) {
-      return dex_cache;
-    }
-  }
   // Failure, dump diagnostic and abort.
-  for (size_t i = 0; i != dex_caches_.size(); ++i) {
-    mirror::DexCache* dex_cache = GetDexCache(i);
-    LOG(ERROR) << "Registered dex file " << i << " = " << dex_cache->GetDexFile()->GetLocation();
+  for (jobject weak_root : dex_caches_) {
+    mirror::DexCache* dex_cache = down_cast<mirror::DexCache*>(self->DecodeJObject(weak_root));
+    if (dex_cache != nullptr) {
+      LOG(ERROR) << "Registered dex file " << dex_cache->GetDexFile()->GetLocation();
+    }
   }
   LOG(FATAL) << "Failed to find DexCache for DexFile " << location;
   UNREACHABLE();
 }
 
 void ClassLinker::FixupDexCaches(ArtMethod* resolution_method) {
-  ReaderMutexLock mu(Thread::Current(), dex_lock_);
-  for (auto& dex_cache : dex_caches_) {
-    dex_cache.Read()->Fixup(resolution_method, image_pointer_size_);
+  Thread* const self = Thread::Current();
+  ReaderMutexLock mu(self, dex_lock_);
+  for (jobject weak_root : dex_caches_) {
+    mirror::DexCache* dex_cache = down_cast<mirror::DexCache*>(self->DecodeJObject(weak_root));
+    if (dex_cache != nullptr) {
+      dex_cache->Fixup(resolution_method, image_pointer_size_);
+    }
   }
 }
 
@@ -3401,11 +3377,13 @@ ArtMethod* ClassLinker::FindMethodForProxy(mirror::Class* proxy_class, ArtMethod
   DCHECK(proxy_class->IsProxyClass());
   DCHECK(proxy_method->IsProxyMethod());
   {
-    ReaderMutexLock mu(Thread::Current(), dex_lock_);
+    Thread* const self = Thread::Current();
+    ReaderMutexLock mu(self, dex_lock_);
     // Locate the dex cache of the original interface/Object
-    for (const GcRoot<mirror::DexCache>& root : dex_caches_) {
-      auto* dex_cache = root.Read();
-      if (proxy_method->HasSameDexCacheResolvedTypes(dex_cache->GetResolvedTypes())) {
+    for (jobject weak_root : dex_caches_) {
+      mirror::DexCache* dex_cache = down_cast<mirror::DexCache*>(self->DecodeJObject(weak_root));
+      if (dex_cache != nullptr &&
+          proxy_method->HasSameDexCacheResolvedTypes(dex_cache->GetResolvedTypes())) {
         ArtMethod* resolved_method = dex_cache->GetResolvedMethod(
             proxy_method->GetDexMethodIndex(), image_pointer_size_);
         CHECK(resolved_method != nullptr);
@@ -5815,11 +5793,6 @@ jobject ClassLinker::CreatePathClassLoader(Thread* self, std::vector<const DexFi
   // SOAAlreadyRunnable is protected, and we need something to add a global reference.
   // We could move the jobject to the callers, but all call-sites do this...
   ScopedObjectAccessUnchecked soa(self);
-
-  // Register the dex files.
-  for (const DexFile* dex_file : dex_files) {
-    RegisterDexFile(*dex_file);
-  }
 
   // For now, create a libcore-level DexFile for each ART DexFile. This "explodes" multidex.
   StackHandleScope<10> hs(self);
