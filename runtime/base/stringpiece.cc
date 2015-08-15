@@ -78,12 +78,15 @@ StringPiece::size_type StringPiece::rfind(const StringPiece& s, size_type pos) c
 
 StringPiece::size_type StringPiece::rfind(char c, size_type pos) const {
   if (length_ == 0) return npos;
-  for (int i = std::min(pos, static_cast<size_type>(length_ - 1));
-       i >= 0; --i) {
+  size_type i = pos == std::numeric_limits<size_type>::max()
+      ? length_
+      : std::min(pos + 1, length_);
+  do {
+    i--;
     if (ptr_[i] == c) {
       return i;
     }
-  }
+  } while (i != 0);
   return npos;
 }
 

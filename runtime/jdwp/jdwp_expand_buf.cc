@@ -35,9 +35,9 @@ namespace JDWP {
  * Data structure used to track buffer use.
  */
 struct ExpandBuf {
-  uint8_t*     storage;
-  int     curLen;
-  int     maxLen;
+  uint8_t* storage;
+  size_t   curLen;
+  size_t   maxLen;
 };
 
 #define kInitialStorage 64
@@ -83,7 +83,7 @@ size_t expandBufGetLength(ExpandBuf* pBuf) {
  * Ensure that the buffer has enough space to hold incoming data.  If it
  * doesn't, resize the buffer.
  */
-static void ensureSpace(ExpandBuf* pBuf, int newCount) {
+static void ensureSpace(ExpandBuf* pBuf, size_t newCount) {
   if (pBuf->curLen + newCount <= pBuf->maxLen) {
     return;
   }
@@ -103,7 +103,7 @@ static void ensureSpace(ExpandBuf* pBuf, int newCount) {
 /*
  * Allocate some space in the buffer.
  */
-uint8_t* expandBufAddSpace(ExpandBuf* pBuf, int gapSize) {
+uint8_t* expandBufAddSpace(ExpandBuf* pBuf, size_t gapSize) {
   uint8_t* gapStart;
 
   ensureSpace(pBuf, gapSize);

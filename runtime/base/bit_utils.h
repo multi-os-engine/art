@@ -116,7 +116,7 @@ static constexpr T RoundUp(T x, typename std::remove_reference<T>::type n) WARN_
 
 template<typename T>
 static constexpr T RoundUp(T x, typename std::remove_reference<T>::type n) {
-  return RoundDown(x + n - 1, n);
+  return RoundDown<T>(x + n - 1, n);
 }
 
 // For aligning pointers.
@@ -211,7 +211,9 @@ static constexpr T GetIntLimit(size_t bits) {
   return
       DCHECK_CONSTEXPR(bits > 0, "bits cannot be zero", 0)
       DCHECK_CONSTEXPR(bits < BitSizeOf<T>(), "kBits must be < max.", 0)
-      static_cast<T>(1) << (bits - 1);
+      static_cast<T>(static_cast<T>(1) << (bits - 1));  // Note: double-cast for correct width
+                                                        //       of "1" and the result, no matter
+                                                        //       T.
 }
 
 template <size_t kBits, typename T>

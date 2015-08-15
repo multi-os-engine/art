@@ -173,7 +173,7 @@ class BumpPointerSpace FINAL : public ContinuousMemMapAllocSpace {
 
   uint8_t* growth_end_;
   AtomicInteger objects_allocated_;  // Accumulated from revoked thread local regions.
-  AtomicInteger bytes_allocated_;  // Accumulated from revoked thread local regions.
+  Atomic<size_t> bytes_allocated_;  // Accumulated from revoked thread local regions.
   Mutex block_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   // The objects at the start of the space are stored in the main block. The main block doesn't
   // have a header, this lets us walk empty spaces which are mprotected.

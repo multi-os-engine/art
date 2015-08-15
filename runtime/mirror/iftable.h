@@ -40,7 +40,7 @@ class MANAGED IfTable FINAL : public ObjectArray<Object> {
     return method_array;
   }
 
-  size_t GetMethodArrayCount(int32_t i) SHARED_REQUIRES(Locks::mutator_lock_) {
+  int32_t GetMethodArrayCount(int32_t i) SHARED_REQUIRES(Locks::mutator_lock_) {
     auto* method_array = down_cast<PointerArray*>(Get((i * kMax) + kMethodArray));
     return method_array == nullptr ? 0u : method_array->GetLength();
   }
@@ -52,7 +52,7 @@ class MANAGED IfTable FINAL : public ObjectArray<Object> {
     Set<false>(idx, arr);
   }
 
-  size_t Count() SHARED_REQUIRES(Locks::mutator_lock_) {
+  int32_t Count() SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetLength() / kMax;
   }
 

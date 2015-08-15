@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_MIRROR_CLASS_H_
 #define ART_RUNTIME_MIRROR_CLASS_H_
 
+#include "base/casts.h"
 #include "base/iteration_range.h"
 #include "dex_file.h"
 #include "gc_root.h"
@@ -65,7 +66,7 @@ class MANAGED Class FINAL : public Object {
   // Interface method table size. Increasing this value reduces the chance of two interface methods
   // colliding in the interface method table but increases the size of classes that implement
   // (non-marker) interfaces.
-  static constexpr size_t kImtSize = IMT_SIZE;
+  static constexpr uint32_t kImtSize = IMT_SIZE;
 
   // Class Status
   //
@@ -979,7 +980,8 @@ class MANAGED Class FINAL : public Object {
   }
 
   uint16_t GetDexClassDefIndex() SHARED_REQUIRES(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_));
+    return dchecked_integral_cast<uint16_t>(
+        GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_class_def_idx_)));
   }
 
   void SetDexClassDefIndex(uint16_t class_def_idx) SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -988,7 +990,8 @@ class MANAGED Class FINAL : public Object {
   }
 
   uint16_t GetDexTypeIndex() SHARED_REQUIRES(Locks::mutator_lock_) {
-    return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_));
+    return dchecked_integral_cast<uint16_t>(
+        GetField32(OFFSET_OF_OBJECT_MEMBER(Class, dex_type_idx_)));
   }
 
   void SetDexTypeIndex(uint16_t type_idx) SHARED_REQUIRES(Locks::mutator_lock_) {

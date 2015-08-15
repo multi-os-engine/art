@@ -72,11 +72,11 @@ inline uint32_t ArtMethod::GetAccessFlags() {
 inline uint16_t ArtMethod::GetMethodIndex() {
   DCHECK(IsRuntimeMethod() || GetDeclaringClass()->IsResolved() ||
          GetDeclaringClass()->IsErroneous());
-  return method_index_;
+  return dchecked_integral_cast<uint16_t>(method_index_);
 }
 
 inline uint16_t ArtMethod::GetMethodIndexDuringLinking() {
-  return method_index_;
+  return dchecked_integral_cast<uint16_t>(method_index_);
 }
 
 inline uint32_t ArtMethod::GetDexMethodIndex() {

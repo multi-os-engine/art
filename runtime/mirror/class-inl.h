@@ -629,10 +629,11 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
   uint32_t size = sizeof(Class);
   // Space used by embedded tables.
   if (has_embedded_tables) {
-    const uint32_t embedded_imt_size = kImtSize * ImTableEntrySize(pointer_size);
-    const uint32_t embedded_vtable_size = num_vtable_entries * VTableEntrySize(pointer_size);
-    size = RoundUp(size + sizeof(uint32_t) /* embedded vtable len */, pointer_size) +
-        embedded_imt_size + embedded_vtable_size;
+    const size_t embedded_imt_size = kImtSize * ImTableEntrySize(pointer_size);
+    const size_t embedded_vtable_size = num_vtable_entries * VTableEntrySize(pointer_size);
+    size = static_cast<uint32_t>(
+        RoundUp(size + sizeof(uint32_t) /* embedded vtable len */, pointer_size) +
+        embedded_imt_size + embedded_vtable_size);
   }
 
   // Space used by reference statics.
@@ -910,22 +911,22 @@ inline bool Class::IsAssignableFrom(Class* src) {
 
 inline uint32_t Class::NumDirectMethods() {
   LengthPrefixedArray<ArtMethod>* arr = GetDirectMethodsPtrUnchecked();
-  return arr != nullptr ? arr->Length() : 0u;
+  return arr != nullptr ? static_cast<uint32_t>(arr->Length()) : 0u;
 }
 
 inline uint32_t Class::NumVirtualMethods() {
   LengthPrefixedArray<ArtMethod>* arr = GetVirtualMethodsPtrUnchecked();
-  return arr != nullptr ? arr->Length() : 0u;
+  return arr != nullptr ? static_cast<uint32_t>(arr->Length()) : 0u;
 }
 
 inline uint32_t Class::NumInstanceFields() {
   LengthPrefixedArray<ArtField>* arr = GetIFieldsPtrUnchecked();
-  return arr != nullptr ? arr->Length() : 0u;
+  return arr != nullptr ? static_cast<uint32_t>(arr->Length()) : 0u;
 }
 
 inline uint32_t Class::NumStaticFields() {
   LengthPrefixedArray<ArtField>* arr = GetSFieldsPtrUnchecked();
-  return arr != nullptr ? arr->Length() : 0u;
+  return arr != nullptr ? static_cast<uint32_t>(arr->Length()) : 0u;
 }
 
 }  // namespace mirror

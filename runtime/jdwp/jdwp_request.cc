@@ -74,6 +74,26 @@ uint64_t Request::ReadValue(size_t width) {
   return value;
 }
 
+template<>
+uint8_t Request::ReadValue<uint8_t>() {
+  return Read1();
+}
+
+template<>
+uint16_t Request::ReadValue<uint16_t>() {
+  return Read2BE();
+}
+
+template<>
+uint32_t Request::ReadValue<uint32_t>() {
+  return Read4BE();
+}
+
+template<>
+uint64_t Request::ReadValue<uint64_t>() {
+  return Read8BE();
+}
+
 int32_t Request::ReadSigned32(const char* what) {
   int32_t value = static_cast<int32_t>(Read4BE());
   VLOG(jdwp) << "    " << what << " " << value;

@@ -39,7 +39,8 @@ inline mirror::Object* BumpPointerSpace::Alloc(Thread*, size_t num_bytes, size_t
   return ret;
 }
 
-inline mirror::Object* BumpPointerSpace::AllocThreadUnsafe(Thread* self, size_t num_bytes,
+inline mirror::Object* BumpPointerSpace::AllocThreadUnsafe(Thread* self,
+                                                           size_t num_bytes,
                                                            size_t* bytes_allocated,
                                                            size_t* usable_size,
                                                            size_t* bytes_tl_bulk_allocated) {

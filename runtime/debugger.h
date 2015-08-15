@@ -89,7 +89,7 @@ struct DebugInvokeReq {
 class SingleStepControl {
  public:
   SingleStepControl(JDWP::JdwpStepSize step_size, JDWP::JdwpStepDepth step_depth,
-                    int stack_depth, ArtMethod* method)
+                    size_t stack_depth, ArtMethod* method)
       : step_size_(step_size), step_depth_(step_depth),
         stack_depth_(stack_depth), method_(method) {
   }
@@ -102,7 +102,7 @@ class SingleStepControl {
     return step_depth_;
   }
 
-  int GetStackDepth() const {
+  size_t GetStackDepth() const {
     return stack_depth_;
   }
 
@@ -125,7 +125,7 @@ class SingleStepControl {
 
   // The stack depth when this single-step was initiated. This is used to support SD_OVER and SD_OUT
   // single-step depth.
-  const int stack_depth_;
+  const size_t stack_depth_;
 
   // The location this single-step was initiated from.
   // A single-step is initiated in a suspended thread. We save here the current method and the
@@ -700,10 +700,10 @@ class Dbg {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   static JDWP::JdwpError GetLocalValue(const StackVisitor& visitor,
-                                       ScopedObjectAccessUnchecked& soa, int slot,
+                                       ScopedObjectAccessUnchecked& soa, uint16_t slot,
                                        JDWP::JdwpTag tag, uint8_t* buf, size_t width)
       REQUIRES(!Locks::thread_list_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
-  static JDWP::JdwpError SetLocalValue(StackVisitor& visitor, int slot, JDWP::JdwpTag tag,
+  static JDWP::JdwpError SetLocalValue(StackVisitor& visitor, uint16_t slot, JDWP::JdwpTag tag,
                                        uint64_t value, size_t width)
       REQUIRES(!Locks::thread_list_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
 

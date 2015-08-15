@@ -110,7 +110,7 @@ inline mirror::Class* ClassLinker::ResolveType(uint16_t type_idx, ArtField* refe
 
 inline ArtMethod* ClassLinker::GetResolvedMethod(uint32_t method_idx, ArtMethod* referrer) {
   ArtMethod* resolved_method = referrer->GetDexCacheResolvedMethod(
-      method_idx, image_pointer_size_);
+      dchecked_integral_cast<uint16_t>(method_idx), image_pointer_size_);
   if (resolved_method == nullptr || resolved_method->IsRuntimeMethod()) {
     return nullptr;
   }
@@ -165,22 +165,22 @@ inline mirror::Object* ClassLinker::AllocObject(Thread* self) {
 }
 
 template <class T>
-inline mirror::ObjectArray<T>* ClassLinker::AllocObjectArray(Thread* self, size_t length) {
+inline mirror::ObjectArray<T>* ClassLinker::AllocObjectArray(Thread* self, int32_t length) {
   return mirror::ObjectArray<T>::Alloc(self, GetClassRoot(kObjectArrayClass), length);
 }
 
 inline mirror::ObjectArray<mirror::Class>* ClassLinker::AllocClassArray(Thread* self,
-                                                                        size_t length) {
+                                                                        int32_t length) {
   return mirror::ObjectArray<mirror::Class>::Alloc(self, GetClassRoot(kClassArrayClass), length);
 }
 
 inline mirror::ObjectArray<mirror::String>* ClassLinker::AllocStringArray(Thread* self,
-                                                                          size_t length) {
+                                                                          int32_t length) {
   return mirror::ObjectArray<mirror::String>::Alloc(self, GetClassRoot(kJavaLangStringArrayClass),
                                                     length);
 }
 
-inline mirror::IfTable* ClassLinker::AllocIfTable(Thread* self, size_t ifcount) {
+inline mirror::IfTable* ClassLinker::AllocIfTable(Thread* self, int32_t ifcount) {
   return down_cast<mirror::IfTable*>(
       mirror::IfTable::Alloc(self, GetClassRoot(kObjectArrayClass),
                              ifcount * mirror::IfTable::kMax));

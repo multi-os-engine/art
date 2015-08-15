@@ -108,7 +108,7 @@ class MANAGED PrimitiveArray : public Array {
  public:
   typedef T ElementType;
 
-  static PrimitiveArray<T>* Alloc(Thread* self, size_t length)
+  static PrimitiveArray<T>* Alloc(Thread* self, int32_t length)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
   const T* GetData() const ALWAYS_INLINE  SHARED_REQUIRES(Locks::mutator_lock_) {

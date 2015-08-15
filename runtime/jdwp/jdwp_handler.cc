@@ -1253,6 +1253,7 @@ static JdwpError ER_Set(JdwpState* state, Request* request, ExpandBuf* pReply)
         // Restrict certain events based on location.
         JdwpLocation location = request->ReadLocation();
         mod.locationOnly.loc = location;
+        // TODO: Sort out locations with a dex_pc that's invalid for us (>32bit)?
       }
       break;
     case MK_EXCEPTION_ONLY:

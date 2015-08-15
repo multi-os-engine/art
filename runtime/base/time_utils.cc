@@ -37,6 +37,15 @@ std::string PrettyDuration(uint64_t nano_duration, size_t max_fraction_digits) {
   }
 }
 
+std::string PrettyDuration(double nano_duration, size_t max_fraction_digits) {
+  if (nano_duration < 0.001) {  // Arbitrarily small.
+    return "0";
+  } else {
+    return FormatDuration(nano_duration, GetAppropriateTimeUnit(nano_duration),
+                          max_fraction_digits);
+  }
+}
+
 TimeUnit GetAppropriateTimeUnit(uint64_t nano_duration) {
   const uint64_t one_sec = 1000 * 1000 * 1000;
   const uint64_t one_ms  = 1000 * 1000;
@@ -50,6 +59,10 @@ TimeUnit GetAppropriateTimeUnit(uint64_t nano_duration) {
   } else {
     return kTimeUnitNanosecond;
   }
+}
+
+TimeUnit GetAppropriateTimeUnit(double nano_duration) {
+  return GetAppropriateTimeUnit(static_cast<uint64_t>(nano_duration));
 }
 
 uint64_t GetNsToTimeUnitDivisor(TimeUnit time_unit) {
@@ -68,6 +81,12 @@ uint64_t GetNsToTimeUnitDivisor(TimeUnit time_unit) {
       return 1;
   }
   return 0;
+}
+
+std::string FormatDuration(double nano_duration, TimeUnit time_unit,
+                           size_t max_fraction_digits) {
+  // TODO: Do we need a dedicated implementation?
+  return FormatDuration(static_cast<uint64_t>(nano_duration), time_unit, max_fraction_digits);
 }
 
 std::string FormatDuration(uint64_t nano_duration, TimeUnit time_unit,

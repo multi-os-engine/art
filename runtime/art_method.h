@@ -209,7 +209,7 @@ class ArtMethod FINAL {
   }
 
   // Number of 32bit registers that would be required to hold all the arguments
-  static size_t NumArgRegisters(const StringPiece& shorty);
+  static uint32_t NumArgRegisters(const StringPiece& shorty);
 
   ALWAYS_INLINE uint32_t GetDexMethodIndex() SHARED_REQUIRES(Locks::mutator_lock_);
 

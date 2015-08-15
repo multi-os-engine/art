@@ -186,11 +186,11 @@ class Instruction {
 
   // Returns the size (in 2 byte code units) of this instruction.
   size_t SizeInCodeUnits() const {
-    int result = kInstructionSizeInCodeUnits[Opcode()];
-    if (UNLIKELY(result < 0)) {
+    size_t result = kInstructionSizeInCodeUnits[Opcode()];
+    if (UNLIKELY(result == 0)) {
       return SizeInCodeUnitsComplexOpcode();
     } else {
-      return static_cast<size_t>(result);
+      return result;
     }
   }
 
@@ -207,7 +207,7 @@ class Instruction {
 
   // Returns a pointer to the next instruction in the stream.
   const Instruction* Next() const {
-    return RelativeAt(SizeInCodeUnits());
+    return RelativeAt(static_cast<int32_t>(SizeInCodeUnits()));
   }
 
   // Returns a pointer to the instruction after this 1xx instruction in the stream.
@@ -431,7 +431,7 @@ class Instruction {
   void SetVRegA_10x(uint8_t val) {
     DCHECK(FormatOf(Opcode()) == k10x);
     uint16_t* insns = reinterpret_cast<uint16_t*>(this);
-    insns[0] = (val << 8) | (insns[0] & 0x00ff);
+    insns[0] = static_cast<uint16_t>((val << 8) | (insns[0] & 0x00ff));
   }
 
   void SetVRegB_3rc(uint16_t val) {
@@ -551,7 +551,7 @@ class Instruction {
 
   // Get the dex PC of this instruction as a offset in code units from the beginning of insns.
   uint32_t GetDexPc(const uint16_t* insns) const {
-    return (reinterpret_cast<const uint16_t*>(this) - insns);
+    return static_cast<uint32_t>(reinterpret_cast<const uint16_t*>(this) - insns);
   }
 
   // Dump decoded version of instruction
@@ -608,7 +608,7 @@ class Instruction {
   static IndexType const kInstructionIndexTypes[];
   static int const kInstructionFlags[];
   static int const kInstructionVerifyFlags[];
-  static int const kInstructionSizeInCodeUnits[];
+  static size_t const kInstructionSizeInCodeUnits[];
   DISALLOW_IMPLICIT_CONSTRUCTORS(Instruction);
 };
 std::ostream& operator<<(std::ostream& os, const Instruction::Code& code);

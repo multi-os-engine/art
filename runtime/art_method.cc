@@ -20,6 +20,7 @@
 #include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "base/stringpiece.h"
+#include "debugger.h"
 #include "dex_file-inl.h"
 #include "dex_instruction.h"
 #include "entrypoints/entrypoint_utils.h"
@@ -79,7 +80,7 @@ InvokeType ArtMethod::GetInvokeType() {
   }
 }
 
-size_t ArtMethod::NumArgRegisters(const StringPiece& shorty) {
+uint32_t ArtMethod::NumArgRegisters(const StringPiece& shorty) {
   CHECK_LE(1U, shorty.length());
   uint32_t num_registers = 0;
   for (size_t i = 1; i < shorty.length(); ++i) {
@@ -131,7 +132,7 @@ ArtMethod* ArtMethod::FindOverriddenMethod(size_t pointer_size) {
                Runtime::Current()->GetClassLinker()->FindMethodForProxy(GetDeclaringClass(), this));
     } else {
       mirror::IfTable* iftable = GetDeclaringClass()->GetIfTable();
-      for (size_t i = 0; i < iftable->Count() && result == nullptr; i++) {
+      for (int32_t i = 0; i < iftable->Count() && result == nullptr; i++) {
         mirror::Class* interface = iftable->GetInterface(i);
         for (size_t j = 0; j < interface->NumVirtualMethods(); ++j) {
           ArtMethod* interface_method = interface->GetVirtualMethod(j, pointer_size);
@@ -180,7 +181,7 @@ uint32_t ArtMethod::FindDexMethodIndexInOtherDexFile(const DexFile& other_dexfil
 
 uint32_t ArtMethod::ToDexPc(const uintptr_t pc, bool abort_on_failure) {
   const void* entry_point = GetQuickOatEntryPoint(sizeof(void*));
-  uint32_t sought_offset = pc - reinterpret_cast<uintptr_t>(entry_point);
+  uint32_t sought_offset = static_cast<uint32_t>(pc - reinterpret_cast<uintptr_t>(entry_point));
   if (IsOptimized(sizeof(void*))) {
     CodeInfo code_info = GetOptimizedCodeInfo();
     StackMapEncoding encoding = code_info.ExtractEncoding();
@@ -513,7 +514,9 @@ QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo() {
     // Note: -sizeof(void*) since callee-save frame stores a whole method pointer.
     size_t frame_size = RoundUp(callee_info.FrameSizeInBytes() - sizeof(void*) +
                                 sizeof(ArtMethod*) + scope_size, kStackAlignment);
-    return QuickMethodFrameInfo(frame_size, callee_info.CoreSpillMask(), callee_info.FpSpillMask());
+    return QuickMethodFrameInfo(static_cast<uint32_t>(frame_size),
+                                callee_info.CoreSpillMask(),
+                                callee_info.FpSpillMask());
   }
 
   const void* code_pointer = EntryPointToCodePointer(entry_point);
@@ -548,7 +551,7 @@ bool ArtMethod::EqualParameters(Handle<mirror::ObjectArray<mirror::Class>> param
     return false;
   }
   auto* cl = Runtime::Current()->GetClassLinker();
-  for (size_t i = 0; i < count; ++i) {
+  for (uint32_t i = 0; i < count; ++i) {
     auto type_idx = proto_params->GetTypeItem(i).type_idx_;
     auto* type = cl->ResolveType(type_idx, this);
     if (type == nullptr) {

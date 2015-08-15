@@ -343,7 +343,7 @@ void BitVector::DumpHelper(const char* prefix, std::ostringstream& buffer) const
   }
 
   buffer << '(';
-  for (size_t i = 0; i < storage_size_ * kWordBits; i++) {
+  for (uint32_t i = 0; i < storage_size_ * kWordBits; i++) {
     buffer << IsBitSet(i);
   }
   buffer << ')';

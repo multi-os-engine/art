@@ -54,7 +54,7 @@ size_t expandBufGetLength(ExpandBuf* pBuf);
  * expandBufAddSpace() returns a pointer to the *start* of the region
  * added.
  */
-uint8_t* expandBufAddSpace(ExpandBuf* pBuf, int gapSize);
+uint8_t* expandBufAddSpace(ExpandBuf* pBuf, size_t gapSize);
 void expandBufAdd1(ExpandBuf* pBuf, uint8_t val);
 void expandBufAdd2BE(ExpandBuf* pBuf, uint16_t val);
 void expandBufAdd4BE(ExpandBuf* pBuf, uint32_t val);

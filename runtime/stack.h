@@ -579,9 +579,9 @@ class StackVisitor {
                                         uint32_t core_spills, uint32_t fp_spills,
                                         size_t frame_size, int reg, InstructionSet isa);
 
-  static int GetOutVROffset(uint16_t out_num, InstructionSet isa) {
+  static int32_t GetOutVROffset(uint16_t out_num, InstructionSet isa) {
     // According to stack model, the first out is above the Method referernce.
-    return InstructionSetPointerSize(isa) + out_num * sizeof(uint32_t);
+    return static_cast<int32_t>(InstructionSetPointerSize(isa) + out_num * sizeof(uint32_t));
   }
 
   bool IsInInlinedFrame() const {

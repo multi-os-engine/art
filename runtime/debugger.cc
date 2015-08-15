@@ -61,11 +61,10 @@ static constexpr const char* kDbgInstrumentationKey = "Debugger";
 
 // Limit alloc_record_count to the 2BE value (64k-1) that is the limit of the current protocol.
 static uint16_t CappedAllocRecordCount(size_t alloc_record_count) {
-  const size_t cap = 0xffff;
-  if (alloc_record_count > cap) {
-    return cap;
+  if (alloc_record_count > std::numeric_limits<uint16_t>::max()) {
+    return std::numeric_limits<uint16_t>::max();
   }
-  return alloc_record_count;
+  return static_cast<uint16_t>(alloc_record_count);
 }
 
 class Breakpoint {
@@ -749,8 +748,8 @@ JDWP::JdwpError Dbg::GetMonitorInfo(JDWP::ObjectId object_id, JDWP::ExpandBuf* r
   } else {
     expandBufAddObjectId(reply, gRegistry->Add(nullptr));
   }
-  expandBufAdd4BE(reply, monitor_info.entry_count_);
-  expandBufAdd4BE(reply, monitor_info.waiters_.size());
+  expandBufAdd4BE(reply, static_cast<uint32_t>(monitor_info.entry_count_));
+  expandBufAdd4BE(reply, static_cast<uint32_t>(monitor_info.waiters_.size()));
   for (size_t i = 0; i < monitor_info.waiters_.size(); ++i) {
     expandBufAddObjectId(reply, gRegistry->Add(monitor_info.waiters_[i]->GetPeer()));
   }
@@ -766,9 +765,9 @@ JDWP::JdwpError Dbg::GetOwnedMonitors(JDWP::ObjectId thread_id,
                         std::vector<uint32_t>* stack_depth_vector)
         SHARED_REQUIRES(Locks::mutator_lock_)
       : StackVisitor(thread, context, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
-        current_stack_depth(0),
         monitors(monitor_vector),
-        stack_depths(stack_depth_vector) {}
+        stack_depths(stack_depth_vector),
+        current_stack_depth(0) {}
 
     // TODO: Enable annotalysis. We know lock is held in constructor, but abstraction confuses
     // annotalysis.
@@ -787,9 +786,9 @@ JDWP::JdwpError Dbg::GetOwnedMonitors(JDWP::ObjectId thread_id,
       visitor->stack_depths->push_back(visitor->current_stack_depth);
     }
 
-    size_t current_stack_depth;
     std::vector<JDWP::ObjectId>* const monitors;
     std::vector<uint32_t>* const stack_depths;
+    uint32_t current_stack_depth;
   };
 
   ScopedObjectAccessUnchecked soa(Thread::Current());
@@ -1154,7 +1153,7 @@ static void CopyArrayData(mirror::Array* a, JDWP::Request* src, int offset, int 
 
   T* dst = reinterpret_cast<T*>(a->GetRawData(sizeof(T), offset));
   for (int i = 0; i < count; ++i) {
-    *dst++ = src->ReadValue(sizeof(T));
+    *dst++ = src->ReadValue<T>();
   }
 }
 
@@ -1395,7 +1394,7 @@ static uint16_t DemangleSlot(uint16_t slot, ArtMethod* m, JDWP::JdwpError* error
     // We should not get here for a method without code (native, proxy or abstract). Log it and
     // return the slot as is since all registers are arguments.
     LOG(WARNING) << "Trying to demangle slot for method without code " << PrettyMethod(m);
-    uint16_t vreg_count = ArtMethod::NumArgRegisters(m->GetShorty());
+    uint16_t vreg_count = static_cast<uint16_t>(ArtMethod::NumArgRegisters(m->GetShorty()));
     if (slot < vreg_count) {
       *error = JDWP::ERR_NONE;
       return slot;
@@ -1423,12 +1422,12 @@ JDWP::JdwpError Dbg::OutputDeclaredFields(JDWP::RefTypeId class_id, bool with_ge
     return error;
   }
 
-  size_t instance_field_count = c->NumInstanceFields();
-  size_t static_field_count = c->NumStaticFields();
+  uint32_t instance_field_count = c->NumInstanceFields();
+  uint32_t static_field_count = c->NumStaticFields();
 
   expandBufAdd4BE(pReply, instance_field_count + static_field_count);
 
-  for (size_t i = 0; i < instance_field_count + static_field_count; ++i) {
+  for (uint32_t i = 0; i < instance_field_count + static_field_count; ++i) {
     ArtField* f = (i < instance_field_count) ? c->GetInstanceField(i) :
         c->GetStaticField(i - instance_field_count);
     expandBufAddFieldId(pReply, ToFieldId(f));
@@ -1451,14 +1450,14 @@ JDWP::JdwpError Dbg::OutputDeclaredMethods(JDWP::RefTypeId class_id, bool with_g
     return error;
   }
 
-  size_t direct_method_count = c->NumDirectMethods();
-  size_t virtual_method_count = c->NumVirtualMethods();
+  uint32_t direct_method_count = c->NumDirectMethods();
+  uint32_t virtual_method_count = c->NumVirtualMethods();
 
   expandBufAdd4BE(pReply, direct_method_count + virtual_method_count);
 
   auto* cl = Runtime::Current()->GetClassLinker();
   auto ptr_size = cl->GetImagePointerSize();
-  for (size_t i = 0; i < direct_method_count + virtual_method_count; ++i) {
+  for (uint32_t i = 0; i < direct_method_count + virtual_method_count; ++i) {
     ArtMethod* m = i < direct_method_count ?
         c->GetDirectMethod(i, ptr_size) : c->GetVirtualMethod(i - direct_method_count, ptr_size);
     expandBufAddMethodId(pReply, ToMethodId(m));
@@ -1482,9 +1481,9 @@ JDWP::JdwpError Dbg::OutputDeclaredInterfaces(JDWP::RefTypeId class_id, JDWP::Ex
   if (c.Get() == nullptr) {
     return error;
   }
-  size_t interface_count = c->NumDirectInterfaces();
+  uint32_t interface_count = c->NumDirectInterfaces();
   expandBufAdd4BE(pReply, interface_count);
-  for (size_t i = 0; i < interface_count; ++i) {
+  for (uint32_t i = 0; i < interface_count; ++i) {
     expandBufAddRefTypeId(pReply,
                           gRegistry->AddRefType(mirror::Class::GetDirectInterface(self, c, i)));
   }
@@ -1592,7 +1591,8 @@ void Dbg::OutputVariableTable(JDWP::RefTypeId, JDWP::MethodId method_id, bool wi
         &context);
   }
 
-  JDWP::Set4BE(expandBufGetBuffer(pReply) + variable_count_offset, context.variable_count);
+  JDWP::Set4BE(expandBufGetBuffer(pReply) + variable_count_offset,
+               dchecked_integral_cast<uint32_t>(context.variable_count));
 }
 
 void Dbg::OutputMethodReturnValue(JDWP::MethodId method_id, const JValue* return_value,
@@ -1868,9 +1868,9 @@ void Dbg::OutputJValue(JDWP::JdwpTag tag, const JValue* return_value, JDWP::Expa
   if (IsPrimitiveTag(tag)) {
     expandBufAdd1(pReply, tag);
     if (tag == JDWP::JT_BOOLEAN || tag == JDWP::JT_BYTE) {
-      expandBufAdd1(pReply, return_value->GetI());
+      expandBufAdd1(pReply, static_cast<uint8_t>(return_value->GetI()));
     } else if (tag == JDWP::JT_CHAR || tag == JDWP::JT_SHORT) {
-      expandBufAdd2BE(pReply, return_value->GetI());
+      expandBufAdd2BE(pReply, static_cast<uint16_t>(return_value->GetI()));
     } else if (tag == JDWP::JT_FLOAT || tag == JDWP::JT_INT) {
       expandBufAdd4BE(pReply, return_value->GetI());
     } else if (tag == JDWP::JT_DOUBLE || tag == JDWP::JT_LONG) {
@@ -2039,7 +2039,7 @@ JDWP::JdwpError Dbg::GetThreadGroupChildren(JDWP::ObjectId thread_group_id,
   {
     std::vector<JDWP::ObjectId> child_thread_ids;
     GetThreads(thread_group, &child_thread_ids);
-    expandBufAdd4BE(pReply, child_thread_ids.size());
+    expandBufAdd4BE(pReply, static_cast<uint32_t>(child_thread_ids.size()));
     for (JDWP::ObjectId child_thread_id : child_thread_ids) {
       expandBufAddObjectId(pReply, child_thread_id);
     }
@@ -2049,7 +2049,7 @@ JDWP::JdwpError Dbg::GetThreadGroupChildren(JDWP::ObjectId thread_group_id,
   {
     std::vector<JDWP::ObjectId> child_thread_groups_ids;
     GetChildThreadGroups(soa, thread_group, &child_thread_groups_ids);
-    expandBufAdd4BE(pReply, child_thread_groups_ids.size());
+    expandBufAdd4BE(pReply, static_cast<uint32_t>(child_thread_groups_ids.size()));
     for (JDWP::ObjectId child_thread_group_id : child_thread_groups_ids) {
       expandBufAddObjectId(pReply, child_thread_group_id);
     }
@@ -2195,7 +2195,7 @@ void Dbg::GetThreads(mirror::Object* thread_group, std::vector<JDWP::ObjectId>* 
   }
 }
 
-static int GetStackDepth(Thread* thread) SHARED_REQUIRES(Locks::mutator_lock_) {
+static size_t GetStackDepth(Thread* thread) SHARED_REQUIRES(Locks::mutator_lock_) {
   struct CountStackDepthVisitor : public StackVisitor {
     explicit CountStackDepthVisitor(Thread* thread_in)
         : StackVisitor(thread_in, nullptr, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
@@ -2244,7 +2244,7 @@ JDWP::JdwpError Dbg::GetThreadFrames(JDWP::ObjectId thread_id, size_t start_fram
           start_frame_(start_frame_in),
           frame_count_(frame_count_in),
           buf_(buf_in) {
-      expandBufAdd4BE(buf_, frame_count_);
+      expandBufAdd4BE(buf_, dchecked_integral_cast<uint32_t>(frame_count_));
     }
 
     bool VisitFrame() OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -2462,9 +2462,13 @@ JDWP::JdwpError Dbg::GetLocalValues(JDWP::Request* request, JDWP::ExpandBuf* pRe
 
     VLOG(jdwp) << "    --> slot " << slot << " " << reqSigByte;
 
+    if (slot > std::numeric_limits<uint16_t>::max()) {
+      return JDWP::ERR_INVALID_SLOT;
+    }
+
     size_t width = Dbg::GetTagWidth(reqSigByte);
     uint8_t* ptr = expandBufAddSpace(pReply, width + 1);
-    error = Dbg::GetLocalValue(visitor, soa, slot, reqSigByte, ptr, width);
+    error = Dbg::GetLocalValue(visitor, soa, static_cast<uint16_t>(slot), reqSigByte, ptr, width);
     if (error != JDWP::ERR_NONE) {
       return error;
     }
@@ -2489,7 +2493,7 @@ static JDWP::JdwpError FailGetLocalValue(const StackVisitor& visitor, uint16_t v
 }
 
 JDWP::JdwpError Dbg::GetLocalValue(const StackVisitor& visitor, ScopedObjectAccessUnchecked& soa,
-                                   int slot, JDWP::JdwpTag tag, uint8_t* buf, size_t width) {
+                                   uint16_t slot, JDWP::JdwpTag tag, uint8_t* buf, size_t width) {
   ArtMethod* m = visitor.GetMethod();
   JDWP::JdwpError error = JDWP::ERR_NONE;
   uint16_t vreg = DemangleSlot(slot, m, &error);
@@ -2515,7 +2519,7 @@ JDWP::JdwpError Dbg::GetLocalValue(const StackVisitor& visitor, ScopedObjectAcce
         return FailGetLocalValue(visitor, vreg, tag);
       }
       VLOG(jdwp) << "get byte local " << vreg << " = " << intVal;
-      JDWP::Set1(buf + 1, intVal);
+      JDWP::Set1(buf + 1, static_cast<uint8_t>(intVal));
       break;
     }
     case JDWP::JT_SHORT:
@@ -2526,7 +2530,7 @@ JDWP::JdwpError Dbg::GetLocalValue(const StackVisitor& visitor, ScopedObjectAcce
         return FailGetLocalValue(visitor, vreg, tag);
       }
       VLOG(jdwp) << "get short/char local " << vreg << " = " << intVal;
-      JDWP::Set2BE(buf + 1, intVal);
+      JDWP::Set2BE(buf + 1, static_cast<uint16_t>(intVal));
       break;
     }
     case JDWP::JT_INT: {
@@ -2633,7 +2637,12 @@ JDWP::JdwpError Dbg::SetLocalValues(JDWP::Request* request) {
     uint64_t value = request->ReadValue(width);
 
     VLOG(jdwp) << "    --> slot " << slot << " " << sigByte << " " << value;
-    error = Dbg::SetLocalValue(visitor, slot, sigByte, value, width);
+
+    if (slot > std::numeric_limits<uint16_t>::max()) {
+      return JDWP::ERR_INVALID_SLOT;
+    }
+
+    error = Dbg::SetLocalValue(visitor, static_cast<uint16_t>(slot), sigByte, value, width);
     if (error != JDWP::ERR_NONE) {
       return error;
     }
@@ -2651,7 +2660,7 @@ static JDWP::JdwpError FailSetLocalValue(const StackVisitor& visitor, uint16_t v
   return kStackFrameLocalAccessError;
 }
 
-JDWP::JdwpError Dbg::SetLocalValue(StackVisitor& visitor, int slot, JDWP::JdwpTag tag,
+JDWP::JdwpError Dbg::SetLocalValue(StackVisitor& visitor, uint16_t slot, JDWP::JdwpTag tag,
                                    uint64_t value, size_t width) {
   ArtMethod* m = visitor.GetMethod();
   JDWP::JdwpError error = JDWP::ERR_NONE;
@@ -2949,7 +2958,7 @@ void Dbg::UpdateDebugger(Thread* thread, mirror::Object* this_object,
       // might get unrolled past it by an exception, and it's tricky
       // to identify recursion.)
 
-      int stack_depth = GetStackDepth(thread);
+      size_t stack_depth = GetStackDepth(thread);
 
       if (stack_depth < single_step_control->GetStackDepth()) {
         // Popped up one or more frames, always trigger.
@@ -2974,7 +2983,7 @@ void Dbg::UpdateDebugger(Thread* thread, mirror::Object* this_object,
       // with the PC at the next instruction in the returned-to
       // function, rather than the end of the returning function.
 
-      int stack_depth = GetStackDepth(thread);
+      size_t stack_depth = GetStackDepth(thread);
       if (stack_depth < single_step_control->GetStackDepth()) {
         event_flags |= kSingleStep;
         VLOG(jdwp) << "SS method pop";
@@ -3317,7 +3326,9 @@ void Dbg::WatchLocation(const JDWP::JdwpLocation* location, DeoptimizationReques
     } else {
       breakpoint_deoptimization_kind = deoptimization_kind;
     }
-    gBreakpoints.push_back(Breakpoint(m, location->dex_pc, breakpoint_deoptimization_kind));
+    gBreakpoints.push_back(Breakpoint(m,
+                                      static_cast<uint32_t>(location->dex_pc),
+                                      breakpoint_deoptimization_kind));
     VLOG(jdwp) << "Set breakpoint #" << (gBreakpoints.size() - 1) << ": "
                << gBreakpoints[gBreakpoints.size() - 1];
   }
@@ -3802,7 +3813,7 @@ JDWP::JdwpError Dbg::PrepareInvokeMethod(uint32_t request_id, JDWP::ObjectId thr
       HandleWrapper<mirror::Object> h_obj(hs.NewHandleWrapper(&receiver));
       HandleWrapper<mirror::Class> h_klass(hs.NewHandleWrapper(&c));
       const DexFile::TypeList* types = m->GetParameterTypeList();
-      for (size_t i = 0; i < arg_count; ++i) {
+      for (uint32_t i = 0; i < arg_count; ++i) {
         if (shorty[i + 1] != JdwpTagToShortyChar(arg_types[i])) {
           return JDWP::ERR_ILLEGAL_ARGUMENT;
         }
@@ -3877,16 +3888,16 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
 }
 
 // Helper function: write a variable-width value into the output input buffer.
-static void WriteValue(JDWP::ExpandBuf* pReply, int width, uint64_t value) {
+static void WriteValue(JDWP::ExpandBuf* pReply, size_t width, uint64_t value) {
   switch (width) {
     case 1:
-      expandBufAdd1(pReply, value);
+      expandBufAdd1(pReply, dchecked_integral_cast<uint8_t>(value));
       break;
     case 2:
-      expandBufAdd2BE(pReply, value);
+      expandBufAdd2BE(pReply, dchecked_integral_cast<uint16_t>(value));
       break;
     case 4:
-      expandBufAdd4BE(pReply, value);
+      expandBufAdd4BE(pReply, dchecked_integral_cast<uint32_t>(value));
       break;
     case 8:
       expandBufAdd8BE(pReply, value);
@@ -4020,7 +4031,7 @@ void Dbg::BuildInvokeReply(JDWP::ExpandBuf* pReply, uint32_t request_id, JDWP::J
 
   // Now we know the size, we can complete the JDWP header.
   uint8_t* buf = expandBufGetBuffer(pReply);
-  JDWP::Set4BE(buf + kJDWPHeaderSizeOffset, expandBufGetLength(pReply));
+  JDWP::Set4BE(buf + kJDWPHeaderSizeOffset, static_cast<uint32_t>(expandBufGetLength(pReply)));
   JDWP::Set4BE(buf + kJDWPHeaderIdOffset, request_id);
   JDWP::Set1(buf + kJDWPHeaderFlagsOffset, kJDWPFlagReply);  // flags
   JDWP::Set2BE(buf + kJDWPHeaderErrorCodeOffset, JDWP::ERR_NONE);
@@ -4069,13 +4080,14 @@ bool Dbg::DdmHandlePacket(JDWP::Request* request, uint8_t** pReplyBuf, int* pRep
 
   // Create a byte[] corresponding to 'request'.
   size_t request_length = request->size();
-  ScopedLocalRef<jbyteArray> dataArray(env, env->NewByteArray(request_length));
+  ScopedLocalRef<jbyteArray> dataArray(env, env->NewByteArray(
+      dchecked_integral_cast<int32_t>(request_length)));
   if (dataArray.get() == nullptr) {
     LOG(WARNING) << "byte[] allocation failed: " << request_length;
     env->ExceptionClear();
     return false;
   }
-  env->SetByteArrayRegion(dataArray.get(), 0, request_length,
+  env->SetByteArrayRegion(dataArray.get(), 0, static_cast<int32_t>(request_length),
                           reinterpret_cast<const jbyte*>(request->data()));
   request->Skip(request_length);
 
@@ -4195,7 +4207,7 @@ void Dbg::DdmSendThreadNotification(Thread* t, uint32_t type) {
 
     std::vector<uint8_t> bytes;
     JDWP::Append4BE(bytes, t->GetThreadId());
-    JDWP::AppendUtf16BE(bytes, chars, char_count);
+    JDWP::AppendUtf16BE(bytes, chars, static_cast<uint16_t>(char_count));
     CHECK_EQ(bytes.size(), char_count*2 + sizeof(uint32_t)*2);
     Dbg::DdmSendChunk(type, bytes);
   }
@@ -4332,10 +4344,14 @@ void Dbg::DdmSendHeapInfo(HpifWhen reason) {
   JDWP::Append4BE(bytes, 1);  // Heap id (bogus; we only have one heap).
   JDWP::Append8BE(bytes, MilliTime());
   JDWP::Append1BE(bytes, reason);
-  JDWP::Append4BE(bytes, heap->GetMaxMemory());  // Max allowed heap size in bytes.
-  JDWP::Append4BE(bytes, heap->GetTotalMemory());  // Current heap size in bytes.
-  JDWP::Append4BE(bytes, heap->GetBytesAllocated());
-  JDWP::Append4BE(bytes, heap->GetObjectsAllocated());
+  // TODO: the following parts should really be made 64-bit safe. For now we *could* use a checked
+  //       cast, as heaps didn't reach 4GB just yet.
+  // Max allowed heap size in bytes.
+  JDWP::Append4BE(bytes, static_cast<uint32_t>(heap->GetMaxMemory()));
+  // Current heap size in bytes.
+  JDWP::Append4BE(bytes, static_cast<uint32_t>(heap->GetTotalMemory()));
+  JDWP::Append4BE(bytes, static_cast<uint32_t>(heap->GetBytesAllocated()));
+  JDWP::Append4BE(bytes, static_cast<uint32_t>(heap->GetObjectsAllocated()));
   CHECK_EQ(bytes.size(), 4U + (heap_count * (4 + 8 + 1 + 4 + 4 + 4 + 4)));
   Dbg::DdmSendChunk(CHUNK_TYPE("HPIF"), bytes);
 }
@@ -4403,7 +4419,10 @@ class HeapChunkContext {
     JDWP::Write4BE(&p_, 1);  // Heap id (bogus; we only have one heap).
     JDWP::Write1BE(&p_, 8);  // Size of allocation unit, in bytes.
 
-    JDWP::Write4BE(&p_, reinterpret_cast<uintptr_t>(chunk_ptr));  // virtual address of segment start.
+    // virtual address of segment start. Currently in the low 4GB, so this is safe.
+    JDWP::Write4BE(&p_,
+                   dchecked_integral_cast<uint32_t>(
+                       reinterpret_cast<uintptr_t>(chunk_ptr)));
     JDWP::Write4BE(&p_, 0);  // offset of this piece (relative to the virtual address).
     // [u4]: length of piece, in allocation units
     // We won't know this until we're done, so save the offset and stuff in a dummy value.
@@ -4421,7 +4440,8 @@ class HeapChunkContext {
     // Patch the "length of piece" field.
     CHECK_LE(&buf_[0], pieceLenField_);
     CHECK_LE(pieceLenField_, p_);
-    JDWP::Set4BE(pieceLenField_, totalAllocationUnits_);
+    // TODO: Is it conceivable that we get greater 4 billion allocations?
+    JDWP::Set4BE(pieceLenField_, static_cast<uint32_t>(totalAllocationUnits_));
 
     Dbg::DdmSendChunk(type_, p_ - &buf_[0], &buf_[0]);
     Reset();
@@ -4542,7 +4562,7 @@ class HeapChunkContext {
       length -= 256;
     }
     *p_++ = state;
-    *p_++ = length - 1;
+    *p_++ = static_cast<uint8_t>(length - 1);
   }
 
   uint8_t ExamineNativeObject(const void* p) SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -4755,7 +4775,7 @@ class StringTable {
       size_t s_len = CountModifiedUtf8Chars(s);
       std::unique_ptr<uint16_t[]> s_utf16(new uint16_t[s_len]);
       ConvertModifiedUtf8ToUtf16(s_utf16.get(), s);
-      JDWP::AppendUtf16BE(bytes, s_utf16.get(), s_len);
+      JDWP::AppendUtf16BE(bytes, s_utf16.get(), static_cast<uint32_t>(s_len));
     }
   }
 
@@ -4881,9 +4901,9 @@ jbyteArray Dbg::GetRecentAllocations() {
     JDWP::Append2BE(bytes, capped_count);
     size_t string_table_offset = bytes.size();
     JDWP::Append4BE(bytes, 0);  // We'll patch this later...
-    JDWP::Append2BE(bytes, class_names.Size());
-    JDWP::Append2BE(bytes, method_names.Size());
-    JDWP::Append2BE(bytes, filenames.Size());
+    JDWP::Append2BE(bytes, dchecked_integral_cast<uint16_t>(class_names.Size()));
+    JDWP::Append2BE(bytes, dchecked_integral_cast<uint16_t>(method_names.Size()));
+    JDWP::Append2BE(bytes, dchecked_integral_cast<uint16_t>(filenames.Size()));
 
     std::string temp;
     count = capped_count;
@@ -4900,12 +4920,14 @@ jbyteArray Dbg::GetRecentAllocations() {
       size_t stack_depth = record->GetDepth();
       size_t allocated_object_class_name_index =
           class_names.IndexOf(record->GetClassDescriptor(&temp));
-      JDWP::Append4BE(bytes, record->ByteCount());
+      JDWP::Append4BE(bytes, static_cast<uint32_t>(record->ByteCount()));
       JDWP::Append2BE(bytes, static_cast<uint16_t>(record->GetTid()));
-      JDWP::Append2BE(bytes, allocated_object_class_name_index);
-      JDWP::Append1BE(bytes, stack_depth);
+      JDWP::Append2BE(bytes, static_cast<uint16_t>(allocated_object_class_name_index));
+      // TODO: Is the limit really 255 frames? Is it correct to cut down the amount of loop
+      //       iterations.
+      JDWP::Append1BE(bytes, static_cast<uint8_t>(stack_depth));
 
-      for (size_t stack_frame = 0; stack_frame < stack_depth; ++stack_frame) {
+      for (size_t stack_frame = 0; stack_frame < static_cast<uint8_t>(stack_depth); ++stack_frame) {
         // For each stack frame:
         // (2b) method's class name
         // (2b) method name
@@ -4915,25 +4937,30 @@ jbyteArray Dbg::GetRecentAllocations() {
         size_t class_name_index = class_names.IndexOf(m->GetDeclaringClassDescriptor());
         size_t method_name_index = method_names.IndexOf(m->GetName());
         size_t file_name_index = filenames.IndexOf(GetMethodSourceFile(m));
-        JDWP::Append2BE(bytes, class_name_index);
-        JDWP::Append2BE(bytes, method_name_index);
-        JDWP::Append2BE(bytes, file_name_index);
-        JDWP::Append2BE(bytes, record->StackElement(stack_frame).ComputeLineNumber());
+        JDWP::Append2BE(bytes, static_cast<uint16_t>(class_name_index));
+        JDWP::Append2BE(bytes, static_cast<uint16_t>(method_name_index));
+        JDWP::Append2BE(bytes, static_cast<uint16_t>(file_name_index));
+        // TODO: What about overflow here?
+        JDWP::Append2BE(bytes, static_cast<uint16_t>(
+            record->StackElement(stack_frame).ComputeLineNumber()));
       }
     }
 
     // (xb) class name strings
     // (xb) method name strings
     // (xb) source file strings
-    JDWP::Set4BE(&bytes[string_table_offset], bytes.size());
+    JDWP::Set4BE(&bytes[string_table_offset], static_cast<uint32_t>(bytes.size()));
     class_names.WriteTo(bytes);
     method_names.WriteTo(bytes);
     filenames.WriteTo(bytes);
   }
   JNIEnv* env = self->GetJniEnv();
-  jbyteArray result = env->NewByteArray(bytes.size());
+  jbyteArray result = env->NewByteArray(static_cast<uint32_t>(bytes.size()));
   if (result != nullptr) {
-    env->SetByteArrayRegion(result, 0, bytes.size(), reinterpret_cast<const jbyte*>(&bytes[0]));
+    env->SetByteArrayRegion(result,
+                            0,
+                            static_cast<uint32_t>(bytes.size()),
+                            reinterpret_cast<const jbyte*>(&bytes[0]));
   }
   return result;
 }

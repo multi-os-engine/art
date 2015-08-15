@@ -74,7 +74,7 @@ mirror::Class* ArtField::ProxyFindSystemClass(const char* descriptor) {
   return Runtime::Current()->GetClassLinker()->FindSystemClass(Thread::Current(), descriptor);
 }
 
-mirror::Class* ArtField::ResolveGetType(uint32_t type_idx) {
+mirror::Class* ArtField::ResolveGetType(uint16_t type_idx) {
   return Runtime::Current()->GetClassLinker()->ResolveType(type_idx, this);
 }
 

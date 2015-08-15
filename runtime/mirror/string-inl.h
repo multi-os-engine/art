@@ -57,7 +57,10 @@ class SetStringCountAndBytesVisitor {
  public:
   SetStringCountAndBytesVisitor(int32_t count, Handle<ByteArray> src_array, int32_t offset,
                                 int32_t high_byte)
-      : count_(count), src_array_(src_array), offset_(offset), high_byte_(high_byte) {
+      : count_(count),
+        src_array_(src_array),
+        offset_(offset),
+        high_byte_(dchecked_integral_cast<uint16_t>(high_byte)) {
   }
 
   void operator()(Object* obj, size_t usable_size ATTRIBUTE_UNUSED) const
@@ -68,7 +71,7 @@ class SetStringCountAndBytesVisitor {
     uint16_t* value = string->GetValue();
     const uint8_t* const src = reinterpret_cast<uint8_t*>(src_array_->GetData()) + offset_;
     for (int i = 0; i < count_; i++) {
-      value[i] = high_byte_ + (src[i] & 0xFF);
+      value[i] = high_byte_ + src[i];
     }
   }
 
@@ -76,7 +79,7 @@ class SetStringCountAndBytesVisitor {
   const int32_t count_;
   Handle<ByteArray> src_array_;
   const int32_t offset_;
-  const int32_t high_byte_;
+  const uint16_t high_byte_;
 };
 
 // Sets string count and value in the allocation code path to ensure it is guarded by a CAS.

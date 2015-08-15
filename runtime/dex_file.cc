@@ -658,7 +658,7 @@ const DexFile::TypeId* DexFile::FindTypeId(uint32_t string_idx) const {
 
 const DexFile::ProtoId* DexFile::FindProtoId(uint16_t return_type_idx,
                                              const uint16_t* signature_type_idxs,
-                                             uint32_t signature_length) const {
+                                             size_t signature_length) const {
   int32_t lo = 0;
   int32_t hi = NumProtoIds() - 1;
   while (hi >= lo) {

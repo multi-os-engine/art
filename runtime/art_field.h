@@ -194,7 +194,7 @@ class ArtField FINAL {
  private:
   mirror::Class* ProxyFindSystemClass(const char* descriptor)
       SHARED_REQUIRES(Locks::mutator_lock_);
-  mirror::Class* ResolveGetType(uint32_t type_idx) SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Class* ResolveGetType(uint16_t type_idx) SHARED_REQUIRES(Locks::mutator_lock_);
   mirror::String* ResolveGetStringName(Thread* self, const DexFile& dex_file, uint32_t string_idx,
                                        mirror::DexCache* dex_cache)
       SHARED_REQUIRES(Locks::mutator_lock_);

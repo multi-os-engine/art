@@ -515,7 +515,7 @@ class HashSet {
     }
 
     // When we hit elements_until_expand_, we are at the max load factor and must expand again.
-    elements_until_expand_ = NumBuckets() * max_load_factor_;
+    elements_until_expand_ = static_cast<size_t>(NumBuckets() * max_load_factor_);
   }
 
   ALWAYS_INLINE size_t FirstAvailableSlot(size_t index) const {

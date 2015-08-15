@@ -335,27 +335,27 @@ class ClassLinker {
 
   // TODO: replace this with multiple methods that allocate the correct managed type.
   template <class T>
-  mirror::ObjectArray<T>* AllocObjectArray(Thread* self, size_t length)
+  mirror::ObjectArray<T>* AllocObjectArray(Thread* self, int32_t length)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
-  mirror::ObjectArray<mirror::Class>* AllocClassArray(Thread* self, size_t length)
+  mirror::ObjectArray<mirror::Class>* AllocClassArray(Thread* self, int32_t length)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
-  mirror::ObjectArray<mirror::String>* AllocStringArray(Thread* self, size_t length)
+  mirror::ObjectArray<mirror::String>* AllocStringArray(Thread* self, int32_t length)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
   LengthPrefixedArray<ArtField>* AllocArtFieldArray(Thread* self, size_t length);
 
   LengthPrefixedArray<ArtMethod>* AllocArtMethodArray(Thread* self, size_t length);
 
-  mirror::PointerArray* AllocPointerArray(Thread* self, size_t length)
+  mirror::PointerArray* AllocPointerArray(Thread* self, uint32_t length)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
-  mirror::IfTable* AllocIfTable(Thread* self, size_t ifcount)
+  mirror::IfTable* AllocIfTable(Thread* self, int32_t ifcount)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
   mirror::ObjectArray<mirror::StackTraceElement>* AllocStackTraceElementArray(
-      Thread* self, size_t length) SHARED_REQUIRES(Locks::mutator_lock_)
+      Thread* self, int32_t length) SHARED_REQUIRES(Locks::mutator_lock_)
           REQUIRES(!Roles::uninterruptible_);
 
   void VerifyClass(Thread* self, Handle<mirror::Class> klass)
@@ -600,11 +600,11 @@ class ClassLinker {
                             ArtMethod** out_imt)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  bool LinkStaticFields(Thread* self, Handle<mirror::Class> klass, size_t* class_size)
+  bool LinkStaticFields(Thread* self, Handle<mirror::Class> klass, uint32_t* class_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
   bool LinkInstanceFields(Thread* self, Handle<mirror::Class> klass)
       SHARED_REQUIRES(Locks::mutator_lock_);
-  bool LinkFields(Thread* self, Handle<mirror::Class> klass, bool is_static, size_t* class_size)
+  bool LinkFields(Thread* self, Handle<mirror::Class> klass, bool is_static, uint32_t* class_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
   void LinkCode(ArtMethod* method, const OatFile::OatClass* oat_class,
                 uint32_t class_def_method_index)

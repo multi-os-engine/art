@@ -377,7 +377,10 @@ class ScopedCheck {
           indent_ = 0;
         }
       } else {
-        LOG(INFO) << StringPrintf("JNI: %*s<- %s returned %s", indent_, "", function_name_, msg.c_str());
+        LOG(INFO) << StringPrintf("JNI: %*s<- %s returned %s",
+                                  static_cast<int>(indent_),
+                                  "",
+                                  function_name_, msg.c_str());
       }
     }
 
@@ -428,7 +431,10 @@ class ScopedCheck {
           indent_ = 0;
         }
       } else {
-        LOG(INFO) << StringPrintf("JNI: %*s<- %s returned %s", indent_, "", function_name_, msg.c_str());
+        LOG(INFO) << StringPrintf("JNI: %*s<- %s returned %s",
+                                  static_cast<int>(indent_),
+                                  "",
+                                  function_name_, msg.c_str());
       }
     }
 
@@ -1188,7 +1194,7 @@ class ScopedCheck {
   const char* const function_name_;
 
   const int flags_;
-  int indent_;
+  size_t indent_;
 
   const bool has_method_;
 
@@ -1215,7 +1221,9 @@ class GuardedCopy {
     // If modification is not expected, grab a checksum.
     uLong adler = 0;
     if (!mod_okay) {
-      adler = adler32(adler32(0L, Z_NULL, 0), reinterpret_cast<const Bytef*>(original_buf), len);
+      adler = adler32(adler32(0L, Z_NULL, 0),
+                      reinterpret_cast<const Bytef*>(original_buf),
+                      dchecked_integral_cast<uint32_t>(len));
     }
 
     GuardedCopy* copy = new (new_buf) GuardedCopy(original_buf, len, adler);
@@ -1371,7 +1379,9 @@ class GuardedCopy {
     // told the client that we made a copy, there's no reason they can't alter the buffer.
     if (!mod_okay) {
       uLong computed_adler =
-          adler32(adler32(0L, Z_NULL, 0), BufferWithinRedZones(), original_length_);
+          adler32(adler32(0L, Z_NULL, 0),
+                  BufferWithinRedZones(),
+                  dchecked_integral_cast<uint32_t>(original_length_));
       if (computed_adler != adler_) {
         AbortF(function_name, "buffer modified (0x%08lx vs 0x%08lx) at address %p",
                computed_adler, adler_, this);

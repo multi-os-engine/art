@@ -393,7 +393,7 @@ class RegionSpace FINAL : public ContinuousMemMapAllocSpace {
       DCHECK_LE(live_bytes_, BytesAllocated());
       size_t bytes_allocated = RoundUp(BytesAllocated(), kRegionSize);
       DCHECK_GE(bytes_allocated, 0U);
-      uint result = (live_bytes_ * 100U) / bytes_allocated;
+      uint result = static_cast<uint32_t>((live_bytes_ * 100U) / bytes_allocated);
       DCHECK_LE(result, 100U);
       return result;
     }

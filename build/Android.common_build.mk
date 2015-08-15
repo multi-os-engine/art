@@ -228,6 +228,7 @@ art_cflags := \
   -Wredundant-decls \
   -Wshadow \
   -Wunused \
+  -Wconversion -Wno-sign-conversion \
   -fvisibility=protected \
   $(art_default_gc_type_cflags)
 
@@ -270,7 +271,7 @@ art_non_debug_cflags := \
 
 # Cflags for debug ART and ART tools.
 art_debug_cflags := \
-  -O2 \
+  -O0 \
   -DDYNAMIC_ANNOTATIONS_ENABLED=1 \
   -DVIXL_DEBUG \
   -UNDEBUG

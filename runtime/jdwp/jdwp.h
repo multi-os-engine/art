@@ -424,6 +424,10 @@ class Request {
   // Helper function: read a variable-width value from the input buffer.
   uint64_t ReadValue(size_t width);
 
+  // Note: is specialized for uint8_t, uint16_t, uint32_t and uint64_t.
+  template <typename T>
+  T ReadValue();
+
   int32_t ReadSigned32(const char* what);
 
   uint32_t ReadUnsigned32(const char* what);
