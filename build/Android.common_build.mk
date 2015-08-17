@@ -133,10 +133,6 @@ ART_TARGET_CLANG_CFLAGS_mips64 :=
 ART_TARGET_CLANG_CFLAGS_x86 :=
 ART_TARGET_CLANG_CFLAGS_x86_64 :=
 
-# These are necessary for Clang ARM64 ART builds. TODO: remove.
-ART_TARGET_CLANG_CFLAGS_arm64  += \
-  -DNVALGRIND
-
 # Warn about thread safety violations with clang.
 art_clang_cflags := -Wthread-safety -Wthread-safety-negative
 
@@ -275,16 +271,6 @@ art_debug_cflags := \
   -DVIXL_DEBUG \
   -UNDEBUG
 
-# The latest clang update trips over many of the files in art and never finishes
-# compiling for aarch64 with -O3 (or -O2). Drop back to -O1 while we investigate
-# to stop punishing the build server.
-ifeq ($(TARGET_ARCH),arm64)
-  ifeq ($(USE_CLANG_PLATFORM_BUILD),true)
-    art_debug_cflags += -O1
-    art_non_debug_cflags += -O1
-  endif
-endif
-
 art_host_non_debug_cflags := $(art_non_debug_cflags)
 art_target_non_debug_cflags := $(art_non_debug_cflags)
 
@@ -318,6 +304,11 @@ ifeq ($(ART_HOST_CLANG),true)
 ART_HOST_CFLAGS += -Wno-pessimizing-move
 endif
 ART_TARGET_CLANG_CFLAGS += -Wno-pessimizing-move
+
+# The latest clang update trips over many of the files in art and never finishes
+# compiling for aarch64 with -O3 (or -O2). Drop back to -O1 while we investigate
+# to stop punishing the build server.
+ART_TARGET_CLANG_CFLAGS_arm64 += -O1
 
 ifndef LIBART_IMG_TARGET_BASE_ADDRESS
   $(error LIBART_IMG_TARGET_BASE_ADDRESS unset)
