@@ -99,6 +99,43 @@ class ValueSet : public ArenaObject<kArenaAllocMisc> {
         if (existing->Equals(instruction)) {
           return existing;
         }
+        // Loop up load value written by early store.
+        if (instruction->IsInstanceFieldGet() && existing->IsInstanceFieldSet()) {
+          HInstanceFieldGet* get = instruction->AsInstanceFieldGet();
+          HInstanceFieldSet* set = existing->AsInstanceFieldSet();
+          if (get->InputAt(0) == set->InputAt(0) &&  // Compare objects.
+              get->GetFieldOffset().Int32Value() == set->GetFieldOffset().Int32Value()) {
+            // Work around the fact that HIR aliases I/F and J/D.
+            // TODO: Remove the 'if' statement once HIR types are clean.
+            if (get->GetType() == set->InputAt(1)->GetType()) {
+              DCHECK_EQ(get->GetType(), set->InputAt(1)->GetType());
+              return set->GetValue();
+            }
+          }
+        } else if (instruction->IsStaticFieldGet() && existing->IsStaticFieldSet()) {
+          HStaticFieldGet* get = instruction->AsStaticFieldGet();
+          HStaticFieldSet* set = existing->AsStaticFieldSet();
+          if (get->InputAt(0) == set->InputAt(0) &&  // Compare class objects.
+              get->GetFieldOffset().Int32Value() == set->GetFieldOffset().Int32Value()) {
+            // Work around the fact that HIR aliases I/F and J/D.
+            // TODO: Remove the 'if' statement once HIR types are clean.
+            if (get->GetType() == set->InputAt(1)->GetType()) {
+              DCHECK_EQ(get->GetType(), set->InputAt(1)->GetType());
+              return set->GetValue();
+            }
+          }
+        } else if (instruction->IsArrayGet() && existing->IsArraySet()) {
+          HArrayGet* get = instruction->AsArrayGet();
+          HArraySet* set = existing->AsArraySet();
+          if (get->GetArray() == set->GetArray() && get->GetIndex() == set->GetIndex()) {
+            // Work around the fact that HIR aliases I/F and J/D.
+            // TODO: Remove the 'if' statement once HIR types are clean.
+            if (get->GetType() == set->GetValue()->GetType()) {
+              DCHECK_EQ(get->GetType(), set->GetValue()->GetType());
+              return set->GetValue();
+            }
+          }
+        }
       }
     }
     return nullptr;
@@ -264,10 +301,13 @@ class ValueSet : public ArenaObject<kArenaAllocMisc> {
   // odd buckets to speed up deletion.
   size_t HashCode(HInstruction* instruction) const {
     size_t hash_code = instruction->ComputeHashCode();
-    if (instruction->GetSideEffects().HasDependencies()) {
-      return (hash_code << 1) | 0;
-    } else {
+    if (instruction->GetSideEffects().DoesNothing() || instruction->IsClinitCheck()) {
+      // Note: HClinitCheck is special. The real class initialization can only
+      // be done once before any other access to the class object. So it cannot
+      // overwrite(or be overwritten) any other writes.
       return (hash_code << 1) | 1;
+    } else {
+      return (hash_code << 1) | 0;
     }
   }
 
@@ -395,6 +435,8 @@ void GlobalValueNumberer::VisitBasicBlock(HBasicBlock* block) {
       } else {
         set->Add(current);
       }
+    } else {
+      set->Add(current);
     }
     current = next;
   }

@@ -74,12 +74,12 @@ TEST(GVNTest, LocalFieldElimination) {
                                                            false,
                                                            kUnknownFieldIndex,
                                                            graph->GetDexFile()));
-  HInstruction* use_after_kill = block->GetLastInstruction();
+  HInstruction* get_after_set = block->GetLastInstruction();
   block->AddInstruction(new (&allocator) HExit());
 
   ASSERT_EQ(to_remove->GetBlock(), block);
   ASSERT_EQ(different_offset->GetBlock(), block);
-  ASSERT_EQ(use_after_kill->GetBlock(), block);
+  ASSERT_EQ(get_after_set->GetBlock(), block);
 
   graph->TryBuildingSsa();
   SideEffectsAnalysis side_effects(graph);
@@ -88,7 +88,7 @@ TEST(GVNTest, LocalFieldElimination) {
 
   ASSERT_TRUE(to_remove->GetBlock() == nullptr);
   ASSERT_EQ(different_offset->GetBlock(), block);
-  ASSERT_EQ(use_after_kill->GetBlock(), block);
+  ASSERT_TRUE(get_after_set->GetBlock() == nullptr);
 }
 
 TEST(GVNTest, GlobalFieldElimination) {

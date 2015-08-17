@@ -1384,13 +1384,14 @@ class SideEffects : public ValueObject {
     return flags_ == (kAllChangeBits | kAllDependOnBits);
   }
 
-  // Returns true if this may read something written by other.
+  // Returns true if this may read/overwrite something written by other.
   bool MayDependOn(SideEffects other) const {
     if ((flags_ >> kChangeBits) & other.flags_ &  (1ULL << kCanTriggerGCBit)) {
       return true;
     }
     const uint64_t reads = (flags_ & kAllReads) >> kChangeBits;
-    const bool may_depend_on = other.flags_ & reads;
+    const uint64_t writes = flags_ & kAllWrites;
+    const bool may_depend_on = other.flags_ & (reads | writes);
     if (!may_depend_on) {
       return false;
     } else {
@@ -3963,9 +3964,11 @@ class FieldInfo : public ValueObject {
   const DexFile& dex_file_;
 };
 
+static inline size_t ComputeHashCodeForMemoryAccess(const HInstruction* instruction);
+
 class HInstanceFieldGet : public HExpression<1> {
  public:
-  HInstanceFieldGet(HInstruction* value,
+  HInstanceFieldGet(HInstruction* object,
                     Primitive::Type field_type,
                     MemberOffset field_offset,
                     bool is_volatile,
@@ -3975,7 +3978,7 @@ class HInstanceFieldGet : public HExpression<1> {
             field_type,
             SideEffects::FieldReadOfType(field_type, is_volatile, field_offset)),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file) {
-    SetRawInputAt(0, value);
+    SetRawInputAt(0, object);
   }
 
   bool CanBeMoved() const OVERRIDE { return !IsVolatile(); }
@@ -3990,7 +3993,7 @@ class HInstanceFieldGet : public HExpression<1> {
   }
 
   size_t ComputeHashCode() const OVERRIDE {
-    return (HInstruction::ComputeHashCode() << 7) | GetFieldOffset().SizeValue();
+    return ComputeHashCodeForMemoryAccess(this);
   }
 
   const FieldInfo& GetFieldInfo() const { return field_info_; }
@@ -4025,6 +4028,10 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
     return (obj == InputAt(0)) && GetFieldOffset().Uint32Value() < kPageSize;
+  }
+
+  size_t ComputeHashCode() const OVERRIDE {
+    return ComputeHashCodeForMemoryAccess(this);
   }
 
   const FieldInfo& GetFieldInfo() const { return field_info_; }
@@ -4071,6 +4078,10 @@ class HArrayGet : public HExpression<2> {
 
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }
+
+  size_t ComputeHashCode() const OVERRIDE {
+    return ComputeHashCodeForMemoryAccess(this);
+  }
 
   DECLARE_INSTRUCTION(ArrayGet);
 
@@ -4142,6 +4153,10 @@ class HArraySet : public HTemplateInstruction<3> {
 
   static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type value_type) {
     return (value_type == Primitive::kPrimNot) ? SideEffects::CanTriggerGC() : SideEffects::None();
+  }
+
+  size_t ComputeHashCode() const OVERRIDE {
+    return ComputeHashCodeForMemoryAccess(this);
   }
 
   DECLARE_INSTRUCTION(ArraySet);
@@ -4448,7 +4463,7 @@ class HStaticFieldGet : public HExpression<1> {
   }
 
   size_t ComputeHashCode() const OVERRIDE {
-    return (HInstruction::ComputeHashCode() << 7) | GetFieldOffset().SizeValue();
+    return ComputeHashCodeForMemoryAccess(this);
   }
 
   const FieldInfo& GetFieldInfo() const { return field_info_; }
@@ -4489,6 +4504,10 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
   HInstruction* GetValue() const { return InputAt(1); }
   bool GetValueCanBeNull() const { return value_can_be_null_; }
   void ClearValueCanBeNull() { value_can_be_null_ = false; }
+
+  size_t ComputeHashCode() const OVERRIDE {
+    return ComputeHashCodeForMemoryAccess(this);
+  }
 
   DECLARE_INSTRUCTION(StaticFieldSet);
 
@@ -5103,6 +5122,50 @@ inline void SideEffects::SetArrayAccessIndex(HInstruction* index) {
   this->data_offset_ = array_index;
 }
 
+size_t ComputeHashCodeForMemoryAccess(const HInstruction* instruction) {
+  // Note: GVN requires hash code to be the same when reading/writing the same
+  // heap memory.
+  HInstruction::InstructionKind kind = HInstruction::kNullConstant;
+  int base = 0;
+  int offset = 0;
+  if (instruction->IsInstanceFieldGet() || instruction->IsInstanceFieldSet()) {
+    kind = HInstruction::kInstanceFieldGet;
+    if (instruction->IsInstanceFieldGet()) {
+      const HInstanceFieldGet* get = instruction->AsInstanceFieldGet();
+      base = get->InputAt(0)->GetId();
+      offset = get->GetFieldOffset().SizeValue();
+    } else {
+      const HInstanceFieldSet* set = instruction->AsInstanceFieldSet();
+      base = set->InputAt(0)->GetId();
+      offset = set->GetFieldOffset().SizeValue();
+    }
+  } else if (instruction->IsArrayGet() || instruction->IsArraySet()) {
+    kind = HInstruction::kArrayGet;
+    if (instruction->IsArrayGet()) {
+      const HArrayGet* get = instruction->AsArrayGet();
+      base = get->GetArray()->GetId();
+      offset = get->GetIndex()->GetId();
+    } else {
+      const HArraySet* set = instruction->AsArraySet();
+      base = set->GetArray()->GetId();
+      offset = set->GetIndex()->GetId();
+    }
+  } else if (instruction->IsStaticFieldGet() || instruction->IsStaticFieldSet()) {
+    kind = HInstruction::kStaticFieldGet;
+    if (instruction->IsStaticFieldGet()) {
+      const HStaticFieldGet* get = instruction->AsStaticFieldGet();
+      base = get->InputAt(0)->GetId();
+      offset = get->GetFieldOffset().SizeValue();
+    } else {
+      const HStaticFieldSet* set = instruction->AsStaticFieldSet();
+      base = set->InputAt(0)->GetId();
+      offset = set->GetFieldOffset().SizeValue();
+    }
+  }
+
+  DCHECK_NE(kind, HInstruction::kNullConstant) << "Unexpected instruction type";
+  return (kind << 16) | (base << 8) | offset;
+}
 
 }  // namespace art
 

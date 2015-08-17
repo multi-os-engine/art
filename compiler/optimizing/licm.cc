@@ -113,9 +113,14 @@ void LICM::Run() {
            !inst_it.Done();
            inst_it.Advance()) {
         HInstruction* instruction = inst_it.Current();
+        // Note: HClinitCheck is special. The real class initialization can only
+        // be done once before any other access to the class object. So it cannot
+        // overwrite (or be overwritten by) any other writes. It won't depend on
+        // any other instructions.
         if (instruction->CanBeMoved()
             && (!instruction->CanThrow() || !found_first_non_hoisted_throwing_instruction_in_loop)
-            && !instruction->GetSideEffects().MayDependOn(loop_effects)
+            && (!instruction->GetSideEffects().MayDependOn(loop_effects)
+                || instruction->IsClinitCheck())
             && InputsAreDefinedBeforeLoop(instruction)) {
           // We need to update the environment if the instruction has a loop header
           // phi in it.

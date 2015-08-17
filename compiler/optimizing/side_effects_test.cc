@@ -40,7 +40,7 @@ void testWriteAndReadSanity(SideEffects write, SideEffects read) {
   // All-dependences.
   SideEffects all = SideEffects::All();
   EXPECT_TRUE(all.MayDependOn(write));
-  EXPECT_FALSE(write.MayDependOn(all));
+  EXPECT_TRUE(write.MayDependOn(all));
   EXPECT_FALSE(all.MayDependOn(read));
   EXPECT_TRUE(read.MayDependOn(all));
 
@@ -140,12 +140,12 @@ TEST(SideEffectsTest, VolatileDependences) {
   EXPECT_FALSE(volatile_write.MayDependOn(any_read));
   EXPECT_TRUE(any_read.MayDependOn(volatile_write));
   EXPECT_TRUE(volatile_write.MayDependOn(any_write));
-  EXPECT_FALSE(any_write.MayDependOn(volatile_write));
+  EXPECT_TRUE(any_write.MayDependOn(volatile_write));
 
   EXPECT_FALSE(volatile_read.MayDependOn(any_read));
   EXPECT_TRUE(any_read.MayDependOn(volatile_read));
   EXPECT_TRUE(volatile_read.MayDependOn(any_write));
-  EXPECT_FALSE(any_write.MayDependOn(volatile_read));
+  EXPECT_TRUE(any_write.MayDependOn(volatile_read));
 }
 
 TEST(SideEffectsTest, SameWidthTypes) {
