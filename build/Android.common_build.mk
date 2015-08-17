@@ -275,16 +275,6 @@ art_debug_cflags := \
   -DVIXL_DEBUG \
   -UNDEBUG
 
-# The latest clang update trips over many of the files in art and never finishes
-# compiling for aarch64 with -O3 (or -O2). Drop back to -O1 while we investigate
-# to stop punishing the build server.
-ifeq ($(TARGET_ARCH),arm64)
-  ifeq ($(USE_CLANG_PLATFORM_BUILD),true)
-    art_debug_cflags += -O1
-    art_non_debug_cflags += -O1
-  endif
-endif
-
 art_host_non_debug_cflags := $(art_non_debug_cflags)
 art_target_non_debug_cflags := $(art_non_debug_cflags)
 
@@ -329,6 +319,16 @@ ART_HOST_NON_DEBUG_CFLAGS := $(art_host_non_debug_cflags)
 ART_TARGET_NON_DEBUG_CFLAGS := $(art_target_non_debug_cflags)
 ART_HOST_DEBUG_CFLAGS := $(art_debug_cflags)
 ART_TARGET_DEBUG_CFLAGS := $(art_debug_cflags)
+
+# The latest clang update trips over many of the files in art and never finishes
+# compiling for aarch64 with -O3 (or -O2). Drop back to -O1 while we investigate
+# to stop punishing the build server.
+ifeq ($(TARGET_ARCH),arm64)
+  ifeq ($(USE_CLANG_PLATFORM_BUILD),true)
+    ART_TARGET_DEBUG_CFLAGS += -O1
+    art_target_non_debug_cflags += -O1
+  endif
+endif
 
 ifndef LIBART_IMG_HOST_MIN_BASE_ADDRESS_DELTA
   LIBART_IMG_HOST_MIN_BASE_ADDRESS_DELTA=-0x1000000
