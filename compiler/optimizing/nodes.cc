@@ -343,6 +343,16 @@ void HGraph::ComputeTryBlockInformation() {
   }
 }
 
+bool HGraph::HasTryCatch() const {
+  for (size_t i = 0, e = blocks_.Size(); i < e; ++i) {
+    HBasicBlock* block = blocks_.Get(i);
+    if (block != nullptr && (block->IsInTry() || block->IsCatchBlock())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void HGraph::SimplifyCFG() {
   // Simplify the CFG for future analysis, and code generation:
   // (1): Split critical edges.
@@ -641,13 +651,13 @@ static void Remove(HInstructionList* instruction_list,
                    HInstruction* instruction,
                    bool ensure_safety) {
   DCHECK_EQ(block, instruction->GetBlock());
-  instruction->SetBlock(nullptr);
-  instruction_list->RemoveInstruction(instruction);
   if (ensure_safety) {
     DCHECK(instruction->GetUses().IsEmpty());
     DCHECK(instruction->GetEnvUses().IsEmpty());
     RemoveAsUser(instruction);
   }
+  instruction->SetBlock(nullptr);
+  instruction_list->RemoveInstruction(instruction);
 }
 
 void HBasicBlock::RemoveInstruction(HInstruction* instruction, bool ensure_safety) {
