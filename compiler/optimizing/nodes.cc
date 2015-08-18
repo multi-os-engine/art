@@ -343,6 +343,16 @@ void HGraph::ComputeTryBlockInformation() {
   }
 }
 
+bool HGraph::HasTryCatch(HGraph* graph) {
+  for (size_t i = 0, e = graph->GetBlocks().Size(); i < e; ++i) {
+    HBasicBlock* block = graph->GetBlocks().Get(i);
+    if (block != nullptr && (block->IsInTry() || block->IsCatchBlock())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void HGraph::SimplifyCFG() {
   // Simplify the CFG for future analysis, and code generation:
   // (1): Split critical edges.
