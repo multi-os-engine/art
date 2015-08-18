@@ -99,7 +99,8 @@ void HDeadCodeElimination::RemoveDeadBlocks() {
   // Connect successive blocks created by dead branches. Order does not matter.
   for (HReversePostOrderIterator it(*graph_); !it.Done();) {
     HBasicBlock* block  = it.Current();
-    if (block->IsEntryBlock() || block->GetSuccessors().Size() != 1u) {
+    if (block->IsEntryBlock()
+        || block->GetSuccessors().Size() != 1u) {
       it.Advance();
       continue;
     }
@@ -142,7 +143,10 @@ void HDeadCodeElimination::RemoveDeadInstructions() {
 }
 
 void HDeadCodeElimination::Run() {
-  RemoveDeadBlocks();
+  if (!graph_->HasTryCatch()) {
+    // TODO: Update dead block elimination and enable for try/catch.
+    RemoveDeadBlocks();
+  }
   SsaRedundantPhiElimination(graph_).Run();
   RemoveDeadInstructions();
 }
