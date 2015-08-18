@@ -488,6 +488,8 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
 
   ifeq ($$(art_target_or_host),target)
     LOCAL_SHARED_LIBRARIES += libdl
+	# For simulator/code_simulator*
+    LOCAL_SHARED_LIBRARIES += libvixl
     # ZipArchive support, the order matters here to get all symbols.
     LOCAL_STATIC_LIBRARIES := libziparchive libz libbase
     # For android::FileMap used by libziparchive.
@@ -496,11 +498,15 @@ $$(ENUM_OPERATOR_OUT_GEN): $$(GENERATED_SRC_DIR)/%_operator_out.cc : $(LOCAL_PAT
     LOCAL_SHARED_LIBRARIES += libcutils
   else # host
     ifeq ($$(art_static_or_shared),static)
-      LOCAL_STATIC_LIBRARIES += libziparchive-host libz libvixl
+	  # For simulator/code_simulator*
+      LOCAL_STATIC_LIBRARIES += libvixl
+      LOCAL_STATIC_LIBRARIES += libziparchive-host libz
       # For ashmem_create_region.
       LOCAL_STATIC_LIBRARIES += libcutils
     else
-      LOCAL_SHARED_LIBRARIES += libziparchive-host libz-host libvixl
+	  # For simulator/code_simulator*
+      LOCAL_SHARED_LIBRARIES += libvixl
+      LOCAL_SHARED_LIBRARIES += libziparchive-host libz-host
       # For ashmem_create_region.
       LOCAL_SHARED_LIBRARIES += libcutils
     endif
