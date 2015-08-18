@@ -266,11 +266,46 @@ class HGraphBuilder : public ValueObject {
                                      uint32_t dex_pc,
                                      HInvoke* invoke);
 
-  HInvokeStaticOrDirect::DispatchInfo ComputeDispatchInfo(bool is_string_init,
-                                                          int32_t string_init_offset,
-                                                          MethodReference target_method,
-                                                          uintptr_t direct_method,
-                                                          uintptr_t direct_code);
+  struct InvokeInfo {
+    InvokeInfo(const DexFile* file, uint32_t index) : target_method(file, index) {}
+
+    MethodReference target_method;
+    InvokeType original_invoke_type;
+    InvokeType optimized_invoke_type;
+    Primitive::Type return_type;
+    size_t number_of_arguments;
+    int32_t table_index;
+    uintptr_t direct_code;
+    uintptr_t direct_method;
+    bool is_string_init;
+    int32_t string_init_offset;
+    const char* descriptor;
+  };
+
+  bool ComputeInvokeInfo(Instruction::Code invoke_opcode,
+                         uint32_t dex_pc,
+                         uint32_t method_idx,
+                         InvokeInfo* invoke_info);
+
+  HInvokeStaticOrDirect::DispatchInfo ComputeDispatchInfo(const InvokeInfo& invoke_info);
+
+  bool SetupArgumentsForInvoke(HInvoke* invoke,
+                               uint32_t number_of_vreg_arguments,
+                               uint32_t* args,
+                               uint32_t register_index,
+                               bool is_range,
+                               const char* descriptor,
+                               HClinitCheck* clinit_check);
+
+  HInvokeStaticOrDirect* BuildInvokeStaticOrDirect(uint32_t dex_pc,
+                                                   uint32_t method_idx,
+                                                   InvokeInfo* invoke_info,
+                                                   HClinitCheck** clinit_check);
+
+  HClinitCheck* ProcessClinitCheckForInvoke(
+      uint32_t dex_pc,
+      uint32_t method_idx,
+      HInvokeStaticOrDirect::ClinitCheckRequirement* clinit_check_requirement);
 
   ArenaAllocator* const arena_;
 
