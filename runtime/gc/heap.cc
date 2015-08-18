@@ -3843,6 +3843,8 @@ void Heap::CheckGcStressMode(Thread* self, mirror::Object** obj) {
     if (new_backtrace) {
       StackHandleScope<1> hs(self);
       auto h = hs.NewHandleWrapper(obj);
+      LOG(INFO) << "Starting GC for unique backtrace";
+      self->DumpStack(LOG(INFO));
       CollectGarbage(false);
       unique_backtrace_count_.FetchAndAddSequentiallyConsistent(1);
     } else {
