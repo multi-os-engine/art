@@ -148,18 +148,15 @@ void SsaRedundantPhiElimination::Run() {
       continue;
     }
 
-    if (phi->IsInLoop()) {
-      // Because we're updating the users of this phi, we may have new
-      // phis candidate for elimination if this phi is in a loop. Add phis that
-      // used this phi to the worklist.
-      for (HUseIterator<HInstruction*> it(phi->GetUses()); !it.Done(); it.Advance()) {
-        HUseListNode<HInstruction*>* current = it.Current();
-        HInstruction* user = current->GetUser();
-        if (user->IsPhi()) {
-          worklist_.Add(user->AsPhi());
-        }
+    // Because we're updating the users of this phi, we may have new candidates
+    // for elimination. Add phis that use this phi to the worklist.
+    for (HUseIterator<HInstruction*> it(phi->GetUses()); !it.Done(); it.Advance()) {
+      HInstruction* user = it.Current()->GetUser();
+      if (user->IsPhi()) {
+        worklist_.Add(user->AsPhi());
       }
     }
+
     phi->ReplaceWith(candidate);
     phi->GetBlock()->RemovePhi(phi);
   }

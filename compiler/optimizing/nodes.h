@@ -350,6 +350,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
     return instruction_set_;
   }
 
+  bool HasTryCatch() const;
+
  private:
   void VisitBlockForDominatorTree(HBasicBlock* block,
                                   HBasicBlock* predecessor,
@@ -555,6 +557,22 @@ class HLoopInformation : public ArenaObject<kArenaAllocMisc> {
   DISALLOW_COPY_AND_ASSIGN(HLoopInformation);
 };
 
+// Stores exception type information for catch blocks.
+class CatchHandlerInformation : public ArenaObject<kArenaAllocMisc> {
+ public:
+  CatchHandlerInformation(uint16_t type_index, const DexFile& dex_file)
+      : type_index_(type_index), dex_file_(dex_file) {}
+
+  uint16_t GetTypeIndex() const { return type_index_; }
+  const DexFile& GetDexFile() const { return dex_file_; }
+
+  bool IsCatchAll() const { return type_index_ == DexFile::kDexNoIndex16; }
+
+ private:
+  const uint16_t type_index_;
+  const DexFile& dex_file_;
+};
+
 static constexpr size_t kNoLifetime = -1;
 static constexpr uint32_t kNoDexPc = -1;
 
@@ -575,7 +593,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
         dex_pc_(dex_pc),
         lifetime_start_(kNoLifetime),
         lifetime_end_(kNoLifetime),
-        is_catch_block_(false) {}
+        catch_handler_information_(nullptr),
+        try_entry_(nullptr) {}
 
   const GrowableArray<HBasicBlock*>& GetPredecessors() const {
     return predecessors_;
@@ -873,8 +892,15 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
 
   uint32_t GetDexPc() const { return dex_pc_; }
 
-  bool IsCatchBlock() const { return is_catch_block_; }
-  void SetIsCatchBlock() { is_catch_block_ = true; }
+  bool IsCatchBlock() const { return catch_handler_information_ != nullptr; }
+
+  const CatchHandlerInformation& GetCatchHandlerInformation() const {
+    return *catch_handler_information_;
+  }
+
+  void SetCatchHandlerInformation(CatchHandlerInformation* info) {
+    catch_handler_information_ = info;
+  }
 
   bool EndsWithControlFlowInstruction() const;
   bool EndsWithIf() const;
@@ -895,7 +921,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   const uint32_t dex_pc_;
   size_t lifetime_start_;
   size_t lifetime_end_;
-  bool is_catch_block_;
+
+  CatchHandlerInformation* catch_handler_information_;
 
   // If this block is in a try block, `try_entry_` stores one of, possibly
   // several, TryBoundary instructions entering it.
@@ -4412,6 +4439,8 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
 class HLoadException : public HExpression<0> {
  public:
   HLoadException() : HExpression(Primitive::kPrimNot, SideEffects::None()) {}
+
+  bool CanBeNull() const OVERRIDE { return false; }
 
   DECLARE_INSTRUCTION(LoadException);
 
