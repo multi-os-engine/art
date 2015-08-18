@@ -575,13 +575,14 @@ class Dex2Oat FINAL {
   };
 
   template <typename T>
-  static void ParseUintOption(const StringPiece& option,
+  static void ParseUintOption(const char* const raw_option,
                               const std::string& option_name,
                               T* out,
                               bool is_long_option = true) {
+    const StringPiece option(raw_option);
     std::string option_prefix = option_name + (is_long_option ? "=" : "");
     DCHECK(option.starts_with(option_prefix));
-    const char* value_string = option.substr(option_prefix.size()).data();
+    const char* value_string = raw_option + option_prefix.size();
     int64_t parsed_integer_value;
     if (!ParseInt(value_string, &parsed_integer_value)) {
       Usage("Failed to parse %s '%s' as an integer", option_name.c_str(), value_string);
@@ -592,21 +593,22 @@ class Dex2Oat FINAL {
     *out = dchecked_integral_cast<T>(parsed_integer_value);
   }
 
-  void ParseZipFd(const StringPiece& option) {
-    ParseUintOption(option, "--zip-fd", &zip_fd_);
+  void ParseZipFd(const char* const raw_option) {
+    ParseUintOption(raw_option, "--zip-fd", &zip_fd_);
   }
 
-  void ParseOatFd(const StringPiece& option) {
-    ParseUintOption(option, "--oat-fd", &oat_fd_);
+  void ParseOatFd(const char* const raw_option) {
+    ParseUintOption(raw_option, "--oat-fd", &oat_fd_);
   }
 
-  void ParseJ(const StringPiece& option) {
-    ParseUintOption(option, "-j", &thread_count_, /* is_long_option */ false);
+  void ParseJ(const char* const raw_option) {
+    ParseUintOption(raw_option, "-j", &thread_count_, /* is_long_option */ false);
   }
 
-  void ParseBase(const StringPiece& option) {
+  void ParseBase(const char* const raw_option) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--base="));
-    const char* image_base_str = option.substr(strlen("--base=")).data();
+    const char* image_base_str = raw_option + strlen("--base=");
     char* end;
     image_base_ = strtoul(image_base_str, &end, 16);
     if (end == image_base_str || *end != '\0') {
@@ -614,9 +616,10 @@ class Dex2Oat FINAL {
     }
   }
 
-  void ParseInstructionSet(const StringPiece& option) {
+  void ParseInstructionSet(const char* const raw_option) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--instruction-set="));
-    StringPiece instruction_set_str = option.substr(strlen("--instruction-set=")).data();
+    StringPiece instruction_set_str = raw_option + strlen("--instruction-set=");
     // StringPiece is not necessarily zero-terminated, so need to make a copy and ensure it.
     std::unique_ptr<char[]> buf(new char[instruction_set_str.length() + 1]);
     strncpy(buf.get(), instruction_set_str.data(), instruction_set_str.length());
@@ -628,9 +631,10 @@ class Dex2Oat FINAL {
     }
   }
 
-  void ParseInstructionSetVariant(const StringPiece& option, ParserOptions* parser_options) {
+  void ParseInstructionSetVariant(const char* const raw_option, ParserOptions* parser_options) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--instruction-set-variant="));
-    StringPiece str = option.substr(strlen("--instruction-set-variant=")).data();
+    StringPiece str = raw_option + strlen("--instruction-set-variant=");
     instruction_set_features_.reset(
         InstructionSetFeatures::FromVariant(
             instruction_set_, str.as_string(), &parser_options->error_msg));
@@ -639,9 +643,10 @@ class Dex2Oat FINAL {
     }
   }
 
-  void ParseInstructionSetFeatures(const StringPiece& option, ParserOptions* parser_options) {
+  void ParseInstructionSetFeatures(const char* const raw_option, ParserOptions* parser_options) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--instruction-set-features="));
-    StringPiece str = option.substr(strlen("--instruction-set-features=")).data();
+    StringPiece str = raw_option + strlen("--instruction-set-features=");
     if (instruction_set_features_.get() == nullptr) {
       instruction_set_features_.reset(
           InstructionSetFeatures::FromVariant(
@@ -659,10 +664,11 @@ class Dex2Oat FINAL {
     }
   }
 
-  void ParseCompilerBackend(const StringPiece& option, ParserOptions* parser_options) {
+  void ParseCompilerBackend(const char* const raw_option, ParserOptions* parser_options) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--compiler-backend="));
     parser_options->requested_specific_compiler = true;
-    StringPiece backend_str = option.substr(strlen("--compiler-backend=")).data();
+    StringPiece backend_str = raw_option + strlen("--compiler-backend=");
     if (backend_str == "Quick") {
       compiler_kind_ = Compiler::kQuick;
     } else if (backend_str == "Optimizing") {
@@ -672,61 +678,66 @@ class Dex2Oat FINAL {
     }
   }
 
-  void ParseHugeMethodMax(const StringPiece& option, ParserOptions* parser_options) {
-    ParseUintOption(option, "--huge-method-max", &parser_options->huge_method_threshold);
+  void ParseHugeMethodMax(const char* const raw_option, ParserOptions* parser_options) {
+    ParseUintOption(raw_option, "--huge-method-max", &parser_options->huge_method_threshold);
   }
 
-  void ParseLargeMethodMax(const StringPiece& option, ParserOptions* parser_options) {
-    ParseUintOption(option, "--large-method-max", &parser_options->large_method_threshold);
+  void ParseLargeMethodMax(const char* const raw_option, ParserOptions* parser_options) {
+    ParseUintOption(raw_option, "--large-method-max", &parser_options->large_method_threshold);
   }
 
-  void ParseSmallMethodMax(const StringPiece& option, ParserOptions* parser_options) {
-    ParseUintOption(option, "--small-method-max", &parser_options->small_method_threshold);
+  void ParseSmallMethodMax(const char* const raw_option, ParserOptions* parser_options) {
+    ParseUintOption(raw_option, "--small-method-max", &parser_options->small_method_threshold);
   }
 
-  void ParseTinyMethodMax(const StringPiece& option, ParserOptions* parser_options) {
-    ParseUintOption(option, "--tiny-method-max", &parser_options->tiny_method_threshold);
+  void ParseTinyMethodMax(const char* const raw_option, ParserOptions* parser_options) {
+    ParseUintOption(raw_option, "--tiny-method-max", &parser_options->tiny_method_threshold);
   }
 
-  void ParseNumDexMethods(const StringPiece& option, ParserOptions* parser_options) {
-    ParseUintOption(option, "--num-dex-methods", &parser_options->num_dex_methods_threshold);
+  void ParseNumDexMethods(const char* const raw_option, ParserOptions* parser_options) {
+    ParseUintOption(raw_option, "--num-dex-methods", &parser_options->num_dex_methods_threshold);
   }
 
-  void ParseInlineDepthLimit(const StringPiece& option, ParserOptions* parser_options) {
-    ParseUintOption(option, "--inline-depth-limit", &parser_options->inline_depth_limit);
+  void ParseInlineDepthLimit(const char* const raw_option, ParserOptions* parser_options) {
+    ParseUintOption(raw_option, "--inline-depth-limit", &parser_options->inline_depth_limit);
   }
 
-  void ParseInlineMaxCodeUnits(const StringPiece& option, ParserOptions* parser_options) {
-    ParseUintOption(option, "--inline-max-code-units=", &parser_options->inline_max_code_units);
+  void ParseInlineMaxCodeUnits(const char* const raw_option, ParserOptions* parser_options) {
+    ParseUintOption(raw_option, "--inline-max-code-units=", &parser_options->inline_max_code_units);
   }
 
-  void ParseDisablePasses(const StringPiece& option, ParserOptions* parser_options) {
+  void ParseDisablePasses(const char* const raw_option, ParserOptions* parser_options) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--disable-passes="));
-    const std::string disable_passes = option.substr(strlen("--disable-passes=")).data();
+    const std::string disable_passes = raw_option + strlen("--disable-passes=");
     parser_options->pass_manager_options.SetDisablePassList(disable_passes);
   }
 
-  void ParsePrintPasses(const StringPiece& option, ParserOptions* parser_options) {
+  void ParsePrintPasses(const char* const raw_option, ParserOptions* parser_options) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--print-passes="));
-    const std::string print_passes = option.substr(strlen("--print-passes=")).data();
+    const std::string print_passes = raw_option + strlen("--print-passes=");
     parser_options->pass_manager_options.SetPrintPassList(print_passes);
   }
 
-  void ParseDumpCfgPasses(const StringPiece& option, ParserOptions* parser_options) {
+  void ParseDumpCfgPasses(const char* const raw_option, ParserOptions* parser_options) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--dump-cfg-passes="));
-    const std::string dump_passes_string = option.substr(strlen("--dump-cfg-passes=")).data();
+    const std::string dump_passes_string = raw_option + strlen("--dump-cfg-passes=");
     parser_options->pass_manager_options.SetDumpPassList(dump_passes_string);
   }
 
-  void ParsePassOptions(const StringPiece& option, ParserOptions* parser_options) {
+  void ParsePassOptions(const char* const raw_option, ParserOptions* parser_options) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--pass-options="));
-    const std::string pass_options = option.substr(strlen("--pass-options=")).data();
+    const std::string pass_options = raw_option + strlen("--pass-options=");
     parser_options->pass_manager_options.SetOverriddenPassOptions(pass_options);
   }
 
-  void ParseDumpInitFailures(const StringPiece& option) {
+  void ParseDumpInitFailures(const char* const raw_option) {
+    const StringPiece option(raw_option);
     DCHECK(option.starts_with("--dump-init-failures="));
-    std::string file_name = option.substr(strlen("--dump-init-failures=")).data();
+    std::string file_name = raw_option + strlen("--dump-init-failures=");
     init_failure_output_.reset(new std::ofstream(file_name));
     if (init_failure_output_.get() == nullptr) {
       LOG(ERROR) << "Failed to allocate ofstream";
@@ -737,8 +748,8 @@ class Dex2Oat FINAL {
     }
   }
 
-  void ParseSwapFd(const StringPiece& option) {
-    ParseUintOption(option, "--swap-fd", &swap_fd_);
+  void ParseSwapFd(const char* const raw_option) {
+    ParseUintOption(raw_option, "--swap-fd", &swap_fd_);
   }
 
   void ProcessOptions(ParserOptions* parser_options) {
@@ -1009,79 +1020,80 @@ class Dex2Oat FINAL {
     std::unique_ptr<ParserOptions> parser_options(new ParserOptions());
 
     for (int i = 0; i < argc; i++) {
-      const StringPiece option(argv[i]);
+      const char* const raw_option = argv[i];
+      const StringPiece option(raw_option);
       const bool log_options = false;
       if (log_options) {
         LOG(INFO) << "dex2oat: option[" << i << "]=" << argv[i];
       }
       if (option.starts_with("--dex-file=")) {
-        dex_filenames_.push_back(option.substr(strlen("--dex-file=")).data());
+        dex_filenames_.push_back(raw_option + strlen("--dex-file="));
       } else if (option.starts_with("--dex-location=")) {
-        dex_locations_.push_back(option.substr(strlen("--dex-location=")).data());
+        dex_locations_.push_back(raw_option + strlen("--dex-location="));
       } else if (option.starts_with("--zip-fd=")) {
-        ParseZipFd(option);
+        ParseZipFd(raw_option);
       } else if (option.starts_with("--zip-location=")) {
-        zip_location_ = option.substr(strlen("--zip-location=")).data();
+        zip_location_ = raw_option + strlen("--zip-location=");
       } else if (option.starts_with("--oat-file=")) {
-        oat_filename_ = option.substr(strlen("--oat-file=")).data();
+        oat_filename_ = raw_option + strlen("--oat-file=");
       } else if (option.starts_with("--oat-symbols=")) {
-        parser_options->oat_symbols = option.substr(strlen("--oat-symbols=")).data();
+        parser_options->oat_symbols = raw_option + strlen("--oat-symbols=");
       } else if (option.starts_with("--oat-fd=")) {
-        ParseOatFd(option);
+        ParseOatFd(raw_option);
       } else if (option == "--watch-dog") {
         parser_options->watch_dog_enabled = true;
       } else if (option == "--no-watch-dog") {
         parser_options->watch_dog_enabled = false;
       } else if (option.starts_with("-j")) {
-        ParseJ(option);
+        ParseJ(raw_option);
       } else if (option.starts_with("--oat-location=")) {
-        oat_location_ = option.substr(strlen("--oat-location=")).data();
+        oat_location_ = raw_option + strlen("--oat-location=");
       } else if (option.starts_with("--image=")) {
-        image_filename_ = option.substr(strlen("--image=")).data();
+        image_filename_ = raw_option + strlen("--image=");
       } else if (option.starts_with("--image-classes=")) {
-        image_classes_filename_ = option.substr(strlen("--image-classes=")).data();
+        image_classes_filename_ = raw_option + strlen("--image-classes=");
       } else if (option.starts_with("--image-classes-zip=")) {
-        image_classes_zip_filename_ = option.substr(strlen("--image-classes-zip=")).data();
+        image_classes_zip_filename_ = raw_option + strlen("--image-classes-zip=");
       } else if (option.starts_with("--compiled-classes=")) {
-        compiled_classes_filename_ = option.substr(strlen("--compiled-classes=")).data();
+        compiled_classes_filename_ = raw_option + strlen("--compiled-classes=");
       } else if (option.starts_with("--compiled-classes-zip=")) {
-        compiled_classes_zip_filename_ = option.substr(strlen("--compiled-classes-zip=")).data();
+        compiled_classes_zip_filename_ = raw_option + strlen("--compiled-classes-zip=");
       } else if (option.starts_with("--compiled-methods=")) {
-        compiled_methods_filename_ = option.substr(strlen("--compiled-methods=")).data();
+        compiled_methods_filename_ = raw_option + strlen("--compiled-methods=");
       } else if (option.starts_with("--compiled-methods-zip=")) {
-        compiled_methods_zip_filename_ = option.substr(strlen("--compiled-methods-zip=")).data();
+        compiled_methods_zip_filename_ = raw_option + strlen("--compiled-methods-zip=");
       } else if (option.starts_with("--base=")) {
-        ParseBase(option);
+        ParseBase(raw_option);
       } else if (option.starts_with("--boot-image=")) {
-        parser_options->boot_image_filename = option.substr(strlen("--boot-image=")).data();
+        parser_options->boot_image_filename = raw_option + strlen("--boot-image=");
       } else if (option.starts_with("--android-root=")) {
-        android_root_ = option.substr(strlen("--android-root=")).data();
+        android_root_ = raw_option + strlen("--android-root=");
       } else if (option.starts_with("--instruction-set=")) {
-        ParseInstructionSet(option);
+        ParseInstructionSet(raw_option);
       } else if (option.starts_with("--instruction-set-variant=")) {
-        ParseInstructionSetVariant(option, parser_options.get());
+        ParseInstructionSetVariant(raw_option, parser_options.get());
       } else if (option.starts_with("--instruction-set-features=")) {
-        ParseInstructionSetFeatures(option, parser_options.get());
+        ParseInstructionSetFeatures(raw_option, parser_options.get());
       } else if (option.starts_with("--compiler-backend=")) {
-        ParseCompilerBackend(option, parser_options.get());
+        ParseCompilerBackend(raw_option, parser_options.get());
       } else if (option.starts_with("--compiler-filter=")) {
-        parser_options->compiler_filter_string = option.substr(strlen("--compiler-filter=")).data();
+        parser_options->compiler_filter_string = raw_option + strlen("--compiler-filter=");
       } else if (option == "--compile-pic") {
         parser_options->compile_pic = true;
       } else if (option.starts_with("--huge-method-max=")) {
-        ParseHugeMethodMax(option, parser_options.get());
+        ParseHugeMethodMax(raw_option, parser_options.get());
       } else if (option.starts_with("--large-method-max=")) {
-        ParseLargeMethodMax(option, parser_options.get());
+        ParseLargeMethodMax(raw_option, parser_options.get());
       } else if (option.starts_with("--small-method-max=")) {
-        ParseSmallMethodMax(option, parser_options.get());
+        ParseSmallMethodMax(raw_option, parser_options.get());
       } else if (option.starts_with("--tiny-method-max=")) {
-        ParseTinyMethodMax(option, parser_options.get());
+        ParseTinyMethodMax(raw_option, parser_options.get());
       } else if (option.starts_with("--num-dex-methods=")) {
-        ParseNumDexMethods(option, parser_options.get());
+        ParseNumDexMethods(raw_option, parser_options.get());
       } else if (option.starts_with("--inline-depth-limit=")) {
-        ParseInlineDepthLimit(option, parser_options.get());
+        ParseInlineDepthLimit(raw_option, parser_options.get());
       } else if (option.starts_with("--inline-max-code-units=")) {
-        ParseInlineMaxCodeUnits(option, parser_options.get());
+        ParseInlineMaxCodeUnits(raw_option, parser_options.get());
       } else if (option == "--host") {
         is_host_ = true;
       } else if (option == "--runtime-arg") {
@@ -1097,7 +1109,7 @@ class Dex2Oat FINAL {
       } else if (option == "--dump-passes") {
         dump_passes_ = true;
       } else if (option.starts_with("--dump-cfg=")) {
-        dump_cfg_file_name_ = option.substr(strlen("--dump-cfg=")).data();
+        dump_cfg_file_name_ = raw_option + strlen("--dump-cfg=");
       } else if (option == "--dump-stats") {
         dump_stats_ = true;
       } else if (option == "--generate-debug-info" || option == "-g") {
@@ -1108,7 +1120,7 @@ class Dex2Oat FINAL {
         parser_options->debuggable = true;
         parser_options->generate_debug_info = true;
       } else if (option.starts_with("--profile-file=")) {
-        profile_file_ = option.substr(strlen("--profile-file=")).data();
+        profile_file_ = raw_option + strlen("--profile-file=");
         VLOG(compiler) << "dex2oat: profile file is " << profile_file_;
       } else if (option == "--no-profile-file") {
         // No profile
@@ -1117,17 +1129,17 @@ class Dex2Oat FINAL {
       } else if (option == "--print-pass-names") {
         parser_options->pass_manager_options.SetPrintPassNames(true);
       } else if (option.starts_with("--disable-passes=")) {
-        ParseDisablePasses(option, parser_options.get());
+        ParseDisablePasses(raw_option, parser_options.get());
       } else if (option.starts_with("--print-passes=")) {
-        ParsePrintPasses(option, parser_options.get());
+        ParsePrintPasses(raw_option, parser_options.get());
       } else if (option == "--print-all-passes") {
         parser_options->pass_manager_options.SetPrintAllPasses();
       } else if (option.starts_with("--dump-cfg-passes=")) {
-        ParseDumpCfgPasses(option, parser_options.get());
+        ParseDumpCfgPasses(raw_option, parser_options.get());
       } else if (option == "--print-pass-options") {
         parser_options->pass_manager_options.SetPrintPassOptions(true);
       } else if (option.starts_with("--pass-options=")) {
-        ParsePassOptions(option, parser_options.get());
+        ParsePassOptions(raw_option, parser_options.get());
       } else if (option == "--include-patch-information") {
         parser_options->include_patch_information = true;
       } else if (option == "--no-include-patch-information") {
@@ -1138,11 +1150,11 @@ class Dex2Oat FINAL {
         gLogVerbosity.compiler = false;
         Split(option.substr(strlen("--verbose-methods=")).ToString(), ',', &verbose_methods_);
       } else if (option.starts_with("--dump-init-failures=")) {
-        ParseDumpInitFailures(option);
+        ParseDumpInitFailures(raw_option);
       } else if (option.starts_with("--swap-file=")) {
-        swap_file_name_ = option.substr(strlen("--swap-file=")).data();
+        swap_file_name_ = raw_option + strlen("--swap-file=");
       } else if (option.starts_with("--swap-fd=")) {
-        ParseSwapFd(option);
+        ParseSwapFd(raw_option);
       } else if (option == "--abort-on-hard-verifier-error") {
         parser_options->abort_on_hard_verifier_error = true;
       } else {
