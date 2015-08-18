@@ -1021,7 +1021,7 @@ class MANAGED Class FINAL : public Object {
   void SetPreverifiedFlagOnAllMethods(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  template <bool kVisitClass, typename Visitor>
+  template <typename Visitor>
   void VisitReferences(mirror::Class* klass, const Visitor& visitor)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
