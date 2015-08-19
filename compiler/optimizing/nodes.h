@@ -1028,7 +1028,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)
 
-#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
+#define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                          \
+  M(Arm64IntermediateAddress, Instruction)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
@@ -1314,6 +1315,10 @@ class SideEffects : public ValueObject {
 
   SideEffects Exclusion(SideEffects other) const {
     return SideEffects(flags_ & ~other.flags_);
+  }
+
+  void Add(SideEffects other) {
+    flags_ |= other.flags_;
   }
 
   bool Includes(SideEffects other) const {
@@ -1857,6 +1862,7 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   }
 
   SideEffects GetSideEffects() const { return side_effects_; }
+  void AddSideEffects(SideEffects other) { side_effects_.Add(other); }
 
   size_t GetLifetimePosition() const { return lifetime_position_; }
   void SetLifetimePosition(size_t position) { lifetime_position_ = position; }
@@ -1925,7 +1931,7 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   // order of blocks where this instruction's live interval start.
   size_t lifetime_position_;
 
-  const SideEffects side_effects_;
+  SideEffects side_effects_;
 
   // TODO: for primitive types this should be marked as invalid.
   ReferenceTypeInfo reference_type_info_;
@@ -3976,8 +3982,11 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 
 class HArrayGet : public HExpression<2> {
  public:
-  HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type)
-      : HExpression(type, SideEffects::ArrayReadOfType(type)) {
+  HArrayGet(HInstruction* array,
+            HInstruction* index,
+            Primitive::Type type,
+            SideEffects additional_side_effects = SideEffects::None())
+      : HExpression(type, SideEffects::ArrayReadOfType(type).Union(additional_side_effects)) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -4014,10 +4023,12 @@ class HArraySet : public HTemplateInstruction<3> {
             HInstruction* index,
             HInstruction* value,
             Primitive::Type expected_component_type,
-            uint32_t dex_pc)
+            uint32_t dex_pc,
+            SideEffects additional_side_effects = SideEffects::None())
       : HTemplateInstruction(
             SideEffects::ArrayWriteOfType(expected_component_type).Union(
-                SideEffectsForArchRuntimeCalls(value->GetType()))),
+                SideEffectsForArchRuntimeCalls(value->GetType())).Union(
+                    additional_side_effects)),
         dex_pc_(dex_pc),
         expected_component_type_(expected_component_type),
         needs_type_check_(value->GetType() == Primitive::kPrimNot),
@@ -4068,6 +4079,10 @@ class HArraySet : public HTemplateInstruction<3> {
     return ((value_type == Primitive::kPrimFloat) || (value_type == Primitive::kPrimDouble))
         ? value_type
         : expected_component_type_;
+  }
+
+  Primitive::Type GetRawExpectedComponentType() const {
+    return expected_component_type_;
   }
 
   static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type value_type) {
@@ -4127,6 +4142,8 @@ class HBoundsCheck : public HExpression<2> {
   bool NeedsEnvironment() const OVERRIDE { return true; }
 
   bool CanThrow() const OVERRIDE { return true; }
+
+  HInstruction* GetIndex() const { return InputAt(0); }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
@@ -4810,6 +4827,12 @@ class HParallelMove : public HTemplateInstruction<0> {
 
   DISALLOW_COPY_AND_ASSIGN(HParallelMove);
 };
+
+}  // namespace art
+
+#include "nodes_arm64.h"
+
+namespace art {
 
 class HGraphVisitor : public ValueObject {
  public:
