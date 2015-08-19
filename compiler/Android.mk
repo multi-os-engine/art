@@ -62,8 +62,8 @@ LIBART_COMPILER_SRC_FILES := \
 	jni/quick/calling_convention.cc \
 	jni/quick/jni_compiler.cc \
 	optimizing/boolean_simplifier.cc \
-	optimizing/builder.cc \
 	optimizing/bounds_check_elimination.cc \
+	optimizing/builder.cc \
 	optimizing/code_generator.cc \
 	optimizing/code_generator_utils.cc \
 	optimizing/constant_folding.cc \
@@ -73,6 +73,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/gvn.cc \
 	optimizing/inliner.cc \
 	optimizing/instruction_simplifier.cc \
+	optimizing/instruction_simplifier_arm64.cc \
 	optimizing/intrinsics.cc \
 	optimizing/licm.cc \
 	optimizing/locations.cc \
