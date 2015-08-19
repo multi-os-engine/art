@@ -575,7 +575,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
         dex_pc_(dex_pc),
         lifetime_start_(kNoLifetime),
         lifetime_end_(kNoLifetime),
-        is_catch_block_(false) {}
+        is_catch_block_(false),
+        try_entry_(nullptr) {}
 
   const GrowableArray<HBasicBlock*>& GetPredecessors() const {
     return predecessors_;
