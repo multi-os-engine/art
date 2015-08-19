@@ -914,7 +914,7 @@ bool RegisterAllocator::TrySplitNonPairOrUnalignedPairIntervalAt(size_t position
     DCHECK(active->HasRegister());
     if (active->IsFixed()) continue;
     if (active->IsHighInterval()) continue;
-    if (first_register_use > next_use[active->GetRegister()]) continue;
+    if (first_register_use - 1 > next_use[active->GetRegister()]) continue;
 
     // Split the first interval found.
     if (!active->IsLowInterval() || IsLowOfUnalignedPairInterval(active)) {
