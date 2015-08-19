@@ -72,6 +72,8 @@ static constexpr uint32_t kUnknownFieldIndex = static_cast<uint32_t>(-1);
 
 static constexpr InvokeType kInvalidInvokeType = static_cast<InvokeType>(-1);
 
+static constexpr uint32_t kNoDexPc = -1;
+
 enum IfCondition {
   kCondEQ,
   kCondNE,
@@ -311,24 +313,24 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   // Returns a constant of the given type and value. If it does not exist
   // already, it is created and inserted into the graph. This method is only for
   // integral types.
-  HConstant* GetConstant(Primitive::Type type, int64_t value);
+  HConstant* GetConstant(Primitive::Type type, int64_t value, uint32_t dex_pc = kNoDexPc);
 
   // TODO: This is problematic for the consistency of reference type propagation
   // because it can be created anytime after the pass and thus it will be left
   // with an invalid type.
-  HNullConstant* GetNullConstant();
+  HNullConstant* GetNullConstant(uint32_t dex_pc = kNoDexPc);
 
-  HIntConstant* GetIntConstant(int32_t value) {
-    return CreateConstant(value, &cached_int_constants_);
+  HIntConstant* GetIntConstant(int32_t value, uint32_t dex_pc = kNoDexPc) {
+    return CreateConstant(value, &cached_int_constants_, dex_pc);
   }
-  HLongConstant* GetLongConstant(int64_t value) {
-    return CreateConstant(value, &cached_long_constants_);
+  HLongConstant* GetLongConstant(int64_t value, uint32_t dex_pc = kNoDexPc) {
+    return CreateConstant(value, &cached_long_constants_, dex_pc);
   }
-  HFloatConstant* GetFloatConstant(float value) {
-    return CreateConstant(bit_cast<int32_t, float>(value), &cached_float_constants_);
+  HFloatConstant* GetFloatConstant(float value, uint32_t dex_pc = kNoDexPc) {
+    return CreateConstant(bit_cast<int32_t, float>(value), &cached_float_constants_, dex_pc);
   }
-  HDoubleConstant* GetDoubleConstant(double value) {
-    return CreateConstant(bit_cast<int64_t, double>(value), &cached_double_constants_);
+  HDoubleConstant* GetDoubleConstant(double value, uint32_t dex_pc = kNoDexPc) {
+    return CreateConstant(bit_cast<int64_t, double>(value), &cached_double_constants_, dex_pc);
   }
 
   HCurrentMethod* GetCurrentMethod();
@@ -367,7 +369,8 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
 
   template <class InstructionType, typename ValueType>
   InstructionType* CreateConstant(ValueType value,
-                                  ArenaSafeMap<ValueType, InstructionType*>* cache) {
+                                  ArenaSafeMap<ValueType, InstructionType*>* cache,
+                                  uint32_t dex_pc = kNoDexPc) {
     // Try to find an existing constant of the given value.
     InstructionType* constant = nullptr;
     auto cached_constant = cache->find(value);
@@ -378,7 +381,7 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
     // If not found or previously deleted, create and cache a new instruction.
     // Don't bother reviving a previously deleted instruction, for simplicity.
     if (constant == nullptr || constant->GetBlock() == nullptr) {
-      constant = new (arena_) InstructionType(value);
+      constant = new (arena_) InstructionType(value, dex_pc);
       cache->Overwrite(value, constant);
       InsertConstant(constant);
     }
@@ -613,7 +616,6 @@ class TryCatchInformation : public ArenaObject<kArenaAllocMisc> {
 };
 
 static constexpr size_t kNoLifetime = -1;
-static constexpr uint32_t kNoDexPc = -1;
 
 // A block in a method. Contains the list of instructions represented
 // as a double linked list. Each block knows its predecessors and
@@ -621,7 +623,7 @@ static constexpr uint32_t kNoDexPc = -1;
 
 class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
  public:
-  explicit HBasicBlock(HGraph* graph, uint32_t dex_pc = kNoDexPc)
+  HBasicBlock(HGraph* graph, uint32_t dex_pc = kNoDexPc)
       : graph_(graph),
         predecessors_(graph->GetArena(), kDefaultNumberOfPredecessors),
         successors_(graph->GetArena(), kDefaultNumberOfSuccessors),
@@ -678,6 +680,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
 
   int GetBlockId() const { return block_id_; }
   void SetBlockId(int id) { block_id_ = id; }
+  uint32_t GetDexPc() const { return dex_pc_; }
+  uint32_t GetLastDexPc() const;
 
   HBasicBlock* GetDominator() const { return dominator_; }
   void SetDominator(HBasicBlock* dominator) { dominator_ = dominator; }
@@ -938,7 +942,6 @@ class HBasicBlock : public ArenaObject<kArenaAllocMisc> {
   void SetLifetimeStart(size_t start) { lifetime_start_ = start; }
   void SetLifetimeEnd(size_t end) { lifetime_end_ = end; }
 
-  uint32_t GetDexPc() const { return dex_pc_; }
 
   bool EndsWithControlFlowInstruction() const;
   bool EndsWithIf() const;
@@ -1684,10 +1687,11 @@ std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs);
 
 class HInstruction : public ArenaObject<kArenaAllocMisc> {
  public:
-  explicit HInstruction(SideEffects side_effects)
+  HInstruction(SideEffects side_effects, uint32_t dex_pc = kNoDexPc)
       : previous_(nullptr),
         next_(nullptr),
         block_(nullptr),
+        dex_pc_(dex_pc),
         id_(-1),
         ssa_index_(-1),
         environment_(nullptr),
@@ -1717,6 +1721,7 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   bool IsInBlock() const { return block_ != nullptr; }
   bool IsInLoop() const { return block_->IsInLoop(); }
   bool IsLoopHeaderPhi() { return IsPhi() && block_->IsLoopHeader(); }
+  uint32_t GetDexPc() const { return dex_pc_; }
 
   virtual size_t InputCount() const = 0;
   HInstruction* InputAt(size_t i) const { return InputRecordAt(i).GetInstruction(); }
@@ -1730,11 +1735,6 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   }
 
   virtual bool NeedsEnvironment() const { return false; }
-  virtual uint32_t GetDexPc() const {
-    LOG(FATAL) << "GetDexPc() cannot be called on an instruction that"
-                  " does not need an environment";
-    UNREACHABLE();
-  }
   virtual bool IsControlFlow() const { return false; }
 
   virtual bool CanThrow() const { return false; }
@@ -1937,6 +1937,7 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   HInstruction* previous_;
   HInstruction* next_;
   HBasicBlock* block_;
+  const uint32_t dex_pc_;
 
   // An instruction gets an id when it is added to the graph.
   // It reflects creation order. A negative id means the instruction
@@ -2088,8 +2089,8 @@ class EmbeddedArray<T, 0> {
 template<intptr_t N>
 class HTemplateInstruction: public HInstruction {
  public:
-  HTemplateInstruction<N>(SideEffects side_effects)
-      : HInstruction(side_effects), inputs_() {}
+  explicit HTemplateInstruction<N>(SideEffects side_effects, uint32_t dex_pc = kNoDexPc)
+      : HInstruction(side_effects, dex_pc), inputs_() {}
   virtual ~HTemplateInstruction() {}
 
   size_t InputCount() const OVERRIDE { return N; }
@@ -2110,8 +2111,8 @@ class HTemplateInstruction: public HInstruction {
 template<intptr_t N>
 class HExpression : public HTemplateInstruction<N> {
  public:
-  HExpression<N>(Primitive::Type type, SideEffects side_effects)
-      : HTemplateInstruction<N>(side_effects), type_(type) {}
+  HExpression<N>(Primitive::Type type, SideEffects side_effects, uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction<N>(side_effects, dex_pc), type_(type) {}
   virtual ~HExpression() {}
 
   Primitive::Type GetType() const OVERRIDE { return type_; }
@@ -2124,7 +2125,8 @@ class HExpression : public HTemplateInstruction<N> {
 // instruction that branches to the exit block.
 class HReturnVoid : public HTemplateInstruction<0> {
  public:
-  HReturnVoid() : HTemplateInstruction(SideEffects::None()) {}
+  explicit HReturnVoid(uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc) {}
 
   bool IsControlFlow() const OVERRIDE { return true; }
 
@@ -2138,7 +2140,8 @@ class HReturnVoid : public HTemplateInstruction<0> {
 // instruction that branches to the exit block.
 class HReturn : public HTemplateInstruction<1> {
  public:
-  explicit HReturn(HInstruction* value) : HTemplateInstruction(SideEffects::None()) {
+  explicit HReturn(HInstruction* value, uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc) {
     SetRawInputAt(0, value);
   }
 
@@ -2155,7 +2158,7 @@ class HReturn : public HTemplateInstruction<1> {
 // exit block.
 class HExit : public HTemplateInstruction<0> {
  public:
-  HExit() : HTemplateInstruction(SideEffects::None()) {}
+  explicit HExit(uint32_t dex_pc = kNoDexPc) : HTemplateInstruction(SideEffects::None(), dex_pc) {}
 
   bool IsControlFlow() const OVERRIDE { return true; }
 
@@ -2168,7 +2171,7 @@ class HExit : public HTemplateInstruction<0> {
 // Jumps from one block to another.
 class HGoto : public HTemplateInstruction<0> {
  public:
-  HGoto() : HTemplateInstruction(SideEffects::None()) {}
+  explicit HGoto(uint32_t dex_pc = kNoDexPc) : HTemplateInstruction(SideEffects::None(), dex_pc) {}
 
   bool IsControlFlow() const OVERRIDE { return true; }
 
@@ -2184,7 +2187,8 @@ class HGoto : public HTemplateInstruction<0> {
 
 class HConstant : public HExpression<0> {
  public:
-  explicit HConstant(Primitive::Type type) : HExpression(type, SideEffects::None()) {}
+  explicit HConstant(Primitive::Type type, uint32_t dex_pc = kNoDexPc)
+      : HExpression(type, SideEffects::None(), dex_pc) {}
 
   bool CanBeMoved() const OVERRIDE { return true; }
 
@@ -2209,7 +2213,7 @@ class HNullConstant : public HConstant {
   DECLARE_INSTRUCTION(NullConstant);
 
  private:
-  HNullConstant() : HConstant(Primitive::kPrimNot) {}
+  explicit HNullConstant(uint32_t dex_pc = kNoDexPc) : HConstant(Primitive::kPrimNot, dex_pc) {}
 
   friend class HGraph;
   DISALLOW_COPY_AND_ASSIGN(HNullConstant);
@@ -2235,8 +2239,10 @@ class HIntConstant : public HConstant {
   DECLARE_INSTRUCTION(IntConstant);
 
  private:
-  explicit HIntConstant(int32_t value) : HConstant(Primitive::kPrimInt), value_(value) {}
-  explicit HIntConstant(bool value) : HConstant(Primitive::kPrimInt), value_(value ? 1 : 0) {}
+  explicit HIntConstant(int32_t value, uint32_t dex_pc = kNoDexPc)
+      : HConstant(Primitive::kPrimInt, dex_pc), value_(value) {}
+  explicit HIntConstant(bool value, uint32_t dex_pc = kNoDexPc)
+      : HConstant(Primitive::kPrimInt, dex_pc), value_(value ? 1 : 0) {}
 
   const int32_t value_;
 
@@ -2264,7 +2270,8 @@ class HLongConstant : public HConstant {
   DECLARE_INSTRUCTION(LongConstant);
 
  private:
-  explicit HLongConstant(int64_t value) : HConstant(Primitive::kPrimLong), value_(value) {}
+  explicit HLongConstant(int64_t value, uint32_t dex_pc = kNoDexPc)
+      : HConstant(Primitive::kPrimLong, dex_pc), value_(value) {}
 
   const int64_t value_;
 
@@ -2276,7 +2283,8 @@ class HLongConstant : public HConstant {
 // two successors.
 class HIf : public HTemplateInstruction<1> {
  public:
-  explicit HIf(HInstruction* input) : HTemplateInstruction(SideEffects::None()) {
+  explicit HIf(HInstruction* input, uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc) {
     SetRawInputAt(0, input);
   }
 
@@ -2309,8 +2317,8 @@ class HTryBoundary : public HTemplateInstruction<0> {
     kExit,
   };
 
-  explicit HTryBoundary(BoundaryKind kind)
-      : HTemplateInstruction(SideEffects::None()), kind_(kind) {}
+  explicit HTryBoundary(BoundaryKind kind, uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc), kind_(kind) {}
 
   bool IsControlFlow() const OVERRIDE { return true; }
 
@@ -2367,21 +2375,17 @@ class HExceptionHandlerIterator : public ValueObject {
 // Deoptimize to interpreter, upon checking a condition.
 class HDeoptimize : public HTemplateInstruction<1> {
  public:
-  HDeoptimize(HInstruction* cond, uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::None()),
-        dex_pc_(dex_pc) {
+  explicit HDeoptimize(HInstruction* cond, uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc) {
     SetRawInputAt(0, cond);
   }
 
   bool NeedsEnvironment() const OVERRIDE { return true; }
   bool CanThrow() const OVERRIDE { return true; }
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   DECLARE_INSTRUCTION(Deoptimize);
 
  private:
-  uint32_t dex_pc_;
-
   DISALLOW_COPY_AND_ASSIGN(HDeoptimize);
 };
 
@@ -2390,7 +2394,8 @@ class HDeoptimize : public HTemplateInstruction<1> {
 // instructions that work with the dex cache.
 class HCurrentMethod : public HExpression<0> {
  public:
-  explicit HCurrentMethod(Primitive::Type type) : HExpression(type, SideEffects::None()) {}
+  explicit HCurrentMethod(Primitive::Type type, uint32_t dex_pc = kNoDexPc)
+      : HExpression(type, SideEffects::None(), dex_pc) {}
 
   DECLARE_INSTRUCTION(CurrentMethod);
 
@@ -2400,8 +2405,8 @@ class HCurrentMethod : public HExpression<0> {
 
 class HUnaryOperation : public HExpression<1> {
  public:
-  HUnaryOperation(Primitive::Type result_type, HInstruction* input)
-      : HExpression(result_type, SideEffects::None()) {
+  HUnaryOperation(Primitive::Type result_type, HInstruction* input, uint32_t dex_pc = kNoDexPc)
+      : HExpression(result_type, SideEffects::None(), dex_pc) {
     SetRawInputAt(0, input);
   }
 
@@ -2434,8 +2439,9 @@ class HBinaryOperation : public HExpression<2> {
   HBinaryOperation(Primitive::Type result_type,
                    HInstruction* left,
                    HInstruction* right,
-                   SideEffects side_effects = SideEffects::None())
-      : HExpression(result_type, side_effects) {
+                   SideEffects side_effects = SideEffects::None(),
+                   uint32_t dex_pc = kNoDexPc)
+      : HExpression(result_type, side_effects, dex_pc) {
     SetRawInputAt(0, left);
     SetRawInputAt(1, right);
   }
@@ -2527,8 +2533,8 @@ enum class ComparisonBias {
 
 class HCondition : public HBinaryOperation {
  public:
-  HCondition(HInstruction* first, HInstruction* second)
-      : HBinaryOperation(Primitive::kPrimBoolean, first, second),
+  HCondition(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(Primitive::kPrimBoolean, first, second, SideEffects::None(), dex_pc),
         needs_materialization_(true),
         bias_(ComparisonBias::kNoBias) {}
 
@@ -2579,18 +2585,20 @@ class HCondition : public HBinaryOperation {
 // Instruction to check if two inputs are equal to each other.
 class HEqual : public HCondition {
  public:
-  HEqual(HInstruction* first, HInstruction* second)
-      : HCondition(first, second) {}
+  HEqual(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
   template <typename T> bool Compute(T x, T y) const { return x == y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Equal);
@@ -2609,18 +2617,20 @@ class HEqual : public HCondition {
 
 class HNotEqual : public HCondition {
  public:
-  HNotEqual(HInstruction* first, HInstruction* second)
-      : HCondition(first, second) {}
+  HNotEqual(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
   template <typename T> bool Compute(T x, T y) const { return x != y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(NotEqual);
@@ -2639,16 +2649,18 @@ class HNotEqual : public HCondition {
 
 class HLessThan : public HCondition {
  public:
-  HLessThan(HInstruction* first, HInstruction* second)
-      : HCondition(first, second) {}
+  HLessThan(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
 
   template <typename T> bool Compute(T x, T y) const { return x < y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(LessThan);
@@ -2667,16 +2679,18 @@ class HLessThan : public HCondition {
 
 class HLessThanOrEqual : public HCondition {
  public:
-  HLessThanOrEqual(HInstruction* first, HInstruction* second)
-      : HCondition(first, second) {}
+  HLessThanOrEqual(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
 
   template <typename T> bool Compute(T x, T y) const { return x <= y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(LessThanOrEqual);
@@ -2695,16 +2709,18 @@ class HLessThanOrEqual : public HCondition {
 
 class HGreaterThan : public HCondition {
  public:
-  HGreaterThan(HInstruction* first, HInstruction* second)
-      : HCondition(first, second) {}
+  HGreaterThan(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
 
   template <typename T> bool Compute(T x, T y) const { return x > y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(GreaterThan);
@@ -2723,16 +2739,18 @@ class HGreaterThan : public HCondition {
 
 class HGreaterThanOrEqual : public HCondition {
  public:
-  HGreaterThanOrEqual(HInstruction* first, HInstruction* second)
-      : HCondition(first, second) {}
+  HGreaterThanOrEqual(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
 
   template <typename T> bool Compute(T x, T y) const { return x >= y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(GreaterThanOrEqual);
@@ -2758,10 +2776,10 @@ class HCompare : public HBinaryOperation {
            HInstruction* first,
            HInstruction* second,
            ComparisonBias bias,
-           uint32_t dex_pc)
-      : HBinaryOperation(Primitive::kPrimInt, first, second, SideEffectsForArchRuntimeCalls(type)),
-        bias_(bias),
-        dex_pc_(dex_pc) {
+           uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(Primitive::kPrimInt, first, second,
+                         SideEffectsForArchRuntimeCalls(type), dex_pc),
+        bias_(bias) {
     DCHECK_EQ(type, first->GetType());
     DCHECK_EQ(type, second->GetType());
   }
@@ -2770,10 +2788,12 @@ class HCompare : public HBinaryOperation {
   int32_t Compute(T x, T y) const { return x == y ? 0 : x > y ? 1 : -1; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
@@ -2784,7 +2804,6 @@ class HCompare : public HBinaryOperation {
 
   bool IsGtBias() { return bias_ == ComparisonBias::kGtBias; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type type) {
     // MIPS64 uses a runtime call for FP comparisons.
@@ -2795,7 +2814,6 @@ class HCompare : public HBinaryOperation {
 
  private:
   const ComparisonBias bias_;
-  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HCompare);
 };
@@ -2803,8 +2821,8 @@ class HCompare : public HBinaryOperation {
 // A local in the graph. Corresponds to a Dex register.
 class HLocal : public HTemplateInstruction<0> {
  public:
-  explicit HLocal(uint16_t reg_number)
-      : HTemplateInstruction(SideEffects::None()), reg_number_(reg_number) {}
+  explicit HLocal(uint16_t reg_number, uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc), reg_number_(reg_number) {}
 
   DECLARE_INSTRUCTION(Local);
 
@@ -2820,8 +2838,8 @@ class HLocal : public HTemplateInstruction<0> {
 // Load a given local. The local is an input of this instruction.
 class HLoadLocal : public HExpression<1> {
  public:
-  HLoadLocal(HLocal* local, Primitive::Type type)
-      : HExpression(type, SideEffects::None()) {
+  HLoadLocal(HLocal* local, Primitive::Type type, uint32_t dex_pc = kNoDexPc)
+      : HExpression(type, SideEffects::None(), dex_pc) {
     SetRawInputAt(0, local);
   }
 
@@ -2837,7 +2855,8 @@ class HLoadLocal : public HExpression<1> {
 // and the local.
 class HStoreLocal : public HTemplateInstruction<2> {
  public:
-  HStoreLocal(HLocal* local, HInstruction* value) : HTemplateInstruction(SideEffects::None()) {
+  HStoreLocal(HLocal* local, HInstruction* value, uint32_t dex_pc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc) {
     SetRawInputAt(0, local);
     SetRawInputAt(1, value);
   }
@@ -2878,9 +2897,10 @@ class HFloatConstant : public HConstant {
   DECLARE_INSTRUCTION(FloatConstant);
 
  private:
-  explicit HFloatConstant(float value) : HConstant(Primitive::kPrimFloat), value_(value) {}
-  explicit HFloatConstant(int32_t value)
-      : HConstant(Primitive::kPrimFloat), value_(bit_cast<float, int32_t>(value)) {}
+  explicit HFloatConstant(float value, uint32_t dex_pc = kNoDexPc)
+      : HConstant(Primitive::kPrimFloat, dex_pc), value_(value) {}
+  explicit HFloatConstant(int32_t value, uint32_t dex_pc = kNoDexPc)
+      : HConstant(Primitive::kPrimFloat, dex_pc), value_(bit_cast<float, int32_t>(value)) {}
 
   const float value_;
 
@@ -2918,9 +2938,10 @@ class HDoubleConstant : public HConstant {
   DECLARE_INSTRUCTION(DoubleConstant);
 
  private:
-  explicit HDoubleConstant(double value) : HConstant(Primitive::kPrimDouble), value_(value) {}
-  explicit HDoubleConstant(int64_t value)
-      : HConstant(Primitive::kPrimDouble), value_(bit_cast<double, int64_t>(value)) {}
+  explicit HDoubleConstant(double value, uint32_t dex_pc = kNoDexPc)
+      : HConstant(Primitive::kPrimDouble, dex_pc), value_(value) {}
+  explicit HDoubleConstant(int64_t value, uint32_t dex_pc = kNoDexPc)
+      : HConstant(Primitive::kPrimDouble, dex_pc), value_(bit_cast<double, int64_t>(value)) {}
 
   const double value_;
 
@@ -2965,7 +2986,6 @@ class HInvoke : public HInstruction {
 
   Primitive::Type GetType() const OVERRIDE { return return_type_; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   uint32_t GetDexMethodIndex() const { return dex_method_index_; }
   const DexFile& GetDexFile() const { return GetEnvironment()->GetDexFile(); }
@@ -2998,11 +3018,10 @@ class HInvoke : public HInstruction {
           uint32_t dex_method_index,
           InvokeType original_invoke_type)
     : HInstruction(
-          SideEffects::AllExceptGCDependency()),  // Assume write/read on all fields/arrays.
+          SideEffects::AllExceptGCDependency(), dex_pc),  // Assume write/read on all fields/arrays.
       number_of_arguments_(number_of_arguments),
       inputs_(arena, number_of_arguments),
       return_type_(return_type),
-      dex_pc_(dex_pc),
       dex_method_index_(dex_method_index),
       original_invoke_type_(original_invoke_type),
       intrinsic_(Intrinsics::kNone),
@@ -3019,7 +3038,6 @@ class HInvoke : public HInstruction {
   uint32_t number_of_arguments_;
   GrowableArray<HUserRecord<HInstruction*> > inputs_;
   const Primitive::Type return_type_;
-  const uint32_t dex_pc_;
   const uint32_t dex_method_index_;
   const InvokeType original_invoke_type_;
   Intrinsics intrinsic_;
@@ -3315,15 +3333,13 @@ class HNewInstance : public HExpression<1> {
                uint16_t type_index,
                const DexFile& dex_file,
                QuickEntrypointEnum entrypoint)
-      : HExpression(Primitive::kPrimNot, SideEffects::CanTriggerGC()),
-        dex_pc_(dex_pc),
+      : HExpression(Primitive::kPrimNot, SideEffects::CanTriggerGC(), dex_pc),
         type_index_(type_index),
         dex_file_(dex_file),
         entrypoint_(entrypoint) {
     SetRawInputAt(0, current_method);
   }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
   uint16_t GetTypeIndex() const { return type_index_; }
   const DexFile& GetDexFile() const { return dex_file_; }
 
@@ -3342,7 +3358,6 @@ class HNewInstance : public HExpression<1> {
   DECLARE_INSTRUCTION(NewInstance);
 
  private:
-  const uint32_t dex_pc_;
   const uint16_t type_index_;
   const DexFile& dex_file_;
   const QuickEntrypointEnum entrypoint_;
@@ -3352,16 +3367,16 @@ class HNewInstance : public HExpression<1> {
 
 class HNeg : public HUnaryOperation {
  public:
-  HNeg(Primitive::Type result_type, HInstruction* input)
-      : HUnaryOperation(result_type, input) {}
+  HNeg(Primitive::Type result_type, HInstruction* input, uint32_t dex_pc = kNoDexPc)
+      : HUnaryOperation(result_type, input, dex_pc) {}
 
   template <typename T> T Compute(T x) const { return -x; }
 
   HConstant* Evaluate(HIntConstant* x) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Neg);
@@ -3378,8 +3393,7 @@ class HNewArray : public HExpression<2> {
             uint16_t type_index,
             const DexFile& dex_file,
             QuickEntrypointEnum entrypoint)
-      : HExpression(Primitive::kPrimNot, SideEffects::CanTriggerGC()),
-        dex_pc_(dex_pc),
+      : HExpression(Primitive::kPrimNot, SideEffects::CanTriggerGC(), dex_pc),
         type_index_(type_index),
         dex_file_(dex_file),
         entrypoint_(entrypoint) {
@@ -3387,7 +3401,6 @@ class HNewArray : public HExpression<2> {
     SetRawInputAt(1, current_method);
   }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
   uint16_t GetTypeIndex() const { return type_index_; }
   const DexFile& GetDexFile() const { return dex_file_; }
 
@@ -3404,7 +3417,6 @@ class HNewArray : public HExpression<2> {
   DECLARE_INSTRUCTION(NewArray);
 
  private:
-  const uint32_t dex_pc_;
   const uint16_t type_index_;
   const DexFile& dex_file_;
   const QuickEntrypointEnum entrypoint_;
@@ -3414,18 +3426,21 @@ class HNewArray : public HExpression<2> {
 
 class HAdd : public HBinaryOperation {
  public:
-  HAdd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HAdd(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+       uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
   template <typename T> T Compute(T x, T y) const { return x + y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Add);
@@ -3436,16 +3451,19 @@ class HAdd : public HBinaryOperation {
 
 class HSub : public HBinaryOperation {
  public:
-  HSub(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HSub(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+       uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
 
   template <typename T> T Compute(T x, T y) const { return x - y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Sub);
@@ -3456,18 +3474,21 @@ class HSub : public HBinaryOperation {
 
 class HMul : public HBinaryOperation {
  public:
-  HMul(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HMul(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+       uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
   template <typename T> T Compute(T x, T y) const { return x * y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Mul);
@@ -3478,9 +3499,9 @@ class HMul : public HBinaryOperation {
 
 class HDiv : public HBinaryOperation {
  public:
-  HDiv(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
-      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls()),
-        dex_pc_(dex_pc) {}
+  HDiv(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+       uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls(), dex_pc) {}
 
   template <typename T>
   T Compute(T x, T y) const {
@@ -3492,13 +3513,13 @@ class HDiv : public HBinaryOperation {
   }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
-
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   static SideEffects SideEffectsForArchRuntimeCalls() {
     // The generated code can use a runtime call.
@@ -3508,16 +3529,14 @@ class HDiv : public HBinaryOperation {
   DECLARE_INSTRUCTION(Div);
 
  private:
-  const uint32_t dex_pc_;
-
   DISALLOW_COPY_AND_ASSIGN(HDiv);
 };
 
 class HRem : public HBinaryOperation {
  public:
-  HRem(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
-      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls()),
-        dex_pc_(dex_pc) {}
+  HRem(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+       uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls(), dex_pc) {}
 
   template <typename T>
   T Compute(T x, T y) const {
@@ -3529,13 +3548,14 @@ class HRem : public HBinaryOperation {
   }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   static SideEffects SideEffectsForArchRuntimeCalls() {
     return SideEffects::CanTriggerGC();
@@ -3544,15 +3564,13 @@ class HRem : public HBinaryOperation {
   DECLARE_INSTRUCTION(Rem);
 
  private:
-  const uint32_t dex_pc_;
-
   DISALLOW_COPY_AND_ASSIGN(HRem);
 };
 
 class HDivZeroCheck : public HExpression<1> {
  public:
-  HDivZeroCheck(HInstruction* value, uint32_t dex_pc)
-      : HExpression(value->GetType(), SideEffects::None()), dex_pc_(dex_pc) {
+  explicit HDivZeroCheck(HInstruction* value, uint32_t dex_pc = kNoDexPc)
+      : HExpression(value->GetType(), SideEffects::None(), dex_pc) {
     SetRawInputAt(0, value);
   }
 
@@ -3568,20 +3586,17 @@ class HDivZeroCheck : public HExpression<1> {
   bool NeedsEnvironment() const OVERRIDE { return true; }
   bool CanThrow() const OVERRIDE { return true; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
-
   DECLARE_INSTRUCTION(DivZeroCheck);
 
  private:
-  const uint32_t dex_pc_;
-
   DISALLOW_COPY_AND_ASSIGN(HDivZeroCheck);
 };
 
 class HShl : public HBinaryOperation {
  public:
-  HShl(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HShl(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+       uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
 
   template <typename T, typename U, typename V>
   T Compute(T x, U y, V max_shift_value) const {
@@ -3592,17 +3607,17 @@ class HShl : public HBinaryOperation {
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetIntConstant(
-        Compute(x->GetValue(), y->GetValue(), kMaxIntShiftValue));
+        Compute(x->GetValue(), y->GetValue(), kMaxIntShiftValue), GetDexPc());
   }
   // There is no `Evaluate(HIntConstant* x, HLongConstant* y)`, as this
   // case is handled as `x << static_cast<int>(y)`.
   HConstant* Evaluate(HLongConstant* x, HIntConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(
-        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue));
+        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(
-        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue));
+        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Shl);
@@ -3613,8 +3628,9 @@ class HShl : public HBinaryOperation {
 
 class HShr : public HBinaryOperation {
  public:
-  HShr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HShr(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+       uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
 
   template <typename T, typename U, typename V>
   T Compute(T x, U y, V max_shift_value) const {
@@ -3625,17 +3641,17 @@ class HShr : public HBinaryOperation {
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetIntConstant(
-        Compute(x->GetValue(), y->GetValue(), kMaxIntShiftValue));
+        Compute(x->GetValue(), y->GetValue(), kMaxIntShiftValue), GetDexPc());
   }
   // There is no `Evaluate(HIntConstant* x, HLongConstant* y)`, as this
   // case is handled as `x >> static_cast<int>(y)`.
   HConstant* Evaluate(HLongConstant* x, HIntConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(
-        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue));
+        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(
-        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue));
+        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Shr);
@@ -3646,8 +3662,9 @@ class HShr : public HBinaryOperation {
 
 class HUShr : public HBinaryOperation {
  public:
-  HUShr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HUShr(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+        uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
 
   template <typename T, typename U, typename V>
   T Compute(T x, U y, V max_shift_value) const {
@@ -3659,17 +3676,17 @@ class HUShr : public HBinaryOperation {
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetIntConstant(
-        Compute(x->GetValue(), y->GetValue(), kMaxIntShiftValue));
+        Compute(x->GetValue(), y->GetValue(), kMaxIntShiftValue), GetDexPc());
   }
   // There is no `Evaluate(HIntConstant* x, HLongConstant* y)`, as this
   // case is handled as `x >>> static_cast<int>(y)`.
   HConstant* Evaluate(HLongConstant* x, HIntConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(
-        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue));
+        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(
-        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue));
+        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(UShr);
@@ -3680,8 +3697,9 @@ class HUShr : public HBinaryOperation {
 
 class HAnd : public HBinaryOperation {
  public:
-  HAnd(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HAnd(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+       uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
@@ -3689,16 +3707,20 @@ class HAnd : public HBinaryOperation {
   auto Compute(T x, U y) const -> decltype(x & y) { return x & y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HIntConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(And);
@@ -3709,8 +3731,9 @@ class HAnd : public HBinaryOperation {
 
 class HOr : public HBinaryOperation {
  public:
-  HOr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HOr(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+      uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
@@ -3718,16 +3741,20 @@ class HOr : public HBinaryOperation {
   auto Compute(T x, U y) const -> decltype(x | y) { return x | y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HIntConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Or);
@@ -3738,8 +3765,9 @@ class HOr : public HBinaryOperation {
 
 class HXor : public HBinaryOperation {
  public:
-  HXor(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HXor(Primitive::Type result_type, HInstruction* left, HInstruction* right,
+       uint32_t dex_pc = kNoDexPc)
+      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
@@ -3747,16 +3775,20 @@ class HXor : public HBinaryOperation {
   auto Compute(T x, U y) const -> decltype(x ^ y) { return x ^ y; }
 
   HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue(),
+                                                          y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HIntConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HIntConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(), y->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue(),
+                                                           y->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Xor);
@@ -3769,8 +3801,10 @@ class HXor : public HBinaryOperation {
 // the calling convention.
 class HParameterValue : public HExpression<0> {
  public:
-  HParameterValue(uint8_t index, Primitive::Type parameter_type, bool is_this = false)
-      : HExpression(parameter_type, SideEffects::None()), index_(index), is_this_(is_this) {}
+  HParameterValue(uint8_t index, Primitive::Type parameter_type, bool is_this = false,
+                  uint32_t dex_pc = kNoDexPc)
+      : HExpression(parameter_type, SideEffects::None(), dex_pc),
+        index_(index), is_this_(is_this) {}
 
   uint8_t GetIndex() const { return index_; }
 
@@ -3793,8 +3827,8 @@ class HParameterValue : public HExpression<0> {
 
 class HNot : public HUnaryOperation {
  public:
-  HNot(Primitive::Type result_type, HInstruction* input)
-      : HUnaryOperation(result_type, input) {}
+  HNot(Primitive::Type result_type, HInstruction* input, uint32_t dex_pc = kNoDexPc)
+      : HUnaryOperation(result_type, input, dex_pc) {}
 
   bool CanBeMoved() const OVERRIDE { return true; }
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
@@ -3805,10 +3839,10 @@ class HNot : public HUnaryOperation {
   template <typename T> T Compute(T x) const { return ~x; }
 
   HConstant* Evaluate(HIntConstant* x) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue()));
+    return GetBlock()->GetGraph()->GetLongConstant(Compute(x->GetValue()), GetDexPc());
   }
 
   DECLARE_INSTRUCTION(Not);
@@ -3819,8 +3853,8 @@ class HNot : public HUnaryOperation {
 
 class HBooleanNot : public HUnaryOperation {
  public:
-  explicit HBooleanNot(HInstruction* input)
-      : HUnaryOperation(Primitive::Type::kPrimBoolean, input) {}
+  explicit HBooleanNot(HInstruction* input, uint32_t dex_pc = kNoDexPc)
+      : HUnaryOperation(Primitive::Type::kPrimBoolean, input, dex_pc) {}
 
   bool CanBeMoved() const OVERRIDE { return true; }
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
@@ -3834,7 +3868,7 @@ class HBooleanNot : public HUnaryOperation {
   }
 
   HConstant* Evaluate(HIntConstant* x) const OVERRIDE {
-    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue()));
+    return GetBlock()->GetGraph()->GetIntConstant(Compute(x->GetValue()), GetDexPc());
   }
   HConstant* Evaluate(HLongConstant* x ATTRIBUTE_UNUSED) const OVERRIDE {
     LOG(FATAL) << DebugName() << " is not defined for long values";
@@ -3850,9 +3884,10 @@ class HBooleanNot : public HUnaryOperation {
 class HTypeConversion : public HExpression<1> {
  public:
   // Instantiate a type conversion of `input` to `result_type`.
-  HTypeConversion(Primitive::Type result_type, HInstruction* input, uint32_t dex_pc)
-      : HExpression(result_type, SideEffectsForArchRuntimeCalls(input->GetType(), result_type)),
-        dex_pc_(dex_pc) {
+  HTypeConversion(Primitive::Type result_type, HInstruction* input, uint32_t dex_pc = kNoDexPc)
+      : HExpression(result_type,
+                    SideEffectsForArchRuntimeCalls(input->GetType(), result_type),
+                    dex_pc) {
     SetRawInputAt(0, input);
     DCHECK_NE(input->GetType(), result_type);
   }
@@ -3863,7 +3898,6 @@ class HTypeConversion : public HExpression<1> {
 
   // Required by the x86 and ARM code generators when producing calls
   // to the runtime.
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   bool CanBeMoved() const OVERRIDE { return true; }
   bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE { return true; }
@@ -3887,8 +3921,6 @@ class HTypeConversion : public HExpression<1> {
   DECLARE_INSTRUCTION(TypeConversion);
 
  private:
-  const uint32_t dex_pc_;
-
   DISALLOW_COPY_AND_ASSIGN(HTypeConversion);
 };
 
@@ -3896,8 +3928,12 @@ static constexpr uint32_t kNoRegNumber = -1;
 
 class HPhi : public HInstruction {
  public:
-  HPhi(ArenaAllocator* arena, uint32_t reg_number, size_t number_of_inputs, Primitive::Type type)
-      : HInstruction(SideEffects::None()),
+  HPhi(ArenaAllocator* arena,
+       uint32_t reg_number,
+       size_t number_of_inputs,
+       Primitive::Type type,
+       uint32_t dex_pc = kNoDexPc)
+      : HInstruction(SideEffects::None(), dex_pc),
         inputs_(arena, number_of_inputs),
         reg_number_(reg_number),
         type_(type),
@@ -3974,8 +4010,8 @@ class HPhi : public HInstruction {
 
 class HNullCheck : public HExpression<1> {
  public:
-  HNullCheck(HInstruction* value, uint32_t dex_pc)
-      : HExpression(value->GetType(), SideEffects::None()), dex_pc_(dex_pc) {
+  explicit HNullCheck(HInstruction* value, uint32_t dex_pc = kNoDexPc)
+      : HExpression(value->GetType(), SideEffects::None(), dex_pc) {
     SetRawInputAt(0, value);
   }
 
@@ -3991,13 +4027,10 @@ class HNullCheck : public HExpression<1> {
 
   bool CanBeNull() const OVERRIDE { return false; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   DECLARE_INSTRUCTION(NullCheck);
 
  private:
-  const uint32_t dex_pc_;
-
   DISALLOW_COPY_AND_ASSIGN(HNullCheck);
 };
 
@@ -4035,10 +4068,11 @@ class HInstanceFieldGet : public HExpression<1> {
                     MemberOffset field_offset,
                     bool is_volatile,
                     uint32_t field_idx,
-                    const DexFile& dex_file)
+                    const DexFile& dex_file,
+                    uint32_t dex_pc = kNoDexPc)
       : HExpression(
             field_type,
-            SideEffects::FieldReadOfType(field_type, is_volatile)),
+            SideEffects::FieldReadOfType(field_type, is_volatile), dex_pc),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file) {
     SetRawInputAt(0, value);
   }
@@ -4079,9 +4113,10 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     MemberOffset field_offset,
                     bool is_volatile,
                     uint32_t field_idx,
-                    const DexFile& dex_file)
+                    const DexFile& dex_file,
+                    uint32_t dex_pc = kNoDexPc)
       : HTemplateInstruction(
-          SideEffects::FieldWriteOfType(field_type, is_volatile)),
+          SideEffects::FieldWriteOfType(field_type, is_volatile), dex_pc),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
         value_can_be_null_(true) {
     SetRawInputAt(0, object);
@@ -4111,8 +4146,8 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
 
 class HArrayGet : public HExpression<2> {
  public:
-  HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type)
-      : HExpression(type, SideEffects::ArrayReadOfType(type)) {
+  HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type, uint32_t dex_pc = kNoDexPc)
+      : HExpression(type, SideEffects::ArrayReadOfType(type), dex_pc) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -4149,11 +4184,10 @@ class HArraySet : public HTemplateInstruction<3> {
             HInstruction* index,
             HInstruction* value,
             Primitive::Type expected_component_type,
-            uint32_t dex_pc)
+            uint32_t dex_pc = kNoDexPc)
       : HTemplateInstruction(
             SideEffects::ArrayWriteOfType(expected_component_type).Union(
-                SideEffectsForArchRuntimeCalls(value->GetType()))),
-        dex_pc_(dex_pc),
+                SideEffectsForArchRuntimeCalls(value->GetType())), dex_pc),
         expected_component_type_(expected_component_type),
         needs_type_check_(value->GetType() == Primitive::kPrimNot),
         value_can_be_null_(true) {
@@ -4188,8 +4222,6 @@ class HArraySet : public HTemplateInstruction<3> {
   bool GetValueCanBeNull() const { return value_can_be_null_; }
   bool NeedsTypeCheck() const { return needs_type_check_; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
-
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }
   HInstruction* GetValue() const { return InputAt(2); }
@@ -4212,7 +4244,6 @@ class HArraySet : public HTemplateInstruction<3> {
   DECLARE_INSTRUCTION(ArraySet);
 
  private:
-  const uint32_t dex_pc_;
   const Primitive::Type expected_component_type_;
   bool needs_type_check_;
   bool value_can_be_null_;
@@ -4222,8 +4253,8 @@ class HArraySet : public HTemplateInstruction<3> {
 
 class HArrayLength : public HExpression<1> {
  public:
-  explicit HArrayLength(HInstruction* array)
-      : HExpression(Primitive::kPrimInt, SideEffects::None()) {
+  explicit HArrayLength(HInstruction* array, uint32_t dex_pc = kNoDexPc)
+      : HExpression(Primitive::kPrimInt, SideEffects::None(), dex_pc) {
     // Note that arrays do not change length, so the instruction does not
     // depend on any write.
     SetRawInputAt(0, array);
@@ -4246,8 +4277,8 @@ class HArrayLength : public HExpression<1> {
 
 class HBoundsCheck : public HExpression<2> {
  public:
-  HBoundsCheck(HInstruction* index, HInstruction* length, uint32_t dex_pc)
-      : HExpression(index->GetType(), SideEffects::None()), dex_pc_(dex_pc) {
+  HBoundsCheck(HInstruction* index, HInstruction* length, uint32_t dex_pc = kNoDexPc)
+      : HExpression(index->GetType(), SideEffects::None(), dex_pc) {
     DCHECK(index->GetType() == Primitive::kPrimInt);
     SetRawInputAt(0, index);
     SetRawInputAt(1, length);
@@ -4263,13 +4294,10 @@ class HBoundsCheck : public HExpression<2> {
 
   bool CanThrow() const OVERRIDE { return true; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   DECLARE_INSTRUCTION(BoundsCheck);
 
  private:
-  const uint32_t dex_pc_;
-
   DISALLOW_COPY_AND_ASSIGN(HBoundsCheck);
 };
 
@@ -4282,7 +4310,8 @@ class HBoundsCheck : public HExpression<2> {
  */
 class HTemporary : public HTemplateInstruction<0> {
  public:
-  explicit HTemporary(size_t index) : HTemplateInstruction(SideEffects::None()), index_(index) {}
+  explicit HTemporary(size_t index, uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc), index_(index) {}
 
   size_t GetIndex() const { return index_; }
 
@@ -4296,28 +4325,24 @@ class HTemporary : public HTemplateInstruction<0> {
 
  private:
   const size_t index_;
-
   DISALLOW_COPY_AND_ASSIGN(HTemporary);
 };
 
 class HSuspendCheck : public HTemplateInstruction<0> {
  public:
-  explicit HSuspendCheck(uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::CanTriggerGC()), dex_pc_(dex_pc), slow_path_(nullptr) {}
+  explicit HSuspendCheck(uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::CanTriggerGC(), dex_pc), slow_path_(nullptr) {}
 
   bool NeedsEnvironment() const OVERRIDE {
     return true;
   }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
   void SetSlowPath(SlowPathCode* slow_path) { slow_path_ = slow_path; }
   SlowPathCode* GetSlowPath() const { return slow_path_; }
 
   DECLARE_INSTRUCTION(SuspendCheck);
 
  private:
-  const uint32_t dex_pc_;
-
   // Only used for code generation, in order to share the same slow path between back edges
   // of a same loop.
   SlowPathCode* slow_path_;
@@ -4334,12 +4359,11 @@ class HLoadClass : public HExpression<1> {
              uint16_t type_index,
              const DexFile& dex_file,
              bool is_referrers_class,
-             uint32_t dex_pc)
-      : HExpression(Primitive::kPrimNot, SideEffectsForArchRuntimeCalls()),
+             uint32_t dex_pc = kNoDexPc)
+      : HExpression(Primitive::kPrimNot, SideEffectsForArchRuntimeCalls(), dex_pc),
         type_index_(type_index),
         dex_file_(dex_file),
         is_referrers_class_(is_referrers_class),
-        dex_pc_(dex_pc),
         generate_clinit_check_(false),
         loaded_class_rti_(ReferenceTypeInfo::CreateInvalid()) {
     SetRawInputAt(0, current_method);
@@ -4353,7 +4377,6 @@ class HLoadClass : public HExpression<1> {
 
   size_t ComputeHashCode() const OVERRIDE { return type_index_; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
   uint16_t GetTypeIndex() const { return type_index_; }
   bool IsReferrersClass() const { return is_referrers_class_; }
   bool CanBeNull() const OVERRIDE { return false; }
@@ -4406,7 +4429,6 @@ class HLoadClass : public HExpression<1> {
   const uint16_t type_index_;
   const DexFile& dex_file_;
   const bool is_referrers_class_;
-  const uint32_t dex_pc_;
   // Whether this instruction must generate the initialization check.
   // Used for code generation.
   bool generate_clinit_check_;
@@ -4418,10 +4440,9 @@ class HLoadClass : public HExpression<1> {
 
 class HLoadString : public HExpression<1> {
  public:
-  HLoadString(HCurrentMethod* current_method, uint32_t string_index, uint32_t dex_pc)
-      : HExpression(Primitive::kPrimNot, SideEffectsForArchRuntimeCalls()),
-        string_index_(string_index),
-        dex_pc_(dex_pc) {
+  HLoadString(HCurrentMethod* current_method, uint32_t string_index, uint32_t dex_pc = kNoDexPc)
+      : HExpression(Primitive::kPrimNot, SideEffectsForArchRuntimeCalls(), dex_pc),
+        string_index_(string_index) {
     SetRawInputAt(0, current_method);
   }
 
@@ -4433,7 +4454,6 @@ class HLoadString : public HExpression<1> {
 
   size_t ComputeHashCode() const OVERRIDE { return string_index_; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
   uint32_t GetStringIndex() const { return string_index_; }
 
   // TODO: Can we deopt or debug when we resolve a string?
@@ -4448,7 +4468,6 @@ class HLoadString : public HExpression<1> {
 
  private:
   const uint32_t string_index_;
-  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HLoadString);
 };
@@ -4458,11 +4477,11 @@ class HLoadString : public HExpression<1> {
  */
 class HClinitCheck : public HExpression<1> {
  public:
-  HClinitCheck(HLoadClass* constant, uint32_t dex_pc)
+  explicit HClinitCheck(HLoadClass* constant, uint32_t dex_pc = kNoDexPc)
       : HExpression(
             Primitive::kPrimNot,
-            SideEffects::AllChanges()),  // Assume write/read on all fields/arrays.
-        dex_pc_(dex_pc) {
+            SideEffects::AllChanges(),  // Assume write/read on all fields/arrays.
+            dex_pc) {
     SetRawInputAt(0, constant);
   }
 
@@ -4477,15 +4496,12 @@ class HClinitCheck : public HExpression<1> {
     return true;
   }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   HLoadClass* GetLoadClass() const { return InputAt(0)->AsLoadClass(); }
 
   DECLARE_INSTRUCTION(ClinitCheck);
 
  private:
-  const uint32_t dex_pc_;
-
   DISALLOW_COPY_AND_ASSIGN(HClinitCheck);
 };
 
@@ -4496,10 +4512,11 @@ class HStaticFieldGet : public HExpression<1> {
                   MemberOffset field_offset,
                   bool is_volatile,
                   uint32_t field_idx,
-                  const DexFile& dex_file)
+                  const DexFile& dex_file,
+                  uint32_t dex_pc = kNoDexPc)
       : HExpression(
             field_type,
-            SideEffects::FieldReadOfType(field_type, is_volatile)),
+            SideEffects::FieldReadOfType(field_type, is_volatile), dex_pc),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file) {
     SetRawInputAt(0, cls);
   }
@@ -4537,9 +4554,10 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                   MemberOffset field_offset,
                   bool is_volatile,
                   uint32_t field_idx,
-                  const DexFile& dex_file)
+                  const DexFile& dex_file,
+                  uint32_t dex_pc = kNoDexPc)
       : HTemplateInstruction(
-          SideEffects::FieldWriteOfType(field_type, is_volatile)),
+          SideEffects::FieldWriteOfType(field_type, is_volatile), dex_pc),
         field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
         value_can_be_null_(true) {
     SetRawInputAt(0, cls);
@@ -4567,7 +4585,8 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
 // Implement the move-exception DEX instruction.
 class HLoadException : public HExpression<0> {
  public:
-  HLoadException() : HExpression(Primitive::kPrimNot, SideEffects::None()) {}
+  explicit HLoadException(uint32_t dex_pc = kNoDexPc)
+      : HExpression(Primitive::kPrimNot, SideEffects::None(), dex_pc) {}
 
   bool CanBeNull() const OVERRIDE { return false; }
 
@@ -4581,7 +4600,8 @@ class HLoadException : public HExpression<0> {
 // Must not be removed because the runtime expects the TLS to get cleared.
 class HClearException : public HTemplateInstruction<0> {
  public:
-  HClearException() : HTemplateInstruction(SideEffects::AllWrites()) {}
+  explicit HClearException(uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::AllWrites(), dex_pc) {}
 
   DECLARE_INSTRUCTION(ClearException);
 
@@ -4591,8 +4611,8 @@ class HClearException : public HTemplateInstruction<0> {
 
 class HThrow : public HTemplateInstruction<1> {
  public:
-  HThrow(HInstruction* exception, uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::CanTriggerGC()), dex_pc_(dex_pc) {
+  explicit HThrow(HInstruction* exception, uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::CanTriggerGC(), dex_pc) {
     SetRawInputAt(0, exception);
   }
 
@@ -4602,13 +4622,10 @@ class HThrow : public HTemplateInstruction<1> {
 
   bool CanThrow() const OVERRIDE { return true; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   DECLARE_INSTRUCTION(Throw);
 
  private:
-  const uint32_t dex_pc_;
-
   DISALLOW_COPY_AND_ASSIGN(HThrow);
 };
 
@@ -4617,11 +4634,12 @@ class HInstanceOf : public HExpression<2> {
   HInstanceOf(HInstruction* object,
               HLoadClass* constant,
               bool class_is_final,
-              uint32_t dex_pc)
-      : HExpression(Primitive::kPrimBoolean, SideEffectsForArchRuntimeCalls(class_is_final)),
+              uint32_t dex_pc = kNoDexPc)
+      : HExpression(Primitive::kPrimBoolean,
+                    SideEffectsForArchRuntimeCalls(class_is_final),
+                    dex_pc),
         class_is_final_(class_is_final),
-        must_do_null_check_(true),
-        dex_pc_(dex_pc) {
+        must_do_null_check_(true) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, constant);
   }
@@ -4636,7 +4654,6 @@ class HInstanceOf : public HExpression<2> {
     return false;
   }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   bool IsClassFinal() const { return class_is_final_; }
 
@@ -4653,7 +4670,6 @@ class HInstanceOf : public HExpression<2> {
  private:
   const bool class_is_final_;
   bool must_do_null_check_;
-  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceOf);
 };
@@ -4662,8 +4678,11 @@ class HBoundType : public HExpression<1> {
  public:
   // Constructs an HBoundType with the given upper_bound.
   // Ensures that the upper_bound is valid.
-  HBoundType(HInstruction* input, ReferenceTypeInfo upper_bound, bool upper_can_be_null)
-      : HExpression(Primitive::kPrimNot, SideEffects::None()),
+  HBoundType(HInstruction* input,
+             ReferenceTypeInfo upper_bound,
+             bool upper_can_be_null,
+             uint32_t dex_pc = kNoDexPc)
+      : HExpression(Primitive::kPrimNot, SideEffects::None(), dex_pc),
         upper_bound_(upper_bound),
         upper_can_be_null_(upper_can_be_null),
         can_be_null_(upper_can_be_null) {
@@ -4706,11 +4725,10 @@ class HCheckCast : public HTemplateInstruction<2> {
   HCheckCast(HInstruction* object,
              HLoadClass* constant,
              bool class_is_final,
-             uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::CanTriggerGC()),
+             uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::CanTriggerGC(), dex_pc),
         class_is_final_(class_is_final),
-        must_do_null_check_(true),
-        dex_pc_(dex_pc) {
+        must_do_null_check_(true) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, constant);
   }
@@ -4731,7 +4749,6 @@ class HCheckCast : public HTemplateInstruction<2> {
   bool MustDoNullCheck() const { return must_do_null_check_; }
   void ClearMustDoNullCheck() { must_do_null_check_ = false; }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   bool IsClassFinal() const { return class_is_final_; }
 
@@ -4740,16 +4757,15 @@ class HCheckCast : public HTemplateInstruction<2> {
  private:
   const bool class_is_final_;
   bool must_do_null_check_;
-  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HCheckCast);
 };
 
 class HMemoryBarrier : public HTemplateInstruction<0> {
  public:
-  explicit HMemoryBarrier(MemBarrierKind barrier_kind)
+  explicit HMemoryBarrier(MemBarrierKind barrier_kind, uint32_t dex_pc = kNoDexPc)
       : HTemplateInstruction(
-            SideEffects::AllWritesAndReads()),  // Assume write/read on all fields/arrays.
+            SideEffects::AllWritesAndReads(), dex_pc),  // Assume write/read on all fields/arrays.
         barrier_kind_(barrier_kind) {}
 
   MemBarrierKind GetBarrierKind() { return barrier_kind_; }
@@ -4769,10 +4785,10 @@ class HMonitorOperation : public HTemplateInstruction<1> {
     kExit,
   };
 
-  HMonitorOperation(HInstruction* object, OperationKind kind, uint32_t dex_pc)
+  HMonitorOperation(HInstruction* object, OperationKind kind, uint32_t dex_pc = kNoDexPc)
     : HTemplateInstruction(
-          SideEffects::AllExceptGCDependency()),  // Assume write/read on all fields/arrays.
-      kind_(kind), dex_pc_(dex_pc) {
+          SideEffects::AllExceptGCDependency(), dex_pc),  // Assume write/read on all fields/arrays.
+      kind_(kind) {
     SetRawInputAt(0, object);
   }
 
@@ -4786,7 +4802,6 @@ class HMonitorOperation : public HTemplateInstruction<1> {
     return IsEnter();
   }
 
-  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   bool IsEnter() const { return kind_ == kEnter; }
 
@@ -4794,7 +4809,6 @@ class HMonitorOperation : public HTemplateInstruction<1> {
 
  private:
   const OperationKind kind_;
-  const uint32_t dex_pc_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HMonitorOperation);
@@ -4809,7 +4823,8 @@ class HMonitorOperation : public HTemplateInstruction<1> {
  */
 class HFakeString : public HTemplateInstruction<0> {
  public:
-  HFakeString() : HTemplateInstruction(SideEffects::None()) {}
+  explicit HFakeString(uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc) {}
 
   Primitive::Type GetType() const OVERRIDE { return Primitive::kPrimNot; }
 
@@ -4897,8 +4912,8 @@ static constexpr size_t kDefaultNumberOfMoves = 4;
 
 class HParallelMove : public HTemplateInstruction<0> {
  public:
-  explicit HParallelMove(ArenaAllocator* arena)
-      : HTemplateInstruction(SideEffects::None()), moves_(arena, kDefaultNumberOfMoves) {}
+  explicit HParallelMove(ArenaAllocator* arena, uint32_t dex_pc = kNoDexPc)
+      : HTemplateInstruction(SideEffects::None(), dex_pc), moves_(arena, kDefaultNumberOfMoves) {}
 
   void AddMove(Location source,
                Location destination,
