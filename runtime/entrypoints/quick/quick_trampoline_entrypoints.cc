@@ -325,7 +325,8 @@ class QuickArgumentVisitor {
     if (outer_method->IsOptimized(sizeof(void*))) {
       CodeInfo code_info = outer_method->GetOptimizedCodeInfo();
       StackMapEncoding encoding = code_info.ExtractEncoding();
-      StackMap stack_map = code_info.GetStackMapForNativePcOffset(outer_pc_offset, encoding);
+      StackMap stack_map = code_info.GetSafepointStackMapForNativePcOffset(
+          outer_pc_offset, encoding);
       DCHECK(stack_map.IsValid());
       if (stack_map.HasInlineInfo(encoding)) {
         InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map, encoding);
