@@ -114,7 +114,7 @@ InlineInfo StackVisitor::GetCurrentInlineInfo() const {
   uint32_t native_pc_offset = outer_method->NativeQuickPcOffset(cur_quick_frame_pc_);
   CodeInfo code_info = outer_method->GetOptimizedCodeInfo();
   StackMapEncoding encoding = code_info.ExtractEncoding();
-  StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
+  StackMap stack_map = code_info.GetSafepointStackMapForNativePcOffset(native_pc_offset, encoding);
   DCHECK(stack_map.IsValid());
   return code_info.GetInlineInfoOf(stack_map, encoding);
 }
@@ -275,7 +275,7 @@ bool StackVisitor::GetVRegFromOptimizedCode(ArtMethod* m, uint16_t vreg, VRegKin
   StackMapEncoding encoding = code_info.ExtractEncoding();
 
   uint32_t native_pc_offset = outer_method->NativeQuickPcOffset(cur_quick_frame_pc_);
-  StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
+  StackMap stack_map = code_info.GetSafepointStackMapForNativePcOffset(native_pc_offset, encoding);
   DCHECK(stack_map.IsValid());
   size_t depth_in_stack_map = current_inlining_depth_ - 1;
 
@@ -325,6 +325,10 @@ bool StackVisitor::GetVRegFromOptimizedCode(ArtMethod* m, uint16_t vreg, VRegKin
 
 bool StackVisitor::GetRegisterIfAccessible(uint32_t reg, VRegKind kind, uint32_t* val) const {
   const bool is_float = (kind == kFloatVReg) || (kind == kDoubleLoVReg) || (kind == kDoubleHiVReg);
+
+  // X86 float registers are 64-bit and the logic below does not apply.
+  DCHECK(!is_float || kRuntimeISA != InstructionSet::kX86);
+
   if (!IsAccessibleRegister(reg, is_float)) {
     return false;
   }
@@ -793,7 +797,8 @@ void StackVisitor::WalkStack(bool include_transitions) {
           CodeInfo code_info = method->GetOptimizedCodeInfo();
           StackMapEncoding encoding = code_info.ExtractEncoding();
           uint32_t native_pc_offset = method->NativeQuickPcOffset(cur_quick_frame_pc_);
-          StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
+          StackMap stack_map = code_info.GetSafepointStackMapForNativePcOffset(
+              native_pc_offset, encoding);
           if (stack_map.IsValid() && stack_map.HasInlineInfo(encoding)) {
             InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map, encoding);
             DCHECK_EQ(current_inlining_depth_, 0u);

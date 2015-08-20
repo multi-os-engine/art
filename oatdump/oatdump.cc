@@ -1400,10 +1400,16 @@ class OatDumper {
     if (raw_code_info != nullptr) {
       CodeInfo code_info(raw_code_info);
       StackMapEncoding encoding = code_info.ExtractEncoding();
-      StackMap stack_map = code_info.GetStackMapForNativePcOffset(offset, encoding);
-      if (stack_map.IsValid()) {
-        stack_map.Dump(vios, code_info, encoding, oat_method.GetCodeOffset(),
-                       code_item->registers_size_);
+      StackMap safepoint_stack_map =
+          code_info.GetSafepointStackMapForNativePcOffset(offset, encoding);
+      if (safepoint_stack_map.IsValid()) {
+        safepoint_stack_map.Dump(vios, code_info, encoding, oat_method.GetCodeOffset(),
+                                 code_item->registers_size_);
+      }
+      StackMap catch_stack_map = code_info.GetCatchStackMapForNativePcOffset(offset, encoding);
+      if (catch_stack_map.IsValid()) {
+        catch_stack_map.Dump(vios, code_info, encoding, oat_method.GetCodeOffset(),
+                             code_item->registers_size_);
       }
     }
   }

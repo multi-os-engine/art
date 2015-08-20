@@ -185,7 +185,7 @@ uint32_t ArtMethod::ToDexPc(const uintptr_t pc, bool abort_on_failure) {
   if (IsOptimized(sizeof(void*))) {
     CodeInfo code_info = GetOptimizedCodeInfo();
     StackMapEncoding encoding = code_info.ExtractEncoding();
-    StackMap stack_map = code_info.GetStackMapForNativePcOffset(sought_offset, encoding);
+    StackMap stack_map = code_info.GetSafepointStackMapForNativePcOffset(sought_offset, encoding);
     if (stack_map.IsValid()) {
       return stack_map.GetDexPc(encoding);
     }

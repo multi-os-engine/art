@@ -45,11 +45,21 @@ class QuickExceptionHandler {
 
   void FindCatch(mirror::Throwable* exception) SHARED_REQUIRES(Locks::mutator_lock_);
   void DeoptimizeStack() SHARED_REQUIRES(Locks::mutator_lock_);
+  void SetCatchEnvironmentForOptimizedHandler(StackVisitor* stack_visitor)
+      SHARED_REQUIRES(Locks::mutator_lock_);
   void UpdateInstrumentationStack() SHARED_REQUIRES(Locks::mutator_lock_);
   NO_RETURN void DoLongJump() SHARED_REQUIRES(Locks::mutator_lock_);
 
+  ArtMethod** GetHandlerQuickFrame() const {
+    return handler_quick_frame_;
+  }
+
   void SetHandlerQuickFrame(ArtMethod** handler_quick_frame) {
     handler_quick_frame_ = handler_quick_frame;
+  }
+
+  uintptr_t GetHandlerQuickFramePc() const {
+    return handler_quick_frame_pc_;
   }
 
   void SetHandlerQuickFramePc(uintptr_t handler_quick_frame_pc) {
