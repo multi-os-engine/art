@@ -1209,6 +1209,9 @@ class SsaLivenessAnalysis : public ValueObject {
     // A value that's not live in compiled code may still be needed in interpreter,
     // due to code motion, etc.
     if (env_holder->IsDeoptimize()) return true;
+    // A value live at a throwing instruction in try block may be copied by the
+    // runtime to its location at the top of the catch block.
+    if (env_holder->CanThrowIntoCatchBlock()) return true;
     if (instruction->GetBlock()->GetGraph()->IsDebuggable()) return true;
     return instruction->GetType() == Primitive::kPrimNot;
   }
