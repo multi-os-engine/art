@@ -53,7 +53,7 @@ TEST(StackMapTest, Test1) {
   CodeInfo code_info(region);
   StackMapEncoding encoding = code_info.ExtractEncoding();
   ASSERT_EQ(0u, encoding.NumberOfBytesForStackMask());
-  ASSERT_EQ(1u, code_info.GetNumberOfStackMaps());
+  ASSERT_EQ(1u, code_info.GetNumberOfSafepointStackMaps());
 
   uint32_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
   ASSERT_EQ(2u, number_of_location_catalog_entries);
@@ -64,9 +64,9 @@ TEST(StackMapTest, Test1) {
   size_t expected_location_catalog_size = 1u + 5u;
   ASSERT_EQ(expected_location_catalog_size, location_catalog.Size());
 
-  StackMap stack_map = code_info.GetStackMapAt(0, encoding);
-  ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForDexPc(0, encoding)));
-  ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForNativePcOffset(64, encoding)));
+  StackMap stack_map = code_info.GetSafepointStackMapAt(0, encoding);
+  ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForDexPc(0, encoding)));
+  ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForNativePcOffset(64, encoding)));
   ASSERT_EQ(0u, stack_map.GetDexPc(encoding));
   ASSERT_EQ(64u, stack_map.GetNativePcOffset(encoding));
   ASSERT_EQ(0x3u, stack_map.GetRegisterMask(encoding));
@@ -167,7 +167,7 @@ TEST(StackMapTest, Test2) {
   CodeInfo code_info(region);
   StackMapEncoding encoding = code_info.ExtractEncoding();
   ASSERT_EQ(2u, encoding.NumberOfBytesForStackMask());
-  ASSERT_EQ(4u, code_info.GetNumberOfStackMaps());
+  ASSERT_EQ(4u, code_info.GetNumberOfSafepointStackMaps());
 
   uint32_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
   ASSERT_EQ(7u, number_of_location_catalog_entries);
@@ -180,9 +180,9 @@ TEST(StackMapTest, Test2) {
 
   // First stack map.
   {
-    StackMap stack_map = code_info.GetStackMapAt(0, encoding);
-    ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForDexPc(0, encoding)));
-    ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForNativePcOffset(64, encoding)));
+    StackMap stack_map = code_info.GetSafepointStackMapAt(0, encoding);
+    ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForDexPc(0, encoding)));
+    ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForNativePcOffset(64, encoding)));
     ASSERT_EQ(0u, stack_map.GetDexPc(encoding));
     ASSERT_EQ(64u, stack_map.GetNativePcOffset(encoding));
     ASSERT_EQ(0x3u, stack_map.GetRegisterMask(encoding));
@@ -242,9 +242,9 @@ TEST(StackMapTest, Test2) {
 
   // Second stack map.
   {
-    StackMap stack_map = code_info.GetStackMapAt(1, encoding);
-    ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForDexPc(1u, encoding)));
-    ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForNativePcOffset(128u, encoding)));
+    StackMap stack_map = code_info.GetSafepointStackMapAt(1, encoding);
+    ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForDexPc(1u, encoding)));
+    ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForNativePcOffset(128u, encoding)));
     ASSERT_EQ(1u, stack_map.GetDexPc(encoding));
     ASSERT_EQ(128u, stack_map.GetNativePcOffset(encoding));
     ASSERT_EQ(0xFFu, stack_map.GetRegisterMask(encoding));
@@ -297,9 +297,9 @@ TEST(StackMapTest, Test2) {
 
   // Third stack map.
   {
-    StackMap stack_map = code_info.GetStackMapAt(2, encoding);
-    ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForDexPc(2u, encoding)));
-    ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForNativePcOffset(192u, encoding)));
+    StackMap stack_map = code_info.GetSafepointStackMapAt(2, encoding);
+    ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForDexPc(2u, encoding)));
+    ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForNativePcOffset(192u, encoding)));
     ASSERT_EQ(2u, stack_map.GetDexPc(encoding));
     ASSERT_EQ(192u, stack_map.GetNativePcOffset(encoding));
     ASSERT_EQ(0xABu, stack_map.GetRegisterMask(encoding));
@@ -352,9 +352,9 @@ TEST(StackMapTest, Test2) {
 
   // Fourth stack map.
   {
-    StackMap stack_map = code_info.GetStackMapAt(3, encoding);
-    ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForDexPc(3u, encoding)));
-    ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForNativePcOffset(256u, encoding)));
+    StackMap stack_map = code_info.GetSafepointStackMapAt(3, encoding);
+    ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForDexPc(3u, encoding)));
+    ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForNativePcOffset(256u, encoding)));
     ASSERT_EQ(3u, stack_map.GetDexPc(encoding));
     ASSERT_EQ(256u, stack_map.GetNativePcOffset(encoding));
     ASSERT_EQ(0xCDu, stack_map.GetRegisterMask(encoding));
@@ -426,7 +426,7 @@ TEST(StackMapTest, TestNonLiveDexRegisters) {
   CodeInfo code_info(region);
   StackMapEncoding encoding = code_info.ExtractEncoding();
   ASSERT_EQ(0u, encoding.NumberOfBytesForStackMask());
-  ASSERT_EQ(1u, code_info.GetNumberOfStackMaps());
+  ASSERT_EQ(1u, code_info.GetNumberOfSafepointStackMaps());
 
   uint32_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
   ASSERT_EQ(1u, number_of_location_catalog_entries);
@@ -436,9 +436,9 @@ TEST(StackMapTest, TestNonLiveDexRegisters) {
   size_t expected_location_catalog_size = 5u;
   ASSERT_EQ(expected_location_catalog_size, location_catalog.Size());
 
-  StackMap stack_map = code_info.GetStackMapAt(0, encoding);
-  ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForDexPc(0, encoding)));
-  ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForNativePcOffset(64, encoding)));
+  StackMap stack_map = code_info.GetSafepointStackMapAt(0, encoding);
+  ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForDexPc(0, encoding)));
+  ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForNativePcOffset(64, encoding)));
   ASSERT_EQ(0u, stack_map.GetDexPc(encoding));
   ASSERT_EQ(64u, stack_map.GetNativePcOffset(encoding));
   ASSERT_EQ(0x3u, stack_map.GetRegisterMask(encoding));
@@ -532,14 +532,14 @@ TEST(StackMapTest, DexRegisterMapOffsetOverflow) {
   //   locations (that is, 127 bytes of data).
   // Hence it has a size of 255 bytes, and therefore...
   ASSERT_EQ(128u, DexRegisterMap::GetLiveBitMaskSize(number_of_dex_registers));
-  StackMap stack_map0 = code_info.GetStackMapAt(0, encoding);
+  StackMap stack_map0 = code_info.GetSafepointStackMapAt(0, encoding);
   DexRegisterMap dex_register_map0 =
       code_info.GetDexRegisterMapOf(stack_map0, encoding, number_of_dex_registers);
   ASSERT_EQ(127u, dex_register_map0.GetLocationMappingDataSize(number_of_dex_registers,
                                                                number_of_location_catalog_entries));
   ASSERT_EQ(255u, dex_register_map0.Size());
 
-  StackMap stack_map1 = code_info.GetStackMapAt(1, encoding);
+  StackMap stack_map1 = code_info.GetSafepointStackMapAt(1, encoding);
   ASSERT_TRUE(stack_map1.HasDexRegisterMap(encoding));
   // ...the offset of the second Dex register map (relative to the
   // beginning of the Dex register maps region) is 255 (i.e.,
@@ -580,19 +580,19 @@ TEST(StackMapTest, TestShareDexRegisterMap) {
   StackMapEncoding encoding = ci.ExtractEncoding();
 
   // Verify first stack map.
-  StackMap sm0 = ci.GetStackMapAt(0, encoding);
+  StackMap sm0 = ci.GetSafepointStackMapAt(0, encoding);
   DexRegisterMap dex_registers0 = ci.GetDexRegisterMapOf(sm0, encoding, number_of_dex_registers);
   ASSERT_EQ(0, dex_registers0.GetMachineRegister(0, number_of_dex_registers, ci, encoding));
   ASSERT_EQ(-2, dex_registers0.GetConstant(1, number_of_dex_registers, ci, encoding));
 
   // Verify second stack map.
-  StackMap sm1 = ci.GetStackMapAt(1, encoding);
+  StackMap sm1 = ci.GetSafepointStackMapAt(1, encoding);
   DexRegisterMap dex_registers1 = ci.GetDexRegisterMapOf(sm1, encoding, number_of_dex_registers);
   ASSERT_EQ(0, dex_registers1.GetMachineRegister(0, number_of_dex_registers, ci, encoding));
   ASSERT_EQ(-2, dex_registers1.GetConstant(1, number_of_dex_registers, ci, encoding));
 
   // Verify third stack map.
-  StackMap sm2 = ci.GetStackMapAt(2, encoding);
+  StackMap sm2 = ci.GetSafepointStackMapAt(2, encoding);
   DexRegisterMap dex_registers2 = ci.GetDexRegisterMapOf(sm2, encoding, number_of_dex_registers);
   ASSERT_EQ(2, dex_registers2.GetMachineRegister(0, number_of_dex_registers, ci, encoding));
   ASSERT_EQ(-2, dex_registers2.GetConstant(1, number_of_dex_registers, ci, encoding));
@@ -621,16 +621,16 @@ TEST(StackMapTest, TestNoDexRegisterMap) {
   CodeInfo code_info(region);
   StackMapEncoding encoding = code_info.ExtractEncoding();
   ASSERT_EQ(0u, encoding.NumberOfBytesForStackMask());
-  ASSERT_EQ(1u, code_info.GetNumberOfStackMaps());
+  ASSERT_EQ(1u, code_info.GetNumberOfSafepointStackMaps());
 
   uint32_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
   ASSERT_EQ(0u, number_of_location_catalog_entries);
   DexRegisterLocationCatalog location_catalog = code_info.GetDexRegisterLocationCatalog(encoding);
   ASSERT_EQ(0u, location_catalog.Size());
 
-  StackMap stack_map = code_info.GetStackMapAt(0, encoding);
-  ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForDexPc(0, encoding)));
-  ASSERT_TRUE(stack_map.Equals(code_info.GetStackMapForNativePcOffset(64, encoding)));
+  StackMap stack_map = code_info.GetSafepointStackMapAt(0, encoding);
+  ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForDexPc(0, encoding)));
+  ASSERT_TRUE(stack_map.Equals(code_info.GetSafepointStackMapForNativePcOffset(64, encoding)));
   ASSERT_EQ(0u, stack_map.GetDexPc(encoding));
   ASSERT_EQ(64u, stack_map.GetNativePcOffset(encoding));
   ASSERT_EQ(0x3u, stack_map.GetRegisterMask(encoding));
@@ -715,7 +715,7 @@ TEST(StackMapTest, InlineTest) {
 
   {
     // Verify first stack map.
-    StackMap sm0 = ci.GetStackMapAt(0, encoding);
+    StackMap sm0 = ci.GetSafepointStackMapAt(0, encoding);
 
     DexRegisterMap dex_registers0 = ci.GetDexRegisterMapOf(sm0, encoding, 2);
     ASSERT_EQ(0, dex_registers0.GetStackOffsetInBytes(0, 2, ci, encoding));
@@ -741,7 +741,7 @@ TEST(StackMapTest, InlineTest) {
 
   {
     // Verify second stack map.
-    StackMap sm1 = ci.GetStackMapAt(1, encoding);
+    StackMap sm1 = ci.GetSafepointStackMapAt(1, encoding);
 
     DexRegisterMap dex_registers0 = ci.GetDexRegisterMapOf(sm1, encoding, 2);
     ASSERT_EQ(56, dex_registers0.GetStackOffsetInBytes(0, 2, ci, encoding));
@@ -772,7 +772,7 @@ TEST(StackMapTest, InlineTest) {
 
   {
     // Verify third stack map.
-    StackMap sm2 = ci.GetStackMapAt(2, encoding);
+    StackMap sm2 = ci.GetSafepointStackMapAt(2, encoding);
 
     DexRegisterMap dex_registers0 = ci.GetDexRegisterMapOf(sm2, encoding, 2);
     ASSERT_FALSE(dex_registers0.IsDexRegisterLive(0));
@@ -782,7 +782,7 @@ TEST(StackMapTest, InlineTest) {
 
   {
     // Verify fourth stack map.
-    StackMap sm3 = ci.GetStackMapAt(3, encoding);
+    StackMap sm3 = ci.GetSafepointStackMapAt(3, encoding);
 
     DexRegisterMap dex_registers0 = ci.GetDexRegisterMapOf(sm3, encoding, 2);
     ASSERT_EQ(56, dex_registers0.GetStackOffsetInBytes(0, 2, ci, encoding));
