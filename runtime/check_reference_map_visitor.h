@@ -66,7 +66,8 @@ class CheckReferenceMapVisitor : public StackVisitor {
     ArtMethod* m = GetMethod();
     CodeInfo code_info = m->GetOptimizedCodeInfo();
     StackMapEncoding encoding = code_info.ExtractEncoding();
-    StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
+    StackMap stack_map = code_info.GetSafepointStackMapForNativePcOffset(
+        native_pc_offset, encoding);
     uint16_t number_of_dex_registers = m->GetCodeItem()->registers_size_;
     DexRegisterMap dex_register_map =
         code_info.GetDexRegisterMapOf(stack_map, encoding, number_of_dex_registers);

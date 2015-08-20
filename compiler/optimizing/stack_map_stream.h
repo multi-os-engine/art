@@ -63,6 +63,8 @@ class StackMapStream : public ValueObject {
   explicit StackMapStream(ArenaAllocator* allocator)
       : allocator_(allocator),
         stack_maps_(allocator, 10),
+        number_of_safepoint_stack_maps_(0),
+        number_of_catch_stack_maps_(0),
         location_catalog_entries_(allocator, 4),
         dex_register_locations_(allocator, 10 * 4),
         inline_infos_(allocator, 2),
@@ -115,7 +117,8 @@ class StackMapStream : public ValueObject {
                           uint32_t register_mask,
                           BitVector* sp_mask,
                           uint32_t num_dex_registers,
-                          uint8_t inlining_depth);
+                          uint8_t inlining_depth,
+                          bool is_catch_stack_map);
   void EndStackMapEntry();
 
   void AddDexRegisterEntry(DexRegisterLocation::Kind kind, int32_t value);
@@ -126,9 +129,13 @@ class StackMapStream : public ValueObject {
                             uint32_t num_dex_registers);
   void EndInlineInfoEntry();
 
-  size_t GetNumberOfStackMaps() const {
+  size_t GetTotalNumberOfStackMaps() const {
     return stack_maps_.Size();
   }
+
+  size_t GetNumberOfSafepointStackMaps() const { return number_of_safepoint_stack_maps_; }
+
+  size_t GetNumberOfCatchStackMaps() const { return number_of_catch_stack_maps_; }
 
   const StackMapEntry& GetStackMap(size_t i) const {
     DCHECK_LT(i, stack_maps_.Size());
@@ -163,8 +170,12 @@ class StackMapStream : public ValueObject {
                             const BitVector& live_dex_registers_mask,
                             uint32_t start_index_in_dex_register_locations) const;
 
+  StackMap GetStackMapFromCodeInfo(const CodeInfo& code_info, size_t index) const;
+
   ArenaAllocator* allocator_;
   GrowableArray<StackMapEntry> stack_maps_;
+  size_t number_of_safepoint_stack_maps_;
+  size_t number_of_catch_stack_maps_;
 
   // A catalog of unique [location_kind, register_value] pairs (per method).
   GrowableArray<DexRegisterLocation> location_catalog_entries_;
