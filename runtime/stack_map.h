@@ -1025,6 +1025,7 @@ class CodeInfo {
   typedef uint16_t EncodingInfoType;
   typedef uint32_t NumberOfLocationCatalogEntriesType;
   typedef uint32_t NumberOfStackMapsType;
+  typedef uint32_t NumberOfCatchStackMapsType;
   typedef uint32_t StackMaskSizeType;
 
   // Memory (bit) layout: encoding info.
@@ -1069,8 +1070,8 @@ class CodeInfo {
     return region_.LoadBits(bit_offset, kNumberOfBitForNumberOfBytesForEncoding);
   }
 
-  bool HasInlineInfo() const {
-    return region_.LoadBit(kHasInlineInfoBitOffset);
+  bool HasInlineInfo(const StackMapEncoding& encoding) const {
+    return encoding.HasInlineInfo();
   }
 
   DexRegisterLocationCatalog GetDexRegisterLocationCatalog(const StackMapEncoding& encoding) const {
@@ -1082,6 +1083,11 @@ class CodeInfo {
   StackMap GetStackMapAt(size_t i, const StackMapEncoding& encoding) const {
     size_t stack_map_size = encoding.ComputeStackMapSize();
     return StackMap(GetStackMaps(encoding).Subregion(i * stack_map_size, stack_map_size));
+  }
+
+  StackMap GetCatchStackMapAt(size_t i, const StackMapEncoding& encoding) const {
+    size_t stack_map_size = encoding.ComputeStackMapSize();
+    return StackMap(GetCatchStackMaps(encoding).Subregion(i * stack_map_size, stack_map_size));
   }
 
   OverallSizeType GetOverallSize() const {
@@ -1115,13 +1121,27 @@ class CodeInfo {
     region_.StoreUnaligned<NumberOfStackMapsType>(kNumberOfStackMapsOffset, number_of_stack_maps);
   }
 
-  // Get the size all the stack maps of this CodeInfo object, in bytes.
+  // Get the size of all the stack maps of this CodeInfo object, in bytes.
   size_t GetStackMapsSize(const StackMapEncoding& encoding) const {
     return encoding.ComputeStackMapSize() * GetNumberOfStackMaps();
   }
 
+  NumberOfCatchStackMapsType GetNumberOfCatchStackMaps() const {
+    return region_.LoadUnaligned<NumberOfCatchStackMapsType>(kNumberOfCatchStackMapsOffset);
+  }
+
+  void SetNumberOfCatchStackMaps(NumberOfCatchStackMapsType number_of_catch_stack_maps) {
+    region_.StoreUnaligned<NumberOfCatchStackMapsType>(
+        kNumberOfCatchStackMapsOffset, number_of_catch_stack_maps);
+  }
+
+  // Get the size of all the catch stack maps of this CodeInfo object, in bytes.
+  size_t GetCatchStackMapsSize(const StackMapEncoding& encoding) const {
+    return encoding.ComputeStackMapSize() * GetNumberOfCatchStackMaps();
+  }
+
   uint32_t GetDexRegisterLocationCatalogOffset(const StackMapEncoding& encoding) const {
-    return GetStackMapsOffset() + GetStackMapsSize(encoding);
+    return GetCatchStackMapsOffset(encoding) + GetCatchStackMapsSize(encoding);
   }
 
   size_t GetDexRegisterMapsOffset(const StackMapEncoding& encoding) const {
@@ -1129,8 +1149,12 @@ class CodeInfo {
          + GetDexRegisterLocationCatalogSize(encoding);
   }
 
-  uint32_t GetStackMapsOffset() const {
+  uint32_t GetStackMapsOffset(const StackMapEncoding& encoding ATTRIBUTE_UNUSED) const {
     return kFixedSize;
+  }
+
+  uint32_t GetCatchStackMapsOffset(const StackMapEncoding& encoding) const {
+    return GetStackMapsOffset(encoding) + GetStackMapsSize(encoding);
   }
 
   DexRegisterMap GetDexRegisterMapOf(StackMap stack_map,
@@ -1174,6 +1198,16 @@ class CodeInfo {
     return StackMap();
   }
 
+  StackMap GetCatchStackMapForDexPc(uint32_t dex_pc, const StackMapEncoding& encoding) const {
+    for (size_t i = 0, e = GetNumberOfCatchStackMaps(); i < e; ++i) {
+      StackMap stack_map = GetCatchStackMapAt(i, encoding);
+      if (stack_map.GetDexPc(encoding) == dex_pc) {
+        return stack_map;
+      }
+    }
+    return StackMap();
+  }
+
   StackMap GetStackMapForNativePcOffset(uint32_t native_pc_offset,
                                         const StackMapEncoding& encoding) const {
     // TODO: stack maps are sorted by native pc, we can do a binary search.
@@ -1198,13 +1232,18 @@ class CodeInfo {
 
  private:
   static constexpr int kOverallSizeOffset = 0;
-  static constexpr int kEncodingInfoOffset = ELEMENT_BYTE_OFFSET_AFTER(OverallSize);
+  static constexpr int kEncodingInfoOffset =
+      ELEMENT_BYTE_OFFSET_AFTER(OverallSize);
   static constexpr int kNumberOfLocationCatalogEntriesOffset =
       ELEMENT_BYTE_OFFSET_AFTER(EncodingInfo);
   static constexpr int kNumberOfStackMapsOffset =
       ELEMENT_BYTE_OFFSET_AFTER(NumberOfLocationCatalogEntries);
-  static constexpr int kStackMaskSizeOffset = ELEMENT_BYTE_OFFSET_AFTER(NumberOfStackMaps);
-  static constexpr int kFixedSize = ELEMENT_BYTE_OFFSET_AFTER(StackMaskSize);
+  static constexpr int kNumberOfCatchStackMapsOffset =
+      ELEMENT_BYTE_OFFSET_AFTER(NumberOfStackMaps);
+  static constexpr int kStackMaskSizeOffset =
+      ELEMENT_BYTE_OFFSET_AFTER(NumberOfCatchStackMaps);
+  static constexpr int kFixedSize =
+      ELEMENT_BYTE_OFFSET_AFTER(StackMaskSize);
 
   static constexpr int kHasInlineInfoBitOffset = kEncodingInfoOffset * kBitsPerByte;
   static constexpr int kInlineInfoBitOffset = ELEMENT_BIT_OFFSET_AFTER(HasInlineInfo);
@@ -1223,7 +1262,13 @@ class CodeInfo {
   MemoryRegion GetStackMaps(const StackMapEncoding& encoding) const {
     return region_.size() == 0
         ? MemoryRegion()
-        : region_.Subregion(GetStackMapsOffset(), GetStackMapsSize(encoding));
+        : region_.Subregion(GetStackMapsOffset(encoding), GetStackMapsSize(encoding));
+  }
+
+  MemoryRegion GetCatchStackMaps(const StackMapEncoding& encoding) const {
+    return region_.size() == 0
+        ? MemoryRegion()
+        : region_.Subregion(GetCatchStackMapsOffset(encoding), GetCatchStackMapsSize(encoding));
   }
 
   // Compute the size of the Dex register map associated to the stack map at

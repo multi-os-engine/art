@@ -2331,6 +2331,7 @@ void Thread::QuickDeliverException() {
     exception_handler.DeoptimizeStack();
   } else {
     exception_handler.FindCatch(exception);
+    exception_handler.SetCatchPhiValues();
   }
   exception_handler.UpdateInstrumentationStack();
   exception_handler.DoLongJump();
