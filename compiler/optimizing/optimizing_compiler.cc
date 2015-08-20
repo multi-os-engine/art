@@ -544,10 +544,6 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   RunOptimizations(graph, compiler_driver, compilation_stats_.get(),
                    dex_compilation_unit, pass_observer, &handles);
 
-  if (graph->HasTryCatch()) {
-    return nullptr;
-  }
-
   AllocateRegisters(graph, codegen, pass_observer);
 
   CodeVectorAllocator allocator;
@@ -555,6 +551,8 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
 
   ArenaVector<LinkerPatch> linker_patches = EmitAndSortLinkerPatches(codegen);
 
+  std::vector<uint8_t> mapping_table;
+  codegen->BuildMappingTable(&mapping_table);
   DefaultSrcMap src_mapping_table;
   if (compiler_driver->GetCompilerOptions().GetGenerateDebugInfo()) {
     codegen->BuildSourceMap(&src_mapping_table);
@@ -576,7 +574,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
       codegen->GetCoreSpillMask(),
       codegen->GetFpuSpillMask(),
       &src_mapping_table,
-      ArrayRef<const uint8_t>(),  // mapping_table.
+      ArrayRef<const uint8_t>(mapping_table),
       ArrayRef<const uint8_t>(stack_map),
       ArrayRef<const uint8_t>(),  // native_gc_map.
       ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()),

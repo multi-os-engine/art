@@ -273,7 +273,6 @@ class HGraph : public ArenaObject<kArenaAllocMisc> {
   }
 
   uint16_t GetNumberOfVRegs() const {
-    DCHECK(!in_ssa_form_);
     return number_of_vregs_;
   }
 
@@ -2192,6 +2191,8 @@ class HConstant : public HExpression<0> {
   virtual bool IsZero() const { return false; }
   virtual bool IsOne() const { return false; }
 
+  virtual uint64_t GetValueAsUnsignedInt() const = 0;
+
   DECLARE_INSTRUCTION(Constant);
 
  private:
@@ -2203,6 +2204,8 @@ class HNullConstant : public HConstant {
   bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
+
+  uint64_t GetValueAsUnsignedInt() const OVERRIDE { return 0; }
 
   size_t ComputeHashCode() const OVERRIDE { return 0; }
 
@@ -2220,6 +2223,8 @@ class HNullConstant : public HConstant {
 class HIntConstant : public HConstant {
  public:
   int32_t GetValue() const { return value_; }
+
+  uint64_t GetValueAsUnsignedInt() const OVERRIDE { return static_cast<uint64_t>(value_); }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     DCHECK(other->IsIntConstant());
@@ -2249,6 +2254,8 @@ class HIntConstant : public HConstant {
 class HLongConstant : public HConstant {
  public:
   int64_t GetValue() const { return value_; }
+
+  uint64_t GetValueAsUnsignedInt() const OVERRIDE { return value_; }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     DCHECK(other->IsLongConstant());
@@ -2854,10 +2861,13 @@ class HFloatConstant : public HConstant {
  public:
   float GetValue() const { return value_; }
 
+  uint64_t GetValueAsUnsignedInt() const OVERRIDE {
+    return static_cast<uint64_t>(bit_cast<uint32_t, float>(value_));
+  }
+
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     DCHECK(other->IsFloatConstant());
-    return bit_cast<uint32_t, float>(other->AsFloatConstant()->value_) ==
-        bit_cast<uint32_t, float>(value_);
+    return other->AsFloatConstant()->GetValueAsUnsignedInt() == GetValueAsUnsignedInt();
   }
 
   size_t ComputeHashCode() const OVERRIDE { return static_cast<size_t>(GetValue()); }
@@ -2894,10 +2904,11 @@ class HDoubleConstant : public HConstant {
  public:
   double GetValue() const { return value_; }
 
+  uint64_t GetValueAsUnsignedInt() const OVERRIDE { return bit_cast<uint64_t, double>(value_); }
+
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     DCHECK(other->IsDoubleConstant());
-    return bit_cast<uint64_t, double>(other->AsDoubleConstant()->value_) ==
-        bit_cast<uint64_t, double>(value_);
+    return other->AsDoubleConstant()->GetValueAsUnsignedInt() == GetValueAsUnsignedInt();
   }
 
   size_t ComputeHashCode() const OVERRIDE { return static_cast<size_t>(GetValue()); }
@@ -2978,7 +2989,8 @@ class HInvoke : public HInstruction {
     return intrinsic_;
   }
 
-  void SetIntrinsic(Intrinsics intrinsic, IntrinsicNeedsEnvironmentOrCache needs_env_or_cache) {
+  void SetIntrinsic(Intrinsics intrinsic,
+                    IntrinsicNeedsEnvironmentOrCache needs_env_or_cache) {
     intrinsic_ = intrinsic;
     needs_environment_or_cache_ = needs_env_or_cache;
   }
@@ -3919,6 +3931,20 @@ class HPhi : public HInstruction {
     inputs_.SetSize(number_of_inputs);
   }
 
+  // Returns the next equivalent phi (starting from the current one) or null if there is none.
+  // An equivalent phi is a phi having the same dex register and type.
+  // It assumes that phis with the same dex register are adjacent.
+  HPhi* GetNextEquivalentPhiWithSameType() {
+    HInstruction* next = GetNext();
+    while (next != nullptr && next->AsPhi()->GetRegNumber() == reg_number_) {
+      if (next->GetType() == GetType()) {
+        return next->AsPhi();
+      }
+      next = next->GetNext();
+    }
+    return nullptr;
+  }
+
   // Returns a type equivalent to the given `type`, but that a `HPhi` can hold.
   static Primitive::Type ToPhiType(Primitive::Type type) {
     switch (type) {
@@ -3952,18 +3978,11 @@ class HPhi : public HInstruction {
   bool IsDead() const { return !is_live_; }
   bool IsLive() const { return is_live_; }
 
-  // Returns the next equivalent phi (starting from the current one) or null if there is none.
-  // An equivalent phi is a phi having the same dex register and type.
-  // It assumes that phis with the same dex register are adjacent.
-  HPhi* GetNextEquivalentPhiWithSameType() {
-    HInstruction* next = GetNext();
-    while (next != nullptr && next->AsPhi()->GetRegNumber() == reg_number_) {
-      if (next->GetType() == GetType()) {
-        return next->AsPhi();
-      }
-      next = next->GetNext();
-    }
-    return nullptr;
+  bool IsVRegEquivalentOf(HInstruction* other) const {
+    return other != nullptr
+        && other->IsPhi()
+        && other->AsPhi()->GetBlock() == GetBlock()
+        && other->AsPhi()->GetRegNumber() == GetRegNumber();
   }
 
   DECLARE_INSTRUCTION(Phi);

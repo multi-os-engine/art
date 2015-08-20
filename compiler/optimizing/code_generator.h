@@ -229,8 +229,15 @@ class CodeGenerator {
   }
 
   void RecordPcInfo(HInstruction* instruction, uint32_t dex_pc, SlowPathCode* slow_path = nullptr);
+  void RecordCatchBlockInfo();
   bool CanMoveNullCheckToUser(HNullCheck* null_check);
   void MaybeRecordImplicitNullCheck(HInstruction* instruction);
+
+  // Returns true if implicit null checks are allowed in the compiler options
+  // and if the null check is not inside a try block. We currently cannot do
+  // implicit null checks in that case because we need the NullCheckSlowPath to
+  // save live registers, which may be needed by the runtime to set catch phis.
+  bool IsImplicitNullCheckAllowed(HNullCheck* null_check) const;
 
   void AddSlowPath(SlowPathCode* slow_path) {
     slow_paths_.Add(slow_path);

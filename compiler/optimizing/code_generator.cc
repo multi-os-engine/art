@@ -245,6 +245,10 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
 
   GenerateSlowPaths();
 
+  if (!is_baseline) {
+    RecordCatchBlockInfo();
+  }
+
   // Finalize instructions in assember;
   Finalize(allocator);
 }
@@ -634,7 +638,7 @@ void CodeGenerator::BuildMappingTable(std::vector<uint8_t>* data) const {
   // Walk over the blocks and find which ones correspond to catch block entries.
   for (size_t i = 0; i < graph_->GetBlocks().Size(); ++i) {
     HBasicBlock* block = graph_->GetBlocks().Get(i);
-    if (block->IsCatchBlock()) {
+    if (block != nullptr && block->IsCatchBlock()) {
       intptr_t native_pc = GetAddressOf(block);
       ++dex2pc_entries;
       dex2pc_data_size += UnsignedLeb128Size(native_pc - dex2pc_offset);
@@ -673,7 +677,7 @@ void CodeGenerator::BuildMappingTable(std::vector<uint8_t>* data) const {
 
   for (size_t i = 0; i < graph_->GetBlocks().Size(); ++i) {
     HBasicBlock* block = graph_->GetBlocks().Get(i);
-    if (block->IsCatchBlock()) {
+    if (block != nullptr && block->IsCatchBlock()) {
       intptr_t native_pc = GetAddressOf(block);
       write_pos2 = EncodeUnsignedLeb128(write_pos2, native_pc - dex2pc_offset);
       write_pos2 = EncodeSignedLeb128(write_pos2, block->GetDexPc() - dex2pc_dalvik_offset);
@@ -701,7 +705,7 @@ void CodeGenerator::BuildMappingTable(std::vector<uint8_t>* data) const {
     }
     for (size_t i = 0; i < graph_->GetBlocks().Size(); ++i) {
       HBasicBlock* block = graph_->GetBlocks().Get(i);
-      if (block->IsCatchBlock()) {
+      if (block != nullptr && block->IsCatchBlock()) {
         CHECK_EQ(GetAddressOf(block), it2.NativePcOffset());
         CHECK_EQ(block->GetDexPc(), it2.DexPc());
         ++it2;
@@ -776,7 +780,8 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
 
   if (instruction == nullptr) {
     // For stack overflow checks.
-    stack_map_stream_.BeginStackMapEntry(outer_dex_pc, native_pc, 0, 0, 0, 0);
+    stack_map_stream_.BeginStackMapEntry(
+        outer_dex_pc, native_pc, 0, 0, 0, 0, /* is_catch_stack_map */ false);
     stack_map_stream_.EndStackMapEntry();
     return;
   }
@@ -798,10 +803,86 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
                                        register_mask,
                                        locations->GetStackMask(),
                                        outer_environment_size,
-                                       inlining_depth);
+                                       inlining_depth,
+                                       /* is_catch_stack_map */ false);
 
   EmitEnvironment(instruction->GetEnvironment(), slow_path);
   stack_map_stream_.EndStackMapEntry();
+}
+
+void CodeGenerator::RecordCatchBlockInfo() {
+  ArenaAllocator* arena = graph_->GetArena();
+
+  for (size_t i = 0, e = block_order_->Size(); i < e; ++i) {
+    HBasicBlock* block = block_order_->Get(i);
+    if (!block->IsCatchBlock()) {
+      continue;
+    }
+
+    uint32_t dex_pc = block->GetDexPc();
+    uint32_t num_vregs = graph_->GetNumberOfVRegs();
+    uint32_t inlining_depth = 0;  // not supported at the moment
+    uint32_t native_pc = GetAddressOf(block);
+    uint32_t register_mask = 0;   // all values are on stack
+
+    GrowableArray<Location> locations(arena, num_vregs);
+    locations.SetSize(num_vregs);
+
+    ArenaBitVector* stack_mask = new (arena) ArenaBitVector(arena, 0, /* expandable */ true);
+    for (HInstructionIterator phi_it(block->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+      HPhi* phi = phi_it.Current()->AsPhi();
+      LiveInterval* interval = phi->GetLiveInterval();
+      size_t vreg = phi->GetRegNumber();
+      Location location = interval->ToLocation();
+
+      // All catch phis must be allocated to a stack slot.
+      DCHECK(location.IsStackSlot() || location.IsDoubleStackSlot());
+
+      locations.Put(vreg, location);
+      if (phi->GetType() == Primitive::kPrimNot) {
+        stack_mask->SetBit(interval->GetSpillSlot() / kVRegSize);
+      }
+    }
+
+    stack_map_stream_.BeginStackMapEntry(dex_pc,
+                                         native_pc,
+                                         register_mask,
+                                         stack_mask,
+                                         num_vregs,
+                                         inlining_depth,
+                                         /* is_catch_stack_map */ true);
+
+    for (size_t vreg = 0; vreg < num_vregs; ++vreg) {
+      Location location = locations.Get(vreg);
+      switch (location.GetKind()) {
+        case Location::kInvalid: {
+          stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kNone, 0);
+          break;
+        }
+
+        case Location::kStackSlot: {
+          stack_map_stream_.AddDexRegisterEntry(
+              DexRegisterLocation::Kind::kInStack, location.GetStackIndex());
+          break;
+        }
+
+        case Location::kDoubleStackSlot: {
+          stack_map_stream_.AddDexRegisterEntry(
+              DexRegisterLocation::Kind::kInStack, location.GetStackIndex());
+          stack_map_stream_.AddDexRegisterEntry(
+              DexRegisterLocation::Kind::kInStack, location.GetHighStackIndex(kVRegSize));
+          ++vreg;
+          DCHECK_LT(vreg, num_vregs);
+          break;
+        }
+
+        default:
+          LOG(FATAL) << "Unexpected kind " << location.GetKind();
+      }
+    }
+
+    stack_map_stream_.EndStackMapEntry();
+  }
 }
 
 void CodeGenerator::EmitEnvironment(HEnvironment* environment, SlowPathCode* slow_path) {
@@ -974,6 +1055,11 @@ void CodeGenerator::EmitEnvironment(HEnvironment* environment, SlowPathCode* slo
   }
 }
 
+bool CodeGenerator::IsImplicitNullCheckAllowed(HNullCheck* null_check) const {
+  return compiler_options_.GetImplicitNullChecks()
+      && !null_check->CanThrowIntoCatchBlock();
+}
+
 bool CodeGenerator::CanMoveNullCheckToUser(HNullCheck* null_check) {
   HInstruction* first_next_not_move = null_check->GetNextDisregardingMoves();
 
@@ -989,10 +1075,6 @@ void CodeGenerator::MaybeRecordImplicitNullCheck(HInstruction* instr) {
     return;
   }
 
-  if (!compiler_options_.GetImplicitNullChecks()) {
-    return;
-  }
-
   if (!instr->CanDoImplicitNullCheckOn(instr->InputAt(0))) {
     return;
   }
@@ -1004,9 +1086,11 @@ void CodeGenerator::MaybeRecordImplicitNullCheck(HInstruction* instr) {
   // and needs to record the pc.
   if (first_prev_not_move != nullptr && first_prev_not_move->IsNullCheck()) {
     HNullCheck* null_check = first_prev_not_move->AsNullCheck();
-    // TODO: The parallel moves modify the environment. Their changes need to be reverted
-    // otherwise the stack maps at the throw point will not be correct.
-    RecordPcInfo(null_check, null_check->GetDexPc());
+    if (IsImplicitNullCheckAllowed(null_check)) {
+      // TODO: The parallel moves modify the environment. Their changes need to be
+      // reverted otherwise the stack maps at the throw point will not be correct.
+      RecordPcInfo(null_check, null_check->GetDexPc());
+    }
   }
 }
 
