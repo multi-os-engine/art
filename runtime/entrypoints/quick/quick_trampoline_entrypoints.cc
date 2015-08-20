@@ -675,8 +675,16 @@ extern "C" uint64_t artQuickToInterpreterBridge(ArtMethod* method, Thread* self,
     // Request a stack deoptimization if needed
     ArtMethod* caller = QuickArgumentVisitor::GetCallingMethod(sp);
     if (UNLIKELY(Dbg::IsForcedInterpreterNeededForUpcall(self, caller))) {
-      self->SetException(Thread::GetDeoptimizationException());
+      // Save return value and pending exception.
       self->SetDeoptimizationReturnValue(result, shorty[0] == 'L');
+      self->SetDeoptimizationPendingException(self->GetException());
+
+      // Push the context of the deoptimization stack so we can restore the return value and the
+      // exception before executing the deoptimized frames.
+      self->PushAndClearDeoptimizationContext();
+
+      // Set special exception to cause deoptimization.
+      self->SetException(Thread::GetDeoptimizationException());
     }
 
     // No need to restore the args since the method has already been run by the interpreter.
