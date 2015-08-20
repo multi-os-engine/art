@@ -551,11 +551,6 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   RunOptimizations(graph, compiler_driver, compilation_stats_.get(),
                    dex_compilation_unit, pass_observer, &handles);
 
-  if (graph->HasTryCatch()) {
-    soa.Self()->TransitionFromSuspendedToRunnable();
-    return nullptr;
-  }
-
   AllocateRegisters(graph, codegen, pass_observer);
 
   ArenaAllocator* arena = graph->GetArena();
@@ -567,6 +562,9 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   codegen->CompileOptimized(&allocator);
 
   ArenaVector<LinkerPatch> linker_patches = EmitAndSortLinkerPatches(codegen);
+
+  ArenaVector<uint8_t> mapping_table(arena->Adapter(kArenaAllocMappingTables));
+  codegen->BuildMappingTable(&mapping_table);
 
   ArenaVector<uint8_t> stack_map(arena->Adapter(kArenaAllocStackMaps));
   codegen->BuildStackMaps(&stack_map);
@@ -584,7 +582,7 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
       codegen->GetCoreSpillMask(),
       codegen->GetFpuSpillMask(),
       &src_mapping_table,
-      ArrayRef<const uint8_t>(),  // mapping_table.
+      ArrayRef<const uint8_t>(mapping_table),
       ArrayRef<const uint8_t>(stack_map),
       ArrayRef<const uint8_t>(),  // native_gc_map.
       ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()),

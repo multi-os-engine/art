@@ -2353,6 +2353,7 @@ void Thread::QuickDeliverException() {
     exception_handler.DeoptimizeStack();
   } else {
     exception_handler.FindCatch(exception);
+    exception_handler.SetCatchPhiValues();
   }
   exception_handler.UpdateInstrumentationStack();
   exception_handler.DoLongJump();
@@ -2512,7 +2513,7 @@ class ReferenceMapVisitor : public StackVisitor {
         uintptr_t native_pc_offset = m->NativeQuickPcOffset(GetCurrentQuickFramePc(), entry_point);
         CodeInfo code_info = m->GetOptimizedCodeInfo();
         StackMapEncoding encoding = code_info.ExtractEncoding();
-        StackMap map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
+        StackMap map = code_info.GetSafepointStackMapForNativePcOffset(native_pc_offset, encoding);
         DCHECK(map.IsValid());
         MemoryRegion mask = map.GetStackMask(encoding);
         // Visit stack entries that hold pointers.

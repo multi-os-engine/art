@@ -22,7 +22,8 @@ void StackMapStream::BeginStackMapEntry(uint32_t dex_pc,
                                         uint32_t register_mask,
                                         BitVector* sp_mask,
                                         uint32_t num_dex_registers,
-                                        uint8_t inlining_depth) {
+                                        uint8_t inlining_depth,
+                                        bool is_catch_stack_map) {
   DCHECK_EQ(0u, current_entry_.dex_pc) << "EndStackMapEntry not called after BeginStackMapEntry";
   current_entry_.dex_pc = dex_pc;
   current_entry_.native_pc_offset = native_pc_offset;
@@ -51,6 +52,14 @@ void StackMapStream::BeginStackMapEntry(uint32_t dex_pc,
   dex_pc_max_ = std::max(dex_pc_max_, dex_pc);
   register_mask_max_ = std::max(register_mask_max_, register_mask);
   current_dex_register_ = 0;
+
+  if (is_catch_stack_map) {
+    number_of_catch_stack_maps_++;
+  } else {
+    DCHECK_EQ(number_of_catch_stack_maps_, 0u)
+        << "Safepoint stack maps must be at the beginning of the stream";
+    number_of_safepoint_stack_maps_++;
+  }
 }
 
 void StackMapStream::EndStackMapEntry() {
@@ -229,6 +238,13 @@ size_t StackMapStream::ComputeInlineInfoSize() const {
     + (number_of_stack_maps_with_inline_info_ * InlineInfo::kFixedSize);
 }
 
+StackMap StackMapStream::GetStackMapFromCodeInfo(const CodeInfo& code_info, size_t index) const {
+  // Instruction stack maps are stored first, then catch stack maps.
+  return (index < number_of_safepoint_stack_maps_)
+      ? code_info.GetSafepointStackMapAt(index, stack_map_encoding_)
+      : code_info.GetCatchStackMapAt(index - number_of_safepoint_stack_maps_, stack_map_encoding_);
+}
+
 void StackMapStream::FillIn(MemoryRegion region) {
   DCHECK_EQ(0u, current_entry_.dex_pc) << "EndStackMapEntry not called after BeginStackMapEntry";
   DCHECK_NE(0u, needed_size_) << "PrepareForFillIn not called before FillIn";
@@ -244,8 +260,11 @@ void StackMapStream::FillIn(MemoryRegion region) {
       inline_infos_start_, inline_info_size_);
 
   code_info.SetEncoding(stack_map_encoding_);
-  code_info.SetNumberOfStackMaps(stack_maps_.Size());
-  DCHECK_EQ(code_info.GetStackMapsSize(code_info.ExtractEncoding()), stack_maps_size_);
+
+  code_info.SetNumberOfSafepointStackMaps(number_of_safepoint_stack_maps_);
+  code_info.SetNumberOfCatchStackMaps(number_of_catch_stack_maps_);
+  DCHECK_EQ(code_info.GetSafepointStackMapsSize(code_info.ExtractEncoding()) +
+            code_info.GetCatchStackMapsSize(code_info.ExtractEncoding()), stack_maps_size_);
 
   // Set the Dex register location catalog.
   code_info.SetNumberOfLocationCatalogEntries(location_catalog_entries_.Size());
@@ -266,7 +285,7 @@ void StackMapStream::FillIn(MemoryRegion region) {
   uintptr_t next_dex_register_map_offset = 0;
   uintptr_t next_inline_info_offset = 0;
   for (size_t i = 0, e = stack_maps_.Size(); i < e; ++i) {
-    StackMap stack_map = code_info.GetStackMapAt(i, stack_map_encoding_);
+    StackMap stack_map = GetStackMapFromCodeInfo(code_info, i);
     StackMapEntry entry = stack_maps_.Get(i);
 
     stack_map.SetDexPc(stack_map_encoding_, entry.dex_pc);
@@ -285,8 +304,8 @@ void StackMapStream::FillIn(MemoryRegion region) {
         // If we have a hit reuse the offset.
         stack_map.SetDexRegisterMapOffset(
             stack_map_encoding_,
-            code_info.GetStackMapAt(entry.same_dex_register_map_as_, stack_map_encoding_)
-                     .GetDexRegisterMapOffset(stack_map_encoding_));
+            GetStackMapFromCodeInfo(code_info, entry.same_dex_register_map_as_)
+                .GetDexRegisterMapOffset(stack_map_encoding_));
       } else {
         // New dex registers maps should be added to the stack map.
         MemoryRegion register_region = dex_register_locations_region.Subregion(
