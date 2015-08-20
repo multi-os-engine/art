@@ -885,20 +885,13 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
                                            table_index);
   }
 
-  if (!SetupArgumentsForInvoke(invoke,
-                               number_of_vreg_arguments,
-                               args,
-                               register_index,
-                               is_range,
-                               descriptor,
-                               clinit_check)) {
-    return false;
-  }
-
-  current_block_->AddInstruction(invoke);
-  latest_result_ = invoke;
-
-  return true;
+  return SetupArgumentsAndAddInvoke(invoke,
+                                    number_of_vreg_arguments,
+                                    args,
+                                    register_index,
+                                    is_range,
+                                    descriptor,
+                                    clinit_check));
 }
 
 HClinitCheck* HGraphBuilder::ProcessClinitCheckForInvoke(
@@ -1047,7 +1040,7 @@ HInvokeStaticOrDirect::DispatchInfo HGraphBuilder::ComputeDispatchInfo(
     method_load_kind, code_ptr_location, method_load_data, direct_code_ptr };
 }
 
-bool HGraphBuilder::SetupArgumentsForInvoke(HInvoke* invoke,
+bool HGraphBuilder::SetupArgumentsAndAddInvoke(HInvoke* invoke,
                                             uint32_t number_of_vreg_arguments,
                                             uint32_t* args,
                                             uint32_t register_index,
@@ -1131,8 +1124,14 @@ bool HGraphBuilder::SetupArgumentsForInvoke(HInvoke* invoke,
     uint32_t orig_this_reg = is_range ? register_index : args[0];
     HInstruction* fake_string = LoadLocal(orig_this_reg, Primitive::kPrimNot);
     invoke->SetArgumentAt(argument_index, fake_string);
+    current_block_->AddInstruction(invoke);
     PotentiallySimplifyFakeString(orig_this_reg, invoke->GetDexPc(), invoke);
+  } else {
+    current_block_->AddInstruction(invoke);
   }
+
+  latest_result_ = invoke;
+
   return true;
 }
 
