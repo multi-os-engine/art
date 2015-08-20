@@ -349,6 +349,147 @@ void QuickExceptionHandler::DeoptimizeStack() {
   self_->SetException(Thread::GetDeoptimizationException());
 }
 
+class CatchPhiStackVisitor FINAL : public StackVisitor {
+ public:
+  CatchPhiStackVisitor(Thread* self, Context* context, QuickExceptionHandler* exception_handler)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      : StackVisitor(self, context, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
+        exception_handler_(exception_handler),
+        number_of_vregs_(exception_handler_->GetHandlerMethod()->GetCodeItem()->registers_size_),
+        code_info_(exception_handler_->GetHandlerMethod()->GetOptimizedCodeInfo()),
+        stack_map_encoding_(code_info_.ExtractEncoding()) {}
+
+  bool VisitFrame() OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+    if (GetCurrentQuickFrame() != exception_handler_->GetHandlerQuickFrame()) {
+      return true;  // Continue stack walk.
+    } else {
+      SetCatchPhiSlots();
+      return false;  // End stack walk.
+    }
+  }
+
+ private:
+  DexRegisterMap FindThrowVRegMap() SHARED_REQUIRES(Locks::mutator_lock_) {
+    // There might be multiple stack maps for each dex_pc. We find the thrower
+    // uniquely by the native_pc.
+    StackMap stack_map = code_info_.GetSafepointStackMapForNativePcOffset(
+        GetNativePcOffset(), stack_map_encoding_);
+    DCHECK(stack_map.IsValid());
+    return code_info_.GetDexRegisterMapOf(stack_map, stack_map_encoding_, number_of_vregs_);
+  }
+
+  DexRegisterMap FindCatchVRegMap() SHARED_REQUIRES(Locks::mutator_lock_) {
+    StackMap stack_map = code_info_.GetCatchStackMapForDexPc(
+        exception_handler_->GetHandlerDexPc(), stack_map_encoding_);
+    DCHECK(stack_map.IsValid());
+    return code_info_.GetDexRegisterMapOf(stack_map, stack_map_encoding_, number_of_vregs_);
+  }
+
+  bool HasCatchPhiForVReg(size_t vreg, const DexRegisterMap& catch_vreg_map) {
+    DexRegisterLocation::Kind location_kind =
+        catch_vreg_map.GetLocationKind(vreg, number_of_vregs_, code_info_, stack_map_encoding_);
+    if (location_kind == DexRegisterLocation::Kind::kNone) {
+      return false;
+    } else {
+      DCHECK(location_kind == DexRegisterLocation::Kind::kInStack);
+      return true;
+    }
+  }
+
+  DexRegisterLocation::Kind GetVRegLocationKind(uint16_t vreg, const DexRegisterMap& vreg_map) {
+    return vreg_map.GetLocationKind(vreg, number_of_vregs_, code_info_, stack_map_encoding_);
+  }
+
+  VRegKind ToVRegKind(DexRegisterLocation::Kind kind) {
+    // Slightly hacky since we cannot map DexRegisterLocationKind and VRegKind
+    // one to one. However, StackVisitor::GetVRegFromOptimizedCode only needs to
+    // distinguish between core/fpu registers and low/high bits on 64-bit.
+    switch (kind) {
+      case DexRegisterLocation::Kind::kConstant:
+      case DexRegisterLocation::Kind::kInStack:
+        // VRegKind is ignored.
+        return VRegKind::kUndefined;
+
+      case DexRegisterLocation::Kind::kInRegister:
+        // Selects core register. For 64-bit registers, selects low 32 bits.
+        return VRegKind::kLongLoVReg;
+
+      case DexRegisterLocation::Kind::kInRegisterHigh:
+        // Selects core register. For 64-bit registers, selects high 32 bits.
+        return VRegKind::kLongHiVReg;
+
+      case DexRegisterLocation::Kind::kInFpuRegister:
+        // Selects FPU register. For 64-bit registers, selects low 32 bits.
+        return VRegKind::kDoubleLoVReg;
+
+      case DexRegisterLocation::Kind::kInFpuRegisterHigh:
+        // Selects FPU register. For 64-bit registers, selects high 32 bits.
+        return VRegKind::kDoubleHiVReg;
+
+      default:
+        LOG(FATAL) << "Unexpected vreg location "
+                   << DexRegisterLocation::PrettyDescriptor(kind);
+        UNREACHABLE();
+    }
+  }
+
+  void SetCatchPhiSlots() SHARED_REQUIRES(Locks::mutator_lock_) {
+    DexRegisterMap throw_vreg_map = FindThrowVRegMap();
+    DexRegisterMap catch_vreg_map = FindCatchVRegMap();
+
+    for (uint16_t vreg = 0; vreg < number_of_vregs_; ++vreg) {
+      if (HasCatchPhiForVReg(vreg, catch_vreg_map)) {
+        // Get vreg value from its current location.
+        uint32_t vreg_value;
+        DexRegisterLocation::Kind location_kind = GetVRegLocationKind(vreg, throw_vreg_map);
+        bool success = GetVReg(GetMethod(), vreg, ToVRegKind(location_kind), &vreg_value);
+        CHECK(success) << "VReg " << vreg << " was optimized out ("
+                       << "method=" << PrettyMethod(GetMethod()) << ", "
+                       << "dex_pc=" << GetDexPc() << ", "
+                       << "native_pc_offset=" << GetNativePcOffset() << ")";
+
+        // Copy value to the catch phi's stack slot.
+        int32_t slot_offset = catch_vreg_map.GetStackOffsetInBytes(vreg,
+                                                                   number_of_vregs_,
+                                                                   code_info_,
+                                                                   stack_map_encoding_);
+        uint8_t* slot_address = reinterpret_cast<uint8_t*>(GetCurrentQuickFrame()) + slot_offset;
+        uint32_t* slot_ptr = reinterpret_cast<uint32_t*>(slot_address);
+        *slot_ptr = vreg_value;
+      }
+    }
+  }
+
+  QuickExceptionHandler* const exception_handler_;
+
+  size_t number_of_vregs_;
+  CodeInfo code_info_;
+  StackMapEncoding stack_map_encoding_;
+
+  DISALLOW_COPY_AND_ASSIGN(CatchPhiStackVisitor);
+};
+
+void QuickExceptionHandler::SetCatchPhiValues() {
+  DCHECK(!is_deoptimization_);
+
+  if (*GetHandlerQuickFrame() == nullptr) {
+    // This is an upcall exception and will be redelivered. Ignore now.
+    return;
+  }
+
+  if (GetHandlerMethod() != nullptr && !GetHandlerMethod()->IsOptimized(sizeof(void*))) {
+    // We only need to update the stack if the method was compiled with Optimizing.
+    return;
+  }
+
+  if (kDebugExceptionDelivery) {
+    self_->DumpStack(LOG(INFO) << "Setting catch phis: ");
+  }
+
+  CatchPhiStackVisitor visitor(self_, context_, this);
+  visitor.WalkStack(true);
+}
+
 // Unwinds all instrumentation stack frame prior to catch handler or upcall.
 class InstrumentationStackVisitor : public StackVisitor {
  public:

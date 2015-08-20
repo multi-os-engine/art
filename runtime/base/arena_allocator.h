@@ -77,6 +77,7 @@ enum ArenaAllocKind {
   kArenaAllocMoveOperands,
   kArenaAllocCodeBuffer,
   kArenaAllocStackMaps,
+  kArenaAllocMappingTables,
   kArenaAllocBaselineMaps,
   kArenaAllocOptimization,
   kNumArenaAllocKinds
