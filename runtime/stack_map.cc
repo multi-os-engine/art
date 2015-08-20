@@ -107,11 +107,13 @@ void CodeInfo::Dump(VariableIndentationOutputStream* vios,
                     bool dump_stack_maps) const {
   StackMapEncoding encoding = ExtractEncoding();
   uint32_t code_info_size = GetOverallSize();
-  size_t number_of_stack_maps = GetNumberOfStackMaps();
+  size_t number_of_safepoint_stack_maps = GetNumberOfSafepointStackMaps();
+  size_t number_of_catch_stack_maps = GetNumberOfCatchStackMaps();
   vios->Stream()
       << "Optimized CodeInfo (size=" << code_info_size
       << ", number_of_dex_registers=" << number_of_dex_registers
-      << ", number_of_stack_maps=" << number_of_stack_maps
+      << ", number_of_safepoint_stack_maps=" << number_of_safepoint_stack_maps
+      << ", number_of_catch_stack_maps=" << number_of_catch_stack_maps
       << ", has_inline_info=" << encoding.HasInlineInfo()
       << ", number_of_bytes_for_inline_info=" << encoding.NumberOfBytesForInlineInfo()
       << ", number_of_bytes_for_dex_register_map=" << encoding.NumberOfBytesForDexRegisterMap()
@@ -124,13 +126,24 @@ void CodeInfo::Dump(VariableIndentationOutputStream* vios,
   GetDexRegisterLocationCatalog(encoding).Dump(vios, *this);
   // Display stack maps along with (live) Dex register maps.
   if (dump_stack_maps) {
-    for (size_t i = 0; i < number_of_stack_maps; ++i) {
-      StackMap stack_map = GetStackMapAt(i, encoding);
+    for (size_t i = 0; i < number_of_safepoint_stack_maps; ++i) {
+      StackMap stack_map = GetSafepointStackMapAt(i, encoding);
       stack_map.Dump(vios,
                      *this,
                      encoding,
                      code_offset,
                      number_of_dex_registers,
+                     "",
+                     " " + std::to_string(i));
+    }
+    for (size_t i = 0; i < number_of_catch_stack_maps; ++i) {
+      StackMap stack_map = GetCatchStackMapAt(i, encoding);
+      stack_map.Dump(vios,
+                     *this,
+                     encoding,
+                     code_offset,
+                     number_of_dex_registers,
+                     "Catch",
                      " " + std::to_string(i));
     }
   }
@@ -180,9 +193,10 @@ void StackMap::Dump(VariableIndentationOutputStream* vios,
                     const StackMapEncoding& encoding,
                     uint32_t code_offset,
                     uint16_t number_of_dex_registers,
+                    const std::string& header_prefix,
                     const std::string& header_suffix) const {
   vios->Stream()
-      << "StackMap" << header_suffix
+      << header_prefix << "StackMap" << header_suffix
       << std::hex
       << " [native_pc=0x" << code_offset + GetNativePcOffset(encoding) << "]"
       << " (dex_pc=0x" << GetDexPc(encoding)
