@@ -1065,6 +1065,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
 
+#define FOR_EACH_CONCRETE_INSTRUCTION_MIPS(M)
+
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)
@@ -1075,6 +1077,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   FOR_EACH_CONCRETE_INSTRUCTION_COMMON(M)                               \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                                \
+  FOR_EACH_CONCRETE_INSTRUCTION_MIPS(M)                                 \
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)                               \
   FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
@@ -2783,7 +2786,7 @@ class HCompare : public HBinaryOperation {
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type type) {
-    // MIPS64 uses a runtime call for FP comparisons.
+    // MIPS and MIPS64 use a runtime call for FP comparisons.
     return Primitive::IsFloatingPointType(type) ? SideEffects::CanTriggerGC() : SideEffects::None();
   }
 

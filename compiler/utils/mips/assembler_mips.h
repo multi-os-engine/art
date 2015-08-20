@@ -29,13 +29,22 @@
 namespace art {
 namespace mips {
 
+enum class Condition {
+  kEq,
+  kNe,
+  kLt,
+  kLe,
+  kGt,
+  kGe
+};
+
 enum LoadOperandType {
   kLoadSignedByte,
   kLoadUnsignedByte,
   kLoadSignedHalfword,
   kLoadUnsignedHalfword,
   kLoadWord,
-  kLoadWordPair,
+  kLoadWordPair,  // TODO: Remove?
   kLoadSWord,
   kLoadDWord
 };
@@ -44,7 +53,7 @@ enum StoreOperandType {
   kStoreByte,
   kStoreHalfword,
   kStoreWord,
-  kStoreWordPair,
+  kStoreWordPair,  // TODO: Remove?
   kStoreSWord,
   kStoreDWord
 };
@@ -74,6 +83,9 @@ class MipsAssembler FINAL : public Assembler {
   void Xori(Register rt, Register rs, uint16_t imm16);
   void Nor(Register rd, Register rs, Register rt);
 
+  void Seb(Register rd, Register rt);
+  void Seh(Register rd, Register rt);
+
   void Sll(Register rd, Register rs, int shamt);
   void Srl(Register rd, Register rs, int shamt);
   void Sra(Register rd, Register rs, int shamt);
@@ -87,6 +99,7 @@ class MipsAssembler FINAL : public Assembler {
   void Lbu(Register rt, Register rs, uint16_t imm16);
   void Lhu(Register rt, Register rs, uint16_t imm16);
   void Lui(Register rt, uint16_t imm16);
+  void Sync(uint32_t stype);
   void Mfhi(Register rd);
   void Mflo(Register rd);
 
@@ -99,11 +112,16 @@ class MipsAssembler FINAL : public Assembler {
   void Slti(Register rt, Register rs, uint16_t imm16);
   void Sltiu(Register rt, Register rs, uint16_t imm16);
 
-  void Beq(Register rt, Register rs, uint16_t imm16);
-  void Bne(Register rt, Register rs, uint16_t imm16);
+  void Beq(Register rt, Register rs, uint16_t offset);
+  void Bne(Register rt, Register rs, uint16_t offset);
+  void Bltz(Register rs, uint16_t offset);
+  void Blez(Register rs, uint16_t offset);
+  void Bgtz(Register rs, uint16_t offset);
+  void Bgez(Register rs, uint16_t offset);
   void J(uint32_t address);
   void Jal(uint32_t address);
   void Jr(Register rs);
+  void Jalr(Register rd, Register rs);
   void Jalr(Register rs);
 
   void AddS(FRegister fd, FRegister fs, FRegister ft);
@@ -116,6 +134,13 @@ class MipsAssembler FINAL : public Assembler {
   void DivD(DRegister fd, DRegister fs, DRegister ft);
   void MovS(FRegister fd, FRegister fs);
   void MovD(DRegister fd, DRegister fs);
+  void NegS(FRegister fd, FRegister fs);
+  void NegD(DRegister fd, DRegister fs);
+
+  void Cvtsw(FRegister fd, FRegister fs);
+  void Cvtdw(DRegister fd, FRegister fs);
+  void Cvtsd(FRegister fd, DRegister fs);
+  void Cvtds(DRegister fd, FRegister fs);
 
   void Mfc1(Register rt, FRegister fs);
   void Mtc1(FRegister ft, Register rs);
@@ -135,20 +160,42 @@ class MipsAssembler FINAL : public Assembler {
 
   void AddConstant(Register rt, Register rs, int32_t value);
   void LoadImmediate(Register rt, int32_t value);
+  void LoadSImmediate(FRegister rt, float value);
+  void LoadDImmediate(DRegister rt, double value);
 
   void EmitLoad(ManagedRegister m_dst, Register src_register, int32_t src_offset, size_t size);
   void LoadFromOffset(LoadOperandType type, Register reg, Register base, int32_t offset);
   void LoadSFromOffset(FRegister reg, Register base, int32_t offset);
   void LoadDFromOffset(DRegister reg, Register base, int32_t offset);
   void StoreToOffset(StoreOperandType type, Register reg, Register base, int32_t offset);
-  void StoreFToOffset(FRegister reg, Register base, int32_t offset);
+  void StoreSToOffset(FRegister reg, Register base, int32_t offset);
   void StoreDToOffset(DRegister reg, Register base, int32_t offset);
+
+  // Label-aware branch and jump instructions.
+  void Beq(Register rt, Register rs, Label* label);
+  void Bne(Register rt, Register rs, Label* label);
+  void Bltz(Register rs, Label* label);
+  void Blez(Register rs, Label* label);
+  void Bgtz(Register rs, Label* label);
+  void Bgez(Register rs, Label* label);
+  void BranchOnLowerThan(Register rt, Register rs, Label* label);
+  void BranchOnLowerThanOrEqual(Register rt, Register rs, Label* label);
+  void BranchOnGreaterThan(Register rt, Register rs, Label* label);
+  void BranchOnGreaterThanOrEqual(Register rt, Register rs, Label* label);
+  void BranchOnLowerThanUnsigned(Register rt, Register rs, Label* label);
+  void BranchOnLowerThanOrEqualUnsigned(Register rt, Register rs, Label* label);
+  void BranchOnGreaterThanUnsigned(Register rt, Register rs, Label* label);
+  void BranchOnGreaterThanOrEqualUnsigned(Register rt, Register rs, Label* label);
+  void J(Label* label);
+  void Jal(Label* label);
+
+  void Bind(Label* label, bool is_jump);
 
   // Emit data (e.g. encoded instruction or immediate) to the instruction stream.
   void Emit(int32_t value);
-  void EmitBranch(Register rt, Register rs, Label* label, bool equal);
+  void EmitBranch(Register rt, Register rs, Label* label, Condition condition);
+  void EmitBranchCompareToZero(Register rs, Label* label, Condition condition);
   void EmitJump(Label* label, bool link);
-  void Bind(Label* label, bool is_jump);
 
   //
   // Overridden common assembler high-level functionality
