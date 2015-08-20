@@ -162,27 +162,41 @@ void Thread::ResetQuickAllocEntryPointsForThread() {
   ResetQuickAllocEntryPoints(&tlsPtr_.quick_entrypoints);
 }
 
-class DeoptimizationReturnValueRecord {
+class DeoptimizationContextRecord {
  public:
-  DeoptimizationReturnValueRecord(const JValue& ret_val,
-                                  bool is_reference,
-                                  DeoptimizationReturnValueRecord* link)
-      : ret_val_(ret_val), is_reference_(is_reference), link_(link) {}
+  DeoptimizationContextRecord(const JValue& ret_val, bool is_reference,
+                              mirror::Throwable* pending_exception,
+                              DeoptimizationContextRecord* link)
+      : ret_val_(ret_val), is_reference_(is_reference), pending_exception_(pending_exception),
+        link_(link) {}
 
   JValue GetReturnValue() const { return ret_val_; }
   bool IsReference() const { return is_reference_; }
-  DeoptimizationReturnValueRecord* GetLink() const { return link_; }
-  mirror::Object** GetGCRoot() {
+  mirror::Throwable* GetPendingException() const { return pending_exception_; }
+  DeoptimizationContextRecord* GetLink() const { return link_; }
+  mirror::Object** GetReturnValueAsGCRoot() {
     DCHECK(is_reference_);
     return ret_val_.GetGCRoot();
   }
+  mirror::Object** GetPendingExceptionAsGCRoot() {
+    return reinterpret_cast<mirror::Object**>(&pending_exception_);
+  }
 
  private:
+  // The value returned by the method at the top of the stack before deoptimization.
   JValue ret_val_;
-  const bool is_reference_;
-  DeoptimizationReturnValueRecord* const link_;
 
-  DISALLOW_COPY_AND_ASSIGN(DeoptimizationReturnValueRecord);
+  // Indicates whether the returned value is a reference. If so, the GC will visit it.
+  const bool is_reference_;
+
+  // The exception that was pending before deoptimization (or null if there was no pending
+  // exception).
+  mirror::Throwable* pending_exception_;
+
+  // A link to the previous DeoptimizationContextRecord.
+  DeoptimizationContextRecord* const link_;
+
+  DISALLOW_COPY_AND_ASSIGN(DeoptimizationContextRecord);
 };
 
 class StackedShadowFrameRecord {
@@ -206,22 +220,25 @@ class StackedShadowFrameRecord {
   DISALLOW_COPY_AND_ASSIGN(StackedShadowFrameRecord);
 };
 
-void Thread::PushAndClearDeoptimizationReturnValue() {
-  DeoptimizationReturnValueRecord* record = new DeoptimizationReturnValueRecord(
+void Thread::PushAndClearDeoptimizationContext() {
+  DeoptimizationContextRecord* record = new DeoptimizationContextRecord(
       tls64_.deoptimization_return_value,
       tls32_.deoptimization_return_value_is_reference,
+      tlsPtr_.deoptimization_exception_to_restore,
       tlsPtr_.deoptimization_return_value_stack);
   tlsPtr_.deoptimization_return_value_stack = record;
+  // TODO merge both of them.
   ClearDeoptimizationReturnValue();
+  ClearDeoptimizationPendingException();
 }
 
-JValue Thread::PopDeoptimizationReturnValue() {
-  DeoptimizationReturnValueRecord* record = tlsPtr_.deoptimization_return_value_stack;
+void Thread::PopDeoptimizationContext(JValue* result, mirror::Throwable** exception) {
+  DeoptimizationContextRecord* record = tlsPtr_.deoptimization_return_value_stack;
   DCHECK(record != nullptr);
   tlsPtr_.deoptimization_return_value_stack = record->GetLink();
-  JValue ret_val(record->GetReturnValue());
+  result->SetJ(record->GetReturnValue().GetJ());
+  *exception = record->GetPendingException();
   delete record;
-  return ret_val;
 }
 
 void Thread::PushStackedShadowFrame(ShadowFrame* sf, StackedShadowFrameType type) {
@@ -2593,7 +2610,7 @@ void Thread::VisitRoots(RootVisitor* visitor) {
   visitor->VisitRootIfNonNull(&tlsPtr_.opeer, RootInfo(kRootThreadObject, thread_id));
   if (tlsPtr_.exception != nullptr && tlsPtr_.exception != GetDeoptimizationException()) {
     visitor->VisitRoot(reinterpret_cast<mirror::Object**>(&tlsPtr_.exception),
-                   RootInfo(kRootNativeStack, thread_id));
+                       RootInfo(kRootNativeStack, thread_id));
   }
   visitor->VisitRootIfNonNull(&tlsPtr_.monitor_enter_object, RootInfo(kRootNativeStack, thread_id));
   tlsPtr_.jni_env->locals.VisitRoots(visitor, RootInfo(kRootJNILocal, thread_id));
@@ -2601,6 +2618,16 @@ void Thread::VisitRoots(RootVisitor* visitor) {
   HandleScopeVisitRoots(visitor, thread_id);
   if (tlsPtr_.debug_invoke_req != nullptr) {
     tlsPtr_.debug_invoke_req->VisitRoots(visitor, RootInfo(kRootDebugger, thread_id));
+  }
+  // Visit roots for deoptimization.
+  if (tls32_.deoptimization_return_value_is_reference) {
+    visitor->VisitRootIfNonNull(tls64_.deoptimization_return_value.GetGCRoot(),
+                                RootInfo(kRootThreadObject, thread_id));
+  }
+  if (tlsPtr_.deoptimization_exception_to_restore != nullptr) {
+    visitor->VisitRoot(
+        reinterpret_cast<mirror::Object**>(&tlsPtr_.deoptimization_exception_to_restore),
+        RootInfo(kRootThreadObject, thread_id));
   }
   if (tlsPtr_.stacked_shadow_frame_record != nullptr) {
     RootCallbackVisitor visitor_to_callback(visitor, thread_id);
@@ -2616,13 +2643,15 @@ void Thread::VisitRoots(RootVisitor* visitor) {
     }
   }
   if (tlsPtr_.deoptimization_return_value_stack != nullptr) {
-    for (DeoptimizationReturnValueRecord* record = tlsPtr_.deoptimization_return_value_stack;
+    for (DeoptimizationContextRecord* record = tlsPtr_.deoptimization_return_value_stack;
          record != nullptr;
          record = record->GetLink()) {
       if (record->IsReference()) {
-        visitor->VisitRootIfNonNull(record->GetGCRoot(),
-            RootInfo(kRootThreadObject, thread_id));
+        visitor->VisitRootIfNonNull(record->GetReturnValueAsGCRoot(),
+                                    RootInfo(kRootThreadObject, thread_id));
       }
+      visitor->VisitRootIfNonNull(record->GetPendingExceptionAsGCRoot(),
+                                  RootInfo(kRootThreadObject, thread_id));
     }
   }
   for (auto* verifier = tlsPtr_.method_verifier; verifier != nullptr; verifier = verifier->link_) {
