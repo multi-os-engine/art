@@ -919,90 +919,63 @@ void IntrinsicCodeGeneratorARM::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
-void IntrinsicLocationsBuilderARM::VisitStringEquals(HInvoke* invoke) {
+void IntrinsicLocationsBuilderARM::VisitStringEqualsLoop(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                             LocationSummary::kNoCall,
                                                             kIntrinsified);
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
-  // Temporary registers to store lengths of strings and for calculations.
-  // Using instruction cbz requires a low register, so explicitly set a temp to be R0.
-  locations->AddTemp(Location::RegisterLocation(R0));
+  // Using instruction cbz requires a low register, so explicitly set count input to be R0.
+  locations->SetInAt(2, Location::RegisterLocation(R0));
+  // Temporary registers for calculations.
   locations->AddTemp(Location::RequiresRegister());
   locations->AddTemp(Location::RequiresRegister());
 
   locations->SetOut(Location::RequiresRegister());
 }
 
-void IntrinsicCodeGeneratorARM::VisitStringEquals(HInvoke* invoke) {
+void IntrinsicCodeGeneratorARM::VisitStringEqualsLoop(HInvoke* invoke) {
   ArmAssembler* assembler = GetAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
   Register str = locations->InAt(0).AsRegister<Register>();
   Register arg = locations->InAt(1).AsRegister<Register>();
+  Register count = locations->InAt(2).AsRegister<Register>();
   Register out = locations->Out().AsRegister<Register>();
 
   Register temp = locations->GetTemp(0).AsRegister<Register>();
   Register temp1 = locations->GetTemp(1).AsRegister<Register>();
-  Register temp2 = locations->GetTemp(2).AsRegister<Register>();
 
   Label loop;
   Label end;
   Label return_true;
   Label return_false;
 
-  // Get offsets of count, value, and class fields within a string object.
-  const uint32_t count_offset = mirror::String::CountOffset().Uint32Value();
+  // Get offset of value field within a string object.
   const uint32_t value_offset = mirror::String::ValueOffset().Uint32Value();
-  const uint32_t class_offset = mirror::Object::ClassOffset().Uint32Value();
 
-  // Note that the null check must have been done earlier.
-  DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
-
-  // Check if input is null, return false if it is.
-  __ CompareAndBranchIfZero(arg, &return_false);
-
-  // Instanceof check for the argument by comparing class fields.
-  // All string objects must have the same type since String cannot be subclassed.
-  // Receiver must be a string object, so its class field is equal to all strings' class fields.
-  // If the argument is a string object, its class field must be equal to receiver's class field.
-  __ ldr(temp, Address(str, class_offset));
-  __ ldr(temp1, Address(arg, class_offset));
-  __ cmp(temp, ShifterOperand(temp1));
-  __ b(&return_false, NE);
-
-  // Load lengths of this and argument strings.
-  __ ldr(temp, Address(str, count_offset));
-  __ ldr(temp1, Address(arg, count_offset));
-  // Check if lengths are equal, return false if they're not.
-  __ cmp(temp, ShifterOperand(temp1));
-  __ b(&return_false, NE);
   // Return true if both strings are empty.
   __ cbz(temp, &return_true);
-
-  // Reference equality check, return true if same reference.
-  __ cmp(str, ShifterOperand(arg));
-  __ b(&return_true, EQ);
 
   // Assertions that must hold in order to compare strings 2 characters at a time.
   DCHECK_ALIGNED(value_offset, 4);
   static_assert(IsAligned<4>(kObjectAlignment), "String of odd length is not zero padded");
 
   // temp cannot overflow because we cannot allocate a String object with size 4GiB or greater.
-  __ add(temp, temp, ShifterOperand(temp));
-  __ LoadImmediate(temp1, value_offset);
-  __ add(temp, temp, ShifterOperand(value_offset));
+  __ add(count, count, ShifterOperand(count));
+  __ LoadImmediate(temp, value_offset);
+  __ add(count, count, ShifterOperand(value_offset));
 
   // Loop to compare strings 2 characters at a time starting at the front of the string.
   // Ok to do this because strings with an odd length are zero-padded.
   __ Bind(&loop);
-  __ ldr(out, Address(str, temp1));
-  __ ldr(temp2, Address(arg, temp1));
-  __ cmp(out, ShifterOperand(temp2));
+  __ ldr(out, Address(str, temp));
+  __ ldr(temp1, Address(arg, temp));
+  __ cmp(out, ShifterOperand(temp1));
   __ b(&return_false, NE);
-  __ add(temp1, temp1, ShifterOperand(sizeof(uint32_t)));
-  __ cmp(temp1, ShifterOperand(temp));
+  __ add(temp, temp, ShifterOperand(sizeof(uint32_t)));
+  __ cmp(temp, ShifterOperand(count));
   __ b(&loop, LO);
 
   // Return true and exit the function.

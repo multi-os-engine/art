@@ -855,64 +855,38 @@ void IntrinsicCodeGeneratorX86_64::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
-void IntrinsicLocationsBuilderX86_64::VisitStringEquals(HInvoke* invoke) {
+void IntrinsicLocationsBuilderX86_64::VisitStringEqualsLoop(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                             LocationSummary::kNoCall,
                                                             kIntrinsified);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetInAt(1, Location::RequiresRegister());
+  locations->SetInAt(2, Location::RegisterLocation(RCX));
 
-  // Request temporary registers, RCX and RDI needed for repe_cmpsq instruction.
-  locations->AddTemp(Location::RegisterLocation(RCX));
+  // Request temporary register, RDI needed for repe_cmpsq instruction.
   locations->AddTemp(Location::RegisterLocation(RDI));
 
   // Set output, RSI needed for repe_cmpsq instruction anyways.
   locations->SetOut(Location::RegisterLocation(RSI), Location::kOutputOverlap);
 }
 
-void IntrinsicCodeGeneratorX86_64::VisitStringEquals(HInvoke* invoke) {
+void IntrinsicCodeGeneratorX86_64::VisitStringEqualsLoop(HInvoke* invoke) {
   X86_64Assembler* assembler = GetAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
   CpuRegister str = locations->InAt(0).AsRegister<CpuRegister>();
   CpuRegister arg = locations->InAt(1).AsRegister<CpuRegister>();
-  CpuRegister rcx = locations->GetTemp(0).AsRegister<CpuRegister>();
-  CpuRegister rdi = locations->GetTemp(1).AsRegister<CpuRegister>();
+  CpuRegister rcx = locations->InAt(2).AsRegister<CpuRegister>();
+  CpuRegister rdi = locations->GetTemp(0).AsRegister<CpuRegister>();
   CpuRegister rsi = locations->Out().AsRegister<CpuRegister>();
 
   Label end;
   Label return_true;
   Label return_false;
 
-  // Get offsets of count, value, and class fields within a string object.
-  const uint32_t count_offset = mirror::String::CountOffset().Uint32Value();
+  // Get offset of value field within a string object.
   const uint32_t value_offset = mirror::String::ValueOffset().Uint32Value();
-  const uint32_t class_offset = mirror::Object::ClassOffset().Uint32Value();
 
-  // Note that the null check must have been done earlier.
-  DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
-
-  // Check if input is null, return false if it is.
-  __ testl(arg, arg);
-  __ j(kEqual, &return_false);
-
-  // Instanceof check for the argument by comparing class fields.
-  // All string objects must have the same type since String cannot be subclassed.
-  // Receiver must be a string object, so its class field is equal to all strings' class fields.
-  // If the argument is a string object, its class field must be equal to receiver's class field.
-  __ movl(rcx, Address(str, class_offset));
-  __ cmpl(rcx, Address(arg, class_offset));
-  __ j(kNotEqual, &return_false);
-
-  // Reference equality check, return true if same reference.
-  __ cmpl(str, arg);
-  __ j(kEqual, &return_true);
-
-  // Load length of receiver string.
-  __ movl(rcx, Address(str, count_offset));
-  // Check if lengths are equal, return false if they're not.
-  __ cmpl(rcx, Address(arg, count_offset));
-  __ j(kNotEqual, &return_false);
   // Return true if both strings are empty.
   __ testl(rcx, rcx);
   __ j(kEqual, &return_true);

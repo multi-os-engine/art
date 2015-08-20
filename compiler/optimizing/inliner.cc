@@ -40,7 +40,7 @@
 
 namespace art {
 
-static constexpr size_t kMaximumNumberOfHInstructions = 12;
+static constexpr size_t kMaximumNumberOfHInstructions = 15;
 
 void HInliner::Run() {
   if (graph_->IsDebuggable()) {
@@ -228,7 +228,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
   size_t inline_max_code_units = compiler_driver_->GetCompilerOptions().GetInlineMaxCodeUnits();
   if (code_item->insns_size_in_code_units_ > inline_max_code_units) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
-                   << " is too big to inline";
+                   << " is too big to inline ";
     return false;
   }
 

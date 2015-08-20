@@ -214,8 +214,8 @@ static Intrinsics GetIntrinsic(InlineMethod method, InstructionSet instruction_s
       return Intrinsics::kStringCharAt;
     case kIntrinsicCompareTo:
       return Intrinsics::kStringCompareTo;
-    case kIntrinsicEquals:
-      return Intrinsics::kStringEquals;
+    case kIntrinsicEqualsLoop:
+      return Intrinsics::kStringEqualsLoop;
     case kIntrinsicGetCharsNoCheck:
       return Intrinsics::kStringGetCharsNoCheck;
     case kIntrinsicIsEmptyOrLength:

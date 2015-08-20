@@ -56,7 +56,7 @@ static constexpr bool kIntrinsicIsStatic[] = {
     false,  // kIntrinsicReferenceGetReferent
     false,  // kIntrinsicCharAt
     false,  // kIntrinsicCompareTo
-    false,  // kIntrinsicEquals
+    false,  // kIntrinsicEqualsLoop
     false,  // kIntrinsicGetCharsNoCheck
     false,  // kIntrinsicIsEmptyOrLength
     false,  // kIntrinsicIndexOf
@@ -96,7 +96,7 @@ static_assert(kIntrinsicIsStatic[kIntrinsicRoundDouble], "RoundDouble must be st
 static_assert(!kIntrinsicIsStatic[kIntrinsicReferenceGetReferent], "Get must not be static");
 static_assert(!kIntrinsicIsStatic[kIntrinsicCharAt], "CharAt must not be static");
 static_assert(!kIntrinsicIsStatic[kIntrinsicCompareTo], "CompareTo must not be static");
-static_assert(!kIntrinsicIsStatic[kIntrinsicEquals], "String equals must not be static");
+static_assert(!kIntrinsicIsStatic[kIntrinsicEqualsLoop], "String equals loop must not be static");
 static_assert(!kIntrinsicIsStatic[kIntrinsicGetCharsNoCheck], "GetCharsNoCheck must not be static");
 static_assert(!kIntrinsicIsStatic[kIntrinsicIsEmptyOrLength], "IsEmptyOrLength must not be static");
 static_assert(!kIntrinsicIsStatic[kIntrinsicIndexOf], "IndexOf must not be static");
@@ -194,7 +194,7 @@ const char* const DexFileMethodInliner::kNameCacheNames[] = {
     "getReferent",           // kNameCacheReferenceGet
     "charAt",                // kNameCacheCharAt
     "compareTo",             // kNameCacheCompareTo
-    "equals",                // kNameCacheEquals
+    "equalsLoop",            // kNameCacheEqualsLoop
     "getCharsNoCheck",       // kNameCacheGetCharsNoCheck
     "isEmpty",               // kNameCacheIsEmpty
     "indexOf",               // kNameCacheIndexOf
@@ -287,8 +287,8 @@ const DexFileMethodInliner::ProtoDef DexFileMethodInliner::kProtoCacheDefs[] = {
     { kClassCacheVoid, 2, { kClassCacheLong, kClassCacheLong } },
     // kProtoCacheJS_V
     { kClassCacheVoid, 2, { kClassCacheLong, kClassCacheShort } },
-    // kProtoCacheObject_Z
-    { kClassCacheBoolean, 1, { kClassCacheJavaLangObject } },
+    // kProtoCacheStringI_Z
+    { kClassCacheBoolean, 2, { kClassCacheJavaLangString, kClassCacheInt } },
     // kProtoCacheObjectJII_Z
     { kClassCacheBoolean, 4, { kClassCacheJavaLangObject, kClassCacheLong,
         kClassCacheInt, kClassCacheInt } },
@@ -423,7 +423,7 @@ const DexFileMethodInliner::IntrinsicDef DexFileMethodInliner::kIntrinsicMethods
 
     INTRINSIC(JavaLangString, CharAt, I_C, kIntrinsicCharAt, 0),
     INTRINSIC(JavaLangString, CompareTo, String_I, kIntrinsicCompareTo, 0),
-    INTRINSIC(JavaLangString, Equals, Object_Z, kIntrinsicEquals, 0),
+    INTRINSIC(JavaLangString, EqualsLoop, StringI_Z, kIntrinsicEqualsLoop, 0),
     INTRINSIC(JavaLangString, GetCharsNoCheck, IICharArrayI_V, kIntrinsicGetCharsNoCheck, 0),
     INTRINSIC(JavaLangString, IsEmpty, _Z, kIntrinsicIsEmptyOrLength, kIntrinsicFlagIsEmpty),
     INTRINSIC(JavaLangString, IndexOf, II_I, kIntrinsicIndexOf, kIntrinsicFlagNone),
@@ -594,7 +594,7 @@ bool DexFileMethodInliner::GenIntrinsic(Mir2Lir* backend, CallInfo* info) {
       return backend->GenInlinedCharAt(info);
     case kIntrinsicCompareTo:
       return backend->GenInlinedStringCompareTo(info);
-    case kIntrinsicEquals:
+    case kIntrinsicEqualsLoop:
       // Quick does not implement this intrinsic.
       return false;
     case kIntrinsicGetCharsNoCheck:
