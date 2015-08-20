@@ -282,7 +282,6 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   }
 
   uint16_t GetNumberOfVRegs() const {
-    DCHECK(!in_ssa_form_);
     return number_of_vregs_;
   }
 
@@ -2187,6 +2186,8 @@ class HConstant : public HExpression<0> {
   virtual bool IsZero() const { return false; }
   virtual bool IsOne() const { return false; }
 
+  virtual uint64_t GetValueAsUint64() const = 0;
+
   DECLARE_INSTRUCTION(Constant);
 
  private:
@@ -2198,6 +2199,8 @@ class HNullConstant : public HConstant {
   bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
+
+  uint64_t GetValueAsUint64() const OVERRIDE { return 0; }
 
   size_t ComputeHashCode() const OVERRIDE { return 0; }
 
@@ -2215,6 +2218,8 @@ class HNullConstant : public HConstant {
 class HIntConstant : public HConstant {
  public:
   int32_t GetValue() const { return value_; }
+
+  uint64_t GetValueAsUint64() const OVERRIDE { return static_cast<uint64_t>(value_); }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     DCHECK(other->IsIntConstant());
@@ -2246,6 +2251,8 @@ class HIntConstant : public HConstant {
 class HLongConstant : public HConstant {
  public:
   int64_t GetValue() const { return value_; }
+
+  uint64_t GetValueAsUint64() const OVERRIDE { return value_; }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     DCHECK(other->IsLongConstant());
@@ -2866,10 +2873,13 @@ class HFloatConstant : public HConstant {
  public:
   float GetValue() const { return value_; }
 
+  uint64_t GetValueAsUint64() const OVERRIDE {
+    return static_cast<uint64_t>(bit_cast<uint32_t, float>(value_));
+  }
+
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     DCHECK(other->IsFloatConstant());
-    return bit_cast<uint32_t, float>(other->AsFloatConstant()->value_) ==
-        bit_cast<uint32_t, float>(value_);
+    return other->AsFloatConstant()->GetValueAsUint64() == GetValueAsUint64();
   }
 
   size_t ComputeHashCode() const OVERRIDE { return static_cast<size_t>(GetValue()); }
@@ -2907,10 +2917,11 @@ class HDoubleConstant : public HConstant {
  public:
   double GetValue() const { return value_; }
 
+  uint64_t GetValueAsUint64() const OVERRIDE { return bit_cast<uint64_t, double>(value_); }
+
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     DCHECK(other->IsDoubleConstant());
-    return bit_cast<uint64_t, double>(other->AsDoubleConstant()->value_) ==
-        bit_cast<uint64_t, double>(value_);
+    return other->AsDoubleConstant()->GetValueAsUint64() == GetValueAsUint64();
   }
 
   size_t ComputeHashCode() const OVERRIDE { return static_cast<size_t>(GetValue()); }
@@ -4002,6 +4013,13 @@ class HPhi : public HInstruction {
   void SetLive() { is_live_ = true; }
   bool IsDead() const { return !is_live_; }
   bool IsLive() const { return is_live_; }
+
+  bool IsVRegEquivalentOf(HInstruction* other) const {
+    return other != nullptr
+        && other->IsPhi()
+        && other->AsPhi()->GetBlock() == GetBlock()
+        && other->AsPhi()->GetRegNumber() == GetRegNumber();
+  }
 
   // Returns the next equivalent phi (starting from the current one) or null if there is none.
   // An equivalent phi is a phi having the same dex register and type.
