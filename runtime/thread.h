@@ -77,7 +77,7 @@ class ClassLinker;
 class Closure;
 class Context;
 struct DebugInvokeReq;
-class DeoptimizationReturnValueRecord;
+class DeoptimizationContextRecord;
 class DexFile;
 class JavaVMExt;
 struct JNIEnvExt;
@@ -831,8 +831,15 @@ class Thread {
     tls64_.deoptimization_return_value.SetJ(0);
     tls32_.deoptimization_return_value_is_reference = false;
   }
-  void PushAndClearDeoptimizationReturnValue();
-  JValue PopDeoptimizationReturnValue();
+  void SetDeoptimizationPendingException(mirror::Throwable* exception) {
+    CHECK(exception != GetDeoptimizationException());
+    tlsPtr_.deoptimization_exception_to_restore = exception;
+  }
+  void ClearDeoptimizationPendingException() {
+    tlsPtr_.deoptimization_exception_to_restore = nullptr;
+  }
+  void PushAndClearDeoptimizationContext();
+  void PopDeoptimizationContext(JValue* result, mirror::Throwable** exception);
   void PushStackedShadowFrame(ShadowFrame* sf, StackedShadowFrameType type);
   ShadowFrame* PopStackedShadowFrame(StackedShadowFrameType type);
 
@@ -1182,6 +1189,7 @@ class Thread {
       top_handle_scope(nullptr), class_loader_override(nullptr), long_jump_context(nullptr),
       instrumentation_stack(nullptr), debug_invoke_req(nullptr), single_step_control(nullptr),
       stacked_shadow_frame_record(nullptr), deoptimization_return_value_stack(nullptr),
+      deoptimization_exception_to_restore(nullptr),
       name(nullptr), pthread_self(0),
       last_no_thread_suspension_cause(nullptr), thread_local_start(nullptr),
       thread_local_pos(nullptr), thread_local_end(nullptr), thread_local_objects(0),
@@ -1265,7 +1273,10 @@ class Thread {
     StackedShadowFrameRecord* stacked_shadow_frame_record;
 
     // Deoptimization return value record stack.
-    DeoptimizationReturnValueRecord* deoptimization_return_value_stack;
+    DeoptimizationContextRecord* deoptimization_return_value_stack;
+
+    // The exception that was pending before deoptimization.
+    mirror::Throwable* deoptimization_exception_to_restore;
 
     // A cached copy of the java.lang.Thread's name.
     std::string* name;
