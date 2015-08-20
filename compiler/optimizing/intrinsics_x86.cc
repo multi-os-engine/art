@@ -946,7 +946,7 @@ void IntrinsicCodeGeneratorX86::VisitStringCompareTo(HInvoke* invoke) {
   __ Bind(slow_path->GetExitLabel());
 }
 
-void IntrinsicLocationsBuilderX86::VisitStringEquals(HInvoke* invoke) {
+void IntrinsicLocationsBuilderX86::VisitStringEqualsLoop(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                             LocationSummary::kNoCall,
                                                             kIntrinsified);
@@ -961,7 +961,7 @@ void IntrinsicLocationsBuilderX86::VisitStringEquals(HInvoke* invoke) {
   locations->SetOut(Location::RegisterLocation(ESI), Location::kOutputOverlap);
 }
 
-void IntrinsicCodeGeneratorX86::VisitStringEquals(HInvoke* invoke) {
+void IntrinsicCodeGeneratorX86::VisitStringEqualsLoop(HInvoke* invoke) {
   X86Assembler* assembler = GetAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
@@ -978,32 +978,9 @@ void IntrinsicCodeGeneratorX86::VisitStringEquals(HInvoke* invoke) {
   // Get offsets of count, value, and class fields within a string object.
   const uint32_t count_offset = mirror::String::CountOffset().Uint32Value();
   const uint32_t value_offset = mirror::String::ValueOffset().Uint32Value();
-  const uint32_t class_offset = mirror::Object::ClassOffset().Uint32Value();
-
-  // Note that the null check must have been done earlier.
-  DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
-
-  // Check if input is null, return false if it is.
-  __ testl(arg, arg);
-  __ j(kEqual, &return_false);
-
-  // Instanceof check for the argument by comparing class fields.
-  // All string objects must have the same type since String cannot be subclassed.
-  // Receiver must be a string object, so its class field is equal to all strings' class fields.
-  // If the argument is a string object, its class field must be equal to receiver's class field.
-  __ movl(ecx, Address(str, class_offset));
-  __ cmpl(ecx, Address(arg, class_offset));
-  __ j(kNotEqual, &return_false);
-
-  // Reference equality check, return true if same reference.
-  __ cmpl(str, arg);
-  __ j(kEqual, &return_true);
 
   // Load length of receiver string.
   __ movl(ecx, Address(str, count_offset));
-  // Check if lengths are equal, return false if they're not.
-  __ cmpl(ecx, Address(arg, count_offset));
-  __ j(kNotEqual, &return_false);
   // Return true if both strings are empty.
   __ testl(ecx, ecx);
   __ j(kEqual, &return_true);
