@@ -22,7 +22,8 @@ void StackMapStream::BeginStackMapEntry(uint32_t dex_pc,
                                         uint32_t register_mask,
                                         BitVector* sp_mask,
                                         uint32_t num_dex_registers,
-                                        uint8_t inlining_depth) {
+                                        uint8_t inlining_depth,
+                                        bool is_catch_stack_map) {
   DCHECK_EQ(0u, current_entry_.dex_pc) << "EndStackMapEntry not called after BeginStackMapEntry";
   current_entry_.dex_pc = dex_pc;
   current_entry_.native_pc_offset = native_pc_offset;
@@ -51,6 +52,14 @@ void StackMapStream::BeginStackMapEntry(uint32_t dex_pc,
   dex_pc_max_ = std::max(dex_pc_max_, dex_pc);
   register_mask_max_ = std::max(register_mask_max_, register_mask);
   current_dex_register_ = 0;
+
+  if (is_catch_stack_map) {
+    number_of_catch_stack_maps_++;
+  } else {
+    DCHECK_EQ(number_of_catch_stack_maps_, 0u)
+        << "Safepoint stack maps must be at the beginning of the stream";
+    number_of_safepoint_stack_maps_++;
+  }
 }
 
 void StackMapStream::EndStackMapEntry() {
@@ -244,7 +253,8 @@ void StackMapStream::FillIn(MemoryRegion region) {
       inline_infos_start_, inline_info_size_);
 
   code_info.SetEncoding(stack_map_encoding_);
-  code_info.SetNumberOfStackMaps(stack_maps_.Size());
+
+  code_info.SetNumberOfStackMaps(number_of_safepoint_stack_maps_ + number_of_catch_stack_maps_);
   DCHECK_EQ(code_info.GetStackMapsSize(code_info.ExtractEncoding()), stack_maps_size_);
 
   // Set the Dex register location catalog.
@@ -286,7 +296,7 @@ void StackMapStream::FillIn(MemoryRegion region) {
         stack_map.SetDexRegisterMapOffset(
             stack_map_encoding_,
             code_info.GetStackMapAt(entry.same_dex_register_map_as_, stack_map_encoding_)
-                     .GetDexRegisterMapOffset(stack_map_encoding_));
+                .GetDexRegisterMapOffset(stack_map_encoding_));
       } else {
         // New dex registers maps should be added to the stack map.
         MemoryRegion register_region = dex_register_locations_region.Subregion(
