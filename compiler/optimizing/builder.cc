@@ -817,11 +817,20 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
                                            &table_index,
                                            &direct_code,
                                            &direct_method)) {
-    VLOG(compiler) << "Did not compile "
-                   << PrettyMethod(dex_compilation_unit_->GetDexMethodIndex(), *dex_file_)
-                   << " because a method call could not be resolved";
-    MaybeRecordStat(MethodCompilationStat::kNotCompiledUnresolvedMethod);
-    return false;
+    MaybeRecordStat(MethodCompilationStat::kUnresolvedMethod);
+    HInvoke* invoke = new (arena_) HInvokeUnresolved(arena_,
+                                                     number_of_arguments,
+                                                     return_type,
+                                                     dex_pc,
+                                                     method_idx,
+                                                     original_invoke_type);
+    return SetupArgumentsAndAddInvoke(invoke,
+                                      number_of_vreg_arguments,
+                                      args,
+                                      register_index,
+                                      is_range,
+                                      descriptor,
+                                      nullptr /* clinit_check */);
   }
 
   DCHECK(optimized_invoke_type != kSuper);
@@ -2417,6 +2426,7 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
         HFakeString* fake_string = new (arena_) HFakeString();
         current_block_->AddInstruction(fake_string);
         UpdateLocal(register_index, fake_string);
+        // TODO: What if the String init is unresolved?.
       } else {
         QuickEntrypointEnum entrypoint = NeedsAccessCheck(type_index)
             ? kQuickAllocObjectWithAccessCheck
