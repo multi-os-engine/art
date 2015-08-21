@@ -86,6 +86,9 @@ enum ScaleFactor {
   TIMES_8 = 3
 };
 
+// Size (in bytes) of registers.
+const int kRegisterSize = 4;
+
 class Instr {
  public:
   static const uint32_t kBreakPointInstruction = 0x0000000D;

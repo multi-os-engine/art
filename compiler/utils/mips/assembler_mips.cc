@@ -90,7 +90,7 @@ void MipsAssembler::EmitFI(int opcode, int fmt, FRegister rt, uint16_t imm) {
   Emit(encoding);
 }
 
-void MipsAssembler::EmitBranch(Register rt, Register rs, Label* label, bool equal) {
+void MipsAssembler::EmitBranch(Register rt, Register rs, Label* label, Condition condition) {
   int offset;
   if (label->IsBound()) {
     offset = label->Position() - buffer_.Size();
@@ -99,10 +99,44 @@ void MipsAssembler::EmitBranch(Register rt, Register rs, Label* label, bool equa
     offset = label->position_;
     label->LinkTo(buffer_.Size());
   }
-  if (equal) {
-    Beq(rt, rs, (offset >> 2) & kBranchOffsetMask);
+  switch (condition) {
+    case Condition::kEq:
+      Beq(rt, rs, (offset >> 2) & kBranchOffsetMask);
+      break;
+    case Condition::kNe:
+      Bne(rt, rs, (offset >> 2) & kBranchOffsetMask);
+      break;
+    default:
+      // TODO: Generate a proper op<< for Condition and use it.
+      LOG(FATAL) << "Unexpected condition " << static_cast<int>(condition);
+  }
+}
+
+void MipsAssembler::EmitBranchCompareToZero(Register rs, Label* label, Condition condition) {
+  int offset;
+  if (label->IsBound()) {
+    offset = label->Position() - buffer_.Size();
   } else {
-    Bne(rt, rs, (offset >> 2) & kBranchOffsetMask);
+    // Use the offset field of the branch instruction for linking the sites.
+    offset = label->position_;
+    label->LinkTo(buffer_.Size());
+  }
+  switch (condition) {
+    case Condition::kLt:
+      Bltz(rs, (offset >> 2) & kBranchOffsetMask);
+      break;
+    case Condition::kLe:
+      Blez(rs, (offset >> 2) & kBranchOffsetMask);
+      break;
+    case Condition::kGt:
+      Bgtz(rs, (offset >> 2) & kBranchOffsetMask);
+      break;
+    case Condition::kGe:
+      Bgez(rs, (offset >> 2) & kBranchOffsetMask);
+      break;
+    default:
+      // TODO: Generate a proper op<< for Condition and use it.
+      LOG(FATAL) << "Unexpected condition " << static_cast<int>(condition);
   }
 }
 
@@ -123,6 +157,14 @@ void MipsAssembler::EmitJump(Label* label, bool link) {
 }
 
 int32_t MipsAssembler::EncodeBranchOffset(int offset, int32_t inst, bool is_jump) {
+  // TODO: Support large offsets.
+#if 1
+  // For the moment, cheat to let dex2oat compile as much as possible.
+  if (!IsInt(POPCOUNT(kBranchOffsetMask), offset)) {
+    return 0;
+  }
+#endif
+
   CHECK_ALIGNED(offset, 4);
   CHECK(IsInt(POPCOUNT(kBranchOffsetMask), offset)) << offset;
 
@@ -228,6 +270,14 @@ void MipsAssembler::Nor(Register rd, Register rs, Register rt) {
   EmitR(0, rs, rt, rd, 0, 0x27);
 }
 
+void MipsAssembler::Seb(Register rd, Register rt) {
+  EmitR(0x1f, static_cast<Register>(0), rt, rd, 0x10, 0x20);
+}
+
+void MipsAssembler::Seh(Register rd, Register rt) {
+  EmitR(0x1f, static_cast<Register>(0), rt, rd, 0x18, 0x20);
+}
+
 void MipsAssembler::Sll(Register rd, Register rs, int shamt) {
   EmitR(0, rs, static_cast<Register>(0), rd, shamt, 0x00);
 }
@@ -276,6 +326,13 @@ void MipsAssembler::Lui(Register rt, uint16_t imm16) {
   EmitI(0xf, static_cast<Register>(0), rt, imm16);
 }
 
+void MipsAssembler::Sync(uint32_t stype) {
+  constexpr uint32_t kStypeMask = 0x1f;
+  CHECK_LE(stype, kStypeMask);
+  EmitR(0, static_cast<Register>(0), static_cast<Register>(0), static_cast<Register>(0),
+        stype & kStypeMask, 0xf);
+}
+
 void MipsAssembler::Mfhi(Register rd) {
   EmitR(0, static_cast<Register>(0), static_cast<Register>(0), rd, 0, 0x10);
 }
@@ -312,13 +369,33 @@ void MipsAssembler::Sltiu(Register rt, Register rs, uint16_t imm16) {
   EmitI(0xb, rs, rt, imm16);
 }
 
-void MipsAssembler::Beq(Register rt, Register rs, uint16_t imm16) {
-  EmitI(0x4, rs, rt, imm16);
+void MipsAssembler::Beq(Register rt, Register rs, uint16_t offset) {
+  EmitI(0x4, rs, rt, offset);
   Nop();
 }
 
-void MipsAssembler::Bne(Register rt, Register rs, uint16_t imm16) {
-  EmitI(0x5, rs, rt, imm16);
+void MipsAssembler::Bne(Register rt, Register rs, uint16_t offset) {
+  EmitI(0x5, rs, rt, offset);
+  Nop();
+}
+
+void MipsAssembler::Bltz(Register rs, uint16_t offset) {
+  EmitI(0x1, rs, static_cast<Register>(0), offset);
+  Nop();
+}
+
+void MipsAssembler::Blez(Register rs, uint16_t offset) {
+  EmitI(0x6, rs, static_cast<Register>(0), offset);
+  Nop();
+}
+
+void MipsAssembler::Bgtz(Register rs, uint16_t offset) {
+  EmitI(0x1, rs, static_cast<Register>(0), offset);
+  Nop();
+}
+
+void MipsAssembler::Bgez(Register rs, uint16_t offset) {
+  EmitI(0x7, rs, static_cast<Register>(1), offset);
   Nop();
 }
 
@@ -337,9 +414,91 @@ void MipsAssembler::Jr(Register rs) {
   Nop();
 }
 
-void MipsAssembler::Jalr(Register rs) {
-  EmitR(0, rs, static_cast<Register>(0), RA, 0, 0x09);
+void MipsAssembler::Jalr(Register rd, Register rs) {
+  EmitR(0, rs, static_cast<Register>(0), rd, 0, 0x09);
   Nop();
+}
+
+void MipsAssembler::Jalr(Register rs) {
+  Jalr(RA, rs);
+}
+
+void MipsAssembler::Beq(Register rt, Register rs, Label* label) {
+  EmitBranch(rt, rs, label, Condition::kEq);
+}
+
+void MipsAssembler::Bne(Register rt, Register rs, Label* label) {
+  EmitBranch(rt, rs, label, Condition::kNe);
+}
+
+void MipsAssembler::Bltz(Register rs, Label* label) {
+  EmitBranchCompareToZero(rs, label, Condition::kLt);
+}
+
+void MipsAssembler::Blez(Register rs, Label* label) {
+  EmitBranchCompareToZero(rs, label, Condition::kLe);
+}
+
+void MipsAssembler::Bgtz(Register rs, Label* label) {
+  EmitBranchCompareToZero(rs, label, Condition::kGt);
+}
+
+void MipsAssembler::Bgez(Register rs, Label* label) {
+  EmitBranchCompareToZero(rs, label, Condition::kGe);
+}
+
+void MipsAssembler::BranchOnLowerThan(Register rt, Register rs, Label* label) {
+  Slt(AT, rt, rs);
+  Bne(AT, ZERO, label);
+}
+
+void MipsAssembler::BranchOnLowerThanOrEqual(Register rt, Register rs, Label* label) {
+  // Implement `rt <= rs` as `!(rs < rt)` since there is no SLE instruction.
+  Slt(AT, rs, rt);
+  Beq(AT, ZERO, label);
+}
+
+void MipsAssembler::BranchOnGreaterThan(Register rt, Register rs, Label* label) {
+  // Implement `rt > rs` as `(rs < rt)` since there is no SGT instruction.
+  Slt(AT, rs, rt);
+  Bne(AT, ZERO, label);
+}
+
+void MipsAssembler::BranchOnGreaterThanOrEqual(Register rt, Register rs, Label* label) {
+  // Implement `rt >= rs` as `!(rt < rs)` since there is no SGE instruction.
+  Slt(AT, rt, rs);
+  Beq(AT, ZERO, label);
+}
+
+void MipsAssembler::BranchOnLowerThanUnsigned(Register rt, Register rs, Label* label) {
+  Sltu(AT, rt, rs);
+  Bne(AT, ZERO, label);
+}
+
+void MipsAssembler::BranchOnLowerThanOrEqualUnsigned(Register rt, Register rs, Label* label) {
+  // Implement `rt <= rs` as `!(rs < rt)` since there is no SLE instruction.
+  Sltu(AT, rs, rt);
+  Beq(AT, ZERO, label);
+}
+
+void MipsAssembler::BranchOnGreaterThanUnsigned(Register rt, Register rs, Label* label) {
+  // Implement `rt > rs` as `(rs < rt)` since there is no SGT instruction.
+  Sltu(AT, rs, rt);
+  Bne(AT, ZERO, label);
+}
+
+void MipsAssembler::BranchOnGreaterThanOrEqualUnsigned(Register rt, Register rs, Label* label) {
+  // Implement `rt >= rs` as `!(rt < rs)` since there is no SGE instruction.
+  Sltu(AT, rt, rs);
+  Beq(AT, ZERO, label);
+}
+
+void MipsAssembler::J(Label* label) {
+  EmitJump(label, /* is_link */ false);
+}
+
+void MipsAssembler::Jal(Label* label) {
+  EmitJump(label, /* is_link */ true);
 }
 
 void MipsAssembler::AddS(FRegister fd, FRegister fs, FRegister ft) {
@@ -385,6 +544,31 @@ void MipsAssembler::MovS(FRegister fd, FRegister fs) {
 void MipsAssembler::MovD(DRegister fd, DRegister fs) {
   EmitFR(0x11, 0x11, static_cast<FRegister>(0), static_cast<FRegister>(fs),
          static_cast<FRegister>(fd), 0x6);
+}
+
+void MipsAssembler::NegS(FRegister fd, FRegister fs) {
+  EmitFR(0x11, 0x10, static_cast<FRegister>(0), fs, fd, 0x7);
+}
+
+void MipsAssembler::NegD(DRegister fd, DRegister fs) {
+  EmitFR(0x11, 0x11, static_cast<FRegister>(0), static_cast<FRegister>(fs),
+         static_cast<FRegister>(fd), 0x7);
+}
+
+void MipsAssembler::Cvtsw(FRegister fd, FRegister fs) {
+  EmitFR(0x11, 0x14, static_cast<FRegister>(0), fs, fd, 0x20);
+}
+
+void MipsAssembler::Cvtdw(DRegister fd, FRegister fs) {
+  EmitFR(0x11, 0x14, static_cast<FRegister>(0), fs, static_cast<FRegister>(fd), 0x21);
+}
+
+void MipsAssembler::Cvtsd(FRegister fd, DRegister fs) {
+  EmitFR(0x11, 0x11, static_cast<FRegister>(0), static_cast<FRegister>(fs), fd, 0x20);
+}
+
+void MipsAssembler::Cvtds(DRegister fd, FRegister fs) {
+  EmitFR(0x11, 0x10, static_cast<FRegister>(0), fs, static_cast<FRegister>(fd), 0x21);
 }
 
 void MipsAssembler::Mfc1(Register rt, FRegister fs) {
@@ -455,6 +639,33 @@ void MipsAssembler::LoadImmediate(Register rt, int32_t value) {
   Addiu(rt, ZERO, value);
 }
 
+void MipsAssembler::LoadSImmediate(FRegister rt, float value) {
+  int32_t int_value = bit_cast<int32_t, float>(value);
+  if (int_value == bit_cast<int32_t, float>(0.0f)) {
+    Mtc1(rt, ZERO);
+  } else {
+    LoadImmediate(AT, int_value);
+    Mtc1(rt, AT);
+  }
+}
+
+void MipsAssembler::LoadDImmediate(DRegister rt, double value) {
+  uint64_t int_value = bit_cast<uint64_t, double>(value);
+  FRegister low = static_cast<FRegister>(rt * 2);
+  FRegister high = static_cast<FRegister>(low + 1);
+  if (int_value == bit_cast<uint64_t, double>(0.0)) {
+    Mtc1(low, ZERO);
+    Mtc1(high, ZERO);
+  } else {
+    LoadSImmediate(low, bit_cast<float, uint32_t>(Low32Bits(int_value)));
+    if (High32Bits(int_value) == Low32Bits(int_value)) {
+      MovS(high, low);
+    } else {
+      LoadSImmediate(high, bit_cast<float, uint32_t>(High32Bits(int_value)));
+    }
+  }
+}
+
 void MipsAssembler::EmitLoad(ManagedRegister m_dst, Register src_register, int32_t src_offset,
                              size_t size) {
   MipsManagedRegister dst = m_dst.AsMips();
@@ -477,6 +688,14 @@ void MipsAssembler::EmitLoad(ManagedRegister m_dst, Register src_register, int32
 
 void MipsAssembler::LoadFromOffset(LoadOperandType type, Register reg, Register base,
                                    int32_t offset) {
+  if (!IsInt<16>(offset)) {
+    CHECK_NE(base, AT);
+    LoadImmediate(AT, offset);
+    Addu(AT, AT, base);
+    base = AT;
+    offset = 0;
+  }
+  CHECK(IsInt<16>(offset));
   switch (type) {
     case kLoadSignedByte:
       Lb(reg, base, offset);
@@ -502,15 +721,54 @@ void MipsAssembler::LoadFromOffset(LoadOperandType type, Register reg, Register 
 }
 
 void MipsAssembler::LoadSFromOffset(FRegister reg, Register base, int32_t offset) {
+  if (!IsInt<16>(offset)) {
+    CHECK_NE(base, AT);
+    LoadImmediate(AT, offset);
+    Addu(AT, AT, base);
+    base = AT;
+    offset = 0;
+  }
+  CHECK(IsInt<16>(offset));
   Lwc1(reg, base, offset);
 }
 
 void MipsAssembler::LoadDFromOffset(DRegister reg, Register base, int32_t offset) {
+  if (!IsInt<16>(offset)) {
+    CHECK_NE(base, AT);
+    LoadImmediate(AT, offset);
+    Addu(AT, AT, base);
+    base = AT;
+    offset = 0;
+  }
+  CHECK(IsInt<16>(offset));
   Ldc1(reg, base, offset);
 }
 
 void MipsAssembler::StoreToOffset(StoreOperandType type, Register reg, Register base,
                                   int32_t offset) {
+  Register tmp_reg = kNoRegister;
+  if (!IsInt<16>(offset)) {
+    CHECK_NE(base, AT);
+    if (reg != AT) {
+      tmp_reg = AT;
+    } else {
+      // Be careful not to use AT twice (for `reg` and `base`) in the
+      // store instruction below).  Instead, save S0 on the stack (or
+      // S1 if S0 is already used by `base`), use it as secondary
+      // temporary register, and restore it after the store
+      // instruction has been emitted.
+      tmp_reg = (base != S0) ? S0 : S1;
+      Push(tmp_reg);
+      if (base == SP) {
+        offset += kRegisterSize;
+      }
+    }
+    LoadImmediate(tmp_reg, offset);
+    Addu(tmp_reg, tmp_reg, base);
+    base = tmp_reg;
+    offset = 0;
+  }
+  CHECK(IsInt<16>(offset));
   switch (type) {
     case kStoreByte:
       Sb(reg, base, offset);
@@ -527,14 +785,44 @@ void MipsAssembler::StoreToOffset(StoreOperandType type, Register reg, Register 
     default:
       LOG(FATAL) << "UNREACHABLE";
   }
+  if (tmp_reg != kNoRegister && tmp_reg != AT) {
+    CHECK((tmp_reg == S0) || (tmp_reg == S1));
+    Pop(tmp_reg);
+  }
 }
 
-void MipsAssembler::StoreFToOffset(FRegister reg, Register base, int32_t offset) {
+void MipsAssembler::StoreSToOffset(FRegister reg, Register base, int32_t offset) {
+  if (!IsInt<16>(offset)) {
+    CHECK_NE(base, AT);
+    LoadImmediate(AT, offset);
+    Addu(AT, AT, base);
+    base = AT;
+    offset = 0;
+  }
+  CHECK(IsInt<16>(offset));
   Swc1(reg, base, offset);
 }
 
 void MipsAssembler::StoreDToOffset(DRegister reg, Register base, int32_t offset) {
+  if (!IsInt<16>(offset)) {
+    CHECK_NE(base, AT);
+    LoadImmediate(AT, offset);
+    Addu(AT, AT, base);
+    base = AT;
+    offset = 0;
+  }
+  CHECK(IsInt<16>(offset));
   Sdc1(reg, base, offset);
+}
+
+void MipsAssembler::Push(Register reg) {
+  IncreaseFrameSize(kRegisterSize);
+  Sw(Register(reg), SP, 0);
+}
+
+void MipsAssembler::Pop(Register reg) {
+  Lw(Register(reg), SP, 0);
+  DecreaseFrameSize(kRegisterSize);
 }
 
 static dwarf::Reg DWARFReg(Register reg) {
@@ -600,13 +888,19 @@ void MipsAssembler::RemoveFrame(size_t frame_size,
 }
 
 void MipsAssembler::IncreaseFrameSize(size_t adjust) {
+  // TODO: Is this required?
+#if 0
   CHECK_ALIGNED(adjust, kStackAlignment);
+#endif
   AddConstant(SP, SP, -adjust);
   cfi_.AdjustCFAOffset(adjust);
 }
 
 void MipsAssembler::DecreaseFrameSize(size_t adjust) {
+  // TODO: Is this required?
+#if 0
   CHECK_ALIGNED(adjust, kStackAlignment);
+#endif
   AddConstant(SP, SP, adjust);
   cfi_.AdjustCFAOffset(-adjust);
 }
@@ -624,7 +918,7 @@ void MipsAssembler::Store(FrameOffset dest, ManagedRegister msrc, size_t size) {
     StoreToOffset(kStoreWord, src.AsRegisterPairHigh(),
                   SP, dest.Int32Value() + 4);
   } else if (src.IsFRegister()) {
-    StoreFToOffset(src.AsFRegister(), SP, dest.Int32Value());
+    StoreSToOffset(src.AsFRegister(), SP, dest.Int32Value());
   } else {
     CHECK(src.IsDRegister());
     StoreDToOffset(src.AsDRegister(), SP, dest.Int32Value());
@@ -722,15 +1016,19 @@ void MipsAssembler::LoadRawPtrFromThread32(ManagedRegister mdest,
   LoadFromOffset(kLoadWord, dest.AsCoreRegister(), S1, offs.Int32Value());
 }
 
-void MipsAssembler::SignExtend(ManagedRegister /*mreg*/, size_t /*size*/) {
+void MipsAssembler::SignExtend(ManagedRegister mreg ATTRIBUTE_UNUSED,
+                               size_t size ATTRIBUTE_UNUSED) {
   UNIMPLEMENTED(FATAL) << "no sign extension necessary for mips";
 }
 
-void MipsAssembler::ZeroExtend(ManagedRegister /*mreg*/, size_t /*size*/) {
+void MipsAssembler::ZeroExtend(ManagedRegister mreg ATTRIBUTE_UNUSED,
+                               size_t size ATTRIBUTE_UNUSED) {
   UNIMPLEMENTED(FATAL) << "no zero extension necessary for mips";
 }
 
-void MipsAssembler::Move(ManagedRegister mdest, ManagedRegister msrc, size_t /*size*/) {
+void MipsAssembler::Move(ManagedRegister mdest,
+                         ManagedRegister msrc,
+                         size_t size ATTRIBUTE_UNUSED) {
   MipsManagedRegister dest = mdest.AsMips();
   MipsManagedRegister src = msrc.AsMips();
   if (!dest.Equals(src)) {
@@ -820,8 +1118,11 @@ void MipsAssembler::Copy(ManagedRegister dest_base, Offset dest_offset, FrameOff
   StoreToOffset(kStoreWord, scratch, dest_base.AsMips().AsCoreRegister(), dest_offset.Int32Value());
 }
 
-void MipsAssembler::Copy(FrameOffset /*dest*/, FrameOffset /*src_base*/, Offset /*src_offset*/,
-                         ManagedRegister /*mscratch*/, size_t /*size*/) {
+void MipsAssembler::Copy(FrameOffset dest ATTRIBUTE_UNUSED,
+                         FrameOffset src_base ATTRIBUTE_UNUSED,
+                         Offset src_offset ATTRIBUTE_UNUSED,
+                         ManagedRegister mscratch ATTRIBUTE_UNUSED,
+                         size_t size ATTRIBUTE_UNUSED) {
   UNIMPLEMENTED(FATAL) << "no mips implementation";
 }
 
@@ -834,8 +1135,12 @@ void MipsAssembler::Copy(ManagedRegister dest, Offset dest_offset,
   StoreToOffset(kStoreWord, scratch, dest.AsMips().AsCoreRegister(), dest_offset.Int32Value());
 }
 
-void MipsAssembler::Copy(FrameOffset /*dest*/, Offset /*dest_offset*/, FrameOffset /*src*/, Offset /*src_offset*/,
-                         ManagedRegister /*mscratch*/, size_t /*size*/) {
+void MipsAssembler::Copy(FrameOffset dest ATTRIBUTE_UNUSED,
+                         Offset dest_offset ATTRIBUTE_UNUSED,
+                         FrameOffset src ATTRIBUTE_UNUSED,
+                         Offset src_offset ATTRIBUTE_UNUSED,
+                         ManagedRegister mscratch ATTRIBUTE_UNUSED,
+                         size_t size ATTRIBUTE_UNUSED) {
   UNIMPLEMENTED(FATAL) << "no mips implementation";
 }
 
@@ -844,8 +1149,9 @@ void MipsAssembler::MemoryBarrier(ManagedRegister) {
 }
 
 void MipsAssembler::CreateHandleScopeEntry(ManagedRegister mout_reg,
-                                    FrameOffset handle_scope_offset,
-                                    ManagedRegister min_reg, bool null_allowed) {
+                                           FrameOffset handle_scope_offset,
+                                           ManagedRegister min_reg,
+                                           bool null_allowed) {
   MipsManagedRegister out_reg = mout_reg.AsMips();
   MipsManagedRegister in_reg = min_reg.AsMips();
   CHECK(in_reg.IsNoRegister() || in_reg.IsCoreRegister()) << in_reg;
@@ -863,7 +1169,7 @@ void MipsAssembler::CreateHandleScopeEntry(ManagedRegister mout_reg,
     if (!out_reg.Equals(in_reg)) {
       LoadImmediate(out_reg.AsCoreRegister(), 0);
     }
-    EmitBranch(in_reg.AsCoreRegister(), ZERO, &null_arg, true);
+    EmitBranch(in_reg.AsCoreRegister(), ZERO, &null_arg, Condition::kEq);
     AddConstant(out_reg.AsCoreRegister(), SP, handle_scope_offset.Int32Value());
     Bind(&null_arg, false);
   } else {
@@ -872,9 +1178,9 @@ void MipsAssembler::CreateHandleScopeEntry(ManagedRegister mout_reg,
 }
 
 void MipsAssembler::CreateHandleScopeEntry(FrameOffset out_off,
-                                    FrameOffset handle_scope_offset,
-                                    ManagedRegister mscratch,
-                                    bool null_allowed) {
+                                           FrameOffset handle_scope_offset,
+                                           ManagedRegister mscratch,
+                                           bool null_allowed) {
   MipsManagedRegister scratch = mscratch.AsMips();
   CHECK(scratch.IsCoreRegister()) << scratch;
   if (null_allowed) {
@@ -884,7 +1190,7 @@ void MipsAssembler::CreateHandleScopeEntry(FrameOffset out_off,
     // Null values get a handle scope entry value of 0.  Otherwise, the handle scope entry is
     // the address in the handle scope holding the reference.
     // e.g. scratch = (scratch == 0) ? 0 : (SP+handle_scope_offset)
-    EmitBranch(scratch.AsCoreRegister(), ZERO, &null_arg, true);
+    EmitBranch(scratch.AsCoreRegister(), ZERO, &null_arg, Condition::kEq);
     AddConstant(scratch.AsCoreRegister(), SP, handle_scope_offset.Int32Value());
     Bind(&null_arg, false);
   } else {
@@ -895,7 +1201,7 @@ void MipsAssembler::CreateHandleScopeEntry(FrameOffset out_off,
 
 // Given a handle scope entry, load the associated reference.
 void MipsAssembler::LoadReferenceFromHandleScope(ManagedRegister mout_reg,
-                                          ManagedRegister min_reg) {
+                                                 ManagedRegister min_reg) {
   MipsManagedRegister out_reg = mout_reg.AsMips();
   MipsManagedRegister in_reg = min_reg.AsMips();
   CHECK(out_reg.IsCoreRegister()) << out_reg;
@@ -904,17 +1210,19 @@ void MipsAssembler::LoadReferenceFromHandleScope(ManagedRegister mout_reg,
   if (!out_reg.Equals(in_reg)) {
     LoadImmediate(out_reg.AsCoreRegister(), 0);
   }
-  EmitBranch(in_reg.AsCoreRegister(), ZERO, &null_arg, true);
+  EmitBranch(in_reg.AsCoreRegister(), ZERO, &null_arg, Condition::kEq);
   LoadFromOffset(kLoadWord, out_reg.AsCoreRegister(),
                  in_reg.AsCoreRegister(), 0);
   Bind(&null_arg, false);
 }
 
-void MipsAssembler::VerifyObject(ManagedRegister /*src*/, bool /*could_be_null*/) {
+void MipsAssembler::VerifyObject(ManagedRegister src ATTRIBUTE_UNUSED,
+                                 bool could_be_null ATTRIBUTE_UNUSED) {
   // TODO: not validating references
 }
 
-void MipsAssembler::VerifyObject(FrameOffset /*src*/, bool /*could_be_null*/) {
+void MipsAssembler::VerifyObject(FrameOffset src ATTRIBUTE_UNUSED,
+                                 bool could_be_null ATTRIBUTE_UNUSED) {
   // TODO: not validating references
 }
 
@@ -941,7 +1249,8 @@ void MipsAssembler::Call(FrameOffset base, Offset offset, ManagedRegister mscrat
   // TODO: place reference map on call
 }
 
-void MipsAssembler::CallFromThread32(ThreadOffset<4> /*offset*/, ManagedRegister /*mscratch*/) {
+void MipsAssembler::CallFromThread32(ThreadOffset<4> offset ATTRIBUTE_UNUSED,
+                                     ManagedRegister mscratch ATTRIBUTE_UNUSED) {
   UNIMPLEMENTED(FATAL) << "no mips implementation";
 }
 
@@ -950,7 +1259,7 @@ void MipsAssembler::GetCurrentThread(ManagedRegister tr) {
 }
 
 void MipsAssembler::GetCurrentThread(FrameOffset offset,
-                                     ManagedRegister /*mscratch*/) {
+                                     ManagedRegister mscratch ATTRIBUTE_UNUSED) {
   StoreToOffset(kStoreWord, S1, SP, offset.Int32Value());
 }
 
@@ -960,7 +1269,7 @@ void MipsAssembler::ExceptionPoll(ManagedRegister mscratch, size_t stack_adjust)
   buffer_.EnqueueSlowPath(slow);
   LoadFromOffset(kLoadWord, scratch.AsCoreRegister(),
                  S1, Thread::ExceptionOffset<4>().Int32Value());
-  EmitBranch(scratch.AsCoreRegister(), ZERO, slow->Entry(), false);
+  EmitBranch(scratch.AsCoreRegister(), ZERO, slow->Entry(), Condition::kNe);
 }
 
 void MipsExceptionSlowPath::Emit(Assembler* sasm) {

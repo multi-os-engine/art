@@ -143,7 +143,7 @@ class HGraphBuilder : public ValueObject {
   void Binop_23x(const Instruction& instruction, Primitive::Type type, uint32_t dex_pc);
 
   template<typename T>
-  void Binop_23x_shift(const Instruction& instruction, Primitive::Type type);
+  void Binop_23x_shift(const Instruction& instruction, Primitive::Type type, uint32_t dex_pc);
 
   void Binop_23x_cmp(const Instruction& instruction,
                      Primitive::Type type,
@@ -157,13 +157,19 @@ class HGraphBuilder : public ValueObject {
   void Binop_12x(const Instruction& instruction, Primitive::Type type, uint32_t dex_pc);
 
   template<typename T>
-  void Binop_12x_shift(const Instruction& instruction, Primitive::Type type);
+  void Binop_12x_shift(const Instruction& instruction, Primitive::Type type, uint32_t dex_pc);
 
   template<typename T>
   void Binop_22b(const Instruction& instruction, bool reverse);
 
   template<typename T>
+  void Binop_22b(const Instruction& instruction, bool reverse, uint32_t dex_pc);
+
+  template<typename T>
   void Binop_22s(const Instruction& instruction, bool reverse);
+
+  template<typename T>
+  void Binop_22s(const Instruction& instruction, bool reverse, uint32_t dex_pc);
 
   template<typename T> void If_21t(const Instruction& instruction, uint32_t dex_pc);
   template<typename T> void If_22t(const Instruction& instruction, uint32_t dex_pc);

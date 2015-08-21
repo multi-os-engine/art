@@ -1069,6 +1069,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
 
+#define FOR_EACH_CONCRETE_INSTRUCTION_MIPS(M)
+
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)
@@ -1079,6 +1081,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   FOR_EACH_CONCRETE_INSTRUCTION_COMMON(M)                               \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                                \
+  FOR_EACH_CONCRETE_INSTRUCTION_MIPS(M)                                 \
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)                               \
   FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
@@ -2787,7 +2790,7 @@ class HCompare : public HBinaryOperation {
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type type) {
-    // MIPS64 uses a runtime call for FP comparisons.
+    // MIPS and MIPS64 use a runtime call for FP comparisons.
     return Primitive::IsFloatingPointType(type) ? SideEffects::CanTriggerGC() : SideEffects::None();
   }
 
@@ -3463,8 +3466,18 @@ class HSub : public HBinaryOperation {
 
 class HMul : public HBinaryOperation {
  public:
-  HMul(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HMul(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
+      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls(result_type)),
+        dex_pc_(dex_pc) {}
+
+  // Required by the MIPS code generators when producing calls to the
+  // runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
+  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type type) {
+    // MIPS uses a runtime call for long multiplications.
+    return type == Primitive::kPrimLong ? SideEffects::CanTriggerGC() : SideEffects::None();
+  }
 
   bool IsCommutative() const OVERRIDE { return true; }
 
@@ -3480,6 +3493,8 @@ class HMul : public HBinaryOperation {
   DECLARE_INSTRUCTION(Mul);
 
  private:
+  const uint32_t dex_pc_;
+
   DISALLOW_COPY_AND_ASSIGN(HMul);
 };
 
@@ -3587,8 +3602,18 @@ class HDivZeroCheck : public HExpression<1> {
 
 class HShl : public HBinaryOperation {
  public:
-  HShl(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HShl(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
+      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls(result_type)),
+        dex_pc_(dex_pc) {}
+
+  // Required by the MIPS code generators when producing calls to the
+  // runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
+  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type type) {
+    // MIPS uses a runtime call for long shifts.
+    return type == Primitive::kPrimLong ? SideEffects::CanTriggerGC() : SideEffects::None();
+  }
 
   template <typename T, typename U, typename V>
   T Compute(T x, U y, V max_shift_value) const {
@@ -3615,13 +3640,25 @@ class HShl : public HBinaryOperation {
   DECLARE_INSTRUCTION(Shl);
 
  private:
+  const uint32_t dex_pc_;
+
   DISALLOW_COPY_AND_ASSIGN(HShl);
 };
 
 class HShr : public HBinaryOperation {
  public:
-  HShr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HShr(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
+      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls(result_type)),
+        dex_pc_(dex_pc) {}
+
+  // Required by the MIPS code generators when producing calls to the
+  // runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
+  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type type) {
+    // MIPS uses a runtime call for long shifts.
+    return type == Primitive::kPrimLong ? SideEffects::CanTriggerGC() : SideEffects::None();
+  }
 
   template <typename T, typename U, typename V>
   T Compute(T x, U y, V max_shift_value) const {
@@ -3648,13 +3685,25 @@ class HShr : public HBinaryOperation {
   DECLARE_INSTRUCTION(Shr);
 
  private:
+  const uint32_t dex_pc_;
+
   DISALLOW_COPY_AND_ASSIGN(HShr);
 };
 
 class HUShr : public HBinaryOperation {
  public:
-  HUShr(Primitive::Type result_type, HInstruction* left, HInstruction* right)
-      : HBinaryOperation(result_type, left, right) {}
+  HUShr(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
+      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls(result_type)),
+        dex_pc_(dex_pc) {}
+
+  // Required by the MIPS code generators when producing calls to the
+  // runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
+  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type type) {
+    // MIPS uses a runtime call for long shifts.
+    return type == Primitive::kPrimLong ? SideEffects::CanTriggerGC() : SideEffects::None();
+  }
 
   template <typename T, typename U, typename V>
   T Compute(T x, U y, V max_shift_value) const {
@@ -3682,6 +3731,8 @@ class HUShr : public HBinaryOperation {
   DECLARE_INSTRUCTION(UShr);
 
  private:
+  const uint32_t dex_pc_;
+
   DISALLOW_COPY_AND_ASSIGN(HUShr);
 };
 
@@ -3874,8 +3925,8 @@ class HTypeConversion : public HExpression<1> {
   Primitive::Type GetInputType() const { return GetInput()->GetType(); }
   Primitive::Type GetResultType() const { return GetType(); }
 
-  // Required by the x86 and ARM code generators when producing calls
-  // to the runtime.
+  // Required by the x86, ARM, MIPS and MIPS64 code generators when
+  // producing calls to the runtime.
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
   bool CanBeMoved() const OVERRIDE { return true; }
