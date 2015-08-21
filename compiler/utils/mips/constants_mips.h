@@ -86,6 +86,12 @@ enum ScaleFactor {
   TIMES_8 = 3
 };
 
+// Size (in bytes) of MIPS registers.
+static constexpr size_t kRegisterSize = 4u;
+
+// Size (in bytes) of MIPS instructions.
+static constexpr size_t kInstructionSize = 4u;
+
 class Instr {
  public:
   static const uint32_t kBreakPointInstruction = 0x0000000D;

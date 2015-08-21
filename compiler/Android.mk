@@ -149,6 +149,7 @@ LIBART_COMPILER_SRC_FILES_mips := \
 	dex/quick/mips/target_mips.cc \
 	dex/quick/mips/utility_mips.cc \
 	jni/quick/mips/calling_convention_mips.cc \
+	optimizing/code_generator_mips.cc \
 	utils/mips/assembler_mips.cc \
 	utils/mips/managed_register_mips.cc \
 
@@ -207,7 +208,8 @@ LIBART_COMPILER_ENUM_OPERATOR_OUT_HEADER_FILES_arm64 := \
   dex/quick/arm64/arm64_lir.h
 
 LIBART_COMPILER_ENUM_OPERATOR_OUT_HEADER_FILES_mips := \
-  dex/quick/mips/mips_lir.h
+  dex/quick/mips/mips_lir.h \
+  utils/mips/assembler_mips.h
 
 LIBART_COMPILER_ENUM_OPERATOR_OUT_HEADER_FILES_mips64 := \
   $(LIBART_COMPILER_ENUM_OPERATOR_OUT_HEADER_FILES_mips)

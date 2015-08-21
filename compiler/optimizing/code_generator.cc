@@ -24,16 +24,20 @@
 #include "code_generator_arm64.h"
 #endif
 
+#ifdef ART_ENABLE_CODEGEN_mips
+#include "code_generator_mips.h"
+#endif
+
+#ifdef ART_ENABLE_CODEGEN_mips64
+#include "code_generator_mips64.h"
+#endif
+
 #ifdef ART_ENABLE_CODEGEN_x86
 #include "code_generator_x86.h"
 #endif
 
 #ifdef ART_ENABLE_CODEGEN_x86_64
 #include "code_generator_x86_64.h"
-#endif
-
-#ifdef ART_ENABLE_CODEGEN_mips64
-#include "code_generator_mips64.h"
 #endif
 
 #include "compiled_method.h"
@@ -553,10 +557,9 @@ CodeGenerator* CodeGenerator::Create(HGraph* graph,
 #endif
 #ifdef ART_ENABLE_CODEGEN_mips
     case kMips:
-      UNUSED(compiler_options);
-      UNUSED(graph);
-      UNUSED(isa_features);
-      return nullptr;
+      return new mips::CodeGeneratorMIPS(graph,
+          *isa_features.AsMipsInstructionSetFeatures(),
+          compiler_options);
 #endif
 #ifdef ART_ENABLE_CODEGEN_mips64
     case kMips64: {
@@ -748,11 +751,16 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
     if (instruction->IsTypeConversion() || instruction->IsCompare()) {
       return;
     }
-    if (instruction->IsRem()) {
-      Primitive::Type type = instruction->AsRem()->GetResultType();
-      if ((type == Primitive::kPrimFloat) || (type == Primitive::kPrimDouble)) {
-        return;
-      }
+    // Likewise for some arithmetic and shift operations on MIPS and MIPS64.
+    if ((instruction->IsMul() && instruction->AsMul()->GetResultType() == Primitive::kPrimLong) ||
+        (instruction->IsDiv() && instruction->AsDiv()->GetResultType() == Primitive::kPrimLong) ||
+        (instruction->IsRem()
+         && (Primitive::IsFloatingPointType(instruction->AsRem()->GetResultType())
+             || instruction->AsRem()->GetResultType() == Primitive::kPrimLong)) ||
+        (instruction->IsShl() && instruction->AsShl()->GetResultType() == Primitive::kPrimLong) ||
+        (instruction->IsShr() && instruction->AsShr()->GetResultType() == Primitive::kPrimLong) ||
+        (instruction->IsUShr() && instruction->AsUShr()->GetResultType() == Primitive::kPrimLong)) {
+      return;
     }
   }
 
