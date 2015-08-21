@@ -795,8 +795,10 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
                                             const DexFile& dex_file) const {
   CompilerDriver* compiler_driver = GetCompilerDriver();
   CompiledMethod* method = nullptr;
-  if (compiler_driver->IsMethodVerifiedWithoutFailures(method_idx, class_def_idx, dex_file) &&
-      !compiler_driver->GetVerifiedMethod(&dex_file, method_idx)->HasRuntimeThrow()) {
+  const VerifiedMethod* verified_method = compiler_driver->GetVerifiedMethod(&dex_file, method_idx);
+  if ((compiler_driver->IsMethodVerifiedWithoutFailures(method_idx, class_def_idx, dex_file)
+      || verified_method->HasOnlyUnresolvedFailures())
+      && !verified_method->HasRuntimeThrow()) {
      method = TryCompile(code_item, access_flags, invoke_type, class_def_idx,
                          method_idx, jclass_loader, dex_file);
   } else {

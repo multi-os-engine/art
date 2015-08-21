@@ -704,6 +704,7 @@ Location InvokeDexCallingConventionVisitorARM::GetNextLocation(Primitive::Type t
       if (index + 1 < calling_convention.GetNumberOfRegisters()) {
         DCHECK_EQ(calling_convention.GetRegisterAt(index) + 1,
                   calling_convention.GetRegisterAt(index + 1));
+
         return Location::RegisterPairLocation(calling_convention.GetRegisterAt(index),
                                               calling_convention.GetRegisterAt(index + 1));
       } else {
@@ -955,6 +956,21 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
         LOG(FATAL) << "Unexpected type " << instruction->GetType();
     }
   }
+}
+
+void CodeGeneratorARM::MoveConstant(Location location, int32_t value) {
+  DCHECK(location.IsRegister());
+  __ LoadImmediate(location.AsRegister<Register>(), value);
+}
+
+void CodeGeneratorARM::InvokeRuntime(QuickEntrypointEnum entrypoint,
+                                     HInstruction* instruction,
+                                     uint32_t dex_pc,
+                                     SlowPathCode* slow_path) {
+  InvokeRuntime(GetThreadOffset<kArmWordSize>(entrypoint).Int32Value(),
+                instruction,
+                dex_pc,
+                slow_path);
 }
 
 void CodeGeneratorARM::InvokeRuntime(int32_t entry_point_offset,
@@ -1507,6 +1523,14 @@ void LocationsBuilderARM::VisitReturn(HReturn* ret) {
 void InstructionCodeGeneratorARM::VisitReturn(HReturn* ret) {
   UNUSED(ret);
   codegen_->GenerateFrameExit();
+}
+
+void LocationsBuilderARM::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
+void InstructionCodeGeneratorARM::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
 }
 
 void LocationsBuilderARM::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
@@ -2979,7 +3003,7 @@ void InstructionCodeGeneratorARM::VisitNewInstance(HNewInstance* instruction) {
   __ LoadImmediate(calling_convention.GetRegisterAt(0), instruction->GetTypeIndex());
   // Note: if heap poisoning is enabled, the entry point takes cares
   // of poisoning the reference.
-  codegen_->InvokeRuntime(GetThreadOffset<kArmWordSize>(instruction->GetEntrypoint()).Int32Value(),
+  codegen_->InvokeRuntime(instruction->GetEntrypoint(),
                           instruction,
                           instruction->GetDexPc(),
                           nullptr);
@@ -3000,7 +3024,7 @@ void InstructionCodeGeneratorARM::VisitNewArray(HNewArray* instruction) {
   __ LoadImmediate(calling_convention.GetRegisterAt(0), instruction->GetTypeIndex());
   // Note: if heap poisoning is enabled, the entry point takes cares
   // of poisoning the reference.
-  codegen_->InvokeRuntime(GetThreadOffset<kArmWordSize>(instruction->GetEntrypoint()).Int32Value(),
+  codegen_->InvokeRuntime(instruction->GetEntrypoint(),
                           instruction,
                           instruction->GetDexPc(),
                           nullptr);

@@ -855,6 +855,12 @@ void CodeGeneratorMIPS64::Move(HInstruction* instruction,
   }
 }
 
+void CodeGeneratorMIPS64::MoveConstant(Location location, int32_t value) {
+  DCHECK(location.IsRegister());
+  __ LoadConst32(location.AsRegister<GpuRegister>(), value);
+}
+
+
 Location CodeGeneratorMIPS64::GetStackLocation(HLoadLocal* load) const {
   Primitive::Type type = load->GetType();
 
@@ -970,6 +976,16 @@ void CodeGeneratorMIPS64::DumpCoreRegister(std::ostream& stream, int reg) const 
 
 void CodeGeneratorMIPS64::DumpFloatingPointRegister(std::ostream& stream, int reg) const {
   stream << Mips64ManagedRegister::FromFpuRegister(FpuRegister(reg));
+}
+
+void CodeGeneratorMIPS64::InvokeRuntime(QuickEntrypointEnum entrypoint,
+                                     HInstruction* instruction,
+                                     uint32_t dex_pc,
+                                     SlowPathCode* slow_path) {
+  InvokeRuntime(GetThreadOffset<kMips64WordSize>(entrypoint).Int32Value(),
+                instruction,
+                dex_pc,
+                slow_path);
 }
 
 void CodeGeneratorMIPS64::InvokeRuntime(int32_t entry_point_offset,
@@ -2327,6 +2343,14 @@ void InstructionCodeGeneratorMIPS64::VisitNullConstant(HNullConstant* constant A
   // Will be generated at use site.
 }
 
+void LocationsBuilderMIPS64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
 void LocationsBuilderMIPS64::HandleInvoke(HInvoke* invoke) {
   InvokeDexCallingConventionVisitorMIPS64 calling_convention_visitor;
   CodeGenerator::CreateCommonInvokeLocationSummary(invoke, &calling_convention_visitor);
@@ -2774,11 +2798,10 @@ void InstructionCodeGeneratorMIPS64::VisitNewArray(HNewArray* instruction) {
   LocationSummary* locations = instruction->GetLocations();
   // Move an uint16_t value to a register.
   __ LoadConst32(locations->GetTemp(0).AsRegister<GpuRegister>(), instruction->GetTypeIndex());
-  codegen_->InvokeRuntime(
-      GetThreadOffset<kMips64WordSize>(instruction->GetEntrypoint()).Int32Value(),
-      instruction,
-      instruction->GetDexPc(),
-      nullptr);
+  codegen_->InvokeRuntime(instruction->GetEntrypoint(),
+                          instruction,
+                          instruction->GetDexPc(),
+                          nullptr);
   CheckEntrypointTypes<kQuickAllocArrayWithAccessCheck, void*, uint32_t, int32_t, ArtMethod*>();
 }
 
@@ -2795,11 +2818,10 @@ void InstructionCodeGeneratorMIPS64::VisitNewInstance(HNewInstance* instruction)
   LocationSummary* locations = instruction->GetLocations();
   // Move an uint16_t value to a register.
   __ LoadConst32(locations->GetTemp(0).AsRegister<GpuRegister>(), instruction->GetTypeIndex());
-  codegen_->InvokeRuntime(
-      GetThreadOffset<kMips64WordSize>(instruction->GetEntrypoint()).Int32Value(),
-      instruction,
-      instruction->GetDexPc(),
-      nullptr);
+  codegen_->InvokeRuntime(instruction->GetEntrypoint(),
+                          instruction,
+                          instruction->GetDexPc(),
+                          nullptr);
   CheckEntrypointTypes<kQuickAllocObjectWithAccessCheck, void*, uint32_t, ArtMethod*>();
 }
 

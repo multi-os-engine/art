@@ -381,6 +381,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         invoke->GetDexMethodIndex(), GetGraph()->GetDexFile(), /* with_signature */ false);
   }
 
+  void VisitInvokeUnresolved(HInvokeUnresolved* invoke) OVERRIDE {
+    StartAttributeStream("invoke_type") << invoke->GetOriginalInvokeType();
+  }
+
   void VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) OVERRIDE {
     VisitInvoke(invoke);
     StartAttributeStream("recursive") << std::boolalpha
