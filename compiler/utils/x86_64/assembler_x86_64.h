@@ -302,6 +302,62 @@ class ConstantArea {
 };
 
 
+class ShortLabel {
+ public:
+  ShortLabel() : position_(0) {}
+
+  ~ShortLabel() {
+    // Assert if label is being destroyed with unresolved branches pending.
+    CHECK(!IsLinked());
+  }
+
+  // Returns the position for bound and linked labels. Cannot be used
+  // for unused labels.
+  int Position() const {
+    CHECK(!IsUnused());
+    return IsBound() ? -position_ - sizeof(void*) : position_ - sizeof(void*);
+  }
+
+  int LinkPosition() const {
+    CHECK(IsLinked());
+    return position_ - sizeof(void*);
+  }
+
+  bool IsBound() const { return position_ < 0; }
+  bool IsUnused() const { return position_ == 0; }
+  bool IsLinked() const { return !link_locations_.empty(); }
+
+ private:
+  int position_;
+
+  // Since we only have one byte of space for the offset, we have to store
+  // the list of link positions out of line.
+  std::vector<uint32_t> link_locations_;
+
+  void BindTo(int position) {
+    CHECK(!IsBound());
+    position_ = -position - sizeof(void*);
+    CHECK(IsBound());
+  }
+
+  void AddLink(uint32_t position) {
+    CHECK(!IsBound());
+    link_locations_.push_back(position);
+  }
+
+  const std::vector<uint32_t>& GetLinkPositions() const {
+    return link_locations_;
+  }
+
+  void RemoveLinks() {
+    link_locations_.clear();
+  }
+
+  friend class x86_64::X86_64Assembler;
+
+  DISALLOW_COPY_AND_ASSIGN(ShortLabel);
+};
+
 class X86_64Assembler FINAL : public Assembler {
  public:
   X86_64Assembler() {}
@@ -588,10 +644,13 @@ class X86_64Assembler FINAL : public Assembler {
   void hlt();
 
   void j(Condition condition, Label* label);
+  void j(Condition condition, ShortLabel* label);
+  void jrcxz(ShortLabel* label);
 
   void jmp(CpuRegister reg);
   void jmp(const Address& address);
   void jmp(Label* label);
+  void jmp(ShortLabel* label);
 
   X86_64Assembler* lock();
   void cmpxchgl(const Address& address, CpuRegister reg);
@@ -639,6 +698,7 @@ class X86_64Assembler FINAL : public Assembler {
   int PreferredLoopAlignment() { return 16; }
   void Align(int alignment, int offset);
   void Bind(Label* label);
+  void Bind(ShortLabel* label);
 
   //
   // Overridden common assembler high-level functionality
@@ -809,6 +869,7 @@ class X86_64Assembler FINAL : public Assembler {
   void EmitComplex(uint8_t rm, const Operand& operand, const Immediate& immediate);
   void EmitLabel(Label* label, int instruction_size);
   void EmitLabelLink(Label* label);
+  void EmitLabelLink(ShortLabel* label);
 
   void EmitGenericShift(bool wide, int rm, CpuRegister reg, const Immediate& imm);
   void EmitGenericShift(bool wide, int rm, CpuRegister operand, CpuRegister shifter);
