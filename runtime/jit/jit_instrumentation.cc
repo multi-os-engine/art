@@ -51,8 +51,10 @@ class JitCompileTask : public Task {
   DISALLOW_IMPLICIT_CONSTRUCTORS(JitCompileTask);
 };
 
-JitInstrumentationCache::JitInstrumentationCache(size_t hot_method_threshold)
-    : lock_("jit instrumentation lock"), hot_method_threshold_(hot_method_threshold) {
+JitInstrumentationCache::JitInstrumentationCache(size_t hot_method_threshold,
+                                                 size_t warm_method_threshold)
+    : hot_method_threshold_(hot_method_threshold),
+      warm_method_threshold_(warm_method_threshold) {
 }
 
 void JitInstrumentationCache::CreateThreadPool() {
@@ -63,17 +65,10 @@ void JitInstrumentationCache::DeleteThreadPool() {
   thread_pool_.reset();
 }
 
-void JitInstrumentationCache::SignalCompiled(Thread* self, ArtMethod* method) {
-  ScopedObjectAccessUnchecked soa(self);
-  jmethodID method_id = soa.EncodeMethod(method);
-  MutexLock mu(self, lock_);
-  auto it = samples_.find(method_id);
-  if (it != samples_.end()) {
-    samples_.erase(it);
-  }
+void JitInstrumentationCache::SignalCompiled(Thread*, ArtMethod*) {
 }
 
-void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t count) {
+void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t) {
   ScopedObjectAccessUnchecked soa(self);
   // Since we don't have on-stack replacement, some methods can remain in the interpreter longer
   // than we want resulting in samples even after the method is compiled.
@@ -81,40 +76,43 @@ void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t
       Runtime::Current()->GetJit()->GetCodeCache()->ContainsMethod(method)) {
     return;
   }
-  jmethodID method_id = soa.EncodeMethod(method);
-  bool is_hot = false;
-  {
-    MutexLock mu(self, lock_);
-    size_t sample_count = 0;
-    auto it = samples_.find(method_id);
-    if (it != samples_.end()) {
-      it->second += count;
-      sample_count = it->second;
-    } else {
-      sample_count = count;
-      samples_.insert(std::make_pair(method_id, count));
-    }
-    // If we have enough samples, mark as hot and request Jit compilation.
-    if (sample_count >= hot_method_threshold_ && sample_count - count < hot_method_threshold_) {
-      is_hot = true;
-    }
+  if (thread_pool_.get() == nullptr) {
+    // Runtime is shutting down.
+    return;
   }
-  if (is_hot) {
-    if (thread_pool_.get() != nullptr) {
-      thread_pool_->AddTask(self, new JitCompileTask(
-          method->GetInterfaceMethodIfProxy(sizeof(void*)), this));
-      thread_pool_->StartWorkers(self);
-    } else {
-      VLOG(jit) << "Compiling hot method " << PrettyMethod(method);
-      Runtime::Current()->GetJit()->CompileMethod(
-          method->GetInterfaceMethodIfProxy(sizeof(void*)), self);
-    }
+  uint16_t sample_count = method->IncrementCounter();
+  // If we have enough samples, mark as hot and request Jit compilation.
+  if (sample_count == warm_method_threshold_) {
+    ProfilingInfo* info = method->CreateProfilingInfo();
+    VLOG(jit) << "Start profiling " << PrettyMethod(method) << " with " << info << " " << method->GetProfilingInfo();
+  }
+  if (sample_count == hot_method_threshold_) {
+    thread_pool_->AddTask(self, new JitCompileTask(
+        method->GetInterfaceMethodIfProxy(sizeof(void*)), this));
+    thread_pool_->StartWorkers(self);
   }
 }
 
 JitInstrumentationListener::JitInstrumentationListener(JitInstrumentationCache* cache)
     : instrumentation_cache_(cache) {
   CHECK(instrumentation_cache_ != nullptr);
+}
+
+void JitInstrumentationListener::InvokeVirtualOrInterface(Thread* thread,
+                                                          mirror::Object* this_object,
+                                                          ArtMethod* caller,
+                                                          uint32_t dex_pc,
+                                                          ArtMethod* /* callee */) {
+  if (this_object == nullptr) {
+    return;
+  }
+
+  ProfilingInfo* info = caller->GetProfilingInfo();
+  if (info == nullptr) {
+    return;
+  }
+
+  info->AddInvokeInfo(thread, dex_pc, this_object->GetClass());
 }
 
 }  // namespace jit

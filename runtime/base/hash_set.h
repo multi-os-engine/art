@@ -222,6 +222,15 @@ class HashSet {
     return *this;
   }
 
+  void SetData(T* data, bool owns_data) {
+    data_ = data;
+    owns_data_ = owns_data;
+  }
+  
+  const T* GetData() const {
+    return data_;
+  }
+
   // Lower case for c++11 for each.
   Iterator begin() {
     Iterator ret(this, 0);
@@ -352,6 +361,10 @@ class HashSet {
     return num_elements_;
   }
 
+  size_t NumBuckets() const {
+    return num_buckets_;
+  }
+
   void ShrinkToMaximumLoad() {
     Resize(Size() / max_load_factor_);
   }
@@ -452,10 +465,6 @@ class HashSet {
 
   bool IsFreeSlot(size_t index) const {
     return emptyfn_.IsEmpty(ElementForIndex(index));
-  }
-
-  size_t NumBuckets() const {
-    return num_buckets_;
   }
 
   // Allocate a number of buckets.

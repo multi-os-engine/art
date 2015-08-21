@@ -30,6 +30,7 @@
 #include "interpreter/interpreter.h"
 #include "jit/jit.h"
 #include "jit/jit_code_cache.h"
+#include "jit/profiling_info.h"
 #include "jni_internal.h"
 #include "mapping_table.h"
 #include "mirror/abstract_method.h"
@@ -573,6 +574,16 @@ const uint8_t* ArtMethod::GetQuickenedInfo() {
     return nullptr;
   }
   return oat_method.GetVmapTable();
+}
+
+ProfilingInfo* ArtMethod::CreateProfilingInfo() {
+ ProfilingInfo* info = ProfilingInfo::Create(this);
+ if (!reinterpret_cast<Atomic<ProfilingInfo*>*>(&ptr_sized_fields_.entry_point_from_jni_)->
+      CompareExchangeStrongSequentiallyConsistent(nullptr, info)) {
+   return GetProfilingInfo();
+ } else {
+   return info;
+ }
 }
 
 }  // namespace art

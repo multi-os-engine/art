@@ -97,6 +97,13 @@ struct InstrumentationListener {
   // Call-back for when we get a backward branch.
   virtual void BackwardBranch(Thread* thread, ArtMethod* method, int32_t dex_pc_offset)
       SHARED_REQUIRES(Locks::mutator_lock_) = 0;
+
+  virtual void InvokeVirtualOrInterface(Thread* thread,
+                                        mirror::Object* this_object,
+                                        ArtMethod* caller,
+                                        uint32_t dex_pc,
+                                        ArtMethod* callee)
+      SHARED_REQUIRES(Locks::mutator_lock_) = 0;
 };
 
 // Instrumentation is a catch-all for when extra information is required from the runtime. The
@@ -114,6 +121,7 @@ class Instrumentation {
     kFieldWritten = 0x20,
     kExceptionCaught = 0x40,
     kBackwardBranch = 0x80,
+    kInvokeVirtualOrInterface = 0x100,
   };
 
   enum class InstrumentationLevel {
@@ -257,6 +265,10 @@ class Instrumentation {
     return have_backward_branch_listeners_;
   }
 
+  bool HasInvokeVirtualOrInterfaceListeners() const SHARED_REQUIRES(Locks::mutator_lock_) {
+    return have_invoke_virtual_or_interface_listeners_;
+  }
+
   bool IsActive() const SHARED_REQUIRES(Locks::mutator_lock_) {
     return have_dex_pc_listeners_ || have_method_entry_listeners_ || have_method_exit_listeners_ ||
         have_field_read_listeners_ || have_field_write_listeners_ ||
@@ -325,6 +337,17 @@ class Instrumentation {
     }
   }
 
+  void InvokeVirtualOrInterface(Thread* thread,
+                                mirror::Object* this_object,
+                                ArtMethod* caller,
+                                uint32_t dex_pc,
+                                ArtMethod* callee) const
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    if (UNLIKELY(HasInvokeVirtualOrInterfaceListeners())) {
+      InvokeVirtualOrInterfaceImpl(thread, this_object, caller, dex_pc, callee);
+    }
+  }
+
   // Inform listeners that an exception was caught.
   void ExceptionCaughtEvent(Thread* thread, mirror::Throwable* exception_object) const
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -384,6 +407,12 @@ class Instrumentation {
                            ArtMethod* method, uint32_t dex_pc) const
       SHARED_REQUIRES(Locks::mutator_lock_);
   void BackwardBranchImpl(Thread* thread, ArtMethod* method, int32_t offset) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  void InvokeVirtualOrInterfaceImpl(Thread* thread,
+                                    mirror::Object* this_object,
+                                    ArtMethod* caller,
+                                    uint32_t dex_pc,
+                                    ArtMethod* callee) const
       SHARED_REQUIRES(Locks::mutator_lock_);
   void FieldReadEventImpl(Thread* thread, mirror::Object* this_object,
                            ArtMethod* method, uint32_t dex_pc,
@@ -451,6 +480,9 @@ class Instrumentation {
   // Do we have any backward branch listeners? Short-cut to avoid taking the instrumentation_lock_.
   bool have_backward_branch_listeners_ GUARDED_BY(Locks::mutator_lock_);
 
+  // Do we have any invoke listeners? Short-cut to avoid taking the instrumentation_lock_.
+  bool have_invoke_virtual_or_interface_listeners_ GUARDED_BY(Locks::mutator_lock_);
+
   // Contains the instrumentation level required by each client of the instrumentation identified
   // by a string key.
   typedef SafeMap<const char*, InstrumentationLevel> InstrumentationLevelTable;
@@ -461,6 +493,8 @@ class Instrumentation {
   std::list<InstrumentationListener*> method_exit_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> method_unwind_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> backward_branch_listeners_ GUARDED_BY(Locks::mutator_lock_);
+  std::list<InstrumentationListener*> invoke_virtual_or_interface_listeners_
+      GUARDED_BY(Locks::mutator_lock_);
   std::shared_ptr<std::list<InstrumentationListener*>> dex_pc_listeners_
       GUARDED_BY(Locks::mutator_lock_);
   std::shared_ptr<std::list<InstrumentationListener*>> field_read_listeners_

@@ -25,6 +25,7 @@
 #include "dex_file.h"
 #include "dex_file-inl.h"
 #include "gc_root-inl.h"
+#include "jit/profiling_info.h"
 #include "mirror/class-inl.h"
 #include "mirror/dex_cache.h"
 #include "mirror/object-inl.h"
@@ -34,6 +35,8 @@
 #include "read_barrier-inl.h"
 #include "runtime-inl.h"
 #include "utils.h"
+
+#include <iostream>
 
 namespace art {
 
@@ -503,6 +506,13 @@ void ArtMethod::VisitRoots(RootVisitorType& visitor) {
   visitor.VisitRootIfNonNull(declaring_class_.AddressWithoutBarrier());
   visitor.VisitRootIfNonNull(dex_cache_resolved_methods_.AddressWithoutBarrier());
   visitor.VisitRootIfNonNull(dex_cache_resolved_types_.AddressWithoutBarrier());
+  ProfilingInfo* profiling_info = GetProfilingInfo();
+  if (hotness_count_ != 0 && !IsNative() && profiling_info != nullptr) {
+    std::cerr << PrettyMethod(this) << " " << profiling_info << std::endl;
+    for (size_t i = 0, e = profiling_info->CacheSize(); i< e; ++i) {
+      visitor.VisitRootIfNonNull(profiling_info->CacheAt(i).AddressWithoutBarrier());
+    }
+  }
 }
 
 inline void ArtMethod::CopyFrom(const ArtMethod* src, size_t image_pointer_size) {
