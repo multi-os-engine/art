@@ -1501,6 +1501,44 @@ void InstructionCodeGeneratorX86::VisitReturn(HReturn* ret) {
   codegen_->GenerateFrameExit();
 }
 
+void LocationsBuilderX86::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  // The trampoline uses the same calling convention as dex calling conventions,
+  // except instead of loading arg0/r0 with the target Method*, arg0/r0 will contain
+  // the method_idx.
+  HandleInvoke(invoke);
+}
+
+void InstructionCodeGeneratorX86::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  LocationSummary* locations = invoke->GetLocations();
+  Register method_idx_reg = locations->GetTemp(0).AsRegister<Register>();
+  DCHECK_EQ(method_idx_reg, kMethodRegisterArgument);
+
+  __ movl(method_idx_reg, Immediate(invoke->GetDexMethodIndex()));
+
+  switch (invoke->GetOriginalInvokeType()) {
+    case kStatic:
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pInvokeStaticTrampolineWithAccessCheck),
+          invoke, invoke->GetDexPc(), nullptr);
+      break;
+    case kDirect:
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pInvokeDirectTrampolineWithAccessCheck),
+          invoke, invoke->GetDexPc(), nullptr);
+      break;
+    case kVirtual:
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pInvokeVirtualTrampolineWithAccessCheck),
+          invoke, invoke->GetDexPc(), nullptr);
+      break;
+    case kSuper:
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pInvokeSuperTrampolineWithAccessCheck),
+          invoke, invoke->GetDexPc(), nullptr);
+      break;
+    case kInterface:
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pInvokeInterfaceTrampolineWithAccessCheck),
+          invoke, invoke->GetDexPc(), nullptr);
+      break;
+  }
+}
+
 void LocationsBuilderX86::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
   // When we do not run baseline, explicit clinit checks triggered by static
   // invokes must have been pruned by art::PrepareForRegisterAllocation.

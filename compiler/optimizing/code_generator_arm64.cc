@@ -2300,6 +2300,14 @@ void InstructionCodeGeneratorARM64::VisitNullConstant(HNullConstant* constant) {
   UNUSED(constant);
 }
 
+void LocationsBuilderARM64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
+void InstructionCodeGeneratorARM64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
 void LocationsBuilderARM64::HandleInvoke(HInvoke* invoke) {
   InvokeDexCallingConventionVisitorARM64 calling_convention_visitor;
   CodeGenerator::CreateCommonInvokeLocationSummary(invoke, &calling_convention_visitor);

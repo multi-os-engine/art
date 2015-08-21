@@ -1663,6 +1663,14 @@ Location InvokeDexCallingConventionVisitorX86_64::GetNextLocation(Primitive::Typ
   return Location();
 }
 
+void LocationsBuilderX86_64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
+void InstructionCodeGeneratorX86_64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
 void LocationsBuilderX86_64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
   // When we do not run baseline, explicit clinit checks triggered by static
   // invokes must have been pruned by art::PrepareForRegisterAllocation.

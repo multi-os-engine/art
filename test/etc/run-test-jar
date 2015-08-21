@@ -63,8 +63,12 @@ while true; do
     elif [ "x$1" = "x-Xcompiler-option" ]; then
         shift
         option="$1"
-        FLAGS="${FLAGS} -Xcompiler-option $option"
         COMPILE_FLAGS="${COMPILE_FLAGS} $option"
+        if [ "x$option" != "x--dump-cfg="*];  then
+          # Dump cfg only for the main dex. Otherwise we risk overriding it
+          # at runtime if we initiate compilation for a secondary dex.
+          FLAGS="${FLAGS} -Xcompiler-option $option"
+        fi
         shift
     elif [ "x$1" = "x--runtime-option" ]; then
         shift

@@ -414,6 +414,7 @@ MethodVerifier::MethodVerifier(Thread* self,
       have_pending_runtime_throw_failure_(false),
       have_pending_experimental_failure_(false),
       have_any_pending_runtime_throw_failure_(false),
+      have_only_unresolved_failures_(true),
       new_instance_count_(0),
       monitor_enter_count_(0),
       can_load_classes_(can_load_classes),
@@ -597,6 +598,9 @@ std::ostream& MethodVerifier::Fail(VerifyError error) {
     case VERIFY_ERROR_INSTANTIATION:
     case VERIFY_ERROR_CLASS_CHANGE:
     case VERIFY_ERROR_FORCE_INTERPRETER:
+      if (error == VERIFY_ERROR_FORCE_INTERPRETER) {
+        have_only_unresolved_failures_ = false;
+      }
       if (Runtime::Current()->IsAotCompiler() || !can_load_classes_) {
         // If we're optimistically running verification at compile time, turn NO_xxx, ACCESS_xxx,
         // class change and instantiation errors into soft verification errors so that we re-verify
@@ -631,6 +635,7 @@ std::ostream& MethodVerifier::Fail(VerifyError error) {
     case VERIFY_ERROR_BAD_CLASS_SOFT:
       if (!allow_soft_failures_) {
         have_pending_hard_failure_ = true;
+        have_only_unresolved_failures_ = false;
       }
       break;
       // Hard verification failures at compile time will still fail at runtime, so the class is
@@ -647,6 +652,7 @@ std::ostream& MethodVerifier::Fail(VerifyError error) {
         Dump(oss);
         LOG(ERROR) << oss.str();
       }
+      have_only_unresolved_failures_ = false;
       break;
     }
   }

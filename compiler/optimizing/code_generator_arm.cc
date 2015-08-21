@@ -704,6 +704,7 @@ Location InvokeDexCallingConventionVisitorARM::GetNextLocation(Primitive::Type t
       if (index + 1 < calling_convention.GetNumberOfRegisters()) {
         DCHECK_EQ(calling_convention.GetRegisterAt(index) + 1,
                   calling_convention.GetRegisterAt(index + 1));
+
         return Location::RegisterPairLocation(calling_convention.GetRegisterAt(index),
                                               calling_convention.GetRegisterAt(index + 1));
       } else {
@@ -1507,6 +1508,14 @@ void LocationsBuilderARM::VisitReturn(HReturn* ret) {
 void InstructionCodeGeneratorARM::VisitReturn(HReturn* ret) {
   UNUSED(ret);
   codegen_->GenerateFrameExit();
+}
+
+void LocationsBuilderARM::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
+void InstructionCodeGeneratorARM::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
 }
 
 void LocationsBuilderARM::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {

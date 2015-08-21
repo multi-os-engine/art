@@ -2327,6 +2327,14 @@ void InstructionCodeGeneratorMIPS64::VisitNullConstant(HNullConstant* constant A
   // Will be generated at use site.
 }
 
+void LocationsBuilderMIPS64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
+  UNUSED(invoke);
+}
+
 void LocationsBuilderMIPS64::HandleInvoke(HInvoke* invoke) {
   InvokeDexCallingConventionVisitorMIPS64 calling_convention_visitor;
   CodeGenerator::CreateCommonInvokeLocationSummary(invoke, &calling_convention_visitor);
