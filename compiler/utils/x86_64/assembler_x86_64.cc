@@ -1971,6 +1971,38 @@ void X86_64Assembler::j(Condition condition, Label* label) {
 }
 
 
+void X86_64Assembler::j(Condition condition, NearLabel* label) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  if (label->IsBound()) {
+    static const int kShortSize = 2;
+    int offset = label->Position() - buffer_.Size();
+    CHECK_LE(offset, 0);
+    CHECK(IsInt<8>(offset - kShortSize));
+    EmitUint8(0x70 + condition);
+    EmitUint8((offset - kShortSize) & 0xFF);
+  } else {
+    EmitUint8(0x70 + condition);
+    EmitLabelLink(label);
+  }
+}
+
+
+void X86_64Assembler::jrcxz(NearLabel* label) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  if (label->IsBound()) {
+    static const int kShortSize = 2;
+    int offset = label->Position() - buffer_.Size();
+    CHECK_LE(offset, 0);
+    CHECK(IsInt<8>(offset - kShortSize));
+    EmitUint8(0xE3);
+    EmitUint8((offset - kShortSize) & 0xFF);
+  } else {
+    EmitUint8(0xE3);
+    EmitLabelLink(label);
+  }
+}
+
+
 void X86_64Assembler::jmp(CpuRegister reg) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   EmitOptionalRex32(reg);
@@ -2001,6 +2033,22 @@ void X86_64Assembler::jmp(Label* label) {
     }
   } else {
     EmitUint8(0xE9);
+    EmitLabelLink(label);
+  }
+}
+
+
+void X86_64Assembler::jmp(NearLabel* label) {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  if (label->IsBound()) {
+    static const int kShortSize = 2;
+    int offset = label->Position() - buffer_.Size();
+    CHECK_LE(offset, 0);
+    CHECK(IsInt<8>(offset - kShortSize));
+    EmitUint8(0xEB);
+    EmitUint8((offset - kShortSize) & 0xFF);
+  } else {
+    EmitUint8(0xEB);
     EmitLabelLink(label);
   }
 }
@@ -2187,6 +2235,19 @@ void X86_64Assembler::Bind(Label* label) {
 }
 
 
+void X86_64Assembler::Bind(NearLabel* label) {
+  int bound = buffer_.Size();
+  CHECK(!label->IsBound());  // Labels can only be bound once.
+  for (uint32_t pos : label->GetLinkPositions()) {
+    int offset = bound - (pos + 1);
+    CHECK(IsInt<8>(offset));
+    buffer_.Store<int8_t>(pos, offset & 0xFF);
+  }
+  label->RemoveLinks();
+  label->BindTo(bound);
+}
+
+
 void X86_64Assembler::EmitOperand(uint8_t reg_or_opcode, const Operand& operand) {
   CHECK_GE(reg_or_opcode, 0);
   CHECK_LT(reg_or_opcode, 8);
@@ -2253,6 +2314,14 @@ void X86_64Assembler::EmitLabelLink(Label* label) {
   int position = buffer_.Size();
   EmitInt32(label->position_);
   label->LinkTo(position);
+}
+
+
+void X86_64Assembler::EmitLabelLink(NearLabel* label) {
+  CHECK(!label->IsBound());
+  int position = buffer_.Size();
+  EmitUint8(0);
+  label->AddLink(position);
 }
 
 
