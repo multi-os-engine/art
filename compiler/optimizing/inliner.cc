@@ -62,7 +62,9 @@ void HInliner::Run() {
       HInstruction* next = instruction->GetNext();
       HInvoke* call = instruction->AsInvoke();
       // As long as the call is not intrinsified, it is worth trying to inline.
-      if (call != nullptr && call->GetIntrinsic() == Intrinsics::kNone) {
+      if (call != nullptr
+          && !call->IsInvokeUnresolved()
+          && call->GetIntrinsic() == Intrinsics::kNone) {
         // We use the original invoke type to ensure the resolution of the called method
         // works properly.
         if (!TryInline(call)) {
@@ -190,6 +192,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
   }
 
   if (resolved_method == nullptr) {
+    // TODO: Can this still happen?
     // Method cannot be resolved if it is in another dex file we do not have access to.
     VLOG(compiler) << "Method cannot be resolved " << PrettyMethod(method_index, caller_dex_file);
     return false;
