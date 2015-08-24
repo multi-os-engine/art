@@ -45,14 +45,18 @@ TEST(GVNTest, LocalFieldElimination) {
                                                            Primitive::kPrimNot,
                                                            MemberOffset(42),
                                                            false,
+                                                           false,
                                                            kUnknownFieldIndex,
+                                                           kUnknownClassDefIndex,
                                                            graph->GetDexFile(),
                                                            dex_cache));
   block->AddInstruction(new (&allocator) HInstanceFieldGet(parameter,
                                                            Primitive::kPrimNot,
                                                            MemberOffset(42),
                                                            false,
+                                                           false,
                                                            kUnknownFieldIndex,
+                                                           kUnknownClassDefIndex,
                                                            graph->GetDexFile(),
                                                            dex_cache));
   HInstruction* to_remove = block->GetLastInstruction();
@@ -60,7 +64,9 @@ TEST(GVNTest, LocalFieldElimination) {
                                                            Primitive::kPrimNot,
                                                            MemberOffset(43),
                                                            false,
+                                                           false,
                                                            kUnknownFieldIndex,
+                                                           kUnknownClassDefIndex,
                                                            graph->GetDexFile(),
                                                            dex_cache));
   HInstruction* different_offset = block->GetLastInstruction();
@@ -70,14 +76,18 @@ TEST(GVNTest, LocalFieldElimination) {
                                                            Primitive::kPrimNot,
                                                            MemberOffset(42),
                                                            false,
+                                                           false,
                                                            kUnknownFieldIndex,
+                                                           kUnknownClassDefIndex,
                                                            graph->GetDexFile(),
                                                            dex_cache));
   block->AddInstruction(new (&allocator) HInstanceFieldGet(parameter,
                                                            Primitive::kPrimNot,
                                                            MemberOffset(42),
                                                            false,
+                                                           false,
                                                            kUnknownFieldIndex,
+                                                           kUnknownClassDefIndex,
                                                            graph->GetDexFile(),
                                                            dex_cache));
   HInstruction* use_after_kill = block->GetLastInstruction();
@@ -116,7 +126,9 @@ TEST(GVNTest, GlobalFieldElimination) {
                                                            Primitive::kPrimBoolean,
                                                            MemberOffset(42),
                                                            false,
+                                                           false,
                                                            kUnknownFieldIndex,
+                                                           kUnknownClassDefIndex,
                                                            graph->GetDexFile(),
                                                            dex_cache));
 
@@ -137,7 +149,9 @@ TEST(GVNTest, GlobalFieldElimination) {
                                                           Primitive::kPrimBoolean,
                                                           MemberOffset(42),
                                                           false,
+                                                          false,
                                                           kUnknownFieldIndex,
+                                                          kUnknownClassDefIndex,
                                                           graph->GetDexFile(),
                                                           dex_cache));
   then->AddInstruction(new (&allocator) HGoto());
@@ -145,7 +159,9 @@ TEST(GVNTest, GlobalFieldElimination) {
                                                            Primitive::kPrimBoolean,
                                                            MemberOffset(42),
                                                            false,
+                                                           false,
                                                            kUnknownFieldIndex,
+                                                           kUnknownClassDefIndex,
                                                            graph->GetDexFile(),
                                                            dex_cache));
   else_->AddInstruction(new (&allocator) HGoto());
@@ -153,7 +169,9 @@ TEST(GVNTest, GlobalFieldElimination) {
                                                           Primitive::kPrimBoolean,
                                                           MemberOffset(42),
                                                           false,
+                                                          false,
                                                           kUnknownFieldIndex,
+                                                          kUnknownClassDefIndex,
                                                           graph->GetDexFile(),
                                                           dex_cache));
   join->AddInstruction(new (&allocator) HExit());
@@ -189,7 +207,9 @@ TEST(GVNTest, LoopFieldElimination) {
                                                            Primitive::kPrimBoolean,
                                                            MemberOffset(42),
                                                            false,
+                                                           false,
                                                            kUnknownFieldIndex,
+                                                           kUnknownClassDefIndex,
                                                            graph->GetDexFile(),
                                                            dex_cache));
   block->AddInstruction(new (&allocator) HGoto());
@@ -210,7 +230,9 @@ TEST(GVNTest, LoopFieldElimination) {
                                                                  Primitive::kPrimBoolean,
                                                                  MemberOffset(42),
                                                                  false,
+                                                                 false,
                                                                  kUnknownFieldIndex,
+                                                                 kUnknownClassDefIndex,
                                                                  graph->GetDexFile(),
                                                                  dex_cache));
   HInstruction* field_get_in_loop_header = loop_header->GetLastInstruction();
@@ -223,7 +245,9 @@ TEST(GVNTest, LoopFieldElimination) {
                                                                Primitive::kPrimBoolean,
                                                                MemberOffset(42),
                                                                false,
+                                                               false,
                                                                kUnknownFieldIndex,
+                                                               kUnknownClassDefIndex,
                                                                graph->GetDexFile(),
                                                                dex_cache));
   HInstruction* field_set = loop_body->GetLastInstruction();
@@ -231,7 +255,9 @@ TEST(GVNTest, LoopFieldElimination) {
                                                                Primitive::kPrimBoolean,
                                                                MemberOffset(42),
                                                                false,
+                                                               false,
                                                                kUnknownFieldIndex,
+                                                               kUnknownClassDefIndex,
                                                                graph->GetDexFile(),
                                                                dex_cache));
   HInstruction* field_get_in_loop_body = loop_body->GetLastInstruction();
@@ -241,7 +267,9 @@ TEST(GVNTest, LoopFieldElimination) {
                                                           Primitive::kPrimBoolean,
                                                           MemberOffset(42),
                                                           false,
+                                                          false,
                                                           kUnknownFieldIndex,
+                                                          kUnknownClassDefIndex,
                                                           graph->GetDexFile(),
                                                           dex_cache));
   HInstruction* field_get_in_exit = exit->GetLastInstruction();
@@ -337,7 +365,9 @@ TEST(GVNTest, LoopSideEffects) {
                                                              Primitive::kPrimNot,
                                                              MemberOffset(42),
                                                              false,
+                                                             false,
                                                              kUnknownFieldIndex,
+                                                             kUnknownClassDefIndex,
                                                              graph->GetDexFile(),
                                                              dex_cache));
 
@@ -360,7 +390,9 @@ TEST(GVNTest, LoopSideEffects) {
                                            Primitive::kPrimNot,
                                            MemberOffset(42),
                                            false,
+                                           false,
                                            kUnknownFieldIndex,
+                                           kUnknownClassDefIndex,
                                            graph->GetDexFile(),
                                            dex_cache),
         outer_loop_body->GetLastInstruction());
@@ -384,7 +416,9 @@ TEST(GVNTest, LoopSideEffects) {
                                            Primitive::kPrimNot,
                                            MemberOffset(42),
                                            false,
+                                           false,
                                            kUnknownFieldIndex,
+                                           kUnknownClassDefIndex,
                                            graph->GetDexFile(),
                                            dex_cache),
         inner_loop_body->GetLastInstruction());

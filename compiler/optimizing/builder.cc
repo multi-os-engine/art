@@ -1259,6 +1259,7 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
 
   HInstruction* object = LoadLocal(obj_reg, Primitive::kPrimNot, dex_pc);
   current_block_->AddInstruction(new (arena_) HNullCheck(object, dex_pc));
+  uint16_t class_def_index = resolved_field->GetDeclaringClass()->GetDexClassDefIndex();
   if (is_put) {
     Temporaries temps(graph_);
     HInstruction* null_check = current_block_->GetLastInstruction();
@@ -1271,7 +1272,9 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
         field_type,
         resolved_field->GetOffset(),
         resolved_field->IsVolatile(),
+        resolved_field->IsFinal(),
         field_index,
+        class_def_index,
         *dex_file_,
         dex_compilation_unit_->GetDexCache(),
         dex_pc));
@@ -1281,7 +1284,9 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
         field_type,
         resolved_field->GetOffset(),
         resolved_field->IsVolatile(),
+        resolved_field->IsFinal(),
         field_index,
+        class_def_index,
         *dex_file_,
         dex_compilation_unit_->GetDexCache(),
         dex_pc));
@@ -1393,6 +1398,7 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
   }
 
   Primitive::Type field_type = resolved_field->GetTypeAsPrimitiveType();
+  uint16_t class_def_index = resolved_field->GetDeclaringClass()->GetDexClassDefIndex();
   if (is_put) {
     // We need to keep the class alive before loading the value.
     Temporaries temps(graph_);
@@ -1404,7 +1410,9 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
                                                                 field_type,
                                                                 resolved_field->GetOffset(),
                                                                 resolved_field->IsVolatile(),
+                                                                resolved_field->IsFinal(),
                                                                 field_index,
+                                                                class_def_index,
                                                                 *dex_file_,
                                                                 dex_cache_,
                                                                 dex_pc));
@@ -1413,7 +1421,9 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
                                                                 field_type,
                                                                 resolved_field->GetOffset(),
                                                                 resolved_field->IsVolatile(),
+                                                                resolved_field->IsFinal(),
                                                                 field_index,
+                                                                class_def_index,
                                                                 *dex_file_,
                                                                 dex_cache_,
                                                                 dex_pc));

@@ -486,7 +486,9 @@ static HGraph* BuildIfElseWithPhi(ArenaAllocator* allocator,
                                                          Primitive::kPrimBoolean,
                                                          MemberOffset(22),
                                                          false,
+                                                         false,
                                                          kUnknownFieldIndex,
+                                                         kUnknownClassDefIndex,
                                                          graph->GetDexFile(),
                                                          dex_cache);
   block->AddInstruction(test);
@@ -511,14 +513,18 @@ static HGraph* BuildIfElseWithPhi(ArenaAllocator* allocator,
                                               Primitive::kPrimInt,
                                               MemberOffset(42),
                                               false,
+                                              false,
                                               kUnknownFieldIndex,
+                                              kUnknownClassDefIndex,
                                               graph->GetDexFile(),
                                               dex_cache);
 *input2 = new (allocator) HInstanceFieldGet(parameter,
                                             Primitive::kPrimInt,
                                             MemberOffset(42),
                                             false,
+                                            false,
                                             kUnknownFieldIndex,
+                                            kUnknownClassDefIndex,
                                             graph->GetDexFile(),
                                             dex_cache);
   then->AddInstruction(*input1);
@@ -632,7 +638,9 @@ static HGraph* BuildFieldReturn(ArenaAllocator* allocator,
                                              Primitive::kPrimInt,
                                              MemberOffset(42),
                                              false,
+                                             false,
                                              kUnknownFieldIndex,
+                                             kUnknownClassDefIndex,
                                              graph->GetDexFile(),
                                              dex_cache);
   block->AddInstruction(*field);

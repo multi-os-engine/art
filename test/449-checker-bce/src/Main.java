@@ -614,14 +614,14 @@ public class Main {
   /// CHECK: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
-  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
 
   /// CHECK-START: void Main.foo1(int[], int, int) BCE (after)
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
-  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
   //  Added blocks for deoptimization.
   /// CHECK: If
   /// CHECK: Goto
@@ -649,14 +649,14 @@ public class Main {
   /// CHECK: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
-  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
 
   /// CHECK-START: void Main.foo2(int[], int, int) BCE (after)
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
-  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
   //  Added blocks for deoptimization.
   /// CHECK: If
   /// CHECK: Goto
@@ -684,14 +684,14 @@ public class Main {
   /// CHECK: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
-  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
 
   /// CHECK-START: void Main.foo3(int[], int) BCE (after)
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
-  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
   //  Added blocks for deoptimization.
   /// CHECK: If
   /// CHECK: Goto
@@ -717,14 +717,14 @@ public class Main {
   /// CHECK: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
-  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
 
   /// CHECK-START: void Main.foo4(int[], int) BCE (after)
   /// CHECK: Phi
   /// CHECK-NOT: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK-NOT: BoundsCheck
-  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
   //  Added blocks for deoptimization.
   /// CHECK: If
   /// CHECK: Goto
