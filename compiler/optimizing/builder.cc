@@ -1234,12 +1234,14 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
                                                            field_index,
                                                            dex_pc);
     } else {
+      uint16_t class_def_index = resolved_field->GetDeclaringClass()->GetDexClassDefIndex();
       field_set = new (arena_) HInstanceFieldSet(null_check,
                                                  value,
                                                  field_type,
                                                  resolved_field->GetOffset(),
                                                  resolved_field->IsVolatile(),
                                                  field_index,
+                                                 class_def_index,
                                                  *dex_file_,
                                                  dex_compilation_unit_->GetDexCache(),
                                                  dex_pc);
@@ -1254,11 +1256,13 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
                                                            field_index,
                                                            dex_pc);
     } else {
+      uint16_t class_def_index = resolved_field->GetDeclaringClass()->GetDexClassDefIndex();
       field_get = new (arena_) HInstanceFieldGet(null_check,
                                                  field_type,
                                                  resolved_field->GetOffset(),
                                                  resolved_field->IsVolatile(),
                                                  field_index,
+                                                 class_def_index,
                                                  *dex_file_,
                                                  dex_compilation_unit_->GetDexCache(),
                                                  dex_pc);
@@ -1394,6 +1398,8 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
     cls = new (arena_) HClinitCheck(constant, dex_pc);
     current_block_->AddInstruction(cls);
   }
+
+  uint16_t class_def_index = resolved_field->GetDeclaringClass()->GetDexClassDefIndex();
   if (is_put) {
     // We need to keep the class alive before loading the value.
     Temporaries temps(graph_);
@@ -1406,6 +1412,7 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
                                                                 resolved_field->GetOffset(),
                                                                 resolved_field->IsVolatile(),
                                                                 field_index,
+                                                                class_def_index,
                                                                 *dex_file_,
                                                                 dex_cache_,
                                                                 dex_pc));
@@ -1415,6 +1422,7 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
                                                                 resolved_field->GetOffset(),
                                                                 resolved_field->IsVolatile(),
                                                                 field_index,
+                                                                class_def_index,
                                                                 *dex_file_,
                                                                 dex_cache_,
                                                                 dex_pc));
