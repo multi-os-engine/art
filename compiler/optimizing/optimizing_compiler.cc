@@ -324,7 +324,7 @@ void OptimizingCompiler::Init() {
     CHECK_EQ(driver->GetThreadCount(), 1U)
       << "Graph visualizer requires the compiler to run single-threaded. "
       << "Invoke the compiler with '-j1'.";
-    visualizer_output_.reset(new std::ofstream(cfg_file_name));
+    visualizer_output_.reset(new std::ofstream(cfg_file_name, std::ofstream::app));
   }
   if (driver->GetDumpStats()) {
     compilation_stats_.reset(new OptimizingCompilerStats());
