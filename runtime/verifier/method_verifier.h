@@ -88,6 +88,8 @@ enum VerifyError {
   VERIFY_ERROR_FORCE_INTERPRETER = 10,  // Skip the verification phase at runtime;
                                         // force the interpreter to do access checks.
                                         // (sets a soft fail at compile time).
+  VERIFY_ERROR_LOCKING = 11,            // Could not guarantee balanced locking. This should be punted to
+                                        // the interpreter with access checks.
 };
 std::ostream& operator<<(std::ostream& os, const VerifyError& rhs);
 
