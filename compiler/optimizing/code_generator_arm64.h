@@ -350,7 +350,8 @@ class CodeGeneratorARM64 : public CodeGenerator {
   void InvokeRuntime(int32_t offset,
                      HInstruction* instruction,
                      uint32_t dex_pc,
-                     SlowPathCode* slow_path);
+                     SlowPathCode* slow_path,
+                     bool record_pc_info = true);
 
   ParallelMoveResolverARM64* GetMoveResolver() OVERRIDE { return &move_resolver_; }
 

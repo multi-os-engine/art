@@ -421,10 +421,13 @@ size_t CodeGeneratorX86::RestoreFloatingPointRegister(size_t stack_index, uint32
 void CodeGeneratorX86::InvokeRuntime(Address entry_point,
                                      HInstruction* instruction,
                                      uint32_t dex_pc,
-                                     SlowPathCode* slow_path) {
+                                     SlowPathCode* slow_path,
+                                     bool record_pc_info) {
   ValidateInvokeRuntime(instruction, slow_path);
   __ fs()->call(entry_point);
-  RecordPcInfo(instruction, dex_pc, slow_path);
+  if (record_pc_info) {
+    RecordPcInfo(instruction, dex_pc, slow_path);
+  }
 }
 
 CodeGeneratorX86::CodeGeneratorX86(HGraph* graph,

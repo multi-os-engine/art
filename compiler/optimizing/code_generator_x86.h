@@ -236,7 +236,8 @@ class CodeGeneratorX86 : public CodeGenerator {
   void InvokeRuntime(Address entry_point,
                      HInstruction* instruction,
                      uint32_t dex_pc,
-                     SlowPathCode* slow_path);
+                     SlowPathCode* slow_path,
+                     bool record_pc_info = true);
 
   size_t GetWordSize() const OVERRIDE {
     return kX86WordSize;

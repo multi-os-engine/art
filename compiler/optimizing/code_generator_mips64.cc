@@ -975,12 +975,15 @@ void CodeGeneratorMIPS64::DumpFloatingPointRegister(std::ostream& stream, int re
 void CodeGeneratorMIPS64::InvokeRuntime(int32_t entry_point_offset,
                                         HInstruction* instruction,
                                         uint32_t dex_pc,
-                                        SlowPathCode* slow_path) {
+                                        SlowPathCode* slow_path,
+                                        bool record_pc_info) {
   ValidateInvokeRuntime(instruction, slow_path);
   // TODO: anything related to T9/GP/GOT/PIC/.so's?
   __ LoadFromOffset(kLoadDoubleword, T9, TR, entry_point_offset);
   __ Jalr(T9);
-  RecordPcInfo(instruction, dex_pc, slow_path);
+  if (record_pc_info) {
+    RecordPcInfo(instruction, dex_pc, slow_path);
+  }
 }
 
 void InstructionCodeGeneratorMIPS64::GenerateClassInitializationCheck(SlowPathCodeMIPS64* slow_path,

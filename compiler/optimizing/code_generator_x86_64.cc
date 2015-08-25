@@ -548,10 +548,13 @@ size_t CodeGeneratorX86_64::RestoreFloatingPointRegister(size_t stack_index, uin
 void CodeGeneratorX86_64::InvokeRuntime(Address entry_point,
                                         HInstruction* instruction,
                                         uint32_t dex_pc,
-                                        SlowPathCode* slow_path) {
+                                        SlowPathCode* slow_path,
+                                        bool record_pc_info) {
   ValidateInvokeRuntime(instruction, slow_path);
   __ gs()->call(entry_point);
-  RecordPcInfo(instruction, dex_pc, slow_path);
+  if (record_pc_info) {
+    RecordPcInfo(instruction, dex_pc, slow_path);
+  }
 }
 
 static constexpr int kNumberOfCpuRegisterPairs = 0;

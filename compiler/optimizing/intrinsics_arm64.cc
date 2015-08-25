@@ -37,6 +37,8 @@ namespace art {
 
 namespace arm64 {
 
+#define QUICK_ENTRY_POINT(x) QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, x).Int32Value()
+
 using helpers::DRegisterFrom;
 using helpers::FPRegisterFrom;
 using helpers::HeapOperand;
@@ -1049,9 +1051,11 @@ void IntrinsicCodeGeneratorARM64::VisitStringCompareTo(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ B(eq, slow_path->GetEntryLabel());
 
-  __ Ldr(
-      lr, MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pStringCompareTo).Int32Value()));
-  __ Blr(lr);
+  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pStringCompareTo),
+                          invoke,
+                          invoke->GetDexPc(),
+                          nullptr,
+                          /* Don't record pc info. */ false);
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -1189,8 +1193,11 @@ static void GenerateVisitStringIndexOf(HInvoke* invoke,
     __ Mov(tmp_reg, 0);
   }
 
-  __ Ldr(lr, MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pIndexOf).Int32Value()));
-  __ Blr(lr);
+  codegen->InvokeRuntime(QUICK_ENTRY_POINT(pIndexOf),
+                         invoke,
+                         invoke->GetDexPc(),
+                         nullptr,
+                         /* Don't record pc info. */ false);
 
   if (slow_path != nullptr) {
     __ Bind(slow_path->GetExitLabel());
@@ -1258,10 +1265,10 @@ void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromBytes(HInvoke* invoke)
   codegen_->AddSlowPath(slow_path);
   __ B(eq, slow_path->GetEntryLabel());
 
-  __ Ldr(lr,
-      MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pAllocStringFromBytes).Int32Value()));
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
-  __ Blr(lr);
+  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromBytes),
+                          invoke,
+                          invoke->GetDexPc(),
+                          nullptr);
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -1277,12 +1284,10 @@ void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromChars(HInvoke* invo
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromChars(HInvoke* invoke) {
-  vixl::MacroAssembler* masm = GetVIXLAssembler();
-
-  __ Ldr(lr,
-      MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pAllocStringFromChars).Int32Value()));
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
-  __ Blr(lr);
+  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromChars),
+                          invoke,
+                          invoke->GetDexPc(),
+                          nullptr);
 }
 
 void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromString(HInvoke* invoke) {
@@ -1307,10 +1312,10 @@ void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromString(HInvoke* invoke
   codegen_->AddSlowPath(slow_path);
   __ B(eq, slow_path->GetEntryLabel());
 
-  __ Ldr(lr,
-      MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pAllocStringFromString).Int32Value()));
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
-  __ Blr(lr);
+  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromString),
+                          invoke,
+                          invoke->GetDexPc(),
+                          nullptr);
   __ Bind(slow_path->GetExitLabel());
 }
 

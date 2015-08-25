@@ -38,6 +38,8 @@ static constexpr int kDoubleNaNHigh = 0x7FF80000;
 static constexpr int kDoubleNaNLow = 0x00000000;
 static constexpr int kFloatNaN = 0x7FC00000;
 
+#define QUICK_ENTRY_POINT(x) Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, x))
+
 IntrinsicLocationsBuilderX86::IntrinsicLocationsBuilderX86(CodeGeneratorX86* codegen)
   : arena_(codegen->GetGraph()->GetArena()), codegen_(codegen) {
 }
@@ -942,7 +944,11 @@ void IntrinsicCodeGeneratorX86::VisitStringCompareTo(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
-  __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pStringCompareTo)));
+  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pStringCompareTo),
+                          invoke,
+                          invoke->GetDexPc(),
+                          nullptr,
+                          /* Don't record pc info. */ false);
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -1211,8 +1217,10 @@ void IntrinsicCodeGeneratorX86::VisitStringNewStringFromBytes(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
-  __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAllocStringFromBytes)));
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
+  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromBytes),
+                          invoke,
+                          invoke->GetDexPc(),
+                          nullptr);
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -1228,10 +1236,10 @@ void IntrinsicLocationsBuilderX86::VisitStringNewStringFromChars(HInvoke* invoke
 }
 
 void IntrinsicCodeGeneratorX86::VisitStringNewStringFromChars(HInvoke* invoke) {
-  X86Assembler* assembler = GetAssembler();
-
-  __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAllocStringFromChars)));
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
+  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromChars),
+                          invoke,
+                          invoke->GetDexPc(),
+                          nullptr);
 }
 
 void IntrinsicLocationsBuilderX86::VisitStringNewStringFromString(HInvoke* invoke) {
@@ -1253,8 +1261,10 @@ void IntrinsicCodeGeneratorX86::VisitStringNewStringFromString(HInvoke* invoke) 
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
-  __ fs()->call(Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, pAllocStringFromString)));
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
+  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromString),
+                          invoke,
+                          invoke->GetDexPc(),
+                          nullptr);
   __ Bind(slow_path->GetExitLabel());
 }
 
