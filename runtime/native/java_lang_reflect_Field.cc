@@ -419,6 +419,9 @@ static jobject Field_getAnnotationNative(JNIEnv* env, jobject javaField, jclass 
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   ArtField* field = soa.Decode<mirror::Field*>(javaField)->GetArtField();
+  if (field->GetDeclaringClass()->IsProxyClass()) {
+    return nullptr;
+  }
   Handle<mirror::Class> klass(hs.NewHandle(soa.Decode<mirror::Class*>(annotationType)));
   return soa.AddLocalReference<jobject>(field->GetDexFile()->GetAnnotationForField(field, klass));
 }
@@ -426,12 +429,23 @@ static jobject Field_getAnnotationNative(JNIEnv* env, jobject javaField, jclass 
 static jobjectArray Field_getDeclaredAnnotations(JNIEnv* env, jobject javaField) {
   ScopedFastNativeObjectAccess soa(env);
   ArtField* field = soa.Decode<mirror::Field*>(javaField)->GetArtField();
+  if (field->GetDeclaringClass()->IsProxyClass()) {
+    // Return an empty array instead of a null pointer
+    mirror::Class* annotation_array_class =
+        soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_annotation_Annotation__array);
+    mirror::ObjectArray<mirror::Object>* empty_array =
+        mirror::ObjectArray<mirror::Object>::Alloc(soa.Self(), annotation_array_class, 0);
+    return soa.AddLocalReference<jobjectArray>(empty_array);
+  }
   return soa.AddLocalReference<jobjectArray>(field->GetDexFile()->GetAnnotationsForField(field));
 }
 
 static jobjectArray Field_getSignatureAnnotation(JNIEnv* env, jobject javaField) {
   ScopedFastNativeObjectAccess soa(env);
   ArtField* field = soa.Decode<mirror::Field*>(javaField)->GetArtField();
+  if (field->GetDeclaringClass()->IsProxyClass()) {
+    return nullptr;
+  }
   return soa.AddLocalReference<jobjectArray>(
       field->GetDexFile()->GetSignatureAnnotationForField(field));
 }
@@ -441,6 +455,9 @@ static jboolean Field_isAnnotationPresentNative(JNIEnv* env, jobject javaField,
   ScopedFastNativeObjectAccess soa(env);
   StackHandleScope<1> hs(soa.Self());
   ArtField* field = soa.Decode<mirror::Field*>(javaField)->GetArtField();
+  if (field->GetDeclaringClass()->IsProxyClass()) {
+    return false;
+  }
   Handle<mirror::Class> klass(hs.NewHandle(soa.Decode<mirror::Class*>(annotationType)));
   return field->GetDexFile()->IsFieldAnnotationPresent(field, klass);
 }
