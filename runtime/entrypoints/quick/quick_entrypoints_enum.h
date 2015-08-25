@@ -26,7 +26,7 @@ namespace art {
 // Define an enum for the entrypoints. Names are prepended a 'kQuick'.
 enum QuickEntrypointEnum
 {  // NOLINT(whitespace/braces)
-#define ENTRYPOINT_ENUM(name, rettype, ...) kQuick ## name,
+#define ENTRYPOINT_ENUM(name, ...) kQuick ## name,
 #include "quick_entrypoints_list.h"
   QUICK_ENTRYPOINT_LIST(ENTRYPOINT_ENUM)
 #undef QUICK_ENTRYPOINT_LIST
@@ -40,8 +40,8 @@ template <size_t pointer_size>
 static ThreadOffset<pointer_size> GetThreadOffset(QuickEntrypointEnum trampoline) {
   switch (trampoline)
   {  // NOLINT(whitespace/braces)
-  #define ENTRYPOINT_ENUM(name, rettype, ...) case kQuick ## name : \
-      return QUICK_ENTRYPOINT_OFFSET(pointer_size, p ## name);
+  #define ENTRYPOINT_ENUM(name, ...) case kQuick ## name : \
+      return QUICK_ENTRYPOINT_OFFSET(pointer_size, QUICK_ENTRYPOINT_POINTER(name));
   #include "quick_entrypoints_list.h"
     QUICK_ENTRYPOINT_LIST(ENTRYPOINT_ENUM)
   #undef QUICK_ENTRYPOINT_LIST
@@ -55,12 +55,24 @@ static ThreadOffset<pointer_size> GetThreadOffset(QuickEntrypointEnum trampoline
 template <QuickEntrypointEnum entrypoint, typename... Types>
 void CheckEntrypointTypes();
 
-#define ENTRYPOINT_ENUM(name, ...) \
+#define ENTRYPOINT_ENUM(name, ignored, ...) \
 template <> inline void CheckEntrypointTypes<kQuick ## name, __VA_ARGS__>() {};  // NOLINT [readability/braces] [4]
 #include "quick_entrypoints_list.h"
   QUICK_ENTRYPOINT_LIST(ENTRYPOINT_ENUM)
 #undef QUICK_ENTRYPOINT_LIST
 #undef ENTRYPOINT_ENUM
+
+// Define an enum to indicate whether entrypoints might trigger GC.
+enum QuickEntrypointCanTriggerGCEnum
+{  // NOLINT(whitespace/braces)
+#define QUICK_ENTRYPOINT_CAN_TRIGGER_GC(name) kQuick ## name ## CanTriggerGC
+#define ENTRYPOINT_ENUM(name, can_trigger_gc, ...) \
+  QUICK_ENTRYPOINT_CAN_TRIGGER_GC(name) = can_trigger_gc,
+#include "quick_entrypoints_list.h"
+  QUICK_ENTRYPOINT_LIST(ENTRYPOINT_ENUM)
+#undef QUICK_ENTRYPOINT_LIST
+#undef ENTRYPOINT_ENUM
+};
 
 }  // namespace art
 

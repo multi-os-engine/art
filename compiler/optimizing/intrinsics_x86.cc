@@ -38,7 +38,10 @@ static constexpr int kDoubleNaNHigh = 0x7FF80000;
 static constexpr int kDoubleNaNLow = 0x00000000;
 static constexpr int kFloatNaN = 0x7FC00000;
 
-#define QUICK_ENTRY_POINT(x) Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, x))
+#define QUICK_ENTRY_POINT(x) \
+    Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, QUICK_ENTRYPOINT_POINTER(x)))
+#define QUICK_ENTRYPOINT_ARGS(x) \
+    QUICK_ENTRY_POINT(x), QUICK_ENTRYPOINT_CAN_TRIGGER_GC(x)
 
 IntrinsicLocationsBuilderX86::IntrinsicLocationsBuilderX86(CodeGeneratorX86* codegen)
   : arena_(codegen->GetGraph()->GetArena()), codegen_(codegen) {
@@ -944,7 +947,7 @@ void IntrinsicCodeGeneratorX86::VisitStringCompareTo(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
-  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pStringCompareTo),
+  codegen_->InvokeRuntime(QUICK_ENTRYPOINT_ARGS(StringCompareTo),
                           invoke,
                           invoke->GetDexPc(),
                           nullptr,
@@ -1217,7 +1220,7 @@ void IntrinsicCodeGeneratorX86::VisitStringNewStringFromBytes(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
-  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromBytes),
+  codegen_->InvokeRuntime(QUICK_ENTRYPOINT_ARGS(AllocStringFromBytes),
                           invoke,
                           invoke->GetDexPc(),
                           nullptr);
@@ -1236,7 +1239,7 @@ void IntrinsicLocationsBuilderX86::VisitStringNewStringFromChars(HInvoke* invoke
 }
 
 void IntrinsicCodeGeneratorX86::VisitStringNewStringFromChars(HInvoke* invoke) {
-  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromChars),
+  codegen_->InvokeRuntime(QUICK_ENTRYPOINT_ARGS(AllocStringFromChars),
                           invoke,
                           invoke->GetDexPc(),
                           nullptr);
@@ -1261,7 +1264,7 @@ void IntrinsicCodeGeneratorX86::VisitStringNewStringFromString(HInvoke* invoke) 
   codegen_->AddSlowPath(slow_path);
   __ j(kEqual, slow_path->GetEntryLabel());
 
-  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromString),
+  codegen_->InvokeRuntime(QUICK_ENTRYPOINT_ARGS(AllocStringFromString),
                           invoke,
                           invoke->GetDexPc(),
                           nullptr);

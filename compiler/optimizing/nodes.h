@@ -2437,11 +2437,8 @@ class HUnaryOperation : public HExpression<1> {
 
 class HBinaryOperation : public HExpression<2> {
  public:
-  HBinaryOperation(Primitive::Type result_type,
-                   HInstruction* left,
-                   HInstruction* right,
-                   SideEffects side_effects = SideEffects::None())
-      : HExpression(result_type, side_effects) {
+  HBinaryOperation(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+      : HExpression(result_type, SideEffects::None()) {
     SetRawInputAt(0, left);
     SetRawInputAt(1, right);
   }
@@ -2765,7 +2762,7 @@ class HCompare : public HBinaryOperation {
            HInstruction* second,
            ComparisonBias bias,
            uint32_t dex_pc)
-      : HBinaryOperation(Primitive::kPrimInt, first, second, SideEffectsForArchRuntimeCalls(type)),
+      : HBinaryOperation(Primitive::kPrimInt, first, second),
         bias_(bias),
         dex_pc_(dex_pc) {
     DCHECK_EQ(type, first->GetType());
@@ -2791,11 +2788,6 @@ class HCompare : public HBinaryOperation {
   bool IsGtBias() { return bias_ == ComparisonBias::kGtBias; }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
-
-  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type type) {
-    // MIPS64 uses a runtime call for FP comparisons.
-    return Primitive::IsFloatingPointType(type) ? SideEffects::CanTriggerGC() : SideEffects::None();
-  }
 
   DECLARE_INSTRUCTION(Compare);
 
@@ -3492,8 +3484,7 @@ class HMul : public HBinaryOperation {
 class HDiv : public HBinaryOperation {
  public:
   HDiv(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
-      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls()),
-        dex_pc_(dex_pc) {}
+      : HBinaryOperation(result_type, left, right), dex_pc_(dex_pc) {}
 
   template <typename T>
   T Compute(T x, T y) const {
@@ -3513,11 +3504,6 @@ class HDiv : public HBinaryOperation {
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
-  static SideEffects SideEffectsForArchRuntimeCalls() {
-    // The generated code can use a runtime call.
-    return SideEffects::CanTriggerGC();
-  }
-
   DECLARE_INSTRUCTION(Div);
 
  private:
@@ -3529,8 +3515,7 @@ class HDiv : public HBinaryOperation {
 class HRem : public HBinaryOperation {
  public:
   HRem(Primitive::Type result_type, HInstruction* left, HInstruction* right, uint32_t dex_pc)
-      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls()),
-        dex_pc_(dex_pc) {}
+      : HBinaryOperation(result_type, left, right), dex_pc_(dex_pc) {}
 
   template <typename T>
   T Compute(T x, T y) const {
@@ -3549,10 +3534,6 @@ class HRem : public HBinaryOperation {
   }
 
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
-
-  static SideEffects SideEffectsForArchRuntimeCalls() {
-    return SideEffects::CanTriggerGC();
-  }
 
   DECLARE_INSTRUCTION(Rem);
 
@@ -3870,8 +3851,7 @@ class HTypeConversion : public HExpression<1> {
  public:
   // Instantiate a type conversion of `input` to `result_type`.
   HTypeConversion(Primitive::Type result_type, HInstruction* input, uint32_t dex_pc)
-      : HExpression(result_type, SideEffectsForArchRuntimeCalls(input->GetType(), result_type)),
-        dex_pc_(dex_pc) {
+      : HExpression(result_type, SideEffects::None()), dex_pc_(dex_pc) {
     SetRawInputAt(0, input);
     DCHECK_NE(input->GetType(), result_type);
   }
@@ -3890,18 +3870,6 @@ class HTypeConversion : public HExpression<1> {
   // Try to statically evaluate the conversion and return a HConstant
   // containing the result.  If the input cannot be converted, return nullptr.
   HConstant* TryStaticEvaluation() const;
-
-  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type input_type,
-                                                    Primitive::Type result_type) {
-    // Some architectures may not require the 'GC' side effects, but at this point
-    // in the compilation process we do not know what architecture we will
-    // generate code for, so we must be conservative.
-    if ((Primitive::IsFloatingPointType(input_type) && Primitive::IsIntegralType(result_type))
-        || (input_type == Primitive::kPrimLong && Primitive::IsFloatingPointType(result_type))) {
-      return SideEffects::CanTriggerGC();
-    }
-    return SideEffects::None();
-  }
 
   DECLARE_INSTRUCTION(TypeConversion);
 
