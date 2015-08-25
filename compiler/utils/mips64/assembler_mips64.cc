@@ -25,9 +25,38 @@
 namespace art {
 namespace mips64 {
 
+void Mips64Assembler::FinalizeCode() {
+  for (auto& exception_block : exception_blocks_) {
+    EmitExceptionPoll(exception_block);
+  }
+  PromoteBranches();
+}
+
+void Mips64Assembler::FinalizeInstructions(const MemoryRegion& region) {
+  EmitBranches();
+  Assembler::FinalizeInstructions(region);
+}
+
+void Mips64Assembler::EmitBranches() {
+  // Switch from appending instructions at the end of the buffer to overwriting
+  // existing instructions (branch placeholders) in the buffer.
+  overwriting_ = true;
+  for (auto& branch : branches_) {
+    EmitBranch(branch);
+  }
+  overwriting_ = false;
+}
+
 void Mips64Assembler::Emit(uint32_t value) {
-  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
-  buffer_.Emit<uint32_t>(value);
+  if (overwriting_) {
+    // Branches to labels are emitted into their placeholders here.
+    buffer_.Store<uint32_t>(overwrite_location_, value);
+    overwrite_location_ += sizeof(uint32_t);
+  } else {
+    // Other instructions are simply appended at the end here.
+    AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+    buffer_.Emit<uint32_t>(value);
+  }
 }
 
 void Mips64Assembler::EmitR(int opcode, GpuRegister rs, GpuRegister rt, GpuRegister rd,
@@ -62,9 +91,8 @@ void Mips64Assembler::EmitI21(int opcode, GpuRegister rs, uint32_t imm21) {
   Emit(encoding);
 }
 
-void Mips64Assembler::EmitJ(int opcode, uint32_t addr26) {
-  uint32_t encoding = static_cast<uint32_t>(opcode) << kOpcodeShift |
-                      (addr26 & 0x3FFFFFF);
+void Mips64Assembler::EmitI26(int opcode, uint32_t imm26) {
+  uint32_t encoding = static_cast<uint32_t>(opcode) << kOpcodeShift | (imm26 & 0x3FFFFFF);
   Emit(encoding);
 }
 
@@ -91,14 +119,6 @@ void Mips64Assembler::EmitFI(int opcode, int fmt, FpuRegister ft, uint16_t imm) 
   Emit(encoding);
 }
 
-void Mips64Assembler::Add(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
-  EmitR(0, rs, rt, rd, 0, 0x20);
-}
-
-void Mips64Assembler::Addi(GpuRegister rt, GpuRegister rs, uint16_t imm16) {
-  EmitI(0x8, rs, rt, imm16);
-}
-
 void Mips64Assembler::Addu(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
   EmitR(0, rs, rt, rd, 0, 0x21);
 }
@@ -115,56 +135,12 @@ void Mips64Assembler::Daddiu(GpuRegister rt, GpuRegister rs, uint16_t imm16) {
   EmitI(0x19, rs, rt, imm16);
 }
 
-void Mips64Assembler::Sub(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
-  EmitR(0, rs, rt, rd, 0, 0x22);
-}
-
 void Mips64Assembler::Subu(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
   EmitR(0, rs, rt, rd, 0, 0x23);
 }
 
 void Mips64Assembler::Dsubu(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
   EmitR(0, rs, rt, rd, 0, 0x2f);
-}
-
-void Mips64Assembler::MultR2(GpuRegister rs, GpuRegister rt) {
-  EmitR(0, rs, rt, static_cast<GpuRegister>(0), 0, 0x18);
-}
-
-void Mips64Assembler::MultuR2(GpuRegister rs, GpuRegister rt) {
-  EmitR(0, rs, rt, static_cast<GpuRegister>(0), 0, 0x19);
-}
-
-void Mips64Assembler::DivR2(GpuRegister rs, GpuRegister rt) {
-  EmitR(0, rs, rt, static_cast<GpuRegister>(0), 0, 0x1a);
-}
-
-void Mips64Assembler::DivuR2(GpuRegister rs, GpuRegister rt) {
-  EmitR(0, rs, rt, static_cast<GpuRegister>(0), 0, 0x1b);
-}
-
-void Mips64Assembler::MulR2(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
-  EmitR(0x1c, rs, rt, rd, 0, 2);
-}
-
-void Mips64Assembler::DivR2(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
-  DivR2(rs, rt);
-  Mflo(rd);
-}
-
-void Mips64Assembler::ModR2(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
-  DivR2(rs, rt);
-  Mfhi(rd);
-}
-
-void Mips64Assembler::DivuR2(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
-  DivuR2(rs, rt);
-  Mflo(rd);
-}
-
-void Mips64Assembler::ModuR2(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
-  DivuR2(rs, rt);
-  Mfhi(rd);
 }
 
 void Mips64Assembler::MulR6(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
@@ -354,14 +330,6 @@ void Mips64Assembler::Sync(uint32_t stype) {
            static_cast<GpuRegister>(0), stype & 0x1f, 0xf);
 }
 
-void Mips64Assembler::Mfhi(GpuRegister rd) {
-  EmitR(0, static_cast<GpuRegister>(0), static_cast<GpuRegister>(0), rd, 0, 0x10);
-}
-
-void Mips64Assembler::Mflo(GpuRegister rd) {
-  EmitR(0, static_cast<GpuRegister>(0), static_cast<GpuRegister>(0), rd, 0, 0x12);
-}
-
 void Mips64Assembler::Sb(GpuRegister rt, GpuRegister rs, uint16_t imm16) {
   EmitI(0x28, rs, rt, imm16);
 }
@@ -394,29 +362,8 @@ void Mips64Assembler::Sltiu(GpuRegister rt, GpuRegister rs, uint16_t imm16) {
   EmitI(0xb, rs, rt, imm16);
 }
 
-void Mips64Assembler::Beq(GpuRegister rs, GpuRegister rt, uint16_t imm16) {
-  EmitI(0x4, rs, rt, imm16);
-  Nop();
-}
-
-void Mips64Assembler::Bne(GpuRegister rs, GpuRegister rt, uint16_t imm16) {
-  EmitI(0x5, rs, rt, imm16);
-  Nop();
-}
-
-void Mips64Assembler::J(uint32_t addr26) {
-  EmitJ(0x2, addr26);
-  Nop();
-}
-
-void Mips64Assembler::Jal(uint32_t addr26) {
-  EmitJ(0x3, addr26);
-  Nop();
-}
-
 void Mips64Assembler::Jalr(GpuRegister rd, GpuRegister rs) {
   EmitR(0, rs, static_cast<GpuRegister>(0), rd, 0, 0x09);
-  Nop();
 }
 
 void Mips64Assembler::Jalr(GpuRegister rs) {
@@ -429,6 +376,14 @@ void Mips64Assembler::Jr(GpuRegister rs) {
 
 void Mips64Assembler::Auipc(GpuRegister rs, uint16_t imm16) {
   EmitI(0x3B, rs, static_cast<GpuRegister>(0x1E), imm16);
+}
+
+void Mips64Assembler::Addiupc(GpuRegister rs, uint32_t imm19) {
+  EmitI21(0x3B, rs, imm19 & 0x7FFFF);
+}
+
+void Mips64Assembler::Bc(uint32_t imm26) {
+  EmitI26(0x32, imm26 & 0x3FFFFFF);
 }
 
 void Mips64Assembler::Jic(GpuRegister rt, uint16_t imm16) {
@@ -509,6 +464,65 @@ void Mips64Assembler::Beqzc(GpuRegister rs, uint32_t imm21) {
 void Mips64Assembler::Bnezc(GpuRegister rs, uint32_t imm21) {
   CHECK_NE(rs, ZERO);
   EmitI21(0x3E, rs, imm21);
+}
+
+void Mips64Assembler::EmitBcondc(BranchCondition cond,
+                                 GpuRegister rs,
+                                 GpuRegister rt,
+                                 uint32_t imm16_21) {
+  switch (cond) {
+    case kCondLT:
+      Bltc(rs, rt, imm16_21);
+      break;
+    case kCondGE:
+      Bgec(rs, rt, imm16_21);
+      break;
+    case kCondLE:
+      Bgec(rt, rs, imm16_21);
+      break;
+    case kCondGT:
+      Bltc(rt, rs, imm16_21);
+      break;
+    case kCondLTZ:
+      DCHECK_EQ(rt, ZERO);
+      Bltzc(rs, imm16_21);
+      break;
+    case kCondGEZ:
+      DCHECK_EQ(rt, ZERO);
+      Bgezc(rs, imm16_21);
+      break;
+    case kCondLEZ:
+      DCHECK_EQ(rt, ZERO);
+      Blezc(rs, imm16_21);
+      break;
+    case kCondGTZ:
+      DCHECK_EQ(rt, ZERO);
+      Bgtzc(rs, imm16_21);
+      break;
+    case kCondEQ:
+      Beqc(rs, rt, imm16_21);
+      break;
+    case kCondNE:
+      Bnec(rs, rt, imm16_21);
+      break;
+    case kCondEQZ:
+      DCHECK_EQ(rt, ZERO);
+      Beqzc(rs, imm16_21);
+      break;
+    case kCondNEZ:
+      DCHECK_EQ(rt, ZERO);
+      Bnezc(rs, imm16_21);
+      break;
+    case kCondLTU:
+      Bltuc(rs, rt, imm16_21);
+      break;
+    case kCondGEU:
+      Bgeuc(rs, rt, imm16_21);
+      break;
+    case kUncond:
+      DCHECK(false) << "Unexpected branch condition";
+      UNREACHABLE();
+  }
 }
 
 void Mips64Assembler::AddS(FpuRegister fd, FpuRegister fs, FpuRegister ft) {
@@ -741,15 +755,6 @@ void Mips64Assembler::LoadConst64(GpuRegister rd, int64_t value) {
   }
 }
 
-void Mips64Assembler::Addiu32(GpuRegister rt, GpuRegister rs, int32_t value, GpuRegister rtmp) {
-  if (IsInt<16>(value)) {
-    Addiu(rt, rs, value);
-  } else {
-    LoadConst32(rtmp, value);
-    Addu(rt, rs, rtmp);
-  }
-}
-
 void Mips64Assembler::Daddiu64(GpuRegister rt, GpuRegister rs, int64_t value, GpuRegister rtmp) {
   if (IsInt<16>(value)) {
     Daddiu(rt, rs, value);
@@ -759,177 +764,648 @@ void Mips64Assembler::Daddiu64(GpuRegister rt, GpuRegister rs, int64_t value, Gp
   }
 }
 
-//
-// MIPS64R6 branches
-//
-//
-// Unconditional (pc + 32-bit signed offset):
-//
-//   auipc    at, ofs_high
-//   jic      at, ofs_low
-//   // no delay/forbidden slot
-//
-//
-// Conditional (pc + 32-bit signed offset):
-//
-//   b<cond>c   reg, +2      // skip next 2 instructions
-//   auipc      at, ofs_high
-//   jic        at, ofs_low
-//   // no delay/forbidden slot
-//
-//
-// Unconditional (pc + 32-bit signed offset) and link:
-//
-//   auipc    reg, ofs_high
-//   daddiu   reg, ofs_low
-//   jialc    reg, 0
-//   // no delay/forbidden slot
-//
-//
-// TODO: use shorter instruction sequences whenever possible.
-//
+void Mips64Assembler::Branch::InitShortOrLong(Mips64Assembler::Branch::OfsBits ofs_size,
+                                              Mips64Assembler::Branch::Type short_type,
+                                              Mips64Assembler::Branch::Type long_type) {
+  type_ = (ofs_size <= branch_info_[short_type].OfsSize) ? short_type : long_type;
+}
 
-void Mips64Assembler::Bind(Label* label) {
+void Mips64Assembler::Branch::InitializeType(bool is_call) {
+  OfsBits ofs_size = GetOffsetSizeNeeded(location_, target_);
+  if (is_call) {
+    InitShortOrLong(ofs_size, kCall, kLongCall);
+  } else if (condition_ == kUncond) {
+    InitShortOrLong(ofs_size, kUncondBranch, kLongUncondBranch);
+  } else {
+    if (condition_ == kCondEQZ || condition_ == kCondNEZ) {
+      // Special case for beqzc/bnezc with longer offset than in other b<cond>c instructions.
+      type_ = (ofs_size <= kOfs23) ? kCondBranch : kLongCondBranch;
+    } else {
+      InitShortOrLong(ofs_size, kCondBranch, kLongCondBranch);
+    }
+  }
+  old_type_ = type_;
+}
+
+bool Mips64Assembler::Branch::IsNop(BranchCondition condition, GpuRegister lhs, GpuRegister rhs) {
+  switch (condition) {
+    case kCondLT:
+    case kCondGT:
+    case kCondNE:
+    case kCondLTU:
+      return lhs == rhs;
+    default:
+      return false;
+  }
+}
+
+bool Mips64Assembler::Branch::IsUncond(BranchCondition condition,
+                                       GpuRegister lhs,
+                                       GpuRegister rhs) {
+  switch (condition) {
+    case kUncond:
+      return true;
+    case kCondGE:
+    case kCondLE:
+    case kCondEQ:
+    case kCondGEU:
+      return lhs == rhs;
+    default:
+      return false;
+  }
+}
+
+Mips64Assembler::Branch::Branch(uint32_t location, uint32_t target)
+    : old_location_(location),
+      location_(location),
+      target_(target),
+      lhs_reg_(0),
+      rhs_reg_(0),
+      condition_(kUncond) {
+  InitializeType(false);
+}
+
+Mips64Assembler::Branch::Branch(uint32_t location,
+                                uint32_t target,
+                                Mips64Assembler::BranchCondition condition,
+                                GpuRegister lhs_reg,
+                                GpuRegister rhs_reg)
+    : old_location_(location),
+      location_(location),
+      target_(target),
+      lhs_reg_(lhs_reg),
+      rhs_reg_(rhs_reg),
+      condition_(condition) {
+  DCHECK(condition != kUncond);
+  switch (condition) {
+    case kCondEQ:
+    case kCondNE:
+    case kCondLT:
+    case kCondGE:
+    case kCondLE:
+    case kCondGT:
+    case kCondLTU:
+    case kCondGEU:
+      DCHECK(lhs_reg != ZERO && rhs_reg != ZERO);
+      break;
+    case kCondLTZ:
+    case kCondGEZ:
+    case kCondLEZ:
+    case kCondGTZ:
+    case kCondEQZ:
+    case kCondNEZ:
+      DCHECK(rhs_reg == ZERO && lhs_reg != ZERO);
+      break;
+    case kUncond:
+      UNREACHABLE();
+  }
+  DCHECK(!IsNop(condition, lhs_reg, rhs_reg));
+  if (IsUncond(condition, lhs_reg, rhs_reg)) {
+    // Branch condition is always true, make the branch unconditional.
+    condition_ = kUncond;
+  }
+  InitializeType(false);
+}
+
+Mips64Assembler::Branch::Branch(uint32_t location, uint32_t target, GpuRegister indirect_reg)
+    : old_location_(location),
+      location_(location),
+      target_(target),
+      lhs_reg_(indirect_reg),
+      rhs_reg_(0),
+      condition_(kUncond) {
+  DCHECK(indirect_reg != ZERO && indirect_reg != AT);
+  InitializeType(true);
+}
+
+Mips64Assembler::BranchCondition Mips64Assembler::Branch::OppositeCondition(
+    Mips64Assembler::BranchCondition cond) {
+  switch (cond) {
+    case kCondLT:
+      return kCondGE;
+    case kCondGE:
+      return kCondLT;
+    case kCondLE:
+      return kCondGT;
+    case kCondGT:
+      return kCondLE;
+    case kCondLTZ:
+      return kCondGEZ;
+    case kCondGEZ:
+      return kCondLTZ;
+    case kCondLEZ:
+      return kCondGTZ;
+    case kCondGTZ:
+      return kCondLEZ;
+    case kCondEQ:
+      return kCondNE;
+    case kCondNE:
+      return kCondEQ;
+    case kCondEQZ:
+      return kCondNEZ;
+    case kCondNEZ:
+      return kCondEQZ;
+    case kCondLTU:
+      return kCondGEU;
+    case kCondGEU:
+      return kCondLTU;
+    case kUncond:
+      DCHECK(false) << "Unexpected branch condition";
+  }
+  UNREACHABLE();
+}
+
+Mips64Assembler::Branch::Type Mips64Assembler::Branch::GetType() const {
+  return type_;
+}
+
+Mips64Assembler::BranchCondition Mips64Assembler::Branch::GetCondition() const {
+  return condition_;
+}
+
+GpuRegister Mips64Assembler::Branch::GetLeftRegister() const {
+  return static_cast<GpuRegister>(lhs_reg_);
+}
+
+GpuRegister Mips64Assembler::Branch::GetRightRegister() const {
+  return static_cast<GpuRegister>(rhs_reg_);
+}
+
+uint32_t Mips64Assembler::Branch::GetTarget() const {
+  return target_;
+}
+
+uint32_t Mips64Assembler::Branch::GetLocation() const {
+  return location_;
+}
+
+uint32_t Mips64Assembler::Branch::GetOldLocation() const {
+  return old_location_;
+}
+
+uint32_t Mips64Assembler::Branch::GetLength() const {
+  return branch_info_[type_].Length;
+}
+
+uint32_t Mips64Assembler::Branch::GetOldLength() const {
+  return branch_info_[old_type_].Length;
+}
+
+uint32_t Mips64Assembler::Branch::GetSize() const {
+  return GetLength() * sizeof(uint32_t);
+}
+
+uint32_t Mips64Assembler::Branch::GetOldSize() const {
+  return GetOldLength() * sizeof(uint32_t);
+}
+
+uint32_t Mips64Assembler::Branch::GetEndLocation() const {
+  return GetLocation() + GetSize();
+}
+
+uint32_t Mips64Assembler::Branch::GetOldEndLocation() const {
+  return GetOldLocation() + GetOldSize();
+}
+
+bool Mips64Assembler::Branch::IsLong() const {
+  switch (type_) {
+    // Short branches
+    case kUncondBranch:
+    case kCondBranch:
+    case kCall:
+      return false;
+    // Long branches
+    case kLongUncondBranch:
+    case kLongCondBranch:
+    case kLongCall:
+      return true;
+  }
+  UNREACHABLE();
+}
+
+bool Mips64Assembler::Branch::IsResolved() const {
+  return target_ != kUnresolved;
+}
+
+Mips64Assembler::Branch::OfsBits Mips64Assembler::Branch::GetOffsetSize() const {
+  OfsBits ofs_size =
+      (type_ == kCondBranch && (condition_ == kCondEQZ || condition_ == kCondNEZ))
+          ? kOfs23
+          : branch_info_[type_].OfsSize;
+  return ofs_size;
+}
+
+Mips64Assembler::Branch::OfsBits Mips64Assembler::Branch::GetOffsetSizeNeeded(uint32_t location,
+                                                                              uint32_t target) {
+  // For unresolved targets assume the shortest encoding
+  // (later it will be made longer if needed).
+  if (target == kUnresolved)
+    return kOfs16;
+  int64_t distance = static_cast<int64_t>(target) - location;
+  // To simplify calculations in composite branches consisting of multiple instructions
+  // bump up the distance by a value larger than the max byte size of a composite branch.
+  distance += (distance >= 0) ? kMaxBranchSize : -kMaxBranchSize;
+  if (IsInt<kOfs16>(distance))
+    return kOfs16;
+  else if (IsInt<kOfs18>(distance))
+    return kOfs18;
+  else if (IsInt<kOfs21>(distance))
+    return kOfs21;
+  else if (IsInt<kOfs23>(distance))
+    return kOfs23;
+  else if (IsInt<kOfs28>(distance))
+    return kOfs28;
+  return kOfs32;
+}
+
+void Mips64Assembler::Branch::Resolve(uint32_t target) {
+  target_ = target;
+}
+
+void Mips64Assembler::Branch::Relocate(uint32_t expand_location, uint32_t delta) {
+  if (location_ > expand_location) {
+    location_ += delta;
+  }
+  if (!IsResolved()) {
+    return;  // Don't know the target yet.
+  }
+  if (target_ > expand_location) {
+    target_ += delta;
+  }
+}
+
+void Mips64Assembler::Branch::PromoteToLong() {
+  switch (type_) {
+    // Short branches
+    case kUncondBranch:
+      type_ = kLongUncondBranch;
+      break;
+    case kCondBranch:
+      type_ = kLongCondBranch;
+      break;
+    case kCall:
+      type_ = kLongCall;
+      break;
+    default:
+      break;
+  }
+}
+
+uint32_t Mips64Assembler::Branch::PromoteIfNeeded(uint32_t max_short_distance) {
+  // If the branch is still unresolved or already long, nothing to do.
+  if (IsLong() || !IsResolved()) {
+    return 0;
+  }
+  // Promote the short branch to long if the offset size is too small
+  // to hold the distance between location_ and target_.
+  if (GetOffsetSizeNeeded(location_, target_) > GetOffsetSize()) {
+    PromoteToLong();
+    uint32_t old_size = GetOldSize();
+    uint32_t new_size = GetSize();
+    DCHECK(new_size > old_size);
+    return new_size - old_size;
+  }
+  // The following logic is for debugging/testing purposes.
+  // Promote some short branches to long when it's not really required.
+  if (max_short_distance != UINT32_MAX) {
+    int64_t distance = static_cast<int64_t>(target_) - location_;
+    distance = (distance >= 0) ? distance : -distance;
+    if (distance >= max_short_distance) {
+      PromoteToLong();
+      uint32_t old_size = GetOldSize();
+      uint32_t new_size = GetSize();
+      DCHECK(new_size > old_size);
+      return new_size - old_size;
+    }
+  }
+  return 0;
+}
+
+uint32_t Mips64Assembler::Branch::GetOffsetLocation() const {
+  return location_ + branch_info_[type_].InstrOfs * sizeof(uint32_t);
+}
+
+uint32_t Mips64Assembler::Branch::GetOffset() const {
+  DCHECK(IsResolved());
+  uint32_t ofs_mask = 0xFFFFFFFF >> (32 - GetOffsetSize());
+  // Calculate the byte distance between instructions and also account for
+  // different PC-relative origins.
+  uint32_t offset = target_ - GetOffsetLocation() - branch_info_[type_].PcOrg * sizeof(uint32_t);
+  // Prepare the offset for encoding into the instruction(s).
+  offset = (offset & ofs_mask) >> branch_info_[type_].OfsShift;
+  return offset;
+}
+
+Mips64Assembler::Branch* Mips64Assembler::GetBranch(uint32_t branch_id) const {
+  if (branch_id >= branches_.size()) {
+    return nullptr;
+  }
+  return branches_[branch_id];
+}
+
+void Mips64Assembler::Bind(Mips64Label* label) {
   CHECK(!label->IsBound());
-  int32_t bound_pc = buffer_.Size();
+  uint32_t bound_pc = buffer_.Size();
 
-  // Walk the list of the branches (auipc + jic pairs) referring to and preceding this label.
-  // Embed the previously unknown pc-relative addresses in them.
+  // Walk the list of the branches referring to and preceding this label.
+  // Store the previously unknown target addresses in them.
   while (label->IsLinked()) {
-    int32_t position = label->Position();
-    // Extract the branch (instruction pair)
-    uint32_t auipc = buffer_.Load<uint32_t>(position);
-    uint32_t jic = buffer_.Load<uint32_t>(position + 4);  // actually, jic or daddiu
+    uint32_t branch_id = label->Position();
+    Branch* branch = GetBranch(branch_id);
+    branch->Resolve(bound_pc);
 
-    // Extract the location of the previous pair in the list (walking the list backwards;
-    // the previous pair location was stored in the immediate operands of the instructions)
-    int32_t prev = (auipc << 16) | (jic & 0xFFFF);
-
-    // Get the pc-relative address
-    uint32_t offset = bound_pc - position;
-    offset += (offset & 0x8000) << 1;  // account for sign extension in jic/daddiu
-
-    // Embed it in the two instructions
-    auipc = (auipc & 0xFFFF0000) | (offset >> 16);
-    jic = (jic & 0xFFFF0000) | (offset & 0xFFFF);
-
-    // Save the adjusted instructions
-    buffer_.Store<uint32_t>(position, auipc);
-    buffer_.Store<uint32_t>(position + 4, jic);
+    uint32_t branch_location = branch->GetLocation();
+    // Extract the location of the previous branch in the list (walking the list backwards;
+    // the previous branch ID was stored in the space reserved for this branch).
+    uint32_t prev = buffer_.Load<uint32_t>(branch_location);
 
     // On to the previous branch in the list...
     label->position_ = prev;
   }
 
-  // Now make the label object contain its own location
-  // (it will be used by the branches referring to and following this label)
+  // Now make the label object contain its own location (relative to the end of the preceding
+  // branch, if any; it will be used by the branches referring to and following this label).
+  label->prev_branch_id_plus_one_ = branches_.size();
+  if (label->prev_branch_id_plus_one_) {
+    uint32_t branch_id = label->prev_branch_id_plus_one_ - 1;
+    Branch* branch = GetBranch(branch_id);
+    bound_pc -= branch->GetEndLocation();
+  }
   label->BindTo(bound_pc);
 }
 
-void Mips64Assembler::B(Label* label) {
-  if (label->IsBound()) {
-    // Branch backwards (to a preceding label), distance is known
-    uint32_t offset = label->Position() - buffer_.Size();
-    CHECK_LE(static_cast<int32_t>(offset), 0);
-    offset += (offset & 0x8000) << 1;  // account for sign extension in jic
-    Auipc(AT, offset >> 16);
-    Jic(AT, offset);
-  } else {
-    // Branch forward (to a following label), distance is unknown
-    int32_t position = buffer_.Size();
-    // The first branch forward will have 0 in its pc-relative address (copied from label's
-    // position). It will be the terminator of the list of forward-reaching branches.
-    uint32_t prev = label->position_;
-    Auipc(AT, prev >> 16);
-    Jic(AT, prev);
-    // Now make the link object point to the location of this branch
-    // (this forms a linked list of branches preceding this label)
-    label->LinkTo(position);
+uint32_t Mips64Assembler::GetLabelLocation(Mips64Label* label) const {
+  CHECK(label->IsBound());
+  uint32_t target = label->Position();
+  if (label->prev_branch_id_plus_one_) {
+    // Get label location based on the branch preceding it.
+    uint32_t branch_id = label->prev_branch_id_plus_one_ - 1;
+    Branch* branch = GetBranch(branch_id);
+    target += branch->GetEndLocation();
+  }
+  return target;
+}
+
+uint32_t Mips64Assembler::GetAdjustedPosition(uint32_t old_position) {
+  // We can reconstruct the adjustment by going through all the branches from the beginning
+  // up to the old_position. Since we expect AdjustedPosition() to be called in a loop
+  // with increasing old_position, we can use the data from last AdjustedPosition() to
+  // continue where we left off and the whole loop should be O(m+n) where m is the number
+  // of positions to adjust and n is the number of branches.
+  if (old_position < last_old_position_) {
+    last_position_adjustment_ = 0;
+    last_old_position_ = 0;
+    last_branch_id_ = 0;
+  }
+  while (last_branch_id_ != branches_.size()) {
+    Branch* branch = GetBranch(last_branch_id_);
+    if (branch->GetLocation() >= old_position + last_position_adjustment_) {
+      break;
+    }
+    last_position_adjustment_ += branch->GetSize() - branch->GetOldSize();
+    ++last_branch_id_;
+  }
+  last_old_position_ = old_position;
+  return old_position + last_position_adjustment_;
+}
+
+void Mips64Assembler::Buncond(Mips64Label* label) {
+  uint32_t target = label->IsBound() ? GetLabelLocation(label) : Branch::kUnresolved;
+  Branch* branch = new Branch(buffer_.Size(), target);
+  branches_.push_back(branch);
+  uint32_t length = branch->GetLength();
+  if (!label->IsBound()) {
+    // Branch forward (to a following label), distance is unknown.
+    // The first branch forward will contain 0, serving as the terminator of
+    // the list of forward-reaching branches.
+    Emit(label->position_);
+    length--;
+    // Now make the label object point to this branch
+    // (this forms a linked list of branches preceding this label).
+    uint32_t branch_id = branches_.size() - 1;
+    label->LinkTo(branch_id);
+  }
+  // Reserve space for the branch.
+  while (length--) {
+    Nop();
   }
 }
 
-void Mips64Assembler::Jalr(Label* label, GpuRegister indirect_reg) {
-  if (label->IsBound()) {
-    // Branch backwards (to a preceding label), distance is known
-    uint32_t offset = label->Position() - buffer_.Size();
-    CHECK_LE(static_cast<int32_t>(offset), 0);
-    offset += (offset & 0x8000) << 1;  // account for sign extension in daddiu
-    Auipc(indirect_reg, offset >> 16);
-    Daddiu(indirect_reg, indirect_reg, offset);
-    Jialc(indirect_reg, 0);
-  } else {
-    // Branch forward (to a following label), distance is unknown
-    int32_t position = buffer_.Size();
-    // The first branch forward will have 0 in its pc-relative address (copied from label's
-    // position). It will be the terminator of the list of forward-reaching branches.
-    uint32_t prev = label->position_;
-    Auipc(indirect_reg, prev >> 16);
-    Daddiu(indirect_reg, indirect_reg, prev);
-    Jialc(indirect_reg, 0);
-    // Now make the link object point to the location of this branch
-    // (this forms a linked list of branches preceding this label)
-    label->LinkTo(position);
+void Mips64Assembler::Bcond(Mips64Label* label,
+                            BranchCondition condition,
+                            GpuRegister lhs,
+                            GpuRegister rhs) {
+  // If lhs = rhs, this can be a NOP.
+  if (Branch::IsNop(condition, lhs, rhs)) {
+    return;
+  }
+  uint32_t target = label->IsBound() ? GetLabelLocation(label) : Branch::kUnresolved;
+  Branch* branch = new Branch(buffer_.Size(), target, condition, lhs, rhs);
+  branches_.push_back(branch);
+  uint32_t length = branch->GetLength();
+  if (!label->IsBound()) {
+    // Branch forward (to a following label), distance is unknown.
+    // The first branch forward will contain 0, serving as the terminator of
+    // the list of forward-reaching branches.
+    Emit(label->position_);
+    length--;
+    // Now make the label object point to this branch
+    // (this forms a linked list of branches preceding this label).
+    uint32_t branch_id = branches_.size() - 1;
+    label->LinkTo(branch_id);
+  }
+  // Reserve space for the branch.
+  while (length--) {
+    Nop();
   }
 }
 
-void Mips64Assembler::Bltc(GpuRegister rs, GpuRegister rt, Label* label) {
-  Bgec(rs, rt, 2);
-  B(label);
+void Mips64Assembler::Call(Mips64Label* label, GpuRegister indirect_reg) {
+  uint32_t target = label->IsBound() ? GetLabelLocation(label) : Branch::kUnresolved;
+  Branch* branch = new Branch(buffer_.Size(), target, indirect_reg);
+  branches_.push_back(branch);
+  uint32_t length = branch->GetLength();
+  if (!label->IsBound()) {
+    // Branch forward (to a following label), distance is unknown.
+    // The first branch forward will contain 0, serving as the terminator of
+    // the list of forward-reaching branches.
+    Emit(label->position_);
+    length--;
+    // Now make the label object point to this branch
+    // (this forms a linked list of branches preceding this label).
+    uint32_t branch_id = branches_.size() - 1;
+    label->LinkTo(branch_id);
+  }
+  // Reserve space for the branch.
+  while (length--) {
+    Nop();
+  }
 }
 
-void Mips64Assembler::Bltzc(GpuRegister rt, Label* label) {
-  Bgezc(rt, 2);
-  B(label);
+void Mips64Assembler::PromoteBranches() {
+  // Promote short branches to long as necessary.
+  bool changed;
+  do {
+    changed = false;
+    for (auto& branch : branches_) {
+      DCHECK(branch->IsResolved());
+      uint32_t delta = branch->PromoteIfNeeded();
+      // If this branch has been promoted and needs to expand in size,
+      // relocate all branches by the expansion size.
+      if (delta) {
+        changed = true;
+        uint32_t expand_location = branch->GetLocation();
+        for (auto& branch2 : branches_) {
+          branch2->Relocate(expand_location, delta);
+        }
+      }
+    }
+  } while (changed);
+
+  // Account for branch expansion by resizing the code buffer
+  // and moving the code in it to its final location.
+  size_t branch_count = branches_.size();
+  if (branch_count) {
+    // Resize.
+    Branch* last_branch = branches_[branch_count - 1];
+    uint32_t size_delta = last_branch->GetEndLocation() - last_branch->GetOldEndLocation();
+    uint32_t old_size = buffer_.Size();
+    buffer_.Resize(old_size + size_delta);
+    // Move the code residing between branch placeholders.
+    uint32_t end = old_size;
+    size_t i = branch_count;
+    do {
+      i--;
+      Branch* branch = branches_[i];
+      uint32_t size = end - branch->GetOldEndLocation();
+      buffer_.Move(branch->GetEndLocation(), branch->GetOldEndLocation(), size);
+      end = branch->GetOldLocation();
+    } while (i);
+  }
 }
 
-void Mips64Assembler::Bgtzc(GpuRegister rt, Label* label) {
-  Blezc(rt, 2);
-  B(label);
+// Keep branch_info_[] synchronized with EmitBranch()
+const Mips64Assembler::Branch::BranchInfo Mips64Assembler::Branch::branch_info_[] = {
+  // Short branches
+  //   kUncondBranch
+  {  1, 0, 1, Mips64Assembler::Branch::kOfs28, 2 },
+  //   kCondBranch
+  {  2, 0, 1, Mips64Assembler::Branch::kOfs18, 2 },  // exception: kOfs23 for beqzc/bnezc
+  //   kCall
+  {  2, 0, 0, Mips64Assembler::Branch::kOfs21, 2 },
+  // Long branches
+  //   kLongUncondBranch
+  {  2, 0, 0, Mips64Assembler::Branch::kOfs32, 0 },
+  //   kLongCondBranch
+  {  3, 1, 0, Mips64Assembler::Branch::kOfs32, 0 },
+  //   kLongCall
+  {  3, 0, 0, Mips64Assembler::Branch::kOfs32, 0 },
+};
+
+// Keep branch_info_[] synchronized with EmitBranch()
+void Mips64Assembler::EmitBranch(Mips64Assembler::Branch* branch) {
+  DCHECK_EQ(overwriting_, true);
+  overwrite_location_ = branch->GetLocation();
+  uint32_t offset = branch->GetOffset();
+  BranchCondition condition = branch->GetCondition();
+  GpuRegister lhs = branch->GetLeftRegister();
+  GpuRegister rhs = branch->GetRightRegister();
+  switch (branch->GetType()) {
+    // Short branches
+    case Branch::kUncondBranch:
+      DCHECK(overwrite_location_ == branch->GetOffsetLocation());
+      Bc(offset);
+      break;
+    case Branch::kCondBranch:
+      DCHECK(overwrite_location_ == branch->GetOffsetLocation());
+      EmitBcondc(condition, lhs, rhs, offset);
+      Nop();  // TODO: improve by filling the forbidden slot
+      break;
+    case Branch::kCall:
+      DCHECK(overwrite_location_ == branch->GetOffsetLocation());
+      Addiupc(lhs, offset);
+      Jialc(lhs, 0);
+      break;
+    // Long branches
+    case Branch::kLongUncondBranch:
+      offset += (offset & 0x8000) << 1;  // account for sign extension in jic
+      DCHECK(overwrite_location_ == branch->GetOffsetLocation());
+      Auipc(AT, offset >> 16);
+      Jic(AT, offset);
+      break;
+    case Branch::kLongCondBranch:
+      EmitBcondc(Branch::OppositeCondition(condition), lhs, rhs, 2);
+      offset += (offset & 0x8000) << 1;  // account for sign extension in jic
+      DCHECK(overwrite_location_ == branch->GetOffsetLocation());
+      Auipc(AT, offset >> 16);
+      Jic(AT, offset);
+      break;
+    case Branch::kLongCall:
+      offset += (offset & 0x8000) << 1;  // account for sign extension in daddiu
+      DCHECK(overwrite_location_ == branch->GetOffsetLocation());
+      Auipc(lhs, offset >> 16);
+      Daddiu(lhs, lhs, offset);
+      Jialc(lhs, 0);
+      break;
+  }
+  DCHECK(overwrite_location_ == branch->GetEndLocation());
+  DCHECK(branch->GetSize() < Branch::kMaxBranchSize);
 }
 
-void Mips64Assembler::Bgec(GpuRegister rs, GpuRegister rt, Label* label) {
-  Bltc(rs, rt, 2);
-  B(label);
+void Mips64Assembler::Bc(Mips64Label* label) {
+  Buncond(label);
 }
 
-void Mips64Assembler::Bgezc(GpuRegister rt, Label* label) {
-  Bltzc(rt, 2);
-  B(label);
+void Mips64Assembler::Jialc(Mips64Label* label, GpuRegister indirect_reg) {
+  Call(label, indirect_reg);
 }
 
-void Mips64Assembler::Blezc(GpuRegister rt, Label* label) {
-  Bgtzc(rt, 2);
-  B(label);
+void Mips64Assembler::Bltc(GpuRegister rs, GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondLT, rs, rt);
 }
 
-void Mips64Assembler::Bltuc(GpuRegister rs, GpuRegister rt, Label* label) {
-  Bgeuc(rs, rt, 2);
-  B(label);
+void Mips64Assembler::Bltzc(GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondLTZ, rt);
 }
 
-void Mips64Assembler::Bgeuc(GpuRegister rs, GpuRegister rt, Label* label) {
-  Bltuc(rs, rt, 2);
-  B(label);
+void Mips64Assembler::Bgtzc(GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondGTZ, rt);
 }
 
-void Mips64Assembler::Beqc(GpuRegister rs, GpuRegister rt, Label* label) {
-  Bnec(rs, rt, 2);
-  B(label);
+void Mips64Assembler::Bgec(GpuRegister rs, GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondGE, rs, rt);
 }
 
-void Mips64Assembler::Bnec(GpuRegister rs, GpuRegister rt, Label* label) {
-  Beqc(rs, rt, 2);
-  B(label);
+void Mips64Assembler::Bgezc(GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondGEZ, rt);
 }
 
-void Mips64Assembler::Beqzc(GpuRegister rs, Label* label) {
-  Bnezc(rs, 2);
-  B(label);
+void Mips64Assembler::Blezc(GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondLEZ, rt);
 }
 
-void Mips64Assembler::Bnezc(GpuRegister rs, Label* label) {
-  Beqzc(rs, 2);
-  B(label);
+void Mips64Assembler::Bltuc(GpuRegister rs, GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondLTU, rs, rt);
+}
+
+void Mips64Assembler::Bgeuc(GpuRegister rs, GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondGEU, rs, rt);
+}
+
+void Mips64Assembler::Beqc(GpuRegister rs, GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondEQ, rs, rt);
+}
+
+void Mips64Assembler::Bnec(GpuRegister rs, GpuRegister rt, Mips64Label* label) {
+  Bcond(label, kCondNE, rs, rt);
+}
+
+void Mips64Assembler::Beqzc(GpuRegister rs, Mips64Label* label) {
+  Bcond(label, kCondEQZ, rs);
+}
+
+void Mips64Assembler::Bnezc(GpuRegister rs, Mips64Label* label) {
+  Bcond(label, kCondNEZ, rs);
 }
 
 void Mips64Assembler::LoadFromOffset(LoadOperandType type, GpuRegister reg, GpuRegister base,
@@ -1132,6 +1608,7 @@ void Mips64Assembler::RemoveFrame(size_t frame_size,
 
   // Then jump to the return address.
   Jr(RA);
+  Nop();
 
   // The CFI should be restored for any code that follows the exit block.
   cfi_.RestoreState();
@@ -1389,7 +1866,10 @@ void Mips64Assembler::Copy(ManagedRegister dest, Offset dest_offset,
   CHECK(size == 4 || size == 8) << size;
   if (size == 4) {
     LoadFromOffset(kLoadWord, scratch, src.AsMips64().AsGpuRegister(), src_offset.Int32Value());
-    StoreToOffset(kStoreDoubleword, scratch, dest.AsMips64().AsGpuRegister(), dest_offset.Int32Value());
+    StoreToOffset(kStoreDoubleword,
+                  scratch,
+                  dest.AsMips64().AsGpuRegister(),
+                  dest_offset.Int32Value());
   } else if (size == 8) {
     LoadFromOffset(kLoadDoubleword, scratch, src.AsMips64().AsGpuRegister(),
                    src_offset.Int32Value());
@@ -1420,7 +1900,7 @@ void Mips64Assembler::CreateHandleScopeEntry(ManagedRegister mout_reg,
   CHECK(in_reg.IsNoRegister() || in_reg.IsGpuRegister()) << in_reg;
   CHECK(out_reg.IsGpuRegister()) << out_reg;
   if (null_allowed) {
-    Label null_arg;
+    Mips64Label null_arg;
     // Null values get a handle scope entry value of 0.  Otherwise, the handle scope entry is
     // the address in the handle scope holding the reference.
     // e.g. out_reg = (handle == 0) ? 0 : (SP+handle_offset)
@@ -1447,7 +1927,7 @@ void Mips64Assembler::CreateHandleScopeEntry(FrameOffset out_off,
   Mips64ManagedRegister scratch = mscratch.AsMips64();
   CHECK(scratch.IsGpuRegister()) << scratch;
   if (null_allowed) {
-    Label null_arg;
+    Mips64Label null_arg;
     LoadFromOffset(kLoadUnsignedWord, scratch.AsGpuRegister(), SP,
                    handle_scope_offset.Int32Value());
     // Null values get a handle scope entry value of 0.  Otherwise, the handle scope entry is
@@ -1469,7 +1949,7 @@ void Mips64Assembler::LoadReferenceFromHandleScope(ManagedRegister mout_reg,
   Mips64ManagedRegister in_reg = min_reg.AsMips64();
   CHECK(out_reg.IsGpuRegister()) << out_reg;
   CHECK(in_reg.IsGpuRegister()) << in_reg;
-  Label null_arg;
+  Mips64Label null_arg;
   if (!out_reg.Equals(in_reg)) {
     LoadConst32(out_reg.AsGpuRegister(), 0);
   }
@@ -1495,6 +1975,7 @@ void Mips64Assembler::Call(ManagedRegister mbase, Offset offset, ManagedRegister
   LoadFromOffset(kLoadDoubleword, scratch.AsGpuRegister(),
                  base.AsGpuRegister(), offset.Int32Value());
   Jalr(scratch.AsGpuRegister());
+  Nop();
   // TODO: place reference map on call
 }
 
@@ -1507,6 +1988,7 @@ void Mips64Assembler::Call(FrameOffset base, Offset offset, ManagedRegister mscr
   LoadFromOffset(kLoadDoubleword, scratch.AsGpuRegister(),
                  scratch.AsGpuRegister(), offset.Int32Value());
   Jalr(scratch.AsGpuRegister());
+  Nop();
   // TODO: place reference map on call
 }
 
@@ -1526,30 +2008,30 @@ void Mips64Assembler::GetCurrentThread(FrameOffset offset,
 void Mips64Assembler::ExceptionPoll(ManagedRegister mscratch, size_t stack_adjust) {
   Mips64ManagedRegister scratch = mscratch.AsMips64();
   Mips64ExceptionSlowPath* slow = new Mips64ExceptionSlowPath(scratch, stack_adjust);
-  buffer_.EnqueueSlowPath(slow);
+  exception_blocks_.push_back(slow);
   LoadFromOffset(kLoadDoubleword, scratch.AsGpuRegister(),
                  S1, Thread::ExceptionOffset<8>().Int32Value());
   Bnezc(scratch.AsGpuRegister(), slow->Entry());
 }
 
-void Mips64ExceptionSlowPath::Emit(Assembler* sasm) {
-  Mips64Assembler* sp_asm = down_cast<Mips64Assembler*>(sasm);
-#define __ sp_asm->
-  __ Bind(&entry_);
-  if (stack_adjust_ != 0) {  // Fix up the frame.
-    __ DecreaseFrameSize(stack_adjust_);
+void Mips64Assembler::EmitExceptionPoll(Mips64ExceptionSlowPath* exception) {
+  Bind(exception->Entry());
+  if (exception->stack_adjust_ != 0) {  // Fix up the frame.
+    DecreaseFrameSize(exception->stack_adjust_);
   }
   // Pass exception object as argument
   // Don't care about preserving A0 as this call won't return
-  __ Move(A0, scratch_.AsGpuRegister());
+  Move(A0, exception->scratch_.AsGpuRegister());
   // Set up call to Thread::Current()->pDeliverException
-  __ LoadFromOffset(kLoadDoubleword, T9, S1,
-                    QUICK_ENTRYPOINT_OFFSET(8, pDeliverException).Int32Value());
-  // TODO: check T9 usage
-  __ Jr(T9);
+  LoadFromOffset(kLoadDoubleword,
+                 T9,
+                 S1,
+                 QUICK_ENTRYPOINT_OFFSET(8, pDeliverException).Int32Value());
+  Jr(T9);
+  Nop();
+
   // Call never returns
-  __ Break();
-#undef __
+  Break();
 }
 
 }  // namespace mips64

@@ -46,41 +46,69 @@ enum StoreOperandType {
   kStoreDoubleword
 };
 
+class Mips64Label : public Label {
+ public:
+  Mips64Label() : prev_branch_id_plus_one_(0) {}
+
+ private:
+  uint32_t prev_branch_id_plus_one_;  // to get distance from preceding branch, if any
+
+  friend class Mips64Assembler;
+  DISALLOW_COPY_AND_ASSIGN(Mips64Label);
+};
+
+// Slowpath entered when Thread::Current()->_exception is non-null
+class Mips64ExceptionSlowPath {
+ public:
+  explicit Mips64ExceptionSlowPath(Mips64ManagedRegister scratch, size_t stack_adjust)
+      : scratch_(scratch), stack_adjust_(stack_adjust) {}
+ private:
+  Mips64Label* Entry() { return &exception_entry_; }
+  const Mips64ManagedRegister scratch_;
+  const size_t stack_adjust_;
+  Mips64Label exception_entry_;
+
+  friend class Mips64Assembler;
+  DISALLOW_COPY_AND_ASSIGN(Mips64ExceptionSlowPath);
+};
+
 class Mips64Assembler FINAL : public Assembler {
  public:
-  Mips64Assembler() {}
-  virtual ~Mips64Assembler() {}
+  Mips64Assembler() :
+      overwriting_(false),
+      overwrite_location_(0),
+      last_position_adjustment_(0),
+      last_old_position_(0),
+      last_branch_id_(0) {}
+
+  virtual ~Mips64Assembler() {
+    for (auto& branch : branches_) {
+      DCHECK(branch->IsResolved());
+      delete branch;
+    }
+    for (auto& exception_block : exception_blocks_) {
+      delete exception_block;
+    }
+  }
 
   // Emit Machine Instructions.
-  void Add(GpuRegister rd, GpuRegister rs, GpuRegister rt);
-  void Addi(GpuRegister rt, GpuRegister rs, uint16_t imm16);
   void Addu(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void Addiu(GpuRegister rt, GpuRegister rs, uint16_t imm16);
   void Daddu(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
   void Daddiu(GpuRegister rt, GpuRegister rs, uint16_t imm16);  // MIPS64
-  void Sub(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void Subu(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void Dsubu(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
 
-  void MultR2(GpuRegister rs, GpuRegister rt);  // R2
-  void MultuR2(GpuRegister rs, GpuRegister rt);  // R2
-  void DivR2(GpuRegister rs, GpuRegister rt);  // R2
-  void DivuR2(GpuRegister rs, GpuRegister rt);  // R2
-  void MulR2(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R2
-  void DivR2(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R2
-  void ModR2(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R2
-  void DivuR2(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R2
-  void ModuR2(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R2
-  void MulR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R6
-  void DivR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R6
-  void ModR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R6
-  void DivuR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R6
-  void ModuR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // R6
-  void Dmul(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64 R6
-  void Ddiv(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64 R6
-  void Dmod(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64 R6
-  void Ddivu(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64 R6
-  void Dmodu(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64 R6
+  void MulR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
+  void DivR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
+  void ModR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
+  void DivuR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
+  void ModuR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
+  void Dmul(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
+  void Ddiv(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
+  void Dmod(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
+  void Ddivu(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
+  void Dmodu(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
 
   void And(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void Andi(GpuRegister rt, GpuRegister rs, uint16_t imm16);
@@ -90,8 +118,8 @@ class Mips64Assembler FINAL : public Assembler {
   void Xori(GpuRegister rt, GpuRegister rs, uint16_t imm16);
   void Nor(GpuRegister rd, GpuRegister rs, GpuRegister rt);
 
-  void Seb(GpuRegister rd, GpuRegister rt);  // R2+
-  void Seh(GpuRegister rd, GpuRegister rt);  // R2+
+  void Seb(GpuRegister rd, GpuRegister rt);
+  void Seh(GpuRegister rd, GpuRegister rt);
   void Dext(GpuRegister rs, GpuRegister rt, int pos, int size_less_one);  // MIPS64
 
   void Sll(GpuRegister rd, GpuRegister rt, int shamt);
@@ -118,11 +146,9 @@ class Mips64Assembler FINAL : public Assembler {
   void Lhu(GpuRegister rt, GpuRegister rs, uint16_t imm16);
   void Lwu(GpuRegister rt, GpuRegister rs, uint16_t imm16);  // MIPS64
   void Lui(GpuRegister rt, uint16_t imm16);
-  void Dahi(GpuRegister rs, uint16_t imm16);  // MIPS64 R6
-  void Dati(GpuRegister rs, uint16_t imm16);  // MIPS64 R6
+  void Dahi(GpuRegister rs, uint16_t imm16);  // MIPS64
+  void Dati(GpuRegister rs, uint16_t imm16);  // MIPS64
   void Sync(uint32_t stype);
-  void Mfhi(GpuRegister rd);  // R2
-  void Mflo(GpuRegister rd);  // R2
 
   void Sb(GpuRegister rt, GpuRegister rs, uint16_t imm16);
   void Sh(GpuRegister rt, GpuRegister rs, uint16_t imm16);
@@ -134,28 +160,26 @@ class Mips64Assembler FINAL : public Assembler {
   void Slti(GpuRegister rt, GpuRegister rs, uint16_t imm16);
   void Sltiu(GpuRegister rt, GpuRegister rs, uint16_t imm16);
 
-  void Beq(GpuRegister rs, GpuRegister rt, uint16_t imm16);
-  void Bne(GpuRegister rs, GpuRegister rt, uint16_t imm16);
-  void J(uint32_t addr26);
-  void Jal(uint32_t addr26);
   void Jalr(GpuRegister rd, GpuRegister rs);
   void Jalr(GpuRegister rs);
   void Jr(GpuRegister rs);
-  void Auipc(GpuRegister rs, uint16_t imm16);  // R6
-  void Jic(GpuRegister rt, uint16_t imm16);  // R6
-  void Jialc(GpuRegister rt, uint16_t imm16);  // R6
-  void Bltc(GpuRegister rs, GpuRegister rt, uint16_t imm16);  // R6
-  void Bltzc(GpuRegister rt, uint16_t imm16);  // R6
-  void Bgtzc(GpuRegister rt, uint16_t imm16);  // R6
-  void Bgec(GpuRegister rs, GpuRegister rt, uint16_t imm16);  // R6
-  void Bgezc(GpuRegister rt, uint16_t imm16);  // R6
-  void Blezc(GpuRegister rt, uint16_t imm16);  // R6
-  void Bltuc(GpuRegister rs, GpuRegister rt, uint16_t imm16);  // R6
-  void Bgeuc(GpuRegister rs, GpuRegister rt, uint16_t imm16);  // R6
-  void Beqc(GpuRegister rs, GpuRegister rt, uint16_t imm16);  // R6
-  void Bnec(GpuRegister rs, GpuRegister rt, uint16_t imm16);  // R6
-  void Beqzc(GpuRegister rs, uint32_t imm21);  // R6
-  void Bnezc(GpuRegister rs, uint32_t imm21);  // R6
+  void Auipc(GpuRegister rs, uint16_t imm16);
+  void Addiupc(GpuRegister rs, uint32_t imm19);
+  void Bc(uint32_t imm26);
+  void Jic(GpuRegister rt, uint16_t imm16);
+  void Jialc(GpuRegister rt, uint16_t imm16);
+  void Bltc(GpuRegister rs, GpuRegister rt, uint16_t imm16);
+  void Bltzc(GpuRegister rt, uint16_t imm16);
+  void Bgtzc(GpuRegister rt, uint16_t imm16);
+  void Bgec(GpuRegister rs, GpuRegister rt, uint16_t imm16);
+  void Bgezc(GpuRegister rt, uint16_t imm16);
+  void Blezc(GpuRegister rt, uint16_t imm16);
+  void Bltuc(GpuRegister rs, GpuRegister rt, uint16_t imm16);
+  void Bgeuc(GpuRegister rs, GpuRegister rt, uint16_t imm16);
+  void Beqc(GpuRegister rs, GpuRegister rt, uint16_t imm16);
+  void Bnec(GpuRegister rs, GpuRegister rt, uint16_t imm16);
+  void Beqzc(GpuRegister rs, uint32_t imm21);
+  void Bnezc(GpuRegister rs, uint32_t imm21);
 
   void AddS(FpuRegister fd, FpuRegister fs, FpuRegister ft);
   void SubS(FpuRegister fd, FpuRegister fs, FpuRegister ft);
@@ -194,25 +218,23 @@ class Mips64Assembler FINAL : public Assembler {
   void LoadConst32(GpuRegister rd, int32_t value);
   void LoadConst64(GpuRegister rd, int64_t value);  // MIPS64
 
-  void Addiu32(GpuRegister rt, GpuRegister rs, int32_t value, GpuRegister rtmp = AT);
   void Daddiu64(GpuRegister rt, GpuRegister rs, int64_t value, GpuRegister rtmp = AT);  // MIPS64
 
-  void Bind(Label* label);  // R6
-  void B(Label* label);  // R6
-  void Jalr(Label* label, GpuRegister indirect_reg = RA);  // R6
-  // TODO: implement common for R6 and non-R6 interface for conditional branches?
-  void Bltc(GpuRegister rs, GpuRegister rt, Label* label);  // R6
-  void Bltzc(GpuRegister rt, Label* label);  // R6
-  void Bgtzc(GpuRegister rt, Label* label);  // R6
-  void Bgec(GpuRegister rs, GpuRegister rt, Label* label);  // R6
-  void Bgezc(GpuRegister rt, Label* label);  // R6
-  void Blezc(GpuRegister rt, Label* label);  // R6
-  void Bltuc(GpuRegister rs, GpuRegister rt, Label* label);  // R6
-  void Bgeuc(GpuRegister rs, GpuRegister rt, Label* label);  // R6
-  void Beqc(GpuRegister rs, GpuRegister rt, Label* label);  // R6
-  void Bnec(GpuRegister rs, GpuRegister rt, Label* label);  // R6
-  void Beqzc(GpuRegister rs, Label* label);  // R6
-  void Bnezc(GpuRegister rs, Label* label);  // R6
+  void Bind(Mips64Label* label);
+  void Bc(Mips64Label* label);
+  void Jialc(Mips64Label* label, GpuRegister indirect_reg);
+  void Bltc(GpuRegister rs, GpuRegister rt, Mips64Label* label);
+  void Bltzc(GpuRegister rt, Mips64Label* label);
+  void Bgtzc(GpuRegister rt, Mips64Label* label);
+  void Bgec(GpuRegister rs, GpuRegister rt, Mips64Label* label);
+  void Bgezc(GpuRegister rt, Mips64Label* label);
+  void Blezc(GpuRegister rt, Mips64Label* label);
+  void Bltuc(GpuRegister rs, GpuRegister rt, Mips64Label* label);
+  void Bgeuc(GpuRegister rs, GpuRegister rt, Mips64Label* label);
+  void Beqc(GpuRegister rs, GpuRegister rt, Mips64Label* label);
+  void Bnec(GpuRegister rs, GpuRegister rt, Mips64Label* label);
+  void Beqzc(GpuRegister rs, Mips64Label* label);
+  void Bnezc(GpuRegister rs, Mips64Label* label);
 
   void EmitLoad(ManagedRegister m_dst, GpuRegister src_register, int32_t src_offset, size_t size);
   void LoadFromOffset(LoadOperandType type, GpuRegister reg, GpuRegister base, int32_t offset);
@@ -340,26 +362,221 @@ class Mips64Assembler FINAL : public Assembler {
   // and branch to a ExceptionSlowPath if it is.
   void ExceptionPoll(ManagedRegister mscratch, size_t stack_adjust) OVERRIDE;
 
+  // Emit slow paths queued during assembly and promote short branches to long
+  // if needed.
+  void FinalizeCode() OVERRIDE;
+
+  // Emit branches and finalize all instructions.
+  void FinalizeInstructions(const MemoryRegion& region);
+
+  // Returns the (always-)current location of a label (can be used in class CodeGeneratorMIPS64,
+  // must be used instead of Mips64Label::GetPosition()).
+  uint32_t GetLabelLocation(Mips64Label* label) const;
+
+  // Get the final position of a label after local fixup based on the old position
+  // recorded before FinalizeCode().
+  uint32_t GetAdjustedPosition(uint32_t old_position);
+
  private:
+  enum BranchCondition {
+    kCondLT,
+    kCondGE,
+    kCondLE,
+    kCondGT,
+    kCondLTZ,
+    kCondGEZ,
+    kCondLEZ,
+    kCondGTZ,
+    kCondEQ,
+    kCondNE,
+    kCondEQZ,
+    kCondNEZ,
+    kCondLTU,
+    kCondGEU,
+    kUncond,
+  };
+
+  class Branch {
+   public:
+    enum Type {
+      // Short branches
+      kUncondBranch,
+      kCondBranch,
+      kCall,
+      // Long branches
+      kLongUncondBranch,
+      kLongCondBranch,
+      kLongCall,
+    };
+
+    // Bit sizes of offsets defined as enums to minimize chance of typos
+    enum OfsBits {
+      kOfs16 = 16,
+      kOfs18 = 18,
+      kOfs21 = 21,
+      kOfs23 = 23,
+      kOfs28 = 28,
+      kOfs32 = 32,
+    };
+
+    static constexpr uint32_t kUnresolved = 0xffffffff;  // Unresolved target_
+    static constexpr int32_t kMaxBranchLength = 32;
+    static constexpr int32_t kMaxBranchSize = kMaxBranchLength * sizeof(uint32_t);
+
+    struct BranchInfo {
+      uint32_t Length;    // Branch length as a number of 4-byte-long instructions.
+      uint32_t InstrOfs;  // Ordinal number (0-based) of the first (or the only) instruction
+                          // that contains the branch's PC-relative offset (or its most
+                          // significant 16-bit half, which goes first).
+      uint32_t PcOrg;     // Different MIPS instructions with PC-relative offsets apply
+                          // said offsets to slightly different origins, e.g. to PC or PC+4.
+                          // Encode the origin distance (as a number of 4-byte instructions)
+                          // from the instruction containing the offset.
+      OfsBits OfsSize;    // How large (in bits) a PC-relative offset can be for a given type
+                          // of branch (kCondBranch is an exception: use kOfs23 for
+                          // beqzc/bnezc).
+      int OfsShift;       // Some MIPS instructions with PC-relative offsets shift the offset
+                          // by 2. Encode the shift count.
+    };
+    static const BranchInfo branch_info_[/*enum Type*/];
+
+    // Unconditional branch
+    Branch(uint32_t location, uint32_t target);
+    // Conditional branch
+    Branch(uint32_t location,
+           uint32_t target,
+           BranchCondition condition,
+           GpuRegister lhs_reg,
+           GpuRegister rhs_reg = ZERO);
+    // Call (branch and link) that stores the target address in a given register (i.e. T9)
+    Branch(uint32_t location, uint32_t target, GpuRegister indirect_reg);
+
+    // Some conditional branches with lhs = rhs are effectively NOPs, while some
+    // others are effectively unconditional. MIPSR6 conditional branches require lhs != rhs.
+    // So, we need a way to identify such branches in order to emit no instructions for them
+    // or change them to unconditional.
+    static bool IsNop(BranchCondition condition, GpuRegister lhs, GpuRegister rhs);
+    static bool IsUncond(BranchCondition condition, GpuRegister lhs, GpuRegister rhs);
+
+    static BranchCondition OppositeCondition(BranchCondition cond);
+
+    Type GetType() const;
+    BranchCondition GetCondition() const;
+    GpuRegister GetLeftRegister() const;
+    GpuRegister GetRightRegister() const;
+    uint32_t GetTarget() const;
+    uint32_t GetLocation() const;
+    uint32_t GetOldLocation() const;
+    uint32_t GetLength() const;
+    uint32_t GetOldLength() const;
+    uint32_t GetSize() const;
+    uint32_t GetOldSize() const;
+    uint32_t GetEndLocation() const;
+    uint32_t GetOldEndLocation() const;
+    bool IsLong() const;
+    bool IsResolved() const;
+
+    // Returns the bit size of the signed offset that the branch instruction can handle.
+    OfsBits GetOffsetSize() const;
+
+    // Calculates the distance between two byte locations in the assembler buffer and
+    // returns the number of bits needed to represent the distance as a signed integer.
+    //
+    // Branch instructions have signed offsets of 16, 19 (addiupc), 21 (beqzc/bnezc),
+    // and 26 (bc) bits, which are additionally shifted left 2 positions at run time.
+    //
+    // Composite branches (made of several instructions) with longer reach have 32-bit
+    // offsets encoded as 2 16-bit "halves" in two instructions (high half goes first).
+    // The composite branches cover the range of PC + ~+/-2GB.
+    //
+    // The returned values are therefore: 18, 21, 23, 28 and 32. There's also a special
+    // case with the addiu instruction and a 16 bit offset.
+    static OfsBits GetOffsetSizeNeeded(uint32_t location, uint32_t target);
+
+    // Resolve a branch when the target is known.
+    void Resolve(uint32_t target);
+
+    // Relocate a branch by a given delta if needed due to expansion of this or another
+    // branch at a given location by this delta (just changes location_ and target_).
+    void Relocate(uint32_t expand_location, uint32_t delta);
+
+    // If the branch is short, changes its type to long.
+    void PromoteToLong();
+
+    // If necessary, updates the type by promoting a short branch to a long branch
+    // based on the branch location and target. Returns the amount (in bytes) by
+    // which the branch size has increased.
+    // max_short_distance caps the maximum distance between location_ and target_
+    // that is allowed for short branches. This is for debugging/testing purposes.
+    // max_short_distance = 0 forces all short branches to become long.
+    // Use the implicit default argument when not debugging/testing.
+    uint32_t PromoteIfNeeded(uint32_t max_short_distance = UINT32_MAX);
+
+    // Returns the location of the instruction(s) containing the offset.
+    uint32_t GetOffsetLocation() const;
+
+    // Calculates and returns the offset ready for encoding in the branch instruction(s).
+    uint32_t GetOffset() const;
+
+   private:
+    // Completes branch construction by determining and recording its type.
+    void InitializeType(bool is_call);
+    // Helper for the above.
+    void InitShortOrLong(OfsBits ofs_size, Type short_type, Type long_type);
+
+    uint32_t old_location_;          // Offset into assembler buffer in bytes
+    uint32_t location_;              // Offset into assembler buffer in bytes
+    uint32_t target_;                // Offset into assembler buffer in bytes
+
+    uint32_t lhs_reg_ : 5;           // Left-hand side register in conditional branches or
+                                     // indirect call register
+    uint32_t rhs_reg_ : 5;           // Right-hand side register in conditional branches
+    BranchCondition condition_ : 5;  // Condition for conditional branches
+
+    Type type_ : 5;                  // Current type of the branch
+    Type old_type_ : 5;              // Initial type of the branch
+  };
+
   void EmitR(int opcode, GpuRegister rs, GpuRegister rt, GpuRegister rd, int shamt, int funct);
   void EmitI(int opcode, GpuRegister rs, GpuRegister rt, uint16_t imm);
   void EmitI21(int opcode, GpuRegister rs, uint32_t imm21);
-  void EmitJ(int opcode, uint32_t addr26);
+  void EmitI26(int opcode, uint32_t imm26);
   void EmitFR(int opcode, int fmt, FpuRegister ft, FpuRegister fs, FpuRegister fd, int funct);
   void EmitFI(int opcode, int fmt, FpuRegister rt, uint16_t imm);
+  void EmitBcondc(BranchCondition cond, GpuRegister rs, GpuRegister rt, uint32_t imm16_21);
+
+  void Buncond(Mips64Label* label);
+  void Bcond(Mips64Label* label,
+             BranchCondition condition,
+             GpuRegister lhs,
+             GpuRegister rhs = ZERO);
+  void Call(Mips64Label* label, GpuRegister indirect_reg);
+
+  Branch* GetBranch(uint32_t branch_id) const;
+
+  void PromoteBranches();
+  void EmitBranch(Branch* branch);
+  void EmitBranches();
+
+  // Emits Exception block.
+  void EmitExceptionPoll(Mips64ExceptionSlowPath* exception);
+
+  // List of exception blocks to generate at the end of the code cache.
+  std::vector<Mips64ExceptionSlowPath*> exception_blocks_;
+
+  std::vector<Branch*> branches_;
+
+  // Whether appending instructions at the end of the buffer or
+  // overwriting the existing ones and the current overwrite location.
+  bool overwriting_;
+  uint32_t overwrite_location_;
+
+  // Data for AdjustedPosition(), see the description there.
+  uint32_t last_position_adjustment_;
+  uint32_t last_old_position_;
+  uint32_t last_branch_id_;
 
   DISALLOW_COPY_AND_ASSIGN(Mips64Assembler);
-};
-
-// Slowpath entered when Thread::Current()->_exception is non-null
-class Mips64ExceptionSlowPath FINAL : public SlowPath {
- public:
-  Mips64ExceptionSlowPath(Mips64ManagedRegister scratch, size_t stack_adjust)
-      : scratch_(scratch), stack_adjust_(stack_adjust) {}
-  virtual void Emit(Assembler *sp_asm) OVERRIDE;
- private:
-  const Mips64ManagedRegister scratch_;
-  const size_t stack_adjust_;
 };
 
 }  // namespace mips64

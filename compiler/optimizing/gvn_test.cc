@@ -45,20 +45,23 @@ TEST(GVNTest, LocalFieldElimination) {
                                                            MemberOffset(42),
                                                            false,
                                                            kUnknownFieldIndex,
-                                                           graph->GetDexFile()));
+                                                           graph->GetDexFile(),
+                                                           kUnknownDexPc));
   block->AddInstruction(new (&allocator) HInstanceFieldGet(parameter,
                                                            Primitive::kPrimNot,
                                                            MemberOffset(42),
                                                            false,
                                                            kUnknownFieldIndex,
-                                                           graph->GetDexFile()));
+                                                           graph->GetDexFile(),
+                                                           kUnknownDexPc));
   HInstruction* to_remove = block->GetLastInstruction();
   block->AddInstruction(new (&allocator) HInstanceFieldGet(parameter,
                                                            Primitive::kPrimNot,
                                                            MemberOffset(43),
                                                            false,
                                                            kUnknownFieldIndex,
-                                                           graph->GetDexFile()));
+                                                           graph->GetDexFile(),
+                                                           kUnknownDexPc));
   HInstruction* different_offset = block->GetLastInstruction();
   // Kill the value.
   block->AddInstruction(new (&allocator) HInstanceFieldSet(parameter,
@@ -67,13 +70,15 @@ TEST(GVNTest, LocalFieldElimination) {
                                                            MemberOffset(42),
                                                            false,
                                                            kUnknownFieldIndex,
-                                                           graph->GetDexFile()));
+                                                           graph->GetDexFile(),
+                                                           kUnknownDexPc));
   block->AddInstruction(new (&allocator) HInstanceFieldGet(parameter,
                                                            Primitive::kPrimNot,
                                                            MemberOffset(42),
                                                            false,
                                                            kUnknownFieldIndex,
-                                                           graph->GetDexFile()));
+                                                           graph->GetDexFile(),
+                                                           kUnknownDexPc));
   HInstruction* use_after_kill = block->GetLastInstruction();
   block->AddInstruction(new (&allocator) HExit());
 
@@ -110,7 +115,8 @@ TEST(GVNTest, GlobalFieldElimination) {
                                                            MemberOffset(42),
                                                            false,
                                                            kUnknownFieldIndex,
-                                                           graph->GetDexFile()));
+                                                           graph->GetDexFile(),
+                                                           kUnknownDexPc));
 
   block->AddInstruction(new (&allocator) HIf(block->GetLastInstruction()));
   HBasicBlock* then = new (&allocator) HBasicBlock(graph);
@@ -130,21 +136,24 @@ TEST(GVNTest, GlobalFieldElimination) {
                                                           MemberOffset(42),
                                                           false,
                                                           kUnknownFieldIndex,
-                                                          graph->GetDexFile()));
+                                                          graph->GetDexFile(),
+                                                          kUnknownDexPc));
   then->AddInstruction(new (&allocator) HGoto());
   else_->AddInstruction(new (&allocator) HInstanceFieldGet(parameter,
                                                            Primitive::kPrimBoolean,
                                                            MemberOffset(42),
                                                            false,
                                                            kUnknownFieldIndex,
-                                                           graph->GetDexFile()));
+                                                           graph->GetDexFile(),
+                                                           kUnknownDexPc));
   else_->AddInstruction(new (&allocator) HGoto());
   join->AddInstruction(new (&allocator) HInstanceFieldGet(parameter,
                                                           Primitive::kPrimBoolean,
                                                           MemberOffset(42),
                                                           false,
                                                           kUnknownFieldIndex,
-                                                          graph->GetDexFile()));
+                                                          graph->GetDexFile(),
+                                                          kUnknownDexPc));
   join->AddInstruction(new (&allocator) HExit());
 
   graph->TryBuildingSsa();
@@ -178,7 +187,8 @@ TEST(GVNTest, LoopFieldElimination) {
                                                            MemberOffset(42),
                                                            false,
                                                            kUnknownFieldIndex,
-                                                           graph->GetDexFile()));
+                                                           graph->GetDexFile(),
+                                                           kUnknownDexPc));
   block->AddInstruction(new (&allocator) HGoto());
 
   HBasicBlock* loop_header = new (&allocator) HBasicBlock(graph);
@@ -198,7 +208,8 @@ TEST(GVNTest, LoopFieldElimination) {
                                                                  MemberOffset(42),
                                                                  false,
                                                                  kUnknownFieldIndex,
-                                                                 graph->GetDexFile()));
+                                                                 graph->GetDexFile(),
+                                                                 kUnknownDexPc));
   HInstruction* field_get_in_loop_header = loop_header->GetLastInstruction();
   loop_header->AddInstruction(new (&allocator) HIf(block->GetLastInstruction()));
 
@@ -210,14 +221,16 @@ TEST(GVNTest, LoopFieldElimination) {
                                                                MemberOffset(42),
                                                                false,
                                                                kUnknownFieldIndex,
-                                                               graph->GetDexFile()));
+                                                               graph->GetDexFile(),
+                                                               kUnknownDexPc));
   HInstruction* field_set = loop_body->GetLastInstruction();
   loop_body->AddInstruction(new (&allocator) HInstanceFieldGet(parameter,
                                                                Primitive::kPrimBoolean,
                                                                MemberOffset(42),
                                                                false,
                                                                kUnknownFieldIndex,
-                                                               graph->GetDexFile()));
+                                                               graph->GetDexFile(),
+                                                               kUnknownDexPc));
   HInstruction* field_get_in_loop_body = loop_body->GetLastInstruction();
   loop_body->AddInstruction(new (&allocator) HGoto());
 
@@ -226,7 +239,8 @@ TEST(GVNTest, LoopFieldElimination) {
                                                           MemberOffset(42),
                                                           false,
                                                           kUnknownFieldIndex,
-                                                          graph->GetDexFile()));
+                                                          graph->GetDexFile(),
+                                                          kUnknownDexPc));
   HInstruction* field_get_in_exit = exit->GetLastInstruction();
   exit->AddInstruction(new (&allocator) HExit());
 
@@ -320,7 +334,8 @@ TEST(GVNTest, LoopSideEffects) {
                                                              MemberOffset(42),
                                                              false,
                                                              kUnknownFieldIndex,
-                                                             graph->GetDexFile()));
+                                                             graph->GetDexFile(),
+                                                             kUnknownDexPc));
 
     SideEffectsAnalysis side_effects(graph);
     side_effects.Run();
@@ -342,7 +357,8 @@ TEST(GVNTest, LoopSideEffects) {
                                            MemberOffset(42),
                                            false,
                                            kUnknownFieldIndex,
-                                           graph->GetDexFile()),
+                                           graph->GetDexFile(),
+                                           kUnknownDexPc),
         outer_loop_body->GetLastInstruction());
 
     SideEffectsAnalysis side_effects(graph);
@@ -365,7 +381,8 @@ TEST(GVNTest, LoopSideEffects) {
                                            MemberOffset(42),
                                            false,
                                            kUnknownFieldIndex,
-                                           graph->GetDexFile()),
+                                           graph->GetDexFile(),
+                                           kUnknownDexPc),
         inner_loop_body->GetLastInstruction());
 
     SideEffectsAnalysis side_effects(graph);

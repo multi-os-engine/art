@@ -69,6 +69,7 @@ static constexpr uint32_t kMaxIntShiftValue = 0x1f;
 static constexpr uint64_t kMaxLongShiftValue = 0x3f;
 
 static constexpr uint32_t kUnknownFieldIndex = static_cast<uint32_t>(-1);
+static constexpr uint32_t kUnknownDexPc = static_cast<uint32_t>(-1);
 
 static constexpr InvokeType kInvalidInvokeType = static_cast<InvokeType>(-1);
 
@@ -1069,6 +1070,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
 
+#define FOR_EACH_CONCRETE_INSTRUCTION_MIPS(M)
+
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)
@@ -1079,6 +1082,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   FOR_EACH_CONCRETE_INSTRUCTION_COMMON(M)                               \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                                \
+  FOR_EACH_CONCRETE_INSTRUCTION_MIPS(M)                                 \
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)                               \
   FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
@@ -4048,11 +4052,13 @@ class HInstanceFieldGet : public HExpression<1> {
                     MemberOffset field_offset,
                     bool is_volatile,
                     uint32_t field_idx,
-                    const DexFile& dex_file)
+                    const DexFile& dex_file,
+                    uint32_t dex_pc)
       : HExpression(
             field_type,
             SideEffects::FieldReadOfType(field_type, is_volatile)),
-        field_info_(field_offset, field_type, is_volatile, field_idx, dex_file) {
+            field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
+        dex_pc_(dex_pc) {
     SetRawInputAt(0, value);
   }
 
@@ -4076,10 +4082,14 @@ class HInstanceFieldGet : public HExpression<1> {
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
 
+  // Required by the mips code generators when producing calls to the runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
   DECLARE_INSTRUCTION(InstanceFieldGet);
 
  private:
   const FieldInfo field_info_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldGet);
 };
@@ -4092,11 +4102,13 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     MemberOffset field_offset,
                     bool is_volatile,
                     uint32_t field_idx,
-                    const DexFile& dex_file)
+                    const DexFile& dex_file,
+                    uint32_t dex_pc)
       : HTemplateInstruction(
           SideEffects::FieldWriteOfType(field_type, is_volatile)),
-        field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
-        value_can_be_null_(true) {
+          field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
+          value_can_be_null_(true),
+        dex_pc_(dex_pc) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, value);
   }
@@ -4113,11 +4125,15 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
   bool GetValueCanBeNull() const { return value_can_be_null_; }
   void ClearValueCanBeNull() { value_can_be_null_ = false; }
 
+  // Required by the mips code generators when producing calls to the runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
   DECLARE_INSTRUCTION(InstanceFieldSet);
 
  private:
   const FieldInfo field_info_;
   bool value_can_be_null_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldSet);
 };
@@ -4510,11 +4526,13 @@ class HStaticFieldGet : public HExpression<1> {
                   MemberOffset field_offset,
                   bool is_volatile,
                   uint32_t field_idx,
-                  const DexFile& dex_file)
+                  const DexFile& dex_file,
+                  uint32_t dex_pc)
       : HExpression(
             field_type,
             SideEffects::FieldReadOfType(field_type, is_volatile)),
-        field_info_(field_offset, field_type, is_volatile, field_idx, dex_file) {
+            field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
+        dex_pc_(dex_pc) {
     SetRawInputAt(0, cls);
   }
 
@@ -4535,10 +4553,14 @@ class HStaticFieldGet : public HExpression<1> {
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
 
+  // Required by the mips code generators when producing calls to the runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
   DECLARE_INSTRUCTION(StaticFieldGet);
 
  private:
   const FieldInfo field_info_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldGet);
 };
@@ -4551,11 +4573,13 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                   MemberOffset field_offset,
                   bool is_volatile,
                   uint32_t field_idx,
-                  const DexFile& dex_file)
+                  const DexFile& dex_file,
+                  uint32_t dex_pc)
       : HTemplateInstruction(
           SideEffects::FieldWriteOfType(field_type, is_volatile)),
-        field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
-        value_can_be_null_(true) {
+          field_info_(field_offset, field_type, is_volatile, field_idx, dex_file),
+          value_can_be_null_(true),
+        dex_pc_(dex_pc) {
     SetRawInputAt(0, cls);
     SetRawInputAt(1, value);
   }
@@ -4569,11 +4593,15 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
   bool GetValueCanBeNull() const { return value_can_be_null_; }
   void ClearValueCanBeNull() { value_can_be_null_ = false; }
 
+  // Required by the mips code generators when producing calls to the runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
   DECLARE_INSTRUCTION(StaticFieldSet);
 
  private:
   const FieldInfo field_info_;
   bool value_can_be_null_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldSet);
 };

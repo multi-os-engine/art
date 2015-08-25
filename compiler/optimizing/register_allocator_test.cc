@@ -486,7 +486,8 @@ static HGraph* BuildIfElseWithPhi(ArenaAllocator* allocator,
                                                          MemberOffset(22),
                                                          false,
                                                          kUnknownFieldIndex,
-                                                         graph->GetDexFile());
+                                                         graph->GetDexFile(),
+                                                         kUnknownDexPc);
   block->AddInstruction(test);
   block->AddInstruction(new (allocator) HIf(test));
   HBasicBlock* then = new (allocator) HBasicBlock(graph);
@@ -510,13 +511,15 @@ static HGraph* BuildIfElseWithPhi(ArenaAllocator* allocator,
                                               MemberOffset(42),
                                               false,
                                               kUnknownFieldIndex,
-                                              graph->GetDexFile());
+                                              graph->GetDexFile(),
+                                              kUnknownDexPc);
 *input2 = new (allocator) HInstanceFieldGet(parameter,
                                             Primitive::kPrimInt,
                                             MemberOffset(42),
                                             false,
                                             kUnknownFieldIndex,
-                                            graph->GetDexFile());
+                                            graph->GetDexFile(),
+                                            kUnknownDexPc);
   then->AddInstruction(*input1);
   else_->AddInstruction(*input2);
   join->AddInstruction(new (allocator) HExit());
@@ -628,7 +631,8 @@ static HGraph* BuildFieldReturn(ArenaAllocator* allocator,
                                              MemberOffset(42),
                                              false,
                                              kUnknownFieldIndex,
-                                             graph->GetDexFile());
+                                             graph->GetDexFile(),
+                                             kUnknownDexPc);
   block->AddInstruction(*field);
   *ret = new (allocator) HReturn(*field);
   block->AddInstruction(*ret);
