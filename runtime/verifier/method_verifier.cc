@@ -414,6 +414,7 @@ MethodVerifier::MethodVerifier(Thread* self,
       have_pending_runtime_throw_failure_(false),
       have_pending_experimental_failure_(false),
       have_any_pending_runtime_throw_failure_(false),
+      have_only_unresolved_failures_(true),
       new_instance_count_(0),
       monitor_enter_count_(0),
       can_load_classes_(can_load_classes),
@@ -587,6 +588,10 @@ bool MethodVerifier::Verify() {
 }
 
 std::ostream& MethodVerifier::Fail(VerifyError error) {
+  if (error != VERIFY_ERROR_NO_CLASS) {
+    have_only_unresolved_failures_ = false;
+  }
+
   switch (error) {
     case VERIFY_ERROR_NO_CLASS:
     case VERIFY_ERROR_NO_FIELD:
