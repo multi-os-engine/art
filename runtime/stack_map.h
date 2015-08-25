@@ -62,8 +62,8 @@ class DexRegisterLocation {
    * - kNone: the register has no location yet, meaning it has not been set;
    * - kConstant: value holds the constant;
    * - kStack: value holds the stack offset;
-   * - kRegister: value holds the physical register number;
-   * - kFpuRegister: value holds the physical register number.
+   * - kInRegister(High): value holds the physical register number;
+   * - kInFpuRegister(High): value holds the physical register number.
    *
    * In addition, DexRegisterMap also uses these values:
    * - kInStackLargeOffset: value holds a "large" stack offset (greater than
@@ -72,13 +72,17 @@ class DexRegisterLocation {
    *   or greater than or equal to 32).
    */
   enum class Kind : uint8_t {
+    // Empty entries are never stored and therefore do not need own bit marker.
+    kNone = static_cast<uint8_t>(-1),
+
     // Short location kinds, for entries fitting on one byte (3 bits
     // for the kind, 5 bits for the value) in a DexRegisterMap.
-    kNone = 0,                // 0b000
-    kInStack = 1,             // 0b001
-    kInRegister = 2,          // 0b010
+    kInStack = 0,             // 0b000
+    kInRegister = 1,          // 0b001
+    kInRegisterHigh = 2,      // 0b010
     kInFpuRegister = 3,       // 0b011
-    kConstant = 4,            // 0b100
+    kInFpuRegisterHigh = 4,   // 0b100
+    kConstant = 5,            // 0b101
 
     // Large location kinds, requiring a 5-byte encoding (1 byte for the
     // kind, 4 bytes for the value).
@@ -87,11 +91,11 @@ class DexRegisterLocation {
     // divided by the stack frame slot size (4 bytes) cannot fit on a
     // 5-bit unsigned integer (i.e., this offset value is greater than
     // or equal to 2^5 * 4 = 128 bytes).
-    kInStackLargeOffset = 5,  // 0b101
+    kInStackLargeOffset = 6,  // 0b110
 
     // Large constant, that cannot fit on a 5-bit signed integer (i.e.,
     // lower than 0, or greater than or equal to 2^5 = 32).
-    kConstantLargeValue = 6,  // 0b110
+    kConstantLargeValue = 7,  // 0b111
 
     kLastLocationKind = kConstantLargeValue
   };
@@ -108,17 +112,20 @@ class DexRegisterLocation {
         return "in stack";
       case Kind::kInRegister:
         return "in register";
+      case Kind::kInRegisterHigh:
+        return "in register high";
       case Kind::kInFpuRegister:
         return "in fpu register";
+      case Kind::kInFpuRegisterHigh:
+        return "in fpu register high";
       case Kind::kConstant:
         return "as constant";
       case Kind::kInStackLargeOffset:
         return "in stack (large offset)";
       case Kind::kConstantLargeValue:
         return "as constant (large value)";
-      default:
-        UNREACHABLE();
     }
+    UNREACHABLE();
   }
 
   static bool IsShortLocationKind(Kind kind) {
@@ -126,17 +133,17 @@ class DexRegisterLocation {
       case Kind::kNone:
       case Kind::kInStack:
       case Kind::kInRegister:
+      case Kind::kInRegisterHigh:
       case Kind::kInFpuRegister:
+      case Kind::kInFpuRegisterHigh:
       case Kind::kConstant:
         return true;
 
       case Kind::kInStackLargeOffset:
       case Kind::kConstantLargeValue:
         return false;
-
-      default:
-        UNREACHABLE();
     }
+    UNREACHABLE();
   }
 
   // Convert `kind` to a "surface" kind, i.e. one that doesn't include
@@ -147,7 +154,9 @@ class DexRegisterLocation {
       case Kind::kNone:
       case Kind::kInStack:
       case Kind::kInRegister:
+      case Kind::kInRegisterHigh:
       case Kind::kInFpuRegister:
+      case Kind::kInFpuRegisterHigh:
       case Kind::kConstant:
         return kind;
 
@@ -156,10 +165,8 @@ class DexRegisterLocation {
 
       case Kind::kConstantLargeValue:
         return Kind::kConstant;
-
-      default:
-        UNREACHABLE();
     }
+    UNREACHABLE();
   }
 
   // Required by art::StackMapStream::LocationCatalogEntriesIndices.
@@ -305,20 +312,23 @@ class DexRegisterLocationCatalog {
 
   // Compute the compressed kind of `location`.
   static DexRegisterLocation::Kind ComputeCompressedKind(const DexRegisterLocation& location) {
-    switch (location.GetInternalKind()) {
+    DexRegisterLocation::Kind kind = location.GetInternalKind();
+    switch (kind) {
       case DexRegisterLocation::Kind::kNone:
         DCHECK_EQ(location.GetValue(), 0);
         return DexRegisterLocation::Kind::kNone;
 
       case DexRegisterLocation::Kind::kInRegister:
+      case DexRegisterLocation::Kind::kInRegisterHigh:
         DCHECK_GE(location.GetValue(), 0);
         DCHECK_LT(location.GetValue(), 1 << kValueBits);
-        return DexRegisterLocation::Kind::kInRegister;
+        return kind;
 
       case DexRegisterLocation::Kind::kInFpuRegister:
+      case DexRegisterLocation::Kind::kInFpuRegisterHigh:
         DCHECK_GE(location.GetValue(), 0);
         DCHECK_LT(location.GetValue(), 1 << kValueBits);
-        return DexRegisterLocation::Kind::kInFpuRegister;
+        return kind;
 
       case DexRegisterLocation::Kind::kInStack:
         return IsShortStackOffsetValue(location.GetValue())
@@ -342,7 +352,9 @@ class DexRegisterLocationCatalog {
     switch (location.GetInternalKind()) {
       case DexRegisterLocation::Kind::kNone:
       case DexRegisterLocation::Kind::kInRegister:
+      case DexRegisterLocation::Kind::kInRegisterHigh:
       case DexRegisterLocation::Kind::kInFpuRegister:
+      case DexRegisterLocation::Kind::kInFpuRegisterHigh:
         return true;
 
       case DexRegisterLocation::Kind::kInStack:
@@ -501,8 +513,10 @@ class DexRegisterMap {
                              const StackMapEncoding& enc) const {
     DexRegisterLocation location =
         GetDexRegisterLocation(dex_register_number, number_of_dex_registers, code_info, enc);
-    DCHECK(location.GetInternalKind() == DexRegisterLocation::Kind::kInRegister
-           || location.GetInternalKind() == DexRegisterLocation::Kind::kInFpuRegister)
+    DCHECK(location.GetInternalKind() == DexRegisterLocation::Kind::kInRegister ||
+           location.GetInternalKind() == DexRegisterLocation::Kind::kInRegisterHigh ||
+           location.GetInternalKind() == DexRegisterLocation::Kind::kInFpuRegister ||
+           location.GetInternalKind() == DexRegisterLocation::Kind::kInFpuRegisterHigh)
         << DexRegisterLocation::PrettyDescriptor(location.GetInternalKind());
     return location.GetValue();
   }
