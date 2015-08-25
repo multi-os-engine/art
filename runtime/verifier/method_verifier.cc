@@ -415,6 +415,7 @@ MethodVerifier::MethodVerifier(Thread* self,
       have_pending_runtime_throw_failure_(false),
       have_pending_experimental_failure_(false),
       have_any_pending_runtime_throw_failure_(false),
+      have_only_unresolved_failures_(true),
       new_instance_count_(0),
       monitor_enter_count_(0),
       encountered_failure_types_(0),
@@ -699,7 +700,6 @@ bool MethodVerifier::Verify() {
 }
 
 std::ostream& MethodVerifier::Fail(VerifyError error) {
-  // Mark the error type as encountered.
   encountered_failure_types_ |= static_cast<uint32_t>(error);
 
   switch (error) {

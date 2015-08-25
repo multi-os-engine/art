@@ -248,6 +248,8 @@ class MethodVerifier {
   bool HasCheckCasts() const;
   bool HasVirtualOrInterfaceInvokes() const;
   bool HasFailures() const;
+  bool HasHardFailures() const;
+  bool HasOnlyUnresolvedFailures() const;
   bool HasInstructionThatWillThrow() const {
     return have_any_pending_runtime_throw_failure_;
   }
@@ -739,6 +741,8 @@ class MethodVerifier {
 
   // A version of the above that is not reset and thus captures if there were *any* throw failures.
   bool have_any_pending_runtime_throw_failure_;
+
+  bool have_only_unresolved_failures_;
 
   // Info message log use primarily for verifier diagnostics.
   std::ostringstream info_messages_;

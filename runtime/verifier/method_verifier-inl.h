@@ -63,7 +63,15 @@ inline bool MethodVerifier::HasVirtualOrInterfaceInvokes() const {
 }
 
 inline bool MethodVerifier::HasFailures() const {
-  return !failure_messages_.empty();
+  return !failures_.empty();
+}
+
+inline bool MethodVerifier::HasHardFailures() const {
+  return have_pending_hard_failure_;
+}
+
+inline bool MethodVerifier::HasOnlyUnresolvedFailures() const {
+  return have_only_unresolved_failures_;
 }
 
 inline const RegType& MethodVerifier::ResolveCheckedClass(uint32_t class_idx) {
