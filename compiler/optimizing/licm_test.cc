@@ -32,7 +32,6 @@ class LICMTest : public testing::Test {
   LICMTest() : pool_(), allocator_(&pool_) {
     graph_ = CreateGraph(&allocator_);
   }
-
   ~LICMTest() { }
 
   // Builds a singly-nested loop structure in CFG. Tests can further populate
