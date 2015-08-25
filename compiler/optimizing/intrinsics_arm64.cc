@@ -37,7 +37,10 @@ namespace art {
 
 namespace arm64 {
 
-#define QUICK_ENTRY_POINT(x) QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, x).Int32Value()
+#define QUICK_ENTRY_POINT(x) \
+    QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, QUICK_ENTRYPOINT_POINTER(x)).Int32Value()
+#define QUICK_ENTRYPOINT_ARGS(x) \
+    QUICK_ENTRY_POINT(x), QUICK_ENTRYPOINT_CAN_TRIGGER_GC(x)
 
 using helpers::DRegisterFrom;
 using helpers::FPRegisterFrom;
@@ -1051,7 +1054,7 @@ void IntrinsicCodeGeneratorARM64::VisitStringCompareTo(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ B(eq, slow_path->GetEntryLabel());
 
-  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pStringCompareTo),
+  codegen_->InvokeRuntime(QUICK_ENTRYPOINT_ARGS(StringCompareTo),
                           invoke,
                           invoke->GetDexPc(),
                           nullptr,
@@ -1193,7 +1196,7 @@ static void GenerateVisitStringIndexOf(HInvoke* invoke,
     __ Mov(tmp_reg, 0);
   }
 
-  codegen->InvokeRuntime(QUICK_ENTRY_POINT(pIndexOf),
+  codegen->InvokeRuntime(QUICK_ENTRYPOINT_ARGS(IndexOf),
                          invoke,
                          invoke->GetDexPc(),
                          nullptr,
@@ -1265,7 +1268,7 @@ void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromBytes(HInvoke* invoke)
   codegen_->AddSlowPath(slow_path);
   __ B(eq, slow_path->GetEntryLabel());
 
-  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromBytes),
+  codegen_->InvokeRuntime(QUICK_ENTRYPOINT_ARGS(AllocStringFromBytes),
                           invoke,
                           invoke->GetDexPc(),
                           nullptr);
@@ -1284,7 +1287,7 @@ void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromChars(HInvoke* invo
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromChars(HInvoke* invoke) {
-  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromChars),
+  codegen_->InvokeRuntime(QUICK_ENTRYPOINT_ARGS(AllocStringFromChars),
                           invoke,
                           invoke->GetDexPc(),
                           nullptr);
@@ -1312,7 +1315,7 @@ void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromString(HInvoke* invoke
   codegen_->AddSlowPath(slow_path);
   __ B(eq, slow_path->GetEntryLabel());
 
-  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAllocStringFromString),
+  codegen_->InvokeRuntime(QUICK_ENTRYPOINT_ARGS(AllocStringFromString),
                           invoke,
                           invoke->GetDexPc(),
                           nullptr);

@@ -299,6 +299,7 @@ class CodeGeneratorARM : public CodeGenerator {
 
   // Generate code to invoke a runtime entry point.
   void InvokeRuntime(int32_t offset,
+                     bool entry_point_can_trigger_gc,
                      HInstruction* instruction,
                      uint32_t dex_pc,
                      SlowPathCode* slow_path,

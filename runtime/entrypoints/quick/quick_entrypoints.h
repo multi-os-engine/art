@@ -41,7 +41,9 @@ class Thread;
 
 // Pointers to functions that are called by quick compiler generated code via thread-local storage.
 struct PACKED(4) QuickEntryPoints {
-#define ENTRYPOINT_ENUM(name, rettype, ...) rettype ( * p ## name )( __VA_ARGS__ );
+#define QUICK_ENTRYPOINT_POINTER(name) p ## name
+#define ENTRYPOINT_ENUM(name, ignored, rettype, ...) \
+    rettype ( * QUICK_ENTRYPOINT_POINTER(name) )( __VA_ARGS__ );  // NOLINT [whitespace/parens]
 #include "quick_entrypoints_list.h"
   QUICK_ENTRYPOINT_LIST(ENTRYPOINT_ENUM)
 #undef QUICK_ENTRYPOINT_LIST
