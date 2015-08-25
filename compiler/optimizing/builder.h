@@ -278,10 +278,37 @@ class HGraphBuilder : public ValueObject {
                                   const char* descriptor,
                                   HClinitCheck* clinit_check);
 
+  bool SetupArgumentsAndAddStringInit(HInvoke* invoke,
+                                      uint32_t number_of_vreg_arguments,
+                                      uint32_t* args,
+                                      uint32_t register_index,
+                                      bool is_range,
+                                      const char* descriptor);
+
+  bool SetupCommonInvokeArguments(HInvoke* invoke,
+                                  uint32_t number_of_vreg_arguments,
+                                  uint32_t* args,
+                                  uint32_t register_index,
+                                  bool is_range,
+                                  const char* descriptor,
+                                  size_t start_index,
+                                  size_t* argument_index);
+
   HClinitCheck* ProcessClinitCheckForInvoke(
       uint32_t dex_pc,
       uint32_t method_idx,
       HInvokeStaticOrDirect::ClinitCheckRequirement* clinit_check_requirement);
+
+  bool HandleStringInit(uint32_t dex_pc,
+                        uint32_t method_idx,
+                        int32_t string_init_offset,
+                        InvokeType original_invoke_type,
+                        uint32_t number_of_arguments,
+                        uint32_t number_of_vreg_arguments,
+                        bool is_range,
+                        uint32_t* args,
+                        uint32_t register_index,
+                        const char* descriptor);
 
   ArenaAllocator* const arena_;
 
