@@ -1205,7 +1205,8 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
         resolved_field->GetOffset(),
         resolved_field->IsVolatile(),
         field_index,
-        *dex_file_));
+        *dex_file_,
+        dex_pc));
   } else {
     current_block_->AddInstruction(new (arena_) HInstanceFieldGet(
         current_block_->GetLastInstruction(),
@@ -1213,7 +1214,8 @@ bool HGraphBuilder::BuildInstanceFieldAccess(const Instruction& instruction,
         resolved_field->GetOffset(),
         resolved_field->IsVolatile(),
         field_index,
-        *dex_file_));
+        *dex_file_,
+        dex_pc));
 
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
@@ -1332,14 +1334,16 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
                                                                 resolved_field->GetOffset(),
                                                                 resolved_field->IsVolatile(),
                                                                 field_index,
-                                                                *dex_file_));
+                                                                *dex_file_,
+                                                                dex_pc));
   } else {
     current_block_->AddInstruction(new (arena_) HStaticFieldGet(cls,
                                                                 field_type,
                                                                 resolved_field->GetOffset(),
                                                                 resolved_field->IsVolatile(),
                                                                 field_index,
-                                                                *dex_file_));
+                                                                *dex_file_,
+                                                                dex_pc));
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
   return true;
