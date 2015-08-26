@@ -46,6 +46,7 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   void VisitEqual(HEqual* equal) OVERRIDE;
   void VisitNotEqual(HNotEqual* equal) OVERRIDE;
   void VisitBooleanNot(HBooleanNot* bool_not) OVERRIDE;
+  void VisitBoundsCheck(HBoundsCheck* bound_check) OVERRIDE;
   void VisitInstanceFieldSet(HInstanceFieldSet* equal) OVERRIDE;
   void VisitStaticFieldSet(HStaticFieldSet* equal) OVERRIDE;
   void VisitArraySet(HArraySet* equal) OVERRIDE;
@@ -432,6 +433,22 @@ void InstructionSimplifierVisitor::VisitBooleanNot(HBooleanNot* bool_not) {
     // It is possible that `parent` is dead at this point but we leave
     // its removal to DCE for simplicity.
     RecordSimplification();
+  }
+}
+
+void InstructionSimplifierVisitor::VisitBoundsCheck(HBoundsCheck* bounds_check) {
+  HInstruction* index = bounds_check->GetIndex();
+  HInstruction* length = bounds_check->GetLength();
+
+  if (index->IsConstant() && length->IsConstant()) {
+    int64_t index_val = Int64FromConstant(index->AsConstant());
+    int64_t length_val = Int64FromConstant(length->AsConstant());
+    if (index_val >= 0 && index_val < length_val) {
+      // We should not generate a bounds check if it is a valid range.
+      bounds_check->ReplaceWith(index);
+      bounds_check->GetBlock()->RemoveInstruction(bounds_check);
+      RecordSimplification();
+    }
   }
 }
 

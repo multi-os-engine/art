@@ -4644,6 +4644,7 @@ class HBoundsCheck : public HExpression<2> {
   bool CanThrow() const OVERRIDE { return true; }
 
   HInstruction* GetIndex() const { return InputAt(0); }
+  HInstruction* GetLength() const { return InputAt(1); }
 
   DECLARE_INSTRUCTION(BoundsCheck);
 
