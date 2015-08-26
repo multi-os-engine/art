@@ -4448,6 +4448,9 @@ class HBoundsCheck : public HExpression<2> {
     return true;
   }
 
+  HInstruction* GetIndex() const { return InputAt(0); }
+  HInstruction* GetLength() const { return InputAt(1); }
+
   bool NeedsEnvironment() const OVERRIDE { return true; }
 
   bool CanThrow() const OVERRIDE { return true; }

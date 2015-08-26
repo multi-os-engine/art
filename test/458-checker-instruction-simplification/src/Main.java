@@ -1226,11 +1226,27 @@ public class Main {
     return arg / -0.25f;
   }
 
+  /// CHECK-START: int[] Main.BoundsCheck(int) instruction_simplifier (before)
+  /// CHECK-DAG:                      BoundsCheck
+  /// CHECK-DAG:                      BoundsCheck
+
+  /// CHECK-START: int[] Main.BoundsCheck(int) instruction_simplifier (after)
+  /// CHECK-NOT:                      BoundsCheck
+  /// CHECK-NOT:                      BoundsCheck
+
+  public static int[] BoundsCheck(int arg) {
+    int[] array = new int[2];
+    array[0] = array[1] = arg;
+    return array;
+  }
+
   public static void main(String[] args) {
     int arg = 123456;
 
     assertLongEquals(Add0(arg), arg);
     assertIntEquals(AndAllOnes(arg), arg);
+    assertIntEquals(BoundsCheck(arg)[0], arg);
+    assertIntEquals(BoundsCheck(arg)[1], arg);
     assertLongEquals(Div1(arg), arg);
     assertIntEquals(DivN1(arg), -arg);
     assertLongEquals(Mul1(arg), arg);

@@ -1778,8 +1778,24 @@ void LocationsBuilderARM64::VisitBoundsCheck(HBoundsCheck* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::VisitBoundsCheck(HBoundsCheck* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  Location index_loc = locations->InAt(0);
+  Location length_loc = locations->InAt(1);
   BoundsCheckSlowPathARM64* slow_path =
       new (GetGraph()->GetArena()) BoundsCheckSlowPathARM64(instruction);
+
+  if (length_loc.IsConstant() && index_loc.IsConstant()) {
+    int32_t length = CodeGenerator::GetInt32ValueOf(length_loc.GetConstant());
+    int32_t index = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
+    if (index < 0 || index >= length) {
+      codegen_->AddSlowPath(slow_path);
+      __ B(slow_path->GetEntryLabel());
+    } else {
+      // Some optimization after BCE may have generated this, and we should not
+      // generate a bounds check if it is a valid range.
+    }
+    return;
+  }
   codegen_->AddSlowPath(slow_path);
 
   __ Cmp(InputRegisterAt(instruction, 0), InputOperandAt(instruction, 1));
