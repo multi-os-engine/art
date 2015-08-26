@@ -418,9 +418,7 @@ public class Main {
   /// CHECK: ArraySet
   /// CHECK: BoundsCheck
   /// CHECK: ArraySet
-  /// CHECK: BoundsCheck
   /// CHECK: ArraySet
-  /// CHECK: BoundsCheck
   /// CHECK: ArraySet
   /// CHECK: BoundsCheck
   /// CHECK: ArraySet
