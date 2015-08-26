@@ -1041,18 +1041,24 @@ void CodeGenerator::EmitParallelMoves(Location from1,
   GetMoveResolver()->EmitNativeCode(&parallel_move);
 }
 
-void CodeGenerator::ValidateInvokeRuntime(HInstruction* instruction, SlowPathCode* slow_path) {
+void CodeGenerator::ValidateInvokeRuntime(HInstruction* instruction,
+                                          bool entry_point_can_trigger_gc,
+                                          SlowPathCode* slow_path) {
   // Ensure that the call kind indication given to the register allocator is
   // coherent with the runtime call generated, and that the GC side effect is
   // set when required.
   if (slow_path == nullptr) {
     DCHECK(instruction->GetLocations()->WillCall()) << instruction->DebugName();
-    DCHECK(instruction->GetSideEffects().Includes(SideEffects::CanTriggerGC()))
+    DCHECK(instruction->GetSideEffects().Includes(SideEffects::CanTriggerGC()) ||
+           // The entry point has explicitly been marked as not able to trigger GC.
+           !entry_point_can_trigger_gc)
         << instruction->DebugName() << instruction->GetSideEffects().ToString();
   } else {
     DCHECK(instruction->GetLocations()->OnlyCallsOnSlowPath() || slow_path->IsFatal())
         << instruction->DebugName() << slow_path->GetDescription();
     DCHECK(instruction->GetSideEffects().Includes(SideEffects::CanTriggerGC()) ||
+           // The entry point has explicitly been marked as not able to trigger GC.
+           !entry_point_can_trigger_gc ||
            // Control flow would not come back into the code if a fatal slow
            // path is taken, so we do not care if it triggers GC.
            slow_path->IsFatal() ||

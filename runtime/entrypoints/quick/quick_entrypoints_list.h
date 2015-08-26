@@ -17,136 +17,138 @@
 #ifndef ART_RUNTIME_ENTRYPOINTS_QUICK_QUICK_ENTRYPOINTS_LIST_H_
 #define ART_RUNTIME_ENTRYPOINTS_QUICK_QUICK_ENTRYPOINTS_LIST_H_
 
-// All quick entrypoints. Format is name, return type, argument types.
+// All quick entrypoints.  The format
+//    V(name, can trigger gc, return type, argument types)
 
 #define QUICK_ENTRYPOINT_LIST(V) \
-  V(AllocArray, void*, uint32_t, int32_t, ArtMethod*) \
-  V(AllocArrayResolved, void*, mirror::Class*, int32_t, ArtMethod*) \
-  V(AllocArrayWithAccessCheck, void*, uint32_t, int32_t, ArtMethod*) \
-  V(AllocObject, void*, uint32_t, ArtMethod*) \
-  V(AllocObjectResolved, void*, mirror::Class*, ArtMethod*) \
-  V(AllocObjectInitialized, void*, mirror::Class*, ArtMethod*) \
-  V(AllocObjectWithAccessCheck, void*, uint32_t, ArtMethod*) \
-  V(CheckAndAllocArray, void*, uint32_t, int32_t, ArtMethod*) \
-  V(CheckAndAllocArrayWithAccessCheck, void*, uint32_t, int32_t, ArtMethod*) \
-  V(AllocStringFromBytes, void*, void*, int32_t, int32_t, int32_t) \
-  V(AllocStringFromChars, void*, int32_t, int32_t, void*) \
-  V(AllocStringFromString, void*, void*) \
+  V(AllocArray, true, void*, uint32_t, int32_t, ArtMethod*) \
+  V(AllocArrayResolved, true, void*, mirror::Class*, int32_t, ArtMethod*) \
+  V(AllocArrayWithAccessCheck, true, void*, uint32_t, int32_t, ArtMethod*) \
+  V(AllocObject, true, void*, uint32_t, ArtMethod*) \
+  V(AllocObjectResolved, true, void*, mirror::Class*, ArtMethod*) \
+  V(AllocObjectInitialized, true, void*, mirror::Class*, ArtMethod*) \
+  V(AllocObjectWithAccessCheck, true, void*, uint32_t, ArtMethod*) \
+  V(CheckAndAllocArray, true, void*, uint32_t, int32_t, ArtMethod*) \
+  V(CheckAndAllocArrayWithAccessCheck, true, void*, uint32_t, int32_t, ArtMethod*) \
+  V(AllocStringFromBytes, true, void*, void*, int32_t, int32_t, int32_t) \
+  V(AllocStringFromChars, true, void*, int32_t, int32_t, void*) \
+  V(AllocStringFromString, true, void*, void*) \
 \
-  V(InstanceofNonTrivial, uint32_t, const mirror::Class*, const mirror::Class*) \
-  V(CheckCast, void, const mirror::Class*, const mirror::Class*) \
+  V(InstanceofNonTrivial, true, uint32_t, const mirror::Class*, const mirror::Class*) \
+  V(CheckCast, true, void, const mirror::Class*, const mirror::Class*) \
 \
-  V(InitializeStaticStorage, void*, uint32_t) \
-  V(InitializeTypeAndVerifyAccess, void*, uint32_t) \
-  V(InitializeType, void*, uint32_t) \
-  V(ResolveString, void*, uint32_t) \
+  V(InitializeStaticStorage, true, void*, uint32_t) \
+  V(InitializeTypeAndVerifyAccess, true, void*, uint32_t) \
+  V(InitializeType, true, void*, uint32_t) \
+  V(ResolveString, true, void*, uint32_t) \
 \
-  V(Set8Instance, int, uint32_t, void*, int8_t) \
-  V(Set8Static, int, uint32_t, int8_t) \
-  V(Set16Instance, int, uint32_t, void*, int16_t) \
-  V(Set16Static, int, uint32_t, int16_t) \
-  V(Set32Instance, int, uint32_t, void*, int32_t) \
-  V(Set32Static, int, uint32_t, int32_t) \
-  V(Set64Instance, int, uint32_t, void*, int64_t) \
-  V(Set64Static, int, uint32_t, int64_t) \
-  V(SetObjInstance, int, uint32_t, void*, void*) \
-  V(SetObjStatic, int, uint32_t, void*) \
-  V(GetByteInstance, int8_t, uint32_t, void*) \
-  V(GetBooleanInstance, uint8_t, uint32_t, void*) \
-  V(GetByteStatic, int8_t, uint32_t) \
-  V(GetBooleanStatic, uint8_t, uint32_t) \
-  V(GetShortInstance, int16_t, uint32_t, void*) \
-  V(GetCharInstance, uint16_t, uint32_t, void*) \
-  V(GetShortStatic, int16_t, uint32_t) \
-  V(GetCharStatic, uint16_t, uint32_t) \
-  V(Get32Instance, int32_t, uint32_t, void*) \
-  V(Get32Static, int32_t, uint32_t) \
-  V(Get64Instance, int64_t, uint32_t, void*) \
-  V(Get64Static, int64_t, uint32_t) \
-  V(GetObjInstance, void*, uint32_t, void*) \
-  V(GetObjStatic, void*, uint32_t) \
+  V(Set8Instance, true, int, uint32_t, void*, int8_t) \
+  V(Set8Static, true, int, uint32_t, int8_t) \
+  V(Set16Instance, true, int, uint32_t, void*, int16_t) \
+  V(Set16Static, true, int, uint32_t, int16_t) \
+  V(Set32Instance, true, int, uint32_t, void*, int32_t) \
+  V(Set32Static, true, int, uint32_t, int32_t) \
+  V(Set64Instance, true, int, uint32_t, void*, int64_t) \
+  V(Set64Static, true, int, uint32_t, int64_t) \
+  V(SetObjInstance, true, int, uint32_t, void*, void*) \
+  V(SetObjStatic, true, int, uint32_t, void*) \
+  V(GetByteInstance, true, int8_t, uint32_t, void*) \
+  V(GetBooleanInstance, true, uint8_t, uint32_t, void*) \
+  V(GetByteStatic, true, int8_t, uint32_t) \
+  V(GetBooleanStatic, true, uint8_t, uint32_t) \
+  V(GetShortInstance, true, int16_t, uint32_t, void*) \
+  V(GetCharInstance, true, uint16_t, uint32_t, void*) \
+  V(GetShortStatic, true, int16_t, uint32_t) \
+  V(GetCharStatic, true, uint16_t, uint32_t) \
+  V(Get32Instance, true, int32_t, uint32_t, void*) \
+  V(Get32Static, true, int32_t, uint32_t) \
+  V(Get64Instance, true, int64_t, uint32_t, void*) \
+  V(Get64Static, true, int64_t, uint32_t) \
+  V(GetObjInstance, true, void*, uint32_t, void*) \
+  V(GetObjStatic, true, void*, uint32_t) \
 \
-  V(AputObjectWithNullAndBoundCheck, void, mirror::Array*, int32_t, mirror::Object*) \
-  V(AputObjectWithBoundCheck, void, mirror::Array*, int32_t, mirror::Object*) \
-  V(AputObject, void, mirror::Array*, int32_t, mirror::Object*) \
-  V(HandleFillArrayData, void, void*, void*) \
+  V(AputObjectWithNullAndBoundCheck, true, void, mirror::Array*, int32_t, mirror::Object*) \
+  V(AputObjectWithBoundCheck, true, void, mirror::Array*, int32_t, mirror::Object*) \
+  V(AputObject, true, void, mirror::Array*, int32_t, mirror::Object*) \
+  V(HandleFillArrayData, true, void, void*, void*) \
 \
-  V(JniMethodStart, uint32_t, Thread*) \
-  V(JniMethodStartSynchronized, uint32_t, jobject, Thread*) \
-  V(JniMethodEnd, void, uint32_t, Thread*) \
-  V(JniMethodEndSynchronized, void, uint32_t, jobject, Thread*) \
-  V(JniMethodEndWithReference, mirror::Object*, jobject, uint32_t, Thread*) \
-  V(JniMethodEndWithReferenceSynchronized, mirror::Object*, jobject, uint32_t, jobject, Thread*) \
-  V(QuickGenericJniTrampoline, void, ArtMethod*) \
+  V(JniMethodStart, true, uint32_t, Thread*) \
+  V(JniMethodStartSynchronized, true, uint32_t, jobject, Thread*) \
+  V(JniMethodEnd, true, void, uint32_t, Thread*) \
+  V(JniMethodEndSynchronized, true, void, uint32_t, jobject, Thread*) \
+  V(JniMethodEndWithReference, true, mirror::Object*, jobject, uint32_t, Thread*) \
+  V(JniMethodEndWithReferenceSynchronized, \
+    true, mirror::Object*, jobject, uint32_t, jobject, Thread*) \
+  V(QuickGenericJniTrampoline, true, void, ArtMethod*) \
 \
-  V(LockObject, void, mirror::Object*) \
-  V(UnlockObject, void, mirror::Object*) \
+  V(LockObject, true, void, mirror::Object*) \
+  V(UnlockObject, true, void, mirror::Object*) \
 \
-  V(CmpgDouble, int32_t, double, double) \
-  V(CmpgFloat, int32_t, float, float) \
-  V(CmplDouble, int32_t, double, double) \
-  V(CmplFloat, int32_t, float, float) \
-  V(Fmod, double, double, double) \
-  V(L2d, double, int64_t) \
-  V(Fmodf, float, float, float) \
-  V(L2f, float, int64_t) \
-  V(D2iz, int32_t, double) \
-  V(F2iz, int32_t, float) \
-  V(Idivmod, int32_t, int32_t, int32_t) \
-  V(D2l, int64_t, double) \
-  V(F2l, int64_t, float) \
-  V(Ldiv, int64_t, int64_t, int64_t) \
-  V(Lmod, int64_t, int64_t, int64_t) \
-  V(Lmul, int64_t, int64_t, int64_t) \
-  V(ShlLong, uint64_t, uint64_t, uint32_t) \
-  V(ShrLong, uint64_t, uint64_t, uint32_t) \
-  V(UshrLong, uint64_t, uint64_t, uint32_t) \
+  V(CmpgDouble, false, int32_t, double, double) \
+  V(CmpgFloat, false, int32_t, float, float) \
+  V(CmplDouble, false, int32_t, double, double) \
+  V(CmplFloat, false, int32_t, float, float) \
+  V(Fmod, false, double, double, double) \
+  V(L2d, false, double, int64_t) \
+  V(Fmodf, false, float, float, float) \
+  V(L2f, false, float, int64_t) \
+  V(D2iz, false, int32_t, double) \
+  V(F2iz, false, int32_t, float) \
+  V(Idivmod, false, int32_t, int32_t, int32_t) \
+  V(D2l, false, int64_t, double) \
+  V(F2l, false, int64_t, float) \
+  V(Ldiv, false, int64_t, int64_t, int64_t) \
+  V(Lmod, false, int64_t, int64_t, int64_t) \
+  V(Lmul, false, int64_t, int64_t, int64_t) \
+  V(ShlLong, false, uint64_t, uint64_t, uint32_t) \
+  V(ShrLong, false, uint64_t, uint64_t, uint32_t) \
+  V(UshrLong, false, uint64_t, uint64_t, uint32_t) \
 \
-  V(IndexOf, int32_t, void*, uint32_t, uint32_t, uint32_t) \
-  V(StringCompareTo, int32_t, void*, void*) \
-  V(Memcpy, void*, void*, const void*, size_t) \
+  V(IndexOf, true, int32_t, void*, uint32_t, uint32_t, uint32_t) \
+  V(StringCompareTo, true, int32_t, void*, void*) \
+  V(Memcpy, true, void*, void*, const void*, size_t) \
 \
-  V(QuickImtConflictTrampoline, void, ArtMethod*) \
-  V(QuickResolutionTrampoline, void, ArtMethod*) \
-  V(QuickToInterpreterBridge, void, ArtMethod*) \
-  V(InvokeDirectTrampolineWithAccessCheck, void, uint32_t, void*) \
-  V(InvokeInterfaceTrampolineWithAccessCheck, void, uint32_t, void*) \
-  V(InvokeStaticTrampolineWithAccessCheck, void, uint32_t, void*) \
-  V(InvokeSuperTrampolineWithAccessCheck, void, uint32_t, void*) \
-  V(InvokeVirtualTrampolineWithAccessCheck, void, uint32_t, void*) \
+  V(QuickImtConflictTrampoline, true, void, ArtMethod*) \
+  V(QuickResolutionTrampoline, true, void, ArtMethod*) \
+  V(QuickToInterpreterBridge, true, void, ArtMethod*) \
+  V(InvokeDirectTrampolineWithAccessCheck, true, void, uint32_t, void*) \
+  V(InvokeInterfaceTrampolineWithAccessCheck, true, void, uint32_t, void*) \
+  V(InvokeStaticTrampolineWithAccessCheck, true, void, uint32_t, void*) \
+  V(InvokeSuperTrampolineWithAccessCheck, true, void, uint32_t, void*) \
+  V(InvokeVirtualTrampolineWithAccessCheck, true, void, uint32_t, void*) \
 \
-  V(TestSuspend, void, void) \
+  V(TestSuspend, true, void, void) \
 \
-  V(DeliverException, void, mirror::Object*) \
-  V(ThrowArrayBounds, void, int32_t, int32_t) \
-  V(ThrowDivZero, void, void) \
-  V(ThrowNoSuchMethod, void, int32_t) \
-  V(ThrowNullPointer, void, void) \
-  V(ThrowStackOverflow, void, void*) \
-  V(Deoptimize, void, void) \
+  V(DeliverException, true, void, mirror::Object*) \
+  V(ThrowArrayBounds, true, void, int32_t, int32_t) \
+  V(ThrowDivZero, true, void, void) \
+  V(ThrowNoSuchMethod, true, void, int32_t) \
+  V(ThrowNullPointer, true, void, void) \
+  V(ThrowStackOverflow, true, void, void*) \
+  V(Deoptimize, true, void, void) \
 \
-  V(A64Load, int64_t, volatile const int64_t *) \
-  V(A64Store, void, volatile int64_t *, int64_t) \
+  V(A64Load, true, int64_t, volatile const int64_t *) \
+  V(A64Store, true, void, volatile int64_t *, int64_t) \
 \
-  V(NewEmptyString, void) \
-  V(NewStringFromBytes_B, void) \
-  V(NewStringFromBytes_BI, void) \
-  V(NewStringFromBytes_BII, void) \
-  V(NewStringFromBytes_BIII, void) \
-  V(NewStringFromBytes_BIIString, void) \
-  V(NewStringFromBytes_BString, void) \
-  V(NewStringFromBytes_BIICharset, void) \
-  V(NewStringFromBytes_BCharset, void) \
-  V(NewStringFromChars_C, void) \
-  V(NewStringFromChars_CII, void) \
-  V(NewStringFromChars_IIC, void) \
-  V(NewStringFromCodePoints, void) \
-  V(NewStringFromString, void) \
-  V(NewStringFromStringBuffer, void) \
-  V(NewStringFromStringBuilder, void) \
+  V(NewEmptyString, true, void) \
+  V(NewStringFromBytes_B, true, void) \
+  V(NewStringFromBytes_BI, true, void) \
+  V(NewStringFromBytes_BII, true, void) \
+  V(NewStringFromBytes_BIII, true, void) \
+  V(NewStringFromBytes_BIIString, true, void) \
+  V(NewStringFromBytes_BString, true, void) \
+  V(NewStringFromBytes_BIICharset, true, void) \
+  V(NewStringFromBytes_BCharset, true, void) \
+  V(NewStringFromChars_C, true, void) \
+  V(NewStringFromChars_CII, true, void) \
+  V(NewStringFromChars_IIC, true, void) \
+  V(NewStringFromCodePoints, true, void) \
+  V(NewStringFromString, true, void) \
+  V(NewStringFromStringBuffer, true, void) \
+  V(NewStringFromStringBuilder, true, void) \
 \
-  V(ReadBarrierJni, void, mirror::CompressedReference<mirror::Object>*, Thread*) \
-  V(ReadBarrierSlow, mirror::Object*, mirror::Object*, mirror::Object*, uint32_t)
+  V(ReadBarrierJni, true, void, mirror::CompressedReference<mirror::Object>*, Thread*) \
+  V(ReadBarrierSlow, true, mirror::Object*, mirror::Object*, mirror::Object*, uint32_t)
 
 #endif  // ART_RUNTIME_ENTRYPOINTS_QUICK_QUICK_ENTRYPOINTS_LIST_H_
 #undef ART_RUNTIME_ENTRYPOINTS_QUICK_QUICK_ENTRYPOINTS_LIST_H_   // #define is only for lint.
