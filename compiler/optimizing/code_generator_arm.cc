@@ -960,11 +960,14 @@ void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstr
 void CodeGeneratorARM::InvokeRuntime(int32_t entry_point_offset,
                                      HInstruction* instruction,
                                      uint32_t dex_pc,
-                                     SlowPathCode* slow_path) {
+                                     SlowPathCode* slow_path,
+                                     bool record_pc_info) {
   ValidateInvokeRuntime(instruction, slow_path);
   __ LoadFromOffset(kLoadWord, LR, TR, entry_point_offset);
   __ blx(LR);
-  RecordPcInfo(instruction, dex_pc, slow_path);
+  if (record_pc_info) {
+    RecordPcInfo(instruction, dex_pc, slow_path);
+  }
 }
 
 void InstructionCodeGeneratorARM::HandleGoto(HInstruction* got, HBasicBlock* successor) {
