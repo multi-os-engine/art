@@ -393,6 +393,14 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     StartAttributeStream("kind") << (try_boundary->IsEntry() ? "entry" : "exit");
   }
 
+  void VisitArm64DataProcWithShifterOp(HArm64DataProcWithShifterOp* instruction) OVERRIDE {
+    output_ << " (" << instruction->GetInstrKind() << "+" << instruction->GetOpKind();
+    if (HArm64DataProcWithShifterOp::IsShiftOp(instruction->GetOpKind())) {
+      output_ << " " << instruction->GetShiftAmount();
+    }
+    output_ << ") ";
+  }
+
   bool IsPass(const char* name) {
     return strcmp(pass_name_, name) == 0;
   }
