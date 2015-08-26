@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "arch/instruction_set.h"
+#include "arch/instruction_set_features.h"
 #include "base/logging.h"
 #include "base/macros.h"
 #include "arm/constants_arm.h"
@@ -80,6 +81,13 @@ class ExternalLabel {
 class Label {
  public:
   Label() : position_(0) {}
+
+  Label(Label&& src) noexcept
+      : position_(src.position_) {
+    // We must unlink/unbind the src label when moving; if not, calling the destructor on
+    // the src label would fail.
+    src.position_ = 0;
+  }
 
   ~Label() {
     // Assert if label is being destroyed with unresolved branches pending.
@@ -383,7 +391,8 @@ class DebugFrameOpCodeWriterForAssembler FINAL
 
 class Assembler {
  public:
-  static Assembler* Create(InstructionSet instruction_set);
+  static Assembler* Create(InstructionSet instruction_set,
+                           const InstructionSetFeatures* instruction_set_features = nullptr);
 
   // Finalize the code; emit slow paths, fixup branches, add literal pool, etc.
   virtual void FinalizeCode() { buffer_.EmitSlowPaths(this); }
