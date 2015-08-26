@@ -1212,8 +1212,7 @@ enum UnimplementedInstructionBreakCode {
 };
 
 #define DEFINE_UNIMPLEMENTED_INSTRUCTION_VISITORS(name)                               \
-  void InstructionCodeGeneratorARM64::Visit##name(H##name* instr) {                   \
-    UNUSED(instr);                                                                    \
+  void InstructionCodeGeneratorARM64::Visit##name(H##name* instr ATTRIBUTE_UNUSED) {  \
     __ Brk(UNIMPLEMENTED_INSTRUCTION_BREAK_CODE(name));                               \
   }                                                                                   \
   void LocationsBuilderARM64::Visit##name(H##name* instr) {                           \
@@ -2030,8 +2029,8 @@ void LocationsBuilderARM64::VisitDoubleConstant(HDoubleConstant* constant) {
   locations->SetOut(Location::ConstantLocation(constant));
 }
 
-void InstructionCodeGeneratorARM64::VisitDoubleConstant(HDoubleConstant* constant) {
-  UNUSED(constant);
+void InstructionCodeGeneratorARM64::VisitDoubleConstant(
+    HDoubleConstant* constant ATTRIBUTE_UNUSED) {
   // Will be generated at use site.
 }
 
@@ -2039,8 +2038,7 @@ void LocationsBuilderARM64::VisitExit(HExit* exit) {
   exit->SetLocations(nullptr);
 }
 
-void InstructionCodeGeneratorARM64::VisitExit(HExit* exit) {
-  UNUSED(exit);
+void InstructionCodeGeneratorARM64::VisitExit(HExit* exit ATTRIBUTE_UNUSED) {
 }
 
 void LocationsBuilderARM64::VisitFloatConstant(HFloatConstant* constant) {
@@ -2049,8 +2047,7 @@ void LocationsBuilderARM64::VisitFloatConstant(HFloatConstant* constant) {
   locations->SetOut(Location::ConstantLocation(constant));
 }
 
-void InstructionCodeGeneratorARM64::VisitFloatConstant(HFloatConstant* constant) {
-  UNUSED(constant);
+void InstructionCodeGeneratorARM64::VisitFloatConstant(HFloatConstant* constant ATTRIBUTE_UNUSED) {
   // Will be generated at use site.
 }
 
@@ -2285,9 +2282,8 @@ void LocationsBuilderARM64::VisitIntConstant(HIntConstant* constant) {
   locations->SetOut(Location::ConstantLocation(constant));
 }
 
-void InstructionCodeGeneratorARM64::VisitIntConstant(HIntConstant* constant) {
+void InstructionCodeGeneratorARM64::VisitIntConstant(HIntConstant* constant ATTRIBUTE_UNUSED) {
   // Will be generated at use site.
-  UNUSED(constant);
 }
 
 void LocationsBuilderARM64::VisitNullConstant(HNullConstant* constant) {
@@ -2295,9 +2291,8 @@ void LocationsBuilderARM64::VisitNullConstant(HNullConstant* constant) {
   locations->SetOut(Location::ConstantLocation(constant));
 }
 
-void InstructionCodeGeneratorARM64::VisitNullConstant(HNullConstant* constant) {
+void InstructionCodeGeneratorARM64::VisitNullConstant(HNullConstant* constant ATTRIBUTE_UNUSED) {
   // Will be generated at use site.
-  UNUSED(constant);
 }
 
 void LocationsBuilderARM64::HandleInvoke(HInvoke* invoke) {
@@ -2662,9 +2657,8 @@ void LocationsBuilderARM64::VisitLoadLocal(HLoadLocal* load) {
   load->SetLocations(nullptr);
 }
 
-void InstructionCodeGeneratorARM64::VisitLoadLocal(HLoadLocal* load) {
+void InstructionCodeGeneratorARM64::VisitLoadLocal(HLoadLocal* load ATTRIBUTE_UNUSED) {
   // Nothing to do, this is driven by the code generator.
-  UNUSED(load);
 }
 
 void LocationsBuilderARM64::VisitLoadString(HLoadString* load) {
@@ -2702,9 +2696,8 @@ void LocationsBuilderARM64::VisitLongConstant(HLongConstant* constant) {
   locations->SetOut(Location::ConstantLocation(constant));
 }
 
-void InstructionCodeGeneratorARM64::VisitLongConstant(HLongConstant* constant) {
+void InstructionCodeGeneratorARM64::VisitLongConstant(HLongConstant* constant ATTRIBUTE_UNUSED) {
   // Will be generated at use site.
-  UNUSED(constant);
 }
 
 void LocationsBuilderARM64::VisitMonitorOperation(HMonitorOperation* instruction) {
@@ -2971,8 +2964,7 @@ void LocationsBuilderARM64::VisitPhi(HPhi* instruction) {
   locations->SetOut(Location::Any());
 }
 
-void InstructionCodeGeneratorARM64::VisitPhi(HPhi* instruction) {
-  UNUSED(instruction);
+void InstructionCodeGeneratorARM64::VisitPhi(HPhi* instruction ATTRIBUTE_UNUSED) {
   LOG(FATAL) << "Unreachable";
 }
 
@@ -3042,8 +3034,7 @@ void LocationsBuilderARM64::VisitReturn(HReturn* instruction) {
   locations->SetInAt(0, ARM64ReturnLocation(return_type));
 }
 
-void InstructionCodeGeneratorARM64::VisitReturn(HReturn* instruction) {
-  UNUSED(instruction);
+void InstructionCodeGeneratorARM64::VisitReturn(HReturn* instruction ATTRIBUTE_UNUSED) {
   codegen_->GenerateFrameExit();
 }
 
@@ -3051,8 +3042,7 @@ void LocationsBuilderARM64::VisitReturnVoid(HReturnVoid* instruction) {
   instruction->SetLocations(nullptr);
 }
 
-void InstructionCodeGeneratorARM64::VisitReturnVoid(HReturnVoid* instruction) {
-  UNUSED(instruction);
+void InstructionCodeGeneratorARM64::VisitReturnVoid(HReturnVoid* instruction ATTRIBUTE_UNUSED) {
   codegen_->GenerateFrameExit();
 }
 
@@ -3096,8 +3086,7 @@ void LocationsBuilderARM64::VisitStoreLocal(HStoreLocal* store) {
   }
 }
 
-void InstructionCodeGeneratorARM64::VisitStoreLocal(HStoreLocal* store) {
-  UNUSED(store);
+void InstructionCodeGeneratorARM64::VisitStoreLocal(HStoreLocal* store ATTRIBUTE_UNUSED) {
 }
 
 void LocationsBuilderARM64::VisitSub(HSub* instruction) {
@@ -3146,9 +3135,8 @@ void LocationsBuilderARM64::VisitTemporary(HTemporary* temp) {
   temp->SetLocations(nullptr);
 }
 
-void InstructionCodeGeneratorARM64::VisitTemporary(HTemporary* temp) {
+void InstructionCodeGeneratorARM64::VisitTemporary(HTemporary* temp ATTRIBUTE_UNUSED) {
   // Nothing to do, this is driven by the code generator.
-  UNUSED(temp);
 }
 
 void LocationsBuilderARM64::VisitThrow(HThrow* instruction) {
@@ -3247,15 +3235,13 @@ void InstructionCodeGeneratorARM64::VisitXor(HXor* instruction) {
   HandleBinaryOp(instruction);
 }
 
-void LocationsBuilderARM64::VisitBoundType(HBoundType* instruction) {
+void LocationsBuilderARM64::VisitBoundType(HBoundType* instruction ATTRIBUTE_UNUSED) {
   // Nothing to do, this should be removed during prepare for register allocator.
-  UNUSED(instruction);
   LOG(FATAL) << "Unreachable";
 }
 
-void InstructionCodeGeneratorARM64::VisitBoundType(HBoundType* instruction) {
+void InstructionCodeGeneratorARM64::VisitBoundType(HBoundType* instruction ATTRIBUTE_UNUSED) {
   // Nothing to do, this should be removed during prepare for register allocator.
-  UNUSED(instruction);
   LOG(FATAL) << "Unreachable";
 }
 

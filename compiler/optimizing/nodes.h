@@ -1751,8 +1751,7 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
     return true;
   }
 
-  virtual bool CanDoImplicitNullCheckOn(HInstruction* obj) const {
-    UNUSED(obj);
+  virtual bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const {
     return false;
   }
 
@@ -1869,16 +1868,14 @@ class HInstruction : public ArenaObject<kArenaAllocMisc> {
   virtual bool CanBeMoved() const { return false; }
 
   // Returns whether the two instructions are of the same kind.
-  virtual bool InstructionTypeEquals(HInstruction* other) const {
-    UNUSED(other);
+  virtual bool InstructionTypeEquals(HInstruction* other ATTRIBUTE_UNUSED) const {
     return false;
   }
 
   // Returns whether any data encoded in the two instructions is equal.
   // This method does not look at the inputs. Both instructions must be
   // of the same type, otherwise the method has undefined behavior.
-  virtual bool InstructionDataEquals(HInstruction* other) const {
-    UNUSED(other);
+  virtual bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const {
     return false;
   }
 
@@ -2073,13 +2070,11 @@ template<typename T>
 class EmbeddedArray<T, 0> {
  public:
   intptr_t length() const { return 0; }
-  const T& operator[](intptr_t i) const {
-    UNUSED(i);
+  const T& operator[](intptr_t i ATTRIBUTE_UNUSED) const {
     LOG(FATAL) << "Unreachable";
     UNREACHABLE();
   }
-  T& operator[](intptr_t i) {
-    UNUSED(i);
+  T& operator[](intptr_t i ATTRIBUTE_UNUSED) {
     LOG(FATAL) << "Unreachable";
     UNREACHABLE();
   }
@@ -2409,8 +2404,7 @@ class HUnaryOperation : public HExpression<1> {
   Primitive::Type GetResultType() const { return GetType(); }
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
 
@@ -2479,8 +2473,7 @@ class HBinaryOperation : public HExpression<2> {
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
 
@@ -3135,8 +3128,7 @@ class HInvokeStaticOrDirect : public HInvoke {
         target_method_(target_method),
         dispatch_info_(dispatch_info) {}
 
-  bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
-    UNUSED(obj);
+  bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
     // We access the method via the dex cache so we can't do an implicit null check.
     // TODO: for intrinsics we can generate implicit null checks.
     return false;
@@ -3567,8 +3559,7 @@ class HDivZeroCheck : public HExpression<1> {
 
   bool CanBeMoved() const OVERRIDE { return true; }
 
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
 
@@ -3810,8 +3801,7 @@ class HNot : public HUnaryOperation {
       : HUnaryOperation(result_type, input) {}
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
 
@@ -3836,8 +3826,7 @@ class HBooleanNot : public HUnaryOperation {
       : HUnaryOperation(Primitive::Type::kPrimBoolean, input) {}
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
 
@@ -3993,8 +3982,7 @@ class HNullCheck : public HExpression<1> {
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
 
@@ -4131,12 +4119,10 @@ class HArrayGet : public HExpression<2> {
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
-  bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
-    UNUSED(obj);
+  bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
     // TODO: We can be smarter here.
     // Currently, the array access is always preceded by an ArrayLength or a NullCheck
     // which generates the implicit null check. There are cases when these can be removed
@@ -4184,8 +4170,7 @@ class HArraySet : public HTemplateInstruction<3> {
   // Can throw ArrayStoreException.
   bool CanThrow() const OVERRIDE { return needs_type_check_; }
 
-  bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
-    UNUSED(obj);
+  bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
     // TODO: Same as for ArrayGet.
     return false;
   }
@@ -4243,8 +4228,7 @@ class HArrayLength : public HExpression<1> {
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
@@ -4267,8 +4251,7 @@ class HBoundsCheck : public HExpression<2> {
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
 
@@ -4481,8 +4464,7 @@ class HClinitCheck : public HExpression<1> {
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
-    UNUSED(other);
+  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
 
@@ -4967,7 +4949,7 @@ class HGraphVisitor : public ValueObject {
   explicit HGraphVisitor(HGraph* graph) : graph_(graph) {}
   virtual ~HGraphVisitor() {}
 
-  virtual void VisitInstruction(HInstruction* instruction) { UNUSED(instruction); }
+  virtual void VisitInstruction(HInstruction* instruction ATTRIBUTE_UNUSED) {}
   virtual void VisitBasicBlock(HBasicBlock* block);
 
   // Visit the graph following basic block insertion order.
