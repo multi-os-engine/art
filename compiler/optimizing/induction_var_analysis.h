@@ -57,12 +57,10 @@ class HInductionVarAnalysis : public HOptimization {
   };
 
   enum InductionClass {
-    kNone,
     kInvariant,
     kLinear,
     kWrapAround,
-    kPeriodic,
-    kMonotonic
+    kPeriodic
   };
 
   enum InductionOp {
@@ -71,7 +69,6 @@ class HInductionVarAnalysis : public HOptimization {
     kSub,
     kNeg,
     kMul,
-    kDiv,
     kFetch
   };
 
@@ -79,7 +76,7 @@ class HInductionVarAnalysis : public HOptimization {
    * Defines a detected induction as:
    *   (1) invariant:
    *         operation: a + b, a - b, -b, a * b, a / b
-   *       or
+   *       or:
    *         fetch: fetch from HIR
    *   (2) linear:
    *         nop: a * i + b
@@ -87,8 +84,6 @@ class HInductionVarAnalysis : public HOptimization {
    *         nop: a, then defined by b
    *   (4) periodic
    *         nop: a, then defined by b (repeated when exhausted)
-   *   (5) monotonic
-   *         // TODO: determine representation
    */
   struct InductionInfo : public ArenaObject<kArenaAllocMisc> {
     InductionInfo(InductionClass ic,
@@ -108,17 +103,20 @@ class HInductionVarAnalysis : public HOptimization {
     HInstruction* fetch;
   };
 
-  inline bool IsVisitedNode(int id) const {
-    return map_.find(id) != map_.end();
+  inline bool IsVisitedNode(HInstruction* instruction) const {
+    return map_.find(instruction) != map_.end();
   }
 
-  inline InductionInfo* NewInductionInfo(
-      InductionClass c,
-      InductionOp op,
-      InductionInfo* a,
-      InductionInfo* b,
-      HInstruction* i) {
-    return new (graph_->GetArena()) InductionInfo(c, op, a, b, i);
+  inline InductionInfo* NewInvariantOp(InductionOp op, InductionInfo* a, InductionInfo* b) {
+    return new (graph_->GetArena()) InductionInfo(kInvariant, op, a, b, nullptr);
+  }
+
+  inline InductionInfo* NewInvariantFetch(HInstruction* f) {
+    return new (graph_->GetArena()) InductionInfo(kInvariant, kFetch, nullptr, nullptr, f);
+  }
+
+  inline InductionInfo* NewInduction(InductionClass ic, InductionInfo* a, InductionInfo* b) {
+    return new (graph_->GetArena()) InductionInfo(ic, kNop, a, b, nullptr);
   }
 
   // Methods for analysis.
@@ -132,17 +130,23 @@ class HInductionVarAnalysis : public HOptimization {
   InductionInfo* TransferPhi(InductionInfo* a, InductionInfo* b);
   InductionInfo* TransferAddSub(InductionInfo* a, InductionInfo* b, InductionOp op);
   InductionInfo* TransferMul(InductionInfo* a, InductionInfo* b);
+  InductionInfo* TransferShl(InductionInfo* a, InductionInfo* b);
   InductionInfo* TransferNeg(InductionInfo* a);
-  InductionInfo* TransferCycleOverPhi(HInstruction* phi);
-  InductionInfo* TransferCycleOverAddSub(HLoopInformation* loop,
-                                         HInstruction* x,
-                                         HInstruction* y,
-                                         InductionOp op,
-                                         bool first);
+
+  // Solvers.
+  InductionInfo* SolvePhi(HLoopInformation* loop,
+                          HInstruction* phi,
+                          HInstruction* instruction);
+  InductionInfo* SolveAddSub(HLoopInformation* loop,
+                             HInstruction* phi,
+                             HInstruction* instruction,
+                             HInstruction* x,
+                             HInstruction* y,
+                             InductionOp op,
+                             bool first);
+  InductionInfo* PeriodToEnd(InductionInfo* seq, InductionInfo* last);
 
   // Assign and lookup.
-  void PutInfo(int loop_id, int id, InductionInfo* info);
-  InductionInfo* GetInfo(int loop_id, int id);
   void AssignInfo(HLoopInformation* loop, HInstruction* instruction, InductionInfo* info);
   InductionInfo* LookupInfo(HLoopInformation* loop, HInstruction* instruction);
   bool InductionEqual(InductionInfo* info1, InductionInfo* info2);
@@ -150,18 +154,12 @@ class HInductionVarAnalysis : public HOptimization {
 
   // Bookkeeping during and after analysis.
   // TODO: fine tune data structures, only keep relevant data
-
   uint32_t global_depth_;
-
   ArenaVector<HInstruction*> stack_;
   ArenaVector<HInstruction*> scc_;
-
-  // Mappings of instruction id to node and induction information.
-  ArenaSafeMap<int, NodeInfo> map_;
-  ArenaSafeMap<int, InductionInfo*> cycle_;
-
-  // Mapping from loop id to mapping of instruction id to induction information.
-  ArenaSafeMap<int, ArenaSafeMap<int, InductionInfo*>> induction_;
+  ArenaSafeMap<HInstruction*, NodeInfo> map_;
+  ArenaSafeMap<HInstruction*, InductionInfo*> cycle_;
+  ArenaSafeMap<HLoopInformation*, ArenaSafeMap<HInstruction*, InductionInfo*>> induction_;
 
   DISALLOW_COPY_AND_ASSIGN(HInductionVarAnalysis);
 };
