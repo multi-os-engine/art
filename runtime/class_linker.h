@@ -478,6 +478,8 @@ class ClassLinker {
   // entries are roots, but potentially not image classes.
   void DropFindArrayClassCache() SHARED_REQUIRES(Locks::mutator_lock_);
 
+  std::shared_ptr<const DexFile> GetOpenedDexFile(const std::string& location) const;
+
  private:
   void VisitClassesInternal(ClassVisitor* visitor)
       REQUIRES(Locks::classlinker_classes_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
@@ -700,7 +702,7 @@ class ClassLinker {
       REQUIRES(!Locks::classlinker_classes_lock_);
 
   std::vector<const DexFile*> boot_class_path_;
-  std::vector<std::unique_ptr<const DexFile>> opened_dex_files_;
+  std::vector<std::shared_ptr<const DexFile>> opened_dex_files_;
 
   mutable ReaderWriterMutex dex_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   // JNI weak globals to allow dex caches to get unloaded. We lazily delete weak globals when we

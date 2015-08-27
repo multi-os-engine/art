@@ -1195,7 +1195,7 @@ void ClassLinker::InitFromImage() {
     CHECK_EQ(dex_file->GetLocationChecksum(), oat_dex_file->GetDexFileLocationChecksum());
 
     AppendToBootClassPath(*dex_file.get(), dex_cache);
-    opened_dex_files_.push_back(std::move(dex_file));
+    opened_dex_files_.push_back(std::shared_ptr<const DexFile>(dex_file.release()));
   }
 
   CHECK(ValidPointerSize(image_pointer_size_)) << image_pointer_size_;
@@ -2541,17 +2541,11 @@ mirror::DexCache* ClassLinker::FindDexCacheLocked(const DexFile& dex_file, bool 
     }
   }
   // Check dex file by location, this is used for oatdump.
-  std::string location(dex_file.GetLocation());
-  for (jobject weak_root : dex_caches_) {
-    mirror::DexCache* dex_cache = down_cast<mirror::DexCache*>(self->DecodeJObject(weak_root));
-    if (dex_cache != nullptr && dex_cache->GetDexFile()->GetLocation() == location) {
-      return dex_cache;
-    }
-  }
   if (allow_failure) {
     return nullptr;
   }
   // Failure, dump diagnostic and abort.
+  std::string location(dex_file.GetLocation());
   for (jobject weak_root : dex_caches_) {
     mirror::DexCache* dex_cache = down_cast<mirror::DexCache*>(self->DecodeJObject(weak_root));
     if (dex_cache != nullptr) {
@@ -5971,6 +5965,15 @@ ArtMethod* ClassLinker::CreateRuntimeMethod() {
 void ClassLinker::DropFindArrayClassCache() {
   std::fill_n(find_array_class_cache_, kFindArrayCacheSize, GcRoot<mirror::Class>(nullptr));
   find_array_class_cache_next_victim_ = 0;
+}
+
+std::shared_ptr<const DexFile> ClassLinker::GetOpenedDexFile(const std::string& location) const {
+  for (const std::shared_ptr<const DexFile>& ptr : opened_dex_files_) {
+    if (ptr->GetLocation() == location) {
+      return ptr;
+    }
+  }
+  return std::shared_ptr<const DexFile>();
 }
 
 }  // namespace art

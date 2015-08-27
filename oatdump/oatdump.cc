@@ -78,6 +78,20 @@ const char* image_roots_descriptions_[] = {
   "kClassRoots",
 };
 
+std::shared_ptr<const DexFile> OpenDexFile(const OatFile::OatDexFile* oat_dex_file,
+                                            std::string* error_msg) {
+  DCHECK(oat_dex_file != nullptr);
+  Runtime* const runtime = Runtime::Current();
+  std::shared_ptr<const DexFile> ret;
+  if (runtime != nullptr) {
+    ret = runtime->GetClassLinker()->GetOpenedDexFile(oat_dex_file->GetDexFileLocation());
+  }
+  if (ret.get() == nullptr) {
+    ret.reset(oat_dex_file->OpenDexFile(error_msg).release());
+  }
+  return ret;
+}
+
 class OatSymbolizer FINAL {
  public:
   class RodataWriter FINAL : public CodeOutput {
@@ -159,7 +173,7 @@ class OatSymbolizer FINAL {
 
   void WalkOatDexFile(const OatFile::OatDexFile* oat_dex_file, Callback callback) {
     std::string error_msg;
-    std::unique_ptr<const DexFile> dex_file(oat_dex_file->OpenDexFile(&error_msg));
+    std::shared_ptr<const DexFile> dex_file(OpenDexFile(oat_dex_file, &error_msg));
     if (dex_file.get() == nullptr) {
       return;
     }
@@ -504,7 +518,7 @@ class OatDumper {
       const OatFile::OatDexFile* oat_dex_file = oat_dex_files_[i];
       CHECK(oat_dex_file != nullptr);
       std::string error_msg;
-      std::unique_ptr<const DexFile> dex_file(oat_dex_file->OpenDexFile(&error_msg));
+      std::shared_ptr<const DexFile> dex_file(OpenDexFile(oat_dex_file, &error_msg));
       if (dex_file.get() == nullptr) {
         LOG(WARNING) << "Failed to open dex file '" << oat_dex_file->GetDexFileLocation()
             << "': " << error_msg;
@@ -533,7 +547,7 @@ class OatDumper {
       const OatFile::OatDexFile* oat_dex_file = oat_dex_files_[i];
       CHECK(oat_dex_file != nullptr);
       std::string error_msg;
-      std::unique_ptr<const DexFile> dex_file(oat_dex_file->OpenDexFile(&error_msg));
+      std::shared_ptr<const DexFile> dex_file(OpenDexFile(oat_dex_file, &error_msg));
       if (dex_file.get() == nullptr) {
         LOG(WARNING) << "Failed to open dex file '" << oat_dex_file->GetDexFileLocation()
             << "': " << error_msg;
@@ -593,7 +607,7 @@ class OatDumper {
     // Create the verifier early.
 
     std::string error_msg;
-    std::unique_ptr<const DexFile> dex_file(oat_dex_file.OpenDexFile(&error_msg));
+    std::shared_ptr<const DexFile> dex_file(OpenDexFile(&oat_dex_file, &error_msg));
     if (dex_file.get() == nullptr) {
       os << "NOT FOUND: " << error_msg << "\n\n";
       os << std::flush;
@@ -638,7 +652,7 @@ class OatDumper {
     std::string error_msg;
     std::string dex_file_location = oat_dex_file.GetDexFileLocation();
 
-    std::unique_ptr<const DexFile> dex_file(oat_dex_file.OpenDexFile(&error_msg));
+    std::shared_ptr<const DexFile> dex_file(OpenDexFile(&oat_dex_file, &error_msg));
     if (dex_file == nullptr) {
       os << "Failed to open dex file '" << dex_file_location << "': " << error_msg;
       return false;
@@ -2337,13 +2351,13 @@ static int DumpOatWithRuntime(Runtime* runtime, OatFile* oat_file, OatDumperOpti
   ScopedObjectAccess soa(self);
   ClassLinker* class_linker = runtime->GetClassLinker();
   class_linker->RegisterOatFile(oat_file);
-  std::vector<std::unique_ptr<const DexFile>> dex_files;
+  std::vector<std::shared_ptr<const DexFile>> dex_files;
   for (const OatFile::OatDexFile* odf : oat_file->GetOatDexFiles()) {
     std::string error_msg;
-    std::unique_ptr<const DexFile> dex_file = odf->OpenDexFile(&error_msg);
+    std::shared_ptr<const DexFile> dex_file(OpenDexFile(odf, &error_msg));
     CHECK(dex_file != nullptr) << error_msg;
     class_linker->RegisterDexFile(*dex_file);
-    dex_files.push_back(std::move(dex_file));
+    dex_files.push_back(dex_file);
   }
 
   // Need a class loader.
