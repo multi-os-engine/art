@@ -514,7 +514,7 @@ static bool ModsMatch(JdwpEvent* pEvent, const ModBasket& basket)
       break;
     default:
       LOG(FATAL) << "unknown mod kind " << pMod->modKind;
-      break;
+      UNREACHABLE();
     }
   }
   return true;
@@ -728,8 +728,8 @@ void JdwpState::ClearWaitForJdwpToken() {
  * the header.
  */
 static ExpandBuf* eventPrep() {
-  ExpandBuf* pReq = expandBufAlloc();
-  expandBufAddSpace(pReq, kJDWPHeaderLen);
+  ExpandBuf* pReq = new ExpandBuf();
+  pReq->AddSpace(kJDWPHeaderLen);
   return pReq;
 }
 
@@ -738,18 +738,11 @@ static ExpandBuf* eventPrep() {
  *
  * Takes ownership of "pReq" (currently discards it).
  */
+// TODO: remove ownership, let the caller deal with that.
 void JdwpState::EventFinish(ExpandBuf* pReq) {
-  uint8_t* buf = expandBufGetBuffer(pReq);
-
-  Set4BE(buf + kJDWPHeaderSizeOffset, expandBufGetLength(pReq));
-  Set4BE(buf + kJDWPHeaderIdOffset, NextRequestSerial());
-  Set1(buf + kJDWPHeaderFlagsOffset, 0);     /* flags */
-  Set1(buf + kJDWPHeaderCmdSetOffset, kJDWPEventCmdSet);
-  Set1(buf + kJDWPHeaderCmdOffset, kJDWPEventCompositeCmd);
-
+  pReq->CompleteEvent(NextRequestSerial());
   SendRequest(pReq);
-
-  expandBufFree(pReq);
+  delete pReq;
 }
 
 
@@ -769,11 +762,11 @@ void JdwpState::PostVMStart() {
   VLOG(jdwp) << "  suspend_policy=" << suspend_policy;
 
   ExpandBuf* pReq = eventPrep();
-  expandBufAdd1(pReq, suspend_policy);
-  expandBufAdd4BE(pReq, 1);
-  expandBufAdd1(pReq, EK_VM_START);
-  expandBufAdd4BE(pReq, 0);       /* requestId */
-  expandBufAddObjectId(pReq, threadId);
+  pReq->Add1(suspend_policy);
+  pReq->Add4BE(1);
+  pReq->Add1(EK_VM_START);
+  pReq->Add4BE(0);       /* requestId */
+  pReq->AddObjectId(threadId);
 
   Dbg::ManageDeoptimization();
 
@@ -899,14 +892,14 @@ void JdwpState::PostLocationEvent(const EventLocation* pLoc, mirror::Object* thi
   }
 
   ExpandBuf* pReq = eventPrep();
-  expandBufAdd1(pReq, suspend_policy);
-  expandBufAdd4BE(pReq, match_list.size());
+  pReq->Add1(suspend_policy);
+  pReq->Add4BE(match_list.size());
 
   for (const JdwpEvent* pEvent : match_list) {
-    expandBufAdd1(pReq, pEvent->eventKind);
-    expandBufAdd4BE(pReq, pEvent->requestId);
-    expandBufAddObjectId(pReq, thread_id);
-    expandBufAddLocation(pReq, jdwp_location);
+    pReq->Add1(pEvent->eventKind);
+    pReq->Add4BE(pEvent->requestId);
+    pReq->AddObjectId(thread_id);
+    pReq->AddLocation(jdwp_location);
     if (pEvent->eventKind == EK_METHOD_EXIT_WITH_RETURN_VALUE) {
       Dbg::OutputMethodReturnValue(jdwp_location.method_id, returnValue, pReq);
     }
@@ -970,8 +963,8 @@ void JdwpState::PostFieldEvent(const EventLocation* pLoc, ArtField* field,
   }
 
   ExpandBuf* pReq = eventPrep();
-  expandBufAdd1(pReq, suspend_policy);
-  expandBufAdd4BE(pReq, match_list.size());
+  pReq->Add1(suspend_policy);
+  pReq->Add4BE(match_list.size());
 
   // Get field's reference type tag.
   JDWP::JdwpTypeTag type_tag = Dbg::GetTypeTag(field->GetDeclaringClass());
@@ -984,15 +977,15 @@ void JdwpState::PostFieldEvent(const EventLocation* pLoc, ArtField* field,
   }
 
   for (const JdwpEvent* pEvent : match_list) {
-    expandBufAdd1(pReq, pEvent->eventKind);
-    expandBufAdd4BE(pReq, pEvent->requestId);
-    expandBufAddObjectId(pReq, thread_id);
-    expandBufAddLocation(pReq, jdwp_location);
-    expandBufAdd1(pReq, type_tag);
-    expandBufAddRefTypeId(pReq, field_type_id);
-    expandBufAddFieldId(pReq, field_id);
-    expandBufAdd1(pReq, tag);
-    expandBufAddObjectId(pReq, instance_id);
+    pReq->Add1(pEvent->eventKind);
+    pReq->Add4BE(pEvent->requestId);
+    pReq->AddObjectId(thread_id);
+    pReq->AddLocation(jdwp_location);
+    pReq->Add1(type_tag);
+    pReq->AddRefTypeId(field_type_id);
+    pReq->AddFieldId(field_id);
+    pReq->Add1(tag);
+    pReq->AddObjectId(instance_id);
     if (is_modification) {
       Dbg::OutputFieldValue(field_id, fieldValue, pReq);
     }
@@ -1051,13 +1044,13 @@ void JdwpState::PostThreadChange(Thread* thread, bool start) {
   }
 
   ExpandBuf* pReq = eventPrep();
-  expandBufAdd1(pReq, suspend_policy);
-  expandBufAdd4BE(pReq, match_list.size());
+  pReq->Add1(suspend_policy);
+  pReq->Add4BE(match_list.size());
 
   for (const JdwpEvent* pEvent : match_list) {
-    expandBufAdd1(pReq, pEvent->eventKind);
-    expandBufAdd4BE(pReq, pEvent->requestId);
-    expandBufAdd8BE(pReq, thread_id);
+    pReq->Add1(pEvent->eventKind);
+    pReq->Add4BE(pEvent->requestId);
+    pReq->AddObjectId(thread_id);
   }
 
   {
@@ -1079,11 +1072,11 @@ bool JdwpState::PostVMDeath() {
   VLOG(jdwp) << "EVENT: " << EK_VM_DEATH;
 
   ExpandBuf* pReq = eventPrep();
-  expandBufAdd1(pReq, SP_NONE);
-  expandBufAdd4BE(pReq, 1);
+  pReq->Add1(SP_NONE);
+  pReq->Add4BE(1);
 
-  expandBufAdd1(pReq, EK_VM_DEATH);
-  expandBufAdd4BE(pReq, 0);
+  pReq->Add1(EK_VM_DEATH);
+  pReq->Add4BE(0);
   EventFinish(pReq);
   return true;
 }
@@ -1157,17 +1150,17 @@ void JdwpState::PostException(const EventLocation* pThrowLoc, mirror::Throwable*
   }
 
   ExpandBuf* pReq = eventPrep();
-  expandBufAdd1(pReq, suspend_policy);
-  expandBufAdd4BE(pReq, match_list.size());
+  pReq->Add1(suspend_policy);
+  pReq->Add4BE(match_list.size());
 
   for (const JdwpEvent* pEvent : match_list) {
-    expandBufAdd1(pReq, pEvent->eventKind);
-    expandBufAdd4BE(pReq, pEvent->requestId);
-    expandBufAddObjectId(pReq, thread_id);
-    expandBufAddLocation(pReq, jdwp_throw_location);
-    expandBufAdd1(pReq, JT_OBJECT);
-    expandBufAddObjectId(pReq, exceptionId);
-    expandBufAddLocation(pReq, jdwp_catch_location);
+    pReq->Add1(pEvent->eventKind);
+    pReq->Add4BE(pEvent->requestId);
+    pReq->AddObjectId(thread_id);
+    pReq->AddLocation(jdwp_throw_location);
+    pReq->Add1(JT_OBJECT);
+    pReq->AddObjectId(exceptionId);
+    pReq->AddLocation(jdwp_catch_location);
   }
 
   {
@@ -1238,17 +1231,17 @@ void JdwpState::PostClassPrepare(mirror::Class* klass) {
   }
 
   ExpandBuf* pReq = eventPrep();
-  expandBufAdd1(pReq, suspend_policy);
-  expandBufAdd4BE(pReq, match_list.size());
+  pReq->Add1(suspend_policy);
+  pReq->Add4BE(match_list.size());
 
   for (const JdwpEvent* pEvent : match_list) {
-    expandBufAdd1(pReq, pEvent->eventKind);
-    expandBufAdd4BE(pReq, pEvent->requestId);
-    expandBufAddObjectId(pReq, thread_id);
-    expandBufAdd1(pReq, tag);
-    expandBufAddRefTypeId(pReq, class_id);
-    expandBufAddUtf8String(pReq, signature);
-    expandBufAdd4BE(pReq, status);
+    pReq->Add1(pEvent->eventKind);
+    pReq->Add4BE(pEvent->requestId);
+    pReq->AddObjectId(thread_id);
+    pReq->Add1(tag);
+    pReq->AddRefTypeId(class_id);
+    pReq->AddUtf8String(signature);
+    pReq->Add4BE(status);
   }
 
   {

@@ -29,6 +29,7 @@
 
 #include "gc_root.h"
 #include "jdwp/jdwp.h"
+#include "jdwp/jdwp_expand_buf.h"
 #include "jni.h"
 #include "jvalue.h"
 #include "thread.h"
@@ -52,17 +53,23 @@ class Thread;
  * Invoke-during-breakpoint support.
  */
 struct DebugInvokeReq {
-  DebugInvokeReq(uint32_t invoke_request_id, JDWP::ObjectId invoke_thread_id,
-                 mirror::Object* invoke_receiver, mirror::Class* invoke_class,
-                 ArtMethod* invoke_method, uint32_t invoke_options,
-                 uint64_t args[], uint32_t args_count)
-      : request_id(invoke_request_id), thread_id(invoke_thread_id), receiver(invoke_receiver),
-        klass(invoke_class), method(invoke_method), arg_count(args_count), arg_values(args),
-        options(invoke_options), reply(JDWP::expandBufAlloc()) {
-  }
-
-  ~DebugInvokeReq() {
-    JDWP::expandBufFree(reply);
+  DebugInvokeReq(uint32_t invoke_request_id,
+                 JDWP::ObjectId invoke_thread_id,
+                 mirror::Object* invoke_receiver,
+                 mirror::Class* invoke_class,
+                 ArtMethod* invoke_method,
+                 uint32_t invoke_options,
+                 uint64_t args[],
+                 uint32_t args_count)
+      : request_id(invoke_request_id),
+        thread_id(invoke_thread_id),
+        receiver(invoke_receiver),
+        klass(invoke_class),
+        method(invoke_method),
+        arg_count(args_count),
+        arg_values(args),
+        options(invoke_options),
+        reply() {
   }
 
   // Request
@@ -77,7 +84,7 @@ struct DebugInvokeReq {
   const uint32_t options;
 
   // Reply
-  JDWP::ExpandBuf* const reply;
+  JDWP::ExpandBuf reply;
 
   void VisitRoots(RootVisitor* visitor, const RootInfo& root_info)
       SHARED_REQUIRES(Locks::mutator_lock_);

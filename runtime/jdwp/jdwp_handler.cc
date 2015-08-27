@@ -58,15 +58,15 @@ static JdwpError WriteTaggedObject(ExpandBuf* reply, ObjectId object_id)
   uint8_t tag;
   JdwpError rc = Dbg::GetObjectTag(object_id, &tag);
   if (rc == ERR_NONE) {
-    expandBufAdd1(reply, tag);
-    expandBufAddObjectId(reply, object_id);
+    reply->Add1(tag);
+    reply->AddObjectId(object_id);
   }
   return rc;
 }
 
 static JdwpError WriteTaggedObjectList(ExpandBuf* reply, const std::vector<ObjectId>& objects)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  expandBufAdd4BE(reply, objects.size());
+  reply->Add4BE(objects.size());
   for (size_t i = 0; i < objects.size(); ++i) {
     JdwpError rc = WriteTaggedObject(reply, objects[i]);
     if (rc != ERR_NONE) {
@@ -127,17 +127,17 @@ static JdwpError VM_Version(JdwpState*, Request*, ExpandBuf* pReply)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   // Text information on runtime version.
   std::string version(StringPrintf("Android Runtime %s", Runtime::Current()->GetVersion()));
-  expandBufAddUtf8String(pReply, version);
+  pReply->AddUtf8String(version);
 
   // JDWP version numbers, major and minor.
-  expandBufAdd4BE(pReply, 1);
-  expandBufAdd4BE(pReply, 6);
+  pReply->Add4BE(1);
+  pReply->Add4BE(6);
 
   // "java.version".
-  expandBufAddUtf8String(pReply, "1.6.0");
+  pReply->AddUtf8String("1.6.0");
 
   // "java.vm.name".
-  expandBufAddUtf8String(pReply, "Dalvik");
+  pReply->AddUtf8String("Dalvik");
 
   return ERR_NONE;
 }
@@ -154,7 +154,7 @@ static JdwpError VM_ClassesBySignature(JdwpState*, Request* request, ExpandBuf* 
   std::vector<RefTypeId> ids;
   Dbg::FindLoadedClassBySignature(classDescriptor.c_str(), &ids);
 
-  expandBufAdd4BE(pReply, ids.size());
+  pReply->Add4BE(ids.size());
 
   for (size_t i = 0; i < ids.size(); ++i) {
     // Get class vs. interface and status flags.
@@ -165,9 +165,9 @@ static JdwpError VM_ClassesBySignature(JdwpState*, Request* request, ExpandBuf* 
       return status;
     }
 
-    expandBufAdd1(pReply, type_tag);
-    expandBufAddRefTypeId(pReply, ids[i]);
-    expandBufAdd4BE(pReply, class_status);
+    pReply->Add1(type_tag);
+    pReply->AddRefTypeId(ids[i]);
+    pReply->Add4BE(class_status);
   }
 
   return ERR_NONE;
@@ -184,9 +184,9 @@ static JdwpError VM_AllThreads(JdwpState*, Request*, ExpandBuf* pReply)
   std::vector<ObjectId> thread_ids;
   Dbg::GetThreads(nullptr /* all thread groups */, &thread_ids);
 
-  expandBufAdd4BE(pReply, thread_ids.size());
+  pReply->Add4BE(thread_ids.size());
   for (uint32_t i = 0; i < thread_ids.size(); ++i) {
-    expandBufAddObjectId(pReply, thread_ids[i]);
+    pReply->AddObjectId(thread_ids[i]);
   }
 
   return ERR_NONE;
@@ -204,9 +204,9 @@ static JdwpError VM_TopLevelThreadGroups(JdwpState*, Request*, ExpandBuf* pReply
    * in "main", which is a child of "system".
    */
   uint32_t groups = 1;
-  expandBufAdd4BE(pReply, groups);
+  pReply->Add4BE(groups);
   ObjectId thread_group_id = Dbg::GetSystemThreadGroupId();
-  expandBufAddObjectId(pReply, thread_group_id);
+  pReply->AddObjectId(thread_group_id);
 
   return ERR_NONE;
 }
@@ -216,11 +216,11 @@ static JdwpError VM_TopLevelThreadGroups(JdwpState*, Request*, ExpandBuf* pReply
  */
 static JdwpError VM_IDSizes(JdwpState*, Request*, ExpandBuf* pReply)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  expandBufAdd4BE(pReply, sizeof(FieldId));
-  expandBufAdd4BE(pReply, sizeof(MethodId));
-  expandBufAdd4BE(pReply, sizeof(ObjectId));
-  expandBufAdd4BE(pReply, sizeof(RefTypeId));
-  expandBufAdd4BE(pReply, sizeof(FrameId));
+  pReply->Add4BE(sizeof(FieldId));
+  pReply->Add4BE(sizeof(MethodId));
+  pReply->Add4BE(sizeof(ObjectId));
+  pReply->Add4BE(sizeof(RefTypeId));
+  pReply->Add4BE(sizeof(FrameId));
   return ERR_NONE;
 }
 
@@ -274,28 +274,25 @@ static JdwpError VM_CreateString(JdwpState*, Request* request, ExpandBuf* pReply
   if (status != ERR_NONE) {
     return status;
   }
-  expandBufAddObjectId(pReply, string_id);
+  pReply->AddObjectId(string_id);
   return ERR_NONE;
+}
+
+// Appends class paths to reply (<paths count> <path1> <path2> ... <pathN>).
+static void AppendClassPaths(const std::string& classpath, ExpandBuf* pReply) {
+  std::vector<std::string> paths;
+  Split(classpath, ':', &paths);
+  pReply->Add4BE(paths.size());
+  for (const std::string& str : paths) {
+    pReply->AddUtf8String(str);
+  }
 }
 
 static JdwpError VM_ClassPaths(JdwpState*, Request*, ExpandBuf* pReply)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  expandBufAddUtf8String(pReply, "/");
-
-  std::vector<std::string> class_path;
-  Split(Runtime::Current()->GetClassPathString(), ':', &class_path);
-  expandBufAdd4BE(pReply, class_path.size());
-  for (const std::string& str : class_path) {
-    expandBufAddUtf8String(pReply, str);
-  }
-
-  std::vector<std::string> boot_class_path;
-  Split(Runtime::Current()->GetBootClassPathString(), ':', &boot_class_path);
-  expandBufAdd4BE(pReply, boot_class_path.size());
-  for (const std::string& str : boot_class_path) {
-    expandBufAddUtf8String(pReply, str);
-  }
-
+  pReply->AddUtf8String("/");
+  AppendClassPaths(Runtime::Current()->GetClassPathString(), pReply);
+  AppendClassPaths(Runtime::Current()->GetBootClassPathString(), pReply);
   return ERR_NONE;
 }
 
@@ -312,13 +309,13 @@ static JdwpError VM_DisposeObjects(JdwpState*, Request* request, ExpandBuf*)
 
 static JdwpError VM_Capabilities(JdwpState*, Request*, ExpandBuf* reply)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  expandBufAdd1(reply, true);    // canWatchFieldModification
-  expandBufAdd1(reply, true);    // canWatchFieldAccess
-  expandBufAdd1(reply, true);    // canGetBytecodes
-  expandBufAdd1(reply, true);    // canGetSyntheticAttribute
-  expandBufAdd1(reply, true);    // canGetOwnedMonitorInfo
-  expandBufAdd1(reply, true);    // canGetCurrentContendedMonitor
-  expandBufAdd1(reply, true);    // canGetMonitorInfo
+  reply->Add1(true);    // canWatchFieldModification
+  reply->Add1(true);    // canWatchFieldAccess
+  reply->Add1(true);    // canGetBytecodes
+  reply->Add1(true);    // canGetSyntheticAttribute
+  reply->Add1(true);    // canGetOwnedMonitorInfo
+  reply->Add1(true);    // canGetCurrentContendedMonitor
+  reply->Add1(true);    // canGetMonitorInfo
   return ERR_NONE;
 }
 
@@ -327,24 +324,24 @@ static JdwpError VM_CapabilitiesNew(JdwpState*, Request* request, ExpandBuf* rep
   // The first few capabilities are the same as those reported by the older call.
   VM_Capabilities(nullptr, request, reply);
 
-  expandBufAdd1(reply, false);   // canRedefineClasses
-  expandBufAdd1(reply, false);   // canAddMethod
-  expandBufAdd1(reply, false);   // canUnrestrictedlyRedefineClasses
-  expandBufAdd1(reply, false);   // canPopFrames
-  expandBufAdd1(reply, true);    // canUseInstanceFilters
-  expandBufAdd1(reply, false);   // canGetSourceDebugExtension
-  expandBufAdd1(reply, false);   // canRequestVMDeathEvent
-  expandBufAdd1(reply, false);   // canSetDefaultStratum
-  expandBufAdd1(reply, true);    // 1.6: canGetInstanceInfo
-  expandBufAdd1(reply, false);   // 1.6: canRequestMonitorEvents
-  expandBufAdd1(reply, true);    // 1.6: canGetMonitorFrameInfo
-  expandBufAdd1(reply, false);   // 1.6: canUseSourceNameFilters
-  expandBufAdd1(reply, false);   // 1.6: canGetConstantPool
-  expandBufAdd1(reply, false);   // 1.6: canForceEarlyReturn
+  reply->Add1(false);   // canRedefineClasses
+  reply->Add1(false);   // canAddMethod
+  reply->Add1(false);   // canUnrestrictedlyRedefineClasses
+  reply->Add1(false);   // canPopFrames
+  reply->Add1(true);    // canUseInstanceFilters
+  reply->Add1(false);   // canGetSourceDebugExtension
+  reply->Add1(false);   // canRequestVMDeathEvent
+  reply->Add1(false);   // canSetDefaultStratum
+  reply->Add1(true);    // 1.6: canGetInstanceInfo
+  reply->Add1(false);   // 1.6: canRequestMonitorEvents
+  reply->Add1(true);    // 1.6: canGetMonitorFrameInfo
+  reply->Add1(false);   // 1.6: canUseSourceNameFilters
+  reply->Add1(false);   // 1.6: canGetConstantPool
+  reply->Add1(false);   // 1.6: canForceEarlyReturn
 
   // Fill in reserved22 through reserved32; note count started at 1.
   for (size_t i = 22; i <= 32; ++i) {
-    expandBufAdd1(reply, false);
+    reply->Add1(false);
   }
   return ERR_NONE;
 }
@@ -354,7 +351,7 @@ static JdwpError VM_AllClassesImpl(ExpandBuf* pReply, bool descriptor_and_status
   std::vector<JDWP::RefTypeId> classes;
   Dbg::GetClassList(&classes);
 
-  expandBufAdd4BE(pReply, classes.size());
+  pReply->Add4BE(classes.size());
 
   for (size_t i = 0; i < classes.size(); ++i) {
     static const char genericSignature[1] = "";
@@ -366,14 +363,14 @@ static JdwpError VM_AllClassesImpl(ExpandBuf* pReply, bool descriptor_and_status
       return status;
     }
 
-    expandBufAdd1(pReply, type_tag);
-    expandBufAddRefTypeId(pReply, classes[i]);
+    pReply->Add1(type_tag);
+    pReply->AddRefTypeId(classes[i]);
     if (descriptor_and_status) {
-      expandBufAddUtf8String(pReply, descriptor);
+      pReply->AddUtf8String(descriptor);
       if (generic) {
-        expandBufAddUtf8String(pReply, genericSignature);
+        pReply->AddUtf8String(genericSignature);
       }
-      expandBufAdd4BE(pReply, class_status);
+      pReply->Add4BE(class_status);
     }
   }
 
@@ -407,9 +404,9 @@ static JdwpError VM_InstanceCounts(JdwpState*, Request* request, ExpandBuf* pRep
     return rc;
   }
 
-  expandBufAdd4BE(pReply, counts.size());
-  for (size_t i = 0; i < counts.size(); ++i) {
-    expandBufAdd8BE(pReply, counts[i]);
+  pReply->Add4BE(counts.size());
+  for (const uint64_t count : counts) {
+    pReply->Add8BE(count);
   }
   return ERR_NONE;
 }
@@ -427,7 +424,7 @@ static JdwpError RT_GetValues(JdwpState*, Request* request, ExpandBuf* pReply)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   RefTypeId refTypeId = request->ReadRefTypeId();
   int32_t field_count = request->ReadSigned32("field count");
-  expandBufAdd4BE(pReply, field_count);
+  pReply->Add4BE(field_count);
   for (int32_t i = 0; i < field_count; ++i) {
     FieldId fieldId = request->ReadFieldId();
     JdwpError status = Dbg::GetStaticFieldValue(refTypeId, fieldId, pReply);
@@ -449,7 +446,7 @@ static JdwpError RT_SourceFile(JdwpState*, Request* request, ExpandBuf* pReply)
   if (status != ERR_NONE) {
     return status;
   }
-  expandBufAddUtf8String(pReply, source_file);
+  pReply->AddUtf8String(source_file);
   return ERR_NONE;
 }
 
@@ -465,7 +462,7 @@ static JdwpError RT_Status(JdwpState*, Request* request, ExpandBuf* pReply)
   if (status != ERR_NONE) {
     return status;
   }
-  expandBufAdd4BE(pReply, class_status);
+  pReply->Add4BE(class_status);
   return ERR_NONE;
 }
 
@@ -490,7 +487,7 @@ static JdwpError RT_ClassObject(JdwpState*, Request* request, ExpandBuf* pReply)
     return status;
   }
   VLOG(jdwp) << StringPrintf("    --> ObjectId %#" PRIx64, class_object_id);
-  expandBufAddObjectId(pReply, class_object_id);
+  pReply->AddObjectId(class_object_id);
   return ERR_NONE;
 }
 
@@ -514,9 +511,9 @@ static JdwpError RT_Signature(JdwpState*, Request* request, ExpandBuf* pReply, b
   if (status != ERR_NONE) {
     return status;
   }
-  expandBufAddUtf8String(pReply, signature);
+  pReply->AddUtf8String(signature);
   if (with_generic) {
-    expandBufAddUtf8String(pReply, "");
+    pReply->AddUtf8String("");
   }
   return ERR_NONE;
 }
@@ -603,7 +600,7 @@ static JdwpError CT_Superclass(JdwpState*, Request* request, ExpandBuf* pReply)
   if (status != ERR_NONE) {
     return status;
   }
-  expandBufAddRefTypeId(pReply, superClassId);
+  pReply->AddRefTypeId(superClassId);
   return ERR_NONE;
 }
 
@@ -684,8 +681,8 @@ static JdwpError AT_newInstance(JdwpState*, Request* request, ExpandBuf* pReply)
   if (status != ERR_NONE) {
     return status;
   }
-  expandBufAdd1(pReply, JT_ARRAY);
-  expandBufAddObjectId(pReply, object_id);
+  pReply->Add1(JT_ARRAY);
+  pReply->AddObjectId(object_id);
   return ERR_NONE;
 }
 
@@ -737,9 +734,9 @@ static JdwpError M_Bytecodes(JdwpState*, Request* request, ExpandBuf* reply)
     return rc;
   }
 
-  expandBufAdd4BE(reply, bytecodes.size());
+  reply->Add4BE(bytecodes.size());
   for (size_t i = 0; i < bytecodes.size(); ++i) {
-    expandBufAdd1(reply, bytecodes[i]);
+    reply->Add1(bytecodes[i]);
   }
 
   return ERR_NONE;
@@ -766,7 +763,7 @@ static JdwpError OR_GetValues(JdwpState*, Request* request, ExpandBuf* pReply)
   ObjectId object_id = request->ReadObjectId();
   int32_t field_count = request->ReadSigned32("field count");
 
-  expandBufAdd4BE(pReply, field_count);
+  pReply->Add4BE(field_count);
   for (int32_t i = 0; i < field_count; ++i) {
     FieldId fieldId = request->ReadFieldId();
     JdwpError status = Dbg::GetFieldValue(object_id, fieldId, pReply);
@@ -793,7 +790,8 @@ static JdwpError OR_SetValues(JdwpState*, Request* request, ExpandBuf*)
     size_t width = Dbg::GetTagWidth(fieldTag);
     uint64_t value = request->ReadValue(width);
 
-    VLOG(jdwp) << "    --> fieldId=" << fieldId << " tag=" << fieldTag << "(" << width << ") value=" << value;
+    VLOG(jdwp) << "    --> fieldId=" << fieldId << " tag=" << fieldTag
+               << "(" << width << ") value=" << value;
     JdwpError status = Dbg::SetFieldValue(object_id, fieldId, value, width);
     if (status != ERR_NONE) {
       return status;
@@ -848,7 +846,7 @@ static JdwpError OR_IsCollected(JdwpState*, Request* request, ExpandBuf* pReply)
   ObjectId object_id = request->ReadObjectId();
   bool is_collected;
   JdwpError rc = Dbg::IsCollected(object_id, &is_collected);
-  expandBufAdd1(pReply, is_collected ? 1 : 0);
+  pReply->Add1(is_collected ? 1 : 0);
   return rc;
 }
 
@@ -883,7 +881,7 @@ static JdwpError SR_Value(JdwpState*, Request* request, ExpandBuf* pReply)
 
   VLOG(jdwp) << StringPrintf("    --> %s", PrintableString(str.c_str()).c_str());
 
-  expandBufAddUtf8String(pReply, str);
+  pReply->AddUtf8String(str);
 
   return ERR_NONE;
 }
@@ -901,7 +899,7 @@ static JdwpError TR_Name(JdwpState*, Request* request, ExpandBuf* pReply)
     return error;
   }
   VLOG(jdwp) << StringPrintf("  Name of thread %#" PRIx64 " is \"%s\"", thread_id, name.c_str());
-  expandBufAddUtf8String(pReply, name);
+  pReply->AddUtf8String(name);
 
   return ERR_NONE;
 }
@@ -959,8 +957,8 @@ static JdwpError TR_Status(JdwpState*, Request* request, ExpandBuf* pReply)
 
   VLOG(jdwp) << "    --> " << threadStatus << ", " << suspendStatus;
 
-  expandBufAdd4BE(pReply, threadStatus);
-  expandBufAdd4BE(pReply, suspendStatus);
+  pReply->Add4BE(threadStatus);
+  pReply->Add4BE(suspendStatus);
 
   return ERR_NONE;
 }
@@ -1021,7 +1019,7 @@ static JdwpError TR_FrameCount(JdwpState*, Request* request, ExpandBuf* pReply)
   if (rc != ERR_NONE) {
     return rc;
   }
-  expandBufAdd4BE(pReply, static_cast<uint32_t>(frame_count));
+  pReply->Add4BE(static_cast<uint32_t>(frame_count));
 
   return ERR_NONE;
 }
@@ -1037,14 +1035,14 @@ static JdwpError TR_OwnedMonitors(Request* request, ExpandBuf* reply, bool with_
     return rc;
   }
 
-  expandBufAdd4BE(reply, monitors.size());
+  reply->Add4BE(monitors.size());
   for (size_t i = 0; i < monitors.size(); ++i) {
     rc = WriteTaggedObject(reply, monitors[i]);
     if (rc != ERR_NONE) {
       return rc;
     }
     if (with_stack_depths) {
-      expandBufAdd4BE(reply, stack_depths[i]);
+      reply->Add4BE(stack_depths[i]);
     }
   }
   return ERR_NONE;
@@ -1135,7 +1133,7 @@ static JdwpError AR_Length(JdwpState*, Request* request, ExpandBuf* pReply)
   }
   VLOG(jdwp) << "    --> " << length;
 
-  expandBufAdd4BE(pReply, length);
+  pReply->Add4BE(length);
 
   return ERR_NONE;
 }
@@ -1308,7 +1306,7 @@ static JdwpError ER_Set(JdwpState* state, Request* request, ExpandBuf* pReply)
    * We reply with an integer "requestID".
    */
   uint32_t requestId = state->NextEventSerial();
-  expandBufAdd4BE(pReply, requestId);
+  pReply->Add4BE(requestId);
 
   pEvent->requestId = requestId;
 
@@ -1394,7 +1392,7 @@ static JdwpError DDM_Chunk(JdwpState* state, Request* request, ExpandBuf* pReply
     // instead of copying it into the expanding buffer.  The reduction in
     // heap requirements is probably more valuable than the efficiency.
     CHECK_GT(replyLen, 0);
-    memcpy(expandBufAddSpace(pReply, replyLen), replyBuf, replyLen);
+    memcpy(pReply->AddSpace(replyLen), replyBuf, replyLen);
     delete[] replyBuf;
   }
   return ERR_NONE;
@@ -1615,7 +1613,7 @@ size_t JdwpState::ProcessRequest(Request* request, ExpandBuf* pReply, bool* skip
   Thread* self = Thread::Current();
   ScopedObjectAccess soa(self);
 
-  expandBufAddSpace(pReply, kJDWPHeaderLen);
+  pReply->AddSpace(kJDWPHeaderLen);
 
   size_t i;
   for (i = 0; i < arraysize(gHandlers); ++i) {
@@ -1643,24 +1641,15 @@ size_t JdwpState::ProcessRequest(Request* request, ExpandBuf* pReply, bool* skip
     // invoke completes so we must not send it now.
     *skip_reply = true;
   } else {
-    /*
-     * Set up the reply header.
-     *
-     * If we encountered an error, only send the header back.
-     */
-    uint8_t* replyBuf = expandBufGetBuffer(pReply);
-    replyLength = (result == ERR_NONE) ? expandBufGetLength(pReply) : kJDWPHeaderLen;
-    Set4BE(replyBuf + kJDWPHeaderSizeOffset, replyLength);
-    Set4BE(replyBuf + kJDWPHeaderIdOffset, request->GetId());
-    Set1(replyBuf + kJDWPHeaderFlagsOffset, kJDWPFlagReply);
-    Set2BE(replyBuf + kJDWPHeaderErrorCodeOffset, result);
+    replyLength = pReply->CompleteReply(request->GetId(), result);
+    CHECK_GE(pReply->GetLength(), kJDWPHeaderLen) << GetCommandName(request)
+                                                  << " " << request->GetId();
 
-    CHECK_GT(expandBufGetLength(pReply), 0U) << GetCommandName(request) << " " << request->GetId();
-
-    size_t respLen = expandBufGetLength(pReply) - kJDWPHeaderLen;
-    VLOG(jdwp) << "REPLY: " << GetCommandName(request) << " " << result << " (length=" << respLen << ")";
+    size_t respLen = pReply->GetLength() - kJDWPHeaderLen;
+    VLOG(jdwp) << "REPLY: " << GetCommandName(request) << " " << result
+               << " (length=" << respLen << ")";
     if (false) {
-      VLOG(jdwp) << HexDump(expandBufGetBuffer(pReply) + kJDWPHeaderLen, respLen, false, "");
+      VLOG(jdwp) << HexDump(pReply->GetBuffer() + kJDWPHeaderLen, respLen, false, "");
     }
   }
 

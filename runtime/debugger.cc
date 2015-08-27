@@ -709,7 +709,7 @@ JDWP::JdwpError Dbg::GetClassLoader(JDWP::RefTypeId id, JDWP::ExpandBuf* pReply)
   if (o == nullptr) {
     return JDWP::ERR_INVALID_OBJECT;
   }
-  expandBufAddObjectId(pReply, gRegistry->Add(o->GetClass()->GetClassLoader()));
+  pReply->AddObjectId(gRegistry->Add(o->GetClass()->GetClassLoader()));
   return JDWP::ERR_NONE;
 }
 
@@ -729,7 +729,7 @@ JDWP::JdwpError Dbg::GetModifiers(JDWP::RefTypeId id, JDWP::ExpandBuf* pReply) {
     access_flags |= kAccSuper;
   }
 
-  expandBufAdd4BE(pReply, access_flags);
+  pReply->Add4BE(access_flags);
 
   return JDWP::ERR_NONE;
 }
@@ -752,14 +752,14 @@ JDWP::JdwpError Dbg::GetMonitorInfo(JDWP::ObjectId object_id, JDWP::ExpandBuf* r
     monitor_info = MonitorInfo(o);
   }
   if (monitor_info.owner_ != nullptr) {
-    expandBufAddObjectId(reply, gRegistry->Add(monitor_info.owner_->GetPeer()));
+    reply->AddObjectId(gRegistry->Add(monitor_info.owner_->GetPeer()));
   } else {
-    expandBufAddObjectId(reply, gRegistry->Add(nullptr));
+    reply->AddObjectId(gRegistry->Add(nullptr));
   }
-  expandBufAdd4BE(reply, monitor_info.entry_count_);
-  expandBufAdd4BE(reply, monitor_info.waiters_.size());
+  reply->Add4BE(monitor_info.entry_count_);
+  reply->Add4BE(monitor_info.waiters_.size());
   for (size_t i = 0; i < monitor_info.waiters_.size(); ++i) {
-    expandBufAddObjectId(reply, gRegistry->Add(monitor_info.waiters_[i]->GetPeer()));
+    reply->AddObjectId(gRegistry->Add(monitor_info.waiters_[i]->GetPeer()));
   }
   return JDWP::ERR_NONE;
 }
@@ -950,8 +950,8 @@ JDWP::JdwpError Dbg::GetReflectedType(JDWP::RefTypeId class_id, JDWP::ExpandBuf*
   }
 
   JDWP::JdwpTypeTag type_tag = GetTypeTag(c);
-  expandBufAdd1(pReply, type_tag);
-  expandBufAddRefTypeId(pReply, class_id);
+  pReply->Add1(type_tag);
+  pReply->AddRefTypeId(class_id);
   return JDWP::ERR_NONE;
 }
 
@@ -1024,8 +1024,8 @@ JDWP::JdwpError Dbg::GetReferenceType(JDWP::ObjectId object_id, JDWP::ExpandBuf*
   JDWP::JdwpTypeTag type_tag = GetTypeTag(o->GetClass());
   JDWP::RefTypeId type_id = gRegistry->AddRefType(o->GetClass());
 
-  expandBufAdd1(pReply, type_tag);
-  expandBufAddRefTypeId(pReply, type_id);
+  pReply->Add1(type_tag);
+  pReply->AddRefTypeId(type_id);
 
   return JDWP::ERR_NONE;
 }
@@ -1107,7 +1107,10 @@ JDWP::JdwpError Dbg::GetArrayLength(JDWP::ObjectId array_id, int32_t* length) {
   return JDWP::ERR_NONE;
 }
 
-JDWP::JdwpError Dbg::OutputArray(JDWP::ObjectId array_id, int offset, int count, JDWP::ExpandBuf* pReply) {
+JDWP::JdwpError Dbg::OutputArray(JDWP::ObjectId array_id,
+                                 int offset,
+                                 int count,
+                                 JDWP::ExpandBuf* pReply) {
   JDWP::JdwpError error;
   mirror::Array* a = DecodeNonNullArray(array_id, &error);
   if (a == nullptr) {
@@ -1119,12 +1122,12 @@ JDWP::JdwpError Dbg::OutputArray(JDWP::ObjectId array_id, int offset, int count,
     return JDWP::ERR_INVALID_LENGTH;
   }
   JDWP::JdwpTag element_tag = BasicTagFromClass(a->GetClass()->GetComponentType());
-  expandBufAdd1(pReply, element_tag);
-  expandBufAdd4BE(pReply, count);
+  pReply->Add1(element_tag);
+  pReply->Add4BE(count);
 
   if (IsPrimitiveTag(element_tag)) {
     size_t width = GetTagWidth(element_tag);
-    uint8_t* dst = expandBufAddSpace(pReply, count * width);
+    uint8_t* dst = pReply->AddSpace(count * width);
     if (width == 8) {
       const uint64_t* src8 = reinterpret_cast<uint64_t*>(a->GetRawData(sizeof(uint64_t), 0));
       for (int i = 0; i < count; ++i) JDWP::Write8BE(&dst, src8[offset + i]);
@@ -1145,8 +1148,8 @@ JDWP::JdwpError Dbg::OutputArray(JDWP::ObjectId array_id, int offset, int count,
       mirror::Object* element = oa->Get(offset + i);
       JDWP::JdwpTag specific_tag = (element != nullptr) ? TagFromObject(soa, element)
                                                         : element_tag;
-      expandBufAdd1(pReply, specific_tag);
-      expandBufAddObjectId(pReply, gRegistry->Add(element));
+      pReply->Add1(specific_tag);
+      pReply->AddObjectId(gRegistry->Add(element));
     }
   }
 
@@ -1445,19 +1448,19 @@ JDWP::JdwpError Dbg::OutputDeclaredFields(JDWP::RefTypeId class_id, bool with_ge
   size_t instance_field_count = c->NumInstanceFields();
   size_t static_field_count = c->NumStaticFields();
 
-  expandBufAdd4BE(pReply, instance_field_count + static_field_count);
+  pReply->Add4BE(instance_field_count + static_field_count);
 
   for (size_t i = 0; i < instance_field_count + static_field_count; ++i) {
     ArtField* f = (i < instance_field_count) ? c->GetInstanceField(i) :
         c->GetStaticField(i - instance_field_count);
-    expandBufAddFieldId(pReply, ToFieldId(f));
-    expandBufAddUtf8String(pReply, f->GetName());
-    expandBufAddUtf8String(pReply, f->GetTypeDescriptor());
+    pReply->AddFieldId(ToFieldId(f));
+    pReply->AddUtf8String(f->GetName());
+    pReply->AddUtf8String(f->GetTypeDescriptor());
     if (with_generic) {
       static const char genericSignature[1] = "";
-      expandBufAddUtf8String(pReply, genericSignature);
+      pReply->AddUtf8String(genericSignature);
     }
-    expandBufAdd4BE(pReply, MangleAccessFlags(f->GetAccessFlags()));
+    pReply->Add4BE(MangleAccessFlags(f->GetAccessFlags()));
   }
   return JDWP::ERR_NONE;
 }
@@ -1473,22 +1476,22 @@ JDWP::JdwpError Dbg::OutputDeclaredMethods(JDWP::RefTypeId class_id, bool with_g
   size_t direct_method_count = c->NumDirectMethods();
   size_t virtual_method_count = c->NumVirtualMethods();
 
-  expandBufAdd4BE(pReply, direct_method_count + virtual_method_count);
+  pReply->Add4BE(direct_method_count + virtual_method_count);
 
   auto* cl = Runtime::Current()->GetClassLinker();
   auto ptr_size = cl->GetImagePointerSize();
   for (size_t i = 0; i < direct_method_count + virtual_method_count; ++i) {
-    ArtMethod* m = i < direct_method_count ?
-        c->GetDirectMethod(i, ptr_size) : c->GetVirtualMethod(i - direct_method_count, ptr_size);
-    expandBufAddMethodId(pReply, ToMethodId(m));
-    expandBufAddUtf8String(pReply, m->GetInterfaceMethodIfProxy(sizeof(void*))->GetName());
-    expandBufAddUtf8String(pReply,
-                           m->GetInterfaceMethodIfProxy(sizeof(void*))->GetSignature().ToString());
+    ArtMethod* m = i < direct_method_count
+        ? c->GetDirectMethod(i, ptr_size)
+        : c->GetVirtualMethod(i - direct_method_count, ptr_size);
+    pReply->AddMethodId(ToMethodId(m));
+    pReply->AddUtf8String(m->GetInterfaceMethodIfProxy(sizeof(void*))->GetName());
+    pReply->AddUtf8String(m->GetInterfaceMethodIfProxy(sizeof(void*))->GetSignature().ToString());
     if (with_generic) {
       const char* generic_signature = "";
-      expandBufAddUtf8String(pReply, generic_signature);
+      pReply->AddUtf8String(generic_signature);
     }
-    expandBufAdd4BE(pReply, MangleAccessFlags(m->GetAccessFlags()));
+    pReply->Add4BE(MangleAccessFlags(m->GetAccessFlags()));
   }
   return JDWP::ERR_NONE;
 }
@@ -1502,10 +1505,9 @@ JDWP::JdwpError Dbg::OutputDeclaredInterfaces(JDWP::RefTypeId class_id, JDWP::Ex
     return error;
   }
   size_t interface_count = c->NumDirectInterfaces();
-  expandBufAdd4BE(pReply, interface_count);
+  pReply->Add4BE(interface_count);
   for (size_t i = 0; i < interface_count; ++i) {
-    expandBufAddRefTypeId(pReply,
-                          gRegistry->AddRefType(mirror::Class::GetDirectInterface(self, c, i)));
+    pReply->AddRefTypeId(gRegistry->AddRefType(mirror::Class::GetDirectInterface(self, c, i)));
   }
   return JDWP::ERR_NONE;
 }
@@ -1517,8 +1519,8 @@ void Dbg::OutputLineTable(JDWP::RefTypeId, JDWP::MethodId method_id, JDWP::Expan
 
     static bool Callback(void* context, uint32_t address, uint32_t line_number) {
       DebugCallbackContext* pContext = reinterpret_cast<DebugCallbackContext*>(context);
-      expandBufAdd8BE(pContext->pReply, address);
-      expandBufAdd4BE(pContext->pReply, line_number);
+      pContext->pReply->Add8BE(address);
+      pContext->pReply->Add4BE(line_number);
       pContext->numItems++;
       return false;
     }
@@ -1536,12 +1538,12 @@ void Dbg::OutputLineTable(JDWP::RefTypeId, JDWP::MethodId method_id, JDWP::Expan
     end = code_item->insns_size_in_code_units_ - 1;
   }
 
-  expandBufAdd8BE(pReply, start);
-  expandBufAdd8BE(pReply, end);
+  pReply->Add8BE(start);
+  pReply->Add8BE(end);
 
   // Add numLines later
-  size_t numLinesOffset = expandBufGetLength(pReply);
-  expandBufAdd4BE(pReply, 0);
+  size_t numLinesOffset = pReply->GetLength();
+  pReply->Add4BE(0);
 
   DebugCallbackContext context;
   context.numItems = 0;
@@ -1552,7 +1554,7 @@ void Dbg::OutputLineTable(JDWP::RefTypeId, JDWP::MethodId method_id, JDWP::Expan
                                      DebugCallbackContext::Callback, nullptr, &context);
   }
 
-  JDWP::Set4BE(expandBufGetBuffer(pReply) + numLinesOffset, context.numItems);
+  JDWP::Set4BE(pReply->GetBuffer() + numLinesOffset, context.numItems);
 }
 
 void Dbg::OutputVariableTable(JDWP::RefTypeId, JDWP::MethodId method_id, bool with_generic,
@@ -1575,14 +1577,14 @@ void Dbg::OutputVariableTable(JDWP::RefTypeId, JDWP::MethodId method_id, bool wi
 
       slot = MangleSlot(slot, pContext->method);
 
-      expandBufAdd8BE(pContext->pReply, startAddress);
-      expandBufAddUtf8String(pContext->pReply, name);
-      expandBufAddUtf8String(pContext->pReply, descriptor);
+      pContext->pReply->Add8BE(startAddress);
+      pContext->pReply->AddUtf8String(name);
+      pContext->pReply->AddUtf8String(descriptor);
       if (pContext->with_generic) {
-        expandBufAddUtf8String(pContext->pReply, signature);
+        pContext->pReply->AddUtf8String(signature);
       }
-      expandBufAdd4BE(pContext->pReply, endAddress - startAddress);
-      expandBufAdd4BE(pContext->pReply, slot);
+      pContext->pReply->Add4BE(endAddress - startAddress);
+      pContext->pReply->Add4BE(slot);
 
       ++pContext->variable_count;
     }
@@ -1592,11 +1594,11 @@ void Dbg::OutputVariableTable(JDWP::RefTypeId, JDWP::MethodId method_id, bool wi
   // arg_count considers doubles and longs to take 2 units.
   // variable_count considers everything to take 1 unit.
   std::string shorty(m->GetShorty());
-  expandBufAdd4BE(pReply, ArtMethod::NumArgRegisters(shorty));
+  pReply->Add4BE(ArtMethod::NumArgRegisters(shorty));
 
   // We don't know the total number of variables yet, so leave a blank and update it later.
-  size_t variable_count_offset = expandBufGetLength(pReply);
-  expandBufAdd4BE(pReply, 0);
+  size_t variable_count_offset = pReply->GetLength();
+  pReply->Add4BE(0);
 
   DebugCallbackContext context;
   context.method = m;
@@ -1611,7 +1613,7 @@ void Dbg::OutputVariableTable(JDWP::RefTypeId, JDWP::MethodId method_id, bool wi
         &context);
   }
 
-  JDWP::Set4BE(expandBufGetBuffer(pReply) + variable_count_offset, context.variable_count);
+  JDWP::Set4BE(pReply->GetBuffer() + variable_count_offset, context.variable_count);
 }
 
 void Dbg::OutputMethodReturnValue(JDWP::MethodId method_id, const JValue* return_value,
@@ -1885,23 +1887,23 @@ JDWP::JdwpError Dbg::StringToUtf8(JDWP::ObjectId string_id, std::string* str) {
 
 void Dbg::OutputJValue(JDWP::JdwpTag tag, const JValue* return_value, JDWP::ExpandBuf* pReply) {
   if (IsPrimitiveTag(tag)) {
-    expandBufAdd1(pReply, tag);
+    pReply->Add1(tag);
     if (tag == JDWP::JT_BOOLEAN || tag == JDWP::JT_BYTE) {
-      expandBufAdd1(pReply, return_value->GetI());
+      pReply->Add1(return_value->GetI());
     } else if (tag == JDWP::JT_CHAR || tag == JDWP::JT_SHORT) {
-      expandBufAdd2BE(pReply, return_value->GetI());
+      pReply->Add2BE(return_value->GetI());
     } else if (tag == JDWP::JT_FLOAT || tag == JDWP::JT_INT) {
-      expandBufAdd4BE(pReply, return_value->GetI());
+      pReply->Add4BE(return_value->GetI());
     } else if (tag == JDWP::JT_DOUBLE || tag == JDWP::JT_LONG) {
-      expandBufAdd8BE(pReply, return_value->GetJ());
+      pReply->Add8BE(return_value->GetJ());
     } else {
       CHECK_EQ(tag, JDWP::JT_VOID);
     }
   } else {
     ScopedObjectAccessUnchecked soa(Thread::Current());
     mirror::Object* value = return_value->GetL();
-    expandBufAdd1(pReply, TagFromObject(soa, value));
-    expandBufAddObjectId(pReply, gRegistry->Add(value));
+    pReply->Add1(TagFromObject(soa, value));
+    pReply->AddObjectId(gRegistry->Add(value));
   }
 }
 
@@ -1938,7 +1940,7 @@ JDWP::JdwpError Dbg::GetThreadGroup(JDWP::ObjectId thread_id, JDWP::ExpandBuf* p
   DecodeThread(soa, thread_id, &error);
   if (error == JDWP::ERR_THREAD_NOT_ALIVE) {
     // Zombie threads are in the null group.
-    expandBufAddObjectId(pReply, JDWP::ObjectId(0));
+    pReply->AddObjectId(JDWP::ObjectId(0));
     error = JDWP::ERR_NONE;
   } else if (error == JDWP::ERR_NONE) {
     mirror::Class* c = soa.Decode<mirror::Class*>(WellKnownClasses::java_lang_Thread);
@@ -1948,7 +1950,7 @@ JDWP::JdwpError Dbg::GetThreadGroup(JDWP::ObjectId thread_id, JDWP::ExpandBuf* p
     mirror::Object* group = f->GetObject(thread_object);
     CHECK(group != nullptr);
     JDWP::ObjectId thread_group_id = gRegistry->Add(group);
-    expandBufAddObjectId(pReply, thread_group_id);
+    pReply->AddObjectId(thread_group_id);
   }
   return error;
 }
@@ -1989,7 +1991,7 @@ JDWP::JdwpError Dbg::GetThreadGroupName(JDWP::ObjectId thread_group_id, JDWP::Ex
   mirror::String* s = reinterpret_cast<mirror::String*>(f->GetObject(thread_group));
 
   std::string thread_group_name(s->ToModifiedUtf8());
-  expandBufAddUtf8String(pReply, thread_group_name);
+  pReply->AddUtf8String(thread_group_name);
   return JDWP::ERR_NONE;
 }
 
@@ -2008,7 +2010,7 @@ JDWP::JdwpError Dbg::GetThreadGroupParent(JDWP::ObjectId thread_group_id, JDWP::
     parent = f->GetObject(thread_group);
   }
   JDWP::ObjectId parent_group_id = gRegistry->Add(parent);
-  expandBufAddObjectId(pReply, parent_group_id);
+  pReply->AddObjectId(parent_group_id);
   return JDWP::ERR_NONE;
 }
 
@@ -2056,9 +2058,9 @@ JDWP::JdwpError Dbg::GetThreadGroupChildren(JDWP::ObjectId thread_group_id,
   {
     std::vector<JDWP::ObjectId> child_thread_ids;
     GetThreads(thread_group, &child_thread_ids);
-    expandBufAdd4BE(pReply, child_thread_ids.size());
+    pReply->Add4BE(child_thread_ids.size());
     for (JDWP::ObjectId child_thread_id : child_thread_ids) {
-      expandBufAddObjectId(pReply, child_thread_id);
+      pReply->AddObjectId(child_thread_id);
     }
   }
 
@@ -2066,9 +2068,9 @@ JDWP::JdwpError Dbg::GetThreadGroupChildren(JDWP::ObjectId thread_group_id,
   {
     std::vector<JDWP::ObjectId> child_thread_groups_ids;
     GetChildThreadGroups(soa, thread_group, &child_thread_groups_ids);
-    expandBufAdd4BE(pReply, child_thread_groups_ids.size());
+    pReply->Add4BE(child_thread_groups_ids.size());
     for (JDWP::ObjectId child_thread_group_id : child_thread_groups_ids) {
-      expandBufAddObjectId(pReply, child_thread_group_id);
+      pReply->AddObjectId(child_thread_group_id);
     }
   }
 
@@ -2152,7 +2154,7 @@ JDWP::JdwpError Dbg::GetThreadDebugSuspendCount(JDWP::ObjectId thread_id, JDWP::
     return error;
   }
   MutexLock mu2(soa.Self(), *Locks::thread_suspend_count_lock_);
-  expandBufAdd4BE(pReply, thread->GetDebugSuspendCount());
+  pReply->Add4BE(thread->GetDebugSuspendCount());
   return JDWP::ERR_NONE;
 }
 
@@ -2262,7 +2264,7 @@ JDWP::JdwpError Dbg::GetThreadFrames(JDWP::ObjectId thread_id, size_t start_fram
           start_frame_(start_frame_in),
           frame_count_(frame_count_in),
           buf_(buf_in) {
-      expandBufAdd4BE(buf_, frame_count_);
+      buf_->Add4BE(frame_count_);
     }
 
     bool VisitFrame() OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -2277,8 +2279,8 @@ JDWP::JdwpError Dbg::GetThreadFrames(JDWP::ObjectId thread_id, size_t start_fram
         JDWP::JdwpLocation location;
         SetJdwpLocation(&location, GetMethod(), GetDexPc());
         VLOG(jdwp) << StringPrintf("    Frame %3zd: id=%3" PRIu64 " ", depth_, frame_id) << location;
-        expandBufAdd8BE(buf_, frame_id);
-        expandBufAddLocation(buf_, location);
+        buf_->Add8BE(frame_id);
+        buf_->AddLocation(location);
       }
       ++depth_;
       return true;
@@ -2288,7 +2290,9 @@ JDWP::JdwpError Dbg::GetThreadFrames(JDWP::ObjectId thread_id, size_t start_fram
     size_t depth_;
     const size_t start_frame_;
     const size_t frame_count_;
-    JDWP::ExpandBuf* buf_;
+    JDWP::ExpandBuf* const buf_;
+
+    DISALLOW_COPY_AND_ASSIGN(GetFrameVisitor);
   };
 
   ScopedObjectAccessUnchecked soa(Thread::Current());
@@ -2475,7 +2479,7 @@ JDWP::JdwpError Dbg::GetLocalValues(JDWP::Request* request, JDWP::ExpandBuf* pRe
 
   // Read the values from visitor's context.
   int32_t slot_count = request->ReadSigned32("slot count");
-  expandBufAdd4BE(pReply, slot_count);     /* "int values" */
+  pReply->Add4BE(slot_count);     /* "int values" */
   for (int32_t i = 0; i < slot_count; ++i) {
     uint32_t slot = request->ReadUnsigned32("slot");
     JDWP::JdwpTag reqSigByte = request->ReadTag();
@@ -2483,7 +2487,7 @@ JDWP::JdwpError Dbg::GetLocalValues(JDWP::Request* request, JDWP::ExpandBuf* pRe
     VLOG(jdwp) << "    --> slot " << slot << " " << reqSigByte;
 
     size_t width = Dbg::GetTagWidth(reqSigByte);
-    uint8_t* ptr = expandBufAddSpace(pReply, width + 1);
+    uint8_t* ptr = pReply->AddSpace(width + 1);
     error = Dbg::GetLocalValue(visitor, soa, slot, reqSigByte, ptr, width);
     if (error != JDWP::ERR_NONE) {
       return error;
@@ -3985,16 +3989,16 @@ void Dbg::ExecuteMethod(DebugInvokeReq* pReq) {
 static void WriteValue(JDWP::ExpandBuf* pReply, int width, uint64_t value) {
   switch (width) {
     case 1:
-      expandBufAdd1(pReply, value);
+      pReply->Add1(value);
       break;
     case 2:
-      expandBufAdd2BE(pReply, value);
+      pReply->Add2BE(value);
       break;
     case 4:
-      expandBufAdd4BE(pReply, value);
+      pReply->Add4BE(value);
       break;
     case 8:
-      expandBufAdd8BE(pReply, value);
+      pReply->Add8BE(value);
       break;
     default:
       LOG(FATAL) << width;
@@ -4106,34 +4110,30 @@ void Dbg::ExecuteMethodWithoutPendingException(ScopedObjectAccess& soa, DebugInv
 
   // Attach the reply to DebugInvokeReq so it can be sent to the debugger when the event thread
   // is ready to suspend.
-  BuildInvokeReply(pReq->reply, pReq->request_id, result_tag, result_value, exceptionObjectId);
+  BuildInvokeReply(&pReq->reply, pReq->request_id, result_tag, result_value, exceptionObjectId);
 }
 
 void Dbg::BuildInvokeReply(JDWP::ExpandBuf* pReply, uint32_t request_id, JDWP::JdwpTag result_tag,
                            uint64_t result_value, JDWP::ObjectId exception) {
   // Make room for the JDWP header since we do not know the size of the reply yet.
-  JDWP::expandBufAddSpace(pReply, kJDWPHeaderLen);
+  pReply->AddSpace(kJDWPHeaderLen);
 
   size_t width = GetTagWidth(result_tag);
-  JDWP::expandBufAdd1(pReply, result_tag);
+  pReply->Add1(result_tag);
   if (width != 0) {
     WriteValue(pReply, width, result_value);
   }
-  JDWP::expandBufAdd1(pReply, JDWP::JT_OBJECT);
-  JDWP::expandBufAddObjectId(pReply, exception);
+  pReply->Add1(JDWP::JT_OBJECT);
+  pReply->AddObjectId(exception);
 
-  // Now we know the size, we can complete the JDWP header.
-  uint8_t* buf = expandBufGetBuffer(pReply);
-  JDWP::Set4BE(buf + kJDWPHeaderSizeOffset, expandBufGetLength(pReply));
-  JDWP::Set4BE(buf + kJDWPHeaderIdOffset, request_id);
-  JDWP::Set1(buf + kJDWPHeaderFlagsOffset, kJDWPFlagReply);  // flags
-  JDWP::Set2BE(buf + kJDWPHeaderErrorCodeOffset, JDWP::ERR_NONE);
+  // Now we know the size, we can complete the reply.
+  pReply->CompleteReply(request_id, JDWP::ERR_NONE);
 }
 
 void Dbg::FinishInvokeMethod(DebugInvokeReq* pReq) {
   CHECK_NE(Thread::Current(), GetDebugThread()) << "This must be called by the event thread";
 
-  JDWP::ExpandBuf* const pReply = pReq->reply;
+  JDWP::ExpandBuf* const pReply = &pReq->reply;
   CHECK(pReply != nullptr) << "No reply attached to DebugInvokeReq";
 
   // We need to prevent other threads (including JDWP thread) from interacting with the debugger
@@ -4143,7 +4143,7 @@ void Dbg::FinishInvokeMethod(DebugInvokeReq* pReq) {
 
   // Send the reply unless the debugger detached before the completion of the method.
   if (IsDebuggerActive()) {
-    const size_t replyDataLength = expandBufGetLength(pReply) - kJDWPHeaderLen;
+    const size_t replyDataLength = pReply->GetLength() - kJDWPHeaderLen;
     VLOG(jdwp) << StringPrintf("REPLY INVOKE id=0x%06x (length=%zu)",
                                pReq->request_id, replyDataLength);
 
