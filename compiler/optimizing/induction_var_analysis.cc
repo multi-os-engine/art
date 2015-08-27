@@ -42,6 +42,30 @@ static bool IsEntryPhi(HLoopInformation* loop, HInstruction* instruction) {
       instruction->GetBlock() == loop->GetHeader();
 }
 
+/**
+ * Returns true for integral constant, passing its value as output parameter.
+ */
+static bool IsInt(HInstruction* instruction, int32_t* value) {
+  if (instruction->IsIntConstant()) {
+    *value = instruction->AsIntConstant()->GetValue();
+    return value;
+  }
+  return false;
+}
+
+/**
+ * Returns a string representation of an instruction
+ * (for testing and debugging only).
+ */
+static std::string InstructionToString(HInstruction* instruction) {
+  if (instruction->IsIntConstant()) {
+    return std::to_string(instruction->AsIntConstant()->GetValue());
+  } else if (instruction->IsLongConstant()) {
+    return std::to_string(instruction->AsLongConstant()->GetValue()) + "L";
+  }
+  return std::to_string(instruction->GetId()) + ":" + instruction->DebugName();
+}
+
 //
 // Class methods.
 //
@@ -71,12 +95,12 @@ void HInductionVarAnalysis::VisitLoop(HLoopInformation* loop) {
   // Find strongly connected components (SSCs) in the SSA graph of this loop using Tarjan's
   // algorithm. Due to the descendant-first nature, classification happens "on-demand".
   global_depth_ = 0;
-  CHECK(stack_.empty());
+  DCHECK(stack_.empty());
   map_.clear();
 
   for (HBlocksInLoopIterator it_loop(*loop); !it_loop.Done(); it_loop.Advance()) {
     HBasicBlock* loop_block = it_loop.Current();
-    CHECK(loop_block->IsInLoop());
+    DCHECK(loop_block->IsInLoop());
     if (loop_block->GetLoopInformation() != loop) {
       continue;  // Inner loops already visited.
     }
@@ -95,7 +119,7 @@ void HInductionVarAnalysis::VisitLoop(HLoopInformation* loop) {
     }
   }
 
-  CHECK(stack_.empty());
+  DCHECK(stack_.empty());
   map_.clear();
 }
 
@@ -176,6 +200,9 @@ void HInductionVarAnalysis::ClassifyTrivial(HLoopInformation* loop, HInstruction
   } else if (instruction->IsMul()) {
     info = TransferMul(LookupInfo(loop, instruction->InputAt(0)),
                        LookupInfo(loop, instruction->InputAt(1)));
+  } else if (instruction->IsShl()) {
+    info = TransferShl(LookupInfo(loop, instruction->InputAt(0)),
+                       LookupInfo(loop, instruction->InputAt(1)));
   } else if (instruction->IsNeg()) {
     info = TransferNeg(LookupInfo(loop, instruction->InputAt(0)));
   }
@@ -188,7 +215,7 @@ void HInductionVarAnalysis::ClassifyTrivial(HLoopInformation* loop, HInstruction
 
 void HInductionVarAnalysis::ClassifyNonTrivial(HLoopInformation* loop) {
   const size_t size = scc_.size();
-  CHECK_GE(size, 1u);
+  DCHECK_GE(size, 1u);
   HInstruction* phi = scc_[size - 1];
   if (!IsEntryPhi(loop, phi)) {
     return;
@@ -200,38 +227,50 @@ void HInductionVarAnalysis::ClassifyNonTrivial(HLoopInformation* loop) {
     return;
   }
 
-  // Singleton entry-phi-operation may be a wrap-around induction.
+  // Special cases.
   if (size == 1) {
+    // Singleton entry-phi-operation may be a wrap-around induction.
     InductionInfo* update = LookupInfo(loop, internal);
     if (update != nullptr) {
       AssignInfo(loop, phi, NewInductionInfo(kWrapAround, kNop, initial, update, nullptr));
     }
     return;
+  } else if (size == 2) {
+    // Tight cycle may be a periodic induction.
+    HInstruction* sub = scc_[0];
+    InductionInfo* update = TransferCycleOverPeriodic(loop, phi, sub, initial);
+    if (update != nullptr) {
+      AssignInfo(loop, phi, NewInductionInfo(kPeriodic, kNop, initial, update, nullptr));
+      AssignInfo(loop, sub, NewInductionInfo(kPeriodic, kNop, update, initial, nullptr));
+      return;
+    }
   }
 
   // Inspect remainder of the cycle that resides in scc_. The cycle_ mapping assigns
-  // temporary meaning to its nodes.
-  cycle_.Overwrite(phi->GetId(), nullptr);
+  // temporary meaning to its nodes, seeded from the phi instruction and back.
   for (size_t i = 0; i < size - 1; i++) {
     HInstruction* operation = scc_[i];
     InductionInfo* update = nullptr;
     if (operation->IsPhi()) {
       update = TransferCycleOverPhi(operation);
     } else if (operation->IsAdd()) {
-      update = TransferCycleOverAddSub(loop, operation->InputAt(0), operation->InputAt(1), kAdd, true);
+      update = TransferCycleOverAddSub(
+          loop, phi, operation->InputAt(0), operation->InputAt(1), kAdd, true);
     } else if (operation->IsSub()) {
-      update = TransferCycleOverAddSub(loop, operation->InputAt(0), operation->InputAt(1), kSub, true);
+      update = TransferCycleOverAddSub(
+          loop, phi, operation->InputAt(0), operation->InputAt(1), kSub, true);
     }
     if (update == nullptr) {
       return;
     }
-    cycle_.Overwrite(operation->GetId(), update);
+    cycle_.Put(operation->GetId(), update);
   }
 
-  // Success if the internal link received accumulated nonzero update.
+  // Success if the internal link received a meaning.
   auto it = cycle_.find(internal->GetId());
-  if (it != cycle_.end() && it->second != nullptr) {
+  if (it != cycle_.end()) {
     // Classify header phi and feed the cycle "on-demand".
+    DCHECK(it->second->induction_class == kInvariant);
     AssignInfo(loop, phi, NewInductionInfo(kLinear, kNop, it->second, initial, nullptr));
     for (size_t i = 0; i < size - 1; i++) {
       ClassifyTrivial(loop, scc_[i]);
@@ -251,36 +290,35 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferPhi(Inducti
 HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferAddSub(InductionInfo* a,
                                                                             InductionInfo* b,
                                                                             InductionOp op) {
-  // Transfer over an addition or subtraction: invariant or linear
-  // inputs combine into new invariant or linear result.
+  // Transfer over a addition or subtraction: any invariant, linear, wrap-around, or periodic
+  // can be combined with an invariant to yield a similar result. Even two linear inputs can
+  // be combined. All other combinations fail, however.
   if (a != nullptr && b != nullptr) {
     if (a->induction_class == kInvariant && b->induction_class == kInvariant) {
       return NewInductionInfo(kInvariant, op, a, b, nullptr);
-    } else if (a->induction_class == kLinear && b->induction_class == kInvariant) {
-      return NewInductionInfo(
-          kLinear,
-          kNop,
-          a->op_a,
-          NewInductionInfo(kInvariant, op, a->op_b, b, nullptr),
-          nullptr);
-    } else if (a->induction_class == kInvariant && b->induction_class == kLinear) {
-      InductionInfo* ba = b->op_a;
-      if (op == kSub) {  // negation required
-        ba = NewInductionInfo(kInvariant, kNeg, nullptr, ba, nullptr);
-      }
-      return NewInductionInfo(
-          kLinear,
-          kNop,
-          ba,
-          NewInductionInfo(kInvariant, op, a, b->op_b, nullptr),
-          nullptr);
     } else if (a->induction_class == kLinear && b->induction_class == kLinear) {
       return NewInductionInfo(
           kLinear,
           kNop,
-          NewInductionInfo(kInvariant, op, a->op_a, b->op_a, nullptr),
-          NewInductionInfo(kInvariant, op, a->op_b, b->op_b, nullptr),
+          TransferAddSub(a->op_a, b->op_a, op),
+          TransferAddSub(a->op_b, b->op_b, op),
           nullptr);
+    } else if (a->induction_class == kInvariant) {
+      InductionInfo* new_a = b->op_a;
+      InductionInfo* new_b = TransferAddSub(a, b->op_b, op);
+      if (b->induction_class != kLinear) {
+        new_a = TransferAddSub(a, new_a, op);
+      } else if (op == kSub) {  // Negation required.
+        new_a = TransferNeg(new_a);
+      }
+      return NewInductionInfo(b->induction_class, kNop, new_a, new_b, nullptr);
+    } else if (b->induction_class == kInvariant) {
+      InductionInfo* new_a = a->op_a;
+      InductionInfo* new_b = TransferAddSub(a->op_b, b, op);
+      if (a->induction_class != kLinear) {
+        new_a = TransferAddSub(new_a, b, op);
+      }
+      return NewInductionInfo(a->induction_class, kNop, new_a, new_b, nullptr);
     }
   }
   return nullptr;
@@ -288,60 +326,61 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferAddSub(Indu
 
 HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferMul(InductionInfo* a,
                                                                          InductionInfo* b) {
-  // Transfer over a multiplication: invariant or linear
-  // inputs combine into new invariant or linear result.
-  // Two linear inputs would become quadratic.
+  // Transfer over a multiplication: any invariant, linear, wrap-around, or periodic
+  // can be multiplied with an invariant to yield a similar but multiplied result.
+  // Two non-invariant inputs cannot be multiplied, however.
   if (a != nullptr && b != nullptr) {
     if (a->induction_class == kInvariant && b->induction_class == kInvariant) {
       return NewInductionInfo(kInvariant, kMul, a, b, nullptr);
-    } else if (a->induction_class == kLinear && b->induction_class == kInvariant) {
+    } else if (a->induction_class == kInvariant) {
       return NewInductionInfo(
-          kLinear,
-          kNop,
-          NewInductionInfo(kInvariant, kMul, a->op_a, b, nullptr),
-          NewInductionInfo(kInvariant, kMul, a->op_b, b, nullptr),
-          nullptr);
-    } else if (a->induction_class == kInvariant && b->induction_class == kLinear) {
+          b->induction_class, kNop, TransferMul(a, b->op_a), TransferMul(a, b->op_b), nullptr);
+    } else if (b->induction_class == kInvariant) {
       return NewInductionInfo(
-          kLinear,
-          kNop,
-          NewInductionInfo(kInvariant, kMul, a, b->op_a, nullptr),
-          NewInductionInfo(kInvariant, kMul, a, b->op_b, nullptr),
-          nullptr);
+          a->induction_class, kNop, TransferMul(a->op_a, b), TransferMul(a->op_b, b), nullptr);
+    }
+  }
+  return nullptr;
+}
+
+HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferShl(InductionInfo* a,
+                                                                         InductionInfo* b) {
+  // Transfer over a shift left: treat shift by restricted constant as equivalent multiplication.
+  if (a != nullptr && b != nullptr && b->induction_class == kInvariant && b->operation == kFetch) {
+    int32_t value = 0;
+    if (IsInt(b->fetch, &value) && 0 <= value && value < 31) {
+      HInstruction* new_fetch = graph_->GetIntConstant(1 << value);  // Side effect in HIR.
+      InductionInfo* new_b = NewInductionInfo(kInvariant, kFetch, nullptr, nullptr, new_fetch);
+      return TransferMul(a, new_b);
     }
   }
   return nullptr;
 }
 
 HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferNeg(InductionInfo* a) {
-  // Transfer over a unary negation: invariant or linear input
-  // yields a similar, but negated result.
+  // Transfer over a unary negation: invariant, linear, wrap-around, or periodic input yields
+  // a similar but negated induction as result.
   if (a != nullptr) {
     if (a->induction_class == kInvariant) {
       return NewInductionInfo(kInvariant, kNeg, nullptr, a, nullptr);
-    } else if (a->induction_class == kLinear) {
-      return NewInductionInfo(
-          kLinear,
-          kNop,
-          NewInductionInfo(kInvariant, kNeg, nullptr, a->op_a, nullptr),
-          NewInductionInfo(kInvariant, kNeg, nullptr, a->op_b, nullptr),
-          nullptr);
     }
+    return NewInductionInfo(
+        a->induction_class, kNop, TransferNeg(a->op_a), TransferNeg(a->op_b), nullptr);
   }
   return nullptr;
 }
 
-HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferCycleOverPhi(HInstruction* phi) {
-  // Transfer within a cycle over a phi: only identical inputs
-  // can be combined into that input as result.
+HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferCycleOverPhi(
+    HInstruction* phi) {
+  // Transfer within a cycle over a phi: identical inputs are combined into that input as result.
   const size_t count = phi->InputCount();
-  CHECK_GT(count, 0u);
+  DCHECK_GT(count, 0u);
   auto ita = cycle_.find(phi->InputAt(0)->GetId());
   if (ita != cycle_.end()) {
     InductionInfo* a = ita->second;
     for (size_t i = 1; i < count; i++) {
       auto itb = cycle_.find(phi->InputAt(i)->GetId());
-      if (itb == cycle_.end() ||!HInductionVarAnalysis::InductionEqual(a, itb->second)) {
+      if (itb == cycle_.end() || !HInductionVarAnalysis::InductionEqual(a, itb->second)) {
         return nullptr;
       }
     }
@@ -352,33 +391,43 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferCycleOverPh
 
 HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferCycleOverAddSub(
     HLoopInformation* loop,
+    HInstruction* phi,
     HInstruction* x,
     HInstruction* y,
     InductionOp op,
     bool first) {
-  // Transfer within a cycle over an addition or subtraction: adding or
-  // subtracting an invariant value adds to the stride of the induction,
-  // starting with the phi value denoted by the unusual nullptr value.
-  auto it = cycle_.find(x->GetId());
-  if (it != cycle_.end()) {
-    InductionInfo* a = it->second;
-    InductionInfo* b = LookupInfo(loop, y);
-    if (b != nullptr && b->induction_class == kInvariant) {
-      if (a == nullptr) {
-        if (op == kSub) {  // negation required
-          return NewInductionInfo(kInvariant, kNeg, nullptr, b, nullptr);
-        }
-        return b;
-      } else if (a->induction_class == kInvariant) {
+  // Transfer within a cycle over an addition or subtraction: adding or subtracting an
+  // invariant value, seeded from phi, keeps adding to the stride of the induction.
+  InductionInfo* b = LookupInfo(loop, y);
+  if (b != nullptr && b->induction_class == kInvariant) {
+    if (x == phi) {
+      return (op == kAdd) ? b : NewInductionInfo(kInvariant, kNeg, nullptr, b, nullptr);
+    }
+    auto it = cycle_.find(x->GetId());
+    if (it != cycle_.end()) {
+      InductionInfo* a = it->second;
+      if (a->induction_class == kInvariant) {
         return NewInductionInfo(kInvariant, op, a, b, nullptr);
       }
     }
   }
-  // On failure, try alternatives.
-  if (op == kAdd) {
-    // Try the other way around for an addition.
-    if (first) {
-      return TransferCycleOverAddSub(loop, y, x, op, false);
+  // Try the other way around for an addition if considered for first time.
+  if (first && op == kAdd) {
+    return TransferCycleOverAddSub(loop, phi, y, x, op, false);
+  }
+  return nullptr;
+}
+
+HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferCycleOverPeriodic(
+    HLoopInformation* loop,
+    HInstruction* phi,
+    HInstruction* sub,
+    InductionInfo* initial) {
+  // Transfer within a tight cycle for a periodic induction k = c - k;
+  if (sub->IsSub() && phi->InputAt(1) == sub && sub->InputAt(1) == phi) {
+    InductionInfo* a = LookupInfo(loop, sub->InputAt(0));
+    if (a != nullptr && a->induction_class == kInvariant) {
+      return NewInductionInfo(kInvariant, kSub, a, initial, nullptr);
     }
   }
   return nullptr;
@@ -388,7 +437,8 @@ void HInductionVarAnalysis::PutInfo(int loop_id, int id, InductionInfo* info) {
   auto it = induction_.find(loop_id);
   if (it == induction_.end()) {
     it = induction_.Put(
-        loop_id, ArenaSafeMap<int, InductionInfo*>(std::less<int>(), graph_->GetArena()->Adapter()));
+        loop_id,
+        ArenaSafeMap<int, InductionInfo*>(std::less<int>(), graph_->GetArena()->Adapter()));
   }
   it->second.Overwrite(id, info);
 }
@@ -412,9 +462,9 @@ void HInductionVarAnalysis::AssignInfo(HLoopInformation* loop,
   PutInfo(loopId, id, info);
 }
 
-HInductionVarAnalysis::InductionInfo*
-HInductionVarAnalysis::LookupInfo(HLoopInformation* loop,
-                                  HInstruction* instruction) {
+HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::LookupInfo(
+    HLoopInformation* loop,
+    HInstruction* instruction) {
   const int loop_id = loop->GetHeader()->GetBlockId();
   const int id = instruction->GetId();
   InductionInfo* info = GetInfo(loop_id, id);
@@ -446,21 +496,20 @@ std::string HInductionVarAnalysis::InductionToString(InductionInfo* info) {
       std::string inv = "(";
       inv += InductionToString(info->op_a);
       switch (info->operation) {
-        case kNop: inv += " ? "; break;
-        case kAdd: inv += " + "; break;
+        case kNop:   inv += " ? "; break;
+        case kAdd:   inv += " + "; break;
         case kSub:
-        case kNeg: inv += " - "; break;
-        case kMul: inv += " * "; break;
-        case kDiv: inv += " / "; break;
+        case kNeg:   inv += " - "; break;
+        case kMul:   inv += " * "; break;
         case kFetch:
-          CHECK(info->fetch != nullptr);
-          inv += std::to_string(info->fetch->GetId()) + ":" + info->fetch->DebugName();
+          DCHECK(info->fetch);
+          inv += InstructionToString(info->fetch);
           break;
       }
       inv += InductionToString(info->op_b);
       return inv + ")";
     } else {
-      CHECK(info->operation == kNop);
+      DCHECK(info->operation == kNop);
       if (info->induction_class == kLinear) {
         return "(" + InductionToString(info->op_a) + " * i + " +
                      InductionToString(info->op_b) + ")";

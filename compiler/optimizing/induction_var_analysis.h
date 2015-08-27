@@ -57,12 +57,10 @@ class HInductionVarAnalysis : public HOptimization {
   };
 
   enum InductionClass {
-    kNone,
     kInvariant,
     kLinear,
     kWrapAround,
-    kPeriodic,
-    kMonotonic
+    kPeriodic
   };
 
   enum InductionOp {
@@ -71,7 +69,6 @@ class HInductionVarAnalysis : public HOptimization {
     kSub,
     kNeg,
     kMul,
-    kDiv,
     kFetch
   };
 
@@ -79,7 +76,7 @@ class HInductionVarAnalysis : public HOptimization {
    * Defines a detected induction as:
    *   (1) invariant:
    *         operation: a + b, a - b, -b, a * b, a / b
-   *       or
+   *       or:
    *         fetch: fetch from HIR
    *   (2) linear:
    *         nop: a * i + b
@@ -87,8 +84,6 @@ class HInductionVarAnalysis : public HOptimization {
    *         nop: a, then defined by b
    *   (4) periodic
    *         nop: a, then defined by b (repeated when exhausted)
-   *   (5) monotonic
-   *         // TODO: determine representation
    */
   struct InductionInfo : public ArenaObject<kArenaAllocMisc> {
     InductionInfo(InductionClass ic,
@@ -132,13 +127,19 @@ class HInductionVarAnalysis : public HOptimization {
   InductionInfo* TransferPhi(InductionInfo* a, InductionInfo* b);
   InductionInfo* TransferAddSub(InductionInfo* a, InductionInfo* b, InductionOp op);
   InductionInfo* TransferMul(InductionInfo* a, InductionInfo* b);
+  InductionInfo* TransferShl(InductionInfo* a, InductionInfo* b);
   InductionInfo* TransferNeg(InductionInfo* a);
   InductionInfo* TransferCycleOverPhi(HInstruction* phi);
   InductionInfo* TransferCycleOverAddSub(HLoopInformation* loop,
+                                         HInstruction* phi,
                                          HInstruction* x,
                                          HInstruction* y,
                                          InductionOp op,
                                          bool first);
+  InductionInfo* TransferCycleOverPeriodic(HLoopInformation* loop,
+                                           HInstruction* phi,
+                                           HInstruction* sub,
+                                           InductionInfo* initial);
 
   // Assign and lookup.
   void PutInfo(int loop_id, int id, InductionInfo* info);
