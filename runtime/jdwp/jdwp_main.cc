@@ -126,13 +126,13 @@ void JdwpNetStateBase::Close() {
  * Write a packet of "length" bytes. Grabs a mutex to assure atomicity.
  */
 ssize_t JdwpNetStateBase::WritePacket(ExpandBuf* pReply, size_t length) {
-  DCHECK_LE(length, expandBufGetLength(pReply));
+  DCHECK_LE(length, pReply->GetLength());
   if (!IsConnected()) {
     LOG(WARNING) << "Connection with debugger is closed";
     return -1;
   }
   MutexLock mu(Thread::Current(), socket_lock_);
-  return TEMP_FAILURE_RETRY(write(clientSock, expandBufGetBuffer(pReply), length));
+  return TEMP_FAILURE_RETRY(write(clientSock, pReply->GetBuffer(), length));
 }
 
 /*
@@ -185,10 +185,10 @@ void JdwpState::SendRequest(ExpandBuf* pReq) {
   }
 
   errno = 0;
-  ssize_t actual = netState->WritePacket(pReq, expandBufGetLength(pReq));
-  if (static_cast<size_t>(actual) != expandBufGetLength(pReq)) {
+  ssize_t actual = netState->WritePacket(pReq, pReq->GetLength());
+  if (static_cast<size_t>(actual) != pReq->GetLength()) {
     PLOG(ERROR) << StringPrintf("Failed to send JDWP packet to debugger (%zd of %zu)",
-                                actual, expandBufGetLength(pReq));
+                                actual, pReq->GetLength());
   }
 }
 
@@ -258,6 +258,7 @@ JdwpState* JdwpState::Create(const JdwpOptions* options) {
 #endif
     default:
       LOG(FATAL) << "Unknown transport: " << options->transport;
+      UNREACHABLE();
   }
   {
     /*
@@ -397,16 +398,18 @@ bool JdwpState::HandlePacket() {
   CHECK(netStateBase != nullptr) << "Connection has been closed";
   JDWP::Request request(netStateBase->input_buffer_, netStateBase->input_count_);
 
-  ExpandBuf* pReply = expandBufAlloc();
-  bool skip_reply = false;
-  size_t replyLength = ProcessRequest(&request, pReply, &skip_reply);
   ssize_t cc = 0;
-  if (!skip_reply) {
-    cc = netStateBase->WritePacket(pReply, replyLength);
-  } else {
-    DCHECK_EQ(replyLength, 0U);
+  size_t replyLength;
+  {
+    ExpandBuf reply;
+    bool skip_reply = false;
+    replyLength = ProcessRequest(&request, &reply, &skip_reply);
+    if (!skip_reply) {
+      cc = netStateBase->WritePacket(&reply, replyLength);
+    } else {
+      DCHECK_EQ(replyLength, 0U);
+    }
   }
-  expandBufFree(pReply);
 
   /*
    * We processed this request and sent its reply so we can release the JDWP token.
