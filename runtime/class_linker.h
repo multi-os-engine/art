@@ -478,6 +478,8 @@ class ClassLinker {
   // entries are roots, but potentially not image classes.
   void DropFindArrayClassCache() SHARED_REQUIRES(Locks::mutator_lock_);
 
+  const DexFile* GetOpenedDexFile(const std::string& location) const;
+
  private:
   void VisitClassesInternal(ClassVisitor* visitor)
       REQUIRES(Locks::classlinker_classes_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
