@@ -78,6 +78,24 @@ const char* image_roots_descriptions_[] = {
   "kClassRoots",
 };
 
+static std::vector<std::unique_ptr<const DexFile>> opened_dex_files;
+
+const DexFile* OpenDexFile(const OatFile::OatDexFile* oat_dex_file, std::string* error_msg) {
+  DCHECK(oat_dex_file != nullptr);
+  Runtime* const runtime = Runtime::Current();
+  const DexFile* ret = nullptr;
+  if (runtime != nullptr) {
+    ret = runtime->GetClassLinker()->GetOpenedDexFile(oat_dex_file->GetDexFileLocation());
+  }
+  if (ret == nullptr) {
+    ret = oat_dex_file->OpenDexFile(error_msg).release();
+    if (ret != nullptr) {
+      opened_dex_files.push_back(std::unique_ptr<const DexFile>(ret));
+    }
+  }
+  return ret;
+}
+
 class OatSymbolizer FINAL {
  public:
   class RodataWriter FINAL : public CodeOutput {
@@ -159,8 +177,8 @@ class OatSymbolizer FINAL {
 
   void WalkOatDexFile(const OatFile::OatDexFile* oat_dex_file, Callback callback) {
     std::string error_msg;
-    std::unique_ptr<const DexFile> dex_file(oat_dex_file->OpenDexFile(&error_msg));
-    if (dex_file.get() == nullptr) {
+    const DexFile* const dex_file = OpenDexFile(oat_dex_file, &error_msg);
+    if (dex_file == nullptr) {
       return;
     }
     for (size_t class_def_index = 0;
@@ -172,7 +190,7 @@ class OatSymbolizer FINAL {
       switch (type) {
         case kOatClassAllCompiled:
         case kOatClassSomeCompiled:
-          WalkOatClass(oat_class, *dex_file.get(), class_def, callback);
+          WalkOatClass(oat_class, *dex_file, class_def, callback);
           break;
 
         case kOatClassNoneCompiled:
@@ -504,8 +522,8 @@ class OatDumper {
       const OatFile::OatDexFile* oat_dex_file = oat_dex_files_[i];
       CHECK(oat_dex_file != nullptr);
       std::string error_msg;
-      std::unique_ptr<const DexFile> dex_file(oat_dex_file->OpenDexFile(&error_msg));
-      if (dex_file.get() == nullptr) {
+      const DexFile* const dex_file = OpenDexFile(oat_dex_file, &error_msg);
+      if (dex_file == nullptr) {
         LOG(WARNING) << "Failed to open dex file '" << oat_dex_file->GetDexFileLocation()
             << "': " << error_msg;
       } else {
@@ -533,8 +551,8 @@ class OatDumper {
       const OatFile::OatDexFile* oat_dex_file = oat_dex_files_[i];
       CHECK(oat_dex_file != nullptr);
       std::string error_msg;
-      std::unique_ptr<const DexFile> dex_file(oat_dex_file->OpenDexFile(&error_msg));
-      if (dex_file.get() == nullptr) {
+      const DexFile* const dex_file = OpenDexFile(oat_dex_file, &error_msg);
+      if (dex_file == nullptr) {
         LOG(WARNING) << "Failed to open dex file '" << oat_dex_file->GetDexFileLocation()
             << "': " << error_msg;
         continue;
@@ -593,8 +611,8 @@ class OatDumper {
     // Create the verifier early.
 
     std::string error_msg;
-    std::unique_ptr<const DexFile> dex_file(oat_dex_file.OpenDexFile(&error_msg));
-    if (dex_file.get() == nullptr) {
+    const DexFile* const dex_file = OpenDexFile(&oat_dex_file, &error_msg);
+    if (dex_file == nullptr) {
       os << "NOT FOUND: " << error_msg << "\n\n";
       os << std::flush;
       return false;
@@ -621,7 +639,7 @@ class OatDumper {
          << " (" << oat_class.GetType() << ")\n";
       // TODO: include bitmap here if type is kOatClassSomeCompiled?
       if (options_.list_classes_) continue;
-      if (!DumpOatClass(&vios, oat_class, *(dex_file.get()), class_def, &stop_analysis)) {
+      if (!DumpOatClass(&vios, oat_class, *dex_file, class_def, &stop_analysis)) {
         success = false;
       }
       if (stop_analysis) {
@@ -638,7 +656,7 @@ class OatDumper {
     std::string error_msg;
     std::string dex_file_location = oat_dex_file.GetDexFileLocation();
 
-    std::unique_ptr<const DexFile> dex_file(oat_dex_file.OpenDexFile(&error_msg));
+    const DexFile* const dex_file = OpenDexFile(&oat_dex_file, &error_msg);
     if (dex_file == nullptr) {
       os << "Failed to open dex file '" << dex_file_location << "': " << error_msg;
       return false;
@@ -2337,20 +2355,20 @@ static int DumpOatWithRuntime(Runtime* runtime, OatFile* oat_file, OatDumperOpti
   ScopedObjectAccess soa(self);
   ClassLinker* class_linker = runtime->GetClassLinker();
   class_linker->RegisterOatFile(oat_file);
-  std::vector<std::unique_ptr<const DexFile>> dex_files;
+  std::vector<const DexFile*> dex_files;
   for (const OatFile::OatDexFile* odf : oat_file->GetOatDexFiles()) {
     std::string error_msg;
-    std::unique_ptr<const DexFile> dex_file = odf->OpenDexFile(&error_msg);
+    const DexFile* const dex_file = OpenDexFile(odf, &error_msg);
     CHECK(dex_file != nullptr) << error_msg;
     class_linker->RegisterDexFile(*dex_file);
-    dex_files.push_back(std::move(dex_file));
+    dex_files.push_back(dex_file);
   }
 
   // Need a class loader.
   // Fake that we're a compiler.
   std::vector<const DexFile*> class_path;
   for (auto& dex_file : dex_files) {
-    class_path.push_back(dex_file.get());
+    class_path.push_back(dex_file);
   }
   jobject class_loader = class_linker->CreatePathClassLoader(self, class_path);
 
