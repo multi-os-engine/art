@@ -32,9 +32,7 @@ Request::Request(const uint8_t* bytes, uint32_t available) : p_(bytes) {
 
   id_ = Read4BE();
   int8_t flags = Read1();
-  if ((flags & kJDWPFlagReply) != 0) {
-    LOG(FATAL) << "reply?!";
-  }
+  CHECK_EQ((flags & kJDWPFlagReply), 0) << "reply?!";
 
   command_set_ = Read1();
   command_ = Read1();
@@ -69,7 +67,7 @@ uint64_t Request::ReadValue(size_t width) {
     case 2: value = Read2BE(); break;
     case 4: value = Read4BE(); break;
     case 8: value = Read8BE(); break;
-    default: LOG(FATAL) << width; break;
+    default: LOG(FATAL) << width; UNREACHABLE();
   }
   return value;
 }

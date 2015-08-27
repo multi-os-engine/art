@@ -31,123 +31,61 @@ namespace art {
 
 namespace JDWP {
 
-/*
- * Data structure used to track buffer use.
- */
-struct ExpandBuf {
-  uint8_t*     storage;
-  int     curLen;
-  int     maxLen;
-};
+static constexpr size_t kInitialStorage = 64;
 
-#define kInitialStorage 64
-
-/*
- * Allocate a JdwpBuf and some initial storage.
- */
-ExpandBuf* expandBufAlloc() {
-  ExpandBuf* newBuf = new ExpandBuf;
-  newBuf->storage = reinterpret_cast<uint8_t*>(malloc(kInitialStorage));
-  newBuf->curLen = 0;
-  newBuf->maxLen = kInitialStorage;
-  return newBuf;
+ExpandBuf::ExpandBuf() : storage_(nullptr), current_length_(0), max_length_(kInitialStorage) {
+  storage_ = reinterpret_cast<uint8_t*>(malloc(kInitialStorage));
 }
 
-/*
- * Free a JdwpBuf and associated storage.
- */
-void expandBufFree(ExpandBuf* pBuf) {
-  if (pBuf == nullptr) {
+ExpandBuf::~ExpandBuf() {
+  free(storage_);
+}
+
+
+void ExpandBuf::EnsureSpace(size_t newCount) {
+  if (current_length_ + newCount <= max_length_) {
     return;
   }
 
-  free(pBuf->storage);
-  delete pBuf;
-}
-
-/*
- * Get a pointer to the start of the buffer.
- */
-uint8_t* expandBufGetBuffer(ExpandBuf* pBuf) {
-  return pBuf->storage;
-}
-
-/*
- * Get the amount of data currently in the buffer.
- */
-size_t expandBufGetLength(ExpandBuf* pBuf) {
-  return pBuf->curLen;
-}
-
-/*
- * Ensure that the buffer has enough space to hold incoming data.  If it
- * doesn't, resize the buffer.
- */
-static void ensureSpace(ExpandBuf* pBuf, int newCount) {
-  if (pBuf->curLen + newCount <= pBuf->maxLen) {
-    return;
+  while (current_length_ + newCount > max_length_) {
+    max_length_ *= 2;
   }
 
-  while (pBuf->curLen + newCount > pBuf->maxLen) {
-    pBuf->maxLen *= 2;
-  }
-
-  uint8_t* newPtr = reinterpret_cast<uint8_t*>(realloc(pBuf->storage, pBuf->maxLen));
-  if (newPtr == nullptr) {
-    LOG(FATAL) << "realloc(" << pBuf->maxLen << ") failed";
-  }
-
-  pBuf->storage = newPtr;
+  uint8_t* newPtr = reinterpret_cast<uint8_t*>(realloc(storage_, max_length_));
+  CHECK(newPtr != nullptr) << "realloc(" << max_length_ << ") failed";
+  storage_ = newPtr;
 }
 
-/*
- * Allocate some space in the buffer.
- */
-uint8_t* expandBufAddSpace(ExpandBuf* pBuf, int gapSize) {
-  uint8_t* gapStart;
-
-  ensureSpace(pBuf, gapSize);
-  gapStart = pBuf->storage + pBuf->curLen;
+uint8_t* ExpandBuf::AddSpace(size_t gapSize) {
+  EnsureSpace(gapSize);
+  uint8_t* gapStart = storage_ + current_length_;
   /* do we want to garbage-fill the gap for debugging? */
-  pBuf->curLen += gapSize;
-
+  current_length_ += gapSize;
   return gapStart;
 }
 
-/*
- * Append a byte.
- */
-void expandBufAdd1(ExpandBuf* pBuf, uint8_t val) {
-  ensureSpace(pBuf, sizeof(val));
-  *(pBuf->storage + pBuf->curLen) = val;
-  pBuf->curLen++;
+void ExpandBuf::Add1(uint8_t val) {
+  EnsureSpace(sizeof(val));
+  *(storage_ + current_length_) = val;
+  current_length_++;
 }
 
-/*
- * Append two big-endian bytes.
- */
-void expandBufAdd2BE(ExpandBuf* pBuf, uint16_t val) {
-  ensureSpace(pBuf, sizeof(val));
-  Set2BE(pBuf->storage + pBuf->curLen, val);
-  pBuf->curLen += sizeof(val);
+void ExpandBuf::Add2BE(uint16_t val) {
+  EnsureSpace(sizeof(val));
+  Set2BE(storage_ + current_length_, val);
+  current_length_ += sizeof(val);
 }
 
-/*
- * Append four big-endian bytes.
- */
-void expandBufAdd4BE(ExpandBuf* pBuf, uint32_t val) {
-  ensureSpace(pBuf, sizeof(val));
-  Set4BE(pBuf->storage + pBuf->curLen, val);
-  pBuf->curLen += sizeof(val);
+void ExpandBuf::Add4BE(uint32_t val) {
+  EnsureSpace(sizeof(val));
+  Set4BE(storage_ + current_length_, val);
+  current_length_ += sizeof(val);
 }
 
-/*
- * Append eight big-endian bytes.
- */
-void expandBufAdd8BE(ExpandBuf* pBuf, uint64_t val) {
-  ensureSpace(pBuf, sizeof(val));
-  Set8BE(pBuf->storage + pBuf->curLen, val);
-  pBuf->curLen += sizeof(val);
+void ExpandBuf::Add8BE(uint64_t val) {
+  EnsureSpace(sizeof(val));
+  Set8BE(storage_ + current_length_, val);
+  current_length_ += sizeof(val);
 }
 
 static void SetUtf8String(uint8_t* buf, const char* str, size_t strLen) {
@@ -155,32 +93,25 @@ static void SetUtf8String(uint8_t* buf, const char* str, size_t strLen) {
   memcpy(buf + sizeof(uint32_t), str, strLen);
 }
 
-/*
- * Add a UTF8 string as a 4-byte length followed by a non-nullptr-terminated
- * string.
- *
- * Because these strings are coming out of the VM, it's safe to assume that
- * they can be null-terminated (either they don't have null bytes or they
- * have stored null bytes in a multi-byte encoding).
- */
-void expandBufAddUtf8String(ExpandBuf* pBuf, const char* s) {
-  int strLen = strlen(s);
-  ensureSpace(pBuf, sizeof(uint32_t) + strLen);
-  SetUtf8String(pBuf->storage + pBuf->curLen, s, strLen);
-  pBuf->curLen += sizeof(uint32_t) + strLen;
+void ExpandBuf::AddUtf8String(const char* s) {
+  size_t strLen = strlen(s);
+  EnsureSpace(sizeof(uint32_t) + strLen);
+  SetUtf8String(storage_ + current_length_, s, strLen);
+  current_length_ += sizeof(uint32_t) + strLen;
 }
 
-void expandBufAddUtf8String(ExpandBuf* pBuf, const std::string& s) {
-  ensureSpace(pBuf, sizeof(uint32_t) + s.size());
-  SetUtf8String(pBuf->storage + pBuf->curLen, s.data(), s.size());
-  pBuf->curLen += sizeof(uint32_t) + s.size();
+void ExpandBuf::AddUtf8String(const std::string& s) {
+  EnsureSpace(sizeof(uint32_t) + s.size());
+  SetUtf8String(storage_ + current_length_, s.data(), s.size());
+  current_length_ += sizeof(uint32_t) + s.size();
 }
 
-void expandBufAddLocation(ExpandBuf* buf, const JdwpLocation& location) {
-  expandBufAdd1(buf, location.type_tag);
-  expandBufAddObjectId(buf, location.class_id);
-  expandBufAddMethodId(buf, location.method_id);
-  expandBufAdd8BE(buf, location.dex_pc);
+// TODO: move utility functions from jdwp.h to here.
+void ExpandBuf::AddLocation(const JdwpLocation& location) {
+  Add1(location.type_tag);
+  AddObjectId(location.class_id);
+  AddMethodId(location.method_id);
+  Add8BE(location.dex_pc);
 }
 
 }  // namespace JDWP
