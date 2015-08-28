@@ -1191,6 +1191,11 @@ JDWP::JdwpError Dbg::SetArrayElements(JDWP::ObjectId array_id, int offset, int c
       if (error != JDWP::ERR_NONE) {
         return error;
       }
+      if (!oa->CheckAssignable(o)) {
+        // Clear the pending ArrayStoreException.
+        Thread::Current()->ClearException();
+        return JDWP::ERR_TYPE_MISMATCH;
+      }
       oa->Set<false>(offset + i, o);
     }
   }
