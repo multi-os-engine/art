@@ -2667,6 +2667,8 @@ class ReferenceMapVisitor : public StackVisitor {
         }
       }
     }
+    // Mark lock count map required for structured locking checks.
+    shadow_frame->GetLockCountData().VisitMonitors(visitor_, this);
   }
 
  private:
@@ -2791,6 +2793,11 @@ class RootCallbackVisitor {
   void operator()(mirror::Object** obj, size_t vreg, const StackVisitor* stack_visitor) const
       SHARED_REQUIRES(Locks::mutator_lock_) {
     visitor_->VisitRoot(obj, JavaFrameRootInfo(tid_, stack_visitor, vreg));
+  }
+
+  void operator()(mirror::Object*** objs, size_t count, const StackVisitor* stack_visitor) const
+        SHARED_REQUIRES(Locks::mutator_lock_) {
+    visitor_->VisitRoots(objs, count, JavaFrameRootInfo(tid_, stack_visitor, -1));
   }
 
  private:
