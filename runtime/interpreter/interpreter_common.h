@@ -79,12 +79,47 @@ extern JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item,
 void ThrowNullPointerExceptionFromInterpreter()
     SHARED_REQUIRES(Locks::mutator_lock_);
 
-static inline void DoMonitorEnter(Thread* self, Object* ref) NO_THREAD_SAFETY_ANALYSIS {
+template <bool kMonitorCounting>
+static inline void DoMonitorEnter(Thread* self,
+                                  ShadowFrame* frame,
+                                  Object* ref) NO_THREAD_SAFETY_ANALYSIS {
   ref->MonitorEnter(self);
+  if (kMonitorCounting && frame->GetLockCountMap() != nullptr) {
+    if (!self->IsExceptionPending()) {
+      frame->GetLockCountMap()->push_back(ref);
+    }
+  }
 }
 
-static inline void DoMonitorExit(Thread* self, Object* ref) NO_THREAD_SAFETY_ANALYSIS {
+template <bool kMonitorCounting>
+static inline void DoMonitorExit(Thread* self,
+                                 ShadowFrame* frame,
+                                 Object* ref) NO_THREAD_SAFETY_ANALYSIS {
   ref->MonitorExit(self);
+  if (kMonitorCounting && frame->GetLockCountMap() != nullptr) {
+    auto it = std::find(frame->GetLockCountMap()->begin(), frame->GetLockCountMap()->end(), ref);
+    if (it != frame->GetLockCountMap()->end()) {
+      frame->GetLockCountMap()->erase(it);
+    }
+  }
+}
+
+static inline bool CheckAllMonitorsReleased(Thread* self, ShadowFrame* frame)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (frame->GetLockCountMap() != nullptr) {
+    if (!frame->GetLockCountMap()->empty()) {
+      // OK, there are monitors that are still locked. Unlock all of them, then raise an exception.
+      for (mirror::Object* obj : *frame->GetLockCountMap()) {
+        DoMonitorExit<false>(self, frame, obj);
+      }
+      // Raise an exception, just give the first object as the sample.
+      self->ThrowNewExceptionF("Ljava/lang/IllegalMonitorStateException;",
+                               "did not unlock monitor on object of type '%s'",
+                               PrettyTypeOf((*frame->GetLockCountMap())[0]).c_str());
+      return false;
+    }
+  }
+  return true;
 }
 
 void AbortTransactionF(Thread* self, const char* fmt, ...)
