@@ -717,9 +717,17 @@ extern "C" uint64_t artQuickToInterpreterBridge(ArtMethod* method, Thread* self,
     const char* old_cause = self->StartAssertNoThreadSuspension(
         "Building interpreter shadow frame");
     uint16_t num_regs = code_item->registers_size_;
-    // No last shadow coming from quick.
     ShadowFrameAllocaUniquePtr shadow_frame_unique_ptr =
-        CREATE_SHADOW_FRAME(num_regs, nullptr, method, 0);
+        CREATE_SHADOW_FRAME(num_regs,
+                            /* link */ nullptr,          // No last shadow coming from quick.
+                            method,
+                            /* dex pc */ 0,
+                            /* lock counting */ false);  // No lock counting. The method/class may
+                                                         // not be verified here, so we don't know
+                                                         // yet whether we'll have to count locks.
+                                                         // As an optimization, allocate the lock
+                                                         // count structure lazily below if
+                                                         // necessary.
     ShadowFrame* shadow_frame = shadow_frame_unique_ptr.get();
     size_t first_arg_reg = code_item->registers_size_ - code_item->ins_size_;
     BuildQuickShadowFrameVisitor shadow_frame_builder(sp, method->IsStatic(), shorty, shorty_len,
@@ -741,6 +749,12 @@ extern "C" uint64_t artQuickToInterpreterBridge(ArtMethod* method, Thread* self,
         self->PopManagedStackFragment(fragment);
         return 0;
       }
+    }
+
+    // The method verification status is only available now, after the class is guaranteed to be
+    // verified.
+    if (method->NeedsLockCounting()) {
+      shadow_frame->AllocLockCountData();
     }
 
     result = interpreter::EnterInterpreterFromEntryPoint(self, code_item, shadow_frame);

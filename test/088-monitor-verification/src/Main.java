@@ -221,16 +221,18 @@ public class Main {
     // Smali testing code.
     private static void runSmaliTests() {
         if (!hasOatFile() || runtimeIsSoftFail() || isInterpreted()) {
-            // Skip test, this seems to be a non-compiled code test configuration.
-            return;
+             // Some tests ensure that the verifier was able to guarantee balanced locking by
+            // asserting that the test function is running as compiled code. But skip this now,
+            // as this seems to be a non-compiled code test configuration.
+            disableStackFrameAsserts();
         }
 
         runTest("OK", new Object[] { new Object(), new Object() }, null);
         runTest("TooDeep", new Object[] { new Object() }, null);
         runTest("NotStructuredOverUnlock", new Object[] { new Object() },
                 IllegalMonitorStateException.class);
-        runTest("NotStructuredUnderUnlock", new Object[] { new Object() }, null);
-                // TODO: new IllegalMonitorStateException());
+        runTest("NotStructuredUnderUnlock", new Object[] { new Object() },
+                IllegalMonitorStateException.class);
         runTest("UnbalancedJoin", new Object[] { new Object(), new Object() }, null);
         runTest("UnbalancedStraight", new Object[] { new Object(), new Object() }, null);
     }
@@ -282,4 +284,5 @@ public class Main {
     public static native boolean hasOatFile();
     public static native boolean runtimeIsSoftFail();
     public static native boolean isInterpreted();
+    public static native void disableStackFrameAsserts();
 }
