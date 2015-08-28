@@ -542,6 +542,13 @@ class ArtMethod FINAL {
     return ++hotness_count_;
   }
 
+  // Should the interpreter count lock and unlock operations to enforce structured locking?
+  // We currently merge this info into the verification status, as the verifier will fail the
+  // method with a LOCKING failure, so use the Preverified flag.
+  bool NeedsLockCounting() {
+    return !IsPreverified();
+  }
+
  protected:
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   // The class we are a part of.
