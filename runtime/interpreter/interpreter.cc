@@ -332,7 +332,11 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
   // Set up shadow frame with matching number of reference slots to vregs.
   ShadowFrame* last_shadow_frame = self->GetManagedStack()->GetTopShadowFrame();
   ShadowFrameAllocaUniquePtr shadow_frame_unique_ptr =
-      CREATE_SHADOW_FRAME(num_regs, last_shadow_frame, method, 0);
+      CREATE_SHADOW_FRAME(num_regs,
+                          last_shadow_frame,
+                          method,
+                          0,
+                          method->IsPreverified() ? nullptr : new LockCountMap());
   ShadowFrame* shadow_frame = shadow_frame_unique_ptr.get();
   self->PushShadowFrame(shadow_frame);
 
@@ -472,6 +476,13 @@ extern "C" void artInterpreterToInterpreterBridge(Thread* self, const DexFile::C
       }
       CHECK(h_declaring_class->IsInitializing());
     }
+  }
+  // The caller may have made the wrong choice with the lock count map. If the class wasn't verified
+  // yet, then static initialization above will now have filled in the right state, and we may have
+  // to delete the lock metadata.
+  // Note: as this might race, we cannot do this just in the is_static branch above.
+  if (shadow_frame->GetLockCountMap() != nullptr && shadow_frame->GetMethod()->IsPreverified()) {
+    shadow_frame->SetLockCountMap(nullptr);
   }
 
   if (LIKELY(!shadow_frame->GetMethod()->IsNative())) {
