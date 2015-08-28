@@ -66,6 +66,8 @@ class MANAGED StackReference : public mirror::CompressedReference<MirrorType> {
 struct ShadowFrameDeleter;
 using ShadowFrameAllocaUniquePtr = std::unique_ptr<ShadowFrame, ShadowFrameDeleter>;
 
+using LockCountMap = std::vector<mirror::Object*>;
+
 // ShadowFrame has 2 possible layouts:
 //  - interpreter - separate VRegs and reference arrays. References are in the reference array.
 //  - JNI - just VRegs, but where every VReg holds a reference.
@@ -81,7 +83,8 @@ class ShadowFrame {
   static ShadowFrame* CreateDeoptimizedFrame(uint32_t num_vregs, ShadowFrame* link,
                                              ArtMethod* method, uint32_t dex_pc) {
     uint8_t* memory = new uint8_t[ComputeSize(num_vregs)];
-    return CreateShadowFrameImpl(num_vregs, link, method, dex_pc, memory);
+    // Note: deoptimization means we came from a compiled method, so balanced locking was verified.
+    return CreateShadowFrameImpl(num_vregs, link, method, dex_pc, nullptr, memory);
   }
 
   // Delete a ShadowFrame allocated on the heap for deoptimization.
@@ -93,12 +96,12 @@ class ShadowFrame {
 
   // Create a shadow frame in a fresh alloca. This needs to be in the context of the caller.
   // Inlining doesn't work, the compiler will still undo the alloca. So this needs to be a macro.
-#define CREATE_SHADOW_FRAME(num_vregs, link, method, dex_pc) ({                              \
+#define CREATE_SHADOW_FRAME(num_vregs, link, method, dex_pc, lock_map) ({                    \
     size_t frame_size = ShadowFrame::ComputeSize(num_vregs);                                 \
     void* alloca_mem = alloca(frame_size);                                                   \
     ShadowFrameAllocaUniquePtr(                                                              \
         ShadowFrame::CreateShadowFrameImpl((num_vregs), (link), (method), (dex_pc),          \
-                                           (alloca_mem)));                                   \
+                                           (lock_map), (alloca_mem)));                       \
     })
 
   ~ShadowFrame() {}
@@ -272,6 +275,14 @@ class ShadowFrame {
     }
   }
 
+  LockCountMap* GetLockCountMap() {
+    return lock_count_map_.get();
+  }
+
+  void SetLockCountMap(LockCountMap* map) {
+    return lock_count_map_.reset(map);
+  }
+
   static size_t LinkOffset() {
     return OFFSETOF_MEMBER(ShadowFrame, link_);
   }
@@ -297,14 +308,19 @@ class ShadowFrame {
                                             ShadowFrame* link,
                                             ArtMethod* method,
                                             uint32_t dex_pc,
+                                            LockCountMap* lock_count_map,
                                             void* memory) {
-    return new (memory) ShadowFrame(num_vregs, link, method, dex_pc, true);
+    return new (memory) ShadowFrame(num_vregs, link, method, dex_pc, lock_count_map, true);
   }
 
  private:
   ShadowFrame(uint32_t num_vregs, ShadowFrame* link, ArtMethod* method,
-              uint32_t dex_pc, bool has_reference_array)
-      : number_of_vregs_(num_vregs), link_(link), method_(method), dex_pc_(dex_pc) {
+              uint32_t dex_pc, LockCountMap* lock_count_map, bool has_reference_array)
+      : number_of_vregs_(num_vregs),
+        link_(link),
+        method_(method),
+        dex_pc_(dex_pc),
+        lock_count_map_(lock_count_map) {
     // TODO(iam): Remove this parameter, it's an an artifact of portable removal
     DCHECK(has_reference_array);
     if (has_reference_array) {
@@ -330,6 +346,7 @@ class ShadowFrame {
   ShadowFrame* link_;
   ArtMethod* method_;
   uint32_t dex_pc_;
+  std::unique_ptr<LockCountMap> lock_count_map_;
 
   // This is a two-part array:
   //  - [0..number_of_vregs) holds the raw virtual registers, and each element here is always 4
