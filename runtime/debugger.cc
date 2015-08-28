@@ -1191,6 +1191,10 @@ JDWP::JdwpError Dbg::SetArrayElements(JDWP::ObjectId array_id, int offset, int c
       if (error != JDWP::ERR_NONE) {
         return error;
       }
+      // Check object's type is compatible with array's type.
+      if (o != nullptr && !o->InstanceOf(oa->GetClass()->GetComponentType())) {
+        return JDWP::ERR_TYPE_MISMATCH;
+      }
       oa->Set<false>(offset + i, o);
     }
   }
