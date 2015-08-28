@@ -66,6 +66,8 @@ class MANAGED StackReference : public mirror::CompressedReference<MirrorType> {
 struct ShadowFrameDeleter;
 using ShadowFrameAllocaUniquePtr = std::unique_ptr<ShadowFrame, ShadowFrameDeleter>;
 
+using LockCountData = std::vector<mirror::Object*>;
+
 // ShadowFrame has 2 possible layouts:
 //  - interpreter - separate VRegs and reference arrays. References are in the reference array.
 //  - JNI - just VRegs, but where every VReg holds a reference.
@@ -272,6 +274,15 @@ class ShadowFrame {
     }
   }
 
+  LockCountData* GetLockCountData() {
+    return lock_count_data_.get();
+  }
+
+  // Allocate a new instance of LockCountData to be used.
+  void AllocLockCountData() {
+    return lock_count_data_.reset(new LockCountData());
+  }
+
   static size_t LinkOffset() {
     return OFFSETOF_MEMBER(ShadowFrame, link_);
   }
@@ -330,6 +341,7 @@ class ShadowFrame {
   ShadowFrame* link_;
   ArtMethod* method_;
   uint32_t dex_pc_;
+  std::unique_ptr<LockCountData> lock_count_data_;
 
   // This is a two-part array:
   //  - [0..number_of_vregs) holds the raw virtual registers, and each element here is always 4
