@@ -79,12 +79,68 @@ extern JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item,
 void ThrowNullPointerExceptionFromInterpreter()
     SHARED_REQUIRES(Locks::mutator_lock_);
 
-static inline void DoMonitorEnter(Thread* self, Object* ref) NO_THREAD_SAFETY_ANALYSIS {
+template <bool kMonitorCounting>
+static inline void DoMonitorEnter(Thread* self,
+                                  ShadowFrame* frame,
+                                  Object* ref) NO_THREAD_SAFETY_ANALYSIS {
   ref->MonitorEnter(self);
+  if (kMonitorCounting) {
+    // If there's an error during enter, we won't have locked the monitor. So check there's no
+    // exception.
+    if (!self->IsExceptionPending()) {
+      if (frame->GetLockCountData() == nullptr) {
+        frame->AllocLockCountData();
+      }
+      frame->GetLockCountData()->push_back(ref);
+    }
+  }
 }
 
-static inline void DoMonitorExit(Thread* self, Object* ref) NO_THREAD_SAFETY_ANALYSIS {
+template <bool kMonitorCounting>
+static inline void DoMonitorExit(Thread* self,
+                                 ShadowFrame* frame,
+                                 Object* ref) NO_THREAD_SAFETY_ANALYSIS {
   ref->MonitorExit(self);
+  if (kMonitorCounting) {
+    if (frame->GetLockCountData() != nullptr) {
+      // We need to remove one pointer to ref, as duplicates are used for counting recursive locks.
+      // We arbitrarily choose the first one.
+      auto it = std::find(frame->GetLockCountData()->begin(),
+                          frame->GetLockCountData()->end(),
+                          ref);
+      if (it != frame->GetLockCountData()->end()) {
+        frame->GetLockCountData()->erase(it);
+      }
+    } else {
+      // If we don't have lock counting data, then this should be an Exit before Enter. In that case
+      // the Exit should have thrown an exception.
+      DCHECK(self->IsExceptionPending());
+    }
+  }
+}
+
+template <bool kMonitorCounting>
+static inline bool CheckAllMonitorsReleased(Thread* self, ShadowFrame* frame)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (kMonitorCounting) {
+    if (frame->GetLockCountData() != nullptr) {
+      if (!frame->GetLockCountData()->empty()) {
+        // OK, there are monitors that are still locked. Unlock all of them, then raise an
+        // exception.
+        for (mirror::Object* obj : *frame->GetLockCountData()) {
+          // Use the helper (as we need NO_THREAD_SAFETY_ANALYSIS), but don't do the lock counting.
+          DoMonitorExit</* kMonitorCounting */ false>(self, frame, obj);
+        }
+        // Raise an exception, just give the first object as the sample.
+        Object* first = (*frame->GetLockCountData())[0];
+        self->ThrowNewExceptionF("Ljava/lang/IllegalMonitorStateException;",
+                                 "did not unlock monitor on object of type '%s'",
+                                 PrettyTypeOf(first).c_str());
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 void AbortTransactionF(Thread* self, const char* fmt, ...)
