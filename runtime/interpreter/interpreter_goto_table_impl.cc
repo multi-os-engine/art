@@ -89,6 +89,12 @@ namespace interpreter {
       UnexpectedOpcode(inst, shadow_frame);                                                       \
   } HANDLE_INSTRUCTION_END();
 
+#define HANDLE_MONITOR_CHECKS()                                                    \
+  if (do_assignability_check) {                                                    \
+    if (!CheckAllMonitorsReleased<do_assignability_check>(self, &shadow_frame)) {  \
+      HANDLE_PENDING_EXCEPTION();                                                  \
+    }                                                                              \
+  }
 
 /**
  * Interpreter based on computed goto tables.
@@ -275,6 +281,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_START(RETURN_VOID_NO_BARRIER) {
     JValue result;
     self->AllowThreadSuspension();
+    HANDLE_MONITOR_CHECKS();
     instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodExitListeners())) {
       instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
@@ -289,6 +296,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     QuasiAtomic::ThreadFenceForConstructor();
     JValue result;
     self->AllowThreadSuspension();
+    HANDLE_MONITOR_CHECKS();
     instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodExitListeners())) {
       instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
@@ -304,6 +312,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     result.SetJ(0);
     result.SetI(shadow_frame.GetVReg(inst->VRegA_11x(inst_data)));
     self->AllowThreadSuspension();
+    HANDLE_MONITOR_CHECKS();
     instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodExitListeners())) {
       instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
@@ -318,6 +327,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     JValue result;
     result.SetJ(shadow_frame.GetVRegLong(inst->VRegA_11x(inst_data)));
     self->AllowThreadSuspension();
+    HANDLE_MONITOR_CHECKS();
     instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
     if (UNLIKELY(instrumentation->HasMethodExitListeners())) {
       instrumentation->MethodExitEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
@@ -331,6 +341,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_START(RETURN_OBJECT) {
     JValue result;
     self->AllowThreadSuspension();
+    HANDLE_MONITOR_CHECKS();
     const uint8_t vreg_index = inst->VRegA_11x(inst_data);
     Object* obj_result = shadow_frame.GetVRegReference(vreg_index);
     if (do_assignability_check && obj_result != nullptr) {
@@ -468,7 +479,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
       ThrowNullPointerExceptionFromInterpreter();
       HANDLE_PENDING_EXCEPTION();
     } else {
-      DoMonitorEnter(self, obj);
+      DoMonitorEnter<do_access_check>(self, &shadow_frame, obj);
       POSSIBLY_HANDLE_PENDING_EXCEPTION(self->IsExceptionPending(), 1);
     }
   }
@@ -480,7 +491,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
       ThrowNullPointerExceptionFromInterpreter();
       HANDLE_PENDING_EXCEPTION();
     } else {
-      DoMonitorExit(self, obj);
+      DoMonitorExit<do_access_check>(self, &shadow_frame, obj);
       POSSIBLY_HANDLE_PENDING_EXCEPTION(self->IsExceptionPending(), 1);
     }
   }
