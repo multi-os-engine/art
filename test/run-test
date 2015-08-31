@@ -40,9 +40,13 @@ else
   tmp_dir="${TMPDIR}/$USER/${test_dir}"
 fi
 checker="${progdir}/../tools/checker/checker.py"
-
-export JAVA="java"
-export JAVAC="javac -g"
+if [ -z "${JAVA_HOME}" ]; then
+  export JAVA="java"
+  export JAVAC="javac -g"
+else
+  export JAVA="${JAVA_HOME}/bin/java"
+  export JAVAC="${JAVA_HOME}/bin/javac -g"
+fi
 export RUN="${progdir}/etc/run-test-jar"
 export DEX_LOCATION=/data/run-test/${test_dir}
 export NEED_DEX="true"
@@ -162,6 +166,7 @@ while true; do
         NEED_DEX="false"
         USE_JACK="false"
         run_args="${run_args} --jvm"
+        build_args="${build_args} --jvm"
         shift
     elif [ "x$1" = "x-O" ]; then
         lib="libart.so"
