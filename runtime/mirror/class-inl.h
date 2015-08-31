@@ -376,6 +376,7 @@ inline bool Class::IsSubClass(Class* klass) {
 }
 
 inline ArtMethod* Class::FindVirtualMethodForInterface(ArtMethod* method, size_t pointer_size) {
+  // LOG(INFO) << "Trying to find method for interface " << PrettyMethod(method);
   Class* declaring_class = method->GetDeclaringClass();
   DCHECK(declaring_class != nullptr) << PrettyClass(this);
   DCHECK(declaring_class->IsInterface()) << PrettyMethod(method);

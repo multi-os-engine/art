@@ -532,6 +532,10 @@ class Runtime {
     return zygote_max_failed_boots_;
   }
 
+  bool AreExperimentalDefaultMethodsEnabled() const {
+    return experimental_default_methods_;
+  }
+
   bool AreExperimentalLambdasEnabled() const {
     return experimental_lambdas_;
   }
@@ -762,6 +766,11 @@ class Runtime {
   //
   // Experimental opcodes should not be used by other production code.
   bool experimental_lambdas_;
+
+  // Enable experimental support for default methods.
+  //
+  // Not yet fully specified or supported.
+  bool experimental_default_methods_;
 
   MethodRefToStringInitRegMap method_ref_string_init_reg_map_;
 

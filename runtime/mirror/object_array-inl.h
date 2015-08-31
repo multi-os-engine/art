@@ -115,7 +115,7 @@ inline void ObjectArray<T>::SetWithoutChecksAndWriteBarrier(int32_t i, T* object
 
 template<class T>
 inline T* ObjectArray<T>::GetWithoutChecks(int32_t i) {
-  DCHECK(CheckIsValidIndex(i));
+  DCHECK(CheckIsValidIndex(i)) << i << " is not a valid index in array of length " << GetLength();
   return GetFieldObject<T>(OffsetOfElement(i));
 }
 

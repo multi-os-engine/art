@@ -155,7 +155,7 @@ class ArtMethod FINAL {
   }
 
   void SetPreverified() SHARED_REQUIRES(Locks::mutator_lock_) {
-    DCHECK(!IsPreverified());
+    DCHECK(!IsPreverified()) << PrettyMethod(this);
     SetAccessFlags(GetAccessFlags() | kAccPreverified);
   }
 
