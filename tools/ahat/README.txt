@@ -15,6 +15,7 @@ TODO:
    - Recommend how to start looking at a heap dump.
    - Say how to enable allocation sites.
    - Where to submit feedback, questions, and bug reports.
+   - Note that long summary strings end in ... and have no end quote.
  * Submit perflib fix for getting stack traces, then uncomment that code in
    AhatSnapshot to use that.
  * Dim 'image' and 'zygote' heap sizes slightly? Why do we even show these?
@@ -29,9 +30,6 @@ TODO:
    - Use consistent order for heap columns.
       Sometimes I see "app" first, sometimes last (from one heap dump to
       another) How about, always sort by name?
- * For string summaries, if the string is an offset into a bigger byte array,
-   make sure to show just the part that's in the bigger byte array, not the
-   entire byte array.
  * For HeapTable with single heap shown, the heap name isn't centered?
  * Consistently document functions.
  * Should help be part of an AhatHandler, that automatically gets the menu and
@@ -70,6 +68,8 @@ Things to Test:
    time.
  * That we don't show the 'extra' column in the DominatedList if we are
    showing all the instances.
+ * That InstanceUtils.asString properly takes into account "offset" and
+   "count" fields, if they are present.
 
 Reported Issues:
  * Request to be able to sort tables by size.

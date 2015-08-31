@@ -83,7 +83,24 @@ class InstanceUtils {
       return null;
     }
     char[] value = getCharArrayField(inst, "value");
-    return (value == null) ? null : new String(value);
+    if (value == null) {
+      return null;
+    }
+
+    int offset = 0;
+    int count = value.length;
+
+    Integer offsetField = getIntField(inst, "offset");
+    if (offsetField != null) {
+      offset = offsetField;
+    }
+
+    Integer countField = getIntField(inst, "count");
+    if (countField != null) {
+      count = countField;
+    }
+
+    return (value == null) ? null : new String(value, offset, count);
   }
 
   /**
