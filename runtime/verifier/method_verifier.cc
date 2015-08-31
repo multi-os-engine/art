@@ -196,7 +196,8 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
   }
   size_t error_count = 0;
   bool hard_fail = false;
-  ClassLinker* linker = Runtime::Current()->GetClassLinker();
+  Runtime* runtime = Runtime::Current();
+  ClassLinker* linker = runtime->GetClassLinker();
   int64_t previous_direct_method_idx = -1;
   while (it.HasNextDirectMethod()) {
     self->AllowThreadSuspension();
@@ -628,7 +629,9 @@ bool MethodVerifier::Verify() {
       }
       if ((class_def_->GetJavaAccessFlags() & kAccInterface) != 0) {
         // Interface methods must be public and abstract.
-        if ((method_access_flags_ & (kAccPublic | kAccAbstract)) != (kAccPublic | kAccAbstract)) {
+        uint32_t kRequired = kAccPublic |
+            (runtime->AreExperimentalDefaultMethodsEnabled() ? 0 : kAccAbstract);
+        if ((method_access_flags_ & kRequired) != kRequired) {
           Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "interface methods must be public and abstract";
           return false;
         }
@@ -659,7 +662,7 @@ bool MethodVerifier::Verify() {
     // Only the static initializer may have code in an interface.
     if ((class_def_->GetJavaAccessFlags() & kAccInterface) != 0) {
       // Interfaces may have static initializers for their fields.
-      if (!IsConstructor() || !IsStatic()) {
+      if (!runtime->AreExperimentalDefaultMethodsEnabled() && (!IsConstructor() || !IsStatic())) {
         Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "interface methods must be abstract";
         return false;
       }
@@ -681,6 +684,7 @@ bool MethodVerifier::Verify() {
                                       << " regs=" << code_item_->registers_size_;
     return false;
   }
+
   // Allocate and initialize an array to hold instruction data.
   insn_flags_.reset(new InstructionFlags[code_item_->insns_size_in_code_units_]());
   // Run through the instructions and see if the width checks out.
@@ -692,8 +696,8 @@ bool MethodVerifier::Verify() {
   // Perform code-flow analysis and return.
   result = result && VerifyCodeFlow();
   // Compute information for compiler.
-  if (result && Runtime::Current()->IsCompiler()) {
-    result = Runtime::Current()->GetCompilerCallbacks()->MethodVerified(this);
+  if (result && runtime->IsCompiler()) {
+    result = runtime->GetCompilerCallbacks()->MethodVerified(this);
   }
   return result;
 }

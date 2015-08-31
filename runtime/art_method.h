@@ -133,6 +133,10 @@ class ArtMethod FINAL {
     return (GetAccessFlags() & kAccMiranda) != 0;
   }
 
+  bool IsDefault() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return (GetAccessFlags() & kAccDefault) != 0;
+  }
+
   bool IsNative() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccNative) != 0;
   }
@@ -157,7 +161,7 @@ class ArtMethod FINAL {
   }
 
   void SetPreverified() SHARED_REQUIRES(Locks::mutator_lock_) {
-    DCHECK(!IsPreverified());
+    DCHECK(!IsPreverified()) << PrettyMethod(this);
     SetAccessFlags(GetAccessFlags() | kAccPreverified);
   }
 
@@ -169,6 +173,10 @@ class ArtMethod FINAL {
         && GetEntryPointFromQuickCompiledCodePtrSize(pointer_size) != nullptr
         && GetQuickOatCodePointer(pointer_size) != nullptr
         && GetNativeGcMap(pointer_size) == nullptr;
+  }
+
+  bool IsOverridableByDefaultMethod() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return IsDefault() || IsAbstract();
   }
 
   bool CheckIncompatibleClassChange(InvokeType type) SHARED_REQUIRES(Locks::mutator_lock_);
