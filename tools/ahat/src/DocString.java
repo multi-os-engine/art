@@ -62,7 +62,7 @@ class DocString {
    * Returns this object.
    */
   public DocString append(String format, Object... args) {
-    String text = String.format(format, args);
+    String text = (args.length > 0) ? String.format(format, args) : format;
     mStringBuilder.append(HtmlEscapers.htmlEscaper().escape(text));
     return this;
   }
@@ -104,7 +104,7 @@ class DocString {
    * known to be valid. Format arguments are supported.
    */
   public static URI uri(String format, Object... args) {
-    String uriString = String.format(format, args);
+    String uriString = (args.length > 0) ? String.format(format, args) : format;
     try {
       return new URI(uriString);
     } catch (URISyntaxException e) {
