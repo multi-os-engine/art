@@ -211,7 +211,7 @@ inline bool ArtMethod::CheckIncompatibleClassChange(InvokeType type) {
       return !IsDirect() || IsStatic();
     case kVirtual: {
       mirror::Class* methods_class = GetDeclaringClass();
-      return IsDirect() || (methods_class->IsInterface() && !IsMiranda());
+      return IsDirect() || (methods_class->IsInterface() && !IsDefault() && !IsMiranda());
     }
     case kSuper:
       // Constructors and static methods are called with invoke-direct.

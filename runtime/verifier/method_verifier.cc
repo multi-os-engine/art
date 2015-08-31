@@ -628,7 +628,9 @@ bool MethodVerifier::Verify() {
       }
       if ((class_def_->GetJavaAccessFlags() & kAccInterface) != 0) {
         // Interface methods must be public and abstract.
-        if ((method_access_flags_ & (kAccPublic | kAccAbstract)) != (kAccPublic | kAccAbstract)) {
+        uint32_t kRequired = kAccPublic |
+            (Runtime::Current()->AreExperimentalDefaultMethodsEnabled() ? 0 : kAccAbstract);
+        if ((method_access_flags_ & kRequired) != kRequired) {
           Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "interface methods must be public and abstract";
           return false;
         }
@@ -659,7 +661,8 @@ bool MethodVerifier::Verify() {
     // Only the static initializer may have code in an interface.
     if ((class_def_->GetJavaAccessFlags() & kAccInterface) != 0) {
       // Interfaces may have static initializers for their fields.
-      if (!IsConstructor() || !IsStatic()) {
+      if (!Runtime::Current()->AreExperimentalDefaultMethodsEnabled() &&
+          (!IsConstructor() || !IsStatic())) {
         Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "interface methods must be abstract";
         return false;
       }
@@ -679,6 +682,15 @@ bool MethodVerifier::Verify() {
   if (code_item_->ins_size_ > code_item_->registers_size_) {
     Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "bad register counts (ins=" << code_item_->ins_size_
                                       << " regs=" << code_item_->registers_size_;
+    return false;
+  }
+  // Sanity check that interface methods have no implementation.
+  // TODO Remove once fully supported.
+  // TODO Better message.
+  if (class_def_->GetJavaAccessFlags() & kAccInterface
+      && !(method_access_flags_ & (kAccAbstract | kAccStatic))
+      && !Runtime::Current()->AreExperimentalDefaultMethodsEnabled()) {
+    Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "non-abstract interface method found";
     return false;
   }
   // Allocate and initialize an array to hold instruction data.
