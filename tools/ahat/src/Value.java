@@ -25,6 +25,10 @@ import java.net.URI;
  */
 class Value {
 
+  // For string literals, we limit the number of characters we show to
+  // kMaxCharsOfStringLiteralToShow in case the string is really long.
+  private static int kMaxCharsOfStringLiteralToShow = 200;
+
   /**
    * Create a DocString representing a summary of the given instance.
    */
@@ -45,13 +49,13 @@ class Value {
     // Annotate Strings with their values.
     String stringValue = InstanceUtils.asString(inst);
     if (stringValue != null) {
-      link.append("\"%s\"", stringValue);
+      link.append(" \"%s", initialCharsOf(stringValue, "\"", "..."));
     }
 
     // Annotate DexCache with its location.
     String dexCacheLocation = InstanceUtils.getDexCacheLocation(inst);
     if (dexCacheLocation != null) {
-      link.append(" for " + dexCacheLocation);
+      link.append(" for %s", initialCharsOf(dexCacheLocation, "", "..."));
     }
 
     URI objTarget = DocString.uri("object?id=%d", inst.getId());
@@ -76,5 +80,18 @@ class Value {
     } else {
       return DocString.text("%s", val);
     }
+  }
+
+  // Return at most the first kMaxCharsOfStringLiteralToShow characters of the
+  // given string.  suffixIfComplete is appended if all the characters are
+  // shown.  suffixIfTruncated is appended if not all of the characters are
+  // shown.
+  private static String initialCharsOf(String str,
+      String suffixIfComplete, String suffixIfTruncated) {
+    if (str.length() > kMaxCharsOfStringLiteralToShow) {
+      String truncated = str.substring(0, kMaxCharsOfStringLiteralToShow);
+      return String.format("%s%s", truncated, suffixIfTruncated);
+    }
+    return String.format("%s%s", str, suffixIfComplete);
   }
 }

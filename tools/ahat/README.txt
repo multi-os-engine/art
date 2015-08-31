@@ -29,8 +29,6 @@ TODO:
    - Use consistent order for heap columns.
       Sometimes I see "app" first, sometimes last (from one heap dump to
       another) How about, always sort by name?
- * For long strings, limit the string length shown in the summary view to
-   something reasonable.  Say 50 chars, then add a "..." at the end.
  * For string summaries, if the string is an offset into a bigger byte array,
    make sure to show just the part that's in the bigger byte array, not the
    entire byte array.
