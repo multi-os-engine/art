@@ -718,11 +718,18 @@ void Class::SetPreverifiedFlagOnAllMethods(size_t pointer_size) {
   DCHECK(IsVerified());
   for (auto& m : GetDirectMethods(pointer_size)) {
     if (!m.IsNative() && !m.IsAbstract()) {
+      LOG(INFO) << "Preverifying direct method (" << (uintptr_t)&m << ") " << PrettyMethod(&m)
+                << " for class " << PrettyClass(this);
       m.SetPreverified();
     }
   }
+  // if (IsInterface()) {
+  //   return;
+  // }
   for (auto& m : GetVirtualMethods(pointer_size)) {
-    if (!m.IsNative() && !m.IsAbstract()) {
+    if (!m.IsNative() && !m.IsAbstract() && (IsInterface() || !m.IsDefault())) {
+      LOG(INFO) << "Preverifying virtual method (" << (uintptr_t)&m << ") " << PrettyMethod(&m)
+                << " for class " << PrettyClass(this);
       m.SetPreverified();
     }
   }

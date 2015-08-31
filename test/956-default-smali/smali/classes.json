@@ -1,0 +1,54 @@
+{
+    "classes": {
+        "A":{
+            "name": "A",
+            "super": "java/lang/Object",
+            "methods": [],
+            "implements": ["Greeter"]
+        },
+        "B":{
+            "name": "B",
+            "super": "java/lang/Object",
+            "methods": [],
+            "implements": ["Greeter2"]
+        },
+        "C":{
+            "name": "C",
+            "super": "A",
+            "methods": [],
+            "implements": []
+        },
+        "D":{
+            "name": "D",
+            "super": "java/lang/Object",
+            "methods": [],
+            "implements": ["Greeter3"]
+        },
+        "E":{
+            "name": "E",
+            "super": "A",
+            "methods": [],
+            "implements": ["Greeter2"]
+        }
+    },
+    "interfaces": {
+        "Greeter":{
+            "name":"Greeter",
+            "super": "java/lang/Object",
+            "methods": ["SayHi", "SayHiTwice"],
+            "implements": []
+        },
+        "Greeter2":{
+            "name":"Greeter2",
+            "super": "java/lang/Object",
+            "methods": [],
+            "implements": ["Greeter"]
+        },
+        "Greeter3":{
+            "name":"Greeter3",
+            "super": "java/lang/Object",
+            "methods": ["GetName"],
+            "implements": ["Greeter"]
+        }
+    }
+}
