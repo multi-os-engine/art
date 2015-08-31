@@ -111,7 +111,7 @@ inline mirror::Class* ClassLinker::ResolveType(uint16_t type_idx, ArtField* refe
 inline ArtMethod* ClassLinker::GetResolvedMethod(uint32_t method_idx, ArtMethod* referrer) {
   ArtMethod* resolved_method = referrer->GetDexCacheResolvedMethod(
       method_idx, image_pointer_size_);
-  if (resolved_method == nullptr || resolved_method->IsRuntimeMethod()) {
+  if (resolved_method == nullptr || resolved_method->IsDefault() || resolved_method->IsRuntimeMethod()) {
     return nullptr;
   }
   return resolved_method;
