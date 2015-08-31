@@ -269,10 +269,10 @@ std::unique_ptr<RuntimeParser> ParsedOptions::MakeParser(bool ignore_unrecognize
       .Define("-Xfingerprint:_")
           .WithType<std::string>()
           .IntoKey(M::Fingerprint)
-      .Define({"-Xexperimental-lambdas", "-Xnoexperimental-lambdas"})
-          .WithType<bool>()
-          .WithValues({true, false})
-          .IntoKey(M::ExperimentalLambdas)
+      .Define("-Xexperimental:_")
+          .WithType<ExperimentalFlags>()
+          .AppendValues()
+          .IntoKey(M::Experimental)
       .Ignore({
           "-ea", "-da", "-enableassertions", "-disableassertions", "--runtime-arg", "-esa",
           "-dsa", "-enablesystemassertions", "-disablesystemassertions", "-Xrs", "-Xint:_",
@@ -557,7 +557,14 @@ bool ParsedOptions::Parse(const RuntimeOptions& options, bool ignore_unrecognize
     args.Set(M::HeapGrowthLimit, args.GetOrDefault(M::MemoryMaximumSize));
   }
 
-  if (args.GetOrDefault(M::ExperimentalLambdas)) {
+  if (args.GetOrDefault(M::Experimental) & ExperimentalFlags::kDefaultMethods) {
+    LOG(WARNING) << "Default method support has been enabled. The verifier will be less strict "
+                 << "in some cases. All existing invoke opcodes have an unstable updated "
+                 << "specification and are nearly guaranteed to change over time. Do not attempt "
+                 << "to write shipping code against the invoke opcodes with this flag.";
+  }
+
+  if (args.GetOrDefault(M::Experimental) & ExperimentalFlags::kLambdas) {
     LOG(WARNING) << "Experimental lambdas have been enabled. All lambda opcodes have "
                  << "an unstable specification and are nearly guaranteed to change over time. "
                  << "Do not attempt to write shipping code against these opcodes.";
