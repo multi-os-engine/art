@@ -600,6 +600,10 @@ class ClassLinker {
   bool LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  bool LinkDefaultInterfaceMethods(Thread* self, Handle<mirror::Class> klass,
+                                   Handle<mirror::ObjectArray<mirror::Class>> interfaces,
+                                   ArtMethod** out_imt)
+      SHARED_REQUIRES(Locks::mutator_lock_);
   bool LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass,
                             Handle<mirror::ObjectArray<mirror::Class>> interfaces,
                             ArtMethod** out_imt)

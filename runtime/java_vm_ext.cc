@@ -810,6 +810,8 @@ extern "C" jint JNI_CreateJavaVM(JavaVM** p_vm, JNIEnv** p_env, void* vm_args) {
     JavaVMOption* option = &args->options[i];
     options.push_back(std::make_pair(std::string(option->optionString), option->extraInfo));
   }
+  // options.push_back(std::make_pair(std::string("-verbose:startup"), nullptr));
+  // options.push_back(std::make_pair(std::string("-verbose:class"), nullptr));
   bool ignore_unrecognized = args->ignoreUnrecognized;
   if (!Runtime::Create(options, ignore_unrecognized)) {
     ATRACE_END();

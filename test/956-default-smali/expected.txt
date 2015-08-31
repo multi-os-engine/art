@@ -1,0 +1,5 @@
+A: SayHi()='Hi ', SayHiTwice()='Hi Hi '
+B: SayHi()='Hello ', SayHiTwice()='I say Hello Hello '
+C: SayHi()='Hi ', SayHiTwice()='You don't control me'
+D: SayHi()='Hello Alex ', SayHiTwice()='Hello Alex Hello Alex '
+E: SayHi()='Hi2 ', SayHiTwice()='Hi2 Hi2 '
