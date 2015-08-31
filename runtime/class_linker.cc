@@ -16,8 +16,10 @@
 
 #include "class_linker.h"
 
+#include <algorithm>
 #include <deque>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <queue>
 #include <string>
@@ -4609,20 +4611,11 @@ bool ClassLinker::LinkMethods(Thread* self,
                               Handle<mirror::ObjectArray<mirror::Class>> interfaces,
                               ArtMethod** out_imt) {
   self->AllowThreadSuspension();
-  if (klass->IsInterface()) {
-    // No vtable.
-    size_t count = klass->NumVirtualMethods();
-    if (!IsUint<16>(count)) {
-      ThrowClassFormatError(klass.Get(), "Too many methods on interface: %zd", count);
-      return false;
-    }
-    for (size_t i = 0; i < count; ++i) {
-      klass->GetVirtualMethodDuringLinking(i, image_pointer_size_)->SetMethodIndex(i);
-    }
-  } else if (!LinkVirtualMethods(self, klass)) {  // Link virtual methods first.
-    return false;
-  }
-  return LinkInterfaceMethods(self, klass, interfaces, out_imt);  // Link interface method last.
+  std::map<int32_t, ArtMethod*> default_translations;
+  // Link virtual methods then interface methods.
+  return SetupInterfaceLookupTable(self, klass, interfaces)
+          && LinkVirtualMethods(self, klass, &default_translations)
+          && LinkInterfaceMethods(self, klass, std::move(default_translations), out_imt);
 }
 
 // Comparator for name and signature of a method, used in finding overriding methods. Implementation
@@ -4746,9 +4739,26 @@ class LinkVirtualHashTable {
 const uint32_t LinkVirtualHashTable::invalid_index_ = std::numeric_limits<uint32_t>::max();
 const uint32_t LinkVirtualHashTable::removed_index_ = std::numeric_limits<uint32_t>::max() - 1;
 
-bool ClassLinker::LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass) {
+bool ClassLinker::LinkVirtualMethods(Thread* self,
+                                     Handle<mirror::Class> klass,
+                                     std::map<int32_t, ArtMethod*>* default_translations) {
   const size_t num_virtual_methods = klass->NumVirtualMethods();
-  if (klass->HasSuperClass()) {
+  if (klass->IsInterface()) {
+    // No vtable.
+    if (!IsUint<16>(num_virtual_methods)) {
+      ThrowClassFormatError(klass.Get(), "Too many methods on interface: %zd", num_virtual_methods);
+      return false;
+    }
+    // TODO May need to replace this with real VTable for invoke_super
+    for (size_t i = 0; i < num_virtual_methods; ++i) {
+      ArtMethod* m = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
+      m->SetMethodIndex(i);
+      if (!m->IsAbstract()) {
+        m->SetAccessFlags(m->GetAccessFlags() | kAccDefault);
+      }
+    }
+    return true;
+  } else if (klass->HasSuperClass()) {
     const size_t super_vtable_length = klass->GetSuperClass()->GetVTableLength();
     const size_t max_count = num_virtual_methods + super_vtable_length;
     StackHandleScope<2> hs(self);
@@ -4764,14 +4774,14 @@ bool ClassLinker::LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass) 
         vtable->SetElementPtrSize(
             i, super_class->GetEmbeddedVTableEntry(i, image_pointer_size_), image_pointer_size_);
       }
-      if (num_virtual_methods == 0) {
+      if (num_virtual_methods == 0 && super_class->GetIfTableCount() == klass->GetIfTableCount()) {
         klass->SetVTable(vtable.Get());
         return true;
       }
     } else {
       auto* super_vtable = super_class->GetVTable();
       CHECK(super_vtable != nullptr) << PrettyClass(super_class.Get());
-      if (num_virtual_methods == 0) {
+      if (num_virtual_methods == 0 && super_class->GetIfTableCount() == klass->GetIfTableCount()) {
         klass->SetVTable(super_vtable);
         return true;
       }
@@ -4792,7 +4802,7 @@ bool ClassLinker::LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass) 
     // the need for the initial vtable which we later shrink back down).
     // 3. Add non overridden methods to the end of the vtable.
     static constexpr size_t kMaxStackHash = 250;
-    const size_t hash_table_size = num_virtual_methods * 3;
+    const size_t hash_table_size = num_virtual_methods * 3 + 1;
     uint32_t* hash_table_ptr;
     std::unique_ptr<uint32_t[]> hash_heap_storage;
     if (hash_table_size <= kMaxStackHash) {
@@ -4809,10 +4819,10 @@ bool ClassLinker::LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass) 
           i, image_pointer_size_)->GetDeclaringClass() != nullptr);
       hash_table.Add(i);
     }
-    // Loop through each super vtable method and see if they are overriden by a method we added to
+    // Loop through each super vtable method and see if they are overridden by a method we added to
     // the hash table.
     for (size_t j = 0; j < super_vtable_length; ++j) {
-      // Search the hash table to see if we are overidden by any method.
+      // Search the hash table to see if we are overridden by any method.
       ArtMethod* super_method = vtable->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_);
       MethodNameAndSignatureComparator super_method_name_comparator(
           super_method->GetInterfaceMethodIfProxy(image_pointer_size_));
@@ -4835,10 +4845,42 @@ bool ClassLinker::LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass) 
                        << " would have incorrectly overridden the package-private method in "
                        << PrettyDescriptor(super_method->GetDeclaringClassDescriptor());
         }
+      } else if (super_method->IsDefault()) {
+        // We didn't directly override this method but we might through default methods...
+        // Check for default method update.
+        ArtMethod* default_method = nullptr;
+        std::string icce_message;
+        if (!FindDefaultMethodImplementation(self, super_method, klass, &default_method,
+                                             &icce_message)) {
+          // An error occurred while finding default methods.
+          ThrowIncompatibleClassChangeError(klass.Get(), "%s", icce_message.c_str());
+          return false;
+        }
+        // This should always work because we inherit superclass interfaces. We should either get
+        //  1) An IncompatibleClassChangeError because of conflicting default method
+        //     implementations.
+        //  2) The same default method implementation as the superclass.
+        //  3) A default method that overrides the superclasses.
+        // Therefore this check should never fail.
+        CHECK(default_method != nullptr);
+        if (UNLIKELY(default_method->GetDeclaringClass() != super_method->GetDeclaringClass())) {
+          // TODO Refactor this add default methods to virtuals here and not in //
+          //      LinkInterfaceMethods maybe.
+          // Make a note that vtable entry j must be updated, store what it needs to be updated to.
+          // We will allocate a virtual method slot in LinkInterfaceMethods and fix it up then.
+          default_translations->insert({j, default_method});
+          VLOG(class_linker) << "Method " << PrettyMethod(super_method) << " overridden by default "
+                             << PrettyMethod(default_method) << " in " << PrettyClass(klass.Get());
+        } else {
+          // They are the same method/no override
+          // Cannot do direct comparison because we had to copy the ArtMethod object into the
+          // superclasses vtable.
+          continue;
+        }
       }
     }
-    // Add the non overridden methods at the end.
     size_t actual_count = super_vtable_length;
+    // Add the non overridden methods at the end.
     for (size_t i = 0; i < num_virtual_methods; ++i) {
       ArtMethod* local_method = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
       size_t method_idx = local_method->GetMethodIndexDuringLinking();
@@ -4886,20 +4928,186 @@ bool ClassLinker::LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass) 
   return true;
 }
 
-bool ClassLinker::LinkInterfaceMethods(Thread* self,
-                                       Handle<mirror::Class> klass,
-                                       Handle<mirror::ObjectArray<mirror::Class>> interfaces,
-                                       ArtMethod** out_imt) {
-  StackHandleScope<3> hs(self);
-  Runtime* const runtime = Runtime::Current();
-  const bool has_superclass = klass->HasSuperClass();
-  const size_t super_ifcount = has_superclass ? klass->GetSuperClass()->GetIfTableCount() : 0U;
+// Find the default method implementation for 'interface_method' in 'klass'. Stores it into
+// out_default_method and returns true on success. If no default method was found stores nullptr
+// into out_default_method and returns true. If an error occurs (such as a default_method conflict)
+// it will fill the icce_message with an appropriate message for an IncompatibleClassChangeError,
+// which should then be thrown by the caller.
+bool ClassLinker::FindDefaultMethodImplementation(Thread* self,
+                                                  ArtMethod* interface_method,
+                                                  Handle<mirror::Class> klass,
+                                                  ArtMethod** out_default_method,
+                                                  std::string* icce_message) {
+  *out_default_method = nullptr;
+  mirror::Class* chosen_iface = nullptr;
+
+  // We organize the interface table so that, for interface I any subinterfaces J follow it in the
+  // table. This lets us walk the table backwards when searching for default methods.  The first one
+  // we encounter is the best candidate since it is the most specific. Once we have found it we keep
+  // track of it and then continue checking all other interfaces, since we need to throw an error if
+  // we encounter conflicting default method implementations (one is not a subtype of the other).
+  size_t ifcount = klass->GetIfTableCount();
+  StackHandleScope<1> hs(self);
+  MutableHandle<mirror::IfTable> iftable(hs.NewHandle(klass->GetIfTable()));
+  MethodNameAndSignatureComparator interface_name_comparator(
+      interface_method->GetInterfaceMethodIfProxy(image_pointer_size_));
+  for (int32_t k = ifcount - 1; k >= 0; k--) {
+    mirror::Class* iface = iftable->GetInterface(k);
+    size_t num_iface_methods = iface->NumVirtualMethods();
+    for (size_t m = 0; m < num_iface_methods; m++) {
+      ArtMethod* current_method = iface->GetVirtualMethod(m, image_pointer_size_);
+      if (!current_method->IsAbstract() &&
+          interface_name_comparator.HasSameNameAndSignature(
+              current_method->GetInterfaceMethodIfProxy(image_pointer_size_))) {
+        CHECK(current_method->IsPublic()) << "Interface method '" << PrettyMethod(current_method)
+                                          << "' is not public!";
+        if (UNLIKELY(*out_default_method != nullptr)) {
+          // We have multiple default impls of the same method. We need to check they do not
+          // conflict and throw an error if they do. Conflicting means that the current iface is not
+          // masked by the chosen interface.
+          if (!iface->IsAssignableFrom(chosen_iface)) {
+            *icce_message = StringPrintf(
+                "Conflicting default method implementations: '%s' and '%s'",
+                PrettyMethod(current_method).c_str(),
+                PrettyMethod(*out_default_method).c_str());
+            return false;
+          } else {
+            break;  // Continue checking at the next interface.
+          }
+        } else {
+          *out_default_method = current_method;
+          chosen_iface = iface;
+          // We should now finish traversing the graph to find if we have default methods that
+          // conflict.
+          break;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+// Sets imt_ref appropriately for LinkInterfaceMethods.
+static void SetIMTRef(ArtMethod* unimplemented_method,
+                      ArtMethod* conflict_method,
+                      size_t image_pointer_size,
+                      ArtMethod* current_method,
+                      ArtMethod** imt_ref)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  // Place method in imt if entry is empty, place conflict otherwise.
+  if (*imt_ref == unimplemented_method) {
+    *imt_ref = current_method;
+  } else if (*imt_ref != conflict_method) {
+    // If we are not a conflict and we have the same signature and name as the imt
+    // entry, it must be that we overwrote a superclass vtable entry.
+    MethodNameAndSignatureComparator imt_comparator(
+        (*imt_ref)->GetInterfaceMethodIfProxy(image_pointer_size));
+    if (imt_comparator.HasSameNameAndSignature(
+          current_method->GetInterfaceMethodIfProxy(image_pointer_size))) {
+      *imt_ref = current_method;
+    } else {
+      *imt_ref = conflict_method;
+    }
+  }
+}
+
+// Simple helper function that checks that no subtypes of val are contained within the 'seen' set.
+static bool NotSubinterfaceOfAny(const std::unordered_set<mirror::Class*>& seen,
+                                 mirror::Class* val)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  for (auto c : seen) {
+    if (val->IsAssignableFrom(&*c)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Fills in and flattens the interface inheritance hierarchy.
+//
+// By the end of this function all interfaces in the transitive closure of to_process are added to
+// the iftable and every interface precedes all of its sub-interfaces in this list.
+//
+// all I, J: Interface | I <: J implies J precedes I
+//
+// This returns the total number of items in the iftable. The iftable might be resized down after
+// this call.
+//
+// We order this backwards so that we do not need to reorder superclass interfaces when new
+// interfaces are added in subclasses interface tables.
+//
+// iftable is a copy of the superclasses iftable with the first super_ifcount entries filled in with
+// the transitive closure of the interfaces of the superclass. The other entries are uninitialized.
+// We will fill in the remaining entries in this function. The iftable must be large enough to hold
+// all interfaces without changing its size.
+static size_t FillIfTable(mirror::IfTable* iftable,
+                          size_t super_ifcount,
+                          std::vector<mirror::Class*> to_process)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  std::unordered_set<mirror::Class*> seen;
+  // The first super_ifcount elements are from the superclass. We note that they are already added.
+  for (size_t i = 0; i < super_ifcount; i++) {
+    seen.insert(iftable->GetInterface(i));
+  }
+  size_t idx = super_ifcount;
+  for (auto interface_iter : to_process) {
+    // Let us call the first idx elements of iftable the current-iface-list
+    // at this point in the loop current-iface-list has the invariant that:
+    //    for every pair of interfaces I,J within it:
+    //      if index_of(I) < index_of(J) then I is not a subtype of J
+    mirror::Class* interface = &*interface_iter;
+
+    // If we have already seen this element then all of its super-interfaces must already be in the
+    // current-iface-list so we can skip adding it.
+    if (seen.find(interface) == seen.end()) {
+      // We haven't seen this interface so add all of its super-interfaces onto the
+      // current-iface-list, skipping those already on it.
+      int32_t ifcount = interface->GetIfTableCount();
+      for (int32_t j = 0; j < ifcount; j++) {
+        mirror::Class* super_interface = interface->GetIfTable()->GetInterface(j);
+        if (seen.find(super_interface) == seen.end()) {
+          DCHECK(NotSubinterfaceOfAny(seen, super_interface))
+              << "We already saw a subtype of " << PrettyClass(super_interface)
+              << " so we should have already added it!";
+          seen.insert(super_interface);
+          iftable->SetInterface(idx, super_interface);
+          idx++;
+        }
+      }
+      DCHECK(NotSubinterfaceOfAny(seen, interface))
+          << "We already saw a subtype of " << PrettyClass(interface)
+          << " so we should have already added it!";
+      // Place this interface onto the current-iface-list after all of its super-interfaces.
+      seen.insert(interface);
+      iftable->SetInterface(idx, interface);
+      idx++;
+    }
+  }
+  if (kIsDebugBuild) {
+    // Check that the iftable is ordered correctly.
+    for (size_t i = 0; i < idx; i++) {
+      mirror::Class* if_a = iftable->GetInterface(i);
+      for (size_t j = i + 1; j < idx; j++) {
+        mirror::Class* if_b = iftable->GetInterface(j);
+        // !(if_a <: if_b)
+        CHECK(!if_b->IsAssignableFrom(if_a))
+            << "Bad interface order: " << PrettyClass(if_a) << " (index " << i << ") extends "
+            << PrettyClass(if_b) << " (index " << j << ") and so should be after it in the "
+            << "interface list.";
+      }
+    }
+  }
+  return idx;
+}
+
+bool ClassLinker::SetupInterfaceLookupTable(Thread* self, Handle<mirror::Class> klass,
+                                            Handle<mirror::ObjectArray<mirror::Class>> interfaces) {
+  StackHandleScope<1> hs(self);
+  const size_t super_ifcount =
+      klass->HasSuperClass() ? klass->GetSuperClass()->GetIfTableCount() : 0U;
   const bool have_interfaces = interfaces.Get() != nullptr;
-  const size_t num_interfaces = have_interfaces
-      ? interfaces->GetLength()
-      : klass->NumDirectInterfaces();
-  const size_t method_alignment = ArtMethod::Alignment(image_pointer_size_);
-  const size_t method_size = ArtMethod::Size(image_pointer_size_);
+  const size_t num_interfaces =
+      have_interfaces ? interfaces->GetLength() : klass->NumDirectInterfaces();
   if (num_interfaces == 0) {
     if (super_ifcount == 0) {
       // Class implements no interfaces.
@@ -4923,6 +5131,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
     }
   }
   size_t ifcount = super_ifcount + num_interfaces;
+  // Check every interface for being an interface.
   for (size_t i = 0; i < num_interfaces; i++) {
     mirror::Class* interface = have_interfaces
         ? interfaces->GetWithoutChecks(i)
@@ -4938,11 +5147,13 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
     }
     ifcount += interface->GetIfTableCount();
   }
+  // Create the interface function table
   MutableHandle<mirror::IfTable> iftable(hs.NewHandle(AllocIfTable(self, ifcount)));
   if (UNLIKELY(iftable.Get() == nullptr)) {
     self->AssertPendingOOMException();
     return false;
   }
+  // Fill in table with super-classes iftable
   if (super_ifcount != 0) {
     mirror::IfTable* super_iftable = klass->GetSuperClass()->GetIfTable();
     for (size_t i = 0; i < super_ifcount; i++) {
@@ -4950,56 +5161,51 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
       iftable->SetInterface(i, super_interface);
     }
   }
+
   self->AllowThreadSuspension();
-  // Flatten the interface inheritance hierarchy.
-  size_t idx = super_ifcount;
+
+  std::vector<mirror::Class*> to_add;
   for (size_t i = 0; i < num_interfaces; i++) {
     mirror::Class* interface = have_interfaces ? interfaces->Get(i) :
         mirror::Class::GetDirectInterface(self, klass, i);
-    // Check if interface is already in iftable
-    bool duplicate = false;
-    for (size_t j = 0; j < idx; j++) {
-      mirror::Class* existing_interface = iftable->GetInterface(j);
-      if (existing_interface == interface) {
-        duplicate = true;
-        break;
-      }
-    }
-    if (!duplicate) {
-      // Add this non-duplicate interface.
-      iftable->SetInterface(idx++, interface);
-      // Add this interface's non-duplicate super-interfaces.
-      for (int32_t j = 0; j < interface->GetIfTableCount(); j++) {
-        mirror::Class* super_interface = interface->GetIfTable()->GetInterface(j);
-        bool super_duplicate = false;
-        for (size_t k = 0; k < idx; k++) {
-          mirror::Class* existing_interface = iftable->GetInterface(k);
-          if (existing_interface == super_interface) {
-            super_duplicate = true;
-            break;
-          }
-        }
-        if (!super_duplicate) {
-          iftable->SetInterface(idx++, super_interface);
-        }
-      }
-    }
+    to_add.push_back(interface);
   }
+
+  size_t new_ifcount = FillIfTable(iftable.Get(), super_ifcount, std::move(to_add));
+
   self->AllowThreadSuspension();
+
   // Shrink iftable in case duplicates were found
-  if (idx < ifcount) {
+  if (new_ifcount < ifcount) {
     DCHECK_NE(num_interfaces, 0U);
     iftable.Assign(down_cast<mirror::IfTable*>(
-        iftable->CopyOf(self, idx * mirror::IfTable::kMax)));
+        iftable->CopyOf(self, new_ifcount * mirror::IfTable::kMax)));
     if (UNLIKELY(iftable.Get() == nullptr)) {
       self->AssertPendingOOMException();
       return false;
     }
-    ifcount = idx;
+    ifcount = new_ifcount;
   } else {
-    DCHECK_EQ(idx, ifcount);
+    DCHECK_EQ(new_ifcount, ifcount);
   }
   klass->SetIfTable(iftable.Get());
+  return true;
+}
+
+bool ClassLinker::LinkInterfaceMethods(Thread* self,
+                                       Handle<mirror::Class> klass,
+                                       std::map<int32_t, ArtMethod*> default_translations,
+                                       ArtMethod** out_imt) {
+  StackHandleScope<3> hs(self);
+  Runtime* const runtime = Runtime::Current();
+  const bool has_superclass = klass->HasSuperClass();
+  const size_t super_ifcount = has_superclass ? klass->GetSuperClass()->GetIfTableCount() : 0U;
+  const size_t method_alignment = ArtMethod::Alignment(image_pointer_size_);
+  const size_t method_size = ArtMethod::Size(image_pointer_size_);
+  const size_t ifcount = klass->GetIfTableCount();
+
+  MutableHandle<mirror::IfTable> iftable(hs.NewHandle(klass->GetIfTable()));
+
   // If we're an interface, we don't need the vtable pointers, so we're done.
   if (klass->IsInterface()) {
     return true;
@@ -5012,6 +5218,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
   ArenaStack stack(runtime->GetLinearAlloc()->GetArenaPool());
   ScopedArenaAllocator allocator(&stack);
   ScopedArenaVector<ArtMethod*> miranda_methods(allocator.Adapter());
+  ScopedArenaVector<ArtMethod*> default_methods(allocator.Adapter());
 
   MutableHandle<mirror::PointerArray> vtable(hs.NewHandle(klass->GetVTableDuringLinking()));
   ArtMethod* const unimplemented_method = runtime->GetImtUnimplementedMethod();
@@ -5041,7 +5248,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
         for (size_t j = 0; j < num_virtuals; ++j) {
           auto method = method_array->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_);
           DCHECK(method != nullptr) << PrettyClass(super_class);
-          if (method->IsMiranda()) {
+          if (method->IsDefault() || method->IsMiranda()) {
             continue;
           }
           ArtMethod* interface_method = interface->GetVirtualMethod(j, image_pointer_size_);
@@ -5105,16 +5312,13 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
         input_vtable_array = vtable;
         input_array_length = input_vtable_array->GetLength();
       }
-      if (input_array_length == 0) {
-        // If the added virtual methods is empty, do nothing.
-        DCHECK(super_interface);
-        continue;
-      }
+      // For each method in interface
       for (size_t j = 0; j < num_methods; ++j) {
         auto* interface_method = iftable->GetInterface(i)->GetVirtualMethod(j, image_pointer_size_);
         MethodNameAndSignatureComparator interface_name_comparator(
             interface_method->GetInterfaceMethodIfProxy(image_pointer_size_));
-        int32_t k;
+        uint32_t imt_index = interface_method->GetDexMethodIndex() % mirror::Class::kImtSize;
+        auto** imt_ref = &out_imt[imt_index];
         // For each method listed in the interface's method list, find the
         // matching method in our class's method list.  We want to favor the
         // subclass over the superclass, which just requires walking
@@ -5123,7 +5327,10 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
         // it -- otherwise it would use the same vtable slot.  In .dex files
         // those don't end up in the virtual method table, so it shouldn't
         // matter which direction we go.  We walk it backward anyway.)
-        for (k = input_array_length - 1; k >= 0; --k) {
+        //
+        // To find defaults we need to do the same but also go over interfaces.
+        bool found_impl = false;
+        for (int32_t k = input_array_length - 1; k >= 0; --k) {
           ArtMethod* vtable_method = input_virtual_methods != nullptr ?
               &input_virtual_methods->At(k, method_size, method_alignment) :
               input_vtable_array->GetElementPtrSize<ArtMethod*>(k, image_pointer_size_);
@@ -5139,25 +5346,57 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
                   "Method '%s' implementing interface method '%s' is not public",
                   PrettyMethod(vtable_method).c_str(), PrettyMethod(interface_method).c_str());
               return false;
+            } else if (vtable_method->IsDefault()) {
+                // We might have a newer, better, default method for this, so we just skip it. The
+                // next step of scanning the interfaces will pick this up again if we are still
+                // using it.
+                break;
+            } else {
+              found_impl = true;
             }
             method_array->SetElementPtrSize(j, vtable_method, image_pointer_size_);
             // Place method in imt if entry is empty, place conflict otherwise.
-            uint32_t imt_index = interface_method->GetDexMethodIndex() % mirror::Class::kImtSize;
-            auto** imt_ref = &out_imt[imt_index];
-            if (*imt_ref == unimplemented_method) {
-              *imt_ref = vtable_method;
-            } else if (*imt_ref != conflict_method) {
-              // If we are not a conflict and we have the same signature and name as the imt entry,
-              // it must be that we overwrote a superclass vtable entry.
-              MethodNameAndSignatureComparator imt_comparator(
-                  (*imt_ref)->GetInterfaceMethodIfProxy(image_pointer_size_));
-              *imt_ref = imt_comparator.HasSameNameAndSignature(vtable_method_for_name_comparison) ?
-                  vtable_method : conflict_method;
-            }
+            SetIMTRef(unimplemented_method,
+                      conflict_method,
+                      image_pointer_size_,
+                      vtable_method,
+                      imt_ref);
             break;
           }
         }
-        if (k < 0 && !super_interface) {
+        // We should only search for default implementations when either (1) the interface is new,
+        // (2) the superclass's implementation is a default method, or (3) the superclass does not
+        // have an implementation.
+        if (!found_impl && (!super_interface ||
+                            method_array->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_)
+                                ->IsOverridableByDefaultMethod())) {
+          ArtMethod* current_method = nullptr;
+          std::string icce_message;
+          if (!FindDefaultMethodImplementation(self,
+                                               interface_method,
+                                               klass,
+                                               &current_method,
+                                               &icce_message)) {
+            // There was a conflict with default method implementations.
+            self->EndAssertNoThreadSuspension(old_cause);
+            ThrowIncompatibleClassChangeError(klass.Get(), "%s", icce_message.c_str());
+            return false;
+          }
+          if (current_method != nullptr) {
+            // We found a default method implementation and there were no conflicts.
+            // Save the default method. We need to add it to the vtable
+            default_methods.push_back(current_method);
+            method_array->SetElementPtrSize(j, current_method, image_pointer_size_);
+            SetIMTRef(unimplemented_method,
+                      conflict_method,
+                      image_pointer_size_,
+                      current_method,
+                      imt_ref);
+            found_impl = true;
+          }
+        }
+        if (!found_impl && !super_interface) {
+          // It is defined in this class or any of its subclasses
           ArtMethod* miranda_method = nullptr;
           for (auto& mir_method : miranda_methods) {
             if (interface_name_comparator.HasSameNameAndSignature(mir_method)) {
@@ -5166,6 +5405,8 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
             }
           }
           if (miranda_method == nullptr) {
+            VLOG(class_linker) << "No implementation found on class " << PrettyClass(klass.Get())
+                               << " for method " << PrettyMethod(interface_method);
             miranda_method = reinterpret_cast<ArtMethod*>(allocator.Alloc(method_size));
             CHECK(miranda_method != nullptr);
             // Point the interface table at a phantom slot.
@@ -5177,9 +5418,10 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
       }
     }
   }
-  if (!miranda_methods.empty()) {
+  if (!miranda_methods.empty() || !default_methods.empty()) {
     const size_t old_method_count = klass->NumVirtualMethods();
-    const size_t new_method_count = old_method_count + miranda_methods.size();
+    const size_t new_method_count =
+        old_method_count + miranda_methods.size() + default_methods.size();
     // Attempt to realloc to save RAM if possible.
     LengthPrefixedArray<ArtMethod>* old_virtuals = klass->GetVirtualMethodsPtr();
     // The Realloced virtual methods aren't visiblef from the class roots, so there is no issue
@@ -5214,13 +5456,22 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
         ++out;
       }
     }
-    StrideIterator<ArtMethod> out(virtuals->Begin(method_size, method_alignment) + old_method_count);
+    StrideIterator<ArtMethod> out(virtuals->Begin(method_size, method_alignment)
+                                  + old_method_count);
     // Copy over miranda methods before copying vtable since CopyOf may cause thread suspension and
     // we want the roots of the miranda methods to get visited.
     for (ArtMethod* mir_method : miranda_methods) {
       out->CopyFrom(mir_method, image_pointer_size_);
       out->SetAccessFlags(out->GetAccessFlags() | kAccMiranda);
+      DCHECK(out->GetAccessFlags() & kAccAbstract) << "Miranda method '" << PrettyMethod(&*out)
+                                                   << "' is not default!";
       move_table.emplace(mir_method, &*out);
+      ++out;
+    }
+    for (ArtMethod* def_method : default_methods) {
+      out->CopyFrom(def_method, image_pointer_size_);
+      out->SetAccessFlags(out->GetAccessFlags() | kAccDefault);
+      move_table.emplace(def_method, &*out);
       ++out;
     }
     virtuals->SetLength(new_method_count);
@@ -5230,7 +5481,8 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
     self->EndAssertNoThreadSuspension(old_cause);
 
     const size_t old_vtable_count = vtable->GetLength();
-    const size_t new_vtable_count = old_vtable_count + miranda_methods.size();
+    const size_t new_vtable_count =
+        old_vtable_count + miranda_methods.size() + default_methods.size();
     miranda_methods.clear();
     vtable.Assign(down_cast<mirror::PointerArray*>(vtable->CopyOf(self, new_vtable_count)));
     if (UNLIKELY(vtable.Get() == nullptr)) {
@@ -5250,12 +5502,20 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
     // Update old vtable methods.
     for (size_t i = 0; i < old_vtable_count; ++i) {
       auto* m = vtable->GetElementPtrSize<ArtMethod*>(i, image_pointer_size_);
+      auto translation = default_translations.find(i);
+      bool found_translation = false;
+      if (translation != default_translations.end()) {
+        m = translation->second;
+        found_translation = true;
+      }
       DCHECK(m != nullptr) << PrettyClass(klass.Get());
       auto it = move_table.find(m);
       if (it != move_table.end()) {
         auto* new_m = it->second;
         DCHECK(new_m != nullptr) << PrettyClass(klass.Get());
         vtable->SetElementPtrSize(i, new_m, image_pointer_size_);
+      } else {
+        CHECK(!found_translation) << "We were asked to update this vtable entry. Should not fail.";
       }
     }
 
@@ -5286,7 +5546,9 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
       auto* resolved_methods = klass->GetDexCache()->GetResolvedMethods();
       for (size_t i = 0, count = klass->GetDexCache()->NumResolvedMethods(); i < count; ++i) {
         auto* m = mirror::DexCache::GetElementPtrSize(resolved_methods, i, image_pointer_size_);
-        CHECK(move_table.find(m) == move_table.end()) << PrettyMethod(m);
+        if (!m->IsDefault()) {
+          CHECK(move_table.find(m) == move_table.end()) << PrettyMethod(m);
+        }
       }
     }
     // Put some random garbage in old virtuals to help find stale pointers.

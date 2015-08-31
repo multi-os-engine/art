@@ -28,6 +28,7 @@
 
 #include "arch/instruction_set.h"
 #include "base/macros.h"
+#include "experimental.h"
 #include "gc_root.h"
 #include "instrumentation.h"
 #include "jobject_comparator.h"
@@ -531,8 +532,12 @@ class Runtime {
     return zygote_max_failed_boots_;
   }
 
+  bool AreExperimentalDefaultMethodsEnabled() const {
+    return experimental_flags_ & ExperimentalFlags::kDefaultMethods;
+  }
+
   bool AreExperimentalLambdasEnabled() const {
-    return experimental_lambdas_;
+    return experimental_flags_ & ExperimentalFlags::kLambdas;
   }
 
   lambda::BoxTable* GetLambdaBoxTable() const {
@@ -763,7 +768,7 @@ class Runtime {
   // eventually publish them as public-usable opcodes, but they aren't ready yet.
   //
   // Experimental opcodes should not be used by other production code.
-  bool experimental_lambdas_;
+  ExperimentalFlags experimental_flags_;
 
   MethodRefToStringInitRegMap method_ref_string_init_reg_map_;
 

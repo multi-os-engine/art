@@ -722,7 +722,7 @@ void Class::SetPreverifiedFlagOnAllMethods(size_t pointer_size) {
     }
   }
   for (auto& m : GetVirtualMethods(pointer_size)) {
-    if (!m.IsNative() && !m.IsAbstract()) {
+    if (!m.IsNative() && !m.IsAbstract() && (IsInterface() || !m.IsDefault())) {
       m.SetPreverified();
     }
   }
