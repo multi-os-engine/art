@@ -133,6 +133,11 @@ class ArtMethod FINAL {
     return (GetAccessFlags() & kAccMiranda) != 0;
   }
 
+  // This is set by the class linker.
+  bool IsDefault() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return (GetAccessFlags() & kAccDefault) != 0;
+  }
+
   bool IsNative() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccNative) != 0;
   }
@@ -169,6 +174,11 @@ class ArtMethod FINAL {
         && GetEntryPointFromQuickCompiledCodePtrSize(pointer_size) != nullptr
         && GetQuickOatCodePointer(pointer_size) != nullptr
         && GetNativeGcMap(pointer_size) == nullptr;
+  }
+
+  // Returns true if this method could be overridden by a default method.
+  bool IsOverridableByDefaultMethod() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return IsDefault() || IsAbstract();
   }
 
   bool CheckIncompatibleClassChange(InvokeType type) SHARED_REQUIRES(Locks::mutator_lock_);
