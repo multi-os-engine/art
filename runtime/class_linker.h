@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_CLASS_LINKER_H_
 #define ART_RUNTIME_CLASS_LINKER_H_
 
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -601,11 +602,32 @@ class ClassLinker {
                    ArtMethod** out_imt)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  bool LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass)
+  bool LinkVirtualMethods(Thread* self,
+                          Handle<mirror::Class> klass,
+                          std::map<int32_t, ArtMethod*>* default_translations)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  bool LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass,
-                            Handle<mirror::ObjectArray<mirror::Class>> interfaces,
+  bool SetupInterfaceLookupTable(Thread* self,
+                                 Handle<mirror::Class> klass,
+                                 Handle<mirror::ObjectArray<mirror::Class>> interfaces)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Find the default method implementation for 'interface_method' in 'klass'. Stores it into
+  // out_default_method and returns true on success. If no default method was found stores nullptr
+  // into out_default_method and returns true. If an error occurs (such as a default_method
+  // conflict) stores an appropriate message for an IncompatibleClassChangeError into icce_message
+  // and returns false. The caller should then throw the IncompatibleClassChangeError. Done this way
+  // due to fact that we cannot always restore the right thread state.
+  bool FindDefaultMethodImplementation(Thread* self,
+                                       ArtMethod* interface_method,
+                                       Handle<mirror::Class> klass,
+                                       ArtMethod** out_default_method,
+                                       std::string* icce_message)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  bool LinkInterfaceMethods(Thread* self,
+                            Handle<mirror::Class> klass,
+                            std::map<int32_t, ArtMethod*> default_translations,
                             ArtMethod** out_imt)
       SHARED_REQUIRES(Locks::mutator_lock_);
 

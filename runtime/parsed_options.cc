@@ -270,6 +270,10 @@ std::unique_ptr<RuntimeParser> ParsedOptions::MakeParser(bool ignore_unrecognize
           .WithType<bool>()
           .WithValues({true, false})
           .IntoKey(M::ExperimentalLambdas)
+      .Define({"-Xexperimental-default-methods", "-Xnoexperimental-default-methods"})
+          .WithType<bool>()
+          .WithValues({true, false})
+          .IntoKey(M::ExperimentalDefaultMethods)
       .Ignore({
           "-ea", "-da", "-enableassertions", "-disableassertions", "--runtime-arg", "-esa",
           "-dsa", "-enablesystemassertions", "-disablesystemassertions", "-Xrs", "-Xint:_",
