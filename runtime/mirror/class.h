@@ -229,6 +229,16 @@ class MANAGED Class FINAL : public Object {
     return (GetAccessFlags() & kAccClassIsFinalizable) != 0;
   }
 
+  ALWAYS_INLINE void SetRecursivelyInitalized() SHARED_REQUIRES(Locks::mutator_lock_) {
+    uint32_t flags = GetField32(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_));
+    SetAccessFlags(flags | kAccRecursivelyInitialized);
+  }
+
+  ALWAYS_INLINE void SetHasDefaultMethods() SHARED_REQUIRES(Locks::mutator_lock_) {
+    uint32_t flags = GetField32(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_));
+    SetAccessFlags(flags | kAccHasDefaultMethod);
+  }
+
   ALWAYS_INLINE void SetFinalizable() SHARED_REQUIRES(Locks::mutator_lock_) {
     uint32_t flags = GetField32(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_));
     SetAccessFlags(flags | kAccClassIsFinalizable);
@@ -859,6 +869,14 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   ArtMethod* FindClassInitializer(size_t pointer_size) SHARED_REQUIRES(Locks::mutator_lock_);
+
+  bool HasDefaultMethods() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return (GetAccessFlags() & kAccHasDefaultMethod) != 0;
+  }
+
+  bool HasBeenRecursivelyInitialized() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return (GetAccessFlags() & kAccRecursivelyInitialized) != 0;
+  }
 
   ALWAYS_INLINE int32_t GetIfTableCount() SHARED_REQUIRES(Locks::mutator_lock_);
 
