@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_CLASS_LINKER_H_
 #define ART_RUNTIME_CLASS_LINKER_H_
 
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -604,9 +605,25 @@ class ClassLinker {
   bool LinkVirtualMethods(Thread* self, Handle<mirror::Class> klass)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  bool LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass,
-                            Handle<mirror::ObjectArray<mirror::Class>> interfaces,
-                            ArtMethod** out_imt)
+  bool SetupInterfaceLookupTable(Thread* self,
+                                 Handle<mirror::Class> klass,
+                                 Handle<mirror::ObjectArray<mirror::Class>> interfaces)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Find the default method implementation for 'interface_method' in 'klass'. Stores it into
+  // out_default_method and returns true on success. If no default method was found stores nullptr
+  // into out_default_method and returns true. If an error occurs (such as a default_method
+  // conflict) calls the supplied prepare_for_throw function and returns false. The value of
+  // out_default_method is undefined if the function returns false. prepare_for_throw defaults to a
+  // no-op.
+  bool FindDefaultMethodImplementation(Thread* self,
+                                       ArtMethod* interface_method,
+                                       Handle<mirror::Class> klass,
+                                       ArtMethod** out_default_method,
+                                       std::string* icce_message)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  bool LinkInterfaceMethods(Thread* self, Handle<mirror::Class> klass, ArtMethod** out_imt)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   bool LinkStaticFields(Thread* self, Handle<mirror::Class> klass, size_t* class_size)
