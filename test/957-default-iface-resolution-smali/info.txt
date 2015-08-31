@@ -1,0 +1,5 @@
+Smali-based tests for experimental interface default methods.
+
+This tests that interface method resolution order is correct.
+
+Obviously needs to run under ART.
