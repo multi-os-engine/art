@@ -24,6 +24,7 @@
 #include "base/stringprintf.h"
 #include "dex_file-inl.h"
 #include "leb128.h"
+#include "runtime.h"
 #include "safe_map.h"
 #include "utf-inl.h"
 #include "utils.h"
@@ -2530,7 +2531,9 @@ bool DexFileVerifier::CheckMethodAccessFlags(uint32_t method_index,
   }
 
   // Only the static initializer may have code in an interface.
-  if (((class_access_flags & kAccInterface) != 0) && !is_clinit_by_name) {
+  if (((class_access_flags & kAccInterface) != 0)
+      && !is_clinit_by_name
+      && !Runtime::Current()->AreExperimentalDefaultMethodsEnabled()) {
     *error_msg = StringPrintf("Non-clinit interface method %" PRIu32 " should not have code",
                               method_index);
     return false;

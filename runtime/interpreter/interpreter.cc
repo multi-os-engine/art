@@ -455,10 +455,15 @@ extern "C" void artInterpreterToInterpreterBridge(Thread* self, const DexFile::C
   }
 
   self->PushShadowFrame(shadow_frame);
+  ArtMethod* method = shadow_frame->GetMethod();
   // Ensure static methods are initialized.
-  const bool is_static = shadow_frame->GetMethod()->IsStatic();
-  if (is_static) {
-    mirror::Class* declaring_class = shadow_frame->GetMethod()->GetDeclaringClass();
+  const bool is_static = method->IsStatic();
+  // Ensure non-abstract interface methods are initialized.
+  // TODO Check if this is kosher. Might need to change to explicitly not setup statics for spec
+  const bool is_interface_method =
+      method->GetDeclaringClass()->IsInterface() && !method->IsAbstract();
+  if (is_static || is_interface_method) {
+    mirror::Class* declaring_class = method->GetDeclaringClass();
     if (UNLIKELY(!declaring_class->IsInitialized())) {
       StackHandleScope<1> hs(self);
       HandleWrapper<Class> h_declaring_class(hs.NewHandleWrapper(&declaring_class));
