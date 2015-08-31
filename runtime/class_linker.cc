@@ -5355,9 +5355,8 @@ mirror::String* ClassLinker::ResolveString(const DexFile& dex_file, uint32_t str
   if (resolved != nullptr) {
     return resolved;
   }
-  uint32_t utf16_length;
-  const char* utf8_data = dex_file.StringDataAndUtf16LengthByIdx(string_idx, &utf16_length);
-  mirror::String* string = intern_table_->InternStrong(utf16_length, utf8_data);
+  const char* utf8_data = dex_file.StringDataByIdx(string_idx);
+  mirror::String* string = intern_table_->InternStrong(utf8_data);
   dex_cache->SetResolvedString(string_idx, string);
   return string;
 }

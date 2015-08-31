@@ -30,11 +30,11 @@ TEST_F(InternTableTest, Intern) {
   ScopedObjectAccess soa(Thread::Current());
   InternTable intern_table;
   StackHandleScope<4> hs(soa.Self());
-  Handle<mirror::String> foo_1(hs.NewHandle(intern_table.InternStrong(3, "foo")));
-  Handle<mirror::String> foo_2(hs.NewHandle(intern_table.InternStrong(3, "foo")));
+  Handle<mirror::String> foo_1(hs.NewHandle(intern_table.InternStrong("foo")));
+  Handle<mirror::String> foo_2(hs.NewHandle(intern_table.InternStrong("foo")));
   Handle<mirror::String> foo_3(
       hs.NewHandle(mirror::String::AllocFromModifiedUtf8(soa.Self(), "foo")));
-  Handle<mirror::String> bar(hs.NewHandle(intern_table.InternStrong(3, "bar")));
+  Handle<mirror::String> bar(hs.NewHandle(intern_table.InternStrong("bar")));
   EXPECT_TRUE(foo_1->Equals("foo"));
   EXPECT_TRUE(foo_2->Equals("foo"));
   EXPECT_TRUE(foo_3->Equals("foo"));
@@ -50,13 +50,13 @@ TEST_F(InternTableTest, Size) {
   ScopedObjectAccess soa(Thread::Current());
   InternTable t;
   EXPECT_EQ(0U, t.Size());
-  t.InternStrong(3, "foo");
+  t.InternStrong("foo");
   StackHandleScope<1> hs(soa.Self());
   Handle<mirror::String> foo(
       hs.NewHandle(mirror::String::AllocFromModifiedUtf8(soa.Self(), "foo")));
   t.InternWeak(foo.Get());
   EXPECT_EQ(1U, t.Size());
-  t.InternStrong(3, "bar");
+  t.InternStrong("bar");
   EXPECT_EQ(2U, t.Size());
 }
 
@@ -90,8 +90,8 @@ class TestPredicate : public IsMarkedVisitor {
 TEST_F(InternTableTest, SweepInternTableWeaks) {
   ScopedObjectAccess soa(Thread::Current());
   InternTable t;
-  t.InternStrong(3, "foo");
-  t.InternStrong(3, "bar");
+  t.InternStrong("foo");
+  t.InternStrong("bar");
   StackHandleScope<5> hs(soa.Self());
   Handle<mirror::String> hello(
       hs.NewHandle(mirror::String::AllocFromModifiedUtf8(soa.Self(), "hello")));
@@ -126,9 +126,9 @@ TEST_F(InternTableTest, ContainsWeak) {
     // Strongs are never weak.
     InternTable t;
     StackHandleScope<2> hs(soa.Self());
-    Handle<mirror::String> interned_foo_1(hs.NewHandle(t.InternStrong(3, "foo")));
+    Handle<mirror::String> interned_foo_1(hs.NewHandle(t.InternStrong("foo")));
     EXPECT_FALSE(t.ContainsWeak(interned_foo_1.Get()));
-    Handle<mirror::String> interned_foo_2(hs.NewHandle(t.InternStrong(3, "foo")));
+    Handle<mirror::String> interned_foo_2(hs.NewHandle(t.InternStrong("foo")));
     EXPECT_FALSE(t.ContainsWeak(interned_foo_2.Get()));
     EXPECT_EQ(interned_foo_1.Get(), interned_foo_2.Get());
   }
@@ -156,7 +156,7 @@ TEST_F(InternTableTest, ContainsWeak) {
         hs.NewHandle(mirror::String::AllocFromModifiedUtf8(soa.Self(), "foo")));
     Handle<mirror::String> interned_foo_1(hs.NewHandle(t.InternWeak(foo.Get())));
     EXPECT_TRUE(t.ContainsWeak(interned_foo_1.Get()));
-    Handle<mirror::String> interned_foo_2(hs.NewHandle(t.InternStrong(3, "foo")));
+    Handle<mirror::String> interned_foo_2(hs.NewHandle(t.InternStrong("foo")));
     EXPECT_FALSE(t.ContainsWeak(interned_foo_2.Get()));
     EXPECT_EQ(interned_foo_1.Get(), interned_foo_2.Get());
   }
@@ -165,7 +165,7 @@ TEST_F(InternTableTest, ContainsWeak) {
     // Interning a weak after a strong gets you the strong.
     InternTable t;
     StackHandleScope<3> hs(soa.Self());
-    Handle<mirror::String> interned_foo_1(hs.NewHandle(t.InternStrong(3, "foo")));
+    Handle<mirror::String> interned_foo_1(hs.NewHandle(t.InternStrong("foo")));
     EXPECT_FALSE(t.ContainsWeak(interned_foo_1.Get()));
     Handle<mirror::String> foo(
         hs.NewHandle(mirror::String::AllocFromModifiedUtf8(soa.Self(), "foo")));

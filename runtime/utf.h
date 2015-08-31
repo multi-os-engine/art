@@ -80,6 +80,11 @@ int32_t ComputeUtf16Hash(mirror::CharArray* chars, int32_t offset, size_t char_c
     SHARED_REQUIRES(Locks::mutator_lock_);
 int32_t ComputeUtf16Hash(const uint16_t* chars, size_t char_count);
 
+/*
+ * Compute the java.lang.String hashCode() value for a modified UTF-8 string.
+ */
+int32_t ComputeModifiedUtf8JavaHash(const char* chars);
+
 // Compute a hash code of a modified UTF-8 string. Not the standard java hash since it returns a
 // size_t and hashes individual chars instead of codepoint words.
 size_t ComputeModifiedUtf8Hash(const char* chars);

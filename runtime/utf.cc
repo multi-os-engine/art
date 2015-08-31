@@ -115,6 +115,20 @@ int32_t ComputeUtf16Hash(const uint16_t* chars, size_t char_count) {
   return static_cast<int32_t>(hash);
 }
 
+int32_t ComputeModifiedUtf8JavaHash(const char* chars) {
+  uint32_t hash = 0;
+  while (*chars != '\0') {
+    const uint32_t ch = GetUtf16FromUtf8(&chars);
+    const uint16_t leading = GetLeadingUtf16Char(ch);
+    const uint16_t trailing = GetTrailingUtf16Char(ch);
+    hash = hash * 31 + leading;
+    if (trailing != 0) {
+      hash = hash * 31 + trailing;
+    }
+  }
+  return static_cast<int32_t>(hash);
+}
+
 size_t ComputeModifiedUtf8Hash(const char* chars) {
   size_t hash = 0;
   while (*chars != '\0') {

@@ -89,8 +89,16 @@ mirror::String* InternTable::LookupStrong(mirror::String* s) {
   return strong_interns_.Find(s);
 }
 
+mirror::String* InternTable::LookupStrong(const char* utf8_data) {
+  return strong_interns_.Find(utf8_data);
+}
+
 mirror::String* InternTable::LookupWeak(mirror::String* s) {
   return weak_interns_.Find(s);
+}
+
+mirror::String* InternTable::LookupWeak(const char* utf8_data) {
+  return weak_interns_.Find(utf8_data);
 }
 
 void InternTable::SwapPostZygoteWithPreZygote() {
@@ -185,6 +193,14 @@ void InternTable::AddImageStringsToTable(gc::space::ImageSpace* image_space) {
 }
 
 mirror::String* InternTable::LookupStringFromImage(mirror::String* s) {
+  return LookupStringFromImage(s->ToModifiedUtf8());
+}
+
+mirror::String* InternTable::LookupStringFromImage(const char* utf8_data) {
+  return LookupStringFromImage(std::string(utf8_data));
+}
+
+mirror::String* InternTable::LookupStringFromImage(const std::string& utf8_data) {
   if (image_added_to_intern_table_) {
     return nullptr;
   }
@@ -194,12 +210,11 @@ mirror::String* InternTable::LookupStringFromImage(mirror::String* s) {
   }
   mirror::Object* root = image->GetImageHeader().GetImageRoot(ImageHeader::kDexCaches);
   mirror::ObjectArray<mirror::DexCache>* dex_caches = root->AsObjectArray<mirror::DexCache>();
-  const std::string utf8 = s->ToModifiedUtf8();
   for (int32_t i = 0; i < dex_caches->GetLength(); ++i) {
     mirror::DexCache* dex_cache = dex_caches->Get(i);
     const DexFile* dex_file = dex_cache->GetDexFile();
     // Binary search the dex file for the string index.
-    const DexFile::StringId* string_id = dex_file->FindStringId(utf8.c_str());
+    const DexFile::StringId* string_id = dex_file->FindStringId(utf8_data.c_str());
     if (string_id != nullptr) {
       uint32_t string_idx = dex_file->GetIndexForStringId(*string_id);
       // GetResolvedString() contains a RB.
@@ -297,14 +312,68 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong, bool hold
   return is_strong ? InsertStrong(s) : InsertWeak(s);
 }
 
-mirror::String* InternTable::InternStrong(int32_t utf16_length, const char* utf8_data) {
-  DCHECK(utf8_data != nullptr);
-  return InternStrong(mirror::String::AllocFromModifiedUtf8(
-      Thread::Current(), utf16_length, utf8_data));
+mirror::String* InternTable::TryInsertWithoutAlloc(const char* utf8_data, bool is_strong, bool holding_locks) {
+  if (utf8_data == nullptr) {
+    return nullptr;
+  }
+  Thread* const self = Thread::Current();
+  MutexLock mu(self, *Locks::intern_table_lock_);
+  if (kDebugLocking && !holding_locks) {
+    Locks::mutator_lock_->AssertSharedHeld(self);
+    CHECK_EQ(2u, self->NumberOfHeldMutexes()) << "may only safely hold the mutator lock";
+  }
+  while (true) {
+    if (holding_locks) {
+      if (!kUseReadBarrier) {
+        CHECK_EQ(weak_root_state_, gc::kWeakRootStateNormal);
+      } else {
+        CHECK(self->GetWeakRefAccessEnabled());
+      }
+    }
+    // Check the strong table for a match.
+    mirror::String* strong = LookupStrong(utf8_data);
+    if (strong != nullptr) {
+      return strong;
+    }
+    if ((!kUseReadBarrier && weak_root_state_ != gc::kWeakRootStateNoReadsOrWrites) ||
+        (kUseReadBarrier && self->GetWeakRefAccessEnabled())) {
+      break;
+    }
+    // weak_root_state_ is set to gc::kWeakRootStateNoReadsOrWrites in the GC pause but is only
+    // cleared after SweepSystemWeaks has completed. This is why we need to wait until it is
+    // cleared.
+    CHECK(!holding_locks);
+    WaitUntilAccessible(self);
+  }
+  if (!kUseReadBarrier) {
+    CHECK_EQ(weak_root_state_, gc::kWeakRootStateNormal);
+  } else {
+    CHECK(self->GetWeakRefAccessEnabled());
+  }
+  // There is no match in the strong table, check the weak table.
+  mirror::String* weak = LookupWeak(utf8_data);
+  if (weak != nullptr) {
+    if (is_strong) {
+      // A match was found in the weak table. Promote to the strong table.
+      RemoveWeak(weak);
+      return InsertStrong(weak);
+    }
+    return weak;
+  }
+  // Check the image for a match.
+  mirror::String* image = LookupStringFromImage(utf8_data);
+  if (image != nullptr) {
+    return is_strong ? InsertStrong(image) : InsertWeak(image);
+  }
+  return nullptr;
 }
 
 mirror::String* InternTable::InternStrong(const char* utf8_data) {
-  DCHECK(utf8_data != nullptr);
+  // TODO: check if utf8_data is null?
+  mirror::String* result = TryInsertWithoutAlloc(utf8_data, true, true);
+  if (result != nullptr) {
+    return result;
+  }
   return InternStrong(mirror::String::AllocFromModifiedUtf8(Thread::Current(), utf8_data));
 }
 
@@ -361,12 +430,24 @@ std::size_t InternTable::StringHashEquals::operator()(const GcRoot<mirror::Strin
   return static_cast<size_t>(root.Read()->GetHashCode());
 }
 
+std::size_t InternTable::StringHashEquals::operator()(const char* utf8_data) const {
+  return static_cast<size_t>(ComputeModifiedUtf8JavaHash(utf8_data));
+}
+
 bool InternTable::StringHashEquals::operator()(const GcRoot<mirror::String>& a,
                                                const GcRoot<mirror::String>& b) const {
   if (kIsDebugBuild) {
     Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
   }
   return a.Read()->Equals(b.Read());
+}
+
+bool InternTable::StringHashEquals::operator()(const GcRoot<mirror::String>& a,
+                                               const char* utf8_data) const {
+  if (kIsDebugBuild) {
+    Locks::mutator_lock_->AssertSharedHeld(Thread::Current());
+  }
+  return a.Read()->Equals(utf8_data);
 }
 
 size_t InternTable::Table::ReadIntoPreZygoteTable(const uint8_t* ptr) {
@@ -398,6 +479,19 @@ mirror::String* InternTable::Table::Find(mirror::String* s) {
     return it->Read();
   }
   it = post_zygote_table_.Find(GcRoot<mirror::String>(s));
+  if (it != post_zygote_table_.end()) {
+    return it->Read();
+  }
+  return nullptr;
+}
+
+mirror::String* InternTable::Table::Find(const char* utf8_data) {
+  Locks::intern_table_lock_->AssertHeld(Thread::Current());
+  auto it = pre_zygote_table_.Find(utf8_data);
+  if (it != pre_zygote_table_.end()) {
+    return it->Read();
+  }
+  it = post_zygote_table_.Find(utf8_data);
   if (it != post_zygote_table_.end()) {
     return it->Read();
   }

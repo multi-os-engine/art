@@ -56,10 +56,6 @@ class InternTable {
  public:
   InternTable();
 
-  // Interns a potentially new string in the 'strong' table. May cause thread suspension.
-  mirror::String* InternStrong(int32_t utf16_length, const char* utf8_data)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
-
   // Only used by image writer. Special version that may not cause thread suspension since the GC
   // can not be running while we are doing image writing. Maybe be called while while holding a
   // lock since there will not be thread suspension.
@@ -133,7 +129,10 @@ class InternTable {
   class StringHashEquals {
    public:
     std::size_t operator()(const GcRoot<mirror::String>& root) const NO_THREAD_SAFETY_ANALYSIS;
+    std::size_t operator()(const char* utf8_data) const;
     bool operator()(const GcRoot<mirror::String>& a, const GcRoot<mirror::String>& b) const
+        NO_THREAD_SAFETY_ANALYSIS;
+    bool operator()(const GcRoot<mirror::String>& a, const char* utf8_data) const
         NO_THREAD_SAFETY_ANALYSIS;
   };
   class GcRootEmptyFn {
@@ -151,6 +150,8 @@ class InternTable {
   class Table {
    public:
     mirror::String* Find(mirror::String* s) SHARED_REQUIRES(Locks::mutator_lock_)
+        REQUIRES(Locks::intern_table_lock_);
+    mirror::String* Find(const char* utf8_data) SHARED_REQUIRES(Locks::mutator_lock_)
         REQUIRES(Locks::intern_table_lock_);
     void Insert(mirror::String* s) SHARED_REQUIRES(Locks::mutator_lock_)
         REQUIRES(Locks::intern_table_lock_);
@@ -192,9 +193,18 @@ class InternTable {
   mirror::String* Insert(mirror::String* s, bool is_strong, bool holding_locks)
       REQUIRES(!Locks::intern_table_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Tries inserting the string, but returns null if there is no existing
+  // string object for the given string data.
+  mirror::String* TryInsertWithoutAlloc(const char* utf8_data, bool is_strong, bool holding_locks)
+      REQUIRES(!Locks::intern_table_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
+
   mirror::String* LookupStrong(mirror::String* s)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
+  mirror::String* LookupStrong(const char* utf8_data)
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
   mirror::String* LookupWeak(mirror::String* s)
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
+  mirror::String* LookupWeak(const char* utf8_data)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
   mirror::String* InsertStrong(mirror::String* s)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
@@ -207,6 +217,10 @@ class InternTable {
 
   // Transaction rollback access.
   mirror::String* LookupStringFromImage(mirror::String* s)
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
+  mirror::String* LookupStringFromImage(const std::string& utf8_data)
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
+  mirror::String* LookupStringFromImage(const char* utf8_data)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
   mirror::String* InsertStrongFromTransaction(mirror::String* s)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
