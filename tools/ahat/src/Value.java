@@ -45,13 +45,15 @@ class Value {
     // Annotate Strings with their values.
     String stringValue = InstanceUtils.asString(inst);
     if (stringValue != null) {
-      link.append("\"%s\"", stringValue);
+      boolean isLong = stringValue.length() > 200;
+      link.append("\"%.200s%s", stringValue, isLong ? "..." : "\"");
     }
 
     // Annotate DexCache with its location.
     String dexCacheLocation = InstanceUtils.getDexCacheLocation(inst);
     if (dexCacheLocation != null) {
-      link.append(" for " + dexCacheLocation);
+      boolean isLong = dexCacheLocation.length() > 200;
+      link.append(" for %.200s%s", dexCacheLocation, isLong ? "..." : "\"");
     }
 
     URI objTarget = DocString.uri("object?id=%d", inst.getId());
