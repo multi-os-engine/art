@@ -570,6 +570,15 @@ bool MethodVerifier::Verify() {
                                       << " regs=" << code_item_->registers_size_;
     return false;
   }
+  // Sanity check that interface methods have no implementation.
+  // TODO Remove once fully supported.
+  // TODO Better message.
+  if (class_def_->GetJavaAccessFlags() & kAccInterface
+      && !(method_access_flags_ & (kAccAbstract | kAccStatic))
+      && !Runtime::Current()->AreExperimentalDefaultMethodsEnabled()) {
+    Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "non-abstract interface method found";
+    return false;
+  }
   // Allocate and initialize an array to hold instruction data.
   insn_flags_.reset(new InstructionFlags[code_item_->insns_size_in_code_units_]());
   // Run through the instructions and see if the width checks out.
