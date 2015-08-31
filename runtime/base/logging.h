@@ -41,6 +41,7 @@ struct LogVerbosity {
   bool deopt;
   bool gc;
   bool heap;
+  bool inliner;
   bool jdwp;
   bool jit;
   bool jni;

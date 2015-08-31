@@ -83,6 +83,7 @@ TEST_F(ParsedOptionsTest, ParsedOptions) {
   EXPECT_TRUE(VLOG_IS_ON(class_linker));
   EXPECT_FALSE(VLOG_IS_ON(compiler));
   EXPECT_FALSE(VLOG_IS_ON(heap));
+  EXPECT_FALSE(VLOG_IS_ON(inliner));
   EXPECT_TRUE(VLOG_IS_ON(gc));
   EXPECT_FALSE(VLOG_IS_ON(jdwp));
   EXPECT_TRUE(VLOG_IS_ON(jni));

@@ -175,7 +175,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
   uint32_t method_index = invoke_instruction->GetDexMethodIndex();
   ScopedObjectAccess soa(Thread::Current());
   const DexFile& caller_dex_file = *caller_compilation_unit_.GetDexFile();
-  VLOG(compiler) << "Try inlining " << PrettyMethod(method_index, caller_dex_file);
+  VLOG(inliner) << "Try inlining " << PrettyMethod(method_index, caller_dex_file);
 
   ClassLinker* class_linker = caller_compilation_unit_.GetClassLinker();
   // We can query the dex cache directly. The verifier has populated it already.
@@ -191,25 +191,25 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
 
   if (resolved_method == nullptr) {
     // Method cannot be resolved if it is in another dex file we do not have access to.
-    VLOG(compiler) << "Method cannot be resolved " << PrettyMethod(method_index, caller_dex_file);
+    VLOG(inliner) << "Method cannot be resolved " << PrettyMethod(method_index, caller_dex_file);
     return false;
   }
 
   if (!invoke_instruction->IsInvokeStaticOrDirect()) {
     resolved_method = FindVirtualOrInterfaceTarget(invoke_instruction, resolved_method);
     if (resolved_method == nullptr) {
-      VLOG(compiler) << "Interface or virtual call to "
-                     << PrettyMethod(method_index, caller_dex_file)
-                     << " could not be statically determined";
+      VLOG(inliner) << "Interface or virtual call to "
+                    << PrettyMethod(method_index, caller_dex_file)
+                    << " could not be statically determined";
       return false;
     }
     // We have found a method, but we need to find where that method is for the caller's
     // dex file.
     method_index = FindMethodIndexIn(resolved_method, caller_dex_file, method_index);
     if (method_index == DexFile::kDexNoIndex) {
-      VLOG(compiler) << "Interface or virtual call to "
-                     << PrettyMethod(resolved_method)
-                     << " cannot be inlined because unaccessible to caller";
+      VLOG(inliner) << "Interface or virtual call to "
+                    << PrettyMethod(resolved_method)
+                    << " cannot be inlined because unaccessible to caller";
       return false;
     }
   }
@@ -220,29 +220,29 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
   const DexFile::CodeItem* code_item = resolved_method->GetCodeItem();
 
   if (code_item == nullptr) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
-                   << " is not inlined because it is native";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, caller_dex_file)
+                  << " is not inlined because it is native";
     return false;
   }
 
   size_t inline_max_code_units = compiler_driver_->GetCompilerOptions().GetInlineMaxCodeUnits();
   if (code_item->insns_size_in_code_units_ > inline_max_code_units) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
-                   << " is too big to inline";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, caller_dex_file)
+                  << " is too big to inline";
     return false;
   }
 
   if (code_item->tries_size_ != 0) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
-                   << " is not inlined because of try block";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, caller_dex_file)
+                  << " is not inlined because of try block";
     return false;
   }
 
   uint16_t class_def_idx = resolved_method->GetDeclaringClass()->GetDexClassDefIndex();
   if (!compiler_driver_->IsMethodVerifiedWithoutFailures(
         resolved_method->GetDexMethodIndex(), class_def_idx, *resolved_method->GetDexFile())) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
-                   << " couldn't be verified, so it cannot be inlined";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, caller_dex_file)
+                  << " couldn't be verified, so it cannot be inlined";
     return false;
   }
 
@@ -250,9 +250,9 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
       invoke_instruction->AsInvokeStaticOrDirect()->IsStaticWithImplicitClinitCheck()) {
     // Case of a static method that cannot be inlined because it implicitly
     // requires an initialization check of its declaring class.
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
-                   << " is not inlined because it is static and requires a clinit"
-                   << " check that cannot be emitted due to Dex cache limitations";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, caller_dex_file)
+                  << " is not inlined because it is static and requires a clinit"
+                  << " check that cannot be emitted due to Dex cache limitations";
     return false;
   }
 
@@ -260,7 +260,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
     return false;
   }
 
-  VLOG(compiler) << "Successfully inlined " << PrettyMethod(method_index, caller_dex_file);
+  VLOG(inliner) << "Successfully inlined " << PrettyMethod(method_index, caller_dex_file);
   MaybeRecordStat(kInlinedInvoke);
   return true;
 }
@@ -329,21 +329,21 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
                         resolved_method->GetQuickenedInfo());
 
   if (!builder.BuildGraph(*code_item)) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                   << " could not be built, so cannot be inlined";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                  << " could not be built, so cannot be inlined";
     return false;
   }
 
   if (!RegisterAllocator::CanAllocateRegistersFor(*callee_graph,
                                                   compiler_driver_->GetInstructionSet())) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                   << " cannot be inlined because of the register allocator";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                  << " cannot be inlined because of the register allocator";
     return false;
   }
 
   if (!callee_graph->TryBuildingSsa()) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                   << " could not be transformed to SSA";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                  << " could not be transformed to SSA";
     return false;
   }
 
@@ -411,8 +411,8 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   // a throw predecessor.
   HBasicBlock* exit_block = callee_graph->GetExitBlock();
   if (exit_block == nullptr) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                   << " could not be inlined because it has an infinite loop";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                  << " could not be inlined because it has an infinite loop";
     return false;
   }
 
@@ -424,8 +424,8 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     }
   }
   if (has_throw_predecessor) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                   << " could not be inlined because one branch always throws";
+    VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                  << " could not be inlined because one branch always throws";
     return false;
   }
 
@@ -435,8 +435,8 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   for (; !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     if (block->IsLoopHeader()) {
-      VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                     << " could not be inlined because it contains a loop";
+      VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                    << " could not be inlined because it contains a loop";
       return false;
     }
 
@@ -444,8 +444,8 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
          !instr_it.Done();
          instr_it.Advance()) {
       if (number_of_instructions++ ==  number_of_instructions_budget) {
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                       << " could not be inlined because it is too big.";
+        VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                      << " could not be inlined because it is too big.";
         return false;
       }
       HInstruction* current = instr_it.Current();
@@ -453,22 +453,22 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
       if (current->IsInvokeInterface()) {
         // Disable inlining of interface calls. The cost in case of entering the
         // resolution conflict is currently too high.
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                       << " could not be inlined because it has an interface call.";
+        VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                      << " could not be inlined because it has an interface call.";
         return false;
       }
 
       if (!same_dex_file && current->NeedsEnvironment()) {
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                       << " could not be inlined because " << current->DebugName()
-                       << " needs an environment and is in a different dex file";
+        VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                      << " could not be inlined because " << current->DebugName()
+                      << " needs an environment and is in a different dex file";
         return false;
       }
 
       if (!same_dex_file && current->NeedsDexCache()) {
-        VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                       << " could not be inlined because " << current->DebugName()
-                       << " it is in a different dex file and requires access to the dex cache";
+        VLOG(inliner) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                      << " could not be inlined because " << current->DebugName()
+                      << " it is in a different dex file and requires access to the dex cache";
         return false;
       }
     }
