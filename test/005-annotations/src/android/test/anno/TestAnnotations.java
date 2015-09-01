@@ -180,5 +180,13 @@ public class TestAnnotations {
         printAnnotationArray("    ", TestAnnotations.class.getPackage().getAnnotations());
         System.out.println("Package declared annotations:");
         printAnnotationArray("    ", TestAnnotations.class.getPackage().getDeclaredAnnotations());
+
+        System.out.println();
+
+        // Test TypeNotPresentException
+        try {
+          System.out.println(SimplyNoted.class.getAnnotation(AnnotationWithMissingClassMember.class));
+        } catch (TypeNotPresentException expected) {
+        }
     }
 }

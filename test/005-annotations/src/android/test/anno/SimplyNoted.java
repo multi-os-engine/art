@@ -4,6 +4,7 @@ package android.test.anno;
 @AnnoSimpleType2
 @AnnoSimpleTypeInvis
 @MissingAnnotation
+@AnnotationWithMissingClassMember(MissingAnnotation.class)
 public class SimplyNoted {
     @AnnoSimpleField
     @MissingAnnotation
