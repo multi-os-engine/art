@@ -375,7 +375,7 @@ JavaVMExt::JavaVMExt(Runtime* runtime, const RuntimeArgumentMap& runtime_options
       unchecked_functions_(&gJniInvokeInterface),
       weak_globals_lock_("JNI weak global reference table lock", kJniWeakGlobalsLock),
       weak_globals_(kWeakGlobalsInitial, kWeakGlobalsMax, kWeakGlobal),
-      allow_new_weak_globals_(true),
+      allow_accessing_weak_globals_(true),
       weak_globals_add_condition_("weak globals add condition", weak_globals_lock_) {
   functions = unchecked_functions_;
   SetCheckJniEnabled(runtime_options.Exists(RuntimeArgumentMap::CheckJni));
@@ -473,8 +473,7 @@ jweak JavaVMExt::AddWeakGlobalRef(Thread* self, mirror::Object* obj) {
     return nullptr;
   }
   MutexLock mu(self, weak_globals_lock_);
-  while (UNLIKELY((!kUseReadBarrier && !allow_new_weak_globals_) ||
-                  (kUseReadBarrier && !self->GetWeakRefAccessEnabled()))) {
+  while (UNLIKELY(!MayAccessWeakGlobals(self))) {
     weak_globals_add_condition_.WaitHoldingLocks(self);
   }
   IndirectRef ref = weak_globals_.Add(IRT_FIRST_SEGMENT, obj);
@@ -542,14 +541,16 @@ void JavaVMExt::DumpForSigQuit(std::ostream& os) {
 }
 
 void JavaVMExt::DisallowNewWeakGlobals() {
-  MutexLock mu(Thread::Current(), weak_globals_lock_);
-  allow_new_weak_globals_ = false;
+  Thread* const self = Thread::Current();
+  MutexLock mu(self, weak_globals_lock_);
+  Locks::mutator_lock_->AssertExclusiveHeld(self);
+  allow_accessing_weak_globals_.StoreSequentiallyConsistent(false);
 }
 
 void JavaVMExt::AllowNewWeakGlobals() {
   Thread* self = Thread::Current();
   MutexLock mu(self, weak_globals_lock_);
-  allow_new_weak_globals_ = true;
+  allow_accessing_weak_globals_.StoreSequentiallyConsistent(true);
   weak_globals_add_condition_.Broadcast(self);
 }
 
@@ -557,7 +558,7 @@ void JavaVMExt::EnsureNewWeakGlobalsDisallowed() {
   // Lock and unlock once to ensure that no threads are still in the
   // middle of adding new weak globals.
   MutexLock mu(Thread::Current(), weak_globals_lock_);
-  CHECK(!allow_new_weak_globals_);
+  CHECK(!allow_accessing_weak_globals_.LoadSequentiallyConsistent());
 }
 
 void JavaVMExt::BroadcastForNewWeakGlobals() {
@@ -576,7 +577,18 @@ void JavaVMExt::UpdateGlobal(Thread* self, IndirectRef ref, mirror::Object* resu
   globals_.Update(ref, result);
 }
 
+inline bool JavaVMExt::MayAccessWeakGlobals(Thread* self) const {
+  return kUseReadBarrier ? self->GetWeakRefAccessEnabled() :
+      allow_accessing_weak_globals_.LoadSequentiallyConsistent();
+}
+
 mirror::Object* JavaVMExt::DecodeWeakGlobal(Thread* self, IndirectRef ref) {
+  // It is safe to access GetWeakRefAccessEnabled without the lock since CC uses checkpoints to call
+  // SetWeakRefAccessEnabled, and the other collectors only modify allow_accessing_weak_globals_
+  // when the mutators are paused.
+  if (LIKELY(MayAccessWeakGlobals(self))) {
+    return weak_globals_.SynchronizedGet(self, &weak_globals_lock_, ref);
+  }
   MutexLock mu(self, weak_globals_lock_);
   return DecodeWeakGlobalLocked(self, ref);
 }
@@ -585,8 +597,7 @@ mirror::Object* JavaVMExt::DecodeWeakGlobalLocked(Thread* self, IndirectRef ref)
   if (kDebugLocking) {
     weak_globals_lock_.AssertHeld(self);
   }
-  while (UNLIKELY((!kUseReadBarrier && !allow_new_weak_globals_) ||
-                  (kUseReadBarrier && !self->GetWeakRefAccessEnabled()))) {
+  while (UNLIKELY(!MayAccessWeakGlobals(self))) {
     weak_globals_add_condition_.WaitHoldingLocks(self);
   }
   return weak_globals_.Get(ref);
