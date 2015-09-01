@@ -223,7 +223,8 @@ TEST_F(DexFileVerifierTest, MethodId) {
     std::string error_msg;
     bool success = !ModifyAndLoad(kGoodTestDex, tmp.GetFilename().c_str(), 220, 0xFFU, &error_msg);
     ASSERT_TRUE(success);
-    ASSERT_NE(error_msg.find("inter_method_id_item class_idx"), std::string::npos) << error_msg;
+    ASSERT_NE(error_msg.find("could not find declaring class for method index 0"),
+              std::string::npos) << error_msg;
   }
 
   {
@@ -241,7 +242,8 @@ TEST_F(DexFileVerifierTest, MethodId) {
     std::string error_msg;
     bool success = !ModifyAndLoad(kGoodTestDex, tmp.GetFilename().c_str(), 224, 0xFFU, &error_msg);
     ASSERT_TRUE(success);
-    ASSERT_NE(error_msg.find("inter_method_id_item name_idx"), std::string::npos) << error_msg;
+    ASSERT_NE(error_msg.find("String index not available for method flags verification"),
+              std::string::npos) << error_msg;
   }
 }
 

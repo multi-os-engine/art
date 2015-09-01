@@ -57,8 +57,16 @@ class DexFileVerifier {
   uint32_t ReadUnsignedLittleEndian(uint32_t size);
   bool CheckAndGetHandlerOffsets(const DexFile::CodeItem* code_item,
                                  uint32_t* handler_offsets, uint32_t handlers_size);
-  bool CheckClassDataItemField(uint32_t idx, uint32_t access_flags, bool expect_static);
-  bool CheckClassDataItemMethod(uint32_t idx, uint32_t access_flags, uint32_t code_offset,
+  bool CheckClassDataItemField(uint32_t idx,
+                               uint32_t access_flags,
+                               uint32_t class_access_flags,
+                               uint32_t class_type_index,
+                               bool expect_static);
+  bool CheckClassDataItemMethod(uint32_t idx,
+                                uint32_t access_flags,
+                                uint32_t class_access_flags,
+                                uint32_t class_type_index,
+                                uint32_t code_offset,
                                 std::unordered_set<uint32_t>& direct_method_indexes,
                                 bool expect_direct);
   bool CheckPadding(size_t offset, uint32_t aligned_offset);
@@ -111,6 +119,25 @@ class DexFileVerifier {
 
   void ErrorStringPrintf(const char* fmt, ...)
       __attribute__((__format__(__printf__, 2, 3))) COLD_ATTR;
+
+  // Retrieve class index and class access flag from the given member.
+  bool FindClassFlags(uint32_t index,
+                      bool is_field,
+                      uint16_t* class_type_index,
+                      uint32_t* class_access_flags);
+
+  // Check the given access flags, interpreted for a field in the context of a class with the given
+  // second access flags.
+  static bool CheckFieldAccessFlags(uint32_t field_access_flags,
+                                    uint32_t class_access_flags,
+                                    std::string* error_msg);
+  // Check the given method and access flags, in the context of a class with the given second access
+  // flags.
+  bool CheckMethodAccessFlags(uint32_t method_index,
+                              uint32_t method_access_flags,
+                              uint32_t class_access_flags,
+                              bool has_code,
+                              std::string* error_msg);
 
   const DexFile* const dex_file_;
   const uint8_t* const begin_;
