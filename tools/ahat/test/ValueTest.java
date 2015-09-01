@@ -16,19 +16,17 @@
 
 package com.android.ahat;
 
-import org.junit.runner.JUnitCore;
+import com.android.tools.perflib.heap.Instance;
+import java.io.IOException;
+import org.junit.Test;
 
-public class Tests {
-  public static void main(String[] args) {
-    if (args.length == 0) {
-      args = new String[]{
-        "com.android.ahat.InstanceUtilsTest",
-        "com.android.ahat.QueryTest",
-        "com.android.ahat.SortTest",
-        "com.android.ahat.ValueTest"
-      };
-    }
-    JUnitCore.main(args);
+public class ValueTest {
+  @Test
+  public void render_stringWithConversions() throws IOException {
+    // We should not crash trying to render a string instance that just
+    // happens to contain formatting conversions.
+    AhatSnapshot snapshot = SnapshotBuilder.makeSnapshotWithString(0x42, "%s is %d");
+    Instance stringInstance = snapshot.findInstance(0x42);
+    Value.render(stringInstance);
   }
 }
-

@@ -16,7 +16,6 @@
 
 package com.android.ahat;
 
-import com.android.tools.perflib.heap.HprofParser;
 import com.android.tools.perflib.heap.Snapshot;
 import com.android.tools.perflib.heap.io.HprofBuffer;
 import com.android.tools.perflib.heap.io.MemoryMappedFileBuffer;
@@ -73,7 +72,7 @@ public class Main {
 
     System.out.println("Reading hprof file...");
     HprofBuffer buffer = new MemoryMappedFileBuffer(hprof);
-    Snapshot snapshot = (new HprofParser(buffer)).parse();
+    Snapshot snapshot = Snapshot.createSnapshot(buffer);
 
     System.out.println("Computing Dominators...");
     snapshot.computeDominators();
