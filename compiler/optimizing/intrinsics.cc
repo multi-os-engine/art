@@ -16,12 +16,17 @@
 
 #include "intrinsics.h"
 
+#include "art_method.h"
+#include "class_linker.h"
 #include "dex/quick/dex_file_method_inliner.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "driver/compiler_driver.h"
 #include "invoke_type.h"
+#include "mirror/dex_cache-inl.h"
 #include "nodes.h"
 #include "quick/inline_method_analyser.h"
+#include "scoped_thread_state_change.h"
+#include "thread-inl.h"
 #include "utils.h"
 
 namespace art {
@@ -364,17 +369,71 @@ void IntrinsicsRecognizer::Run() {
       if (inst->IsInvoke()) {
         HInvoke* invoke = inst->AsInvoke();
         InlineMethod method;
-        DexFileMethodInliner* inliner =
-            driver_->GetMethodInlinerMap()->GetMethodInliner(&invoke->GetDexFile());
+        const DexFile& dex_file = invoke->GetDexFile();
+        DexFileMethodInliner* inliner = driver_->GetMethodInlinerMap()->GetMethodInliner(&dex_file);
         DCHECK(inliner != nullptr);
         if (inliner->IsIntrinsic(invoke->GetDexMethodIndex(), &method)) {
           Intrinsics intrinsic = GetIntrinsic(method, graph_->GetInstructionSet());
 
           if (intrinsic != Intrinsics::kNone) {
             if (!CheckInvokeType(intrinsic, invoke)) {
-              LOG(WARNING) << "Found an intrinsic with unexpected invoke type: "
-                           << intrinsic << " for "
-                           << PrettyMethod(invoke->GetDexMethodIndex(), invoke->GetDexFile());
+              // We might be in a situation where we have inlined a method that calls an intrinsic,
+              // but that method is in a different dex file on which we do not have a
+              // verified_method that would have helped the compiler driver sharpen the call.
+              // We can still ensure the invoke types match by checking whether the called method
+              // is final or is in a final class.
+              ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+              {
+                ScopedObjectAccess soa(Thread::Current());
+                ArtMethod* art_method =
+                    class_linker->FindDexCache(soa.Self(), dex_file)->GetResolvedMethod(
+                        invoke->GetDexMethodIndex(), class_linker->GetImagePointerSize());
+                DCHECK(art_method != nullptr);
+                if (art_method->IsFinal() || art_method->GetDeclaringClass()->IsFinal()) {
+                  DCHECK(invoke->IsInvokeVirtual());
+                  LOG(INFO) << "Replacing "
+                            << PrettyMethod(invoke->GetDexMethodIndex(), invoke->GetDexFile())
+                            << " with invoke-direct";
+                  HInvokeVirtual* invoke_virtual = invoke->AsInvokeVirtual();
+                  HInvokeStaticOrDirect::DispatchInfo dispatch_info {
+                      HInvokeStaticOrDirect::MethodLoadKind::kDexCacheViaMethod,
+                      HInvokeStaticOrDirect::CodePtrLocation::kCallArtMethod,
+                      0,
+                      0 };
+                  HInvokeStaticOrDirect* invoke_direct =
+                      new (graph_->GetArena()) HInvokeStaticOrDirect(
+                          graph_->GetArena(),
+                          invoke_virtual->GetNumberOfArguments(),
+                          invoke_virtual->GetType(),
+                          invoke_virtual->GetDexPc(),
+                          invoke_virtual->GetDexMethodIndex(),
+                          MethodReference(&invoke_virtual->GetDexFile(),
+                                          invoke_virtual->GetDexMethodIndex()),
+                          dispatch_info,
+                          InvokeType::kVirtual,
+                          InvokeType::kDirect,
+                          HInvokeStaticOrDirect::ClinitCheckRequirement::kNone);
+                  // Copy parameters.
+                  for (uint32_t i = 0; i < invoke_direct->GetNumberOfArguments(); ++i) {
+                    invoke_direct->SetArgumentAt(i, invoke_virtual->InputAt(i));
+                  }
+                  // Push HCurrentMethod, which is required as a fake dependency for StaticOrDirect.
+                  invoke_direct->SetArgumentAt(invoke_direct->GetNumberOfArguments(),
+                                               graph_->GetCurrentMethod());
+                  block->ReplaceAndRemoveInstructionWith(invoke_virtual, invoke_direct);
+                  // Copy environment. This must be after the above, as it needs the block to be
+                  // set.
+                  invoke_direct->CopyEnvironmentFrom(invoke_virtual->GetEnvironment());
+
+                  // Finally mark the intrinsic.
+                  invoke_direct->SetIntrinsic(intrinsic, NeedsEnvironmentOrCache(intrinsic));
+                } else {
+                  LOG(WARNING) << "Found an intrinsic with unexpected invoke type: "
+                               << intrinsic << " for "
+                               << PrettyMethod(invoke->GetDexMethodIndex(), invoke->GetDexFile())
+                               << invoke->DebugName();
+                }
+              }
             } else {
               invoke->SetIntrinsic(intrinsic, NeedsEnvironmentOrCache(intrinsic));
             }

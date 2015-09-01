@@ -105,8 +105,9 @@ class IntrinsicSlowPathARM : public SlowPathCodeARM {
                                           Location::RegisterLocation(kArtMethodRegister));
       codegen->RecordPcInfo(invoke_, invoke_->GetDexPc(), this);
     } else {
-      UNIMPLEMENTED(FATAL) << "Non-direct intrinsic slow-path not yet implemented";
-      UNREACHABLE();
+      codegen->GenerateVirtualCall(invoke_->AsInvokeVirtual(),
+                                   Location::RegisterLocation(kArtMethodRegister));
+      codegen->RecordPcInfo(invoke_, invoke_->GetDexPc(), this);
     }
 
     // Copy the result back to the expected output.
