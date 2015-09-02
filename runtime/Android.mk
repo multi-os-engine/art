@@ -217,6 +217,12 @@ LIBART_COMMON_SRC_FILES += \
 LIBART_TARGET_LDFLAGS :=
 LIBART_HOST_LDFLAGS :=
 
+# Keep the __jit_debug_register_code symbol as a unique symbol during ICF for architectures where
+# ICF is enabled (currently only arm). The symbol is used by the debuggers to detect when new jit
+# code is generated. We don't want it to be called when a different function with the same (empty)
+# body is called.
+LIBART_TARGET_LDFLAGS_arm := -Wl,--keep-unique,__jit_debug_register_code
+
 LIBART_TARGET_SRC_FILES := \
   $(LIBART_COMMON_SRC_FILES) \
   jdwp/jdwp_adb.cc \
@@ -565,8 +571,14 @@ LIBART_COMMON_SRC_FILES :=
 LIBART_HOST_DEFAULT_INSTRUCTION_SET_FEATURES :=
 LIBART_TARGET_DEFAULT_INSTRUCTION_SET_FEATURES :=
 2ND_LIBART_TARGET_DEFAULT_INSTRUCTION_SET_FEATURES :=
-LIBART_TARGET_LDFLAGS :=
 LIBART_HOST_LDFLAGS :=
+LIBART_TARGET_LDFLAGS :=
+LIBART_TARGET_LDFLAGS_arm :=
+LIBART_TARGET_LDFLAGS_arm64 :=
+LIBART_TARGET_LDFLAGS_x86 :=
+LIBART_TARGET_LDFLAGS_x86_64 :=
+LIBART_TARGET_LDFLAGS_mips :=
+LIBART_TARGET_LDFLAGS_mips64 :=
 LIBART_TARGET_SRC_FILES :=
 LIBART_TARGET_SRC_FILES_arm :=
 LIBART_TARGET_SRC_FILES_arm64 :=
