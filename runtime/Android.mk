@@ -214,8 +214,11 @@ LIBART_COMMON_SRC_FILES += \
   entrypoints/quick/quick_throw_entrypoints.cc \
   entrypoints/quick/quick_trampoline_entrypoints.cc
 
-LIBART_TARGET_LDFLAGS :=
-LIBART_HOST_LDFLAGS :=
+# Keep the __jit_debug_register_code symbol as a unique symbol during ICF. The symbol is used by the
+# debuggers to detect when new jit code is generated. We don't want it to be called when a different
+# function with the same (empty) body is called.
+LIBART_TARGET_LDFLAGS := -Wl,--keep-unique,__jit_debug_register_code
+LIBART_HOST_LDFLAGS := -Wl,--keep-unique,__jit_debug_register_code
 
 LIBART_TARGET_SRC_FILES := \
   $(LIBART_COMMON_SRC_FILES) \
