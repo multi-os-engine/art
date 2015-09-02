@@ -666,6 +666,12 @@ bool MemMap::Protect(int prot) {
     return true;
   }
 
+  if (reuse_) {
+    // Don't change a map we don't own. This might not even be mapped memory.
+    prot_ = prot;
+    return true;
+  }
+
   if (mprotect(base_begin_, base_size_, prot) == 0) {
     prot_ = prot;
     return true;

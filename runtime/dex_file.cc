@@ -133,6 +133,14 @@ bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string*
 
 bool DexFile::Open(const char* filename, const char* location, std::string* error_msg,
                    std::vector<std::unique_ptr<const DexFile>>* dex_files) {
+  return OpenWithAllocator(filename, location, nullptr, error_msg, dex_files);
+}
+
+bool DexFile::OpenWithAllocator(const char* filename,
+                                const char* location,
+                                Allocator* allocator,
+                                std::string* error_msg,
+                                std::vector<std::unique_ptr<const DexFile>>* dex_files) {
   DCHECK(dex_files != nullptr) << "DexFile::Open: out-param is nullptr";
   uint32_t magic;
   ScopedFd fd(OpenAndReadMagic(filename, &magic, error_msg));
@@ -141,7 +149,7 @@ bool DexFile::Open(const char* filename, const char* location, std::string* erro
     return false;
   }
   if (IsZipMagic(magic)) {
-    return DexFile::OpenZip(fd.release(), location, error_msg, dex_files);
+    return DexFile::OpenZip(fd.release(), location, allocator, error_msg, dex_files);
   }
   if (IsDexMagic(magic)) {
     std::unique_ptr<const DexFile> dex_file(DexFile::OpenFile(fd.release(), location, true,
@@ -262,7 +270,10 @@ std::unique_ptr<const DexFile> DexFile::OpenFile(int fd, const char* location, b
 
 const char* DexFile::kClassesDex = "classes.dex";
 
-bool DexFile::OpenZip(int fd, const std::string& location, std::string* error_msg,
+bool DexFile::OpenZip(int fd,
+                      const std::string& location,
+                      Allocator* allocator,
+                      std::string* error_msg,
                       std::vector<std::unique_ptr<const DexFile>>* dex_files) {
   DCHECK(dex_files != nullptr) << "DexFile::OpenZip: out-param is nullptr";
   std::unique_ptr<ZipArchive> zip_archive(ZipArchive::OpenFromFd(fd, location.c_str(), error_msg));
@@ -270,7 +281,7 @@ bool DexFile::OpenZip(int fd, const std::string& location, std::string* error_ms
     DCHECK(!error_msg->empty());
     return false;
   }
-  return DexFile::OpenFromZip(*zip_archive, location, error_msg, dex_files);
+  return DexFile::OpenFromZipWithAllocator(*zip_archive, location, allocator, error_msg, dex_files);
 }
 
 std::unique_ptr<const DexFile> DexFile::OpenMemory(const std::string& location,
@@ -286,8 +297,11 @@ std::unique_ptr<const DexFile> DexFile::OpenMemory(const std::string& location,
                     error_msg);
 }
 
-std::unique_ptr<const DexFile> DexFile::Open(const ZipArchive& zip_archive, const char* entry_name,
-                                             const std::string& location, std::string* error_msg,
+std::unique_ptr<const DexFile> DexFile::Open(const ZipArchive& zip_archive,
+                                             const char* entry_name,
+                                             const std::string& location,
+                                             Allocator* allocator,
+                                             std::string* error_msg,
                                              ZipOpenErrorCode* error_code) {
   CHECK(!location.empty());
   std::unique_ptr<ZipEntry> zip_entry(zip_archive.Find(entry_name, error_msg));
@@ -295,7 +309,8 @@ std::unique_ptr<const DexFile> DexFile::Open(const ZipArchive& zip_archive, cons
     *error_code = ZipOpenErrorCode::kEntryNotFound;
     return nullptr;
   }
-  std::unique_ptr<MemMap> map(zip_entry->ExtractToMemMap(location.c_str(), entry_name, error_msg));
+  std::unique_ptr<MemMap> map(
+      zip_entry->ExtractToMemMapWithAllocator(location.c_str(), entry_name, allocator, error_msg));
   if (map.get() == nullptr) {
     *error_msg = StringPrintf("Failed to extract '%s' from '%s': %s", entry_name, location.c_str(),
                               error_msg->c_str());
@@ -303,7 +318,7 @@ std::unique_ptr<const DexFile> DexFile::Open(const ZipArchive& zip_archive, cons
     return nullptr;
   }
   std::unique_ptr<const DexFile> dex_file(OpenMemory(location, zip_entry->GetCrc32(), map.release(),
-                                               error_msg));
+                                                     error_msg));
   if (dex_file.get() == nullptr) {
     *error_msg = StringPrintf("Failed to open dex file '%s' from memory: %s", location.c_str(),
                               error_msg->c_str());
@@ -331,12 +346,25 @@ std::unique_ptr<const DexFile> DexFile::Open(const ZipArchive& zip_archive, cons
 // seems an excessive number.
 static constexpr size_t kWarnOnManyDexFilesThreshold = 100;
 
-bool DexFile::OpenFromZip(const ZipArchive& zip_archive, const std::string& location,
+bool DexFile::OpenFromZip(const ZipArchive& zip_archive,
+                          const std::string& location,
                           std::string* error_msg,
                           std::vector<std::unique_ptr<const DexFile>>* dex_files) {
+  return OpenFromZipWithAllocator(zip_archive, location, nullptr, error_msg, dex_files);
+}
+
+bool DexFile::OpenFromZipWithAllocator(const ZipArchive& zip_archive,
+                                       const std::string& location,
+                                       Allocator* allocator,
+                                       std::string* error_msg,
+                                       std::vector<std::unique_ptr<const DexFile>>* dex_files) {
   DCHECK(dex_files != nullptr) << "DexFile::OpenFromZip: out-param is nullptr";
   ZipOpenErrorCode error_code;
-  std::unique_ptr<const DexFile> dex_file(Open(zip_archive, kClassesDex, location, error_msg,
+  std::unique_ptr<const DexFile> dex_file(Open(zip_archive,
+                                               kClassesDex,
+                                               location,
+                                               allocator,
+                                               error_msg,
                                                &error_code));
   if (dex_file.get() == nullptr) {
     return false;
@@ -352,8 +380,12 @@ bool DexFile::OpenFromZip(const ZipArchive& zip_archive, const std::string& loca
     for (size_t i = 1; ; ++i) {
       std::string name = GetMultiDexClassesDexName(i);
       std::string fake_location = GetMultiDexLocation(i, location.c_str());
-      std::unique_ptr<const DexFile> next_dex_file(Open(zip_archive, name.c_str(), fake_location,
-                                                        error_msg, &error_code));
+      std::unique_ptr<const DexFile> next_dex_file(Open(zip_archive,
+                                                        name.c_str(),
+                                                        fake_location,
+                                                        allocator,
+                                                        error_msg,
+                                                        &error_code));
       if (next_dex_file.get() == nullptr) {
         if (error_code != ZipOpenErrorCode::kEntryNotFound) {
           LOG(WARNING) << error_msg;

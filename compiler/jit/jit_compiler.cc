@@ -109,7 +109,7 @@ JitCompiler::JitCompiler() : total_time_(0) {
       /* dump_passes */ false,
       /* dump_cfg_file_name */ "",
       cumulative_logger_.get(),
-      /* swap_fd */ -1,
+      /* swap_space */ nullptr,
       /* profile_file */ ""));
   // Disable dedupe so we can remove compiled methods.
   compiler_driver_->SetDedupeEnabled(false);
