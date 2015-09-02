@@ -72,6 +72,7 @@
 #include "ScopedLocalRef.h"
 #include "scoped_thread_state_change.h"
 #include "utils.h"
+#include "utils/swap_space.h"
 #include "vector_output_stream.h"
 #include "well_known_classes.h"
 #include "zip_archive.h"
@@ -495,6 +496,22 @@ static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files) {
   }
   return dex_files_size >= kMinDexFileCumulativeSizeForSwap;
 }
+
+class SimpleSwapAllocator : public Allocator {
+ public:
+  explicit SimpleSwapAllocator(SwapSpace* swap) : swap_space_(swap) {}
+
+  void* Alloc(size_t size) OVERRIDE {
+    return swap_space_->Alloc(size);
+  }
+  void Free(void* ptr ATTRIBUTE_UNUSED) OVERRIDE {
+    // Ignore, it's not worth it here. We use this for the zip parts, which will be live for a long
+    // time.
+  }
+
+ private:
+  SwapSpace* swap_space_;  // The swap space we allocate into.
+};
 
 class Dex2Oat FINAL {
  public:
@@ -1196,6 +1213,11 @@ class Dex2Oat FINAL {
       swap_file->DisableAutoClose();  // We'll handle it ourselves, the File object will be
                                       // released immediately.
       unlink(swap_file_name_.c_str());
+
+      // Allocate the swap space.
+      swap_space_.reset(new SwapSpace(swap_fd_, 10 * MB));
+      // And the allocator on top of it.
+      allocator_.reset(new SimpleSwapAllocator(swap_space_.get()));
     }
 
     return true;
@@ -1343,7 +1365,11 @@ class Dex2Oat FINAL {
               << error_msg;
           return false;
         }
-        if (!DexFile::OpenFromZip(*zip_archive.get(), zip_location_, &error_msg, &opened_dex_files_)) {
+        if (!DexFile::OpenFromZipWithAllocator(*zip_archive.get(),
+                                               zip_location_,
+                                               allocator_.get(),
+                                               &error_msg,
+                                               &opened_dex_files_)) {
           LOG(ERROR) << "Failed to open dex from file descriptor for zip file '" << zip_location_
               << "': " << error_msg;
           return false;
@@ -1473,7 +1499,7 @@ class Dex2Oat FINAL {
                                      dump_passes_,
                                      dump_cfg_file_name_,
                                      compiler_phases_timings_.get(),
-                                     swap_fd_,
+                                     swap_space_.get(),
                                      profile_file_));
 
     driver_->CompileAll(class_loader, dex_files_, timings_);
@@ -1698,9 +1724,9 @@ class Dex2Oat FINAL {
   }
 
  private:
-  static size_t OpenDexFiles(const std::vector<const char*>& dex_filenames,
-                             const std::vector<const char*>& dex_locations,
-                             std::vector<std::unique_ptr<const DexFile>>* dex_files) {
+  size_t OpenDexFiles(const std::vector<const char*>& dex_filenames,
+                      const std::vector<const char*>& dex_locations,
+                      std::vector<std::unique_ptr<const DexFile>>* dex_files) {
     DCHECK(dex_files != nullptr) << "OpenDexFiles out-param is nullptr";
     size_t failure_count = 0;
     for (size_t i = 0; i < dex_filenames.size(); i++) {
@@ -1712,7 +1738,11 @@ class Dex2Oat FINAL {
         LOG(WARNING) << "Skipping non-existent dex file '" << dex_filename << "'";
         continue;
       }
-      if (!DexFile::Open(dex_filename, dex_location, &error_msg, dex_files)) {
+      if (!DexFile::OpenWithAllocator(dex_filename,
+                                      dex_location,
+                                      allocator_.get(),
+                                      &error_msg,
+                                      dex_files)) {
         LOG(WARNING) << "Failed to open .dex from file '" << dex_filename << "': " << error_msg;
         ++failure_count;
       }
@@ -1986,6 +2016,12 @@ class Dex2Oat FINAL {
   TimingLogger* timings_;
   std::unique_ptr<CumulativeLogger> compiler_phases_timings_;
   std::unique_ptr<std::ostream> init_failure_output_;
+
+  // If we're using swap.
+  std::unique_ptr<SwapSpace> swap_space_;
+  // If we're using a swap file, this is a base/allocator.h allocator we can use for unzipping swap
+  // files.
+  std::unique_ptr<Allocator> allocator_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(Dex2Oat);
 };

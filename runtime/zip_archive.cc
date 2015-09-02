@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <vector>
 
+#include "base/allocator.h"
 #include "base/stringprintf.h"
 #include "base/unix_file/fd_file.h"
 
@@ -52,22 +53,53 @@ bool ZipEntry::ExtractToFile(File& file, std::string* error_msg) {
 
 MemMap* ZipEntry::ExtractToMemMap(const char* zip_filename, const char* entry_filename,
                                   std::string* error_msg) {
+  return ExtractToMemMapWithAllocator(zip_filename, entry_filename, nullptr, error_msg);
+}
+
+MemMap* ZipEntry::ExtractToMemMapWithAllocator(const char* zip_filename,
+                                               const char* entry_filename,
+                                               Allocator* allocator,
+                                               std::string* error_msg) {
   std::string name(entry_filename);
   name += " extracted in memory from ";
   name += zip_filename;
-  std::unique_ptr<MemMap> map(MemMap::MapAnonymous(name.c_str(),
-                                                   nullptr, GetUncompressedLength(),
-                                                   PROT_READ | PROT_WRITE, false, false,
-                                                   error_msg));
-  if (map.get() == nullptr) {
-    DCHECK(!error_msg->empty());
-    return nullptr;
-  }
+  size_t size = GetUncompressedLength();
+  std::unique_ptr<MemMap> map;
+  if (allocator == nullptr) {
+    map.reset(MemMap::MapAnonymous(name.c_str(),
+                                   nullptr,
+                                   GetUncompressedLength(),
+                                   PROT_READ | PROT_WRITE,
+                                   false,
+                                   false,
+                                   error_msg));
+    if (map.get() == nullptr) {
+      DCHECK(!error_msg->empty());
+      return nullptr;
+    }
+  } else {
+    // Use the given allocator.
+    void* memory = allocator->Alloc(size);
+    if (memory == nullptr) {
+      *error_msg = StringPrintf("Could not allocate %zd bytes for unzipping %s/%s",
+                                size,
+                                zip_filename,
+                                entry_filename);
+      return nullptr;
+    }
 
-  const int32_t error = ExtractToMemory(handle_, zip_entry_,
-                                        map->Begin(), map->Size());
+    map.reset(MemMap::MapDummy(name.c_str(),
+                               reinterpret_cast<uint8_t*>(memory),
+                               size));
+  }
+  DCHECK(map.get() != nullptr);
+
+  const int32_t error = ExtractToMemory(handle_, zip_entry_, map->Begin(), map->Size());
   if (error) {
     *error_msg = std::string(ErrorCodeString(error));
+    if (allocator != nullptr) {
+      allocator->Free(map.get()->Begin());  // Need to free manually.
+    }
     return nullptr;
   }
 

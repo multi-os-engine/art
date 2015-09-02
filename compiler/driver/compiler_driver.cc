@@ -346,9 +346,9 @@ CompilerDriver::CompilerDriver(const CompilerOptions* compiler_options,
                                std::unordered_set<std::string>* compiled_methods,
                                size_t thread_count, bool dump_stats, bool dump_passes,
                                const std::string& dump_cfg_file_name, CumulativeLogger* timer,
-                               int swap_fd, const std::string& profile_file)
-    : swap_space_(swap_fd == -1 ? nullptr : new SwapSpace(swap_fd, 10 * MB)),
-      swap_space_allocator_(new SwapAllocator<void>(swap_space_.get())),
+                               SwapSpace* swap_space, const std::string& profile_file)
+    : swap_space_(swap_space),
+      swap_space_allocator_(new SwapAllocator<void>(swap_space_)),
       profile_present_(false), compiler_options_(compiler_options),
       verification_results_(verification_results),
       method_inliner_map_(method_inliner_map),
@@ -2627,7 +2627,7 @@ std::string CompilerDriver::GetMemoryUsageString(bool extended) const {
   oss << " native alloc=" << PrettySize(allocated_space) << " free="
       << PrettySize(free_space);
 #endif
-  if (swap_space_.get() != nullptr) {
+  if (swap_space_ != nullptr) {
     oss << " swap=" << PrettySize(swap_space_->GetSize());
   }
   if (extended) {

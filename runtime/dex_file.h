@@ -41,6 +41,7 @@ namespace mirror {
   class ClassLoader;
   class DexCache;
 }  // namespace mirror
+class Allocator;
 class ArtField;
 class ArtMethod;
 class ClassLinker;
@@ -406,6 +407,11 @@ class DexFile {
   // Opens .dex files found in the container, guessing the container format based on file extension.
   static bool Open(const char* filename, const char* location, std::string* error_msg,
                    std::vector<std::unique_ptr<const DexFile>>* dex_files);
+  static bool OpenWithAllocator(const char* filename,
+                                const char* location,
+                                Allocator* allocator,
+                                std::string* error_msg,
+                                std::vector<std::unique_ptr<const DexFile>>* dex_files);
 
   // Checks whether the given file has the dex magic, or is a zip file with a classes.dex entry.
   // If this function returns false, Open will not succeed. The inverse is not true, however.
@@ -420,10 +426,16 @@ class DexFile {
     return OpenMemory(base, size, location, location_checksum, nullptr, oat_dex_file, error_msg);
   }
 
-  // Open all classesXXX.dex files from a zip archive.
+  // Open all classesXXX.dex files from a zip archive. Same as calling the below with a null
+  // allocator.
   static bool OpenFromZip(const ZipArchive& zip_archive, const std::string& location,
                           std::string* error_msg,
                           std::vector<std::unique_ptr<const DexFile>>* dex_files);
+  static bool OpenFromZipWithAllocator(const ZipArchive& zip_archive,
+                                       const std::string& location,
+                                       Allocator* allocator,
+                                       std::string* error_msg,
+                                       std::vector<std::unique_ptr<const DexFile>>* dex_files);
 
   // Closes a .dex file.
   virtual ~DexFile();
@@ -1145,7 +1157,10 @@ class DexFile {
                                                  bool verify, std::string* error_msg);
 
   // Opens dex files from within a .jar, .zip, or .apk file
-  static bool OpenZip(int fd, const std::string& location, std::string* error_msg,
+  static bool OpenZip(int fd,
+                      const std::string& location,
+                      Allocator* allocator,
+                      std::string* error_msg,
                       std::vector<std::unique_ptr<const DexFile>>* dex_files);
 
   enum class ZipOpenErrorCode {  // private
@@ -1159,8 +1174,11 @@ class DexFile {
 
   // Opens .dex file from the entry_name in a zip archive. error_code is undefined when non-null
   // return.
-  static std::unique_ptr<const DexFile> Open(const ZipArchive& zip_archive, const char* entry_name,
-                                             const std::string& location, std::string* error_msg,
+  static std::unique_ptr<const DexFile> Open(const ZipArchive& zip_archive,
+                                             const char* entry_name,
+                                             const std::string& location,
+                                             Allocator* allocator,
+                                             std::string* error_msg,
                                              ZipOpenErrorCode* error_code);
 
   // Opens a .dex file at the given address backed by a MemMap

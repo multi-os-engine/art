@@ -31,14 +31,19 @@
 
 namespace art {
 
-class ZipArchive;
+class Allocator;  // From base/allocator.h.
 class MemMap;
+class ZipArchive;
 
 class ZipEntry {
  public:
   bool ExtractToFile(File& file, std::string* error_msg);
+  // Uses the below with null allocator.
   MemMap* ExtractToMemMap(const char* zip_filename, const char* entry_filename,
                           std::string* error_msg);
+  // Null allocator means to use MemMap::Anonymous.
+  MemMap* ExtractToMemMapWithAllocator(const char* zip_filename, const char* entry_filename,
+                                       Allocator* allocator, std::string* error_msg);
   virtual ~ZipEntry();
 
   uint32_t GetUncompressedLength();

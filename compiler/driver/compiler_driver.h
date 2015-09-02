@@ -100,7 +100,7 @@ class CompilerDriver {
                  std::unordered_set<std::string>* compiled_methods,
                  size_t thread_count, bool dump_stats, bool dump_passes,
                  const std::string& dump_cfg_file_name,
-                 CumulativeLogger* timer, int swap_fd,
+                 CumulativeLogger* timer, SwapSpace* swap_space,
                  const std::string& profile_file);
 
   ~CompilerDriver();
@@ -600,7 +600,7 @@ class CompilerDriver {
 
   // Swap pool and allocator used for native allocations. May be file-backed. Needs to be first
   // as other fields rely on this.
-  std::unique_ptr<SwapSpace> swap_space_;
+  SwapSpace* swap_space_;
   std::unique_ptr<SwapAllocator<void> > swap_space_allocator_;
 
   ProfileFile profile_file_;
