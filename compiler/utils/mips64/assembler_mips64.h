@@ -93,6 +93,7 @@ class Mips64Assembler FINAL : public Assembler {
   void Seb(GpuRegister rd, GpuRegister rt);  // R2+
   void Seh(GpuRegister rd, GpuRegister rt);  // R2+
   void Dext(GpuRegister rs, GpuRegister rt, int pos, int size_less_one);  // MIPS64
+  void Dinsu(GpuRegister rt, GpuRegister rs, int pos_less_32, int size_less_one);  // MIPS64
 
   void Sll(GpuRegister rd, GpuRegister rt, int shamt);
   void Srl(GpuRegister rd, GpuRegister rt, int shamt);
@@ -176,7 +177,9 @@ class Mips64Assembler FINAL : public Assembler {
   void Cvtds(FpuRegister fd, FpuRegister fs);
 
   void Mfc1(GpuRegister rt, FpuRegister fs);
+  void Mfhc1(GpuRegister rt, FpuRegister fs);
   void Mtc1(GpuRegister rt, FpuRegister fs);
+  void Mthc1(GpuRegister rt, FpuRegister fs);
   void Dmfc1(GpuRegister rt, FpuRegister fs);  // MIPS64
   void Dmtc1(GpuRegister rt, FpuRegister fs);  // MIPS64
   void Lwc1(FpuRegister ft, GpuRegister rs, uint16_t imm16);

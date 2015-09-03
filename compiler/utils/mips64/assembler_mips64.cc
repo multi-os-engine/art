@@ -25,6 +25,9 @@
 namespace art {
 namespace mips64 {
 
+// Extra temporary/scratch register needed for unaligned load/store instructions.
+static constexpr GpuRegister TMP2 = T3;
+
 void Mips64Assembler::Emit(uint32_t value) {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   buffer_.Emit<uint32_t>(value);
@@ -247,6 +250,14 @@ void Mips64Assembler::Dext(GpuRegister rt, GpuRegister rs, int pos, int size_les
   DCHECK(0 <= pos && pos < 32) << pos;
   DCHECK(0 <= size_less_one && size_less_one < 32) << size_less_one;
   EmitR(0x1f, rs, rt, static_cast<GpuRegister>(size_less_one), pos, 3);
+}
+
+void Mips64Assembler::Dinsu(GpuRegister rt, GpuRegister rs, int pos_less_32, int size_less_one) {
+  DCHECK(0 <= pos_less_32 && pos_less_32 < 32) << pos_less_32;
+  DCHECK(0 <= size_less_one && size_less_one < 32) << size_less_one;
+  DCHECK(0 <= pos_less_32 + size_less_one && pos_less_32 + size_less_one < 32)
+      << pos_less_32 << "+" << size_less_one;
+  EmitR(0x1f, rs, rt, static_cast<GpuRegister>(pos_less_32 + size_less_one), pos_less_32, 6);
 }
 
 void Mips64Assembler::Sll(GpuRegister rd, GpuRegister rt, int shamt) {
@@ -579,8 +590,16 @@ void Mips64Assembler::Mfc1(GpuRegister rt, FpuRegister fs) {
   EmitFR(0x11, 0x00, static_cast<FpuRegister>(rt), fs, static_cast<FpuRegister>(0), 0x0);
 }
 
+void Mips64Assembler::Mfhc1(GpuRegister rt, FpuRegister fs) {
+  EmitFR(0x11, 0x03, static_cast<FpuRegister>(rt), fs, static_cast<FpuRegister>(0), 0x0);
+}
+
 void Mips64Assembler::Mtc1(GpuRegister rt, FpuRegister fs) {
   EmitFR(0x11, 0x04, static_cast<FpuRegister>(rt), fs, static_cast<FpuRegister>(0), 0x0);
+}
+
+void Mips64Assembler::Mthc1(GpuRegister rt, FpuRegister fs) {
+  EmitFR(0x11, 0x07, static_cast<FpuRegister>(rt), fs, static_cast<FpuRegister>(0), 0x0);
 }
 
 void Mips64Assembler::Dmfc1(GpuRegister rt, FpuRegister fs) {
@@ -934,7 +953,7 @@ void Mips64Assembler::Bnezc(GpuRegister rs, Label* label) {
 
 void Mips64Assembler::LoadFromOffset(LoadOperandType type, GpuRegister reg, GpuRegister base,
                                      int32_t offset) {
-  if (!IsInt<16>(offset)) {
+  if (!IsInt<16>(offset) || (type == kLoadDoubleword && (offset & 0x7) && !IsInt<16>(offset + 4))) {
     LoadConst32(AT, offset);
     Daddu(AT, AT, base);
     base = AT;
@@ -955,20 +974,29 @@ void Mips64Assembler::LoadFromOffset(LoadOperandType type, GpuRegister reg, GpuR
       Lhu(reg, base, offset);
       break;
     case kLoadWord:
+      DCHECK_ALIGNED(offset, 4);
       Lw(reg, base, offset);
       break;
     case kLoadUnsignedWord:
+      DCHECK_ALIGNED(offset, 4);
       Lwu(reg, base, offset);
       break;
     case kLoadDoubleword:
-      Ld(reg, base, offset);
+      if (offset & 0x7) {
+        DCHECK_ALIGNED(offset, 4);
+        Lwu(reg, base, offset);
+        Lwu(TMP2, base, offset + 4);
+        Dinsu(reg, TMP2, 0, 31);
+      } else {
+        Ld(reg, base, offset);
+      }
       break;
   }
 }
 
 void Mips64Assembler::LoadFpuFromOffset(LoadOperandType type, FpuRegister reg, GpuRegister base,
                                         int32_t offset) {
-  if (!IsInt<16>(offset)) {
+  if (!IsInt<16>(offset) || (type == kLoadDoubleword && (offset & 0x7) && !IsInt<16>(offset + 4))) {
     LoadConst32(AT, offset);
     Daddu(AT, AT, base);
     base = AT;
@@ -977,10 +1005,18 @@ void Mips64Assembler::LoadFpuFromOffset(LoadOperandType type, FpuRegister reg, G
 
   switch (type) {
     case kLoadWord:
+      DCHECK_ALIGNED(offset, 4);
       Lwc1(reg, base, offset);
       break;
     case kLoadDoubleword:
-      Ldc1(reg, base, offset);
+      if (offset & 0x7) {
+        DCHECK_ALIGNED(offset, 4);
+        Lwc1(reg, base, offset);
+        Lw(TMP2, base, offset + 4);
+        Mthc1(TMP2, reg);
+      } else {
+        Ldc1(reg, base, offset);
+      }
       break;
     default:
       LOG(FATAL) << "UNREACHABLE";
@@ -1016,7 +1052,7 @@ void Mips64Assembler::EmitLoad(ManagedRegister m_dst, GpuRegister src_register, 
 
 void Mips64Assembler::StoreToOffset(StoreOperandType type, GpuRegister reg, GpuRegister base,
                                     int32_t offset) {
-  if (!IsInt<16>(offset)) {
+  if (!IsInt<16>(offset) || (type == kStoreDoubleword && (offset & 0x7) && !IsInt<16>(offset + 4))) {
     LoadConst32(AT, offset);
     Daddu(AT, AT, base);
     base = AT;
@@ -1031,10 +1067,18 @@ void Mips64Assembler::StoreToOffset(StoreOperandType type, GpuRegister reg, GpuR
       Sh(reg, base, offset);
       break;
     case kStoreWord:
+      DCHECK_ALIGNED(offset, 4);
       Sw(reg, base, offset);
       break;
     case kStoreDoubleword:
-      Sd(reg, base, offset);
+      if (offset & 0x7) {
+        DCHECK_ALIGNED(offset, 4);
+        Sw(reg, base, offset);
+        Dsrl32(TMP2, reg, 0);
+        Sw(TMP2, base, offset + 4);
+      } else {
+        Sd(reg, base, offset);
+      }
       break;
     default:
       LOG(FATAL) << "UNREACHABLE";
@@ -1043,7 +1087,7 @@ void Mips64Assembler::StoreToOffset(StoreOperandType type, GpuRegister reg, GpuR
 
 void Mips64Assembler::StoreFpuToOffset(StoreOperandType type, FpuRegister reg, GpuRegister base,
                                        int32_t offset) {
-  if (!IsInt<16>(offset)) {
+  if (!IsInt<16>(offset) || (type == kStoreDoubleword && (offset & 0x7) && !IsInt<16>(offset + 4))) {
     LoadConst32(AT, offset);
     Daddu(AT, AT, base);
     base = AT;
@@ -1052,10 +1096,18 @@ void Mips64Assembler::StoreFpuToOffset(StoreOperandType type, FpuRegister reg, G
 
   switch (type) {
     case kStoreWord:
+      DCHECK_ALIGNED(offset, 4);
       Swc1(reg, base, offset);
       break;
     case kStoreDoubleword:
-      Sdc1(reg, base, offset);
+      if (offset & 0x7) {
+        DCHECK_ALIGNED(offset, 4);
+        Mfhc1(TMP2, reg);
+        Swc1(reg, base, offset);
+        Sw(TMP2, base, offset + 4);
+      } else {
+        Sdc1(reg, base, offset);
+      }
       break;
     default:
       LOG(FATAL) << "UNREACHABLE";

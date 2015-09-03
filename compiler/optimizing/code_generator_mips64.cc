@@ -37,6 +37,7 @@ static constexpr GpuRegister kMethodRegisterArgument = A0;
 
 // We need extra temporary/scratch registers (in addition to AT) in some cases.
 static constexpr GpuRegister TMP = T8;
+static constexpr GpuRegister TMP2 = T3;
 static constexpr FpuRegister FTMP = F8;
 
 // ART Thread Register.
@@ -903,10 +904,11 @@ void CodeGeneratorMIPS64::SetupBlockedRegisters(bool is_baseline ATTRIBUTE_UNUSE
   blocked_core_registers_[SP] = true;
   blocked_core_registers_[RA] = true;
 
-  // AT and TMP(T8) are used as temporary/scratch registers
-  // (similar to how AT is used by MIPS assemblers).
+  // AT, TMP(T8) and TMP2(T3) are used as temporary/scratch
+  // registers (similar to how AT is used by MIPS assemblers).
   blocked_core_registers_[AT] = true;
   blocked_core_registers_[TMP] = true;
+  blocked_core_registers_[TMP2] = true;
   blocked_fpu_registers_[FTMP] = true;
 
   // Reserve suspend and thread registers.
