@@ -1209,6 +1209,11 @@ class SsaLivenessAnalysis : public ValueObject {
     // A value that's not live in compiled code may still be needed in interpreter,
     // due to code motion, etc.
     if (env_holder->IsDeoptimize()) return true;
+    if (env_holder->IsInvoke() ||
+        env_holder->IsInvokeStaticOrDirect() ||
+        env_holder->IsInvokeVirtual() ||
+        env_holder->IsInvokeInterface())
+      return true;
     if (instruction->GetBlock()->GetGraph()->IsDebuggable()) return true;
     return instruction->GetType() == Primitive::kPrimNot;
   }
