@@ -277,6 +277,29 @@ class ScopedObjectAccess : public ScopedObjectAccessUnchecked {
   DISALLOW_COPY_AND_ASSIGN(ScopedObjectAccess);
 };
 
+// Annotalysis helper for going to a suspended state from runnable.
+class ScopedThreadSuspension {
+ public:
+  explicit ScopedThreadSuspension(Thread* self, ThreadState suspended_state)
+      REQUIRES(!Locks::thread_suspend_count_lock_, !Roles::uninterruptible_)
+      UNLOCK_FUNCTION(Locks::mutator_lock_) ALWAYS_INLINE
+      : self_(self),
+        suspended_state_(suspended_state) {
+    self_->TransitionFromRunnableToSuspended(suspended_state);
+  }
+
+  ~ScopedThreadSuspension() SHARED_LOCK_FUNCTION(Locks::mutator_lock_) ALWAYS_INLINE {
+    DCHECK_EQ(self_->GetState(), suspended_state_);
+    self_->TransitionFromSuspendedToRunnable();
+  }
+
+ private:
+  Thread* const self_;
+  ThreadState suspended_state_;
+  DISALLOW_COPY_AND_ASSIGN(ScopedThreadSuspension);
+};
+
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_SCOPED_THREAD_STATE_CHANGE_H_
