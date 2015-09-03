@@ -36,6 +36,8 @@ void HBooleanSimplifier::TryRemovingNegatedCondition(HBasicBlock* block) {
   if (!boolean_not->HasUses()) {
     boolean_not->GetBlock()->RemoveInstruction(boolean_not);
   }
+
+  MaybeRecordStat(MethodCompilationStat::kBooleanSimplifier);
 }
 
 // Returns true if 'block1' and 'block2' are empty, merge into the same single
@@ -154,6 +156,7 @@ void HBooleanSimplifier::TryRemovingBooleanSelection(HBasicBlock* block) {
   // entry block. Any following blocks would have had the join block
   // as a dominator, and `MergeWith` handles changing that to the
   // entry block.
+  MaybeRecordStat(MethodCompilationStat::kBooleanSimplifier);
 }
 
 void HBooleanSimplifier::Run() {
