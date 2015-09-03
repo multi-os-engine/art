@@ -32,8 +32,9 @@ namespace art {
  */
 class HConstantFolding : public HOptimization {
  public:
-  explicit HConstantFolding(HGraph* graph, const char* name = kConstantFoldingPassName)
-      : HOptimization(graph, name) {}
+  explicit HConstantFolding(HGraph* graph, OptimizingCompilerStats* stats,
+                            const char* name = kConstantFoldingPassName)
+      : HOptimization(graph, name, stats) {}
 
   void Run() OVERRIDE;
 

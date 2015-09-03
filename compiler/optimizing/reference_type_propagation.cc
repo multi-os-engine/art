@@ -75,8 +75,9 @@ class RTPVisitor : public HGraphDelegateVisitor {
 
 ReferenceTypePropagation::ReferenceTypePropagation(HGraph* graph,
                                                    StackHandleScopeCollection* handles,
+                                                   OptimizingCompilerStats* stats,
                                                    const char* name)
-    : HOptimization(graph, name),
+    : HOptimization(graph, name, stats),
       handles_(handles),
       worklist_(graph->GetArena(), kDefaultWorklistSize) {
   // Mutator lock is required for NewHandle, but annotalysis ignores constructors.
@@ -722,6 +723,7 @@ void ReferenceTypePropagation::ProcessWorklist() {
     HInstruction* instruction = worklist_.Pop();
     if (UpdateNullability(instruction) || UpdateReferenceTypeInfo(instruction)) {
       AddDependentInstructionsToWorklist(instruction);
+      MaybeRecordStat(MethodCompilationStat::kReferenceTypePropagation);
     }
   }
 }

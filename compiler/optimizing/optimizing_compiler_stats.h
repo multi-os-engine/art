@@ -54,6 +54,11 @@ enum MethodCompilationStat {
   kRemovedCheckedCast,
   kRemovedDeadInstruction,
   kRemovedNullCheck,
+  kConstantFolding,
+  kBooleanSimplifier,
+  kReferenceTypePropagation,
+  kIntrinsicsRecognizer,
+  kLICM,
   kLastStat
 };
 
@@ -124,6 +129,11 @@ class OptimizingCompilerStats {
       case kRemovedCheckedCast: return "kRemovedCheckedCast";
       case kRemovedDeadInstruction: return "kRemovedDeadInstruction";
       case kRemovedNullCheck: return "kRemovedNullCheck";
+      case kConstantFolding: return "kConstantFolding";
+      case kBooleanSimplifier: return "kBooleanSimplifier";
+      case kReferenceTypePropagation: return "kReferenceTypePropagation";
+      case kIntrinsicsRecognizer: return "kIntrinsicsRecognizer";
+      case kLICM: return "kLICM";
 
       case kLastStat: break;  // Invalid to print out.
     }

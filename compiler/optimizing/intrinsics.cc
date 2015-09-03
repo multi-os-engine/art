@@ -377,6 +377,7 @@ void IntrinsicsRecognizer::Run() {
                            << PrettyMethod(invoke->GetDexMethodIndex(), invoke->GetDexFile());
             } else {
               invoke->SetIntrinsic(intrinsic, NeedsEnvironmentOrCache(intrinsic));
+              MaybeRecordStat(MethodCompilationStat::kIntrinsicsRecognizer);
             }
           }
         }

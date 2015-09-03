@@ -32,6 +32,7 @@ class ReferenceTypePropagation : public HOptimization {
  public:
   ReferenceTypePropagation(HGraph* graph,
                            StackHandleScopeCollection* handles,
+                           OptimizingCompilerStats* stats,
                            const char* name = kReferenceTypePropagationPassName);
 
   void Run() OVERRIDE;

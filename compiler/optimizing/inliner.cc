@@ -381,10 +381,10 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
 
   // Run simple optimizations on the graph.
   HDeadCodeElimination dce(callee_graph, stats_);
-  HConstantFolding fold(callee_graph);
-  ReferenceTypePropagation type_propagation(callee_graph, handles_);
+  HConstantFolding fold(callee_graph, stats_);
+  ReferenceTypePropagation type_propagation(callee_graph, handles_, stats_);
   InstructionSimplifier simplify(callee_graph, stats_);
-  IntrinsicsRecognizer intrinsics(callee_graph, compiler_driver_);
+  IntrinsicsRecognizer intrinsics(callee_graph, compiler_driver_, stats_);
 
   HOptimization* optimizations[] = {
     &intrinsics,
