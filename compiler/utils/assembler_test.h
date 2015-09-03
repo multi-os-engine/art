@@ -188,6 +188,70 @@ class AssemblerTest : public testing::Test {
     return str;
   }
 
+  template <typename Reg1, typename Reg2, typename ImmType1, typename ImmType2>
+  std::string RepeatTemplatedRegistersImmBitsImmBits(void (Ass::*f)(Reg1, Reg2, ImmType1, ImmType2),
+      int imm_bits1,
+      int imm_bits2,
+      const std::vector<Reg1*> reg1_registers,
+      const std::vector<Reg2*> reg2_registers,
+      std::string (AssemblerTest::*GetName1)(const Reg1&),
+      std::string (AssemblerTest::*GetName2)(const Reg2&),
+      std::string fmt) {
+    std::vector<int64_t> imms1 = CreateImmediateValuesBits(abs(imm_bits1), imm_bits1 > 0);
+    std::vector<int64_t> imms2 = CreateImmediateValuesBits(abs(imm_bits2), imm_bits2 > 0);
+    WarnOnCombinations(reg1_registers.size() * reg2_registers.size() * imms1.size() * imms2.size());
+
+    std::string str;
+    for (auto reg1 : reg1_registers) {
+      for (auto reg2 : reg2_registers) {
+        for (int64_t imm1 : imms1) {
+          for (int64_t imm2 : imms2) {
+            Imm new_imm1 = CreateImmediate(imm1);
+            Imm new_imm2 = CreateImmediate(imm2);
+            (assembler_.get()->*f)(*reg1, *reg2, new_imm1, new_imm2);
+            std::string base = fmt;
+
+            std::string reg1_string = (this->*GetName1)(*reg1);
+            size_t reg1_index;
+            while ((reg1_index = base.find(REG1_TOKEN)) != std::string::npos) {
+              base.replace(reg1_index, ConstexprStrLen(REG1_TOKEN), reg1_string);
+            }
+
+            std::string reg2_string = (this->*GetName2)(*reg2);
+            size_t reg2_index;
+            while ((reg2_index = base.find(REG2_TOKEN)) != std::string::npos) {
+              base.replace(reg2_index, ConstexprStrLen(REG2_TOKEN), reg2_string);
+            }
+
+            size_t imm1_index = base.find(IMM1_TOKEN);
+            if (imm1_index != std::string::npos) {
+              std::ostringstream sreg;
+              sreg << imm1;
+              std::string imm1_string = sreg.str();
+              base.replace(imm1_index, ConstexprStrLen(IMM1_TOKEN), imm1_string);
+            }
+
+            size_t imm2_index = base.find(IMM2_TOKEN);
+            if (imm2_index != std::string::npos) {
+              std::ostringstream sreg;
+              sreg << imm2;
+              std::string imm2_string = sreg.str();
+              base.replace(imm2_index, ConstexprStrLen(IMM2_TOKEN), imm2_string);
+            }
+
+            if (str.size() > 0) {
+              str += "\n";
+            }
+            str += base;
+          }
+        }
+      }
+    }
+    // Add a newline at the end.
+    str += "\n";
+    return str;
+  }
+
   template <typename RegType, typename ImmType>
   std::string RepeatTemplatedRegisterImmBits(void (Ass::*f)(RegType, ImmType),
                                               int imm_bits,
@@ -232,6 +296,21 @@ class AssemblerTest : public testing::Test {
   std::string RepeatRRIb(void (Ass::*f)(Reg, Reg, ImmType), int imm_bits, std::string fmt) {
     return RepeatTemplatedRegistersImmBits<Reg, Reg, ImmType>(f,
         imm_bits,
+        GetRegisters(),
+        GetRegisters(),
+        &AssemblerTest::GetRegName<RegisterView::kUsePrimaryName>,
+        &AssemblerTest::GetRegName<RegisterView::kUsePrimaryName>,
+        fmt);
+  }
+
+  template <typename ImmType1, typename ImmType2>
+  std::string RepeatRRIbIb(void (Ass::*f)(Reg, Reg, ImmType1, ImmType2),
+                           int imm_bits1,
+                           int imm_bits2,
+                           std::string fmt) {
+    return RepeatTemplatedRegistersImmBitsImmBits<Reg, Reg, ImmType1, ImmType2>(f,
+        imm_bits1,
+        imm_bits2,
         GetRegisters(),
         GetRegisters(),
         &AssemblerTest::GetRegName<RegisterView::kUsePrimaryName>,
@@ -798,6 +877,8 @@ class AssemblerTest : public testing::Test {
   static constexpr const char* REG2_TOKEN = "{reg2}";
   static constexpr const char* REG3_TOKEN = "{reg3}";
   static constexpr const char* IMM_TOKEN = "{imm}";
+  static constexpr const char* IMM1_TOKEN = "{imm1}";
+  static constexpr const char* IMM2_TOKEN = "{imm2}";
 
  private:
   template <RegisterView kRegView>
