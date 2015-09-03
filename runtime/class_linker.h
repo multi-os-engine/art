@@ -59,6 +59,13 @@ template<size_t kNumReferences> class PACKED(4) StackHandleScope;
 
 enum VisitRootFlags : uint8_t;
 
+class ClassLoaderVisitor {
+ public:
+  virtual ~ClassLoaderVisitor() {}
+  virtual void Visit(mirror::ClassLoader* class_loader)
+      SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_) = 0;
+};
+
 class ClassLinker {
  public:
   // Well known mirror::Class roots accessed via GetClassRoot.
@@ -481,8 +488,17 @@ class ClassLinker {
   void DropFindArrayClassCache() SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:
+  // If remove_cleared_loaders is true then we must have classlinker_classes_lock_ as exclusive
+  // held.
+  void VisitClassLoadersAndRemoveClearedLoaders(ClassLoaderVisitor* visitor)
+      REQUIRES(Locks::classlinker_classes_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  void VisitClassLoaders(ClassLoaderVisitor* visitor) const
+      SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
+
+
   void VisitClassesInternal(ClassVisitor* visitor)
-      REQUIRES(Locks::classlinker_classes_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
+      SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
 
   // Returns the number of zygote and image classes.
   size_t NumZygoteClasses() const
@@ -634,7 +650,7 @@ class ClassLinker {
   size_t GetDexCacheCount() SHARED_REQUIRES(Locks::mutator_lock_, dex_lock_) {
     return dex_caches_.size();
   }
-  const std::list<jobject>& GetDexCaches() SHARED_REQUIRES(Locks::mutator_lock_, dex_lock_) {
+  const std::list<jweak>& GetDexCaches() SHARED_REQUIRES(Locks::mutator_lock_, dex_lock_) {
     return dex_caches_;
   }
 
@@ -709,12 +725,12 @@ class ClassLinker {
   mutable ReaderWriterMutex dex_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   // JNI weak globals to allow dex caches to get unloaded. We lazily delete weak globals when we
   // register new dex files.
-  std::list<jobject> dex_caches_ GUARDED_BY(dex_lock_);
+  std::list<jweak> dex_caches_ GUARDED_BY(dex_lock_);
   std::vector<const OatFile*> oat_files_ GUARDED_BY(dex_lock_);
 
-  // This contains the class laoders which have class tables. It is populated by
-  // InsertClassTableForClassLoader.
-  std::vector<GcRoot<mirror::ClassLoader>> class_loaders_
+  // This contains the class loaders which have class tables. It is populated by
+  // InsertClassTableForClassLoader. Weak roots to enable class unloading.
+  std::list<jweak> class_loaders_
       GUARDED_BY(Locks::classlinker_classes_lock_);
 
   // Boot class path table. Since the class loader for this is null.
