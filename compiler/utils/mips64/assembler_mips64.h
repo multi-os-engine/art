@@ -29,6 +29,9 @@
 namespace art {
 namespace mips64 {
 
+static constexpr size_t kMips64WordSize = 4;
+static constexpr size_t kMips64DoublewordSize = 8;
+
 enum LoadOperandType {
   kLoadSignedByte,
   kLoadUnsignedByte,
@@ -97,6 +100,7 @@ class Mips64Assembler FINAL : public Assembler {
   void Dsbh(GpuRegister rd, GpuRegister rt);  // R2+
   void Dshd(GpuRegister rd, GpuRegister rt);  // R2+
   void Dext(GpuRegister rs, GpuRegister rt, int pos, int size_less_one);  // MIPS64
+  void Dinsu(GpuRegister rt, GpuRegister rs, int pos_less_32, int size_less_one);  // MIPS64
   void Wsbh(GpuRegister rd, GpuRegister rt);
   void Sc(GpuRegister rt, GpuRegister base, int16_t imm9 = 0);
   void Scd(GpuRegister rt, GpuRegister base, int16_t imm9 = 0);
@@ -219,7 +223,9 @@ class Mips64Assembler FINAL : public Assembler {
   void Cvtdl(FpuRegister fd, FpuRegister fs);
 
   void Mfc1(GpuRegister rt, FpuRegister fs);
+  void Mfhc1(GpuRegister rt, FpuRegister fs);
   void Mtc1(GpuRegister rt, FpuRegister fs);
+  void Mthc1(GpuRegister rt, FpuRegister fs);
   void Dmfc1(GpuRegister rt, FpuRegister fs);  // MIPS64
   void Dmtc1(GpuRegister rt, FpuRegister fs);  // MIPS64
   void Lwc1(FpuRegister ft, GpuRegister rs, uint16_t imm16);
