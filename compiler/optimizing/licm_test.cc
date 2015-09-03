@@ -78,7 +78,7 @@ class LICMTest : public testing::Test {
     ASSERT_TRUE(graph_->TryBuildingSsa());
     SideEffectsAnalysis side_effects(graph_);
     side_effects.Run();
-    LICM licm(graph_, side_effects);
+    LICM licm(graph_, side_effects, nullptr);
     licm.Run();
   }
 

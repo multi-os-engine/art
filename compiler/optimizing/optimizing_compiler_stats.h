@@ -49,6 +49,10 @@ enum MethodCompilationStat {
   kNotCompiledUnsupportedIsa,
   kNotCompiledVerificationError,
   kNotCompiledVerifyAtRuntime,
+  kConstantFolding,
+  kBooleanSimplifier,
+  kIntrinsicsRecognizer,
+  kLICM,
   kLastStat
 };
 
@@ -111,6 +115,10 @@ class OptimizingCompilerStats {
       case kNotCompiledUnsupportedIsa : name = "NotCompiledUnsupportedIsa"; break;
       case kNotCompiledVerificationError : name = "NotCompiledVerificationError"; break;
       case kNotCompiledVerifyAtRuntime : name = "NotCompiledVerifyAtRuntime"; break;
+      case kConstantFolding : name = "kConstantFolding"; break;
+      case kBooleanSimplifier : name = "kBooleanSimplifier"; break;
+      case kIntrinsicsRecognizer : name = "kIntrinsicsRecognizer"; break;
+      case kLICM : name = "kLICM"; break;
 
       case kLastStat:
         LOG(FATAL) << "invalid stat "
