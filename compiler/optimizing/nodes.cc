@@ -1353,8 +1353,7 @@ void HBasicBlock::DisconnectAndDelete() {
 
 void HBasicBlock::MergeWith(HBasicBlock* other) {
   DCHECK_EQ(GetGraph(), other->GetGraph());
-  DCHECK(std::find(dominated_blocks_.begin(), dominated_blocks_.end(), other) !=
-      dominated_blocks_.end());
+  DCHECK(ContainsElement(dominated_blocks_, other));
   DCHECK_EQ(GetSingleSuccessor(), other);
   DCHECK_EQ(other->GetSinglePredecessor(), this);
   DCHECK(other->GetPhis().IsEmpty());

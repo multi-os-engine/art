@@ -23,6 +23,7 @@
 
 #include "base/arena_containers.h"
 #include "base/arena_object.h"
+#include "base/stl_util.h"
 #include "dex/compiler_enums.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "handle.h"
@@ -663,9 +664,7 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   }
 
   bool HasSuccessor(const HBasicBlock* block, size_t start_from = 0u) {
-    DCHECK_LE(start_from, successors_.size());
-    auto it = std::find(successors_.begin() + start_from, successors_.end(), block);
-    return it != successors_.end();
+    return ContainsElement(successors_, block, start_from);
   }
 
   const ArenaVector<HBasicBlock*>& GetDominatedBlocks() const {
@@ -710,15 +709,11 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   void AddDominatedBlock(HBasicBlock* block) { dominated_blocks_.push_back(block); }
 
   void RemoveDominatedBlock(HBasicBlock* block) {
-    auto it = std::find(dominated_blocks_.begin(), dominated_blocks_.end(), block);
-    DCHECK(it != dominated_blocks_.end());
-    dominated_blocks_.erase(it);
+    RemoveExistingElement(dominated_blocks_, block);
   }
 
   void ReplaceDominatedBlock(HBasicBlock* existing, HBasicBlock* new_block) {
-    auto it = std::find(dominated_blocks_.begin(), dominated_blocks_.end(), existing);
-    DCHECK(it != dominated_blocks_.end());
-    *it = new_block;
+    ReplaceExistingElement(dominated_blocks_, existing, new_block);
   }
 
   void ClearDominanceInformation();
@@ -793,15 +788,11 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   }
 
   size_t GetPredecessorIndexOf(HBasicBlock* predecessor) const {
-    auto it = std::find(predecessors_.begin(), predecessors_.end(), predecessor);
-    DCHECK(it != predecessors_.end());
-    return std::distance(predecessors_.begin(), it);
+    return IndexOfExistingElement(predecessors_, predecessor);
   }
 
   size_t GetSuccessorIndexOf(HBasicBlock* successor) const {
-    auto it = std::find(successors_.begin(), successors_.end(), successor);
-    DCHECK(it != successors_.end());
-    return std::distance(successors_.begin(), it);
+    return IndexOfExistingElement(successors_, successor);
   }
 
   HBasicBlock* GetSinglePredecessor() const {
