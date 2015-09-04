@@ -580,8 +580,9 @@ inline bool JavaVMExt::MayAccessWeakGlobals(Thread* self) const {
 }
 
 inline bool JavaVMExt::MayAccessWeakGlobalsUnlocked(Thread* self) const {
-  return kUseReadBarrier ? self->GetWeakRefAccessEnabled() :
-      allow_accessing_weak_globals_.LoadSequentiallyConsistent();
+  return kUseReadBarrier
+      ? self->GetWeakRefAccessEnabled()
+      : allow_accessing_weak_globals_.LoadSequentiallyConsistent();
 }
 
 mirror::Object* JavaVMExt::DecodeWeakGlobal(Thread* self, IndirectRef ref) {
@@ -712,7 +713,7 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env, const std::string& path, jobject 
     }
   }
   if (!created_library) {
-    LOG(INFO) << "WOW: we lost a race to add shared library: "
+    LOG(INFO) << "WOW we lost a race to add shared library: "
         << "\"" << path << "\" ClassLoader=" << class_loader;
     return library->CheckOnLoadResult();
   }
