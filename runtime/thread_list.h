@@ -19,6 +19,7 @@
 
 #include "base/histogram.h"
 #include "base/mutex.h"
+#include "base/value_object.h"
 #include "gc_root.h"
 #include "jni.h"
 #include "object_callbacks.h"
@@ -64,8 +65,9 @@ class ThreadList {
   // is currenly used for hprof since large heaps take a long time.
   void SuspendAll(const char* cause, bool long_suspend = false)
       EXCLUSIVE_LOCK_FUNCTION(Locks::mutator_lock_)
-      REQUIRES(!Locks::thread_list_lock_, !Locks::thread_suspend_count_lock_);
-
+      REQUIRES(!Locks::thread_list_lock_,
+               !Locks::thread_suspend_count_lock_,
+               !Locks::mutator_lock_);
 
   // Suspend a thread using a peer, typically used by the debugger. Returns the thread on success,
   // else null. The peer is used to identify the thread to avoid races with the thread terminating.
@@ -186,6 +188,19 @@ class ThreadList {
   friend class Thread;
 
   DISALLOW_COPY_AND_ASSIGN(ThreadList);
+};
+
+// Helper for suspending all threads and
+class ScopedSuspendAll : public ValueObject {
+ public:
+  ScopedSuspendAll(const char* cause, bool long_suspend = false)
+     EXCLUSIVE_LOCK_FUNCTION(Locks::mutator_lock_)
+     REQUIRES(!Locks::thread_list_lock_,
+              !Locks::thread_suspend_count_lock_,
+              !Locks::mutator_lock_);
+  ~ScopedSuspendAll()
+      UNLOCK_FUNCTION(Locks::mutator_lock_)
+      REQUIRES(!Locks::thread_list_lock_, !Locks::thread_suspend_count_lock_);
 };
 
 }  // namespace art
