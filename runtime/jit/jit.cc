@@ -162,16 +162,14 @@ Jit::~Jit() {
 
 void Jit::CreateInstrumentationCache(size_t compile_threshold) {
   CHECK_GT(compile_threshold, 0U);
-  Runtime* const runtime = Runtime::Current();
-  runtime->GetThreadList()->SuspendAll(__FUNCTION__);
+  ScopedSuspendAll ssa(__FUNCTION__);
   // Add Jit interpreter instrumentation, tells the interpreter when to notify the jit to compile
   // something.
   instrumentation_cache_.reset(new jit::JitInstrumentationCache(compile_threshold));
-  runtime->GetInstrumentation()->AddListener(
+  Runtime::Current()->GetInstrumentation()->AddListener(
       new jit::JitInstrumentationListener(instrumentation_cache_.get()),
       instrumentation::Instrumentation::kMethodEntered |
       instrumentation::Instrumentation::kBackwardBranch);
-  runtime->GetThreadList()->ResumeAll();
 }
 
 }  // namespace jit
