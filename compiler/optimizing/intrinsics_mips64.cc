@@ -34,6 +34,9 @@ namespace mips64 {
 // We need extra temporary/scratch registers (in addition to AT) in some cases.
 static constexpr GpuRegister TMP = T8;
 
+// ART Thread Register.
+static constexpr GpuRegister TR = S1;
+
 IntrinsicLocationsBuilderMIPS64::IntrinsicLocationsBuilderMIPS64(CodeGeneratorMIPS64* codegen)
   : arena_(codegen->GetGraph()->GetArena()) {
 }
@@ -721,6 +724,22 @@ void IntrinsicCodeGeneratorMIPS64::VisitMemoryPokeLongNative(HInvoke* invoke) {
         0);
 }
 
+// Thread java.lang.Thread.currentThread()
+void IntrinsicLocationsBuilderMIPS64::VisitThreadCurrentThread(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kNoCall,
+                                                            kIntrinsified);
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorMIPS64::VisitThreadCurrentThread(HInvoke* invoke) {
+  Mips64Assembler* masm = GetAssembler();
+  __ LoadFromOffset(kLoadUnsignedWord,
+                    invoke->GetLocations()->Out().AsRegister<GpuRegister>(),
+                    TR,
+                    Thread::PeerOffset<8>().Int32Value());
+}
+
 // Unimplemented intrinsics.
 
 #define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
@@ -732,7 +751,6 @@ void IntrinsicCodeGeneratorMIPS64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSE
 UNIMPLEMENTED_INTRINSIC(MathRoundDouble)
 UNIMPLEMENTED_INTRINSIC(MathRoundFloat)
 
-UNIMPLEMENTED_INTRINSIC(ThreadCurrentThread)
 UNIMPLEMENTED_INTRINSIC(UnsafeGet)
 UNIMPLEMENTED_INTRINSIC(UnsafeGetVolatile)
 UNIMPLEMENTED_INTRINSIC(UnsafeGetLong)
