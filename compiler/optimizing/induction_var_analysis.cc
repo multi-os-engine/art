@@ -42,33 +42,6 @@ static bool IsEntryPhi(HLoopInformation* loop, HInstruction* instruction) {
       instruction->GetBlock() == loop->GetHeader();
 }
 
-/**
- * Returns true for 32/64-bit integral constant, passing its value as output parameter.
- */
-static bool IsIntAndGet(HInstruction* instruction, int64_t* value) {
-  if (instruction->IsIntConstant()) {
-    *value = instruction->AsIntConstant()->GetValue();
-    return true;
-  } else if (instruction->IsLongConstant()) {
-    *value = instruction->AsLongConstant()->GetValue();
-    return true;
-  }
-  return false;
-}
-
-/**
- * Returns a string representation of an instruction
- * (for testing and debugging only).
- */
-static std::string InstructionToString(HInstruction* instruction) {
-  if (instruction->IsIntConstant()) {
-    return std::to_string(instruction->AsIntConstant()->GetValue());
-  } else if (instruction->IsLongConstant()) {
-    return std::to_string(instruction->AsLongConstant()->GetValue()) + "L";
-  }
-  return std::to_string(instruction->GetId()) + ":" + instruction->DebugName();
-}
-
 //
 // Class methods.
 //
@@ -375,19 +348,17 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferShl(Inducti
                                                                          InductionInfo* b,
                                                                          Primitive::Type t) {
   // Transfer over a shift left: treat shift by restricted constant as equivalent multiplication.
-  if (a != nullptr && b != nullptr && b->induction_class == kInvariant && b->operation == kFetch) {
-    int64_t value = -1;
+  int64_t value = -1;
+  if (a != nullptr && IsIntAndGet(b, &value)) {
     // Obtain the constant needed for the multiplication. This yields an existing instruction
     // if the constants is already there. Otherwise, this has a side effect on the HIR.
     // The restriction on the shift factor avoids generating a negative constant
     // (viz. 1 << 31 and 1L << 63 set the sign bit). The code assumes that generalization
     // for shift factors outside [0,32) and [0,64) ranges is done by earlier simplification.
-    if (IsIntAndGet(b->fetch, &value)) {
-      if (t == Primitive::kPrimInt && 0 <= value && value < 31) {
-        return TransferMul(a, NewInvariantFetch(graph_->GetIntConstant(1 << value)));
-      } else if (t == Primitive::kPrimLong && 0 <= value && value < 63) {
-        return TransferMul(a, NewInvariantFetch(graph_->GetLongConstant(1L << value)));
-      }
+    if (t == Primitive::kPrimInt && 0 <= value && value < 31) {
+      return TransferMul(a, NewInvariantFetch(graph_->GetIntConstant(1 << value)));
+    } else if (t == Primitive::kPrimLong && 0 <= value && value < 63) {
+      return TransferMul(a, NewInvariantFetch(graph_->GetLongConstant(1L << value)));
     }
   }
   return nullptr;
@@ -516,6 +487,49 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::LookupInfo(HLoopInf
   return nullptr;
 }
 
+HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::NewSimplifiedInvariant(InductionOp op,
+                                                                                    InductionInfo* a,
+                                                                                    InductionInfo* b) {
+  // Some light-weight simplifications are performed during construction of invariants.
+  // This often safes memory and yields a more concise representation of the induction.
+  int64_t value = -1;
+  if (IsIntAndGet(a, &value)) {
+    if (value == 0) {
+      // Simplify 0 + b = b, 0 * b = 0.
+      if (op == kAdd) {
+        return b;
+      } else if (op == kMul) {
+        return a;
+      }
+    } else if (value == 1 && op == kMul) {
+      // Simplify 1 * b = b.
+      return b;
+    }
+  }
+  if (IsIntAndGet(b, &value)) {
+    if (value == 0) {
+      // Simplify a + 0 = a, a - 0 = a, a * 0 = 0, - 0 = 0.
+      if (op == kAdd || op == kSub) {
+        return a;
+      } else if (op == kMul || op == kNeg) {
+        return b;
+      }
+    } else if (value == 1 && (op == kMul || op == kDiv)) {
+      // Simplify a * 1 = a, a / 1 = a.
+      return a;
+    }
+  } else if (b->operation == kNeg) {
+    // Simplify a + (-b) = a - b, a - (-b) = a + b, - (-b) = b.
+    switch (op) {
+      case kAdd: op = kSub; b = b->op_b; break;
+      case kSub: op = kAdd; b = b->op_b; break;
+      case kNeg: return b->op_b;
+      default:   break;
+    }
+  }
+  return new (graph_->GetArena()) InductionInfo(kInvariant, op, a, b, nullptr);
+}
+
 bool HInductionVarAnalysis::InductionEqual(InductionInfo* info1,
                                            InductionInfo* info2) {
   // Test structural equality only, without accounting for simplifications.
@@ -531,9 +545,24 @@ bool HInductionVarAnalysis::InductionEqual(InductionInfo* info1,
   return info1 == info2;
 }
 
+bool HInductionVarAnalysis::IsIntAndGet(InductionInfo* info, int64_t* value) {
+  if (info != nullptr && info->induction_class == kInvariant && info->operation == kFetch) {
+    DCHECK(info->fetch);
+    if (info->fetch->IsIntConstant()) {
+      *value = info->fetch->AsIntConstant()->GetValue();
+      return true;
+    } else if (info->fetch->IsLongConstant()) {
+      *value = info->fetch->AsLongConstant()->GetValue();
+      return true;
+    }
+  }
+  return false;
+}
+
 std::string HInductionVarAnalysis::InductionToString(InductionInfo* info) {
   if (info != nullptr) {
     if (info->induction_class == kInvariant) {
+      int64_t value = -1;
       std::string inv = "(";
       inv += InductionToString(info->op_a);
       switch (info->operation) {
@@ -545,7 +574,11 @@ std::string HInductionVarAnalysis::InductionToString(InductionInfo* info) {
         case kDiv:   inv += " / "; break;
         case kFetch:
           DCHECK(info->fetch);
-          inv += InstructionToString(info->fetch);
+          if (IsIntAndGet(info, &value)) {
+            inv += std::to_string(value);
+          } else {
+            inv += std::to_string(info->fetch->GetId()) + ":" + info->fetch->DebugName();
+          }
           break;
       }
       inv += InductionToString(info->op_b);
