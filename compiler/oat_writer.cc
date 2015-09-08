@@ -32,6 +32,7 @@
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
 #include "gc/space/space.h"
+#include "gc/space/image_space.h"
 #include "image_writer.h"
 #include "linker/relative_patcher.h"
 #include "mirror/array.h"
@@ -43,6 +44,7 @@
 #include "safe_map.h"
 #include "scoped_thread_state_change.h"
 #include "handle_scope-inl.h"
+#include "utils/dex_cache_arrays_layout-inl.h"
 #include "verifier/method_verifier.h"
 
 namespace art {
@@ -142,6 +144,18 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     offset = InitOatCodeDexFiles(offset);
   }
   size_ = offset;
+
+  if (image_writer == nullptr) {
+    // Allocate space for app dex cache arrays in the .bss section.
+    size_t bss_start = RoundUp(size_, kPageSize);
+    size_t pointer_size = GetInstructionSetPointerSize(instruction_set);
+    bss_size_ = 0u;
+    for (const DexFile* dex_file : dex_files) {
+      dex_cache_arrays_offsets_.Put(dex_file, bss_start + bss_size_);
+      DexCacheArraysLayout layout(pointer_size, dex_file);
+      bss_size_ += layout.Size();
+    }
+  }
 
   CHECK_EQ(dex_files_->size(), oat_dex_files_.size());
   CHECK_EQ(compiler->IsImage(), image_writer_ != nullptr);
@@ -847,18 +861,21 @@ class OatWriter::WriteCodeMethodVisitor : public OatDexMethodVisitor {
       const uint8_t* oat_data = writer_->image_writer_->GetOatFileBegin() + file_offset_;
       return element - oat_data;
     } else {
-      LOG(FATAL) << "Unimplemented.";
-      UNREACHABLE();
+      size_t start = writer_->dex_cache_arrays_offsets_.Get(patch.TargetDexCacheDexFile());
+      return start + patch.TargetDexCacheElementOffset();
     }
   }
 
   void PatchObjectAddress(std::vector<uint8_t>* code, uint32_t offset, mirror::Object* object)
       SHARED_REQUIRES(Locks::mutator_lock_) {
-    // NOTE: Direct method pointers across oat files don't use linker patches. However, direct
-    // type pointers across oat files do. (TODO: Investigate why.)
     if (writer_->image_writer_ != nullptr) {
       object = writer_->image_writer_->GetImageAddress(object);
+    } else {
+      // NOTE: We're using linker patches for app->boot references when
+      // the image can be relocated and therefore we need to emit .oat_patches.
+      DCHECK(Runtime::Current()->GetHeap()->FindSpaceFromObject(object, false)->IsImageSpace());
     }
+    // Note: We only patch targeting Objects in image which is in the low 4gb.
     uint32_t address = PointerToLowMemUInt32(object);
     DCHECK_LE(offset + 4, code->size());
     uint8_t* data = &(*code)[offset];
@@ -870,12 +887,16 @@ class OatWriter::WriteCodeMethodVisitor : public OatDexMethodVisitor {
 
   void PatchMethodAddress(std::vector<uint8_t>* code, uint32_t offset, ArtMethod* method)
       SHARED_REQUIRES(Locks::mutator_lock_) {
-    // NOTE: Direct method pointers across oat files don't use linker patches. However, direct
-    // type pointers across oat files do. (TODO: Investigate why.)
     if (writer_->image_writer_ != nullptr) {
       method = writer_->image_writer_->GetImageMethodAddress(method);
+    } else if (kIsDebugBuild) {
+      // NOTE: We're using linker patches for app->boot references when
+      // the image can be relocated and therefore we need to emit .oat_patches.
+      gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetImageSpace();
+      size_t method_offset = reinterpret_cast<const uint8_t*>(method) - image_space->Begin();
+      CHECK(image_space->GetImageHeader().GetMethodsSection().Contains(method_offset));
     }
-    // Note: We only patch ArtMethods to low 4gb since thats where the image is.
+    // Note: We only patch targeting ArtMethods in image which is in the low 4gb.
     uint32_t address = PointerToLowMemUInt32(method);
     DCHECK_LE(offset + 4, code->size());
     uint8_t* data = &(*code)[offset];
