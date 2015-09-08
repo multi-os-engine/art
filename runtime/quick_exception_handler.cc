@@ -40,7 +40,23 @@ QuickExceptionHandler::QuickExceptionHandler(Thread* self, bool is_deoptimizatio
     handler_dex_pc_(0), clear_exception_(false), handler_frame_depth_(kInvalidFrameDepth) {
 }
 
-// Finds catch handler or prepares for deoptimization.
+void QuickExceptionHandler::Reset(bool is_deoptimization) {
+  if (context_ != nullptr) {
+    self_->ReleaseLongJumpContext(context_);
+  }
+  context_ = self_->GetLongJumpContext();
+  is_deoptimization_ = is_deoptimization;
+  method_tracing_active_ = is_deoptimization ||
+      Runtime::Current()->GetInstrumentation()->AreExitStubsInstalled();
+  handler_quick_frame_ = nullptr;
+  handler_quick_frame_pc_ = 0;
+  handler_method_ = nullptr;
+  handler_dex_pc_ = 0;
+  clear_exception_ = false;
+  handler_frame_depth_ = kInvalidFrameDepth;
+}
+
+// Finds catch handler.
 class CatchBlockStackVisitor FINAL : public StackVisitor {
  public:
   CatchBlockStackVisitor(Thread* self, Context* context, Handle<mirror::Throwable>* exception,
@@ -125,7 +141,7 @@ void QuickExceptionHandler::FindCatch(mirror::Throwable* exception) {
   StackHandleScope<1> hs(self_);
   Handle<mirror::Throwable> exception_ref(hs.NewHandle(exception));
 
-  // Walk the stack to find catch handler or prepare for deoptimization.
+  // Walk the stack to find catch handler.
   CatchBlockStackVisitor visitor(self_, context_, &exception_ref, this);
   visitor.WalkStack(true);
 
@@ -200,6 +216,8 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
   }
 
   bool HandleDeoptimization(ArtMethod* m) SHARED_REQUIRES(Locks::mutator_lock_) {
+    CHECK(!m->IsNative());
+    CHECK(!m->IsProxyMethod());
     const DexFile::CodeItem* code_item = m->GetCodeItem();
     CHECK(code_item != nullptr);
     uint16_t num_regs = code_item->registers_size_;

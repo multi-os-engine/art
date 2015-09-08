@@ -2353,6 +2353,17 @@ void Thread::QuickDeliverException() {
     exception_handler.DeoptimizeStack();
   } else {
     exception_handler.FindCatch(exception);
+    // We may need to deoptimize for the debugger. In that case, we let the interpreter
+    // handle the exception when executing the deoptimized frames.
+    if (Dbg::IsForcedInterpreterNeededForException(this)) {
+      // FindCatch may have restored the exception.
+      ClearException();
+      // Save the exception into the deoptimization context so it can be restored
+      // before entering the interpreter.
+      PushDeoptimizationContext(JValue(), false, exception);
+      exception_handler.Reset(true);
+      exception_handler.DeoptimizeStack();
+    }
   }
   exception_handler.UpdateInstrumentationStack();
   exception_handler.DoLongJump();

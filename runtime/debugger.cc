@@ -3490,6 +3490,71 @@ bool Dbg::IsForcedInterpreterNeededForUpcallImpl(Thread* thread, ArtMethod* m) {
   return instrumentation->IsDeoptimized(m);
 }
 
+struct NeedsDeoptimizationVisitor : public StackVisitor {
+ public:
+  explicit NeedsDeoptimizationVisitor(Thread* self) SHARED_REQUIRES(Locks::mutator_lock_)
+    : StackVisitor(self, nullptr, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
+      has_deoptimized_method_(false) {}
+
+  bool VisitFrame() OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+    ArtMethod* method = GetMethod();
+    if (method == nullptr) {
+      // This is an upcall.
+      return false;
+    }
+    if (IsShadowFrame()) {
+      // Ignore shadow frame which are already interpreted.
+      return true;
+    }
+    if (Runtime::Current()->GetInstrumentation()->InterpretOnly()) {
+      // We found a compiled frame in the stack but instrumentation is set to interpret
+      // everything: we need to deoptimize.
+      has_deoptimized_method_ = true;
+      return false;
+    }
+    // TODO: is this necessary?
+    if (HasInstrumentationExitHook()) {
+      // We installed the instrumentation exit stub in order to deoptimize the stack.
+      has_deoptimized_method_ = true;
+      return false;
+    }
+    if (Runtime::Current()->GetInstrumentation()->IsDeoptimized(method)) {
+      // We found a deoptimized method in the stack.
+      has_deoptimized_method_ = true;
+      return false;
+    }
+    return true;
+  }
+
+  bool NeedsDeoptimization() const {
+    return has_deoptimized_method_;
+  }
+
+  bool HasInstrumentationExitHook() {
+//    uintptr_t current_pc = GetCurrentQuickFramePc();
+//    return current_pc == reinterpret_cast<uintptr_t>(GetQuickInstrumentationExitPc());
+    return false;
+  }
+
+ private:
+  bool has_deoptimized_method_;
+
+  DISALLOW_COPY_AND_ASSIGN(NeedsDeoptimizationVisitor);
+};
+
+// Do we need to deoptimize the stack to handle an exception?
+bool Dbg::IsForcedInterpreterNeededForExceptionImpl(Thread* thread) {
+  const SingleStepControl* const ssc = thread->GetSingleStepControl();
+  if (ssc != nullptr) {
+    // We deopt to step into the catch handler.
+    return true;
+  }
+  // Deoptimization is required if at least one method in the stack needs it.
+  NeedsDeoptimizationVisitor visitor(thread);
+  visitor.WalkStack(true);  // includes upcall.
+  return visitor.NeedsDeoptimization();
+}
+
 // Scoped utility class to suspend a thread so that we may do tasks such as walk its stack. Doesn't
 // cause suspension if the thread is the current thread.
 class ScopedDebuggerThreadSuspension {
