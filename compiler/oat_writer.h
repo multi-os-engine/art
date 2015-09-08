@@ -272,6 +272,10 @@ class OatWriter {
   // The size of the required .bss section holding the DexCache data.
   size_t bss_size_;
 
+  // Offsets of the dex cache arrays for each app dex file. For the
+  // boot image, this information is provided by the ImageWriter.
+  SafeMap<const DexFile*, size_t> dex_cache_arrays_offsets_;
+
   // Offset of the oat data from the start of the mmapped region of the elf file.
   size_t oat_data_offset_;
 
