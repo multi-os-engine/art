@@ -2352,7 +2352,27 @@ void Thread::QuickDeliverException() {
   if (is_deoptimization) {
     exception_handler.DeoptimizeStack();
   } else {
-    exception_handler.FindCatch(exception);
+    size_t handler_frame_depth;
+    {
+      // FindCatch may load classes so keep exception GC safe.
+      StackHandleScope<1> hs(this);
+      HandleWrapper<mirror::Throwable> h_exception(hs.NewHandleWrapper(&exception));
+      handler_frame_depth = exception_handler.FindCatch(h_exception.Get());
+    }
+    // We found either a catch handler or an upcall and are going to jump to it. However,
+    // the debugger may have been notified of the exception and now require to deoptimize
+    // the stack to support new event requests (breakpoint, single-step, ...). If that is
+    // the case, we let the interpreter handle the exception when executing the deoptimized
+    // frames.
+    if (Dbg::IsForcedInterpreterNeededForException(this, handler_frame_depth)) {
+      // FindCatch may have restored the exception.
+      ClearException();
+      // Save the exception into the deoptimization context so it can be restored
+      // before entering the interpreter.
+      PushDeoptimizationContext(JValue(), false, exception);
+      exception_handler.ResetForDeoptimization();
+      exception_handler.DeoptimizeStack();
+    }
   }
   exception_handler.UpdateInstrumentationStack();
   exception_handler.DoLongJump();
