@@ -3490,6 +3490,88 @@ bool Dbg::IsForcedInterpreterNeededForUpcallImpl(Thread* thread, ArtMethod* m) {
   return instrumentation->IsDeoptimized(m);
 }
 
+struct NeedsDeoptimizationVisitor : public StackVisitor {
+ public:
+  NeedsDeoptimizationVisitor(Thread* self, ArtMethod** catch_handler_frame)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+    : StackVisitor(self, nullptr, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
+      catch_handler_frame_(catch_handler_frame),
+      skip_unwind_frames_(true),
+      needs_deoptimization_(false) {
+    DCHECK(catch_handler_frame != nullptr);
+    DCHECK(*catch_handler_frame != nullptr) << "Expected catch handler, not an upcall";
+  }
+
+  ~NeedsDeoptimizationVisitor() {
+    DCHECK(!skip_unwind_frames_) << "We never reached catch handler";
+  }
+
+  bool VisitFrame() OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+    // The visitor is meant to be used when handling exception from compiled code only.
+    CHECK(!IsShadowFrame()) << "We only expect to visit compiled frame";
+    ArtMethod** current_frame = GetCurrentQuickFrame();
+    if (current_frame == catch_handler_frame_) {
+      // We reach the catch handler: now every frame may potentially require deoptimization.
+      DCHECK(skip_unwind_frames_);
+      skip_unwind_frames_ = false;
+    }
+    if (skip_unwind_frames_) {
+      // This frame will be unwound so it does not require deoptimization.
+      return true;
+    }
+    ArtMethod* method = GetMethod();
+    if (method == nullptr) {
+      // We reach an upcall and don't need to deoptimize this part of the stack (ManagedFragment)
+      // so we can stop the visit.
+      DCHECK(!needs_deoptimization_);
+      return false;
+    }
+    if (Runtime::Current()->GetInstrumentation()->InterpretOnly()) {
+      // We found a compiled frame in the stack but instrumentation is set to interpret
+      // everything: we need to deoptimize.
+      needs_deoptimization_ = true;
+      return false;
+    }
+    if (Runtime::Current()->GetInstrumentation()->IsDeoptimized(method)) {
+      // We found a deoptimized method in the stack.
+      needs_deoptimization_ = true;
+      return false;
+    }
+    return true;
+  }
+
+  bool NeedsDeoptimization() const {
+    return needs_deoptimization_;
+  }
+
+ private:
+  // The handler frame catching the exception. This is used to ignore frames that
+  // will be unwound and cannot cause deoptimization.
+  ArtMethod** const catch_handler_frame_;
+  // Should we skip frames that will be unwound before reaching the catch handler frame?
+  bool skip_unwind_frames_;
+  // Do we need to deoptimize the stack?
+  bool needs_deoptimization_;
+
+  DISALLOW_COPY_AND_ASSIGN(NeedsDeoptimizationVisitor);
+};
+
+// Do we need to deoptimize the stack to handle an exception?
+bool Dbg::IsForcedInterpreterNeededForExceptionImpl(Thread* thread,
+                                                    ArtMethod** catch_handler_frame) {
+  const SingleStepControl* const ssc = thread->GetSingleStepControl();
+  if (ssc != nullptr) {
+    // We deopt to step into the catch handler.
+    DCHECK(*catch_handler_frame != nullptr) << "Only step into catch handler, not upcall";
+    return true;
+  }
+  // Deoptimization is required if at least one method in the stack needs it. However we
+  // skip frames that will be unwound (thus not executed).
+  NeedsDeoptimizationVisitor visitor(thread, catch_handler_frame);
+  visitor.WalkStack(true);  // includes upcall.
+  return visitor.NeedsDeoptimization();
+}
+
 // Scoped utility class to suspend a thread so that we may do tasks such as walk its stack. Doesn't
 // cause suspension if the thread is the current thread.
 class ScopedDebuggerThreadSuspension {

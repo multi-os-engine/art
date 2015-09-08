@@ -2352,7 +2352,23 @@ void Thread::QuickDeliverException() {
   if (is_deoptimization) {
     exception_handler.DeoptimizeStack();
   } else {
-    exception_handler.FindCatch(exception);
+    ArtMethod** handler_frame = exception_handler.FindCatch(exception);
+    const bool found_catch_handler = (*handler_frame != nullptr);
+    if (found_catch_handler) {
+      // We found a catch handler and are going to jump to it. However, the debugger may
+      // have been notified of the exception and now require to deoptimize the stack to
+      // support new event requests (breakpoint, single-step, ...). If that is the case,
+      // we let the interpreter handle the exception when executing the deoptimized frames.
+      if (Dbg::IsForcedInterpreterNeededForException(this, handler_frame)) {
+        // FindCatch may have restored the exception.
+        ClearException();
+        // Save the exception into the deoptimization context so it can be restored
+        // before entering the interpreter.
+        PushDeoptimizationContext(JValue(), false, exception);
+        exception_handler.ResetForDeoptimization();
+        exception_handler.DeoptimizeStack();
+      }
+    }
   }
   exception_handler.UpdateInstrumentationStack();
   exception_handler.DoLongJump();
