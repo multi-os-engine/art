@@ -1,0 +1,100 @@
+/*
+ * Copyright (C) 2015 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef ART_COMPILER_OPTIMIZING_INDUCTION_VAR_RANGE_H_
+#define ART_COMPILER_OPTIMIZING_INDUCTION_VAR_RANGE_H_
+
+#include "induction_var_analysis.h"
+
+namespace art {
+
+/**
+ * This class implements induction variable based range analysis on expressions within loops.
+ * It takes the results of induction variable analysis in the constructor and provides a public
+ * API to obtain a conservative lower and upper bound value on each instruction in the HIR.
+ *
+ * For example, given a linear induction 2 * i + x where 0 <= i <= 10, range analysis yields lower
+ * bound value x and upper bound value x + 20 for the expression, viz. the range [0, x + 20].
+ */
+class InductionVarRange {
+ public:
+  /*
+   * A value that can be represented as "instruction + constant" for a 32-bit constant, where
+   * Value(INT_MIN) and Value(INT_MAX) denote an unknown lower and upper bound, respectively.
+   * Although range analysis could yield more complex values in ranges, this format is sufficiently
+   * powerful to represent many useful cases, and feeds directly into e.g. BCE.
+   */
+  struct Value {
+    Value(HInstruction* i, int32_t c) : instruction(i), constant(c) {}
+    explicit Value(int32_t c) : instruction(nullptr), constant(c) {}
+    HInstruction* instruction;
+    int32_t constant;
+  };
+
+  explicit InductionVarRange(HInductionVarAnalysis* induction);
+
+  /** Returns true if instruction is an induction within the loop. */
+  bool IsInduction(HLoopInformation* loop, HInstruction* instruction);
+
+  /** Returns a, possibly conservative, lower bound on the instruction's value within the loop. */
+  Value GetMinInduction(HLoopInformation* loop, HInstruction* instruction);
+
+  /** Returns a, possibly conservative, upper bound on the instruction's value within the loop. */
+  Value GetMaxInduction(HLoopInformation* loop, HInstruction* instruction);
+
+ private:
+  //
+  // Private helper methods.
+  //
+
+  /**
+   * Returns a representation of the trip-count of the loop in order to perform range
+   * analysis on the given instruction. Since this trip-count expression is only
+   * valid under the top-test, an extra check is made that instruction is not in
+   * the loop-preheader. For early-exit loops, the trip-count may be conservative.
+   */
+  HInductionVarAnalysis::InductionInfo* GetTripCount(HLoopInformation* loop,
+                                                     HInstruction* instruction);
+
+  static Value GetMin(HInductionVarAnalysis::InductionInfo* info,
+                      HInductionVarAnalysis::InductionInfo* induc);
+  static Value GetMax(HInductionVarAnalysis::InductionInfo* info,
+                      HInductionVarAnalysis::InductionInfo* induc);
+  static Value GetMul(HInductionVarAnalysis::InductionInfo* info1,
+                      HInductionVarAnalysis::InductionInfo* info2,
+                      HInductionVarAnalysis::InductionInfo* induc, int32_t fail_value);
+  static Value GetDiv(HInductionVarAnalysis::InductionInfo* info1,
+                      HInductionVarAnalysis::InductionInfo* info2,
+                      HInductionVarAnalysis::InductionInfo* induc, int32_t fail_value);
+
+  static Value AddValue(Value v1, Value v2, int32_t fail_value);
+  static Value SubValue(Value v1, Value v2, int32_t fail_value);
+  static Value MulValue(Value v1, Value v2, int32_t fail_value);
+  static Value DivValue(Value v1, Value v2, int32_t fail_value);
+  static Value MinValue(Value v1, Value v2);
+  static Value MaxValue(Value v1, Value v2);
+
+  /** Results of prior induction variable analysis. */
+  HInductionVarAnalysis *induction_;
+
+  friend class InductionVarRangeTest;
+
+  DISALLOW_COPY_AND_ASSIGN(InductionVarRange);
+};
+
+}  // namespace art
+
+#endif  // ART_COMPILER_OPTIMIZING_INDUCTION_VAR_RANGE_H_
