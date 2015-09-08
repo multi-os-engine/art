@@ -358,6 +358,28 @@ void InstructionSimplifierVisitor::VisitSuspendCheck(HSuspendCheck* check) {
   block->RemoveInstruction(check);
 }
 
+static HCondition* GetOppositeConditionSwapOps(ArenaAllocator* arena, HInstruction* cond) {
+  HInstruction *lhs = cond->InputAt(0);
+  HInstruction *rhs = cond->InputAt(1);
+  switch (cond->GetKind()) {
+    case HInstruction::kEqual:
+      return new (arena) HEqual(rhs, lhs);
+    case HInstruction::kNotEqual:
+      return new (arena) HNotEqual(rhs, lhs);
+    case HInstruction::kLessThan:
+      return new (arena) HGreaterThan(rhs, lhs);
+    case HInstruction::kLessThanOrEqual:
+      return new (arena) HGreaterThanOrEqual(rhs, lhs);
+    case HInstruction::kGreaterThan:
+      return new (arena) HLessThan(rhs, lhs);
+    case HInstruction::kGreaterThanOrEqual:
+      return new (arena) HLessThanOrEqual(rhs, lhs);
+    default:
+      LOG(FATAL) << "Unknown ConditionType " << cond->GetKind();
+  }
+  return nullptr;
+}
+
 void InstructionSimplifierVisitor::VisitEqual(HEqual* equal) {
   HInstruction* input_const = equal->GetConstantRight();
   if (input_const != nullptr) {
@@ -622,6 +644,30 @@ void InstructionSimplifierVisitor::VisitLessThanOrEqual(HLessThanOrEqual* condit
 // TODO: unsigned comparisons too?
 
 void InstructionSimplifierVisitor::VisitCondition(HCondition* condition) {
+  HInstruction* left = condition->GetLeft();
+  HInstruction* right = condition->GetRight();
+
+  // Reverse condition if left is constant to let code generator handle
+  // condition using constant without memory operations.
+  if (left->IsConstant() && !right->IsConstant()) {
+    HBasicBlock* block = condition->GetBlock();
+    HCondition* replacement = GetOppositeConditionSwapOps(block->GetGraph()->GetArena(), condition);
+    // If it is a fp we must set the opposite bias to used in original condition.
+    if (replacement != nullptr) {
+      if (condition->IsLtBias()) {
+        replacement->SetBias(ComparisonBias::kGtBias);
+      } else if (condition->IsGtBias()) {
+        replacement->SetBias(ComparisonBias::kLtBias);
+      }
+      block->ReplaceAndRemoveInstructionWith(condition, replacement);
+      RecordSimplification();
+
+      condition = replacement;
+      left = condition->GetLeft();
+      right = condition->GetRight();
+    }
+  }
+
   // Try to fold an HCompare into this HCondition.
 
   // This simplification is currently supported on x86, x86_64, ARM and ARM64.
@@ -631,8 +677,6 @@ void InstructionSimplifierVisitor::VisitCondition(HCondition* condition) {
     return;
   }
 
-  HInstruction* left = condition->GetLeft();
-  HInstruction* right = condition->GetRight();
   // We can only replace an HCondition which compares a Compare to 0.
   // Both 'dx' and 'jack' generate a compare to 0 when compiling a
   // condition with a long, float or double comparison as input.

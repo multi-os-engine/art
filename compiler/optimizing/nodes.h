@@ -2641,6 +2641,8 @@ class HCondition : public HBinaryOperation {
 
   bool IsGtBias() const { return bias_ == ComparisonBias::kGtBias; }
 
+  bool IsLtBias() const { return bias_ == ComparisonBias::kLtBias; }
+
   void SetBias(ComparisonBias bias) { bias_ = bias; }
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
