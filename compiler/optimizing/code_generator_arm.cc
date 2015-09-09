@@ -59,7 +59,7 @@ static constexpr DRegister DTMP = D31;
 #define __ down_cast<ArmAssembler*>(codegen->GetAssembler())->
 #define QUICK_ENTRY_POINT(x) QUICK_ENTRYPOINT_OFFSET(kArmWordSize, x).Int32Value()
 
-class NullCheckSlowPathARM : public SlowPathCodeARM {
+class NullCheckSlowPathARM : public DefaultSlowPathCode {
  public:
   explicit NullCheckSlowPathARM(HNullCheck* instruction) : instruction_(instruction) {}
 
@@ -79,7 +79,7 @@ class NullCheckSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(NullCheckSlowPathARM);
 };
 
-class DivZeroCheckSlowPathARM : public SlowPathCodeARM {
+class DivZeroCheckSlowPathARM : public DefaultSlowPathCode {
  public:
   explicit DivZeroCheckSlowPathARM(HDivZeroCheck* instruction) : instruction_(instruction) {}
 
@@ -99,7 +99,7 @@ class DivZeroCheckSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(DivZeroCheckSlowPathARM);
 };
 
-class SuspendCheckSlowPathARM : public SlowPathCodeARM {
+class SuspendCheckSlowPathARM : public DefaultSlowPathCode {
  public:
   SuspendCheckSlowPathARM(HSuspendCheck* instruction, HBasicBlock* successor)
       : instruction_(instruction), successor_(successor) {}
@@ -140,7 +140,7 @@ class SuspendCheckSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(SuspendCheckSlowPathARM);
 };
 
-class BoundsCheckSlowPathARM : public SlowPathCodeARM {
+class BoundsCheckSlowPathARM : public DefaultSlowPathCode {
  public:
   explicit BoundsCheckSlowPathARM(HBoundsCheck* instruction)
       : instruction_(instruction) {}
@@ -174,7 +174,7 @@ class BoundsCheckSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(BoundsCheckSlowPathARM);
 };
 
-class LoadClassSlowPathARM : public SlowPathCodeARM {
+class LoadClassSlowPathARM : public DefaultSlowPathCode {
  public:
   LoadClassSlowPathARM(HLoadClass* cls,
                        HInstruction* at,
@@ -227,7 +227,7 @@ class LoadClassSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(LoadClassSlowPathARM);
 };
 
-class LoadStringSlowPathARM : public SlowPathCodeARM {
+class LoadStringSlowPathARM : public DefaultSlowPathCode {
  public:
   explicit LoadStringSlowPathARM(HLoadString* instruction) : instruction_(instruction) {}
 
@@ -257,7 +257,7 @@ class LoadStringSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(LoadStringSlowPathARM);
 };
 
-class TypeCheckSlowPathARM : public SlowPathCodeARM {
+class TypeCheckSlowPathARM : public DefaultSlowPathCode {
  public:
   explicit TypeCheckSlowPathARM(HInstruction* instruction) : instruction_(instruction) {}
 
@@ -309,7 +309,7 @@ class TypeCheckSlowPathARM : public SlowPathCodeARM {
   DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathARM);
 };
 
-class DeoptimizationSlowPathARM : public SlowPathCodeARM {
+class DeoptimizationSlowPathARM : public DefaultSlowPathCode {
  public:
   explicit DeoptimizationSlowPathARM(HInstruction* instruction)
     : instruction_(instruction) {}
@@ -1232,7 +1232,7 @@ void LocationsBuilderARM::VisitDeoptimize(HDeoptimize* deoptimize) {
 }
 
 void InstructionCodeGeneratorARM::VisitDeoptimize(HDeoptimize* deoptimize) {
-  SlowPathCodeARM* slow_path = new (GetGraph()->GetArena())
+  DefaultSlowPathCode* slow_path = new (GetGraph()->GetArena())
       DeoptimizationSlowPathARM(deoptimize);
   codegen_->AddSlowPath(slow_path);
   Label* slow_path_entry = slow_path->GetEntryLabel();
@@ -2750,7 +2750,7 @@ void LocationsBuilderARM::VisitDivZeroCheck(HDivZeroCheck* instruction) {
 }
 
 void InstructionCodeGeneratorARM::VisitDivZeroCheck(HDivZeroCheck* instruction) {
-  SlowPathCodeARM* slow_path = new (GetGraph()->GetArena()) DivZeroCheckSlowPathARM(instruction);
+  DefaultSlowPathCode* slow_path = new (GetGraph()->GetArena()) DivZeroCheckSlowPathARM(instruction);
   codegen_->AddSlowPath(slow_path);
 
   LocationSummary* locations = instruction->GetLocations();
@@ -3514,7 +3514,7 @@ void InstructionCodeGeneratorARM::GenerateImplicitNullCheck(HNullCheck* instruct
 }
 
 void InstructionCodeGeneratorARM::GenerateExplicitNullCheck(HNullCheck* instruction) {
-  SlowPathCodeARM* slow_path = new (GetGraph()->GetArena()) NullCheckSlowPathARM(instruction);
+  DefaultSlowPathCode* slow_path = new (GetGraph()->GetArena()) NullCheckSlowPathARM(instruction);
   codegen_->AddSlowPath(slow_path);
 
   LocationSummary* locations = instruction->GetLocations();
@@ -3874,7 +3874,7 @@ void LocationsBuilderARM::VisitBoundsCheck(HBoundsCheck* instruction) {
 
 void InstructionCodeGeneratorARM::VisitBoundsCheck(HBoundsCheck* instruction) {
   LocationSummary* locations = instruction->GetLocations();
-  SlowPathCodeARM* slow_path =
+  DefaultSlowPathCode* slow_path =
       new (GetGraph()->GetArena()) BoundsCheckSlowPathARM(instruction);
   codegen_->AddSlowPath(slow_path);
 
@@ -4210,7 +4210,7 @@ void InstructionCodeGeneratorARM::VisitLoadClass(HLoadClass* cls) {
     __ LoadFromOffset(kLoadWord, out, out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex()));
     // TODO: We will need a read barrier here.
 
-    SlowPathCodeARM* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM(
+    DefaultSlowPathCode* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM(
         cls, cls, cls->GetDexPc(), cls->MustGenerateClinitCheck());
     codegen_->AddSlowPath(slow_path);
     __ CompareAndBranchIfZero(out, slow_path->GetEntryLabel());
@@ -4233,7 +4233,7 @@ void LocationsBuilderARM::VisitClinitCheck(HClinitCheck* check) {
 
 void InstructionCodeGeneratorARM::VisitClinitCheck(HClinitCheck* check) {
   // We assume the class is not null.
-  SlowPathCodeARM* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM(
+  DefaultSlowPathCode* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathARM(
       check->GetLoadClass(), check, check->GetDexPc(), true);
   codegen_->AddSlowPath(slow_path);
   GenerateClassInitializationCheck(slow_path,
@@ -4241,7 +4241,7 @@ void InstructionCodeGeneratorARM::VisitClinitCheck(HClinitCheck* check) {
 }
 
 void InstructionCodeGeneratorARM::GenerateClassInitializationCheck(
-    SlowPathCodeARM* slow_path, Register class_reg) {
+    DefaultSlowPathCode* slow_path, Register class_reg) {
   __ LoadFromOffset(kLoadWord, IP, class_reg, mirror::Class::StatusOffset().Int32Value());
   __ cmp(IP, ShifterOperand(mirror::Class::kStatusInitialized));
   __ b(slow_path->GetEntryLabel(), LT);
@@ -4259,7 +4259,7 @@ void LocationsBuilderARM::VisitLoadString(HLoadString* load) {
 }
 
 void InstructionCodeGeneratorARM::VisitLoadString(HLoadString* load) {
-  SlowPathCodeARM* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathARM(load);
+  DefaultSlowPathCode* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathARM(load);
   codegen_->AddSlowPath(slow_path);
 
   LocationSummary* locations = load->GetLocations();
@@ -4329,7 +4329,7 @@ void InstructionCodeGeneratorARM::VisitInstanceOf(HInstanceOf* instruction) {
   Register out = locations->Out().AsRegister<Register>();
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
   Label done, zero;
-  SlowPathCodeARM* slow_path = nullptr;
+  DefaultSlowPathCode* slow_path = nullptr;
 
   // Return 0 if `obj` is null.
   // avoid null check if we know obj is not null.
@@ -4382,7 +4382,7 @@ void InstructionCodeGeneratorARM::VisitCheckCast(HCheckCast* instruction) {
   Register temp = locations->GetTemp(0).AsRegister<Register>();
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
 
-  SlowPathCodeARM* slow_path =
+  DefaultSlowPathCode* slow_path =
       new (GetGraph()->GetArena()) TypeCheckSlowPathARM(instruction);
   codegen_->AddSlowPath(slow_path);
 
@@ -4684,6 +4684,43 @@ void LocationsBuilderARM::VisitFakeString(HFakeString* instruction) {
 void InstructionCodeGeneratorARM::VisitFakeString(HFakeString* instruction ATTRIBUTE_UNUSED) {
   DCHECK(codegen_->IsBaseline());
   // Will be generated at use site.
+}
+
+void CodeGeneratorARM::MoveFromReturnRegister(Location trg, Primitive::Type type) {
+  if (!trg.IsValid()) {
+    DCHECK(type == Primitive::kPrimVoid);
+    return;
+  }
+
+  DCHECK_NE(type, Primitive::kPrimVoid);
+
+  if (Primitive::IsIntegralType(type) || type == Primitive::kPrimNot) {
+    if (type == Primitive::kPrimLong) {
+      Register trg_reg_lo = trg.AsRegisterPairLow<Register>();
+      Register trg_reg_hi = trg.AsRegisterPairHigh<Register>();
+      Register res_reg_lo = R0;
+      Register res_reg_hi = R1;
+      if (trg_reg_lo != res_reg_hi) {
+        if (trg_reg_lo != res_reg_lo) {
+          __ mov(trg_reg_lo, ShifterOperand(res_reg_lo));
+          __ mov(trg_reg_hi, ShifterOperand(res_reg_hi));
+        } else {
+          DCHECK_EQ(trg_reg_lo + 1, trg_reg_hi);
+        }
+      } else {
+        __ mov(trg_reg_hi, ShifterOperand(res_reg_hi));
+        __ mov(trg_reg_lo, ShifterOperand(res_reg_lo));
+      }
+    } else {
+      Register trg_reg = trg.AsRegister<Register>();
+      Register res_reg = R0;
+      if (trg_reg != res_reg) {
+        __ mov(trg_reg, ShifterOperand(res_reg));
+      }
+    }
+  } else {
+    UNIMPLEMENTED(FATAL) << "Floating-point return.";
+  }
 }
 
 #undef __

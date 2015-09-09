@@ -29,6 +29,7 @@
 #include "memory_region.h"
 #include "nodes.h"
 #include "stack_map_stream.h"
+#include "utils/label.h"
 
 namespace art {
 
@@ -112,6 +113,20 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SlowPathCode);
+};
+
+class DefaultSlowPathCode : public SlowPathCode {
+ public:
+  DefaultSlowPathCode() : entry_label_(), exit_label_() {}
+
+  Label* GetEntryLabel() { return &entry_label_; }
+  Label* GetExitLabel() { return &exit_label_; }
+
+ private:
+  Label entry_label_;
+  Label exit_label_;
+
+  DISALLOW_COPY_AND_ASSIGN(DefaultSlowPathCode);
 };
 
 class InvokeDexCallingConventionVisitor {
@@ -362,6 +377,14 @@ class CodeGenerator {
 
   void SetDisassemblyInformation(DisassemblyInformation* info) { disasm_info_ = info; }
   DisassemblyInformation* GetDisassemblyInformation() const { return disasm_info_; }
+
+  // Generate a call to a static or direct method.
+  virtual void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp) = 0;
+  // Generate a call to a virtual method.
+  virtual void GenerateVirtualCall(HInvokeVirtual* invoke, Location temp) = 0;
+
+  // Copy the result of a call into the given target.
+  virtual void MoveFromReturnRegister(Location trg, Primitive::Type type) = 0;
 
  protected:
   // Method patch info used for recording locations of required linker patches and
