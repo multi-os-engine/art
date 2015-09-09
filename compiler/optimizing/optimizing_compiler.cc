@@ -89,12 +89,6 @@ class CodeVectorAllocator FINAL : public CodeAllocator {
   DISALLOW_COPY_AND_ASSIGN(CodeVectorAllocator);
 };
 
-/**
- * Filter to apply to the visualizer. Methods whose name contain that filter will
- * be dumped.
- */
-static constexpr const char kStringFilter[] = "";
-
 class PassScope;
 
 class PassObserver : public ValueObject {
@@ -103,7 +97,8 @@ class PassObserver : public ValueObject {
                const char* method_name,
                CodeGenerator* codegen,
                std::ostream* visualizer_output,
-               CompilerDriver* compiler_driver)
+               CompilerDriver* compiler_driver,
+               const char* dump_cfg_filter)
       : graph_(graph),
         method_name_(method_name),
         timing_logger_enabled_(compiler_driver->GetDumpPasses()),
@@ -111,7 +106,8 @@ class PassObserver : public ValueObject {
         disasm_info_(graph->GetArena()),
         visualizer_enabled_(!compiler_driver->GetDumpCfgFileName().empty()),
         visualizer_(visualizer_output, graph, *codegen),
-        graph_in_bad_state_(false) {
+        graph_in_bad_state_(false),
+        dump_cfg_filter_(dump_cfg_filter) {
     if (timing_logger_enabled_ || visualizer_enabled_) {
       if (!IsVerboseMethod(compiler_driver, method_name)) {
         timing_logger_enabled_ = visualizer_enabled_ = false;
@@ -178,17 +174,17 @@ class PassObserver : public ValueObject {
     }
   }
 
-  static bool IsVerboseMethod(CompilerDriver* compiler_driver, const char* method_name) {
+  bool IsVerboseMethod(CompilerDriver* compiler_driver, const char* method_name) {
     // Test an exact match to --verbose-methods. If verbose-methods is set, this overrides an
-    // empty kStringFilter matching all methods.
+    // empty dump_cfg_filter_ matching all methods.
     if (compiler_driver->GetCompilerOptions().HasVerboseMethods()) {
       return compiler_driver->GetCompilerOptions().IsVerboseMethod(method_name);
     }
 
     // Test the kStringFilter sub-string. constexpr helper variable to silence unreachable-code
     // warning when the string is empty.
-    constexpr bool kStringFilterEmpty = arraysize(kStringFilter) <= 1;
-    if (kStringFilterEmpty || strstr(method_name, kStringFilter) != nullptr) {
+    bool kStringFilterEmpty = sizeof(dump_cfg_filter_) == 0;
+    if (kStringFilterEmpty || strstr(method_name, dump_cfg_filter_) != nullptr) {
       return true;
     }
 
@@ -209,6 +205,8 @@ class PassObserver : public ValueObject {
   // Flag to be set by the compiler if the pass failed and the graph is not
   // expected to validate.
   bool graph_in_bad_state_;
+
+  const char* dump_cfg_filter_;
 
   friend PassScope;
 
@@ -307,6 +305,10 @@ class OptimizingCompiler FINAL : public Compiler {
   // Delegate to Quick in case the optimizing compiler cannot compile a method.
   std::unique_ptr<Compiler> delegate_;
 
+  // Filter to apply to the visualizer. Methods whose name contain that filter
+  // will be dumped.
+  std::string dump_cfg_filter_;
+
   DISALLOW_COPY_AND_ASSIGN(OptimizingCompiler);
 };
 
@@ -324,6 +326,7 @@ void OptimizingCompiler::Init() {
   // Enable C1visualizer output. Must be done in Init() because the compiler
   // driver is not fully initialized when passed to the compiler's constructor.
   CompilerDriver* driver = GetCompilerDriver();
+  dump_cfg_filter_ = driver->GetDumpCfgFilter();
   const std::string cfg_file_name = driver->GetDumpCfgFileName();
   if (!cfg_file_name.empty()) {
     CHECK_EQ(driver->GetThreadCount(), 1U)
@@ -714,7 +717,8 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                              method_name.c_str(),
                              codegen.get(),
                              visualizer_output_.get(),
-                             compiler_driver);
+                             compiler_driver,
+                             dump_cfg_filter_.c_str());
 
   const uint8_t* interpreter_metadata = nullptr;
   {

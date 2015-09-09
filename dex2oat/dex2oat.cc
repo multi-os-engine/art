@@ -1096,6 +1096,8 @@ class Dex2Oat FINAL {
         dump_passes_ = true;
       } else if (option.starts_with("--dump-cfg=")) {
         dump_cfg_file_name_ = option.substr(strlen("--dump-cfg=")).data();
+      } else if (option.starts_with("--dump-cfg-filter=")) {
+        dump_cfg_filter_ = option.substr(strlen("--dump-cfg-filter=")).data();
       } else if (option == "--dump-stats") {
         dump_stats_ = true;
       } else if (option == "--generate-debug-info" || option == "-g") {
@@ -1476,7 +1478,8 @@ class Dex2Oat FINAL {
                                      dump_cfg_file_name_,
                                      compiler_phases_timings_.get(),
                                      swap_fd_,
-                                     profile_file_));
+                                     profile_file_,
+                                     dump_cfg_filter_));
 
     driver_->CompileAll(class_loader, dex_files_, timings_);
   }
@@ -1982,6 +1985,7 @@ class Dex2Oat FINAL {
   bool dump_timing_;
   bool dump_slow_timing_;
   std::string dump_cfg_file_name_;
+  std::string dump_cfg_filter_;
   std::string swap_file_name_;
   int swap_fd_;
   std::string profile_file_;  // Profile file to use

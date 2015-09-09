@@ -101,7 +101,8 @@ class CompilerDriver {
                  size_t thread_count, bool dump_stats, bool dump_passes,
                  const std::string& dump_cfg_file_name,
                  CumulativeLogger* timer, int swap_fd,
-                 const std::string& profile_file);
+                 const std::string& profile_file,
+                 const std::string& dump_cfg_filter = "");
 
   ~CompilerDriver();
 
@@ -426,6 +427,10 @@ class CompilerDriver {
     return dump_cfg_file_name_;
   }
 
+  const std::string& GetDumpCfgFilter() const {
+      return dump_cfg_filter_;
+  }
+
   CumulativeLogger* GetTimingsLogger() const {
     return timings_logger_;
   }
@@ -667,6 +672,7 @@ class CompilerDriver {
   bool dump_stats_;
   const bool dump_passes_;
   const std::string dump_cfg_file_name_;
+  const std::string dump_cfg_filter_;
 
   CumulativeLogger* const timings_logger_;
 
