@@ -49,7 +49,7 @@ static constexpr int kFakeReturnRegister = Register(8);
 #define __ down_cast<X86Assembler*>(codegen->GetAssembler())->
 #define QUICK_ENTRY_POINT(x) Address::Absolute(QUICK_ENTRYPOINT_OFFSET(kX86WordSize, x))
 
-class NullCheckSlowPathX86 : public SlowPathCodeX86 {
+class NullCheckSlowPathX86 : public SlowPathCode {
  public:
   explicit NullCheckSlowPathX86(HNullCheck* instruction) : instruction_(instruction) {}
 
@@ -75,7 +75,7 @@ class NullCheckSlowPathX86 : public SlowPathCodeX86 {
   DISALLOW_COPY_AND_ASSIGN(NullCheckSlowPathX86);
 };
 
-class DivZeroCheckSlowPathX86 : public SlowPathCodeX86 {
+class DivZeroCheckSlowPathX86 : public SlowPathCode {
  public:
   explicit DivZeroCheckSlowPathX86(HDivZeroCheck* instruction) : instruction_(instruction) {}
 
@@ -101,7 +101,7 @@ class DivZeroCheckSlowPathX86 : public SlowPathCodeX86 {
   DISALLOW_COPY_AND_ASSIGN(DivZeroCheckSlowPathX86);
 };
 
-class DivRemMinusOneSlowPathX86 : public SlowPathCodeX86 {
+class DivRemMinusOneSlowPathX86 : public SlowPathCode {
  public:
   DivRemMinusOneSlowPathX86(Register reg, bool is_div) : reg_(reg), is_div_(is_div) {}
 
@@ -123,7 +123,7 @@ class DivRemMinusOneSlowPathX86 : public SlowPathCodeX86 {
   DISALLOW_COPY_AND_ASSIGN(DivRemMinusOneSlowPathX86);
 };
 
-class BoundsCheckSlowPathX86 : public SlowPathCodeX86 {
+class BoundsCheckSlowPathX86 : public SlowPathCode {
  public:
   explicit BoundsCheckSlowPathX86(HBoundsCheck* instruction) : instruction_(instruction) {}
 
@@ -161,7 +161,7 @@ class BoundsCheckSlowPathX86 : public SlowPathCodeX86 {
   DISALLOW_COPY_AND_ASSIGN(BoundsCheckSlowPathX86);
 };
 
-class SuspendCheckSlowPathX86 : public SlowPathCodeX86 {
+class SuspendCheckSlowPathX86 : public SlowPathCode {
  public:
   SuspendCheckSlowPathX86(HSuspendCheck* instruction, HBasicBlock* successor)
       : instruction_(instruction), successor_(successor) {}
@@ -201,7 +201,7 @@ class SuspendCheckSlowPathX86 : public SlowPathCodeX86 {
   DISALLOW_COPY_AND_ASSIGN(SuspendCheckSlowPathX86);
 };
 
-class LoadStringSlowPathX86 : public SlowPathCodeX86 {
+class LoadStringSlowPathX86 : public SlowPathCode {
  public:
   explicit LoadStringSlowPathX86(HLoadString* instruction) : instruction_(instruction) {}
 
@@ -233,7 +233,7 @@ class LoadStringSlowPathX86 : public SlowPathCodeX86 {
   DISALLOW_COPY_AND_ASSIGN(LoadStringSlowPathX86);
 };
 
-class LoadClassSlowPathX86 : public SlowPathCodeX86 {
+class LoadClassSlowPathX86 : public SlowPathCode {
  public:
   LoadClassSlowPathX86(HLoadClass* cls,
                        HInstruction* at,
@@ -285,7 +285,7 @@ class LoadClassSlowPathX86 : public SlowPathCodeX86 {
   DISALLOW_COPY_AND_ASSIGN(LoadClassSlowPathX86);
 };
 
-class TypeCheckSlowPathX86 : public SlowPathCodeX86 {
+class TypeCheckSlowPathX86 : public SlowPathCode {
  public:
   explicit TypeCheckSlowPathX86(HInstruction* instruction) : instruction_(instruction) {}
 
@@ -340,7 +340,7 @@ class TypeCheckSlowPathX86 : public SlowPathCodeX86 {
   DISALLOW_COPY_AND_ASSIGN(TypeCheckSlowPathX86);
 };
 
-class DeoptimizationSlowPathX86 : public SlowPathCodeX86 {
+class DeoptimizationSlowPathX86 : public SlowPathCode {
  public:
   explicit DeoptimizationSlowPathX86(HInstruction* instruction)
     : instruction_(instruction) {}
@@ -1182,7 +1182,7 @@ void LocationsBuilderX86::VisitDeoptimize(HDeoptimize* deoptimize) {
 }
 
 void InstructionCodeGeneratorX86::VisitDeoptimize(HDeoptimize* deoptimize) {
-  SlowPathCodeX86* slow_path = new (GetGraph()->GetArena())
+  SlowPathCode* slow_path = new (GetGraph()->GetArena())
       DeoptimizationSlowPathX86(deoptimize);
   codegen_->AddSlowPath(slow_path);
   Label* slow_path_entry = slow_path->GetEntryLabel();
@@ -2844,7 +2844,7 @@ void InstructionCodeGeneratorX86::GenerateDivRemIntegral(HBinaryOperation* instr
           GenerateDivRemWithAnyConstant(instruction);
         }
       } else {
-        SlowPathCodeX86* slow_path =
+        SlowPathCode* slow_path =
           new (GetGraph()->GetArena()) DivRemMinusOneSlowPathX86(out.AsRegister<Register>(),
               is_div);
         codegen_->AddSlowPath(slow_path);
@@ -3081,7 +3081,7 @@ void LocationsBuilderX86::VisitDivZeroCheck(HDivZeroCheck* instruction) {
 }
 
 void InstructionCodeGeneratorX86::VisitDivZeroCheck(HDivZeroCheck* instruction) {
-  SlowPathCodeX86* slow_path = new (GetGraph()->GetArena()) DivZeroCheckSlowPathX86(instruction);
+  SlowPathCode* slow_path = new (GetGraph()->GetArena()) DivZeroCheckSlowPathX86(instruction);
   codegen_->AddSlowPath(slow_path);
 
   LocationSummary* locations = instruction->GetLocations();
@@ -4025,7 +4025,7 @@ void InstructionCodeGeneratorX86::GenerateImplicitNullCheck(HNullCheck* instruct
 }
 
 void InstructionCodeGeneratorX86::GenerateExplicitNullCheck(HNullCheck* instruction) {
-  SlowPathCodeX86* slow_path = new (GetGraph()->GetArena()) NullCheckSlowPathX86(instruction);
+  SlowPathCode* slow_path = new (GetGraph()->GetArena()) NullCheckSlowPathX86(instruction);
   codegen_->AddSlowPath(slow_path);
 
   LocationSummary* locations = instruction->GetLocations();
@@ -4465,7 +4465,7 @@ void InstructionCodeGeneratorX86::VisitBoundsCheck(HBoundsCheck* instruction) {
   LocationSummary* locations = instruction->GetLocations();
   Location index_loc = locations->InAt(0);
   Location length_loc = locations->InAt(1);
-  SlowPathCodeX86* slow_path =
+  SlowPathCode* slow_path =
     new (GetGraph()->GetArena()) BoundsCheckSlowPathX86(instruction);
 
   if (length_loc.IsConstant()) {
@@ -4832,7 +4832,7 @@ void InstructionCodeGeneratorX86::VisitLoadClass(HLoadClass* cls) {
     __ movl(out, Address(out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex())));
     // TODO: We will need a read barrier here.
 
-    SlowPathCodeX86* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathX86(
+    SlowPathCode* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathX86(
         cls, cls, cls->GetDexPc(), cls->MustGenerateClinitCheck());
     codegen_->AddSlowPath(slow_path);
     __ testl(out, out);
@@ -4856,7 +4856,7 @@ void LocationsBuilderX86::VisitClinitCheck(HClinitCheck* check) {
 
 void InstructionCodeGeneratorX86::VisitClinitCheck(HClinitCheck* check) {
   // We assume the class to not be null.
-  SlowPathCodeX86* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathX86(
+  SlowPathCode* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathX86(
       check->GetLoadClass(), check, check->GetDexPc(), true);
   codegen_->AddSlowPath(slow_path);
   GenerateClassInitializationCheck(slow_path,
@@ -4864,7 +4864,7 @@ void InstructionCodeGeneratorX86::VisitClinitCheck(HClinitCheck* check) {
 }
 
 void InstructionCodeGeneratorX86::GenerateClassInitializationCheck(
-    SlowPathCodeX86* slow_path, Register class_reg) {
+    SlowPathCode* slow_path, Register class_reg) {
   __ cmpl(Address(class_reg,  mirror::Class::StatusOffset().Int32Value()),
           Immediate(mirror::Class::kStatusInitialized));
   __ j(kLess, slow_path->GetEntryLabel());
@@ -4880,7 +4880,7 @@ void LocationsBuilderX86::VisitLoadString(HLoadString* load) {
 }
 
 void InstructionCodeGeneratorX86::VisitLoadString(HLoadString* load) {
-  SlowPathCodeX86* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathX86(load);
+  SlowPathCode* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathX86(load);
   codegen_->AddSlowPath(slow_path);
 
   LocationSummary* locations = load->GetLocations();
@@ -4949,7 +4949,7 @@ void InstructionCodeGeneratorX86::VisitInstanceOf(HInstanceOf* instruction) {
   Register out = locations->Out().AsRegister<Register>();
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
   NearLabel done, zero;
-  SlowPathCodeX86* slow_path = nullptr;
+  SlowPathCode* slow_path = nullptr;
 
   // Return 0 if `obj` is null.
   // Avoid null check if we know obj is not null.
@@ -5008,7 +5008,7 @@ void InstructionCodeGeneratorX86::VisitCheckCast(HCheckCast* instruction) {
   Location cls = locations->InAt(1);
   Register temp = locations->GetTemp(0).AsRegister<Register>();
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
-  SlowPathCodeX86* slow_path =
+  SlowPathCode* slow_path =
       new (GetGraph()->GetArena()) TypeCheckSlowPathX86(instruction);
   codegen_->AddSlowPath(slow_path);
 
@@ -5441,6 +5441,36 @@ class ConstantHandlerVisitor : public HGraphVisitor {
 void ConstantAreaFixups::Run() {
   ConstantHandlerVisitor visitor(graph_);
   visitor.VisitInsertionOrder();
+}
+
+// TODO: target as memory.
+void CodeGeneratorX86::MoveFromReturnRegister(Location target, Primitive::Type type) {
+  if (!target.IsValid()) {
+    DCHECK(type == Primitive::kPrimVoid);
+    return;
+  }
+
+  DCHECK_NE(type, Primitive::kPrimVoid);
+
+  Location return_loc = InvokeDexCallingConventionVisitorX86().GetReturnLocation(type);
+  if (target.Equals(return_loc)) {
+    return;
+  }
+
+  // TODO: Consider pairs in the parallel move resolver, then this could be nicely merged
+  //       with the below.
+  if (type == Primitive::kPrimLong) {
+    HParallelMove parallel_move(GetGraph()->GetArena());
+    parallel_move.AddMove(return_loc.ToLow(), target.ToLow(), Primitive::kPrimInt, nullptr);
+    parallel_move.AddMove(return_loc.ToHigh(), target.ToHigh(), Primitive::kPrimInt, nullptr);
+    GetMoveResolver()->EmitNativeCode(&parallel_move);
+    return;
+  }
+
+  // Let the parallel move resolver take care of all of this.
+  HParallelMove parallel_move(GetGraph()->GetArena());
+  parallel_move.AddMove(return_loc, target, type, nullptr);
+  GetMoveResolver()->EmitNativeCode(&parallel_move);
 }
 
 #undef __
