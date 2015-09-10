@@ -16,12 +16,14 @@
 
 package com.android.ahat;
 
+import java.io.IOException;
 import org.junit.runner.JUnitCore;
 
 public class Tests {
-  public static void main(String[] args) {
+  public static void main(String[] args) throws IOException {
     if (args.length == 0) {
       args = new String[]{
+        "com.android.ahat.InstanceUtilsTest",
         "com.android.ahat.QueryTest",
         "com.android.ahat.SortTest"
       };
