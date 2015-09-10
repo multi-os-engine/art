@@ -16,6 +16,7 @@
 
 #include "base/arena_containers.h"
 #include "bounds_check_elimination.h"
+#include "induction_var_range.h"
 #include "nodes.h"
 
 namespace art {
@@ -126,14 +127,17 @@ class ValueBound : public ValueObject {
     return instruction_ == bound.instruction_ && constant_ == bound.constant_;
   }
 
-  static HInstruction* FromArrayLengthToArray(HInstruction* instruction) {
-    DCHECK(instruction->IsArrayLength() || instruction->IsNewArray());
+  static HInstruction* FromArrayLengthToArrayOrActualLength(HInstruction* instruction) {
+    // Hunt as deep into the array length operator as possible
+    // in order to match the compare the same terminal nodes.
     if (instruction->IsArrayLength()) {
-      HInstruction* input = instruction->InputAt(0);
-      if (input->IsNullCheck()) {
-        input = input->AsNullCheck()->InputAt(0);
-      }
-      return input;
+      instruction = instruction->InputAt(0);
+    }
+    if (instruction->IsNullCheck()) {
+      instruction = instruction->InputAt(0);
+    }
+    if (instruction->IsNewArray()) {
+      instruction = instruction->InputAt(0);
     }
     return instruction;
   }
@@ -149,9 +153,10 @@ class ValueBound : public ValueObject {
 
     // Some bounds are created with HNewArray* as the instruction instead
     // of HArrayLength*. They are treated the same.
-    // HArrayLength with the same array input are considered equal also.
-    instruction1 = FromArrayLengthToArray(instruction1);
-    instruction2 = FromArrayLengthToArray(instruction2);
+    // HArrayLength with the same array input, or different arrays with
+    // same length are considered equal also.
+    instruction1 = FromArrayLengthToArrayOrActualLength(instruction1);
+    instruction2 = FromArrayLengthToArrayOrActualLength(instruction2);
     return instruction1 == instruction2;
   }
 
@@ -1109,9 +1114,12 @@ class BCEVisitor : public HGraphVisitor {
     return block->GetBlockId() >= initial_block_size_;
   }
 
-  explicit BCEVisitor(HGraph* graph)
-      : HGraphVisitor(graph), maps_(graph->GetBlocks().Size()),
-        need_to_revisit_block_(false), initial_block_size_(graph->GetBlocks().Size()) {}
+  explicit BCEVisitor(HGraph* graph, HInductionVarAnalysis* induction_analysis)
+      : HGraphVisitor(graph),
+        maps_(graph->GetBlocks().Size()),
+        need_to_revisit_block_(false),
+        initial_block_size_(graph->GetBlocks().Size()),
+        induction_range_(induction_analysis) {}
 
   void VisitBasicBlock(HBasicBlock* block) OVERRIDE {
     DCHECK(!IsAddedBlock(block));
@@ -1157,6 +1165,20 @@ class BCEVisitor : public HGraphVisitor {
       basic_block = basic_block->GetDominator();
     }
     // Didn't find any.
+    return nullptr;
+  }
+
+  // Use results of induction variable range analysis.
+  ValueRange* LookupInductionRange(HInstruction* context, HInstruction* instruction) {
+    InductionVarRange::Value v1 = induction_range_.GetMinInduction(context, instruction);
+    InductionVarRange::Value v2 = induction_range_.GetMaxInduction(context, instruction);
+    if ((v1.a_constant == 0 || v1.a_constant == 1) && v1.b_constant != INT_MIN &&
+        (v2.a_constant == 0 || v2.a_constant == 1) && v2.b_constant != INT_MAX) {
+      ValueBound low = ValueBound(v1.instruction, v1.b_constant);
+      ValueBound up = ValueBound(v2.instruction, v2.b_constant);
+      return new (GetGraph()->GetArena()) ValueRange(GetGraph()->GetArena(), low, up);
+    }
+    // Didn't find anything useful.
     return nullptr;
   }
 
@@ -1391,16 +1413,21 @@ class BCEVisitor : public HGraphVisitor {
     }
 
     if (!index->IsIntConstant()) {
+      ValueBound lower = ValueBound(nullptr, 0);        // constant 0
+      ValueBound upper = ValueBound(array_length, -1);  // array_length - 1
+      ValueRange* array_range = new (GetGraph()->GetArena())
+          ValueRange(GetGraph()->GetArena(), lower, upper);
+      // Try range obtained by local analysis.
       ValueRange* index_range = LookupValueRange(index, block);
-      if (index_range != nullptr) {
-        ValueBound lower = ValueBound(nullptr, 0);        // constant 0
-        ValueBound upper = ValueBound(array_length, -1);  // array_length - 1
-        ValueRange* array_range = new (GetGraph()->GetArena())
-            ValueRange(GetGraph()->GetArena(), lower, upper);
-        if (index_range->FitsIn(array_range)) {
-          ReplaceBoundsCheck(bounds_check, index);
-          return;
-        }
+      if (index_range != nullptr && index_range->FitsIn(array_range)) {
+        ReplaceBoundsCheck(bounds_check, index);
+        return;
+      }
+      // Try range obtained by induction variable analysis.
+      index_range = LookupInductionRange(bounds_check, index);
+      if (index_range != nullptr && index_range->FitsIn(array_range)) {
+        ReplaceBoundsCheck(bounds_check, index);
+        return;
       }
     } else {
       int32_t constant = index->AsIntConstant()->GetValue();
@@ -1832,6 +1859,9 @@ class BCEVisitor : public HGraphVisitor {
   // Initial number of blocks.
   int32_t initial_block_size_;
 
+  // Range analysis based on induction variables.
+  InductionVarRange induction_range_;
+
   DISALLOW_COPY_AND_ASSIGN(BCEVisitor);
 };
 
@@ -1840,7 +1870,7 @@ void BoundsCheckElimination::Run() {
     return;
   }
 
-  BCEVisitor visitor(graph_);
+  BCEVisitor visitor(graph_, induction_analysis_);
   // Reverse post order guarantees a node's dominators are visited first.
   // We want to visit in the dominator-based order since if a value is known to
   // be bounded by a range at one instruction, it must be true that all uses of
