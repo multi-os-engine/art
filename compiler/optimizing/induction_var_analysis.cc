@@ -15,6 +15,7 @@
  */
 
 #include "induction_var_analysis.h"
+#include "induction_var_range.h"
 
 namespace art {
 
@@ -511,12 +512,15 @@ void HInductionVarAnalysis::VisitCondition(HLoopInformation* loop,
     InductionInfo* stride = a->op_a;
     InductionInfo* lo_val = a->op_b;
     InductionInfo* hi_val = b;
-    int64_t value = -1;
-    if (IsIntAndGet(stride, &value)) {
-      if ((value > 0 && (cmp == kCondLT || cmp == kCondLE)) ||
-          (value < 0 && (cmp == kCondGT || cmp == kCondGE))) {
+    // Analyze the stride thoroughly, since its representation may be compound at this point.
+    InductionVarRange::Value v1 = InductionVarRange::GetMin(stride, nullptr);
+    InductionVarRange::Value v2 = InductionVarRange::GetMax(stride, nullptr);
+    if (v1.a_constant == 0 && v2.a_constant == 0 && v1.b_constant == v2.b_constant) {
+      const int32_t stride_value = v1.b_constant;
+      if ((stride_value > 0 && (cmp == kCondLT || cmp == kCondLE)) ||
+          (stride_value < 0 && (cmp == kCondGT || cmp == kCondGE))) {
         bool is_strict = cmp == kCondLT || cmp == kCondGT;
-        VisitTripCount(loop, lo_val, hi_val, stride, value, type, is_strict);
+        VisitTripCount(loop, lo_val, hi_val, stride, stride_value, type, is_strict);
       }
     }
   }
@@ -544,7 +548,7 @@ void HInductionVarAnalysis::VisitTripCount(HLoopInformation* loop,
   //       least once. Otherwise TC is 0. Also, the expression assumes the loop does not
   //       have any early-exits. Otherwise, TC is an upper bound.
   //
-  bool cancels = is_strict && abs(stride_value) == 1;  // compensation cancels conversion?
+  bool cancels = is_strict && std::abs(stride_value) == 1;  // compensation cancels conversion?
   if (!cancels) {
     // Convert exclusive integral inequality into inclusive integral inequality,
     // viz. condition i < U is i <= U - 1 and condition i > U is i >= U + 1.
@@ -557,7 +561,7 @@ void HInductionVarAnalysis::VisitTripCount(HLoopInformation* loop,
   }
 
   // Assign the trip-count expression to the loop control. Clients that use the information
-  // should be aware that due to the L <= U assumption, the expression is only valid in the
+  // should be aware that due to the top-test assumption, the expression is only valid in the
   // loop-body proper, and not yet in the loop-header. If the loop has any early exits, the
   // trip-count forms a conservative upper bound on the number of loop iterations.
   InductionInfo* trip_count =
