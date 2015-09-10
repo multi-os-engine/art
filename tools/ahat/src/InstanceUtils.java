@@ -132,7 +132,7 @@ class InstanceUtils {
    * Read a field of an instance.
    * Returns null if the field value is null or if the field couldn't be read.
    */
-  private static Object getField(Instance inst, String fieldName) {
+  public static Object getField(Instance inst, String fieldName) {
     if (!(inst instanceof ClassInstance)) {
       return null;
     }

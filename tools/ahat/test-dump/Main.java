@@ -14,20 +14,29 @@
  * limitations under the License.
  */
 
-package com.android.ahat;
+import dalvik.system.VMDebug;
+import java.io.IOException;
 
-import org.junit.runner.JUnitCore;
+/**
+ * Program used to create a heap dump for test purposes.
+ */
+public class Main {
+  public static DumpedStuff stuff;
 
-public class Tests {
-  public static void main(String[] args) {
-    if (args.length == 0) {
-      args = new String[]{
-        "com.android.ahat.InstanceUtilsTest",
-        "com.android.ahat.QueryTest",
-        "com.android.ahat.SortTest"
-      };
+  public static class DumpedStuff {
+    public String basicString = "hello, world";
+  }
+
+  public static void main(String[] args) throws IOException {
+    if (args.length < 1) {
+      System.err.println("no output file specified");
+      return;
     }
-    JUnitCore.main(args);
+    String file = args[0];
+
+    stuff = new DumpedStuff();
+
+    System.err.println("Dumping hprof data to " + file);
+    VMDebug.dumpHprofData(file);
   }
 }
-

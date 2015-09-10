@@ -16,18 +16,16 @@
 
 package com.android.ahat;
 
-import org.junit.runner.JUnitCore;
+import com.android.tools.perflib.heap.Instance;
+import java.io.IOException;
+import static org.junit.Assert.assertEquals;
+import org.junit.Test;
 
-public class Tests {
-  public static void main(String[] args) {
-    if (args.length == 0) {
-      args = new String[]{
-        "com.android.ahat.InstanceUtilsTest",
-        "com.android.ahat.QueryTest",
-        "com.android.ahat.SortTest"
-      };
-    }
-    JUnitCore.main(args);
+public class InstanceUtilsTest {
+  @Test
+  public void basicString() throws IOException {
+    AhatSnapshot snapshot = TestDump.getAhatSnapshot();
+    Instance str = (Instance)TestDump.getDumpedThing(snapshot, "basicString");
+    assertEquals("hello, world", InstanceUtils.asString(str));
   }
 }
-

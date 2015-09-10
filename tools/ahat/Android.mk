@@ -16,6 +16,8 @@
 
 LOCAL_PATH := $(call my-dir)
 
+include art/build/Android.common_test.mk
+
 # --- ahat.jar ----------------
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
@@ -53,6 +55,28 @@ LOCAL_IS_HOST_MODULE := true
 LOCAL_MODULE_TAGS := tests
 LOCAL_MODULE := ahat-tests
 include $(BUILD_HOST_JAVA_LIBRARY)
+AHAT_TEST_JAR := $(LOCAL_BUILT_MODULE)
 
-ahat-test: $(LOCAL_BUILT_MODULE)
-	java -jar $<
+# --- ahat-test-dump.jar --------------
+include $(CLEAR_VARS)
+LOCAL_MODULE := ahat-test-dump
+LOCAL_MODULE_TAGS := tests
+LOCAL_SRC_FILES := $(call all-java-files-under, test-dump)
+include $(BUILD_HOST_DALVIK_JAVA_LIBRARY)
+AHAT_TEST_DUMP_JAR := $(LOCAL_BUILT_MODULE)
+
+# Run ahat-test-dump.jar to generate test-dump.hprof
+AHAT_TEST_LIBART := $(HOST_OUT_JAVA_LIBRARIES)/core-libart-hostdex.jar
+AHAT_TEST_DUMP_DEPENDENCIES := \
+	$(ART_HOST_EXECUTABLES) \
+	$(AHAT_TEST_LIBART) \
+	$(HOST_OUT_EXECUTABLES)/art \
+	$(ART_HOST_OUT_SHARED_LIBRARIES)/libjavacore$(ART_HOST_SHLIB_EXTENSION)
+
+AHAT_TEST_DUMP_HPROF := $(call local-intermediates-dir)/test-dump.hprof
+$(AHAT_TEST_DUMP_HPROF): $(AHAT_TEST_DUMP_JAR) $(AHAT_TEST_DUMP_DEPENDENCIES)
+	$(HOST_OUT_EXECUTABLES)/art -Xbootclasspath:$(AHAT_TEST_LIBART) -cp $(AHAT_TEST_DUMP_JAR) Main $@
+
+.PHONY: ahat-test
+ahat-test: $(AHAT_TEST_JAR) $(AHAT_TEST_DUMP_HPROF)
+	java -Dahat.test.dump.hprof=$(AHAT_TEST_DUMP_HPROF) -jar $(AHAT_TEST_JAR) 
