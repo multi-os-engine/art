@@ -17,20 +17,26 @@
 #ifndef ART_COMPILER_OPTIMIZING_BOUNDS_CHECK_ELIMINATION_H_
 #define ART_COMPILER_OPTIMIZING_BOUNDS_CHECK_ELIMINATION_H_
 
+#include "induction_var_analysis.h"
 #include "optimization.h"
 
 namespace art {
 
 class BoundsCheckElimination : public HOptimization {
  public:
-  explicit BoundsCheckElimination(HGraph* graph)
-      : HOptimization(graph, kBoundsCheckEliminiationPassName) {}
+  explicit BoundsCheckElimination(HGraph* graph) : BoundsCheckElimination(graph, nullptr) {}
+
+  BoundsCheckElimination(HGraph* graph, HInductionVarAnalysis* induction_analysis)
+      : HOptimization(graph, kBoundsCheckEliminiationPassName),
+        induction_analysis_(induction_analysis) {}
 
   void Run() OVERRIDE;
 
   static constexpr const char* kBoundsCheckEliminiationPassName = "BCE";
 
  private:
+  HInductionVarAnalysis* induction_analysis_;
+
   DISALLOW_COPY_AND_ASSIGN(BoundsCheckElimination);
 };
 
