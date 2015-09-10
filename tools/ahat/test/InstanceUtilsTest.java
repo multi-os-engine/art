@@ -16,20 +16,16 @@
 
 package com.android.ahat;
 
+import com.android.tools.perflib.heap.Instance;
 import java.io.IOException;
-import org.junit.runner.JUnitCore;
+import static org.junit.Assert.assertEquals;
+import org.junit.Test;
 
-public class Tests {
-  public static void main(String[] args) throws IOException {
-    TestDump.initializeSharedTestDump();
-    if (args.length == 0) {
-      args = new String[]{
-        "com.android.ahat.InstanceUtilsTest",
-        "com.android.ahat.QueryTest",
-        "com.android.ahat.SortTest"
-      };
-    }
-    JUnitCore.main(args);
+public class InstanceUtilsTest {
+  @Test
+  public void basicString() throws IOException {
+    TestDump dump = TestDump.getSharedTestDump();
+    Instance str = (Instance)dump.getDumpedThing("basicString");
+    assertEquals("hello, world", InstanceUtils.asString(str));
   }
 }
-
