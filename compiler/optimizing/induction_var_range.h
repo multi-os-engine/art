@@ -39,7 +39,7 @@ class InductionVarRange {
    */
   struct Value {
     Value(HInstruction* i, int32_t a, int32_t b)
-        : instruction(a ? i : nullptr),
+        : instruction(a != 0 ? i : nullptr),
           a_constant(a),
           b_constant(b) {}
     explicit Value(int32_t b) : Value(nullptr, 0, b) {}
@@ -70,7 +70,8 @@ class InductionVarRange {
   HInductionVarAnalysis::InductionInfo* GetTripCount(HLoopInformation* loop,
                                                      HInstruction* context);
 
-  static Value GetFetch(HInstruction* instruction, int32_t fail_value);
+  static Value GetFetch(HInstruction* instruction,
+                        HInductionVarAnalysis::InductionInfo* trip, int32_t fail_value);
 
   static Value GetMin(HInductionVarAnalysis::InductionInfo* info,
                       HInductionVarAnalysis::InductionInfo* trip);
