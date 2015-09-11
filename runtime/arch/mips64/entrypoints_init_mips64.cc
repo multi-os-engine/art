@@ -184,9 +184,10 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   qpoints->pA64Load = QuasiAtomic::Read64;
   qpoints->pA64Store = QuasiAtomic::Write64;
 
-  // Read barrier
+  // Read barrier.
   qpoints->pReadBarrierJni = ReadBarrierJni;
   qpoints->pReadBarrierSlow = artReadBarrierSlow;
+  qpoints->pReadBarrierForRootSlow = artReadBarrierForRootSlow;
 };
 
 }  // namespace art

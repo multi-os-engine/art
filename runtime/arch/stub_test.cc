@@ -2424,4 +2424,6 @@ TEST_F(StubTest, ReadBarrier) {
 #endif
 }
 
+// TODO: Add a test for the ReadBarrierForRootSlow entry point.
+
 }  // namespace art
