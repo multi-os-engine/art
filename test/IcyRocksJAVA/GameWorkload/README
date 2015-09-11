@@ -1,0 +1,60 @@
+= IcyRocks-Java
+IcyRocks-Java is a java implemented game workload based on analysis of real computation patterns.
+IcyRocks is developed based on cocos2d for android and JBox2d. Cocos2d for android is a java port of cocos2d on Android. JBox2d is a java port of Box2D physics engine.
+
+== Source Files
+The Source Files are all under /src
+* files under /src/com/intel/ are developed by Intel.
+* files under /src/org/ are from open source project cocos2d at https://github.com/ZhouWeikuan/cocos2d
+* files under /src/aurelienribon are from open source project box2d-editor at https://code.google.com/p/box2d-editor
+
+== Matrics
+* The main metrics of this workload is AFPS on bottom-left. It means average FPS since last scenario change.
+* There are also other four metrics:
+  FPS: instant FPS, calculated every 100ms
+  TIME: total execution time since last scenario changed
+  SNOW: number of snow grains in scenario. More snow grains means higher computation load.
+  ROCK: number of icy rocks in scenario. More rocks means higher computation load.
+
+== Requirements
+
+In order to use IcyRocks-Java, you will need to have an android device with android verison equal or
+later than 4.4, which means SDK API level later or equal to 19.
+The previous version of android was not guaranteed to sucessfully run this workload.
+
+== Build
+You can build IcyRocks-Java in command line or in Eclipse.
+
+===Build in command line:
+You can build this workload under Android Project Source tree.
+Android version should be larger or equal to 4.4 (SDK API level >= 19)
+We have made an Android.mk under the project root folder.
+following steps to build AndroidGCBench.apk
+* From the [ANDROID_ROOT] run:
+  build/envsetup.sh
+  lunch <target>
+* Now goto art/workloads/icyrocks-java/GameWorkload run:
+  mm or mmm
+
+By default, this will build the IcyRocks-Java.apk and save it into:
+[ANDROID_ROOT]/art/workloads/icyrocks-java/GameWorkload/bin/IcyRocks-Java/
+
+===Build in Eclipse:
+* Android SDK version should be later or euqal to 19.
+* Start eclipse and click File -> import menu, the import dialog will pop up.
+* Choose General -> Existing Projects into Workspace, and click next
+* Set the root directory to the path to .project file, GameWorkload will show up, select it and click finish.
+* Now IcyRocks project is imported into eclipse, and eclipse will build this project automatically.
+
+== Usage
+* Install GameWorkload.apk on your device
+* Launch the GameWorkload application
+* Tap the screen to change rock and snow grain numbers. Current default setting will add 10 rocks for each tap.
+* You can change configuration of scenario by using command line parameter:
+  "adb shell am start -n com.intel.gameworkload/.MainActivity -e nsnows 10 -e nrocks 20 -e rockstep 10 -e snowstep 15 -e transition 2 -e execTime 5000"
+  ** nsnows: number of snow grains. Default is 20.
+  ** nrocks: number of rock. Default is 10.
+  ** rockstep: number of added rocks for each touch. Default is 10.
+  ** snowstep: number of added snow grains for each touch. Default is 0.
+  ** transition: the time ignored at beginning of application and rock/snow number changes. It's specified in seconds. Default time is 2.
+  ** execTime: the execution time of activity in ms. (5000 means 5 seconds). Default is 0, means never exit automatically.
