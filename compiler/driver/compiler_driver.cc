@@ -544,6 +544,13 @@ static void CompileMethod(Thread* self,
                           Handle<mirror::DexCache> dex_cache)
     REQUIRES(!driver->compiled_methods_lock_) {
   DCHECK(driver != nullptr);
+  // if debug option --stop-compiling-after is passed
+  // then check whether we need to stop compilation.
+  if (driver->GetCompilerOptions().IsConditionalCompilation() &&
+     (driver->GetCompilerOptions().GetStopCompilingAfter() < method_idx ||
+      driver->GetCompilerOptions().GetStopCompilingAfter() == UINT32_MAX)) {
+    return;
+  }
   CompiledMethod* compiled_method = nullptr;
   uint64_t start_ns = kTimeCompileMethod ? NanoTime() : 0;
   MethodReference method_ref(&dex_file, method_idx);
