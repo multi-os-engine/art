@@ -197,18 +197,18 @@ uint8_t* JitCompiler::WriteMethodHeaderAndCode(const CompiledMethod* compiled_me
   reserve_begin += sizeof(OatQuickMethodHeader);
   reserve_begin = reinterpret_cast<uint8_t*>(
       compiled_method->AlignCode(reinterpret_cast<uintptr_t>(reserve_begin)));
-  const auto* quick_code = compiled_method->GetQuickCode();
+  const auto quick_code = compiled_method->GetQuickCode();
   CHECK_LE(reserve_begin, reserve_end);
-  CHECK_LE(quick_code->size(), static_cast<size_t>(reserve_end - reserve_begin));
+  CHECK_LE(quick_code.size(), static_cast<size_t>(reserve_end - reserve_begin));
   auto* code_ptr = reserve_begin;
   OatQuickMethodHeader* method_header = reinterpret_cast<OatQuickMethodHeader*>(code_ptr) - 1;
   // Construct the header last.
   const auto frame_size_in_bytes = compiled_method->GetFrameSizeInBytes();
   const auto core_spill_mask = compiled_method->GetCoreSpillMask();
   const auto fp_spill_mask = compiled_method->GetFpSpillMask();
-  const auto code_size = quick_code->size();
+  const auto code_size = quick_code.size();
   CHECK_NE(code_size, 0U);
-  std::copy(quick_code->data(), quick_code->data() + code_size, code_ptr);
+  std::copy(quick_code.data(), quick_code.data() + code_size, code_ptr);
   // After we are done writing we need to update the method header.
   // Write out the method header last.
   method_header = new(method_header) OatQuickMethodHeader(
@@ -227,47 +227,47 @@ bool JitCompiler::AddToCodeCache(ArtMethod* method, const CompiledMethod* compil
                                  OatFile::OatMethod* out_method) {
   Runtime* runtime = Runtime::Current();
   JitCodeCache* const code_cache = runtime->GetJit()->GetCodeCache();
-  const auto* quick_code = compiled_method->GetQuickCode();
-  if (quick_code == nullptr) {
+  auto const quick_code = compiled_method->GetQuickCode();
+  if (quick_code.empty()) {
     return false;
   }
-  const auto code_size = quick_code->size();
+  const auto code_size = quick_code.size();
   Thread* const self = Thread::Current();
   const uint8_t* base = code_cache->CodeCachePtr();
-  auto* const mapping_table = compiled_method->GetMappingTable();
-  auto* const vmap_table = compiled_method->GetVmapTable();
-  auto* const gc_map = compiled_method->GetGcMap();
+  auto const mapping_table = compiled_method->GetMappingTable();
+  auto const vmap_table = compiled_method->GetVmapTable();
+  auto const gc_map = compiled_method->GetGcMap();
   uint8_t* mapping_table_ptr = nullptr;
   uint8_t* vmap_table_ptr = nullptr;
   uint8_t* gc_map_ptr = nullptr;
 
-  if (mapping_table != nullptr) {
+  if (!mapping_table.empty()) {
     // Write out pre-header stuff.
     mapping_table_ptr = code_cache->AddDataArray(
-        self, mapping_table->data(), mapping_table->data() + mapping_table->size());
+        self, mapping_table.data(), mapping_table.data() + mapping_table.size());
     if (mapping_table_ptr == nullptr) {
       return false;  // Out of data cache.
     }
   }
 
-  if (vmap_table != nullptr) {
+  if (!vmap_table.empty()) {
     vmap_table_ptr = code_cache->AddDataArray(
-        self, vmap_table->data(), vmap_table->data() + vmap_table->size());
+        self, vmap_table.data(), vmap_table.data() + vmap_table.size());
     if (vmap_table_ptr == nullptr) {
       return false;  // Out of data cache.
     }
   }
 
-  if (gc_map != nullptr) {
+  if (!gc_map.empty()) {
     gc_map_ptr = code_cache->AddDataArray(
-        self, gc_map->data(), gc_map->data() + gc_map->size());
+        self, gc_map.data(), gc_map.data() + gc_map.size());
     if (gc_map_ptr == nullptr) {
       return false;  // Out of data cache.
     }
   }
 
   // Don't touch this until you protect / unprotect the code.
-  const size_t reserve_size = sizeof(OatQuickMethodHeader) + quick_code->size() + 32;
+  const size_t reserve_size = sizeof(OatQuickMethodHeader) + quick_code.size() + 32;
   uint8_t* const code_reserve = code_cache->ReserveCode(self, reserve_size);
   if (code_reserve == nullptr) {
     return false;
@@ -277,7 +277,7 @@ bool JitCompiler::AddToCodeCache(ArtMethod* method, const CompiledMethod* compil
       vmap_table_ptr, gc_map_ptr);
 
   __builtin___clear_cache(reinterpret_cast<char*>(code_ptr),
-                          reinterpret_cast<char*>(code_ptr + quick_code->size()));
+                          reinterpret_cast<char*>(code_ptr + quick_code.size()));
 
   const size_t thumb_offset = compiled_method->CodeDelta();
   const uint32_t code_offset = code_ptr - base + thumb_offset;
