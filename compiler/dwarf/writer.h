@@ -116,9 +116,9 @@ class Writer {
     data_->insert(data_->end(), p, p + size);
   }
 
-  template<typename Allocator2>
-  void PushData(const std::vector<uint8_t, Allocator2>* buffer) {
-    data_->insert(data_->end(), buffer->begin(), buffer->end());
+  template<typename Container>
+  void PushData(const Container& buffer) {
+    data_->insert(data_->end(), buffer.begin(), buffer.end());
   }
 
   void UpdateUint32(size_t offset, uint32_t value) {
