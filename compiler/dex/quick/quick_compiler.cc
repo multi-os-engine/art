@@ -683,7 +683,8 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
   // build default.
   CompilerDriver* driver = GetCompilerDriver();
 
-  VLOG(compiler) << "Compiling " << PrettyMethod(method_idx, dex_file) << "...";
+  VLOG(compiler) << "Compiling " << PrettyMethod(method_idx, dex_file)
+                 << ", method_idx = " << method_idx << " ...";
   if (Compiler::IsPathologicalCase(*code_item, method_idx, dex_file)) {
     return nullptr;
   }
@@ -720,7 +721,12 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
   bool match = use_match && (compiler_flip_match ^
       (PrettyMethod(method_idx, dex_file).find(compiler_method_match) != std::string::npos));
   if (!use_match || match) {
-    cu.disable_opt = kCompilerOptimizerDisableFlags;
+    // Check if disable mask is passed via --quick-disable-opt.
+    if (driver->GetCompilerOptions().IsConditionalCompilation()) {
+      cu.disable_opt = driver->GetCompilerOptions().GetQuickDisableOptimizationMask();
+    } else {
+      cu.disable_opt = kCompilerOptimizerDisableFlags;
+    }
     cu.enable_debug = kCompilerDebugFlags;
     cu.verbose = VLOG_IS_ON(compiler) ||
         (cu.enable_debug & (1 << kDebugVerbose));
@@ -841,6 +847,8 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
 CompiledMethod* QuickCompiler::JniCompile(uint32_t access_flags,
                                           uint32_t method_idx,
                                           const DexFile& dex_file) const {
+  VLOG(compiler) << "Compiling native " << PrettyMethod(method_idx, dex_file)
+                 << ", method_idx = " << method_idx << " ...";
   return ArtQuickJniCompileMethod(GetCompilerDriver(), access_flags, method_idx, dex_file);
 }
 

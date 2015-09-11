@@ -119,12 +119,14 @@ class PassObserver : public ValueObject {
                CompilerDriver* compiler_driver)
       : graph_(graph),
         cached_method_name_(),
+        compiler_driver_(compiler_driver),
         timing_logger_enabled_(compiler_driver->GetDumpPasses()),
         timing_logger_(timing_logger_enabled_ ? GetMethodName() : "", true, true),
         disasm_info_(graph->GetArena()),
         visualizer_enabled_(!compiler_driver->GetDumpCfgFileName().empty()),
         visualizer_(visualizer_output, graph, *codegen),
-        graph_in_bad_state_(false) {
+        graph_in_bad_state_(false),
+        current_opt_id_(0) {
     if (timing_logger_enabled_ || visualizer_enabled_) {
       if (!IsVerboseMethod(compiler_driver, GetMethodName())) {
         timing_logger_enabled_ = visualizer_enabled_ = false;
@@ -150,6 +152,10 @@ class PassObserver : public ValueObject {
   }
 
   void SetGraphInBadState() { graph_in_bad_state_ = true; }
+  uint32_t GetCurrentOptId() { return current_opt_id_; }
+  void SetCurrentOptId(uint32_t id) { current_opt_id_ = id; }
+
+  CompilerDriver* GetCompilerDriver() { return compiler_driver_; }
 
   const char* GetMethodName() {
     // PrettyMethod() is expensive, so we delay calling it until we actually have to.
@@ -215,10 +221,11 @@ class PassObserver : public ValueObject {
 
     return false;
   }
-
   HGraph* const graph_;
 
   std::string cached_method_name_;
+
+  CompilerDriver* compiler_driver_;
 
   bool timing_logger_enabled_;
   TimingLogger timing_logger_;
@@ -231,6 +238,9 @@ class PassObserver : public ValueObject {
   // Flag to be set by the compiler if the pass failed and the graph is not
   // expected to validate.
   bool graph_in_bad_state_;
+
+  // Current number of an optimization pass
+  uint32_t current_opt_id_;
 
   friend PassScope;
 
@@ -274,6 +284,9 @@ class OptimizingCompiler FINAL : public Compiler {
   CompiledMethod* JniCompile(uint32_t access_flags,
                              uint32_t method_idx,
                              const DexFile& dex_file) const OVERRIDE {
+    VLOG(compiler) << "Compiling native "
+                   << PrettyMethod(method_idx, dex_file)
+                   << ", method_idx = " << method_idx;
     return ArtQuickJniCompileMethod(GetCompilerDriver(), access_flags, method_idx, dex_file);
   }
 
@@ -407,10 +420,23 @@ static bool InstructionSetSupportsReadBarrier(InstructionSet instruction_set) {
 static void RunOptimizations(HOptimization* optimizations[],
                              size_t length,
                              PassObserver* pass_observer) {
-  for (size_t i = 0; i < length; ++i) {
-    PassScope scope(optimizations[i]->GetPassName(), pass_observer);
+  uint32_t phase_id = pass_observer->GetCurrentOptId();
+  for (size_t i = 0; i < length; ++i, ++phase_id) {
+    const char* name = optimizations[i]->GetPassName();
+    PassScope scope(name, pass_observer);
+    // if debug option --stop-optimizing-after is passed
+    // then check whether we need to stop optimization.
+    const CompilerOptions& co = pass_observer->GetCompilerDriver()->GetCompilerOptions();
+    if (co.IsConditionalCompilation()) {
+      if (co.GetStopOptimizingAfter() < phase_id ||
+          co.GetStopOptimizingAfter() == std::numeric_limits<uint32_t>::max()) {
+        break;
+      }
+      VLOG(compiler) << "Applying " << name << ", phase_id = " << phase_id;
+    }
     optimizations[i]->Run();
   }
+  pass_observer->SetCurrentOptId(phase_id);
 }
 
 static void MaybeRunInliner(HGraph* graph,
