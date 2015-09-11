@@ -32,6 +32,10 @@ CompilerOptions::CompilerOptions()
       inline_depth_limit_(kUnsetInlineDepthLimit),
       inline_max_code_units_(kUnsetInlineMaxCodeUnits),
       no_inline_from_(nullptr),
+      stop_compiling_after_(std::numeric_limits<uint32_t>::max() - 1),
+      stop_optimizing_after_(std::numeric_limits<uint32_t>::max() - 1),
+      quick_disable_opt_mask_(0),
+      cond_compilation_(false),
       include_patch_information_(kDefaultIncludePatchInformation),
       top_k_profile_threshold_(kDefaultTopKProfileThreshold),
       debuggable_(false),
@@ -61,6 +65,10 @@ CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
                                  size_t inline_depth_limit,
                                  size_t inline_max_code_units,
                                  const DexFile* no_inline_from,
+                                 size_t stop_compiling_after,
+                                 size_t stop_optimizing_after,
+                                 size_t quick_disable_opt_mask,
+                                 bool cond_compilation,
                                  bool include_patch_information,
                                  double top_k_profile_threshold,
                                  bool debuggable,
@@ -82,6 +90,10 @@ CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
     inline_depth_limit_(inline_depth_limit),
     inline_max_code_units_(inline_max_code_units),
     no_inline_from_(no_inline_from),
+    stop_compiling_after_(stop_compiling_after),
+    stop_optimizing_after_(stop_optimizing_after),
+    quick_disable_opt_mask_(quick_disable_opt_mask),
+    cond_compilation_(cond_compilation),
     include_patch_information_(include_patch_information),
     top_k_profile_threshold_(top_k_profile_threshold),
     debuggable_(debuggable),
@@ -167,6 +179,36 @@ void CompilerOptions::ParseDumpInitFailures(const StringPiece& option,
   }
 }
 
+void CompilerOptions::ParseStopCompilingAfter(const StringPiece& option, UsageFn Usage) {
+  const char* stop_method_idx = option.substr(strlen("--stop-compiling-after=")).data();
+  char* end;
+  stop_compiling_after_ = strtoul(stop_method_idx, &end, 0);
+  if (end == stop_method_idx || *end != '\0') {
+    Usage("Failed to parse value for option %s", option.data());
+  }
+  cond_compilation_ = true;
+}
+
+void CompilerOptions::ParseStopOptimizingAfter(const StringPiece& option, UsageFn Usage) {
+  const char* stop_phase = option.substr(strlen("--stop-optimizing-after=")).data();
+  char* end;
+  stop_optimizing_after_ = strtoul(stop_phase, &end, 0);
+  if (end == stop_phase || *end != '\0') {
+    Usage("Failed to parse value for option %s", option.data());
+  }
+  cond_compilation_ = true;
+}
+
+void CompilerOptions::ParseDisableOptMask(const StringPiece& option, UsageFn Usage) {
+  const char* mask = option.substr(strlen("--quick-disable-opt=")).data();
+  char* end;
+  quick_disable_opt_mask_ = strtoul(mask, &end, 0);
+  if (end == mask || *end != '\0') {
+    Usage("Failed to parse value for option %s", option.data());
+  }
+  cond_compilation_ = true;
+}
+
 bool CompilerOptions::ParseCompilerOption(const StringPiece& option, UsageFn Usage) {
   if (option.starts_with("--compiler-filter=")) {
     const char* compiler_filter_string = option.substr(strlen("--compiler-filter=")).data();
@@ -240,6 +282,12 @@ bool CompilerOptions::ParseCompilerOption(const StringPiece& option, UsageFn Usa
     ParsePassOptions(option, Usage);
   } else if (option.starts_with("--dump-init-failures=")) {
     ParseDumpInitFailures(option, Usage);
+  } else if (option.starts_with("--stop-compiling-after=")) {
+    ParseStopCompilingAfter(option, Usage);
+  } else if (option.starts_with("--stop-optimizing-after=")) {
+    ParseStopOptimizingAfter(option, Usage);
+  } else if (option.starts_with("--quick-disable-opt=")) {
+    ParseDisableOptMask(option, Usage);
   } else {
     // Option not recognized.
     return false;
