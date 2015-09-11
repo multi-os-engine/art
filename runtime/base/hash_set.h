@@ -135,6 +135,20 @@ class HashSet {
     Clear();
   }
 
+  HashSet(EmptyFn empty_fn, HashFn hash_fn, Pred pred, Alloc alloc = Alloc())
+      : allocfn_(alloc),
+        hashfn_(hash_fn),
+        emptyfn_(empty_fn),
+        pred_(pred),
+        num_elements_(0u),
+        num_buckets_(0u),
+        owns_data_(false),
+        data_(nullptr),
+        min_load_factor_(kDefaultMinLoadFactor),
+        max_load_factor_(kDefaultMaxLoadFactor) {
+    Clear();
+  }
+
   HashSet(const HashSet& other) : num_elements_(0), num_buckets_(0), owns_data_(false),
       data_(nullptr) {
     *this = other;
@@ -338,14 +352,17 @@ class HashSet {
   }
 
   void InsertWithHash(const T& element, size_t hash) {
-    DCHECK_EQ(hash, hashfn_(element));
-    if (num_elements_ >= elements_until_expand_) {
-      Expand();
-      DCHECK_LT(num_elements_, elements_until_expand_);
-    }
-    const size_t index = FirstAvailableSlot(IndexForHash(hash));
+    const size_t index = AllocateInsertSlot(element, hash);
     data_[index] = element;
-    ++num_elements_;
+  }
+
+  void Insert(T&& element) {
+    InsertWithHash(std::move(element), hashfn_(element));
+  }
+
+  void InsertWithHash(T&& element, size_t hash) {
+    const size_t index = AllocateInsertSlot(element, hash);
+    data_[index] = std::move(element);
   }
 
   size_t Size() const {
@@ -472,6 +489,7 @@ class HashSet {
   void DeallocateStorage() {
     if (owns_data_) {
       for (size_t i = 0; i < NumBuckets(); ++i) {
+        emptyfn_.MakeEmpty(data_[i]);
         allocfn_.destroy(allocfn_.address(data_[i]));
       }
       if (data_ != nullptr) {
@@ -527,6 +545,16 @@ class HashSet {
       DCHECK_LE(non_empty_count, NumBuckets());  // Don't loop forever.
     }
     return index;
+  }
+
+  size_t AllocateInsertSlot(const T& element, size_t hash) {
+    DCHECK_EQ(hash, hashfn_(element));
+    if (num_elements_ >= elements_until_expand_) {
+      Expand();
+      DCHECK_LT(num_elements_, elements_until_expand_);
+    }
+    ++num_elements_;
+    return FirstAvailableSlot(IndexForHash(hash));
   }
 
   // Return new offset.

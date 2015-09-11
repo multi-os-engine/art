@@ -23,6 +23,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "swap_space_fwd.h"
+
 #include "base/debug_stack.h"
 #include "base/logging.h"
 #include "base/macros.h"
@@ -97,8 +99,6 @@ class SwapSpace {
   mutable Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   DISALLOW_COPY_AND_ASSIGN(SwapSpace);
 };
-
-template <typename T> class SwapAllocator;
 
 template <>
 class SwapAllocator<void> {
