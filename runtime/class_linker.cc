@@ -4879,7 +4879,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
     ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*> move_table(allocator.Adapter());
     if (virtuals != old_virtuals) {
       // Maps from heap allocated miranda method to linear alloc miranda method.
-      StrideIterator<ArtMethod> out = virtuals->Begin(method_size, method_alignment);
+      StrideIterator<ArtMethod> out = virtuals->begin(method_size, method_alignment);
       // Copy over the old methods + miranda methods.
       for (auto& m : klass->GetVirtualMethods(image_pointer_size_)) {
         move_table.emplace(&m, &*out);
@@ -4889,7 +4889,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
         ++out;
       }
     }
-    StrideIterator<ArtMethod> out(virtuals->Begin(method_size, method_alignment) + old_method_count);
+    StrideIterator<ArtMethod> out(virtuals->begin(method_size, method_alignment) + old_method_count);
     // Copy over miranda methods before copying vtable since CopyOf may cause thread suspension and
     // we want the roots of the miranda methods to get visited.
     for (ArtMethod* mir_method : miranda_methods) {
@@ -4898,7 +4898,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
       move_table.emplace(mir_method, &*out);
       ++out;
     }
-    virtuals->SetLength(new_method_count);
+    virtuals->SetSize(new_method_count);
     UpdateClassVirtualMethods(klass.Get(), virtuals);
     // Done copying methods, they are all roots in the class now, so we can end the no thread
     // suspension assert.
@@ -4912,7 +4912,7 @@ bool ClassLinker::LinkInterfaceMethods(Thread* self,
       self->AssertPendingOOMException();
       return false;
     }
-    out = virtuals->Begin(method_size, method_alignment) + old_method_count;
+    out = virtuals->begin(method_size, method_alignment) + old_method_count;
     size_t vtable_pos = old_vtable_count;
     for (size_t i = old_method_count; i < new_method_count; ++i) {
       // Leave the declaring class alone as type indices are relative to it
