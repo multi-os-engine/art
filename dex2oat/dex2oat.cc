@@ -49,6 +49,7 @@
 #include "compiler.h"
 #include "compiler_callbacks.h"
 #include "dex_file-inl.h"
+#include "dex/dex_flags.h"
 #include "dex/pass_manager.h"
 #include "dex/verification_results.h"
 #include "dex/quick_compiler_callbacks.h"
@@ -340,7 +341,44 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("  --swap-fd=<file-descriptor>:  specifies a file to use for swap (by descriptor).");
   UsageError("      Example: --swap-fd=10");
   UsageError("");
-  std::cerr << "See log for usage error information\n";
+  UsageError("  --stop-compiling-after=<method-idx>:  stops compilation after a specified method.");
+  UsageError("      <method-idx> can be either hex or decimal value.");
+  UsageError("      Example: --stop-compiling-after=17 compiles first 17 methods");
+  UsageError("      Example: --stop-compiling-after=0x%x compiles none of methods", std::numeric_limits<uint32_t>::max());
+  UsageError("      Default: 0x%x", std::numeric_limits<uint32_t>::max() - 1);
+  UsageError("");
+  UsageError("  --stop-optimizing-after=<phase-id>:  stops optimization after a specified phase id (Optimizing backend).");
+  UsageError("      <phase-idx> can be either hex or decimal value.");
+  UsageError("      Example: --stop-optimizing-after=2 applies first 2 optimizations");
+  UsageError("      Example: --stop-optimizing-after=0x%x don't apply any optimization", std::numeric_limits<uint32_t>::max());
+  UsageError("      Default: 0x%x", std::numeric_limits<uint32_t>::max() - 1);
+  UsageError("");
+  UsageError("  --quick-disable-opt=<mask>:  disables an optimization (Quick backend).");
+  UsageError("      <mask> can be either hex or decimal value.");
+  UsageError("      Example: --quick-disable-opt=0x%x disables kLoadStoreElimination", 1 << kLoadStoreElimination);
+  UsageError("      Example: --quick-disable-opt=0x%x disables all optimization", std::numeric_limits<uint32_t>::max());
+  UsageError("      Default: 0");
+  UsageError("      To disable a particular optimization use the following values:");
+  #define USE(a) "        "#a" = 0x%x", 1 << a
+  UsageError(USE(kLoadStoreElimination));
+  UsageError(USE(kLoadHoisting));
+  UsageError(USE(kSuppressLoads));
+  UsageError(USE(kNullCheckElimination));
+  UsageError(USE(kClassInitCheckElimination));
+  UsageError(USE(kGlobalValueNumbering));
+  UsageError(USE(kGvnDeadCodeElimination));
+  UsageError(USE(kLocalValueNumbering));
+  UsageError(USE(kPromoteRegs));
+  UsageError(USE(kTrackLiveTemps));
+  UsageError(USE(kSafeOptimizations));
+  UsageError(USE(kBBOpt));
+  UsageError(USE(kSuspendCheckElimination));
+  UsageError(USE(kMatch));
+  UsageError(USE(kPromoteCompilerTemps));
+  UsageError(USE(kSuppressExceptionEdges));
+  UsageError(USE(kSuppressMethodInlining));
+  #undef USE
+  UsageError("");  std::cerr << "See log for usage error information\n";
   exit(EXIT_FAILURE);
 }
 
@@ -556,6 +594,10 @@ class Dex2Oat FINAL {
     int inline_depth_limit = kUnsetInlineDepthLimit;
     static constexpr int kUnsetInlineMaxCodeUnits = -1;
     int inline_max_code_units = kUnsetInlineMaxCodeUnits;
+    uint32_t stop_comp_after = std::numeric_limits<uint32_t>::max() - 1;
+    uint32_t stop_opt_after = std::numeric_limits<uint32_t>::max() - 1;
+    uint32_t quick_disable_opt_mask = 0;
+    bool cond_comp = false;
 
     // Profile file to use
     double top_k_profile_threshold = CompilerOptions::kDefaultTopKProfileThreshold;
@@ -741,6 +783,36 @@ class Dex2Oat FINAL {
 
   void ParseSwapFd(const StringPiece& option) {
     ParseUintOption(option, "--swap-fd", &swap_fd_);
+  }
+
+  void ParseStopCompilingAfter(const StringPiece& option, ParserOptions* parser_options) {
+    const char* stop_method_idx = option.substr(strlen("--stop-compiling-after=")).data();
+    char* end;
+    parser_options->stop_comp_after = strtoul(stop_method_idx, &end, 0);
+    if (end == stop_method_idx || *end != '\0') {
+      Usage("Failed to parse value for option %s", option.data());
+    }
+    parser_options->cond_comp = true;
+  }
+
+  void ParseStopOptimizingAfter(const StringPiece& option, ParserOptions* parser_options) {
+    const char* stop_phase = option.substr(strlen("--stop-optimizing-after=")).data();
+    char* end;
+    parser_options->stop_opt_after = strtoul(stop_phase, &end, 0);
+    if (end == stop_phase || *end != '\0') {
+      Usage("Failed to parse value for option %s", option.data());
+    }
+    parser_options->cond_comp = true;
+  }
+
+  void ParseDisableOptMask(const StringPiece& option, ParserOptions* parser_options) {
+    const char* mask = option.substr(strlen("--quick-disable-opt=")).data();
+    char* end;
+    parser_options->quick_disable_opt_mask = strtoul(mask, &end, 0);
+    if (end == mask || *end != '\0') {
+      Usage("Failed to parse value for option %s", option.data());
+    }
+    parser_options->cond_comp = true;
   }
 
   void ProcessOptions(ParserOptions* parser_options) {
@@ -942,6 +1014,10 @@ class Dex2Oat FINAL {
                                                 parser_options->num_dex_methods_threshold,
                                                 parser_options->inline_depth_limit,
                                                 parser_options->inline_max_code_units,
+                                                parser_options->stop_comp_after,
+                                                parser_options->stop_opt_after,
+                                                parser_options->quick_disable_opt_mask,
+                                                parser_options->cond_comp,
                                                 parser_options->include_patch_information,
                                                 parser_options->top_k_profile_threshold,
                                                 parser_options->debuggable,
@@ -1143,6 +1219,12 @@ class Dex2Oat FINAL {
         ParseSwapFd(option);
       } else if (option == "--abort-on-hard-verifier-error") {
         parser_options->abort_on_hard_verifier_error = true;
+      } else if (option.starts_with("--stop-compiling-after=")) {
+        ParseStopCompilingAfter(option, parser_options.get());
+      } else if (option.starts_with("--stop-optimizing-after=")) {
+        ParseStopOptimizingAfter(option, parser_options.get());
+      } else if (option.starts_with("--quick-disable-opt=")) {
+        ParseDisableOptMask(option, parser_options.get());
       } else {
         Usage("Unknown argument %s", option.data());
       }

@@ -69,6 +69,10 @@ class CompilerOptions FINAL {
                   size_t num_dex_methods_threshold,
                   size_t inline_depth_limit,
                   size_t inline_max_code_units,
+                  size_t stop_compiling_after,
+                  size_t stop_optimizing_after,
+                  size_t quick_disable_opt_mask,
+                  bool cond_compilation,
                   bool include_patch_information,
                   double top_k_profile_threshold,
                   bool debuggable,
@@ -153,6 +157,22 @@ class CompilerOptions FINAL {
     return inline_max_code_units_;
   }
 
+  size_t GetStopCompilingAfter() const {
+    return stop_compiling_after_;
+  }
+
+  size_t GetStopOptimizingAfter() const {
+    return stop_optimizing_after_;
+  }
+
+  size_t GetQuickDisableOptimizationMask() const {
+    return quick_disable_opt_mask_;
+  }
+
+  bool IsConditionalCompilation() const {
+    return cond_compilation_;
+  }
+
   double GetTopKProfileThreshold() const {
     return top_k_profile_threshold_;
   }
@@ -220,6 +240,10 @@ class CompilerOptions FINAL {
   const size_t num_dex_methods_threshold_;
   const size_t inline_depth_limit_;
   const size_t inline_max_code_units_;
+  const size_t stop_compiling_after_;
+  const size_t stop_optimizing_after_;
+  const size_t quick_disable_opt_mask_;
+  const bool cond_compilation_;
   const bool include_patch_information_;
   // When using a profile file only the top K% of the profiled samples will be compiled.
   const double top_k_profile_threshold_;
