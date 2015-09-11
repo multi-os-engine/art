@@ -49,6 +49,7 @@
 #include "compiler.h"
 #include "compiler_callbacks.h"
 #include "dex_file-inl.h"
+#include "dex/dex_flags.h"
 #include "dex/pass_manager.h"
 #include "dex/verification_results.h"
 #include "dex/quick_compiler_callbacks.h"
@@ -369,6 +370,44 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("");
   UsageError("  --multi-image: specify that separate oat and image files be generated for each "
              "input dex file.");
+  UsageError("");
+  UsageError("  --stop-compiling-after=<method-idx>:  stops compilation after a specified method.");
+  UsageError("      <method-idx> can be either hex or decimal value.");
+  UsageError("      Example: --stop-compiling-after=17 compiles first 17 methods");
+  UsageError("      Example: --stop-compiling-after=0x%x compiles none of methods", std::numeric_limits<uint32_t>::max());
+  UsageError("      Default: 0x%x", std::numeric_limits<uint32_t>::max() - 1);
+  UsageError("");
+  UsageError("  --stop-optimizing-after=<phase-id>:  stops optimization after a specified phase id (Optimizing backend).");
+  UsageError("      <phase-idx> can be either hex or decimal value.");
+  UsageError("      Example: --stop-optimizing-after=2 applies first 2 optimizations");
+  UsageError("      Example: --stop-optimizing-after=0x%x don't apply any optimization", std::numeric_limits<uint32_t>::max());
+  UsageError("      Default: 0x%x", std::numeric_limits<uint32_t>::max() - 1);
+  UsageError("");
+  UsageError("  --quick-disable-opt=<mask>:  disables an optimization (Quick backend).");
+  UsageError("      <mask> can be either hex or decimal value.");
+  UsageError("      Example: --quick-disable-opt=0x%x disables kLoadStoreElimination", 1 << kLoadStoreElimination);
+  UsageError("      Example: --quick-disable-opt=0x%x disables all optimization", std::numeric_limits<uint32_t>::max());
+  UsageError("      Default: 0");
+  UsageError("      To disable a particular optimization use the following values:");
+  #define USE(a) "        "#a" = 0x%x", 1 << a
+  UsageError(USE(kLoadStoreElimination));
+  UsageError(USE(kLoadHoisting));
+  UsageError(USE(kSuppressLoads));
+  UsageError(USE(kNullCheckElimination));
+  UsageError(USE(kClassInitCheckElimination));
+  UsageError(USE(kGlobalValueNumbering));
+  UsageError(USE(kGvnDeadCodeElimination));
+  UsageError(USE(kLocalValueNumbering));
+  UsageError(USE(kPromoteRegs));
+  UsageError(USE(kTrackLiveTemps));
+  UsageError(USE(kSafeOptimizations));
+  UsageError(USE(kBBOpt));
+  UsageError(USE(kSuspendCheckElimination));
+  UsageError(USE(kMatch));
+  UsageError(USE(kPromoteCompilerTemps));
+  UsageError(USE(kSuppressExceptionEdges));
+  UsageError(USE(kSuppressMethodInlining));
+  #undef USE
   UsageError("");
   std::cerr << "See log for usage error information\n";
   exit(EXIT_FAILURE);
