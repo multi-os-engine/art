@@ -90,6 +90,7 @@ include $(art_path)/tools/Android.mk
 include $(art_path)/tools/ahat/Android.mk
 include $(art_path)/tools/dexfuzz/Android.mk
 include $(art_path)/sigchainlib/Android.mk
+include $(art_path)/benchmark/Android.mk
 
 
 # ART_HOST_DEPENDENCIES depends on Android.executable.mk above for ART_HOST_EXECUTABLES
