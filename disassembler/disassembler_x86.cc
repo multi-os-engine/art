@@ -243,7 +243,52 @@ std::string DisassemblerX86::DumpAddress(uint8_t mod, uint8_t rm, uint8_t rex64,
   return address.str();
 }
 
+size_t DisassemblerX86::DumpNops(std::ostream& os, const uint8_t* instr) {
+  size_t nop_size = 0u;
+  if (*instr == 0x90) {
+    nop_size = 1u;
+  } else if (*instr == 0x66 && *(instr + 1) == 0x90) {
+    nop_size = 2u;
+  } else if (*instr == 0x0f && *(instr + 1) == 0x1f && *(instr + 2) == 0x00) {
+    nop_size = 3u;
+  } else if (*instr == 0x0f && *(instr + 1) == 0x1f && *(instr + 2) == 0x40 && *(instr + 3) == 0x00) {
+    nop_size = 4u;
+  } else if (*instr == 0x0f && *(instr + 1) == 0x1f && *(instr + 2) == 0x44 && *(instr + 3) == 0x00
+      && *(instr + 4) == 0x00) {
+    nop_size = 5u;
+  } else if (*instr == 0x66 && *(instr + 1) == 0x0f && *(instr + 2) == 0x1f && *(instr + 3) == 0x44
+      && *(instr + 4) == 0x00 && *(instr + 5) == 0x00) {
+    nop_size = 6u;
+  } else if (*instr == 0x0f && *(instr + 1) == 0x1f && *(instr + 2) == 0x80 && *(instr + 3) == 0x00
+      && *(instr + 4) == 0x00 && *(instr + 5) == 0x00 && *(instr + 6) == 0x00) {
+    nop_size = 7u;
+  } else if (*instr == 0x0f && *(instr + 1) == 0x1f && *(instr + 2) == 0x84 && *(instr + 3) == 0x00
+      && *(instr + 4) == 0x00 && *(instr + 5) == 0x00 && *(instr + 6) == 0x00 && *(instr + 7) == 0x00) {
+    nop_size = 8u;
+  } else if (*instr == 0x66 && *(instr + 1) == 0x0f && *(instr + 2) == 0x1f && *(instr + 3) == 0x84
+      && *(instr + 4) == 0x00 && *(instr + 5) == 0x00 && *(instr + 6) == 0x00 && *(instr + 7) == 0x00
+      && *(instr + 8) == 0x00) {
+    nop_size = 9u;
+  } else if (*instr ==0x66 && *(instr + 1) == 0x2e && *(instr + 2) == 0x0f && *(instr + 3) == 0x1f
+      && *(instr + 4) == 0x84 && *(instr + 5) == 0x00 && *(instr + 6) == 0x00 && *(instr + 7) == 0x00
+      && *(instr + 8) == 0x00 && *(instr + 9) == 0x00) {
+    nop_size = 10u;
+  }
+
+  if (nop_size != 0u) {
+    os << FormatInstructionPointer(instr)
+       << StringPrintf(": %22s    \t       nop \n", DumpCodeHex(instr, instr + nop_size).c_str());
+  }
+
+  return nop_size;
+}
+
 size_t DisassemblerX86::DumpInstruction(std::ostream& os, const uint8_t* instr) {
+  size_t nop_size = DumpNops(os, instr);
+  if (nop_size != 0u) {
+    return nop_size;
+  }
+
   const uint8_t* begin_instr = instr;
   bool have_prefixes = true;
   uint8_t prefix[4] = {0, 0, 0, 0};
@@ -400,6 +445,7 @@ DISASSEMBLER_ENTRY(cmp,
   case 0x89: opcode1 = "mov"; store = true; has_modrm = true; break;
   case 0x8A: opcode1 = "mov"; load = true; has_modrm = true; byte_operand = true; break;
   case 0x8B: opcode1 = "mov"; load = true; has_modrm = true; break;
+  case 0x9D: opcode1 = "popf"; break;
 
   case 0x0F:  // 2 byte extended opcode
     instr++;
