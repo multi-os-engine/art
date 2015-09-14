@@ -4692,16 +4692,25 @@ class HThrow : public HTemplateInstruction<1> {
   DISALLOW_COPY_AND_ASSIGN(HThrow);
 };
 
+enum class TypeCheckKind {
+  kExactCheck,
+  kClassHierarchyCheck,
+  kAbstractClassCheck,
+  kInterfaceCheck,
+  kArrayObjectCheck,
+  kArrayCheck
+};
+
 class HInstanceOf : public HExpression<2> {
  public:
   HInstanceOf(HInstruction* object,
               HLoadClass* constant,
-              bool class_is_final,
+              TypeCheckKind check_kind,
               uint32_t dex_pc)
       : HExpression(Primitive::kPrimBoolean,
-                    SideEffectsForArchRuntimeCalls(class_is_final),
+                    SideEffectsForArchRuntimeCalls(check_kind),
                     dex_pc),
-        class_is_final_(class_is_final),
+        check_kind_(check_kind),
         must_do_null_check_(true) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, constant);
@@ -4717,20 +4726,22 @@ class HInstanceOf : public HExpression<2> {
     return false;
   }
 
-  bool IsClassFinal() const { return class_is_final_; }
+  bool IsExactCheck() const { return check_kind_ == TypeCheckKind::kExactCheck; }
+
+  TypeCheckKind GetTypeCheckKind() const { return check_kind_; }
 
   // Used only in code generation.
   bool MustDoNullCheck() const { return must_do_null_check_; }
   void ClearMustDoNullCheck() { must_do_null_check_ = false; }
 
-  static SideEffects SideEffectsForArchRuntimeCalls(bool class_is_final) {
-    return class_is_final ? SideEffects::None() : SideEffects::CanTriggerGC();
+  static SideEffects SideEffectsForArchRuntimeCalls(TypeCheckKind check_kind) {
+    return (check_kind == TypeCheckKind::kExactCheck) ? SideEffects::None() : SideEffects::CanTriggerGC();
   }
 
   DECLARE_INSTRUCTION(InstanceOf);
 
  private:
-  const bool class_is_final_;
+  const TypeCheckKind check_kind_;
   bool must_do_null_check_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceOf);
@@ -4786,10 +4797,10 @@ class HCheckCast : public HTemplateInstruction<2> {
  public:
   HCheckCast(HInstruction* object,
              HLoadClass* constant,
-             bool class_is_final,
+             TypeCheckKind check_kind,
              uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::CanTriggerGC(), dex_pc),
-        class_is_final_(class_is_final),
+        check_kind_(check_kind),
         must_do_null_check_(true) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, constant);
@@ -4810,14 +4821,14 @@ class HCheckCast : public HTemplateInstruction<2> {
 
   bool MustDoNullCheck() const { return must_do_null_check_; }
   void ClearMustDoNullCheck() { must_do_null_check_ = false; }
+  TypeCheckKind GetTypeCheckKind() const { return check_kind_; }
 
-
-  bool IsClassFinal() const { return class_is_final_; }
+  bool IsExactCheck() const { return check_kind_ == TypeCheckKind::kExactCheck; }
 
   DECLARE_INSTRUCTION(CheckCast);
 
  private:
-  const bool class_is_final_;
+  const TypeCheckKind check_kind_;
   bool must_do_null_check_;
 
   DISALLOW_COPY_AND_ASSIGN(HCheckCast);
