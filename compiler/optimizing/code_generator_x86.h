@@ -325,6 +325,16 @@ class CodeGeneratorX86 : public CodeGenerator {
     return isa_features_;
   }
 
+  // Generate a read barrier for a heap reference.
+  void GenerateReadBarrier(HInstruction* instruction,
+                           Location out,
+                           Location ref,
+                           Location obj,
+                           uint32_t offset,
+                           Location index = Location());
+  // Generate a read barrier for a GC root.
+  void GenerateReadBarrierForRoot(HInstruction* instruction, Location out, Location root);
+
  private:
   // Labels for each block that will be compiled.
   GrowableArray<Label> block_labels_;
@@ -348,6 +358,10 @@ class SlowPathCodeX86 : public SlowPathCode {
 
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }
+
+ protected:
+  void SaveParameterRegisters(CodeGenerator* codegen, Location out);
+  void RestoreParameterRegisters(CodeGenerator* codegen, Location out);
 
  private:
   Label entry_label_;
