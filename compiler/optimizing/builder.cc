@@ -2721,11 +2721,13 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
     }
 
     case Instruction::PACKED_SWITCH: {
+      graph_->SetHasSwitch(true);
       BuildPackedSwitch(instruction, dex_pc);
       break;
     }
 
     case Instruction::SPARSE_SWITCH: {
+      graph_->SetHasSwitch(true);
       BuildSparseSwitch(instruction, dex_pc);
       break;
     }

@@ -157,6 +157,7 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
         number_of_in_vregs_(0),
         temporaries_vreg_slots_(0),
         has_bounds_checks_(false),
+        has_switch_(false),
         debuggable_(debuggable),
         current_instruction_id_(start_instruction_id),
         dex_file_(dex_file),
@@ -311,6 +312,14 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
     has_bounds_checks_ = value;
   }
 
+  bool HasSwitch() const {
+    return has_switch_;
+  }
+
+  void SetHasSwitch(bool value) {
+    has_switch_ = value;
+  }
+
   bool ShouldGenerateConstructorBarrier() const {
     return should_generate_constructor_barrier_;
   }
@@ -432,6 +441,10 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
 
   // Has bounds checks. We can totally skip BCE if it's false.
   bool has_bounds_checks_;
+
+  // Has switch statement. We use it to avoid GVN'ing HEqual instructions.
+  // TODO: remove (b/24092914)
+  bool has_switch_;
 
   // Indicates whether the graph should be compiled in a way that
   // ensures full debuggability. If false, we can apply more
@@ -2589,6 +2602,12 @@ class HEqual : public HCondition {
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetIntConstant(
         Compute(x->GetValue(), y->GetValue()), GetDexPc());
+  }
+
+  bool CanBeMoved() const OVERRIDE {
+    // TODO: remove (b/24092914). We do this check to avoid allocating tons of
+    // memory in GVN.
+    return !GetBlock()->GetGraph()->HasSwitch();
   }
 
   DECLARE_INSTRUCTION(Equal);
