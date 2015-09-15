@@ -586,7 +586,8 @@ ProfilingInfo* ArtMethod::CreateProfilingInfo() {
   uintptr_t pointer = reinterpret_cast<uintptr_t>(this) + offset.Uint32Value();
   if (!reinterpret_cast<Atomic<ProfilingInfo*>*>(pointer)->
           CompareExchangeStrongSequentiallyConsistent(nullptr, info)) {
-    return GetProfilingInfo();
+    DCHECK(!Runtime::Current()->IsAotCompiler());
+    return GetProfilingInfo(sizeof(void*));
   } else {
     return info;
   }
