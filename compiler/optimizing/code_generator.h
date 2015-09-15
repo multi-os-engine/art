@@ -47,6 +47,11 @@ static int32_t constexpr kPrimIntMax = 0x7fffffff;
 // Maximum value for a primitive long.
 static int64_t constexpr kPrimLongMax = INT64_C(0x7fffffffffffffff);
 
+// Debugging flag that forces the generation of read barriers, but does
+// not trigger the use of the concurrent copying GC.
+// TODO: Remove when the work on read barriers in Optimizing is done.
+static bool constexpr kForceReadBarrier = false;
+
 class Assembler;
 class CodeGenerator;
 class DexCompilationUnit;
@@ -176,6 +181,7 @@ class CodeGenerator {
                                 size_t maximum_number_of_live_core_registers,
                                 size_t maximum_number_of_live_fp_registers,
                                 size_t number_of_out_slots,
+                                bool should_save_parameter_registers,
                                 const GrowableArray<HBasicBlock*>& block_order);
   int32_t GetStackSlot(HLocal* local) const;
   Location GetTemporaryLocation(HTemporary* temp) const;
@@ -374,6 +380,7 @@ class CodeGenerator {
                 size_t number_of_core_registers,
                 size_t number_of_fpu_registers,
                 size_t number_of_register_pairs,
+                size_t number_of_parameter_core_registers,
                 uint32_t core_callee_save_mask,
                 uint32_t fpu_callee_save_mask,
                 const CompilerOptions& compiler_options)
@@ -387,6 +394,7 @@ class CodeGenerator {
         number_of_core_registers_(number_of_core_registers),
         number_of_fpu_registers_(number_of_fpu_registers),
         number_of_register_pairs_(number_of_register_pairs),
+        number_of_parameter_core_registers_(number_of_parameter_core_registers),
         core_callee_save_mask_(core_callee_save_mask),
         fpu_callee_save_mask_(fpu_callee_save_mask),
         stack_map_stream_(graph->GetArena()),
@@ -465,6 +473,7 @@ class CodeGenerator {
   size_t number_of_core_registers_;
   size_t number_of_fpu_registers_;
   size_t number_of_register_pairs_;
+  size_t number_of_parameter_core_registers_;
   const uint32_t core_callee_save_mask_;
   const uint32_t fpu_callee_save_mask_;
 

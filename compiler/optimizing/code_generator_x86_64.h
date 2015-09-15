@@ -94,10 +94,14 @@ class SlowPathCodeX86_64 : public SlowPathCode {
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }
 
- private:
+  void SaveParameterRegisters(CodeGenerator* codegen, Location out);
+  void RestoreParameterRegisters(CodeGenerator* codegen, Location out);
+
+ protected:
   Label entry_label_;
   Label exit_label_;
 
+ private:
   DISALLOW_COPY_AND_ASSIGN(SlowPathCodeX86_64);
 };
 
@@ -311,6 +315,16 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   const X86_64InstructionSetFeatures& GetInstructionSetFeatures() const {
     return isa_features_;
   }
+
+  // Generate a read barrier for a heap reference.
+  void GenerateReadBarrier(HInstruction* instruction,
+                           Location out,
+                           Location ref,
+                           Location obj,
+                           uint32_t offset,
+                           Location index = Location());
+  // Generate a read barrier for a GC root.
+  void GenerateReadBarrierForRoot(HInstruction* instruction, Location out, Location root);
 
   int ConstantAreaStart() const {
     return constant_area_start_;

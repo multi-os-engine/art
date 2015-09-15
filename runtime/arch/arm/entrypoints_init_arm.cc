@@ -170,9 +170,10 @@ void InitEntryPoints(InterpreterEntryPoints* ipoints, JniEntryPoints* jpoints,
   // Deoptimization from compiled code.
   qpoints->pDeoptimize = art_quick_deoptimize_from_compiled_code;
 
-  // Read barrier
+  // Read barrier.
   qpoints->pReadBarrierJni = ReadBarrierJni;
   qpoints->pReadBarrierSlow = artReadBarrierSlow;
+  qpoints->pReadBarrierForRootSlow = artReadBarrierForRootSlow;
 }
 
 }  // namespace art
