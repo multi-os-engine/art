@@ -121,9 +121,10 @@ class HInductionVarAnalysis : public HOptimization {
   uint32_t VisitDescendant(HLoopInformation* loop, HInstruction* instruction);
   void ClassifyTrivial(HLoopInformation* loop, HInstruction* instruction);
   void ClassifyNonTrivial(HLoopInformation* loop);
+  InductionInfo* RotatePeriodicInduction(InductionInfo* induction, InductionInfo* last);
 
   // Transfer operations.
-  InductionInfo* TransferPhi(InductionInfo* a, InductionInfo* b);
+  InductionInfo* TransferPhi(HLoopInformation* loop, HInstruction* phi, size_t index);
   InductionInfo* TransferAddSub(InductionInfo* a, InductionInfo* b, InductionOp op);
   InductionInfo* TransferMul(InductionInfo* a, InductionInfo* b);
   InductionInfo* TransferShl(InductionInfo* a, InductionInfo* b, Primitive::Type type);
@@ -131,16 +132,16 @@ class HInductionVarAnalysis : public HOptimization {
 
   // Solvers.
   InductionInfo* SolvePhi(HLoopInformation* loop,
+                          HInstruction* entry_phi,
                           HInstruction* phi,
-                          HInstruction* instruction);
+                          size_t index);
   InductionInfo* SolveAddSub(HLoopInformation* loop,
-                             HInstruction* phi,
+                             HInstruction* entry_phi,
                              HInstruction* instruction,
                              HInstruction* x,
                              HInstruction* y,
                              InductionOp op,
                              bool is_first_call);
-  InductionInfo* RotatePeriodicInduction(InductionInfo* induction, InductionInfo* last);
 
   // Trip count information.
   void VisitControl(HLoopInformation* loop);
@@ -153,9 +154,10 @@ class HInductionVarAnalysis : public HOptimization {
                       InductionInfo* lo_val,
                       InductionInfo* hi_val,
                       InductionInfo* stride,
-                      int32_t stride_value,
                       Primitive::Type type,
-                      bool is_strict);
+                      bool is_unit,
+                      bool is_strict,
+                      InductionOp op);
 
   // Assign and lookup.
   void AssignInfo(HLoopInformation* loop, HInstruction* instruction, InductionInfo* info);
