@@ -22,12 +22,16 @@
 namespace art {
 
 /**
- * This class implements induction variable based range analysis on expressions within loops.
- * It takes the results of induction variable analysis in the constructor and provides a public
- * API to obtain a conservative lower and upper bound value on each instruction in the HIR.
+ * This class implements range analysis on expressions within loops. It takes the results
+ * of induction variable analysis in the constructor and provides a public API to obtain
+ * a conservative lower and upper bound value on each instruction in the HIR.
  *
- * For example, given a linear induction 2 * i + x where 0 <= i <= 10, range analysis yields lower
- * bound value x and upper bound value x + 20 for the expression, thus, the range [x, x + 20].
+ * The range analysis is done with a combination of symbolic and partial integral evaluation
+ * of expressions. The analysis avoids complications with wrap-around arithmetic on the integral
+ * parts but all clients should be aware that wrap-around may occur on any of the symbolic parts.
+ * For example, given a known range for [0,100] for i, the evaluation yields range [-100,100]
+ * for expression -2*i+100, which is exact, and range [x,x+100] for expression i+x, which may
+ * wrap-around anywhere in the range depending on the actual value of x.
  */
 class InductionVarRange {
  public:
