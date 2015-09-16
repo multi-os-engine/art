@@ -491,7 +491,9 @@ void CompilerDriver::CompileAll(jobject class_loader,
       new ThreadPool("Compiler driver thread pool", thread_count_ - 1));
   VLOG(compiler) << "Before precompile " << GetMemoryUsageString(false);
   PreCompile(class_loader, dex_files, thread_pool.get(), timings);
-  Compile(class_loader, dex_files, thread_pool.get(), timings);
+  if (!GetCompilerOptions().VerifyAtRuntime()) {
+    Compile(class_loader, dex_files, thread_pool.get(), timings);
+  }
   if (dump_stats_) {
     stats_->Dump();
   }
