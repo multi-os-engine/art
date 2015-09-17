@@ -21,7 +21,7 @@
 # tree). By disabling this module in SANITIZE_TARGET build, we keep the regular,
 # uninstrumented version of it.
 # Bug: 22233158
-ifneq (address,$(strip $(SANITIZE_TARGET)))
+ifeq ($(filter $(SANITIZE_TARGET),address),)
 
 LOCAL_PATH := $(call my-dir)
 
