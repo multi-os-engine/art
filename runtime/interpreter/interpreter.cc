@@ -397,7 +397,7 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
   self->PopShadowFrame();
 }
 
-void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame, JValue* ret_val)
+void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame, bool from_code, JValue* ret_val)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   JValue value;
   // Set value to last known result in case the shadow frame chain is empty.
@@ -408,7 +408,7 @@ void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame, JVa
     self->SetTopOfShadowStack(shadow_frame);
     const DexFile::CodeItem* code_item = shadow_frame->GetMethod()->GetCodeItem();
     const uint32_t dex_pc = shadow_frame->GetDexPC();
-    uint32_t new_dex_pc;
+    uint32_t new_dex_pc = dex_pc;
     if (UNLIKELY(self->IsExceptionPending())) {
       // If we deoptimize from the QuickExceptionHandler, we already reported the exception to
       // the instrumentation. To prevent from reporting it a second time, we simply pass a
@@ -419,7 +419,7 @@ void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame, JVa
                                                                     instrumentation);
       new_dex_pc = found_dex_pc;  // the dex pc of a matching catch handler
                                   // or DexFile::kDexNoIndex if there is none.
-    } else {
+    } else if (!from_code) {
       const Instruction* instr = Instruction::At(&code_item->insns_[dex_pc]);
       // For an invoke, use the dex pc of the next instruction.
       // TODO: should be tested more once b/17586779 is fixed.
@@ -432,6 +432,7 @@ void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame, JVa
     ShadowFrame* old_frame = shadow_frame;
     shadow_frame = shadow_frame->GetLink();
     ShadowFrame::DeleteDeoptimizedFrame(old_frame);
+    from_code = false;
     first = false;
   }
   ret_val->SetJ(value.GetJ());
