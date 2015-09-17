@@ -969,6 +969,39 @@ void CodeGeneratorARM::MoveConstant(Location location, int32_t value) {
   __ LoadImmediate(location.AsRegister<Register>(), value);
 }
 
+void CodeGeneratorARM::MoveLocation(Location dst, Location src, Primitive::Type dst_type) {
+  if (src.IsFpuRegister() && dst.IsRegister()) {
+    DCHECK_EQ(dst_type, Primitive::kPrimInt) << dst_type;
+    __ vmovrs(dst.AsRegister<Register>(), src.AsFpuRegister<SRegister>());
+  } else if (src.IsFpuRegisterPair() && dst.IsRegisterPair()) {
+    DCHECK_EQ(dst_type, Primitive::kPrimLong) << dst_type;
+    __ vmovrrd(dst.AsRegisterPairLow<Register>(),
+               dst.AsRegisterPairHigh<Register>(),
+               FromLowSToD(src.AsFpuRegisterPairLow<SRegister>()));
+  } else if (src.IsRegister() && dst.IsFpuRegister()) {
+    DCHECK_EQ(dst_type, Primitive::kPrimFloat) << dst_type;
+    __ vmovsr(dst.AsFpuRegister<SRegister>(), src.AsRegister<Register>());
+  } else if (src.IsRegisterPair() && dst.IsFpuRegisterPair()) {
+    DCHECK_EQ(dst_type, Primitive::kPrimDouble) << dst_type;
+    __ vmovdrr(FromLowSToD(dst.AsFpuRegisterPairLow<SRegister>()),
+               src.AsRegisterPairLow<Register>(),
+               src.AsRegisterPairHigh<Register>());
+  } else {
+    UNIMPLEMENTED(FATAL) << "MoveLocation not implemented: " << src << "->" << dst;
+  }
+}
+
+void CodeGeneratorARM::AddLocationAsTemp(Location location, LocationSummary* locations) {
+  if (location.IsRegister()) {
+    locations->AddTemp(location);
+  } else if (location.IsRegisterPair()) {
+    locations->AddTemp(Location::RegisterLocation(location.AsRegisterPairLow<Register>()));
+    locations->AddTemp(Location::RegisterLocation(location.AsRegisterPairHigh<Register>()));
+  } else {
+    UNIMPLEMENTED(FATAL) << "AddLocationAsTemp not implemented for location " << location;
+  }
+}
+
 void CodeGeneratorARM::InvokeRuntime(QuickEntrypointEnum entrypoint,
                                      HInstruction* instruction,
                                      uint32_t dex_pc,
@@ -3534,6 +3567,74 @@ void LocationsBuilderARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
 
 void InstructionCodeGeneratorARM::VisitStaticFieldSet(HStaticFieldSet* instruction) {
   HandleFieldSet(instruction, instruction->GetFieldInfo(), instruction->GetValueCanBeNull());
+}
+
+void LocationsBuilderARM::VisitUnresolvedInstanceFieldGet(
+    HUnresolvedInstanceFieldGet* instruction) {
+  FieldAccessCallingConvetionARM calling_convention;
+  codegen_->CreateUnresolvedFieldLocationSummary(
+      instruction, instruction->GetFieldType(), calling_convention);
+}
+
+void InstructionCodeGeneratorARM::VisitUnresolvedInstanceFieldGet(
+    HUnresolvedInstanceFieldGet* instruction) {
+  FieldAccessCallingConvetionARM calling_convention;
+  codegen_->GenerateUnresolvedFieldAccess(instruction,
+                                          instruction->GetFieldType(),
+                                          instruction->GetFieldIndex(),
+                                          instruction->GetDexPc(),
+                                          calling_convention);
+}
+
+void LocationsBuilderARM::VisitUnresolvedInstanceFieldSet(
+    HUnresolvedInstanceFieldSet* instruction) {
+  FieldAccessCallingConvetionARM calling_convention;
+  codegen_->CreateUnresolvedFieldLocationSummary(
+      instruction, instruction->GetFieldType(), calling_convention);
+}
+
+void InstructionCodeGeneratorARM::VisitUnresolvedInstanceFieldSet(
+    HUnresolvedInstanceFieldSet* instruction) {
+  FieldAccessCallingConvetionARM calling_convention;
+  codegen_->GenerateUnresolvedFieldAccess(instruction,
+                                          instruction->GetFieldType(),
+                                          instruction->GetFieldIndex(),
+                                          instruction->GetDexPc(),
+                                          calling_convention);
+}
+
+void LocationsBuilderARM::VisitUnresolvedStaticFieldGet(
+    HUnresolvedStaticFieldGet* instruction) {
+  FieldAccessCallingConvetionARM calling_convention;
+  codegen_->CreateUnresolvedFieldLocationSummary(
+      instruction, instruction->GetFieldType(), calling_convention);
+}
+
+void InstructionCodeGeneratorARM::VisitUnresolvedStaticFieldGet(
+    HUnresolvedStaticFieldGet* instruction) {
+  FieldAccessCallingConvetionARM calling_convention;
+  codegen_->GenerateUnresolvedFieldAccess(instruction,
+                                          instruction->GetFieldType(),
+                                          instruction->GetFieldIndex(),
+                                          instruction->GetDexPc(),
+                                          calling_convention);
+}
+
+void LocationsBuilderARM::VisitUnresolvedStaticFieldSet(
+    HUnresolvedStaticFieldSet* instruction) {
+  FieldAccessCallingConvetionARM calling_convention;
+  codegen_->CreateUnresolvedFieldLocationSummary(
+      instruction, instruction->GetFieldType(), calling_convention);
+}
+
+void InstructionCodeGeneratorARM::VisitUnresolvedStaticFieldSet(
+    HUnresolvedStaticFieldSet* instruction) {
+  FieldAccessCallingConvetionARM calling_convention;
+  codegen_->GenerateUnresolvedFieldAccess(instruction,
+                                          instruction->GetFieldType(),
+                                          instruction->GetFieldIndex(),
+                                          instruction->GetDexPc(),
+                                          calling_convention);
 }
 
 void LocationsBuilderARM::VisitNullCheck(HNullCheck* instruction) {

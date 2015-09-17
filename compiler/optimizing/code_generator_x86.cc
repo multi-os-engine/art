@@ -904,6 +904,45 @@ void CodeGeneratorX86::MoveConstant(Location location, int32_t value) {
   __ movl(location.AsRegister<Register>(), Immediate(value));
 }
 
+void CodeGeneratorX86::MoveLocation(Location dst, Location src, Primitive::Type dst_type) {
+  if (src.IsFpuRegister() && dst.IsRegister()) {
+    DCHECK_EQ(dst_type, Primitive::kPrimInt) << dst_type;
+    __ movd(dst.AsRegister<Register>(), src.AsFpuRegister<XmmRegister>());
+  } else if (src.IsFpuRegister() && dst.IsRegisterPair()) {
+    DCHECK_EQ(dst_type, Primitive::kPrimLong) << dst_type;
+    XmmRegister src_reg = src.AsFpuRegister<XmmRegister>();
+    __ movd(dst.AsRegisterPairLow<Register>(), src_reg);
+    __ psrlq(src_reg, Immediate(32));
+    __ movd(dst.AsRegisterPairHigh<Register>(), src_reg);
+  } else if (src.IsRegister() && dst.IsFpuRegister()) {
+    DCHECK_EQ(dst_type, Primitive::kPrimFloat) << dst_type;
+     __ movd(dst.AsFpuRegister<XmmRegister>(), src.AsRegister<Register>());
+  } else if (src.IsRegisterPair() && dst.IsFpuRegister()) {
+    DCHECK_EQ(dst_type, Primitive::kPrimDouble) << dst_type;
+    size_t elem_size = Primitive::ComponentSize(Primitive::kPrimInt);
+    // Create stack space for 2 elements.
+    __ subl(ESP, Immediate(2 * elem_size));
+    __ movl(Address(ESP, 0), src.AsRegisterPairLow<Register>());
+    __ movl(Address(ESP, elem_size), src.AsRegisterPairHigh<Register>());
+    __ movsd(dst.AsFpuRegister<XmmRegister>(), Address(ESP, 0));
+    // And remove the temporary stack space we allocated.
+    __ addl(ESP, Immediate(2 * elem_size));
+  } else {
+    UNIMPLEMENTED(FATAL) << "MoveLocation not implemented: " << src << "->" << dst;
+  }
+}
+
+void CodeGeneratorX86::AddLocationAsTemp(Location location, LocationSummary* locations) {
+  if (location.IsRegister()) {
+    locations->AddTemp(location);
+  } else if (location.IsRegisterPair()) {
+    locations->AddTemp(Location::RegisterLocation(location.AsRegisterPairLow<Register>()));
+    locations->AddTemp(Location::RegisterLocation(location.AsRegisterPairHigh<Register>()));
+  } else {
+    UNIMPLEMENTED(FATAL) << "AddLocationAsTemp not implemented for location " << location;
+  }
+}
+
 void InstructionCodeGeneratorX86::HandleGoto(HInstruction* got, HBasicBlock* successor) {
   DCHECK(!successor->IsExitBlock());
 
@@ -4021,6 +4060,74 @@ void LocationsBuilderX86::VisitInstanceFieldGet(HInstanceFieldGet* instruction) 
 
 void InstructionCodeGeneratorX86::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
   HandleFieldGet(instruction, instruction->GetFieldInfo());
+}
+
+void LocationsBuilderX86::VisitUnresolvedInstanceFieldGet(
+    HUnresolvedInstanceFieldGet* instruction) {
+  FieldAccessCallingConvetionX86 calling_convention;
+  codegen_->CreateUnresolvedFieldLocationSummary(
+      instruction, instruction->GetFieldType(), calling_convention);
+}
+
+void InstructionCodeGeneratorX86::VisitUnresolvedInstanceFieldGet(
+    HUnresolvedInstanceFieldGet* instruction) {
+  FieldAccessCallingConvetionX86 calling_convention;
+  codegen_->GenerateUnresolvedFieldAccess(instruction,
+                                          instruction->GetFieldType(),
+                                          instruction->GetFieldIndex(),
+                                          instruction->GetDexPc(),
+                                          calling_convention);
+}
+
+void LocationsBuilderX86::VisitUnresolvedInstanceFieldSet(
+    HUnresolvedInstanceFieldSet* instruction) {
+  FieldAccessCallingConvetionX86 calling_convention;
+  codegen_->CreateUnresolvedFieldLocationSummary(
+      instruction, instruction->GetFieldType(), calling_convention);
+}
+
+void InstructionCodeGeneratorX86::VisitUnresolvedInstanceFieldSet(
+    HUnresolvedInstanceFieldSet* instruction) {
+  FieldAccessCallingConvetionX86 calling_convention;
+  codegen_->GenerateUnresolvedFieldAccess(instruction,
+                                          instruction->GetFieldType(),
+                                          instruction->GetFieldIndex(),
+                                          instruction->GetDexPc(),
+                                          calling_convention);
+}
+
+void LocationsBuilderX86::VisitUnresolvedStaticFieldGet(
+    HUnresolvedStaticFieldGet* instruction) {
+  FieldAccessCallingConvetionX86 calling_convention;
+  codegen_->CreateUnresolvedFieldLocationSummary(
+      instruction, instruction->GetFieldType(), calling_convention);
+}
+
+void InstructionCodeGeneratorX86::VisitUnresolvedStaticFieldGet(
+    HUnresolvedStaticFieldGet* instruction) {
+  FieldAccessCallingConvetionX86 calling_convention;
+  codegen_->GenerateUnresolvedFieldAccess(instruction,
+                                          instruction->GetFieldType(),
+                                          instruction->GetFieldIndex(),
+                                          instruction->GetDexPc(),
+                                          calling_convention);
+}
+
+void LocationsBuilderX86::VisitUnresolvedStaticFieldSet(
+    HUnresolvedStaticFieldSet* instruction) {
+  FieldAccessCallingConvetionX86 calling_convention;
+  codegen_->CreateUnresolvedFieldLocationSummary(
+      instruction, instruction->GetFieldType(), calling_convention);
+}
+
+void InstructionCodeGeneratorX86::VisitUnresolvedStaticFieldSet(
+    HUnresolvedStaticFieldSet* instruction) {
+  FieldAccessCallingConvetionX86 calling_convention;
+  codegen_->GenerateUnresolvedFieldAccess(instruction,
+                                          instruction->GetFieldType(),
+                                          instruction->GetFieldIndex(),
+                                          instruction->GetDexPc(),
+                                          calling_convention);
 }
 
 void LocationsBuilderX86::VisitNullCheck(HNullCheck* instruction) {
