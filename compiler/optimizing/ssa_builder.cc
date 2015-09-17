@@ -57,8 +57,13 @@ class DeadPhiHandling : public ValueObject {
 };
 
 bool DeadPhiHandling::UpdateType(HPhi* phi) {
+  if (phi->IsDead()) {
+    // Phi was rendered dead while waiting in the worklist because it was replaced
+    // with an equivalent.
+    return false;
+  }
+
   Primitive::Type existing = phi->GetType();
-  DCHECK(phi->IsLive());
 
   bool conflict = false;
   Primitive::Type new_type = existing;
@@ -112,11 +117,28 @@ bool DeadPhiHandling::UpdateType(HPhi* phi) {
     phi->SetType(Primitive::kPrimVoid);
     phi->SetDead();
     return true;
-  } else {
-    DCHECK(phi->IsLive());
-    phi->SetType(new_type);
-    return existing != new_type;
+  } else if (existing == new_type) {
+    return false;
   }
+
+  DCHECK(phi->IsLive());
+  phi->SetType(new_type);
+
+  // There might exist a `new_type` equivalent of `phi` already. In that case,
+  // we replace the equivalent with the, now live, `phi`.
+  HPhi* equivalent = phi->GetNextEquivalentPhiWithSameType();
+  if (equivalent != nullptr) {
+    // Normal phis only have dead equivalents from typed LoadLocals, because if
+    // there was a live one, SsaBuilder would have replaced `phi` with it. Loop
+    // phis, on the other hand, are visited after their users which could have
+    // created a live equivalent.
+    equivalent->ReplaceWith(phi);
+    // Dependent instructions are added to the worklist in no given order. The
+    // equivalent may be waiting to be processed. Setting it deda will skip it.
+    equivalent->SetDead();
+  }
+
+  return true;
 }
 
 void DeadPhiHandling::VisitBasicBlock(HBasicBlock* block) {
