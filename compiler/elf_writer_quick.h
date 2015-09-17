@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "arch/instruction_set.h"
+#include "arch/instruction_set_features.h"
 #include "elf_writer.h"
 #include "os.h"
 
@@ -28,6 +29,7 @@ namespace art {
 class CompilerOptions;
 
 std::unique_ptr<ElfWriter> CreateElfWriterQuick(InstructionSet instruction_set,
+                                                const InstructionSetFeatures* features,
                                                 const CompilerOptions* compiler_options,
                                                 File* elf_file);
 

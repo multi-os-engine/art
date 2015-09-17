@@ -46,6 +46,9 @@ class JitCompiler {
   CompilerOptions* GetCompilerOptions() const {
     return compiler_options_.get();
   }
+  CompilerDriver* GetCompilerDriver() const {
+    return compiler_driver_.get();
+  }
 
  private:
   uint64_t total_time_;

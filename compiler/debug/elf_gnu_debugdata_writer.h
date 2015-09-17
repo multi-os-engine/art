@@ -79,13 +79,16 @@ static void XzCompress(const std::vector<uint8_t>* src, std::vector<uint8_t>* ds
 template <typename ElfTypes>
 static std::vector<uint8_t> MakeMiniDebugInfoInternal(
     InstructionSet isa,
+    const InstructionSetFeatures* features,
     size_t rodata_section_size,
     size_t text_section_size,
     const ArrayRef<const MethodDebugInfo>& method_infos) {
   std::vector<uint8_t> buffer;
   buffer.reserve(KB);
   VectorOutputStream out("Mini-debug-info ELF file", &buffer);
-  std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(isa, &out));
+  std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(isa,
+                                                                         &out,
+                                                                         features->AsBitmap()));
   builder->Start();
   // Mirror .rodata and .text as NOBITS sections.
   // It is needed to detected relocations after compression.

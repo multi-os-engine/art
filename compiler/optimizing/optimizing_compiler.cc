@@ -936,7 +936,8 @@ bool OptimizingCompiler::JitCompile(Thread* self,
         code_address + code_allocator.GetSize(),
         &compiled_method
     };
-    ArrayRef<const uint8_t> elf_file = debug::WriteDebugElfFileForMethod(method_debug_info);
+    ArrayRef<const uint8_t> elf_file = debug::WriteDebugElfFileForMethod(
+        method_debug_info, GetCompilerDriver()->GetInstructionSetFeatures());
     CreateJITCodeEntryForAddress(code_address,
                                  std::unique_ptr<const uint8_t[]>(elf_file.data()),
                                  elf_file.size());

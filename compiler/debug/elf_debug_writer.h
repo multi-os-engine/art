@@ -37,13 +37,16 @@ void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
                     bool write_oat_patches);
 
 std::vector<uint8_t> MakeMiniDebugInfo(InstructionSet isa,
+                                       const InstructionSetFeatures* features,
                                        size_t rodata_section_size,
                                        size_t text_section_size,
                                        const ArrayRef<const MethodDebugInfo>& method_infos);
 
-ArrayRef<const uint8_t> WriteDebugElfFileForMethod(const MethodDebugInfo& method_info);
+ArrayRef<const uint8_t> WriteDebugElfFileForMethod(const MethodDebugInfo& method_info,
+                                                   const InstructionSetFeatures* features);
 
 ArrayRef<const uint8_t> WriteDebugElfFileForClasses(const InstructionSet isa,
+                                                    const InstructionSetFeatures* features,
                                                     const ArrayRef<mirror::Class*>& types)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
