@@ -54,18 +54,15 @@ bool ProfilingInfo::Create(Thread* self, ArtMethod* method, bool retry_allocatio
     code_ptr += instruction.SizeInCodeUnits();
   }
 
-  // If there is no instruction we are interested in, no need to create a `ProfilingInfo`
-  // object, it will never be filled.
-  if (entries.empty()) {
-    return true;
-  }
+  // We always create a `ProfilingInfo` object, even if there is no instruction we are
+  // interested in. The JIT code cache internally uses it.
 
   // Allocate the `ProfilingInfo` object int the JIT's data space.
   jit::JitCodeCache* code_cache = Runtime::Current()->GetJit()->GetCodeCache();
   return code_cache->AddProfilingInfo(self, method, entries, retry_allocation) != nullptr;
 }
 
-void ProfilingInfo::AddInvokeInfo(uint32_t dex_pc, mirror::Class* cls) {
+InlineCache* ProfilingInfo::GetInlineCache(uint32_t dex_pc) {
   InlineCache* cache = nullptr;
   // TODO: binary search if array is too long.
   for (size_t i = 0; i < number_of_inline_caches_; ++i) {
@@ -75,7 +72,11 @@ void ProfilingInfo::AddInvokeInfo(uint32_t dex_pc, mirror::Class* cls) {
     }
   }
   DCHECK(cache != nullptr);
+  return cache;
+}
 
+void ProfilingInfo::AddInvokeInfo(uint32_t dex_pc, mirror::Class* cls) {
+  InlineCache* cache = GetInlineCache(dex_pc);
   for (size_t i = 0; i < InlineCache::kIndividualCacheSize; ++i) {
     mirror::Class* existing = cache->classes_[i].Read();
     if (existing == cls) {
