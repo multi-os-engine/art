@@ -112,11 +112,26 @@ bool DeadPhiHandling::UpdateType(HPhi* phi) {
     phi->SetType(Primitive::kPrimVoid);
     phi->SetDead();
     return true;
-  } else {
-    DCHECK(phi->IsLive());
-    phi->SetType(new_type);
-    return existing != new_type;
+  } else if (existing == new_type) {
+    return false;
   }
+
+  DCHECK(phi->IsLive());
+  DCHECK(existing == Primitive::kPrimVoid || existing == Primitive::kPrimInt);
+  phi->SetType(new_type);
+
+  // It is possible that since `phi` was added to `worklist_`, a reference type
+  // equivalent has been created. In that case, we should keep just one (b/24129675).
+  if (new_type == Primitive::kPrimNot) {
+    HPhi* ref_equivalent = phi->GetNextEquivalentPhiWithSameType();
+    if (ref_equivalent != nullptr) {
+      // Since `ref_equivalent` may be dead, we keep `phi` which must be live.
+      ref_equivalent->ReplaceWith(phi);
+      ref_equivalent->SetDead();
+    }
+  }
+
+  return true;
 }
 
 void DeadPhiHandling::VisitBasicBlock(HBasicBlock* block) {
