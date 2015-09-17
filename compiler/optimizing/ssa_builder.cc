@@ -57,22 +57,33 @@ class DeadPhiHandling : public ValueObject {
 };
 
 bool DeadPhiHandling::UpdateType(HPhi* phi) {
+  if (phi->IsDead()) {
+    // Phi was rendered dead while waiting in the worklist because it was replaced
+    // with an equivalent.
+    return false;
+  }
+
   Primitive::Type existing = phi->GetType();
-  DCHECK(phi->IsLive());
+
+  // LOG(INFO) << "Reviving phi " << phi->GetId() << ", reg=" << phi->GetRegNumber() << ", type=" << phi->GetType() << ", block=" << phi->GetBlock()->GetBlockId();
 
   bool conflict = false;
   Primitive::Type new_type = existing;
   for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
     HInstruction* input = phi->InputAt(i);
+    // LOG(INFO) << i << ":" << input->DebugName() << input->GetId();
     if (input->IsPhi() && input->AsPhi()->IsDead()) {
       // We are doing a reverse post order visit of the graph, reviving
       // phis that have environment uses and updating their types. If an
       // input is a phi, and it is dead (because its input types are
       // conflicting), this phi must be marked dead as well.
       conflict = true;
+      // LOG(INFO) << "Conflict1";
       break;
     }
     Primitive::Type input_type = HPhi::ToPhiType(input->GetType());
+
+    // LOG(INFO) << "new_type=" << new_type << ", input type=" << input_type;
 
     // The only acceptable transitions are:
     // - From void to typed: first time we update the type of this phi.
@@ -85,6 +96,7 @@ bool DeadPhiHandling::UpdateType(HPhi* phi) {
       HInstruction* equivalent = SsaBuilder::GetReferenceTypeEquivalent(input);
       if (equivalent == nullptr) {
         conflict = true;
+        // LOG(INFO) << "Conflict2";
         break;
       } else {
         phi->ReplaceInput(equivalent, i);
@@ -112,17 +124,37 @@ bool DeadPhiHandling::UpdateType(HPhi* phi) {
     phi->SetType(Primitive::kPrimVoid);
     phi->SetDead();
     return true;
-  } else {
-    DCHECK(phi->IsLive());
-    phi->SetType(new_type);
-    return existing != new_type;
+  } else if (existing == new_type) {
+    return false;
   }
+
+  DCHECK(phi->IsLive());
+  phi->SetType(new_type);
+  // LOG(INFO) << "Setting type to " << new_type;
+
+  // There might exist a `new_type` equivalent of `phi` already. In that case,
+  // we replace the equivalent with the, now live, `phi`.
+  HPhi* equivalent = phi->GetNextEquivalentPhiWithSameType();
+  if (equivalent != nullptr) {
+    // Normal phis only have dead equivalents from typed LoadLocals, because if
+    // there was a live one, SsaBuilder would have replaced `phi` with it. Loop
+    // phis, on the other hand, are visited after their users which could have
+    // created a live equivalent.
+    equivalent->ReplaceWith(phi);
+    // Dependent instructions are added to the worklist in no given order. The
+    // equivalent may be waiting to be processed. Setting it deda will skip it.
+    equivalent->SetDead();
+  }
+
+  return true;
 }
 
 void DeadPhiHandling::VisitBasicBlock(HBasicBlock* block) {
   for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
     HPhi* phi = it.Current()->AsPhi();
+    // LOG(INFO) << "Visiting phi " << phi->GetId() << ", reg=" << phi->GetRegNumber() << " in block " << phi->GetBlock()->GetBlockId();
     if (phi->IsDead() && phi->HasEnvironmentUses()) {
+      // LOG(INFO) << "Dead with env uses";
       phi->SetLive();
       if (block->IsLoopHeader()) {
         // Give a type to the loop phi, to guarantee convergence of the algorithm.
@@ -138,6 +170,7 @@ void DeadPhiHandling::VisitBasicBlock(HBasicBlock* block) {
 }
 
 void DeadPhiHandling::ProcessWorklist() {
+  // LOG(INFO) << "Processing worklist";
   while (!worklist_.empty()) {
     HPhi* instruction = worklist_.back();
     worklist_.pop_back();
@@ -152,6 +185,7 @@ void DeadPhiHandling::ProcessWorklist() {
 
 void DeadPhiHandling::AddToWorklist(HPhi* instruction) {
   DCHECK(instruction->IsLive());
+  // LOG(INFO) << "Adding to worklist " << instruction->GetId() << ", reg=" << instruction->GetRegNumber() << ", type=" << instruction->GetType();
   worklist_.push_back(instruction);
 }
 
