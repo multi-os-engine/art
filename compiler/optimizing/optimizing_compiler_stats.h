@@ -38,7 +38,6 @@ enum MethodCompilationStat {
   kNotCompiledBranchOutsideMethodCode,
   kNotCompiledCannotBuildSSA,
   kNotCompiledCantAccesType,
-  kNotCompiledClassNotVerified,
   kNotCompiledHugeMethod,
   kNotCompiledLargeMethodNoBranches,
   kNotCompiledMalformedOpcode,
@@ -48,6 +47,19 @@ enum MethodCompilationStat {
   kNotCompiledUnhandledInstruction,
   kNotCompiledUnsupportedIsa,
   kNotCompiledVerifyAtRuntime,
+  kNotCompiledClassVerifyErrorUnknown,
+  kNotCompiledVerifyErrorBadClassHard,
+  kNotCompiledVerifyErrorBadClassSoft,
+  kNotCompiledVerifyErrorNoClass,
+  kNotCompiledVerifyErrorNoField,
+  kNotCompiledVerifyErrorNoMethod,
+  kNotCompiledVerifyErrorAccessClass,
+  kNotCompiledVerifyErrorAccessField,
+  kNotCompiledVerifyErrorAccessMethod,
+  kNotCompiledVerifyErrorClassChange,
+  kNotCompiledVerifyErrorInstantiation,
+  kNotCompiledVerifyErrorForceInterpreter,
+  kNotCompiledVerifyErrorLocking,
   kNotOptimizedDisabled,
   kNotOptimizedRegisterAllocator,
   kNotOptimizedTryCatch,
@@ -108,7 +120,6 @@ class OptimizingCompilerStats {
       case kNotCompiledBranchOutsideMethodCode: return "kNotCompiledBranchOutsideMethodCode";
       case kNotCompiledCannotBuildSSA : return "kNotCompiledCannotBuildSSA";
       case kNotCompiledCantAccesType : return "kNotCompiledCantAccesType";
-      case kNotCompiledClassNotVerified : return "kNotCompiledClassNotVerified";
       case kNotCompiledHugeMethod : return "kNotCompiledHugeMethod";
       case kNotCompiledLargeMethodNoBranches : return "kNotCompiledLargeMethodNoBranches";
       case kNotCompiledMalformedOpcode : return "kNotCompiledMalformedOpcode";
@@ -121,6 +132,20 @@ class OptimizingCompilerStats {
       case kNotOptimizedDisabled : return "kNotOptimizedDisabled";
       case kNotOptimizedRegisterAllocator : return "kNotOptimizedRegisterAllocator";
       case kNotOptimizedTryCatch : return "kNotOptimizedTryCatch";
+      case kNotCompiledClassVerifyErrorUnknown : return "kNotCompiledClassVerifyErrorUnknown";
+      case kNotCompiledVerifyErrorBadClassHard : return "kNotCompiledVerifyErrorBadClassHard";
+      case kNotCompiledVerifyErrorBadClassSoft : return "kNotCompiledVerifyErrorBadClassSoft";
+      case kNotCompiledVerifyErrorNoClass : return "kNotCompiledVerifyErrorNoClass";
+      case kNotCompiledVerifyErrorNoField : return "kNotCompiledVerifyErrorNoField";
+      case kNotCompiledVerifyErrorNoMethod : return "kNotCompiledVerifyErrorNoMethod";
+      case kNotCompiledVerifyErrorAccessClass : return "kNotCompiledVerifyErrorAccessClass";
+      case kNotCompiledVerifyErrorAccessField : return "kNotCompiledVerifyErrorAccessField";
+      case kNotCompiledVerifyErrorAccessMethod : return "kNotCompiledVerifyErrorAccessMethod";
+      case kNotCompiledVerifyErrorClassChange : return "kNotCompiledVerifyErrorClassChange";
+      case kNotCompiledVerifyErrorInstantiation : return "kNotCompiledVerifyErrorInstantiation";
+      case kNotCompiledVerifyErrorForceInterpreter :
+         return "kNotCompiledVerifyErrorForceInterpreter";
+      case kNotCompiledVerifyErrorLocking : return "kNotCompiledVerifyErrorLocking";
       case kRemovedCheckedCast: return "kRemovedCheckedCast";
       case kRemovedDeadInstruction: return "kRemovedDeadInstruction";
       case kRemovedNullCheck: return "kRemovedNullCheck";

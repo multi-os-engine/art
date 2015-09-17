@@ -288,7 +288,43 @@ class OptimizingCompiler FINAL : public Compiler {
     }
   }
 
+  void MaybeRecordVerifierFailures(uint32_t failures) const {
+    if (compilation_stats_.get() != nullptr) {
+      MethodCompilationStat stat = MethodCompilationStat::kNotCompiledClassVerifyErrorUnknown;
+      if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_BAD_CLASS_HARD)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorBadClassHard;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_BAD_CLASS_SOFT)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorBadClassSoft;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_NO_CLASS)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorNoClass;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_NO_FIELD)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorNoField;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_NO_METHOD)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorNoMethod;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_ACCESS_CLASS)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorAccessClass;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_ACCESS_FIELD)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorAccessField;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_ACCESS_METHOD)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorAccessMethod;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_CLASS_CHANGE)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorClassChange;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_INSTANTIATION)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorInstantiation;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_FORCE_INTERPRETER)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorForceInterpreter;
+      } else if (is_flag_set(failures, verifier::VerifyError::VERIFY_ERROR_LOCKING)) {
+        stat = MethodCompilationStat::kNotCompiledVerifyErrorLocking;
+      }
+      compilation_stats_->RecordStat(stat);
+    }
+  }
+
  private:
+  static bool is_flag_set(uint32_t flags, uint32_t flag) {
+    return (flags & flag) == flag;
+  }
+
   // Whether we should run any optimization or register allocation. If false, will
   // just run the code generation after the graph was built.
   const bool run_optimizations_;
@@ -836,7 +872,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
   return compiled_method;
 }
 
-static bool HasOnlyUnresolvedFailures(const VerifiedMethod* verified_method) {
+static bool CanHandleVerificationFailure(const VerifiedMethod* verified_method) {
   uint32_t unresolved_mask = verifier::VerifyError::VERIFY_ERROR_NO_CLASS;
   return (verified_method->GetEncounteredVerificationFailures() & (~unresolved_mask)) == 0;
 }
@@ -854,14 +890,14 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
   const VerifiedMethod* verified_method = compiler_driver->GetVerifiedMethod(&dex_file, method_idx);
   DCHECK(!verified_method->HasRuntimeThrow());
   if (compiler_driver->IsMethodVerifiedWithoutFailures(method_idx, class_def_idx, dex_file)
-      || HasOnlyUnresolvedFailures(verified_method)) {
+      || CanHandleVerificationFailure(verified_method)) {
      method = TryCompile(code_item, access_flags, invoke_type, class_def_idx,
                          method_idx, jclass_loader, dex_file, dex_cache);
   } else {
     if (compiler_driver->GetCompilerOptions().VerifyAtRuntime()) {
       MaybeRecordStat(MethodCompilationStat::kNotCompiledVerifyAtRuntime);
     } else {
-      MaybeRecordStat(MethodCompilationStat::kNotCompiledClassNotVerified);
+      MaybeRecordVerifierFailures(verified_method->GetEncounteredVerificationFailures());
     }
   }
 
