@@ -742,8 +742,8 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
     ArtMethod* art_method = compiler_driver->ResolveMethod(
         soa, dex_cache, loader, &dex_compilation_unit, method_idx, invoke_type);
     // We may not get a method, for example if its class is erroneous.
-    // TODO: Clean this up, the compiler driver should just pass the ArtMethod to compile.
     if (art_method != nullptr) {
+      graph->SetArtMethod(art_method);
       interpreter_metadata = art_method->GetQuickenedInfo();
     }
   }

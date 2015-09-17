@@ -857,8 +857,7 @@ class MonotonicValueRange : public ValueRange {
 
     HIntConstant* const_instr = graph->GetIntConstant(constant);
     HCondition* cond = new (graph->GetArena()) HLessThan(value, const_instr);
-    HDeoptimize* deoptimize = new (graph->GetArena())
-        HDeoptimize(cond, suspend_check->GetDexPc());
+    HDeoptimize* deoptimize = new (graph->GetArena()) HDeoptimize(cond, suspend_check->GetDexPc());
     deopt_block->InsertInstructionBefore(cond, deopt_block->GetLastInstruction());
     deopt_block->InsertInstructionBefore(deoptimize, deopt_block->GetLastInstruction());
     deoptimize->CopyEnvironmentFromWithLoopPhiAdjustment(
@@ -1768,7 +1767,7 @@ class BCEVisitor : public HGraphVisitor {
 
   void VisitDeoptimize(HDeoptimize* deoptimize) {
     // Right now it's only HLessThanOrEqual.
-    DCHECK(deoptimize->InputAt(0)->IsLessThanOrEqual());
+    if (!deoptimize->InputAt(0)->IsLessThanOrEqual()) return;
     HLessThanOrEqual* less_than_or_equal = deoptimize->InputAt(0)->AsLessThanOrEqual();
     HInstruction* instruction = less_than_or_equal->InputAt(0);
     if (instruction->IsArrayLength()) {

@@ -28,6 +28,7 @@ class DexCompilationUnit;
 class HGraph;
 class HInvoke;
 class OptimizingCompilerStats;
+struct InlineCache;
 
 class HInliner : public HOptimization {
  public:
@@ -54,6 +55,11 @@ class HInliner : public HOptimization {
 
  private:
   bool TryInline(HInvoke* invoke_instruction);
+  bool TryInline(HInvoke* invoke_instruction, ArtMethod* resolved_method)
+    SHARED_REQUIRES(Locks::mutator_lock_);
+  bool TryInlineMonomorphicCall(HInvoke* invoke_instruction, ArtMethod* resolved_method, const InlineCache& ic) 
+    SHARED_REQUIRES(Locks::mutator_lock_);
+  bool TryInlinePolymorphicCall(HInvoke* invoke_instruction, ArtMethod* resolved_method, const InlineCache& ic);
   bool TryBuildAndInline(ArtMethod* resolved_method,
                          HInvoke* invoke_instruction,
                          bool same_dex_file);

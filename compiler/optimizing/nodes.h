@@ -371,6 +371,9 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   bool HasTryCatch() const { return has_try_catch_; }
   void SetHasTryCatch(bool value) { has_try_catch_ = value; }
 
+  ArtMethod* GetArtMethod() const { return art_method_; }
+  void SetArtMethod(ArtMethod* method) { art_method_ = method; }
+
  private:
   void FindBackEdges(ArenaBitVector* visited);
   void RemoveInstructionsAsUsersFromDeadBlocks(const ArenaBitVector& visited) const;
@@ -473,7 +476,13 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   ArenaSafeMap<int64_t, HDoubleConstant*> cached_double_constants_;
 
   HCurrentMethod* cached_current_method_;
-
+  
+  // The ArtMethod this graph is for. Note that for AOT, it may be null,
+  // for example for methods whose declaring class could not be resolved
+  // (such as when the superclass could not be found).
+  ArtMethod* art_method_;
+ 
+ private:
   friend class SsaBuilder;           // For caching constants.
   friend class SsaLivenessAnalysis;  // For the linear order.
   ART_FRIEND_TEST(GraphTest, IfSuccessorSimpleJoinBlock1);
@@ -2437,7 +2446,7 @@ class HTryBoundary : public HTemplateInstruction<0> {
 // Deoptimize to interpreter, upon checking a condition.
 class HDeoptimize : public HTemplateInstruction<1> {
  public:
-  explicit HDeoptimize(HInstruction* cond, uint32_t dex_pc)
+  HDeoptimize(HInstruction* cond, uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::None(), dex_pc) {
     SetRawInputAt(0, cond);
   }

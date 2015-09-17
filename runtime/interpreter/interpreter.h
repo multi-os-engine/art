@@ -37,7 +37,7 @@ extern void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method,
                                        mirror::Object* receiver, uint32_t* args, JValue* result)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
-extern void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame,
+extern void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame, bool from_code,
                                            JValue* ret_val)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
