@@ -143,11 +143,11 @@ class OatSymbolizer FINAL {
     uint32_t bss_size = oat_file_->BssSize();
     RodataWriter rodata_writer(oat_file_);
     TextWriter text_writer(oat_file_);
+    InstructionSet isa = oat_file_->GetOatHeader().GetInstructionSet();
+    uint32_t bit_map = oat_file_->GetOatHeader().GetInstructionSetFeaturesBitmap();
+
     builder_.reset(new ElfBuilder<ElfTypes32>(
-        oat_file_->GetOatHeader().GetInstructionSet(),
-        rodata_size, &rodata_writer,
-        text_size, &text_writer,
-        bss_size));
+        isa, rodata_size, &rodata_writer, text_size, &text_writer, bss_size, bit_map));
 
     Walk(&art::OatSymbolizer::RegisterForDedup);
 
