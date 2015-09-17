@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "arch/instruction_set.h"
+#include "arch/mips/instruction_set_features_mips.h"
 #include "base/bit_utils.h"
 #include "base/unix_file/fd_file.h"
 #include "buffered_output_stream.h"
@@ -490,10 +491,72 @@ class ElfBuilder FINAL {
     DISALLOW_COPY_AND_ASSIGN(HashSection);
   };
 
+  class AbiflagsSection FINAL : public Section {
+   public:
+    // Section with Mips abiflag info.
+    static constexpr uint8_t MIPS_AFL_REG_NONE =         0;  // no registers
+    static constexpr uint8_t MIPS_AFL_REG_32 =           1;  // 32-bit registers
+    static constexpr uint8_t MIPS_AFL_REG_64 =           2;  // 64-bit registers
+    static constexpr uint32_t MIPS_AFL_FLAGS1_ODDSPREG = 1;  // Uses odd single-prec fp regs
+    static constexpr uint8_t MIPS_ABI_FP_DOUBLE =        1;  // -mdouble-float
+    static constexpr uint8_t MIPS_ABI_FP_XX =            5;  // -mfpxx
+    static constexpr uint8_t MIPS_ABI_FP_64A =           7;  // -mips32r* -mfp64 -mno-odd-spreg
+
+    AbiflagsSection(const std::string& name, Elf_Word type, Elf_Word flags,
+            const Section* link, Elf_Word info, Elf_Word align, Elf_Word entsize,
+            InstructionSet isa, uint32_t bit_map)
+        : Section(name, type, flags, link, info, align, entsize) {
+      if (isa == kMips || isa == kMips64) {
+        bool fpu32 = false;    // assume mips64 values
+        uint8_t isa_rev = 6;   // assume mips64 values
+        if (isa == kMips) {
+          // adjust for mips32 values
+          const InstructionSetFeatures* Features =
+              InstructionSetFeatures::FromBitmap(isa, bit_map);
+          fpu32 = Features->AsMipsInstructionSetFeatures()->Is32BitFloatingPoint();
+          isa_rev = Features->AsMipsInstructionSetFeatures()->IsR6() ?
+                    6 : Features->AsMipsInstructionSetFeatures()->IsMipsIsaRevGreaterThanEqual2() ?
+                    (fpu32 ? 2 : 5) : 1;
+        }
+        abiflags_.version = 0;  // version of flags structure
+        abiflags_.isa_level = (isa == kMips) ? 32 : 64;
+        abiflags_.isa_rev = isa_rev;
+        abiflags_.gpr_size = (isa == kMips) ? MIPS_AFL_REG_32 : MIPS_AFL_REG_64;
+        abiflags_.cpr1_size = fpu32 ? MIPS_AFL_REG_32 : MIPS_AFL_REG_64;
+        abiflags_.cpr2_size = MIPS_AFL_REG_NONE;
+        // Set the fp_abi to MIPS_ABI_FP_64A for mips32 with 64-bit FPUs (ie: mips32 R5 and R6).
+        // Otherwise set to MIPS_ABI_FP_DOUBLE.
+        abiflags_.fp_abi = (isa == kMips && !fpu32) ? MIPS_ABI_FP_64A : MIPS_ABI_FP_DOUBLE;
+        abiflags_.isa_ext = 0;
+        abiflags_.ases = 0;
+        // To keep the code simple, we are not using odd FP reg for single floats for both
+        // mips32 and mips64 ART. Therefore we are not setting the MIPS_AFL_FLAGS1_ODDSPREG bit.
+        abiflags_.flags1 = 0;
+        abiflags_.flags2 = 0;
+      }
+    }
+
+    Elf_Word GetSize() const OVERRIDE {
+      return sizeof(abiflags_);
+    }
+
+    bool Write(File* elf_file) OVERRIDE {
+      return WriteArray(elf_file, &abiflags_, 1);
+    }
+
+   private:
+    struct {
+      uint16_t version;  // version of this structure
+      uint8_t  isa_level, isa_rev, gpr_size, cpr1_size, cpr2_size;
+      uint8_t  fp_abi;
+      uint32_t isa_ext, ases, flags1, flags2;
+    } abiflags_;
+  };
+
   ElfBuilder(InstructionSet isa,
              Elf_Word rodata_size, CodeOutput* rodata_writer,
              Elf_Word text_size, CodeOutput* text_writer,
-             Elf_Word bss_size)
+             Elf_Word bss_size, uint32_t bit_map)
     : isa_(isa),
       dynstr_(".dynstr", SHF_ALLOC),
       dynsym_(".dynsym", SHT_DYNSYM, SHF_ALLOC, &dynstr_),
@@ -506,7 +569,9 @@ class ElfBuilder FINAL {
       dynamic_(".dynamic", &dynstr_),
       strtab_(".strtab", 0),
       symtab_(".symtab", SHT_SYMTAB, 0, &strtab_),
-      shstrtab_(".shstrtab", 0) {
+      shstrtab_(".shstrtab", 0),
+      abiflags_(".MIPS.abiflags", SHT_MIPS_ABIFLAGS, SHF_ALLOC,
+              nullptr, 0, 8, 0, isa, bit_map) {
   }
   ~ElfBuilder() {}
 
@@ -524,6 +589,7 @@ class ElfBuilder FINAL {
     // | Elf_Ehdr                |
     // +-------------------------+
     // | Elf_Phdr PHDR           |
+    // | Elf_Phdr LOPROC         | .abiflags (Optional)
     // | Elf_Phdr LOAD R         | .dynsym .dynstr .hash .rodata
     // | Elf_Phdr LOAD R X       | .text
     // | Elf_Phdr LOAD RW        | .bss (Optional)
@@ -583,6 +649,7 @@ class ElfBuilder FINAL {
     // | names of sections       |
     // +-------------------------+
     // | Elf_Shdr null           |
+    // | Elf_Shdr .abiflags      |  (Optional)
     // | Elf_Shdr .dynsym        |
     // | Elf_Shdr .dynstr        |
     // | Elf_Shdr .hash          |
@@ -606,6 +673,9 @@ class ElfBuilder FINAL {
     // Create a list of all section which we want to write.
     // This is the order in which they will be written.
     std::vector<Section*> sections;
+    if (isa_ == kMips || isa_ == kMips64) {
+      sections.push_back(&abiflags_);
+    }
     sections.push_back(&dynsym_);
     sections.push_back(&dynstr_);
     sections.push_back(&hash_);
@@ -686,6 +756,12 @@ class ElfBuilder FINAL {
     // interesting parts of memory and their addresses overlap with PT_LOAD.
     std::vector<Elf_Phdr> program_headers;
     program_headers.push_back(Elf_Phdr());  // Placeholder for PT_PHDR.
+
+    // Create the PT_MIPS_ABIFLAGS segment for mips processors.
+    if (isa_ == kMips || isa_ == kMips64) {
+      program_headers.push_back(MakeProgramHeader(PT_MIPS_ABIFLAGS, PF_R, abiflags_));
+    }
+
     // Create the main LOAD R segment which spans all sections up to .rodata.
     const Elf_Shdr* rodata = rodata_.GetHeader();
     program_headers.push_back(MakeProgramHeader(PT_LOAD, PF_R,
@@ -925,6 +1001,7 @@ class ElfBuilder FINAL {
   }
 
   InstructionSet isa_;
+  uint32_t bit_map_;
   StrtabSection dynstr_;
   SymtabSection dynsym_;
   HashSection hash_;
@@ -936,6 +1013,7 @@ class ElfBuilder FINAL {
   SymtabSection symtab_;
   std::vector<Section*> other_sections_;
   StrtabSection shstrtab_;
+  AbiflagsSection abiflags_;
 
   DISALLOW_COPY_AND_ASSIGN(ElfBuilder);
 };
