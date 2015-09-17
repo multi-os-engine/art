@@ -873,7 +873,10 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
 }
 
 static bool CanHandleVerificationFailure(const VerifiedMethod* verified_method) {
-  uint32_t unresolved_mask = verifier::VerifyError::VERIFY_ERROR_NO_CLASS;
+  uint32_t unresolved_mask = verifier::VerifyError::VERIFY_ERROR_NO_CLASS
+      | verifier::VerifyError::VERIFY_ERROR_ACCESS_CLASS
+      | verifier::VerifyError::VERIFY_ERROR_ACCESS_FIELD
+      | verifier::VerifyError::VERIFY_ERROR_ACCESS_METHOD;
   return (verified_method->GetEncounteredVerificationFailures() & (~unresolved_mask)) == 0;
 }
 

@@ -19,4 +19,8 @@
  */
 public class SemiPrivate {
     private static String mPrivvy = "stuff";
+
+    private static String privvyMethod() {
+      return "stuff";
+    }
 }
