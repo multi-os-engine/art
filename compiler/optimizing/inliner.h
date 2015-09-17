@@ -27,11 +27,13 @@ class CompilerDriver;
 class DexCompilationUnit;
 class HGraph;
 class HInvoke;
+class InlineCache;
 class OptimizingCompilerStats;
 
 class HInliner : public HOptimization {
  public:
   HInliner(HGraph* outer_graph,
+           HGraph* outermost_graph,
            CodeGenerator* codegen,
            const DexCompilationUnit& outer_compilation_unit,
            const DexCompilationUnit& caller_compilation_unit,
@@ -40,6 +42,7 @@ class HInliner : public HOptimization {
            OptimizingCompilerStats* stats,
            size_t depth = 0)
       : HOptimization(outer_graph, kInlinerPassName, stats),
+        outermost_graph_(outermost_graph),
         outer_compilation_unit_(outer_compilation_unit),
         caller_compilation_unit_(caller_compilation_unit),
         codegen_(codegen),
@@ -54,10 +57,25 @@ class HInliner : public HOptimization {
 
  private:
   bool TryInline(HInvoke* invoke_instruction);
+
+  bool TryInline(HInvoke* invoke_instruction, ArtMethod* resolved_method)
+    SHARED_REQUIRES(Locks::mutator_lock_);
+
+  bool TryInlineMonomorphicCall(HInvoke* invoke_instruction,
+                                ArtMethod* resolved_method,
+                                const InlineCache& ic)
+    SHARED_REQUIRES(Locks::mutator_lock_);
+
+  bool TryInlinePolymorphicCall(HInvoke* invoke_instruction,
+                                ArtMethod* resolved_method,
+                                const InlineCache& ic)
+    SHARED_REQUIRES(Locks::mutator_lock_);
+
   bool TryBuildAndInline(ArtMethod* resolved_method,
                          HInvoke* invoke_instruction,
                          bool same_dex_file);
 
+  HGraph* const outermost_graph_;
   const DexCompilationUnit& outer_compilation_unit_;
   const DexCompilationUnit& caller_compilation_unit_;
   CodeGenerator* const codegen_;
