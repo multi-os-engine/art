@@ -263,6 +263,27 @@ static constexpr bool IsAbsoluteUint(T value) {
                       : static_cast<unsigned_type>(value));
 }
 
+// Generate maximum/minimum values for signed/unsigned n-bit integers
+template <typename T>
+static constexpr T MaxInt(size_t bits) {
+  return
+      DCHECK_CONSTEXPR(bits > 0, "bits cannot be zero", 0)
+      DCHECK_CONSTEXPR(bits < BitSizeOf<T>(), "kBits must be < max.", 0)
+      std::is_signed<T>::value ?
+      (static_cast<T>(1ull << (bits - 1))) - 1 :
+      (static_cast<T>(1ull << bits)) - 1;
+}
+
+template <typename T>
+static constexpr T MinInt(size_t bits) {
+  return
+      DCHECK_CONSTEXPR(bits > 0, "bits cannot be zero", 0)
+      DCHECK_CONSTEXPR(bits < BitSizeOf<T>(), "kBits must be < max.", 0)
+      std::is_signed<T>::value ?
+      static_cast<T>(-1) - MaxInt<T>(bits) :
+      static_cast<T>(0);
+}
+
 // Using the Curiously Recurring Template Pattern to implement everything shared
 // by LowToHighBitIterator and HighToLowBitIterator, i.e. everything but operator*().
 template <typename T, typename Iter>
