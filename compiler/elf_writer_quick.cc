@@ -145,6 +145,7 @@ bool ElfWriterQuick<ElfTypes>::Write(
     bool is_host_unused ATTRIBUTE_UNUSED) {
   using Elf_Addr = typename ElfTypes::Addr;
   const InstructionSet isa = compiler_driver_->GetInstructionSet();
+  uint32_t bit_map = oat_writer->GetOatHeader().GetInstructionSetFeaturesBitmap();
 
   // Setup the builder with the main OAT sections (.rodata .text .bss).
   const size_t rodata_size = oat_writer->GetOatHeader().GetExecutableOffset();
@@ -153,7 +154,7 @@ bool ElfWriterQuick<ElfTypes>::Write(
   RodataWriter rodata_writer(oat_writer);
   TextWriter text_writer(oat_writer);
   std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(
-      isa, rodata_size, &rodata_writer, text_size, &text_writer, bss_size));
+      isa, rodata_size, &rodata_writer, text_size, &text_writer, bss_size, bit_map));
 
   // Add debug sections.
   // They are allocated here (in the same scope as the builder),

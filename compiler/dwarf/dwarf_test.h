@@ -62,7 +62,7 @@ class DwarfTest : public CommonRuntimeTest {
     class NoCode : public CodeOutput {
       bool Write(OutputStream*) OVERRIDE { return true; }  // NOLINT
     } no_code;
-    ElfBuilder<ElfTypes> builder(isa, 0, &no_code, 0, &no_code, 0);
+    ElfBuilder<ElfTypes> builder(isa, 0, &no_code, 0, &no_code, 0, 0);
     typedef typename ElfBuilder<ElfTypes>::RawSection RawSection;
     RawSection debug_info(".debug_info", SHT_PROGBITS, 0, nullptr, 0, 1, 0);
     RawSection debug_abbrev(".debug_abbrev", SHT_PROGBITS, 0, nullptr, 0, 1, 0);
