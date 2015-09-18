@@ -108,4 +108,4 @@ fi
 # Run the tests using vogar.
 echo "Running tests for the following test packages:"
 echo ${working_packages[@]} | tr " " "\n"
-vogar $vogar_args --expectations art/tools/libcore_failures.txt --classpath $jsr166_test_jar --classpath $test_jar ${working_packages[@]}
+vogar $vogar_args --expectations art/tools/libcore_failures.txt --classpath $jsr166_test_jar --classpath $test_jar libcore.java.util.TreeMapTest#testClassCastExceptions
