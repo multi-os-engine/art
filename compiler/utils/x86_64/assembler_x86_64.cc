@@ -3115,14 +3115,30 @@ void X86_64ExceptionSlowPath::Emit(Assembler *sasm) {
 }
 
 void X86_64Assembler::AddConstantArea() {
-  const std::vector<int32_t>& area = constant_area_.GetBuffer();
+  size_t num_zero_words = 0;
+  const std::vector<int32_t>& area = constant_area_.GetBuffer(&num_zero_words);
+  // Generate the literal area first.
   for (size_t i = 0, e = area.size(); i < e; i++) {
     AssemblerBuffer::EnsureCapacity ensured(&buffer_);
     EmitInt32(area[i]);
   }
+
+  // Generate the zero word area, with the fixups as needed.
+  const std::vector<ConstantArea::FixupInfo>& fixups = constant_area_.GetFixups();
+  auto fixup_it = fixups.begin();
+  size_t next_fixup_index = (fixup_it == fixups.end()) ? -1 : fixup_it->first;
+  for (size_t i = 0; i < num_zero_words; i++) {
+    AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+    if (i == next_fixup_index) {
+      EmitFixup(fixup_it->second);
+      fixup_it++;
+      next_fixup_index = (fixup_it == fixups.end()) ? -1 : fixup_it->first;
+    }
+    EmitInt32(0);
+  }
 }
 
-int ConstantArea::AddInt32(int32_t v) {
+int32_t ConstantArea::AddInt32(int32_t v) {
   for (size_t i = 0, e = buffer_.size(); i < e; i++) {
     if (v == buffer_[i]) {
       return i * elem_size_;
@@ -3135,9 +3151,9 @@ int ConstantArea::AddInt32(int32_t v) {
   return result;
 }
 
-int ConstantArea::AddInt64(int64_t v) {
-  int32_t v_low = v;
-  int32_t v_high = v >> 32;
+int32_t ConstantArea::AddInt64(int64_t v) {
+  int32_t v_low = Low32Bits(v);
+  int32_t v_high = High32Bits(v);
   if (buffer_.size() > 1) {
     // Ensure we don't pass the end of the buffer.
     for (size_t i = 0, e = buffer_.size() - 1; i < e; i++) {
@@ -3154,12 +3170,12 @@ int ConstantArea::AddInt64(int64_t v) {
   return result;
 }
 
-int ConstantArea::AddDouble(double v) {
+int32_t ConstantArea::AddDouble(double v) {
   // Treat the value as a 64-bit integer value.
   return AddInt64(bit_cast<int64_t, double>(v));
 }
 
-int ConstantArea::AddFloat(float v) {
+int32_t ConstantArea::AddFloat(float v) {
   // Treat the value as a 32-bit integer value.
   return AddInt32(bit_cast<int32_t, float>(v));
 }
