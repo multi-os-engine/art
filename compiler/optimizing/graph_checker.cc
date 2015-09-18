@@ -730,8 +730,9 @@ void SSAChecker::HandleBooleanInput(HInstruction* instruction, size_t input_inde
           value));
     }
   } else if (input->GetType() == Primitive::kPrimInt
-             && (input->IsPhi() || input->IsAnd() || input->IsOr() || input->IsXor())) {
-    // TODO: We need a data-flow analysis to determine if the Phi or
+             && (input->IsPhi() || input->IsAnd() || input->IsOr() || input->IsXor() ||
+                 input->IsConditionalSelect())) {
+    // TODO: We need a data-flow analysis to determine if the Phi or ConditionalSelect or
     //       binary operation is actually Boolean. Allow for now.
   } else if (input->GetType() != Primitive::kPrimBoolean) {
     AddError(StringPrintf(

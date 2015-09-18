@@ -871,6 +871,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   // Replace instruction `initial` with `replacement` within this block.
   void ReplaceAndRemoveInstructionWith(HInstruction* initial,
                                        HInstruction* replacement);
+  // Move `instruction` already in a block to before the `cursor` in this block.
+  void MoveInstructionBefore(HInstruction* instruction, HInstruction* cursor);
   void AddPhi(HPhi* phi);
   void InsertPhiAfter(HPhi* instruction, HPhi* cursor);
   // RemoveInstruction and RemovePhi delete a given instruction from the respective
@@ -1083,6 +1085,9 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
+#define FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)                     \
+  M(ConditionalSelect, Instruction)
+
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                            \
   M(X86ComputeBaseMethodAddress, Instruction)                           \
   M(X86LoadFromConstantTable, Instruction)
@@ -1094,6 +1099,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                                \
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)                               \
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)                           \
   FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
@@ -4954,6 +4960,40 @@ class HMonitorOperation : public HTemplateInstruction<1> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HMonitorOperation);
+};
+
+class HConditionalSelect : public HExpression<4> {
+ public:
+  HConditionalSelect(HCondition* cond, HInstruction* left, HInstruction* right)
+      : HExpression(left->GetType(), SideEffects::None()), condition_(cond->GetCondition()) {
+    DCHECK_EQ(HPhi::ToPhiType(left->GetType()), HPhi::ToPhiType(right->GetType()));
+    DCHECK(!Primitive::IsFloatingPointType(left->GetType()));
+    SetRawInputAt(0, left);
+    SetRawInputAt(1, right);
+    SetRawInputAt(2, cond->GetLeft());
+    SetRawInputAt(3, cond->GetRight());
+  }
+
+
+  HInstruction* GetLeft() const { return InputAt(0); }
+  HInstruction* GetRight() const { return InputAt(1); }
+  HInstruction* GetCompareLeft() const { return InputAt(2); }
+  HInstruction* GetCompareRight() const { return InputAt(3); }
+  Primitive::Type GetResultType() const { return GetType(); }
+  IfCondition GetCondition() const { return condition_; }
+
+  bool CanBeMoved() const OVERRIDE { return true; }
+  bool CanBeNull() const OVERRIDE { return GetLeft()->CanBeNull() || GetRight()->CanBeNull(); }
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    return condition_ == other->AsConditionalSelect()->GetCondition();
+  }
+
+  DECLARE_INSTRUCTION(ConditionalSelect);
+
+ private:
+  IfCondition condition_;
+
+  DISALLOW_COPY_AND_ASSIGN(HConditionalSelect);
 };
 
 /**
