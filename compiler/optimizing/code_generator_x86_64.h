@@ -202,6 +202,9 @@ class InstructionCodeGeneratorX86_64 : public HGraphVisitor {
   DISALLOW_COPY_AND_ASSIGN(InstructionCodeGeneratorX86_64);
 };
 
+// Class for fixups to constant area.
+class RIPFixup;
+
 class CodeGeneratorX86_64 : public CodeGenerator {
  public:
   CodeGeneratorX86_64(HGraph* graph,
@@ -319,6 +322,7 @@ class CodeGeneratorX86_64 : public CodeGenerator {
 
   // Load a 64 bit value into a register in the most efficient manner.
   void Load64BitValue(CpuRegister dest, int64_t value);
+  Address LiteralCaseTable(HPackedSwitch* switch_instr);
 
   // Store a 64 bit value into a DoubleStackSlot in the most efficient manner.
   void Store64BitValueToStack(Location dest, int64_t value);
@@ -355,6 +359,9 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   // When we don't know the proper offset for the value, we use kDummy32BitOffset.
   // We will fix this up in the linker later to have the right value.
   static constexpr int32_t kDummy32BitOffset = 256;
+
+  // Fixups into the constant area that need to be handled specially.
+  GrowableArray<RIPFixup*> jump_table_fixups_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorX86_64);
 };
