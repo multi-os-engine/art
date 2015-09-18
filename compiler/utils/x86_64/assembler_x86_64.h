@@ -284,6 +284,11 @@ class ConstantArea {
     // the constant area where the literal resides.
     int AddInt32(int32_t v);
 
+    // Add an int32_t to the end of the constant area, returning the offset into
+    // the constant area where the literal resides.  The value must not be combined
+    // with any other element in the constant table.
+    int AddUniqueInt32(int32_t v);
+
     // Add an int64_t to the constant area, returning the offset into
     // the constant area where the literal resides.
     int AddInt64(int64_t v);
@@ -814,7 +819,16 @@ class X86_64Assembler FINAL : public Assembler {
 
   // Add an int32_t to the constant area, returning the offset into
   // the constant area where the literal resides.
-  int AddInt32(int32_t v) { return constant_area_.AddInt32(v); }
+  int AddInt32(int32_t v) {
+    return constant_area_.AddInt32(v);
+  }
+
+  // Add an int32_t to the end of the constant area, returning the offset into
+  // the constant area where the literal resides.  The value must not be combined
+  // with any other element in the constant table.
+  int AddUniqueInt32(int32_t v) {
+    return constant_area_.AddUniqueInt32(v);
+  }
 
   // Add an int64_t to the constant area, returning the offset into
   // the constant area where the literal resides.
@@ -825,6 +839,9 @@ class X86_64Assembler FINAL : public Assembler {
 
   // Is the constant area empty? Return true if there are no literals in the constant area.
   bool IsConstantAreaEmpty() const { return constant_area_.GetSize() == 0; }
+
+  // Return the current size of the constant area.
+  size_t ConstantAreaSize() const { return constant_area_.GetSize(); }
 
   //
   // Heap poisoning.

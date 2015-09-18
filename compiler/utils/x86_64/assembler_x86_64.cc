@@ -3122,7 +3122,14 @@ void X86_64Assembler::AddConstantArea() {
   }
 }
 
+int ConstantArea::AddUniqueInt32(int32_t v) {
+  int result = buffer_.size() * elem_size_;
+  buffer_.push_back(v);
+  return result;
+}
+
 int ConstantArea::AddInt32(int32_t v) {
+  // Look for an existing match.
   for (size_t i = 0, e = buffer_.size(); i < e; i++) {
     if (v == buffer_[i]) {
       return i * elem_size_;
@@ -3130,9 +3137,7 @@ int ConstantArea::AddInt32(int32_t v) {
   }
 
   // Didn't match anything.
-  int result = buffer_.size() * elem_size_;
-  buffer_.push_back(v);
-  return result;
+  return AddUniqueInt32(v);
 }
 
 int ConstantArea::AddInt64(int64_t v) {
