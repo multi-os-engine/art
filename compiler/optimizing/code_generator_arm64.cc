@@ -989,7 +989,7 @@ void CodeGeneratorARM64::MoveLocation(Location destination,
       DCHECK(dst.Is64Bits() == source.IsDoubleStackSlot());
       __ Ldr(dst, StackOperandFrom(source));
     } else if (source.IsConstant()) {
-      DCHECK(CoherentConstantAndType(source, dst_type));
+      DCHECK(CoherentConstantAndType(source, dst_type)) << source << dst_type;
       MoveConstant(dst, source.GetConstant());
     } else if (source.IsRegister()) {
       if (destination.IsRegister()) {
@@ -2238,54 +2238,43 @@ void InstructionCodeGeneratorARM64::VisitTryBoundary(HTryBoundary* try_boundary)
   }
 }
 
+static bool IsMaterializedCondition(HInstruction* instruction) {
+  return !instruction->IsCondition() || instruction->AsCondition()->NeedsMaterialization();
+}
+
+static bool IsConditionOnIntOrLong(HCondition* cond) {
+  return !Primitive::IsFloatingPointType(cond->InputAt(0)->GetType());
+}
+
 void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruction,
+                                                          size_t condition_input_index,
                                                           vixl::Label* true_target,
                                                           vixl::Label* false_target,
-                                                          vixl::Label* always_true_target) {
-  HInstruction* cond = instruction->InputAt(0);
-  HCondition* condition = cond->AsCondition();
-
+                                                          bool true_falls_through,
+                                                          bool false_falls_through) {
+  HInstruction* cond = instruction->InputAt(condition_input_index);
   if (cond->IsIntConstant()) {
-    int32_t cond_value = cond->AsIntConstant()->GetValue();
-    if (cond_value == 1) {
-      if (always_true_target != nullptr) {
-        __ B(always_true_target);
+    if (cond->AsIntConstant()->IsOne()) {
+      if (!true_falls_through) {
+        __ B(true_target);
       }
-      return;
     } else {
-      DCHECK_EQ(cond_value, 0);
+      DCHECK(cond->AsIntConstant()->IsZero());
+      if (!false_falls_through) {
+        __ B(false_target);
+      }
     }
-  } else if (!cond->IsCondition() || condition->NeedsMaterialization()) {
+    return;
+  } else if (IsMaterializedCondition(cond)) {
     // The condition instruction has been materialized, compare the output to 0.
-    Location cond_val = instruction->GetLocations()->InAt(0);
+    Location cond_val = instruction->GetLocations()->InAt(condition_input_index);
     DCHECK(cond_val.IsRegister());
-    __ Cbnz(InputRegisterAt(instruction, 0), true_target);
+    __ Cbnz(InputRegisterAt(instruction, condition_input_index), true_target);
   } else {
     // The condition instruction has not been materialized, use its inputs as
     // the comparison and its condition as the branch condition.
-    Primitive::Type type =
-        cond->IsCondition() ? cond->InputAt(0)->GetType() : Primitive::kPrimInt;
-
-    if (Primitive::IsFloatingPointType(type)) {
-      // FP compares don't like null false_targets.
-      if (false_target == nullptr) {
-        false_target = codegen_->GetLabelOf(instruction->AsIf()->IfFalseSuccessor());
-      }
-      FPRegister lhs = InputFPRegisterAt(condition, 0);
-      if (condition->GetLocations()->InAt(1).IsConstant()) {
-        DCHECK(IsFloatingPointZeroConstant(condition->GetLocations()->InAt(1).GetConstant()));
-        // 0.0 is the only immediate that can be encoded directly in an FCMP instruction.
-        __ Fcmp(lhs, 0.0);
-      } else {
-        __ Fcmp(lhs, InputFPRegisterAt(condition, 1));
-      }
-      if (condition->IsFPConditionTrueIfNaN()) {
-        __ B(vs, true_target);  // VS for unordered.
-      } else if (condition->IsFPConditionFalseIfNaN()) {
-        __ B(vs, false_target);  // VS for unordered.
-      }
-      __ B(ARM64Condition(condition->GetCondition()), true_target);
-    } else {
+    HCondition* condition = cond->AsCondition();
+    if (IsConditionOnIntOrLong(cond->AsCondition())) {
       // Integer cases.
       Register lhs = InputRegisterAt(condition, 0);
       Operand rhs = InputOperandAt(condition, 1);
@@ -2315,34 +2304,118 @@ void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruct
         __ Cmp(lhs, rhs);
         __ B(arm64_cond, true_target);
       }
+    } else {
+      // FP compares don't like null false_targets.
+      DCHECK(false_target != nullptr);
+      FPRegister lhs = InputFPRegisterAt(condition, 0);
+      if (condition->GetLocations()->InAt(1).IsConstant()) {
+        DCHECK(IsFloatingPointZeroConstant(condition->GetLocations()->InAt(1).GetConstant()));
+        // 0.0 is the only immediate that can be encoded directly in an FCMP instruction.
+        __ Fcmp(lhs, 0.0);
+      } else {
+        __ Fcmp(lhs, InputFPRegisterAt(condition, 1));
+      }
+      if (condition->IsFPConditionTrueIfNaN()) {
+        __ B(vs, true_target);  // VS for unordered.
+      } else if (condition->IsFPConditionFalseIfNaN()) {
+        __ B(vs, false_target);  // VS for unordered.
+      }
+      __ B(ARM64Condition(condition->GetCondition()), true_target);
     }
   }
-  if (false_target != nullptr) {
+  if (!false_falls_through) {
     __ B(false_target);
   }
 }
 
 void LocationsBuilderARM64::VisitIf(HIf* if_instr) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(if_instr);
-  HInstruction* cond = if_instr->InputAt(0);
-  if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
+  if (IsMaterializedCondition(if_instr->InputAt(0))) {
     locations->SetInAt(0, Location::RequiresRegister());
   }
 }
 
 void InstructionCodeGeneratorARM64::VisitIf(HIf* if_instr) {
-  vixl::Label* true_target = codegen_->GetLabelOf(if_instr->IfTrueSuccessor());
-  vixl::Label* false_target = codegen_->GetLabelOf(if_instr->IfFalseSuccessor());
-  vixl::Label* always_true_target = true_target;
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(),
-                                if_instr->IfTrueSuccessor())) {
-    always_true_target = nullptr;
+  HBasicBlock* true_successor = if_instr->IfTrueSuccessor();
+  HBasicBlock* false_successor = if_instr->IfFalseSuccessor();
+  GenerateTestAndBranch(if_instr,
+                        /* condition_input_index */ 0,
+                        codegen_->GetLabelOf(true_successor),
+                        codegen_->GetLabelOf(false_successor),
+                        codegen_->GoesToNextBlock(if_instr->GetBlock(), true_successor),
+                        codegen_->GoesToNextBlock(if_instr->GetBlock(), false_successor));
+}
+
+static bool CanUseCselFor(HSelect* select) {
+  return  // CSEL cannot move floating-point registers.
+          !Primitive::IsFloatingPointType(select->GetType()) &&
+          // If we need to emit the condition, make sure values are int/long.
+          !IsMaterializedCondition(select->GetCondition()) &&
+          IsConditionOnIntOrLong(select->GetCondition()->AsCondition());
+}
+
+void LocationsBuilderARM64::VisitSelect(HSelect* select) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(select);
+  if (Primitive::IsFloatingPointType(select->GetType())) {
+    locations->SetInAt(0, Location::RequiresFpuRegister());
+    locations->SetInAt(1, Location::RequiresFpuRegister());
+    locations->SetOut(Location::RequiresFpuRegister());
+  } else {
+    locations->SetInAt(0, Location::RequiresRegister());
+    locations->SetInAt(1, ARM64EncodableConstantOrRegister(select->InputAt(1), select));
+    locations->SetOut(Location::RequiresRegister());
   }
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(),
-                                if_instr->IfFalseSuccessor())) {
-    false_target = nullptr;
+  if (IsMaterializedCondition(select->GetCondition())) {
+    locations->SetInAt(2, Location::RequiresRegister());
   }
-  GenerateTestAndBranch(if_instr, true_target, false_target, always_true_target);
+}
+
+void InstructionCodeGeneratorARM64::VisitSelect(HSelect* select) {
+  LocationSummary* locations = select->GetLocations();
+  Location out = locations->Out();
+  Location loc_false = locations->InAt(0);
+  Location loc_true = locations->InAt(1);
+
+  const bool must_move_true = !out.Equals(loc_true);
+  const bool must_move_false = !out.Equals(loc_false);
+  if (!must_move_true && !must_move_false) {
+    return;
+  }
+
+  if (CanUseCselFor(select)) {
+    HCondition* cond = select->GetCondition()->AsCondition();
+    __ Cmp(InputRegisterAt(cond, 0), InputOperandAt(cond, 1));
+    __ Csel(OutputRegister(select),
+            InputRegisterAt(select, 0),  // false value
+            InputOperandAt(select, 1),   // true value
+            ARM64Condition(cond->GetOppositeCondition()));
+  } else {
+    vixl::Label true_target, false_target, merge_target;
+    GenerateTestAndBranch(select,
+                          /* condition_input_index */ 2,
+                          &true_target,
+                          &false_target,
+                          !must_move_false,
+                          must_move_false);
+
+    if (must_move_false) {
+      __ Bind(&false_target);
+      codegen_->MoveLocation(out, loc_false, Primitive::kPrimVoid);
+      if (must_move_true) {
+        __ B(&merge_target);
+        __ Bind(&true_target);
+        codegen_->MoveLocation(out, loc_true, Primitive::kPrimVoid);
+        __ Bind(&merge_target);
+      } else {
+        __ Bind(&true_target);
+      }
+    } else {
+      DCHECK(must_move_true);
+      __ Bind(&true_target);
+      codegen_->MoveLocation(out, loc_true, Primitive::kPrimVoid);
+      __ Bind(&false_target);
+    }
+  }
 }
 
 void LocationsBuilderARM64::VisitDeoptimize(HDeoptimize* deoptimize) {
@@ -2360,7 +2433,12 @@ void InstructionCodeGeneratorARM64::VisitDeoptimize(HDeoptimize* deoptimize) {
       DeoptimizationSlowPathARM64(deoptimize);
   codegen_->AddSlowPath(slow_path);
   vixl::Label* slow_path_entry = slow_path->GetEntryLabel();
-  GenerateTestAndBranch(deoptimize, slow_path_entry, nullptr, slow_path_entry);
+  GenerateTestAndBranch(deoptimize,
+                        /* condition_input_index */ 0,
+                        slow_path_entry,
+                        /* false_target */ nullptr,
+                        /* true_falls_through */ false,
+                        /* false_falls_through */ true);
 }
 
 void LocationsBuilderARM64::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
