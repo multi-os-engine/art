@@ -38,64 +38,29 @@ void HBooleanSimplifier::TryRemovingNegatedCondition(HBasicBlock* block) {
   }
 }
 
+static bool IsSimpleBlock(HBasicBlock* block) {
+  DCHECK(block->EndsWithControlFlowInstruction());
+
+  HInstruction* first_insn = block->GetFirstInstruction();
+  HInstruction* last_insn = block->GetLastInstruction();
+
+  if (last_insn->IsGoto()) {
+    if (first_insn == last_insn) {
+      return true;
+    } else if (first_insn->GetNext() == last_insn) {
+      return first_insn->CanBeMoved() && !first_insn->GetSideEffects().HasSideEffects();
+    }
+  }
+
+  return false;
+}
+
 // Returns true if 'block1' and 'block2' are empty, merge into the same single
 // successor and the successor can only be reached from them.
 static bool BlocksDoMergeTogether(HBasicBlock* block1, HBasicBlock* block2) {
-  if (!block1->IsSingleGoto() || !block2->IsSingleGoto()) return false;
-  HBasicBlock* succ1 = block1->GetSuccessors()[0];
-  HBasicBlock* succ2 = block2->GetSuccessors()[0];
+  HBasicBlock* succ1 = block1->GetSingleSuccessor();
+  HBasicBlock* succ2 = block2->GetSingleSuccessor();
   return succ1 == succ2 && succ1->GetPredecessors().size() == 2u;
-}
-
-// Returns true if the outcome of the branching matches the boolean value of
-// the branching condition.
-static bool PreservesCondition(HInstruction* input_true, HInstruction* input_false) {
-  return input_true->IsIntConstant() && input_true->AsIntConstant()->IsOne()
-      && input_false->IsIntConstant() && input_false->AsIntConstant()->IsZero();
-}
-
-// Returns true if the outcome of the branching is exactly opposite of the
-// boolean value of the branching condition.
-static bool NegatesCondition(HInstruction* input_true, HInstruction* input_false) {
-  return input_true->IsIntConstant() && input_true->AsIntConstant()->IsZero()
-      && input_false->IsIntConstant() && input_false->AsIntConstant()->IsOne();
-}
-
-// Returns an instruction with the opposite boolean value from 'cond'.
-static HInstruction* GetOppositeCondition(HInstruction* cond) {
-  HGraph* graph = cond->GetBlock()->GetGraph();
-  ArenaAllocator* allocator = graph->GetArena();
-
-  if (cond->IsCondition()) {
-    HInstruction* lhs = cond->InputAt(0);
-    HInstruction* rhs = cond->InputAt(1);
-    if (cond->IsEqual()) {
-      return new (allocator) HNotEqual(lhs, rhs);
-    } else if (cond->IsNotEqual()) {
-      return new (allocator) HEqual(lhs, rhs);
-    } else if (cond->IsLessThan()) {
-      return new (allocator) HGreaterThanOrEqual(lhs, rhs);
-    } else if (cond->IsLessThanOrEqual()) {
-      return new (allocator) HGreaterThan(lhs, rhs);
-    } else if (cond->IsGreaterThan()) {
-      return new (allocator) HLessThanOrEqual(lhs, rhs);
-    } else {
-      DCHECK(cond->IsGreaterThanOrEqual());
-      return new (allocator) HLessThan(lhs, rhs);
-    }
-  } else if (cond->IsIntConstant()) {
-    HIntConstant* int_const = cond->AsIntConstant();
-    if (int_const->IsZero()) {
-      return graph->GetIntConstant(1);
-    } else {
-      DCHECK(int_const->IsOne());
-      return graph->GetIntConstant(0);
-    }
-  } else {
-    // General case when 'cond' is another instruction of type boolean,
-    // as verified by SSAChecker.
-    return new (allocator) HBooleanNot(cond);
-  }
 }
 
 void HBooleanSimplifier::TryRemovingBooleanSelection(HBasicBlock* block) {
@@ -105,43 +70,42 @@ void HBooleanSimplifier::TryRemovingBooleanSelection(HBasicBlock* block) {
   HIf* if_instruction = block->GetLastInstruction()->AsIf();
   HBasicBlock* true_block = if_instruction->IfTrueSuccessor();
   HBasicBlock* false_block = if_instruction->IfFalseSuccessor();
-  if (!BlocksDoMergeTogether(true_block, false_block)) {
+  if (!IsSimpleBlock(true_block) ||
+      !IsSimpleBlock(false_block) ||
+      !BlocksDoMergeTogether(true_block, false_block)) {
     return;
   }
-  HBasicBlock* merge_block = true_block->GetSuccessors()[0];
+  HBasicBlock* merge_block = true_block->GetSingleSuccessor();
   if (!merge_block->HasSinglePhi()) {
     return;
   }
+
+  size_t predecessor_index_true = merge_block->GetPredecessorIndexOf(true_block);
+  size_t predecessor_index_false = 1 - predecessor_index_true;
+  DCHECK_EQ(predecessor_index_false, merge_block->GetPredecessorIndexOf(false_block));
+
   HPhi* phi = merge_block->GetFirstPhi()->AsPhi();
-  HInstruction* true_value = phi->InputAt(merge_block->GetPredecessorIndexOf(true_block));
-  HInstruction* false_value = phi->InputAt(merge_block->GetPredecessorIndexOf(false_block));
+  HInstruction* true_value = phi->InputAt(predecessor_index_true);
+  HInstruction* false_value = phi->InputAt(predecessor_index_false);
 
   // Check if the selection negates/preserves the value of the condition and
   // if so, generate a suitable replacement instruction.
-  HInstruction* if_condition = if_instruction->InputAt(0);
-
-  // Don't change FP compares.  The definition of compares involving NaNs forces
-  // the compares to be done as written by the user.
-  if (if_condition->IsCondition() &&
-      Primitive::IsFloatingPointType(if_condition->InputAt(0)->GetType())) {
-    return;
-  }
-
-  HInstruction* replacement;
-  if (NegatesCondition(true_value, false_value)) {
-    replacement = GetOppositeCondition(if_condition);
-    if (replacement->GetBlock() == nullptr) {
-      block->InsertInstructionBefore(replacement, if_instruction);
-    }
-  } else if (PreservesCondition(true_value, false_value)) {
-    replacement = if_condition;
-  } else {
-    return;
-  }
+  HSelect* select = new (graph_->GetArena()) HSelect(if_instruction->InputAt(0),
+                                                     true_value,
+                                                     false_value,
+                                                     if_instruction->GetDexPc());
+  merge_block->InsertInstructionBefore(select, merge_block->GetFirstInstruction());
 
   // Replace the selection outcome with the new instruction.
-  phi->ReplaceWith(replacement);
+  phi->ReplaceWith(select);
   merge_block->RemovePhi(phi);
+
+  // If `true_block` has an instruction we need to move out, do it now. We do not
+  // need to do the same for `false_block` because it will get merged with `block`.
+  if (!true_block->IsSingleGoto()) {
+    true_block->MoveInstructionBefore(true_block->GetFirstInstruction(), if_instruction);
+  }
+  DCHECK(true_block->IsSingleGoto());
 
   // Delete the true branch and merge the resulting chain of blocks
   // 'block->false_block->merge_block' into one.

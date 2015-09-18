@@ -2015,26 +2015,31 @@ void InstructionCodeGeneratorMIPS64::VisitTryBoundary(HTryBoundary* try_boundary
   }
 }
 
+static bool IsMaterializedCondition(HInstruction* instruction) {
+  return !instruction->IsCondition() || instruction->AsCondition()->NeedsMaterialization();
+}
+
 void InstructionCodeGeneratorMIPS64::GenerateTestAndBranch(HInstruction* instruction,
+                                                           size_t condition_input_index,
                                                            Label* true_target,
                                                            Label* false_target,
-                                                           Label* always_true_target) {
-  HInstruction* cond = instruction->InputAt(0);
+                                                           bool true_falls_through,
+                                                           bool false_falls_through) {
+  HInstruction* cond = instruction->InputAt(condition_input_index);
   HCondition* condition = cond->AsCondition();
 
   if (cond->IsIntConstant()) {
-    int32_t cond_value = cond->AsIntConstant()->GetValue();
-    if (cond_value == 1) {
-      if (always_true_target != nullptr) {
-        __ B(always_true_target);
+    if (cond->AsIntConstant()->IsOne()) {
+      if (!true_falls_through) {
+        __ B(true_target);
       }
       return;
     } else {
-      DCHECK_EQ(cond_value, 0);
+      DCHECK(cond->AsIntConstant()->IsZero());
     }
-  } else if (!cond->IsCondition() || condition->NeedsMaterialization()) {
+  } else if (IsMaterializedCondition(cond)) {
     // The condition instruction has been materialized, compare the output to 0.
-    Location cond_val = instruction->GetLocations()->InAt(0);
+    Location cond_val = instruction->GetLocations()->InAt(condition_input_index);
     DCHECK(cond_val.IsRegister());
     __ Bnezc(cond_val.AsRegister<GpuRegister>(), true_target);
   } else {
@@ -2119,7 +2124,7 @@ void InstructionCodeGeneratorMIPS64::GenerateTestAndBranch(HInstruction* instruc
       }
     }
   }
-  if (false_target != nullptr) {
+  if (!false_falls_through) {
     __ B(false_target);
   }
 }
@@ -2133,18 +2138,48 @@ void LocationsBuilderMIPS64::VisitIf(HIf* if_instr) {
 }
 
 void InstructionCodeGeneratorMIPS64::VisitIf(HIf* if_instr) {
-  Label* true_target = codegen_->GetLabelOf(if_instr->IfTrueSuccessor());
-  Label* false_target = codegen_->GetLabelOf(if_instr->IfFalseSuccessor());
-  Label* always_true_target = true_target;
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(),
-                                if_instr->IfTrueSuccessor())) {
-    always_true_target = nullptr;
+  HBasicBlock* true_successor = if_instr->IfTrueSuccessor();
+  HBasicBlock* false_successor = if_instr->IfFalseSuccessor();
+  GenerateTestAndBranch(if_instr,
+                        /* condition_input_index */ 0,
+                        codegen_->GetLabelOf(true_successor),
+                        codegen_->GetLabelOf(false_successor),
+                        codegen_->GoesToNextBlock(if_instr->GetBlock(), true_successor),
+                        codegen_->GoesToNextBlock(if_instr->GetBlock(), false_successor));
+}
+
+void LocationsBuilderMIPS64::VisitSelect(HSelect* select) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(select);
+  if (Primitive::IsFloatingPointType(select->GetType())) {
+    locations->SetInAt(0, Location::RequiresFpuRegister());
+    locations->SetInAt(1, Location::RequiresFpuRegister());
+  } else {
+    locations->SetInAt(0, Location::RequiresRegister());
+    locations->SetInAt(1, Location::RequiresRegister());
   }
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(),
-                                if_instr->IfFalseSuccessor())) {
-    false_target = nullptr;
+  if (IsMaterializedCondition(select->GetCondition())) {
+    locations->SetInAt(2, Location::RequiresRegister());
   }
-  GenerateTestAndBranch(if_instr, true_target, false_target, always_true_target);
+  locations->SetOut(Location::SameAsFirstInput());
+}
+
+void InstructionCodeGeneratorMIPS64::VisitSelect(HSelect* select) {
+  LocationSummary* locations = select->GetLocations();
+  Location out = locations->Out();
+  Location rhs = locations->InAt(1);
+
+  Label true_target, false_target;
+  GenerateTestAndBranch(select,
+                        /* condition_input_index */ 2,
+                        &true_target,
+                        &false_target,
+                        /* true_falls_through */ true,
+                        /* false_falls_through */ false);
+  __ Bind(&true_target);
+  HParallelMove parallel_move(GetGraph()->GetArena());
+  parallel_move.AddMove(rhs, out, select->GetType(), nullptr);
+  codegen_->GetMoveResolver()->EmitNativeCode(&parallel_move);
+  __ Bind(&false_target);
 }
 
 void LocationsBuilderMIPS64::VisitDeoptimize(HDeoptimize* deoptimize) {
@@ -2162,7 +2197,12 @@ void InstructionCodeGeneratorMIPS64::VisitDeoptimize(HDeoptimize* deoptimize) {
       DeoptimizationSlowPathMIPS64(deoptimize);
   codegen_->AddSlowPath(slow_path);
   Label* slow_path_entry = slow_path->GetEntryLabel();
-  GenerateTestAndBranch(deoptimize, slow_path_entry, nullptr, slow_path_entry);
+  GenerateTestAndBranch(deoptimize,
+                        /* condition_input_index */ 0,
+                        slow_path_entry,
+                        /* false_target */ nullptr,
+                        /* true_falls_through */ false,
+                        /* false_falls_through */ true);
 }
 
 void LocationsBuilderMIPS64::HandleFieldGet(HInstruction* instruction,

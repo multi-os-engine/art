@@ -856,6 +856,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   // Replace instruction `initial` with `replacement` within this block.
   void ReplaceAndRemoveInstructionWith(HInstruction* initial,
                                        HInstruction* replacement);
+  // Move `instruction` already in a block to before the `cursor` in this block.
+  void MoveInstructionBefore(HInstruction* instruction, HInstruction* cursor);
   void AddPhi(HPhi* phi);
   void InsertPhiAfter(HPhi* instruction, HPhi* cursor);
   // RemoveInstruction and RemovePhi delete a given instruction from the respective
@@ -1056,6 +1058,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(UnresolvedInstanceFieldSet, Instruction)                            \
   M(UnresolvedStaticFieldGet, Instruction)                              \
   M(UnresolvedStaticFieldSet, Instruction)                              \
+  M(Select, Instruction)                                                \
   M(StoreLocal, Instruction)                                            \
   M(Sub, BinaryOperation)                                               \
   M(SuspendCheck, Instruction)                                          \
@@ -1074,7 +1077,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                            \
   M(X86ComputeBaseMethodAddress, Instruction)                           \
-  M(X86LoadFromConstantTable, Instruction)
+  M(X86LoadFromConstantTable, Instruction)                              \
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
@@ -5072,7 +5075,6 @@ class HMonitorOperation : public HTemplateInstruction<1> {
     return IsEnter();
   }
 
-
   bool IsEnter() const { return kind_ == kEnter; }
 
   DECLARE_INSTRUCTION(MonitorOperation);
@@ -5082,6 +5084,39 @@ class HMonitorOperation : public HTemplateInstruction<1> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HMonitorOperation);
+};
+
+class HSelect : public HExpression<3> {
+ public:
+  HSelect(HInstruction* condition,
+          HInstruction* true_value,
+          HInstruction* false_value,
+          uint32_t dex_pc)
+      : HExpression(HPhi::ToPhiType(true_value->GetType()), SideEffects::None(), dex_pc) {
+    DCHECK_NE(true_value->GetType(), Primitive::kPrimVoid);
+    DCHECK_NE(false_value->GetType(), Primitive::kPrimVoid);
+    DCHECK_EQ(HPhi::ToPhiType(true_value->GetType()), HPhi::ToPhiType(false_value->GetType()));
+
+    // This order is optimal for code generation. Architectures which implement
+    // conditional move will set out=in(0) and move if condition is satisfied.
+    SetRawInputAt(0, false_value);
+    SetRawInputAt(1, true_value);
+    SetRawInputAt(2, condition);
+  }
+
+  HInstruction* GetFalseValue() const { return InputAt(0); }
+  HInstruction* GetTrueValue() const { return InputAt(1); }
+  HInstruction* GetCondition() const { return InputAt(2); }
+
+  bool CanBeMoved() const OVERRIDE { return true; }
+  bool CanBeNull() const OVERRIDE {
+    return GetTrueValue()->CanBeNull() || GetFalseValue()->CanBeNull();
+  }
+
+  DECLARE_INSTRUCTION(Select);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HSelect);
 };
 
 /**

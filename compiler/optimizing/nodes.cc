@@ -657,6 +657,20 @@ void HBasicBlock::InsertInstructionAfter(HInstruction* instruction, HInstruction
   instructions_.InsertInstructionAfter(instruction, cursor);
 }
 
+void HBasicBlock::MoveInstructionBefore(HInstruction* instr, HInstruction* cursor) {
+  DCHECK(!instr->IsPhi());
+  DCHECK(!instr->IsControlFlow());
+  DCHECK(!cursor->IsPhi());
+
+  HBasicBlock* from_block = instr->GetBlock();
+  HBasicBlock* to_block = cursor->GetBlock();
+  DCHECK(from_block != to_block);
+
+  from_block->RemoveInstruction(instr, /* ensure_safety */ false);
+  instr->SetBlock(to_block);
+  to_block->instructions_.InsertInstructionBefore(instr, cursor);
+}
+
 void HBasicBlock::InsertPhiAfter(HPhi* phi, HPhi* cursor) {
   DCHECK_EQ(phi->GetId(), -1);
   DCHECK_NE(cursor->GetId(), -1);
