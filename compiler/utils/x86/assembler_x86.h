@@ -260,11 +260,15 @@ class ConstantArea {
 
   // Add an int32_t to the constant area, returning the offset into
   // the constant area where the literal resides.
-  int AddInt32(int32_t v);
+  int AddInt32(int32_t v, bool do_not_merge = false);
 
   // Add an int64_t to the constant area, returning the offset into
   // the constant area where the literal resides.
   int AddInt64(int64_t v);
+
+  int GetSize() const {
+    return buffer_.size() * elem_size_;
+  }
 
   bool IsEmpty() const {
     return buffer_.size() == 0;
@@ -274,18 +278,9 @@ class ConstantArea {
     return buffer_;
   }
 
-  void AddFixup(AssemblerFixup* fixup) {
-    fixups_.push_back(fixup);
-  }
-
-  const std::vector<AssemblerFixup*>& GetFixups() const {
-    return fixups_;
-  }
-
  private:
-  static constexpr size_t kEntrySize = sizeof(int32_t);
+  static constexpr size_t elem_size_ = sizeof(int32_t);
   std::vector<int32_t> buffer_;
-  std::vector<AssemblerFixup*> fixups_;
 };
 
 class X86Assembler FINAL : public Assembler {
@@ -748,7 +743,9 @@ class X86Assembler FINAL : public Assembler {
 
   // Add an int32_t to the constant area, returning the offset into
   // the constant area where the literal resides.
-  int AddInt32(int32_t v) { return constant_area_.AddInt32(v); }
+  int AddInt32(int32_t v, bool do_not_merge = false) {
+    return constant_area_.AddInt32(v, do_not_merge);
+  }
 
   // Add an int64_t to the constant area, returning the offset into
   // the constant area where the literal resides.
@@ -759,7 +756,9 @@ class X86Assembler FINAL : public Assembler {
 
   // Is the constant area empty? Return true if there are no literals in the constant area.
   bool IsConstantAreaEmpty() const { return constant_area_.IsEmpty(); }
-  void AddConstantAreaFixup(AssemblerFixup* fixup) { constant_area_.AddFixup(fixup); }
+
+  // Return the current size of the constant area.
+  size_t ConstantAreaSize() const { return constant_area_.GetSize(); }
 
  private:
   inline void EmitUint8(uint8_t value);

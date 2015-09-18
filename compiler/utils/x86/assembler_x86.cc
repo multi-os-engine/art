@@ -2369,15 +2369,17 @@ void X86Assembler::AddConstantArea() {
   }
 }
 
-int ConstantArea::AddInt32(int32_t v) {
-  for (size_t i = 0, e = buffer_.size(); i < e; i++) {
-    if (v == buffer_[i]) {
-      return i * kEntrySize;
+int ConstantArea::AddInt32(int32_t v, bool do_not_merge) {
+  if (!do_not_merge) {
+    for (size_t i = 0, e = buffer_.size(); i < e; i++) {
+      if (v == buffer_[i]) {
+        return i * elem_size_;
+      }
     }
   }
 
   // Didn't match anything.
-  int result = buffer_.size() * kEntrySize;
+  int result = buffer_.size() * elem_size_;
   buffer_.push_back(v);
   return result;
 }
@@ -2389,13 +2391,13 @@ int ConstantArea::AddInt64(int64_t v) {
     // Ensure we don't pass the end of the buffer.
     for (size_t i = 0, e = buffer_.size() - 1; i < e; i++) {
       if (v_low == buffer_[i] && v_high == buffer_[i + 1]) {
-        return i * kEntrySize;
+        return i * elem_size_;
       }
     }
   }
 
   // Didn't match anything.
-  int result = buffer_.size() * kEntrySize;
+  int result = buffer_.size() * elem_size_;
   buffer_.push_back(v_low);
   buffer_.push_back(v_high);
   return result;
