@@ -47,57 +47,6 @@ static bool BlocksDoMergeTogether(HBasicBlock* block1, HBasicBlock* block2) {
   return succ1 == succ2 && succ1->GetPredecessors().size() == 2u;
 }
 
-// Returns true if the outcome of the branching matches the boolean value of
-// the branching condition.
-static bool PreservesCondition(HInstruction* input_true, HInstruction* input_false) {
-  return input_true->IsIntConstant() && input_true->AsIntConstant()->IsOne()
-      && input_false->IsIntConstant() && input_false->AsIntConstant()->IsZero();
-}
-
-// Returns true if the outcome of the branching is exactly opposite of the
-// boolean value of the branching condition.
-static bool NegatesCondition(HInstruction* input_true, HInstruction* input_false) {
-  return input_true->IsIntConstant() && input_true->AsIntConstant()->IsZero()
-      && input_false->IsIntConstant() && input_false->AsIntConstant()->IsOne();
-}
-
-// Returns an instruction with the opposite boolean value from 'cond'.
-static HInstruction* GetOppositeCondition(HInstruction* cond) {
-  HGraph* graph = cond->GetBlock()->GetGraph();
-  ArenaAllocator* allocator = graph->GetArena();
-
-  if (cond->IsCondition()) {
-    HInstruction* lhs = cond->InputAt(0);
-    HInstruction* rhs = cond->InputAt(1);
-    if (cond->IsEqual()) {
-      return new (allocator) HNotEqual(lhs, rhs);
-    } else if (cond->IsNotEqual()) {
-      return new (allocator) HEqual(lhs, rhs);
-    } else if (cond->IsLessThan()) {
-      return new (allocator) HGreaterThanOrEqual(lhs, rhs);
-    } else if (cond->IsLessThanOrEqual()) {
-      return new (allocator) HGreaterThan(lhs, rhs);
-    } else if (cond->IsGreaterThan()) {
-      return new (allocator) HLessThanOrEqual(lhs, rhs);
-    } else {
-      DCHECK(cond->IsGreaterThanOrEqual());
-      return new (allocator) HLessThan(lhs, rhs);
-    }
-  } else if (cond->IsIntConstant()) {
-    HIntConstant* int_const = cond->AsIntConstant();
-    if (int_const->IsZero()) {
-      return graph->GetIntConstant(1);
-    } else {
-      DCHECK(int_const->IsOne());
-      return graph->GetIntConstant(0);
-    }
-  } else {
-    // General case when 'cond' is another instruction of type boolean,
-    // as verified by SSAChecker.
-    return new (allocator) HBooleanNot(cond);
-  }
-}
-
 void HBooleanSimplifier::TryRemovingBooleanSelection(HBasicBlock* block) {
   DCHECK(block->EndsWithIf());
 
@@ -112,35 +61,25 @@ void HBooleanSimplifier::TryRemovingBooleanSelection(HBasicBlock* block) {
   if (!merge_block->HasSinglePhi()) {
     return;
   }
+
+  size_t predecessor_index_true = merge_block->GetPredecessorIndexOf(true_block);
+  size_t predecessor_index_false = 1 - predecessor_index_true;
+  DCHECK_EQ(predecessor_index_false, merge_block->GetPredecessorIndexOf(false_block));
+
   HPhi* phi = merge_block->GetFirstPhi()->AsPhi();
-  HInstruction* true_value = phi->InputAt(merge_block->GetPredecessorIndexOf(true_block));
-  HInstruction* false_value = phi->InputAt(merge_block->GetPredecessorIndexOf(false_block));
+  HInstruction* true_value = phi->InputAt(predecessor_index_true);
+  HInstruction* false_value = phi->InputAt(predecessor_index_false);
 
   // Check if the selection negates/preserves the value of the condition and
   // if so, generate a suitable replacement instruction.
-  HInstruction* if_condition = if_instruction->InputAt(0);
-
-  // Don't change FP compares.  The definition of compares involving NaNs forces
-  // the compares to be done as written by the user.
-  if (if_condition->IsCondition() &&
-      Primitive::IsFloatingPointType(if_condition->InputAt(0)->GetType())) {
-    return;
-  }
-
-  HInstruction* replacement;
-  if (NegatesCondition(true_value, false_value)) {
-    replacement = GetOppositeCondition(if_condition);
-    if (replacement->GetBlock() == nullptr) {
-      block->InsertInstructionBefore(replacement, if_instruction);
-    }
-  } else if (PreservesCondition(true_value, false_value)) {
-    replacement = if_condition;
-  } else {
-    return;
-  }
+  HSelect* select = new (graph_->GetArena()) HSelect(if_instruction->InputAt(0),
+                                                     true_value,
+                                                     false_value,
+                                                     if_instruction->GetDexPc());
+  block->InsertInstructionBefore(select, if_instruction);
 
   // Replace the selection outcome with the new instruction.
-  phi->ReplaceWith(replacement);
+  phi->ReplaceWith(select);
   merge_block->RemovePhi(phi);
 
   // Delete the true branch and merge the resulting chain of blocks
