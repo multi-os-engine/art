@@ -27,6 +27,10 @@
 #include "constant_area_fixups_x86.h"
 #endif
 
+#if defined(ART_ENABLE_CODEGEN_x86) || defined(ART_ENABLE_CODEGEN_x86_64)
+#include "generate_selects.h"
+#endif
+
 #include "art_method-inl.h"
 #include "base/arena_allocator.h"
 #include "base/arena_containers.h"
@@ -434,12 +438,24 @@ static void RunArchOptimizations(InstructionSet instruction_set,
 #endif
 #ifdef ART_ENABLE_CODEGEN_x86
     case kX86: {
+      HX86GenerateSelects* gen_selects = new (arena) HX86GenerateSelects(graph, stats);
       x86::ConstantAreaFixups* constant_area_fixups =
           new (arena) x86::ConstantAreaFixups(graph, stats);
       HOptimization* x86_optimizations[] = {
+        gen_selects,
         constant_area_fixups
       };
       RunOptimizations(x86_optimizations, arraysize(x86_optimizations), pass_observer);
+      break;
+    }
+#endif
+#ifdef ART_ENABLE_CODEGEN_x86_64
+    case kX86_64: {
+      HX86_64GenerateSelects* gen_selects = new (arena) HX86_64GenerateSelects(graph, stats);
+      HOptimization* x86_64_optimizations[] = {
+        gen_selects
+      };
+      RunOptimizations(x86_64_optimizations, arraysize(x86_64_optimizations), pass_observer);
       break;
     }
 #endif
