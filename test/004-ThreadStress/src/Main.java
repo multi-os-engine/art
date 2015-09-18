@@ -149,6 +149,7 @@ public class Main implements Runnable {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException ignored) {
+            } catch (OutOfMemoryError ignore) {
             }
             return true;
         }
@@ -167,6 +168,7 @@ public class Main implements Runnable {
                 try {
                     lock.wait(100, 0);
                 } catch (InterruptedException ignored) {
+                } catch (OutOfMemoryError ignore) {
                 }
             }
             return true;
@@ -186,6 +188,7 @@ public class Main implements Runnable {
                 try {
                     lock.wait();
                 } catch (InterruptedException ignored) {
+                } catch (OutOfMemoryError ignore) {
                 }
             }
             return true;
@@ -205,6 +208,7 @@ public class Main implements Runnable {
                 try {
                     Thread.sleep((int)(Math.random()*10));
                 } catch (InterruptedException ignored) {
+                } catch (OutOfMemoryError ignore) {
                 }
             }
             return true;
@@ -458,7 +462,14 @@ public class Main implements Runnable {
                             // to pass.
                         }
                     }
-                    System.out.println("Finishing worker");
+                    // Keep trying to print "Finishing worker" until it succeeds.
+                    while (true) {
+                        try {
+                            System.out.println("Finishing worker");
+                            break;
+                        } catch (OutOfMemoryError e) {
+                        }
+                    }
                 }
             };
         }
