@@ -5310,6 +5310,84 @@ void InstructionCodeGeneratorX86::VisitX86LoadFromConstantTable(HX86LoadFromCons
   }
 }
 
+void LocationsBuilderX86::VisitX86SelectValue(HX86SelectValue* instr) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instr, LocationSummary::kNoCall);
+  // The values must both be in registers for CMOV.
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+
+  // The comparision is just like a condition.  We only handle integers for now.
+  DCHECK(!Primitive::IsFloatingPointType(instr->InputAt(2)->GetType()));
+  locations->SetInAt(2, Location::RequiresRegister());
+  locations->SetInAt(3, Location::Any());
+  locations->SetOut(Location::SameAsFirstInput());
+}
+
+void InstructionCodeGeneratorX86::VisitX86SelectValue(HX86SelectValue* instr) {
+  LocationSummary* locations = instr->GetLocations();
+  Register cond_lhs = locations->InAt(2).AsRegister<Register>();
+  Location cond_rhs = locations->InAt(3);
+
+  if (cond_rhs.IsRegister()) {
+    __ cmpl(cond_lhs, cond_rhs.AsRegister<Register>());
+  } else if (cond_rhs.IsConstant()) {
+    int32_t constant = CodeGenerator::GetInt32ValueOf(cond_rhs.GetConstant());
+    if (constant == 0) {
+      __ testl(cond_lhs, cond_lhs);
+    } else {
+      __ cmpl(cond_lhs, Immediate(constant));
+    }
+  } else {
+    __ cmpl(cond_lhs, Address(ESP, cond_rhs.GetStackIndex()));
+  }
+
+  // The condition code has now been set. Use a CMOV to get the right value into
+  // the output (which is the same as the input).  The LHS is already in the output
+  // register, so we only need to move on the opposite condition.
+  Condition opposite_cond = kEqual;
+  switch (instr->GetCondition()) {
+    case kCondEQ:
+      opposite_cond = kNotEqual;
+      break;
+    case kCondNE:
+      opposite_cond = kEqual;
+      break;
+    case kCondLT:
+      opposite_cond = kGreaterEqual;
+      break;
+    case kCondLE:
+      opposite_cond = kGreater;
+      break;
+    case kCondGT:
+      opposite_cond = kLessEqual;
+      break;
+    case kCondGE:
+      opposite_cond = kLess;
+      break;
+  }
+
+  Location value_lhs = locations->InAt(0);
+  Location value_rhs = locations->InAt(1);
+  Location out = locations->Out();
+  if (instr->GetType() == Primitive::kPrimLong) {
+    // Do this as 2 CMOVs.
+    DCHECK(out.IsRegisterPair());
+    DCHECK(value_lhs.IsRegisterPair());
+    DCHECK(value_rhs.IsRegisterPair());
+    DCHECK_EQ(out.AsRegisterPairLow<Register>(), value_lhs.AsRegisterPairLow<Register>());
+    DCHECK_EQ(out.AsRegisterPairHigh<Register>(), value_lhs.AsRegisterPairHigh<Register>());
+    __ cmovl(opposite_cond, out.AsRegisterPairLow<Register>(),
+             value_rhs.AsRegisterPairLow<Register>());
+    __ cmovl(opposite_cond, out.AsRegisterPairHigh<Register>(),
+             value_rhs.AsRegisterPairHigh<Register>());
+  } else {
+    // Integer case.
+    DCHECK_EQ(out.AsRegister<Register>(), value_lhs.AsRegister<Register>());
+    __ cmovl(opposite_cond, out.AsRegister<Register>(), value_rhs.AsRegister<Register>());
+  }
+}
+
 void CodeGeneratorX86::Finalize(CodeAllocator* allocator) {
   // Generate the constant area if needed.
   X86Assembler* assembler = GetAssembler();

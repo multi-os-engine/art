@@ -872,6 +872,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   // Replace instruction `initial` with `replacement` within this block.
   void ReplaceAndRemoveInstructionWith(HInstruction* initial,
                                        HInstruction* replacement);
+  // Move `instruction` already in a block to before the `cursor` in this block.
+  void MoveInstructionBefore(HInstruction* instruction, HInstruction* cursor);
   void AddPhi(HPhi* phi);
   void InsertPhiAfter(HPhi* instruction, HPhi* cursor);
   // RemoveInstruction and RemovePhi delete a given instruction from the respective
@@ -1082,6 +1084,9 @@ class HLoopInformationOutwardIterator : public ValueObject {
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)
 
+#define FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)                     \
+  M(X86SelectValue, Instruction)
+
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                            \
   M(X86ComputeBaseMethodAddress, Instruction)                           \
   M(X86LoadFromConstantTable, Instruction)
@@ -1093,6 +1098,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                                \
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)                               \
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)                           \
   FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
   FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
@@ -5053,6 +5059,10 @@ class HParallelMove : public HTemplateInstruction<0> {
 };
 
 }  // namespace art
+
+#if defined(ART_ENABLE_CODEGEN_x86) || defined(ART_ENABLE_CODEGEN_x86_64)
+#include "nodes_x86_common.h"
+#endif
 
 #ifdef ART_ENABLE_CODEGEN_x86
 #include "nodes_x86.h"
