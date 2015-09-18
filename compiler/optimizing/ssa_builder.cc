@@ -345,6 +345,40 @@ void SsaBuilder::BuildSsa() {
   }
 }
 
+ArenaVector<HInstruction*>* SsaBuilder::GetLocalsFor(HBasicBlock* block,
+                                                     ArenaVector<HInstruction*>* thrower_locals) {
+  DCHECK_LT(block->GetBlockId(), locals_for_.size());
+  ArenaVector<HInstruction*>* locals = &locals_for_[block->GetBlockId()];
+  const size_t vregs = GetGraph()->GetNumberOfVRegs();
+  if (locals->empty() && vregs != 0u) {
+    locals->resize(vregs, nullptr);
+
+    if (block->IsCatchBlock()) {
+      // We record incoming inputs of catch phis at throwing instructions and
+      // must therefore eagerly create the phis. Unused phis will be removed
+      // in the dead phi analysis.
+      // TODO
+      DCHECK(thrower_locals != nullptr);
+      DCHECK_EQ(thrower_locals->size(), vregs);
+      ArenaAllocator* arena = GetGraph()->GetArena();
+      for (size_t i = 0; i < vregs; ++i) {
+        LOG(INFO) << "vreg=" << i << ", size=" << thrower_locals->size();
+        if ((*thrower_locals)[i] != nullptr) {
+          HPhi* phi = new (arena) HPhi(arena, i, 0, Primitive::kPrimVoid);
+          block->AddPhi(phi);
+          (*locals)[i] = phi;
+          LOG(INFO) << "LOCAL_CREATED";
+        }
+        // } else {
+        //   LOG(INFO) << "LOCAL_SKIPPED";
+        // }
+        LOG(INFO) << "DONE";
+      }
+    }
+  }
+  return locals;
+}
+
 HInstruction* SsaBuilder::ValueOfLocal(HBasicBlock* block, size_t local) {
   ArenaVector<HInstruction*>* locals = GetLocalsFor(block);
   DCHECK_LT(local, locals->size());
@@ -577,7 +611,8 @@ void SsaBuilder::VisitInstruction(HInstruction* instruction) {
     const HTryBoundary& try_entry =
         instruction->GetBlock()->GetTryCatchInformation()->GetTryEntry();
     for (HExceptionHandlerIterator it(try_entry); !it.Done(); it.Advance()) {
-      ArenaVector<HInstruction*>* handler_locals = GetLocalsFor(it.Current());
+      ArenaVector<HInstruction*>* handler_locals = GetLocalsFor(it.Current(), current_locals_);
+      LOG(INFO) << "Got locals, size=" << handler_locals->size();
       DCHECK_EQ(handler_locals->size(), current_locals_->size());
       for (size_t i = 0, e = current_locals_->size(); i < e; ++i) {
         HInstruction* local_value = (*current_locals_)[i];
