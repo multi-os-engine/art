@@ -29,6 +29,7 @@ enum MethodCompilationStat {
   kAttemptCompilation = 0,
   kCompiledBaseline,
   kCompiledOptimized,
+  kGeneratedSelects,
   kInlinedInvoke,
   kInstructionSimplifications,
   kInstructionSimplificationsArch,
@@ -96,6 +97,7 @@ class OptimizingCompilerStats {
       case kAttemptCompilation : return "kAttemptCompilation";
       case kCompiledBaseline : return "kCompiledBaseline";
       case kCompiledOptimized : return "kCompiledOptimized";
+      case kGeneratedSelects: return "kGeneratedSelects";
       case kInlinedInvoke : return "kInlinedInvoke";
       case kInstructionSimplifications: return "kInstructionSimplifications";
       case kInstructionSimplificationsArch: return "kInstructionSimplificationsArch";
