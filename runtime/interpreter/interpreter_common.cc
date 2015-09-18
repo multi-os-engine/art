@@ -698,15 +698,19 @@ static inline bool DoCallCommon(ArtMethod* called_method,
     MethodReference method_ref = method->ToMethodReference();
     SafeMap<uint32_t, std::set<uint32_t>> string_init_map;
     SafeMap<uint32_t, std::set<uint32_t>>* string_init_map_ptr;
+    Locks::interpreter_string_init_map_lock_->ExclusiveLock(self);
     MethodRefToStringInitRegMap& method_to_string_init_map = Runtime::Current()->GetStringInitMap();
     auto it = method_to_string_init_map.find(method_ref);
     if (it == method_to_string_init_map.end()) {
+      Locks::interpreter_string_init_map_lock_->ExclusiveUnlock(self);
       string_init_map = std::move(verifier::MethodVerifier::FindStringInitMap(method));
+      Locks::interpreter_string_init_map_lock_->ExclusiveLock(self);
       method_to_string_init_map.Overwrite(method_ref, string_init_map);
       string_init_map_ptr = &string_init_map;
     } else {
       string_init_map_ptr = &it->second;
     }
+    Locks::interpreter_string_init_map_lock_->ExclusiveUnlock(self);
     if (string_init_map_ptr->size() != 0) {
       uint32_t dex_pc = shadow_frame.GetDexPC();
       auto map_it = string_init_map_ptr->find(dex_pc);
