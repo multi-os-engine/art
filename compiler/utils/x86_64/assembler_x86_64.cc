@@ -3122,10 +3122,13 @@ void X86_64Assembler::AddConstantArea() {
   }
 }
 
-int ConstantArea::AddInt32(int32_t v) {
-  for (size_t i = 0, e = buffer_.size(); i < e; i++) {
-    if (v == buffer_[i]) {
-      return i * elem_size_;
+int ConstantArea::AddInt32(int32_t v, bool do_not_merge) {
+  if (!do_not_merge) {
+    // Look for an existing match.
+    for (size_t i = 0, e = buffer_.size(); i < e; i++) {
+      if (v == buffer_[i]) {
+        return i * elem_size_;
+      }
     }
   }
 
