@@ -19,8 +19,8 @@ public class Main {
     System.loadLibrary(args[0]);
 
     boolean executable_correct = (isPic() ?
-                                  hasExecutableOat() == true :
-                                  hasExecutableOat() == isDex2OatEnabled());
+        hasExecutableOat() == true :
+        (hasExecutableOat() == isDex2OatEnabled() || isRelocationDeltaZero()));
 
     System.out.println(
         "dex2oat & patchoat are " + ((isDex2OatEnabled()) ? "enabled" : "disabled") +
@@ -50,4 +50,6 @@ public class Main {
   private native static boolean hasOat();
 
   private native static boolean hasExecutableOat();
+
+  private native static boolean isRelocationDeltaZero();
 }
