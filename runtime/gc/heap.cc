@@ -2764,6 +2764,7 @@ class VerifyReferenceVisitor : public SingleRootVisitor {
     if (fail_count_->FetchAndAddSequentiallyConsistent(1) == 0) {
       // Print message on only on first failure to prevent spam.
       LOG(ERROR) << "!!!!!!!!!!!!!!Heap corruption detected!!!!!!!!!!!!!!!!!!!";
+      LOG(FATAL) << "test";
     }
     if (obj != nullptr) {
       // Only do this part for non roots.
