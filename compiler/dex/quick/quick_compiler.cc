@@ -519,7 +519,10 @@ static bool CanCompileShorty(const char* shorty, InstructionSet instruction_set)
 // In the rare cases we compile experimental opcodes, the runtime has an option to enable it,
 // which will force scanning for any unsupported opcodes.
 static bool SkipScanningUnsupportedOpcodes(InstructionSet instruction_set) {
-  if (UNLIKELY(kUnsupportedOpcodesSize[instruction_set] == 0U)) {
+  if (UNLIKELY(Runtime::Current()->AreExperimentalDefaultMethodsEnabled())) {
+    // Default methods change behavior of invoke-super. We need to scan
+    return false;
+  } else if (UNLIKELY(kUnsupportedOpcodesSize[instruction_set] == 0U)) {
     // All opcodes are supported no matter what. Usually not the case
     // since experimental opcodes are not implemented in the quick compiler.
     return true;
@@ -578,6 +581,12 @@ bool QuickCompiler::CanCompileMethod(uint32_t method_idx, const DexFile& dex_fil
               << MIRGraph::extended_mir_op_names_[opcode - kMirOpFirst];
         }
         return false;
+#if 0
+      } else if (!CanCompileInstruction(mir->dalvikInsn, dex_file, cu)) {
+        // TODO Fill in CanCompileInstruction
+        VLOG(compiler) << "Cannot compile opcode : " << mir->dalvikInsn.opcode;
+        return false;
+#endif
       }
       // Check if it invokes a prototype that we cannot support.
       if (std::find(kInvokeOpcodes, kInvokeOpcodes + arraysize(kInvokeOpcodes), opcode)

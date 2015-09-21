@@ -4742,191 +4742,224 @@ const uint32_t LinkVirtualHashTable::removed_index_ = std::numeric_limits<uint32
 bool ClassLinker::LinkVirtualMethods(Thread* self,
                                      Handle<mirror::Class> klass,
                                      std::map<int32_t, ArtMethod*>* default_translations) {
-  const size_t num_virtual_methods = klass->NumVirtualMethods();
   if (klass->IsInterface()) {
-    // No vtable.
-    if (!IsUint<16>(num_virtual_methods)) {
-      ThrowClassFormatError(klass.Get(), "Too many methods on interface: %zd", num_virtual_methods);
-      return false;
-    }
-    // TODO May need to replace this with real VTable for invoke_super
-    for (size_t i = 0; i < num_virtual_methods; ++i) {
-      ArtMethod* m = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
-      m->SetMethodIndex(i);
-      if (!m->IsAbstract()) {
-        m->SetAccessFlags(m->GetAccessFlags() | kAccDefault);
-      }
-    }
-    return true;
+    return LinkVirtualMethodsOnInterface(self, klass);
   } else if (klass->HasSuperClass()) {
-    const size_t super_vtable_length = klass->GetSuperClass()->GetVTableLength();
-    const size_t max_count = num_virtual_methods + super_vtable_length;
-    StackHandleScope<2> hs(self);
-    Handle<mirror::Class> super_class(hs.NewHandle(klass->GetSuperClass()));
-    MutableHandle<mirror::PointerArray> vtable;
-    if (super_class->ShouldHaveEmbeddedImtAndVTable()) {
-      vtable = hs.NewHandle(AllocPointerArray(self, max_count));
-      if (UNLIKELY(vtable.Get() == nullptr)) {
-        self->AssertPendingOOMException();
-        return false;
-      }
-      for (size_t i = 0; i < super_vtable_length; i++) {
-        vtable->SetElementPtrSize(
-            i, super_class->GetEmbeddedVTableEntry(i, image_pointer_size_), image_pointer_size_);
-      }
-      if (num_virtual_methods == 0 && super_class->GetIfTableCount() == klass->GetIfTableCount()) {
-        klass->SetVTable(vtable.Get());
-        return true;
-      }
-    } else {
-      auto* super_vtable = super_class->GetVTable();
-      CHECK(super_vtable != nullptr) << PrettyClass(super_class.Get());
-      if (num_virtual_methods == 0 && super_class->GetIfTableCount() == klass->GetIfTableCount()) {
-        klass->SetVTable(super_vtable);
-        return true;
-      }
-      vtable = hs.NewHandle(down_cast<mirror::PointerArray*>(
-          super_vtable->CopyOf(self, max_count)));
-      if (UNLIKELY(vtable.Get() == nullptr)) {
-        self->AssertPendingOOMException();
-        return false;
-      }
-    }
-    // How the algorithm works:
-    // 1. Populate hash table by adding num_virtual_methods from klass. The values in the hash
-    // table are: invalid_index for unused slots, index super_vtable_length + i for a virtual
-    // method which has not been matched to a vtable method, and j if the virtual method at the
-    // index overrode the super virtual method at index j.
-    // 2. Loop through super virtual methods, if they overwrite, update hash table to j
-    // (j < super_vtable_length) to avoid redundant checks. (TODO maybe use this info for reducing
-    // the need for the initial vtable which we later shrink back down).
-    // 3. Add non overridden methods to the end of the vtable.
-    static constexpr size_t kMaxStackHash = 250;
-    const size_t hash_table_size = num_virtual_methods * 3 + 1;
-    uint32_t* hash_table_ptr;
-    std::unique_ptr<uint32_t[]> hash_heap_storage;
-    if (hash_table_size <= kMaxStackHash) {
-      hash_table_ptr = reinterpret_cast<uint32_t*>(
-          alloca(hash_table_size * sizeof(*hash_table_ptr)));
-    } else {
-      hash_heap_storage.reset(new uint32_t[hash_table_size]);
-      hash_table_ptr = hash_heap_storage.get();
-    }
-    LinkVirtualHashTable hash_table(klass, hash_table_size, hash_table_ptr, image_pointer_size_);
-    // Add virtual methods to the hash table.
-    for (size_t i = 0; i < num_virtual_methods; ++i) {
-      DCHECK(klass->GetVirtualMethodDuringLinking(
-          i, image_pointer_size_)->GetDeclaringClass() != nullptr);
-      hash_table.Add(i);
-    }
-    // Loop through each super vtable method and see if they are overridden by a method we added to
-    // the hash table.
-    for (size_t j = 0; j < super_vtable_length; ++j) {
-      // Search the hash table to see if we are overridden by any method.
-      ArtMethod* super_method = vtable->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_);
-      MethodNameAndSignatureComparator super_method_name_comparator(
-          super_method->GetInterfaceMethodIfProxy(image_pointer_size_));
-      uint32_t hash_index = hash_table.FindAndRemove(&super_method_name_comparator);
-      if (hash_index != hash_table.GetNotFoundIndex()) {
-        ArtMethod* virtual_method = klass->GetVirtualMethodDuringLinking(
-            hash_index, image_pointer_size_);
-        if (klass->CanAccessMember(super_method->GetDeclaringClass(),
-                                   super_method->GetAccessFlags())) {
-          if (super_method->IsFinal()) {
-            ThrowLinkageError(klass.Get(), "Method %s overrides final method in class %s",
-                              PrettyMethod(virtual_method).c_str(),
-                              super_method->GetDeclaringClassDescriptor());
-            return false;
-          }
-          vtable->SetElementPtrSize(j, virtual_method, image_pointer_size_);
-          virtual_method->SetMethodIndex(j);
-        } else {
-          LOG(WARNING) << "Before Android 4.1, method " << PrettyMethod(virtual_method)
-                       << " would have incorrectly overridden the package-private method in "
-                       << PrettyDescriptor(super_method->GetDeclaringClassDescriptor());
-        }
-      } else if (super_method->IsDefault()) {
-        // We didn't directly override this method but we might through default methods...
-        // Check for default method update.
-        ArtMethod* default_method = nullptr;
-        std::string icce_message;
-        if (!FindDefaultMethodImplementation(self, super_method, klass, &default_method,
-                                             &icce_message)) {
-          // An error occurred while finding default methods.
-          ThrowIncompatibleClassChangeError(klass.Get(), "%s", icce_message.c_str());
-          return false;
-        }
-        // This should always work because we inherit superclass interfaces. We should either get
-        //  1) An IncompatibleClassChangeError because of conflicting default method
-        //     implementations.
-        //  2) The same default method implementation as the superclass.
-        //  3) A default method that overrides the superclasses.
-        // Therefore this check should never fail.
-        CHECK(default_method != nullptr);
-        if (UNLIKELY(default_method->GetDeclaringClass() != super_method->GetDeclaringClass())) {
-          // TODO Refactor this add default methods to virtuals here and not in //
-          //      LinkInterfaceMethods maybe.
-          // Make a note that vtable entry j must be updated, store what it needs to be updated to.
-          // We will allocate a virtual method slot in LinkInterfaceMethods and fix it up then.
-          default_translations->insert({j, default_method});
-          VLOG(class_linker) << "Method " << PrettyMethod(super_method) << " overridden by default "
-                             << PrettyMethod(default_method) << " in " << PrettyClass(klass.Get());
-        } else {
-          // They are the same method/no override
-          // Cannot do direct comparison because we had to copy the ArtMethod object into the
-          // superclasses vtable.
-          continue;
-        }
-      }
-    }
-    size_t actual_count = super_vtable_length;
-    // Add the non overridden methods at the end.
-    for (size_t i = 0; i < num_virtual_methods; ++i) {
-      ArtMethod* local_method = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
-      size_t method_idx = local_method->GetMethodIndexDuringLinking();
-      if (method_idx < super_vtable_length &&
-          local_method == vtable->GetElementPtrSize<ArtMethod*>(method_idx, image_pointer_size_)) {
-        continue;
-      }
-      vtable->SetElementPtrSize(actual_count, local_method, image_pointer_size_);
-      local_method->SetMethodIndex(actual_count);
-      ++actual_count;
-    }
-    if (!IsUint<16>(actual_count)) {
-      ThrowClassFormatError(klass.Get(), "Too many methods defined on class: %zd", actual_count);
-      return false;
-    }
-    // Shrink vtable if possible
-    CHECK_LE(actual_count, max_count);
-    if (actual_count < max_count) {
-      vtable.Assign(down_cast<mirror::PointerArray*>(vtable->CopyOf(self, actual_count)));
-      if (UNLIKELY(vtable.Get() == nullptr)) {
-        self->AssertPendingOOMException();
-        return false;
-      }
-    }
-    klass->SetVTable(vtable.Get());
+    return LinkVirtualMethodsOnObjectClass(self, klass, default_translations);
   } else {
-    CHECK_EQ(klass.Get(), GetClassRoot(kJavaLangObject));
-    if (!IsUint<16>(num_virtual_methods)) {
-      ThrowClassFormatError(klass.Get(), "Too many methods: %d",
-                            static_cast<int>(num_virtual_methods));
-      return false;
+    DCHECK_EQ(klass.Get(), GetClassRoot(kJavaLangObject));
+    return LinkVirtualMethodsOnJavaLangObject(self, klass);
+  }
+}
+
+bool ClassLinker::LinkVirtualMethodsOnInterface(Thread* self, Handle<mirror::Class> klass) {
+  const size_t num_virtual_methods = klass->NumVirtualMethods();
+  // No vtable.
+  if (!IsUint<16>(num_virtual_methods)) {
+    ThrowClassFormatError(klass.Get(), "Too many methods on interface: %zd", num_virtual_methods);
+    return false;
+  }
+  // TODO Only do this if we need to.
+  auto* vtable = AllocPointerArray(self, num_virtual_methods);
+  if (UNLIKELY(vtable == nullptr)) {
+    self->AssertPendingOOMException();
+    return false;
+  }
+  bool need_vtable = false;
+  for (size_t i = 0; i < num_virtual_methods; ++i) {
+    ArtMethod* m = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
+    m->SetMethodIndex(i);
+    vtable->SetElementPtrSize(i, m, image_pointer_size_);
+    if (!m->IsAbstract()) {
+      need_vtable = true;
+      m->SetAccessFlags(m->GetAccessFlags() | kAccDefault);
     }
-    auto* vtable = AllocPointerArray(self, num_virtual_methods);
-    if (UNLIKELY(vtable == nullptr)) {
-      self->AssertPendingOOMException();
-      return false;
-    }
-    for (size_t i = 0; i < num_virtual_methods; ++i) {
-      ArtMethod* virtual_method = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
-      vtable->SetElementPtrSize(i, virtual_method, image_pointer_size_);
-      virtual_method->SetMethodIndex(i & 0xFFFF);
-    }
+  }
+  if (need_vtable) {
+    // If it is empty it should get freed eventually.
     klass->SetVTable(vtable);
   }
   return true;
 }
+
+bool ClassLinker::LinkVirtualMethodsOnObjectClass(
+    Thread* self,
+    Handle<mirror::Class> klass,
+    std::map<int32_t, ArtMethod*>* default_translations) {
+  const size_t num_virtual_methods = klass->NumVirtualMethods();
+  const size_t super_vtable_length = klass->GetSuperClass()->GetVTableLength();
+  const size_t max_count = num_virtual_methods + super_vtable_length;
+  StackHandleScope<2> hs(self);
+  Handle<mirror::Class> super_class(hs.NewHandle(klass->GetSuperClass()));
+  MutableHandle<mirror::PointerArray> vtable;
+  if (super_class->ShouldHaveEmbeddedImtAndVTable()) {
+    vtable = hs.NewHandle(AllocPointerArray(self, max_count));
+    if (UNLIKELY(vtable.Get() == nullptr)) {
+      self->AssertPendingOOMException();
+      return false;
+    }
+    for (size_t i = 0; i < super_vtable_length; i++) {
+      vtable->SetElementPtrSize(i,
+                                super_class->GetEmbeddedVTableEntry(i, image_pointer_size_),
+                                image_pointer_size_);
+    }
+    if (num_virtual_methods == 0 && super_class->GetIfTableCount() == klass->GetIfTableCount()) {
+      klass->SetVTable(vtable.Get());
+      return true;
+    }
+  } else {
+    auto* super_vtable = super_class->GetVTable();
+    CHECK(super_vtable != nullptr) << PrettyClass(super_class.Get());
+    if (num_virtual_methods == 0 && super_class->GetIfTableCount() == klass->GetIfTableCount()) {
+      klass->SetVTable(super_vtable);
+      return true;
+    }
+    vtable = hs.NewHandle(down_cast<mirror::PointerArray*>(
+        super_vtable->CopyOf(self, max_count)));
+    if (UNLIKELY(vtable.Get() == nullptr)) {
+      self->AssertPendingOOMException();
+      return false;
+    }
+  }
+  // How the algorithm works:
+  // 1. Populate hash table by adding num_virtual_methods from klass. The values in the hash
+  // table are: invalid_index for unused slots, index super_vtable_length + i for a virtual
+  // method which has not been matched to a vtable method, and j if the virtual method at the
+  // index overrode the super virtual method at index j.
+  // 2. Loop through super virtual methods, if they overwrite, update hash table to j
+  // (j < super_vtable_length) to avoid redundant checks. (TODO maybe use this info for reducing
+  // the need for the initial vtable which we later shrink back down).
+  // 3. Add non overridden methods to the end of the vtable.
+  static constexpr size_t kMaxStackHash = 250;
+  const size_t hash_table_size = num_virtual_methods * 3 + 1;
+  uint32_t* hash_table_ptr;
+  std::unique_ptr<uint32_t[]> hash_heap_storage;
+  if (hash_table_size <= kMaxStackHash) {
+    hash_table_ptr = reinterpret_cast<uint32_t*>(
+        alloca(hash_table_size * sizeof(*hash_table_ptr)));
+  } else {
+    hash_heap_storage.reset(new uint32_t[hash_table_size]);
+    hash_table_ptr = hash_heap_storage.get();
+  }
+  LinkVirtualHashTable hash_table(klass, hash_table_size, hash_table_ptr, image_pointer_size_);
+  // Add virtual methods to the hash table.
+  for (size_t i = 0; i < num_virtual_methods; ++i) {
+    DCHECK(klass->GetVirtualMethodDuringLinking(
+        i, image_pointer_size_)->GetDeclaringClass() != nullptr);
+    hash_table.Add(i);
+  }
+  // Loop through each super vtable method and see if they are overridden by a method we added to
+  // the hash table.
+  for (size_t j = 0; j < super_vtable_length; ++j) {
+    // Search the hash table to see if we are overridden by any method.
+    ArtMethod* super_method = vtable->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_);
+    MethodNameAndSignatureComparator super_method_name_comparator(
+        super_method->GetInterfaceMethodIfProxy(image_pointer_size_));
+    uint32_t hash_index = hash_table.FindAndRemove(&super_method_name_comparator);
+    if (hash_index != hash_table.GetNotFoundIndex()) {
+      ArtMethod* virtual_method = klass->GetVirtualMethodDuringLinking(
+          hash_index, image_pointer_size_);
+      if (klass->CanAccessMember(super_method->GetDeclaringClass(),
+                                  super_method->GetAccessFlags())) {
+        if (super_method->IsFinal()) {
+          ThrowLinkageError(klass.Get(), "Method %s overrides final method in class %s",
+                            PrettyMethod(virtual_method).c_str(),
+                            super_method->GetDeclaringClassDescriptor());
+          return false;
+        }
+        vtable->SetElementPtrSize(j, virtual_method, image_pointer_size_);
+        virtual_method->SetMethodIndex(j);
+      } else {
+        LOG(WARNING) << "Before Android 4.1, method " << PrettyMethod(virtual_method)
+                     << " would have incorrectly overridden the package-private method in "
+                     << PrettyDescriptor(super_method->GetDeclaringClassDescriptor());
+      }
+    } else if (super_method->IsDefault()) {
+      // We didn't directly override this method but we might through default methods...
+      // Check for default method update.
+      ArtMethod* default_method = nullptr;
+      std::string icce_message;
+      if (!FindDefaultMethodImplementation(self, super_method, klass, &default_method,
+                                           &icce_message)) {
+        // An error occurred while finding default methods.
+        ThrowIncompatibleClassChangeError(klass.Get(), "%s", icce_message.c_str());
+        return false;
+      }
+      // This should always work because we inherit superclass interfaces. We should either get
+      //  1) An IncompatibleClassChangeError because of conflicting default method
+      //     implementations.
+      //  2) The same default method implementation as the superclass.
+      //  3) A default method that overrides the superclasses.
+      // Therefore this check should never fail.
+      CHECK(default_method != nullptr);
+      if (UNLIKELY(default_method->GetDeclaringClass() != super_method->GetDeclaringClass())) {
+        // TODO Refactor this add default methods to virtuals here and not in //
+        //      LinkInterfaceMethods maybe.
+        // Make a note that vtable entry j must be updated, store what it needs to be updated to.
+        // We will allocate a virtual method slot in LinkInterfaceMethods and fix it up then.
+        default_translations->insert({j, default_method});
+        VLOG(class_linker) << "Method " << PrettyMethod(super_method) << " overridden by default "
+                           << PrettyMethod(default_method) << " in " << PrettyClass(klass.Get());
+      } else {
+        // They are the same method/no override
+        // Cannot do direct comparison because we had to copy the ArtMethod object into the
+        // superclasses vtable.
+        continue;
+      }
+    }
+  }
+  size_t actual_count = super_vtable_length;
+  // Add the non overridden methods at the end.
+  for (size_t i = 0; i < num_virtual_methods; ++i) {
+    ArtMethod* local_method = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
+    size_t method_idx = local_method->GetMethodIndexDuringLinking();
+    if (method_idx < super_vtable_length &&
+        local_method == vtable->GetElementPtrSize<ArtMethod*>(method_idx, image_pointer_size_)) {
+      continue;
+    }
+    vtable->SetElementPtrSize(actual_count, local_method, image_pointer_size_);
+    local_method->SetMethodIndex(actual_count);
+    ++actual_count;
+  }
+  if (!IsUint<16>(actual_count)) {
+    ThrowClassFormatError(klass.Get(), "Too many methods defined on class: %zd", actual_count);
+    return false;
+  }
+  // Shrink vtable if possible
+  CHECK_LE(actual_count, max_count);
+  if (actual_count < max_count) {
+    vtable.Assign(down_cast<mirror::PointerArray*>(vtable->CopyOf(self, actual_count)));
+    if (UNLIKELY(vtable.Get() == nullptr)) {
+      self->AssertPendingOOMException();
+      return false;
+    }
+  }
+  klass->SetVTable(vtable.Get());
+  return true;
+}
+
+bool ClassLinker::LinkVirtualMethodsOnJavaLangObject(Thread* self, Handle<mirror::Class> klass) {
+  const size_t num_virtual_methods = klass->NumVirtualMethods();
+  CHECK_EQ(klass.Get(), GetClassRoot(kJavaLangObject));
+  if (!IsUint<16>(num_virtual_methods)) {
+    ThrowClassFormatError(klass.Get(), "Too many methods: %d",
+                          static_cast<int>(num_virtual_methods));
+    return false;
+  }
+  auto* vtable = AllocPointerArray(self, num_virtual_methods);
+  if (UNLIKELY(vtable == nullptr)) {
+    self->AssertPendingOOMException();
+    return false;
+  }
+  for (size_t i = 0; i < num_virtual_methods; ++i) {
+    ArtMethod* virtual_method = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
+    vtable->SetElementPtrSize(i, virtual_method, image_pointer_size_);
+    virtual_method->SetMethodIndex(i & 0xFFFF);
+  }
+  klass->SetVTable(vtable);
+  return true;
+}
+
 
 // Find the default method implementation for 'interface_method' in 'klass'. Stores it into
 // out_default_method and returns true on success. If no default method was found stores nullptr

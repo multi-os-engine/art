@@ -724,6 +724,17 @@ class ClassLinker {
                           std::map<int32_t, ArtMethod*>* default_translations)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  bool LinkVirtualMethodsOnInterface(Thread* self, Handle<mirror::Class> klass)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  bool LinkVirtualMethodsOnObjectClass(Thread* self,
+                                       Handle<mirror::Class> klass,
+                                       std::map<int32_t, ArtMethod*>* default_translations)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  bool LinkVirtualMethodsOnJavaLangObject(Thread* self, Handle<mirror::Class> klass)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   bool SetupInterfaceLookupTable(Thread* self,
                                  Handle<mirror::Class> klass,
                                  Handle<mirror::ObjectArray<mirror::Class>> interfaces)

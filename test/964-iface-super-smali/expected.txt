@@ -1,0 +1,76 @@
+Beginning repetition 0
+Testing for type A
+A-virtual           A.SayHi()='Hello '
+A-interface     iface.SayHi()='Hello '
+End testing for type A
+Testing for type B
+B-virtual           B.SayHi()='Hello Hello '
+B-interface     iface.SayHi()='Hello Hello '
+B-interface    iface2.SayHi()='Hello Hello '
+End testing for type B
+Testing for type C
+C-virtual           C.SayHi()='Hello  and welcome '
+C-interface     iface.SayHi()='Hello  and welcome '
+End testing for type C
+Testing for type D
+D-virtual           D.SayHi()='Hello Hello  and welcome '
+D-interface     iface.SayHi()='Hello Hello  and welcome '
+D-interface    iface2.SayHi()='Hello Hello  and welcome '
+End testing for type D
+Beginning repetition 1
+Testing for type A
+A-virtual           A.SayHi()='Hello '
+A-interface     iface.SayHi()='Hello '
+End testing for type A
+Testing for type B
+B-virtual           B.SayHi()='Hello Hello '
+B-interface     iface.SayHi()='Hello Hello '
+B-interface    iface2.SayHi()='Hello Hello '
+End testing for type B
+Testing for type C
+C-virtual           C.SayHi()='Hello  and welcome '
+C-interface     iface.SayHi()='Hello  and welcome '
+End testing for type C
+Testing for type D
+D-virtual           D.SayHi()='Hello Hello  and welcome '
+D-interface     iface.SayHi()='Hello Hello  and welcome '
+D-interface    iface2.SayHi()='Hello Hello  and welcome '
+End testing for type D
+Beginning repetition 2
+Testing for type A
+A-virtual           A.SayHi()='Hello '
+A-interface     iface.SayHi()='Hello '
+End testing for type A
+Testing for type B
+B-virtual           B.SayHi()='Hello Hello '
+B-interface     iface.SayHi()='Hello Hello '
+B-interface    iface2.SayHi()='Hello Hello '
+End testing for type B
+Testing for type C
+C-virtual           C.SayHi()='Hello  and welcome '
+C-interface     iface.SayHi()='Hello  and welcome '
+End testing for type C
+Testing for type D
+D-virtual           D.SayHi()='Hello Hello  and welcome '
+D-interface     iface.SayHi()='Hello Hello  and welcome '
+D-interface    iface2.SayHi()='Hello Hello  and welcome '
+End testing for type D
+Beginning repetition 3
+Testing for type A
+A-virtual           A.SayHi()='Hello '
+A-interface     iface.SayHi()='Hello '
+End testing for type A
+Testing for type B
+B-virtual           B.SayHi()='Hello Hello '
+B-interface     iface.SayHi()='Hello Hello '
+B-interface    iface2.SayHi()='Hello Hello '
+End testing for type B
+Testing for type C
+C-virtual           C.SayHi()='Hello  and welcome '
+C-interface     iface.SayHi()='Hello  and welcome '
+End testing for type C
+Testing for type D
+D-virtual           D.SayHi()='Hello Hello  and welcome '
+D-interface     iface.SayHi()='Hello Hello  and welcome '
+D-interface    iface2.SayHi()='Hello Hello  and welcome '
+End testing for type D

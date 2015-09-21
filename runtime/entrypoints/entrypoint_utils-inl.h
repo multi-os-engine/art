@@ -484,23 +484,40 @@ inline ArtMethod* FindMethodFromCode(uint32_t method_idx, mirror::Object** this_
       return klass->GetVTableEntry(vtable_index, class_linker->GetImagePointerSize());
     }
     case kSuper: {
-      mirror::Class* super_class = referrer->GetDeclaringClass()->GetSuperClass();
+      bool is_interface;
+      mirror::Class* called_class;
+      mirror::Class* methods_class = resolved_method->GetDeclaringClass();
+
+      if (methods_class->IsInterface()) {
+        is_interface = true;
+        if (!methods_class->IsAssignableFrom(referrer->GetDeclaringClass())) {
+          ThrowIncompatibleClassChangeErrorClassForInterfaceDispatch(resolved_method,
+                                                                     *this_object,
+                                                                     referrer);
+          return nullptr;
+        }
+        called_class = methods_class;
+      } else {
+        is_interface = false;
+        called_class = referrer->GetDeclaringClass()->GetSuperClass();
+      }
+
       uint16_t vtable_index = resolved_method->GetMethodIndex();
-      if (access_check) {
+      if (access_check || is_interface) {
         // Check existence of super class.
-        if (super_class == nullptr || !super_class->HasVTable() ||
-            vtable_index >= static_cast<uint32_t>(super_class->GetVTableLength())) {
+        if (called_class == nullptr || !called_class->HasVTable() ||
+            vtable_index >= static_cast<uint32_t>(called_class->GetVTableLength())) {
           // Behavior to agree with that of the verifier.
           ThrowNoSuchMethodError(type, resolved_method->GetDeclaringClass(),
-                                 resolved_method->GetName(), resolved_method->GetSignature());
+                                resolved_method->GetName(), resolved_method->GetSignature());
           return nullptr;  // Failure.
         }
       } else {
         // Super class must exist.
-        DCHECK(super_class != nullptr);
+        DCHECK(called_class != nullptr);
       }
-      DCHECK(super_class->HasVTable());
-      return super_class->GetVTableEntry(vtable_index, class_linker->GetImagePointerSize());
+      DCHECK(called_class->HasVTable());
+      return called_class->GetVTableEntry(vtable_index, class_linker->GetImagePointerSize());
     }
     case kInterface: {
       uint32_t imt_index = resolved_method->GetDexMethodIndex() % mirror::Class::kImtSize;
