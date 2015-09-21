@@ -538,6 +538,64 @@ ArtMethod* Class::FindVirtualMethod(
   return nullptr;
 }
 
+ArtMethod* Class::FindVirtualMethodForInterfaceSuper(ArtMethod* method, size_t pointer_size) {
+  DCHECK(method->GetDeclaringClass()->IsInterface());
+  DCHECK(IsInterface()) << "Should only be called on a interface class";
+  // Check if we have one defined on this interface first. This includes searching copied ones to
+  // get any conflict methods.
+  for (ArtMethod& iface_method : GetVirtualMethods(pointer_size)) {
+    if (method->HasSameNameAndSignature(&iface_method)) {
+      return &iface_method;
+    }
+  }
+
+  std::vector<ArtMethod*> abstract_methods;
+  // Search through the IFTable for a working version. We don't need to check for conflicts
+  // because if there was one it would appear in this classes virtual_methods_ above.
+
+  Thread* self = Thread::Current();
+  StackHandleScope<2> hs(self);
+  MutableHandle<mirror::IfTable> iftable(hs.NewHandle(GetIfTable()));
+  MutableHandle<mirror::Class> iface(hs.NewHandle<mirror::Class>(nullptr));
+  size_t iftable_count = GetIfTableCount();
+  // Find the method. We don't need to check for conflicts because they would have been in the
+  // copied virtuals of this interface.
+  for (size_t k = iftable_count; k != 0;) {
+    k--;
+    DCHECK_LT(k, iftable->Count());
+    iface.Assign(iftable->GetInterface(k));
+    // Iterate through every declared method on this interface. The order does not matter.
+    for (auto& method_iter : iface->GetDeclaredVirtualMethods(pointer_size)) {
+      ArtMethod* current_method = &method_iter;
+      if (current_method->HasSameNameAndSignature(method)) {
+        if (current_method->IsDefault()) {
+          // Check if overridden by any in abstract_methods. We do not need to check for
+          // default_conflicts because we would hit those before we get to this loop.
+          bool overridden = false;
+          for (ArtMethod* possible_override : abstract_methods) {
+            DCHECK(possible_override->HasSameNameAndSignature(current_method));
+            if (iface->IsAssignableFrom(possible_override->GetDeclaringClass())) {
+              overridden = true;
+              break;
+            }
+          }
+          if (!overridden) {
+            return current_method;
+          }
+        } else {
+          // This might override another default method. Just stash it for now.
+          abstract_methods.push_back(current_method);
+        }
+      }
+    }
+  }
+  // If we reach here we either never found any declaration of the method (in which case
+  // 'abstract_methods' is empty or we found no non-overriden default methods in which case
+  // 'abstract_methods' contains a number of abstract implementations of the methods. We choose one
+  // of these arbitrarily.
+  return abstract_methods.empty() ? nullptr : abstract_methods[0];
+}
+
 ArtMethod* Class::FindClassInitializer(size_t pointer_size) {
   for (ArtMethod& method : GetDirectMethods(pointer_size)) {
     if (method.IsClassInitializer()) {
