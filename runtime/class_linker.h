@@ -901,6 +901,13 @@ class ClassLinker {
           ArtMethod** out_imt)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  void FillImtFromSuperClass(Handle<mirror::Class> klass,
+                             Handle<mirror::IfTable> iftable,
+                             ArtMethod* unimplemented_method,
+                             ArtMethod* imt_conflict_method,
+                             ArtMethod** out_imt)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   bool LinkStaticFields(Thread* self, Handle<mirror::Class> klass, size_t* class_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
   bool LinkInstanceFields(Thread* self, Handle<mirror::Class> klass)
