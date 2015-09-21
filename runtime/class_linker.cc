@@ -4629,7 +4629,6 @@ bool ClassLinker::LinkVirtualMethods(
       return false;
     }
     bool has_defaults = false;
-    // TODO May need to replace this with real VTable for invoke_super
     // Assign each method an IMT index and set the default flag.
     for (size_t i = 0; i < num_virtual_methods; ++i) {
       ArtMethod* m = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
@@ -4644,6 +4643,18 @@ bool ClassLinker::LinkVirtualMethods(
     // virtual_methods_ array again during initialization.
     if (has_defaults) {
       klass->SetHasDefaultMethods();
+      // Only do this if we need to.
+      auto* vtable = AllocPointerArray(self, num_virtual_methods);
+      if (UNLIKELY(vtable == nullptr)) {
+        self->AssertPendingOOMException();
+        return false;
+      }
+      for (size_t i = 0; i < num_virtual_methods; ++i) {
+        ArtMethod* m = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
+        DCHECK_EQ(m->GetMethodIndexDuringLinking(), i);
+        vtable->SetElementPtrSize(i, m, image_pointer_size_);
+      }
+      klass->SetVTable(vtable);
     }
     return true;
   } else if (klass->HasSuperClass()) {
@@ -5266,6 +5277,7 @@ bool ClassLinker::LinkInterfaceMethods(
   MutableHandle<mirror::IfTable> iftable(hs.NewHandle(klass->GetIfTable()));
 
   // If we're an interface, we don't need the vtable pointers, so we're done.
+  // TODO We need to fill in these even if we are interfaces...
   if (klass->IsInterface()) {
     return true;
   }
@@ -6169,6 +6181,7 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
         case kInterface:
         case kVirtual:
         case kSuper:
+          // TODO Correct this.
           resolved = klass->FindDirectMethod(name, signature, image_pointer_size_);
           break;
       }

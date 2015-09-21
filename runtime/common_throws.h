@@ -29,10 +29,14 @@ class ArtField;
 class ArtMethod;
 class Signature;
 class StringPiece;
+class DexFile;
 
 // AbstractMethodError
 
 void ThrowAbstractMethodError(ArtMethod* method)
+    SHARED_REQUIRES(Locks::mutator_lock_) COLD_ATTR;
+
+void ThrowAbstractMethodError(uint32_t method_idx, const DexFile& dex_file)
     SHARED_REQUIRES(Locks::mutator_lock_) COLD_ATTR;
 
 // ArithmeticException

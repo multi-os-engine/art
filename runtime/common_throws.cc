@@ -84,6 +84,12 @@ void ThrowAbstractMethodError(ArtMethod* method) {
                               PrettyMethod(method).c_str()).c_str());
 }
 
+void ThrowAbstractMethodError(uint32_t method_idx, const DexFile& dex_file) {
+  ThrowException("Ljava/lang/AbstractMethodError;", nullptr,
+                 StringPrintf("abstract method \"%s\"",
+                              PrettyMethod(method_idx, dex_file, true).c_str()).c_str());
+}
+
 // ArithmeticException
 
 void ThrowArithmeticExceptionDivideByZero() {

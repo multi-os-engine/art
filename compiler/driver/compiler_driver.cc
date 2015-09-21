@@ -1592,6 +1592,7 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
                                        InvokeType* invoke_type, MethodReference* target_method,
                                        int* vtable_idx, uintptr_t* direct_code,
                                        uintptr_t* direct_method) {
+  // TODO Have this check for new invoke-super behavior and punt for optimizing.
   InvokeType orig_invoke_type = *invoke_type;
   int stats_flags = 0;
   ScopedObjectAccess soa(Thread::Current());

@@ -106,17 +106,17 @@ size_t ArtMethod::NumArgRegisters(const StringPiece& shorty) {
   return num_registers;
 }
 
-static bool HasSameNameAndSignature(ArtMethod* method1, ArtMethod* method2)
+bool ArtMethod::HasSameNameAndSignature(ArtMethod* other)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedAssertNoThreadSuspension ants(Thread::Current(), "HasSameNameAndSignature");
-  const DexFile* dex_file = method1->GetDexFile();
-  const DexFile::MethodId& mid = dex_file->GetMethodId(method1->GetDexMethodIndex());
-  if (method1->GetDexCache() == method2->GetDexCache()) {
-    const DexFile::MethodId& mid2 = dex_file->GetMethodId(method2->GetDexMethodIndex());
+  const DexFile* dex_file = GetDexFile();
+  const DexFile::MethodId& mid = dex_file->GetMethodId(GetDexMethodIndex());
+  if (GetDexCache() == other->GetDexCache()) {
+    const DexFile::MethodId& mid2 = dex_file->GetMethodId(other->GetDexMethodIndex());
     return mid.name_idx_ == mid2.name_idx_ && mid.proto_idx_ == mid2.proto_idx_;
   }
-  const DexFile* dex_file2 = method2->GetDexFile();
-  const DexFile::MethodId& mid2 = dex_file2->GetMethodId(method2->GetDexMethodIndex());
+  const DexFile* dex_file2 = other->GetDexFile();
+  const DexFile::MethodId& mid2 = dex_file2->GetMethodId(other->GetDexMethodIndex());
   if (!DexFileStringEquals(dex_file, mid.name_idx_, dex_file2, mid2.name_idx_)) {
     return false;  // Name mismatch.
   }
@@ -145,21 +145,28 @@ ArtMethod* ArtMethod::FindOverriddenMethod(size_t pointer_size) {
                Runtime::Current()->GetClassLinker()->FindMethodForProxy(GetDeclaringClass(), this));
     } else {
       mirror::IfTable* iftable = GetDeclaringClass()->GetIfTable();
-      for (size_t i = 0; i < iftable->Count() && result == nullptr; i++) {
+      size_t ifcount = iftable->Count();
+      if (ifcount == 0) {
+        return nullptr;
+      }
+      for (size_t i = ifcount - 1; result == nullptr; --i) {
         mirror::Class* interface = iftable->GetInterface(i);
         for (size_t j = 0; j < interface->NumVirtualMethods(); ++j) {
           ArtMethod* interface_method = interface->GetVirtualMethod(j, pointer_size);
-          if (HasSameNameAndSignature(
-              this, interface_method->GetInterfaceMethodIfProxy(sizeof(void*)))) {
+          if (HasSameNameAndSignature(interface_method->GetInterfaceMethodIfProxy(sizeof(void*)))) {
             result = interface_method;
             break;
           }
         }
+        if (i == 0) {
+          break;
+        }
       }
     }
   }
-  DCHECK(result == nullptr || HasSameNameAndSignature(
-      GetInterfaceMethodIfProxy(sizeof(void*)), result->GetInterfaceMethodIfProxy(sizeof(void*))));
+  DCHECK(result == nullptr ||
+         GetInterfaceMethodIfProxy(sizeof(void*))->HasSameNameAndSignature(
+             result->GetInterfaceMethodIfProxy(sizeof(void*))));
   return result;
 }
 

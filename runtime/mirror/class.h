@@ -799,6 +799,11 @@ class MANAGED Class FINAL : public Object {
   ArtMethod* FindVirtualMethodForSuper(ArtMethod* method, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Given a method from some implementor of this interface, return the specific implementation
+  // method for this class.
+  ArtMethod* FindVirtualMethodForInterfaceSuper(ArtMethod* method, size_t pointer_size)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   // Given a method implemented by this class, but potentially from a
   // super class or interface, return the specific implementation
   // method for this class.
