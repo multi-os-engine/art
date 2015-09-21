@@ -538,6 +538,20 @@ ArtMethod* Class::FindVirtualMethod(
   return nullptr;
 }
 
+// TODO This needs to be rewritten to support not having an iftable on interfaces.
+ArtMethod* Class::FindVirtualMethodForInterfaceSuper(ArtMethod* method, size_t pointer_size) {
+  DCHECK(method->GetDeclaringClass()->IsInterface());
+  DCHECK(IsInterface()) << "Should only be called on a interface class";
+  // Check if we have one defined on this interface first
+  for (ArtMethod& iface_method : GetDeclaredVirtualMethods(pointer_size)) {
+    if (method->HasSameNameAndSignature(&iface_method)) {
+      return &iface_method;
+    }
+  }
+  // We will get it from our iftable.
+  return FindVirtualMethodForInterface(method, pointer_size);
+}
+
 ArtMethod* Class::FindClassInitializer(size_t pointer_size) {
   for (ArtMethod& method : GetDirectMethods(pointer_size)) {
     if (method.IsClassInitializer()) {
