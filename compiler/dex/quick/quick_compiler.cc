@@ -520,7 +520,11 @@ static bool CanCompileShorty(const char* shorty, InstructionSet instruction_set)
 // In the rare cases we compile experimental opcodes, the runtime has an option to enable it,
 // which will force scanning for any unsupported opcodes.
 static bool SkipScanningUnsupportedOpcodes(InstructionSet instruction_set) {
-  if (UNLIKELY(kUnsupportedOpcodesSize[instruction_set] == 0U)) {
+  if (UNLIKELY(Runtime::Current()->
+                  AreExperimentalFlagsEnabled(ExperimentalFlags::kDefaultMethods))) {
+    // Default methods change behavior of invoke-super. We need to scan
+    return false;
+  } else if (UNLIKELY(kUnsupportedOpcodesSize[instruction_set] == 0U)) {
     // All opcodes are supported no matter what. Usually not the case
     // since experimental opcodes are not implemented in the quick compiler.
     return true;
@@ -538,8 +542,27 @@ static bool SkipScanningUnsupportedOpcodes(InstructionSet instruction_set) {
   }
 }
 
+bool QuickCompiler::CanCompileInstruction(const MIR* mir,
+                                          const DexFile& dex_file) const {
+  switch (mir->dalvikInsn.opcode) {
+    // The quick compiler is not getting these new instruction semantics
+    case Instruction::INVOKE_SUPER:  // Fall-through
+    case Instruction::INVOKE_SUPER_RANGE: {
+      DCHECK(mir->dalvikInsn.IsInvoke());
+      uint32_t invoke_method_idx = mir->dalvikInsn.vB;
+      const DexFile::MethodId& method_id = dex_file.GetMethodId(invoke_method_idx);
+      const DexFile::ClassDef* class_def = dex_file.FindClassDef(method_id.class_idx_);
+      // False if we are an interface i.e. !(java_access_flags & kAccInterface)
+      return class_def != nullptr && ((class_def->GetJavaAccessFlags() & kAccInterface) == 0);
+    }
+    default:
+      return true;
+  }
+}
+
 // Skip the method that we do not support currently.
-bool QuickCompiler::CanCompileMethod(uint32_t method_idx, const DexFile& dex_file,
+bool QuickCompiler::CanCompileMethod(uint32_t method_idx,
+                                     const DexFile& dex_file,
                                      CompilationUnit* cu) const {
   // This is a limitation in mir_graph. See MirGraph::SetNumSSARegs.
   if (cu->mir_graph->GetNumOfCodeAndTempVRs() > kMaxAllowedDalvikRegisters) {
@@ -579,6 +602,9 @@ bool QuickCompiler::CanCompileMethod(uint32_t method_idx, const DexFile& dex_fil
           VLOG(compiler) << "Unsupported extended MIR opcode : "
               << MIRGraph::extended_mir_op_names_[opcode - kMirOpFirst];
         }
+        return false;
+      } else if (!CanCompileInstruction(mir, dex_file)) {
+        VLOG(compiler) << "Cannot compile opcode : " << mir->dalvikInsn.opcode;
         return false;
       }
       // Check if it invokes a prototype that we cannot support.
