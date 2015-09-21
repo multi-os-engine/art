@@ -532,6 +532,7 @@ inline uint32_t Class::GetAccessFlags() {
       << " IsErroneous=" <<
           IsErroneous<static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis)>()
       << " IsString=" << (this == String::GetJavaLangString())
+      << " status= " << GetStatus<kVerifyFlags>()
       << " descriptor=" << PrettyDescriptor(this);
   return GetField32<kVerifyFlags>(AccessFlagsOffset());
 }
