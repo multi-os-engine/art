@@ -735,6 +735,9 @@ run_file_size_limit=2048
 if echo "$test_dir" | grep -Eq "(083|089|964)" > /dev/null; then
   build_file_size_limit=5120
   run_file_size_limit=5120
+elif echo "$test_dir" | grep 971 >/dev/null; then
+  build_file_size_limit=5120
+  run_file_size_limit=5120
 fi
 if [ "$run_checker" = "yes" -a "$target_mode" = "yes" ]; then
   # We will need to `adb pull` the .cfg output from the target onto the host to
