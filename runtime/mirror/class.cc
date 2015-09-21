@@ -362,10 +362,17 @@ ArtMethod* Class::FindInterfaceMethod(const StringPiece& name, const StringPiece
 
   int32_t iftable_count = GetIfTableCount();
   IfTable* iftable = GetIfTable();
-  for (int32_t i = 0; i < iftable_count; ++i) {
+  if (iftable_count == 0) {
+    return nullptr;
+  }
+  for (int32_t i = iftable_count - 1; ; --i) {
+    DCHECK_LT(i, iftable_count);
     method = iftable->GetInterface(i)->FindDeclaredVirtualMethod(name, signature, pointer_size);
     if (method != nullptr) {
       return method;
+    }
+    if (i == 0) {
+      break;
     }
   }
   return nullptr;
@@ -381,10 +388,17 @@ ArtMethod* Class::FindInterfaceMethod(const StringPiece& name, const Signature& 
 
   int32_t iftable_count = GetIfTableCount();
   IfTable* iftable = GetIfTable();
-  for (int32_t i = 0; i < iftable_count; ++i) {
+  if (iftable_count == 0) {
+    return nullptr;
+  }
+  for (int32_t i = iftable_count - 1; ; --i) {
+    DCHECK_LT(i, iftable_count);
     method = iftable->GetInterface(i)->FindDeclaredVirtualMethod(name, signature, pointer_size);
     if (method != nullptr) {
       return method;
+    }
+    if (i == 0) {
+      break;
     }
   }
   return nullptr;
@@ -400,11 +414,18 @@ ArtMethod* Class::FindInterfaceMethod(const DexCache* dex_cache, uint32_t dex_me
 
   int32_t iftable_count = GetIfTableCount();
   IfTable* iftable = GetIfTable();
-  for (int32_t i = 0; i < iftable_count; ++i) {
+  if (iftable_count == 0) {
+    return nullptr;
+  }
+  for (int32_t i = iftable_count - 1; ; --i) {
+    DCHECK_LT(i, iftable_count);
     method = iftable->GetInterface(i)->FindDeclaredVirtualMethod(
         dex_cache, dex_method_idx, pointer_size);
     if (method != nullptr) {
       return method;
+    }
+    if (i == 0) {
+      break;
     }
   }
   return nullptr;
@@ -549,6 +570,34 @@ ArtMethod* Class::FindVirtualMethod(
     ArtMethod* method = klass->FindDeclaredVirtualMethod(dex_cache, dex_method_idx, pointer_size);
     if (method != nullptr) {
       return method;
+    }
+  }
+  return nullptr;
+}
+
+ArtMethod* Class::FindVirtualMethodForInterfaceSuper(
+    ArtMethod* method, size_t pointer_size) {
+  DCHECK(IsInterface()) << "Should only be called on a interface class";
+  // Check if we have one defined on this interface first
+  for (ArtMethod& iface_method : GetVirtualMethods(pointer_size)) {
+    if (iface_method.IsDefault() && method->HasSameNameAndSignature(&iface_method)) {
+      return &iface_method;
+    }
+  }
+  size_t ifcount = GetIfTableCount();
+  if (ifcount == 0) {
+    return nullptr;
+  }
+  IfTable* iftable = GetIfTable();
+  for (size_t i = ifcount - 1; ; --i) {
+    mirror::Class* interface = iftable->GetInterface(i);
+    for (ArtMethod& iface_method : interface->GetVirtualMethods(pointer_size)) {
+      if (iface_method.IsDefault() && method->HasSameNameAndSignature(&iface_method)) {
+        return &iface_method;
+      }
+    }
+    if (i == 0) {
+      break;
     }
   }
   return nullptr;
