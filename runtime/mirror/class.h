@@ -343,7 +343,7 @@ class MANAGED Class FINAL : public Object {
   // be replaced with a class with the right size for embedded imt/vtable.
   bool IsTemp() SHARED_REQUIRES(Locks::mutator_lock_) {
     Status s = GetStatus();
-    return s < Status::kStatusResolving && ShouldHaveEmbeddedImtAndVTable();
+    return s < Status::kStatusResolving && (ShouldHaveEmbeddedImt() || ShouldHaveEmbeddedVTable());
   }
 
   String* GetName() SHARED_REQUIRES(Locks::mutator_lock_);  // Returns the cached name.
@@ -752,8 +752,18 @@ class MANAGED Class FINAL : public Object {
     return MemberOffset(sizeof(Class));
   }
 
-  bool ShouldHaveEmbeddedImtAndVTable() SHARED_REQUIRES(Locks::mutator_lock_) {
+  bool ShouldHaveEmbeddedVTable() SHARED_REQUIRES(Locks::mutator_lock_) {
     return IsInstantiable();
+  }
+
+  bool ShouldHaveEmbeddedImt() SHARED_REQUIRES(Locks::mutator_lock_) {
+    // TODO Should have this sometimes (always?) return true for interfaces so we can do a fast-path
+    // interface-super lookup.
+    return ShouldHaveEmbeddedVTable();
+  }
+
+  bool ShouldHaveEmbeddedImtAndVTable() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return ShouldHaveEmbeddedVTable() && ShouldHaveEmbeddedImt();
   }
 
   bool HasVTable() SHARED_REQUIRES(Locks::mutator_lock_);
@@ -788,6 +798,9 @@ class MANAGED Class FINAL : public Object {
 
   void PopulateEmbeddedImtAndVTable(ArtMethod* const (&methods)[kImtSize], size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
+  void PopulateEmbeddedImt(ArtMethod* const (&methods)[kImtSize], size_t pointer_size)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  void PopulateEmbeddedVTable(size_t pointer_size) SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Given a method implemented by this class but potentially from a super class, return the
   // specific implementation method for this class.
@@ -797,6 +810,11 @@ class MANAGED Class FINAL : public Object {
   // Given a method implemented by this class' super class, return the specific implementation
   // method for this class.
   ArtMethod* FindVirtualMethodForSuper(ArtMethod* method, size_t pointer_size)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Given a method from some implementor of this interface, return the specific implementation
+  // method for this class.
+  ArtMethod* FindVirtualMethodForInterfaceSuper(ArtMethod* method, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Given a method implemented by this class, but potentially from a
@@ -1009,7 +1027,7 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   pid_t GetClinitThreadId() SHARED_REQUIRES(Locks::mutator_lock_) {
-    DCHECK(IsIdxLoaded() || IsErroneous());
+    DCHECK(IsIdxLoaded() || IsErroneous()) << PrettyClass(this);
     return GetField32(OFFSET_OF_OBJECT_MEMBER(Class, clinit_thread_id_));
   }
 

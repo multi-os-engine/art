@@ -1450,7 +1450,7 @@ void ImageWriter::FixupClass(mirror::Class* orig, mirror::Class* copy) {
   // Fix up embedded tables.
   if (!orig->IsTemp()) {
     // TODO: Why do we have temp classes in some cases?
-    if (orig->ShouldHaveEmbeddedImtAndVTable()) {
+    if (orig->ShouldHaveEmbeddedVTable()) {
       for (int32_t i = 0; i < orig->GetEmbeddedVTableLength(); ++i) {
         ArtMethod* orig_method = orig->GetEmbeddedVTableEntry(i, target_ptr_size_);
         copy->SetEmbeddedVTableEntryUnchecked(
@@ -1458,6 +1458,8 @@ void ImageWriter::FixupClass(mirror::Class* orig, mirror::Class* copy) {
             NativeLocationInImage(orig_method),
             target_ptr_size_);
       }
+    }
+    if (orig->ShouldHaveEmbeddedImt()) {
       for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
         copy->SetEmbeddedImTableEntry(
             i,

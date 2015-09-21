@@ -536,6 +536,21 @@ ArtMethod* Class::FindVirtualMethod(
   return nullptr;
 }
 
+// TODO Fix this.
+ArtMethod* Class::FindVirtualMethodForInterfaceSuper(
+    ArtMethod* method, size_t pointer_size) {
+  DCHECK(method->GetDeclaringClass()->IsInterface());
+  DCHECK(IsInterface()) << "Should only be called on a interface class";
+  // Check if we have one defined on this interface first
+  for (ArtMethod& iface_method : GetVirtualMethods(pointer_size)) {
+    if (method->HasSameNameAndSignature(&iface_method)) {
+      return &iface_method;
+    }
+  }
+  // We will get it from our iftable.
+  return FindVirtualMethodForInterface(method, pointer_size);
+}
+
 ArtMethod* Class::FindClassInitializer(size_t pointer_size) {
   for (ArtMethod& method : GetDirectMethods(pointer_size)) {
     if (method.IsClassInitializer()) {
@@ -831,11 +846,19 @@ const DexFile::TypeList* Class::GetInterfaceTypeList() {
 
 void Class::PopulateEmbeddedImtAndVTable(ArtMethod* const (&methods)[kImtSize],
                                          size_t pointer_size) {
+  PopulateEmbeddedImt(methods, pointer_size);
+  PopulateEmbeddedVTable(pointer_size);
+}
+
+void Class::PopulateEmbeddedImt(ArtMethod* const (&methods)[kImtSize], size_t pointer_size) {
   for (size_t i = 0; i < kImtSize; i++) {
     auto method = methods[i];
     DCHECK(method != nullptr);
     SetEmbeddedImTableEntry(i, method, pointer_size);
   }
+}
+
+void Class::PopulateEmbeddedVTable(size_t pointer_size) {
   PointerArray* table = GetVTableDuringLinking();
   CHECK(table != nullptr) << PrettyClass(this);
   const size_t table_length = table->GetLength();
@@ -894,7 +917,12 @@ class CopyClassVisitor {
     Handle<mirror::Class> h_new_class_obj(hs.NewHandle(obj->AsClass()));
     mirror::Object::CopyObject(self_, h_new_class_obj.Get(), orig_->Get(), copy_bytes_);
     mirror::Class::SetStatus(h_new_class_obj, Class::kStatusResolving, self_);
-    h_new_class_obj->PopulateEmbeddedImtAndVTable(imt_, pointer_size_);
+    if (h_new_class_obj->ShouldHaveEmbeddedImt()) {
+      h_new_class_obj->PopulateEmbeddedImt(imt_, pointer_size_);
+    }
+    if (h_new_class_obj->ShouldHaveEmbeddedVTable()) {
+      h_new_class_obj->PopulateEmbeddedVTable(pointer_size_);
+    }
     h_new_class_obj->SetClassSize(new_length_);
     // Visit all of the references to make sure there is no from space references in the native
     // roots.

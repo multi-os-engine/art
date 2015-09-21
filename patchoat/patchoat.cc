@@ -696,12 +696,14 @@ void PatchOat::VisitObject(mirror::Object* object) {
         }
       }
     }
-    if (klass->ShouldHaveEmbeddedImtAndVTable()) {
-      const size_t pointer_size = InstructionSetPointerSize(isa_);
+    const size_t pointer_size = InstructionSetPointerSize(isa_);
+    if (klass->ShouldHaveEmbeddedVTable()) {
       for (int32_t i = 0; i < klass->GetEmbeddedVTableLength(); ++i) {
         copy_klass->SetEmbeddedVTableEntryUnchecked(i, RelocatedAddressOfPointer(
             klass->GetEmbeddedVTableEntry(i, pointer_size)), pointer_size);
       }
+    }
+    if (klass->ShouldHaveEmbeddedImt()) {
       for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
         copy_klass->SetEmbeddedImTableEntry(i, RelocatedAddressOfPointer(
             klass->GetEmbeddedImTableEntry(i, pointer_size)), pointer_size);

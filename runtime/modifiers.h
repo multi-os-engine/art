@@ -59,7 +59,9 @@ static constexpr uint32_t kAccDefaultConflict =      0x00800000;  // method (run
 // Interface and all its super-interfaces with default methods have been recursively initialized.
 static constexpr uint32_t kAccRecursivelyInitialized    = 0x20000000;
 // Interface declares some default method.
-static constexpr uint32_t kAccHasDefaultMethod          = 0x40000000;
+static constexpr uint32_t kAccHasDefaultMethod          = 0x40000000;  // class (runtime)
+// This is a flag on methods that indicates that it is part of some type
+static constexpr uint32_t kAccDefaultCopied             = 0x40000000;  // method (runtime)
 // class/ancestor overrides finalize()
 static constexpr uint32_t kAccClassIsFinalizable        = 0x80000000;
 

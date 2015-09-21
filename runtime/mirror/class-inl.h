@@ -163,29 +163,29 @@ inline MemberOffset Class::EmbeddedImTableEntryOffset(uint32_t i, size_t pointer
 }
 
 inline ArtMethod* Class::GetEmbeddedImTableEntry(uint32_t i, size_t pointer_size) {
-  DCHECK(ShouldHaveEmbeddedImtAndVTable());
+  DCHECK(ShouldHaveEmbeddedImt());
   return GetFieldPtrWithSize<ArtMethod*>(
       EmbeddedImTableEntryOffset(i, pointer_size), pointer_size);
 }
 
 inline void Class::SetEmbeddedImTableEntry(uint32_t i, ArtMethod* method, size_t pointer_size) {
-  DCHECK(ShouldHaveEmbeddedImtAndVTable());
+  DCHECK(ShouldHaveEmbeddedImt());
   SetFieldPtrWithSize<false>(EmbeddedImTableEntryOffset(i, pointer_size), method, pointer_size);
 }
 
 inline bool Class::HasVTable() {
-  return GetVTable() != nullptr || ShouldHaveEmbeddedImtAndVTable();
+  return GetVTable() != nullptr || ShouldHaveEmbeddedVTable();
 }
 
 inline int32_t Class::GetVTableLength() {
-  if (ShouldHaveEmbeddedImtAndVTable()) {
+  if (ShouldHaveEmbeddedVTable()) {
     return GetEmbeddedVTableLength();
   }
   return GetVTable() != nullptr ? GetVTable()->GetLength() : 0;
 }
 
 inline ArtMethod* Class::GetVTableEntry(uint32_t i, size_t pointer_size) {
-  if (ShouldHaveEmbeddedImtAndVTable()) {
+  if (ShouldHaveEmbeddedVTable()) {
     return GetEmbeddedVTableEntry(i, pointer_size);
   }
   auto* vtable = GetVTable();
@@ -447,10 +447,12 @@ inline MemberOffset Class::GetFirstReferenceInstanceFieldOffset() {
 inline MemberOffset Class::GetFirstReferenceStaticFieldOffset(size_t pointer_size) {
   DCHECK(IsResolved());
   uint32_t base = sizeof(mirror::Class);  // Static fields come after the class.
-  if (ShouldHaveEmbeddedImtAndVTable()) {
+  uint32_t vtable_length = ShouldHaveEmbeddedVTable() ? GetEmbeddedVTableLength() : 0;
+  bool has_embedded_imt = ShouldHaveEmbeddedImt();
+  if (vtable_length != 0 || has_embedded_imt) {
     // Static fields come after the embedded tables.
     base = mirror::Class::ComputeClassSize(
-        true, GetEmbeddedVTableLength(), 0, 0, 0, 0, 0, pointer_size);
+        has_embedded_imt, vtable_length, 0, 0, 0, 0, 0, pointer_size);
   }
   return MemberOffset(base);
 }
@@ -458,10 +460,12 @@ inline MemberOffset Class::GetFirstReferenceStaticFieldOffset(size_t pointer_siz
 inline MemberOffset Class::GetFirstReferenceStaticFieldOffsetDuringLinking(size_t pointer_size) {
   DCHECK(IsLoaded());
   uint32_t base = sizeof(mirror::Class);  // Static fields come after the class.
-  if (ShouldHaveEmbeddedImtAndVTable()) {
+  uint32_t vtable_length = ShouldHaveEmbeddedVTable() ? GetVTableDuringLinking()->GetLength() : 0;
+  bool has_embedded_imt = ShouldHaveEmbeddedImt();
+  if (vtable_length != 0 || has_embedded_imt) {
     // Static fields come after the embedded tables.
-    base = mirror::Class::ComputeClassSize(true, GetVTableDuringLinking()->GetLength(),
-                                           0, 0, 0, 0, 0, pointer_size);
+    base = mirror::Class::ComputeClassSize(
+        has_embedded_imt, vtable_length, 0, 0, 0, 0, 0, pointer_size);
   }
   return MemberOffset(base);
 }
@@ -508,7 +512,7 @@ inline ArtField* Class::GetInstanceField(uint32_t i) {
 
 template<VerifyObjectFlags kVerifyFlags>
 inline uint32_t Class::GetReferenceInstanceOffsets() {
-  DCHECK(IsResolved<kVerifyFlags>() || IsErroneous<kVerifyFlags>());
+  DCHECK(IsResolved<kVerifyFlags>() || IsErroneous<kVerifyFlags>() || IsClassClass<kVerifyFlags>());
   return GetField32<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, reference_instance_offsets_));
 }
 
@@ -526,13 +530,15 @@ inline uint32_t Class::GetAccessFlags() {
   // circularity issue during loading the names of its members
   DCHECK(IsIdxLoaded<kVerifyFlags>() || IsRetired<kVerifyFlags>() ||
          IsErroneous<static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis)>() ||
-         this == String::GetJavaLangString())
+         this == String::GetJavaLangString() ||
+         IsClassClass<kVerifyFlags>())
       << "IsIdxLoaded=" << IsIdxLoaded<kVerifyFlags>()
       << " IsRetired=" << IsRetired<kVerifyFlags>()
       << " IsErroneous=" <<
           IsErroneous<static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis)>()
       << " IsString=" << (this == String::GetJavaLangString())
-      << " descriptor=" << PrettyDescriptor(this);
+      << " status= " << status_
+      << " descriptor=";  // << PrettyDescriptor(this);
   return GetField32<kVerifyFlags>(AccessFlagsOffset());
 }
 
