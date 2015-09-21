@@ -4172,6 +4172,7 @@ bool ClassLinker::LinkClass(Thread* self,
     // correct size during class linker initialization.
     CHECK_EQ(klass->GetClassSize(), class_size) << PrettyDescriptor(klass.Get());
 
+    // TODO Fix this so everything has imt.
     if (klass->ShouldHaveEmbeddedImtAndVTable()) {
       klass->PopulateEmbeddedImtAndVTable(imt, image_pointer_size_);
     }
@@ -4701,7 +4702,6 @@ bool ClassLinker::LinkVirtualMethods(
       return false;
     }
     bool has_defaults = false;
-    // TODO May need to replace this with real VTable for invoke_super
     // Assign each method an IMT index and set the default flag.
     for (size_t i = 0; i < num_virtual_methods; ++i) {
       ArtMethod* m = klass->GetVirtualMethodDuringLinking(i, image_pointer_size_);
@@ -5389,7 +5389,7 @@ static void SanityCheckVTable(Handle<mirror::Class> klass, uint32_t pointer_size
   }
 }
 
-// TODO Combine virtuals and directs.
+// TODO This method needs to be split up into several smaller methods.
 bool ClassLinker::LinkInterfaceMethods(
     Thread* self,
     Handle<mirror::Class> klass,
@@ -5405,10 +5405,8 @@ bool ClassLinker::LinkInterfaceMethods(
 
   MutableHandle<mirror::IfTable> iftable(hs.NewHandle(klass->GetIfTable()));
 
-  // If we're an interface, we don't need the vtable pointers, so we're done.
-  if (klass->IsInterface()) {
-    return true;
-  }
+  const bool is_interface = klass->IsInterface();
+
   // These are allocated on the heap to begin, we then transfer to linear alloc when we re-create
   // the virtual methods array.
   // Need to use low 4GB arenas for compiler or else the pointers wont fit in 32 bit method array
@@ -5520,7 +5518,7 @@ bool ClassLinker::LinkInterfaceMethods(
       //      because they are the last choice of an implementation. We get around this by looking
       //      at the super-classes iftable methods (copied into method_array previously) when we are
       //      looking for the implementation of a super-interface method but that is rather dirty.
-      ArrayLikeProxy<ArtMethod> input_methods = super_interface ?
+      ArrayLikeProxy<ArtMethod> input_methods = (super_interface || is_interface) ?
           ArrayLikeProxy<ArtMethod>(klass->GetDeclaredVirtualMethodsSlice(image_pointer_size_)) :
           ArrayLikeProxy<ArtMethod>(vtable, image_pointer_size_);
       int32_t input_array_length = input_methods.Size();
@@ -5600,7 +5598,7 @@ bool ClassLinker::LinkInterfaceMethods(
               method_array->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_);
           DCHECK(supers_method != nullptr);
           DCHECK(interface_name_comparator.HasSameNameAndSignature(supers_method));
-          if (!supers_method->IsOverridableByDefaultMethod()) {
+          if (LIKELY(!supers_method->IsOverridableByDefaultMethod())) {
             // The method is not overridable by a default method (i.e. it is directly implemented
             // in some class). Therefore move onto the next interface method.
             continue;
@@ -5622,7 +5620,7 @@ bool ClassLinker::LinkInterfaceMethods(
             } else {
               // See if we already have a conflict method for this method.
               ArtMethod* preexisting_conflict = FindSameNameAndSignature(interface_name_comparator,
-                                                                          default_conflict_methods);
+                                                                         default_conflict_methods);
               if (LIKELY(preexisting_conflict != nullptr)) {
                 // We already have another conflict we can reuse.
                 default_conflict_method = preexisting_conflict;
@@ -5636,7 +5634,7 @@ bool ClassLinker::LinkInterfaceMethods(
             }
             current_method = default_conflict_method;
             break;
-          }
+          }  // case kDefaultConflict
           case DefaultMethodSearchResult::kDefaultFound: {
             DCHECK(current_method != nullptr);
             // Found a default method.
@@ -5657,7 +5655,7 @@ bool ClassLinker::LinkInterfaceMethods(
               }
             }
             break;
-          }
+          }  // case kDefaultFound
           case DefaultMethodSearchResult::kAbstractFound: {
             DCHECK(current_method == nullptr);
             // Abstract method masks all defaults.
@@ -5669,7 +5667,7 @@ bool ClassLinker::LinkInterfaceMethods(
               current_method = vtable_impl;
             }
             break;
-          }
+          }  // case kAbstractFound
         }
         if (current_method != nullptr) {
           // We found a default method implementation. Record it in the iftable and IMT.
@@ -5697,10 +5695,14 @@ bool ClassLinker::LinkInterfaceMethods(
           }
           method_array->SetElementPtrSize(j, miranda_method, image_pointer_size_);
         }
-      }
-    }
-  }
-  if (!miranda_methods.empty() || !default_methods.empty() || !default_conflict_methods.empty()) {
+      }  // For each method in interface end.
+    }  // if (num_methods > 0)
+  }  // For each interface.
+  const bool has_new_virtuals = !(miranda_methods.empty() &&
+                                  default_methods.empty() &&
+                                  default_conflict_methods.empty());
+  // TODO don't extend virtuals of interface unless necessary (when is it?).
+  if (has_new_virtuals) {
     VLOG(class_linker) << PrettyClass(klass.Get()) << ": miranda_methods=" << miranda_methods.size()
                        << " default_methods=" << default_methods.size()
                        << " default_conflict_methods=" << default_conflict_methods.size();
@@ -5797,81 +5799,76 @@ bool ClassLinker::LinkInterfaceMethods(
     // suspension assert.
     self->EndAssertNoThreadSuspension(old_cause);
 
-    const size_t old_vtable_count = vtable->GetLength();
-    const size_t new_vtable_count = old_vtable_count +
-                                    miranda_methods.size() +
-                                    default_methods.size() +
-                                    default_conflict_methods.size();
-    miranda_methods.clear();
-    vtable.Assign(down_cast<mirror::PointerArray*>(vtable->CopyOf(self, new_vtable_count)));
-    if (UNLIKELY(vtable.Get() == nullptr)) {
-      self->AssertPendingOOMException();
-      return false;
-    }
-    out = methods->begin(method_size, method_alignment) + old_method_count;
-    size_t vtable_pos = old_vtable_count;
-    for (size_t i = old_method_count; i < new_method_count; ++i) {
-      // Leave the declaring class alone as type indices are relative to it
-      out->SetMethodIndex(0xFFFF & vtable_pos);
-      vtable->SetElementPtrSize(vtable_pos, &*out, image_pointer_size_);
-      ++out;
-      ++vtable_pos;
-    }
-    CHECK_EQ(vtable_pos, new_vtable_count);
-    // Update old vtable methods. We use the default_translations map to figure out what each vtable
-    // entry should be updated to, if they need to be at all.
-    for (size_t i = 0; i < old_vtable_count; ++i) {
-      ArtMethod* translated_method = vtable->GetElementPtrSize<ArtMethod*>(i, image_pointer_size_);
-      // Try and find what we need to change this method to.
-      auto translation_it = default_translations.find(i);
-      bool found_translation = false;
-      if (translation_it != default_translations.end()) {
-        if (translation_it->second.IsInConflict()) {
-          // Find which conflict method we are to use for this method.
-          MethodNameAndSignatureComparator old_method_comparator(
-              translated_method->GetInterfaceMethodIfProxy(image_pointer_size_));
-          ArtMethod* new_conflict_method = FindSameNameAndSignature(old_method_comparator,
-                                                                    default_conflict_methods);
-          CHECK(new_conflict_method != nullptr) << "Expected a conflict method!";
-          translated_method = new_conflict_method;
-        } else if (translation_it->second.IsAbstract()) {
-          // Find which miranda method we are to use for this method.
-          MethodNameAndSignatureComparator old_method_comparator(
-              translated_method->GetInterfaceMethodIfProxy(image_pointer_size_));
-          ArtMethod* miranda_method = FindSameNameAndSignature(old_method_comparator,
-                                                               miranda_methods);
-          DCHECK(miranda_method != nullptr);
-          translated_method = miranda_method;
-        } else {
-          // Normal default method (changed from an older default or abstract interface method).
-          DCHECK(translation_it->second.IsTranslation());
-          translated_method = translation_it->second.GetTranslation();
+    if (!is_interface) {
+      const size_t old_vtable_count = vtable->GetLength();
+      const size_t new_vtable_count = old_vtable_count +
+                                      miranda_methods.size() +
+                                      default_methods.size() +
+                                      default_conflict_methods.size();
+      vtable.Assign(down_cast<mirror::PointerArray*>(vtable->CopyOf(self, new_vtable_count)));
+      if (UNLIKELY(vtable.Get() == nullptr)) {
+        self->AssertPendingOOMException();
+        return false;
+      }
+      out = methods->begin(method_size, method_alignment) + old_method_count;
+      size_t vtable_pos = old_vtable_count;
+      for (size_t i = old_method_count; i < new_method_count; ++i) {
+        // Leave the declaring class alone the method's dex_code_item_offset_ and dex_method_index_
+        // fields are references into the dex file the method was defined in. Since the ArtMethod
+        // does not store that information it uses declaring_class_->dex_cache_.
+        out->SetMethodIndex(0xFFFF & vtable_pos);
+        vtable->SetElementPtrSize(vtable_pos, &*out, image_pointer_size_);
+        ++out;
+        ++vtable_pos;
+      }
+      CHECK_EQ(vtable_pos, new_vtable_count);
+      // Update old vtable methods. We use the default_translations map to figure out what each
+      // vtable entry should be updated to, if they need to be at all.
+      for (size_t i = 0; i < old_vtable_count; ++i) {
+        ArtMethod* translated_method = vtable->GetElementPtrSize<ArtMethod*>(i, image_pointer_size_);
+        // Try and find what we need to change this method to.
+        auto translation_it = default_translations.find(i);
+        bool found_translation = false;
+        if (translation_it != default_translations.end()) {
+          if (translation_it->second.IsInConflict()) {
+            // Find which conflict method we are to use for this method.
+            MethodNameAndSignatureComparator old_method_comparator(
+                translated_method->GetInterfaceMethodIfProxy(image_pointer_size_));
+            ArtMethod* new_conflict_method = FindSameNameAndSignature(old_method_comparator,
+                                                                      default_conflict_methods);
+            CHECK(new_conflict_method != nullptr) << "Expected a conflict method!";
+            translated_method = new_conflict_method;
+          } else if (translation_it->second.IsAbstract()) {
+            // Find which miranda method we are to use for this method.
+            MethodNameAndSignatureComparator old_method_comparator(
+                translated_method->GetInterfaceMethodIfProxy(image_pointer_size_));
+            ArtMethod* miranda_method = FindSameNameAndSignature(old_method_comparator,
+                                                                miranda_methods);
+            DCHECK(miranda_method != nullptr);
+            translated_method = miranda_method;
+          } else {
+            // Normal default method (changed from an older default or abstract interface method).
+            DCHECK(translation_it->second.IsTranslation());
+            translated_method = translation_it->second.GetTranslation();
+          }
+          found_translation = true;
         }
-        found_translation = true;
+        DCHECK(translated_method != nullptr);
+        auto it = move_table.find(translated_method);
+        if (it != move_table.end()) {
+          auto* new_method = it->second;
+          DCHECK(new_method != nullptr);
+          vtable->SetElementPtrSize(i, new_method, image_pointer_size_);
+        } else {
+          // If it was not going to be updated we wouldn't have put it into the default_translations
+          // map.
+          CHECK(!found_translation) << "We were asked to update this vtable entry. Must not fail.";
+        }
       }
-      DCHECK(translated_method != nullptr);
-      auto it = move_table.find(translated_method);
-      if (it != move_table.end()) {
-        auto* new_method = it->second;
-        DCHECK(new_method != nullptr);
-        vtable->SetElementPtrSize(i, new_method, image_pointer_size_);
-      } else {
-        // If it was not going to be updated we wouldn't have put it into the default_translations
-        // map.
-        CHECK(!found_translation) << "We were asked to update this vtable entry. Must not fail.";
-      }
+      klass->SetVTable(vtable.Get());
     }
 
-    if (kIsDebugBuild) {
-      for (size_t i = 0; i < new_vtable_count; ++i) {
-        CHECK(move_table.find(vtable->GetElementPtrSize<ArtMethod*>(i, image_pointer_size_)) ==
-              move_table.end());
-      }
-    }
-
-    klass->SetVTable(vtable.Get());
-    // Go fix up all the stale (old miranda or default method) pointers.
-    // First do it on the iftable.
+    // Go fix up all the stale miranda pointers.
     for (size_t i = 0; i < ifcount; ++i) {
       for (size_t j = 0, count = iftable->GetMethodArrayCount(i); j < count; ++j) {
         auto* method_array = iftable->GetMethodArray(i);
@@ -5915,7 +5912,7 @@ bool ClassLinker::LinkInterfaceMethods(
   } else {
     self->EndAssertNoThreadSuspension(old_cause);
   }
-  if (kIsDebugBuild) {
+  if (kIsDebugBuild && !is_interface) {
     SanityCheckVTable(klass, image_pointer_size_);
   }
   return true;
@@ -6270,7 +6267,13 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
       resolved = klass->FindInterfaceMethod(dex_cache.Get(), method_idx, image_pointer_size_);
       DCHECK(resolved == nullptr || resolved->GetDeclaringClass()->IsInterface());
       break;
-    case kSuper:  // Fall-through.
+    case kSuper:
+      if (klass->IsInterface()) {
+        resolved = klass->FindInterfaceMethod(dex_cache.Get(), method_idx, image_pointer_size_);
+      } else {
+        resolved = klass->FindVirtualMethod(dex_cache.Get(), method_idx, image_pointer_size_);
+      }
+      break;
     case kVirtual:
       resolved = klass->FindVirtualMethod(dex_cache.Get(), method_idx, image_pointer_size_);
       break;
@@ -6292,7 +6295,13 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
         resolved = klass->FindInterfaceMethod(name, signature, image_pointer_size_);
         DCHECK(resolved == nullptr || resolved->GetDeclaringClass()->IsInterface());
         break;
-      case kSuper:  // Fall-through.
+      case kSuper:
+        if (klass->IsInterface()) {
+          resolved = klass->FindInterfaceMethod(name, signature, image_pointer_size_);
+        } else {
+          resolved = klass->FindVirtualMethod(name, signature, image_pointer_size_);
+        }
+        break;
       case kVirtual:
         resolved = klass->FindVirtualMethod(name, signature, image_pointer_size_);
         break;
@@ -6322,6 +6331,7 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
         case kInterface:
         case kVirtual:
         case kSuper:
+          // TODO Correct this.
           resolved = klass->FindDirectMethod(name, signature, image_pointer_size_);
           break;
       }

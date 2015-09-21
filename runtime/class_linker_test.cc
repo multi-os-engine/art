@@ -225,11 +225,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     for (int i = 0; i < klass->GetIfTableCount(); i++) {
       mirror::Class* interface = iftable->GetInterface(i);
       ASSERT_TRUE(interface != nullptr);
-      if (klass->IsInterface()) {
-        EXPECT_EQ(0U, iftable->GetMethodArrayCount(i));
-      } else {
-        EXPECT_EQ(interface->NumVirtualMethods(), iftable->GetMethodArrayCount(i));
-      }
+      EXPECT_EQ(interface->NumVirtualMethods(), iftable->GetMethodArrayCount(i));
     }
     if (klass->IsAbstract()) {
       EXPECT_FALSE(klass->IsFinal());
@@ -1009,8 +1005,6 @@ TEST_F(ClassLinkerTest, Interfaces) {
   EXPECT_NE(Ii, Ai);
   EXPECT_NE(Jj1, Aj1);
   EXPECT_NE(Jj2, Aj2);
-  EXPECT_EQ(Kj1, Jj1);
-  EXPECT_EQ(Kj2, Jj2);
   EXPECT_EQ(Ai, A->FindVirtualMethodForInterface(Ii, sizeof(void*)));
   EXPECT_EQ(Aj1, A->FindVirtualMethodForInterface(Jj1, sizeof(void*)));
   EXPECT_EQ(Aj2, A->FindVirtualMethodForInterface(Jj2, sizeof(void*)));
