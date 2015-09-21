@@ -14,20 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# make us exit on a failure
-set -e
-
-# Generate the smali Main.smali file or fail
-${ANDROID_BUILD_TOP}/art/test/utils/python/generate_smali_main.py ./smali
-
-if [[ $@ == *"--jvm"* ]]; then
-  # Build the Java files if we are running a --jvm test
-  mkdir -p src
-  mkdir -p classes
-  ${ANDROID_BUILD_TOP}/art/tools/extract-embedded-java ./smali ./src
-  ${JAVAC} -implicit:none -d classes $(find src -name '*.java')
+if echo $@ | grep -q -- "--jvm"; then
+  ${RUN} "$@"
+else
+  ${RUN} "$@" --runtime-option -Xexperimental:default-methods -Xcompiler-option --runtime-arg -Xcompiler-option -Xexperimental:default-methods
 fi
-
-# Build the smali files and make a dex
-${SMALI} -JXmx256m ${SMALI_ARGS} --output classes.dex $(find smali -name '*.smali')
-zip "$TEST_NAME.jar" classes.dex
