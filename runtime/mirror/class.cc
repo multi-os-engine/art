@@ -536,6 +536,20 @@ ArtMethod* Class::FindVirtualMethod(
   return nullptr;
 }
 
+ArtMethod* Class::FindVirtualMethodForInterfaceSuper(
+    ArtMethod* method, size_t pointer_size) {
+  DCHECK(method->GetDeclaringClass()->IsInterface());
+  DCHECK(IsInterface()) << "Should only be called on a interface class";
+  // Check if we have one defined on this interface first
+  for (ArtMethod& iface_method : GetVirtualMethods(pointer_size)) {
+    if (method->HasSameNameAndSignature(&iface_method)) {
+      return &iface_method;
+    }
+  }
+  // We will get it from our iftable.
+  return FindVirtualMethodForInterface(method, pointer_size);
+}
+
 ArtMethod* Class::FindClassInitializer(size_t pointer_size) {
   for (ArtMethod& method : GetDirectMethods(pointer_size)) {
     DCHECK(reinterpret_cast<volatile void*>(&method) != nullptr);
