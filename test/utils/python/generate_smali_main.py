@@ -15,7 +15,7 @@
 # limitations under the License.
 
 """
-Generate Smali Main file for test 960
+Generate Smali Main file for tests from a classes.xml file
 """
 
 import os
