@@ -144,7 +144,11 @@ ArtMethod* ArtMethod::FindOverriddenMethod(size_t pointer_size) {
                Runtime::Current()->GetClassLinker()->FindMethodForProxy(GetDeclaringClass(), this));
     } else {
       mirror::IfTable* iftable = GetDeclaringClass()->GetIfTable();
-      for (size_t i = 0; i < iftable->Count() && result == nullptr; i++) {
+      size_t ifcount = iftable->Count();
+      if (ifcount == 0) {
+        return nullptr;
+      }
+      for (size_t i = ifcount - 1; result == nullptr; --i) {
         mirror::Class* interface = iftable->GetInterface(i);
         for (size_t j = 0; j < interface->NumVirtualMethods(); ++j) {
           ArtMethod* interface_method = interface->GetVirtualMethod(j, pointer_size);
@@ -152,6 +156,9 @@ ArtMethod* ArtMethod::FindOverriddenMethod(size_t pointer_size) {
             result = interface_method;
             break;
           }
+        }
+        if (i == 0) {
+          break;
         }
       }
     }
