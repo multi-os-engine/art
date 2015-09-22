@@ -1143,6 +1143,23 @@ HBasicBlock* HBasicBlock::SplitBefore(HInstruction* cursor) {
   return new_block;
 }
 
+HBasicBlock* HBasicBlock::SplitAtTop() {
+  DCHECK(!graph_->IsInSsaForm()) << "Support for SSA form not implemented";
+  DCHECK(!IsCatchBlock()) << "Does not move try/catch information to the new block.";
+
+  HBasicBlock* new_block = new (GetGraph()->GetArena()) HBasicBlock(GetGraph(), GetDexPc());
+
+  for (HBasicBlock* predecessor : GetPredecessors()) {
+    new_block->predecessors_.push_back(predecessor);
+    predecessor->successors_[predecessor->GetSuccessorIndexOf(this)] = new_block;
+  }
+  predecessors_.clear();
+  AddPredecessor(new_block);
+
+  GetGraph()->AddBlock(new_block);
+  return new_block;
+}
+
 HBasicBlock* HBasicBlock::SplitAfter(HInstruction* cursor) {
   DCHECK(!cursor->IsControlFlow());
   DCHECK_NE(instructions_.last_instruction_, cursor);
@@ -1186,6 +1203,15 @@ const HTryBoundary* HBasicBlock::ComputeTryEntryOfSuccessors() const {
   } else {
     return nullptr;
   }
+}
+
+bool HBasicBlock::HasThrowingInstructions() const {
+  for (HInstructionIterator it(GetInstructions()); !it.Done(); it.Advance()) {
+    if (it.Current()->CanThrow()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 static bool HasOnlyOneInstruction(const HBasicBlock& block) {

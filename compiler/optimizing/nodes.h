@@ -829,8 +829,14 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   // created, latter block. Note that this method will add the block to the
   // graph, create a Goto at the end of the former block and will create an edge
   // between the blocks. It will not, however, update the reverse post order or
-  // loop information.
+  // loop and try/catch information.
   HBasicBlock* SplitBefore(HInstruction* cursor);
+
+  // Create a new block between this block and its predecessors. The new block is
+  // added to the graph, all predecessor edges are relinked to it and an edge is
+  // created to `this`. Returns the newly created block without any instructions.
+  // Reverse post order or loop and try/catch information are not updated.
+  HBasicBlock* SplitAtTop();
 
   // Split the block into two blocks just after `cursor`. Returns the newly
   // created block. Note that this method just updates raw block information,
@@ -940,6 +946,8 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   // the appropriate try entry will be returned.
   const HTryBoundary* ComputeTryEntryOfSuccessors() const;
 
+  bool HasThrowingInstructions() const;
+
   // Returns whether this block dominates the blocked passed as parameter.
   bool Dominates(HBasicBlock* block) const;
 
@@ -948,7 +956,6 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
 
   void SetLifetimeStart(size_t start) { lifetime_start_ = start; }
   void SetLifetimeEnd(size_t end) { lifetime_end_ = end; }
-
 
   bool EndsWithControlFlowInstruction() const;
   bool EndsWithIf() const;
