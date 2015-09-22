@@ -413,6 +413,23 @@ static bool nb_signalhandler(int sig, siginfo_t* info ATTRIBUTE_UNUSED, void* co
     UNUSED(context);
 #endif
   }
+
+  // Before invoking this handler, all other unclaimed signals must be blocked.
+  // We're trying to check the signal mask to verify its status here.
+  sigset_t tmpset;
+  sigemptyset(&tmpset);
+  sigprocmask(SIG_SETMASK, nullptr, &tmpset);
+  int other_claimed = (sig == SIGSEGV) ? SIGILL : SIGSEGV;
+  for (int signum = 0; signum < _NSIG; ++signum) {
+    if ((signum == SIGKILL) || (signum == SIGSTOP) || (signum == __SIGRTMIN) || (signum ==__SIGRTMIN + 1)) {
+        continue;
+    } else if ((sigismember(&tmpset, signum)) && (signum == other_claimed)) {
+      printf("ERROR: The claimed signal %d is blocked\n", signum);
+    } else if ((!sigismember(&tmpset, signum)) && (signum != other_claimed)) {
+      printf("ERROR: The unclaimed signal %d is not blocked\n", signum);
+    }
+  }
+
   // We handled this...
   return true;
 }
