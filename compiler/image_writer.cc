@@ -1362,6 +1362,9 @@ void ImageWriter::FixupObject(Object* orig, Object* copy) {
         // If src is a ClassLoader, set the class table to null so that it gets recreated by the
         // ClassLoader.
         down_cast<mirror::ClassLoader*>(copy)->SetClassTable(nullptr);
+        // Also set allocator to null to be safe. The allocator is created when we create the class
+        // table.
+        down_cast<mirror::ClassLoader*>(copy)->SetAllocator(nullptr);
       }
     }
     FixupVisitor visitor(this, copy);
