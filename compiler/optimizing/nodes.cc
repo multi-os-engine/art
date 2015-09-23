@@ -141,10 +141,29 @@ void HBasicBlock::ClearDominanceInformation() {
 void HGraph::ComputeDominanceInformation() {
   DCHECK(reverse_post_order_.empty());
   reverse_post_order_.reserve(blocks_.size());
-  ArenaVector<size_t> visits(blocks_.size(), 0u, arena_->Adapter());
   reverse_post_order_.push_back(entry_block_);
-  for (HBasicBlock* successor : entry_block_->GetSuccessors()) {
-    VisitBlockForDominatorTree(successor, entry_block_, &visits);
+
+  ArenaVector<size_t> visits(blocks_.size(), 0u, arena_->Adapter());
+  struct WorklistEntry {
+    HBasicBlock* block;
+    size_t number_of_processed_successors;
+  };
+  ArenaVector<WorklistEntry> worklist(arena_->Adapter());
+  constexpr size_t kDefaultWorklistSize = 8;
+  worklist.reserve(kDefaultWorklistSize);
+  worklist.emplace_back(entry_block_, 0u);
+  while (!worklist.empty()) {
+    WorklistEntry& entry = worklist.back();
+    HBasicBlock* current = entry.block;
+    if (entry.number_of_processed_successors == current->GetSuccessors().size()) {
+      worklist.pop_back();
+    } else {
+      DCHECK_LT(entry.number_of_processed_successors, current->GetSuccessors().size());
+      HBasicBlock* successor = current->GetSuccessors()[entry.number_of_processed_successors++];
+      if (VisitBlockForDominatorTree(successor, current, &visits)) {
+        worklist.emplace_back(successor, 0u);
+      }
+    }
   }
 }
 
@@ -166,7 +185,8 @@ HBasicBlock* HGraph::FindCommonDominator(HBasicBlock* first, HBasicBlock* second
   return nullptr;
 }
 
-void HGraph::VisitBlockForDominatorTree(HBasicBlock* block,
+// Returns true if we should start visiting block's successors.
+bool HGraph::VisitBlockForDominatorTree(HBasicBlock* block,
                                         HBasicBlock* predecessor,
                                         ArenaVector<size_t>* visits) {
   if (block->GetDominator() == nullptr) {
@@ -182,10 +202,9 @@ void HGraph::VisitBlockForDominatorTree(HBasicBlock* block,
       block->GetPredecessors().size() - block->NumberOfBackEdges()) {
     block->GetDominator()->AddDominatedBlock(block);
     reverse_post_order_.push_back(block);
-    for (HBasicBlock* successor : block->GetSuccessors()) {
-      VisitBlockForDominatorTree(successor, block, visits);
-    }
+    return true;
   }
+  return false;
 }
 
 void HGraph::TransformToSsa() {
