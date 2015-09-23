@@ -30,4 +30,8 @@ public class IntHolder {
     public static void runGC() {
         Runtime.getRuntime().gc();
     }
+
+    public static void loadLibrary(String name) {
+      System.loadLibrary(name);
+    }
 }
