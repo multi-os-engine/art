@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2013 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,12 @@
  * limitations under the License.
  */
 
-// Simple class that holds a static int for testing that class unloading works
-// and re-runs the class initializer.
-public class IntHolder {
-    private static int value = 1;
+#include "jni.h"
 
-    public static void setValue(int newValue) {
-        value = newValue;
-    }
+#include "base/logging.h"
 
-    public static int getValue() {
-        return value;
-    }
+#include <iostream>
 
-    public static void runGC() {
-        Runtime.getRuntime().gc();
-    }
-
-    public static void loadLibrary(String name) {
-      System.loadLibrary(name);
-    }
+extern "C" JNIEXPORT void JNI_OnUnload(JavaVM*, void *) {
+  std::cout << "JNI_OnUnload called" << std::endl;
 }

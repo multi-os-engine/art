@@ -7,3 +7,5 @@ null
 null
 loader null false
 loader null false
+JNI_OnUnload called
+null
