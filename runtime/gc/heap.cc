@@ -2588,6 +2588,12 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type,
   FinishGC(self, gc_type);
   // Inform DDMS that a GC completed.
   Dbg::GcDidFinish();
+  // Unload native libraries for class unloading. We do this after calling FinishGC to prevent
+  // deadlocks in case the JNI_OnUnload function does allocations.
+  {
+    ScopedObjectAccess soa(self);
+    soa.Vm()->UnloadNativeLibraries();
+  }
   return gc_type;
 }
 
