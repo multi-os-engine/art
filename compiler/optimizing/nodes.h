@@ -370,7 +370,8 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   void SetHasTryCatch(bool value) { has_try_catch_ = value; }
 
  private:
-  void VisitBlockForDominatorTree(HBasicBlock* block,
+  // Returns true if this is the last forward edge going to the block.
+  bool VisitBlockForDominatorTree(HBasicBlock* block,
                                   HBasicBlock* predecessor,
                                   ArenaVector<size_t>* visits);
   void FindBackEdges(ArenaBitVector* visited);
