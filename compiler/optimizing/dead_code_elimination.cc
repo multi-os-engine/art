@@ -16,49 +16,61 @@
 
 #include "dead_code_elimination.h"
 
+#include "utils/array_ref.h"
 #include "base/bit_vector-inl.h"
 #include "ssa_phi_elimination.h"
 
 namespace art {
 
-static void MarkReachableBlocks(HBasicBlock* block, ArenaBitVector* visited) {
-  int block_id = block->GetBlockId();
-  if (visited->IsBitSet(block_id)) {
-    return;
-  }
-  visited->SetBit(block_id);
+static void MarkReachableBlocks(HGraph* graph, ArenaBitVector* visited) {
+  ArenaVector<HBasicBlock*> worklist(graph->GetArena()->Adapter());
+  constexpr size_t kDefaultWorlistSize = 8;
+  worklist.reserve(kDefaultWorlistSize);
+  visited->SetBit(graph->GetEntryBlock()->GetBlockId());
+  worklist.push_back(graph->GetEntryBlock());
 
-  HInstruction* last_instruction = block->GetLastInstruction();
-  if (last_instruction->IsIf()) {
-    HIf* if_instruction = last_instruction->AsIf();
-    HInstruction* condition = if_instruction->InputAt(0);
-    if (!condition->IsIntConstant()) {
-      MarkReachableBlocks(if_instruction->IfTrueSuccessor(), visited);
-      MarkReachableBlocks(if_instruction->IfFalseSuccessor(), visited);
-    } else if (condition->AsIntConstant()->IsOne()) {
-      MarkReachableBlocks(if_instruction->IfTrueSuccessor(), visited);
-    } else {
-      DCHECK(condition->AsIntConstant()->IsZero());
-      MarkReachableBlocks(if_instruction->IfFalseSuccessor(), visited);
-    }
-  } else if (last_instruction->IsPackedSwitch() &&
-             last_instruction->AsPackedSwitch()->InputAt(0)->IsIntConstant()) {
-    HPackedSwitch* switch_instruction = last_instruction->AsPackedSwitch();
-    int32_t switch_value = switch_instruction->InputAt(0)->AsIntConstant()->GetValue();
-    int32_t start_value = switch_instruction->GetStartValue();
-    int32_t last_value = start_value + switch_instruction->GetNumEntries();
-    for (int32_t case_value = start_value; case_value <= last_value; case_value++) {
-      if (case_value == last_value) {
-        MarkReachableBlocks(switch_instruction->GetDefaultBlock(), visited);
+  while (!worklist.empty()) {
+    HBasicBlock* block = worklist.back();
+    worklist.pop_back();
+    int block_id = block->GetBlockId();
+    DCHECK(visited->IsBitSet(block_id));
+
+    HBasicBlock* live_successor = nullptr;
+    HInstruction* last_instruction = block->GetLastInstruction();
+    if (last_instruction->IsIf()) {
+      HIf* if_instruction = last_instruction->AsIf();
+      HInstruction* condition = if_instruction->InputAt(0);
+      if (condition->IsIntConstant()) {
+        if (condition->AsIntConstant()->IsOne()) {
+          live_successor = if_instruction->IfTrueSuccessor();
+        } else {
+          DCHECK(condition->AsIntConstant()->IsZero());
+          live_successor = if_instruction->IfFalseSuccessor();
+        }
       }
-      if (case_value == switch_value) {
-        MarkReachableBlocks(block->GetSuccessor(case_value - start_value), visited);
-        break;
+    } else if (last_instruction->IsPackedSwitch()) {
+      HPackedSwitch* switch_instruction = last_instruction->AsPackedSwitch();
+      HInstruction* switch_input = switch_instruction->InputAt(0);
+      if (switch_input->IsIntConstant()) {
+        int32_t switch_value = switch_input->AsIntConstant()->GetValue();
+        int32_t start_value = switch_instruction->GetStartValue();
+        uint32_t switch_index = static_cast<uint32_t>(switch_value - start_value);
+        if (switch_index < static_cast<size_t>(switch_instruction->GetNumEntries())) {
+          live_successor = block->GetSuccessor(switch_index);
+        } else {
+          live_successor = switch_instruction->GetDefaultBlock();
+        }
       }
     }
-  } else {
-    for (HBasicBlock* successor : block->GetSuccessors()) {
-      MarkReachableBlocks(successor, visited);
+
+    ArrayRef<HBasicBlock* const> successors = (live_successor != nullptr)
+        ? ArrayRef<HBasicBlock* const>(&live_successor, 1)
+        : ArrayRef<HBasicBlock* const>(block->GetSuccessors());
+    for (HBasicBlock* successor : successors) {
+      if (!visited->IsBitSet(successor->GetBlockId())) {
+        visited->SetBit(successor->GetBlockId());
+        worklist.push_back(successor);
+      }
     }
   }
 }
@@ -82,7 +94,7 @@ void HDeadCodeElimination::RemoveDeadBlocks() {
   ArenaBitVector live_blocks(allocator, graph_->GetBlocks().size(), false);
   ArenaBitVector affected_loops(allocator, graph_->GetBlocks().size(), false);
 
-  MarkReachableBlocks(graph_->GetEntryBlock(), &live_blocks);
+  MarkReachableBlocks(graph_, &live_blocks);
   bool removed_one_or_more_blocks = false;
 
   // Remove all dead blocks. Iterate in post order because removal needs the
