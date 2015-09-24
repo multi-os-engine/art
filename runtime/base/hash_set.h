@@ -119,6 +119,7 @@ class HashSet {
   static constexpr double kDefaultMaxLoadFactor = 0.9;
   static constexpr size_t kMinBuckets = 1000;
 
+  using ValueType = T;
   typedef BaseIterator<T, HashSet> Iterator;
   typedef BaseIterator<const T, const HashSet> ConstIterator;
 
@@ -337,15 +338,21 @@ class HashSet {
     InsertWithHash(element, hashfn_(element));
   }
 
+  // Insert an element, allows duplicates. Takes over element with an std::move.
+  void Insert(T&& element) {
+    InsertWithHash(std::move(element), hashfn_(element));
+  }
+
+  // Insert an element with a specific hash pre-calculated.
   void InsertWithHash(const T& element, size_t hash) {
-    DCHECK_EQ(hash, hashfn_(element));
-    if (num_elements_ >= elements_until_expand_) {
-      Expand();
-      DCHECK_LT(num_elements_, elements_until_expand_);
-    }
-    const size_t index = FirstAvailableSlot(IndexForHash(hash));
+    const size_t index = PrepareToInsertElement(element, hash);
     data_[index] = element;
-    ++num_elements_;
+  }
+
+  // Insert an element with a specific hash pre-calculated. Takes over element with std::move.
+  void InsertWithHash(T&& element, size_t hash) {
+    const size_t index = PrepareToInsertElement(element, hash);
+    data_[index] = std::move(element);
   }
 
   size_t Size() const {
@@ -400,6 +407,22 @@ class HashSet {
   }
 
  private:
+  // Prepare to insert the element by updating the table book-keeping, and possibly expanding.
+  // Returns the index at which the element needs to be stored at.
+  size_t PrepareToInsertElement(const T& element, size_t hash) {
+    DCHECK_EQ(hash, hashfn_(element));
+    if (num_elements_ >= elements_until_expand_) {
+      Expand();
+      DCHECK_LT(num_elements_, elements_until_expand_);
+    }
+    const size_t index = FirstAvailableSlot(IndexForHash(hash));
+    ++num_elements_;
+
+    // Note: caller needs to update data_[index] after preparation is complete.
+    return index;
+  }
+
+
   T& ElementForIndex(size_t index) {
     DCHECK_LT(index, NumBuckets());
     DCHECK(data_ != nullptr);

@@ -53,6 +53,32 @@ template <class Key, class Value, class EmptyFn,
     class Alloc = std::allocator<std::pair<Key, Value>>>
 class HashMap : public HashSet<std::pair<Key, Value>, EmptyFn, HashMapWrapper<HashFn>,
                                HashMapWrapper<Pred>, Alloc> {
+ public:
+  using KeyType = Key;
+  using ValueType = std::pair<Key, Value>;  // note: intentionally shadow HashSet::ValueType
+
+  // Insert the key/value pair, allows duplicates. Copies the key and the value.
+  void Insert(const Key& key, const Value& value) {
+    Insert(std::make_pair(key, value));
+  }
+
+  // Insert the key/value pair, allows duplicates. Moves-from the key, copies the value.
+  void Insert(Key&& key, const Value& value) {
+    Insert(std::make_pair(std::move(key), value));
+  }
+
+  // Insert the key/value pair, allows duplicates. Copies the key, moves-from the value.
+  void Insert(const Key& key, Value&& value) {
+    Insert(std::make_pair(key, std::move(value)));
+  }
+
+  // Insert the key/value pair, allows duplicates. Moves-from the key and the value.
+  void Insert(Key&& key, Value&& value) {
+    Insert(std::make_pair(std::move(key), std::move(value)));
+  }
+
+  using HashSet<
+      std::pair<Key, Value>, EmptyFn, HashMapWrapper<HashFn>, HashMapWrapper<Pred>, Alloc>::Insert;
 };
 
 }  // namespace art

@@ -49,6 +49,15 @@ struct PACKED(sizeof(ArtLambdaMethod*)) Closure {
   // The target_size must be at least as large as GetSize().
   void CopyTo(void* target, size_t target_size) const;
 
+  // Get the target method, i.e. the method that will be dispatched into with invoke-lambda.
+  ArtMethod* GetTargetMethod() const;
+
+  // Calculates the hash code. Value is recomputed each time.
+  uint32_t GetHashCode() const SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Is this the same closure as other? e.g. same target method, same variables captured.
+  bool Equals(const Closure* other) const SHARED_REQUIRES(Locks::mutator_lock_);
+
   // How many variables were captured?
   size_t GetNumberOfCapturedVariables() const;
 
