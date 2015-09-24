@@ -892,6 +892,13 @@ void Mips64Assembler::LoadConst64(GpuRegister rd, int64_t value) {
   } else if ((value & 0xFFFF) == 0 && ((value >> 31) & 0x1FFFF) == ((0x20000 - bit31) & 0x1FFFF)) {
     Lui(rd, value >> 16);
     Dati(rd, (value >> 48) + bit31);
+  } else if (IsPowerOfTwo(value + UINT64_C(1))) {
+    int shift_cnt = 64 - CTZ(value + UINT64_C(1));
+    Daddiu(rd, ZERO, -1);
+    if (shift_cnt < 32)
+      Dsrl(rd, rd, shift_cnt);
+    else
+      Dsrl32(rd, rd, shift_cnt & 31);
   } else {
     int shift_cnt = CTZ(value);
     int64_t tmp = value >> shift_cnt;
