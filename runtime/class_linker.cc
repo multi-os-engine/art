@@ -4186,6 +4186,7 @@ ClassTable* ClassLinker::InsertClassTableForClassLoader(mirror::ClassLoader* cla
     data.allocator = Runtime::Current()->CreateLinearAlloc();
     class_loaders_.push_back(data);
     // Don't already have a class table, add it to the class loader.
+    CHECK(class_loader->GetClassTable() == nullptr);
     class_loader->SetClassTable(data.class_table);
     class_loader->SetAllocator(data.allocator);
   }
