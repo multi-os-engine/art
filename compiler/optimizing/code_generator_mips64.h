@@ -155,12 +155,12 @@ class SlowPathCodeMIPS64 : public SlowPathCode {
  public:
   SlowPathCodeMIPS64() : entry_label_(), exit_label_() {}
 
-  Label* GetEntryLabel() { return &entry_label_; }
-  Label* GetExitLabel() { return &exit_label_; }
+  Mips64Label* GetEntryLabel() { return &entry_label_; }
+  Mips64Label* GetExitLabel() { return &exit_label_; }
 
  private:
-  Label entry_label_;
-  Label exit_label_;
+  Mips64Label entry_label_;
+  Mips64Label exit_label_;
 
   DISALLOW_COPY_AND_ASSIGN(SlowPathCodeMIPS64);
 };
@@ -227,9 +227,9 @@ class InstructionCodeGeneratorMIPS64 : public HGraphVisitor {
   void GenerateImplicitNullCheck(HNullCheck* instruction);
   void GenerateExplicitNullCheck(HNullCheck* instruction);
   void GenerateTestAndBranch(HInstruction* instruction,
-                             Label* true_target,
-                             Label* false_target,
-                             Label* always_true_target);
+                             Mips64Label* true_target,
+                             Mips64Label* false_target,
+                             Mips64Label* always_true_target);
   void DivRemOneOrMinusOne(HBinaryOperation* instruction);
   void DivRemByPowerOfTwo(HBinaryOperation* instruction);
   void GenerateDivRemWithAnyConstant(HBinaryOperation* instruction);
@@ -262,7 +262,7 @@ class CodeGeneratorMIPS64 : public CodeGenerator {
   size_t GetFloatingPointSpillSlotSize() const OVERRIDE { return kMips64WordSize; }
 
   uintptr_t GetAddressOf(HBasicBlock* block) const OVERRIDE {
-    return GetLabelOf(block)->Position();
+    return assembler_.GetLabelLocation(GetLabelOf(block));
   }
 
   HGraphVisitor* GetLocationBuilder() OVERRIDE { return &location_builder_; }
@@ -295,12 +295,12 @@ class CodeGeneratorMIPS64 : public CodeGenerator {
     return isa_features_;
   }
 
-  Label* GetLabelOf(HBasicBlock* block) const {
-    return CommonGetLabelOf<Label>(block_labels_, block);
+  Mips64Label* GetLabelOf(HBasicBlock* block) const {
+    return CommonGetLabelOf<Mips64Label>(block_labels_, block);
   }
 
   void Initialize() OVERRIDE {
-    block_labels_ = CommonInitializeLabels<Label>();
+    block_labels_ = CommonInitializeLabels<Mips64Label>();
   }
 
   void Finalize(CodeAllocator* allocator) OVERRIDE;
@@ -346,8 +346,8 @@ class CodeGeneratorMIPS64 : public CodeGenerator {
 
  private:
   // Labels for each block that will be compiled.
-  Label* block_labels_;  // Indexed by block id.
-  Label frame_entry_label_;
+  Mips64Label* block_labels_;  // Indexed by block id.
+  Mips64Label frame_entry_label_;
   LocationsBuilderMIPS64 location_builder_;
   InstructionCodeGeneratorMIPS64 instruction_visitor_;
   ParallelMoveResolverMIPS64 move_resolver_;
