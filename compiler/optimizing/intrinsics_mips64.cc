@@ -115,7 +115,7 @@ class IntrinsicSlowPathMIPS64 : public SlowPathCodeMIPS64 {
     }
 
     RestoreLiveRegisters(codegen, invoke_->GetLocations());
-    __ B(GetExitLabel());
+    __ Bc(GetExitLabel());
   }
 
   const char* GetDescription() const OVERRIDE { return "IntrinsicSlowPathMIPS64"; }
@@ -806,7 +806,7 @@ static void GenRoundingMode(LocationSummary* locations,
 
   DCHECK_NE(in, out);
 
-  Label done;
+  Mips64Label done;
 
   // double floor/ceil(double in) {
   //     if in.isNaN || in.isInfinite || in.isZero {
@@ -1256,7 +1256,7 @@ static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGenerat
   // } while (tmp_value == 0 && failure([tmp_ptr] <- r_new_value));
   // result = tmp_value != 0;
 
-  Label loop_head, exit_loop;
+  Mips64Label loop_head, exit_loop;
   __ Daddu(TMP, base, offset);
   __ Sync(0);
   __ Bind(&loop_head);
@@ -1412,7 +1412,7 @@ static void GenerateStringIndexOf(HInvoke* invoke,
       // full slow-path down and branch unconditionally.
       slow_path = new (allocator) IntrinsicSlowPathMIPS64(invoke);
       codegen->AddSlowPath(slow_path);
-      __ B(slow_path->GetEntryLabel());
+      __ Bc(slow_path->GetEntryLabel());
       __ Bind(slow_path->GetExitLabel());
       return;
     }
