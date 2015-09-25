@@ -502,14 +502,42 @@ void InstructionSimplifierVisitor::VisitAnd(HAnd* instruction) {
   HConstant* input_cst = instruction->GetConstantRight();
   HInstruction* input_other = instruction->GetLeastConstantLeft();
 
-  if ((input_cst != nullptr) && AreAllBitsSet(input_cst)) {
-    // Replace code looking like
-    //    AND dst, src, 0xFFF...FF
-    // with
-    //    src
-    instruction->ReplaceWith(input_other);
-    instruction->GetBlock()->RemoveInstruction(instruction);
-    return;
+  if (input_cst != nullptr) {
+    int64_t value = Int64FromConstant(input_cst);
+    if (value == -1) {
+      // Replace code looking like
+      //    AND dst, src, 0xFFF...FF
+      // with
+      //    src
+      instruction->ReplaceWith(input_other);
+      instruction->GetBlock()->RemoveInstruction(instruction);
+      RecordSimplification();
+      return;
+    }
+    if ((input_other->IsUShr() || input_other->IsShr()) && input_other->InputAt(1)->IsConstant()) {
+      size_t reg_bits = (instruction->GetResultType() == Primitive::kPrimLong) ? 64 : 32;
+      size_t shift = Int64FromConstant(input_other->InputAt(1)->AsConstant()) & (reg_bits - 1);
+      size_t num_tail_bits_set = CTZ(value + 1);
+      if (num_tail_bits_set >= reg_bits - shift && input_other->IsUShr()) {
+        // This AND clears only bits known to be clear, for example "(x >>> 24) & 0xff".
+        instruction->ReplaceWith(input_other);
+        instruction->GetBlock()->RemoveInstruction(instruction);
+        RecordSimplification();
+        return;
+      }  else if (num_tail_bits_set == reg_bits - shift && IsPowerOfTwo(value + 1) &&
+          input_other->HasOnlyOneNonEnvironmentUse()) {
+        DCHECK(input_other->IsShr());
+        // Replace SHR+AND with USHR, for example "(x >> 24) & 0xff" -> "x >>> 24".
+        HUShr* ushr = new (GetGraph()->GetArena()) HUShr(instruction->GetType(),
+                                                         input_other->InputAt(0),
+                                                         input_other->InputAt(1),
+                                                         input_other->GetDexPc());
+        instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, ushr);
+        input_other->GetBlock()->RemoveInstruction(input_other);
+        RecordSimplification();
+        return;
+      }
+    }
   }
 
   // We assume that GVN has run before, so we only perform a pointer comparison.
