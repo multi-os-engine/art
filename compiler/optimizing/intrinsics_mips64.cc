@@ -526,7 +526,7 @@ void IntrinsicCodeGeneratorMIPS64::VisitMathFloor(HInvoke* invoke) {
   FpuRegister in = locations->InAt(0).AsFpuRegister<FpuRegister>();
   FpuRegister out = locations->Out().AsFpuRegister<FpuRegister>();
 
-  Label done;
+  Mips64Label done;
 
   // double floor(double in) {
   //     if in.isNaN || in.isInfinite || in.isZero {
@@ -575,7 +575,7 @@ void IntrinsicCodeGeneratorMIPS64::VisitMathCeil(HInvoke* invoke) {
   FpuRegister in = locations->InAt(0).AsFpuRegister<FpuRegister>();
   FpuRegister out = locations->Out().AsFpuRegister<FpuRegister>();
 
-  Label done;
+  Mips64Label done;
 
   // double ceil(double in) {
   //     if in.isNaN || in.isInfinite || in.isZero {
