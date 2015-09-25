@@ -48,8 +48,26 @@ class AssemblerMIPS64Test : public AssemblerTest<mips64::Mips64Assembler,
     return "mips64";
   }
 
+  std::string GetAssemblerCmdName() OVERRIDE {
+    // We assemble and link for MIPS64R6. See GetAssemblerParameters() for details.
+    return "gcc";
+  }
+
   std::string GetAssemblerParameters() OVERRIDE {
-    return " --no-warn -march=mips64r6";
+    // We assemble and link for MIPS64R6. The reason is that object files produced for MIPS64R6
+    // (and MIPS32R6) with the GNU assembler don't have correct final offsets in PC-relative
+    // branches in the .text section and so they require a relocation pass (there's a relocation
+    // section, .rela.text, that has the needed info to fix up the branches).
+    return " -march=mips64r6 -Wa,--no-warn -Wl,-Ttext=0 -Wl,-e0 -nostdlib";
+  }
+
+  void Pad(std::vector<uint8_t>& data) OVERRIDE {
+    // The GNU linker unconditionally pads the code segment with NOPs to a size that is a multiple
+    // of 16 and there doesn't appear to be a way to suppress this padding. Our assembler doesn't
+    // pad, so, in order for two assembler outputs to match, we need to match the padding as well.
+    // NOP is encoded as four zero bytes on MIPS.
+    size_t pad_size = RoundUp(data.size(), 16u) - data.size();
+    data.insert(data.end(), pad_size, 0);
   }
 
   std::string GetDisassembleParameters() OVERRIDE {
@@ -182,6 +200,14 @@ class AssemblerMIPS64Test : public AssemblerTest<mips64::Mips64Assembler,
     return secondary_register_names_[reg];
   }
 
+  std::string RepeatInsn(size_t count, const std::string& insn) {
+    std::string result;
+    for (; count != 0u; --count) {
+      result += insn;
+    }
+    return result;
+  }
+
  private:
   std::vector<mips64::GpuRegister*> registers_;
   std::map<mips64::GpuRegister, std::string, MIPS64CpuRegisterCompare> secondary_register_names_;
@@ -194,6 +220,7 @@ TEST_F(AssemblerMIPS64Test, Toolchain) {
   EXPECT_TRUE(CheckTools());
 }
 
+#define __ GetAssembler()->
 
 ///////////////////
 // FP Operations //
@@ -348,7 +375,379 @@ TEST_F(AssemblerMIPS64Test, CvtSW) {
 ////////////////
 
 TEST_F(AssemblerMIPS64Test, Jalr) {
-  DriverStr(RepeatRRNoDupes(&mips64::Mips64Assembler::Jalr, "jalr ${reg1}, ${reg2}"), "jalr");
+  DriverStr(".set noreorder\n" +
+            RepeatRRNoDupes(&mips64::Mips64Assembler::Jalr, "jalr ${reg1}, ${reg2}"), "jalr");
+}
+
+TEST_F(AssemblerMIPS64Test, Jialc) {
+  mips64::Mips64Label label1, label2;
+  __ Jialc(&label1, mips64::T9);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label1);
+  __ Jialc(&label2, mips64::T9);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label2);
+  __ Jialc(&label1, mips64::T9);
+
+  std::string expected =
+      ".set noreorder\n"
+      "lapc $t9, 1f\n"
+      "jialc $t9, 0\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n"
+      "lapc $t9, 2f\n"
+      "jialc $t9, 0\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "2:\n"
+      "lapc $t9, 1b\n"
+      "jialc $t9, 0\n";
+  DriverStr(expected, "Jialc");
+}
+
+TEST_F(AssemblerMIPS64Test, Bc) {
+  mips64::Mips64Label label1, label2;
+  __ Bc(&label1);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label1);
+  __ Bc(&label2);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label2);
+  __ Bc(&label1);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bc 1f\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n"
+      "bc 2f\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "2:\n"
+      "bc 1b\n";
+  DriverStr(expected, "Bc");
+}
+
+TEST_F(AssemblerMIPS64Test, Beqc) {
+  mips64::Mips64Label label;
+  __ Beqc(mips64::A0, mips64::A1, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Beqc(mips64::A2, mips64::A3, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "beqc $a0, $a1, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "beqc $a2, $a3, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Beqc");
+}
+
+TEST_F(AssemblerMIPS64Test, Bnec) {
+  mips64::Mips64Label label;
+  __ Bnec(mips64::A0, mips64::A1, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bnec(mips64::A2, mips64::A3, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bnec $a0, $a1, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "bnec $a2, $a3, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Bnec");
+}
+
+TEST_F(AssemblerMIPS64Test, Beqzc) {
+  mips64::Mips64Label label;
+  __ Beqzc(mips64::A0, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Beqzc(mips64::A1, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "beqzc $a0, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "beqzc $a1, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Beqzc");
+}
+
+TEST_F(AssemblerMIPS64Test, Bnezc) {
+  mips64::Mips64Label label;
+  __ Bnezc(mips64::A0, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bnezc(mips64::A1, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bnezc $a0, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "bnezc $a1, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Bnezc");
+}
+
+TEST_F(AssemblerMIPS64Test, Bltzc) {
+  mips64::Mips64Label label;
+  __ Bltzc(mips64::A0, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bltzc(mips64::A1, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bltzc $a0, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "bltzc $a1, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Bltzc");
+}
+
+TEST_F(AssemblerMIPS64Test, Bgezc) {
+  mips64::Mips64Label label;
+  __ Bgezc(mips64::A0, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bgezc(mips64::A1, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bgezc $a0, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "bgezc $a1, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Bgezc");
+}
+
+TEST_F(AssemblerMIPS64Test, Blezc) {
+  mips64::Mips64Label label;
+  __ Blezc(mips64::A0, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Blezc(mips64::A1, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "blezc $a0, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "blezc $a1, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Blezc");
+}
+
+TEST_F(AssemblerMIPS64Test, Bgtzc) {
+  mips64::Mips64Label label;
+  __ Bgtzc(mips64::A0, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bgtzc(mips64::A1, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bgtzc $a0, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "bgtzc $a1, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Bgtzc");
+}
+
+TEST_F(AssemblerMIPS64Test, Bltc) {
+  mips64::Mips64Label label;
+  __ Bltc(mips64::A0, mips64::A1, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bltc(mips64::A2, mips64::A3, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bltc $a0, $a1, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "bltc $a2, $a3, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Bltc");
+}
+
+TEST_F(AssemblerMIPS64Test, Bgec) {
+  mips64::Mips64Label label;
+  __ Bgec(mips64::A0, mips64::A1, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bgec(mips64::A2, mips64::A3, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bgec $a0, $a1, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "bgec $a2, $a3, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Bgec");
+}
+
+TEST_F(AssemblerMIPS64Test, Bltuc) {
+  mips64::Mips64Label label;
+  __ Bltuc(mips64::A0, mips64::A1, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bltuc(mips64::A2, mips64::A3, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bltuc $a0, $a1, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "bltuc $a2, $a3, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Bltuc");
+}
+
+TEST_F(AssemblerMIPS64Test, Bgeuc) {
+  mips64::Mips64Label label;
+  __ Bgeuc(mips64::A0, mips64::A1, &label);
+  constexpr size_t kAdduCount1 = 63;
+  for (size_t i = 0; i != kAdduCount1; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bind(&label);
+  constexpr size_t kAdduCount2 = 64;
+  for (size_t i = 0; i != kAdduCount2; ++i) {
+    __ Addu(mips64::ZERO, mips64::ZERO, mips64::ZERO);
+  }
+  __ Bgeuc(mips64::A2, mips64::A3, &label);
+
+  std::string expected =
+      ".set noreorder\n"
+      "bgeuc $a0, $a1, 1f\n"
+      "nop\n" +
+      RepeatInsn(kAdduCount1, "addu $zero, $zero, $zero\n") +
+      "1:\n" +
+      RepeatInsn(kAdduCount2, "addu $zero, $zero, $zero\n") +
+      "bgeuc $a2, $a3, 1b\n"
+      "nop\n";
+  DriverStr(expected, "Bgeuc");
 }
 
 //////////
