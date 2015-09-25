@@ -199,21 +199,16 @@ static void DexFile_closeDexFile(JNIEnv* env, jclass, jobject cookie) {
     return;
   }
 
+  // Delete dex files associated with this dalvik.system.DexFile since there should not be running
+  // code using it. dex_files is a vector due to multidex.
   ScopedObjectAccess soa(env);
-
-  // The Runtime currently never unloads classes, which means any registered
-  // dex files must be kept around forever in case they are used. We
-  // accomplish this here by explicitly leaking those dex files that are
-  // registered.
-  //
-  // TODO: The Runtime should support unloading of classes and freeing of the
-  // dex files for those unloaded classes rather than leaking dex files here.
   ClassLinker* const class_linker = Runtime::Current()->GetClassLinker();
   for (const DexFile* dex_file : *dex_files) {
-    if (class_linker->FindDexCache(soa.Self(), *dex_file, true) == nullptr) {
-      delete dex_file;
-    }
+    CHECK(class_linker->FindDexCache(soa.Self(), *dex_file, true) == nullptr);
+    delete dex_file;
   }
+
+  // TODO: Also unmap the OatFile for this dalvik.system.DexFile.
 }
 
 static jclass DexFile_defineClassNative(JNIEnv* env, jclass, jstring javaName, jobject javaLoader,
