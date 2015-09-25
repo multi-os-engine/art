@@ -26,7 +26,7 @@
 #error test code compiled without NDEBUG
 #endif
 
-static JavaVM* jvm = nullptr;
+extern "C" JavaVM* jvm = nullptr;
 
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
   assert(vm != nullptr);
