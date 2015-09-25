@@ -123,8 +123,11 @@ class WaitForCompilationToFinishTask : public Task {
     barrier_.Increment(self, 1);
   }
 
-  virtual void Run(Thread* self) OVERRIDE {
-    barrier_.Pass(self);
+  virtual void Run(Thread* self ATTRIBUTE_UNUSED) OVERRIDE {}
+
+  virtual void Finalize() OVERRIDE {
+    // Do this in Finalize since Finalize is called after Run by the thread pool.
+    barrier_.Pass(Thread::Current());
   }
 
  private:
