@@ -554,41 +554,31 @@ void HInductionVarAnalysis::VisitCondition(HLoopInformation* loop,
   } else if (a->induction_class == kLinear && b->induction_class == kInvariant) {
     // Analyze condition with induction at left-hand-side (e.g. i < U).
     InductionInfo* stride = a->op_a;
-    InductionInfo* lo_val = a->op_b;
-    InductionInfo* hi_val = b;
+    InductionInfo* l_expr = a->op_b;
+    InductionInfo* u_expr = b;
     // Analyze stride (may be compound).
-    InductionVarRange::Value v1 = InductionVarRange::GetVal(stride, nullptr, /* is_min */ true);
-    InductionVarRange::Value v2 = InductionVarRange::GetVal(stride, nullptr, /* is_min */ false);
-    if (v1.a_constant != 0 || v2.a_constant != 0 || v1.b_constant != v2.b_constant) {
+    int32_t stride_value = 0;
+    if (!InductionVarRange::GetConstant(stride, &stride_value)) {
       return;
     }
-    // Rewrite safe condition i != U with unit stride into i < U or i > U
-    // (unit stride guarantees that the end condition is always reached).
-    const int32_t stride_value = v1.b_constant;
-    int64_t lo_value = 0;
-    int64_t hi_value = 0;
-    if (cmp == kCondNE && IsIntAndGet(lo_val, &lo_value) && IsIntAndGet(hi_val, &hi_value)) {
-      if ((stride_value == +1 && lo_value < hi_value) ||
-          (stride_value == -1 && lo_value > hi_value)) {
-        cmp = stride_value > 0 ? kCondLT : kCondGT;
-      }
+    // Rewrite condition i != U into i < U or i > U if end condition is reached exactly.
+    if (cmp == kCondNE && ((stride_value == +1 && IsTaken(l_expr, u_expr, kCondLT)) ||
+                           (stride_value == -1 && IsTaken(l_expr, u_expr, kCondGT)))) {
+      cmp = stride > 0 ? kCondLT : kCondGT;
     }
     // Normalize a linear loop control with a nonzero stride:
     //   stride > 0, either i < U or i <= U
     //   stride < 0, either i > U or i >= U
-    //
-    // TODO: construct conditions for constant/symbolic safety of trip-count
-    //
     if ((stride_value > 0 && (cmp == kCondLT || cmp == kCondLE)) ||
         (stride_value < 0 && (cmp == kCondGT || cmp == kCondGE))) {
-      VisitTripCount(loop, lo_val, hi_val, stride, stride_value, type, cmp);
+      VisitTripCount(loop, l_expr, u_expr, stride, stride_value, type, cmp);
     }
   }
 }
 
 void HInductionVarAnalysis::VisitTripCount(HLoopInformation* loop,
-                                           InductionInfo* lo_val,
-                                           InductionInfo* hi_val,
+                                           InductionInfo* l_expr,
+                                           InductionInfo* u_expr,
                                            InductionInfo* stride,
                                            int32_t stride_value,
                                            Primitive::Type type,
@@ -604,30 +594,93 @@ void HInductionVarAnalysis::VisitTripCount(HLoopInformation* loop,
   //    for (n = 0; n < TC; n++) // where TC = (U + S - L) / S
   //      .. L + S * n ..
   //
-  // NOTE: The TC (trip-count) expression is only valid when safe. Otherwise TC is 0
-  //       (or possibly infinite). Also, the expression assumes the loop does not have
-  //       early-exits. Otherwise, TC is an upper bound.
+  // taking the following into consideration:
   //
-  bool cancels = (cmp == kCondLT || cmp == kCondGT) && std::abs(stride_value) == 1;
+  // (1) Using the same precision, the TC (trip-count) expression should be interpreted as
+  //     an unsigned entity, as in the following loop that uses the full range:
+  //     for (int i = INT_MIN; i < INT_MAX; i++) // TC = UINT_MAX
+  // (2) The TC is only valid if the loop is taken, otherwise TC = 0, as in:
+  //     for (int i = 12; i < U; i++) // TC = 0 when U >= 12
+  //     If this cannot be determined at compile-time, the TC is only valid within the
+  //     loop-body proper, not the loop-header unless enforced with an explicit condition.
+  // (3) The TC is only valid if the loop is finite, otherwise TC has no value, as in:
+  //     for (int i = 0; i <= U; i++) // TC = Inf when U = INT_MAX
+  //     If this cannot be determined at compile-time, the TC is only valid when enforced
+  //     with an explicit condition.
+  // (4) For loops which early-exits, the TC forms an upper bound, as in:
+  //     for (int i = 0; i < 10 && ....; i++) // TC <= 10
+  const bool is_taken = IsTaken(l_expr, u_expr, cmp);
+  const bool is_finite = IsFinite(u_expr, stride_value, type, cmp);
+  const bool cancels = (cmp == kCondLT || cmp == kCondGT) && std::abs(stride_value) == 1;
   if (!cancels) {
     // Convert exclusive integral inequality into inclusive integral inequality,
     // viz. condition i < U is i <= U - 1 and condition i > U is i >= U + 1.
     if (cmp == kCondLT) {
-      hi_val = CreateInvariantOp(kSub, hi_val, CreateConstant(1, type));
+      u_expr = CreateInvariantOp(kSub, u_expr, CreateConstant(1, type));
     } else if (cmp == kCondGT) {
-      hi_val = CreateInvariantOp(kAdd, hi_val, CreateConstant(1, type));
+      u_expr = CreateInvariantOp(kAdd, u_expr, CreateConstant(1, type));
     }
     // Compensate for stride.
-    hi_val = CreateInvariantOp(kAdd, hi_val, stride);
+    u_expr = CreateInvariantOp(kAdd, u_expr, stride);
   }
-
+  InductionInfo* tc = CreateInvariantOp(kDiv, CreateInvariantOp(kSub, u_expr, l_expr), stride);
   // Assign the trip-count expression to the loop control. Clients that use the information
-  // should be aware that the expression is only valid in the loop-body proper (when symbolically
-  // safe), and not yet in the loop-header (unless constant safe). If the loop has any early exits,
-  // the trip-count forms a conservative upper bound on the number of loop iterations.
-  InductionInfo* trip_count =
-      CreateInvariantOp(kDiv, CreateInvariantOp(kSub, hi_val, lo_val), stride);
-  AssignInfo(loop, loop->GetHeader()->GetLastInstruction(), trip_count);
+  // should be aware that the expression is only valid under the conditions sketched above.
+  InductionOp tcKind = kTCinBodyUnsafe;
+  if (is_taken && is_finite) {
+    tcKind = kTCinLoop;
+  } else if (is_finite) {
+    tcKind = kTCinBody;
+  } else if (is_taken) {
+    tcKind = kTCinLoopUnsafe;
+  }
+  AssignInfo(loop, loop->GetHeader()->GetLastInstruction(), CreateTripCount(tcKind, tc));
+}
+
+bool HInductionVarAnalysis::IsTaken(InductionInfo* l_expr,
+                                    InductionInfo* u_expr,
+                                    IfCondition cmp) {
+  int64_t l_value;
+  int64_t u_value;
+  if (IsIntAndGet(l_expr, &l_value) && IsIntAndGet(u_expr, &u_value)) {
+    switch (cmp) {
+      case kCondLT: return l_value <  u_value;
+      case kCondLE: return l_value <= u_value;
+      case kCondGT: return l_value >  u_value;
+      case kCondGE: return l_value >= u_value;
+      case kCondEQ:
+      case kCondNE: DCHECK(0);
+    }
+  }
+  return false;  // not certain, may be untaken
+}
+
+bool HInductionVarAnalysis::IsFinite(InductionInfo* u_expr,
+                                     int32_t stride_value,
+                                     Primitive::Type type,
+                                     IfCondition cmp) {
+  const int64_t min = type == Primitive::kPrimInt
+      ? std::numeric_limits<int32_t>::min()
+      : std::numeric_limits<int64_t>::min();
+  const int64_t max = type == Primitive::kPrimInt
+        ? std::numeric_limits<int32_t>::max()
+        : std::numeric_limits<int64_t>::max();
+  // Some rules under which it is certain at compile-time that the loop is finite.
+  int64_t value;
+  switch (cmp) {
+    case kCondLT:
+      return stride_value == 1 || (IsIntAndGet(u_expr, &value) && value <= (max - stride_value + 1));
+    case kCondLE:
+      return (IsIntAndGet(u_expr, &value) && value <= (max - stride_value));
+    case kCondGT:
+      return stride_value == -1 || (IsIntAndGet(u_expr, &value) && value >= (min - stride_value - 1));
+    case kCondGE:
+      return (IsIntAndGet(u_expr, &value) && value >= (min - stride_value));
+    case kCondEQ:
+    case kCondNE:
+      DCHECK(0);
+  }
+  return false; // not certain, may be infinite
 }
 
 void HInductionVarAnalysis::AssignInfo(HLoopInformation* loop,
@@ -778,6 +831,10 @@ std::string HInductionVarAnalysis::InductionToString(InductionInfo* info) {
             inv += std::to_string(info->fetch->GetId()) + ":" + info->fetch->DebugName();
           }
           break;
+        case kTCinLoop:       inv += "TC-loop:"; break;
+        case kTCinBody:       inv += "TC-body:"; break;
+        case kTCinLoopUnsafe: inv += "TC-loop-unsafe:"; break;
+        case kTCinBodyUnsafe: inv += "TC-body-unsafe:"; break;
       }
       inv += InductionToString(info->op_b);
       return inv + ")";

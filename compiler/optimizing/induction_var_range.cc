@@ -89,7 +89,8 @@ InductionVarRange::Value InductionVarRange::GetMinInduction(HInstruction* contex
   HLoopInformation* loop = context->GetBlock()->GetLoopInformation();
   if (loop != nullptr) {
     return GetVal(induction_analysis_->LookupInfo(loop, instruction),
-                  GetTripCount(loop, context), /* is_min */ true);
+                  GetTripCount(loop, context),
+                  /* is_min */ true);
   }
   return Value();
 }
@@ -100,7 +101,8 @@ InductionVarRange::Value InductionVarRange::GetMaxInduction(HInstruction* contex
   if (loop != nullptr) {
     return SimplifyMax(
         GetVal(induction_analysis_->LookupInfo(loop, instruction),
-               GetTripCount(loop, context), /* is_min */ false));
+               GetTripCount(loop, context),
+               /* is_min */ false));
   }
   return Value();
 }
@@ -111,19 +113,19 @@ InductionVarRange::Value InductionVarRange::GetMaxInduction(HInstruction* contex
 
 HInductionVarAnalysis::InductionInfo* InductionVarRange::GetTripCount(HLoopInformation* loop,
                                                                       HInstruction* context) {
-  // The trip-count expression is only valid when the top-test is taken at least once,
-  // that means, when the analyzed context appears outside the loop header itself.
-  // Early-exit loops are okay, since in those cases, the trip-count is conservative.
-  //
-  // TODO: deal with runtime safety issues on TCs
-  //
-  if (context->GetBlock() != loop->GetHeader()) {
-    HInductionVarAnalysis::InductionInfo* trip =
-        induction_analysis_->LookupInfo(loop, loop->GetHeader()->GetLastInstruction());
-    if (trip != nullptr) {
-      // Wrap the trip-count representation in its own unusual NOP node, so that range analysis
-      // is able to determine the [0, TC - 1] interval without having to construct constants.
-      return induction_analysis_->CreateInvariantOp(HInductionVarAnalysis::kNop, trip, trip);
+  // Use the trip-count expression if the loop is safe (cannot be infinite) and it is
+  // either valid in the full loop or in the loop-body proper and requested from there.
+  HInductionVarAnalysis::InductionInfo* trip =
+      induction_analysis_->LookupInfo(loop, loop->GetHeader()->GetLastInstruction());
+  if (trip != nullptr) {
+    DCHECK_EQ(HInductionVarAnalysis::kInvariant, trip->induction_class);
+    switch (trip->operation) {
+      case HInductionVarAnalysis::kTCinLoop:
+        return trip;
+      case HInductionVarAnalysis::kTCinBody:  // only in loop-body proper
+        return context->GetBlock() != loop->GetHeader() ? trip : nullptr;
+      default:
+        break;
     }
   }
   return nullptr;
@@ -160,10 +162,9 @@ InductionVarRange::Value InductionVarRange::GetVal(HInductionVarAnalysis::Induct
       case HInductionVarAnalysis::kInvariant:
         // Invariants.
         switch (info->operation) {
-          case HInductionVarAnalysis::kNop:  // normalized: 0 or TC-1
-            DCHECK_EQ(info->op_a, info->op_b);
-            return is_min ? Value(0)
-                          : SubValue(GetVal(info->op_b, trip, is_min), Value(1));
+          case HInductionVarAnalysis::kNop:
+            DCHECK(0);
+            break;
           case HInductionVarAnalysis::kAdd:
             return AddValue(GetVal(info->op_a, trip, is_min),
                             GetVal(info->op_b, trip, is_min));
@@ -179,6 +180,11 @@ InductionVarRange::Value InductionVarRange::GetVal(HInductionVarAnalysis::Induct
             return GetDiv(info->op_a, info->op_b, trip, is_min);
           case HInductionVarAnalysis::kFetch:
             return GetFetch(info->fetch, trip, is_min);
+          case HInductionVarAnalysis::kTCinLoop:
+          case HInductionVarAnalysis::kTCinBody:
+          case HInductionVarAnalysis::kTCinLoopUnsafe:
+          case HInductionVarAnalysis::kTCinBodyUnsafe:  // normalized: 0 or TC-1
+            return is_min ? Value(0) : SubValue(GetVal(info->op_b, trip, is_min), Value(1));
         }
         break;
       case HInductionVarAnalysis::kLinear:
@@ -253,6 +259,16 @@ InductionVarRange::Value InductionVarRange::GetDiv(HInductionVarAnalysis::Induct
     }
   }
   return Value();
+}
+
+bool InductionVarRange::GetConstant(HInductionVarAnalysis::InductionInfo* info, int32_t *value) {
+  Value v_min = GetVal(info, nullptr, /* is_min */ true);
+  Value v_max = GetVal(info, nullptr, /* is_min */ false);
+  if (v_min.a_constant == 0 && v_max.a_constant == 0 && v_min.b_constant == v_max.b_constant) {
+    *value = v_min.b_constant;
+    return true;
+  }
+  return false;
 }
 
 InductionVarRange::Value InductionVarRange::AddValue(Value v1, Value v2) {

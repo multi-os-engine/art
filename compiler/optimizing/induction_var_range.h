@@ -91,6 +91,8 @@ class InductionVarRange {
                       HInductionVarAnalysis::InductionInfo* trip,
                       bool is_min);
 
+  static bool GetConstant(HInductionVarAnalysis::InductionInfo* info, int32_t *value);
+
   static Value AddValue(Value v1, Value v2);
   static Value SubValue(Value v1, Value v2);
   static Value MulValue(Value v1, Value v2);
