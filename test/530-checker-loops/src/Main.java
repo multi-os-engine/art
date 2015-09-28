@@ -278,12 +278,11 @@ public class Main {
   /// CHECK-START: int Main.linearDoWhile() BCE (before)
   /// CHECK-DAG: BoundsCheck
   /// CHECK-START: int Main.linearDoWhile() BCE (after)
-  /// CHECK-DAG: BoundsCheck
+  /// CHECK-NOT: BoundsCheck
   private static int linearDoWhile() {
     int[] x = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
     int result = 0;
     int i = 0;
-    // TODO: make this work
     do {
       result += x[i++];
     } while (i < 10);
