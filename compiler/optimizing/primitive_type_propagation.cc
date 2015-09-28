@@ -21,60 +21,93 @@
 
 namespace art {
 
-static Primitive::Type MergeTypes(Primitive::Type existing, Primitive::Type new_type) {
-  // We trust the verifier has already done the necessary checking.
-  switch (existing) {
-    case Primitive::kPrimFloat:
-    case Primitive::kPrimDouble:
-    case Primitive::kPrimNot:
-      return existing;
-    default:
-      // Phis are initialized with a void type, so if we are asked
-      // to merge with a void type, we should use the existing one.
-      return new_type == Primitive::kPrimVoid
-          ? existing
-          : HPhi::ToPhiType(new_type);
+bool PrimitiveTypePropagation::TypePhiFromInputs(HPhi* phi) {
+  Primitive::Type common_type = phi->GetType();
+
+  for (HInputIterator it(phi); !it.Done(); it.Advance()) {
+    HInstruction* input = it.Current();
+    if (input->IsPhi() && input->AsPhi()->IsDead()) {
+      // Phis are constructed live and those with no uses marked dead by
+      // SsaDeadPhiElimination. Hence, if an input is a dead phi, it must have
+      // been made dead due to type conflict. Mark this phi conflicting too.
+      return false;
+    }
+
+    Primitive::Type input_type = HPhi::ToPhiType(input->GetType());
+    if (common_type == Primitive::kPrimVoid) {
+      // Setting type for the first time.
+      common_type = input_type;
+    } else if (common_type == input_type) {
+      // No change in type.
+    } else if (input_type == Primitive::kPrimVoid) {
+      // Input is a phi which has not been typed yet. Do nothing.
+      DCHECK(input->IsPhi());
+    } else if (Primitive::ComponentSize(common_type) != Primitive::ComponentSize(input_type)) {
+      // Types are of different sizes. Must be a conflict.
+      return false;
+    } else if (Primitive::IsIntegralType(common_type)) {
+      // Previous inputs were integral, this one is not but is of the same size.
+      // This does not imply conflict since some bytecode instruction types are
+      // ambiguous. ReplacePhiInputs will either type them or detect a conflict.
+      DCHECK(Primitive::IsFloatingPointType(input_type) || input_type == Primitive::kPrimNot);
+      common_type = input_type;
+    } else if (Primitive::IsIntegralType(input_type)) {
+      // Input is integral, common type is not. Same as in the previous case, if
+      // there is a conflict, it will be detected during ReplacePhiInputs.
+      DCHECK(Primitive::IsFloatingPointType(common_type) || common_type == Primitive::kPrimNot);
+    } else {
+      // Combining float and reference types. Clearly a conflict.
+      DCHECK((common_type == Primitive::kPrimFloat && input_type == Primitive::kPrimNot) ||
+             (common_type == Primitive::kPrimNot && input_type == Primitive::kPrimFloat));
+      return false;
+    }
   }
+
+  phi->SetType(common_type);
+  return true;
 }
 
-// Re-compute and update the type of the instruction. Returns
-// whether or not the type was changed.
-bool PrimitiveTypePropagation::UpdateType(HPhi* phi) {
-  DCHECK(phi->IsLive());
-  Primitive::Type existing = phi->GetType();
-
-  Primitive::Type new_type = existing;
-  for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
-    Primitive::Type input_type = phi->InputAt(i)->GetType();
-    new_type = MergeTypes(new_type, input_type);
-  }
-  phi->SetType(new_type);
-
-  if (new_type == Primitive::kPrimDouble
-      || new_type == Primitive::kPrimFloat
-      || new_type == Primitive::kPrimNot) {
-    // If the phi is of floating point type, we need to update its inputs to that
-    // type. For inputs that are phis, we need to recompute their types.
+bool PrimitiveTypePropagation::ReplacePhiInputs(HPhi* phi) {
+  Primitive::Type common_type = phi->GetType();
+  if (Primitive::IsFloatingPointType(common_type) || common_type == Primitive::kPrimNot) {
     for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
       HInstruction* input = phi->InputAt(i);
-      if (input->GetType() != new_type) {
-        HInstruction* equivalent = (new_type == Primitive::kPrimNot)
+      if (input->GetType() != common_type) {
+        HInstruction* equivalent = (common_type == Primitive::kPrimNot)
             ? SsaBuilder::GetReferenceTypeEquivalent(input)
-            : SsaBuilder::GetFloatOrDoubleEquivalent(phi, input, new_type);
+            : SsaBuilder::GetFloatOrDoubleEquivalent(phi, input, common_type);
+        if (equivalent == nullptr) {
+          // Input could not be typed. Report conflict.
+          return false;
+        }
+
         phi->ReplaceInput(equivalent, i);
         if (equivalent->IsPhi()) {
-          equivalent->AsPhi()->SetLive();
           AddToWorklist(equivalent->AsPhi());
         } else if (equivalent == input) {
           // The input has changed its type. It can be an input of other phis,
           // so we need to put phi users in the work list.
-          AddDependentInstructionsToWorklist(equivalent);
+          AddDependentInstructionsToWorklist(input);
         }
       }
     }
   }
 
-  return existing != new_type;
+  return true;
+}
+
+bool PrimitiveTypePropagation::UpdateType(HPhi* phi) {
+  DCHECK(phi->IsLive());
+  Primitive::Type original_type = phi->GetType();
+
+  if (!TypePhiFromInputs(phi) || !ReplacePhiInputs(phi)) {
+    // Phi could not be typed due to conflicting inputs. The phi must be dead.
+    phi->SetDead();
+    return true;
+  }
+
+  // Return true if the type of the phi has changed.
+  return phi->GetType() != original_type;
 }
 
 void PrimitiveTypePropagation::Run() {
@@ -109,10 +142,12 @@ void PrimitiveTypePropagation::VisitBasicBlock(HBasicBlock* block) {
 
 void PrimitiveTypePropagation::ProcessWorklist() {
   while (!worklist_.empty()) {
-    HPhi* instruction = worklist_.back();
+    HPhi* phi = worklist_.back();
     worklist_.pop_back();
-    if (UpdateType(instruction)) {
-      AddDependentInstructionsToWorklist(instruction);
+    // The phi could have been made dead as a result of conflicts while in the
+    // worklist. If it is now dead, there is no point in updating its type.
+    if (phi->IsLive() && UpdateType(phi)) {
+      AddDependentInstructionsToWorklist(phi);
     }
   }
 }
@@ -123,10 +158,17 @@ void PrimitiveTypePropagation::AddToWorklist(HPhi* instruction) {
 }
 
 void PrimitiveTypePropagation::AddDependentInstructionsToWorklist(HInstruction* instruction) {
+  // If `instruction` is a dead phi, type conflict was just identified. All its
+  // live phi users therefore need to be marked dead/conflicting too and we add
+  // them to the worklist. Otherwise we add users whose type does not match and
+  // needs to be updated.
+  bool add_all_live_phis = instruction->IsPhi() && instruction->AsPhi()->IsDead();
   for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
-    HPhi* phi = it.Current()->GetUser()->AsPhi();
-    if (phi != nullptr && phi->IsLive() && phi->GetType() != instruction->GetType()) {
-      AddToWorklist(phi);
+    HInstruction* user = it.Current()->GetUser();
+    if (user->IsPhi() && user->AsPhi()->IsLive()) {
+      if (add_all_live_phis || user->GetType() != instruction->GetType()) {
+        AddToWorklist(user->AsPhi());
+      }
     }
   }
 }
