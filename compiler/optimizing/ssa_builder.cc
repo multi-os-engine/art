@@ -146,7 +146,10 @@ void DeadPhiHandling::VisitBasicBlock(HBasicBlock* block) {
       phi->SetLive();
       if (block->IsLoopHeader()) {
         // Give a type to the loop phi, to guarantee convergence of the algorithm.
-        phi->SetType(phi->InputAt(0)->GetType());
+        // Keep the type if it already has one or we could create type equivalents.
+        if (phi->GetType() == Primitive::kPrimVoid) {
+          phi->SetType(phi->InputAt(0)->GetType());
+        }
         AddToWorklist(phi);
       } else {
         // Because we are doing a reverse post order visit, all inputs of
