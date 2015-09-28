@@ -22,204 +22,6 @@
 
 namespace art {
 
-/**
- * A debuggable application may require to reviving phis, to ensure their
- * associated DEX register is available to a debugger. This class implements
- * the logic for statement (c) of the SsaBuilder (see ssa_builder.h). It
- * also makes sure that phis with incompatible input types are not revived
- * (statement (b) of the SsaBuilder).
- *
- * This phase must be run after detecting dead phis through the
- * DeadPhiElimination phase, and before deleting the dead phis.
- */
-class DeadPhiHandling : public ValueObject {
- public:
-  explicit DeadPhiHandling(HGraph* graph)
-      : graph_(graph), worklist_(graph->GetArena()->Adapter(kArenaAllocSsaBuilder)) {
-    worklist_.reserve(kDefaultWorklistSize);
-  }
-
-  void Run();
-
- private:
-  void VisitBasicBlock(HBasicBlock* block);
-  void ProcessWorklist();
-  void AddToWorklist(HPhi* phi);
-  void AddDependentInstructionsToWorklist(HPhi* phi);
-  bool UpdateType(HPhi* phi);
-
-  HGraph* const graph_;
-  ArenaVector<HPhi*> worklist_;
-
-  static constexpr size_t kDefaultWorklistSize = 8;
-
-  DISALLOW_COPY_AND_ASSIGN(DeadPhiHandling);
-};
-
-static bool HasConflictingEquivalent(HPhi* phi) {
-  if (phi->GetNext() == nullptr) {
-    return false;
-  }
-  HPhi* next = phi->GetNext()->AsPhi();
-  if (next->GetRegNumber() == phi->GetRegNumber()) {
-    if (next->GetType() == Primitive::kPrimVoid) {
-      // We only get a void type for an equivalent phi we processed and found out
-      // it was conflicting.
-      return true;
-    } else {
-      // Go to the next phi, in case it is also an equivalent.
-      return HasConflictingEquivalent(next);
-    }
-  }
-  return false;
-}
-
-bool DeadPhiHandling::UpdateType(HPhi* phi) {
-  if (phi->IsDead()) {
-    // Phi was rendered dead while waiting in the worklist because it was replaced
-    // with an equivalent.
-    return false;
-  }
-
-  Primitive::Type existing = phi->GetType();
-
-  bool conflict = false;
-  Primitive::Type new_type = existing;
-  for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
-    HInstruction* input = phi->InputAt(i);
-    if (input->IsPhi() && input->AsPhi()->IsDead()) {
-      // We are doing a reverse post order visit of the graph, reviving
-      // phis that have environment uses and updating their types. If an
-      // input is a phi, and it is dead (because its input types are
-      // conflicting), this phi must be marked dead as well.
-      conflict = true;
-      break;
-    }
-    Primitive::Type input_type = HPhi::ToPhiType(input->GetType());
-
-    // The only acceptable transitions are:
-    // - From void to typed: first time we update the type of this phi.
-    // - From int to reference (or reference to int): the phi has to change
-    //   to reference type. If the integer input cannot be converted to a
-    //   reference input, the phi will remain dead.
-    if (new_type == Primitive::kPrimVoid) {
-      new_type = input_type;
-    } else if (new_type == Primitive::kPrimNot && input_type == Primitive::kPrimInt) {
-      if (input->IsPhi() && HasConflictingEquivalent(input->AsPhi())) {
-        // If we already asked for an equivalent of the input phi, but that equivalent
-        // ended up conflicting, make this phi conflicting too.
-        conflict = true;
-        break;
-      }
-      HInstruction* equivalent = SsaBuilder::GetReferenceTypeEquivalent(input);
-      if (equivalent == nullptr) {
-        conflict = true;
-        break;
-      }
-      phi->ReplaceInput(equivalent, i);
-      if (equivalent->IsPhi()) {
-        DCHECK_EQ(equivalent->GetType(), Primitive::kPrimNot);
-        // We created a new phi, but that phi has the same inputs as the old phi. We
-        // add it to the worklist to ensure its inputs can also be converted to reference.
-        // If not, it will remain dead, and the algorithm will make the current phi dead
-        // as well.
-        equivalent->AsPhi()->SetLive();
-        AddToWorklist(equivalent->AsPhi());
-      }
-    } else if (new_type == Primitive::kPrimInt && input_type == Primitive::kPrimNot) {
-      new_type = Primitive::kPrimNot;
-      // Start over, we may request reference equivalents for the inputs of the phi.
-      i = -1;
-    } else if (new_type != input_type) {
-      conflict = true;
-      break;
-    }
-  }
-
-  if (conflict) {
-    phi->SetType(Primitive::kPrimVoid);
-    phi->SetDead();
-    return true;
-  } else if (existing == new_type) {
-    return false;
-  }
-
-  DCHECK(phi->IsLive());
-  phi->SetType(new_type);
-
-  // There might exist a `new_type` equivalent of `phi` already. In that case,
-  // we replace the equivalent with the, now live, `phi`.
-  HPhi* equivalent = phi->GetNextEquivalentPhiWithSameType();
-  if (equivalent != nullptr) {
-    // There cannot be more than two equivalents with the same type.
-    DCHECK(equivalent->GetNextEquivalentPhiWithSameType() == nullptr);
-    // If doing fix-point iteration, the equivalent might be in `worklist_`.
-    // Setting it dead will make UpdateType skip it.
-    equivalent->SetDead();
-    equivalent->ReplaceWith(phi);
-  }
-
-  return true;
-}
-
-void DeadPhiHandling::VisitBasicBlock(HBasicBlock* block) {
-  for (HInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
-    HPhi* phi = it.Current()->AsPhi();
-    if (phi->IsDead() && phi->HasEnvironmentUses()) {
-      phi->SetLive();
-      if (block->IsLoopHeader()) {
-        // Give a type to the loop phi to guarantee convergence of the algorithm.
-        // Note that the dead phi may already have a type if it is an equivalent
-        // generated for a typed LoadLocal. In that case we do not change the
-        // type because it could lead to an unsupported PrimNot/Float/Double ->
-        // PrimInt/Long transition and create same type equivalents.
-        if (phi->GetType() == Primitive::kPrimVoid) {
-          phi->SetType(phi->InputAt(0)->GetType());
-        }
-        AddToWorklist(phi);
-      } else {
-        // Because we are doing a reverse post order visit, all inputs of
-        // this phi have been visited and therefore had their (initial) type set.
-        UpdateType(phi);
-      }
-    }
-  }
-}
-
-void DeadPhiHandling::ProcessWorklist() {
-  while (!worklist_.empty()) {
-    HPhi* instruction = worklist_.back();
-    worklist_.pop_back();
-    // Note that the same equivalent phi can be added multiple times in the work list, if
-    // used by multiple phis. The first call to `UpdateType` will know whether the phi is
-    // dead or live.
-    if (instruction->IsLive() && UpdateType(instruction)) {
-      AddDependentInstructionsToWorklist(instruction);
-    }
-  }
-}
-
-void DeadPhiHandling::AddToWorklist(HPhi* instruction) {
-  DCHECK(instruction->IsLive());
-  worklist_.push_back(instruction);
-}
-
-void DeadPhiHandling::AddDependentInstructionsToWorklist(HPhi* instruction) {
-  for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
-    HPhi* phi = it.Current()->GetUser()->AsPhi();
-    if (phi != nullptr && !phi->IsDead()) {
-      AddToWorklist(phi);
-    }
-  }
-}
-
-void DeadPhiHandling::Run() {
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
-    VisitBasicBlock(it.Current());
-  }
-  ProcessWorklist();
-}
-
 void SsaBuilder::FixNullConstantType() {
   // The order doesn't matter here.
   for (HReversePostOrderIterator itb(*GetGraph()); !itb.Done(); itb.Advance()) {
@@ -259,10 +61,11 @@ void SsaBuilder::EquivalentPhisCleanup() {
       HPhi* phi = it.Current()->AsPhi();
       HPhi* next = phi->GetNextEquivalentPhiWithSameType();
       if (next != nullptr) {
-        // Make sure we do not replace a live phi with a dead phi. A live phi has been
-        // handled by the type propagation phase, unlike a dead phi.
+        // Make sure we do not replace a live phi with a dead phi. A live phi
+        // has been handled by the type propagation phase, unlike a dead phi.
         if (next->IsLive()) {
           phi->ReplaceWith(next);
+          phi->SetDead();
         } else {
           next->ReplaceWith(phi);
         }
@@ -299,6 +102,7 @@ void SsaBuilder::BuildSsa() {
   // type. The marking allows the type propagation to know which phis it needs
   // to handle. We mark but do not eliminate: the elimination will be done in
   // step 9).
+
   SsaDeadPhiElimination dead_phis_for_type_propagation(GetGraph());
   dead_phis_for_type_propagation.MarkDeadPhis();
 
@@ -314,8 +118,8 @@ void SsaBuilder::BuildSsa() {
   // the same dex register. This pass cleans them up.
   EquivalentPhisCleanup();
 
-  // 6) Mark dead phis again. Step 4) may have introduced new phis.
-  // Step 5) might enable the death of new phis.
+  // // 6) Mark dead phis again. Step 4) may have introduced new phis.
+  // // Step 5) might enable the death of new phis.
   SsaDeadPhiElimination dead_phis(GetGraph());
   dead_phis.MarkDeadPhis();
 
@@ -359,14 +163,6 @@ void SsaBuilder::BuildSsa() {
       // We found a live phi equivalent. Update the environment uses of `phi` with it.
       phi->ReplaceWith(next);
     }
-  }
-
-  // 10) Deal with phis to guarantee liveness of phis in case of a debuggable
-  // application. This is for satisfying statement (c) of the SsaBuilder
-  // (see ssa_builder.h).
-  if (GetGraph()->IsDebuggable()) {
-    DeadPhiHandling dead_phi_handler(GetGraph());
-    dead_phi_handler.Run();
   }
 
   // 11) Now that the right phis are used for the environments, and we
@@ -563,6 +359,10 @@ HDoubleConstant* SsaBuilder::GetDoubleEquivalent(HLongConstant* constant) {
  * phi with a floating point / reference type.
  */
 HPhi* SsaBuilder::GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive::Type type) {
+  DCHECK(phi->IsLive()) << "Creating an equivalent of a dead phi would create a live phi.";
+
+  // LOG(INFO) << "Requesting phi " << phi->GetId() << " equivalent " << type;
+
   // We place the floating point /reference phi next to this phi.
   HInstruction* next = phi->GetNext();
   if (next != nullptr
@@ -577,6 +377,7 @@ HPhi* SsaBuilder::GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive:
       || (next->GetType() != type)) {
     ArenaAllocator* allocator = phi->GetBlock()->GetGraph()->GetArena();
     HPhi* new_phi = new (allocator) HPhi(allocator, phi->GetRegNumber(), phi->InputCount(), type);
+    // LOG(INFO) << "Created phi " << new_phi->GetId() << " live=" << new_phi->IsLive();
     for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
       // Copy the inputs. Note that the graph may not be correctly typed by doing this copy,
       // but the type propagation phase will fix it.
@@ -586,6 +387,8 @@ HPhi* SsaBuilder::GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive:
     return new_phi;
   } else {
     DCHECK_EQ(next->GetType(), type);
+    // LOG(INFO) << "Found existing equivalent " << next->GetId() << " live=" << next->AsPhi()->IsLive();
+    next->AsPhi()->SetLive();
     return next->AsPhi();
   }
 }
@@ -594,11 +397,14 @@ HInstruction* SsaBuilder::GetFloatOrDoubleEquivalent(HInstruction* user,
                                                      HInstruction* value,
                                                      Primitive::Type type) {
   if (value->IsArrayGet()) {
-    // The verifier has checked that values in arrays cannot be used for both
-    // floating point and non-floating point operations. It is therefore safe to just
-    // change the type of the operation.
-    value->AsArrayGet()->SetType(type);
-    return value;
+    HArrayGet* aget = value->AsArrayGet();
+    if (aget->GetType() != type && aget->IsTypeFixed()) {
+      DCHECK(value->GetBlock()->GetGraph()->IsDebuggable()) << aget->GetType() << type;
+      DCHECK(user->IsPhi());
+      return nullptr;
+    }
+    aget->SetType(type);
+    return aget;
   } else if (value->IsLongConstant()) {
     return GetDoubleEquivalent(value->AsLongConstant());
   } else if (value->IsIntConstant()) {
@@ -606,12 +412,7 @@ HInstruction* SsaBuilder::GetFloatOrDoubleEquivalent(HInstruction* user,
   } else if (value->IsPhi()) {
     return GetFloatDoubleOrReferenceEquivalentOfPhi(value->AsPhi(), type);
   } else {
-    // For other instructions, we assume the verifier has checked that the dex format is correctly
-    // typed and the value in a dex register will not be used for both floating point and
-    // non-floating point operations. So the only reason an instruction would want a floating
-    // point equivalent is for an unused phi that will be removed by the dead phi elimination phase.
-    DCHECK(user->IsPhi()) << "is actually " << user->DebugName() << " (" << user->GetId() << ")";
-    return value;
+    return nullptr;
   }
 }
 
@@ -636,6 +437,18 @@ void SsaBuilder::VisitLoadLocal(HLoadLocal* load) {
       value = GetReferenceTypeEquivalent(value);
     }
   }
+
+  if (value->IsArrayGet() && !value->AsArrayGet()->IsTypeFixed()) {
+    for (HUseIterator<HInstruction*> use_it(load->GetUses()); !use_it.Done(); use_it.Advance()) {
+      HInstruction* user = use_it.Current()->GetUser();
+      size_t index = use_it.Current()->GetIndex();
+      if (!user->IsPhi() && !user->IsStoreLocal() && (!user->IsArraySet() || index != 2)) {
+        value->AsArrayGet()->FixType();
+        break;
+      }
+    }
+  }
+
   load->ReplaceWith(value);
   load->GetBlock()->RemoveInstruction(load);
 }

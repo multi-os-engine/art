@@ -755,6 +755,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                         dex_cache);
 
   VLOG(compiler) << "Building " << method_name;
+  // LOG(INFO) << "Building " << method_name;
 
   {
     PassScope scope(HGraphBuilder::kBuilderPassName, &pass_observer);

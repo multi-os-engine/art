@@ -24,21 +24,40 @@ void SsaDeadPhiElimination::Run() {
 }
 
 void SsaDeadPhiElimination::MarkDeadPhis() {
+  // LOG(INFO) << "MARKDEADPHIS";
   // Add to the worklist phis referenced by non-phi instructions.
   for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     for (HInstructionIterator inst_it(block->GetPhis()); !inst_it.Done(); inst_it.Advance()) {
       HPhi* phi = inst_it.Current()->AsPhi();
+      if (phi->IsDead()) {
+        // Phis are constructed live, so this one was previously proven dead
+        // or conflicting.
+        // LOG(INFO) << "Phi" << phi->GetId() << " already dead";
+        continue;
+      }
+
       // Set dead ahead of running through uses. The phi may have no use.
-      phi->SetDead();
-      for (HUseIterator<HInstruction*> use_it(phi->GetUses()); !use_it.Done(); use_it.Advance()) {
-        HUseListNode<HInstruction*>* current = use_it.Current();
-        HInstruction* user = current->GetUser();
-        if (!user->IsPhi()) {
-          worklist_.push_back(phi);
-          phi->SetLive();
-          break;
+      bool is_live = false;
+
+      if (graph_->IsDebuggable() && phi->HasEnvironmentUses()) {
+        is_live = true;
+        // LOG(INFO) << "Phi" << phi->GetId() << " has env uses in debuggable";
+      } else {
+        for (HUseIterator<HInstruction*> use_it(phi->GetUses()); !use_it.Done(); use_it.Advance()) {
+          if (!use_it.Current()->GetUser()->IsPhi()) {
+            is_live = true;
+            // LOG(INFO) << "Phi" << phi->GetId() << " has a non-phi use";
+            break;
+          }
         }
+      }
+
+      if (is_live) {
+        worklist_.push_back(phi);
+      } else {
+        // LOG(INFO) << "Phi" << phi->GetId() << " has no uses";
+        phi->SetDead();
       }
     }
   }
@@ -46,12 +65,16 @@ void SsaDeadPhiElimination::MarkDeadPhis() {
   // Process the worklist by propagating liveness to phi inputs.
   while (!worklist_.empty()) {
     HPhi* phi = worklist_.back();
+    // LOG(INFO) << "Worklist phi " << phi->GetId();
     worklist_.pop_back();
     for (HInputIterator it(phi); !it.Done(); it.Advance()) {
       HInstruction* input = it.Current();
       if (input->IsPhi() && input->AsPhi()->IsDead()) {
-        worklist_.push_back(input->AsPhi());
+        // If we revive a phi it must have been live at the beginning of
+        // the pass but had no non-phi uses of its own.
         input->AsPhi()->SetLive();
+        // LOG(INFO) << "Phi" << input->AsPhi()->GetId() << " kept live because used by a live phi" << phi->GetId();
+        worklist_.push_back(input->AsPhi());
       }
     }
   }
@@ -75,7 +98,7 @@ void SsaDeadPhiElimination::EliminateDeadPhis() {
           for (HUseIterator<HInstruction*> use_it(phi->GetUses()); !use_it.Done();
                use_it.Advance()) {
             HInstruction* user = use_it.Current()->GetUser();
-            DCHECK(user->IsLoopHeaderPhi()) << user->GetId();
+            DCHECK(user->IsPhi());
             DCHECK(user->AsPhi()->IsDead()) << user->GetId();
           }
         }

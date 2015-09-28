@@ -4069,7 +4069,7 @@ class HPhi : public HInstruction {
         inputs_(number_of_inputs, arena->Adapter(kArenaAllocPhiInputs)),
         reg_number_(reg_number),
         type_(type),
-        is_live_(false),
+        is_live_(true),
         can_be_null_(true) {
   }
 
@@ -4094,7 +4094,14 @@ class HPhi : public HInstruction {
   void RemoveInputAt(size_t index);
 
   Primitive::Type GetType() const OVERRIDE { return type_; }
-  void SetType(Primitive::Type type) { type_ = type; }
+  void SetType(Primitive::Type new_type) {
+    DCHECK(type_ == new_type ||
+           type_ == Primitive::kPrimVoid ||
+           (type_ == Primitive::kPrimInt && new_type == Primitive::kPrimFloat) ||
+           (type_ == Primitive::kPrimInt && new_type == Primitive::kPrimNot) ||
+           (type_ == Primitive::kPrimLong && new_type == Primitive::kPrimDouble));
+    type_ = new_type;
+  }
 
   bool CanBeNull() const OVERRIDE { return can_be_null_; }
   void SetCanBeNull(bool can_be_null) { can_be_null_ = can_be_null; }
@@ -4298,7 +4305,8 @@ class HArrayGet : public HExpression<2> {
             HInstruction* index,
             Primitive::Type type,
             uint32_t dex_pc)
-      : HExpression(type, SideEffects::ArrayReadOfType(type), dex_pc) {
+      : HExpression(type, SideEffects::ArrayReadOfType(type), dex_pc),
+        fixed_type_(type != Primitive::kPrimInt && type != Primitive::kPrimLong) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -4318,7 +4326,13 @@ class HArrayGet : public HExpression<2> {
     return false;
   }
 
-  void SetType(Primitive::Type type) { type_ = type; }
+  void SetType(Primitive::Type type) {
+    DCHECK(type_ == type || !IsTypeFixed());
+    type_ = type;
+  }
+
+  bool IsTypeFixed() const { return fixed_type_; }
+  void FixType() { fixed_type_ = true; }
 
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }
@@ -4326,6 +4340,8 @@ class HArrayGet : public HExpression<2> {
   DECLARE_INSTRUCTION(ArrayGet);
 
  private:
+  bool fixed_type_;
+
   DISALLOW_COPY_AND_ASSIGN(HArrayGet);
 };
 
