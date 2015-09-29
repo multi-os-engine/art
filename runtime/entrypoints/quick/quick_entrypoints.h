@@ -37,6 +37,7 @@ class CompressedReference;
 }  // namespace mirror
 
 class ArtMethod;
+class HandleScope;
 class Thread;
 
 // Pointers to functions that are called by quick compiler generated code via thread-local storage.
