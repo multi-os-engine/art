@@ -321,8 +321,7 @@ static const int kMaximumCompilationTimeBeforeWarning = 100; /* ms */
 OptimizingCompiler::OptimizingCompiler(CompilerDriver* driver)
     : Compiler(driver, kMaximumCompilationTimeBeforeWarning),
       run_optimizations_(
-          (driver->GetCompilerOptions().GetCompilerFilter() != CompilerOptions::kTime)
-          && !driver->GetCompilerOptions().GetDebuggable()),
+          driver->GetCompilerOptions().GetCompilerFilter() != CompilerOptions::kTime),
       delegate_(Create(driver, Compiler::Kind::kQuick)) {}
 
 void OptimizingCompiler::Init() {

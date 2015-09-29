@@ -43,7 +43,7 @@ class TestVisitor : public StackVisitor {
       found_method_ = true;
       uint32_t value = 0;
       if (GetCurrentQuickFrame() != nullptr && m->IsOptimized(sizeof(void*))) {
-        CHECK_EQ(GetVReg(m, 0, kIntVReg, &value), false);
+        CHECK_EQ(GetVReg(m, 0, kIntVReg, &value), Runtime::Current()->IsDebuggable());
       } else {
         CHECK(GetVReg(m, 0, kIntVReg, &value));
         CHECK_EQ(value, 1u);
