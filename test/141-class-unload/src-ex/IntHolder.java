@@ -36,4 +36,12 @@ public class IntHolder {
     }
 
     public static native void waitForCompilation();
+
+    public static Throwable generateStackTrace() {
+      try {
+          throw new Exception("test");
+      } catch (Throwable throwable) {
+          return throwable;
+      }
+    }
 }
