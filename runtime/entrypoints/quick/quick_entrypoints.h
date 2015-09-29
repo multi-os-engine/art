@@ -37,6 +37,7 @@ class CompressedReference;
 }  // namespace mirror
 
 class ArtMethod;
+class HandleScope;
 class Thread;
 
 // Pointers to functions that are called by quick compiler generated code via thread-local storage.
@@ -66,6 +67,10 @@ extern mirror::Object* JniMethodEndWithReference(jobject result, uint32_t saved_
 extern mirror::Object* JniMethodEndWithReferenceSynchronized(jobject result,
                                                              uint32_t saved_local_ref_cookie,
                                                              jobject locked, Thread* self)
+    NO_THREAD_SAFETY_ANALYSIS HOT_ATTR;
+extern uint64_t GenericJniMethodEnd(Thread* self, uint32_t saved_local_ref_cookie,
+                                    jvalue result, uint64_t result_f, ArtMethod* called,
+                                    HandleScope* handle_scope)
     NO_THREAD_SAFETY_ANALYSIS HOT_ATTR;
 
 extern void ReadBarrierJni(mirror::CompressedReference<mirror::Object>* handle_on_stack,
