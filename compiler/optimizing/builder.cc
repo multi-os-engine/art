@@ -940,7 +940,8 @@ HClinitCheck* HGraphBuilder::ProcessClinitCheckForInvoke(
           storage_index,
           *dex_compilation_unit_->GetDexFile(),
           is_outer_class,
-          dex_pc);
+          dex_pc,
+          /*needs_access_check*/ false);
       current_block_->AddInstruction(load_class);
       clinit_check = new (arena_) HClinitCheck(load_class, dex_pc);
       current_block_->AddInstruction(clinit_check);
@@ -1384,7 +1385,8 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
                                                  storage_index,
                                                  *dex_compilation_unit_->GetDexFile(),
                                                  is_outer_class,
-                                                 dex_pc);
+                                                 dex_pc,
+                                                 /*needs_access_check*/ false);
   current_block_->AddInstruction(constant);
 
   HInstruction* cls = constant;
@@ -1646,14 +1648,11 @@ bool HGraphBuilder::BuildTypeCheck(const Instruction& instruction,
           soa.Self(), *dex_compilation_unit_->GetDexFile())));
   Handle<mirror::Class> resolved_class(hs.NewHandle(dex_cache->GetResolvedType(type_index)));
 
-  if ((resolved_class.Get() == nullptr) ||
+  bool needs_access_check = (resolved_class.Get() == nullptr) ||
        // TODO: Remove this check once the compiler actually knows which
        // ArtMethod it is compiling.
       (GetCompilingClass() == nullptr) ||
-      !GetCompilingClass()->CanAccess(resolved_class.Get())) {
-    MaybeRecordStat(MethodCompilationStat::kNotCompiledCantAccesType);
-    return false;
-  }
+      !GetCompilingClass()->CanAccess(resolved_class.Get());
 
   HInstruction* object = LoadLocal(reference, Primitive::kPrimNot, dex_pc);
   HLoadClass* cls = new (arena_) HLoadClass(
@@ -1661,7 +1660,8 @@ bool HGraphBuilder::BuildTypeCheck(const Instruction& instruction,
       type_index,
       *dex_compilation_unit_->GetDexFile(),
       IsOutermostCompilingClass(type_index),
-      dex_pc);
+      dex_pc,
+      needs_access_check);
   current_block_->AddInstruction(cls);
 
   // The class needs a temporary before being used by the type check.
@@ -2791,16 +2791,13 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       bool can_access = compiler_driver_->CanAccessTypeWithoutChecks(
           dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index,
           &type_known_final, &type_known_abstract, &dont_use_is_referrers_class);
-      if (!can_access) {
-        MaybeRecordStat(MethodCompilationStat::kNotCompiledCantAccesType);
-        return false;
-      }
       current_block_->AddInstruction(new (arena_) HLoadClass(
           graph_->GetCurrentMethod(),
           type_index,
           *dex_compilation_unit_->GetDexFile(),
           IsOutermostCompilingClass(type_index),
-          dex_pc));
+          dex_pc,
+          !can_access));
       UpdateLocal(instruction.VRegA_21c(), current_block_->GetLastInstruction(), dex_pc);
       break;
     }

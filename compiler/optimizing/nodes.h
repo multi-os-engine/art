@@ -4485,12 +4485,14 @@ class HLoadClass : public HExpression<1> {
              uint16_t type_index,
              const DexFile& dex_file,
              bool is_referrers_class,
-             uint32_t dex_pc)
+             uint32_t dex_pc,
+             bool needs_access_check)
       : HExpression(Primitive::kPrimNot, SideEffectsForArchRuntimeCalls(), dex_pc),
         type_index_(type_index),
         dex_file_(dex_file),
         is_referrers_class_(is_referrers_class),
         generate_clinit_check_(false),
+        needs_access_check_(needs_access_check),
         loaded_class_rti_(ReferenceTypeInfo::CreateInvalid()) {
     SetRawInputAt(0, current_method);
   }
@@ -4516,13 +4518,16 @@ class HLoadClass : public HExpression<1> {
   bool MustGenerateClinitCheck() const {
     return generate_clinit_check_;
   }
-
   void SetMustGenerateClinitCheck(bool generate_clinit_check) {
     generate_clinit_check_ = generate_clinit_check;
   }
 
   bool CanCallRuntime() const {
-    return MustGenerateClinitCheck() || !is_referrers_class_;
+    return MustGenerateClinitCheck() || !is_referrers_class_ || needs_access_check_;
+  }
+
+  bool NeedsAccessCheck() const {
+    return needs_access_check_;
   }
 
   bool CanThrow() const OVERRIDE {
@@ -4558,6 +4563,7 @@ class HLoadClass : public HExpression<1> {
   // Whether this instruction must generate the initialization check.
   // Used for code generation.
   bool generate_clinit_check_;
+  bool needs_access_check_;
 
   ReferenceTypeInfo loaded_class_rti_;
 

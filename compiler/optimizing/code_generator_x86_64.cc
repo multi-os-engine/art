@@ -4680,20 +4680,24 @@ void InstructionCodeGeneratorX86_64::GenerateClassInitializationCheck(
 }
 
 void LocationsBuilderX86_64::VisitLoadClass(HLoadClass* cls) {
-  LocationSummary::CallKind call_kind = cls->CanCallRuntime()
-      ? LocationSummary::kCallOnSlowPath
-      : LocationSummary::kNoCall;
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(cls, call_kind);
-  locations->SetInAt(0, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister());
+  InvokeRuntimeCallingConvention calling_convention;
+  CodeGenerator::CreateLoadClassLocationSummary(
+      cls,
+      Location::RegisterLocation(calling_convention.GetRegisterAt(0)),
+      Location::RegisterLocation(RAX));
 }
 
 void InstructionCodeGeneratorX86_64::VisitLoadClass(HLoadClass* cls) {
   LocationSummary* locations = cls->GetLocations();
   CpuRegister out = locations->Out().AsRegister<CpuRegister>();
   CpuRegister current_method = locations->InAt(0).AsRegister<CpuRegister>();
-  if (cls->IsReferrersClass()) {
+  if (cls->NeedsAccessCheck()) {
+    codegen_->MoveConstant(locations->GetTemp(0), cls->GetTypeIndex());
+    codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pInitializeTypeAndVerifyAccess),
+                            cls,
+                            cls->GetDexPc(),
+                            nullptr);
+  } else if (cls->IsReferrersClass()) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
     __ movl(out, Address(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));

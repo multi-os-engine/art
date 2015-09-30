@@ -2900,17 +2900,23 @@ void InstructionCodeGeneratorARM64::VisitInvokeVirtual(HInvokeVirtual* invoke) {
 }
 
 void LocationsBuilderARM64::VisitLoadClass(HLoadClass* cls) {
-  LocationSummary::CallKind call_kind = cls->CanCallRuntime() ? LocationSummary::kCallOnSlowPath
-                                                              : LocationSummary::kNoCall;
-  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(cls, call_kind);
-  locations->SetInAt(0, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister());
+  InvokeRuntimeCallingConvention calling_convention;
+  CodeGenerator::CreateLoadClassLocationSummary(
+      cls,
+      LocationFrom(calling_convention.GetRegisterAt(0)),
+      LocationFrom(vixl::x0));
 }
 
 void InstructionCodeGeneratorARM64::VisitLoadClass(HLoadClass* cls) {
   Register out = OutputRegister(cls);
   Register current_method = InputRegisterAt(cls, 0);
-  if (cls->IsReferrersClass()) {
+  if (cls->NeedsAccessCheck()) {
+    codegen_->MoveConstant(cls->GetLocations()->GetTemp(0), cls->GetTypeIndex());
+    codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pInitializeTypeAndVerifyAccess),
+                            cls,
+                            cls->GetDexPc(),
+                            nullptr);
+  } else if (cls->IsReferrersClass()) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
     __ Ldr(out, MemOperand(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));

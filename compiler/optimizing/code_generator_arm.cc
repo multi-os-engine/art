@@ -4350,20 +4350,24 @@ void ParallelMoveResolverARM::RestoreScratch(int reg) {
 }
 
 void LocationsBuilderARM::VisitLoadClass(HLoadClass* cls) {
-  LocationSummary::CallKind call_kind = cls->CanCallRuntime()
-      ? LocationSummary::kCallOnSlowPath
-      : LocationSummary::kNoCall;
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(cls, call_kind);
-  locations->SetInAt(0, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister());
+  InvokeRuntimeCallingConvention calling_convention;
+  CodeGenerator::CreateLoadClassLocationSummary(
+      cls,
+      Location::RegisterLocation(calling_convention.GetRegisterAt(0)),
+      Location::RegisterLocation(R0));
 }
 
 void InstructionCodeGeneratorARM::VisitLoadClass(HLoadClass* cls) {
   LocationSummary* locations = cls->GetLocations();
   Register out = locations->Out().AsRegister<Register>();
   Register current_method = locations->InAt(0).AsRegister<Register>();
-  if (cls->IsReferrersClass()) {
+  if (cls->NeedsAccessCheck()) {
+    codegen_->MoveConstant(locations->GetTemp(0), cls->GetTypeIndex());
+    codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pInitializeTypeAndVerifyAccess),
+                            cls,
+                            cls->GetDexPc(),
+                            nullptr);
+  } else if (cls->IsReferrersClass()) {
     DCHECK(!cls->CanCallRuntime());
     DCHECK(!cls->MustGenerateClinitCheck());
     __ LoadFromOffset(
