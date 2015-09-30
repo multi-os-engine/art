@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <iostream>
+#undef AART
 
 #include "optimizing_compiler.h"
 
@@ -466,7 +468,7 @@ static void RunOptimizations(HGraph* graph,
   GVNOptimization* gvn = new (arena) GVNOptimization(graph, *side_effects);
   LICM* licm = new (arena) LICM(graph, *side_effects);
   HInductionVarAnalysis* induction = new (arena) HInductionVarAnalysis(graph);
-  BoundsCheckElimination* bce = new (arena) BoundsCheckElimination(graph, induction);
+  BoundsCheckElimination* bce = new (arena) BoundsCheckElimination(graph, side_effects, induction);
   ReferenceTypePropagation* type_propagation =
       new (arena) ReferenceTypePropagation(graph, handles);
   InstructionSimplifier* simplify2 = new (arena) InstructionSimplifier(
@@ -764,6 +766,9 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
                         dex_cache);
 
   VLOG(compiler) << "Building " << method_name;
+#ifdef AART
+  std::cout << "\n\n**** BIK: " << method_name << std::endl << std::endl;
+#endif
 
   {
     PassScope scope(HGraphBuilder::kBuilderPassName, &pass_observer);

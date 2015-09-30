@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <iostream>
+#undef AART
 
 #include "induction_var_range.h"
 
@@ -60,6 +62,10 @@ static bool IsIntAndGet(HInstruction* instruction, int32_t* value) {
   return false;
 }
 
+static InductionVarRange::Value SimplifyMin(InductionVarRange::Value v) {
+  return v;
+}
+
 /**
  * An upper bound a * (length / a) + b, where a > 0, can be conservatively rewritten as length + b
  * because length >= 0 is true. This makes it more likely the bound is useful to clients.
@@ -86,12 +92,44 @@ InductionVarRange::InductionVarRange(HInductionVarAnalysis* induction_analysis)
 
 InductionVarRange::Value InductionVarRange::GetMinInduction(HInstruction* context,
                                                             HInstruction* instruction) {
-  return GetInduction(context, instruction, /* is_min */ true);
+  return SimplifyMin(GetInduction(context, instruction, /* is_min */ true));
 }
 
 InductionVarRange::Value InductionVarRange::GetMaxInduction(HInstruction* context,
                                                             HInstruction* instruction) {
   return SimplifyMax(GetInduction(context, instruction, /* is_min */ false));
+}
+
+
+
+bool InductionVarRange::CanGenCode(HLoopInformation* loop, HInstruction* instruction) {
+  if (loop != nullptr) {
+    HBasicBlock* header = loop->GetHeader();
+    HInductionVarAnalysis::InductionInfo* info = induction_analysis_->LookupInfo(loop, instruction);
+    HInductionVarAnalysis::InductionInfo* trip = induction_analysis_->LookupInfo(loop, header->GetLastInstruction());
+    if (info != nullptr && trip != nullptr) {
+      return CanGenCode(info, trip);
+    }
+  }
+  return false;
+}
+
+void InductionVarRange::GenCode(HLoopInformation* loop,
+                                HInstruction* instruction,
+                                HInstruction** lower,
+                                HInstruction** upper) {
+  DCHECK(loop != nullptr);
+  HBasicBlock* header = loop->GetHeader();
+  HInductionVarAnalysis::InductionInfo* info = induction_analysis_->LookupInfo(loop, instruction);
+  HInductionVarAnalysis::InductionInfo* trip = induction_analysis_->LookupInfo(loop, header->GetLastInstruction());
+  DCHECK(info != nullptr && trip != nullptr);
+  Value m = GetVal(info, trip, false, /* is_min */ true);
+  if (m.is_known && m.a_constant == 0 && m.b_constant >= 0) {
+    *lower = nullptr;
+  } else {
+    *lower = GenCode(loop->GetPreHeader(), info, trip, /* is_min */ true);
+  }
+  *upper = GenCode(loop->GetPreHeader(), info, trip, /* is_min */ false);
 }
 
 //
@@ -105,10 +143,19 @@ InductionVarRange::Value InductionVarRange::GetInduction(HInstruction* context,
   if (loop != nullptr) {
     HBasicBlock* header = loop->GetHeader();
     bool in_body = context->GetBlock() != header;
-    return GetVal(induction_analysis_->LookupInfo(loop, instruction),
-                  induction_analysis_->LookupInfo(loop, header->GetLastInstruction()),
-                  in_body,
-                  is_min);
+    Value v = GetVal(induction_analysis_->LookupInfo(loop, instruction),
+                     induction_analysis_->LookupInfo(loop, header->GetLastInstruction()),
+                     in_body,
+                     is_min);
+#ifdef AART
+    std::cout << "BIK-MIN ON " << instruction->GetId()
+      << " in=" << HInductionVarAnalysis::InductionToString(
+          induction_analysis_->LookupInfo(loop, instruction))
+      << " tc=" << HInductionVarAnalysis::InductionToString(
+          induction_analysis_->LookupInfo(loop, header->GetLastInstruction()))
+      << " is " << v.ToString() << std::endl;
+#endif
+    return v;
   }
   return Value();
 }
@@ -324,6 +371,99 @@ InductionVarRange::Value InductionVarRange::MergeVal(Value v1, Value v2, bool is
     }
   }
   return Value();
+}
+
+
+bool InductionVarRange::CanGenCode(HInductionVarAnalysis::InductionInfo* info,
+                                   HInductionVarAnalysis::InductionInfo* trip) {
+  if (info != nullptr) {
+    int32_t value = 0;
+    switch (info->induction_class) {
+      case HInductionVarAnalysis::kInvariant:
+        // Invariants.
+        switch (info->operation) {
+          case HInductionVarAnalysis::kAdd:
+          case HInductionVarAnalysis::kSub:
+            return CanGenCode(info->op_a, trip) && CanGenCode(info->op_b, trip);
+          case HInductionVarAnalysis::kNeg:
+            return CanGenCode(info->op_b, trip);
+          case HInductionVarAnalysis::kFetch:
+            return true;
+          case HInductionVarAnalysis::kTripCountInLoop:
+          case HInductionVarAnalysis::kTripCountInBody:
+            return CanGenCode(info->op_b, trip);
+          default:
+            return false;
+        }
+      case HInductionVarAnalysis::kLinear:
+        // Linear induction a * i + b, with a == 1, for normalized 0 <= i < TC.
+        return GetConstant(info->op_a, &value) && value == 1 &&
+            CanGenCode(info->op_b, trip) && CanGenCode(trip, trip);
+      default:
+        return false;
+    }
+  }
+  return false;
+}
+
+HInstruction* InductionVarRange::GenCode(HBasicBlock* block,
+                                         HInductionVarAnalysis::InductionInfo* info,
+                                         HInductionVarAnalysis::InductionInfo* trip,
+                                         bool is_min) {
+  HInstruction* ins = nullptr;
+  if (info != nullptr) {
+    Primitive::Type type = Primitive::kPrimInt;
+    switch (info->induction_class) {
+      case HInductionVarAnalysis::kInvariant:
+        // Invariants.
+        switch (info->operation) {
+          case HInductionVarAnalysis::kAdd:
+            ins = new (induction_analysis_->graph_->GetArena())
+                            HAdd(type,
+                                 GenCode(block, info->op_a, trip, is_min),
+                                 GenCode(block, info->op_b, trip, is_min));
+            break;
+          case HInductionVarAnalysis::kSub:
+            ins = new (induction_analysis_->graph_->GetArena())
+                            HSub(type,
+                                 GenCode(block, info->op_a, trip, is_min),
+                                 GenCode(block, info->op_b, trip, !is_min));
+            break;
+          case HInductionVarAnalysis::kNeg:
+            ins = new (induction_analysis_->graph_->GetArena())
+                                        HNeg(type,
+                                             GenCode(block, info->op_b, trip, !is_min));
+            break;
+          case HInductionVarAnalysis::kFetch:
+            return info->fetch;  // already in HIR!
+          case HInductionVarAnalysis::kTripCountInLoop:
+          case HInductionVarAnalysis::kTripCountInBody:
+            if (is_min) {
+              return induction_analysis_->graph_->GetIntConstant(0);
+            }
+            ins = new (induction_analysis_->graph_->GetArena())
+                                               HSub(type,
+                                                    GenCode(block, info->op_b, trip, is_min),
+                                                    induction_analysis_->graph_->GetIntConstant(1));
+            break;
+          default:
+            break;
+        }
+        break;
+      case HInductionVarAnalysis::kLinear:
+        // Linear induction a * i + b, for normalized 0 <= i < TC.
+        ins = new (induction_analysis_->graph_->GetArena())
+             HAdd(type,
+                  GenCode(block, trip, trip, is_min),
+                  GenCode(block, info->op_b, trip, is_min));
+        break;
+      default:
+        break;
+    }
+  }
+  DCHECK(ins != nullptr);
+  block->InsertInstructionBefore(ins, block->GetLastInstruction());
+  return ins;
 }
 
 }  // namespace art

@@ -15,7 +15,7 @@
  */
 #include <iostream>
 #include "pretty_printer.h"
-#undef AART
+#define AART
 
 #include "bounds_check_elimination.h"
 
@@ -23,7 +23,6 @@
 
 #include "base/arena_containers.h"
 #include "induction_var_range.h"
-#include "side_effects_analysis.h"
 #include "nodes.h"
 
 namespace art {
@@ -718,9 +717,7 @@ class MonotonicValueRange : public ValueRange {
     }
 
     if (end_ != nullptr) {
-#ifdef AART
       std::cout << "bik disables old deopt" << std::endl;
-#endif
       return this;
     }
 
@@ -884,9 +881,6 @@ class MonotonicValueRange : public ValueRange {
 
     HIntConstant* const_instr = graph->GetIntConstant(constant);
     HCondition* cond = new (graph->GetArena()) HLessThan(value, const_instr);
-#ifdef AART
-    std::cout << "bik add deopt type 1" << std::endl;
-#endif
     HDeoptimize* deoptimize = new (graph->GetArena())
         HDeoptimize(cond, suspend_check->GetDexPc());
     deopt_block->InsertInstructionBefore(cond, deopt_block->GetLastInstruction());
@@ -982,9 +976,6 @@ class MonotonicValueRange : public ValueRange {
         HNullConstant* null_constant = graph->GetNullConstant();
         HCondition* null_check_cond = new (graph->GetArena()) HEqual(array, null_constant);
         // TODO: for one dex_pc, share the same deoptimization slow path.
-#ifdef AART
-        std::cout << "bik add deopt type 2" << std::endl;
-#endif
         HDeoptimize* null_check_deoptimize = new (graph->GetArena())
             HDeoptimize(null_check_cond, suspend_check->GetDexPc());
         deopt_block->InsertInstructionBefore(
@@ -1038,9 +1029,6 @@ class MonotonicValueRange : public ValueRange {
       deopt_block->InsertInstructionBefore(added, deopt_block->GetLastInstruction());
     }
     HCondition* cond = new (graph->GetArena()) HGreaterThan(value, added);
-#ifdef AART
-    std::cout << "bik add deopt type 3" << std::endl;
-#endif
     HDeoptimize* deopt = new (graph->GetArena()) HDeoptimize(cond, suspend_check->GetDexPc());
     deopt_block->InsertInstructionBefore(cond, deopt_block->GetLastInstruction());
     deopt_block->InsertInstructionBefore(deopt, deopt_block->GetLastInstruction());
@@ -1129,6 +1117,191 @@ class MonotonicValueRange : public ValueRange {
   DISALLOW_COPY_AND_ASSIGN(MonotonicValueRange);
 };
 
+/**
+ * Loop-based bounds check elimination.
+ *
+ * The loop-body of every loop in the program is scanned to find bounds checks that were
+ * left by dominator-based bounds check elimination.
+ *
+ * If static range analysis shows a bounds check is always satisfied, the check is removed.
+ *
+ * When the compiler fails to remove a bounds check statically, an attempt is made to remove
+ * the bounds check dynamically by means of runtime tests in the loop header that trigger a
+ * de-optimization in case bounds (may) go out of range. Otherwise, the loop is executed
+ * with all corresponding bounds checks (and related null checks) removed.
+ */
+class LoopBasedBCE: public ValueObject {
+ public:
+  LoopBasedBCE(HGraph* graph, HInductionVarAnalysis* induction_analysis)
+      : graph_(graph),
+        allocator_(graph->GetArena()),
+        induction_range_(induction_analysis) {
+  }
+
+  void VisitAllLoops() {
+    for (HPostOrderIterator it_graph(*graph_); !it_graph.Done(); it_graph.Advance()) {
+      if (it_graph.Current()->IsLoopHeader()) {
+        VisitLoop(it_graph.Current()->GetLoopInformation());
+      }
+    }
+  }
+
+  /* Visits statements that belong to current loop. */
+  void VisitLoop(HLoopInformation* loop) {
+    loop_ = loop;
+    anchor_ = loop->GetPreHeader()->GetLastInstruction();
+    suspend_ = loop->GetSuspendCheck();
+#ifdef AART
+    std::cout << "\n==> consider AARTING this loop, achor = " << anchor_->GetId()
+              << " suspend = " << suspend_->GetId() << std::endl;
+#endif
+    for (HBlocksInLoopIterator it_loop(*loop); !it_loop.Done(); it_loop.Advance()) {
+      HBasicBlock* loop_block = it_loop.Current();
+      if (loop_block->GetLoopInformation() == loop) {
+        for (HInstructionIterator it(loop_block->GetInstructions()); !it.Done(); it.Advance()) {
+          if (it.Current()->IsBoundsCheck()) {
+            VisitBoundsCheck(it.Current());  // try static/dynamic elimination
+          } else if (it.Current()->IsArrayGet()) {
+            VisitArrayGet(it.Current());  // try late-LICM
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Determines if a bounds check can be eliminated statically with range analysis
+   * or dynamically by performing the de-optimization technique on range values.
+   */
+  void VisitBoundsCheck(HInstruction* instruction) {
+    HInstruction* index = instruction->InputAt(0);
+    HInstruction* length = instruction->InputAt(1);
+    if (IsAlwaysSatisfied(instruction, index, length)) {
+      std::cout << "advanced static succeeds!" << std::endl;
+      ReplaceWith(instruction, index);
+    } else if (induction_range_.CanGenCode(index) && CanHandleLength(length)) {
+      std::cout << "advanced dynamic succeeds!" << std::endl;
+      HInstruction* lower = nullptr;
+      HInstruction* upper = nullptr;
+      // Generate in preheader: if (lower < 0 || upper >= length) deopt;
+      // TODO: for invariant subscripts, *unsigned* comparison could do this with one check!
+      induction_range_.GenCode(index, &lower, &upper);
+      DCHECK(lower != nullptr);
+      InsertDeoptInPreHeader(new (allocator_) HLessThan(lower, graph_->GetIntConstant(0)));
+      DCHECK(upper != nullptr);
+      InsertDeoptInPreHeader(new (allocator_) HGreaterThanOrEqual(upper, length));
+      ReplaceWith(instruction, index);
+    }
+  }
+
+  /**
+   * After bounds checks are eliminated, sometimes invariant array references are
+   * exposed underneath which may be hoisted out of the loop (form of late-LICM).
+   *
+   * for (int i = 0; i < n; i++) {
+   *                                <-------+
+   *   for (int j = 0; j < n; j++)          |
+   *     a[i][j] = 0;               --a[i]--+
+   * }
+   */
+  void VisitArrayGet(HInstruction* instruction) {
+    // SOMEHOW: !instruction->GetSideEffects().MayDependOn(loop_effects)
+    if (IsLoopInvariant(instruction->InputAt(0)) && IsLoopInvariant(instruction->InputAt(1))) {
+      std::cout << "invariant load suddenly moves out too" << std::endl;
+      DCHECK(!instruction->NeedsEnvironment());
+      instruction->MoveBefore(anchor_);
+    }
+  }
+
+  /** Returns true if static range analysis can determine the bounds check is always satisfied. */
+  bool IsAlwaysSatisfied(HInstruction* context, HInstruction* index, HInstruction* length) {
+    InductionVarRange::Value v1 = induction_range_.GetMinInduction(context, index);
+    InductionVarRange::Value v2 = induction_range_.GetMaxInduction(context, index);
+    if (v1.is_known && (v1.a_constant == 0 || v1.a_constant == 1) &&
+        v2.is_known && (v2.a_constant == 0 || v2.a_constant == 1)) {
+      DCHECK(v1.a_constant == 1 || v1.instruction == nullptr);
+      DCHECK(v2.a_constant == 1 || v2.instruction == nullptr);
+      ValueRange array_range(allocator_, ValueBound(nullptr, 0),
+                                         ValueBound(length, -1));
+      ValueRange index_range(allocator_, ValueBound(v1.instruction, v1.b_constant),
+                                         ValueBound(v2.instruction, v2.b_constant));
+      std::cout << "advanced II tries " << index_range.ToString() << " vs. " << array_range.ToString() << std::endl;
+      return index_range.FitsIn(&array_range);
+    }
+    return false;
+  }
+
+
+  /** Returns true if array length is already invariant, or can be made so. */
+  bool CanHandleLength(HInstruction* instruction) {
+    if (IsLoopInvariant(instruction)) {
+      return true;
+    } else if (instruction->IsArrayLength()) {
+      if (CanHandleNullCheck(instruction->InputAt(0))) {
+        DCHECK(!instruction->NeedsEnvironment());
+        instruction->MoveBefore(anchor_);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Returns true if null check is already invariant, or can be made so. */
+  bool CanHandleNullCheck(HInstruction* instruction) {
+    if (IsLoopInvariant(instruction)) {
+      return true;
+    } else if (instruction->IsNullCheck()) {
+      HInstruction* array = instruction->InputAt(0);
+      if (IsLoopInvariant(array)) {
+        InsertDeoptInPreHeader(new (allocator_) HEqual(array, graph_->GetNullConstant()));
+        ReplaceWith(instruction, array);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Helper method to determine if instruction is loop-invariant. */
+  bool IsLoopInvariant(HInstruction* instruction) {
+    HLoopInformation* other_loop = instruction->GetBlock()->GetLoopInformation();
+    return other_loop != loop_ && (other_loop == nullptr || loop_->IsIn(*other_loop));
+  }
+
+  /** Helper method to insert a de-optimization instruction in pre-header. */
+  void InsertDeoptInPreHeader(HInstruction* condition) {
+    InsertInPreHeader(condition);
+    HDeoptimize* deoptimize = new (allocator_) HDeoptimize(condition, suspend_->GetDexPc());
+    InsertInPreHeader(deoptimize);
+    deoptimize->CopyEnvironmentFromWithLoopPhiAdjustment(suspend_->GetEnvironment(), loop_->GetHeader());
+  }
+
+  /** Helper method to insert a new instruction in pre-header. */
+  void InsertInPreHeader(HInstruction* instruction) {
+    loop_->GetPreHeader()->InsertInstructionBefore(instruction, anchor_);
+  }
+
+  /** Helper method to replace an instruction with another instruction. */
+  void ReplaceWith(HInstruction* instruction, HInstruction* replacement) {
+    instruction->ReplaceWith(replacement);
+    instruction->GetBlock()->RemoveInstruction(instruction);
+  }
+
+ private:
+  // Graph with allocator.
+  HGraph* const graph_;
+  ArenaAllocator* const allocator_;
+
+  // Environment of the current loop under consideration.
+  HLoopInformation* loop_;
+  HInstruction* anchor_;
+  HInstruction* suspend_;
+
+  // Range analysis based on induction variables.
+  InductionVarRange induction_range_;
+
+  DISALLOW_COPY_AND_ASSIGN(LoopBasedBCE);
+};
+
 class BCEVisitor : public HGraphVisitor {
  public:
   // The least number of bounds checks that should be eliminated by triggering
@@ -1146,14 +1319,11 @@ class BCEVisitor : public HGraphVisitor {
     return block->GetBlockId() >= initial_block_size_;
   }
 
-  BCEVisitor(HGraph* graph,
-             SideEffectsAnalysis* side_effects,
-             HInductionVarAnalysis* induction_analysis)
+  BCEVisitor(HGraph* graph, HInductionVarAnalysis* induction_analysis)
       : HGraphVisitor(graph),
         maps_(graph->GetBlocks().size()),
         need_to_revisit_block_(false),
         initial_block_size_(graph->GetBlocks().size()),
-        side_effects_(side_effects),
         induction_range_(induction_analysis) {}
 
   void VisitBasicBlock(HBasicBlock* block) OVERRIDE {
@@ -1418,7 +1588,7 @@ class BCEVisitor : public HGraphVisitor {
     }
   }
 
-  void VisitBoundsCheck(HBoundsCheck* bounds_check) OVERRIDE {
+  void VisitBoundsCheck(HBoundsCheck* bounds_check) {
     HBasicBlock* block = bounds_check->GetBlock();
     HInstruction* index = bounds_check->InputAt(0);
     HInstruction* array_length = bounds_check->InputAt(1);
@@ -1437,21 +1607,23 @@ class BCEVisitor : public HGraphVisitor {
       ValueBound lower = ValueBound(nullptr, 0);        // constant 0
       ValueBound upper = ValueBound(array_length, -1);  // array_length - 1
       ValueRange array_range(GetGraph()->GetArena(), lower, upper);
-      // Try range obtained by dominator-based analysis.
+      // Try range obtained by local analysis.
       ValueRange* index_range = LookupValueRange(index, block);
       if (index_range != nullptr && index_range->FitsIn(&array_range)) {
 #ifdef AART
-        std::cout << "simple does " << bounds_check->GetId() << " array=" << array_range.ToString() << " index=" << index_range->ToString() << std::endl;
+        std::cout << "simple does " << bounds_check->GetId() << " "
+                  << index_range->ToString() << " vs. " << array_range.ToString() << std::endl;
 #endif
-        ReplaceInstruction(bounds_check, index);
+        ReplaceBoundsCheck(bounds_check, index);
         return;
       }
       // Try range obtained by induction variable analysis.
-      if (InductionRangeFitsIn(&array_range, bounds_check, index)) {
+      if (StaticRangeFitsIn(&array_range, bounds_check, index)) {
 #ifdef AART
-        std::cout << "advanced does " << bounds_check->GetId() << " array=" << array_range.ToString() << std::endl;
+        std::cout << "advanced does " << bounds_check->GetId() << " "
+                  << index_range->ToString() << " vs. " << array_range.ToString() << std::endl;
 #endif
-        ReplaceInstruction(bounds_check, index);
+        ReplaceBoundsCheck(bounds_check, index);
         return;
       }
     } else {
@@ -1462,7 +1634,7 @@ class BCEVisitor : public HGraphVisitor {
       }
       if (array_length->IsIntConstant()) {
         if (constant < array_length->AsIntConstant()->GetValue()) {
-          ReplaceInstruction(bounds_check, index);
+          ReplaceBoundsCheck(bounds_check, index);
         }
         return;
       }
@@ -1473,7 +1645,7 @@ class BCEVisitor : public HGraphVisitor {
         ValueBound lower = existing_range->GetLower();
         DCHECK(lower.IsConstant());
         if (constant < lower.GetConstant()) {
-          ReplaceInstruction(bounds_check, index);
+          ReplaceBoundsCheck(bounds_check, index);
           return;
         } else {
           // Existing range isn't strong enough to eliminate the bounds check.
@@ -1508,9 +1680,11 @@ class BCEVisitor : public HGraphVisitor {
           ValueRange(GetGraph()->GetArena(), lower, upper);
       GetValueRangeMap(block)->Overwrite(array_length->GetId(), range);
     }
+  }
 
-    // If static analysis fails, try dynamic elimination.
-    TryToRemoveBoundsCheckDynamically(bounds_check);
+  void ReplaceBoundsCheck(HInstruction* bounds_check, HInstruction* index) {
+    bounds_check->ReplaceWith(index);
+    bounds_check->GetBlock()->RemoveInstruction(bounds_check);
   }
 
   static bool HasSameInputAtBackEdges(HPhi* phi) {
@@ -1529,7 +1703,7 @@ class BCEVisitor : public HGraphVisitor {
     return true;
   }
 
-  void VisitPhi(HPhi* phi) OVERRIDE {
+  void VisitPhi(HPhi* phi) {
     if (phi->IsLoopHeaderPhi()
         && (phi->GetType() == Primitive::kPrimInt)
         && HasSameInputAtBackEdges(phi)) {
@@ -1576,7 +1750,7 @@ class BCEVisitor : public HGraphVisitor {
     }
   }
 
-  void VisitIf(HIf* instruction) OVERRIDE {
+  void VisitIf(HIf* instruction) {
     if (instruction->InputAt(0)->IsCondition()) {
       HCondition* cond = instruction->InputAt(0)->AsCondition();
       IfCondition cmp = cond->GetCondition();
@@ -1620,7 +1794,7 @@ class BCEVisitor : public HGraphVisitor {
     }
   }
 
-  void VisitAdd(HAdd* add) OVERRIDE {
+  void VisitAdd(HAdd* add) {
     HInstruction* right = add->GetRight();
     if (right->IsIntConstant()) {
       ValueRange* left_range = LookupValueRange(add->GetLeft(), add->GetBlock());
@@ -1634,7 +1808,7 @@ class BCEVisitor : public HGraphVisitor {
     }
   }
 
-  void VisitSub(HSub* sub) OVERRIDE {
+  void VisitSub(HSub* sub) {
     HInstruction* left = sub->GetLeft();
     HInstruction* right = sub->GetRight();
     if (right->IsIntConstant()) {
@@ -1736,19 +1910,19 @@ class BCEVisitor : public HGraphVisitor {
     }
   }
 
-  void VisitDiv(HDiv* div) OVERRIDE {
+  void VisitDiv(HDiv* div) {
     FindAndHandlePartialArrayLength(div);
   }
 
-  void VisitShr(HShr* shr) OVERRIDE {
+  void VisitShr(HShr* shr) {
     FindAndHandlePartialArrayLength(shr);
   }
 
-  void VisitUShr(HUShr* ushr) OVERRIDE {
+  void VisitUShr(HUShr* ushr) {
     FindAndHandlePartialArrayLength(ushr);
   }
 
-  void VisitAnd(HAnd* instruction) OVERRIDE {
+  void VisitAnd(HAnd* instruction) {
     if (instruction->GetRight()->IsIntConstant()) {
       int32_t constant = instruction->GetRight()->AsIntConstant()->GetValue();
       if (constant > 0) {
@@ -1763,7 +1937,7 @@ class BCEVisitor : public HGraphVisitor {
     }
   }
 
-  void VisitNewArray(HNewArray* new_array) OVERRIDE {
+  void VisitNewArray(HNewArray* new_array) {
     HInstruction* len = new_array->InputAt(0);
     if (!len->IsIntConstant()) {
       HInstruction *left;
@@ -1787,7 +1961,7 @@ class BCEVisitor : public HGraphVisitor {
     }
   }
 
-  void VisitDeoptimize(HDeoptimize* deoptimize) OVERRIDE {
+  void VisitDeoptimize(HDeoptimize* deoptimize) {
     // Right now it's only HLessThanOrEqual.
     DCHECK(deoptimize->InputAt(0)->IsLessThanOrEqual());
     HLessThanOrEqual* less_than_or_equal = deoptimize->InputAt(0)->AsLessThanOrEqual();
@@ -1800,38 +1974,6 @@ class BCEVisitor : public HGraphVisitor {
       ValueRange* range = new (GetGraph()->GetArena())
           ValueRange(GetGraph()->GetArena(), lower, ValueBound::Max());
       GetValueRangeMap(deoptimize->GetBlock())->Overwrite(instruction->GetId(), range);
-    }
-  }
-
-  /**
-    * After bounds checks are eliminated, sometimes invariant array references are
-    * exposed underneath which may be hoisted out of the loop (form of late-licm).
-    *
-    * for (int i = 0; i < n; i++) {
-    *                                <-------+
-    *   for (int j = 0; j < n; j++)          |
-    *     a[i][j] = 0;               --a[i]--+
-    * }
-    */
-  void VisitArrayGet(HArrayGet* instruction) OVERRIDE {
-    if (instruction->IsInLoop()) {
-      HLoopInformation* loop = instruction->GetBlock()->GetLoopInformation();
-      if (IsLoopInvariant(loop, instruction->InputAt(0)) &&
-          IsLoopInvariant(loop, instruction->InputAt(1))) {
-        DCHECK(side_effects_ != nullptr);
-        SideEffects loop_effects = side_effects_->GetLoopEffects(loop->GetHeader());
-        if (!instruction->GetSideEffects().MayDependOn(loop_effects)) {
-#ifdef AART
-          std::cout << "!invariant load moves out!"
-              << instruction->GetId() << " inputs are "
-              << instruction->InputAt(0)->GetId() << ","
-              << instruction->InputAt(1)->GetId()
-              << std::endl;
-#endif
-          DCHECK(!instruction->NeedsEnvironment());
-          instruction->MoveBefore(GetLoopPreHeaderAnchor(loop));
-        }
-      }
     }
   }
 
@@ -1851,9 +1993,6 @@ class BCEVisitor : public HGraphVisitor {
     HBoundsCheck* bounds_check = first_constant_index_bounds_check_map_.Get(
         array_length->GetId())->AsBoundsCheck();
     HCondition* cond = new (GetGraph()->GetArena()) HLessThanOrEqual(array_length, const_instr);
-#ifdef AART
-    std::cout << "bik add deopt type 4" << std::endl;
-#endif
     HDeoptimize* deoptimize = new (GetGraph()->GetArena())
         HDeoptimize(cond, bounds_check->GetDexPc());
     block->InsertInstructionBefore(cond, bounds_check);
@@ -1902,128 +2041,25 @@ class BCEVisitor : public HGraphVisitor {
     }
   }
 
-  /**
-   * Returns true if static range analysis based on induction variables can determine the bounds
-   * check on the given array range is always satisfied with the computed index range.
-   */
-  bool InductionRangeFitsIn(ValueRange* array_range, HInstruction* context, HInstruction* index) {
+  //
+  // Methods related to range analysis.
+  //
+
+  /** Returns true if static range analysis can determine the bounds check is always satisfied. */
+  bool StaticRangeFitsIn(ValueRange* array_range, HInstruction* context, HInstruction* index) {
     InductionVarRange::Value v1 = induction_range_.GetMinInduction(context, index);
     InductionVarRange::Value v2 = induction_range_.GetMaxInduction(context, index);
     if (v1.is_known && (v1.a_constant == 0 || v1.a_constant == 1) &&
         v2.is_known && (v2.a_constant == 0 || v2.a_constant == 1)) {
       DCHECK(v1.a_constant == 1 || v1.instruction == nullptr);
       DCHECK(v2.a_constant == 1 || v2.instruction == nullptr);
-      ValueRange index_range(GetGraph()->GetArena(),
-                             ValueBound(v1.instruction, v1.b_constant),
-                             ValueBound(v2.instruction, v2.b_constant));
+      ValueRange index_range(allocator_, ValueBound(v1.instruction, v1.b_constant),
+                                         ValueBound(v2.instruction, v2.b_constant));
       return index_range.FitsIn(array_range);
     }
     return false;
   }
 
-  /**
-   * When the compiler fails to remove a bounds check statically, an attempt is made to remove
-   * the bounds check dynamically by means of runtime tests in the loop header that trigger a
-   * de-optimization in case bounds may go out of range. Otherwise, the loop is executed
-   * with all corresponding bounds checks (and related null checks) removed.
-   */
-  void TryToRemoveBoundsCheckDynamically(HInstruction* instruction) {
-    HLoopInformation* loop = instruction->GetBlock()->GetLoopInformation();
-    HInstruction* index = instruction->InputAt(0);
-    HInstruction* length = instruction->InputAt(1);
-    // TODO: efficiency heuristics, accept unsafe loops
-    if (induction_range_.CanGenCode(loop, index) && CanHandleLength(loop, length)) {
-      HInstruction* lower = nullptr;
-      HInstruction* upper = nullptr;
-      // Generate in pre-header: if (lower < 0 || upper >= length) deopt;
-      // TODO: for invariant subscripts, *unsigned* comparison could do this with one check!
-      induction_range_.GenCode(loop, index, &lower, &upper);
-      if (lower != nullptr) {
-        InsertDeoptInPreHeader(
-            loop,
-            new (GetGraph()->GetArena()) HLessThan(lower, GetGraph()->GetIntConstant(0)));
-      }
-      CHECK(upper != nullptr);
-      InsertDeoptInPreHeader(
-          loop,
-          new (GetGraph()->GetArena()) HGreaterThanOrEqual(upper, length));
-#ifdef AART
-      std::cout << "advanced dynamic removes bounds check " << instruction->GetId() << std::endl;
-#endif
-      ReplaceInstruction(instruction, index);
-    }
-  }
-
-  /**
-   * Returns true if the array length is already loop invariant, or can be made so
-   * by handling the null check under the hood of the array length operation.
-   */
-  bool CanHandleLength(HLoopInformation* loop, HInstruction* instruction) {
-    if (IsLoopInvariant(loop, instruction)) {
-      return true;
-    } else if (instruction->IsArrayLength()) {
-      if (CanHandleNullCheck(loop, instruction->InputAt(0))) {
-        DCHECK(!instruction->NeedsEnvironment());
-        instruction->MoveBefore(GetLoopPreHeaderAnchor(loop));
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Returns true if the null check is already loop invariant, or can be made so
-   * by generating a de-optimization test in the pre-header.
-   */
-  bool CanHandleNullCheck(HLoopInformation* loop, HInstruction* instruction) {
-    if (IsLoopInvariant(loop, instruction)) {
-      return true;
-    } else if (instruction->IsNullCheck()) {
-      HInstruction* array = instruction->InputAt(0);
-      if (IsLoopInvariant(loop, array)) {
-        // Generate in pre-header: if (array == null) deopt;
-        InsertDeoptInPreHeader(
-            loop,
-            new (GetGraph()->GetArena()) HEqual(array, GetGraph()->GetNullConstant()));
-#ifdef AART
-        std::cout << "advanced dynamic removes null " << instruction->GetId() << std::endl;
-#endif
-        ReplaceInstruction(instruction, array);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Helper method to insert a de-optimization instruction in the loop pre-header. */
-  void InsertDeoptInPreHeader(HLoopInformation* loop, HInstruction* condition) {
-    HBasicBlock* preheader = loop->GetPreHeader();
-    HInstruction* anchor = preheader->GetLastInstruction();
-    HInstruction* suspend = loop->GetSuspendCheck();
-    preheader->InsertInstructionBefore(condition, anchor);
-    HDeoptimize* deopt = new (GetGraph()->GetArena()) HDeoptimize(condition, suspend->GetDexPc());
-    preheader->InsertInstructionBefore(deopt, anchor);
-    deopt->CopyEnvironmentFromWithLoopPhiAdjustment(suspend->GetEnvironment(), loop->GetHeader());
-  }
-
-  /** Helper method to get the anchor goto in the loop-preheader. */
-  static HInstruction* GetLoopPreHeaderAnchor(HLoopInformation* loop) {
-    return loop->GetPreHeader()->GetLastInstruction();
-  }
-
-  /** Helper method to determine if instruction is loop-invariant in given loop. */
-  static bool IsLoopInvariant(HLoopInformation* loop, HInstruction* instruction) {
-    HLoopInformation* other_loop = instruction->GetBlock()->GetLoopInformation();
-    return other_loop != loop && (other_loop == nullptr || loop->IsIn(*other_loop));
-  }
-
-  /** Helper method to replace an instruction with another instruction. */
-  static void ReplaceInstruction(HInstruction* instruction, HInstruction* replacement) {
-    instruction->ReplaceWith(replacement);
-    instruction->GetBlock()->RemoveInstruction(instruction);
-  }
-
-  // A set of maps, one per basic block, from instruction to range.
   std::vector<std::unique_ptr<ArenaSafeMap<int, ValueRange*>>> maps_;
 
   // Map an HArrayLength instruction's id to the first HBoundsCheck instruction in
@@ -2039,9 +2075,6 @@ class BCEVisitor : public HGraphVisitor {
   // Initial number of blocks.
   uint32_t initial_block_size_;
 
-  // Side effects.
-  SideEffectsAnalysis* side_effects_;
-
   // Range analysis based on induction variables.
   InductionVarRange induction_range_;
 
@@ -2053,6 +2086,7 @@ void BoundsCheckElimination::Run() {
     return;
   }
 
+  BCEVisitor visitor(graph_, induction_analysis_);
   // Reverse post order guarantees a node's dominators are visited first.
   // We want to visit in the dominator-based order since if a value is known to
   // be bounded by a range at one instruction, it must be true that all uses of
@@ -2060,7 +2094,6 @@ void BoundsCheckElimination::Run() {
   // value can be narrowed further down in the dominator tree.
   //
   // TODO: only visit blocks that dominate some array accesses.
-  BCEVisitor visitor(graph_, side_effects_, induction_analysis_);
   HBasicBlock* last_visited_block = nullptr;
   for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     HBasicBlock* current = it.Current();
@@ -2076,6 +2109,12 @@ void BoundsCheckElimination::Run() {
     }
     visitor.VisitBasicBlock(current);
     last_visited_block = current;
+  }
+
+  // If not all bounds checks were eliminated, use loop-based bounds check elimination.
+  if (induction_analysis_) {
+    LoopBasedBCE loop_bce(graph_, induction_analysis_);
+    loop_bce.VisitAllLoops();
   }
 
 #ifdef AART
