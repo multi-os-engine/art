@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <iostream>
+#include "pretty_printer.h"
+#undef AART
 
 #include "induction_var_analysis.h"
 #include "induction_var_range.h"
@@ -85,6 +88,11 @@ HInductionVarAnalysis::HInductionVarAnalysis(HGraph* graph)
 }
 
 void HInductionVarAnalysis::Run() {
+#ifdef AART
+  StringPrettyPrinter printer(graph_);
+  printer.VisitInsertionOrder();
+  std::cout << printer.str() << std::endl;
+#endif
   // Detects sequence variables (generalized induction variables) during an inner-loop-first
   // traversal of all loops using Gerlek's algorithm. The order is only relevant if outer
   // loops would use induction information of inner loops (not currently done).
@@ -568,6 +576,10 @@ void HInductionVarAnalysis::VisitCondition(HLoopInformation* loop,
                            (stride_value == -1 && IsTaken(lower_expr, upper_expr, kCondGT)))) {
       cmp = stride_value > 0 ? kCondLT : kCondGT;
     }
+#ifdef AART
+    std::cout << "investigate loop DO I=" << InductionToString(lower_expr) << ","
+              << InductionToString(upper_expr) << "," << stride_value << std::endl;
+#endif
     // Normalize a linear loop control with a nonzero stride:
     //   stride > 0, either i < U or i <= U
     //   stride < 0, either i > U or i >= U
@@ -698,6 +710,9 @@ void HInductionVarAnalysis::AssignInfo(HLoopInformation* loop,
                             graph_->GetArena()->Adapter(kArenaAllocInductionVarAnalysis)));
   }
   it->second.Put(instruction, info);
+#ifdef AART
+  std::cout << "BIK INDUC: " << instruction->GetId() << " : " << InductionToString(info) << std::endl;
+#endif
 }
 
 HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::LookupInfo(HLoopInformation* loop,

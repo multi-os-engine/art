@@ -52,6 +52,17 @@ class InductionVarRange {
     int32_t b_constant;
     // If true, represented by prior fields. Otherwise unknown value.
     bool is_known;
+
+    // DEBUG
+    std::string ToString() {
+      if (!is_known)
+        return "{?}";
+      std::string r = "{";
+      if (a_constant != 0)
+        r += " " + std::to_string(a_constant) + "x I" + std::to_string(instruction->GetId()) + " ";
+      r += std::to_string(b_constant);
+      return r + "}";
+    }
   };
 
   explicit InductionVarRange(HInductionVarAnalysis* induction);
@@ -67,6 +78,9 @@ class InductionVarRange {
    * possibly conservative, upper bound on the instruction's value.
    */
   Value GetMaxInduction(HInstruction* context, HInstruction* instruction);
+
+  bool CanGenCode(HLoopInformation* loop, HInstruction* instruction);
+  void GenCode(HLoopInformation* loop, HInstruction* instruction, HInstruction** lower, HInstruction** upper);
 
  private:
   //
@@ -101,6 +115,13 @@ class InductionVarRange {
   static Value MulValue(Value v1, Value v2);
   static Value DivValue(Value v1, Value v2);
   static Value MergeVal(Value v1, Value v2, bool is_min);
+
+  bool CanGenCode(HInductionVarAnalysis::InductionInfo* info,
+                  HInductionVarAnalysis::InductionInfo* trip);
+  HInstruction* GenCode(HBasicBlock* block,
+                        HInductionVarAnalysis::InductionInfo* info,
+                        HInductionVarAnalysis::InductionInfo* trip,
+                        bool is_min);
 
   /** Results of prior induction variable analysis. */
   HInductionVarAnalysis *induction_analysis_;
