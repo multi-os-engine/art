@@ -61,6 +61,10 @@ const vixl::CPURegList callee_saved_fp_registers(vixl::CPURegister::kFPRegister,
                                                  vixl::kDRegSize,
                                                  vixl::d8.code(),
                                                  vixl::d15.code());
+const vixl::CPURegList callee_saved_fp_registers_debuggable(vixl::CPURegister::kFPRegister,
+                                                            vixl::kDRegSize,
+                                                            0,
+                                                            0);
 Location ARM64ReturnLocation(Primitive::Type return_type);
 
 class SlowPathCodeARM64 : public SlowPathCode {
