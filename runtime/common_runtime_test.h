@@ -114,9 +114,6 @@ class CommonRuntimeTest : public testing::Test {
   // Called after the runtime is created.
   virtual void PostRuntimeCreate() {}
 
-  // Gets the path of the specified dex file for host or target.
-  static std::string GetDexFileName(const std::string& jar_prefix);
-
   std::string GetTestAndroidRoot();
 
   std::string GetTestDexFileName(const char* name);

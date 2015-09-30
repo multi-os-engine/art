@@ -432,7 +432,7 @@ define define-art-gtest-rule-target
     $(foreach file,$(ART_GTEST_$(1)_DEX_DEPS),$(ART_TEST_TARGET_GTEST_$(file)_DEX)) \
     $$(ART_TARGET_NATIVETEST_OUT)/$$(TARGET_$(2)ARCH)/$(1) \
     $$($(2)TARGET_OUT_SHARED_LIBRARIES)/libjavacore.so \
-    $$(TARGET_OUT_JAVA_LIBRARIES)/core-libart.jar
+    $$(TARGET_OUT_JAVA_LIBRARIES)/core-libart-testdex.jar
 
 .PHONY: $$(gtest_rule)
 $$(gtest_rule): test-art-target-sync

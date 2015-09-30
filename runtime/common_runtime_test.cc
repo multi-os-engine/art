@@ -407,16 +407,14 @@ void CommonRuntimeTest::TearDown() {
 }
 
 std::string CommonRuntimeTest::GetLibCoreDexFileName() {
-  return GetDexFileName("core-libart");
-}
-
-std::string CommonRuntimeTest::GetDexFileName(const std::string& jar_prefix) {
   if (IsHost()) {
     const char* host_dir = getenv("ANDROID_HOST_OUT");
     CHECK(host_dir != nullptr);
-    return StringPrintf("%s/framework/%s-hostdex.jar", host_dir, jar_prefix.c_str());
+    return StringPrintf("%s/framework/core-libart-hostdex.jar", host_dir);
   }
-  return StringPrintf("%s/framework/%s.jar", GetAndroidRoot(), jar_prefix.c_str());
+  // We cannot use core-libart.jar in preopted configurations, as the dex file will be stripped
+  // from it. Use the testdex version which is never stripped.
+  return StringPrintf("%s/framework/core-libart-testdex.jar", GetAndroidRoot());
 }
 
 std::string CommonRuntimeTest::GetTestAndroidRoot() {
