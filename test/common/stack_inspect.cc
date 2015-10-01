@@ -27,6 +27,17 @@
 
 namespace art {
 
+static bool asserts_enabled = true;
+
+// public static native void disableCallerAsserts();
+// Note: to globally disable asserts in unsupported configurations.
+
+extern "C" JNIEXPORT void JNICALL Java_Main_disableCallerAsserts(JNIEnv* env ATTRIBUTE_UNUSED,
+                                                                 jclass cls ATTRIBUTE_UNUSED) {
+  asserts_enabled = false;
+}
+
+
 // public static native boolean isCallerInterpreted();
 
 extern "C" JNIEXPORT jboolean JNICALL Java_Main_isCallerInterpreted(JNIEnv* env, jclass) {
@@ -40,7 +51,9 @@ extern "C" JNIEXPORT jboolean JNICALL Java_Main_isCallerInterpreted(JNIEnv* env,
 // public static native void assertCallerIsInterpreted();
 
 extern "C" JNIEXPORT void JNICALL Java_Main_assertCallerIsInterpreted(JNIEnv* env, jclass klass) {
-  CHECK(Java_Main_isCallerInterpreted(env, klass));
+  if (asserts_enabled) {
+    CHECK(Java_Main_isCallerInterpreted(env, klass));
+  }
 }
 
 
@@ -68,7 +81,9 @@ extern "C" JNIEXPORT jboolean JNICALL Java_Main_isCallerManaged(JNIEnv* env, jcl
 // public static native void assertCallerIsManaged();
 
 extern "C" JNIEXPORT void JNICALL Java_Main_assertCallerIsManaged(JNIEnv* env, jclass cls) {
-  CHECK(Java_Main_isCallerManaged(env, cls));
+  if (asserts_enabled) {
+    CHECK(Java_Main_isCallerManaged(env, cls));
+  }
 }
 
 }  // namespace art
