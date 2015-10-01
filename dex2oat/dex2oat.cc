@@ -503,7 +503,7 @@ static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files) {
 class Dex2Oat FINAL {
  public:
   explicit Dex2Oat(TimingLogger* timings) :
-      compiler_kind_(kUseOptimizingCompiler ? Compiler::kOptimizing : Compiler::kQuick),
+      compiler_kind_(Compiler::kOptimizing),
       instruction_set_(kRuntimeISA),
       // Take the default set of instruction features from the build.
       verification_results_(nullptr),
@@ -752,10 +752,9 @@ class Dex2Oat FINAL {
 
   void ProcessOptions(ParserOptions* parser_options) {
     image_ = (!image_filename_.empty());
-    if (!parser_options->requested_specific_compiler && !kUseOptimizingCompiler) {
-      // If no specific compiler is requested, the current behavior is
-      // to compile the boot image with Quick, and the rest with Optimizing.
-      compiler_kind_ = image_ ? Compiler::kQuick : Compiler::kOptimizing;
+    if (image_) {
+      // We currently need to have our boot image always debuggable.
+      parser_options->debuggable = true;
     }
 
     if (oat_filename_.empty() && oat_fd_ == -1) {
