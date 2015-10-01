@@ -841,7 +841,7 @@ void Mir2Lir::CreateNativeGcMap() {
         references_buffer[i] = static_cast<uint8_t>(
             raw_storage[i / sizeof(raw_storage[0])] >> (8u * (i % sizeof(raw_storage[0]))));
       }
-      native_gc_map_builder.AddEntry(native_offset, &references_buffer[0]);
+      native_gc_map_builder.AddEntry(native_offset, references_buffer.data());
       prev_mir = mir;
     }
   }

@@ -4252,7 +4252,6 @@ ArmAssembler* ParallelMoveResolverARM::GetAssembler() const {
 }
 
 void ParallelMoveResolverARM::EmitMove(size_t index) {
-  DCHECK_LT(index, moves_.size());
   MoveOperands* move = moves_[index];
   Location source = move->GetSource();
   Location destination = move->GetDestination();
@@ -4385,7 +4384,6 @@ void ParallelMoveResolverARM::Exchange(int mem1, int mem2) {
 }
 
 void ParallelMoveResolverARM::EmitSwap(size_t index) {
-  DCHECK_LT(index, moves_.size());
   MoveOperands* move = moves_[index];
   Location source = move->GetSource();
   Location destination = move->GetDestination();
@@ -5191,7 +5189,7 @@ void InstructionCodeGeneratorARM::VisitPackedSwitch(HPackedSwitch* switch_instr)
   const ArenaVector<HBasicBlock*>& successors = switch_instr->GetBlock()->GetSuccessors();
   for (int32_t i = 0; i < num_entries; i++) {
     GenerateCompareWithImmediate(value_reg, lower_bound + i);
-    __ b(codegen_->GetLabelOf(successors.at(i)), EQ);
+    __ b(codegen_->GetLabelOf(successors[i]), EQ);
   }
 
   // And the default for any other value.
