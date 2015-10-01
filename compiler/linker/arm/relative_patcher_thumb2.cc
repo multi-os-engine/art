@@ -110,8 +110,8 @@ uint32_t Thumb2RelativePatcher::GetInsn32(ArrayRef<const uint8_t> code, uint32_t
       (static_cast<uint32_t>(addr[3]) << 8);
 }
 
-template <typename Alloc>
-uint32_t Thumb2RelativePatcher::GetInsn32(std::vector<uint8_t, Alloc>* code, uint32_t offset) {
+template <typename Vector>
+uint32_t Thumb2RelativePatcher::GetInsn32(Vector* code, uint32_t offset) {
   return GetInsn32(ArrayRef<const uint8_t>(*code), offset);
 }
 

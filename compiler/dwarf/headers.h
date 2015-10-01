@@ -36,11 +36,11 @@ namespace dwarf {
 // In particular, it is not related to machine architecture.
 
 // Write common information entry (CIE) to .debug_frame or .eh_frame section.
-template<typename Allocator>
+template<typename Vector>
 void WriteDebugFrameCIE(bool is64bit,
                         ExceptionHeaderValueApplication address_type,
                         Reg return_address_register,
-                        const DebugFrameOpCodeWriter<Allocator>& opcodes,
+                        const DebugFrameOpCodeWriter<Vector>& opcodes,
                         CFIFormat format,
                         std::vector<uint8_t>* debug_frame) {
   Writer<> writer(debug_frame);
@@ -49,8 +49,8 @@ void WriteDebugFrameCIE(bool is64bit,
   writer.PushUint32((format == DW_EH_FRAME_FORMAT) ? 0 : 0xFFFFFFFF);  // CIE id.
   writer.PushUint8(1);   // Version.
   writer.PushString("zR");
-  writer.PushUleb128(DebugFrameOpCodeWriter<Allocator>::kCodeAlignmentFactor);
-  writer.PushSleb128(DebugFrameOpCodeWriter<Allocator>::kDataAlignmentFactor);
+  writer.PushUleb128(DebugFrameOpCodeWriter<Vector>::kCodeAlignmentFactor);
+  writer.PushSleb128(DebugFrameOpCodeWriter<Vector>::kDataAlignmentFactor);
   writer.PushUleb128(return_address_register.num());  // ubyte in DWARF2.
   writer.PushUleb128(1);  // z: Augmentation data size.
   if (is64bit) {
@@ -74,10 +74,10 @@ void WriteDebugFrameCIE(bool is64bit,
 }
 
 // Write frame description entry (FDE) to .debug_frame or .eh_frame section.
-template<typename Allocator>
+template<typename Vector>
 void WriteDebugFrameFDE(bool is64bit, size_t cie_offset,
                         uint64_t initial_address, uint64_t address_range,
-                        const std::vector<uint8_t, Allocator>* opcodes,
+                        const std::vector<uint8_t, Vector>* opcodes,
                         CFIFormat format,
                         std::vector<uint8_t>* debug_frame,
                         std::vector<uintptr_t>* debug_frame_patches) {
@@ -107,9 +107,9 @@ void WriteDebugFrameFDE(bool is64bit, size_t cie_offset,
 }
 
 // Write compilation unit (CU) to .debug_info section.
-template<typename Allocator>
+template<typename Vector>
 void WriteDebugInfoCU(uint32_t debug_abbrev_offset,
-                      const DebugInfoEntryWriter<Allocator>& entries,
+                      const DebugInfoEntryWriter<Vector>& entries,
                       std::vector<uint8_t>* debug_info,
                       std::vector<uintptr_t>* debug_info_patches) {
   Writer<> writer(debug_info);
@@ -135,10 +135,10 @@ struct FileEntry {
 };
 
 // Write line table to .debug_line section.
-template<typename Allocator>
+template<typename Vector>
 void WriteDebugLineTable(const std::vector<std::string>& include_directories,
                          const std::vector<FileEntry>& files,
-                         const DebugLineOpCodeWriter<Allocator>& opcodes,
+                         const DebugLineOpCodeWriter<Vector>& opcodes,
                          std::vector<uint8_t>* debug_line,
                          std::vector<uintptr_t>* debug_line_patches) {
   Writer<> writer(debug_line);
@@ -151,13 +151,13 @@ void WriteDebugLineTable(const std::vector<std::string>& include_directories,
   size_t header_length_pos = writer.data()->size();
   writer.PushUint32(0);  // Header-length placeholder.
   writer.PushUint8(1 << opcodes.GetCodeFactorBits());
-  writer.PushUint8(DebugLineOpCodeWriter<Allocator>::kDefaultIsStmt ? 1 : 0);
-  writer.PushInt8(DebugLineOpCodeWriter<Allocator>::kLineBase);
-  writer.PushUint8(DebugLineOpCodeWriter<Allocator>::kLineRange);
-  writer.PushUint8(DebugLineOpCodeWriter<Allocator>::kOpcodeBase);
-  static const int opcode_lengths[DebugLineOpCodeWriter<Allocator>::kOpcodeBase] = {
+  writer.PushUint8(DebugLineOpCodeWriter<Vector>::kDefaultIsStmt ? 1 : 0);
+  writer.PushInt8(DebugLineOpCodeWriter<Vector>::kLineBase);
+  writer.PushUint8(DebugLineOpCodeWriter<Vector>::kLineRange);
+  writer.PushUint8(DebugLineOpCodeWriter<Vector>::kOpcodeBase);
+  static const int opcode_lengths[DebugLineOpCodeWriter<Vector>::kOpcodeBase] = {
       0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1 };
-  for (int i = 1; i < DebugLineOpCodeWriter<Allocator>::kOpcodeBase; i++) {
+  for (int i = 1; i < DebugLineOpCodeWriter<Vector>::kOpcodeBase; i++) {
     writer.PushUint8(opcode_lengths[i]);
   }
   for (const std::string& directory : include_directories) {

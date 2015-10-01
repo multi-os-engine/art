@@ -26,8 +26,8 @@ namespace art {
 
 class GcMapBuilder {
  public:
-  template <typename Alloc>
-  GcMapBuilder(std::vector<uint8_t, Alloc>* table, size_t entries, uint32_t max_native_offset,
+  template <typename Vector>
+  GcMapBuilder(Vector* table, size_t entries, uint32_t max_native_offset,
                size_t references_width)
       : entries_(entries), references_width_(entries != 0u ? references_width : 0u),
         native_offset_width_(entries != 0 && max_native_offset != 0

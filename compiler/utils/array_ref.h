@@ -77,6 +77,23 @@ class ArrayRef {
       : array_(array_in), size_(size_in) {
   }
 
+  template <typename Vector,
+            typename = typename std::enable_if<
+                std::is_same<typename Vector::value_type, value_type>::value>::type>
+  explicit ArrayRef(Vector& v)
+      : array_(v.data()), size_(v.size()) {
+  }
+
+  template <typename Vector,
+            typename = typename std::enable_if<
+                std::is_same<
+                    typename std::add_const<typename Vector::value_type>::type,
+                    value_type>::value>::type>
+  explicit ArrayRef(const Vector& v)
+      : array_(v.data()), size_(v.size()) {
+  }
+
+#if 0
   template <typename Alloc>
   explicit ArrayRef(std::vector<T, Alloc>& v)
       : array_(v.data()), size_(v.size()) {
@@ -88,6 +105,7 @@ class ArrayRef {
                         t ATTRIBUTE_UNUSED = tag())
       : array_(v.data()), size_(v.size()) {
   }
+#endif
 
   ArrayRef(const ArrayRef&) = default;
 
