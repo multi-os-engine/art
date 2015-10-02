@@ -446,6 +446,197 @@ class StubTest : public CommonRuntimeTest {
         : "rbx", "rbp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
           "memory");  // clobber all
     // TODO: Should we clobber the other registers?
+#elif defined(__aarch64__)
+    __asm__ __volatile__(
+        // Spill x0-x7 which we say we don't clobber. May contain args.
+        "sub sp, sp, #64\n\t"
+        ".cfi_adjust_cfa_offset 64\n\t"
+        "stp x0, x1, [sp]\n\t"
+        "stp x2, x3, [sp, #16]\n\t"
+        "stp x4, x5, [sp, #32]\n\t"
+        "stp x6, x7, [sp, #48]\n\t"
+
+        "sub sp, sp, #16\n\t"          // Reserve stack space, 16B aligned
+        ".cfi_adjust_cfa_offset 16\n\t"
+        "str %[referrer], [sp]\n\t"    // referrer
+
+        // Push everything on the stack, so we don't rely on the order. What a mess. :-(
+        "sub sp, sp, #48\n\t"
+        ".cfi_adjust_cfa_offset 48\n\t"
+        // All things are "r" constraints, so direct str/stp should work.
+        "stp %[arg0], %[arg1], [sp]\n\t"
+        "stp %[arg2], %[code], [sp, #16]\n\t"
+        "str %[self], [sp, #32]\n\t"
+
+        // Now we definitely have x0-x3 free, use it to garble d8 - d15
+        "movk x0, #0xfad0\n\t"
+        "movk x0, #0xebad, lsl #16\n\t"
+        "movk x0, #0xfad0, lsl #32\n\t"
+        "movk x0, #0xebad, lsl #48\n\t"
+        "fmov d8, x0\n\t"
+        "add x0, x0, 1\n\t"
+        "fmov d9, x0\n\t"
+        "add x0, x0, 1\n\t"
+        "fmov d10, x0\n\t"
+        "add x0, x0, 1\n\t"
+        "fmov d11, x0\n\t"
+        "add x0, x0, 1\n\t"
+        "fmov d12, x0\n\t"
+        "add x0, x0, 1\n\t"
+        "fmov d13, x0\n\t"
+        "add x0, x0, 1\n\t"
+        "fmov d14, x0\n\t"
+        "add x0, x0, 1\n\t"
+        "fmov d15, x0\n\t"
+
+        // Load call params into the right registers.
+        "ldp x0, x2, [sp]\n\t"  // arg1 needs to into x2
+        "ldp x1, x3, [sp, #16]\n\t"
+        "ldr x19, [sp, #32]\n\t"
+        "add sp, sp, #48\n\t"
+        ".cfi_adjust_cfa_offset -48\n\t"
+
+
+        "blr x3\n\t"              // Call the stub
+        "mov x8, x0\n\t"          // Store result
+        "add sp, sp, #16\n\t"     // Drop the quick "frame"
+        ".cfi_adjust_cfa_offset -16\n\t"
+
+        // Test d8 - d15. We can use x1 and x2.
+        "movk x1, #0xfad0\n\t"
+        "movk x1, #0xebad, lsl #16\n\t"
+        "movk x1, #0xfad0, lsl #32\n\t"
+        "movk x1, #0xebad, lsl #48\n\t"
+        "fmov x2, d8\n\t"
+        "cmp x1, x2\n\t"
+        "b.ne 1f\n\t"
+        "add x1, x1, 1\n\t"
+
+        "fmov x2, d9\n\t"
+        "cmp x1, x2\n\t"
+        "b.ne 1f\n\t"
+        "add x1, x1, 1\n\t"
+
+        "fmov x2, d10\n\t"
+        "cmp x1, x2\n\t"
+        "b.ne 1f\n\t"
+        "add x1, x1, 1\n\t"
+
+        "fmov x2, d11\n\t"
+        "cmp x1, x2\n\t"
+        "b.ne 1f\n\t"
+        "add x1, x1, 1\n\t"
+
+        "fmov x2, d12\n\t"
+        "cmp x1, x2\n\t"
+        "b.ne 1f\n\t"
+        "add x1, x1, 1\n\t"
+
+        "fmov x2, d13\n\t"
+        "cmp x1, x2\n\t"
+        "b.ne 1f\n\t"
+        "add x1, x1, 1\n\t"
+
+        "fmov x2, d14\n\t"
+        "cmp x1, x2\n\t"
+        "b.ne 1f\n\t"
+        "add x1, x1, 1\n\t"
+
+        "fmov x2, d15\n\t"
+        "cmp x1, x2\n\t"
+        "b.ne 1f\n\t"
+
+        "mov x9, #0\n\t"              // Use x9 as flag, in clobber list
+
+        // Finish up.
+        "2:\n\t"
+        "ldp x0, x1, [sp]\n\t"        // Restore stuff not named clobbered, may contain fpr_result
+        "ldp x2, x3, [sp, #16]\n\t"
+        "ldp x4, x5, [sp, #32]\n\t"
+        "ldp x6, x7, [sp, #48]\n\t"
+        "add sp, sp, #64\n\t"         // Free stack space, now sp as on entry
+        ".cfi_adjust_cfa_offset -64\n\t"
+
+        "str x9, %[fpr_result]\n\t"   // Store the FPR comparison result
+        "mov %[result], x8\n\t"              // Store the call result
+
+        "b 3f\n\t"                     // Goto end
+
+        // Failed fpr verification.
+        "1:\n\t"
+        "mov x9, #1\n\t"
+        "b 2b\n\t"                     // Goto finish-up
+
+        // End
+        "3:\n\t"
+        : [result] "=r" (result)
+          // Use the result from r0
+        : [arg0] "0"(arg0), [arg1] "r"(arg1), [arg2] "r"(arg2), [code] "r"(code), [self] "r"(self),
+          [referrer] "r"(referrer), [fpr_result] "m" (fpr_result)
+        : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19", "x20",
+          "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "x30",
+          "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7",
+          "d8", "d9", "d10", "d11", "d12", "d13", "d14", "d15",
+          "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
+          "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
+          "memory");  // clobber.
+#elif defined(__mips__) && defined(__LP64__)
+    __asm__ __volatile__ (
+        // Spill a0-a7 which we say we don't clobber. May contain args.
+        "daddiu $sp, $sp, -64\n\t"
+        "sd $a0, 0($sp)\n\t"
+        "sd $a1, 8($sp)\n\t"
+        "sd $a2, 16($sp)\n\t"
+        "sd $a3, 24($sp)\n\t"
+        "sd $a4, 32($sp)\n\t"
+        "sd $a5, 40($sp)\n\t"
+        "sd $a6, 48($sp)\n\t"
+        "sd $a7, 56($sp)\n\t"
+
+        "daddiu $sp, $sp, -16\n\t"  // Reserve stack space, 16B aligned.
+        "sd %[referrer], 0($sp)\n\t"
+
+        // Push everything on the stack, so we don't rely on the order.
+        "daddiu $sp, $sp, -40\n\t"
+        "sd %[arg0], 0($sp)\n\t"
+        "sd %[arg1], 8($sp)\n\t"
+        "sd %[arg2], 16($sp)\n\t"
+        "sd %[code], 24($sp)\n\t"
+        "sd %[self], 32($sp)\n\t"
+
+        // Load call params into the right registers.
+        "ld $a0, 0($sp)\n\t"
+        "ld $a2, 8($sp)\n\t"  // arg1 should go into a2
+        "ld $a1, 16($sp)\n\t"
+        "ld $t9, 24($sp)\n\t"
+        "ld $s1, 32($sp)\n\t"
+        "daddiu $sp, $sp, 40\n\t"
+
+        "jalr $t9\n\t"              // Call the stub.
+        "nop\n\t"
+        "daddiu $sp, $sp, 16\n\t"   // Drop the quick "frame".
+
+        // Restore stuff not named clobbered.
+        "ld $a0, 0($sp)\n\t"
+        "ld $a1, 8($sp)\n\t"
+        "ld $a2, 16($sp)\n\t"
+        "ld $a3, 24($sp)\n\t"
+        "ld $a4, 32($sp)\n\t"
+        "ld $a5, 40($sp)\n\t"
+        "ld $a6, 48($sp)\n\t"
+        "ld $a7, 56($sp)\n\t"
+        "daddiu $sp, $sp, 64\n\t"
+
+        "move %[result], $v0\n\t"   // Store the call result.
+        : [result] "=r" (result)
+        : [arg0] "r"(arg0), [arg1] "r"(arg1), [arg2] "r"(arg2), [code] "r"(code), [self] "r"(self),
+          [referrer] "r"(referrer)
+        : "at", "v0", "v1", "t0", "t1", "t2", "t3", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
+          "t8", "t9", "k0", "k1", "fp", "ra",
+          "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13",
+          "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24", "f25", "f26",
+          "f27", "f28", "f29", "f30", "f31",
+          "memory");  // clobber.
 #else
     UNUSED(arg0, arg1, arg2, code, referrer);
     LOG(WARNING) << "Was asked to invoke for an architecture I do not understand.";
@@ -2005,8 +2196,8 @@ static void GetSetObjInstance(Handle<mirror::Object>* obj, ArtField* f,
 static void GetSet64Static(ArtField* f, Thread* self, ArtMethod* referrer,
                            StubTest* test)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-// TODO: (defined(__mips__) && defined(__LP64__)) || defined(__aarch64__)
-#if (defined(__x86_64__) && !defined(__APPLE__))
+// TODO:
+#if (defined(__x86_64__) && !defined(__APPLE__)) || (defined(__mips__) && defined(__LP64__)) || defined(__aarch64__)
   uint64_t values[] = { 0, 1, 2, 255, 32768, 1000000, 0xFFFFFFFF, 0xFFFFFFFFFFFF };
 
   for (size_t i = 0; i < arraysize(values); ++i) {
