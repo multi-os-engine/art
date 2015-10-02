@@ -502,7 +502,8 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
             << std::boolalpha << instruction->CanBeNull() << std::noboolalpha;
         StartAttributeStream("exact") << std::boolalpha << info.IsExact() << std::noboolalpha;
       } else {
-        DCHECK(!is_after_pass_) << "Type info should be valid after reference type propagation";
+        DCHECK(instruction->IsLoadClass() || !is_after_pass_)
+            << "Expected a valid rti after reference type propagation";
       }
     }
     if (disasm_info_ != nullptr) {

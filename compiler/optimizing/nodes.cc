@@ -1838,6 +1838,15 @@ ReferenceTypeInfo::ReferenceTypeInfo(TypeHandle type_handle, bool is_exact)
   }
 }
 
+void HLoadClass::SetLoadedClassRTI(ReferenceTypeInfo rti) {
+  // Make sure we only set exact types (the loaded class should never be merged).
+  if (kIsDebugBuild) {
+    ScopedObjectAccess soa(Thread::Current());
+    DCHECK(rti.IsExact() || rti.IsValid());
+  }
+  loaded_class_rti_ = rti;
+}
+
 std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
   ScopedObjectAccess soa(Thread::Current());
   os << "["
