@@ -116,6 +116,46 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
   DISALLOW_COPY_AND_ASSIGN(IntrinsicVisitor);
 };
 
+class IntrinsicOptimizations : public ValueObject {
+ public:
+  IntrinsicOptimizations(uint32_t* value) : value_(value) {}
+
+ protected:
+  bool IsBitSet(uint32_t bit) const {
+    return (*value_ & (bit << 1)) != 0u;
+  }
+
+  void SetBit(uint32_t bit) {
+    (*value_) |= (bit << 1);
+  }
+
+ private:
+  uint32_t *value_;
+
+  DISALLOW_COPY_AND_ASSIGN(IntrinsicOptimizations);
+};
+
+#define INTRINSIC_OPTIMIZATION(name, bit)              \
+ public:                                               \
+  void Set##name() { SetBit(k##name); }                \
+  bool Get##name() const { return IsBitSet(k##name); } \
+ private:                                              \
+  static constexpr int k##name = bit
+
+class StringEqualsOptimizations : public IntrinsicOptimizations {
+ public:
+  StringEqualsOptimizations(HInvoke* invoke)
+      : IntrinsicOptimizations(invoke->GetIntrinsicOptimizations()) {}
+
+  INTRINSIC_OPTIMIZATION(ArgumentNotNull, 1);
+  INTRINSIC_OPTIMIZATION(ArgumentIsString, 2);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(StringEqualsOptimizations);
+};
+
+#undef INTRISIC_OPTIMIZATION
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_INTRINSICS_H_

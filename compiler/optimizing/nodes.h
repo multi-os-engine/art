@@ -1656,6 +1656,10 @@ class ReferenceTypeInfo : ValueObject {
     return GetTypeHandle()->IsObjectClass();
   }
 
+  bool IsStringClass() const SHARED_REQUIRES(Locks::mutator_lock_) {
+    return IsValid() && GetTypeHandle()->IsStringClass();
+  }
+
   bool IsObjectArray() const SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(IsValid());
     return IsArrayClass() && GetTypeHandle()->GetComponentType()->IsObjectClass();
@@ -3073,6 +3077,10 @@ class HInvoke : public HInstruction {
 
   bool CanThrow() const OVERRIDE { return true; }
 
+  uint32_t* GetIntrinsicOptimizations() {
+    return &intrinsic_optimizations_;
+  }
+
   DECLARE_INSTRUCTION(Invoke);
 
  protected:
@@ -3092,7 +3100,8 @@ class HInvoke : public HInstruction {
       dex_method_index_(dex_method_index),
       original_invoke_type_(original_invoke_type),
       intrinsic_(Intrinsics::kNone),
-      needs_environment_or_cache_(kNeedsEnvironmentOrCache) {
+      needs_environment_or_cache_(kNeedsEnvironmentOrCache),
+      intrinsic_optimizations_(0) {
   }
 
   const HUserRecord<HInstruction*> InputRecordAt(size_t index) const OVERRIDE {
@@ -3112,6 +3121,9 @@ class HInvoke : public HInstruction {
   const InvokeType original_invoke_type_;
   Intrinsics intrinsic_;
   IntrinsicNeedsEnvironmentOrCache needs_environment_or_cache_;
+
+  // A magic word holding optimizations for intrinsics. See intrinsics.h.
+  uint32_t intrinsic_optimizations_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HInvoke);

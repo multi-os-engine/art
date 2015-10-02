@@ -16,15 +16,16 @@
 
 #include "instruction_simplifier.h"
 
+#include "intrinsics.h"
 #include "mirror/class-inl.h"
 #include "scoped_thread_state_change.h"
 
 namespace art {
 
-class InstructionSimplifierVisitor : public HGraphVisitor {
+class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
  public:
   InstructionSimplifierVisitor(HGraph* graph, OptimizingCompilerStats* stats)
-      : HGraphVisitor(graph),
+      : HGraphDelegateVisitor(graph),
         stats_(stats) {}
 
   void Run();
@@ -71,6 +72,7 @@ class InstructionSimplifierVisitor : public HGraphVisitor {
   void VisitXor(HXor* instruction) OVERRIDE;
   void VisitInstanceOf(HInstanceOf* instruction) OVERRIDE;
   void VisitFakeString(HFakeString* fake_string) OVERRIDE;
+  void VisitInvoke(HInvoke* invoke) OVERRIDE;
 
   bool CanEnsureNotNullAt(HInstruction* instr, HInstruction* at) const;
 
@@ -1031,6 +1033,25 @@ void InstructionSimplifierVisitor::VisitFakeString(HFakeString* instruction) {
   // `instruction`.
   instruction->ReplaceWith(actual_string);
   instruction->GetBlock()->RemoveInstruction(instruction);
+}
+
+void InstructionSimplifierVisitor::VisitInvoke(HInvoke* instruction) {
+  if (instruction->GetIntrinsic() == Intrinsics::kStringEquals) {
+    HInstruction* argument = instruction->InputAt(1);
+    if (instruction->InputAt(0) == argument) {
+      instruction->ReplaceWith(GetGraph()->GetIntConstant(1));
+      instruction->GetBlock()->RemoveInstruction(instruction);
+    } else {
+      StringEqualsOptimizations optimizations(instruction);
+      if (CanEnsureNotNullAt(argument, instruction)) {
+        optimizations.SetArgumentNotNull();
+      }
+      ScopedObjectAccess soa(Thread::Current());
+      if (argument->GetReferenceTypeInfo().IsStringClass()) {
+        optimizations.SetArgumentIsString();
+      }
+    }
+  }
 }
 
 }  // namespace art
