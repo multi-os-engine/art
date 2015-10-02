@@ -30,6 +30,7 @@
 #include "dex_instruction.h"
 #include "gc/accounting/card_table-inl.h"
 #include "gc/allocation_record.h"
+#include "gc/scoped_gc_critical_section.h"
 #include "gc/space/large_object_space.h"
 #include "gc/space/space-inl.h"
 #include "handle_scope.h"
@@ -559,14 +560,15 @@ void Dbg::GoActive() {
     return;
   }
 
+  Thread* const self = Thread::Current();
   {
     // TODO: dalvik only warned if there were breakpoints left over. clear in Dbg::Disconnected?
-    ReaderMutexLock mu(Thread::Current(), *Locks::breakpoint_lock_);
+    ReaderMutexLock mu(self, *Locks::breakpoint_lock_);
     CHECK_EQ(gBreakpoints.size(), 0U);
   }
 
   {
-    MutexLock mu(Thread::Current(), *Locks::deoptimization_lock_);
+    MutexLock mu(self, *Locks::deoptimization_lock_);
     CHECK_EQ(deoptimization_requests_.size(), 0U);
     CHECK_EQ(full_deoptimization_event_count_, 0U);
     CHECK_EQ(dex_pc_change_event_ref_count_, 0U);
@@ -578,6 +580,9 @@ void Dbg::GoActive() {
   }
 
   Runtime* runtime = Runtime::Current();
+  gc::ScopedGCCriticalSection gcs(self,
+                                  gc::kGcCauseInstrumentation,
+                                  gc::kCollectorTypeInstrumentation);
   ScopedSuspendAll ssa(__FUNCTION__);
   if (RequiresDeoptimization()) {
     runtime->GetInstrumentation()->EnableDeoptimization();
@@ -598,6 +603,9 @@ void Dbg::Disconnected() {
   Runtime* runtime = Runtime::Current();
   Thread* self = Thread::Current();
   {
+    gc::ScopedGCCriticalSection gcs(self,
+                                    gc::kGcCauseInstrumentation,
+                                    gc::kCollectorTypeInstrumentation);
     ScopedSuspendAll ssa(__FUNCTION__);
     ThreadState old_state = self->SetStateUnsafe(kRunnable);
     // Debugger may not be active at this point.
@@ -3164,6 +3172,9 @@ void Dbg::ManageDeoptimization() {
   ScopedThreadSuspension sts(self, kWaitingForDeoptimization);
   // We need to suspend mutator threads first.
   ScopedSuspendAll ssa(__FUNCTION__);
+  gc::ScopedGCCriticalSection gcs(self,
+                                  gc::kGcCauseInstrumentation,
+                                  gc::kCollectorTypeInstrumentation);
   const ThreadState old_state = self->SetStateUnsafe(kRunnable);
   {
     MutexLock mu(self, *Locks::deoptimization_lock_);
