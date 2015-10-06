@@ -1057,8 +1057,62 @@ void InstructionSimplifierVisitor::VisitInvoke(HInvoke* instruction) {
         optimizations.SetArgumentNotNull();
       }
       ScopedObjectAccess soa(Thread::Current());
-      if (argument->GetReferenceTypeInfo().IsStringClass()) {
+      ReferenceTypeInfo argument_rti = argument->GetReferenceTypeInfo();
+      if (argument_rti.IsValid() && argument_rti.IsStringClass()) {
         optimizations.SetArgumentIsString();
+      }
+    }
+  } else if (instruction->GetIntrinsic() == Intrinsics::kSystemArrayCopy) {
+    HInstruction* source = instruction->InputAt(0);
+    HInstruction* destination = instruction->InputAt(2);
+    HInstruction* count = instruction->InputAt(4);
+    SystemArrayCopyOptimizations optimizations(instruction);
+    if (CanEnsureNotNullAt(source, instruction)) {
+      optimizations.SetSourceIsNotNull();
+    }
+    if (CanEnsureNotNullAt(destination, instruction)) {
+      optimizations.SetDestinationIsNotNull();
+    }
+    if (destination == source) {
+      optimizations.SetDestinationIsSource();
+    }
+
+    if (count->IsArrayLength()) {
+      if (count->InputAt(0) == source) {
+        optimizations.SetCountIsSourceLength();
+      }
+
+      if (count->InputAt(0) == destination) {
+        optimizations.SetCountIsDestinationLength();
+      }
+    }
+
+    {
+      ScopedObjectAccess soa(Thread::Current());
+      ReferenceTypeInfo destination_rti = destination->GetReferenceTypeInfo();
+      if (destination_rti.IsValid()) {
+        if (destination_rti.IsObjectArray()) {
+          if (destination_rti.IsExact()) {
+            optimizations.SetDoesNotNeedTypeCheck();
+          }
+          optimizations.SetDestinationIsTypedObjectArray();
+        }
+        if (destination_rti.IsPrimitiveArrayClass()) {
+          optimizations.SetDestinationIsPrimitiveArray();
+        } else if (destination_rti.IsNonPrimitiveArrayClass()) {
+          optimizations.SetDestinationIsNonPrimitiveArray();
+        }
+      }
+      ReferenceTypeInfo source_rti = source->GetReferenceTypeInfo();
+      if (source_rti.IsValid()) {
+        if (destination_rti.IsValid() && destination_rti.CanArrayHoldValuesOf(source_rti)) {
+          optimizations.SetDoesNotNeedTypeCheck();
+        }
+        if (source_rti.IsPrimitiveArrayClass()) {
+          optimizations.SetSourceIsPrimitiveArray();
+        } else if (source_rti.IsNonPrimitiveArrayClass()) {
+          optimizations.SetSourceIsNonPrimitiveArray();
+        }
       }
     }
   }
