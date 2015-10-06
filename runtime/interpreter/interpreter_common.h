@@ -140,11 +140,11 @@ static inline bool IsValidLambdaTargetOrThrow(ArtMethod* called_method)
 
 // Write out the 'Closure*' into vreg and vreg+1, as if it was a jlong.
 static inline void WriteLambdaClosureIntoVRegs(ShadowFrame& shadow_frame,
-                                               const lambda::Closure* lambda_closure,
+                                               const lambda::Closure& lambda_closure,
                                                uint32_t vreg) {
   // Split the method into a lo and hi 32 bits so we can encode them into 2 virtual registers.
-  uint32_t closure_lo = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(lambda_closure));
-  uint32_t closure_hi = static_cast<uint32_t>(reinterpret_cast<uint64_t>(lambda_closure)
+  uint32_t closure_lo = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&lambda_closure));
+  uint32_t closure_hi = static_cast<uint32_t>(reinterpret_cast<uint64_t>(&lambda_closure)
                                                     >> BitSizeOf<uint32_t>());
   // Use uint64_t instead of uintptr_t to allow shifting past the max on 32-bit.
   static_assert(sizeof(uint64_t) >= sizeof(uintptr_t), "Impossible");
@@ -200,8 +200,14 @@ static inline bool DoCreateLambda(Thread* self,
   lambda::ArtLambdaMethod* initialized_lambda_method;
   // Initialize the ArtLambdaMethod with the right data.
   {
-    lambda::ArtLambdaMethod* uninitialized_lambda_method =
-        reinterpret_cast<lambda::ArtLambdaMethod*>(
+    // Allocate enough memory to store a well-aligned ArtLambdaMethod.
+    // This is not the final type yet since the data starts out uninitialized.
+    using AlignedStorageForLambdaMethod =
+        std::aligned_storage<sizeof(lambda::ArtLambdaMethod),
+                             alignof(lambda::ArtLambdaMethod)>::type;
+
+    AlignedStorageForLambdaMethod* uninitialized_lambda_method =
+        reinterpret_cast<AlignedStorageForLambdaMethod*>(
             lambda::LeakingAllocator::AllocateMemory(self, sizeof(lambda::ArtLambdaMethod)));
 
     std::string captured_variables_shorty = closure_builder->GetCapturedVariableShortyTypes();
@@ -236,21 +242,19 @@ static inline bool DoCreateLambda(Thread* self,
         captured_variables_shorty.size() + 1);
     strcpy(captured_variables_shorty_copy, captured_variables_shorty.c_str());
 
-    new (uninitialized_lambda_method) lambda::ArtLambdaMethod(called_method,
-                                                              captured_variables_type_desc,
-                                                              captured_variables_shorty_copy,
-                                                              true);  // innate lambda
-    initialized_lambda_method = uninitialized_lambda_method;
+    // After initialization, the object at the storage is well-typed. Use strong type going forward.
+    initialized_lambda_method =
+        new (uninitialized_lambda_method) lambda::ArtLambdaMethod(called_method,
+                                                                  captured_variables_type_desc,
+                                                                  captured_variables_shorty_copy,
+                                                                  true);  // innate lambda
   }
 
   // Write all the closure captured variables and the closure header into the closure.
-  lambda::Closure* initialized_closure;
-  {
-    initialized_closure =
-        closure_builder->CreateInPlace(uninitialized_closure, initialized_lambda_method);
-  }
+  lambda::Closure* initialized_closure =
+      closure_builder->CreateInPlace(uninitialized_closure, initialized_lambda_method);
 
-  WriteLambdaClosureIntoVRegs(/*inout*/shadow_frame, initialized_closure, vreg_dest_closure);
+  WriteLambdaClosureIntoVRegs(/*inout*/shadow_frame, *initialized_closure, vreg_dest_closure);
   return true;
 }
 
@@ -911,7 +915,7 @@ static inline bool DoUnboxLambda(Thread* self,
   }
 
   DCHECK(unboxed_closure != nullptr);
-  WriteLambdaClosureIntoVRegs(/*inout*/shadow_frame, unboxed_closure, vreg_target_closure);
+  WriteLambdaClosureIntoVRegs(/*inout*/shadow_frame, *unboxed_closure, vreg_target_closure);
   return true;
 }
 
