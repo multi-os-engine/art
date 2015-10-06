@@ -53,14 +53,11 @@ static void RemoveChunk(FreeByStartSet* free_by_start,
   free_by_start->erase(free_by_start_pos);
 }
 
-template <typename FreeByStartSet, typename FreeBySizeSet>
-static void InsertChunk(FreeByStartSet* free_by_start,
-                        FreeBySizeSet* free_by_size,
-                        const SpaceChunk& chunk) {
+inline void SwapSpace::InsertChunk(const SpaceChunk& chunk) {
   DCHECK_NE(chunk.size, 0u);
-  auto insert_result = free_by_start->insert(chunk);
+  auto insert_result = free_by_start_.insert(chunk);
   DCHECK(insert_result.second);
-  free_by_size->emplace(chunk.size, insert_result.first);
+  free_by_size_.emplace(chunk.size, insert_result.first);
 }
 
 SwapSpace::SwapSpace(int fd, size_t initial_size)
@@ -69,7 +66,7 @@ SwapSpace::SwapSpace(int fd, size_t initial_size)
       lock_("SwapSpace lock", static_cast<LockLevel>(LockLevel::kDefaultMutexLevel - 1)) {
   // Assume that the file is unlinked.
 
-  InsertChunk(&free_by_start_, &free_by_size_, NewFileChunk(initial_size));
+  InsertChunk(NewFileChunk(initial_size));
 }
 
 SwapSpace::~SwapSpace() {
@@ -124,13 +121,13 @@ void* SwapSpace::Alloc(size_t size) {
   if (old_chunk.size != size) {
     // Insert the remainder.
     SpaceChunk new_chunk = { old_chunk.ptr + size, old_chunk.size - size };
-    InsertChunk(&free_by_start_, &free_by_size_, new_chunk);
+    InsertChunk(new_chunk);
   }
 
   return ret;
 }
 
-SpaceChunk SwapSpace::NewFileChunk(size_t min_size) {
+SwapSpace::SpaceChunk SwapSpace::NewFileChunk(size_t min_size) {
 #if !defined(__APPLE__)
   size_t next_part = std::max(RoundUp(min_size, kPageSize), RoundUp(kMininumMapSize, kPageSize));
   int result = TEMP_FAILURE_RETRY(ftruncate64(fd_, size_ + next_part));
@@ -195,7 +192,7 @@ void SwapSpace::Free(void* ptrV, size_t size) {
       // "it" is invalidated but we don't need it anymore.
     }
   }
-  InsertChunk(&free_by_start_, &free_by_size_, chunk);
+  InsertChunk(chunk);
 
   if (kCheckFreeMaps) {
     size_t free_after = CollectFree(free_by_start_, free_by_size_);

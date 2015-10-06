@@ -24,7 +24,7 @@
 #include "length_prefixed_array.h"
 #include "utils/array_ref.h"
 #include "utils/dedupe_set.h"
-#include "utils/swap_space.h"
+#include "utils/swap_space_fwd.h"
 
 namespace art {
 
