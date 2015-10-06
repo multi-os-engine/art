@@ -960,6 +960,10 @@ void Instrumentation::ExceptionCaughtEvent(Thread* thread,
   }
 }
 
+size_t Instrumentation::ComputeFrameId(Thread* self, size_t depth) {
+  return StackVisitor::ComputeNumFrames(self, kInstrumentationStackWalk) - depth;
+}
+
 static void CheckStackDepth(Thread* self, const InstrumentationStackFrame& instrumentation_frame,
                             int delta)
     SHARED_REQUIRES(Locks::mutator_lock_) {
