@@ -15,11 +15,11 @@
  */
 
 import other.InaccessibleClass;
+import other.InaccessibleClassProxy;
 
 public class Main {
-    public static final boolean VERBOSE = false;
-
     public static void main(String[] args) {
+        testDontGvnLoadClassWithAccessChecks(new Object());
         try {
             testInstanceOf();
         } catch (IllegalAccessError e) {
@@ -37,6 +37,17 @@ public class Main {
         } catch (IllegalAccessError e) {
             System.out.println("Got expected error checkcast null");
         }
+
+        try {
+            testDontGvnLoadClassWithAccessChecks(new Object());
+        } catch (IllegalAccessError e) {
+            System.out.println("Got expected error instanceof");
+        }
+    }
+
+    public static boolean testDontGvnLoadClassWithAccessChecks(Object o) {
+        InaccessibleClassProxy.test(o);
+        return ic instanceof InaccessibleClass;
     }
 
     /// CHECK-START: boolean Main.testInstanceOf() register (after)
