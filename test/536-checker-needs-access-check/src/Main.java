@@ -15,10 +15,9 @@
  */
 
 import other.InaccessibleClass;
+import other.InaccessibleClassProxy;
 
 public class Main {
-    public static final boolean VERBOSE = false;
-
     public static void main(String[] args) {
         try {
             testInstanceOf();
@@ -36,6 +35,12 @@ public class Main {
             testCheckCastNull();
         } catch (IllegalAccessError e) {
             System.out.println("Got expected error checkcast null");
+        }
+
+        try {
+            testDontGvnLoadClassWithAccessChecks(new Object());
+        } catch (IllegalAccessError e) {
+            System.out.println("Got expected error instanceof");
         }
     }
 
@@ -57,6 +62,20 @@ public class Main {
     /// CHECK: CheckCast
     public static InaccessibleClass testCheckCastNull() {
         return (InaccessibleClass) null;
+    }
+
+    /// CHECK-START: boolean Main.testDontGvnLoadClassWithAccessChecks(java.lang.Object) inliner (before)
+    /// CHECK: InvokeStaticOrDirect
+
+    /// CHECK-START: boolean Main.testDontGvnLoadClassWithAccessChecks(java.lang.Object) inliner (after)
+    /// CHECK-NOT: InvokeStaticOrDirect
+
+    /// CHECK-START: boolean Main.testDontGvnLoadClassWithAccessChecks(java.lang.Object) GVN (after)
+    /// CHECK: LoadClass needs_access_check:false
+    /// CHECK: LoadClass needs_access_check:true
+    public static boolean testDontGvnLoadClassWithAccessChecks(Object o) {
+        InaccessibleClassProxy.test(o);
+        return ic instanceof InaccessibleClass;
     }
 
     public static InaccessibleClass ic;
