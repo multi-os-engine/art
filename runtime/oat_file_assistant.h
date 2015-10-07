@@ -283,6 +283,11 @@ class OatFileAssistant {
   static bool DexFilenameToOdexFilename(const std::string& location,
       InstructionSet isa, std::string* odex_filename, std::string* error_msg);
 
+  // Forces OatFile::Open to make a new copy.
+  void SetAlreadyLoaded(bool already_loaded) {
+    already_loaded_ = already_loaded;
+  }
+
  private:
   struct ImageInfo {
     uint32_t oat_checksum = 0;
@@ -458,6 +463,9 @@ class OatFileAssistant {
   // of the OatFileAssistant object and the OatFileAssistant object is in a
   // bad state and should no longer be used.
   bool oat_file_released_ = false;
+
+  // If the oat file is already opened, we make a new copy.
+  bool already_loaded_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(OatFileAssistant);
 };
