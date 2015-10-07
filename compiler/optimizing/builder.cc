@@ -1303,7 +1303,8 @@ bool HGraphBuilder::IsOutermostCompilingClass(uint16_t type_index) const {
       soa, dex_cache, class_loader, type_index, dex_compilation_unit_)));
   Handle<mirror::Class> outer_class(hs.NewHandle(GetOutermostCompilingClass()));
 
-  return outer_class.Get() == cls.Get();
+  // If the class cannot be resolved, be conservative and assume it's not the outermost class.
+  return (cls.Get() != nullptr) && (outer_class.Get() == cls.Get());
 }
 
 void HGraphBuilder::BuildUnresolvedStaticFieldAccess(const Instruction& instruction,
