@@ -547,10 +547,17 @@ class AssemblerTestInfrastructure {
       UNREACHABLE();
     }
 
+    LOG(ERROR) << "FindToolDump: gcc_path=" << gcc_path
+               << " cmd=" << sh_args;
     std::ifstream in(tmp_file.c_str());
     if (in) {
-      LOG(ERROR) << in.rdbuf();
+      std::string line;
+      while (std::getline(in, line)) {
+        LOG(ERROR) << line;
+      }
     }
+    in.close();
+    std::remove(tmp_file.c_str());
   }
 
   // Use a consistent tmpnam, so store it.
