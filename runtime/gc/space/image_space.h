@@ -63,8 +63,7 @@ class ImageSpace : public MemMapSpace {
 
   // Releases the OatFile from the ImageSpace so it can be transfer to
   // the caller, presumably the ClassLinker.
-  OatFile* ReleaseOatFile()
-      SHARED_REQUIRES(Locks::mutator_lock_);
+  std::unique_ptr<const OatFile> ReleaseOatFile();
 
   void VerifyImageAllocations()
       SHARED_REQUIRES(Locks::mutator_lock_);
