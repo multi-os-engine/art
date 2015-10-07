@@ -42,6 +42,7 @@
 #include "mirror/class.h"
 #include "mirror/object-inl.h"
 #include "oat_file-inl.h"
+#include "oat_file_manager.h"
 #include "os.h"
 #include "runtime.h"
 #include "utils.h"
@@ -116,14 +117,20 @@ OatFile* OatFile::Open(const std::string& filename,
   //       !executable is a sign that we may want to patch), which may not be allowed for
   //       various reasons.
   if (kUseDlopen && (kIsTargetBuild || kUseDlopenOnHost) && executable) {
-    // Try to use dlopen. This may fail for various reasons, outlined below. We try dlopen, as
-    // this will register the oat file with the linker and allows libunwind to find our info.
-    ret.reset(OpenDlopen(filename, location, requested_base, abs_dex_location, error_msg));
-    if (ret.get() != nullptr) {
-      return ret.release();
-    }
-    if (kPrintDlOpenErrorMessage) {
-      LOG(ERROR) << "Failed to dlopen: " << *error_msg;
+    // Avoid using dlopen if we are the host and we already have the dex file opened.
+    OatFileManager* const manager = Runtime::Current()->GetOatFileManager();
+    if (kIsTargetBuild ||
+        !kUseDlopenOnHost ||
+        manager->FindOpenedOatFileFromOatLocation(location) == nullptr) {
+      // Try to use dlopen. This may fail for various reasons, outlined below. We try dlopen, as
+      // this will register the oat file with the linker and allows libunwind to find our info.
+      ret.reset(OpenDlopen(filename, location, requested_base, abs_dex_location, error_msg));
+      if (ret.get() != nullptr) {
+        return ret.release();
+      }
+      if (kPrintDlOpenErrorMessage) {
+        LOG(ERROR) << "Failed to dlopen: " << *error_msg;
+      }
     }
   }
 

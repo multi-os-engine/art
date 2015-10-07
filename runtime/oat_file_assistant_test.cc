@@ -31,6 +31,7 @@
 #include "compiler_callbacks.h"
 #include "gc/space/image_space.h"
 #include "mem_map.h"
+#include "oat_file_manager.h"
 #include "os.h"
 #include "scoped_thread_state_change.h"
 #include "thread-inl.h"
@@ -958,10 +959,12 @@ class RaceGenerateTask : public Task {
 
     // Load the dex files, and save a pointer to the loaded oat file, so that
     // we can verify only one oat file was loaded for the dex location.
-    ClassLinker* linker = Runtime::Current()->GetClassLinker();
     std::vector<std::unique_ptr<const DexFile>> dex_files;
     std::vector<std::string> error_msgs;
-    dex_files = linker->OpenDexFilesFromOat(dex_location_.c_str(), oat_location_.c_str(), &error_msgs);
+    dex_files = Runtime::Current()->GetOatFileManager()->OpenDexFilesFromOat(
+        dex_location_.c_str(),
+        oat_location_.c_str(),
+        &error_msgs);
     CHECK(!dex_files.empty()) << Join(error_msgs, '\n');
     CHECK(dex_files[0]->GetOatDexFile() != nullptr) << dex_files[0]->GetLocation();
     loaded_oat_file_ = dex_files[0]->GetOatDexFile()->GetOatFile();
@@ -980,8 +983,7 @@ class RaceGenerateTask : public Task {
 // Test the case where multiple processes race to generate an oat file.
 // This simulates multiple processes using multiple threads.
 //
-// We want only one Oat file to be loaded when there is a race to load, to
-// avoid using up the virtual memory address space.
+// We want one unique Oat file to be loaded when there is a race to load.
 TEST_F(OatFileAssistantTest, RaceToGenerate) {
   std::string dex_location = GetScratchDir() + "/RaceToGenerate.jar";
   std::string oat_location = GetOdexDir() + "/RaceToGenerate.oat";
@@ -1005,7 +1007,7 @@ TEST_F(OatFileAssistantTest, RaceToGenerate) {
   // Verify every task got the same pointer.
   const OatFile* expected = tasks[0]->GetLoadedOatFile();
   for (auto& task : tasks) {
-    EXPECT_EQ(expected, task->GetLoadedOatFile());
+    EXPECT_NE(expected, task->GetLoadedOatFile());
   }
 }
 
