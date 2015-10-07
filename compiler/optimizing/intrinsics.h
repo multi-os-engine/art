@@ -125,8 +125,9 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
 
 class IntrinsicOptimizations : public ValueObject {
  public:
-  IntrinsicOptimizations(HInvoke* invoke) : value_(invoke->GetIntrinsicOptimizations()) {}
-  IntrinsicOptimizations(const HInvoke& invoke) : value_(invoke.GetIntrinsicOptimizations()) {}
+  explicit IntrinsicOptimizations(HInvoke* invoke) : value_(invoke->GetIntrinsicOptimizations()) {}
+  explicit IntrinsicOptimizations(const HInvoke& invoke)
+      : value_(invoke.GetIntrinsicOptimizations()) {}
 
   static constexpr int kNumberOfGenericOptimizations = 2;
   GENERIC_OPTIMIZATION(DoesNotNeedDexCache, 0);
@@ -158,7 +159,7 @@ class IntrinsicOptimizations : public ValueObject {
 
 class StringEqualsOptimizations : public IntrinsicOptimizations {
  public:
-  StringEqualsOptimizations(HInvoke* invoke) : IntrinsicOptimizations(invoke) {}
+  explicit StringEqualsOptimizations(HInvoke* invoke) : IntrinsicOptimizations(invoke) {}
 
   INTRINSIC_OPTIMIZATION(ArgumentNotNull, 0);
   INTRINSIC_OPTIMIZATION(ArgumentIsString, 1);
