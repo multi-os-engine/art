@@ -539,6 +539,15 @@ class ClassLinker {
     LinearAlloc* allocator;
   };
 
+  // Ensures that the supertype of 'klass' ('supertype') is verified. Returns false and throws
+  // appropriate exceptions if verification failed hard. Returns true otherwise (including on
+  // soft-failures).
+  bool AttemptSupertypeVerification(Thread* self,
+                                    Handle<mirror::Class> klass,
+                                    Handle<mirror::Class> supertype)
+      REQUIRES(!dex_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   void VisitClassLoaders(ClassLoaderVisitor* visitor) const
       SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
 

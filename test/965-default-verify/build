@@ -19,10 +19,11 @@ set -e
 
 if [[ $@ == *"--jvm"* ]]; then
   # Build the Java files if we are running a --jvm test
-  mkdir -p src
-  mkdir -p classes
+  mkdir -p src classes
   ${ANDROID_BUILD_TOP}/art/tools/extract-embedded-java ./smali ./src
-  ${JAVAC} -implicit:none -d classes $(find src -name '*.java')
+  ${JAVAC} -implicit:none -d classes build-src/Statics.java src/Main.java src/Iface.java
+  rm -f classes/Statics.class
+  ${JAVAC} -implicit:none -d classes src/Statics.java
 fi
 
 # Build the smali files and make a dex
