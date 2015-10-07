@@ -848,6 +848,11 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
      method = TryCompile(code_item, access_flags, invoke_type, class_def_idx,
                          method_idx, jclass_loader, dex_file, dex_cache);
   } else {
+    if (kIsDebugBuild) {
+      std::string method_name = PrettyMethod(method_idx, dex_file);
+      bool shouldCompile = method_name.find("$opt$") != std::string::npos;
+      DCHECK(!shouldCompile) << "Didn't compile " << method_name;
+    }
     if (compiler_driver->GetCompilerOptions().VerifyAtRuntime()) {
       MaybeRecordStat(MethodCompilationStat::kNotCompiledVerifyAtRuntime);
     } else {
