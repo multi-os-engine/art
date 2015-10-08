@@ -37,6 +37,7 @@
 #include "thread.h"
 #include "dex/verified_method.h"
 #include "dex/verification_results.h"
+#include "verifier/method_verifier.h"
 
 namespace art {
 
@@ -177,6 +178,16 @@ static uint32_t FindMethodIndexIn(ArtMethod* method,
   }
 }
 
+// TODO: merge with OptimizingCompiler::CanHandleVerificationFailure()
+static bool CanHandleVerificationFailure(const VerifiedMethod* verified_method) {
+  // For access errors the compiler will use the unresolved helpers (e.g. HInvokeUnresolved).
+  uint32_t unresolved_mask = verifier::VerifyError::VERIFY_ERROR_NO_CLASS
+      | verifier::VerifyError::VERIFY_ERROR_ACCESS_CLASS
+      | verifier::VerifyError::VERIFY_ERROR_ACCESS_FIELD
+      | verifier::VerifyError::VERIFY_ERROR_ACCESS_METHOD;
+  return (verified_method->GetEncounteredVerificationFailures() & (~unresolved_mask)) == 0;
+}
+
 bool HInliner::TryInline(HInvoke* invoke_instruction) {
   if (invoke_instruction->IsInvokeUnresolved()) {
     return false;  // Don't bother to move further if we know the method is unresolved.
@@ -252,14 +263,15 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
     return false;
   }
 
-  if (!resolved_method->GetDeclaringClass()->IsVerified()) {
-    uint16_t class_def_idx = resolved_method->GetDeclaringClass()->GetDexClassDefIndex();
-    if (!compiler_driver_->IsMethodVerifiedWithoutFailures(
-          resolved_method->GetDexMethodIndex(), class_def_idx, *resolved_method->GetDexFile())) {
-      VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
-                     << " couldn't be verified, so it cannot be inlined";
-      return false;
-    }
+  uint16_t class_def_idx = resolved_method->GetDeclaringClass()->GetDexClassDefIndex();
+  const VerifiedMethod* verified_method = compiler_driver_->GetVerifiedMethod(
+      resolved_method->GetDexFile(), resolved_method->GetDexMethodIndex());
+  if (!compiler_driver_->IsMethodVerifiedWithoutFailures(
+        resolved_method->GetDexMethodIndex(), class_def_idx, *resolved_method->GetDexFile())
+      && !CanHandleVerificationFailure(verified_method)) {
+    VLOG(compiler) << "Method " << PrettyMethod(method_index, caller_dex_file)
+                   << " couldn't be verified, so it cannot be inlined";
+    return false;
   }
 
   if (invoke_instruction->IsInvokeStaticOrDirect() &&

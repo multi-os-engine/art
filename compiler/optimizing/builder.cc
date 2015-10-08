@@ -1303,7 +1303,8 @@ bool HGraphBuilder::IsOutermostCompilingClass(uint16_t type_index) const {
       soa, dex_cache, class_loader, type_index, dex_compilation_unit_)));
   Handle<mirror::Class> outer_class(hs.NewHandle(GetOutermostCompilingClass()));
 
-  return outer_class.Get() == cls.Get();
+  // If the class cannot be resolved, be conservative and assume it's not the outermost class.
+  return (cls.Get() != nullptr) && (outer_class.Get() == cls.Get());
 }
 
 void HGraphBuilder::BuildUnresolvedStaticFieldAccess(const Instruction& instruction,
@@ -1355,7 +1356,9 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
   // The index at which the field's class is stored in the DexCache's type array.
   uint32_t storage_index;
   bool is_outer_class = (outer_class.Get() == resolved_field->GetDeclaringClass());
-  if (is_outer_class) {
+  // TODO: this is not a reliabale testing for inlining. Pass a flag around.
+  bool is_inline_build = outer_compilation_unit_ != dex_compilation_unit_;
+  if (!is_inline_build && is_outer_class) {
     storage_index = outer_class->GetDexTypeIndex();
   } else if (outer_dex_cache.Get() != dex_cache.Get()) {
     // The compiler driver cannot currently understand multiple dex caches involved. Just bailout.
