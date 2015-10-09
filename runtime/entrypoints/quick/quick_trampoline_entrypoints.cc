@@ -646,8 +646,8 @@ extern "C" uint64_t artQuickToInterpreterBridge(ArtMethod* method, Thread* self,
   // frame.
   ScopedQuickEntrypointChecks sqec(self);
 
-  if (method->IsAbstract()) {
-    ThrowAbstractMethodError(method);
+  if (UNLIKELY(!method->IsInvokable())) {
+    method->ThrowInvocationTimeError();
     return 0;
   }
 

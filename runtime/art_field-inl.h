@@ -33,6 +33,10 @@
 
 namespace art {
 
+bool ArtMethod::IsOverridableByDefaultMethod() {
+  return GetDeclaringClass()->IsInterface();
+}
+
 inline mirror::Class* ArtField::GetDeclaringClass() {
   GcRootSource gc_root_source(this);
   mirror::Class* result = declaring_class_.Read(&gc_root_source);
