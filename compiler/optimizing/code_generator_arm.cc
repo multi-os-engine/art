@@ -417,11 +417,16 @@ inline Condition ARMSignedOrFPCondition(IfCondition cond) {
     case kCondLE: return LE;
     case kCondGT: return GT;
     case kCondGE: return GE;
+    case kCondB:  return LO;
+    case kCondBE: return LS;
+    case kCondA:  return HI;
+    case kCondAE: return HS;
   }
   LOG(FATAL) << "Unreachable";
   UNREACHABLE();
 }
 
+// TODO(ajcbik): unify with one above?
 inline Condition ARMUnsignedCondition(IfCondition cond) {
   switch (cond) {
     case kCondEQ: return EQ;
@@ -430,6 +435,10 @@ inline Condition ARMUnsignedCondition(IfCondition cond) {
     case kCondLE: return LS;
     case kCondGT: return HI;
     case kCondGE: return HS;
+    case kCondB:  return LO;
+    case kCondBE: return LS;
+    case kCondA:  return HI;
+    case kCondAE: return HS;
   }
   LOG(FATAL) << "Unreachable";
   UNREACHABLE();
@@ -1190,6 +1199,9 @@ void InstructionCodeGeneratorARM::GenerateLongComparesAndJumps(HCondition* cond,
     case kCondGE:
       true_high_cond = kCondGT;
       break;
+    default:
+      // TODO(ajcbik): make this work
+      break;
   }
   if (right.IsConstant()) {
     int64_t value = right.GetConstant()->AsLongConstant()->GetValue();
@@ -1497,6 +1509,38 @@ void LocationsBuilderARM::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
 }
 
 void InstructionCodeGeneratorARM::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderARM::VisitBelow(HBelow* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitBelow(HBelow* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderARM::VisitBelowOrEqual(HBelowOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitBelowOrEqual(HBelowOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderARM::VisitAbove(HAbove* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitAbove(HAbove* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderARM::VisitAboveOrEqual(HAboveOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorARM::VisitAboveOrEqual(HAboveOrEqual* comp) {
   VisitCondition(comp);
 }
 
