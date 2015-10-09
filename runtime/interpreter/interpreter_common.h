@@ -124,8 +124,8 @@ static inline bool IsValidLambdaTargetOrThrow(ArtMethod* called_method)
 
   if (UNLIKELY(called_method == nullptr)) {
     // The shadow frame should already be pushed, so we don't need to update it.
-  } else if (UNLIKELY(called_method->IsAbstract())) {
-    ThrowAbstractMethodError(called_method);
+  } else if (UNLIKELY(called_method->ThrowInvokationTimeError())) {
+    // We got an error.
     // TODO(iam): Also handle the case when the method is non-static, what error do we throw?
     // TODO(iam): Also make sure that ACC_LAMBDA is set.
   } else if (UNLIKELY(called_method->GetCodeItem() == nullptr)) {
@@ -598,8 +598,7 @@ static inline bool DoInvoke(Thread* self, ShadowFrame& shadow_frame, const Instr
     CHECK(self->IsExceptionPending());
     result->SetJ(0);
     return false;
-  } else if (UNLIKELY(called_method->IsAbstract())) {
-    ThrowAbstractMethodError(called_method);
+  } else if (UNLIKELY(called_method->ThrowInvokationTimeError())) {
     result->SetJ(0);
     return false;
   } else {
@@ -637,8 +636,7 @@ static inline bool DoInvokeVirtualQuick(Thread* self, ShadowFrame& shadow_frame,
     CHECK(self->IsExceptionPending());
     result->SetJ(0);
     return false;
-  } else if (UNLIKELY(called_method->IsAbstract())) {
-    ThrowAbstractMethodError(called_method);
+  } else if (UNLIKELY(called_method->ThrowInvokationTimeError())) {
     result->SetJ(0);
     return false;
   } else {

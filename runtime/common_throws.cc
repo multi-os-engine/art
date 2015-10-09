@@ -242,6 +242,13 @@ void ThrowIncompatibleClassChangeError(mirror::Class* referrer, const char* fmt,
   va_end(args);
 }
 
+void ThrowIncompatibleClassChangeError(ArtMethod* method) {
+  ThrowException("Ljava/lang/IncompatibleClassChangeError;", nullptr,
+                 StringPrintf("Conflicting default method implementations %s",
+                              PrettyMethod(method).c_str()).c_str());
+}
+
+
 // IOException
 
 void ThrowIOException(const char* fmt, ...) {

@@ -136,6 +136,20 @@ class ArtMethod FINAL {
     return (GetAccessFlags() & kAccMiranda) != 0;
   }
 
+  // Returns true if invoking this method will not cause an AbstractMethodError or
+  // IncompatibleClassChangeError.
+  bool IsInvokable() {
+    return !IsAbstract() && !IsDefaultConflict();
+  }
+
+  // This is set by the class linker.
+  bool IsDefaultConflict() {
+    bool is_conflict = ((GetAccessFlags() & kAccDefaultConflict) != 0);
+    // Check that conflict flag is only set on default methods.
+    DCHECK(!is_conflict || IsDefault()) << "Non default method cannot be conflict sentinel";
+    return is_conflict;
+  }
+
   // This is set by the class linker.
   bool IsDefault() {
     return (GetAccessFlags() & kAccDefault) != 0;
@@ -185,6 +199,10 @@ class ArtMethod FINAL {
   }
 
   bool CheckIncompatibleClassChange(InvokeType type) SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Returns true and throws an error if invoking the method would cause an error. Else returns
+  // false.
+  bool ThrowInvokationTimeError() SHARED_REQUIRES(Locks::mutator_lock_);
 
   uint16_t GetMethodIndex() SHARED_REQUIRES(Locks::mutator_lock_);
 

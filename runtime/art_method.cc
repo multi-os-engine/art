@@ -111,6 +111,19 @@ static bool HasSameNameAndSignature(ArtMethod* method1, ArtMethod* method2)
   return dex_file->GetMethodSignature(mid) == dex_file2->GetMethodSignature(mid2);
 }
 
+bool ArtMethod::ThrowInvokationTimeError() {
+  if (LIKELY(IsInvokable())) {
+    return false;
+  } else if (IsAbstract()) {
+    ThrowAbstractMethodError(this);
+    return true;
+  } else {
+    CHECK(IsDefaultConflict());
+    ThrowIncompatibleClassChangeError(this);
+    return true;
+  }
+}
+
 ArtMethod* ArtMethod::FindOverriddenMethod(size_t pointer_size) {
   if (IsStatic()) {
     return nullptr;
@@ -367,7 +380,7 @@ bool ArtMethod::IsEntrypointInterpreter() {
 }
 
 const void* ArtMethod::GetQuickOatEntryPoint(size_t pointer_size) {
-  if (IsAbstract() || IsRuntimeMethod() || IsProxyMethod()) {
+  if (!IsInvokable() || IsRuntimeMethod() || IsProxyMethod()) {
     return nullptr;
   }
   Runtime* runtime = Runtime::Current();
@@ -498,7 +511,7 @@ static uint32_t GetNumberOfReferenceArgsWithoutReceiver(ArtMethod* method)
 QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo() {
   Runtime* runtime = Runtime::Current();
 
-  if (UNLIKELY(IsAbstract())) {
+  if (UNLIKELY(!IsInvokable())) {
     return runtime->GetCalleeSaveMethodFrameInfo(Runtime::kRefsAndArgs);
   }
 
