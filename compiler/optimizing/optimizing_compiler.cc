@@ -851,7 +851,8 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     }
   }
 
-  if (kIsDebugBuild && IsCompilingWithCoreImage()) {
+  if (kIsDebugBuild && IsCompilingWithCoreImage() &&
+      IsInstructionSetSupported(compiler_driver->GetInstructionSet())) {
     // For testing purposes, we put a special marker on method names that should be compiled
     // with this compiler. This makes sure we're not regressing.
     std::string method_name = PrettyMethod(method_idx, dex_file);
