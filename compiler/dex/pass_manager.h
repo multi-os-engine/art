@@ -38,6 +38,9 @@ class PassManagerOptions {
   void SetPrintPassNames(bool b) {
     print_pass_names_ = b;
   }
+  bool GetPrintPassNames() const {
+    return print_pass_names_;
+  }
 
   void SetPrintAllPasses() {
     default_print_passes_ = true;
