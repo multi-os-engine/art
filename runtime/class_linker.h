@@ -708,6 +708,66 @@ class ClassLinker {
                    ArtMethod** out_imt)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Does anything needed to make sure that the compiler will not generate a direct invoke to this
+  // method. Should only be called on non-invokable methods.
+  void EnsureThrowsInvocationError(ArtMethod* method)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // A wrapper class representing the result of a method translation used for linking methods and
+  // updating superclass default methods.
+  class MethodTranslation {
+   public:
+    // This slot must become a default conflict method.
+    static MethodTranslation CreateConflictingMethod() {
+      return MethodTranslation(kConflict, nullptr);
+    }
+
+    // This slot must become an abstract method.
+    static MethodTranslation CreateAbstractMethod() {
+      return MethodTranslation(kAbstract, nullptr);
+    }
+
+    // Use the given method as the current value for this vtable slot during translation.
+    static MethodTranslation CreateTranslatedMethod(ArtMethod* new_method) {
+      return MethodTranslation(kTranslation, new_method);
+    }
+
+    // Returns true if this is a method that must become a conflict method.
+    bool IsInConflict() const {
+      return type_ == kConflict;
+    }
+
+    // Returns true if this is a method that must become an abstract method.
+    bool IsAbstract() const {
+      return type_ == kAbstract;
+    }
+
+    // Returns true if this is a method that must become a different method.
+    bool IsTranslation() const {
+      return type_ == kTranslation;
+    }
+
+    // Get the translated version of this method.
+    ArtMethod* GetTranslation() const {
+      DCHECK(IsTranslation());
+      DCHECK(translation_ != nullptr);
+      return translation_;
+    }
+
+   private:
+    enum Type {
+      kTranslation,
+      kConflict,
+      kAbstract,
+    };
+
+    explicit MethodTranslation(Type type, ArtMethod* translation)
+        : translation_(translation), type_(type) {}
+
+    ArtMethod* translation_;
+    Type type_;
+  };
+
   // Links the virtual methods for the given class and records any default methods that will need to
   // be updated later.
   //
@@ -724,9 +784,10 @@ class ClassLinker {
   //                          scan, we therefore store the vtable index's that might need to be
   //                          updated with the method they will turn into.
   // TODO This whole default_translations thing is very dirty. There should be a better way.
-  bool LinkVirtualMethods(Thread* self,
-                          Handle<mirror::Class> klass,
-                          /*out*/std::unordered_map<size_t, ArtMethod*>* default_translations)
+  bool LinkVirtualMethods(
+        Thread* self,
+        Handle<mirror::Class> klass,
+        /*out*/std::unordered_map<size_t, MethodTranslation>* default_translations)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Sets up the interface lookup table (IFTable) in the correct order to allow searching for
@@ -743,31 +804,26 @@ class ClassLinker {
   // * target_method - The method we are trying to find a default implementation for.
   // * klass - The class we are searching for a definition of target_method.
   // * out_default_method - The pointer we will store the found default method to on success.
-  // * icce_message - A string we will store an appropriate IncompatibleClassChangeError message
-  //                  into in case of failure. Note we must do it this way since we do not know
-  //                  whether we can allocate the exception object, which could cause us to go to
-  //                  sleep.
   //
   // Return value:
   // * True - There were no conflicting method implementations found in the class while searching
   //          for target_method. The default method implementation is stored into out_default_method
   //          if it was found.  Otherwise *out_default_method will be set to nullptr.
   // * False - Conflicting method implementations were found when searching for target_method. The
-  //           value of *out_default_method is undefined and *icce_message is a string that should
-  //           be used to create an IncompatibleClassChangeError as soon as possible.
+  //           value of *out_default_method is nullptr.
   bool FindDefaultMethodImplementation(Thread* self,
                                        ArtMethod* target_method,
                                        Handle<mirror::Class> klass,
-                                       /*out*/ArtMethod** out_default_method,
-                                       /*out*/std::string* icce_message) const
+                                       /*out*/ArtMethod** out_default_method) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Sets the imt entries and fixes up the vtable for the given class by linking all the interface
   // methods. See LinkVirtualMethods for an explanation of what default_translations is.
-  bool LinkInterfaceMethods(Thread* self,
-                            Handle<mirror::Class> klass,
-                            const std::unordered_map<size_t, ArtMethod*>& default_translations,
-                            ArtMethod** out_imt)
+  bool LinkInterfaceMethods(
+          Thread* self,
+          Handle<mirror::Class> klass,
+          const std::unordered_map<size_t, MethodTranslation>& default_translations,
+          ArtMethod** out_imt)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   bool LinkStaticFields(Thread* self, Handle<mirror::Class> klass, size_t* class_size)
