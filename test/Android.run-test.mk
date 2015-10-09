@@ -219,6 +219,7 @@ TEST_ART_PYTHON3_DEPENDENCY_RUN_TESTS := \
   960-default-smali \
   961-default-iface-resolution-generated \
   964-default-iface-init-generated \
+  967-default-partial-compilation-generated
 
 # disable timing sensitive tests on "dist" builds.
 ifdef dist_goal
