@@ -1429,13 +1429,18 @@ bool ClassLinker::FindClassInPathClassLoader(ScopedObjectAccessAlreadyRunnable& 
             break;
           }
           int32_t long_array_size = long_array->GetLength();
-          for (int32_t j = 0; j < long_array_size; ++j) {
+          // First element is the oat file.
+          for (int32_t j = 1; j < long_array_size; ++j) {
             const DexFile* cp_dex_file = reinterpret_cast<const DexFile*>(static_cast<uintptr_t>(
                 long_array->GetWithoutChecks(j)));
             const DexFile::ClassDef* dex_class_def = cp_dex_file->FindClassDef(descriptor, hash);
             if (dex_class_def != nullptr) {
-              mirror::Class* klass = DefineClass(self, descriptor, hash, class_loader,
-                                                 *cp_dex_file, *dex_class_def);
+              mirror::Class* klass = DefineClass(self,
+                                                 descriptor,
+                                                 hash,
+                                                 class_loader,
+                                                 *cp_dex_file,
+                                                 *dex_class_def);
               if (klass == nullptr) {
                 CHECK(self->IsExceptionPending()) << descriptor;
                 self->ClearException();
@@ -5794,9 +5799,10 @@ jobject ClassLinker::CreatePathClassLoader(Thread* self, std::vector<const DexFi
   for (const DexFile* dex_file : dex_files) {
     StackHandleScope<3> hs2(self);
 
-    Handle<mirror::LongArray> h_long_array = hs2.NewHandle(mirror::LongArray::Alloc(self, 1));
+    // Index 0 is for the oat file, we don't need to set it for the tests.
+    Handle<mirror::LongArray> h_long_array = hs2.NewHandle(mirror::LongArray::Alloc(self, 2));
     DCHECK(h_long_array.Get() != nullptr);
-    h_long_array->Set(0, reinterpret_cast<intptr_t>(dex_file));
+    h_long_array->Set(1, reinterpret_cast<intptr_t>(dex_file));
 
     Handle<mirror::Object> h_dex_file = hs2.NewHandle(
         cookie_field->GetDeclaringClass()->AllocObject(self));
