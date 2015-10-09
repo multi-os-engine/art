@@ -335,6 +335,10 @@ void ArtMethod::UnregisterNative() {
   RegisterNative(GetJniDlsymLookupStub(), false);
 }
 
+bool ArtMethod::IsOverridableByDefaultMethod() {
+  return GetDeclaringClass()->IsInterface();
+}
+
 bool ArtMethod::EqualParameters(Handle<mirror::ObjectArray<mirror::Class>> params) {
   auto* dex_cache = GetDexCache();
   auto* dex_file = dex_cache->GetDexFile();
