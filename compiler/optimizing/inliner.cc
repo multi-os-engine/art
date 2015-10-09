@@ -142,7 +142,7 @@ static ArtMethod* FindVirtualOrInterfaceTarget(HInvoke* invoke, ArtMethod* resol
     // the target method. Since we check above the exact type of the receiver,
     // the only reason this can happen is an IncompatibleClassChangeError.
     return nullptr;
-  } else if (resolved_method->IsAbstract()) {
+  } else if (!resolved_method->IsInvocable()) {
     // The information we had on the receiver was not enough to find
     // the target method. Since we check above the exact type of the receiver,
     // the only reason this can happen is an IncompatibleClassChangeError.

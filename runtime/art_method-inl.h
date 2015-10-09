@@ -50,6 +50,16 @@ inline mirror::Class* ArtMethod::GetDeclaringClassNoBarrier() {
   return declaring_class_.Read<kWithoutReadBarrier>();
 }
 
+inline void ArtMethod::ThrowInvocationTimeError() {
+  DCHECK(!IsInvocable());
+  if (IsAbstract()) {
+    ThrowAbstractMethodError(this);
+  } else {
+    DCHECK(IsDefaultConflict());
+    ThrowIncompatibleClassChangeError(this);
+  }
+}
+
 inline mirror::Class* ArtMethod::GetDeclaringClass() {
   mirror::Class* result = GetDeclaringClassUnchecked();
   if (kIsDebugBuild) {
