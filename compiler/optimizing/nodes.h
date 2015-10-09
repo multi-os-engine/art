@@ -81,12 +81,19 @@ static constexpr InvokeType kInvalidInvokeType = static_cast<InvokeType>(-1);
 static constexpr uint32_t kNoDexPc = -1;
 
 enum IfCondition {
-  kCondEQ,
-  kCondNE,
-  kCondLT,
-  kCondLE,
-  kCondGT,
-  kCondGE,
+  // All types.
+  kCondEQ,  // ==
+  kCondNE,  // !=
+  // Signed integers and floating-point numbers.
+  kCondLT,  // <
+  kCondLE,  // <=
+  kCondGT,  // >
+  kCondGE,  // <=
+  // Unsigned integers.
+  kCondB,   // <
+  kCondBE,  // <=
+  kCondA,   // >
+  kCondAE,  // >=
 };
 
 class HInstructionList : public ValueObject {
@@ -988,11 +995,15 @@ class HLoopInformationOutwardIterator : public ValueObject {
 };
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_COMMON(M)                         \
+  M(Above, Condition)                                                   \
+  M(AboveOrEqual, Condition)                                            \
   M(Add, BinaryOperation)                                               \
   M(And, BinaryOperation)                                               \
   M(ArrayGet, Instruction)                                              \
   M(ArrayLength, Instruction)                                           \
   M(ArraySet, Instruction)                                              \
+  M(Below, Condition)                                                   \
+  M(BelowOrEqual, Condition)                                            \
   M(BooleanNot, UnaryOperation)                                         \
   M(BoundsCheck, Instruction)                                           \
   M(BoundType, Instruction)                                             \
@@ -2808,6 +2819,133 @@ class HGreaterThanOrEqual : public HCondition {
   DISALLOW_COPY_AND_ASSIGN(HGreaterThanOrEqual);
 };
 
+class HBelow : public HCondition {
+ public:
+  HBelow(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
+
+  template <typename T> bool Compute(T x, T y) const { return x < y; }
+
+  HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(static_cast<uint32_t>(x->GetValue()),
+                static_cast<uint32_t>(y->GetValue())), GetDexPc());
+  }
+  HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(static_cast<uint64_t>(x->GetValue()),
+                static_cast<uint64_t>(y->GetValue())), GetDexPc());
+  }
+
+  DECLARE_INSTRUCTION(Below);
+
+  IfCondition GetCondition() const OVERRIDE {
+    return kCondB;
+  }
+
+  IfCondition GetOppositeCondition() const OVERRIDE {
+    return kCondAE;
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HBelow);
+};
+
+class HBelowOrEqual : public HCondition {
+ public:
+  HBelowOrEqual(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
+
+  template <typename T> bool Compute(T x, T y) const { return x <= y; }
+
+  HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(static_cast<uint32_t>(x->GetValue()),
+                static_cast<uint32_t>(y->GetValue())), GetDexPc());
+  }
+  HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(static_cast<uint64_t>(x->GetValue()),
+                static_cast<uint64_t>(y->GetValue())), GetDexPc());
+  }
+
+  DECLARE_INSTRUCTION(BelowOrEqual);
+
+  IfCondition GetCondition() const OVERRIDE {
+    return kCondBE;
+  }
+
+  IfCondition GetOppositeCondition() const OVERRIDE {
+    return kCondA;
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HBelowOrEqual);
+};
+
+class HAbove : public HCondition {
+ public:
+  HAbove(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
+
+  template <typename T> bool Compute(T x, T y) const { return x > y; }
+
+  HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(static_cast<uint32_t>(x->GetValue()),
+                static_cast<uint32_t>(y->GetValue())), GetDexPc());
+  }
+  HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(static_cast<uint64_t>(x->GetValue()),
+                static_cast<uint64_t>(y->GetValue())), GetDexPc());
+  }
+
+  DECLARE_INSTRUCTION(Above);
+
+  IfCondition GetCondition() const OVERRIDE {
+    return kCondA;
+  }
+
+  IfCondition GetOppositeCondition() const OVERRIDE {
+    return kCondBE;
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HAbove);
+};
+
+class HAboveOrEqual : public HCondition {
+ public:
+  HAboveOrEqual(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
+      : HCondition(first, second, dex_pc) {}
+
+  template <typename T> bool Compute(T x, T y) const { return x >= y; }
+
+  HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(static_cast<uint32_t>(x->GetValue()),
+                static_cast<uint32_t>(y->GetValue())), GetDexPc());
+  }
+  HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(static_cast<uint64_t>(x->GetValue()),
+                static_cast<uint64_t>(y->GetValue())), GetDexPc());
+  }
+
+  DECLARE_INSTRUCTION(AboveOrEqual);
+
+  IfCondition GetCondition() const OVERRIDE {
+    return kCondAE;
+  }
+
+  IfCondition GetOppositeCondition() const OVERRIDE {
+    return kCondB;
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HAboveOrEqual);
+};
 
 // Instruction to check how two inputs compare to each other.
 // Result is 0 if input0 == input1, 1 if input0 > input1, or -1 if input0 < input1.

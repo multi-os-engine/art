@@ -1855,6 +1855,11 @@ void InstructionCodeGeneratorMIPS64::VisitCondition(HCondition* instruction) {
         }
       }
       break;
+
+    default:
+      // TODO(ajcbik): make this work
+      LOG(FATAL) << "No unsigned support yet";
+      break;
   }
 }
 
@@ -2072,6 +2077,10 @@ void InstructionCodeGeneratorMIPS64::GenerateTestAndBranch(HInstruction* instruc
         case kCondGT:
           __ Bgtzc(lhs, true_target);
           break;
+        default:
+          // TODO(ajcbik): make this work
+          LOG(FATAL) << "No unsigned support yet";
+          break;
       }
     } else {
       if (use_imm) {
@@ -2094,6 +2103,10 @@ void InstructionCodeGeneratorMIPS64::GenerateTestAndBranch(HInstruction* instruc
           case kCondGT:
             // if lhs == rhs for a negative condition, then it is a NOP
             break;
+          default:
+            // TODO(ajcbik): make this work
+            LOG(FATAL) << "No unsigned support yet";
+            break;
         }
       } else {
         switch (if_cond) {
@@ -2114,6 +2127,10 @@ void InstructionCodeGeneratorMIPS64::GenerateTestAndBranch(HInstruction* instruc
             break;
           case kCondGT:
             __ Bltc(rhs_reg, lhs, true_target);
+            break;
+          default:
+            // TODO(ajcbik): make this work
+            LOG(FATAL) << "No unsigned support yet";
             break;
         }
       }
@@ -3459,6 +3476,38 @@ void LocationsBuilderMIPS64::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) 
 }
 
 void InstructionCodeGeneratorMIPS64::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderMIPS64::VisitBelow(HBelow* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitBelow(HBelow* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderMIPS64::VisitBelowOrEqual(HBelowOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitBelowOrEqual(HBelowOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderMIPS64::VisitAbove(HAbove* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitAbove(HAbove* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderMIPS64::VisitAboveOrEqual(HAboveOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitAboveOrEqual(HAboveOrEqual* comp) {
   VisitCondition(comp);
 }
 
