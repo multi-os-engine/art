@@ -1855,6 +1855,14 @@ void InstructionCodeGeneratorMIPS64::VisitCondition(HCondition* instruction) {
         }
       }
       break;
+
+    case kCondB:
+    case kCondBE:
+    case kCondA:
+    case kCondAE:
+      // TODO(ajcbik): make this work
+      LOG(FATAL) << "No unsigned support yet";
+      break;
   }
 }
 
@@ -2072,6 +2080,18 @@ void InstructionCodeGeneratorMIPS64::GenerateTestAndBranch(HInstruction* instruc
         case kCondGT:
           __ Bgtzc(lhs, true_target);
           break;
+        case kCondB:
+          break;  // always false
+        case kCondBE:
+          __ Beqzc(lhs, true_target);  // <= 0 if zero
+          break;
+        case kCondA:
+          __ Bnezc(lhs, true_target);  // > 0 if non-zero
+          break;
+        case kCondAE:
+          __ B(true_target);  // always true
+          break;
+
       }
     } else {
       if (use_imm) {
@@ -2086,12 +2106,16 @@ void InstructionCodeGeneratorMIPS64::GenerateTestAndBranch(HInstruction* instruc
           case kCondEQ:
           case kCondGE:
           case kCondLE:
+          case kCondBE:
+          case kCondAE:
             // if lhs == rhs for a positive condition, then it is a branch
             __ B(true_target);
             break;
           case kCondNE:
           case kCondLT:
           case kCondGT:
+          case kCondB:
+          case kCondA:
             // if lhs == rhs for a negative condition, then it is a NOP
             break;
         }
@@ -2114,6 +2138,18 @@ void InstructionCodeGeneratorMIPS64::GenerateTestAndBranch(HInstruction* instruc
             break;
           case kCondGT:
             __ Bltc(rhs_reg, lhs, true_target);
+            break;
+          case kCondB:
+            __ Bltuc(lhs, rhs_reg, true_target);
+            break;
+          case kCondAE:
+            __ Bgeuc(lhs, rhs_reg, true_target);
+            break;
+          case kCondBE:
+            __ Bgeuc(rhs_reg, lhs, true_target);
+            break;
+          case kCondA:
+            __ Bltuc(rhs_reg, lhs, true_target);
             break;
         }
       }
@@ -3459,6 +3495,38 @@ void LocationsBuilderMIPS64::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) 
 }
 
 void InstructionCodeGeneratorMIPS64::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderMIPS64::VisitBelow(HBelow* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitBelow(HBelow* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderMIPS64::VisitBelowOrEqual(HBelowOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitBelowOrEqual(HBelowOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderMIPS64::VisitAbove(HAbove* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitAbove(HAbove* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderMIPS64::VisitAboveOrEqual(HAboveOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitAboveOrEqual(HAboveOrEqual* comp) {
   VisitCondition(comp);
 }
 
