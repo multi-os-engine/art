@@ -1,0 +1,7 @@
+Create Main instance
+Calling non-conflicting function
+CHARGE
+Calling conflicting function
+Expected ICCE Thrown
+Calling non-conflicting function
+CHARGE

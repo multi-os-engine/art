@@ -367,7 +367,7 @@ bool ArtMethod::IsEntrypointInterpreter() {
 }
 
 const void* ArtMethod::GetQuickOatEntryPoint(size_t pointer_size) {
-  if (IsAbstract() || IsRuntimeMethod() || IsProxyMethod()) {
+  if (!IsInvokable() || IsRuntimeMethod() || IsProxyMethod()) {
     return nullptr;
   }
   Runtime* runtime = Runtime::Current();
@@ -498,7 +498,7 @@ static uint32_t GetNumberOfReferenceArgsWithoutReceiver(ArtMethod* method)
 QuickMethodFrameInfo ArtMethod::GetQuickFrameInfo() {
   Runtime* runtime = Runtime::Current();
 
-  if (UNLIKELY(IsAbstract())) {
+  if (UNLIKELY(!IsInvokable())) {
     return runtime->GetCalleeSaveMethodFrameInfo(Runtime::kRefsAndArgs);
   }
 

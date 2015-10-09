@@ -2146,7 +2146,7 @@ const OatFile::OatMethod ClassLinker::FindOatMethodFor(ArtMethod* method, bool* 
 
 // Special case to get oat code without overwriting a trampoline.
 const void* ClassLinker::GetQuickOatCodeFor(ArtMethod* method) {
-  CHECK(!method->IsAbstract()) << PrettyMethod(method);
+  CHECK(method->IsInvokable()) << PrettyMethod(method);
   if (method->IsProxyMethod()) {
     return GetQuickProxyInvokeHandler();
   }
@@ -2173,7 +2173,7 @@ const void* ClassLinker::GetQuickOatCodeFor(ArtMethod* method) {
 }
 
 const void* ClassLinker::GetOatMethodQuickCodeFor(ArtMethod* method) {
-  if (method->IsNative() || method->IsAbstract() || method->IsProxyMethod()) {
+  if (method->IsNative() || !method->IsInvokable() || method->IsProxyMethod()) {
     return nullptr;
   }
   bool found;
@@ -2275,6 +2275,14 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
   // Ignore virtual methods on the iterator.
 }
 
+// Does anything needed to make sure that the compiler will not generate a direct invoke to this
+// method. Should only be called on non-invokable methods.
+void ClassLinker::EnsureThrowsInvocationError(ArtMethod* method) {
+  DCHECK(!method->IsInvokable());
+  method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
+  return;
+}
+
 void ClassLinker::LinkCode(ArtMethod* method, const OatFile::OatClass* oat_class,
                            uint32_t class_def_method_index) {
   Runtime* const runtime = Runtime::Current();
@@ -2294,8 +2302,8 @@ void ClassLinker::LinkCode(ArtMethod* method, const OatFile::OatClass* oat_class
   // Install entry point from interpreter.
   bool enter_interpreter = NeedsInterpreter(method, method->GetEntryPointFromQuickCompiledCode());
 
-  if (method->IsAbstract()) {
-    method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
+  if (!method->IsInvokable()) {
+    EnsureThrowsInvocationError(method);
     return;
   }
 
@@ -3631,7 +3639,7 @@ void ClassLinker::CheckProxyMethod(ArtMethod* method, ArtMethod* prototype) cons
   // Basic sanity
   CHECK(!prototype->IsFinal());
   CHECK(method->IsFinal());
-  CHECK(!method->IsAbstract());
+  CHECK(method->IsInvokable());
 
   // The proxy method doesn't have its own dex cache or dex file and so it steals those of its
   // interface prototype. The exception to this are Constructors and the Class of the Proxy itself.
@@ -4700,7 +4708,7 @@ bool ClassLinker::LinkMethods(Thread* self,
   // A map from vtable indexes to the method they need to be updated to point to. Used because we
   // need to have default methods be in the virtuals array of each class but we don't set that up
   // until LinkInterfaceMethods.
-  std::unordered_map<size_t, ArtMethod*> default_translations;
+  std::unordered_map<size_t, ClassLinker::MethodTranslation> default_translations;
   // Link virtual methods then interface methods.
   // We set up the interface lookup table first because we need it to determine if we need to update
   // any vtable entries with new default method implementations.
@@ -4833,7 +4841,7 @@ const uint32_t LinkVirtualHashTable::removed_index_ = std::numeric_limits<uint32
 bool ClassLinker::LinkVirtualMethods(
     Thread* self,
     Handle<mirror::Class> klass,
-    /*out*/std::unordered_map<size_t, ArtMethod*>* default_translations) {
+    /*out*/std::unordered_map<size_t, ClassLinker::MethodTranslation>* default_translations) {
   const size_t num_virtual_methods = klass->NumVirtualMethods();
   if (klass->IsInterface()) {
     // No vtable.
@@ -4960,16 +4968,19 @@ bool ClassLinker::LinkVirtualMethods(
         // We didn't directly override this method but we might through default methods...
         // Check for default method update.
         ArtMethod* default_method = nullptr;
-        std::string icce_message;
         if (!FindDefaultMethodImplementation(self,
                                              super_method,
                                              klass,
-                                             /*out*/&default_method,
-                                             /*out*/&icce_message)) {
-          // An error occurred while finding default methods.
-          // TODO This should actually be thrown when we attempt to invoke this method.
-          ThrowIncompatibleClassChangeError(klass.Get(), "%s", icce_message.c_str());
-          return false;
+                                             /*out*/&default_method)) {
+          // A conflict was found looking for default methods. Note this (assuming it wasn't
+          // pre-existing) in the translations map.
+          if (UNLIKELY(!super_method->IsDefaultConflict())) {
+            // We need to replace this non-conflicting method in the superclass with a conflicting
+            // one in this subclass.
+            default_translations->insert(
+                {j, ClassLinker::MethodTranslation::ConflictMethod()});
+          }
+          continue;
         }
         // This should always work because we inherit superclass interfaces. We should either get
         //  1) An IncompatibleClassChangeError because of conflicting default method
@@ -4978,7 +4989,8 @@ bool ClassLinker::LinkVirtualMethods(
         //  3) A default method that overrides the superclass's.
         // Therefore this check should never fail.
         CHECK(default_method != nullptr);
-        if (UNLIKELY(default_method->GetDeclaringClass() != super_method->GetDeclaringClass())) {
+        if (UNLIKELY(super_method->IsDefaultConflict() ||
+                     default_method->GetDeclaringClass() != super_method->GetDeclaringClass())) {
           // TODO Refactor this add default methods to virtuals here and not in
           //      LinkInterfaceMethods maybe.
           //      The problem is default methods might override previously present default-method or
@@ -4988,7 +5000,8 @@ bool ClassLinker::LinkVirtualMethods(
           //      entries need to be updated.
           // Make a note that vtable entry j must be updated, store what it needs to be updated to.
           // We will allocate a virtual method slot in LinkInterfaceMethods and fix it up then.
-          default_translations->insert({j, default_method});
+          default_translations->insert(
+              {j, ClassLinker::MethodTranslation::NewMethod(default_method)});
           VLOG(class_linker) << "Method " << PrettyMethod(super_method) << " overridden by default "
                              << PrettyMethod(default_method) << " in " << PrettyClass(klass.Get());
         } else {
@@ -5051,17 +5064,14 @@ bool ClassLinker::LinkVirtualMethods(
 // Find the default method implementation for 'interface_method' in 'klass'. Stores it into
 // out_default_method and returns true on success. If no default method was found stores nullptr
 // into out_default_method and returns true. If an error occurs (such as a default_method conflict)
-// it will fill the icce_message with an appropriate message for an IncompatibleClassChangeError,
-// which should then be thrown by the caller.
+// it will return false.
 bool ClassLinker::FindDefaultMethodImplementation(Thread* self,
                                                   ArtMethod* target_method,
                                                   Handle<mirror::Class> klass,
-                                                  /*out*/ArtMethod** out_default_method,
-                                                  /*out*/std::string* icce_message) const {
+                                                  /*out*/ArtMethod** out_default_method) const {
   DCHECK(self != nullptr);
   DCHECK(target_method != nullptr);
   DCHECK(out_default_method != nullptr);
-  DCHECK(icce_message != nullptr);
 
   *out_default_method = nullptr;
   mirror::Class* chosen_iface = nullptr;
@@ -5105,9 +5115,11 @@ bool ClassLinker::FindDefaultMethodImplementation(Thread* self,
         // conflict and throw an error if they do. Conflicting means that the current iface is not
         // masked by the chosen interface.
         if (!iface->IsAssignableFrom(chosen_iface)) {
-          *icce_message = StringPrintf("Conflicting default method implementations: '%s' and '%s'",
-                                       PrettyMethod(current_method).c_str(),
-                                       PrettyMethod(*out_default_method).c_str());
+          LOG(WARNING) << "Conflicting default method implementations: "
+                       << PrettyMethod(current_method) << " and "
+                       << PrettyMethod(*out_default_method) << " on "
+                       << PrettyClass(klass.Get());
+          *out_default_method = nullptr;
           return false;
         } else {
           break;  // Continue checking at the next interface.
@@ -5359,7 +5371,7 @@ bool ClassLinker::SetupInterfaceLookupTable(Thread* self, Handle<mirror::Class> 
 bool ClassLinker::LinkInterfaceMethods(
     Thread* self,
     Handle<mirror::Class> klass,
-    const std::unordered_map<size_t, ArtMethod*>& default_translations,
+    const std::unordered_map<size_t, ClassLinker::MethodTranslation>& default_translations,
     ArtMethod** out_imt) {
   StackHandleScope<3> hs(self);
   Runtime* const runtime = Runtime::Current();
@@ -5382,6 +5394,10 @@ bool ClassLinker::LinkInterfaceMethods(
   // Use the linear alloc pool since this one is in the low 4gb for the compiler.
   ArenaStack stack(runtime->GetLinearAlloc()->GetArenaPool());
   ScopedArenaAllocator allocator(&stack);
+
+  // TODO Fill this in like we do miranda methods. We will need to do linear search to find if
+  // multiple uses. Need to do that during translation too.
+  ScopedArenaVector<ArtMethod*> default_conflict_methods(allocator.Adapter());
   ScopedArenaVector<ArtMethod*> miranda_methods(allocator.Adapter());
   ScopedArenaVector<ArtMethod*> default_methods(allocator.Adapter());
 
@@ -5547,17 +5563,35 @@ bool ClassLinker::LinkInterfaceMethods(
                             method_array->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_)
                                 ->IsOverridableByDefaultMethod())) {
           ArtMethod* current_method = nullptr;
-          std::string icce_message;
-          if (!FindDefaultMethodImplementation(self,
-                                               interface_method,
-                                               klass,
-                                               /*out*/&current_method,
-                                               /*out*/&icce_message)) {
-            // There was a conflict with default method implementations.
-            self->EndAssertNoThreadSuspension(old_cause);
-            // TODO This should actually be thrown when we attempt to invoke this method.
-            ThrowIncompatibleClassChangeError(klass.Get(), "%s", icce_message.c_str());
-            return false;
+          if (UNLIKELY(!FindDefaultMethodImplementation(self,
+                                                        interface_method,
+                                                        klass,
+                                                        /*out*/&current_method))) {
+            // We have a conflict add it to the list.
+            ArtMethod* default_conflict_method;
+            if (found_default_impl && default_impl->IsDefaultConflict()) {
+              // We can use the method from the superclass, don't bother adding it to virtuals.
+              default_conflict_method = default_impl;
+            } else {
+              ArtMethod* preexisting_conflict = nullptr;
+              for (ArtMethod* method : default_conflict_methods) {
+                if (interface_name_comparator.HasSameNameAndSignature(method)) {
+                  preexisting_conflict = method;
+                  break;
+                }
+              }
+              if (preexisting_conflict != nullptr) {
+                // We already have another conflict we can reuse
+                default_conflict_method = preexisting_conflict;
+              } else {
+                default_conflict_method =
+                    reinterpret_cast<ArtMethod*>(allocator.Alloc(method_size));
+                new(default_conflict_method) ArtMethod(*interface_method, image_pointer_size_);
+                default_conflict_methods.push_back(default_conflict_method);
+              }
+            }
+            method_array->SetElementPtrSize(j, default_conflict_method, image_pointer_size_);
+            found_impl = true;
           } else if (current_method != nullptr) {
             if (found_default_impl &&
                 current_method->GetDeclaringClass() == default_impl->GetDeclaringClass()) {
@@ -5599,10 +5633,12 @@ bool ClassLinker::LinkInterfaceMethods(
       }
     }
   }
-  if (!miranda_methods.empty() || !default_methods.empty()) {
+  if (!miranda_methods.empty() || !default_methods.empty() || !default_conflict_methods.empty()) {
     const size_t old_method_count = klass->NumVirtualMethods();
-    const size_t new_method_count =
-        old_method_count + miranda_methods.size() + default_methods.size();
+    const size_t new_method_count = old_method_count +
+                                    miranda_methods.size() +
+                                    default_methods.size() +
+                                    default_conflict_methods.size();
     // Attempt to realloc to save RAM if possible.
     LengthPrefixedArray<ArtMethod>* old_virtuals = klass->GetVirtualMethodsPtr();
     // The Realloced virtual methods aren't visiblef from the class roots, so there is no issue
@@ -5669,6 +5705,28 @@ bool ClassLinker::LinkInterfaceMethods(
       move_table.emplace(def_method, &new_method);
       ++out;
     }
+    for (ArtMethod* conf_method : default_conflict_methods) {
+      ArtMethod& new_method = *out;
+      new_method.CopyFrom(conf_method, image_pointer_size_);
+      // This is a type of default method (there are default method impls, just a conflict) so mark
+      // this as a default, non-abstract method, since thats what it is.
+      new_method.SetAccessFlags(new_method.GetAccessFlags() | kAccDefault);
+      new_method.SetAccessFlags(new_method.GetAccessFlags() | kAccDefaultConflict);
+      new_method.SetAccessFlags(new_method.GetAccessFlags() & ~kAccAbstract);
+      DCHECK(new_method.IsDefaultConflict());
+      // The actual method might or might not be marked abstract since we just copied it from a
+      // (possibly default) interface method. We need to set it entry point to be the bridge so that
+      // the compiler will not invoke the implementation of whatever method we copied from.
+      EnsureThrowsInvocationError(&new_method);
+
+      // Clear the preverified flag if it is present. Since this class hasn't been verified yet it
+      // shouldn't have methods that are preverified.
+      // TODO This is rather arbitrary. We should maybe support classes where only some of its
+      // methods are preverified.
+      new_method.SetAccessFlags(new_method.GetAccessFlags() & ~kAccPreverified);
+      move_table.emplace(conf_method, &new_method);
+      ++out;
+    }
     virtuals->SetLength(new_method_count);
     UpdateClassVirtualMethods(klass.Get(), virtuals);
     // Done copying methods, they are all roots in the class now, so we can end the no thread
@@ -5676,8 +5734,10 @@ bool ClassLinker::LinkInterfaceMethods(
     self->EndAssertNoThreadSuspension(old_cause);
 
     const size_t old_vtable_count = vtable->GetLength();
-    const size_t new_vtable_count =
-        old_vtable_count + miranda_methods.size() + default_methods.size();
+    const size_t new_vtable_count = old_vtable_count +
+                                    miranda_methods.size() +
+                                    default_methods.size() +
+                                    default_conflict_methods.size();
     miranda_methods.clear();
     vtable.Assign(down_cast<mirror::PointerArray*>(vtable->CopyOf(self, new_vtable_count)));
     if (UNLIKELY(vtable.Get() == nullptr)) {
@@ -5702,9 +5762,22 @@ bool ClassLinker::LinkInterfaceMethods(
       auto translation_it = default_translations.find(i);
       bool found_translation = false;
       if (translation_it != default_translations.end()) {
-        size_t vtable_index;
-        std::tie(vtable_index, translated_method) = *translation_it;
-        DCHECK_EQ(vtable_index, i);
+        if (translation_it->second.IsInConflict()) {
+          MethodNameAndSignatureComparator old_method_comparator(
+              translated_method->GetInterfaceMethodIfProxy(image_pointer_size_));
+          ArtMethod* new_conflict_method = nullptr;
+          for (ArtMethod* conflict : default_conflict_methods) {
+            if (old_method_comparator.HasSameNameAndSignature(conflict)) {
+              new_conflict_method = conflict;
+              break;
+            }
+          }
+          CHECK(new_conflict_method != nullptr) << "Expected a conflict method!";
+          translated_method = new_conflict_method;
+        } else {
+          // TODO Handle conflict
+          translated_method = translation_it->second.GetTranslation();
+        }
         found_translation = true;
       }
       DCHECK(translated_method != nullptr);
