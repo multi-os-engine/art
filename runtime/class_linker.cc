@@ -1429,13 +1429,18 @@ bool ClassLinker::FindClassInPathClassLoader(ScopedObjectAccessAlreadyRunnable& 
             break;
           }
           int32_t long_array_size = long_array->GetLength();
-          for (int32_t j = 0; j < long_array_size; ++j) {
+          // First element is the oat file.
+          for (int32_t j = 1; j < long_array_size; ++j) {
             const DexFile* cp_dex_file = reinterpret_cast<const DexFile*>(static_cast<uintptr_t>(
                 long_array->GetWithoutChecks(j)));
             const DexFile::ClassDef* dex_class_def = cp_dex_file->FindClassDef(descriptor, hash);
             if (dex_class_def != nullptr) {
-              mirror::Class* klass = DefineClass(self, descriptor, hash, class_loader,
-                                                 *cp_dex_file, *dex_class_def);
+              mirror::Class* klass = DefineClass(self,
+                                                 descriptor,
+                                                 hash,
+                                                 class_loader,
+                                                 *cp_dex_file,
+                                                 *dex_class_def);
               if (klass == nullptr) {
                 CHECK(self->IsExceptionPending()) << descriptor;
                 self->ClearException();
