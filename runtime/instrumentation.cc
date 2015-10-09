@@ -111,7 +111,7 @@ static void UpdateEntrypoints(ArtMethod* method, const void* quick_code)
 }
 
 void Instrumentation::InstallStubsForMethod(ArtMethod* method) {
-  if (method->IsAbstract() || method->IsProxyMethod()) {
+  if (!method->IsInvokable() || method->IsProxyMethod()) {
     // Do not change stubs for these methods.
     return;
   }
@@ -728,7 +728,7 @@ bool Instrumentation::IsDeoptimizedMethodsEmpty() const {
 void Instrumentation::Deoptimize(ArtMethod* method) {
   CHECK(!method->IsNative());
   CHECK(!method->IsProxyMethod());
-  CHECK(!method->IsAbstract());
+  CHECK(method->IsInvokable());
 
   Thread* self = Thread::Current();
   {
@@ -751,7 +751,7 @@ void Instrumentation::Deoptimize(ArtMethod* method) {
 void Instrumentation::Undeoptimize(ArtMethod* method) {
   CHECK(!method->IsNative());
   CHECK(!method->IsProxyMethod());
-  CHECK(!method->IsAbstract());
+  CHECK(method->IsInvokable());
 
   Thread* self = Thread::Current();
   bool empty;
