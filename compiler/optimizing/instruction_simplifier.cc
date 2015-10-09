@@ -615,6 +615,8 @@ void InstructionSimplifierVisitor::VisitLessThanOrEqual(HLessThanOrEqual* condit
   VisitCondition(condition);
 }
 
+// TODO: unsigned comparisons too?
+
 void InstructionSimplifierVisitor::VisitCondition(HCondition* condition) {
   // Try to fold an HCompare into this HCondition.
 
@@ -622,7 +624,7 @@ void InstructionSimplifierVisitor::VisitCondition(HCondition* condition) {
   // TODO: Implement it for MIPS64.
   InstructionSet instruction_set = GetGraph()->GetInstructionSet();
   if (instruction_set == kMips64) {
-    return;
+    //return;
   }
 
   HInstruction* left = condition->GetLeft();
