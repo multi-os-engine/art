@@ -852,11 +852,15 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
   }
 
   if (kIsDebugBuild && IsCompilingWithCoreImage()) {
-    // For testing purposes, we put a special marker on method names that should be compiled
-    // with this compiler. This makes sure we're not regressing.
-    std::string method_name = PrettyMethod(method_idx, dex_file);
-    bool shouldCompile = method_name.find("$opt$") != std::string::npos;
-    DCHECK((method != nullptr) || !shouldCompile) << "Didn't compile " << method_name;
+    InstructionSet instruction_set = compiler_driver->GetInstructionSet();
+    // We change the ISA from kArm to kThumb before the actual compilation.
+    if ((instruction_set == kArm) || IsInstructionSetSupported(instruction_set)) {
+      // For testing purposes, we put a special marker on method names that should be compiled
+      // with this compiler. This makes sure we're not regressing.
+      std::string method_name = PrettyMethod(method_idx, dex_file);
+      bool shouldCompile = method_name.find("$opt$") != std::string::npos;
+      DCHECK((method != nullptr) || !shouldCompile) << "Didn't compile " << method_name;
+    }
   }
 
   return method;
