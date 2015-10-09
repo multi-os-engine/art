@@ -32,6 +32,7 @@
 #include "debugger.h"
 #include "dex_file-inl.h"
 #include "gc/scoped_gc_critical_section.h"
+#include "id_map.h"
 #include "instrumentation.h"
 #include "mirror/class-inl.h"
 #include "mirror/dex_cache-inl.h"
@@ -101,23 +102,12 @@ static TraceAction DecodeTraceAction(uint32_t tmid) {
 
 ArtMethod* Trace::DecodeTraceMethod(uint32_t tmid) {
   MutexLock mu(Thread::Current(), *unique_methods_lock_);
-  return unique_methods_[tmid >> TraceActionBits];
+  return art_method_id_map_.GetKey(tmid >> TraceActionBits);
 }
 
 uint32_t Trace::EncodeTraceMethod(ArtMethod* method) {
   MutexLock mu(Thread::Current(), *unique_methods_lock_);
-  uint32_t idx;
-  auto it = art_method_id_map_.find(method);
-  if (it != art_method_id_map_.end()) {
-    idx = it->second;
-  } else {
-    unique_methods_.push_back(method);
-    idx = unique_methods_.size() - 1;
-    art_method_id_map_.emplace(method, idx);
-  }
-  DCHECK_LT(idx, unique_methods_.size());
-  DCHECK_EQ(unique_methods_[idx], method);
-  return idx;
+  return art_method_id_map_.Add(method);
 }
 
 uint32_t Trace::EncodeTraceMethodAndAction(ArtMethod* method, TraceAction action) {
@@ -127,7 +117,7 @@ uint32_t Trace::EncodeTraceMethodAndAction(ArtMethod* method, TraceAction action
 }
 
 std::vector<ArtMethod*>* Trace::AllocStackTrace() {
-  return (temp_stack_trace_.get() != nullptr)  ? temp_stack_trace_.release() :
+  return (temp_stack_trace_.get() != nullptr) ? temp_stack_trace_.release() :
       new std::vector<ArtMethod*>();
 }
 
@@ -147,23 +137,25 @@ void Trace::SetDefaultClockSource(TraceClockSource clock_source) {
 }
 
 static uint16_t GetTraceVersion(TraceClockSource clock_source) {
-  return (clock_source == TraceClockSource::kDual) ? kTraceVersionDualClock
-                                                    : kTraceVersionSingleClock;
+  return (clock_source == TraceClockSource::kDual)
+      ? kTraceVersionDualClock
+      : kTraceVersionSingleClock;
 }
 
 static uint16_t GetRecordSize(TraceClockSource clock_source) {
-  return (clock_source == TraceClockSource::kDual) ? kTraceRecordSizeDualClock
-                                                    : kTraceRecordSizeSingleClock;
+  return (clock_source == TraceClockSource::kDual)
+      ? kTraceRecordSizeDualClock
+      : kTraceRecordSizeSingleClock;
 }
 
-bool Trace::UseThreadCpuClock() {
+bool Trace::UseThreadCpuClock() const {
   return (clock_source_ == TraceClockSource::kThreadCpu) ||
-      (clock_source_ == TraceClockSource::kDual);
+         (clock_source_ == TraceClockSource::kDual);
 }
 
-bool Trace::UseWallClock() {
+bool Trace::UseWallClock() const {
   return (clock_source_ == TraceClockSource::kWall) ||
-      (clock_source_ == TraceClockSource::kDual);
+         (clock_source_ == TraceClockSource::kDual);
 }
 
 void Trace::MeasureClockOverhead() {
@@ -582,8 +574,12 @@ TracingMode Trace::GetMethodTracingMode() {
 
 static constexpr size_t kMinBufSize = 18U;  // Trace header is up to 18B.
 
-Trace::Trace(File* trace_file, const char* trace_name, size_t buffer_size, int flags,
-             TraceOutputMode output_mode, TraceMode trace_mode)
+Trace::Trace(File* trace_file,
+             const char* trace_name,
+             size_t buffer_size,
+             int flags,
+             TraceOutputMode output_mode,
+             TraceMode trace_mode)
     : trace_file_(trace_file),
       buf_(new uint8_t[std::max(kMinBufSize, buffer_size)]()),
       flags_(flags), trace_output_mode_(output_mode), trace_mode_(trace_mode),
@@ -591,7 +587,8 @@ Trace::Trace(File* trace_file, const char* trace_name, size_t buffer_size, int f
       buffer_size_(std::max(kMinBufSize, buffer_size)),
       start_time_(MicroTime()), clock_overhead_ns_(GetClockOverheadNanoSeconds()), cur_offset_(0),
       overflow_(false), interval_us_(0), streaming_lock_(nullptr),
-      unique_methods_lock_(new Mutex("unique methods lock", kTracingUniqueMethodsLock)) {
+      unique_methods_lock_(new Mutex("unique methods lock", kTracingUniqueMethodsLock)),
+      art_method_id_map_(0) {
   uint16_t trace_version = GetTraceVersion(clock_source_);
   if (output_mode == TraceOutputMode::kStreaming) {
     trace_version |= 0xF0U;
@@ -752,32 +749,37 @@ void Trace::FinishTracing() {
   }
 }
 
-void Trace::DexPcMoved(Thread* thread, mirror::Object* this_object,
-                       ArtMethod* method, uint32_t new_dex_pc) {
-  UNUSED(thread, this_object, method, new_dex_pc);
+void Trace::DexPcMoved(Thread* thread ATTRIBUTE_UNUSED,
+                       mirror::Object* this_object ATTRIBUTE_UNUSED,
+                       ArtMethod* method,
+                       uint32_t new_dex_pc) {
   // We're not recorded to listen to this kind of event, so complain.
   LOG(ERROR) << "Unexpected dex PC event in tracing " << PrettyMethod(method) << " " << new_dex_pc;
 }
 
-void Trace::FieldRead(Thread* thread, mirror::Object* this_object,
-                       ArtMethod* method, uint32_t dex_pc, ArtField* field)
-    SHARED_REQUIRES(Locks::mutator_lock_) {
-  UNUSED(thread, this_object, method, dex_pc, field);
+void Trace::FieldRead(Thread* thread ATTRIBUTE_UNUSED,
+                      mirror::Object* this_object ATTRIBUTE_UNUSED,
+                       ArtMethod* method,
+                       uint32_t dex_pc,
+                       ArtField* field ATTRIBUTE_UNUSED) {
   // We're not recorded to listen to this kind of event, so complain.
   LOG(ERROR) << "Unexpected field read event in tracing " << PrettyMethod(method) << " " << dex_pc;
 }
 
-void Trace::FieldWritten(Thread* thread, mirror::Object* this_object,
-                          ArtMethod* method, uint32_t dex_pc, ArtField* field,
-                          const JValue& field_value)
-    SHARED_REQUIRES(Locks::mutator_lock_) {
-  UNUSED(thread, this_object, method, dex_pc, field, field_value);
+void Trace::FieldWritten(Thread* thread ATTRIBUTE_UNUSED,
+                         mirror::Object* this_object ATTRIBUTE_UNUSED,
+                          ArtMethod* method,
+                          uint32_t dex_pc,
+                          ArtField* field ATTRIBUTE_UNUSED,
+                          const JValue& field_value ATTRIBUTE_UNUSED) {
   // We're not recorded to listen to this kind of event, so complain.
   LOG(ERROR) << "Unexpected field write event in tracing " << PrettyMethod(method) << " " << dex_pc;
 }
 
-void Trace::MethodEntered(Thread* thread, mirror::Object* this_object ATTRIBUTE_UNUSED,
-                          ArtMethod* method, uint32_t dex_pc ATTRIBUTE_UNUSED) {
+void Trace::MethodEntered(Thread* thread,
+                          mirror::Object* this_object ATTRIBUTE_UNUSED,
+                          ArtMethod* method,
+                          uint32_t dex_pc ATTRIBUTE_UNUSED) {
   uint32_t thread_clock_diff = 0;
   uint32_t wall_clock_diff = 0;
   ReadClocks(thread, &thread_clock_diff, &wall_clock_diff);
@@ -785,8 +787,10 @@ void Trace::MethodEntered(Thread* thread, mirror::Object* this_object ATTRIBUTE_
                       thread_clock_diff, wall_clock_diff);
 }
 
-void Trace::MethodExited(Thread* thread, mirror::Object* this_object ATTRIBUTE_UNUSED,
-                         ArtMethod* method, uint32_t dex_pc ATTRIBUTE_UNUSED,
+void Trace::MethodExited(Thread* thread,
+                         mirror::Object* this_object ATTRIBUTE_UNUSED,
+                         ArtMethod* method,
+                         uint32_t dex_pc ATTRIBUTE_UNUSED,
                          const JValue& return_value ATTRIBUTE_UNUSED) {
   uint32_t thread_clock_diff = 0;
   uint32_t wall_clock_diff = 0;
@@ -795,23 +799,28 @@ void Trace::MethodExited(Thread* thread, mirror::Object* this_object ATTRIBUTE_U
                       thread_clock_diff, wall_clock_diff);
 }
 
-void Trace::MethodUnwind(Thread* thread, mirror::Object* this_object ATTRIBUTE_UNUSED,
-                         ArtMethod* method, uint32_t dex_pc ATTRIBUTE_UNUSED) {
+void Trace::MethodUnwind(Thread* thread,
+                         mirror::Object* this_object ATTRIBUTE_UNUSED,
+                         ArtMethod* method,
+                         uint32_t dex_pc ATTRIBUTE_UNUSED) {
   uint32_t thread_clock_diff = 0;
   uint32_t wall_clock_diff = 0;
   ReadClocks(thread, &thread_clock_diff, &wall_clock_diff);
-  LogMethodTraceEvent(thread, method, instrumentation::Instrumentation::kMethodUnwind,
-                      thread_clock_diff, wall_clock_diff);
+  LogMethodTraceEvent(thread,
+                      method,
+                      instrumentation::Instrumentation::kMethodUnwind,
+                      thread_clock_diff,
+                      wall_clock_diff);
 }
 
-void Trace::ExceptionCaught(Thread* thread, mirror::Throwable* exception_object)
-    SHARED_REQUIRES(Locks::mutator_lock_) {
-  UNUSED(thread, exception_object);
+void Trace::ExceptionCaught(Thread* thread ATTRIBUTE_UNUSED,
+                            mirror::Throwable* exception_object ATTRIBUTE_UNUSED) {
   LOG(ERROR) << "Unexpected exception caught event in tracing";
 }
 
-void Trace::BackwardBranch(Thread* /*thread*/, ArtMethod* method,
-                           int32_t /*dex_pc_offset*/)
+void Trace::BackwardBranch(Thread* thread ATTRIBUTE_UNUSED,
+                           ArtMethod* method,
+                           int32_t dex_pc_offset ATTRIBUTE_UNUSED)
       SHARED_REQUIRES(Locks::mutator_lock_) {
   LOG(ERROR) << "Unexpected backward branch event in tracing" << PrettyMethod(method);
 }
@@ -906,9 +915,11 @@ void Trace::WriteToBuf(const uint8_t* src, size_t src_size) {
   memcpy(buf_.get() + old_offset, src, src_size);
 }
 
-void Trace::LogMethodTraceEvent(Thread* thread, ArtMethod* method,
+void Trace::LogMethodTraceEvent(Thread* thread,
+                                ArtMethod* method,
                                 instrumentation::Instrumentation::InstrumentationEvent event,
-                                uint32_t thread_clock_diff, uint32_t wall_clock_diff) {
+                                uint32_t thread_clock_diff,
+                                uint32_t wall_clock_diff) {
   // Advance cur_offset_ atomically.
   int32_t new_offset;
   int32_t old_offset = 0;

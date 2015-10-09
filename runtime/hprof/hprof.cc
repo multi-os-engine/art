@@ -52,6 +52,7 @@
 #include "gc/heap.h"
 #include "gc/space/space.h"
 #include "globals.h"
+#include "id_map.h"
 #include "jdwp/jdwp.h"
 #include "jdwp/jdwp_priv.h"
 #include "mirror/class.h"
@@ -424,8 +425,9 @@ class Hprof : public SingleRootVisitor {
         output_(nullptr),
         current_heap_(HPROF_HEAP_DEFAULT),
         objects_in_segment_(0),
-        next_string_id_(0x400000),
-        next_class_serial_number_(1) {
+        strings_(0x400000),
+        classes_(1),
+        frames_(0u) {
     LOG(INFO) << "hprof: heap dump \"" << filename_ << "\" starting...";
   }
 
@@ -537,9 +539,8 @@ class Hprof : public SingleRootVisitor {
   }
 
   void WriteClassTable() SHARED_REQUIRES(Locks::mutator_lock_) {
-    for (const auto& p : classes_) {
-      mirror::Class* c = p.first;
-      HprofClassSerialNumber sn = p.second;
+    for (const HprofClassSerialNumber sn : classes_) {
+      mirror::Class* c = classes_.GetKey(sn);
       CHECK(c != nullptr);
       output_->StartNewRecord(HPROF_TAG_LOAD_CLASS, kHprofTime);
       // LOAD CLASS format:
@@ -555,9 +556,8 @@ class Hprof : public SingleRootVisitor {
   }
 
   void WriteStringTable() {
-    for (const std::pair<std::string, HprofStringId>& p : strings_) {
-      const std::string& string = p.first;
-      const size_t id = p.second;
+    for (HprofStringId id : strings_) {
+      const std::string& string = strings_.GetKey(id);
 
       output_->StartNewRecord(HPROF_TAG_STRING, kHprofTime);
 
@@ -590,15 +590,11 @@ class Hprof : public SingleRootVisitor {
                       uint32_t thread_serial);
 
   HprofClassObjectId LookupClassId(mirror::Class* c) SHARED_REQUIRES(Locks::mutator_lock_) {
-    if (c != nullptr) {
-      auto it = classes_.find(c);
-      if (it == classes_.end()) {
-        // first time to see this class
-        HprofClassSerialNumber sn = next_class_serial_number_++;
-        classes_.Put(c, sn);
-        // Make sure that we've assigned a string ID for this class' name
-        LookupClassNameId(c);
-      }
+    if (c != nullptr && classes_.Find(c) != nullptr) {
+      // first time to see this class
+      classes_.Add(c);
+      // Make sure that we've assigned a string ID for this class' name
+      LookupClassNameId(c);
     }
     return PointerToLowMemUInt32(c);
   }
@@ -625,13 +621,7 @@ class Hprof : public SingleRootVisitor {
   }
 
   HprofStringId LookupStringId(const std::string& string) {
-    auto it = strings_.find(string);
-    if (it != strings_.end()) {
-      return it->second;
-    }
-    HprofStringId id = next_string_id_++;
-    strings_.Put(string, id);
-    return id;
+    return strings_.Add(string);
   }
 
   HprofStringId LookupClassNameId(mirror::Class* c) SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -689,9 +679,9 @@ class Hprof : public SingleRootVisitor {
         // ID: source file name string ID
         // U4: class serial number
         // U4: >0, line number; 0, no line information available; -1, unknown location
-        auto frame_result = frames_.find(frame);
-        CHECK(frame_result != frames_.end());
-        __ AddU4(frame_result->second);
+        auto frame_result = frames_.Find(frame);
+        CHECK(frame_result != nullptr);
+        __ AddU4(*frame_result);
         __ AddStringId(LookupStringId(method->GetName()));
         __ AddStringId(LookupStringId(method->GetSignature().ToString()));
         const char* source_file = method->GetDeclaringClassSourceFile();
@@ -699,9 +689,10 @@ class Hprof : public SingleRootVisitor {
           source_file = "";
         }
         __ AddStringId(LookupStringId(source_file));
-        auto class_result = classes_.find(method->GetDeclaringClass());
-        CHECK(class_result != classes_.end());
-        __ AddU4(class_result->second);
+        const HprofClassSerialNumber* class_result = classes_.Find(method->GetDeclaringClass());
+        CHECK(class_result != nullptr) << "Didn't find class "
+                                       << PrettyClass(method->GetDeclaringClass());
+        __ AddU4(*class_result);
         __ AddU4(frame->ComputeLineNumber());
       }
 
@@ -717,9 +708,9 @@ class Hprof : public SingleRootVisitor {
       __ AddU4(depth);
       for (size_t i = 0; i < depth; ++i) {
         const gc::AllocRecordStackTraceElement* frame = &trace->GetStackElement(i);
-        auto frame_result = frames_.find(frame);
-        CHECK(frame_result != frames_.end());
-        __ AddU4(frame_result->second);
+        auto frame_result = frames_.Find(frame);
+        CHECK(frame_result != nullptr);
+        __ AddU4(*frame_result);
       }
     }
   }
@@ -823,7 +814,6 @@ class Hprof : public SingleRootVisitor {
     gc::AllocRecordObjectMap* records = Runtime::Current()->GetHeap()->GetAllocationRecords();
     CHECK(records != nullptr);
     HprofStackTraceSerialNumber next_trace_sn = kHprofNullStackTrace + 1;
-    HprofStackFrameId next_frame_id = 0;
     size_t count = 0;
 
     for (auto it = records->Begin(), end = records->End(); it != end; ++it) {
@@ -846,15 +836,11 @@ class Hprof : public SingleRootVisitor {
         // only check frames if the trace is newly discovered
         for (size_t i = 0, depth = trace->GetDepth(); i < depth; ++i) {
           const gc::AllocRecordStackTraceElement* frame = &trace->GetStackElement(i);
-          auto frames_result = frames_.find(frame);
-          if (frames_result == frames_.end()) {
-            frames_.emplace(frame, next_frame_id++);
-          }
+          frames_.Add(frame);
         }
       }
     }
     CHECK_EQ(traces_.size(), next_trace_sn - kHprofNullStackTrace - 1);
-    CHECK_EQ(frames_.size(), next_frame_id);
     VLOG(heap) << "hprof: found " << count << " objects with allocation stack traces";
   }
 
@@ -872,17 +858,16 @@ class Hprof : public SingleRootVisitor {
   HprofHeapId current_heap_;  // Which heap we're currently dumping.
   size_t objects_in_segment_;
 
-  HprofStringId next_string_id_;
-  SafeMap<std::string, HprofStringId> strings_;
-  HprofClassSerialNumber next_class_serial_number_;
-  SafeMap<mirror::Class*, HprofClassSerialNumber> classes_;
+  IdMap<std::string, HprofStringId> strings_;
+  IdMap<mirror::Class*, HprofClassSerialNumber> classes_;
 
   std::unordered_map<const gc::AllocRecordStackTrace*, HprofStackTraceSerialNumber,
                      gc::HashAllocRecordTypesPtr<gc::AllocRecordStackTrace>,
                      gc::EqAllocRecordTypesPtr<gc::AllocRecordStackTrace>> traces_;
-  std::unordered_map<const gc::AllocRecordStackTraceElement*, HprofStackFrameId,
-                     gc::HashAllocRecordTypesPtr<gc::AllocRecordStackTraceElement>,
-                     gc::EqAllocRecordTypesPtr<gc::AllocRecordStackTraceElement>> frames_;
+
+  IdMap<const gc::AllocRecordStackTraceElement*, HprofStackFrameId,
+        gc::HashAllocRecordTypesPtr<gc::AllocRecordStackTraceElement>,
+        gc::EqAllocRecordTypesPtr<gc::AllocRecordStackTraceElement>> frames_;
   std::unordered_map<const mirror::Object*, const gc::AllocRecordStackTrace*> allocation_records_;
 
   friend class GcRootVisitor;

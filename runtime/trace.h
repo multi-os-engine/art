@@ -29,6 +29,7 @@
 #include "atomic.h"
 #include "base/macros.h"
 #include "globals.h"
+#include "id_map.h"
 #include "instrumentation.h"
 #include "os.h"
 #include "safe_map.h"
@@ -112,9 +113,16 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
 
   static void SetDefaultClockSource(TraceClockSource clock_source);
 
-  static void Start(const char* trace_filename, int trace_fd, size_t buffer_size, int flags,
-                    TraceOutputMode output_mode, TraceMode trace_mode, int interval_us)
-      REQUIRES(!Locks::mutator_lock_, !Locks::thread_list_lock_, !Locks::thread_suspend_count_lock_,
+  static void Start(const char* trace_filename,
+                    int trace_fd,
+                    size_t buffer_size,
+                    int flags,
+                    TraceOutputMode output_mode,
+                    TraceMode trace_mode,
+                    int interval_us)
+      REQUIRES(!Locks::mutator_lock_,
+               !Locks::thread_list_lock_,
+               !Locks::thread_suspend_count_lock_,
                !Locks::trace_lock_);
   static void Pause() REQUIRES(!Locks::trace_lock_, !Locks::thread_list_lock_);
   static void Resume() REQUIRES(!Locks::trace_lock_);
@@ -122,73 +130,122 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
   // Stop tracing. This will finish the trace and write it to file/send it via DDMS.
   static void Stop()
       REQUIRES(!Locks::mutator_lock_, !Locks::thread_list_lock_, !Locks::trace_lock_);
+
   // Abort tracing. This will just stop tracing and *not* write/send the collected data.
   static void Abort()
       REQUIRES(!Locks::mutator_lock_, !Locks::thread_list_lock_, !Locks::trace_lock_);
+
   static void Shutdown()
       REQUIRES(!Locks::mutator_lock_, !Locks::thread_list_lock_, !Locks::trace_lock_);
+
   static TracingMode GetMethodTracingMode() REQUIRES(!Locks::trace_lock_);
 
-  bool UseWallClock();
-  bool UseThreadCpuClock();
+  bool UseWallClock() const;
+
+  bool UseThreadCpuClock() const;
+
   void MeasureClockOverhead();
+
   uint32_t GetClockOverheadNanoSeconds();
 
   void CompareAndUpdateStackTrace(Thread* thread, std::vector<ArtMethod*>* stack_trace)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_, !*streaming_lock_);
+      REQUIRES(!*unique_methods_lock_, !*streaming_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // InstrumentationListener implementation.
   void MethodEntered(Thread* thread, mirror::Object* this_object,
                      ArtMethod* method, uint32_t dex_pc)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_, !*streaming_lock_)
-      OVERRIDE;
-  void MethodExited(Thread* thread, mirror::Object* this_object,
-                    ArtMethod* method, uint32_t dex_pc,
+      OVERRIDE
+      REQUIRES(!*unique_methods_lock_, !*streaming_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void MethodExited(Thread* thread,
+                    mirror::Object* this_object,
+                    ArtMethod* method,
+                    uint32_t dex_pc,
                     const JValue& return_value)
+      OVERRIDE
+      REQUIRES(!*unique_methods_lock_, !*streaming_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void MethodUnwind(Thread* thread,
+                    mirror::Object* this_object,
+                    ArtMethod* method,
+                    uint32_t dex_pc)
+      OVERRIDE
+      REQUIRES(!*unique_methods_lock_, !*streaming_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void DexPcMoved(Thread* thread,
+                  mirror::Object* this_object,
+                  ArtMethod* method,
+                  uint32_t new_dex_pc)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_, !*streaming_lock_)
       OVERRIDE;
-  void MethodUnwind(Thread* thread, mirror::Object* this_object,
-                    ArtMethod* method, uint32_t dex_pc)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_, !*streaming_lock_)
-      OVERRIDE;
-  void DexPcMoved(Thread* thread, mirror::Object* this_object,
-                  ArtMethod* method, uint32_t new_dex_pc)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_, !*streaming_lock_)
-      OVERRIDE;
-  void FieldRead(Thread* thread, mirror::Object* this_object,
-                 ArtMethod* method, uint32_t dex_pc, ArtField* field)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_) OVERRIDE;
-  void FieldWritten(Thread* thread, mirror::Object* this_object,
-                    ArtMethod* method, uint32_t dex_pc, ArtField* field,
+
+  void FieldRead(Thread* thread,
+                 mirror::Object* this_object,
+                 ArtMethod* method,
+                 uint32_t dex_pc,
+                 ArtField* field)
+      OVERRIDE
+      REQUIRES(!*unique_methods_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void FieldWritten(Thread* thread,
+                    mirror::Object* this_object,
+                    ArtMethod* method,
+                    uint32_t dex_pc,
+                    ArtField* field,
                     const JValue& field_value)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_) OVERRIDE;
+      OVERRIDE
+      REQUIRES(!*unique_methods_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   void ExceptionCaught(Thread* thread, mirror::Throwable* exception_object)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_) OVERRIDE;
+      OVERRIDE
+      REQUIRES(!*unique_methods_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   void BackwardBranch(Thread* thread, ArtMethod* method, int32_t dex_pc_offset)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_) OVERRIDE;
+      OVERRIDE
+      REQUIRES(!*unique_methods_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   void InvokeVirtualOrInterface(Thread* thread,
                                 mirror::Object* this_object,
                                 ArtMethod* caller,
                                 uint32_t dex_pc,
                                 ArtMethod* callee)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_) OVERRIDE;
+      OVERRIDE
+      REQUIRES(!*unique_methods_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   // Reuse an old stack trace if it exists, otherwise allocate a new one.
   static std::vector<ArtMethod*>* AllocStackTrace();
+
   // Clear and store an old stack trace for later use.
   static void FreeStackTrace(std::vector<ArtMethod*>* stack_trace);
+
   // Save id and name of a thread before it exits.
   static void StoreExitingThreadInfo(Thread* thread);
 
   static TraceOutputMode GetOutputMode() REQUIRES(!Locks::trace_lock_);
+
   static TraceMode GetMode() REQUIRES(!Locks::trace_lock_);
+
   static size_t GetBufferSize() REQUIRES(!Locks::trace_lock_);
 
   // Used by class linker to prevent class unloading.
   static bool IsTracingEnabled() REQUIRES(!Locks::trace_lock_);
 
  private:
-  Trace(File* trace_file, const char* trace_name, size_t buffer_size, int flags,
-        TraceOutputMode output_mode, TraceMode trace_mode);
+  Trace(File* trace_file,
+        const char* trace_name,
+        size_t buffer_size,
+        int flags,
+        TraceOutputMode output_mode,
+        TraceMode trace_mode);
 
   // The sampling interval in microseconds is passed as an argument.
   static void* RunSamplingThread(void* arg) REQUIRES(!Locks::trace_lock_);
@@ -200,26 +257,36 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
       // This causes the negative annotations to incorrectly have a false positive. TODO: Figure out
       // how to annotate this.
       NO_THREAD_SAFETY_ANALYSIS;
-  void FinishTracing() SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_);
+
+  void FinishTracing()
+      REQUIRES(!*unique_methods_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   void ReadClocks(Thread* thread, uint32_t* thread_clock_diff, uint32_t* wall_clock_diff);
 
-  void LogMethodTraceEvent(Thread* thread, ArtMethod* method,
+  void LogMethodTraceEvent(Thread* thread,
+                           ArtMethod* method,
                            instrumentation::Instrumentation::InstrumentationEvent event,
-                           uint32_t thread_clock_diff, uint32_t wall_clock_diff)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_, !*streaming_lock_);
+                           uint32_t thread_clock_diff,
+                           uint32_t wall_clock_diff)
+      REQUIRES(!*unique_methods_lock_, !*streaming_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Methods to output traced methods and threads.
   void GetVisitedMethods(size_t end_offset, std::set<ArtMethod*>* visited_methods)
       REQUIRES(!*unique_methods_lock_);
+
   void DumpMethodList(std::ostream& os, const std::set<ArtMethod*>& visited_methods)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_);
+
   void DumpThreadList(std::ostream& os) REQUIRES(!Locks::thread_list_lock_);
 
   // Methods to register seen entitites in streaming mode. The methods return true if the entity
   // is newly discovered.
   bool RegisterMethod(ArtMethod* method)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(streaming_lock_);
+      REQUIRES(streaming_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   bool RegisterThread(Thread* thread)
       REQUIRES(streaming_lock_);
 
@@ -229,14 +296,19 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
       REQUIRES(streaming_lock_);
 
   uint32_t EncodeTraceMethod(ArtMethod* method) REQUIRES(!*unique_methods_lock_);
+
   uint32_t EncodeTraceMethodAndAction(ArtMethod* method, TraceAction action)
       REQUIRES(!*unique_methods_lock_);
+
   ArtMethod* DecodeTraceMethod(uint32_t tmid) REQUIRES(!*unique_methods_lock_);
-  std::string GetMethodLine(ArtMethod* method) REQUIRES(!*unique_methods_lock_)
+
+  std::string GetMethodLine(ArtMethod* method)
+      REQUIRES(!*unique_methods_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void DumpBuf(uint8_t* buf, size_t buf_size, TraceClockSource clock_source)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_);
+      REQUIRES(!*unique_methods_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Singleton instance of the Trace or null when no method tracing is active.
   static Trace* volatile the_trace_ GUARDED_BY(Locks::trace_lock_);
@@ -297,8 +369,7 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
   // Bijective map from ArtMethod* to index.
   // Map from ArtMethod* to index in unique_methods_;
   Mutex* unique_methods_lock_ ACQUIRED_AFTER(streaming_lock_);
-  std::unordered_map<ArtMethod*, uint32_t> art_method_id_map_ GUARDED_BY(unique_methods_lock_);
-  std::vector<ArtMethod*> unique_methods_ GUARDED_BY(unique_methods_lock_);
+  IdMap<ArtMethod*, uint32_t> art_method_id_map_ GUARDED_BY(unique_methods_lock_);
 
   DISALLOW_COPY_AND_ASSIGN(Trace);
 };

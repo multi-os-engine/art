@@ -56,8 +56,11 @@ class DefaultEmptyFn<T*> {
 // EmptyFn needs to implement two functions MakeEmpty(T& item) and IsEmpty(const T& item).
 // TODO: We could get rid of this requirement by using a bitmap, though maybe this would be slower
 // and more complicated.
-template <class T, class EmptyFn = DefaultEmptyFn<T>, class HashFn = std::hash<T>,
-    class Pred = std::equal_to<T>, class Alloc = std::allocator<T>>
+template <class T,
+          class EmptyFn = DefaultEmptyFn<T>,
+          class HashFn = std::hash<T>,
+          class Pred = std::equal_to<T>,
+          class Alloc = std::allocator<T>>
 class HashSet {
   template <class Elem, class HashSetType>
   class BaseIterator : std::iterator<std::forward_iterator_tag, Elem> {
@@ -148,19 +151,22 @@ class HashSet {
         max_load_factor_(kDefaultMaxLoadFactor) {
   }
 
-  explicit HashSet(const allocator_type& alloc)
-      : allocfn_(alloc),
-        hashfn_(),
-        emptyfn_(),
-        pred_(),
-        num_elements_(0u),
-        num_buckets_(0u),
-        elements_until_expand_(0u),
-        owns_data_(false),
-        data_(nullptr),
-        min_load_factor_(kDefaultMinLoadFactor),
-        max_load_factor_(kDefaultMaxLoadFactor) {
-  }
+  explicit HashSet(const HashFn& hash,
+                   const Pred& pred,
+                   const allocator_type& alloc)
+        : allocfn_(alloc),
+          hashfn_(hash),
+          emptyfn_(),
+          pred_(pred),
+          num_elements_(0u),
+          num_buckets_(0u),
+          elements_until_expand_(0u),
+          owns_data_(false),
+          data_(nullptr),
+          min_load_factor_(kDefaultMinLoadFactor),
+          max_load_factor_(kDefaultMaxLoadFactor) {}
+
+  explicit HashSet(const allocator_type& alloc) : HashSet(HashFn(), Pred(), alloc) {}
 
   HashSet(const HashSet& other)
       : allocfn_(other.allocfn_),
