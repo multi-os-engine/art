@@ -79,9 +79,17 @@ static HInstruction* GetOppositeCondition(HInstruction* cond) {
       return new (allocator) HGreaterThan(lhs, rhs);
     } else if (cond->IsGreaterThan()) {
       return new (allocator) HLessThanOrEqual(lhs, rhs);
-    } else {
-      DCHECK(cond->IsGreaterThanOrEqual());
+    } else if (cond->IsGreaterThanOrEqual()) {
       return new (allocator) HLessThan(lhs, rhs);
+    } else if (cond->IsBelow()) {
+      return new (allocator) HAboveOrEqual(lhs, rhs);
+    } else if (cond->IsBelowOrEqual()) {
+      return new (allocator) HAbove(lhs, rhs);
+    } else if (cond->IsAbove()) {
+      return new (allocator) HBelowOrEqual(lhs, rhs);
+    } else {
+      DCHECK(cond->IsAboveOrEqual());
+      return new (allocator) HBelow(lhs, rhs);
     }
   } else if (cond->IsIntConstant()) {
     HIntConstant* int_const = cond->AsIntConstant();

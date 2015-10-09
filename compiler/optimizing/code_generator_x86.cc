@@ -436,11 +436,16 @@ inline Condition X86SignedCondition(IfCondition cond) {
     case kCondLE: return kLessEqual;
     case kCondGT: return kGreater;
     case kCondGE: return kGreaterEqual;
+    case kCondB:  return kBelow;
+    case kCondBE: return kBelowEqual;
+    case kCondA:  return kAbove;
+    case kCondAE: return kAboveEqual;
   }
   LOG(FATAL) << "Unreachable";
   UNREACHABLE();
 }
 
+// TODO(ajcbik): unify with one above?
 inline Condition X86UnsignedOrFPCondition(IfCondition cond) {
   switch (cond) {
     case kCondEQ: return kEqual;
@@ -449,6 +454,10 @@ inline Condition X86UnsignedOrFPCondition(IfCondition cond) {
     case kCondLE: return kBelowEqual;
     case kCondGT: return kAbove;
     case kCondGE: return kAboveEqual;
+    case kCondB:  return kBelow;
+    case kCondBE: return kBelowEqual;
+    case kCondA:  return kAbove;
+    case kCondAE: return kAboveEqual;
   }
   LOG(FATAL) << "Unreachable";
   UNREACHABLE();
@@ -1088,6 +1097,9 @@ void InstructionCodeGeneratorX86::GenerateLongComparesAndJumps(HCondition* cond,
     case kCondGE:
       true_high_cond = kCondGT;
       break;
+    default:
+      // TODO(ajcbik): make this work
+      break;
   }
 
   if (right.IsConstant()) {
@@ -1480,6 +1492,38 @@ void LocationsBuilderX86::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
 }
 
 void InstructionCodeGeneratorX86::VisitGreaterThanOrEqual(HGreaterThanOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderX86::VisitBelow(HBelow* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitBelow(HBelow* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderX86::VisitBelowOrEqual(HBelowOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitBelowOrEqual(HBelowOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderX86::VisitAbove(HAbove* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitAbove(HAbove* comp) {
+  VisitCondition(comp);
+}
+
+void LocationsBuilderX86::VisitAboveOrEqual(HAboveOrEqual* comp) {
+  VisitCondition(comp);
+}
+
+void InstructionCodeGeneratorX86::VisitAboveOrEqual(HAboveOrEqual* comp) {
   VisitCondition(comp);
 }
 
