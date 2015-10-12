@@ -43,7 +43,8 @@ extern uint32_t JniMethodStart(Thread* self) {
   return saved_local_ref_cookie;
 }
 
-extern uint32_t JniMethodStartSynchronized(jobject to_lock, Thread* self) {
+extern uint32_t JniMethodStartSynchronized(jobject to_lock, Thread* self)
+    REQUIRES(!Roles::uninterruptible_) {
   self->DecodeJObject(to_lock)->MonitorEnter(self);
   return JniMethodStart(self);
 }
