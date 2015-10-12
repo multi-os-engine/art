@@ -83,17 +83,25 @@ void ThrowNullPointerExceptionFromInterpreter()
 template <bool kMonitorCounting>
 static inline void DoMonitorEnter(Thread* self,
                                   ShadowFrame* frame,
-                                  Object* ref) NO_THREAD_SAFETY_ANALYSIS {
+                                  Object* ref)
+    NO_THREAD_SAFETY_ANALYSIS
+    REQUIRES(!Roles::uninterruptible_) {
+  StackHandleScope<1> hs(self);
+  Handle<Object> h_ref(hs.NewHandle(ref));
   ref->MonitorEnter(self);
-  frame->GetLockCountData().AddMonitor<kMonitorCounting>(self, ref);
+  frame->GetLockCountData().AddMonitor<kMonitorCounting>(self, h_ref.Get());
 }
 
 template <bool kMonitorCounting>
 static inline void DoMonitorExit(Thread* self,
                                  ShadowFrame* frame,
-                                 Object* ref) NO_THREAD_SAFETY_ANALYSIS {
+                                 Object* ref)
+    NO_THREAD_SAFETY_ANALYSIS
+    REQUIRES(!Roles::uninterruptible_) {
+  StackHandleScope<1> hs(self);
+  Handle<Object> h_ref(hs.NewHandle(ref));
   ref->MonitorExit(self);
-  frame->GetLockCountData().RemoveMonitorOrThrow<kMonitorCounting>(self, ref);
+  frame->GetLockCountData().RemoveMonitorOrThrow<kMonitorCounting>(self, h_ref.Get());
 }
 
 void AbortTransactionF(Thread* self, const char* fmt, ...)
