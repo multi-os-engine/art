@@ -16,6 +16,8 @@
 
 LOCAL_PATH := $(call my-dir)
 
+include art/build/Android.common_path.mk
+
 # Copy the art shell script to the host's bin directory
 include $(CLEAR_VARS)
 LOCAL_IS_HOST_MODULE := true
@@ -23,6 +25,12 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_CLASS := EXECUTABLES
 LOCAL_MODULE := art
 include $(BUILD_SYSTEM)/base_rules.mk
+$(LOCAL_BUILT_MODULE): \
+	$(HOST_OUT_EXECUTABLES)/dalvikvm \
+	$(HOST_OUT_EXECUTABLES)/dalvikvm32 \
+	$(HOST_OUT_EXECUTABLES)/dalvikvm64 \
+	$(HOST_OUT_SHARED_LIBRARIES)/libart.so \
+	$(HOST_CORE_IMG_OUT_BASE)-optimizing-pic$(CORE_IMG_SUFFIX)
 $(LOCAL_BUILT_MODULE): $(LOCAL_PATH)/art $(ACP)
 	@echo "Copy: $(PRIVATE_MODULE) ($@)"
 	$(copy-file-to-new-target)
