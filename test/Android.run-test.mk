@@ -325,12 +325,12 @@ ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUIL
 
 # 131 is an old test. The functionality has been implemented at an earlier stage and is checked
 # in tests 138.
-ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES),$(PREBUILD_TYPES), \
+ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),debug,$(PREBUILD_TYPES), \
     $(COMPILER_TYPES),$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES),$(IMAGE_TYPES), \
     $(PICTEST_TYPES),$(DEBUGGABLE_TYPES),131-structural-change,$(ALL_ADDRESS_SIZES))
 
 # 138-duplicate-classes-check. Turned off temporarily, b/21333911.
-ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES),$(PREBUILD_TYPES), \
+ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),ndebug,$(PREBUILD_TYPES), \
     $(COMPILER_TYPES),$(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES),$(IMAGE_TYPES), \
     $(PICTEST_TYPES),$(DEBUGGABLE_TYPES),138-duplicate-classes-check,$(ALL_ADDRESS_SIZES))
 
