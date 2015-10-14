@@ -29,6 +29,7 @@ GTEST_DEX_DIRECTORIES := \
   GetMethodSignature \
   Instrumentation \
   Interfaces \
+  Lookup \
   Main \
   MultiDex \
   MultiDexModifiedSecondary \
@@ -78,6 +79,7 @@ ART_GTEST_proxy_test_DEX_DEPS := Interfaces
 ART_GTEST_reflection_test_DEX_DEPS := Main NonStaticLeafMethods StaticLeafMethods
 ART_GTEST_stub_test_DEX_DEPS := AllFields
 ART_GTEST_transaction_test_DEX_DEPS := Transaction
+ART_GTEST_lookup_table_test_DEX_DEPS := Lookup
 
 # The elf writer test has dependencies on core.oat.
 ART_GTEST_elf_writer_test_HOST_DEPS := $(HOST_CORE_IMAGE_default_no-pic_64) $(HOST_CORE_IMAGE_default_no-pic_32)
@@ -207,6 +209,7 @@ RUNTIME_GTEST_COMMON_SRC_FILES := \
   runtime/lambda/closure_test.cc \
   runtime/lambda/shorty_field_type_test.cc \
   runtime/leb128_test.cc \
+  runtime/lookup_table_test.cc \
   runtime/mem_map_test.cc \
   runtime/memory_region_test.cc \
   runtime/mirror/dex_cache_test.cc \

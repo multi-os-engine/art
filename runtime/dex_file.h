@@ -51,6 +51,7 @@ class OatDexFile;
 class Signature;
 template<class T> class Handle;
 class StringPiece;
+class TypeLookupTable;
 class ZipArchive;
 
 // TODO: move all of the macro functionality into the DexCache class.
@@ -1275,6 +1276,7 @@ class DexFile {
   // pointer to the OatDexFile it was loaded from. Otherwise oat_dex_file_ is
   // null.
   const OatDexFile* oat_dex_file_;
+  std::unique_ptr<TypeLookupTable> lookup_table_;
 
   friend class DexFileVerifierTest;
 };
