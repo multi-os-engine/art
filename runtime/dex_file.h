@@ -51,6 +51,7 @@ class OatDexFile;
 class Signature;
 template<class T> class Handle;
 class StringPiece;
+class TypeLookupTable;
 class ZipArchive;
 
 // TODO: move all of the macro functionality into the DexCache class.
@@ -1139,6 +1140,12 @@ class DexFile {
     return oat_dex_file_;
   }
 
+  TypeLookupTable* GetTypeLookupTable() const {
+    return lookup_table_.get();
+  }
+
+  void CreateTypeLookupTable() const;
+
  private:
   // Opens a .dex file
   static std::unique_ptr<const DexFile> OpenFile(int fd, const char* location,
@@ -1275,6 +1282,7 @@ class DexFile {
   // pointer to the OatDexFile it was loaded from. Otherwise oat_dex_file_ is
   // null.
   const OatDexFile* oat_dex_file_;
+  mutable std::unique_ptr<TypeLookupTable> lookup_table_;
 
   friend class DexFileVerifierTest;
 };

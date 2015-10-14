@@ -37,6 +37,7 @@
 #include "dex_file-inl.h"
 #include "dex_file_verifier.h"
 #include "globals.h"
+#include "handle_scope-inl.h"
 #include "leb128.h"
 #include "mirror/field.h"
 #include "mirror/method.h"
@@ -44,8 +45,8 @@
 #include "os.h"
 #include "reflection.h"
 #include "safe_map.h"
-#include "handle_scope-inl.h"
 #include "thread.h"
+#include "type_lookup_table.h"
 #include "utf-inl.h"
 #include "utils.h"
 #include "well_known_classes.h"
@@ -419,6 +420,14 @@ DexFile::DexFile(const uint8_t* base, size_t size,
       oat_dex_file_(oat_dex_file) {
   CHECK(begin_ != nullptr) << GetLocation();
   CHECK_GT(size_, 0U) << GetLocation();
+  const uint8_t* lookup_data = oat_dex_file != nullptr ? oat_dex_file->GetLookupTableData() : nullptr;
+  if (lookup_data != nullptr) {
+    if (lookup_data + TypeLookupTable::RawDataLength(*this) > oat_dex_file->GetOatFile()->End()) {
+      LOG(WARNING) << "found truncated lookup table in " << GetLocation();
+    } else {
+      lookup_table_.reset(TypeLookupTable::Open(lookup_data, *this));
+    }
+  }
 }
 
 DexFile::~DexFile() {
@@ -477,6 +486,14 @@ uint32_t DexFile::GetVersion() const {
 
 const DexFile::ClassDef* DexFile::FindClassDef(const char* descriptor, size_t hash) const {
   DCHECK_EQ(ComputeModifiedUtf8Hash(descriptor), hash);
+  if (LIKELY(lookup_table_.get() != nullptr)) {
+    uint32_t class_def_idx = lookup_table_->Lookup(descriptor, hash);
+    if (class_def_idx != DexFile::kDexNoIndex) {
+      return &GetClassDef(class_def_idx);
+    }
+    return nullptr;
+  }
+
   // If we have an index lookup the descriptor via that as its constant time to search.
   Index* index = class_def_index_.LoadSequentiallyConsistent();
   if (index != nullptr) {
@@ -695,6 +712,10 @@ const DexFile::ProtoId* DexFile::FindProtoId(uint16_t return_type_idx,
     }
   }
   return nullptr;
+}
+
+void DexFile::CreateTypeLookupTable() const {
+  lookup_table_.reset(TypeLookupTable::Create(*this));
 }
 
 // Given a signature place the type ids into the given vector
