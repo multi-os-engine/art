@@ -22,6 +22,7 @@
 #include <memory>
 
 #include "linker/relative_patcher.h"  // For linker::RelativePatcherTargetProvider.
+#include "lookup_table.h"
 #include "mem_map.h"
 #include "method_reference.h"
 #include "oat.h"
@@ -168,6 +169,7 @@ class OatWriter {
 
   size_t InitOatHeader();
   size_t InitOatDexFiles(size_t offset);
+  size_t InitLookupTables(size_t offset);
   size_t InitDexFiles(size_t offset);
   size_t InitOatClasses(size_t offset);
   size_t InitOatMaps(size_t offset);
@@ -177,6 +179,7 @@ class OatWriter {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   bool WriteTables(OutputStream* out, const size_t file_offset);
+  bool WriteLookupTables(OutputStream* out, const size_t file_offset);
   size_t WriteMaps(OutputStream* out, const size_t file_offset, size_t relative_offset);
   size_t WriteCode(OutputStream* out, const size_t file_offset, size_t relative_offset);
   size_t WriteCodeDexFiles(OutputStream* out, const size_t file_offset, size_t relative_offset);
@@ -199,6 +202,8 @@ class OatWriter {
     const uint8_t* dex_file_location_data_;
     uint32_t dex_file_location_checksum_;
     uint32_t dex_file_offset_;
+    uint32_t lookup_table_offset_;
+    std::unique_ptr<TypeLookupTable> lookup_table_;
     std::vector<uint32_t> methods_offsets_;
 
    private:
@@ -333,6 +338,9 @@ class OatWriter {
   uint32_t size_oat_class_status_;
   uint32_t size_oat_class_method_bitmaps_;
   uint32_t size_oat_class_method_offsets_;
+  uint32_t size_oat_lookup_table_alignment_;
+  uint32_t size_oat_lookup_table_offset_;
+  uint32_t size_oat_lookup_table_;
 
   std::unique_ptr<linker::RelativePatcher> relative_patcher_;
 

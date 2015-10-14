@@ -38,6 +38,7 @@
 #include "dex_file_verifier.h"
 #include "globals.h"
 #include "leb128.h"
+#include "lookup_table.h"
 #include "mirror/field.h"
 #include "mirror/method.h"
 #include "mirror/string.h"
@@ -419,6 +420,9 @@ DexFile::DexFile(const uint8_t* base, size_t size,
       oat_dex_file_(oat_dex_file) {
   CHECK(begin_ != nullptr) << GetLocation();
   CHECK_GT(size_, 0U) << GetLocation();
+  if (oat_dex_file_ != nullptr && oat_dex_file_->GetLookupTableData() != nullptr) {
+    lookup_table_.reset(TypeLookupTable::Open(oat_dex_file_->GetLookupTableData(), *this));
+  }
 }
 
 DexFile::~DexFile() {
@@ -477,6 +481,14 @@ uint32_t DexFile::GetVersion() const {
 
 const DexFile::ClassDef* DexFile::FindClassDef(const char* descriptor, size_t hash) const {
   DCHECK_EQ(ComputeModifiedUtf8Hash(descriptor), hash);
+  if (LIKELY(lookup_table_.get() != nullptr)) {
+    uint32_t class_def_idx = lookup_table_->Lookup(descriptor, hash);
+    if (class_def_idx != DexFile::kDexNoIndex) {
+      return &GetClassDef(class_def_idx);
+    }
+    return nullptr;
+  }
+
   // If we have an index lookup the descriptor via that as its constant time to search.
   Index* index = class_def_index_.LoadSequentiallyConsistent();
   if (index != nullptr) {
