@@ -1189,7 +1189,9 @@ mirror::PointerArray* ClassLinker::AllocPointerArray(Thread* self, size_t length
       static_cast<mirror::Array*>(mirror::IntArray::Alloc(self, length)));
 }
 
-mirror::DexCache* ClassLinker::AllocDexCache(Thread* self, const DexFile& dex_file) {
+mirror::DexCache* ClassLinker::AllocDexCache(Thread* self,
+                                             const DexFile& dex_file,
+                                             LinearAlloc* linear_alloc) {
   StackHandleScope<6> hs(self);
   auto dex_cache(hs.NewHandle(down_cast<mirror::DexCache*>(
       GetClassRoot(kJavaLangDexCache)->AllocObject(self))));
@@ -1213,7 +1215,7 @@ mirror::DexCache* ClassLinker::AllocDexCache(Thread* self, const DexFile& dex_fi
       // in the low 4GiB address space so that we can store pointers in 32-bit fields.
       // This is conveniently provided by the linear allocator.
       raw_arrays = reinterpret_cast<uint8_t*>(
-          Runtime::Current()->GetLinearAlloc()->Alloc(self, layout.Size()));  // Zero-initialized.
+          linear_alloc->Alloc(self, layout.Size()));  // Zero-initialized.
     } else {
       raw_arrays = reinterpret_cast<uint8_t*>(calloc(layout.Size(), 1u));  // Zero-initialized.
       if (raw_arrays == nullptr) {
@@ -1590,7 +1592,8 @@ mirror::Class* ClassLinker::DefineClass(Thread* self,
     self->AssertPendingOOMException();
     return nullptr;
   }
-  mirror::DexCache* dex_cache = RegisterDexFile(dex_file);
+  mirror::DexCache* dex_cache = RegisterDexFile(dex_file,
+                                                CreateAllocatorForClassLoader(class_loader.Get()));
   if (dex_cache == nullptr) {
     self->AssertPendingOOMException();
     return nullptr;
@@ -2093,6 +2096,18 @@ LinearAlloc* ClassLinker::GetAllocatorForClassLoader(mirror::ClassLoader* class_
   return allocator;
 }
 
+LinearAlloc* ClassLinker::CreateAllocatorForClassLoader(mirror::ClassLoader* class_loader) {
+  if (class_loader == nullptr) {
+    return Runtime::Current()->GetLinearAlloc();
+  }
+  LinearAlloc* allocator = class_loader->GetAllocator();
+  if (allocator == nullptr) {
+    allocator = Runtime::Current()->CreateLinearAlloc();
+    class_loader->SetAllocator(allocator);
+  }
+  return allocator;
+}
+
 void ClassLinker::LoadClassMembers(Thread* self,
                                    const DexFile& dex_file,
                                    const uint8_t* class_data,
@@ -2251,7 +2266,10 @@ void ClassLinker::LoadMethod(Thread* self,
 
 void ClassLinker::AppendToBootClassPath(Thread* self, const DexFile& dex_file) {
   StackHandleScope<1> hs(self);
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(AllocDexCache(self, dex_file)));
+  Handle<mirror::DexCache> dex_cache(hs.NewHandle(AllocDexCache(
+      self,
+      dex_file,
+      Runtime::Current()->GetLinearAlloc())));
   CHECK(dex_cache.Get() != nullptr) << "Failed to allocate dex cache for "
                                     << dex_file.GetLocation();
   AppendToBootClassPath(dex_file, dex_cache);
@@ -2287,7 +2305,7 @@ void ClassLinker::RegisterDexFileLocked(const DexFile& dex_file,
   dex_cache->SetDexFile(&dex_file);
 }
 
-mirror::DexCache* ClassLinker::RegisterDexFile(const DexFile& dex_file) {
+mirror::DexCache* ClassLinker::RegisterDexFile(const DexFile& dex_file, LinearAlloc* linear_alloc) {
   Thread* self = Thread::Current();
   {
     ReaderMutexLock mu(self, dex_lock_);
@@ -2300,7 +2318,7 @@ mirror::DexCache* ClassLinker::RegisterDexFile(const DexFile& dex_file) {
   // suspend all threads and another thread may need the dex_lock_ to
   // get to a suspend point.
   StackHandleScope<1> hs(self);
-  Handle<mirror::DexCache> h_dex_cache(hs.NewHandle(AllocDexCache(self, dex_file)));
+  Handle<mirror::DexCache> h_dex_cache(hs.NewHandle(AllocDexCache(self, dex_file, linear_alloc)));
   WriterMutexLock mu(self, dex_lock_);
   mirror::DexCache* dex_cache = FindDexCacheLocked(self, dex_file, true);
   if (dex_cache != nullptr) {
@@ -3097,15 +3115,15 @@ mirror::Class* ClassLinker::CreateProxyClass(ScopedObjectAccessAlreadyRunnable& 
   std::string descriptor(GetDescriptorForProxy(klass.Get()));
   const size_t hash = ComputeModifiedUtf8Hash(descriptor.c_str());
 
+  // Needs to be before we insert the class so that the allocator field is set.
+  LinearAlloc* const allocator = CreateAllocatorForClassLoader(klass->GetClassLoader());
+
   // Insert the class before loading the fields as the field roots
   // (ArtField::declaring_class_) are only visited from the class
   // table. There can't be any suspend points between inserting the
   // class and setting the field arrays below.
   mirror::Class* existing = InsertClass(descriptor.c_str(), klass.Get(), hash);
   CHECK(existing == nullptr);
-
-  // Needs to be after we insert the class so that the allocator field is set.
-  LinearAlloc* const allocator = GetAllocatorForClassLoader(klass->GetClassLoader());
 
   // Instance fields are inherited, but we add a couple of static fields...
   const size_t num_fields = 2;
@@ -3945,13 +3963,13 @@ ClassTable* ClassLinker::InsertClassTableForClassLoader(mirror::ClassLoader* cla
     ClassLoaderData data;
     data.weak_root = self->GetJniEnv()->vm->AddWeakGlobalRef(self, class_loader);
     data.class_table = class_table;
-    data.allocator = Runtime::Current()->CreateLinearAlloc();
-    class_loaders_.push_back(data);
     // Don't already have a class table, add it to the class loader.
     CHECK(class_loader->GetClassTable() == nullptr);
-    CHECK(class_loader->GetAllocator() == nullptr);
     class_loader->SetClassTable(data.class_table);
-    class_loader->SetAllocator(data.allocator);
+    // Should have been set when we registered the dex file.
+    data.allocator = class_loader->GetAllocator();
+    CHECK(data.allocator != nullptr);
+    class_loaders_.push_back(data);
   }
   return class_table;
 }
