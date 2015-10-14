@@ -107,6 +107,9 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     size_oat_class_status_(0),
     size_oat_class_method_bitmaps_(0),
     size_oat_class_method_offsets_(0),
+    size_oat_lookup_table_alignment_(0),
+    size_oat_lookup_table_offset_(0),
+    size_oat_lookup_table_(0),
     method_offset_map_() {
   CHECK(key_value_store != nullptr);
 
@@ -127,6 +130,10 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
   {
     TimingLogger::ScopedTiming split("InitDexFiles", timings);
     offset = InitDexFiles(offset);
+  }
+  {
+    TimingLogger::ScopedTiming split("InitLookupTables", timings);
+    offset = InitLookupTables(offset);
   }
   {
     TimingLogger::ScopedTiming split("InitOatClasses", timings);
@@ -1053,7 +1060,25 @@ size_t OatWriter::InitDexFiles(size_t offset) {
     oat_dex_files_[i]->dex_file_offset_ = offset;
 
     const DexFile* dex_file = (*dex_files_)[i];
+
+    // Initialize type lookup table
+    oat_dex_files_[i]->lookup_table_.reset(TypeLookupTable::Create(*dex_file));
+
     offset += dex_file->GetHeader().file_size_;
+  }
+  return offset;
+}
+
+size_t OatWriter::InitLookupTables(size_t offset) {
+  for (OatDexFile* oat_dex_file : oat_dex_files_) {
+    if (oat_dex_file->lookup_table_.get() != nullptr) {
+      uint32_t aligned_offset = RoundUp(offset, 4);
+      oat_dex_file->lookup_table_offset_ = aligned_offset;
+      size_oat_lookup_table_alignment_ += aligned_offset - offset;
+      offset = aligned_offset + oat_dex_file->lookup_table_->RawDataLength();
+    } else {
+      oat_dex_file->lookup_table_offset_ = 0;
+    }
   }
   return offset;
 }
@@ -1266,6 +1291,9 @@ bool OatWriter::WriteCode(OutputStream* out) {
     DO_STAT(size_oat_class_status_);
     DO_STAT(size_oat_class_method_bitmaps_);
     DO_STAT(size_oat_class_method_offsets_);
+    DO_STAT(size_oat_lookup_table_alignment_);
+    DO_STAT(size_oat_lookup_table_offset_);
+    DO_STAT(size_oat_lookup_table_);
     #undef DO_STAT
 
     VLOG(compiler) << "size_total=" << PrettySize(size_total) << " (" << size_total << "B)"; \
@@ -1318,6 +1346,24 @@ bool OatWriter::WriteTables(OutputStream* out, const size_t file_offset) {
       return false;
     }
     size_dex_file_ += dex_file->GetHeader().file_size_;
+  }
+  for (size_t i = 0; i != oat_dex_files_.size(); ++i) {
+    uint32_t expected_offset = file_offset + oat_dex_files_[i]->lookup_table_offset_;
+    off_t actual_offset = out->Seek(expected_offset, kSeekSet);
+    if (static_cast<uint32_t>(actual_offset) != expected_offset) {
+      const DexFile* dex_file = (*dex_files_)[i];
+      PLOG(ERROR) << "Failed to seek to lookup table section. Actual: " << actual_offset
+                  << " Expected: " << expected_offset << " File: " << dex_file->GetLocation();
+      return false;
+    }
+    const TypeLookupTable* table = oat_dex_files_[i]->lookup_table_.get();
+    if (!out->WriteFully(table->RawData(), table->RawDataLength())) {
+      const DexFile* dex_file = (*dex_files_)[i];
+      PLOG(ERROR) << "Failed to write lookup table for " << dex_file->GetLocation()
+                  << " to " << out->GetLocation();
+      return false;
+    }
+    size_oat_lookup_table_ += table->RawDataLength();
   }
   for (size_t i = 0; i != oat_classes_.size(); ++i) {
     if (!oat_classes_[i]->Write(this, out, file_offset)) {
@@ -1435,6 +1481,7 @@ OatWriter::OatDexFile::OatDexFile(size_t offset, const DexFile& dex_file) {
   dex_file_location_data_ = reinterpret_cast<const uint8_t*>(location.data());
   dex_file_location_checksum_ = dex_file.GetLocationChecksum();
   dex_file_offset_ = 0;
+  lookup_table_offset_ = 0;
   methods_offsets_.resize(dex_file.NumClassDefs());
 }
 
@@ -1443,6 +1490,7 @@ size_t OatWriter::OatDexFile::SizeOf() const {
           + dex_file_location_size_
           + sizeof(dex_file_location_checksum_)
           + sizeof(dex_file_offset_)
+          + sizeof(lookup_table_offset_)
           + (sizeof(methods_offsets_[0]) * methods_offsets_.size());
 }
 
@@ -1479,6 +1527,11 @@ bool OatWriter::OatDexFile::Write(OatWriter* oat_writer,
     return false;
   }
   oat_writer->size_oat_dex_file_offset_ += sizeof(dex_file_offset_);
+  if (!out->WriteFully(&lookup_table_offset_, sizeof(lookup_table_offset_))) {
+    PLOG(ERROR) << "Failed to write lookup table offset to " << out->GetLocation();
+    return false;
+  }
+  oat_writer->size_oat_lookup_table_offset_ += sizeof(lookup_table_offset_);
   if (!out->WriteFully(&methods_offsets_[0],
                       sizeof(methods_offsets_[0]) * methods_offsets_.size())) {
     PLOG(ERROR) << "Failed to write methods offsets to " << out->GetLocation();
