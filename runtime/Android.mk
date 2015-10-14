@@ -110,6 +110,7 @@ LIBART_COMMON_SRC_FILES := \
   jni_internal.cc \
   jobject_comparator.cc \
   linear_alloc.cc \
+  lookup_table.cc \
   mem_map.cc \
   memory_region.cc \
   mirror/abstract_method.cc \
