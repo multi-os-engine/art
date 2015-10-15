@@ -361,7 +361,7 @@ Heap::Heap(size_t initial_size,
     const size_t size = non_moving_space_mem_map->Size();
     non_moving_space_ = space::DlMallocSpace::CreateFromMemMap(
         non_moving_space_mem_map.release(), "zygote / non moving space", kDefaultStartingSize,
-        initial_size, size, size, false);
+        initial_size, size, size, true, false);
     non_moving_space_->SetFootprintLimit(non_moving_space_->Capacity());
     CHECK(non_moving_space_ != nullptr) << "Failed creating non moving space "
         << requested_alloc_space_begin;
@@ -581,7 +581,7 @@ space::MallocSpace* Heap::CreateMallocSpaceFromMemMap(MemMap* mem_map,
   } else {
     malloc_space = space::DlMallocSpace::CreateFromMemMap(mem_map, name, kDefaultStartingSize,
                                                           initial_size, growth_limit, capacity,
-                                                          can_move_objects);
+                                                          true, can_move_objects);
   }
   if (collector::SemiSpace::kUseRememberedSet) {
     accounting::RememberedSet* rem_set  =
