@@ -140,6 +140,10 @@ namespace art {
 
 // If a signal isn't handled properly, enable a handler that attempts to dump the Java stack.
 static constexpr bool kEnableJavaStackTraceHandler = false;
+static constexpr double kLowMemoryMinLoadFactor = 0.5;
+static constexpr double kLowMemoryMaxLoadFactor = 0.8;
+static constexpr double kNormalMinLoadFactor = 0.4;
+static constexpr double kNormalMaxLoadFactor = 0.7;
 Runtime* Runtime::instance_ = nullptr;
 
 struct TraceConfig {
@@ -200,7 +204,9 @@ Runtime::Runtime()
       no_sig_chain_(false),
       is_native_bridge_loaded_(false),
       zygote_max_failed_boots_(0),
-      experimental_flags_(ExperimentalFlags::kNone) {
+      experimental_flags_(ExperimentalFlags::kNone),
+      oat_file_manager_(nullptr),
+      low_memory_mode_(false) {
   CheckAsmSupportOffsetsAndSizes();
   std::fill(callee_save_methods_, callee_save_methods_ + arraysize(callee_save_methods_), 0u);
 }
@@ -886,6 +892,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   zygote_max_failed_boots_ = runtime_options.GetOrDefault(Opt::ZygoteMaxFailedBoots);
   experimental_flags_ = runtime_options.GetOrDefault(Opt::Experimental);
+  low_memory_mode_ = runtime_options.Exists(Opt::LowMemoryMode);
 
   XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
   ATRACE_BEGIN("CreateHeap");
@@ -1802,6 +1809,14 @@ LinearAlloc* Runtime::CreateLinearAlloc() {
   return (IsAotCompiler() && Is64BitInstructionSet(kRuntimeISA))
       ? new LinearAlloc(low_4gb_arena_pool_.get())
       : new LinearAlloc(arena_pool_.get());
+}
+
+double Runtime::GetHashTableMinLoadFactor() const {
+  return low_memory_mode_ ? kLowMemoryMinLoadFactor : kNormalMinLoadFactor;
+}
+
+double Runtime::GetHashTableMaxLoadFactor() const {
+  return low_memory_mode_ ? kLowMemoryMaxLoadFactor : kNormalMaxLoadFactor;
 }
 
 }  // namespace art
