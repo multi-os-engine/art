@@ -36,16 +36,21 @@ static constexpr bool kPrefetchDuringDlMallocFreeList = true;
 
 DlMallocSpace::DlMallocSpace(MemMap* mem_map, size_t initial_size, const std::string& name,
                              void* mspace, uint8_t* begin, uint8_t* end, uint8_t* limit,
-                             size_t growth_limit, bool can_move_objects, size_t starting_size)
-    : MallocSpace(name, mem_map, begin, end, limit, growth_limit, true, can_move_objects,
+                             size_t growth_limit, bool create_bitmaps, bool can_move_objects,
+                             size_t starting_size)
+    : MallocSpace(name, mem_map, begin, end, limit, growth_limit, create_bitmaps, can_move_objects,
                   starting_size, initial_size),
       mspace_(mspace) {
   CHECK(mspace != nullptr);
 }
 
-DlMallocSpace* DlMallocSpace::CreateFromMemMap(MemMap* mem_map, const std::string& name,
-                                               size_t starting_size, size_t initial_size,
-                                               size_t growth_limit, size_t capacity,
+DlMallocSpace* DlMallocSpace::CreateFromMemMap(MemMap* mem_map,
+                                               const std::string& name,
+                                               size_t starting_size,
+                                               size_t initial_size,
+                                               size_t growth_limit,
+                                               size_t capacity,
+                                               bool create_bitmaps,
                                                bool can_move_objects) {
   DCHECK(mem_map != nullptr);
   void* mspace = CreateMspace(mem_map->Begin(), starting_size, initial_size);
@@ -65,10 +70,10 @@ DlMallocSpace* DlMallocSpace::CreateFromMemMap(MemMap* mem_map, const std::strin
   if (Runtime::Current()->IsRunningOnMemoryTool()) {
     return new MemoryToolMallocSpace<DlMallocSpace, kDefaultMemoryToolRedZoneBytes, true, false>(
         mem_map, initial_size, name, mspace, begin, end, begin + capacity, growth_limit,
-        can_move_objects, starting_size);
+        create_bitmaps, can_move_objects, starting_size);
   } else {
     return new DlMallocSpace(mem_map, initial_size, name, mspace, begin, end, begin + capacity,
-                             growth_limit, can_move_objects, starting_size);
+                             growth_limit, create_bitmaps, can_move_objects, starting_size);
   }
 }
 
@@ -98,7 +103,7 @@ DlMallocSpace* DlMallocSpace::Create(const std::string& name, size_t initial_siz
     return nullptr;
   }
   DlMallocSpace* space = CreateFromMemMap(mem_map, name, starting_size, initial_size,
-                                          growth_limit, capacity, can_move_objects);
+                                          growth_limit, capacity, true, can_move_objects);
   // We start out with only the initial size possibly containing objects.
   if (VLOG_IS_ON(heap) || VLOG_IS_ON(startup)) {
     LOG(INFO) << "DlMallocSpace::Create exiting (" << PrettyDuration(NanoTime() - start_time)
@@ -154,11 +159,11 @@ MallocSpace* DlMallocSpace::CreateInstance(MemMap* mem_map, const std::string& n
                                            bool can_move_objects) {
   if (Runtime::Current()->IsRunningOnMemoryTool()) {
     return new MemoryToolMallocSpace<DlMallocSpace, kDefaultMemoryToolRedZoneBytes, true, false>(
-        mem_map, initial_size_, name, allocator, begin, end, limit, growth_limit,
+        mem_map, initial_size_, name, allocator, begin, end, limit, growth_limit, true,
         can_move_objects, starting_size_);
   } else {
     return new DlMallocSpace(mem_map, initial_size_, name, allocator, begin, end, limit,
-                             growth_limit, can_move_objects, starting_size_);
+                             growth_limit, true, can_move_objects, starting_size_);
   }
 }
 
