@@ -1,0 +1,7 @@
+Code-Review+2: Hans Boehm <hboehm@google.com>
+Verified+1: Mathieu Chartier <mathieuc@google.com>
+Submitted-by: Mathieu Chartier <mathieuc@google.com>
+Submitted-at: Thu, 15 Oct 2015 23:47:04 +0000
+Reviewed-on: https://android-review.googlesource.com/175040
+Project: platform/art
+Branch: refs/heads/master
