@@ -29,6 +29,7 @@
 
 namespace art {
 
+class CodeGenerator;
 class Instruction;
 class SwitchTable;
 
@@ -275,12 +276,6 @@ class HGraphBuilder : public ValueObject {
   void PotentiallySimplifyFakeString(uint16_t original_dex_register,
                                      uint32_t dex_pc,
                                      HInvoke* invoke);
-
-  HInvokeStaticOrDirect::DispatchInfo ComputeDispatchInfo(bool is_string_init,
-                                                          int32_t string_init_offset,
-                                                          MethodReference target_method,
-                                                          uintptr_t direct_method,
-                                                          uintptr_t direct_code);
 
   bool SetupInvokeArguments(HInvoke* invoke,
                             uint32_t number_of_vreg_arguments,
