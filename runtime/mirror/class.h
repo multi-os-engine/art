@@ -1158,6 +1158,10 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:
+  template <typename ... Args>
+  ArtMethod* FindInterfaceMethodInternal(Args&& ... args)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   void SetVerifyError(Object* klass) SHARED_REQUIRES(Locks::mutator_lock_);
 
   template <bool throw_on_failure, bool use_referrers_cache>
