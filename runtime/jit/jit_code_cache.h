@@ -22,6 +22,7 @@
 #include "atomic.h"
 #include "base/macros.h"
 #include "base/mutex.h"
+#include "gc/space/dlmalloc_space.h"
 #include "gc_root.h"
 #include "jni.h"
 #include "oat_file.h"
@@ -48,33 +49,27 @@ class JitCodeCache {
   // in the out arg error_msg.
   static JitCodeCache* Create(size_t capacity, std::string* error_msg);
 
-  const uint8_t* CodeCachePtr() const {
-    return code_cache_ptr_;
-  }
-
-  size_t CodeCacheSize() const {
-    return code_cache_ptr_ - code_cache_begin_;
-  }
-
-  size_t CodeCacheRemain() const {
-    return code_cache_end_ - code_cache_ptr_;
-  }
-
-  const uint8_t* DataCachePtr() const {
-    return data_cache_ptr_;
-  }
-
-  size_t DataCacheSize() const {
-    return data_cache_ptr_ - data_cache_begin_;
-  }
-
-  size_t DataCacheRemain() const {
-    return data_cache_end_ - data_cache_ptr_;
-  }
-
   size_t NumMethods() const {
     return num_methods_;
   }
+
+  size_t CodeCacheSize() const {
+    return code_space_->GetBytesAllocated();
+  }
+
+  size_t DataCacheSize() const {
+    return data_space_->GetBytesAllocated();
+  }
+
+  uint8_t* CommitCode(Thread* self,
+                      const uint8_t* mapping_table,
+                      const uint8_t* vmap_table,
+                      const uint8_t* gc_map,
+                      size_t frame_size_in_bytes,
+                      size_t core_spill_mask,
+                      size_t fp_spill_mask,
+                      const uint8_t* code,
+                      size_t code_size);
 
   // Return true if the code cache contains the code pointer which si the entrypoint of the method.
   bool ContainsMethod(ArtMethod* method) const
@@ -82,9 +77,6 @@ class JitCodeCache {
 
   // Return true if the code cache contains a code ptr.
   bool ContainsCodePtr(const void* ptr) const;
-
-  // Reserve a region of code of size at least "size". Returns null if there is no more room.
-  uint8_t* ReserveCode(Thread* self, size_t size) REQUIRES(!lock_);
 
   // Reserve a region of data of size at least "size". Returns null if there is no more room.
   uint8_t* ReserveData(Thread* self, size_t size) REQUIRES(!lock_);
@@ -116,14 +108,8 @@ class JitCodeCache {
   // headers in code cache which point to things in the data cache. If the maps are more than 4GB
   // apart, having multiple maps wouldn't work.
   std::unique_ptr<MemMap> mem_map_;
-  // Code cache section.
-  uint8_t* code_cache_ptr_;
-  const uint8_t* code_cache_begin_;
-  const uint8_t* code_cache_end_;
-  // Data cache section.
-  uint8_t* data_cache_ptr_;
-  const uint8_t* data_cache_begin_;
-  const uint8_t* data_cache_end_;
+  std::unique_ptr<gc::space::DlMallocSpace> code_space_;
+  std::unique_ptr<gc::space::DlMallocSpace> data_space_;
   size_t num_methods_;
   // This map holds code for methods if they were deoptimized by the instrumentation stubs. This is
   // required since we have to implement ClassLinker::GetQuickOatCodeFor for walking stacks.
