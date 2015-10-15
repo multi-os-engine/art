@@ -1158,6 +1158,12 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:
+  template <typename Sig>
+  ArtMethod* FindInterfaceMethodInternal(const StringPiece& name,
+                                         Sig signature,
+                                         size_t pointer_size)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   void SetVerifyErrorClass(Class* klass) SHARED_REQUIRES(Locks::mutator_lock_);
 
   template <bool throw_on_failure, bool use_referrers_cache>
