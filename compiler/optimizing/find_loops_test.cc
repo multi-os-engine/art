@@ -29,7 +29,7 @@ namespace art {
 
 static HGraph* TestCode(const uint16_t* data, ArenaAllocator* allocator) {
   HGraph* graph = CreateGraph(allocator);
-  HGraphBuilder builder(graph);
+  HGraphBuilder builder(graph, nullptr /* Code generator not needed for this test. */);
   const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
   builder.BuildGraph(*item);
   graph->BuildDominatorTree();

@@ -81,7 +81,9 @@ inline HGraph* CreateCFG(ArenaAllocator* allocator,
                          const uint16_t* data,
                          Primitive::Type return_type = Primitive::kPrimInt) {
   HGraph* graph = CreateGraph(allocator);
-  HGraphBuilder builder(graph, return_type);
+  // TODO: Create code generator when you add a test that needs it.
+  // The code generator is currently needed only for HInvokeStaticOrDirect capability test.
+  HGraphBuilder builder(graph, nullptr /* Code generator not needed for this test. */, return_type);
   const DexFile::CodeItem* item =
     reinterpret_cast<const DexFile::CodeItem*>(data);
   bool graph_built = builder.BuildGraph(*item);

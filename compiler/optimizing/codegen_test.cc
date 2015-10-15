@@ -246,7 +246,7 @@ static void TestCode(const uint16_t* data, bool has_result = false, int32_t expe
   ArenaPool pool;
   ArenaAllocator arena(&pool);
   HGraph* graph = CreateGraph(&arena);
-  HGraphBuilder builder(graph);
+  HGraphBuilder builder(graph, nullptr /* Code generator not needed for this test. */);
   const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
   bool graph_built = builder.BuildGraph(*item);
   ASSERT_TRUE(graph_built);
@@ -259,7 +259,9 @@ static void TestCodeLong(const uint16_t* data, bool has_result, int64_t expected
   ArenaPool pool;
   ArenaAllocator arena(&pool);
   HGraph* graph = CreateGraph(&arena);
-  HGraphBuilder builder(graph, Primitive::kPrimLong);
+  HGraphBuilder builder(graph,
+                        nullptr /* Code generator not needed for this test. */,
+                        Primitive::kPrimLong);
   const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
   bool graph_built = builder.BuildGraph(*item);
   ASSERT_TRUE(graph_built);
