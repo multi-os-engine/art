@@ -339,6 +339,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
 
   OptimizingCompilerStats inline_stats;
   HGraphBuilder builder(callee_graph,
+                        codegen_,
                         &dex_compilation_unit,
                         &outer_compilation_unit_,
                         resolved_method->GetDexFile(),
@@ -415,6 +416,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   size_t number_of_instructions_budget = kMaximumNumberOfHInstructions;
   if (depth_ + 1 < compiler_driver_->GetCompilerOptions().GetInlineDepthLimit()) {
     HInliner inliner(callee_graph,
+                     codegen_,
                      outer_compilation_unit_,
                      dex_compilation_unit,
                      compiler_driver_,
@@ -484,7 +486,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
         return false;
       }
 
-      if (!same_dex_file && current->NeedsDexCache()) {
+      if (!same_dex_file && current->NeedsDexCacheOfDeclaringClass()) {
         VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                        << " could not be inlined because " << current->DebugName()
                        << " it is in a different dex file and requires access to the dex cache";

@@ -29,12 +29,14 @@
 
 namespace art {
 
+class CodeGenerator;
 class Instruction;
 class SwitchTable;
 
 class HGraphBuilder : public ValueObject {
  public:
   HGraphBuilder(HGraph* graph,
+                CodeGenerator* codegen,
                 DexCompilationUnit* dex_compilation_unit,
                 const DexCompilationUnit* const outer_compilation_unit,
                 const DexFile* dex_file,
@@ -49,6 +51,7 @@ class HGraphBuilder : public ValueObject {
         exit_block_(nullptr),
         current_block_(nullptr),
         graph_(graph),
+        codegen_(codegen),
         dex_file_(dex_file),
         dex_compilation_unit_(dex_compilation_unit),
         compiler_driver_(driver),
@@ -62,7 +65,9 @@ class HGraphBuilder : public ValueObject {
         dex_cache_(dex_cache) {}
 
   // Only for unit testing.
-  HGraphBuilder(HGraph* graph, Primitive::Type return_type = Primitive::kPrimInt)
+  HGraphBuilder(HGraph* graph,
+                CodeGenerator* codegen,
+                Primitive::Type return_type = Primitive::kPrimInt)
       : arena_(graph->GetArena()),
         branch_targets_(graph->GetArena()->Adapter(kArenaAllocGraphBuilder)),
         locals_(graph->GetArena()->Adapter(kArenaAllocGraphBuilder)),
@@ -70,6 +75,7 @@ class HGraphBuilder : public ValueObject {
         exit_block_(nullptr),
         current_block_(nullptr),
         graph_(graph),
+        codegen_(codegen),
         dex_file_(nullptr),
         dex_compilation_unit_(nullptr),
         compiler_driver_(nullptr),
@@ -324,6 +330,7 @@ class HGraphBuilder : public ValueObject {
   HBasicBlock* exit_block_;
   HBasicBlock* current_block_;
   HGraph* const graph_;
+  CodeGenerator* const codegen_;
 
   // The dex file where the method being compiled is.
   const DexFile* const dex_file_;

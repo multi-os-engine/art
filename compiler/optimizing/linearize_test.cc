@@ -41,7 +41,7 @@ static void TestCode(const uint16_t* data, const uint32_t (&expected_order)[numb
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = CreateGraph(&allocator);
-  HGraphBuilder builder(graph);
+  HGraphBuilder builder(graph, nullptr /* Code generator not needed for this test. */);
   const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
   bool graph_built = builder.BuildGraph(*item);
   ASSERT_TRUE(graph_built);

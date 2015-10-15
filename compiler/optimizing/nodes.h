@@ -1962,7 +1962,9 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
     return NeedsEnvironment() || IsLoadClass() || IsLoadString();
   }
 
-  virtual bool NeedsDexCache() const { return false; }
+  // Returns whether the code generation of the instruction will require to have access
+  // to the dex cache of the current method's declaring class via the current method.
+  virtual bool NeedsDexCacheOfDeclaringClass() const { return false; }
 
   // Does this instruction have any use in an environment before
   // control flow hits 'other'?
@@ -3401,11 +3403,13 @@ class HInvokeStaticOrDirect : public HInvoke {
   MethodLoadKind GetMethodLoadKind() const { return dispatch_info_.method_load_kind; }
   CodePtrLocation GetCodePtrLocation() const { return dispatch_info_.code_ptr_location; }
   bool IsRecursive() const { return GetMethodLoadKind() == MethodLoadKind::kRecursive; }
-  bool NeedsDexCache() const OVERRIDE;
+  bool NeedsDexCacheOfDeclaringClass() const OVERRIDE;
   bool IsStringInit() const { return GetMethodLoadKind() == MethodLoadKind::kStringInit; }
   uint32_t GetCurrentMethodInputIndex() const { return GetNumberOfArguments(); }
   bool HasMethodAddress() const { return GetMethodLoadKind() == MethodLoadKind::kDirectAddress; }
-  bool HasPcRelDexCache() const { return GetMethodLoadKind() == MethodLoadKind::kDexCachePcRelative; }
+  bool HasPcRelDexCache() const {
+    return GetMethodLoadKind() == MethodLoadKind::kDexCachePcRelative;
+  }
   bool HasDirectCodePtr() const { return GetCodePtrLocation() == CodePtrLocation::kCallDirect; }
   MethodReference GetTargetMethod() const { return target_method_; }
 
@@ -4711,7 +4715,7 @@ class HLoadClass : public HExpression<1> {
 
   const DexFile& GetDexFile() { return dex_file_; }
 
-  bool NeedsDexCache() const OVERRIDE { return !is_referrers_class_; }
+  bool NeedsDexCacheOfDeclaringClass() const OVERRIDE { return !is_referrers_class_; }
 
   static SideEffects SideEffectsForArchRuntimeCalls() {
     return SideEffects::CanTriggerGC();
@@ -4753,7 +4757,7 @@ class HLoadString : public HExpression<1> {
 
   // TODO: Can we deopt or debug when we resolve a string?
   bool NeedsEnvironment() const OVERRIDE { return false; }
-  bool NeedsDexCache() const OVERRIDE { return true; }
+  bool NeedsDexCacheOfDeclaringClass() const OVERRIDE { return true; }
   bool CanBeNull() const OVERRIDE { return false; }
 
   static SideEffects SideEffectsForArchRuntimeCalls() {

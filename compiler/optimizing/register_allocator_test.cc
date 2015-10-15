@@ -39,7 +39,7 @@ static bool Check(const uint16_t* data) {
   ArenaPool pool;
   ArenaAllocator allocator(&pool);
   HGraph* graph = CreateGraph(&allocator);
-  HGraphBuilder builder(graph);
+  HGraphBuilder builder(graph, nullptr /* Code generator not needed for this test. */);
   const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
   builder.BuildGraph(*item);
   graph->TryBuildingSsa();
@@ -256,7 +256,7 @@ TEST(RegisterAllocatorTest, Loop2) {
 
 static HGraph* BuildSSAGraph(const uint16_t* data, ArenaAllocator* allocator) {
   HGraph* graph = CreateGraph(allocator);
-  HGraphBuilder builder(graph);
+  HGraphBuilder builder(graph, nullptr /* Code generator not needed for this test. */);
   const DexFile::CodeItem* item = reinterpret_cast<const DexFile::CodeItem*>(data);
   builder.BuildGraph(*item);
   graph->TryBuildingSsa();

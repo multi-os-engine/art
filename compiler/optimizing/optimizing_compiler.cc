@@ -376,6 +376,7 @@ static void RunOptimizations(HOptimization* optimizations[],
 }
 
 static void MaybeRunInliner(HGraph* graph,
+                            CodeGenerator* codegen,
                             CompilerDriver* driver,
                             OptimizingCompilerStats* stats,
                             const DexCompilationUnit& dex_compilation_unit,
@@ -390,7 +391,7 @@ static void MaybeRunInliner(HGraph* graph,
 
   ArenaAllocator* arena = graph->GetArena();
   HInliner* inliner = new (arena) HInliner(
-    graph, dex_compilation_unit, dex_compilation_unit, driver, handles, stats);
+    graph, codegen, dex_compilation_unit, dex_compilation_unit, driver, handles, stats);
   ReferenceTypePropagation* type_propagation =
     new (arena) ReferenceTypePropagation(graph, handles,
         "reference_type_propagation_after_inlining");
@@ -443,6 +444,7 @@ static void RunArchOptimizations(InstructionSet instruction_set,
 }
 
 static void RunOptimizations(HGraph* graph,
+                             CodeGenerator* codegen,
                              CompilerDriver* driver,
                              OptimizingCompilerStats* stats,
                              const DexCompilationUnit& dex_compilation_unit,
@@ -499,7 +501,7 @@ static void RunOptimizations(HGraph* graph,
 
     RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
   } else {
-    MaybeRunInliner(graph, driver, stats, dex_compilation_unit, pass_observer, handles);
+    MaybeRunInliner(graph, codegen, driver, stats, dex_compilation_unit, pass_observer, handles);
 
     HOptimization* optimizations2[] = {
       // BooleanSimplifier depends on the InstructionSimplifier removing
@@ -573,8 +575,13 @@ CompiledMethod* OptimizingCompiler::CompileOptimized(HGraph* graph,
   ScopedObjectAccess soa(Thread::Current());
   StackHandleScopeCollection handles(soa.Self());
   soa.Self()->TransitionFromRunnableToSuspended(kNative);
-  RunOptimizations(graph, compiler_driver, compilation_stats_.get(),
-                   dex_compilation_unit, pass_observer, &handles);
+  RunOptimizations(graph,
+                   codegen,
+                   compiler_driver,
+                   compilation_stats_.get(),
+                   dex_compilation_unit,
+                   pass_observer,
+                   &handles);
 
   AllocateRegisters(graph, codegen, pass_observer);
 
@@ -747,6 +754,7 @@ CompiledMethod* OptimizingCompiler::TryCompile(const DexFile::CodeItem* code_ite
     }
   }
   HGraphBuilder builder(graph,
+                        codegen.get(),
                         &dex_compilation_unit,
                         &dex_compilation_unit,
                         &dex_file,

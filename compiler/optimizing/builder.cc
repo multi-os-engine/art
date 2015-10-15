@@ -19,6 +19,7 @@
 #include "art_field-inl.h"
 #include "base/logging.h"
 #include "class_linker.h"
+#include "code_generator.h"
 #include "dex/verified_method.h"
 #include "dex_file-inl.h"
 #include "dex_instruction-inl.h"
@@ -770,6 +771,7 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
                                                                             target_method,
                                                                             direct_method,
                                                                             direct_code);
+
     HInvoke* invoke = new (arena_) HInvokeStaticOrDirect(
         arena_,
         number_of_arguments - 1,
@@ -1016,8 +1018,10 @@ HInvokeStaticOrDirect::DispatchInfo HGraphBuilder::ComputeDispatchInfo(
     code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallArtMethod;
   }
 
-  return HInvokeStaticOrDirect::DispatchInfo {
-    method_load_kind, code_ptr_location, method_load_data, direct_code_ptr };
+  HInvokeStaticOrDirect::DispatchInfo desired_dispatch_info = {
+      method_load_kind, code_ptr_location, method_load_data, direct_code_ptr
+  };
+  return codegen_->GetSupportedInvokeStaticOrDirectDispatch(desired_dispatch_info, target_method);
 }
 
 bool HGraphBuilder::SetupInvokeArguments(HInvoke* invoke,
