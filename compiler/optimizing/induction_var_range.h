@@ -68,6 +68,25 @@ class InductionVarRange {
    */
   Value GetMaxInduction(HInstruction* context, HInstruction* instruction);
 
+  /**
+   * Returns true if range analysis is able to generate code for the lower and upper bound
+   * expressions on the instruction in the given context. Output parameter top_test
+   * denotes whether a top test is needed to protect the trip-count expression.
+   */
+  bool CanGenerateCode(HInstruction* context, HInstruction* instruction, bool* top_test);
+
+  /**
+   * This method can be used to generate the actual code in the HIR represented by the given
+   * graph. Code for the lower and upper bound expression are returned in lower and upper,
+   * respectively. If lower is not set, only one test suffices.
+   */
+  bool GenerateCode(HInstruction* context,
+                    HInstruction* instruction,
+                    HGraph* graph,
+                    HInstruction** lower,
+                    HInstruction** upper,
+                    bool* top_test);
+
  private:
   //
   // Private helper methods.
@@ -101,6 +120,19 @@ class InductionVarRange {
   static Value MulValue(Value v1, Value v2);
   static Value DivValue(Value v1, Value v2);
   static Value MergeVal(Value v1, Value v2, bool is_min);
+
+  /**
+   * Generates code for lower/upper expression in the HIR. Returns true on success.
+   * With graph == nullptr, the method can be used to determine if code generation
+   * would be successful without generating actual code yet.
+   */
+  static bool GenerateCode(HInductionVarAnalysis::InductionInfo* info,
+                           HInductionVarAnalysis::InductionInfo* trip,
+                           HBasicBlock* preheader,
+                           HGraph* graph,
+                           HInstruction** result,
+                           bool in_body,
+                           bool is_min);
 
   /** Results of prior induction variable analysis. */
   HInductionVarAnalysis *induction_analysis_;
