@@ -22,6 +22,9 @@ namespace art {
 
 ClassTable::ClassTable() {
   classes_.push_back(ClassSet());
+  Runtime* const runtime = Runtime::Current();
+  classes_.back().SetLoadFactor(runtime->GetHashTableMinLoadFactor(),
+                                runtime->GetHashTableMaxLoadFactor());
 }
 
 void ClassTable::FreezeSnapshot() {
