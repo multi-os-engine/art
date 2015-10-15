@@ -30,8 +30,8 @@ JitCodeCache* JitCodeCache::Create(size_t capacity, std::string* error_msg) {
   CHECK_LT(capacity, kMaxCapacity);
   std::string error_str;
   // Map name specific for android_os_Debug.cpp accounting.
-  MemMap* map = MemMap::MapAnonymous("jit-code-cache", nullptr, capacity,
-                                     PROT_READ | PROT_WRITE | PROT_EXEC, false, false, &error_str);
+  MemMap* map = MemMap::MapAnonymous(
+      "jit-code-cache", nullptr, capacity, PROT_READ | PROT_WRITE, false, false, &error_str);
   if (map == nullptr) {
     std::ostringstream oss;
     oss << "Failed to create read write execute cache: " << error_str << " size=" << capacity;
@@ -44,18 +44,23 @@ JitCodeCache* JitCodeCache::Create(size_t capacity, std::string* error_msg) {
 JitCodeCache::JitCodeCache(MemMap* mem_map)
     : lock_("Jit code cache", kJitCodeCacheLock), num_methods_(0) {
   VLOG(jit) << "Created jit code cache size=" << PrettySize(mem_map->Size());
-  mem_map_.reset(mem_map);
-  uint8_t* divider = mem_map->Begin() + RoundUp(mem_map->Size() / 4, kPageSize);
   // Data cache is 1 / 4 of the map. TODO: Make this variable?
-  // Put data at the start.
-  data_cache_ptr_ = mem_map->Begin();
-  data_cache_end_ = divider;
-  data_cache_begin_ = data_cache_ptr_;
-  mprotect(data_cache_ptr_, data_cache_end_ - data_cache_begin_, PROT_READ | PROT_WRITE);
-  // Code cache after.
-  code_cache_begin_ = divider;
-  code_cache_ptr_ = divider;
-  code_cache_end_ = mem_map->End();
+  size_t data_size = RoundUp(mem_map->Size() / 4, kPageSize);
+  size_t code_size = mem_map->Size() - data_size;
+  uint8_t* divider = mem_map->Begin() + data_size;
+ 
+  MemMap* dummy =  MemMap::MapDummy("jit code cache", divider, code_size);
+  code_space_.reset(gc::space::DlMallocSpace::CreateFromMemMap(
+      dummy, "jit-code-cache", code_size, code_size, code_size, code_size, true, false));
+
+  mprotect(dummy->Begin(), code_size, PROT_READ | PROT_EXEC);
+
+  dummy =  MemMap::MapDummy("jit data cache", mem_map->Begin(), mem_map->Size() - code_size);
+  // No need for bitmaps for the data cache, the compiled code knows what to free.
+  data_space_.reset(gc::space::DlMallocSpace::CreateFromMemMap(
+      dummy, "jit-data-cache", data_size, data_size, data_size, data_size, false, false));
+
+  mprotect(dummy->Begin(), data_size, PROT_READ | PROT_WRITE);
 }
 
 bool JitCodeCache::ContainsMethod(ArtMethod* method) const {
@@ -63,7 +68,7 @@ bool JitCodeCache::ContainsMethod(ArtMethod* method) const {
 }
 
 bool JitCodeCache::ContainsCodePtr(const void* ptr) const {
-  return ptr >= code_cache_begin_ && ptr < code_cache_end_;
+  return code_space_->Contains(reinterpret_cast<mirror::Object*>(const_cast<void*>(ptr)));
 }
 
 void JitCodeCache::FlushInstructionCache() {
@@ -72,35 +77,63 @@ void JitCodeCache::FlushInstructionCache() {
   // __clear_cache(reinterpret_cast<char*>(code_cache_begin_), static_cast<int>(CodeCacheSize()));
 }
 
-uint8_t* JitCodeCache::ReserveCode(Thread* self, size_t size) {
-  MutexLock mu(self, lock_);
-  if (size > CodeCacheRemain()) {
+uint8_t* JitCodeCache::CommitCode(Thread* self,
+                                  const uint8_t* mapping_table,
+                                  const uint8_t* vmap_table,
+                                  const uint8_t* gc_map,
+                                  size_t frame_size_in_bytes,
+                                  size_t core_spill_mask,
+                                  size_t fp_spill_mask,
+                                  const uint8_t* code,
+                                  size_t code_size) {
+  size_t bytes_allocated, usable_size, bytes_tl_bulk_allocated;
+  size_t total_size = RoundUp(sizeof(OatQuickMethodHeader) + code_size + 32, sizeof(void*));
+
+  // TODO(ngeoffray): Only set the write bit to the memory allocated.
+  mprotect(code_space_->Begin(), code_space_->Capacity(), PROT_READ | PROT_WRITE | PROT_EXEC);
+  uint8_t* result = reinterpret_cast<uint8_t*>(code_space_->AllocNonvirtual(
+      self, total_size, &bytes_allocated, &usable_size, &bytes_tl_bulk_allocated));
+
+  if (result == nullptr) {
     return nullptr;
   }
+
+  uint8_t* code_ptr = reinterpret_cast<uint8_t*>(
+      RoundUp(reinterpret_cast<size_t>(result + sizeof(OatQuickMethodHeader)), GetInstructionSetAlignment(kRuntimeISA)));
+
+  std::copy(code, code + code_size, code_ptr);
+  OatQuickMethodHeader* method_header = reinterpret_cast<OatQuickMethodHeader*>(code_ptr) - 1;
+  new (method_header) OatQuickMethodHeader(
+      (mapping_table == nullptr) ? 0 : code_ptr - mapping_table,
+      (vmap_table == nullptr) ? 0 : code_ptr - vmap_table,
+      (gc_map == nullptr) ? 0 : code_ptr - gc_map,
+      frame_size_in_bytes,
+      core_spill_mask,
+      fp_spill_mask,
+      code_size);
+  mprotect(code_space_->Begin(), code_space_->Capacity(), PROT_READ | PROT_EXEC);
+
+  __builtin___clear_cache(reinterpret_cast<char*>(code_ptr),
+                          reinterpret_cast<char*>(code_ptr + code_size));
   ++num_methods_;  // TODO: This is hacky but works since each method has exactly one code region.
-  code_cache_ptr_ += size;
-  return code_cache_ptr_ - size;
+  return reinterpret_cast<uint8_t*>(method_header);
 }
 
 uint8_t* JitCodeCache::ReserveData(Thread* self, size_t size) {
-  MutexLock mu(self, lock_);
   size = RoundUp(size, sizeof(void*));
-  if (size > DataCacheRemain()) {
-    return nullptr;
-  }
-  data_cache_ptr_ += size;
-  return data_cache_ptr_ - size;
+  size_t bytes_allocated, usable_size, bytes_tl_bulk_allocated;
+  uint8_t* result = reinterpret_cast<uint8_t*>(data_space_->AllocNonvirtual(
+      self, size, &bytes_allocated, &usable_size, &bytes_tl_bulk_allocated));
+  return result;
 }
 
 uint8_t* JitCodeCache::AddDataArray(Thread* self, const uint8_t* begin, const uint8_t* end) {
-  MutexLock mu(self, lock_);
-  const size_t size = RoundUp(end - begin, sizeof(void*));
-  if (size > DataCacheRemain()) {
+  uint8_t* result = ReserveData(self, end - begin);
+  if (result == nullptr) {
     return nullptr;  // Out of space in the data cache.
   }
-  std::copy(begin, end, data_cache_ptr_);
-  data_cache_ptr_ += size;
-  return data_cache_ptr_ - size;
+  std::copy(begin, end, result);
+  return result;
 }
 
 const void* JitCodeCache::GetCodeFor(ArtMethod* method) {
