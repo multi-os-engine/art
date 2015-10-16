@@ -384,4 +384,35 @@ const uint8_t* ArtMethod::GetQuickenedInfo() {
   return oat_method.GetVmapTable();
 }
 
+OatQuickMethodHeader* ArtMethod::GetOatQuickMethodHeader(uintptr_t pc) {
+  if (IsRuntimeMethod() || IsProxyMethod()) {
+    return nullptr;
+  }
+
+  Runtime* runtime = Runtime::Current();
+  const void* code = runtime->GetInstrumentation()->GetQuickCodeFor(this, sizeof(void*));
+  DCHECK(code != nullptr);
+
+  if (runtime->GetClassLinker()->IsQuickGenericJniStub(code)) {
+    // The generic JNI does not have any method header.
+    return nullptr;
+  }
+
+  code = EntryPointToCodePointer(code);
+  OatQuickMethodHeader* method_header = reinterpret_cast<OatQuickMethodHeader*>(
+      reinterpret_cast<uintptr_t>(code) - sizeof(OatQuickMethodHeader));
+
+  DCHECK(method_header->Contains(pc) ||
+      // For thumb2, during a stack walk, a return PC may point past-the-end of the code
+      // in the case that the last instruction is a call that isn't expected to
+      // return.
+      ((pc == (reinterpret_cast<uintptr_t>(code) + method_header->code_size_ + 1))
+        && kRuntimeISA == kArm) ||
+      (pc == 0) ||  // Happens for the downcall during a stack walk, and unit testing.
+      (pc == reinterpret_cast<uintptr_t>(GetQuickInstrumentationExitPc())))
+      << std::hex << pc << " " << code << " "
+      << reinterpret_cast<uintptr_t>(code) + method_header->code_size_;
+  return method_header;
+}
+
 }  // namespace art

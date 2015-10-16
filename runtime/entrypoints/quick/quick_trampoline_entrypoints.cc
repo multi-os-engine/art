@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "art_code.h"
 #include "art_method-inl.h"
 #include "callee_save_frame.h"
 #include "common_throws.h"
@@ -295,8 +294,6 @@ class QuickArgumentVisitor {
   static mirror::Object* GetProxyThisObject(ArtMethod** sp)
       SHARED_REQUIRES(Locks::mutator_lock_) {
     CHECK((*sp)->IsProxyMethod());
-    CHECK_EQ(kQuickCalleeSaveFrame_RefAndArgs_FrameSize,
-             GetCallingCodeFrom(sp).GetFrameSizeInBytes());
     CHECK_GT(kNumQuickGprArgs, 0u);
     constexpr uint32_t kThisGprIndex = 0u;  // 'this' is in the 1st GPR.
     size_t this_arg_offset = kQuickCalleeSaveFrame_RefAndArgs_Gpr1Offset +
@@ -323,10 +320,11 @@ class QuickArgumentVisitor {
     ArtMethod** caller_sp = reinterpret_cast<ArtMethod**>(
         reinterpret_cast<uintptr_t>(sp) + callee_frame_size);
     uintptr_t outer_pc = QuickArgumentVisitor::GetCallingPc(sp);
-    uintptr_t outer_pc_offset = GetCallingCodeFrom(caller_sp).NativeQuickPcOffset(outer_pc);
+    OatQuickMethodHeader* current_code = (*caller_sp)->GetOatQuickMethodHeader(outer_pc);
+    uintptr_t outer_pc_offset = current_code->NativeQuickPcOffset(outer_pc);
 
-    if (GetCallingCodeFrom(caller_sp).IsOptimized(sizeof(void*))) {
-      CodeInfo code_info = GetCallingCodeFrom(caller_sp).GetOptimizedCodeInfo();
+    if (current_code->IsOptimized()) {
+      CodeInfo code_info = current_code->GetOptimizedCodeInfo();
       StackMapEncoding encoding = code_info.ExtractEncoding();
       StackMap stack_map = code_info.GetStackMapForNativePcOffset(outer_pc_offset, encoding);
       DCHECK(stack_map.IsValid());
@@ -337,7 +335,7 @@ class QuickArgumentVisitor {
         return stack_map.GetDexPc(encoding);
       }
     } else {
-      return GetCallingCodeFrom(caller_sp).ToDexPc(outer_pc);
+      return current_code->ToDexPc(*caller_sp, outer_pc);
     }
   }
 
@@ -842,10 +840,6 @@ extern "C" uint64_t artQuickProxyInvokeHandler(
       self->StartAssertNoThreadSuspension("Adding to IRT proxy object arguments");
   // Register the top of the managed stack, making stack crawlable.
   DCHECK_EQ((*sp), proxy_method) << PrettyMethod(proxy_method);
-  DCHECK_EQ(GetCallingCodeFrom(sp).GetFrameSizeInBytes(),
-            ArtCode(Runtime::Current()->GetCalleeSaveMethod(Runtime::kRefsAndArgs))
-                .GetFrameSizeInBytes())
-      << PrettyMethod(proxy_method);
   self->VerifyStack();
   // Start new JNI local reference state.
   JNIEnvExt* env = self->GetJniEnv();
