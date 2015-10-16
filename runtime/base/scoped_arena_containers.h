@@ -61,7 +61,6 @@ template <typename K, typename V, class Hash = std::hash<K>, class KeyEqual = st
 using ScopedArenaUnorderedMap =
     std::unordered_map<K, V, Hash, KeyEqual, ScopedArenaAllocatorAdapter<std::pair<const K, V>>>;
 
-
 // Implementation details below.
 
 template <>

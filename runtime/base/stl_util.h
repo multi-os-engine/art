@@ -21,6 +21,8 @@
 #include <sstream>
 
 #include "base/logging.h"
+#include "base/memory_tool.h"
+#include "globals.h"
 
 namespace art {
 
@@ -138,6 +140,26 @@ void ReplaceElement(Container& container, const T& old_value, const T& new_value
   DCHECK(it != container.end());  // Must exist.
   *it = new_value;
 }
+
+template <typename T>
+class DestroyOnlyDelete {
+ public:
+  void operator()(T* ptr) const {
+    ptr->~T();
+    if (kIsDebugBuild && RUNNING_ON_MEMORY_TOOL > 0) {
+      MEMORY_TOOL_MAKE_UNDEFINED(ptr, sizeof(T));
+    }
+  }
+};
+
+template <typename T>
+class DestroyOnlyDelete<T[]> {
+ private:
+  void operator()(T* ptr ATTRIBUTE_UNUSED) const {}
+};
+
+template <typename T>
+using DestroyOnlyUniquePtr = std::unique_ptr<T, DestroyOnlyDelete<T>>;
 
 // Search for an element with the specified value and return true if it was found, false otherwise.
 template <typename Container, typename T>
