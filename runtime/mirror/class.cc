@@ -578,6 +578,8 @@ static ArtField* FindFieldByNameAndType(LengthPrefixedArray<ArtField>* fields,
   ArtField* ret = nullptr;
   while (low < high) {
     size_t mid = (low + high) / 2;
+    DCHECK_GE(mid, low) << "Cosmic rays caused integer overflow";
+    DCHECK_LT(mid, high) << "Cosmic rays caused integer overflow";
     ArtField& field = fields->At(mid);
     // Fields are sorted by class, then name, then type descriptor. This is verified in dex file
     // verifier. There can be multiple fields with the same in the same class name due to proguard.
