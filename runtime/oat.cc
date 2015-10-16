@@ -20,8 +20,12 @@
 #include <zlib.h>
 
 #include "arch/instruction_set_features.h"
+#include "art_method.h"
 #include "base/bit_utils.h"
 #include "base/stringprintf.h"
+#include "mapping_table.h"
+#include "scoped_thread_state_change.h"
+#include "thread.h"
 
 namespace art {
 
@@ -487,5 +491,101 @@ OatQuickMethodHeader::OatQuickMethodHeader(
 }
 
 OatQuickMethodHeader::~OatQuickMethodHeader() {}
+
+uint32_t OatQuickMethodHeader::ToDexPc(ArtMethod* method,
+                                       const uintptr_t pc,
+                                       bool abort_on_failure) const {
+  const void* entry_point = GetEntryPoint();
+  uint32_t sought_offset = pc - reinterpret_cast<uintptr_t>(entry_point);
+  if (IsOptimized()) {
+    CodeInfo code_info = GetOptimizedCodeInfo();
+    StackMapEncoding encoding = code_info.ExtractEncoding();
+    StackMap stack_map = code_info.GetStackMapForNativePcOffset(sought_offset, encoding);
+    if (stack_map.IsValid()) {
+      return stack_map.GetDexPc(encoding);
+    }
+  } else {
+    MappingTable table(GetMappingTable());
+    // NOTE: Special methods (see Mir2Lir::GenSpecialCase()) have an empty mapping
+    // but they have no suspend checks and, consequently, we never call ToDexPc() for them.
+    if (table.TotalSize() == 0) {
+      DCHECK(method->IsNative());
+      return DexFile::kDexNoIndex;
+    }
+
+    // Assume the caller wants a pc-to-dex mapping so check here first.
+    typedef MappingTable::PcToDexIterator It;
+    for (It cur = table.PcToDexBegin(), end = table.PcToDexEnd(); cur != end; ++cur) {
+      if (cur.NativePcOffset() == sought_offset) {
+        return cur.DexPc();
+      }
+    }
+    // Now check dex-to-pc mappings.
+    typedef MappingTable::DexToPcIterator It2;
+    for (It2 cur = table.DexToPcBegin(), end = table.DexToPcEnd(); cur != end; ++cur) {
+      if (cur.NativePcOffset() == sought_offset) {
+        return cur.DexPc();
+      }
+    }
+  }
+  if (abort_on_failure) {
+    ScopedObjectAccess soa(Thread::Current());
+      LOG(FATAL) << "Failed to find Dex offset for PC offset " << reinterpret_cast<void*>(sought_offset)
+             << "(PC " << reinterpret_cast<void*>(pc) << ", entry_point=" << entry_point
+             << " current entry_point=" << method->GetEntryPointFromQuickCompiledCode()
+             << ") in " << PrettyMethod(method);
+  }
+  return DexFile::kDexNoIndex;
+}
+
+uintptr_t OatQuickMethodHeader::ToNativeQuickPc(ArtMethod* method,
+                                                const uint32_t dex_pc,
+                                                bool is_for_catch_handler,
+                                                bool abort_on_failure) const {
+  const void* entry_point = GetEntryPoint();
+  if (IsOptimized()) {
+    // Optimized code does not have a mapping table. Search for the dex-to-pc
+    // mapping in stack maps.
+    CodeInfo code_info = GetOptimizedCodeInfo();
+    StackMapEncoding encoding = code_info.ExtractEncoding();
+
+    // All stack maps are stored in the same CodeItem section, safepoint stack
+    // maps first, then catch stack maps. We use `is_for_catch_handler` to select
+    // the order of iteration.
+    StackMap stack_map =
+        LIKELY(is_for_catch_handler) ? code_info.GetCatchStackMapForDexPc(dex_pc, encoding)
+                                     : code_info.GetStackMapForDexPc(dex_pc, encoding);
+    if (stack_map.IsValid()) {
+      return reinterpret_cast<uintptr_t>(entry_point) + stack_map.GetNativePcOffset(encoding);
+    }
+  } else {
+    MappingTable table(GetMappingTable());
+    if (table.TotalSize() == 0) {
+      DCHECK_EQ(dex_pc, 0U);
+      return 0;   // Special no mapping/pc == 0 case
+    }
+    // Assume the caller wants a dex-to-pc mapping so check here first.
+    typedef MappingTable::DexToPcIterator It;
+    for (It cur = table.DexToPcBegin(), end = table.DexToPcEnd(); cur != end; ++cur) {
+      if (cur.DexPc() == dex_pc) {
+        return reinterpret_cast<uintptr_t>(entry_point) + cur.NativePcOffset();
+      }
+    }
+    // Now check pc-to-dex mappings.
+    typedef MappingTable::PcToDexIterator It2;
+    for (It2 cur = table.PcToDexBegin(), end = table.PcToDexEnd(); cur != end; ++cur) {
+      if (cur.DexPc() == dex_pc) {
+        return reinterpret_cast<uintptr_t>(entry_point) + cur.NativePcOffset();
+      }
+    }
+  }
+
+  if (abort_on_failure) {
+    ScopedObjectAccess soa(Thread::Current());
+    LOG(FATAL) << "Failed to find native offset for dex pc 0x" << std::hex << dex_pc
+               << " in " << PrettyMethod(method);
+  }
+  return UINTPTR_MAX;
+}
 
 }  // namespace art

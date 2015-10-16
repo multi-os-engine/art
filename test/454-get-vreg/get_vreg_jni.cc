@@ -15,7 +15,6 @@
  */
 
 #include "arch/context.h"
-#include "art_code.h"
 #include "art_method-inl.h"
 #include "jni.h"
 #include "scoped_thread_state_change.h"
@@ -46,12 +45,12 @@ class TestVisitor : public StackVisitor {
       CHECK_EQ(value, 42u);
 
       bool success = GetVReg(m, 1, kIntVReg, &value);
-      if (!IsCurrentFrameInInterpreter() && GetCurrentCode().IsOptimized(sizeof(void*))) {
+      if (!IsCurrentFrameInInterpreter() && GetCurrentOatQuickMethodHeader()->IsOptimized()) {
         CHECK(!success);
       }
 
       success = GetVReg(m, 2, kIntVReg, &value);
-      if (!IsCurrentFrameInInterpreter() && GetCurrentCode().IsOptimized(sizeof(void*))) {
+      if (!IsCurrentFrameInInterpreter() && GetCurrentOatQuickMethodHeader()->IsOptimized()) {
         CHECK(!success);
       }
 
@@ -83,12 +82,12 @@ class TestVisitor : public StackVisitor {
       CHECK_EQ(value, 42u);
 
       bool success = GetVRegPair(m, 2, kLongLoVReg, kLongHiVReg, &value);
-      if (!IsCurrentFrameInInterpreter() && GetCurrentCode().IsOptimized(sizeof(void*))) {
+      if (!IsCurrentFrameInInterpreter() && GetCurrentOatQuickMethodHeader()->IsOptimized()) {
         CHECK(!success);
       }
 
       success = GetVRegPair(m, 4, kLongLoVReg, kLongHiVReg, &value);
-      if (!IsCurrentFrameInInterpreter() && GetCurrentCode().IsOptimized(sizeof(void*))) {
+      if (!IsCurrentFrameInInterpreter() && GetCurrentOatQuickMethodHeader()->IsOptimized()) {
         CHECK(!success);
       }
 
