@@ -1410,6 +1410,8 @@ class Dex2Oat FINAL {
       ScopedObjectAccess soa(self);
       dex_caches_.push_back(soa.AddLocalReference<jobject>(
           class_linker->RegisterDexFile(*dex_file, Runtime::Current()->GetLinearAlloc())));
+      // Create the find class def index.
+      dex_file->CreateFindClassDefIndex();
     }
 
     // If we use a swap file, ensure we are above the threshold to make it necessary.

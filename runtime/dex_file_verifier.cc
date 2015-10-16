@@ -1416,7 +1416,9 @@ bool DexFileVerifier::CheckIntraSectionIterate(size_t offset, uint32_t section_c
     }
 
     if (IsDataSectionType(type)) {
-      offset_to_type_map_.Put(aligned_offset, type);
+      DCHECK(offset_to_type_map_.find(aligned_offset) == offset_to_type_map_.end())
+          << aligned_offset << " " << type;
+      offset_to_type_map_.insert(std::make_pair(aligned_offset, type));
     }
 
     aligned_offset = ptr_ - begin_;
