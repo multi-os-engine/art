@@ -16,7 +16,6 @@
 
 #include "entrypoints/entrypoint_utils.h"
 
-#include "art_code.h"
 #include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "base/mutex.h"
@@ -31,6 +30,7 @@
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
 #include "nth_caller_visitor.h"
+#include "oat_quick_method_header.h"
 #include "reflection.h"
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
@@ -359,17 +359,18 @@ ArtMethod* GetCalleeSaveMethodCaller(ArtMethod** sp,
   const size_t callee_frame_size = GetCalleeSaveFrameSize(kRuntimeISA, type);
   auto** caller_sp = reinterpret_cast<ArtMethod**>(
       reinterpret_cast<uintptr_t>(sp) + callee_frame_size);
-  ArtCode current_code = GetCallingCodeFrom(caller_sp);
+  const size_t callee_return_pc_offset = GetCalleeSaveReturnPcOffset(kRuntimeISA, type);
+  uintptr_t caller_pc = *reinterpret_cast<uintptr_t*>(
+      (reinterpret_cast<uint8_t*>(sp) + callee_return_pc_offset));
   ArtMethod* outer_method = *caller_sp;
   ArtMethod* caller = outer_method;
 
-  if ((outer_method != nullptr) && current_code.IsOptimized(sizeof(void*))) {
-    const size_t callee_return_pc_offset = GetCalleeSaveReturnPcOffset(kRuntimeISA, type);
-    uintptr_t caller_pc = *reinterpret_cast<uintptr_t*>(
-        (reinterpret_cast<uint8_t*>(sp) + callee_return_pc_offset));
-    if (LIKELY(caller_pc != reinterpret_cast<uintptr_t>(GetQuickInstrumentationExitPc()))) {
-      uintptr_t native_pc_offset = current_code.NativeQuickPcOffset(caller_pc);
-      CodeInfo code_info = current_code.GetOptimizedCodeInfo();
+  if (outer_method != nullptr) {
+    OatQuickMethodHeader* current_code = outer_method->GetOatQuickMethodHeader(caller_pc);
+    if (current_code->IsOptimized() &&
+        LIKELY(caller_pc != reinterpret_cast<uintptr_t>(GetQuickInstrumentationExitPc()))) {
+      uintptr_t native_pc_offset = current_code->NativeQuickPcOffset(caller_pc);
+      CodeInfo code_info = current_code->GetOptimizedCodeInfo();
       StackMapEncoding encoding = code_info.ExtractEncoding();
       StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
       DCHECK(stack_map.IsValid());
@@ -380,17 +381,15 @@ ArtMethod* GetCalleeSaveMethodCaller(ArtMethod** sp,
     } else {
       // We're instrumenting, just use the StackVisitor which knows how to
       // handle instrumented frames.
-      NthCallerVisitor visitor(Thread::Current(), 1, true);
-      visitor.WalkStack();
-      caller = visitor.caller;
-      if (kIsDebugBuild) {
-        // Avoid doing the check below.
-        do_caller_check = false;
-      }
+      caller = nullptr;
     }
   }
 
-  if (kIsDebugBuild && do_caller_check) {
+  if (caller == nullptr) {
+    NthCallerVisitor visitor(Thread::Current(), 1, true);
+    visitor.WalkStack();
+    caller = visitor.caller;
+  } else if (kIsDebugBuild && do_caller_check) {
     // Note that do_caller_check is optional, as this method can be called by
     // stubs, and tests without a proper call stack.
     NthCallerVisitor visitor(Thread::Current(), 1, true);
