@@ -1139,6 +1139,9 @@ class DexFile {
     return oat_dex_file_;
   }
 
+  // Create an hash table to speed up FindClassDef.
+  void CreateFindClassDefIndex() const;
+
  private:
   // Opens a .dex file
   static std::unique_ptr<const DexFile> OpenFile(int fd, const char* location,
@@ -1197,7 +1200,6 @@ class DexFile {
   // Check whether a location denotes a multidex dex file. This is a very simple check: returns
   // whether the string contains the separator character.
   static bool IsMultiDexLocation(const char* location);
-
 
   // The base address of the memory mapping.
   const uint8_t* const begin_;
