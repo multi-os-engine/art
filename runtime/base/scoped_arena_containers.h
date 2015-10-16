@@ -196,6 +196,33 @@ inline ScopedArenaAllocatorAdapter<void> ScopedArenaAllocator::Adapter(ArenaAllo
   return ScopedArenaAllocatorAdapter<void>(this, kind);
 }
 
+// Special deleter that only calls the destructor. Also checks for double free errors.
+template <typename T>
+class ArenaDelete {
+  static constexpr uint8_t kMagicFill = 0xCE;
+ public:
+  void operator()(T* ptr) const {
+    ptr->~T();
+    if (RUNNING_ON_MEMORY_TOOL > 0) {
+      // Writing to the memory will fail if it we already destroyed the pointer with
+      // DestroyOnlyDelete since we make it no access.
+      memset(ptr, kMagicFill, sizeof(T));
+      MEMORY_TOOL_MAKE_NOACCESS(ptr, sizeof(T));
+    } else if (kIsDebugBuild) {
+      CHECK(ArenaStack::ArenaTagForAllocation(reinterpret_cast<void*>(ptr)) == kArenaFreeTagUsed)
+          << "Freeing invalid object " << ptr;
+      // TODO: This is arena specific, should we rename DestroyOnlyDelete correspondingly.
+      ArenaStack::ArenaTagForAllocation(reinterpret_cast<void*>(ptr)) = kArenaFreeTagFree;
+      // Write a magic value to try and catch use after free error.
+      memset(ptr, kMagicFill, sizeof(T));
+    }
+  }
+};
+
+// Arena unique ptr that only calls the destructor of the element.
+template <typename T>
+using ArenaUniquePtr = std::unique_ptr<T, ArenaDelete<T>>;
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_BASE_SCOPED_ARENA_CONTAINERS_H_

@@ -21,6 +21,9 @@
 #include <sstream>
 
 #include "base/logging.h"
+#include "base/memory_tool.h"
+#include "base/scoped_arena_allocator.h"
+#include "globals.h"
 
 namespace art {
 
