@@ -123,6 +123,11 @@ class ScopedArenaAllocator
     return arena_stack_->Alloc(bytes, kind);
   }
 
+  template <typename T, typename... Args>
+  T* New(Args&& ... args) {
+    return new (Alloc(sizeof(T))) T(std::forward<Args>(args)...);
+  }
+
   template <typename T>
   T* AllocArray(size_t length, ArenaAllocKind kind = kArenaAllocMisc) {
     return static_cast<T*>(Alloc(length * sizeof(T), kind));

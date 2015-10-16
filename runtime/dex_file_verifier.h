@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_DEX_FILE_VERIFIER_H_
 #define ART_RUNTIME_DEX_FILE_VERIFIER_H_
 
+#include <unordered_map>
 #include <unordered_set>
 
 #include "dex_file.h"
@@ -175,7 +176,7 @@ class DexFileVerifier {
   const char* const location_;
   const DexFile::Header* const header_;
 
-  AllocationTrackingSafeMap<uint32_t, uint16_t, kAllocatorTagDexFileVerifier> offset_to_type_map_;
+  std::unordered_map<uint32_t, uint16_t> offset_to_type_map_;
   const uint8_t* ptr_;
   const void* previous_item_;
 

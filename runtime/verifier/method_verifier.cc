@@ -62,7 +62,7 @@ void PcToRegisterLineTable::Init(RegisterTrackingMode mode, InstructionFlags* fl
                                  uint32_t insns_size, uint16_t registers_size,
                                  MethodVerifier* verifier) {
   DCHECK_GT(insns_size, 0U);
-  register_lines_.reset(new RegisterLine*[insns_size]());
+  register_lines_ = verifier->GetArena()->AllocArray<RegisterLine*>(insns_size);
   size_ = insns_size;
   for (uint32_t i = 0; i < insns_size; i++) {
     bool interesting = false;
@@ -87,9 +87,11 @@ void PcToRegisterLineTable::Init(RegisterTrackingMode mode, InstructionFlags* fl
 
 PcToRegisterLineTable::~PcToRegisterLineTable() {
   for (size_t i = 0; i < size_; i++) {
-    delete register_lines_[i];
-    if (kIsDebugBuild) {
-      register_lines_[i] = nullptr;
+    if (register_lines_[i] != nullptr) {
+      register_lines_[i]->~RegisterLine();
+      if (kIsDebugBuild) {
+        register_lines_[i] = nullptr;
+      }
     }
   }
 }
@@ -398,7 +400,9 @@ MethodVerifier::MethodVerifier(Thread* self,
                                bool need_precise_constants, bool verify_to_dump,
                                bool allow_thread_suspension)
     : self_(self),
-      reg_types_(can_load_classes),
+      arena_stack_(Runtime::Current()->GetArenaPool()),
+      arena_(&arena_stack_),
+      reg_types_(can_load_classes, &arena_),
       work_insn_idx_(DexFile::kDexNoIndex),
       dex_method_idx_(dex_method_idx),
       mirror_method_(method),
@@ -702,7 +706,8 @@ bool MethodVerifier::Verify() {
   }
 
   // Allocate and initialize an array to hold instruction data.
-  insn_flags_.reset(new InstructionFlags[code_item_->insns_size_in_code_units_]());
+  void* memory = arena_.AllocArray<InstructionFlags>(code_item_->insns_size_in_code_units_);
+  insn_flags_ = reinterpret_cast<InstructionFlags*>(memory);
   // Run through the instructions and see if the width checks out.
   bool result = ComputeWidthsAndCountOps();
   // Flag instructions guarded by a "try" block and check exception handlers.
@@ -1430,11 +1435,10 @@ bool MethodVerifier::VerifyCodeFlow() {
 
   /* Create and initialize table holding register status */
   reg_table_.Init(kTrackCompilerInterestPoints,
-                  insn_flags_.get(),
+                  insn_flags_,
                   insns_size,
                   registers_size,
                   this);
-
 
   work_line_.reset(RegisterLine::Create(registers_size, this));
   saved_line_.reset(RegisterLine::Create(registers_size, this));
@@ -1895,8 +1899,8 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
   // We need to ensure the work line is consistent while performing validation. When we spot a
   // peephole pattern we compute a new line for either the fallthrough instruction or the
   // branch target.
-  std::unique_ptr<RegisterLine> branch_line;
-  std::unique_ptr<RegisterLine> fallthrough_line;
+  ArenaUniquePtr<RegisterLine> branch_line;
+  ArenaUniquePtr<RegisterLine> fallthrough_line;
 
   switch (inst->Opcode()) {
     case Instruction::NOP:
@@ -2786,8 +2790,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
         work_line_->MarkRefsAsInitialized(this, this_type, this_reg, work_insn_idx_);
       }
       if (return_type == nullptr) {
-        return_type = &reg_types_.FromDescriptor(GetClassLoader(), return_type_descriptor,
-                                                 false);
+        return_type = &reg_types_.FromDescriptor(GetClassLoader(), return_type_descriptor, false);
       }
       if (!return_type->IsLowHalf()) {
         work_line_->SetResultRegisterType(this, *return_type);
@@ -2860,7 +2863,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
         uint32_t method_idx = (is_range) ? inst->VRegB_3rc() : inst->VRegB_35c();
         const DexFile::MethodId& method_id = dex_file_->GetMethodId(method_idx);
         uint32_t return_type_idx = dex_file_->GetProtoId(method_id.proto_idx_).return_type_idx_;
-        descriptor =  dex_file_->StringByTypeIdx(return_type_idx);
+        descriptor = dex_file_->StringByTypeIdx(return_type_idx);
       } else {
         descriptor = abs_method->GetReturnTypeDescriptor();
       }
@@ -3309,7 +3312,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       return false;
     }
     /* update branch target, set "changed" if appropriate */
-    if (nullptr != branch_line.get()) {
+    if (nullptr != branch_line) {
       if (!UpdateRegisters(work_insn_idx_ + branch_target, branch_line.get(), false)) {
         return false;
       }
@@ -3434,7 +3437,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
     if (!CheckNotMoveException(code_item_->insns_, next_insn_idx)) {
       return false;
     }
-    if (nullptr != fallthrough_line.get()) {
+    if (nullptr != fallthrough_line) {
       // Make workline consistent with fallthrough computed from peephole optimization.
       work_line_->CopyFromLine(fallthrough_line.get());
     }
@@ -3491,30 +3494,55 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
   return true;
 }  // NOLINT(readability/fn_size)
 
+void MethodVerifier::UninstantiableError(const char* descriptor) {
+  Fail(VerifyError::VERIFY_ERROR_NO_CLASS) << "Could not create precise reference for "
+                                           << "non-instantiable klass " << descriptor;
+}
+
+inline bool MethodVerifier::IsInstantiableOrPrimitive(mirror::Class* klass) {
+  return klass->IsInstantiable() || klass->IsPrimitive();
+}
+
 const RegType& MethodVerifier::ResolveClassAndCheckAccess(uint32_t class_idx) {
-  const char* descriptor = dex_file_->StringByTypeIdx(class_idx);
-  const RegType& referrer = GetDeclaringClass();
   mirror::Class* klass = dex_cache_->GetResolvedType(class_idx);
-  const RegType& result = klass != nullptr ?
-      FromClass(descriptor, klass, klass->CannotBeAssignedFromOtherTypes()) :
-      reg_types_.FromDescriptor(GetClassLoader(), descriptor, false);
-  if (result.IsConflict()) {
-    Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "accessing broken descriptor '" << descriptor
-        << "' in " << referrer;
-    return result;
+  const RegType* result = nullptr;
+  if (klass != nullptr) {
+    bool precise = klass->CannotBeAssignedFromOtherTypes();
+    if (precise && !IsInstantiableOrPrimitive(klass)) {
+      const char* descriptor = dex_file_->StringByTypeIdx(class_idx);
+      UninstantiableError(descriptor);
+      precise = false;
+    }
+    result = reg_types_.FindClass(klass, precise);
+    if (result == nullptr) {
+      const char* descriptor = dex_file_->StringByTypeIdx(class_idx);
+      result = &reg_types_.InsertClass(descriptor, klass, precise);
+    }
+  } else {
+    const char* descriptor = dex_file_->StringByTypeIdx(class_idx);
+    result = &reg_types_.FromDescriptor(GetClassLoader(), descriptor, false);
   }
-  if (klass == nullptr && !result.IsUnresolvedTypes()) {
-    dex_cache_->SetResolvedType(class_idx, result.GetClass());
+  DCHECK(result != nullptr);
+  if (result->IsConflict()) {
+    const char* descriptor = dex_file_->StringByTypeIdx(class_idx);
+    Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "accessing broken descriptor '" << descriptor
+        << "' in " << GetDeclaringClass();
+    return *result;
+  }
+  if (klass == nullptr && !result->IsUnresolvedTypes()) {
+    dex_cache_->SetResolvedType(class_idx, result->GetClass());
   }
   // Check if access is allowed. Unresolved types use xxxWithAccessCheck to
   // check at runtime if access is allowed and so pass here. If result is
   // primitive, skip the access check.
-  if (result.IsNonZeroReferenceTypes() && !result.IsUnresolvedTypes() &&
-      !referrer.IsUnresolvedTypes() && !referrer.CanAccess(result)) {
-    Fail(VERIFY_ERROR_ACCESS_CLASS) << "illegal class access: '"
-                                    << referrer << "' -> '" << result << "'";
+  if (result->IsNonZeroReferenceTypes() && !result->IsUnresolvedTypes()) {
+    const RegType& referrer = GetDeclaringClass();
+    if (!referrer.IsUnresolvedTypes() && !referrer.CanAccess(*result)) {
+      Fail(VERIFY_ERROR_ACCESS_CLASS) << "illegal class access: '"
+                                      << referrer << "' -> '" << result << "'";
+    }
   }
-  return result;
+  return *result;
 }
 
 const RegType& MethodVerifier::GetCaughtExceptionType() {
@@ -3720,9 +3748,10 @@ ArtMethod* MethodVerifier::VerifyInvocationArgsFromIterator(
       } else {
         const uint32_t method_idx = (is_range) ? inst->VRegB_3rc() : inst->VRegB_35c();
         const uint16_t class_idx = dex_file_->GetMethodId(method_idx).class_idx_;
-        res_method_class = &reg_types_.FromDescriptor(GetClassLoader(),
-                                                      dex_file_->StringByTypeIdx(class_idx),
-                                                      false);
+        res_method_class = &reg_types_.FromDescriptor(
+            GetClassLoader(),
+            dex_file_->StringByTypeIdx(class_idx),
+            false);
       }
       if (!res_method_class->IsAssignableFrom(actual_arg_type)) {
         Fail(actual_arg_type.IsUnresolvedTypes() ? VERIFY_ERROR_NO_CLASS:
@@ -4476,14 +4505,16 @@ void MethodVerifier::VerifyQuickFieldAccess(const Instruction* inst, const RegTy
         field->GetType<false>();
 
     if (field_type_class != nullptr) {
-      field_type = &FromClass(field->GetTypeDescriptor(), field_type_class,
+      field_type = &FromClass(field->GetTypeDescriptor(),
+                              field_type_class,
                               field_type_class->CannotBeAssignedFromOtherTypes());
     } else {
       Thread* self = Thread::Current();
       DCHECK(!can_load_classes_ || self->IsExceptionPending());
       self->ClearException();
       field_type = &reg_types_.FromDescriptor(field->GetDeclaringClass()->GetClassLoader(),
-                                              field->GetTypeDescriptor(), false);
+                                              field->GetTypeDescriptor(),
+                                              false);
     }
     if (field_type == nullptr) {
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Cannot infer field type from " << inst->Name();
@@ -4621,9 +4652,9 @@ bool MethodVerifier::UpdateRegisters(uint32_t next_insn, RegisterLine* merge_lin
       AdjustReturnLine(this, ret_inst, target_line);
     }
   } else {
-    std::unique_ptr<RegisterLine> copy(gDebugVerify ?
-                                 RegisterLine::Create(target_line->NumRegs(), this) :
-                                 nullptr);
+    ArenaUniquePtr<RegisterLine> copy(gDebugVerify
+        ? RegisterLine::Create(target_line->NumRegs(), this)
+        : nullptr);
     if (gDebugVerify) {
       copy->CopyFromLine(target_line);
     }
@@ -4685,8 +4716,7 @@ const RegType& MethodVerifier::GetDeclaringClass() {
         = dex_file_->GetTypeDescriptor(dex_file_->GetTypeId(method_id.class_idx_));
     if (mirror_method_ != nullptr) {
       mirror::Class* klass = mirror_method_->GetDeclaringClass();
-      declaring_class_ = &FromClass(descriptor, klass,
-                                    klass->CannotBeAssignedFromOtherTypes());
+      declaring_class_ = &FromClass(descriptor, klass, klass->CannotBeAssignedFromOtherTypes());
     } else {
       declaring_class_ = &reg_types_.FromDescriptor(GetClassLoader(), descriptor, false);
     }
