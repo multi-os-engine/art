@@ -1198,6 +1198,8 @@ class DexFile {
   // whether the string contains the separator character.
   static bool IsMultiDexLocation(const char* location);
 
+  // Create the fast find class def index.
+  void CreateFindClassDefIndex() const;
 
   // The base address of the memory mapping.
   const uint8_t* const begin_;

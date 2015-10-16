@@ -61,6 +61,16 @@ template <typename K, typename V, class Hash = std::hash<K>, class KeyEqual = st
 using ScopedArenaUnorderedMap =
     std::unordered_map<K, V, Hash, KeyEqual, ScopedArenaAllocatorAdapter<std::pair<const K, V>>>;
 
+template <typename T>
+class DestructorOnlyDeleter {
+ public:
+  void operator()(T* ptr) const {
+    ptr->~T();
+  }
+};
+
+template <typename T>
+using ArenaUniquePtr = std::unique_ptr<T, DestructorOnlyDeleter<T>>;
 
 // Implementation details below.
 
