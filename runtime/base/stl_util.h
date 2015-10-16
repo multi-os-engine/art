@@ -21,6 +21,8 @@
 #include <sstream>
 
 #include "base/logging.h"
+#include "base/memory_tool.h"
+#include "globals.h"
 
 namespace art {
 
@@ -138,6 +140,30 @@ void ReplaceElement(Container& container, const T& old_value, const T& new_value
   DCHECK(it != container.end());  // Must exist.
   *it = new_value;
 }
+
+template <typename T>
+class DestroyOnlyDelete {
+  static constexpr uint8_t kMagicFill = 0xCE;
+ public:
+  void operator()(T* ptr) const {
+    ptr->~T();
+    if (RUNNING_ON_MEMORY_TOOL > 0) {
+      // Writing to the memory will fail if it we already destroyed the pointer with
+      // DestroyOnlyDelete since we make it no access.
+      memset(ptr, kMagicFill, sizeof(T));
+      MEMORY_TOOL_MAKE_NOACCESS(ptr, sizeof(T));
+    } else if (kIsDebugBuild) {
+      // Write a magic value to try and catch use after free error.
+      memset(ptr, kMagicFill, sizeof(T));
+    }
+  }
+};
+
+template <typename T>
+class DestroyOnlyDelete<T[]> {};
+
+template <typename T>
+using DestroyOnlyUniquePtr = std::unique_ptr<T, DestroyOnlyDelete<T>>;
 
 // Search for an element with the specified value and return true if it was found, false otherwise.
 template <typename Container, typename T>

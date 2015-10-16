@@ -35,7 +35,11 @@ inline RegisterLine* MethodVerifier::GetRegLine(uint32_t dex_pc) {
 }
 
 inline const InstructionFlags& MethodVerifier::GetInstructionFlags(size_t index) const {
-  return insn_flags_[index];
+  return insn_flags_.get()[index];
+}
+
+inline InstructionFlags& MethodVerifier::GetInstructionFlags(size_t index) {
+  return insn_flags_.get()[index];
 }
 
 inline mirror::ClassLoader* MethodVerifier::GetClassLoader() {
