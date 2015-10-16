@@ -419,6 +419,10 @@ DexFile::DexFile(const uint8_t* base, size_t size,
       oat_dex_file_(oat_dex_file) {
   CHECK(begin_ != nullptr) << GetLocation();
   CHECK_GT(size_, 0U) << GetLocation();
+  Runtime* const runtime = Runtime::Current();
+  if (runtime == nullptr || runtime->IsAotCompiler()) {
+    CreateFindClassDefIndex();
+  }
 }
 
 DexFile::~DexFile() {
@@ -511,18 +515,23 @@ const DexFile::ClassDef* DexFile::FindClassDef(const char* descriptor, size_t ha
   if (old_misses == kMaxFailedDexClassDefLookups) {
     // Are we the ones moving the miss count past the max? Sanity check the index doesn't exist.
     CHECK(class_def_index_.LoadSequentiallyConsistent() == nullptr);
-    // Build the index.
-    index = new Index();
-    for (uint32_t i = 0; i < num_class_defs;  ++i) {
-      const ClassDef& class_def = GetClassDef(i);
-      const char* class_descriptor = GetClassDescriptor(class_def);
-      index->Insert(std::make_pair(class_descriptor, &class_def));
-    }
-    // Sanity check the index still doesn't exist, only 1 thread should build it.
-    CHECK(class_def_index_.LoadSequentiallyConsistent() == nullptr);
-    class_def_index_.StoreSequentiallyConsistent(index);
+    CreateFindClassDefIndex();
   }
   return nullptr;
+}
+
+void DexFile::CreateFindClassDefIndex() const {
+  // Build the index.
+  Index* index = new Index();
+  uint32_t num_class_defs = NumClassDefs();
+  for (uint32_t i = 0; i < num_class_defs;  ++i) {
+    const ClassDef& class_def = GetClassDef(i);
+    const char* class_descriptor = GetClassDescriptor(class_def);
+    index->Insert(std::make_pair(class_descriptor, &class_def));
+  }
+  // Sanity check the index still doesn't exist, only 1 thread should build it.
+  CHECK(class_def_index_.LoadSequentiallyConsistent() == nullptr);
+  class_def_index_.StoreSequentiallyConsistent(index);
 }
 
 const DexFile::ClassDef* DexFile::FindClassDef(uint16_t type_idx) const {

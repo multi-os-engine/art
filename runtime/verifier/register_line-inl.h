@@ -182,6 +182,22 @@ inline void RegisterLine::VerifyMonitorStackEmpty(MethodVerifier* verifier) cons
   }
 }
 
+inline RegisterLine* RegisterLine::Create(size_t num_regs, MethodVerifier* verifier) {
+  void* memory = verifier->GetArena().Alloc(sizeof(RegisterLine) + (num_regs * sizeof(uint16_t)));
+  RegisterLine* rl = new (memory) RegisterLine(num_regs, verifier);
+  return rl;
+}
+
+inline RegisterLine::RegisterLine(size_t num_regs, MethodVerifier* verifier)
+    : num_regs_(num_regs),
+      monitors_(verifier->GetArena().Adapter()),
+      reg_to_lock_depths_(std::less<uint32_t>(), verifier->GetArena().Adapter()),
+      this_initialized_(false) {
+  // Memory is alreayd zeroed.
+  // memset(&line_, 0, num_regs_ * sizeof(uint16_t));
+  SetResultTypeToUnknown(verifier);
+}
+
 }  // namespace verifier
 }  // namespace art
 
