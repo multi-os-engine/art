@@ -139,6 +139,17 @@ void ReplaceElement(Container& container, const T& old_value, const T& new_value
   *it = new_value;
 }
 
+template <typename T>
+class DestroyOnlyDelete {
+ public:
+  void operator()(T* ptr) const {
+    ptr->~T();
+  }
+};
+
+template <typename T>
+using DestroyOnlyUniquePtr = std::unique_ptr<T, DestroyOnlyDelete<T>>;
+
 // Search for an element with the specified value and return true if it was found, false otherwise.
 template <typename Container, typename T>
 bool ContainsElement(const Container& container, const T& value, size_t start_pos = 0u) {
