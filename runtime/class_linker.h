@@ -540,6 +540,10 @@ class ClassLinker {
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!Locks::classlinker_classes_lock_);
 
+  void InsertDexFileInToClassLoader(mirror::Object* dex_file, mirror::ClassLoader* class_loader)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!Locks::classlinker_classes_lock_);
+
  private:
   struct ClassLoaderData {
     jweak weak_root;  // Weak root to enable class unloading.
