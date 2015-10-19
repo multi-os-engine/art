@@ -425,9 +425,13 @@ bool InductionVarRange::GenerateCode(HInstruction* context,
     }
     HInductionVarAnalysis::InductionInfo* trip =
         induction_analysis_->LookupInfo(loop, header->GetLastInstruction());
-    // Determine what tests are needed.
+    // Determine what tests are needed. A finite test is needed if the evaluation code uses the
+    // trip-count and the loop maybe unsafe (because in such cases, the index could "overshoot"
+    // the computed range). A taken test is needed for any unknown trip-count, even if evaluation
+    // code does not use the trip-count explicitly (since there could be an implicit relation
+    // between e.g. an invariant subscript and a not-taken condition).
     *needs_finite_test = NeedsTripCount(info) && IsUnsafeTripCount(trip);
-    *needs_taken_test = NeedsTripCount(info) && IsBodyTripCount(trip);
+    *needs_taken_test = IsBodyTripCount(trip);
     // Code generation for taken test: generate the code when requested or otherwise analyze
     // if code generation is feasible when taken test is needed.
     if (taken_test != nullptr) {
