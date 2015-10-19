@@ -735,6 +735,12 @@ void SSAChecker::VisitPhi(HPhi* phi) {
     }
   }
 
+  // For a synthetic phi, remainder of verification that compares this phi node
+  // with all phi nodes for the same virtual register can be skipped.
+  if (phi->GetRegNumber() == kNoRegNumber) {
+    return;
+  }
+
   // Test phi equivalents. There should not be two of the same type and they
   // should only be created for constants which were untyped in DEX.
   for (HInstructionIterator phi_it(phi->GetBlock()->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
