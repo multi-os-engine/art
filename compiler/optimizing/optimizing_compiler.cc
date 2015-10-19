@@ -457,11 +457,12 @@ static void RunOptimizations(HGraph* graph,
   InstructionSimplifier* simplify1 = new (arena) InstructionSimplifier(graph, stats);
   HBooleanSimplifier* boolean_simplify = new (arena) HBooleanSimplifier(graph);
   HConstantFolding* fold2 = new (arena) HConstantFolding(graph, "constant_folding_after_inlining");
+  HConstantFolding* fold3 = new (arena) HConstantFolding(graph, "constant_folding_final");
   SideEffectsAnalysis* side_effects = new (arena) SideEffectsAnalysis(graph);
   GVNOptimization* gvn = new (arena) GVNOptimization(graph, *side_effects);
   LICM* licm = new (arena) LICM(graph, *side_effects);
   HInductionVarAnalysis* induction = new (arena) HInductionVarAnalysis(graph);
-  BoundsCheckElimination* bce = new (arena) BoundsCheckElimination(graph, induction);
+  BoundsCheckElimination* bce = new (arena) BoundsCheckElimination(graph, side_effects, induction);
   ReferenceTypePropagation* type_propagation =
       new (arena) ReferenceTypePropagation(graph, handles);
   InstructionSimplifier* simplify2 = new (arena) InstructionSimplifier(
@@ -511,6 +512,7 @@ static void RunOptimizations(HGraph* graph,
       licm,
       induction,
       bce,
+      fold3,
       simplify3,
       dce2,
       // The codegen has a few assumptions that only the instruction simplifier
