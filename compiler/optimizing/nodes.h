@@ -2524,9 +2524,8 @@ class HBinaryOperation : public HExpression<2> {
   HBinaryOperation(Primitive::Type result_type,
                    HInstruction* left,
                    HInstruction* right,
-                   SideEffects side_effects = SideEffects::None(),
                    uint32_t dex_pc = kNoDexPc)
-      : HExpression(result_type, side_effects, dex_pc) {
+      : HExpression(result_type, SideEffects::None(), dex_pc) {
     SetRawInputAt(0, left);
     SetRawInputAt(1, right);
   }
@@ -2618,7 +2617,7 @@ enum class ComparisonBias {
 class HCondition : public HBinaryOperation {
  public:
   HCondition(HInstruction* first, HInstruction* second, uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(Primitive::kPrimBoolean, first, second, SideEffects::None(), dex_pc),
+      : HBinaryOperation(Primitive::kPrimBoolean, first, second, dex_pc),
         needs_materialization_(true),
         bias_(ComparisonBias::kNoBias) {}
 
@@ -2988,11 +2987,7 @@ class HCompare : public HBinaryOperation {
            HInstruction* second,
            ComparisonBias bias,
            uint32_t dex_pc)
-      : HBinaryOperation(Primitive::kPrimInt,
-                         first,
-                         second,
-                         SideEffectsForArchRuntimeCalls(type),
-                         dex_pc),
+      : HBinaryOperation(Primitive::kPrimInt, first, second, dex_pc),
         bias_(bias) {
     DCHECK_EQ(type, first->GetType());
     DCHECK_EQ(type, second->GetType());
@@ -3018,11 +3013,6 @@ class HCompare : public HBinaryOperation {
 
   bool IsGtBias() { return bias_ == ComparisonBias::kGtBias; }
 
-
-  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type type) {
-    // MIPS64 uses a runtime call for FP comparisons.
-    return Primitive::IsFloatingPointType(type) ? SideEffects::CanTriggerGC() : SideEffects::None();
-  }
 
   DECLARE_INSTRUCTION(Compare);
 
@@ -3681,7 +3671,7 @@ class HAdd : public HBinaryOperation {
        HInstruction* left,
        HInstruction* right,
        uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
@@ -3708,7 +3698,7 @@ class HSub : public HBinaryOperation {
        HInstruction* left,
        HInstruction* right,
        uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   template <typename T> T Compute(T x, T y) const { return x - y; }
 
@@ -3733,7 +3723,7 @@ class HMul : public HBinaryOperation {
        HInstruction* left,
        HInstruction* right,
        uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
@@ -3760,7 +3750,7 @@ class HDiv : public HBinaryOperation {
        HInstruction* left,
        HInstruction* right,
        uint32_t dex_pc)
-      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   template <typename T>
   T Compute(T x, T y) const {
@@ -3780,11 +3770,6 @@ class HDiv : public HBinaryOperation {
         Compute(x->GetValue(), y->GetValue()), GetDexPc());
   }
 
-  static SideEffects SideEffectsForArchRuntimeCalls() {
-    // The generated code can use a runtime call.
-    return SideEffects::CanTriggerGC();
-  }
-
   DECLARE_INSTRUCTION(Div);
 
  private:
@@ -3797,7 +3782,7 @@ class HRem : public HBinaryOperation {
        HInstruction* left,
        HInstruction* right,
        uint32_t dex_pc)
-      : HBinaryOperation(result_type, left, right, SideEffectsForArchRuntimeCalls(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   template <typename T>
   T Compute(T x, T y) const {
@@ -3815,11 +3800,6 @@ class HRem : public HBinaryOperation {
   HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetLongConstant(
         Compute(x->GetValue(), y->GetValue()), GetDexPc());
-  }
-
-
-  static SideEffects SideEffectsForArchRuntimeCalls() {
-    return SideEffects::CanTriggerGC();
   }
 
   DECLARE_INSTRUCTION(Rem);
@@ -3858,7 +3838,7 @@ class HShl : public HBinaryOperation {
        HInstruction* left,
        HInstruction* right,
        uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   template <typename T, typename U, typename V>
   T Compute(T x, U y, V max_shift_value) const {
@@ -3894,7 +3874,7 @@ class HShr : public HBinaryOperation {
        HInstruction* left,
        HInstruction* right,
        uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   template <typename T, typename U, typename V>
   T Compute(T x, U y, V max_shift_value) const {
@@ -3930,7 +3910,7 @@ class HUShr : public HBinaryOperation {
         HInstruction* left,
         HInstruction* right,
         uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   template <typename T, typename U, typename V>
   T Compute(T x, U y, V max_shift_value) const {
@@ -3967,7 +3947,7 @@ class HAnd : public HBinaryOperation {
        HInstruction* left,
        HInstruction* right,
        uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
@@ -4003,7 +3983,7 @@ class HOr : public HBinaryOperation {
       HInstruction* left,
       HInstruction* right,
       uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
@@ -4039,7 +4019,7 @@ class HXor : public HBinaryOperation {
        HInstruction* left,
        HInstruction* right,
        uint32_t dex_pc = kNoDexPc)
-      : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc) {}
+      : HBinaryOperation(result_type, left, right, dex_pc) {}
 
   bool IsCommutative() const OVERRIDE { return true; }
 
@@ -4161,9 +4141,7 @@ class HTypeConversion : public HExpression<1> {
  public:
   // Instantiate a type conversion of `input` to `result_type`.
   HTypeConversion(Primitive::Type result_type, HInstruction* input, uint32_t dex_pc)
-      : HExpression(result_type,
-                    SideEffectsForArchRuntimeCalls(input->GetType(), result_type),
-                    dex_pc) {
+      : HExpression(result_type, SideEffects::None(), dex_pc) {
     SetRawInputAt(0, input);
     DCHECK_NE(input->GetType(), result_type);
   }
@@ -4181,18 +4159,6 @@ class HTypeConversion : public HExpression<1> {
   // Try to statically evaluate the conversion and return a HConstant
   // containing the result.  If the input cannot be converted, return nullptr.
   HConstant* TryStaticEvaluation() const;
-
-  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type input_type,
-                                                    Primitive::Type result_type) {
-    // Some architectures may not require the 'GC' side effects, but at this point
-    // in the compilation process we do not know what architecture we will
-    // generate code for, so we must be conservative.
-    if ((Primitive::IsFloatingPointType(input_type) && Primitive::IsIntegralType(result_type))
-        || (input_type == Primitive::kPrimLong && Primitive::IsFloatingPointType(result_type))) {
-      return SideEffects::CanTriggerGC();
-    }
-    return SideEffects::None();
-  }
 
   DECLARE_INSTRUCTION(TypeConversion);
 

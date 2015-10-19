@@ -1080,18 +1080,21 @@ void CodeGeneratorARM::AddLocationAsTemp(Location location, LocationSummary* loc
 void CodeGeneratorARM::InvokeRuntime(QuickEntrypointEnum entrypoint,
                                      HInstruction* instruction,
                                      uint32_t dex_pc,
-                                     SlowPathCode* slow_path) {
+                                     SlowPathCode* slow_path,
+                                     bool entrypoint_cannot_trigger_GC) {
   InvokeRuntime(GetThreadOffset<kArmWordSize>(entrypoint).Int32Value(),
                 instruction,
                 dex_pc,
-                slow_path);
+                slow_path,
+                entrypoint_cannot_trigger_GC);
 }
 
 void CodeGeneratorARM::InvokeRuntime(int32_t entry_point_offset,
                                      HInstruction* instruction,
                                      uint32_t dex_pc,
-                                     SlowPathCode* slow_path) {
-  ValidateInvokeRuntime(instruction, slow_path);
+                                     SlowPathCode* slow_path,
+                                     bool entrypoint_cannot_trigger_GC) {
+  ValidateInvokeRuntime(instruction, slow_path, entrypoint_cannot_trigger_GC);
   __ LoadFromOffset(kLoadWord, LR, TR, entry_point_offset);
   __ blx(LR);
   RecordPcInfo(instruction, dex_pc, slow_path);
@@ -2185,7 +2188,10 @@ void InstructionCodeGeneratorARM::VisitTypeConversion(HTypeConversion* conversio
           codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pF2l),
                                   conversion,
                                   conversion->GetDexPc(),
-                                  nullptr);
+                                  nullptr,
+                                  // The `F2l` entrypoint is GC-safe.
+                                  // See comments for `ValidateInvokeRuntime()`.
+                                  true);
           break;
 
         case Primitive::kPrimDouble:
@@ -2193,7 +2199,10 @@ void InstructionCodeGeneratorARM::VisitTypeConversion(HTypeConversion* conversio
           codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pD2l),
                                   conversion,
                                   conversion->GetDexPc(),
-                                  nullptr);
+                                  nullptr,
+                                  // The `D2l` entrypoint is GC-safe.
+                                  // See comments for `ValidateInvokeRuntime()`.
+                                  true);
           break;
 
         default:
@@ -2238,7 +2247,10 @@ void InstructionCodeGeneratorARM::VisitTypeConversion(HTypeConversion* conversio
           codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pL2f),
                                   conversion,
                                   conversion->GetDexPc(),
-                                  nullptr);
+                                  nullptr,
+                                  // The `L2f` entrypoint is GC-safe.
+                                  // See comments for `ValidateInvokeRuntime()`.
+                                  true);
           break;
 
         case Primitive::kPrimDouble:
@@ -2760,7 +2772,13 @@ void InstructionCodeGeneratorARM::VisitDiv(HDiv* div) {
         DCHECK_EQ(calling_convention.GetRegisterAt(1), second.AsRegister<Register>());
         DCHECK_EQ(R0, out.AsRegister<Register>());
 
-        codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pIdivmod), div, div->GetDexPc(), nullptr);
+        codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pIdivmod),
+                                div,
+                                div->GetDexPc(),
+                                nullptr,
+                                // The `Idivmod` entrypoint is GC-safe.
+                                // See comments for `ValidateInvokeRuntime()`.
+                                true);
       }
       break;
     }
@@ -2774,7 +2792,13 @@ void InstructionCodeGeneratorARM::VisitDiv(HDiv* div) {
       DCHECK_EQ(R0, out.AsRegisterPairLow<Register>());
       DCHECK_EQ(R1, out.AsRegisterPairHigh<Register>());
 
-      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pLdiv), div, div->GetDexPc(), nullptr);
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pLdiv),
+                              div,
+                              div->GetDexPc(),
+                              nullptr,
+                              // The `Ldiv` entrypoint is GC-safe.
+                              // See comments for `ValidateInvokeRuntime()`.
+                              true);
       break;
     }
 
@@ -2902,23 +2926,47 @@ void InstructionCodeGeneratorARM::VisitRem(HRem* rem) {
         DCHECK_EQ(calling_convention.GetRegisterAt(1), second.AsRegister<Register>());
         DCHECK_EQ(R1, out.AsRegister<Register>());
 
-        codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pIdivmod), rem, rem->GetDexPc(), nullptr);
+        codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pIdivmod),
+                                rem,
+                                rem->GetDexPc(),
+                                nullptr,
+                                // The `Idivmod` entrypoint is GC-safe.
+                                // See comments for `ValidateInvokeRuntime()`.
+                                true);
       }
       break;
     }
 
     case Primitive::kPrimLong: {
-      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pLmod), rem, rem->GetDexPc(), nullptr);
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pLmod),
+                              rem,
+                              rem->GetDexPc(),
+                              nullptr,
+                              // The `Lmod` entrypoint is GC-safe.
+                              // See comments for `ValidateInvokeRuntime()`.
+                              true);
       break;
     }
 
     case Primitive::kPrimFloat: {
-      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pFmodf), rem, rem->GetDexPc(), nullptr);
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pFmodf),
+                              rem,
+                              rem->GetDexPc(),
+                              nullptr,
+                              // The `Fmodf` entrypoint is GC-safe.
+                              // See comments for `ValidateInvokeRuntime()`.
+                              true);
       break;
     }
 
     case Primitive::kPrimDouble: {
-      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pFmod), rem, rem->GetDexPc(), nullptr);
+      codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pFmod),
+                              rem,
+                              rem->GetDexPc(),
+                              nullptr,
+                              // The `Fmod` entrypoint is GC-safe.
+                              // See comments for `ValidateInvokeRuntime()`.
+                              true);
       break;
     }
 

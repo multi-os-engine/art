@@ -342,7 +342,31 @@ class CodeGenerator {
     return type == Primitive::kPrimNot && !value->IsNullConstant();
   }
 
-  void ValidateInvokeRuntime(HInstruction* instruction, SlowPathCode* slow_path);
+  // `entrypoint_cannot_trigger_GC` can be set to true if the entrypoint is certain
+  // *NOT* to trigger GC. The list of known GC-safe entrypoints is:
+  //      CmpgDouble
+  //      CmpgFloat
+  //      CmplDouble
+  //      CmplFloat
+  //      Fmod
+  //      L2d
+  //      Fmodf
+  //      L2f
+  //      D2iz
+  //      F2iz
+  //      Idivmod
+  //      D2l
+  //      F2l
+  //      Ldiv
+  //      Lmod
+  //      Lmul
+  //      ShlLong
+  //      ShrLong
+  //      UshrLong
+  // (The list above follows the order in runtime/entrypoints/quick/quick_entrypoints_list.h.)
+  void ValidateInvokeRuntime(HInstruction* instruction,
+                             SlowPathCode* slow_path,
+                             bool entrypoint_cannot_trigger_GC = false);
 
   void AddAllocatedRegister(Location location) {
     allocated_registers_.Add(location);
@@ -429,7 +453,9 @@ class CodeGenerator {
   virtual void InvokeRuntime(QuickEntrypointEnum entrypoint,
                              HInstruction* instruction,
                              uint32_t dex_pc,
-                             SlowPathCode* slow_path) = 0;
+                             SlowPathCode* slow_path,
+                             // See comments for `ValidateInvokeRuntime()`.
+                             bool entrypoint_cannot_trigger_GC = false) = 0;
 
   // Generate a call to a static or direct method.
   virtual void GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp) = 0;

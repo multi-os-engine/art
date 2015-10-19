@@ -496,18 +496,21 @@ size_t CodeGeneratorX86::RestoreFloatingPointRegister(size_t stack_index, uint32
 void CodeGeneratorX86::InvokeRuntime(QuickEntrypointEnum entrypoint,
                                      HInstruction* instruction,
                                      uint32_t dex_pc,
-                                     SlowPathCode* slow_path) {
+                                     SlowPathCode* slow_path,
+                                     bool entrypoint_cannot_trigger_GC) {
   InvokeRuntime(GetThreadOffset<kX86WordSize>(entrypoint).Int32Value(),
                 instruction,
                 dex_pc,
-                slow_path);
+                slow_path,
+                entrypoint_cannot_trigger_GC);
 }
 
 void CodeGeneratorX86::InvokeRuntime(int32_t entry_point_offset,
                                      HInstruction* instruction,
                                      uint32_t dex_pc,
-                                     SlowPathCode* slow_path) {
-  ValidateInvokeRuntime(instruction, slow_path);
+                                     SlowPathCode* slow_path,
+                                     bool entrypoint_cannot_trigger_GC) {
+  ValidateInvokeRuntime(instruction, slow_path, entrypoint_cannot_trigger_GC);
   __ fs()->call(Address::Absolute(entry_point_offset));
   RecordPcInfo(instruction, dex_pc, slow_path);
 }
@@ -2207,7 +2210,10 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
           codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pF2l),
                                   conversion,
                                   conversion->GetDexPc(),
-                                  nullptr);
+                                  nullptr,
+                                  // The `F2l' entrypoint is GC-safe.
+                                  // See comments in `ValidateInvokeRuntime()`.
+                                  true);
           break;
 
         case Primitive::kPrimDouble:
@@ -2215,7 +2221,10 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
           codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pD2l),
                                   conversion,
                                   conversion->GetDexPc(),
-                                  nullptr);
+                                  nullptr,
+                                  // The `D2l` entrypoint it GC-safe.
+                                  // See comments in `ValidateInvokeRuntime()`.
+                                  true);
           break;
 
         default:
@@ -3045,12 +3054,18 @@ void InstructionCodeGeneratorX86::GenerateDivRemIntegral(HBinaryOperation* instr
         codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pLdiv),
                                 instruction,
                                 instruction->GetDexPc(),
-                                nullptr);
+                                nullptr,
+                                // The `Ldiv` entrypoint it GC-safe.
+                                // See comments in `ValidateInvokeRuntime()`.
+                                true);
       } else {
         codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pLmod),
                                 instruction,
                                 instruction->GetDexPc(),
-                                nullptr);
+                                nullptr,
+                                // The `Lmod` entrypoint it GC-safe.
+                                // See comments in `ValidateInvokeRuntime()`.
+                                true);
       }
       break;
     }

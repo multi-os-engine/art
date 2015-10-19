@@ -330,12 +330,16 @@ class CodeGeneratorARM : public CodeGenerator {
   void InvokeRuntime(QuickEntrypointEnum entrypoint,
                      HInstruction* instruction,
                      uint32_t dex_pc,
-                     SlowPathCode* slow_path) OVERRIDE;
+                     SlowPathCode* slow_path,
+                     // See comments for `ValidateInvokeRuntime()`.
+                     bool entrypoint_cannot_trigger_GC = false) OVERRIDE;
 
   void InvokeRuntime(int32_t offset,
                      HInstruction* instruction,
                      uint32_t dex_pc,
-                     SlowPathCode* slow_path);
+                     SlowPathCode* slow_path,
+                     // See comments for `ValidateInvokeRuntime()`.
+                     bool entrypoint_cannot_trigger_GC = false);
 
   // Emit a write barrier.
   void MarkGCCard(Register temp, Register card, Register object, Register value, bool can_be_null);

@@ -634,18 +634,21 @@ size_t CodeGeneratorX86_64::RestoreFloatingPointRegister(size_t stack_index, uin
 void CodeGeneratorX86_64::InvokeRuntime(QuickEntrypointEnum entrypoint,
                                         HInstruction* instruction,
                                         uint32_t dex_pc,
-                                        SlowPathCode* slow_path) {
+                                        SlowPathCode* slow_path,
+                                        bool entrypoint_cannot_trigger_GC) {
   InvokeRuntime(GetThreadOffset<kX86_64WordSize>(entrypoint).Int32Value(),
                 instruction,
                 dex_pc,
-                slow_path);
+                slow_path,
+                entrypoint_cannot_trigger_GC);
 }
 
 void CodeGeneratorX86_64::InvokeRuntime(int32_t entry_point_offset,
                                         HInstruction* instruction,
                                         uint32_t dex_pc,
-                                        SlowPathCode* slow_path) {
-  ValidateInvokeRuntime(instruction, slow_path);
+                                        SlowPathCode* slow_path,
+                                        bool entrypoint_cannot_trigger_GC) {
+  ValidateInvokeRuntime(instruction, slow_path, entrypoint_cannot_trigger_GC);
   __ gs()->call(Address::Absolute(entry_point_offset, true));
   RecordPcInfo(instruction, dex_pc, slow_path);
 }

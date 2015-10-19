@@ -1216,18 +1216,21 @@ void CodeGeneratorARM64::StoreRelease(Primitive::Type type,
 void CodeGeneratorARM64::InvokeRuntime(QuickEntrypointEnum entrypoint,
                                        HInstruction* instruction,
                                        uint32_t dex_pc,
-                                       SlowPathCode* slow_path) {
+                                       SlowPathCode* slow_path,
+                                       bool entrypoint_cannot_trigger_GC) {
   InvokeRuntime(GetThreadOffset<kArm64WordSize>(entrypoint).Int32Value(),
                 instruction,
                 dex_pc,
-                slow_path);
+                slow_path,
+                entrypoint_cannot_trigger_GC);
 }
 
 void CodeGeneratorARM64::InvokeRuntime(int32_t entry_point_offset,
                                        HInstruction* instruction,
                                        uint32_t dex_pc,
-                                       SlowPathCode* slow_path) {
-  ValidateInvokeRuntime(instruction, slow_path);
+                                       SlowPathCode* slow_path,
+                                       bool entrypoint_cannot_trigger_GC) {
+  ValidateInvokeRuntime(instruction, slow_path, entrypoint_cannot_trigger_GC);
   BlockPoolsScope block_pools(GetVIXLAssembler());
   __ Ldr(lr, MemOperand(tr, entry_point_offset));
   __ Blr(lr);
@@ -3481,7 +3484,13 @@ void InstructionCodeGeneratorARM64::VisitRem(HRem* rem) {
     case Primitive::kPrimDouble: {
       int32_t entry_offset = (type == Primitive::kPrimFloat) ? QUICK_ENTRY_POINT(pFmodf)
                                                              : QUICK_ENTRY_POINT(pFmod);
-      codegen_->InvokeRuntime(entry_offset, rem, rem->GetDexPc(), nullptr);
+      codegen_->InvokeRuntime(entry_offset,
+                              rem,
+                              rem->GetDexPc(),
+                              nullptr,
+                              // The entrypoints `Fmodf` and `Fmod` above are GC-safe.
+                              // See comments for `ValidateInvokeRuntime()`.
+                              true);
       break;
     }
 

@@ -272,12 +272,16 @@ class CodeGeneratorX86 : public CodeGenerator {
   void InvokeRuntime(QuickEntrypointEnum entrypoint,
                      HInstruction* instruction,
                      uint32_t dex_pc,
-                     SlowPathCode* slow_path) OVERRIDE;
+                     SlowPathCode* slow_path,
+                     // See comments for `ValidateInvokeRuntime()`.
+                     bool entrypoint_cannot_trigger_GC = false) OVERRIDE;
 
   void InvokeRuntime(int32_t entry_point_offset,
                      HInstruction* instruction,
                      uint32_t dex_pc,
-                     SlowPathCode* slow_path);
+                     SlowPathCode* slow_path,
+                     // See comments for `ValidateInvokeRuntime()`.
+                     bool entrypoint_cannot_trigger_GC = false);
 
   size_t GetWordSize() const OVERRIDE {
     return kX86WordSize;

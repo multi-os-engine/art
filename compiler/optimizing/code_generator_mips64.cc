@@ -1001,20 +1001,23 @@ void CodeGeneratorMIPS64::DumpFloatingPointRegister(std::ostream& stream, int re
 }
 
 void CodeGeneratorMIPS64::InvokeRuntime(QuickEntrypointEnum entrypoint,
-                                     HInstruction* instruction,
-                                     uint32_t dex_pc,
-                                     SlowPathCode* slow_path) {
+                                        HInstruction* instruction,
+                                        uint32_t dex_pc,
+                                        SlowPathCode* slow_path,
+                                        bool entrypoint_cannot_trigger_GC) {
   InvokeRuntime(GetThreadOffset<kMips64WordSize>(entrypoint).Int32Value(),
                 instruction,
                 dex_pc,
-                slow_path);
+                slow_path,
+                entrypoint_cannot_trigger_GC);
 }
 
 void CodeGeneratorMIPS64::InvokeRuntime(int32_t entry_point_offset,
                                         HInstruction* instruction,
                                         uint32_t dex_pc,
-                                        SlowPathCode* slow_path) {
-  ValidateInvokeRuntime(instruction, slow_path);
+                                        SlowPathCode* slow_path,
+                                        bool entrypoint_cannot_trigger_GC) {
+  ValidateInvokeRuntime(instruction, slow_path, entrypoint_cannot_trigger_GC);
   // TODO: anything related to T9/GP/GOT/PIC/.so's?
   __ LoadFromOffset(kLoadDoubleword, T9, TR, entry_point_offset);
   __ Jalr(T9);
@@ -1755,7 +1758,14 @@ void InstructionCodeGeneratorMIPS64::VisitCompare(HCompare* instruction) {
         entry_point_offset = instruction->IsGtBias() ? QUICK_ENTRY_POINT(pCmpgDouble)
                                                      : QUICK_ENTRY_POINT(pCmplDouble);
       }
-      codegen_->InvokeRuntime(entry_point_offset, instruction, instruction->GetDexPc(), nullptr);
+      codegen_->InvokeRuntime(entry_point_offset,
+                              instruction,
+                              instruction->GetDexPc(),
+                              nullptr,
+                              // The four entrypoints `CmpgFloat`, `CmplFloat`,
+                              // `CmpgDouble`, and `CmplDouble` are GC-safe.
+                              // See comments for `ValidateInvokeRuntime()`.
+                              true);
       break;
     }
 
@@ -3120,7 +3130,12 @@ void InstructionCodeGeneratorMIPS64::VisitRem(HRem* instruction) {
     case Primitive::kPrimDouble: {
       int32_t entry_offset = (type == Primitive::kPrimFloat) ? QUICK_ENTRY_POINT(pFmodf)
                                                              : QUICK_ENTRY_POINT(pFmod);
-      codegen_->InvokeRuntime(entry_offset, instruction, instruction->GetDexPc(), nullptr);
+      codegen_->InvokeRuntime(entry_offset,
+                              instruction,
+                              instruction->GetDexPc(),
+                              // The `Fmodf` and `Fmod` entrypoints are GC-safe.
+                              // See comments for `ValidateInvokeRuntime()`.
+                              nullptr);
       break;
     }
     default:
@@ -3429,7 +3444,10 @@ void InstructionCodeGeneratorMIPS64::VisitTypeConversion(HTypeConversion* conver
       codegen_->InvokeRuntime(entry_offset,
                               conversion,
                               conversion->GetDexPc(),
-                              nullptr);
+                              nullptr,
+                              // The `L2f` and `L2d` entrypoints are GC-safe.
+                              // See comments for `ValidateInvokeRuntime()`.
+                              true);
     }
   } else if (Primitive::IsIntegralType(result_type) && Primitive::IsFloatingPointType(input_type)) {
     CHECK(result_type == Primitive::kPrimInt || result_type == Primitive::kPrimLong);
@@ -3444,7 +3462,10 @@ void InstructionCodeGeneratorMIPS64::VisitTypeConversion(HTypeConversion* conver
     codegen_->InvokeRuntime(entry_offset,
                             conversion,
                             conversion->GetDexPc(),
-                            nullptr);
+                            nullptr,
+                            // The four entrypoints `F2iz`, `D2iz`, `F2l`, and `D2l` above are
+                            // GC-safe.  See comments for `ValidateInvokeRuntime()`.
+                            true);
   } else if (Primitive::IsFloatingPointType(result_type) &&
              Primitive::IsFloatingPointType(input_type)) {
     FpuRegister dst = locations->Out().AsFpuRegister<FpuRegister>();
