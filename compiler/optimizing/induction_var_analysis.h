@@ -65,11 +65,13 @@ class HInductionVarAnalysis : public HOptimization {
     kMul,
     kDiv,
     kFetch,
-    // Trip counts (valid in full loop or only body proper; unsafe implies loop may be infinite).
+    // Trip-counts (valid in full loop or only body proper; unsafe implies loop may be infinite).
     kTripCountInLoop,
     kTripCountInBody,
     kTripCountInLoopUnsafe,
-    kTripCountInBodyUnsafe
+    kTripCountInBodyUnsafe,
+    // Comparisons for trip-count tests.
+    kLT, kLE, kGT, kGE
   };
 
   /**
@@ -85,7 +87,7 @@ class HInductionVarAnalysis : public HOptimization {
    *   (4) periodic
    *         nop: a, then defined by b (repeated when exhausted)
    *   (5) trip-count:
-   *         tc: defined by b
+   *         tc: defined by a, taken-test in b
    */
   struct InductionInfo : public ArenaObject<kArenaAllocInductionVarAnalysis> {
     InductionInfo(InductionClass ic,
@@ -119,8 +121,8 @@ class HInductionVarAnalysis : public HOptimization {
     return new (graph_->GetArena()) InductionInfo(kInvariant, kFetch, nullptr, nullptr, f);
   }
 
-  InductionInfo* CreateTripCount(InductionOp op, InductionInfo* b) {
-    return new (graph_->GetArena()) InductionInfo(kInvariant, op, nullptr, b, nullptr);
+  InductionInfo* CreateTripCount(InductionOp op, InductionInfo* a, InductionInfo* b) {
+    return new (graph_->GetArena()) InductionInfo(kInvariant, op, a, b, nullptr);
   }
 
   InductionInfo* CreateInduction(InductionClass ic, InductionInfo* a, InductionInfo* b) {
