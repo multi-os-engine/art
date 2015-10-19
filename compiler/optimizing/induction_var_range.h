@@ -70,10 +70,10 @@ class InductionVarRange {
 
   /**
    * Returns true if range analysis is able to generate code for the lower and upper bound
-   * expressions on the instruction in the given context. Output parameter top_test denotes
-   * whether a top test is needed to protect the trip-count expression evaluation.
+   * expressions on the instruction in the given context. Output parameter needs_test denotes
+   * whether an explicit test is needed to protect the trip-count expression evaluation.
    */
-  bool CanGenerateCode(HInstruction* context, HInstruction* instruction, /*out*/bool* top_test);
+  bool CanGenerateCode(HInstruction* context, HInstruction* instruction, /*out*/bool* needs_test);
 
   /**
    * Generates the actual code in the HIR for the lower and upper bound expressions on the
@@ -87,13 +87,25 @@ class InductionVarRange {
    * block:
    *   lower: add x, 0
    *   upper: add x, 5
+   *
+   * Precondition: CanGenerateCode() returns true.
    */
-  bool GenerateCode(HInstruction* context,
+  void GenerateCode(HInstruction* context,
                     HInstruction* instruction,
                     HGraph* graph,
                     HBasicBlock* block,
                     /*out*/HInstruction** lower,
                     /*out*/HInstruction** upper);
+
+  /**
+   * Generates explicit test for the loop in the given context. Code is generated in given block
+   * and graph. Returns the condition.
+   *
+   * Precondition: CanGenerateCode() returns true and needs_test is set.
+   */
+  HInstruction* GenerateTest(HInstruction* context,
+                             HGraph* graph,
+                             HBasicBlock* block);
 
  private:
   //
@@ -140,7 +152,7 @@ class InductionVarRange {
                     HBasicBlock* block,
                     /*out*/HInstruction** lower,
                     /*out*/HInstruction** upper,
-                    bool* top_test);
+                    bool* needs_test);
 
   static bool GenerateCode(HInductionVarAnalysis::InductionInfo* info,
                            HInductionVarAnalysis::InductionInfo* trip,
