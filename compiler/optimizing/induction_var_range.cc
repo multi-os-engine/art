@@ -75,10 +75,12 @@ static InductionVarRange::Value SimplifyMax(InductionVarRange::Value v) {
   return v;
 }
 
-static HInstruction* Insert(HBasicBlock* preheader, HInstruction* instruction) {
-  DCHECK(preheader != nullptr);
+/** Helper method to insert an instruction. */
+static HInstruction* Insert(HBasicBlock* block, HInstruction* instruction) {
+  DCHECK(block != nullptr);
+  DCHECK(block->GetLastInstruction() != nullptr) << block->GetBlockId();
   DCHECK(instruction != nullptr);
-  preheader->InsertInstructionBefore(instruction, preheader->GetLastInstruction());
+  block->InsertInstructionBefore(instruction, block->GetLastInstruction());
   return instruction;
 }
 
@@ -103,17 +105,30 @@ InductionVarRange::Value InductionVarRange::GetMaxInduction(HInstruction* contex
 
 bool InductionVarRange::CanGenerateCode(HInstruction* context,
                                         HInstruction* instruction,
-                                        /*out*/bool* top_test) {
-  return GenerateCode(context, instruction, nullptr, nullptr, nullptr, nullptr, top_test);
+                                        /*out*/bool* needs_test) {
+  return GenerateCode(context, instruction, nullptr, nullptr, nullptr, nullptr, needs_test);
 }
 
-bool InductionVarRange::GenerateCode(HInstruction* context,
+void InductionVarRange::GenerateCode(HInstruction* context,
                                      HInstruction* instruction,
                                      HGraph* graph,
                                      HBasicBlock* block,
                                      /*out*/HInstruction** lower,
                                      /*out*/HInstruction** upper) {
-  return GenerateCode(context, instruction, graph, block, lower, upper, nullptr);
+  CHECK(GenerateCode(context, instruction, graph, block, lower, upper, nullptr));
+}
+
+HInstruction* InductionVarRange::GenerateTest(HInstruction* context,
+                                              HGraph* graph,
+                                              HBasicBlock* block) {
+  HLoopInformation* loop = context->GetBlock()->GetLoopInformation();  // closest enveloping loop
+  DCHECK(loop != nullptr);
+  HBasicBlock* header = loop->GetHeader();
+  HInductionVarAnalysis::InductionInfo* trip =
+      induction_analysis_->LookupInfo(loop, header->GetLastInstruction());
+  HInstruction* condition = nullptr;
+  CHECK(GenerateCode(trip->op_b, nullptr, graph, block, &condition, false, false));
+  return condition;
 }
 
 //
@@ -356,7 +371,7 @@ bool InductionVarRange::GenerateCode(HInstruction* context,
                                      HBasicBlock* block,
                                      /*out*/HInstruction** lower,
                                      /*out*/HInstruction** upper,
-                                     /*out*/bool* top_test) {
+                                     /*out*/bool* needs_test) {
   HLoopInformation* loop = context->GetBlock()->GetLoopInformation();  // closest enveloping loop
   if (loop != nullptr) {
     HBasicBlock* header = loop->GetHeader();
@@ -365,8 +380,13 @@ bool InductionVarRange::GenerateCode(HInstruction* context,
     HInductionVarAnalysis::InductionInfo* trip =
         induction_analysis_->LookupInfo(loop, header->GetLastInstruction());
     if (info != nullptr && trip != nullptr) {
-      if (top_test != nullptr) {
-        *top_test = trip->operation != HInductionVarAnalysis::kTripCountInLoop;
+      if (needs_test != nullptr) {
+        *needs_test = trip->operation != HInductionVarAnalysis::kTripCountInLoop;
+        // If test is needed, make sure it can be generated.
+        if (*needs_test &&
+            !GenerateCode(trip->op_b, nullptr, graph, block, nullptr, false, false)) {
+          return false;
+        }
       }
       return
         // Success on lower if invariant (not set), or code can be generated.
@@ -396,10 +416,29 @@ bool InductionVarRange::GenerateCode(HInductionVarAnalysis::InductionInfo* info,
         // Invariants.
         switch (info->operation) {
           case HInductionVarAnalysis::kAdd:
+          case HInductionVarAnalysis::kLT:
+          case HInductionVarAnalysis::kLE:
+          case HInductionVarAnalysis::kGT:
+          case HInductionVarAnalysis::kGE:
             if (GenerateCode(info->op_a, trip, graph, block, &opa, in_body, is_min) &&
                 GenerateCode(info->op_b, trip, graph, block, &opb, in_body, is_min)) {
               if (graph != nullptr) {
-                *result = Insert(block, new (graph->GetArena()) HAdd(type, opa, opb));
+                HInstruction* operation = nullptr;
+                switch (info->operation) {
+                  case HInductionVarAnalysis::kAdd:
+                    operation = new (graph->GetArena()) HAdd(type, opa, opb); break;
+                  case HInductionVarAnalysis::kLT:
+                    operation = new (graph->GetArena()) HLessThan(opa, opb); break;
+                  case HInductionVarAnalysis::kLE:
+                    operation = new (graph->GetArena()) HLessThanOrEqual(opa, opb); break;
+                  case HInductionVarAnalysis::kGT:
+                    operation = new (graph->GetArena()) HGreaterThan(opa, opb); break;
+                  case HInductionVarAnalysis::kGE:
+                    operation = new (graph->GetArena()) HGreaterThanOrEqual(opa, opb); break;
+                  default:
+                    LOG(FATAL) << "unknown operation";
+                }
+                *result = Insert(block, operation);
               }
               return true;
             }
@@ -461,14 +500,20 @@ bool InductionVarRange::GenerateCode(HInductionVarAnalysis::InductionInfo* info,
             if (GenerateCode(trip,       trip, graph, block, &opa, in_body, is_min_a) &&
                 GenerateCode(info->op_b, trip, graph, block, &opb, in_body, is_min)) {
               if (graph != nullptr) {
-                *result = Insert(block, new (graph->GetArena()) HAdd(type, opa, opb));
+                HInstruction* oper;
+                if (value == 1) {
+                  oper = new (graph->GetArena()) HAdd(type, opa, opb);
+                } else {
+                  oper = new (graph->GetArena()) HSub(type, opb, opa);
+                }
+                *result = Insert(block, oper);
               }
               return true;
             }
           }
         }
         break;
-      default:  // TODO(ajcbik): add more cases
+      default:
         break;
     }
   }
