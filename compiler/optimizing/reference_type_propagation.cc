@@ -78,10 +78,25 @@ class RTPVisitor : public HGraphDelegateVisitor {
 ReferenceTypePropagation::ReferenceTypePropagation(HGraph* graph,
                                                    StackHandleScopeCollection* handles,
                                                    const char* name)
+    : ReferenceTypePropagation(graph, handles, nullptr, name) {
+}
+
+ReferenceTypePropagation::ReferenceTypePropagation(HGraph* graph,
+                                                   StackHandleScopeCollection* handles,
+                                                   HInstruction* start_from,
+                                                   const char* name)
     : HOptimization(graph, name),
       handles_(handles),
       worklist_(graph->GetArena()->Adapter(kArenaAllocReferenceTypePropagation)) {
   worklist_.reserve(kDefaultWorklistSize);
+  if (start_from != nullptr) {
+    DCHECK_EQ(graph, start_from->GetBlock()->GetGraph());
+    DCHECK_EQ(Primitive::kPrimNot, start_from->GetType());
+    AddDependentInstructionsToWorklist(start_from);
+    run_with_initial_worklist_root_ = true;
+  } else {
+    run_with_initial_worklist_root_ = false;
+  }
   // Mutator lock is required for NewHandle, but annotalysis ignores constructors.
   ScopedObjectAccess soa(Thread::Current());
   ClassLinker* linker = Runtime::Current()->GetClassLinker();
@@ -100,12 +115,15 @@ ReferenceTypePropagation::ReferenceTypePropagation(HGraph* graph,
 }
 
 void ReferenceTypePropagation::Run() {
-  // To properly propagate type info we need to visit in the dominator-based order.
-  // Reverse post order guarantees a node's dominators are visited first.
-  // We take advantage of this order in `VisitBasicBlock`.
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
-    VisitBasicBlock(it.Current());
+  if (!run_with_initial_worklist_root_) {
+    // To properly propagate type info we need to visit in the dominator-based order.
+    // Reverse post order guarantees a node's dominators are visited first.
+    // We take advantage of this order in `VisitBasicBlock`.
+    for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+      VisitBasicBlock(it.Current());
+    }
   }
+
   ProcessWorklist();
 
   if (kIsDebugBuild) {

@@ -31,8 +31,16 @@ namespace art {
  */
 class ReferenceTypePropagation : public HOptimization {
  public:
+  // Creates a full type propagation pass.
   ReferenceTypePropagation(HGraph* graph,
                            StackHandleScopeCollection* handles,
+                           const char* name = kReferenceTypePropagationPassName);
+  // Creates a refinement type propagation which will only propagate types for
+  // instructions dominated by `start_from`.
+  // If `start_from` is null, a full type propagation will be created.
+  ReferenceTypePropagation(HGraph* graph,
+                           StackHandleScopeCollection* handles,
+                           HInstruction* start_from,
                            const char* name = kReferenceTypePropagationPassName);
 
   void Run() OVERRIDE;
@@ -64,6 +72,8 @@ class ReferenceTypePropagation : public HOptimization {
   ReferenceTypeInfo::TypeHandle class_class_handle_;
   ReferenceTypeInfo::TypeHandle string_class_handle_;
   ReferenceTypeInfo::TypeHandle throwable_class_handle_;
+
+  bool run_with_initial_worklist_root_;
 
   static constexpr size_t kDefaultWorklistSize = 8;
 
