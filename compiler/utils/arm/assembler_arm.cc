@@ -922,5 +922,30 @@ uint32_t ArmAssembler::ModifiedImmediate(uint32_t value) {
   return value | i << 26 | imm3 << 12 | a << 7;
 }
 
+void ArmAssembler::FinalizeTrackedLabels() {
+  if (!tracked_labels_.empty()) {
+    // This array should be sorted, as assembly is generated in linearized order. It isn't
+    // technically required, but GetAdjustedPosition() used in AdjustLabelPosition() can take
+    // advantage of it. So ensure that it's actually the case.
+    if (kIsDebugBuild) {
+      if (tracked_labels_.size() > 1u) {
+        std::vector<Label*> copy(tracked_labels_);
+        std::sort(
+            copy.begin(),
+            copy.end(),
+            [](const Label* lhs, const Label* rhs) { return lhs->Position() < rhs->Position(); });
+        CHECK(copy == tracked_labels_);
+      }
+    }
+
+    Label* last_label = nullptr;  // Track duplicates, we must not adjust twice.
+    for (Label* label : tracked_labels_) {
+      DCHECK_NE(label, last_label);
+      AdjustLabelPosition(label);
+      last_label = label;
+    }
+  }
+}
+
 }  // namespace arm
 }  // namespace art
