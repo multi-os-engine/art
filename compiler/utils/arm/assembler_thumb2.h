@@ -18,6 +18,7 @@
 #define ART_COMPILER_UTILS_ARM_ASSEMBLER_THUMB2_H_
 
 #include <deque>
+#include <utility>
 #include <vector>
 
 #include "base/logging.h"
@@ -61,6 +62,7 @@ class Thumb2Assembler FINAL : public ArmAssembler {
   }
 
   void FinalizeCode() OVERRIDE;
+  void FinalizeTables() OVERRIDE;
 
   // Data-processing instructions.
   virtual void and_(Register rd, Register rn, const ShifterOperand& so,
@@ -304,6 +306,8 @@ class Thumb2Assembler FINAL : public ArmAssembler {
   void AddConstant(Register rd, Register rn, int32_t value,
                    Condition cond = AL, SetCc set_cc = kCcDontCare) OVERRIDE;
 
+  void CmpConstant(Register rn, int32_t value, Condition cond = AL) OVERRIDE;
+
   // Load and Store. May clobber IP.
   void LoadImmediate(Register rd, int32_t value, Condition cond = AL) OVERRIDE;
   void MarkExceptionHandler(Label* label) OVERRIDE;
@@ -358,6 +362,12 @@ class Thumb2Assembler FINAL : public ArmAssembler {
     force_32bit_ = true;
   }
 
+  // Emit an ADR (or a sequence of instructions) to load the jump table address into base_reg. This
+  // will generate a fixup.
+  JumpTable* CreateJumpTable(std::vector<Label*>&& labels, Register base_reg) OVERRIDE;
+  // Emit an ADD PC, X to dispatch a jump-table jump. This will generate a fixup.
+  void EmitJumpTableDispatch(JumpTable* jump_table, Register displacement_reg) OVERRIDE;
+
  private:
   typedef uint16_t FixupId;
 
@@ -397,8 +407,10 @@ class Thumb2Assembler FINAL : public ArmAssembler {
       kUnconditionalLink,         // BL.
       kUnconditionalLinkX,        // BLX.
       kCompareAndBranchXZero,     // cbz/cbnz.
+      kAddPc,                     // add pc, rX (used for jump table).
       kLoadLiteralNarrow,         // Load narrrow integer literal.
       kLoadLiteralWide,           // Load wide integer literal.
+      kLoadLiteralAddr,           // Load address of literal (used for jump table).
       kLoadFPLiteralSingle,       // Load FP literal single.
       kLoadFPLiteralDouble,       // Load FP literal double.
     };
@@ -416,6 +428,10 @@ class Thumb2Assembler FINAL : public ArmAssembler {
       kCbxz32Bit,   // CMP rX, #0 + Bcc label; X < 8; 16-bit Bcc; +-8-bit offset.
       kCbxz48Bit,   // CMP rX, #0 + Bcc label; X < 8; 32-bit Bcc; up to +-1MiB offset.
 
+      // Jump table dispatch. This is always a known size, but for fixing up the table we emit it
+      // as a fixup.
+      kAddPc16Bit,  // ADD pc, rX.
+
       // Load integer literal variants.
       // LDR rX, label; X < 8; 16-bit variant up to 1KiB offset; 2 bytes.
       kLiteral1KiB,
@@ -428,6 +444,16 @@ class Thumb2Assembler FINAL : public ArmAssembler {
       // NOTE: We don't provide the 12-byte version of kLiteralFar below where the LDR is 16-bit.
       // MOV rX, imm16 + MOVT rX, imm16 + ADD rX, pc + LDR rX, [rX]; any offset; 14 bytes.
       kLiteralFar,
+
+      // Load literal base addr.
+      // ADR rX, label; X < 8; 8 bit immediate, shifted to 10 bit. 2 bytes.
+      kLiteralAddr1KiB,
+      // ADR rX, label; 4KiB offset. 4 bytes.
+      kLiteralAddr4KiB,
+      // MOV rX, imm16 + ADD rX, pc; 64KiB offset. 6 bytes.
+      kLiteralAddr64KiB,
+      // MOV rX, imm16 + MOVT rX, imm16 + ADD rX, pc; any offset; 10 bytes.
+      kLiteralAddrFar,
 
       // Load long or FP literal variants.
       // VLDR s/dX, label; 32-bit insn, up to 1KiB offset; 4 bytes.
@@ -456,8 +482,16 @@ class Thumb2Assembler FINAL : public ArmAssembler {
                    cond, kCompareAndBranchXZero, kCbxz16Bit, location);
     }
 
+    // Add register to pc, jump table dispatch.
+    static Fixup AddPc(uint32_t location, Register rn, Size size = kAddPc16Bit) {
+      DCHECK(size == kAddPc16Bit);
+      Fixup fixup(rn, kNoRegister, kNoSRegister, kNoDRegister, AL, kAddPc, size, location);
+      fixup.Resolve(location);
+      return fixup;
+    }
+
     // Load narrow literal.
-    static Fixup LoadNarrowLiteral(uint32_t location, Register rt, Size size = kLiteral1KiB) {
+    static Fixup LoadNarrowLiteral(uint32_t location, Register rt, Size size) {
       DCHECK(size == kLiteral1KiB || size == kLiteral4KiB || size == kLiteral64KiB ||
              size == kLiteral1MiB || size == kLiteralFar);
       DCHECK(!IsHighRegister(rt) || (size != kLiteral1KiB && size != kLiteral64KiB));
@@ -491,6 +525,14 @@ class Thumb2Assembler FINAL : public ArmAssembler {
              size == kLongOrFPLiteralFar);
       return Fixup(kNoRegister, kNoRegister, kNoSRegister, dd,
                    AL, kLoadFPLiteralDouble, size, location);
+    }
+
+    static Fixup LoadLiteralAddress(uint32_t location, Register rt, Size size) {
+      DCHECK(size == kLiteralAddr1KiB || size == kLiteralAddr4KiB || size == kLiteralAddr64KiB ||
+             size == kLiteralAddrFar);
+      DCHECK(!IsHighRegister(rt) || size != kLiteralAddr1KiB);
+      return Fixup(rt, kNoRegister, kNoSRegister, kNoDRegister,
+                   AL, kLoadLiteralAddr, size, location);
     }
 
     Type GetType() const {
@@ -603,6 +645,32 @@ class Thumb2Assembler FINAL : public ArmAssembler {
     // array in the assembler and we store only the start index and count here.
     uint32_t dependents_count_;
     uint32_t dependents_start_;
+  };
+
+  class Thumb2JumpTable : public JumpTable {
+   public:
+    explicit Thumb2JumpTable(std::vector<Label*>&& labels)
+        : JumpTable(std::forward<std::vector<Label*>>(labels)), dispatch_fixup_id_(0), bound_(false) {
+    }
+
+    FixupId GetDispatchFixupId() {
+      return dispatch_fixup_id_;
+    }
+
+    bool Bound() {
+      return bound_;
+    }
+
+    // Record the fixup for the dispatch.
+    void Bind(FixupId id) {
+      DCHECK(!Bound());
+      dispatch_fixup_id_ = id;
+      bound_ = true;
+    }
+
+   private:
+    FixupId dispatch_fixup_id_;
+    bool bound_;
   };
 
   // Emit a single 32 or 16 bit data processing instruction.
@@ -756,12 +824,14 @@ class Thumb2Assembler FINAL : public ArmAssembler {
   }
 
   void BindLabel(Label* label, uint32_t bound_pc);
-  void BindLiterals();
+  uint32_t BindLiterals();
+  void BindJumpTables(uint32_t code_size);
   void AdjustFixupIfNeeded(Fixup* fixup, uint32_t* current_code_size,
                            std::deque<FixupId>* fixups_to_recalculate);
   uint32_t AdjustFixups();
   void EmitFixups(uint32_t adjusted_code_size);
   void EmitLiterals();
+  void EmitJumpTables();
 
   static int16_t BEncoding16(int32_t offset, Condition cond);
   static int32_t BEncoding32(int32_t offset, Condition cond);
@@ -778,6 +848,9 @@ class Thumb2Assembler FINAL : public ArmAssembler {
   static int32_t VldrdEncoding32(DRegister dd, Register rn, int32_t offset);
   static int16_t LdrRtRnImm5Encoding16(Register rt, Register rn, int32_t offset);
   static int32_t LdrRtRnImm12Encoding(Register rt, Register rn, int32_t offset);
+  static int16_t AdrEncoding16(Register rd, int32_t offset);
+  static int32_t AdrEncoding32(Register rd, int32_t offset);
+  static int16_t AddPcEncoding16(Register rm);
 
   std::vector<Fixup> fixups_;
   std::unique_ptr<FixupId[]> fixup_dependents_;
@@ -785,6 +858,9 @@ class Thumb2Assembler FINAL : public ArmAssembler {
   // Use std::deque<> for literal labels to allow insertions at the end
   // without invalidating pointers and references to existing elements.
   std::deque<Literal> literals_;
+
+  // Jump table list.
+  std::deque<Thumb2JumpTable> jump_tables_;
 
   // Data for AdjustedPosition(), see the description there.
   uint32_t last_position_adjustment_;
