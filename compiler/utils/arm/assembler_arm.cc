@@ -922,5 +922,25 @@ uint32_t ArmAssembler::ModifiedImmediate(uint32_t value) {
   return value | i << 26 | imm3 << 12 | a << 7;
 }
 
+void ArmAssembler::FinalizeTrackedLabels() {
+  if (!tracked_labels_.empty()) {
+    // Sort it, as the actual assemblers are optimized towards a linear scan through labels.
+    if (tracked_labels_.size() > 1u) {
+      std::sort(
+          tracked_labels_.begin(),
+          tracked_labels_.end(),
+          [](const Label* lhs, const Label* rhs) { return lhs->Position() < rhs->Position(); });
+    }
+
+    Label* last_label = nullptr;  // Track duplicates, we must not adjust twice.
+    for (Label* label : tracked_labels_) {
+      if (label != last_label) {
+        AdjustLabelPosition(label);
+        last_label = label;
+      }
+    }
+  }
+}
+
 }  // namespace arm
 }  // namespace art
