@@ -102,6 +102,16 @@ void Thumb2Assembler::BindLiterals() {
   }
 }
 
+void Thumb2Assembler::BindJumpTables() {
+  // We don't add the padding here, that's done only after adjusting the Fixup sizes.
+  uint32_t code_size = buffer_.Size();
+  for (JumpTable& table : jump_tables_) {
+    Label* label = table.GetLabel();
+    BindLabel(label, code_size);
+    code_size += table.GetSize();
+  }
+}
+
 void Thumb2Assembler::AdjustFixupIfNeeded(Fixup* fixup, uint32_t* current_code_size,
                                           std::deque<FixupId>* fixups_to_recalculate) {
   uint32_t adjustment = fixup->AdjustSizeIfNeeded(*current_code_size);
@@ -224,6 +234,27 @@ void Thumb2Assembler::EmitLiterals() {
       DCHECK(literal.GetSize() == 4u || literal.GetSize() == 8u);
       for (size_t i = 0, size = literal.GetSize(); i != size; ++i) {
         buffer_.Emit<uint8_t>(literal.GetData()[i]);
+      }
+    }
+  }
+}
+
+void Thumb2Assembler::EmitJumpTables() {
+  if (!jump_tables_.empty()) {
+    // Jump tables require 4 byte alignment. (We don't support byte and half-word jump tables.)
+    uint32_t code_size = buffer_.Size();
+    DCHECK_ALIGNED(code_size, 2);
+    if ((code_size & 2u) != 0u) {
+      Emit16(0);
+    }
+    for (JumpTable& table : jump_tables_) {
+      AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+      DCHECK_EQ(static_cast<size_t>(table.GetLabel()->Position()), buffer_.Size());
+      int32_t anchor_position = table.GetAnchorLabel()->Position();
+
+      for (Label* target : table.GetData()) {
+        int32_t offset = target->Position() - anchor_position;
+        buffer_.Emit<int32_t>(offset);
       }
     }
   }
@@ -382,12 +413,33 @@ inline int32_t Thumb2Assembler::LdrRtRnImm12Encoding(Register rt, Register rn, i
   return B31 | B30 | B29 | B28 | B27 | B23 | B22 | B20 | (rn << 16) | (rt << 12) | offset;
 }
 
+inline int16_t Thumb2Assembler::AdrEncoding16(Register rt, int32_t offset) {
+  DCHECK(IsUint<10>(offset));
+  DCHECK(IsAligned<4>(offset));
+  DCHECK(!IsHighRegister(rt));
+  return B15 | B13 | (rt << 8) | (offset >> 2);
+}
+
+inline int32_t Thumb2Assembler::AdrEncoding32(Register rt, int32_t offset) {
+  DCHECK(IsUint<12>(offset));
+  // Bit     26: offset[11]
+  // Bits 14-12: offset[10-8]
+  // Bits   7-0: offset[7-0]
+  int32_t immediate_mask =
+      ((offset & (1 << 11)) << (26 - 11)) |
+      ((offset & (7 << 8)) << (12 - 8)) |
+      (offset & 0xFF);
+  return B31 | B30 | B29 | B28 | B25 | B19 | B18 | B17 | B16 | (rt << 8) | immediate_mask;
+}
+
 void Thumb2Assembler::FinalizeCode() {
   ArmAssembler::FinalizeCode();
   BindLiterals();
+  BindJumpTables();
   uint32_t adjusted_code_size = AdjustFixups();
   EmitFixups(adjusted_code_size);
   EmitLiterals();
+  EmitJumpTables();
 }
 
 bool Thumb2Assembler::ShifterOperandCanAlwaysHold(uint32_t immediate) {
@@ -1770,6 +1822,15 @@ inline size_t Thumb2Assembler::Fixup::SizeInBytes(Size size) {
     case kLiteralFar:
       return 14u;
 
+    case kLiteralAddr1KiB:
+      return 2u;
+    case kLiteralAddr4KiB:
+      return 4u;
+    case kLiteralAddr64KiB:
+      return 6u;
+    case kLiteralAddrFar:
+      return 10u;
+
     case kLongOrFPLiteral1KiB:
       return 4u;
     case kLongOrFPLiteral256KiB:
@@ -1831,6 +1892,8 @@ inline int32_t Thumb2Assembler::Fixup::GetOffset(uint32_t current_code_size) con
     case kLiteral1KiB:
     case kLiteral4KiB:
     case kLongOrFPLiteral1KiB:
+    case kLiteralAddr1KiB:
+    case kLiteralAddr4KiB:
       DCHECK(diff >= 0 || (GetSize() == kLiteral1KiB && diff == -2));
       diff += LiteralPoolPaddingSize(current_code_size);
       // Load literal instructions round down the PC+4 to a multiple of 4, so if the PC
@@ -1843,12 +1906,14 @@ inline int32_t Thumb2Assembler::Fixup::GetOffset(uint32_t current_code_size) con
     case kLiteral1MiB:
     case kLiteral64KiB:
     case kLongOrFPLiteral256KiB:
+    case kLiteralAddr64KiB:
       DCHECK_GE(diff, 4);  // The target must be at least 4 bytes after the ADD rX, PC.
       diff -= 4;        // One extra 32-bit MOV.
       diff += LiteralPoolPaddingSize(current_code_size);
       break;
     case kLiteralFar:
     case kLongOrFPLiteralFar:
+    case kLiteralAddrFar:
       DCHECK_GE(diff, 8);  // The target must be at least 4 bytes after the ADD rX, PC.
       diff -= 8;        // Extra MOVW+MOVT; both 32-bit.
       diff += LiteralPoolPaddingSize(current_code_size);
@@ -1926,6 +1991,30 @@ uint32_t Thumb2Assembler::Fixup::AdjustSizeIfNeeded(uint32_t current_code_size) 
       current_code_size += IncreaseSize(kLiteralFar);
       FALLTHROUGH_INTENDED;
     case kLiteralFar:
+      // This encoding can reach any target.
+      break;
+
+    case kLiteralAddr1KiB:
+      DCHECK(!IsHighRegister(rn_));
+      if (IsUint<10>(GetOffset(current_code_size))) {
+        break;
+      }
+      current_code_size += IncreaseSize(kLiteralAddr4KiB);
+      FALLTHROUGH_INTENDED;
+    case kLiteralAddr4KiB:
+      if (IsUint<12>(GetOffset(current_code_size))) {
+        break;
+      }
+      current_code_size += IncreaseSize(kLiteralAddr64KiB);
+      FALLTHROUGH_INTENDED;
+    case kLiteralAddr64KiB:
+      // Can't handle high register which we can encounter by fall-through from kLiteralAddr4KiB.
+      if (!IsHighRegister(rn_) && IsUint<16>(GetOffset(current_code_size))) {
+        break;
+      }
+      current_code_size += IncreaseSize(kLiteralAddrFar);
+      FALLTHROUGH_INTENDED;
+    case kLiteralAddrFar:
       // This encoding can reach any target.
       break;
 
@@ -2052,6 +2141,42 @@ void Thumb2Assembler::Fixup::Emit(AssemblerBuffer* buffer, uint32_t code_size) c
       buffer->Store<int16_t>(location_ + 8u, add_pc_encoding);
       buffer->Store<int16_t>(location_ + 10u, ldr_encoding >> 16);
       buffer->Store<int16_t>(location_ + 12u, static_cast<int16_t>(ldr_encoding & 0xffff));
+      break;
+    }
+
+    case kLiteralAddr1KiB: {
+      DCHECK(type_ == kLoadLiteralAddr);
+      int16_t encoding = AdrEncoding16(rn_, GetOffset(code_size));
+      buffer->Store<int16_t>(location_, encoding);
+      break;
+    }
+    case kLiteralAddr4KiB: {
+      DCHECK(type_ == kLoadLiteralAddr);
+      int32_t encoding = AdrEncoding32(rn_, GetOffset(code_size));
+      buffer->Store<int16_t>(location_, encoding >> 16);
+      buffer->Store<int16_t>(location_ + 2u, static_cast<int16_t>(encoding & 0xffff));
+      break;
+    }
+    case kLiteralAddr64KiB: {
+      DCHECK(type_ == kLoadLiteralAddr);
+      int32_t mov_encoding = MovwEncoding32(rn_, GetOffset(code_size));
+      int16_t add_pc_encoding = AddRdnRmEncoding16(rn_, PC);
+      buffer->Store<int16_t>(location_, mov_encoding >> 16);
+      buffer->Store<int16_t>(location_ + 2u, static_cast<int16_t>(mov_encoding & 0xffff));
+      buffer->Store<int16_t>(location_ + 4u, add_pc_encoding);
+      break;
+    }
+    case kLiteralAddrFar: {
+      DCHECK(type_ == kLoadLiteralAddr);
+      int32_t offset = GetOffset(code_size);
+      int32_t movw_encoding = MovwEncoding32(rn_, offset & 0xffff);
+      int32_t movt_encoding = MovtEncoding32(rn_, offset & ~0xffff);
+      int16_t add_pc_encoding = AddRdnRmEncoding16(rn_, PC);
+      buffer->Store<int16_t>(location_, movw_encoding >> 16);
+      buffer->Store<int16_t>(location_ + 2u, static_cast<int16_t>(movw_encoding & 0xffff));
+      buffer->Store<int16_t>(location_ + 4u, movt_encoding >> 16);
+      buffer->Store<int16_t>(location_ + 6u, static_cast<int16_t>(movt_encoding & 0xffff));
+      buffer->Store<int16_t>(location_ + 8u, add_pc_encoding);
       break;
     }
 
@@ -3476,5 +3601,26 @@ void Thumb2Assembler::CompareAndBranchIfNonZero(Register r, Label* label) {
     b(label, NE);
   }
 }
+
+JumpTable* Thumb2Assembler::CreateJumpTable(std::vector<Label*> labels, Register base_reg) {
+  jump_tables_.emplace_back(labels);
+  JumpTable* table = &jump_tables_.back();
+  DCHECK(!table->GetLabel()->IsBound());
+
+  bool use32bit = IsForced32Bit() || IsHighRegister(base_reg);
+  uint32_t location = buffer_.Size();
+  Fixup::Size size = use32bit ? Fixup::kLiteralAddr4KiB : Fixup::kLiteralAddr1KiB;
+  FixupId fixup_id = AddFixup(Fixup::LoadLiteralAddress(location, base_reg, size));
+  Emit16(static_cast<uint16_t>(table->GetLabel()->position_));
+  table->GetLabel()->LinkTo(fixup_id);
+  if (use32bit) {
+    Emit16(0);
+  }
+  DCHECK_EQ(location + GetFixup(fixup_id)->GetSizeInBytes(), buffer_.Size());
+
+  return table;
+}
+
+
 }  // namespace arm
 }  // namespace art

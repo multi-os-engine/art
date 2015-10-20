@@ -77,6 +77,44 @@ class Literal {
   DISALLOW_COPY_AND_ASSIGN(Literal);
 };
 
+// Jump table: table of labels emitted after the literals. Similar to literals.
+class JumpTable {
+ public:
+  explicit JumpTable(std::vector<Label*> labels) : label_(), anchor_label_(), labels_(labels) {
+  }
+
+  uint32_t GetSize() const {
+    return static_cast<uint32_t>(labels_.size());
+  }
+
+  const std::vector<Label*>& GetData() const {
+    return labels_;
+  }
+
+  Label* GetLabel() {
+    return &label_;
+  }
+
+  const Label* GetLabel() const {
+    return &label_;
+  }
+
+  Label* GetAnchorLabel() {
+    return &anchor_label_;
+  }
+
+  const Label* GetAnchorLabel() const {
+    return &anchor_label_;
+  }
+
+ private:
+  Label label_;
+  Label anchor_label_;
+  std::vector<Label*> labels_;
+
+  DISALLOW_COPY_AND_ASSIGN(JumpTable);
+};
+
 class ShifterOperand {
  public:
   ShifterOperand() : type_(kUnknown), rm_(kNoRegister), rs_(kNoRegister),
@@ -995,6 +1033,11 @@ class ArmAssembler : public Assembler {
   void Jump(Label* label) OVERRIDE {
     b(label);
   }
+
+  // Create a jump table for the given labels that will be emitted when finalizing. Create a load
+  // sequence (or placeholder) that stores the base address into the given register. When the table
+  // is emitted, offsets will be relative to the anchor in the table.
+  virtual JumpTable* CreateJumpTable(std::vector<Label*> labels, Register base_reg) = 0;
 
  protected:
   // Returns whether or not the given register is used for passing parameters.

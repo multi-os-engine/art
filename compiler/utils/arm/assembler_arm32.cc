@@ -1584,6 +1584,11 @@ void Arm32Assembler::CompareAndBranchIfNonZero(Register r, Label* label) {
   b(label, NE);
 }
 
+JumpTable* Arm32Assembler::CreateJumpTable(std::vector<Label*> labels ATTRIBUTE_UNUSED,
+                                           Register base_reg ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "CreateJumpTable is not supported on ARM32";
+  UNREACHABLE();
+}
 
 }  // namespace arm
 }  // namespace art

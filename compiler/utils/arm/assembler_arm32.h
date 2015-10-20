@@ -308,6 +308,8 @@ class Arm32Assembler FINAL : public ArmAssembler {
 
   void MemoryBarrier(ManagedRegister scratch) OVERRIDE;
 
+  JumpTable* CreateJumpTable(std::vector<Label*> labels, Register base_reg) OVERRIDE;
+
  private:
   void EmitType01(Condition cond,
                   int type,
