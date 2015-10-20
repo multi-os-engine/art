@@ -1712,20 +1712,21 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
   size_t parameter_index = 0;
   for (HInstructionIterator it(entry_block_->GetInstructions()); !it.Done(); it.Advance()) {
     HInstruction* current = it.Current();
+    HInstruction* replacement = nullptr;
     if (current->IsNullConstant()) {
-      current->ReplaceWith(outer_graph->GetNullConstant(current->GetDexPc()));
+      replacement = outer_graph->GetNullConstant(current->GetDexPc());
     } else if (current->IsIntConstant()) {
-      current->ReplaceWith(outer_graph->GetIntConstant(
-          current->AsIntConstant()->GetValue(), current->GetDexPc()));
+      replacement = outer_graph->GetIntConstant(
+          current->AsIntConstant()->GetValue(), current->GetDexPc());
     } else if (current->IsLongConstant()) {
-      current->ReplaceWith(outer_graph->GetLongConstant(
-          current->AsLongConstant()->GetValue(), current->GetDexPc()));
+      replacement = outer_graph->GetLongConstant(
+          current->AsLongConstant()->GetValue(), current->GetDexPc());
     } else if (current->IsFloatConstant()) {
-      current->ReplaceWith(outer_graph->GetFloatConstant(
-          current->AsFloatConstant()->GetValue(), current->GetDexPc()));
+      replacement = outer_graph->GetFloatConstant(
+          current->AsFloatConstant()->GetValue(), current->GetDexPc());
     } else if (current->IsDoubleConstant()) {
-      current->ReplaceWith(outer_graph->GetDoubleConstant(
-          current->AsDoubleConstant()->GetValue(), current->GetDexPc()));
+      replacement = outer_graph->GetDoubleConstant(
+          current->AsDoubleConstant()->GetValue(), current->GetDexPc());
     } else if (current->IsParameterValue()) {
       if (kIsDebugBuild
           && invoke->IsInvokeStaticOrDirect()
@@ -1735,12 +1736,20 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
         size_t last_input_index = invoke->InputCount() - 1;
         DCHECK(parameter_index != last_input_index);
       }
-      current->ReplaceWith(invoke->InputAt(parameter_index++));
+      replacement = invoke->InputAt(parameter_index++);
     } else if (current->IsCurrentMethod()) {
-      current->ReplaceWith(outer_graph->GetCurrentMethod());
+      replacement = outer_graph->GetCurrentMethod();
     } else {
       DCHECK(current->IsGoto() || current->IsSuspendCheck());
       entry_block_->RemoveInstruction(current);
+    }
+    if (replacement != nullptr) {
+      current->ReplaceWith(replacement);
+      // If the current is the return value then we need to update the later.
+      if (current == return_value) {
+        DCHECK_EQ(entry_block_, return_value->GetBlock());
+        return_value = replacement;
+      }
     }
   }
 
