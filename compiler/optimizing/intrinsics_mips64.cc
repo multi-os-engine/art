@@ -272,7 +272,9 @@ void IntrinsicCodeGeneratorMIPS64::VisitShortReverseBytes(HInvoke* invoke) {
   GenReverseBytes(invoke->GetLocations(), Primitive::kPrimShort, GetAssembler());
 }
 
-static void GenNumberOfLeadingZeroes(LocationSummary* locations, bool is64bit, Mips64Assembler* assembler) {
+static void GenNumberOfLeadingZeroes(LocationSummary* locations,
+                                     bool is64bit,
+                                     Mips64Assembler* assembler) {
   GpuRegister in  = locations->InAt(0).AsRegister<GpuRegister>();
   GpuRegister out = locations->Out().AsRegister<GpuRegister>();
 
@@ -301,7 +303,9 @@ void IntrinsicCodeGeneratorMIPS64::VisitLongNumberOfLeadingZeros(HInvoke* invoke
   GenNumberOfLeadingZeroes(invoke->GetLocations(), true, GetAssembler());
 }
 
-static void GenNumberOfTrailingZeroes(LocationSummary* locations, bool is64bit, Mips64Assembler* assembler) {
+static void GenNumberOfTrailingZeroes(LocationSummary* locations,
+                                      bool is64bit,
+                                      Mips64Assembler* assembler) {
   Location in = locations->InAt(0);
   Location out = locations->Out();
 
@@ -383,7 +387,7 @@ void IntrinsicCodeGeneratorMIPS64::VisitIntegerRotateRight(HInvoke* invoke) {
   GenRotateRight(invoke, Primitive::kPrimInt, GetAssembler());
 }
 
-// int java.lang.Long.rotateRight(long i, int distance)
+// long java.lang.Long.rotateRight(long i, int distance)
 void IntrinsicLocationsBuilderMIPS64::VisitLongRotateRight(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                            LocationSummary::kNoCall,
@@ -446,7 +450,7 @@ void IntrinsicCodeGeneratorMIPS64::VisitIntegerRotateLeft(HInvoke* invoke) {
   GenRotateLeft(invoke, Primitive::kPrimInt, GetAssembler());
 }
 
-// int java.lang.Long.rotateLeft(long i, int distance)
+// long java.lang.Long.rotateLeft(long i, int distance)
 void IntrinsicLocationsBuilderMIPS64::VisitLongRotateLeft(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                            LocationSummary::kNoCall,
@@ -754,17 +758,19 @@ void IntrinsicCodeGeneratorMIPS64::VisitMathSqrt(HInvoke* invoke) {
   __ SqrtD(out, in);
 }
 
-static void CreateFPToFP(ArenaAllocator* arena, HInvoke* invoke) {
+static void CreateFPToFP(ArenaAllocator* arena,
+                         HInvoke* invoke,
+                         Location::OutputOverlap overlaps = Location::kOutputOverlap) {
   LocationSummary* locations = new (arena) LocationSummary(invoke,
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresFpuRegister());
-  locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
+  locations->SetOut(Location::RequiresFpuRegister(), overlaps);
 }
 
 // double java.lang.Math.rint(double)
 void IntrinsicLocationsBuilderMIPS64::VisitMathRint(HInvoke* invoke) {
-  CreateFPToFP(arena_, invoke);
+  CreateFPToFP(arena_, invoke, Location::kNoOutputOverlap);
 }
 
 void IntrinsicCodeGeneratorMIPS64::VisitMathRint(HInvoke* invoke) {
