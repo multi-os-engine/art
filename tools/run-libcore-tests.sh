@@ -67,6 +67,7 @@ working_packages=("dalvik.system"
                   "org.apache.harmony.tests.javax.security"
                   "tests.java.lang.String"
                   "jsr166")
+packages=${working_packages[@]}
 
 vogar_args=$@
 while true; do
@@ -82,14 +83,42 @@ while true; do
     # classpath/resources differences when compiling the boot image.
     vogar_args="$vogar_args --vm-arg -Ximage:/non/existent"
     shift
+  elif [[ "$1" == --packages=* ]]; then
+    # Initialize array `packages` from a space-separated list of packages.
+    packages_list=$(echo "$1" | sed 's/--packages=//')
+    packages=($packages_list)
+    # Remove the --package=* option from the list of Vogar arguments.
+    vogar_args=${vogar_args/$1}
+    shift
+  elif [[ "$1" == "--show-default-packages" ]]; then
+    echo ${working_packages[@]} | tr " " "\n"
+    exit
   elif [[ "$1" == "--debug" ]]; then
-    # Remove the --debug from the arguments.
+    # Remove the --debug option from the list of Vogar arguments.
     vogar_args=${vogar_args/$1}
     vogar_args="$vogar_args --vm-arg -XXlib:libartd.so"
     shift
+  elif [[ "$1" == "--help" ]]; then
+    cat <<EOF
+Usage: $0 [OPTION]...
+Run libcore tests using Vogar.
+
+Options:
+  --packages=PACKAGE_LIST     Use the space-separated PACKAGE_LIST instead of
+                                the default package list.
+  --show-default-packages     Show the default list of packages used and exit.
+  --debug                     Use the runtime's debug mode (i.e. use libartd.so
+                                instead of libart.so).
+  --help                      Display this help and exit.
+
+Other options are passed to Vogar as-is, e.g. '--mode=device' or '--mode=host'.
+EOF
+    exit
   elif [[ "$1" == "" ]]; then
+    # End of parameter list.
     break
   else
+    # Untouched option passed to Vogar.
     shift
   fi
 done
@@ -101,5 +130,6 @@ vogar_args="$vogar_args --timeout 480"
 
 # Run the tests using vogar.
 echo "Running tests for the following test packages:"
-echo ${working_packages[@]} | tr " " "\n"
-vogar $vogar_args --expectations art/tools/libcore_failures.txt --classpath $jsr166_test_jar --classpath $test_jar ${working_packages[@]}
+echo ${packages[@]} | tr " " "\n"
+vogar $vogar_args --expectations art/tools/libcore_failures.txt \
+  --classpath $jsr166_test_jar --classpath $test_jar ${packages[@]}
