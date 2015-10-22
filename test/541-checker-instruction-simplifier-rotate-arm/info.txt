@@ -1,0 +1,3 @@
+Tests ARM simplification of bitfield rotate patterns in optimizing compiler.
+NOTE: Copy of 541-checker-instruction-simplifier-rotate-arm64/.
+TODO: Remove this copy file when we can multi-arch checker test.

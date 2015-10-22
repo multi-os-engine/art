@@ -17,6 +17,8 @@
 #ifndef ART_COMPILER_OPTIMIZING_NODES_ARM64_H_
 #define ART_COMPILER_OPTIMIZING_NODES_ARM64_H_
 
+#include "nodes.h"
+
 namespace art {
 
 // This instruction computes an intermediate address pointing in the 'middle' of an object. The

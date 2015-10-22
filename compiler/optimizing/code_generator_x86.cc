@@ -3740,6 +3740,16 @@ void InstructionCodeGeneratorX86::GenerateUShrLong(const Location& loc, Register
   __ Bind(&done);
 }
 
+void LocationsBuilderX86::VisitRotate(HRotate* ror ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unreachable";
+  UNREACHABLE();
+}
+
+void InstructionCodeGeneratorX86::VisitRotate(HRotate* ror ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unreachable";
+  UNREACHABLE();
+}
+
 void LocationsBuilderX86::VisitShl(HShl* shl) {
   HandleShift(shl);
 }

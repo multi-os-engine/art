@@ -17,6 +17,7 @@
 #ifndef ART_COMPILER_OPTIMIZING_COMMON_ARM64_H_
 #define ART_COMPILER_OPTIMIZING_COMMON_ARM64_H_
 
+#include "code_generator.h"
 #include "locations.h"
 #include "nodes.h"
 #include "utils/arm64/assembler_arm64.h"
@@ -198,6 +199,11 @@ static bool CanEncodeConstantAsImmediate(HConstant* constant, HInstruction* inst
   // For single uses we let VIXL handle the constant generation since it will
   // use registers that are not managed by the register allocator (wip0, wip1).
   if (constant->GetUses().HasOnlyOneUse()) {
+    return true;
+  }
+
+  // Our code generator ensures shift distances are within an encodable range.
+  if (instr->IsRotate()) {
     return true;
   }
 
