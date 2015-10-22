@@ -67,29 +67,78 @@ working_packages=("dalvik.system"
                   "org.apache.harmony.tests.javax.security"
                   "tests.java.lang.String"
                   "jsr166")
+packages=${working_packages[@]}
+
+# Options passed to Vogar when `--mode=device` is passed to this script.
+#
+# Use the ART instance located in path /data/local/tmp/ on device, and
+# a boot image built with the Optimizing compiler.
+vogar_mode_device_args="--device-dir=/data/local/tmp"
+vogar_mode_device_args="$vogar_mode_device_args --vm-command=/data/local/tmp/system/bin/art"
+vogar_mode_device_args="$vogar_mode_device_args --vm-arg -Ximage:/data/art-test/core-optimizing.art"
+
+# Options passed to Vogar when `--mode=host` is passed to this script.
+#
+# We explicitly give a wrong path for the image, to ensure Vogar
+# will create a boot image with the default compiler. Note that
+# giving an existing image on host does not work because of
+# classpath/resources differences when compiling the boot image.
+vogar_mode_host_args="--vm-arg -Ximage:/non/existent"
 
 vogar_args=$@
 while true; do
   if [[ "$1" == "--mode=device" ]]; then
-    vogar_args="$vogar_args --device-dir=/data/local/tmp"
-    vogar_args="$vogar_args --vm-command=/data/local/tmp/system/bin/art"
-    vogar_args="$vogar_args --vm-arg -Ximage:/data/art-test/core-optimizing.art"
+    # Option `--mode=device` is passed to Vogar, as well as options in `$vogar_mode_device_args`.
+    vogar_args="$vogar_args $vogar_mode_device_args"
     shift
   elif [[ "$1" == "--mode=host" ]]; then
-    # We explicitly give a wrong path for the image, to ensure vogar
-    # will create a boot image with the default compiler. Note that
-    # giving an existing image on host does not work because of
-    # classpath/resources differences when compiling the boot image.
-    vogar_args="$vogar_args --vm-arg -Ximage:/non/existent"
+    # Option `--mode=host` is passed to Vogar, as well as options in `$vogar_mode_host_args`.
+    vogar_args="$vogar_args $vogar_mode_host_args"
     shift
+  elif [[ "$1" == --packages=* ]]; then
+    # Initialize array `packages` from a space-separated list of packages.
+    packages_list=$(echo "$1" | sed 's/--packages=//')
+    packages=($packages_list)
+    # Remove the --package=* option from the list of Vogar arguments.
+    vogar_args=${vogar_args/$1}
+    shift
+  elif [[ "$1" == "--show-default-packages" ]]; then
+    echo ${working_packages[@]} | tr " " "\n"
+    exit
   elif [[ "$1" == "--debug" ]]; then
-    # Remove the --debug from the arguments.
+    # Remove the --debug option from the list of Vogar arguments.
     vogar_args=${vogar_args/$1}
     vogar_args="$vogar_args --vm-arg -XXlib:libartd.so"
     shift
+  elif [[ "$1" == "--help" ]]; then
+    cat <<EOF
+Usage: $0 [OPTION]...
+Run libcore tests using Vogar.
+
+Options:
+  --packages=PACKAGE_LIST     Use the space-separated PACKAGE_LIST instead of
+                                the default package list.
+  --show-default-packages     Show the default list of packages used and exit.
+  --debug                     Use the runtime's debug mode (i.e. use libartd.so
+                                instead of libart.so).
+  --help                      Display this help and exit.
+
+Other options are passed to Vogar as-is, e.g. '--mode=device', '--mode=host',
+'--variant=X32', etc.  See 'vogar --help' for more information.
+
+When running on a device ('--mode=device'), Vogar is also passed these options:
+  $vogar_mode_device_args
+
+When running on host ('--mode=host'), Vogar is also passed these options:
+  $vogar_mode_host_args
+
+EOF
+    exit
   elif [[ "$1" == "" ]]; then
+    # End of parameter list.
     break
   else
+    # Untouched option passed to Vogar.
     shift
   fi
 done
@@ -101,5 +150,6 @@ vogar_args="$vogar_args --timeout 480"
 
 # Run the tests using vogar.
 echo "Running tests for the following test packages:"
-echo ${working_packages[@]} | tr " " "\n"
-vogar $vogar_args --expectations art/tools/libcore_failures.txt --classpath $jsr166_test_jar --classpath $test_jar ${working_packages[@]}
+echo ${packages[@]} | tr " " "\n"
+vogar $vogar_args --expectations art/tools/libcore_failures.txt \
+  --classpath $jsr166_test_jar --classpath $test_jar ${packages[@]}
