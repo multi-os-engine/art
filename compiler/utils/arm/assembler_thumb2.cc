@@ -229,6 +229,32 @@ void Thumb2Assembler::EmitLiterals() {
   }
 }
 
+void Thumb2Assembler::PatchCFI() {
+  if (cfi().NumberOfDelayedAdvancePCs() == 0u) {
+    return;
+  }
+
+  typedef DebugFrameOpCodeWriterForAssembler::DelayedAdvancePC DelayedAdvancePC;
+  const auto data = cfi().ReleaseData();
+  const std::vector<uint8_t>& old_stream = data.first;
+  const std::vector<DelayedAdvancePC>& advances = data.second;
+
+  // Refill our data buffer with patched opcodes.
+  cfi().ReserveCFIStream(old_stream.size() + advances.size() + 16);
+  size_t stream_pos = 0;
+  for (const DelayedAdvancePC& advance : advances) {
+    DCHECK_GE(advance.stream_pos, stream_pos);
+    // Copy old data up to the point when advance was issued.
+    cfi().AppendRawData(old_stream, stream_pos, advance.stream_pos);
+    stream_pos = advance.stream_pos;
+    // Insert the advance command with its final offset.
+    size_t final_pc = GetAdjustedPosition(advance.pc);
+    cfi().AdvancePC(final_pc);
+  }
+  // Copy the final segment if any.
+  cfi().AppendRawData(old_stream, stream_pos, old_stream.size());
+}
+
 inline int16_t Thumb2Assembler::BEncoding16(int32_t offset, Condition cond) {
   DCHECK_ALIGNED(offset, 2);
   int16_t encoding = B15 | B14;
@@ -388,6 +414,7 @@ void Thumb2Assembler::FinalizeCode() {
   uint32_t adjusted_code_size = AdjustFixups();
   EmitFixups(adjusted_code_size);
   EmitLiterals();
+  PatchCFI();
 }
 
 bool Thumb2Assembler::ShifterOperandCanAlwaysHold(uint32_t immediate) {

@@ -43,6 +43,7 @@ class Thumb2Assembler FINAL : public ArmAssembler {
         last_position_adjustment_(0u),
         last_old_position_(0u),
         last_fixup_id_(0u) {
+    cfi().DelayEmittingAdvancePCs();
   }
 
   virtual ~Thumb2Assembler() {
@@ -762,6 +763,7 @@ class Thumb2Assembler FINAL : public ArmAssembler {
   uint32_t AdjustFixups();
   void EmitFixups(uint32_t adjusted_code_size);
   void EmitLiterals();
+  void PatchCFI();
 
   static int16_t BEncoding16(int32_t offset, Condition cond);
   static int32_t BEncoding32(int32_t offset, Condition cond);
