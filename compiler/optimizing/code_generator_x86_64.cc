@@ -3737,6 +3737,16 @@ void InstructionCodeGeneratorX86_64::HandleShift(HBinaryOperation* op) {
   }
 }
 
+void LocationsBuilderX86_64::VisitRor(HRor* ror ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unreachable";
+  UNREACHABLE();
+}
+
+void InstructionCodeGeneratorX86_64::VisitRor(HRor* ror ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unreachable";
+  UNREACHABLE();
+}
+
 void LocationsBuilderX86_64::VisitShl(HShl* shl) {
   HandleShift(shl);
 }

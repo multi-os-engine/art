@@ -3747,6 +3747,16 @@ void InstructionCodeGeneratorMIPS::VisitReturnVoid(HReturnVoid* ret ATTRIBUTE_UN
   codegen_->GenerateFrameExit();
 }
 
+void LocationsBuilderMIPS::VisitRor(HRor* ror ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unreachable";
+  UNREACHABLE();
+}
+
+void InstructionCodeGeneratorMIPS::VisitRor(HRor* ror ATTRIBUTE_UNUSED) {
+  LOG(FATAL) << "Unreachable";
+  UNREACHABLE();
+}
+
 void LocationsBuilderMIPS::VisitShl(HShl* shl) {
   HandleShift(shl);
 }
