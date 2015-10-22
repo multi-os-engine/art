@@ -38,6 +38,7 @@
 #ifdef ART_ENABLE_CODEGEN_x86_64
 #include "x86_64/assembler_x86_64.h"
 #endif
+#include "base/casts.h"
 #include "globals.h"
 #include "memory_region.h"
 
@@ -119,7 +120,51 @@ void AssemblerBuffer::ExtendCapacity(size_t min_capacity) {
 }
 
 void DebugFrameOpCodeWriterForAssembler::ImplicitlyAdvancePC() {
-  this->AdvancePC(assembler_->CodeSize());
+  uint32_t pc = dchecked_integral_cast<uint32_t>(assembler_->CodeSize());
+  if (delay_emitting_advance_pc_) {
+    uint32_t stream_pos = dchecked_integral_cast<uint32_t>(opcodes_.size());
+    delayed_advance_pcs_.push_back(DelayedAdvancePC{stream_pos, pc});
+  } else {
+    AdvancePC(pc);
+  }
+}
+
+void DebugFrameOpCodeWriterForAssembler::DelayEmittingAdvancePCs() {
+  DCHECK_EQ(assembler_->CodeSize(), 0u);
+  delay_emitting_advance_pc_ = true;
+}
+
+void DebugFrameOpCodeWriterForAssembler::EmitDelayedAdvancePCs() {
+  if (!IsEnabled()) {
+    DCHECK(this->data()->empty());
+    return;
+  }
+  if (delayed_advance_pcs_.empty()) {
+    return;
+  }
+  // Move our data buffer to temporary variable.
+  std::vector<uint8_t> old_opcodes(opcodes_.get_allocator());
+  old_opcodes.swap(opcodes_);
+  // Refill our data buffer with patched opcodes.
+  opcodes_.reserve(old_opcodes.size() + delayed_advance_pcs_.size() + 16);
+  size_t stream_pos = 0;
+  for (const DelayedAdvancePC& advance : delayed_advance_pcs_) {
+    DCHECK_GE(advance.stream_pos, stream_pos);
+    // Copy old data up to the point when advance was issued.
+    this->opcodes_.insert(this->opcodes_.end(),
+                          old_opcodes.begin() + stream_pos,
+                          old_opcodes.begin() + advance.stream_pos);
+    stream_pos = advance.stream_pos;
+    // Insert the advance command with its final offset.
+    size_t final_pc = assembler_->GetAdjustedPosition(advance.pc);
+    AdvancePC(final_pc);
+  }
+  // Copy the final segment if any.
+  this->opcodes_.insert(this->opcodes_.end(),
+                        old_opcodes.begin() + stream_pos,
+                        old_opcodes.end());
+  // Clear delayed advances.
+  delayed_advance_pcs_.clear();
 }
 
 Assembler* Assembler::Create(InstructionSet instruction_set,

@@ -117,7 +117,7 @@ class Label {
     CHECK(IsLinked());
   }
 
-  friend class arm::ArmAssembler;
+  friend class Assembler;
   friend class arm::Arm32Assembler;
   friend class arm::Thumb2Assembler;
   friend class arm64::Arm64Assembler;

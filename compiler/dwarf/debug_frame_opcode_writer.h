@@ -282,7 +282,12 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
 
   bool IsEnabled() const { return enabled_; }
 
-  void SetEnabled(bool value) { enabled_ = value; }
+  void SetEnabled(bool value) {
+    enabled_ = value;
+    if (enabled_ && opcodes_.capacity() == 0u) {
+      opcodes_.reserve(32);
+    }
+  }
 
   int GetCurrentPC() const { return current_pc_; }
 
@@ -292,9 +297,9 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
 
   using Writer<Vector>::data;
 
-  DebugFrameOpCodeWriter(bool enabled = true,
-                         const typename Vector::allocator_type& alloc =
-                             typename Vector::allocator_type())
+  explicit DebugFrameOpCodeWriter(bool enabled = true,
+                                  const typename Vector::allocator_type& alloc =
+                                      typename Vector::allocator_type())
       : Writer<Vector>(&opcodes_),
         enabled_(enabled),
         opcodes_(alloc),
@@ -303,7 +308,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
         uses_dwarf3_features_(false) {
     if (enabled) {
       // Best guess based on couple of observed outputs.
-      opcodes_.reserve(16);
+      opcodes_.reserve(32);
     }
   }
 

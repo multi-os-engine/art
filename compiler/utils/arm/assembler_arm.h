@@ -640,20 +640,6 @@ class ArmAssembler : public Assembler {
 
   void Pad(uint32_t bytes);
 
-  // Adjust label position.
-  void AdjustLabelPosition(Label* label) {
-    DCHECK(label->IsBound());
-    uint32_t old_position = static_cast<uint32_t>(label->Position());
-    uint32_t new_position = GetAdjustedPosition(old_position);
-    label->Reinitialize();
-    DCHECK_GE(static_cast<int>(new_position), 0);
-    label->BindTo(static_cast<int>(new_position));
-  }
-
-  // Get the final position of a label after local fixup based on the old position
-  // recorded before FinalizeCode().
-  virtual uint32_t GetAdjustedPosition(uint32_t old_position) = 0;
-
   // Macros.
   // Most of these are pure virtual as they need to be implemented per instruction set.
 

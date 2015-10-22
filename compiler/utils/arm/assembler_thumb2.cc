@@ -388,6 +388,7 @@ void Thumb2Assembler::FinalizeCode() {
   uint32_t adjusted_code_size = AdjustFixups();
   EmitFixups(adjusted_code_size);
   EmitLiterals();
+  cfi().EmitDelayedAdvancePCs();
 }
 
 bool Thumb2Assembler::ShifterOperandCanAlwaysHold(uint32_t immediate) {

@@ -43,6 +43,7 @@ class Thumb2Assembler FINAL : public ArmAssembler {
         last_position_adjustment_(0u),
         last_old_position_(0u),
         last_fixup_id_(0u) {
+    cfi().DelayEmittingAdvancePCs();
   }
 
   virtual ~Thumb2Assembler() {
