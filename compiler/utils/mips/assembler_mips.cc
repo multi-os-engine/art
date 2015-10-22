@@ -43,9 +43,112 @@ void MipsAssembler::FinalizeCode() {
 }
 
 void MipsAssembler::FinalizeInstructions(const MemoryRegion& region) {
+  size_t number_of_delayed_adjust_pcs = cfi().NumberOfDelayedAdvancePCs();
   EmitBranches();
   Assembler::FinalizeInstructions(region);
+  PatchCFI(number_of_delayed_adjust_pcs);
 }
+
+void MipsAssembler::PatchCFI(size_t number_of_delayed_adjust_pcs) {
+  if (cfi().NumberOfDelayedAdvancePCs() == 0u) {
+    DCHECK_EQ(number_of_delayed_adjust_pcs, 0u);
+    return;
+  }
+
+  typedef DebugFrameOpCodeWriterForAssembler::DelayedAdvancePC DelayedAdvancePC;
+  const auto data = cfi().ReleaseData();
+  const std::vector<uint8_t>& old_stream = data.first;
+  const std::vector<DelayedAdvancePC>& advances = data.second;
+
+  // PCs recording before EmitBranches() need to be adjusted.
+  // PCs recorded during EmitBranches() are already adjusted.
+  // Both ranges are separately sorted but they may overlap.
+  if (kIsDebugBuild) {
+    auto cmp = [](const DelayedAdvancePC& lhs, const DelayedAdvancePC& rhs) {
+      return lhs.pc < rhs.pc;
+    };
+    CHECK(std::is_sorted(advances.begin(), advances.begin() + number_of_delayed_adjust_pcs, cmp));
+    CHECK(std::is_sorted(advances.begin() + number_of_delayed_adjust_pcs, advances.end(), cmp));
+  }
+
+  // Append initial CFI data if any.
+  size_t size = advances.size();
+  DCHECK_NE(size, 0u);
+  cfi().AppendRawData(old_stream, 0u, advances[0].stream_pos);
+  // Emit PC adjustments interleaved with the old CFI stream.
+  size_t adjust_pos = 0u;
+  size_t late_emit_pos = number_of_delayed_adjust_pcs;
+  while (adjust_pos != number_of_delayed_adjust_pcs || late_emit_pos != size) {
+    size_t adjusted_pc = (adjust_pos != number_of_delayed_adjust_pcs)
+        ? GetAdjustedPosition(advances[adjust_pos].pc)
+        : static_cast<size_t>(-1);
+    size_t late_emit_pc = (late_emit_pos != size)
+        ? advances[late_emit_pos].pc
+        : static_cast<size_t>(-1);
+    size_t advance_pc = std::min(adjusted_pc, late_emit_pc);
+    DCHECK_NE(advance_pc, static_cast<size_t>(-1));
+    size_t entry = (adjusted_pc <= late_emit_pc) ? adjust_pos : late_emit_pos;
+    if (adjusted_pc <= late_emit_pc) {
+      ++adjust_pos;
+    } else {
+      ++late_emit_pos;
+    }
+    cfi().AdvancePC(advance_pc);
+    size_t end_pos = (entry + 1u == size) ? old_stream.size() : advances[entry + 1u].stream_pos;
+    cfi().AppendRawData(old_stream, advances[entry].stream_pos, end_pos);
+  }
+}
+#if 0
+void DebugFrameOpCodeWriterForAssembler::EmitDelayedAdvancePCs() {
+  // Refill our data buffer with patched opcodes. The algorithm has linear complexity
+  // in the absence of out-of-order PCs which are assumed to be extremely rare.
+  opcodes_.reserve(old_opcodes.size() + delayed_advance_pcs_.size() + 16);
+  size_t size = delayed_advance_pcs_.size();
+  size_t out_of_order_advances_start = FindFirstOutOfOrderAdvance();
+  DCHECK(1 <= out_of_order_advances_start && out_of_order_advances_start <= size);
+  size_t lowest_out_of_order_pc = FindLowestPC(out_of_order_advances_start);
+  for (size_t i = 0; i != out_of_order_advances_start; ) {
+    size_t j = i;
+    if (delayed_advance_pcs_[j].pc > lowest_out_of_order_pc) {
+      // Find the advance with lowest out-of-order PC.
+      j = out_of_order_advances_start;
+      DCHECK_NE(j, size);
+      while (delayed_advance_pcs_[j].pc != lowest_out_of_order_pc) {
+        ++j;
+        DCHECK_NE(j, size);
+      }
+    }
+    const DelayedAdvancePC& advance = delayed_advance_pcs_[j];
+    // Insert the advance command with its final offset.
+    size_t final_pc = assembler_->GetAdjustedPosition(advance.pc);
+    if (final_pc != 0u) {
+      AdvancePC(final_pc);
+    }
+    // Copy old data up to the point when the next advance was issued.
+    size_t end_pos =
+        ((j + 1u == size) ? old_opcodes.size() : delayed_advance_pcs_[j + 1u].stream_pos);
+    this->opcodes_.insert(this->opcodes_.end(),
+                          old_opcodes.begin() + advance.stream_pos,
+                          old_opcodes.begin() + end_pos);
+    // Go to the next advance if in-order, otherwise remove the out-of-order advance.
+    if (i == j) {
+      ++i;
+    } else {
+      delayed_advance_pcs_.erase(delayed_advance_pcs_.begin() + j);
+      --size;
+      if (j == out_of_order_advances_start) {
+        while (j != size && delayed_advance_pcs_[j].pc >= delayed_advance_pcs_[j - 1u].pc) {
+          ++j;
+        }
+        out_of_order_advances_start = j;
+      }
+      lowest_out_of_order_pc = FindLowestPC(out_of_order_advances_start);
+    }
+  }
+  // Clear delayed advances.
+  delayed_advance_pcs_.clear();
+}
+#endif
 
 void MipsAssembler::EmitBranches() {
   CHECK(!overwriting_);
@@ -1770,6 +1873,7 @@ void MipsAssembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
                                const std::vector<ManagedRegister>& callee_save_regs,
                                const ManagedRegisterEntrySpills& entry_spills) {
   CHECK_ALIGNED(frame_size, kStackAlignment);
+  DCHECK(!overwriting_);
 
   // Increase frame to required size.
   IncreaseFrameSize(frame_size);
@@ -1811,6 +1915,7 @@ void MipsAssembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
 void MipsAssembler::RemoveFrame(size_t frame_size,
                                 const std::vector<ManagedRegister>& callee_save_regs) {
   CHECK_ALIGNED(frame_size, kStackAlignment);
+  DCHECK(!overwriting_);
   cfi_.RememberState();
 
   // Pop callee saves and return address.
@@ -1840,12 +1945,18 @@ void MipsAssembler::IncreaseFrameSize(size_t adjust) {
   CHECK_ALIGNED(adjust, kFramePointerSize);
   Addiu32(SP, SP, -adjust);
   cfi_.AdjustCFAOffset(adjust);
+  if (overwriting_) {
+    cfi_.OverrideDelayedPC(overwrite_location_);
+  }
 }
 
 void MipsAssembler::DecreaseFrameSize(size_t adjust) {
   CHECK_ALIGNED(adjust, kFramePointerSize);
   Addiu32(SP, SP, adjust);
   cfi_.AdjustCFAOffset(-adjust);
+  if (overwriting_) {
+    cfi_.OverrideDelayedPC(overwrite_location_);
+  }
 }
 
 void MipsAssembler::Store(FrameOffset dest, ManagedRegister msrc, size_t size) {
