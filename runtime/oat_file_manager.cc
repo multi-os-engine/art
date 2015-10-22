@@ -285,9 +285,14 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
   // have to generate or relocate an oat file.
   Locks::mutator_lock_->AssertNotHeld(Thread::Current());
 
+  InstructionSet target_ISA = kRuntimeISA;
+  if (Runtime::NeedsSimulator()) {
+    target_ISA = Runtime::Current()->GetSimulateISA();
+  }
+
   OatFileAssistant oat_file_assistant(dex_location,
                                       oat_location,
-                                      kRuntimeISA,
+                                      target_ISA,
                                       !Runtime::Current()->IsAotCompiler());
 
   // Lock the target oat location to avoid races generating and loading the

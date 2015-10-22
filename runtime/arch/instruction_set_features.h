@@ -43,8 +43,9 @@ class InstructionSetFeatures {
   // Parse a bitmap for the given isa and create an InstructionSetFeatures.
   static const InstructionSetFeatures* FromBitmap(InstructionSet isa, uint32_t bitmap);
 
-  // Turn C pre-processor #defines into the equivalent instruction set features for kRuntimeISA.
-  static const InstructionSetFeatures* FromCppDefines();
+  // Turn C pre-processor #defines into the equivalent instruction set features for ISA.
+  // By default, input ISA is kRuntimeISA.
+  static const InstructionSetFeatures* FromCppDefines(InstructionSet isa = kRuntimeISA);
 
   // Process /proc/cpuinfo and use kRuntimeISA to produce InstructionSetFeatures.
   static const InstructionSetFeatures* FromCpuInfo();

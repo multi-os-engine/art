@@ -819,6 +819,44 @@ class SetInterpreterEntrypointArtMethodVisitor : public ArtMethodVisitor {
   DISALLOW_COPY_AND_ASSIGN(SetInterpreterEntrypointArtMethodVisitor);
 };
 
+// Set image methods' entry point to simulator.
+class SetSimulatorEntrypointArtMethodVisitor : public ArtMethodVisitor {
+ public:
+  explicit SetSimulatorEntrypointArtMethodVisitor(size_t image_pointer_size)
+      : image_pointer_size_(image_pointer_size) {}
+
+  void Visit(ArtMethod* method) OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+    DCHECK(Runtime::NeedsSimulator());
+    if (kIsDebugBuild && !method->IsRuntimeMethod()) {
+      CHECK(method->GetDeclaringClass() != nullptr);
+    }
+
+    // Simulator don't need to handle runtime methods and resolution methods.
+    if (method->IsRuntimeMethod() || method->IsResolutionMethod()) {
+      return;
+    }
+
+    // For now, we set entry point to interpreter instead.
+    // TODO: when simulator can understand the frames and calling convention between them, set entry
+    // point to simulator.
+    if (!method->IsNative()) {
+      method->SetEntryPointFromQuickCompiledCodePtrSize(GetQuickToInterpreterBridge(),
+                                                        image_pointer_size_);
+    } else {
+      // Interpreter is not supposed to interpret native method, generic jni stub looks like a normal
+      // quick method and the real code execution path:
+      //  interpreter -> invoke stub -> generic jni -> native jni function
+      method->SetEntryPointFromQuickCompiledCodePtrSize(GetQuickGenericJniStub(),
+                                                        image_pointer_size_);
+    }
+  }
+
+ private:
+  const size_t image_pointer_size_;
+
+  DISALLOW_COPY_AND_ASSIGN(SetSimulatorEntrypointArtMethodVisitor);
+};
+
 void ClassLinker::InitFromImage() {
   VLOG(startup) << "ClassLinker::InitFromImage entering";
   CHECK(!init_done_);
@@ -922,6 +960,14 @@ void ClassLinker::InitFromImage() {
     const ImageHeader& header = space->GetImageHeader();
     const ImageSection& methods = header.GetMethodsSection();
     SetInterpreterEntrypointArtMethodVisitor visitor(image_pointer_size_);
+    methods.VisitPackedArtMethods(&visitor, space->Begin(), image_pointer_size_);
+  }
+
+  // Set entry point to simulator if in simulator mode.
+  if (Runtime::NeedsSimulator()) {
+    const ImageHeader& header = space->GetImageHeader();
+    const ImageSection& methods = header.GetMethodsSection();
+    SetSimulatorEntrypointArtMethodVisitor visitor(image_pointer_size_);
     methods.VisitPackedArtMethods(&visitor, space->Begin(), image_pointer_size_);
   }
 
@@ -1883,8 +1929,11 @@ static bool NeedsInterpreter(ArtMethod* method, const void* quick_code)
   }
   // If interpreter mode is enabled, every method (except native and proxy) must
   // be run with interpreter.
-  return Runtime::Current()->GetInstrumentation()->InterpretOnly() &&
-         !method->IsNative() && !method->IsProxyMethod();
+  Runtime* runtime = Runtime::Current();
+  // For now we also enter interpreter if we need simulator.
+  // TODO: remove the simulator case.
+  return (Runtime::NeedsSimulator() || runtime->GetInstrumentation()->InterpretOnly()) &&
+          !method->IsNative() && !method->IsProxyMethod();
 }
 
 void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {

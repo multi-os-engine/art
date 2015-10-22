@@ -409,6 +409,21 @@ class Runtime {
 
   void SetInstructionSet(InstructionSet instruction_set);
 
+  InstructionSet GetSimulateISA() const {
+    return simulate_isa_;
+  }
+
+  void SetSimulateISA(InstructionSet instruction_set);
+
+  static bool NeedsSimulator() {
+    Runtime* runtime = Current();
+    // Disable simulator for compiler.
+    if (runtime == nullptr || runtime->IsCompiler()) {
+      return false;
+    }
+    return runtime->GetSimulateISA() != kNone;
+  }
+
   void SetCalleeSaveMethod(ArtMethod* method, CalleeSaveType type);
 
   ArtMethod* CreateCalleeSaveMethod() SHARED_REQUIRES(Locks::mutator_lock_);
@@ -621,6 +636,10 @@ class Runtime {
   GcRoot<mirror::Object> sentinel_;
 
   InstructionSet instruction_set_;
+
+  // The ISA of code we are simulating. If it is not kNone, we will run the code with that ISA and
+  // run with a simulator. The code might come from JIT compiler or an pre-built image.
+  InstructionSet simulate_isa_;
   QuickMethodFrameInfo callee_save_method_frame_infos_[kLastCalleeSaveType];
 
   CompilerCallbacks* compiler_callbacks_;

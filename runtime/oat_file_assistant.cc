@@ -69,9 +69,14 @@ OatFileAssistant::OatFileAssistant(const char* dex_location,
   CHECK(dex_location != nullptr) << "OatFileAssistant: null dex location";
   dex_location_.assign(dex_location);
 
-  if (load_executable_ && isa != kRuntimeISA) {
+  InstructionSet executable_isa = kRuntimeISA;
+  if (Runtime::NeedsSimulator()) {
+    executable_isa = Runtime::Current()->GetSimulateISA();
+  }
+
+  if (load_executable_ && isa != executable_isa) {
     LOG(WARNING) << "OatFileAssistant: Load executable specified, "
-      << "but isa is not kRuntimeISA. Will not attempt to load executable.";
+      << "but isa is not kRuntimeISA or simulator isa. Will not attempt to load executable.";
     load_executable_ = false;
   }
 

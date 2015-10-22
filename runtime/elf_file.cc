@@ -28,6 +28,7 @@
 #include "elf_file_impl.h"
 #include "elf_utils.h"
 #include "leb128.h"
+#include "runtime.h"
 #include "utils.h"
 
 namespace art {
@@ -1127,11 +1128,18 @@ template <typename ElfTypes>
 bool ElfFileImpl<ElfTypes>::Load(bool executable, std::string* error_msg) {
   CHECK(program_header_only_) << file_->GetPath();
 
+  // By default, ISA of ELF file should align with kRuntime.
+  InstructionSet expected_ISA = kRuntimeISA;
+  // For simulator, isa should align with simulator.
+  if (Runtime::NeedsSimulator()) {
+    expected_ISA = Runtime::Current()->GetSimulateISA();
+  }
+
   if (executable) {
     InstructionSet elf_ISA = GetInstructionSetFromELF(GetHeader().e_machine, GetHeader().e_flags);
-    if (elf_ISA != kRuntimeISA) {
+    if (elf_ISA != expected_ISA) {
       std::ostringstream oss;
-      oss << "Expected ISA " << kRuntimeISA << " but found " << elf_ISA;
+      oss << "Expected ISA " << expected_ISA << " but found " << elf_ISA;
       *error_msg = oss.str();
       return false;
     }

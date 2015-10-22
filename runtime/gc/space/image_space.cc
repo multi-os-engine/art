@@ -763,7 +763,14 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
   }
 
   Runtime* runtime = Runtime::Current();
-  runtime->SetInstructionSet(space->oat_file_->GetOatHeader().GetInstructionSet());
+
+  // Runtime ISA must be kRuntimeISA on simulator, not the ISA of image. Otherwise, we will get wrong
+  // frame infos from Runtime instance.
+  InstructionSet runtime_ISA = kRuntimeISA;
+  if (!Runtime::NeedsSimulator()) {
+    runtime_ISA = space->oat_file_->GetOatHeader().GetInstructionSet();
+  }
+  runtime->SetInstructionSet(runtime_ISA);
 
   runtime->SetResolutionMethod(image_header.GetImageMethod(ImageHeader::kResolutionMethod));
   runtime->SetImtConflictMethod(image_header.GetImageMethod(ImageHeader::kImtConflictMethod));

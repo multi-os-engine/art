@@ -273,6 +273,17 @@ std::unique_ptr<RuntimeParser> ParsedOptions::MakeParser(bool ignore_unrecognize
           .WithType<ExperimentalFlags>()
           .AppendValues()
           .IntoKey(M::Experimental)
+      .Define("--simulate-isa=_")
+          .WithType<InstructionSet>()
+          .WithValueMap({{"none",   kNone},
+                         {"arm",    kArm},
+                         {"arm64",  kArm64},
+                         {"thumb2", kThumb2},
+                         {"x86",    kX86},
+                         {"x86_64", kX86_64},
+                         {"mips",   kMips},
+                         {"mips64", kMips64}})
+          .IntoKey(M::SimulateInstructionSet)
       .Ignore({
           "-ea", "-da", "-enableassertions", "-disableassertions", "--runtime-arg", "-esa",
           "-dsa", "-enablesystemassertions", "-disablesystemassertions", "-Xrs", "-Xint:_",
@@ -615,6 +626,8 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -showversion\n");
   UsageMessage(stream, "  -help\n");
   UsageMessage(stream, "  -agentlib:jdwp=options\n");
+  UsageMessage(stream, "  --simulate-isa=isa \n"
+                       "     ('none', 'arm', 'arm64', 'x64', 'x86_64', 'mips', 'mips64')\n");
   UsageMessage(stream, "\n");
 
   UsageMessage(stream, "The following extended options are supported:\n");

@@ -159,6 +159,11 @@ inline uint32_t OatFile::OatMethod::GetCodeOffset() const {
 }
 
 inline const void* OatFile::OatMethod::GetQuickCode() const {
+  // Empty entry points in ArtMethod, in order to enter interpreter when simulator is enabled.
+  // TODO: check if we can simulate given quick code, if yes, return the proper entry point.
+  if (Runtime::NeedsSimulator()) {
+    return nullptr;
+  }
   return GetOatPointer<const void*>(GetCodeOffset());
 }
 
