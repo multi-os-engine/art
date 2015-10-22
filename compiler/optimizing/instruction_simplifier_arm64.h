@@ -40,8 +40,22 @@ class InstructionSimplifierArm64Visitor : public HGraphVisitor {
                                     HInstruction* index,
                                     int access_size);
 
+  // TODO: Move rotate simplification to instruction_simplifier.cc once proven on ARM64.
+  void TryReplaceWithRotate(HBinaryOperation* instruction);
+  void ReplaceRotateWithRor(HBinaryOperation* op, HUShr* ushr, HShl* shl, HInstruction* dist);
+  void ReplaceRotateWithNegRor(HBinaryOperation* op,
+                               HBinaryOperation* ushr,
+                               HBinaryOperation* shl);
+  bool IsSubRegBitsMinusOther(HSub* sub, size_t reg_bits, HSub* other);
+  void TryReplaceWithRotateConstantPattern(HBinaryOperation* op, HUShr* ushr, HShl* shl);
+  void TryReplaceWithRotateRegisterSubPattern(HBinaryOperation* op, HUShr* ushr, HShl* shl);
+  void TryReplaceWithRotateRegisterNegPattern(HBinaryOperation* op, HUShr* ushr, HShl* shl);
+
   void VisitArrayGet(HArrayGet* instruction) OVERRIDE;
   void VisitArraySet(HArraySet* instruction) OVERRIDE;
+  void VisitOr(HOr* instruction) OVERRIDE;
+  void VisitXor(HXor* instruction) OVERRIDE;
+  void VisitAdd(HAdd* instruction) OVERRIDE;
 
   OptimizingCompilerStats* stats_;
 };

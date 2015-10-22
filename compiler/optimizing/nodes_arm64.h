@@ -17,6 +17,8 @@
 #ifndef ART_COMPILER_OPTIMIZING_NODES_ARM64_H_
 #define ART_COMPILER_OPTIMIZING_NODES_ARM64_H_
 
+#include "nodes.h"
+
 namespace art {
 
 // This instruction computes an intermediate address pointing in the 'middle' of an object. The
@@ -40,6 +42,42 @@ class HArm64IntermediateAddress : public HExpression<2> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HArm64IntermediateAddress);
+};
+
+class HArm64Ror : public HBinaryOperation {
+ public:
+  HArm64Ror(Primitive::Type result_type,
+            HInstruction* value,
+            HInstruction* distance)
+    : HBinaryOperation(result_type, value, distance) {}
+
+  template <typename T, typename U, typename V>
+  T Compute(T x, U y, V max_shift_value) const {
+    static_assert(std::is_same<V, typename std::make_unsigned<T>::type>::value,
+                  "V is not the unsigned integer type corresponding to T");
+    V ux = static_cast<V>(x);
+    const V reg_bits = sizeof(T) * 8;
+    T result = static_cast<T>(ux >> (y & max_shift_value)) | (x << (reg_bits - (y & max_shift_value)));
+    return result;
+  }
+
+  HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(x->GetValue(), y->GetValue(), kMaxIntShiftValue), GetDexPc());
+  }
+  HConstant* Evaluate(HLongConstant* x, HIntConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetLongConstant(
+        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue), GetDexPc());
+  }
+  HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetLongConstant(
+        Compute(x->GetValue(), y->GetValue(), kMaxLongShiftValue), GetDexPc());
+  }
+
+  DECLARE_INSTRUCTION(Arm64Ror);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HArm64Ror);
 };
 
 }  // namespace art
