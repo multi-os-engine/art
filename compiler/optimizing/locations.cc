@@ -67,6 +67,12 @@ Location Location::ByteRegisterOrConstant(int reg, HInstruction* instruction) {
       : Location::RegisterLocation(reg);
 }
 
+Location Location::FpuRegisterOrConstant(HInstruction* instruction) {
+  return instruction->IsConstant()
+      ? Location::ConstantLocation(instruction->AsConstant())
+      : Location::RequiresFpuRegister();
+}
+
 std::ostream& operator<<(std::ostream& os, const Location& location) {
   os << location.DebugString();
   if (location.IsRegister() || location.IsFpuRegister()) {
