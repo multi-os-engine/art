@@ -39,9 +39,15 @@ class InstructionSimplifierArm64Visitor : public HGraphVisitor {
                                     HInstruction* array,
                                     HInstruction* index,
                                     int access_size);
+  void TryReplaceOrWithRotate(HOr* instruction);
+  void ReplaceOrAndShiftsWithRor(HOr* orr, HUShr* ushr, HShl* shl);
+  void TryReplaceOrWithRotateConstantPattern(HOr* orr, HUShr* ushr, HShl* shl);
+  void TryReplaceOrWithRotateRegisterSubPattern(HOr* orr, HUShr* ushr, HShl* shl);
+  void TryReplaceOrWithRotateRegisterNegPattern(HOr* orr, HUShr* ushr, HShl* shl);
 
   void VisitArrayGet(HArrayGet* instruction) OVERRIDE;
   void VisitArraySet(HArraySet* instruction) OVERRIDE;
+  void VisitOr(HOr* instruction) OVERRIDE;
 
   OptimizingCompilerStats* stats_;
 };
