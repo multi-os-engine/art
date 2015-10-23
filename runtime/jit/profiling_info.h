@@ -36,26 +36,12 @@ class Class;
  */
 class ProfilingInfo {
  public:
-  static ProfilingInfo* Create(ArtMethod* method);
-
-  // Add information from an executed INVOKE instruction to the profile.
-  void AddInvokeInfo(Thread* self, uint32_t dex_pc, mirror::Class* cls);
-
-  // NO_THREAD_SAFETY_ANALYSIS since we don't know what the callback requires.
-  template<typename RootVisitorType>
-  void VisitRoots(RootVisitorType& visitor) NO_THREAD_SAFETY_ANALYSIS {
-    for (size_t i = 0; i < number_of_inline_caches_; ++i) {
-      InlineCache* cache = &cache_[i];
-      for (size_t j = 0; j < InlineCache::kIndividualCacheSize; ++j) {
-        visitor.VisitRootIfNonNull(cache->classes_[j].AddressWithoutBarrier());
-      }
-    }
-  }
-
- private:
-  // Structure to store the classes seen at runtime for a specific instruction.
+  // Class to store the classes seen at runtime for a specific instruction.
   // Once the classes_ array is full, we consider the INVOKE to be megamorphic.
-  struct InlineCache {
+  class InlineCache {
+   public:
+    static constexpr uint16_t kIndividualCacheSize = 5;
+
     bool IsMonomorphic() const {
       DCHECK_GE(kIndividualCacheSize, 2);
       return !classes_[0].IsNull() && classes_[1].IsNull();
@@ -79,16 +65,42 @@ class ProfilingInfo {
       return !classes_[1].IsNull() && classes_[kIndividualCacheSize - 1].IsNull();
     }
 
-    static constexpr uint16_t kIndividualCacheSize = 5;
-    uint32_t dex_pc;
+    uint32_t GetDexPc() const { return dex_pc_; }
+    uint16_t GetNumberOfClasses() const { return kIndividualCacheSize; }
+    const GcRoot<mirror::Class>* GetClasses() const { return classes_; }
+
+   private:
+    uint32_t dex_pc_;
     GcRoot<mirror::Class> classes_[kIndividualCacheSize];
+
+    friend class ProfilingInfo;
   };
 
+  static ProfilingInfo* Create(ArtMethod* method);
+
+  // Add information from an executed INVOKE instruction to the profile.
+  void AddInvokeInfo(Thread* self, uint32_t dex_pc, mirror::Class* cls);
+
+  // NO_THREAD_SAFETY_ANALYSIS since we don't know what the callback requires.
+  template<typename RootVisitorType>
+  void VisitRoots(RootVisitorType& visitor) NO_THREAD_SAFETY_ANALYSIS {
+    for (size_t i = 0; i < number_of_inline_caches_; ++i) {
+      InlineCache* cache = &cache_[i];
+      for (size_t j = 0; j < InlineCache::kIndividualCacheSize; ++j) {
+        visitor.VisitRootIfNonNull(cache->classes_[j].AddressWithoutBarrier());
+      }
+    }
+  }
+
+  uint32_t GetNumberOfInlinedCaches() const { return number_of_inline_caches_; }
+  const InlineCache* GetInlineCache() const { return cache_; }
+
+ private:
   explicit ProfilingInfo(const std::vector<uint32_t>& entries)
       : number_of_inline_caches_(entries.size()) {
     memset(&cache_, 0, number_of_inline_caches_ * sizeof(InlineCache));
     for (size_t i = 0; i < number_of_inline_caches_; ++i) {
-      cache_[i].dex_pc = entries[i];
+      cache_[i].dex_pc_ = entries[i];
     }
   }
 
