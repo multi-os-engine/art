@@ -121,6 +121,86 @@ void X86Mir2Lir::GenLargePackedSwitch(MIR* mir, DexOffset table_offset, RegLocat
   branch_over->target = target;
 }
 
+/*
+ * Handle unlocked -> thin locked transition inline or else call out to quick entrypoint. For more
+ * details see monitor.cc.
+ */
+void X86Mir2Lir::GenMonitorEnter(int opt_flags, RegLocation rl_src) {
+  FlushAllRegs();
+  const RegStorage rs_obj = cu_->target64 ? rs_r1q : rs_r1;
+  const RegStorage rs_temp = cu_->target64 ? rs_r8 : rs_r3;
+  LoadValueDirectFixed(rl_src, rs_obj);  // Get obj.
+  LockCallTemps();  // Prepare for explicit register usage.
+  GenImplicitNullCheck(rs_obj, opt_flags);
+  // If lock is unheld, try to grab it quickly with compare and exchange.
+  NewLIR2(kX86Mov32RT, rs_r2.GetReg(), cu_->target64 ? Thread::ThinLockIdOffset<8>().Int32Value() :
+          Thread::ThinLockIdOffset<4>().Int32Value());
+  NewLIR3(kX86Mov32RM, rs_r0.GetReg(), rs_obj.GetReg(),
+          mirror::Object::MonitorOffset().Int32Value());
+  NewLIR2(kX86Mov32RR, rs_temp.GetReg(), rs_r0.GetReg());
+  OpRegRegImm(kOpAnd, rs_temp, rs_temp, LockWord::kReadBarrierStateMaskShiftedToggled);
+  OpRegImm(kOpCmp, rs_temp, 0);
+  LIR* branch_locked = NewLIR2(kX86Jcc8, 0, kX86CondNe);
+  OpRegRegImm(kOpAnd, rs_r0, rs_r0, LockWord::kReadBarrierStateMaskShifted);
+  OpRegRegReg(kOpOr, rs_r2, rs_r2, rs_r0);
+  NewLIR2(kX86Xor32RR, rs_r0.GetReg(), rs_r0.GetReg());
+  NewLIR3(kX86LockCmpxchgMR, rs_obj.GetReg(),
+          mirror::Object::MonitorOffset().Int32Value(), rs_r2.GetReg());
+  LIR* branch_success = NewLIR2(kX86Jcc8, 0, kX86CondEq);
+  branch_locked->target = NewLIR0(kPseudoTargetLabel);
+  // If lock is held, go the expensive route - artLockObjectFromCode(self, obj).
+  CallRuntimeHelperRegLocation(kQuickLockObject, rl_src, true);
+  branch_success->target = NewLIR0(kPseudoTargetLabel);
+}
+
+/*
+ * Handle thin locked held by current thread unlock inline or else call out to quick entrypoint.
+ * For more details see monitor.cc.
+ */
+void X86Mir2Lir::GenMonitorExit(int opt_flags, RegLocation rl_src) {
+  FlushAllRegs();
+  const RegStorage rs_obj = cu_->target64 ? rs_r1q : rs_r1;
+  const RegStorage rs_temp = cu_->target64 ? rs_r8 : rs_r3;
+  LoadValueDirectFixed(rl_src, rs_obj);  // Get obj.
+  LockCallTemps();  // Prepare for explicit register usage.
+  GenImplicitNullCheck(rs_obj, opt_flags);
+  // If lock is thin and held by the current thread, unlock it in the fast path.
+  NewLIR2(kX86Mov32RT, rs_r2.GetReg(), cu_->target64 ? Thread::ThinLockIdOffset<8>().Int32Value() :
+          Thread::ThinLockIdOffset<4>().Int32Value());
+  NewLIR3(kX86Mov32RM, rs_r0.GetReg(), rs_obj.GetReg(),
+          mirror::Object::MonitorOffset().Int32Value());
+  OpRegRegImm(kOpAnd, rs_temp, rs_r0, LockWord::kStateMaskShifted |
+              LockWord::kThinLockOwnerMask << LockWord::kThinLockOwnerShift);
+  OpRegReg(kOpSub, rs_temp, rs_r2);
+  LIR* branch_not_held = NewLIR2(kX86Jcc8, 0, kX86CondNe);
+  OpRegRegImm(kOpAnd, rs_temp, rs_r0, LockWord::kThinLockCountMask <<
+              LockWord::kThinLockCountShift);
+  OpRegImm(kOpCmp, rs_temp, 0);
+  LIR* branch_to_unlocked = NewLIR2(kX86Jcc8, 0, kX86CondEq);
+  OpRegRegImm(kOpSub, rs_temp, rs_r0, LockWord::kThinLockCountOne);
+  LIR* branch = NewLIR1(kX86Jmp8, 0);
+  branch_to_unlocked->target = NewLIR0(kPseudoTargetLabel);
+  OpRegRegImm(kOpAnd, rs_temp, rs_r0, LockWord::kReadBarrierStateMaskShifted);
+  branch->target = NewLIR0(kPseudoTargetLabel);
+  LIR* branch_cas_fail = nullptr;
+  if (kUseReadBarrier) {
+    NewLIR3(kX86LockCmpxchgMR, rs_obj.GetReg(), mirror::Object::MonitorOffset().Int32Value(),
+            rs_temp.GetReg());
+    branch_cas_fail = NewLIR2(kX86Jcc8, 0, kX86CondNe);
+  } else {
+    NewLIR3(kX86Mov32MR, rs_obj.GetReg(), mirror::Object::MonitorOffset().Int32Value(),
+            rs_temp.GetReg());
+  }
+  LIR* branch_success = NewLIR1(kX86Jmp8, 0);
+  branch_not_held->target = NewLIR0(kPseudoTargetLabel);
+  if (kUseReadBarrier) {
+    branch_cas_fail->target = NewLIR0(kPseudoTargetLabel);
+  }
+  // Otherwise, go the expensive route - UnlockObjectFromCode(obj).
+  CallRuntimeHelperRegLocation(kQuickUnlockObject, rl_src, true);
+  branch_success->target = NewLIR0(kPseudoTargetLabel);
+}
+
 void X86Mir2Lir::GenMoveException(RegLocation rl_dest) {
   int ex_offset = cu_->target64 ?
       Thread::ExceptionOffset<8>().Int32Value() :
