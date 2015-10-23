@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_JIT_JIT_H_
 #define ART_RUNTIME_JIT_JIT_H_
 
+#include <list>
 #include <unordered_map>
 
 #include "atomic.h"
@@ -71,6 +72,8 @@ class Jit {
     return instrumentation_cache_.get();
   }
 
+  void SaveProfilingInfo(const std::string& filename);
+
  private:
   Jit();
   bool LoadCompiler(std::string* error_msg);
@@ -84,11 +87,14 @@ class Jit {
 
   // Performance monitoring.
   bool dump_info_on_shutdown_;
+  bool record_compiled_methods_;
   CumulativeLogger cumulative_timings_;
 
   std::unique_ptr<jit::JitInstrumentationCache> instrumentation_cache_;
   std::unique_ptr<jit::JitCodeCache> code_cache_;
   CompilerCallbacks* compiler_callbacks_;  // Owned by the jit compiler.
+
+  std::list<ArtMethod*> compiled_methods_;
 
   DISALLOW_COPY_AND_ASSIGN(Jit);
 };
@@ -108,11 +114,17 @@ class JitOptions {
   bool DumpJitInfoOnShutdown() const {
     return dump_info_on_shutdown_;
   }
+  bool RecordCompiledMethods() const {
+    return record_compiled_methods_;
+  }
   bool UseJIT() const {
     return use_jit_;
   }
   void SetUseJIT(bool b) {
     use_jit_ = b;
+  }
+  void SetRecordCompiledMethods(bool b) {
+    record_compiled_methods_ = b;
   }
 
  private:
@@ -121,9 +133,10 @@ class JitOptions {
   size_t compile_threshold_;
   size_t warmup_threshold_;
   bool dump_info_on_shutdown_;
+  bool record_compiled_methods_;
 
   JitOptions() : use_jit_(false), code_cache_capacity_(0), compile_threshold_(0),
-      dump_info_on_shutdown_(false) { }
+      dump_info_on_shutdown_(false), record_compiled_methods_(false) { }
 
   DISALLOW_COPY_AND_ASSIGN(JitOptions);
 };

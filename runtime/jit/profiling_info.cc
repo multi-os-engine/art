@@ -64,6 +64,7 @@ ProfilingInfo* ProfilingInfo::Create(ArtMethod* method) {
   if (entries.empty()) {
     return nullptr;
   }
+  ScopedObjectAccess soa(Thread::Current());
 
   // Allocate the `ProfilingInfo` object int the JIT's data space.
   jit::JitCodeCache* code_cache = Runtime::Current()->GetJit()->GetCodeCache();
@@ -82,13 +83,12 @@ void ProfilingInfo::AddInvokeInfo(Thread* self, uint32_t dex_pc, mirror::Class* 
   InlineCache* cache = nullptr;
   // TODO: binary search if array is too long.
   for (size_t i = 0; i < number_of_inline_caches_; ++i) {
-    if (cache_[i].dex_pc == dex_pc) {
+    if (cache_[i].dex_pc_ == dex_pc) {
       cache = &cache_[i];
       break;
     }
   }
   DCHECK(cache != nullptr);
-
   ScopedObjectAccess soa(self);
   for (size_t i = 0; i < InlineCache::kIndividualCacheSize; ++i) {
     mirror::Class* existing = cache->classes_[i].Read<kWithoutReadBarrier>();
