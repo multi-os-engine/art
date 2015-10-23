@@ -562,17 +562,24 @@ static void VMRuntime_preloadDexCaches(JNIEnv* env, jobject) {
 
 /*
  * This is called by the framework when it knows the application directory and
- * process name.  We use this information to start up the sampling profiler for
- * for ART.
+ * process name.
  */
-static void VMRuntime_registerAppInfo(JNIEnv* env, jclass, jstring pkgName,
-                                      jstring appDir ATTRIBUTE_UNUSED,
+static void VMRuntime_registerAppInfo(JNIEnv* env,
+                                      jclass clazz ATTRIBUTE_UNUSED,
+                                      jstring pkgName,
+                                      jstring appDir,
                                       jstring procName ATTRIBUTE_UNUSED) {
-  const char *pkgNameChars = env->GetStringUTFChars(pkgName, nullptr);
-  std::string profileFile = StringPrintf("/data/dalvik-cache/profiles/%s", pkgNameChars);
+  const char* appDirChars = env->GetStringUTFChars(appDir, nullptr);
+  const char* pkgNameChars = env->GetStringUTFChars(pkgName, nullptr);
+  // TODO(calin): For now, use the application directory for the profile file.
+  // This should be moved to the application code_cache directory. However, that
+  // might not exist (if this is an isolated process the framework will not create
+  // the directory) and thus extra checks are needed.
+  std::string profileFile = StringPrintf("%s/%s.prof", appDirChars, pkgNameChars);
 
-  Runtime::Current()->StartProfiler(profileFile.c_str());
+  Runtime::Current()->SetJitProfilingFilename(profileFile.c_str());
 
+  env->ReleaseStringUTFChars(appDir, appDirChars);
   env->ReleaseStringUTFChars(pkgName, pkgNameChars);
 }
 

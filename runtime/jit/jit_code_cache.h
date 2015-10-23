@@ -133,6 +133,13 @@ class JitCodeCache {
       REQUIRES(!lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Adds to `methods` all the compiled art methods which are part of the given `oat_file`.
+  void GetCompiledArtMethods(const OatFile* oat_file, std::set<ArtMethod*>& methods)
+      REQUIRES(!lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  uint64_t GetLastUpdateTimeNs() REQUIRES(!lock_);
+
  private:
   // Take ownership of code_mem_map.
   JitCodeCache(MemMap* code_map, MemMap* data_map);
@@ -192,6 +199,8 @@ class JitCodeCache {
   SafeMap<const void*, ArtMethod*> method_code_map_ GUARDED_BY(lock_);
   // ProfilingInfo objects we have allocated.
   std::vector<ProfilingInfo*> profiling_infos_ GUARDED_BY(lock_);
+  // Last time the the code_cache was updated.
+  uint64_t last_update_time_ns_ GUARDED_BY(lock_);
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(JitCodeCache);
 };
