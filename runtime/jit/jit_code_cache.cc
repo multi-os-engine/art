@@ -460,5 +460,15 @@ OatQuickMethodHeader* JitCodeCache::LookupMethodHeader(uintptr_t pc, ArtMethod* 
   return method_header;
 }
 
+void JitCodeCache::GetCompiledArtMethods(const OatFile* oat_file,
+                                         /*out*/ std::set<ArtMethod*>& methods) {
+  MutexLock mu(Thread::Current(), lock_);
+  for (auto it = method_code_map_.begin(); it != method_code_map_.end(); it++) {
+    if (it->second->GetDexFile()->GetOatDexFile()->GetOatFile() == oat_file) {
+      methods.insert(it->second);
+    }
+  }
+}
+
 }  // namespace jit
 }  // namespace art

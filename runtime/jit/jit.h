@@ -49,6 +49,7 @@ class Jit {
   virtual ~Jit();
   static Jit* Create(JitOptions* options, std::string* error_msg);
   bool CompileMethod(ArtMethod* method, Thread* self)
+      REQUIRES(!profiling_data_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
   void CreateInstrumentationCache(size_t compile_threshold, size_t warmup_threshold);
   void CreateThreadPool();
@@ -71,6 +72,8 @@ class Jit {
     return instrumentation_cache_.get();
   }
 
+  void SaveProfilingInfo(const std::string& filename) REQUIRES(!profiling_data_lock_);
+
  private:
   Jit();
   bool LoadCompiler(std::string* error_msg);
@@ -90,6 +93,14 @@ class Jit {
   std::unique_ptr<jit::JitCodeCache> code_cache_;
   CompilerCallbacks* compiler_callbacks_;  // Owned by the jit compiler.
 
+  // Profile data
+  // Whether or not profiling data should be recorded and saved to disk.
+  bool save_profiling_data_;
+  // Lock for updating/saving profile data.
+  Mutex profiling_data_lock_;
+  // Whether or not profiling data was updated since last saved.
+  Atomic<bool> profiling_data_updated_;
+
   DISALLOW_COPY_AND_ASSIGN(Jit);
 };
 
@@ -108,11 +119,17 @@ class JitOptions {
   bool DumpJitInfoOnShutdown() const {
     return dump_info_on_shutdown_;
   }
+  bool GetSaveProfilingData() const {
+    return save_profiling_data_;
+  }
   bool UseJIT() const {
     return use_jit_;
   }
   void SetUseJIT(bool b) {
     use_jit_ = b;
+  }
+  void SetSaveProfilingData(bool b) {
+    save_profiling_data_ = b;
   }
 
  private:
@@ -121,9 +138,10 @@ class JitOptions {
   size_t compile_threshold_;
   size_t warmup_threshold_;
   bool dump_info_on_shutdown_;
+  bool save_profiling_data_;
 
   JitOptions() : use_jit_(false), code_cache_capacity_(0), compile_threshold_(0),
-      dump_info_on_shutdown_(false) { }
+      dump_info_on_shutdown_(false), save_profiling_data_(false) { }
 
   DISALLOW_COPY_AND_ASSIGN(JitOptions);
 };
