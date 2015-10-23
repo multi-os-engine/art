@@ -217,6 +217,14 @@ Runtime::~Runtime() {
   if (is_native_bridge_loaded_) {
     UnloadNativeBridge();
   }
+
+  if (jit_.get() != nullptr) {
+    // TODO(calin): Piggy back on the profile_output_file_name_ for now.
+    if (!profile_output_filename_.empty()) {
+      jit_->SaveProfilingInfo(profile_output_filename_);
+    }
+  }
+
   if (dump_gc_performance_on_shutdown_) {
     // This can't be called from the Heap destructor below because it
     // could call RosAlloc::InspectAll() which needs the thread_list
