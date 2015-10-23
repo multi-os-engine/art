@@ -24,6 +24,7 @@
 #include "interpreter/interpreter.h"
 #include "jit_code_cache.h"
 #include "jit_instrumentation.h"
+#include "offline_profiling_info.h"
 #include "runtime.h"
 #include "runtime_options.h"
 #include "thread_list.h"
@@ -43,14 +44,20 @@ JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& opt
       options.GetOrDefault(RuntimeArgumentMap::JITWarmupThreshold);
   jit_options->dump_info_on_shutdown_ =
       options.Exists(RuntimeArgumentMap::DumpJITInfoOnShutdown);
+      options.Exists(RuntimeArgumentMap::DumpJITInfoOnShutdown);
+  jit_options->record_compiled_methods_ =
+      !options.GetOrDefault(RuntimeArgumentMap::ProfilerOpts).output_file_name_.empty();
   return jit_options;
 }
 
 void Jit::DumpInfo(std::ostream& os) {
   os << "Code cache size=" << PrettySize(code_cache_->CodeCacheSize())
      << " data cache size=" << PrettySize(code_cache_->DataCacheSize())
-     << " num methods=" << code_cache_->NumMethods()
-     << "\n";
+     << " num methods=" << code_cache_->NumMethods();
+  if (record_compiled_methods_) {
+    os << " num recorded compiled methods=" << compiled_methods_.size();
+  }
+  os << "\n";
   cumulative_timings_.Dump(os);
 }
 
@@ -67,6 +74,7 @@ Jit::Jit()
 Jit* Jit::Create(JitOptions* options, std::string* error_msg) {
   std::unique_ptr<Jit> jit(new Jit);
   jit->dump_info_on_shutdown_ = options->DumpJitInfoOnShutdown();
+  jit->record_compiled_methods_ = options->RecordCompiledMethods();
   if (!jit->LoadCompiler(error_msg)) {
     return nullptr;
   }
@@ -135,7 +143,11 @@ bool Jit::CompileMethod(ArtMethod* method, Thread* self) {
     VLOG(jit) << "JIT not compiling " << PrettyMethod(method) << " due to breakpoint";
     return false;
   }
-  return jit_compile_method_(jit_compiler_handle_, method, self);
+  bool result = jit_compile_method_(jit_compiler_handle_, method, self);
+  if (result) {
+    compiled_methods_.push_back(method);
+  }
+  return result;
 }
 
 void Jit::CreateThreadPool() {
@@ -146,6 +158,20 @@ void Jit::CreateThreadPool() {
 void Jit::DeleteThreadPool() {
   if (instrumentation_cache_.get() != nullptr) {
     instrumentation_cache_->DeleteThreadPool();
+  }
+}
+
+void Jit::SaveProfilingInfo(const std::string& filename) {
+  DCHECK(record_compiled_methods_);
+  if (!compiled_methods_.empty()) {
+    OfflineProfilingInfo info(compiled_methods_);
+    if (info.Serialize(filename)) {
+      VLOG(jit) << "Saved profiling info to file " << filename;
+    } else {
+      LOG(WARNING) << "Profile data couldn't be serialized to " << filename;
+    }
+  } else {
+    VLOG(jit) << "No methods were compiled. Nothing will be saved to file " << filename;
   }
 }
 
