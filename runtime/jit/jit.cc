@@ -24,6 +24,8 @@
 #include "interpreter/interpreter.h"
 #include "jit_code_cache.h"
 #include "jit_instrumentation.h"
+#include "oat_file_manager.h"
+#include "offline_profiling_info.h"
 #include "runtime.h"
 #include "runtime_options.h"
 #include "thread_list.h"
@@ -43,6 +45,9 @@ JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& opt
       options.GetOrDefault(RuntimeArgumentMap::JITWarmupThreshold);
   jit_options->dump_info_on_shutdown_ =
       options.Exists(RuntimeArgumentMap::DumpJITInfoOnShutdown);
+      options.Exists(RuntimeArgumentMap::DumpJITInfoOnShutdown);
+  jit_options->save_profiling_data_ =
+      options.GetOrDefault(RuntimeArgumentMap::JITSaveProfilingData);;
   return jit_options;
 }
 
@@ -61,12 +66,22 @@ void Jit::AddTimingLogger(const TimingLogger& logger) {
 Jit::Jit()
     : jit_library_handle_(nullptr), jit_compiler_handle_(nullptr), jit_load_(nullptr),
       jit_compile_method_(nullptr), dump_info_on_shutdown_(false),
-      cumulative_timings_("JIT timings") {
+      cumulative_timings_("JIT timings"),
+      save_profiling_data_(false),
+      profiling_data_lock_("JIT profiling data", kProfilerLock),
+      profiling_data_updated_(true) {
 }
 
 Jit* Jit::Create(JitOptions* options, std::string* error_msg) {
   std::unique_ptr<Jit> jit(new Jit);
   jit->dump_info_on_shutdown_ = options->DumpJitInfoOnShutdown();
+  jit->save_profiling_data_ = options->GetSaveProfilingData();
+  if (jit->save_profiling_data_) {
+    if (Runtime::Current()->GetOatFileManager().GetPrimaryOatFile() == nullptr) {
+      jit->save_profiling_data_ = false;
+      LOG(WARNING) << "Disabling save_profile_data_ because no primary oat file was found.";
+    }
+  }
   if (!jit->LoadCompiler(error_msg)) {
     return nullptr;
   }
@@ -135,7 +150,26 @@ bool Jit::CompileMethod(ArtMethod* method, Thread* self) {
     VLOG(jit) << "JIT not compiling " << PrettyMethod(method) << " due to breakpoint";
     return false;
   }
-  return jit_compile_method_(jit_compiler_handle_, method, self);
+
+  size_t old_number_of_compiled_code = 0;
+  size_t old_data_cache_size = 0;
+  bool track_profiling_data_updates = save_profiling_data_ &&
+      (method->GetDexFile()->GetOatDexFile()->GetOatFile() ==
+          Runtime::Current()->GetOatFileManager().GetPrimaryOatFile());
+  if (track_profiling_data_updates) {
+    old_number_of_compiled_code = code_cache_->NumberOfCompiledCode();
+    old_data_cache_size = code_cache_->DataCacheSize();
+  }
+
+  bool result = jit_compile_method_(jit_compiler_handle_, method, self);
+
+  if (result && track_profiling_data_updates &&
+      ((old_data_cache_size != code_cache_->DataCacheSize()) ||
+          (old_number_of_compiled_code != code_cache_->NumberOfCompiledCode()))) {
+    // Don't acquire a lock. We don't care if we miss a save.
+    profiling_data_updated_.StoreRelaxed(true);
+  }
+  return result;
 }
 
 void Jit::CreateThreadPool() {
@@ -146,6 +180,38 @@ void Jit::CreateThreadPool() {
 void Jit::DeleteThreadPool() {
   if (instrumentation_cache_.get() != nullptr) {
     instrumentation_cache_->DeleteThreadPool();
+  }
+}
+
+void Jit::SaveProfilingInfo(const std::string& filename) {
+  if (!save_profiling_data_) {
+    return;
+  }
+
+  ScopedObjectAccess soa(Thread::Current());
+  MutexLock mu(Thread::Current(), profiling_data_lock_);
+  if (!profiling_data_updated_.LoadRelaxed()) {
+    return;
+  }
+  profiling_data_updated_.StoreRelaxed(false);
+
+  const OatFile* primary_oat_file = Runtime::Current()->GetOatFileManager().GetPrimaryOatFile();
+  DCHECK(primary_oat_file != nullptr);
+  std::set<ArtMethod*> methods;
+  code_cache_->GetCompiledArtMethods(primary_oat_file, methods);
+
+  OfflineProfilingInfo info;
+  for (auto it = methods.begin(); it != methods.end(); it++) {
+    info.AddMethodInfo(*it);
+  }
+  if (info.HasData()) {
+    if (info.Serialize(filename)) {
+      VLOG(jit) << "Saved profiling info to file " << filename;
+    } else {
+      LOG(WARNING) << "Profile data couldn't be serialized to " << filename;
+    }
+  } else {
+    VLOG(jit) << "No methods were updated. Profile file will not be updated: " << filename;
   }
 }
 
