@@ -20,9 +20,6 @@
 #include "lambda/art_lambda_method.h"
 #include "runtime/mirror/object_reference.h"
 
-static constexpr const bool kClosureSupportsReferences = false;
-static constexpr const bool kClosureSupportsGarbageCollection = false;
-
 namespace art {
 namespace lambda {
 

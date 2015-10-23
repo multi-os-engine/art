@@ -90,6 +90,12 @@ class ArtLambdaMethod {
     return strlen(captured_variables_shorty_);
   }
 
+  // Return the offset in bytes from the start of ArtLambdaMethod to the method_.
+  // -- Only should be used by assembly (stubs) and compiled code.
+  static constexpr size_t GetArtMethodOffset() {
+    return offsetof(ArtLambdaMethod, method_);
+  }
+
  private:
   // TODO: ArtMethod, or at least the entry points should be inlined into this struct
   // to avoid an extra indirect load when doing invokes.

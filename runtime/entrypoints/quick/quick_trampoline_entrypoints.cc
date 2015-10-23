@@ -293,7 +293,7 @@ class QuickArgumentVisitor {
   // 1st GPR.
   static mirror::Object* GetProxyThisObject(ArtMethod** sp)
       SHARED_REQUIRES(Locks::mutator_lock_) {
-    CHECK((*sp)->IsProxyMethod());
+    CHECK((*sp)->IsReflectProxyMethod());
     CHECK_EQ(kQuickCalleeSaveFrame_RefAndArgs_FrameSize, (*sp)->GetFrameSizeInBytes());
     CHECK_GT(kNumQuickGprArgs, 0u);
     constexpr uint32_t kThisGprIndex = 0u;  // 'this' is in the 1st GPR.
@@ -834,8 +834,9 @@ void BuildQuickArgumentVisitor::FixupReferences() {
 extern "C" uint64_t artQuickProxyInvokeHandler(
     ArtMethod* proxy_method, mirror::Object* receiver, Thread* self, ArtMethod** sp)
     SHARED_REQUIRES(Locks::mutator_lock_) {
+  DCHECK(proxy_method->GetDeclaringClass()->IsReflectProxyClass()) << PrettyMethod(proxy_method);
   DCHECK(proxy_method->IsProxyMethod()) << PrettyMethod(proxy_method);
-  DCHECK(receiver->GetClass()->IsProxyClass()) << PrettyMethod(proxy_method);
+  DCHECK(receiver->GetClass()->IsReflectProxyClass()) << PrettyMethod(proxy_method);
   // Ensure we don't get thread suspension until the object arguments are safely in jobjects.
   const char* old_cause =
       self->StartAssertNoThreadSuspension("Adding to IRT proxy object arguments");

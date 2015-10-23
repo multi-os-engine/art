@@ -78,6 +78,7 @@
 #include "jni_internal.h"
 #include "linear_alloc.h"
 #include "lambda/box_table.h"
+#include "lambda/box_class_table.h"
 #include "mirror/array.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
@@ -417,6 +418,7 @@ void Runtime::SweepSystemWeaks(IsMarkedVisitor* visitor) {
   GetJavaVM()->SweepJniWeakGlobals(visitor);
   GetHeap()->SweepAllocationRecords(visitor);
   GetLambdaBoxTable()->SweepWeakBoxedLambdas(visitor);
+  GetLambdaBoxClassTable()->SweepWeakBoxedLambdas(visitor);
 }
 
 bool Runtime::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
@@ -939,6 +941,8 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   // Allocate a global table of boxed lambda objects <-> closures.
   lambda_box_table_ = MakeUnique<lambda::BoxTable>();
+  // Allocate a global table of class names <-> lambda proxy classes.
+  lambda_box_class_table_ = MakeUnique<lambda::BoxClassTable>();
 
   // Use MemMap arena pool for jit, malloc otherwise. Malloc arenas are faster to allocate but
   // can't be trimmed as easily.
@@ -1525,6 +1529,7 @@ void Runtime::DisallowNewSystemWeaks() {
   java_vm_->DisallowNewWeakGlobals();
   heap_->DisallowNewAllocationRecords();
   lambda_box_table_->DisallowNewWeakBoxedLambdas();
+  lambda_box_class_table_->DisallowNewWeakBoxedLambdas();
 }
 
 void Runtime::AllowNewSystemWeaks() {
@@ -1534,6 +1539,7 @@ void Runtime::AllowNewSystemWeaks() {
   java_vm_->AllowNewWeakGlobals();
   heap_->AllowNewAllocationRecords();
   lambda_box_table_->AllowNewWeakBoxedLambdas();
+  lambda_box_class_table_->AllowNewWeakBoxedLambdas();
 }
 
 void Runtime::BroadcastForNewSystemWeaks() {
@@ -1545,6 +1551,7 @@ void Runtime::BroadcastForNewSystemWeaks() {
   java_vm_->BroadcastForNewWeakGlobals();
   heap_->BroadcastForNewAllocationRecords();
   lambda_box_table_->BroadcastForNewWeakBoxedLambdas();
+  lambda_box_class_table_->BroadcastForNewWeakBoxedLambdas();
 }
 
 void Runtime::SetInstructionSet(InstructionSet instruction_set) {

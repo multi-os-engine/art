@@ -165,9 +165,20 @@ mirror::Object* StackVisitor::GetThisObject() const {
     } else {
       return cur_shadow_frame_->GetVRegReference(0);
     }
-  } else if (m->IsProxyMethod()) {
+  } else if (m->IsReflectProxyMethod()) {
     if (cur_quick_frame_ != nullptr) {
       return artQuickGetProxyThisObject(cur_quick_frame_);
+    } else {
+      return cur_shadow_frame_->GetVRegReference(0);
+    }
+  } else if (m->IsLambdaProxyMethod()) {
+    if (cur_quick_frame_ != nullptr) {
+      // XX: Should be safe to return null here, the lambda proxies
+      // don't set up their own quick frame because they don't need to spill any registers.
+      // By the time we are executing inside of the final target of the proxy invoke,
+      // the original 'this' reference is no longer live.
+      LOG(WARNING) << "Lambda proxies don't have a quick frame, do they?!";
+      return nullptr;
     } else {
       return cur_shadow_frame_->GetVRegReference(0);
     }

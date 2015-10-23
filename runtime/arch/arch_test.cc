@@ -18,6 +18,7 @@
 
 #include "art_method-inl.h"
 #include "common_runtime_test.h"
+// #include "lambda/closure.h"  // FIXME: asm_support.h should not be included inside of another namespace
 #include "quick/quick_method_frame_info.h"
 
 namespace art {
@@ -46,9 +47,15 @@ class ArchTest : public CommonRuntimeTest {
   }
 };
 
+}  // namespace art
+
 // Common tests are declared next to the constants.
 #define ADD_TEST_EQ(x, y) EXPECT_EQ(x, y);
 #include "asm_support.h"
+// FIXME: this relies on existing #includes in asm_support.h not actually being included at this point
+// otherwise everything gets pulled into an art::art namespace which is obviously not the intent.
+
+namespace art {
 
 TEST_F(ArchTest, CheckCommonOffsetsAndSizes) {
   CheckAsmSupportOffsetsAndSizes();

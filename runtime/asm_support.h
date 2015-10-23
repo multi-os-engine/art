@@ -1,4 +1,5 @@
 /*
+ *
  * Copyright (C) 2011 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,8 +20,11 @@
 
 #if defined(__cplusplus)
 #include "art_method.h"
+#include "lambda/art_lambda_method.h"
+#include "lambda/closure.h"
 #include "lock_word.h"
 #include "mirror/class.h"
+#include "mirror/lambda_proxy.h"
 #include "mirror/string.h"
 #include "runtime.h"
 #include "thread.h"
@@ -48,10 +52,19 @@
 #define ADD_TEST_EQ(x, y) CHECK_EQ(x, y);
 #endif
 
+namespace art {
 static inline void CheckAsmSupportOffsetsAndSizes() {
 #else
 #define ADD_TEST_EQ(x, y)
 #endif
+
+// Size of native pointers to the heap or stack.
+#if defined(__x86_64__) || defined(__aarch64__) || (defined(__mips__) && defined(__LP64__))
+#define NATIVE_POINTER_SIZE 8
+#else
+#define NATIVE_POINTER_SIZE 4
+#endif  // 64-bit check
+ADD_TEST_EQ(static_cast<size_t>(NATIVE_POINTER_SIZE), sizeof(void*))
 
 // Size of references to the heap on the stack.
 #define STACK_REFERENCE_SIZE 4
@@ -236,8 +249,66 @@ ADD_TEST_EQ(static_cast<size_t>(OBJECT_ALIGNMENT_MASK), art::kObjectAlignment - 
 ADD_TEST_EQ(static_cast<uint32_t>(OBJECT_ALIGNMENT_MASK_TOGGLED),
             ~static_cast<uint32_t>(art::kObjectAlignment - 1))
 
+// Working with raw lambdas (lambda::Closure) in raw memory:
+//
+//     |---------------------|
+//     | ArtLambdaMethod*    |  <-- pointer to lambda art method, has the info like the size.
+//     |---------------------|  <-- 'data offset'
+//     | [ Dynamic Size ]    |  <-- OPTIONAL: only if the ArtLambdaMethod::dynamic_size_ is true.
+//     |---------------------|
+//     | Captured Variables  |
+//     |        ...          |
+//     |---------------------|  <-- total length determined by "dynamic size" if it is present,
+//                                  otherwise by the ArtLambdaMethod::static_size_
+
+// Offset from start of lambda::Closure to the ArtLambdaMethod*.
+#define LAMBDA_CLOSURE_METHOD_OFFSET 0
+ADD_TEST_EQ(static_cast<size_t>(LAMBDA_CLOSURE_METHOD_OFFSET),
+            offsetof(art::lambda::ClosureStorage, lambda_info_))
+// Offset from the start of lambda::Closure to the data (captured vars or dynamic size).
+#define LAMBDA_CLOSURE_DATA_OFFSET NATIVE_POINTER_SIZE
+ADD_TEST_EQ(static_cast<size_t>(LAMBDA_CLOSURE_DATA_OFFSET),
+            offsetof(art::lambda::ClosureStorage, captured_))
+// Offsets to captured variables intentionally omitted as it needs a runtime branch.
+
+// The size of a lambda closure after it's been compressed down for storage.
+// -- Although a lambda closure is a virtual register pair (64-bit), we only need 32-bit
+//    to track the pointer when we are on 32-bit architectures.
+//    Both the compiler and the runtime therefore compress the closure down for 32-bit archs.
+#define LAMBDA_CLOSURE_COMPRESSED_POINTER_SIZE NATIVE_POINTER_SIZE
+ADD_TEST_EQ(static_cast<size_t>(LAMBDA_CLOSURE_COMPRESSED_POINTER_SIZE),
+            sizeof(art::lambda::Closure*))
+
+// Working with boxed innate lambdas (as a mirror::Object) in raw memory:
+// --- Note that this layout only applies to lambdas originally made with create-lambda.
+// --- Boxing a lambda created from a new-instance instruction is simply the original object.
+//
+//     |---------------------|
+//     |   object header     |
+//     |---------------------|
+//     | lambda::Closure*    | <-- long on 64-bit, int on 32-bit
+//     |---------------------|
+#define MIRROR_OBJECT_BOXED_INNATE_LAMBDA_CLOSURE_POINTER_OFFSET (MIRROR_OBJECT_HEADER_SIZE)
+ADD_TEST_EQ(static_cast<size_t>(MIRROR_OBJECT_BOXED_INNATE_LAMBDA_CLOSURE_POINTER_OFFSET),
+            art::mirror::LambdaProxy::GetInstanceFieldOffsetClosure())
+           // offsetof(art::mirror::LambdaProxy, closure_))
+
+// Working with boxed innate lambdas (as a mirror::Object) in raw memory:
+// --- Note that this layout only applies to lambdas originally made with create-lambda.
+// --- Boxing a lambda created from a new-instance instruction is simply the original object.
+//
+//     |---------------------|
+//     |   object header     |
+//     |---------------------|
+//     | lambda::Closure*    | <-- long on 64-bit, int on 32-bit
+//     |---------------------|
+#define ART_LAMBDA_METHOD_ART_METHOD_OFFSET (0)
+ADD_TEST_EQ(static_cast<size_t>(ART_LAMBDA_METHOD_ART_METHOD_OFFSET),
+            art::lambda::ArtLambdaMethod::GetArtMethodOffset())
+
 #if defined(__cplusplus)
 }  // End of CheckAsmSupportOffsets.
+}  // namespace art
 #endif
 
 #endif  // ART_RUNTIME_ASM_SUPPORT_H_

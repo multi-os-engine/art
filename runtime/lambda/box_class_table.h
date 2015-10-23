@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef ART_RUNTIME_LAMBDA_BOX_TABLE_H_
-#define ART_RUNTIME_LAMBDA_BOX_TABLE_H_
+#ifndef ART_RUNTIME_LAMBDA_BOX_CLASS_TABLE_H_
+#define ART_RUNTIME_LAMBDA_BOX_CLASS_TABLE_H_
 
 #include "base/allocator.h"
 #include "base/hash_map.h"
@@ -28,9 +28,11 @@
 namespace art {
 
 class ArtMethod;  // forward declaration
+template<class T> class Handle;  // forward declaration
+class ClassLoader;  // forward declaration
 
 namespace mirror {
-class Class;   // forward declaration
+class Class;  // forward declaration
 class ClassLoader;  // forward declaration
 class LambdaProxy;  // forward declaration
 class Object;  // forward declaration
@@ -46,40 +48,35 @@ struct Closure;  // forward declaration
  * Conceptually, we store a mapping of Closures -> Weak Reference<Boxed Lambda Object>.
  * When too many objects get GCd, we shrink the underlying table to use less space.
  */
-class BoxTable FINAL {
+class BoxClassTable FINAL {
  public:
-  using ClosureType = art::lambda::Closure*;
-
-  // Boxes a closure into an object. Returns null and throws an exception on failure.
-  mirror::Object* BoxLambda(const ClosureType& closure,
-                            const char* class_name,
-                            mirror::ClassLoader* class_loader)
-      REQUIRES(!Locks::lambda_table_lock_, !Roles::uninterruptible_)
-      SHARED_REQUIRES(Locks::mutator_lock_);
-
-  // Unboxes an object back into the lambda. Returns false and throws an exception on failure.
-  bool UnboxLambda(mirror::Object* object, ClosureType* out_closure)
+  // XX: This should take a LambdaArtMethod instead, read class name from that.
+  // Note: null class_loader means bootclasspath.
+  mirror::Class* GetOrCreateBoxClass(const char* class_name,
+                                     const Handle<mirror::ClassLoader>& class_loader)
+      REQUIRES(!Locks::lambda_class_table_lock_, !Roles::uninterruptible_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Sweep weak references to lambda boxes. Update the addresses if the objects have been
   // moved, and delete them from the table if the objects have been cleaned up.
   void SweepWeakBoxedLambdas(IsMarkedVisitor* visitor)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Locks::lambda_table_lock_);
+      REQUIRES(!Locks::lambda_class_table_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // GC callback: Temporarily block anyone from touching the map.
   void DisallowNewWeakBoxedLambdas()
-      REQUIRES(!Locks::lambda_table_lock_);
+      REQUIRES(!Locks::lambda_class_table_lock_);
 
   // GC callback: Unblock any readers who have been queued waiting to touch the map.
   void AllowNewWeakBoxedLambdas()
-      REQUIRES(!Locks::lambda_table_lock_);
+      REQUIRES(!Locks::lambda_class_table_lock_);
 
   // GC callback: Unblock any readers who have been queued waiting to touch the map.
   void BroadcastForNewWeakBoxedLambdas()
-      REQUIRES(!Locks::lambda_table_lock_);
+      REQUIRES(!Locks::lambda_class_table_lock_);
 
-  BoxTable();
-  ~BoxTable();
+  BoxClassTable();
+  ~BoxClassTable();
 
  private:
   // Explanation:
@@ -93,18 +90,18 @@ class BoxTable FINAL {
   // Instead, use a GcRoot here which will be automatically updated by the GC.
   //
   // Also, any reads should be protected by a read barrier to always give us the "to" space address.
-  using ValueType = GcRoot<mirror::Object>;
+  using ValueType = GcRoot<mirror::Class>;
 
-  // Attempt to look up the lambda in the map, or return null if it's not there yet.
-  ValueType FindBoxedLambda(const ClosureType& closure) const
-      SHARED_REQUIRES(Locks::lambda_table_lock_);
+  // Attempt to look up the class in the map, or return null if it's not there yet.
+  ValueType FindBoxedClass(const std::string& class_name) const
+      SHARED_REQUIRES(Locks::lambda_class_table_lock_);
 
   // If the GC has come in and temporarily disallowed touching weaks, block until is it allowed.
   void BlockUntilWeaksAllowed()
-      SHARED_REQUIRES(Locks::lambda_table_lock_);
+      SHARED_REQUIRES(Locks::lambda_class_table_lock_);
 
-  // Wrap the Closure into a unique_ptr so that the HashMap can delete its memory automatically.
-  using UnorderedMapKeyType = ClosureType;
+  // Store the key as a string so that we can have our own copy of the class name.
+  using UnorderedMapKeyType = std::string;
 
   // EmptyFn implementation for art::HashMap
   struct EmptyFn {
@@ -126,36 +123,27 @@ class BoxTable FINAL {
         NO_THREAD_SAFETY_ANALYSIS;  // SHARED_REQUIRES(Locks::mutator_lock_)
   };
 
-  using UnorderedMap = art::HashMap<UnorderedMapKeyType,
-                                    ValueType,
-                                    EmptyFn,
-                                    HashFn,
-                                    EqualsFn,
-                                    TrackingAllocator<std::pair<ClosureType, ValueType>,
-                                                      kAllocatorTagLambdaBoxTable>>;
+  using UnorderedMap =  art::HashMap<UnorderedMapKeyType,
+                                     ValueType,
+                                     EmptyFn,
+                                     HashFn,
+                                     EqualsFn,
+                                     TrackingAllocator<std::pair<UnorderedMapKeyType, ValueType>,
+                                                       kAllocatorTagLambdaProxyClassBoxTable>>;
 
-  using ClassMap = art::HashMap<std::string,
-                                GcRoot<mirror::Class>,
-                                EmptyFn,
-                                HashFn,
-                                EqualsFn,
-                                TrackingAllocator<std::pair<ClosureType, ValueType>,
-                                                      kAllocatorTagLambdaProxyClassBoxTable>>;
-
-  UnorderedMap map_                                          GUARDED_BY(Locks::lambda_table_lock_);
-  UnorderedMap classes_map_                                  GUARDED_BY(Locks::lambda_table_lock_);
-  bool allow_new_weaks_                                      GUARDED_BY(Locks::lambda_table_lock_);
-  ConditionVariable new_weaks_condition_                     GUARDED_BY(Locks::lambda_table_lock_);
+  UnorderedMap map_                                   GUARDED_BY(Locks::lambda_class_table_lock_);
+  bool allow_new_weaks_                               GUARDED_BY(Locks::lambda_class_table_lock_);
+  ConditionVariable new_weaks_condition_              GUARDED_BY(Locks::lambda_class_table_lock_);
 
   // Shrink the map when we get below this load factor.
   // (This is an arbitrary value that should be large enough to prevent aggressive map erases
   // from shrinking the table too often.)
   static constexpr double kMinimumLoadFactor = UnorderedMap::kDefaultMinLoadFactor / 2;
 
-  DISALLOW_COPY_AND_ASSIGN(BoxTable);
+  DISALLOW_COPY_AND_ASSIGN(BoxClassTable);
 };
 
 }  // namespace lambda
 }  // namespace art
 
-#endif  // ART_RUNTIME_LAMBDA_BOX_TABLE_H_
+#endif  // ART_RUNTIME_LAMBDA_BOX_CLASS_TABLE_H_

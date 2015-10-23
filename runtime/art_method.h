@@ -153,7 +153,15 @@ class ArtMethod FINAL {
     return (GetAccessFlags() & kAccSynthetic) != 0;
   }
 
+  // Does this method live on a declaring class that is itself any proxy class?
+  // -- Returns true for both java.lang.reflect.Proxy and java.lang.LambdaProxy subclasses.
   bool IsProxyMethod() SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Does this method live in a java.lang.reflect.Proxy subclass?
+  bool IsReflectProxyMethod() SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Does this method live in a java.lang.LambdaProxy subclass?
+  bool IsLambdaProxyMethod() SHARED_REQUIRES(Locks::mutator_lock_);
 
   bool IsPreverified() {
     return (GetAccessFlags() & kAccPreverified) != 0;
@@ -172,6 +180,17 @@ class ArtMethod FINAL {
         && GetEntryPointFromQuickCompiledCodePtrSize(pointer_size) != nullptr
         && GetQuickOatCodePointer(pointer_size) != nullptr
         && GetNativeGcMap(pointer_size) == nullptr;
+  }
+
+  // Does this method have a corresponding method_item in the DexFile?
+  bool HasDexMetadata() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return !IsProxyMethod();
+  }
+
+  // Does this method have a corresponding code_item in the DexFile?
+  // (True implies that it also has dex metadata).
+  bool HasDexCodeItem() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return HasDexMetadata() && !IsNative();
   }
 
   bool CheckIncompatibleClassChange(InvokeType type) SHARED_REQUIRES(Locks::mutator_lock_);
@@ -512,6 +531,9 @@ class ArtMethod FINAL {
 
   mirror::DexCache* GetDexCache() SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Returns the current method ('this') if this is a regular, non-proxy method.
+  // Otherwise, when this class is a proxy (IsProxyMethod), look-up the original interface's
+  // method (that the proxy is "overriding") and return that.
   ALWAYS_INLINE ArtMethod* GetInterfaceMethodIfProxy(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 

@@ -1213,7 +1213,6 @@ DEFINE_FUNCTION art_quick_set64_static
     RETURN_IF_EAX_ZERO                   // return or deliver exception
 END_FUNCTION art_quick_set64_static
 
-
 DEFINE_FUNCTION art_quick_proxy_invoke_handler
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_RDI
 
@@ -1224,6 +1223,68 @@ DEFINE_FUNCTION art_quick_proxy_invoke_handler
     movq %rax, %xmm0                        // Copy return value in case of float returns.
     RETURN_OR_DELIVER_PENDING_EXCEPTION
 END_FUNCTION art_quick_proxy_invoke_handler
+
+#if defined(NDEBUG)
+// Release should be faaast. So just jump directly to the lambda method.
+#define LAMBDA_PROXY_SETUP_FRAME 0
+#else
+// Debug can be slower, and we want to get better stack traces. Set up a frame.
+#define LAMBDA_PROXY_SETUP_FRAME 1
+#endif
+
+// Forward call from boxed innate lambda to the underlying lambda closure's target method.
+DEFINE_FUNCTION art_quick_lambda_proxy_invoke_handler
+    // This function is always called when the lambda is innate.
+    // Therefore we can assume the box is to an innate lambda.
+    // TODO: perhaps there should be a DCHECK to make sure it's innate?
+
+    // Set up a quick frame when debugging so we can see that it's going through a stub.
+    // An invoke-virtual + a stub invocation is enough of a hint that we *could* be
+    // going through a lambda proxy.
+#if LAMBDA_PROXY_SETUP_FRAME
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
+#endif
+
+    // Set up the new correct method receiver (swap object with closure).
+    // -- The original object is no longer available after this.
+    //
+    // (Before)
+    // rsi == mirror::Object* boxed_lambda;  // lambda proxy object.
+    movq MIRROR_OBJECT_BOXED_INNATE_LAMBDA_CLOSURE_POINTER_OFFSET(%rsi), %rsi
+    // (After)
+    // lambda::Closure* closure = boxed_lambda->closure_;  // Overwrite receiver object.
+    // rsi == closure
+
+    // Look up the new correct method target.
+    // -- The original method target is no longer available after this.
+    movq LAMBDA_CLOSURE_METHOD_OFFSET(%rsi), %rdi          // Overwrite old receiver method.
+    // (After)
+    // ArtLambdaMethod* lambda_method_target = closure->lambda_info_;
+    // rdi == lambda_method_target
+
+    // TODO: avoid extra indirect load by subclass ArtLambdaMethod from ArtMethod.
+
+    // Set up the correct method target from the lambda info.
+    movq ART_LAMBDA_METHOD_ART_METHOD_OFFSET(%rdi), %rdi  // Write new receiver method.
+    // (After)
+    // ArtMethod* method_target = lambda_method_target->target_;
+    // rdi == method_target
+
+    // Forward the call to the overwritten receiver method.
+    // -- Arguments [2,N] are left completely untouched since the signature is otherwise identical.
+    // call *ART_METHOD_QUICK_CODE_OFFSET_64(%rdi)  // (new method, new receiver, old args...)
+    // XX: cannot use call because it misaligns stack from 16->8
+    // TODO: maybe JMP r/m64 instead?
+#if LAMBDA_PROXY_SETUP_FRAME
+    call *ART_METHOD_QUICK_CODE_OFFSET_64(%rdi)  // (new method, new receiver, old args...)
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME
+    ret
+#else
+    jmp *ART_METHOD_QUICK_CODE_OFFSET_64(%rdi)
+    // XX: I guess we can just test this by flipping the NDEBUG around?
+#endif
+
+END_FUNCTION art_quick_lambda_proxy_invoke_handler
 
     /*
      * Called to resolve an imt conflict.

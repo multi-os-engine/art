@@ -47,6 +47,11 @@ class LeakingAllocator {
   static T* MakeInstance(Thread* self, Args&&... args) {
     return new (AllocateMemory(self, sizeof(T))) T(std::forward<Args>(args)...);
   }
+
+  // Mark the call site as one that *should* clean up memory.
+  static void DeleteMemory(Thread* /*self*/, void* /*ptr*/) {
+    // In reality, LinearAlloc doesn't  delete and we need to handle this in a special way.
+  }
 };
 
 }  // namespace lambda

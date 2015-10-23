@@ -942,6 +942,13 @@ ENTRY art_quick_proxy_invoke_handler
     DELIVER_PENDING_EXCEPTION
 END art_quick_proxy_invoke_handler
 
+// Forward call from boxed innate lambda to the underlying lambda closure's target method.
+     .extern artQuickLambdaProxyInvokeHandler
+ENTRY art_quick_lambda_proxy_invoke_handler
+#TODO
+    bkpt
+END art_quick_lambda_proxy_invoke_handler
+
     /*
      * Called to resolve an imt conflict. r12 is a hidden argument that holds the target method's
      * dex method index.

@@ -58,7 +58,7 @@ inline mirror::Field* Field::CreateFromArtField(Thread* self, ArtField* field,
       Runtime::Current()->GetClassLinker()->GetImagePointerSize() : sizeof(void*);
   auto dex_field_index = field->GetDexFieldIndex();
   auto* resolved_field = field->GetDexCache()->GetResolvedField(dex_field_index, pointer_size);
-  if (field->GetDeclaringClass()->IsProxyClass()) {
+  if (field->GetDeclaringClass()->IsAnyProxyClass()) {
     DCHECK(field->IsStatic());
     DCHECK_LT(dex_field_index, 2U);
     // The two static fields (interfaces, throws) of all proxy classes

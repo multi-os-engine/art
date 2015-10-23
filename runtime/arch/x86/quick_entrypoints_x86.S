@@ -1291,6 +1291,12 @@ DEFINE_FUNCTION art_quick_proxy_invoke_handler
     RETURN_OR_DELIVER_PENDING_EXCEPTION    // return or deliver exception
 END_FUNCTION art_quick_proxy_invoke_handler
 
+// Forward call from boxed innate lambda to the underlying lambda closure's target method.
+DEFINE_FUNCTION art_quick_lambda_proxy_invoke_handler
+#TODO
+    int3
+END_FUNCTION art_quick_lambda_proxy_invoke_handler
+
     /*
      * Called to resolve an imt conflict. xmm7 is a hidden argument that holds the target method's
      * dex method index.
