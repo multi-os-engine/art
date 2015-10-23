@@ -50,6 +50,7 @@ static constexpr uint32_t kAccPreverified =          0x00080000;  // class (runt
 static constexpr uint32_t kAccFastNative =           0x00080000;  // method (dex only)
 static constexpr uint32_t kAccMiranda =              0x00200000;  // method (dex only)
 static constexpr uint32_t kAccDefault =              0x00400000;  // method (runtime)
+static constexpr uint32_t kAccClassIsLambdaProxy =   0x01000000;  // class  (dex only)
 
 // Special runtime-only flags.
 // Interface and all its super-interfaces with default methods have been recursively initialized.
