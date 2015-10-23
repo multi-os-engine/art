@@ -1833,13 +1833,6 @@ const void* ClassLinker::GetQuickOatCodeFor(ArtMethod* method) {
       return code;
     }
   }
-  jit::Jit* const jit = Runtime::Current()->GetJit();
-  if (jit != nullptr) {
-    auto* code = jit->GetCodeCache()->GetCodeFor(method);
-    if (code != nullptr) {
-      return code;
-    }
-  }
   if (method->IsNative()) {
     // No code and native? Use generic trampoline.
     return GetQuickGenericJniStub();
@@ -1855,13 +1848,6 @@ const void* ClassLinker::GetOatMethodQuickCodeFor(ArtMethod* method) {
   OatFile::OatMethod oat_method = FindOatMethodFor(method, &found);
   if (found) {
     return oat_method.GetQuickCode();
-  }
-  jit::Jit* jit = Runtime::Current()->GetJit();
-  if (jit != nullptr) {
-    auto* code = jit->GetCodeCache()->GetCodeFor(method);
-    if (code != nullptr) {
-      return code;
-    }
   }
   return nullptr;
 }
