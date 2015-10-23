@@ -24,6 +24,8 @@
 #include "interpreter/interpreter.h"
 #include "jit_code_cache.h"
 #include "jit_instrumentation.h"
+#include "oat_file_manager.h"
+#include "offline_profiling_info.h"
 #include "runtime.h"
 #include "runtime_options.h"
 #include "thread_list.h"
@@ -43,6 +45,9 @@ JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& opt
       options.GetOrDefault(RuntimeArgumentMap::JITWarmupThreshold);
   jit_options->dump_info_on_shutdown_ =
       options.Exists(RuntimeArgumentMap::DumpJITInfoOnShutdown);
+      options.Exists(RuntimeArgumentMap::DumpJITInfoOnShutdown);
+  jit_options->save_profiling_data_ =
+      options.GetOrDefault(RuntimeArgumentMap::JITSaveProfilingData);;
   return jit_options;
 }
 
@@ -73,6 +78,14 @@ Jit* Jit::Create(JitOptions* options, std::string* error_msg) {
   jit->code_cache_.reset(JitCodeCache::Create(options->GetCodeCacheCapacity(), error_msg));
   if (jit->GetCodeCache() == nullptr) {
     return nullptr;
+  }
+  jit->offline_profile_info_.reset(nullptr);
+  if (options->GetSaveProfilingData()) {
+    if (Runtime::Current()->GetOatFileManager().GetPrimaryOatFile() != nullptr) {
+      jit->offline_profile_info_.reset(new OfflineProfilingInfo());
+    } else {
+      LOG(WARNING) << "Disabling save_profile_data_ because no primary oat file was found.";
+    }
   }
   LOG(INFO) << "JIT created with code_cache_capacity="
       << PrettySize(options->GetCodeCacheCapacity())
@@ -135,6 +148,7 @@ bool Jit::CompileMethod(ArtMethod* method, Thread* self) {
     VLOG(jit) << "JIT not compiling " << PrettyMethod(method) << " due to breakpoint";
     return false;
   }
+
   return jit_compile_method_(jit_compiler_handle_, method, self);
 }
 
@@ -146,6 +160,26 @@ void Jit::CreateThreadPool() {
 void Jit::DeleteThreadPool() {
   if (instrumentation_cache_.get() != nullptr) {
     instrumentation_cache_->DeleteThreadPool();
+  }
+}
+
+void Jit::SaveProfilingInfo(const std::string& filename) {
+  if (offline_profile_info_ == nullptr) {
+    return;
+  }
+
+  uint64_t last_update_ns = code_cache_->GetLastUpdateTimeNs();
+  if (offline_profile_info_->NeedsSaving(last_update_ns)) {
+    const OatFile* primary_oat_file = Runtime::Current()->GetOatFileManager().GetPrimaryOatFile();
+    DCHECK(primary_oat_file != nullptr);
+    std::set<ArtMethod*> methods;
+    {
+      ScopedObjectAccess soa(Thread::Current());
+      code_cache_->GetCompiledArtMethods(primary_oat_file, methods);
+    }
+    offline_profile_info_->SaveMethodsInfo(filename, last_update_ns, methods);
+  } else {
+    VLOG(jit) << "No need to save profiling information to: " << filename;
   }
 }
 

@@ -26,6 +26,7 @@
 #include "gc_root.h"
 #include "jni.h"
 #include "object_callbacks.h"
+#include "offline_profiling_info.h"
 #include "thread_pool.h"
 
 namespace art {
@@ -71,6 +72,8 @@ class Jit {
     return instrumentation_cache_.get();
   }
 
+  void SaveProfilingInfo(const std::string& filename);
+
  private:
   Jit();
   bool LoadCompiler(std::string* error_msg);
@@ -90,6 +93,7 @@ class Jit {
   std::unique_ptr<jit::JitCodeCache> code_cache_;
   CompilerCallbacks* compiler_callbacks_;  // Owned by the jit compiler.
 
+  std::unique_ptr<OfflineProfilingInfo> offline_profile_info_;
   DISALLOW_COPY_AND_ASSIGN(Jit);
 };
 
@@ -108,11 +112,17 @@ class JitOptions {
   bool DumpJitInfoOnShutdown() const {
     return dump_info_on_shutdown_;
   }
+  bool GetSaveProfilingData() const {
+    return save_profiling_data_;
+  }
   bool UseJIT() const {
     return use_jit_;
   }
   void SetUseJIT(bool b) {
     use_jit_ = b;
+  }
+  void SetSaveProfilingData(bool b) {
+    save_profiling_data_ = b;
   }
 
  private:
@@ -121,9 +131,10 @@ class JitOptions {
   size_t compile_threshold_;
   size_t warmup_threshold_;
   bool dump_info_on_shutdown_;
+  bool save_profiling_data_;
 
   JitOptions() : use_jit_(false), code_cache_capacity_(0), compile_threshold_(0),
-      dump_info_on_shutdown_(false) { }
+      dump_info_on_shutdown_(false), save_profiling_data_(false) { }
 
   DISALLOW_COPY_AND_ASSIGN(JitOptions);
 };
