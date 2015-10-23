@@ -56,6 +56,7 @@ namespace jit {
 
 namespace lambda {
   class BoxTable;
+  class BoxClassTable;
 }  // namespace lambda
 
 namespace mirror {

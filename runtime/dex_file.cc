@@ -26,6 +26,7 @@
 
 #include <memory>
 #include <sstream>
+#include <string>
 
 #include "art_field-inl.h"
 #include "art_method-inl.h"
