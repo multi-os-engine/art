@@ -99,17 +99,9 @@ ReferenceTypePropagation::ReferenceTypePropagation(HGraph* graph,
   }
 }
 
-void ReferenceTypePropagation::Run() {
-  // To properly propagate type info we need to visit in the dominator-based order.
-  // Reverse post order guarantees a node's dominators are visited first.
-  // We take advantage of this order in `VisitBasicBlock`.
-  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
-    VisitBasicBlock(it.Current());
-  }
-  ProcessWorklist();
-
+void ReferenceTypePropagation::ValidateTypes(bool validate_null_check_input) {
+  // TODO: move this to the graph checker.
   if (kIsDebugBuild) {
-    // TODO: move this to the graph checker.
     ScopedObjectAccess soa(Thread::Current());
     for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
       HBasicBlock* block = it.Current();
@@ -124,7 +116,7 @@ void ReferenceTypePropagation::Run() {
             HLoadClass* cls = instr->AsLoadClass();
             DCHECK(cls->GetReferenceTypeInfo().IsExact());
             DCHECK(!cls->GetLoadedClassRTI().IsValid() || cls->GetLoadedClassRTI().IsExact());
-          } else if (instr->IsNullCheck()) {
+          } else if (instr->IsNullCheck() && validate_null_check_input) {
             DCHECK(instr->GetReferenceTypeInfo().IsEqual(instr->InputAt(0)->GetReferenceTypeInfo()))
                 << "NullCheck " << instr->GetReferenceTypeInfo()
                 << "Input(0) " << instr->InputAt(0)->GetReferenceTypeInfo();
@@ -133,6 +125,31 @@ void ReferenceTypePropagation::Run() {
       }
     }
   }
+}
+
+void ReferenceTypePropagation::Run() {
+  // To properly propagate type info we need to visit in the dominator-based order.
+  // Reverse post order guarantees a node's dominators are visited first.
+  // We take advantage of this order in `VisitBasicBlock`.
+  for (HReversePostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
+    VisitBasicBlock(it.Current());
+  }
+
+  ProcessWorklist();
+  ValidateTypes(/*validate_null_check_input*/true);
+}
+
+void ReferenceTypePropagation::Run(HInstruction* start_from) {
+  DCHECK(start_from != nullptr);
+  DCHECK_EQ(graph_, start_from->GetBlock()->GetGraph());
+  DCHECK_EQ(Primitive::kPrimNot, start_from->GetType());
+
+  AddDependentInstructionsToWorklist(start_from);
+  ProcessWorklist();
+  // NullCheck's input may be widen by the inliner (because we don't implement
+  // the smallest common type and merge to Object). Skip the check in this case
+  // until we implement it.
+  ValidateTypes(/*validate_null_check_input*/false);
 }
 
 void ReferenceTypePropagation::VisitBasicBlock(HBasicBlock* block) {
