@@ -524,9 +524,26 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
       DCHECK(return_replacement->IsPhi());
       size_t pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
       ReferenceTypeInfo::TypeHandle return_handle =
-        handles_->NewHandle(resolved_method->GetReturnType(true /* resolve */, pointer_size));
+          handles_->NewHandle(resolved_method->GetReturnType(true /* resolve */, pointer_size));
       return_replacement->SetReferenceTypeInfo(ReferenceTypeInfo::Create(
          return_handle, return_handle->CannotBeAssignedFromOtherTypes() /* is_exact */));
+    }
+
+    // Check if the actual return type is a subtype of the declared invoke type.
+    // If so, run a limited type propagation to update the types in the original graph.
+    ReferenceTypeInfo return_rti = return_replacement->GetReferenceTypeInfo();
+    ReferenceTypeInfo invoke_rti = invoke_instruction->GetReferenceTypeInfo();
+    if (!return_rti.IsEqual(invoke_rti)) {
+      if (invoke_rti.IsSupertypeOf(return_rti)) {
+        ReferenceTypePropagation rtp_fixup(graph_, handles_);
+        rtp_fixup.Run(return_replacement);
+      } else if (!return_replacement->IsNullConstant()) {
+        // return_replacement could still be object (as a result of a merge).
+        // This happens because we don't implement the smallest common type and merge to Object.
+        // In this case, if the return is not the null constant, bound its type to the type of the
+        // invoke.
+        return_replacement->SetReferenceTypeInfo(invoke_rti);
+      }
     }
   }
 
