@@ -333,4 +333,18 @@ TEST_F(HashSetTest, TestLookupByAlternateKeyType) {
   ASSERT_NE(hash_set.end(), hash_set.Find(std::forward_list<int>({1, 2, 3, 4})));
 }
 
+TEST_F(HashSetTest, TestReserve) {
+  HashSet<std::string, IsEmptyFnString> hash_set;
+  std::vector<size_t> sizes = {1, 10, 25, 55, 128, 1024, 4096};
+  for (size_t size : sizes) {
+    hash_set.Reserve(size);
+    // Check that we expanded enough.
+    CHECK_GE(hash_set.ElementsUntilExpand(), size);
+  }
+  // Check the behaviour for shrinking, it does not necessarily resize down.
+  constexpr size_t size = 100;
+  hash_set.Reserve(size);
+  CHECK_GE(hash_set.ElementsUntilExpand(), size);
+}
+
 }  // namespace art
