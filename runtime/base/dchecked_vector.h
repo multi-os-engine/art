@@ -60,7 +60,7 @@ class dchecked_vector : private std::vector<T, Alloc> {
   explicit dchecked_vector(const allocator_type& alloc)
       : Base(alloc) { }
   explicit dchecked_vector(size_type n, const allocator_type& alloc = allocator_type())
-      : Base(n, alloc) { }
+      : Base(alloc) { resize(n); }
   dchecked_vector(size_type n,
                   const value_type& value,
                   const allocator_type& alloc = allocator_type())
