@@ -900,7 +900,10 @@ bool Thread::InitStackHwm() {
 
   // Sanity check.
   int stack_variable;
-  CHECK_GT(&stack_variable, reinterpret_cast<void*>(tlsPtr_.stack_end));
+
+  if (!RUNNING_ON_MEMORY_TOOL || !kMemoryToolIsValgrind) {
+    CHECK_GT(&stack_variable, reinterpret_cast<void*>(tlsPtr_.stack_end));
+  }
 
   return true;
 }
