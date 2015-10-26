@@ -328,6 +328,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     // at runtime, we change this call as if it was a virtual call.
     invoke_type = kVirtual;
   }
+  int callee_graph_start_instruction_id = graph_->GetCurrentInstructionId();
   HGraph* callee_graph = new (graph_->GetArena()) HGraph(
       graph_->GetArena(),
       callee_dex_file,
@@ -336,7 +337,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
       compiler_driver_->GetInstructionSet(),
       invoke_type,
       graph_->IsDebuggable(),
-      graph_->GetCurrentInstructionId());
+      callee_graph_start_instruction_id);
 
   OptimizingCompilerStats inline_stats;
   HGraphBuilder builder(callee_graph,
@@ -524,9 +525,49 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
       DCHECK(return_replacement->IsPhi());
       size_t pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
       ReferenceTypeInfo::TypeHandle return_handle =
-        handles_->NewHandle(resolved_method->GetReturnType(true /* resolve */, pointer_size));
+          handles_->NewHandle(resolved_method->GetReturnType(true /* resolve */, pointer_size));
       return_replacement->SetReferenceTypeInfo(ReferenceTypeInfo::Create(
          return_handle, return_handle->CannotBeAssignedFromOtherTypes() /* is_exact */));
+    }
+
+    // Check if the actual return type is a subtype of the declared invoke type.
+    // If so, run a limited type propagation to update the types in the original graph.
+
+    // If may be that the return_replacement is a null check (e.g. when returning a null checked
+    // parameter). Since null-checks just propagate the type of their input is best to use and
+    // update the original user. This allows for more precision and to maintain the invariant that
+    // null checks have the same type as their input. Thus, we go up the hierarchy until we find the
+    // original input.
+    while (return_replacement->IsNullCheck()) {
+      // The DCHECK is an extra safety net to make sure that inlining didn't break the type in the
+      // original null check chain
+      DCHECK(return_replacement->GetReferenceTypeInfo().IsEqual(
+          return_replacement->InputAt(0)->GetReferenceTypeInfo()));
+      return_replacement = return_replacement->InputAt(0);
+    }
+
+    ReferenceTypeInfo return_rti = return_replacement->GetReferenceTypeInfo();
+    ReferenceTypeInfo invoke_rti = invoke_instruction->GetReferenceTypeInfo();
+    // TODO(calin): run the type propagation if the nullabukuty
+    if (!return_rti.IsEqual(invoke_rti)) {
+      if (invoke_rti.IsSupertypeOf(return_rti)) {
+        ReferenceTypePropagation rtp_fixup(graph_, handles_);
+        rtp_fixup.Run(return_replacement);
+      } else if (!return_replacement->IsNullConstant()) {
+        // return_replacement could be object (as a result of a merge) or a super type if it comes
+        // from the caller graph (e.g. if it's a parameter).
+        // This happens because we don't implement the smallest common type and merge to Object.
+        // In this case, if the return is not the null constant, bound its type to the type of the
+        // invoke.
+        return_replacement->SetReferenceTypeInfo(invoke_rti);
+
+        // If the return_replacement comes from the caller graph we need to propagate the types
+        // again.
+        if (return_replacement->GetId() < callee_graph_start_instruction_id) {
+          ReferenceTypePropagation rtp_fixup(graph_, handles_);
+          rtp_fixup.Run(return_replacement);
+        }
+      }
     }
   }
 
