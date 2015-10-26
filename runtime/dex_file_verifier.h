@@ -175,7 +175,30 @@ class DexFileVerifier {
   const char* const location_;
   const DexFile::Header* const header_;
 
-  AllocationTrackingSafeMap<uint32_t, uint16_t, kAllocatorTagDexFileVerifier> offset_to_type_map_;
+  struct OffsetTypeMapEmptyFn {
+    void MakeEmpty(std::pair<uint32_t, uint16_t>& pair) const {
+      pair.first = 0u;
+    }
+    bool IsEmpty(const std::pair<uint32_t, uint16_t>& pair) const {
+      return pair.first == 0;
+    }
+  };
+  struct OffsetTypeMapHashCompareFn {
+    // Hash function.
+    size_t operator()(const uint32_t key) const {
+      return key;
+    }
+    // std::equal function.
+    bool operator()(const uint32_t a, const uint32_t b) const {
+      return a == b;
+    }
+  };
+  AllocationTrackingHashMap<uint32_t,
+                            uint16_t,
+                            OffsetTypeMapEmptyFn,
+                            kAllocatorTagDexFileVerifier,
+                            OffsetTypeMapHashCompareFn,
+                            OffsetTypeMapHashCompareFn> offset_to_type_map_;
   const uint8_t* ptr_;
   const void* previous_item_;
 
