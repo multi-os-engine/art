@@ -328,6 +328,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     // at runtime, we change this call as if it was a virtual call.
     invoke_type = kVirtual;
   }
+  int callee_graph_start_instruction_id = graph_->GetCurrentInstructionId();
   HGraph* callee_graph = new (graph_->GetArena()) HGraph(
       graph_->GetArena(),
       callee_dex_file,
@@ -336,7 +337,7 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
       compiler_driver_->GetInstructionSet(),
       invoke_type,
       graph_->IsDebuggable(),
-      graph_->GetCurrentInstructionId());
+      callee_graph_start_instruction_id);
 
   OptimizingCompilerStats inline_stats;
   HGraphBuilder builder(callee_graph,
@@ -516,6 +517,11 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
 
   if ((return_replacement != nullptr)
       && (return_replacement->GetType() == Primitive::kPrimNot)) {
+    if (return_replacement->IsNullConstant()) {
+      // Nothing to be done if the return is null.
+      return true;
+    }
+
     if (!return_replacement->GetReferenceTypeInfo().IsValid()) {
       // Make sure that we have a valid type for the return. We may get an invalid one when
       // we inline invokes with multiple branches and create a Phi for the result.
@@ -524,9 +530,74 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
       DCHECK(return_replacement->IsPhi());
       size_t pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
       ReferenceTypeInfo::TypeHandle return_handle =
-        handles_->NewHandle(resolved_method->GetReturnType(true /* resolve */, pointer_size));
+          handles_->NewHandle(resolved_method->GetReturnType(true /* resolve */, pointer_size));
       return_replacement->SetReferenceTypeInfo(ReferenceTypeInfo::Create(
          return_handle, return_handle->CannotBeAssignedFromOtherTypes() /* is_exact */));
+    }
+
+    // Check if the actual return type is a subtype of the declared invoke type.
+    // If so, run a limited type propagation to update the types in the original graph.
+
+    // It may be that the return_replacement is a null check (e.g. when returning a null checked
+    // parameter). Since null-checks just propagate the type of their input is best to use and
+    // update the original user:
+    //     1) we are more precise in the original graph
+    //     2) we are able to maintain the invariant: null checks have the same type as their input.
+    // Thus, we go up the hierarchy until we find the original input.
+    HNullCheck* original_return_null_check = return_replacement->AsNullCheck();
+    while (return_replacement->IsNullCheck()) {
+      // The DCHECK is an extra safety net to make sure that inlining didn't break the type in the
+      // original NullCheck chain.
+      DCHECK(return_replacement->GetReferenceTypeInfo().IsEqual(
+          return_replacement->InputAt(0)->GetReferenceTypeInfo()));
+      return_replacement = return_replacement->InputAt(0);
+    }
+
+    ReferenceTypeInfo return_rti = return_replacement->GetReferenceTypeInfo();
+    ReferenceTypeInfo invoke_rti = invoke_instruction->GetReferenceTypeInfo();
+    // TODO(calin): run the type propagation if the nullability has changed.
+    if (!return_rti.IsEqual(invoke_rti)) {
+      bool invoke_is_super_type = invoke_rti.IsStrictSupertypeOf(return_rti);
+      bool invoke_is_less_exact = !invoke_rti.IsExact() && return_rti.IsExact();
+      bool return_type_is_more_precise = invoke_is_super_type || invoke_is_less_exact;
+
+      // Check if need to update the return type. This can happen in several situations:
+      //   1) return_replacement could be a super type of the actual declared return type
+      //      (as a result of a merge)
+      //   2) return_replacement could come from the caller graph (e.g. the method returns one of
+      //      its parameter). The method signature could tell more about its type.
+      ReferenceTypeInfo::TypeHandle return_type_handle = invoke_is_super_type
+          ? return_rti.GetTypeHandle()
+          : invoke_rti.GetTypeHandle();
+      bool return_is_exact = return_rti.IsExact() || invoke_rti.IsExact();
+      ReferenceTypeInfo new_return_rti =
+         ReferenceTypeInfo::Create(return_type_handle, return_is_exact);
+      bool return_needed_update = !return_replacement->IsNullConstant() &&
+          !new_return_rti.IsEqual(return_rti);
+      if (return_needed_update) {
+        return_replacement->SetReferenceTypeInfo(new_return_rti);
+      }
+
+      // Run the type propagation again if:
+      //   1) we have more precise information about the return type than we could infer from the
+      //      method signature.
+      // or
+      //   2) we updated the return type and the the return_replacement is actually from the caller
+      //      graph (happens when the function returns one of it's parameters)
+      bool return_is_from_caller_graph =
+          return_replacement->GetId() < callee_graph_start_instruction_id;
+      if (return_type_is_more_precise ||
+          (return_needed_update && return_is_from_caller_graph)) {
+        // If the method returned a NullCheck we need to check again the starting point of the
+        // type propagation. If the root input of the NullCheck was not updated start from the
+        // NullCheck itself to avoid the ending the propagation prematurely.
+        bool start_from_orig_null_check = original_return_null_check != nullptr &&
+            return_type_is_more_precise &&
+            !return_needed_update &&
+            return_is_from_caller_graph;
+        ReferenceTypePropagation rtp_fixup(graph_, handles_);
+        rtp_fixup.Run(start_from_orig_null_check ? original_return_null_check : return_replacement);
+      }
     }
   }
 
