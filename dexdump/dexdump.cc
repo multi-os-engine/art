@@ -818,6 +818,21 @@ static void dumpInstruction(const DexFile* pDexFile,
                 pDecInsn->VRegA(), conv.d, pDecInsn->WideVRegB());
       }
       break;
+    case Instruction::k25x:        // op vC, {vD, vE, vF, vG} (B: count)
+      {
+        u4 arg[6];
+        pDecInsn->GetAllArgs25x(arg);
+        fprintf(gOutFile, " v%d, {", arg[0]);
+        for (int i = 0, n = pDecInsn->VRegB(); i < n; i++) {
+          if (i == 0) {
+            fprintf(gOutFile, "v%d", arg[2 + i]);
+          } else {
+            fprintf(gOutFile, ", v%d", arg[2 + i]);
+          }
+        }  // for
+        fputc('}', gOutFile);
+      }
+      break;
     // NOT SUPPORTED:
     // case Instruction::k00x:        // unknown op or breakpoint
     //    break;
