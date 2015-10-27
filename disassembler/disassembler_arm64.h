@@ -23,6 +23,7 @@
 #pragma GCC diagnostic ignored "-Wshadow"
 #include "vixl/a64/decoder-a64.h"
 #include "vixl/a64/disasm-a64.h"
+#include "vixl/a64/instrument-a64.h"
 #pragma GCC diagnostic pop
 
 namespace art {
@@ -60,8 +61,14 @@ class CustomDisassembler FINAL : public vixl::Disassembler {
 class DisassemblerArm64 FINAL : public Disassembler {
  public:
   explicit DisassemblerArm64(DisassemblerOptions* options) :
-      Disassembler(options), disasm(options) {
+      Disassembler(options), disasm(options), instrumentation(nullptr) {
     decoder.AppendVisitor(&disasm);
+    if (options->collect_statistics_) {
+      instrumentation.reset(new vixl::Instrument(kARM64DisassemblerStatsFileName,
+                                                 kARM64DisassemblerStatsSampleRate));
+      instrumentation->Enable();
+      decoder.AppendVisitor(instrumentation.get());
+    }
   }
 
   size_t Dump(std::ostream& os, const uint8_t* begin) OVERRIDE;
@@ -70,6 +77,10 @@ class DisassemblerArm64 FINAL : public Disassembler {
  private:
   vixl::Decoder decoder;
   CustomDisassembler disasm;
+  std::unique_ptr<vixl::Instrument> instrumentation;
+
+  static constexpr const char* kARM64DisassemblerStatsFileName = "statistics_arm64.csv";
+  static constexpr uint64_t kARM64DisassemblerStatsSampleRate = 0;
 
   DISALLOW_COPY_AND_ASSIGN(DisassemblerArm64);
 };
