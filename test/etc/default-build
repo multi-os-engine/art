@@ -17,6 +17,29 @@
 # Stop if something fails.
 set -e
 
+# Set default values
+if [ -d smali ]; then
+  HAS_SMALI=true
+fi
+
+if [ -d src ]; then
+  HAS_SRC=true
+fi
+
+if [ -d src2 ]; then
+  HAS_SRC2=true
+fi
+
+if [ -d src-multidex ]; then
+  HAS_SRC_MULTIDEX=true
+fi
+
+if [ -d src-ex ]; then
+  HAS_SRC_EX=true
+fi
+
+: ${JACK_ARGS:=}
+
 DX_FLAGS=""
 SKIP_DX_MERGER="false"
 
@@ -27,6 +50,21 @@ while true; do
     DX_FLAGS="${DX_FLAGS} $option"
     shift
   elif [ "x$1" = "x--jvm" ]; then
+    shift
+  elif [ "x$1" = "x--no-src" ]; then
+    HAS_SRC=false
+    shift
+  elif [ "x$1" = "x--no-src2" ]; then
+    HAS_SRC2=false
+    shift
+  elif [ "x$1" = "x--no-src-mutlidex" ]; then
+    HAS_SRC_MULTIDEX=false
+    shift
+  elif [ "x$1" = "x--no-src-ex" ]; then
+    HAS_SRC_EX=false
+    shift
+  elif [ "x$1" = "x--no-smali" ]; then
+    HAS_SMALI=false
     shift
   elif expr "x$1" : "x--" >/dev/null 2>&1; then
     echo "unknown $0 option: $1" 1>&2
@@ -41,12 +79,12 @@ if [ -e classes.dex ]; then
   exit 0
 fi
 
-if ! [ -d src ] && ! [ -d src2 ]; then
+if ! [ "${HAS_SRC}" = "true" ] && ! [ "${HAS_SRC2}" = "true" ]; then
   # No src directory? Then forget about trying to run dx.
   SKIP_DX_MERGER="true"
 fi
 
-if [ -d src-multidex ]; then
+if [ "${HAS_SRC_MULTIDEX}" = "true" ]; then
   # Jack does not support this configuration unless we specify how to partition the DEX file
   # with a .jpp file.
   USE_JACK="false"
@@ -54,27 +92,27 @@ fi
 
 if [ ${USE_JACK} = "true" ]; then
   # Jack toolchain
-  if [ -d src ]; then
-    ${JACK} --output-jack src.jack src
+  if [ "${HAS_SRC}" = "true" ]; then
+    ${JACK} ${JACK_ARGS} --output-jack src.jack src
     imported_jack_files="--import src.jack"
   fi
 
-  if [ -d src2 ]; then
-    ${JACK} --output-jack src2.jack src2
+  if [ "${HAS_SRC2}" = "true" ]; then
+    ${JACK} ${JACK_ARGS} --output-jack src2.jack src2
     imported_jack_files="--import src2.jack ${imported_jack_files}"
   fi
 
   # Compile jack files into a DEX file. We set jack.import.type.policy=keep-first to consider
   # class definitions from src2 first.
-  ${JACK} ${imported_jack_files} -D jack.import.type.policy=keep-first --output-dex .
+  ${JACK} ${JACK_ARGS} ${imported_jack_files} -D jack.import.type.policy=keep-first --output-dex .
 else
   # Legacy toolchain with javac+dx
-  if [ -d src ]; then
+  if [ "${HAS_SRC}" = "true" ]; then
     mkdir classes
     ${JAVAC} -implicit:none -classpath src-multidex -d classes `find src -name '*.java'`
   fi
 
-  if [ -d src-multidex ]; then
+  if [ "${HAS_SRC_MULTIDEX}" = "true" ]; then
     mkdir classes2
     ${JAVAC} -implicit:none -classpath src -d classes2 `find src-multidex -name '*.java'`
     if [ ${NEED_DEX} = "true" ]; then
@@ -83,7 +121,7 @@ else
     fi
   fi
 
-  if [ -d src2 ]; then
+  if [ "${HAS_SRC2}" = "true" ]; then
     mkdir -p classes
     ${JAVAC} -d classes `find src2 -name '*.java'`
   fi
@@ -94,9 +132,9 @@ else
   fi
 fi
 
-if [ -d smali ]; then
+if [ "${HAS_SMALI}" = "true" ]; then
   # Compile Smali classes
-  ${SMALI} -JXmx256m ${SMALI_ARGS} --output smali_classes.dex `find smali -name '*.smali'`
+  ${SMALI} -JXmx512m ${SMALI_ARGS} --output smali_classes.dex `find smali -name '*.smali'`
 
   # Don't bother with dexmerger if we provide our own main function in a smali file.
   if [ ${SKIP_DX_MERGER} = "false" ]; then
@@ -106,12 +144,12 @@ if [ -d smali ]; then
   fi
 fi
 
-if [ -d src-ex ]; then
+if [ ${HAS_SRC_EX} = "true" ]; then
   if [ ${USE_JACK} = "true" ]; then
       # Rename previous "classes.dex" so it is not overwritten.
       mv classes.dex classes-1.dex
       #TODO find another way to append src.jack to the jack classpath
-      ${JACK}:src.jack --output-dex . src-ex
+      ${JACK}:src.jack ${JACK_ARGS} --output-dex . src-ex
       zip $TEST_NAME-ex.jar classes.dex
       # Restore previous "classes.dex" so it can be zipped.
       mv classes-1.dex classes.dex
@@ -133,7 +171,7 @@ if [ -d src-ex ]; then
 fi
 
 # Create a single jar with two dex files for multidex.
-if [ -d src-multidex ]; then
+if [ ${HAS_SRC_MULTIDEX} = "true" ]; then
   zip $TEST_NAME.jar classes.dex classes2.dex
 elif [ ${NEED_DEX} = "true" ]; then
   zip $TEST_NAME.jar classes.dex
