@@ -1580,6 +1580,62 @@ void InstructionCodeGeneratorARM64::VisitAnd(HAnd* instruction) {
   HandleBinaryOp(instruction);
 }
 
+void LocationsBuilderARM64::VisitArm64DataProcWithShifterOp(
+    HArm64DataProcWithShifterOp* instruction) {
+  DCHECK(instruction->GetType() == Primitive::kPrimInt ||
+         instruction->GetType() == Primitive::kPrimLong);
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM64::VisitArm64DataProcWithShifterOp(
+    HArm64DataProcWithShifterOp* instruction) {
+  Primitive::Type type = instruction->GetType();
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+  Register out = OutputRegister(instruction);
+  Register left = InputRegisterAt(instruction, 0);
+  // If this `HArm64DataProcWithShifterOp` was created by merging a type conversion as the
+  // shifter operand operation, the IR generating `right_reg` (input to the type
+  // conversion) can have a different type from the current instruction's type,
+  // so we manually indicate the type.
+  Register right_reg = RegisterFrom(instruction->GetLocations()->InAt(1), type);
+  int64_t shift_amount = (type == Primitive::kPrimInt)
+    ? static_cast<uint32_t>(instruction->GetShiftAmount() & kMaxIntShiftValue)
+    : static_cast<uint32_t>(instruction->GetShiftAmount() & kMaxLongShiftValue);
+
+  Operand right_operand(0);
+
+  HArm64DataProcWithShifterOp::OpKind op_kind = instruction->GetOpKind();
+  if (HArm64DataProcWithShifterOp::IsExtensionOp(op_kind)) {
+    right_operand = Operand(right_reg, helpers::ExtendFromOpKind(op_kind));
+  } else {
+    right_operand = Operand(right_reg, helpers::ShiftFromOpKind(op_kind), shift_amount);
+  }
+
+  switch (instruction->GetInstrKind()) {
+    case HInstruction::kAdd:
+      __ Add(out, left, right_operand);
+      break;
+    case HInstruction::kAnd:
+      __ And(out, left, right_operand);
+      break;
+    case HInstruction::kOr:
+      __ Orr(out, left, right_operand);
+      break;
+    case HInstruction::kSub:
+      __ Sub(out, left, right_operand);
+      break;
+    case HInstruction::kXor:
+      __ Eor(out, left, right_operand);
+      break;
+    default:
+      LOG(FATAL) << "Unexpected operation kind.";
+  }
+}
+
 void LocationsBuilderARM64::VisitArm64IntermediateAddress(HArm64IntermediateAddress* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
