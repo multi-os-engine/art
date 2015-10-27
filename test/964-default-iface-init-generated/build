@@ -17,6 +17,8 @@
 # make us exit on a failure
 set -e
 
+ARGS=$@
+
 # We will be making more files than the ulimit is set to allow. Remove it temporarily.
 OLD_ULIMIT=`ulimit -S`
 ulimit -S unlimited
@@ -29,17 +31,17 @@ trap 'restore_ulimit' ERR
 # Generate the smali files and expected.txt or fail
 ./util-src/generate_smali.py ./smali ./expected.txt
 
-if [[ $@ == *"--jvm"* ]]; then
-  # Build the Java files if we are running a --jvm test
+if [[ $ARGS == *"--jvm"* || "$USE_JACK" == "true" ]]; then
+  # We are compiling java code, create it.
   mkdir -p src
-  mkdir -p classes
   ${ANDROID_BUILD_TOP}/art/tools/extract-embedded-java ./smali ./src
-  ${JAVAC} -implicit:none -d classes $(find src -name '*.java')
+  # Ignore the smali directory.
+  ARGS="${ARGS} --no-smali"
+  # Tell jack to compile 1.8.
+  export JACK_ARGS="${JACK_ARGS} -D jack.java.source.version=1.8"
 fi
 
-# Build the smali files and make a dex
-${SMALI} -JXmx512m ${SMALI_ARGS} --output classes.dex $(find smali -name '*.smali')
-zip $TEST_NAME.jar classes.dex
+./default-build $ARGS
 
 # Reset the ulimit back to its initial value
 restore_ulimit
