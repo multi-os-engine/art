@@ -101,6 +101,37 @@ static void DumpRegisterMapping(std::ostream& os,
      << " (" << location.GetValue() << ")" << suffix << '\n';
 }
 
+void CodeInfo::CollectStats(Statistics& code_info_stats,
+                            Statistics& stack_map_stats,
+                            Statistics& dex_register_map_stats,
+                            Statistics& inline_info_stats,
+                            uint16_t number_of_dex_registers) {
+  Stats(code_info_stats);
+  StackMapEncoding encoding = ExtractEncoding();
+  size_t number_of_stack_maps = GetNumberOfStackMaps();
+  for (size_t i = 0; i < number_of_stack_maps; ++i) {
+    StackMap stack_map = GetStackMapAt(i, encoding);
+    stack_map.Stats(stack_map_stats);
+    if (stack_map.HasDexRegisterMap(encoding)) {
+      DexRegisterMap dex_register_map = GetDexRegisterMapOf(
+          stack_map, encoding, number_of_dex_registers);
+      dex_register_map.Stats(dex_register_map_stats);
+    }
+    if (stack_map.HasInlineInfo(encoding)) {
+      InlineInfo inline_info = GetInlineInfoOf(stack_map, encoding);
+      inline_info.Stats(inline_info_stats);
+      for (size_t j = 0; j < inline_info.GetDepth(); ++j) {
+        if (inline_info.HasDexRegisterMapAtDepth(j)) {
+         DexRegisterMap dex_register_map = GetDexRegisterMapAtDepth(
+            j, inline_info, encoding, number_of_dex_registers);
+         dex_register_map.Stats(dex_register_map_stats);
+        }
+      }
+    }
+  }
+}
+
+
 void CodeInfo::Dump(VariableIndentationOutputStream* vios,
                     uint32_t code_offset,
                     uint16_t number_of_dex_registers,

@@ -19,6 +19,7 @@
 
 #include "base/bit_vector.h"
 #include "base/bit_utils.h"
+#include "base/statistics.h"
 #include "memory_region.h"
 
 namespace art {
@@ -651,6 +652,10 @@ class DexRegisterMap {
     return region_.size();
   }
 
+  void Stats(Statistics& stats) const {
+    stats.Insert(Size());
+  }
+
   void Dump(VariableIndentationOutputStream* vios,
             const CodeInfo& code_info, uint16_t number_of_dex_registers) const;
 
@@ -887,6 +892,14 @@ class StackMap {
             uint16_t number_of_dex_registers,
             const std::string& header_suffix = "") const;
 
+  size_t Size() const {
+    return region_.size();
+  }
+
+  void Stats(Statistics& stats) const {
+    stats.Insert(Size());
+  }
+
   // Special (invalid) offset for the DexRegisterMapOffset field meaning
   // that there is no Dex register map for this stack map.
   static constexpr uint32_t kNoDexRegisterMap = -1;
@@ -983,6 +996,14 @@ class InlineInfo {
 
   static size_t SingleEntrySize() {
     return kFixedEntrySize;
+  }
+
+  size_t Size() const {
+    return region_.size();
+  }
+
+  void Stats(Statistics& stats) const {
+    stats.Insert(Size());
   }
 
   void Dump(VariableIndentationOutputStream* vios,
@@ -1200,6 +1221,10 @@ class CodeInfo {
     return StackMap();
   }
 
+  void Stats(Statistics& stats) const {
+    stats.Insert(GetOverallSize());
+  }
+
   // Dump this CodeInfo object on `os`.  `code_offset` is the (absolute)
   // native PC of the compiled method and `number_of_dex_registers` the
   // number of Dex virtual registers used in this method.  If
@@ -1209,6 +1234,12 @@ class CodeInfo {
             uint32_t code_offset,
             uint16_t number_of_dex_registers,
             bool dump_stack_maps) const;
+
+  void CollectStats(Statistics& code_info_stats,
+                    Statistics& stack_map_stats,
+                    Statistics& dex_register_map_stats,
+                    Statistics& inline_info_stats,
+                    uint16_t number_of_dex_registers);
 
  private:
   static constexpr int kOverallSizeOffset = 0;

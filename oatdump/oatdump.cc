@@ -29,6 +29,7 @@
 #include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "base/unix_file/fd_file.h"
+#include "base/statistics.h"
 #include "class_linker.h"
 #include "class_linker-inl.h"
 #include "dex_file-inl.h"
@@ -325,6 +326,7 @@ class OatDumperOptions {
                    bool dump_raw_gc_map,
                    bool dump_vmap,
                    bool dump_code_info_stack_maps,
+                   bool dump_size_statistics,
                    bool disassemble_code,
                    bool absolute_addresses,
                    const char* class_filter,
@@ -337,6 +339,7 @@ class OatDumperOptions {
       dump_raw_gc_map_(dump_raw_gc_map),
       dump_vmap_(dump_vmap),
       dump_code_info_stack_maps_(dump_code_info_stack_maps),
+      dump_size_statistics_(dump_size_statistics),
       disassemble_code_(disassemble_code),
       absolute_addresses_(absolute_addresses),
       class_filter_(class_filter),
@@ -351,6 +354,7 @@ class OatDumperOptions {
   const bool dump_raw_gc_map_;
   const bool dump_vmap_;
   const bool dump_code_info_stack_maps_;
+  const bool dump_size_statistics_;
   const bool disassemble_code_;
   const bool absolute_addresses_;
   const char* const class_filter_;
@@ -378,10 +382,9 @@ class OatDumper {
     CHECK(options_.class_filter_ != nullptr);
     CHECK(options_.method_filter_ != nullptr);
     AddAllOffsets();
-  }
-
-  ~OatDumper() {
-    delete disassembler_;
+    if (options_.dump_size_statistics_) {
+      size_statistics_.reset(new OatStats());
+    }
   }
 
   InstructionSet GetInstructionSet() {
@@ -495,6 +498,9 @@ class OatDumper {
           success = false;
         }
       }
+    }
+    if (options_.dump_size_statistics_) {
+      size_statistics_->Dump(kStatisticsFileName, oat_file_);
     }
     os << std::flush;
     return success;
@@ -1057,6 +1063,13 @@ class OatDumper {
         DCHECK(code_item != nullptr);
         ScopedIndentation indent1(vios);
         DumpCodeInfo(vios, code_info, oat_method, *code_item);
+        if (options_.dump_size_statistics_) {
+          code_info.CollectStats(size_statistics_->code_info_stats,
+                                 size_statistics_->stack_map_stats,
+                                 size_statistics_->register_map_stats,
+                                 size_statistics_->inline_info_stats,
+                                 code_item->registers_size_);
+        }
       }
     } else if (IsMethodGeneratedByDexToDexCompiler(oat_method, code_item)) {
       // We don't encode the size in the table, so just emit that we have quickened
@@ -1438,6 +1451,9 @@ class OatDumper {
                 bool bad_input, size_t code_size) {
     const void* quick_code = oat_method.GetQuickCode();
 
+    if (options_.dump_size_statistics_) {
+      oat_method.Stats(size_statistics_->native_method_code_size_stats);
+    }
     if (code_size == 0) {
       code_size = oat_method.GetQuickCodeSize();
     }
@@ -1466,13 +1482,50 @@ class OatDumper {
     }
   }
 
+  struct OatStats {
+    Statistics code_info_stats;
+    Statistics stack_map_stats;
+    Statistics inline_info_stats;
+    Statistics register_map_stats;
+    Statistics native_method_code_size_stats;
+
+    OatStats()
+        : code_info_stats("Code Info"),
+          stack_map_stats("Stack Map"),
+          inline_info_stats("Inline Info"),
+          register_map_stats("Dex Register Map"),
+          native_method_code_size_stats("Native Code") {}
+
+    void Dump(const char* stats_file_name, const OatFile& oat_file) {
+      std::ofstream stats_file(stats_file_name, std::ofstream::out);
+      CHECK(stats_file.is_open()) << "Could not open stats file: " << stats_file_name;
+
+      stats_file << "Oatfile: " << oat_file.GetLocation() << "\n";
+      stats_file << "Arch: " << oat_file.GetOatHeader().GetInstructionSet() << "\n";
+      stats_file << "Size: " << oat_file.Size() << "\n";
+      stats_file << "BssSize: " << oat_file.BssSize() << "\n";
+
+      Statistics::DumpCSVHeader(stats_file);
+      code_info_stats.DumpToCSV(stats_file);
+      stack_map_stats.DumpToCSV(stats_file);
+      inline_info_stats.DumpToCSV(stats_file);
+      register_map_stats.DumpToCSV(stats_file);
+      native_method_code_size_stats.DumpToCSV(stats_file);
+
+      stats_file.close();
+    }
+  };
+
+  static constexpr const char* kStatisticsFileName = "statistics.csv";
+
   const OatFile& oat_file_;
   const std::vector<const OatFile::OatDexFile*> oat_dex_files_;
   const OatDumperOptions& options_;
   uint32_t resolved_addr2instr_;
   InstructionSet instruction_set_;
   std::set<uintptr_t> offsets_;
-  Disassembler* disassembler_;
+  std::unique_ptr<Disassembler> disassembler_;
+  std::unique_ptr<OatStats> size_statistics_;
 };
 
 class ImageDumper {
@@ -2084,7 +2137,6 @@ class ImageDumper {
     size_t gc_map_bytes;
     size_t pc_mapping_table_bytes;
     size_t vmap_table_bytes;
-
     size_t dex_instruction_bytes;
 
     std::vector<ArtMethod*> method_outlier;
@@ -2498,6 +2550,8 @@ struct OatdumpArgs : public CmdlineArgs {
       dump_vmap_ = false;
     } else if (option =="--dump:code_info_stack_maps") {
       dump_code_info_stack_maps_ = true;
+    } else if (option =="--dump:size_statistics") {
+      dump_size_statistics_ = true;
     } else if (option == "--no-disassemble") {
       disassemble_code_ = false;
     } else if (option.starts_with("--symbolize=")) {
@@ -2580,6 +2634,9 @@ struct OatdumpArgs : public CmdlineArgs {
         "  --dump:code_info_stack_maps enables dumping of stack maps in CodeInfo sections.\n"
         "      Example: --dump:code_info_stack_maps\n"
         "\n"
+        "  --dump:statistics enables dumping of aditional size statistics. \n"
+        "      Example: --dump:size_statistics\n"
+        "\n"
         "  --no-disassemble may be used to disable disassembly.\n"
         "      Example: --no-disassemble\n"
         "\n"
@@ -2621,6 +2678,7 @@ struct OatdumpArgs : public CmdlineArgs {
   bool dump_raw_gc_map_ = false;
   bool dump_vmap_ = true;
   bool dump_code_info_stack_maps_ = false;
+  bool dump_size_statistics_ = false;
   bool disassemble_code_ = true;
   bool symbolize_ = false;
   bool list_classes_ = false;
@@ -2641,6 +2699,7 @@ struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
         args_->dump_raw_gc_map_,
         args_->dump_vmap_,
         args_->dump_code_info_stack_maps_,
+        args_->dump_size_statistics_,
         args_->disassemble_code_,
         absolute_addresses,
         args_->class_filter_,

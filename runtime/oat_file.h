@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "base/mutex.h"
+#include "base/statistics.h"
 #include "base/stringpiece.h"
 #include "dex_file.h"
 #include "invoke_type.h"
@@ -143,6 +144,10 @@ class OatFile FINAL {
     // See ClassLinker::FindOatMethodFor.
     static const OatMethod Invalid() {
       return OatMethod(nullptr, -1);
+    }
+
+    void Stats(Statistics& stats) const {
+      stats.Insert(GetQuickCodeSize());
     }
 
    private:
