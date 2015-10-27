@@ -545,6 +545,18 @@ inline uint32_t Class::GetAccessFlags() {
   return GetField32<kVerifyFlags>(AccessFlagsOffset());
 }
 
+inline bool Class::IsTemp() {
+  if (!dex_cache_.IsNull() && dex_class_def_idx_ != DexFile::kDexNoIndex16) {
+    const OatDexFile* oat_dex_file = GetDexFile().GetOatDexFile();
+    if (oat_dex_file != nullptr && oat_dex_file->GetClassSize(dex_class_def_idx_) != 0) {
+      return false;
+    }
+  }
+
+  Status s = GetStatus();
+  return s < Status::kStatusResolving && ShouldHaveEmbeddedImtAndVTable();
+}
+
 inline String* Class::GetName() {
   return GetFieldObject<String>(OFFSET_OF_OBJECT_MEMBER(Class, name_));
 }

@@ -1583,11 +1583,20 @@ mirror::Class* ClassLinker::DefineClass(Thread* self,
   }
 
   if (klass.Get() == nullptr) {
+    uint32_t size = 0;
+    const OatDexFile* oat_dex_file = dex_file.GetOatDexFile();
+    if (oat_dex_file != nullptr) {
+      uint16_t class_def_idx = dex_file.GetIndexForClassDef(dex_class_def);
+      size = oat_dex_file->GetClassSize(class_def_idx);
+    }
+    if (size == 0) {
+      size = SizeOfClassWithoutEmbeddedTables(dex_file, dex_class_def);
+    }
     // Allocate a class with the status of not ready.
     // Interface object should get the right size here. Regular class will
     // figure out the right size later and be replaced with one of the right
     // size when the class becomes resolved.
-    klass.Assign(AllocClass(self, SizeOfClassWithoutEmbeddedTables(dex_file, dex_class_def)));
+    klass.Assign(AllocClass(self, size));
   }
   if (UNLIKELY(klass.Get() == nullptr)) {
     self->AssertPendingOOMException();

@@ -357,6 +357,7 @@ CompilerDriver::CompilerDriver(const CompilerOptions* compiler_options,
       instruction_set_(instruction_set),
       instruction_set_features_(instruction_set_features),
       freezing_constructor_lock_("freezing constructor lock"),
+      class_size_lock_("class sizes lock"),
       compiled_classes_lock_("compiled classes lock"),
       compiled_methods_lock_("compiled method lock"),
       compiled_methods_(MethodTable::key_compare()),
@@ -1904,6 +1905,11 @@ class ResolveClassFieldsAndMethodsVisitor : public CompilationVisitor {
       CheckAndClearResolveException(soa.Self());
       resolve_fields_and_methods = false;
     } else {
+      if (klass->ShouldHaveEmbeddedImtAndVTable() && !klass->IsArrayClass() &&
+          klass->GetDexFile().GetLocation() == dex_file.GetLocation()) {
+        ClassReference ref(&dex_file, class_def_index);
+        manager_->GetCompiler()->SetClassSize(ref, klass->GetClassSize());
+      }
       // We successfully resolved a class, should we skip it?
       if (SkipClass(jclass_loader, dex_file, klass)) {
         return;
@@ -2623,6 +2629,21 @@ bool CompilerDriver::IsStringInit(uint32_t method_index, const DexFile* dex_file
   size_t pointer_size = InstructionSetPointerSize(GetInstructionSet());
   *offset = inliner->GetOffsetForStringInit(method_index, pointer_size);
   return inliner->IsStringInitMethodIndex(method_index);
+}
+
+void CompilerDriver::SetClassSize(const ClassReference& ref, uint32_t size) {
+  MutexLock lock(Thread::Current(), class_size_lock_);
+  SafeMap<ClassReference, uint32_t>::const_iterator it = class_sizes_.find(ref);
+  if (it != class_sizes_.end()) {
+    return;
+  }
+  class_sizes_.Put(ref, size);
+}
+
+uint32_t CompilerDriver::GetClassSize(const ClassReference& ref) const {
+  MutexLock lock(Thread::Current(), class_size_lock_);
+  SafeMap<ClassReference, uint32_t>::const_iterator it = class_sizes_.find(ref);
+  return it == class_sizes_.end() ? 0 : it->second;
 }
 
 }  // namespace art

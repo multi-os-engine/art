@@ -341,10 +341,7 @@ class MANAGED Class FINAL : public Object {
 
   // Returns true if this class is the placeholder and should retire and
   // be replaced with a class with the right size for embedded imt/vtable.
-  bool IsTemp() SHARED_REQUIRES(Locks::mutator_lock_) {
-    Status s = GetStatus();
-    return s < Status::kStatusResolving && ShouldHaveEmbeddedImtAndVTable();
-  }
+  bool IsTemp() SHARED_REQUIRES(Locks::mutator_lock_);
 
   String* GetName() SHARED_REQUIRES(Locks::mutator_lock_);  // Returns the cached name.
   void SetName(String* name) SHARED_REQUIRES(Locks::mutator_lock_);  // Sets the cached name.
