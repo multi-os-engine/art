@@ -89,10 +89,8 @@ static Primitive::Type GetType(uint64_t data, bool is_op_size) {
   }
 }
 
-static Intrinsics GetIntrinsic(InlineMethod method, InstructionSet instruction_set) {
-  if (instruction_set == kMips) {
-    return Intrinsics::kNone;
-  }
+static Intrinsics GetIntrinsic(InlineMethod method,
+                               InstructionSet instruction_set ATTRIBUTE_UNUSED) {
   switch (method.opcode) {
     // Floating-point conversions.
     case kIntrinsicDoubleCvt:
