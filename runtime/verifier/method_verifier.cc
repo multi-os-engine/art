@@ -665,7 +665,8 @@ bool MethodVerifier::Verify() {
       // Interfaces may always have static initializers for their fields. If we are running with
       // default methods enabled we also allow other public, static, non-final methods to have code.
       // Otherwise that is the only type of method allowed.
-      if (runtime->AreExperimentalFlagsEnabled(ExperimentalFlags::kDefaultMethods)) {
+      if (runtime->AreExperimentalFlagsEnabled(ExperimentalFlags::kDefaultMethods) &&
+          !(IsConstructor() && IsStatic())) {
         if (IsInstanceConstructor()) {
           Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "interfaces may not have non-static constructor";
           return false;
@@ -3662,8 +3663,15 @@ ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(
                                       << PrettyMethod(res_method);
     return nullptr;
   }
-  // Check that interface methods match interface classes.
-  if (klass->IsInterface() && method_type != METHOD_INTERFACE) {
+  // Check that interface methods are static or match interface classes.
+  // We only allow statics if we don't have default methods enabled.
+  Runtime* runtime = Runtime::Current();
+  bool default_methods_supported =
+      runtime == nullptr ||
+      runtime->AreExperimentalFlagsEnabled(ExperimentalFlags::kDefaultMethods);
+  if (klass->IsInterface() &&
+      method_type != METHOD_INTERFACE &&
+      (!default_methods_supported || method_type != METHOD_STATIC)) {
     Fail(VERIFY_ERROR_CLASS_CHANGE) << "non-interface method " << PrettyMethod(res_method)
                                     << " is in an interface class " << PrettyClass(klass);
     return nullptr;
