@@ -482,6 +482,9 @@ class CompilerDriver {
     return &compiled_method_storage_;
   }
 
+  void SetClassSize(const ClassReference& ref, uint32_t size) REQUIRES(!class_size_lock_);
+  uint32_t GetClassSize(const ClassReference& ref) const REQUIRES(!class_size_lock_);
+
  private:
   // Return whether the declaring class of `resolved_member` is
   // available to `referrer_class` for read or write access using two
@@ -618,6 +621,9 @@ class CompilerDriver {
   // All class references that require
   mutable ReaderWriterMutex freezing_constructor_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   std::set<ClassReference> freezing_constructor_classes_ GUARDED_BY(freezing_constructor_lock_);
+
+  mutable Mutex class_size_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
+  SafeMap<ClassReference, uint32_t> class_sizes_;
 
   typedef SafeMap<const ClassReference, CompiledClass*> ClassTable;
   // All class references that this compiler has compiled.

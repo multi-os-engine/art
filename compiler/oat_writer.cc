@@ -104,6 +104,7 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     size_oat_dex_file_location_checksum_(0),
     size_oat_dex_file_offset_(0),
     size_oat_dex_file_methods_offsets_(0),
+    size_oat_class_size_(0),
     size_oat_class_type_(0),
     size_oat_class_status_(0),
     size_oat_class_method_bitmaps_(0),
@@ -348,6 +349,7 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
 
   bool EndClass() {
     ClassReference class_ref(dex_file_, class_def_index_);
+    uint32_t size = writer_->compiler_driver_->GetClassSize(class_ref);
     CompiledClass* compiled_class = writer_->compiler_driver_->GetCompiledClass(class_ref);
     mirror::Class::Status status;
     if (compiled_class != nullptr) {
@@ -358,7 +360,7 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
       status = mirror::Class::kStatusNotReady;
     }
 
-    OatClass* oat_class = new OatClass(offset_, compiled_methods_,
+    OatClass* oat_class = new OatClass(offset_, size, compiled_methods_,
                                        num_non_null_compiled_methods_, status);
     writer_->oat_classes_.push_back(oat_class);
     oat_class->UpdateChecksum(writer_->oat_header_);
@@ -1279,6 +1281,7 @@ bool OatWriter::WriteCode(OutputStream* out) {
     DO_STAT(size_oat_dex_file_location_checksum_);
     DO_STAT(size_oat_dex_file_offset_);
     DO_STAT(size_oat_dex_file_methods_offsets_);
+    DO_STAT(size_oat_class_size_);
     DO_STAT(size_oat_class_type_);
     DO_STAT(size_oat_class_status_);
     DO_STAT(size_oat_class_method_bitmaps_);
@@ -1553,6 +1556,7 @@ bool OatWriter::OatDexFile::Write(OatWriter* oat_writer,
 }
 
 OatWriter::OatClass::OatClass(size_t offset,
+                              uint32_t size,
                               const std::vector<CompiledMethod*>& compiled_methods,
                               uint32_t num_non_null_compiled_methods,
                               mirror::Class::Status status)
@@ -1561,6 +1565,7 @@ OatWriter::OatClass::OatClass(size_t offset,
   CHECK_LE(num_non_null_compiled_methods, num_methods);
 
   offset_ = offset;
+  size_ = size;
   oat_method_offsets_offsets_from_oat_class_.resize(num_methods);
 
   // Since both kOatClassNoneCompiled and kOatClassAllCompiled could
@@ -1625,7 +1630,8 @@ size_t OatWriter::OatClass::GetOatMethodOffsetsOffsetFromOatClass(
 }
 
 size_t OatWriter::OatClass::SizeOf() const {
-  return sizeof(status_)
+  return sizeof(size_)
+          + sizeof(status_)
           + sizeof(type_)
           + ((method_bitmap_size_ == 0) ? 0 : sizeof(method_bitmap_size_))
           + method_bitmap_size_
@@ -1633,6 +1639,7 @@ size_t OatWriter::OatClass::SizeOf() const {
 }
 
 void OatWriter::OatClass::UpdateChecksum(OatHeader* oat_header) const {
+  oat_header->UpdateChecksum(&size_, sizeof(size_));
   oat_header->UpdateChecksum(&status_, sizeof(status_));
   oat_header->UpdateChecksum(&type_, sizeof(type_));
   if (method_bitmap_size_ != 0) {
@@ -1648,6 +1655,11 @@ bool OatWriter::OatClass::Write(OatWriter* oat_writer,
                                 OutputStream* out,
                                 const size_t file_offset) const {
   DCHECK_OFFSET_();
+  if (!out->WriteFully(&size_, sizeof(size_))) {
+    PLOG(ERROR) << "Failed to write class size to " << out->GetLocation();
+    return false;
+  }
+  oat_writer->size_oat_class_size_ += sizeof(size_);
   if (!out->WriteFully(&status_, sizeof(status_))) {
     PLOG(ERROR) << "Failed to write class status to " << out->GetLocation();
     return false;

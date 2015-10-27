@@ -218,6 +218,7 @@ class OatWriter {
   class OatClass {
    public:
     OatClass(size_t offset,
+             uint32_t size,
              const std::vector<CompiledMethod*>& compiled_methods,
              uint32_t num_non_null_compiled_methods,
              mirror::Class::Status status);
@@ -247,6 +248,8 @@ class OatWriter {
     std::vector<uint32_t> oat_method_offsets_offsets_from_oat_class_;
 
     // data to write
+
+    uint32_t size_;
 
     static_assert(mirror::Class::Status::kStatusMax < (2 ^ 16), "class status won't fit in 16bits");
     int16_t status_;
@@ -339,6 +342,7 @@ class OatWriter {
   uint32_t size_oat_dex_file_location_checksum_;
   uint32_t size_oat_dex_file_offset_;
   uint32_t size_oat_dex_file_methods_offsets_;
+  uint32_t size_oat_class_size_;
   uint32_t size_oat_class_type_;
   uint32_t size_oat_class_status_;
   uint32_t size_oat_class_method_bitmaps_;

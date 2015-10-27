@@ -390,6 +390,8 @@ class OatDexFile FINAL {
     return dex_file_location_checksum_;
   }
 
+  uint32_t GetClassSize(uint16_t class_def_idx) const;
+
   // Returns the OatClass for the class specified by the given DexFile class_def_index.
   OatFile::OatClass GetOatClass(uint16_t class_def_index) const;
 

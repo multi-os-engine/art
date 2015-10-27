@@ -756,13 +756,24 @@ uint32_t OatFile::OatDexFile::GetOatClassOffset(uint16_t class_def_index) const 
   return oat_class_offsets_pointer_[class_def_index];
 }
 
+uint32_t OatFile::OatDexFile::GetClassSize(uint16_t class_def_idx) const {
+  uint32_t oat_class_offset = GetOatClassOffset(class_def_idx);
+
+  const uint8_t* oat_class_pointer = oat_file_->Begin() + oat_class_offset;
+  CHECK_LT(oat_class_pointer, oat_file_->End()) << oat_file_->GetLocation();
+
+ return *reinterpret_cast<const uint32_t*>(oat_class_pointer);
+}
+
 OatFile::OatClass OatFile::OatDexFile::GetOatClass(uint16_t class_def_index) const {
   uint32_t oat_class_offset = GetOatClassOffset(class_def_index);
 
   const uint8_t* oat_class_pointer = oat_file_->Begin() + oat_class_offset;
   CHECK_LT(oat_class_pointer, oat_file_->End()) << oat_file_->GetLocation();
 
-  const uint8_t* status_pointer = oat_class_pointer;
+  const uint8_t* class_size_pointer = oat_class_pointer;
+
+  const uint8_t* status_pointer = class_size_pointer + sizeof(uint32_t);
   CHECK_LT(status_pointer, oat_file_->End()) << oat_file_->GetLocation();
   mirror::Class::Status status =
       static_cast<mirror::Class::Status>(*reinterpret_cast<const int16_t*>(status_pointer));
