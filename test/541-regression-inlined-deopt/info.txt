@@ -1,0 +1,2 @@
+Regression test for deopt from optimized code which would use the top-level
+stack map for deopting inlined frames.

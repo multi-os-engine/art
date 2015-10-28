@@ -128,7 +128,7 @@ ArtMethod* StackVisitor::GetMethod() const {
     return cur_shadow_frame_->GetMethod();
   } else if (cur_quick_frame_ != nullptr) {
     if (IsInInlinedFrame()) {
-      size_t depth_in_stack_map = current_inlining_depth_ - 1;
+      size_t depth_in_stack_map = GetCurrentInlineInfoDepth();
       InlineInfo inline_info = GetCurrentInlineInfo();
       return GetResolvedMethod(*GetCurrentQuickFrame(), inline_info, depth_in_stack_map);
     } else {

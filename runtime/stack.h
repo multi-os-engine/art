@@ -698,6 +698,10 @@ class StackVisitor {
     return current_inlining_depth_ != 0;
   }
 
+  size_t GetCurrentInlineInfoDepth() const {
+    return current_inlining_depth_ - 1;
+  }
+
   uintptr_t GetCurrentQuickFramePc() const {
     return cur_quick_frame_pc_;
   }
