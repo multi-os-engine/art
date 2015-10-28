@@ -629,7 +629,6 @@ public class Main {
         // This will cause AIOOBE.
         constantIndexingForward6(new int[3]);
       } catch (ArrayIndexOutOfBoundsException e2) {
-        assertIsManaged();
         return 99;
       }
     }
