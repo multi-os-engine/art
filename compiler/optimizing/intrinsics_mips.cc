@@ -138,6 +138,156 @@ bool IntrinsicLocationsBuilderMIPS::TryDispatch(HInvoke* invoke) {
 
 #define __ assembler->
 
+static void CreateFPToIntLocations(ArenaAllocator* arena, HInvoke* invoke) {
+  LocationSummary* locations = new (arena) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  locations->SetInAt(0, Location::RequiresFpuRegister());
+  locations->SetOut(Location::RequiresRegister());
+}
+
+static void MoveFPToInt(LocationSummary* locations, bool is64bit, MipsAssembler* assembler) {
+  FRegister in  = locations->InAt(0).AsFpuRegister<FRegister>();
+
+  if (is64bit) {
+    Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+    Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+    __ Mfc1(out_lo, in);
+    __ Mfhc1(out_hi, in);
+  } else {
+    Register out = locations->Out().AsRegister<Register>();
+
+    __ Mfc1(out, in);
+  }
+}
+
+// long java.lang.Double.doubleToRawLongBits(double)
+void IntrinsicLocationsBuilderMIPS::VisitDoubleDoubleToRawLongBits(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitDoubleDoubleToRawLongBits(HInvoke* invoke) {
+  MoveFPToInt(invoke->GetLocations(), true, GetAssembler());
+}
+
+// int java.lang.Float.floatToRawIntBits(float)
+void IntrinsicLocationsBuilderMIPS::VisitFloatFloatToRawIntBits(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitFloatFloatToRawIntBits(HInvoke* invoke) {
+  MoveFPToInt(invoke->GetLocations(), false, GetAssembler());
+}
+
+static void CreateIntToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
+  LocationSummary* locations = new (arena) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresFpuRegister());
+}
+
+static void MoveIntToFP(LocationSummary* locations, bool is64bit, MipsAssembler* assembler) {
+  FRegister out = locations->Out().AsFpuRegister<FRegister>();
+
+  if (is64bit) {
+    Register in_lo   = locations->InAt(0).AsRegisterPairLow<Register>();
+    Register in_hi   = locations->InAt(0).AsRegisterPairHigh<Register>();
+
+    __ Mtc1(in_lo, out);
+    __ Mthc1(in_hi, out);
+  } else {
+    Register in  = locations->InAt(0).AsRegister<Register>();
+
+    __ Mtc1(in, out);
+  }
+}
+
+// double java.lang.Double.longBitsToDouble(long)
+void IntrinsicLocationsBuilderMIPS::VisitDoubleLongBitsToDouble(HInvoke* invoke) {
+  CreateIntToFPLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitDoubleLongBitsToDouble(HInvoke* invoke) {
+  MoveIntToFP(invoke->GetLocations(), true, GetAssembler());
+}
+
+// float java.lang.Float.intBitsToFloat(int)
+void IntrinsicLocationsBuilderMIPS::VisitFloatIntBitsToFloat(HInvoke* invoke) {
+  CreateIntToFPLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitFloatIntBitsToFloat(HInvoke* invoke) {
+  MoveIntToFP(invoke->GetLocations(), false, GetAssembler());
+}
+
+static void CreateIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke) {
+  LocationSummary* locations = new (arena) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+static void GenReverseBytes(LocationSummary* locations,
+                            Primitive::Type type,
+                            MipsAssembler* assembler) {
+  if (type == Primitive::kPrimShort) {
+    Register in  = locations->InAt(0).AsRegister<Register>();
+    Register out = locations->Out().AsRegister<Register>();
+
+    __ Wsbh(out, in);
+    __ Seh(out, out);
+  } else if (type == Primitive::kPrimInt) {
+    Register in  = locations->InAt(0).AsRegister<Register>();
+    Register out = locations->Out().AsRegister<Register>();
+
+    __ Rotr(out, in, 16);
+    __ Wsbh(out, out);
+  } else if (type == Primitive::kPrimLong) {
+    Register in_lo   = locations->InAt(0).AsRegisterPairLow<Register>();
+    Register in_hi   = locations->InAt(0).AsRegisterPairHigh<Register>();
+    Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+    Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+    __ Rotr(AT, in_hi, 16);
+    __ Rotr(TMP, in_lo, 16);
+    __ Wsbh(out_lo, AT);
+    __ Wsbh(out_hi, TMP);
+  } else {
+    LOG(FATAL) << "Unexpected size for reverse-bytes: " << type;
+    UNREACHABLE();
+  }
+}
+
+// int java.lang.Integer.reverseBytes(int)
+void IntrinsicLocationsBuilderMIPS::VisitIntegerReverseBytes(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitIntegerReverseBytes(HInvoke* invoke) {
+  GenReverseBytes(invoke->GetLocations(), Primitive::kPrimInt, GetAssembler());
+}
+
+// long java.lang.Long.reverseBytes(long)
+void IntrinsicLocationsBuilderMIPS::VisitLongReverseBytes(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitLongReverseBytes(HInvoke* invoke) {
+  GenReverseBytes(invoke->GetLocations(), Primitive::kPrimLong, GetAssembler());
+}
+
+// short java.lang.Short.reverseBytes(short)
+void IntrinsicLocationsBuilderMIPS::VisitShortReverseBytes(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitShortReverseBytes(HInvoke* invoke) {
+  GenReverseBytes(invoke->GetLocations(), Primitive::kPrimShort, GetAssembler());
+}
+
 // boolean java.lang.String.equals(Object anObject)
 void IntrinsicLocationsBuilderMIPS::VisitStringEquals(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
@@ -257,15 +407,8 @@ void IntrinsicCodeGeneratorMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED)
 
 UNIMPLEMENTED_INTRINSIC(IntegerReverse)
 UNIMPLEMENTED_INTRINSIC(LongReverse)
-UNIMPLEMENTED_INTRINSIC(ShortReverseBytes)
-UNIMPLEMENTED_INTRINSIC(IntegerReverseBytes)
-UNIMPLEMENTED_INTRINSIC(LongReverseBytes)
 UNIMPLEMENTED_INTRINSIC(LongNumberOfLeadingZeros)
 UNIMPLEMENTED_INTRINSIC(IntegerNumberOfLeadingZeros)
-UNIMPLEMENTED_INTRINSIC(FloatIntBitsToFloat)
-UNIMPLEMENTED_INTRINSIC(DoubleLongBitsToDouble)
-UNIMPLEMENTED_INTRINSIC(FloatFloatToRawIntBits)
-UNIMPLEMENTED_INTRINSIC(DoubleDoubleToRawLongBits)
 UNIMPLEMENTED_INTRINSIC(MathAbsDouble)
 UNIMPLEMENTED_INTRINSIC(MathAbsFloat)
 UNIMPLEMENTED_INTRINSIC(MathAbsInt)
