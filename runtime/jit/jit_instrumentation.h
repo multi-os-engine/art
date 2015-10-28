@@ -100,7 +100,8 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
                                 ArtMethod* caller,
                                 uint32_t dex_pc,
                                 ArtMethod* callee)
-      OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_);
+      OVERRIDE
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:
   JitInstrumentationCache* const instrumentation_cache_;

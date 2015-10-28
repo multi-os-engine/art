@@ -35,6 +35,7 @@ namespace art {
 
 class ArtMethod;
 class LinearAlloc;
+class ProfilingInfo;
 
 namespace jit {
 
@@ -114,6 +115,14 @@ class JitCodeCache {
       REQUIRES(Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  
+  ProfilingInfo* AddProfilingInfo(Thread* self,
+                                  ArtMethod* method,
+                                  const std::vector<uint32_t>& entries,
+                                  bool is_compiler_task)
+      REQUIRES(!lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
  private:
   // Take ownership of code_mem_map.
   JitCodeCache(MemMap* code_map, MemMap* data_map);
@@ -130,6 +139,12 @@ class JitCodeCache {
                               size_t fp_spill_mask,
                               const uint8_t* code,
                               size_t code_size)
+      REQUIRES(!lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  ProfilingInfo* AddProfilingInfoInternal(Thread* self,
+                                          ArtMethod* method,
+                                          const std::vector<uint32_t>& entries)
       REQUIRES(!lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -159,6 +174,8 @@ class JitCodeCache {
   std::unique_ptr<CodeCacheBitmap> live_bitmap_;
   // This map holds compiled code associated to the ArtMethod
   SafeMap<const void*, ArtMethod*> method_code_map_ GUARDED_BY(lock_);
+
+  std::vector<ProfilingInfo*> profiling_infos_ GUARDED_BY(lock_);
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(JitCodeCache);
 };
