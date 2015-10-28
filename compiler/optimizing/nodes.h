@@ -551,6 +551,9 @@ class HLoopInformation : public ArenaObject<kArenaAllocLoopInfo> {
   // Note that `other` *must* be populated before entering this function.
   bool IsIn(const HLoopInformation& other) const;
 
+  // Returns true if instruction is invariant within this loop.
+  bool IsLoopInvariant(HInstruction* instruction) const;
+
   const ArenaBitVector& GetBlocks() const { return blocks_; }
 
   void Add(HBasicBlock* block);
