@@ -649,15 +649,19 @@ void ClassLinker::FinishInit(Thread* self) {
   CHECK_STREQ(pendingNext->GetName(), "pendingNext");
   CHECK_STREQ(pendingNext->GetTypeDescriptor(), "Ljava/lang/ref/Reference;");
 
-  ArtField* queue = java_lang_ref_Reference->GetInstanceField(1);
+  ArtField* pendingNextList = java_lang_ref_Reference->GetInstanceField(1);
+  CHECK_STREQ(pendingNextList->GetName(), "pendingNextList");
+  CHECK_STREQ(pendingNextList->GetTypeDescriptor(), "Ljava/lang/ref/Reference;");
+
+  ArtField* queue = java_lang_ref_Reference->GetInstanceField(2);
   CHECK_STREQ(queue->GetName(), "queue");
   CHECK_STREQ(queue->GetTypeDescriptor(), "Ljava/lang/ref/ReferenceQueue;");
 
-  ArtField* queueNext = java_lang_ref_Reference->GetInstanceField(2);
+  ArtField* queueNext = java_lang_ref_Reference->GetInstanceField(3);
   CHECK_STREQ(queueNext->GetName(), "queueNext");
   CHECK_STREQ(queueNext->GetTypeDescriptor(), "Ljava/lang/ref/Reference;");
 
-  ArtField* referent = java_lang_ref_Reference->GetInstanceField(3);
+  ArtField* referent = java_lang_ref_Reference->GetInstanceField(4);
   CHECK_STREQ(referent->GetName(), "referent");
   CHECK_STREQ(referent->GetTypeDescriptor(), "Ljava/lang/Object;");
 

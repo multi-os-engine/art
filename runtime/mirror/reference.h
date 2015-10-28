@@ -52,6 +52,9 @@ class MANAGED Reference : public Object {
   static MemberOffset PendingNextOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Reference, pending_next_);
   }
+  static MemberOffset PendingNextListOffset() {
+    return OFFSET_OF_OBJECT_MEMBER(Reference, pending_next_list_);
+  }
   static MemberOffset QueueOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Reference, queue_);
   }
@@ -110,6 +113,7 @@ class MANAGED Reference : public Object {
 
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   HeapReference<Reference> pending_next_;  // Note this is Java volatile:
+  HeapReference<Reference> pending_next_list_;  // Note this is Java volatile:
   HeapReference<Object> queue_;  // Note this is Java volatile:
   HeapReference<Reference> queue_next_;  // Note this is Java volatile:
   HeapReference<Object> referent_;  // Note this is Java volatile:

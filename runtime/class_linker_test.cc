@@ -583,6 +583,7 @@ struct DexCacheOffsets : public CheckOffsets<mirror::DexCache> {
 struct ReferenceOffsets : public CheckOffsets<mirror::Reference> {
   ReferenceOffsets() : CheckOffsets<mirror::Reference>(false, "Ljava/lang/ref/Reference;") {
     addOffset(OFFSETOF_MEMBER(mirror::Reference, pending_next_), "pendingNext");
+    addOffset(OFFSETOF_MEMBER(mirror::Reference, pending_next_list_), "pendingNextList");
     addOffset(OFFSETOF_MEMBER(mirror::Reference, queue_), "queue");
     addOffset(OFFSETOF_MEMBER(mirror::Reference, queue_next_), "queueNext");
     addOffset(OFFSETOF_MEMBER(mirror::Reference, referent_), "referent");
