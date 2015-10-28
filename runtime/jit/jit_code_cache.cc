@@ -408,10 +408,12 @@ void JitCodeCache::GarbageCollectCache(Thread* self) {
 
   // Run a checkpoint on all threads to mark the JIT compiled code they are running.
   {
+    Locks::mutator_lock_->SharedLock(self);
     Barrier barrier(0);
     MarkCodeClosure closure(this, &barrier);
     size_t threads_running_checkpoint =
         Runtime::Current()->GetThreadList()->RunCheckpoint(&closure);
+    Locks::mutator_lock_->SharedUnlock(self);
     if (threads_running_checkpoint != 0) {
       barrier.Increment(self, threads_running_checkpoint);
     }
