@@ -3476,6 +3476,8 @@ class HInvokeStaticOrDirect : public HInvoke {
     inputs_.pop_back();
     clinit_check_requirement_ = ClinitCheckRequirement::kImplicit;
     DCHECK(IsStaticWithImplicitClinitCheck());
+    // Use code pointer from ArtMethod* as it may point to a resolution stub that calls <clinit>().
+    dispatch_info_.code_ptr_location = CodePtrLocation::kCallArtMethod;
   }
 
   bool IsStringFactoryFor(HFakeString* str) const {
