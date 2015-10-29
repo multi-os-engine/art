@@ -85,7 +85,7 @@ fi
 
 # If JACK_CLASSPATH is not set, assume it only contains core-libart.
 if [ -z "$JACK_CLASSPATH" ]; then
-  export JACK_CLASSPATH="$ANDROID_BUILD_TOP/out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/classes.jack"
+  export JACK_CLASSPATH="${OUT_DIR:-${ANDROID_BUILD_TOP}/out}/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/classes.jack"
 fi
 
 # If JILL_JAR is not set, assume it is located in the prebuilts directory.
@@ -440,7 +440,7 @@ elif [ "$runtime" = "art" ]; then
     if [ "$target_mode" = "no" ]; then
         # ANDROID_HOST_OUT is not set in a build environment.
         if [ -z "$ANDROID_HOST_OUT" ]; then
-            export ANDROID_HOST_OUT=$ANDROID_BUILD_TOP/out/host/linux-x86
+            export ANDROID_HOST_OUT=${OUT_DIR:-${ANDROID_BUILD_TOP}/out}/host/linux-x86
         fi
         guess_host_arch_name
         run_args="${run_args} --boot ${ANDROID_HOST_OUT}/framework/core${image_suffix}${pic_image_suffix}.art"
@@ -688,6 +688,32 @@ if [ ${USE_JACK} = "false" ]; then
   fi
 fi
 
+# Run the build script doing all the things needed for output logging.
+function do_build() {
+  # Make fifos to get the output of build
+  local build_output_fifo=${build_output}.fifo
+  mkfifo "$build_output_fifo"
+
+  # Get the script to run
+  local build_script=$1
+  shift
+
+  # Write out the output log and print out any error messages
+  cat $build_output_fifo > $build_output &
+  local output=$!
+
+  # Run the script. Bash will replace /dev/stderr with the shells stderr fd. We
+  # do the output substitution to be able to get both the stderr and stdout in
+  # the same file without overwriting each other but only print out stderr.
+  "./${build_script}" "$@" >$build_output_fifo 2> >(tee -a $build_output_fifo > /dev/stderr)
+  local build_exit=$?
+  # Get rid of the fifo
+  rm "$build_output_fifo"
+  # wait for other process to exit
+  wait $output || true
+  return $build_exit
+}
+
 good="no"
 good_build="yes"
 good_run="yes"
@@ -721,7 +747,7 @@ if [ "$dev_mode" = "yes" ]; then
         echo "run exit status: $run_exit" 1>&2
     fi
 elif [ "$update_mode" = "yes" ]; then
-    "./${build}" $build_args >"$build_output" 2>&1
+    do_build ${build} ${build_args}
     build_exit="$?"
     if [ "$build_exit" = '0' ]; then
         if ! ulimit -S "$run_file_size_limit"; then
@@ -743,7 +769,7 @@ elif [ "$update_mode" = "yes" ]; then
     fi
 elif [ "$build_only" = "yes" ]; then
     good="yes"
-    "./${build}" $build_args >"$build_output" 2>&1
+    do_build ${build} ${build_args}
     build_exit="$?"
     if [ "$build_exit" '!=' '0' ]; then
         cp "$build_output" "$output"
@@ -758,7 +784,7 @@ elif [ "$build_only" = "yes" ]; then
     find $tmp_dir -mindepth 1  ! -regex ".*/\(.*jar\|$output\|$expected\)" | xargs rm -rf
     exit 0
 else
-    "./${build}" $build_args >"$build_output" 2>&1
+    do_build ${build} ${build_args}
     build_exit="$?"
     if [ "$build_exit" = '0' ]; then
         if ! ulimit -S "$run_file_size_limit"; then
