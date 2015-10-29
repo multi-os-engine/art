@@ -98,7 +98,7 @@ TEST_F(ImageTest, WriteRead) {
 
   {
     bool success_image =
-        writer->Write(image_file.GetFilename(), dup_oat->GetPath(), dup_oat->GetPath());
+        writer->Write(-1, image_file.GetFilename(), dup_oat->GetPath(), dup_oat->GetPath());
     ASSERT_TRUE(success_image);
     bool success_fixup = ElfWriter::Fixup(dup_oat.get(), writer->GetOatDataBegin());
     ASSERT_TRUE(success_fixup);
