@@ -26,12 +26,26 @@ import com.android.tools.perflib.heap.RootObj;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-class ObjectHandler extends AhatHandler {
+class ObjectHandler implements AhatHandler {
+
+  private static final String ARRAY_ELEMENTS_ID = "elements";
+  private static final String DOMINATOR_PATH_ID = "dompath";
+  private static final String ALLOCATION_SITE_ID = "frames";
+  private static final String DOMINATED_OBJECTS_ID = "dominated";
+  private static final String INSTANCE_FIELDS_ID = "ifields";
+  private static final String STATIC_FIELDS_ID = "sfields";
+  private static final String HARD_REFS_ID = "refs";
+  private static final String SOFT_REFS_ID = "srefs";
+
+  private AhatSnapshot mSnapshot;
+
   public ObjectHandler(AhatSnapshot snapshot) {
-    super(snapshot);
+    mSnapshot = snapshot;
   }
 
   @Override
@@ -46,8 +60,8 @@ class ObjectHandler extends AhatHandler {
     doc.title("Object %08x", inst.getUniqueId());
     doc.big(Value.render(inst));
 
-    printAllocationSite(doc, inst);
-    printDominatorPath(doc, inst);
+    printAllocationSite(doc, query, inst);
+    printDominatorPath(doc, query, inst);
 
     doc.section("Object Info");
     ClassObj cls = inst.getClassObj();
@@ -62,39 +76,48 @@ class ObjectHandler extends AhatHandler {
 
     printBitmap(doc, inst);
     if (inst instanceof ClassInstance) {
-      printClassInstanceFields(doc, (ClassInstance)inst);
+      printClassInstanceFields(doc, query, (ClassInstance)inst);
     } else if (inst instanceof ArrayInstance) {
-      printArrayElements(doc, (ArrayInstance)inst);
+      printArrayElements(doc, query, (ArrayInstance)inst);
     } else if (inst instanceof ClassObj) {
-      printClassInfo(doc, (ClassObj)inst);
+      printClassInfo(doc, query, (ClassObj)inst);
     }
-    printReferences(doc, inst);
+    printReferences(doc, query, inst);
     printDominatedObjects(doc, query, inst);
   }
 
-  private static void printClassInstanceFields(Doc doc, ClassInstance inst) {
+  private static void printClassInstanceFields(Doc doc, Query query, ClassInstance inst) {
     doc.section("Fields");
     doc.table(new Column("Type"), new Column("Name"), new Column("Value"));
-    for (ClassInstance.FieldValue field : inst.getValues()) {
+    Collection<ClassInstance.FieldValue> fields = inst.getValues();
+    LimitSelector selector = new LimitSelector(query, INSTANCE_FIELDS_ID, fields.size());
+    int limit = selector.getSelectedLimit();
+    Iterator<ClassInstance.FieldValue> iter = fields.iterator();
+    for (int i = 0; i < limit && iter.hasNext(); i++) {
+      ClassInstance.FieldValue field = iter.next();
       doc.row(
           DocString.text(field.getField().getType().toString()),
           DocString.text(field.getField().getName()),
           Value.render(field.getValue()));
     }
     doc.end();
+    selector.render(doc);
   }
 
-  private static void printArrayElements(Doc doc, ArrayInstance array) {
+  private static void printArrayElements(Doc doc, Query query, ArrayInstance array) {
     doc.section("Array Elements");
     doc.table(new Column("Index", Column.Align.RIGHT), new Column("Value"));
     Object[] elements = array.getValues();
-    for (int i = 0; i < elements.length; i++) {
+    LimitSelector selector = new LimitSelector(query, ARRAY_ELEMENTS_ID, elements.length);
+    int limit = selector.getSelectedLimit();
+    for (int i = 0; i < limit; i++) {
       doc.row(DocString.format("%d", i), Value.render(elements[i]));
     }
     doc.end();
+    selector.render(doc);
   }
 
-  private static void printClassInfo(Doc doc, ClassObj clsobj) {
+  private static void printClassInfo(Doc doc, Query query, ClassObj clsobj) {
     doc.section("Class Info");
     doc.descriptions();
     doc.description(DocString.text("Super Class"), Value.render(clsobj.getSuperClassObj()));
@@ -103,41 +126,59 @@ class ObjectHandler extends AhatHandler {
 
     doc.section("Static Fields");
     doc.table(new Column("Type"), new Column("Name"), new Column("Value"));
-    for (Map.Entry<Field, Object> field : clsobj.getStaticFieldValues().entrySet()) {
+    Collection<Map.Entry<Field, Object>> fields = clsobj.getStaticFieldValues().entrySet();
+    LimitSelector selector = new LimitSelector(query, STATIC_FIELDS_ID, fields.size());
+    int limit = selector.getSelectedLimit();
+    Iterator<Map.Entry<Field, Object>> iter = fields.iterator();
+    for (int i = 0; i < limit && iter.hasNext(); i++) {
+      Map.Entry<Field, Object> field = iter.next();
       doc.row(
           DocString.text(field.getKey().getType().toString()),
           DocString.text(field.getKey().getName()),
           Value.render(field.getValue()));
     }
     doc.end();
+    selector.render(doc);
   }
 
-  private static void printReferences(Doc doc, Instance inst) {
+  private static void printReferences(Doc doc, Query query, Instance inst) {
     doc.section("Objects with References to this Object");
     if (inst.getHardReferences().isEmpty()) {
       doc.println(DocString.text("(none)"));
     } else {
       doc.table(new Column("Object"));
-      for (Instance ref : inst.getHardReferences()) {
+      Collection<Instance> references = inst.getHardReferences();
+      LimitSelector selector = new LimitSelector(query, HARD_REFS_ID, references.size());
+      int limit = selector.getSelectedLimit();
+      Iterator<Instance> iter = references.iterator();
+      for (int i = 0; i < limit && iter.hasNext(); i++) {
+        Instance ref = iter.next();
         doc.row(Value.render(ref));
       }
       doc.end();
+      selector.render(doc);
     }
 
     if (inst.getSoftReferences() != null) {
       doc.section("Objects with Soft References to this Object");
       doc.table(new Column("Object"));
-      for (Instance ref : inst.getSoftReferences()) {
-        doc.row(Value.render(inst));
+      Collection<Instance> references = inst.getSoftReferences();
+      LimitSelector selector = new LimitSelector(query, SOFT_REFS_ID, references.size());
+      int limit = selector.getSelectedLimit();
+      Iterator<Instance> iter = references.iterator();
+      for (int i = 0; i < limit && iter.hasNext(); i++) {
+        Instance ref = iter.next();
+        doc.row(Value.render(ref));
       }
       doc.end();
+      selector.render(doc);
     }
   }
 
-  private void printAllocationSite(Doc doc, Instance inst) {
+  private void printAllocationSite(Doc doc, Query query, Instance inst) {
     doc.section("Allocation Site");
     Site site = mSnapshot.getSiteForInstance(inst);
-    SitePrinter.printSite(doc, mSnapshot, site);
+    SitePrinter.printSite(mSnapshot, doc, query, ALLOCATION_SITE_ID, site);
   }
 
   // Draw the bitmap corresponding to this instance if there is one.
@@ -150,7 +191,7 @@ class ObjectHandler extends AhatHandler {
     }
   }
 
-  private void printDominatorPath(Doc doc, Instance inst) {
+  private void printDominatorPath(Doc doc, Query query, Instance inst) {
     doc.section("Dominator Path from Root");
     List<Instance> path = new ArrayList<Instance>();
     for (Instance parent = inst;
@@ -193,14 +234,14 @@ class ObjectHandler extends AhatHandler {
         return Collections.singletonList(value);
       }
     };
-    HeapTable.render(doc, table, mSnapshot, path);
+    HeapTable.render(doc, query, DOMINATOR_PATH_ID, table, mSnapshot, path);
   }
 
   public void printDominatedObjects(Doc doc, Query query, Instance inst) {
     doc.section("Immediately Dominated Objects");
     List<Instance> instances = mSnapshot.getDominated(inst);
     if (instances != null) {
-      DominatedList.render(mSnapshot, doc, instances, query);
+      DominatedList.render(mSnapshot, doc, query, DOMINATED_OBJECTS_ID, instances);
     } else {
       doc.println(DocString.text("(none)"));
     }

@@ -20,11 +20,16 @@ import com.android.tools.perflib.heap.Instance;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
-class ObjectsHandler extends AhatHandler {
+class ObjectsHandler implements AhatHandler {
+  private static final String OBJECTS_ID = "objects";
+
+  private AhatSnapshot mSnapshot;
+
   public ObjectsHandler(AhatSnapshot snapshot) {
-    super(snapshot);
+    mSnapshot = snapshot;
   }
 
   @Override
@@ -51,13 +56,18 @@ class ObjectsHandler extends AhatHandler {
         new Column("Size", Column.Align.RIGHT),
         new Column("Heap"),
         new Column("Object"));
-    for (Instance inst : insts) {
+    LimitSelector selector = new LimitSelector(query, OBJECTS_ID, insts.size());
+    int limit = selector.getSelectedLimit();
+    Iterator<Instance> iter = insts.iterator();
+    for (int i = 0; i < limit && iter.hasNext(); i++) {
+      Instance inst = iter.next();
       doc.row(
           DocString.format("%,d", inst.getSize()),
           DocString.text(inst.getHeap().getName()),
           Value.render(inst));
     }
     doc.end();
+    selector.render(doc);
   }
 }
 

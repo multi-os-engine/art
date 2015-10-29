@@ -33,6 +33,15 @@ public class Main {
     public String basicString = "hello, world";
     public String nullString = null;
     public Object anObject = new Object();
+    public byte[] bigArray;
+
+    DumpedStuff() {
+      int N = 1000000;
+      bigArray = new byte[N];
+      for (int i = 0; i < N; i++) {
+        bigArray[i] = (byte)((i*i) & 0xFF);
+      }
+    }
   }
 
   public static void main(String[] args) throws IOException {
