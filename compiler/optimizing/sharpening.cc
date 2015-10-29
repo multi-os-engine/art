@@ -20,6 +20,7 @@
 #include "utils/dex_cache_arrays_layout-inl.h"
 #include "driver/compiler_driver.h"
 #include "nodes.h"
+#include "runtime.h"
 
 namespace art {
 
@@ -78,6 +79,9 @@ void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
     method_load_kind = HInvokeStaticOrDirect::MethodLoadKind::kRecursive;
     code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallSelf;
   } else {
+    bool use_pc_relativeinstructions =
+        ((direct_method == 0u || direct_code == static_cast<uintptr_t>(-1))) &&
+        ContainsElement(compiler_driver_->GetDexFilesForOatFile(), &graph_->GetDexFile());
     if (direct_method != 0u) {  // Should we use a direct pointer to the method?
       if (direct_method != static_cast<uintptr_t>(-1)) {  // Is the method pointer known now?
         method_load_kind = HInvokeStaticOrDirect::MethodLoadKind::kDirectAddress;
@@ -87,10 +91,11 @@ void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
       }
     } else {  // Use dex cache.
       DCHECK_EQ(target_method.dex_file, &graph_->GetDexFile());
-      DexCacheArraysLayout layout =
-          compiler_driver_->GetDexCacheArraysLayout(target_method.dex_file);
-      if (layout.Valid()) {  // Can we use PC-relative access to the dex cache arrays?
+      if (use_pc_relativeinstructions) {  // Can we use PC-relative access to the dex cache arrays?
+        DCHECK(!Runtime::Current()->UseJit());
         method_load_kind = HInvokeStaticOrDirect::MethodLoadKind::kDexCachePcRelative;
+        DexCacheArraysLayout layout(GetInstructionSetPointerSize(codegen_->GetInstructionSet()),
+                                    &graph_->GetDexFile());
         method_load_data = layout.MethodOffset(target_method.dex_method_index);
       } else {  // We must go through the ArtMethod's pointer to resolved methods.
         method_load_kind = HInvokeStaticOrDirect::MethodLoadKind::kDexCacheViaMethod;
@@ -100,11 +105,9 @@ void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
       if (direct_code != static_cast<uintptr_t>(-1)) {  // Is the code pointer known now?
         code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallDirect;
         direct_code_ptr = direct_code;
-      } else if (compiler_driver_->IsImage() ||
-          target_method.dex_file == &graph_->GetDexFile()) {
+      } else if (use_pc_relativeinstructions) {
         // Use PC-relative calls for invokes within a multi-dex oat file.
-        // TODO: Recognize when the target dex file is within the current oat file for
-        // app compilation. At the moment we recognize only the boot image as multi-dex.
+        DCHECK(!Runtime::Current()->UseJit());
         code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallPCRelative;
       } else {  // The direct pointer will be known at link time.
         // NOTE: This is used for app->boot calls when compiling an app against
