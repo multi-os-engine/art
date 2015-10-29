@@ -52,6 +52,7 @@ ZYGOTE=""
 DEX_VERIFY=""
 USE_DEX2OAT_AND_PATCHOAT="y"
 INSTRUCTION_SET_FEATURES=""
+PULL_SYMBOLS="n" # only does anything with target, host symbols are already present.
 ARGS=""
 
 while true; do
@@ -132,6 +133,7 @@ while true; do
         USE_GDB="y"
         DEV_MODE="y"
         TIME_OUT="n"
+        PULL_SYMBOLS="y"
         shift
     elif [ "x$1" = "x--gdb-arg" ]; then
         shift
@@ -144,6 +146,7 @@ while true; do
         shift
     elif [ "x$1" = "x--dev" ]; then
         DEV_MODE="y"
+        PULL_SYMBOLS="y"
         shift
     elif [ "x$1" = "x--interpreter" ]; then
         INTERPRETER="y"
@@ -255,6 +258,38 @@ fi
 
 msg "------------------------------"
 
+# Correctly pull a large adb file by increasing our shell's resource limit
+function adb_pull_file() {
+  if ! adb shell ls "$@" >& /dev/null; then
+    echo "remote file $@ does not exist" >&2
+    return 1
+  fi
+
+  local old_ulimit="$(ulimit -f)"
+  ulimit -S unlimited > /dev/null
+  if [ "$DEV_MODE" = "y" ]; then
+    echo "adb pull $@"
+    adb pull "$@"
+  else
+    adb pull "$@" >& /dev/null  # Hide annoying progress bar (and also everything else).
+  fi
+  local success=$?
+  ulimit -S "$old_ulimit" > /dev/null
+  return $success
+}
+
+# Pull an adb file, but only if it exists on the device.
+# Return code 0 = pulled, return code non-0 = not pulled
+function adb_pull_file_if_exists() {
+  adb shell ls "$@" >& /dev/null
+  local success="$?"
+  if [ "$success" -eq 0 ]; then
+    adb_pull_file "$@"
+  else
+    return "$success"
+  fi
+}
+
 if [ "$DEBUGGER" = "y" ]; then
   # Use this instead for ddms and connect by running 'ddms':
   # DEBUGGER_OPTS="-agentlib:jdwp=transport=dt_android_adb,server=y,suspend=y"
@@ -361,12 +396,26 @@ fi
 dex2oat_cmdline="true"
 mkdir_cmdline="mkdir -p ${DEX_LOCATION}/dalvik-cache/$ISA"
 
+OAT_DIRECTORY=$DEX_LOCATION/dalvik-cache/$ISA
+OAT_FILEPATH=$OAT_DIRECTORY/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g")
+BOOT_IMAGE_FILEPATH=${BOOT_IMAGE%/*}/$ISA/${BOOT_IMAGE##*/}  # /data/art-test/core.art -> "/data/art-test" + "/$ISA/" + "core.art"
+BOOT_OAT_FILEPATH=${BOOT_IMAGE_FILEPATH%.art}.oat ## /x/y/z/core.art -> /x/y/z/core.oat
+BOOT_IMAGE_DIRECTORY=${BOOT_IMAGE_FILEPATH%/*}  ## /x/y/z/core.art -> /x/y/z
+
+# Build up the absolute file path to the relocated boot oat file.
+# Depending on the configurations we might not always have one of these.
+RELOCATED_BOOT_OAT_FILEPATH=${BOOT_IMAGE//\//@}  # /data/art-test/core.art -> @data@art-test@core.art
+RELOCATED_BOOT_OAT_FILEPATH=${RELOCATED_BOOT_OAT_FILEPATH:1} # @data@art-test@core.art -> data@art-test@core.art
+RELOCATED_BOOT_OAT_FILEPATH=${OAT_DIRECTORY}/${RELOCATED_BOOT_OAT_FILEPATH} # /data/run-test/test-####/dalvik-cache/$ISA/data@art-test@core.art
+RELOCATED_BOOT_IMAGE_FILEPATH=$RELOCATED_BOOT_OAT_FILEPATH # /data/run-test/test-####/dalvik-cache/$ISA/data@art-test@core.art
+RELOCATED_BOOT_OAT_FILEPATH=${RELOCATED_BOOT_IMAGE_FILEPATH%.art}.oat  # ...@core.art -> ...@core.oat
+
 if [ "$PREBUILD" = "y" ]; then
   dex2oat_cmdline="$INVOKE_WITH $ANDROID_ROOT/bin/dex2oatd \
                       $COMPILE_FLAGS \
                       --boot-image=${BOOT_IMAGE} \
                       --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
-                      --oat-file=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.dex | cut -d/ -f 2- | sed "s:/:@:g") \
+                      --oat-file=$OAT_FILEPATH \
                       --instruction-set=$ISA"
   if [ "x$INSTRUCTION_SET_FEATURES" != "x" ] ; then
     dex2oat_cmdline="${dex2oat_cmdline} --instruction-set-features=${INSTRUCTION_SET_FEATURES}"
@@ -404,8 +453,24 @@ dalvikvm_cmdline="$INVOKE_WITH $GDB $ANDROID_ROOT/bin/$DALVIKVM \
                   $DALVIKVM_BOOT_OPT \
                   -cp $DEX_LOCATION/$TEST_NAME.jar$SECONDARY_DEX $MAIN $ARGS"
 
+dalvikvm_cmdline_nogdb_bogus_main="$INVOKE_WITH $ANDROID_ROOT/bin/$DALVIKVM \
+                  $GDB_ARGS \
+                  $FLAGS \
+                  $DEX_VERIFY \
+                  -XXlib:$LIB \
+                  $PATCHOAT \
+                  $DEX2OAT \
+                  $DALVIKVM_ISA_FEATURES_ARGS \
+                  $ZYGOTE \
+                  $JNI_OPTS \
+                  $INT_OPTS \
+                  $DEBUGGER_OPTS \
+                  $DALVIKVM_BOOT_OPT \
+                  -cp $DEX_LOCATION/$TEST_NAME.jar$SECONDARY_DEX "\$\$bogusMainFunction" $ARGS"
+
 # Remove whitespace.
 dex2oat_cmdline=$(echo $dex2oat_cmdline)
+dalvikvm_cmdline_nogdb_bogus_main=$(echo $dalvikvm_cmdline_nogdb_bogus_main)
 dalvikvm_cmdline=$(echo $dalvikvm_cmdline)
 
 if [ "$HOST" = "n" ]; then
@@ -431,18 +496,19 @@ if [ "$HOST" = "n" ]; then
       LD_LIBRARY_PATH=$ANDROID_ROOT/$LIBRARY_DIRECTORY
     fi
 
-    # Create a script with the command. The command can get longer than the longest
-    # allowed adb command and there is no way to get the exit status from a adb shell
-    # command.
-    cmdline="cd $DEX_LOCATION && \
+    cmdline_prefix="cd $DEX_LOCATION && \
              export ANDROID_DATA=$DEX_LOCATION && \
              export DEX_LOCATION=$DEX_LOCATION && \
              export ANDROID_ROOT=$ANDROID_ROOT && \
              $mkdir_cmdline && \
              export LD_LIBRARY_PATH=$LD_LIBRARY_PATH && \
-             export PATH=$ANDROID_ROOT/bin:$PATH && \
-             $dex2oat_cmdline && \
-             $dalvikvm_cmdline"
+             export PATH=$ANDROID_ROOT/bin:$PATH"
+
+    # Create a script with the command. The command can get longer than the longest
+    # allowed adb command and there is no way to get the exit status from a adb shell
+    # command.
+    cmdline="$cmdline_prefix && \
+             $dex2oat_cmdline"
 
     cmdfile=$(tempfile -p "cmd-" -s "-$TEST_NAME")
     echo "$cmdline" > $cmdfile
@@ -451,15 +517,139 @@ if [ "$HOST" = "n" ]; then
       echo $cmdline
     fi
 
+    # Create a secondary script which executes the code.
+    # We need to pull the dexcache from the device between the first and second
+    # script in order to get debugging symbols.
+    cmdline2="$cmdline_prefix && \
+             $dalvikvm_cmdline"
+
+    cmdfile2=$(tempfile -p "cmd-" -s "-$TEST_NAME")
+    echo "$cmdline2" > $cmdfile2
+
+    if [ "$DEV_MODE" = "y" ]; then
+      echo $cmdline2
+    fi
+
     if [ "$QUIET" = "n" ]; then
       adb push $cmdfile $DEX_LOCATION/cmdline.sh
     else
       adb push $cmdfile $DEX_LOCATION/cmdline.sh > /dev/null 2>&1
     fi
 
+    # New versions of adb return the command line success.
     adb shell sh $DEX_LOCATION/cmdline.sh
+    command_success=$?
 
     rm -f $cmdfile
+
+    if [ $command_success -ne 0 ]; then
+      echo "dex2oat failed." >&2
+      exit 1
+    fi
+
+    ###
+    ### Pull down all the oat/art files into $OUT/symbols for debugging.
+    ###
+    if [[ "$PULL_SYMBOLS" == "y" ]]; then
+      # Run dalvikvm with a bogus main argument to relocate core.oat
+      cmdline="$cmdline_prefix && \
+             $dalvikvm_cmdline_nogdb_bogus_main"
+      cmdfile=$(tempfile -p "cmd-" -s "-$TEST_NAME")
+      echo "$cmdline" > $cmdfile
+
+      if [ "$QUIET" = "n" ]; then
+        adb push $cmdfile $DEX_LOCATION/cmdline.sh
+      else
+        adb push $cmdfile $DEX_LOCATION/cmdline.sh > /dev/null 2>&1
+      fi
+
+      command_results="$(adb shell sh $DEX_LOCATION/cmdline.sh 2>&1)"
+      rm -f $cmdfile
+      # When dalvikvm 'successfully' runs and relocates, it throws ClassNotFoundException
+      # since we provided it with a completely bogus main function.
+      if ! [[ "$command_results" == *java.lang.ClassNotFoundException* ]]; then
+        echo "dalvikvm relocation of core.oat failed"
+        exit 2
+      fi
+
+      ###
+      ### All art/oat files are ready
+      ### -- Pull them and place them into symbols directory.
+      ###
+
+      # Pull the oat/art files we created on the device into our symbols directory.
+      # Then when gdb is debugging, it will find all the symbols automatically.
+
+      pushd $OUT/symbols > /dev/null
+      mkdir -p ./$OAT_DIRECTORY  # Create symbols dir, same path as on device.
+      pushd ./$OAT_DIRECTORY > /dev/null
+
+      # Pull the application oat file.
+      adb_pull_file $OAT_FILEPATH
+
+      # Pull the relocated core.art/core.oat
+      adb_pull_file_if_exists $RELOCATED_BOOT_OAT_FILEPATH  # Download relocated data@art-test@core.oat, if it exists
+      adb_pull_file_if_exists $RELOCATED_BOOT_IMAGE_FILEPATH # Download relocated data@art-test@core.art, if it exists
+
+      popd > /dev/null # Go back to $OUT/symbols
+
+      mkdir -p ./$BOOT_IMAGE_DIRECTORY
+      pushd ./$BOOT_IMAGE_DIRECTORY > /dev/null
+
+      # Download the non-relocated core.art/core.oat
+      adb_pull_file $BOOT_IMAGE_FILEPATH # Download core.art
+      adb_pull_file $BOOT_OAT_FILEPATH   # Download core.oat
+
+      popd > /dev/null # Go back to $OUT/symbols
+      popd > /dev/null # Go back to the rest of the script's CWD
+    fi
+
+    ###
+    ### Actually run dalvikvm with all the proper arguments on the target.
+    ###
+
+    if [ "$QUIET" = "n" ]; then
+      adb push $cmdfile2 $DEX_LOCATION/cmdline2.sh
+    else
+      adb push $cmdfile2 $DEX_LOCATION/cmdline2.sh > /dev/null 2>&1
+    fi
+
+    adb shell sh $DEX_LOCATION/cmdline2.sh
+    command_success=$?
+
+    rm -f $cmdfile2
+
+    if [[ "$command_success"] -ne 0 ]]; then
+      echo "Dex2oat failed." >&2
+      exit 2
+    fi
+
+    ###
+    ### Clean up all the symbols we pulled earlier by deleting them.
+    ###
+    if [[ "$PULL_SYMBOLS" == "y" ]]; then
+
+      # XX: Should we always clean up here unless running in DEV_MODE ?
+      if [ $command_success -eq 0 ]; then
+        pushd $OUT/symbols > /dev/null
+        # Delete boot images and app oat file.
+
+        [ -f ./$OAT_FILEPATH ] && rm ./$OAT_FILEPATH
+
+        # Delete relocated core.art / core.oat
+        [ -f ./$RELOCATED_BOOT_OAT_FILEPATH ] && rm ./$RELOCATED_BOOT_OAT_FILEPATH
+        [ -f ./$RELOCATED_BOOT_IMAGE_FILEPATH ] && rm ./$RELOCATED_BOOT_IMAGE_FILEPATH
+
+        # Delete non-relocated core.art / core.oat
+        [ -f ./$BOOT_IMAGE_FILEPATH ] && rm ./$BOOT_IMAGE_FILEPATH
+        [ -f ./$BOOT_OAT_FILEPATH ] && rm ./$BOOT_OAT_FILEPATH
+
+        # Delete the temporary symbols directory we made before.
+        [ -d ./$OAT_DIRECTORY ] && rmdir ./$OAT_DIRECTORY
+        ## TODO: Should be a loop until we reach $OUT/symbols ?
+        popd > /dev/null
+      fi
+    fi
 else
     export ANDROID_PRINTF_LOG=brief
 
