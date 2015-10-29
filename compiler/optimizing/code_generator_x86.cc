@@ -164,6 +164,49 @@ class BoundsCheckSlowPathX86 : public SlowPathCode {
   DISALLOW_COPY_AND_ASSIGN(BoundsCheckSlowPathX86);
 };
 
+class BoundsCheckSlowPathMemoryX86 : public SlowPathCode {
+ public:
+  explicit BoundsCheckSlowPathMemoryX86(HX86BoundsCheckMemory* instruction)
+    : instruction_(instruction) {}
+
+  void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    LocationSummary* locations = instruction_->GetLocations();
+    CodeGeneratorX86* x86_codegen = down_cast<CodeGeneratorX86*>(codegen);
+    __ Bind(GetEntryLabel());
+    if (instruction_->CanThrowIntoCatchBlock()) {
+      // Live registers will be restored in the catch block if caught.
+      SaveLiveRegisters(codegen, instruction_->GetLocations());
+    }
+
+    // Load the array length into our temporary.
+    Address array_length(locations->InAt(1).AsRegister<Register>(),
+                         mirror::Array::LengthOffset().Uint32Value());
+    __ movl(locations->GetTemp(0).AsRegister<Register>(), array_length);
+
+    // We're moving two locations to locations that could overlap, so we need a parallel
+    // move resolver.
+    InvokeRuntimeCallingConvention calling_convention;
+    codegen->EmitParallelMoves(
+        locations->InAt(0),
+        Location::RegisterLocation(calling_convention.GetRegisterAt(0)),
+        Primitive::kPrimInt,
+        locations->GetTemp(0),
+        Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
+        Primitive::kPrimInt);
+    x86_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pThrowArrayBounds),
+                               instruction_, instruction_->GetDexPc(), this);
+  }
+
+  bool IsFatal() const OVERRIDE { return true; }
+
+  const char* GetDescription() const OVERRIDE { return "BoundsCheckSlowPathMemoryX86"; }
+
+ private:
+  HX86BoundsCheckMemory* const instruction_;
+
+  DISALLOW_COPY_AND_ASSIGN(BoundsCheckSlowPathMemoryX86);
+};
+
 class SuspendCheckSlowPathX86 : public SlowPathCode {
  public:
   SuspendCheckSlowPathX86(HSuspendCheck* instruction, HBasicBlock* successor)
@@ -5180,6 +5223,41 @@ void InstructionCodeGeneratorX86::VisitBoundsCheck(HBoundsCheck* instruction) {
     codegen_->AddSlowPath(slow_path);
     __ j(kBelowEqual, slow_path->GetEntryLabel());
   }
+}
+
+void LocationsBuilderX86::VisitX86BoundsCheckMemory(HX86BoundsCheckMemory* instruction) {
+  LocationSummary::CallKind call_kind = instruction->CanThrowIntoCatchBlock()
+      ? LocationSummary::kCallOnSlowPath
+      : LocationSummary::kNoCall;
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction, call_kind);
+  locations->SetInAt(0, Location::RegisterOrConstant(instruction->InputAt(0)));
+  DCHECK(!instruction->InputAt(1)->IsConstant());
+  locations->SetInAt(1, Location::RequiresRegister());
+  if (instruction->HasUses()) {
+    locations->SetOut(Location::SameAsFirstInput());
+  }
+  // We need a temporary for the slow path code to load the length.
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorX86::VisitX86BoundsCheckMemory(HX86BoundsCheckMemory* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  Location index_loc = locations->InAt(0);
+  Register array_base = locations->InAt(1).AsRegister<Register>();
+  SlowPathCode* slow_path =
+      new (GetGraph()->GetArena()) BoundsCheckSlowPathMemoryX86(instruction);
+
+  // Compare the length in the array descriptor to the index.
+  Address array_length(array_base, mirror::Array::LengthOffset().Uint32Value());
+  if (index_loc.IsConstant()) {
+    int32_t value = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
+    __ cmpl(array_length, Immediate(value));
+  } else {
+    __ cmpl(array_length, index_loc.AsRegister<Register>());
+  }
+  codegen_->MaybeRecordImplicitNullCheck(instruction);
+  codegen_->AddSlowPath(slow_path);
+  __ j(kBelowEqual, slow_path->GetEntryLabel());
 }
 
 void LocationsBuilderX86::VisitTemporary(HTemporary* temp) {

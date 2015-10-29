@@ -42,6 +42,12 @@ void PrepareForRegisterAllocation::VisitBoundsCheck(HBoundsCheck* check) {
   check->ReplaceWith(check->InputAt(0));
 }
 
+#if defined(ART_ENABLE_CODEGEN_x86) || defined(ART_ENABLE_CODEGEN_x86_64)
+void PrepareForRegisterAllocation::VisitX86BoundsCheckMemory(HX86BoundsCheckMemory* check) {
+  check->ReplaceWith(check->InputAt(0));
+}
+#endif
+
 void PrepareForRegisterAllocation::VisitBoundType(HBoundType* bound_type) {
   bound_type->ReplaceWith(bound_type->InputAt(0));
   bound_type->GetBlock()->RemoveInstruction(bound_type);

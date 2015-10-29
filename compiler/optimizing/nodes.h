@@ -1112,6 +1112,13 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(X86PackedSwitch, Instruction)
 #endif
 
+#if defined(ART_ENABLE_CODEGEN_x86) || defined(ART_ENABLE_CODEGEN_x86_64)
+#define FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)                     \
+  M(X86BoundsCheckMemory, Instruction)
+#else
+#define FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)
+#endif
+
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
 
 #define FOR_EACH_CONCRETE_INSTRUCTION(M)                                \
@@ -1121,7 +1128,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS(M)                                 \
   FOR_EACH_CONCRETE_INSTRUCTION_MIPS64(M)                               \
   FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                                  \
-  FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_64(M)                               \
+  FOR_EACH_CONCRETE_INSTRUCTION_X86_COMMON(M)
 
 #define FOR_EACH_INSTRUCTION(M)                                         \
   FOR_EACH_CONCRETE_INSTRUCTION(M)                                      \
@@ -1806,6 +1814,8 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
 
   virtual size_t InputCount() const = 0;
   HInstruction* InputAt(size_t i) const { return InputRecordAt(i).GetInstruction(); }
+
+  virtual size_t GetBaseInputIndex() const { return 0; }
 
   virtual void Accept(HGraphVisitor* visitor) = 0;
   virtual const char* DebugName() const = 0;
@@ -5519,7 +5529,7 @@ class HParallelMove : public HTemplateInstruction<0> {
 #ifdef ART_ENABLE_CODEGEN_arm64
 #include "nodes_arm64.h"
 #endif
-#ifdef ART_ENABLE_CODEGEN_x86
+#if defined(ART_ENABLE_CODEGEN_x86) || defined(ART_ENABLE_CODEGEN_x86_64)
 #include "nodes_x86.h"
 #endif
 

@@ -1269,7 +1269,7 @@ void CodeGenerator::MaybeRecordImplicitNullCheck(HInstruction* instr) {
     return;
   }
 
-  if (!instr->CanDoImplicitNullCheckOn(instr->InputAt(0))) {
+  if (!instr->CanDoImplicitNullCheckOn(instr->InputAt(instr->GetBaseInputIndex()))) {
     return;
   }
 
