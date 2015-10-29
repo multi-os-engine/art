@@ -41,21 +41,32 @@ class Value {
     }
 
     link.append(inst.toString());
+    URI objTarget = DocString.formattedUri("object?id=%d", inst.getId());
+    DocString formatted = DocString.link(objTarget, link);
 
     // Annotate Strings with their values.
     String stringValue = InstanceUtils.asString(inst);
     if (stringValue != null) {
-      link.appendFormat("\"%s\"", stringValue);
+      formatted.appendFormat(" \"%s\"", stringValue);
+    }
+
+    // Annotate Reference with its referent
+    Instance referent = InstanceUtils.getReferent(inst);
+    if (referent != null) {
+      formatted.append(" for ");
+
+      // It should not be possible for a referent to refer back to the
+      // reference object, even indirectly, so there shouldn't be any issues
+      // with infinite recursion here.
+      formatted.append(renderInstance(referent));
     }
 
     // Annotate DexCache with its location.
     String dexCacheLocation = InstanceUtils.getDexCacheLocation(inst);
     if (dexCacheLocation != null) {
-      link.append(" for " + dexCacheLocation);
+      formatted.append(" for " + dexCacheLocation);
     }
 
-    URI objTarget = DocString.formattedUri("object?id=%d", inst.getId());
-    DocString formatted = DocString.link(objTarget, link);
 
     // Annotate bitmaps with a thumbnail.
     Instance bitmap = InstanceUtils.getAssociatedBitmapInstance(inst);
