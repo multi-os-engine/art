@@ -250,6 +250,10 @@ void MipsAssembler::Nor(Register rd, Register rs, Register rt) {
   EmitR(0, rs, rt, rd, 0, 0x27);
 }
 
+void MipsAssembler::Bitswap(Register rd, Register rt) {
+  EmitR(0x1f, static_cast<Register>(0), rt, rd, 0x0, 0x20);
+}
+
 void MipsAssembler::Seb(Register rd, Register rt) {
   EmitR(0x1f, static_cast<Register>(0), rt, rd, 0x10, 0x20);
 }

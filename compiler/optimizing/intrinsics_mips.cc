@@ -352,6 +352,158 @@ void IntrinsicCodeGeneratorMIPS::VisitShortReverseBytes(HInvoke* invoke) {
                   codegen_->GetInstructionSetFeatures().IsMipsIsaRevGreaterThanEqual2());
 }
 
+static void GenReverse(LocationSummary* locations,
+                       Primitive::Type type,
+                       MipsAssembler* assembler,
+                       bool isR6,
+                       bool isR2OrNewer) {
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+
+  if (type == Primitive::kPrimInt) {
+    Register in  = locations->InAt(0).AsRegister<Register>();
+    Register out = locations->Out().AsRegister<Register>();
+
+    if (isR2OrNewer) {
+      __ Rotr(out, in, 16);
+      __ Wsbh(out, out);
+    } else {
+      // MIPS32r1
+      // __ Rotr(out, in, 16);
+      __ Sll(TMP, in, 16);
+      __ Srl(out, in, 16);
+      __ Or(out, out, TMP);
+      // __ Wsbh(out, out);
+      __ LoadConst32(AT, 0x00FF00FF);
+      __ And(TMP, out, AT);
+      __ Sll(TMP, TMP, 8);
+      __ Srl(out, out, 8);
+      __ And(out, out, AT);
+      __ Or(out, TMP, out);
+    }
+    if (isR6) {
+      __ Bitswap(out, out);
+    } else {
+      __ LoadConst32(AT, 0x0F0F0F0F);
+      __ And(TMP, out, AT);
+      __ Sll(TMP, TMP, 4);
+      __ Srl(out, out, 4);
+      __ And(out, out, AT);
+      __ Or(out, TMP, out);
+      __ LoadConst32(AT, 0x33333333);
+      __ And(TMP, out, AT);
+      __ Sll(TMP, TMP, 2);
+      __ Srl(out, out, 2);
+      __ And(out, out, AT);
+      __ Or(out, TMP, out);
+      __ LoadConst32(AT, 0x55555555);
+      __ And(TMP, out, AT);
+      __ Sll(TMP, TMP, 1);
+      __ Srl(out, out, 1);
+      __ And(out, out, AT);
+      __ Or(out, TMP, out);
+    }
+  } else {
+    Register in_lo   = locations->InAt(0).AsRegisterPairLow<Register>();
+    Register in_hi   = locations->InAt(0).AsRegisterPairHigh<Register>();
+    Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+    Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+    if (isR2OrNewer) {
+      __ Rotr(AT, in_lo, 16);
+      __ Rotr(TMP, in_hi, 16);
+      __ Wsbh(out_hi, AT);
+      __ Wsbh(out_lo, TMP);
+    } else {
+      // MIPS32r1
+      // __ Rotr(out_hi, in_lo, 16);
+      __ Sll(TMP, in_lo, 16);
+      __ Srl(out_hi, in_lo, 16);
+      __ Or(out_hi, out_hi, TMP);
+      // __ Rotr(out_lo, in_hi, 16);
+      __ Sll(TMP, in_hi, 16);
+      __ Srl(out_lo, in_hi, 16);
+      __ Or(out_lo, out_lo, TMP);
+      // __ Wsbh(out_hi, out_hi);
+      __ LoadConst32(AT, 0x00FF00FF);
+      __ And(TMP, out_hi, AT);
+      __ Sll(TMP, TMP, 8);
+      __ Srl(out_hi, out_hi, 8);
+      __ And(out_hi, out_hi, AT);
+      __ Or(out_hi, TMP, out_hi);
+      // __ Wsbh(out_lo, out_lo);
+      __ And(TMP, out_lo, AT);  // AT already holds the correct mask value
+      __ Sll(TMP, TMP, 8);
+      __ Srl(out_lo, out_lo, 8);
+      __ And(out_lo, out_lo, AT);
+      __ Or(out_lo, TMP, out_lo);
+    }
+    if (isR6) {
+      __ Bitswap(out_hi, out_hi);
+      __ Bitswap(out_lo, out_lo);
+    } else {
+      __ LoadConst32(AT, 0x0F0F0F0F);
+      __ And(TMP, out_hi, AT);
+      __ Sll(TMP, TMP, 4);
+      __ Srl(out_hi, out_hi, 4);
+      __ And(out_hi, out_hi, AT);
+      __ Or(out_hi, TMP, out_hi);
+      __ And(TMP, out_lo, AT);
+      __ Sll(TMP, TMP, 4);
+      __ Srl(out_lo, out_lo, 4);
+      __ And(out_lo, out_lo, AT);
+      __ Or(out_lo, TMP, out_lo);
+      __ LoadConst32(AT, 0x33333333);
+      __ And(TMP, out_hi, AT);
+      __ Sll(TMP, TMP, 2);
+      __ Srl(out_hi, out_hi, 2);
+      __ And(out_hi, out_hi, AT);
+      __ Or(out_hi, TMP, out_hi);
+      __ And(TMP, out_lo, AT);
+      __ Sll(TMP, TMP, 2);
+      __ Srl(out_lo, out_lo, 2);
+      __ And(out_lo, out_lo, AT);
+      __ Or(out_lo, TMP, out_lo);
+      __ LoadConst32(AT, 0x55555555);
+      __ And(TMP, out_hi, AT);
+      __ Sll(TMP, TMP, 1);
+      __ Srl(out_hi, out_hi, 1);
+      __ And(out_hi, out_hi, AT);
+      __ Or(out_hi, TMP, out_hi);
+      __ And(TMP, out_lo, AT);
+      __ Sll(TMP, TMP, 1);
+      __ Srl(out_lo, out_lo, 1);
+      __ And(out_lo, out_lo, AT);
+      __ Or(out_lo, TMP, out_lo);
+    }
+  }
+}
+
+// int java.lang.Integer.reverse(int)
+void IntrinsicLocationsBuilderMIPS::VisitIntegerReverse(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitIntegerReverse(HInvoke* invoke) {
+  GenReverse(invoke->GetLocations(),
+             Primitive::kPrimInt,
+             GetAssembler(),
+             codegen_->GetInstructionSetFeatures().IsR6(),
+             codegen_->GetInstructionSetFeatures().IsMipsIsaRevGreaterThanEqual2());
+}
+
+// long java.lang.Long.reverse(long)
+void IntrinsicLocationsBuilderMIPS::VisitLongReverse(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitLongReverse(HInvoke* invoke) {
+  GenReverse(invoke->GetLocations(),
+             Primitive::kPrimLong,
+             GetAssembler(),
+             codegen_->GetInstructionSetFeatures().IsR6(),
+             codegen_->GetInstructionSetFeatures().IsMipsIsaRevGreaterThanEqual2());
+}
+
 // boolean java.lang.String.equals(Object anObject)
 void IntrinsicLocationsBuilderMIPS::VisitStringEquals(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
@@ -462,8 +614,6 @@ void IntrinsicLocationsBuilderMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUS
 void IntrinsicCodeGeneratorMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) {    \
 }
 
-UNIMPLEMENTED_INTRINSIC(IntegerReverse)
-UNIMPLEMENTED_INTRINSIC(LongReverse)
 UNIMPLEMENTED_INTRINSIC(LongNumberOfLeadingZeros)
 UNIMPLEMENTED_INTRINSIC(IntegerNumberOfLeadingZeros)
 UNIMPLEMENTED_INTRINSIC(MathAbsDouble)
