@@ -131,6 +131,7 @@ class MipsAssembler FINAL : public Assembler {
   void Xori(Register rt, Register rs, uint16_t imm16);
   void Nor(Register rd, Register rs, Register rt);
 
+  void Bitswap(Register rd, Register rt);  // R6
   void Seb(Register rd, Register rt);  // R2+
   void Seh(Register rd, Register rt);  // R2+
   void Wsbh(Register rd, Register rt);

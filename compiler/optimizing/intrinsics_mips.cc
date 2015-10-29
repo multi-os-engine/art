@@ -288,6 +288,115 @@ void IntrinsicCodeGeneratorMIPS::VisitShortReverseBytes(HInvoke* invoke) {
   GenReverseBytes(invoke->GetLocations(), Primitive::kPrimShort, GetAssembler());
 }
 
+static void GenReverse(LocationSummary* locations,
+                       Primitive::Type type,
+                       MipsAssembler* assembler,
+                       bool isR6) {
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+
+  if (type == Primitive::kPrimInt) {
+    Register in  = locations->InAt(0).AsRegister<Register>();
+    Register out = locations->Out().AsRegister<Register>();
+
+    __ Rotr(out, in, 16);
+    __ Wsbh(out, out);
+    if (isR6) {
+      __ Bitswap(out, out);
+    } else {
+      __ LoadConst32(AT, 0x0F0F0F0F);
+      __ And(TMP, out, AT);
+      __ Sll(TMP, TMP, 4);
+      __ Srl(out, out, 4);
+      __ And(out, out, AT);
+      __ Or(out, TMP, out);
+      __ LoadConst32(AT, 0x33333333);
+      __ And(TMP, out, AT);
+      __ Sll(TMP, TMP, 2);
+      __ Srl(out, out, 2);
+      __ And(out, out, AT);
+      __ Or(out, TMP, out);
+      __ LoadConst32(AT, 0x55555555);
+      __ And(TMP, out, AT);
+      __ Sll(TMP, TMP, 1);
+      __ Srl(out, out, 1);
+      __ And(out, out, AT);
+      __ Or(out, TMP, out);
+    }
+  } else {
+    Register in_lo   = locations->InAt(0).AsRegisterPairLow<Register>();
+    Register in_hi   = locations->InAt(0).AsRegisterPairHigh<Register>();
+    Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+    Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+    __ Rotr(AT, in_lo, 16);
+    __ Rotr(TMP, in_hi, 16);
+    __ Wsbh(out_hi, AT);
+    __ Wsbh(out_lo, TMP);
+    if (isR6) {
+      __ Bitswap(out_hi, out_hi);
+      __ Bitswap(out_lo, out_lo);
+    } else {
+      __ LoadConst32(AT, 0x0F0F0F0F);
+      __ And(TMP, out_hi, AT);
+      __ Sll(TMP, TMP, 4);
+      __ Srl(out_hi, out_hi, 4);
+      __ And(out_hi, out_hi, AT);
+      __ Or(out_hi, TMP, out_hi);
+      __ And(TMP, out_lo, AT);
+      __ Sll(TMP, TMP, 4);
+      __ Srl(out_lo, out_lo, 4);
+      __ And(out_lo, out_lo, AT);
+      __ Or(out_lo, TMP, out_lo);
+      __ LoadConst32(AT, 0x33333333);
+      __ And(TMP, out_hi, AT);
+      __ Sll(TMP, TMP, 2);
+      __ Srl(out_hi, out_hi, 2);
+      __ And(out_hi, out_hi, AT);
+      __ Or(out_hi, TMP, out_hi);
+      __ And(TMP, out_lo, AT);
+      __ Sll(TMP, TMP, 2);
+      __ Srl(out_lo, out_lo, 2);
+      __ And(out_lo, out_lo, AT);
+      __ Or(out_lo, TMP, out_lo);
+      __ LoadConst32(AT, 0x55555555);
+      __ And(TMP, out_hi, AT);
+      __ Sll(TMP, TMP, 1);
+      __ Srl(out_hi, out_hi, 1);
+      __ And(out_hi, out_hi, AT);
+      __ Or(out_hi, TMP, out_hi);
+      __ And(TMP, out_lo, AT);
+      __ Sll(TMP, TMP, 1);
+      __ Srl(out_lo, out_lo, 1);
+      __ And(out_lo, out_lo, AT);
+      __ Or(out_lo, TMP, out_lo);
+    }
+  }
+}
+
+// int java.lang.Integer.reverse(int)
+void IntrinsicLocationsBuilderMIPS::VisitIntegerReverse(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitIntegerReverse(HInvoke* invoke) {
+  GenReverse(invoke->GetLocations(),
+             Primitive::kPrimInt,
+             GetAssembler(),
+             codegen_->GetInstructionSetFeatures().IsR6());
+}
+
+// long java.lang.Long.reverse(long)
+void IntrinsicLocationsBuilderMIPS::VisitLongReverse(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitLongReverse(HInvoke* invoke) {
+  GenReverse(invoke->GetLocations(),
+             Primitive::kPrimLong,
+             GetAssembler(),
+             codegen_->GetInstructionSetFeatures().IsR6());
+}
+
 // boolean java.lang.String.equals(Object anObject)
 void IntrinsicLocationsBuilderMIPS::VisitStringEquals(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
@@ -405,8 +514,6 @@ void IntrinsicLocationsBuilderMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUS
 void IntrinsicCodeGeneratorMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) {    \
 }
 
-UNIMPLEMENTED_INTRINSIC(IntegerReverse)
-UNIMPLEMENTED_INTRINSIC(LongReverse)
 UNIMPLEMENTED_INTRINSIC(LongNumberOfLeadingZeros)
 UNIMPLEMENTED_INTRINSIC(IntegerNumberOfLeadingZeros)
 UNIMPLEMENTED_INTRINSIC(MathAbsDouble)
