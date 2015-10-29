@@ -27,6 +27,7 @@ class InstructionWithAbsorbingInputSimplifier : public HGraphVisitor {
  private:
   void VisitShift(HBinaryOperation* shift);
 
+  void VisitAbove(HAbove* instruction) OVERRIDE;
   void VisitAnd(HAnd* instruction) OVERRIDE;
   void VisitCompare(HCompare* instruction) OVERRIDE;
   void VisitMul(HMul* instruction) OVERRIDE;
@@ -101,6 +102,18 @@ void InstructionWithAbsorbingInputSimplifier::VisitShift(HBinaryOperation* instr
     // with
     //    CONSTANT 0
     instruction->ReplaceWith(left);
+    instruction->GetBlock()->RemoveInstruction(instruction);
+  }
+}
+
+void InstructionWithAbsorbingInputSimplifier::VisitAbove(HAbove* instruction) {
+  if (instruction->GetLeft()->IsConstant() &&
+      instruction->GetLeft()->AsConstant()->IsZero()) {
+    // Replace code looking like
+    //    ABOVE dst, 0, src
+    // with
+    //    CONSTANT false
+    instruction->ReplaceWith(GetGraph()->GetConstant(Primitive::kPrimBoolean, 0));
     instruction->GetBlock()->RemoveInstruction(instruction);
   }
 }
