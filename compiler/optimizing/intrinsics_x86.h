@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_INTRINSICS_X86_H_
 
 #include "intrinsics.h"
+#include "locations.h"
 
 namespace art {
 
