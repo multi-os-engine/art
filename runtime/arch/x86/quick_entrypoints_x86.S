@@ -1597,5 +1597,13 @@ DEFINE_FUNCTION art_quick_read_barrier_slow
     ret
 END_FUNCTION art_quick_read_barrier_slow
 
+DEFINE_FUNCTION art_quick_read_barrier_for_root_slow
+    PUSH eax                        // pass arg1 - root
+    call SYMBOL(artReadBarrierForRootSlow)  // artReadBarrierForRootSlow(root)
+    addl LITERAL(4), %esp           // pop argument
+    CFI_ADJUST_CFA_OFFSET(-4)
+    ret
+END_FUNCTION art_quick_read_barrier_for_root_slow
+
     // TODO: implement these!
 UNIMPLEMENTED art_quick_memcmp16
