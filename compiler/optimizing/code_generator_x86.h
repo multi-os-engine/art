@@ -397,6 +397,38 @@ class CodeGeneratorX86 : public CodeGenerator {
 
   void Finalize(CodeAllocator* allocator) OVERRIDE;
 
+  // TODO(rpl): Document arguments of *GenerateReadBarrier* routines.
+
+  // Generate a read barrier for a heap reference.
+  void GenerateReadBarrier(HInstruction* instruction,
+                           Location out,
+                           Location ref,
+                           Location obj,
+                           uint32_t offset,
+                           Location index = Location());
+  // Like GenerateReadBarrier, but have the read barrier slow path
+  // save `live_temp` (in addition to "real" live registers) before
+  // calling the read barrier entry point in the runtime, and restore
+  // it afterwards.
+  void GenerateReadBarrierWithLiveTemp(HInstruction* instruction,
+                                       Location out,
+                                       Location ref,
+                                       Location obj,
+                                       uint32_t offset,
+                                       Location live_temp,
+                                       Location index = Location());
+  // If read barriers are enabled, generate a read barrier for a heap reference.
+  // If heap poisoning is enabled, also unpoison the reference in `out`.
+  void MaybeGenerateReadBarrier(HInstruction* instruction,
+                                Location out,
+                                Location ref,
+                                Location obj,
+                                uint32_t offset,
+                                Location index = Location());
+
+  // Generate a read barrier for a GC root.
+  void GenerateReadBarrierForRoot(HInstruction* instruction, Location out, Location root);
+
  private:
   // Labels for each block that will be compiled.
   Label* block_labels_;  // Indexed by block id.
