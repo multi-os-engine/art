@@ -241,6 +241,33 @@ static const android_LogPriority kLogSeverityToAndroidLogPriority[] = {
 };
 static_assert(arraysize(kLogSeverityToAndroidLogPriority) == INTERNAL_FATAL + 1,
               "Mismatch in size of kLogSeverityToAndroidLogPriority and values in LogSeverity");
+
+#define DALVIK_LOG_RETRY_DELIVERY "DALVIK_LOG_RETRY_DELIVERY"
+
+struct RetryDelivery {
+  unsigned int count;
+  unsigned int delay_us;
+};
+
+static RetryDelivery retry_delivery_init() {
+  RetryDelivery retry_delivery;
+  char* env = getenv(DALVIK_LOG_RETRY_DELIVERY);
+
+  if (env == nullptr ||
+      2 != sscanf(env, "%u/%u", &retry_delivery.count, &retry_delivery.delay_us)) {
+    retry_delivery.count = 0;
+    retry_delivery.delay_us = 0;
+  } else {
+    LOG_PRI(ANDROID_LOG_INFO, ProgramInvocationShortName(), "%s",
+            StringPrintf(DALVIK_LOG_RETRY_DELIVERY "=%u/%u",
+                         retry_delivery.count,
+                         retry_delivery.delay_us).c_str());
+    retry_delivery.delay_us *= 1000;
+  }
+  return retry_delivery;
+}
+
+static volatile struct RetryDelivery retry_delivery = retry_delivery_init();
 #endif
 
 void LogMessage::LogLine(const char* file, unsigned int line, LogSeverity log_severity,
@@ -248,10 +275,26 @@ void LogMessage::LogLine(const char* file, unsigned int line, LogSeverity log_se
 #ifdef __ANDROID__
   const char* tag = ProgramInvocationShortName();
   int priority = kLogSeverityToAndroidLogPriority[log_severity];
-  if (priority == ANDROID_LOG_FATAL) {
-    LOG_PRI(priority, tag, "%s:%u] %s", file, line, message);
-  } else {
-    LOG_PRI(priority, tag, "%s", message);
+
+  int retry = retry_delivery.count;
+  useconds_t delay = retry_delivery.delay_us;
+
+  while (true) {
+    int res;
+    if (priority == ANDROID_LOG_FATAL) {
+      res = LOG_PRI(priority, tag, "%s:%u] %s", file, line, message);
+    } else {
+      res = LOG_PRI(priority, tag, "%s", message);
+    }
+
+    if (res >= 0 || retry <= 0) {
+      // We successfully sent the message or exceeded the retry limit.
+      break;
+    }
+
+    --retry;
+    usleep(delay);
+    delay += delay;
   }
 #else
   static const char* log_characters = "VDIWEFF";
@@ -276,13 +319,21 @@ void LogMessage::LogLineLowStack(const char* file, unsigned int line, LogSeverit
     buf_size = strlen(file) + 1 /* ':' */ + std::numeric_limits<typeof(line)>::max_digits10 +
         2 /* "] " */ + strlen(message) + 1 /* terminating 0 */;
     buf = reinterpret_cast<char*>(malloc(buf_size));
+    if (buf != nullptr) {
+      snprintf(buf, buf_size, "%s:%u] %s", file, line, message);
+      message = buf;
+    }
   }
+
+  int retry = retry_delivery.count;
+  useconds_t delay = retry_delivery.delay_us;
+  while (android_writeLog(priority, tag, message) < 0 && --retry >= 0) {
+    usleep(delay);
+    delay += delay;
+  }
+
   if (buf != nullptr) {
-    snprintf(buf, buf_size, "%s:%u] %s", file, line, message);
-    android_writeLog(priority, tag, buf);
     free(buf);
-  } else {
-    android_writeLog(priority, tag, message);
   }
 #else
   static const char* log_characters = "VDIWEFF";
