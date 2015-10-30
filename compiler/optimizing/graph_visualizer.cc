@@ -617,10 +617,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     PrintProperty("name", pass_desc.c_str());
     if (disasm_info_ != nullptr) {
       DumpDisassemblyBlockForFrameEntry();
-    }
-    VisitInsertionOrder();
-    if (disasm_info_ != nullptr) {
+      VisitCodeGenOrder();
       DumpDisassemblyBlockForSlowPaths();
+    } else {
+      VisitInsertionOrder();
     }
     EndTag("cfg");
   }
@@ -679,6 +679,16 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
   static constexpr const char* const kDisassemblyBlockSlowPaths = "SlowPaths";
 
  private:
+  void VisitCodeGenOrder() {
+    const ArenaVector<HBasicBlock*>* blocks = codegen_.GetCodeGenOrder();
+    DCHECK(blocks);
+    for (HBasicBlock* block : *blocks) {
+      if (block != nullptr) {
+        VisitBasicBlock(block);
+      }
+    }
+  }
+
   std::ostream& output_;
   const char* pass_name_;
   const bool is_after_pass_;

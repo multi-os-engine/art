@@ -424,6 +424,8 @@ class CodeGenerator {
 
   static void CreateSystemArrayCopyLocationSummary(HInvoke* invoke);
 
+  const ArenaVector<HBasicBlock*>* GetCodeGenOrder() const { return block_order_; }
+
   void SetDisassemblyInformation(DisassemblyInformation* info) { disasm_info_ = info; }
   DisassemblyInformation* GetDisassemblyInformation() const { return disasm_info_; }
 
