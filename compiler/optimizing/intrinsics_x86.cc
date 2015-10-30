@@ -37,10 +37,14 @@ namespace x86 {
 
 static constexpr int kDoubleNaNHigh = 0x7FF80000;
 static constexpr int kDoubleNaNLow = 0x00000000;
-static constexpr int kFloatNaN = 0x7FC00000;
+static constexpr int64_t kDoubleNaN = INT64_C(0x7FF8000000000000);
+static constexpr int32_t kFloatNaN = INT32_C(0x7FC00000);
 
-IntrinsicLocationsBuilderX86::IntrinsicLocationsBuilderX86(CodeGeneratorX86* codegen)
-  : arena_(codegen->GetGraph()->GetArena()), codegen_(codegen) {
+IntrinsicLocationsBuilderX86::IntrinsicLocationsBuilderX86(CodeGeneratorX86* codegen,
+                                                           bool has_constant_area)
+  : arena_(codegen->GetGraph()->GetArena()),
+    codegen_(codegen),
+    has_constant_area_(has_constant_area) {
 }
 
 
@@ -234,21 +238,40 @@ void IntrinsicCodeGeneratorX86::VisitShortReverseBytes(HInvoke* invoke) {
 // TODO: Consider Quick's way of doing Double abs through integer operations, as the immediate we
 //       need is 64b.
 
-static void CreateFloatToFloat(ArenaAllocator* arena, HInvoke* invoke) {
+static void CreateFloatToFloat(ArenaAllocator* arena, HInvoke* invoke, bool has_constant_area) {
   // TODO: Enable memory operations when the assembler supports them.
   LocationSummary* locations = new (arena) LocationSummary(invoke,
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresFpuRegister());
-  // TODO: Allow x86 to work with memory. This requires assembler support, see below.
-  // locations->SetInAt(0, Location::Any());               // X86 can work on memory directly.
   locations->SetOut(Location::SameAsFirstInput());
+  if (has_constant_area) {
+    // We need addressibility for the constant area.
+    locations->SetInAt(1, Location::RequiresRegister());
+    // We need a temporary to hold the constant.
+    locations->AddTemp(Location::RequiresFpuRegister());
+  }
 }
 
-static void MathAbsFP(LocationSummary* locations, bool is64bit, X86Assembler* assembler) {
+static void MathAbsFP(LocationSummary* locations,
+                      bool is64bit,
+                      X86Assembler* assembler,
+                      CodeGeneratorX86* codegen) {
   Location output = locations->Out();
 
-  if (output.IsFpuRegister()) {
+  DCHECK(output.IsFpuRegister());
+  if (locations->InAt(1).IsRegister()) {
+    // We also have a constant area pointer.
+    Register constant_area = locations->InAt(1).AsRegister<Register>();
+    XmmRegister temp = locations->GetTemp(0).AsFpuRegister<XmmRegister>();
+    if (is64bit) {
+      __ movsd(temp, codegen->LiteralInt64Address(INT64_C(0x7FFFFFFFFFFFFFFF), constant_area));
+      __ andpd(output.AsFpuRegister<XmmRegister>(), temp);
+    } else {
+      __ movss(temp, codegen->LiteralInt32Address(INT32_C(0x7FFFFFFF), constant_area));
+      __ andps(output.AsFpuRegister<XmmRegister>(), temp);
+    }
+  } else {
     // Create the right constant on an aligned stack.
     if (is64bit) {
       __ subl(ESP, Immediate(8));
@@ -261,36 +284,23 @@ static void MathAbsFP(LocationSummary* locations, bool is64bit, X86Assembler* as
       __ andps(output.AsFpuRegister<XmmRegister>(), Address(ESP, 0));
     }
     __ addl(ESP, Immediate(16));
-  } else {
-    // TODO: update when assember support is available.
-    UNIMPLEMENTED(FATAL) << "Needs assembler support.";
-//  Once assembler support is available, in-memory operations look like this:
-//    if (is64bit) {
-//      DCHECK(output.IsDoubleStackSlot());
-//      __ andl(Address(Register(RSP), output.GetHighStackIndex(kX86WordSize)),
-//              Immediate(0x7FFFFFFF));
-//    } else {
-//      DCHECK(output.IsStackSlot());
-//      // Can use and with a literal directly.
-//      __ andl(Address(Register(RSP), output.GetStackIndex()), Immediate(0x7FFFFFFF));
-//    }
   }
 }
 
 void IntrinsicLocationsBuilderX86::VisitMathAbsDouble(HInvoke* invoke) {
-  CreateFloatToFloat(arena_, invoke);
+  CreateFloatToFloat(arena_, invoke, has_constant_area_);
 }
 
 void IntrinsicCodeGeneratorX86::VisitMathAbsDouble(HInvoke* invoke) {
-  MathAbsFP(invoke->GetLocations(), true, GetAssembler());
+  MathAbsFP(invoke->GetLocations(), true, GetAssembler(), codegen_);
 }
 
 void IntrinsicLocationsBuilderX86::VisitMathAbsFloat(HInvoke* invoke) {
-  CreateFloatToFloat(arena_, invoke);
+  CreateFloatToFloat(arena_, invoke, has_constant_area_);
 }
 
 void IntrinsicCodeGeneratorX86::VisitMathAbsFloat(HInvoke* invoke) {
-  MathAbsFP(invoke->GetLocations(), false, GetAssembler());
+  MathAbsFP(invoke->GetLocations(), false, GetAssembler(), codegen_);
 }
 
 static void CreateAbsIntLocation(ArenaAllocator* arena, HInvoke* invoke) {
@@ -372,8 +382,11 @@ void IntrinsicCodeGeneratorX86::VisitMathAbsLong(HInvoke* invoke) {
   GenAbsLong(invoke->GetLocations(), GetAssembler());
 }
 
-static void GenMinMaxFP(LocationSummary* locations, bool is_min, bool is_double,
-                        X86Assembler* assembler) {
+static void GenMinMaxFP(LocationSummary* locations,
+                        bool is_min,
+                        bool is_double,
+                        X86Assembler* assembler,
+                        CodeGeneratorX86* codegen) {
   Location op1_loc = locations->InAt(0);
   Location op2_loc = locations->InAt(1);
   Location out_loc = locations->Out();
@@ -434,15 +447,25 @@ static void GenMinMaxFP(LocationSummary* locations, bool is_min, bool is_double,
 
   // NaN handling.
   __ Bind(&nan);
-  if (is_double) {
-    __ pushl(Immediate(kDoubleNaNHigh));
-    __ pushl(Immediate(kDoubleNaNLow));
-    __ movsd(out, Address(ESP, 0));
-    __ addl(ESP, Immediate(8));
+  // Do we have a constant area pointer?
+  if (locations->InAt(2).IsRegister()) {
+    Register constant_area = locations->InAt(2).AsRegister<Register>();
+    if (is_double) {
+      __ movsd(out, codegen->LiteralInt64Address(kDoubleNaN, constant_area));
+    } else {
+      __ movss(out, codegen->LiteralInt32Address(kFloatNaN, constant_area));
+    }
   } else {
-    __ pushl(Immediate(kFloatNaN));
-    __ movss(out, Address(ESP, 0));
-    __ addl(ESP, Immediate(4));
+    if (is_double) {
+      __ pushl(Immediate(kDoubleNaNHigh));
+      __ pushl(Immediate(kDoubleNaNLow));
+      __ movsd(out, Address(ESP, 0));
+      __ addl(ESP, Immediate(8));
+    } else {
+      __ pushl(Immediate(kFloatNaN));
+      __ movss(out, Address(ESP, 0));
+      __ addl(ESP, Immediate(4));
+    }
   }
   __ jmp(&done);
 
@@ -458,7 +481,7 @@ static void GenMinMaxFP(LocationSummary* locations, bool is_min, bool is_double,
   __ Bind(&done);
 }
 
-static void CreateFPFPToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
+static void CreateFPFPToFPLocations(ArenaAllocator* arena, HInvoke* invoke, bool has_constant_area) {
   LocationSummary* locations = new (arena) LocationSummary(invoke,
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
@@ -467,38 +490,41 @@ static void CreateFPFPToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
   // The following is sub-optimal, but all we can do for now. It would be fine to also accept
   // the second input to be the output (we can simply swap inputs).
   locations->SetOut(Location::SameAsFirstInput());
+  if (has_constant_area) {
+    locations->SetInAt(2, Location::RequiresRegister());
+  }
 }
 
 void IntrinsicLocationsBuilderX86::VisitMathMinDoubleDouble(HInvoke* invoke) {
-  CreateFPFPToFPLocations(arena_, invoke);
+  CreateFPFPToFPLocations(arena_, invoke, has_constant_area_);
 }
 
 void IntrinsicCodeGeneratorX86::VisitMathMinDoubleDouble(HInvoke* invoke) {
-  GenMinMaxFP(invoke->GetLocations(), true, true, GetAssembler());
+  GenMinMaxFP(invoke->GetLocations(), true, true, GetAssembler(), codegen_);
 }
 
 void IntrinsicLocationsBuilderX86::VisitMathMinFloatFloat(HInvoke* invoke) {
-  CreateFPFPToFPLocations(arena_, invoke);
+  CreateFPFPToFPLocations(arena_, invoke, has_constant_area_);
 }
 
 void IntrinsicCodeGeneratorX86::VisitMathMinFloatFloat(HInvoke* invoke) {
-  GenMinMaxFP(invoke->GetLocations(), true, false, GetAssembler());
+  GenMinMaxFP(invoke->GetLocations(), true, false, GetAssembler(), codegen_);
 }
 
 void IntrinsicLocationsBuilderX86::VisitMathMaxDoubleDouble(HInvoke* invoke) {
-  CreateFPFPToFPLocations(arena_, invoke);
+  CreateFPFPToFPLocations(arena_, invoke, has_constant_area_);
 }
 
 void IntrinsicCodeGeneratorX86::VisitMathMaxDoubleDouble(HInvoke* invoke) {
-  GenMinMaxFP(invoke->GetLocations(), false, true, GetAssembler());
+  GenMinMaxFP(invoke->GetLocations(), false, true, GetAssembler(), codegen_);
 }
 
 void IntrinsicLocationsBuilderX86::VisitMathMaxFloatFloat(HInvoke* invoke) {
-  CreateFPFPToFPLocations(arena_, invoke);
+  CreateFPFPToFPLocations(arena_, invoke, has_constant_area_);
 }
 
 void IntrinsicCodeGeneratorX86::VisitMathMaxFloatFloat(HInvoke* invoke) {
-  GenMinMaxFP(invoke->GetLocations(), false, false, GetAssembler());
+  GenMinMaxFP(invoke->GetLocations(), false, false, GetAssembler(), codegen_);
 }
 
 static void GenMinMax(LocationSummary* locations, bool is_min, bool is_long,

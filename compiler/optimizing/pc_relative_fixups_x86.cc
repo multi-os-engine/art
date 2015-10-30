@@ -43,6 +43,10 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
     BinaryFP(div);
   }
 
+  void VisitCompare(HCompare* compare) OVERRIDE {
+    BinaryFP(compare);
+  }
+
   void VisitReturn(HReturn* ret) OVERRIDE {
     HConstant* value = ret->InputAt(0)->AsConstant();
     if ((value != nullptr && Primitive::IsFloatingPointType(value->GetType()))) {
@@ -64,8 +68,63 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
 
   void BinaryFP(HBinaryOperation* bin) {
     HConstant* rhs = bin->InputAt(1)->AsConstant();
-    if (rhs != nullptr && Primitive::IsFloatingPointType(bin->GetResultType())) {
+    if (rhs != nullptr && Primitive::IsFloatingPointType(rhs->GetType())) {
       ReplaceInput(bin, rhs, 1, false);
+    }
+  }
+
+  void HandleFieldSet(HInstruction* insn) {
+    // Is the field being assigned a FP value?
+    HConstant* value = insn->InputAt(1)->AsConstant();
+    if (value != nullptr && Primitive::IsFloatingPointType(value->GetType())) {
+      ReplaceInput(insn, value, 1, true);
+    }
+  }
+
+  void VisitStaticFieldSet(HStaticFieldSet* instruction) OVERRIDE {
+    HandleFieldSet(instruction);
+  }
+
+  void VisitInstanceFieldSet(HInstanceFieldSet* instruction) OVERRIDE {
+    HandleFieldSet(instruction);
+  }
+
+  void VisitEqual(HEqual* cond) OVERRIDE {
+    BinaryFP(cond);
+  }
+
+  void VisitNotEqual(HNotEqual* cond) OVERRIDE {
+    BinaryFP(cond);
+  }
+
+  void VisitLessThan(HLessThan* cond) OVERRIDE {
+    BinaryFP(cond);
+  }
+
+  void VisitLessThanOrEqual(HLessThanOrEqual* cond) OVERRIDE {
+    BinaryFP(cond);
+  }
+
+  void VisitGreaterThan(HGreaterThan* cond) OVERRIDE {
+    BinaryFP(cond);
+  }
+
+  void VisitGreaterThanOrEqual(HGreaterThanOrEqual* cond) OVERRIDE {
+    BinaryFP(cond);
+  }
+
+  void VisitNeg(HNeg* neg) OVERRIDE {
+    if (Primitive::IsFloatingPointType(neg->GetType())) {
+      // We need to replace the HNeg with a HX86FPNeg in order to address the constant area.
+      InitializePCRelativeBasePointer(neg);
+      HGraph* graph = GetGraph();
+      HBasicBlock* block = neg->GetBlock();
+      HX86FPNeg* x86_fp_neg = new (graph->GetArena()) HX86FPNeg(
+          neg->GetType(),
+          neg->InputAt(0),
+          base_,
+          neg->GetDexPc());
+      block->ReplaceAndRemoveInstructionWith(neg, x86_fp_neg);
     }
   }
 
@@ -123,6 +182,29 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
       if (input != nullptr && Primitive::IsFloatingPointType(input->GetType())) {
         ReplaceInput(invoke, input, i, true);
       }
+    }
+
+    // These intrinsics need the constant area.
+    switch (invoke->GetIntrinsic()) {
+      case Intrinsics::kMathAbsDouble:
+      case Intrinsics::kMathAbsFloat:
+      case Intrinsics::kMathMaxDoubleDouble:
+      case Intrinsics::kMathMaxFloatFloat:
+      case Intrinsics::kMathMinDoubleDouble:
+      case Intrinsics::kMathMinFloatFloat: {
+        InitializePCRelativeBasePointer(invoke);
+        HGraph* graph = GetGraph();
+        HBasicBlock* block = invoke->GetBlock();
+        HX86IntrinsicWithConstantArea* x86_intrinsic =
+          new (graph->GetArena()) HX86IntrinsicWithConstantArea(
+            graph->GetArena(),
+            invoke->AsInvokeStaticOrDirect(),
+            base_);
+        block->ReplaceAndRemoveInstructionWith(invoke, x86_intrinsic);
+        break;
+      }
+      default:
+        break;
     }
   }
 

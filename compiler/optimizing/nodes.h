@@ -1108,7 +1108,9 @@ class HLoopInformationOutwardIterator : public ValueObject {
 #else
 #define FOR_EACH_CONCRETE_INSTRUCTION_X86(M)                            \
   M(X86ComputeBaseMethodAddress, Instruction)                           \
+  M(X86IntrinsicWithConstantArea, Instruction)                          \
   M(X86LoadFromConstantTable, Instruction)                              \
+  M(X86FPNeg, Instruction)                                              \
   M(X86PackedSwitch, Instruction)
 #endif
 
@@ -3424,6 +3426,10 @@ class HInvokeStaticOrDirect : public HInvoke {
         clinit_check_requirement_(clinit_check_requirement),
         target_method_(target_method),
         dispatch_info_(dispatch_info) { }
+
+  const DispatchInfo& GetDispatchInfo() const {
+    return dispatch_info_;
+  }
 
   void SetDispatchInfo(const DispatchInfo& dispatch_info) {
     bool had_current_method_input = HasCurrentMethodInput();
