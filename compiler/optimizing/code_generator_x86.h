@@ -237,6 +237,8 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   void GenerateLongComparesAndJumps(HCondition* cond, Label* true_label, Label* false_label);
   void HandleGoto(HInstruction* got, HBasicBlock* successor);
 
+  void GenerateFPCompare(Location lhs, Location rhs, HInstruction *insn, bool is_double);
+
   X86Assembler* const assembler_;
   CodeGeneratorX86* const codegen_;
 
