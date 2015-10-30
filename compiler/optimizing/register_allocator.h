@@ -235,6 +235,13 @@ class RegisterAllocator {
   // The maximum live FP registers at safepoints.
   size_t maximum_number_of_live_fp_registers_;
 
+  // True if current method contains HInvokeVirtual or HInvokeInterface instructions. We need
+  // a larger frame size to save parameter registers for read barriers.
+  // TODO: We can optimize it to record the maximum parameter registers needed for current method,
+  // so we don't need to always allocate a frame size to hold all parameter registers. But it needs
+  // an architecture-specific InvokeDexCallingConventionVisitor to check the types of arguments.
+  bool should_save_parameter_registers_;
+
   ART_FRIEND_TEST(RegisterAllocatorTest, FreeUntil);
   ART_FRIEND_TEST(RegisterAllocatorTest, SpillInactive);
 
