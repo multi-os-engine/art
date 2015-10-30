@@ -1,0 +1,25 @@
+--- compiler/optimizing/constant_area_fixups_x86.cc
++++ compiler/optimizing/constant_area_fixups_x86.cc
+@@ -73,22 +73,6 @@
+     }
+   }
+ 
+-  void HandleFieldSet(HInstruction* insn) {
+-    // Is the field being assigned a FP value?
+-    HConstant* value = insn->InputAt(1)->AsConstant();
+-    if (value != nullptr && Primitive::IsFloatingPointType(value->GetType())) {
+-      ReplaceInput(insn, value, 1, true);
+-    }
+-  }
+-
+-  void VisitStaticFieldSet(HStaticFieldSet* instruction) OVERRIDE {
+-    HandleFieldSet(instruction);
+-  }
+-
+-  void VisitInstanceFieldSet(HInstanceFieldSet* instruction) OVERRIDE {
+-    HandleFieldSet(instruction);
+-  }
+-
+   void VisitEqual(HEqual* cond) OVERRIDE {
+     BinaryFP(cond);
+   }
