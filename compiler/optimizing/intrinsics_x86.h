@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_INTRINSICS_X86_H_
 
 #include "intrinsics.h"
+#include "locations.h"
 
 namespace art {
 
@@ -32,7 +33,7 @@ class X86Assembler;
 
 class IntrinsicLocationsBuilderX86 FINAL : public IntrinsicVisitor {
  public:
-  explicit IntrinsicLocationsBuilderX86(CodeGeneratorX86* codegen);
+  IntrinsicLocationsBuilderX86(CodeGeneratorX86* codegen, bool has_constant_area);
 
   // Define visitor methods.
 
@@ -51,6 +52,7 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
  private:
   ArenaAllocator* arena_;
   CodeGeneratorX86* codegen_;
+  bool has_constant_area_;
 
   DISALLOW_COPY_AND_ASSIGN(IntrinsicLocationsBuilderX86);
 };
