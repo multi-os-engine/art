@@ -1363,13 +1363,25 @@ class SideEffects : public ValueObject {
   }
 
   static SideEffects FieldReadOfType(Primitive::Type type, bool is_volatile) {
-    return is_volatile
+    SideEffects side_effects = is_volatile
         ? AllWritesAndReads()
         : SideEffects(TypeFlagWithAlias(type, kFieldReadOffset));
+    if ((kForceReadBarrier || kUseReadBarrier) && type == Primitive::kPrimNot) {
+      // When read barriers are enabled, reading an object field can
+      // trigger the GC.
+      side_effects.Add(CanTriggerGC());
+    }
+    return side_effects;
   }
 
   static SideEffects ArrayReadOfType(Primitive::Type type) {
-    return SideEffects(TypeFlagWithAlias(type, kArrayReadOffset));
+    SideEffects side_effects = SideEffects(TypeFlagWithAlias(type, kArrayReadOffset));
+    if ((kForceReadBarrier || kUseReadBarrier) && type == Primitive::kPrimNot) {
+      // When read barriers are enabled, reading an object reference
+      // in an array cell can trigger the GC.
+      side_effects.Add(CanTriggerGC());
+    }
+    return side_effects;
   }
 
   static SideEffects CanTriggerGC() {
@@ -1430,7 +1442,7 @@ class SideEffects : public ValueObject {
     return flags_ == (kAllChangeBits | kAllDependOnBits);
   }
 
-  // Returns true if this may read something written by other.
+  // Returns true if `this` may read something written by `other`.
   bool MayDependOn(SideEffects other) const {
     const uint64_t depends_on_flags = (flags_ & kAllDependOnBits) >> kChangeBits;
     return (other.flags_ & depends_on_flags);
@@ -4482,7 +4494,11 @@ class HArrayGet : public HExpression<2> {
             HInstruction* index,
             Primitive::Type type,
             uint32_t dex_pc,
-            SideEffects additional_side_effects = SideEffects::None())
+            // When read barriers are enabled, reading an value in an
+            // array of objects can trigger the GC.
+            SideEffects additional_side_effects = (kForceReadBarrier || kUseReadBarrier)
+                ? SideEffects::CanTriggerGC()
+                : SideEffects::None())
       : HExpression(type,
                     SideEffects::ArrayReadOfType(type).Union(additional_side_effects),
                     dex_pc) {
@@ -5162,10 +5178,14 @@ class HInstanceOf : public HExpression<2> {
   void ClearMustDoNullCheck() { must_do_null_check_ = false; }
 
   static SideEffects SideEffectsForArchRuntimeCalls(TypeCheckKind check_kind) {
-    return (check_kind == TypeCheckKind::kExactCheck)
-        ? SideEffects::None()
-        // Mips currently does runtime calls for any other checks.
-        : SideEffects::CanTriggerGC();
+    // When read barriers are enabled, InstanceOf can trigger the GC.
+    return (kForceReadBarrier || kUseReadBarrier)
+                ? SideEffects::CanTriggerGC()
+                : ((check_kind == TypeCheckKind::kExactCheck)
+                       ? SideEffects::None()
+                       // Mips currently does runtime calls for any
+                       // other checks.
+                       : SideEffects::CanTriggerGC());
   }
 
   DECLARE_INSTRUCTION(InstanceOf);
