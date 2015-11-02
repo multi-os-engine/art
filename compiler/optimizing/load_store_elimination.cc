@@ -464,9 +464,14 @@ class HeapLocationCollector : public HGraphVisitor {
 };
 
 // An unknown heap value. Loads with such a value in the heap location cannot be eliminated.
+// A heap location can be set to kUnknownHeapValue when:
+// - initially set a value.
+// - killed due to aliasing, merging, invocation, or loop side effects.
 static HInstruction* const kUnknownHeapValue =
     reinterpret_cast<HInstruction*>(static_cast<uintptr_t>(-1));
+
 // Default heap value after an allocation.
+// A heap location can be set to that value right after an allocation.
 static HInstruction* const kDefaultHeapValue =
     reinterpret_cast<HInstruction*>(static_cast<uintptr_t>(-2));
 
@@ -486,7 +491,8 @@ class LSEVisitor : public HGraphVisitor {
                          graph->GetArena()->Adapter(kArenaAllocLSE)),
         removed_instructions_(graph->GetArena()->Adapter(kArenaAllocLSE)),
         substitute_instructions_(graph->GetArena()->Adapter(kArenaAllocLSE)),
-        singleton_new_instances_(graph->GetArena()->Adapter(kArenaAllocLSE)) {
+        singleton_new_instances_(graph->GetArena()->Adapter(kArenaAllocLSE)),
+        has_write_in_loop_(false) {
   }
 
   void VisitBasicBlock(HBasicBlock* block) OVERRIDE {
@@ -498,6 +504,7 @@ class LSEVisitor : public HGraphVisitor {
       // to see if the heap values should be killed.
       if (side_effects_.GetLoopEffects(block).DoesAnyWrite()) {
         // Leave all values as kUnknownHeapValue.
+        has_write_in_loop_ = true;
       } else {
         // Inherit the values from pre-header.
         HBasicBlock* pre_header = block->GetLoopInformation()->GetPreHeader();
@@ -522,6 +529,9 @@ class LSEVisitor : public HGraphVisitor {
       DCHECK(instruction != nullptr);
       HInstruction* substitute = substitute_instructions_[i];
       if (substitute != nullptr) {
+        DCHECK(instruction->IsInstanceFieldGet() ||
+               instruction->IsStaticFieldGet() ||
+               instruction->IsArrayGet());
         // Keep tracing substitute till one that's not removed.
         HInstruction* sub_sub = FindSubstitute(substitute);
         while (sub_sub != substitute) {
@@ -529,8 +539,17 @@ class LSEVisitor : public HGraphVisitor {
           sub_sub = FindSubstitute(substitute);
         }
         instruction->ReplaceWith(substitute);
+        instruction->GetBlock()->RemoveInstruction(instruction);
+      } else {
+        DCHECK(instruction->IsInstanceFieldSet() ||
+               instruction->IsStaticFieldSet() ||
+               instruction->IsArraySet());
+        if (!has_write_in_loop_) {
+          // Heap values may be killed due to loop side effects.
+          // Stores need to be kept.
+          instruction->GetBlock()->RemoveInstruction(instruction);
+        }
       }
-      instruction->GetBlock()->RemoveInstruction(instruction);
     }
     // TODO: remove unnecessary allocations.
     // Eliminate instructions in singleton_new_instances_ that:
@@ -695,8 +714,12 @@ class LSEVisitor : public HGraphVisitor {
       } else {
         redundant_store = true;
       }
-      // TODO: eliminate the store if the singleton object is not finalizable.
-      redundant_store = false;
+      HNewInstance* new_instance = ref_info->GetReference()->AsNewInstance();
+      DCHECK(new_instance != nullptr);
+      if (new_instance->IsFinalizable()) {
+        // Finalizable objects escape globally. Need to keep the store.
+        redundant_store = false;
+      }
     }
     if (redundant_store) {
       removed_instructions_.push_back(instruction);
@@ -834,7 +857,9 @@ class LSEVisitor : public HGraphVisitor {
       return;
     }
     if (!heap_location_collector_.MayDeoptimize() &&
-        ref_info->IsSingletonAndNotReturned()) {
+        ref_info->IsSingletonAndNotReturned() &&
+        !new_instance->IsFinalizable() &&
+        !new_instance->CanThrow()) {
       // The allocation might be eliminated.
       singleton_new_instances_.push_back(new_instance);
     }
@@ -874,6 +899,8 @@ class LSEVisitor : public HGraphVisitor {
   ArenaVector<HInstruction*> removed_instructions_;
   ArenaVector<HInstruction*> substitute_instructions_;
   ArenaVector<HInstruction*> singleton_new_instances_;
+
+  bool has_write_in_loop_;
 
   DISALLOW_COPY_AND_ASSIGN(LSEVisitor);
 };
