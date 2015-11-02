@@ -3436,6 +3436,7 @@ class HInvokeStaticOrDirect : public HInvoke {
     dispatch_info_ = dispatch_info;
   }
 
+  void InsertInputAt(size_t index, HInstruction* input);
   void RemoveInputAt(size_t index);
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
