@@ -782,8 +782,9 @@ void CompilerDriver::PreCompile(jobject class_loader, const std::vector<const De
 
 bool CompilerDriver::IsImageClass(const char* descriptor) const {
   if (!IsImage()) {
-    // NOTE: Currently unreachable, all callers check IsImage().
-    return false;
+    // IsImage signifies boot image, if we are not that, then we must be the app image. In this
+    // case, return yes.
+    return true;
   } else {
     return image_classes_->find(descriptor) != image_classes_->end();
   }

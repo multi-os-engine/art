@@ -64,7 +64,9 @@ TEST_F(ImageTest, WriteRead) {
   ScratchFile oat_file(OS::CreateEmptyFile(oat_filename.c_str()));
 
   const uintptr_t requested_image_base = ART_BASE_ADDRESS;
-  std::unique_ptr<ImageWriter> writer(new ImageWriter(*compiler_driver_, requested_image_base,
+  std::unique_ptr<ImageWriter> writer(new ImageWriter(*compiler_driver_,
+                                                      requested_image_base,
+                                                      /*compile_app_image*/false,
                                                       /*compile_pic*/false));
   // TODO: compile_pic should be a test argument.
   {
@@ -81,8 +83,15 @@ TEST_F(ImageTest, WriteRead) {
 
       t.NewTiming("WriteElf");
       SafeMap<std::string, std::string> key_value_store;
-      OatWriter oat_writer(class_linker->GetBootClassPath(), 0, 0, 0, compiler_driver_.get(),
-                           writer.get(), &timings, &key_value_store);
+      OatWriter oat_writer(class_linker->GetBootClassPath(),
+                           0,
+                           0,
+                           0,
+                           compiler_driver_.get(),
+                           writer.get(),
+                           true,
+                           &timings,
+                           &key_value_store);
       bool success = writer->PrepareImageAddressSpace() &&
           compiler_driver_->WriteElf(GetTestAndroidRoot(),
                                      !kIsTargetBuild,

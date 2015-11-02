@@ -65,10 +65,12 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
                      int32_t image_patch_delta,
                      const CompilerDriver* compiler,
                      ImageWriter* image_writer,
+                     bool compiling_boot_image,
                      TimingLogger* timings,
                      SafeMap<std::string, std::string>* key_value_store)
   : compiler_driver_(compiler),
     image_writer_(image_writer),
+    compiling_boot_image_(compiling_boot_image),
     dex_files_(&dex_files),
     size_(0u),
     bss_size_(0u),
@@ -113,7 +115,9 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     size_oat_lookup_table_(0),
     method_offset_map_() {
   CHECK(key_value_store != nullptr);
-
+  if (compiling_boot_image) {
+    CHECK(image_writer != nullptr);
+  }
   InstructionSet instruction_set = compiler_driver_->GetInstructionSet();
   const InstructionSetFeatures* features = compiler_driver_->GetInstructionSetFeatures();
   relative_patcher_ = linker::RelativePatcher::Create(instruction_set, features,
@@ -167,9 +171,11 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
   }
 
   CHECK_EQ(dex_files_->size(), oat_dex_files_.size());
-  CHECK_EQ(compiler->IsImage(), image_writer_ != nullptr);
+  // CHECK_EQ(compiler->IsImage(), image_writer_ != nullptr);
+  /*
   CHECK_EQ(compiler->IsImage(),
            key_value_store_->find(OatHeader::kImageLocationKey) == key_value_store_->end());
+           */
   CHECK_ALIGNED(image_patch_delta_, kPageSize);
 }
 
@@ -888,7 +894,7 @@ class OatWriter::WriteCodeMethodVisitor : public OatDexMethodVisitor {
 
   void PatchMethodAddress(std::vector<uint8_t>* code, uint32_t offset, ArtMethod* method)
       SHARED_REQUIRES(Locks::mutator_lock_) {
-    if (writer_->HasImage()) {
+    if (writer_->HasBootImage()) {
       method = writer_->image_writer_->GetImageMethodAddress(method);
     } else if (kIsDebugBuild) {
       // NOTE: We're using linker patches for app->boot references when the image can

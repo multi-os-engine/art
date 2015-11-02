@@ -625,6 +625,10 @@ class Dex2Oat FINAL {
       Usage("Can't have both --image and (--app-image-fd or --app-image-file)");
     }
 
+    if (app_image_ && image_base_ == 0) {
+      image_base_ = 0x100000;  // TODO: Remove this code
+    }
+
     if (IsBootImage()) {
       // We need the boot image to always be debuggable.
       compiler_options_->debuggable_ = true;
@@ -1371,11 +1375,13 @@ class Dex2Oat FINAL {
         key_value_store_->Put(OatHeader::kImageLocationKey, image_file_location);
       }
 
-      oat_writer.reset(new OatWriter(dex_files_, image_file_location_oat_checksum,
+      oat_writer.reset(new OatWriter(dex_files_,
+                                     image_file_location_oat_checksum,
                                      image_file_location_oat_data_begin,
                                      image_patch_delta,
                                      driver_.get(),
                                      image_writer_.get(),
+                                     IsBootImage(),
                                      timings_,
                                      key_value_store_.get()));
     }
@@ -1591,7 +1597,10 @@ class Dex2Oat FINAL {
   }
 
   void PrepareImageWriter(uintptr_t image_base) {
-    image_writer_.reset(new ImageWriter(*driver_, image_base, compiler_options_->GetCompilePic()));
+    image_writer_.reset(new ImageWriter(*driver_,
+                                        image_base,
+                                        compiler_options_->GetCompilePic(),
+                                        IsAppImage()));
   }
 
   // Let the ImageWriter write the image file. If we do not compile PIC, also fix up the oat file.
