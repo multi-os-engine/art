@@ -65,7 +65,8 @@ RegisterAllocator::RegisterAllocator(ArenaAllocator* allocator,
         blocked_fp_registers_(codegen->GetBlockedFloatingPointRegisters()),
         reserved_out_slots_(0),
         maximum_number_of_live_core_registers_(0),
-        maximum_number_of_live_fp_registers_(0) {
+        maximum_number_of_live_fp_registers_(0),
+        should_save_parameter_registers_(false) {
   temp_intervals_.reserve(4);
   int_spill_slots_.reserve(kDefaultNumberOfSpillSlots);
   long_spill_slots_.reserve(kDefaultNumberOfSpillSlots);
@@ -312,6 +313,17 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
       BlockRegister(input.ToLow(), position, position + 1);
       BlockRegister(input.ToHigh(), position, position + 1);
     }
+  }
+
+  if ((kForceReadBarrier || kUseReadBarrier) &&
+      (instruction->IsInvokeVirtual() || instruction->IsInvokeInterface())) {
+    // Read barriers slow paths emitted within the code generation of
+    // HInvokeVirtual and HInvokeInterface instructions and performing
+    // an actual call (i.e. not intrinsified) require parameter (core)
+    // registers to be saved prior to calling the read barrier entry
+    // point in the slow path (and restored after the call), in order
+    // to preserve parameters for the virtual/interface call itself.
+    should_save_parameter_registers_ = true;
   }
 
   LiveInterval* current = instruction->GetLiveInterval();
@@ -1771,6 +1783,7 @@ void RegisterAllocator::Resolve() {
                                      maximum_number_of_live_core_registers_,
                                      maximum_number_of_live_fp_registers_,
                                      reserved_out_slots_,
+                                     should_save_parameter_registers_,
                                      codegen_->GetGraph()->GetLinearOrder());
 
   // Adjust the Out Location of instructions.
