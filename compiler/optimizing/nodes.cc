@@ -376,7 +376,11 @@ void HGraph::ComputeTryBlockInformation() {
     HBasicBlock* first_predecessor = block->GetPredecessors()[0];
     DCHECK(!block->IsLoopHeader() || !block->GetLoopInformation()->IsBackEdge(*first_predecessor));
     const HTryBoundary* try_entry = first_predecessor->ComputeTryEntryOfSuccessors();
-    if (try_entry != nullptr) {
+    if (try_entry != nullptr &&
+        (block->GetTryCatchInformation() == nullptr ||
+         try_entry != &block->GetTryCatchInformation()->GetTryEntry())) {
+      // We are either setting try block membership for the first time or it
+      // has changed.
       block->SetTryCatchInformation(new (arena_) TryCatchInformation(*try_entry));
     }
   }
@@ -1410,13 +1414,30 @@ void HBasicBlock::DisconnectAndDelete() {
   // instructions.
   for (HBasicBlock* predecessor : predecessors_) {
     HInstruction* last_instruction = predecessor->GetLastInstruction();
+    if (last_instruction->IsTryBoundary() && !IsCatchBlock()) {
+      // This block is the only normal-flow successor of the TryBoundary which
+      // makes `predecessor` dead. Since DCE removes blocks in post order,
+      // exception handlers of this TryBoundary were already visited and any
+      // remaining handlers therefore must be live. We remove `predecessor` from
+      // their list of predecessors.
+      DCHECK_EQ(last_instruction->AsTryBoundary()->GetNormalFlowSuccessor(), this);
+      while (predecessor->GetSuccessors().size() > 1) {
+        HBasicBlock* handler = predecessor->GetSuccessors()[1];
+        DCHECK(handler->IsCatchBlock());
+        predecessor->RemoveSuccessor(handler);
+        handler->RemovePredecessor(predecessor);
+      }
+    }
+
     predecessor->RemoveSuccessor(this);
     uint32_t num_pred_successors = predecessor->GetSuccessors().size();
     if (num_pred_successors == 1u) {
       // If we have one successor after removing one, then we must have
-      // had an HIf or HPackedSwitch, as they have more than one successor.
-      // Replace those with a HGoto.
-      DCHECK(last_instruction->IsIf() || last_instruction->IsPackedSwitch());
+      // had an HIf, HPackedSwitch or HTryBoundary, as they have more than one
+      // successor. Replace those with a HGoto.
+      DCHECK(last_instruction->IsIf() ||
+             last_instruction->IsPackedSwitch() ||
+             (last_instruction->IsTryBoundary() && IsCatchBlock()));
       predecessor->RemoveInstruction(last_instruction);
       predecessor->AddInstruction(new (graph_->GetArena()) HGoto(last_instruction->GetDexPc()));
     } else if (num_pred_successors == 0u) {
@@ -1425,10 +1446,12 @@ void HBasicBlock::DisconnectAndDelete() {
       // SSAChecker fails unless it is not removed during the pass too.
       predecessor->RemoveInstruction(last_instruction);
     } else {
-      // There are multiple successors left.  This must come from a HPackedSwitch
-      // and we are in the middle of removing the HPackedSwitch. Like above, leave
-      // this alone, and the SSAChecker will fail if it is not removed as well.
-      DCHECK(last_instruction->IsPackedSwitch());
+      // There are multiple successors left. The removed block might be a successor
+      // of a PackedSwitch which will be completely removed (perhaps replaced with
+      // a Goto), or we are deleting a catch block from a TryBoundary. In either
+      // case, leave `last_instruction` as is for now.
+      DCHECK(last_instruction->IsPackedSwitch() ||
+             (last_instruction->IsTryBoundary() && IsCatchBlock()));
     }
   }
   predecessors_.clear();
@@ -1443,18 +1466,22 @@ void HBasicBlock::DisconnectAndDelete() {
     // dominator of `successor` which violates the order DCHECKed at the top.
     DCHECK(!successor->predecessors_.empty());
 
-    // Remove this block's entries in the successor's phis.
-    if (successor->predecessors_.size() == 1u) {
-      // The successor has just one predecessor left. Replace phis with the only
-      // remaining input.
-      for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
-        HPhi* phi = phi_it.Current()->AsPhi();
-        phi->ReplaceWith(phi->InputAt(1 - this_index));
-        successor->RemovePhi(phi);
-      }
-    } else {
-      for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
-        phi_it.Current()->AsPhi()->RemoveInputAt(this_index);
+    // Remove this block's entries in the successor's phis. Skip exceptional
+    // successors because catch phi inputs do not correspond to predecessor blocks
+    // but throwing instructions. Their inputs will be updated in DeleteDeadBlock.
+    if (!successor->IsCatchBlock()) {
+      if (successor->predecessors_.size() == 1u) {
+        // The successor has just one predecessor left. Replace phis with the only
+        // remaining input.
+        for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+          HPhi* phi = phi_it.Current()->AsPhi();
+          phi->ReplaceWith(phi->InputAt(1 - this_index));
+          successor->RemovePhi(phi);
+        }
+      } else {
+        for (HInstructionIterator phi_it(successor->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+          phi_it.Current()->AsPhi()->RemoveInputAt(this_index);
+        }
       }
     }
   }
@@ -1585,7 +1612,26 @@ void HGraph::DeleteDeadBlock(HBasicBlock* block) {
   DCHECK(block->GetDominator() == nullptr);
 
   for (HBackwardInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
-    block->RemoveInstruction(it.Current());
+    HInstruction* insn = it.Current();
+
+    // Assuming `block` was previously disconnected from all other blocks, `insn`
+    // should not have any remaining uses. Disconnecting a block does not, however,
+    // update inputs of catch phis because we cannot map phi input indices back to
+    // throwing instructions. We at least keep the graph consistent by removing
+    // inputs defined in the deleted block and inputs of other phis at the same
+    // index since these are guaranteed to come from a dead throwing instruction.
+    while (insn->HasUses()) {
+      DCHECK(block->IsTryBlock());
+      HUseListNode<HInstruction*>* use = insn->GetUses().GetFirst();
+      size_t use_index = use->GetIndex();
+      HBasicBlock* user_block =  use->GetUser()->GetBlock();
+      DCHECK(use->GetUser()->IsPhi() && user_block->IsCatchBlock());
+      for (HInstructionIterator phi_it(user_block->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+        phi_it.Current()->AsPhi()->RemoveInputAt(use_index);
+      }
+    }
+
+    block->RemoveInstruction(insn);
   }
   for (HBackwardInstructionIterator it(block->GetPhis()); !it.Done(); it.Advance()) {
     block->RemovePhi(it.Current()->AsPhi());
