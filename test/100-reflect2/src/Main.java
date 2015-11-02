@@ -157,10 +157,28 @@ class Main {
     System.out.println(o + " (" + (o != null ? o.getClass() : "null") + ")");
   }
 
+  private static String[] toSortedStringArray(Object[] objArray) {
+    if (objArray == null) {
+      return null;
+    }
+
+    String[] ret = new String[objArray.length];
+    for (int i = 0; i < objArray.length; i++) {
+      ret[i] = String.valueOf(objArray[i]);
+    }
+
+    Arrays.sort(ret);
+
+    return ret;
+  }
+
   public static void testMethodReflection() throws Exception {
-    System.out.println(Arrays.toString(String.class.getDeclaredConstructors()));
-    System.out.println(Arrays.toString(String.class.getDeclaredFields()));
-    System.out.println(Arrays.toString(String.class.getDeclaredMethods()));
+    System.out.println(
+        Arrays.toString(toSortedStringArray(String.class.getDeclaredConstructors())));
+    System.out.println(
+        Arrays.toString(toSortedStringArray(String.class.getDeclaredFields())));
+    System.out.println(
+        Arrays.toString(toSortedStringArray(String.class.getDeclaredMethods())));
 
     System.out.println(Arrays.toString(Main.class.getInterfaces()));
     System.out.println(Arrays.toString(String.class.getInterfaces()));
