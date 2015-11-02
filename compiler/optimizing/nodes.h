@@ -350,8 +350,6 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
 
   HCurrentMethod* GetCurrentMethod();
 
-  HBasicBlock* FindCommonDominator(HBasicBlock* first, HBasicBlock* second) const;
-
   const DexFile& GetDexFile() const {
     return dex_file_;
   }
@@ -3399,11 +3397,12 @@ class HInvokeStaticOrDirect : public HInvoke {
                         ClinitCheckRequirement clinit_check_requirement)
       : HInvoke(arena,
                 number_of_arguments,
-                // There is one extra argument for the HCurrentMethod node, and
-                // potentially one other if the clinit check is explicit, and one other
-                // if the method is a string factory.
-                1u + (clinit_check_requirement == ClinitCheckRequirement::kExplicit ? 1u : 0u)
-                   + (dispatch_info.method_load_kind == MethodLoadKind::kStringInit ? 1u : 0u),
+                // There is potentially one extra argument for the HCurrentMethod node, and
+                // potentially one other if the clinit check is explicit, and potentially
+                // one other if the method is a string factory.
+                (HasCurrentMethodInput(dispatch_info.method_load_kind) ? 1u : 0u) +
+                    (clinit_check_requirement == ClinitCheckRequirement::kExplicit ? 1u : 0u) +
+                    (dispatch_info.method_load_kind == MethodLoadKind::kStringInit ? 1u : 0u),
                 return_type,
                 dex_pc,
                 method_index,
@@ -3411,11 +3410,24 @@ class HInvokeStaticOrDirect : public HInvoke {
         invoke_type_(invoke_type),
         clinit_check_requirement_(clinit_check_requirement),
         target_method_(target_method),
-        dispatch_info_(dispatch_info) {}
+        dispatch_info_(dispatch_info) { }
 
   void SetDispatchInfo(const DispatchInfo& dispatch_info) {
+    bool had_current_method_input = HasCurrentMethodInput();
     dispatch_info_ = dispatch_info;
+    bool has_current_method_input = HasCurrentMethodInput();
+    if (had_current_method_input && !has_current_method_input) {
+      DCHECK_EQ(InputAt(GetCurrentMethodInputIndex()), GetBlock()->GetGraph()->GetCurrentMethod());
+      RemoveInputAt(GetCurrentMethodInputIndex());
+    } else if (!had_current_method_input && has_current_method_input) {
+      DCHECK(GetCurrentMethodInputIndex() == inputs_.size() ||
+             InputAt(GetCurrentMethodInputIndex()) != GetBlock()->GetGraph()->GetCurrentMethod());
+      InsertInputAt(GetCurrentMethodInputIndex(), GetBlock()->GetGraph()->GetCurrentMethod());
+    }
   }
+
+  void InsertInputAt(size_t index, HInstruction* input);
+  void RemoveInputAt(size_t index);
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
     // We access the method via the dex cache so we can't do an implicit null check.
@@ -3438,6 +3450,7 @@ class HInvokeStaticOrDirect : public HInvoke {
   bool HasPcRelDexCache() const {
     return GetMethodLoadKind() == MethodLoadKind::kDexCachePcRelative;
   }
+  bool HasCurrentMethodInput() const { return HasCurrentMethodInput(GetMethodLoadKind()); }
   bool HasDirectCodePtr() const { return GetCodePtrLocation() == CodePtrLocation::kCallDirect; }
   MethodReference GetTargetMethod() const { return target_method_; }
 
@@ -3486,8 +3499,8 @@ class HInvokeStaticOrDirect : public HInvoke {
 
   bool IsStringFactoryFor(HFakeString* str) const {
     if (!IsStringInit()) return false;
-    // +1 for the current method.
-    if (InputCount() == (number_of_arguments_ + 1)) return false;
+    DCHECK(!HasCurrentMethodInput());
+    if (InputCount() == (number_of_arguments_)) return false;
     return InputAt(InputCount() - 1)->AsFakeString() == str;
   }
 
@@ -3531,6 +3544,10 @@ class HInvokeStaticOrDirect : public HInvoke {
   }
 
  private:
+  static bool HasCurrentMethodInput(MethodLoadKind kind) {
+    return kind == MethodLoadKind::kRecursive || kind == MethodLoadKind::kDexCacheViaMethod;
+  }
+
   const InvokeType invoke_type_;
   ClinitCheckRequirement clinit_check_requirement_;
   // The target method may refer to different dex file or method index than the original

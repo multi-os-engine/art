@@ -17,6 +17,7 @@
 #include "nodes.h"
 
 #include "code_generator.h"
+#include "common_dominator_finder.h"
 #include "ssa_builder.h"
 #include "base/bit_vector-inl.h"
 #include "base/bit_utils.h"
@@ -179,7 +180,11 @@ void HGraph::ComputeDominanceInformation() {
       if (successor->GetDominator() == nullptr) {
         successor->SetDominator(current);
       } else {
-        successor->SetDominator(FindCommonDominator(successor->GetDominator(), current));
+        // The CommonDominatorFinder can work for multiple blocks as long
+        // as the domination information doesn't change. Since we're changing
+        // it here, we can use the finder only for pairs of blocks.
+        successor->SetDominator(
+            CommonDominatorFinder::CommonDominator(successor->GetDominator(), current));
       }
 
       // Once all the forward edges have been visited, we know the immediate
@@ -192,24 +197,6 @@ void HGraph::ComputeDominanceInformation() {
       }
     }
   }
-}
-
-HBasicBlock* HGraph::FindCommonDominator(HBasicBlock* first, HBasicBlock* second) const {
-  ArenaBitVector visited(arena_, blocks_.size(), false);
-  // Walk the dominator tree of the first block and mark the visited blocks.
-  while (first != nullptr) {
-    visited.SetBit(first->GetBlockId());
-    first = first->GetDominator();
-  }
-  // Walk the dominator tree of the second block until a marked block is found.
-  while (second != nullptr) {
-    if (visited.IsBitSet(second->GetBlockId())) {
-      return second;
-    }
-    second = second->GetDominator();
-  }
-  LOG(ERROR) << "Could not find common dominator";
-  return nullptr;
 }
 
 void HGraph::TransformToSsa() {
@@ -1938,6 +1925,24 @@ bool HInvokeStaticOrDirect::NeedsDexCacheOfDeclaringClass() const {
   }
   IntrinsicOptimizations opt(*this);
   return !opt.GetDoesNotNeedDexCache();
+}
+
+void HInvokeStaticOrDirect::InsertInputAt(size_t index, HInstruction* input) {
+  inputs_.insert(inputs_.begin() + index, HUserRecord<HInstruction*>(input));
+  input->AddUseAt(this, index);
+  for (size_t i = index + 1u, size = inputs_.size(); i != size; ++i) {
+    DCHECK_EQ(InputRecordAt(i).GetUseNode()->GetIndex(), i - 1u);
+    InputRecordAt(i).GetUseNode()->SetIndex(i);
+  }
+}
+
+void HInvokeStaticOrDirect::RemoveInputAt(size_t index) {
+  RemoveAsUserOfInput(index);
+  inputs_.erase(inputs_.begin() + index);
+  for (size_t i = index, e = InputCount(); i < e; ++i) {
+    DCHECK_EQ(InputRecordAt(i).GetUseNode()->GetIndex(), i + 1u);
+    InputRecordAt(i).GetUseNode()->SetIndex(i);
+  }
 }
 
 void HInstruction::RemoveEnvironmentUsers() {

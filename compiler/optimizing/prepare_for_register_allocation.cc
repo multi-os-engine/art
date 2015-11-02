@@ -50,7 +50,7 @@ void PrepareForRegisterAllocation::VisitBoundType(HBoundType* bound_type) {
 void PrepareForRegisterAllocation::VisitClinitCheck(HClinitCheck* check) {
   HLoadClass* cls = check->GetLoadClass();
   check->ReplaceWith(cls);
-  if (check->GetPrevious() == cls) {
+  if (cls->GetDexPc() == check->GetDexPc()) {
     // Pass the initialization duty to the `HLoadClass` instruction,
     // and remove the instruction from the graph.
     cls->SetMustGenerateClinitCheck(true);
@@ -100,7 +100,7 @@ void PrepareForRegisterAllocation::VisitInvokeStaticOrDirect(HInvokeStaticOrDire
     // currently the callee is responsible for reporting parameters to the GC, the code
     // that walks the stack during `artQuickResolutionTrampoline` cannot be interrupted for GC.
     // Therefore we cannot allocate any object in that code, including loading a new class.
-    if (last_input == invoke->GetPrevious() && !invoke->IsFromInlinedInvoke()) {
+    if (last_input->GetDexPc() == invoke->GetDexPc() && !invoke->IsFromInlinedInvoke()) {
       last_input->SetMustGenerateClinitCheck(false);
 
       // If the load class instruction is no longer used, remove it from
