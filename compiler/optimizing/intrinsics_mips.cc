@@ -288,6 +288,73 @@ void IntrinsicCodeGeneratorMIPS::VisitShortReverseBytes(HInvoke* invoke) {
   GenReverseBytes(invoke->GetLocations(), Primitive::kPrimShort, GetAssembler());
 }
 
+static void GenNumberOfLeadingZeroes(LocationSummary* locations,
+                                     bool is64bit,
+                                     MipsAssembler* assembler,
+                                     bool isR6) {
+  Register out = locations->Out().AsRegister<Register>();
+  MipsLabel done, bottom_bits;
+
+  if (is64bit) {
+    Register in_lo   = locations->InAt(0).AsRegisterPairLow<Register>();
+    Register in_hi   = locations->InAt(0).AsRegisterPairHigh<Register>();
+
+    if (isR6) {
+      __ Clz(AT, in_hi);
+    } else {
+      __ ClzR1(AT, in_hi);
+    }
+    __ Addiu(TMP, AT, -32);
+    __ Beqz(TMP, &bottom_bits);
+    __ Nop();
+    __ Move(out, AT);           // First bit set to one is in low 32-bits.
+    __ B(&done);                // Return count.
+
+    __ Bind(&bottom_bits);
+    // First bit set to one is in low 32-bits.
+    if (isR6) {
+      __ Clz(out, in_lo);
+    } else {
+      __ ClzR1(out, in_lo);
+    }
+    __ Addiu(out, out, 32);     // Add the count of leading zeroes from the
+                                // hi 32-bits.
+    __ Bind(&done);
+  } else {
+    Register in  = locations->InAt(0).AsRegister<Register>();
+
+    if (isR6) {
+      __ Clz(out, in);
+    } else {
+      __ ClzR1(out, in);
+    }
+  }
+}
+
+// int java.lang.Integer.numberOfLeadingZeros(int i)
+void IntrinsicLocationsBuilderMIPS::VisitIntegerNumberOfLeadingZeros(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitIntegerNumberOfLeadingZeros(HInvoke* invoke) {
+  GenNumberOfLeadingZeroes(invoke->GetLocations(),
+                           false,
+                           GetAssembler(),
+                           codegen_->GetInstructionSetFeatures().IsR6());
+}
+
+// int java.lang.Long.numberOfLeadingZeros(long i)
+void IntrinsicLocationsBuilderMIPS::VisitLongNumberOfLeadingZeros(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitLongNumberOfLeadingZeros(HInvoke* invoke) {
+  GenNumberOfLeadingZeroes(invoke->GetLocations(),
+                           true,
+                           GetAssembler(),
+                           codegen_->GetInstructionSetFeatures().IsR6());
+}
+
 static void GenReverse(LocationSummary* locations,
                        Primitive::Type type,
                        MipsAssembler* assembler,
@@ -514,8 +581,6 @@ void IntrinsicLocationsBuilderMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUS
 void IntrinsicCodeGeneratorMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) {    \
 }
 
-UNIMPLEMENTED_INTRINSIC(LongNumberOfLeadingZeros)
-UNIMPLEMENTED_INTRINSIC(IntegerNumberOfLeadingZeros)
 UNIMPLEMENTED_INTRINSIC(MathAbsDouble)
 UNIMPLEMENTED_INTRINSIC(MathAbsFloat)
 UNIMPLEMENTED_INTRINSIC(MathAbsInt)

@@ -162,6 +162,10 @@ class MipsAssembler FINAL : public Assembler {
   void Sltu(Register rd, Register rs, Register rt);
   void Slti(Register rt, Register rs, uint16_t imm16);
   void Sltiu(Register rt, Register rs, uint16_t imm16);
+  void Clz(Register rd, Register rs);
+  void ClzR1(Register rd, Register rs);
+  void Clo(Register rd, Register rs);
+  void CloR1(Register rd, Register rs);
 
   void B(uint16_t imm16);
   void Beq(Register rs, Register rt, uint16_t imm16);

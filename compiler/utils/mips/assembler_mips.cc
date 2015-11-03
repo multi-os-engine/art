@@ -405,6 +405,22 @@ void MipsAssembler::Jal(uint32_t addr26) {
   EmitI26(0x3, addr26);
 }
 
+void MipsAssembler::Clz(Register rd, Register rs) {
+  EmitR(0, rs, static_cast<Register>(0), rd, 0x01, 0x10);
+}
+
+void MipsAssembler::ClzR1(Register rd, Register rs) {
+  EmitR(0x1C, rs, rd, rd, 0, 0x20);
+}
+
+void MipsAssembler::Clo(Register rd, Register rs) {
+  EmitR(0, rs, static_cast<Register>(0), rd, 0x01, 0x11);
+}
+
+void MipsAssembler::CloR1(Register rd, Register rs) {
+  EmitR(0x1C, rs, rd, rd, 0, 0x21);
+}
+
 void MipsAssembler::Jalr(Register rd, Register rs) {
   EmitR(0, rs, static_cast<Register>(0), rd, 0, 0x09);
 }
