@@ -397,6 +397,61 @@ class CodeGeneratorX86 : public CodeGenerator {
 
   void Finalize(CodeAllocator* allocator) OVERRIDE;
 
+  // Generate a read barrier for a heap reference within `instruction`.
+  //
+  // A read barrier for an object reference read from the heap is
+  // implemented as a call to the artReadBarrierSlow runtime entry
+  // point, which is passed the values in locations `ref`, `obj`, and
+  // `offset`:
+  //
+  //   mirror::Object* artReadBarrierSlow(mirror::Object* ref,
+  //                                      mirror::Object* obj,
+  //                                      uint32_t offset);
+  //
+  // The `out` location contains the value returned by
+  // artReadBarrierSlow.
+  //
+  // When `index` is provided (i.e. for array accesses), the offset
+  // value passed to artReadBarrierSlow is adjusted to take `index`
+  // into account.
+  void GenerateReadBarrier(HInstruction* instruction,
+                           Location out,
+                           Location ref,
+                           Location obj,
+                           uint32_t offset,
+                           Location index = Location::NoLocation());
+  // Like GenerateReadBarrier, but have the read barrier slow path
+  // save `live_temp` (in addition to "real" live registers) before
+  // calling the read barrier entry point in the runtime, and restore
+  // it afterwards.
+  void GenerateReadBarrierWithLiveTemp(HInstruction* instruction,
+                                       Location out,
+                                       Location ref,
+                                       Location obj,
+                                       uint32_t offset,
+                                       Location live_temp,
+                                       Location index = Location::NoLocation());
+  // If read barriers are enabled, generate a read barrier for a heap reference.
+  // If heap poisoning is enabled, also unpoison the reference in `out`.
+  void MaybeGenerateReadBarrier(HInstruction* instruction,
+                                Location out,
+                                Location ref,
+                                Location obj,
+                                uint32_t offset,
+                                Location index = Location::NoLocation());
+
+  // Generate a read barrier for a GC root within `instruction`.
+  //
+  // A read barrier for an object reference GC root is implemented as
+  // a call to the artReadBarrierForRootSlow runtime entry point,
+  // which is passed the value in location `root`:
+  //
+  //   mirror::Object* artReadBarrierForRootSlow(GcRoot<mirror::Object>* root);
+  //
+  // The `out` location contains the value returned by
+  // artReadBarrierForRootSlow.
+  void GenerateReadBarrierForRoot(HInstruction* instruction, Location out, Location root);
+
  private:
   // Labels for each block that will be compiled.
   Label* block_labels_;  // Indexed by block id.
