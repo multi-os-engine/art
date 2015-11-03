@@ -638,7 +638,19 @@ void SsaBuilder::VisitLoadLocal(HLoadLocal* load) {
 }
 
 void SsaBuilder::VisitStoreLocal(HStoreLocal* store) {
-  (*current_locals_)[store->GetLocal()->GetRegNumber()] = store->InputAt(1);
+  uint32_t reg_number = store->GetLocal()->GetRegNumber();
+  (*current_locals_)[reg_number] = store->InputAt(1);
+  if (reg_number != 0) {
+    // Check whether the entry before is a wide type. If it is, we need to discard it,
+    // to make sure the dex register map builder sees the new value. If we were to keep
+    // the wide instruction, it would skip the entry at `reg_number`.
+    HInstruction* previous = (*current_locals_)[reg_number - 1];
+    if (previous != nullptr && Primitive::Is64BitType(previous->GetType())) {
+      // We need to put something: in case this `HStoreLocal` is within a loop, our current SSA
+      // building algorithm eagerly creates loop phis which expect an input at the back edge.
+      (*current_locals_)[reg_number - 1] = GetGraph()->GetConstant(Primitive::kPrimInt, 0);
+    }
+  }
   store->GetBlock()->RemoveInstruction(store);
 }
 
