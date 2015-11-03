@@ -57,6 +57,15 @@ void Class::VisitRoots(RootVisitor* visitor) {
   java_lang_Class_.VisitRootIfNonNull(visitor, RootInfo(kRootStickyClass));
 }
 
+inline void Class::SetVerifyError(mirror::Object* error) {
+  CHECK(error != nullptr) << PrettyClass(this);
+  if (Runtime::Current()->IsActiveTransaction()) {
+    SetFieldObject<true>(OFFSET_OF_OBJECT_MEMBER(Class, verify_error_), error);
+  } else {
+    SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(Class, verify_error_), error);
+  }
+}
+
 void Class::SetStatus(Handle<Class> h_this, Status new_status, Thread* self) {
   Status old_status = h_this->GetStatus();
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
@@ -85,36 +94,9 @@ void Class::SetStatus(Handle<Class> h_this, Status new_status, Thread* self) {
       }
     }
 
-    // Stash current exception.
-    StackHandleScope<1> hs(self);
-    Handle<mirror::Throwable> old_exception(hs.NewHandle(self->GetException()));
-    CHECK(old_exception.Get() != nullptr);
-    Class* eiie_class;
-    // Do't attempt to use FindClass if we have an OOM error since this can try to do more
-    // allocations and may cause infinite loops.
-    bool throw_eiie = (old_exception.Get() == nullptr);
-    if (!throw_eiie) {
-      std::string temp;
-      const char* old_exception_descriptor = old_exception->GetClass()->GetDescriptor(&temp);
-      throw_eiie = (strcmp(old_exception_descriptor, "Ljava/lang/OutOfMemoryError;") != 0);
-    }
-    if (throw_eiie) {
-      // Clear exception to call FindSystemClass.
-      self->ClearException();
-      eiie_class = Runtime::Current()->GetClassLinker()->FindSystemClass(
-          self, "Ljava/lang/ExceptionInInitializerError;");
-      CHECK(!self->IsExceptionPending());
-      // Only verification errors, not initialization problems, should set a verify error.
-      // This is to ensure that ThrowEarlierClassFailure will throw NoClassDefFoundError in that
-      // case.
-      Class* exception_class = old_exception->GetClass();
-      if (!eiie_class->IsAssignableFrom(exception_class)) {
-        h_this->SetVerifyErrorClass(exception_class);
-      }
-    }
-
-    // Restore exception.
-    self->SetException(old_exception.Get());
+    // Remember the current exception.
+    CHECK(self->GetException() != nullptr);
+    h_this->SetVerifyError(self->GetException());
   }
   static_assert(sizeof(Status) == sizeof(uint32_t), "Size of status not equal to uint32");
   if (Runtime::Current()->IsActiveTransaction()) {

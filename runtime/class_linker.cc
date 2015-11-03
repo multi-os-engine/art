@@ -123,7 +123,7 @@ bool ClassLinker::HasInitWithString(Thread* self, const char* descriptor) {
   return exception_init_method != nullptr;
 }
 
-void ClassLinker::ThrowEarlierClassFailure(mirror::Class* c) {
+void ClassLinker::ThrowEarlierClassFailure(mirror::Class* c, bool wrap_in_no_class_def) {
   // The class failed to initialize on a previous attempt, so we want to throw
   // a NoClassDefFoundError (v2 2.17.5).  The exception to this rule is if we
   // failed in verification, in which case v2 5.4.1 says we need to re-throw
@@ -131,8 +131,11 @@ void ClassLinker::ThrowEarlierClassFailure(mirror::Class* c) {
   Runtime* const runtime = Runtime::Current();
   if (!runtime->IsAotCompiler()) {  // Give info if this occurs at runtime.
     std::string extra;
-    if (c->GetVerifyErrorClass() != nullptr) {
-      extra = PrettyDescriptor(c->GetVerifyErrorClass());
+    if (c->GetVerifyError() != nullptr) {
+      mirror::Class* descr_from = c->GetVerifyError()->IsClass()
+                                      ? c->GetVerifyError()->AsClass()
+                                      : c->GetVerifyError()->GetClass();
+      extra = PrettyDescriptor(descr_from);
     }
     LOG(INFO) << "Rejecting re-init on previously-failed class " << PrettyClass(c) << ": " << extra;
   }
@@ -144,20 +147,63 @@ void ClassLinker::ThrowEarlierClassFailure(mirror::Class* c) {
     mirror::Throwable* pre_allocated = runtime->GetPreAllocatedNoClassDefFoundError();
     self->SetException(pre_allocated);
   } else {
-    if (c->GetVerifyErrorClass() != nullptr) {
-      // TODO: change the verifier to store an _instance_, with a useful detail message?
-      // It's possible the exception doesn't have a <init>(String).
-      std::string temp;
-      const char* descriptor = c->GetVerifyErrorClass()->GetDescriptor(&temp);
+    if (c->GetVerifyError() != nullptr) {
+      mirror::Object* obj = c->GetVerifyError();
+      if (obj->IsClass()) {
+        // Previous error has been stored as class. Create a new exception of that type.
 
-      if (HasInitWithString(self, descriptor)) {
-        self->ThrowNewException(descriptor, PrettyDescriptor(c).c_str());
+        // It's possible the exception doesn't have a <init>(String).
+        std::string temp;
+        const char* descriptor = obj->AsClass()->GetDescriptor(&temp);
+
+        if (HasInitWithString(self, descriptor)) {
+          self->ThrowNewException(descriptor, PrettyDescriptor(c).c_str());
+        } else {
+          self->ThrowNewException(descriptor, nullptr);
+        }
       } else {
-        self->ThrowNewException(descriptor, nullptr);
+        // Previous error has been stored as an instance. Just rethrow.
+        mirror::Class* throwable_class =
+            self->DecodeJObject(WellKnownClasses::java_lang_Throwable)->AsClass();
+        mirror::Class* error_class = obj->GetClass();
+        CHECK(throwable_class->IsAssignableFrom(error_class));
+        self->SetException(obj->AsThrowable());
       }
-    } else {
-      self->ThrowNewException("Ljava/lang/NoClassDefFoundError;",
-                              PrettyDescriptor(c).c_str());
+    }
+    if (c->GetVerifyError() == nullptr || wrap_in_no_class_def) {
+      // NoClassDefFoundError does not have a constructor that allows a cause, and it's not clear
+      // whether it is OK for the old exception to be the cause.
+      // We'll use addSuppressed to add any old exception as suppressed.
+      StackHandleScope<2> hs(self);
+      Handle<mirror::Throwable> cause = hs.NewHandle(self->GetException());
+      self->ClearException();
+
+      // Create NoClassDefFoundError.
+      self->ThrowNewException("Ljava/lang/NoClassDefFoundError;", PrettyDescriptor(c).c_str());
+
+      // Install suppressed cause.
+      if (cause.Get() != nullptr) {
+        // Find addSuppressed(Throwable). Note: this should be a rare path, so no need to
+        // optimize this.
+        mirror::Class* throwable_class =
+            self->DecodeJObject(WellKnownClasses::java_lang_Throwable)->AsClass();
+        ArtMethod* add_suppressed_method =
+            throwable_class->FindDeclaredVirtualMethod("addSuppressed",
+                                                       "(Ljava/lang/Throwable;)V",
+                                                       sizeof(void*));
+        CHECK(add_suppressed_method != nullptr);
+
+        JValue result;
+        uint32_t tmp[2];
+        tmp[0] = PointerToLowMemUInt32(self->GetException());
+        tmp[1] = PointerToLowMemUInt32(cause.Get());
+        Handle<mirror::Throwable> exc = hs.NewHandle(self->GetException());
+        self->ClearException();         // Clear, we need to start the method without anything
+                                        // pending.
+        add_suppressed_method->Invoke(self, tmp, 2 * sizeof(uint32_t), &result, "VL");
+        self->ClearException();         // Clear any exception that might have been raised now.
+        self->SetException(exc.Get());  // And re-install the NoClassDefFoundError.
+      }
     }
   }
 }
@@ -3399,7 +3445,7 @@ bool ClassLinker::InitializeClass(Thread* self, Handle<mirror::Class> klass,
 
     // Was the class already found to be erroneous? Done under the lock to match the JLS.
     if (klass->IsErroneous()) {
-      ThrowEarlierClassFailure(klass.Get());
+      ThrowEarlierClassFailure(klass.Get(), true);
       VlogClassInitializationFailure(klass);
       return false;
     }

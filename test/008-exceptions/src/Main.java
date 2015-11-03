@@ -79,6 +79,8 @@ public class Main {
             try {
                 BadInit.dummy = 1;
                 throw new IllegalStateException("Should not reach here.");
+            } catch (NoClassDefFoundError e) {
+                System.out.println(e);
             } catch (BadError e) {
                 System.out.println(e);
             }

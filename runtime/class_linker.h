@@ -850,7 +850,7 @@ class ClassLinker {
   // class.
   // Note: Currently we only store the descriptor, so we cannot throw the exact throwable, only
   //       a recreation with a custom string.
-  void ThrowEarlierClassFailure(mirror::Class* c)
+  void ThrowEarlierClassFailure(mirror::Class* c, bool wrap_in_no_class_def = false)
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!dex_lock_);
 
