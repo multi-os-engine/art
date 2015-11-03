@@ -594,9 +594,11 @@ void Instrumentation::ConfigureStubs(const char* key, InstrumentationLevel desir
       empty = IsDeoptimizedMethodsEmpty();  // Avoid lock violation.
     }
     if (empty) {
-      instrumentation_stubs_installed_ = false;
       MutexLock mu(self, *Locks::thread_list_lock_);
       Runtime::Current()->GetThreadList()->ForEach(InstrumentationRestoreStack, this);
+      // Only do this after restoring, as walking the stack when restoring will see
+      // the instrumentation exit pc.
+      instrumentation_stubs_installed_ = false;
     }
   }
 }
