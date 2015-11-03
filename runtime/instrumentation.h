@@ -517,20 +517,20 @@ class Instrumentation {
   InstrumentationLevelTable requested_instrumentation_levels_ GUARDED_BY(Locks::mutator_lock_);
 
   // The event listeners, written to with the mutator_lock_ exclusively held.
+  // Mutators must be able to iterate over these lists concurrently, that is, with listeners being
+  // added or removed while iterating.
+  // Note that mutators cannot make a copy of these lists before iterating, as the instrumentation
+  // listeners can also be deleted concurrently.
   std::list<InstrumentationListener*> method_entry_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> method_exit_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> method_unwind_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> backward_branch_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> invoke_virtual_or_interface_listeners_
       GUARDED_BY(Locks::mutator_lock_);
-  std::shared_ptr<std::list<InstrumentationListener*>> dex_pc_listeners_
-      GUARDED_BY(Locks::mutator_lock_);
-  std::shared_ptr<std::list<InstrumentationListener*>> field_read_listeners_
-      GUARDED_BY(Locks::mutator_lock_);
-  std::shared_ptr<std::list<InstrumentationListener*>> field_write_listeners_
-      GUARDED_BY(Locks::mutator_lock_);
-  std::shared_ptr<std::list<InstrumentationListener*>> exception_caught_listeners_
-      GUARDED_BY(Locks::mutator_lock_);
+  std::list<InstrumentationListener*> dex_pc_listeners_ GUARDED_BY(Locks::mutator_lock_);
+  std::list<InstrumentationListener*> field_read_listeners_ GUARDED_BY(Locks::mutator_lock_);
+  std::list<InstrumentationListener*> field_write_listeners_ GUARDED_BY(Locks::mutator_lock_);
+  std::list<InstrumentationListener*> exception_caught_listeners_ GUARDED_BY(Locks::mutator_lock_);
 
   // The set of methods being deoptimized (by the debugger) which must be executed with interpreter
   // only.
