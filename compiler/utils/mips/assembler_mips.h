@@ -131,6 +131,13 @@ class MipsAssembler FINAL : public Assembler {
   void Xori(Register rt, Register rs, uint16_t imm16);
   void Nor(Register rd, Register rs, Register rt);
 
+  void Seleqz(Register rd, Register rs, Register rt);
+  void Selnez(Register rd, Register rs, Register rt);
+  void ClzR6(Register rd, Register rs);
+  void ClzR2(Register rd, Register rs);
+  void CloR6(Register rd, Register rs);
+  void CloR2(Register rd, Register rs);
+
   void Bitswap(Register rd, Register rt);  // R6
   void Seb(Register rd, Register rt);  // R2+
   void Seh(Register rd, Register rt);  // R2+
@@ -177,6 +184,8 @@ class MipsAssembler FINAL : public Assembler {
   void Jalr(Register rd, Register rs);
   void Jalr(Register rs);
   void Jr(Register rs);
+  void Movz(Register rd, Register rs, Register rt);
+  void Movn(Register rd, Register rs, Register rt);
   void Nal();
   void Auipc(Register rs, uint16_t imm16);  // R6
   void Addiupc(Register rs, uint32_t imm19);  // R6
