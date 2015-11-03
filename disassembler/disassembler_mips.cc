@@ -139,6 +139,7 @@ static const MipsInstruction gMipsInstructions[] = {
   // SPECIAL2
   { kSpecial2Mask | 0x7ff, (28 << kOpcodeShift) | 2, "mul", "DST" },
   { kSpecial2Mask | 0x7ff, (28 << kOpcodeShift) | 32, "clz", "DS" },
+  { kSpecial2Mask | 0x7ff, (28 << kOpcodeShift) | 33, "clo", "DS" },
   { kSpecial2Mask | 0xffff, (28 << kOpcodeShift) | 0, "madd", "ST" },
   { kSpecial2Mask | 0xffff, (28 << kOpcodeShift) | 1, "maddu", "ST" },
   { kSpecial2Mask | 0xffff, (28 << kOpcodeShift) | 2, "mul", "DST" },
