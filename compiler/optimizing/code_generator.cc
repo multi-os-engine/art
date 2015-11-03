@@ -148,6 +148,8 @@ void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
     MarkNotLeaf();
   }
   const bool is_64_bit = Is64BitInstructionSet(GetInstructionSet());
+  // Save parameter registers when using read barriers.
+  const bool should_save_parameter_registers = kForceReadBarrier || kUseReadBarrier;
   InitializeCodeGeneration(GetGraph()->GetNumberOfLocalVRegs()
                              + GetGraph()->GetTemporariesVRegSlots()
                              + 1 /* filler */,
@@ -155,6 +157,7 @@ void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
                            0, /* the baseline compiler does not have live registers at slow path */
                            GetGraph()->GetMaximumNumberOfOutVRegs()
                              + (is_64_bit ? 2 : 1) /* current method */,
+                           should_save_parameter_registers,
                            GetGraph()->GetBlocks());
   CompileInternal(allocator, /* is_baseline */ true);
 }
@@ -310,6 +313,7 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
                                              size_t maximum_number_of_live_core_registers,
                                              size_t maximum_number_of_live_fp_registers,
                                              size_t number_of_out_slots,
+                                             bool should_save_parameter_registers,
                                              const ArenaVector<HBasicBlock*>& block_order) {
   block_order_ = &block_order;
   DCHECK(!block_order.empty());
@@ -318,6 +322,7 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
   first_register_slot_in_slow_path_ = (number_of_out_slots + number_of_spill_slots) * kVRegSize;
 
   if (number_of_spill_slots == 0
+      && !should_save_parameter_registers
       && !HasAllocatedCalleeSaveRegisters()
       && IsLeafMethod()
       && !RequiresCurrentMethod()) {
@@ -325,10 +330,40 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
     DCHECK_EQ(maximum_number_of_live_fp_registers, 0u);
     SetFrameSize(CallPushesPC() ? GetWordSize() : 0);
   } else {
+    if (kForceReadBarrier || kUseReadBarrier) {
+      // Some read barriers need to save temporary registers (e.g. see
+      // the call to
+      // CodeGeneratorX86_64::GenerateReadBarrierWithLiveTemp in
+      // InstructionCodeGeneratorX86_64::VisitArraySet). This number
+      // can be up to `kMaxLiveTempRegistersForReadBarrier`
+      // temporaries. Such temporaries are not considered live
+      // registers by the register allocator, and as such will not be
+      // taken into account in
+      // `maximum_number_of_live_core_registers`. To ensure these
+      // temporaries are allocated a slot on the stack, we manually
+      // increase `maximum_number_of_live_core_registers` here.
+      maximum_number_of_live_core_registers += kMaxLiveTempRegistersForReadBarrier;
+    }
+    // If the compiled method needs to save parameter (core) registers
+    // on the stack at any point, ensure the area where live core registers
+    // are saved is large enough to save all of them as well.
+    //
+    // Saving parameter (core) registers is currently needed in read
+    // barrier slow paths emitted during the generation of
+    // HInvokeVirtual and HInvokeInterface instructions performing an
+    // actual call (i.e. not intrinsified).
+    //
+    // TODO: Instead of saving all parameter registers (and hence
+    // allocate space on the stack frame for all of them here), we should
+    // try to save only the ones which are actually used in the
+    // HInvokeVirtual and HInvokeInterface calls.
+    size_t core_registers_to_save = should_save_parameter_registers ?
+        std::max(number_of_parameter_core_registers_, maximum_number_of_live_core_registers) :
+        maximum_number_of_live_core_registers;
     SetFrameSize(RoundUp(
         number_of_spill_slots * kVRegSize
         + number_of_out_slots * kVRegSize
-        + maximum_number_of_live_core_registers * GetWordSize()
+        + core_registers_to_save * GetWordSize()
         + maximum_number_of_live_fp_registers * GetFloatingPointSpillSlotSize()
         + FrameEntrySpillSize(),
         kStackAlignment));
@@ -545,15 +580,19 @@ void CodeGenerator::GenerateUnresolvedFieldAccess(
   }
 }
 
+// TODO: Remove argument `code_generator_supports_read_barrier` when
+// all code generators have read barrier support.
 void CodeGenerator::CreateLoadClassLocationSummary(HLoadClass* cls,
                                                    Location runtime_type_index_location,
-                                                   Location runtime_return_location) {
+                                                   Location runtime_return_location,
+                                                   bool code_generator_supports_read_barrier) {
   ArenaAllocator* allocator = cls->GetBlock()->GetGraph()->GetArena();
   LocationSummary::CallKind call_kind = cls->NeedsAccessCheck()
       ? LocationSummary::kCall
-      : (cls->CanCallRuntime()
-          ? LocationSummary::kCallOnSlowPath
-          : LocationSummary::kNoCall);
+      : (((code_generator_supports_read_barrier && (kForceReadBarrier || kUseReadBarrier)) ||
+          cls->CanCallRuntime())
+            ? LocationSummary::kCallOnSlowPath
+            : LocationSummary::kNoCall);
   LocationSummary* locations = new (allocator) LocationSummary(cls, call_kind);
   if (cls->NeedsAccessCheck()) {
     locations->SetInAt(0, Location::NoLocation());
@@ -1314,21 +1353,46 @@ void CodeGenerator::ValidateInvokeRuntime(HInstruction* instruction, SlowPathCod
   // coherent with the runtime call generated, and that the GC side effect is
   // set when required.
   if (slow_path == nullptr) {
-    DCHECK(instruction->GetLocations()->WillCall()) << instruction->DebugName();
+    DCHECK(instruction->GetLocations()->WillCall())
+        << "instruction->DebugName()=" << instruction->DebugName();
     DCHECK(instruction->GetSideEffects().Includes(SideEffects::CanTriggerGC()))
-        << instruction->DebugName() << instruction->GetSideEffects().ToString();
+        << "instruction->DebugName()=" << instruction->DebugName()
+        << " instruction->GetSideEffects().ToString()=" << instruction->GetSideEffects().ToString();
   } else {
-    DCHECK(instruction->GetLocations()->OnlyCallsOnSlowPath() || slow_path->IsFatal())
-        << instruction->DebugName() << slow_path->GetDescription();
+    DCHECK(instruction->GetLocations()->OnlyCallsOnSlowPath() ||
+           slow_path->IsFatal() ||
+           // When read barriers are enabled, both HInvokeVirtual and
+           // HInvokeInterface use a slow path to emit a read barrier,
+           // before the method call itself.
+           ((kForceReadBarrier || kUseReadBarrier) &&
+            (instruction->IsInvokeVirtual() || instruction->IsInvokeInterface())))
+        << "instruction->DebugName()=" << instruction->DebugName()
+        << " slow_path->GetDescription()=" << slow_path->GetDescription();
     DCHECK(instruction->GetSideEffects().Includes(SideEffects::CanTriggerGC()) ||
            // Control flow would not come back into the code if a fatal slow
            // path is taken, so we do not care if it triggers GC.
            slow_path->IsFatal() ||
            // HDeoptimize is a special case: we know we are not coming back from
            // it into the code.
-           instruction->IsDeoptimize())
-        << instruction->DebugName() << instruction->GetSideEffects().ToString()
-        << slow_path->GetDescription();
+           instruction->IsDeoptimize() ||
+           // When read barriers are enabled, some instructions use a
+           // slow path to emit a read barrier, which does not trigger
+           // GC, is not fatal, nor is emitted by HDeoptimize
+           // instructions.
+           ((kForceReadBarrier || kUseReadBarrier) &&
+            (instruction->IsInvokeVirtual() ||
+             instruction->IsInvokeInterface() ||
+             instruction->IsInstanceFieldGet() ||
+             instruction->IsStaticFieldGet() ||
+             instruction->IsArraySet() ||
+             instruction->IsArrayGet() ||
+             instruction->IsLoadClass() ||
+             instruction->IsLoadString() ||
+             instruction->IsInstanceOf() ||
+             instruction->IsCheckCast())))
+        << "instruction->DebugName()=" << instruction->DebugName()
+        << " instruction->GetSideEffects().ToString()=" << instruction->GetSideEffects().ToString()
+        << " slow_path->GetDescription()=" << slow_path->GetDescription();
   }
 
   // Check the coherency of leaf information.

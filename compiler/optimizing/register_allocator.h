@@ -235,6 +235,18 @@ class RegisterAllocator {
   // The maximum live FP registers at safepoints.
   size_t maximum_number_of_live_fp_registers_;
 
+  // Will we possibly need to save parameter register?
+  //
+  // When read barriers are enabled, this flag is set to "true" as the
+  // read barrier instrumentation of HInvokeVirtual and
+  // HInvokeInterface instructions uses a slow path that must save and
+  // restore parameter registers, as they will be needed for the
+  // actual call later. CodeGenerator::InitializeCodeGeneration honors
+  // this flags and ensures the area in the stack frame, where live
+  // registers are saved, is also large enough to save parameter
+  // registers.
+  bool should_save_parameter_registers_;
+
   ART_FRIEND_TEST(RegisterAllocatorTest, FreeUntil);
   ART_FRIEND_TEST(RegisterAllocatorTest, SpillInactive);
 
