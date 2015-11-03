@@ -17,7 +17,11 @@
 // An exception that doesn't have a <init>(String) method.
 class BadError extends Error {
     public BadError() {
-        super("This is bad by convention");
+        this("");
+    }
+
+    public BadError(String s) {
+        super("This is bad by convention: " + s);
     }
 }
 
@@ -27,7 +31,7 @@ class BadInit {
     static {
         System.out.println("Static Init");
         if (true) {
-            throw new BadError();
+            throw new BadError("BadInit");
         }
     }
 }
