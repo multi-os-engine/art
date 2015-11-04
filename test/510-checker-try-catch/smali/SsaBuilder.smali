@@ -59,7 +59,7 @@
 
 # Should be rejected because :catch_all is a loop header.
 
-## CHECK-START: int SsaBuilder.testCatchLoopHeader(int, int, int) ssa_builder (after, bad_state)
+## CHECK-START: int SsaBuilder.testCatchLoopHeader(int, int, int) prepare_for_ssa (after, bad_state)
 
 .method public static testCatchLoopHeader(III)I
     .registers 4
@@ -197,8 +197,12 @@
 
 # Tests that dead catch blocks are removed.
 
-## CHECK-START: int SsaBuilder.testDeadCatchBlock(int, int, int) ssa_builder (before)
+## CHECK-START: int SsaBuilder.testDeadCatchBlock(int, int, int) prepare_for_ssa (before)
 ## CHECK:                       Mul
+
+## CHECK-START: int SsaBuilder.testDeadCatchBlock(int, int, int) prepare_for_ssa (after)
+## CHECK-NOT:                   flags "catch_block"
+## CHECK-NOT:                   Mul
 
 ## CHECK-START: int SsaBuilder.testDeadCatchBlock(int, int, int) ssa_builder (after)
 ## CHECK-DAG:     <<P0:i\d+>>   ParameterValue
@@ -207,10 +211,6 @@
 ## CHECK-DAG:     <<Add1:i\d+>> Add [<<P0>>,<<P1>>]
 ## CHECK-DAG:     <<Add2:i\d+>> Add [<<Add1>>,<<P2>>]
 ## CHECK-DAG:                   Return [<<Add2>>]
-
-## CHECK-START: int SsaBuilder.testDeadCatchBlock(int, int, int) ssa_builder (after)
-## CHECK-NOT:                   flags "catch_block"
-## CHECK-NOT:                   Mul
 
 .method public static testDeadCatchBlock(III)I
     .registers 4

@@ -98,6 +98,13 @@ enum IfCondition {
   kCondAE,  // >=
 };
 
+enum BuildSsaResult {
+  kNonNaturalLoop,
+  kTryCatchLoop,
+  kUntypedArrayAccess,
+  kSsaBuilt,
+};
+
 class HInstructionList : public ValueObject {
  public:
   HInstructionList() : first_instruction_(nullptr), last_instruction_(nullptr) {}
@@ -197,36 +204,22 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
 
   void AddBlock(HBasicBlock* block);
 
-  // Try building the SSA form of this graph, with dominance computation and loop
-  // recognition. Returns whether it was successful in doing all these steps.
-  bool TryBuildingSsa() {
-    BuildDominatorTree();
-    // The SSA builder requires loops to all be natural. Specifically, the dead phi
-    // elimination phase checks the consistency of the graph when doing a post-order
-    // visit for eliminating dead phis: a dead phi can only have loop header phi
-    // users remaining when being visited.
-    if (!AnalyzeNaturalLoops()) return false;
-    // Precompute per-block try membership before entering the SSA builder,
-    // which needs the information to build catch block phis from values of
-    // locals at throwing instructions inside try blocks.
-    ComputeTryBlockInformation();
-    TransformToSsa();
-    in_ssa_form_ = true;
-    return true;
-  }
+  // Try building the SSA form of this graph, with dominance computation and
+  // loop recognition. Returns a code specifying whether it was successful, or
+  // the reason for failure.
+  BuildSsaResult TryBuildingSsa(StackHandleScopeCollection* handles);
 
   void ComputeDominanceInformation();
   void ClearDominanceInformation();
 
   void BuildDominatorTree();
-  void TransformToSsa();
   void SimplifyCFG();
   void SimplifyCatchBlocks();
 
   // Analyze all natural loops in this graph. Returns false if one
   // loop is not natural, that is the header does not dominate the
   // back edge.
-  bool AnalyzeNaturalLoops() const;
+  BuildSsaResult AnalyzeNaturalLoops() const;
 
   // Iterate over blocks to compute try block membership. Needs reverse post
   // order and loop information.
@@ -4378,7 +4371,16 @@ class HPhi : public HInstruction {
   void RemoveInputAt(size_t index);
 
   Primitive::Type GetType() const OVERRIDE { return type_; }
-  void SetType(Primitive::Type type) { type_ = type; }
+  void SetType(Primitive::Type new_type) {
+    // Make sure that only valid type changes occur. The following are allowed:
+    //  (1) int  -> float/ref (primitive type propagation),
+    //  (2) long -> double (primitive type propagation).
+    DCHECK(type_ == new_type ||
+           (type_ == Primitive::kPrimInt && new_type == Primitive::kPrimFloat) ||
+           (type_ == Primitive::kPrimInt && new_type == Primitive::kPrimNot) ||
+           (type_ == Primitive::kPrimLong && new_type == Primitive::kPrimDouble));
+    type_ = new_type;
+  }
 
   bool CanBeNull() const OVERRIDE { return can_be_null_; }
   void SetCanBeNull(bool can_be_null) { can_be_null_ = can_be_null; }
@@ -4618,7 +4620,17 @@ class HArrayGet : public HExpression<2> {
     return false;
   }
 
-  void SetType(Primitive::Type type) { type_ = type; }
+  bool IsEquivalentOf(HArrayGet* other) const {
+    bool result = (GetDexPc() == other->GetDexPc());
+    if (kIsDebugBuild && result) {
+      DCHECK(GetBlock() == other->GetBlock());
+      DCHECK(GetArray() == other->GetArray());
+      DCHECK(GetIndex() == other->GetIndex());
+      DCHECK(Primitive::IsFloatingPointType(GetType()));
+      DCHECK(Primitive::IsIntOrLongType(other->GetType()));
+    }
+    return result;
+  }
 
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }
