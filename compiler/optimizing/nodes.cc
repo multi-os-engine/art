@@ -198,10 +198,31 @@ void HGraph::ComputeDominanceInformation() {
   }
 }
 
-void HGraph::TransformToSsa() {
-  DCHECK(!reverse_post_order_.empty());
-  SsaBuilder ssa_builder(this);
-  ssa_builder.BuildSsa();
+BuildSsaResult HGraph::TryBuildingSsa(StackHandleScopeCollection* handles) {
+  BuildDominatorTree();
+
+  // The SSA builder requires loops to all be natural. Specifically, the dead phi
+  // elimination phase checks the consistency of the graph when doing a post-order
+  // visit for eliminating dead phis: a dead phi can only have loop header phi
+  // users remaining when being visited.
+  BuildSsaResult result = AnalyzeNaturalLoops();
+  if (result != kBuildSsaSuccess) {
+    return result;
+  }
+
+  // Precompute per-block try membership before entering the SSA builder,
+  // which needs the information to build catch block phis from values of
+  // locals at throwing instructions inside try blocks.
+  ComputeTryBlockInformation();
+
+  // Tranforms graph to SSA form.
+  result = SsaBuilder(this, handles).BuildSsa();
+  if (result != kBuildSsaSuccess) {
+    return result;
+  }
+
+  in_ssa_form_ = true;
+  return kBuildSsaSuccess;
 }
 
 HBasicBlock* HGraph::SplitEdge(HBasicBlock* block, HBasicBlock* successor) {
@@ -410,7 +431,7 @@ void HGraph::SimplifyCFG() {
   }
 }
 
-bool HGraph::AnalyzeNaturalLoops() const {
+BuildSsaResult HGraph::AnalyzeNaturalLoops() const {
   // Order does not matter.
   for (HReversePostOrderIterator it(*this); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
@@ -418,16 +439,16 @@ bool HGraph::AnalyzeNaturalLoops() const {
       if (block->IsCatchBlock()) {
         // TODO: Dealing with exceptional back edges could be tricky because
         //       they only approximate the real control flow. Bail out for now.
-        return false;
+        return kBuildSsaFailThrowCatchLoop;
       }
       HLoopInformation* info = block->GetLoopInformation();
       if (!info->Populate()) {
         // Abort if the loop is non natural. We currently bailout in such cases.
-        return false;
+        return kBuildSsaFailNonNaturalLoop;
       }
     }
   }
-  return true;
+  return kBuildSsaSuccess;
 }
 
 void HGraph::InsertConstant(HConstant* constant) {

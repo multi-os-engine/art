@@ -452,22 +452,6 @@ public class Main {
     return obj.k;
   }
 
-  /// CHECK-START: float Main.test19(float[], float[]) load_store_elimination (before)
-  /// CHECK: <<IntTypeValue:i\d+>> ArrayGet
-  /// CHECK: ArraySet
-  /// CHECK: <<FloatTypeValue:f\d+>> ArrayGet
-
-  /// CHECK-START: float Main.test19(float[], float[]) load_store_elimination (after)
-  /// CHECK: <<IntTypeValue:i\d+>> ArrayGet
-  /// CHECK: ArraySet
-  /// CHECK: <<FloatTypeValue:f\d+>> ArrayGet
-
-  // I/F, J/D aliasing should keep the load/store.
-  static float test19(float[] fa1, float[] fa2) {
-    fa1[0] = fa2[0];
-    return fa1[0];
-  }
-
   /// CHECK-START: TestClass Main.test20() load_store_elimination (before)
   /// CHECK: NewInstance
   /// CHECK: InstanceFieldSet
@@ -677,7 +661,6 @@ public class Main {
     assertIntEquals(test18(new TestClass()), 1);
     float[] fa1 = { 0.8f };
     float[] fa2 = { 1.8f };
-    assertFloatEquals(test19(fa1, fa2), 1.8f);
     assertFloatEquals(test20().i, 0);
     test21();
     assertIntEquals(test22(), 13);
