@@ -24,6 +24,7 @@
 #include "base/arena_containers.h"
 #include "base/bit_vector-inl.h"
 #include "base/stringprintf.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 
@@ -594,6 +595,18 @@ void SSAChecker::VisitInstruction(HInstruction* instruction) {
       }
     }
   }
+
+  // Ensure that reference type instructions have RTI. We exclude NullConstant
+  // which can be created by a pass which cannot set its RTI.
+  if (instruction->GetType() == Primitive::kPrimNot && !instruction->IsNullConstant()) {
+    ScopedObjectAccess soa(Thread::Current());
+    if (!instruction->GetReferenceTypeInfo().IsValid()) {
+      AddError(StringPrintf("Reference type instruction %s:%d does not have "
+                            "valid reference type information.",
+                            instruction->DebugName(),
+                            instruction->GetId()));
+    }
+  }
 }
 
 static Primitive::Type PrimitiveKind(Primitive::Type type) {
@@ -898,6 +911,18 @@ void SSAChecker::VisitConstant(HConstant* instruction) {
         instruction->DebugName(),
         instruction->GetId(),
         block->GetBlockId()));
+  }
+}
+
+void SSAChecker::VisitArrayGet(HArrayGet* aget) {
+  HArrayGet* next_insn = aget->GetNext()->AsArrayGet();
+  if (next_insn != nullptr && next_insn->IsEquivalentOf(aget)) {
+    AddError(StringPrintf(
+        "%s:%d and its equivalent %s:%d are both present in the method.",
+        aget->DebugName(),
+        aget->GetId(),
+        next_insn->DebugName(),
+        next_insn->GetId()));
   }
 }
 

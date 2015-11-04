@@ -21,6 +21,8 @@
 #include "mirror/dex_cache.h"
 #include "scoped_thread_state_change.h"
 
+#include <iostream>
+
 namespace art {
 
 class RTPVisitor : public HGraphDelegateVisitor {
@@ -71,8 +73,6 @@ class RTPVisitor : public HGraphDelegateVisitor {
   ReferenceTypeInfo::TypeHandle string_class_handle_;
   ReferenceTypeInfo::TypeHandle throwable_class_handle_;
   ArenaVector<HInstruction*>* worklist_;
-
-  static constexpr size_t kDefaultWorklistSize = 8;
 };
 
 ReferenceTypePropagation::ReferenceTypePropagation(HGraph* graph,
@@ -171,9 +171,11 @@ static void ForEachUntypedInstruction(HGraph* graph, Functor fn) {
   ScopedObjectAccess soa(Thread::Current());
   for (HReversePostOrderIterator block_it(*graph); !block_it.Done(); block_it.Advance()) {
     for (HInstructionIterator it(block_it.Current()->GetPhis()); !it.Done(); it.Advance()) {
-      HInstruction* instr = it.Current();
-      if (instr->GetType() == Primitive::kPrimNot && !instr->GetReferenceTypeInfo().IsValid()) {
-        fn(instr);
+      HPhi* phi = it.Current()->AsPhi();
+      if (phi->IsLive() &&
+          phi->GetType() == Primitive::kPrimNot &&
+          !phi->GetReferenceTypeInfo().IsValid()) {
+        fn(phi);
       }
     }
     for (HInstructionIterator it(block_it.Current()->GetInstructions()); !it.Done(); it.Advance()) {
@@ -376,6 +378,67 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
   }
 }
 
+static HInstanceOf* MatchIfInstanceOf(HIf* ifInstruction) {
+  HInstruction* input = ifInstruction->InputAt(0);
+
+  if (input->IsEqual()) {
+    HInstruction* rhs = input->AsEqual()->GetConstantRight();
+    if (rhs != nullptr) {
+      HInstruction* lhs = input->AsEqual()->GetLeastConstantLeft();
+      if (lhs->IsInstanceOf() && rhs->IsIntConstant() && rhs->AsIntConstant()->IsOne()) {
+        // Condition has not been simplified: IsInstanceOf -> Equal to 1 -> If.
+        return lhs->AsInstanceOf();
+      }
+    }
+  } else if (input->IsNotEqual()) {
+    HInstruction* rhs = input->AsNotEqual()->GetConstantRight();
+    if (rhs != nullptr) {
+      HInstruction* lhs = input->AsNotEqual()->GetLeastConstantLeft();
+      if (lhs->IsInstanceOf() && rhs->IsIntConstant() && rhs->AsIntConstant()->IsZero()) {
+        // Condition has not been simplified: IsInstanceOf -> NotEqual to 0 -> If.
+        return lhs->AsInstanceOf();
+      }
+    }
+  } else if (input->IsInstanceOf()) {
+    // Condition was simplified: InstanceOf -> If.
+    return input->AsInstanceOf();
+  }
+
+  return nullptr;
+}
+
+static HInstanceOf* MatchIfNotInstanceOf(HIf* ifInstruction) {
+  HInstruction* input = ifInstruction->InputAt(0);
+
+  if (input->IsEqual()) {
+    HInstruction* rhs = input->AsEqual()->GetConstantRight();
+    if (rhs != nullptr) {
+      HInstruction* lhs = input->AsEqual()->GetLeastConstantLeft();
+      if (lhs->IsInstanceOf() && rhs->IsIntConstant() && rhs->AsIntConstant()->IsZero()) {
+        // Condition has not been simplified: IsInstanceOf -> Equal to 0 -> If.
+        return lhs->AsInstanceOf();
+      }
+    }
+  } else if (input->IsNotEqual()) {
+    HInstruction* rhs = input->AsNotEqual()->GetConstantRight();
+    if (rhs != nullptr) {
+      HInstruction* lhs = input->AsNotEqual()->GetLeastConstantLeft();
+      if (lhs->IsInstanceOf() && rhs->IsIntConstant() && rhs->AsIntConstant()->IsOne()) {
+        // Condition has not been simplified: IsInstanceOf -> NotEqual to 1 -> If.
+        return lhs->AsInstanceOf();
+      }
+    }
+  } else if (input->IsBooleanNot()) {
+    HInstruction* not_input = input->InputAt(0);
+    if (not_input->IsInstanceOf()) {
+      // Condition was simplified. InstanceOf -> BooleanNot -> If
+      return not_input->AsInstanceOf();
+    }
+  }
+
+  return nullptr;
+}
+
 // Detects if `block` is the True block for the pattern
 // `if (x instanceof ClassX) { }`
 // If that's the case insert an HBoundType instruction to bound the type of `x`
@@ -385,23 +448,19 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
   if (ifInstruction == nullptr) {
     return;
   }
-  HInstruction* ifInput = ifInstruction->InputAt(0);
-  HInstruction* instanceOf = nullptr;
-  HBasicBlock* instanceOfTrueBlock = nullptr;
 
-  // The instruction simplifier has transformed:
-  //   - `if (a instanceof A)` into an HIf with an HInstanceOf input
-  //   - `if (!(a instanceof A)` into an HIf with an HBooleanNot input (which in turn
-  //     has an HInstanceOf input)
-  // So we should not see the usual HEqual here.
-  if (ifInput->IsInstanceOf()) {
-    instanceOf = ifInput;
+  // Try to recognize common `if (instanceof)` and `if (!instanceof)` patterns.
+  HBasicBlock* instanceOfTrueBlock = nullptr;
+  HInstruction* instanceOf = MatchIfInstanceOf(ifInstruction);
+  if (instanceOf != nullptr) {
     instanceOfTrueBlock = ifInstruction->IfTrueSuccessor();
-  } else if (ifInput->IsBooleanNot() && ifInput->InputAt(0)->IsInstanceOf()) {
-    instanceOf = ifInput->InputAt(0);
-    instanceOfTrueBlock = ifInstruction->IfFalseSuccessor();
   } else {
-    return;
+    instanceOf = MatchIfNotInstanceOf(ifInstruction);
+    if (instanceOf != nullptr) {
+      instanceOfTrueBlock = ifInstruction->IfFalseSuccessor();
+    } else {
+      return;
+    }
   }
 
   HLoadClass* load_class = instanceOf->InputAt(1)->AsLoadClass();
@@ -523,7 +582,11 @@ void RTPVisitor::VisitNewArray(HNewArray* instr) {
 static mirror::Class* GetClassFromDexCache(Thread* self, const DexFile& dex_file, uint16_t type_idx)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   mirror::DexCache* dex_cache =
-      Runtime::Current()->GetClassLinker()->FindDexCache(self, dex_file, false);
+      Runtime::Current()->GetClassLinker()->FindDexCache(self, dex_file, /* allow_failure */ true);
+  if (dex_cache == nullptr) {
+    // Dex cache could not be found. This should only happen during gtests.
+    return nullptr;
+  }
   // Get type from dex cache assuming it was populated by the verifier.
   return dex_cache->GetResolvedType(type_idx);
 }
@@ -540,17 +603,24 @@ void RTPVisitor::VisitParameterValue(HParameterValue* instr) {
 
 void RTPVisitor::UpdateFieldAccessTypeInfo(HInstruction* instr,
                                            const FieldInfo& info) {
-  // The field index is unknown only during tests.
-  if (instr->GetType() != Primitive::kPrimNot || info.GetFieldIndex() == kUnknownFieldIndex) {
+  if (instr->GetType() != Primitive::kPrimNot) {
     return;
   }
 
   ScopedObjectAccess soa(Thread::Current());
-  ClassLinker* cl = Runtime::Current()->GetClassLinker();
-  ArtField* field = cl->GetResolvedField(info.GetFieldIndex(), info.GetDexCache().Get());
-  // TODO: There are certain cases where we can't resolve the field.
-  // b/21914925 is open to keep track of a repro case for this issue.
-  mirror::Class* klass = (field == nullptr) ? nullptr : field->GetType<false>();
+  mirror::Class* klass = nullptr;
+
+  // The field index is unknown only during tests.
+  if (info.GetFieldIndex() != kUnknownFieldIndex) {
+    ClassLinker* cl = Runtime::Current()->GetClassLinker();
+    ArtField* field = cl->GetResolvedField(info.GetFieldIndex(), info.GetDexCache().Get());
+    // TODO: There are certain cases where we can't resolve the field.
+    // b/21914925 is open to keep track of a repro case for this issue.
+    if (field != nullptr) {
+      klass = field->GetType<false>();
+    }
+  }
+
   SetClassAsTypeInfo(instr, klass, /* is_exact */ false);
 }
 
@@ -666,7 +736,7 @@ void RTPVisitor::VisitCheckCast(HCheckCast* check_cast) {
 }
 
 void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
-  if (phi->GetType() != Primitive::kPrimNot) {
+  if (phi->IsDead() || phi->GetType() != Primitive::kPrimNot) {
     return;
   }
 
@@ -824,6 +894,8 @@ void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
 // NullConstant inputs are ignored during merging as they do not provide any useful information.
 // If all the inputs are NullConstants then the type of the phi will be set to Object.
 void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
+  DCHECK(instr->IsLive());
+
   size_t input_count = instr->InputCount();
   size_t first_input_index_not_null = 0;
   while (first_input_index_not_null < input_count &&
@@ -868,7 +940,7 @@ void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
 // Re-computes and updates the nullability of the instruction. Returns whether or
 // not the nullability was changed.
 bool ReferenceTypePropagation::UpdateNullability(HInstruction* instr) {
-  DCHECK(instr->IsPhi()
+  DCHECK((instr->IsPhi() && instr->AsPhi()->IsLive())
       || instr->IsBoundType()
       || instr->IsNullCheck()
       || instr->IsArrayGet());
@@ -916,7 +988,7 @@ void ReferenceTypePropagation::AddToWorklist(HInstruction* instruction) {
 void ReferenceTypePropagation::AddDependentInstructionsToWorklist(HInstruction* instruction) {
   for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
     HInstruction* user = it.Current()->GetUser();
-    if (user->IsPhi()
+    if ((user->IsPhi() && user->AsPhi()->IsLive())
        || user->IsBoundType()
        || user->IsNullCheck()
        || (user->IsArrayGet() && (user->GetType() == Primitive::kPrimNot))) {
