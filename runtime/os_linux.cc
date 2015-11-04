@@ -43,6 +43,12 @@ File* OS::CreateEmptyFile(const char* name) {
   return OpenFileWithFlags(name, O_RDWR | O_CREAT | O_TRUNC);
 }
 
+File* OS::CreateEmptyFileWriteOnly(const char* name) {
+  unlink(name);
+
+  return OpenFileWithFlags(name, O_WRONLY | O_CREAT | O_TRUNC);
+}
+
 File* OS::OpenFileWithFlags(const char* name, int flags) {
   CHECK(name != nullptr);
   std::unique_ptr<File> file(new File);
