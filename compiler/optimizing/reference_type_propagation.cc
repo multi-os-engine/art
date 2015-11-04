@@ -615,7 +615,7 @@ void RTPVisitor::VisitCheckCast(HCheckCast* check_cast) {
 }
 
 void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
-  if (phi->GetType() != Primitive::kPrimNot) {
+  if (phi->IsDead() || phi->GetType() != Primitive::kPrimNot) {
     return;
   }
 
@@ -772,6 +772,8 @@ void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
 // NullConstant inputs are ignored during merging as they do not provide any useful information.
 // If all the inputs are NullConstants then the type of the phi will be set to Object.
 void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
+  DCHECK(instr->IsLive());
+
   size_t input_count = instr->InputCount();
   size_t first_input_index_not_null = 0;
   while (first_input_index_not_null < input_count &&
@@ -816,7 +818,7 @@ void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
 // Re-computes and updates the nullability of the instruction. Returns whether or
 // not the nullability was changed.
 bool ReferenceTypePropagation::UpdateNullability(HInstruction* instr) {
-  DCHECK(instr->IsPhi()
+  DCHECK((instr->IsPhi() && instr->AsPhi()->IsLive())
       || instr->IsBoundType()
       || instr->IsNullCheck()
       || instr->IsArrayGet());
@@ -864,7 +866,7 @@ void ReferenceTypePropagation::AddToWorklist(HInstruction* instruction) {
 void ReferenceTypePropagation::AddDependentInstructionsToWorklist(HInstruction* instruction) {
   for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
     HInstruction* user = it.Current()->GetUser();
-    if (user->IsPhi()
+    if ((user->IsPhi() && user->AsPhi()->IsLive())
        || user->IsBoundType()
        || user->IsNullCheck()
        || (user->IsArrayGet() && (user->GetType() == Primitive::kPrimNot))) {

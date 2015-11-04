@@ -30,6 +30,7 @@
 #include "optimization.h"
 #include "reference_type_propagation.h"
 #include "register_allocator.h"
+#include "ssa_builder.h"
 #include "ssa_liveness_analysis.h"
 #include "utils/assembler.h"
 
@@ -502,7 +503,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       } else {
         StartAttributeStream("loop") << "B" << info->GetHeader()->GetBlockId();
       }
-    } else if ((IsPass(ReferenceTypePropagation::kReferenceTypePropagationPassName)
+    } else if ((IsPass(SsaBuilder::kSsaBuilderPassName)
         || IsPass(HInliner::kInlinerPassName))
         && (instruction->GetType() == Primitive::kPrimNot)) {
       ReferenceTypeInfo info = instruction->IsLoadClass()
@@ -525,12 +526,12 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         // Note: The infrastructure to properly type NullConstants everywhere is to complex to add
         // for the benefits.
         StartAttributeStream("klass") << "not_set";
-        DCHECK(!is_after_pass_
-            || !IsPass(ReferenceTypePropagation::kReferenceTypePropagationPassName))
-            << " Expected a valid rti after reference type propagation";
+        DCHECK(!is_after_pass_ || !IsPass(SsaBuilder::kSsaBuilderPassName))
+            << " Expected a valid rti after SSA builder";
       } else {
-        DCHECK(!is_after_pass_)
-            << "Expected a valid rti after reference type propagation";
+        DCHECK(!is_after_pass_ ||
+               (IsPass(SsaBuilder::kSsaBuilderPassName) && graph_in_bad_state_))
+            << "Expected a valid rti after SSA builder";
       }
     }
     if (disasm_info_ != nullptr) {
