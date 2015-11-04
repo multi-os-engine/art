@@ -145,7 +145,7 @@ void Jit::CreateThreadPool() {
 
 void Jit::DeleteThreadPool() {
   if (instrumentation_cache_.get() != nullptr) {
-    instrumentation_cache_->DeleteThreadPool();
+    instrumentation_cache_->DeleteThreadPool(Thread::Current());
   }
 }
 

@@ -49,7 +49,7 @@ class JitInstrumentationCache {
   void AddSamples(Thread* self, ArtMethod* method, size_t samples)
       SHARED_REQUIRES(Locks::mutator_lock_);
   void CreateThreadPool();
-  void DeleteThreadPool();
+  void DeleteThreadPool(Thread* self);
   // Wait until there is no more pending compilation tasks.
   void WaitForCompilationToFinish(Thread* self);
 

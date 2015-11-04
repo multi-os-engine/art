@@ -78,11 +78,20 @@ JitInstrumentationCache::JitInstrumentationCache(size_t hot_method_threshold,
 
 void JitInstrumentationCache::CreateThreadPool() {
   thread_pool_.reset(new ThreadPool("Jit thread pool", 1));
+  thread_pool_->StartWorkers(Thread::Current());
 }
 
-void JitInstrumentationCache::DeleteThreadPool() {
-  DCHECK(Runtime::Current()->IsShuttingDown(Thread::Current()));
-  thread_pool_.reset();
+void JitInstrumentationCache::DeleteThreadPool(Thread* self) {
+  DCHECK(Runtime::Current()->IsShuttingDown(self));
+  if (thread_pool_.get() != nullptr) {
+    thread_pool_->StopWorkers(self);
+    thread_pool_->RemoveAllTasks(self);
+    // We could just suspend all threads, but we know those threads
+    // will finish in a short period, so it's not worth adding a suspend logic
+    // here. Besides, this is only done for shutdown.
+    WaitForCompilationToFinish(self);
+    thread_pool_.reset();
+  }
 }
 
 void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t) {
@@ -91,8 +100,7 @@ void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t
   if (method->IsClassInitializer() || method->IsNative()) {
     return;
   }
-  if (thread_pool_.get() == nullptr) {
-    DCHECK(Runtime::Current()->IsShuttingDown(self));
+  if (Runtime::Current()->IsShuttingDown(self)) {
     return;
   }
   uint16_t sample_count = method->IncrementCounter();
@@ -103,13 +111,11 @@ void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t
       // We failed allocating. Instead of doing the collection on the Java thread, we push
       // an allocation to a compiler thread, that will do the collection.
       thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kAllocateProfile));
-      thread_pool_->StartWorkers(self);
     }
   }
 
   if (sample_count == hot_method_threshold_) {
     thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kCompile));
-    thread_pool_->StartWorkers(self);
   }
 }
 
