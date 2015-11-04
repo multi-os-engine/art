@@ -72,49 +72,49 @@ final class FinalException extends Exception {}
 
 public class Main {
 
-  /// CHECK-START: void Main.testSimpleRemove() instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testSimpleRemove() instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testSimpleRemove() instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testSimpleRemove() instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testSimpleRemove() {
     Super s = new SubclassA();
     ((SubclassA)s).$noinline$g();
   }
 
-  /// CHECK-START: void Main.testSimpleKeep(Super) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testSimpleKeep(Super) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testSimpleKeep(Super) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testSimpleKeep(Super) instruction_simplifier (after)
   /// CHECK:         CheckCast
   public void testSimpleKeep(Super s) {
     ((SubclassA)s).$noinline$f();
   }
 
-  /// CHECK-START: java.lang.String Main.testClassRemove() instruction_simplifier_after_types (before)
+  /// CHECK-START: java.lang.String Main.testClassRemove() instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: java.lang.String Main.testClassRemove() instruction_simplifier_after_types (after)
+  /// CHECK-START: java.lang.String Main.testClassRemove() instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public String testClassRemove() {
     Object s = SubclassA.class;
     return ((Class)s).getName();
   }
 
-  /// CHECK-START: java.lang.String Main.testClassKeep() instruction_simplifier_after_types (before)
+  /// CHECK-START: java.lang.String Main.testClassKeep() instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: java.lang.String Main.testClassKeep() instruction_simplifier_after_types (after)
+  /// CHECK-START: java.lang.String Main.testClassKeep() instruction_simplifier (after)
   /// CHECK:         CheckCast
   public String testClassKeep() {
     Object s = SubclassA.class;
     return ((SubclassA)s).$noinline$h();
   }
 
-  /// CHECK-START: void Main.testIfRemove(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testIfRemove(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testIfRemove(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testIfRemove(int) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testIfRemove(int x) {
     Super s;
@@ -126,10 +126,10 @@ public class Main {
     ((SubclassA)s).$noinline$g();
   }
 
-  /// CHECK-START: void Main.testIfKeep(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testIfKeep(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testIfKeep(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testIfKeep(int) instruction_simplifier (after)
   /// CHECK:         CheckCast
   public void testIfKeep(int x) {
     Super s;
@@ -141,10 +141,10 @@ public class Main {
     ((SubclassA)s).$noinline$g();
   }
 
-  /// CHECK-START: void Main.testForRemove(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testForRemove(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testForRemove(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testForRemove(int) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testForRemove(int x) {
     Super s = new SubclassA();
@@ -156,10 +156,10 @@ public class Main {
     ((SubclassA)s).$noinline$g();
   }
 
-  /// CHECK-START: void Main.testForKeep(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testForKeep(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testForKeep(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testForKeep(int) instruction_simplifier (after)
   /// CHECK:         CheckCast
   public void testForKeep(int x) {
     Super s = new SubclassA();
@@ -171,10 +171,10 @@ public class Main {
     ((SubclassC)s).$noinline$g();
   }
 
-  /// CHECK-START: void Main.testPhiFromCall(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testPhiFromCall(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testPhiFromCall(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testPhiFromCall(int) instruction_simplifier (after)
   /// CHECK:         CheckCast
   public void testPhiFromCall(int i) {
     Object x;
@@ -186,11 +186,12 @@ public class Main {
     ((SubclassC)x).$noinline$g();
   }
 
-  /// CHECK-START: void Main.testInstanceOf(java.lang.Object) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceOf(java.lang.Object) instruction_simplifier (before)
   /// CHECK:         CheckCast
   /// CHECK:         CheckCast
+  /// CHECK-NOT:     CheckCast
 
-  /// CHECK-START: void Main.testInstanceOf(java.lang.Object) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOf(java.lang.Object) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceOf(Object o) {
     if (o instanceof SubclassC) {
@@ -201,11 +202,101 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.testInstanceOfKeep(java.lang.Object) instruction_simplifier_after_types (before)
+  public static boolean $inline$InstanceofSubclassB(Object o) { return o instanceof SubclassB; }
+  public static boolean $inline$InstanceofSubclassC(Object o) { return o instanceof SubclassC; }
+
+  /// CHECK-START: void Main.testInstanceOf_NotInlined(java.lang.Object) ssa_builder (after)
+  /// CHECK-DAG:     <<Cst0:i\d+>> IntConstant 0
+  /// CHECK-DAG:     <<Cst1:i\d+>> IntConstant 1
+  /// CHECK-DAG:     <<IOf1:z\d+>> InstanceOf
+  /// CHECK-DAG:                   NotEqual [<<IOf1>>,<<Cst1>>]
+  /// CHECK-DAG:     <<IOf2:z\d+>> InstanceOf
+  /// CHECK-DAG:                   Equal [<<IOf2>>,<<Cst0>>]
+
+  /// CHECK-START: void Main.testInstanceOf_NotInlined(java.lang.Object) instruction_simplifier (before)
+  /// CHECK:         CheckCast
+  /// CHECK:         CheckCast
+  /// CHECK-NOT:     CheckCast
+
+  /// CHECK-START: void Main.testInstanceOf_NotInlined(java.lang.Object) instruction_simplifier (after)
+  /// CHECK-NOT:     CheckCast
+  public void testInstanceOf_NotInlined(Object o) {
+    if ((o instanceof SubclassC) == true) {
+      ((SubclassC)o).$noinline$g();
+    }
+    if ((o instanceof SubclassB) != false) {
+      ((SubclassB)o).$noinline$g();
+    }
+  }
+
+  /// CHECK-START: void Main.testNotInstanceOf_NotInlined(java.lang.Object) ssa_builder (after)
+  /// CHECK-DAG:     <<Cst0:i\d+>> IntConstant 0
+  /// CHECK-DAG:     <<Cst1:i\d+>> IntConstant 1
+  /// CHECK-DAG:     <<IOf1:z\d+>> InstanceOf
+  /// CHECK-DAG:                   Equal [<<IOf1>>,<<Cst1>>]
+  /// CHECK-DAG:     <<IOf2:z\d+>> InstanceOf
+  /// CHECK-DAG:                   NotEqual [<<IOf2>>,<<Cst0>>]
+
+  /// CHECK-START: void Main.testNotInstanceOf_NotInlined(java.lang.Object) instruction_simplifier (before)
+  /// CHECK:         CheckCast
+  /// CHECK:         CheckCast
+  /// CHECK-NOT:     CheckCast
+
+  /// CHECK-START: void Main.testNotInstanceOf_NotInlined(java.lang.Object) instruction_simplifier (after)
+  /// CHECK-NOT:     CheckCast
+  public void testNotInstanceOf_NotInlined(Object o) {
+    if ((o instanceof SubclassC) != true) {
+      // Empty branch to flip the condition.
+    } else {
+      ((SubclassC)o).$noinline$g();
+    }
+    if ((o instanceof SubclassB) == false) {
+      // Empty branch to flip the condition.
+    } else {
+      ((SubclassB)o).$noinline$g();
+    }
+  }
+
+  /// CHECK-START: void Main.testInstanceOf_Inlined(java.lang.Object) inliner (after)
+  /// CHECK-DAG:     <<IOf:z\d+>>  InstanceOf
+  /// CHECK-DAG:                   If [<<IOf>>]
+
+  /// CHECK-START: void Main.testInstanceOf_Inlined(java.lang.Object) instruction_simplifier_after_bce (before)
+  /// CHECK:         CheckCast
+  /// CHECK-NOT:     CheckCast
+
+  /// CHECK-START: void Main.testInstanceOf_Inlined(java.lang.Object) instruction_simplifier_after_bce (after)
+  /// CHECK-NOT:     CheckCast
+  public void testInstanceOf_Inlined(Object o) {
+    if (!$inline$InstanceofSubclassC(o)) {
+      // Empty branch to flip the condition.
+    } else {
+      ((SubclassC)o).$noinline$g();
+    }
+  }
+
+  /// CHECK-START: void Main.testNotInstanceOf_Inlined(java.lang.Object) inliner (after)
+  /// CHECK-DAG:     <<IOf:z\d+>>  InstanceOf
+  /// CHECK-DAG:     <<Not:z\d+>>  BooleanNot [<<IOf>>]
+  /// CHECK-DAG:                   If [<<Not>>]
+
+  /// CHECK-START: void Main.testNotInstanceOf_Inlined(java.lang.Object) instruction_simplifier_after_bce (before)
+  /// CHECK:         CheckCast
+  /// CHECK-NOT:     CheckCast
+
+  /// CHECK-START: void Main.testNotInstanceOf_Inlined(java.lang.Object) instruction_simplifier_after_bce (after)
+  /// CHECK-NOT:     CheckCast
+  public void testNotInstanceOf_Inlined(Object o) {
+    if ($inline$InstanceofSubclassC(o)) {
+      ((SubclassC)o).$noinline$g();
+    }
+  }
+
+  /// CHECK-START: void Main.testInstanceOfKeep(java.lang.Object) instruction_simplifier (before)
   /// CHECK:         CheckCast
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceOfKeep(java.lang.Object) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOfKeep(java.lang.Object) instruction_simplifier (after)
   /// CHECK:         CheckCast
   /// CHECK:         CheckCast
   public void testInstanceOfKeep(Object o) {
@@ -217,11 +308,11 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.testInstanceOfNested(java.lang.Object) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceOfNested(java.lang.Object) instruction_simplifier (before)
   /// CHECK:         CheckCast
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceOfNested(java.lang.Object) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOfNested(java.lang.Object) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceOfNested(Object o) {
     if (o instanceof SubclassC) {
@@ -233,10 +324,10 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.testInstanceOfWithPhi(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceOfWithPhi(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceOfWithPhi(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOfWithPhi(int) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceOfWithPhi(int i) {
     Object o;
@@ -251,10 +342,10 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.testInstanceOfInFor(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceOfInFor(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceOfInFor(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOfInFor(int) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceOfInFor(int n) {
     Object o = new SubclassA();
@@ -268,10 +359,10 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.testInstanceOfSubclass() instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceOfSubclass() instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceOfSubclass() instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOfSubclass() instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceOfSubclass() {
     Object o = new SubclassA();
@@ -280,10 +371,10 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.testInstanceOfWithPhiSubclass(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceOfWithPhiSubclass(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceOfWithPhiSubclass(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOfWithPhiSubclass(int) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceOfWithPhiSubclass(int i) {
     Object o;
@@ -298,10 +389,10 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.testInstanceOfWithPhiTop(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceOfWithPhiTop(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceOfWithPhiTop(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOfWithPhiTop(int) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceOfWithPhiTop(int i) {
     Object o;
@@ -316,10 +407,10 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.testInstanceOfSubclassInFor(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceOfSubclassInFor(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceOfSubclassInFor(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOfSubclassInFor(int) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceOfSubclassInFor(int n) {
     Object o = new SubclassA();
@@ -333,10 +424,10 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.testInstanceOfTopInFor(int) instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceOfTopInFor(int) instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceOfTopInFor(int) instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceOfTopInFor(int) instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceOfTopInFor(int n) {
     Object o = new SubclassA();
@@ -361,10 +452,10 @@ public class Main {
   public SubclassA a = new SubclassA();
   public static SubclassA b = new SubclassA();
 
-  /// CHECK-START: void Main.testInstanceFieldGetSimpleRemove() instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInstanceFieldGetSimpleRemove() instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInstanceFieldGetSimpleRemove() instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInstanceFieldGetSimpleRemove() instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInstanceFieldGetSimpleRemove() {
     Main m = new Main();
@@ -372,10 +463,10 @@ public class Main {
     ((SubclassA)a).$noinline$g();
   }
 
-  /// CHECK-START: void Main.testStaticFieldGetSimpleRemove() instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testStaticFieldGetSimpleRemove() instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testStaticFieldGetSimpleRemove() instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testStaticFieldGetSimpleRemove() instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testStaticFieldGetSimpleRemove() {
     Super b = Main.b;
@@ -384,29 +475,29 @@ public class Main {
 
   public SubclassA $noinline$getSubclass() { throw new RuntimeException(); }
 
-  /// CHECK-START: void Main.testArraySimpleRemove() instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testArraySimpleRemove() instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testArraySimpleRemove() instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testArraySimpleRemove() instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testArraySimpleRemove() {
     Super[] b = new SubclassA[10];
     SubclassA[] c = (SubclassA[])b;
   }
 
-  /// CHECK-START: void Main.testInvokeSimpleRemove() instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testInvokeSimpleRemove() instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testInvokeSimpleRemove() instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testInvokeSimpleRemove() instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testInvokeSimpleRemove() {
     Super b = $noinline$getSubclass();
     ((SubclassA)b).$noinline$g();
   }
-  /// CHECK-START: void Main.testArrayGetSimpleRemove() instruction_simplifier_after_types (before)
+  /// CHECK-START: void Main.testArrayGetSimpleRemove() instruction_simplifier (before)
   /// CHECK:         CheckCast
 
-  /// CHECK-START: void Main.testArrayGetSimpleRemove() instruction_simplifier_after_types (after)
+  /// CHECK-START: void Main.testArrayGetSimpleRemove() instruction_simplifier (after)
   /// CHECK-NOT:     CheckCast
   public void testArrayGetSimpleRemove() {
     Super[] a = new SubclassA[10];
@@ -534,7 +625,7 @@ public class Main {
   /// CHECK:                        CheckCast [<<Param>>,<<Clazz>>]
   /// CHECK:                        BoundType [<<Param>>] can_be_null:true
 
-  /// CHECK-START: java.lang.String Main.checkcastPreserveNullCheck(java.lang.Object) instruction_simplifier_after_types (after)
+  /// CHECK-START: java.lang.String Main.checkcastPreserveNullCheck(java.lang.Object) instruction_simplifier (after)
   /// CHECK:      <<This:l\d+>>     ParameterValue
   /// CHECK:      <<Param:l\d+>>    ParameterValue
   /// CHECK:      <<Clazz:l\d+>>    LoadClass

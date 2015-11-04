@@ -24,33 +24,6 @@
 namespace art {
 
 /**
- * Optimization phase that removes dead phis from the graph. Dead phis are unused
- * phis, or phis only used by other phis.
- */
-class SsaDeadPhiElimination : public HOptimization {
- public:
-  explicit SsaDeadPhiElimination(HGraph* graph)
-      : HOptimization(graph, kSsaDeadPhiEliminationPassName),
-        worklist_(graph->GetArena()->Adapter(kArenaAllocSsaPhiElimination)) {
-    worklist_.reserve(kDefaultWorklistSize);
-  }
-
-  void Run() OVERRIDE;
-
-  void MarkDeadPhis();
-  void EliminateDeadPhis();
-
-  static constexpr const char* kSsaDeadPhiEliminationPassName = "dead_phi_elimination";
-
- private:
-  ArenaVector<HPhi*> worklist_;
-
-  static constexpr size_t kDefaultWorklistSize = 8;
-
-  DISALLOW_COPY_AND_ASSIGN(SsaDeadPhiElimination);
-};
-
-/**
  * Removes redundant phis that may have been introduced when doing SSA conversion.
  * For example, when entering a loop, we create phis for all live registers. These
  * registers might be updated with the same value, or not updated at all. We can just
