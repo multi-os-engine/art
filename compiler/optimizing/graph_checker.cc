@@ -24,6 +24,7 @@
 #include "base/arena_containers.h"
 #include "base/bit_vector-inl.h"
 #include "base/stringprintf.h"
+#include "handle_scope-inl.h"
 
 namespace art {
 
@@ -592,6 +593,18 @@ void SSAChecker::VisitInstruction(HInstruction* instruction) {
                               current_block_->GetBlockId(),
                               instruction->GetId()));
       }
+    }
+  }
+
+  // Ensure that reference type instructions have RTI. We exclude NullConstant
+  // which can be created by a pass which cannot set its RTI.
+  if (instruction->GetType() == Primitive::kPrimNot && !instruction->IsNullConstant()) {
+    ScopedObjectAccess soa(Thread::Current());
+    if (!instruction->GetReferenceTypeInfo().IsValid()) {
+      AddError(StringPrintf("Reference type instruction %s:%d does not have "
+                            "valid reference type information.",
+                            instruction->DebugName(),
+                            instruction->GetId()));
     }
   }
 }
