@@ -49,10 +49,13 @@ static constexpr int kDefaultNumberOfLoops = 2;
  */
 class SsaBuilder : public HGraphVisitor {
  public:
-  explicit SsaBuilder(HGraph* graph)
+  explicit SsaBuilder(HGraph* graph, StackHandleScopeCollection* handles)
       : HGraphVisitor(graph),
+        handles_(handles),
+        after_rtp_(false),
         current_locals_(nullptr),
         loop_headers_(graph->GetArena()->Adapter(kArenaAllocSsaBuilder)),
+        ambiguous_agets_(graph->GetArena()->Adapter(kArenaAllocSsaBuilder)),
         locals_for_(graph->GetBlocks().size(),
                     ArenaVector<HInstruction*>(graph->GetArena()->Adapter(kArenaAllocSsaBuilder)),
                     graph->GetArena()->Adapter(kArenaAllocSsaBuilder)) {
@@ -71,23 +74,32 @@ class SsaBuilder : public HGraphVisitor {
   void VisitStoreLocal(HStoreLocal* store);
   void VisitInstruction(HInstruction* instruction);
   void VisitTemporary(HTemporary* instruction);
-
-  static HInstruction* GetFloatOrDoubleEquivalent(HInstruction* user,
-                                                  HInstruction* instruction,
-                                                  Primitive::Type type);
-
-  static HInstruction* GetReferenceTypeEquivalent(HInstruction* instruction);
+  void VisitArrayGet(HArrayGet* aget);
 
   static constexpr const char* kSsaBuilderPassName = "ssa_builder";
 
  private:
   void SetLoopHeaderPhiInputs();
+  void FixEnvironmentPhis();
   void FixNullConstantType();
   void EquivalentPhisCleanup();
+  void FixAmbiguousArrayGets();
+  void RunPrimitiveTypePropagation();
 
-  static HFloatConstant* GetFloatEquivalent(HIntConstant* constant);
-  static HDoubleConstant* GetDoubleEquivalent(HLongConstant* constant);
-  static HPhi* GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive::Type type);
+  bool TypeInputsOfPhi(HPhi* phi, ArenaVector<HPhi*>* worklist);
+  bool UpdatePrimitiveType(HPhi* phi, ArenaVector<HPhi*>* worklist);
+  void ProcessPrimitiveTypePropagationWorklist(ArenaVector<HPhi*>* worklist);
+
+  HInstruction* GetFloatOrDoubleEquivalent(HInstruction* instruction, Primitive::Type type);
+  HInstruction* GetReferenceTypeEquivalent(HInstruction* instruction);
+
+  HFloatConstant* GetFloatEquivalent(HIntConstant* constant);
+  HDoubleConstant* GetDoubleEquivalent(HLongConstant* constant);
+  HPhi* GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive::Type type);
+  HArrayGet* GetFloatOrDoubleEquivalentOfArrayGet(HArrayGet* aget);
+
+  StackHandleScopeCollection* const handles_;
+  bool after_rtp_;
 
   // Locals for the current block being visited.
   ArenaVector<HInstruction*>* current_locals_;
@@ -95,6 +107,8 @@ class SsaBuilder : public HGraphVisitor {
   // Keep track of loop headers found. The last phase of the analysis iterates
   // over these blocks to set the inputs of their phis.
   ArenaVector<HBasicBlock*> loop_headers_;
+
+  ArenaVector<HArrayGet*> ambiguous_agets_;
 
   // HEnvironment for each block.
   ArenaVector<ArenaVector<HInstruction*>> locals_for_;

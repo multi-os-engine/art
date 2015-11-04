@@ -198,12 +198,6 @@ void HGraph::ComputeDominanceInformation() {
   }
 }
 
-void HGraph::TransformToSsa() {
-  DCHECK(!reverse_post_order_.empty());
-  SsaBuilder ssa_builder(this);
-  ssa_builder.BuildSsa();
-}
-
 HBasicBlock* HGraph::SplitEdge(HBasicBlock* block, HBasicBlock* successor) {
   HBasicBlock* new_block = new (arena_) HBasicBlock(this, successor->GetDexPc());
   AddBlock(new_block);
