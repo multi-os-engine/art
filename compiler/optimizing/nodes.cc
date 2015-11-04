@@ -18,7 +18,6 @@
 
 #include "code_generator.h"
 #include "common_dominator.h"
-#include "ssa_builder.h"
 #include "base/bit_vector-inl.h"
 #include "base/bit_utils.h"
 #include "base/stl_util.h"
@@ -196,12 +195,6 @@ void HGraph::ComputeDominanceInformation() {
       }
     }
   }
-}
-
-void HGraph::TransformToSsa() {
-  DCHECK(!reverse_post_order_.empty());
-  SsaBuilder ssa_builder(this);
-  ssa_builder.BuildSsa();
 }
 
 HBasicBlock* HGraph::SplitEdge(HBasicBlock* block, HBasicBlock* successor) {

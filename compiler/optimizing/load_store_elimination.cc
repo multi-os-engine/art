@@ -646,31 +646,22 @@ class LSEVisitor : public HGraphVisitor {
       removed_loads_.push_back(instruction);
       substitute_instructions_for_loads_.push_back(constant);
       heap_values[idx] = constant;
-      return;
-    }
-    if (heap_value != kUnknownHeapValue && heap_value->IsInstanceFieldSet()) {
-      HInstruction* store = heap_value;
-      // This load must be from a singleton since it's from the same field
-      // that a "removed" store puts the value. That store must be to a singleton's field.
-      DCHECK(ref_info->IsSingleton());
-      // Get the real heap value of the store.
-      heap_value = store->InputAt(1);
-    }
-    if ((heap_value != kUnknownHeapValue) &&
-        // Keep the load due to possible I/F, J/D array aliasing.
-        // See b/22538329 for details.
-        (heap_value->GetType() == instruction->GetType())) {
-      removed_loads_.push_back(instruction);
-      substitute_instructions_for_loads_.push_back(heap_value);
-      TryRemovingNullCheck(instruction);
-      return;
-    }
-
-    // Load isn't eliminated.
-    if (heap_value == kUnknownHeapValue) {
+    } else if (heap_value == kUnknownHeapValue) {
       // Put the load as the value into the HeapLocation.
       // This acts like GVN but with better aliasing analysis.
       heap_values[idx] = instruction;
+    } else {
+      if (heap_value->IsInstanceFieldSet()) {
+        HInstruction* store = heap_value;
+        // This load must be from a singleton since it's from the same field
+        // that a "removed" store puts the value. That store must be to a singleton's field.
+        DCHECK(ref_info->IsSingleton());
+        // Get the real heap value of the store.
+        heap_value = store->InputAt(1);
+      }
+      removed_loads_.push_back(instruction);
+      substitute_instructions_for_loads_.push_back(heap_value);
+      TryRemovingNullCheck(instruction);
     }
   }
 
