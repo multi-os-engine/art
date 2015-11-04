@@ -198,12 +198,6 @@ void HGraph::ComputeDominanceInformation() {
   }
 }
 
-void HGraph::TransformToSsa() {
-  DCHECK(!reverse_post_order_.empty());
-  SsaBuilder ssa_builder(this);
-  ssa_builder.BuildSsa();
-}
-
 HBasicBlock* HGraph::SplitEdge(HBasicBlock* block, HBasicBlock* successor) {
   HBasicBlock* new_block = new (arena_) HBasicBlock(this, successor->GetDexPc());
   AddBlock(new_block);
@@ -709,31 +703,40 @@ void HBasicBlock::InsertPhiAfter(HPhi* phi, HPhi* cursor) {
 static void Remove(HInstructionList* instruction_list,
                    HBasicBlock* block,
                    HInstruction* instruction,
-                   bool ensure_safety) {
+                   bool ensure_safety,
+                   bool remove_as_user) {
   DCHECK_EQ(block, instruction->GetBlock());
   instruction->SetBlock(nullptr);
   instruction_list->RemoveInstruction(instruction);
   if (ensure_safety) {
     DCHECK(instruction->GetUses().IsEmpty());
     DCHECK(instruction->GetEnvUses().IsEmpty());
+  }
+  if (remove_as_user) {
     RemoveAsUser(instruction);
   }
 }
 
-void HBasicBlock::RemoveInstruction(HInstruction* instruction, bool ensure_safety) {
+void HBasicBlock::RemoveInstruction(HInstruction* instruction,
+                                    bool ensure_safety,
+                                    bool remove_as_user) {
   DCHECK(!instruction->IsPhi());
-  Remove(&instructions_, this, instruction, ensure_safety);
+  Remove(&instructions_, this, instruction, ensure_safety, remove_as_user);
 }
 
-void HBasicBlock::RemovePhi(HPhi* phi, bool ensure_safety) {
-  Remove(&phis_, this, phi, ensure_safety);
+void HBasicBlock::RemovePhi(HPhi* phi,
+                            bool ensure_safety,
+                            bool remove_as_user) {
+  Remove(&phis_, this, phi, ensure_safety, remove_as_user);
 }
 
-void HBasicBlock::RemoveInstructionOrPhi(HInstruction* instruction, bool ensure_safety) {
+void HBasicBlock::RemoveInstructionOrPhi(HInstruction* instruction,
+                                         bool ensure_safety,
+                                         bool remove_as_user) {
   if (instruction->IsPhi()) {
-    RemovePhi(instruction->AsPhi(), ensure_safety);
+    RemovePhi(instruction->AsPhi(), ensure_safety, remove_as_user);
   } else {
-    RemoveInstruction(instruction, ensure_safety);
+    RemoveInstruction(instruction, ensure_safety, remove_as_user);
   }
 }
 

@@ -486,11 +486,8 @@ static void RunOptimizations(HGraph* graph,
                              CompilerDriver* driver,
                              OptimizingCompilerStats* stats,
                              const DexCompilationUnit& dex_compilation_unit,
-                             PassObserver* pass_observer) {
-  ScopedObjectAccess soa(Thread::Current());
-  StackHandleScopeCollection handles(soa.Self());
-  ScopedThreadSuspension sts(soa.Self(), kNative);
-
+                             PassObserver* pass_observer,
+                             StackHandleScopeCollection* handles) {
   ArenaAllocator* arena = graph->GetArena();
   HDeadCodeElimination* dce1 = new (arena) HDeadCodeElimination(
       graph, stats, HDeadCodeElimination::kInitialDeadCodeEliminationPassName);
@@ -506,31 +503,25 @@ static void RunOptimizations(HGraph* graph,
   LoadStoreElimination* lse = new (arena) LoadStoreElimination(graph, *side_effects);
   HInductionVarAnalysis* induction = new (arena) HInductionVarAnalysis(graph);
   BoundsCheckElimination* bce = new (arena) BoundsCheckElimination(graph, induction);
-  ReferenceTypePropagation* type_propagation =
-      new (arena) ReferenceTypePropagation(graph, &handles);
   HSharpening* sharpening = new (arena) HSharpening(graph, codegen, dex_compilation_unit, driver);
   InstructionSimplifier* simplify2 = new (arena) InstructionSimplifier(
-      graph, stats, "instruction_simplifier_after_types");
-  InstructionSimplifier* simplify3 = new (arena) InstructionSimplifier(
       graph, stats, "instruction_simplifier_after_bce");
-  InstructionSimplifier* simplify4 = new (arena) InstructionSimplifier(
+  InstructionSimplifier* simplify3 = new (arena) InstructionSimplifier(
       graph, stats, "instruction_simplifier_before_codegen");
 
   IntrinsicsRecognizer* intrinsics = new (arena) IntrinsicsRecognizer(graph, driver);
 
   HOptimization* optimizations1[] = {
     intrinsics,
+    sharpening,
     fold1,
     simplify1,
-    type_propagation,
-    sharpening,
     dce1,
-    simplify2
   };
 
   RunOptimizations(optimizations1, arraysize(optimizations1), pass_observer);
 
-  MaybeRunInliner(graph, codegen, driver, stats, dex_compilation_unit, pass_observer, &handles);
+  MaybeRunInliner(graph, codegen, driver, stats, dex_compilation_unit, pass_observer, handles);
 
   // TODO: Update passes incompatible with try/catch so we have the same
   //       pipeline for all methods.
@@ -543,7 +534,7 @@ static void RunOptimizations(HGraph* graph,
       // The codegen has a few assumptions that only the instruction simplifier
       // can satisfy. For example, the code generator does not expect to see a
       // HTypeConversion from a type to the same type.
-      simplify4,
+      simplify3,
     };
 
     RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
@@ -558,13 +549,13 @@ static void RunOptimizations(HGraph* graph,
       licm,
       induction,
       bce,
-      simplify3,
+      simplify2,
       lse,
       dce2,
       // The codegen has a few assumptions that only the instruction simplifier
       // can satisfy. For example, the code generator does not expect to see a
       // HTypeConversion from a type to the same type.
-      simplify4,
+      simplify3,
     };
 
     RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
@@ -773,11 +764,16 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
     }
   }
 
-  VLOG(compiler) << "Optimizing " << pass_observer.GetMethodName();
   if (run_optimizations_) {
+    VLOG(compiler) << "Optimizing " << pass_observer.GetMethodName();
+
+    ScopedObjectAccess soa(Thread::Current());
+    StackHandleScopeCollection handles(soa.Self());
+    ScopedThreadSuspension sts(soa.Self(), kNative);
+
     {
       PassScope scope(SsaBuilder::kSsaBuilderPassName, &pass_observer);
-      if (!graph->TryBuildingSsa()) {
+      if (!graph->PrepareForSsaBuilder()) {
         // We could not transform the graph to SSA, bailout.
         LOG(INFO) << "Skipping compilation of " << pass_observer.GetMethodName()
             << ": it contains a non natural loop";
@@ -785,6 +781,7 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
         pass_observer.SetGraphInBadState();
         return nullptr;
       }
+      SsaBuilder(graph, &handles).BuildSsa();
     }
 
     RunOptimizations(graph,
@@ -792,7 +789,8 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
                      compiler_driver,
                      compilation_stats_.get(),
                      dex_compilation_unit,
-                     &pass_observer);
+                     &pass_observer,
+                     &handles);
     codegen->CompileOptimized(code_allocator);
   } else {
     codegen->CompileBaseline(code_allocator);
