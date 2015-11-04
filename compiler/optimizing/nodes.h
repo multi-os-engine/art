@@ -199,7 +199,7 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
 
   // Try building the SSA form of this graph, with dominance computation and loop
   // recognition. Returns whether it was successful in doing all these steps.
-  bool TryBuildingSsa() {
+  bool PrepareForSsaBuilder() {
     BuildDominatorTree();
     // The SSA builder requires loops to all be natural. Specifically, the dead phi
     // elimination phase checks the consistency of the graph when doing a post-order
@@ -210,10 +210,10 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
     // which needs the information to build catch block phis from values of
     // locals at throwing instructions inside try blocks.
     ComputeTryBlockInformation();
-    TransformToSsa();
-    in_ssa_form_ = true;
     return true;
   }
+
+  void SetInSsaForm() { in_ssa_form_ = true; }
 
   void ComputeDominanceInformation();
   void ClearDominanceInformation();
@@ -886,9 +886,15 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   // RemoveInstruction and RemovePhi delete a given instruction from the respective
   // instruction list. With 'ensure_safety' set to true, it verifies that the
   // instruction is not in use and removes it from the use lists of its inputs.
-  void RemoveInstruction(HInstruction* instruction, bool ensure_safety = true);
-  void RemovePhi(HPhi* phi, bool ensure_safety = true);
-  void RemoveInstructionOrPhi(HInstruction* instruction, bool ensure_safety = true);
+  void RemoveInstruction(HInstruction* instruction,
+                         bool ensure_safety = true,
+                         bool remove_as_user = true);
+  void RemovePhi(HPhi* phi,
+                 bool ensure_safety = true,
+                 bool remove_as_user = true);
+  void RemoveInstructionOrPhi(HInstruction* instruction,
+                              bool ensure_safety = true,
+                              bool remove_as_user = true);
 
   bool IsLoopHeader() const {
     return IsInLoop() && (loop_information_->GetHeader() == this);
@@ -4350,7 +4356,16 @@ class HPhi : public HInstruction {
   void RemoveInputAt(size_t index);
 
   Primitive::Type GetType() const OVERRIDE { return type_; }
-  void SetType(Primitive::Type type) { type_ = type; }
+  void SetType(Primitive::Type new_type) {
+    // Make sure that only valid type changes occur. The following are allowed:
+    //  (1) int  -> float/ref (primitive type propagation),
+    //  (2) long -> double (primitive type propagation).
+    DCHECK(type_ == new_type ||
+           (type_ == Primitive::kPrimInt && new_type == Primitive::kPrimFloat) ||
+           (type_ == Primitive::kPrimInt && new_type == Primitive::kPrimNot) ||
+           (type_ == Primitive::kPrimLong && new_type == Primitive::kPrimDouble));
+    type_ = new_type;
+  }
 
   bool CanBeNull() const OVERRIDE { return can_be_null_; }
   void SetCanBeNull(bool can_be_null) { can_be_null_ = can_be_null; }
@@ -4590,7 +4605,17 @@ class HArrayGet : public HExpression<2> {
     return false;
   }
 
-  void SetType(Primitive::Type type) { type_ = type; }
+  bool IsEquivalentOf(HArrayGet* other) const {
+    bool result = (GetDexPc() == other->GetDexPc());
+    if (kIsDebugBuild && result) {
+      DCHECK(GetBlock() == other->GetBlock());
+      DCHECK(GetArray() == other->GetArray());
+      DCHECK(GetIndex() == other->GetIndex());
+      DCHECK(Primitive::IsFloatingPointType(GetType()));
+      DCHECK(Primitive::IsIntOrLongType(other->GetType()));
+    }
+    return result;
+  }
 
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }

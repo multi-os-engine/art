@@ -33,6 +33,7 @@
 #include "reference_type_propagation.h"
 #include "register_allocator.h"
 #include "sharpening.h"
+#include "ssa_builder.h"
 #include "ssa_phi_elimination.h"
 #include "scoped_thread_state_change.h"
 #include "thread.h"
@@ -361,11 +362,13 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
     return false;
   }
 
-  if (!callee_graph->TryBuildingSsa()) {
+  if (!callee_graph->PrepareForSsaBuilder()) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                    << " could not be transformed to SSA";
     return false;
   }
+
+  SsaBuilder(callee_graph, handles_).BuildSsa();
 
   size_t parameter_index = 0;
   for (HInstructionIterator instructions(callee_graph->GetEntryBlock()->GetInstructions());
@@ -396,14 +399,12 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
   // Run simple optimizations on the graph.
   HDeadCodeElimination dce(callee_graph, stats_);
   HConstantFolding fold(callee_graph);
-  ReferenceTypePropagation type_propagation(callee_graph, handles_);
   HSharpening sharpening(callee_graph, codegen_, dex_compilation_unit, compiler_driver_);
   InstructionSimplifier simplify(callee_graph, stats_);
   IntrinsicsRecognizer intrinsics(callee_graph, compiler_driver_);
 
   HOptimization* optimizations[] = {
     &intrinsics,
-    &type_propagation,
     &sharpening,
     &simplify,
     &fold,
