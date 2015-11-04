@@ -896,4 +896,16 @@ void SSAChecker::VisitConstant(HConstant* instruction) {
   }
 }
 
+void SSAChecker::VisitArrayGet(HArrayGet* aget) {
+  HArrayGet* next_insn = aget->GetNext()->AsArrayGet();
+  if (next_insn != nullptr && next_insn->IsEquivalentOf(aget)) {
+    AddError(StringPrintf(
+        "%s:%d and its equivalent %s:%d are both present in the method.",
+        aget->DebugName(),
+        aget->GetId(),
+        next_insn->DebugName(),
+        next_insn->GetId()));
+  }
+}
+
 }  // namespace art
