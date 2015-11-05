@@ -1039,10 +1039,15 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
       "Oat file should be right after the image.";
   // Create the header.
   new (image_->Begin()) ImageHeader(
-      PointerToLowMemUInt32(image_begin_), image_end,
-      sections, image_roots_address_, oat_file_->GetOatHeader().GetChecksum(),
-      PointerToLowMemUInt32(oat_file_begin), PointerToLowMemUInt32(oat_data_begin_),
-      PointerToLowMemUInt32(oat_data_end), PointerToLowMemUInt32(oat_file_end), target_ptr_size_,
+      PointerToLowMemUInt32(image_begin_),
+      image_end,
+      sections, image_roots_address_,
+      oat_file_->GetOatHeader().GetChecksum(),
+      PointerToLowMemUInt32(oat_file_begin),
+      PointerToLowMemUInt32(oat_data_begin_),
+      PointerToLowMemUInt32(oat_data_end),
+      PointerToLowMemUInt32(oat_file_end),
+      target_ptr_size_,
       compile_pic_);
 }
 

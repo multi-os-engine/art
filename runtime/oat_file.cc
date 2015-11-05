@@ -386,7 +386,7 @@ bool OatFile::ElfFileOpen(File* file, uint8_t* requested_base, uint8_t* oat_file
     *error_msg = StringPrintf("Failed to find oatlastword symbol in '%s'", file->GetPath().c_str());
     return false;
   }
-  // Readjust to be non-inclusive upper bound.
+  // Read just to be non-inclusive upper bound.
   end_ += sizeof(uint32_t);
 
   bss_begin_ = const_cast<uint8_t*>(elf_file_->FindDynamicSymbolAddress("oatbss"));
