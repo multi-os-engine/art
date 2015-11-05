@@ -148,6 +148,8 @@ void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
     MarkNotLeaf();
   }
   const bool is_64_bit = Is64BitInstructionSet(GetInstructionSet());
+  // Save parameter registers when using read barriers.
+  const bool should_save_parameter_registers = kForceReadBarrier || kUseReadBarrier;
   InitializeCodeGeneration(GetGraph()->GetNumberOfLocalVRegs()
                              + GetGraph()->GetTemporariesVRegSlots()
                              + 1 /* filler */,
@@ -155,6 +157,7 @@ void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
                            0, /* the baseline compiler does not have live registers at slow path */
                            GetGraph()->GetMaximumNumberOfOutVRegs()
                              + (is_64_bit ? 2 : 1) /* current method */,
+                           should_save_parameter_registers,
                            GetGraph()->GetBlocks());
   CompileInternal(allocator, /* is_baseline */ true);
 }
@@ -310,6 +313,7 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
                                              size_t maximum_number_of_live_core_registers,
                                              size_t maximum_number_of_live_fpu_registers,
                                              size_t number_of_out_slots,
+                                             bool should_save_parameter_registers,
                                              const ArenaVector<HBasicBlock*>& block_order) {
   block_order_ = &block_order;
   DCHECK(!block_order.empty());
@@ -318,6 +322,7 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
   first_register_slot_in_slow_path_ = (number_of_out_slots + number_of_spill_slots) * kVRegSize;
 
   if (number_of_spill_slots == 0
+      && !should_save_parameter_registers
       && !HasAllocatedCalleeSaveRegisters()
       && IsLeafMethod()
       && !RequiresCurrentMethod()) {
@@ -339,11 +344,31 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
       // increase `maximum_number_of_live_core_registers` here.
       maximum_number_of_live_core_registers += kMaxLiveTempRegistersForReadBarrier;
     }
+    // If the compiled method needs to save parameter (core) registers
+    // on the stack at any point, ensure the area where live core registers
+    // are saved is large enough to save all of them as well.
+    //
+    // Saving parameter (core) registers is currently needed in read
+    // barrier slow paths emitted during the generation of
+    // HInvokeVirtual and HInvokeInterface instructions performing an
+    // actual call (i.e. not intrinsified).
+    //
+    // TODO: Instead of saving all parameter registers (and hence
+    // allocate space on the stack frame for all of them here), we should
+    // try to save only the ones which are actually used in the
+    // HInvokeVirtual and HInvokeInterface calls.
+    size_t core_registers_to_save = should_save_parameter_registers ?
+        std::max(number_of_parameter_core_registers_, maximum_number_of_live_core_registers) :
+        maximum_number_of_live_core_registers;
+    // Likewise for floating-point registers.
+    size_t fpu_registers_to_save = should_save_parameter_registers ?
+        std::max(number_of_parameter_fpu_registers_, maximum_number_of_live_fpu_registers) :
+        maximum_number_of_live_fpu_registers;
     SetFrameSize(RoundUp(
         number_of_spill_slots * kVRegSize
         + number_of_out_slots * kVRegSize
-        + maximum_number_of_live_core_registers * GetWordSize()
-        + maximum_number_of_live_fpu_registers * GetFloatingPointSpillSlotSize()
+        + core_registers_to_save * GetWordSize()
+        + fpu_registers_to_save * GetFloatingPointSpillSlotSize()
         + FrameEntrySpillSize(),
         kStackAlignment));
   }
@@ -1338,7 +1363,13 @@ void CodeGenerator::ValidateInvokeRuntime(HInstruction* instruction, SlowPathCod
         << "instruction->DebugName()=" << instruction->DebugName()
         << " instruction->GetSideEffects().ToString()=" << instruction->GetSideEffects().ToString();
   } else {
-    DCHECK(instruction->GetLocations()->OnlyCallsOnSlowPath() || slow_path->IsFatal())
+    DCHECK(instruction->GetLocations()->OnlyCallsOnSlowPath() ||
+           slow_path->IsFatal() ||
+           // When read barriers are enabled, both HInvokeVirtual and
+           // HInvokeInterface use a slow path to emit a read barrier,
+           // before the method call itself.
+           ((kForceReadBarrier || kUseReadBarrier) &&
+            (instruction->IsInvokeVirtual() || instruction->IsInvokeInterface())))
         << "instruction->DebugName()=" << instruction->DebugName()
         << " slow_path->GetDescription()=" << slow_path->GetDescription();
     DCHECK(instruction->GetSideEffects().Includes(SideEffects::CanTriggerGC()) ||
@@ -1353,7 +1384,9 @@ void CodeGenerator::ValidateInvokeRuntime(HInstruction* instruction, SlowPathCod
            // GC, is not fatal, nor is emitted by HDeoptimize
            // instructions.
            ((kForceReadBarrier || kUseReadBarrier) &&
-            (instruction->IsInstanceFieldGet() ||
+            (instruction->IsInvokeVirtual() ||
+             instruction->IsInvokeInterface() ||
+             instruction->IsInstanceFieldGet() ||
              instruction->IsStaticFieldGet() ||
              instruction->IsArraySet() ||
              instruction->IsArrayGet() ||

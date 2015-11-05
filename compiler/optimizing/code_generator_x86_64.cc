@@ -475,21 +475,31 @@ class ReadBarrierForHeapReferenceSlowPathX86_64 : public SlowPathCode {
     CpuRegister reg_out = out_.AsRegister<CpuRegister>();
     DCHECK(locations->CanCall());
     DCHECK(!locations->GetLiveRegisters()->ContainsCoreRegister(reg_out.AsRegister())) << out_;
-    DCHECK(!instruction_->IsInvoke() ||
-           (instruction_->IsInvokeStaticOrDirect() &&
-            instruction_->GetLocations()->Intrinsified()));
 
     __ Bind(GetEntryLabel());
-    // Add the "live temporary registers" to the list of live
-    // registers before saving them. Note that we have previously
-    // reserved space for up to
-    // `kMaxLiveTempRegistersForReadBarrier` live temps on the stack
-    // in CodeGenerator::InitializeCodeGeneration.
-    DCHECK_LE(live_temp_registers_.size(), kMaxLiveTempRegistersForReadBarrier);
-    for (Location live_temp : live_temp_registers_) {
-      instruction_->GetLocations()->AddLiveRegister(live_temp);
+    if (ShouldSaveAndRestoreParameterRegisters()) {
+      DCHECK(!instruction_->GetLocations()->Intrinsified());
+      // There should be no "live temporary registers" when this slow
+      // path is before a method call, as we are only supposed to save
+      // parameter registers (instead of live registers) in this code
+      // path.
+      DCHECK(live_temp_registers_.empty()) << live_temp_registers_.size();
+      SaveParameterRegisters(codegen, locations, out_);
+    } else {
+      DCHECK(!instruction_->IsInvoke() ||
+             (instruction_->IsInvokeStaticOrDirect() &&
+              instruction_->GetLocations()->Intrinsified()));
+      // Add the "live temporary registers" to the list of live
+      // registers before saving them. Note that we have previously
+      // reserved space for up to
+      // `kMaxLiveTempRegistersForReadBarrier` live temps on the stack
+      // in CodeGenerator::InitializeCodeGeneration.
+      DCHECK_LE(live_temp_registers_.size(), kMaxLiveTempRegistersForReadBarrier);
+      for (Location live_temp : live_temp_registers_) {
+        instruction_->GetLocations()->AddLiveRegister(live_temp);
+      }
+      SaveLiveRegisters(codegen, locations);
     }
-    SaveLiveRegisters(codegen, locations);
 
     // We may have to change the index's value, but as `index_` is a
     // constant member (like other "inputs" of this slow path),
@@ -579,11 +589,24 @@ class ReadBarrierForHeapReferenceSlowPathX86_64 : public SlowPathCode {
         kQuickReadBarrierSlow, mirror::Object*, mirror::Object*, mirror::Object*, uint32_t>();
     x86_64_codegen->Move(out_, Location::RegisterLocation(RAX));
 
-    RestoreLiveRegisters(codegen, locations);
-    // Remove the "live temporary registers" from the list of live
-    // registers after restoring them.
-    for (Location live_temp : live_temp_registers_) {
-      instruction_->GetLocations()->RemoveLiveRegister(live_temp);
+    if (ShouldSaveAndRestoreParameterRegisters()) {
+      DCHECK(!instruction_->GetLocations()->Intrinsified());
+      // There should be no "live temporary registers" when this slow
+      // path is before a method call, as we are only supposed to
+      // restore parameter registers (instead of live registers) in
+      // this code path.
+      DCHECK(live_temp_registers_.empty()) << live_temp_registers_.size();
+      RestoreParameterRegisters(codegen, out_);
+    } else {
+      DCHECK(!instruction_->IsInvoke() ||
+             (instruction_->IsInvokeStaticOrDirect() &&
+              instruction_->GetLocations()->Intrinsified()));
+      RestoreLiveRegisters(codegen, locations);
+      // Remove the "live temporary registers" from the list of live
+      // registers after restoring them.
+      for (Location live_temp : live_temp_registers_) {
+        instruction_->GetLocations()->RemoveLiveRegister(live_temp);
+      }
     }
 
     __ jmp(GetExitLabel());
@@ -603,6 +626,88 @@ class ReadBarrierForHeapReferenceSlowPathX86_64 : public SlowPathCode {
   }
 
  private:
+  // Is this read barrier (for a heap reference) generated before a
+  // call, thus requiring us to save the parameter registers before
+  // the call, and restore them after?
+  bool ShouldSaveAndRestoreParameterRegisters() const {
+    // HInvokeVirtual and HInvokeInterface are the only instructions
+    // requiring a read barrier for a heap reference before an actual
+    // method call, for which we need to save and restore parameter
+    // registers.
+    //
+    // Note that HInvokeStaticOrDirect instructions do not require
+    // read barriers (neither for heap references nor for GC roots),
+    // hence we will never end up in this slow path (nor in
+    // ReadBarrierForRootSlowPathX86_64) when visiting a
+    // HInvokeStaticOrDirect instruction, except when it is
+    // intrinsified (for some intrinsics only).
+    return instruction_->IsInvokeVirtual() || instruction_->IsInvokeInterface();
+  }
+
+  // Save parameter registers on the stack (with the exception of
+  // `excluded_reg`, if it is a parameter register).
+  void SaveParameterRegisters(CodeGenerator* codegen,
+                              LocationSummary* locations,
+                              Location excluded_reg) {
+    size_t stack_offset = codegen->GetFirstRegisterSlotInSlowPath();
+
+    // TODO: This implementation saves all the (core & FP) parameter
+    // registers, even the ones which are not used by the invoked
+    // method, which is suboptimal. Instead, we should only save the
+    // registers which are actually used.
+    for (size_t i = 0; i < kParameterCoreRegistersLength; ++i) {
+      size_t reg = static_cast<size_t>(kParameterCoreRegisters[i]);
+      if (!codegen->IsCoreCalleeSaveRegister(reg)
+          && reg != static_cast<size_t>(excluded_reg.AsRegister<CpuRegister>().AsRegister())) {
+        // If the register holds an object, update the stack mask.
+        if (locations->RegisterContainsObject(reg)) {
+          locations->SetStackBit(stack_offset / kVRegSize);
+        }
+        DCHECK_LT(stack_offset, codegen->GetFrameSize() - codegen->FrameEntrySpillSize());
+        DCHECK_LT(reg, kMaximumNumberOfExpectedRegisters);
+        saved_core_stack_offsets_[reg] = stack_offset;
+        stack_offset += codegen->SaveCoreRegister(stack_offset, reg);
+      }
+    }
+
+    for (size_t i = 0; i < kParameterFloatRegistersLength; ++i) {
+      size_t reg = static_cast<size_t>(kParameterFloatRegisters[i]);
+      if (!codegen->IsFloatingPointCalleeSaveRegister(reg)) {
+        DCHECK_LT(stack_offset, codegen->GetFrameSize() - codegen->FrameEntrySpillSize());
+        DCHECK_LT(reg, kMaximumNumberOfExpectedRegisters);
+        saved_fpu_stack_offsets_[reg] = stack_offset;
+        stack_offset += codegen->SaveFloatingPointRegister(stack_offset, reg);
+      }
+    }
+  }
+
+  // Restore parameter registers from the stack (with the exception of
+  // `excluded_reg`, if it is a parameter register).
+  void RestoreParameterRegisters(CodeGenerator* codegen, Location excluded_reg) {
+    size_t stack_offset = codegen->GetFirstRegisterSlotInSlowPath();
+
+    // TODO: Likewise, we should only restore the registers which are
+    // actually used.
+    for (size_t i = 0; i < kParameterCoreRegistersLength; ++i) {
+      size_t reg = static_cast<size_t>(kParameterCoreRegisters[i]);
+      if (!codegen->IsCoreCalleeSaveRegister(reg)
+          && reg != static_cast<size_t>(excluded_reg.AsRegister<CpuRegister>().AsRegister())) {
+        DCHECK_LT(stack_offset, codegen->GetFrameSize() - codegen->FrameEntrySpillSize());
+        DCHECK_LT(i, kMaximumNumberOfExpectedRegisters);
+        stack_offset += codegen->RestoreCoreRegister(stack_offset, reg);
+      }
+    }
+
+    for (size_t i = 0; i < kParameterFloatRegistersLength; ++i) {
+      size_t reg = static_cast<size_t>(kParameterFloatRegisters[i]);
+      if (!codegen->IsFloatingPointCalleeSaveRegister(reg)) {
+        DCHECK_LT(stack_offset, codegen->GetFrameSize() - codegen->FrameEntrySpillSize());
+        DCHECK_LT(i, kMaximumNumberOfExpectedRegisters);
+        stack_offset += codegen->RestoreFloatingPointRegister(stack_offset, reg);
+      }
+    }
+  }
+
   CpuRegister FindNextAvailableRegister(CodeGenerator* codegen) {
     size_t ref = static_cast<int>(ref_.AsRegister<CpuRegister>().AsRegister());
     size_t obj = static_cast<int>(obj_.AsRegister<CpuRegister>().AsRegister());
@@ -816,14 +921,7 @@ void CodeGeneratorX86_64::GenerateVirtualCall(HInvokeVirtual* invoke, Location t
   // /* HeapReference<Class> */ temp = receiver->klass_
   __ movl(temp, Address(receiver.AsRegister<CpuRegister>(), class_offset));
   MaybeRecordImplicitNullCheck(invoke);
-  // Instead of simply (possibly) unpoisoning `temp` here, we should
-  // emit a read barrier for the previous class reference load.
-  // However this is not required in practice, as this is an
-  // intermediate/temporary reference and because the current
-  // concurrent copying collector keeps the from-space memory
-  // intact/accessible until the end of the marking phase (a different
-  // collector may not).
-  __ MaybeUnpoisonHeapReference(temp);
+  MaybeGenerateReadBarrier(invoke, temp_in, temp_in, receiver, class_offset);
   // temp = temp->GetMethodAt(method_offset);
   __ movq(temp, Address(temp, method_offset));
   // call temp->GetEntryPoint();
@@ -921,6 +1019,8 @@ CodeGeneratorX86_64::CodeGeneratorX86_64(HGraph* graph,
                       kNumberOfCpuRegisters,
                       kNumberOfFloatRegisters,
                       kNumberOfCpuRegisterPairs,
+                      kParameterCoreRegistersLength,
+                      kParameterFloatRegistersLength,
                       ComputeRegisterMask(reinterpret_cast<const int*>(kCoreCalleeSaves),
                                           arraysize(kCoreCalleeSaves))
                           | (1 << kFakeReturnRegister),
@@ -2137,42 +2237,49 @@ void InstructionCodeGeneratorX86_64::VisitInvokeVirtual(HInvokeVirtual* invoke) 
 
 void LocationsBuilderX86_64::VisitInvokeInterface(HInvokeInterface* invoke) {
   HandleInvoke(invoke);
-  // Add the hidden argument.
+  // Add the hidden argument.  This register is possibly used for read barrier too.
   invoke->GetLocations()->AddTemp(Location::RegisterLocation(RAX));
 }
 
 void InstructionCodeGeneratorX86_64::VisitInvokeInterface(HInvokeInterface* invoke) {
   // TODO: b/18116999, our IMTs can miss an IncompatibleClassChangeError.
   LocationSummary* locations = invoke->GetLocations();
-  CpuRegister temp = locations->GetTemp(0).AsRegister<CpuRegister>();
+  Location temp_loc = locations->GetTemp(0);
+  CpuRegister temp = temp_loc.AsRegister<CpuRegister>();
+  Location temp2_loc = locations->GetTemp(1);
   uint32_t method_offset = mirror::Class::EmbeddedImTableEntryOffset(
       invoke->GetImtIndex() % mirror::Class::kImtSize, kX86_64PointerSize).Uint32Value();
   Location receiver = locations->InAt(0);
   size_t class_offset = mirror::Object::ClassOffset().SizeValue();
 
-  // Set the hidden argument.
-  CpuRegister hidden_reg = locations->GetTemp(1).AsRegister<CpuRegister>();
-  codegen_->Load64BitValue(hidden_reg, invoke->GetDexMethodIndex());
-
   if (receiver.IsStackSlot()) {
     __ movl(temp, Address(CpuRegister(RSP), receiver.GetStackIndex()));
+    if (kForceReadBarrier || kUseReadBarrier) {
+      // Save the value of `temp` into `temp2` before overwriting it
+      // in the following move operation, as we will need it for the
+      // read barrier below.
+      CpuRegister temp2 = temp2_loc.AsRegister<CpuRegister>();
+      __ movl(temp2, temp);
+    }
     // /* HeapReference<Class> */ temp = temp->klass_
     __ movl(temp, Address(temp, class_offset));
+    codegen_->MaybeRecordImplicitNullCheck(invoke);
+    codegen_->MaybeGenerateReadBarrier(invoke, temp_loc, temp_loc, temp2_loc, class_offset);
   } else {
     // /* HeapReference<Class> */ temp = receiver->klass_
     __ movl(temp, Address(receiver.AsRegister<CpuRegister>(), class_offset));
+    codegen_->MaybeRecordImplicitNullCheck(invoke);
+    codegen_->MaybeGenerateReadBarrier(invoke, temp_loc, temp_loc, receiver, class_offset);
   }
-  codegen_->MaybeRecordImplicitNullCheck(invoke);
-  // Instead of simply (possibly) unpoisoning `temp` here, we should
-  // emit a read barrier for the previous class reference load.
-  // However this is not required in practice, as this is an
-  // intermediate/temporary reference and because the current
-  // concurrent copying collector keeps the from-space memory
-  // intact/accessible until the end of the marking phase (a different
-  // collector may not).
-  __ MaybeUnpoisonHeapReference(temp);
   // temp = temp->GetImtEntryAt(method_offset);
   __ movq(temp, Address(temp, method_offset));
+
+  // Set the hidden argument.  This is done after the (potential) read
+  // barrier, which overwrites RAX.
+  CpuRegister hidden_reg = temp2_loc.AsRegister<CpuRegister>();
+  DCHECK_EQ(RAX, hidden_reg.AsRegister());
+  codegen_->Load64BitValue(hidden_reg, invoke->GetDexMethodIndex());
+
   // call temp->GetEntryPoint();
   __ call(Address(temp,
                   ArtMethod::EntryPointFromQuickCompiledCodeOffset(kX86_64WordSize).SizeValue()));
