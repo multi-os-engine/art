@@ -49,6 +49,12 @@ static int32_t constexpr kPrimIntMax = 0x7fffffff;
 // Maximum value for a primitive long.
 static int64_t constexpr kPrimLongMax = INT64_C(0x7fffffffffffffff);
 
+// Maximum number of temporary core registers that may need to be
+// saved (and hence allocated a slot on the stack by
+// CodeGenerator::InitializeCodeGeneration) when read barriers are
+// enabled.
+static size_t constexpr kMaxLiveTempRegistersForReadBarrier = 1;
+
 class Assembler;
 class CodeGenerator;
 class DexCompilationUnit;
@@ -204,7 +210,7 @@ class CodeGenerator {
   virtual uintptr_t GetAddressOf(HBasicBlock* block) const = 0;
   void InitializeCodeGeneration(size_t number_of_spill_slots,
                                 size_t maximum_number_of_live_core_registers,
-                                size_t maximum_number_of_live_fp_registers,
+                                size_t maximum_number_of_live_fpu_registers,
                                 size_t number_of_out_slots,
                                 const ArenaVector<HBasicBlock*>& block_order);
   int32_t GetStackSlot(HLocal* local) const;
@@ -420,7 +426,8 @@ class CodeGenerator {
   // TODO: This overlaps a bit with MoveFromReturnRegister. Refactor for a better design.
   static void CreateLoadClassLocationSummary(HLoadClass* cls,
                                              Location runtime_type_index_location,
-                                             Location runtime_return_location);
+                                             Location runtime_return_location,
+                                             bool code_generator_supports_read_barrier = false);
 
   static void CreateSystemArrayCopyLocationSummary(HInvoke* invoke);
 

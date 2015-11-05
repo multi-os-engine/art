@@ -115,6 +115,13 @@ class CommonCompilerTest : public CommonRuntimeTest {
     return; \
   }
 
+// TODO: When read barrier works with all compilers in use, get rid of this.
+#define TEST_DISABLED_FOR_READ_BARRIER_WITH_QUICK() \
+  if (kUseReadBarrier && GetCompilerKind() == Compiler::kQuick) { \
+    printf("WARNING: TEST DISABLED FOR READ BARRIER WITH QUICK\n"); \
+    return; \
+  }
+
 // TODO: When non-PIC works with all compilers in use, get rid of this.
 #define TEST_DISABLED_FOR_NON_PIC_COMPILING_WITH_OPTIMIZING() \
   if (GetCompilerKind() == Compiler::kOptimizing) { \
