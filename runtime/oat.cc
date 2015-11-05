@@ -143,13 +143,13 @@ bool OatHeader::IsValid() const {
 std::string OatHeader::GetValidationErrorMessage() const {
   if (memcmp(magic_, kOatMagic, sizeof(kOatMagic)) != 0) {
     static_assert(sizeof(kOatMagic) == 4, "kOatMagic has unexpected length");
-    return StringPrintf("Invalid oat magic, expected 0x%x%x%x%x, got 0x%x%x%x%x.",
+    return StringPrintf("Invalid oat magic, expected 0x%02x%02x%02x%02x, got 0x%02x%02x%02x%02x.",
                         kOatMagic[0], kOatMagic[1], kOatMagic[2], kOatMagic[3],
                         magic_[0], magic_[1], magic_[2], magic_[3]);
   }
   if (memcmp(version_, kOatVersion, sizeof(kOatVersion)) != 0) {
     static_assert(sizeof(kOatVersion) == 4, "kOatVersion has unexpected length");
-    return StringPrintf("Invalid oat version, expected 0x%x%x%x%x, got 0x%x%x%x%x.",
+    return StringPrintf("Invalid oat version, expected 0x%02x%02x%02x%02x, got 0x%02x%02x%02x%02x.",
                         kOatVersion[0], kOatVersion[1], kOatVersion[2], kOatVersion[3],
                         version_[0], version_[1], version_[2], version_[3]);
   }
