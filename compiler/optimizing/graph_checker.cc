@@ -531,10 +531,14 @@ void SSAChecker::VisitInstruction(HInstruction* instruction) {
        !use_it.Done(); use_it.Advance()) {
     HInstruction* use = use_it.Current()->GetUser();
     if (!use->IsPhi() && !instruction->StrictlyDominates(use)) {
-      AddError(StringPrintf("Instruction %d in block %d does not dominate "
-                            "use %d in block %d.",
-                            instruction->GetId(), current_block_->GetBlockId(),
-                            use->GetId(), use->GetBlock()->GetBlockId()));
+      AddError(StringPrintf("Instruction %s:%d in block %d does not dominate "
+                            "use %s:%d in block %d.",
+                            instruction->DebugName(),
+                            instruction->GetId(),
+                            current_block_->GetBlockId(),
+                            use->DebugName(),
+                            use->GetId(),
+                            use->GetBlock()->GetBlockId()));
     }
   }
 
