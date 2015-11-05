@@ -1509,6 +1509,9 @@ class ClassDataItemIterator {
 
 class EncodedStaticFieldValueIterator {
  public:
+  EncodedStaticFieldValueIterator(const DexFile& dex_file,
+                                  const DexFile::ClassDef& class_def)
+      SHARED_REQUIRES(Locks::mutator_lock_);
   EncodedStaticFieldValueIterator(const DexFile& dex_file, Handle<mirror::DexCache>* dex_cache,
                                   Handle<mirror::ClassLoader>* class_loader,
                                   ClassLinker* linker, const DexFile::ClassDef& class_def)
@@ -1540,7 +1543,12 @@ class EncodedStaticFieldValueIterator {
     kBoolean = 0x1f
   };
 
+  ValueType GetValueType() const { return type_; }
+  const jvalue& GetJavaValue() const { return jval_; }
+
  private:
+  void Init(const DexFile::ClassDef& class_def);
+
   static constexpr uint8_t kEncodedValueTypeMask = 0x1f;  // 0b11111
   static constexpr uint8_t kEncodedValueArgShift = 5;
 
