@@ -130,12 +130,13 @@ class DumpMixin(metaclass=abc.ABCMeta):
 
   def dump(self, directory):
     """
-    Dump this object to a file in the given directory
+    Dump this object to a file in the given directory. Returns the 'Path' object dumped to.
     """
     out_file = directory / self.get_file_name()
     if out_file.exists():
       out_file.unlink()
     with out_file.open('w') as out:
       print(str(self), file=out)
+    return out_file
 
 FileLike.register(DumpMixin)
