@@ -93,6 +93,10 @@ namespace art {
 
 static constexpr bool kSanityCheckObjects = kIsDebugBuild;
 
+// If the oat file says a class failed verification, should we throw a small canned response, or
+// should the verifier be re-run to verify (and fail) and have a precise message?
+static constexpr bool kRerunVerifierForPreciseVerifierFailureMessage = true;
+
 static void ThrowNoClassDefFoundError(const char* fmt, ...)
     __attribute__((__format__(__printf__, 1, 2)))
     SHARED_REQUIRES(Locks::mutator_lock_);
@@ -2904,13 +2908,18 @@ void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass) {
   mirror::Class::Status oat_file_class_status(mirror::Class::kStatusNotReady);
   bool preverified = VerifyClassUsingOatFile(dex_file, klass.Get(), oat_file_class_status);
   if (oat_file_class_status == mirror::Class::kStatusError) {
-    VLOG(class_linker) << "Skipping runtime verification of erroneous class "
-        << PrettyDescriptor(klass.Get()) << " in "
-        << klass->GetDexCache()->GetLocation()->ToModifiedUtf8();
-    ThrowVerifyError(klass.Get(), "Rejecting class %s because it failed compile-time verification",
-                     PrettyDescriptor(klass.Get()).c_str());
-    mirror::Class::SetStatus(klass, mirror::Class::kStatusError, self);
-    return;
+    if (!kRerunVerifierForPreciseVerifierFailureMessage) {
+      // Throw pre-canned message and skip verifying again.
+      VLOG(class_linker) << "Skipping runtime verification of erroneous class "
+          << PrettyDescriptor(klass.Get()) << " in "
+          << klass->GetDexCache()->GetLocation()->ToModifiedUtf8();
+      ThrowVerifyError(klass.Get(),
+                       "Rejecting class %s because it failed compile-time verification",
+                       PrettyDescriptor(klass.Get()).c_str());
+      mirror::Class::SetStatus(klass, mirror::Class::kStatusError, self);
+      return;
+    }
+    // Just run the verifier again.
   }
   verifier::MethodVerifier::FailureKind verifier_failure = verifier::MethodVerifier::kNoFailure;
   std::string error_msg;
