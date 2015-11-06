@@ -21,6 +21,7 @@
 
 #include "atomic.h"
 #include "base/allocator.h"
+#include "base/chain_hash_set.h"
 #include "base/hash_set.h"
 #include "base/mutex.h"
 #include "gc_root.h"
@@ -157,7 +158,8 @@ class InternTable {
         SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
     void SweepWeaks(IsMarkedVisitor* visitor)
         SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
-    void SwapPostZygoteWithPreZygote() REQUIRES(Locks::intern_table_lock_);
+    void SwapPostZygoteWithPreZygote()
+        SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
     size_t Size() const REQUIRES(Locks::intern_table_lock_);
     // Read pre zygote table is called from ReadFromMemory which happens during runtime creation
     // when we load the image intern table. Returns how many bytes were read.
@@ -171,15 +173,22 @@ class InternTable {
    private:
     typedef HashSet<GcRoot<mirror::String>, GcRootEmptyFn, StringHashEquals, StringHashEquals,
         TrackingAllocator<GcRoot<mirror::String>, kAllocatorTagInternTable>> UnorderedSet;
+    typedef ChainHashSet<GcRoot<mirror::String>, GcRootEmptyFn, StringHashEquals,
+                                StringHashEquals> ChainUnorderedSet;
 
-    void SweepWeaks(UnorderedSet* set, IsMarkedVisitor* visitor)
+    template <class T>
+    void SweepWeaks(T* set, IsMarkedVisitor* visitor)
         SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
 
     // We call SwapPostZygoteWithPreZygote when we create the zygote to reduce private dirty pages
     // caused by modifying the zygote intern table hash table. The pre zygote table are the
     // interned strings which were interned before we created the zygote space. Post zygote is self
     // explanatory.
-    UnorderedSet pre_zygote_table_;
+    // As soon as there aren't any inserts into the pre zygote table after the fork we can use
+    // ChainHashSet here. The hash set is filled at compile time from the existing data from the
+    // post zygote table and stored in the boot.art file. At runtime the table is read and used as
+    // the pre zygote table.
+    ChainUnorderedSet pre_zygote_table_;
     UnorderedSet post_zygote_table_;
   };
 

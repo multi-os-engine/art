@@ -364,41 +364,52 @@ bool InternTable::StringHashEquals::operator()(const GcRoot<mirror::String>& a,
 size_t InternTable::Table::ReadIntoPreZygoteTable(const uint8_t* ptr) {
   CHECK_EQ(pre_zygote_table_.Size(), 0u);
   size_t read_count = 0;
-  pre_zygote_table_ = UnorderedSet(ptr, false /* make copy */, &read_count);
+  pre_zygote_table_ = ChainUnorderedSet(ptr, &read_count);
   return read_count;
 }
 
+// Write raw data from the post_zygote table.
 size_t InternTable::Table::WriteFromPostZygoteTable(uint8_t* ptr) {
-  return post_zygote_table_.WriteToMemory(ptr);
+  // Check if the pre_zygote_table_ is empty than fill it with data from
+  // the post_zygote_table_.
+  if (pre_zygote_table_.Empty()) {
+    pre_zygote_table_.Fill(post_zygote_table_);
+    // We don't need the post_zygote_table_ any more.
+    post_zygote_table_.Clear();
+  }
+  return pre_zygote_table_.WriteToMemory(ptr);
 }
 
 void InternTable::Table::Remove(mirror::String* s) {
-  auto it = post_zygote_table_.Find(GcRoot<mirror::String>(s));
-  if (it != post_zygote_table_.end()) {
-    post_zygote_table_.Erase(it);
+  auto it_post = post_zygote_table_.Find(GcRoot<mirror::String>(s));
+  if (it_post != post_zygote_table_.end()) {
+    post_zygote_table_.Erase(it_post);
   } else {
-    it = pre_zygote_table_.Find(GcRoot<mirror::String>(s));
-    DCHECK(it != pre_zygote_table_.end());
-    pre_zygote_table_.Erase(it);
+    auto it_pre = pre_zygote_table_.Find(GcRoot<mirror::String>(s));
+    DCHECK(it_pre != pre_zygote_table_.end());
+    pre_zygote_table_.Erase(it_pre);
   }
 }
 
 mirror::String* InternTable::Table::Find(mirror::String* s) {
   Locks::intern_table_lock_->AssertHeld(Thread::Current());
-  auto it = pre_zygote_table_.Find(GcRoot<mirror::String>(s));
-  if (it != pre_zygote_table_.end()) {
-    return it->Read();
+  // Try to find in the pre_zygote_table_ first.
+  auto it_pre = pre_zygote_table_.Find(GcRoot<mirror::String>(s));
+  if (it_pre != pre_zygote_table_.end()) {
+    return it_pre->Read();
   }
-  it = post_zygote_table_.Find(GcRoot<mirror::String>(s));
-  if (it != post_zygote_table_.end()) {
-    return it->Read();
+  // There is no match in the pre_zygote_table_, find in the post_zygote_table_.
+  auto it_post = post_zygote_table_.Find(GcRoot<mirror::String>(s));
+  if (it_post != post_zygote_table_.end()) {
+    return it_post->Read();
   }
   return nullptr;
 }
 
 void InternTable::Table::SwapPostZygoteWithPreZygote() {
   if (pre_zygote_table_.Empty()) {
-    std::swap(pre_zygote_table_, post_zygote_table_);
+    pre_zygote_table_.Fill(post_zygote_table_);
+    post_zygote_table_.Clear();
     VLOG(heap) << "Swapping " << pre_zygote_table_.Size() << " interns to the pre zygote table";
   } else {
     // This case happens if read the intern table from the image.
@@ -428,10 +439,11 @@ void InternTable::Table::SweepWeaks(IsMarkedVisitor* visitor) {
   SweepWeaks(&post_zygote_table_, visitor);
 }
 
-void InternTable::Table::SweepWeaks(UnorderedSet* set, IsMarkedVisitor* visitor) {
+template <class T>
+void InternTable::Table::SweepWeaks(T* set, IsMarkedVisitor* visitor) {
   for (auto it = set->begin(), end = set->end(); it != end;) {
     // This does not need a read barrier because this is called by GC.
-    mirror::Object* object = it->Read<kWithoutReadBarrier>();
+    mirror::Object* object = it->template Read<kWithoutReadBarrier>();
     mirror::Object* new_object = visitor->IsMarked(object);
     if (new_object == nullptr) {
       it = set->Erase(it);
@@ -461,8 +473,6 @@ void InternTable::ChangeWeakRootStateLocked(gc::WeakRootState new_state) {
 
 InternTable::Table::Table() {
   Runtime* const runtime = Runtime::Current();
-  pre_zygote_table_.SetLoadFactor(runtime->GetHashTableMinLoadFactor(),
-                                  runtime->GetHashTableMaxLoadFactor());
   post_zygote_table_.SetLoadFactor(runtime->GetHashTableMinLoadFactor(),
                                    runtime->GetHashTableMaxLoadFactor());
 }

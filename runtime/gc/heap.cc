@@ -2308,7 +2308,11 @@ void Heap::PreZygoteFork() {
   if (HasZygoteSpace()) {
     return;
   }
+  // Lock the mutator_lock_ because it's required by the
+  // SwapPostZygoteWithPreZygote() method.
+  Locks::mutator_lock_->SharedLock(self);
   Runtime::Current()->GetInternTable()->SwapPostZygoteWithPreZygote();
+  Locks::mutator_lock_->SharedUnlock(self);
   Runtime::Current()->GetClassLinker()->MoveClassTableToPreZygote();
   VLOG(heap) << "Starting PreZygoteFork";
   // Trim the pages at the end of the non moving space.
