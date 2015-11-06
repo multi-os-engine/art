@@ -1006,7 +1006,8 @@ bool HGraphBuilder::SetupInvokeArguments(HInvoke* invoke,
     return false;
   }
 
-  if (invoke->IsInvokeStaticOrDirect()) {
+  if (invoke->IsInvokeStaticOrDirect() &&
+      invoke->AsInvokeStaticOrDirect()->HasCurrentMethodInput()) {
     invoke->SetArgumentAt(*argument_index, graph_->GetCurrentMethod());
     (*argument_index)++;
   }
