@@ -160,9 +160,6 @@ class MethodVerifier {
                                              uint32_t method_access_flags)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  static FailureKind VerifyMethod(ArtMethod* method, bool allow_soft_failures,
-                                  std::string* error) SHARED_REQUIRES(Locks::mutator_lock_);
-
   uint8_t EncodePcToReferenceMapData() const;
 
   uint32_t DexFileVersion() const {
@@ -310,6 +307,23 @@ class MethodVerifier {
   // Adds the given string to the end of the last failure message.
   void AppendToLastFailMessage(std::string);
 
+  // Verify all direct or virtual methods of a class. The method assumes that the iterator is
+  // positioned correctly, and the iterator will be updated.
+  template <bool kDirect>
+  static void VerifyMethods(Thread* self,
+                            ClassLinker* linker,
+                            const DexFile* dex_file,
+                            const DexFile::ClassDef* class_def,
+                            ClassDataItemIterator* it,
+                            Handle<mirror::DexCache> dex_cache,
+                            Handle<mirror::ClassLoader> class_loader,
+                            bool allow_soft_failures,
+                            bool need_precise_constants,
+                            bool* hard_fail,
+                            size_t* error_count,
+                            std::string* error_string)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   /*
    * Perform verification on a single method.
    *
@@ -321,13 +335,17 @@ class MethodVerifier {
    *  (3) Iterate through the method, checking type safety and looking
    *      for code flow problems.
    */
-  static FailureKind VerifyMethod(Thread* self, uint32_t method_idx, const DexFile* dex_file,
+  static FailureKind VerifyMethod(Thread* self, uint32_t method_idx,
+                                  const DexFile* dex_file,
                                   Handle<mirror::DexCache> dex_cache,
                                   Handle<mirror::ClassLoader> class_loader,
                                   const DexFile::ClassDef* class_def_idx,
                                   const DexFile::CodeItem* code_item,
-                                  ArtMethod* method, uint32_t method_access_flags,
-                                  bool allow_soft_failures, bool need_precise_constants)
+                                  ArtMethod* method,
+                                  uint32_t method_access_flags,
+                                  bool allow_soft_failures,
+                                  bool need_precise_constants,
+                                  std::string* hard_failure_msg)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void FindLocksAtDexPc() SHARED_REQUIRES(Locks::mutator_lock_);
