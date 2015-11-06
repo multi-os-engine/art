@@ -1940,6 +1940,24 @@ bool HInvokeStaticOrDirect::NeedsDexCacheOfDeclaringClass() const {
   return !opt.GetDoesNotNeedDexCache();
 }
 
+void HInvokeStaticOrDirect::InsertInputAt(size_t index, HInstruction* input) {
+  inputs_.insert(inputs_.begin() + index, HUserRecord<HInstruction*>(input));
+  input->AddUseAt(this, index);
+  for (size_t i = index + 1u, size = inputs_.size(); i != size; ++i) {
+    DCHECK_EQ(InputRecordAt(i).GetUseNode()->GetIndex(), i - 1u);
+    InputRecordAt(i).GetUseNode()->SetIndex(i);
+  }
+}
+
+void HInvokeStaticOrDirect::RemoveInputAt(size_t index) {
+  RemoveAsUserOfInput(index);
+  inputs_.erase(inputs_.begin() + index);
+  for (size_t i = index, e = InputCount(); i < e; ++i) {
+    DCHECK_EQ(InputRecordAt(i).GetUseNode()->GetIndex(), i + 1u);
+    InputRecordAt(i).GetUseNode()->SetIndex(i);
+  }
+}
+
 void HInstruction::RemoveEnvironmentUsers() {
   for (HUseIterator<HEnvironment*> use_it(GetEnvUses()); !use_it.Done(); use_it.Advance()) {
     HUseListNode<HEnvironment*>* user_node = use_it.Current();
