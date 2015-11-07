@@ -648,6 +648,169 @@ void IntrinsicCodeGeneratorMIPS::VisitLongNumberOfTrailingZeros(HInvoke* invoke)
                             codegen_->GetInstructionSetFeatures().IsMipsIsaRevGreaterThanEqual2());
 }
 
+static void GenRotateRight(HInvoke* invoke,
+                           Primitive::Type type,
+                           MipsAssembler* assembler,
+                           bool isR2OrNewer) {
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+
+  LocationSummary* locations = invoke->GetLocations();
+  if (invoke->InputAt(1)->IsIntConstant()) {
+    uint32_t shift = static_cast<uint32_t>(invoke->InputAt(1)->AsIntConstant()->GetValue());
+    if (type == Primitive::kPrimInt) {
+      Register in = locations->InAt(0).AsRegister<Register>();
+      Register out = locations->Out().AsRegister<Register>();
+
+      shift &= 0x1f;
+      if (isR2OrNewer) {
+        if ((shift != 0) || (out != in)) {
+          __ Rotr(out, in, shift);
+        }
+      } else {
+        if (shift == 0) {
+          if (out != in) {
+            __ Move(out, in);
+          }
+        } else {
+          __ Srl(AT, in, shift);
+          __ Sll(out, in, 32-shift);
+          __ Or(out, out, AT);
+        }
+      }
+    } else {    // Primitive::kPrimLong
+      Register in_lo  = locations->InAt(0).AsRegisterPairLow<Register>();
+      Register in_hi  = locations->InAt(0).AsRegisterPairHigh<Register>();
+      Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+      Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+      shift &= 0x3f;
+
+      if (shift == 0) {
+        __ Move(out_lo, in_lo);
+        __ Move(out_hi, in_hi);
+      } else if (shift == 32) {
+        __ Move(out_lo, in_hi);
+        __ Move(out_hi, in_lo);
+      } else if (shift < 32) {
+        __ Srl(AT, in_lo, shift);
+        __ Sll(out_lo, in_hi, 32-shift);
+        __ Or(out_lo, out_lo, AT);
+        __ Srl(AT, in_hi, shift);
+        __ Sll(out_hi, in_lo, 32-shift);
+        __ Or(out_hi, out_hi, AT);
+      } else {
+        __ Sll(AT, in_lo, 64-shift);
+        __ Srl(out_lo, in_hi, shift-32);
+        __ Or(out_lo, out_lo, AT);
+        __ Sll(AT, in_hi, 64-shift);
+        __ Srl(out_hi, in_hi, shift-32);
+        __ Or(out_hi, out_hi, AT);
+      }
+    }
+  } else {      // !invoke->InputAt(1)->IsIntConstant()
+    Register shamt = locations->InAt(1).AsRegister<Register>();
+    if (type == Primitive::kPrimInt) {
+      Register in = locations->InAt(0).AsRegister<Register>();
+      Register out = locations->Out().AsRegister<Register>();
+
+      if (isR2OrNewer) {
+        __ Rotrv(out, in, shamt);
+      } else {
+        __ Srlv(AT, in, shamt);
+        __ LoadConst32(TMP, 32);
+        __ Subu(TMP, TMP, shamt);
+        __ Sllv(out, in, TMP);
+        __ Or(out, out, AT);
+      }
+    } else {    // Primitive::kPrimLong
+      Register in_lo  = locations->InAt(0).AsRegisterPairLow<Register>();
+      Register in_hi  = locations->InAt(0).AsRegisterPairHigh<Register>();
+      Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+      Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+      MipsLabel eq32;
+      MipsLabel lt32;
+      MipsLabel gt32;
+      MipsLabel done;
+
+      __ Andi(TMP, shamt, 0x3F);
+
+      __ Bnez(TMP, &eq32);
+      __ Move(out_lo, in_lo);
+      __ Move(out_hi, in_hi);
+      __ B(&done);
+
+      __ Bind(&eq32);
+      __ LoadConst32(AT, 32);
+      __ Bne(TMP, AT, &lt32);
+      __ Move(out_lo, in_hi);
+      __ Move(out_hi, in_lo);
+      __ B(&done);
+
+      __ Bind(&lt32);
+      __ LoadConst32(AT, 32);
+      __ Sltu(TMP, TMP, AT);
+      __ Beqz(TMP, &gt32);
+      __ Srl(out_lo, in_lo, shamt);
+      __ Srl(out_hi, in_hi, shamt);
+      __ Subu(TMP, AT, shamt);
+      __ Sll(AT, in_hi, TMP);
+      __ Or(out_lo, out_lo, AT);
+      __ Sll(AT, in_lo, TMP);
+      __ Or(out_hi, out_hi, AT);
+      __ B(&done);
+
+      __ Bind(&gt32);
+      __ LoadConst32(TMP, 64);
+      __ Subu(TMP, TMP, shamt);
+      __ Sll(out_lo, in_lo, TMP);
+      __ Sll(out_hi, in_hi, TMP);
+      __ Addiu(TMP, shamt, -32);
+      __ Srl(AT, in_hi, TMP);
+      __ Or(out_lo, out_lo, AT);
+      __ Srl(AT, in_lo, TMP);
+      __ Or(out_hi, out_hi, AT);
+
+      __ Bind(&done);
+    }
+  }
+}
+
+// int java.lang.Integer.rotateRight(int i, int distance)
+void IntrinsicLocationsBuilderMIPS::VisitIntegerRotateRight(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RegisterOrConstant(invoke->InputAt(1)));
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitIntegerRotateRight(HInvoke* invoke) {
+  GenRotateRight(invoke,
+                 Primitive::kPrimInt,
+                 GetAssembler(),
+                 codegen_->GetInstructionSetFeatures().IsMipsIsaRevGreaterThanEqual2());
+}
+
+// long java.lang.Long.rotateRight(long i, int distance)
+void IntrinsicLocationsBuilderMIPS::VisitLongRotateRight(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RegisterOrConstant(invoke->InputAt(1)));
+  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitLongRotateRight(HInvoke* invoke) {
+  GenRotateRight(invoke,
+                 Primitive::kPrimLong,
+                 GetAssembler(),
+                 codegen_->GetInstructionSetFeatures().IsMipsIsaRevGreaterThanEqual2());
+}
+
+
 // int java.lang.Integer.reverse(int)
 void IntrinsicLocationsBuilderMIPS::VisitIntegerReverse(HInvoke* invoke) {
   CreateIntToIntLocations(arena_, invoke);
@@ -839,9 +1002,7 @@ UNIMPLEMENTED_INTRINSIC(StringNewStringFromBytes)
 UNIMPLEMENTED_INTRINSIC(StringNewStringFromChars)
 UNIMPLEMENTED_INTRINSIC(StringNewStringFromString)
 UNIMPLEMENTED_INTRINSIC(LongRotateLeft)
-UNIMPLEMENTED_INTRINSIC(LongRotateRight)
 UNIMPLEMENTED_INTRINSIC(IntegerRotateLeft)
-UNIMPLEMENTED_INTRINSIC(IntegerRotateRight)
 
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
