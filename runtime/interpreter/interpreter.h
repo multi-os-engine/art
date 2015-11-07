@@ -33,20 +33,27 @@ class Thread;
 namespace interpreter {
 
 // Called by ArtMethod::Invoke, shadow frames arguments are taken from the args array.
-extern void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method,
-                                       mirror::Object* receiver, uint32_t* args, JValue* result)
+void EnterInterpreterFromInvoke(Thread* self,
+                                ArtMethod* method,
+                                mirror::Object* receiver,
+                                uint32_t* args,
+                                JValue* result)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
-extern void EnterInterpreterFromDeoptimize(Thread* self, ShadowFrame* shadow_frame,
-                                           JValue* ret_val)
+void EnterInterpreterFromDeoptimize(Thread* self,
+                                    ShadowFrame* shadow_frame,
+                                    JValue* ret_val)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
-extern JValue EnterInterpreterFromEntryPoint(Thread* self, const DexFile::CodeItem* code_item,
-                                             ShadowFrame* shadow_frame)
+JValue EnterInterpreterFromEntryPoint(Thread* self,
+                                      const DexFile::CodeItem* code_item,
+                                      ShadowFrame* shadow_frame)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
-void ArtInterpreterToInterpreterBridge(Thread* self, const DexFile::CodeItem* code_item,
-                                       ShadowFrame* shadow_frame, JValue* result)
+void ArtInterpreterToInterpreterBridge(Thread* self,
+                                       const DexFile::CodeItem* code_item,
+                                       ShadowFrame* shadow_frame,
+                                       JValue* result)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
 }  // namespace interpreter
