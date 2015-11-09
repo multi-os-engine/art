@@ -557,6 +557,10 @@ class LocationSummary : public ArenaObject<kArenaAllocLocationSummary> {
     live_registers_.Add(location);
   }
 
+  void RemoveLiveRegister(Location location) {
+    live_registers_.Remove(location);
+  }
+
   BitVector* GetStackMask() const {
     return stack_mask_;
   }
@@ -592,6 +596,10 @@ class LocationSummary : public ArenaObject<kArenaAllocLocationSummary> {
     return intrinsified_;
   }
 
+  void SetIntrinsified(bool intrinsified) {
+    intrinsified_ = intrinsified;
+  }
+
  private:
   ArenaVector<Location> inputs_;
   ArenaVector<Location> temps_;
@@ -611,7 +619,7 @@ class LocationSummary : public ArenaObject<kArenaAllocLocationSummary> {
   RegisterSet live_registers_;
 
   // Whether these are locations for an intrinsified call.
-  const bool intrinsified_;
+  bool intrinsified_;
 
   ART_FRIEND_TEST(RegisterAllocatorTest, ExpectedInRegisterHint);
   ART_FRIEND_TEST(RegisterAllocatorTest, SameAsFirstInputHint);
