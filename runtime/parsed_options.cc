@@ -451,7 +451,6 @@ bool ParsedOptions::DoParse(const RuntimeOptions& options,
     UsageMessage(stdout, "ART version %s\n", Runtime::GetVersion());
     Exit(0);
   } else if (args.Exists(M::BootClassPath)) {
-    LOG(INFO) << "setting boot class path to " << *args.Get(M::BootClassPath);
   }
 
   // Set a default boot class path if we didn't get an explicit one via command line.

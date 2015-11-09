@@ -22,9 +22,13 @@
 
 #include "base/logging.h"
 #include "base/stl_util.h"
+#include "class_linker.h"
 #include "dex_file-inl.h"
 #include "gc/space/image_space.h"
+#include "handle_scope-inl.h"
+#include "mirror/class_loader.h"
 #include "oat_file_assistant.h"
+#include "scoped_thread_state_change.h"
 #include "thread-inl.h"
 
 namespace art {
@@ -33,6 +37,7 @@ namespace art {
 // Only enabled for debug builds to prevent bit rot. There are too many performance regressions for
 // normal builds.
 static constexpr bool kDuplicateClassesCheck = kIsDebugBuild;
+static constexpr bool kEnableAppImage = true;
 
 const OatFile* OatFileManager::RegisterOatFile(std::unique_ptr<const OatFile> oat_file) {
   WriterMutexLock mu(Thread::Current(), *Locks::oat_file_manager_lock_);
@@ -273,6 +278,8 @@ bool OatFileManager::HasCollisions(const OatFile* oat_file,
 std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
     const char* dex_location,
     const char* oat_location,
+    jobject class_loader,
+    jobjectArray dex_elements,
     const OatFile** out_oat_file,
     std::vector<std::string>* error_msgs) {
   CHECK(dex_location != nullptr);
@@ -280,12 +287,13 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
 
   // Verify we aren't holding the mutator lock, which could starve GC if we
   // have to generate or relocate an oat file.
-  Locks::mutator_lock_->AssertNotHeld(Thread::Current());
-
+  Thread* const self = Thread::Current();
+  Locks::mutator_lock_->AssertNotHeld(self);
+  Runtime* const runtime = Runtime::Current();
   OatFileAssistant oat_file_assistant(dex_location,
                                       oat_location,
                                       kRuntimeISA,
-                                      !Runtime::Current()->IsAotCompiler());
+                                      !runtime->IsAotCompiler());
 
   // Lock the target oat location to avoid races generating and loading the
   // oat file.
@@ -304,8 +312,8 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
     LOG(WARNING) << error_msg;
   }
 
-  // Get the oat file on disk.
   std::unique_ptr<const OatFile> oat_file(oat_file_assistant.GetBestOatFile().release());
+  // Get the oat file on disk.
   if (oat_file != nullptr) {
     // Take the file only if it has no collisions, or we must take it because of preopting.
     bool accept_oat_file = !HasCollisions(oat_file.get(), /*out*/ &error_msg);
@@ -340,7 +348,38 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
 
   // Load the dex files from the oat file.
   if (source_oat_file != nullptr) {
-    dex_files = oat_file_assistant.LoadDexFiles(*source_oat_file, dex_location);
+    bool added_image_space = false;
+    // gLogVerbosity.image = true;  // Don't check this in.
+    if (source_oat_file->IsExecutable()) {
+      std::unique_ptr<gc::space::ImageSpace> image_space(
+          kEnableAppImage ? oat_file_assistant.GetImageSpace(source_oat_file) : nullptr);
+      if (image_space != nullptr) {
+        ScopedObjectAccess soa(self);
+        StackHandleScope<1> hs(self);
+        Handle<mirror::ClassLoader> h_loader(
+            hs.NewHandle(soa.Decode<mirror::ClassLoader*>(class_loader)));
+        // Can not load app image without class loader.
+        if (h_loader.Get() != nullptr) {
+          std::string temp_error_msg;
+          if (!runtime->GetClassLinker()->AddImageSpace(image_space.get(),
+                                                        h_loader,
+                                                        dex_elements,
+                                                        dex_location,
+                                                        /*out*/&dex_files,
+                                                        /*out*/&temp_error_msg)) {
+            VLOG(image) << "Failed to load application image file " << temp_error_msg;
+            // Non-fatal don't update error_msg.
+          } else {
+            runtime->GetHeap()->AddSpace(image_space.release());
+            added_image_space = true;
+          }
+        }
+      }
+    }
+    if (!added_image_space) {
+      DCHECK(dex_files.empty());
+      dex_files = oat_file_assistant.LoadDexFiles(*source_oat_file, dex_location);
+    }
     if (dex_files.empty()) {
       error_msgs->push_back("Failed to open dex files from " + source_oat_file->GetLocation());
     }

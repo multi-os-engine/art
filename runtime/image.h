@@ -78,10 +78,32 @@ class PACKED(4) ImageSection {
 // header of image files written by ImageWriter, read and validated by Space.
 class PACKED(4) ImageHeader {
  public:
+  enum StorageMode : uint32_t {
+    kStorageModeUncompressed,
+    kStorageModeLZ4,
+    kStorageModeCount,  // Number of elements in enum.
+  };
+  static constexpr StorageMode kDefaultStorageMode = kStorageModeUncompressed;
+
   ImageHeader()
-      : image_begin_(0U), image_size_(0U), oat_checksum_(0U), oat_file_begin_(0U),
-        oat_data_begin_(0U), oat_data_end_(0U), oat_file_end_(0U), patch_delta_(0),
-        image_roots_(0U), pointer_size_(0U), compile_pic_(0) {}
+      : image_begin_(0U),
+        image_size_(0U),
+        oat_checksum_(0U),
+        oat_file_begin_(0U),
+        oat_data_begin_(0U),
+        oat_data_end_(0U),
+        oat_file_end_(0U),
+        boot_image_begin_(0U),
+        boot_image_size_(0U),
+        boot_oat_begin_(0U),
+        boot_oat_size_(0U),
+        patch_delta_(0),
+        image_roots_(0U),
+        pointer_size_(0U),
+        compile_pic_(0),
+        is_pic_(0),
+        storage_mode_(kDefaultStorageMode),
+        data_size_(0) {}
 
   ImageHeader(uint32_t image_begin,
               uint32_t image_size,
@@ -92,8 +114,15 @@ class PACKED(4) ImageHeader {
               uint32_t oat_data_begin,
               uint32_t oat_data_end,
               uint32_t oat_file_end,
+              uint32_t boot_image_begin,
+              uint32_t boot_image_size,
+              uint32_t boot_oat_begin,
+              uint32_t boot_oat_size,
               uint32_t pointer_size,
-              bool compile_pic);
+              bool compile_pic,
+              bool is_pic,
+              StorageMode storage_mode,
+              size_t data_size);
 
   bool IsValid() const;
   const char* GetMagic() const;
@@ -189,9 +218,39 @@ class PACKED(4) ImageHeader {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void RelocateImage(off_t delta);
+  void RelocateImageMethods(off_t delta);
+  void RelocateImageObjects(off_t delta);
 
   bool CompilePic() const {
     return compile_pic_ != 0;
+  }
+
+  bool IsPic() const {
+    return is_pic_ != 0;
+  }
+
+  uint32_t GetBootImageBegin() const {
+    return boot_image_begin_;
+  }
+
+  uint32_t GetBootImageSize() const {
+    return boot_image_size_;
+  }
+
+  uint32_t GetBootOatBegin() const {
+    return boot_oat_begin_;
+  }
+
+  uint32_t GetBootOatSize() const {
+    return boot_oat_size_;
+  }
+
+  StorageMode GetStorageMode() const {
+    return storage_mode_;
+  }
+
+  uint64_t GetDataSize() const {
+    return data_size_;
   }
 
  private:
@@ -223,6 +282,16 @@ class PACKED(4) ImageHeader {
   // .so files. Used for positioning a following alloc spaces.
   uint32_t oat_file_end_;
 
+  // Boot image begin and end (app image headers only).
+  uint32_t boot_image_begin_;
+  uint32_t boot_image_size_;
+
+  // Boot oat begin and end (app image headers only).
+  uint32_t boot_oat_begin_;
+  uint32_t boot_oat_size_;
+
+  // TODO: We should probably insert a boot image checksum for app images.
+
   // The total delta that this image has been patched.
   int32_t patch_delta_;
 
@@ -235,11 +304,22 @@ class PACKED(4) ImageHeader {
   // Boolean (0 or 1) to denote if the image was compiled with --compile-pic option
   const uint32_t compile_pic_;
 
-  // Image sections
+  // Boolean (0 or 1) to denote if the image can be mapped at a random address. Currently, app
+  // oat files do not depend on their app image.
+  const uint32_t is_pic_;
+
+  // Image sections, all relative.
   ImageSection sections_[kSectionCount];
 
-  // Image methods.
+  // Image methods, may be inside of the boot image for app images.
   uint64_t image_methods_[kImageMethodsCount];
+
+  // Storage method for the image, the image may be compressed.
+  StorageMode storage_mode_;
+
+  // Data size for the image data excluding the bitmap and the header. For compressed images, this
+  // is the compressed size in the file.
+  uint32_t data_size_;
 
   friend class ImageWriter;
 };
@@ -248,6 +328,7 @@ std::ostream& operator<<(std::ostream& os, const ImageHeader::ImageMethod& polic
 std::ostream& operator<<(std::ostream& os, const ImageHeader::ImageRoot& policy);
 std::ostream& operator<<(std::ostream& os, const ImageHeader::ImageSections& section);
 std::ostream& operator<<(std::ostream& os, const ImageSection& section);
+std::ostream& operator<<(std::ostream& os, const ImageHeader::StorageMode& mode);
 
 }  // namespace art
 

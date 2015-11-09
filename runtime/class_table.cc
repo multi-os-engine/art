@@ -40,6 +40,16 @@ bool ClassTable::Contains(mirror::Class* klass) {
   return false;
 }
 
+mirror::Class* ClassTable::Lookup(mirror::Class* klass) {
+  for (ClassSet& class_set : classes_) {
+    auto it = class_set.Find(GcRoot<mirror::Class>(klass));
+    if (it != class_set.end()) {
+      return it->Read();
+    }
+  }
+  return nullptr;
+}
+
 mirror::Class* ClassTable::UpdateClass(const char* descriptor, mirror::Class* klass, size_t hash) {
   // Should only be updating latest table.
   auto existing_it = classes_.back().FindWithHash(descriptor, hash);
@@ -167,9 +177,14 @@ size_t ClassTable::WriteToMemory(uint8_t* ptr) const {
   return ret;
 }
 
-size_t ClassTable::ReadFromMemory(uint8_t* ptr) {
+size_t ClassTable::ReadFromMemory(uint8_t* ptr, mirror::ClassLoader* new_loader) {
   size_t read_count = 0;
   classes_.insert(classes_.begin(), ClassSet(ptr, /*make copy*/false, &read_count));
+  if (new_loader != nullptr) {
+    for (GcRoot<mirror::Class>& klass : classes_.front()) {
+      klass.Read<kWithoutReadBarrier>()->SetClassLoader(new_loader);
+    }
+  }
   return read_count;
 }
 

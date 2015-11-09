@@ -153,6 +153,12 @@ bool PatchOat::Patch(const std::string& image_location, off_t delta,
     return false;
   }
 
+  if (image_header.GetStorageMode() != ImageHeader::kStorageModeUncompressed) {
+    LOG(ERROR) << "Patchoat is not supported with compressed image files "
+               << input_image->GetPath();
+    return false;
+  }
+
   /*bool is_image_pic = */IsImagePic(image_header, input_image->GetPath());
   // Nothing special to do right now since the image always needs to get patched.
   // Perhaps in some far-off future we may have images with relative addresses that are true-PIC.
@@ -528,6 +534,9 @@ void PatchOat::PatchInternedStrings(const ImageHeader* image_header) {
 
 void PatchOat::PatchClassTable(const ImageHeader* image_header) {
   const auto& section = image_header->GetImageSection(ImageHeader::kSectionClassTable);
+  if (section.Size() == 0) {
+    return;
+  }
   // Note that we require that ReadFromMemory does not make an internal copy of the elements.
   // This also relies on visit roots not doing any verification which could fail after we update
   // the roots to be the image addresses.
