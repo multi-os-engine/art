@@ -49,7 +49,7 @@ class ImageSpace;
 
 class ClassTable;
 
-static constexpr int kInvalidImageFd = -1;
+static constexpr int kInvalidFd = -1;
 
 // Write a Space built during compilation for use during execution.
 class ImageWriter FINAL {
@@ -107,7 +107,9 @@ class ImageWriter FINAL {
   // the names in image_filenames.
   bool Write(int image_fd,
              const std::vector<const char*>& image_filenames,
-             const std::vector<const char*>& oat_filenames)
+             int oat_fd,
+             const std::vector<const char*>& oat_filenames,
+             const std::string& oat_location)
       REQUIRES(!Locks::mutator_lock_);
 
   uintptr_t GetOatDataBegin(const char* oat_filename) {
