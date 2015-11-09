@@ -147,6 +147,7 @@ TEST_F(CompilerDriverTest, DISABLED_LARGE_CompileDexLibCore) {
 
 TEST_F(CompilerDriverTest, AbstractMethodErrorStub) {
   TEST_DISABLED_FOR_HEAP_REFERENCE_POISONING_WITH_QUICK();
+  TEST_DISABLED_FOR_READ_BARRIER_WITH_QUICK();
   jobject class_loader;
   {
     ScopedObjectAccess soa(Thread::Current());
@@ -193,6 +194,7 @@ class CompilerDriverMethodsTest : public CompilerDriverTest {
 
 TEST_F(CompilerDriverMethodsTest, Selection) {
   TEST_DISABLED_FOR_HEAP_REFERENCE_POISONING_WITH_QUICK();
+  TEST_DISABLED_FOR_READ_BARRIER_WITH_QUICK();
   Thread* self = Thread::Current();
   jobject class_loader;
   {
