@@ -155,7 +155,7 @@ static jobject DexFile_openDexFileNative(JNIEnv* env,
                                          jstring javaOutputName,
                                          jint flags ATTRIBUTE_UNUSED,
                                          // class_loader will be used for app images.
-                                         jobject class_loader ATTRIBUTE_UNUSED) {
+                                         jobject class_loader) {
   ScopedUtfChars sourceName(env, javaSourceName);
   if (sourceName.c_str() == nullptr) {
     return 0;
@@ -173,6 +173,7 @@ static jobject DexFile_openDexFileNative(JNIEnv* env,
 
   dex_files = runtime->GetOatFileManager().OpenDexFilesFromOat(sourceName.c_str(),
                                                                outputName.c_str(),
+                                                               class_loader,
                                                                /*out*/ &oat_file,
                                                                /*out*/ &error_msgs);
 

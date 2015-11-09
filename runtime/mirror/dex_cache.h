@@ -61,6 +61,13 @@ class MANAGED DexCache FINAL : public Object {
   void Fixup(ArtMethod* trampoline, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  template <typename T, typename Visitor>
+  static void FixupGcRootArray(GcRoot<T>* dest,
+                               GcRoot<T>* src,
+                               size_t count,
+                               const Visitor& visitor)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   String* GetLocation() SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldObject<String>(OFFSET_OF_OBJECT_MEMBER(DexCache, location_));
   }

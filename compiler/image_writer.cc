@@ -1165,18 +1165,48 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
   const size_t image_end = static_cast<uint32_t>(interned_strings_section->End());
   CHECK_EQ(AlignUp(image_begin_ + image_end, kPageSize), oat_file_begin) <<
       "Oat file should be right after the image.";
+  // Store boot image info for app image so that we can relocate.
+
+  uint32_t boot_image_begin = 0;
+  uint32_t boot_image_size = 0;
+  uint32_t boot_oat_begin = 0;
+  uint32_t boot_oat_size = 0;
+  if (boot_image_space_ != nullptr) {
+    boot_image_begin = PointerToLowMemUInt32(boot_image_space_->Begin());
+    boot_image_size = boot_image_space_->GetImageHeader().GetImageSize();
+    const OatFile* boot_oat_file = boot_image_space_->GetOatFile();
+    /*
+    boot_oat_begin =
+        PointerToLowMemUInt32(boot_image_space_->GetImageHeader().GetOatFileBegin());
+    boot_oat_size =
+        PointerToLowMemUInt32(boot_image_space_->GetImageHeader().GetOatFileEnd()) - boot_oat_begin;
+        */
+    boot_oat_begin = PointerToLowMemUInt32(boot_oat_file->Begin());
+    boot_oat_size = boot_oat_file->Size();
+  }
+  LOG(ERROR) << "App " << reinterpret_cast<const void*>(oat_file_begin)
+             << "-" << reinterpret_cast<const void*>(oat_file_end);
+  LOG(ERROR) << "App data " << reinterpret_cast<const void*>(oat_data_begin_)
+             << "-" << reinterpret_cast<const void*>(oat_data_end);
+  LOG(ERROR) << "Boot " << reinterpret_cast<const void*>(boot_oat_begin)
+             << "-" << reinterpret_cast<const void*>(boot_oat_begin + boot_oat_size);
   // Create the header.
   new (image_->Begin()) ImageHeader(PointerToLowMemUInt32(image_begin_),
-                                                          image_end,
-                                                          sections,
-                                                          image_roots_address_,
-                                                          oat_file_->GetOatHeader().GetChecksum(),
-                                                          PointerToLowMemUInt32(oat_file_begin),
-                                                          PointerToLowMemUInt32(oat_data_begin_),
-                                                          PointerToLowMemUInt32(oat_data_end),
-                                                          PointerToLowMemUInt32(oat_file_end),
-                                                          target_ptr_size_,
-                                                          compile_pic_);
+                                    image_end,
+                                    sections,
+                                    image_roots_address_,
+                                    oat_file_->GetOatHeader().GetChecksum(),
+                                    PointerToLowMemUInt32(oat_file_begin),
+                                    PointerToLowMemUInt32(oat_data_begin_),
+                                    PointerToLowMemUInt32(oat_data_end),
+                                    PointerToLowMemUInt32(oat_file_end),
+                                    boot_image_begin,
+                                    boot_image_size,
+                                    boot_oat_begin,
+                                    boot_oat_size,
+                                    target_ptr_size_,
+                                    compile_pic_,
+                                    /*is_pic*/compile_app_image_);
 }
 
 ArtMethod* ImageWriter::GetImageMethodAddress(ArtMethod* method) {
@@ -1438,34 +1468,28 @@ T* ImageWriter::NativeLocationInImage(T* obj) {
       : reinterpret_cast<T*>(image_begin_ + NativeOffsetInImage(obj));
 }
 
-void ImageWriter::FixupClass(mirror::Class* orig, mirror::Class* copy) {
-  // Update the field arrays.
-  copy->SetSFieldsPtrUnchecked(NativeLocationInImage(orig->GetSFieldsPtr()));
-  copy->SetIFieldsPtrUnchecked(NativeLocationInImage(orig->GetIFieldsPtr()));
-  // Update direct and virtual method arrays.
-  copy->SetDirectMethodsPtrUnchecked(NativeLocationInImage(orig->GetDirectMethodsPtr()));
-  copy->SetVirtualMethodsPtr(NativeLocationInImage(orig->GetVirtualMethodsPtr()));
-  // Update dex cache strings.
-  copy->SetDexCacheStrings(NativeLocationInImage(orig->GetDexCacheStrings()));
-  // Fix up embedded tables.
-  if (!orig->IsTemp()) {
-    // TODO: Why do we have temp classes in some cases?
-    if (orig->ShouldHaveEmbeddedImtAndVTable()) {
-      for (int32_t i = 0; i < orig->GetEmbeddedVTableLength(); ++i) {
-        ArtMethod* orig_method = orig->GetEmbeddedVTableEntry(i, target_ptr_size_);
-        copy->SetEmbeddedVTableEntryUnchecked(
-            i,
-            NativeLocationInImage(orig_method),
-            target_ptr_size_);
-      }
-      for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
-        copy->SetEmbeddedImTableEntry(
-            i,
-            NativeLocationInImage(orig->GetEmbeddedImTableEntry(i, target_ptr_size_)),
-            target_ptr_size_);
-      }
-    }
+template <typename T>
+T* ImageWriter::NativeCopyLocation(T* obj) {
+  return (obj == nullptr || IsInBootImage(obj))
+      ? obj
+      : reinterpret_cast<T*>(image_->Begin() + NativeOffsetInImage(obj));
+}
+
+class NativeLocationVisitor {
+ public:
+  explicit NativeLocationVisitor(ImageWriter* image_writer) : image_writer_(image_writer) {}
+
+  template <typename T>
+  T* operator()(T* ptr) const {
+    return image_writer_->NativeLocationInImage(ptr);
   }
+
+ private:
+  ImageWriter* const image_writer_;
+};
+
+void ImageWriter::FixupClass(mirror::Class* orig, mirror::Class* copy) {
+  orig->FixupNativePointers(copy, target_ptr_size_, NativeLocationVisitor(this));
   FixupClassVisitor visitor(this, copy);
   static_cast<mirror::Object*>(orig)->VisitReferences(visitor, visitor);
 }
@@ -1525,6 +1549,21 @@ void ImageWriter::FixupObject(Object* orig, Object* copy) {
   }
 }
 
+
+class ImageAddressVisitor {
+ public:
+  explicit ImageAddressVisitor(ImageWriter* image_writer) : image_writer_(image_writer) {}
+
+  template <typename T>
+  T* operator()(T* ptr) const SHARED_REQUIRES(Locks::mutator_lock_) {
+    return image_writer_->GetImageAddress(ptr);
+  }
+
+ private:
+  ImageWriter* const image_writer_;
+};
+
+
 void ImageWriter::FixupDexCache(mirror::DexCache* orig_dex_cache,
                                 mirror::DexCache* copy_dex_cache) {
   // Though the DexCache array fields are usually treated as native pointers, we set the full
@@ -1533,52 +1572,41 @@ void ImageWriter::FixupDexCache(mirror::DexCache* orig_dex_cache,
   //     static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + offset))).
   GcRoot<mirror::String>* orig_strings = orig_dex_cache->GetStrings();
   if (orig_strings != nullptr) {
-    uintptr_t copy_strings_offset = NativeOffsetInImage(orig_strings);
-    copy_dex_cache->SetField64<false>(
-        mirror::DexCache::StringsOffset(),
-        static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + copy_strings_offset)));
-    GcRoot<mirror::String>* copy_strings =
-        reinterpret_cast<GcRoot<mirror::String>*>(image_->Begin() + copy_strings_offset);
-    for (size_t i = 0, num = orig_dex_cache->NumStrings(); i != num; ++i) {
-      copy_strings[i] = GcRoot<mirror::String>(GetImageAddress(orig_strings[i].Read()));
-    }
+    copy_dex_cache->SetFieldPtr64<false>(mirror::DexCache::StringsOffset(),
+                                         NativeLocationInImage(orig_strings));
+    mirror::DexCache::FixupGcRootArray(NativeCopyLocation(orig_strings),
+                                       orig_strings,
+                                       orig_dex_cache->NumStrings(),
+                                       ImageAddressVisitor(this));
   }
   GcRoot<mirror::Class>* orig_types = orig_dex_cache->GetResolvedTypes();
   if (orig_types != nullptr) {
-    uintptr_t copy_types_offset = NativeOffsetInImage(orig_types);
-    copy_dex_cache->SetField64<false>(
-        mirror::DexCache::ResolvedTypesOffset(),
-        static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + copy_types_offset)));
-    GcRoot<mirror::Class>* copy_types =
-        reinterpret_cast<GcRoot<mirror::Class>*>(image_->Begin() + copy_types_offset);
-    for (size_t i = 0, num = orig_dex_cache->NumResolvedTypes(); i != num; ++i) {
-      copy_types[i] = GcRoot<mirror::Class>(GetImageAddress(orig_types[i].Read()));
-    }
+    copy_dex_cache->SetFieldPtr64<false>(mirror::DexCache::ResolvedTypesOffset(),
+                                         NativeLocationInImage(orig_types));
+    mirror::DexCache::FixupGcRootArray(NativeCopyLocation(orig_types),
+                                       orig_types,
+                                       orig_dex_cache->NumResolvedTypes(),
+                                       ImageAddressVisitor(this));
   }
   ArtMethod** orig_methods = orig_dex_cache->GetResolvedMethods();
   if (orig_methods != nullptr) {
-    uintptr_t copy_methods_offset = NativeOffsetInImage(orig_methods);
-    copy_dex_cache->SetField64<false>(
-        mirror::DexCache::ResolvedMethodsOffset(),
-        static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + copy_methods_offset)));
-    ArtMethod** copy_methods =
-        reinterpret_cast<ArtMethod**>(image_->Begin() + copy_methods_offset);
+    copy_dex_cache->SetFieldPtr64<false>(mirror::DexCache::ResolvedMethodsOffset(),
+                                         NativeLocationInImage(orig_methods));
+    ArtMethod** copy_methods = NativeCopyLocation(orig_methods);
     for (size_t i = 0, num = orig_dex_cache->NumResolvedMethods(); i != num; ++i) {
       ArtMethod* orig = mirror::DexCache::GetElementPtrSize(orig_methods, i, target_ptr_size_);
-      ArtMethod* copy = IsInBootImage(orig) ? orig : NativeLocationInImage(orig);
+      ArtMethod* copy = NativeLocationInImage(orig);
       mirror::DexCache::SetElementPtrSize(copy_methods, i, copy, target_ptr_size_);
     }
   }
   ArtField** orig_fields = orig_dex_cache->GetResolvedFields();
   if (orig_fields != nullptr) {
-    uintptr_t copy_fields_offset = NativeOffsetInImage(orig_fields);
-    copy_dex_cache->SetField64<false>(
-        mirror::DexCache::ResolvedFieldsOffset(),
-        static_cast<int64_t>(reinterpret_cast<uintptr_t>(image_begin_ + copy_fields_offset)));
-    ArtField** copy_fields = reinterpret_cast<ArtField**>(image_->Begin() + copy_fields_offset);
+    copy_dex_cache->SetFieldPtr64<false>(mirror::DexCache::ResolvedFieldsOffset(),
+                                         NativeLocationInImage(orig_fields));
+    ArtField** copy_fields = NativeCopyLocation(orig_fields);
     for (size_t i = 0, num = orig_dex_cache->NumResolvedFields(); i != num; ++i) {
       ArtField* orig = mirror::DexCache::GetElementPtrSize(orig_fields, i, target_ptr_size_);
-      ArtField* copy = IsInBootImage(orig) ? orig : NativeLocationInImage(orig);
+      ArtField* copy = NativeLocationInImage(orig);
       mirror::DexCache::SetElementPtrSize(copy_fields, i, copy, target_ptr_size_);
     }
   }
@@ -1589,11 +1617,10 @@ const uint8_t* ImageWriter::GetOatAddress(OatAddress type) const {
   // If we are compiling an app image, we need to use the stubs of the boot image.
   if (compile_app_image_) {
     // Use the current image pointers.
-    gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
-    DCHECK(image_space != nullptr);
-    const OatFile* oat_file = image_space->GetOatFile();
-    CHECK(oat_file != nullptr);
-    const OatHeader& header = oat_file->GetOatHeader();
+    DCHECK(boot_image_space_ != nullptr);
+    const OatFile* boot_oat = boot_image_space_->GetOatFile();
+    CHECK(boot_oat != nullptr);
+    const OatHeader& header = boot_oat->GetOatHeader();
     switch (type) {
       // TODO: We could maybe clean this up if we stored them in an array in the oat header.
       case kOatAddressQuickGenericJNITrampoline:
@@ -1633,7 +1660,8 @@ const uint8_t* ImageWriter::GetQuickCode(ArtMethod* method, bool* quick_is_inter
   const uint8_t* quick_code = GetOatAddressForOffset(quick_oat_code_offset);
   *quick_is_interpreted = false;
   if (quick_code != nullptr && (!method->IsStatic() || method->IsConstructor() ||
-      method->GetDeclaringClass()->IsInitialized())) {
+      // method->GetDeclaringClass()->IsInitialized())) {
+      method->GetDeclaringClass()->IsVerified())) {
     // We have code for a non-static or initialized method, just use the code.
   } else if (quick_code == nullptr && method->IsNative() &&
       (!method->IsStatic() || method->GetDeclaringClass()->IsInitialized())) {

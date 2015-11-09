@@ -432,7 +432,7 @@ inline void Class::SetIfTable(IfTable* new_iftable) {
 }
 
 inline LengthPrefixedArray<ArtField>* Class::GetIFieldsPtr() {
-  DCHECK(IsLoaded() || IsErroneous());
+  DCHECK(IsLoaded() || IsErroneous()) << GetStatus();
   return GetFieldPtr<LengthPrefixedArray<ArtField>*>(OFFSET_OF_OBJECT_MEMBER(Class, ifields_));
 }
 
@@ -662,7 +662,7 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
   return size;
 }
 
-template <typename Visitor>
+template <typename Visitor, bool kVisitNativeRoots>
 inline void Class::VisitReferences(mirror::Class* klass, const Visitor& visitor) {
   VisitInstanceFieldsReferences(klass, visitor);
   // Right after a class is allocated, but not yet loaded
@@ -678,8 +678,10 @@ inline void Class::VisitReferences(mirror::Class* klass, const Visitor& visitor)
     // linked yet.
     VisitStaticFieldsReferences(this, visitor);
   }
-  // Since this class is reachable, we must also visit the associated roots when we scan it.
-  VisitNativeRoots(visitor, Runtime::Current()->GetClassLinker()->GetImagePointerSize());
+  if (kVisitNativeRoots) {
+    // Since this class is reachable, we must also visit the associated roots when we scan it.
+    VisitNativeRoots(visitor, Runtime::Current()->GetClassLinker()->GetImagePointerSize());
+  }
 }
 
 template<ReadBarrierOption kReadBarrierOption>
@@ -935,6 +937,57 @@ inline uint32_t Class::NumInstanceFields() {
 inline uint32_t Class::NumStaticFields() {
   LengthPrefixedArray<ArtField>* arr = GetSFieldsPtrUnchecked();
   return arr != nullptr ? arr->size() : 0u;
+}
+
+template <typename Visitor>
+inline void Class::FixupNativePointers(mirror::Class* dest,
+                                       size_t pointer_size,
+                                       const Visitor& visitor) {
+  // Update the field arrays.
+  LengthPrefixedArray<ArtField>* const sfields = GetSFieldsPtr();
+  LengthPrefixedArray<ArtField>* const new_sfields = visitor(sfields);
+  if (sfields != new_sfields) {
+    dest->SetSFieldsPtrUnchecked(new_sfields);
+  }
+  LengthPrefixedArray<ArtField>* const ifields = GetIFieldsPtr();
+  LengthPrefixedArray<ArtField>* const new_ifields = visitor(ifields);
+  if (ifields != new_ifields) {
+    dest->SetIFieldsPtrUnchecked(new_ifields);
+  }
+  // Update direct and virtual method arrays.
+  LengthPrefixedArray<ArtMethod>* const direct_methods = GetDirectMethodsPtr();
+  LengthPrefixedArray<ArtMethod>* const new_direct_methods = visitor(direct_methods);
+  if (direct_methods != new_direct_methods) {
+    dest->SetDirectMethodsPtrUnchecked(new_direct_methods);
+  }
+  LengthPrefixedArray<ArtMethod>* const virtual_methods = GetVirtualMethodsPtr();
+  LengthPrefixedArray<ArtMethod>* const new_virtual_methods = visitor(virtual_methods);
+  if (virtual_methods != new_virtual_methods) {
+    dest->SetVirtualMethodsPtr(new_virtual_methods);
+  }
+  // Update dex cache strings.
+  GcRoot<mirror::String>* const strings = GetDexCacheStrings();
+  GcRoot<mirror::String>* const new_strings = visitor(strings);
+  if (strings != new_strings) {
+    dest->SetDexCacheStrings(new_strings);
+  }
+  // Fix up embedded tables.
+  if (!IsTemp() && ShouldHaveEmbeddedImtAndVTable()) {
+    for (int32_t i = 0, count = GetEmbeddedVTableLength(); i < count; ++i) {
+      ArtMethod* method = GetEmbeddedVTableEntry(i, pointer_size);
+      ArtMethod* new_method = visitor(method);
+      if (method != new_method) {
+        dest->SetEmbeddedVTableEntryUnchecked(i, new_method, pointer_size);
+      }
+    }
+    for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
+      ArtMethod* method = GetEmbeddedImTableEntry(i, pointer_size);
+      ArtMethod* new_method = visitor(method);
+      if (method != new_method) {
+        dest->SetEmbeddedImTableEntry(i, new_method, pointer_size);
+      }
+    }
+  }
 }
 
 }  // namespace mirror
