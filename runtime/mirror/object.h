@@ -456,6 +456,13 @@ class MANAGED LOCKABLE Object {
     SetFieldPtrWithSize<kTransactionActive, kCheckTransaction, kVerifyFlags>(
         field_offset, new_value, sizeof(void*));
   }
+  template<bool kTransactionActive, bool kCheckTransaction = true,
+      VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, typename T>
+  void SetFieldPtr64(MemberOffset field_offset, T new_value)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    SetFieldPtrWithSize<kTransactionActive, kCheckTransaction, kVerifyFlags>(
+        field_offset, new_value, 8u);
+  }
 
   template<bool kTransactionActive, bool kCheckTransaction = true,
       VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, typename T>
@@ -476,6 +483,7 @@ class MANAGED LOCKABLE Object {
   // TODO fix thread safety analysis broken by the use of template. This should be
   // SHARED_REQUIRES(Locks::mutator_lock_).
   template <VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
+            bool kVisitNativeRoots = true,
             typename Visitor,
             typename JavaLangRefVisitor = VoidFunctor>
   void VisitReferences(const Visitor& visitor, const JavaLangRefVisitor& ref_visitor)
@@ -494,6 +502,11 @@ class MANAGED LOCKABLE Object {
   T GetFieldPtr(MemberOffset field_offset)
       SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldPtrWithSize<T, kVerifyFlags, kIsVolatile>(field_offset, sizeof(void*));
+  }
+  template<class T, VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kIsVolatile = false>
+  T GetFieldPtr64(MemberOffset field_offset)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    return GetFieldPtrWithSize<T, kVerifyFlags, kIsVolatile>(field_offset, 8u);
   }
 
   template<class T, VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags, bool kIsVolatile = false>

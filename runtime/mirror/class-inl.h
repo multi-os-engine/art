@@ -516,7 +516,7 @@ inline void Class::SetIfTable(IfTable* new_iftable) {
 }
 
 inline LengthPrefixedArray<ArtField>* Class::GetIFieldsPtr() {
-  DCHECK(IsLoaded() || IsErroneous());
+  DCHECK(IsLoaded() || IsErroneous()) << GetStatus();
   return GetFieldPtr<LengthPrefixedArray<ArtField>*>(OFFSET_OF_OBJECT_MEMBER(Class, ifields_));
 }
 
@@ -746,7 +746,7 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
   return size;
 }
 
-template <typename Visitor>
+template <typename Visitor, bool kVisitNativeRoots>
 inline void Class::VisitReferences(mirror::Class* klass, const Visitor& visitor) {
   VisitInstanceFieldsReferences(klass, visitor);
   // Right after a class is allocated, but not yet loaded
@@ -762,8 +762,10 @@ inline void Class::VisitReferences(mirror::Class* klass, const Visitor& visitor)
     // linked yet.
     VisitStaticFieldsReferences(this, visitor);
   }
-  // Since this class is reachable, we must also visit the associated roots when we scan it.
-  VisitNativeRoots(visitor, Runtime::Current()->GetClassLinker()->GetImagePointerSize());
+  if (kVisitNativeRoots) {
+    // Since this class is reachable, we must also visit the associated roots when we scan it.
+    VisitNativeRoots(visitor, Runtime::Current()->GetClassLinker()->GetImagePointerSize());
+  }
 }
 
 template<ReadBarrierOption kReadBarrierOption>

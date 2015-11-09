@@ -115,6 +115,9 @@ class CardTable {
 
   // Resets all of the bytes in the card table to clean.
   void ClearCardTable();
+
+  // Clear a range of cards that covers start to end, start must be aligned to kCardSize.
+  // End is aligned up to kCardSize since image spaces' ends are not necessarily aligned.
   void ClearCardRange(uint8_t* start, uint8_t* end);
 
   // Resets all of the bytes in the card table which do not map to the image space.

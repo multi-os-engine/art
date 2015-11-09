@@ -475,6 +475,15 @@ class ArtMethod FINAL {
   // Returns whether the method has any compiled code, JIT or AOT.
   bool HasAnyCompiledCode() SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Update heap and native objects by the passed in visitor. Does not use read barrier.
+  // NO_THREAD_SAFETY_ANALYSIS since it may be used for image relocation.
+  template <typename Visitor>
+  ALWAYS_INLINE void UpdateObjects(const Visitor& visitor) NO_THREAD_SAFETY_ANALYSIS;
+
+  // Update entry points by passing them through the visitor.
+  template <typename Visitor>
+  ALWAYS_INLINE void UpdateEntrypoints(const Visitor& visitor);
+
  protected:
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   // The class we are a part of.
