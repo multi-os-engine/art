@@ -678,9 +678,26 @@ if [[ "$TEST_NAME" =~ ^[0-9]+-checker- ]]; then
   USE_JACK="false"
 
   if [ "$runtime" = "art" -a "$image_suffix" = "-optimizing" ]; then
+    # Optimizing has support for read barriers on x86 and x86-64 only.
+    # On other architectures, compiling is disabled when read barriers
+    # are enabled, meaning that we do not produce a CFG file as a
+    # side-effect of compilation, thus the Checker assertions cannot
+    # be checked.  Disable Checker for those cases.
+    #
+    # TODO: Re-enable Checker when read barrier support is added to
+    # other architectures (b/12687968).
+    if [ "x$ART_USE_READ_BARRIER" = xtrue ]        \
+       && (([ "x$host_mode" = "xyes" ]             \
+             && [ "x$host_arch_name" != xx86 ]     \
+             && [ "x$host_arch_name" != xx86_64 ]) \
+           || ([ "x$target_mode" = "xyes" ]        \
+               && [ "x$target_arch_name" != xx86 ] \
+               && [ "x$target_arch_name" != xx86_64 ])); then
+      run_checker="no"
     # In no-prebuild mode, the compiler is only invoked if both dex2oat and
     # patchoat are available. Disable Checker otherwise (b/22552692).
-    if [ "$prebuild_mode" = "yes" ] || [ "$have_patchoat" = "yes" -a "$have_dex2oat" = "yes" ]; then
+    elif [ "$prebuild_mode" = "yes" ] \
+         || [ "$have_patchoat" = "yes" -a "$have_dex2oat" = "yes" ]; then
       run_checker="yes"
 
       if [ "$target_mode" = "no" ]; then
