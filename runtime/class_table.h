@@ -87,6 +87,10 @@ class ClassTable {
   mirror::Class* Lookup(const char* descriptor, size_t hash)
       SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
 
+  // Return any class that matches the descriptor of klass. Returns null if there are none.
+  mirror::Class* Lookup(mirror::Class* klass)
+      SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
+
   void Insert(mirror::Class* klass)
       REQUIRES(Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);

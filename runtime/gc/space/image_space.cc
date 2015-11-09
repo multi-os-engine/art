@@ -573,8 +573,13 @@ ImageSpace* ImageSpace::Create(const char* image_location,
       // assume this if we are using a relocated image (i.e. image checksum
       // matches) since this is only different by the offset. We need this to
       // make sure that host tests continue to work.
-      space = ImageSpace::Init(image_filename->c_str(), image_location,
-                               !(is_system || relocated_version_used), error_msg);
+      // Since we are the boot image, pass null since we load the oat file from the boot image oat
+      // file name.
+      space = ImageSpace::Init(image_filename->c_str(),
+                               image_location,
+                               !(is_system || relocated_version_used),
+                               /* oat_file */nullptr,
+                               error_msg);
     }
     if (space != nullptr) {
       return space;
@@ -632,7 +637,7 @@ ImageSpace* ImageSpace::Create(const char* image_location,
     // we leave Create.
     ScopedFlock image_lock;
     image_lock.Init(cache_filename.c_str(), error_msg);
-    space = ImageSpace::Init(cache_filename.c_str(), image_location, true, error_msg);
+    space = ImageSpace::Init(cache_filename.c_str(), image_location, true, nullptr, error_msg);
     if (space == nullptr) {
       *error_msg = StringPrintf("Failed to load generated image '%s': %s",
                                 cache_filename.c_str(), error_msg->c_str());
@@ -655,33 +660,410 @@ void ImageSpace::VerifyImageAllocations() {
   }
 }
 
-ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_location,
-                             bool validate_oat_file, std::string* error_msg) {
+class RelocationRange {
+ public:
+  RelocationRange() = default;
+  RelocationRange(const RelocationRange&) = default;
+  RelocationRange(uintptr_t source, uintptr_t dest, uintptr_t length)
+      : source_(source),
+        dest_(dest),
+        length_(length) {}
+
+  bool ContainsSource(uintptr_t address) const {
+    return address - source_ < length_;
+  }
+
+  uintptr_t ToDest(uintptr_t address) const {
+    DCHECK(ContainsSource(address));
+    return address + Delta();
+  }
+
+  off_t Delta() const {
+    return dest_ - source_;
+  }
+
+  uintptr_t Source() const {
+    return source_;
+  }
+
+  uintptr_t Dest() const {
+    return dest_;
+  }
+
+  uintptr_t Length() const {
+    return length_;
+  }
+
+ private:
+  const uintptr_t source_;
+  const uintptr_t dest_;
+  const uintptr_t length_;
+};
+
+class FixupVisitor : public ValueObject {
+ public:
+  FixupVisitor(const RelocationRange& boot_image,
+               const RelocationRange& boot_oat,
+               const RelocationRange& app_image,
+               const RelocationRange& app_oat)
+      : boot_image_(boot_image),
+        boot_oat_(boot_oat),
+        app_image_(app_image),
+        app_oat_(app_oat) {}
+
+  template <typename T>
+  ALWAYS_INLINE T* ForwardObject(T* src) const {
+    const uintptr_t uint_src = reinterpret_cast<uintptr_t>(src);
+    if (boot_image_.ContainsSource(uint_src)) {
+      return reinterpret_cast<T*>(boot_image_.ToDest(uint_src));
+    }
+    if (app_image_.ContainsSource(uint_src)) {
+      return reinterpret_cast<T*>(app_image_.ToDest(uint_src));
+    }
+    return src;
+  }
+
+  ALWAYS_INLINE const void* ForwardCode(const void* src) const {
+    const uintptr_t uint_src = reinterpret_cast<uintptr_t>(src);
+    if (boot_oat_.ContainsSource(uint_src)) {
+     return reinterpret_cast<const void*>(boot_oat_.ToDest(uint_src));
+    }
+    if (app_oat_.ContainsSource(uint_src)) {
+      return reinterpret_cast<const void*>(app_oat_.ToDest(uint_src));
+    }
+    if (uint_src != 0) {
+      LOG(FATAL) << "Unpatched code " << src;
+    }
+    return src;
+  }
+
+ protected:
+  // Source section.
+  RelocationRange boot_image_;
+  RelocationRange boot_oat_;
+  RelocationRange app_image_;
+  RelocationRange app_oat_;
+};
+
+std::ostream& operator<<(std::ostream& os, const RelocationRange& reloc) {
+  return os << "(" << reinterpret_cast<const void*>(reloc.Source()) << "-"
+            << reinterpret_cast<const void*>(reloc.Source() + reloc.Length()) << ")->("
+            << reinterpret_cast<const void*>(reloc.Dest()) << "-"
+            << reinterpret_cast<const void*>(reloc.Dest() + reloc.Length()) << ")";
+}
+
+// Adapt to mirror::Class::FixupNativePointers
+class FixupObjectAdapter : public FixupVisitor {
+ public:
+  template<typename... Args>
+  explicit FixupObjectAdapter(Args... args) : FixupVisitor(args...) {}
+
+  template <typename T>
+  T* operator()(T* obj) const {
+    return ForwardObject(obj);
+  }
+};
+
+class FixupClassVisitor : public FixupVisitor {
+ public:
+  template<typename... Args>
+  explicit FixupClassVisitor(Args... args) : FixupVisitor(args...) {}
+
+  // The image space is contained so the GC doesn't need to know about it. Avoid requiring mutator
+  // lock to prevent possible pauses.
+  ALWAYS_INLINE void operator()(mirror::Object* obj) const NO_THREAD_SAFETY_ANALYSIS {
+    mirror::Class* klass = obj->GetClass<kVerifyNone, kWithoutReadBarrier>();
+    DCHECK(klass != nullptr) << "Null class in image";
+    // No AsClass since our fields aren't quite fixed up yet.
+    mirror::Class* new_klass = down_cast<mirror::Class*>(ForwardObject(klass));
+    // Keep clean if possible.
+    if (klass != new_klass) {
+      obj->SetClass<kVerifyNone>(new_klass);
+    }
+  }
+};
+
+class FixupObjectVisitor : public FixupVisitor {
+ public:
+  template<typename... Args>
+  explicit FixupObjectVisitor(Args... args) : FixupVisitor(args...) {}
+
+  // Fixup separately since we need to fixup method entrypoints.
+  ALWAYS_INLINE void VisitRootIfNonNull(
+      mirror::CompressedReference<mirror::Object>* root ATTRIBUTE_UNUSED) const {}
+
+  ALWAYS_INLINE void VisitRoot(mirror::CompressedReference<mirror::Object>* root ATTRIBUTE_UNUSED)
+      const {}
+
+  ALWAYS_INLINE void operator()(mirror::Object* obj,
+                                MemberOffset offset,
+                                bool is_static ATTRIBUTE_UNUSED) const
+      NO_THREAD_SAFETY_ANALYSIS {
+    if (offset.Uint32Value() != mirror::Object::ClassOffset().Uint32Value()) {
+      mirror::Object* ref = obj->GetFieldObject<mirror::Object, kVerifyNone>(offset);
+      // Use SetFieldObjectWithoutWriteBarrier to avoid card marking since we are writing to the
+      // image.
+      obj->SetFieldObjectWithoutWriteBarrier<false, true, kVerifyNone>(offset, ForwardObject(ref));
+    }
+  }
+
+  // java.lang.ref.Reference visitor.
+  void operator()(mirror::Class* klass ATTRIBUTE_UNUSED, mirror::Reference* ref) const
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::heap_bitmap_lock_) {
+    mirror::Object* obj = ref->GetReferent();
+    ref->SetFieldObjectWithoutWriteBarrier<false, true, kVerifyNone>(
+        mirror::Reference::ReferentOffset(),
+        ForwardObject(obj));
+  }
+
+  ALWAYS_INLINE void operator()(mirror::Object* obj) const NO_THREAD_SAFETY_ANALYSIS {
+    obj->VisitReferences<kVerifyNone, /*visit native roots*/false>(*this, *this);
+    // We want to use our own class loader and not the one in the image.
+    if (obj->IsClass()) {
+      mirror::Class* klass = obj->AsClass();
+      // TODO: Clean this up.
+      FixupObjectAdapter visitor(boot_image_, boot_oat_, app_image_, app_oat_);
+      klass->FixupNativePointers(klass, sizeof(void*), visitor);
+      // Deal with the arrays.
+      mirror::PointerArray* vtable = klass->GetVTable();
+      if (vtable != nullptr) {
+        vtable->Fixup(vtable, sizeof(void*), visitor);
+      }
+      mirror::IfTable* iftable = klass->GetIfTable();
+      if (iftable != nullptr) {
+        for (int32_t i = 0; i < klass->GetIfTableCount(); ++i) {
+          if (iftable->GetMethodArrayCount(i) > 0) {
+            mirror::PointerArray* methods = iftable->GetMethodArray(i);
+            DCHECK(methods != nullptr);
+            methods->Fixup(methods, sizeof(void*), visitor);
+          }
+        }
+      }
+    } else if (obj->IsClassLoader()) {
+      obj->AsClassLoader()->SetClassTable(nullptr);
+    }
+  }
+};
+
+class FixupArtMethodVisitor : public FixupVisitor, public ArtMethodVisitor {
+ public:
+  template<typename... Args>
+  explicit FixupArtMethodVisitor(Args... args) : FixupVisitor(args...) {}
+
+  virtual void Visit(ArtMethod* method) NO_THREAD_SAFETY_ANALYSIS {
+    method->SetDeclaringClass(ForwardObject(method->GetDeclaringClassNoBarrier())->AsClass());
+    method->SetDexCacheResolvedMethods(
+        ForwardObject(method->GetDexCacheResolvedMethods(sizeof(void*))),
+        sizeof(void*));
+    method->SetDexCacheResolvedTypes(
+        ForwardObject(method->GetDexCacheResolvedTypes(sizeof(void*))),
+        sizeof(void*));
+    if (method->IsNative()) {
+      method->SetEntryPointFromJni(ForwardCode(method->GetEntryPointFromJni()));
+    } else {
+      DCHECK(method->GetEntryPointFromJni() == nullptr);
+    }
+    method->SetEntryPointFromQuickCompiledCode(
+        ForwardCode(method->GetEntryPointFromQuickCompiledCode()));
+  }
+};
+
+class FixupArtFieldVisitor : public FixupVisitor, public ArtFieldVisitor {
+ public:
+  template<typename... Args>
+  explicit FixupArtFieldVisitor(Args... args) : FixupVisitor(args...) {}
+
+  virtual void Visit(ArtField* field) NO_THREAD_SAFETY_ANALYSIS {
+    field->SetDeclaringClass(ForwardObject(
+        field->DeclaringClassRoot().Read<kWithoutReadBarrier>())->AsClass());
+  }
+};
+
+static bool RelocateInPlace(ImageHeader& image_header,
+                            uint8_t* target_base,
+                            accounting::ContinuousSpaceBitmap* bitmap,
+                            const OatFile* app_oat_file,
+                            std::string* error_msg) {
+  DCHECK(error_msg != nullptr);
+  if (!image_header.IsPic()) {
+    if (image_header.GetImageBegin() == target_base) {
+      return true;
+    }
+    // TODO: Add more detail.
+    *error_msg = "Can not relocate non-pic image";
+    return false;
+  }
+  // Set up sections.
+  space::ImageSpace* boot_image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
+  CHECK(boot_image_space != nullptr);
+  const ImageHeader& boot_image_header = boot_image_space->GetImageHeader();
+  const OatFile* boot_oat_file = boot_image_space->GetOatFile();
+  const size_t boot_oat_data_size = boot_image_header.GetOatDataEnd() -
+      boot_image_header.GetOatDataBegin();
+  if (boot_oat_file->Size() != boot_oat_data_size) {
+    *error_msg = StringPrintf("Boot oat file size %" PRIu64 " does not match expected size %"
+                                  PRIu64,
+                              static_cast<uint64_t>(boot_oat_file->Size()),
+                              static_cast<uint64_t>(boot_oat_data_size));
+    return false;
+  }
+  TimingLogger logger(__FUNCTION__, true, false);
+  CHECK_EQ(image_header.GetBootImageSize(),
+           boot_image_space->GetImageHeader().GetImageSize());
+  RelocationRange boot_image(image_header.GetBootImageBegin(),
+                             reinterpret_cast<uintptr_t>(boot_image_space->Begin()),
+                             image_header.GetBootImageSize());
+  RelocationRange boot_oat(image_header.GetBootOatBegin(),
+                           reinterpret_cast<uintptr_t>(boot_oat_file->Begin()),
+                           boot_oat_file->Size());
+  RelocationRange app_image(reinterpret_cast<uintptr_t>(image_header.GetImageBegin()),
+                            reinterpret_cast<uintptr_t>(target_base),
+                            image_header.GetImageSize());
+  // Use the oat data section since this is where the OatFile::Begin is.
+  RelocationRange app_oat(reinterpret_cast<uintptr_t>(image_header.GetOatDataBegin()),
+                          // Not necessarily in low 4GB.
+                          reinterpret_cast<uintptr_t>(app_oat_file->Begin()),
+                          image_header.GetOatDataEnd() - image_header.GetOatDataBegin());
+  VLOG(image) << "App image " << app_image;
+  VLOG(image) << "App oat " << app_oat;
+  VLOG(image) << "Boot image " << boot_image;
+  VLOG(image) << "Boot oat " << boot_oat;
+  // True if we need to fixup any heap pointers, otherwise only code pointers.
+  const bool fixup_image = boot_image.Delta() != 0 || app_image.Delta() != 0;
+  const bool fixup_code = boot_oat.Delta() != 0 || app_oat.Delta() != 0;
+  if (!fixup_image && !fixup_code) {
+    // Nothing to fix up.
+    return true;
+  }
+  // Need to update the image to be at the target base.
+  const ImageSection& objects_section = image_header.GetImageSection(ImageHeader::kSectionObjects);
+  uintptr_t objects_begin = reinterpret_cast<uintptr_t>(target_base + objects_section.Offset());
+  uintptr_t objects_end = reinterpret_cast<uintptr_t>(target_base + objects_section.End());
+  // Two pass approach, fix up all classes first, then fix up non class-objects.
+  if (fixup_image) {
+    TimingLogger::ScopedTiming timing("Fixup classes", &logger);
+    FixupClassVisitor fixup_class_visitor(boot_image, boot_oat, app_image, app_oat);
+    bitmap->VisitMarkedRange(objects_begin, objects_end, fixup_class_visitor);
+    timing.NewTiming("Fixup objects");
+    FixupObjectVisitor fixup_object_visitor(boot_image, boot_oat, app_image, app_oat);
+    bitmap->VisitMarkedRange(objects_begin, objects_end, fixup_object_visitor);
+    FixupObjectAdapter fixup_adapter(boot_image, boot_oat, app_image, app_oat);
+    ScopedObjectAccess soa(Thread::Current());
+    // Fixup image roots.
+    CHECK(app_image.ContainsSource(reinterpret_cast<uintptr_t>(image_header.GetImageRoots())));
+    image_header.RelocateImageObjects(app_image.Delta());
+    CHECK_EQ(image_header.GetImageBegin(), target_base);
+    // Fix up dex cache DexFile pointers.
+    auto* dex_caches = image_header.GetImageRoot(ImageHeader::kDexCaches)->
+        AsObjectArray<mirror::DexCache>();
+    for (int32_t i = 0, count = dex_caches->GetLength(); i < count; ++i) {
+      mirror::DexCache* dex_cache = dex_caches->Get(i);
+      // Fix up dex cache pointers.
+      GcRoot<mirror::String>* strings = dex_cache->GetStrings();
+      if (strings != nullptr) {
+        GcRoot<mirror::String>* new_strings = fixup_adapter.ForwardObject(strings);
+        if (strings != new_strings) {
+          dex_cache->SetFieldPtr64<false>(mirror::DexCache::StringsOffset(), new_strings);
+        }
+        dex_cache->FixupStrings(new_strings, fixup_adapter);
+      }
+      GcRoot<mirror::Class>* types = dex_cache->GetResolvedTypes();
+      if (types != nullptr) {
+        GcRoot<mirror::Class>* new_types = fixup_adapter.ForwardObject(types);
+        if (types != new_types) {
+          dex_cache->SetFieldPtr64<false>(mirror::DexCache::ResolvedTypesOffset(), new_types);
+        }
+        dex_cache->FixupResolvedTypes(new_types, fixup_adapter);
+      }
+      ArtMethod** methods = dex_cache->GetResolvedMethods();
+      if (methods != nullptr) {
+        ArtMethod** new_methods = fixup_adapter.ForwardObject(methods);
+        if (methods != new_methods) {
+          dex_cache->SetFieldPtr64<false>(mirror::DexCache::ResolvedMethodsOffset(), new_methods);
+        }
+        for (size_t j = 0, num = dex_cache->NumResolvedMethods(); j != num; ++j) {
+          ArtMethod* orig = mirror::DexCache::GetElementPtrSize(new_methods, j, sizeof(void*));
+          ArtMethod* copy = fixup_adapter.ForwardObject(orig);
+          if (orig != copy) {
+            mirror::DexCache::SetElementPtrSize(new_methods, j, copy, sizeof(void*));
+          }
+        }
+      }
+      ArtField** fields = dex_cache->GetResolvedFields();
+      if (fields != nullptr) {
+        ArtField** new_fields = fixup_adapter.ForwardObject(fields);
+        if (fields != new_fields) {
+          dex_cache->SetFieldPtr64<false>(mirror::DexCache::ResolvedFieldsOffset(), new_fields);
+        }
+        for (size_t j = 0, num = dex_cache->NumResolvedFields(); j != num; ++j) {
+          ArtField* orig = mirror::DexCache::GetElementPtrSize(new_fields, j, sizeof(void*));
+          ArtField* copy = fixup_adapter.ForwardObject(orig);
+          if (orig != copy) {
+            mirror::DexCache::SetElementPtrSize(new_fields, j, copy, sizeof(void*));
+          }
+        }
+      }
+    }
+  }
+  {
+    TimingLogger::ScopedTiming timing("Fixup methods", &logger);
+    FixupArtMethodVisitor method_visitor(boot_image, boot_oat, app_image, app_oat);
+    image_header.GetImageSection(ImageHeader::kSectionArtMethods).VisitPackedArtMethods(
+        &method_visitor,
+        target_base,
+        sizeof(void*));
+  }
+  if (fixup_image) {
+    {
+      TimingLogger::ScopedTiming timing("Fixup fields", &logger);
+      FixupArtFieldVisitor field_visitor(boot_image, boot_oat, app_image, app_oat);
+      image_header.GetImageSection(ImageHeader::kSectionArtFields).VisitPackedArtFields(
+          &field_visitor,
+          target_base);
+    }
+    // In the app image case, the image methods are actually in the boot image.
+    image_header.RelocateImageMethods(boot_image.Delta());
+  }
+  logger.Dump(LOG(INFO));
+  return true;
+}
+
+ImageSpace* ImageSpace::Init(const char* image_filename,
+                             const char* image_location,
+                             bool validate_oat_file,
+                             const OatFile* oat_file,
+                             std::string* error_msg) {
   CHECK(image_filename != nullptr);
   CHECK(image_location != nullptr);
 
-  uint64_t start_time = 0;
-  if (VLOG_IS_ON(heap) || VLOG_IS_ON(startup)) {
-    start_time = NanoTime();
-    LOG(INFO) << "ImageSpace::Init entering image_filename=" << image_filename;
-  }
+  TimingLogger logger(__FUNCTION__, true, false);
+  VLOG(image) << "ImageSpace::Init entering image_filename=" << image_filename;
 
-  std::unique_ptr<File> file(OS::OpenFileForReading(image_filename));
-  if (file.get() == nullptr) {
-    *error_msg = StringPrintf("Failed to open '%s'", image_filename);
-    return nullptr;
+  std::unique_ptr<File> file;
+  {
+    TimingLogger::ScopedTiming timing("OpenImageFile", &logger);
+    file.reset(OS::OpenFileForReading(image_filename));
+    if (file == nullptr) {
+      *error_msg = StringPrintf("Failed to open '%s'", image_filename);
+      return nullptr;
+    }
   }
-  ImageHeader image_header;
-  bool success = file->ReadFully(&image_header, sizeof(image_header));
-  if (!success || !image_header.IsValid()) {
-    *error_msg = StringPrintf("Invalid image header in '%s'", image_filename);
-    return nullptr;
+  ImageHeader temp_image_header;
+  ImageHeader* image_header = &temp_image_header;
+  {
+    TimingLogger::ScopedTiming timing("ReadImageHeader", &logger);
+    bool success = file->ReadFully(image_header, sizeof(*image_header));
+    if (!success || !image_header->IsValid()) {
+      *error_msg = StringPrintf("Invalid image header in '%s'", image_filename);
+      return nullptr;
+    }
   }
   // Check that the file is large enough.
   uint64_t image_file_size = static_cast<uint64_t>(file->GetLength());
-  if (image_header.GetImageSize() > image_file_size) {
+  if (image_header->GetImageSize() > image_file_size) {
     *error_msg = StringPrintf("Image file too small for image heap: %" PRIu64 " vs. %zu.",
-                              image_file_size, image_header.GetImageSize());
+                              image_file_size,
+                              image_header->GetImageSize());
     return nullptr;
   }
 
@@ -689,14 +1071,14 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
     LOG(INFO) << "Dumping image sections";
     for (size_t i = 0; i < ImageHeader::kSectionCount; ++i) {
       const auto section_idx = static_cast<ImageHeader::ImageSections>(i);
-      auto& section = image_header.GetImageSection(section_idx);
+      auto& section = image_header->GetImageSection(section_idx);
       LOG(INFO) << section_idx << " start="
-          << reinterpret_cast<void*>(image_header.GetImageBegin() + section.Offset()) << " "
-          << section;
+                << reinterpret_cast<void*>(image_header->GetImageBegin() + section.Offset()) << " "
+                << section;
     }
   }
 
-  const auto& bitmap_section = image_header.GetImageSection(ImageHeader::kSectionImageBitmap);
+  const auto& bitmap_section = image_header->GetImageSection(ImageHeader::kSectionImageBitmap);
   auto end_of_bitmap = static_cast<size_t>(bitmap_section.End());
   if (end_of_bitmap != image_file_size) {
     *error_msg = StringPrintf(
@@ -705,91 +1087,159 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
     return nullptr;
   }
 
+  std::vector<uint8_t*> addresses(1, image_header->GetImageBegin());
+  if (image_header->IsPic()) {
+    // Can also map at an arbitrary address since we can relocate.
+    // addresses.push_back(nullptr);
+    addresses[0] = nullptr;
+  }
+
   // Note: The image header is part of the image due to mmap page alignment required of offset.
-  std::unique_ptr<MemMap> map(MemMap::MapFileAtAddress(image_header.GetImageBegin(),
-                                                       image_header.GetImageSize(),
-                                                       PROT_READ | PROT_WRITE,
-                                                       MAP_PRIVATE,
-                                                       file->Fd(),
-                                                       0,
-                                                       /*low_4gb*/false,
-                                                       /*reuse*/false,
-                                                       image_filename,
-                                                       error_msg));
+  std::unique_ptr<MemMap> map;
+  std::string temp_error_msg;
+  for (uint8_t* address : addresses) {
+    TimingLogger::ScopedTiming timing("MapImageFile", &logger);
+    map.reset(MemMap::MapFileAtAddress(address,
+                                       image_header->GetImageSize(),
+                                       PROT_READ | PROT_WRITE,
+                                       MAP_PRIVATE,
+                                       file->Fd(),
+                                       0,
+                                       /*low_4gb*/true,
+                                       /*reuse*/false,
+                                       image_filename,
+                                       &temp_error_msg));
+    if (map != nullptr) {
+      break;
+    }
+  }
   if (map == nullptr) {
-    DCHECK(!error_msg->empty());
+    DCHECK(!temp_error_msg.empty());
+    *error_msg = temp_error_msg;
     return nullptr;
   }
-  CHECK_EQ(image_header.GetImageBegin(), map->Begin());
-  DCHECK_EQ(0, memcmp(&image_header, map->Begin(), sizeof(ImageHeader)));
+  // DCHECK_EQ(0, memcmp(image_header, map->Begin(), sizeof(ImageHeader)));
 
-  std::unique_ptr<MemMap> image_map(MemMap::MapFileAtAddress(nullptr,
-                                                             bitmap_section.Size(),
-                                                             PROT_READ, MAP_PRIVATE,
-                                                             file->Fd(),
-                                                             bitmap_section.Offset(),
-                                                             /*low_4gb*/false,
-                                                             /*reuse*/false,
-                                                             image_filename,
-                                                             error_msg));
-  if (image_map.get() == nullptr) {
+  std::unique_ptr<MemMap> image_map;
+  {
+    TimingLogger::ScopedTiming timing("MapImageBitmap", &logger);
+    image_map.reset(MemMap::MapFileAtAddress(nullptr,
+                                             bitmap_section.Size(),
+                                             PROT_READ,
+                                             MAP_PRIVATE,
+                                             file->Fd(),
+                                             bitmap_section.Offset(),
+                                             /*low_4gb*/false,
+                                             /*reuse*/false,
+                                             image_filename,
+                                             error_msg));
+  }
+  if (image_map == nullptr) {
     *error_msg = StringPrintf("Failed to map image bitmap: %s", error_msg->c_str());
     return nullptr;
   }
-  uint32_t bitmap_index = bitmap_index_.FetchAndAddSequentiallyConsistent(1);
-  std::string bitmap_name(StringPrintf("imagespace %s live-bitmap %u", image_filename,
+  // Loaded the map, use the image header from the file now in case we patch it with
+  // RelocateInPlace.
+  image_header = reinterpret_cast<ImageHeader*>(map->Begin());
+  const uint32_t bitmap_index = bitmap_index_.FetchAndAddSequentiallyConsistent(1);
+  std::string bitmap_name(StringPrintf("imagespace %s live-bitmap %u",
+                                       image_filename,
                                        bitmap_index));
-  std::unique_ptr<accounting::ContinuousSpaceBitmap> bitmap(
-      accounting::ContinuousSpaceBitmap::CreateFromMemMap(
-          bitmap_name, image_map.release(), reinterpret_cast<uint8_t*>(map->Begin()),
-          accounting::ContinuousSpaceBitmap::ComputeHeapSize(bitmap_section.Size())));
-  if (bitmap.get() == nullptr) {
-    *error_msg = StringPrintf("Could not create bitmap '%s'", bitmap_name.c_str());
-    return nullptr;
-  }
-
   // We only want the mirror object, not the ArtFields and ArtMethods.
   uint8_t* const image_end =
-      map->Begin() + image_header.GetImageSection(ImageHeader::kSectionObjects).End();
-  std::unique_ptr<ImageSpace> space(new ImageSpace(image_filename, image_location,
-                                                   map.release(), bitmap.release(), image_end));
+      map->Begin() + image_header->GetImageSection(ImageHeader::kSectionObjects).End();
+  std::unique_ptr<accounting::ContinuousSpaceBitmap> bitmap;
+  {
+    TimingLogger::ScopedTiming timing("CreateImageBitmap", &logger);
+    bitmap.reset(
+      accounting::ContinuousSpaceBitmap::CreateFromMemMap(
+          bitmap_name,
+          image_map.release(),
+          reinterpret_cast<uint8_t*>(map->Begin()),
+          image_end - map->Begin()));
+    if (bitmap == nullptr) {
+      *error_msg = StringPrintf("Could not create bitmap '%s'", bitmap_name.c_str());
+      return nullptr;
+    }
+  }
+  {
+    TimingLogger::ScopedTiming timing("RelocateImage", &logger);
+    if (!RelocateInPlace(*image_header,
+                         map->Begin(),
+                         bitmap.get(),
+                         oat_file,
+                         error_msg)) {
+      return nullptr;
+    }
+  }
+  std::unique_ptr<ImageSpace> space;
+  {
+    TimingLogger::ScopedTiming timing("AllocateImageSpace", &logger);
+    space.reset(new ImageSpace(image_filename,
+                               image_location,
+                               map.release(),
+                               bitmap.release(),
+                               image_end));
+  }
 
   // VerifyImageAllocations() will be called later in Runtime::Init()
   // as some class roots like ArtMethod::java_lang_reflect_ArtMethod_
   // and ArtField::java_lang_reflect_ArtField_, which are used from
   // Object::SizeOf() which VerifyImageAllocations() calls, are not
   // set yet at this point.
-
-  space->oat_file_.reset(space->OpenOatFile(image_filename, error_msg));
-  if (space->oat_file_.get() == nullptr) {
-    DCHECK(!error_msg->empty());
-    return nullptr;
+  if (oat_file == nullptr) {
+    TimingLogger::ScopedTiming timing("OpenOatFile", &logger);
+    space->oat_file_.reset(space->OpenOatFile(image_filename, error_msg));
+    if (space->oat_file_ == nullptr) {
+      DCHECK(!error_msg->empty());
+      return nullptr;
+    }
+    space->oat_file_non_owned_ = space->oat_file_.get();
+  } else {
+    space->oat_file_non_owned_ = oat_file;
   }
-  space->oat_file_non_owned_ = space->oat_file_.get();
 
-  if (validate_oat_file && !space->ValidateOatFile(error_msg)) {
-    DCHECK(!error_msg->empty());
-    return nullptr;
+  if (validate_oat_file) {
+    TimingLogger::ScopedTiming timing("ValidateOatFile", &logger);
+    if (!space->ValidateOatFile(error_msg)) {
+     DCHECK(!error_msg->empty());
+      return nullptr;
+    }
   }
 
   Runtime* runtime = Runtime::Current();
-  runtime->SetInstructionSet(space->oat_file_->GetOatHeader().GetInstructionSet());
 
-  runtime->SetResolutionMethod(image_header.GetImageMethod(ImageHeader::kResolutionMethod));
-  runtime->SetImtConflictMethod(image_header.GetImageMethod(ImageHeader::kImtConflictMethod));
-  runtime->SetImtUnimplementedMethod(
-      image_header.GetImageMethod(ImageHeader::kImtUnimplementedMethod));
-  runtime->SetCalleeSaveMethod(
-      image_header.GetImageMethod(ImageHeader::kCalleeSaveMethod), Runtime::kSaveAll);
-  runtime->SetCalleeSaveMethod(
-      image_header.GetImageMethod(ImageHeader::kRefsOnlySaveMethod), Runtime::kRefsOnly);
-  runtime->SetCalleeSaveMethod(
-      image_header.GetImageMethod(ImageHeader::kRefsAndArgsSaveMethod), Runtime::kRefsAndArgs);
-
-  if (VLOG_IS_ON(heap) || VLOG_IS_ON(startup)) {
-    LOG(INFO) << "ImageSpace::Init exiting (" << PrettyDuration(NanoTime() - start_time)
-             << ") " << *space.get();
+  if (oat_file != nullptr) {
+    /*CHECK_EQ(runtime->GetInstructionSet(),
+             space->oat_file_non_owned_->GetOatHeader().GetInstructionSet());*/
+    CHECK_EQ(runtime->GetResolutionMethod(),
+             image_header->GetImageMethod(ImageHeader::kResolutionMethod));
+    CHECK_EQ(runtime->GetImtConflictMethod(),
+             image_header->GetImageMethod(ImageHeader::kImtConflictMethod));
+    CHECK_EQ(runtime->GetImtUnimplementedMethod(),
+             image_header->GetImageMethod(ImageHeader::kImtUnimplementedMethod));
+    CHECK_EQ(runtime->GetCalleeSaveMethod(Runtime::kSaveAll),
+             image_header->GetImageMethod(ImageHeader::kCalleeSaveMethod));
+    CHECK_EQ(runtime->GetCalleeSaveMethod(Runtime::kRefsOnly),
+             image_header->GetImageMethod(ImageHeader::kRefsOnlySaveMethod));
+    CHECK_EQ(runtime->GetCalleeSaveMethod(Runtime::kRefsAndArgs),
+             image_header->GetImageMethod(ImageHeader::kRefsAndArgsSaveMethod));
+  } else {
+    runtime->SetInstructionSet(space->oat_file_non_owned_->GetOatHeader().GetInstructionSet());
+    runtime->SetResolutionMethod(image_header->GetImageMethod(ImageHeader::kResolutionMethod));
+    runtime->SetImtConflictMethod(image_header->GetImageMethod(ImageHeader::kImtConflictMethod));
+    runtime->SetImtUnimplementedMethod(
+        image_header->GetImageMethod(ImageHeader::kImtUnimplementedMethod));
+    runtime->SetCalleeSaveMethod(
+        image_header->GetImageMethod(ImageHeader::kCalleeSaveMethod), Runtime::kSaveAll);
+    runtime->SetCalleeSaveMethod(
+        image_header->GetImageMethod(ImageHeader::kRefsOnlySaveMethod), Runtime::kRefsOnly);
+    runtime->SetCalleeSaveMethod(
+        image_header->GetImageMethod(ImageHeader::kRefsAndArgsSaveMethod), Runtime::kRefsAndArgs);
   }
+
+  VLOG(image) << "ImageSpace::Init exiting " << *space.get();
+  logger.Dump(LOG(INFO));
   return space.release();
 }
 
@@ -867,6 +1317,16 @@ void ImageSpace::Dump(std::ostream& os) const {
       << ",end=" << reinterpret_cast<void*>(End())
       << ",size=" << PrettySize(Size())
       << ",name=\"" << GetName() << "\"]";
+}
+
+ImageSpace* ImageSpace::CreateFromAppImage(const char* image,
+                                           const OatFile* oat_file,
+                                           std::string* error_msg) {
+  return gc::space::ImageSpace::Init(image,
+                                     image,
+                                     /*validate_oat_file*/false,
+                                     oat_file,
+                                     error_msg);
 }
 
 }  // namespace space
