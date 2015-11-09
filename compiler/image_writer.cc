@@ -597,6 +597,13 @@ bool ImageWriter::ContainsBootClassLoaderNonImageClass(mirror::Class* klass) {
   // Place holder value to prevent infinite recursion.
   prune_class_memo_.emplace(klass, false);
   bool result = IsBootClassLoaderNonImageClass(klass);
+  // Remove classes that failed to verify since we don't want to have java.lang.VerifyError in the
+  // app image.
+  if (klass->GetStatus() == mirror::Class::kStatusError) {
+    result = true;
+  } else {
+    CHECK(klass->GetVerifyError() == nullptr) << PrettyClass(klass);
+  }
   if (!result) {
     // Check interfaces since these wont be visited through VisitReferences.)
     mirror::IfTable* if_table = klass->GetIfTable();
@@ -635,7 +642,8 @@ bool ImageWriter::KeepClass(Class* klass) {
   if (compile_app_image_) {
     // For app images, we need to prune boot loader classes that are not in the boot image since
     // these may have already been loaded when the app image is loaded.
-    return !ContainsBootClassLoaderNonImageClass(klass);
+    // Keep classes in the boot image space since we don't want to reresolve these.
+    return boot_image_space_->HasAddress(klass) || !ContainsBootClassLoaderNonImageClass(klass);
   }
   std::string temp;
   return compiler_driver_.IsImageClass(klass->GetDescriptor(&temp));
@@ -901,6 +909,10 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
       }
       // Visit and assign offsets for fields and field arrays.
       auto* as_klass = h_obj->AsClass();
+      if (compile_app_image_) {
+        // Extra sanity, no boot loader classes should be left!
+        CHECK(!IsBootClassLoaderClass(as_klass)) << PrettyClass(as_klass);
+      }
       LengthPrefixedArray<ArtField>* fields[] = {
           as_klass->GetSFieldsPtr(), as_klass->GetIFieldsPtr(),
       };
@@ -1168,18 +1180,42 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
   const size_t image_end = static_cast<uint32_t>(interned_strings_section->End());
   CHECK_EQ(AlignUp(image_begin_ + image_end, kPageSize), oat_file_begin) <<
       "Oat file should be right after the image.";
+  // Store boot image info for app image so that we can relocate.
+
+  uint32_t boot_image_begin = 0;
+  uint32_t boot_image_size = 0;
+  uint32_t boot_oat_begin = 0;
+  uint32_t boot_oat_size = 0;
+  if (boot_image_space_ != nullptr) {
+    boot_image_begin = PointerToLowMemUInt32(boot_image_space_->Begin());
+    boot_image_size = boot_image_space_->GetImageHeader().GetImageSize();
+    const OatFile* boot_oat_file = boot_image_space_->GetOatFile();
+    /*
+    boot_oat_begin =
+        PointerToLowMemUInt32(boot_image_space_->GetImageHeader().GetOatFileBegin());
+    boot_oat_size =
+        PointerToLowMemUInt32(boot_image_space_->GetImageHeader().GetOatFileEnd()) - boot_oat_begin;
+        */
+    boot_oat_begin = PointerToLowMemUInt32(boot_oat_file->Begin());
+    boot_oat_size = boot_oat_file->Size();
+  }
   // Create the header.
   new (image_->Begin()) ImageHeader(PointerToLowMemUInt32(image_begin_),
-                                                          image_end,
-                                                          sections,
-                                                          image_roots_address_,
-                                                          oat_file_->GetOatHeader().GetChecksum(),
-                                                          PointerToLowMemUInt32(oat_file_begin),
-                                                          PointerToLowMemUInt32(oat_data_begin_),
-                                                          PointerToLowMemUInt32(oat_data_end),
-                                                          PointerToLowMemUInt32(oat_file_end),
-                                                          target_ptr_size_,
-                                                          compile_pic_);
+                                    image_end,
+                                    sections,
+                                    image_roots_address_,
+                                    oat_file_->GetOatHeader().GetChecksum(),
+                                    PointerToLowMemUInt32(oat_file_begin),
+                                    PointerToLowMemUInt32(oat_data_begin_),
+                                    PointerToLowMemUInt32(oat_data_end),
+                                    PointerToLowMemUInt32(oat_file_end),
+                                    boot_image_begin,
+                                    boot_image_size,
+                                    boot_oat_begin,
+                                    boot_oat_size,
+                                    target_ptr_size_,
+                                    compile_pic_,
+                                    /*is_pic*/compile_app_image_);
 }
 
 ArtMethod* ImageWriter::GetImageMethodAddress(ArtMethod* method) {
@@ -1588,11 +1624,10 @@ const uint8_t* ImageWriter::GetOatAddress(OatAddress type) const {
   // If we are compiling an app image, we need to use the stubs of the boot image.
   if (compile_app_image_) {
     // Use the current image pointers.
-    gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
-    DCHECK(image_space != nullptr);
-    const OatFile* oat_file = image_space->GetOatFile();
-    CHECK(oat_file != nullptr);
-    const OatHeader& header = oat_file->GetOatHeader();
+    DCHECK(boot_image_space_ != nullptr);
+    const OatFile* boot_oat = boot_image_space_->GetOatFile();
+    CHECK(boot_oat != nullptr);
+    const OatHeader& header = boot_oat->GetOatHeader();
     switch (type) {
       // TODO: We could maybe clean this up if we stored them in an array in the oat header.
       case kOatAddressQuickGenericJNITrampoline:
@@ -1632,6 +1667,7 @@ const uint8_t* ImageWriter::GetQuickCode(ArtMethod* method, bool* quick_is_inter
   const uint8_t* quick_code = GetOatAddressForOffset(quick_oat_code_offset);
   *quick_is_interpreted = false;
   if (quick_code != nullptr && (!method->IsStatic() || method->IsConstructor() ||
+      // method->GetDeclaringClass()->IsInitialized())) {
       method->GetDeclaringClass()->IsInitialized())) {
     // We have code for a non-static or initialized method, just use the code.
   } else if (quick_code == nullptr && method->IsNative() &&

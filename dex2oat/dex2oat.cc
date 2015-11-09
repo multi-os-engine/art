@@ -1608,6 +1608,8 @@ class Dex2Oat FINAL {
 
   void PrepareImageWriter(uintptr_t image_base) {
     DCHECK(IsImage());
+    // Currently the app oat file does not have dependencies on the app image. So the app image may
+    // mapped at any random address.
     image_writer_.reset(new ImageWriter(*driver_,
                                         image_base,
                                         compiler_options_->GetCompilePic(),

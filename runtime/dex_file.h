@@ -65,6 +65,9 @@ class DexFile {
   // name of the DexFile entry within a zip archive
   static const char* kClassesDex;
 
+  // default name of the ART file.
+  static const char* kClassesArt;
+
   // The value of an invalid index.
   static const uint32_t kDexNoIndex = 0xFFFFFFFF;
 

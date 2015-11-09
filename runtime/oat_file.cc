@@ -98,6 +98,7 @@ OatFile* OatFile::OpenWithElfFile(ElfFile* elf_file,
   bool has_section = elf_file->GetSectionOffsetAndSize(".rodata", &offset, &size);
   CHECK(has_section);
   oat_file->begin_ = elf_file->Begin() + offset;
+  LOG(INFO) << "DATA: " << reinterpret_cast<const void*>(oat_file->begin_);
   oat_file->end_ = elf_file->Begin() + size + offset;
   // Ignore the optional .bss section when opening non-executable.
   return oat_file->Setup(abs_dex_location, error_msg) ? oat_file.release() : nullptr;
@@ -271,6 +272,7 @@ bool OatFile::Dlopen(const std::string& elf_filename, uint8_t* requested_base,
     return false;
   }
   begin_ = reinterpret_cast<uint8_t*>(dlsym(dlopen_handle_, "oatdata"));
+  LOG(INFO) << "DATA: " << reinterpret_cast<const void*>(begin_);
   if (begin_ == nullptr) {
     *error_msg = StringPrintf("Failed to find oatdata symbol in '%s': %s", elf_filename.c_str(),
                               dlerror());
@@ -370,6 +372,7 @@ bool OatFile::ElfFileOpen(File* file, uint8_t* requested_base, uint8_t* oat_file
     return false;
   }
   begin_ = elf_file_->FindDynamicSymbolAddress("oatdata");
+  LOG(INFO) << "DATA: " << reinterpret_cast<const void*>(begin_);
   if (begin_ == nullptr) {
     *error_msg = StringPrintf("Failed to find oatdata symbol in '%s'", file->GetPath().c_str());
     return false;

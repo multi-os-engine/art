@@ -644,6 +644,9 @@ class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {
         *dex_file_, it.GetMemberIndex(), dex_cache, NullHandle<mirror::ClassLoader>(), nullptr,
         invoke_type);
     if (method == nullptr) {
+      hs.Self()->ClearException();
+      return true;
+      /*
       LOG(INTERNAL_FATAL) << "Unexpected failure to resolve a method: "
                           << PrettyMethod(it.GetMemberIndex(), *dex_file_, true);
       soa.Self()->AssertPendingException();
@@ -651,6 +654,7 @@ class OatWriter::InitImageMethodVisitor : public OatDexMethodVisitor {
       std::string dump = exc->Dump();
       LOG(FATAL) << dump;
       UNREACHABLE();
+      */
     }
 
     if (compiled_method != nullptr && compiled_method->GetQuickCode().size() != 0) {
@@ -1169,9 +1173,9 @@ size_t OatWriter::InitOatCodeDexFiles(size_t offset) {
     } while (false)
 
   VISIT(InitCodeMethodVisitor);
-  if (compiler_driver_->IsBootImage()) {
+  // if (true || compiler_driver_->IsBootImage()) {
     VISIT(InitImageMethodVisitor);
-  }
+  // }
 
   #undef VISIT
 

@@ -125,6 +125,19 @@ class ClassLinker {
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!dex_lock_);
 
+  // Add an image space to the class linker, may fix up classloader fields and dex cache fields.
+  // Returns the dexfiles that were newly opened for the space. May be less than the number of dex
+  // caches if some of the dex files were already opened.
+  // Returns an empty array on failure.
+  std::vector<std::unique_ptr<const DexFile>> AddImageSpace(
+      gc::space::ImageSpace* space,
+      Handle<mirror::ClassLoader> class_loader,
+      jobjectArray dex_elements,
+      const char* dex_location,
+      std::string* error_msg)
+      REQUIRES(!dex_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   // Finds a class by its descriptor, loading it if necessary.
   // If class_loader is null, searches boot_class_path_.
   mirror::Class* FindClass(Thread* self,
@@ -646,6 +659,11 @@ class ClassLinker {
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!dex_lock_);
 
+  // Return true if two class loaders are the same. Only designed to work with
+  // dalvik.system.PathClassLoader.
+  bool ClassLoadersResolveTheSameWay(mirror::ClassLoader* a, mirror::ClassLoader* b)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   // Precomputes size needed for Class, in the case of a non-temporary class this size must be
   // sufficient to hold all static fields.
   uint32_t SizeOfClassWithoutEmbeddedTables(const DexFile& dex_file,
@@ -980,7 +998,7 @@ class ClassLinker {
       REQUIRES(!Locks::classlinker_classes_lock_);
 
   std::vector<const DexFile*> boot_class_path_;
-  std::vector<std::unique_ptr<const DexFile>> opened_dex_files_;
+  std::vector<std::unique_ptr<const DexFile>> boot_dex_files_;
 
   mutable ReaderWriterMutex dex_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   // JNI weak globals and side data to allow dex caches to get unloaded. We lazily delete weak

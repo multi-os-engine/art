@@ -122,18 +122,20 @@ inline void DexCache::SetElementPtrSize(PtrType* ptr_array,
   }
 }
 
-template <VerifyObjectFlags kVerifyFlags, typename Visitor>
+template <VerifyObjectFlags kVerifyFlags, bool kVisitNativeRoots, typename Visitor>
 inline void DexCache::VisitReferences(mirror::Class* klass, const Visitor& visitor) {
   // Visit instance fields first.
   VisitInstanceFieldsReferences(klass, visitor);
   // Visit arrays after.
-  GcRoot<mirror::String>* strings = GetStrings();
-  for (size_t i = 0, num_strings = NumStrings(); i != num_strings; ++i) {
-    visitor.VisitRootIfNonNull(strings[i].AddressWithoutBarrier());
-  }
-  GcRoot<mirror::Class>* resolved_types = GetResolvedTypes();
-  for (size_t i = 0, num_types = NumResolvedTypes(); i != num_types; ++i) {
-    visitor.VisitRootIfNonNull(resolved_types[i].AddressWithoutBarrier());
+  if (kVisitNativeRoots) {
+    GcRoot<mirror::String>* strings = GetStrings();
+    for (size_t i = 0, num_strings = NumStrings(); i != num_strings; ++i) {
+      visitor.VisitRootIfNonNull(strings[i].AddressWithoutBarrier());
+    }
+    GcRoot<mirror::Class>* resolved_types = GetResolvedTypes();
+    for (size_t i = 0, num_types = NumResolvedTypes(); i != num_types; ++i) {
+      visitor.VisitRootIfNonNull(resolved_types[i].AddressWithoutBarrier());
+    }
   }
 }
 
