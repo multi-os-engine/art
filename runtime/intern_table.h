@@ -84,10 +84,16 @@ class InternTable {
   bool ContainsWeak(mirror::String* s) SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!Locks::intern_table_lock_);
 
+  mirror::String* Lookup(Thread* self, mirror::String* s)
+      REQUIRES(!Locks::intern_table_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   // Total number of interned strings.
   size_t Size() const REQUIRES(!Locks::intern_table_lock_);
+
   // Total number of weakly live interned strings.
   size_t StrongSize() const REQUIRES(!Locks::intern_table_lock_);
+
   // Total number of strongly live interned strings.
   size_t WeakSize() const REQUIRES(!Locks::intern_table_lock_);
 

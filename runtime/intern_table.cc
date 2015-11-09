@@ -482,4 +482,10 @@ InternTable::Table::Table() {
                                runtime->GetHashTableMaxLoadFactor());
 }
 
+mirror::String* InternTable::Lookup(Thread* self, mirror::String* s) {
+  MutexLock mu(self, *Locks::intern_table_lock_);
+  mirror::String* found = LookupStrong(s);
+  return (found != nullptr) ? found : LookupWeak(s);
+}
+
 }  // namespace art
