@@ -46,6 +46,12 @@ class ImageSpace : public MemMapSpace {
   static ImageSpace* Create(const char* image, InstructionSet image_isa, std::string* error_msg)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Try to open an existing app image space.
+  static ImageSpace* CreateFromAppImage(const char* image,
+                                        const OatFile* oat_file,
+                                        std::string* error_msg)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   // Reads the image header from the specified image location for the
   // instruction set image_isa or dies trying.
   static ImageHeader* ReadImageHeaderOrDie(const char* image_location,
@@ -142,8 +148,11 @@ class ImageSpace : public MemMapSpace {
   // image's OatFile is up-to-date relative to its DexFile
   // inputs. Otherwise (for /data), validate the inputs and generate
   // the OatFile in /data/dalvik-cache if necessary.
-  static ImageSpace* Init(const char* image_filename, const char* image_location,
-                          bool validate_oat_file, std::string* error_msg)
+  static ImageSpace* Init(const char* image_filename,
+                          const char* image_location,
+                          bool validate_oat_file,
+                          const OatFile* oat_file,
+                          std::string* error_msg)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   OatFile* OpenOatFile(const char* image, std::string* error_msg) const

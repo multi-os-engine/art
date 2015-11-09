@@ -38,6 +38,7 @@
 #include "os.h"
 #include "profiler.h"
 #include "runtime.h"
+#include "scoped_thread_state_change.h"
 #include "ScopedFd.h"
 #include "utils.h"
 
@@ -324,6 +325,16 @@ bool OatFileAssistant::OdexFileIsUpToDate() {
     }
   }
   return cached_odex_file_is_up_to_date_;
+}
+
+std::string OatFileAssistant::ArtFileName(const OatFile* oat_file) const {
+  std::string art_file = oat_file->GetLocation();
+  // Replace extension with .art
+  const size_t last_ext = art_file.find_last_of('.');
+  if (last_ext == std::string::npos) {
+    return std::string();
+  }
+  return art_file.substr(0, last_ext) + ".art";
 }
 
 const std::string* OatFileAssistant::OatFileName() {
@@ -1000,6 +1011,23 @@ ProfileFile* OatFileAssistant::GetOldProfile() {
     }
   }
   return old_profile_load_succeeded_ ? &cached_old_profile_ : nullptr;
+}
+
+gc::space::ImageSpace* OatFileAssistant::GetImageSpace(const OatFile* oat_file) {
+  DCHECK(oat_file != nullptr);
+  std::string art_file = ArtFileName(oat_file);
+  if (art_file.empty()) {
+    return nullptr;
+  }
+  std::string error_msg;
+  ScopedObjectAccess soa(Thread::Current());
+  gc::space::ImageSpace* ret = gc::space::ImageSpace::CreateFromAppImage(art_file.c_str(),
+                                                                         oat_file,
+                                                                         &error_msg);
+  if (ret == nullptr) {
+    LOG(INFO) << "Failed to open app image " << art_file.c_str() << " " << error_msg;
+  }
+  return ret;
 }
 
 }  // namespace art

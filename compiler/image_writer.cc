@@ -540,7 +540,10 @@ ImageWriter::BinSlot ImageWriter::GetImageBinSlot(mirror::Object* object) const 
 }
 
 bool ImageWriter::AllocMemory() {
-  const size_t length = RoundUp(image_objects_offset_begin_ + GetBinSizeSum() + intern_table_bytes_,
+  const size_t length = RoundUp(image_objects_offset_begin_ +
+                                    GetBinSizeSum() +
+                                    intern_table_bytes_ +
+                                    class_table_bytes_,
                                 kPageSize);
   std::string error_msg;
   image_.reset(MemMap::MapAnonymous("image writer image",
@@ -619,6 +622,13 @@ bool ImageWriter::ContainsBootClassLoaderNonImageClassInternal(
   visited->emplace(klass);
   bool result = IsBootClassLoaderNonImageClass(klass);
   bool my_early_exit = false;  // Only for ourselves, ignore caller.
+  // Remove classes that failed to verify since we don't want to have java.lang.VerifyError in the
+  // app image.
+  if (klass->GetStatus() == mirror::Class::kStatusError) {
+    result = true;
+  } else {
+    CHECK(klass->GetVerifyError() == nullptr) << PrettyClass(klass);
+  }
   if (!result) {
     // Check interfaces since these wont be visited through VisitReferences.)
     mirror::IfTable* if_table = klass->GetIfTable();
@@ -628,6 +638,12 @@ bool ImageWriter::ContainsBootClassLoaderNonImageClassInternal(
           &my_early_exit,
           visited);
     }
+  }
+  if (klass->IsObjectArrayClass()) {
+    result = result || ContainsBootClassLoaderNonImageClassInternal(
+        klass->GetComponentType(),
+        &my_early_exit,
+        visited);
   }
   // Check static fields and their classes.
   size_t num_static_fields = klass->NumReferenceStaticFields();
@@ -682,7 +698,8 @@ bool ImageWriter::KeepClass(Class* klass) {
   if (compile_app_image_) {
     // For app images, we need to prune boot loader classes that are not in the boot image since
     // these may have already been loaded when the app image is loaded.
-    return !ContainsBootClassLoaderNonImageClass(klass);
+    // Keep classes in the boot image space since we don't want to reresolve these.
+    return boot_image_space_->HasAddress(klass) || !ContainsBootClassLoaderNonImageClass(klass);
   }
   std::string temp;
   return compiler_driver_.IsImageClass(klass->GetDescriptor(&temp));
@@ -948,6 +965,10 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
       }
       // Visit and assign offsets for fields and field arrays.
       auto* as_klass = h_obj->AsClass();
+      if (compile_app_image_) {
+        // Extra sanity, no boot loader classes should be left!
+        CHECK(!IsBootClassLoaderClass(as_klass)) << PrettyClass(as_klass);
+      }
       LengthPrefixedArray<ArtField>* fields[] = {
           as_klass->GetSFieldsPtr(), as_klass->GetIFieldsPtr(),
       };
@@ -1029,6 +1050,14 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
         if (value != nullptr) {
           WalkFieldsInOrder(value);
         }
+      }
+    } else if (h_obj->IsClassLoader()) {
+      // Register the class loader if it has a class table.
+      // The fake boot class loader should not get registered and we should end up with only one
+      // class loader.
+      mirror::ClassLoader* class_loader = h_obj->AsClassLoader();
+      if (class_loader->GetClassTable() != nullptr) {
+        class_loaders_.insert(class_loader);
       }
     }
   }
@@ -1154,9 +1183,25 @@ void ImageWriter::CalculateNewObjectOffsets() {
   }
 
   // Calculate how big the intern table will be after being serialized.
-  auto* const intern_table = Runtime::Current()->GetInternTable();
+  InternTable* const intern_table = runtime->GetInternTable();
   CHECK_EQ(intern_table->WeakSize(), 0u) << " should have strong interned all the strings";
   intern_table_bytes_ = intern_table->WriteToMemory(nullptr);
+
+  // Write out the class table.
+  ClassLinker* class_linker = runtime->GetClassLinker();
+  if (boot_image_space_ == nullptr) {
+    // Compiling the boot image, add null class loader.
+    class_loaders_.insert(nullptr);
+  }
+  if (!class_loaders_.empty()) {
+    CHECK_EQ(class_loaders_.size(), 1u) << "Should only have one real class loader in the image";
+    ReaderMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
+    for (mirror::ClassLoader* loader : class_loaders_) {
+      ClassTable* table = class_linker->ClassTableForClassLoader(loader);
+      CHECK(table != nullptr);
+      class_table_bytes_ += table->WriteToMemory(nullptr);
+    }
+  }
 
   // Note that image_end_ is left at end of used mirror object section.
 }
@@ -1199,6 +1244,12 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
   auto* interned_strings_section = &sections[ImageHeader::kSectionInternedStrings];
   *interned_strings_section = ImageSection(cur_pos, intern_table_bytes_);
   cur_pos = interned_strings_section->End();
+  // Calculate the size of the class table section.
+  auto* class_table_section = &sections[ImageHeader::kSectionClassTable];
+  *class_table_section = ImageSection(cur_pos, class_table_bytes_);
+  cur_pos = class_table_section->End();
+  // Image end goes right before the start of the image bitmap.
+  const size_t image_end = static_cast<uint32_t>(cur_pos);
   // Finally bitmap section.
   const size_t bitmap_bytes = image_bitmap_->Size();
   auto* bitmap_section = &sections[ImageHeader::kSectionImageBitmap];
@@ -1212,21 +1263,38 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
     }
     LOG(INFO) << "Methods: clean=" << clean_methods_ << " dirty=" << dirty_methods_;
   }
-  const size_t image_end = static_cast<uint32_t>(interned_strings_section->End());
   CHECK_EQ(AlignUp(image_begin_ + image_end, kPageSize), oat_file_begin) <<
       "Oat file should be right after the image.";
+  // Store boot image info for app image so that we can relocate.
+
+  uint32_t boot_image_begin = 0;
+  uint32_t boot_image_size = 0;
+  uint32_t boot_oat_begin = 0;
+  uint32_t boot_oat_size = 0;
+  if (boot_image_space_ != nullptr) {
+    boot_image_begin = PointerToLowMemUInt32(boot_image_space_->Begin());
+    boot_image_size = boot_image_space_->GetImageHeader().GetImageSize();
+    const OatFile* boot_oat_file = boot_image_space_->GetOatFile();
+    boot_oat_begin = PointerToLowMemUInt32(boot_oat_file->Begin());
+    boot_oat_size = boot_oat_file->Size();
+  }
   // Create the header.
   new (image_->Begin()) ImageHeader(PointerToLowMemUInt32(image_begin_),
-                                                          image_end,
-                                                          sections,
-                                                          image_roots_address_,
-                                                          oat_file_->GetOatHeader().GetChecksum(),
-                                                          PointerToLowMemUInt32(oat_file_begin),
-                                                          PointerToLowMemUInt32(oat_data_begin_),
-                                                          PointerToLowMemUInt32(oat_data_end),
-                                                          PointerToLowMemUInt32(oat_file_end),
-                                                          target_ptr_size_,
-                                                          compile_pic_);
+                                    image_end,
+                                    sections,
+                                    image_roots_address_,
+                                    oat_file_->GetOatHeader().GetChecksum(),
+                                    PointerToLowMemUInt32(oat_file_begin),
+                                    PointerToLowMemUInt32(oat_data_begin_),
+                                    PointerToLowMemUInt32(oat_data_end),
+                                    PointerToLowMemUInt32(oat_file_end),
+                                    boot_image_begin,
+                                    boot_image_size,
+                                    boot_oat_begin,
+                                    boot_oat_size,
+                                    target_ptr_size_,
+                                    compile_pic_,
+                                    /*is_pic*/compile_app_image_);
 }
 
 ArtMethod* ImageWriter::GetImageMethodAddress(ArtMethod* method) {
@@ -1323,23 +1391,48 @@ void ImageWriter::CopyAndFixupNativeData() {
     }
     image_header->SetImageMethod(static_cast<ImageHeader::ImageMethod>(i), method);
   }
+  FixupRootVisitor root_visitor(this);
+
   // Write the intern table into the image.
   const ImageSection& intern_table_section = image_header->GetImageSection(
       ImageHeader::kSectionInternedStrings);
-  InternTable* const intern_table = Runtime::Current()->GetInternTable();
-  uint8_t* const memory_ptr = image_->Begin() + intern_table_section.Offset();
-  const size_t intern_table_bytes = intern_table->WriteToMemory(memory_ptr);
+  Runtime* const runtime = Runtime::Current();
+  InternTable* const intern_table = runtime->GetInternTable();
+  uint8_t* const intern_table_memory_ptr = image_->Begin() + intern_table_section.Offset();
+  const size_t intern_table_bytes = intern_table->WriteToMemory(intern_table_memory_ptr);
+  CHECK_EQ(intern_table_bytes, intern_table_bytes_);
   // Fixup the pointers in the newly written intern table to contain image addresses.
-  InternTable temp_table;
+  InternTable temp_intern_table;
   // Note that we require that ReadFromMemory does not make an internal copy of the elements so that
   // the VisitRoots() will update the memory directly rather than the copies.
   // This also relies on visit roots not doing any verification which could fail after we update
   // the roots to be the image addresses.
-  temp_table.ReadFromMemory(memory_ptr);
-  CHECK_EQ(temp_table.Size(), intern_table->Size());
-  FixupRootVisitor visitor(this);
-  temp_table.VisitRoots(&visitor, kVisitRootFlagAllRoots);
-  CHECK_EQ(intern_table_bytes, intern_table_bytes_);
+  temp_intern_table.ReadFromMemory(intern_table_memory_ptr);
+  CHECK_EQ(temp_intern_table.Size(), intern_table->Size());
+  temp_intern_table.VisitRoots(&root_visitor, kVisitRootFlagAllRoots);
+
+  // Write the class table(s) into the image.
+  ClassLinker* const class_linker = runtime->GetClassLinker();
+  const ImageSection& class_table_section = image_header->GetImageSection(
+      ImageHeader::kSectionClassTable);
+  uint8_t* const class_table_memory_ptr = image_->Begin() + class_table_section.Offset();
+  ReaderMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
+  size_t class_table_bytes = 0;
+  for (mirror::ClassLoader* loader : class_loaders_) {
+    ClassTable* table = class_linker->ClassTableForClassLoader(loader);
+    CHECK(table != nullptr);
+    uint8_t* memory_ptr = class_table_memory_ptr + class_table_bytes;
+    class_table_bytes += table->WriteToMemory(memory_ptr);
+    // Fixup the pointers in the newly written class table to contain image addresses. See
+    // above comment for intern tables.
+    ClassTable temp_class_table;
+    temp_class_table.ReadFromMemory(memory_ptr);
+    // CHECK_EQ(temp_class_table.NumNonZygoteClasses(), table->NumNonZygoteClasses());
+    BufferedRootVisitor<kDefaultBufferedRootCount> buffered_visitor(&root_visitor,
+                                                                    RootInfo(kRootUnknown));
+    temp_class_table.VisitRoots(buffered_visitor);
+  }
+  CHECK_EQ(class_table_bytes, class_table_bytes_);
 }
 
 void ImageWriter::CopyAndFixupObjects() {
@@ -1553,15 +1646,17 @@ void ImageWriter::FixupObject(Object* orig, Object* copy) {
       ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
       if (klass == class_linker->GetClassRoot(ClassLinker::kJavaLangDexCache)) {
         FixupDexCache(down_cast<mirror::DexCache*>(orig), down_cast<mirror::DexCache*>(copy));
-      } else if (klass->IsSubClass(down_cast<mirror::Class*>(
-          class_linker->GetClassRoot(ClassLinker::kJavaLangClassLoader)))) {
+      } else if (klass->IsClassLoaderClass()) {
+        mirror::ClassLoader* copy_loader = down_cast<mirror::ClassLoader*>(copy);
         // If src is a ClassLoader, set the class table to null so that it gets recreated by the
         // ClassLoader.
-        down_cast<mirror::ClassLoader*>(copy)->SetClassTable(nullptr);
+        copy_loader->SetClassTable(nullptr);
         // Also set allocator to null to be safe. The allocator is created when we create the class
         // table. We also never expect to unload things in the image since they are held live as
         // roots.
-        down_cast<mirror::ClassLoader*>(copy)->SetAllocator(nullptr);
+        copy_loader->SetAllocator(nullptr);
+        // Clear lambda proxy table. TODO: Re-enable when CL is unreverted.
+        // copy_loader->SetLambdaProxyCache(nullptr);
       }
     }
     FixupVisitor visitor(this, copy);
@@ -1635,11 +1730,10 @@ const uint8_t* ImageWriter::GetOatAddress(OatAddress type) const {
   // If we are compiling an app image, we need to use the stubs of the boot image.
   if (compile_app_image_) {
     // Use the current image pointers.
-    gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
-    DCHECK(image_space != nullptr);
-    const OatFile* oat_file = image_space->GetOatFile();
-    CHECK(oat_file != nullptr);
-    const OatHeader& header = oat_file->GetOatHeader();
+    DCHECK(boot_image_space_ != nullptr);
+    const OatFile* boot_oat = boot_image_space_->GetOatFile();
+    CHECK(boot_oat != nullptr);
+    const OatHeader& header = boot_oat->GetOatHeader();
     switch (type) {
       // TODO: We could maybe clean this up if we stored them in an array in the oat header.
       case kOatAddressQuickGenericJNITrampoline:
@@ -1840,7 +1934,8 @@ uint8_t* ImageWriter::GetOatFileBegin() const {
                                 bin_slot_sizes_[kBinArtMethodDirty] +
                                 bin_slot_sizes_[kBinArtMethodClean] +
                                 bin_slot_sizes_[kBinDexCacheArray] +
-                                intern_table_bytes_;
+                                intern_table_bytes_ +
+                                class_table_bytes_;
   return image_begin_ + RoundUp(image_end_ + native_sections_size, kPageSize);
 }
 

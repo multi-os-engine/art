@@ -87,6 +87,10 @@ class ClassTable {
   mirror::Class* Lookup(const char* descriptor, size_t hash)
       SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
 
+  // Return any class that matches the descriptor of klass. Returns null if there are none.
+  mirror::Class* Lookup(mirror::Class* klass)
+      SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
+
   void Insert(mirror::Class* klass)
       REQUIRES(Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -104,17 +108,28 @@ class ClassTable {
       REQUIRES(Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  size_t WriteToMemory(uint8_t* ptr) const
+      REQUIRES(Locks::classlinker_classes_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  // If new_loader is non null we change the class loaders from the read image to be equal to the
+  // new loader.
+  size_t ReadFromMemory(uint8_t* ptr, mirror::ClassLoader* new_loader = nullptr)
+      REQUIRES(Locks::classlinker_classes_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
  private:
   class ClassDescriptorHashEquals {
    public:
+    // uint32_t for cross compilation.
+    uint32_t operator()(const GcRoot<mirror::Class>& root) const NO_THREAD_SAFETY_ANALYSIS;
     // Same class loader and descriptor.
-    std::size_t operator()(const GcRoot<mirror::Class>& root) const NO_THREAD_SAFETY_ANALYSIS;
     bool operator()(const GcRoot<mirror::Class>& a, const GcRoot<mirror::Class>& b) const
         NO_THREAD_SAFETY_ANALYSIS;;
     // Same descriptor.
     bool operator()(const GcRoot<mirror::Class>& a, const char* descriptor) const
         NO_THREAD_SAFETY_ANALYSIS;
-    std::size_t operator()(const char* descriptor) const NO_THREAD_SAFETY_ANALYSIS;
+    // uint32_t for cross compilation.
+    uint32_t operator()(const char* descriptor) const NO_THREAD_SAFETY_ANALYSIS;
   };
   class GcRootEmptyFn {
    public:
