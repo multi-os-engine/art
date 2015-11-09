@@ -190,6 +190,11 @@ class ArtField FINAL {
     return declaring_class_;
   }
 
+  // Update the declaring class with the passed in visitor. Does not use read barrier.
+  // NO_THREAD_SAFETY_ANALYSIS since it may be used for image relocation.
+  template <typename Visitor>
+  ALWAYS_INLINE void UpdateObjects(const Visitor& visitor) NO_THREAD_SAFETY_ANALYSIS;
+
  private:
   mirror::Class* ProxyFindSystemClass(const char* descriptor)
       SHARED_REQUIRES(Locks::mutator_lock_);
