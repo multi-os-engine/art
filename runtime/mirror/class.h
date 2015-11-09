@@ -1202,7 +1202,7 @@ class MANAGED Class FINAL : public Object {
   static MemberOffset EmbeddedImTableOffset(size_t pointer_size);
   static MemberOffset EmbeddedVTableOffset(size_t pointer_size);
 
-  template <typename Visitor>
+  template <typename Visitor, bool kVisitNativeRoots>
   void VisitReferences(mirror::Class* klass, const Visitor& visitor)
       SHARED_REQUIRES(Locks::mutator_lock_);
 

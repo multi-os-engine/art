@@ -257,8 +257,13 @@ TEST_F(ImageTest, ImageHeaderIsValid) {
                              oat_data_begin,
                              oat_data_end,
                              oat_file_end,
+                             /*boot_image_begin*/0U,
+                             /*boot_image_size*/0U,
+                             /*boot_oat_begin*/0U,
+                             /*boot_oat_size_*/0U,
                              sizeof(void*),
-                             /*compile_pic*/false);
+                             /*compile_pic*/false,
+                             /*is_pic*/false);
     ASSERT_TRUE(image_header.IsValid());
 
     char* magic = const_cast<char*>(image_header.GetMagic());

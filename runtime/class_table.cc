@@ -40,6 +40,16 @@ bool ClassTable::Contains(mirror::Class* klass) {
   return false;
 }
 
+mirror::Class* ClassTable::Lookup(mirror::Class* klass) {
+  for (ClassSet& class_set : classes_) {
+    auto it = class_set.Find(GcRoot<mirror::Class>(klass));
+    if (it != class_set.end()) {
+      return it->Read();
+    }
+  }
+  return nullptr;
+}
+
 mirror::Class* ClassTable::UpdateClass(const char* descriptor, mirror::Class* klass, size_t hash) {
   // Should only be updating latest table.
   auto existing_it = classes_.back().FindWithHash(descriptor, hash);
