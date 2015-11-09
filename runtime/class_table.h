@@ -84,7 +84,12 @@ class ClassTable {
   bool Visit(ClassVisitor* visitor)
       SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
 
+  // Return the first class that matches the descriptor. Returns null if there are none.
   mirror::Class* Lookup(const char* descriptor, size_t hash)
+      SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
+
+  // Return the first class that matches the descriptor of klass. Returns null if there are none.
+  mirror::Class* LookupByDescriptor(mirror::Class* klass)
       SHARED_REQUIRES(Locks::classlinker_classes_lock_, Locks::mutator_lock_);
 
   void Insert(mirror::Class* klass)
@@ -108,9 +113,15 @@ class ClassTable {
   size_t WriteToMemory(uint8_t* ptr) const
       REQUIRES(Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
+  // Read a table from ptr and put it at the front of the class set.
   size_t ReadFromMemory(uint8_t* ptr)
       REQUIRES(Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Change the class loader of all the contained classes.
+  void SetClassLoaderWithoutReadBarrier(mirror::ClassLoader* class_loader)
+    REQUIRES(Locks::classlinker_classes_lock_)
+    SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:
   class ClassDescriptorHashEquals {

@@ -261,11 +261,11 @@ Heap::Heap(size_t initial_size,
     requested_alloc_space_begin = reinterpret_cast<uint8_t*>(300 * MB) - non_moving_space_capacity;
   }
   if (!image_file_name.empty()) {
-    ATRACE_BEGIN("ImageSpace::Create");
+    ATRACE_BEGIN("ImageSpace::CreateBootImage");
     std::string error_msg;
-    boot_image_space_ = space::ImageSpace::Create(image_file_name.c_str(),
-                                                  image_instruction_set,
-                                                  &error_msg);
+    boot_image_space_ = space::ImageSpace::CreateBootImage(image_file_name.c_str(),
+                                                           image_instruction_set,
+                                                           &error_msg);
     ATRACE_END();
     if (boot_image_space_ != nullptr) {
       AddSpace(boot_image_space_);
@@ -449,7 +449,15 @@ Heap::Heap(size_t initial_size,
   ATRACE_END();
   // Allocate the card table.
   ATRACE_BEGIN("Create card table");
-  card_table_.reset(accounting::CardTable::Create(heap_begin, heap_capacity));
+  // We currently don't support dynamically resizing the card table.
+  // Since we don't know where in the low_4gb the app image will be located, make the card table
+  // cover the whole low_4gb. TODO: Extend the card table in AddSpace.
+  UNUSED(heap_capacity);
+  // Start at 64 KB, we can be sure there are no spaces mapped this low since the address range is
+  // reserved by the kernel.
+  static constexpr size_t kMinHeapAddress = 4 * KB;
+  card_table_.reset(accounting::CardTable::Create(reinterpret_cast<uint8_t*>(kMinHeapAddress),
+                                                  4 * GB - kMinHeapAddress));
   CHECK(card_table_.get() != nullptr) << "Failed to create card table";
   ATRACE_END();
   if (foreground_collector_type_ == kCollectorTypeCC && kUseTableLookupReadBarrier) {

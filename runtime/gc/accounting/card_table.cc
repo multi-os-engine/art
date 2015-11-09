@@ -113,7 +113,7 @@ void CardTable::ClearCardRange(uint8_t* start, uint8_t* end) {
     return;
   }
   CHECK_ALIGNED(reinterpret_cast<uintptr_t>(start), kCardSize);
-  CHECK_ALIGNED(reinterpret_cast<uintptr_t>(end), kCardSize);
+  end = AlignUp(end, kCardSize);
   static_assert(kCardClean == 0, "kCardClean must be 0");
   uint8_t* start_card = CardFromAddr(start);
   uint8_t* end_card = CardFromAddr(end);

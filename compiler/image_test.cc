@@ -131,8 +131,9 @@ void ImageTest::TestWriteRead(ImageHeader::StorageMode storage_mode) {
   ASSERT_TRUE(dup_oat.get() != nullptr);
 
   {
-    bool success_image = writer->Write(kInvalidImageFd,
+    bool success_image = writer->Write(kInvalidFd,
                                        image_file.GetFilename(),
+                                       kInvalidFd,
                                        dup_oat->GetPath(),
                                        dup_oat->GetPath());
     ASSERT_TRUE(success_image);
@@ -269,8 +270,13 @@ TEST_F(ImageTest, ImageHeaderIsValid) {
                              oat_data_begin,
                              oat_data_end,
                              oat_file_end,
+                             /*boot_image_begin*/0U,
+                             /*boot_image_size*/0U,
+                             /*boot_oat_begin*/0U,
+                             /*boot_oat_size_*/0U,
                              sizeof(void*),
                              /*compile_pic*/false,
+                             /*is_pic*/false,
                              ImageHeader::kDefaultStorageMode,
                              /*data_size*/0u);
     ASSERT_TRUE(image_header.IsValid());

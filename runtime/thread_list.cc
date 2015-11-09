@@ -1167,6 +1167,7 @@ void ThreadList::SuspendAllDaemonThreads() {
   }
   LOG(ERROR) << "suspend all daemons failed";
 }
+
 void ThreadList::Register(Thread* self) {
   DCHECK_EQ(self, Thread::Current());
 

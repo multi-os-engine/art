@@ -1053,9 +1053,9 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   CHECK_GE(GetHeap()->GetContinuousSpaces().size(), 1U);
   class_linker_ = new ClassLinker(intern_table_);
   if (GetHeap()->HasImageSpace()) {
-    ATRACE_BEGIN("InitFromImage");
+    ATRACE_BEGIN("InitFromBootImage");
     std::string error_msg;
-    bool result = class_linker_->InitFromImage(&error_msg);
+    bool result = class_linker_->InitFromBootImage(&error_msg);
     ATRACE_END();
     if (!result) {
       LOG(ERROR) << "Could not initialize from image: " << error_msg;
