@@ -273,10 +273,11 @@ Heap::Heap(size_t initial_size,
       std::string& image_name = image_file_names[index];
       ATRACE_BEGIN("ImageSpace::Create");
       std::string error_msg;
-      space::ImageSpace* boot_image_space = space::ImageSpace::Create(image_name.c_str(),
-                                                                      image_instruction_set,
-                                                                      index > 0,
-                                                                      &error_msg);
+      space::ImageSpace* boot_image_space = space::ImageSpace::CreateBootImage(
+          image_name.c_str(),
+          image_instruction_set,
+          index > 0,
+          &error_msg);
       ATRACE_END();
       if (boot_image_space != nullptr) {
         AddSpace(boot_image_space);
@@ -488,7 +489,15 @@ Heap::Heap(size_t initial_size,
   ATRACE_END();
   // Allocate the card table.
   ATRACE_BEGIN("Create card table");
-  card_table_.reset(accounting::CardTable::Create(heap_begin, heap_capacity));
+  // We currently don't support dynamically resizing the card table.
+  // Since we don't know where in the low_4gb the app image will be located, make the card table
+  // cover the whole low_4gb. TODO: Extend the card table in AddSpace.
+  UNUSED(heap_capacity);
+  // Start at 64 KB, we can be sure there are no spaces mapped this low since the address range is
+  // reserved by the kernel.
+  static constexpr size_t kMinHeapAddress = 4 * KB;
+  card_table_.reset(accounting::CardTable::Create(reinterpret_cast<uint8_t*>(kMinHeapAddress),
+                                                  4 * GB - kMinHeapAddress));
   CHECK(card_table_.get() != nullptr) << "Failed to create card table";
   ATRACE_END();
   if (foreground_collector_type_ == kCollectorTypeCC && kUseTableLookupReadBarrier) {
@@ -1247,10 +1256,6 @@ space::Space* Heap::FindSpaceFromObject(const mirror::Object* obj, bool fail_ok)
     return result;
   }
   return FindDiscontinuousSpaceFromObject(obj, fail_ok);
-}
-
-std::vector<space::ImageSpace*> Heap::GetBootImageSpaces() const {
-  return boot_image_spaces_;
 }
 
 void Heap::ThrowOutOfMemoryError(Thread* self, size_t byte_count, AllocatorType allocator_type) {
@@ -3984,6 +3989,44 @@ void Heap::DisableGCForShutdown() {
   CHECK(Runtime::Current()->IsShuttingDown(self));
   MutexLock mu(self, *gc_complete_lock_);
   gc_disabled_for_shutdown_ = true;
+}
+
+bool Heap::ObjectIsInBootImageSpace(mirror::Object* obj) const {
+  for (gc::space::ImageSpace* space : boot_image_spaces_) {
+    if (space->HasAddress(obj)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void Heap::GetBootImagesSize(uint32_t* boot_image_begin,
+                             uint32_t* boot_image_end,
+                             uint32_t* boot_oat_begin,
+                             uint32_t* boot_oat_end) {
+  DCHECK(boot_image_begin != nullptr);
+  DCHECK(boot_image_end != nullptr);
+  DCHECK(boot_oat_begin != nullptr);
+  DCHECK(boot_oat_end != nullptr);
+  *boot_image_begin = 0u;
+  *boot_image_end = 0u;
+  *boot_oat_begin = 0u;
+  *boot_oat_end = 0u;
+  for (gc::space::ImageSpace* space_ : GetBootImageSpaces()) {
+    const uint32_t image_begin = PointerToLowMemUInt32(space_->Begin());
+    const uint32_t image_size = space_->GetImageHeader().GetImageSize();
+    if (*boot_image_begin == 0 || image_begin < *boot_image_begin) {
+      *boot_image_begin = image_begin;
+    }
+    *boot_image_end = std::max(*boot_image_end, image_begin + image_size);
+    const OatFile* boot_oat_file = space_->GetOatFile();
+    const uint32_t oat_begin = PointerToLowMemUInt32(boot_oat_file->Begin());
+    const uint32_t oat_size = boot_oat_file->Size();
+    if (*boot_oat_begin == 0 || oat_begin < *boot_oat_begin) {
+      *boot_oat_begin = oat_begin;
+    }
+    *boot_oat_end = std::max(*boot_oat_end, oat_begin + oat_size);
+  }
 }
 
 }  // namespace gc

@@ -1181,6 +1181,7 @@ void ThreadList::SuspendAllDaemonThreadsForShutdown() {
   }
   LOG(WARNING) << "timed out suspending all daemon threads";
 }
+
 void ThreadList::Register(Thread* self) {
   DCHECK_EQ(self, Thread::Current());
 
