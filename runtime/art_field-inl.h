@@ -334,6 +334,15 @@ inline void ArtField::VisitRoots(RootVisitorType& visitor) {
   visitor.VisitRoot(declaring_class_.AddressWithoutBarrier());
 }
 
+template <typename Visitor>
+inline void ArtField::UpdateObjects(const Visitor& visitor) {
+  mirror::Class* old_class = DeclaringClassRoot().Read<kWithoutReadBarrier>();
+  mirror::Class* new_class = visitor(old_class);
+  if (old_class != new_class) {
+    SetDeclaringClass(new_class);
+  }
+}
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_ART_FIELD_INL_H_
