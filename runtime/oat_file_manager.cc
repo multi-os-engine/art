@@ -22,9 +22,13 @@
 
 #include "base/logging.h"
 #include "base/stl_util.h"
+#include "class_linker.h"
 #include "dex_file-inl.h"
 #include "gc/space/image_space.h"
+#include "handle_scope-inl.h"
+#include "mirror/class_loader.h"
 #include "oat_file_assistant.h"
+#include "scoped_thread_state_change.h"
 #include "thread-inl.h"
 
 namespace art {
@@ -273,6 +277,7 @@ bool OatFileManager::HasCollisions(const OatFile* oat_file,
 std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
     const char* dex_location,
     const char* oat_location,
+    jobject class_loader,
     const OatFile** out_oat_file,
     std::vector<std::string>* error_msgs) {
   CHECK(dex_location != nullptr);
@@ -280,7 +285,8 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
 
   // Verify we aren't holding the mutator lock, which could starve GC if we
   // have to generate or relocate an oat file.
-  Locks::mutator_lock_->AssertNotHeld(Thread::Current());
+  Thread* const self = Thread::Current();
+  Locks::mutator_lock_->AssertNotHeld(self);
 
   OatFileAssistant oat_file_assistant(dex_location,
                                       oat_location,
@@ -304,8 +310,8 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
     LOG(WARNING) << error_msg;
   }
 
-  // Get the oat file on disk.
   std::unique_ptr<const OatFile> oat_file(oat_file_assistant.GetBestOatFile().release());
+  // Get the oat file on disk.
   if (oat_file != nullptr) {
     // Take the file only if it has no collisions, or we must take it because of preopting.
     bool accept_oat_file = !HasCollisions(oat_file.get(), /*out*/ &error_msg);
@@ -340,7 +346,19 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
 
   // Load the dex files from the oat file.
   if (source_oat_file != nullptr) {
-    dex_files = oat_file_assistant.LoadDexFiles(*source_oat_file, dex_location);
+    std::unique_ptr<gc::space::ImageSpace> image_space(
+        oat_file_assistant.GetImageSpace(source_oat_file));
+    if (image_space != nullptr) {
+      ScopedObjectAccess soa(self);
+      StackHandleScope<1> hs(self);
+      CHECK(class_loader != nullptr) << "Can not load app image without class loader.";
+      dex_files = Runtime::Current()->GetClassLinker()->AddImageSpace(
+          image_space.get(),
+          hs.NewHandle(soa.Decode<mirror::ClassLoader*>(class_loader)));
+      // TODO: Add image space to heap.
+    } else {
+      dex_files = oat_file_assistant.LoadDexFiles(*source_oat_file, dex_location);
+    }
     if (dex_files.empty()) {
       error_msgs->push_back("Failed to open dex files from " + source_oat_file->GetLocation());
     }
