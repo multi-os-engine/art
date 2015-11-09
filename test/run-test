@@ -678,7 +678,7 @@ if [[ "$TEST_NAME" =~ ^[0-9]+-checker- ]]; then
   USE_JACK="false"
 
   if [ "$runtime" = "art" -a "$image_suffix" = "-optimizing" ]; then
-    # Optimizing has support for read barriers on x86 and x86-64 only.
+    # Optimizing has support for read barriers on ARM, x86 and x86-64 only.
     # On other architectures, compiling is disabled when read barriers
     # are enabled, meaning that we do not produce a CFG file as a
     # side-effect of compilation, thus the Checker assertions cannot
@@ -691,6 +691,7 @@ if [[ "$TEST_NAME" =~ ^[0-9]+-checker- ]]; then
              && [ "x$host_arch_name" != xx86 ]     \
              && [ "x$host_arch_name" != xx86_64 ]) \
            || ([ "x$target_mode" = "xyes" ]        \
+               && [ "x$target_arch_name" != xarm ] \
                && [ "x$target_arch_name" != xx86 ] \
                && [ "x$target_arch_name" != xx86_64 ])); then
       run_checker="no"
