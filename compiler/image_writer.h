@@ -349,6 +349,8 @@ class ImageWriter FINAL {
 
   template <typename T>
   T* NativeLocationInImage(T* obj);
+  template <typename T>
+  T* NativeCopyLocation(T* obj);
 
   // Return true of obj is inside of the boot image space. This may only return true if we are
   // compiling an app image.
@@ -446,6 +448,7 @@ class ImageWriter FINAL {
   friend class FixupClassVisitor;
   friend class FixupRootVisitor;
   friend class FixupVisitor;
+  friend class NativeLocationVisitor;
   friend class NonImageClassesVisitor;
   DISALLOW_COPY_AND_ASSIGN(ImageWriter);
 };

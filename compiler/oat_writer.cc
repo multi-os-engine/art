@@ -1169,9 +1169,9 @@ size_t OatWriter::InitOatCodeDexFiles(size_t offset) {
     } while (false)
 
   VISIT(InitCodeMethodVisitor);
-  if (compiler_driver_->IsBootImage()) {
+  // if (true || compiler_driver_->IsBootImage()) {
     VISIT(InitImageMethodVisitor);
-  }
+  // }
 
   #undef VISIT
 

@@ -190,6 +190,10 @@ class PointerArray : public Array {
   template<bool kTransactionActive = false, bool kUnchecked = false, typename T>
   void SetElementPtrSize(uint32_t idx, T element, size_t ptr_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
+
+  template <typename Visitor>
+  void Fixup(mirror::PointerArray* dest, size_t pointer_size, const Visitor& visitor)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 };
 
 }  // namespace mirror

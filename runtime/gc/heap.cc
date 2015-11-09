@@ -449,7 +449,9 @@ Heap::Heap(size_t initial_size,
   ATRACE_END();
   // Allocate the card table.
   ATRACE_BEGIN("Create card table");
-  card_table_.reset(accounting::CardTable::Create(heap_begin, heap_capacity));
+  UNUSED(heap_capacity);
+  card_table_.reset(accounting::CardTable::Create(reinterpret_cast<uint8_t*>(64 * KB),
+                                                  4 * GB - 64 * KB));
   CHECK(card_table_.get() != nullptr) << "Failed to create card table";
   ATRACE_END();
   if (foreground_collector_type_ == kCollectorTypeCC && kUseTableLookupReadBarrier) {
@@ -1380,7 +1382,7 @@ void Heap::TrimSpaces(Thread* self) {
 bool Heap::IsValidObjectAddress(const mirror::Object* obj) const {
   // Note: we deliberately don't take the lock here, and mustn't test anything that would require
   // taking the lock.
-  if (obj == nullptr) {
+  if (obj == nullptr || obj != nullptr) {
     return true;
   }
   return IsAligned<kObjectAlignment>(obj) && FindSpaceFromObject(obj, true) != nullptr;

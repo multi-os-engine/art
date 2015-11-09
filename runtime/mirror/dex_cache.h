@@ -61,6 +61,13 @@ class MANAGED DexCache FINAL : public Object {
   void Fixup(ArtMethod* trampoline, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  template <typename T, typename Visitor>
+  static void FixupGcRootArray(GcRoot<T>* dest,
+                               GcRoot<T>* src,
+                               size_t count,
+                               const Visitor& visitor)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   String* GetLocation() SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldObject<String>(OFFSET_OF_OBJECT_MEMBER(DexCache, location_));
   }
@@ -129,16 +136,38 @@ class MANAGED DexCache FINAL : public Object {
     return GetFieldPtr<GcRoot<String>*>(StringsOffset());
   }
 
+  void SetStrings(GcRoot<String>* strings) ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
+    SetFieldPtr<false>(StringsOffset(), strings);
+  }
+
   GcRoot<Class>* GetResolvedTypes() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldPtr<GcRoot<Class>*>(ResolvedTypesOffset());
+  }
+
+  void SetResolvedTypes(GcRoot<Class>* resolved_types)
+      ALWAYS_INLINE
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    SetFieldPtr<false>(ResolvedTypesOffset(), resolved_types);
   }
 
   ArtMethod** GetResolvedMethods() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldPtr<ArtMethod**>(ResolvedMethodsOffset());
   }
 
+  void SetResolvedMethods(ArtMethod** resolved_methods)
+      ALWAYS_INLINE
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    SetFieldPtr<false>(ResolvedMethodsOffset(), resolved_methods);
+  }
+
   ArtField** GetResolvedFields() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldPtr<ArtField**>(ResolvedFieldsOffset());
+  }
+
+  void SetResolvedFields(ArtField** resolved_fields)
+      ALWAYS_INLINE
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    SetFieldPtr<false>(ResolvedFieldsOffset(), resolved_fields);
   }
 
   size_t NumStrings() SHARED_REQUIRES(Locks::mutator_lock_) {

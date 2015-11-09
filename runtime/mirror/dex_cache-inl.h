@@ -137,6 +137,20 @@ inline void DexCache::VisitReferences(mirror::Class* klass, const Visitor& visit
   }
 }
 
+template <typename T, typename Visitor>
+inline void DexCache::FixupGcRootArray(GcRoot<T>* dest,
+                                       GcRoot<T>* src,
+                                       size_t count,
+                                       const Visitor& visitor) {
+  for (size_t i = 0; i < count; ++i) {
+    T* source = src[i].Read();  // TODO: Probably don't need read barrier for most callers.
+    T* new_source = visitor(source);
+    if (source != new_source) {
+      dest[i] = GcRoot<T>(new_source);
+    }
+  }
+}
+
 }  // namespace mirror
 }  // namespace art
 
