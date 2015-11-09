@@ -476,6 +476,7 @@ class MANAGED LOCKABLE Object {
   // TODO fix thread safety analysis broken by the use of template. This should be
   // SHARED_REQUIRES(Locks::mutator_lock_).
   template <VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
+            bool kVisitNativeRoots = true,
             typename Visitor,
             typename JavaLangRefVisitor = VoidFunctor>
   void VisitReferences(const Visitor& visitor, const JavaLangRefVisitor& ref_visitor)

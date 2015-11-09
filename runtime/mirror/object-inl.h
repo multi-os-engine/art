@@ -1101,7 +1101,10 @@ inline mirror::DexCache* Object::AsDexCache() {
   return down_cast<mirror::DexCache*>(this);
 }
 
-template <VerifyObjectFlags kVerifyFlags, typename Visitor, typename JavaLangRefVisitor>
+template <VerifyObjectFlags kVerifyFlags,
+          bool kVisitNativeRoots,
+          typename Visitor,
+          typename JavaLangRefVisitor>
 inline void Object::VisitReferences(const Visitor& visitor,
                                     const JavaLangRefVisitor& ref_visitor) {
   mirror::Class* klass = GetClass<kVerifyFlags>();
@@ -1119,7 +1122,7 @@ inline void Object::VisitReferences(const Visitor& visitor,
       DCHECK(!klass->IsStringClass());
       if (class_flags == kClassFlagClass) {
         DCHECK(klass->IsClassClass());
-        AsClass<kVerifyNone>()->VisitReferences(klass, visitor);
+        AsClass<kVerifyNone>()->VisitReferences<Visitor, kVisitNativeRoots>(klass, visitor);
       } else if (class_flags == kClassFlagObjectArray) {
         DCHECK(klass->IsObjectArrayClass());
         AsObjectArray<mirror::Object, kVerifyNone>()->VisitReferences(visitor);
@@ -1131,7 +1134,7 @@ inline void Object::VisitReferences(const Visitor& visitor,
         dex_cache->VisitReferences<kVerifyFlags>(klass, visitor);
       } else {
         mirror::ClassLoader* const class_loader = AsClassLoader<kVerifyFlags>();
-        class_loader->VisitReferences<kVerifyFlags>(klass, visitor);
+        class_loader->VisitReferences<kVerifyFlags, kVisitNativeRoots>(klass, visitor);
       }
     } else if (kIsDebugBuild) {
       CHECK(!klass->IsClassClass());

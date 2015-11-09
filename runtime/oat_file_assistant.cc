@@ -38,6 +38,7 @@
 #include "os.h"
 #include "profiler.h"
 #include "runtime.h"
+#include "scoped_thread_state_change.h"
 #include "ScopedFd.h"
 #include "utils.h"
 
@@ -324,6 +325,32 @@ bool OatFileAssistant::OdexFileIsUpToDate() {
     }
   }
   return cached_odex_file_is_up_to_date_;
+}
+
+const std::string* OatFileAssistant::ArtFileName() {
+  if (!cached_art_file_name_attempted_) {
+    cached_art_file_name_attempted_ = true;
+
+    // Compute the oat file name from the dex location.
+    // TODO: The oat file assistant should be the definitive place for
+    // determining the oat file name from the dex location, not
+    // GetDalvikCacheFilename.
+    std::string cache_dir = StringPrintf("%s%s",
+        DalvikCacheDirectory().c_str(), GetInstructionSetString(isa_));
+    std::string default_art_name = dex_location_ + "/" + DexFile::kClassesArt;
+    std::string error_msg;
+    cached_art_file_name_found_ = GetDalvikCacheFilename(default_art_name.c_str(),
+                                                         cache_dir.c_str(),
+                                                         &cached_art_file_name_,
+                                                         &error_msg);
+    if (!cached_art_file_name_found_) {
+      // If we can't determine the oat file name, we treat the oat file as
+      // inaccessible.
+      LOG(WARNING) << "Failed to determine art file name for dex location "
+        << dex_location_ << ": " << error_msg;
+    }
+  }
+  return cached_art_file_name_found_ ? &cached_art_file_name_ : nullptr;
 }
 
 const std::string* OatFileAssistant::OatFileName() {
@@ -1000,6 +1027,23 @@ ProfileFile* OatFileAssistant::GetOldProfile() {
     }
   }
   return old_profile_load_succeeded_ ? &cached_old_profile_ : nullptr;
+}
+
+gc::space::ImageSpace* OatFileAssistant::GetImageSpace(const OatFile* oat_file) {
+  DCHECK(oat_file != nullptr);
+  const std::string* art_file = ArtFileName();
+  LOG(ERROR) << (art_file != nullptr ? art_file->c_str() : "");
+  if (art_file == nullptr) {
+    return nullptr;
+  }
+  std::string error_msg;
+  gc::space::ImageSpace* space;
+  {
+    ScopedObjectAccess soa(Thread::Current());
+    space = gc::space::ImageSpace::CreateFromAppImage(art_file->c_str(), oat_file, &error_msg);
+  }
+  LOG(ERROR) << error_msg;
+  return space;
 }
 
 }  // namespace art

@@ -1165,18 +1165,37 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
   const size_t image_end = static_cast<uint32_t>(interned_strings_section->End());
   CHECK_EQ(AlignUp(image_begin_ + image_end, kPageSize), oat_file_begin) <<
       "Oat file should be right after the image.";
+  // Store boot image info for app image so that we can relocate.
+
+  uint32_t boot_image_begin = 0;
+  uint32_t boot_image_size = 0;
+  uint32_t boot_oat_begin = 0;
+  uint32_t boot_oat_size = 0;
+  if (boot_image_space_ != nullptr) {
+    boot_image_begin = PointerToLowMemUInt32(boot_image_space_->Begin());
+    boot_image_size = boot_image_space_->GetImageHeader().GetImageSize();
+    boot_oat_begin =
+        PointerToLowMemUInt32(boot_image_space_->GetImageHeader().GetOatFileBegin());
+    boot_oat_size =
+        PointerToLowMemUInt32(boot_image_space_->GetImageHeader().GetOatFileEnd()) - boot_oat_begin;
+  }
   // Create the header.
   new (image_->Begin()) ImageHeader(PointerToLowMemUInt32(image_begin_),
-                                                          image_end,
-                                                          sections,
-                                                          image_roots_address_,
-                                                          oat_file_->GetOatHeader().GetChecksum(),
-                                                          PointerToLowMemUInt32(oat_file_begin),
-                                                          PointerToLowMemUInt32(oat_data_begin_),
-                                                          PointerToLowMemUInt32(oat_data_end),
-                                                          PointerToLowMemUInt32(oat_file_end),
-                                                          target_ptr_size_,
-                                                          compile_pic_);
+                                    image_end,
+                                    sections,
+                                    image_roots_address_,
+                                    oat_file_->GetOatHeader().GetChecksum(),
+                                    PointerToLowMemUInt32(oat_file_begin),
+                                    PointerToLowMemUInt32(oat_data_begin_),
+                                    PointerToLowMemUInt32(oat_data_end),
+                                    PointerToLowMemUInt32(oat_file_end),
+                                    boot_image_begin,
+                                    boot_image_size,
+                                    boot_oat_begin,
+                                    boot_oat_size,
+                                    target_ptr_size_,
+                                    compile_pic_,
+                                    /*is_pic*/compile_app_image_);
 }
 
 ArtMethod* ImageWriter::GetImageMethodAddress(ArtMethod* method) {

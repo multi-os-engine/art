@@ -304,8 +304,8 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
     LOG(WARNING) << error_msg;
   }
 
-  // Get the oat file on disk.
   std::unique_ptr<const OatFile> oat_file(oat_file_assistant.GetBestOatFile().release());
+  // Get the oat file on disk.
   if (oat_file != nullptr) {
     // Take the file only if it has no collisions, or we must take it because of preopting.
     bool accept_oat_file = !HasCollisions(oat_file.get(), /*out*/ &error_msg);
@@ -330,6 +330,11 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
     }
 
     if (accept_oat_file) {
+      std::unique_ptr<gc::space::ImageSpace> image_space(
+          oat_file_assistant.GetImageSpace(oat_file.get()));
+      /* if (image_space != nullptr) {
+        Runtime::Current()->GetHeap()->AddSpace(image_space.release());
+      } */
       VLOG(class_linker) << "Registering " << oat_file->GetLocation();
       source_oat_file = RegisterOatFile(std::move(oat_file));
       *out_oat_file = source_oat_file;

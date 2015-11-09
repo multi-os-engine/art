@@ -896,7 +896,7 @@ void ClassLinker::InitFromImage() {
   for (int32_t i = 0; i < dex_caches->GetLength(); i++) {
     StackHandleScope<1> hs2(self);
     Handle<mirror::DexCache> dex_cache(hs2.NewHandle(dex_caches->Get(i)));
-    const std::string& dex_file_location(dex_cache->GetLocation()->ToModifiedUtf8());
+    const std::string dex_file_location(dex_cache->GetLocation()->ToModifiedUtf8());
     const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(dex_file_location.c_str(),
                                                                       nullptr);
     CHECK(oat_dex_file != nullptr) << oat_file->GetLocation() << " " << dex_file_location;

@@ -231,7 +231,8 @@ TEST_F(ImageTest, ImageHeaderIsValid) {
                              oat_data_end,
                              oat_file_end,
                              sizeof(void*),
-                             /*compile_pic*/false);
+                             /*compile_pic*/false,
+                             /*is_pic*/false);
     ASSERT_TRUE(image_header.IsValid());
 
     char* magic = const_cast<char*>(image_header.GetMagic());

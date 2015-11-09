@@ -270,6 +270,7 @@ std::unique_ptr<const DexFile> DexFile::OpenFile(int fd, const char* location, b
 }
 
 const char* DexFile::kClassesDex = "classes.dex";
+const char* DexFile::kClassesArt = "classes.art";
 
 bool DexFile::OpenZip(int fd, const std::string& location, std::string* error_msg,
                       std::vector<std::unique_ptr<const DexFile>>* dex_files) {
