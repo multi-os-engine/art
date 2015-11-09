@@ -678,6 +678,14 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
     instruction_set = kThumb2;
   }
 
+  // Read barrier are supported only on x86 and x86-64 at the moment.
+  // TODO: Add support for other architectures and remove this case.
+  if ((kForceReadBarrier || kUseReadBarrier) &&
+      instruction_set != kX86 &&
+      instruction_set != kX86_64) {
+    return nullptr;
+  }
+
   // Do not attempt to compile on architectures we do not support.
   if (!IsInstructionSetSupported(instruction_set)) {
     MaybeRecordStat(MethodCompilationStat::kNotCompiledUnsupportedIsa);
