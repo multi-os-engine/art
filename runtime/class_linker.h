@@ -125,6 +125,19 @@ class ClassLinker {
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!dex_lock_);
 
+  // Add an image space to the class linker, may fix up classloader fields and dex cache fields.
+  // The dex files that were newly opened for the space are placed in the out argument
+  // out_dex_files. Returns an if the operation succeeded.
+  bool AddImageSpace(
+      gc::space::ImageSpace* space,
+      Handle<mirror::ClassLoader> class_loader,
+      jobjectArray dex_elements,
+      const char* dex_location,
+      std::vector<std::unique_ptr<const DexFile>>* out_dex_files,
+      std::string* error_msg)
+      REQUIRES(!dex_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   // Finds a class by its descriptor, loading it if necessary.
   // If class_loader is null, searches boot_class_path_.
   mirror::Class* FindClass(Thread* self,
@@ -989,7 +1002,7 @@ class ClassLinker {
       REQUIRES(!Locks::classlinker_classes_lock_);
 
   std::vector<const DexFile*> boot_class_path_;
-  std::vector<std::unique_ptr<const DexFile>> opened_dex_files_;
+  std::vector<std::unique_ptr<const DexFile>> boot_dex_files_;
 
   mutable ReaderWriterMutex dex_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   // JNI weak globals and side data to allow dex caches to get unloaded. We lazily delete weak

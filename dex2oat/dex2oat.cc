@@ -1292,8 +1292,11 @@ class Dex2Oat FINAL {
 
       if (app_image_ && image_base_ == 0) {
         gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
+        // The non moving space is right after the oat file. Put the preferred app image location
+        // there so that we ideally get a continuous immune region for the GC.
         image_base_ = RoundUp(
-            reinterpret_cast<uintptr_t>(image_space->GetImageHeader().GetOatFileEnd()),
+            reinterpret_cast<uintptr_t>(image_space->GetImageHeader().GetOatFileEnd()) +
+            gc::Heap::kDefaultNonMovingSpaceCapacity,
             kPageSize);
         VLOG(compiler) << "App image base=" << reinterpret_cast<void*>(image_base_);
       }
@@ -1700,6 +1703,8 @@ class Dex2Oat FINAL {
 
   void PrepareImageWriter(uintptr_t image_base) {
     DCHECK(IsImage());
+    // Currently the app oat file does not have dependencies on the app image. So the app image may
+    // mapped at any random address.
     image_writer_.reset(new ImageWriter(*driver_,
                                         image_base,
                                         compiler_options_->GetCompilePic(),
