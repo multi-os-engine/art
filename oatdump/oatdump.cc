@@ -2366,7 +2366,11 @@ class ImageDumper {
   DISALLOW_COPY_AND_ASSIGN(ImageDumper);
 };
 
-static int DumpImage(Runtime* runtime, const char* image_location, OatDumperOptions* options,
+static int DumpImage(Runtime* runtime,
+                     const char* image_location,
+                     bool boot_image,
+                     OatFile* oat_file,  // Only used for app image case.
+                     OatDumperOptions* options,
                      std::ostream* os) {
   // Dumping the image, no explicit class loader.
   NullHandle<mirror::ClassLoader> null_class_loader;
@@ -2374,8 +2378,25 @@ static int DumpImage(Runtime* runtime, const char* image_location, OatDumperOpti
 
   ScopedObjectAccess soa(Thread::Current());
   gc::Heap* heap = runtime->GetHeap();
-  gc::space::ImageSpace* image_space = heap->GetBootImageSpace();
-  CHECK(image_space != nullptr);
+  gc::space::ImageSpace* image_space;
+  std::unique_ptr<gc::space::ImageSpace> app_image_file;
+  if (boot_image) {
+    image_space = heap->GetBootImageSpace();
+    CHECK(image_space != nullptr);
+  } else {
+    std::string error_msg;
+    app_image_file.reset(gc::space::ImageSpace::CreateFromAppImage(image_location,
+                                                                   oat_file,
+                                                                   &error_msg));
+    if (app_image_file == nullptr) {
+      fprintf(stderr,
+              "Error opening application image %s : %s\n",
+              image_location,
+              error_msg.c_str());
+      return EXIT_FAILURE;
+    }
+    image_space = app_image_file.get();
+  }
   const ImageHeader& image_header = image_space->GetImageHeader();
   if (!image_header.IsValid()) {
     fprintf(stderr, "Invalid image header %s\n", image_location);
@@ -2488,6 +2509,8 @@ struct OatdumpArgs : public CmdlineArgs {
       oat_filename_ = option.substr(strlen("--oat-file=")).data();
     } else if (option.starts_with("--image=")) {
       image_location_ = option.substr(strlen("--image=")).data();
+    } else if (option.starts_with("--app-image=")) {
+      app_image_location_ = option.substr(strlen("--app-image=")).data();
     } else if (option =="--dump:raw_mapping_table") {
       dump_raw_mapping_table_ = true;
     } else if (option == "--dump:raw_gc_map") {
@@ -2539,8 +2562,10 @@ struct OatdumpArgs : public CmdlineArgs {
     if (image_location_ == nullptr && oat_filename_ == nullptr) {
       *error_msg = "Either --image or --oat-file must be specified";
       return kParseError;
-    } else if (image_location_ != nullptr && oat_filename_ != nullptr) {
-      *error_msg = "Either --image or --oat-file must be specified but not both";
+    } else if ((image_location_ != nullptr && oat_filename_ != nullptr) !=
+               (app_image_location_ != nullptr)) {
+      *error_msg = "Both --image or --oat-file must be specified iff an application image is"
+                   " specified";
       return kParseError;
     }
 
@@ -2559,8 +2584,11 @@ struct OatdumpArgs : public CmdlineArgs {
         "  --oat-file=<file.oat>: specifies an input oat filename.\n"
         "      Example: --oat-file=/system/framework/boot.oat\n"
         "\n"
-        "  --image=<file.art>: specifies an input image location.\n"
+        "  --image=<file.art>: specifies an input boot image location.\n"
         "      Example: --image=/system/framework/boot.art\n"
+        "\n"
+        "  --app-image=<file.art>: specifies an input application image location.\n"
+        "      Example: --app-image=base.art\n"
         "\n";
 
     usage += Base::GetUsage();
@@ -2614,6 +2642,7 @@ struct OatdumpArgs : public CmdlineArgs {
   const char* class_filter_ = "";
   const char* method_filter_ = "";
   const char* image_location_ = nullptr;
+  const char* app_image_location_ = nullptr;
   std::string elf_filename_prefix_;
   bool dump_raw_mapping_table_ = false;
   bool dump_raw_gc_map_ = false;
@@ -2648,7 +2677,9 @@ struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
         args_->export_dex_location_,
         args_->addr2instr_));
 
-    return (args_->boot_image_location_ != nullptr || args_->image_location_ != nullptr) &&
+    return (args_->boot_image_location_ != nullptr ||
+            args_->image_location_ != nullptr ||
+            args_->app_image_location_ != nullptr) &&
           !args_->symbolize_;
   }
 
@@ -2671,15 +2702,42 @@ struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
   virtual bool ExecuteWithRuntime(Runtime* runtime) {
     CHECK(args_ != nullptr);
 
-    if (args_->oat_filename_ != nullptr) {
-      return DumpOat(runtime,
-                     args_->oat_filename_,
-                     oat_dumper_options_.get(),
-                     args_->os_) == EXIT_SUCCESS;
+    if (DumpOat(runtime,
+                args_->oat_filename_,
+                oat_dumper_options_.get(),
+                args_->os_) != EXIT_SUCCESS) {
+      return false;
     }
 
-    return DumpImage(runtime, args_->image_location_, oat_dumper_options_.get(), args_->os_)
-      == EXIT_SUCCESS;
+    // If we have both the app image and the boot image, prefer dumping the app image.
+    const bool boot_image = args_->app_image_location_ == nullptr;
+    const char* preferred_image = boot_image ? args_->image_location_ : args_->app_image_location_;
+    // Dumping app image requires the oat file.
+    std::unique_ptr<OatFile> app_oat_file;
+    if (!boot_image) {
+      std::string error_msg;
+      const char* oat_filename = args_->oat_filename_;
+      app_oat_file.reset(OatFile::Open(oat_filename,
+                                       oat_filename,
+                                       nullptr,
+                                       nullptr,
+                                       false,
+                                       nullptr,
+                                       &error_msg));
+      if (app_oat_file == nullptr) {
+        fprintf(stderr,
+                "Error opening oat file %s : %s\n",
+                oat_filename,
+                error_msg.c_str());
+        return false;
+      }
+    }
+    return DumpImage(runtime,
+                     preferred_image,
+                     boot_image,
+                     app_oat_file.get(),
+                     oat_dumper_options_.get(),
+                     args_->os_) == EXIT_SUCCESS;
   }
 
   std::unique_ptr<OatDumperOptions> oat_dumper_options_;

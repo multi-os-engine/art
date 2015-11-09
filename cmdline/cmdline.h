@@ -69,11 +69,15 @@ static bool LocationToFilename(const std::string& location, InstructionSet isa,
       has_cache = true;
     }
   }
+
   if (has_system) {
     *filename = system_filename;
     return true;
   } else if (has_cache) {
     *filename = cache_filename;
+    return true;
+  } else if (OS::FileExists(location.c_str())) {
+    *filename = location;
     return true;
   } else {
     return false;
@@ -263,6 +267,7 @@ struct CmdlineArgs {
 
       // Check that the boot image location points to a valid file name.
       std::string file_name;
+      LOG(INFO) << boot_image_location;
       if (!LocationToFilename(boot_image_location, instruction_set_, &file_name)) {
         *error_msg = StringPrintf("No corresponding file for location '%s' exists",
                                   file_name.c_str());
