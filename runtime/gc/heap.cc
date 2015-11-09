@@ -449,7 +449,14 @@ Heap::Heap(size_t initial_size,
   ATRACE_END();
   // Allocate the card table.
   ATRACE_BEGIN("Create card table");
-  card_table_.reset(accounting::CardTable::Create(heap_begin, heap_capacity));
+  // We currently don't support dynamically resizing the card table.
+  // Since we don't know where in the low_4gb the app image will be located, make the card table
+  // cover the whole low_4gb. TODO: Extend the card table in AddSpace.
+  UNUSED(heap_capacity);
+  // Start at 64 KB, we can be sure there are no spaces mapped this low.
+  static constexpr size_t kMinHeapAddress = 4 * KB;
+  card_table_.reset(accounting::CardTable::Create(reinterpret_cast<uint8_t*>(kMinHeapAddress),
+                                                  4 * GB - kMinHeapAddress));
   CHECK(card_table_.get() != nullptr) << "Failed to create card table";
   ATRACE_END();
   if (foreground_collector_type_ == kCollectorTypeCC && kUseTableLookupReadBarrier) {
@@ -3162,7 +3169,7 @@ void Heap::ProcessCards(TimingLogger* timings,
     } else if (process_alloc_space_cards) {
       TimingLogger::ScopedTiming t2("AllocSpaceClearCards", timings);
       if (clear_alloc_space_cards) {
-        card_table_->ClearCardRange(space->Begin(), space->End());
+        card_table_->ClearCardRange(space->Begin(), AlignUp(space->End(), kPageSize));
       } else {
         // No mod union table for the AllocSpace. Age the cards so that the GC knows that these
         // cards were dirty before the GC started.

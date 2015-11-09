@@ -155,12 +155,33 @@ bool ImageWriter::PrepareImageAddressSpace() {
 
 bool ImageWriter::Write(int image_fd,
                         const std::string& image_filename,
+                        int oat_fd,
                         const std::string& oat_filename,
                         const std::string& oat_location) {
-  CHECK(!image_filename.empty());
+  if (image_fd == -1) {
+    CHECK(!image_filename.empty());
+  }
+  if (oat_fd == -1) {
+    CHECK(!oat_filename.empty());
+  }
 
-  std::unique_ptr<File> oat_file(OS::OpenFileReadWrite(oat_filename.c_str()));
-  if (oat_file.get() == nullptr) {
+  std::unique_ptr<File> oat_file;
+  if (oat_fd != kInvalidFd) {
+    if (oat_filename.empty()) {
+      oat_file.reset(new File(oat_fd, false));
+    } else {
+      oat_file.reset(new File(oat_fd, oat_filename, false));
+    }
+    int length = oat_file->GetLength();
+    if (length < 0) {
+      LOG(ERROR) << "FD " << oat_fd << " FILE SIZE " << length << " " << strerror(-length);
+    } else {
+      oat_file->DisableAutoClose();
+    }
+  } else {
+    oat_file.reset(OS::OpenFileReadWrite(oat_filename.c_str()));
+  }
+  if (oat_file == nullptr) {
     PLOG(ERROR) << "Failed to open oat file " << oat_filename << " for " << oat_location;
     return false;
   }
@@ -206,13 +227,23 @@ bool ImageWriter::Write(int image_fd,
 
   SetOatChecksumFromElfFile(oat_file.get());
 
-  if (oat_file->FlushCloseOrErase() != 0) {
+  if (oat_fd != -1) {
+    // Leave fd open for caller.
+    if (oat_file->Flush() != 0) {
+      LOG(ERROR) << "Failed to flush oat file " << oat_filename << " for " << oat_location;
+      return false;
+    }
+  } else if (oat_file->FlushCloseOrErase() != 0) {
     LOG(ERROR) << "Failed to flush and close oat file " << oat_filename << " for " << oat_location;
     return false;
   }
   std::unique_ptr<File> image_file;
-  if (image_fd != kInvalidImageFd) {
-    image_file.reset(new File(image_fd, image_filename, unix_file::kCheckSafeUsage));
+  if (image_fd != kInvalidFd) {
+    if (image_filename.empty()) {
+      image_file.reset(new File(image_fd, unix_file::kCheckSafeUsage));
+    } else {
+      image_file.reset(new File(image_fd, image_filename, unix_file::kCheckSafeUsage));
+    }
   } else {
     image_file.reset(OS::CreateEmptyFile(image_filename.c_str()));
   }
@@ -220,7 +251,7 @@ bool ImageWriter::Write(int image_fd,
     LOG(ERROR) << "Failed to open image file " << image_filename;
     return false;
   }
-  if (fchmod(image_file->Fd(), 0644) != 0) {
+  if (!compile_app_image_ && fchmod(image_file->Fd(), 0644) != 0) {
     PLOG(ERROR) << "Failed to make image file world readable: " << image_filename;
     image_file->Erase();
     return EXIT_FAILURE;
@@ -668,6 +699,13 @@ bool ImageWriter::ContainsBootClassLoaderNonImageClassInternal(
   visited->emplace(klass);
   bool result = IsBootClassLoaderNonImageClass(klass);
   bool my_early_exit = false;  // Only for ourselves, ignore caller.
+  // Remove classes that failed to verify since we don't want to have java.lang.VerifyError in the
+  // app image.
+  if (klass->GetStatus() == mirror::Class::kStatusError) {
+    result = true;
+  } else {
+    CHECK(klass->GetVerifyError() == nullptr) << PrettyClass(klass);
+  }
   if (!result) {
     // Check interfaces since these wont be visited through VisitReferences.)
     mirror::IfTable* if_table = klass->GetIfTable();
@@ -677,6 +715,12 @@ bool ImageWriter::ContainsBootClassLoaderNonImageClassInternal(
           &my_early_exit,
           visited);
     }
+  }
+  if (klass->IsObjectArrayClass()) {
+    result = result || ContainsBootClassLoaderNonImageClassInternal(
+        klass->GetComponentType(),
+        &my_early_exit,
+        visited);
   }
   // Check static fields and their classes.
   size_t num_static_fields = klass->NumReferenceStaticFields();
@@ -731,7 +775,8 @@ bool ImageWriter::KeepClass(Class* klass) {
   if (compile_app_image_) {
     // For app images, we need to prune boot loader classes that are not in the boot image since
     // these may have already been loaded when the app image is loaded.
-    return !ContainsBootClassLoaderNonImageClass(klass);
+    // Keep classes in the boot image space since we don't want to reresolve these.
+    return boot_image_space_->HasAddress(klass) || !ContainsBootClassLoaderNonImageClass(klass);
   }
   std::string temp;
   return compiler_driver_.IsImageClass(klass->GetDescriptor(&temp));
@@ -997,6 +1042,11 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
       }
       // Visit and assign offsets for fields and field arrays.
       auto* as_klass = h_obj->AsClass();
+      DCHECK_NE(klass->GetStatus(), mirror::Class::kStatusError);
+      if (compile_app_image_) {
+        // Extra sanity, no boot loader classes should be left!
+        CHECK(!IsBootClassLoaderClass(as_klass)) << PrettyClass(as_klass);
+      }
       LengthPrefixedArray<ArtField>* fields[] = {
           as_klass->GetSFieldsPtr(), as_klass->GetIFieldsPtr(),
       };
@@ -1275,6 +1325,8 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
   auto* interned_strings_section = &sections[ImageHeader::kSectionInternedStrings];
   *interned_strings_section = ImageSection(cur_pos, intern_table_bytes_);
   cur_pos = interned_strings_section->End();
+  // Round up for class table alignment.
+  cur_pos = RoundUp(cur_pos, sizeof(uint64_t));
   // Calculate the size of the class table section.
   auto* class_table_section = &sections[ImageHeader::kSectionClassTable];
   *class_table_section = ImageSection(cur_pos, class_table_bytes_);
@@ -1296,21 +1348,38 @@ void ImageWriter::CreateHeader(size_t oat_loaded_size, size_t oat_data_offset) {
   }
   CHECK_EQ(AlignUp(image_begin_ + image_end, kPageSize), oat_file_begin) <<
       "Oat file should be right after the image.";
-  // Create the header, leave 0 for data size since we will fill this in as we are writing the
+  // Store boot image info for app image so that we can relocate.
+  uint32_t boot_image_begin = 0;
+  uint32_t boot_image_size = 0;
+  uint32_t boot_oat_begin = 0;
+  uint32_t boot_oat_size = 0;
+  if (boot_image_space_ != nullptr) {
+    boot_image_begin = PointerToLowMemUInt32(boot_image_space_->Begin());
+    boot_image_size = boot_image_space_->GetImageHeader().GetImageSize();
+    const OatFile* boot_oat_file = boot_image_space_->GetOatFile();
+    boot_oat_begin = PointerToLowMemUInt32(boot_oat_file->Begin());
+    boot_oat_size = boot_oat_file->Size();
+  }
+  // Create the header, leave 0 for stored size since we will fill this in as we are writing the
   // image.
   new (image_->Begin()) ImageHeader(PointerToLowMemUInt32(image_begin_),
-                                                          image_end,
-                                                          sections,
-                                                          image_roots_address_,
-                                                          oat_file_->GetOatHeader().GetChecksum(),
-                                                          PointerToLowMemUInt32(oat_file_begin),
-                                                          PointerToLowMemUInt32(oat_data_begin_),
-                                                          PointerToLowMemUInt32(oat_data_end),
-                                                          PointerToLowMemUInt32(oat_file_end),
-                                                          target_ptr_size_,
-                                                          compile_pic_,
-                                                          image_storage_mode_,
-                                                          /*data_size*/0u);
+                                    image_end,
+                                    sections,
+                                    image_roots_address_,
+                                    oat_file_->GetOatHeader().GetChecksum(),
+                                    PointerToLowMemUInt32(oat_file_begin),
+                                    PointerToLowMemUInt32(oat_data_begin_),
+                                    PointerToLowMemUInt32(oat_data_end),
+                                    PointerToLowMemUInt32(oat_file_end),
+                                    boot_image_begin,
+                                    boot_image_size,
+                                    boot_oat_begin,
+                                    boot_oat_size,
+                                    target_ptr_size_,
+                                    compile_pic_,
+                                    /*is_pic*/compile_app_image_,
+                                    image_storage_mode_,
+                                    /*data_size*/0u);
 }
 
 ArtMethod* ImageWriter::GetImageMethodAddress(ArtMethod* method) {
@@ -1667,13 +1736,16 @@ void ImageWriter::FixupObject(Object* orig, Object* copy) {
       if (klass == class_linker->GetClassRoot(ClassLinker::kJavaLangDexCache)) {
         FixupDexCache(down_cast<mirror::DexCache*>(orig), down_cast<mirror::DexCache*>(copy));
       } else if (klass->IsClassLoaderClass()) {
+        mirror::ClassLoader* copy_loader = down_cast<mirror::ClassLoader*>(copy);
         // If src is a ClassLoader, set the class table to null so that it gets recreated by the
         // ClassLoader.
-        down_cast<mirror::ClassLoader*>(copy)->SetClassTable(nullptr);
+        copy_loader->SetClassTable(nullptr);
         // Also set allocator to null to be safe. The allocator is created when we create the class
         // table. We also never expect to unload things in the image since they are held live as
         // roots.
-        down_cast<mirror::ClassLoader*>(copy)->SetAllocator(nullptr);
+        copy_loader->SetAllocator(nullptr);
+        // Clear lambda proxy table. TODO: Re-enable when CL is unreverted.
+        // copy_loader->SetLambdaProxyCache(nullptr);
       }
     }
     FixupVisitor visitor(this, copy);
@@ -1747,11 +1819,10 @@ const uint8_t* ImageWriter::GetOatAddress(OatAddress type) const {
   // If we are compiling an app image, we need to use the stubs of the boot image.
   if (compile_app_image_) {
     // Use the current image pointers.
-    gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
-    DCHECK(image_space != nullptr);
-    const OatFile* oat_file = image_space->GetOatFile();
-    CHECK(oat_file != nullptr);
-    const OatHeader& header = oat_file->GetOatHeader();
+    DCHECK(boot_image_space_ != nullptr);
+    const OatFile* boot_oat = boot_image_space_->GetOatFile();
+    CHECK(boot_oat != nullptr);
+    const OatHeader& header = boot_oat->GetOatHeader();
     switch (type) {
       // TODO: We could maybe clean this up if we stored them in an array in the oat header.
       case kOatAddressQuickGenericJNITrampoline:
