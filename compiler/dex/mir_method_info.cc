@@ -101,7 +101,9 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
       // The method index is actually the dex PC in this case.
       // Calculate the proper dex file and target method idx.
       CHECK(use_jit);
-      CHECK_EQ(invoke_type, kVirtual);
+      if (!string_init) {
+        CHECK_EQ(invoke_type, kVirtual);
+      }
       // Don't devirt if we are in a different dex file since we can't have direct invokes in
       // another dex file unless we always put a direct / patch pointer.
       devirt_target = nullptr;
