@@ -788,7 +788,107 @@ END_MACRO
 
 // Generate the allocation entrypoints for each allocator.
 GENERATE_ALLOC_ENTRYPOINTS_FOR_EACH_ALLOCATOR
-GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_rosalloc, RosAlloc)
+
+// A hand-written override for GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_rosalloc, RosAlloc).
+DEFINE_FUNCTION art_quick_alloc_object_rosalloc
+    // Fast path rosalloc allocation.
+    // eax: uint32_t type_idx/return value, ecx: ArtMethod*
+    pushl %ebx
+    pushl %edi
+    pushl %esi
+    movl ART_METHOD_DEX_CACHE_TYPES_OFFSET_32(%ecx), %edx  // Load dex cache resolved types array
+                                                        // Load the class (edx)
+    movl 0(%edx, %eax, MIRROR_OBJECT_ARRAY_COMPONENT_SIZE), %edx
+    testl %edx, %edx                                    // Check null class
+    jz   .Lart_quick_alloc_object_rosalloc_slow_path
+                                                        // Check class status
+    cmpl LITERAL(MIRROR_CLASS_STATUS_INITIALIZED), MIRROR_CLASS_STATUS_OFFSET(%edx)
+    jne  .Lart_quick_alloc_object_rosalloc_slow_path
+                                                        // No fake dependence needed on x86
+                                                        // between status and flags load,
+                                                        // since each load is a load-acquire,
+                                                        // no loads reordering.
+                                                        // Check access flags has
+                                                        // kAccClassIsFinalizable
+    testl LITERAL(ACCESS_FLAGS_CLASS_IS_FINALIZABLE), MIRROR_CLASS_ACCESS_FLAGS_OFFSET(%edx)
+    jnz   .Lart_quick_alloc_object_rosalloc_slow_path
+
+    movl %fs:THREAD_SELF_OFFSET, %ebx                   // ebx = thread
+                                                        // Check if the thread local allocation
+                                                        // stack has room
+    movl THREAD_LOCAL_ALLOC_STACK_TOP_OFFSET(%ebx), %esi
+    cmpl THREAD_LOCAL_ALLOC_STACK_END_OFFSET(%ebx), %esi
+    jae  .Lart_quick_alloc_object_rosalloc_slow_path
+
+    movl MIRROR_CLASS_OBJECT_SIZE_OFFSET(%edx), %edi    // Load the object size (edi)
+                                                        // Check if the size is for a thread
+                                                        // local allocation
+    cmpl LITERAL(ROSALLOC_MAX_THREAD_LOCAL_BRACKET_SIZE), %edi
+    ja   .Lart_quick_alloc_object_rosalloc_slow_path
+    decl %edi
+    shrl LITERAL(ROSALLOC_BRACKET_QUANTUM_SIZE_SHIFT), %edi // Calculate the rosalloc bracket index
+                                                            // from object size.
+                                                            // Align up the size by the rosalloc
+                                                            // bracket quantum size and divide
+                                                            // by the quantum size and subtract
+                                                            // by 1. This code is a shorter but
+                                                            // equivalent version.
+                                                        // Load thread local rosalloc run (esi)
+    movl THREAD_ROSALLOC_RUNS_OFFSET(%ebx, %edi, __SIZEOF_POINTER__), %esi
+                                                        // Load free_list head (edi),
+                                                        // this will be the return value.
+    movl (ROSALLOC_RUN_FREE_LIST_OFFSET + ROSALLOC_RUN_FREE_LIST_HEAD_OFFSET)(%esi), %edi
+    test %edi, %edi
+    jz   .Lart_quick_alloc_object_rosalloc_slow_path
+    movl %edi, %eax
+                                                        // Load the next pointer of the head
+                                                        // and update head of free list with
+                                                        // next pointer
+    movl ROSALLOC_SLOT_NEXT_OFFSET(%eax), %edi
+    movl %edi, (ROSALLOC_RUN_FREE_LIST_OFFSET + ROSALLOC_RUN_FREE_LIST_HEAD_OFFSET)(%esi)
+                                                        // Decrement size of free list by 1
+    decl (ROSALLOC_RUN_FREE_LIST_OFFSET + ROSALLOC_RUN_FREE_LIST_SIZE_OFFSET)(%esi)
+                                                        // Store the class pointer in the
+                                                        // header. This also overwrites the
+                                                        // next pointer. The offsets are
+                                                        // asserted to match.
+#if ROSALLOC_SLOT_NEXT_OFFSET != MIRROR_OBJECT_CLASS_OFFSET
+#error "Class pointer needs to overwrite next pointer."
+#endif
+    POISON_HEAP_REF edx
+    movl %edx, MIRROR_OBJECT_CLASS_OFFSET(%eax)
+                                                        // Push the new object onto the thread
+                                                        // local allocation stack and
+                                                        // increment the thread local
+                                                        // allocation stack top.
+    movl THREAD_LOCAL_ALLOC_STACK_TOP_OFFSET(%ebx), %edi
+    movl %eax, (%edi)
+    addl LITERAL(COMPRESSED_REFERENCE_SIZE), %edi
+    movl %edi, THREAD_LOCAL_ALLOC_STACK_TOP_OFFSET(%ebx)
+                                                        // No fence needed for x86.
+    popl %esi
+    popl %edi
+    popl %ebx
+    ret
+.Lart_quick_alloc_object_rosalloc_slow_path:
+    popl %esi
+    popl %edi
+    popl %ebx
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME ebx, ebx // save ref containing registers for GC
+    // Outgoing argument set up
+    PUSH eax                      // alignment padding
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH ecx
+    PUSH eax
+    call SYMBOL(artAllocObjectFromCodeRosAlloc)  // cxx_name(arg0, arg1, Thread*)
+    addl LITERAL(16), %esp        // pop arguments
+    CFI_ADJUST_CFA_OFFSET(-16)
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME          // resotre frame up to return address
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER      // return or deliver exception
+END_FUNCTION art_quick_alloc_object_rosalloc
+
+
 GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_tlab, TLAB)
 
 ONE_ARG_DOWNCALL art_quick_resolve_string, artResolveStringFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
