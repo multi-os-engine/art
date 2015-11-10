@@ -26,24 +26,38 @@ restore_ulimit() {
 }
 trap 'restore_ulimit' ERR
 
-# TODO: Support running with jack.
-
+USES_JAVA_SOURCE="false"
 if [[ $@ == *"--jvm"* ]]; then
-  # Build the Java files if we are running a --jvm test
+  USES_JAVA_SOURCE="true"
   mkdir -p classes
+  SCRATCH_DIR=./classes
+  BUILD_EXEC=./util-src/java-build.sh
+  # We don't need to do anything else to get jvm to work so just run 'true' to finish up.
+  FINISH_EXEC=/bin/true
+elif [[ "$USE_JACK" == "true" ]]; then
+  if $JACK -D jack.java.source.version=1.8 2>/dev/null; then
+    USES_JAVA_SOURCE="true"
+    mkdir -p jacks
+    SCRATCH_DIR=./jacks
+    BUILD_EXEC=./util-src/jack-build.sh
+    FINISH_EXEC=./util-src/jack-finish.sh
+  else
+    echo "WARNING: Cannot use jack because it does not support JLS 1.8. Falling back to smali" >&2
+  fi
+fi
+
+
+if [[ "$USES_JAVA_SOURCE" == "true" ]]; then
+  # Build the Java files. We will put them in ./src. This directory will have the final version of
+  # all classes once the generate_java.py program finishes.
   mkdir -p src
-  echo "${JAVAC} \$@" >> ./javac_exec.sh
-  # This will use java_exec.sh to execute the javac compiler. It will place the
-  # compiled class files in ./classes and the expected values in expected.txt
-  #
-  # After this the src directory will contain the final versions of all files.
-  ./util-src/generate_java.py ./javac_exec.sh ./src ./classes ./expected.txt ./build_log
+  ./util-src/generate_java.py $BUILD_EXEC $FINISH_EXEC ./src $SCRATCH_DIR ./expected.txt ./build_log
 else
   mkdir -p ./smali
   # Generate the smali files and expected.txt or fail
   ./util-src/generate_smali.py ./smali ./expected.txt
   # Use the default build script
-  ./default-build "$@" "$EXTRA_ARGS" --experimental default-methods
+  ./default-build "$@" --experimental default-methods
 fi
 
 # Reset the ulimit back to its initial value
