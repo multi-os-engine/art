@@ -381,8 +381,8 @@ void HGraph::SimplifyCFG() {
       // Only split normal-flow edges. We cannot split exceptional edges as they
       // are synthesized (approximate real control flow), and we do not need to
       // anyway. Moves that would be inserted there are performed by the runtime.
-      for (size_t j = 0, e = block->NumberOfNormalSuccessors(); j < e; ++j) {
-        HBasicBlock* successor = block->GetSuccessors()[j];
+      for (size_t j = 0, e = block->GetNormalSuccessors().size(); j < e; ++j) {
+        HBasicBlock* successor = block->GetNormalSuccessors()[j];
         DCHECK(!successor->IsCatchBlock());
         if (successor == exit_block_) {
           // Throw->TryBoundary->Exit. Special case which we do not want to split
