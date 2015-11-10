@@ -35,6 +35,7 @@
 #include "mirror/class.h"
 #include "offsets.h"
 #include "primitive.h"
+#include "utils/array_ref.h"
 
 namespace art {
 
@@ -659,6 +660,16 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
     return successors_;
   }
 
+  ArrayRef<HBasicBlock* const> GetNormalSuccessors() const {
+    ArrayRef<HBasicBlock* const> array(successors_);
+    return EndsWithTryBoundary() ? array.SubArray(0u, 1u) : array;
+  }
+
+  ArrayRef<HBasicBlock* const> GetExceptionalSuccessors() const {
+    return EndsWithTryBoundary() ? ArrayRef<HBasicBlock* const>(successors_).SubArray(1u)
+                                 : ArrayRef<HBasicBlock* const>();
+  }
+
   bool HasSuccessor(const HBasicBlock* block, size_t start_from = 0u) {
     return ContainsElement(successors_, block, start_from);
   }
@@ -807,12 +818,6 @@ class HBasicBlock : public ArenaObject<kArenaAllocBasicBlock> {
   bool IsFirstIndexOfPredecessor(HBasicBlock* predecessor, size_t idx) const {
     DCHECK_EQ(GetPredecessors()[idx], predecessor);
     return GetPredecessorIndexOf(predecessor) == idx;
-  }
-
-  // Returns the number of non-exceptional successors. SsaChecker ensures that
-  // these are stored at the beginning of the successor list.
-  size_t NumberOfNormalSuccessors() const {
-    return EndsWithTryBoundary() ? 1 : GetSuccessors().size();
   }
 
   // Create a new block between this block and its predecessors. The new block
@@ -2429,11 +2434,10 @@ class HTryBoundary : public HTemplateInstruction<0> {
 class HExceptionHandlerIterator : public ValueObject {
  public:
   explicit HExceptionHandlerIterator(const HTryBoundary& try_boundary)
-    : block_(*try_boundary.GetBlock()), index_(block_.NumberOfNormalSuccessors()) {}
+    : block_(*try_boundary.GetBlock()), index_(0u) {}
 
-  bool Done() const { return index_ == block_.GetSuccessors().size(); }
-  HBasicBlock* Current() const { return block_.GetSuccessors()[index_]; }
-  size_t CurrentSuccessorIndex() const { return index_; }
+  bool Done() const { return index_ == block_.GetExceptionalSuccessors().size(); }
+  HBasicBlock* Current() const { return block_.GetExceptionalSuccessors()[index_]; }
   void Advance() { ++index_; }
 
  private:
