@@ -381,8 +381,8 @@ void HGraph::SimplifyCFG() {
       // Only split normal-flow edges. We cannot split exceptional edges as they
       // are synthesized (approximate real control flow), and we do not need to
       // anyway. Moves that would be inserted there are performed by the runtime.
-      for (size_t j = 0, e = block->NumberOfNormalSuccessors(); j < e; ++j) {
-        HBasicBlock* successor = block->GetSuccessors()[j];
+      for (size_t j = 0, e = block->GetNormalSuccessors().size(); j < e; ++j) {
+        HBasicBlock* successor = block->GetNormalSuccessors()[j];
         DCHECK(!successor->IsCatchBlock());
         if (successor == exit_block_) {
           // Throw->TryBoundary->Exit. Special case which we do not want to split
@@ -1325,17 +1325,34 @@ bool HBasicBlock::HasSinglePhi() const {
   return !GetPhis().IsEmpty() && GetFirstPhi()->GetNext() == nullptr;
 }
 
+ArrayRef<HBasicBlock* const> HBasicBlock::GetNormalSuccessors() const {
+  if (EndsWithTryBoundary()) {
+    return ArrayRef<HBasicBlock* const>(successors_).SubArray(0u, 1u);
+  } else {
+    return ArrayRef<HBasicBlock* const>(successors_);
+  }
+}
+
+ArrayRef<HBasicBlock* const> HBasicBlock::GetExceptionalSuccessors() const {
+  if (EndsWithTryBoundary()) {
+    return GetLastInstruction()->AsTryBoundary()->GetExceptionHandlers();
+  } else {
+    return ArrayRef<HBasicBlock* const>();
+  }
+}
+
 bool HTryBoundary::HasSameExceptionHandlersAs(const HTryBoundary& other) const {
-  if (GetBlock()->GetSuccessors().size() != other.GetBlock()->GetSuccessors().size()) {
+  ArrayRef<HBasicBlock* const> handlers1 = GetExceptionHandlers();
+  ArrayRef<HBasicBlock* const> handlers2 = other.GetExceptionHandlers();
+
+  size_t length = handlers1.size();
+  if (length != handlers2.size()) {
     return false;
   }
 
   // Exception handlers need to be stored in the same order.
-  for (HExceptionHandlerIterator it1(*this), it2(other);
-       !it1.Done();
-       it1.Advance(), it2.Advance()) {
-    DCHECK(!it2.Done());
-    if (it1.Current() != it2.Current()) {
+  for (size_t i = 0; i < length; ++i) {
+    if (handlers1[i] != handlers2[i]) {
       return false;
     }
   }
