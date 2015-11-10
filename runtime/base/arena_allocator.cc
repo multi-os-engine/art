@@ -321,17 +321,16 @@ void* ArenaAllocator::AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind) {
     // Obtain a new block.
     ObtainNewArenaForAllocation(rounded_bytes);
     CHECK(ptr_ != nullptr);
-    MEMORY_TOOL_MAKE_UNDEFINED(ptr_, end_ - ptr_);
+    MEMORY_TOOL_MAKE_NOACCESS(ptr_, end_ - ptr_);
   }
   ArenaAllocatorStats::RecordAlloc(rounded_bytes, kind);
   uint8_t* ret = ptr_;
   ptr_ += rounded_bytes;
+  MEMORY_TOOL_MAKE_DEFINED(ret, bytes);
   // Check that the memory is already zeroed out.
-  for (uint8_t* ptr = ret; ptr < ptr_; ++ptr) {
+  for (uint8_t* ptr = ret; ptr != ret + bytes; ++ptr) {
     CHECK_EQ(*ptr, 0U);
   }
-  MEMORY_TOOL_MAKE_DEFINED(ret, bytes);
-  MEMORY_TOOL_MAKE_NOACCESS(ret + bytes, rounded_bytes - bytes);
   return ret;
 }
 
