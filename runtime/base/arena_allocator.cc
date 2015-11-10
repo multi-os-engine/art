@@ -326,11 +326,7 @@ void* ArenaAllocator::AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind) {
   ArenaAllocatorStats::RecordAlloc(rounded_bytes, kind);
   uint8_t* ret = ptr_;
   ptr_ += rounded_bytes;
-  // Check that the memory is already zeroed out.
-  for (uint8_t* ptr = ret; ptr < ptr_; ++ptr) {
-    CHECK_EQ(*ptr, 0U);
-  }
-  MEMORY_TOOL_MAKE_DEFINED(ret, bytes);
+  memset(ret, 0, bytes);  // ArenaAllocator guarantees zero-initialization.
   MEMORY_TOOL_MAKE_NOACCESS(ret + bytes, rounded_bytes - bytes);
   return ret;
 }
