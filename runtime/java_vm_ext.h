@@ -32,6 +32,9 @@ namespace mirror {
 
 class ArtMethod;
 class Libraries;
+#ifdef __ANDROID__
+class LibraryNamespaces;
+#endif
 class ParsedOptions;
 class Runtime;
 struct RuntimeArgumentMap;
@@ -82,11 +85,11 @@ class JavaVMExt : public JavaVM {
   /**
    * Loads the given shared library. 'path' is an absolute pathname.
    *
-   * Returns 'true' on success. On failure, sets 'detail' to a
+   * Returns 'true' on success. On failure, sets 'error_msg' to a
    * human-readable description of the error.
    */
   bool LoadNativeLibrary(JNIEnv* env, const std::string& path, jobject javaLoader,
-                         std::string* error_msg);
+                         jstring library_path, std::string* error_msg);
 
   // Unload native libraries with cleared class loaders.
   void UnloadNativeLibraries()
@@ -169,6 +172,9 @@ class JavaVMExt : public JavaVM {
       REQUIRES(!globals_lock_);
 
  private:
+  void* OpenNativeLibrary(JNIEnv* env, const char* path_str,
+                          jobject class_loader, jstring library_path);
+
   // Return true if self can currently access weak globals.
   bool MayAccessWeakGlobalsUnlocked(Thread* self) const SHARED_REQUIRES(Locks::mutator_lock_);
   bool MayAccessWeakGlobals(Thread* self) const
@@ -197,6 +203,10 @@ class JavaVMExt : public JavaVM {
   // No lock annotation since UnloadNativeLibraries is called on libraries_ but locks the
   // jni_libraries_lock_ internally.
   std::unique_ptr<Libraries> libraries_;
+
+#ifdef __ANDROID__
+  std::unique_ptr<LibraryNamespaces> namespaces_;
+#endif
 
   // Used by -Xcheck:jni.
   const JNIInvokeInterface* const unchecked_functions_;

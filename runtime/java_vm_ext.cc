@@ -17,6 +17,11 @@
 #include "jni_internal.h"
 
 #define ATRACE_TAG ATRACE_TAG_DALVIK
+
+#ifdef __ANDROID__
+#include <android/dlext.h>
+#endif
+
 #include <cutils/trace.h>
 #include <dlfcn.h>
 
@@ -37,6 +42,7 @@
 #include "runtime_options.h"
 #include "ScopedLocalRef.h"
 #include "scoped_thread_state_change.h"
+#include "ScopedUtfChars.h"
 #include "thread-inl.h"
 #include "thread_list.h"
 
@@ -310,6 +316,53 @@ class Libraries {
       GUARDED_BY(Locks::jni_libraries_lock_);
 };
 
+#ifdef __ANDROID__
+class LibraryNamespaces {
+ public:
+  LibraryNamespaces() {}
+
+  android_namespace_t* GetOrCreate(JNIEnv* env, Runtime* runtime,
+                                   jobject class_loader, jstring library_path)
+      REQUIRES(!Locks::jni_libraries_lock_) {
+    if (!initialized && !InitPublicNamespace(runtime)) {
+      return nullptr;
+    }
+
+    ScopedObjectAccess soa(env);
+    mirror::Object* key = soa.Decode<mirror::Object*>(class_loader);
+
+    MutexLock mu(soa.Self(), *Locks::jni_libraries_lock_);
+    if (namespaces_.find(key) != namespaces_.end()) {
+      return namespaces_.Get(key);
+    }
+
+    ScopedUtfChars libraryPath(env, library_path);
+
+    android_namespace_t* ns =
+            android_create_namespace("art-classloader-namespace",
+                                     nullptr,
+                                     libraryPath.c_str(),
+                                     true);
+
+    namespaces_.Put(key, ns);
+    return ns;
+  }
+
+ private:
+  bool InitPublicNamespace(const Runtime* runtime) {
+    const char* public_libraries = runtime->GetPublicNativeLibraries();
+    initialized = android_init_public_namespace(public_libraries);
+    return initialized;
+  }
+
+  bool initialized;
+  AllocationTrackingSafeMap<mirror::Object*, android_namespace_t*, kAllocatorTagJNILibraries>
+      namespaces_ GUARDED_BY(Locks::jni_libraries_lock_);
+
+  DISALLOW_COPY_AND_ASSIGN(LibraryNamespaces);
+};
+#endif
+
 class JII {
  public:
   static jint DestroyJavaVM(JavaVM* vm) {
@@ -428,6 +481,9 @@ JavaVMExt::JavaVMExt(Runtime* runtime, const RuntimeArgumentMap& runtime_options
       globals_lock_("JNI global reference table lock"),
       globals_(gGlobalsInitial, gGlobalsMax, kGlobal),
       libraries_(new Libraries),
+#ifdef __ANDROID__
+      namespaces_(new LibraryNamespaces),
+#endif
       unchecked_functions_(&gJniInvokeInterface),
       weak_globals_lock_("JNI weak global reference table lock", kJniWeakGlobalsLock),
       weak_globals_(kWeakGlobalsInitial, kWeakGlobalsMax, kWeakGlobal),
@@ -714,8 +770,32 @@ void JavaVMExt::UnloadNativeLibraries() {
   libraries_.get()->UnloadNativeLibraries();
 }
 
+void* JavaVMExt::OpenNativeLibrary(JNIEnv* env, const char* path,
+                                   jobject class_loader, jstring library_path) {
+#ifdef __ANDROID__
+  if (runtime_->GetTargetSdkVersion() <= 23 || class_loader == nullptr) {
+    return dlopen(path, RTLD_NOW);
+  } else {
+    android_namespace_t* ns = namespaces_->GetOrCreate(env, runtime_, class_loader, library_path);
+    if (ns == nullptr) {
+      return nullptr;
+    }
+    android_dlextinfo extinfo;
+    extinfo.flags = ANDROID_DLEXT_USE_NAMESPACE;
+    extinfo.library_namespace = ns;
+
+    return android_dlopen_ext(path, RTLD_NOW, &extinfo);
+  }
+#else
+  UNUSED(env);
+  UNUSED(class_loader);
+  UNUSED(library_path);
+  return dlopen(path, RTLD_NOW);
+#endif
+}
+
 bool JavaVMExt::LoadNativeLibrary(JNIEnv* env, const std::string& path, jobject class_loader,
-                                  std::string* error_msg) {
+                                  jstring library_path, std::string* error_msg) {
   error_msg->clear();
 
   // See if we've already loaded this library.  If we have, and the class loader
@@ -774,7 +854,7 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env, const std::string& path, jobject 
 
   Locks::mutator_lock_->AssertNotHeld(self);
   const char* path_str = path.empty() ? nullptr : path.c_str();
-  void* handle = dlopen(path_str, RTLD_NOW);
+  void* handle = OpenNativeLibrary(env, path_str, class_loader, library_path);
   bool needs_native_bridge = false;
   if (handle == nullptr) {
     if (android::NativeBridgeIsSupported(path_str)) {

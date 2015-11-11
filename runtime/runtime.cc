@@ -887,6 +887,8 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   Split(runtime_options.GetOrDefault(Opt::CpuAbiList), ',', &cpu_abilist_);
 
+  public_native_libraries_ = runtime_options.ReleaseOrDefault(Opt::PublicNativeLibraries);
+
   fingerprint_ = runtime_options.ReleaseOrDefault(Opt::Fingerprint);
 
   if (runtime_options.GetOrDefault(Opt::Interpret)) {
@@ -1196,9 +1198,9 @@ void Runtime::InitNativeMethods() {
   // Most JNI libraries can just use System.loadLibrary, but libcore can't because it's
   // the library that implements System.loadLibrary!
   {
-    std::string reason;
-    if (!java_vm_->LoadNativeLibrary(env, "libjavacore.so", nullptr, &reason)) {
-      LOG(FATAL) << "LoadNativeLibrary failed for \"libjavacore.so\": " << reason;
+    std::string error_msg;
+    if (!java_vm_->LoadNativeLibrary(env, "libjavacore.so", nullptr, nullptr, &error_msg)) {
+      LOG(FATAL) << "LoadNativeLibrary failed for \"libjavacore.so\": " << error_msg;
     }
   }
 

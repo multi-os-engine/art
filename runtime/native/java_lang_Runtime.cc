@@ -74,12 +74,20 @@ static jstring Runtime_nativeLoad(JNIEnv* env, jclass, jstring javaFilename, job
     return nullptr;
   }
 
-  SetLdLibraryPath(env, javaLdLibraryPathJstr);
+  int32_t target_sdk_version = Runtime::Current()->GetTargetSdkVersion();
+
+  // Starting with N nativeLoad uses classloader local
+  // linker namespace instead of global LD_LIBRARY_PATH
+  // (23 is Marshmallow)
+  if (target_sdk_version <= 23) {
+    SetLdLibraryPath(env, javaLdLibraryPathJstr);
+  }
 
   std::string error_msg;
   {
     JavaVMExt* vm = Runtime::Current()->GetJavaVM();
-    bool success = vm->LoadNativeLibrary(env, filename.c_str(), javaLoader, &error_msg);
+    bool success = vm->LoadNativeLibrary(env, filename.c_str(), javaLoader,
+                                         javaLdLibraryPathJstr, &error_msg);
     if (success) {
       return nullptr;
     }
