@@ -20,6 +20,7 @@ import com.android.tools.perflib.heap.ClassObj;
 import com.android.tools.perflib.heap.Heap;
 import com.android.tools.perflib.heap.Instance;
 import com.android.tools.perflib.heap.RootObj;
+import com.android.tools.perflib.heap.RootType;
 import com.android.tools.perflib.heap.Snapshot;
 import com.android.tools.perflib.heap.StackFrame;
 import com.android.tools.perflib.heap.StackTrace;
@@ -33,6 +34,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -46,6 +48,11 @@ class AhatSnapshot {
 
   // Map from Instance to the list of Instances it immediately dominates.
   private Map<Instance, List<Instance>> mDominated;
+
+  // Map from roots to their types.
+  // Instances are only included if they are roots, and the collection of root
+  // types is guaranteed to be non-empty.
+  private Map<Instance, Collection<RootType>> mRoots;
 
   private Site mRootSite;
   private Map<Heap, Long> mHeapSizes;
@@ -107,6 +114,18 @@ class AhatSnapshot {
       }
       mHeapSizes.put(heap, total);
     }
+
+    // Record the roots and their types.
+    mRoots = new HashMap<Instance, Collection<RootType>>();
+    for (RootObj root : snapshot.getGCRoots()) {
+      Instance inst = root.getReferredInstance();
+      Collection<RootType> types = mRoots.get(inst);
+      if (types == null) {
+        types = new HashSet<RootType>();
+        mRoots.put(inst, types);
+      }
+      types.add(root.getRootType());
+    }
   }
 
   // Note: This method is exposed for testing purposes.
@@ -128,6 +147,21 @@ class AhatSnapshot {
 
   public Collection<RootObj> getGCRoots() {
     return mSnapshot.getGCRoots();
+  }
+
+  /**
+   * Returns true if the given instance is a root.
+   */
+  public boolean isRoot(Instance inst) {
+    return mRoots.containsKey(inst);
+  }
+
+  /**
+   * Returns the list of root types for the given instance, or null if the
+   * instance is not a root.
+   */
+  public Collection<RootType> getRootTypes(Instance inst) {
+    return mRoots.get(inst);
   }
 
   public List<Heap> getHeaps() {
