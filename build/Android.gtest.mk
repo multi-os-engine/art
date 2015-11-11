@@ -432,6 +432,7 @@ endif
 # $(3): LD_LIBRARY_PATH or undefined - used in case libartd.so is not in /system/lib/
 define define-art-gtest-rule-target
   gtest_rule := test-art-target-gtest-$(1)$$($(2)ART_PHONY_TEST_TARGET_SUFFIX)
+  gtest_options :=
 
   # Add the test dependencies to test-art-target-sync, which will be a prerequisite for the test
   # to ensure files are pushed to the device.
@@ -442,6 +443,11 @@ define define-art-gtest-rule-target
     $$($(2)TARGET_OUT_SHARED_LIBRARIES)/libjavacore.so \
     $$(TARGET_OUT_JAVA_LIBRARIES)/core-libart.jar
 
+  ifeq ($(ART_TEST_QUIET),true)
+    gtest_options += --quiet
+  endif
+
+$$(gtest_rule): PRIVATE_GTEST_OPTIONS := $$(gtest_options)
 .PHONY: $$(gtest_rule)
 $$(gtest_rule): test-art-target-sync
 	$(hide) adb shell touch $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID
@@ -449,7 +455,7 @@ $$(gtest_rule): test-art-target-sync
 	$(hide) adb shell chmod 755 $(ART_TARGET_NATIVETEST_DIR)/$(TARGET_$(2)ARCH)/$(1)
 	$(hide) $$(call ART_TEST_SKIP,$$@) && \
 	  (adb shell "$(GCOV_ENV) LD_LIBRARY_PATH=$(3) ANDROID_ROOT=$(ART_GTEST_TARGET_ANDROID_ROOT) \
-	    $(ART_TARGET_NATIVETEST_DIR)/$(TARGET_$(2)ARCH)/$(1) && touch $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID" \
+	    $(ART_TARGET_NATIVETEST_DIR)/$(TARGET_$(2)ARCH)/$(1) $$(PRIVATE_GTEST_OPTIONS) && touch $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID" \
 	  && (adb pull $(ART_TARGET_TEST_DIR)/$(TARGET_$(2)ARCH)/$$@-$$$$PPID /tmp/ \
 	      && $$(call ART_TEST_PASSED,$$@)) \
 	  || $$(call ART_TEST_FAILED,$$@))
@@ -461,6 +467,7 @@ $$(gtest_rule): test-art-target-sync
 
   # Clear locally defined variables.
   gtest_rule :=
+  gtest_options :=
 endef  # define-art-gtest-rule-target
 
 ART_VALGRIND_DEPENDENCIES := \
@@ -477,6 +484,7 @@ ART_VALGRIND_DEPENDENCIES := \
 # $(1): gtest name - the name of the test we're building such as leb128_test.
 # $(2): 2ND_ or undefined - used to differentiate between the primary and secondary architecture.
 define define-art-gtest-rule-host
+  gtest_options :=
   gtest_rule := test-art-host-gtest-$(1)$$($(2)ART_PHONY_TEST_HOST_SUFFIX)
   gtest_exe := $$(HOST_OUT_EXECUTABLES)/$(1)$$($(2)ART_PHONY_TEST_HOST_SUFFIX)
   # Dependencies for all host gtests.
@@ -486,11 +494,14 @@ define define-art-gtest-rule-host
     $$(ART_GTEST_$(1)_HOST_DEPS) \
     $(foreach file,$(ART_GTEST_$(1)_DEX_DEPS),$(ART_TEST_HOST_GTEST_$(file)_DEX))
 
+  ifeq ($(ART_TEST_QUIET),true)
+    gtest_options += --quiet
+  endif
   ART_TEST_HOST_GTEST_DEPENDENCIES += $$(gtest_deps)
-
+$$(gtest_rule): PRIVATE_GTEST_OPTIONS := $$(gtest_options)
 .PHONY: $$(gtest_rule)
 $$(gtest_rule): $$(gtest_exe) $$(gtest_deps)
-	$(hide) ($$(call ART_TEST_SKIP,$$@) && $$< && $$(call ART_TEST_PASSED,$$@)) \
+	$(hide) ($$(call ART_TEST_SKIP,$$@) && $$< $$(PRIVATE_GTEST_OPTIONS) && $$(call ART_TEST_PASSED,$$@)) \
 	  || $$(call ART_TEST_FAILED,$$@)
 
   ART_TEST_HOST_GTEST$$($(2)ART_PHONY_TEST_HOST_SUFFIX)_RULES += $$(gtest_rule)
@@ -498,11 +509,12 @@ $$(gtest_rule): $$(gtest_exe) $$(gtest_deps)
   ART_TEST_HOST_GTEST_$(1)_RULES += $$(gtest_rule)
 
 
+valgrind-$$(gtest_rule): PRIVATE_GTEST_OPTIONS := $$(gtest_options)
 .PHONY: valgrind-$$(gtest_rule)
 valgrind-$$(gtest_rule): $$(gtest_exe) $$(gtest_deps) $(ART_VALGRIND_DEPENDENCIES)
 	$(hide) $$(call ART_TEST_SKIP,$$@) && \
 	  VALGRIND_LIB=$(HOST_OUT)/lib64/valgrind \
-	  $(HOST_OUT_EXECUTABLES)/valgrind --leak-check=full --error-exitcode=1 $$< && \
+	  $(HOST_OUT_EXECUTABLES)/valgrind --leak-check=full --error-exitcode=1 $$< $$(PRIVATE_GTEST_OPTIONS) && \
 	    $$(call ART_TEST_PASSED,$$@) || $$(call ART_TEST_FAILED,$$@)
 
   ART_TEST_HOST_VALGRIND_GTEST$$($(2)ART_PHONY_TEST_HOST_SUFFIX)_RULES += valgrind-$$(gtest_rule)
@@ -514,6 +526,7 @@ valgrind-$$(gtest_rule): $$(gtest_exe) $$(gtest_deps) $(ART_VALGRIND_DEPENDENCIE
   gtest_rule :=
   gtest_exe :=
   gtest_deps :=
+  gtest_options :=
 endef  # define-art-gtest-rule-host
 
 # Define the rules to build and run host and target gtests.

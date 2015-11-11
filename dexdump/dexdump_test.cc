@@ -32,6 +32,9 @@
 
 namespace art {
 
+// Run noisy processes quietly.
+static const bool kQuietExec = true;
+
 class DexDumpTest : public CommonRuntimeTest {
  protected:
   virtual void SetUp() {
@@ -42,12 +45,15 @@ class DexDumpTest : public CommonRuntimeTest {
 
   // Runs test with given arguments.
   bool Exec(const std::vector<std::string>& args, std::string* error_msg) {
+    return Exec(args, false, error_msg);
+  }
+  bool Exec(const std::vector<std::string>& args, bool suppress_output, std::string* error_msg) {
     // TODO(ajcbik): dexdump2 -> dexdump
     std::string file_path = GetTestAndroidRoot() + "/bin/dexdump2";
     EXPECT_TRUE(OS::FileExists(file_path.c_str())) << file_path << " should be a valid file path";
     std::vector<std::string> exec_argv = { file_path };
     exec_argv.insert(exec_argv.end(), args.begin(), args.end());
-    return ::art::Exec(exec_argv, error_msg);
+    return ::art::Exec(exec_argv, suppress_output, error_msg);
   }
 
   std::string dex_file_;
@@ -56,17 +62,17 @@ class DexDumpTest : public CommonRuntimeTest {
 
 TEST_F(DexDumpTest, NoInputFileGiven) {
   std::string error_msg;
-  ASSERT_FALSE(Exec({}, &error_msg)) << error_msg;
+  ASSERT_FALSE(Exec({}, kQuietExec, &error_msg)) << error_msg;
 }
 
 TEST_F(DexDumpTest, CantOpenOutput) {
   std::string error_msg;
-  ASSERT_FALSE(Exec({"-o", "/joho", dex_file_}, &error_msg)) << error_msg;
+  ASSERT_FALSE(Exec({"-o", "/joho", dex_file_}, kQuietExec, &error_msg)) << error_msg;
 }
 
 TEST_F(DexDumpTest, BadFlagCombination) {
   std::string error_msg;
-  ASSERT_FALSE(Exec({"-c", "-i", dex_file_}, &error_msg)) << error_msg;
+  ASSERT_FALSE(Exec({"-c", "-i", dex_file_}, kQuietExec, &error_msg)) << error_msg;
 }
 
 TEST_F(DexDumpTest, FullPlainOutput) {

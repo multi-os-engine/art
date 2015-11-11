@@ -788,8 +788,11 @@ class AssemblerTest : public testing::Test {
   }
 
   void WarnOnCombinations(size_t count) {
-    if (count > kWarnManyCombinationsThreshold) {
-      GTEST_LOG_(WARNING) << "Many combinations (" << count << "), test generation might be slow.";
+    const size_t kWarnManyCombinations = kIsTargetBuild ? kWarnManyCombinationsThresholdTarget :
+                                                          kWarnManyCombinationsThresholdHost;
+    if (count > kWarnManyCombinations) {
+      GTEST_LOG_(WARNING) << "Many combinations (" << count << " > " << kWarnManyCombinations
+                          << "), test generation might be slow.";
     }
   }
 
@@ -849,7 +852,8 @@ class AssemblerTest : public testing::Test {
     test_helper_->Driver(*data, assembly_text, test_name);
   }
 
-  static constexpr size_t kWarnManyCombinationsThreshold = 500;
+  static constexpr size_t kWarnManyCombinationsThresholdTarget = 500;
+  static constexpr size_t kWarnManyCombinationsThresholdHost = 10000;
 
   std::unique_ptr<Ass> assembler_;
   std::unique_ptr<AssemblerTestInfrastructure> test_helper_;
