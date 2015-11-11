@@ -571,7 +571,7 @@ public class Main {
   }
 
   /// CHECK-START: SuperInterface Main.testMergeInterfaces(boolean, Interface, OtherInterface) reference_type_propagation (after)
-  /// CHECK:      <<Phi:l\d+>>       Phi klass:java.lang.Object
+  /// CHECK:      <<Phi:l\d+>>       Phi klass:SuperInterface
   /// CHECK:                         Return [<<Phi>>]
   private SuperInterface testMergeInterfaces(boolean cond, Interface a, OtherInterface b) {
     return cond ? a : b;
@@ -582,19 +582,6 @@ public class Main {
   }
 
   private int mainField = 0;
-
-  /// CHECK-START: void Main.testInlinerWidensReturnType(boolean, Interface, OtherInterface) inliner (before)
-  /// CHECK:      <<Invoke:l\d+>>    InvokeStaticOrDirect klass:SuperInterface
-  /// CHECK:      <<NullCheck:l\d+>> NullCheck [<<Invoke>>] klass:SuperInterface exact:false
-  /// CHECK:                         InvokeInterface [<<NullCheck>>]
-
-  /// CHECK-START: void Main.testInlinerWidensReturnType(boolean, Interface, OtherInterface) inliner (after)
-  /// CHECK:      <<Phi:l\d+>>       Phi klass:java.lang.Object
-  /// CHECK:      <<NullCheck:l\d+>> NullCheck [<<Phi>>] klass:SuperInterface exact:false
-  /// CHECK:                         InvokeInterface [<<NullCheck>>]
-  private void testInlinerWidensReturnType(boolean cond, Interface a, OtherInterface b) {
-    testMergeInterfaces(cond, a, b).superInterfaceMethod();
-  }
 
   /// CHECK-START: void Main.testInlinerReturnsNull() inliner (before)
   /// CHECK:      <<Int:i\d+>>       IntConstant 0
