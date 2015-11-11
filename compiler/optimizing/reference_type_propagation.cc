@@ -631,14 +631,19 @@ ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& 
   } else if (!a_is_interface && !b_is_interface) {
     result_type_handle = handles_->NewHandle(a_type_handle->GetCommonSuperClass(b_type_handle));
     is_exact = false;
+  } else if (a_is_interface && b_is_interface) {
+    result_type_handle = handles_->NewHandle(a_type_handle->GetCommonInterface(b_type_handle));
+    if (result_type_handle.Get() == nullptr) {
+      result_type_handle = object_class_handle_;
+    }
+    is_exact = false;
   } else {
-    // This can happen if:
-    //    - both types are interfaces. TODO(calin): implement
-    //    - one is an interface, the other a class, and the type does not implement the interface
-    //      e.g:
-    //        void foo(Interface i, boolean cond) {
-    //          Object o = cond ? i : new Object();
-    //        }
+    // This can happen if on type is an interface, the other a class, and the class
+    // does not implement the interface
+    // e.g:
+    //  void foo(Interface i, boolean cond) {
+    //    Object o = cond ? i : new Object();
+    //  }
     result_type_handle = object_class_handle_;
     is_exact = false;
   }

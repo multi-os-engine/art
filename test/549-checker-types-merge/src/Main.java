@@ -110,7 +110,7 @@ public class Main {
   }
 
   /// CHECK-START: java.lang.Object Main.testMergeInterfaces(boolean, InterfaceExtendsA, InterfaceExtendsB) reference_type_propagation (after)
-  /// CHECK:      <<Phi:l\d+>>       Phi klass:java.lang.Object
+  /// CHECK:      <<Phi:l\d+>>       Phi klass:InterfaceSuper
   /// CHECK:                         Return [<<Phi>>]
   private Object testMergeInterfaces(boolean cond, InterfaceExtendsA a, InterfaceExtendsB b) {
     // Different Interfaces, have a common super type.
