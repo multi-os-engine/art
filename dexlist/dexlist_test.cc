@@ -32,6 +32,9 @@
 
 namespace art {
 
+// Run noisy processes quietly.
+static const bool kQuietExec = true;
+
 class DexListTest : public CommonRuntimeTest {
  protected:
   virtual void SetUp() {
@@ -42,6 +45,10 @@ class DexListTest : public CommonRuntimeTest {
 
   // Runs test with given arguments.
   bool Exec(const std::vector<std::string>& args, std::string* error_msg) {
+    return Exec(args, false, error_msg);
+  }
+
+  bool Exec(const std::vector<std::string>& args, bool suppress_out, std::string* error_msg) {
     std::string file_path = GetTestAndroidRoot();
     if (IsHost()) {
       file_path += "/bin/dexlist";
@@ -51,7 +58,7 @@ class DexListTest : public CommonRuntimeTest {
     EXPECT_TRUE(OS::FileExists(file_path.c_str())) << file_path << " should be a valid file path";
     std::vector<std::string> exec_argv = { file_path };
     exec_argv.insert(exec_argv.end(), args.begin(), args.end());
-    return ::art::Exec(exec_argv, error_msg);
+    return ::art::Exec(exec_argv, suppress_out, error_msg);
   }
 
   std::string dex_file_;
@@ -60,17 +67,17 @@ class DexListTest : public CommonRuntimeTest {
 
 TEST_F(DexListTest, NoInputFileGiven) {
   std::string error_msg;
-  ASSERT_FALSE(Exec({}, &error_msg)) << error_msg;
+  ASSERT_FALSE(Exec({}, kQuietExec, &error_msg)) << error_msg;
 }
 
 TEST_F(DexListTest, CantOpenOutput) {
   std::string error_msg;
-  ASSERT_FALSE(Exec({"-o", "/joho", dex_file_}, &error_msg)) << error_msg;
+  ASSERT_FALSE(Exec({"-o", "/joho", dex_file_}, kQuietExec, &error_msg)) << error_msg;
 }
 
 TEST_F(DexListTest, IllFormedMethod) {
   std::string error_msg;
-  ASSERT_FALSE(Exec({"-m", "joho", dex_file_}, &error_msg)) << error_msg;
+  ASSERT_FALSE(Exec({"-m", "joho", dex_file_}, kQuietExec, &error_msg)) << error_msg;
 }
 
 TEST_F(DexListTest, FullOutput) {

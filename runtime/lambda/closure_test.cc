@@ -27,7 +27,7 @@
 #include "gtest/gtest.h"
 
 // Turn this on for some extra printfs to help with debugging, since some code is optimized out.
-static constexpr const bool kDebuggingClosureTest = true;
+static constexpr const bool kDebuggingClosureTest = false;
 
 namespace std {
   using Closure = art::lambda::Closure;
