@@ -802,6 +802,17 @@ mirror::Class* Class::GetDirectInterface(Thread* self, Handle<mirror::Class> kla
   }
 }
 
+mirror::Class* Class::GetCommonSuperClass(Handle<Class> klass) {
+  DCHECK(klass.Get() != nullptr);
+  DCHECK(!klass->IsInterface());
+  DCHECK(!IsInterface());
+  mirror::Class* common_super_class = this;
+  while (!common_super_class->IsAssignableFrom(klass.Get())) {
+    common_super_class = common_super_class->GetSuperClass();
+  }
+  return common_super_class;
+}
+
 const char* Class::GetSourceFile() {
   const DexFile& dex_file = GetDexFile();
   const DexFile::ClassDef* dex_class_def = GetClassDef();
