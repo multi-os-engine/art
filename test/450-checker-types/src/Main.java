@@ -562,26 +562,6 @@ public class Main {
 
   private int mainField = 0;
 
-  /// CHECK-START: SuperInterface Main.getWiderType(boolean, Interface, OtherInterface) reference_type_propagation (after)
-  /// CHECK:      <<Phi:l\d+>>       Phi klass:java.lang.Object
-  /// CHECK:                         Return [<<Phi>>]
-  private SuperInterface getWiderType(boolean cond, Interface a, OtherInterface b) {
-    return cond ? a : b;
-  }
-
-  /// CHECK-START: void Main.testInlinerWidensReturnType(boolean, Interface, OtherInterface) inliner (before)
-  /// CHECK:      <<Invoke:l\d+>>    InvokeStaticOrDirect klass:SuperInterface
-  /// CHECK:      <<NullCheck:l\d+>> NullCheck [<<Invoke>>] klass:SuperInterface exact:false
-  /// CHECK:                         InvokeInterface [<<NullCheck>>]
-
-  /// CHECK-START: void Main.testInlinerWidensReturnType(boolean, Interface, OtherInterface) inliner (after)
-  /// CHECK:      <<Phi:l\d+>>       Phi klass:java.lang.Object
-  /// CHECK:      <<NullCheck:l\d+>> NullCheck [<<Phi>>] klass:SuperInterface exact:false
-  /// CHECK:                         InvokeInterface [<<NullCheck>>]
-  private void testInlinerWidensReturnType(boolean cond, Interface a, OtherInterface b) {
-    getWiderType(cond, a, b).superInterfaceMethod();
-  }
-
   /// CHECK-START: void Main.testInlinerReturnsNull() inliner (before)
   /// CHECK:      <<Int:i\d+>>       IntConstant 0
   /// CHECK:      <<Invoke:l\d+>>    InvokeStaticOrDirect klass:Main

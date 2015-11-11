@@ -16,6 +16,8 @@
 
 #include "class.h"
 
+#include <queue>
+
 #include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "class_linker-inl.h"
@@ -812,6 +814,28 @@ mirror::Class* Class::GetCommonSuperClass(Handle<Class> klass) {
   }
   DCHECK(common_super_class != nullptr);
   return common_super_class;
+}
+
+mirror::Class* Class::GetCommonInterface(Handle<mirror::Class> intf) {
+  DCHECK(intf.Get() != nullptr);
+  DCHECK(intf->IsInterface());
+  DCHECK(IsInterface());
+  Thread* self = Thread::Current();
+  std::queue<mirror::Class*> queue;
+  queue.push(this);
+  while (!queue.empty()) {
+    mirror::Class* current = queue.front();
+    queue.pop();
+    if (current->IsAssignableFrom(intf.Get())) {
+      return current;
+    }
+    StackHandleScope<1> hs(self);
+    Handle<mirror::Class> h_current(hs.NewHandle(current));
+    for (uint32_t i = 0; i < current->NumDirectInterfaces(); i++) {
+      queue.push(GetDirectInterface(self, h_current, i));
+    }
+  }
+  return nullptr;
 }
 
 const char* Class::GetSourceFile() {
