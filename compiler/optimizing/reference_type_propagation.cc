@@ -614,23 +614,34 @@ ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& 
   }
 
   bool is_exact = a.IsExact() && b.IsExact();
-  Handle<mirror::Class> type_handle;
+  ReferenceTypeInfo::TypeHandle result_type_handle;
+  ReferenceTypeInfo::TypeHandle a_type_handle = a.GetTypeHandle();
+  ReferenceTypeInfo::TypeHandle b_type_handle = b.GetTypeHandle();
+  bool a_is_interface = a_type_handle->IsInterface();
+  bool b_is_interface = b_type_handle->IsInterface();
 
   if (a.GetTypeHandle().Get() == b.GetTypeHandle().Get()) {
-    type_handle = a.GetTypeHandle();
+    result_type_handle = a_type_handle;
   } else if (a.IsSupertypeOf(b)) {
-    type_handle = a.GetTypeHandle();
+    result_type_handle = a_type_handle;
     is_exact = false;
   } else if (b.IsSupertypeOf(a)) {
-    type_handle = b.GetTypeHandle();
+    result_type_handle = b_type_handle;
+    is_exact = false;
+  } else if (!a_is_interface && !b_is_interface) {
+    // Both, a and b, are classes.
+    result_type_handle = handles_->NewHandle(a_type_handle->GetSuperClass());
+    while (!result_type_handle->IsAssignableFrom(b_type_handle.Get())) {
+      result_type_handle = handles_->NewHandle(result_type_handle->GetSuperClass());
+    }
     is_exact = false;
   } else {
-    // TODO: Find the first common super class.
-    type_handle = object_class_handle_;
+    // TODO: Find the first common super interface.
+    result_type_handle = object_class_handle_;
     is_exact = false;
   }
 
-  return ReferenceTypeInfo::Create(type_handle, is_exact);
+  return ReferenceTypeInfo::Create(result_type_handle, is_exact);
 }
 
 static void UpdateArrayGet(HArrayGet* instr,
