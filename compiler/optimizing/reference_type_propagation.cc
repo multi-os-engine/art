@@ -604,6 +604,27 @@ void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
   }
 }
 
+ReferenceTypeInfo::TypeHandle ReferenceTypePropagation::GetCommonInterface(
+    const ReferenceTypeInfo::TypeHandle& a, const ReferenceTypeInfo::TypeHandle& b) {
+  Thread* self = Thread::Current();
+  std::list<ReferenceTypeInfo::TypeHandle> a_interfaces;
+  for (uint32_t i = 0; i < a->NumDirectInterfaces(); i++) {
+    ReferenceTypeInfo::TypeHandle interface =
+        handles_->NewHandle(a->GetDirectInterface(self, a, i));
+    if (interface->IsAssignableFrom(b.Get())) {
+      return interface;
+    }
+    a_interfaces.push_back(interface);
+  }
+  for (auto it = a_interfaces.begin(); it != a_interfaces.end(); it++) {
+    ReferenceTypeInfo::TypeHandle result = GetCommonInterface(*it, b);
+    if (result.Get() != nullptr) {
+      return result;
+    }
+  }
+  return ReferenceTypeInfo::TypeHandle();
+}
+
 ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& a,
                                                        const ReferenceTypeInfo& b) {
   if (!b.IsValid()) {
@@ -631,14 +652,13 @@ ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& 
   } else if (!a_is_interface && !b_is_interface) {
     result_type_handle = handles_->NewHandle(a_type_handle->GetCommonSuperClass(b_type_handle));
     is_exact = false;
+  } else if (a_is_interface && b_is_interface) {
+    result_type_handle = GetCommonInterface(a_type_handle, b_type_handle);
+    if (result_type_handle.Get() == nullptr) {
+      result_type_handle = object_class_handle_;
+    }
+    is_exact = false;
   } else {
-    // This can happen if:
-    //    - both types are interfaces. TODO(calin): implement
-    //    - one is an interface, the other a class, and the type does not implement the interface
-    //      e.g:
-    //        void foo(Interface i, boolean cond) {
-    //          Object o = cond ? i : new Object();
-    //        }
     result_type_handle = object_class_handle_;
     is_exact = false;
   }
