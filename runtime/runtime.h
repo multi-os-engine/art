@@ -534,6 +534,10 @@ class Runtime {
     return target_sdk_version_;
   }
 
+  const char* GetPublicNativeLibraries() const {
+    return public_native_libraries_.c_str();
+  }
+
   uint32_t GetZygoteMaxFailedBoots() const {
     return zygote_max_failed_boots_;
   }
@@ -751,6 +755,9 @@ class Runtime {
 
   // Specifies target SDK version to allow workarounds for certain API levels.
   int32_t target_sdk_version_;
+
+  // List of public native libraries - native libraries exported by Android NDK
+  std::string public_native_libraries_;
 
   // Implicit checks flags.
   bool implicit_null_checks_;       // NullPointer checks are implicit.
