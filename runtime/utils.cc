@@ -1408,6 +1408,10 @@ bool IsOatMagic(uint32_t magic) {
 }
 
 bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg) {
+  return Exec(arg_vector, false, error_msg);
+}
+
+bool Exec(std::vector<std::string>& arg_vector, bool suppress_output, std::string* error_msg) {
   const std::string command_line(Join(arg_vector, ' '));
 
   CHECK_GE(arg_vector.size(), 1U) << command_line;
@@ -1430,6 +1434,15 @@ bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg) {
 
     // change process groups, so we don't get reaped by ProcessManager
     setpgid(0, 0);
+
+    if (suppress_output) {
+      int devnull = TEMP_FAILURE_RETRY(open("/dev/null", O_WRONLY));
+      if (devnull != -1) {
+        dup2(devnull, STDOUT_FILENO);
+        dup2(devnull, STDERR_FILENO);
+      }
+      // Ignore errors to avoid allocation in forked process.
+    }
 
     execv(program, &args[0]);
 

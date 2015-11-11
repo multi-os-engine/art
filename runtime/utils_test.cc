@@ -30,6 +30,9 @@
 
 namespace art {
 
+// Run noisy processes quietly.
+static const bool kQuietExec = true;
+
 std::string PrettyArguments(const char* signature);
 std::string PrettyReturnType(const char* signature);
 
@@ -360,7 +363,7 @@ TEST_F(UtilsTest, ExecSuccess) {
   std::string error_msg;
   if (!(RUNNING_ON_MEMORY_TOOL && kMemoryToolDetectsLeaks)) {
     // Running on valgrind fails due to some memory that leaks in thread alternate signal stacks.
-    EXPECT_TRUE(Exec(command, &error_msg));
+    EXPECT_TRUE(Exec(command, kQuietExec, &error_msg));
   }
   EXPECT_EQ(0U, error_msg.size()) << error_msg;
 }
@@ -374,7 +377,7 @@ TEST_F(UtilsTest, ExecError) {
   std::string error_msg;
   if (!(RUNNING_ON_MEMORY_TOOL && kMemoryToolDetectsLeaks)) {
     // Running on valgrind fails due to some memory that leaks in thread alternate signal stacks.
-    EXPECT_FALSE(Exec(command, &error_msg));
+    EXPECT_FALSE(Exec(command, kQuietExec, &error_msg));
     EXPECT_NE(0U, error_msg.size());
   }
 }

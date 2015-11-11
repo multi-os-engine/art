@@ -36,6 +36,12 @@ class JavaVMExt;
 class Runtime;
 typedef std::vector<std::pair<std::string, const void*>> RuntimeOptions;
 
+class QuietPrinter : public testing::EmptyTestEventListener {
+ public:
+  virtual void OnTestPartResult(const testing::TestPartResult& result);
+  virtual void OnTestEnd(const testing::TestInfo& info);
+};
+
 class ScratchFile {
  public:
   ScratchFile();

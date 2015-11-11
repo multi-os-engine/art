@@ -42,6 +42,9 @@ enum class RegisterView {  // private
   kUseQuaternaryName,
 };
 
+// Set to true to have the tests warn on large tests which might take a while.
+static constexpr bool kWarnOnManyCombinations = false;
+
 template<typename Ass, typename Reg, typename FPReg, typename Imm>
 class AssemblerTest : public testing::Test {
  public:
@@ -788,7 +791,7 @@ class AssemblerTest : public testing::Test {
   }
 
   void WarnOnCombinations(size_t count) {
-    if (count > kWarnManyCombinationsThreshold) {
+    if (kWarnOnManyCombinations && count > kWarnManyCombinationsThreshold) {
       GTEST_LOG_(WARNING) << "Many combinations (" << count << "), test generation might be slow.";
     }
   }

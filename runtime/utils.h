@@ -278,6 +278,9 @@ bool IsOatMagic(uint32_t magic);
 
 // Wrapper on fork/execv to run a command in a subprocess.
 bool Exec(std::vector<std::string>& arg_vector, std::string* error_msg);
+// Wrapper on fork/execv to run a command in a subprocess. Will redirect stdout and stderr into
+// /dev/null if suppress_output is true.
+bool Exec(std::vector<std::string>& arg_vector, bool suppress_output, std::string* error_msg);
 
 class VoidFunctor {
  public:

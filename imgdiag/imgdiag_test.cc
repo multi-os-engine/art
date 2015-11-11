@@ -32,6 +32,8 @@
 
 namespace art {
 
+// Run noisy processes quietly.
+static const bool kQuietExec = true;
 static const char* kImgDiagDiffPid = "--image-diff-pid";
 static const char* kImgDiagBootImage = "--boot-image";
 static const char* kImgDiagBinaryName = "imgdiag";
@@ -76,6 +78,12 @@ class ImgDiagTest : public CommonRuntimeTest {
 
   // Run imgdiag with a custom boot image location.
   bool Exec(pid_t image_diff_pid, const std::string& boot_image, std::string* error_msg) {
+    return Exec(image_diff_pid, boot_image, false, error_msg);
+  }
+  bool Exec(pid_t image_diff_pid,
+            const std::string& boot_image,
+            bool suppress_output,
+            std::string* error_msg) {
     // Invoke 'img_diag' against the current process.
     // This should succeed because we have a runtime and so it should
     // be able to map in the boot.art and do a diff for it.
@@ -96,12 +104,15 @@ class ImgDiagTest : public CommonRuntimeTest {
 
     std::vector<std::string> exec_argv = { file_path, diff_pid_args, boot_image_args };
 
-    return ::art::Exec(exec_argv, error_msg);
+    return ::art::Exec(exec_argv, suppress_output, error_msg);
   }
 
   // Run imgdiag with the default boot image location.
   bool ExecDefaultBootImage(pid_t image_diff_pid, std::string* error_msg) {
-    return Exec(image_diff_pid, boot_image_location_, error_msg);
+    return ExecDefaultBootImage(image_diff_pid, false, error_msg);
+  }
+  bool ExecDefaultBootImage(pid_t image_diff_pid, bool suppress_output, std::string* error_msg) {
+    return Exec(image_diff_pid, boot_image_location_, suppress_output, error_msg);
   }
 
  private:
@@ -132,7 +143,7 @@ TEST_F(ImgDiagTest, ImageDiffBadPid) {
 
   // Run imgdiag --image-diff-pid=some_bad_pid and wait until it's done with a 0 exit code.
   std::string error_msg;
-  ASSERT_FALSE(ExecDefaultBootImage(-12345, &error_msg)) << "Incorrectly executed";
+  ASSERT_FALSE(ExecDefaultBootImage(-12345, kQuietExec, &error_msg)) << "Incorrectly executed";
   UNUSED(error_msg);
 }
 

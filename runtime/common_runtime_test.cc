@@ -56,14 +56,59 @@ int main(int argc, char **argv) {
   // bridge warnings. The following line reduces the minimum log severity to ERROR and suppresses
   // everything else. In case you want to see all messages, comment out the line.
   setenv("ANDROID_LOG_TAGS", "*:e", 1);
+  bool quiet = false;
+  const std::string kQuietString = "--quiet";
+
+  int i = 1;
+  for (; i < argc; i++) {
+    if (kQuietString == argv[i]) {
+      quiet = true;
+      break;
+    }
+  }
+
+  if (quiet) {
+    // Remove the --quiet flag since google test doesn't know about it.
+    argc--;
+    CHECK_LE(i, argc);
+    memmove(&argv[i], &argv[i+1], argc - i);
+  }
 
   art::InitLogging(argv);
   LOG(::art::INFO) << "Running main() from common_runtime_test.cc...";
   testing::InitGoogleTest(&argc, argv);
+
+  if (quiet) {
+    testing::UnitTest& test = *testing::UnitTest::GetInstance();
+    testing::TestEventListeners& listeners = test.listeners();
+    // Get rid of the regular result listener.
+    delete listeners.Release(listeners.default_result_printer());
+    listeners.Append(new art::QuietPrinter);
+  }
+
   return RUN_ALL_TESTS();
 }
 
 namespace art {
+
+void QuietPrinter::OnTestPartResult(const testing::TestPartResult& result) {
+  if (result.type() == testing::TestPartResult::kSuccess) {
+    return;
+  } else {
+    fprintf(stdout, "%s:%d: Failure\n%s\n",
+            result.file_name(),
+            result.line_number(),
+            result.message());
+    fflush(stdout);
+  }
+}
+
+void QuietPrinter::OnTestEnd(const testing::TestInfo& info) {
+  if (info.result()->Failed()) {
+    fprintf(stdout, "FAILED: %s.%s\n", info.test_case_name(), info.name());
+    fflush(stdout);
+  }
+}
 
 ScratchFile::ScratchFile() {
   // ANDROID_DATA needs to be set
