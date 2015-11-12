@@ -485,10 +485,7 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
         DCHECK(why == kTimedWaiting || why == kSleeping) << why;
         self->GetWaitConditionVariable()->TimedWait(self, ms, ns);
       }
-      if (self->IsInterruptedLocked()) {
-        was_interrupted = true;
-      }
-      self->SetInterruptedLocked(false);
+      was_interrupted = self->IsInterruptedLocked();
     }
   }
 
@@ -523,18 +520,18 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   monitor_lock_.Unlock(self);
 
   if (was_interrupted) {
-    /*
-     * We were interrupted while waiting, or somebody interrupted an
-     * un-interruptible thread earlier and we're bailing out immediately.
-     *
-     * The doc sayeth: "The interrupted status of the current thread is
-     * cleared when this exception is thrown."
-     */
-    {
-      MutexLock mu(self, *self->GetWaitMutex());
-      self->SetInterruptedLocked(false);
-    }
     if (interruptShouldThrow) {
+      /*
+       * We were interrupted while waiting, or somebody interrupted an
+       * un-interruptible thread earlier and we're bailing out immediately.
+       *
+       * The doc sayeth: "The interrupted status of the current thread is
+       * cleared when this exception is thrown."
+       */
+      {
+        MutexLock mu(self, *self->GetWaitMutex());
+        self->SetInterruptedLocked(false);
+      }
       self->ThrowNewException("Ljava/lang/InterruptedException;", nullptr);
     }
   }
