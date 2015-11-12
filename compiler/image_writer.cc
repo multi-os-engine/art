@@ -304,9 +304,9 @@ void ImageWriter::PrepareDexCacheArraySlots() {
   Thread* const self = Thread::Current();
   ReaderMutexLock mu(self, *class_linker->DexLock());
   uint32_t size = 0u;
-  for (jobject weak_root : class_linker->GetDexCaches()) {
+  for (const ClassLinker::DexCacheData& data : class_linker->GetDexCaches()) {
     mirror::DexCache* dex_cache =
-        down_cast<mirror::DexCache*>(self->DecodeJObject(weak_root));
+        down_cast<mirror::DexCache*>(self->DecodeJObject(data.weak_root));
     if (dex_cache == nullptr) {
       continue;
     }
@@ -587,8 +587,8 @@ void ImageWriter::PruneNonImageClasses() {
   ScopedAssertNoThreadSuspension sa(self, __FUNCTION__);
   ReaderMutexLock mu(self, *Locks::classlinker_classes_lock_);  // For ClassInClassTable
   ReaderMutexLock mu2(self, *class_linker->DexLock());
-  for (jobject weak_root : class_linker->GetDexCaches()) {
-    mirror::DexCache* dex_cache = down_cast<mirror::DexCache*>(self->DecodeJObject(weak_root));
+  for (const ClassLinker::DexCacheData& data : class_linker->GetDexCaches()) {
+    mirror::DexCache* dex_cache = down_cast<mirror::DexCache*>(self->DecodeJObject(data.weak_root));
     if (dex_cache == nullptr) {
       continue;
     }
@@ -717,9 +717,9 @@ ObjectArray<Object>* ImageWriter::CreateImageRoots() const {
     CHECK_EQ(dex_cache_count, class_linker->GetDexCacheCount())
         << "The number of dex caches changed.";
     size_t i = 0;
-    for (jobject weak_root : class_linker->GetDexCaches()) {
+    for (const ClassLinker::DexCacheData& data : class_linker->GetDexCaches()) {
       mirror::DexCache* dex_cache =
-          down_cast<mirror::DexCache*>(self->DecodeJObject(weak_root));
+          down_cast<mirror::DexCache*>(self->DecodeJObject(data.weak_root));
       dex_caches->Set<false>(i, dex_cache);
       ++i;
     }
