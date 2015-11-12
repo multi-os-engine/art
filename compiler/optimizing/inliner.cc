@@ -181,6 +181,8 @@ static uint32_t FindMethodIndexIn(ArtMethod* method,
 bool HInliner::TryInline(HInvoke* invoke_instruction) {
   if (invoke_instruction->IsInvokeUnresolved()) {
     return false;  // Don't bother to move further if we know the method is unresolved.
+  } else if (invoke_instruction->IsInvokeLambda()) {
+    return false;  // Maybe one day....
   }
 
   uint32_t method_index = invoke_instruction->GetDexMethodIndex();
