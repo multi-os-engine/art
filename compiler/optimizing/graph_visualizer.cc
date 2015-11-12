@@ -428,6 +428,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     }
     output_ << ") ";
   }
+
+  void VisitArm64MultiplyAccumulate(HArm64MultiplyAccumulate* instruction) OVERRIDE {
+    output_ << " (Mul" << instruction->GetOpKind() << ") ";
+  }
 #endif
 
   bool IsPass(const char* name) {
