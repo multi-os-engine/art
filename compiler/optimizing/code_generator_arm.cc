@@ -1240,25 +1240,15 @@ void InstructionCodeGeneratorARM::GenerateLongComparesAndJumps(HCondition* cond,
   __ b(true_label, final_condition);
 }
 
-void InstructionCodeGeneratorARM::GenerateCompareTestAndBranch(HIf* if_instr,
-                                                               HCondition* condition,
+void InstructionCodeGeneratorARM::GenerateCompareTestAndBranch(HCondition* condition,
                                                                Label* true_target,
                                                                Label* false_target,
-                                                               Label* always_true_target) {
+                                                               bool false_fallthrough) {
+  DCHECK(true_target != nullptr && false_target != nullptr);
+
   LocationSummary* locations = condition->GetLocations();
   Location left = locations->InAt(0);
   Location right = locations->InAt(1);
-
-  // We don't want true_target as a nullptr.
-  if (true_target == nullptr) {
-    true_target = always_true_target;
-  }
-  bool falls_through = (false_target == nullptr);
-
-  // FP compares don't like null false_targets.
-  if (false_target == nullptr) {
-    false_target = codegen_->GetLabelOf(if_instr->IfFalseSuccessor());
-  }
 
   Primitive::Type type = condition->InputAt(0)->GetType();
   switch (type) {
@@ -1278,117 +1268,123 @@ void InstructionCodeGeneratorARM::GenerateCompareTestAndBranch(HIf* if_instr,
       LOG(FATAL) << "Unexpected compare type " << type;
   }
 
-  if (!falls_through) {
+  if (!false_fallthrough) {
     __ b(false_target);
   }
 }
 
 void InstructionCodeGeneratorARM::GenerateTestAndBranch(HInstruction* instruction,
+                                                        size_t condition_input_index,
                                                         Label* true_target,
                                                         Label* false_target,
-                                                        Label* always_true_target) {
-  HInstruction* cond = instruction->InputAt(0);
-  if (cond->IsIntConstant()) {
+                                                        bool true_fallthrough,
+                                                        bool false_fallthrough) {
+  DCHECK(true_fallthrough || true_target != nullptr);
+  DCHECK(false_fallthrough || false_target != nullptr);
+
+  HInstruction* cond = instruction->InputAt(condition_input_index);
+
+  if (true_fallthrough && false_fallthrough) {
+    // Nothing to do. The code always falls through.
+    return;
+  } else if (cond->IsIntConstant()) {
     // Constant condition, statically compared against 1.
-    int32_t cond_value = cond->AsIntConstant()->GetValue();
-    if (cond_value == 1) {
-      if (always_true_target != nullptr) {
-        __ b(always_true_target);
+    if (cond->AsIntConstant()->IsOne()) {
+      if (!true_fallthrough) {
+        __ b(true_target);
       }
-      return;
     } else {
-      DCHECK_EQ(cond_value, 0);
+      DCHECK(cond->AsIntConstant()->IsZero());
+      if (!false_fallthrough) {
+        __ b(false_target);
+      }
+    }
+    return;
+  }
+
+  // The following code generates these patterns:
+  //  (1) !true_fallthrough && false_fallthrough
+  //        - condition true => branch to true_target
+  //  (2) true_fallthrough && !false_fallthrough
+  //        - opposite condition true => branch to false_target
+  //  (3) !true_fallthrough && !false_fallthrough
+  //        - condition true => branch to true_target
+  //        - branch to false_target
+  if (IsMaterializedCondition(cond)) {
+    // Condition has been materialized, compare the output to 0.
+    Location cond_val = instruction->GetLocations()->InAt(condition_input_index);
+    DCHECK(cond_val.IsRegister());
+    if (true_fallthrough) {
+      __ CompareAndBranchIfZero(cond_val.AsRegister<Register>(), false_target);
+    } else {
+      __ CompareAndBranchIfNonZero(cond_val.AsRegister<Register>(), true_target);
     }
   } else {
-    // Can we optimize the jump if we know that the next block is the true case?
+    // Condition has not been materialized. Use its inputs as the comparison and
+    // its condition as the branch condition.
     HCondition* condition = cond->AsCondition();
-    bool can_jump_to_false = CanReverseCondition(always_true_target, false_target, condition);
-    if (condition == nullptr || condition->NeedsMaterialization()) {
-      // Condition has been materialized, compare the output to 0.
-      DCHECK(instruction->GetLocations()->InAt(0).IsRegister());
-      if (can_jump_to_false) {
-        __ CompareAndBranchIfZero(instruction->GetLocations()->InAt(0).AsRegister<Register>(),
-                                  false_target);
-        return;
-      }
-      __ CompareAndBranchIfNonZero(instruction->GetLocations()->InAt(0).AsRegister<Register>(),
-                                   true_target);
+
+    // If this a long or FP comparison that has been folded into the HCondition,
+    // generate the comparison directly.
+    Primitive::Type type = condition->InputAt(0)->GetType();
+    if (type == Primitive::kPrimLong || Primitive::IsFloatingPointType(type)) {
+      GenerateCompareTestAndBranch(condition, true_target, false_target, false_fallthrough);
+      return;
+    }
+
+    LocationSummary* locations = cond->GetLocations();
+    DCHECK(locations->InAt(0).IsRegister());
+    Register left = locations->InAt(0).AsRegister<Register>();
+    Location right = locations->InAt(1);
+    if (right.IsRegister()) {
+      __ cmp(left, ShifterOperand(right.AsRegister<Register>()));
     } else {
-      // Condition has not been materialized, use its inputs as the
-      // comparison and its condition as the branch condition.
-      Primitive::Type type = (condition != nullptr)
-          ? cond->InputAt(0)->GetType()
-          : Primitive::kPrimInt;
-      // Is this a long or FP comparison that has been folded into the HCondition?
-      if (type == Primitive::kPrimLong || Primitive::IsFloatingPointType(type)) {
-        // Generate the comparison directly.
-        GenerateCompareTestAndBranch(instruction->AsIf(), condition,
-                                     true_target, false_target, always_true_target);
-        return;
-      }
-
-      LocationSummary* locations = cond->GetLocations();
-      DCHECK(locations->InAt(0).IsRegister()) << locations->InAt(0);
-      Register left = locations->InAt(0).AsRegister<Register>();
-      Location right = locations->InAt(1);
-      if (right.IsRegister()) {
-        __ cmp(left, ShifterOperand(right.AsRegister<Register>()));
-      } else {
-        DCHECK(right.IsConstant());
-        GenerateCompareWithImmediate(left, CodeGenerator::GetInt32ValueOf(right.GetConstant()));
-      }
-      if (can_jump_to_false) {
-        __ b(false_target, ARMCondition(condition->GetOppositeCondition()));
-        return;
-      }
-
+      DCHECK(right.IsConstant());
+      GenerateCompareWithImmediate(left, CodeGenerator::GetInt32ValueOf(right.GetConstant()));
+    }
+    if (true_fallthrough) {
+      __ b(false_target, ARMCondition(condition->GetOppositeCondition()));
+    } else {
       __ b(true_target, ARMCondition(condition->GetCondition()));
     }
   }
-  if (false_target != nullptr) {
+
+  if (!true_fallthrough && !false_fallthrough) {
     __ b(false_target);
   }
 }
 
 void LocationsBuilderARM::VisitIf(HIf* if_instr) {
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(if_instr, LocationSummary::kNoCall);
-  HInstruction* cond = if_instr->InputAt(0);
-  if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(if_instr);
+  if (IsMaterializedCondition(if_instr->InputAt(0))) {
     locations->SetInAt(0, Location::RequiresRegister());
   }
 }
 
 void InstructionCodeGeneratorARM::VisitIf(HIf* if_instr) {
-  Label* true_target = codegen_->GetLabelOf(if_instr->IfTrueSuccessor());
-  Label* false_target = codegen_->GetLabelOf(if_instr->IfFalseSuccessor());
-  Label* always_true_target = true_target;
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(),
-                                if_instr->IfTrueSuccessor())) {
-    always_true_target = nullptr;
-  }
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(),
-                                if_instr->IfFalseSuccessor())) {
-    false_target = nullptr;
-  }
-  GenerateTestAndBranch(if_instr, true_target, false_target, always_true_target);
+  HBasicBlock* true_successor = if_instr->IfTrueSuccessor();
+  HBasicBlock* false_successor = if_instr->IfFalseSuccessor();
+  GenerateTestAndBranch(if_instr,
+                        0,
+                        codegen_->GetLabelOf(true_successor),
+                        codegen_->GetLabelOf(false_successor),
+                        codegen_->GoesToNextBlock(if_instr->GetBlock(), true_successor),
+                        codegen_->GoesToNextBlock(if_instr->GetBlock(), false_successor));
 }
 
 void LocationsBuilderARM::VisitDeoptimize(HDeoptimize* deoptimize) {
   LocationSummary* locations = new (GetGraph()->GetArena())
       LocationSummary(deoptimize, LocationSummary::kCallOnSlowPath);
-  HInstruction* cond = deoptimize->InputAt(0);
-  if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
+  if (IsMaterializedCondition(deoptimize->InputAt(0))) {
     locations->SetInAt(0, Location::RequiresRegister());
   }
 }
 
 void InstructionCodeGeneratorARM::VisitDeoptimize(HDeoptimize* deoptimize) {
-  SlowPathCode* slow_path = new (GetGraph()->GetArena())
-      DeoptimizationSlowPathARM(deoptimize);
+  SlowPathCode* slow_path = new (GetGraph()->GetArena()) DeoptimizationSlowPathARM(deoptimize);
   codegen_->AddSlowPath(slow_path);
   Label* slow_path_entry = slow_path->GetEntryLabel();
-  GenerateTestAndBranch(deoptimize, slow_path_entry, nullptr, slow_path_entry);
+  GenerateTestAndBranch(deoptimize, 0, slow_path_entry, nullptr, false, true);
 }
 
 void LocationsBuilderARM::VisitCondition(HCondition* cond) {

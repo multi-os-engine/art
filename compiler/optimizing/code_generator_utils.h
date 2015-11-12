@@ -22,17 +22,14 @@
 namespace art {
 
 class Label;
-class HCondition;
+class HInstruction;
 
 // Computes the magic number and the shift needed in the div/rem by constant algorithm, as out
 // arguments `magic` and `shift`
 void CalculateMagicAndShiftForDivRem(int64_t divisor, bool is_long, int64_t* magic, int* shift);
 
-// Is it valid to reverse the condition? Uses the values supplied to
-// GenerateTestAndBranch() in instruction generators.
-bool CanReverseCondition(Label* always_true_target,
-                         Label* false_target,
-                         HCondition* condition);
+// Returns true if `instruction` is a materialized HCondition or other boolean value.
+bool IsMaterializedCondition(HInstruction* instruction);
 
 }  // namespace art
 
