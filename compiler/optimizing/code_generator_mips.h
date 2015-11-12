@@ -226,9 +226,11 @@ class InstructionCodeGeneratorMIPS : public HGraphVisitor {
   void GenerateImplicitNullCheck(HNullCheck* instruction);
   void GenerateExplicitNullCheck(HNullCheck* instruction);
   void GenerateTestAndBranch(HInstruction* instruction,
+                             size_t condition_input_index,
                              MipsLabel* true_target,
                              MipsLabel* false_target,
-                             MipsLabel* always_true_target);
+                             bool true_fallthrough,
+                             bool false_fallthrough);
   void HandleGoto(HInstruction* got, HBasicBlock* successor);
 
   MipsAssembler* const assembler_;

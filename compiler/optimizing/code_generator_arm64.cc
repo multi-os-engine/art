@@ -2283,38 +2283,60 @@ void InstructionCodeGeneratorARM64::VisitTryBoundary(HTryBoundary* try_boundary)
 }
 
 void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruction,
+                                                          size_t condition_input_index,
                                                           vixl::Label* true_target,
                                                           vixl::Label* false_target,
-                                                          vixl::Label* always_true_target) {
-  HInstruction* cond = instruction->InputAt(0);
-  HCondition* condition = cond->AsCondition();
+                                                          bool true_fallthrough,
+                                                          bool false_fallthrough) {
+  DCHECK(true_fallthrough || true_target != nullptr);
+  DCHECK(false_fallthrough || false_target != nullptr);
 
-  if (cond->IsIntConstant()) {
-    int32_t cond_value = cond->AsIntConstant()->GetValue();
-    if (cond_value == 1) {
-      if (always_true_target != nullptr) {
-        __ B(always_true_target);
+  HInstruction* cond = instruction->InputAt(condition_input_index);
+
+  if (true_fallthrough && false_fallthrough) {
+    // Nothing to do. The code always falls through.
+    return;
+  } else if (cond->IsIntConstant()) {
+    // Constant condition, statically compared against 1.
+    if (cond->AsIntConstant()->IsOne()) {
+      if (!true_fallthrough) {
+        __ B(true_target);
       }
-      return;
     } else {
-      DCHECK_EQ(cond_value, 0);
+      DCHECK(cond->AsIntConstant()->IsZero());
+      if (!false_fallthrough) {
+        __ B(false_target);
+      }
     }
-  } else if (!cond->IsCondition() || condition->NeedsMaterialization()) {
+    return;
+  }
+
+  // The following code generates these patterns:
+  //  (1) true_fallthrough && !false_fallthrough
+  //        - opposite condition true => branch to false_target
+  //  (2) !true_fallthrough && false_fallthrough
+  //        - condition true => branch to true_target
+  //  (3) !true_fallthrough && !false_fallthrough
+  //        - condition true => branch to true_target
+  //        - branch to false_target
+  if (IsMaterializedCondition(cond)) {
     // The condition instruction has been materialized, compare the output to 0.
-    Location cond_val = instruction->GetLocations()->InAt(0);
+    Location cond_val = instruction->GetLocations()->InAt(condition_input_index);
     DCHECK(cond_val.IsRegister());
-    __ Cbnz(InputRegisterAt(instruction, 0), true_target);
+      if (true_fallthrough) {
+      __ Cbz(InputRegisterAt(instruction, condition_input_index), false_target);
+    } else {
+      __ Cbnz(InputRegisterAt(instruction, condition_input_index), true_target);
+    }
   } else {
     // The condition instruction has not been materialized, use its inputs as
     // the comparison and its condition as the branch condition.
-    Primitive::Type type =
-        cond->IsCondition() ? cond->InputAt(0)->GetType() : Primitive::kPrimInt;
+    HCondition* condition = cond->AsCondition();
 
+    Primitive::Type type = condition->InputAt(0)->GetType();
     if (Primitive::IsFloatingPointType(type)) {
+      DCHECK(true_target != nullptr && false_target != nullptr);
       // FP compares don't like null false_targets.
-      if (false_target == nullptr) {
-        false_target = codegen_->GetLabelOf(instruction->AsIf()->IfFalseSuccessor());
-      }
       FPRegister lhs = InputFPRegisterAt(condition, 0);
       if (condition->GetLocations()->InAt(1).IsConstant()) {
         DCHECK(IsFloatingPointZeroConstant(condition->GetLocations()->InAt(1).GetConstant()));
@@ -2328,27 +2350,41 @@ void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruct
       } else if (condition->IsFPConditionFalseIfNaN()) {
         __ B(vs, false_target);  // VS for unordered.
       }
-      __ B(ARM64Condition(condition->GetCondition()), true_target);
+      if (true_fallthrough) {
+        __ B(ARM64Condition(condition->GetOppositeCondition()), false_target);
+      } else {
+        __ B(ARM64Condition(condition->GetCondition()), true_target);
+      }
     } else {
       // Integer cases.
       Register lhs = InputRegisterAt(condition, 0);
       Operand rhs = InputOperandAt(condition, 1);
-      Condition arm64_cond = ARM64Condition(condition->GetCondition());
+
+      Condition arm64_cond;
+      vixl::Label* non_fallthrough_target;
+      if (true_fallthrough) {
+        arm64_cond = ARM64Condition(condition->GetOppositeCondition());
+        non_fallthrough_target = false_target;
+      } else {
+        arm64_cond = ARM64Condition(condition->GetCondition());
+        non_fallthrough_target = true_target;
+      }
+
       if ((arm64_cond != gt && arm64_cond != le) && rhs.IsImmediate() && (rhs.immediate() == 0)) {
         switch (arm64_cond) {
           case eq:
-            __ Cbz(lhs, true_target);
+            __ Cbz(lhs, non_fallthrough_target);
             break;
           case ne:
-            __ Cbnz(lhs, true_target);
+            __ Cbnz(lhs, non_fallthrough_target);
             break;
           case lt:
             // Test the sign bit and branch accordingly.
-            __ Tbnz(lhs, (lhs.IsX() ? kXRegSize : kWRegSize) - 1, true_target);
+            __ Tbnz(lhs, (lhs.IsX() ? kXRegSize : kWRegSize) - 1, non_fallthrough_target);
             break;
           case ge:
             // Test the sign bit and branch accordingly.
-            __ Tbz(lhs, (lhs.IsX() ? kXRegSize : kWRegSize) - 1, true_target);
+            __ Tbz(lhs, (lhs.IsX() ? kXRegSize : kWRegSize) - 1, non_fallthrough_target);
             break;
           default:
             // Without the `static_cast` the compiler throws an error for
@@ -2357,43 +2393,40 @@ void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruct
         }
       } else {
         __ Cmp(lhs, rhs);
-        __ B(arm64_cond, true_target);
+        __ B(arm64_cond, non_fallthrough_target);
       }
     }
   }
-  if (false_target != nullptr) {
+
+  // If neither branch falls through (case 3), the conditional branch to `true_target`
+  // was already emitted (case 2) and we need to emit a jump to `false_target`.
+  if (!true_fallthrough && !false_fallthrough) {
     __ B(false_target);
   }
 }
 
 void LocationsBuilderARM64::VisitIf(HIf* if_instr) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(if_instr);
-  HInstruction* cond = if_instr->InputAt(0);
-  if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
+  if (IsMaterializedCondition(if_instr->InputAt(0))) {
     locations->SetInAt(0, Location::RequiresRegister());
   }
 }
 
 void InstructionCodeGeneratorARM64::VisitIf(HIf* if_instr) {
-  vixl::Label* true_target = codegen_->GetLabelOf(if_instr->IfTrueSuccessor());
-  vixl::Label* false_target = codegen_->GetLabelOf(if_instr->IfFalseSuccessor());
-  vixl::Label* always_true_target = true_target;
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(),
-                                if_instr->IfTrueSuccessor())) {
-    always_true_target = nullptr;
-  }
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(),
-                                if_instr->IfFalseSuccessor())) {
-    false_target = nullptr;
-  }
-  GenerateTestAndBranch(if_instr, true_target, false_target, always_true_target);
+  HBasicBlock* true_successor = if_instr->IfTrueSuccessor();
+  HBasicBlock* false_successor = if_instr->IfFalseSuccessor();
+  GenerateTestAndBranch(if_instr,
+                        /* condition_input_index */ 0,
+                        codegen_->GetLabelOf(true_successor),
+                        codegen_->GetLabelOf(false_successor),
+                        codegen_->GoesToNextBlock(if_instr->GetBlock(), true_successor),
+                        codegen_->GoesToNextBlock(if_instr->GetBlock(), false_successor));
 }
 
 void LocationsBuilderARM64::VisitDeoptimize(HDeoptimize* deoptimize) {
   LocationSummary* locations = new (GetGraph()->GetArena())
       LocationSummary(deoptimize, LocationSummary::kCallOnSlowPath);
-  HInstruction* cond = deoptimize->InputAt(0);
-  if (!cond->IsCondition() || cond->AsCondition()->NeedsMaterialization()) {
+  if (IsMaterializedCondition(deoptimize->InputAt(0))) {
     locations->SetInAt(0, Location::RequiresRegister());
   }
 }
@@ -2403,7 +2436,12 @@ void InstructionCodeGeneratorARM64::VisitDeoptimize(HDeoptimize* deoptimize) {
       DeoptimizationSlowPathARM64(deoptimize);
   codegen_->AddSlowPath(slow_path);
   vixl::Label* slow_path_entry = slow_path->GetEntryLabel();
-  GenerateTestAndBranch(deoptimize, slow_path_entry, nullptr, slow_path_entry);
+  GenerateTestAndBranch(deoptimize,
+                        /* condition_input_index */ 0,
+                        slow_path_entry,
+                        nullptr,
+                        /* true_fallthrough */ false,
+                        /* false_fallthrough */ true);
 }
 
 void LocationsBuilderARM64::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
