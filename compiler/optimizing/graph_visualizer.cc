@@ -427,6 +427,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       StartAttributeStream("shift") << instruction->GetShiftAmount();
     }
   }
+
+  void VisitArm64MultiplyAccumulate(HArm64MultiplyAccumulate* instruction) OVERRIDE {
+    StartAttributeStream("kind") << instruction->GetOpKind();
+  }
 #endif
 
   bool IsPass(const char* name) {
