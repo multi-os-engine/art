@@ -6150,6 +6150,8 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
     case kVirtual:
       resolved = klass->FindVirtualMethod(dex_cache.Get(), method_idx, image_pointer_size_);
       break;
+    case kLambda:  // TODO: later
+      break;
     default:
       LOG(FATAL) << "Unreachable - invocation type: " << type;
       UNREACHABLE();
@@ -6171,6 +6173,8 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
       case kSuper:  // Fall-through.
       case kVirtual:
         resolved = klass->FindVirtualMethod(name, signature, image_pointer_size_);
+        break;
+      case kLambda:  // TODO: later
         break;
     }
   }
@@ -6199,6 +6203,8 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
         case kVirtual:
         case kSuper:
           resolved = klass->FindDirectMethod(name, signature, image_pointer_size_);
+          break;
+        case kLambda:  // TODO: later
           break;
       }
 
@@ -6266,6 +6272,8 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
                 ThrowNoSuchMethodError(type, klass, name, signature);
               }
             }
+            break;
+          case kLambda:  // TODO: later
             break;
         }
       }

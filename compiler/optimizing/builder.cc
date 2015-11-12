@@ -462,6 +462,10 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
 
   InitializeParameters(code_item.ins_size_);
 
+  // No pending variable captures.
+  // TODO: remove this later
+  variable_captures_.clear();
+
   size_t dex_pc = 0;
   while (code_ptr < code_end) {
     // Update the current block if dex_pc starts a new block.
@@ -472,6 +476,16 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
     }
     dex_pc += instruction.SizeInCodeUnits();
     code_ptr += instruction.SizeInCodeUnits();
+  }
+
+  // Reject pending variable captures.
+  // TODO: remove this later
+  if (!variable_captures_.empty()) {
+    VLOG(compiler) << "Did not compile "
+                   << PrettyMethod(dex_compilation_unit_->GetDexMethodIndex(), *dex_file_)
+                   << " because of pending variable captures";
+    variable_captures_.clear();
+    return false;
   }
 
   // Add Exit to the exit block.
@@ -729,6 +743,8 @@ static InvokeType GetInvokeTypeFromOpCode(Instruction::Code opcode) {
     case Instruction::INVOKE_SUPER_RANGE:
     case Instruction::INVOKE_SUPER:
       return kSuper;
+    case Instruction::INVOKE_LAMBDA:
+      return kLambda;
     default:
       LOG(FATAL) << "Unexpected invoke opcode: " << opcode;
       UNREACHABLE();
@@ -1945,7 +1961,7 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
         method_idx = instruction.VRegB_35c();
       }
       uint32_t number_of_vreg_arguments = instruction.VRegA_35c();
-      uint32_t args[5];
+      uint32_t args[Instruction::kMaxVarArgRegs];
       instruction.GetVarArgs(args);
       if (!BuildInvoke(instruction, dex_pc, method_idx,
                        number_of_vreg_arguments, false, args, -1)) {
@@ -2542,7 +2558,7 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
     case Instruction::FILLED_NEW_ARRAY: {
       uint32_t number_of_vreg_arguments = instruction.VRegA_35c();
       uint32_t type_index = instruction.VRegB_35c();
-      uint32_t args[5];
+      uint32_t args[Instruction::kMaxVarArgRegs];
       instruction.GetVarArgs(args);
       BuildFilledNewArray(dex_pc, type_index, number_of_vreg_arguments, false, args, 0);
       break;
@@ -2808,6 +2824,114 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
 
     case Instruction::SPARSE_SWITCH: {
       BuildSparseSwitch(instruction, dex_pc);
+      break;
+    }
+
+    //
+    // Lambda extensions to Dex bytecode.
+    //
+
+    // TODO: INVOKE_LAMBDA_RANGE
+    case Instruction::INVOKE_LAMBDA: {
+      // Format: invoke-lambda vA, {vD, vE, cF, vG} with vB defining number of parameters.
+      // The invoke is applied to the closure in vA (type J).
+      Primitive::Type return_type = Primitive::kPrimVoid;
+      uint32_t number_of_vreg_arguments = instruction.VRegB_25x();
+      uint32_t args[Instruction::kMaxVarArgRegs25x];
+      instruction.GetAllArgs25x(args);
+      HInvoke* invoke = new (arena_) HInvokeLambda(arena_,
+                                                   return_type,
+                                                   number_of_vreg_arguments + 1,
+                                                   dex_pc);
+      HInstruction* closure = LoadLocal(args[0], Primitive::kPrimLong, dex_pc);
+      invoke->SetArgumentAt(0, closure);
+      // Set up the parameters.
+      // TODO: to get this working for toy programs, use proto of last seen create
+      //       use method_id when available instead!
+      DCHECK(proto_last_seen_create_);
+      const char* descriptor = proto_last_seen_create_;
+      size_t start_index = 2;
+      size_t argument_index = 1;
+      if (!SetupInvokeArguments(invoke,
+                                number_of_vreg_arguments + 2,
+                                args,
+                                -1,  // register index
+                                false,  // is_range
+                                descriptor + 1,  // position at J (skipped also)
+                                start_index,
+                                &argument_index)) {
+        return false;
+      }
+      current_block_->AddInstruction(invoke);
+      latest_result_ = invoke;  // only set for invoke
+      break;
+    }
+
+    case Instruction::CREATE_LAMBDA: {
+      // Format: create-lambda vA, "I(I)"@vB with the method prototype defined by vB and
+      // all prior captures as operands. The create result (type J) is stored in vA.
+      size_t number_of_inputs = variable_captures_.size();
+      uint16_t method_index = instruction.VRegB_21c();
+      const char* descriptor = dex_file_->GetMethodShorty(method_index);
+      HInstruction* create = new (arena_) HCreateLambda(arena_, number_of_inputs, method_index, dex_pc);
+      for (size_t index = 0; index < number_of_inputs; index++) {
+        DCHECK(variable_captures_[index]->IsCaptureVariable());
+        create->SetRawInputAt(index, variable_captures_[index]);
+      }
+      variable_captures_.clear();  // done with operands
+      current_block_->AddInstruction(create);
+      UpdateLocal(instruction.VRegA_21c(), current_block_->GetLastInstruction(), dex_pc);
+      proto_last_seen_create_ = descriptor;
+      break;
+    }
+
+    case Instruction::CAPTURE_VARIABLE: {
+      // Format: capture-variable vA, "I"@vB with variable's type defined by vB. Note that
+      // vA is a source here, and the capture result (type J) is represented by a temporary.
+      // Any subsequent create-lambda will collect all prior captures as operands.
+      // TODO: this bytecode instruction will go away, but the HIR node will remain
+      Temporaries temps(graph_);
+      uint16_t string_index = instruction.VRegB_21c();
+      const char* descriptor = dex_file_->StringDataByIdx(string_index);
+      Primitive::Type variable_type = Primitive::GetType(descriptor[0]);
+      HInstruction* variable = LoadLocal(instruction.VRegA_21c(), variable_type, dex_pc);
+      HInstruction* capture = new (arena_) HCaptureVariable(variable, string_index, dex_pc);
+      current_block_->AddInstruction(capture);
+      temps.Add(capture);
+      variable_captures_.push_back(capture);
+      break;
+    }
+
+    case Instruction::LIBERATE_VARIABLE: {
+      // Format: liberate-variable vA, vB, "I"@vC with closure in vB (type J).
+      // The liberate result, with type defined by vC, is stored in vA.
+      uint16_t string_index = instruction.VRegC_22c();
+      const char* descriptor = dex_file_->StringDataByIdx(string_index);
+      Primitive::Type result_type = Primitive::GetType(descriptor[0]);
+      HInstruction* closure = LoadLocal(instruction.VRegB_22c(), Primitive::kPrimLong, dex_pc);
+      current_block_->AddInstruction(new (arena_) HLiberateVariable(result_type, closure, string_index, dex_pc));
+      UpdateLocal(instruction.VRegA_22c(), current_block_->GetLastInstruction(), dex_pc);
+      break;
+    }
+
+    case Instruction::BOX_LAMBDA: {
+      // Format: box-lambda vA, vB with closure in vB (type J).
+      // The box result (type L) is stored in vA.
+      HInstruction* closure = LoadLocal(instruction.VRegB_22x(), Primitive::kPrimLong, dex_pc);
+      current_block_->AddInstruction(new (arena_) HBoxLambda(closure, dex_pc));
+      UpdateLocal(instruction.VRegA_22x(), current_block_->GetLastInstruction(), dex_pc);
+      break;
+    }
+
+    case Instruction::UNBOX_LAMBDA: {
+      // Format: unbox-lambda vA, vB, "I"@vC with a reference in vB (type L, and more
+      // specifically interface vC). The unbox result (type J) is stored in vA.
+      uint16_t string_index = instruction.VRegC_22c();
+      const char* descriptor = dex_file_->StringDataByIdx(string_index);
+      DCHECK(descriptor);
+      HInstruction* reference = LoadLocal(instruction.VRegB_22c(), Primitive::kPrimNot, dex_pc);
+      current_block_->AddInstruction(new (arena_) HUnboxLambda(reference, dex_pc));
+      UpdateLocal(instruction.VRegA_22c(), current_block_->GetLastInstruction(), dex_pc);
       break;
     }
 

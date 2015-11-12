@@ -57,6 +57,11 @@ class RTPVisitor : public HGraphDelegateVisitor {
   void VisitInvoke(HInvoke* instr) OVERRIDE;
   void VisitArrayGet(HArrayGet* instr) OVERRIDE;
   void VisitCheckCast(HCheckCast* instr) OVERRIDE;
+  void VisitCreateLambda(HCreateLambda* instr) OVERRIDE;
+  void VisitCaptureVariable(HCaptureVariable* instr) OVERRIDE;
+  void VisitLiberateVariable(HLiberateVariable* instr) OVERRIDE;
+  void VisitBoxLambda(HBoxLambda* instr) OVERRIDE;
+  void VisitUnboxLambda(HUnboxLambda* instr) OVERRIDE;
   void VisitNullCheck(HNullCheck* instr) OVERRIDE;
   void VisitFakeString(HFakeString* instr) OVERRIDE;
   void UpdateReferenceTypeInfo(HInstruction* instr,
@@ -580,6 +585,33 @@ void RTPVisitor::VisitCheckCast(HCheckCast* check_cast) {
       user->ReplaceInput(bound_type, it.Current()->GetIndex());
     }
   }
+}
+
+void RTPVisitor::VisitCreateLambda(HCreateLambda* instr) {
+  DCHECK_EQ(instr->GetType(), Primitive::kPrimLong);  // result is always J
+}
+
+void RTPVisitor::VisitCaptureVariable(HCaptureVariable* instr) {
+  DCHECK_EQ(instr->GetType(), Primitive::kPrimLong);  // result is always J
+}
+
+void RTPVisitor::VisitLiberateVariable(HLiberateVariable* instr) {
+  if (instr->GetType() != Primitive::kPrimNot) {
+    return;
+  }
+  // TODO: what to do on ref?
+  instr->SetReferenceTypeInfo(
+       ReferenceTypeInfo::Create(object_class_handle_, /* is_exact */ false));
+}
+
+void RTPVisitor::VisitBoxLambda(HBoxLambda* instr) {
+  // TODO: what to do on always ref?
+  instr->SetReferenceTypeInfo(
+       ReferenceTypeInfo::Create(object_class_handle_, /* is_exact */ false));
+}
+
+void RTPVisitor::VisitUnboxLambda(HUnboxLambda* instr) {
+  DCHECK_EQ(instr->GetType(), Primitive::kPrimLong);  // result is always J
 }
 
 void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
