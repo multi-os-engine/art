@@ -227,14 +227,15 @@ class InstructionCodeGeneratorX86 : public HGraphVisitor {
   void GenerateImplicitNullCheck(HNullCheck* instruction);
   void GenerateExplicitNullCheck(HNullCheck* instruction);
   void GenerateTestAndBranch(HInstruction* instruction,
+                             size_t condition_input_index,
                              Label* true_target,
                              Label* false_target,
-                             Label* always_true_target);
-  void GenerateCompareTestAndBranch(HIf* if_inst,
-                                    HCondition* condition,
+                             bool true_fallthrough,
+                             bool false_fallthrough);
+  void GenerateCompareTestAndBranch(HCondition* condition,
                                     Label* true_target,
                                     Label* false_target,
-                                    Label* always_true_target);
+                                    bool false_fallthrough);
   void GenerateFPJumps(HCondition* cond, Label* true_label, Label* false_label);
   void GenerateLongComparesAndJumps(HCondition* cond, Label* true_label, Label* false_label);
   void HandleGoto(HInstruction* got, HBasicBlock* successor);
