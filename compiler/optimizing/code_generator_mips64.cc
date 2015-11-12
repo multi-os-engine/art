@@ -3994,5 +3994,65 @@ void InstructionCodeGeneratorMIPS64::VisitPackedSwitch(HPackedSwitch* switch_ins
   }
 }
 
+// TODO: implement lambda code generation
+
+void LocationsBuilderMIPS64::VisitInvokeLambda(HInvokeLambda* invoke) {
+  HandleInvoke(invoke);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitInvokeLambda(HInvokeLambda* invoke) {
+  DCHECK(invoke != nullptr);
+}
+
+void LocationsBuilderMIPS64::VisitCreateLambda(HCreateLambda* create) {
+  LocationSummary* locations = new (GetGraph()->GetArena())
+      LocationSummary(create, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitCreateLambda(HCreateLambda* create) {
+  DCHECK(create != nullptr);
+}
+
+void LocationsBuilderMIPS64::VisitCaptureVariable(HCaptureVariable* capture) {
+  LocationSummary* locations = new (GetGraph()->GetArena())
+      LocationSummary(capture, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitCaptureVariable(HCaptureVariable* capture) {
+  DCHECK(capture != nullptr);
+}
+
+void LocationsBuilderMIPS64::VisitLiberateVariable(HLiberateVariable* liberate) {
+  LocationSummary* locations = new (GetGraph()->GetArena())
+      LocationSummary(liberate, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitLiberateVariable(HLiberateVariable* liberate) {
+  DCHECK(liberate != nullptr);
+}
+
+void LocationsBuilderMIPS64::VisitBoxLambda(HBoxLambda* box) {
+  LocationSummary* locations = new (GetGraph()->GetArena())
+      LocationSummary(box, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitBoxLambda(HBoxLambda* box) {
+  DCHECK(box != nullptr);
+}
+
+void LocationsBuilderMIPS64::VisitUnboxLambda(HUnboxLambda* unbox) {
+  LocationSummary* locations = new (GetGraph()->GetArena())
+      LocationSummary(unbox, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitUnboxLambda(HUnboxLambda* unbox) {
+  DCHECK(unbox != nullptr);
+}
+
 }  // namespace mips64
 }  // namespace art

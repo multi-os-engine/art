@@ -1033,11 +1033,14 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(BooleanNot, UnaryOperation)                                         \
   M(BoundsCheck, Instruction)                                           \
   M(BoundType, Instruction)                                             \
+  M(BoxLambda, Instruction)                                             \
+  M(CaptureVariable, Instruction)                                       \
   M(CheckCast, Instruction)                                             \
   M(ClearException, Instruction)                                        \
   M(ClinitCheck, Instruction)                                           \
   M(Compare, BinaryOperation)                                           \
   M(Condition, BinaryOperation)                                         \
+  M(CreateLambda, Instruction)                                          \
   M(CurrentMethod, Instruction)                                         \
   M(Deoptimize, Instruction)                                            \
   M(Div, BinaryOperation)                                               \
@@ -1057,10 +1060,12 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(IntConstant, Constant)                                              \
   M(InvokeUnresolved, Invoke)                                           \
   M(InvokeInterface, Invoke)                                            \
+  M(InvokeLambda, Invoke)                                               \
   M(InvokeStaticOrDirect, Invoke)                                       \
   M(InvokeVirtual, Invoke)                                              \
   M(LessThan, Condition)                                                \
   M(LessThanOrEqual, Condition)                                         \
+  M(LiberateVariable, Instruction)                                      \
   M(LoadClass, Instruction)                                             \
   M(LoadException, Instruction)                                         \
   M(LoadLocal, Instruction)                                             \
@@ -1089,6 +1094,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(Shr, BinaryOperation)                                               \
   M(StaticFieldGet, Instruction)                                        \
   M(StaticFieldSet, Instruction)                                        \
+  M(UnboxLambda, Instruction)                                           \
   M(UnresolvedInstanceFieldGet, Instruction)                            \
   M(UnresolvedInstanceFieldSet, Instruction)                            \
   M(UnresolvedStaticFieldGet, Instruction)                              \
@@ -3693,6 +3699,135 @@ class HInvokeInterface : public HInvoke {
   const uint32_t imt_index_;
 
   DISALLOW_COPY_AND_ASSIGN(HInvokeInterface);
+};
+
+class HInvokeLambda : public HInvoke {
+ public:
+  HInvokeLambda(ArenaAllocator* arena,
+                Primitive::Type return_type,
+                uint32_t number_of_arguments,
+                uint32_t dex_pc)
+      : HInvoke(arena,
+                number_of_arguments,
+                /* no other arguments */ 0u,
+                return_type,
+                dex_pc,
+                DexFile::kDexNoIndex16,
+                kLambda) {}
+
+  DECLARE_INSTRUCTION(InvokeLambda);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HInvokeLambda);
+};
+
+class HCreateLambda : public HInstruction {
+ public:
+  HCreateLambda(ArenaAllocator* arena,
+                size_t number_of_inputs,
+                uint16_t method_index,
+                uint32_t dex_pc)
+      : HInstruction(SideEffects::None(), dex_pc),
+        method_index_(method_index),
+        inputs_(number_of_inputs, arena->Adapter(kArenaAllocMisc)) {
+  }
+
+  size_t InputCount() const OVERRIDE { return inputs_.size(); }
+
+  Primitive::Type GetType() const OVERRIDE { return Primitive::kPrimLong; }
+
+  bool CanThrow() const OVERRIDE { return true; }
+
+  uint16_t GetMethodIndex() const { return method_index_; }
+
+  DECLARE_INSTRUCTION(CreateLambda);
+
+ protected:
+  const HUserRecord<HInstruction*> InputRecordAt(size_t index) const OVERRIDE {
+    return inputs_[index];
+  }
+
+  void SetRawInputRecordAt(size_t index, const HUserRecord<HInstruction*>& input) OVERRIDE {
+    inputs_[index] = input;
+  }
+
+ private:
+  const uint16_t method_index_;
+
+  ArenaVector<HUserRecord<HInstruction*>> inputs_;
+
+  DISALLOW_COPY_AND_ASSIGN(HCreateLambda);
+};
+
+class HCaptureVariable : public HExpression<1> {
+ public:
+  HCaptureVariable(HInstruction* variable,
+                   uint16_t string_index,
+                   uint32_t dex_pc)
+      : HExpression(Primitive::kPrimLong, SideEffects::None(), dex_pc),
+        string_index_(string_index) {
+    SetRawInputAt(0, variable);
+  }
+
+  uint16_t GetStringIndex() const { return string_index_; }
+
+  DECLARE_INSTRUCTION(CaptureVariable);
+
+ private:
+  const uint16_t string_index_;
+
+  DISALLOW_COPY_AND_ASSIGN(HCaptureVariable);
+};
+
+class HLiberateVariable : public HExpression<1> {
+ public:
+  HLiberateVariable(Primitive::Type result_type,
+                    HInstruction* closure,
+                    uint16_t string_index,
+                    uint32_t dex_pc)
+      : HExpression(result_type, SideEffects::None(), dex_pc),
+        string_index_(string_index) {
+    SetRawInputAt(0, closure);
+  }
+
+  bool CanThrow() const OVERRIDE { return true; }
+
+  uint16_t GetStringIndex() const { return string_index_; }
+
+  DECLARE_INSTRUCTION(LiberateVariable);
+
+ private:
+  const uint16_t string_index_;
+
+  DISALLOW_COPY_AND_ASSIGN(HLiberateVariable);
+};
+
+class HBoxLambda : public HExpression<1> {
+ public:
+  HBoxLambda(HInstruction* closure, uint32_t dex_pc)
+      : HExpression(Primitive::kPrimNot, SideEffects::None(), dex_pc) {
+    SetRawInputAt(0, closure);
+  }
+
+  DECLARE_INSTRUCTION(BoxLambda);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HBoxLambda);
+};
+
+class HUnboxLambda : public HExpression<1> {
+ public:
+  HUnboxLambda(HInstruction* reference, uint32_t dex_pc)
+      : HExpression(Primitive::kPrimLong, SideEffects::None(), dex_pc) {
+    SetRawInputAt(0, reference);
+  }
+
+  bool CanThrow() const OVERRIDE { return true; }
+
+  DECLARE_INSTRUCTION(UnboxLambda);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HUnboxLambda);
 };
 
 class HNewInstance : public HExpression<2> {
