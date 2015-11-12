@@ -1,0 +1,5 @@
+Lambda0:
+Lambda1:1
+Lambda1:123
+Boxed-Lambda1:6
+passed

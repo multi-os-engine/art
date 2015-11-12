@@ -27,7 +27,8 @@ enum InvokeType {
   kVirtual,    // <<virtual>>
   kSuper,      // <<super>>
   kInterface,  // <<interface>>
-  kMaxInvokeType = kInterface
+  kLambda,     // <<lambda>>
+  kMaxInvokeType = kLambda
 };
 
 std::ostream& operator<<(std::ostream& os, const InvokeType& rhs);
