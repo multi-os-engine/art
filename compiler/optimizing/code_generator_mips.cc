@@ -4230,6 +4230,61 @@ void InstructionCodeGeneratorMIPS::VisitInvokeUnresolved(HInvokeUnresolved* invo
   codegen_->GenerateInvokeUnresolvedRuntimeCall(invoke);
 }
 
+// TODO: implement lambda code generation
+
+void LocationsBuilderMIPS::VisitInvokeLambda(HInvokeLambda* invoke) {
+  HandleInvoke(invoke);
+}
+
+void InstructionCodeGeneratorMIPS::VisitInvokeLambda(HInvokeLambda* invoke) {
+  DCHECK(invoke != nullptr);
+}
+
+void LocationsBuilderMIPS::VisitCreateLambda(HCreateLambda* create) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(create, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS::VisitCreateLambda(HCreateLambda* create) {
+  DCHECK(create != nullptr);
+}
+
+void LocationsBuilderMIPS::VisitCaptureVariable(HCaptureVariable* capture) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(capture, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS::VisitCaptureVariable(HCaptureVariable* capture) {
+  DCHECK(capture != nullptr);
+}
+
+void LocationsBuilderMIPS::VisitLiberateVariable(HLiberateVariable* liberate) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(liberate, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS::VisitLiberateVariable(HLiberateVariable* liberate) {
+  DCHECK(liberate != nullptr);
+}
+
+void LocationsBuilderMIPS::VisitBoxLambda(HBoxLambda* box) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(box, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS::VisitBoxLambda(HBoxLambda* box) {
+  DCHECK(box != nullptr);
+}
+
+void LocationsBuilderMIPS::VisitUnboxLambda(HUnboxLambda* unbox) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(unbox, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorMIPS::VisitUnboxLambda(HUnboxLambda* unbox) {
+  DCHECK(unbox != nullptr);
+}
+
 #undef __
 #undef QUICK_ENTRY_POINT
 

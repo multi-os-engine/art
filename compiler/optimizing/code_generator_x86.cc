@@ -6135,6 +6135,61 @@ void CodeGeneratorX86::MoveFromReturnRegister(Location target, Primitive::Type t
   }
 }
 
+// TODO: implement lambda code generation
+
+void LocationsBuilderX86::VisitInvokeLambda(HInvokeLambda* invoke) {
+  HandleInvoke(invoke);
+}
+
+void InstructionCodeGeneratorX86::VisitInvokeLambda(HInvokeLambda* invoke) {
+  DCHECK(invoke != nullptr);
+}
+
+void LocationsBuilderX86::VisitCreateLambda(HCreateLambda* create) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(create, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorX86::VisitCreateLambda(HCreateLambda* create) {
+  DCHECK(create != nullptr);
+}
+
+void LocationsBuilderX86::VisitCaptureVariable(HCaptureVariable* capture) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(capture, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorX86::VisitCaptureVariable(HCaptureVariable* capture) {
+  DCHECK(capture != nullptr);
+}
+
+void LocationsBuilderX86::VisitLiberateVariable(HLiberateVariable* liberate) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(liberate, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorX86::VisitLiberateVariable(HLiberateVariable* liberate) {
+  DCHECK(liberate != nullptr);
+}
+
+void LocationsBuilderX86::VisitBoxLambda(HBoxLambda* box) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(box, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorX86::VisitBoxLambda(HBoxLambda* box) {
+  DCHECK(box != nullptr);
+}
+
+void LocationsBuilderX86::VisitUnboxLambda(HUnboxLambda* unbox) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(unbox, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorX86::VisitUnboxLambda(HUnboxLambda* unbox) {
+  DCHECK(unbox != nullptr);
+}
+
 #undef __
 
 }  // namespace x86
