@@ -39,6 +39,7 @@ class InstructionSimplifierArm64Visitor : public HGraphVisitor {
                                     HInstruction* array,
                                     HInstruction* index,
                                     int access_size);
+
   bool TryMergeIntoUsersShifterOperand(HInstruction* instruction);
   bool TryMergeIntoShifterOperand(HBinaryOperation* binop,
                                   HInstruction* bitfield_op,
@@ -51,9 +52,14 @@ class InstructionSimplifierArm64Visitor : public HGraphVisitor {
     return TryMergeIntoShifterOperand(binop, bitfield_op, true);
   }
 
+  bool TrySimpleMultiplyAccumulatePatterns(HMul* mul,
+                                           HBinaryOperation* input_binop,
+                                           HInstruction* input_other);
+
   // HInstruction visitors, sorted alphabetically.
   void VisitArrayGet(HArrayGet* instruction) OVERRIDE;
   void VisitArraySet(HArraySet* instruction) OVERRIDE;
+  void VisitMul(HMul* instruction) OVERRIDE;
   void VisitShl(HShl* instruction) OVERRIDE;
   void VisitShr(HShr* instruction) OVERRIDE;
   void VisitTypeConversion(HTypeConversion* instruction) OVERRIDE;
