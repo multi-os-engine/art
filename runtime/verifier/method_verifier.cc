@@ -996,7 +996,8 @@ bool MethodVerifier::VerifyInstructions() {
 }
 
 bool MethodVerifier::VerifyInstruction(const Instruction* inst, uint32_t code_offset) {
-  if (UNLIKELY(inst->IsExperimental())) {
+  if (UNLIKELY(inst->IsExperimental()) &&
+      !Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kLambdas)) {
     // Experimental instructions don't yet have verifier support implementation.
     // While it is possible to use them by themselves, when we try to use stable instructions
     // with a virtual register that was created by an experimental instruction,
@@ -3209,31 +3210,31 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       break;
     }
     case Instruction::INVOKE_LAMBDA: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement invoke-lambda verification
+      if (!Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kLambdas)) {
+        Fail(VERIFY_ERROR_FORCE_INTERPRETER);
+      }
+      // TODO: implement invoke-lambda verification
       break;
     }
     case Instruction::CAPTURE_VARIABLE: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement capture-variable verification
+      if (!Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kLambdas)) {
+        Fail(VERIFY_ERROR_FORCE_INTERPRETER);
+      }
+      // TODO: implement capture-variable verification
       break;
     }
     case Instruction::CREATE_LAMBDA: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement create-lambda verification
+      if (!Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kLambdas)) {
+        Fail(VERIFY_ERROR_FORCE_INTERPRETER);
+      }
+      // TODO: implement create-lambda verification
       break;
     }
     case Instruction::LIBERATE_VARIABLE: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement liberate-variable verification
+      if (!Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kLambdas)) {
+        Fail(VERIFY_ERROR_FORCE_INTERPRETER);
+      }
+      // TODO: implement liberate-variable verification
       break;
     }
 
@@ -3245,24 +3246,23 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
     }
 
     case Instruction::BOX_LAMBDA: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement box-lambda verification
-
+      if (!Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kLambdas)) {
+        Fail(VERIFY_ERROR_FORCE_INTERPRETER);
+      }
       // Partial verification. Sets the resulting type to always be an object, which
       // is good enough for some other verification to occur without hard-failing.
       const uint32_t vreg_target_object = inst->VRegA_22x();  // box-lambda vA, vB
       const RegType& reg_type = reg_types_.JavaLangObject(need_precise_constants_);
       work_line_->SetRegisterType<LockOp::kClear>(this, vreg_target_object, reg_type);
+      // TODO: fully implement box-lambda verification
       break;
     }
 
-     case Instruction::UNBOX_LAMBDA: {
-      // Don't bother verifying, instead the interpreter will take the slow path with access checks.
-      // If the code would've normally hard-failed, then the interpreter will throw the
-      // appropriate verification errors at runtime.
-      Fail(VERIFY_ERROR_FORCE_INTERPRETER);  // TODO(iam): implement unbox-lambda verification
+    case Instruction::UNBOX_LAMBDA: {
+      if (!Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kLambdas)) {
+        Fail(VERIFY_ERROR_FORCE_INTERPRETER);
+      }
+      // TODO: implement unbox-lambda verification
       break;
     }
 

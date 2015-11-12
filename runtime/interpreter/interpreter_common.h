@@ -451,7 +451,7 @@ static inline bool DoCaptureVariable(Thread* self,
   return true;
 }
 
-// Handles capture-variable instructions.
+// Handles liberate-variable instructions.
 // Returns true on success, otherwise throws an exception and returns false.
 // (Exceptions are thrown by creating a new exception and then being put in the thread TLS)
 template<bool do_access_check>

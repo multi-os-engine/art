@@ -59,7 +59,9 @@ class HGraphBuilder : public ValueObject {
         can_use_baseline_for_string_init_(true),
         compilation_stats_(compiler_stats),
         interpreter_metadata_(interpreter_metadata),
-        dex_cache_(dex_cache) {}
+        dex_cache_(dex_cache),
+        variable_captures_(graph->GetArena()->Adapter(kArenaAllocMisc)),
+        proto_last_seen_create_(nullptr) {}
 
   // Only for unit testing.
   HGraphBuilder(HGraph* graph, Primitive::Type return_type = Primitive::kPrimInt)
@@ -80,7 +82,9 @@ class HGraphBuilder : public ValueObject {
         can_use_baseline_for_string_init_(true),
         compilation_stats_(nullptr),
         interpreter_metadata_(nullptr),
-        dex_cache_(NullHandle<mirror::DexCache>()) {}
+        dex_cache_(NullHandle<mirror::DexCache>()),
+        variable_captures_(graph->GetArena()->Adapter(kArenaAllocMisc)),
+        proto_last_seen_create_(nullptr) {}
 
   bool BuildGraph(const DexFile::CodeItem& code);
 
@@ -371,6 +375,14 @@ class HGraphBuilder : public ValueObject {
 
   // Dex cache for dex_file_.
   Handle<mirror::DexCache> dex_cache_;
+
+  // Record of variable captures prior to create-lambda instruction.
+  // TODO: this goes away with the capture-variable -> create-lambda change
+  ArenaVector<HInstruction*> variable_captures_;
+
+  // Short prototype of last seen create-lambda, such as "VJI".
+  // TODO: this goes away with addition of proto information in invoke-lambda
+  const char* proto_last_seen_create_;
 
   DISALLOW_COPY_AND_ASSIGN(HGraphBuilder);
 };
