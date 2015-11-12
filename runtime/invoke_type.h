@@ -27,6 +27,7 @@ enum InvokeType {
   kVirtual,    // <<virtual>>
   kSuper,      // <<super>>
   kInterface,  // <<interface>>
+  kLambda,     // <<lambda>>
   kMaxInvokeType = kInterface
 };
 

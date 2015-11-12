@@ -419,6 +419,8 @@ void CodeGenerator::GenerateInvokeUnresolvedRuntimeCall(HInvokeUnresolved* invok
     case kInterface:
       entrypoint = kQuickInvokeInterfaceTrampolineWithAccessCheck;
       break;
+    case kLambda:
+      return;  // TODO: fix this
   }
   InvokeRuntime(entrypoint, invoke, invoke->GetDexPc(), nullptr);
 }

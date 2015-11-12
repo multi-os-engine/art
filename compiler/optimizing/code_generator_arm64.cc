@@ -3871,6 +3871,61 @@ void InstructionCodeGeneratorARM64::VisitPackedSwitch(HPackedSwitch* switch_inst
   }
 }
 
+// TODO: implement lambda code generation
+
+void LocationsBuilderARM64::VisitInvokeLambda(HInvokeLambda* invoke) {
+  HandleInvoke(invoke);
+}
+
+void InstructionCodeGeneratorARM64::VisitInvokeLambda(HInvokeLambda* invoke) {
+  DCHECK(invoke != nullptr);
+}
+
+void LocationsBuilderARM64::VisitCreateLambda(HCreateLambda* create) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(create, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM64::VisitCreateLambda(HCreateLambda* create) {
+  DCHECK(create != nullptr);
+}
+
+void LocationsBuilderARM64::VisitCaptureVariable(HCaptureVariable* capture) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(capture, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM64::VisitCaptureVariable(HCaptureVariable* capture) {
+  DCHECK(capture != nullptr);
+}
+
+void LocationsBuilderARM64::VisitLiberateVariable(HLiberateVariable* liberate) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(liberate, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM64::VisitLiberateVariable(HLiberateVariable* liberate) {
+  DCHECK(liberate != nullptr);
+}
+
+void LocationsBuilderARM64::VisitBoxLambda(HBoxLambda* box) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(box, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM64::VisitBoxLambda(HBoxLambda* box) {
+  DCHECK(box != nullptr);
+}
+
+void LocationsBuilderARM64::VisitUnboxLambda(HUnboxLambda* unbox) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(unbox, LocationSummary::kNoCall);
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+}
+
+void InstructionCodeGeneratorARM64::VisitUnboxLambda(HUnboxLambda* unbox) {
+  DCHECK(unbox != nullptr);
+}
+
 #undef __
 #undef QUICK_ENTRY_POINT
 
