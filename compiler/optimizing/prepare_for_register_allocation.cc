@@ -50,7 +50,7 @@ void PrepareForRegisterAllocation::VisitBoundType(HBoundType* bound_type) {
 void PrepareForRegisterAllocation::VisitClinitCheck(HClinitCheck* check) {
   HLoadClass* cls = check->GetLoadClass();
   check->ReplaceWith(cls);
-  if (check->GetPrevious() == cls) {
+  if (CanMoveClinitCheck(cls, check)) {
     // Pass the initialization duty to the `HLoadClass` instruction,
     // and remove the instruction from the graph.
     cls->SetMustGenerateClinitCheck(true);
@@ -100,7 +100,7 @@ void PrepareForRegisterAllocation::VisitInvokeStaticOrDirect(HInvokeStaticOrDire
     // currently the callee is responsible for reporting parameters to the GC, the code
     // that walks the stack during `artQuickResolutionTrampoline` cannot be interrupted for GC.
     // Therefore we cannot allocate any object in that code, including loading a new class.
-    if (last_input == invoke->GetPrevious() && !invoke->IsFromInlinedInvoke()) {
+    if (CanMoveClinitCheck(last_input, invoke)) {
       last_input->SetMustGenerateClinitCheck(false);
 
       // If the load class instruction is no longer used, remove it from
@@ -110,6 +110,52 @@ void PrepareForRegisterAllocation::VisitInvokeStaticOrDirect(HInvokeStaticOrDire
       }
     }
   }
+}
+
+bool PrepareForRegisterAllocation::CanMoveClinitCheck(HInstruction* input, HInstruction* user) {
+  // Determine if input and user come from the same dalvik instruction, so that we can move
+  // the clinit check responsibility from one to another, i.e. from HClinitCheck to HLoadClass
+  // or from HLoadClass to HInvokeStaticOrDirect.
+
+  // Start with a quick dex pc check.
+  if (user->GetDexPc() != input->GetDexPc()) {
+    return false;
+  }
+
+  // Now do a thorough environment check that this is really coming from the same instruction in
+  // the same inlined graph. Unfortunately, we have to go through the whole environment chain.
+  HEnvironment* user_environment = user->GetEnvironment();
+  HEnvironment* input_environment = input->GetEnvironment();
+  while (user_environment != nullptr || input_environment != nullptr) {
+    if (user_environment == nullptr || input_environment == nullptr) {
+      // Different environment chain length. This happens when a method is called
+      // once directly and once indirectly through another inlined method.
+      return false;
+    }
+    if (user_environment->GetDexPc() != input_environment->GetDexPc() ||
+        user_environment->GetMethodIdx() != input_environment->GetMethodIdx() ||
+        &user_environment->GetDexFile() != &input_environment->GetDexFile()) {
+      return false;
+    }
+    user_environment = user_environment->GetParent();
+    input_environment = input_environment->GetParent();
+  }
+
+  // Check for code motion taking the input to a different block, just in case.
+  if (user->GetBlock() != input->GetBlock()) {
+    return false;
+  }
+
+  // In debug mode, check that we have not inserted a throwing instruction
+  // or an instruction with side effects between input and user.
+  if (kIsDebugBuild) {
+    for (HInstruction* between = input->GetNext(); between != user; between = between->GetNext()) {
+      CHECK(between != nullptr);  // User must be after input in the same block.
+      CHECK(!between->CanThrow());
+      CHECK(!between->HasSideEffects());
+    }
+  }
+  return true;
 }
 
 }  // namespace art
