@@ -136,8 +136,9 @@ test-art-target-sync: $(TEST_ART_TARGET_SYNC_DEPS)
 else
 test-art-target-sync: $(TEST_ART_TARGET_SYNC_DEPS)
 	adb root
-	adb wait-for-device push $(ANDROID_PRODUCT_OUT)/system $(ART_TEST_ANDROID_ROOT)
-	adb push $(ANDROID_PRODUCT_OUT)/data /data
+	adb shell mkdir -p $(ART_TEST_ANDROID_ROOT)
+	adb wait-for-device push $(ANDROID_PRODUCT_OUT)/system/* $(ART_TEST_ANDROID_ROOT)/
+	adb push $(ANDROID_PRODUCT_OUT)/data /
 endif
 endif
 
