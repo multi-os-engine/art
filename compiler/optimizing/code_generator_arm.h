@@ -184,6 +184,23 @@ class LocationsBuilderARM : public HGraphVisitor {
   DISALLOW_COPY_AND_ASSIGN(LocationsBuilderARM);
 };
 
+/* Combine consequent instructions in the following way:
+ * MUL ADD -> MLA
+ * MUL SUB -> MLS
+ */
+class InstructionsCombinerARM : public HGraphVisitor {
+ public:
+  explicit InstructionsCombinerARM(HGraph* graph): HGraphVisitor(graph) {}
+
+  void VisitMul(HMul* mul) OVERRIDE;
+
+ private:
+  void MulAddToMla(HMul* mul, HAdd* add);
+  void MulSubToMls(HMul* mul, HSub* sub);
+
+  DISALLOW_COPY_AND_ASSIGN(InstructionsCombinerARM);
+};
+
 class InstructionCodeGeneratorARM : public HGraphVisitor {
  public:
   InstructionCodeGeneratorARM(HGraph* graph, CodeGeneratorARM* codegen);
@@ -277,6 +294,10 @@ class CodeGeneratorARM : public CodeGenerator {
   size_t GetFloatingPointSpillSlotSize() const OVERRIDE {
     // Allocated in S registers, which are word sized.
     return kArmWordSize;
+  }
+
+  HGraphVisitor* GetInstructionsCombiner() OVERRIDE {
+    return &instructions_combiner_;
   }
 
   HGraphVisitor* GetLocationBuilder() OVERRIDE {
@@ -395,6 +416,7 @@ class CodeGeneratorARM : public CodeGenerator {
   // Relative call patch info.
   // Using ArenaDeque<> which retains element addresses on push/emplace_back().
   ArenaDeque<MethodPatchInfo<Label>> relative_call_patches_;
+  InstructionsCombinerARM instructions_combiner_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorARM);
 };

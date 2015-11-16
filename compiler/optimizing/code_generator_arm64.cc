@@ -625,7 +625,8 @@ CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
       call_patches_(MethodReferenceComparator(),
                     graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
       relative_call_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
-      pc_relative_dex_cache_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)) {
+      pc_relative_dex_cache_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
+      instructions_combiner_(graph) {
   // Save the link register (containing the return address) to mimic Quick.
   AddAllocatedRegister(LocationFrom(lr));
 }
@@ -3263,22 +3264,235 @@ void InstructionCodeGeneratorARM64::VisitMonitorOperation(HMonitorOperation* ins
   CheckEntrypointTypes<kQuickLockObject, void, mirror::Object*>();
 }
 
-void LocationsBuilderARM64::VisitMul(HMul* mul) {
+void InstructionsCombinerARM64::MulAddToMadd(HMul* mul, HAdd* add) {
+  if (add->GetType() != mul->GetResultType()) {
+    return;
+  }
+
+  HInstruction* additive = nullptr;
+  if (add->GetLeft() == mul) {
+    additive = add->GetRight();
+  } else if (add->GetRight() == mul) {
+    additive = add->GetLeft();
+  } else {
+    return;
+  }
+
+  HMadd* madd = new (GetGraph()->GetArena()) HMadd(add->GetResultType(),
+                                                   mul->GetLeft(),
+                                                   mul->GetRight(),
+                                                   additive);
+  add->GetBlock()->ReplaceAndRemoveInstructionWith(add, madd);
+  mul->GetBlock()->RemoveInstruction(mul);
+}
+
+void InstructionsCombinerARM64::MulNegToMneg(HMul* mul, HNeg* neg) {
+  if (neg->GetType() != mul->GetResultType()) {
+    return;
+  }
+  if (mul != neg->GetInput()) {
+    return;
+  }
+
+  HMneg* mneg = new (GetGraph()->GetArena()) HMneg(neg->GetResultType(),
+                                                   mul->GetLeft(),
+                                                   mul->GetRight());
+  neg->GetBlock()->ReplaceAndRemoveInstructionWith(neg, mneg);
+  mul->GetBlock()->RemoveInstruction(mul);
+}
+
+void InstructionsCombinerARM64::MulSubToMsub(HMul* mul, HSub* sub) {
+  if (sub->GetType() != mul->GetResultType()) {
+    return;
+  }
+
+  if (mul != sub->GetRight()) {
+    return;
+  }
+
+  HMsub* msub = new (GetGraph()->GetArena()) HMsub(sub->GetResultType(),
+                                                   mul->GetLeft(),
+                                                   mul->GetRight(),
+                                                   sub->GetLeft());
+  sub->GetBlock()->ReplaceAndRemoveInstructionWith(sub, msub);
+  mul->GetBlock()->RemoveInstruction(mul);
+}
+
+void InstructionsCombinerARM64::VisitMul(HMul* mul) {
+  if (mul->GetNext() == nullptr) {
+    return;
+  }
+  if (mul->HasEnvironmentUses() || !mul->GetUses().HasOnlyOneUse()) {
+    return;
+  }
+
+  if (mul->GetNext()->IsAdd()) {
+    MulAddToMadd(mul, mul->GetNext()->AsAdd());
+  } else if (mul->GetNext()->IsNeg()) {
+    MulNegToMneg(mul, mul->GetNext()->AsNeg());
+  } else if (mul->GetNext()->IsSub()) {
+    MulSubToMsub(mul, mul->GetNext()->AsSub());
+  }
+}
+
+void LocationsBuilderARM64::VisitMadd(HMadd* madd) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(mul, LocationSummary::kNoCall);
-  switch (mul->GetResultType()) {
+      new (GetGraph()->GetArena()) LocationSummary(madd,
+                                                   LocationSummary::kNoCall);
+  switch (madd->GetResultType()) {
     case Primitive::kPrimInt:
     case Primitive::kPrimLong:
       locations->SetInAt(0, Location::RequiresRegister());
       locations->SetInAt(1, Location::RequiresRegister());
-      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      locations->SetInAt(2, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(),
+                        Location::kNoOutputOverlap);
       break;
 
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble:
       locations->SetInAt(0, Location::RequiresFpuRegister());
       locations->SetInAt(1, Location::RequiresFpuRegister());
-      locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
+      locations->SetInAt(2, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister(),
+                        Location::kNoOutputOverlap);
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected madd type " << madd->GetResultType();
+  }
+}
+
+void LocationsBuilderARM64::VisitMneg(HMneg* mneg) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mneg,
+                                                   LocationSummary::kNoCall);
+  switch (mneg->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(),
+                        Location::kNoOutputOverlap);
+      break;
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister(),
+                        Location::kNoOutputOverlap);
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected mneg type " << mneg->GetResultType();
+  }
+}
+
+void LocationsBuilderARM64::VisitMsub(HMsub* msub) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(msub,
+                                                   LocationSummary::kNoCall);
+  switch (msub->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetInAt(2, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(),
+                        Location::kNoOutputOverlap);
+      break;
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
+      locations->SetInAt(2, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister(),
+                        Location::kNoOutputOverlap);
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected msub type " << msub->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM64::VisitMadd(HMadd* madd) {
+  switch (madd->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      __ Madd(OutputRegister(madd), InputRegisterAt(madd, 0),
+              InputRegisterAt(madd, 1), InputRegisterAt(madd, 2));
+      break;
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      __ Fmadd(OutputFPRegister(madd), InputFPRegisterAt(madd, 0),
+               InputFPRegisterAt(madd, 1), InputFPRegisterAt(madd, 2));
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected madd type " << madd->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM64::VisitMneg(HMneg* mneg) {
+  switch (mneg->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      __ Mneg(OutputRegister(mneg), InputRegisterAt(mneg, 0),
+              InputRegisterAt(mneg, 1));
+      break;
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      __ Fnmul(OutputFPRegister(mneg), InputFPRegisterAt(mneg, 0),
+               InputFPRegisterAt(mneg, 1));
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected mneg type " << mneg->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM64::VisitMsub(HMsub* msub) {
+  switch (msub->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      __ Msub(OutputRegister(msub), InputRegisterAt(msub, 0),
+              InputRegisterAt(msub, 1), InputRegisterAt(msub, 2));
+      break;
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      __ Fmsub(OutputFPRegister(msub), InputFPRegisterAt(msub, 0),
+               InputFPRegisterAt(msub, 1), InputFPRegisterAt(msub, 2));
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected msub type " << msub->GetResultType();
+  }
+}
+
+void LocationsBuilderARM64::VisitMul(HMul* mul) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mul,
+                                                   LocationSummary::kNoCall);
+  switch (mul->GetResultType()) {
+    case Primitive::kPrimInt:
+    case Primitive::kPrimLong:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(),
+                        Location::kNoOutputOverlap);
+      break;
+
+    case Primitive::kPrimFloat:
+    case Primitive::kPrimDouble:
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister(),
+                        Location::kNoOutputOverlap);
       break;
 
     default:
@@ -3290,12 +3504,14 @@ void InstructionCodeGeneratorARM64::VisitMul(HMul* mul) {
   switch (mul->GetResultType()) {
     case Primitive::kPrimInt:
     case Primitive::kPrimLong:
-      __ Mul(OutputRegister(mul), InputRegisterAt(mul, 0), InputRegisterAt(mul, 1));
+      __ Mul(OutputRegister(mul), InputRegisterAt(mul, 0),
+             InputRegisterAt(mul, 1));
       break;
 
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble:
-      __ Fmul(OutputFPRegister(mul), InputFPRegisterAt(mul, 0), InputFPRegisterAt(mul, 1));
+      __ Fmul(OutputFPRegister(mul), InputFPRegisterAt(mul, 0),
+              InputFPRegisterAt(mul, 1));
       break;
 
     default:

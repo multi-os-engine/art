@@ -500,7 +500,8 @@ CodeGeneratorARM::CodeGeneratorARM(HGraph* graph,
                       graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
       call_patches_(MethodReferenceComparator(),
                     graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
-      relative_call_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)) {
+      relative_call_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
+      instructions_combiner_(graph) {
   // Always save the LR register to mimic Quick.
   AddAllocatedRegister(Location::RegisterLocation(LR));
 }
@@ -2465,6 +2466,129 @@ void InstructionCodeGeneratorARM::VisitSub(HSub* sub) {
 
     default:
       LOG(FATAL) << "Unexpected sub type " << sub->GetResultType();
+  }
+}
+
+void InstructionsCombinerARM::MulAddToMla(HMul* mul, HAdd* add) {
+  if (add->GetType() != mul->GetResultType()) {
+    return;
+  }
+
+  HInstruction* additive = nullptr;
+  if (add->GetLeft() == mul) {
+    additive = add->GetRight();
+  } else if (add->GetRight() == mul) {
+    additive = add->GetLeft();
+  } else {
+    return;
+  }
+
+  HMla* mla = new (GetGraph()->GetArena()) HMla(add->GetResultType(),
+                                                mul->GetLeft(),
+                                                mul->GetRight(),
+                                                additive);
+  add->GetBlock()->ReplaceAndRemoveInstructionWith(add, mla);
+  mul->GetBlock()->RemoveInstruction(mul);
+}
+
+void InstructionsCombinerARM::MulSubToMls(HMul* mul, HSub* sub) {
+  if (sub->GetType() != mul->GetResultType()) {
+    return;
+  }
+
+  if (mul != sub->GetRight()) {
+    return;
+  }
+
+  HMls* mls = new (GetGraph()->GetArena()) HMls(sub->GetResultType(),
+                                                mul->GetLeft(),
+                                                mul->GetRight(),
+                                                sub->GetLeft());
+  sub->GetBlock()->ReplaceAndRemoveInstructionWith(sub, mls);
+  mul->GetBlock()->RemoveInstruction(mul);
+}
+
+void InstructionsCombinerARM::VisitMul(HMul* mul) {
+  if (mul->GetNext() == nullptr) {
+    return;
+  }
+  if (mul->HasEnvironmentUses() || !mul->GetUses().HasOnlyOneUse()) {
+    return;
+  }
+  if (mul->GetResultType() != Primitive::kPrimInt) {
+    return;
+  }
+
+  if (mul->GetNext()->IsAdd()) {
+    MulAddToMla(mul, mul->GetNext()->AsAdd());
+  } else if (mul->GetNext()->IsSub()) {
+    MulSubToMls(mul, mul->GetNext()->AsSub());
+  }
+}
+
+void LocationsBuilderARM::VisitMla(HMla* mla) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mla, LocationSummary::kNoCall);
+  switch (mla->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetInAt(2, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected mla type " << mla->GetResultType();
+  }
+}
+
+void LocationsBuilderARM::VisitMls(HMls* mls) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(mls, LocationSummary::kNoCall);
+  switch (mls->GetResultType()) {
+    case Primitive::kPrimInt:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetInAt(2, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected mls type " << mls->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM::VisitMla(HMla* mla) {
+  LocationSummary* locations = mla->GetLocations();
+  Location out = locations->Out();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  Location third = locations->InAt(2);
+  switch (mla->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ mla(out.AsRegister<Register>(), first.AsRegister<Register>(), second.AsRegister<Register>(),
+             third.AsRegister<Register>());
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected mla type " << mla->GetResultType();
+  }
+}
+
+void InstructionCodeGeneratorARM::VisitMls(HMls* mls) {
+  LocationSummary* locations = mls->GetLocations();
+  Location out = locations->Out();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  Location third = locations->InAt(2);
+  switch (mls->GetResultType()) {
+    case Primitive::kPrimInt:
+      __ mls(out.AsRegister<Register>(), first.AsRegister<Register>(), second.AsRegister<Register>(),
+             third.AsRegister<Register>());
+      break;
+
+    default:
+      LOG(FATAL) << "Unexpected mls type " << mls->GetResultType();
   }
 }
 

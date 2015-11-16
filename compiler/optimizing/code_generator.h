@@ -183,6 +183,8 @@ class CodeGenerator {
         + parameter->GetIndex() * kVRegSize;
   }
 
+  void CombineInstructions();
+
   virtual void Initialize() = 0;
   virtual void Finalize(CodeAllocator* allocator);
   virtual void EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches);
@@ -518,6 +520,7 @@ class CodeGenerator {
 
   virtual Location GetStackLocation(HLoadLocal* load) const = 0;
 
+  virtual HGraphVisitor* GetInstructionsCombiner() { return nullptr; }
   virtual HGraphVisitor* GetLocationBuilder() = 0;
   virtual HGraphVisitor* GetInstructionVisitor() = 0;
 

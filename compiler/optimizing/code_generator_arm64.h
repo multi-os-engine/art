@@ -265,6 +265,25 @@ class LocationsBuilderARM64 : public HGraphVisitor {
   DISALLOW_COPY_AND_ASSIGN(LocationsBuilderARM64);
 };
 
+/* Combine consequent instructions in the following way:
+ * MUL ADD -> MADD
+ * MUL SUB -> MSUB
+ * MUL NEG -> MNEG
+ */
+class InstructionsCombinerARM64 : public HGraphVisitor {
+ public:
+  explicit InstructionsCombinerARM64(HGraph* graph): HGraphVisitor(graph) {}
+
+  void VisitMul(HMul* mul) OVERRIDE;
+
+ private:
+  void MulAddToMadd(HMul* mul, HAdd* add);
+  void MulNegToMneg(HMul* mul, HNeg* neg);
+  void MulSubToMsub(HMul* mul, HSub* sub);
+
+  DISALLOW_COPY_AND_ASSIGN(InstructionsCombinerARM64);
+};
+
 class ParallelMoveResolverARM64 : public ParallelMoveResolverNoSwap {
  public:
   ParallelMoveResolverARM64(ArenaAllocator* allocator, CodeGeneratorARM64* codegen)
@@ -326,6 +345,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
     return block_entry_label->location();
   }
 
+  HGraphVisitor* GetInstructionsCombiner() OVERRIDE { return &instructions_combiner_; }
   HGraphVisitor* GetLocationBuilder() OVERRIDE { return &location_builder_; }
   HGraphVisitor* GetInstructionVisitor() OVERRIDE { return &instruction_visitor_; }
   Arm64Assembler* GetAssembler() OVERRIDE { return &assembler_; }
@@ -469,6 +489,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
   ArenaDeque<MethodPatchInfo<vixl::Label>> relative_call_patches_;
   // PC-relative DexCache access info.
   ArenaDeque<PcRelativeDexCacheAccessInfo> pc_relative_dex_cache_patches_;
+  InstructionsCombinerARM64 instructions_combiner_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorARM64);
 };

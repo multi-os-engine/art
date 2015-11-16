@@ -220,6 +220,19 @@ void CodeGenerator::GenerateSlowPaths() {
   current_slow_path_ = nullptr;
 }
 
+void CodeGenerator::CombineInstructions() {
+  HGraphVisitor* combiner = GetInstructionsCombiner();
+  if (combiner == nullptr) {
+    return;
+  }
+
+  // Does not matter in which direction we combine instructions,
+  // since it's a local optimization.
+  for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
+    combiner->VisitBasicBlock(it.Current());
+  }
+}
+
 void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) {
   is_baseline_ = is_baseline;
   HGraphVisitor* instruction_visitor = GetInstructionVisitor();

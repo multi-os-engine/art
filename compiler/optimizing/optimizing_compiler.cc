@@ -561,6 +561,8 @@ static void RunOptimizations(HGraph* graph,
   }
 
   RunArchOptimizations(driver->GetInstructionSet(), graph, stats, pass_observer);
+  // Instruction combining must be rigth before register allocation.
+  codegen->CombineInstructions();
   AllocateRegisters(graph, codegen, pass_observer);
 }
 

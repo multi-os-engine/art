@@ -1090,13 +1090,18 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(UShr, BinaryOperation)                                              \
   M(Xor, BinaryOperation)                                               \
 
-#define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)
+#define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                            \
+  M(Mla, TernaryOperation)                                              \
+  M(Mls, TernaryOperation)
 
 #ifndef ART_ENABLE_CODEGEN_arm64
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
 #else
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)                          \
-  M(Arm64IntermediateAddress, Instruction)
+  M(Arm64IntermediateAddress, Instruction)                              \
+  M(Madd, TernaryOperation)                                             \
+  M(Mneg, BinaryOperation)                                              \
+  M(Msub, TernaryOperation)
 #endif
 
 #define FOR_EACH_CONCRETE_INSTRUCTION_MIPS(M)
@@ -1128,6 +1133,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(Constant, Instruction)                                              \
   M(UnaryOperation, Instruction)                                        \
   M(BinaryOperation, Instruction)                                       \
+  M(TernaryOperation, Instruction)                                      \
   M(Invoke, Instruction)
 
 #define FORWARD_DECLARATION(type, super) class H##type;
@@ -2622,6 +2628,32 @@ class HBinaryOperation : public HExpression<2> {
   DISALLOW_COPY_AND_ASSIGN(HBinaryOperation);
 };
 
+class HTernaryOperation : public HExpression<3> {
+ public:
+  HTernaryOperation(Primitive::Type result_type,
+                    HInstruction* left,
+                    HInstruction* middle,
+                    HInstruction* right,
+                    uint32_t dex_pc = kNoDexPc)
+      : HExpression(result_type, SideEffects::None(), dex_pc) {
+    SetRawInputAt(0, left);
+    SetRawInputAt(1, middle);
+    SetRawInputAt(2, right);
+  }
+
+  HInstruction* GetLeft() const { return InputAt(0); }
+  HInstruction* GetMiddle() const { return InputAt(1); }
+  HInstruction* GetRight() const { return InputAt(2); }
+  Primitive::Type GetResultType() const { return GetType(); }
+
+  bool CanBeMoved() const OVERRIDE { return true; }
+
+  DECLARE_INSTRUCTION(TernaryOperation);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HTernaryOperation);
+};
+
 // The comparison bias applies for floating point operations and indicates how NaN
 // comparisons are treated:
 enum class ComparisonBias {
@@ -3820,6 +3852,71 @@ class HMul : public HBinaryOperation {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HMul);
+};
+
+class HMadd : public HTernaryOperation {
+ public:
+  HMadd(Primitive::Type result_type, HInstruction* left, HInstruction* middle, HInstruction* right)
+        : HTernaryOperation(result_type, left, middle, right) {}
+
+  DECLARE_INSTRUCTION(Madd);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HMadd);
+};
+
+class HMla : public HTernaryOperation {
+ public:
+  HMla(Primitive::Type result_type, HInstruction* left, HInstruction* middle, HInstruction* right)
+       : HTernaryOperation(result_type, left, middle, right) {}
+
+  DECLARE_INSTRUCTION(Mla);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HMla);
+};
+
+class HMneg : public HBinaryOperation {
+ public:
+  HMneg(Primitive::Type result_type, HInstruction* left, HInstruction* right)
+        : HBinaryOperation(result_type, left, right) {}
+
+  DECLARE_INSTRUCTION(Mneg);
+  template <typename T> T Compute(T x, T y) const { return -(x * y); }
+
+  HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(x->GetValue(), y->GetValue()), GetDexPc());
+  }
+  HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetLongConstant(
+        Compute(x->GetValue(), y->GetValue()), GetDexPc());
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HMneg);
+};
+
+class HMsub : public HTernaryOperation {
+ public:
+  HMsub(Primitive::Type result_type, HInstruction* left, HInstruction* middle, HInstruction* right)
+        : HTernaryOperation(result_type, left, middle, right) {}
+
+  DECLARE_INSTRUCTION(Msub);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HMsub);
+};
+
+class HMls : public HTernaryOperation {
+ public:
+  HMls(Primitive::Type result_type, HInstruction* left, HInstruction* middle, HInstruction* right)
+       : HTernaryOperation(result_type, left, middle, right) {}
+
+  DECLARE_INSTRUCTION(Mls);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HMls);
 };
 
 class HDiv : public HBinaryOperation {

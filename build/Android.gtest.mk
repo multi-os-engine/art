@@ -257,6 +257,7 @@ COMPILER_GTEST_COMMON_SRC_FILES := \
   compiler/optimizing/gvn_test.cc \
   compiler/optimizing/induction_var_analysis_test.cc \
   compiler/optimizing/induction_var_range_test.cc \
+  compiler/optimizing/instruction_combiner_test.cc \
   compiler/optimizing/licm_test.cc \
   compiler/optimizing/live_interval_test.cc \
   compiler/optimizing/nodes_test.cc \
