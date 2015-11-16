@@ -500,6 +500,17 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         StartAttributeStream("exact") << std::boolalpha << info.IsExact() << std::noboolalpha;
       } else if (instruction->IsLoadClass()) {
         StartAttributeStream("klass") << "unresolved";
+      } else if (instruction->IsNullConstant()) {
+        // NullConstants may be added to the graph during other passes that happen between
+        // ReferenceTypePropagation and Inliner (e.g. InstructionSimplifier). If the inliner
+        // doesn't run or doesn't inline anything, the NullConstants remains untyped.
+        // So we should check NullConstants for validity only after a reference type propagation.
+        //
+        // Note: The infrastructure to properly type NullConstants everywhere is to complex to add
+        // for the benefits.
+        StartAttributeStream("klass") << "not_set";
+        DCHECK(!is_after_pass_ || IsPass(HInliner::kInlinerPassName))
+            << " Expected a valid rti after reference type propagation";
       } else {
         DCHECK(!is_after_pass_)
             << "Expected a valid rti after reference type propagation";
