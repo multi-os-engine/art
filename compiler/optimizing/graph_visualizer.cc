@@ -501,7 +501,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       } else if (instruction->IsLoadClass()) {
         StartAttributeStream("klass") << "unresolved";
       } else {
-        DCHECK(!is_after_pass_)
+        DCHECK(!is_after_pass_ || instruction->IsNullConstant())
             << "Expected a valid rti after reference type propagation";
       }
     }
