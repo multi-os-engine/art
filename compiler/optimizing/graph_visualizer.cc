@@ -501,7 +501,14 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       } else if (instruction->IsLoadClass()) {
         StartAttributeStream("klass") << "unresolved";
       } else {
-        DCHECK(!is_after_pass_)
+        // NullConstants may be added to the graph during other passes that happen between
+        // ReferenceTypePropagation and Inliner (e.g. InstructionSimplifier). If the inliner
+        // doesn't run or doesn't inline anything, the NullConstants remains untyped.
+        //
+        // Note: The infrastructure to properly type NullConstants everywhere is to complex to add
+        // for the benefits.
+        DCHECK(!is_after_pass_ ||
+            (IsPass(HInliner::kInlinerPassName) && instruction->IsNullConstant()))
             << "Expected a valid rti after reference type propagation";
       }
     }
