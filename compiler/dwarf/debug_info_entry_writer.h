@@ -112,6 +112,12 @@ class DebugInfoEntryWriter FINAL : private Writer<Vector> {
     this->PushData(ptr, num_bytes);
   }
 
+  void WriteExprLoc(Attribute attrib, const void* ptr, size_t num_bytes) {
+    AddAbbrevAttribute(attrib, DW_FORM_exprloc);
+    this->PushUleb128(dchecked_integral_cast<uint32_t>(num_bytes));
+    this->PushData(ptr, num_bytes);
+  }
+
   void WriteData1(Attribute attrib, uint8_t value) {
     AddAbbrevAttribute(attrib, DW_FORM_data1);
     this->PushUint8(value);
@@ -130,6 +136,12 @@ class DebugInfoEntryWriter FINAL : private Writer<Vector> {
   void WriteData8(Attribute attrib, uint64_t value) {
     AddAbbrevAttribute(attrib, DW_FORM_data8);
     this->PushUint64(value);
+  }
+
+  // NB: New in DWARF4. Previous versions use DW_FORM_data4 or DW_FORM_data8.
+  void WriteSecOffset(Attribute attrib, uint32_t offset) {
+    AddAbbrevAttribute(attrib, DW_FORM_sec_offset);
+    this->PushUint32(offset);
   }
 
   void WriteSdata(Attribute attrib, int value) {
