@@ -27,6 +27,7 @@
 #include "elf_builder.h"
 #include "oat_writer.h"
 #include "utils.h"
+#include "stack_map.h"
 
 namespace art {
 namespace dwarf {
@@ -291,6 +292,10 @@ class DebugInfoWriter {
         const DexFile::TypeList* dex_params = dex->GetProtoParameters(dex_proto);
         const char* dex_class_desc = dex->GetMethodDeclaringClassDescriptor(dex_method);
 
+        bool is_optiming = mi->compiled_method_->GetQuickCode().size() > 0 &&
+                           mi->compiled_method_->GetGcMap().size() == 0 &&
+                           mi->code_item_ != nullptr;
+
         // Enclose the method in correct class definition.
         if (last_dex_class_desc != dex_class_desc) {
           if (last_dex_class_desc != nullptr) {
@@ -320,16 +325,51 @@ class DebugInfoWriter {
         info_.WriteStrp(DW_AT_name, dex->GetMethodName(dex_method), debug_str);
         info_.WriteAddr(DW_AT_low_pc, text_address + mi->low_pc_);
         info_.WriteAddr(DW_AT_high_pc, text_address + mi->high_pc_);
+        uint8_t frame_base[] = { DW_OP_call_frame_cfa };
+        info_.WriteExprLoc(DW_AT_frame_base, &frame_base, sizeof(frame_base));
         WriteLazyType(dex->GetReturnTypeDescriptor(dex_proto));
         if (dex_params != nullptr) {
+          uint32_t vreg = !is_optiming ? 0 :
+            mi->code_item_->registers_size_ - mi->code_item_->ins_size_;
+          if ((mi->access_flags_ & kAccStatic) == 0) {
+            vreg++;
+          }
           for (uint32_t i = 0; i < dex_params->Size(); ++i) {
             info_.StartTag(DW_TAG_formal_parameter);
             // Parameter names may not be always available.
             if (i < param_names.size() && param_names[i] != nullptr) {
               info_.WriteStrp(DW_AT_name, param_names[i], debug_str);
             }
-            WriteLazyType(dex->StringByTypeIdx(dex_params->GetTypeItem(i).type_idx_));
+            // Write the type.
+            const char* type_desc = dex->StringByTypeIdx(dex_params->GetTypeItem(i).type_idx_);
+            WriteLazyType(type_desc);
+            // Write the stack location of the parameter.
+            if (is_optiming) {
+              const void* raw_code_info = mi->compiled_method_->GetVmapTable().data();
+              CHECK(raw_code_info != nullptr);
+              CodeInfo code_info(raw_code_info);
+              StackMapEncoding encoding = code_info.ExtractEncoding();
+              for (uint32_t s = 0; s < code_info.GetNumberOfStackMaps(); s++) {
+                StackMap stack_map = code_info.GetStackMapAt(s, encoding);
+                if (stack_map.IsValid() && stack_map.HasDexRegisterMap(encoding)) {
+                  DexRegisterMap dex_register_map = code_info.GetDexRegisterMapOf(
+                      stack_map, encoding, mi->code_item_->registers_size_);
+                  DexRegisterLocation reg_loc = dex_register_map.GetDexRegisterLocation(
+                      vreg, mi->code_item_->registers_size_, code_info, encoding);
+                  if (reg_loc.GetKind() == DexRegisterLocation::Kind::kInStack) {
+                    uint8_t location[8] = { DW_OP_fbreg };
+                    uint8_t* end = EncodeSignedLeb128(&location[1], reg_loc.GetValue());
+                    info_.WriteExprLoc(DW_AT_location, &location[0], end - location);
+                    break;
+                  }
+                }
+              }
+            }
+            vreg += type_desc[0] == 'D' || type_desc[0] == 'J' ? 2 : 1;
             info_.EndTag();
+          }
+          if (is_optiming) {
+            CHECK_EQ(vreg, mi->code_item_->registers_size_);
           }
         }
         info_.EndTag();
@@ -352,8 +392,10 @@ class DebugInfoWriter {
     // to be enclosed in the right set of namespaces. Therefore we
     // just define all types lazily at the end of compilation unit.
     void WriteLazyType(const char* type_descriptor) {
-      lazy_types_.push_back(std::make_pair(info_.size(), type_descriptor));
-      info_.WriteRef4(DW_AT_type, 0);
+      if (type_descriptor != nullptr && type_descriptor[0] != 'V') {
+        lazy_types_.push_back(std::make_pair(info_.size(), type_descriptor));
+        info_.WriteRef4(DW_AT_type, 0);
+      }
     }
 
     void FinishLazyTypes() {
@@ -393,22 +435,60 @@ class DebugInfoWriter {
       } else {
         // Primitive types.
         const char* name;
+        uint32_t encoding;
+        uint32_t byte_size;
         switch (*desc) {
-        case 'B': name = "byte"; break;
-        case 'C': name = "char"; break;
-        case 'D': name = "double"; break;
-        case 'F': name = "float"; break;
-        case 'I': name = "int"; break;
-        case 'J': name = "long"; break;
-        case 'S': name = "short"; break;
-        case 'Z': name = "boolean"; break;
-        case 'V': name = "void"; break;
+        case 'B':
+          name = "byte";
+          encoding = DW_ATE_signed;
+          byte_size = 4;
+          break;
+        case 'C':
+          name = "char";
+          encoding = DW_ATE_unsigned_char;
+          byte_size = 4;
+          break;
+        case 'D':
+          name = "double";
+          encoding = DW_ATE_float;
+          byte_size = 8;
+          break;
+        case 'F':
+          name = "float";
+          encoding = DW_ATE_float;
+          byte_size = 4;
+          break;
+        case 'I':
+          name = "int";
+          encoding = DW_ATE_signed;
+          byte_size = 4;
+          break;
+        case 'J':
+          name = "long";
+          encoding = DW_ATE_signed;
+          byte_size = 8;
+          break;
+        case 'S':
+          name = "short";
+          encoding = DW_ATE_signed;
+          byte_size = 4;
+          break;
+        case 'Z':
+          name = "boolean";
+          encoding = DW_ATE_boolean;
+          byte_size = 4;
+          break;
+        case 'V':
+          LOG(FATAL) << "Void type should not be encoded";
+          UNREACHABLE();
         default:
           LOG(FATAL) << "Unknown dex type descriptor: " << desc;
           UNREACHABLE();
         }
         offset = info_.StartTag(DW_TAG_base_type);
         info_.WriteStrp(DW_AT_name, name, debug_str);
+        info_.WriteData1(DW_AT_encoding, encoding);
+        info_.WriteData1(DW_AT_byte_size, byte_size);
         info_.EndTag();
       }
 

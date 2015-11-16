@@ -113,6 +113,12 @@ class DebugInfoEntryWriter FINAL : private Writer<Vector> {
     this->PushData(ptr, num_bytes);
   }
 
+  void WriteExprLoc(Attribute attrib, const void* ptr, int num_bytes) {
+    AddAbbrevAttribute(attrib, DW_FORM_exprloc);
+    this->PushUleb128(num_bytes);
+    this->PushData(ptr, num_bytes);
+  }
+
   void WriteData1(Attribute attrib, uint8_t value) {
     AddAbbrevAttribute(attrib, DW_FORM_data1);
     this->PushUint8(value);
