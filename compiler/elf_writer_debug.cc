@@ -29,9 +29,48 @@
 #include "elf_builder.h"
 #include "oat_writer.h"
 #include "utils.h"
+#include "stack_map.h"
 
 namespace art {
 namespace dwarf {
+
+static Reg GetDwarfCoreReg(InstructionSet isa, int machine_reg) {
+  switch (isa) {
+    case kArm:
+    case kThumb2:
+      return Reg::ArmCore(machine_reg);
+    case kArm64:
+      return Reg::Arm64Core(machine_reg);
+    case kX86:
+      return Reg::X86Core(machine_reg);
+    case kX86_64:
+      return Reg::X86_64Core(machine_reg);
+    case kMips:
+      return Reg::MipsCore(machine_reg);
+    case kMips64:
+      return Reg::Mips64Core(machine_reg);
+    default:
+      LOG(FATAL) << "Unknown instruction set: " << isa;
+      UNREACHABLE();
+  }
+}
+
+static Reg GetDwarfFpReg(InstructionSet isa, int machine_reg) {
+  switch (isa) {
+    case kArm:
+    case kThumb2:
+      return Reg::ArmFp(machine_reg);
+    case kArm64:
+      return Reg::Arm64Fp(machine_reg);
+    case kX86:
+      return Reg::X86Fp(machine_reg);
+    case kX86_64:
+      return Reg::X86_64Fp(machine_reg);
+    default:
+      LOG(FATAL) << "Unknown instruction set: " << isa;
+      UNREACHABLE();
+  }
+}
 
 static void WriteCIE(InstructionSet isa,
                      CFIFormat format,
@@ -280,8 +319,9 @@ class DebugInfoWriter {
       info_.WriteStrp(DW_AT_producer, owner_->WriteString("Android dex2oat"));
       info_.WriteData1(DW_AT_language, DW_LANG_Java);
       info_.WriteAddr(DW_AT_low_pc, text_address + compilation_unit.low_pc_);
-      info_.WriteAddr(DW_AT_high_pc, text_address + compilation_unit.high_pc_);
-      info_.WriteData4(DW_AT_stmt_list, compilation_unit.debug_line_offset_);
+      // DW_AT_high_pc can be size since DWARF4.
+      info_.WriteUdata(DW_AT_high_pc, compilation_unit.high_pc_ - compilation_unit.low_pc_);
+      info_.WriteSecOffset(DW_AT_stmt_list, compilation_unit.debug_line_offset_);
 
       const char* last_dex_class_desc = nullptr;
       for (auto mi : compilation_unit.methods_) {
@@ -321,17 +361,39 @@ class DebugInfoWriter {
         info_.StartTag(DW_TAG_subprogram);
         WriteName(dex->GetMethodName(dex_method));
         info_.WriteAddr(DW_AT_low_pc, text_address + mi->low_pc_);
-        info_.WriteAddr(DW_AT_high_pc, text_address + mi->high_pc_);
+        // DW_AT_high_pc can be size since DWARF4.
+        info_.WriteUdata(DW_AT_high_pc, mi->high_pc_ - mi->low_pc_);
+        uint8_t frame_base[] = { DW_OP_call_frame_cfa };
+        info_.WriteExprLoc(DW_AT_frame_base, &frame_base, sizeof(frame_base));
         WriteLazyType(dex->GetReturnTypeDescriptor(dex_proto));
         if (dex_params != nullptr) {
+          uint32_t vreg = mi->code_item_ == nullptr ? 0 :
+              mi->code_item_->registers_size_ - mi->code_item_->ins_size_;
+          if ((mi->access_flags_ & kAccStatic) == 0) {
+            info_.StartTag(DW_TAG_formal_parameter);
+            WriteName("this");
+            info_.WriteFlag(DW_AT_artificial, true);
+            WriteLazyType(dex_class_desc);
+            WriteRegLocation(mi, vreg, compilation_unit.low_pc_);
+            vreg++;
+            info_.EndTag();
+          }
           for (uint32_t i = 0; i < dex_params->Size(); ++i) {
             info_.StartTag(DW_TAG_formal_parameter);
             // Parameter names may not be always available.
             if (i < param_names.size() && param_names[i] != nullptr) {
               WriteName(param_names[i]);
             }
-            WriteLazyType(dex->StringByTypeIdx(dex_params->GetTypeItem(i).type_idx_));
+            // Write the type.
+            const char* type_desc = dex->StringByTypeIdx(dex_params->GetTypeItem(i).type_idx_);
+            WriteLazyType(type_desc);
+            // Write the stack location of the parameter.
+            WriteRegLocation(mi, vreg, compilation_unit.low_pc_);
+            vreg += type_desc[0] == 'D' || type_desc[0] == 'J' ? 2 : 1;
             info_.EndTag();
+          }
+          if (mi->code_item_ != nullptr) {
+            CHECK_EQ(vreg, mi->code_item_->registers_size_);
           }
         }
         info_.EndTag();
@@ -350,6 +412,144 @@ class DebugInfoWriter {
           owner_->debug_abbrev_.Insert(debug_abbrev_.data(), debug_abbrev_.size());
       WriteDebugInfoCU(debug_abbrev_offset, info_, offset, &buffer, &owner_->debug_info_patches_);
       owner_->builder_->GetDebugInfo()->WriteFully(buffer.data(), buffer.size());
+    }
+
+    // Write table into .debug_loc which describes location of dex register.
+    // The dex register might be valid only at some points and it might
+    // move between machine registers and stack.
+    void WriteRegLocation(const OatWriter::DebugInfo* method_info, uint16_t vreg,
+                          uint32_t compilation_unit_low_pc) {
+      bool is_optiming = method_info->compiled_method_->GetQuickCode().size() > 0 &&
+                         method_info->compiled_method_->GetVmapTable().size() > 0 &&
+                         method_info->compiled_method_->GetGcMap().size() == 0 &&
+                         method_info->code_item_ != nullptr;
+      if (!is_optiming) {
+        return;
+      }
+
+      Writer<> writer(&owner_->debug_loc_);
+      info_.WriteSecOffset(DW_AT_location, writer.size());
+
+      const InstructionSet isa = owner_->builder_->GetIsa();
+      const bool is64bit = Is64BitInstructionSet(isa);
+      const CodeInfo code_info(method_info->compiled_method_->GetVmapTable().data());
+      const StackMapEncoding encoding = code_info.ExtractEncoding();
+      DexRegisterLocation last_reg_loc = DexRegisterLocation::None();
+      size_t offset_of_last_end_address = 0;
+      for (uint32_t s = 0; s < code_info.GetNumberOfStackMaps(); s++) {
+        StackMap stack_map = code_info.GetStackMapAt(s, encoding);
+        DCHECK(stack_map.IsValid());
+
+        // Find the location of the dex register.
+        DexRegisterLocation reg_loc = DexRegisterLocation::None();
+        if (stack_map.HasDexRegisterMap(encoding)) {
+          DexRegisterMap dex_register_map = code_info.GetDexRegisterMapOf(
+              stack_map, encoding, method_info->code_item_->registers_size_);
+          reg_loc = dex_register_map.GetDexRegisterLocation(
+              vreg, method_info->code_item_->registers_size_, code_info, encoding);
+        }
+        if (last_reg_loc == reg_loc) {
+          // Keep going until we see a change in location.
+          continue;
+        }
+        last_reg_loc = reg_loc;
+
+        // Translate dex register location to DWARF.
+        int32_t value = reg_loc.GetValue();
+        uint8_t buffer[32];
+        uint8_t* pos = buffer;
+        switch (reg_loc.GetKind()) {
+          case DexRegisterLocation::Kind::kInStack:
+          case DexRegisterLocation::Kind::kInStackLargeOffset: {
+            // The stack offset is relative to SP. Make it relative to CFA.
+            value -= method_info->compiled_method_->GetFrameSizeInBytes();
+            *(pos++) = DW_OP_fbreg;
+            pos = EncodeSignedLeb128(pos, value);
+            break;
+          }
+          case DexRegisterLocation::Kind::kInRegister:
+            *(pos++) = DW_OP_regx;
+            pos = EncodeUnsignedLeb128(pos, GetDwarfCoreReg(isa, value).num());
+            break;
+          case DexRegisterLocation::Kind::kInRegisterHigh:
+            // Load the value of the register.
+            *(pos++) = DW_OP_bregx;
+            pos = EncodeUnsignedLeb128(pos, GetDwarfCoreReg(isa, value).num());
+            pos = EncodeSignedLeb128(pos, 0);
+            // Shift right by 32 bits.
+            *(pos++) = DW_OP_const1u;
+            *(pos++) = 32;
+            *(pos++) = DW_OP_shr;
+            // Return it.
+            *(pos++) = DW_OP_stack_value;
+            break;
+          case DexRegisterLocation::Kind::kInFpuRegister:
+            *(pos++) = DW_OP_regx;
+            pos = EncodeUnsignedLeb128(pos, GetDwarfFpReg(isa, value).num());
+            break;
+          case DexRegisterLocation::Kind::kInFpuRegisterHigh:
+            // Load the value of the register.
+            *(pos++) = DW_OP_bregx;
+            pos = EncodeUnsignedLeb128(pos, GetDwarfFpReg(isa, value).num());
+            pos = EncodeSignedLeb128(pos, 0);
+            // Shift right by 32 bits.
+            *(pos++) = DW_OP_const1u;
+            *(pos++) = 32;
+            *(pos++) = DW_OP_shr;
+            // Return it.
+            *(pos++) = DW_OP_stack_value;
+            break;
+          case DexRegisterLocation::Kind::kConstant:
+          case DexRegisterLocation::Kind::kConstantLargeValue:
+            *(pos++) = DW_OP_consts;
+            pos = EncodeSignedLeb128(pos, value);
+            *(pos++) = DW_OP_stack_value;
+            break;
+          case DexRegisterLocation::Kind::kNone:
+            break;
+          default:
+            LOG(FATAL) << "Unknown register location kind: "
+                       << DexRegisterLocation::PrettyDescriptor(reg_loc.GetKind());
+            UNREACHABLE();
+        }
+
+        // Write end address for previous entry.
+        const uint32_t pc = method_info->low_pc_ + stack_map.GetNativePcOffset(encoding);
+        if (offset_of_last_end_address != 0) {
+          if (is64bit) {
+            writer.UpdateUint64(offset_of_last_end_address, pc - compilation_unit_low_pc);
+          } else {
+            writer.UpdateUint32(offset_of_last_end_address, pc - compilation_unit_low_pc);
+          }
+        }
+        offset_of_last_end_address = 0;
+
+        if (pos > buffer) {
+          // Write start/end address.
+          if (is64bit) {
+            writer.PushUint64(pc - compilation_unit_low_pc);
+            offset_of_last_end_address = writer.size();
+            writer.PushUint64(method_info->high_pc_ - compilation_unit_low_pc);
+          } else {
+            writer.PushUint32(pc - compilation_unit_low_pc);
+            offset_of_last_end_address = writer.size();
+            writer.PushUint32(method_info->high_pc_ - compilation_unit_low_pc);
+          }
+          // Write the expression.
+          writer.PushUint16(pos - buffer);
+          writer.PushData(buffer, pos - buffer);
+        } else {
+          // Otherwise leave the address range undefined.
+        }
+      }
+      // Write end-of-list entry.
+      if (is64bit) {
+        writer.PushUint64(0);
+        writer.PushUint64(0);
+      } else {
+        writer.PushUint32(0);
+        writer.PushUint32(0);
+      }
     }
 
     // Some types are difficult to define as we go since they need
@@ -398,22 +598,60 @@ class DebugInfoWriter {
       } else {
         // Primitive types.
         const char* name;
+        uint32_t encoding;
+        uint32_t byte_size;
         switch (*desc) {
-        case 'B': name = "byte"; break;
-        case 'C': name = "char"; break;
-        case 'D': name = "double"; break;
-        case 'F': name = "float"; break;
-        case 'I': name = "int"; break;
-        case 'J': name = "long"; break;
-        case 'S': name = "short"; break;
-        case 'Z': name = "boolean"; break;
-        case 'V': name = "void"; break;
+        case 'B':
+          name = "byte";
+          encoding = DW_ATE_signed;
+          byte_size = 1;
+          break;
+        case 'C':
+          name = "char";
+          encoding = DW_ATE_UTF;
+          byte_size = 2;
+          break;
+        case 'D':
+          name = "double";
+          encoding = DW_ATE_float;
+          byte_size = 8;
+          break;
+        case 'F':
+          name = "float";
+          encoding = DW_ATE_float;
+          byte_size = 4;
+          break;
+        case 'I':
+          name = "int";
+          encoding = DW_ATE_signed;
+          byte_size = 4;
+          break;
+        case 'J':
+          name = "long";
+          encoding = DW_ATE_signed;
+          byte_size = 8;
+          break;
+        case 'S':
+          name = "short";
+          encoding = DW_ATE_signed;
+          byte_size = 2;
+          break;
+        case 'Z':
+          name = "boolean";
+          encoding = DW_ATE_boolean;
+          byte_size = 1;
+          break;
+        case 'V':
+          LOG(FATAL) << "Void type should not be encoded";
+          UNREACHABLE();
         default:
           LOG(FATAL) << "Unknown dex type descriptor: " << desc;
           UNREACHABLE();
         }
         offset = info_.StartTag(DW_TAG_base_type);
         WriteName(name);
+        info_.WriteData1(DW_AT_encoding, encoding);
+        info_.WriteData1(DW_AT_byte_size, byte_size);
         info_.EndTag();
       }
 
@@ -480,6 +718,7 @@ class DebugInfoWriter {
     builder_->WritePatches(".debug_info.oat_patches", &debug_info_patches_);
     builder_->WriteSection(".debug_abbrev", &debug_abbrev_.Data());
     builder_->WriteSection(".debug_str", &debug_str_.Data());
+    builder_->WriteSection(".debug_loc", &debug_loc_);
   }
 
  private:
@@ -491,6 +730,7 @@ class DebugInfoWriter {
   std::vector<uintptr_t> debug_info_patches_;
   DedupVector debug_abbrev_;
   DedupVector debug_str_;
+  std::vector<uint8_t> debug_loc_;
 
   std::unordered_set<const char*> defined_dex_classes_;  // For CHECKs only.
 };
