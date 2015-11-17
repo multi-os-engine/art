@@ -1598,13 +1598,65 @@ void RegisterAllocator::ConnectSiblings(LiveInterval* interval) {
       && current->HasRegister()
       // Currently, we spill unconditionnally the current method in the code generators.
       && !interval->GetDefinedBy()->IsCurrentMethod()) {
-    // We spill eagerly, so move must be at definition.
-    InsertMoveAfter(interval->GetDefinedBy(),
-                    interval->ToLocation(),
-                    interval->NeedsTwoSpillSlots()
-                        ? Location::DoubleStackSlot(interval->GetParent()->GetSpillSlot())
-                        : Location::StackSlot(interval->GetParent()->GetSpillSlot()));
+    bool spilled = false;
+    HInstruction* insn = interval->GetDefinedBy();
+    HLoopInformation* loop_info = insn->GetBlock()->GetLoopInformation();
+    // If we are in loop body try to spill outside the loop.
+    if (loop_info != nullptr) {
+      size_t range_end_position = current->GetFirstRange()->GetEnd() / 2;
+      HInstruction* range_end_insn = liveness_.GetInstructionFromPosition(range_end_position);
+      // If we are at block boundary lets get previous block.
+      if (range_end_insn == nullptr) {
+       range_end_insn = liveness_.GetInstructionFromPosition(range_end_position - 1);
+       DCHECK(range_end_insn != nullptr);
+      }
+      HBasicBlock* target_block = range_end_insn->GetBlock();
+      HLoopInformation* target_loop_info = target_block->GetLoopInformation();
+      if (target_loop_info != loop_info) {
+        bool is_safe = true;
+        // Check if all exit blocks lie in interval. Bail if not.
+        ArenaVector<HBasicBlock*> exit_blocks(allocator_->Adapter(kArenaAllocMisc));
+        for (HBlocksInLoopIterator bb_it(*loop_info); !bb_it.Done(); bb_it.Advance()) {
+          HBasicBlock* bb = bb_it.Current();
+          for (size_t idx = 0; idx < bb->GetSuccessors().size(); ++idx) {
+            HBasicBlock* successor = bb->GetSuccessors()[idx];
+            if (!loop_info->Contains(*successor)) {
+              size_t successor_position = successor->GetFirstInstruction()->GetLifetimePosition();
+              if (successor_position > current->GetStart() &&
+                  successor_position < current->GetFirstRange()->GetEnd()) {
+                exit_blocks.push_back(successor);
+              } else {
+                is_safe = false;
+                break;
+              }
+            }
+          }
+          if (!is_safe) {
+            break;
+          }
+        }
+        if (is_safe) {
+          spilled = true;
+          Location dest = interval->NeedsTwoSpillSlots()
+                              ? Location::DoubleStackSlot(interval->GetParent()->GetSpillSlot())
+                              : Location::StackSlot(interval->GetParent()->GetSpillSlot());
+          for (size_t i = 0; i < exit_blocks.size(); i++) {
+            InsertParallelMoveAtEntryOf(exit_blocks[i], insn, interval->ToLocation(), dest);
+          }
+        }
+      }
+    }
+
+    if (!spilled) {
+      // Otherwise we spill eagerly, so move must be at definition.
+      InsertMoveAfter(insn,
+                      interval->ToLocation(),
+                      interval->NeedsTwoSpillSlots()
+                          ? Location::DoubleStackSlot(interval->GetParent()->GetSpillSlot())
+                          : Location::StackSlot(interval->GetParent()->GetSpillSlot()));
+    }
   }
+
   UsePosition* use = current->GetFirstUse();
   UsePosition* env_use = current->GetFirstEnvironmentUse();
 
