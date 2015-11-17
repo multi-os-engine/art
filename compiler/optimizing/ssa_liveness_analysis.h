@@ -391,6 +391,20 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
   }
   int GetSpillSlot() const { return spill_slot_; }
 
+  LiveInterval* GetPrevSibling() {
+    LiveInterval* current = GetParent();
+    if (!IsParent()) {
+      while (current->GetNextSibling() != this) {
+        current = current->GetNextSibling();
+      }
+    }
+    return current;
+  }
+
+  void AddSibling(LiveInterval* sibling) {
+    next_sibling_ = sibling;
+  }
+
   void SetFrom(size_t from) {
     if (first_range_ != nullptr) {
       first_range_->start_ = from;
