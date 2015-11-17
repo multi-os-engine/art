@@ -372,9 +372,22 @@ void InstructionSimplifierVisitor::VisitEqual(HEqual* equal) {
         block->RemoveInstruction(equal);
         RecordSimplification();
       } else if (input_const->AsIntConstant()->IsZero()) {
-        // Replace (bool_value == false) with !bool_value
-        block->ReplaceAndRemoveInstructionWith(
-            equal, new (block->GetGraph()->GetArena()) HBooleanNot(input_value));
+        // Can we rewrite a condition?
+        HInstruction* replacement;
+        bool try_remove_input_value = false;
+        if (input_value->IsCondition() &&
+            !Primitive::IsFloatingPointType(input_value->InputAt(0)->GetType())) {
+          // Replace non-FP (a OP b) != 0 with a OPPOSITE_OP b
+          replacement = GetOppositeCondition(input_value);
+          try_remove_input_value = true;
+        } else {
+          // Replace (bool_value == false) with !bool_value
+          replacement = new (block->GetGraph()->GetArena()) HBooleanNot(input_value);
+        }
+        block->ReplaceAndRemoveInstructionWith(equal, replacement);
+        if (try_remove_input_value && !input_value->HasUses()) {
+          input_value->GetBlock()->RemoveInstruction(input_value);
+        }
         RecordSimplification();
       } else {
         // Replace (bool_value == integer_not_zero_nor_one_constant) with false
