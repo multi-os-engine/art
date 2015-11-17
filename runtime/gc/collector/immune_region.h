@@ -44,7 +44,7 @@ class ImmuneRegion {
       REQUIRES(Locks::heap_bitmap_lock_);
   bool ContainsSpace(const space::ContinuousSpace* space) const;
   // Returns true if an object is inside of the immune region (assumed to be marked).
-  bool ContainsObject(const mirror::Object* obj) const ALWAYS_INLINE {
+  ALWAYS_INLINE bool ContainsObject(const mirror::Object* obj) const {
     // Note: Relies on integer underflow behavior.
     return reinterpret_cast<uintptr_t>(obj) - reinterpret_cast<uintptr_t>(begin_) < size_;
   }
@@ -57,10 +57,10 @@ class ImmuneRegion {
     UpdateSize();
   }
 
-  mirror::Object* Begin() {
+  mirror::Object* Begin() const {
     return begin_;
   }
-  mirror::Object* End() {
+  mirror::Object* End() const {
     return end_;
   }
 
