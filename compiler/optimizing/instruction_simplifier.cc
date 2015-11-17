@@ -372,9 +372,7 @@ void InstructionSimplifierVisitor::VisitEqual(HEqual* equal) {
         block->RemoveInstruction(equal);
         RecordSimplification();
       } else if (input_const->AsIntConstant()->IsZero()) {
-        // Replace (bool_value == false) with !bool_value
-        block->ReplaceAndRemoveInstructionWith(
-            equal, new (block->GetGraph()->GetArena()) HBooleanNot(input_value));
+        equal->ReplaceWith(HGraph::InsertOppositeCondition(input_value, equal));
         RecordSimplification();
       } else {
         // Replace (bool_value == integer_not_zero_nor_one_constant) with false
@@ -399,9 +397,7 @@ void InstructionSimplifierVisitor::VisitNotEqual(HNotEqual* not_equal) {
       // We are comparing the boolean to a constant which is of type int and can
       // be any constant.
       if (input_const->AsIntConstant()->IsOne()) {
-        // Replace (bool_value != true) with !bool_value
-        block->ReplaceAndRemoveInstructionWith(
-            not_equal, new (block->GetGraph()->GetArena()) HBooleanNot(input_value));
+        not_equal->ReplaceWith(HGraph::InsertOppositeCondition(input_value, not_equal));
         RecordSimplification();
       } else if (input_const->AsIntConstant()->IsZero()) {
         // Replace (bool_value != false) with bool_value
