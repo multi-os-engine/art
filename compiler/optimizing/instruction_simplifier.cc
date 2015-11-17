@@ -372,9 +372,17 @@ void InstructionSimplifierVisitor::VisitEqual(HEqual* equal) {
         block->RemoveInstruction(equal);
         RecordSimplification();
       } else if (input_const->AsIntConstant()->IsZero()) {
-        // Replace (bool_value == false) with !bool_value
-        block->ReplaceAndRemoveInstructionWith(
-            equal, new (block->GetGraph()->GetArena()) HBooleanNot(input_value));
+        // Can we rewrite a condition?
+        HInstruction* replacement;
+        if (input_value->IsCondition() &&
+            !Primitive::IsFloatingPointType(input_value->InputAt(0)->GetType())) {
+          // Replace non-FP (a OP b) == 0 with a OPPOSITE_OP b
+          replacement = GetOppositeCondition(input_value);
+        } else {
+          // Replace (bool_value == false) with !bool_value
+          replacement = new (block->GetGraph()->GetArena()) HBooleanNot(input_value);
+        }
+        block->ReplaceAndRemoveInstructionWith(equal, replacement);
         RecordSimplification();
       } else {
         // Replace (bool_value == integer_not_zero_nor_one_constant) with false
@@ -399,9 +407,16 @@ void InstructionSimplifierVisitor::VisitNotEqual(HNotEqual* not_equal) {
       // We are comparing the boolean to a constant which is of type int and can
       // be any constant.
       if (input_const->AsIntConstant()->IsOne()) {
-        // Replace (bool_value != true) with !bool_value
-        block->ReplaceAndRemoveInstructionWith(
-            not_equal, new (block->GetGraph()->GetArena()) HBooleanNot(input_value));
+        HInstruction* replacement;
+        if (input_value->IsCondition() &&
+            !Primitive::IsFloatingPointType(input_value->InputAt(0)->GetType())) {
+          // Replace non-FP (a OP b) != 1 with a OPPOSITE_OP b
+          replacement = GetOppositeCondition(input_value);
+        } else {
+          // Replace (bool_value != true) with !bool_value
+          replacement = new (block->GetGraph()->GetArena()) HBooleanNot(input_value);
+        }
+        block->ReplaceAndRemoveInstructionWith(not_equal, replacement);
         RecordSimplification();
       } else if (input_const->AsIntConstant()->IsZero()) {
         // Replace (bool_value != false) with bool_value
