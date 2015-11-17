@@ -5743,6 +5743,9 @@ inline bool IsSameDexFile(const DexFile& lhs, const DexFile& rhs) {
   return &lhs == &rhs;
 }
 
+// Returns an instruction with the opposite boolean value from 'cond'.
+HInstruction* GetOppositeCondition(HInstruction* cond);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_NODES_H_
