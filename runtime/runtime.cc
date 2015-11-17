@@ -1041,8 +1041,11 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   class_linker_ = new ClassLinker(intern_table_);
   if (GetHeap()->HasImageSpace()) {
     ATRACE_BEGIN("InitFromImage");
-    class_linker_->InitFromImage();
+    bool result = class_linker_->InitFromImage();
     ATRACE_END();
+    if (!result) {
+      return false;
+    }
     if (kIsDebugBuild) {
       GetHeap()->GetBootImageSpace()->VerifyImageAllocations();
     }
@@ -1074,7 +1077,9 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
                  runtime_options.GetOrDefault(Opt::Image),
                  &boot_class_path);
     instruction_set_ = runtime_options.GetOrDefault(Opt::ImageInstructionSet);
-    class_linker_->InitWithoutImage(std::move(boot_class_path));
+    if (!class_linker_->InitWithoutImage(std::move(boot_class_path))) {
+      return false;
+    }
 
     // TODO: Should we move the following to InitWithoutImage?
     SetInstructionSet(instruction_set_);
