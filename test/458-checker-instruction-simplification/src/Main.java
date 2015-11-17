@@ -1226,6 +1226,53 @@ public class Main {
     return arg / -0.25f;
   }
 
+  public static boolean $inline$return_true() { return true;}
+
+  /// CHECK-START: int Main.bool_compare_to_one(int) instruction_simplifier_after_bce (before)
+  /// CHECK-DAG:      <<Const0:i\d+>>   IntConstant 0
+  /// CHECK-DAG:      <<Const1:i\d+>>   IntConstant 1
+  /// CHECK-DAG:      <<Const54:i\d+>>  IntConstant 54
+  /// CHECK:          <<GT0:z\d+>>      GreaterThan [<<Input0:i\d+>>,<<Const54>>]
+  /// CHECK:          <<EQ1:z\d+>>      Equal [<<GT0>>,<<Const1>>]
+  /// CHECK:          <<EQ2:z\d+>>      Equal [<<EQ1>>,<<Const0>>]
+  /// CHECK:                            If [<<EQ2>>]
+
+  // Extra LessThanOrEqual is left over from boolean_simplification.
+  /// CHECK-START: int Main.bool_compare_to_one(int) instruction_simplifier_after_bce (after)
+  /// CHECK-DAG:      <<Const54:i\d+>>  IntConstant 54
+  /// CHECK:                            GreaterThan [<<Input0:i\d+>>,<<Const54>>]
+  /// CHECK:          <<LT0:z\d+>>      LessThanOrEqual [<<Input0>>,<<Const54>>]
+  /// CHECK:          <<LT1:z\d+>>      LessThanOrEqual [<<Input0>>,<<Const54>>]
+  /// CHECK:                            If [<<LT1>>]
+  public static int bool_compare_to_one(int i) {
+    boolean bool = i > 54;
+    bool = bool == $inline$return_true();
+    return bool ? 8 : 9;
+  }
+
+  public static boolean $inline$return_false() { return false;}
+
+  /// CHECK-START: int Main.bool_compare_to_zero(int) instruction_simplifier_after_bce (before)
+  /// CHECK-DAG:      <<Const0:i\d+>>   IntConstant 0
+  /// CHECK-DAG:      <<Const54:i\d+>>  IntConstant 54
+  /// CHECK:          <<GT0:z\d+>>      GreaterThan [<<Input0:i\d+>>,<<Const54>>]
+  /// CHECK:          <<NE1:z\d+>>      NotEqual [<<GT0>>,<<Const0>>]
+  /// CHECK:          <<EQ0:z\d+>>      Equal [<<NE1>>,<<Const0>>]
+  /// CHECK:                            If [<<EQ0>>]
+
+  // Extra LessThanOrEqual is left over from boolean_simplification.
+  /// CHECK-START: int Main.bool_compare_to_zero(int) instruction_simplifier_after_bce (after)
+  /// CHECK-DAG:      <<Const54:i\d+>>  IntConstant 54
+  /// CHECK:                            GreaterThan [<<Input0:i\d+>>,<<Const54>>]
+  /// CHECK:          <<LT0:z\d+>>      LessThanOrEqual [<<Input0>>,<<Const54>>]
+  /// CHECK:          <<LT1:z\d+>>      LessThanOrEqual [<<Input0>>,<<Const54>>]
+  /// CHECK:                            If [<<LT1>>]
+  public static int bool_compare_to_zero(int i) {
+    boolean bool = i > 54;
+    bool = bool != $inline$return_false();
+    return bool ? 8 : 9;
+  }
+
   public static void main(String[] args) {
     int arg = 123456;
 
@@ -1283,5 +1330,7 @@ public class Main {
     assertLongEquals(Shr56And255(0xc123456787654321L), 0xc1L);
     assertIntEquals(Shr24And127(0xc1234567), 0x41);
     assertLongEquals(Shr56And127(0xc123456787654321L), 0x41L);
+    assertIntEquals(bool_compare_to_one(6), 9);
+    assertIntEquals(bool_compare_to_zero(6), 9);
   }
 }
