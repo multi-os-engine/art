@@ -5743,6 +5743,11 @@ inline bool IsSameDexFile(const DexFile& lhs, const DexFile& rhs) {
   return &lhs == &rhs;
 }
 
+// Returns an instruction with the opposite boolean value from 'cond'.
+// The instruction has been inserted into the graph, either as a constant, or
+// before cond.
+HInstruction* InsertOppositeCondition(HInstruction* cond, HInstruction* cursor);
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_NODES_H_
