@@ -1226,6 +1226,42 @@ public class Main {
     return arg / -0.25f;
   }
 
+  /// CHECK-START: int Main.execute(boolean) instruction_simplifier_after_bce (before)
+  /// CHECK-DAG:      <<Const0:i\d+>>   IntConstant 0
+  /// CHECK-DAG:                        name "B4"
+  /// CHECK:                            NotEqual [<<Input0:i\d+>>,<<Const0>>]
+  /// CHECK-NEXT:     <<EQ1:z\d+>>      Equal [<<Input0>>,<<Const0>>]
+  /// CHECK-NEXT:                       NotEqual [<<Input1:i\d+>>,<<Const0>>]
+  /// CHECK-NEXT:                       NotEqual [<<EQ1>>,<<Const0>>]
+  /// CHECK-NEXT:                       Equal [<<EQ1>>,<<Const0>>]
+  /// CHECK-NEXT:                       NotEqual
+  /// CHECK-NEXT:                       Equal
+  /// CHECK-NEXT:                       Goto
+
+  /// CHECK-START: int Main.execute(boolean) instruction_simplifier_after_bce (after)
+  /// CHECK-DAG:      <<Const0:i\d+>>   IntConstant 0
+  /// CHECK-DAG:                        name "B4"
+  /// CHECK:                            NotEqual [<<Input0:i\d+>>,<<Const0>>]
+  /// CHECK-NEXT:                       Equal [<<Input0>>,<<Const0>>]
+  /// CHECK-NEXT:                       NotEqual [<<Input1:i\d+>>,<<Const0>>]
+  /// CHECK-NEXT:                       NotEqual [<<Input0>>,<<Const0>>]
+  /// CHECK-NEXT:                       NotEqual [<<Input1>>,<<Const0>>]
+  /// CHECK-NEXT:                       Goto
+  public static int execute(boolean bool_0_) {
+    boolean bool = true;
+    for (int i = 0; i < 10; i++) {
+      if (bool_0_) {
+        bool = !bool;
+        bool_0_ = !bool_0_;
+        bool = !bool;
+        bool_0_ = !bool_0_;
+      }
+    }
+    if (bool)
+      return 0;
+    return 1;
+  }
+
   public static void main(String[] args) {
     int arg = 123456;
 
@@ -1283,5 +1319,6 @@ public class Main {
     assertLongEquals(Shr56And255(0xc123456787654321L), 0xc1L);
     assertIntEquals(Shr24And127(0xc1234567), 0x41);
     assertLongEquals(Shr56And127(0xc123456787654321L), 0x41L);
+    assertIntEquals(execute(true), 0);
   }
 }

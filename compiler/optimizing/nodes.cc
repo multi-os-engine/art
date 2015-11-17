@@ -2077,4 +2077,40 @@ void HInstruction::RemoveEnvironmentUsers() {
   env_uses_.Clear();
 }
 
+// Returns an instruction with the opposite boolean value from 'cond'.
+HInstruction* GetOppositeCondition(HInstruction* cond) {
+  HGraph* graph = cond->GetBlock()->GetGraph();
+  ArenaAllocator* allocator = graph->GetArena();
+
+  if (cond->IsCondition() &&
+      !Primitive::IsFloatingPointType(cond->InputAt(0)->GetType())) {
+    // Can't reverse floating point conditions.  We have to use HBooleanNot in that case.
+    HInstruction* lhs = cond->InputAt(0);
+    HInstruction* rhs = cond->InputAt(1);
+    switch (cond->AsCondition()->GetOppositeCondition()) {  // get *opposite*
+      case kCondEQ: return new (allocator) HEqual(lhs, rhs);
+      case kCondNE: return new (allocator) HNotEqual(lhs, rhs);
+      case kCondLT: return new (allocator) HLessThan(lhs, rhs);
+      case kCondLE: return new (allocator) HLessThanOrEqual(lhs, rhs);
+      case kCondGT: return new (allocator) HGreaterThan(lhs, rhs);
+      case kCondGE: return new (allocator) HGreaterThanOrEqual(lhs, rhs);
+      case kCondB:  return new (allocator) HBelow(lhs, rhs);
+      case kCondBE: return new (allocator) HBelowOrEqual(lhs, rhs);
+      case kCondA:  return new (allocator) HAbove(lhs, rhs);
+      case kCondAE: return new (allocator) HAboveOrEqual(lhs, rhs);
+    }
+  } else if (cond->IsIntConstant()) {
+    HIntConstant* int_const = cond->AsIntConstant();
+    if (int_const->IsZero()) {
+      return graph->GetIntConstant(1);
+    } else {
+      DCHECK(int_const->IsOne());
+      return graph->GetIntConstant(0);
+    }
+  }
+  // HBooleanNot only accepts boolean input.
+  DCHECK_EQ(cond->GetType(), Primitive::kPrimBoolean);
+  return new (allocator) HBooleanNot(cond);
+}
+
 }  // namespace art
