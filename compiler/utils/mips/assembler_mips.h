@@ -156,12 +156,16 @@ class MipsAssembler FINAL : public Assembler {
   void Srlv(Register rd, Register rt, Register rs);
   void Rotrv(Register rd, Register rt, Register rs);  // R2+
   void Srav(Register rd, Register rt, Register rs);
+  void Ext(Register rd, Register rt, int pos, int size);  // R2+
+  void Ins(Register rd, Register rt, int pos, int size);  // R2+
 
   void Lb(Register rt, Register rs, uint16_t imm16);
   void Lh(Register rt, Register rs, uint16_t imm16);
+  void Lwl(Register rt, Register rs, uint16_t imm16);
   void Lw(Register rt, Register rs, uint16_t imm16);
   void Lbu(Register rt, Register rs, uint16_t imm16);
   void Lhu(Register rt, Register rs, uint16_t imm16);
+  void Lwr(Register rt, Register rs, uint16_t imm16);
   void Lui(Register rt, uint16_t imm16);
   void Sync(uint32_t stype);
   void Mfhi(Register rd);  // R2
@@ -169,7 +173,9 @@ class MipsAssembler FINAL : public Assembler {
 
   void Sb(Register rt, Register rs, uint16_t imm16);
   void Sh(Register rt, Register rs, uint16_t imm16);
+  void Swl(Register rt, Register rs, uint16_t imm16);
   void Sw(Register rt, Register rs, uint16_t imm16);
+  void Swr(Register rt, Register rs, uint16_t imm16);
 
   void Slt(Register rd, Register rs, Register rt);
   void Sltu(Register rd, Register rs, Register rt);
