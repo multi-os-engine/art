@@ -400,12 +400,31 @@ void MipsAssembler::Srav(Register rd, Register rt, Register rs) {
   EmitR(0, rs, rt, rd, 0, 0x07);
 }
 
+void MipsAssembler::Ext(Register rd, Register rt, int pos, int size) {
+  CHECK(IsUint<5>(pos)) << pos;
+  CHECK((0 < size) && (size <= 32)) << size;
+  CHECK((0 < pos + size) && (pos + size <= 32)) << pos << " + " << size;
+  EmitR(0x1f, rt, rd, static_cast<Register>(size - 1), pos, 0x00);
+}
+
+void MipsAssembler::Ins(Register rd, Register rt, int pos, int size) {
+  CHECK(IsUint<5>(pos)) << pos;
+  CHECK((0 < size) && (size <= 32)) << size;
+  CHECK((0 < pos + size) && (pos + size <= 32)) << pos << " + " << size;
+  EmitR(0x1f, rt, rd, static_cast<Register>(pos + size - 1), pos, 0x04);
+}
+
 void MipsAssembler::Lb(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x20, rs, rt, imm16);
 }
 
 void MipsAssembler::Lh(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x21, rs, rt, imm16);
+}
+
+void MipsAssembler::Lwl(Register rt, Register rs, uint16_t imm16) {
+  CHECK(!IsR6());
+  EmitI(0x22, rs, rt, imm16);
 }
 
 void MipsAssembler::Lw(Register rt, Register rs, uint16_t imm16) {
@@ -418,6 +437,11 @@ void MipsAssembler::Lbu(Register rt, Register rs, uint16_t imm16) {
 
 void MipsAssembler::Lhu(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x25, rs, rt, imm16);
+}
+
+void MipsAssembler::Lwr(Register rt, Register rs, uint16_t imm16) {
+  CHECK(!IsR6());
+  EmitI(0x26, rs, rt, imm16);
 }
 
 void MipsAssembler::Lui(Register rt, uint16_t imm16) {
@@ -447,8 +471,18 @@ void MipsAssembler::Sh(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x29, rs, rt, imm16);
 }
 
+void MipsAssembler::Swl(Register rt, Register rs, uint16_t imm16) {
+  CHECK(!IsR6());
+  EmitI(0x2a, rs, rt, imm16);
+}
+
 void MipsAssembler::Sw(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x2b, rs, rt, imm16);
+}
+
+void MipsAssembler::Swr(Register rt, Register rs, uint16_t imm16) {
+  CHECK(!IsR6());
+  EmitI(0x2e, rs, rt, imm16);
 }
 
 void MipsAssembler::Slt(Register rd, Register rs, Register rt) {
