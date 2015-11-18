@@ -403,6 +403,10 @@ void MipsAssembler::Lh(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x21, rs, rt, imm16);
 }
 
+void MipsAssembler::Lwl(Register rt, Register rs, uint16_t imm16) {
+  EmitI(0x22, rs, rt, imm16);
+}
+
 void MipsAssembler::Lw(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x23, rs, rt, imm16);
 }
@@ -413,6 +417,10 @@ void MipsAssembler::Lbu(Register rt, Register rs, uint16_t imm16) {
 
 void MipsAssembler::Lhu(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x25, rs, rt, imm16);
+}
+
+void MipsAssembler::Lwr(Register rt, Register rs, uint16_t imm16) {
+  EmitI(0x26, rs, rt, imm16);
 }
 
 void MipsAssembler::Lui(Register rt, uint16_t imm16) {
@@ -442,8 +450,16 @@ void MipsAssembler::Sh(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x29, rs, rt, imm16);
 }
 
+void MipsAssembler::Swl(Register rt, Register rs, uint16_t imm16) {
+  EmitI(0x2a, rs, rt, imm16);
+}
+
 void MipsAssembler::Sw(Register rt, Register rs, uint16_t imm16) {
   EmitI(0x2b, rs, rt, imm16);
+}
+
+void MipsAssembler::Swr(Register rt, Register rs, uint16_t imm16) {
+  EmitI(0x2e, rs, rt, imm16);
 }
 
 void MipsAssembler::Slt(Register rd, Register rs, Register rt) {
