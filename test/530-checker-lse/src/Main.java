@@ -48,6 +48,16 @@ class TestClass2 {
   int j;
 }
 
+class StaticCounter {
+  public static int value;
+}
+
+class StaticCounter2 {
+  static {
+    StaticCounter.value++;
+  }
+}
+
 class Finalizable {
   static boolean sVisited = false;
   static final int VALUE = 0xbeef;
@@ -116,32 +126,30 @@ public class Main {
 
   /// CHECK-START: int Main.test3(TestClass) load_store_elimination (before)
   /// CHECK: InstanceFieldSet
-  /// CHECK: InstanceFieldGet
-  /// CHECK: InstanceFieldSet
   /// CHECK: NewInstance
   /// CHECK: InstanceFieldSet
   /// CHECK: InstanceFieldSet
   /// CHECK: InstanceFieldGet
+  /// CHECK: InstanceFieldSet
   /// CHECK: InstanceFieldGet
   /// CHECK: InstanceFieldGet
   /// CHECK: InstanceFieldGet
 
   /// CHECK-START: int Main.test3(TestClass) load_store_elimination (after)
   /// CHECK: InstanceFieldSet
-  /// CHECK: InstanceFieldGet
-  /// CHECK: InstanceFieldSet
   /// CHECK: NewInstance
-  /// CHECK-NOT: InstanceFieldSet
+  /// CHECK: InstanceFieldGet
   /// CHECK-NOT: InstanceFieldGet
 
   // A new allocation shouldn't alias with pre-existing values.
+  // TODO: better clinit check analysis on NewInstance to get rid of the last InstanceFieldGet.
   static int test3(TestClass obj) {
     obj.i = 1;
-    obj.next.j = 2;
     TestClass obj2 = new TestClass();
     obj2.i = 3;
     obj2.j = 4;
-    return obj.i + obj.next.j + obj2.i + obj2.j;
+    obj.i++;
+    return obj.i + obj2.i + obj2.j;
   }
 
   /// CHECK-START: int Main.test4(TestClass, boolean) load_store_elimination (before)
@@ -562,6 +570,24 @@ public class Main {
     return obj.i;
   }
 
+  /// CHECK-START: int Main.test24() load_store_elimination (before)
+  /// CHECK: StaticFieldSet
+  /// CHECK: NewInstance
+  /// CHECK: StaticFieldGet
+
+  /// CHECK-START: int Main.test24() load_store_elimination (after)
+  /// CHECK: StaticFieldSet
+  /// CHECK: NewInstance
+  /// CHECK: StaticFieldGet
+
+  // Test static initializer effect on HNewInstance.
+  static int test24() {
+    System.out.print("test".substring(0, 0));  // Defeat inlining.
+    StaticCounter.value = 10;
+    new StaticCounter2();
+    return StaticCounter.value;
+  }
+
   /// CHECK-START: void Main.testFinalizable() load_store_elimination (before)
   /// CHECK: NewInstance
   /// CHECK: InstanceFieldSet
@@ -636,7 +662,7 @@ public class Main {
     TestClass obj1 = new TestClass();
     TestClass obj2 = new TestClass();
     obj1.next = obj2;
-    assertIntEquals(test3(obj1), 10);
+    assertIntEquals(test3(obj1), 9);
     assertIntEquals(test4(new TestClass(), true), 1);
     assertIntEquals(test4(new TestClass(), false), 1);
     assertIntEquals(test5(new TestClass(), true), 1);
@@ -668,6 +694,7 @@ public class Main {
     assertIntEquals(test22(), 13);
     assertIntEquals(test23(true), 4);
     assertIntEquals(test23(false), 5);
+    assertIntEquals(test24(), 11);
     testFinalizableByForcingGc();
   }
 }
