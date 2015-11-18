@@ -335,6 +335,13 @@ class HeapLocationCollector : public HGraphVisitor {
     return true;
   }
 
+  // Get/Create ReferenceInfo for a reference.
+  // Currently this is called:
+  // - for each heap location access, using the reference of the access
+  // - for new instance
+  // TODO: do this for every instruction that can define a reference, such as a parameter,
+  // return value of an invoke/field load, etc. So we have better coverage of pre-existence
+  // info for aliasing analysis.
   ReferenceInfo* GetOrCreateReferenceInfo(HInstruction* ref) {
     ReferenceInfo* ref_info = FindReferenceInfoOf(ref);
     if (ref_info == nullptr) {
@@ -878,6 +885,12 @@ class LSEVisitor : public HGraphVisitor {
   }
 
   void VisitNewInstance(HNewInstance* new_instance) OVERRIDE {
+    // HNewInstance has an implicit clinit check.
+    // TODO: treat the clinit check part of NewInstance separately so it can be optimized
+    // by GVN. Also if there is no static initializer for the class/superclasses, it doesn't
+    // need to be treated as an invocation.
+    HandleInvoke(new_instance);
+
     ReferenceInfo* ref_info = heap_location_collector_.FindReferenceInfoOf(new_instance);
     if (ref_info == nullptr) {
       // new_instance isn't used for field accesses. No need to process it.

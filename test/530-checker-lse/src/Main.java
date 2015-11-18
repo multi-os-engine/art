@@ -116,32 +116,30 @@ public class Main {
 
   /// CHECK-START: int Main.test3(TestClass) load_store_elimination (before)
   /// CHECK: InstanceFieldSet
-  /// CHECK: InstanceFieldGet
-  /// CHECK: InstanceFieldSet
   /// CHECK: NewInstance
   /// CHECK: InstanceFieldSet
   /// CHECK: InstanceFieldSet
   /// CHECK: InstanceFieldGet
+  /// CHECK: InstanceFieldSet
   /// CHECK: InstanceFieldGet
   /// CHECK: InstanceFieldGet
   /// CHECK: InstanceFieldGet
 
   /// CHECK-START: int Main.test3(TestClass) load_store_elimination (after)
   /// CHECK: InstanceFieldSet
-  /// CHECK: InstanceFieldGet
-  /// CHECK: InstanceFieldSet
   /// CHECK: NewInstance
-  /// CHECK-NOT: InstanceFieldSet
+  /// CHECK: InstanceFieldGet
   /// CHECK-NOT: InstanceFieldGet
 
   // A new allocation shouldn't alias with pre-existing values.
+  // TODO: better clinit check analysis on NewInstance to get rid of the last InstanceFieldGet.
   static int test3(TestClass obj) {
     obj.i = 1;
-    obj.next.j = 2;
     TestClass obj2 = new TestClass();
     obj2.i = 3;
     obj2.j = 4;
-    return obj.i + obj.next.j + obj2.i + obj2.j;
+    obj.i++;
+    return obj.i + obj2.i + obj2.j;
   }
 
   /// CHECK-START: int Main.test4(TestClass, boolean) load_store_elimination (before)
@@ -636,7 +634,7 @@ public class Main {
     TestClass obj1 = new TestClass();
     TestClass obj2 = new TestClass();
     obj1.next = obj2;
-    assertIntEquals(test3(obj1), 10);
+    assertIntEquals(test3(obj1), 9);
     assertIntEquals(test4(new TestClass(), true), 1);
     assertIntEquals(test4(new TestClass(), false), 1);
     assertIntEquals(test5(new TestClass(), true), 1);
