@@ -4303,8 +4303,16 @@ class HPhi : public HInstruction {
         inputs_(number_of_inputs, arena->Adapter(kArenaAllocPhiInputs)),
         reg_number_(reg_number),
         type_(type),
-        is_live_(false),
+        is_live_(true),
         can_be_null_(true) {
+  }
+
+  // Returns a type which can be assigned to a phi before PrimitiveTypePropagation.
+  // PrimitiveTypePropagation will either further concretize the type or mark
+  // the phi dead due to conflict. The type matches the first input's size.
+  static Primitive::Type ToInitialPhiType(Primitive::Type first_input_type) {
+    DCHECK_NE(first_input_type, Primitive::kPrimVoid);
+    return Primitive::Is64BitType(first_input_type) ? Primitive::kPrimLong : Primitive::kPrimInt;
   }
 
   // Returns a type equivalent to the given `type`, but that a `HPhi` can hold.
