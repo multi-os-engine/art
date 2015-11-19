@@ -440,6 +440,11 @@ class CodeGeneratorX86 : public CodeGenerator {
   // artReadBarrierForRootSlow.
   void GenerateReadBarrierForRoot(HInstruction* instruction, Location out, Location root);
 
+  // Generate a memory fence.
+  void MemoryFence() {
+    assembler_.lock()->addl(Address(ESP, 0), Immediate(0));
+  }
+
  private:
   Register GetInvokeStaticOrDirectExtraParameter(HInvokeStaticOrDirect* invoke, Register temp);
 
