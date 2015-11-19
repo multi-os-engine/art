@@ -350,6 +350,8 @@ void ParseDouble(const std::string& option,
                  double* parsed_value,
                  UsageFn Usage);
 
+uint32_t GetRandomNumber(uint32_t max = std::numeric_limits<uint32_t>::max());
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_UTILS_H_

@@ -57,20 +57,17 @@ static int32_t ChooseRelocationOffsetDelta(int32_t min_delta, int32_t max_delta)
   CHECK_ALIGNED(min_delta, kPageSize);
   CHECK_ALIGNED(max_delta, kPageSize);
   CHECK_LT(min_delta, max_delta);
+  uint32_t delta = static_cast<uint32_t>(max_delta - min_delta);
+  // The division will get re-written to a shift.
+  uint32_t page_delta = delta / kPageSize;
 
-  std::default_random_engine generator;
-  generator.seed(NanoTime() * getpid());
-  std::uniform_int_distribution<int32_t> distribution(min_delta, max_delta);
-  int32_t r = distribution(generator);
-  if (r % 2 == 0) {
-    r = RoundUp(r, kPageSize);
-  } else {
-    r = RoundDown(r, kPageSize);
-  }
-  CHECK_LE(min_delta, r);
-  CHECK_GE(max_delta, r);
-  CHECK_ALIGNED(r, kPageSize);
-  return r;
+  // +1 to make it inclusive
+  uint32_t chosen_page_delta = GetRandomNumber(page_delta + 1);
+  int32_t chosen = min_delta + static_cast<int32_t>(chosen_page_delta * kPageSize);
+  CHECK_LE(min_delta, chosen);
+  CHECK_GE(max_delta, chosen);
+  CHECK_ALIGNED(chosen, kPageSize);
+  return chosen;
 }
 
 // We are relocating or generating the core image. We should get rid of everything. It is all
