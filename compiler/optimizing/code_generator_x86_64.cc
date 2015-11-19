@@ -3896,7 +3896,7 @@ void InstructionCodeGeneratorX86_64::GenerateMemoryBarrier(MemBarrierKind kind) 
    */
   switch (kind) {
     case MemBarrierKind::kAnyAny: {
-      __ mfence();
+      codegen_->MemoryFence();
       break;
     }
     case MemBarrierKind::kAnyStore:

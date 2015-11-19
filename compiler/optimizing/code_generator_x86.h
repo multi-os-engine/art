@@ -17,6 +17,7 @@
 #ifndef ART_COMPILER_OPTIMIZING_CODE_GENERATOR_X86_H_
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_X86_H_
 
+#include "arch/x86/instruction_set_features_x86.h"
 #include "code_generator.h"
 #include "dex/compiler_enums.h"
 #include "driver/compiler_options.h"
@@ -439,6 +440,15 @@ class CodeGeneratorX86 : public CodeGenerator {
   // The `out` location contains the value returned by
   // artReadBarrierForRootSlow.
   void GenerateReadBarrierForRoot(HInstruction* instruction, Location out, Location root);
+
+  // Generate a memory fence.
+  void MemoryFence() {
+    if (isa_features_.PrefersLockedAddSynchronization()) {
+      assembler_.lock()->addl(Address(ESP, 0), Immediate(0));
+    } else {
+      assembler_.mfence();
+    }
+  }
 
  private:
   Register GetInvokeStaticOrDirectExtraParameter(HInvokeStaticOrDirect* invoke, Register temp);
