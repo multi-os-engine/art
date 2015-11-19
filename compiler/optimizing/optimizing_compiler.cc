@@ -848,7 +848,7 @@ CompiledMethod* OptimizingCompiler::Compile(const DexFile::CodeItem* code_item,
     if (compiler_driver->GetCompilerOptions().VerifyAtRuntime()) {
       MaybeRecordStat(MethodCompilationStat::kNotCompiledVerifyAtRuntime);
     } else {
-      MaybeRecordStat(MethodCompilationStat::kNotCompiledClassNotVerified);
+      MaybeRecordStat(MethodCompilationStat::kNotCompiledVerificationError);
     }
   }
 
