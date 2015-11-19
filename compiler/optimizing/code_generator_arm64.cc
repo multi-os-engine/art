@@ -3372,8 +3372,8 @@ void LocationsBuilderARM64::VisitNewInstance(HNewInstance* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
   InvokeRuntimeCallingConvention calling_convention;
-  locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(0)));
-  locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(1)));
+  locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
+  locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
   locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimNot));
   CheckEntrypointTypes<kQuickAllocObjectWithAccessCheck, void*, uint32_t, ArtMethod*>();
 }
