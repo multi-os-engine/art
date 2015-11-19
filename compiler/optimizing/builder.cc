@@ -876,12 +876,66 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
                       clinit_check);
 }
 
+void HGraphBuilder::BuildNewInstance(uint16_t type_index, uint32_t dex_pc) {
+  bool finalizable;
+  bool can_throw = NeedsAccessCheck(type_index, &finalizable);
+
+  // We initially set the entrypoint to the initialized version. During
+  // 'prepare_for_register_allocation' we may change it.
+  QuickEntrypointEnum entrypoint = kQuickAllocObjectInitialized;
+
+  ScopedObjectAccess soa(Thread::Current());
+  StackHandleScope<2> hs(soa.Self());
+  Handle<mirror::DexCache> dex_cache(hs.NewHandle(
+      dex_compilation_unit_->GetClassLinker()->FindDexCache(
+          soa.Self(), *dex_compilation_unit_->GetDexFile())));
+  Handle<mirror::Class> resolved_class(hs.NewHandle(dex_cache->GetResolvedType(type_index)));
+  
+  HLoadClass* load_class = new (arena_) HLoadClass(
+      graph_->GetCurrentMethod(),
+      type_index,
+      *dex_compilation_unit_->GetDexFile(),
+      IsOutermostCompilingClass(type_index),
+      dex_pc,
+      /*needs_access_check*/ can_throw);
+
+  current_block_->AddInstruction(load_class);
+  HInstruction* cls = load_class;
+  if (!IsInitialized(resolved_class, type_index)) {
+    cls = new (arena_) HClinitCheck(load_class, dex_pc);
+    current_block_->AddInstruction(cls);
+  }
+
+  current_block_->AddInstruction(new (arena_) HNewInstance(
+      cls,
+      graph_->GetCurrentMethod(),
+      dex_pc,
+      type_index,
+      *dex_compilation_unit_->GetDexFile(),
+      can_throw,
+      finalizable,
+      entrypoint));
+}
+
+bool HGraphBuilder::IsInitialized(Handle<mirror::Class> cls, uint16_t type_index) const {
+  if (cls.Get() == nullptr) {
+    return false;
+  }
+  if (GetOutermostCompilingClass() == cls.Get()) {
+    return true;
+  }
+  // TODO: find out why this check is needed.
+  bool is_in_dex_cache = compiler_driver_->CanAssumeTypeIsPresentInDexCache(
+      *outer_compilation_unit_->GetDexFile(), type_index);
+  return cls->IsInitialized() && is_in_dex_cache;
+}
+
 HClinitCheck* HGraphBuilder::ProcessClinitCheckForInvoke(
       uint32_t dex_pc,
       uint32_t method_idx,
       HInvokeStaticOrDirect::ClinitCheckRequirement* clinit_check_requirement) {
   ScopedObjectAccess soa(Thread::Current());
-  StackHandleScope<4> hs(soa.Self());
+  StackHandleScope<5> hs(soa.Self());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(
       dex_compilation_unit_->GetClassLinker()->FindDexCache(
           soa.Self(), *dex_compilation_unit_->GetDexFile())));
@@ -927,13 +981,8 @@ HClinitCheck* HGraphBuilder::ProcessClinitCheckForInvoke(
     // whether we should add an explicit class initialization
     // check for its declaring class before the static method call.
 
-    // TODO: find out why this check is needed.
-    bool is_in_dex_cache = compiler_driver_->CanAssumeTypeIsPresentInDexCache(
-        *outer_compilation_unit_->GetDexFile(), storage_index);
-    bool is_initialized =
-        resolved_method->GetDeclaringClass()->IsInitialized() && is_in_dex_cache;
-
-    if (is_initialized) {
+    Handle<mirror::Class> cls(hs.NewHandle(resolved_method->GetDeclaringClass()));
+    if (IsInitialized(cls, storage_index)) {
       *clinit_check_requirement = HInvokeStaticOrDirect::ClinitCheckRequirement::kNone;
     } else {
       *clinit_check_requirement = HInvokeStaticOrDirect::ClinitCheckRequirement::kExplicit;
@@ -1272,7 +1321,7 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
   uint16_t field_index = instruction.VRegB_21c();
 
   ScopedObjectAccess soa(Thread::Current());
-  StackHandleScope<4> hs(soa.Self());
+  StackHandleScope<5> hs(soa.Self());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(
       dex_compilation_unit_->GetClassLinker()->FindDexCache(
           soa.Self(), *dex_compilation_unit_->GetDexFile())));
@@ -1318,11 +1367,6 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
     }
   }
 
-  // TODO: find out why this check is needed.
-  bool is_in_dex_cache = compiler_driver_->CanAssumeTypeIsPresentInDexCache(
-      *outer_compilation_unit_->GetDexFile(), storage_index);
-  bool is_initialized = resolved_field->GetDeclaringClass()->IsInitialized() && is_in_dex_cache;
-
   HLoadClass* constant = new (arena_) HLoadClass(graph_->GetCurrentMethod(),
                                                  storage_index,
                                                  *dex_compilation_unit_->GetDexFile(),
@@ -1332,12 +1376,14 @@ bool HGraphBuilder::BuildStaticFieldAccess(const Instruction& instruction,
   current_block_->AddInstruction(constant);
 
   HInstruction* cls = constant;
-  if (!is_initialized && !is_outer_class) {
+
+  Handle<mirror::Class> klass(hs.NewHandle(resolved_field->GetDeclaringClass()));
+  if (!IsInitialized(klass, storage_index)){
     cls = new (arena_) HClinitCheck(constant, dex_pc);
     current_block_->AddInstruction(cls);
   }
 
-  uint16_t class_def_index = resolved_field->GetDeclaringClass()->GetDexClassDefIndex();
+  uint16_t class_def_index = klass->GetDexClassDefIndex();
   if (is_put) {
     // We need to keep the class alive before loading the value.
     Temporaries temps(graph_);
@@ -2509,20 +2555,7 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
         current_block_->AddInstruction(fake_string);
         UpdateLocal(register_index, fake_string, dex_pc);
       } else {
-        bool finalizable;
-        bool can_throw = NeedsAccessCheck(type_index, &finalizable);
-        QuickEntrypointEnum entrypoint = can_throw
-            ? kQuickAllocObjectWithAccessCheck
-            : kQuickAllocObject;
-
-        current_block_->AddInstruction(new (arena_) HNewInstance(
-            graph_->GetCurrentMethod(),
-            dex_pc,
-            type_index,
-            *dex_compilation_unit_->GetDexFile(),
-            can_throw,
-            finalizable,
-            entrypoint));
+        BuildNewInstance(type_index, dex_pc);
         UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction(), dex_pc);
       }
       break;

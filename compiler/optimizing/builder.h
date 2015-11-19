@@ -308,6 +308,13 @@ class HGraphBuilder : public ValueObject {
       uint32_t method_idx,
       HInvokeStaticOrDirect::ClinitCheckRequirement* clinit_check_requirement);
 
+  // Build a HNewInstance instruction.
+  void BuildNewInstance(uint16_t type_index, uint32_t dex_pc);
+
+  // Return whether the compiler can assume `cls` is initialized.
+  bool IsInitialized(Handle<mirror::Class> cls, uint16_t type_index) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   ArenaAllocator* const arena_;
 
   // A list of the size of the dex code holding block information for

@@ -48,22 +48,27 @@ void PrepareForRegisterAllocation::VisitBoundType(HBoundType* bound_type) {
 }
 
 void PrepareForRegisterAllocation::VisitClinitCheck(HClinitCheck* check) {
-  // Try to find a static invoke from which this check originated.
-  HInvokeStaticOrDirect* invoke = nullptr;
+  // Try to find a static invoke or a new from which this check originated.
+  HInstruction* implicit_clinit = nullptr;
   for (HUseIterator<HInstruction*> it(check->GetUses()); !it.Done(); it.Advance()) {
     HInstruction* user = it.Current()->GetUser();
     if (user->IsInvokeStaticOrDirect() && CanMoveClinitCheck(check, user)) {
-      invoke = user->AsInvokeStaticOrDirect();
-      DCHECK(invoke->IsStaticWithExplicitClinitCheck());
-      invoke->RemoveExplicitClinitCheck(HInvokeStaticOrDirect::ClinitCheckRequirement::kImplicit);
+      implicit_clinit = user;
+      DCHECK(user->AsInvokeStaticOrDirect()->IsStaticWithExplicitClinitCheck());
+      user->AsInvokeStaticOrDirect()->RemoveExplicitClinitCheck(
+          HInvokeStaticOrDirect::ClinitCheckRequirement::kImplicit);
       break;
+    } else if (user->IsNewInstance() && CanMoveClinitCheck(check, user)) {
+      implicit_clinit = user;
+      user->AsNewInstance()->SetEntrypoint(kQuickAllocObjectResolved);
     }
   }
   // If we found a static invoke for merging, remove the check from all other static invokes.
-  if (invoke != nullptr) {
+  if (implicit_clinit != nullptr) {
     for (HUseIterator<HInstruction*> it(check->GetUses()); !it.Done(); ) {
       HInstruction* user = it.Current()->GetUser();
-      DCHECK(invoke->StrictlyDominates(user));  // All other uses must be dominated.
+      // All other uses must be dominated.
+      DCHECK(implicit_clinit->StrictlyDominates(user) || (implicit_clinit == user));
       it.Advance();  // Advance before we remove the node, reference to the next node is preserved.
       if (user->IsInvokeStaticOrDirect()) {
         user->AsInvokeStaticOrDirect()->RemoveExplicitClinitCheck(
@@ -77,7 +82,7 @@ void PrepareForRegisterAllocation::VisitClinitCheck(HClinitCheck* check) {
 
   check->ReplaceWith(load_class);
 
-  if (invoke != nullptr) {
+  if (implicit_clinit != nullptr) {
     // Remove the check from the graph. It has been merged into the invoke.
     check->GetBlock()->RemoveInstruction(check);
     // Check if we can merge the load class as well.
@@ -89,6 +94,22 @@ void PrepareForRegisterAllocation::VisitClinitCheck(HClinitCheck* check) {
     // and remove the instruction from the graph.
     load_class->SetMustGenerateClinitCheck(true);
     check->GetBlock()->RemoveInstruction(check);
+  }
+}
+
+void PrepareForRegisterAllocation::VisitNewInstance(HNewInstance* instruction) {
+  HLoadClass* load_class = instruction->InputAt(0)->AsLoadClass();
+  bool has_only_one_use = load_class->HasOnlyOneNonEnvironmentUse();
+  // Change the entrypoint to kQuickAllocObject if either:
+  // - the class is finalizable (only kQuickAllocObject handles finalizable classes)
+  // - or the load class has only one use and it does not need access checks. 
+  if (instruction->IsFinalizable() || (has_only_one_use && !load_class->NeedsAccessCheck())) {
+    instruction->SetEntrypoint(kQuickAllocObject);
+    instruction->ReplaceInput(GetGraph()->GetIntConstant(load_class->GetTypeIndex()), 0);
+    if (has_only_one_use) {
+      // We can remove the load class from the graph.
+      load_class->GetBlock()->RemoveInstruction(load_class);
+    }
   }
 }
 
