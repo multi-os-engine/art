@@ -112,7 +112,12 @@ TEST(InstructionSetFeaturesTest, FeaturesFromCpuInfo) {
 #endif
 
 #ifndef __ANDROID__
+#if defined(__i386__) || defined(__x86_64__)
+TEST(InstructionSetFeaturesTest, DISABLED_HostFeaturesFromCppDefines) {
+  LOG(WARNING) << "Test disabled due to no CPP define for X86 lock_add";
+#else
 TEST(InstructionSetFeaturesTest, HostFeaturesFromCppDefines) {
+#endif
   std::string error_msg;
   std::unique_ptr<const InstructionSetFeatures> default_features(
       InstructionSetFeatures::FromVariant(kRuntimeISA, "default", &error_msg));
