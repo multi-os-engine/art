@@ -585,6 +585,8 @@ bool X86Mir2Lir::ProvidesFullMemoryBarrier(X86OpCode opcode) {
       case kX86LockCmpxchgAR:
       case kX86LockCmpxchg64M:
       case kX86LockCmpxchg64A:
+      case kX86LockCmpxchg64AR:
+      case kX86LockAdd32MI8:
       case kX86XchgMR:
       case kX86Mfence:
         // Atomic memory instructions provide full barrier.
@@ -610,20 +612,21 @@ bool X86Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
    * All other barriers (LoadAny, AnyStore, StoreStore) are nops due to the x86 memory model.
    * For those cases, all we need to ensure is that there is a scheduling barrier in place.
    */
+  const RegStorage rs_rSP = cu_->target64 ? rs_rX86_SP_64 : rs_rX86_SP_32;
   if (barrier_kind == kAnyAny) {
-    // If no LIR exists already that can be used a barrier, then generate an mfence.
+    // If no LIR exists already that can be used a barrier, then generate a locked add.
     if (mem_barrier == nullptr) {
-      mem_barrier = NewLIR0(kX86Mfence);
+      mem_barrier = NewLIR3(kX86LockAdd32MI8, rs_rSP.GetReg(), 0, 0);
       ret = true;
     }
 
-    // If last instruction does not provide full barrier, then insert an mfence.
+    // If last instruction does not provide full barrier, then insert a locked add.
     if (ProvidesFullMemoryBarrier(static_cast<X86OpCode>(mem_barrier->opcode)) == false) {
-      mem_barrier = NewLIR0(kX86Mfence);
+      mem_barrier = NewLIR3(kX86LockAdd32MI8, rs_rSP.GetReg(), 0, 0);
       ret = true;
     }
   } else if (barrier_kind == kNTStoreStore) {
-      mem_barrier = NewLIR0(kX86Sfence);
+      mem_barrier = NewLIR3(kX86LockAdd32MI8, rs_rSP.GetReg(), 0, 0);
       ret = true;
   }
 

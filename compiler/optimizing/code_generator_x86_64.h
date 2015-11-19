@@ -417,6 +417,12 @@ class CodeGeneratorX86_64 : public CodeGenerator {
                           int64_t v,
                           HInstruction* instruction);
 
+  // Generate a memory fence.
+  void MemoryFence() {
+    // Prefer lock addl to mfence because it doesn't serialize I/O.
+    assembler_.lock()->addl(Address(CpuRegister(RSP), 0), Immediate(0));
+  }
+
  private:
   struct PcRelativeDexCacheAccessInfo {
     PcRelativeDexCacheAccessInfo(const DexFile& dex_file, uint32_t element_off)
