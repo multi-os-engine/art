@@ -63,8 +63,14 @@ ART_TEST_OPTIMIZING ?= $(ART_TEST_FULL)
 # Do we want to test a PIC-compiled core image?
 ART_TEST_PIC_IMAGE ?= $(ART_TEST_FULL)
 
+# Do we want to test non-PIC-compiled tests ("apps")?
+ART_TEST_NO_PIC_TEST ?= true
+
 # Do we want to test PIC-compiled tests ("apps")?
 ART_TEST_PIC_TEST ?= $(ART_TEST_FULL)
+
+# Do you want non-tracing tests run?
+ART_TEST_NO_TRACE ?= true
 
 # Do you want tracing tests run?
 ART_TEST_TRACE ?= $(ART_TEST_FULL)
@@ -72,16 +78,25 @@ ART_TEST_TRACE ?= $(ART_TEST_FULL)
 # Do you want tracing tests (streaming mode) run?
 ART_TEST_TRACE_STREAM ?= $(ART_TEST_FULL)
 
+# Do you want tests with default GC behavior to run?
+ART_TEST_GC_DEFAULT ?= true
+
 # Do you want tests with GC verification enabled run?
 ART_TEST_GC_VERIFY ?= $(ART_TEST_FULL)
 
 # Do you want tests with the GC stress mode enabled run?
 ART_TEST_GC_STRESS ?= $(ART_TEST_FULL)
 
+# Do you want tests with the default JNI mode (checkjni) enabled run?
+ART_TEST_JNI_DEFAULT ?= true
+
 # Do you want tests with the JNI forcecopy mode enabled run?
 ART_TEST_JNI_FORCECOPY ?= $(ART_TEST_FULL)
 
-# Do you want run-tests with relocation disabled run?
+# Do you want run-tests with relocation enabled to run?
+ART_TEST_RUN_TEST_RELOCATE ?= true
+
+# Do you want run-tests with relocation disabled to run?
 ART_TEST_RUN_TEST_NO_RELOCATE ?= $(ART_TEST_FULL)
 
 # Do you want run-tests with prebuilding?
@@ -89,6 +104,9 @@ ART_TEST_RUN_TEST_PREBUILD ?= true
 
 # Do you want run-tests with no prebuilding enabled run?
 ART_TEST_RUN_TEST_NO_PREBUILD ?= $(ART_TEST_FULL)
+
+# Do you want run-tests with a pregenerated core.art?
+ART_TEST_RUN_TEST_IMAGE ?= true
 
 # Do you want run-tests without a pregenerated core.art?
 ART_TEST_RUN_TEST_NO_IMAGE ?= $(ART_TEST_FULL)
@@ -110,6 +128,9 @@ ART_TEST_RUN_TEST_2ND_ARCH ?= true
 
 # Do you want failed tests to have their artifacts cleaned up?
 ART_TEST_RUN_TEST_ALWAYS_CLEAN ?= true
+
+# Do you want run-tests without the --debuggable flag
+ART_TEST_RUN_TEST_NO_DEBUGGABLE ?= true
 
 # Do you want run-tests with the --debuggable flag
 ART_TEST_RUN_TEST_DEBUGGABLE ?= $(ART_TEST_FULL)

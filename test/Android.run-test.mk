@@ -98,6 +98,9 @@ TEST_ART_RUN_TEST_BUILD_RULES :=
 # General rules to build and run a run-test.
 
 TARGET_TYPES := host target
+
+HAS_MISSING_TEST_OPTIONS := false
+
 PREBUILD_TYPES :=
 ifeq ($(ART_TEST_RUN_TEST_PREBUILD),true)
   PREBUILD_TYPES += prebuild
@@ -108,6 +111,11 @@ endif
 ifeq ($(ART_TEST_RUN_TEST_NO_DEX2OAT),true)
   PREBUILD_TYPES += no-dex2oat
 endif
+ifeq ($(PREBUILD_TYPES),)
+  $(warning All prebuild run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
+endif
+
 COMPILER_TYPES :=
 ifeq ($(ART_TEST_DEFAULT_COMPILER),true)
   COMPILER_TYPES += default
@@ -124,42 +132,95 @@ endif
 ifeq ($(ART_TEST_OPTIMIZING),true)
   COMPILER_TYPES += optimizing
 endif
-RELOCATE_TYPES := relocate
+ifeq ($(COMPILER_TYPES),)
+  $(warning All compiler type run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
+endif
+
+RELOCATE_TYPES :=
+ifeq ($(ART_TEST_RUN_TEST_RELOCATE),true)
+  RELOCATE_TYPES += relocate
+endif
 ifeq ($(ART_TEST_RUN_TEST_NO_RELOCATE),true)
   RELOCATE_TYPES += no-relocate
 endif
 ifeq ($(ART_TEST_RUN_TEST_RELOCATE_NO_PATCHOAT),true)
   RELOCATE_TYPES += relocate-npatchoat
 endif
-TRACE_TYPES := ntrace
+ifeq ($(RELOCATE_TYPES),)
+  $(warning All relocation run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
+endif
+
+TRACE_TYPES :=
+ifeq ($(ART_TEST_NO_TRACE),true)
+  TRACE_TYPES += ntrace
+endif
 ifeq ($(ART_TEST_TRACE),true)
   TRACE_TYPES += trace
 endif
 ifeq ($(ART_TEST_TRACE_STREAM),true)
   TRACE_TYPES += stream
 endif
-GC_TYPES := cms
+ifeq ($(TRACE_TYPES),)
+  $(warning All tracing type run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
+endif
+
+GC_TYPES :=
+ifeq ($(ART_TEST_GC_DEFAULT),true)
+  GC_TYPES += cms
+endif
 ifeq ($(ART_TEST_GC_STRESS),true)
   GC_TYPES += gcstress
 endif
 ifeq ($(ART_TEST_GC_VERIFY),true)
   GC_TYPES += gcverify
 endif
-JNI_TYPES := checkjni
+ifeq ($(GC_TYPES),)
+  $(warning All gc type run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
+endif
+
+JNI_TYPES :=
+ifeq ($(ART_TEST_JNI_DEFAULT),true)
+  JNI_TYPES += checkjni
+endif
 ifeq ($(ART_TEST_JNI_FORCECOPY),true)
   JNI_TYPES += forcecopy
 endif
-IMAGE_TYPES := image
+ifeq ($(JNI_TYPES),)
+  $(warning All jni type run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
+endif
+
+IMAGE_TYPES :=
+ifeq ($(ART_TEST_RUN_TEST_IMAGE),true)
+  IMAGE_TYPES += image
+endif
 ifeq ($(ART_TEST_RUN_TEST_NO_IMAGE),true)
   IMAGE_TYPES += no-image
 endif
 ifeq ($(ART_TEST_PIC_IMAGE),true)
   IMAGE_TYPES += picimage
 endif
-PICTEST_TYPES := npictest
+ifeq ($(IMAGE_TYPES),)
+  $(warning All image type run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
+endif
+
+PICTEST_TYPES :=
+ifeq ($(ART_TEST_NO_PIC_TEST),true)
+  PICTEST_TYPES += npictest
+endif
 ifeq ($(ART_TEST_PIC_TEST),true)
   PICTEST_TYPES += pictest
 endif
+ifeq ($(PICTEST_TYPES),)
+  $(warning All pic type run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
+endif
+
 RUN_TYPES :=
 ifeq ($(ART_TEST_RUN_TEST_DEBUG),true)
   RUN_TYPES += debug
@@ -167,12 +228,30 @@ endif
 ifeq ($(ART_TEST_RUN_TEST_NDEBUG),true)
   RUN_TYPES += ndebug
 endif
-DEBUGGABLE_TYPES := ndebuggable
-ifeq ($(ART_TEST_RUN_TEST_DEBUGGABLE),true)
-DEBUGGABLE_TYPES += debuggable
+ifeq ($(RUN_TYPES),)
+  $(warning All run-type run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
 endif
+
+DEBUGGABLE_TYPES :=
+ifeq ($(ART_TEST_RUN_TEST_NO_DEBUGGABLE),true)
+  DEBUGGABLE_TYPES += ndebuggable
+endif
+ifeq ($(ART_TEST_RUN_TEST_DEBUGGABLE),true)
+  DEBUGGABLE_TYPES += debuggable
+endif
+ifeq ($(DEBUGGABLE_TYPES),)
+  $(warning All debuggable run-test settings are disabled!)
+  ART_TEST_HAS_MISSING_TEST_OPTIONS := true
+endif
+
+ifeq ($(ART_TEST_HAS_MISSING_TEST_OPTIONS),true)
+  $(error Illegal combinations of run-test settings prevents running tests.)
+endif
+
 ADDRESS_SIZES_TARGET := $(ART_PHONY_TEST_TARGET_SUFFIX)
 ADDRESS_SIZES_HOST := $(ART_PHONY_TEST_HOST_SUFFIX)
+
 ifeq ($(ART_TEST_RUN_TEST_2ND_ARCH),true)
   ADDRESS_SIZES_TARGET += $(2ND_ART_PHONY_TEST_TARGET_SUFFIX)
   ADDRESS_SIZES_HOST += $(2ND_ART_PHONY_TEST_HOST_SUFFIX)
