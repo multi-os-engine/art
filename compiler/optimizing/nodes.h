@@ -3637,22 +3637,24 @@ class HInvokeInterface : public HInvoke {
   DISALLOW_COPY_AND_ASSIGN(HInvokeInterface);
 };
 
-class HNewInstance : public HExpression<1> {
+class HNewInstance : public HExpression<2> {
  public:
-  HNewInstance(HCurrentMethod* current_method,
+  HNewInstance(HInstruction* cls,
+               HCurrentMethod* current_method,
                uint32_t dex_pc,
                uint16_t type_index,
                const DexFile& dex_file,
-               bool can_throw,
+               bool needs_access_check,
                bool finalizable,
                QuickEntrypointEnum entrypoint)
       : HExpression(Primitive::kPrimNot, SideEffects::CanTriggerGC(), dex_pc),
         type_index_(type_index),
         dex_file_(dex_file),
-        can_throw_(can_throw),
+        needs_access_check_(needs_access_check),
         finalizable_(finalizable),
         entrypoint_(entrypoint) {
-    SetRawInputAt(0, current_method);
+    SetRawInputAt(0, cls);
+    SetRawInputAt(1, current_method);
   }
 
   uint16_t GetTypeIndex() const { return type_index_; }
@@ -3664,7 +3666,7 @@ class HNewInstance : public HExpression<1> {
   // It may throw when called on type that's not instantiable/accessible.
   // It can throw OOME.
   // TODO: distinguish between the two cases so we can for example allow allocation elimination.
-  bool CanThrow() const OVERRIDE { return can_throw_ || true; }
+  bool CanThrow() const OVERRIDE { return needs_access_check_ || true; }
 
   bool IsFinalizable() const { return finalizable_; }
 
@@ -3672,14 +3674,18 @@ class HNewInstance : public HExpression<1> {
 
   QuickEntrypointEnum GetEntrypoint() const { return entrypoint_; }
 
+  void SetEntrypoint(QuickEntrypointEnum entrypoint) {
+    entrypoint_ = entrypoint;
+  }
+
   DECLARE_INSTRUCTION(NewInstance);
 
  private:
   const uint16_t type_index_;
   const DexFile& dex_file_;
-  const bool can_throw_;
+  const bool needs_access_check_;
   const bool finalizable_;
-  const QuickEntrypointEnum entrypoint_;
+  QuickEntrypointEnum entrypoint_;
 
   DISALLOW_COPY_AND_ASSIGN(HNewInstance);
 };
@@ -4912,6 +4918,7 @@ class HClinitCheck : public HExpression<1> {
     return true;
   }
 
+  bool CanThrow() const OVERRIDE { return true; }
 
   HLoadClass* GetLoadClass() const { return InputAt(0)->AsLoadClass(); }
 
