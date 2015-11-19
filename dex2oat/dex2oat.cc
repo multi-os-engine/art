@@ -315,6 +315,11 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      Use a separate --runtime-arg switch for each argument.");
   UsageError("      Example: --runtime-arg -Xms256m");
   UsageError("");
+  UsageError("  --class-path-location <argument>: used to specify the dex location for the dex files,");
+  UsageError("      passed through the -cp argument. Use ':' to separate the file pathes.");
+  UsageError("      The number of locations should match the number of dex files in the class path.");
+  UsageError("      Example: --class-path-location /system/app/File1.apk:/system/app/File2.apk");
+  UsageError("");
   UsageError("  --profile-file=<filename>: specify profiler output file to use for compilation.");
   UsageError("");
   UsageError("  --print-pass-names: print a list of pass names");
@@ -910,6 +915,14 @@ class Dex2Oat FINAL {
           LOG(INFO) << "dex2oat: option[" << i << "]=" << argv[i];
         }
         runtime_args_.push_back(argv[i]);
+      } else if (option == "--class-path-location") {
+        if (++i >= argc) {
+          Usage("Missing required argument for --class-path-location");
+        }
+        if (log_options) {
+          LOG(INFO) << "dex2oat: option[" << i << "]=" << argv[i];
+        }
+        class_path_location_ = argv[i];
       } else if (option == "--dump-timing") {
         dump_timing_ = true;
       } else if (option == "--dump-passes") {
@@ -1235,7 +1248,8 @@ class Dex2Oat FINAL {
 
     if (!boot_image_option_.empty()) {
       ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-      OpenClassPathFiles(runtime_->GetClassPathString(), dex_files_, &class_path_files_);
+      OpenClassPathFiles(runtime_->GetClassPathString(), class_path_location_,
+                         dex_files_, &class_path_files_);
       ScopedObjectAccess soa(self);
 
       // Classpath: first the class-path given.
@@ -1559,20 +1573,30 @@ class Dex2Oat FINAL {
   // Appends to opened_dex_files any elements of class_path that dex_files
   // doesn't already contain. This will open those dex files as necessary.
   static void OpenClassPathFiles(const std::string& class_path,
+                                 const std::string& class_path_location,
                                  std::vector<const DexFile*> dex_files,
                                  std::vector<std::unique_ptr<const DexFile>>* opened_dex_files) {
     DCHECK(opened_dex_files != nullptr) << "OpenClassPathFiles out-param is nullptr";
-    std::vector<std::string> parsed;
-    Split(class_path, ':', &parsed);
+    std::vector<std::string> dex_filenames;
+    std::vector<std::string> dex_locations;
+    Split(class_path, ':', &dex_filenames);
+    Split(class_path_location, ':', &dex_locations);
+    if (class_path_location.empty()) {
+      dex_locations = dex_filenames;
+    } else if (dex_locations.size() != dex_filenames.size()) {
+      LOG(WARNING) << "The number of dex files from the class path does not match " <<
+                      "the number of dex loccations from --class-path-location";
+      dex_locations = dex_filenames;
+    }
     // Take Locks::mutator_lock_ so that lock ordering on the ClassLinker::dex_lock_ is maintained.
     ScopedObjectAccess soa(Thread::Current());
-    for (size_t i = 0; i < parsed.size(); ++i) {
-      if (DexFilesContains(dex_files, parsed[i])) {
+    for (size_t i = 0; i < dex_filenames.size(); ++i) {
+      if (DexFilesContains(dex_files, dex_locations[i])) {
         continue;
       }
       std::string error_msg;
-      if (!DexFile::Open(parsed[i].c_str(), parsed[i].c_str(), &error_msg, opened_dex_files)) {
-        LOG(WARNING) << "Failed to open dex file '" << parsed[i] << "': " << error_msg;
+      if (!DexFile::Open(dex_filenames[i].c_str(), dex_locations[i].c_str(), &error_msg, opened_dex_files)) {
+        LOG(WARNING) << "Failed to open dex file '" << dex_filenames[i] << "': " << error_msg;
       }
     }
   }
@@ -1779,6 +1803,7 @@ class Dex2Oat FINAL {
   std::string zip_location_;
   std::string boot_image_option_;
   std::vector<const char*> runtime_args_;
+  std::string class_path_location_;
   std::string image_filename_;
   uintptr_t image_base_;
   const char* image_classes_zip_filename_;
