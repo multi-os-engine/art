@@ -18,6 +18,7 @@
 
 #include <inttypes.h>
 #include <pthread.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -59,6 +60,14 @@ namespace art {
 #if defined(__linux__)
 static constexpr bool kUseAddr2line = !kIsTargetBuild;
 #endif
+
+uint32_t GetRandomNumber() {
+#if defined(__BIONIC__)
+  return arc4random();
+#else
+  return static_cast<uint32_t>(rand());
+#endif
+}
 
 pid_t GetTid() {
 #if defined(__APPLE__)

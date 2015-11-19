@@ -59,7 +59,7 @@ static int32_t ChooseRelocationOffsetDelta(int32_t min_delta, int32_t max_delta)
   CHECK_LT(min_delta, max_delta);
 
   std::default_random_engine generator;
-  generator.seed(NanoTime() * getpid());
+  generator.seed(GetRandomNumber());
   std::uniform_int_distribution<int32_t> distribution(min_delta, max_delta);
   int32_t r = distribution(generator);
   if (r % 2 == 0) {
