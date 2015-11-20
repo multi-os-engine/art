@@ -588,8 +588,8 @@ bool HLoopInformation::IsIn(const HLoopInformation& other) const {
 }
 
 bool HLoopInformation::IsLoopInvariant(HInstruction* instruction, bool must_dominate) const {
-  HLoopInformation* other_loop = instruction->GetBlock()->GetLoopInformation();
-  if (other_loop != this && (other_loop == nullptr || !other_loop->IsIn(*this))) {
+  bool out_of_the_loop = !blocks_.IsBitSet(instruction->GetBlock()->GetBlockId());
+  if (out_of_the_loop) {
     if (must_dominate) {
       return instruction->GetBlock()->Dominates(GetHeader());
     }
