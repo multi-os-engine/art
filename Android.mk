@@ -132,10 +132,23 @@ ifeq ($(ART_TEST_ANDROID_ROOT),)
 test-art-target-sync: $(TEST_ART_TARGET_SYNC_DEPS)
 	adb root
 	adb wait-for-device remount
+	((adb shell touch /system/testfile && \
+	  (adb shell rm /system/testfile || true)) || \
+	 (adb disable-verity && \
+  	  adb reboot && \
+	  adb wait-for-device root && \
+	  adb wait-for-device remount))
 	adb sync
 else
 test-art-target-sync: $(TEST_ART_TARGET_SYNC_DEPS)
 	adb root
+	adb remount
+	((adb shell touch /system/testfile && \
+	  (adb shell rm /system/testfile || true)) || \
+	 (adb disable-verity && \
+  	  adb reboot && \
+	  adb wait-for-device root && \
+	  adb wait-for-device remount))
 	adb wait-for-device push $(ANDROID_PRODUCT_OUT)/system $(ART_TEST_ANDROID_ROOT)
 	adb push $(ANDROID_PRODUCT_OUT)/data /data
 endif
@@ -376,6 +389,12 @@ oat-target: $(ART_TARGET_DEPENDENCIES) $(DEFAULT_DEX_PREOPT_INSTALLED_IMAGE) $(O
 oat-target-sync: oat-target
 	adb root
 	adb wait-for-device remount
+	((adb shell touch /system/testfile && \
+	  (adb shell rm /system/testfile || true)) || \
+	 (adb disable-verity && \
+  	  adb reboot && \
+	  adb wait-for-device root && \
+	  adb wait-for-device remount))
 	adb sync
 
 ########################################################################
