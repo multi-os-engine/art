@@ -43,9 +43,11 @@ image="-Ximage:/data/art-test/core-jit.art"
 vm_args=""
 # By default, we run the whole JDWP test suite.
 test="org.apache.harmony.jpda.tests.share.AllTests"
+host="no"
 
 while true; do
   if [[ "$1" == "--mode=host" ]]; then
+    host="yes"
     # Specify bash explicitly since the art script cannot, since it has to run on the device
     # with mksh.
     art="bash ${OUT_DIR-out}/host/linux-x86/bin/art"
@@ -118,3 +120,17 @@ vogar $vm_command \
       --classpath $test_jar \
       --vm-arg -Xcompiler-option --vm-arg --debuggable \
       $test
+
+vogar_exit_status=$?
+
+echo "Killing stalled dalvikvm processes..."
+if [[ $host == "yes" ]]; then
+  processes=$(ps u| grep dalvikvm | awk '{print $1}')
+  for pid in $processes; do kill -9 $pid; done
+else
+  processes=$(adb shell "ps" | grep dalvikvm | awk '{print $2}')
+  for pid in $processes; do adb shell kill -9 $pid; done
+fi
+echo "Done."
+
+exit $vogar_exit_status
