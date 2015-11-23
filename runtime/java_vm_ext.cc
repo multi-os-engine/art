@@ -927,7 +927,8 @@ extern "C" jint JNI_CreateJavaVM(JavaVM** p_vm, JNIEnv** p_env, void* vm_args) {
   ATRACE_BEGIN(__FUNCTION__);
   const JavaVMInitArgs* args = static_cast<JavaVMInitArgs*>(vm_args);
   if (IsBadJniVersion(args->version)) {
-    LOG(ERROR) << "Bad JNI version passed to CreateJavaVM: " << args->version;
+    // Cannot use LOG(), InitLogging() has not been called yet.
+    std::cerr << "Bad JNI version passed to CreateJavaVM: " << args->version << std::endl;
     ATRACE_END();
     return JNI_EVERSION;
   }
