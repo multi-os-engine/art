@@ -3016,8 +3016,12 @@ void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invok
 }
 
 void CodeGeneratorARM64::GenerateVirtualCall(HInvokeVirtual* invoke, Location temp_in) {
-  LocationSummary* locations = invoke->GetLocations();
-  Location receiver = locations->InAt(0);
+  // Use the calling convention instead of the location of the receiver, as
+  // intrinsics may have put the receiver in a different register. In the intrinsics
+  // slow path, the arguments have been moved to the right place, so here we are
+  // guaranteed that the receiver is the first register of the calling convention.
+  InvokeDexCallingConvention calling_convention;
+  Register receiver = calling_convention.GetRegisterAt(0);
   Register temp = XRegisterFrom(temp_in);
   size_t method_offset = mirror::Class::EmbeddedVTableEntryOffset(
       invoke->GetVTableIndex(), kArm64PointerSize).SizeValue();
@@ -3026,8 +3030,7 @@ void CodeGeneratorARM64::GenerateVirtualCall(HInvokeVirtual* invoke, Location te
 
   BlockPoolsScope block_pools(GetVIXLAssembler());
 
-  DCHECK(receiver.IsRegister());
-  __ Ldr(temp.W(), HeapOperandFrom(receiver, class_offset));
+  __ Ldr(temp.W(), HeapOperandFrom(LocationFrom(receiver), class_offset));
   MaybeRecordImplicitNullCheck(invoke);
   GetAssembler()->MaybeUnpoisonHeapReference(temp.W());
   // temp = temp->GetMethodAt(method_offset);
