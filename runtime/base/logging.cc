@@ -29,6 +29,7 @@
 #ifdef __ANDROID__
 #include "cutils/log.h"
 #else
+#include <cassert>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
@@ -205,6 +206,11 @@ LogMessage::~LogMessage() {
 
     // Do the actual logging with the lock held.
     {
+#ifdef __ANDROID__
+      ALOG_ASSERT(Locks::logging_lock_ != nullptr);
+#else
+      assert(Locks::logging_lock_ != nullptr);
+#endif
       MutexLock mu(Thread::Current(), *Locks::logging_lock_);
       if (msg.find('\n') == std::string::npos) {
         LogLine(data_->GetFile(), data_->GetLineNumber(), data_->GetSeverity(), msg.c_str());

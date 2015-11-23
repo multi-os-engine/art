@@ -42,6 +42,11 @@
 #include "thread-inl.h"
 #include "thread_list.h"
 
+// For cases where logging.h cannot be used.
+#ifdef __ANDROID__
+#include "cutils/log.h"
+#endif
+
 namespace art {
 
 static size_t gGlobalsInitial = 512;  // Arbitrary.
@@ -927,7 +932,12 @@ extern "C" jint JNI_CreateJavaVM(JavaVM** p_vm, JNIEnv** p_env, void* vm_args) {
   ATRACE_BEGIN(__FUNCTION__);
   const JavaVMInitArgs* args = static_cast<JavaVMInitArgs*>(vm_args);
   if (IsBadJniVersion(args->version)) {
-    LOG(ERROR) << "Bad JNI version passed to CreateJavaVM: " << args->version;
+    // Cannot use LOG(), InitLogging() has not been called yet.
+#if __ANDROID__
+    ALOGE("Bad JNI version passed to CreateJavaVM: %d", args->version);
+#else
+    fprintf(stderr, "Bad JNI version passed to CreateJavaVM: %d\n", args->version);
+#endif
     ATRACE_END();
     return JNI_EVERSION;
   }
