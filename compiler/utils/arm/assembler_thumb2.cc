@@ -3513,6 +3513,7 @@ bool Thumb2Assembler::CanSplitLoadStoreOffset(int32_t allowed_offset_bits,
                                               /*out*/ int32_t* add_to_base,
                                               /*out*/ int32_t* offset_for_load_store) {
   int32_t other_bits = offset & ~allowed_offset_bits;
+  // Can we ADD or SUB other_bits in a single instruction? See AddConstant().
   if (ShifterOperandCanAlwaysHold(other_bits) || ShifterOperandCanAlwaysHold(-other_bits)) {
     *add_to_base = offset & ~allowed_offset_bits;
     *offset_for_load_store = offset & allowed_offset_bits;
