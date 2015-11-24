@@ -1140,7 +1140,7 @@ bool CompilerDriver::CanAssumeStringIsPresentInDexCache(const DexFile& dex_file,
   // See also Compiler::ResolveDexFile
 
   bool result = false;
-  if (IsBootImage()) {
+  if (IsBootImage() || Runtime::Current()->UseJit()) {
     // We resolve all const-string strings when building for the image.
     ScopedObjectAccess soa(Thread::Current());
     StackHandleScope<1> hs(soa.Self());
