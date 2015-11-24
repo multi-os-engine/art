@@ -357,6 +357,7 @@ CompiledMethod* ArtCompileDEX(
         0,
         0,
         ArrayRef<const SrcMapElem>(),                // src_mapping_table
+        ArrayRef<const uint8_t>(),                   // native_debug_stack_map.
         ArrayRef<const uint8_t>(),                   // mapping_table
         ArrayRef<const uint8_t>(builder.GetData()),  // vmap_table
         ArrayRef<const uint8_t>(),                   // gc_map

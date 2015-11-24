@@ -270,7 +270,7 @@ class CodeGenerator {
   // Record native to dex mapping for a suspend point.  Required by runtime.
   void RecordPcInfo(HInstruction* instruction, uint32_t dex_pc, SlowPathCode* slow_path = nullptr);
   // Record additional native to dex mappings for native debugging/profiling tools.
-  void RecordNativeDebugInfo(uint32_t dex_pc, uintptr_t native_pc_begin, uintptr_t native_pc_end);
+  void RecordNativeDebugInfo(HInstruction* instruction, uint32_t dex_pc);
 
   bool CanMoveNullCheckToUser(HNullCheck* null_check);
   void MaybeRecordImplicitNullCheck(HInstruction* instruction);
@@ -296,6 +296,8 @@ class CodeGenerator {
       ArenaVector<uint8_t>* vector, const CompilerDriver& compiler_driver) const;
   void BuildStackMaps(MemoryRegion region);
   size_t ComputeStackMapsSize();
+  void BuildNativeDebugStackMap(MemoryRegion region);
+  size_t ComputeNativeDebugStackMapSize();
 
   bool IsBaseline() const {
     return is_baseline_;
@@ -453,7 +455,7 @@ class CodeGenerator {
   virtual void MoveFromReturnRegister(Location trg, Primitive::Type type) = 0;
 
   const ArenaVector<SrcMapElem>& GetSrcMappingTable() const {
-    return src_map_;
+    return native_debug_src_map_;
   }
 
  protected:
@@ -492,13 +494,14 @@ class CodeGenerator {
         core_callee_save_mask_(core_callee_save_mask),
         fpu_callee_save_mask_(fpu_callee_save_mask),
         stack_map_stream_(graph->GetArena()),
+        native_debug_stack_map_stream_(graph->GetArena()),
+        native_debug_src_map_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
         block_order_(nullptr),
         is_baseline_(false),
         disasm_info_(nullptr),
         stats_(stats),
         graph_(graph),
         compiler_options_(compiler_options),
-        src_map_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
         slow_paths_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
         current_slow_path_(nullptr),
         current_block_index_(0),
@@ -593,7 +596,12 @@ class CodeGenerator {
   const uint32_t core_callee_save_mask_;
   const uint32_t fpu_callee_save_mask_;
 
+  // StackMap containing only entries required by the run-time.
   StackMapStream stack_map_stream_;
+  // StackMap containing entries for all dex instructions.
+  StackMapStream native_debug_stack_map_stream_;
+  // Native to dex_pc map used for native debugging/profiling tools.
+  ArenaVector<SrcMapElem> native_debug_src_map_;
 
   // The order to use for code generation.
   const ArenaVector<HBasicBlock*>* block_order_;
@@ -609,15 +617,16 @@ class CodeGenerator {
   void GenerateSlowPaths();
   void CompileInternal(CodeAllocator* allocator, bool is_baseline);
   void BlockIfInRegister(Location location, bool is_out = false) const;
-  void EmitEnvironment(HEnvironment* environment, SlowPathCode* slow_path);
+  void EmitStackMapInfo(StackMapStream& stack_map_stream, HInstruction* instruction,
+                        uint32_t dex_pc, SlowPathCode* slow_path) const;
+  void EmitEnvironment(StackMapStream& stack_map_stream, HEnvironment* environment,
+                       SlowPathCode* slow_path) const;
 
   OptimizingCompilerStats* stats_;
 
   HGraph* const graph_;
   const CompilerOptions& compiler_options_;
 
-  // Native to dex_pc map used for native debugging/profiling tools.
-  ArenaVector<SrcMapElem> src_map_;
   ArenaVector<SlowPathCode*> slow_paths_;
 
   // The current slow path that we're generating code for.
