@@ -3253,24 +3253,28 @@ void InstructionCodeGeneratorARM64::VisitLoadLocal(HLoadLocal* load ATTRIBUTE_UN
 }
 
 void LocationsBuilderARM64::VisitLoadString(HLoadString* load) {
-  LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(load, LocationSummary::kCallOnSlowPath);
+  LocationSummary::CallKind call_kind = (!load->IsInDexCache() || kEmitCompilerReadBarrier)
+      ? LocationSummary::kCallOnSlowPath
+      : LocationSummary::kNoCall;
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(load, call_kind);
   locations->SetInAt(0, Location::RequiresRegister());
   locations->SetOut(Location::RequiresRegister());
 }
 
 void InstructionCodeGeneratorARM64::VisitLoadString(HLoadString* load) {
-  SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathARM64(load);
-  codegen_->AddSlowPath(slow_path);
-
   Register out = OutputRegister(load);
   Register current_method = InputRegisterAt(load, 0);
   __ Ldr(out, MemOperand(current_method, ArtMethod::DeclaringClassOffset().Int32Value()));
   __ Ldr(out.X(), HeapOperand(out, mirror::Class::DexCacheStringsOffset()));
   __ Ldr(out, MemOperand(out.X(), CodeGenerator::GetCacheOffset(load->GetStringIndex())));
   // TODO: We will need a read barrier here.
-  __ Cbz(out, slow_path->GetEntryLabel());
-  __ Bind(slow_path->GetExitLabel());
+
+  if (!load->IsInDexCache()) {
+    SlowPathCodeARM64* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathARM64(load);
+    codegen_->AddSlowPath(slow_path);
+    __ Cbz(out, slow_path->GetEntryLabel());
+    __ Bind(slow_path->GetExitLabel());
+  }
 }
 
 void LocationsBuilderARM64::VisitLocal(HLocal* local) {
