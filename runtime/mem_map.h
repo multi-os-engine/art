@@ -103,7 +103,9 @@ class MemMap {
   // "start" offset is absolute, not relative. This version allows
   // requesting a specific address for the base of the
   // mapping. "reuse" allows us to create a view into an existing
-  // mapping where we do not take ownership of the memory.
+  // mapping where we do not take ownership of the memory. If error_msg
+  // is nullptr then we do not print /proc/maps if MapFileAtAddress fails.
+  // This helps improve performance of the fail case.
   //
   // On success, returns returns a MemMap instance.  On failure, returns null.
   static MemMap* MapFileAtAddress(uint8_t* addr,
