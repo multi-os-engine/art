@@ -1114,25 +1114,23 @@ bool CompilerDriver::CanAssumeClassIsLoaded(mirror::Class* klass) {
 }
 
 bool CompilerDriver::CanAssumeTypeIsPresentInDexCache(const DexFile& dex_file, uint32_t type_idx) {
-  if (IsBootImage() &&
-      IsImageClass(dex_file.StringDataByIdx(dex_file.GetTypeId(type_idx).descriptor_idx_))) {
-    {
-      ScopedObjectAccess soa(Thread::Current());
-      mirror::DexCache* dex_cache = Runtime::Current()->GetClassLinker()->FindDexCache(
-          soa.Self(), dex_file, false);
-      mirror::Class* resolved_class = dex_cache->GetResolvedType(type_idx);
-      if (resolved_class == nullptr) {
-        // Erroneous class.
-        stats_->TypeNotInDexCache();
-        return false;
-      }
-    }
+  bool result = false;
+  if ((IsBootImage() &&
+       IsImageClass(dex_file.StringDataByIdx(dex_file.GetTypeId(type_idx).descriptor_idx_))) ||
+      Runtime::Current()->UseJit()) {
+    ScopedObjectAccess soa(Thread::Current());
+    mirror::DexCache* dex_cache = Runtime::Current()->GetClassLinker()->FindDexCache(
+        soa.Self(), dex_file, false);
+    mirror::Class* resolved_class = dex_cache->GetResolvedType(type_idx);
+    result = (resolved_class != nullptr);
+  }
+
+  if (result) {
     stats_->TypeInDexCache();
-    return true;
   } else {
     stats_->TypeNotInDexCache();
-    return false;
   }
+  return result;
 }
 
 bool CompilerDriver::CanAssumeStringIsPresentInDexCache(const DexFile& dex_file,
@@ -1140,7 +1138,7 @@ bool CompilerDriver::CanAssumeStringIsPresentInDexCache(const DexFile& dex_file,
   // See also Compiler::ResolveDexFile
 
   bool result = false;
-  if (IsBootImage()) {
+  if (IsBootImage() || Runtime::Current()->UseJit()) {
     // We resolve all const-string strings when building for the image.
     ScopedObjectAccess soa(Thread::Current());
     StackHandleScope<1> hs(soa.Self());
