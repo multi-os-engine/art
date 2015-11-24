@@ -150,7 +150,7 @@ JitCompiler::JitCompiler() : total_time_(0) {
       /* thread_count */ 1,
       /* dump_stats */ false,
       /* dump_passes */ false,
-      /* dump_cfg_file_name */ "",
+      /* dump_cfg_file_name */ "art.cfg",
       /* dump_cfg_append */ false,
       cumulative_logger_.get(),
       /* swap_fd */ -1,
