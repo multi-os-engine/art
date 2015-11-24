@@ -106,6 +106,7 @@ CompiledMethod::CompiledMethod(CompilerDriver* driver,
                                const uint32_t core_spill_mask,
                                const uint32_t fp_spill_mask,
                                const ArrayRef<const SrcMapElem>& src_mapping_table,
+                               const ArrayRef<const uint8_t>& native_debug_stack_map,
                                const ArrayRef<const uint8_t>& mapping_table,
                                const ArrayRef<const uint8_t>& vmap_table,
                                const ArrayRef<const uint8_t>& native_gc_map,
@@ -116,6 +117,7 @@ CompiledMethod::CompiledMethod(CompilerDriver* driver,
       fp_spill_mask_(fp_spill_mask),
       src_mapping_table_(
           driver->GetCompiledMethodStorage()->DeduplicateSrcMappingTable(src_mapping_table)),
+      native_debug_stack_map_(driver->GetCompiledMethodStorage()->DeduplicateVMapTable(native_debug_stack_map)),
       mapping_table_(driver->GetCompiledMethodStorage()->DeduplicateMappingTable(mapping_table)),
       vmap_table_(driver->GetCompiledMethodStorage()->DeduplicateVMapTable(vmap_table)),
       gc_map_(driver->GetCompiledMethodStorage()->DeduplicateGCMap(native_gc_map)),
@@ -131,6 +133,7 @@ CompiledMethod* CompiledMethod::SwapAllocCompiledMethod(
     const uint32_t core_spill_mask,
     const uint32_t fp_spill_mask,
     const ArrayRef<const SrcMapElem>& src_mapping_table,
+    const ArrayRef<const uint8_t>& native_debug_stack_map,
     const ArrayRef<const uint8_t>& mapping_table,
     const ArrayRef<const uint8_t>& vmap_table,
     const ArrayRef<const uint8_t>& native_gc_map,
@@ -139,8 +142,8 @@ CompiledMethod* CompiledMethod::SwapAllocCompiledMethod(
   SwapAllocator<CompiledMethod> alloc(driver->GetCompiledMethodStorage()->GetSwapSpaceAllocator());
   CompiledMethod* ret = alloc.allocate(1);
   alloc.construct(ret, driver, instruction_set, quick_code, frame_size_in_bytes, core_spill_mask,
-                  fp_spill_mask, src_mapping_table, mapping_table, vmap_table, native_gc_map,
-                  cfi_info, patches);
+                  fp_spill_mask, src_mapping_table, native_debug_stack_map, mapping_table,
+                  vmap_table, native_gc_map, cfi_info, patches);
   return ret;
 }
 

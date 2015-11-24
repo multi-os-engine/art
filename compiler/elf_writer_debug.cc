@@ -427,13 +427,17 @@ class DebugInfoWriter {
       if (!is_optimizing) {
         return;
       }
+      const auto& stack_map_array = method_info->compiled_method_->GetNativeDebugStackMap();
+      if (stack_map_array.size() == 0) {
+        return;
+      }
 
       Writer<> writer(&owner_->debug_loc_);
       info_.WriteSecOffset(DW_AT_location, writer.size());
 
       const InstructionSet isa = owner_->builder_->GetIsa();
       const bool is64bit = Is64BitInstructionSet(isa);
-      const CodeInfo code_info(method_info->compiled_method_->GetVmapTable().data());
+      const CodeInfo code_info(stack_map_array.data());
       const StackMapEncoding encoding = code_info.ExtractEncoding();
       DexRegisterLocation last_reg_lo = DexRegisterLocation::None();
       DexRegisterLocation last_reg_hi = DexRegisterLocation::None();

@@ -603,9 +603,15 @@ CompiledMethod* OptimizingCompiler::EmitOptimized(ArenaAllocator* arena,
                                                   CodeGenerator* codegen,
                                                   CompilerDriver* compiler_driver) const {
   ArenaVector<LinkerPatch> linker_patches = EmitAndSortLinkerPatches(codegen);
+
   ArenaVector<uint8_t> stack_map(arena->Adapter(kArenaAllocStackMaps));
   stack_map.resize(codegen->ComputeStackMapsSize());
   codegen->BuildStackMaps(MemoryRegion(stack_map.data(), stack_map.size()));
+
+  ArenaVector<uint8_t> native_debug_stack_map(arena->Adapter(kArenaAllocStackMaps));
+  native_debug_stack_map.resize(codegen->ComputeNativeDebugStackMapSize());
+  codegen->BuildNativeDebugStackMap(MemoryRegion(native_debug_stack_map.data(),
+                                                 native_debug_stack_map.size()));
 
   MaybeRecordStat(MethodCompilationStat::kCompiledOptimized);
 
@@ -620,6 +626,7 @@ CompiledMethod* OptimizingCompiler::EmitOptimized(ArenaAllocator* arena,
       codegen->GetCoreSpillMask(),
       codegen->GetFpuSpillMask(),
       ArrayRef<const SrcMapElem>(codegen->GetSrcMappingTable()),
+      ArrayRef<const uint8_t>(native_debug_stack_map),
       ArrayRef<const uint8_t>(),  // mapping_table.
       ArrayRef<const uint8_t>(stack_map),
       ArrayRef<const uint8_t>(),  // native_gc_map.
@@ -655,6 +662,7 @@ CompiledMethod* OptimizingCompiler::EmitBaseline(
       codegen->GetCoreSpillMask(),
       codegen->GetFpuSpillMask(),
       ArrayRef<const SrcMapElem>(codegen->GetSrcMappingTable()),
+      ArrayRef<const uint8_t>(),  // native_debug_stack_map.
       AlignVectorSize(mapping_table),
       AlignVectorSize(vmap_table),
       AlignVectorSize(gc_map),

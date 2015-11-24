@@ -322,6 +322,7 @@ class CompiledMethod FINAL : public CompiledCode {
                  const uint32_t core_spill_mask,
                  const uint32_t fp_spill_mask,
                  const ArrayRef<const SrcMapElem>& src_mapping_table,
+                 const ArrayRef<const uint8_t>& native_debug_stack_map,
                  const ArrayRef<const uint8_t>& mapping_table,
                  const ArrayRef<const uint8_t>& vmap_table,
                  const ArrayRef<const uint8_t>& native_gc_map,
@@ -338,6 +339,7 @@ class CompiledMethod FINAL : public CompiledCode {
       const uint32_t core_spill_mask,
       const uint32_t fp_spill_mask,
       const ArrayRef<const SrcMapElem>& src_mapping_table,
+      const ArrayRef<const uint8_t>& native_debug_stack_map,
       const ArrayRef<const uint8_t>& mapping_table,
       const ArrayRef<const uint8_t>& vmap_table,
       const ArrayRef<const uint8_t>& native_gc_map,
@@ -360,6 +362,10 @@ class CompiledMethod FINAL : public CompiledCode {
 
   ArrayRef<const SrcMapElem> GetSrcMappingTable() const {
     return GetArray(src_mapping_table_);
+  }
+
+  ArrayRef<const uint8_t> GetNativeDebugStackMap() const {
+    return GetArray(native_debug_stack_map_);
   }
 
   ArrayRef<const uint8_t> GetMappingTable() const {
@@ -391,6 +397,8 @@ class CompiledMethod FINAL : public CompiledCode {
   const uint32_t fp_spill_mask_;
   // For quick code, a set of pairs (PC, DEX) mapping from native PC offset to DEX offset.
   const LengthPrefixedArray<SrcMapElem>* const src_mapping_table_;
+  // For optimized code, stack maps for all available PCs.  Used for native debugging.
+  const LengthPrefixedArray<uint8_t>* native_debug_stack_map_;
   // For quick code, a uleb128 encoded map from native PC offset to dex PC aswell as dex PC to
   // native PC offset. Size prefixed.
   const LengthPrefixedArray<uint8_t>* const mapping_table_;

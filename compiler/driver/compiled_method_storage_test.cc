@@ -62,6 +62,12 @@ TEST(CompiledMethodStorage, Deduplicate) {
       ArrayRef<const SrcMapElem>(raw_src_map1),
       ArrayRef<const SrcMapElem>(raw_src_map2),
   };
+  const uint8_t raw_debug_stackmap_table1[] = { 3, 4, 6 };
+  const uint8_t raw_debug_stackmap_table2[] = { 8, 5, 3, 1 };
+  ArrayRef<const uint8_t> debug_stackmap_table[] = {
+      ArrayRef<const uint8_t>(raw_debug_stackmap_table1),
+      ArrayRef<const uint8_t>(raw_debug_stackmap_table2),
+  };
   const uint8_t raw_mapping_table1[] = { 5, 6, 7 };
   const uint8_t raw_mapping_table2[] = { 7, 6, 5, 4 };
   ArrayRef<const uint8_t> mapping_table[] = {
@@ -103,13 +109,15 @@ TEST(CompiledMethodStorage, Deduplicate) {
   compiled_methods.reserve(1u << 7);
   for (auto&& c : code) {
     for (auto&& s : src_map) {
-      for (auto&& m : mapping_table) {
-        for (auto&& v : vmap_table) {
-          for (auto&& g : gc_map) {
-            for (auto&& f : cfi_info) {
-              for (auto&& p : patches) {
-                compiled_methods.push_back(CompiledMethod::SwapAllocCompiledMethod(
-                        &driver, kNone, c, 0u, 0u, 0u, s, m, v, g, f, p));
+      for (auto&& d : debug_stackmap_table) {
+        for (auto&& m : mapping_table) {
+          for (auto&& v : vmap_table) {
+            for (auto&& g : gc_map) {
+              for (auto&& f : cfi_info) {
+                for (auto&& p : patches) {
+                  compiled_methods.push_back(CompiledMethod::SwapAllocCompiledMethod(
+                          &driver, kNone, c, 0u, 0u, 0u, s, d, m, v, g, f, p));
+                }
               }
             }
           }
@@ -117,20 +125,22 @@ TEST(CompiledMethodStorage, Deduplicate) {
       }
     }
   }
-  constexpr size_t code_bit = 1u << 6;
-  constexpr size_t src_map_bit = 1u << 5;
+  constexpr size_t code_bit = 1u << 7;
+  constexpr size_t src_map_bit = 1u << 6;
+  constexpr size_t debug_stackmap_bit = 1u << 5;
   constexpr size_t mapping_table_bit = 1u << 4;
   constexpr size_t vmap_table_bit = 1u << 3;
   constexpr size_t gc_map_bit = 1u << 2;
   constexpr size_t cfi_info_bit = 1u << 1;
   constexpr size_t patches_bit = 1u << 0;
-  CHECK_EQ(compiled_methods.size(), 1u << 7);
+  CHECK_EQ(compiled_methods.size(), 1u << 8);
   for (size_t i = 0; i != compiled_methods.size(); ++i) {
     for (size_t j = 0; j != compiled_methods.size(); ++j) {
       CompiledMethod* lhs = compiled_methods[i];
       CompiledMethod* rhs = compiled_methods[j];
       bool same_code = ((i ^ j) & code_bit) == 0u;
       bool same_src_map = ((i ^ j) & src_map_bit) == 0u;
+      bool same_debug_stackmap = ((i ^ j) & debug_stackmap_bit) == 0u;
       bool same_mapping_table = ((i ^ j) & mapping_table_bit) == 0u;
       bool same_vmap_table = ((i ^ j) & vmap_table_bit) == 0u;
       bool same_gc_map = ((i ^ j) & gc_map_bit) == 0u;
@@ -139,6 +149,8 @@ TEST(CompiledMethodStorage, Deduplicate) {
       ASSERT_EQ(same_code, lhs->GetQuickCode().data() == rhs->GetQuickCode().data())
           << i << " " << j;
       ASSERT_EQ(same_src_map, lhs->GetSrcMappingTable().data() == rhs->GetSrcMappingTable().data())
+          << i << " " << j;
+      ASSERT_EQ(same_debug_stackmap, lhs->GetNativeDebugStackMap().data() == rhs->GetNativeDebugStackMap().data())
           << i << " " << j;
       ASSERT_EQ(same_mapping_table, lhs->GetMappingTable().data() == rhs->GetMappingTable().data())
           << i << " " << j;

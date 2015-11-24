@@ -739,9 +739,14 @@ void CodeGeneratorARM::Finalize(CodeAllocator* allocator) {
     uint32_t new_position = __ GetAdjustedPosition(old_position);
     stack_map_stream_.SetStackMapNativePcOffset(i, new_position);
   }
+  for (size_t i = 0, num = native_debug_stack_map_stream_.GetNumberOfStackMaps(); i != num; ++i) {
+    uint32_t old_position = native_debug_stack_map_stream_.GetStackMap(i).native_pc_offset;
+    uint32_t new_position = __ GetAdjustedPosition(old_position);
+    native_debug_stack_map_stream_.SetStackMapNativePcOffset(i, new_position);
+  }
   // Adjust native pc offsets in line mapping table for native debugging.
-  for (size_t i = 0, num = src_map_.size(); i < num; ++i) {
-    src_map_[i].from_ = __ GetAdjustedPosition(src_map_[i].from_);
+  for (size_t i = 0, num = native_debug_src_map_.size(); i < num; ++i) {
+    native_debug_src_map_[i].from_ = __ GetAdjustedPosition(native_debug_src_map_[i].from_);
   }
 
   // Adjust pc offsets for the disassembly information.
