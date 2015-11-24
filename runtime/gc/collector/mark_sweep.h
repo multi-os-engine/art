@@ -103,7 +103,9 @@ class MarkSweep : public GarbageCollector {
       REQUIRES(!mark_stack_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  void MarkRootsCheckpoint(Thread* self, bool revoke_ros_alloc_thread_local_buffers_at_checkpoint)
+  void MarkRootsCheckpoint(Thread* self,
+                           bool revoke_ros_alloc_thread_local_buffers_at_checkpoint,
+                           bool mark_roots)
       REQUIRES(Locks::heap_bitmap_lock_)
       REQUIRES(!mark_stack_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);

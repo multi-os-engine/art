@@ -233,9 +233,12 @@ void MarkSweep::PreCleanCards() {
     // Having the checkpoint fixes this issue since it ensures that the card mark and the
     // reference write are visible to the GC before the card is scanned (this is due to locks being
     // acquired / released in the checkpoint code).
+    // Run checkpoint except marking roots again just to avoid the above race condition.
+    MarkRootsCheckpoint(self, false /*not revoke thread local buffer*/,
+                        false /*not mark thread roots*/);
     // The other roots are also marked to help reduce the pause.
-    MarkRootsCheckpoint(self, false);
-    MarkNonThreadRoots();
+    // Except new roots, no need to mark other roots again, otherwise, it will increase GC duration
+    // and also probably dirty cards which will increase pause time accordingly.
     MarkConcurrentRoots(
         static_cast<VisitRootFlags>(kVisitRootFlagClearRootLog | kVisitRootFlagNewRoots));
     // Process the newly aged cards.
@@ -611,7 +614,8 @@ void MarkSweep::MarkRoots(Thread* self) {
     Runtime::Current()->VisitRoots(this);
     RevokeAllThreadLocalAllocationStacks(self);
   } else {
-    MarkRootsCheckpoint(self, kRevokeRosAllocThreadLocalBuffersAtCheckpoint);
+    MarkRootsCheckpoint(self, kRevokeRosAllocThreadLocalBuffersAtCheckpoint,
+                        true /*mark thread roots*/);
     // At this point the live stack should no longer have any mutators which push into it.
     MarkNonThreadRoots();
     MarkConcurrentRoots(
@@ -1112,8 +1116,9 @@ void MarkSweep::VerifySystemWeaks() {
 class CheckpointMarkThreadRoots : public Closure, public RootVisitor {
  public:
   CheckpointMarkThreadRoots(MarkSweep* mark_sweep,
+                            bool mark_roots,
                             bool revoke_ros_alloc_thread_local_buffers_at_checkpoint)
-      : mark_sweep_(mark_sweep),
+      : mark_sweep_(mark_sweep), mark_roots_(mark_roots),
         revoke_ros_alloc_thread_local_buffers_at_checkpoint_(
             revoke_ros_alloc_thread_local_buffers_at_checkpoint) {
   }
@@ -1142,7 +1147,9 @@ class CheckpointMarkThreadRoots : public Closure, public RootVisitor {
     Thread* const self = Thread::Current();
     CHECK(thread == self || thread->IsSuspended() || thread->GetState() == kWaitingPerformingGc)
         << thread->GetState() << " thread " << thread << " self " << self;
-    thread->VisitRoots(this);
+    if (mark_roots_) {
+      thread->VisitRoots(this);
+    }
     ATRACE_END();
     if (revoke_ros_alloc_thread_local_buffers_at_checkpoint_) {
       ATRACE_BEGIN("RevokeRosAllocThreadLocalBuffers");
@@ -1156,13 +1163,16 @@ class CheckpointMarkThreadRoots : public Closure, public RootVisitor {
 
  private:
   MarkSweep* const mark_sweep_;
+  const bool mark_roots_;
   const bool revoke_ros_alloc_thread_local_buffers_at_checkpoint_;
 };
 
 void MarkSweep::MarkRootsCheckpoint(Thread* self,
-                                    bool revoke_ros_alloc_thread_local_buffers_at_checkpoint) {
+                                    bool revoke_ros_alloc_thread_local_buffers_at_checkpoint,
+                                    bool mark_roots) {
   TimingLogger::ScopedTiming t(__FUNCTION__, GetTimings());
-  CheckpointMarkThreadRoots check_point(this, revoke_ros_alloc_thread_local_buffers_at_checkpoint);
+  CheckpointMarkThreadRoots check_point(this, mark_roots,
+                                        revoke_ros_alloc_thread_local_buffers_at_checkpoint);
   ThreadList* thread_list = Runtime::Current()->GetThreadList();
   // Request the check point is run on all threads returning a count of the threads that must
   // run through the barrier including self.
