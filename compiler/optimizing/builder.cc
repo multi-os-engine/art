@@ -161,6 +161,7 @@ void HGraphBuilder::InitializeParameters(uint16_t number_of_parameters) {
 
   const DexFile::MethodId& referrer_method_id =
       dex_file_->GetMethodId(dex_compilation_unit_->GetDexMethodIndex());
+  // LOG(INFO) << " CALIN: " << PrettyMethod(dex_compilation_unit_->GetDexMethodIndex(), *dex_file_) << " " << dex_file_->GetLocation() << " " << dex_compilation_unit_->GetDexMethodIndex();
   if (!dex_compilation_unit_->IsStatic()) {
     // Add the implicit 'this' argument, not expressed in the signature.
     HParameterValue* parameter = new (arena_) HParameterValue(*dex_file_,
