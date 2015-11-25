@@ -199,5 +199,15 @@ public class TestAnnotations {
         } catch (TypeNotPresentException expected) {
             System.out.println("Got expected TypeNotPresentException");
         }
+
+        // Test renamed enums.
+        try {
+            for (Method m: RenamedNoted.class.getDeclaredMethods()) {
+                Annotation[] annos = m.getDeclaredAnnotations();
+                System.out.println("  annotations on METH " + m + ":");
+            }
+        } catch (NoSuchFieldError expected) {
+            System.out.println("Got expected NoSuchFieldError");
+        }
     }
 }
