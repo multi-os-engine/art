@@ -32,6 +32,7 @@ namespace art {
 
 class BitVector;
 class CompiledMethod;
+struct CompiledMethodDebugInfo;
 class CompilerDriver;
 class ImageWriter;
 class OutputStream;
@@ -129,19 +130,7 @@ class OatWriter {
 
   ~OatWriter();
 
-  struct DebugInfo {
-    const DexFile* dex_file_;
-    size_t class_def_index_;
-    uint32_t dex_method_index_;
-    uint32_t access_flags_;
-    const DexFile::CodeItem *code_item_;
-    bool deduped_;
-    uint32_t low_pc_;
-    uint32_t high_pc_;
-    CompiledMethod* compiled_method_;
-  };
-
-  const std::vector<DebugInfo>& GetMethodDebugInfo() const {
+  const std::vector<CompiledMethodDebugInfo>& GetMethodDebugInfo() const {
     return method_info_;
   }
 
@@ -280,7 +269,7 @@ class OatWriter {
     DISALLOW_COPY_AND_ASSIGN(OatClass);
   };
 
-  std::vector<DebugInfo> method_info_;
+  std::vector<CompiledMethodDebugInfo> method_info_;
 
   const CompilerDriver* const compiler_driver_;
   ImageWriter* const image_writer_;

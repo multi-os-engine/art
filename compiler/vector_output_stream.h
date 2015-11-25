@@ -45,7 +45,11 @@ class VectorOutputStream FINAL : public OutputStream {
     return true;
   }
 
-  off_t Seek(off_t offset, Whence whence);
+  off_t Seek(off_t offset, Whence whence) OVERRIDE;
+
+  bool Flush() OVERRIDE {
+    return true;
+  }
 
  private:
   void EnsureCapacity(off_t new_offset) {

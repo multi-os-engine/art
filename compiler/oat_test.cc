@@ -20,6 +20,7 @@
 #include "class_linker.h"
 #include "common_compiler_test.h"
 #include "compiled_method.h"
+#include "compiled_method_debug_info.h"
 #include "compiler.h"
 #include "dex/pass_manager.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
@@ -27,6 +28,8 @@
 #include "dex/verification_results.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
+#include "elf_writer.h"
+#include "elf_writer_quick.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "mirror/class-inl.h"
 #include "mirror/object_array-inl.h"
@@ -134,11 +137,32 @@ class OatTest : public CommonCompilerTest {
                          /*compiling_boot_image*/false,
                          &timings,
                          &key_value_store);
-    return compiler_driver_->WriteElf(GetTestAndroidRoot(),
-                                      !kIsTargetBuild,
-                                      dex_files,
-                                      &oat_writer,
-                                      file);
+    std::unique_ptr<ElfWriter> elf_writer = CreateElfWriterQuick(
+        compiler_driver_->GetInstructionSet(),
+        &compiler_driver_->GetCompilerOptions(),
+        file);
+
+    elf_writer->Start();
+
+    OutputStream* rodata = elf_writer->StartRoData();
+    oat_writer.WriteRodata(rodata);   // Ignore errors until elf_writer->End().
+    elf_writer->EndRoData(rodata);
+
+    OutputStream* text = elf_writer->StartText();
+    oat_writer.WriteCode(text);       // Ignore errors until elf_writer->End().
+    elf_writer->EndText(text);
+
+    elf_writer->SetBssSize(oat_writer.GetBssSize());
+
+    elf_writer->WriteDynamicSection();
+
+    ArrayRef<const CompiledMethodDebugInfo> debug_infos(oat_writer.GetMethodDebugInfo());
+    elf_writer->WriteDebugInfo(debug_infos);
+
+    ArrayRef<const uintptr_t> patch_locations(oat_writer.GetAbsolutePatchLocations());
+    elf_writer->WritePatchLocations(patch_locations);
+
+    return elf_writer->End();
   }
 
   std::unique_ptr<const InstructionSetFeatures> insn_features_;

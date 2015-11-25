@@ -14,28 +14,27 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_ELF_WRITER_DEBUG_H_
-#define ART_COMPILER_ELF_WRITER_DEBUG_H_
+#ifndef ART_COMPILER_COMPILED_METHOD_DEBUG_INFO_H_
+#define ART_COMPILER_COMPILED_METHOD_DEBUG_INFO_H_
 
-#include <vector>
-
-#include "elf_builder.h"
-#include "dwarf/dwarf_constants.h"
-#include "oat_writer.h"
+#include "dex_file.h"
 
 namespace art {
-namespace dwarf {
 
-template<typename ElfTypes>
-void WriteCFISection(ElfBuilder<ElfTypes>* builder,
-                     const std::vector<OatWriter::DebugInfo>& method_infos,
-                     CFIFormat format);
+class CompiledMethod;
 
-template<typename ElfTypes>
-void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
-                        const std::vector<OatWriter::DebugInfo>& method_infos);
+struct CompiledMethodDebugInfo {
+  const DexFile* dex_file_;
+  size_t class_def_index_;
+  uint32_t dex_method_index_;
+  uint32_t access_flags_;
+  const DexFile::CodeItem *code_item_;
+  bool deduped_;
+  uint32_t low_pc_;
+  uint32_t high_pc_;
+  CompiledMethod* compiled_method_;
+};
 
-}  // namespace dwarf
 }  // namespace art
 
-#endif  // ART_COMPILER_ELF_WRITER_DEBUG_H_
+#endif  // ART_COMPILER_COMPILED_METHOD_DEBUG_INFO_H_

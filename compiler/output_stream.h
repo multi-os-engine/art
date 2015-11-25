@@ -45,6 +45,8 @@ class OutputStream {
 
   virtual off_t Seek(off_t offset, Whence whence) = 0;
 
+  virtual bool Flush() = 0;
+
  private:
   const std::string location_;
 

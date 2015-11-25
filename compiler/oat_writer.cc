@@ -27,6 +27,7 @@
 #include "class_linker.h"
 #include "compiled_class.h"
 #include "compiled_method.h"
+#include "compiled_method_debug_info.h"
 #include "dex_file-inl.h"
 #include "dex/verification_results.h"
 #include "driver/compiler_driver.h"
@@ -485,7 +486,7 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
         // Record debug information for this function if we are doing that.
         const uint32_t quick_code_start = quick_code_offset -
             writer_->oat_header_->GetExecutableOffset() - thumb_offset;
-        writer_->method_info_.push_back(DebugInfo {
+        writer_->method_info_.push_back(CompiledMethodDebugInfo {
             dex_file_,
             class_def_index_,
             it.GetMemberIndex(),
