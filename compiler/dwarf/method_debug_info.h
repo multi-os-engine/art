@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 The Android Open Source Project
+ * Copyright (C) 2015 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,28 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_FILE_OUTPUT_STREAM_H_
-#define ART_COMPILER_FILE_OUTPUT_STREAM_H_
+#ifndef ART_COMPILER_DWARF_METHOD_DEBUG_INFO_H_
+#define ART_COMPILER_DWARF_METHOD_DEBUG_INFO_H_
 
-#include "output_stream.h"
-
-#include "os.h"
+#include "dex_file.h"
 
 namespace art {
+class CompiledMethod;
+namespace dwarf {
 
-class FileOutputStream FINAL : public OutputStream {
- public:
-  explicit FileOutputStream(File* file);
-
-  ~FileOutputStream() OVERRIDE {}
-
-  bool WriteFully(const void* buffer, size_t byte_count) OVERRIDE;
-
-  off_t Seek(off_t offset, Whence whence) OVERRIDE;
-
-  bool Flush() OVERRIDE;
-
- private:
-  File* const file_;
-
-  DISALLOW_COPY_AND_ASSIGN(FileOutputStream);
+struct MethodDebugInfo {
+  const DexFile* dex_file_;
+  size_t class_def_index_;
+  uint32_t dex_method_index_;
+  uint32_t access_flags_;
+  const DexFile::CodeItem* code_item_;
+  bool deduped_;
+  uint32_t low_pc_;
+  uint32_t high_pc_;
+  CompiledMethod* compiled_method_;
 };
 
+}  // namespace dwarf
 }  // namespace art
 
-#endif  // ART_COMPILER_FILE_OUTPUT_STREAM_H_
+#endif  // ART_COMPILER_DWARF_METHOD_DEBUG_INFO_H_
