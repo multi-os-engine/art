@@ -33,6 +33,13 @@ class DexCacheArrayFixupsVisitor : public HGraphVisitor {
                                // Attribute memory use to code generator.
                                graph->GetArena()->Adapter(kArenaAllocCodeGenerator)) {}
 
+  void MoveBasesIfNeeded() {
+    for (const auto& entry : dex_cache_array_bases_) {
+      HArmDexCacheArraysBase* base = entry.second;
+      base->MoveBeforeFirstUserAndOutOfLoops();
+    }
+  }
+
  private:
   void VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) OVERRIDE {
     // If this is an invoke with PC-relative access to the dex cache methods array,
@@ -58,11 +65,8 @@ class DexCacheArrayFixupsVisitor : public HGraphVisitor {
       return lb->second;
     }
 
-    HGraph* graph = GetGraph();
-    HBasicBlock* entry = graph->GetEntryBlock();
-    HArmDexCacheArraysBase* base = new (graph->GetArena()) HArmDexCacheArraysBase(dex_file);
-    HInstruction* insert_pos = (user->GetBlock() == entry) ? user : entry->GetLastInstruction();
-    entry->InsertInstructionBefore(base, insert_pos);
+    HArmDexCacheArraysBase* base = new (GetGraph()->GetArena()) HArmDexCacheArraysBase(dex_file);
+    user->GetBlock()->InsertInstructionBefore(base, user);
     dex_cache_array_bases_.PutBefore(lb, dex_file, base);
     return base;
   }
@@ -75,6 +79,7 @@ class DexCacheArrayFixupsVisitor : public HGraphVisitor {
 void DexCacheArrayFixups::Run() {
   DexCacheArrayFixupsVisitor visitor(graph_);
   visitor.VisitInsertionOrder();
+  visitor.MoveBasesIfNeeded();
 }
 
 }  // namespace arm
