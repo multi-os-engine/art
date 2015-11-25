@@ -58,6 +58,7 @@ LIBART_COMPILER_SRC_FILES := \
 	driver/compiler_driver.cc \
 	driver/compiler_options.cc \
 	driver/dex_compilation_unit.cc \
+	dwarf/elf_writer_debug.cc \
 	linker/relative_patcher.cc \
 	jit/jit_compiler.cc \
 	jni/quick/calling_convention.cc \
@@ -102,7 +103,6 @@ LIBART_COMPILER_SRC_FILES := \
 	buffered_output_stream.cc \
 	compiler.cc \
 	elf_writer.cc \
-	elf_writer_debug.cc \
 	elf_writer_quick.cc \
 	file_output_stream.cc \
 	image_writer.cc \
