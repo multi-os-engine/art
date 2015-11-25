@@ -14,28 +14,27 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_ELF_WRITER_DEBUG_H_
-#define ART_COMPILER_ELF_WRITER_DEBUG_H_
-
-#include <vector>
+#ifndef ART_COMPILER_DWARF_ELF_WRITER_DEBUG_H_
+#define ART_COMPILER_DWARF_ELF_WRITER_DEBUG_H_
 
 #include "elf_builder.h"
 #include "dwarf/dwarf_constants.h"
 #include "oat_writer.h"
+#include "utils/array_ref.h"
 
 namespace art {
 namespace dwarf {
 
 template<typename ElfTypes>
 void WriteCFISection(ElfBuilder<ElfTypes>* builder,
-                     const std::vector<OatWriter::DebugInfo>& method_infos,
+                     const ArrayRef<const MethodDebugInfo>& method_infos,
                      CFIFormat format);
 
 template<typename ElfTypes>
 void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
-                        const std::vector<OatWriter::DebugInfo>& method_infos);
+                        const ArrayRef<const MethodDebugInfo>& method_infos);
 
 }  // namespace dwarf
 }  // namespace art
 
-#endif  // ART_COMPILER_ELF_WRITER_DEBUG_H_
+#endif  // ART_COMPILER_DWARF_ELF_WRITER_DEBUG_H_
