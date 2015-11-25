@@ -26,6 +26,12 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
  public:
   explicit PCRelativeHandlerVisitor(HGraph* graph) : HGraphVisitor(graph), base_(nullptr) {}
 
+  void MoveBaseIfNeeded() {
+    if (base_ != nullptr) {
+      base_->MoveBeforeFirstUserAndOutOfLoops();
+    }
+  }
+
  private:
   void VisitAdd(HAdd* add) OVERRIDE {
     BinaryFP(add);
@@ -72,7 +78,7 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
   void VisitPackedSwitch(HPackedSwitch* switch_insn) OVERRIDE {
     // We need to replace the HPackedSwitch with a HX86PackedSwitch in order to
     // address the constant area.
-    InitializePCRelativeBasePointer(switch_insn);
+    InitializePCRelativeBasePointer();
     HGraph* graph = GetGraph();
     HBasicBlock* block = switch_insn->GetBlock();
     HX86PackedSwitch* x86_switch = new (graph->GetArena()) HX86PackedSwitch(
@@ -84,22 +90,20 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
     block->ReplaceAndRemoveInstructionWith(switch_insn, x86_switch);
   }
 
-  void InitializePCRelativeBasePointer(HInstruction* user) {
+  void InitializePCRelativeBasePointer() {
     // Ensure we only initialize the pointer once.
     if (base_ != nullptr) {
       return;
     }
 
-    HGraph* graph = GetGraph();
-    HBasicBlock* entry = graph->GetEntryBlock();
-    base_ = new (graph->GetArena()) HX86ComputeBaseMethodAddress();
-    HInstruction* insert_pos = (user->GetBlock() == entry) ? user : entry->GetLastInstruction();
-    entry->InsertInstructionBefore(base_, insert_pos);
+    base_ = new (GetGraph()->GetArena()) HX86ComputeBaseMethodAddress();
+    HBasicBlock* entry_block = GetGraph()->GetEntryBlock();
+    entry_block->InsertInstructionBefore(base_, entry_block->GetFirstInstruction());
     DCHECK(base_ != nullptr);
   }
 
   void ReplaceInput(HInstruction* insn, HConstant* value, int input_index, bool materialize) {
-    InitializePCRelativeBasePointer(insn);
+    InitializePCRelativeBasePointer();
     HX86LoadFromConstantTable* load_constant =
         new (GetGraph()->GetArena()) HX86LoadFromConstantTable(base_, value, materialize);
     insn->GetBlock()->InsertInstructionBefore(load_constant, insn);
@@ -111,7 +115,7 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
     // addressing, we need the PC-relative address base.
     HInvokeStaticOrDirect* invoke_static_or_direct = invoke->AsInvokeStaticOrDirect();
     if (invoke_static_or_direct != nullptr && invoke_static_or_direct->HasPcRelativeDexCache()) {
-      InitializePCRelativeBasePointer(invoke);
+      InitializePCRelativeBasePointer();
       // Add the extra parameter base_.
       DCHECK(!invoke_static_or_direct->HasCurrentMethodInput());
       invoke_static_or_direct->AddSpecialInput(base_);
@@ -133,6 +137,7 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
 void PcRelativeFixups::Run() {
   PCRelativeHandlerVisitor visitor(graph_);
   visitor.VisitInsertionOrder();
+  visitor.MoveBaseIfNeeded();
 }
 
 }  // namespace x86
