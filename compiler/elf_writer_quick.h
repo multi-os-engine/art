@@ -17,39 +17,49 @@
 #ifndef ART_COMPILER_ELF_WRITER_QUICK_H_
 #define ART_COMPILER_ELF_WRITER_QUICK_H_
 
+#include <memory>
+
 #include "elf_utils.h"
 #include "elf_writer.h"
-#include "oat_writer.h"
+#include "arch/instruction_set.h"
 
 namespace art {
+
+class BufferedOutputStream;
+class CompilerOptions;
+template <typename ElfTypes> class ElfBuilder;
+
+std::unique_ptr<ElfWriter> CreateElfWriterQuick(InstructionSet instruction_set,
+                                                const CompilerOptions* compiler_options,
+                                                File* elf_file);
 
 template <typename ElfTypes>
 class ElfWriterQuick FINAL : public ElfWriter {
  public:
-  // Write an ELF file. Returns true on success, false on failure.
-  static bool Create(File* file,
-                     OatWriter* oat_writer,
-                     const std::vector<const DexFile*>& dex_files,
-                     const std::string& android_root,
-                     bool is_host,
-                     const CompilerDriver& driver)
-      SHARED_REQUIRES(Locks::mutator_lock_);
+  ElfWriterQuick(InstructionSet instruction_set,
+                 const CompilerOptions* compiler_options,
+                 File* elf_file);
+  ~ElfWriterQuick();
+
+  void Start() OVERRIDE;
+  OutputStream* StartRoData() OVERRIDE;
+  void EndRoData(OutputStream* rodata) OVERRIDE;
+  OutputStream* StartText() OVERRIDE;
+  void EndText(OutputStream* text) OVERRIDE;
+  void SetBssSize(size_t bss_size) OVERRIDE;
+  void WriteDynamicSection() OVERRIDE;
+  void WriteDebugInfo(const ArrayRef<const dwarf::MethodDebugInfo>& method_infos) OVERRIDE;
+  void WritePatchLocations(const ArrayRef<const uintptr_t>& patch_locations) OVERRIDE;
+  bool End() OVERRIDE;
 
   static void EncodeOatPatches(const std::vector<uintptr_t>& locations,
                                std::vector<uint8_t>* buffer);
 
- protected:
-  bool Write(OatWriter* oat_writer,
-             const std::vector<const DexFile*>& dex_files,
-             const std::string& android_root,
-             bool is_host)
-      OVERRIDE
-      SHARED_REQUIRES(Locks::mutator_lock_);
-
  private:
-  ElfWriterQuick(const CompilerDriver& driver, File* elf_file)
-    : ElfWriter(driver, elf_file) {}
-  ~ElfWriterQuick() {}
+  const CompilerOptions* const compiler_options_;
+  File* const elf_file_;
+  std::unique_ptr<BufferedOutputStream> output_stream_;
+  std::unique_ptr<ElfBuilder<ElfTypes>> builder_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(ElfWriterQuick);
 };
