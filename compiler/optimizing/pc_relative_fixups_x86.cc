@@ -26,6 +26,12 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
  public:
   explicit PCRelativeHandlerVisitor(HGraph* graph) : HGraphVisitor(graph), base_(nullptr) {}
 
+  void MoveBaseIfNeeded() {
+    if (base_ != nullptr) {
+      base_->MoveBeforeFirstUserAndOutOfLoops();
+    }
+  }
+
  private:
   void VisitAdd(HAdd* add) OVERRIDE {
     BinaryFP(add);
@@ -90,11 +96,8 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
       return;
     }
 
-    HGraph* graph = GetGraph();
-    HBasicBlock* entry = graph->GetEntryBlock();
-    base_ = new (graph->GetArena()) HX86ComputeBaseMethodAddress();
-    HInstruction* insert_pos = (user->GetBlock() == entry) ? user : entry->GetLastInstruction();
-    entry->InsertInstructionBefore(base_, insert_pos);
+    base_ = new (GetGraph()->GetArena()) HX86ComputeBaseMethodAddress();
+    user->GetBlock()->InsertInstructionBefore(base_, user);
     DCHECK(base_ != nullptr);
   }
 
@@ -133,6 +136,7 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
 void PcRelativeFixups::Run() {
   PCRelativeHandlerVisitor visitor(graph_);
   visitor.VisitInsertionOrder();
+  visitor.MoveBaseIfNeeded();
 }
 
 }  // namespace x86
