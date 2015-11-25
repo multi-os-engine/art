@@ -706,9 +706,11 @@ class RosAlloc {
   // and the footprint.
   Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   // The reader-writer lock to allow one bulk free at a time while
-  // allowing multiple individual frees at the same time. Also, this
-  // is used to avoid race conditions between BulkFree() and
-  // RevokeThreadLocalRuns() on the bulk free list.
+  // allowing multiple individual frees at the same time.
+  // Currently RosAlloc is using bulk free(BulkFree) to free garbages
+  // The individual free is not used any more. Thus no need this lock
+  // for BulkFree. Keep this lock for multiple individual frees, since
+  // the individual free code is still there.
   ReaderWriterMutex bulk_free_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
 
   // The page release mode.
