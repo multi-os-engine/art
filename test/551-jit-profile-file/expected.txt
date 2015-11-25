@@ -1,0 +1,6 @@
+ProfileInfo:
+:classes.dex
+  java.lang.String Main.hotMethod()
+  void Main.main(java.lang.String[])
+:classes2.dex
+  java.lang.String OtherDex.hotMethod()
