@@ -42,7 +42,11 @@ uint32_t TypeLookupTable::RawDataLength() const {
 }
 
 uint32_t TypeLookupTable::RawDataLength(const DexFile& dex_file) {
-  return RoundUpToPowerOfTwo(dex_file.NumClassDefs()) * sizeof(Entry);
+  return RawDataLength(dex_file.NumClassDefs());
+}
+
+uint32_t TypeLookupTable::RawDataLength(uint32_t num_class_defs) {
+  return RoundUpToPowerOfTwo(num_class_defs) * sizeof(Entry);
 }
 
 TypeLookupTable* TypeLookupTable::Create(const DexFile& dex_file) {
