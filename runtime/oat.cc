@@ -45,7 +45,7 @@ static size_t ComputeOatHeaderSize(const SafeMap<std::string, std::string>* vari
 
 OatHeader* OatHeader::Create(InstructionSet instruction_set,
                              const InstructionSetFeatures* instruction_set_features,
-                             const std::vector<const DexFile*>* dex_files,
+                             uint32_t dex_file_count,
                              uint32_t image_file_location_oat_checksum,
                              uint32_t image_file_location_oat_data_begin,
                              const SafeMap<std::string, std::string>* variable_data) {
@@ -58,7 +58,7 @@ OatHeader* OatHeader::Create(InstructionSet instruction_set,
   // Create the OatHeader in-place.
   return new (memory) OatHeader(instruction_set,
                                 instruction_set_features,
-                                dex_files,
+                                dex_file_count,
                                 image_file_location_oat_checksum,
                                 image_file_location_oat_data_begin,
                                 variable_data);
@@ -66,7 +66,7 @@ OatHeader* OatHeader::Create(InstructionSet instruction_set,
 
 OatHeader::OatHeader(InstructionSet instruction_set,
                      const InstructionSetFeatures* instruction_set_features,
-                     const std::vector<const DexFile*>* dex_files,
+                     uint32_t dex_file_count,
                      uint32_t image_file_location_oat_checksum,
                      uint32_t image_file_location_oat_data_begin,
                      const SafeMap<std::string, std::string>* variable_data) {
@@ -91,7 +91,7 @@ OatHeader::OatHeader(InstructionSet instruction_set,
   instruction_set_features_bitmap_ = instruction_set_features->AsBitmap();
   UpdateChecksum(&instruction_set_features_bitmap_, sizeof(instruction_set_features_bitmap_));
 
-  dex_file_count_ = dex_files->size();
+  dex_file_count_ = dex_file_count;
   UpdateChecksum(&dex_file_count_, sizeof(dex_file_count_));
 
   image_file_location_oat_checksum_ = image_file_location_oat_checksum;
