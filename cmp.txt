@@ -1,0 +1,1196 @@
+vmarko@vmarko1:~/source/aosp-master$ make -j 1 dump-oat
+============================================
+PLATFORM_VERSION_CODENAME=REL
+PLATFORM_VERSION=6.0.1
+TARGET_PRODUCT=aosp_hammerhead
+TARGET_BUILD_VARIANT=userdebug
+TARGET_BUILD_TYPE=release
+TARGET_BUILD_APPS=
+TARGET_ARCH=arm
+TARGET_ARCH_VARIANT=armv7-a-neon
+TARGET_CPU_VARIANT=krait
+TARGET_2ND_ARCH=
+TARGET_2ND_ARCH_VARIANT=
+TARGET_2ND_CPU_VARIANT=
+HOST_ARCH=x86_64
+HOST_OS=linux
+HOST_OS_EXTRA=Linux-3.13.0-67-generic-x86_64-with-Ubuntu-14.04-trusty
+HOST_CROSS_OS=windows
+HOST_BUILD_TYPE=release
+BUILD_ID=MASTER
+OUT_DIR=out
+============================================
+Running kati to generate build-aosp_hammerhead.ninja...
+No need to regenerate ninja file
+Starting build with ninja
+ninja: Entering directory `.'
+ninja: warning: multiple rules generate out/target/product/hammerhead/system/etc/gps.conf. builds involving this target will not be correct; continuing anyway [-w dupbuild=warn]
+[  4% 1/25] host dex2oat: out/host/linux-x86/framework/x86/core.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core.oat --oat-location=out/host/linux-x86/framework/x86/core.oat --image=out/host/linux-x86/framework/x86/core.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-backend=Quick
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16809(1602KB) AllocSpace objects, 1(20KB) LOS objects, 59% free, 2MB/6MB, paused 18.369ms total 38.221ms
+Topological sort order: Using fall-back in java.util.Map android.icu.impl.ICUService.getVisibleIDMap() BB #8 @0x58, num_blocks = 49
+PC-relative addressing base promoted but unused in double android.icu.impl.CalendarAstronomer.getJulianDay()
+Topological sort order: Using fall-back in java.util.SortedMap android.icu.impl.ICUService.getDisplayNames(android.icu.util.ULocale, java.util.Comparator, java.lang.String) BB #6 @0x5b, num_blocks = 48
+Topological sort order: Using fall-back in java.lang.Object android.icu.impl.ICUService.getKey(android.icu.impl.ICUService$Key, java.lang.String[], android.icu.impl.ICUService$Factory) BB #56 @0x318, num_blocks = 264
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #33 @0x38c, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #162 @0x487, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #204 @0x575, num_blocks = 239
+Topological sort order: Using fall-back in void android.icu.impl.Utility.appendToRule(java.lang.StringBuffer, int, boolean, boolean, java.lang.StringBuffer) BB #19 @0x7f, num_blocks = 47
+Topological sort order: Using fall-back in void android.icu.text.DateIntervalInfo.setup(android.icu.util.ULocale) BB #14 @0x263, num_blocks = 157
+PC-relative addressing base promoted but unused in boolean android.icu.text.NFRule.shouldRollBack(double)
+PC-relative addressing base promoted but unused in double android.icu.util.IslamicCalendar.moonAge(long)
+PC-relative addressing base promoted but unused in java.lang.String android.icu.text.UTF16.valueOf(char[], int, int, int)
+PC-relative addressing base promoted but unused in double java.lang.Math.nextAfter(double, double)
+PC-relative addressing base promoted but unused in double java.lang.Math.toDegrees(double)
+PC-relative addressing base promoted but unused in double java.lang.Math.toRadians(double)
+PC-relative addressing base promoted but unused in double java.lang.StrictMath.nextAfter(double, double)
+java.util.Collections$UnmodifiableMap$UnmodifiableEntrySet.toArray(java.lang.Object[]) BB #4 @0x27, num_blocks = 11
+PC-relative addressing base promoted but unused in int java.util.DualPivotQuicksort.findAnyZero(double[], int, int)
+Topological sort order: Using fall-back in com.android.org.bouncycastle.math.ec.WNafPreCompInfo com.android.org.bouncycastle.math.ec.WNafUtil.precompute(com.android.org.bouncycastle.math.ec.ECPoint, int, boolean) BB #22 @0x9a, num_blocks = 37
+Explicit concurrent mark sweep GC freed 6677(1607KB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1842KB/5MB, paused 15.741ms total 28.118ms
+SectionObjects size=1667624 range=0-1667624
+SectionArtFields size=132696 range=1667624-1800320
+SectionArtMethods size=668972 range=1800320-2469292
+SectionDexCacheArrays size=521064 range=2469292-2990356
+SectionInternedStrings size=114840 range=2990360-3105200
+SectionClassTable size=12288 range=3105200-3117488
+SectionImageBitmap size=28672 range=3121152-3149824
+Methods: clean=14104 dirty=4202
+[Total time]
+  0.052s/0.171s dex2oat Setup
+    0.118s Create runtime
+  0.050s/1.378s dex2oat Compile
+    0.057s LoadImageClasses
+    0.025s Resolve Types
+    0.003s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.001s Resolve Types
+    0s Resolve MethodsAndFields
+    0.010s Resolve Types
+    0s Resolve MethodsAndFields
+    0.117s Verify Dex File
+    0.008s Verify Dex File
+    0.013s Verify Dex File
+    0.030s Verify Dex File
+    0.369s InitializeNoClinit
+    0.001s InitializeNoClinit
+    0.005s InitializeNoClinit
+    0.015s InitializeNoClinit
+    0.007s UpdateImageClasses
+    0.433s Compile Dex File
+    0.035s Compile Dex File
+    0.054s Compile Dex File
+    0.131s Compile Dex File
+  0.007s/1.156s dex2oat Oat
+    0s/0.112s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.019s InitOatClasses
+      0.030s InitOatMaps
+      0s InitOatCode
+      0.062s InitOatCodeDexFiles
+    0.099s dex2oat Prepare image address space
+    0.936s dex2oat Write ELF
+  0.086s dex2oat ImageWriter
+compiler: end, 2.793s
+
+dex2oat took 2.793s (threads: 32) arena alloc=3MB java alloc=1844KB native alloc=42MB free=13MB
+Code dedupe: 0 collisions, 0 max hash collisions, 29070/26009 probe distance, 11554446 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 8169/17690 probe distance, 3630043 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 2023/2393 probe distance, 2608245 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 8612/18213 probe distance, 3559789 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 7861/11995 probe distance, 3357602 ns hash time
+Current thread not detached in Runtime shutdown
+[  8% 2/25] host dex2oat: out/host/linux-x86/framework/x86_64/core-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core-pic.oat --oat-location=out/host/linux-x86/framework/x86_64/core-pic.oat --image=out/host/linux-x86/framework/x86_64/core-pic.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-backend=Quick --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16797(2MB) AllocSpace objects, 1(20KB) LOS objects, 45% free, 4MB/8MB, paused 18.865ms total 39.880ms
+Topological sort order: Using fall-back in java.util.Map android.icu.impl.ICUService.getVisibleIDMap() BB #8 @0x58, num_blocks = 49
+Topological sort order: Using fall-back in java.util.SortedMap android.icu.impl.ICUService.getDisplayNames(android.icu.util.ULocale, java.util.Comparator, java.lang.String) BB #6 @0x5b, num_blocks = 48
+Topological sort order: Using fall-back in java.lang.Object android.icu.impl.ICUService.getKey(android.icu.impl.ICUService$Key, java.lang.String[], android.icu.impl.ICUService$Factory) BB #56 @0x318, num_blocks = 264
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #33 @0x38c, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #162 @0x487, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #204 @0x575, num_blocks = 239
+Topological sort order: Using fall-back in void android.icu.impl.Utility.appendToRule(java.lang.StringBuffer, int, boolean, boolean, java.lang.StringBuffer) BB #19 @0x7f, num_blocks = 47
+Topological sort order: Using fall-back in void android.icu.text.DateIntervalInfo.setup(android.icu.util.ULocale) BB #14 @0x263, num_blocks = 157
+java.util.Collections$UnmodifiableMap$UnmodifiableEntrySet.toArray(java.lang.Object[]) BB #4 @0x27, num_blocks = 11
+Topological sort order: Using fall-back in com.android.org.bouncycastle.math.ec.WNafPreCompInfo com.android.org.bouncycastle.math.ec.WNafUtil.precompute(com.android.org.bouncycastle.math.ec.ECPoint, int, boolean) BB #22 @0x9a, num_blocks = 37
+Explicit concurrent mark sweep GC freed 6677(2MB) AllocSpace objects, 0(0B) LOS objects, 61% free, 2MB/6MB, paused 15.958ms total 30.044ms
+SectionObjects size=2137888 range=0-2137888
+SectionArtFields size=132696 range=2137888-2270584
+SectionArtMethods size=1044952 range=2270584-3315536
+SectionDexCacheArrays size=783808 range=3315536-4099344
+SectionInternedStrings size=114840 range=4099344-4214184
+SectionClassTable size=12288 range=4214184-4226472
+SectionImageBitmap size=36864 range=4227072-4263936
+Methods: clean=14104 dirty=4202
+[Total time]
+  0.074s/0.219s dex2oat Setup
+    0.144s Create runtime
+  0.052s/1.421s dex2oat Compile
+    0.070s LoadImageClasses
+    0.025s Resolve Types
+    0.003s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.001s Resolve Types
+    0s Resolve MethodsAndFields
+    0.011s Resolve Types
+    0s Resolve MethodsAndFields
+    0.117s Verify Dex File
+    0.008s Verify Dex File
+    0.014s Verify Dex File
+    0.031s Verify Dex File
+    0.376s InitializeNoClinit
+    0.001s InitializeNoClinit
+    0.005s InitializeNoClinit
+    0.015s InitializeNoClinit
+    0.008s UpdateImageClasses
+    0.444s Compile Dex File
+    0.033s Compile Dex File
+    0.055s Compile Dex File
+    0.137s Compile Dex File
+  0.007s/1.068s dex2oat Oat
+    0s/0.110s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.017s InitOatClasses
+      0.031s InitOatMaps
+      0s InitOatCode
+      0.060s InitOatCodeDexFiles
+    0.103s dex2oat Prepare image address space
+    0.847s dex2oat Write ELF
+  0.055s dex2oat ImageWriter
+compiler: end, 2.764s
+
+dex2oat took 2.764s (threads: 32) arena alloc=5MB java alloc=2MB native alloc=42MB free=12MB
+Code dedupe: 0 collisions, 0 max hash collisions, 23444/24327 probe distance, 12416597 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 7561/17508 probe distance, 3723992 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 5789/7327 probe distance, 2759294 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 8036/17815 probe distance, 3610124 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 12534/13880 probe distance, 3660689 ns hash time
+Current thread not detached in Runtime shutdown
+[ 12% 3/25] host dex2oat: out/host/linux-x86/framework/x86_64/core.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core.oat --oat-location=out/host/linux-x86/framework/x86_64/core.oat --image=out/host/linux-x86/framework/x86_64/core.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-backend=Quick
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16809(2MB) AllocSpace objects, 1(20KB) LOS objects, 45% free, 4MB/8MB, paused 18.642ms total 39.548ms
+Topological sort order: Using fall-back in java.util.Map android.icu.impl.ICUService.getVisibleIDMap() BB #8 @0x58, num_blocks = 49
+Topological sort order: Using fall-back in java.util.SortedMap android.icu.impl.ICUService.getDisplayNames(android.icu.util.ULocale, java.util.Comparator, java.lang.String) BB #6 @0x5b, num_blocks = 48
+Topological sort order: Using fall-back in java.lang.Object android.icu.impl.ICUService.getKey(android.icu.impl.ICUService$Key, java.lang.String[], android.icu.impl.ICUService$Factory) BB #56 @0x318, num_blocks = 264
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #33 @0x38c, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #162 @0x487, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #204 @0x575, num_blocks = 239
+Topological sort order: Using fall-back in void android.icu.impl.Utility.appendToRule(java.lang.StringBuffer, int, boolean, boolean, java.lang.StringBuffer) BB #19 @0x7f, num_blocks = 47
+Topological sort order: Using fall-back in void android.icu.text.DateIntervalInfo.setup(android.icu.util.ULocale) BB #14 @0x263, num_blocks = 157
+java.util.Collections$UnmodifiableMap$UnmodifiableEntrySet.toArray(java.lang.Object[]) BB #4 @0x27, num_blocks = 11
+Topological sort order: Using fall-back in com.android.org.bouncycastle.math.ec.WNafPreCompInfo com.android.org.bouncycastle.math.ec.WNafUtil.precompute(com.android.org.bouncycastle.math.ec.ECPoint, int, boolean) BB #22 @0x9a, num_blocks = 37
+Explicit concurrent mark sweep GC freed 6677(2MB) AllocSpace objects, 0(0B) LOS objects, 61% free, 2MB/6MB, paused 15.972ms total 29.996ms
+SectionObjects size=2137888 range=0-2137888
+SectionArtFields size=132696 range=2137888-2270584
+SectionArtMethods size=1044952 range=2270584-3315536
+SectionDexCacheArrays size=783808 range=3315536-4099344
+SectionInternedStrings size=114840 range=4099344-4214184
+SectionClassTable size=12288 range=4214184-4226472
+SectionImageBitmap size=36864 range=4227072-4263936
+Methods: clean=14104 dirty=4202
+[Total time]
+  0.068s/0.215s dex2oat Setup
+    0.146s Create runtime
+  0.052s/1.405s dex2oat Compile
+    0.066s LoadImageClasses
+    0.026s Resolve Types
+    0.007s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.011s Resolve Types
+    0s Resolve MethodsAndFields
+    0.114s Verify Dex File
+    0.007s Verify Dex File
+    0.014s Verify Dex File
+    0.030s Verify Dex File
+    0.375s InitializeNoClinit
+    0.001s InitializeNoClinit
+    0.005s InitializeNoClinit
+    0.015s InitializeNoClinit
+    0.008s UpdateImageClasses
+    0.438s Compile Dex File
+    0.031s Compile Dex File
+    0.053s Compile Dex File
+    0.137s Compile Dex File
+  0.008s/1.181s dex2oat Oat
+    0s/0.114s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.018s InitOatClasses
+      0.031s InitOatMaps
+      0s InitOatCode
+      0.063s InitOatCodeDexFiles
+    0.102s dex2oat Prepare image address space
+    0.956s dex2oat Write ELF
+  0.085s dex2oat ImageWriter
+compiler: end, 2.887s
+
+dex2oat took 2.888s (threads: 32) arena alloc=4MB java alloc=2MB native alloc=43MB free=13MB
+Code dedupe: 0 collisions, 0 max hash collisions, 19762/26256 probe distance, 12165950 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 7599/17507 probe distance, 3547347 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 5748/7322 probe distance, 2825858 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 7677/17813 probe distance, 3461671 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 12495/13869 probe distance, 3629712 ns hash time
+Current thread not detached in Runtime shutdown
+[ 16% 4/25] host dex2oat: out/host/linux-x86/framework/x86/core-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core-pic.oat --oat-location=out/host/linux-x86/framework/x86/core-pic.oat --image=out/host/linux-x86/framework/x86/core-pic.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-backend=Quick --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16801(1600KB) AllocSpace objects, 1(20KB) LOS objects, 59% free, 2MB/6MB, paused 18.476ms total 38.453ms
+Topological sort order: Using fall-back in java.util.Map android.icu.impl.ICUService.getVisibleIDMap() BB #8 @0x58, num_blocks = 49
+Topological sort order: Using fall-back in java.util.SortedMap android.icu.impl.ICUService.getDisplayNames(android.icu.util.ULocale, java.util.Comparator, java.lang.String) BB #6 @0x5b, num_blocks = 48
+Topological sort order: Using fall-back in java.lang.Object android.icu.impl.ICUService.getKey(android.icu.impl.ICUService$Key, java.lang.String[], android.icu.impl.ICUService$Factory) BB #56 @0x318, num_blocks = 264
+PC-relative addressing base promoted but unused in double android.icu.impl.CalendarAstronomer.getJulianDay()
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #33 @0x38c, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #162 @0x487, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #204 @0x575, num_blocks = 239
+Topological sort order: Using fall-back in void android.icu.impl.Utility.appendToRule(java.lang.StringBuffer, int, boolean, boolean, java.lang.StringBuffer) BB #19 @0x7f, num_blocks = 47
+Topological sort order: Using fall-back in void android.icu.text.DateIntervalInfo.setup(android.icu.util.ULocale) BB #14 @0x263, num_blocks = 157
+PC-relative addressing base promoted but unused in double android.icu.util.IslamicCalendar.moonAge(long)
+PC-relative addressing base promoted but unused in double java.lang.Math.toDegrees(double)
+PC-relative addressing base promoted but unused in double java.lang.Math.toRadians(double)
+java.util.Collections$UnmodifiableMap$UnmodifiableEntrySet.toArray(java.lang.Object[]) BB #4 @0x27, num_blocks = 11
+PC-relative addressing base promoted but unused in int java.util.DualPivotQuicksort.findAnyZero(double[], int, int)
+Topological sort order: Using fall-back in com.android.org.bouncycastle.math.ec.WNafPreCompInfo com.android.org.bouncycastle.math.ec.WNafUtil.precompute(com.android.org.bouncycastle.math.ec.ECPoint, int, boolean) BB #22 @0x9a, num_blocks = 37
+Explicit concurrent mark sweep GC freed 6677(1607KB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1842KB/5MB, paused 12.371ms total 23.120ms
+SectionObjects size=1667624 range=0-1667624
+SectionArtFields size=132696 range=1667624-1800320
+SectionArtMethods size=668972 range=1800320-2469292
+SectionDexCacheArrays size=521064 range=2469292-2990356
+SectionInternedStrings size=114840 range=2990360-3105200
+SectionClassTable size=12288 range=3105200-3117488
+SectionImageBitmap size=28672 range=3121152-3149824
+Methods: clean=14104 dirty=4202
+[Total time]
+  0.062s/0.214s dex2oat Setup
+    0.151s Create runtime
+  0.048s/1.358s dex2oat Compile
+    0.066s LoadImageClasses
+    0.025s Resolve Types
+    0.003s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0.001s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.011s Resolve Types
+    0s Resolve MethodsAndFields
+    0.115s Verify Dex File
+    0.008s Verify Dex File
+    0.012s Verify Dex File
+    0.030s Verify Dex File
+    0.373s InitializeNoClinit
+    0.004s InitializeNoClinit
+    0.007s InitializeNoClinit
+    0.015s InitializeNoClinit
+    0.007s UpdateImageClasses
+    0.425s Compile Dex File
+    0.027s Compile Dex File
+    0.047s Compile Dex File
+    0.120s Compile Dex File
+  0.005s/0.920s dex2oat Oat
+    0s/0.104s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.014s InitOatClasses
+      0.024s InitOatMaps
+      0s InitOatCode
+      0.064s InitOatCodeDexFiles
+    0.081s dex2oat Prepare image address space
+    0.728s dex2oat Write ELF
+  0.049s dex2oat ImageWriter
+compiler: end, 2.542s
+
+dex2oat took 2.543s (threads: 32) arena alloc=4MB java alloc=1844KB native alloc=40MB free=14MB
+Code dedupe: 0 collisions, 0 max hash collisions, 22422/23944 probe distance, 11429068 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 7395/17319 probe distance, 3280231 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 2444/2537 probe distance, 2439574 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 8347/17820 probe distance, 3285812 ns hash time
+CFI info dedupe: 1 collisions, 2 max hash collisions, 7431/11901 probe distance, 3239232 ns hash time
+Current thread not detached in Runtime shutdown
+[ 20% 5/25] host dex2oat: out/host/lin...ramework/x86_64/core-optimizing.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core-optimizing.oat --oat-location=out/host/linux-x86/framework/x86_64/core-optimizing.oat --image=out/host/linux-x86/framework/x86_64/core-optimizing.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-backend=Optimizing
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16826(2MB) AllocSpace objects, 1(20KB) LOS objects, 45% free, 4MB/8MB, paused 18.990ms total 40.207ms
+Explicit concurrent mark sweep GC freed 6679(2MB) AllocSpace objects, 0(0B) LOS objects, 61% free, 2MB/6MB, paused 12.902ms total 24.519ms
+SectionObjects size=2138040 range=0-2138040
+SectionArtFields size=132696 range=2138040-2270736
+SectionArtMethods size=1044952 range=2270736-3315688
+SectionDexCacheArrays size=783808 range=3315688-4099496
+SectionInternedStrings size=114840 range=4099496-4214336
+SectionClassTable size=12288 range=4214336-4226624
+SectionImageBitmap size=36864 range=4227072-4263936
+Methods: clean=14104 dirty=4202
+[Total time]
+  0.063s/0.208s dex2oat Setup
+    0.144s Create runtime
+  0.053s/1.978s dex2oat Compile
+    0.067s LoadImageClasses
+    0.033s Resolve Types
+    0.003s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.012s Resolve Types
+    0s Resolve MethodsAndFields
+    0.114s Verify Dex File
+    0.008s Verify Dex File
+    0.012s Verify Dex File
+    0.030s Verify Dex File
+    0.372s InitializeNoClinit
+    0.001s InitializeNoClinit
+    0.005s InitializeNoClinit
+    0.014s InitializeNoClinit
+    0.008s UpdateImageClasses
+    0.760s Compile Dex File
+    0.051s Compile Dex File
+    0.095s Compile Dex File
+    0.324s Compile Dex File
+  0.008s/2.443s dex2oat Oat
+    0s/0.083s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.018s InitOatClasses
+      0.015s InitOatMaps
+      0s InitOatCode
+      0.048s InitOatCodeDexFiles
+    0.088s dex2oat Prepare image address space
+    2.263s dex2oat Write ELF
+  0.083s dex2oat ImageWriter
+compiler: end, 4.713s
+
+dex2oat took 4.714s (threads: 32) arena alloc=26MB java alloc=2MB native alloc=64MB free=18MB
+Code dedupe: 0 collisions, 0 max hash collisions, 23178/24581 probe distance, 11649148 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 1 collisions, 2 max hash collisions, 8979/18623 probe distance, 5886815 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 6176/10944 probe distance, 4031713 ns hash time
+Current thread not detached in Runtime shutdown
+[ 24% 6/25] host dex2oat: out/host/lin...work/x86_64/core-optimizing-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core-optimizing-pic.oat --oat-location=out/host/linux-x86/framework/x86_64/core-optimizing-pic.oat --image=out/host/linux-x86/framework/x86_64/core-optimizing-pic.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-backend=Optimizing --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16801(2MB) AllocSpace objects, 1(20KB) LOS objects, 45% free, 4MB/8MB, paused 18.840ms total 40.287ms
+Explicit concurrent mark sweep GC freed 6676(2MB) AllocSpace objects, 0(0B) LOS objects, 61% free, 2MB/6MB, paused 12.594ms total 23.671ms
+SectionObjects size=2138040 range=0-2138040
+SectionArtFields size=132696 range=2138040-2270736
+SectionArtMethods size=1044952 range=2270736-3315688
+SectionDexCacheArrays size=783808 range=3315688-4099496
+SectionInternedStrings size=114840 range=4099496-4214336
+SectionClassTable size=12288 range=4214336-4226624
+SectionImageBitmap size=36864 range=4227072-4263936
+Methods: clean=14104 dirty=4202
+[Total time]
+  0.059s/0.204s dex2oat Setup
+    0.144s Create runtime
+  0.049s/1.945s dex2oat Compile
+    0.052s LoadImageClasses
+    0.033s Resolve Types
+    0.003s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.012s Resolve Types
+    0s Resolve MethodsAndFields
+    0.118s Verify Dex File
+    0.009s Verify Dex File
+    0.013s Verify Dex File
+    0.032s Verify Dex File
+    0.371s InitializeNoClinit
+    0.001s InitializeNoClinit
+    0.005s InitializeNoClinit
+    0.015s InitializeNoClinit
+    0.008s UpdateImageClasses
+    0.751s Compile Dex File
+    0.053s Compile Dex File
+    0.092s Compile Dex File
+    0.313s Compile Dex File
+  0.009s/2.419s dex2oat Oat
+    0s/0.078s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.016s InitOatClasses
+      0.014s InitOatMaps
+      0s InitOatCode
+      0.046s InitOatCodeDexFiles
+    0.082s dex2oat Prepare image address space
+    2.249s dex2oat Write ELF
+  0.059s dex2oat ImageWriter
+compiler: end, 4.628s
+
+dex2oat took 4.628s (threads: 32) arena alloc=26MB java alloc=2MB native alloc=63MB free=17MB
+Code dedupe: 0 collisions, 0 max hash collisions, 22792/24357 probe distance, 11915097 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 8792/18249 probe distance, 6100178 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 5684/10911 probe distance, 4135628 ns hash time
+Current thread not detached in Runtime shutdown
+[ 28% 7/25] host dex2oat: out/host/lin...6/framework/x86/core-optimizing.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core-optimizing.oat --oat-location=out/host/linux-x86/framework/x86/core-optimizing.oat --image=out/host/linux-x86/framework/x86/core-optimizing.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-backend=Optimizing
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16802(1601KB) AllocSpace objects, 1(20KB) LOS objects, 59% free, 2MB/6MB, paused 19.385ms total 39.996ms
+Explicit concurrent mark sweep GC freed 6675(1607KB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1843KB/5MB, paused 12.675ms total 22.880ms
+SectionObjects size=1667776 range=0-1667776
+SectionArtFields size=132696 range=1667776-1800472
+SectionArtMethods size=668972 range=1800472-2469444
+SectionDexCacheArrays size=521064 range=2469444-2990508
+SectionInternedStrings size=114840 range=2990512-3105352
+SectionClassTable size=12288 range=3105352-3117640
+SectionImageBitmap size=28672 range=3121152-3149824
+Methods: clean=14104 dirty=4202
+[Total time]
+  0.063s/0.207s dex2oat Setup
+    0.144s Create runtime
+  0.054s/2.057s dex2oat Compile
+    0.066s LoadImageClasses
+    0.033s Resolve Types
+    0.004s Resolve MethodsAndFields
+    0.003s Resolve Types
+    0s Resolve MethodsAndFields
+    0.001s Resolve Types
+    0s Resolve MethodsAndFields
+    0.010s Resolve Types
+    0s Resolve MethodsAndFields
+    0.114s Verify Dex File
+    0.008s Verify Dex File
+    0.012s Verify Dex File
+    0.028s Verify Dex File
+    0.372s InitializeNoClinit
+    0.001s InitializeNoClinit
+    0.005s InitializeNoClinit
+    0.017s InitializeNoClinit
+    0.008s UpdateImageClasses
+    0.813s Compile Dex File
+    0.057s Compile Dex File
+    0.092s Compile Dex File
+    0.349s Compile Dex File
+  0.003s/2.325s dex2oat Oat
+    0s/0.075s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.014s InitOatClasses
+      0.015s InitOatMaps
+      0s InitOatCode
+      0.045s InitOatCodeDexFiles
+    0.078s dex2oat Prepare image address space
+    2.167s dex2oat Write ELF
+  0.093s dex2oat ImageWriter
+compiler: end, 4.683s
+
+dex2oat took 4.684s (threads: 32) arena alloc=26MB java alloc=1844KB native alloc=62MB free=14MB
+Code dedupe: 0 collisions, 0 max hash collisions, 22312/24537 probe distance, 11574362 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 9155/18676 probe distance, 5878616 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 9143/8397 probe distance, 3922334 ns hash time
+Current thread not detached in Runtime shutdown
+[ 32% 8/25] host dex2oat: out/host/lin...amework/x86/core-optimizing-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core-optimizing-pic.oat --oat-location=out/host/linux-x86/framework/x86/core-optimizing-pic.oat --image=out/host/linux-x86/framework/x86/core-optimizing-pic.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-backend=Optimizing --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16811(1602KB) AllocSpace objects, 1(20KB) LOS objects, 59% free, 2MB/6MB, paused 18.470ms total 38.583ms
+Explicit concurrent mark sweep GC freed 6674(1607KB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1843KB/5MB, paused 13.383ms total 24.157ms
+SectionObjects size=1667776 range=0-1667776
+SectionArtFields size=132696 range=1667776-1800472
+SectionArtMethods size=668972 range=1800472-2469444
+SectionDexCacheArrays size=521064 range=2469444-2990508
+SectionInternedStrings size=114840 range=2990512-3105352
+SectionClassTable size=12288 range=3105352-3117640
+SectionImageBitmap size=28672 range=3121152-3149824
+Methods: clean=14104 dirty=4202
+[Total time]
+  0.064s/0.208s dex2oat Setup
+    0.143s Create runtime
+  0.050s/2.060s dex2oat Compile
+    0.070s LoadImageClasses
+    0.030s Resolve Types
+    0.002s Resolve MethodsAndFields
+    0.001s Resolve Types
+    0s Resolve MethodsAndFields
+    0.001s Resolve Types
+    0s Resolve MethodsAndFields
+    0.006s Resolve Types
+    0s Resolve MethodsAndFields
+    0.122s Verify Dex File
+    0.007s Verify Dex File
+    0.013s Verify Dex File
+    0.031s Verify Dex File
+    0.376s InitializeNoClinit
+    0.001s InitializeNoClinit
+    0.005s InitializeNoClinit
+    0.018s InitializeNoClinit
+    0.007s UpdateImageClasses
+    0.767s Compile Dex File
+    0.055s Compile Dex File
+    0.095s Compile Dex File
+    0.392s Compile Dex File
+  0.009s/2.743s dex2oat Oat
+    0s/0.077s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.014s InitOatClasses
+      0.014s InitOatMaps
+      0s InitOatCode
+      0.047s InitOatCodeDexFiles
+    0.082s dex2oat Prepare image address space
+    2.574s dex2oat Write ELF
+  0.061s dex2oat ImageWriter
+compiler: end, 5.074s
+
+dex2oat took 5.075s (threads: 32) arena alloc=26MB java alloc=1844KB native alloc=63MB free=14MB
+Code dedupe: 0 collisions, 0 max hash collisions, 23090/24326 probe distance, 11695189 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 8482/18308 probe distance, 5761640 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 8597/8299 probe distance, 3878129 ns hash time
+Current thread not detached in Runtime shutdown
+[ 36% 9/25] host dex2oat: out/host/lin...amework/x86_64/core-interpreter.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core-interpreter.oat --oat-location=out/host/linux-x86/framework/x86_64/core-interpreter.oat --image=out/host/linux-x86/framework/x86_64/core-interpreter.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=interpret-only
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16818(2MB) AllocSpace objects, 1(20KB) LOS objects, 45% free, 4MB/8MB, paused 18.697ms total 39.779ms
+Explicit concurrent mark sweep GC freed 6431(2MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 2MB/6MB, paused 13.841ms total 25.885ms
+SectionObjects size=1690288 range=0-1690288
+SectionArtFields size=132696 range=1690288-1822984
+SectionArtMethods size=1044952 range=1822984-2867936
+SectionDexCacheArrays size=783808 range=2867936-3651744
+SectionInternedStrings size=37528 range=3651744-3689272
+SectionClassTable size=12288 range=3689272-3701560
+SectionImageBitmap size=28672 range=3702784-3731456
+Methods: clean=14104 dirty=4202
+[Total time]
+  57.968ms/211.573ms dex2oat Setup
+    153.605ms Create runtime
+  51.453ms/902.586ms dex2oat Compile
+    69.330ms LoadImageClasses
+    32.450ms Resolve Types
+    3.910ms Resolve MethodsAndFields
+    2.233ms Resolve Types
+    0.661ms Resolve MethodsAndFields
+    2.218ms Resolve Types
+    0.689ms Resolve MethodsAndFields
+    11.955ms Resolve Types
+    0.727ms Resolve MethodsAndFields
+    111.768ms Verify Dex File
+    6.567ms Verify Dex File
+    12.498ms Verify Dex File
+    30.868ms Verify Dex File
+    373.238ms InitializeNoClinit
+    3.820ms InitializeNoClinit
+    7.729ms InitializeNoClinit
+    15.410ms InitializeNoClinit
+    8.175ms UpdateImageClasses
+    102.615ms Compile Dex File
+    6.208ms Compile Dex File
+    13.049ms Compile Dex File
+    35.003ms Compile Dex File
+  6.528ms/668.638ms dex2oat Oat
+    0.016ms/62.676ms dex2oat OatWriter
+      0.019ms InitOatHeader
+      0.010ms InitOatDexFiles
+      0ms InitDexFiles
+      0ms InitLookupTables
+      14.483ms InitOatClasses
+      13.699ms InitOatMaps
+      0.484ms InitOatCode
+      33.963ms InitOatCodeDexFiles
+    87.824ms dex2oat Prepare image address space
+    511.608ms dex2oat Write ELF
+  72.255ms dex2oat ImageWriter
+compiler: end, 1.855s
+
+dex2oat took 1.855s (threads: 32) arena alloc=153KB java alloc=2MB native alloc=18MB free=12MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 16524/22509 probe distance, 2956736 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 40% 10/25] host dex2oat: out/host/li...ork/x86_64/core-interpreter-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core-interpreter-pic.oat --oat-location=out/host/linux-x86/framework/x86_64/core-interpreter-pic.oat --image=out/host/linux-x86/framework/x86_64/core-interpreter-pic.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=interpret-only --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16815(2MB) AllocSpace objects, 1(20KB) LOS objects, 45% free, 4MB/8MB, paused 18.611ms total 39.587ms
+Explicit concurrent mark sweep GC freed 6431(2MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 2MB/6MB, paused 14.388ms total 31.031ms
+SectionObjects size=1690288 range=0-1690288
+SectionArtFields size=132696 range=1690288-1822984
+SectionArtMethods size=1044952 range=1822984-2867936
+SectionDexCacheArrays size=783808 range=2867936-3651744
+SectionInternedStrings size=37528 range=3651744-3689272
+SectionClassTable size=12288 range=3689272-3701560
+SectionImageBitmap size=28672 range=3702784-3731456
+Methods: clean=14104 dirty=4202
+[Total time]
+  55.776ms/200.099ms dex2oat Setup
+    144.323ms Create runtime
+  47.062ms/931.014ms dex2oat Compile
+    64.374ms LoadImageClasses
+    30.235ms Resolve Types
+    3.261ms Resolve MethodsAndFields
+    2.568ms Resolve Types
+    0.670ms Resolve MethodsAndFields
+    2.440ms Resolve Types
+    0.743ms Resolve MethodsAndFields
+    12.654ms Resolve Types
+    0.775ms Resolve MethodsAndFields
+    115.052ms Verify Dex File
+    6.804ms Verify Dex File
+    12.236ms Verify Dex File
+    26.976ms Verify Dex File
+    373.816ms InitializeNoClinit
+    1.875ms InitializeNoClinit
+    5.657ms InitializeNoClinit
+    15.193ms InitializeNoClinit
+    7.702ms UpdateImageClasses
+    149.671ms Compile Dex File
+    6.145ms Compile Dex File
+    12.292ms Compile Dex File
+    32.800ms Compile Dex File
+  2.014ms/666.365ms dex2oat Oat
+    0.016ms/62.630ms dex2oat OatWriter
+      0.017ms InitOatHeader
+      0.010ms InitOatDexFiles
+      0ms InitDexFiles
+      0ms InitLookupTables
+      14.760ms InitOatClasses
+      13.309ms InitOatMaps
+      0.514ms InitOatCode
+      33.999ms InitOatCodeDexFiles
+    99.553ms dex2oat Prepare image address space
+    502.166ms dex2oat Write ELF
+  66.211ms dex2oat ImageWriter
+compiler: end, 1.863s
+
+dex2oat took 1.864s (threads: 32) arena alloc=142KB java alloc=2MB native alloc=18MB free=10MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 16524/22509 probe distance, 2695063 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 44% 11/25] host dex2oat: out/host/li.../framework/x86/core-interpreter.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core-interpreter.oat --oat-location=out/host/linux-x86/framework/x86/core-interpreter.oat --image=out/host/linux-x86/framework/x86/core-interpreter.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=interpret-only
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16822(1603KB) AllocSpace objects, 1(20KB) LOS objects, 59% free, 2MB/6MB, paused 18.684ms total 38.994ms
+Explicit concurrent mark sweep GC freed 6431(1598KB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1375KB/4MB, paused 14.638ms total 26.716ms
+SectionObjects size=1220024 range=0-1220024
+SectionArtFields size=132696 range=1220024-1352720
+SectionArtMethods size=668972 range=1352720-2021692
+SectionDexCacheArrays size=521064 range=2021692-2542756
+SectionInternedStrings size=37528 range=2542760-2580288
+SectionClassTable size=12288 range=2580288-2592576
+SectionImageBitmap size=20480 range=2592768-2613248
+Methods: clean=14104 dirty=4202
+[Total time]
+  60.953ms/203.281ms dex2oat Setup
+    142.328ms Create runtime
+  51.854ms/940.273ms dex2oat Compile
+    68.897ms LoadImageClasses
+    30.548ms Resolve Types
+    3.233ms Resolve MethodsAndFields
+    2.257ms Resolve Types
+    0.636ms Resolve MethodsAndFields
+    2.125ms Resolve Types
+    0.687ms Resolve MethodsAndFields
+    11.297ms Resolve Types
+    0.661ms Resolve MethodsAndFields
+    115.355ms Verify Dex File
+    6.761ms Verify Dex File
+    12.126ms Verify Dex File
+    28.843ms Verify Dex File
+    377.471ms InitializeNoClinit
+    1.725ms InitializeNoClinit
+    5.673ms InitializeNoClinit
+    15.156ms InitializeNoClinit
+    8.068ms UpdateImageClasses
+    146.968ms Compile Dex File
+    6.134ms Compile Dex File
+    12.351ms Compile Dex File
+    31.435ms Compile Dex File
+  2.547ms/652.651ms dex2oat Oat
+    0.014ms/62.579ms dex2oat OatWriter
+      0.014ms InitOatHeader
+      0.009ms InitOatDexFiles
+      0ms InitDexFiles
+      0ms InitLookupTables
+      13.873ms InitOatClasses
+      13.534ms InitOatMaps
+      0.492ms InitOatCode
+      34.639ms InitOatCodeDexFiles
+    93.568ms dex2oat Prepare image address space
+    493.955ms dex2oat Write ELF
+  62.584ms dex2oat ImageWriter
+compiler: end, 1.858s
+
+dex2oat took 1.859s (threads: 32) arena alloc=154KB java alloc=1377KB native alloc=18MB free=10MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 16524/22509 probe distance, 3006635 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 48% 12/25] host dex2oat: out/host/li...mework/x86/core-interpreter-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core-interpreter-pic.oat --oat-location=out/host/linux-x86/framework/x86/core-interpreter-pic.oat --image=out/host/linux-x86/framework/x86/core-interpreter-pic.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=interpret-only --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 16803(1600KB) AllocSpace objects, 1(20KB) LOS objects, 59% free, 2MB/6MB, paused 19.132ms total 43.735ms
+Explicit concurrent mark sweep GC freed 6431(1598KB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1375KB/4MB, paused 14.592ms total 26.132ms
+SectionObjects size=1220024 range=0-1220024
+SectionArtFields size=132696 range=1220024-1352720
+SectionArtMethods size=668972 range=1352720-2021692
+SectionDexCacheArrays size=521064 range=2021692-2542756
+SectionInternedStrings size=37528 range=2542760-2580288
+SectionClassTable size=12288 range=2580288-2592576
+SectionImageBitmap size=20480 range=2592768-2613248
+Methods: clean=14104 dirty=4202
+[Total time]
+  55.794ms/197.654ms dex2oat Setup
+    141.860ms Create runtime
+  55.296ms/954.501ms dex2oat Compile
+    65.914ms LoadImageClasses
+    28.440ms Resolve Types
+    3.886ms Resolve MethodsAndFields
+    3.193ms Resolve Types
+    0.917ms Resolve MethodsAndFields
+    2.030ms Resolve Types
+    0.730ms Resolve MethodsAndFields
+    12.523ms Resolve Types
+    0.719ms Resolve MethodsAndFields
+    119.291ms Verify Dex File
+    7.169ms Verify Dex File
+    11.978ms Verify Dex File
+    26.763ms Verify Dex File
+    382.504ms InitializeNoClinit
+    3.318ms InitializeNoClinit
+    6.692ms InitializeNoClinit
+    15.240ms InitializeNoClinit
+    7.863ms UpdateImageClasses
+    149.368ms Compile Dex File
+    6.120ms Compile Dex File
+    12.495ms Compile Dex File
+    32.043ms Compile Dex File
+  3.625ms/708.162ms dex2oat Oat
+    0.016ms/63.146ms dex2oat OatWriter
+      0.016ms InitOatHeader
+      0.010ms InitOatDexFiles
+      0ms InitDexFiles
+      0ms InitLookupTables
+      15.311ms InitOatClasses
+      13.335ms InitOatMaps
+      0.487ms InitOatCode
+      33.967ms InitOatCodeDexFiles
+    87.834ms dex2oat Prepare image address space
+    553.556ms dex2oat Write ELF
+  60.276ms dex2oat ImageWriter
+compiler: end, 1.920s
+
+dex2oat took 1.921s (threads: 32) arena alloc=192KB java alloc=1377KB native alloc=18MB free=13MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 16524/22509 probe distance, 2673236 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 52% 13/25] host dex2oat: out/host/li...framework/x86_64/core-interp-ac.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core-interp-ac.oat --oat-location=out/host/linux-x86/framework/x86_64/core-interp-ac.oat --image=out/host/linux-x86/framework/x86_64/core-interp-ac.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=verify-at-runtime --runtime-arg -Xverify:softfail
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 15381(4MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1675KB/4MB, paused 12.292ms total 25.843ms
+SectionObjects size=1359992 range=0-1359992
+SectionArtFields size=132320 range=1359992-1492312
+SectionArtMethods size=1042552 range=1492312-2534864
+SectionDexCacheArrays size=783808 range=2534864-3318672
+SectionInternedStrings size=12288 range=3318672-3330960
+SectionClassTable size=12288 range=3330960-3343248
+SectionImageBitmap size=24576 range=3346432-3371008
+Methods: clean=977 dirty=17289
+dex2oat took 616.013ms (threads: 32) arena alloc=0B java alloc=1675KB native alloc=533KB free=7MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 56% 14/25] host dex2oat: out/host/li...ework/x86_64/core-interp-ac-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core-interp-ac-pic.oat --oat-location=out/host/linux-x86/framework/x86_64/core-interp-ac-pic.oat --image=out/host/linux-x86/framework/x86_64/core-interp-ac-pic.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=verify-at-runtime --runtime-arg -Xverify:softfail --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 15381(4MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1675KB/4MB, paused 12.348ms total 25.573ms
+SectionObjects size=1359992 range=0-1359992
+SectionArtFields size=132320 range=1359992-1492312
+SectionArtMethods size=1042552 range=1492312-2534864
+SectionDexCacheArrays size=783808 range=2534864-3318672
+SectionInternedStrings size=12288 range=3318672-3330960
+SectionClassTable size=12288 range=3330960-3343248
+SectionImageBitmap size=24576 range=3346432-3371008
+Methods: clean=977 dirty=17289
+dex2oat took 587.852ms (threads: 32) arena alloc=0B java alloc=1675KB native alloc=533KB free=7MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 60% 15/25] host dex2oat: out/host/li...86/framework/x86/core-interp-ac.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core-interp-ac.oat --oat-location=out/host/linux-x86/framework/x86/core-interp-ac.oat --image=out/host/linux-x86/framework/x86/core-interp-ac.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=verify-at-runtime --runtime-arg -Xverify:softfail
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 15381(2MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 988KB/2MB, paused 12.202ms total 23.974ms
+SectionObjects size=893712 range=0-893712
+SectionArtFields size=132320 range=893712-1026032
+SectionArtMethods size=667452 range=1026032-1693484
+SectionDexCacheArrays size=521064 range=1693484-2214548
+SectionInternedStrings size=12288 range=2214552-2226840
+SectionClassTable size=12288 range=2226840-2239128
+SectionImageBitmap size=16384 range=2240512-2256896
+Methods: clean=977 dirty=17289
+dex2oat took 583.916ms (threads: 32) arena alloc=0B java alloc=988KB native alloc=532KB free=7MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 64% 16/25] host dex2oat: out/host/li...ramework/x86/core-interp-ac-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core-interp-ac-pic.oat --oat-location=out/host/linux-x86/framework/x86/core-interp-ac-pic.oat --image=out/host/linux-x86/framework/x86/core-interp-ac-pic.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=verify-at-runtime --runtime-arg -Xverify:softfail --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 15381(2MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 988KB/2MB, paused 12.243ms total 24.134ms
+SectionObjects size=893712 range=0-893712
+SectionArtFields size=132320 range=893712-1026032
+SectionArtMethods size=667452 range=1026032-1693484
+SectionDexCacheArrays size=521064 range=1693484-2214548
+SectionInternedStrings size=12288 range=2214552-2226840
+SectionClassTable size=12288 range=2226840-2239128
+SectionImageBitmap size=16384 range=2240512-2256896
+Methods: clean=977 dirty=17289
+dex2oat took 589.972ms (threads: 32) arena alloc=0B java alloc=988KB native alloc=532KB free=7MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 68% 17/25] host dex2oat: out/host/li...x-x86/framework/x86_64/core-jit.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core-jit.oat --oat-location=out/host/linux-x86/framework/x86_64/core-jit.oat --image=out/host/linux-x86/framework/x86_64/core-jit.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=verify-at-runtime
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 15366(4MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1684KB/4MB, paused 12.397ms total 25.742ms
+SectionObjects size=1368056 range=0-1368056
+SectionArtFields size=132640 range=1368056-1500696
+SectionArtMethods size=1044464 range=1500696-2545160
+SectionDexCacheArrays size=783808 range=2545160-3328968
+SectionInternedStrings size=12288 range=3328968-3341256
+SectionClassTable size=12288 range=3341256-3353544
+SectionImageBitmap size=24576 range=3354624-3379200
+Methods: clean=977 dirty=17321
+dex2oat took 633.109ms (threads: 32) arena alloc=1872B java alloc=1684KB native alloc=961KB free=7MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 72% 18/25] host dex2oat: out/host/li...6/framework/x86_64/core-jit-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86_64/core-jit-pic.oat --oat-location=out/host/linux-x86/framework/x86_64/core-jit-pic.oat --image=out/host/linux-x86/framework/x86_64/core-jit-pic.art --base=0x60000000 --instruction-set=x86_64 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=verify-at-runtime --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 15366(4MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1684KB/4MB, paused 10.221ms total 20.986ms
+SectionObjects size=1368056 range=0-1368056
+SectionArtFields size=132640 range=1368056-1500696
+SectionArtMethods size=1044464 range=1500696-2545160
+SectionDexCacheArrays size=783808 range=2545160-3328968
+SectionInternedStrings size=12288 range=3328968-3341256
+SectionClassTable size=12288 range=3341256-3353544
+SectionImageBitmap size=24576 range=3354624-3379200
+Methods: clean=977 dirty=17321
+dex2oat took 605.142ms (threads: 32) arena alloc=1872B java alloc=1684KB native alloc=960KB free=7MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 76% 19/25] host dex2oat: out/host/linux-x86/framework/x86/core-jit.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core-jit.oat --oat-location=out/host/linux-x86/framework/x86/core-jit.oat --image=out/host/linux-x86/framework/x86/core-jit.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=verify-at-runtime
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 15366(2MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 993KB/2MB, paused 12.318ms total 24.278ms
+SectionObjects size=898712 range=0-898712
+SectionArtFields size=132640 range=898712-1031352
+SectionArtMethods size=668664 range=1031352-1700016
+SectionDexCacheArrays size=521064 range=1700016-2221080
+SectionInternedStrings size=12288 range=2221080-2233368
+SectionClassTable size=12288 range=2233368-2245656
+SectionImageBitmap size=16384 range=2248704-2265088
+Methods: clean=977 dirty=17321
+dex2oat took 627.358ms (threads: 32) arena alloc=1872B java alloc=993KB native alloc=960KB free=7MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 80% 20/25] host dex2oat: out/host/li...-x86/framework/x86/core-jit-pic.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar --dex-file=out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar --dex-location=out/host/linux-x86/framework/core-libart-hostdex.jar --dex-location=out/host/linux-x86/framework/conscrypt-hostdex.jar --dex-location=out/host/linux-x86/framework/okhttp-hostdex.jar --dex-location=out/host/linux-x86/framework/bouncycastle-hostdex.jar --oat-file=out/host/linux-x86/framework/x86/core-jit-pic.oat --oat-location=out/host/linux-x86/framework/x86/core-jit-pic.oat --image=out/host/linux-x86/framework/x86/core-jit-pic.art --base=0x60000000 --instruction-set=x86 --instruction-set-features=default --host --android-root=out/host/linux-x86 --include-patch-information --generate-debug-info --compiler-filter=verify-at-runtime --compile-pic
+setting boot class path to out/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/conscrypt-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/okhttp-hostdex_intermediates/javalib.jar:out/host/common/obj/JAVA_LIBRARIES/bouncycastle-hostdex_intermediates/javalib.jar
+Explicit concurrent mark sweep GC freed 15366(2MB) AllocSpace objects, 0(0B) LOS objects, 66% free, 993KB/2MB, paused 11.852ms total 23.477ms
+SectionObjects size=898712 range=0-898712
+SectionArtFields size=132640 range=898712-1031352
+SectionArtMethods size=668664 range=1031352-1700016
+SectionDexCacheArrays size=521064 range=1700016-2221080
+SectionInternedStrings size=12288 range=2221080-2233368
+SectionClassTable size=12288 range=2233368-2245656
+SectionImageBitmap size=16384 range=2248704-2265088
+Methods: clean=977 dirty=17321
+dex2oat took 626.973ms (threads: 32) arena alloc=1872B java alloc=993KB native alloc=960KB free=7MB
+Code dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[ 84% 21/25] Output in out/core.host.oatdump.txt
+oatdumpd I 19467 19467 art/cmdline/cmdline.h:301] Try to parse
+oatdumpd I 19467 19467 art/cmdline/cmdline.h:178] will call parse checks
+oatdumpd I 19467 19467 art/cmdline/cmdline.h:233] boot image location: out/host/linux-x86/framework/core.art
+oatdumpd I 19467 19467 art/cmdline/cmdline.h:257] boot_image_location parent_dir_name was framework
+oatdumpd I 19467 19467 art/cmdline/cmdline.h:273] boot_image_filename does exist: out/host/linux-x86/framework/x86_64/core.art
+oatdumpd I 19467 19467 art/runtime/gc/space/image_space.cc:690] Dumping image sections
+oatdumpd I 19467 19467 art/runtime/gc/space/image_space.cc:694] SectionObjects start=0x60000000 size=2137888 range=0-2137888
+oatdumpd I 19467 19467 art/runtime/gc/space/image_space.cc:694] SectionArtFields start=0x60209f20 size=132696 range=2137888-2270584
+oatdumpd I 19467 19467 art/runtime/gc/space/image_space.cc:694] SectionArtMethods start=0x6022a578 size=1044952 range=2270584-3315536
+oatdumpd I 19467 19467 art/runtime/gc/space/image_space.cc:694] SectionDexCacheArrays start=0x60329750 size=783808 range=3315536-4099344
+oatdumpd I 19467 19467 art/runtime/gc/space/image_space.cc:694] SectionInternedStrings start=0x603e8d10 size=114840 range=4099344-4214184
+oatdumpd I 19467 19467 art/runtime/gc/space/image_space.cc:694] SectionClassTable start=0x60404da8 size=12288 range=4214184-4226472
+oatdumpd I 19467 19467 art/runtime/gc/space/image_space.cc:694] SectionImageBitmap start=0x60408000 size=36864 range=4227072-4263936
+oatdumpd W 19467 19467 art/runtime/runtime.cc:235] Current thread not detached in Runtime shutdown
+[ 88% 22/25] target dex2oat: out/targe...mmerhead/data/art-test/arm/core.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/target/common/obj/JAVA_LIBRARIES/core-libart_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/conscrypt_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/okhttp_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/bouncycastle_intermediates/javalib.jar --dex-location=/system/framework/core-libart.jar --dex-location=/system/framework/conscrypt.jar --dex-location=/system/framework/okhttp.jar --dex-location=/system/framework/bouncycastle.jar --oat-file=out/target/product/hammerhead/data/art-test/arm/core.oat --oat-location=out/target/product/hammerhead/data/art-test/arm/core.oat --image=out/target/product/hammerhead/data/art-test/arm/core.art --base=0x70000000 --instruction-set=arm --instruction-set-variant=krait --instruction-set-features=default --android-root=out/target/product/hammerhead/system --include-patch-information --generate-debug-info --compiler-backend=Quick
+setting boot class path to out/target/common/obj/JAVA_LIBRARIES/core-libart_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/conscrypt_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/okhttp_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/bouncycastle_intermediates/javalib.jar
+W/        (19634): Unable to open '/system/framework/core-libart.jar': No such file or directory
+W/        (19634): Unable to open '/system/framework/core-libart.jar': No such file or directory
+W/        (19634): Unable to open '/system/framework/core-libart.jar': No such file or directory
+Explicit concurrent mark sweep GC freed 12634(1295KB) AllocSpace objects, 0(0B) LOS objects, 60% free, 2MB/6MB, paused 17.842ms total 36.176ms
+Topological sort order: Using fall-back in java.util.Map android.icu.impl.ICUService.getVisibleIDMap() BB #8 @0x58, num_blocks = 49
+Topological sort order: Using fall-back in java.util.SortedMap android.icu.impl.ICUService.getDisplayNames(android.icu.util.ULocale, java.util.Comparator, java.lang.String) BB #6 @0x5b, num_blocks = 48
+Topological sort order: Using fall-back in java.lang.Object android.icu.impl.ICUService.getKey(android.icu.impl.ICUService$Key, java.lang.String[], android.icu.impl.ICUService$Factory) BB #56 @0x318, num_blocks = 264
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #33 @0x38c, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #162 @0x487, num_blocks = 239
+Topological sort order: Using fall-back in int android.icu.impl.coll.CollationFastLatin.compareUTF16(char[], char[], int, java.lang.CharSequence, java.lang.CharSequence, int) BB #204 @0x575, num_blocks = 239
+Topological sort order: Using fall-back in void android.icu.impl.Utility.appendToRule(java.lang.StringBuffer, int, boolean, boolean, java.lang.StringBuffer) BB #19 @0x7f, num_blocks = 47
+Topological sort order: Using fall-back in void android.icu.text.DateIntervalInfo.setup(android.icu.util.ULocale) BB #14 @0x263, num_blocks = 157
+java.util.Collections$UnmodifiableMap$UnmodifiableEntrySet.toArray(java.lang.Object[]) BB #4 @0x27, num_blocks = 11
+Topological sort order: Using fall-back in com.android.org.bouncycastle.math.ec.WNafPreCompInfo com.android.org.bouncycastle.math.ec.WNafUtil.precompute(com.android.org.bouncycastle.math.ec.ECPoint, int, boolean) BB #22 @0x9a, num_blocks = 37
+Explicit concurrent mark sweep GC freed 6689(1608KB) AllocSpace objects, 0(0B) LOS objects, 66% free, 1694KB/4MB, paused 14.904ms total 26.742ms
+SectionObjects size=1549384 range=0-1549384
+SectionArtFields size=132676 range=1549384-1682060
+SectionArtMethods size=668896 range=1682060-2350956
+SectionDexCacheArrays size=521024 range=2350956-2871980
+SectionInternedStrings size=114840 range=2871984-2986824
+SectionClassTable size=12288 range=2986824-2999112
+SectionImageBitmap size=24576 range=3002368-3026944
+Methods: clean=14071 dirty=4233
+[Total time]
+  0.063s/0.209s dex2oat Setup
+    0.145s Create runtime
+  0.049s/1.163s dex2oat Compile
+    0.069s LoadImageClasses
+    0.027s Resolve Types
+    0.003s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0.010s Resolve Types
+    0s Resolve MethodsAndFields
+    0.117s Verify Dex File
+    0.008s Verify Dex File
+    0.013s Verify Dex File
+    0.030s Verify Dex File
+    0.135s InitializeNoClinit
+    0.002s InitializeNoClinit
+    0.005s InitializeNoClinit
+    0.039s InitializeNoClinit
+    0.007s UpdateImageClasses
+    0.420s Compile Dex File
+    0.030s Compile Dex File
+    0.054s Compile Dex File
+    0.129s Compile Dex File
+  0.009s/1.220s dex2oat Oat
+    0s/0.123s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.022s InitOatClasses
+      0.030s InitOatMaps
+      0s InitOatCode
+      0.070s InitOatCodeDexFiles
+    0.096s dex2oat Prepare image address space
+    0.990s dex2oat Write ELF
+  0.077s dex2oat ImageWriter
+compiler: end, 2.671s
+
+dex2oat took 2.672s (threads: 32) arena alloc=5MB java alloc=1694KB native alloc=41MB free=13MB
+Code dedupe: 0 collisions, 0 max hash collisions, 22824/24541 probe distance, 10738128 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 7763/17564 probe distance, 3393635 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 7640/8120 probe distance, 2794628 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 8611/18080 probe distance, 3400378 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 9588/12855 probe distance, 3496445 ns hash time
+Current thread not detached in Runtime shutdown
+[ 92% 23/25] Output in out/core.target.arm.oatdump.txt
+oatdumpd I 19668 19668 art/cmdline/cmdline.h:301] Try to parse
+oatdumpd I 19668 19668 art/cmdline/cmdline.h:178] will call parse checks
+oatdumpd I 19668 19668 art/cmdline/cmdline.h:233] boot image location: out/target/product/hammerhead/data/art-test/core.art
+oatdumpd I 19668 19668 art/cmdline/cmdline.h:257] boot_image_location parent_dir_name was art-test
+oatdumpd I 19668 19668 art/cmdline/cmdline.h:273] boot_image_filename does exist: out/target/product/hammerhead/data/art-test/arm/core.art
+oatdumpd I 19668 19668 art/runtime/gc/space/image_space.cc:690] Dumping image sections
+oatdumpd I 19668 19668 art/runtime/gc/space/image_space.cc:694] SectionObjects start=0x70000000 size=1549384 range=0-1549384
+oatdumpd I 19668 19668 art/runtime/gc/space/image_space.cc:694] SectionArtFields start=0x7017a448 size=132676 range=1549384-1682060
+oatdumpd I 19668 19668 art/runtime/gc/space/image_space.cc:694] SectionArtMethods start=0x7019aa8c size=668896 range=1682060-2350956
+oatdumpd I 19668 19668 art/runtime/gc/space/image_space.cc:694] SectionDexCacheArrays start=0x7023df6c size=521024 range=2350956-2871980
+oatdumpd I 19668 19668 art/runtime/gc/space/image_space.cc:694] SectionInternedStrings start=0x702bd2b0 size=114840 range=2871984-2986824
+oatdumpd I 19668 19668 art/runtime/gc/space/image_space.cc:694] SectionClassTable start=0x702d9348 size=12288 range=2986824-2999112
+oatdumpd I 19668 19668 art/runtime/gc/space/image_space.cc:694] SectionImageBitmap start=0x702dd000 size=24576 range=3002368-3026944
+oatdumpd W 19668 19668 art/runtime/runtime.cc:235] Current thread not detached in Runtime shutdown
+[ 96% 24/25] target dex2oat: out/targe...tjars/system/framework/arm/boot.art ()
+out/host/linux-x86/bin/dex2oatd --runtime-arg -Xms64m --runtime-arg -Xmx64m --image-classes=frameworks/base/preloaded-classes --dex-file=out/target/common/obj/JAVA_LIBRARIES/core-libart_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/conscrypt_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/okhttp_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/core-junit_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/bouncycastle_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/ext_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/framework_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/telephony-common_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/voip-common_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/ims-common_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/apache-xml_intermediates/javalib.jar --dex-file=out/target/common/obj/JAVA_LIBRARIES/org.apache.http.legacy.boot_intermediates/javalib.jar --dex-location=/system/framework/core-libart.jar --dex-location=/system/framework/conscrypt.jar --dex-location=/system/framework/okhttp.jar --dex-location=/system/framework/core-junit.jar --dex-location=/system/framework/bouncycastle.jar --dex-location=/system/framework/ext.jar --dex-location=/system/framework/framework.jar --dex-location=/system/framework/telephony-common.jar --dex-location=/system/framework/voip-common.jar --dex-location=/system/framework/ims-common.jar --dex-location=/system/framework/apache-xml.jar --dex-location=/system/framework/org.apache.http.legacy.boot.jar --oat-symbols=out/target/product/hammerhead/symbols/system/framework/arm/boot.oat --oat-file=out/target/product/hammerhead/dex_bootjars/system/framework/arm/boot.oat --oat-location=/system/framework/arm/boot.oat --image=out/target/product/hammerhead/dex_bootjars/system/framework/arm/boot.art --base=0x70000000 --instruction-set=arm --instruction-set-variant=krait --instruction-set-features=default --android-root=out/target/product/hammerhead/system --include-patch-information --runtime-arg -Xnorelocate --no-generate-debug-info
+setting boot class path to out/target/common/obj/JAVA_LIBRARIES/core-libart_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/conscrypt_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/okhttp_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/core-junit_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/bouncycastle_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/ext_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/framework_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/telephony-common_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/voip-common_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/ims-common_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/apache-xml_intermediates/javalib.jar:out/target/common/obj/JAVA_LIBRARIES/org.apache.http.legacy.boot_intermediates/javalib.jar
+W/        (19684): Unable to open '/system/framework/core-libart.jar': No such file or directory
+W/        (19684): Unable to open '/system/framework/core-libart.jar': No such file or directory
+W/        (19684): Unable to open '/system/framework/core-libart.jar': No such file or directory
+Explicit concurrent mark sweep GC freed 35954(5MB) AllocSpace objects, 0(0B) LOS objects, 28% free, 10MB/14MB, paused 43.392ms total 116.832ms
+Method exceeds compiler instruction limit: 25337 in void org.ccil.cowan.tagsoup.HTMLSchema.<init>()
+Explicit concurrent mark sweep GC freed 32006(7MB) AllocSpace objects, 0(0B) LOS objects, 41% free, 5MB/9MB, paused 26.159ms total 61.967ms
+SectionObjects size=5239896 range=0-5239896
+SectionArtFields size=544520 range=5239896-5784416
+SectionArtMethods size=1994540 range=5784416-7778956
+SectionDexCacheArrays size=2145420 range=7778956-9924376
+SectionInternedStrings size=351608 range=9924376-10275984
+SectionClassTable size=37528 range=10275984-10313512
+SectionImageBitmap size=81920 range=10313728-10395648
+Methods: clean=42653 dirty=12068
+[Total time]
+  0.068s/0.540s dex2oat Setup
+    0.472s Create runtime
+  0.130s/8.568s dex2oat Compile
+    0.484s LoadImageClasses
+    0.027s Resolve Types
+    0.003s Resolve MethodsAndFields
+    0.001s Resolve Types
+    0s Resolve MethodsAndFields
+    0.001s Resolve Types
+    0s Resolve MethodsAndFields
+    0s Resolve Types
+    0.001s Resolve MethodsAndFields
+    0.011s Resolve Types
+    0s Resolve MethodsAndFields
+    0.009s Resolve Types
+    0s Resolve MethodsAndFields
+    0.098s Resolve Types
+    0.012s Resolve MethodsAndFields
+    0.021s Resolve Types
+    0.014s Resolve MethodsAndFields
+    0.014s Resolve Types
+    0.001s Resolve MethodsAndFields
+    0.002s Resolve Types
+    0s Resolve MethodsAndFields
+    0s Resolve Types
+    0s Resolve MethodsAndFields
+    0.015s Resolve Types
+    0s Resolve MethodsAndFields
+    0.003s Resolve Types
+    0s Resolve MethodsAndFields
+    0.115s Verify Dex File
+    0.009s Verify Dex File
+    0.014s Verify Dex File
+    0.001s Verify Dex File
+    0.028s Verify Dex File
+    0.036s Verify Dex File
+    0.214s Verify Dex File
+    0.086s Verify Dex File
+    0.044s Verify Dex File
+    0.005s Verify Dex File
+    0.005s Verify Dex File
+    0.034s Verify Dex File
+    0.015s Verify Dex File
+    0.145s InitializeNoClinit
+    0.002s InitializeNoClinit
+    0.006s InitializeNoClinit
+    0s InitializeNoClinit
+    0.040s InitializeNoClinit
+    0.574s InitializeNoClinit
+    0.302s InitializeNoClinit
+    0.056s InitializeNoClinit
+    0.002s InitializeNoClinit
+    0s InitializeNoClinit
+    0s InitializeNoClinit
+    0.006s InitializeNoClinit
+    0.011s InitializeNoClinit
+    0.024s UpdateImageClasses
+    0.985s Compile Dex File
+    0.059s Compile Dex File
+    0.108s Compile Dex File
+    0.012s Compile Dex File
+    0.340s Compile Dex File
+    0.236s Compile Dex File
+    2.209s Compile Dex File
+    0.788s Compile Dex File
+    0.676s Compile Dex File
+    0.069s Compile Dex File
+    0.051s Compile Dex File
+    0.188s Compile Dex File
+    0.191s Compile Dex File
+  0.010s/2.087s dex2oat Oat
+    0s/0.362s dex2oat OatWriter
+      0s InitOatHeader
+      0s InitOatDexFiles
+      0s InitDexFiles
+      0s InitLookupTables
+      0.061s InitOatClasses
+      0.093s InitOatMaps
+      0.001s InitOatCode
+      0.205s InitOatCodeDexFiles
+    0.260s dex2oat Prepare image address space
+    1.453s dex2oat Write ELF
+  0.144s dex2oat ImageWriter
+  0.216s dex2oat OatFile copy
+compiler: end, 11.557s
+
+dex2oat took 11.558s (threads: 32) arena alloc=65MB java alloc=5MB native alloc=183MB free=27MB
+Code dedupe: 1 collisions, 2 max hash collisions, 30773/85005 probe distance, 34548296 ns hash time
+Mapping table dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Vmap table dedupe: 0 collisions, 0 max hash collisions, 33436/60345 probe distance, 19696259 ns hash time
+GC map dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+CFI info dedupe: 0 collisions, 0 max hash collisions, 0/0 probe distance, 0 ns hash time
+Current thread not detached in Runtime shutdown
+[100% 25/25] Output in out/boot.arm.oatdump.txt
+oatdumpd I 19755 19755 art/cmdline/cmdline.h:301] Try to parse
+oatdumpd I 19755 19755 art/cmdline/cmdline.h:178] will call parse checks
+oatdumpd I 19755 19755 art/cmdline/cmdline.h:233] boot image location: out/target/product/hammerhead/dex_bootjars/system/framework/boot.art
+oatdumpd I 19755 19755 art/cmdline/cmdline.h:257] boot_image_location parent_dir_name was framework
+oatdumpd I 19755 19755 art/cmdline/cmdline.h:273] boot_image_filename does exist: out/target/product/hammerhead/dex_bootjars/system/framework/arm/boot.art
+oatdumpd I 19755 19755 art/runtime/gc/space/image_space.cc:690] Dumping image sections
+oatdumpd I 19755 19755 art/runtime/gc/space/image_space.cc:694] SectionObjects start=0x70000000 size=5239896 range=0-5239896
+oatdumpd I 19755 19755 art/runtime/gc/space/image_space.cc:694] SectionArtFields start=0x704ff458 size=544520 range=5239896-5784416
+oatdumpd I 19755 19755 art/runtime/gc/space/image_space.cc:694] SectionArtMethods start=0x70584360 size=1994540 range=5784416-7778956
+oatdumpd I 19755 19755 art/runtime/gc/space/image_space.cc:694] SectionDexCacheArrays start=0x7076b28c size=2145420 range=7778956-9924376
+oatdumpd I 19755 19755 art/runtime/gc/space/image_space.cc:694] SectionInternedStrings start=0x70976f18 size=351608 range=9924376-10275984
+oatdumpd I 19755 19755 art/runtime/gc/space/image_space.cc:694] SectionClassTable start=0x709ccc90 size=37528 range=10275984-10313512
+oatdumpd I 19755 19755 art/runtime/gc/space/image_space.cc:694] SectionImageBitmap start=0x709d6000 size=81920 range=10313728-10395648
+oatdumpd W 19755 19755 art/runtime/runtime.cc:235] Current thread not detached in Runtime shutdown
+
