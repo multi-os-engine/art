@@ -128,23 +128,35 @@ class OatTest : public CommonCompilerTest {
                 const std::vector<const DexFile*>& dex_files,
                 SafeMap<std::string, std::string>& key_value_store) {
     TimingLogger timings("WriteElf", false, false);
-    OatWriter oat_writer(dex_files,
-                         42U,
-                         4096U,
-                         0,
-                         compiler_driver_.get(),
-                         nullptr,
-                         /*compiling_boot_image*/false,
-                         &timings,
-                         &key_value_store);
+    std::vector<const char*> dex_file_locations;
+    for (const DexFile* dex_file : dex_files) {
+      dex_file_locations.push_back(dex_file->GetLocation().c_str());
+    }
     std::unique_ptr<ElfWriter> elf_writer = CreateElfWriterQuick(
         compiler_driver_->GetInstructionSet(),
         &compiler_driver_->GetCompilerOptions(),
         file);
-
     elf_writer->Start();
-
+    OatWriter oat_writer(/*compiling_boot_image*/false,
+                         &timings);
+    for (const DexFile* dex_file : dex_files) {
+      ArrayRef<const uint8_t> raw_dex_file(
+          reinterpret_cast<const uint8_t*>(&dex_file->GetHeader()),
+          dex_file->GetHeader().file_size_);
+      oat_writer.AddRawDexFileSource(raw_dex_file,
+                                     dex_file->GetLocation().c_str(),
+                                     dex_file->GetLocationChecksum(),
+                                     OatWriter::CreateTypeLookupTable::kDontCreate);
+    }
     OutputStream* rodata = elf_writer->StartRoData();
+    if (!oat_writer.WriteDexFiles(rodata,
+                                  file,
+                                  compiler_driver_->GetInstructionSet(),
+                                  compiler_driver_->GetInstructionSetFeatures(),
+                                  &key_value_store)) {
+      return false;
+    }
+    oat_writer.PrepareLayout(compiler_driver_.get(), nullptr, dex_files);
     if (!oat_writer.WriteRodata(rodata)) {
       return false;
     }
@@ -155,6 +167,10 @@ class OatTest : public CommonCompilerTest {
       return false;
     }
     elf_writer->EndText(text);
+
+    if (!oat_writer.WriteHeader(elf_writer->GetStream(), 42U, 4096U, 0)) {
+      return false;
+    }
 
     elf_writer->SetBssSize(oat_writer.GetBssSize());
     elf_writer->WriteDynamicSection();
