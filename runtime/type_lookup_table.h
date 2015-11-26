@@ -76,6 +76,9 @@ class TypeLookupTable {
   // Method returns length of binary data for the specified dex file.
   static uint32_t RawDataLength(const DexFile& dex_file);
 
+  // Method returns length of binary data for the specified number of class definitions.
+  static uint32_t RawDataLength(uint32_t num_class_defs);
+
  private:
    /**
     * To find element we need to compare strings.
