@@ -496,8 +496,12 @@ class Dex2Oat FINAL {
       app_image_(false),
       boot_image_(false),
       is_host_(false),
+      class_loader_(nullptr),
+      elf_writer_(nullptr),
+      oat_writer_(nullptr),
       image_writer_(nullptr),
       driver_(nullptr),
+      rodata_(nullptr),
       dump_stats_(false),
       dump_passes_(false),
       dump_timing_(false),
@@ -1180,7 +1184,56 @@ class Dex2Oat FINAL {
           LOG(INFO) << "Wrote input to " << tmp_file_name;
         }
       }
+
+      // Handle and ClassLoader creation needs to come after Runtime::Create
+      OpenClassPathFiles(runtime_->GetClassPathString(), dex_files_, &class_path_files_);
+      ScopedObjectAccess soa(self);
+
+      // Classpath: first the class-path given.
+      std::vector<const DexFile*> class_path_files;
+      for (auto& class_path_file : class_path_files_) {
+        class_path_files.push_back(class_path_file.get());
+      }
+
+      // Store the classpath we have right now.
+      key_value_store_->Put(OatHeader::kClassPathKey,
+                            OatFile::EncodeDexFileDependencies(class_path_files));
+
+      jobject class_path_class_loader = class_linker->CreatePathClassLoader(self,
+                                                                            class_path_files,
+                                                                            nullptr);
+
+      // Class path loader as parent so that we'll resolve there first.
+      class_loader_ = class_linker->CreatePathClassLoader(self, dex_files_, class_path_class_loader);
     }
+
+    CreateOatWriter();
+    elf_writer_->Start();
+    rodata_ = elf_writer_->StartRoData();
+    {
+      // TODO: Write dex files to oat file before opening them above,
+      // open them directly from the oat file afterwards.
+      TimingLogger::ScopedTiming split("WriteDexFiles", timings_);
+      for (const DexFile* dex_file : dex_files_) {
+        oat_writer_->WriteDexFile(rodata_, *dex_file);
+      }
+    }
+    {
+      // TODO: Re-map type lookup tables from the oat files (or construct them
+      // directly in an mmapped part of the oat file).
+      TimingLogger::ScopedTiming split("WriteTypeLookupTables", timings_);
+      for (const DexFile* dex_file : dex_files_) {
+        dex_file->CreateTypeLookupTable();
+        oat_writer_->WriteTypeLookupTable(rodata_, *dex_file);
+      }
+    }
+    {
+      TimingLogger::ScopedTiming split("WriteOatDexFiles", timings_);
+      for (const DexFile* dex_file : dex_files_) {
+        oat_writer_->WriteOatDexFile(rodata_, *dex_file);
+      }
+    }
+
     // Ensure opened dex files are writable for dex-to-dex transformations. Also ensure that
     // the dex caches stay live since we don't want class unloading to occur during compilation.
     for (const auto& dex_file : dex_files_) {
@@ -1190,7 +1243,6 @@ class Dex2Oat FINAL {
       ScopedObjectAccess soa(self);
       dex_caches_.push_back(soa.AddLocalReference<jobject>(
           class_linker->RegisterDexFile(*dex_file, Runtime::Current()->GetLinearAlloc())));
-      dex_file->CreateTypeLookupTable();
     }
 
     // If we use a swap file, ensure we are above the threshold to make it necessary.
@@ -1232,34 +1284,6 @@ class Dex2Oat FINAL {
     TimingLogger::ScopedTiming t("dex2oat Compile", timings_);
     compiler_phases_timings_.reset(new CumulativeLogger("compilation times"));
 
-    // Handle and ClassLoader creation needs to come after Runtime::Create
-    jobject class_loader = nullptr;
-    jobject class_path_class_loader = nullptr;
-    Thread* self = Thread::Current();
-
-    if (!boot_image_option_.empty()) {
-      ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-      OpenClassPathFiles(runtime_->GetClassPathString(), dex_files_, &class_path_files_);
-      ScopedObjectAccess soa(self);
-
-      // Classpath: first the class-path given.
-      std::vector<const DexFile*> class_path_files;
-      for (auto& class_path_file : class_path_files_) {
-        class_path_files.push_back(class_path_file.get());
-      }
-
-      // Store the classpath we have right now.
-      key_value_store_->Put(OatHeader::kClassPathKey,
-                            OatFile::EncodeDexFileDependencies(class_path_files));
-
-      class_path_class_loader = class_linker->CreatePathClassLoader(self,
-                                                                    class_path_files,
-                                                                    nullptr);
-
-      // Class path loader as parent so that we'll resolve there first.
-      class_loader = class_linker->CreatePathClassLoader(self, dex_files_, class_path_class_loader);
-    }
-
     driver_.reset(new CompilerDriver(compiler_options_.get(),
                                      verification_results_.get(),
                                      &method_inliner_map_,
@@ -1280,7 +1304,53 @@ class Dex2Oat FINAL {
                                      profile_file_));
 
     driver_->SetDexFilesForOatFile(dex_files_);
-    driver_->CompileAll(class_loader, dex_files_, timings_);
+    driver_->CompileAll(class_loader_, dex_files_, timings_);
+  }
+
+  void CreateOatWriter() {
+    TimingLogger::ScopedTiming t2("dex2oat OatWriter", timings_);
+    elf_writer_ = CreateElfWriterQuick(instruction_set_, compiler_options_.get(), oat_file_.get());
+
+    std::string image_file_location;
+    uint32_t image_file_location_oat_checksum = 0;
+    uintptr_t image_file_location_oat_data_begin = 0;
+    int32_t image_patch_delta = 0;
+
+    if (app_image_ && image_base_ == 0) {
+      gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
+      image_base_ = RoundUp(
+          reinterpret_cast<uintptr_t>(image_space->GetImageHeader().GetOatFileEnd()),
+          kPageSize);
+      VLOG(compiler) << "App image base=" << reinterpret_cast<void*>(image_base_);
+    }
+
+    if (!IsBootImage()) {
+      TimingLogger::ScopedTiming t3("Loading image checksum", timings_);
+      gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
+      image_file_location_oat_checksum = image_space->GetImageHeader().GetOatChecksum();
+      image_file_location_oat_data_begin =
+          reinterpret_cast<uintptr_t>(image_space->GetImageHeader().GetOatDataBegin());
+      image_file_location = image_space->GetImageFilename();
+      image_patch_delta = image_space->GetImageHeader().GetPatchDelta();
+    }
+
+    if (!image_file_location.empty()) {
+      key_value_store_->Put(OatHeader::kImageLocationKey, image_file_location);
+    }
+
+    oat_writer_.reset(new OatWriter(IsBootImage()));
+    std::vector<std::string> dex_file_locations;
+    for (const DexFile* dex_file : dex_files_) {
+      dex_file_locations.push_back(dex_file->GetLocation());
+    }
+    oat_writer_->ReserveHeaders(instruction_set_,
+                                instruction_set_features_.get(),
+                                ArrayRef<const std::string>(dex_file_locations),
+                                image_file_location_oat_checksum,
+                                image_file_location_oat_data_begin,
+                                image_patch_delta,
+                                key_value_store_.get(),
+                                timings_);
   }
 
   // Notes on the interleaving of creating the image and oat file to
@@ -1349,55 +1419,19 @@ class Dex2Oat FINAL {
   // ImageWriter, if necessary.
   // Note: Flushing (and closing) the file is the caller's responsibility, except for the failure
   //       case (when the file will be explicitly erased).
-  bool CreateOatFile() {
+  bool WriteOatFile() {
     CHECK(key_value_store_.get() != nullptr);
 
     TimingLogger::ScopedTiming t("dex2oat Oat", timings_);
 
-    std::unique_ptr<OatWriter> oat_writer;
-    {
-      TimingLogger::ScopedTiming t2("dex2oat OatWriter", timings_);
-      std::string image_file_location;
-      uint32_t image_file_location_oat_checksum = 0;
-      uintptr_t image_file_location_oat_data_begin = 0;
-      int32_t image_patch_delta = 0;
-
-      if (app_image_ && image_base_ == 0) {
-        gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
-        image_base_ = RoundUp(
-            reinterpret_cast<uintptr_t>(image_space->GetImageHeader().GetOatFileEnd()),
-            kPageSize);
-        VLOG(compiler) << "App image base=" << reinterpret_cast<void*>(image_base_);
-      }
-
-      if (IsImage()) {
-        PrepareImageWriter(image_base_);
-      }
-
-      if (!IsBootImage()) {
-        TimingLogger::ScopedTiming t3("Loading image checksum", timings_);
-        gc::space::ImageSpace* image_space = Runtime::Current()->GetHeap()->GetBootImageSpace();
-        image_file_location_oat_checksum = image_space->GetImageHeader().GetOatChecksum();
-        image_file_location_oat_data_begin =
-            reinterpret_cast<uintptr_t>(image_space->GetImageHeader().GetOatDataBegin());
-        image_file_location = image_space->GetImageFilename();
-        image_patch_delta = image_space->GetImageHeader().GetPatchDelta();
-      }
-
-      if (!image_file_location.empty()) {
-        key_value_store_->Put(OatHeader::kImageLocationKey, image_file_location);
-      }
-
-      oat_writer.reset(new OatWriter(dex_files_,
-                                     image_file_location_oat_checksum,
-                                     image_file_location_oat_data_begin,
-                                     image_patch_delta,
-                                     driver_.get(),
-                                     image_writer_.get(),
-                                     IsBootImage(),
-                                     timings_,
-                                     key_value_store_.get()));
+    if (IsImage()) {
+      image_writer_.reset(new ImageWriter(*driver_,
+                                          image_base_,
+                                          compiler_options_->GetCompilePic(),
+                                          IsAppImage()));
     }
+
+    oat_writer_->PrepareLayout(dex_files_, driver_.get(), image_writer_.get(), timings_);
 
     if (IsImage()) {
       // The OatWriter constructor has already updated offsets in methods and we need to
@@ -1411,40 +1445,39 @@ class Dex2Oat FINAL {
 
     {
       TimingLogger::ScopedTiming t2("dex2oat Write ELF", timings_);
-      std::unique_ptr<ElfWriter> elf_writer =
-          CreateElfWriterQuick(instruction_set_, compiler_options_.get(), oat_file_.get());
 
-      elf_writer->Start();
-
-      OutputStream* rodata = elf_writer->StartRoData();
-      if (!oat_writer->WriteRodata(rodata)) {
+      DCHECK(rodata_ != nullptr);
+      if (!oat_writer_->WriteRodata(rodata_)) {
         LOG(ERROR) << "Failed to write .rodata section to the ELF file " << oat_file_->GetPath();
         return false;
       }
-      elf_writer->EndRoData(rodata);
+      elf_writer_->EndRoData(rodata_);
+      rodata_ = nullptr;
 
-      OutputStream* text = elf_writer->StartText();
-      if (!oat_writer->WriteCode(text)) {
+      OutputStream* text = elf_writer_->StartText();
+      if (!oat_writer_->WriteCode(text)) {
         LOG(ERROR) << "Failed to write .text section to the ELF file " << oat_file_->GetPath();
         return false;
       }
-      elf_writer->EndText(text);
+      elf_writer_->EndText(text);
 
-      elf_writer->SetBssSize(oat_writer->GetBssSize());
+      elf_writer_->SetBssSize(oat_writer_->GetBssSize());
 
-      elf_writer->WriteDynamicSection();
+      elf_writer_->WriteDynamicSection();
 
-      ArrayRef<const dwarf::MethodDebugInfo> method_infos(oat_writer->GetMethodDebugInfo());
-      elf_writer->WriteDebugInfo(method_infos);
+      ArrayRef<const dwarf::MethodDebugInfo> method_infos(oat_writer_->GetMethodDebugInfo());
+      elf_writer_->WriteDebugInfo(method_infos);
 
-      ArrayRef<const uintptr_t> patch_locations(oat_writer->GetAbsolutePatchLocations());
-      elf_writer->WritePatchLocations(patch_locations);
+      ArrayRef<const uintptr_t> patch_locations(oat_writer_->GetAbsolutePatchLocations());
+      elf_writer_->WritePatchLocations(patch_locations);
 
-      if (!elf_writer->End()) {
+      if (!elf_writer_->End()) {
         LOG(ERROR) << "Failed to write ELF file " << oat_file_->GetPath();
         return false;
       }
     }
+    oat_writer_.reset();
+    elf_writer_.reset();
 
     VLOG(compiler) << "Oat file written successfully (unstripped): " << oat_location_;
     return true;
@@ -1637,14 +1670,6 @@ class Dex2Oat FINAL {
     return true;
   }
 
-  void PrepareImageWriter(uintptr_t image_base) {
-    DCHECK(IsImage());
-    image_writer_.reset(new ImageWriter(*driver_,
-                                        image_base,
-                                        compiler_options_->GetCompilePic(),
-                                        IsAppImage()));
-  }
-
   // Let the ImageWriter write the image file. If we do not compile PIC, also fix up the oat file.
   bool CreateImageFile()
       REQUIRES(!Locks::mutator_lock_) {
@@ -1831,9 +1856,13 @@ class Dex2Oat FINAL {
   std::vector<const DexFile*> dex_files_;
   std::vector<jobject> dex_caches_;
   std::vector<std::unique_ptr<const DexFile>> opened_dex_files_;
+  jobject class_loader_;
 
+  std::unique_ptr<ElfWriter> elf_writer_;
+  std::unique_ptr<OatWriter> oat_writer_;
   std::unique_ptr<ImageWriter> image_writer_;
   std::unique_ptr<CompilerDriver> driver_;
+  OutputStream* rodata_;
 
   std::vector<std::string> verbose_methods_;
   bool dump_stats_;
@@ -1877,7 +1906,7 @@ static int CompileImage(Dex2Oat& dex2oat) {
   dex2oat.Compile();
 
   // Create the boot.oat.
-  if (!dex2oat.CreateOatFile()) {
+  if (!dex2oat.WriteOatFile()) {
     dex2oat.EraseOatFile();
     return EXIT_FAILURE;
   }
@@ -1917,7 +1946,7 @@ static int CompileApp(Dex2Oat& dex2oat) {
   dex2oat.Compile();
 
   // Create the app oat.
-  if (!dex2oat.CreateOatFile()) {
+  if (!dex2oat.WriteOatFile()) {
     dex2oat.EraseOatFile();
     return EXIT_FAILURE;
   }

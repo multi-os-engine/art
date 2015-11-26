@@ -128,23 +128,36 @@ class OatTest : public CommonCompilerTest {
                 const std::vector<const DexFile*>& dex_files,
                 SafeMap<std::string, std::string>& key_value_store) {
     TimingLogger timings("WriteElf", false, false);
-    OatWriter oat_writer(dex_files,
-                         42U,
-                         4096U,
-                         0,
-                         compiler_driver_.get(),
-                         nullptr,
-                         /*compiling_boot_image*/false,
-                         &timings,
-                         &key_value_store);
+    OatWriter oat_writer(/*compiling_boot_image*/false);
+    std::vector<std::string> dex_file_locations;
+    for (const DexFile* dex_file : dex_files) {
+      dex_file_locations.push_back(dex_file->GetLocation());
+    }
+    oat_writer.ReserveHeaders(compiler_driver_->GetInstructionSet(),
+                              compiler_driver_->GetInstructionSetFeatures(),
+                              ArrayRef<const std::string>(dex_file_locations),
+                              42U,
+                              4096U,
+                              0,
+                              &key_value_store,
+                              &timings);
     std::unique_ptr<ElfWriter> elf_writer = CreateElfWriterQuick(
         compiler_driver_->GetInstructionSet(),
         &compiler_driver_->GetCompilerOptions(),
         file);
-
     elf_writer->Start();
-
     OutputStream* rodata = elf_writer->StartRoData();
+    for (const DexFile* dex_file : dex_files) {
+      oat_writer.WriteDexFile(rodata, *dex_file);
+    }
+    for (const DexFile* dex_file : dex_files) {
+      oat_writer.WriteTypeLookupTable(rodata, *dex_file);
+    }
+    for (const DexFile* dex_file : dex_files) {
+      oat_writer.WriteOatDexFile(rodata, *dex_file);
+    }
+    oat_writer.PrepareLayout(dex_files, compiler_driver_.get(), nullptr, &timings);
+
     if (!oat_writer.WriteRodata(rodata)) {
       return false;
     }
@@ -269,12 +282,11 @@ TEST_F(OatTest, OatHeaderIsValid) {
     std::unique_ptr<const InstructionSetFeatures> insn_features(
         InstructionSetFeatures::FromVariant(insn_set, "default", &error_msg));
     ASSERT_TRUE(insn_features.get() != nullptr) << error_msg;
-    std::vector<const DexFile*> dex_files;
     uint32_t image_file_location_oat_checksum = 0;
     uint32_t image_file_location_oat_begin = 0;
     std::unique_ptr<OatHeader> oat_header(OatHeader::Create(insn_set,
                                                             insn_features.get(),
-                                                            &dex_files,
+                                                            0u,
                                                             image_file_location_oat_checksum,
                                                             image_file_location_oat_begin,
                                                             nullptr));
