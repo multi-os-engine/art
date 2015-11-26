@@ -128,23 +128,30 @@ class OatTest : public CommonCompilerTest {
                 const std::vector<const DexFile*>& dex_files,
                 SafeMap<std::string, std::string>& key_value_store) {
     TimingLogger timings("WriteElf", false, false);
-    OatWriter oat_writer(dex_files,
+    std::vector<const char*> dex_file_locations;
+    for (const DexFile* dex_file : dex_files) {
+      dex_file_locations.push_back(dex_file->GetLocation().c_str());
+    }
+    OatWriter oat_writer(compiler_driver_->GetInstructionSet(),
+                         compiler_driver_->GetInstructionSetFeatures(),
+                         ArrayRef<const char* const>(dex_file_locations),
+                         /*compiling_boot_image*/false,
                          42U,
                          4096U,
                          0,
-                         compiler_driver_.get(),
-                         nullptr,
-                         /*compiling_boot_image*/false,
-                         &timings,
-                         &key_value_store);
+                         &key_value_store,
+                         &timings);
     std::unique_ptr<ElfWriter> elf_writer = CreateElfWriterQuick(
         compiler_driver_->GetInstructionSet(),
         &compiler_driver_->GetCompilerOptions(),
         file);
-
     elf_writer->Start();
-
     OutputStream* rodata = elf_writer->StartRoData();
+    oat_writer.WriteDexFiles(rodata, dex_files);
+    oat_writer.WriteTypeLookupTables(rodata, dex_files);
+    oat_writer.WriteOatDexFiles(rodata, dex_files);
+    oat_writer.PrepareLayout(compiler_driver_.get(), nullptr);
+
     if (!oat_writer.WriteRodata(rodata)) {
       return false;
     }
@@ -156,15 +163,14 @@ class OatTest : public CommonCompilerTest {
     }
     elf_writer->EndText(text);
 
+    if (!oat_writer.WriteHeader(elf_writer->GetStream())) {
+      return false;
+    }
+
     elf_writer->SetBssSize(oat_writer.GetBssSize());
-
     elf_writer->WriteDynamicSection();
-
-    ArrayRef<const dwarf::MethodDebugInfo> method_infos(oat_writer.GetMethodDebugInfo());
-    elf_writer->WriteDebugInfo(method_infos);
-
-    ArrayRef<const uintptr_t> patch_locations(oat_writer.GetAbsolutePatchLocations());
-    elf_writer->WritePatchLocations(patch_locations);
+    elf_writer->WriteDebugInfo(oat_writer.GetMethodDebugInfo());
+    elf_writer->WritePatchLocations(oat_writer.GetAbsolutePatchLocations());
 
     return elf_writer->End();
   }
@@ -269,12 +275,11 @@ TEST_F(OatTest, OatHeaderIsValid) {
     std::unique_ptr<const InstructionSetFeatures> insn_features(
         InstructionSetFeatures::FromVariant(insn_set, "default", &error_msg));
     ASSERT_TRUE(insn_features.get() != nullptr) << error_msg;
-    std::vector<const DexFile*> dex_files;
     uint32_t image_file_location_oat_checksum = 0;
     uint32_t image_file_location_oat_begin = 0;
     std::unique_ptr<OatHeader> oat_header(OatHeader::Create(insn_set,
                                                             insn_features.get(),
-                                                            &dex_files,
+                                                            0u,
                                                             image_file_location_oat_checksum,
                                                             image_file_location_oat_begin,
                                                             nullptr));
