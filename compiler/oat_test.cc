@@ -128,23 +128,31 @@ class OatTest : public CommonCompilerTest {
                 const std::vector<const DexFile*>& dex_files,
                 SafeMap<std::string, std::string>& key_value_store) {
     TimingLogger timings("WriteElf", false, false);
-    OatWriter oat_writer(dex_files,
-                         42U,
-                         4096U,
-                         0,
-                         compiler_driver_.get(),
-                         nullptr,
+    std::vector<const char*> dex_file_locations;
+    for (const DexFile* dex_file : dex_files) {
+      dex_file_locations.push_back(dex_file->GetLocation().c_str());
+    }
+    OatWriter oat_writer(compiler_driver_->GetInstructionSet(),
+                         compiler_driver_->GetInstructionSetFeatures(),
+                         ArrayRef<const char* const>(dex_file_locations),
                          /*compiling_boot_image*/false,
-                         &timings,
-                         &key_value_store);
+                         &key_value_store,
+                         &timings);
     std::unique_ptr<ElfWriter> elf_writer = CreateElfWriterQuick(
         compiler_driver_->GetInstructionSet(),
         &compiler_driver_->GetCompilerOptions(),
         file);
-
     elf_writer->Start();
-
     OutputStream* rodata = elf_writer->StartRoData();
+    std::vector<OatWriter::DexFileSource> sources;
+    for (const DexFile* dex_file : dex_files) {
+      sources.emplace_back(dex_file);
+    }
+    oat_writer.WriteDexFiles(rodata, file, ArrayRef<OatWriter::DexFileSource const>(sources));
+    oat_writer.WriteTypeLookupTables(rodata, dex_files);
+    oat_writer.WriteOatDexFiles(rodata, dex_files);
+    oat_writer.PrepareLayout(compiler_driver_.get(), nullptr);
+
     if (!oat_writer.WriteRodata(rodata)) {
       return false;
     }
@@ -155,6 +163,10 @@ class OatTest : public CommonCompilerTest {
       return false;
     }
     elf_writer->EndText(text);
+
+    if (!oat_writer.WriteHeader(elf_writer->GetStream(), 42U, 4096U, 0)) {
+      return false;
+    }
 
     elf_writer->SetBssSize(oat_writer.GetBssSize());
     elf_writer->WriteDynamicSection();

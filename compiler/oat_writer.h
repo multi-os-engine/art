@@ -27,6 +27,7 @@
 #include "method_reference.h"
 #include "mirror/class.h"
 #include "oat.h"
+#include "os.h"
 #include "safe_map.h"
 #include "utils/array_ref.h"
 
@@ -39,6 +40,7 @@ class ImageWriter;
 class OutputStream;
 class TimingLogger;
 class TypeLookupTable;
+class ZipEntry;
 
 namespace dwarf {
 struct MethodDebugInfo;
@@ -60,6 +62,11 @@ struct MethodDebugInfo;
 // TypeLookupTable[1]
 // ...
 // TypeLookupTable[D]
+//
+// ClassOffsets[0]   one table of OatClass offsets for each class def for each OatDexFile.
+// ClassOffsets[1]
+// ...
+// ClassOffsets[D]
 //
 // OatClass[0]       one variable sized OatClass for each of C DexFile::ClassDefs
 // OatClass[1]       contains OatClass entries with class status, offsets to code, etc.
@@ -93,15 +100,83 @@ struct MethodDebugInfo;
 //
 class OatWriter {
  public:
-  OatWriter(const std::vector<const DexFile*>& dex_files,
-            uint32_t image_file_location_oat_checksum,
-            uintptr_t image_file_location_oat_begin,
-            int32_t image_patch_delta,
-            const CompilerDriver* compiler,
-            ImageWriter* image_writer,
-            bool compiling_boot_image,
-            TimingLogger* timings,
-            SafeMap<std::string, std::string>* key_value_store);
+  // Defines the location of the raw dex file to write.
+  class DexFileSource {
+   public:
+    explicit DexFileSource(ZipEntry* zip_entry) : type_(kZipEntry), source_(zip_entry) { }
+    explicit DexFileSource(File* raw_file) : type_(kRawFile), source_(raw_file) { }
+    explicit DexFileSource(const DexFile* dex_file) : type_(kDexFile), source_(dex_file) { }
+
+    bool IsZipEntry() const { return type_ == kZipEntry; }
+    bool IsRawFile() const { return type_ == kRawFile; }
+    bool IsDexFile() const { return type_ == kDexFile; }
+
+    ZipEntry* GetZipEntry() const {
+      DCHECK(IsZipEntry());
+      return static_cast<ZipEntry*>(const_cast<void*>(source_));
+    }
+
+    File* GetRawFile() const {
+      DCHECK(IsRawFile());
+      return static_cast<File*>(const_cast<void*>(source_));
+    }
+
+    const DexFile* GetDexFile() const {
+      DCHECK(IsDexFile());
+      return static_cast<const DexFile*>(source_);
+    }
+
+   private:
+    enum Type {
+      kZipEntry,
+      kRawFile,
+      kDexFile,
+    };
+
+    Type type_;
+    const void* source_;
+  };
+
+  explicit OatWriter(InstructionSet instruction_set,
+                     const InstructionSetFeatures* instruction_set_features,
+                     const ArrayRef<const char* const>& dex_file_locations,
+                     bool compiling_boot_image,
+                     SafeMap<std::string, std::string>* key_value_store,
+                     TimingLogger* timings);
+
+  // To produce a valid oat file, the user must call in order
+  //   - WriteDexFiles(),
+  //   - TODO: OpenDexFiles(),
+  //   - WriteTypeLookupTables(),
+  //   - WriteOatDexFiles(),
+  //   - PrepareLayout(),
+  //   - WriteRodata(),
+  //   - WriteCode(),
+  //   - WriteHeader().
+
+  // Write raw dex files to the .rodata section.
+  bool WriteDexFiles(OutputStream* rodata,
+                     File* file,
+                     const ArrayRef<DexFileSource const>& dex_files);
+  // TODO: Provide OpenDexFiles() that opens the written files.
+  // bool OpenDexFiles(int fd, std::vector<const DexFile*>* dex_files, std::string* error_msg);
+  // Write the lookup table for a dex file.
+  bool WriteTypeLookupTables(OutputStream* rodata, const std::vector<const DexFile*>& dex_files);
+  // Write an OatDexFile for each dex file.
+  bool WriteOatDexFiles(OutputStream* rodata,
+                        const std::vector<const DexFile*>& dex_files);
+  // Prepare layout of remaining data.
+  void PrepareLayout(const CompilerDriver* compiler,
+                     ImageWriter* image_writer);
+  // Write the rest of .rodata section (ClassOffsets[], OatClass[], maps).
+  bool WriteRodata(OutputStream* out);
+  // Write the code to the .text section.
+  bool WriteCode(OutputStream* out);
+  // Write the oat header. This finalizes the oat file.
+  bool WriteHeader(OutputStream* out,
+                   uint32_t image_file_location_oat_checksum,
+                   uintptr_t image_file_location_oat_begin,
+                   int32_t image_patch_delta);
 
   // Returns whether the oat file has an associated image.
   bool HasImage() const {
@@ -129,9 +204,6 @@ class OatWriter {
   ArrayRef<const uintptr_t> GetAbsolutePatchLocations() const {
     return ArrayRef<const uintptr_t>(absolute_patch_locations_);
   }
-
-  bool WriteRodata(OutputStream* out);
-  bool WriteCode(OutputStream* out);
 
   ~OatWriter();
 
@@ -174,29 +246,53 @@ class OatWriter {
   // with a given DexMethodVisitor.
   bool VisitDexMethods(DexMethodVisitor* visitor);
 
-  size_t InitOatHeader();
-  size_t InitOatDexFiles(size_t offset);
-  size_t InitLookupTables(size_t offset);
-  size_t InitDexFiles(size_t offset);
+  size_t InitOatHeader(InstructionSet instruction_set,
+                       const InstructionSetFeatures* instruction_set_features,
+                       uint32_t num_dex_files,
+                       SafeMap<std::string, std::string>* key_value_store);
+  size_t InitOatDexFiles(size_t offset, const ArrayRef<const char* const>& dex_file_locations);
   size_t InitOatClasses(size_t offset);
   size_t InitOatMaps(size_t offset);
   size_t InitOatCode(size_t offset);
   size_t InitOatCodeDexFiles(size_t offset);
 
-  bool WriteTables(OutputStream* out, const size_t file_offset);
-  bool WriteLookupTables(OutputStream* out, const size_t file_offset);
+  bool WriteClassOffsets(OutputStream* out);
+  bool WriteClasses(OutputStream* out);
   size_t WriteMaps(OutputStream* out, const size_t file_offset, size_t relative_offset);
   size_t WriteCode(OutputStream* out, const size_t file_offset, size_t relative_offset);
   size_t WriteCodeDexFiles(OutputStream* out, const size_t file_offset, size_t relative_offset);
 
   bool GetOatDataOffset(OutputStream* out);
+  bool ReadDexFileHeader(File* file, OatDexFile* oat_dex_file);
+  bool SeekToDexFile(OutputStream* out, File* file, OatDexFile* oat_dex_file);
+  bool WriteDexFile(OutputStream* rodata, File* file, OatDexFile* oat_dex_file, ZipEntry* dex_file);
+  bool WriteDexFile(OutputStream* rodata, File* file, OatDexFile* oat_dex_file, File* dex_file);
+  bool WriteDexFile(OutputStream* rodata,
+                    File* file,
+                    OatDexFile* oat_dex_file,
+                    const DexFile* dex_file);
   bool WriteCodeAlignment(OutputStream* out, uint32_t aligned_code_delta);
   bool WriteData(OutputStream* out, const void* data, size_t size);
 
+  enum class WriteState {
+    kUninitialized,
+    kWriteDexFiles,
+    kWriteLookupTables,
+    kWriteOatDexFiles,
+    kPrepareLayout,
+    kWriteRoData,
+    kWriteText,
+    kWriteHeader,
+    kDone
+  };
+
+  WriteState write_state_;
+  TimingLogger* timings_;
+
   dchecked_vector<dwarf::MethodDebugInfo> method_info_;
 
-  const CompilerDriver* const compiler_driver_;
-  ImageWriter* const image_writer_;
+  const CompilerDriver* compiler_driver_;
+  ImageWriter* image_writer_;
   const bool compiling_boot_image_;
 
   // note OatFile does not take ownership of the DexFiles
@@ -215,13 +311,7 @@ class OatWriter {
   // Offset of the oat data from the start of the mmapped region of the elf file.
   size_t oat_data_offset_;
 
-  // dependencies on the image.
-  uint32_t image_file_location_oat_checksum_;
-  uintptr_t image_file_location_oat_begin_;
-  int32_t image_patch_delta_;
-
   // data to write
-  SafeMap<std::string, std::string>* key_value_store_;
   std::unique_ptr<OatHeader> oat_header_;
   dchecked_vector<OatDexFile> oat_dex_files_;
   dchecked_vector<OatClass> oat_classes_;
@@ -257,10 +347,12 @@ class OatWriter {
   uint32_t size_oat_dex_file_location_data_;
   uint32_t size_oat_dex_file_location_checksum_;
   uint32_t size_oat_dex_file_offset_;
+  uint32_t size_oat_dex_file_class_offsets_offset_;
   uint32_t size_oat_dex_file_lookup_table_offset_;
-  uint32_t size_oat_dex_file_class_offsets_;
   uint32_t size_oat_lookup_table_alignment_;
   uint32_t size_oat_lookup_table_;
+  uint32_t size_oat_class_offsets_alignment_;
+  uint32_t size_oat_class_offsets_;
   uint32_t size_oat_class_type_;
   uint32_t size_oat_class_status_;
   uint32_t size_oat_class_method_bitmaps_;
@@ -269,7 +361,7 @@ class OatWriter {
   std::unique_ptr<linker::RelativePatcher> relative_patcher_;
 
   // The locations of absolute patches relative to the start of the executable section.
-  std::vector<uintptr_t> absolute_patch_locations_;
+  dchecked_vector<uintptr_t> absolute_patch_locations_;
 
   // Map method reference to assigned offset.
   // Wrap the map in a class implementing linker::RelativePatcherTargetProvider.
