@@ -31,7 +31,7 @@ class InstructionSetFeatures;
 class PACKED(4) OatHeader {
  public:
   static constexpr uint8_t kOatMagic[] = { 'o', 'a', 't', '\n' };
-  static constexpr uint8_t kOatVersion[] = { '0', '7', '3', '\0' };
+  static constexpr uint8_t kOatVersion[] = { '0', '7', '4', '\0' };
 
   static constexpr const char* kImageLocationKey = "image-location";
   static constexpr const char* kDex2OatCmdLineKey = "dex2oat-cmdline";
@@ -45,15 +45,14 @@ class PACKED(4) OatHeader {
 
   static OatHeader* Create(InstructionSet instruction_set,
                            const InstructionSetFeatures* instruction_set_features,
-                           const std::vector<const DexFile*>* dex_files,
-                           uint32_t image_file_location_oat_checksum,
-                           uint32_t image_file_location_oat_data_begin,
+                           uint32_t dex_file_count,
                            const SafeMap<std::string, std::string>* variable_data);
 
   bool IsValid() const;
   std::string GetValidationErrorMessage() const;
   const char* GetMagic() const;
   uint32_t GetChecksum() const;
+  void UpdateChecksumWithHeaderData();
   void UpdateChecksum(const void* data, size_t length);
   uint32_t GetDexFileCount() const {
     DCHECK(IsValid());
@@ -92,8 +91,11 @@ class PACKED(4) OatHeader {
 
   InstructionSet GetInstructionSet() const;
   uint32_t GetInstructionSetFeaturesBitmap() const;
+
   uint32_t GetImageFileLocationOatChecksum() const;
+  void SetImageFileLocationOatChecksum(uint32_t image_file_location_oat_checksum);
   uint32_t GetImageFileLocationOatDataBegin() const;
+  void SetImageFileLocationOatDataBegin(uint32_t image_file_location_oat_data_begin);
 
   uint32_t GetKeyValueStoreSize() const;
   const uint8_t* GetKeyValueStore() const;
@@ -107,9 +109,7 @@ class PACKED(4) OatHeader {
  private:
   OatHeader(InstructionSet instruction_set,
             const InstructionSetFeatures* instruction_set_features,
-            const std::vector<const DexFile*>* dex_files,
-            uint32_t image_file_location_oat_checksum,
-            uint32_t image_file_location_oat_data_begin,
+            uint32_t dex_file_count,
             const SafeMap<std::string, std::string>* variable_data);
 
   // Returns true if the value of the given key is "true", false otherwise.

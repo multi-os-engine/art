@@ -88,25 +88,30 @@ void ImageTest::TestWriteRead(ImageHeader::StorageMode storage_mode) {
 
       t.NewTiming("WriteElf");
       SafeMap<std::string, std::string> key_value_store;
-      OatWriter oat_writer(class_linker->GetBootClassPath(),
-                           0,
-                           0,
-                           0,
-                           compiler_driver_.get(),
-                           writer.get(),
+      const std::vector<const DexFile*>& dex_files = class_linker->GetBootClassPath();
+      std::vector<const char*> dex_file_locations;
+      for (const DexFile* dex_file : dex_files) {
+        dex_file_locations.push_back(dex_file->GetLocation().c_str());
+      }
+      OatWriter oat_writer(compiler_driver_->GetInstructionSet(),
+                           compiler_driver_->GetInstructionSetFeatures(),
+                           ArrayRef<const char* const>(dex_file_locations),
                            /*compiling_boot_image*/true,
-                           &timings,
-                           &key_value_store);
+                           &key_value_store,
+                           &timings);
       std::unique_ptr<ElfWriter> elf_writer = CreateElfWriterQuick(
           compiler_driver_->GetInstructionSet(),
           &compiler_driver_->GetCompilerOptions(),
           oat_file.GetFile());
+      elf_writer->Start();
+      OutputStream* rodata = elf_writer->StartRoData();
+      oat_writer.WriteDexFiles(rodata, dex_files);
+      oat_writer.WriteTypeLookupTables(rodata, dex_files);
+      oat_writer.WriteOatDexFiles(rodata, dex_files);
+      oat_writer.PrepareLayout(compiler_driver_.get(), writer.get());
       bool success = writer->PrepareImageAddressSpace();
       ASSERT_TRUE(success);
 
-      elf_writer->Start();
-
-      OutputStream* rodata = elf_writer->StartRoData();
       bool rodata_ok = oat_writer.WriteRodata(rodata);
       ASSERT_TRUE(rodata_ok);
       elf_writer->EndRoData(rodata);
@@ -116,15 +121,13 @@ void ImageTest::TestWriteRead(ImageHeader::StorageMode storage_mode) {
       ASSERT_TRUE(text_ok);
       elf_writer->EndText(text);
 
+      bool header_ok = oat_writer.WriteHeader(elf_writer->GetStream(), 0u, 0u, 0u);
+      ASSERT_TRUE(header_ok);
+
       elf_writer->SetBssSize(oat_writer.GetBssSize());
-
       elf_writer->WriteDynamicSection();
-
-      ArrayRef<const dwarf::MethodDebugInfo> method_infos(oat_writer.GetMethodDebugInfo());
-      elf_writer->WriteDebugInfo(method_infos);
-
-      ArrayRef<const uintptr_t> patch_locations(oat_writer.GetAbsolutePatchLocations());
-      elf_writer->WritePatchLocations(patch_locations);
+      elf_writer->WriteDebugInfo(oat_writer.GetMethodDebugInfo());
+      elf_writer->WritePatchLocations(oat_writer.GetAbsolutePatchLocations());
 
       success = elf_writer->End();
 
