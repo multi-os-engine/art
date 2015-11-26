@@ -262,10 +262,6 @@ class MarkSweep : public GarbageCollector {
       REQUIRES(mark_stack_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  // Returns how many threads we should use for the current GC phase based on if we are paused,
-  // whether or not we care about pauses.
-  size_t GetThreadCount(bool paused) const;
-
   // Push a single reference on a mark stack.
   void PushOnMarkStack(mirror::Object* obj)
       REQUIRES(!mark_stack_lock_)

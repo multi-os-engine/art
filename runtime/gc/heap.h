@@ -642,7 +642,7 @@ class Heap {
   // Thread pool.
   void CreateThreadPool();
   void DeleteThreadPool();
-  ThreadPool* GetThreadPool() {
+  ThreadPool* GetThreadPool() const {
     return thread_pool_.get();
   }
   size_t GetParallelGCThreadCount() const {
@@ -651,6 +651,9 @@ class Heap {
   size_t GetConcGCThreadCount() const {
     return conc_gc_threads_;
   }
+  // Returns how many threads we should use for the current GC phase based on if we are paused,
+  // whether or not we care about pauses.
+  size_t GetThreadCount(bool paused) const;
   accounting::ModUnionTable* FindModUnionTableFromSpace(space::Space* space);
   void AddModUnionTable(accounting::ModUnionTable* mod_union_table);
 

@@ -3957,5 +3957,12 @@ void Heap::DisableGCForShutdown() {
   gc_disabled_for_shutdown_ = true;
 }
 
+size_t Heap::GetThreadCount(bool paused) const {
+  if (GetThreadPool() == nullptr || !CareAboutPauseTimes()) {
+    return 1;
+  }
+  return (paused ? GetParallelGCThreadCount() : GetConcGCThreadCount()) + 1;
+}
+
 }  // namespace gc
 }  // namespace art

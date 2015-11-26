@@ -39,6 +39,8 @@ namespace allocator {
 static constexpr bool kUsePrefetchDuringAllocRun = false;
 static constexpr bool kPrefetchNewRunDataByZeroing = false;
 static constexpr size_t kPrefetchStride = 64;
+// Parallel sweep option.
+static constexpr bool kParallelRosSweep = true;
 
 size_t RosAlloc::bracketSizes[kNumOfSizeBrackets];
 size_t RosAlloc::numOfPages[kNumOfSizeBrackets];
@@ -1065,48 +1067,26 @@ ObjectBytePair RosAlloc::SweepRun(Thread* self, Run* run, size_t bracket_idx, ui
   return freed_pair;
 }
 
-/* Applying the characteristics of ros space, below is an alternative approach to sweep the ros
- * space. The overall mechanism is to traverse the ros space by walking page_map_ and meanwhile
- * bypass free memory.
- * 1) for kPageMapEmpty and kPageMapReleased, the stride is contiguous free page size.
- * 2) for kPageMapLargeObject,
- *    i) if the object is dead, the stride is contiguous free page size starting this object;
- *    ii) otherwise, the stride is one page size.
- * 3) for kPageMapRun, the stride is the whole run size. Internally,
- *    i) If it's not thread local, no need bulk_free_lock which is used to avoid
- *       race condition with revoking thread local runs by destroying thread;
- *    ii)TODO: The traditional stride is word-size which covers 256B once
- *         for bracket size >= 256B, the stride unit can be the slot size.
- * 4) otherwise, the stride is one page size.
+/* SweepWalkPagemapRange is to walk the page map from beginning page index to end page index
+ * and then sweep the garbages among them.
  */
-ObjectBytePair RosAlloc::SweepWalkPagemap(bool swap_bitmaps) {
-  size_t page_idx = 0;
+void RosAlloc::SweepWalkPagemapRange(Thread* self, size_t begin_page_idx, size_t end_page_idx,
+                                     uintptr_t* live, uintptr_t* mark,
+                                     accounting::ContinuousSpaceBitmap* live_bitmap,
+                                     uintptr_t heap_begin, uintptr_t space_begin,
+                                     bool swap_bitmaps, ObjectBytePair* freed_pair_ptr) {
+  size_t page_idx = begin_page_idx;
   size_t freed_bytes = 0;
   size_t multiplier = 1;
   size_t free_memory = 0;
-  ObjectBytePair freed_pair(0, 0);
-  Thread* self = Thread::Current();
-  accounting::ContinuousSpaceBitmap* live_bitmap =
-      Runtime::Current()->GetHeap()->GetRosAllocSpace()->GetLiveBitmap();
-  accounting::ContinuousSpaceBitmap* mark_bitmap =
-      Runtime::Current()->GetHeap()->GetRosAllocSpace()->GetMarkBitmap();
-  // If the bitmaps are bound then sweeping this space clearly won't do anything.
-  if (live_bitmap == mark_bitmap) {
-    return freed_pair;
-  }
-  if (swap_bitmaps) {
-    std::swap(live_bitmap, mark_bitmap);
-  }
-  uintptr_t ptr = reinterpret_cast<uintptr_t>(Begin());
   uint8_t page_map_entry;
-  uintptr_t* live = live_bitmap->Begin();
-  uintptr_t* mark = mark_bitmap->Begin();
-  uintptr_t space_begin = live_bitmap->HeapBegin();
-  while (page_idx < cur_page_map_size_snapshot_) {
+  uintptr_t ptr = space_begin;
+  ObjectBytePair freed_pair(0, 0);
+  while (page_idx < end_page_idx) {
     page_map_entry = page_map_[page_idx];
     switch (page_map_entry) {
       case kPageMapLargeObject: {
-        size_t i = reinterpret_cast<size_t>((ptr - space_begin) / kObjectAlignment / kBitsPerIntPtrT);
+        size_t i = reinterpret_cast<size_t>((ptr - heap_begin) / kObjectAlignment / kBitsPerIntPtrT);
         uintptr_t garbage = (live[i] & ~mark[i]) & 1;
         if (garbage != 0) {
           {
@@ -1139,9 +1119,6 @@ ObjectBytePair RosAlloc::SweepWalkPagemap(bool swap_bitmaps) {
           page_idx += run_size;
           break;
         }
-        // If the bracket index >= kNumThreadLocalSizeBrackets, it's definitely not thread local
-        // If the bracket index < kNumThreadLocalSizeBrackets and also in non_full_runs, it's also
-        // not thread local.
         ObjectBytePair run_freed_pair(0, 0);
         if (bracket_idx < kNumThreadLocalSizeBrackets) {
           WriterMutexLock wmu(self, bulk_free_lock_);
@@ -1163,10 +1140,16 @@ ObjectBytePair RosAlloc::SweepWalkPagemap(bool swap_bitmaps) {
       case kPageMapReleased: {
         // Bypass free holes.
         free_memory = free_page_run_size_map_[page_idx];
-        DCHECK_GT(free_memory / kPageSize, static_cast<size_t>(0));
-        multiplier = free_memory / kPageSize;
-        page_idx += multiplier;
-        ptr += multiplier * kPageSize;
+        DCHECK_GE(free_memory / kPageSize, static_cast<size_t>(0));
+        // If the free page holes are splitted by parallel tasks, then the free memory may be zero.
+        if (UNLIKELY(free_memory == 0)) {
+          ptr += kPageSize;
+          page_idx++;
+        } else {
+          multiplier = free_memory / kPageSize;
+          page_idx += multiplier;
+          ptr += multiplier * kPageSize;
+        }
         break;
       }
       default:
@@ -1174,6 +1157,107 @@ ObjectBytePair RosAlloc::SweepWalkPagemap(bool swap_bitmaps) {
         page_idx++;
         break;
     }
+  }
+  freed_pair_ptr->Add(freed_pair);
+}
+
+class SweepWalkPagemapTask : public Task {
+ public:
+  SweepWalkPagemapTask(RosAlloc* rosalloc, size_t begin_page_idx, size_t end_page_idx,
+                       uintptr_t* live, uintptr_t* mark, accounting::ContinuousSpaceBitmap* live_bitmap,
+                       uintptr_t heap_begin, uintptr_t space_begin, bool swap_bitmaps,
+                       ObjectBytePair* freed_pair_ptr)
+      : rosalloc_(rosalloc), begin_page_idx_(begin_page_idx), end_page_idx_(end_page_idx),
+        live_(live), mark_(mark), live_bitmap_(live_bitmap), heap_begin_(heap_begin),
+        ros_begin_(space_begin), swap_bitmaps_(swap_bitmaps), freed_pair_ptr_(freed_pair_ptr) {
+  }
+
+  virtual void Finalize() {
+    delete this;
+  }
+
+  virtual void Run(Thread* self) NO_THREAD_SAFETY_ANALYSIS {
+    rosalloc_->SweepWalkPagemapRange(self, begin_page_idx_, end_page_idx_, live_, mark_,
+                                     live_bitmap_, heap_begin_, ros_begin_, swap_bitmaps_,
+                                     freed_pair_ptr_);
+  }
+
+ private:
+  RosAlloc* rosalloc_;
+  size_t begin_page_idx_;
+  size_t end_page_idx_;
+  uintptr_t* live_;
+  uintptr_t* mark_;
+  accounting::ContinuousSpaceBitmap* live_bitmap_;
+  uintptr_t heap_begin_;
+  uintptr_t ros_begin_;
+  bool swap_bitmaps_;
+  ObjectBytePair* freed_pair_ptr_;
+};
+
+/* Applying the characteristics of ros space, below is an alternative approach to sweep the ros
+ * space. The overall mechanism is to traverse the ros space by walking page_map_ and meanwhile
+ * bypass free memory.
+ * 1) For kPageMapEmpty and kPageMapReleased, the stride is contiguous free page size.
+ * 2) For kPageMapLargeObject,
+ *    i) if the object is dead, the stride is contiguous free page size starting this object;
+ *    ii) otherwise, the stride is one page size.
+ * 3) For kPageMapRun, the stride is the whole run size. Within each run,
+ *    i)TODO: The traditional stride is word-size which covers 256B once.
+ *            For bracket size >= 256B, the stride can be the slot size.
+ * 4) Otherwise, the stride is one page size.
+ */
+ObjectBytePair RosAlloc::SweepWalkPagemap(bool swap_bitmaps) {
+  ObjectBytePair freed_pair(0, 0);
+  Heap* heap = Runtime::Current()->GetHeap();
+  Thread* self = Thread::Current();
+  accounting::ContinuousSpaceBitmap* live_bitmap = heap->GetRosAllocSpace()->GetLiveBitmap();
+  accounting::ContinuousSpaceBitmap* mark_bitmap = heap->GetRosAllocSpace()->GetMarkBitmap();
+  // Walking from the beginning of ros space.
+  uintptr_t ptr = reinterpret_cast<uintptr_t>(Begin());
+  uintptr_t* live = live_bitmap->Begin();
+  uintptr_t* mark = mark_bitmap->Begin();
+  uintptr_t heap_begin = live_bitmap->HeapBegin();
+  // If the bitmaps are bound then sweeping this space clearly won't do anything.
+  if (live_bitmap == mark_bitmap) {
+    return freed_pair;
+  }
+  if (swap_bitmaps) {
+    std::swap(live_bitmap, mark_bitmap);
+  }
+  // default is two GC threads for parallel sweep.
+  size_t thread_count = heap->GetThreadCount(false);
+  if (kParallelRosSweep && thread_count > 1) {
+    ThreadPool* thread_pool = heap->GetThreadPool();
+    const size_t page_range = cur_page_map_size_snapshot_ - 0;
+    const size_t page_delta = page_range / thread_count + 1;
+    size_t ros_begin_page_idx = 0;
+    size_t i = 0;
+    std::vector<ObjectBytePair> freed_pair_vector(thread_count, freed_pair);
+    // Creating sweep tasks according to page amount.
+    // TODO: Using work stealing parallel module to achieve the best load balance among
+    // all the sweep tasks. This work is more desirable on enough multicore platforms.
+    while (ros_begin_page_idx != cur_page_map_size_snapshot_) {
+      size_t page_remaining = cur_page_map_size_snapshot_ - ros_begin_page_idx;
+      size_t page_increment = std::min(page_delta, page_remaining);
+      auto* task = new SweepWalkPagemapTask(this, ros_begin_page_idx,
+                                            ros_begin_page_idx + page_increment, live, mark,
+                                            live_bitmap, heap_begin, ptr, swap_bitmaps,
+                                            &freed_pair_vector.at(i++));
+      thread_pool->AddTask(self, task);
+      ros_begin_page_idx += page_increment;
+      ptr += page_increment * kPageSize;
+    }
+    thread_pool->SetMaxActiveWorkers(thread_count - 1);
+    thread_pool->StartWorkers(self);
+    thread_pool->Wait(self, true, true);
+    thread_pool->StopWorkers(self);
+    for (i = 0; i < freed_pair_vector.size(); i++) {
+      freed_pair.Add(freed_pair_vector.at(i));
+    }
+  } else {
+    SweepWalkPagemapRange(self, 0, cur_page_map_size_snapshot_, live, mark,
+                          live_bitmap, heap_begin, ptr, swap_bitmaps, &freed_pair);
   }
   return freed_pair;
 }

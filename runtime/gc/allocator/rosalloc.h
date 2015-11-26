@@ -815,6 +815,12 @@ class RosAlloc {
   // OK to bypass fewer pages if this table is modified by new allocation during walking,
   // since there is no record in the live and mark bitmap for new allocated pages.
   ObjectBytePair SweepWalkPagemap(bool swap_bitmaps) NO_THREAD_SAFETY_ANALYSIS;
+  void SweepWalkPagemapRange(Thread* self, size_t begin_page_idx, size_t end_page_idx,
+                             uintptr_t* live, uintptr_t* mark,
+                             accounting::ContinuousSpaceBitmap* live_bitmap,
+                             uintptr_t heap_begin, uintptr_t space_begin, bool swap_bitmaps,
+                             ObjectBytePair* freed_pair_ptr)
+      NO_THREAD_SAFETY_ANALYSIS;
   void SetPageMapSizeSnapshot();
   size_t BulkFree(Thread* self, void** ptrs, size_t num_ptrs)
       REQUIRES(!bulk_free_lock_, !lock_);
