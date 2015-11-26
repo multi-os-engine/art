@@ -60,26 +60,24 @@ namespace art {
   DCHECK_EQ(static_cast<off_t>(file_offset + offset_), out->Seek(0, kSeekCurrent)) \
     << "file_offset=" << file_offset << " offset_=" << offset_
 
-OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
+OatWriter::OatWriter(InstructionSet instruction_set,
+                     const InstructionSetFeatures* instruction_set_features,
+                     const ArrayRef<const char* const>& dex_file_locations,
+                     bool compiling_boot_image,
                      uint32_t image_file_location_oat_checksum,
                      uintptr_t image_file_location_oat_begin,
                      int32_t image_patch_delta,
-                     const CompilerDriver* compiler,
-                     ImageWriter* image_writer,
-                     bool compiling_boot_image,
-                     TimingLogger* timings,
-                     SafeMap<std::string, std::string>* key_value_store)
-  : compiler_driver_(compiler),
-    image_writer_(image_writer),
+                     SafeMap<std::string, std::string>* key_value_store,
+                     TimingLogger* timings)
+  : write_state_(kUninitialized),
+    dex_file_number_(0u),
+    compiler_driver_(nullptr),
+    image_writer_(nullptr),
     compiling_boot_image_(compiling_boot_image),
-    dex_files_(&dex_files),
+    dex_files_(nullptr),
     size_(0u),
     bss_size_(0u),
     oat_data_offset_(0u),
-    image_file_location_oat_checksum_(image_file_location_oat_checksum),
-    image_file_location_oat_begin_(image_file_location_oat_begin),
-    image_patch_delta_(image_patch_delta),
-    key_value_store_(key_value_store),
     oat_header_(nullptr),
     size_dex_file_alignment_(0),
     size_executable_offset_alignment_(0),
@@ -106,41 +104,200 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     size_oat_dex_file_location_data_(0),
     size_oat_dex_file_location_checksum_(0),
     size_oat_dex_file_offset_(0),
-    size_oat_dex_file_methods_offsets_(0),
+    size_oat_dex_file_class_offsets_offset_(0),
+    size_oat_dex_file_lookup_table_offset_(0),
+    size_oat_lookup_table_alignment_(0),
+    size_oat_lookup_table_(0),
+    size_oat_class_offsets_alignment_(0),
+    size_oat_class_offsets_(0),
     size_oat_class_type_(0),
     size_oat_class_status_(0),
     size_oat_class_method_bitmaps_(0),
     size_oat_class_method_offsets_(0),
-    size_oat_lookup_table_alignment_(0),
-    size_oat_lookup_table_offset_(0),
-    size_oat_lookup_table_(0),
     method_offset_map_() {
-  CHECK(key_value_store != nullptr);
-  if (compiling_boot_image) {
-    CHECK(image_writer != nullptr);
+  size_t offset;
+  {
+    TimingLogger::ScopedTiming split("InitOatHeader", timings);
+    offset = InitOatHeader(instruction_set,
+                           instruction_set_features,
+                           dchecked_integral_cast<uint32_t>(dex_file_locations.size()),
+                           image_file_location_oat_checksum,
+                           image_file_location_oat_begin,
+                           image_patch_delta,
+                           key_value_store);
+    size_oat_header_ += sizeof(OatHeader);
+    size_oat_header_key_value_store_ += oat_header_->GetHeaderSize() - sizeof(OatHeader);
+  }
+
+  {
+    TimingLogger::ScopedTiming split("InitOatDexFiles", timings);
+    offset = InitOatDexFiles(offset, dex_file_locations);
+  }
+  size_ = offset;
+
+  write_state_ = dex_file_locations.empty() ? kPrepareLayout : kWriteDexFiles;
+  dex_file_number_ = 0u;
+}
+
+bool OatWriter::WriteDexFile(OutputStream* rodata, const DexFile& dex_file) {
+  CHECK(write_state_ == kWriteDexFiles);
+  DCHECK_LT(dex_file_number_, oat_header_->GetDexFileCount());
+  OatDexFile* oat_dex_file = &oat_dex_files_[dex_file_number_];
+
+  if (dex_file_number_ == 0u) {
+    // Get the elf file offset of the oat file.
+    const off_t raw_file_offset = rodata->Seek(0, kSeekCurrent);
+    if (raw_file_offset == (off_t) -1) {
+      LOG(ERROR) << "Failed to get file offset in " << rodata->GetLocation();
+      return false;
+    }
+    oat_data_offset_ = static_cast<size_t>(raw_file_offset);
+  }
+
+  // Dex files are required to be 4 byte aligned.
+  size_t original_offset = size_;
+  size_t offset = RoundUp(original_offset, 4);
+  size_dex_file_alignment_ += offset - original_offset;
+
+  // Set the dex file offset in the OatDexFile.
+  oat_dex_file->dex_file_offset_ = offset;
+
+  uint32_t expected_offset = oat_data_offset_ + offset;
+  off_t actual_offset = rodata->Seek(expected_offset, kSeekSet);
+  if (static_cast<uint32_t>(actual_offset) != expected_offset) {
+    PLOG(ERROR) << "Failed to seek to dex file section. Actual: " << actual_offset
+                << " Expected: " << expected_offset << " File: " << dex_file.GetLocation();
+    return false;
+  }
+  if (!rodata->WriteFully(&dex_file.GetHeader(), dex_file.GetHeader().file_size_)) {
+    PLOG(ERROR) << "Failed to write dex file " << dex_file.GetLocation()
+                << " to " << rodata->GetLocation();
+    return false;
+  }
+  size_dex_file_ += dex_file.GetHeader().file_size_;
+
+  size_ = offset + dex_file.GetHeader().file_size_;
+
+  ++dex_file_number_;
+  if (dex_file_number_ == oat_header_->GetDexFileCount()) {
+    dex_file_number_ = 0u;
+    write_state_ = kWriteLookupTables;
+  }
+  return true;
+}
+
+bool OatWriter::WriteTypeLookupTable(OutputStream* rodata,
+                                     const DexFile& dex_file) {
+  CHECK(write_state_ == kWriteLookupTables);
+  DCHECK_LT(dex_file_number_, oat_header_->GetDexFileCount());
+  OatDexFile* oat_dex_file = &oat_dex_files_[dex_file_number_];
+
+  const TypeLookupTable* lookup_table = dex_file.GetTypeLookupTable();
+  if (lookup_table != nullptr && lookup_table->RawDataLength() != 0u) {
+    // Type tables are required to be 4 byte aligned.
+    size_t original_offset = size_;
+    size_t offset = RoundUp(original_offset, 4);
+    size_oat_lookup_table_alignment_ += offset - original_offset;
+
+    // Set the type lookup table offset in OatDexFile.
+    oat_dex_file->lookup_table_offset_ = offset;
+
+    uint32_t expected_offset = oat_data_offset_ + offset;
+    off_t actual_offset = rodata->Seek(expected_offset, kSeekSet);
+    if (static_cast<uint32_t>(actual_offset) != expected_offset) {
+      PLOG(ERROR) << "Failed to seek to lookup table section. Actual: " << actual_offset
+                  << " Expected: " << expected_offset << " File: " << dex_file.GetLocation();
+      return false;
+    }
+    oat_header_->UpdateChecksum(lookup_table->RawData(), lookup_table->RawDataLength());
+    if (!rodata->WriteFully(lookup_table->RawData(), lookup_table->RawDataLength())) {
+      PLOG(ERROR) << "Failed to write lookup table for " << dex_file.GetLocation()
+                  << " to " << rodata->GetLocation();
+      return false;
+    }
+    size_oat_lookup_table_ += lookup_table->RawDataLength();
+
+    size_ = offset + lookup_table->RawDataLength();
+  } else {
+    oat_dex_file->lookup_table_offset_ = 0u;
+  }
+
+  ++dex_file_number_;
+  if (dex_file_number_ == oat_header_->GetDexFileCount()) {
+    dex_file_number_ = 0u;
+    write_state_ = kWriteOatDexFiles;
+  }
+  return true;
+}
+
+bool OatWriter::WriteOatDexFiles(OutputStream* rodata,
+                                 const std::vector<const DexFile*>& dex_files,
+                                 TimingLogger* timings) {
+  CHECK(write_state_ == kWriteOatDexFiles);
+  CHECK_EQ(dex_files.size(), oat_dex_files_.size());
+
+  dex_files_ = &dex_files;
+
+  TimingLogger::ScopedTiming split("WriteOatDexFiles", timings);
+
+  if (!oat_dex_files_.empty()) {
+    uint32_t expected_offset = oat_data_offset_ + oat_dex_files_[0u].offset_;
+    off_t actual_offset = rodata->Seek(expected_offset, kSeekSet);
+    if (static_cast<uint32_t>(actual_offset) != expected_offset) {
+      PLOG(ERROR) << "Failed to seek to OatDexFile table section. Actual: " << actual_offset
+                  << " Expected: " << expected_offset << " File: " << dex_files[0]->GetLocation();
+      return false;
+    }
+  }
+
+  for (size_t i = 0, size = oat_dex_files_.size(); i != size; ++i) {
+    OatDexFile* oat_dex_file = &oat_dex_files_[i];
+    const DexFile& dex_file = *dex_files[i];
+
+    // Update OatDexFile.
+    oat_dex_file->dex_file_location_checksum_ = dex_file.GetLocationChecksum();
+    oat_dex_file->class_offsets_.resize(dex_file.NumClassDefs());
+    DCHECK_EQ(oat_dex_file->class_offsets_offset_, 0u);
+    if (dex_file.NumClassDefs() != 0u) {
+      // Class offsets are required to be 4 byte aligned.
+      size_t original_offset = size_;
+      size_t offset = RoundUp(original_offset, 4);
+      size_oat_class_offsets_alignment_ += offset - original_offset;
+      oat_dex_file->class_offsets_offset_ = offset;
+      size_ = offset + oat_dex_file->GetClassOffsetsRawSize();
+    }
+
+    DCHECK_EQ(oat_data_offset_ + oat_dex_file->offset_,
+              static_cast<size_t>(rodata->Seek(0, kSeekCurrent)));
+
+    // Write OatDexFile.
+    if (!oat_dex_file->Write(this, rodata, dex_file)) {
+      PLOG(ERROR) << "Failed to write oat dex information to " << rodata->GetLocation();
+      return false;
+    }
+  }
+
+  write_state_ = kPrepareLayout;
+  return true;
+}
+
+void OatWriter::PrepareLayout(const CompilerDriver* compiler,
+                              ImageWriter* image_writer,
+                              TimingLogger* timings) {
+  CHECK(write_state_ == kPrepareLayout);
+
+  compiler_driver_ = compiler;
+  image_writer_ = image_writer;
+  if (compiling_boot_image_) {
+    CHECK(image_writer_ != nullptr);
   }
   InstructionSet instruction_set = compiler_driver_->GetInstructionSet();
+  CHECK_EQ(instruction_set, oat_header_->GetInstructionSet());
   const InstructionSetFeatures* features = compiler_driver_->GetInstructionSetFeatures();
   relative_patcher_ = linker::RelativePatcher::Create(instruction_set, features,
                                                       &method_offset_map_);
 
-  size_t offset;
-  {
-    TimingLogger::ScopedTiming split("InitOatHeader", timings);
-    offset = InitOatHeader();
-  }
-  {
-    TimingLogger::ScopedTiming split("InitOatDexFiles", timings);
-    offset = InitOatDexFiles(offset);
-  }
-  {
-    TimingLogger::ScopedTiming split("InitDexFiles", timings);
-    offset = InitDexFiles(offset);
-  }
-  {
-    TimingLogger::ScopedTiming split("InitLookupTables", timings);
-    offset = InitLookupTables(offset);
-  }
+  uint32_t offset = size_;
   {
     TimingLogger::ScopedTiming split("InitOatClasses", timings);
     offset = InitOatClasses(offset);
@@ -164,7 +321,7 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     size_t bss_start = RoundUp(size_, kPageSize);
     size_t pointer_size = GetInstructionSetPointerSize(instruction_set);
     bss_size_ = 0u;
-    for (const DexFile* dex_file : dex_files) {
+    for (const DexFile* dex_file : *dex_files_) {
       dex_cache_arrays_offsets_.Put(dex_file, bss_start + bss_size_);
       DexCacheArraysLayout layout(pointer_size, dex_file);
       bss_size_ += layout.Size();
@@ -174,14 +331,13 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
   CHECK_EQ(dex_files_->size(), oat_dex_files_.size());
   if (compiling_boot_image_) {
     CHECK_EQ(image_writer_ != nullptr,
-             key_value_store_->find(OatHeader::kImageLocationKey) == key_value_store_->end());
+             oat_header_->GetStoreValueByKey(OatHeader::kImageLocationKey) == nullptr);
   }
-  CHECK_ALIGNED(image_patch_delta_, kPageSize);
+
+  write_state_ = kWriteRoData;
 }
 
 OatWriter::~OatWriter() {
-  delete oat_header_;
-  STLDeleteElements(&oat_dex_files_);
   STLDeleteElements(&oat_classes_);
 }
 
@@ -326,6 +482,11 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
     : DexMethodVisitor(writer, offset),
       compiled_methods_(),
       num_non_null_compiled_methods_(0u) {
+    size_t num_classes = 0u;
+    for (const OatDexFile& oat_dex_file : writer_->oat_dex_files_) {
+      num_classes += oat_dex_file.class_offsets_.size();
+    }
+    writer_->oat_classes_.reserve(num_classes);
     compiled_methods_.reserve(256u);
   }
 
@@ -367,13 +528,13 @@ class OatWriter::InitOatClassesMethodVisitor : public DexMethodVisitor {
     OatClass* oat_class = new OatClass(offset_, compiled_methods_,
                                        num_non_null_compiled_methods_, status);
     writer_->oat_classes_.push_back(oat_class);
-    oat_class->UpdateChecksum(writer_->oat_header_);
+    oat_class->UpdateChecksum(writer_->oat_header_.get());
     offset_ += oat_class->SizeOf();
     return DexMethodVisitor::EndClass();
   }
 
  private:
-  std::vector<CompiledMethod*> compiled_methods_;
+  dchecked_vector<CompiledMethod*> compiled_methods_;
   size_t num_non_null_compiled_methods_;
 };
 
@@ -959,7 +1120,7 @@ class OatWriter::WriteMapMethodVisitor : public OatDexMethodVisitor {
           << map_size << " " << map_offset << " " << offset_ << " "
           << PrettyMethod(it.GetMemberIndex(), *dex_file_) << " for " << DataAccess::Name();
       if (map_size != 0u && map_offset == offset_) {
-        if (UNLIKELY(!out->WriteFully(&map[0], map_size))) {
+        if (UNLIKELY(!out->WriteFully(map.data(), map_size))) {
           ReportWriteFailure(it);
           return false;
         }
@@ -1023,60 +1184,31 @@ bool OatWriter::VisitDexMethods(DexMethodVisitor* visitor) {
   return true;
 }
 
-size_t OatWriter::InitOatHeader() {
-  oat_header_ = OatHeader::Create(compiler_driver_->GetInstructionSet(),
-                                  compiler_driver_->GetInstructionSetFeatures(),
-                                  dex_files_,
-                                  image_file_location_oat_checksum_,
-                                  image_file_location_oat_begin_,
-                                  key_value_store_);
-
+size_t OatWriter::InitOatHeader(InstructionSet instruction_set,
+                                const InstructionSetFeatures* instruction_set_features,
+                                uint32_t num_dex_files,
+                                uint32_t image_file_location_oat_checksum,
+                                uintptr_t image_file_location_oat_begin,
+                                int32_t image_patch_delta,
+                                SafeMap<std::string, std::string>* key_value_store) {
+  oat_header_.reset(OatHeader::Create(instruction_set,
+                                      instruction_set_features,
+                                      num_dex_files,
+                                      image_file_location_oat_checksum,
+                                      image_file_location_oat_begin,
+                                      key_value_store));
+  CHECK_ALIGNED(image_patch_delta, kPageSize);
+  oat_header_->SetImagePatchDelta(image_patch_delta);
   return oat_header_->GetHeaderSize();
 }
 
-size_t OatWriter::InitOatDexFiles(size_t offset) {
-  // create the OatDexFiles
-  for (size_t i = 0; i != dex_files_->size(); ++i) {
-    const DexFile* dex_file = (*dex_files_)[i];
-    CHECK(dex_file != nullptr);
-    OatDexFile* oat_dex_file = new OatDexFile(offset, *dex_file);
-    oat_dex_files_.push_back(oat_dex_file);
-    offset += oat_dex_file->SizeOf();
-  }
-  return offset;
-}
-
-size_t OatWriter::InitDexFiles(size_t offset) {
-  // calculate the offsets within OatDexFiles to the DexFiles
-  for (size_t i = 0; i != dex_files_->size(); ++i) {
-    // dex files are required to be 4 byte aligned
-    size_t original_offset = offset;
-    offset = RoundUp(offset, 4);
-    size_dex_file_alignment_ += offset - original_offset;
-
-    // set offset in OatDexFile to DexFile
-    oat_dex_files_[i]->dex_file_offset_ = offset;
-
-    const DexFile* dex_file = (*dex_files_)[i];
-
-    // Initialize type lookup table
-    oat_dex_files_[i]->lookup_table_ = dex_file->GetTypeLookupTable();
-
-    offset += dex_file->GetHeader().file_size_;
-  }
-  return offset;
-}
-
-size_t OatWriter::InitLookupTables(size_t offset) {
-  for (OatDexFile* oat_dex_file : oat_dex_files_) {
-    if (oat_dex_file->lookup_table_ != nullptr) {
-      uint32_t aligned_offset = RoundUp(offset, 4);
-      oat_dex_file->lookup_table_offset_ = aligned_offset;
-      size_oat_lookup_table_alignment_ += aligned_offset - offset;
-      offset = aligned_offset + oat_dex_file->lookup_table_->RawDataLength();
-    } else {
-      oat_dex_file->lookup_table_offset_ = 0;
-    }
+size_t OatWriter::InitOatDexFiles(size_t offset,
+                                  const ArrayRef<const char* const>& dex_file_locations) {
+  // Create the OatDexFiles.
+  oat_dex_files_.reserve(dex_file_locations.size());
+  for (const char* location : dex_file_locations) {
+    oat_dex_files_.emplace_back(offset, location);
+    offset += oat_dex_files_.back().SizeOf();
   }
   return offset;
 }
@@ -1090,13 +1222,14 @@ size_t OatWriter::InitOatClasses(size_t offset) {
 
   // Update oat_dex_files_.
   auto oat_class_it = oat_classes_.begin();
-  for (OatDexFile* oat_dex_file : oat_dex_files_) {
-    for (uint32_t& method_offset : oat_dex_file->methods_offsets_) {
+  for (OatDexFile& oat_dex_file : oat_dex_files_) {
+    for (uint32_t& class_offset : oat_dex_file.class_offsets_) {
       DCHECK(oat_class_it != oat_classes_.end());
-      method_offset = (*oat_class_it)->offset_;
+      class_offset = (*oat_class_it)->offset_;
       ++oat_class_it;
     }
-    oat_dex_file->UpdateChecksum(oat_header_);
+    oat_header_->UpdateChecksum(oat_dex_file.class_offsets_.data(),
+                                oat_dex_file.GetClassOffsetsRawSize());
   }
   CHECK(oat_class_it == oat_classes_.end());
 
@@ -1130,7 +1263,7 @@ size_t OatWriter::InitOatCode(size_t offset) {
   oat_header_->SetExecutableOffset(offset);
   size_executable_offset_alignment_ = offset - old_offset;
   if (compiler_driver_->IsBootImage()) {
-    CHECK_EQ(image_patch_delta_, 0);
+    CHECK_EQ(oat_header_->GetImagePatchDelta(), 0);
     InstructionSet instruction_set = compiler_driver_->GetInstructionSet();
 
     #define DO_TRAMPOLINE(field, fn_name) \
@@ -1155,7 +1288,6 @@ size_t OatWriter::InitOatCode(size_t offset) {
     oat_header_->SetQuickImtConflictTrampolineOffset(0);
     oat_header_->SetQuickResolutionTrampolineOffset(0);
     oat_header_->SetQuickToInterpreterBridgeOffset(0);
-    oat_header_->SetImagePatchDelta(image_patch_delta_);
   }
   return offset;
 }
@@ -1180,23 +1312,10 @@ size_t OatWriter::InitOatCodeDexFiles(size_t offset) {
 }
 
 bool OatWriter::WriteRodata(OutputStream* out) {
-  const off_t raw_file_offset = out->Seek(0, kSeekCurrent);
-  if (raw_file_offset == (off_t) -1) {
-    LOG(ERROR) << "Failed to get file offset in " << out->GetLocation();
-    return false;
-  }
-  const size_t file_offset = static_cast<size_t>(raw_file_offset);
-  oat_data_offset_ = file_offset;
+  CHECK(write_state_ == kWriteRoData);
 
-  // Reserve space for header. It will be written last - after updating the checksum.
-  size_t header_size = oat_header_->GetHeaderSize();
-  if (out->Seek(header_size, kSeekCurrent) == (off_t) -1) {
-    PLOG(ERROR) << "Failed to reserve space for oat header in " << out->GetLocation();
-    return false;
-  }
-  size_oat_header_ += sizeof(OatHeader);
-  size_oat_header_key_value_store_ += oat_header_->GetHeaderSize() - sizeof(OatHeader);
-
+  // TODO: Clean up. Consider lack of Seek()ing when there are no class defs.
+  size_t file_offset = oat_data_offset_;
   if (!WriteTables(out, file_offset)) {
     LOG(ERROR) << "Failed to write oat tables to " << out->GetLocation();
     return false;
@@ -1226,10 +1345,13 @@ bool OatWriter::WriteRodata(OutputStream* out) {
   }
   DCHECK_OFFSET();
 
+  write_state_ = kWriteText;
   return true;
 }
 
 bool OatWriter::WriteCode(OutputStream* out) {
+  CHECK(write_state_ == kWriteText);
+
   size_t header_size = oat_header_->GetHeaderSize();
   const size_t file_offset = oat_data_offset_;
   size_t relative_offset = oat_header_->GetExecutableOffset();
@@ -1284,14 +1406,16 @@ bool OatWriter::WriteCode(OutputStream* out) {
     DO_STAT(size_oat_dex_file_location_data_);
     DO_STAT(size_oat_dex_file_location_checksum_);
     DO_STAT(size_oat_dex_file_offset_);
-    DO_STAT(size_oat_dex_file_methods_offsets_);
+    DO_STAT(size_oat_dex_file_class_offsets_offset_);
+    DO_STAT(size_oat_dex_file_lookup_table_offset_);
+    DO_STAT(size_oat_lookup_table_alignment_);
+    DO_STAT(size_oat_lookup_table_);
+    DO_STAT(size_oat_class_offsets_alignment_);
+    DO_STAT(size_oat_class_offsets_);
     DO_STAT(size_oat_class_type_);
     DO_STAT(size_oat_class_status_);
     DO_STAT(size_oat_class_method_bitmaps_);
     DO_STAT(size_oat_class_method_offsets_);
-    DO_STAT(size_oat_lookup_table_alignment_);
-    DO_STAT(size_oat_lookup_table_offset_);
-    DO_STAT(size_oat_lookup_table_);
     #undef DO_STAT
 
     VLOG(compiler) << "size_total=" << PrettySize(size_total) << " (" << size_total << "B)"; \
@@ -1302,13 +1426,18 @@ bool OatWriter::WriteCode(OutputStream* out) {
   CHECK_EQ(file_offset + size_, static_cast<size_t>(oat_end_file_offset));
   CHECK_EQ(size_, relative_offset);
 
+  write_state_ = kWriteHeader;
+
+  // TODO: Move to WriteHeader.
+  CHECK(write_state_ == kWriteHeader);
+
   // Write the header now that the checksum is final.
   if (out->Seek(file_offset, kSeekSet) == (off_t) -1) {
     PLOG(ERROR) << "Failed to seek to oat header position in " << out->GetLocation();
     return false;
   }
   DCHECK_EQ(file_offset, static_cast<size_t>(out->Seek(0, kSeekCurrent)));
-  if (!out->WriteFully(oat_header_, header_size)) {
+  if (!out->WriteFully(oat_header_.get(), header_size)) {
     PLOG(ERROR) << "Failed to write oat header to " << out->GetLocation();
     return false;
   }
@@ -1318,69 +1447,32 @@ bool OatWriter::WriteCode(OutputStream* out) {
   }
   DCHECK_EQ(oat_end_file_offset, out->Seek(0, kSeekCurrent));
 
+  write_state_ = kDone;
   return true;
 }
 
 bool OatWriter::WriteTables(OutputStream* out, const size_t file_offset) {
   for (size_t i = 0; i != oat_dex_files_.size(); ++i) {
-    if (!oat_dex_files_[i]->Write(this, out, file_offset)) {
-      PLOG(ERROR) << "Failed to write oat dex information to " << out->GetLocation();
-      return false;
-    }
-  }
-  for (size_t i = 0; i != oat_dex_files_.size(); ++i) {
-    uint32_t expected_offset = file_offset + oat_dex_files_[i]->dex_file_offset_;
+    uint32_t expected_offset = file_offset + oat_dex_files_[i].class_offsets_offset_;
     off_t actual_offset = out->Seek(expected_offset, kSeekSet);
     if (static_cast<uint32_t>(actual_offset) != expected_offset) {
       const DexFile* dex_file = (*dex_files_)[i];
-      PLOG(ERROR) << "Failed to seek to dex file section. Actual: " << actual_offset
+      PLOG(ERROR) << "Failed to seek to oat class offsets section. Actual: " << actual_offset
                   << " Expected: " << expected_offset << " File: " << dex_file->GetLocation();
       return false;
     }
-    const DexFile* dex_file = (*dex_files_)[i];
-    if (!out->WriteFully(&dex_file->GetHeader(), dex_file->GetHeader().file_size_)) {
-      PLOG(ERROR) << "Failed to write dex file " << dex_file->GetLocation()
+    if (!out->WriteFully(oat_dex_files_[i].class_offsets_.data(),
+                         oat_dex_files_[i].GetClassOffsetsRawSize())) {
+      PLOG(ERROR) << "Failed to write oat class offsets for " << (*dex_files_)[i]->GetLocation()
                   << " to " << out->GetLocation();
       return false;
     }
-    size_dex_file_ += dex_file->GetHeader().file_size_;
-  }
-  if (!WriteLookupTables(out, file_offset)) {
-    return false;
+    size_oat_class_offsets_ += oat_dex_files_[i].GetClassOffsetsRawSize();
   }
   for (size_t i = 0; i != oat_classes_.size(); ++i) {
     if (!oat_classes_[i]->Write(this, out, file_offset)) {
       PLOG(ERROR) << "Failed to write oat methods information to " << out->GetLocation();
       return false;
-    }
-  }
-  return true;
-}
-
-bool OatWriter::WriteLookupTables(OutputStream* out, const size_t file_offset) {
-  for (size_t i = 0; i < oat_dex_files_.size(); ++i) {
-    const uint32_t lookup_table_offset = oat_dex_files_[i]->lookup_table_offset_;
-    const TypeLookupTable* table = oat_dex_files_[i]->lookup_table_;
-    DCHECK_EQ(lookup_table_offset == 0, table == nullptr);
-    if (lookup_table_offset == 0) {
-      continue;
-    }
-    const uint32_t expected_offset = file_offset + lookup_table_offset;
-    off_t actual_offset = out->Seek(expected_offset, kSeekSet);
-    if (static_cast<uint32_t>(actual_offset) != expected_offset) {
-      const DexFile* dex_file = (*dex_files_)[i];
-      PLOG(ERROR) << "Failed to seek to lookup table section. Actual: " << actual_offset
-                  << " Expected: " << expected_offset << " File: " << dex_file->GetLocation();
-      return false;
-    }
-    if (table != nullptr) {
-      if (!out->WriteFully(table->RawData(), table->RawDataLength())) {
-        const DexFile* dex_file = (*dex_files_)[i];
-        PLOG(ERROR) << "Failed to write lookup table for " << dex_file->GetLocation()
-                    << " to " << out->GetLocation();
-        return false;
-      }
-      size_oat_lookup_table_ += table->RawDataLength();
     }
   }
   return true;
@@ -1423,7 +1515,7 @@ size_t OatWriter::WriteCode(OutputStream* out, const size_t file_offset, size_t 
         uint32_t alignment_padding = aligned_offset - relative_offset; \
         out->Seek(alignment_padding, kSeekCurrent); \
         size_trampoline_alignment_ += alignment_padding; \
-        if (!out->WriteFully(&(*field)[0], field->size())) { \
+        if (!out->WriteFully(field->data(), field->size())) { \
           PLOG(ERROR) << "Failed to write " # field " to " << out->GetLocation(); \
           return false; \
         } \
@@ -1486,15 +1578,15 @@ std::pair<bool, uint32_t> OatWriter::MethodOffsetMap::FindMethodOffset(MethodRef
   }
 }
 
-OatWriter::OatDexFile::OatDexFile(size_t offset, const DexFile& dex_file) {
-  offset_ = offset;
-  const std::string& location(dex_file.GetLocation());
-  dex_file_location_size_ = location.size();
-  dex_file_location_data_ = reinterpret_cast<const uint8_t*>(location.data());
-  dex_file_location_checksum_ = dex_file.GetLocationChecksum();
-  dex_file_offset_ = 0;
-  lookup_table_offset_ = 0;
-  methods_offsets_.resize(dex_file.NumClassDefs());
+OatWriter::OatDexFile::OatDexFile(size_t offset, const char* dex_file_location)
+    : offset_(offset),
+      dex_file_location_size_(strlen(dex_file_location)),
+      dex_file_location_data_(reinterpret_cast<const uint8_t*>(dex_file_location)),
+      dex_file_location_checksum_(0u),
+      dex_file_offset_(0u),
+      class_offsets_offset_(0u),
+      lookup_table_offset_(0u),
+      class_offsets_() {
 }
 
 size_t OatWriter::OatDexFile::SizeOf() const {
@@ -1502,64 +1594,67 @@ size_t OatWriter::OatDexFile::SizeOf() const {
           + dex_file_location_size_
           + sizeof(dex_file_location_checksum_)
           + sizeof(dex_file_offset_)
-          + sizeof(lookup_table_offset_)
-          + (sizeof(methods_offsets_[0]) * methods_offsets_.size());
-}
-
-void OatWriter::OatDexFile::UpdateChecksum(OatHeader* oat_header) const {
-  oat_header->UpdateChecksum(&dex_file_location_size_, sizeof(dex_file_location_size_));
-  oat_header->UpdateChecksum(dex_file_location_data_, dex_file_location_size_);
-  oat_header->UpdateChecksum(&dex_file_location_checksum_, sizeof(dex_file_location_checksum_));
-  oat_header->UpdateChecksum(&dex_file_offset_, sizeof(dex_file_offset_));
-  oat_header->UpdateChecksum(&lookup_table_offset_, sizeof(lookup_table_offset_));
-  if (lookup_table_ != nullptr) {
-    oat_header->UpdateChecksum(lookup_table_->RawData(), lookup_table_->RawDataLength());
-  }
-  oat_header->UpdateChecksum(&methods_offsets_[0],
-                            sizeof(methods_offsets_[0]) * methods_offsets_.size());
+          + sizeof(class_offsets_offset_)
+          + sizeof(lookup_table_offset_);
 }
 
 bool OatWriter::OatDexFile::Write(OatWriter* oat_writer,
                                   OutputStream* out,
-                                  const size_t file_offset) const {
+                                  const DexFile& dex_file) const {
+  OatHeader* oat_header = oat_writer->oat_header_.get();
+  const size_t file_offset = oat_writer->oat_data_offset_;
   DCHECK_OFFSET_();
+
+  oat_header->UpdateChecksum(&dex_file_location_size_, sizeof(dex_file_location_size_));
   if (!out->WriteFully(&dex_file_location_size_, sizeof(dex_file_location_size_))) {
     PLOG(ERROR) << "Failed to write dex file location length to " << out->GetLocation();
     return false;
   }
   oat_writer->size_oat_dex_file_location_size_ += sizeof(dex_file_location_size_);
+
+  CHECK_EQ(dex_file.GetLocation().size(), dex_file_location_size_);
+  CHECK_EQ(memcmp(dex_file.GetLocation().data(), dex_file_location_data_, dex_file_location_size_),
+           0);
+  oat_header->UpdateChecksum(dex_file_location_data_, dex_file_location_size_);
   if (!out->WriteFully(dex_file_location_data_, dex_file_location_size_)) {
     PLOG(ERROR) << "Failed to write dex file location data to " << out->GetLocation();
     return false;
   }
   oat_writer->size_oat_dex_file_location_data_ += dex_file_location_size_;
+
+  oat_header->UpdateChecksum(&dex_file_location_checksum_, sizeof(dex_file_location_checksum_));
   if (!out->WriteFully(&dex_file_location_checksum_, sizeof(dex_file_location_checksum_))) {
     PLOG(ERROR) << "Failed to write dex file location checksum to " << out->GetLocation();
     return false;
   }
   oat_writer->size_oat_dex_file_location_checksum_ += sizeof(dex_file_location_checksum_);
+
+  oat_header->UpdateChecksum(&dex_file_offset_, sizeof(dex_file_offset_));
   if (!out->WriteFully(&dex_file_offset_, sizeof(dex_file_offset_))) {
     PLOG(ERROR) << "Failed to write dex file offset to " << out->GetLocation();
     return false;
   }
   oat_writer->size_oat_dex_file_offset_ += sizeof(dex_file_offset_);
+
+  oat_header->UpdateChecksum(&class_offsets_offset_, sizeof(class_offsets_offset_));
+  if (!out->WriteFully(&class_offsets_offset_, sizeof(class_offsets_offset_))) {
+    PLOG(ERROR) << "Failed to write class offsets offset to " << out->GetLocation();
+    return false;
+  }
+  oat_writer->size_oat_dex_file_class_offsets_offset_ += sizeof(class_offsets_offset_);
+
+  oat_header->UpdateChecksum(&lookup_table_offset_, sizeof(lookup_table_offset_));
   if (!out->WriteFully(&lookup_table_offset_, sizeof(lookup_table_offset_))) {
     PLOG(ERROR) << "Failed to write lookup table offset to " << out->GetLocation();
     return false;
   }
-  oat_writer->size_oat_lookup_table_offset_ += sizeof(lookup_table_offset_);
-  if (!out->WriteFully(&methods_offsets_[0],
-                      sizeof(methods_offsets_[0]) * methods_offsets_.size())) {
-    PLOG(ERROR) << "Failed to write methods offsets to " << out->GetLocation();
-    return false;
-  }
-  oat_writer->size_oat_dex_file_methods_offsets_ +=
-      sizeof(methods_offsets_[0]) * methods_offsets_.size();
+  oat_writer->size_oat_dex_file_lookup_table_offset_ += sizeof(lookup_table_offset_);
+
   return true;
 }
 
 OatWriter::OatClass::OatClass(size_t offset,
-                              const std::vector<CompiledMethod*>& compiled_methods,
+                              const dchecked_vector<CompiledMethod*>& compiled_methods,
                               uint32_t num_non_null_compiled_methods,
                               mirror::Class::Status status)
     : compiled_methods_(compiled_methods) {
@@ -1646,7 +1741,7 @@ void OatWriter::OatClass::UpdateChecksum(OatHeader* oat_header) const {
     oat_header->UpdateChecksum(&method_bitmap_size_, sizeof(method_bitmap_size_));
     oat_header->UpdateChecksum(method_bitmap_->GetRawStorage(), method_bitmap_size_);
   }
-  oat_header->UpdateChecksum(&method_offsets_[0],
+  oat_header->UpdateChecksum(method_offsets_.data(),
                              sizeof(method_offsets_[0]) * method_offsets_.size());
 }
 
@@ -1677,8 +1772,8 @@ bool OatWriter::OatClass::Write(OatWriter* oat_writer,
     }
     oat_writer->size_oat_class_method_bitmaps_ += method_bitmap_size_;
   }
-  if (!out->WriteFully(&method_offsets_[0],
-                      sizeof(method_offsets_[0]) * method_offsets_.size())) {
+  if (!out->WriteFully(method_offsets_.data(),
+                       sizeof(method_offsets_[0]) * method_offsets_.size())) {
     PLOG(ERROR) << "Failed to write method offsets to " << out->GetLocation();
     return false;
   }
