@@ -739,6 +739,11 @@ void CodeGeneratorARM::Finalize(CodeAllocator* allocator) {
     uint32_t new_position = __ GetAdjustedPosition(old_position);
     stack_map_stream_.SetStackMapNativePcOffset(i, new_position);
   }
+  // Adjust native pc offsets in line mapping table for native debugging.
+  for (size_t i = 0, num = src_map_.size(); i < num; ++i) {
+    src_map_[i].from_ = __ GetAdjustedPosition(src_map_[i].from_);
+  }
+
   // Adjust pc offsets for the disassembly information.
   if (disasm_info_ != nullptr) {
     GeneratedCodeInterval* frame_entry_interval = disasm_info_->GetFrameEntryInterval();

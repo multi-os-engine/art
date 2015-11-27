@@ -492,13 +492,13 @@ class CodeGenerator {
         core_callee_save_mask_(core_callee_save_mask),
         fpu_callee_save_mask_(fpu_callee_save_mask),
         stack_map_stream_(graph->GetArena()),
+        src_map_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
         block_order_(nullptr),
         is_baseline_(false),
         disasm_info_(nullptr),
         stats_(stats),
         graph_(graph),
         compiler_options_(compiler_options),
-        src_map_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
         slow_paths_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
         current_slow_path_(nullptr),
         current_block_index_(0),
@@ -594,6 +594,8 @@ class CodeGenerator {
   const uint32_t fpu_callee_save_mask_;
 
   StackMapStream stack_map_stream_;
+  // Native to dex_pc map used for native debugging/profiling tools.
+  ArenaVector<SrcMapElem> src_map_;
 
   // The order to use for code generation.
   const ArenaVector<HBasicBlock*>* block_order_;
@@ -616,8 +618,6 @@ class CodeGenerator {
   HGraph* const graph_;
   const CompilerOptions& compiler_options_;
 
-  // Native to dex_pc map used for native debugging/profiling tools.
-  ArenaVector<SrcMapElem> src_map_;
   ArenaVector<SlowPathCode*> slow_paths_;
 
   // The current slow path that we're generating code for.

@@ -508,6 +508,10 @@ void CodeGeneratorMIPS::Finalize(CodeAllocator* allocator) {
     DCHECK_GE(new_position, old_position);
     stack_map_stream_.SetStackMapNativePcOffset(i, new_position);
   }
+  // Adjust native pc offsets in line mapping table for native debugging.
+  for (size_t i = 0, num = src_map_.size(); i < num; ++i) {
+    src_map_[i].from_ = __ GetAdjustedPosition(src_map_[i].from_);
+  }
 
   // Adjust pc offsets for the disassembly information.
   if (disasm_info_ != nullptr) {
