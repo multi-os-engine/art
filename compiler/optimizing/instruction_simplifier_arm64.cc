@@ -254,41 +254,56 @@ void InstructionSimplifierArm64Visitor::VisitMul(HMul* instruction) {
       ? instruction->GetUses().GetFirst()->GetUser()
       : nullptr;
 
-  if (instruction->HasOnlyOneNonEnvironmentUse() && (use->IsAdd() || use->IsSub())) {
-    // Replace code looking like
-    //    MUL tmp, x, y
-    //    SUB dst, acc, tmp
-    // with
-    //    MULSUB dst, acc, x, y
-    // Note that we do not want to (unconditionally) perform the merge when the
-    // multiplication has multiple uses and it can be merged in all of them.
-    // Multiple uses could happen on the same control-flow path, and we would
-    // then increase the amount of work. In the future we could try to evaluate
-    // whether all uses are on different control-flow paths (using dominance and
-    // reverse-dominance information) and only perform the merge when they are.
-    HInstruction* accumulator = nullptr;
-    HBinaryOperation* binop = use->AsBinaryOperation();
-    HInstruction* binop_left = binop->GetLeft();
-    HInstruction* binop_right = binop->GetRight();
-    // Be careful after GVN. This should not happen since the `HMul` has only
-    // one use.
-    DCHECK_NE(binop_left, binop_right);
-    if (binop_right == instruction) {
-      accumulator = binop_left;
-    } else if (use->IsAdd()) {
-      DCHECK_EQ(binop_left, instruction);
-      accumulator = binop_right;
-    }
+  if (instruction->HasOnlyOneNonEnvironmentUse()) {
+    if (use->IsAdd() || use->IsSub()) {
+      // Replace code looking like
+      //    MUL tmp, x, y
+      //    SUB dst, acc, tmp
+      // with
+      //    MULSUB dst, acc, x, y
+      // Note that we do not want to (unconditionally) perform the merge when the
+      // multiplication has multiple uses and it can be merged in all of them.
+      // Multiple uses could happen on the same control-flow path, and we would
+      // then increase the amount of work. In the future we could try to evaluate
+      // whether all uses are on different control-flow paths (using dominance and
+      // reverse-dominance information) and only perform the merge when they are.
+      HInstruction* accumulator = nullptr;
+      HBinaryOperation* binop = use->AsBinaryOperation();
+      HInstruction* binop_left = binop->GetLeft();
+      HInstruction* binop_right = binop->GetRight();
+      // Be careful after GVN. This should not happen since the `HMul` has only
+      // one use.
+      DCHECK_NE(binop_left, binop_right);
+      if (binop_right == instruction) {
+        accumulator = binop_left;
+      } else if (use->IsAdd()) {
+        DCHECK_EQ(binop_left, instruction);
+        accumulator = binop_right;
+      }
 
-    if (accumulator != nullptr) {
+      if (accumulator != nullptr) {
+        HArm64MultiplyAccumulate* mulacc =
+            new (GetGraph()->GetArena()) HArm64MultiplyAccumulate(type,
+                                                                  binop->GetKind(),
+                                                                  accumulator,
+                                                                  instruction->GetLeft(),
+                                                                  instruction->GetRight());
+
+        binop->GetBlock()->ReplaceAndRemoveInstructionWith(binop, mulacc);
+        DCHECK(!instruction->HasUses());
+        instruction->GetBlock()->RemoveInstruction(instruction);
+        RecordSimplification();
+        return;
+      }
+    } else if (use->IsNeg()) {
       HArm64MultiplyAccumulate* mulacc =
           new (GetGraph()->GetArena()) HArm64MultiplyAccumulate(type,
-                                                                binop->GetKind(),
-                                                                accumulator,
+                                                                HInstruction::kSub,
+                                                                GetGraph()->GetConstant(type, 0),
                                                                 instruction->GetLeft(),
                                                                 instruction->GetRight());
 
-      binop->GetBlock()->ReplaceAndRemoveInstructionWith(binop, mulacc);
+      use->GetBlock()->ReplaceAndRemoveInstructionWith(use, mulacc);
       DCHECK(!instruction->HasUses());
       instruction->GetBlock()->RemoveInstruction(instruction);
       RecordSimplification();

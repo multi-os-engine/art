@@ -422,6 +422,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     StartAttributeStream("kind") << (try_boundary->IsEntry() ? "entry" : "exit");
   }
 
+  void VisitArmMultiplyAccumulate(HArmMultiplyAccumulate* instruction) OVERRIDE {
+    StartAttributeStream("kind") << instruction->GetOpKind();
+  }
+
 #ifdef ART_ENABLE_CODEGEN_arm64
   void VisitArm64DataProcWithShifterOp(HArm64DataProcWithShifterOp* instruction) OVERRIDE {
     StartAttributeStream("kind") << instruction->GetInstrKind() << "+" << instruction->GetOpKind();
@@ -431,6 +435,12 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
   }
 
   void VisitArm64MultiplyAccumulate(HArm64MultiplyAccumulate* instruction) OVERRIDE {
+    HInstruction* accumulator = instruction->InputAt(HArm64MultiplyAccumulate::kInputAccumulatorIndex);
+    // If accumulator is zero, we have Mneg instruction.
+    if (accumulator->IsConstant() && accumulator->AsConstant()->IsZero()) {
+      DCHECK(instruction->GetOpKind() == HInstruction::kSub);
+      StartAttributeStream("kind") << HInstruction::kNeg;
+    }
     StartAttributeStream("kind") << instruction->GetOpKind();
   }
 #endif

@@ -1983,8 +1983,14 @@ void InstructionCodeGeneratorARM64::VisitArm64IntermediateAddress(
 void LocationsBuilderARM64::VisitArm64MultiplyAccumulate(HArm64MultiplyAccumulate* instr) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instr, LocationSummary::kNoCall);
-  locations->SetInAt(HArm64MultiplyAccumulate::kInputAccumulatorIndex,
-                     Location::RequiresRegister());
+  HInstruction* accumulator = instr->InputAt(HArm64MultiplyAccumulate::kInputAccumulatorIndex);
+  if (accumulator->IsConstant() && accumulator->AsConstant()->IsZero()) {
+    DCHECK(instr->GetOpKind() == HInstruction::kSub);
+    // Don't allocate register for Mneg instruction.
+  } else {
+    locations->SetInAt(HArm64MultiplyAccumulate::kInputAccumulatorIndex,
+                       Location::RequiresRegister());
+  }
   locations->SetInAt(HArm64MultiplyAccumulate::kInputMulLeftIndex, Location::RequiresRegister());
   locations->SetInAt(HArm64MultiplyAccumulate::kInputMulRightIndex, Location::RequiresRegister());
   locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
@@ -1992,7 +1998,6 @@ void LocationsBuilderARM64::VisitArm64MultiplyAccumulate(HArm64MultiplyAccumulat
 
 void InstructionCodeGeneratorARM64::VisitArm64MultiplyAccumulate(HArm64MultiplyAccumulate* instr) {
   Register res = OutputRegister(instr);
-  Register accumulator = InputRegisterAt(instr, HArm64MultiplyAccumulate::kInputAccumulatorIndex);
   Register mul_left = InputRegisterAt(instr, HArm64MultiplyAccumulate::kInputMulLeftIndex);
   Register mul_right = InputRegisterAt(instr, HArm64MultiplyAccumulate::kInputMulRightIndex);
 
@@ -2014,10 +2019,17 @@ void InstructionCodeGeneratorARM64::VisitArm64MultiplyAccumulate(HArm64MultiplyA
   }
 
   if (instr->GetOpKind() == HInstruction::kAdd) {
+    Register accumulator = InputRegisterAt(instr, HArm64MultiplyAccumulate::kInputAccumulatorIndex);
     __ Madd(res, mul_left, mul_right, accumulator);
   } else {
     DCHECK(instr->GetOpKind() == HInstruction::kSub);
-    __ Msub(res, mul_left, mul_right, accumulator);
+    HInstruction* accum_instr = instr->InputAt(HArm64MultiplyAccumulate::kInputAccumulatorIndex);
+    if (accum_instr->IsConstant() && accum_instr->AsConstant()->IsZero()) {
+      __ Mneg(res, mul_left, mul_right);
+    } else {
+      Register accumulator = InputRegisterAt(instr, HArm64MultiplyAccumulate::kInputAccumulatorIndex);
+      __ Msub(res, mul_left, mul_right, accumulator);
+    }
   }
 }
 

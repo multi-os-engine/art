@@ -1095,7 +1095,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(UShr, BinaryOperation)                                              \
   M(Xor, BinaryOperation)                                               \
 
-#define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)
+#define FOR_EACH_CONCRETE_INSTRUCTION_ARM(M)                            \
+  M(ArmMultiplyAccumulate, Instruction)
 
 #ifndef ART_ENABLE_CODEGEN_arm64
 #define FOR_EACH_CONCRETE_INSTRUCTION_ARM64(M)
@@ -5566,6 +5567,7 @@ class HParallelMove : public HTemplateInstruction<0> {
 
 }  // namespace art
 
+#include "nodes_arm.h"
 #ifdef ART_ENABLE_CODEGEN_arm64
 #include "nodes_arm64.h"
 #endif

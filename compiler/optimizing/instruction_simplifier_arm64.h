@@ -70,7 +70,7 @@ class InstructionSimplifierArm64Visitor : public HGraphVisitor {
 
 class InstructionSimplifierArm64 : public HOptimization {
  public:
-  InstructionSimplifierArm64(HGraph* graph, OptimizingCompilerStats* stats)
+  InstructionSimplifierArm64(HGraph* graph, OptimizingCompilerStats* stats = nullptr)
     : HOptimization(graph, "instruction_simplifier_arm64", stats) {}
 
   void Run() OVERRIDE {

@@ -55,6 +55,7 @@
 #include "induction_var_analysis.h"
 #include "inliner.h"
 #include "instruction_simplifier.h"
+#include "instruction_simplifier_arm.h"
 #include "intrinsics.h"
 #include "jit/jit_code_cache.h"
 #include "licm.h"
@@ -435,6 +436,16 @@ static void RunArchOptimizations(InstructionSet instruction_set,
                                  PassObserver* pass_observer) {
   ArenaAllocator* arena = graph->GetArena();
   switch (instruction_set) {
+    case kArm:
+    case kThumb2: {
+      arm::InstructionSimplifierArm* simplifier =
+          new (arena) arm::InstructionSimplifierArm(graph, stats);
+      HOptimization* arm_optimizations[] = {
+        simplifier
+      };
+      RunOptimizations(arm_optimizations, arraysize(arm_optimizations), pass_observer);
+      break;
+    }
 #ifdef ART_ENABLE_CODEGEN_arm64
     case kArm64: {
       arm64::InstructionSimplifierArm64* simplifier =
