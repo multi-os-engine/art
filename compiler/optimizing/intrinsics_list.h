@@ -22,36 +22,36 @@
 // environment.
 
 #define INTRINSICS_LIST(V) \
-  V(DoubleDoubleToRawLongBits, kStatic, kNeedsEnvironmentOrCache) \
-  V(DoubleLongBitsToDouble, kStatic, kNeedsEnvironmentOrCache) \
-  V(FloatFloatToRawIntBits, kStatic, kNeedsEnvironmentOrCache) \
-  V(FloatIntBitsToFloat, kStatic, kNeedsEnvironmentOrCache) \
-  V(IntegerReverse, kStatic, kNeedsEnvironmentOrCache) \
-  V(IntegerReverseBytes, kStatic, kNeedsEnvironmentOrCache) \
-  V(IntegerNumberOfLeadingZeros, kStatic, kNeedsEnvironmentOrCache) \
-  V(IntegerNumberOfTrailingZeros, kStatic, kNeedsEnvironmentOrCache) \
-  V(IntegerRotateRight, kStatic, kNeedsEnvironmentOrCache) \
-  V(IntegerRotateLeft, kStatic, kNeedsEnvironmentOrCache) \
-  V(LongReverse, kStatic, kNeedsEnvironmentOrCache) \
-  V(LongReverseBytes, kStatic, kNeedsEnvironmentOrCache) \
-  V(LongNumberOfLeadingZeros, kStatic, kNeedsEnvironmentOrCache) \
-  V(LongNumberOfTrailingZeros, kStatic, kNeedsEnvironmentOrCache) \
-  V(LongRotateRight, kStatic, kNeedsEnvironmentOrCache) \
-  V(LongRotateLeft, kStatic, kNeedsEnvironmentOrCache) \
-  V(ShortReverseBytes, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathAbsDouble, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathAbsFloat, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathAbsLong, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathAbsInt, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathMinDoubleDouble, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathMinFloatFloat, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathMinLongLong, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathMinIntInt, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathMaxDoubleDouble, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathMaxFloatFloat, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathMaxLongLong, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathMaxIntInt, kStatic, kNeedsEnvironmentOrCache) \
-  V(MathSqrt, kStatic, kNeedsEnvironmentOrCache) \
+  V(DoubleDoubleToRawLongBits, kStatic, kNoEnvironmentOrCache) \
+  V(DoubleLongBitsToDouble, kStatic, kNoEnvironmentOrCache) \
+  V(FloatFloatToRawIntBits, kStatic, kNoEnvironmentOrCache) \
+  V(FloatIntBitsToFloat, kStatic, kNoEnvironmentOrCache) \
+  V(IntegerReverse, kStatic, kNoEnvironmentOrCache) \
+  V(IntegerReverseBytes, kStatic, kNoEnvironmentOrCache) \
+  V(IntegerNumberOfLeadingZeros, kStatic, kNoEnvironmentOrCache) \
+  V(IntegerNumberOfTrailingZeros, kStatic, kNoEnvironmentOrCache) \
+  V(IntegerRotateRight, kStatic, kNoEnvironmentOrCache) \
+  V(IntegerRotateLeft, kStatic, kNoEnvironmentOrCache) \
+  V(LongReverse, kStatic, kNoEnvironmentOrCache) \
+  V(LongReverseBytes, kStatic, kNoEnvironmentOrCache) \
+  V(LongNumberOfLeadingZeros, kStatic, kNoEnvironmentOrCache) \
+  V(LongNumberOfTrailingZeros, kStatic, kNoEnvironmentOrCache) \
+  V(LongRotateRight, kStatic, kNoEnvironmentOrCache) \
+  V(LongRotateLeft, kStatic, kNoEnvironmentOrCache) \
+  V(ShortReverseBytes, kStatic, kNoEnvironmentOrCache) \
+  V(MathAbsDouble, kStatic, kNoEnvironmentOrCache) \
+  V(MathAbsFloat, kStatic, kNoEnvironmentOrCache) \
+  V(MathAbsLong, kStatic, kNoEnvironmentOrCache) \
+  V(MathAbsInt, kStatic, kNoEnvironmentOrCache) \
+  V(MathMinDoubleDouble, kStatic, kNoEnvironmentOrCache) \
+  V(MathMinFloatFloat, kStatic, kNoEnvironmentOrCache) \
+  V(MathMinLongLong, kStatic, kNoEnvironmentOrCache) \
+  V(MathMinIntInt, kStatic, kNoEnvironmentOrCache) \
+  V(MathMaxDoubleDouble, kStatic, kNoEnvironmentOrCache) \
+  V(MathMaxFloatFloat, kStatic, kNoEnvironmentOrCache) \
+  V(MathMaxLongLong, kStatic, kNoEnvironmentOrCache) \
+  V(MathMaxIntInt, kStatic, kNoEnvironmentOrCache) \
+  V(MathSqrt, kStatic, kNoEnvironmentOrCache) \
   V(MathCeil, kStatic, kNeedsEnvironmentOrCache) \
   V(MathFloor, kStatic, kNeedsEnvironmentOrCache) \
   V(MathRint, kStatic, kNeedsEnvironmentOrCache) \
@@ -60,42 +60,42 @@
   V(SystemArrayCopyChar, kStatic, kNeedsEnvironmentOrCache) \
   V(SystemArrayCopy, kStatic, kNeedsEnvironmentOrCache) \
   V(ThreadCurrentThread, kStatic, kNeedsEnvironmentOrCache) \
-  V(MemoryPeekByte, kStatic, kNeedsEnvironmentOrCache) \
-  V(MemoryPeekIntNative, kStatic, kNeedsEnvironmentOrCache) \
-  V(MemoryPeekLongNative, kStatic, kNeedsEnvironmentOrCache) \
-  V(MemoryPeekShortNative, kStatic, kNeedsEnvironmentOrCache) \
-  V(MemoryPokeByte, kStatic, kNeedsEnvironmentOrCache) \
-  V(MemoryPokeIntNative, kStatic, kNeedsEnvironmentOrCache) \
-  V(MemoryPokeLongNative, kStatic, kNeedsEnvironmentOrCache) \
-  V(MemoryPokeShortNative, kStatic, kNeedsEnvironmentOrCache) \
+  V(MemoryPeekByte, kStatic, kNoEnvironmentOrCache) \
+  V(MemoryPeekIntNative, kStatic, kNoEnvironmentOrCache) \
+  V(MemoryPeekLongNative, kStatic, kNoEnvironmentOrCache) \
+  V(MemoryPeekShortNative, kStatic, kNoEnvironmentOrCache) \
+  V(MemoryPokeByte, kStatic, kNoEnvironmentOrCache) \
+  V(MemoryPokeIntNative, kStatic, kNoEnvironmentOrCache) \
+  V(MemoryPokeLongNative, kStatic, kNoEnvironmentOrCache) \
+  V(MemoryPokeShortNative, kStatic, kNoEnvironmentOrCache) \
   V(StringCharAt, kDirect, kNeedsEnvironmentOrCache) \
   V(StringCompareTo, kDirect, kNeedsEnvironmentOrCache) \
-  V(StringEquals, kDirect, kNeedsEnvironmentOrCache) \
+  V(StringEquals, kDirect, kNoEnvironmentOrCache) \
   V(StringGetCharsNoCheck, kDirect, kNeedsEnvironmentOrCache) \
   V(StringIndexOf, kDirect, kNeedsEnvironmentOrCache) \
   V(StringIndexOfAfter, kDirect, kNeedsEnvironmentOrCache) \
   V(StringNewStringFromBytes, kStatic, kNeedsEnvironmentOrCache) \
   V(StringNewStringFromChars, kStatic, kNeedsEnvironmentOrCache) \
   V(StringNewStringFromString, kStatic, kNeedsEnvironmentOrCache) \
-  V(UnsafeCASInt, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafeCASLong, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafeCASObject, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafeGet, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafeGetVolatile, kDirect, kNeedsEnvironmentOrCache) \
+  V(UnsafeCASInt, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafeCASLong, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafeCASObject, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafeGet, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafeGetVolatile, kDirect, kNoEnvironmentOrCache) \
   V(UnsafeGetObject, kDirect, kNeedsEnvironmentOrCache) \
   V(UnsafeGetObjectVolatile, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafeGetLong, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafeGetLongVolatile, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafePut, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafePutOrdered, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafePutVolatile, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafePutObject, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafePutObjectOrdered, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafePutObjectVolatile, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafePutLong, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafePutLongOrdered, kDirect, kNeedsEnvironmentOrCache) \
-  V(UnsafePutLongVolatile, kDirect, kNeedsEnvironmentOrCache) \
-  V(ReferenceGetReferent, kDirect, kNeedsEnvironmentOrCache)
+  V(UnsafeGetLong, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafeGetLongVolatile, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafePut, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafePutOrdered, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafePutVolatile, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafePutObject, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafePutObjectOrdered, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafePutObjectVolatile, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafePutLong, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafePutLongOrdered, kDirect, kNoEnvironmentOrCache) \
+  V(UnsafePutLongVolatile, kDirect, kNoEnvironmentOrCache) \
+  V(ReferenceGetReferent, kDirect, kNoEnvironmentOrCache)
 
 #endif  // ART_COMPILER_OPTIMIZING_INTRINSICS_LIST_H_
 #undef ART_COMPILER_OPTIMIZING_INTRINSICS_LIST_H_   // #define is only for lint.
