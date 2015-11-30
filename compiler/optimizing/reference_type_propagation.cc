@@ -534,8 +534,9 @@ void RTPVisitor::VisitLoadException(HLoadException* instr) {
 void RTPVisitor::VisitNullCheck(HNullCheck* instr) {
   ScopedObjectAccess soa(Thread::Current());
   ReferenceTypeInfo parent_rti = instr->InputAt(0)->GetReferenceTypeInfo();
-  DCHECK(parent_rti.IsValid());
-  instr->SetReferenceTypeInfo(parent_rti);
+  if (parent_rti.IsValid()) {
+    instr->SetReferenceTypeInfo(parent_rti);
+  }
 }
 
 void RTPVisitor::VisitFakeString(HFakeString* instr) {
@@ -588,11 +589,16 @@ void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
   }
 
   if (phi->GetBlock()->IsLoopHeader()) {
+    ScopedObjectAccess soa(Thread::Current());
     // Set the initial type for the phi. Use the non back edge input for reaching
     // a fixed point faster.
+    HInstruction* first_input = phi->InputAt(0);
+    ReferenceTypeInfo first_input_rti = first_input->GetReferenceTypeInfo();
+    if (!first_input->IsNullConstant() && first_input_rti.IsValid()) {
+      phi->SetCanBeNull(first_input->CanBeNull());
+      phi->SetReferenceTypeInfo(first_input_rti);
+    }
     AddToWorklist(phi);
-    phi->SetCanBeNull(phi->InputAt(0)->CanBeNull());
-    phi->SetReferenceTypeInfo(phi->InputAt(0)->GetReferenceTypeInfo());
   } else {
     // Eagerly compute the type of the phi, for quicker convergence. Note
     // that we don't need to add users to the worklist because we are
@@ -770,7 +776,10 @@ void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
       }
     }
   }
-  instr->SetReferenceTypeInfo(new_rti);
+
+  if (new_rti.IsValid()) {
+    instr->SetReferenceTypeInfo(new_rti);
+  }
 }
 
 // Re-computes and updates the nullability of the instruction. Returns whether or
