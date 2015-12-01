@@ -111,6 +111,11 @@ ART_HOST_DEPENDENCIES += $(2ND_HOST_OUT_SHARED_LIBRARIES)/libjavacore.so
 endif
 
 ########################################################################
+# benchmark rules
+
+include $(art_path)/benchmark/Android.mk
+
+########################################################################
 # test rules
 
 ifeq ($(art_test_bother),true)
