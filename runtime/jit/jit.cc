@@ -26,6 +26,7 @@
 #include "jit_instrumentation.h"
 #include "oat_file_manager.h"
 #include "offline_profiling_info.h"
+#include "profile_saver.h"
 #include "runtime.h"
 #include "runtime_options.h"
 #include "utils.h"
@@ -66,7 +67,7 @@ void Jit::AddTimingLogger(const TimingLogger& logger) {
 Jit::Jit()
     : jit_library_handle_(nullptr), jit_compiler_handle_(nullptr), jit_load_(nullptr),
       jit_compile_method_(nullptr), dump_info_on_shutdown_(false),
-      cumulative_timings_("JIT timings") {
+      cumulative_timings_("JIT timings"), save_profiling_info_(false) {
 }
 
 Jit* Jit::Create(JitOptions* options, std::string* error_msg) {
@@ -80,10 +81,7 @@ Jit* Jit::Create(JitOptions* options, std::string* error_msg) {
   if (jit->GetCodeCache() == nullptr) {
     return nullptr;
   }
-  jit->offline_profile_info_.reset(nullptr);
-  if (options->GetSaveProfilingInfo()) {
-    jit->offline_profile_info_.reset(new OfflineProfilingInfo());
-  }
+  jit->save_profiling_info_ = options->GetSaveProfilingInfo();
   LOG(INFO) << "JIT created with initial_capacity="
       << PrettySize(options->GetCodeCacheInitialCapacity())
       << ", max_capacity=" << PrettySize(options->GetCodeCacheMaxCapacity())
@@ -173,25 +171,21 @@ void Jit::DeleteThreadPool() {
   }
 }
 
-void Jit::SaveProfilingInfo(const std::string& filename) {
-  if (offline_profile_info_ == nullptr) {
-    return;
+void Jit::StartProfileSaver(const std::string& filename) {
+  if (save_profiling_info_) {
+    ProfileSaver::Start(filename, code_cache_.get());
   }
-  uint64_t last_update_ns = code_cache_->GetLastUpdateTimeNs();
-  if (offline_profile_info_->NeedsSaving(last_update_ns)) {
-    VLOG(profiler) << "Initiate save profiling information to: " << filename;
-    std::set<ArtMethod*> methods;
-    {
-      ScopedObjectAccess soa(Thread::Current());
-      code_cache_->GetCompiledArtMethods(offline_profile_info_->GetTrackedDexLocations(), methods);
-    }
-    offline_profile_info_->SaveProfilingInfo(filename, last_update_ns, methods);
-  } else {
-    VLOG(profiler) << "No need to save profiling information to: " << filename;
+}
+
+void Jit::StopProfileSaver() {
+  // Shut down the profiler thread before the runtime exits.
+  if (save_profiling_info_ && ProfileSaver::IsStarted()) {
+    ProfileSaver::Stop();
   }
 }
 
 Jit::~Jit() {
+  DCHECK(!save_profiling_info_ || !ProfileSaver::IsStarted());
   if (dump_info_on_shutdown_) {
     DumpInfo(LOG(INFO));
   }
@@ -211,10 +205,9 @@ void Jit::CreateInstrumentationCache(size_t compile_threshold, size_t warmup_thr
 }
 
 void Jit::SetDexLocationsForProfiling(const std::vector<std::string>& dex_base_locations) {
-  if (offline_profile_info_ == nullptr) {
-    return;
+  if (save_profiling_info_ && ProfileSaver::IsStarted()) {
+    ProfileSaver::SetTrackedDexLocations(dex_base_locations);
   }
-  offline_profile_info_->SetTrackedDexLocations(dex_base_locations);
 }
 
 }  // namespace jit

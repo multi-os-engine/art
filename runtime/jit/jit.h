@@ -73,7 +73,8 @@ class Jit {
   }
 
   void SetDexLocationsForProfiling(const std::vector<std::string>& dex_locations);
-  void SaveProfilingInfo(const std::string& filename);
+  void StartProfileSaver(const std::string& filename);
+  void StopProfileSaver();
 
  private:
   Jit();
@@ -94,7 +95,8 @@ class Jit {
   std::unique_ptr<jit::JitCodeCache> code_cache_;
   CompilerCallbacks* compiler_callbacks_;  // Owned by the jit compiler.
 
-  std::unique_ptr<OfflineProfilingInfo> offline_profile_info_;
+  bool save_profiling_info_;
+
   DISALLOW_COPY_AND_ASSIGN(Jit);
 };
 
