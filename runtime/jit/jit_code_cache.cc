@@ -316,7 +316,7 @@ uint8_t* JitCodeCache::CommitCodeInternal(Thread* self,
       // code.
       GetLiveBitmap()->AtomicTestAndSet(FromCodeToAllocation(code_ptr));
     }
-    last_update_time_ns_ = NanoTime();
+    last_update_time_ns_.StoreRelease(NanoTime());
     VLOG(jit)
         << "JIT added "
         << PrettyMethod(method) << "@" << method
@@ -690,9 +690,8 @@ void JitCodeCache::GetCompiledArtMethods(const OatFile* oat_file,
   }
 }
 
-uint64_t JitCodeCache::GetLastUpdateTimeNs() {
-  MutexLock mu(Thread::Current(), lock_);
-  return last_update_time_ns_;
+uint64_t JitCodeCache::GetLastUpdateTimeNs() const {
+  return last_update_time_ns_.LoadAcquire();
 }
 }  // namespace jit
 }  // namespace art
