@@ -38,7 +38,6 @@ public class Main {
   // for some architectures (for example x86), as other architectures may
   // not do move at all.
   /// CHECK:       end_block
-  /// CHECK-NOT:     ParallelMove
 
   public static void test1(boolean z, int a, int b, int c, int d, int m) {
     int e = live1;
@@ -73,7 +72,6 @@ public class Main {
   // for some architectures (for example x86), as other architectures may
   // not do move at all.
   /// CHECK:       end_block
-  /// CHECK-NOT:     ParallelMove
 
   public static void test2(boolean z, int a, int b, int c, int d, int m) {
     int e = live1;
@@ -100,7 +98,6 @@ public class Main {
   /// CHECK:       name "B1"
   /// CHECK-NOT:   end_block
   /// CHECK:         If
-  /// CHECK-NOT:     ParallelMove
   /// CHECK:       name "B6"
   /// CHECK-NOT:   end_block
   /// CHECK:         InstanceFieldSet
