@@ -34,18 +34,12 @@ namespace art {
 static constexpr const uint64_t kMilisecondsToNano = 1000000;
 static constexpr const uint64_t kMinimumTimeBetweenSavesNs = 500 * kMilisecondsToNano;
 
-void OfflineProfilingInfo::SetTrackedDexLocations(
-      const std::vector<std::string>& dex_base_locations) {
-  tracked_dex_base_locations_.clear();
-  tracked_dex_base_locations_.insert(dex_base_locations.begin(), dex_base_locations.end());
-  VLOG(profiler) << "Tracking dex locations: " << Join(dex_base_locations, ':');
-}
-
 const std::set<const std::string>& OfflineProfilingInfo::GetTrackedDexLocations() const {
   return tracked_dex_base_locations_;
 }
 
 bool OfflineProfilingInfo::NeedsSaving(uint64_t last_update_time_ns) const {
+  // TODO(calin): Move this logic to ProfileSaver.
   return !tracked_dex_base_locations_.empty() &&
       (last_update_time_ns - last_update_time_ns_.LoadRelaxed() > kMinimumTimeBetweenSavesNs);
 }

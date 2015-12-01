@@ -72,8 +72,8 @@ public class Main {
         o.hotMethod();
       }
 
-      // Updating the process state to BACKGROUND will trigger profile saving.
-      VMRuntime.updateProcessState(PROFILE_BACKGROUND);
+      // Go to sleep to allow the profile saver to do the actual saving.
+      Thread.sleep(5000);  // 5 seconds;
 
       // Check that the profile file exists.
       profileFile = new File(profileDir, PROFILE_FILE);
