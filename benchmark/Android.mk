@@ -16,6 +16,18 @@
 
 LOCAL_PATH := $(call my-dir)
 
+# build art benchmarks for the target
+# ============================================================
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := art-benchmarks-target
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := JAVA_LIBRARIES
+LOCAL_SRC_FILES := $(call all-subdir-java-files)
+LOCAL_JAVA_LIBRARIES := caliper-api-target
+
+include $(BUILD_JAVA_LIBRARY)
+
 include art/build/Android.common_build.mk
 
 LIBARTBENCHMARK_COMMON_SRC_FILES := \
