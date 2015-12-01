@@ -35,6 +35,7 @@ static constexpr const uint64_t kMilisecondsToNano = 1000000;
 static constexpr const uint64_t kMinimumTimeBetweenSavesNs = 500 * kMilisecondsToNano;
 
 bool OfflineProfilingInfo::NeedsSaving(uint64_t last_update_time_ns) const {
+  // TODO(calin): Move this logic to ProfileSaver.
   return last_update_time_ns - last_update_time_ns_.LoadRelaxed() > kMinimumTimeBetweenSavesNs;
 }
 

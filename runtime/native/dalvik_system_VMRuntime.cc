@@ -224,7 +224,6 @@ static void VMRuntime_registerNativeFree(JNIEnv* env, jobject, jint bytes) {
 static void VMRuntime_updateProcessState(JNIEnv*, jobject, jint process_state) {
   Runtime* runtime = Runtime::Current();
   runtime->GetHeap()->UpdateProcessState(static_cast<gc::ProcessState>(process_state));
-  runtime->UpdateProfilerState(process_state);
 }
 
 static void VMRuntime_trimHeap(JNIEnv* env, jobject) {
@@ -566,17 +565,17 @@ static void VMRuntime_preloadDexCaches(JNIEnv* env, jobject) {
  */
 static void VMRuntime_registerAppInfo(JNIEnv* env,
                                       jclass clazz ATTRIBUTE_UNUSED,
-                                      jstring pkgName,
-                                      jstring appDir,
-                                      jstring procName ATTRIBUTE_UNUSED) {
-  const char* appDirChars = env->GetStringUTFChars(appDir, nullptr);
-  const char* pkgNameChars = env->GetStringUTFChars(pkgName, nullptr);
-  std::string profileFile = StringPrintf("%s/code_cache/%s.prof", appDirChars, pkgNameChars);
+                                      jstring pkg_name,
+                                      jstring app_dir,
+                                      jstring proc_name ATTRIBUTE_UNUSED) {
+  const char* app_dir_chars = env->GetStringUTFChars(app_dir, nullptr);
+  const char* pkg_name_chars = env->GetStringUTFChars(pkg_name, nullptr);
+  std::string profile_file = StringPrintf("%s/code_cache/%s.prof", app_dir_chars, pkg_name_chars);
 
-  Runtime::Current()->SetJitProfilingFilename(profileFile.c_str());
+  Runtime::Current()->StartProfileSaver(profile_file);
 
-  env->ReleaseStringUTFChars(appDir, appDirChars);
-  env->ReleaseStringUTFChars(pkgName, pkgNameChars);
+  env->ReleaseStringUTFChars(app_dir, app_dir_chars);
+  env->ReleaseStringUTFChars(pkg_name, pkg_name_chars);
 }
 
 static jboolean VMRuntime_isBootClassPathOnDisk(JNIEnv* env, jclass, jstring java_instruction_set) {
