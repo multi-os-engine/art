@@ -268,7 +268,7 @@ ifneq (,$(filter no-prebuild,$(PREBUILD_TYPES)))
 endif
 
 # 554-jit-profile-file is disabled because it needs a primary oat file to know what it should save.
-TEST_ART_BROKEN_NO_PREBUILD_TESTS :=
+TEST_ART_BROKEN_NO_PREBUILD_TESTS := \
   554-jit-profile-file
 
 # Note 117-nopatchoat is not broken per-se it just doesn't work (and isn't meant to) without
