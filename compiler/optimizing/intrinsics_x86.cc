@@ -1600,12 +1600,27 @@ static void GenUnsafeGet(HInvoke* invoke,
   Location output_loc = locations->Out();
 
   switch (type) {
-    case Primitive::kPrimInt:
-    case Primitive::kPrimNot: {
+    case Primitive::kPrimInt: {
       Register output = output_loc.AsRegister<Register>();
       __ movl(output, Address(base, offset, ScaleFactor::TIMES_1, 0));
-      if (type == Primitive::kPrimNot) {
-        codegen->MaybeGenerateReadBarrier(invoke, output_loc, output_loc, base_loc, 0U, offset_loc);
+      break;
+    }
+
+    case Primitive::kPrimNot: {
+      Register output = output_loc.AsRegister<Register>();
+      if (kEmitCompilerReadBarrier) {
+        if (kUseBakerReadBarrier) {
+          Location temp = locations->GetTemp(0);
+          codegen->GenerateArrayLoadWithBakerReadBarrier(
+              invoke, output_loc, base, 0U, offset_loc, temp);
+        } else {
+          __ movl(output, Address(base, offset, ScaleFactor::TIMES_1, 0));
+          codegen->GenerateReadBarrierSlow(
+              invoke, output_loc, output_loc, base_loc, 0U, offset_loc);
+        }
+      } else {
+        __ movl(output, Address(base, offset, ScaleFactor::TIMES_1, 0));
+        __ MaybeUnpoisonHeapReference(output);
       }
       break;
     }
@@ -1633,8 +1648,10 @@ static void GenUnsafeGet(HInvoke* invoke,
   }
 }
 
-static void CreateIntIntIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke,
-                                          bool is_long, bool is_volatile) {
+static void CreateIntIntIntToIntLocations(ArenaAllocator* arena,
+                                          HInvoke* invoke,
+                                          Primitive::Type type,
+                                          bool is_volatile) {
   bool can_call = kEmitCompilerReadBarrier &&
       (invoke->GetIntrinsic() == Intrinsics::kUnsafeGetObject ||
        invoke->GetIntrinsic() == Intrinsics::kUnsafeGetObjectVolatile);
@@ -1646,7 +1663,7 @@ static void CreateIntIntIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke
   locations->SetInAt(0, Location::NoLocation());        // Unused receiver.
   locations->SetInAt(1, Location::RequiresRegister());
   locations->SetInAt(2, Location::RequiresRegister());
-  if (is_long) {
+  if (type == Primitive::kPrimLong) {
     if (is_volatile) {
       // Need to use XMM to read volatile.
       locations->AddTemp(Location::RequiresFpuRegister());
@@ -1657,25 +1674,30 @@ static void CreateIntIntIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke
   } else {
     locations->SetOut(Location::RequiresRegister());
   }
+  if (type == Primitive::kPrimNot && kEmitCompilerReadBarrier && kUseBakerReadBarrier) {
+    // We need a temporary register for the read barrier marking slow
+    // path in InstructionCodeGeneratorX86::GenerateArrayLoadWithBakerReadBarrier.
+    locations->AddTemp(Location::RequiresRegister());
+  }
 }
 
 void IntrinsicLocationsBuilderX86::VisitUnsafeGet(HInvoke* invoke) {
-  CreateIntIntIntToIntLocations(arena_, invoke, false, false);
+  CreateIntIntIntToIntLocations(arena_, invoke, Primitive::kPrimInt, false);
 }
 void IntrinsicLocationsBuilderX86::VisitUnsafeGetVolatile(HInvoke* invoke) {
-  CreateIntIntIntToIntLocations(arena_, invoke, false, true);
+  CreateIntIntIntToIntLocations(arena_, invoke, Primitive::kPrimInt, true);
 }
 void IntrinsicLocationsBuilderX86::VisitUnsafeGetLong(HInvoke* invoke) {
-  CreateIntIntIntToIntLocations(arena_, invoke, false, false);
+  CreateIntIntIntToIntLocations(arena_, invoke, Primitive::kPrimLong, false);
 }
 void IntrinsicLocationsBuilderX86::VisitUnsafeGetLongVolatile(HInvoke* invoke) {
-  CreateIntIntIntToIntLocations(arena_, invoke, true, true);
+  CreateIntIntIntToIntLocations(arena_, invoke, Primitive::kPrimLong, true);
 }
 void IntrinsicLocationsBuilderX86::VisitUnsafeGetObject(HInvoke* invoke) {
-  CreateIntIntIntToIntLocations(arena_, invoke, false, false);
+  CreateIntIntIntToIntLocations(arena_, invoke, Primitive::kPrimNot, false);
 }
 void IntrinsicLocationsBuilderX86::VisitUnsafeGetObjectVolatile(HInvoke* invoke) {
-  CreateIntIntIntToIntLocations(arena_, invoke, false, true);
+  CreateIntIntIntToIntLocations(arena_, invoke, Primitive::kPrimNot, true);
 }
 
 
