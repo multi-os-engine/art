@@ -1017,6 +1017,15 @@ bool ClassLinker::InitFromImage(std::string* error_msg) {
   mirror::Throwable::SetClass(GetClassRoot(kJavaLangThrowable));
   mirror::StackTraceElement::SetClass(GetClassRoot(kJavaLangStackTraceElement));
 
+  const ImageHeader& header = space->GetImageHeader();
+  const ImageSection& section = header.GetImageSection(ImageHeader::kSectionClassTable);
+  if (section.Size() > 0u) {
+    WriterMutexLock mu(self, *Locks::classlinker_classes_lock_);
+    ClassTable* const class_table = InsertClassTableForClassLoader(nullptr);
+    class_table->ReadFromMemory(space->Begin() + section.Offset());
+    dex_cache_boot_image_class_lookup_required_ = false;
+  }
+
   FinishInit(self);
 
   VLOG(startup) << "ClassLinker::InitFromImage exiting";
@@ -2786,26 +2795,37 @@ void ClassLinker::AddImageClassesToClassTable(gc::space::ImageSpace* image_space
   Thread* self = Thread::Current();
   WriterMutexLock mu(self, *Locks::classlinker_classes_lock_);
   ScopedAssertNoThreadSuspension ants(self, "Moving image classes to class table");
-  mirror::ObjectArray<mirror::DexCache>* dex_caches = GetImageDexCaches(image_space);
-  std::string temp;
+
   ClassTable* const class_table = InsertClassTableForClassLoader(class_loader);
-  for (int32_t i = 0; i < dex_caches->GetLength(); i++) {
-    mirror::DexCache* dex_cache = dex_caches->Get(i);
-    GcRoot<mirror::Class>* types = dex_cache->GetResolvedTypes();
-    for (int32_t j = 0, num_types = dex_cache->NumResolvedTypes(); j < num_types; j++) {
-      mirror::Class* klass = types[j].Read();
-      if (klass != nullptr) {
-        DCHECK_EQ(klass->GetClassLoader(), class_loader);
-        const char* descriptor = klass->GetDescriptor(&temp);
-        size_t hash = ComputeModifiedUtf8Hash(descriptor);
-        mirror::Class* existing = class_table->Lookup(descriptor, hash);
-        if (existing != nullptr) {
-          CHECK_EQ(existing, klass) << PrettyClassAndClassLoader(existing) << " != "
-              << PrettyClassAndClassLoader(klass);
-        } else {
-          class_table->Insert(klass);
-          if (log_new_class_table_roots_) {
-            new_class_roots_.push_back(GcRoot<mirror::Class>(klass));
+
+  const ImageHeader& header = image_space->GetImageHeader();
+  const ImageSection& section = header.GetImageSection(ImageHeader::kSectionClassTable);
+
+  if (section.Size() > 0u) {
+    LOG(ERROR) << "Adding image section";
+    size_t count = class_table->ReadFromMemory(image_space->Begin() + section.Offset());
+    LOG(ERROR) << "Read " << count << "/" << section.Size();
+  } else {
+    mirror::ObjectArray<mirror::DexCache>* dex_caches = GetImageDexCaches(image_space);
+    std::string temp;
+    for (int32_t i = 0; i < dex_caches->GetLength(); i++) {
+      mirror::DexCache* dex_cache = dex_caches->Get(i);
+      GcRoot<mirror::Class>* types = dex_cache->GetResolvedTypes();
+      for (int32_t j = 0, num_types = dex_cache->NumResolvedTypes(); j < num_types; j++) {
+        mirror::Class* klass = types[j].Read();
+        if (klass != nullptr) {
+          DCHECK_EQ(klass->GetClassLoader(), class_loader);
+          const char* descriptor = klass->GetDescriptor(&temp);
+          size_t hash = ComputeModifiedUtf8Hash(descriptor);
+          mirror::Class* existing = class_table->Lookup(descriptor, hash);
+          if (existing != nullptr) {
+            CHECK_EQ(existing, klass) << PrettyClassAndClassLoader(existing) << " != "
+                << PrettyClassAndClassLoader(klass);
+          } else {
+            class_table->Insert(klass);
+            if (log_new_class_table_roots_) {
+              new_class_roots_.push_back(GcRoot<mirror::Class>(klass));
+            }
           }
         }
       }
