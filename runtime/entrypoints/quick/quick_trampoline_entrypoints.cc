@@ -1019,15 +1019,19 @@ extern "C" const void* artQuickResolutionTrampoline(
     // Incompatible class change should have been handled in resolve method.
     CHECK(!called->CheckIncompatibleClassChange(invoke_type))
         << PrettyMethod(called) << " " << invoke_type;
-    if (virtual_or_interface) {
-      // Refine called method based on receiver.
+    if (virtual_or_interface || invoke_type == kSuper) {
+      // Refine called method based on receiver for kVirtual/kInterface, and
+      // caller for kSuper.
       CHECK(receiver != nullptr) << invoke_type;
 
       ArtMethod* orig_called = called;
       if (invoke_type == kVirtual) {
         called = receiver->GetClass()->FindVirtualMethodForVirtual(called, sizeof(void*));
-      } else {
+      } else if (invoke_type == kInterface) {
         called = receiver->GetClass()->FindVirtualMethodForInterface(called, sizeof(void*));
+      } else {
+        called = caller->GetDeclaringClass()->GetSuperClass()->GetVTableEntry(
+            called->GetMethodIndex(), sizeof(void*));
       }
 
       CHECK(called != nullptr) << PrettyMethod(orig_called) << " "
