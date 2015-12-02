@@ -360,7 +360,8 @@ TEST_ART_BROKEN_FALLBACK_RUN_TESTS := \
   118-noimage-dex2oat \
   119-noimage-patchoat \
   137-cfi \
-  138-duplicate-classes-check2
+  138-duplicate-classes-check2 \
+  554-jit-profile-file
 
 # This test fails without an image.
 TEST_ART_BROKEN_NO_IMAGE_RUN_TESTS := \
