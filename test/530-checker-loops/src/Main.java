@@ -415,6 +415,106 @@ public class Main {
     return result;
   }
 
+  /// CHECK-START: void Main.linearTriangularOnTwoArrayLengths(int) BCE (before)
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-START: void Main.linearTriangularOnTwoArrayLengths(int) BCE (after)
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: Deoptimize
+  private static void linearTriangularOnTwoArrayLengths(int n) {
+    int[] a = new int[n];
+    for (int i = 0; i < a.length; i++) {
+      int[] b = new int[i];
+      for (int j = 0; j < b.length; j++) {
+        // Need to know j < b.length < a.length for static bce.
+        a[j] += 1;
+        // Need to know just j < b.length for static bce.
+        b[j] += 1;
+      }
+      verifyTriangular(a, b, i, n);
+    }
+  }
+
+  /// CHECK-START: void Main.linearTriangularOnOneArrayLength(int) BCE (before)
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-START: void Main.linearTriangularOnOneArrayLength(int) BCE (after)
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: Deoptimize
+  private static void linearTriangularOnOneArrayLength(int n) {
+    int[] a = new int[n];
+    for (int i = 0; i < a.length; i++) {
+      int[] b = new int[i];
+      for (int j = 0; j < i; j++) {
+        // Need to know j < i < a.length for static bce.
+        a[j] += 1;
+        // Need to know just j < i for static bce.
+        b[j] += 1;
+      }
+      verifyTriangular(a, b, i, n);
+    }
+  }
+
+  /// CHECK-START: void Main.linearTriangularOnParameter(int) BCE (before)
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-START: void Main.linearTriangularOnParameter(int) BCE (after)
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: Deoptimize
+  private static void linearTriangularOnParameter(int n) {
+    int[] a = new int[n];
+    for (int i = 0; i < n; i++) {
+      int[] b = new int[i];
+      for (int j = 0; j < i; j++) {
+        // Need to know j < i < n for static bce.
+        a[j] += 1;
+        // Need to know just j < i for static bce.
+        b[j] += 1;
+      }
+      verifyTriangular(a, b, i, n);
+    }
+  }
+
+  // Verifier for triangular methods.
+  private static void verifyTriangular(int[] a, int[] b, int m, int n) {
+    expectEquals(n, a.length);
+    for (int i = 0, k = m; i < n; i++) {
+      expectEquals(a[i], k);
+      if (k > 0) k--;
+    }
+    expectEquals(m, b.length);
+    for (int i = 0; i < m; i++) {
+      expectEquals(b[i], 1);
+    }
+  }
+
   /// CHECK-START: int Main.periodicIdiom(int) BCE (before)
   /// CHECK-DAG: BoundsCheck
   /// CHECK-START: int Main.periodicIdiom(int) BCE (after)
@@ -1012,6 +1112,9 @@ public class Main {
     expectEquals(55, linearDoWhileDown());
     expectEquals(55, linearShort());
     expectEquals(55, invariantFromPreLoop(x, 1));
+    linearTriangularOnTwoArrayLengths(10);
+    linearTriangularOnOneArrayLength(10);
+    linearTriangularOnParameter(10);
 
     // Periodic adds (1, 3), one at the time.
     expectEquals(0, periodicIdiom(-1));
