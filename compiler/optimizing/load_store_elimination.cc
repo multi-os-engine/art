@@ -378,6 +378,9 @@ class HeapLocationCollector : public HGraphVisitor {
 
   void VisitInstanceFieldGet(HInstanceFieldGet* instruction) OVERRIDE {
     VisitFieldAccess(instruction->InputAt(0), instruction->GetFieldInfo());
+    if (instruction->GetType() == Primitive::kPrimNot) {
+      GetOrCreateReferenceInfo(instruction);
+    }
   }
 
   void VisitInstanceFieldSet(HInstanceFieldSet* instruction) OVERRIDE {
@@ -387,6 +390,9 @@ class HeapLocationCollector : public HGraphVisitor {
 
   void VisitStaticFieldGet(HStaticFieldGet* instruction) OVERRIDE {
     VisitFieldAccess(instruction->InputAt(0), instruction->GetFieldInfo());
+    if (instruction->GetType() == Primitive::kPrimNot) {
+      GetOrCreateReferenceInfo(instruction);
+    }
   }
 
   void VisitStaticFieldSet(HStaticFieldSet* instruction) OVERRIDE {
@@ -399,6 +405,9 @@ class HeapLocationCollector : public HGraphVisitor {
 
   void VisitArrayGet(HArrayGet* instruction) OVERRIDE {
     VisitArrayAccess(instruction->InputAt(0), instruction->InputAt(1));
+    if (instruction->GetType() == Primitive::kPrimNot) {
+      GetOrCreateReferenceInfo(instruction);
+    }
   }
 
   void VisitArraySet(HArraySet* instruction) OVERRIDE {
@@ -409,6 +418,30 @@ class HeapLocationCollector : public HGraphVisitor {
   void VisitNewInstance(HNewInstance* new_instance) OVERRIDE {
     // Any references appearing in the ref_info_array_ so far cannot alias with new_instance.
     GetOrCreateReferenceInfo(new_instance);
+  }
+
+  void VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* instruction) OVERRIDE {
+    if (instruction->GetType() == Primitive::kPrimNot) {
+      GetOrCreateReferenceInfo(instruction);
+    }
+  }
+
+  void VisitInvokeVirtual(HInvokeVirtual* instruction) OVERRIDE {
+    if (instruction->GetType() == Primitive::kPrimNot) {
+      GetOrCreateReferenceInfo(instruction);
+    }
+  }
+
+  void VisitInvokeInterface(HInvokeInterface* instruction) OVERRIDE {
+    if (instruction->GetType() == Primitive::kPrimNot) {
+      GetOrCreateReferenceInfo(instruction);
+    }
+  }
+
+  void VisitParameterValue(HParameterValue* instruction) OVERRIDE {
+    if (instruction->GetType() == Primitive::kPrimNot) {
+      GetOrCreateReferenceInfo(instruction);
+    }
   }
 
   void VisitDeoptimize(HDeoptimize* instruction ATTRIBUTE_UNUSED) OVERRIDE {
