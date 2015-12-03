@@ -186,7 +186,7 @@ static void CreateLongToLongLocations(ArenaAllocator* arena, HInvoke* invoke) {
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
+  locations->SetOut(Location::RequiresRegister());
 }
 
 static void GenReverseBytes(LocationSummary* locations,
@@ -342,7 +342,7 @@ static void CreateAbsLongLocation(ArenaAllocator* arena, HInvoke* invoke) {
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
+  locations->SetOut(Location::RequiresRegister());
   locations->AddTemp(Location::RequiresRegister());
 }
 
@@ -629,7 +629,7 @@ static void CreateFPToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   locations->SetInAt(0, Location::RequiresFpuRegister());
-  locations->SetOut(Location::RequiresFpuRegister());
+  locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
 }
 
 void IntrinsicLocationsBuilderX86::VisitMathSqrt(HInvoke* invoke) {
@@ -1047,7 +1047,7 @@ void IntrinsicLocationsBuilderX86::VisitStringEquals(HInvoke* invoke) {
   locations->AddTemp(Location::RegisterLocation(EDI));
 
   // Set output, ESI needed for repe_cmpsl instruction anyways.
-  locations->SetOut(Location::RegisterLocation(ESI), Location::kOutputOverlap);
+  locations->SetOut(Location::RegisterLocation(ESI));
 }
 
 void IntrinsicCodeGeneratorX86::VisitStringEquals(HInvoke* invoke) {
@@ -1650,12 +1650,12 @@ static void CreateIntIntIntToIntLocations(ArenaAllocator* arena, HInvoke* invoke
     if (is_volatile) {
       // Need to use XMM to read volatile.
       locations->AddTemp(Location::RequiresFpuRegister());
-      locations->SetOut(Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
     } else {
-      locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
+      locations->SetOut(Location::RequiresRegister());
     }
   } else {
-    locations->SetOut(Location::RequiresRegister());
+    locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
   }
 }
 
@@ -2068,10 +2068,11 @@ static void CreateLeadingZeroLocations(ArenaAllocator* arena, HInvoke* invoke, b
                                                            kIntrinsified);
   if (is_long) {
     locations->SetInAt(0, Location::RequiresRegister());
+    locations->SetOut(Location::RequiresRegister());
   } else {
     locations->SetInAt(0, Location::Any());
+    locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
   }
-  locations->SetOut(Location::RequiresRegister());
 }
 
 static void GenLeadingZeros(X86Assembler* assembler, HInvoke* invoke, bool is_long) {
@@ -2177,10 +2178,11 @@ static void CreateTrailingZeroLocations(ArenaAllocator* arena, HInvoke* invoke, 
                                                            kIntrinsified);
   if (is_long) {
     locations->SetInAt(0, Location::RequiresRegister());
+    locations->SetOut(Location::RequiresRegister());
   } else {
     locations->SetInAt(0, Location::Any());
+    locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
   }
-  locations->SetOut(Location::RequiresRegister());
 }
 
 static void GenTrailingZeros(X86Assembler* assembler, HInvoke* invoke, bool is_long) {
