@@ -68,6 +68,9 @@ class InductionVarRange {
                          /*out*/Value* max_val,
                          /*out*/bool* needs_finite_test);
 
+  /** Refines the values with induction of next outer loop. Returns true on change. */
+  bool RefineOuter(/*in-out*/Value* min_val, /*in-out*/Value* max_val);
+
   /**
    * Returns true if range analysis is able to generate code for the lower and upper
    * bound expressions on the instruction in the given context. The need_finite_test
@@ -147,6 +150,9 @@ class InductionVarRange {
   static Value MulValue(Value v1, Value v2);
   static Value DivValue(Value v1, Value v2);
   static Value MergeVal(Value v1, Value v2, bool is_min);
+
+  /** Refines the value with induction of next outer loop. Returns same value otherwise. */
+  Value RefineOuter(Value val, bool is_min);
 
   /**
    * Generates code for lower/upper/taken-test in the HIR. Returns true on success.
