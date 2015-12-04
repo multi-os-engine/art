@@ -6149,6 +6149,9 @@ mirror::Class* ClassLinker::ResolveType(const DexFile& dex_file,
   return resolved;
 }
 
+
+
+template <ClassLinker::ResolveMode kResolveMode>
 ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
                                       uint32_t method_idx,
                                       Handle<mirror::DexCache> dex_cache,
@@ -6160,6 +6163,12 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
   ArtMethod* resolved = dex_cache->GetResolvedMethod(method_idx, image_pointer_size_);
   if (resolved != nullptr && !resolved->IsRuntimeMethod()) {
     DCHECK(resolved->GetDeclaringClassUnchecked() != nullptr) << resolved->GetDexMethodIndex();
+    if (kResolveMode == ClassLinker::kForceICCECheck) {
+      if (resolved->CheckIncompatibleClassChange(type)) {
+        ThrowIncompatibleClassChangeError(type, resolved->GetInvokeType(), resolved, referrer);
+        return nullptr;
+      }
+    }
     return resolved;
   }
   // Fail, get the declaring class.
@@ -6178,8 +6187,18 @@ ArtMethod* ClassLinker::ResolveMethod(const DexFile& dex_file,
       DCHECK(resolved == nullptr || resolved->GetDeclaringClassUnchecked() != nullptr);
       break;
     case kInterface:
-      resolved = klass->FindInterfaceMethod(dex_cache.Get(), method_idx, image_pointer_size_);
-      DCHECK(resolved == nullptr || resolved->GetDeclaringClass()->IsInterface());
+      // We have to check whether the method id really belongs to an interface. Otherwise you must
+      // not invoke-interface on it (and the fact will be hidden later, as FindInterfaceMethod may
+      // find the declaration in another interface, so CheckIncompatibleClassChange will succeed.
+      if (UNLIKELY(!klass->IsInterface())) {
+        ThrowIncompatibleClassChangeError(klass,
+                                          "Found class %s, but interface was expected",
+                                          PrettyDescriptor(klass).c_str());
+        return nullptr;
+      } else {
+        resolved = klass->FindInterfaceMethod(dex_cache.Get(), method_idx, image_pointer_size_);
+        DCHECK(resolved == nullptr || resolved->GetDeclaringClass()->IsInterface());
+      }
       break;
     case kSuper:  // Fall-through.
     case kVirtual:
@@ -6780,5 +6799,21 @@ void ClassLinker::CleanupClassLoaders() {
     }
   }
 }
+
+// Instantiate ResolveMethod.
+template ArtMethod* ClassLinker::ResolveMethod<ClassLinker::kForceICCECheck>(
+    const DexFile& dex_file,
+    uint32_t method_idx,
+    Handle<mirror::DexCache> dex_cache,
+    Handle<mirror::ClassLoader> class_loader,
+    ArtMethod* referrer,
+    InvokeType type);
+template ArtMethod* ClassLinker::ResolveMethod<ClassLinker::kNoICCECheckForCache>(
+    const DexFile& dex_file,
+    uint32_t method_idx,
+    Handle<mirror::DexCache> dex_cache,
+    Handle<mirror::ClassLoader> class_loader,
+    ArtMethod* referrer,
+    InvokeType type);
 
 }  // namespace art
