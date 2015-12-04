@@ -17,11 +17,11 @@
 #include "image_space.h"
 
 #include <dirent.h>
+#include <lz4.h>
+#include <random>
 #include <sys/statvfs.h>
 #include <sys/types.h>
 #include <unistd.h>
-
-#include <random>
 
 #include "art_method.h"
 #include "base/macros.h"
@@ -677,11 +677,12 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
     *error_msg = StringPrintf("Invalid image header in '%s'", image_filename);
     return nullptr;
   }
-  // Check that the file is large enough.
-  uint64_t image_file_size = static_cast<uint64_t>(file->GetLength());
-  if (image_header.GetImageSize() > image_file_size) {
-    *error_msg = StringPrintf("Image file too small for image heap: %" PRIu64 " vs. %zu.",
-                              image_file_size, image_header.GetImageSize());
+  // Check that the file is larger than the stored size.
+  const uint64_t image_file_size = static_cast<uint64_t>(file->GetLength());
+  if (image_file_size < image_header.GetStoredSize()) {
+    *error_msg = StringPrintf("Image file truncated: %" PRIu64 " vs. %" PRIu64 ".",
+                              image_file_size,
+                              image_header.GetStoredSize());
     return nullptr;
   }
 
@@ -697,7 +698,13 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
   }
 
   const auto& bitmap_section = image_header.GetImageSection(ImageHeader::kSectionImageBitmap);
-  auto end_of_bitmap = static_cast<size_t>(bitmap_section.End());
+  // The location we want to map from is the first aligned page after the end of the compressed
+  // data.
+  const size_t image_bitmap_offset = RoundUp(sizeof(image_header) + image_header.GetStoredSize(),
+                                             kPageSize);
+  // The actual end is sizeof(header) + stored_size + bitmap_section.Size() since the bitmap section
+  // corresponds to an uncompressed image.
+  const size_t end_of_bitmap = image_bitmap_offset + bitmap_section.Size();
   if (end_of_bitmap != image_file_size) {
     *error_msg = StringPrintf(
         "Image file size does not equal end of bitmap: size=%" PRIu64 " vs. %zu.", image_file_size,
@@ -705,17 +712,56 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
     return nullptr;
   }
 
+  bitmap_section.Offset();
   // Note: The image header is part of the image due to mmap page alignment required of offset.
-  std::unique_ptr<MemMap> map(MemMap::MapFileAtAddress(image_header.GetImageBegin(),
-                                                       image_header.GetImageSize(),
-                                                       PROT_READ | PROT_WRITE,
-                                                       MAP_PRIVATE,
-                                                       file->Fd(),
-                                                       0,
-                                                       /*low_4gb*/false,
-                                                       /*reuse*/false,
-                                                       image_filename,
-                                                       error_msg));
+  std::unique_ptr<MemMap> map;
+  if (image_header.GetStorageMode() == ImageHeader::kStorageModeStore) {
+    map.reset(MemMap::MapFileAtAddress(image_header.GetImageBegin(),
+                                       image_header.GetImageSize(),
+                                       PROT_READ | PROT_WRITE,
+                                       MAP_PRIVATE,
+                                       file->Fd(),
+                                       0,
+                                       /*low_4gb*/false,
+                                       /*reuse*/false,
+                                       image_filename,
+                                       error_msg));
+  } else {
+    // Reserve output and decompress into it.
+    map.reset(MemMap::MapAnonymous(image_location,
+                                   image_header.GetImageBegin(),
+                                   image_header.GetImageSize(),
+                                   PROT_READ | PROT_WRITE,
+                                   /*low_4gb*/false,
+                                  /*reuse*/false,
+                                  error_msg));
+    if (map != nullptr) {
+      const size_t stored_size = image_header.GetStoredSize();
+      const size_t read_offset = sizeof(image_header);  // Skip the header.
+      std::unique_ptr<char[]> temp_buffer(new char[stored_size]);
+      if (!file->ReadFully(&temp_buffer[0], stored_size)) {
+        *error_msg = StringPrintf("Failed to read section of size %zu at offset %zu",
+                                  stored_size,
+                                  read_offset);
+        return nullptr;
+      }
+      memcpy(map->Begin(), &image_header, sizeof(image_header));
+      const uint64_t start = NanoTime();
+      const size_t decompressed_count = LZ4_decompress_safe(
+          &temp_buffer[0],
+          reinterpret_cast<char*>(map->Begin()) + read_offset,
+          stored_size,
+          map->Size());
+      LOG(INFO) << "Decompressing image took " << PrettyDuration(NanoTime() - start);
+      if (decompressed_count + sizeof(ImageHeader) != image_header.GetImageSize()) {
+        *error_msg = StringPrintf("Decompressed size does not match expected image size %zu vs %zu",
+                                  decompressed_count + sizeof(ImageHeader),
+                                  image_header.GetImageSize());
+        return nullptr;
+      }
+    }
+  }
+
   if (map == nullptr) {
     DCHECK(!error_msg->empty());
     return nullptr;
@@ -723,16 +769,16 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
   CHECK_EQ(image_header.GetImageBegin(), map->Begin());
   DCHECK_EQ(0, memcmp(&image_header, map->Begin(), sizeof(ImageHeader)));
 
-  std::unique_ptr<MemMap> image_map(MemMap::MapFileAtAddress(nullptr,
-                                                             bitmap_section.Size(),
-                                                             PROT_READ, MAP_PRIVATE,
-                                                             file->Fd(),
-                                                             bitmap_section.Offset(),
-                                                             /*low_4gb*/false,
-                                                             /*reuse*/false,
-                                                             image_filename,
-                                                             error_msg));
-  if (image_map.get() == nullptr) {
+  std::unique_ptr<MemMap> image_bitmap_map(MemMap::MapFileAtAddress(nullptr,
+                                                                    bitmap_section.Size(),
+                                                                    PROT_READ, MAP_PRIVATE,
+                                                                    file->Fd(),
+                                                                    image_bitmap_offset,
+                                                                    /*low_4gb*/false,
+                                                                    /*reuse*/false,
+                                                                    image_filename,
+                                                                    error_msg));
+  if (image_bitmap_map == nullptr) {
     *error_msg = StringPrintf("Failed to map image bitmap: %s", error_msg->c_str());
     return nullptr;
   }
@@ -741,9 +787,11 @@ ImageSpace* ImageSpace::Init(const char* image_filename, const char* image_locat
                                        bitmap_index));
   std::unique_ptr<accounting::ContinuousSpaceBitmap> bitmap(
       accounting::ContinuousSpaceBitmap::CreateFromMemMap(
-          bitmap_name, image_map.release(), reinterpret_cast<uint8_t*>(map->Begin()),
+          bitmap_name,
+          image_bitmap_map.release(),
+          reinterpret_cast<uint8_t*>(map->Begin()),
           accounting::ContinuousSpaceBitmap::ComputeHeapSize(bitmap_section.Size())));
-  if (bitmap.get() == nullptr) {
+  if (bitmap == nullptr) {
     *error_msg = StringPrintf("Could not create bitmap '%s'", bitmap_name.c_str());
     return nullptr;
   }
