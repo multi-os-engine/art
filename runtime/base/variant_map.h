@@ -19,6 +19,7 @@
 
 #include <memory.h>
 #include <map>
+#include <type_traits>
 #include <utility>
 
 namespace art {
@@ -268,8 +269,9 @@ struct VariantMap {
   }
 
   // Set a value for a given key, overwriting the previous value if any.
+  // NOTE: In the absence of std::omit_from_type_deduction<T> use std::decay<T>.
   template <typename TValue>
-  void Set(const TKey<TValue>& key, const TValue& value) {
+  void Set(const TKey<TValue>& key, const typename std::decay<TValue>::type& value) {
     // Clone the value first, to protect against &value == GetValuePtr(key).
     auto* new_value = new TValue(value);
 
@@ -279,8 +281,9 @@ struct VariantMap {
 
   // Set a value for a given key, only if there was no previous value before.
   // Returns true if the value was set, false if a previous value existed.
+  // NOTE: In the absence of std::omit_from_type_deduction<T> use std::decay<T>.
   template <typename TValue>
-  bool SetIfMissing(const TKey<TValue>& key, const TValue& value) {
+  bool SetIfMissing(const TKey<TValue>& key, const typename std::decay<TValue>::type& value) {
     TValue* ptr = Get(key);
     if (ptr == nullptr) {
       Set(key, value);
