@@ -195,7 +195,7 @@ LIBART_COMPILER_SRC_FILES_x86_64 := \
 	utils/x86_64/managed_register_x86_64.cc \
 
 
-LIBART_COMPILER_CFLAGS :=
+LIBART_COMPILER_CFLAGS := -fomit-frame-pointer
 
 LIBART_COMPILER_ENUM_OPERATOR_OUT_HEADER_FILES := \
   dex/quick/resource_mask.h \
