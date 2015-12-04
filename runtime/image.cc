@@ -36,7 +36,9 @@ ImageHeader::ImageHeader(uint32_t image_begin,
                          uint32_t oat_data_end,
                          uint32_t oat_file_end,
                          uint32_t pointer_size,
-                         bool compile_pic)
+                         bool compile_pic,
+                         StorageMode storage_mode,
+                         size_t stored_size)
   : image_begin_(image_begin),
     image_size_(image_size),
     oat_checksum_(oat_checksum),
@@ -47,7 +49,9 @@ ImageHeader::ImageHeader(uint32_t image_begin,
     patch_delta_(0),
     image_roots_(image_roots),
     pointer_size_(pointer_size),
-    compile_pic_(compile_pic) {
+    compile_pic_(compile_pic),
+    storage_mode_(storage_mode),
+    stored_size_(stored_size) {
   CHECK_EQ(image_begin, RoundUp(image_begin, kPageSize));
   CHECK_EQ(oat_file_begin, RoundUp(oat_file_begin, kPageSize));
   CHECK_EQ(oat_data_begin, RoundUp(oat_data_begin, kPageSize));

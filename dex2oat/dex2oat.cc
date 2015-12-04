@@ -1641,7 +1641,8 @@ class Dex2Oat FINAL {
     image_writer_.reset(new ImageWriter(*driver_,
                                         image_base,
                                         compiler_options_->GetCompilePic(),
-                                        IsAppImage()));
+                                        IsAppImage(),
+                                        ImageHeader::kStorageModeLZ4));
   }
 
   // Let the ImageWriter write the image file. If we do not compile PIC, also fix up the oat file.
