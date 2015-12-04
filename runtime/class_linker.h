@@ -404,6 +404,10 @@ class ClassLinker {
   void VerifyClass(Thread* self, Handle<mirror::Class> klass)
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!dex_lock_);
+  void VerifyClass(Thread* self, Handle<mirror::Class> klass,
+                   std::vector<uint32_t>* classpath_user_ids)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!dex_lock_);
   bool VerifyClassUsingOatFile(const DexFile& dex_file,
                                mirror::Class* klass,
                                mirror::Class::Status& oat_file_class_status)
@@ -580,7 +584,8 @@ class ClassLinker {
   // soft-failures.
   bool AttemptSupertypeVerification(Thread* self,
                                     Handle<mirror::Class> klass,
-                                    Handle<mirror::Class> supertype)
+                                    Handle<mirror::Class> supertype,
+                                    std::vector<uint32_t>* classpath_user_ids)
       REQUIRES(!dex_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 

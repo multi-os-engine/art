@@ -44,6 +44,8 @@ static constexpr size_t kDefaultArenaBitVectorBytes = 8;
 
 class RegTypeCache {
  public:
+  typedef ScopedArenaVector<const RegType*>::const_iterator Iterator;
+
   explicit RegTypeCache(bool can_load_classes, ScopedArenaAllocator& arena);
   ~RegTypeCache();
   static void Init() SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -123,6 +125,12 @@ class RegTypeCache {
   }
   const ConflictType& Conflict() {
     return *ConflictType::GetInstance();
+  }
+  Iterator begin() const {
+    return entries_.begin();
+  }
+  Iterator end() const {
+    return entries_.end();
   }
 
   const PreciseReferenceType& JavaLangClass() SHARED_REQUIRES(Locks::mutator_lock_);

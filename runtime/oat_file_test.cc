@@ -73,18 +73,19 @@ static std::vector<const DexFile*> ToConstDexFiles(
 
 TEST_F(OatFileTest, DexFileDependencies) {
   std::string error_msg;
+  InstructionSet isa = Runtime::Current()->GetInstructionSet();
 
   // No dependencies.
-  EXPECT_TRUE(OatFile::CheckStaticDexFileDependencies(nullptr, &error_msg)) << error_msg;
-  EXPECT_TRUE(OatFile::CheckStaticDexFileDependencies("", &error_msg)) << error_msg;
+  EXPECT_TRUE(OatFile::CheckStaticDexFileDependencies(nullptr, isa, &error_msg)) << error_msg;
+  EXPECT_TRUE(OatFile::CheckStaticDexFileDependencies("", isa, &error_msg)) << error_msg;
 
   // Ill-formed dependencies.
-  EXPECT_FALSE(OatFile::CheckStaticDexFileDependencies("abc", &error_msg));
-  EXPECT_FALSE(OatFile::CheckStaticDexFileDependencies("abc*123*def", &error_msg));
-  EXPECT_FALSE(OatFile::CheckStaticDexFileDependencies("abc*def*", &error_msg));
+  EXPECT_FALSE(OatFile::CheckStaticDexFileDependencies("abc", isa, &error_msg));
+  EXPECT_FALSE(OatFile::CheckStaticDexFileDependencies("abc*123*def", isa, &error_msg));
+  EXPECT_FALSE(OatFile::CheckStaticDexFileDependencies("abc*def*", isa, &error_msg));
 
   // Unsatisfiable dependency.
-  EXPECT_FALSE(OatFile::CheckStaticDexFileDependencies("abc*123*", &error_msg));
+  EXPECT_FALSE(OatFile::CheckStaticDexFileDependencies("abc*123*", isa, &error_msg));
 
   // Load some dex files to be able to do a real test.
   ScopedObjectAccess soa(Thread::Current());
@@ -92,7 +93,7 @@ TEST_F(OatFileTest, DexFileDependencies) {
   std::vector<std::unique_ptr<const DexFile>> dex_files1 = OpenTestDexFiles("Main");
   std::vector<const DexFile*> dex_files_const1 = ToConstDexFiles(dex_files1);
   std::string encoding1 = OatFile::EncodeDexFileDependencies(dex_files_const1);
-  EXPECT_TRUE(OatFile::CheckStaticDexFileDependencies(encoding1.c_str(), &error_msg))
+  EXPECT_TRUE(OatFile::CheckStaticDexFileDependencies(encoding1.c_str(), isa, &error_msg))
       << error_msg << " " << encoding1;
   std::vector<std::string> split1;
   EXPECT_TRUE(OatFile::GetDexLocationsFromDependencies(encoding1.c_str(), &split1));
@@ -103,7 +104,7 @@ TEST_F(OatFileTest, DexFileDependencies) {
   EXPECT_GT(dex_files2.size(), 1U);
   std::vector<const DexFile*> dex_files_const2 = ToConstDexFiles(dex_files2);
   std::string encoding2 = OatFile::EncodeDexFileDependencies(dex_files_const2);
-  EXPECT_TRUE(OatFile::CheckStaticDexFileDependencies(encoding2.c_str(), &error_msg))
+  EXPECT_TRUE(OatFile::CheckStaticDexFileDependencies(encoding2.c_str(), isa, &error_msg))
       << error_msg << " " << encoding2;
   std::vector<std::string> split2;
   EXPECT_TRUE(OatFile::GetDexLocationsFromDependencies(encoding2.c_str(), &split2));

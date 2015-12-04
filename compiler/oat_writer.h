@@ -190,7 +190,8 @@ class OatWriter {
 
   class OatDexFile {
    public:
-    OatDexFile(size_t offset, const DexFile& dex_file);
+    OatDexFile(size_t offset, const DexFile& dex_file,
+        const std::vector<uint32_t>& classpath_user_ids);
     size_t SizeOf() const;
     void UpdateChecksum(OatHeader* oat_header) const;
     bool Write(OatWriter* oat_writer, OutputStream* out, const size_t file_offset) const;
@@ -201,11 +202,13 @@ class OatWriter {
 
     // data to write
     uint32_t dex_file_location_size_;
+    uint32_t dex_file_location_size_aligned_;
     const uint8_t* dex_file_location_data_;
     uint32_t dex_file_location_checksum_;
     uint32_t dex_file_offset_;
     uint32_t lookup_table_offset_;
     TypeLookupTable* lookup_table_;  // Owned by the dex file.
+    std::vector<uint32_t> classpath_user_ids_;
     std::vector<uint32_t> methods_offsets_;
 
    private:
@@ -333,6 +336,7 @@ class OatWriter {
   uint32_t size_vmap_table_;
   uint32_t size_gc_map_;
   uint32_t size_oat_dex_file_location_size_;
+  uint32_t size_oat_dex_file_location_alignment_;
   uint32_t size_oat_dex_file_location_data_;
   uint32_t size_oat_dex_file_location_checksum_;
   uint32_t size_oat_dex_file_offset_;
@@ -344,6 +348,8 @@ class OatWriter {
   uint32_t size_oat_lookup_table_alignment_;
   uint32_t size_oat_lookup_table_offset_;
   uint32_t size_oat_lookup_table_;
+  uint32_t size_oat_classpath_user_ids_count_;
+  uint32_t size_oat_classpath_user_ids_;
 
   std::unique_ptr<linker::RelativePatcher> relative_patcher_;
 

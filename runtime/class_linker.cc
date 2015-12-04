@@ -2895,7 +2895,8 @@ void ClassLinker::LookupClasses(const char* descriptor, std::vector<mirror::Clas
 
 bool ClassLinker::AttemptSupertypeVerification(Thread* self,
                                                Handle<mirror::Class> klass,
-                                               Handle<mirror::Class> supertype) {
+                                               Handle<mirror::Class> supertype,
+                                               std::vector<uint32_t>* classpath_user_ids) {
   DCHECK(self != nullptr);
   DCHECK(klass.Get() != nullptr);
   DCHECK(supertype.Get() != nullptr);
@@ -2905,7 +2906,7 @@ bool ClassLinker::AttemptSupertypeVerification(Thread* self,
   ObjectLock<mirror::Class> super_lock(self, supertype);
 
   if (!supertype->IsVerified() && !supertype->IsErroneous()) {
-    VerifyClass(self, supertype);
+    VerifyClass(self, supertype, classpath_user_ids);
   }
   if (supertype->IsCompileTimeVerified()) {
     // Either we are verified or we soft failed and need to retry at runtime.
@@ -2936,6 +2937,11 @@ bool ClassLinker::AttemptSupertypeVerification(Thread* self,
 }
 
 void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass) {
+    return VerifyClass(self, klass, nullptr);
+}
+
+void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass,
+                              std::vector<uint32_t>* classpath_user_ids) {
   // TODO: assert that the monitor on the Class is held
   ObjectLock<mirror::Class> lock(self, klass);
 
@@ -2987,7 +2993,8 @@ void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass) {
   StackHandleScope<2> hs(self);
   MutableHandle<mirror::Class> supertype(hs.NewHandle(klass->GetSuperClass()));
   // If we have a superclass and we get a hard verification failure we can return immediately.
-  if (supertype.Get() != nullptr && !AttemptSupertypeVerification(self, klass, supertype)) {
+  if (supertype.Get() != nullptr &&
+      !AttemptSupertypeVerification(self, klass, supertype, classpath_user_ids)) {
     CHECK(self->IsExceptionPending()) << "Verification error should be pending.";
     return;
   }
@@ -3013,7 +3020,7 @@ void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass) {
       // We only care if we have default interfaces and can skip if we are already verified...
       if (LIKELY(!iface->HasDefaultMethods() || iface->IsVerified())) {
         continue;
-      } else if (UNLIKELY(!AttemptSupertypeVerification(self, klass, iface))) {
+      } else if (UNLIKELY(!AttemptSupertypeVerification(self, klass, iface, classpath_user_ids))) {
         // We had a hard failure while verifying this interface. Just return immediately.
         CHECK(self->IsExceptionPending()) << "Verification error should be pending.";
         return;
@@ -3045,11 +3052,16 @@ void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass) {
   verifier::MethodVerifier::FailureKind verifier_failure = verifier::MethodVerifier::kNoFailure;
   std::string error_msg;
   if (!preverified) {
+    bool has_classpath_refs = false;
     verifier_failure = verifier::MethodVerifier::VerifyClass(self,
                                                              klass.Get(),
                                                              Runtime::Current()->IsAotCompiler(),
                                                              Runtime::Current()->IsAotCompiler(),
+                                                             &has_classpath_refs,
                                                              &error_msg);
+    if (classpath_user_ids != nullptr && has_classpath_refs) {
+      classpath_user_ids->push_back(klass->GetDexClassDefIndex());
+    }
   }
   if (preverified || verifier_failure != verifier::MethodVerifier::kHardFailure) {
     if (!preverified && verifier_failure != verifier::MethodVerifier::kNoFailure) {
@@ -3154,6 +3166,10 @@ bool ClassLinker::VerifyClassUsingOatFile(const DexFile& dex_file,
   oat_file_class_status = oat_dex_file->GetOatClass(class_def_index).GetStatus();
   if (oat_file_class_status == mirror::Class::kStatusVerified ||
       oat_file_class_status == mirror::Class::kStatusInitialized) {
+      if (oat_dex_file->NeedVerification(class_def_index)) {
+        oat_file_class_status = mirror::Class::kStatusResolved;
+        return false;
+      }
       return true;
   }
   if (oat_file_class_status == mirror::Class::kStatusRetryVerificationAtRuntime) {

@@ -357,6 +357,7 @@ CompilerDriver::CompilerDriver(const CompilerOptions* compiler_options,
       compiled_methods_lock_("compiled method lock"),
       compiled_methods_(MethodTable::key_compare()),
       non_relative_linker_patch_count_(0u),
+      classpath_user_ids_lock_("classpath user ids lock"),
       boot_image_(boot_image),
       image_classes_(image_classes),
       classes_to_compile_(compiled_classes),
@@ -407,6 +408,25 @@ CompilerDriver::~CompilerDriver() {
   compiler_->UnInit();
 }
 
+void CompilerDriver::AddClasspathUserIds(const DexFile* dex_file,
+    const std::vector<uint32_t>& ids) {
+  MutexLock lock(Thread::Current(), classpath_user_ids_lock_);
+  auto it = classpath_user_ids_.find(dex_file);
+  if (it == classpath_user_ids_.end()) {
+    classpath_user_ids_.Put(dex_file, ids);
+  } else {
+    it->second.insert(it->second.end(), ids.begin(), ids.end());
+  }
+}
+
+std::vector<uint32_t> CompilerDriver::GetClasspathUserIds(const DexFile* dex_file) const {
+  MutexLock lock(Thread::Current(), classpath_user_ids_lock_);
+  auto it = classpath_user_ids_.find(dex_file);
+  if (it == classpath_user_ids_.end()) {
+    return std::vector<uint32_t>();
+  }
+  return it->second;
+}
 
 #define CREATE_TRAMPOLINE(type, abi, offset) \
     if (Is64BitInstructionSet(instruction_set_)) { \
@@ -2015,6 +2035,7 @@ class VerifyClassVisitor : public CompilationVisitor {
     const char* descriptor = dex_file.GetClassDescriptor(class_def);
     ClassLinker* class_linker = manager_->GetClassLinker();
     jobject jclass_loader = manager_->GetClassLoader();
+    std::vector<uint32_t> classpath_user_ids;
     StackHandleScope<3> hs(soa.Self());
     Handle<mirror::ClassLoader> class_loader(
         hs.NewHandle(soa.Decode<mirror::ClassLoader*>(jclass_loader)));
@@ -2032,6 +2053,7 @@ class VerifyClassVisitor : public CompilationVisitor {
       Handle<mirror::DexCache> dex_cache(hs.NewHandle(class_linker->FindDexCache(
           soa.Self(), dex_file, false)));
       std::string error_msg;
+      bool has_classpath_references = false;
       if (verifier::MethodVerifier::VerifyClass(soa.Self(),
                                                 &dex_file,
                                                 dex_cache,
@@ -2039,15 +2061,19 @@ class VerifyClassVisitor : public CompilationVisitor {
                                                 &class_def,
                                                 true /* allow soft failures */,
                                                 true /* log hard failures */,
+                                                &has_classpath_references,
                                                 &error_msg) ==
                                                     verifier::MethodVerifier::kHardFailure) {
         LOG(ERROR) << "Verification failed on class " << PrettyDescriptor(descriptor)
                    << " because: " << error_msg;
         manager_->GetCompiler()->SetHadHardVerifierFailure();
       }
+      if (has_classpath_references) {
+        classpath_user_ids.push_back(dex_file.GetIndexForClassDef(class_def));
+      }
     } else if (!SkipClass(jclass_loader, dex_file, klass.Get())) {
       CHECK(klass->IsResolved()) << PrettyClass(klass.Get());
-      class_linker->VerifyClass(soa.Self(), klass);
+      class_linker->VerifyClass(soa.Self(), klass, &classpath_user_ids);
 
       if (klass->IsErroneous()) {
         // ClassLinker::VerifyClass throws, which isn't useful in the compiler.
@@ -2065,6 +2091,7 @@ class VerifyClassVisitor : public CompilationVisitor {
       DCHECK(!manager_->GetCompiler()->IsBootImage() || klass->IsVerified())
           << "Boot classpath class " << PrettyClass(klass.Get()) << " failed to fully verify.";
     }
+    manager_->GetCompiler()->AddClasspathUserIds(&dex_file, classpath_user_ids);
     soa.Self()->AssertNoPendingException();
   }
 

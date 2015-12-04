@@ -118,6 +118,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                         mirror::Class* klass,
                                                         bool allow_soft_failures,
                                                         bool log_hard_failures,
+                                                        bool* has_classpath_references,
                                                         std::string* error) {
   if (klass->IsVerified()) {
     return kNoFailure;
@@ -156,6 +157,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                      class_def,
                      allow_soft_failures,
                      log_hard_failures,
+                     has_classpath_references,
                      error);
 }
 
@@ -176,6 +178,7 @@ void MethodVerifier::VerifyMethods(Thread* self,
                                    bool log_hard_failures,
                                    bool need_precise_constants,
                                    bool* hard_fail,
+                                   bool* has_classpath_references,
                                    size_t* error_count,
                                    std::string* error_string) {
   DCHECK(it != nullptr);
@@ -215,6 +218,7 @@ void MethodVerifier::VerifyMethods(Thread* self,
                                                       allow_soft_failures,
                                                       log_hard_failures,
                                                       need_precise_constants,
+                                                      has_classpath_references,
                                                       &hard_failure_msg);
     if (result != kNoFailure) {
       if (result == kHardFailure) {
@@ -243,6 +247,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                         const DexFile::ClassDef* class_def,
                                                         bool allow_soft_failures,
                                                         bool log_hard_failures,
+                                                        bool* has_classpath_references,
                                                         std::string* error) {
   DCHECK(class_def != nullptr);
 
@@ -278,6 +283,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                       log_hard_failures,
                       false /* need precise constants */,
                       &hard_fail,
+                      has_classpath_references,
                       &error_count,
                       error);
   // Virtual methods.
@@ -292,6 +298,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                       log_hard_failures,
                       false /* need precise constants */,
                       &hard_fail,
+                      has_classpath_references,
                       &error_count,
                       error);
 
@@ -325,6 +332,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyMethod(Thread* self,
                                                          bool allow_soft_failures,
                                                          bool log_hard_failures,
                                                          bool need_precise_constants,
+                                                         bool* has_classpath_references,
                                                          std::string* hard_failure_msg) {
   MethodVerifier::FailureKind result = kNoFailure;
   uint64_t start_ns = kTimeVerifyMethod ? NanoTime() : 0;
@@ -332,7 +340,11 @@ MethodVerifier::FailureKind MethodVerifier::VerifyMethod(Thread* self,
   MethodVerifier verifier(self, dex_file, dex_cache, class_loader, class_def, code_item,
                           method_idx, method, method_access_flags, true, allow_soft_failures,
                           need_precise_constants, true);
-  if (verifier.Verify()) {
+  bool verify_res = verifier.Verify();
+  if (has_classpath_references != nullptr) {
+    *has_classpath_references = verifier.HasClassPathReferences();
+  }
+  if (verify_res) {
     // Verification completed, however failures may be pending that didn't cause the verification
     // to hard fail.
     CHECK(!verifier.have_pending_hard_failure_);
@@ -4859,6 +4871,26 @@ const RegType& MethodVerifier::FromClass(const char* descriptor,
     precise = false;
   }
   return reg_types_.FromClass(descriptor, klass, precise);
+}
+
+bool MethodVerifier::HasClassPathReferences() const {
+  std::vector<std::string> classpath;
+  Split(Runtime::Current()->GetClassPathString(), ':', &classpath);
+  if (classpath.empty()) {
+    return false;
+  }
+  for (const RegType* reg_type : reg_types_) {
+    if (reg_type->HasClass()) {
+      std::vector<std::string>::const_iterator it = std::find(
+          classpath.begin(),
+          classpath.end(),
+          reg_type->GetClass()->GetLocation());
+      if (it != classpath.end()) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 }  // namespace verifier

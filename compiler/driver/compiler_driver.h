@@ -160,6 +160,11 @@ class CompilerDriver {
     return image_classes_.get();
   }
 
+  void AddClasspathUserIds(const DexFile* dex_file, const std::vector<uint32_t>& ids)
+      REQUIRES(!classpath_user_ids_lock_);
+  std::vector<uint32_t> GetClasspathUserIds(const DexFile* dex_file) const
+      REQUIRES(!classpath_user_ids_lock_);
+
   // Generate the trampolines that are invoked by unresolved direct methods.
   const std::vector<uint8_t>* CreateJniDlsymLookup() const
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -629,6 +634,9 @@ class CompilerDriver {
   // Number of non-relative patches in all compiled methods. These patches need space
   // in the .oat_patches ELF section if requested in the compiler options.
   size_t non_relative_linker_patch_count_ GUARDED_BY(compiled_methods_lock_);
+
+  SafeMap< const DexFile*, std::vector<uint32_t> > classpath_user_ids_;
+  mutable Mutex classpath_user_ids_lock_;
 
   const bool boot_image_;
 

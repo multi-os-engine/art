@@ -253,7 +253,9 @@ class OatFile FINAL {
 
   // Check the given dependency list against their dex files - thus the name "Static," this does
   // not check the class-loader environment, only whether there have been file updates.
-  static bool CheckStaticDexFileDependencies(const char* dex_dependencies, std::string* msg);
+  static bool CheckStaticDexFileDependencies(const char* dex_dependencies,
+                                             InstructionSet isa, std::string* msg)
+      NO_THREAD_SAFETY_ANALYSIS;
 
   // Get the dex locations of a dependency list. Note: this is *not* cleaned for synthetic
   // locations of multidex files.
@@ -365,6 +367,8 @@ class OatFile FINAL {
 // OatDexFile in DexFile.
 class OatDexFile FINAL {
  public:
+  uint32_t GetChecksum() const;
+
   // Opens the DexFile referred to by this OatDexFile from within the containing OatFile.
   std::unique_ptr<const DexFile> OpenDexFile(std::string* error_msg) const;
 
@@ -390,6 +394,8 @@ class OatDexFile FINAL {
     return dex_file_location_checksum_;
   }
 
+  bool NeedVerification(uint32_t class_def_idx) const;
+
   // Returns the OatClass for the class specified by the given DexFile class_def_index.
   OatFile::OatClass GetOatClass(uint16_t class_def_index) const;
 
@@ -413,8 +419,11 @@ class OatDexFile FINAL {
              uint32_t dex_file_checksum,
              const uint8_t* dex_file_pointer,
              const uint8_t* lookup_table_data,
+             const uint32_t* classpath_user_ids,
+             uint32_t classpath_user_count,
              const uint32_t* oat_class_offsets_pointer,
-             uint8_t* dex_cache_arrays);
+             uint8_t* dex_cache_arrays,
+             bool need_verification);
 
   const OatFile* const oat_file_;
   const std::string dex_file_location_;
@@ -422,8 +431,11 @@ class OatDexFile FINAL {
   const uint32_t dex_file_location_checksum_;
   const uint8_t* const dex_file_pointer_;
   const uint8_t* lookup_table_data_;
+  const uint32_t* classpath_user_ids_;
+  uint32_t classpath_user_count_;
   const uint32_t* const oat_class_offsets_pointer_;
   uint8_t* const dex_cache_arrays_;
+  bool need_verification_;
 
   friend class OatFile;
   DISALLOW_COPY_AND_ASSIGN(OatDexFile);

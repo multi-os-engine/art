@@ -143,6 +143,7 @@ class MethodVerifier {
                                  mirror::Class* klass,
                                  bool allow_soft_failures,
                                  bool log_hard_failures,
+                                 bool* has_classpath_references,
                                  std::string* error)
       SHARED_REQUIRES(Locks::mutator_lock_);
   static FailureKind VerifyClass(Thread* self,
@@ -152,6 +153,7 @@ class MethodVerifier {
                                  const DexFile::ClassDef* class_def,
                                  bool allow_soft_failures,
                                  bool log_hard_failures,
+                                 bool* has_classpath_references,
                                  std::string* error)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -253,6 +255,7 @@ class MethodVerifier {
   bool HasCheckCasts() const;
   bool HasVirtualOrInterfaceInvokes() const;
   bool HasFailures() const;
+  bool HasClassPathReferences() const SHARED_REQUIRES(Locks::mutator_lock_);
   bool HasInstructionThatWillThrow() const {
     return have_any_pending_runtime_throw_failure_;
   }
@@ -327,6 +330,7 @@ class MethodVerifier {
                             bool log_hard_failures,
                             bool need_precise_constants,
                             bool* hard_fail,
+                            bool* has_classpath_references,
                             size_t* error_count,
                             std::string* error_string)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -353,6 +357,7 @@ class MethodVerifier {
                                   bool allow_soft_failures,
                                   bool log_hard_failures,
                                   bool need_precise_constants,
+                                  bool* has_classpath_references,
                                   std::string* hard_failure_msg)
       SHARED_REQUIRES(Locks::mutator_lock_);
 

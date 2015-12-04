@@ -43,6 +43,7 @@
 #include "mirror/class.h"
 #include "mirror/object-inl.h"
 #include "oat_file-inl.h"
+#include "oat_file_assistant.h"
 #include "oat_file_manager.h"
 #include "os.h"
 #include "runtime.h"
@@ -455,6 +456,14 @@ bool OatFile::Setup(const char* abs_dex_location, std::string* error_msg) {
     return false;
   }
 
+  bool need_verification = false;
+  if (Runtime::Current() != nullptr) {
+    // Check dependencies only if runtime started
+    need_verification = !CheckStaticDexFileDependencies(
+      GetOatHeader().GetStoreValueByKey(OatHeader::kClassPathKey),
+      Runtime::Current()->GetInstructionSet(), error_msg);
+  }
+
   size_t pointer_size = GetInstructionSetPointerSize(GetOatHeader().GetInstructionSet());
   uint8_t* dex_cache_arrays = bss_begin_;
   uint32_t dex_file_count = GetOatHeader().GetDexFileCount();
@@ -476,7 +485,7 @@ bool OatFile::Setup(const char* abs_dex_location, std::string* error_msg) {
     }
 
     const char* dex_file_location_data = reinterpret_cast<const char*>(oat);
-    oat += dex_file_location_size;
+    oat += RoundUp(dex_file_location_size, 4);
     if (UNLIKELY(oat > End())) {
       *error_msg = StringPrintf("In oat file '%s' found OatDexFile #%zu with truncated dex file "
                                     "location",
@@ -566,6 +575,14 @@ bool OatFile::Setup(const char* abs_dex_location, std::string* error_msg) {
         ? Begin() + lookup_table_offset
         : nullptr;
 
+    uint32_t classpath_users_count = *reinterpret_cast<const uint32_t*>(oat);
+    oat += sizeof(classpath_users_count);
+    const uint32_t* classpath_user_ids = 0;
+    if (classpath_users_count != 0) {
+      classpath_user_ids = reinterpret_cast<const uint32_t*>(oat);
+    }
+    oat += sizeof(*classpath_user_ids) * classpath_users_count;
+
     const uint32_t* methods_offsets_pointer = reinterpret_cast<const uint32_t*>(oat);
 
     oat += (sizeof(*methods_offsets_pointer) * header->class_defs_size_);
@@ -606,8 +623,11 @@ bool OatFile::Setup(const char* abs_dex_location, std::string* error_msg) {
                                               dex_file_checksum,
                                               dex_file_pointer,
                                               lookup_table_data,
+                                              classpath_user_ids,
+                                              classpath_users_count,
                                               methods_offsets_pointer,
-                                              current_dex_cache_arrays);
+                                              current_dex_cache_arrays,
+                                              need_verification);
     oat_dex_files_storage_.push_back(oat_dex_file);
 
     // Add the location and canonical location (if different) to the oat_dex_files_ table.
@@ -730,21 +750,31 @@ OatFile::OatDexFile::OatDexFile(const OatFile* oat_file,
                                 uint32_t dex_file_location_checksum,
                                 const uint8_t* dex_file_pointer,
                                 const uint8_t* lookup_table_data,
+                                const uint32_t* classpath_user_ids,
+                                uint32_t classpath_user_count,
                                 const uint32_t* oat_class_offsets_pointer,
-                                uint8_t* dex_cache_arrays)
+                                uint8_t* dex_cache_arrays,
+                                bool need_verification)
     : oat_file_(oat_file),
       dex_file_location_(dex_file_location),
       canonical_dex_file_location_(canonical_dex_file_location),
       dex_file_location_checksum_(dex_file_location_checksum),
       dex_file_pointer_(dex_file_pointer),
       lookup_table_data_(lookup_table_data),
+      classpath_user_ids_(classpath_user_ids),
+      classpath_user_count_(classpath_user_count),
       oat_class_offsets_pointer_(oat_class_offsets_pointer),
-      dex_cache_arrays_(dex_cache_arrays) {}
+      dex_cache_arrays_(dex_cache_arrays),
+      need_verification_(need_verification) {}
 
 OatFile::OatDexFile::~OatDexFile() {}
 
 size_t OatFile::OatDexFile::FileSize() const {
   return reinterpret_cast<const DexFile::Header*>(dex_file_pointer_)->file_size_;
+}
+
+uint32_t OatFile::OatDexFile::GetChecksum() const {
+  return reinterpret_cast<const DexFile::Header*>(dex_file_pointer_)->checksum_;
 }
 
 std::unique_ptr<const DexFile> OatFile::OatDexFile::OpenDexFile(std::string* error_msg) const {
@@ -754,6 +784,16 @@ std::unique_ptr<const DexFile> OatFile::OatDexFile::OpenDexFile(std::string* err
 
 uint32_t OatFile::OatDexFile::GetOatClassOffset(uint16_t class_def_index) const {
   return oat_class_offsets_pointer_[class_def_index];
+}
+
+bool OatFile::OatDexFile::NeedVerification(uint32_t class_def_idx) const {
+    if (!need_verification_) {
+        return false;
+    }
+    const uint32_t* ptr = std::lower_bound(classpath_user_ids_,
+                                           classpath_user_ids_ + classpath_user_count_,
+                                           class_def_idx);
+    return ptr != classpath_user_ids_ + classpath_user_count_ && *ptr == class_def_idx;
 }
 
 OatFile::OatClass OatFile::OatDexFile::GetOatClass(uint16_t class_def_index) const {
@@ -907,7 +947,8 @@ std::string OatFile::EncodeDexFileDependencies(const std::vector<const DexFile*>
   return out.str();
 }
 
-bool OatFile::CheckStaticDexFileDependencies(const char* dex_dependencies, std::string* msg) {
+bool OatFile::CheckStaticDexFileDependencies(const char* dex_dependencies,
+                                             InstructionSet isa, std::string* msg) {
   if (dex_dependencies == nullptr || dex_dependencies[0] == 0) {
     // No dependencies.
     return true;
@@ -933,21 +974,36 @@ bool OatFile::CheckStaticDexFileDependencies(const char* dex_dependencies, std::
       return false;
     }
 
+    bool success = false;
     uint32_t dex_checksum;
     std::string error_msg;
-    if (DexFile::GetChecksum(DexFile::GetDexCanonicalLocation(location.c_str()).c_str(),
-                             &dex_checksum,
-                             &error_msg)) {
-      if (converted != dex_checksum) {
-        *msg = StringPrintf("Checksums don't match for %s: %" PRId64 " vs %u",
-                            location.c_str(), converted, dex_checksum);
-        return false;
+    OatFileAssistant dep_assistant(location.c_str(), isa, false);
+    if (dep_assistant.OatFileExists()) {
+      std::unique_ptr<OatFile> oat_file = dep_assistant.GetBestOatFile();
+      const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(
+        location.c_str(), nullptr);
+      if (oat_dex_file != nullptr) {
+        dex_checksum = oat_dex_file->GetChecksum();
+        success = true;
+      } else {
+        *msg = StringPrintf("Could not find dex file with location %s in oat file %s",
+                            location.c_str(), oat_file->GetLocation().c_str());
       }
     } else {
-      // Problem retrieving checksum.
-      // TODO: odex files?
-      *msg = StringPrintf("Could not retrieve checksum for %s: %s", location.c_str(),
-                          error_msg.c_str());
+      if (DexFile::GetChecksum(DexFile::GetDexCanonicalLocation(location.c_str()).c_str(),
+                               &dex_checksum,
+                               &error_msg)) {
+        success = true;
+      } else {
+        // Problem retrieving checksum.
+        *msg = StringPrintf("Could not retrieve checksum for %s: %s", location.c_str(),
+                            error_msg.c_str());
+        return false;
+      }
+    }
+    if (success && converted != dex_checksum) {
+      *msg = StringPrintf("Checksums don't match for %s: %" PRId64 " vs %u",
+                          location.c_str(), converted, dex_checksum);
       return false;
     }
   }

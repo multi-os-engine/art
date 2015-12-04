@@ -103,6 +103,7 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     size_vmap_table_(0),
     size_gc_map_(0),
     size_oat_dex_file_location_size_(0),
+    size_oat_dex_file_location_alignment_(0),
     size_oat_dex_file_location_data_(0),
     size_oat_dex_file_location_checksum_(0),
     size_oat_dex_file_offset_(0),
@@ -114,6 +115,8 @@ OatWriter::OatWriter(const std::vector<const DexFile*>& dex_files,
     size_oat_lookup_table_alignment_(0),
     size_oat_lookup_table_offset_(0),
     size_oat_lookup_table_(0),
+    size_oat_classpath_user_ids_count_(0),
+    size_oat_classpath_user_ids_(0),
     method_offset_map_() {
   CHECK(key_value_store != nullptr);
   if (compiling_boot_image) {
@@ -1039,7 +1042,9 @@ size_t OatWriter::InitOatDexFiles(size_t offset) {
   for (size_t i = 0; i != dex_files_->size(); ++i) {
     const DexFile* dex_file = (*dex_files_)[i];
     CHECK(dex_file != nullptr);
-    OatDexFile* oat_dex_file = new OatDexFile(offset, *dex_file);
+    std::vector<uint32_t> classpath_user_ids =
+      compiler_driver_->GetClasspathUserIds(dex_file);
+    OatDexFile* oat_dex_file = new OatDexFile(offset, *dex_file, classpath_user_ids);
     oat_dex_files_.push_back(oat_dex_file);
     offset += oat_dex_file->SizeOf();
   }
@@ -1282,6 +1287,7 @@ bool OatWriter::WriteCode(OutputStream* out) {
     DO_STAT(size_gc_map_);
     DO_STAT(size_oat_dex_file_location_size_);
     DO_STAT(size_oat_dex_file_location_data_);
+    DO_STAT(size_oat_dex_file_location_alignment_);
     DO_STAT(size_oat_dex_file_location_checksum_);
     DO_STAT(size_oat_dex_file_offset_);
     DO_STAT(size_oat_dex_file_methods_offsets_);
@@ -1292,6 +1298,8 @@ bool OatWriter::WriteCode(OutputStream* out) {
     DO_STAT(size_oat_lookup_table_alignment_);
     DO_STAT(size_oat_lookup_table_offset_);
     DO_STAT(size_oat_lookup_table_);
+    DO_STAT(size_oat_classpath_user_ids_count_);
+    DO_STAT(size_oat_classpath_user_ids_);
     #undef DO_STAT
 
     VLOG(compiler) << "size_total=" << PrettySize(size_total) << " (" << size_total << "B)"; \
@@ -1486,23 +1494,30 @@ std::pair<bool, uint32_t> OatWriter::MethodOffsetMap::FindMethodOffset(MethodRef
   }
 }
 
-OatWriter::OatDexFile::OatDexFile(size_t offset, const DexFile& dex_file) {
+OatWriter::OatDexFile::OatDexFile(size_t offset, const DexFile& dex_file,
+    const std::vector<uint32_t>& classpath_user_ids) {
   offset_ = offset;
   const std::string& location(dex_file.GetLocation());
   dex_file_location_size_ = location.size();
+  dex_file_location_size_aligned_ = RoundUp(dex_file_location_size_, 4);
   dex_file_location_data_ = reinterpret_cast<const uint8_t*>(location.data());
   dex_file_location_checksum_ = dex_file.GetLocationChecksum();
   dex_file_offset_ = 0;
   lookup_table_offset_ = 0;
+  classpath_user_ids_ = classpath_user_ids;
+  std::sort(classpath_user_ids_.begin(), classpath_user_ids_.end());
   methods_offsets_.resize(dex_file.NumClassDefs());
 }
 
 size_t OatWriter::OatDexFile::SizeOf() const {
+  uint32_t classpath_users_count = classpath_user_ids_.size();
   return sizeof(dex_file_location_size_)
-          + dex_file_location_size_
+          + dex_file_location_size_aligned_
           + sizeof(dex_file_location_checksum_)
           + sizeof(dex_file_offset_)
           + sizeof(lookup_table_offset_)
+          + sizeof(classpath_users_count)
+          + sizeof(classpath_user_ids_[0]) * classpath_users_count
           + (sizeof(methods_offsets_[0]) * methods_offsets_.size());
 }
 
@@ -1515,6 +1530,8 @@ void OatWriter::OatDexFile::UpdateChecksum(OatHeader* oat_header) const {
   if (lookup_table_ != nullptr) {
     oat_header->UpdateChecksum(lookup_table_->RawData(), lookup_table_->RawDataLength());
   }
+  oat_header->UpdateChecksum(classpath_user_ids_.data(),
+                             sizeof(classpath_user_ids_[0]) * classpath_user_ids_.size());
   oat_header->UpdateChecksum(&methods_offsets_[0],
                             sizeof(methods_offsets_[0]) * methods_offsets_.size());
 }
@@ -1533,6 +1550,13 @@ bool OatWriter::OatDexFile::Write(OatWriter* oat_writer,
     return false;
   }
   oat_writer->size_oat_dex_file_location_data_ += dex_file_location_size_;
+  uint8_t alignment[4] = {0};
+  if (!out->WriteFully(alignment, dex_file_location_size_aligned_ - dex_file_location_size_)) {
+    PLOG(ERROR) << "Failed to write dex file location alignment " << out->GetLocation();
+    return false;
+  }
+  oat_writer->size_oat_dex_file_location_alignment_ +=
+      dex_file_location_size_aligned_ - dex_file_location_size_;
   if (!out->WriteFully(&dex_file_location_checksum_, sizeof(dex_file_location_checksum_))) {
     PLOG(ERROR) << "Failed to write dex file location checksum to " << out->GetLocation();
     return false;
@@ -1548,6 +1572,19 @@ bool OatWriter::OatDexFile::Write(OatWriter* oat_writer,
     return false;
   }
   oat_writer->size_oat_lookup_table_offset_ += sizeof(lookup_table_offset_);
+  uint32_t classpath_user_count = classpath_user_ids_.size();
+  if (!out->WriteFully(&classpath_user_count, sizeof(classpath_user_count))) {
+    PLOG(ERROR) << "Failed to write count of classpath user classes to " << out->GetLocation();
+    return false;
+  }
+  oat_writer->size_oat_classpath_user_ids_count_ += sizeof(classpath_user_count);
+  if (!out->WriteFully(classpath_user_ids_.data(),
+                       sizeof(classpath_user_ids_[0]) * classpath_user_count)) {
+    PLOG(ERROR) << "Failed to write classpath user classes to " << out->GetLocation();
+    return false;
+  }
+  oat_writer->size_oat_classpath_user_ids_ +=
+    sizeof(classpath_user_ids_[0]) * classpath_user_count;
   if (!out->WriteFully(&methods_offsets_[0],
                       sizeof(methods_offsets_[0]) * methods_offsets_.size())) {
     PLOG(ERROR) << "Failed to write methods offsets to " << out->GetLocation();
