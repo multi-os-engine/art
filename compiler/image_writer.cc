@@ -984,22 +984,18 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
         }
       }
       // Visit and assign offsets for methods.
-      LengthPrefixedArray<ArtMethod>* method_arrays[] = {
-          as_klass->GetDirectMethodsPtr(), as_klass->GetVirtualMethodsPtr(),
-      };
-      for (LengthPrefixedArray<ArtMethod>* array : method_arrays) {
-        if (array == nullptr) {
-          continue;
-        }
-        bool any_dirty = false;
-        size_t count = 0;
-        const size_t method_alignment = ArtMethod::Alignment(target_ptr_size_);
-        const size_t method_size = ArtMethod::Size(target_ptr_size_);
-        auto iteration_range =
-            MakeIterationRangeFromLengthPrefixedArray(array, method_size, method_alignment);
+      const size_t method_alignment = ArtMethod::Alignment(target_ptr_size_);
+      const size_t method_size = ArtMethod::Size(target_ptr_size_);
+      bool any_dirty = false;
+      LengthPrefixedArray<ArtMethod>* array = as_klass->GetMethodsPtr();
+      if (array != nullptr) {
+        size_t count = array->size();
+        auto iteration_range = as_klass->GetMethods(target_ptr_size_);
         for (auto& m : iteration_range) {
-          any_dirty = any_dirty || WillMethodBeDirty(&m);
-          ++count;
+          if (WillMethodBeDirty(&m)) {
+            any_dirty = true;
+            break;
+          }
         }
         NativeObjectRelocationType type = any_dirty
             ? kNativeObjectRelocationTypeArtMethodDirty
@@ -1014,9 +1010,12 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
             << " already forwarded";
         size_t& offset = bin_slot_sizes_[bin_type];
         DCHECK(!IsInBootImage(array));
-        native_object_relocations_.emplace(array, NativeObjectRelocation { offset,
-            any_dirty ? kNativeObjectRelocationTypeArtMethodArrayDirty :
-                kNativeObjectRelocationTypeArtMethodArrayClean });
+        native_object_relocations_.emplace(
+            array, NativeObjectRelocation {
+              offset,
+              any_dirty ? kNativeObjectRelocationTypeArtMethodArrayDirty
+                        : kNativeObjectRelocationTypeArtMethodArrayClean
+            });
         offset += header_size;
         for (auto& m : iteration_range) {
           AssignMethodOffset(&m, type);
