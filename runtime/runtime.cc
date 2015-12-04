@@ -434,14 +434,25 @@ void Runtime::SweepSystemWeaks(IsMarkedVisitor* visitor) {
   GetLambdaBoxTable()->SweepWeakBoxedLambdas(visitor);
 }
 
-bool Runtime::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
+bool Runtime::ParseOptions(const RuntimeOptions& raw_options,
+                           bool ignore_unrecognized,
+                           RuntimeArgumentMap* runtime_options) {
+  InitLogging(nullptr);  // Calls Locks::Init() as a side effect.
+  bool parsed = ParsedOptions::Parse(raw_options, ignore_unrecognized, runtime_options);
+  if (!parsed) {
+    LOG(ERROR) << "Failed to parse options";
+    return false;
+  }
+  return true;
+}
+
+bool Runtime::Create(RuntimeArgumentMap* runtime_options) {
   // TODO: acquire a static mutex on Runtime to avoid racing.
   if (Runtime::instance_ != nullptr) {
     return false;
   }
-  InitLogging(nullptr);  // Calls Locks::Init() as a side effect.
   instance_ = new Runtime;
-  if (!instance_->Init(options, ignore_unrecognized)) {
+  if (!instance_->Init(runtime_options)) {
     // TODO: Currently deleting the instance will abort the runtime on destruction. Now This will
     // leak memory, instead. Fix the destructor. b/19100793.
     // delete instance_;
@@ -449,6 +460,12 @@ bool Runtime::Create(const RuntimeOptions& options, bool ignore_unrecognized) {
     return false;
   }
   return true;
+}
+
+bool Runtime::Create(const RuntimeOptions& raw_options, bool ignore_unrecognized) {
+  RuntimeArgumentMap runtime_options;
+  return ParseOptions(raw_options, ignore_unrecognized, &runtime_options) &&
+      Create(&runtime_options);
 }
 
 static jobject CreateSystemClassLoader(Runtime* runtime) {
@@ -829,102 +846,94 @@ void Runtime::SetSentinel(mirror::Object* sentinel) {
   sentinel_ = GcRoot<mirror::Object>(sentinel);
 }
 
-bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) {
+bool Runtime::Init(RuntimeArgumentMap* runtime_options) {
   ATRACE_BEGIN("Runtime::Init");
   CHECK_EQ(sysconf(_SC_PAGE_SIZE), kPageSize);
 
   MemMap::Init();
 
   using Opt = RuntimeArgumentMap;
-  RuntimeArgumentMap runtime_options;
-  std::unique_ptr<ParsedOptions> parsed_options(
-      ParsedOptions::Create(raw_options, ignore_unrecognized, &runtime_options));
-  if (parsed_options.get() == nullptr) {
-    LOG(ERROR) << "Failed to parse options";
-    ATRACE_END();
-    return false;
-  }
   VLOG(startup) << "Runtime::Init -verbose:startup enabled";
 
   QuasiAtomic::Startup();
 
   oat_file_manager_ = new OatFileManager;
 
-  Monitor::Init(runtime_options.GetOrDefault(Opt::LockProfThreshold),
-                runtime_options.GetOrDefault(Opt::HookIsSensitiveThread));
+  Monitor::Init(runtime_options->GetOrDefault(Opt::LockProfThreshold),
+                runtime_options->GetOrDefault(Opt::HookIsSensitiveThread));
 
-  boot_class_path_string_ = runtime_options.ReleaseOrDefault(Opt::BootClassPath);
-  class_path_string_ = runtime_options.ReleaseOrDefault(Opt::ClassPath);
-  properties_ = runtime_options.ReleaseOrDefault(Opt::PropertiesList);
+  boot_class_path_string_ = runtime_options->ReleaseOrDefault(Opt::BootClassPath);
+  class_path_string_ = runtime_options->ReleaseOrDefault(Opt::ClassPath);
+  properties_ = runtime_options->ReleaseOrDefault(Opt::PropertiesList);
 
-  compiler_callbacks_ = runtime_options.GetOrDefault(Opt::CompilerCallbacksPtr);
-  patchoat_executable_ = runtime_options.ReleaseOrDefault(Opt::PatchOat);
-  must_relocate_ = runtime_options.GetOrDefault(Opt::Relocate);
-  is_zygote_ = runtime_options.Exists(Opt::Zygote);
-  is_explicit_gc_disabled_ = runtime_options.Exists(Opt::DisableExplicitGC);
-  dex2oat_enabled_ = runtime_options.GetOrDefault(Opt::Dex2Oat);
-  image_dex2oat_enabled_ = runtime_options.GetOrDefault(Opt::ImageDex2Oat);
+  compiler_callbacks_ = runtime_options->GetOrDefault(Opt::CompilerCallbacksPtr);
+  patchoat_executable_ = runtime_options->ReleaseOrDefault(Opt::PatchOat);
+  must_relocate_ = runtime_options->GetOrDefault(Opt::Relocate);
+  is_zygote_ = runtime_options->Exists(Opt::Zygote);
+  is_explicit_gc_disabled_ = runtime_options->Exists(Opt::DisableExplicitGC);
+  dex2oat_enabled_ = runtime_options->GetOrDefault(Opt::Dex2Oat);
+  image_dex2oat_enabled_ = runtime_options->GetOrDefault(Opt::ImageDex2Oat);
 
-  vfprintf_ = runtime_options.GetOrDefault(Opt::HookVfprintf);
-  exit_ = runtime_options.GetOrDefault(Opt::HookExit);
-  abort_ = runtime_options.GetOrDefault(Opt::HookAbort);
+  vfprintf_ = runtime_options->GetOrDefault(Opt::HookVfprintf);
+  exit_ = runtime_options->GetOrDefault(Opt::HookExit);
+  abort_ = runtime_options->GetOrDefault(Opt::HookAbort);
 
-  default_stack_size_ = runtime_options.GetOrDefault(Opt::StackSize);
-  stack_trace_file_ = runtime_options.ReleaseOrDefault(Opt::StackTraceFile);
+  default_stack_size_ = runtime_options->GetOrDefault(Opt::StackSize);
+  stack_trace_file_ = runtime_options->ReleaseOrDefault(Opt::StackTraceFile);
 
-  compiler_executable_ = runtime_options.ReleaseOrDefault(Opt::Compiler);
-  compiler_options_ = runtime_options.ReleaseOrDefault(Opt::CompilerOptions);
-  image_compiler_options_ = runtime_options.ReleaseOrDefault(Opt::ImageCompilerOptions);
-  image_location_ = runtime_options.GetOrDefault(Opt::Image);
+  compiler_executable_ = runtime_options->ReleaseOrDefault(Opt::Compiler);
+  compiler_options_ = runtime_options->ReleaseOrDefault(Opt::CompilerOptions);
+  image_compiler_options_ = runtime_options->ReleaseOrDefault(Opt::ImageCompilerOptions);
+  image_location_ = runtime_options->GetOrDefault(Opt::Image);
 
   max_spins_before_thin_lock_inflation_ =
-      runtime_options.GetOrDefault(Opt::MaxSpinsBeforeThinLockInflation);
+      runtime_options->GetOrDefault(Opt::MaxSpinsBeforeThinLockInflation);
 
   monitor_list_ = new MonitorList;
   monitor_pool_ = MonitorPool::Create();
   thread_list_ = new ThreadList;
   intern_table_ = new InternTable;
 
-  verify_ = runtime_options.GetOrDefault(Opt::Verify);
-  allow_dex_file_fallback_ = !runtime_options.Exists(Opt::NoDexFileFallback);
+  verify_ = runtime_options->GetOrDefault(Opt::Verify);
+  allow_dex_file_fallback_ = !runtime_options->Exists(Opt::NoDexFileFallback);
 
-  no_sig_chain_ = runtime_options.Exists(Opt::NoSigChain);
+  no_sig_chain_ = runtime_options->Exists(Opt::NoSigChain);
 
-  Split(runtime_options.GetOrDefault(Opt::CpuAbiList), ',', &cpu_abilist_);
+  Split(runtime_options->GetOrDefault(Opt::CpuAbiList), ',', &cpu_abilist_);
 
-  fingerprint_ = runtime_options.ReleaseOrDefault(Opt::Fingerprint);
+  fingerprint_ = runtime_options->ReleaseOrDefault(Opt::Fingerprint);
 
-  if (runtime_options.GetOrDefault(Opt::Interpret)) {
+  if (runtime_options->GetOrDefault(Opt::Interpret)) {
     GetInstrumentation()->ForceInterpretOnly();
   }
 
-  zygote_max_failed_boots_ = runtime_options.GetOrDefault(Opt::ZygoteMaxFailedBoots);
-  experimental_flags_ = runtime_options.GetOrDefault(Opt::Experimental);
-  is_low_memory_mode_ = runtime_options.Exists(Opt::LowMemoryMode);
+  zygote_max_failed_boots_ = runtime_options->GetOrDefault(Opt::ZygoteMaxFailedBoots);
+  experimental_flags_ = runtime_options->GetOrDefault(Opt::Experimental);
+  is_low_memory_mode_ = runtime_options->Exists(Opt::LowMemoryMode);
 
-  XGcOption xgc_option = runtime_options.GetOrDefault(Opt::GcOption);
+  XGcOption xgc_option = runtime_options->GetOrDefault(Opt::GcOption);
   ATRACE_BEGIN("CreateHeap");
-  heap_ = new gc::Heap(runtime_options.GetOrDefault(Opt::MemoryInitialSize),
-                       runtime_options.GetOrDefault(Opt::HeapGrowthLimit),
-                       runtime_options.GetOrDefault(Opt::HeapMinFree),
-                       runtime_options.GetOrDefault(Opt::HeapMaxFree),
-                       runtime_options.GetOrDefault(Opt::HeapTargetUtilization),
-                       runtime_options.GetOrDefault(Opt::ForegroundHeapGrowthMultiplier),
-                       runtime_options.GetOrDefault(Opt::MemoryMaximumSize),
-                       runtime_options.GetOrDefault(Opt::NonMovingSpaceCapacity),
-                       runtime_options.GetOrDefault(Opt::Image),
-                       runtime_options.GetOrDefault(Opt::ImageInstructionSet),
+  heap_ = new gc::Heap(runtime_options->GetOrDefault(Opt::MemoryInitialSize),
+                       runtime_options->GetOrDefault(Opt::HeapGrowthLimit),
+                       runtime_options->GetOrDefault(Opt::HeapMinFree),
+                       runtime_options->GetOrDefault(Opt::HeapMaxFree),
+                       runtime_options->GetOrDefault(Opt::HeapTargetUtilization),
+                       runtime_options->GetOrDefault(Opt::ForegroundHeapGrowthMultiplier),
+                       runtime_options->GetOrDefault(Opt::MemoryMaximumSize),
+                       runtime_options->GetOrDefault(Opt::NonMovingSpaceCapacity),
+                       runtime_options->GetOrDefault(Opt::Image),
+                       runtime_options->GetOrDefault(Opt::ImageInstructionSet),
                        xgc_option.collector_type_,
-                       runtime_options.GetOrDefault(Opt::BackgroundGc),
-                       runtime_options.GetOrDefault(Opt::LargeObjectSpace),
-                       runtime_options.GetOrDefault(Opt::LargeObjectThreshold),
-                       runtime_options.GetOrDefault(Opt::ParallelGCThreads),
-                       runtime_options.GetOrDefault(Opt::ConcGCThreads),
-                       runtime_options.Exists(Opt::LowMemoryMode),
-                       runtime_options.GetOrDefault(Opt::LongPauseLogThreshold),
-                       runtime_options.GetOrDefault(Opt::LongGCLogThreshold),
-                       runtime_options.Exists(Opt::IgnoreMaxFootprint),
-                       runtime_options.GetOrDefault(Opt::UseTLAB),
+                       runtime_options->GetOrDefault(Opt::BackgroundGc),
+                       runtime_options->GetOrDefault(Opt::LargeObjectSpace),
+                       runtime_options->GetOrDefault(Opt::LargeObjectThreshold),
+                       runtime_options->GetOrDefault(Opt::ParallelGCThreads),
+                       runtime_options->GetOrDefault(Opt::ConcGCThreads),
+                       runtime_options->Exists(Opt::LowMemoryMode),
+                       runtime_options->GetOrDefault(Opt::LongPauseLogThreshold),
+                       runtime_options->GetOrDefault(Opt::LongGCLogThreshold),
+                       runtime_options->Exists(Opt::IgnoreMaxFootprint),
+                       runtime_options->GetOrDefault(Opt::UseTLAB),
                        xgc_option.verify_pre_gc_heap_,
                        xgc_option.verify_pre_sweeping_heap_,
                        xgc_option.verify_post_gc_heap_,
@@ -932,8 +941,8 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
                        xgc_option.verify_pre_sweeping_rosalloc_,
                        xgc_option.verify_post_gc_rosalloc_,
                        xgc_option.gcstress_,
-                       runtime_options.GetOrDefault(Opt::EnableHSpaceCompactForOOM),
-                       runtime_options.GetOrDefault(Opt::HSpaceCompactForOOMMinIntervalsMs));
+                       runtime_options->GetOrDefault(Opt::EnableHSpaceCompactForOOM),
+                       runtime_options->GetOrDefault(Opt::HSpaceCompactForOOMMinIntervalsMs));
   ATRACE_END();
 
   if (heap_->GetBootImageSpace() == nullptr && !allow_dex_file_fallback_) {
@@ -942,13 +951,13 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     return false;
   }
 
-  dump_gc_performance_on_shutdown_ = runtime_options.Exists(Opt::DumpGCPerformanceOnShutdown);
+  dump_gc_performance_on_shutdown_ = runtime_options->Exists(Opt::DumpGCPerformanceOnShutdown);
 
-  if (runtime_options.Exists(Opt::JdwpOptions)) {
-    Dbg::ConfigureJdwp(runtime_options.GetOrDefault(Opt::JdwpOptions));
+  if (runtime_options->Exists(Opt::JdwpOptions)) {
+    Dbg::ConfigureJdwp(runtime_options->GetOrDefault(Opt::JdwpOptions));
   }
 
-  jit_options_.reset(jit::JitOptions::CreateFromRuntimeArguments(runtime_options));
+  jit_options_.reset(jit::JitOptions::CreateFromRuntimeArguments(*runtime_options));
   if (IsAotCompiler()) {
     // If we are already the compiler at this point, we must be dex2oat. Don't create the jit in
     // this case.
@@ -1025,7 +1034,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     }
   }
 
-  java_vm_ = new JavaVMExt(this, runtime_options);
+  java_vm_ = new JavaVMExt(this, *runtime_options);
 
   Thread::Startup();
 
@@ -1071,19 +1080,19 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
     Split(boot_class_path_string_, ':', &dex_filenames);
 
     std::vector<std::string> dex_locations;
-    if (!runtime_options.Exists(Opt::BootClassPathLocations)) {
+    if (!runtime_options->Exists(Opt::BootClassPathLocations)) {
       dex_locations = dex_filenames;
     } else {
-      dex_locations = runtime_options.GetOrDefault(Opt::BootClassPathLocations);
+      dex_locations = runtime_options->GetOrDefault(Opt::BootClassPathLocations);
       CHECK_EQ(dex_filenames.size(), dex_locations.size());
     }
 
     std::vector<std::unique_ptr<const DexFile>> boot_class_path;
     OpenDexFiles(dex_filenames,
                  dex_locations,
-                 runtime_options.GetOrDefault(Opt::Image),
+                 runtime_options->GetOrDefault(Opt::Image),
                  &boot_class_path);
-    instruction_set_ = runtime_options.GetOrDefault(Opt::ImageInstructionSet);
+    instruction_set_ = runtime_options->GetOrDefault(Opt::ImageInstructionSet);
     std::string error_msg;
     if (!class_linker_->InitWithoutImage(std::move(boot_class_path), &error_msg)) {
       LOG(ERROR) << "Could not initialize without image: " << error_msg;
@@ -1104,18 +1113,18 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
 
   verifier::MethodVerifier::Init();
 
-  if (runtime_options.Exists(Opt::MethodTrace)) {
+  if (runtime_options->Exists(Opt::MethodTrace)) {
     trace_config_.reset(new TraceConfig());
-    trace_config_->trace_file = runtime_options.ReleaseOrDefault(Opt::MethodTraceFile);
-    trace_config_->trace_file_size = runtime_options.ReleaseOrDefault(Opt::MethodTraceFileSize);
+    trace_config_->trace_file = runtime_options->ReleaseOrDefault(Opt::MethodTraceFile);
+    trace_config_->trace_file_size = runtime_options->ReleaseOrDefault(Opt::MethodTraceFileSize);
     trace_config_->trace_mode = Trace::TraceMode::kMethodTracing;
-    trace_config_->trace_output_mode = runtime_options.Exists(Opt::MethodTraceStreaming) ?
+    trace_config_->trace_output_mode = runtime_options->Exists(Opt::MethodTraceStreaming) ?
         Trace::TraceOutputMode::kStreaming :
         Trace::TraceOutputMode::kFile;
   }
 
   {
-    auto&& profiler_options = runtime_options.ReleaseOrDefault(Opt::ProfilerOpts);
+    auto&& profiler_options = runtime_options->ReleaseOrDefault(Opt::ProfilerOpts);
     profile_output_filename_ = profiler_options.output_file_name_;
 
     // TODO: Don't do this, just change ProfilerOptions to include the output file name?
@@ -1135,7 +1144,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   }
 
   // TODO: move this to just be an Trace::Start argument
-  Trace::SetDefaultClockSource(runtime_options.GetOrDefault(Opt::ProfileClock));
+  Trace::SetDefaultClockSource(runtime_options->GetOrDefault(Opt::ProfileClock));
 
   // Pre-allocate an OutOfMemoryError for the double-OOME case.
   self->ThrowNewException("Ljava/lang/OutOfMemoryError;",
@@ -1179,7 +1188,7 @@ bool Runtime::Init(const RuntimeOptions& raw_options, bool ignore_unrecognized) 
   //   DidForkFromZygote(kInitialize) -> try to initialize any native bridge given.
   //   No-op wrt native bridge.
   {
-    std::string native_bridge_file_name = runtime_options.ReleaseOrDefault(Opt::NativeBridge);
+    std::string native_bridge_file_name = runtime_options->ReleaseOrDefault(Opt::NativeBridge);
     is_native_bridge_loaded_ = LoadNativeBridge(native_bridge_file_name);
   }
 
