@@ -208,6 +208,11 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("  --image=<file.art>: specifies the output image filename.");
   UsageError("      Example: --image=/system/framework/boot.art");
   UsageError("");
+  UsageError("  --image-format=(uncompressed|lz4):");
+  UsageError("      Which format to store the image.");
+  UsageError("      Example: --image-format=lz4");
+  UsageError("      Default: uncompressed");
+  UsageError("");
   UsageError("  --image-classes=<classname-file>: specifies classes to include in an image.");
   UsageError("      Example: --image=frameworks/base/preloaded-classes");
   UsageError("");
@@ -488,6 +493,7 @@ class Dex2Oat FINAL {
       image_base_(0U),
       image_classes_zip_filename_(nullptr),
       image_classes_filename_(nullptr),
+      image_storage_mode_(ImageHeader::kStorageModeUncompressed),
       compiled_classes_zip_filename_(nullptr),
       compiled_classes_filename_(nullptr),
       compiled_methods_zip_filename_(nullptr),
@@ -616,6 +622,19 @@ class Dex2Oat FINAL {
       compiler_kind_ = Compiler::kOptimizing;
     } else {
       Usage("Unknown compiler backend: %s", backend_str.data());
+    }
+  }
+
+  void ParseImageFormat(const StringPiece& option) {
+    StringPiece substr("--image-format=");
+    DCHECK(option.starts_with(substr));
+    StringPiece format_str = option.substr(substr.length()).data();
+    if (format_str == "lz4") {
+      image_storage_mode_ = ImageHeader::kStorageModeLZ4;
+    } else if (format_str == "uncompressed") {
+      image_storage_mode_ = ImageHeader::kStorageModeUncompressed;
+    } else {
+      Usage("Unknown image format: %s", format_str.data());
     }
   }
 
@@ -875,6 +894,8 @@ class Dex2Oat FINAL {
         image_classes_filename_ = option.substr(strlen("--image-classes=")).data();
       } else if (option.starts_with("--image-classes-zip=")) {
         image_classes_zip_filename_ = option.substr(strlen("--image-classes-zip=")).data();
+      } else if (option.starts_with("--image-format=")) {
+        ParseImageFormat(option);
       } else if (option.starts_with("--compiled-classes=")) {
         compiled_classes_filename_ = option.substr(strlen("--compiled-classes=")).data();
       } else if (option.starts_with("--compiled-classes-zip=")) {
@@ -1641,7 +1662,8 @@ class Dex2Oat FINAL {
     image_writer_.reset(new ImageWriter(*driver_,
                                         image_base,
                                         compiler_options_->GetCompilePic(),
-                                        IsAppImage()));
+                                        IsAppImage(),
+                                        image_storage_mode_));
   }
 
   // Let the ImageWriter write the image file. If we do not compile PIC, also fix up the oat file.
@@ -1816,6 +1838,7 @@ class Dex2Oat FINAL {
   uintptr_t image_base_;
   const char* image_classes_zip_filename_;
   const char* image_classes_filename_;
+  ImageHeader::StorageMode image_storage_mode_;
   const char* compiled_classes_zip_filename_;
   const char* compiled_classes_filename_;
   const char* compiled_methods_zip_filename_;
