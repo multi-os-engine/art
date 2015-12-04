@@ -27,10 +27,10 @@
 #include <ostream>
 
 #include "base/bit_utils.h"
+#include "base/length_prefixed_array.h"
 #include "base/macros.h"
 #include "driver/compiler_driver.h"
 #include "gc/space/space.h"
-#include "length_prefixed_array.h"
 #include "lock_word.h"
 #include "mem_map.h"
 #include "oat_file.h"
