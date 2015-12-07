@@ -1252,19 +1252,59 @@ class JNI {
     f->SetObject<false>(f->GetDeclaringClass(), v);
   }
 
+#define IS_MOVING_GC_ACTIVE(n) ((n) & 0x01)
+
 #define GET_PRIMITIVE_FIELD(fn, instance) \
-  CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(instance); \
-  CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(fid); \
-  ScopedObjectAccess soa(env); \
-  mirror::Object* o = soa.Decode<mirror::Object*>(instance); \
-  ArtField* f = soa.DecodeField(fid); \
-  return f->Get ##fn (o)
+  do { \
+    gc::Heap* heap = Runtime::Current()->GetHeap(); \
+    size_t mc = heap->GetMovingGCCount(); \
+    if (LIKELY(!IS_MOVING_GC_ACTIVE(mc))) { \
+      CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(instance); \
+      CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(fid); \
+      ScopedFastObjectAccess soa(env); \
+      mirror::Object* o = soa.Decode<mirror::Object*>(instance); \
+      ArtField* f = soa.DecodeField(fid); \
+      auto a = f->Get ##fn(o); \
+      size_t mc2 = heap->GetMovingGCCount(); \
+      if (LIKELY(mc == mc2)) \
+        return a; \
+    } \
+    GET_PRIMITIVE_FIELD_SLOW(fn, instance); \
+  } while (0)
+
+#define GET_PRIMITIVE_FIELD_SLOW(fn, instance) \
+  do { \
+    CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(instance); \
+    CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(fid); \
+    ScopedObjectAccess soa(env); \
+    mirror::Object* o = soa.Decode<mirror::Object*>(instance); \
+    ArtField* f = soa.DecodeField(fid); \
+    return f->Get ##fn (o); \
+  } while (0)
 
 #define GET_STATIC_PRIMITIVE_FIELD(fn) \
-  CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(fid); \
-  ScopedObjectAccess soa(env); \
-  ArtField* f = soa.DecodeField(fid); \
-  return f->Get ##fn (f->GetDeclaringClass())
+  do { \
+    gc::Heap* heap = Runtime::Current()->GetHeap(); \
+    size_t mc = heap->GetMovingGCCount(); \
+    if (LIKELY(!IS_MOVING_GC_ACTIVE(mc))) { \
+      CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(fid); \
+      ScopedFastObjectAccess soa(env); \
+      ArtField* f = soa.DecodeField(fid); \
+      auto a = f->Get ##fn(f->GetDeclaringClass()); \
+      size_t mc2 = heap->GetMovingGCCount(); \
+      if (LIKELY(mc == mc2)) \
+        return a; \
+    } \
+    GET_STATIC_PRIMITIVE_FIELD_SLOW(fn); \
+  } while (0)
+
+#define GET_STATIC_PRIMITIVE_FIELD_SLOW(fn) \
+  do { \
+    CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(fid); \
+    ScopedObjectAccess soa(env); \
+    ArtField* f = soa.DecodeField(fid); \
+    return f->Get ##fn (f->GetDeclaringClass()); \
+  } while (0)
 
 #define SET_PRIMITIVE_FIELD(fn, instance, value) \
   CHECK_NON_NULL_ARGUMENT_RETURN_VOID(instance); \
@@ -1280,67 +1320,83 @@ class JNI {
   ArtField* f = soa.DecodeField(fid); \
   f->Set ##fn <false>(f->GetDeclaringClass(), value)
 
-  static jboolean GetBooleanField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static jboolean GetBooleanField(JNIEnv* env, jobject obj, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_PRIMITIVE_FIELD(Boolean, obj);
   }
 
-  static jbyte GetByteField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static jbyte GetByteField(JNIEnv* env, jobject obj, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_PRIMITIVE_FIELD(Byte, obj);
   }
 
-  static jchar GetCharField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static jchar GetCharField(JNIEnv* env, jobject obj, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_PRIMITIVE_FIELD(Char, obj);
   }
 
-  static jshort GetShortField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static jshort GetShortField(JNIEnv* env, jobject obj, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_PRIMITIVE_FIELD(Short, obj);
   }
 
-  static jint GetIntField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static jint GetIntField(JNIEnv* env, jobject obj, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_PRIMITIVE_FIELD(Int, obj);
   }
 
-  static jlong GetLongField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static jlong GetLongField(JNIEnv* env, jobject obj, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_PRIMITIVE_FIELD(Long, obj);
   }
 
-  static jfloat GetFloatField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static jfloat GetFloatField(JNIEnv* env, jobject obj, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_PRIMITIVE_FIELD(Float, obj);
   }
 
-  static jdouble GetDoubleField(JNIEnv* env, jobject obj, jfieldID fid) {
+  static jdouble GetDoubleField(JNIEnv* env, jobject obj, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_PRIMITIVE_FIELD(Double, obj);
   }
 
-  static jboolean GetStaticBooleanField(JNIEnv* env, jclass, jfieldID fid) {
+  static jboolean GetStaticBooleanField(JNIEnv* env, jclass, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_STATIC_PRIMITIVE_FIELD(Boolean);
   }
 
-  static jbyte GetStaticByteField(JNIEnv* env, jclass, jfieldID fid) {
+  static jbyte GetStaticByteField(JNIEnv* env, jclass, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_STATIC_PRIMITIVE_FIELD(Byte);
   }
 
-  static jchar GetStaticCharField(JNIEnv* env, jclass, jfieldID fid) {
+  static jchar GetStaticCharField(JNIEnv* env, jclass, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_STATIC_PRIMITIVE_FIELD(Char);
   }
 
-  static jshort GetStaticShortField(JNIEnv* env, jclass, jfieldID fid) {
+  static jshort GetStaticShortField(JNIEnv* env, jclass, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_STATIC_PRIMITIVE_FIELD(Short);
   }
 
-  static jint GetStaticIntField(JNIEnv* env, jclass, jfieldID fid) {
+  static jint GetStaticIntField(JNIEnv* env, jclass, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_STATIC_PRIMITIVE_FIELD(Int);
   }
 
-  static jlong GetStaticLongField(JNIEnv* env, jclass, jfieldID fid) {
+  static jlong GetStaticLongField(JNIEnv* env, jclass, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_STATIC_PRIMITIVE_FIELD(Long);
   }
 
-  static jfloat GetStaticFloatField(JNIEnv* env, jclass, jfieldID fid) {
+  static jfloat GetStaticFloatField(JNIEnv* env, jclass, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_STATIC_PRIMITIVE_FIELD(Float);
   }
 
-  static jdouble GetStaticDoubleField(JNIEnv* env, jclass, jfieldID fid) {
+  static jdouble GetStaticDoubleField(JNIEnv* env, jclass, jfieldID fid)
+      NO_THREAD_SAFETY_ANALYSIS {
     GET_STATIC_PRIMITIVE_FIELD(Double);
   }
 
@@ -1782,16 +1838,34 @@ class JNI {
     delete[] chars;
   }
 
-  static jsize GetArrayLength(JNIEnv* env, jarray java_array) {
+  static jsize GetArrayLength(JNIEnv* env, jarray java_array)
+      NO_THREAD_SAFETY_ANALYSIS {
     CHECK_NON_NULL_ARGUMENT_RETURN_ZERO(java_array);
-    ScopedObjectAccess soa(env);
-    mirror::Object* obj = soa.Decode<mirror::Object*>(java_array);
-    if (UNLIKELY(!obj->IsArrayInstance())) {
-      soa.Vm()->JniAbortF("GetArrayLength", "not an array: %s", PrettyTypeOf(obj).c_str());
-      return 0;
+    gc::Heap* heap = Runtime::Current()->GetHeap();
+    size_t mc = heap->GetMovingGCCount();
+    if (LIKELY(!IS_MOVING_GC_ACTIVE(mc))) {
+      ScopedFastObjectAccess soa(env);
+      mirror::Object* obj = soa.Decode<mirror::Object*>(java_array);
+      if (UNLIKELY(obj->GetClass() && !obj->IsArrayInstance())) {
+        soa.Vm()->JniAbortF("GetArrayLength", "not an array: %s", PrettyTypeOf(obj).c_str());
+        return 0;
+      }
+      auto length = obj->AsArray()->GetLength();
+      size_t mc2 = heap->GetMovingGCCount();
+      if (LIKELY(mc == mc2)) {
+        return length;
+      }
     }
-    mirror::Array* array = obj->AsArray();
-    return array->GetLength();
+    {
+      ScopedObjectAccess soa(env);
+      mirror::Object* obj = soa.Decode<mirror::Object*>(java_array);
+      if (UNLIKELY(!obj->IsArrayInstance())) {
+        soa.Vm()->JniAbortF("GetArrayLength", "not an array: %s", PrettyTypeOf(obj).c_str());
+        return 0;
+      }
+      mirror::Array* array = obj->AsArray();
+      return array->GetLength();
+    }
   }
 
   static jobject GetObjectArrayElement(JNIEnv* env, jobjectArray java_array, jsize index) {

@@ -699,6 +699,10 @@ class Heap {
     return disable_moving_gc_count_ > 0;
   }
 
+  size_t GetMovingGCCount() const {
+    return moving_gc_count_.LoadSequentiallyConsistent();
+  }
+
   // Request an asynchronous trim.
   void RequestTrim(Thread* self) REQUIRES(!*pending_task_lock_);
 
@@ -775,6 +779,14 @@ class Heap {
                                        space::ContinuousMemMapAllocSpace* source_space,
                                        GcCause gc_cause)
       REQUIRES(Locks::mutator_lock_);
+
+  void SetCollectorTypeRunning(CollectorType collector_type)
+      REQUIRES(gc_complete_lock_) {
+    collector_type_running_ = collector_type;
+    if (IsMovingGc(collector_type)) {
+      moving_gc_count_.FetchAndAddSequentiallyConsistent(1);
+    }
+  }
 
   void LogGC(GcCause gc_cause, collector::GarbageCollector* collector);
   void StartGC(Thread* self, GcCause cause, CollectorType collector_type)
@@ -1242,6 +1254,10 @@ class Heap {
 
   // Compacting GC disable count, prevents compacting GC from running iff > 0.
   size_t disable_moving_gc_count_ GUARDED_BY(gc_complete_lock_);
+
+  // Accumulative count increase on both begin and finish of a moving gc
+  // if it is odd, means a moving gc is going on.
+  Atomic<size_t> moving_gc_count_;
 
   std::vector<collector::GarbageCollector*> garbage_collectors_;
   collector::SemiSpace* semi_space_collector_;

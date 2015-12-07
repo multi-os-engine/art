@@ -203,6 +203,70 @@ class ScopedObjectAccessAlreadyRunnable : public ValueObject {
   JavaVMExt* const vm_;
 };
 
+class ScopedObjectAccessNoAssertion {
+ public:
+  Thread* Self() const {
+    return self_;
+  }
+
+  JNIEnvExt* Env() const {
+    return env_;
+  }
+
+  JavaVMExt* Vm() const {
+    return vm_;
+  }
+
+  template<typename T>
+  T Decode(jobject obj) const NO_THREAD_SAFETY_ANALYSIS {
+    return down_cast<T>(Self()->DecodeJObject(obj));
+  }
+
+  ArtField* DecodeField(jfieldID fid) const {
+    return reinterpret_cast<ArtField*>(fid);
+  }
+
+  jfieldID EncodeField(ArtField* field) const {
+    return reinterpret_cast<jfieldID>(field);
+  }
+
+  ArtMethod* DecodeMethod(jmethodID mid) const
+      NO_THREAD_SAFETY_ANALYSIS {
+    return reinterpret_cast<ArtMethod*>(mid);
+  }
+
+  jmethodID EncodeMethod(ArtMethod* method) const {
+    return reinterpret_cast<jmethodID>(method);
+  }
+
+ protected:
+  explicit ScopedObjectAccessNoAssertion(JNIEnv* env) ALWAYS_INLINE
+      : self_(ThreadForEnv(env)), env_(down_cast<JNIEnvExt*>(env)), vm_(env_->vm) {
+  }
+
+  // Here purely to force inlining.
+  ~ScopedObjectAccessNoAssertion() ALWAYS_INLINE {
+  }
+
+  // Self thread, can be null.
+  Thread* const self_;
+  // The full JNIEnv.
+  JNIEnvExt* const env_;
+  // The full JavaVM.
+  JavaVMExt* const vm_;
+};
+
+class ScopedFastObjectAccess : public ScopedObjectAccessNoAssertion {
+ public:
+  explicit ScopedFastObjectAccess(JNIEnv* env) ALWAYS_INLINE
+      : ScopedObjectAccessNoAssertion(env) {}
+
+  ~ScopedFastObjectAccess() ALWAYS_INLINE {}
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(ScopedFastObjectAccess);
+};
+
 // Entry/exit processing for transitions from Native to Runnable (ie within JNI functions).
 //
 // This class performs the necessary thread state switching to and from Runnable and lets us
