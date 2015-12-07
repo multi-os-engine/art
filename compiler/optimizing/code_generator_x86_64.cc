@@ -41,6 +41,10 @@ namespace x86_64 {
 
 static constexpr int kCurrentMethodStackOffset = 0;
 static constexpr Register kMethodRegisterArgument = RDI;
+// The compare/jump sequence will generate about (2 * num_entries + 1) instructions. A jump
+// table version generates 7 instructions and num_entries literals. Compare/jump sequence will
+// generates less code/data with a small num_entries.
+static constexpr uint32_t kPackedSwitchJumpTableThreshold = 4;
 
 static constexpr Register kCoreCalleeSaves[] = { RBX, RBP, R12, R13, R14, R15 };
 static constexpr FloatRegister kFpuCalleeSaves[] = { XMM12, XMM13, XMM14, XMM15 };
@@ -6021,22 +6025,57 @@ void LocationsBuilderX86_64::VisitPackedSwitch(HPackedSwitch* switch_instr) {
 
 void InstructionCodeGeneratorX86_64::VisitPackedSwitch(HPackedSwitch* switch_instr) {
   int32_t lower_bound = switch_instr->GetStartValue();
-  int32_t num_entries = switch_instr->GetNumEntries();
+  uint32_t num_entries = switch_instr->GetNumEntries();
   LocationSummary* locations = switch_instr->GetLocations();
   CpuRegister value_reg_in = locations->InAt(0).AsRegister<CpuRegister>();
   CpuRegister temp_reg = locations->GetTemp(0).AsRegister<CpuRegister>();
   CpuRegister base_reg = locations->GetTemp(1).AsRegister<CpuRegister>();
+  HBasicBlock* default_block = switch_instr->GetDefaultBlock();
+  bool gen_compares = num_entries <= kPackedSwitchJumpTableThreshold;
 
   // Remove the bias, if needed.
   Register value_reg_out = value_reg_in.AsRegister();
   if (lower_bound != 0) {
     __ leal(temp_reg, Address(value_reg_in, -lower_bound));
     value_reg_out = temp_reg.AsRegister();
+  } else if (gen_compares) {
+    // We need the value in a scratch register.
+    __ movl(temp_reg, value_reg_in);
+    value_reg_out = temp_reg.AsRegister();
   }
   CpuRegister value_reg(value_reg_out);
 
+  if (gen_compares) {
+    // Save some code/data by generating inline compares.
+    const ArenaVector<HBasicBlock*>& successors = switch_instr->GetBlock()->GetSuccessors();
+
+    // We have subtracted out the lower bound, and the value is in a temporary register.
+    uint32_t index = 0;
+    int32_t subtract_amount = 1;  // First subtract is by one.
+    for (; index < num_entries; index += 2) {
+      __ subl(value_reg, Immediate(subtract_amount));
+      // Subsequent subtracts are by two.
+      subtract_amount = 2;
+      // Jump to successors[index] if value < case_value[index].
+      __ j(kBelow, codegen_->GetLabelOf(successors[index]));
+      // Jump to successors[index + 1] if value == case_value[index + 1].
+      __ j(kEqual, codegen_->GetLabelOf(successors[index + 1]));
+    }
+
+    if (index != num_entries) {
+      // There are an odd number of entries. The only valid index left is '1'.
+      __ cmpl(value_reg, Immediate(1));
+      __ j(kEqual, codegen_->GetLabelOf(successors[num_entries - 1]));
+    }
+
+    // And the default for any other value.
+    if (!codegen_->GoesToNextBlock(switch_instr->GetBlock(), default_block)) {
+      __ jmp(codegen_->GetLabelOf(default_block));
+    }
+    return;
+  }
+
   // Is the value in range?
-  HBasicBlock* default_block = switch_instr->GetDefaultBlock();
   __ cmpl(value_reg, Immediate(num_entries - 1));
   __ j(kAbove, codegen_->GetLabelOf(default_block));
 

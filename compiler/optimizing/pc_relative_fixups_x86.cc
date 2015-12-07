@@ -79,6 +79,10 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
   }
 
   void VisitPackedSwitch(HPackedSwitch* switch_insn) OVERRIDE {
+    constexpr int32_t kPackedSwitchCompareJumpThreshold = 4;
+    if (switch_insn->GetNumEntries() < kPackedSwitchCompareJumpThreshold) {
+      return;
+    }
     // We need to replace the HPackedSwitch with a HX86PackedSwitch in order to
     // address the constant area.
     InitializePCRelativeBasePointer();
