@@ -687,11 +687,12 @@ void* JitCodeCache::MoreCore(const void* mspace, intptr_t increment) NO_THREAD_S
   }
 }
 
-void JitCodeCache::GetCompiledArtMethods(const OatFile* oat_file,
+void JitCodeCache::GetCompiledArtMethods(const std::set<const std::string>& dex_base_locations,
                                          std::set<ArtMethod*>& methods) {
   MutexLock mu(Thread::Current(), lock_);
   for (auto it : method_code_map_) {
-    if (it.second->GetDexFile()->GetOatDexFile()->GetOatFile() == oat_file) {
+    if (dex_base_locations.find(it.second->GetDexFile()->GetBaseLocation())
+        != dex_base_locations.end()) {
       methods.insert(it.second);
     }
   }

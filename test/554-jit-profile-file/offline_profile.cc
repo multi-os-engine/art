@@ -27,23 +27,34 @@
 namespace art {
 namespace {
 
+static std::string get_dex_location(jclass cls) {
+  ScopedObjectAccess soa(Thread::Current());
+  return soa.Decode<mirror::Class*>(cls)->GetDexCache()->GetDexFile()->GetLocation();
+}
+
+extern "C" JNIEXPORT jstring JNICALL Java_Main_getDexLocation(JNIEnv* env, jclass cls) {
+  std::string dex_location = get_dex_location(cls);
+  return env->NewStringUTF(dex_location.c_str());
+}
+
 extern "C" JNIEXPORT jstring JNICALL Java_Main_getProfileInfoDump(
       JNIEnv* env, jclass cls, jstring filename) {
-  std::string dex_location;
-  {
-    ScopedObjectAccess soa(Thread::Current());
-    dex_location = soa.Decode<mirror::Class*>(cls)->GetDexCache()->GetDexFile()->GetLocation();
-  }
-  const OatFile* oat_file = Runtime::Current()->GetOatFileManager().GetPrimaryOatFile();
+  std::string dex_location = get_dex_location(cls);
+  const OatFile* oat_file = nullptr;
+  std::vector<std::string> errors;
   std::vector<std::unique_ptr<const DexFile>> dex_files =
-      OatFileAssistant::LoadDexFiles(*oat_file, dex_location.c_str());
-  const char* filename_chars = env->GetStringUTFChars(filename, nullptr);
+      Runtime::Current()->GetOatFileManager().OpenDexFilesFromOat(
+          dex_location.c_str(),
+          nullptr,
+          &oat_file,
+          &errors);
 
   std::vector<const DexFile*> dex_files_raw;
   for (size_t i = 0; i < dex_files.size(); i++) {
     dex_files_raw.push_back(dex_files[i].get());
   }
 
+  const char* filename_chars = env->GetStringUTFChars(filename, nullptr);
   ProfileCompilationInfo info(filename_chars);
 
   std::string result = info.Load(dex_files_raw)
