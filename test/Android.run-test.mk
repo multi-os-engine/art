@@ -258,10 +258,8 @@ endif
 
 TEST_ART_BROKEN_PREBUILD_RUN_TESTS :=
 
-# 554-jit-profile-file is disabled because it needs a primary oat file to know what it should save.
 TEST_ART_BROKEN_NO_PREBUILD_TESTS := \
-  117-nopatchoat \
-  554-jit-profile-file
+  117-nopatchoat
 
 ifneq (,$(filter no-prebuild,$(PREBUILD_TYPES)))
   ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES),no-prebuild, \
@@ -276,8 +274,7 @@ TEST_ART_BROKEN_NO_PREBUILD_TESTS :=
 TEST_ART_BROKEN_NO_RELOCATE_TESTS := \
   117-nopatchoat \
   118-noimage-dex2oat \
-  119-noimage-patchoat \
-  554-jit-profile-file
+  119-noimage-patchoat
 
 ifneq (,$(filter no-relocate,$(RELOCATE_TYPES)))
   ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES),$(PREBUILD_TYPES), \
@@ -358,15 +355,13 @@ ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),ndebug,$(PREB
 # All these tests check that we have sane behavior if we don't have a patchoat or dex2oat.
 # Therefore we shouldn't run them in situations where we actually don't have these since they
 # explicitly test for them. These all also assume we have an image.
-# 554-jit-profile-file is disabled because it needs a primary oat file to know what it should save.
 TEST_ART_BROKEN_FALLBACK_RUN_TESTS := \
   116-nodex2oat \
   117-nopatchoat \
   118-noimage-dex2oat \
   119-noimage-patchoat \
   137-cfi \
-  138-duplicate-classes-check2 \
-  554-jit-profile-file
+  138-duplicate-classes-check2
 
 # This test fails without an image.
 TEST_ART_BROKEN_NO_IMAGE_RUN_TESTS := \
