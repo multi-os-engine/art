@@ -39,7 +39,7 @@ public class Main {
   private static final String PROFILE_FILE = PKG_NAME + ".prof";
   private static final String TEMP_FILE_NAME_PREFIX = "dummy";
   private static final String TEMP_FILE_NAME_SUFFIX = "-file";
-  private static final int JIT_INVOCATION_COUNT = 101;
+  private static final int JIT_INVOCATION_COUNT = 200;
 
   /* needs to match Runtime:: kProfileBackground */
   private static final int PROFILE_BACKGROUND = 1;
@@ -62,7 +62,7 @@ public class Main {
       profileDir.mkdir();
 
       // Registering the app info will set the profile file name.
-      VMRuntime.registerAppInfo(PKG_NAME, appDir.getPath());
+      VMRuntime.registerAppInfo(PKG_NAME, appDir.getPath(), new String[] {getDexLocation()});
 
       // Make sure the hot methods are jitted.
       Main m = new Main();
@@ -107,7 +107,7 @@ public class Main {
       try {
         Class c = Class.forName("dalvik.system.VMRuntime");
         registerAppInfoMethod = c.getDeclaredMethod("registerAppInfo",
-            String.class, String.class, String.class);
+            String.class, String.class, String[].class);
         updateProcessStateMethod = c.getDeclaredMethod("updateProcessState", Integer.TYPE);
         getRuntimeMethod = c.getDeclaredMethod("getRuntime");
       } catch (Exception e) {
@@ -115,8 +115,9 @@ public class Main {
       }
     }
 
-    public static void registerAppInfo(String pkgName, String appDir) throws Exception {
-      registerAppInfoMethod.invoke(null, pkgName, appDir, null);
+    public static void registerAppInfo(String pkgName, String appDir, String[] codePaths)
+        throws Exception {
+      registerAppInfoMethod.invoke(null, pkgName, appDir, codePaths);
     }
     public static void updateProcessState(int state) throws Exception {
       Object runtime = getRuntimeMethod.invoke(null);
@@ -124,8 +125,8 @@ public class Main {
     }
   }
 
-  static native String getProfileInfoDump(
-      String filename);
+  static native String getProfileInfoDump(String filename);
+  static native String getDexLocation();
 
   private static File createTempFile() throws Exception {
     try {
