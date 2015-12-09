@@ -1,0 +1,8 @@
+Code-Review+1: Stuart Monteith <stuart.monteith@linaro.org>
+Code-Review+2: Vladimir Marko <vmarko@google.com>
+Verified+1: Vladimir Marko <vmarko@google.com>
+Submitted-by: Vladimir Marko <vmarko@google.com>
+Submitted-at: Wed, 09 Dec 2015 16:20:35 +0000
+Reviewed-on: https://android-review.googlesource.com/186101
+Project: platform/art
+Branch: refs/heads/master
