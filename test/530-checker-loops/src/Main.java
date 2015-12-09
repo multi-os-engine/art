@@ -79,6 +79,22 @@ public class Main {
     return result;
   }
 
+  /// CHECK-START: int Main.hiddenStride(int[]) BCE (before)
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-START: int Main.hiddenStride(int[]) BCE (after)
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-NOT: Deoptimize
+  static int hiddenStride(int[] a) {
+    int result = 0;
+    for (int i = 1; i <= 1; i++) {
+      // Obscured unit stride.
+      for (int j = 0; j < a.length; j += i) {
+        result += a[j];
+      }
+    }
+    return result;
+  }
+
   /// CHECK-START: int Main.linearWhile(int[]) BCE (before)
   /// CHECK-DAG: BoundsCheck
   /// CHECK-START: int Main.linearWhile(int[]) BCE (after)
@@ -502,7 +518,53 @@ public class Main {
     }
   }
 
-  // Verifier for triangular methods.
+  /// CHECK-START: void Main.linearTriangularVariations(int) BCE (before)
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-START: void Main.linearTriangularVariations(int) BCE (after)
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-DAG: ArrayGet
+  /// CHECK-DAG: ArraySet
+  /// CHECK-NOT: Deoptimize
+  private static void linearTriangularVariations(int n) {
+    int[] a = new int[n];
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j < i; j++) {
+        a[j] += 1;
+      }
+      for (int j = i - 1; j >= 0; j--) {
+        a[j] += 1;
+      }
+      for (int j = i; j < n; j++) {
+        a[j] += 1;
+      }
+      for (int j = n - 1; j > i - 1; j--) {
+        a[j] += 1;
+      }
+    }
+    verifyTriangular(a);
+  }
+
+  // Verifier for triangular loops.
   private static void verifyTriangular(int[] a, int[] b, int m, int n) {
     expectEquals(n, a.length);
     for (int i = 0, k = m; i < n; i++) {
@@ -512,6 +574,14 @@ public class Main {
     expectEquals(m, b.length);
     for (int i = 0; i < m; i++) {
       expectEquals(b[i], 1);
+    }
+  }
+
+  // Verifier for triangular loops.
+  private static void verifyTriangular(int[] a) {
+    int n = a.length;
+    for (int i = 0; i < n; i++) {
+      expectEquals(a[i], n + n);
     }
   }
 
@@ -1087,6 +1157,8 @@ public class Main {
     expectEquals(55, linearObscure(x));
     expectEquals(0, linearVeryObscure(empty));
     expectEquals(55, linearVeryObscure(x));
+    expectEquals(0, hiddenStride(empty));
+    expectEquals(55, hiddenStride(x));
     expectEquals(0, linearWhile(empty));
     expectEquals(55, linearWhile(x));
     expectEquals(0, linearThreeWayPhi(empty));
@@ -1144,6 +1216,7 @@ public class Main {
     linearTriangularOnTwoArrayLengths(10);
     linearTriangularOnOneArrayLength(10);
     linearTriangularOnParameter(10);
+    linearTriangularVariations(10);
 
     // Sorting.
     int[] sort = { 5, 4, 1, 9, 10, 2, 7, 6, 3, 8 };
