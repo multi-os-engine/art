@@ -861,6 +861,100 @@ void IntrinsicCodeGeneratorMIPS64::VisitMathCeil(HInvoke* invoke) {
   GenRoundingMode(invoke->GetLocations(), kCeil, GetAssembler());
 }
 
+// int java.lang.Math.round(float)
+void IntrinsicLocationsBuilderMIPS64::VisitMathRoundFloat(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS64::VisitMathRoundFloat(HInvoke* invoke) {
+  LocationSummary* locations = invoke->GetLocations();
+  Mips64Assembler* assembler = GetAssembler();
+  FpuRegister in = locations->InAt(0).AsFpuRegister<FpuRegister>();
+  GpuRegister out = locations->Out().AsRegister<GpuRegister>();
+
+  Mips64Label done;
+  Mips64Label notNaN;
+  Mips64Label notNegativeInfinity;
+
+  // if (a.isNaN)
+  //   return 0;
+  __ ClassS(FTMP, in);
+  __ Dmfc1(out, FTMP);
+  __ Andi(TMP, out, kQuietNaN | kSignalingNaN);
+  __ Beqzc(TMP, &notNaN);
+
+  __ Move(out, ZERO);
+  __ Bc(&done);
+
+  __ Bind(&notNaN);
+
+  // if (a == Float.NEGATIVE_INFINITY)
+  //   return Integer.MIN_VALUE;
+  __ Andi(TMP, out, kNegativeInfinity);
+  __ Beqzc(TMP, &notNegativeInfinity);
+
+  __ LoadConst32(out, 0x80000000);  // Integer.MIN_VALUE
+  __ Bc(&done);
+
+  __ Bind(&notNegativeInfinity);
+
+  // return (int)floor(in + 0.5f);
+  __ LoadConst32(out, 0x3F000000);  // Bit pattern for 0.5f
+  __ Mtc1(out, FTMP);
+  __ AddS(FTMP, FTMP, in);
+  __ FloorWS(FTMP, FTMP);
+  __ Mfc1(out, FTMP);
+
+  __ Bind(&done);
+}
+
+// long java.lang.Math.round(double)
+void IntrinsicLocationsBuilderMIPS64::VisitMathRoundDouble(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS64::VisitMathRoundDouble(HInvoke* invoke) {
+  LocationSummary* locations = invoke->GetLocations();
+  Mips64Assembler* assembler = GetAssembler();
+  FpuRegister in = locations->InAt(0).AsFpuRegister<FpuRegister>();
+  GpuRegister out = locations->Out().AsRegister<GpuRegister>();
+
+  Mips64Label done;
+  Mips64Label notNaN;
+  Mips64Label notNegativeInfinity;
+
+  // if (a.isNaN)
+  //   return 0;
+  __ ClassD(FTMP, in);
+  __ Dmfc1(out, FTMP);
+  __ Andi(TMP, out, kQuietNaN | kSignalingNaN);
+  __ Beqzc(TMP, &notNaN);
+
+  __ Move(out, ZERO);
+  __ Bc(&done);
+
+  __ Bind(&notNaN);
+
+  // if (a == Double.NEGATIVE_INFINITY)
+  //   return Long.MIN_VALUE;
+  __ Andi(TMP, out, kNegativeInfinity);
+  __ Beqzc(TMP, &notNegativeInfinity);
+
+  __ LoadConst64(out, 0x8000000000000000);  // Long.MIN_VALUE
+  __ Bc(&done);
+
+  __ Bind(&notNegativeInfinity);
+
+  // return (long)floor(in + 0.5f);
+  __ LoadConst64(out, 0x3FE0000000000000);  // Bit pattern for 0.5d
+  __ Dmtc1(out, FTMP);
+  __ AddD(FTMP, FTMP, in);
+  __ FloorLD(FTMP, FTMP);
+  __ Dmfc1(out, FTMP);
+
+  __ Bind(&done);
+}
+
 // byte libcore.io.Memory.peekByte(long address)
 void IntrinsicLocationsBuilderMIPS64::VisitMemoryPeekByte(HInvoke* invoke) {
   CreateIntToIntLocations(arena_, invoke);
@@ -1721,9 +1815,6 @@ void IntrinsicLocationsBuilderMIPS64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UN
 }                                                                                      \
 void IntrinsicCodeGeneratorMIPS64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) {    \
 }
-
-UNIMPLEMENTED_INTRINSIC(MathRoundDouble)
-UNIMPLEMENTED_INTRINSIC(MathRoundFloat)
 
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
