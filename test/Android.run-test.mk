@@ -42,7 +42,8 @@ TEST_ART_RUN_TEST_DEPENDENCIES := \
 ifeq ($(ANDROID_COMPILE_WITH_JACK),true)
   TEST_ART_RUN_TEST_DEPENDENCIES += \
     $(JACK) \
-    $(JILL_JAR)
+    $(JILL_JAR) \
+    | setup-jack-server
 endif
 
 ifeq ($(ART_TEST_DEBUG_GC),true)
@@ -63,7 +64,7 @@ define define-build-art-run-test
     run_test_options += --quiet
   endif
 $$(dmart_target): PRIVATE_RUN_TEST_OPTIONS := $$(run_test_options)
-$$(dmart_target): $(TEST_ART_RUN_TEST_DEPENDENCIES) $(TARGET_JACK_CLASSPATH_DEPENDENCIES)
+$$(dmart_target): $(TARGET_JACK_CLASSPATH_DEPENDENCIES) $(TEST_ART_RUN_TEST_DEPENDENCIES)
 	$(hide) rm -rf $$(dir $$@) && mkdir -p $$(dir $$@)
 	$(hide) DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) \
 	  SMALI=$(abspath $(HOST_OUT_EXECUTABLES)/smali) \
@@ -864,7 +865,7 @@ define define-test-art-run-test
 $$(run_test_rule_name): PRIVATE_RUN_TEST_OPTIONS := $$(run_test_options)
 $$(run_test_rule_name): PRIVATE_JACK_CLASSPATH := $$(jack_classpath)
 .PHONY: $$(run_test_rule_name)
-$$(run_test_rule_name): $(TEST_ART_RUN_TEST_DEPENDENCIES) $(HOST_OUT_EXECUTABLES)/hprof-conv $$(prereq_rule)
+$$(run_test_rule_name): $(HOST_OUT_EXECUTABLES)/hprof-conv $$(prereq_rule) $(TEST_ART_RUN_TEST_DEPENDENCIES)
 	$(hide) $$(call ART_TEST_SKIP,$$@) && \
 	  DX=$(abspath $(DX)) \
 	    JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) \
