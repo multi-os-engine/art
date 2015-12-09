@@ -458,6 +458,15 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
     return false;
   }
 
+  // Find locations where we want to generate extra stackmaps for native debugging.
+  // This allows us to generate the info only at interesting points (for example,
+  // at start of java statement) rather than before every dex instruction.
+  const bool native_debugging = compiler_driver_->GetCompilerOptions().GetGenerateDebugInfo();
+  ArenaBitVector native_debug_info_locations(arena_, code_item.insns_size_in_code_units_, false);
+  if (native_debugging) {
+    FindNativeDebugInfoLocations(code_item, &native_debug_info_locations);
+  }
+
   CreateBlocksForTryCatch(code_item);
 
   InitializeParameters(code_item.ins_size_);
@@ -467,6 +476,11 @@ bool HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item) {
     // Update the current block if dex_pc starts a new block.
     MaybeUpdateCurrentBlock(dex_pc);
     const Instruction& instruction = *Instruction::At(code_ptr);
+    if (native_debugging && native_debug_info_locations.IsBitSet(dex_pc)) {
+      if (current_block_ != nullptr) {
+        current_block_->AddInstruction(new (arena_) HNativeDebugInfo(dex_pc));
+      }
+    }
     if (!AnalyzeDexInstruction(instruction, dex_pc)) {
       return false;
     }
@@ -505,6 +519,42 @@ void HGraphBuilder::MaybeUpdateCurrentBlock(size_t dex_pc) {
   }
   graph_->AddBlock(block);
   current_block_ = block;
+}
+
+void HGraphBuilder::FindNativeDebugInfoLocations(const DexFile::CodeItem& code_item,
+                                                 ArenaBitVector* locations) {
+  // The callback gets called when the line number changes.
+  // In other words, it marks the start of new java statement.
+  struct Callback {
+    static bool Position(void* ctx, const DexFile::PositionInfo& entry) {
+      static_cast<ArenaBitVector*>(ctx)->SetBit(entry.address_);
+      return false;
+    }
+  };
+  dex_file_->DecodeDebugPositionInfo(&code_item, Callback::Position, locations);
+  // Add native debug info at the start of every basic block.
+  for (uint32_t pc = 0; pc < code_item.insns_size_in_code_units_; pc++) {
+    if (FindBlockStartingAt(pc) != nullptr) {
+      locations->SetBit(pc);
+    }
+  }
+  // Instruction-specific tweaks.
+  for (uint32_t pc = 0; pc < code_item.insns_size_in_code_units_; pc++) {
+    const Instruction* instruction = Instruction::At(code_item.insns_ + pc);
+    switch (instruction->Opcode()) {
+      case Instruction::MOVE_EXCEPTION:
+      case Instruction::MOVE_RESULT:
+      case Instruction::MOVE_RESULT_WIDE:
+      case Instruction::MOVE_RESULT_OBJECT:
+        // The compiler checks that there are no instructions before those.
+        // So generate HNativeDebugInfo after them instead.
+        locations->ClearBit(pc);
+        locations->SetBit(pc + 1);
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 bool HGraphBuilder::ComputeBranchTargets(const uint16_t* code_ptr,
