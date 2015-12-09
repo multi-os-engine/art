@@ -1221,6 +1221,8 @@ void ImageWriter::CalculateNewObjectOffsets() {
     // Compiling the boot image, add null class loader.
     class_loaders_.insert(nullptr);
   }
+  // class_loaders_ usually will not be empty, but may be empty if we attempt to create an image
+  // with no classes.
   if (!class_loaders_.empty()) {
     CHECK_EQ(class_loaders_.size(), 1u) << "Should only have one real class loader in the image";
     ReaderMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
@@ -1431,6 +1433,7 @@ void ImageWriter::CopyAndFixupNativeData() {
   uint8_t* const class_table_memory_ptr = image_->Begin() + class_table_section.Offset();
   ReaderMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
   size_t class_table_bytes = 0;
+  CHECK_LE(class_loaders_.size(), 1u) << "Only support on class loader in the image";
   for (mirror::ClassLoader* loader : class_loaders_) {
     ClassTable* table = class_linker->ClassTableForClassLoader(loader);
     CHECK(table != nullptr);
@@ -1440,7 +1443,8 @@ void ImageWriter::CopyAndFixupNativeData() {
     // above comment for intern tables.
     ClassTable temp_class_table;
     temp_class_table.ReadFromMemory(memory_ptr);
-    // CHECK_EQ(temp_class_table.NumNonZygoteClasses(), table->NumNonZygoteClasses());
+    CHECK_EQ(temp_class_table.NumZygoteClasses(), table->NumNonZygoteClasses() +
+             table->NumZygoteClasses());
     BufferedRootVisitor<kDefaultBufferedRootCount> buffered_visitor(&root_visitor,
                                                                     RootInfo(kRootUnknown));
     temp_class_table.VisitRoots(buffered_visitor);
