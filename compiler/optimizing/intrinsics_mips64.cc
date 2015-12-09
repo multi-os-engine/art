@@ -861,6 +861,82 @@ void IntrinsicCodeGeneratorMIPS64::VisitMathCeil(HInvoke* invoke) {
   GenRoundingMode(invoke->GetLocations(), kCeil, GetAssembler());
 }
 
+// int java.lang.Math.round(float)
+void IntrinsicLocationsBuilderMIPS64::VisitMathRoundFloat(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS64::VisitMathRoundFloat(HInvoke* invoke) {
+  LocationSummary* locations = invoke->GetLocations();
+  Mips64Assembler* assembler = GetAssembler();
+  FpuRegister in = locations->InAt(0).AsFpuRegister<FpuRegister>();
+  GpuRegister out = locations->Out().AsRegister<GpuRegister>();
+
+  Mips64Label done;
+  Mips64Label add;
+
+  __ LoadConst32(out, bit_cast<int32_t, float>(std::numeric_limits<int32_t>::min()));
+  __ Mtc1(out, FTMP);
+  __ CmpLeS(FTMP, FTMP, in);
+  __ Bc1nez(FTMP, &add);
+
+  __ CmpEqS(FTMP, in, in);
+  __ LoadConst32(out, std::numeric_limits<int32_t>::min());
+  __ Bc1nez(FTMP, &done);
+
+  __ Move(out, ZERO);
+  __ Bc(&done);
+
+  __ Bind(&add);
+
+  // return (int)floor(in + 0.5f);
+  __ LoadConst32(out, bit_cast<int32_t, float>(0.5f));
+  __ Mtc1(out, FTMP);
+  __ AddS(FTMP, FTMP, in);
+  __ FloorWS(FTMP, FTMP);
+  __ Mfc1(out, FTMP);
+
+  __ Bind(&done);
+}
+
+// long java.lang.Math.round(double)
+void IntrinsicLocationsBuilderMIPS64::VisitMathRoundDouble(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS64::VisitMathRoundDouble(HInvoke* invoke) {
+  LocationSummary* locations = invoke->GetLocations();
+  Mips64Assembler* assembler = GetAssembler();
+  FpuRegister in = locations->InAt(0).AsFpuRegister<FpuRegister>();
+  GpuRegister out = locations->Out().AsRegister<GpuRegister>();
+
+  Mips64Label done;
+  Mips64Label add;
+
+  __ LoadConst64(out, bit_cast<int64_t, double>(std::numeric_limits<int64_t>::min()));
+  __ Dmtc1(out, FTMP);
+  __ CmpLeD(FTMP, FTMP, in);
+  __ Bc1nez(FTMP, &add);
+
+  __ CmpEqD(FTMP, in, in);
+  __ LoadConst64(out, std::numeric_limits<int64_t>::min());
+  __ Bc1nez(FTMP, &done);
+
+  __ Move(out, ZERO);
+  __ Bc(&done);
+
+  __ Bind(&add);
+
+  // return (long)floor(in + 0.5d);
+  __ LoadConst64(out, bit_cast<int64_t, double>(0.5));
+  __ Dmtc1(out, FTMP);
+  __ AddD(FTMP, FTMP, in);
+  __ FloorLD(FTMP, FTMP);
+  __ Dmfc1(out, FTMP);
+
+  __ Bind(&done);
+}
+
 // byte libcore.io.Memory.peekByte(long address)
 void IntrinsicLocationsBuilderMIPS64::VisitMemoryPeekByte(HInvoke* invoke) {
   CreateIntToIntLocations(arena_, invoke);
@@ -1299,8 +1375,6 @@ static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGenerat
   if (type == Primitive::kPrimLong) {
     __ Lld(out, TMP);
   } else {
-    // Note: We will need a read barrier here, when read barrier
-    // support is added to the MIPS64 back end.
     __ Ll(out, TMP);
   }
   __ Dsubu(out, out, expected);         // If we didn't get the 'expected'
@@ -1723,9 +1797,6 @@ void IntrinsicLocationsBuilderMIPS64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UN
 }                                                                                      \
 void IntrinsicCodeGeneratorMIPS64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) {    \
 }
-
-UNIMPLEMENTED_INTRINSIC(MathRoundDouble)
-UNIMPLEMENTED_INTRINSIC(MathRoundFloat)
 
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
