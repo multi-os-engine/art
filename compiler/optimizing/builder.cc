@@ -784,12 +784,37 @@ ArtMethod* HGraphBuilder::ResolveMethod(uint16_t method_idx, InvokeType invoke_t
     uint16_t vtable_index = resolved_method->GetMethodIndex();
     ArtMethod* actual_method = compiling_class->GetSuperClass()->GetVTableEntry(
         vtable_index, class_linker->GetImagePointerSize());
-    if (actual_method != resolved_method &&
-        !IsSameDexFile(*resolved_method->GetDexFile(), *dex_compilation_unit_->GetDexFile())) {
-      // TODO: The actual method could still be referenced in the current dex file, so we
-      // could try locating it.
-      // TODO: Remove the dex_file restriction.
-      return nullptr;
+    // b/26022686
+    //
+    // We need to prevent any cross-dex file resolution unless the resolved method is guarenteed to
+    // come from a bootclasspath dex file (found by checking if the superclass is in the
+    // bootclasspath).
+    //
+    // The simplest correct code would be:
+    //
+    //     if (actual_method != resolved_method &&
+    //         (!IsSameDexFile(*resolved_method->GetDexFile(), *dex_compilation_unit_->GetDexFile()) ||
+    //          !IsSameDexFile(*actual_method->GetDexFile(), *dex_compilation_unit_->GetDexFile()))) {
+    //       return nullptr;
+    //     }
+    if (actual_method != resolved_method) {
+      const std::vector<const DexFile*>& boot_class_path =
+          dex_compilation_unit_->GetClassLinker()->GetBootClassPath();
+      const DexFile* superclass_dex_file = &compiling_class->GetSuperClass()->GetDexFile();
+      const bool in_boot_class_path = Runtime::Current()->IsCompilingBootImage() ||
+                                      std::find(boot_class_path.begin(),
+                                                boot_class_path.end(),
+                                                superclass_dex_file) != boot_class_path.end();
+      if (!(IsSameDexFile(*resolved_method->GetDexFile(), *dex_compilation_unit_->GetDexFile()) &&
+            (in_boot_class_path ||
+             IsSameDexFile(*actual_method->GetDexFile(), *dex_compilation_unit_->GetDexFile())))) {
+        // We cannot be sure we have the right method if either the resolved or the 'actual'
+        // methods are in different dex files, since they could change out from under us.
+        // TODO: The actual method could still be referenced in the current dex file, so we
+        // could try locating it.
+        // TODO: Remove the dex_file restriction.
+        return nullptr;
+      }
     }
     if (!actual_method->IsInvokable()) {
       // Fail if the actual method cannot be invoked. Otherwise, the runtime resolution stub
