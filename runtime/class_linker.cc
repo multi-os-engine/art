@@ -40,6 +40,7 @@
 #include "base/unix_file/fd_file.h"
 #include "base/value_object.h"
 #include "class_linker-inl.h"
+#include "class_profile.h"
 #include "class_table-inl.h"
 #include "compiler_callbacks.h"
 #include "debugger.h"
@@ -319,7 +320,8 @@ ClassLinker::ClassLinker(InternTable* intern_table)
       quick_imt_conflict_trampoline_(nullptr),
       quick_generic_jni_trampoline_(nullptr),
       quick_to_interpreter_bridge_trampoline_(nullptr),
-      image_pointer_size_(sizeof(void*)) {
+      image_pointer_size_(sizeof(void*)),
+      class_profile_(new ClassProfile) {
   CHECK(intern_table_ != nullptr);
   static_assert(kFindArrayCacheSize == arraysize(find_array_class_cache_),
                 "Array cache size wrong.");
@@ -7322,9 +7324,11 @@ void ClassLinker::DumpForSigQuit(std::ostream& os) {
   if (dex_cache_boot_image_class_lookup_required_) {
     AddBootImageClassesToClassTable();
   }
-  ReaderMutexLock mu(soa.Self(), *Locks::classlinker_classes_lock_);
-  os << "Zygote loaded classes=" << NumZygoteClasses() << " post zygote classes="
-     << NumNonZygoteClasses() << "\n";
+  {
+    ReaderMutexLock mu(soa.Self(), *Locks::classlinker_classes_lock_);
+    os << "Zygote loaded classes=" << NumZygoteClasses() << " post zygote classes="
+       << NumNonZygoteClasses() << "\n";
+  }
 }
 
 class CountClassesVisitor : public ClassLoaderVisitor {
@@ -7617,6 +7621,11 @@ void ClassLinker::CleanupClassLoaders() {
       it = class_loaders_.erase(it);
     }
   }
+}
+
+void ClassLinker::UpdateClassProfile() {
+  DCHECK(class_profile_ != nullptr);
+  class_profile_->Collect();
 }
 
 // Instantiate ResolveMethod.

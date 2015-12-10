@@ -792,7 +792,11 @@ class Heap {
   HomogeneousSpaceCompactResult PerformHomogeneousSpaceCompact() REQUIRES(!*gc_complete_lock_);
   bool SupportHomogeneousSpaceCompactAndCollectorTransitions() const;
 
+  // Start the class profiling task.
+  void StartClassProfiling();
+
  private:
+  class ClassProfileTask;
   class ConcurrentGCTask;
   class CollectorTransitionTask;
   class HeapTrimTask;
@@ -1353,7 +1357,6 @@ class Heap {
   // Boot image spaces.
   std::vector<space::ImageSpace*> boot_image_spaces_;
 
-  friend class CollectorTransitionTask;
   friend class collector::GarbageCollector;
   friend class collector::MarkCompact;
   friend class collector::ConcurrentCopying;

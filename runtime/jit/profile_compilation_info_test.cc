@@ -53,7 +53,7 @@ class ProfileCompilationInfoTest : public CommonRuntimeTest {
                uint32_t checksum,
                uint16_t method_index,
                ProfileCompilationInfo* info) {
-    return info->AddData(dex_location, checksum, method_index);
+    return info->AddMethodIndex(dex_location, checksum, method_index);
   }
 
   uint32_t GetFd(const ScratchFile& file) {

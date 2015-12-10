@@ -867,12 +867,13 @@ void CompilerDriver::PreCompile(jobject class_loader,
 }
 
 bool CompilerDriver::IsImageClass(const char* descriptor) const {
-  if (!IsBootImage()) {
-    // NOTE: Currently only reachable from InitImageMethodVisitor for the app image case.
-    return true;
-  } else {
+  if (image_classes_ != nullptr) {
+    // If we have a set of image classes, use those.
     return image_classes_->find(descriptor) != image_classes_->end();
   }
+  // No set of image classes, assume we include all the classes.
+  // NOTE: Currently only reachable from InitImageMethodVisitor for the app image case.
+  return !IsBootImage();
 }
 
 bool CompilerDriver::IsClassToCompile(const char* descriptor) const {

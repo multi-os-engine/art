@@ -39,6 +39,7 @@ Mutex* Locks::allocated_monitor_ids_lock_ = nullptr;
 Mutex* Locks::allocated_thread_ids_lock_ = nullptr;
 ReaderWriterMutex* Locks::breakpoint_lock_ = nullptr;
 ReaderWriterMutex* Locks::classlinker_classes_lock_ = nullptr;
+ReaderWriterMutex* Locks::class_profile_lock_ = nullptr;
 Mutex* Locks::deoptimization_lock_ = nullptr;
 ReaderWriterMutex* Locks::heap_bitmap_lock_ = nullptr;
 Mutex* Locks::instrument_entrypoints_lock_ = nullptr;
@@ -952,6 +953,7 @@ void Locks::Init() {
     DCHECK(allocated_thread_ids_lock_ != nullptr);
     DCHECK(breakpoint_lock_ != nullptr);
     DCHECK(classlinker_classes_lock_ != nullptr);
+    DCHECK(class_profile_lock_ != nullptr);
     DCHECK(deoptimization_lock_ != nullptr);
     DCHECK(heap_bitmap_lock_ != nullptr);
     DCHECK(oat_file_manager_lock_ != nullptr);
@@ -1029,6 +1031,10 @@ void Locks::Init() {
     DCHECK(classlinker_classes_lock_ == nullptr);
     classlinker_classes_lock_ = new ReaderWriterMutex("ClassLinker classes lock",
                                                       current_lock_level);
+
+    UPDATE_CURRENT_LOCK_LEVEL(kClassProfileLock);
+    DCHECK(class_profile_lock_ == nullptr);
+    class_profile_lock_ = new ReaderWriterMutex("ClassLinker classes lock", current_lock_level);
 
     UPDATE_CURRENT_LOCK_LEVEL(kMonitorPoolLock);
     DCHECK(allocated_monitor_ids_lock_ == nullptr);

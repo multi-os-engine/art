@@ -27,6 +27,7 @@
 #include "base/scoped_flock.h"
 #include "base/stl_util.h"
 #include "base/unix_file/fd_file.h"
+#include "class_profile.h"
 #include "jit/profiling_info.h"
 #include "os.h"
 #include "safe_map.h"
@@ -58,10 +59,25 @@ bool ProfileCompilationInfo::SaveProfilingInfo(const std::string& filename,
     ScopedObjectAccess soa(Thread::Current());
     for (auto it = methods.begin(); it != methods.end(); it++) {
       const DexFile* dex_file = (*it)->GetDexFile();
-      if (!info.AddData(dex_file->GetLocation(),
-                        dex_file->GetLocationChecksum(),
-                        (*it)->GetDexMethodIndex())) {
+      if (!info.AddMethodIndex(dex_file->GetLocation(),
+                               dex_file->GetLocationChecksum(),
+                               (*it)->GetDexMethodIndex())) {
         return false;
+      }
+    }
+    // Add resolved classes.
+    ClassLinker* const class_linker = Runtime::Current()->GetClassLinker();
+    ReaderMutexLock mu(soa.Self(), *Locks::class_profile_lock_);
+    const ClassProfile* class_profile = class_linker->GetClassProfile();
+    if (class_profile != nullptr) {
+      LOG(INFO) << "Saving class profile";
+      const std::unordered_map<std::string, std::unique_ptr<DexCacheProfileData>>& dex_caches =
+          class_profile->GetDexCaches();
+      for (auto&& pair : dex_caches) {
+        const std::string& location = pair.first;
+        const DexCacheProfileData* data = pair.second.get();
+        DCHECK(data != nullptr);
+        info.AddResolvedClasses(location, *data);
       }
     }
   }
@@ -104,10 +120,10 @@ static constexpr const char kLineSeparator = '\n';
 
 /**
  * Serialization format:
- *    dex_location1,dex_location_checksum1,method_id11,method_id12...
- *    dex_location2,dex_location_checksum2,method_id21,method_id22...
+ *    dex_location1,dex_location_checksum1,method_id11,method_id12...,classes,num_class_defs,class_id1,...
+ *    dex_location2,dex_location_checksum2,method_id21,method_id22...,classes,num_class_defs,class_id1,...
  * e.g.
- *    /system/priv-app/app/app.apk,131232145,11,23,454,54
+ *    /system/priv-app/app/app.apk,131232145,11,23,454,54,classes,1,2,4,1234
  *    /system/priv-app/app/app.apk:classes5.dex,218490184,39,13,49,1
  **/
 bool ProfileCompilationInfo::Save(uint32_t fd) {
@@ -122,6 +138,12 @@ bool ProfileCompilationInfo::Save(uint32_t fd) {
     os << dex_location << kFieldSeparator << dex_data.checksum;
     for (auto method_it : dex_data.method_set) {
       os << kFieldSeparator << method_it;
+    }
+    if (!dex_data.class_set.empty()) {
+      os << kFieldSeparator << "classes" << kFieldSeparator << dex_data.num_class_defs;
+      for (auto class_id : dex_data.class_set) {
+        os << kFieldSeparator << class_id;
+      }
     }
     os << kLineSeparator;
   }
@@ -153,18 +175,64 @@ static void SplitString(const std::string& s, char separator, std::vector<std::s
   }
 }
 
-bool ProfileCompilationInfo::AddData(const std::string& dex_location,
-                                     uint32_t checksum,
-                                     uint16_t method_idx) {
+ProfileCompilationInfo::DexFileData* ProfileCompilationInfo::GetOrAddDexFileData(
+    const std::string& dex_location,
+    uint32_t checksum) {
   auto info_it = info_.find(dex_location);
   if (info_it == info_.end()) {
     info_it = info_.Put(dex_location, DexFileData(checksum));
   }
   if (info_it->second.checksum != checksum) {
     LOG(WARNING) << "Checksum mismatch for dex " << dex_location;
+    return nullptr;
+  }
+  return &info_it->second;
+}
+
+bool ProfileCompilationInfo::AddResolvedClasses(const std::string& dex_location,
+                                                const DexCacheProfileData& class_data) {
+  const uint32_t checksum = class_data.DexFileChecksum();
+  DexFileData* const data = GetOrAddDexFileData(dex_location, checksum);
+  if (data == nullptr) {
     return false;
   }
-  info_it->second.method_set.insert(method_idx);
+  data->num_class_defs = class_data.NumClassDefs();
+  for (size_t class_def_idx = 0; class_def_idx < class_data.NumClassDefs(); ++class_def_idx) {
+    if (class_data.IsResolved(class_def_idx)) {
+      data->class_set.insert(class_def_idx);
+    }
+  }
+  return true;
+}
+
+bool ProfileCompilationInfo::AddMethodIndex(const std::string& dex_location,
+                                            uint32_t checksum,
+                                            uint16_t method_idx) {
+  DexFileData* const data = GetOrAddDexFileData(dex_location, checksum);
+  if (data == nullptr) {
+    return false;
+  }
+  data->method_set.insert(method_idx);
+  return true;
+}
+
+void ProfileCompilationInfo::SetNumClassDefs(const std::string& dex_location,
+                                             uint32_t checksum,
+                                             uint32_t num_class_defs) {
+  DexFileData* const data = GetOrAddDexFileData(dex_location, checksum);
+  if (data != nullptr) {
+    data->num_class_defs = num_class_defs;
+  }
+}
+
+bool ProfileCompilationInfo::AddClassIndex(const std::string& dex_location,
+                                           uint32_t checksum,
+                                           uint16_t class_idx) {
+  DexFileData* const data = GetOrAddDexFileData(dex_location, checksum);
+  if (data == nullptr) {
+    return false;
+  }
+  data->class_set.insert(class_idx);
   return true;
 }
 
@@ -183,12 +251,40 @@ bool ProfileCompilationInfo::ProcessLine(const std::string& line) {
   }
 
   for (size_t i = 2; i < parts.size(); i++) {
+    if (parts[i] == "classes") {
+      // Parse number of class defs next.
+      ++i;
+      if (i >= parts.size()) {
+        LOG(WARNING) << "Expected number of class defs";
+        return false;
+      }
+      uint32_t num_class_defs;
+      if (!ParseInt(parts[i].c_str(), &num_class_defs)) {
+        LOG(WARNING) << "Cannot parse num_class_defs " << parts[i];
+        return false;
+      }
+      SetNumClassDefs(dex_location, checksum, num_class_defs);
+      for (++i; i < parts.size(); ++i) {
+        uint32_t class_def_idx;
+        if (!ParseInt(parts[i].c_str(), &class_def_idx)) {
+          LOG(WARNING) << "Cannot parse class_def_idx " << parts[i];
+          return false;
+        } else if (class_def_idx >= num_class_defs) {
+          LOG(WARNING) << "Class def idx " << class_def_idx << " is larger than " << num_class_defs;
+          return false;
+        }
+        if (!AddClassIndex(dex_location, checksum, class_def_idx)) {
+          return false;
+        }
+      }
+      break;
+    }
     uint32_t method_idx;
     if (!ParseInt(parts[i].c_str(), &method_idx)) {
       LOG(WARNING) << "Cannot parse method_idx " << parts[i];
       return false;
     }
-    if (!AddData(dex_location, checksum, method_idx)) {
+    if (!AddMethodIndex(dex_location, checksum, method_idx)) {
       return false;
     }
   }

@@ -31,6 +31,7 @@
 #include "base/histogram-inl.h"
 #include "base/stl_util.h"
 #include "base/time_utils.h"
+#include "class_profile.h"
 #include "common_throws.h"
 #include "cutils/sched_policy.h"
 #include "debugger.h"
@@ -3606,6 +3607,48 @@ void Heap::RequestConcurrentGCAndSaveObject(Thread* self, bool force_full, mirro
   RequestConcurrentGC(self, force_full);
 }
 
+static bool CanAddHeapTask(Thread* self) REQUIRES(!Locks::runtime_shutdown_lock_) {
+  Runtime* runtime = Runtime::Current();
+  return runtime != nullptr && runtime->IsFinishedStarting() && !runtime->IsShuttingDown(self) &&
+      !self->IsHandlingStackOverflow();
+}
+
+class Heap::ClassProfileTask : public HeapTask {
+ public:
+  explicit ClassProfileTask(uint64_t delay, size_t reschedule_count)
+      : HeapTask(NanoTime() + delay),
+        delay_(delay),
+        reschedule_count_(reschedule_count) {}
+
+  virtual void Run(Thread* self) OVERRIDE {
+    {
+      ScopedObjectAccess soa(self);
+      WriterMutexLock mu(self, *Locks::class_profile_lock_);
+      Runtime::Current()->GetClassLinker()->UpdateClassProfile();
+    }
+    if (reschedule_count_ > 0) {
+      // TODO: We could recycle the same task if it wasnt a self deleting task.
+      gc::Heap* const heap = Runtime::Current()->GetHeap();
+      heap->GetTaskProcessor()->AddTask(self, new ClassProfileTask(delay_, reschedule_count_ - 1));
+    }
+  }
+
+ private:
+  // Delay in ns between tasks.
+  const uint64_t delay_;
+
+  // Number of times to reschedule.
+  const uint64_t reschedule_count_;
+};
+
+void Heap::StartClassProfiling() {
+  Thread* const self = Thread::Current();
+  if (CanAddHeapTask(self)) {
+    // Reschedule 5 times, original delay is 1s.
+    task_processor_->AddTask(self, new ClassProfileTask(MsToNs(1000), 5));
+  }
+}
+
 class Heap::ConcurrentGCTask : public HeapTask {
  public:
   ConcurrentGCTask(uint64_t target_time, bool force_full)
@@ -3619,12 +3662,6 @@ class Heap::ConcurrentGCTask : public HeapTask {
  private:
   const bool force_full_;  // If true, force full (or partial) collection.
 };
-
-static bool CanAddHeapTask(Thread* self) REQUIRES(!Locks::runtime_shutdown_lock_) {
-  Runtime* runtime = Runtime::Current();
-  return runtime != nullptr && runtime->IsFinishedStarting() && !runtime->IsShuttingDown(self) &&
-      !self->IsHandlingStackOverflow();
-}
 
 void Heap::ClearConcurrentGCRequest() {
   concurrent_gc_pending_.StoreRelaxed(false);

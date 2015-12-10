@@ -96,6 +96,7 @@ enum LockLevel {
   kAllocatedThreadIdsLock,
   kMonitorPoolLock,
   kMethodVerifiersLock,
+  kClassProfileLock,
   kClassLinkerClassesLock,
   kBreakpointLock,
   kMonitorLock,
@@ -635,11 +636,14 @@ class Locks {
   // Guards lists of classes within the class linker.
   static ReaderWriterMutex* classlinker_classes_lock_ ACQUIRED_AFTER(breakpoint_lock_);
 
+  // Guards the class profile in the class linker.
+  static ReaderWriterMutex* class_profile_lock_ ACQUIRED_AFTER(classlinker_classes_lock_);
+
   // When declaring any Mutex add DEFAULT_MUTEX_ACQUIRED_AFTER to use annotalysis to check the code
   // doesn't try to hold a higher level Mutex.
-  #define DEFAULT_MUTEX_ACQUIRED_AFTER ACQUIRED_AFTER(Locks::classlinker_classes_lock_)
+  #define DEFAULT_MUTEX_ACQUIRED_AFTER ACQUIRED_AFTER(Locks::class_profile_lock_)
 
-  static Mutex* allocated_monitor_ids_lock_ ACQUIRED_AFTER(classlinker_classes_lock_);
+  static Mutex* allocated_monitor_ids_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
 
   // Guard the allocation/deallocation of thread ids.
   static Mutex* allocated_thread_ids_lock_ ACQUIRED_AFTER(allocated_monitor_ids_lock_);

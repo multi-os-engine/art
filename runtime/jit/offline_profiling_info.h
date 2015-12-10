@@ -28,6 +28,7 @@
 namespace art {
 
 class ArtMethod;
+class DexCacheProfileData;
 
 // TODO: rename file.
 /**
@@ -68,13 +69,12 @@ class ProfileCompilationInfo {
   bool Equals(ProfileCompilationInfo& other);
 
  private:
-  bool AddData(const std::string& dex_location, uint32_t checksum, uint16_t method_idx);
-  bool ProcessLine(const std::string& line);
-
   struct DexFileData {
     explicit DexFileData(uint32_t location_checksum) : checksum(location_checksum) {}
     uint32_t checksum;
+    size_t num_class_defs;
     std::set<uint16_t> method_set;
+    std::set<uint16_t> class_set;
 
     bool operator==(const DexFileData& other) const {
       return checksum == other.checksum && method_set == other.method_set;
@@ -82,6 +82,14 @@ class ProfileCompilationInfo {
   };
 
   using DexFileToProfileInfoMap = SafeMap<const std::string, DexFileData>;
+
+  DexFileData* GetOrAddDexFileData(const std::string& dex_location, uint32_t checksum);
+  bool AddMethodIndex(const std::string& dex_location, uint32_t checksum, uint16_t method_idx);
+  bool AddClassIndex(const std::string& dex_location, uint32_t checksum, uint16_t class_idx);
+  void SetNumClassDefs(const std::string& dex_location, uint32_t checksum, uint32_t num_class_defs);
+  bool AddResolvedClasses(const std::string& dex_location,
+                          const DexCacheProfileData& class_data);
+  bool ProcessLine(const std::string& line);
 
   friend class ProfileCompilationInfoTest;
   friend class CompilerDriverProfileTest;
