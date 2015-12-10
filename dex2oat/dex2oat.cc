@@ -1014,8 +1014,21 @@ class Dex2Oat FINAL {
   // boot class path.
   bool Setup() {
     TimingLogger::ScopedTiming t("dex2oat Setup", timings_);
-    RuntimeOptions runtime_options;
     art::MemMap::Init();  // For ZipEntry::ExtractToMemMap.
+
+    if (!PrepareImageClasses() || !PrepareCompiledClasses() || !PrepareCompiledMethods()) {
+      return false;
+    }
+
+    verification_results_.reset(new VerificationResults(compiler_options_.get()));
+    callbacks_.reset(new QuickCompilerCallbacks(
+        verification_results_.get(),
+        &method_inliner_map_,
+        IsBootImage() ?
+            CompilerCallbacks::CallbackMode::kCompileBootImage :
+            CompilerCallbacks::CallbackMode::kCompileApp));
+
+    RuntimeOptions runtime_options;
     if (boot_image_option_.empty()) {
       std::string boot_class_path = "-Xbootclasspath:";
       boot_class_path += Join(dex_filenames_, ':');
@@ -1030,13 +1043,6 @@ class Dex2Oat FINAL {
       runtime_options.push_back(std::make_pair(runtime_args_[i], nullptr));
     }
 
-    verification_results_.reset(new VerificationResults(compiler_options_.get()));
-    callbacks_.reset(new QuickCompilerCallbacks(
-        verification_results_.get(),
-        &method_inliner_map_,
-        IsBootImage() ?
-            CompilerCallbacks::CallbackMode::kCompileBootImage :
-            CompilerCallbacks::CallbackMode::kCompileApp));
     runtime_options.push_back(std::make_pair("compilercallbacks", callbacks_.get()));
     runtime_options.push_back(
         std::make_pair("imageinstructionset", GetInstructionSetString(instruction_set_)));
@@ -1067,64 +1073,6 @@ class Dex2Oat FINAL {
     // compilation of class initializers.
     // Whilst we're in native take the opportunity to initialize well known classes.
     WellKnownClasses::Init(self->GetJniEnv());
-
-    // If --image-classes was specified, calculate the full list of classes to include in the image
-    if (image_classes_filename_ != nullptr) {
-      std::string error_msg;
-      if (image_classes_zip_filename_ != nullptr) {
-        image_classes_.reset(ReadImageClassesFromZip(image_classes_zip_filename_,
-                                                     image_classes_filename_,
-                                                     &error_msg));
-      } else {
-        image_classes_.reset(ReadImageClassesFromFile(image_classes_filename_));
-      }
-      if (image_classes_.get() == nullptr) {
-        LOG(ERROR) << "Failed to create list of image classes from '" << image_classes_filename_ <<
-            "': " << error_msg;
-        return false;
-      }
-    } else if (IsBootImage()) {
-      image_classes_.reset(new std::unordered_set<std::string>);
-    }
-    // If --compiled-classes was specified, calculate the full list of classes to compile in the
-    // image.
-    if (compiled_classes_filename_ != nullptr) {
-      std::string error_msg;
-      if (compiled_classes_zip_filename_ != nullptr) {
-        compiled_classes_.reset(ReadImageClassesFromZip(compiled_classes_zip_filename_,
-                                                        compiled_classes_filename_,
-                                                        &error_msg));
-      } else {
-        compiled_classes_.reset(ReadImageClassesFromFile(compiled_classes_filename_));
-      }
-      if (compiled_classes_.get() == nullptr) {
-        LOG(ERROR) << "Failed to create list of compiled classes from '"
-                   << compiled_classes_filename_ << "': " << error_msg;
-        return false;
-      }
-    } else {
-      compiled_classes_.reset(nullptr);  // By default compile everything.
-    }
-    // If --compiled-methods was specified, read the methods to compile from the given file(s).
-    if (compiled_methods_filename_ != nullptr) {
-      std::string error_msg;
-      if (compiled_methods_zip_filename_ != nullptr) {
-        compiled_methods_.reset(ReadCommentedInputFromZip(compiled_methods_zip_filename_,
-                                                          compiled_methods_filename_,
-                                                          nullptr,            // No post-processing.
-                                                          &error_msg));
-      } else {
-        compiled_methods_.reset(ReadCommentedInputFromFile(compiled_methods_filename_,
-                                                           nullptr));         // No post-processing.
-      }
-      if (compiled_methods_.get() == nullptr) {
-        LOG(ERROR) << "Failed to create list of compiled methods from '"
-            << compiled_methods_filename_ << "': " << error_msg;
-        return false;
-      }
-    } else {
-      compiled_methods_.reset(nullptr);  // By default compile everything.
-    }
 
     ClassLinker* const class_linker = Runtime::Current()->GetClassLinker();
     if (boot_image_option_.empty()) {
@@ -1164,22 +1112,7 @@ class Dex2Oat FINAL {
 
       constexpr bool kSaveDexInput = false;
       if (kSaveDexInput) {
-        for (size_t i = 0; i < dex_files_.size(); ++i) {
-          const DexFile* dex_file = dex_files_[i];
-          std::string tmp_file_name(StringPrintf("/data/local/tmp/dex2oat.%d.%zd.dex",
-                                                 getpid(), i));
-          std::unique_ptr<File> tmp_file(OS::CreateEmptyFile(tmp_file_name.c_str()));
-          if (tmp_file.get() == nullptr) {
-            PLOG(ERROR) << "Failed to open file " << tmp_file_name
-                << ". Try: adb shell chmod 777 /data/local/tmp";
-            continue;
-          }
-          // This is just dumping files for debugging. Ignore errors, and leave remnants.
-          UNUSED(tmp_file->WriteFully(dex_file->Begin(), dex_file->Size()));
-          UNUSED(tmp_file->Flush());
-          UNUSED(tmp_file->Close());
-          LOG(INFO) << "Wrote input to " << tmp_file_name;
-        }
+        SaveDexInput();
       }
     }
     // Ensure opened dex files are writable for dex-to-dex transformations. Also ensure that
@@ -1244,10 +1177,7 @@ class Dex2Oat FINAL {
       ScopedObjectAccess soa(self);
 
       // Classpath: first the class-path given.
-      std::vector<const DexFile*> class_path_files;
-      for (auto& class_path_file : class_path_files_) {
-        class_path_files.push_back(class_path_file.get());
-      }
+      std::vector<const DexFile*> class_path_files = MakeNonOwningPointerVector(class_path_files_);
 
       // Store the classpath we have right now.
       key_value_store_->Put(OatHeader::kClassPathKey,
@@ -1432,14 +1362,9 @@ class Dex2Oat FINAL {
       elf_writer->EndText(text);
 
       elf_writer->SetBssSize(oat_writer->GetBssSize());
-
       elf_writer->WriteDynamicSection();
-
-      ArrayRef<const dwarf::MethodDebugInfo> method_infos(oat_writer->GetMethodDebugInfo());
-      elf_writer->WriteDebugInfo(method_infos);
-
-      ArrayRef<const uintptr_t> patch_locations(oat_writer->GetAbsolutePatchLocations());
-      elf_writer->WritePatchLocations(patch_locations);
+      elf_writer->WriteDebugInfo(oat_writer->GetMethodDebugInfo());
+      elf_writer->WritePatchLocations(oat_writer->GetAbsolutePatchLocations());
 
       if (!elf_writer->End()) {
         LOG(ERROR) << "Failed to write ELF file " << oat_file_->GetPath();
@@ -1552,6 +1477,16 @@ class Dex2Oat FINAL {
   }
 
  private:
+  template <typename T>
+  static std::vector<T*> MakeNonOwningPointerVector(const std::vector<std::unique_ptr<T>>& src) {
+    std::vector<T*> result;
+    result.reserve(src.size());
+    for (const std::unique_ptr<T>& t : src) {
+      result.push_back(t.get());
+    }
+    return result;
+  }
+
   static size_t OpenDexFiles(const std::vector<const char*>& dex_filenames,
                              const std::vector<const char*>& dex_locations,
                              std::vector<std::unique_ptr<const DexFile>>* dex_files) {
@@ -1609,6 +1544,94 @@ class Dex2Oat FINAL {
       if (!DexFile::Open(parsed[i].c_str(), parsed[i].c_str(), &error_msg, opened_dex_files)) {
         LOG(WARNING) << "Failed to open dex file '" << parsed[i] << "': " << error_msg;
       }
+    }
+  }
+
+  bool PrepareImageClasses() {
+    // If --image-classes was specified, calculate the full list of classes to include in the image
+    if (image_classes_filename_ != nullptr) {
+      std::string error_msg;
+      if (image_classes_zip_filename_ != nullptr) {
+        image_classes_.reset(ReadImageClassesFromZip(image_classes_zip_filename_,
+                                                     image_classes_filename_,
+                                                     &error_msg));
+      } else {
+        image_classes_.reset(ReadImageClassesFromFile(image_classes_filename_));
+      }
+      if (image_classes_.get() == nullptr) {
+        LOG(ERROR) << "Failed to create list of image classes from '" << image_classes_filename_ <<
+            "': " << error_msg;
+        return false;
+      }
+    } else if (IsBootImage()) {
+      image_classes_.reset(new std::unordered_set<std::string>);
+    }
+    return true;
+  }
+
+  bool PrepareCompiledClasses() {
+    // If --compiled-classes was specified, calculate the full list of classes to compile in the
+    // image.
+    if (compiled_classes_filename_ != nullptr) {
+      std::string error_msg;
+      if (compiled_classes_zip_filename_ != nullptr) {
+        compiled_classes_.reset(ReadImageClassesFromZip(compiled_classes_zip_filename_,
+                                                        compiled_classes_filename_,
+                                                        &error_msg));
+      } else {
+        compiled_classes_.reset(ReadImageClassesFromFile(compiled_classes_filename_));
+      }
+      if (compiled_classes_.get() == nullptr) {
+        LOG(ERROR) << "Failed to create list of compiled classes from '"
+                   << compiled_classes_filename_ << "': " << error_msg;
+        return false;
+      }
+    } else {
+      compiled_classes_.reset(nullptr);  // By default compile everything.
+    }
+    return true;
+  }
+
+  bool PrepareCompiledMethods() {
+    // If --compiled-methods was specified, read the methods to compile from the given file(s).
+    if (compiled_methods_filename_ != nullptr) {
+      std::string error_msg;
+      if (compiled_methods_zip_filename_ != nullptr) {
+        compiled_methods_.reset(ReadCommentedInputFromZip(compiled_methods_zip_filename_,
+                                                          compiled_methods_filename_,
+                                                          nullptr,            // No post-processing.
+                                                          &error_msg));
+      } else {
+        compiled_methods_.reset(ReadCommentedInputFromFile(compiled_methods_filename_,
+                                                           nullptr));         // No post-processing.
+      }
+      if (compiled_methods_.get() == nullptr) {
+        LOG(ERROR) << "Failed to create list of compiled methods from '"
+            << compiled_methods_filename_ << "': " << error_msg;
+        return false;
+      }
+    } else {
+      compiled_methods_.reset(nullptr);  // By default compile everything.
+    }
+    return true;
+  }
+
+  void SaveDexInput() {
+    for (size_t i = 0; i < dex_files_.size(); ++i) {
+      const DexFile* dex_file = dex_files_[i];
+      std::string tmp_file_name(StringPrintf("/data/local/tmp/dex2oat.%d.%zd.dex",
+                                             getpid(), i));
+      std::unique_ptr<File> tmp_file(OS::CreateEmptyFile(tmp_file_name.c_str()));
+      if (tmp_file.get() == nullptr) {
+        PLOG(ERROR) << "Failed to open file " << tmp_file_name
+            << ". Try: adb shell chmod 777 /data/local/tmp";
+        continue;
+      }
+      // This is just dumping files for debugging. Ignore errors, and leave remnants.
+      UNUSED(tmp_file->WriteFully(dex_file->Begin(), dex_file->Size()));
+      UNUSED(tmp_file->Flush());
+      UNUSED(tmp_file->Close());
+      LOG(INFO) << "Wrote input to " << tmp_file_name;
     }
   }
 
