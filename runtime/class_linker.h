@@ -50,6 +50,7 @@ namespace mirror {
   class StackTraceElement;
 }  // namespace mirror
 
+class ClassProfile;
 template<class T> class Handle;
 template<class T> class MutableHandle;
 class InternTable;
@@ -592,6 +593,11 @@ class ClassLinker {
       REQUIRES(!Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  static bool CanUseAOTCode(ArtMethod* method, const void* quick_code)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void UpdateClassProfile();
+
   struct DexCacheData {
     // Weak root to the DexCache. Note: Do not decode this unnecessarily or else class unloading may
     // not work properly.
@@ -1082,8 +1088,11 @@ class ClassLinker {
   // Image pointer size.
   size_t image_pointer_size_;
 
+  std::unique_ptr<ClassProfile> class_profile_;
+
+  friend class ClassProfile;  // for GetClassRoots and DexLock
   friend class ImageDumper;  // for DexLock
-  friend class ImageWriter;  // for GetClassRoots
+  friend class ImageWriter;  // for GetClassRoots and DexLock
   friend class JniCompilerTest;  // for GetRuntimeQuickGenericJniStub
   friend class JniInternalTest;  // for GetRuntimeQuickGenericJniStub
   ART_FRIEND_TEST(ClassLinkerTest, RegisterDexFileName);  // for DexLock, and RegisterDexFileLocked

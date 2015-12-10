@@ -179,6 +179,7 @@ RUNTIME_GTEST_COMMON_SRC_FILES := \
   runtime/base/variant_map_test.cc \
   runtime/base/unix_file/fd_file_test.cc \
   runtime/class_linker_test.cc \
+  runtime/class_profile_test.cc \
   runtime/dex_file_test.cc \
   runtime/dex_file_verifier_test.cc \
   runtime/dex_instruction_test.cc \

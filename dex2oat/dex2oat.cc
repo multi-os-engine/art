@@ -46,6 +46,7 @@
 #include "base/timing_logger.h"
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
+#include "class_profile.h"
 #include "compiler.h"
 #include "compiler_callbacks.h"
 #include "debug/method_debug_info.h"
@@ -1885,6 +1886,8 @@ class Dex2Oat FINAL {
 
     profile_compilation_info_.reset(info);
 
+    // TODO: Set class_profile_;
+
     return result;
   }
 
@@ -1991,6 +1994,10 @@ class Dex2Oat FINAL {
       }
     } else if (IsBootImage()) {
       image_classes_.reset(new std::unordered_set<std::string>);
+    } else if (class_profile_ != nullptr) {
+      image_classes_.reset(new std::unordered_set<std::string>(
+          class_profile_->GetClassDescriptors()));
+      class_profile_.reset();
     }
     return true;
   }
@@ -2465,6 +2472,7 @@ class Dex2Oat FINAL {
   std::vector<uint32_t> profile_files_fd_;
   std::vector<uint32_t> reference_profile_files_fd_;
   std::unique_ptr<ProfileCompilationInfo> profile_compilation_info_;
+  std::unique_ptr<ClassProfile> class_profile_;
   TimingLogger* timings_;
   std::unique_ptr<CumulativeLogger> compiler_phases_timings_;
   std::vector<std::vector<const DexFile*>> dex_files_per_oat_file_;
