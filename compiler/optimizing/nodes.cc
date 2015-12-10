@@ -1460,6 +1460,23 @@ void HInstructionList::Add(const HInstructionList& instruction_list) {
   }
 }
 
+// Should be called on instructions in a dead block in post order. Assumes the
+// instruction has been removed from all users with the exception of catch phis.
+// It removes instruction from catch phi uses and inputs of other catch phis at
+// the same index with it, as these must be dead too.
+static void RemoveUsesOfDeadInstruction(HInstruction* insn) {
+  DCHECK(!insn->HasEnvironmentUses());
+  while (insn->HasNonEnvironmentUses()) {
+    HUseListNode<HInstruction*>* use = insn->GetUses().GetFirst();
+    size_t use_index = use->GetIndex();
+    HBasicBlock* user_block =  use->GetUser()->GetBlock();
+    DCHECK(use->GetUser()->IsPhi() && user_block->IsCatchBlock());
+    for (HInstructionIterator phi_it(user_block->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
+      phi_it.Current()->AsPhi()->RemoveInputAt(use_index);
+    }
+  }
+}
+
 void HBasicBlock::DisconnectAndDelete() {
   // Dominators must be removed after all the blocks they dominate. This way
   // a loop header is removed last, a requirement for correct loop information
@@ -1562,21 +1579,13 @@ void HBasicBlock::DisconnectAndDelete() {
   //     graph will always remain consistent.
   for (HBackwardInstructionIterator it(GetInstructions()); !it.Done(); it.Advance()) {
     HInstruction* insn = it.Current();
-    while (insn->HasUses()) {
-      DCHECK(IsTryBlock());
-      HUseListNode<HInstruction*>* use = insn->GetUses().GetFirst();
-      size_t use_index = use->GetIndex();
-      HBasicBlock* user_block =  use->GetUser()->GetBlock();
-      DCHECK(use->GetUser()->IsPhi() && user_block->IsCatchBlock());
-      for (HInstructionIterator phi_it(user_block->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
-        phi_it.Current()->AsPhi()->RemoveInputAt(use_index);
-      }
-    }
-
+    RemoveUsesOfDeadInstruction(insn);
     RemoveInstruction(insn);
   }
   for (HInstructionIterator it(GetPhis()); !it.Done(); it.Advance()) {
-    RemovePhi(it.Current()->AsPhi());
+    HPhi* insn = it.Current()->AsPhi();
+    RemoveUsesOfDeadInstruction(insn);
+    RemovePhi(insn);
   }
 
   // Disconnect from the dominator.
