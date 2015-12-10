@@ -469,7 +469,6 @@ TEST_ART_BROKEN_JIT_RUN_TESTS :=
 
 # Known broken tests for the mips32 optimizing compiler backend.
 TEST_ART_BROKEN_OPTIMIZING_MIPS_RUN_TESTS := \
-    510-checker-try-catch \
 
 ifeq (mips,$(TARGET_ARCH))
   ifneq (,$(filter optimizing,$(COMPILER_TYPES)))
