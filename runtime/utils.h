@@ -300,6 +300,10 @@ void Push32(Vector* buf, int32_t data) {
   buf->push_back((data >> 24) & 0xff);
 }
 
+inline void SetInBitmap(size_t idx, uint8_t* bitmap) {
+  bitmap[idx / kBitsPerByte] |= (1u << (idx % kBitsPerByte));
+}
+
 inline bool TestBitmap(size_t idx, const uint8_t* bitmap) {
   return ((bitmap[idx / kBitsPerByte] >> (idx % kBitsPerByte)) & 0x01) != 0;
 }
