@@ -29,7 +29,7 @@ ART_TEST_KNOWN_BROKEN :=
 
 # List of run-tests to skip running in any configuration. This needs to be the full name of the
 # run-test such as '457-regs'.
-ART_TEST_RUN_TEST_SKIP ?=
+ART_TEST_RUN_TEST_SKIP ?= 008-exceptions
 
 # Failing valgrind tests.
 # Note: *all* 64b tests involving the runtime do not work currently. b/15170219.
