@@ -75,6 +75,10 @@ class ArtMethod FINAL {
     return MemberOffset(OFFSETOF_MEMBER(ArtMethod, declaring_class_));
   }
 
+  static MemberOffset AccessFlagsOffset() {
+    return MemberOffset(OFFSET_OF_OBJECT_MEMBER(ArtMethod, access_flags_));
+  }
+
   // Note: GetAccessFlags acquires the mutator lock in debug mode to check that it is not called for
   // a proxy method.
   ALWAYS_INLINE uint32_t GetAccessFlags();

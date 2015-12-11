@@ -29,6 +29,21 @@ extern void ReadBarrierJni(mirror::CompressedReference<mirror::Object>* handle_o
   handle_on_stack->Assign(to_ref);
 }
 
+// Called on entry to JNI from native bridge,
+// transition out of Runnable and release share of mutator_lock_.
+extern void JniMethodStartFromCode(Thread* self) {
+  self->TransitionFromRunnableToSuspended(kNative);
+}
+
+extern void JniMethodStartSynchronizedFromCode(jobject to_lock, Thread* self) {
+  self->DecodeJObject(to_lock)->MonitorEnter(self);
+  ArtMethod* native_method = *self->GetManagedStack()->GetTopQuickFrame();
+  if (!native_method->IsFastNative()) {
+    // When not fast JNI we transition out of runnable.
+    self->TransitionFromRunnableToSuspended(kNative);
+  }
+}
+
 // Called on entry to JNI, transition out of Runnable and release share of mutator_lock_.
 extern uint32_t JniMethodStart(Thread* self) {
   JNIEnvExt* env = self->GetJniEnv();

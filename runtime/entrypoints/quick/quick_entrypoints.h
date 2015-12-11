@@ -51,6 +51,9 @@ struct PACKED(4) QuickEntryPoints {
 
 // JNI entrypoints.
 // TODO: NO_THREAD_SAFETY_ANALYSIS due to different control paths depending on fast JNI.
+extern void JniMethodStartFromCode(Thread* self) NO_THREAD_SAFETY_ANALYSIS HOT_ATTR;
+extern void JniMethodStartSynchronizedFromCode(jobject to_lock, Thread* self)
+    NO_THREAD_SAFETY_ANALYSIS HOT_ATTR;
 extern uint32_t JniMethodStart(Thread* self) NO_THREAD_SAFETY_ANALYSIS HOT_ATTR;
 extern uint32_t JniMethodStartSynchronized(jobject to_lock, Thread* self)
     NO_THREAD_SAFETY_ANALYSIS HOT_ATTR;

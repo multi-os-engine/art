@@ -56,10 +56,10 @@ JNIEnvExt* JNIEnvExt::Create(Thread* self_in, JavaVMExt* vm_in) {
 JNIEnvExt::JNIEnvExt(Thread* self_in, JavaVMExt* vm_in)
     : self(self_in),
       vm(vm_in),
+      critical(0),
       local_ref_cookie(IRT_FIRST_SEGMENT),
       locals(kLocalsInitial, kLocalsMax, kLocal, false),
       check_jni(false),
-      critical(0),
       monitors("monitors", kMonitorsInitial, kMonitorsMax) {
   functions = unchecked_functions = GetJniNativeInterface();
   if (vm->IsCheckJniEnabled()) {

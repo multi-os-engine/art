@@ -52,8 +52,18 @@ struct JNIEnvExt : public JNIEnv {
 
   static Offset SegmentStateOffset();
 
+  static Offset SegmentStateOffset(size_t pointer_size) {
+    return Offset(LocalRefCookieOffset(pointer_size).SizeValue()
+                  + sizeof(local_ref_cookie)
+                  + IndirectReferenceTable::SegmentStateOffset().SizeValue());
+  }
+
   static Offset LocalRefCookieOffset() {
     return Offset(OFFSETOF_MEMBER(JNIEnvExt, local_ref_cookie));
+  }
+
+  static Offset LocalRefCookieOffset(size_t pointer_size) {
+    return Offset(pointer_size * kLeadingPointerCount + sizeof(critical));
   }
 
   static Offset SelfOffset() {
@@ -65,6 +75,13 @@ struct JNIEnvExt : public JNIEnv {
 
   Thread* const self;
   JavaVMExt* const vm;
+
+  // Pointer count, used to compute member offset of 'local_ref_cookie' and 'locals'.
+  static const size_t kLeadingPointerCount = 3;
+
+  // Move 'critical' here to make 'locals' pointer size aligned without padding.
+  // How many nested "critical" JNI calls are we in?
+  int32_t critical;
 
   // Cookie used when using the local indirect reference table.
   uint32_t local_ref_cookie;
@@ -79,9 +96,6 @@ struct JNIEnvExt : public JNIEnv {
 
   // Frequently-accessed fields cached from JavaVM.
   bool check_jni;
-
-  // How many nested "critical" JNI calls are we in?
-  int critical;
 
   // Entered JNI monitors, for bulk exit on thread detach.
   ReferenceTable monitors;
