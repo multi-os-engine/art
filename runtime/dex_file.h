@@ -1551,6 +1551,11 @@ class EncodedStaticFieldValueIterator {
   const jvalue& GetJavaValue() const { return jval_; }
 
  private:
+  EncodedStaticFieldValueIterator(const DexFile& dex_file,
+                                  Handle<mirror::DexCache>* dex_cache,
+                                  Handle<mirror::ClassLoader>* class_loader,
+                                  const DexFile::ClassDef& class_def);
+
   static constexpr uint8_t kEncodedValueTypeMask = 0x1f;  // 0b11111
   static constexpr uint8_t kEncodedValueArgShift = 5;
 

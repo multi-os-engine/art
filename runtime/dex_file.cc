@@ -2210,7 +2210,7 @@ void ClassDataItemIterator::ReadClassDataMethod() {
 EncodedStaticFieldValueIterator::EncodedStaticFieldValueIterator(
     const DexFile& dex_file,
     const DexFile::ClassDef& class_def)
-    : EncodedStaticFieldValueIterator(dex_file, nullptr, nullptr,
+    : EncodedStaticFieldValueIterator(dex_file, nullptr,
                                       nullptr, class_def) {
 }
 
@@ -2218,14 +2218,26 @@ EncodedStaticFieldValueIterator::EncodedStaticFieldValueIterator(
     const DexFile& dex_file, Handle<mirror::DexCache>* dex_cache,
     Handle<mirror::ClassLoader>* class_loader, ClassLinker* linker,
     const DexFile::ClassDef& class_def)
+    : EncodedStaticFieldValueIterator(dex_file, dex_cache,
+                                      class_loader, class_def) {
+  linker_ = linker;
+  DCHECK(dex_cache_ != nullptr);
+  DCHECK(class_loader_ != nullptr);
+}
+
+EncodedStaticFieldValueIterator::EncodedStaticFieldValueIterator(
+    const DexFile& dex_file,
+    Handle<mirror::DexCache>* dex_cache,
+    Handle<mirror::ClassLoader>* class_loader,
+    const DexFile::ClassDef& class_def)
     : dex_file_(dex_file),
       dex_cache_(dex_cache),
       class_loader_(class_loader),
-      linker_(linker),
+      linker_(nullptr),
       array_size_(),
       pos_(-1),
       type_(kByte) {
-  ptr_ = dex_file_.GetEncodedStaticFieldValuesArray(class_def);
+  ptr_ = dex_file.GetEncodedStaticFieldValuesArray(class_def);
   if (ptr_ == nullptr) {
     array_size_ = 0;
   } else {
