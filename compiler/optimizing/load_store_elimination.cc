@@ -655,6 +655,19 @@ class LSEVisitor : public HGraphVisitor {
     }
   }
 
+  // Returns a type equivalent of `type` that our constants can hold.
+  static Primitive::Type ToConstantType(Primitive::Type type) {
+    switch (type) {
+      case Primitive::kPrimBoolean:
+      case Primitive::kPrimByte:
+      case Primitive::kPrimShort:
+      case Primitive::kPrimChar:
+        return Primitive::kPrimInt;
+      default:
+        return type;
+    }
+  }
+
   void VisitGetLocation(HInstruction* instruction,
                         HInstruction* ref,
                         size_t offset,
@@ -686,7 +699,10 @@ class LSEVisitor : public HGraphVisitor {
     if ((heap_value != kUnknownHeapValue) &&
         // Keep the load due to possible I/F, J/D array aliasing.
         // See b/22538329 for details.
-        (heap_value->GetType() == instruction->GetType())) {
+        // 'Upgrade' the type in order to still eliminate loads like:
+        //    foo.booleanField = 0;     <-- constant 0 is typed as int.
+        //    if (foo.booleanField) {}  <-- load is typed as boolean.
+        (ToConstantType(heap_value->GetType()) == ToConstantType(instruction->GetType()))) {
       removed_loads_.push_back(instruction);
       substitute_instructions_for_loads_.push_back(heap_value);
       TryRemovingNullCheck(instruction);
