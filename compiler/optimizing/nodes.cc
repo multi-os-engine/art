@@ -2121,12 +2121,15 @@ bool HInstruction::HasAnyEnvironmentUseBefore(HInstruction* other) {
 
 void HInvoke::SetIntrinsic(Intrinsics intrinsic,
                            IntrinsicNeedsEnvironmentOrCache needs_env_or_cache) {
+  DCHECK_NE(intrinsic, Intrinsics::kNone);
   intrinsic_ = intrinsic;
   IntrinsicOptimizations opt(this);
   if (needs_env_or_cache == kNoEnvironmentOrCache) {
     opt.SetDoesNotNeedDexCache();
     opt.SetDoesNotNeedEnvironment();
   }
+  // Intrinsics do not have any side effects (write/read on fields/arrays).
+  ResetSideEffects();
 }
 
 bool HInvoke::NeedsEnvironment() const {

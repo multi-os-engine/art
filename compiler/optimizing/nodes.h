@@ -2010,6 +2010,7 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
 
   SideEffects GetSideEffects() const { return side_effects_; }
   void AddSideEffects(SideEffects other) { side_effects_.Add(other); }
+  void ResetSideEffects() { side_effects_ = SideEffects::None(); }
 
   size_t GetLifetimePosition() const { return lifetime_position_; }
   void SetLifetimePosition(size_t position) { lifetime_position_ = position; }
