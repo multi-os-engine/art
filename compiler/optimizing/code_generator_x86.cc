@@ -1616,6 +1616,52 @@ void InstructionCodeGeneratorX86::VisitDeoptimize(HDeoptimize* deoptimize) {
                         /* false_target */ nullptr);
 }
 
+void LocationsBuilderX86::VisitSelect(HSelect* select) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(select);
+
+  locations->SetInAt(0, Location::Any());
+  locations->SetInAt(1, Location::Any());
+  if (IsBooleanValueOrMaterializedCondition(select->GetCondition())) {
+    locations->SetInAt(2, Location::Any());
+  }
+  locations->SetOut(Location::Any());
+}
+
+void InstructionCodeGeneratorX86::VisitSelect(HSelect* select) {
+  LocationSummary* locations = select->GetLocations();
+  Location loc_false = locations->InAt(0);
+  Location loc_true = locations->InAt(1);
+  Location out = locations->Out();
+
+  HParallelMove move_true_value(GetGraph()->GetArena());
+  HParallelMove move_false_value(GetGraph()->GetArena());
+  move_true_value.AddMove(loc_true, out, select->GetType(), nullptr);
+  move_false_value.AddMove(loc_false, out, select->GetType(), nullptr);
+
+  bool should_move_true_value = !out.Equals(loc_true);
+  bool should_move_false_value = !out.Equals(loc_false);
+
+  if (should_move_false_value) {
+    Label true_target;
+    GenerateTestAndBranch(select, /* condition_input_index */ 2, &true_target, nullptr);
+    codegen_->GetMoveResolver()->EmitNativeCode(&move_false_value);
+    if (should_move_true_value) {
+      NearLabel merge_target;
+      __ jmp(&merge_target);
+      __ Bind(&true_target);
+      codegen_->GetMoveResolver()->EmitNativeCode(&move_true_value);
+      __ Bind(&merge_target);
+    } else {
+      __ Bind(&true_target);
+    }
+  } else if (should_move_true_value) {
+    Label false_target;
+    GenerateTestAndBranch(select, /* condition_input_index */ 2, nullptr, &false_target);
+    codegen_->GetMoveResolver()->EmitNativeCode(&move_true_value);
+    __ Bind(&false_target);
+  }
+}
+
 void LocationsBuilderX86::VisitLocal(HLocal* local) {
   local->SetLocations(nullptr);
 }
@@ -5510,6 +5556,17 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
       DCHECK(destination.IsDoubleStackSlot());
       __ movsd(Address(ESP, destination.GetStackIndex()), source.AsFpuRegister<XmmRegister>());
     }
+  } else if (source.IsRegisterPair()) {
+    Register low = source.AsRegisterPairLow<Register>();
+    Register high = source.AsRegisterPairHigh<Register>();
+    if (destination.IsRegisterPair()) {
+      __ movl(destination.AsRegisterPairLow<Register>(), low);
+      __ movl(destination.AsRegisterPairHigh<Register>(), high);
+    } else {
+      DCHECK(destination.IsDoubleStackSlot());
+      __ movl(Address(ESP, destination.GetStackIndex()), low);
+      __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)), high);
+    }
   } else if (source.IsStackSlot()) {
     if (destination.IsRegister()) {
       __ movl(destination.AsRegister<Register>(), Address(ESP, source.GetStackIndex()));
@@ -5520,7 +5577,12 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
       MoveMemoryToMemory32(destination.GetStackIndex(), source.GetStackIndex());
     }
   } else if (source.IsDoubleStackSlot()) {
-    if (destination.IsFpuRegister()) {
+    if (destination.IsRegisterPair()) {
+      __ movl(destination.AsRegisterPairLow<Register>(), Address(ESP, source.GetStackIndex()));
+      __ movl(destination.AsRegisterPairHigh<Register>(),
+              Address(ESP, source.GetHighStackIndex(kX86WordSize)));
+
+    } else if (destination.IsFpuRegister()) {
       __ movsd(destination.AsFpuRegister<XmmRegister>(), Address(ESP, source.GetStackIndex()));
     } else {
       DCHECK(destination.IsDoubleStackSlot()) << destination;

@@ -2745,6 +2745,34 @@ void InstructionCodeGeneratorMIPS64::VisitDeoptimize(HDeoptimize* deoptimize) {
                         /* false_target */ nullptr);
 }
 
+void LocationsBuilderMIPS64::VisitSelect(HSelect* select) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(select);
+  if (Primitive::IsFloatingPointType(select->GetType())) {
+    locations->SetInAt(0, Location::RequiresFpuRegister());
+    locations->SetInAt(1, Location::RequiresFpuRegister());
+  } else {
+    locations->SetInAt(0, Location::RequiresRegister());
+    locations->SetInAt(1, Location::RequiresRegister());
+  }
+  if (IsBooleanValueOrMaterializedCondition(select->GetCondition())) {
+    locations->SetInAt(2, Location::RequiresRegister());
+  }
+  locations->SetOut(Location::SameAsFirstInput());
+}
+
+void InstructionCodeGeneratorMIPS64::VisitSelect(HSelect* select) {
+  LocationSummary* locations = select->GetLocations();
+  Mips64Label false_target;
+  GenerateTestAndBranch(select,
+                        /* condition_input_index */ 2,
+                        /* true_target */ nullptr,
+                        &false_target);
+  HParallelMove parallel_move(GetGraph()->GetArena());
+  parallel_move.AddMove(locations->InAt(1), locations->Out(), select->GetType(), nullptr);
+  codegen_->GetMoveResolver()->EmitNativeCode(&parallel_move);
+  __ Bind(&false_target);
+}
+
 void LocationsBuilderMIPS64::HandleFieldGet(HInstruction* instruction,
                                             const FieldInfo& field_info ATTRIBUTE_UNUSED) {
   LocationSummary* locations =
