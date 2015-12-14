@@ -1218,11 +1218,14 @@ void CodeGeneratorX86::MoveConstant(Location location, int32_t value) {
 }
 
 void CodeGeneratorX86::MoveLocation(Location dst, Location src, Primitive::Type dst_type) {
-  if (Primitive::Is64BitType(dst_type)) {
-    Move64(dst, src);
+  HParallelMove move(GetGraph()->GetArena());
+  if (dst_type == Primitive::kPrimLong && !src.IsConstant()) {
+    move.AddMove(src.ToLow(), dst.ToLow(), Primitive::kPrimInt, nullptr);
+    move.AddMove(src.ToHigh(), dst.ToHigh(), Primitive::kPrimInt, nullptr);
   } else {
-    Move32(dst, src);
+    move.AddMove(src, dst, dst_type, nullptr);
   }
+  GetMoveResolver()->EmitNativeCode(&move);
 }
 
 void CodeGeneratorX86::AddLocationAsTemp(Location location, LocationSummary* locations) {
@@ -1559,10 +1562,36 @@ void LocationsBuilderX86::VisitDeoptimize(HDeoptimize* deoptimize) {
 
 void InstructionCodeGeneratorX86::VisitDeoptimize(HDeoptimize* deoptimize) {
   SlowPathCode* slow_path = deopt_slow_paths_.NewSlowPath<DeoptimizationSlowPathX86>(deoptimize);
-  GenerateTestAndBranch(deoptimize,
-                        /* condition_input_index */ 0,
-                        slow_path->GetEntryLabel(),
-                        /* false_target */ static_cast<Label*>(nullptr));
+  GenerateTestAndBranch<Label>(deoptimize,
+                               /* condition_input_index */ 0,
+                               slow_path->GetEntryLabel(),
+                               /* false_target */ nullptr);
+}
+
+void LocationsBuilderX86::VisitSelect(HSelect* select) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(select);
+  Primitive::Type select_type = select->GetType();
+  HInstruction* cond = select->GetCondition();
+
+  if (Primitive::IsFloatingPointType(select_type)) {
+    locations->SetInAt(0, Location::RequiresFpuRegister());
+  } else {
+    locations->SetInAt(0, Location::RequiresRegister());
+  }
+  locations->SetInAt(1, Location::Any());
+  if (IsBooleanValueOrMaterializedCondition(cond)) {
+    locations->SetInAt(2, Location::Any());
+  }
+  locations->SetOut(Location::SameAsFirstInput());
+}
+
+void InstructionCodeGeneratorX86::VisitSelect(HSelect* select) {
+  LocationSummary* locations = select->GetLocations();
+  NearLabel false_target;
+  GenerateTestAndBranch<NearLabel>(
+      select, /* condition_input_index */ 2, /* true_target */ nullptr, &false_target);
+  codegen_->MoveLocation(locations->Out(), locations->InAt(1), select->GetType());
+  __ Bind(&false_target);
 }
 
 void LocationsBuilderX86::VisitNativeDebugInfo(HNativeDebugInfo* info) {
@@ -5488,7 +5517,12 @@ void ParallelMoveResolverX86::EmitMove(size_t index) {
       MoveMemoryToMemory32(destination.GetStackIndex(), source.GetStackIndex());
     }
   } else if (source.IsDoubleStackSlot()) {
-    if (destination.IsFpuRegister()) {
+    if (destination.IsRegisterPair()) {
+      __ movl(destination.AsRegisterPairLow<Register>(), Address(ESP, source.GetStackIndex()));
+      __ movl(destination.AsRegisterPairHigh<Register>(),
+              Address(ESP, source.GetHighStackIndex(kX86WordSize)));
+
+    } else if (destination.IsFpuRegister()) {
       __ movsd(destination.AsFpuRegister<XmmRegister>(), Address(ESP, source.GetStackIndex()));
     } else {
       DCHECK(destination.IsDoubleStackSlot()) << destination;

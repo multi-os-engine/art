@@ -127,13 +127,31 @@ void PrepareForRegisterAllocation::VisitNewInstance(HNewInstance* instruction) {
   }
 }
 
+bool PrepareForRegisterAllocation::CanEmitCondition(HCondition* condition, HInstruction* user)
+    const {
+  if (user->IsIf() || user->IsDeoptimize()) {
+    return true;
+  }
+
+  if (user->IsSelect() && user->AsSelect()->GetCondition() == condition) {
+    if (GetGraph()->GetInstructionSet() == kX86) {
+      return user->GetType() != Primitive::kPrimLong ||
+             condition->InputAt(0)->GetType() != Primitive::kPrimLong;
+    } else {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void PrepareForRegisterAllocation::VisitCondition(HCondition* condition) {
   bool needs_materialization = false;
   if (!condition->GetUses().HasOnlyOneUse() || !condition->GetEnvUses().IsEmpty()) {
     needs_materialization = true;
   } else {
     HInstruction* user = condition->GetUses().GetFirst()->GetUser();
-    if (!user->IsIf() && !user->IsDeoptimize()) {
+    if (!CanEmitCondition(condition, user)) {
       needs_materialization = true;
     } else {
       // TODO: if there is no intervening instructions with side-effect between this condition
@@ -165,7 +183,8 @@ void PrepareForRegisterAllocation::VisitInvokeStaticOrDirect(HInvokeStaticOrDire
   }
 }
 
-bool PrepareForRegisterAllocation::CanMoveClinitCheck(HInstruction* input, HInstruction* user) {
+bool PrepareForRegisterAllocation::CanMoveClinitCheck(HInstruction* input, HInstruction* user)
+    const {
   // Determine if input and user come from the same dex instruction, so that we can move
   // the clinit check responsibility from one to the other, i.e. from HClinitCheck (user)
   // to HLoadClass (input), or from HClinitCheck (input) to HInvokeStaticOrDirect (user).
