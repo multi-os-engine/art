@@ -36,7 +36,7 @@ static inline InvokeType GetIntrinsicInvokeType(Intrinsics i) {
   switch (i) {
     case Intrinsics::kNone:
       return kInterface;  // Non-sensical for intrinsic.
-#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache) \
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache, MemSideEffects) \
     case Intrinsics::k ## Name:               \
       return IsStatic;
 #include "intrinsics_list.h"
@@ -52,7 +52,7 @@ static inline IntrinsicNeedsEnvironmentOrCache NeedsEnvironmentOrCache(Intrinsic
   switch (i) {
     case Intrinsics::kNone:
       return kNeedsEnvironmentOrCache;  // Non-sensical for intrinsic.
-#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache) \
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache, MemSideEffects) \
     case Intrinsics::k ## Name:               \
       return NeedsEnvironmentOrCache;
 #include "intrinsics_list.h"
@@ -61,6 +61,22 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
 #undef OPTIMIZING_INTRINSICS
   }
   return kNeedsEnvironmentOrCache;
+}
+
+// Function that returns whether an intrinsic has heap memory side effects.
+static inline IntrinsicMemSideEffects MemorySideEffects(Intrinsics i) {
+  switch (i) {
+    case Intrinsics::kNone:
+      return kAllSideEffects;
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache, MemSideEffects) \
+    case Intrinsics::k ## Name:               \
+      return MemSideEffects;
+#include "intrinsics_list.h"
+INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
+#undef INTRINSICS_LIST
+#undef OPTIMIZING_INTRINSICS
+  }
+  return kAllSideEffects;
 }
 
 static Primitive::Type GetType(uint64_t data, bool is_op_size) {
@@ -473,7 +489,9 @@ void IntrinsicsRecognizer::Run() {
                   << PrettyMethod(invoke->GetDexMethodIndex(), invoke->GetDexFile())
                   << invoke->DebugName();
             } else {
-              invoke->SetIntrinsic(intrinsic, NeedsEnvironmentOrCache(intrinsic));
+              invoke->SetIntrinsic(intrinsic,
+                                   NeedsEnvironmentOrCache(intrinsic),
+                                   MemorySideEffects(intrinsic));
             }
           }
         }
@@ -487,7 +505,7 @@ std::ostream& operator<<(std::ostream& os, const Intrinsics& intrinsic) {
     case Intrinsics::kNone:
       os << "None";
       break;
-#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache) \
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache, MemSideEffects) \
     case Intrinsics::k ## Name: \
       os << # Name; \
       break;

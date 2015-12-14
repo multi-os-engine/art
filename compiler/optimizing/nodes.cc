@@ -2120,12 +2120,20 @@ bool HInstruction::HasAnyEnvironmentUseBefore(HInstruction* other) {
 }
 
 void HInvoke::SetIntrinsic(Intrinsics intrinsic,
-                           IntrinsicNeedsEnvironmentOrCache needs_env_or_cache) {
+                           IntrinsicNeedsEnvironmentOrCache needs_env_or_cache,
+                           IntrinsicMemSideEffects mem_side_effects) {
   intrinsic_ = intrinsic;
   IntrinsicOptimizations opt(this);
   if (needs_env_or_cache == kNoEnvironmentOrCache) {
     opt.SetDoesNotNeedDexCache();
     opt.SetDoesNotNeedEnvironment();
+  }
+  // Adjust method's side effects from intrinsic table.
+  switch (mem_side_effects) {
+    case kNoSideEffects: SetSideEffects(SideEffects::None()); break;
+    case kReadSideEffects: SetSideEffects(SideEffects::AllReads()); break;
+    case kWriteSideEffects: SetSideEffects(SideEffects::AllWrites()); break;
+    case kAllSideEffects: SetSideEffects(SideEffects::AllExceptGCDependency()); break;
   }
 }
 
@@ -2135,6 +2143,10 @@ bool HInvoke::NeedsEnvironment() const {
   }
   IntrinsicOptimizations opt(*this);
   return !opt.GetDoesNotNeedEnvironment();
+}
+
+bool HInvoke::CanBeMoved() const {
+  return GetSideEffects().DoesNothing();
 }
 
 bool HInvokeStaticOrDirect::NeedsDexCacheOfDeclaringClass() const {

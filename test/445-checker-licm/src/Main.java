@@ -52,13 +52,13 @@ public class Main {
     return result;
   }
 
-  /// CHECK-START: int Main.innerDiv2() licm (before)
+  /// CHECK-START: int Main.innerMul() licm (before)
   /// CHECK-DAG: Mul loop:B4
 
-  /// CHECK-START: int Main.innerDiv2() licm (after)
+  /// CHECK-START: int Main.innerMul() licm (after)
   /// CHECK-DAG: Mul loop:B2
 
-  public static int innerDiv2() {
+  public static int innerMul() {
     int result = 0;
     for (int i = 0; i < 10; ++i) {
       for (int j = 0; j < 10; ++j) {
@@ -71,13 +71,13 @@ public class Main {
     return result;
   }
 
-  /// CHECK-START: int Main.innerDiv3(int, int) licm (before)
+  /// CHECK-START: int Main.divByA(int, int) licm (before)
   /// CHECK-DAG: Div loop:{{B\d+}}
 
-  /// CHECK-START: int Main.innerDiv3(int, int) licm (after)
+  /// CHECK-START: int Main.divByA(int, int) licm (after)
   /// CHECK-DAG: Div loop:{{B\d+}}
 
-  public static int innerDiv3(int a, int b) {
+  public static int divByA(int a, int b) {
     int result = 0;
     while (b < 5) {
       // a might be null, so we can't hoist the operation.
@@ -107,6 +107,25 @@ public class Main {
     return result;
   }
 
+  /// CHECK-START: int Main.divAndIntrinsic(int[]) licm (before)
+  /// CHECK-DAG: Div loop:{{B\d+}}
+
+  /// CHECK-START: int Main.divAndIntrinsic(int[]) licm (after)
+  /// CHECK-NOT: Div loop:{{B\d+}}
+
+  /// CHECK-START: int Main.divAndIntrinsic(int[]) licm (after)
+  /// CHECK-DAG: Div loop:none
+
+  public static int divAndIntrinsic(int[] array) {
+    int result = 0;
+    for (int i = 0; i < array.length; i++) {
+      // An intrinsic call, unlike a general method call, cannot modify the field value.
+      // As a result, the division can be moved out of the loop.
+      result += (staticField / 42) + Math.abs(array[i]);
+    }
+    return result;
+  }
+
   public static int staticField = 42;
 
   public static void assertEquals(int expected, int actual) {
@@ -118,6 +137,9 @@ public class Main {
   public static void main(String[] args) {
     assertEquals(10, div());
     assertEquals(100, innerDiv());
+    assertEquals(18900, innerMul());
+    assertEquals(105, divByA(2, 0));
     assertEquals(12, arrayLength(new int[] { 4, 8 }));
+    assertEquals(21, divAndIntrinsic(new int[] { 4, -2, 8, -3 }));
   }
 }

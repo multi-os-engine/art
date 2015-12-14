@@ -2010,6 +2010,7 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
 
   SideEffects GetSideEffects() const { return side_effects_; }
   void AddSideEffects(SideEffects other) { side_effects_.Add(other); }
+  void SetSideEffects(SideEffects other) { side_effects_ = other; }
 
   size_t GetLifetimePosition() const { return lifetime_position_; }
   void SetLifetimePosition(size_t position) { lifetime_position_ = position; }
@@ -3227,7 +3228,7 @@ class HDoubleConstant : public HConstant {
 };
 
 enum class Intrinsics {
-#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache) k ## Name,
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache, MemSideEffects) k ## Name,
 #include "intrinsics_list.h"
   kNone,
   INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
@@ -3239,6 +3240,13 @@ std::ostream& operator<<(std::ostream& os, const Intrinsics& intrinsic);
 enum IntrinsicNeedsEnvironmentOrCache {
   kNoEnvironmentOrCache,        // Intrinsic does not require an environment or dex cache.
   kNeedsEnvironmentOrCache      // Intrinsic requires an environment or requires a dex cache.
+};
+
+enum IntrinsicMemSideEffects {
+  kNoSideEffects,      // Intrinsic does not have any heap memory side effects.
+  kReadSideEffects,    // Intrinsic may read heap memory.
+  kWriteSideEffects,   // Intrinsic may write heap memory.
+  kAllSideEffects,     // Intrinsic may read or write heap memory.
 };
 
 class HInvoke : public HInstruction {
@@ -3269,13 +3277,17 @@ class HInvoke : public HInstruction {
     return intrinsic_;
   }
 
-  void SetIntrinsic(Intrinsics intrinsic, IntrinsicNeedsEnvironmentOrCache needs_env_or_cache);
+  void SetIntrinsic(Intrinsics intrinsic,
+                    IntrinsicNeedsEnvironmentOrCache needs_env_or_cache,
+                    IntrinsicMemSideEffects mem_side_effects);
 
   bool IsFromInlinedInvoke() const {
     return GetEnvironment()->IsFromInlinedInvoke();
   }
 
   bool CanThrow() const OVERRIDE { return true; }
+
+  bool CanBeMoved() const OVERRIDE;
 
   uint32_t* GetIntrinsicOptimizations() {
     return &intrinsic_optimizations_;
