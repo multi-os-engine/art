@@ -949,6 +949,7 @@ static ArenaVector<LiveInterval*>::iterator RemoveIntervalAndPotentialOtherHalf(
 bool RegisterAllocator::TrySplitNonPairOrUnalignedPairIntervalAt(size_t position,
                                                                  size_t first_register_use,
                                                                  size_t* next_use) {
+  LOG(INFO) << "Trying to split at position " << position << ", first_use=" << first_register_use;
   for (auto it = active_.begin(), end = active_.end(); it != end; ++it) {
     LiveInterval* active = *it;
     DCHECK(active->HasRegister());
