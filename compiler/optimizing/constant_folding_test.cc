@@ -66,7 +66,7 @@ class ConstantFoldingTest : public CommonCompilerTest {
     std::unique_ptr<const X86InstructionSetFeatures> features_x86(
         X86InstructionSetFeatures::FromCppDefines());
     x86::CodeGeneratorX86 codegenX86(graph_, *features_x86.get(), CompilerOptions());
-    HConstantFolding(graph_).Run();
+    HConstantFolding(graph_, nullptr).Run();
     SSAChecker ssa_checker_cf(graph_);
     ssa_checker_cf.Run();
     ASSERT_TRUE(ssa_checker_cf.IsValid());

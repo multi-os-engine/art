@@ -55,6 +55,10 @@ enum MethodCompilationStat {
   kMonomorphicCall,
   kPolymorphicCall,
   kMegamorphicCall,
+  kConstantFolding,
+  kBooleanSimplifier,
+  kIntrinsicsRecognizer,
+  kLICM,
   kLastStat
 };
 
@@ -123,6 +127,10 @@ class OptimizingCompilerStats {
       case kMonomorphicCall: name = "MonomorphicCall"; break;
       case kPolymorphicCall: name = "PolymorphicCall"; break;
       case kMegamorphicCall: name = "kMegamorphicCall"; break;
+      case kConstantFolding : name = "FoldedConstant"; break;
+      case kBooleanSimplifier : name = "SimplifiedBoolean"; break;
+      case kIntrinsicsRecognizer : name = "RecognizedkIntrinsics"; break;
+      case kLICM : name = "LICM"; break;
 
       case kLastStat:
         LOG(FATAL) << "invalid stat "
