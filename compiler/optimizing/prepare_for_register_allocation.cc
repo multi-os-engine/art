@@ -133,7 +133,8 @@ void PrepareForRegisterAllocation::VisitCondition(HCondition* condition) {
     needs_materialization = true;
   } else {
     HInstruction* user = condition->GetUses().GetFirst()->GetUser();
-    if (!user->IsIf() && !user->IsDeoptimize()) {
+    size_t index = condition->GetUses().GetFirst()->GetIndex();
+    if (!user->IsIf() && !user->IsDeoptimize() && !(user->IsSelect() && index == 2u)) {
       needs_materialization = true;
     } else {
       // TODO: if there is no intervening instructions with side-effect between this condition
