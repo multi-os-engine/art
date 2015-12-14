@@ -76,6 +76,8 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   void VisitSub(HSub* instruction) OVERRIDE;
   void VisitUShr(HUShr* instruction) OVERRIDE;
   void VisitXor(HXor* instruction) OVERRIDE;
+  void VisitSelect(HSelect* select) OVERRIDE;
+  void VisitIf(HIf* instruction) OVERRIDE;
   void VisitInstanceOf(HInstanceOf* instruction) OVERRIDE;
   void VisitFakeString(HFakeString* fake_string) OVERRIDE;
   void VisitInvoke(HInvoke* invoke) OVERRIDE;
@@ -573,14 +575,100 @@ void InstructionSimplifierVisitor::VisitNotEqual(HNotEqual* not_equal) {
 }
 
 void InstructionSimplifierVisitor::VisitBooleanNot(HBooleanNot* bool_not) {
-  HInstruction* parent = bool_not->InputAt(0);
-  if (parent->IsBooleanNot()) {
-    HInstruction* value = parent->InputAt(0);
+  HInstruction* input = bool_not->InputAt(0);
+  HInstruction* replace_with = nullptr;
+
+  if (input->IsBooleanNot()) {
     // Replace (!(!bool_value)) with bool_value
-    bool_not->ReplaceWith(value);
-    bool_not->GetBlock()->RemoveInstruction(bool_not);
-    // It is possible that `parent` is dead at this point but we leave
+    replace_with = input->InputAt(0);
+    // It is possible that `input` is dead at this point but we leave
     // its removal to DCE for simplicity.
+  } else if (input->IsConstant()) {
+    // Replace !(true/false) with the false/true.
+    DCHECK(input->IsIntConstant());
+    if (input->AsIntConstant()->IsOne()) {
+      replace_with = GetGraph()->GetIntConstant(0);
+    } else {
+      DCHECK(input->AsIntConstant()->IsZero());
+      replace_with = GetGraph()->GetIntConstant(1);
+    }
+  } else if (input->IsCondition()) {
+    // Don't change FP compares.  The definition of compares involving NaNs
+    // forces the compares to be done as written by the user.
+    if (!Primitive::IsFloatingPointType(input->InputAt(0)->GetType())) {
+      // Replace condition with its opposite.
+      HInstruction* lhs = input->InputAt(0);
+      HInstruction* rhs = input->InputAt(1);
+      if (input->IsEqual()) {
+        replace_with = new (GetGraph()->GetArena()) HNotEqual(lhs, rhs);
+      } else if (input->IsNotEqual()) {
+        replace_with = new (GetGraph()->GetArena()) HEqual(lhs, rhs);
+      } else if (input->IsLessThan()) {
+        replace_with = new (GetGraph()->GetArena()) HGreaterThanOrEqual(lhs, rhs);
+      } else if (input->IsLessThanOrEqual()) {
+        replace_with = new (GetGraph()->GetArena()) HGreaterThan(lhs, rhs);
+      } else if (input->IsGreaterThan()) {
+        replace_with = new (GetGraph()->GetArena()) HLessThanOrEqual(lhs, rhs);
+      } else {
+        DCHECK(input->IsGreaterThanOrEqual());
+        replace_with = new (GetGraph()->GetArena()) HLessThan(lhs, rhs);
+      }
+      bool_not->GetBlock()->InsertInstructionBefore(replace_with, bool_not);
+    }
+  }
+
+  if (replace_with != nullptr) {
+    bool_not->ReplaceWith(replace_with);
+    bool_not->GetBlock()->RemoveInstruction(bool_not);
+    RecordSimplification();
+  }
+}
+
+void InstructionSimplifierVisitor::VisitSelect(HSelect* select) {
+  HInstruction* condition = select->GetCondition();
+
+  if (condition->IsBooleanNot()) {
+    HInstruction* true_value = select->GetFalseValue();
+    HInstruction* false_value = select->GetTrueValue();
+    select->ReplaceInput(false_value, 0);
+    select->ReplaceInput(true_value, 1);
+    select->ReplaceInput(condition->InputAt(0), 2);
+    RecordSimplification();
+  } else {
+    HInstruction* true_value = select->GetTrueValue();
+    HInstruction* false_value = select->GetFalseValue();
+
+    HInstruction* replace_with = nullptr;
+    if (true_value == false_value) {
+      replace_with = true_value;
+    } else if (condition->IsIntConstant()) {
+      if (condition->AsIntConstant()->IsOne()) {
+        replace_with = true_value;
+      } else {
+        DCHECK(condition->AsIntConstant()->IsZero());
+        replace_with = false_value;
+      }
+    } else if (true_value->IsIntConstant() && false_value->IsIntConstant()) {
+      if (true_value->AsIntConstant()->IsOne() && false_value->AsIntConstant()->IsZero()) {
+        replace_with = condition;
+      } else if (true_value->AsIntConstant()->IsZero() && false_value->AsIntConstant()->IsOne()) {
+        replace_with = GetGraph()->InsertOppositeCondition(condition, select);
+      }
+    }
+
+    if (replace_with != nullptr) {
+      select->ReplaceWith(replace_with);
+      select->GetBlock()->RemoveInstruction(select);
+      RecordSimplification();
+    }
+  }
+}
+
+void InstructionSimplifierVisitor::VisitIf(HIf* instruction) {
+  HInstruction* condition = instruction->InputAt(0);
+  if (condition->IsBooleanNot()) {
+    instruction->ReplaceInput(condition->InputAt(0), 0);
+    instruction->GetBlock()->SwapSuccessors();
     RecordSimplification();
   }
 }
