@@ -37,7 +37,7 @@ public class Main {
    * empty branches removed.
    */
 
-  /// CHECK-START: boolean Main.BooleanNot(boolean) boolean_simplifier (before)
+  /// CHECK-START: boolean Main.BooleanNot(boolean) select_generator (before)
   /// CHECK-DAG:     <<Param:z\d+>>    ParameterValue
   /// CHECK-DAG:     <<Const0:i\d+>>   IntConstant 0
   /// CHECK-DAG:     <<Const1:i\d+>>   IntConstant 1
@@ -45,23 +45,24 @@ public class Main {
   /// CHECK-DAG:     <<Phi:i\d+>>      Phi [<<Const1>>,<<Const0>>]
   /// CHECK-DAG:                       Return [<<Phi>>]
 
-  /// CHECK-START: boolean Main.BooleanNot(boolean) boolean_simplifier (before)
+  /// CHECK-START: boolean Main.BooleanNot(boolean) select_generator (before)
   /// CHECK:                           Goto
   /// CHECK:                           Goto
   /// CHECK:                           Goto
   /// CHECK-NOT:                       Goto
 
-  /// CHECK-START: boolean Main.BooleanNot(boolean) boolean_simplifier (after)
+  /// CHECK-START: boolean Main.BooleanNot(boolean) select_generator (after)
   /// CHECK-DAG:     <<Param:z\d+>>    ParameterValue
   /// CHECK-DAG:     <<Const0:i\d+>>   IntConstant 0
-  /// CHECK-DAG:     <<NotParam:z\d+>> BooleanNot [<<Param>>]
+  /// CHECK-DAG:     <<Const1:i\d+>>   IntConstant 1
+  /// CHECK-DAG:     <<NotParam:i\d+>> Select [<<Const1>>,<<Const0>>,<<Param>>]
   /// CHECK-DAG:                       Return [<<NotParam>>]
 
-  /// CHECK-START: boolean Main.BooleanNot(boolean) boolean_simplifier (after)
+  /// CHECK-START: boolean Main.BooleanNot(boolean) select_generator (after)
   /// CHECK-NOT:                       If
   /// CHECK-NOT:                       Phi
 
-  /// CHECK-START: boolean Main.BooleanNot(boolean) boolean_simplifier (after)
+  /// CHECK-START: boolean Main.BooleanNot(boolean) select_generator (after)
   /// CHECK:                           Goto
   /// CHECK-NOT:                       Goto
 
@@ -74,7 +75,7 @@ public class Main {
    * and 0 when False.
    */
 
-  /// CHECK-START: boolean Main.GreaterThan(int, int) boolean_simplifier (before)
+  /// CHECK-START: boolean Main.GreaterThan(int, int) select_generator (before)
   /// CHECK-DAG:     <<ParamX:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<ParamY:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<Const0:i\d+>>   IntConstant 0
@@ -84,13 +85,14 @@ public class Main {
   /// CHECK-DAG:     <<Phi:i\d+>>      Phi [<<Const0>>,<<Const1>>]
   /// CHECK-DAG:                       Return [<<Phi>>]
 
-  /// CHECK-START: boolean Main.GreaterThan(int, int) boolean_simplifier (after)
+  /// CHECK-START: boolean Main.GreaterThan(int, int) select_generator (after)
   /// CHECK-DAG:     <<ParamX:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<ParamY:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<Const0:i\d+>>   IntConstant 0
   /// CHECK-DAG:     <<Const1:i\d+>>   IntConstant 1
   /// CHECK-DAG:     <<Cond:z\d+>>     GreaterThan [<<ParamX>>,<<ParamY>>]
-  /// CHECK-DAG:                       Return [<<Cond>>]
+  /// CHECK-DAG:     <<Select:i\d+>>   Select [<<Const0>>,<<Const1>>,<<Cond>>]
+  /// CHECK-DAG:                       Return [<<Select>>]
 
   public static boolean GreaterThan(int x, int y) {
     return (x <= y) ? false : true;
@@ -101,7 +103,7 @@ public class Main {
    * and 1 when False.
    */
 
-  /// CHECK-START: boolean Main.LessThan(int, int) boolean_simplifier (before)
+  /// CHECK-START: boolean Main.LessThan(int, int) select_generator (before)
   /// CHECK-DAG:     <<ParamX:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<ParamY:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<Const0:i\d+>>   IntConstant 0
@@ -111,13 +113,14 @@ public class Main {
   /// CHECK-DAG:     <<Phi:i\d+>>      Phi [<<Const1>>,<<Const0>>]
   /// CHECK-DAG:                       Return [<<Phi>>]
 
-  /// CHECK-START: boolean Main.LessThan(int, int) boolean_simplifier (after)
+  /// CHECK-START: boolean Main.LessThan(int, int) select_generator (after)
   /// CHECK-DAG:     <<ParamX:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<ParamY:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<Const0:i\d+>>   IntConstant 0
   /// CHECK-DAG:     <<Const1:i\d+>>   IntConstant 1
-  /// CHECK-DAG:     <<Cond:z\d+>>     LessThan [<<ParamX>>,<<ParamY>>]
-  /// CHECK-DAG:                       Return [<<Cond>>]
+  /// CHECK-DAG:     <<Cond:z\d+>>     GreaterThanOrEqual [<<ParamX>>,<<ParamY>>]
+  /// CHECK-DAG:     <<Select:i\d+>>   Select [<<Const1>>,<<Const0>>,<<Cond>>]
+  /// CHECK-DAG:                       Return [<<Select>>]
 
   public static boolean LessThan(int x, int y) {
     return (x < y) ? true : false;
@@ -128,7 +131,7 @@ public class Main {
    * Note that Phis are discovered retrospectively.
    */
 
-  /// CHECK-START: boolean Main.ValuesOrdered(int, int, int) boolean_simplifier (before)
+  /// CHECK-START: boolean Main.ValuesOrdered(int, int, int) select_generator (before)
   /// CHECK-DAG:     <<ParamX:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<ParamY:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<ParamZ:i\d+>>   ParameterValue
@@ -145,29 +148,25 @@ public class Main {
   /// CHECK-DAG:     <<PhiYZ>>         Phi [<<Const1>>,<<Const0>>]
   /// CHECK-DAG:     <<PhiXYZ>>        Phi [<<Const1>>,<<Const0>>]
 
-  /// CHECK-START: boolean Main.ValuesOrdered(int, int, int) boolean_simplifier (after)
+  /// CHECK-START: boolean Main.ValuesOrdered(int, int, int) select_generator (after)
   /// CHECK-DAG:     <<ParamX:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<ParamY:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<ParamZ:i\d+>>   ParameterValue
-  /// CHECK-DAG:     <<CmpXY:z\d+>>    LessThanOrEqual [<<ParamX>>,<<ParamY>>]
-  /// CHECK-DAG:     <<CmpYZ:z\d+>>    LessThanOrEqual [<<ParamY>>,<<ParamZ>>]
-  /// CHECK-DAG:     <<CmpXYZ:z\d+>>   Equal [<<CmpXY>>,<<CmpYZ>>]
-  /// CHECK-DAG:                       Return [<<CmpXYZ>>]
+  /// CHECK-DAG:     <<Const0:i\d+>>   IntConstant 0
+  /// CHECK-DAG:     <<Const1:i\d+>>   IntConstant 1
+  /// CHECK-DAG:     <<CmpXY:z\d+>>    GreaterThan [<<ParamX>>,<<ParamY>>]
+  /// CHECK-DAG:     <<SelXY:i\d+>>    Select [<<Const1>>,<<Const0>>,<<CmpXY>>]
+  /// CHECK-DAG:     <<CmpYZ:z\d+>>    GreaterThan [<<ParamY>>,<<ParamZ>>]
+  /// CHECK-DAG:     <<SelYZ:i\d+>>    Select [<<Const1>>,<<Const0>>,<<CmpYZ>>]
+  /// CHECK-DAG:     <<CmpXYZ:z\d+>>   NotEqual [<<SelXY>>,<<SelYZ>>]
+  /// CHECK-DAG:     <<SelXYZ:i\d+>>   Select [<<Const1>>,<<Const0>>,<<CmpXYZ>>]
+  /// CHECK-DAG:                       Return [<<SelXYZ>>]
 
   public static boolean ValuesOrdered(int x, int y, int z) {
     return (x <= y) == (y <= z);
   }
 
-  /// CHECK-START: int Main.NegatedCondition(boolean) boolean_simplifier (before)
-  /// CHECK-DAG:     <<Param:z\d+>>    ParameterValue
-  /// CHECK-DAG:     <<Const42:i\d+>>  IntConstant 42
-  /// CHECK-DAG:     <<Const43:i\d+>>  IntConstant 43
-  /// CHECK-DAG:     <<NotParam:z\d+>> BooleanNot [<<Param>>]
-  /// CHECK-DAG:                       If [<<NotParam>>]
-  /// CHECK-DAG:     <<Phi:i\d+>>      Phi [<<Const42>>,<<Const43>>]
-  /// CHECK-DAG:                       Return [<<Phi>>]
-
-  /// CHECK-START: int Main.NegatedCondition(boolean) boolean_simplifier (after)
+  /// CHECK-START: int Main.NegatedCondition(boolean) select_generator (before)
   /// CHECK-DAG:     <<Param:z\d+>>    ParameterValue
   /// CHECK-DAG:     <<Const42:i\d+>>  IntConstant 42
   /// CHECK-DAG:     <<Const43:i\d+>>  IntConstant 43
@@ -175,9 +174,14 @@ public class Main {
   /// CHECK-DAG:     <<Phi:i\d+>>      Phi [<<Const42>>,<<Const43>>]
   /// CHECK-DAG:                       Return [<<Phi>>]
 
-  // Note: The fact that branches are swapped is verified by running the test.
+  /// CHECK-START: int Main.NegatedCondition(boolean) select_generator (after)
+  /// CHECK-DAG:     <<Param:z\d+>>    ParameterValue
+  /// CHECK-DAG:     <<Const42:i\d+>>  IntConstant 42
+  /// CHECK-DAG:     <<Const43:i\d+>>  IntConstant 43
+  /// CHECK-DAG:     <<Select:i\d+>>   Select [<<Const43>>,<<Const42>>,<<Param>>]
+  /// CHECK-DAG:                       Return [<<Select>>]
 
-  /// CHECK-START: int Main.NegatedCondition(boolean) boolean_simplifier (after)
+  /// CHECK-START: int Main.NegatedCondition(boolean) select_generator (after)
   /// CHECK-NOT:                       BooleanNot
 
   public static int NegatedCondition(boolean x) {
@@ -186,6 +190,76 @@ public class Main {
     } else {
       return 43;
     }
+  }
+
+  /// CHECK-START: int Main.TrueBlockWithSideEffects(boolean) select_generator (after)
+  /// CHECK:         If
+
+  /// CHECK-START: int Main.TrueBlockWithSideEffects(boolean) select_generator (after)
+  /// CHECK-NOT:     Select
+
+  public static int TrueBlockWithSideEffects(boolean x) {
+    return x ? 42 + field : 43;
+  }
+
+  /// CHECK-START: int Main.FalseBlockWithSideEffects(boolean) select_generator (after)
+  /// CHECK:         If
+
+  /// CHECK-START: int Main.FalseBlockWithSideEffects(boolean) select_generator (after)
+  /// CHECK-NOT:     Select
+
+  public static int FalseBlockWithSideEffects(boolean x) {
+    return x ? 42 : 43 + field;
+  }
+
+  /// CHECK-START: int Main.SimpleTrueBlock(boolean, int) select_generator (after)
+  /// CHECK-DAG:     <<ParamX:z\d+>>   ParameterValue
+  /// CHECK-DAG:     <<ParamY:i\d+>>   ParameterValue
+  /// CHECK-DAG:     <<Const42:i\d+>>  IntConstant 42
+  /// CHECK-DAG:     <<Const43:i\d+>>  IntConstant 43
+  /// CHECK-DAG:     <<Add:i\d+>>      Add [<<ParamY>>,<<Const42>>]
+  /// CHECK-DAG:     <<Select:i\d+>>   Select [<<Const43>>,<<Add>>,<<ParamX>>]
+  /// CHECK-DAG:                       Return [<<Select>>]
+
+  /// CHECK-START: int Main.SimpleTrueBlock(boolean, int) select_generator (after)
+  /// CHECK-NOT:     If
+
+  public static int SimpleTrueBlock(boolean x, int y) {
+    return x ? y + 42 : 43;
+  }
+
+  /// CHECK-START: int Main.SimpleFalseBlock(boolean, int) select_generator (after)
+  /// CHECK-DAG:     <<ParamX:z\d+>>   ParameterValue
+  /// CHECK-DAG:     <<ParamY:i\d+>>   ParameterValue
+  /// CHECK-DAG:     <<Const42:i\d+>>  IntConstant 42
+  /// CHECK-DAG:     <<Const43:i\d+>>  IntConstant 43
+  /// CHECK-DAG:     <<Add:i\d+>>      Add [<<ParamY>>,<<Const43>>]
+  /// CHECK-DAG:     <<Select:i\d+>>   Select [<<Add>>,<<Const42>>,<<ParamX>>]
+  /// CHECK-DAG:                       Return [<<Select>>]
+
+  /// CHECK-START: int Main.SimpleFalseBlock(boolean, int) select_generator (after)
+  /// CHECK-NOT:     If
+
+  public static int SimpleFalseBlock(boolean x, int y) {
+    return x ? 42 : y + 43;
+  }
+
+  /// CHECK-START: int Main.SimpleBothBlocks(boolean, int, int) select_generator (after)
+  /// CHECK-DAG:     <<ParamX:z\d+>>   ParameterValue
+  /// CHECK-DAG:     <<ParamY:i\d+>>   ParameterValue
+  /// CHECK-DAG:     <<ParamZ:i\d+>>   ParameterValue
+  /// CHECK-DAG:     <<Const42:i\d+>>  IntConstant 42
+  /// CHECK-DAG:     <<Const43:i\d+>>  IntConstant 43
+  /// CHECK-DAG:     <<AddTrue:i\d+>>  Add [<<ParamY>>,<<Const42>>]
+  /// CHECK-DAG:     <<AddFalse:i\d+>> Add [<<ParamZ>>,<<Const43>>]
+  /// CHECK-DAG:     <<Select:i\d+>>   Select [<<AddFalse>>,<<AddTrue>>,<<ParamX>>]
+  /// CHECK-DAG:                       Return [<<Select>>]
+
+  /// CHECK-START: int Main.SimpleBothBlocks(boolean, int, int) select_generator (after)
+  /// CHECK-NOT:     If
+
+  public static int SimpleBothBlocks(boolean x, int y, int z) {
+    return x ? y + 42 : z + 43;
   }
 
   public static void main(String[] args) {
@@ -206,5 +280,17 @@ public class Main {
     assertBoolEquals(false, ValuesOrdered(5, 5, 3));
     assertIntEquals(42, NegatedCondition(true));
     assertIntEquals(43, NegatedCondition(false));
+    assertIntEquals(47, TrueBlockWithSideEffects(true));
+    assertIntEquals(43, TrueBlockWithSideEffects(false));
+    assertIntEquals(42, FalseBlockWithSideEffects(true));
+    assertIntEquals(48, FalseBlockWithSideEffects(false));
+    assertIntEquals(46, SimpleTrueBlock(true, 4));
+    assertIntEquals(43, SimpleTrueBlock(false, 4));
+    assertIntEquals(42, SimpleFalseBlock(true, 7));
+    assertIntEquals(50, SimpleFalseBlock(false, 7));
+    assertIntEquals(48, SimpleBothBlocks(true, 6, 2));
+    assertIntEquals(45, SimpleBothBlocks(false, 6, 2));
   }
+
+  public static int field = 5;
 }

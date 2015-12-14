@@ -3244,6 +3244,34 @@ void InstructionCodeGeneratorMIPS::VisitDeoptimize(HDeoptimize* deoptimize) {
                         /* false_target */ nullptr);
 }
 
+void LocationsBuilderMIPS::VisitSelect(HSelect* select) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(select);
+  if (Primitive::IsFloatingPointType(select->GetType())) {
+    locations->SetInAt(0, Location::RequiresFpuRegister());
+    locations->SetInAt(1, Location::RequiresFpuRegister());
+  } else {
+    locations->SetInAt(0, Location::RequiresRegister());
+    locations->SetInAt(1, Location::RequiresRegister());
+  }
+  if (IsBooleanValueOrMaterializedCondition(select->GetCondition())) {
+    locations->SetInAt(2, Location::RequiresRegister());
+  }
+  locations->SetOut(Location::SameAsFirstInput());
+}
+
+void InstructionCodeGeneratorMIPS::VisitSelect(HSelect* select) {
+  LocationSummary* locations = select->GetLocations();
+  MipsLabel false_target;
+  GenerateTestAndBranch(select,
+                        /* condition_input_index */ 2,
+                        /* true_target */ nullptr,
+                        &false_target);
+  HParallelMove parallel_move(GetGraph()->GetArena());
+  parallel_move.AddMove(locations->InAt(1), locations->Out(), select->GetType(), nullptr);
+  codegen_->GetMoveResolver()->EmitNativeCode(&parallel_move);
+  __ Bind(&false_target);
+}
+
 void LocationsBuilderMIPS::VisitNativeDebugInfo(HNativeDebugInfo* info) {
   new (GetGraph()->GetArena()) LocationSummary(info);
 }
