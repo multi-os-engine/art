@@ -15,8 +15,13 @@
  */
 
 public class Main {
+
+  private static int mX = 2;
+  private static int mY = -3;
+
   public static void main(String[] args) {
     System.out.println(foo(3, 4));
+    System.out.println(mulAndIntrinsic());
   }
 
   /// CHECK-START: int Main.foo(int, int) GVN (before)
@@ -35,7 +40,31 @@ public class Main {
     return sum1 + sum2;
   }
 
-  public static long bar(int i) {
-    return i;
+  /// CHECK-START: int Main.mulAndIntrinsic() GVN (before)
+  /// CHECK: StaticFieldGet
+  /// CHECK: StaticFieldGet
+  /// CHECK: Mul
+  /// CHECK: InvokeStaticOrDirect
+  /// CHECK: StaticFieldGet
+  /// CHECK: StaticFieldGet
+  /// CHECK: Mul
+  /// CHECK: Add
+
+  /// CHECK-START: int Main.mulAndIntrinsic() GVN (after)
+  /// CHECK: StaticFieldGet
+  /// CHECK: StaticFieldGet
+  /// CHECK: Mul
+  /// CHECK: InvokeStaticOrDirect
+  /// CHECK-NOT: StaticFieldGet
+  /// CHECK-NOT: StaticFieldGet
+  /// CHECK-NOT: Mul
+  /// CHECK: Add
+
+  public static int mulAndIntrinsic() {
+    int mul1 = mX * mY;
+    int abs  = Math.abs(mul1);
+    int mul2 = mY * mX;
+    return abs + mul2;
   }
+
 }
