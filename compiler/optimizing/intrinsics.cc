@@ -474,6 +474,7 @@ void IntrinsicsRecognizer::Run() {
                   << invoke->DebugName();
             } else {
               invoke->SetIntrinsic(intrinsic, NeedsEnvironmentOrCache(intrinsic));
+              MaybeRecordStat(MethodCompilationStat::kIntrinsicsRecognizer);
             }
           }
         }

@@ -65,6 +65,7 @@ void HConstantFolding::Run() {
         if (constant != nullptr) {
           inst->ReplaceWith(constant);
           inst->GetBlock()->RemoveInstruction(inst);
+          MaybeRecordStat(MethodCompilationStat::kConstantFolding);
         } else {
           inst->Accept(&simplifier);
         }
@@ -75,6 +76,7 @@ void HConstantFolding::Run() {
         if (constant != nullptr) {
           inst->ReplaceWith(constant);
           inst->GetBlock()->RemoveInstruction(inst);
+          MaybeRecordStat(MethodCompilationStat::kConstantFolding);
         }
       } else if (inst->IsTypeConversion()) {
         // Constant folding: replace `TypeConversion(a)' with a constant at
@@ -83,6 +85,7 @@ void HConstantFolding::Run() {
         if (constant != nullptr) {
           inst->ReplaceWith(constant);
           inst->GetBlock()->RemoveInstruction(inst);
+          MaybeRecordStat(MethodCompilationStat::kConstantFolding);
         }
       } else if (inst->IsDivZeroCheck()) {
         // We can safely remove the check if the input is a non-null constant.
@@ -91,6 +94,7 @@ void HConstantFolding::Run() {
         if (check_input->IsConstant() && !check_input->AsConstant()->IsZero()) {
           check->ReplaceWith(check_input);
           check->GetBlock()->RemoveInstruction(check);
+          MaybeRecordStat(MethodCompilationStat::kConstantFolding);
         }
       }
     }
