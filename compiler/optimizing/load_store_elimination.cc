@@ -686,7 +686,7 @@ class LSEVisitor : public HGraphVisitor {
     if ((heap_value != kUnknownHeapValue) &&
         // Keep the load due to possible I/F, J/D array aliasing.
         // See b/22538329 for details.
-        (heap_value->GetType() == instruction->GetType())) {
+        (HPhi::ToPhiType(heap_value->GetType()) == HPhi::ToPhiType(instruction->GetType()))) {
       removed_loads_.push_back(instruction);
       substitute_instructions_for_loads_.push_back(heap_value);
       TryRemovingNullCheck(instruction);
