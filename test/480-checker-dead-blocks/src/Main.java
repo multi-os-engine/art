@@ -56,6 +56,7 @@ public class Main {
       z = x + y;
     } else {
       z = x - y;
+      System.nanoTime();  // prevent simplification to HSelect
     }
     return z;
   }
@@ -86,6 +87,7 @@ public class Main {
       z = x + y;
     } else {
       z = x - y;
+      System.nanoTime();  // prevent simplification to HSelect
     }
     return z;
   }

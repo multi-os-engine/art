@@ -133,7 +133,7 @@ void PrepareForRegisterAllocation::VisitCondition(HCondition* condition) {
     needs_materialization = true;
   } else {
     HInstruction* user = condition->GetUses().GetFirst()->GetUser();
-    if (!user->IsIf() && !user->IsDeoptimize()) {
+    if (!user->IsIf() && !user->IsDeoptimize() && !user->IsSelect()) {
       needs_materialization = true;
     } else {
       // TODO: if there is no intervening instructions with side-effect between this condition

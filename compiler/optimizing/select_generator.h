@@ -53,29 +53,26 @@
 // Note: in order to recognize empty blocks, this optimization must be run
 // after the instruction simplifier has removed redundant suspend checks.
 
-#ifndef ART_COMPILER_OPTIMIZING_BOOLEAN_SIMPLIFIER_H_
-#define ART_COMPILER_OPTIMIZING_BOOLEAN_SIMPLIFIER_H_
+#ifndef ART_COMPILER_OPTIMIZING_SELECT_GENERATOR_H_
+#define ART_COMPILER_OPTIMIZING_SELECT_GENERATOR_H_
 
 #include "optimization.h"
 
 namespace art {
 
-class HBooleanSimplifier : public HOptimization {
+class HSelectGenerator : public HOptimization {
  public:
-  explicit HBooleanSimplifier(HGraph* graph)
-    : HOptimization(graph, kBooleanSimplifierPassName) {}
+  explicit HSelectGenerator(HGraph* graph)
+    : HOptimization(graph, kSelectGeneratorPassName) {}
 
   void Run() OVERRIDE;
 
-  static constexpr const char* kBooleanSimplifierPassName = "boolean_simplifier";
+  static constexpr const char* kSelectGeneratorPassName = "select_generator";
 
  private:
-  void TryRemovingNegatedCondition(HBasicBlock* block);
-  void TryRemovingBooleanSelection(HBasicBlock* block);
-
-  DISALLOW_COPY_AND_ASSIGN(HBooleanSimplifier);
+  DISALLOW_COPY_AND_ASSIGN(HSelectGenerator);
 };
 
 }  // namespace art
 
-#endif  // ART_COMPILER_OPTIMIZING_BOOLEAN_SIMPLIFIER_H_
+#endif  // ART_COMPILER_OPTIMIZING_SELECT_GENERATOR_H_
