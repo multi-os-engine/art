@@ -1354,20 +1354,6 @@ void Heap::TrimSpaces(Thread* self) {
   FinishGC(self, collector::kGcTypeNone);
   size_t native_reclaimed = 0;
 
-#ifdef __ANDROID__
-  // Only trim the native heap if we don't care about pauses.
-  if (!CareAboutPauseTimes()) {
-#if defined(USE_DLMALLOC)
-    // Trim the native heap.
-    dlmalloc_trim(0);
-    dlmalloc_inspect_all(DlmallocMadviseCallback, &native_reclaimed);
-#elif defined(USE_JEMALLOC)
-    // Jemalloc does it's own internal trimming.
-#else
-    UNIMPLEMENTED(WARNING) << "Add trimming support";
-#endif
-  }
-#endif  // __ANDROID__
   uint64_t end_ns = NanoTime();
   VLOG(heap) << "Heap trim of managed (duration=" << PrettyDuration(gc_heap_end_ns - start_ns)
       << ", advised=" << PrettySize(managed_reclaimed) << ") and native (duration="
