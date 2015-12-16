@@ -85,6 +85,7 @@ class InductionVarAnalysisTest : public CommonCompilerTest {
     constant0_ = graph_->GetIntConstant(0);
     constant1_ = graph_->GetIntConstant(1);
     constant100_ = graph_->GetIntConstant(100);
+    float_constant0_ = graph_->GetFloatConstant(0.0f);
     induc_ = new (&allocator_) HLocal(n);
     entry_->AddInstruction(induc_);
     entry_->AddInstruction(new (&allocator_) HStoreLocal(induc_, constant0_));
@@ -157,7 +158,7 @@ class InductionVarAnalysisTest : public CommonCompilerTest {
     HInstruction* load = InsertInstruction(
         new (&allocator_) HLoadLocal(subscript, Primitive::kPrimInt), d);
     return InsertInstruction(new (&allocator_) HArraySet(
-        parameter_, load, constant0_, Primitive::kPrimInt, 0), d);
+        parameter_, load, float_constant0_, Primitive::kPrimFloat, 0), d);
   }
 
   // Returns induction information of instruction in loop at depth d.
@@ -187,6 +188,7 @@ class InductionVarAnalysisTest : public CommonCompilerTest {
   HInstruction* constant0_;
   HInstruction* constant1_;
   HInstruction* constant100_;
+  HInstruction* float_constant0_;
   HLocal* induc_;  // "vreg_n", the "k"
   HLocal* tmp_;    // "vreg_n+1"
   HLocal* dum_;    // "vreg_n+2"
