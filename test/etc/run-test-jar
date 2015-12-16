@@ -138,6 +138,11 @@ while true; do
         gdb_arg="$1"
         GDB_ARGS="${GDB_ARGS} $gdb_arg"
         shift
+    elif [ "x$1" = "x--lldb" ]; then
+        USE_LLDB="y"
+        DEV_MODE="y"
+        TIME_OUT="n"
+        shift
     elif [ "x$1" = "x--zygote" ]; then
         ZYGOTE="-Xzygote"
         msg "Spawning from zygote"
@@ -301,6 +306,13 @@ if [ "$USE_GDB" = "y" ]; then
         # Enable for Emacs "M-x gdb" support. TODO: allow extra gdb arguments on command line.
         # gdbargs="--annotate=3 $gdbargs"
     fi
+  fi
+elif [ "$USE_LLDB" = "y" ]; then
+  if [ "$HOST" = "n" ]; then
+    GDB="lldb-server p --listen 127.0.0.1:5432 --"
+  else
+    GDB=lldb
+    GDB_ARGS="$GDB_ARGS --"
   fi
 fi
 
@@ -540,7 +552,7 @@ else
         export ANDROID_LOG_TAGS='*:e'
     fi
 
-    if [ "$USE_GDB" = "y" ]; then
+    if [ "$USE_GDB" = "y" ] -o [ "$USE_LLDB" = "y" ]; then
       # When running under gdb, we cannot do piping and grepping...
       $cmdline "$@"
     else
