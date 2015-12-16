@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iostream>
 
 #include "parallel_move_resolver.h"
 
@@ -172,7 +171,7 @@ MoveOperands* ParallelMoveResolverWithSwap::PerformMove(size_t index) {
         i = -1;
       } else if (required_swap != nullptr) {
         // A move is required to swap. We walk back the cycle to find the
-        // move by just returning from this `PerforrmMove`.
+        // move by just returning from this `PerformMove`.
         moves_[index]->ClearPending(destination);
         return required_swap;
       }
@@ -201,7 +200,30 @@ MoveOperands* ParallelMoveResolverWithSwap::PerformMove(size_t index) {
   } else {
     for (MoveOperands* other_move : moves_) {
       if (other_move->Blocks(destination)) {
-        DCHECK(other_move->IsPending());
+
+        // TODO: When compiling the method
+        //
+        //   boolean android.icu.impl.coll.CollationWeights.allocWeightsInMinLengthRanges(int, int)
+        //
+        // from the framework on ARM in PIC mode with (fast path
+        // based) Baker's read barriers enabled, the following
+        // assertion fails:
+        //
+        //   Check failed: other_move->IsPending()
+        //     move=[ source=R7 destination=R2 type=PrimInt instruction=Phi 754 ]
+        //     other_move=[ source=R2 destination=R3 type=PrimInt
+        //                  instruction=ArmDexCacheArraysBase 792 ]
+        //
+        // Disabling it does not seem to produce wrong results within
+        // the parallel move resolver.
+        //
+        // Should we keep this assertion? Or is it an actual sign that
+        // something is wrong? Or maybe should we try and use a
+        // non-swap parallel move resolver on ARM?
+        if (!kEmitCompilerReadBarrier || !kUseBakerReadBarrier) {
+          DCHECK(other_move->IsPending()) << "move=" << *move << " other_move=" << *other_move;
+        }
+
         if (!move->Is64BitMove() && other_move->Is64BitMove()) {
           // We swap 64bits moves before swapping 32bits moves. Go back from the
           // cycle by returning the move that must be swapped.
