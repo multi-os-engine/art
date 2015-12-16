@@ -974,9 +974,18 @@ class Dex2Oat FINAL {
   bool OpenFile() {
     bool create_file = !oat_unstripped_.empty();  // as opposed to using open file descriptor
     if (create_file) {
-      oat_file_.reset(OS::CreateEmptyFile(oat_unstripped_.c_str()));
+      if (!IsHost()) {
+        tmp_oat_unstripped_ = oat_unstripped_ + ".tmp";
+        oat_file_.reset(OS::CreateEmptyFile(tmp_oat_unstripped_.c_str()));
+      } else {
+        oat_file_.reset(OS::CreateEmptyFile(oat_unstripped_.c_str()));
+      }
       if (oat_location_.empty()) {
-        oat_location_ = oat_filename_;
+        if(!tmp_oat_unstripped_.empty()) {
+          oat_location_ = oat_filename_ + ".tmp";
+        } else {
+          oat_location_ = oat_filename_;
+        }
       }
     } else {
       oat_file_.reset(new File(oat_fd_, oat_location_, true));
@@ -1399,7 +1408,8 @@ class Dex2Oat FINAL {
 
       TimingLogger::ScopedTiming t("dex2oat OatFile copy", timings_);
       std::unique_ptr<File> in(OS::OpenFileForReading(oat_unstripped_.c_str()));
-      std::unique_ptr<File> out(OS::CreateEmptyFile(oat_stripped_.c_str()));
+      std::string tmp_oat_stripped = oat_stripped_ + ".tmp";
+      std::unique_ptr<File> out(OS::CreateEmptyFile(tmp_oat_stripped.c_str()));
       size_t buffer_size = 8192;
       std::unique_ptr<uint8_t[]> buffer(new uint8_t[buffer_size]);
       while (true) {
@@ -1411,10 +1421,16 @@ class Dex2Oat FINAL {
         CHECK(write_ok);
       }
       if (out->FlushCloseOrErase() != 0) {
-        PLOG(ERROR) << "Failed to flush and close copied oat file: " << oat_stripped_;
+        PLOG(ERROR) << "Failed to flush and close copied oat file: " << tmp_oat_stripped_;
         return false;
       }
-      VLOG(compiler) << "Oat file copied successfully (stripped): " << oat_stripped_;
+      VLOG(compiler) << "Oat file copied successfully (stripped): " << tmp_oat_stripped_;
+      if (rename(tmp_oat_stripped.c_str(), oat_stripped_.c_str())) {
+        LOG(ERROR) << " rename failed from " << tmp_oat_stripped.c_str() << " to "
+          << oat_stripped_.c_str() << " : " << strerror(errno);
+        return false;
+      }
+      VLOG(compiler) << "Oat file is renamed successfully (stripped): " << oat_stripped_;
     }
     return true;
   }
@@ -1439,6 +1455,15 @@ class Dex2Oat FINAL {
         PLOG(ERROR) << "Failed to flush and close oat file: " << oat_location_ << " / "
             << oat_filename_;
         return false;
+      }
+      if (!IsHost()) {
+        if (!tmp_oat_unstripped_.empty() && OS::FileExists(tmp_oat_unstripped_.c_str())) {
+          if (rename(tmp_oat_unstripped_.c_str(), oat_unstripped_.c_str())) {
+            LOG(ERROR) << " rename failed from " << tmp_oat_unstripped_.c_str() << " to "
+              << oat_unstripped_.c_str() << " : " << strerror(errno);
+            return false;
+          }
+        }
       }
     }
     return true;
@@ -1866,6 +1891,7 @@ class Dex2Oat FINAL {
   std::unique_ptr<File> oat_file_;
   std::string oat_stripped_;
   std::string oat_unstripped_;
+  std::string tmp_oat_unstripped_;
   std::string oat_location_;
   std::string oat_filename_;
   int oat_fd_;
