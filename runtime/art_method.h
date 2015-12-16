@@ -458,7 +458,9 @@ class ArtMethod FINAL {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   uint16_t IncrementCounter() {
-    return ++hotness_count_;
+    return hotness_count_ < std::numeric_limits<uint16_t>::max()
+        ? ++hotness_count_
+        : std::numeric_limits<uint16_t>::max();
   }
 
   void ClearCounter() {
