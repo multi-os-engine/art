@@ -776,8 +776,8 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
           case kBuildSsaFailThrowCatchLoop:
             MaybeRecordStat(MethodCompilationStat::kNotCompiledThrowCatchLoop);
             break;
-          case kBuildSsaFailAmbiguousArrayGet:
-            MaybeRecordStat(MethodCompilationStat::kNotCompiledAmbiguousArrayGet);
+          case kBuildSsaFailAmbiguousArrayOp:
+            MaybeRecordStat(MethodCompilationStat::kNotCompiledAmbiguousArrayOp);
             break;
           case kBuildSsaSuccess:
             UNREACHABLE();
