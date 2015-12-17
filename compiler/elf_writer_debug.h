@@ -34,6 +34,10 @@ template<typename ElfTypes>
 void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
                         const ArrayRef<const MethodDebugInfo>& method_infos);
 
+template <typename ElfTypes>
+void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
+                       const ArrayRef<const dwarf::MethodDebugInfo>& method_infos);
+
 }  // namespace dwarf
 }  // namespace art
 
