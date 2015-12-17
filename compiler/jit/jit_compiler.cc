@@ -166,7 +166,7 @@ JitCompiler::JitCompiler() : total_time_(0) {
       /* compiled_classes */ nullptr,
       /* compiled_methods */ nullptr,
       /* thread_count */ 1,
-      /* dump_stats */ false,
+      /* dump_stats */ true,
       /* dump_passes */ false,
       cumulative_logger_.get(),
       /* swap_fd */ -1,
