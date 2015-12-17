@@ -727,7 +727,6 @@ void ParsedOptions::Usage(const char* fmt, ...) {
   UsageMessage(stream, "  -Xjitblocking\n");
   UsageMessage(stream, "  -Xjitmethod:signature[,signature]* (eg Ljava/lang/String\\;replace)\n");
   UsageMessage(stream, "  -Xjitclass:classname[,classname]*\n");
-  UsageMessage(stream, "  -Xjitcodecachesize:N\n");
   UsageMessage(stream, "  -Xjitoffset:offset[,offset]\n");
   UsageMessage(stream, "  -Xjitconfig:filename\n");
   UsageMessage(stream, "  -Xjitcheckcg\n");

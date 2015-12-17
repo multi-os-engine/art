@@ -420,8 +420,8 @@ TEST_F(CmdlineParserTest, TestPropertiesList) {
 }  // TEST_F
 
 /*
-* -Xcompiler-option foo -Xcompiler-option bar ...
-*/
+ * -Xcompiler-option foo -Xcompiler-option bar ...
+ */
 TEST_F(CmdlineParserTest, TestCompilerOption) {
  /*
   * Test successes
@@ -447,8 +447,8 @@ TEST_F(CmdlineParserTest, TestCompilerOption) {
 }  // TEST_F
 
 /*
-* -Xjit, -Xnojit, -Xjitcodecachesize, Xjitcompilethreshold
-*/
+ * -Xusejit, -Xjitmaxsize, -Xjitinitialsize, -Xjitthreshold
+ */
 TEST_F(CmdlineParserTest, TestJitOptions) {
  /*
   * Test successes
@@ -469,8 +469,8 @@ TEST_F(CmdlineParserTest, TestJitOptions) {
 }  // TEST_F
 
 /*
-* -X-profile-*
-*/
+ * -X-profile-*
+ */
 TEST_F(CmdlineParserTest, TestProfilerOptions) {
  /*
   * Test successes
