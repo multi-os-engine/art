@@ -138,7 +138,7 @@ public class ClassAttrs {
             System.err.println("FAILED: " + nsfe);
         } catch (RuntimeException re) {
             System.err.println("FAILED: " + re);
-            re.printStackTrace();
+            re.printStackTrace(System.out);
         }
 
         test_isAssignableFrom();
@@ -225,7 +225,7 @@ public class ClassAttrs {
             method = c.getDeclaredMethod("getSignature", java.lang.reflect.AnnotatedElement.class);
             method.setAccessible(true);
         } catch (Exception ex) {
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
             return "<unknown>";
         }
 

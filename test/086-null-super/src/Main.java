@@ -158,7 +158,7 @@ public class Main {
                 System.err.println("Got expected ITE/NPE");
             } else {
                 System.err.println("Got unexpected ITE");
-                ite.printStackTrace();
+                ite.printStackTrace(System.out);
             }
         }
     }

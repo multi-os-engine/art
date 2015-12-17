@@ -28,6 +28,6 @@ public class ThreadDeathHandler implements Thread.UncaughtExceptionHandler {
 
     public void uncaughtException(Thread t, Throwable e) {
         System.err.println("Uncaught exception " + mMyMessage + "!");
-        e.printStackTrace();
+        e.printStackTrace(System.out);
     }
 }

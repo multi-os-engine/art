@@ -105,7 +105,7 @@ public class Main {
                 throw new RuntimeException("target 2 has unexpected value " + value);
             }
         } catch (Exception ex) {
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
     }
 
@@ -130,7 +130,7 @@ public class Main {
             altClass = loader.loadClass("Inaccessible1");
         } catch (ClassNotFoundException cnfe) {
             System.err.println("loadClass failed");
-            cnfe.printStackTrace();
+            cnfe.printStackTrace(System.out);
             return;
         }
 
@@ -165,7 +165,7 @@ public class Main {
                 System.out.println("Got expected CNFE/IAE #2");
             } else {
                 System.err.println("Got unexpected CNFE/IAE #2");
-                cnfe.printStackTrace();
+                cnfe.printStackTrace(System.out);
             }
         }
     }
@@ -185,7 +185,7 @@ public class Main {
                 System.out.println("Got expected CNFE/IAE #3");
             } else {
                 System.err.println("Got unexpected CNFE/IAE #3");
-                cnfe.printStackTrace();
+                cnfe.printStackTrace(System.out);
             }
         }
     }
@@ -265,7 +265,7 @@ public class Main {
             return;
         } catch (LinkageError le) {
             System.err.println("Got unexpected LinkageError on DEO");
-            le.printStackTrace();
+            le.printStackTrace(System.out);
             return;
         }
 
@@ -281,7 +281,7 @@ public class Main {
             System.out.println("Got DEO result " + result);
         } catch (LinkageError le) {
             System.err.println("Got unexpected LinkageError on DEO");
-            le.printStackTrace();
+            le.printStackTrace(System.out);
             return;
         }
     }

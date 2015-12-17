@@ -45,7 +45,7 @@ public class ConcreteSub extends AbstractBase {
         try {
             meth = absClass.getMethod("redefineMe", (Class[]) null);
         } catch (NoSuchMethodException nsme) {
-            nsme.printStackTrace();
+            nsme.printStackTrace(System.out);
             return;
         }
         System.out.println("meth modifiers=" + meth.getModifiers());

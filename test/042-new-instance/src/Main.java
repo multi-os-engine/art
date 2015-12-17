@@ -38,7 +38,7 @@ public class Main {
             System.out.println("LocalClass succeeded");
         } catch (Exception ex) {
             System.err.println("LocalClass failed");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
 
         // should fail
@@ -50,7 +50,7 @@ public class Main {
             System.out.println("Got expected PackageAccess complaint");
         } catch (Exception ex) {
             System.err.println("Got unexpected PackageAccess failure");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
 
         LocalClass3.main();
@@ -78,7 +78,7 @@ public class Main {
             System.out.println("Cons LocalClass failed as expected");
         } catch (Exception ex) {
             System.err.println("Cons LocalClass failed strangely");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
 
         // should succeed
@@ -89,7 +89,7 @@ public class Main {
             System.out.println("Cons LocalClass2 succeeded");
         } catch (Exception ex) {
             System.err.println("Cons LocalClass2 failed");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
 
         // should succeed
@@ -100,7 +100,7 @@ public class Main {
             System.out.println("Cons InnerClass succeeded");
         } catch (Exception ex) {
             System.err.println("Cons InnerClass failed");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
 
         // should succeed
@@ -111,7 +111,7 @@ public class Main {
             System.out.println("Cons StaticInnerClass succeeded");
         } catch (Exception ex) {
             System.err.println("Cons StaticInnerClass failed");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
 
         // should fail
@@ -124,7 +124,7 @@ public class Main {
             System.out.println("Cons got expected PackageAccess complaint");
         } catch (Exception ex) {
             System.err.println("Cons got unexpected PackageAccess failure");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
 
         // should fail
@@ -138,7 +138,7 @@ public class Main {
             System.out.println("Cons got expected InstantationException");
         } catch (Exception ex) {
             System.err.println("Cons got unexpected MaybeAbstract failure");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
 
         // should fail
@@ -153,7 +153,7 @@ public class Main {
             System.out.println("Cons got expected PackageAccess2 complaint");
         } catch (Exception ex) {
             System.err.println("Cons got unexpected PackageAccess2 failure");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
 
         // should succeed
@@ -188,7 +188,7 @@ class LocalClass3 {
             System.out.println("LocalClass3 succeeded");
         } catch (Exception ex) {
             System.err.println("Got unexpected LocalClass3 failure");
-            ex.printStackTrace();
+            ex.printStackTrace(System.out);
         }
     }
 
@@ -200,7 +200,7 @@ class LocalClass3 {
                 Class c = CC.class;
                 return c.newInstance();
             } catch (Exception ex) {
-                ex.printStackTrace();
+                ex.printStackTrace(System.out);
                 return null;
             }
         }

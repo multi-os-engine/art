@@ -44,7 +44,7 @@ public class Main {
         result = (Integer) m.invoke(null, m_obj);
       } catch (Exception e) {
         System.err.println("Hash code query exception");
-        e.printStackTrace();
+        e.printStackTrace(System.out);
         result = -1;
       }
       return result;
