@@ -30,6 +30,11 @@ class ArchTest : public CommonRuntimeTest {
     options->push_back(std::make_pair("imageinstructionset", "x86_64"));
   }
 
+  // Do not do any of the finalization. We don't want to run any code, we don't need the heap
+  // prepared, it actually will be a problem with the x86_64 above.
+  void FinalizeSetup() OVERRIDE {
+  }
+
   static void CheckFrameSize(InstructionSet isa, Runtime::CalleeSaveType type, uint32_t save_size)
       NO_THREAD_SAFETY_ANALYSIS {
     Runtime* const runtime = Runtime::Current();
