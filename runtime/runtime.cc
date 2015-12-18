@@ -1630,11 +1630,20 @@ void Runtime::SetCalleeSaveMethod(ArtMethod* method, CalleeSaveType type) {
 
 void Runtime::RegisterAppInfo(const std::vector<std::string>& code_paths,
                               const std::string& profile_output_filename) {
-  VLOG(profiler) << "Register app with " << profile_output_filename_
-      << " " << Join(code_paths, ':');
-  DCHECK(!profile_output_filename.empty());
+  VLOG(profiler) << "Register app with " << profile_output_filename_ << " " << Join(code_paths, ':');
+
+  if (profile_output_filename.empty()) {
+    LOG(WARNING) << "JIT profile information will not be recorded: profile filename is empty.";
+  } else if (!FileExists(profile_output_filename)) {
+    LOG(WARNING) << "JIT profile information will not be recorded: profile file does not exits.";
+  }
+  if (code_paths.empty()) {
+    LOG(WARNING) << "JIT profile information will not be recorded: code paths is empty.";
+  }
+
   profile_output_filename_ = profile_output_filename;
-  if (jit_.get() != nullptr && !profile_output_filename.empty() && !code_paths.empty()) {
+  if (jit_.get() != nullptr && !profile_output_filename.empty() && !code_paths.empty() &&
+      FileExists(profile_output_filename)) {
     jit_->StartProfileSaver(profile_output_filename, code_paths);
   }
 }
