@@ -40,7 +40,7 @@ class TestVisitor : public StackVisitor {
       uint32_t value = 0;
       CHECK(GetVReg(m, 0, kIntVReg, &value));
       CHECK_EQ(value, 42u);
-    } else if (m_name.compare("testIntervalHole") == 0) {
+    } else if (m_name.compare("$opt$noinline$testIntervalHole") == 0) {
       found_method_ = true;
       uint32_t value = 0;
       if (GetCurrentQuickFrame() != nullptr &&
