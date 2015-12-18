@@ -16,6 +16,13 @@
 
 #include "debugger_interface.h"
 
+#include "base/logging.h"
+#include "base/mutex.h"
+#include "thread-inl.h"
+#include "thread.h"
+
+#include <unordered_map>
+
 namespace art {
 
 // -------------------------------------------------------------------
@@ -57,13 +64,19 @@ extern "C" {
   JITDescriptor __jit_debug_descriptor = { 1, JIT_NOACTION, nullptr, nullptr };
 }
 
-JITCodeEntry* CreateJITCodeEntry(const uint8_t *symfile_addr, uintptr_t symfile_size) {
+static Mutex g_jit_debug_mutex("JIT debug interface lock", kJitDebugInterfaceLock);
+
+JITCodeEntry* CreateJITCodeEntry(std::unique_ptr<const uint8_t[]> symfile_addr,
+                                 uintptr_t symfile_size) {
+  DCHECK(symfile_addr.get() != nullptr);
+  Thread* self = Thread::Current();
+  MutexLock mu(self, g_jit_debug_mutex);
+
   JITCodeEntry* entry = new JITCodeEntry;
-  entry->symfile_addr_ = symfile_addr;
+  entry->symfile_addr_ = symfile_addr.release();
   entry->symfile_size_ = symfile_size;
   entry->prev_ = nullptr;
 
-  // TODO: Do we need a lock here?
   entry->next_ = __jit_debug_descriptor.first_entry_;
   if (entry->next_ != nullptr) {
     entry->next_->prev_ = entry;
@@ -77,7 +90,9 @@ JITCodeEntry* CreateJITCodeEntry(const uint8_t *symfile_addr, uintptr_t symfile_
 }
 
 void DeleteJITCodeEntry(JITCodeEntry* entry) {
-  // TODO: Do we need a lock here?
+  Thread* self = Thread::Current();
+  MutexLock mu(self, g_jit_debug_mutex);
+
   if (entry->prev_ != nullptr) {
     entry->prev_->next_ = entry->next_;
   } else {
@@ -91,7 +106,31 @@ void DeleteJITCodeEntry(JITCodeEntry* entry) {
   __jit_debug_descriptor.relevant_entry_ = entry;
   __jit_debug_descriptor.action_flag_ = JIT_UNREGISTER_FN;
   __jit_debug_register_code();
+  delete[] entry->symfile_addr_;
   delete entry;
+}
+
+// Mapping from address to entry.  It takes ownership of the entries
+// so that the user of the JIT interface does not have to store them.
+static std::unordered_map<uintptr_t, JITCodeEntry*> g_jit_code_entries;
+
+void CreateJITCodeEntryForAddress(uintptr_t address,
+                                  std::unique_ptr<const uint8_t[]> symfile_addr,
+                                  uintptr_t symfile_size) {
+  DCHECK_NE(address, 0u);
+  DCHECK(g_jit_code_entries.find(address) == g_jit_code_entries.end());
+  JITCodeEntry* entry = CreateJITCodeEntry(std::move(symfile_addr), symfile_size);
+  g_jit_code_entries.emplace(address, entry);
+}
+
+bool DeleteJITCodeEntryForAddress(uintptr_t address) {
+  const auto& it = g_jit_code_entries.find(address);
+  if (it == g_jit_code_entries.end()) {
+    return false;
+  }
+  DeleteJITCodeEntry(it->second);
+  g_jit_code_entries.erase(it);
+  return true;
 }
 
 }  // namespace art
