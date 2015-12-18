@@ -1632,8 +1632,10 @@ void Runtime::RegisterAppInfo(const std::vector<std::string>& code_paths,
                               const std::string& profile_output_filename) {
   LOG(INFO) << "Register app with " << profile_output_filename_ << " " << Join(code_paths, ':');
   DCHECK(!profile_output_filename.empty());
+  DCHECK(FileExists(profile_output_filename));
   profile_output_filename_ = profile_output_filename;
-  if (jit_.get() != nullptr && !profile_output_filename.empty() && !code_paths.empty()) {
+  if (jit_.get() != nullptr && !profile_output_filename.empty() && !code_paths.empty() &&
+      FileExists(profile_output_filename)) {
     jit_->StartProfileSaver(profile_output_filename, code_paths);
   }
 }
