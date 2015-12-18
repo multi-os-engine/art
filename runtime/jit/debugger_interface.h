@@ -31,6 +31,16 @@ JITCodeEntry* CreateJITCodeEntry(const uint8_t *symfile_addr, uintptr_t symfile_
 // Notify native debugger that JITed code has been removed.
 void DeleteJITCodeEntry(JITCodeEntry* entry);
 
+// Notify native debugger about new JITed code by passing in-memory ELF.
+// The address is used only to uniquely identify the entry.
+void CreateJITCodeEntryForAddress(uintptr_t address,
+                                  const uint8_t *symfile_addr,
+                                  uintptr_t symfile_size);
+
+// Notify native debugger that JITed code has been removed.
+// Returns false if entry for the given address was not found.
+bool DeleteJITCodeEntryForAddress(uintptr_t address);
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_JIT_DEBUGGER_INTERFACE_H_
