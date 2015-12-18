@@ -148,6 +148,11 @@ class ElfBuilder FINAL {
       }
     }
 
+    // Returns true if the section was written to disk.
+    bool WasWritten() const {
+      return finished_;
+    }
+
     // Get the location of this section in virtual memory.
     Elf_Addr GetAddress() const {
       CHECK(started_);
@@ -250,13 +255,13 @@ class ElfBuilder FINAL {
     void Add(Elf_Word name, const Section* section,
              Elf_Addr addr, bool is_relative, Elf_Word size,
              uint8_t binding, uint8_t type, uint8_t other = 0) {
-      CHECK(section != nullptr);
       Elf_Sym sym = Elf_Sym();
       sym.st_name = name;
       sym.st_value = addr + (is_relative ? section->GetAddress() : 0);
       sym.st_size = size;
       sym.st_other = other;
-      sym.st_shndx = section->GetSectionIndex();
+      sym.st_shndx = (section != nullptr ? section->GetSectionIndex()
+                                         : static_cast<Elf_Word>(SHN_ABS));
       sym.st_info = (binding << 4) + (type & 0xf);
       symbols_.push_back(sym);
     }
