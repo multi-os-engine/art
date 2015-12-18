@@ -38,6 +38,10 @@
 namespace art {
 namespace jit {
 
+// Generate DWARF debugging information and pass it to the native debugger.
+// TODO: Compile-time constant until we make it run-time configurable.
+static constexpr bool kGenerateNativeDebugInfoInJIT = false;
+
 JitCompiler* JitCompiler::Create() {
   return new JitCompiler();
 }
@@ -88,7 +92,7 @@ JitCompiler::JitCompiler() : total_time_(0) {
       /* include_patch_information */ false,
       CompilerOptions::kDefaultTopKProfileThreshold,
       Runtime::Current()->IsDebuggable(),
-      CompilerOptions::kDefaultGenerateDebugInfo,
+      kGenerateNativeDebugInfoInJIT,
       /* implicit_null_checks */ true,
       /* implicit_so_checks */ true,
       /* implicit_suspend_checks */ false,
