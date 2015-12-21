@@ -20,6 +20,7 @@ import com.android.tools.perflib.heap.ArrayInstance;
 import com.android.tools.perflib.heap.ClassInstance;
 import com.android.tools.perflib.heap.ClassObj;
 import com.android.tools.perflib.heap.Instance;
+import com.android.tools.perflib.heap.Heap;
 import com.android.tools.perflib.heap.Type;
 import java.awt.image.BufferedImage;
 
@@ -31,7 +32,7 @@ class InstanceUtils {
    * Returns true if the given instance is an instance of a class with the
    * given name.
    */
-  public static boolean isInstanceOfClass(Instance inst, String className) {
+  private static boolean isInstanceOfClass(Instance inst, String className) {
     ClassObj cls = (inst == null) ? null : inst.getClassObj();
     return (cls != null && className.equals(cls.getClassName()));
   }
@@ -206,6 +207,28 @@ class InstanceUtils {
   }
 
   /**
+   * Read a long field of an instance.
+   * The field is assumed to be a long type.
+   * Returns null if the field value is not an long or could not be read.
+   */
+  private static Long getLongField(Instance inst, String fieldName) {
+    Object value = getField(inst, fieldName);
+    if (!(value instanceof Long)) {
+      return null;
+    }
+    return (Long)value;
+  }
+
+  /**
+   * Read a long field of an instance, returning a default value if the field
+   * was not a long or could not be read.
+   */
+  private static long getLongField(Instance inst, String fieldName, long def) {
+    Long value = getLongField(inst, fieldName);
+    return value == null ? def : value;
+  }
+
+  /**
    * Read the given field from the given instance.
    * The field is assumed to be a byte[] field.
    * Returns null if the field value is null, not a byte[] or could not be read.
@@ -277,5 +300,60 @@ class InstanceUtils {
       }
     }
     return null;
+  }
+
+  public static class NativeAllocation {
+    public long size;
+    public Heap heap;
+    public long pointer;
+    public Instance referent;
+
+    public NativeAllocation(long size, Heap heap, long pointer, Instance referent) {
+      this.size = size;
+      this.heap = heap;
+      this.pointer = pointer;
+      this.referent = referent;
+    }
+  }
+
+  /**
+   * Assuming inst represents a NativeAllocation, return information about the
+   * native allocation. Returns null if the given instance doesn't represent a
+   * native allocation.
+   */
+  public static NativeAllocation getNativeAllocation(Instance inst) {
+    if (!isInstanceOfClass(inst, "libcore.util.NativeAllocationRegister$CleanerThunk")) {
+      return null;
+    }
+
+    Long pointer = InstanceUtils.getLongField(inst, "nativePtr");
+    if (pointer == null) {
+      return null;
+    }
+
+    Instance register = InstanceUtils.getRefField(inst, "this$0");
+    if (register == null) {
+      return null;
+    }
+
+    Integer size = InstanceUtils.getIntField(register, "size");
+    if (size == null) {
+      return null;
+    }
+
+    Instance referent = null;
+    for (Instance ref : inst.getHardReferences()) {
+      if (isInstanceOfClass(ref, "sun.misc.Cleaner")) {
+        referent = InstanceUtils.getReferent(ref);
+        if (referent != null) {
+          break;
+        }
+      }
+    }
+
+    if (referent == null) {
+      return null;
+    }
+    return new NativeAllocation(size, inst.getHeap(), pointer, referent);
   }
 }
