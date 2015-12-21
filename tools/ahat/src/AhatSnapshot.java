@@ -16,6 +16,7 @@
 
 package com.android.ahat;
 
+import com.android.tools.perflib.heap.ClassInstance;
 import com.android.tools.perflib.heap.ClassObj;
 import com.android.tools.perflib.heap.Heap;
 import com.android.tools.perflib.heap.Instance;
@@ -60,6 +61,15 @@ class AhatSnapshot {
   private Site mRootSite;
   private Map<Heap, Long> mHeapSizes;
 
+  public class NativeAllocation {
+    public long size;
+    public Heap heap;
+    public long pointer;
+    public Instance referent;
+  }
+
+  private List<NativeAllocation> mNativeAllocations;
+
   /**
    * Create an AhatSnapshot from an hprof file.
    */
@@ -81,6 +91,7 @@ class AhatSnapshot {
     mRootSite = new Site("ROOT");
     mHeapSizes = new HashMap<Heap, Long>();
     mRooted = new ArrayList<Instance>();
+    mNativeAllocations = new ArrayList<NativeAllocation>();
 
     ClassObj javaLangClass = mSnapshot.findClass("java.lang.Class");
     for (Heap heap : mHeaps) {
@@ -118,6 +129,24 @@ class AhatSnapshot {
             }
           }
           mRootSite.add(stackId, 0, path.iterator(), inst);
+
+          // Update native allocations.
+          String nativeFreerName = "libcore.util.NativeAllocation$NativeFreer";
+          if (inst instanceof ClassInstance
+              && nativeFreerName.equals(getClassName(inst.getClassObj()))) {
+            NativeAllocation alloc = new NativeAllocation();
+            alloc.size = InstanceUtils.getLongField(inst, "size", -1);
+            alloc.pointer = InstanceUtils.getLongField(inst, "nativePtr", -1);
+            alloc.heap = inst.getHeap();
+            alloc.referent = null;
+            for (Instance ref : inst.getHardReferences()) {
+              alloc.referent = InstanceUtils.getReferent(ref);
+              if (alloc.referent != null) {
+                break;
+              }
+            }
+            mNativeAllocations.add(alloc);
+          }
         }
       }
       mHeapSizes.put(heap, total);
@@ -258,5 +287,10 @@ class AhatSnapshot {
       }
     }
     return site;
+  }
+
+  // Return a list of known native allocations in the snapshot.
+  public List<NativeAllocation> getNativeAllocations() {
+    return mNativeAllocations;
   }
 }

@@ -177,5 +177,31 @@ class Sort {
       return aName.compareTo(bName);
     }
   }
+
+  /**
+   * Compare AhatSnapshot.NativeAllocation by heap name.
+   * Different allocations with the same heap name are considered equal for
+   * the purposes of comparison.
+   */
+  public static class NativeAllocationByHeapName
+      implements Comparator<AhatSnapshot.NativeAllocation> {
+    @Override
+    public int compare(AhatSnapshot.NativeAllocation a, AhatSnapshot.NativeAllocation b) {
+      return a.heap.getName().compareTo(b.heap.getName());
+    }
+  }
+
+  /**
+   * Compare AhatSnapshot.NativeAllocation by their size.
+   * Different allocations with the same size are considered equal for the
+   * purposes of comparison.
+   * This sorts allocations from larger size to smaller size.
+   */
+  public static class NativeAllocationBySize implements Comparator<AhatSnapshot.NativeAllocation> {
+    @Override
+    public int compare(AhatSnapshot.NativeAllocation a, AhatSnapshot.NativeAllocation b) {
+      return Long.compare(b.size, a.size);
+    }
+  }
 }
 

@@ -206,6 +206,28 @@ class InstanceUtils {
   }
 
   /**
+   * Read a long field of an instance.
+   * The field is assumed to be an int type.
+   * Returns null if the field value is not an long or could not be read.
+   */
+  public static Long getLongField(Instance inst, String fieldName) {
+    Object value = getField(inst, fieldName);
+    if (!(value instanceof Long)) {
+      return null;
+    }
+    return (Long)value;
+  }
+
+  /**
+   * Read a long field of an instance, returning a default value if the field
+   * was not a long or could not be read.
+   */
+  public static long getLongField(Instance inst, String fieldName, long def) {
+    Long value = getLongField(inst, fieldName);
+    return value == null ? def : value;
+  }
+
+  /**
    * Read the given field from the given instance.
    * The field is assumed to be a byte[] field.
    * Returns null if the field value is null, not a byte[] or could not be read.
