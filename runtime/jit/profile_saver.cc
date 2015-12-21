@@ -97,9 +97,9 @@ bool ProfileSaver::ProcessProfilingInfo() {
     ScopedObjectAccess soa(Thread::Current());
     jit_code_cache_->GetCompiledArtMethods(tracked_dex_base_locations_, methods);
   }
-  offline_profiling_info_.SaveProfilingInfo(output_filename_, methods);
+  ProfileCompilationInfo::SaveProfilingInfo(output_filename_, methods);
 
-  VLOG(profiler) << "Saved profile time: " << PrettyDuration(NanoTime() - start);
+  VLOG(profiler) << "Profile process time: " << PrettyDuration(NanoTime() - start);
 
   return true;
 }
