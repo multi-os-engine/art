@@ -97,7 +97,7 @@ class CompilerDriver {
                  size_t thread_count, bool dump_stats, bool dump_passes,
                  const std::string& dump_cfg_file_name, bool dump_cfg_append,
                  CumulativeLogger* timer, int swap_fd,
-                 const std::string& profile_file);
+                 const ProfileCompilationInfo* profile_compilation_info);
 
   ~CompilerDriver();
 
@@ -636,9 +636,6 @@ class CompilerDriver {
   // This option may be restricted to the boot image, depending on a flag in the implementation.
   std::unique_ptr<std::unordered_set<std::string>> methods_to_compile_;
 
-  // Info for profile guided compilation.
-  std::unique_ptr<ProfileCompilationInfo> profile_compilation_info_;
-
   bool had_hard_verifier_failure_;
 
   size_t thread_count_;
@@ -664,6 +661,9 @@ class CompilerDriver {
   const std::vector<const DexFile*>* dex_files_for_oat_file_;
 
   CompiledMethodStorage compiled_method_storage_;
+
+  // Info for profile guided compilation.
+  const ProfileCompilationInfo* profile_compilation_info_;
 
   friend class CompileClassVisitor;
   DISALLOW_COPY_AND_ASSIGN(CompilerDriver);
