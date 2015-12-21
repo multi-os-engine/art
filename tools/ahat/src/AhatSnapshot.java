@@ -60,6 +60,8 @@ class AhatSnapshot {
   private Site mRootSite;
   private Map<Heap, Long> mHeapSizes;
 
+  private List<InstanceUtils.NativeAllocation> mNativeAllocations;
+
   /**
    * Create an AhatSnapshot from an hprof file.
    */
@@ -81,6 +83,7 @@ class AhatSnapshot {
     mRootSite = new Site("ROOT");
     mHeapSizes = new HashMap<Heap, Long>();
     mRooted = new ArrayList<Instance>();
+    mNativeAllocations = new ArrayList<InstanceUtils.NativeAllocation>();
 
     ClassObj javaLangClass = mSnapshot.findClass("java.lang.Class");
     for (Heap heap : mHeaps) {
@@ -118,6 +121,12 @@ class AhatSnapshot {
             }
           }
           mRootSite.add(stackId, 0, path.iterator(), inst);
+
+          // Update native allocations.
+          InstanceUtils.NativeAllocation alloc = InstanceUtils.getNativeAllocation(inst);
+          if (alloc != null) {
+            mNativeAllocations.add(alloc);
+          }
         }
       }
       mHeapSizes.put(heap, total);
@@ -258,5 +267,10 @@ class AhatSnapshot {
       }
     }
     return site;
+  }
+
+  // Return a list of known native allocations in the snapshot.
+  public List<InstanceUtils.NativeAllocation> getNativeAllocations() {
+    return mNativeAllocations;
   }
 }
