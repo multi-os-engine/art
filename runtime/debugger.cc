@@ -4680,6 +4680,12 @@ class HeapChunkContext {
     // It's an allocated chunk. Figure out what it is.
     gc::Heap* heap = Runtime::Current()->GetHeap();
     if (!heap->IsLiveObjectLocked(o)) {
+      if (heap->GetNonMovingSpace()->IsDlMallocSpace()) {
+        if (heap->GetNonMovingSpace()->AsDlMallocSpace()->IsDlmallocMetaChunk(o)) {
+          // Meta Chunks in dlmalloc are not marked in live bitmap.
+          return HPSG_STATE(SOLIDITY_HARD, KIND_NATIVE);
+        }
+      }
       LOG(ERROR) << "Invalid object in managed heap: " << o;
       return HPSG_STATE(SOLIDITY_HARD, KIND_NATIVE);
     }

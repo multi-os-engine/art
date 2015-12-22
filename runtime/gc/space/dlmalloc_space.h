@@ -106,6 +106,9 @@ class DlMallocSpace : public MallocSpace {
   // in use, indicated by num_bytes equaling zero.
   void Walk(WalkCallback callback, void* arg) OVERRIDE REQUIRES(!lock_);
 
+  // Reture true if given address points to meta chunk in dlmalloc.
+  // This function is called by callback of Walk(), already held the lock_.
+  bool IsDlmallocMetaChunk(void* addr);
   // Returns the number of bytes that the space has currently obtained from the system. This is
   // greater or equal to the amount of live data in the space.
   size_t GetFootprint() OVERRIDE;

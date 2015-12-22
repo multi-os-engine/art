@@ -238,6 +238,10 @@ void DlMallocSpace::Walk(void(*callback)(void *start, void *end, size_t num_byte
   callback(nullptr, nullptr, 0, arg);  // Indicate end of a space.
 }
 
+bool DlMallocSpace::IsDlmallocMetaChunk(void* addr) {
+  return mspace_meta_chunk_mem(mspace_, addr);
+}
+
 size_t DlMallocSpace::GetFootprint() {
   MutexLock mu(Thread::Current(), lock_);
   return mspace_footprint(mspace_);
