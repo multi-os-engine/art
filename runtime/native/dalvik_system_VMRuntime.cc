@@ -204,8 +204,8 @@ static void VMRuntime_setTargetSdkVersionNative(JNIEnv*, jobject, jint target_sd
 }
 
 static void VMRuntime_registerNativeAllocation(JNIEnv* env, jobject, jint bytes) {
+  ScopedObjectAccess soa(env);
   if (UNLIKELY(bytes < 0)) {
-    ScopedObjectAccess soa(env);
     ThrowRuntimeException("allocation size negative %d", bytes);
     return;
   }
