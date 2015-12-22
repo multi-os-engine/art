@@ -231,7 +231,7 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self,
   if (allocator_type != kAllocatorTypeTLAB &&
       allocator_type != kAllocatorTypeRegionTLAB &&
       allocator_type != kAllocatorTypeRosAlloc &&
-      UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(allocator_type, alloc_size))) {
+      UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(alloc_size))) {
     return nullptr;
   }
   mirror::Object* ret;
@@ -251,8 +251,7 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self,
       if (kInstrumented && UNLIKELY(is_running_on_memory_tool_)) {
         // If running on valgrind or asan, we should be using the instrumented path.
         size_t max_bytes_tl_bulk_allocated = rosalloc_space_->MaxBytesBulkAllocatedFor(alloc_size);
-        if (UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(allocator_type,
-                                                      max_bytes_tl_bulk_allocated))) {
+        if (UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(max_bytes_tl_bulk_allocated))) {
           return nullptr;
         }
         ret = rosalloc_space_->Alloc(self, alloc_size, bytes_allocated, usable_size,
@@ -261,8 +260,7 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self,
         DCHECK(!is_running_on_memory_tool_);
         size_t max_bytes_tl_bulk_allocated =
             rosalloc_space_->MaxBytesBulkAllocatedForNonvirtual(alloc_size);
-        if (UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(allocator_type,
-                                                      max_bytes_tl_bulk_allocated))) {
+        if (UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(max_bytes_tl_bulk_allocated))) {
           return nullptr;
         }
         if (!kInstrumented) {
@@ -303,7 +301,7 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self,
       DCHECK_ALIGNED(alloc_size, space::BumpPointerSpace::kAlignment);
       if (UNLIKELY(self->TlabSize() < alloc_size)) {
         const size_t new_tlab_size = alloc_size + kDefaultTLABSize;
-        if (UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(allocator_type, new_tlab_size))) {
+        if (UNLIKELY(IsOutOfMemoryOnAllocation<kGrow>(new_tlab_size))) {
           return nullptr;
         }
         // Try allocating a new thread local buffer, if the allocaiton fails the space must be
@@ -335,7 +333,7 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self,
       if (UNLIKELY(self->TlabSize() < alloc_size)) {
         if (space::RegionSpace::kRegionSize >= alloc_size) {
           // Non-large. Check OOME for a tlab.
-          if (LIKELY(!IsOutOfMemoryOnAllocation<kGrow>(allocator_type, space::RegionSpace::kRegionSize))) {
+          if (LIKELY(!IsOutOfMemoryOnAllocation<kGrow>(space::RegionSpace::kRegionSize))) {
             // Try to allocate a tlab.
             if (!region_space_->AllocNewTlab(self)) {
               // Failed to allocate a tlab. Try non-tlab.
@@ -347,7 +345,7 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self,
             // Fall-through.
           } else {
             // Check OOME for a non-tlab allocation.
-            if (!IsOutOfMemoryOnAllocation<kGrow>(allocator_type, alloc_size)) {
+            if (!IsOutOfMemoryOnAllocation<kGrow>(alloc_size)) {
               ret = region_space_->AllocNonvirtual<false>(alloc_size, bytes_allocated, usable_size,
                                                           bytes_tl_bulk_allocated);
               return ret;
@@ -358,7 +356,7 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self,
           }
         } else {
           // Large. Check OOME.
-          if (LIKELY(!IsOutOfMemoryOnAllocation<kGrow>(allocator_type, alloc_size))) {
+          if (LIKELY(!IsOutOfMemoryOnAllocation<kGrow>(alloc_size))) {
             ret = region_space_->AllocNonvirtual<false>(alloc_size, bytes_allocated, usable_size,
                                                         bytes_tl_bulk_allocated);
             return ret;
@@ -393,13 +391,13 @@ inline bool Heap::ShouldAllocLargeObject(mirror::Class* c, size_t byte_count) co
 }
 
 template <bool kGrow>
-inline bool Heap::IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t alloc_size) {
+inline bool Heap::IsOutOfMemoryOnAllocation(size_t alloc_size) {
   size_t new_footprint = num_bytes_allocated_.LoadSequentiallyConsistent() + alloc_size;
   if (UNLIKELY(new_footprint > max_allowed_footprint_)) {
     if (UNLIKELY(new_footprint > growth_limit_)) {
       return true;
     }
-    if (!AllocatorMayHaveConcurrentGC(allocator_type) || !IsGcConcurrent()) {
+    if (!IsGcConcurrent()) {
       if (!kGrow) {
         return true;
       }
@@ -417,6 +415,13 @@ inline void Heap::CheckConcurrentGC(Thread* self,
                                     mirror::Object** obj) {
   if (UNLIKELY(new_num_bytes_allocated >= concurrent_start_bytes_)) {
     RequestConcurrentGCAndSaveObject(self, false, obj);
+  }
+}
+
+inline void Heap::CheckConcurrentGC(Thread* self,
+                                    size_t new_num_bytes_allocated) {
+  if (UNLIKELY(new_num_bytes_allocated >= concurrent_start_bytes_)) {
+    RequestConcurrentGC(self, false);
   }
 }
 
