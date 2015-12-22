@@ -249,6 +249,7 @@ class Heap {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void RegisterNativeAllocation(JNIEnv* env, size_t bytes)
+      SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!*gc_complete_lock_, !*pending_task_lock_);
   void RegisterNativeFree(JNIEnv* env, size_t bytes)
       REQUIRES(!*gc_complete_lock_, !*pending_task_lock_);
@@ -911,10 +912,6 @@ class Heap {
   void PostGcVerificationPaused(collector::GarbageCollector* gc)
       REQUIRES(Locks::mutator_lock_, !*gc_complete_lock_);
 
-  // Update the watermark for the native allocated bytes based on the current number of native
-  // bytes allocated and the target utilization ratio.
-  void UpdateMaxNativeFootprint();
-
   // Find a collector based on GC type.
   collector::GarbageCollector* FindCollectorByGcType(collector::GcType gc_type);
 
@@ -1111,17 +1108,12 @@ class Heap {
   // a GC should be triggered.
   size_t max_allowed_footprint_;
 
-  // The watermark at which a concurrent GC is requested by registerNativeAllocation.
-  size_t native_footprint_gc_watermark_;
-
-  // Whether or not we need to run finalizers in the next native allocation.
-  bool native_need_to_run_finalization_;
-
   // Whether or not we currently care about pause times.
   ProcessState process_state_;
 
-  // When num_bytes_allocated_ exceeds this amount then a concurrent GC should be requested so that
-  // it completes ahead of an allocation failing.
+  // When num_bytes_allocated_ + native_bytes_allocated_ exceeds this amount,
+  // a concurrent GC should be requested so that it completes ahead of an
+  // allocation failing.
   size_t concurrent_start_bytes_;
 
   // Since the heap was created, how many bytes have been freed.
@@ -1133,10 +1125,8 @@ class Heap {
   // Number of bytes allocated.  Adjusted after each allocation and free.
   Atomic<size_t> num_bytes_allocated_;
 
-  // Bytes which are allocated and managed by native code but still need to be accounted for.
-  Atomic<size_t> native_bytes_allocated_;
-
-  // Number of bytes freed by thread local buffer revokes. This will
+  // Number of bytes freed by thread local buffer revokes or register native
+  // frees. This will
   // cancel out the ahead-of-time bulk counting of bytes allocated in
   // rosalloc thread-local buffers.  It is temporarily accumulated
   // here to be subtracted from num_bytes_allocated_ later at the next
