@@ -248,6 +248,7 @@ class Heap {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void RegisterNativeAllocation(JNIEnv* env, size_t bytes)
+      SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!*gc_complete_lock_, !*pending_task_lock_);
   void RegisterNativeFree(JNIEnv* env, size_t bytes)
       REQUIRES(!*gc_complete_lock_, !*pending_task_lock_);
@@ -473,6 +474,11 @@ class Heap {
   // Returns the number of bytes currently allocated.
   size_t GetBytesAllocated() const {
     return num_bytes_allocated_.LoadSequentiallyConsistent();
+  }
+
+  // Returns the number of native bytes currently registered.
+  size_t GetNativeBytesRegistered() const {
+    return num_native_bytes_registered_.LoadSequentiallyConsistent();
   }
 
   // Returns the number of objects currently allocated.
@@ -844,6 +850,10 @@ class Heap {
                                        mirror::Object** obj)
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!*pending_task_lock_, !*gc_complete_lock_);
+  ALWAYS_INLINE void CheckConcurrentGC(Thread* self,
+                                       size_t new_num_bytes_allocated)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!*pending_task_lock_, !*gc_complete_lock_);
 
   accounting::ObjectStack* GetMarkStack() {
     return mark_stack_.get();
@@ -870,6 +880,13 @@ class Heap {
       REQUIRES(!Locks::thread_suspend_count_lock_, !*gc_complete_lock_, !*pending_task_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Like AllocateInternalWithGc, but specialized for registering native
+  // allocations. Returns true if space is ultimately available for the
+  // registered native allocation.
+  bool RegisterNativeWithGc(Thread* self, size_t num_bytes)
+      REQUIRES(!Locks::thread_suspend_count_lock_, !*gc_complete_lock_, !*pending_task_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   // Allocate into a specific space.
   mirror::Object* AllocateInto(Thread* self,
                                space::AllocSpace* space,
@@ -892,11 +909,16 @@ class Heap {
                                               size_t* bytes_tl_bulk_allocated)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Checks if we have the space to register a native allocation of the given
+  // size. Returns true if there is space, false otherwise.
+  template <const bool kGrow>
+  bool TryToRegisterNative(size_t alloc_size) SHARED_REQUIRES(Locks::mutator_lock_);
+
   void ThrowOutOfMemoryError(Thread* self, size_t byte_count, AllocatorType allocator_type)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   template <bool kGrow>
-  ALWAYS_INLINE bool IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t alloc_size);
+  ALWAYS_INLINE bool IsOutOfMemoryOnAllocation(size_t alloc_size);
 
   // Returns true if the address passed in is within the address range of a continuous space.
   bool IsValidContinuousSpaceObjectAddress(const mirror::Object* obj) const
@@ -939,10 +961,6 @@ class Heap {
   void PostGcVerificationPaused(collector::GarbageCollector* gc)
       REQUIRES(Locks::mutator_lock_, !*gc_complete_lock_);
 
-  // Update the watermark for the native allocated bytes based on the current number of native
-  // bytes allocated and the target utilization ratio.
-  void UpdateMaxNativeFootprint();
-
   // Find a collector based on GC type.
   collector::GarbageCollector* FindCollectorByGcType(collector::GcType gc_type);
 
@@ -962,10 +980,11 @@ class Heap {
 
   // Given the current contents of the alloc space, increase the allowed heap footprint to match
   // the target utilization ratio.  This should only be called immediately after a full garbage
-  // collection. bytes_allocated_before_gc is used to measure bytes / second for the period which
-  // the GC was run.
+  // collection. bytes_allocated_before_gc and native_bytes_registered_before_gc are used to
+  // measure bytes / second for the period which the GC was run.
   void GrowForUtilization(collector::GarbageCollector* collector_ran,
-                          uint64_t bytes_allocated_before_gc = 0);
+                          uint64_t bytes_allocated_before_gc = 0,
+                          uint64_t native_bytes_registered_before_gc = 0);
 
   size_t GetPercentFree();
 
@@ -1140,16 +1159,10 @@ class Heap {
   // a GC should be triggered.
   size_t max_allowed_footprint_;
 
-  // The watermark at which a concurrent GC is requested by registerNativeAllocation.
-  size_t native_footprint_gc_watermark_;
-
-  // Whether or not we need to run finalizers in the next native allocation.
-  bool native_need_to_run_finalization_;
-
   // Whether or not we currently care about pause times.
   ProcessState process_state_;
 
-  // When num_bytes_allocated_ exceeds this amount then a concurrent GC should be requested so that
+  // When num_bytes_allocated_ exceeds this amount, a concurrent GC should be requested so that
   // it completes ahead of an allocation failing.
   size_t concurrent_start_bytes_;
 
@@ -1160,12 +1173,15 @@ class Heap {
   uint64_t total_objects_freed_ever_;
 
   // Number of bytes allocated.  Adjusted after each allocation and free.
+  // Includes the number of native bytes registered.
   Atomic<size_t> num_bytes_allocated_;
 
-  // Bytes which are allocated and managed by native code but still need to be accounted for.
-  Atomic<size_t> native_bytes_allocated_;
+  // Number of native bytes registered with RegisterNativeAllocation and
+  // RegisterNativeFree.
+  Atomic<size_t> num_native_bytes_registered_;
 
-  // Number of bytes freed by thread local buffer revokes. This will
+  // Number of bytes freed by thread local buffer revokes or register native
+  // frees. This will
   // cancel out the ahead-of-time bulk counting of bytes allocated in
   // rosalloc thread-local buffers.  It is temporarily accumulated
   // here to be subtracted from num_bytes_allocated_ later at the next

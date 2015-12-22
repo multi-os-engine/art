@@ -31,8 +31,6 @@ enum GcCause {
   kGcCauseBackground,
   // An explicit System.gc() call.
   kGcCauseExplicit,
-  // GC triggered for a native allocation.
-  kGcCauseForNativeAlloc,
   // GC triggered for a collector transition.
   kGcCauseCollectorTransition,
   // Not a real GC cause, used when we disable moving GC (currently for GetPrimitiveArrayCritical).
