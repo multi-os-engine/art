@@ -376,6 +376,16 @@ inline mirror::Object* Heap::TryToAllocate(Thread* self,
       *usable_size = alloc_size;
       break;
     }
+    case kAllocatorTypeRegisterNative: {
+      // For RegisterNative, we pretend to allocate an object, but we don't
+      // really allocate anything. We return a bogus non-null mirror::Object*
+      // to indicate that we were able to do the pretend allocation.
+      *bytes_allocated = alloc_size;
+      *usable_size = alloc_size;
+      *bytes_tl_bulk_allocated = alloc_size;
+      ret = reinterpret_cast<mirror::Object*>(0xABCD0123);
+      break;
+    }
     default: {
       LOG(FATAL) << "Invalid allocator type";
       ret = nullptr;

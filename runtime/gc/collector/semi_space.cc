@@ -191,10 +191,8 @@ void SemiSpace::MarkingPhase() {
   RevokeAllThreadLocalBuffers();
   if (generational_) {
     if (GetCurrentIteration()->GetGcCause() == kGcCauseExplicit ||
-        GetCurrentIteration()->GetGcCause() == kGcCauseForNativeAlloc ||
         GetCurrentIteration()->GetClearSoftReferences()) {
-      // If an explicit, native allocation-triggered, or last attempt
-      // collection, collect the whole heap.
+      // If an explicit or last attempt collection, collect the whole heap.
       collect_from_space_only_ = false;
     }
     if (!collect_from_space_only_) {

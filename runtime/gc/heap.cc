@@ -110,9 +110,6 @@ static constexpr size_t kVerifyObjectAllocationStackSize = 16 * KB /
     sizeof(mirror::HeapReference<mirror::Object>);
 static constexpr size_t kDefaultAllocationStackSize = 8 * MB /
     sizeof(mirror::HeapReference<mirror::Object>);
-// System.runFinalization can deadlock with native allocations, to deal with this, we have a
-// timeout on how long we wait for finalizers to run. b/21544853
-static constexpr uint64_t kNativeAllocationFinalizeTimeout = MsToNs(250u);
 
 Heap::Heap(size_t initial_size,
            size_t growth_limit,
@@ -170,15 +167,12 @@ Heap::Heap(size_t initial_size,
       capacity_(capacity),
       growth_limit_(growth_limit),
       max_allowed_footprint_(initial_size),
-      native_footprint_gc_watermark_(initial_size),
-      native_need_to_run_finalization_(false),
       // Initially assume we perceive jank in case the process state is never updated.
       process_state_(kProcessStateJankPerceptible),
       concurrent_start_bytes_(std::numeric_limits<size_t>::max()),
       total_bytes_freed_ever_(0),
       total_objects_freed_ever_(0),
       num_bytes_allocated_(0),
-      native_bytes_allocated_(0),
       num_bytes_freed_revoke_(0),
       verify_missing_card_marks_(false),
       verify_system_weaks_(false),
@@ -3444,18 +3438,6 @@ bool Heap::IsMovableObject(const mirror::Object* obj) const {
   return false;
 }
 
-void Heap::UpdateMaxNativeFootprint() {
-  size_t native_size = native_bytes_allocated_.LoadRelaxed();
-  // TODO: Tune the native heap utilization to be a value other than the java heap utilization.
-  size_t target_size = native_size / GetTargetHeapUtilization();
-  if (target_size > native_size + max_free_) {
-    target_size = native_size + max_free_;
-  } else if (target_size < native_size + min_free_) {
-    target_size = native_size + min_free_;
-  }
-  native_footprint_gc_watermark_ = std::min(growth_limit_, target_size);
-}
-
 collector::GarbageCollector* Heap::FindCollectorByGcType(collector::GcType gc_type) {
   for (const auto& collector : garbage_collectors_) {
     if (collector->GetCollectorType() == collector_type_ &&
@@ -3488,11 +3470,11 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran,
   if (gc_type != collector::kGcTypeSticky) {
     // Grow the heap for non sticky GC.
     ssize_t delta = bytes_allocated / GetTargetHeapUtilization() - bytes_allocated;
-    CHECK_GE(delta, 0);
+    CHECK_GE(delta, 0) << "bytes_allocated=" << bytes_allocated
+      << " target=" << GetTargetHeapUtilization();
     target_size = bytes_allocated + delta * multiplier;
     target_size = std::min(target_size, bytes_allocated + adjusted_max_free);
     target_size = std::max(target_size, bytes_allocated + adjusted_min_free);
-    native_need_to_run_finalization_ = true;
     next_gc_type_ = collector::kGcTypeSticky;
   } else {
     collector::GcType non_sticky_gc_type =
@@ -3527,7 +3509,7 @@ void Heap::GrowForUtilization(collector::GarbageCollector* collector_ran,
           current_gc_iteration_.GetFreedRevokeBytes();
       // Bytes allocated will shrink by freed_bytes after the GC runs, so if we want to figure out
       // how many bytes were allocated during the GC we need to add freed_bytes back on.
-      CHECK_GE(bytes_allocated + freed_bytes, bytes_allocated_before_gc);
+      CHECK_GE(bytes_allocated + freed_bytes, bytes_allocated_before_gc) << "bytes_allocated=" << bytes_allocated;
       const uint64_t bytes_allocated_during_gc = bytes_allocated + freed_bytes -
           bytes_allocated_before_gc;
       // Calculate when to perform the next ConcurrentGC.
@@ -3795,61 +3777,34 @@ void Heap::RunFinalization(JNIEnv* env, uint64_t timeout) {
 
 void Heap::RegisterNativeAllocation(JNIEnv* env, size_t bytes) {
   Thread* self = ThreadForEnv(env);
-  if (native_need_to_run_finalization_) {
-    RunFinalization(env, kNativeAllocationFinalizeTimeout);
-    UpdateMaxNativeFootprint();
-    native_need_to_run_finalization_ = false;
-  }
-  // Total number of native bytes allocated.
-  size_t new_native_bytes_allocated = native_bytes_allocated_.FetchAndAddSequentiallyConsistent(bytes);
-  new_native_bytes_allocated += bytes;
-  if (new_native_bytes_allocated > native_footprint_gc_watermark_) {
-    collector::GcType gc_type = HasZygoteSpace() ? collector::kGcTypePartial :
-        collector::kGcTypeFull;
 
-    // The second watermark is higher than the gc watermark. If you hit this it means you are
-    // allocating native objects faster than the GC can keep up with.
-    if (new_native_bytes_allocated > growth_limit_) {
-      if (WaitForGcToComplete(kGcCauseForNativeAlloc, self) != collector::kGcTypeNone) {
-        // Just finished a GC, attempt to run finalizers.
-        RunFinalization(env, kNativeAllocationFinalizeTimeout);
-        CHECK(!env->ExceptionCheck());
-        // Native bytes allocated may be updated by finalization, refresh it.
-        new_native_bytes_allocated = native_bytes_allocated_.LoadRelaxed();
-      }
-      // If we still are over the watermark, attempt a GC for alloc and run finalizers.
-      if (new_native_bytes_allocated > growth_limit_) {
-        CollectGarbageInternal(gc_type, kGcCauseForNativeAlloc, false);
-        RunFinalization(env, kNativeAllocationFinalizeTimeout);
-        native_need_to_run_finalization_ = false;
-        CHECK(!env->ExceptionCheck());
-      }
-      // We have just run finalizers, update the native watermark since it is very likely that
-      // finalizers released native managed allocations.
-      UpdateMaxNativeFootprint();
-    } else if (!IsGCRequestPending()) {
-      if (IsGcConcurrent()) {
-        RequestConcurrentGC(self, true);  // Request non-sticky type.
-      } else {
-        CollectGarbageInternal(gc_type, kGcCauseForNativeAlloc, false);
-      }
+  size_t bytes_allocated;
+  size_t usable_size;
+  size_t bytes_tl_bulk_allocated = 0;
+  mirror::Object* obj = TryToAllocate<false, false>(self, kAllocatorTypeRegisterNative, bytes,
+      &bytes_allocated, &usable_size, &bytes_tl_bulk_allocated);
+  if (UNLIKELY(obj == nullptr)) {
+    mirror::Class* klass = nullptr;
+    obj = AllocateInternalWithGc(self, kAllocatorTypeRegisterNative, bytes,
+      &bytes_allocated, &usable_size, &bytes_tl_bulk_allocated, &klass);
+  }
+
+  if (LIKELY(obj != nullptr)) {
+    size_t new_bytes_allocated = static_cast<size_t>(
+        num_bytes_allocated_.FetchAndAddSequentiallyConsistent(bytes_tl_bulk_allocated))
+        + bytes_tl_bulk_allocated;
+    if (IsGcConcurrent()) {
+      obj = nullptr;
+      CheckConcurrentGC(self, new_bytes_allocated, &obj);
     }
   }
 }
 
-void Heap::RegisterNativeFree(JNIEnv* env, size_t bytes) {
-  size_t expected_size;
-  do {
-    expected_size = native_bytes_allocated_.LoadRelaxed();
-    if (UNLIKELY(bytes > expected_size)) {
-      ScopedObjectAccess soa(env);
-      env->ThrowNew(WellKnownClasses::java_lang_RuntimeException,
-                    StringPrintf("Attempted to free %zd native bytes with only %zd native bytes "
-                                 "registered as allocated", bytes, expected_size).c_str());
-      break;
-    }
-  } while (!native_bytes_allocated_.CompareExchangeWeakRelaxed(expected_size,
-                                                               expected_size - bytes));
+void Heap::RegisterNativeFree(JNIEnv*, size_t bytes) {
+  // TODO: How do we ensure a user doesn't call RegisterNativeFree without a
+  // corresponding RegisterNativeAlloc in an attempt to get more heap space to
+  // work with?
+  num_bytes_freed_revoke_.FetchAndAddSequentiallyConsistent(bytes);
 }
 
 size_t Heap::GetTotalMemory() const {

@@ -168,7 +168,6 @@ void ConcurrentCopying::InitializePhase() {
   bytes_moved_.StoreRelaxed(0);
   objects_moved_.StoreRelaxed(0);
   if (GetCurrentIteration()->GetGcCause() == kGcCauseExplicit ||
-      GetCurrentIteration()->GetGcCause() == kGcCauseForNativeAlloc ||
       GetCurrentIteration()->GetClearSoftReferences()) {
     force_evacuate_all_ = true;
   } else {
