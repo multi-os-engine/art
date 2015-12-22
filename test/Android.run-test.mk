@@ -32,21 +32,6 @@ art_run_tests_dir := $(call intermediates-dir-for,PACKAGING,art-run-tests)/DATA
 # an empty file touched in the intermediate directory.
 TEST_ART_RUN_TEST_BUILD_RULES :=
 
-# Dependencies for actually running a run-test.
-TEST_ART_RUN_TEST_DEPENDENCIES := \
-  $(DX) \
-  $(HOST_OUT_EXECUTABLES)/jasmin \
-  $(HOST_OUT_EXECUTABLES)/smali \
-  $(HOST_OUT_EXECUTABLES)/dexmerger
-TEST_ART_RUN_TEST_ORDERONLY_DEPENDENCIES :=
-
-ifeq ($(ANDROID_COMPILE_WITH_JACK),true)
-  TEST_ART_RUN_TEST_DEPENDENCIES += \
-    $(JACK) \
-    $(JILL_JAR)
-  TEST_ART_RUN_TEST_ORDERONLY_DEPENDENCIES += setup-jack-server
-endif
-
 ifeq ($(ART_TEST_DEBUG_GC),true)
   ART_TEST_WITH_STRACE := true
 endif
@@ -616,41 +601,6 @@ $(foreach target, $(TARGET_TYPES), \
 $(foreach target, $(TARGET_TYPES), \
   $(foreach debuggable_type, $(DEBUGGABLE_TYPES), \
     $(eval ART_RUN_TEST_$(call name-to-var,$(target))_$(call name-to-var,$(debuggable_type))_RULES :=)))
-
-# We need dex2oat and dalvikvm on the target as well as the core images (all images as we sync
-# only once).
-TEST_ART_TARGET_SYNC_DEPS += $(ART_TARGET_EXECUTABLES) $(TARGET_CORE_IMG_OUTS)
-
-# Also need libarttest.
-TEST_ART_TARGET_SYNC_DEPS += $(ART_TARGET_TEST_OUT)/$(TARGET_ARCH)/libarttest.so
-TEST_ART_TARGET_SYNC_DEPS += $(ART_TARGET_TEST_OUT)/$(TARGET_ARCH)/libarttestd.so
-ifdef TARGET_2ND_ARCH
-TEST_ART_TARGET_SYNC_DEPS += $(ART_TARGET_TEST_OUT)/$(TARGET_2ND_ARCH)/libarttest.so
-TEST_ART_TARGET_SYNC_DEPS += $(ART_TARGET_TEST_OUT)/$(TARGET_2ND_ARCH)/libarttestd.so
-endif
-
-# Also need libnativebridgetest.
-TEST_ART_TARGET_SYNC_DEPS += $(ART_TARGET_TEST_OUT)/$(TARGET_ARCH)/libnativebridgetest.so
-ifdef TARGET_2ND_ARCH
-TEST_ART_TARGET_SYNC_DEPS += $(ART_TARGET_TEST_OUT)/$(TARGET_2ND_ARCH)/libnativebridgetest.so
-endif
-
-# All tests require the host executables. The tests also depend on the core images, but on
-# specific version depending on the compiler.
-ART_TEST_HOST_RUN_TEST_DEPENDENCIES := \
-  $(ART_HOST_EXECUTABLES) \
-  $(ART_HOST_OUT_SHARED_LIBRARIES)/libarttest$(ART_HOST_SHLIB_EXTENSION) \
-  $(ART_HOST_OUT_SHARED_LIBRARIES)/libarttestd$(ART_HOST_SHLIB_EXTENSION) \
-  $(ART_HOST_OUT_SHARED_LIBRARIES)/libnativebridgetest$(ART_HOST_SHLIB_EXTENSION) \
-  $(ART_HOST_OUT_SHARED_LIBRARIES)/libjavacore$(ART_HOST_SHLIB_EXTENSION)
-
-ifneq ($(HOST_PREFER_32_BIT),true)
-ART_TEST_HOST_RUN_TEST_DEPENDENCIES += \
-  $(2ND_ART_HOST_OUT_SHARED_LIBRARIES)/libarttest$(ART_HOST_SHLIB_EXTENSION) \
-  $(2ND_ART_HOST_OUT_SHARED_LIBRARIES)/libarttestd$(ART_HOST_SHLIB_EXTENSION) \
-  $(2ND_ART_HOST_OUT_SHARED_LIBRARIES)/libnativebridgetest$(ART_HOST_SHLIB_EXTENSION) \
-  $(2ND_ART_HOST_OUT_SHARED_LIBRARIES)/libjavacore$(ART_HOST_SHLIB_EXTENSION)
-endif
 
 # Create a rule to build and run a tests following the form:
 # test-art-{1: host or target}-run-test-{2: debug ndebug}-{3: prebuild no-prebuild no-dex2oat}-
