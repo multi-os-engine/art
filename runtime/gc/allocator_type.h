@@ -32,6 +32,7 @@ enum AllocatorType {
   kAllocatorTypeLOS,  // Large object space, also doesn't have entrypoints.
   kAllocatorTypeRegion,
   kAllocatorTypeRegionTLAB,
+  kAllocatorTypeRegisterNative,  // Used to check OOME for RegisterNativeAllocation.
 };
 std::ostream& operator<<(std::ostream& os, const AllocatorType& rhs);
 
