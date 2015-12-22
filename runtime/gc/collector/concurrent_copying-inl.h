@@ -68,13 +68,35 @@ inline mirror::Object* ConcurrentCopying::Mark(mirror::Object* from_ref) {
       return to_ref;
     }
     case space::RegionSpace::RegionType::kRegionTypeUnevacFromSpace: {
-      // This may or may not succeed, which is ok.
+      // For the baker-style RB, in a rare case, we could incorrectly change the object from white
+      // to gray even though the object has already been marked through. This happens if a mutator
+      // thread gets preempted before the AtomicSetReadBarrierPointer below, GC marks through the
+      // object (changes it from white to gray and back to white), and the thread runs and
+      // incorrectly changes it from white to gray. We need to detect such "false gray" cases and
+      // change the objects back to white at the end of marking.
       if (kUseBakerReadBarrier) {
-        from_ref->AtomicSetReadBarrierPointer(ReadBarrier::WhitePtr(), ReadBarrier::GrayPtr());
+        // Test the bitmap first to reduce the chance of false gray cases.
+        if (region_space_bitmap_->Test(from_ref)) {
+          return from_ref;
+        }
+      }
+      // This may or may not succeed, which is ok.
+      bool cas_success = false;
+      if (kUseBakerReadBarrier) {
+        cas_success = from_ref->AtomicSetReadBarrierPointer(ReadBarrier::WhitePtr(),
+                                                            ReadBarrier::GrayPtr());
       }
       mirror::Object* to_ref = from_ref;
       if (region_space_bitmap_->AtomicTestAndSet(from_ref)) {
         // Already marked.
+        if (kUseBakerReadBarrier && cas_success &&
+            // The object could be white here if a thread gets preempted after a success at the
+            // above AtomicSetReadBarrierPointer, GC has marked through it, and the thread runs up
+            // to this point.
+            from_ref->GetReadBarrierPointer() == ReadBarrier::GrayPtr()) {
+          // Register a "false-gray" object to change it from gray to white at the end of marking.
+          PushOntoFalseGrayStack(from_ref);
+        }
       } else {
         // Newly marked.
         if (kUseBakerReadBarrier) {
