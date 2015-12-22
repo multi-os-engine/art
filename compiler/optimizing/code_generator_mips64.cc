@@ -3918,36 +3918,18 @@ void LocationsBuilderMIPS64::VisitTypeConversion(HTypeConversion* conversion) {
     LOG(FATAL) << "Unexpected type conversion from " << input_type << " to " << result_type;
   }
 
-  LocationSummary::CallKind call_kind = LocationSummary::kNoCall;
-  if ((Primitive::IsFloatingPointType(result_type) && input_type == Primitive::kPrimLong) ||
-      (Primitive::IsIntegralType(result_type) && Primitive::IsFloatingPointType(input_type))) {
-    call_kind = LocationSummary::kCall;
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(conversion);
+
+  if (Primitive::IsFloatingPointType(input_type)) {
+    locations->SetInAt(0, Location::RequiresFpuRegister());
+  } else {
+    locations->SetInAt(0, Location::RequiresRegister());
   }
 
-  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(conversion, call_kind);
-
-  if (call_kind == LocationSummary::kNoCall) {
-    if (Primitive::IsFloatingPointType(input_type)) {
-      locations->SetInAt(0, Location::RequiresFpuRegister());
-    } else {
-      locations->SetInAt(0, Location::RequiresRegister());
-    }
-
-    if (Primitive::IsFloatingPointType(result_type)) {
-      locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
-    } else {
-      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
-    }
+  if (Primitive::IsFloatingPointType(result_type)) {
+    locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
   } else {
-    InvokeRuntimeCallingConvention calling_convention;
-
-    if (Primitive::IsFloatingPointType(input_type)) {
-      locations->SetInAt(0, Location::FpuRegisterLocation(calling_convention.GetFpuRegisterAt(0)));
-    } else {
-      locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
-    }
-
-    locations->SetOut(calling_convention.GetReturnLocation(result_type));
+    locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
   }
 }
 
@@ -3992,55 +3974,86 @@ void InstructionCodeGeneratorMIPS64::VisitTypeConversion(HTypeConversion* conver
                    << " to " << result_type;
     }
   } else if (Primitive::IsFloatingPointType(result_type) && Primitive::IsIntegralType(input_type)) {
-    if (input_type != Primitive::kPrimLong) {
-      FpuRegister dst = locations->Out().AsFpuRegister<FpuRegister>();
-      GpuRegister src = locations->InAt(0).AsRegister<GpuRegister>();
+    FpuRegister dst = locations->Out().AsFpuRegister<FpuRegister>();
+    GpuRegister src = locations->InAt(0).AsRegister<GpuRegister>();
+    if (input_type == Primitive::kPrimLong) {
+      __ Dmtc1(src, FTMP);
+      if (result_type == Primitive::kPrimFloat) {
+        __ Cvtsl(dst, FTMP);
+      } else {
+        __ Cvtdl(dst, FTMP);
+      }
+    } else {
       __ Mtc1(src, FTMP);
       if (result_type == Primitive::kPrimFloat) {
         __ Cvtsw(dst, FTMP);
       } else {
         __ Cvtdw(dst, FTMP);
       }
-    } else {
-      int32_t entry_offset = (result_type == Primitive::kPrimFloat) ? QUICK_ENTRY_POINT(pL2f)
-                                                                    : QUICK_ENTRY_POINT(pL2d);
-      codegen_->InvokeRuntime(entry_offset,
-                              conversion,
-                              conversion->GetDexPc(),
-                              nullptr);
-      if (result_type == Primitive::kPrimFloat) {
-        CheckEntrypointTypes<kQuickL2f, float, int64_t>();
-      } else {
-        CheckEntrypointTypes<kQuickL2d, double, int64_t>();
-      }
     }
   } else if (Primitive::IsIntegralType(result_type) && Primitive::IsFloatingPointType(input_type)) {
     CHECK(result_type == Primitive::kPrimInt || result_type == Primitive::kPrimLong);
-    int32_t entry_offset;
-    if (result_type != Primitive::kPrimLong) {
-      entry_offset = (input_type == Primitive::kPrimFloat) ? QUICK_ENTRY_POINT(pF2iz)
-                                                           : QUICK_ENTRY_POINT(pD2iz);
+    GpuRegister dst = locations->Out().AsRegister<GpuRegister>();
+    FpuRegister src = locations->InAt(0).AsFpuRegister<FpuRegister>();
+    Mips64Label truncate;
+    Mips64Label done;
+
+    // This supports both NAN2008=1 (should be always true for R6) and NAN2008=0 behaviors of the
+    // truncate instruction.
+    // TODO: simplify this when the emulator correctly implements NAN2008=1 behavior of the
+    // truncate instruction for MIPS64R6.
+    if (input_type == Primitive::kPrimFloat) {
+      uint32_t min_val = (result_type == Primitive::kPrimLong)
+          ? bit_cast<uint32_t, float>(std::numeric_limits<int64_t>::min())
+          : bit_cast<uint32_t, float>(std::numeric_limits<int32_t>::min());
+      __ LoadConst32(TMP, min_val);
+      __ Mtc1(TMP, FTMP);
+      __ CmpLeS(FTMP, FTMP, src);
     } else {
-      entry_offset = (input_type == Primitive::kPrimFloat) ? QUICK_ENTRY_POINT(pF2l)
-                                                           : QUICK_ENTRY_POINT(pD2l);
+      uint64_t min_val = (result_type == Primitive::kPrimLong)
+          ? bit_cast<uint64_t, double>(std::numeric_limits<int64_t>::min())
+          : bit_cast<uint64_t, double>(std::numeric_limits<int32_t>::min());
+      __ LoadConst64(TMP, min_val);
+      __ Dmtc1(TMP, FTMP);
+      __ CmpLeD(FTMP, FTMP, src);
     }
-    codegen_->InvokeRuntime(entry_offset,
-                            conversion,
-                            conversion->GetDexPc(),
-                            nullptr);
-    if (result_type != Primitive::kPrimLong) {
+
+    __ Bc1nez(FTMP, &truncate);
+
+    if (input_type == Primitive::kPrimFloat) {
+      __ CmpEqS(FTMP, src, src);
+    } else {
+      __ CmpEqD(FTMP, src, src);
+    }
+    if (result_type == Primitive::kPrimLong) {
+      __ LoadConst64(dst, std::numeric_limits<int64_t>::min());
+    } else {
+      __ LoadConst32(dst, std::numeric_limits<int32_t>::min());
+    }
+    __ Mfc1(TMP, FTMP);
+    __ And(dst, dst, TMP);
+
+    __ Bc(&done);
+
+    __ Bind(&truncate);
+
+    if (result_type == Primitive::kPrimLong) {
       if (input_type == Primitive::kPrimFloat) {
-        CheckEntrypointTypes<kQuickF2iz, int32_t, float>();
+        __ TruncLS(FTMP, src);
       } else {
-        CheckEntrypointTypes<kQuickD2iz, int32_t, double>();
+        __ TruncLD(FTMP, src);
       }
+      __ Dmfc1(dst, FTMP);
     } else {
       if (input_type == Primitive::kPrimFloat) {
-        CheckEntrypointTypes<kQuickF2l, int64_t, float>();
+        __ TruncWS(FTMP, src);
       } else {
-        CheckEntrypointTypes<kQuickD2l, int64_t, double>();
+        __ TruncWD(FTMP, src);
       }
+      __ Mfc1(dst, FTMP);
     }
+
+    __ Bind(&done);
   } else if (Primitive::IsFloatingPointType(result_type) &&
              Primitive::IsFloatingPointType(input_type)) {
     FpuRegister dst = locations->Out().AsFpuRegister<FpuRegister>();
