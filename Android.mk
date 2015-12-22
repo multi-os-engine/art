@@ -31,9 +31,9 @@ ifneq (,$(filter clean-oat%,$(MAKECMDGOALS)))
   art_dont_bother := true
 endif
 
-# Don't bother with tests unless there is a test-art*, build-art*, or related target.
+# Don't bother with runtests unless there is a test-art* or related target.
 art_test_bother := false
-ifneq (,$(filter tests test-art% valgrind-test-art% build-art% checkbuild,$(MAKECMDGOALS)))
+ifneq (,$(filter test-art% valgrind-test-art% ,$(MAKECMDGOALS)))
   art_test_bother := true
 endif
 
@@ -113,15 +113,15 @@ endif
 ########################################################################
 # test rules
 
-ifeq ($(art_test_bother),true)
-
 # All the dependencies that must be built ahead of sync-ing them onto the target device.
 TEST_ART_TARGET_SYNC_DEPS :=
 
 include $(art_path)/build/Android.common_test.mk
 include $(art_path)/build/Android.gtest.mk
-include $(art_path)/test/Android.run-test.mk
 include $(art_path)/benchmark/Android.mk
+
+ifeq ($(art_test_bother),true)
+include $(art_path)/test/Android.run-test.mk
 
 TEST_ART_ADB_ROOT_AND_REMOUNT := \
     (adb root && \
