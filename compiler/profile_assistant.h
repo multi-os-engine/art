@@ -52,6 +52,11 @@ class ProfileAssistant {
       const std::vector<std::string>& reference_profile_files,
       /*out*/ ProfileCompilationInfo** profile_compilation_info);
 
+  static bool ProcessProfiles(
+      const std::vector<uint32_t>& profile_files_fd_,
+      const std::vector<uint32_t>& reference_profile_files_fd_,
+      /*out*/ ProfileCompilationInfo** profile_compilation_info);
+
  private:
   ProfileAssistant() {}
 };
