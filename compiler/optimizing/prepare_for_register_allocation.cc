@@ -50,8 +50,8 @@ void PrepareForRegisterAllocation::VisitBoundType(HBoundType* bound_type) {
 void PrepareForRegisterAllocation::VisitClinitCheck(HClinitCheck* check) {
   // Try to find a static invoke or a new-instance from which this check originated.
   HInstruction* implicit_clinit = nullptr;
-  for (HUseIterator<HInstruction*> it(check->GetUses()); !it.Done(); it.Advance()) {
-    HInstruction* user = it.Current()->GetUser();
+  for (const HUseListValue<HInstruction*>& use : check->GetUses()) {
+    HInstruction* user = use.GetUser();
     if ((user->IsInvokeStaticOrDirect() || user->IsNewInstance()) &&
         CanMoveClinitCheck(check, user)) {
       implicit_clinit = user;
@@ -72,11 +72,11 @@ void PrepareForRegisterAllocation::VisitClinitCheck(HClinitCheck* check) {
   // If we found a static invoke or new-instance for merging, remove the check
   // from dominated static invokes.
   if (implicit_clinit != nullptr) {
-    for (HUseIterator<HInstruction*> it(check->GetUses()); !it.Done(); ) {
-      HInstruction* user = it.Current()->GetUser();
+    for (auto it = check->GetUses().begin(), end = check->GetUses().end(); it != end; ) {
+      HInstruction* user = it->GetUser();
       // All other uses must be dominated.
       DCHECK(implicit_clinit->StrictlyDominates(user) || (implicit_clinit == user));
-      it.Advance();  // Advance before we remove the node, reference to the next node is preserved.
+      ++it;  // Advance before we remove the node, reference to the next node is preserved.
       if (user->IsInvokeStaticOrDirect()) {
         user->AsInvokeStaticOrDirect()->RemoveExplicitClinitCheck(
             HInvokeStaticOrDirect::ClinitCheckRequirement::kNone);
@@ -129,10 +129,10 @@ void PrepareForRegisterAllocation::VisitNewInstance(HNewInstance* instruction) {
 
 void PrepareForRegisterAllocation::VisitCondition(HCondition* condition) {
   bool needs_materialization = false;
-  if (!condition->GetUses().HasOnlyOneUse() || !condition->GetEnvUses().IsEmpty()) {
+  if (!condition->GetUses().HasOnlyOneUse() || !condition->GetEnvUses().empty()) {
     needs_materialization = true;
   } else {
-    HInstruction* user = condition->GetUses().GetFirst()->GetUser();
+    HInstruction* user = condition->GetUses().front().GetUser();
     if (!user->IsIf() && !user->IsDeoptimize()) {
       needs_materialization = true;
     } else {

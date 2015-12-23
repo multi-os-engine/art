@@ -122,8 +122,8 @@ void PrimitiveTypePropagation::AddToWorklist(HPhi* instruction) {
 }
 
 void PrimitiveTypePropagation::AddDependentInstructionsToWorklist(HInstruction* instruction) {
-  for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
-    HPhi* phi = it.Current()->GetUser()->AsPhi();
+  for (const HUseListValue<HInstruction*>& use : instruction->GetUses()) {
+    HPhi* phi = use.GetUser()->AsPhi();
     if (phi != nullptr && phi->IsLive() && phi->GetType() != instruction->GetType()) {
       AddToWorklist(phi);
     }

@@ -210,8 +210,8 @@ void DeadPhiHandling::AddToWorklist(HPhi* instruction) {
 }
 
 void DeadPhiHandling::AddDependentInstructionsToWorklist(HPhi* instruction) {
-  for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
-    HPhi* phi = it.Current()->GetUser()->AsPhi();
+  for (const HUseListValue<HInstruction*>& use : instruction->GetUses()) {
+    HPhi* phi = use.GetUser()->AsPhi();
     if (phi != nullptr && !phi->IsDead()) {
       AddToWorklist(phi);
     }

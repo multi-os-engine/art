@@ -630,8 +630,8 @@ void HBasicBlock::ReplaceAndRemoveInstructionWith(HInstruction* initial,
     DCHECK_EQ(replacement->GetType(), Primitive::kPrimVoid);
     DCHECK_EQ(initial->GetBlock(), this);
     DCHECK_EQ(initial->GetType(), Primitive::kPrimVoid);
-    DCHECK(initial->GetUses().IsEmpty());
-    DCHECK(initial->GetEnvUses().IsEmpty());
+    DCHECK(initial->GetUses().empty());
+    DCHECK(initial->GetEnvUses().empty());
     replacement->SetBlock(this);
     replacement->SetId(GetGraph()->GetNextInstructionId());
     instructions_.InsertInstructionBefore(replacement, initial);
@@ -707,8 +707,8 @@ static void Remove(HInstructionList* instruction_list,
   instruction->SetBlock(nullptr);
   instruction_list->RemoveInstruction(instruction);
   if (ensure_safety) {
-    DCHECK(instruction->GetUses().IsEmpty());
-    DCHECK(instruction->GetEnvUses().IsEmpty());
+    DCHECK(instruction->GetUses().empty());
+    DCHECK(instruction->GetEnvUses().empty());
     RemoveAsUser(instruction);
   }
 }
@@ -914,24 +914,22 @@ bool HInstruction::StrictlyDominates(HInstruction* other_instruction) const {
 
 void HInstruction::ReplaceWith(HInstruction* other) {
   DCHECK(other != nullptr);
-  for (HUseIterator<HInstruction*> it(GetUses()); !it.Done(); it.Advance()) {
-    HUseListNode<HInstruction*>* current = it.Current();
-    HInstruction* user = current->GetUser();
-    size_t input_index = current->GetIndex();
+  for (const HUseListValue<HInstruction*>& use : GetUses()) {
+    HInstruction* user = use.GetUser();
+    size_t input_index = use.GetIndex();
     user->SetRawInputAt(input_index, other);
     other->AddUseAt(user, input_index);
   }
 
-  for (HUseIterator<HEnvironment*> it(GetEnvUses()); !it.Done(); it.Advance()) {
-    HUseListNode<HEnvironment*>* current = it.Current();
-    HEnvironment* user = current->GetUser();
-    size_t input_index = current->GetIndex();
+  for (const HUseListValue<HEnvironment*>& use : GetEnvUses()) {
+    HEnvironment* user = use.GetUser();
+    size_t input_index = use.GetIndex();
     user->SetRawEnvAt(input_index, other);
     other->AddEnvUseAt(user, input_index);
   }
 
-  uses_.Clear();
-  env_uses_.Clear();
+  uses_.clear();
+  env_uses_.clear();
 }
 
 void HInstruction::ReplaceInput(HInstruction* replacement, size_t index) {
@@ -1183,17 +1181,18 @@ void HInstruction::MoveBeforeFirstUserAndOutOfLoops() {
   DCHECK_EQ(InputCount(), 0u);
 
   // Find the target block.
-  HUseIterator<HInstruction*> uses_it(GetUses());
-  HBasicBlock* target_block = uses_it.Current()->GetUser()->GetBlock();
-  uses_it.Advance();
-  while (!uses_it.Done() && uses_it.Current()->GetUser()->GetBlock() == target_block) {
-    uses_it.Advance();
+  auto uses_it = GetUses().begin();
+  auto uses_end = GetUses().end();
+  HBasicBlock* target_block = uses_it->GetUser()->GetBlock();
+  ++uses_it;
+  while (uses_it != uses_end && uses_it->GetUser()->GetBlock() == target_block) {
+    ++uses_it;
   }
-  if (!uses_it.Done()) {
+  if (uses_it != uses_end) {
     // This instruction has uses in two or more blocks. Find the common dominator.
     CommonDominator finder(target_block);
-    for (; !uses_it.Done(); uses_it.Advance()) {
-      finder.Update(uses_it.Current()->GetUser()->GetBlock());
+    for (; uses_it != uses_end; ++uses_it) {
+      finder.Update(uses_it->GetUser()->GetBlock());
     }
     target_block = finder.Get();
     DCHECK(target_block != nullptr);
@@ -1206,10 +1205,10 @@ void HInstruction::MoveBeforeFirstUserAndOutOfLoops() {
 
   // Find insertion position.
   HInstruction* insert_pos = nullptr;
-  for (HUseIterator<HInstruction*> uses_it2(GetUses()); !uses_it2.Done(); uses_it2.Advance()) {
-    if (uses_it2.Current()->GetUser()->GetBlock() == target_block &&
-        (insert_pos == nullptr || uses_it2.Current()->GetUser()->StrictlyDominates(insert_pos))) {
-      insert_pos = uses_it2.Current()->GetUser();
+  for (const HUseListValue<HInstruction*>& use : GetUses()) {
+    if (use.GetUser()->GetBlock() == target_block &&
+        (insert_pos == nullptr || use.GetUser()->StrictlyDominates(insert_pos))) {
+      insert_pos = use.GetUser();
     }
   }
   if (insert_pos == nullptr) {
@@ -1472,10 +1471,10 @@ void HInstructionList::Add(const HInstructionList& instruction_list) {
 static void RemoveUsesOfDeadInstruction(HInstruction* insn) {
   DCHECK(!insn->HasEnvironmentUses());
   while (insn->HasNonEnvironmentUses()) {
-    HUseListNode<HInstruction*>* use = insn->GetUses().GetFirst();
-    size_t use_index = use->GetIndex();
-    HBasicBlock* user_block =  use->GetUser()->GetBlock();
-    DCHECK(use->GetUser()->IsPhi() && user_block->IsCatchBlock());
+    const HUseListValue<HInstruction*>& use = insn->GetUses().front();
+    size_t use_index = use.GetIndex();
+    HBasicBlock* user_block =  use.GetUser()->GetBlock();
+    DCHECK(use.GetUser()->IsPhi() && user_block->IsCatchBlock());
     for (HInstructionIterator phi_it(user_block->GetPhis()); !phi_it.Done(); phi_it.Advance()) {
       phi_it.Current()->AsPhi()->RemoveInputAt(use_index);
     }
@@ -2174,12 +2173,11 @@ std::ostream& operator<<(std::ostream& os, HInvokeStaticOrDirect::ClinitCheckReq
 }
 
 void HInstruction::RemoveEnvironmentUsers() {
-  for (HUseIterator<HEnvironment*> use_it(GetEnvUses()); !use_it.Done(); use_it.Advance()) {
-    HUseListNode<HEnvironment*>* user_node = use_it.Current();
-    HEnvironment* user = user_node->GetUser();
-    user->SetRawEnvAt(user_node->GetIndex(), nullptr);
+  for (const HUseListValue<HEnvironment*>& use : GetEnvUses()) {
+    HEnvironment* user = use.GetUser();
+    user->SetRawEnvAt(use.GetIndex(), nullptr);
   }
-  env_uses_.Clear();
+  env_uses_.clear();
 }
 
 // Returns an instruction with the opposite boolean value from 'cond'.

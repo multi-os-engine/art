@@ -98,6 +98,135 @@ enum IfCondition {
   kCondAE,  // >=
 };
 
+class ListNodeBase {
+ public:
+  ListNodeBase() : next_(this), prev_(this) { }
+  explicit ListNodeBase(ListNodeBase* next, ListNodeBase* prev) : next_(next), prev_(prev) { }
+
+  ListNodeBase* GetNext() { return next_; }
+  const ListNodeBase* GetNext() const { return next_; }
+  void SetNext(ListNodeBase* next) { next_ = next; }
+
+  ListNodeBase* GetPrev() { return prev_; }
+  const ListNodeBase* GetPrev() const { return prev_; }
+  void SetPrev(ListNodeBase* prev) { prev_ = prev; }
+
+ private:
+  ListNodeBase* next_;
+  ListNodeBase* prev_;
+
+  DISALLOW_COPY_AND_ASSIGN(ListNodeBase);
+};
+
+template <typename T>
+class ListNode : public ListNodeBase {
+ public:
+  template <typename... Args>
+  ListNode(Args... args)
+      : ListNodeBase(), value_(std::forward<Args>(args)...) { }
+
+  T& GetValue() { return value_; }
+  const T& GetValue() const { return value_; }
+
+ private:
+  T value_;
+
+  DISALLOW_COPY_AND_ASSIGN(ListNode);
+};
+
+template <typename T, typename Node, typename tag = std::bidirectional_iterator_tag>
+class ListIterator;
+
+template <typename T, typename Node, typename tag>
+bool operator==(ListIterator<T, Node, tag> lhs, ListIterator<T, Node, tag> rhs);
+
+template <typename T, typename Node, typename tag>
+class ListIterator
+    : public ValueObject,
+      public std::iterator<tag, T> {
+ public:
+  explicit ListIterator(ListNodeBase* current) : current_(current) { }
+
+  ListNodeBase* GetBase() const { return current_; }
+
+  // Conversion from iterator to const_iterator.
+  template <typename U, typename = typename std::enable_if<
+      std::is_const<T>::value &&
+      std::is_same<U, typename std::remove_const<T>::type>::value>::type>
+  ListIterator(const ListIterator<U, Node, tag>& src) : current_(src.current_) { }
+
+  ListIterator& operator++() {
+    DCHECK(current_ != nullptr);
+    current_ = current_->GetNext();
+    return *this;
+  }
+
+  ListIterator operator++(int) {
+    ListIterator tmp(*this);
+    ++*this;
+    return tmp;
+  }
+
+  ListIterator& operator--() {
+    static_assert(std::is_base_of<std::bidirectional_iterator_tag, tag>::value,
+                  "operator--() can be used only with bidirectional iterators.");
+    DCHECK(current_ != nullptr);
+    current_ = current_->GetPrev();
+    return *this;
+  }
+
+  ListIterator operator--(int) {
+    static_assert(std::is_base_of<std::bidirectional_iterator_tag, tag>::value,
+                  "operator--() can be used only with bidirectional iterators.");
+    ListIterator tmp(*this);
+    --*this;
+    return tmp;
+  }
+
+  T& operator*() const {
+    DCHECK(current_ != nullptr);
+    return down_cast<Node*>(current_)->GetValue();
+  }
+
+  T* operator->() const {
+    return &(**this);
+  }
+
+ private:
+  ListNodeBase* current_;
+
+  template <typename U, typename N, typename t>
+  friend class ListIterator;
+  template <typename U, typename N, typename t>
+  friend bool operator==(ListIterator<U, N, t> lhs, ListIterator<U, N, t> rhs);
+};
+
+template <typename T, typename Node, typename tag>
+inline bool operator==(ListIterator<T, Node, tag> lhs, ListIterator<T, Node, tag> rhs) {
+  return lhs.current_ == rhs.current_;
+}
+
+template <typename T, typename U, typename Node, typename tag>
+typename std::enable_if<!std::is_same<T,U>::value &&
+                        std::is_same<typename std::remove_const<T>::type,
+                                     typename std::remove_const<U>::type>::value, bool>::type
+inline operator==(ListIterator<T, Node, tag> lhs, ListIterator<U, Node, tag> rhs) {
+  return ListIterator<const T, Node, tag>(lhs) == ListIterator<const T, Node, tag>(rhs);
+}
+
+template <typename T, typename Node, typename tag>
+inline bool operator!=(ListIterator<T, Node, tag> lhs, ListIterator<T, Node, tag> rhs) {
+  return !(lhs == rhs);
+}
+
+template <typename T, typename U, typename Node, typename tag>
+typename std::enable_if<!std::is_same<T,U>::value &&
+                        std::is_same<typename std::remove_const<T>::type,
+                                     typename std::remove_const<U>::type>::value, bool>::type
+inline operator!=(ListIterator<T, Node, tag> lhs, ListIterator<U, Node, tag> rhs) {
+  return !(lhs == rhs);
+}
+
 class HInstructionList : public ValueObject {
  public:
   HInstructionList() : first_instruction_(nullptr), last_instruction_(nullptr) {}
@@ -1171,127 +1300,150 @@ FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
 template <typename T> class HUseList;
 
 template <typename T>
-class HUseListNode : public ArenaObject<kArenaAllocUseListNode> {
+class HUseListValue : public ValueObject {
  public:
-  HUseListNode* GetPrevious() const { return prev_; }
-  HUseListNode* GetNext() const { return next_; }
+  HUseListValue(T user, size_t index) : user_(user), index_(index) { }
+
   T GetUser() const { return user_; }
   size_t GetIndex() const { return index_; }
   void SetIndex(size_t index) { index_ = index; }
 
  private:
-  HUseListNode(T user, size_t index)
-      : user_(user), index_(index), prev_(nullptr), next_(nullptr) {}
-
-  T const user_;
+  const T user_;
   size_t index_;
-  HUseListNode<T>* prev_;
-  HUseListNode<T>* next_;
-
-  friend class HUseList<T>;
-
-  DISALLOW_COPY_AND_ASSIGN(HUseListNode);
 };
 
 template <typename T>
+class HUseListNode
+    : public ArenaObject<kArenaAllocUseListNode>,
+      public ListNode<HUseListValue<T>> {
+ public:
+  HUseListNode(T user, size_t index) : ListNode<HUseListValue<T>>(user, index) { }
+};
+
+// HUseList is a doubly-linked list with just a single pointer as a head and doesn't keep
+// the number of elements. With that restriction, we can provide only a forward iterator.
+template <typename T>
 class HUseList : public ValueObject {
  public:
-  HUseList() : first_(nullptr) {}
+  typedef ListIterator<HUseListValue<T>, HUseListNode<T>, std::forward_iterator_tag> iterator;
+  typedef ListIterator<const HUseListValue<T>, HUseListNode<T>, std::forward_iterator_tag>
+      const_iterator;
+  typedef typename iterator::value_type      value_type;
+  typedef typename iterator::pointer         pointer;
+  typedef typename const_iterator::pointer   const_pointer;
+  typedef typename iterator::reference       reference;
+  typedef typename const_iterator::reference const_reference;
+  typedef typename iterator::difference_type difference_type;
+  typedef          size_t                    size_type;
 
-  void Clear() {
-    first_ = nullptr;
+  // Construct/destroy.
+  HUseList() : head_(nullptr) {}
+  ~HUseList() = default;
+  static_assert(std::is_trivially_destructible<T>::value,
+                "HUseList<T> does not destroy values, so they must be trivially destructible.");
+
+  // Iterators.
+  iterator begin() { return iterator(head_); }
+  const_iterator begin() const { return iterator(head_); }
+  const_iterator cbegin() const { return const_iterator(head_); }
+  iterator end() { return iterator(nullptr); }
+  const_iterator end() const { return iterator(nullptr); }
+  const_iterator cend() const { return const_iterator(nullptr); }
+
+  // Capacity.
+  bool empty() const { return head_ == nullptr; }
+  size_t max_size() const { return std::numeric_limits<size_t>::max(); }
+
+  // Element access.
+  reference front() {
+    DCHECK(!empty());
+    return *begin();
+  }
+  const_reference front() const {
+    DCHECK(!empty());
+    return *begin();
+  }
+
+  // Modifiers.
+  // TODO: Update comments.
+  // pop_front(), erase_after(), clear() and swap() are implemented.
+  // push_front()/insert_after(), assign() and resize() are not provided.
+  // emplace_front()/emplace_after() is replaced by AddUse()/AddUseAfter().
+
+  void pop_front() {
+    DCHECK(!empty());
+    erase(begin());
+  }
+  iterator erase(const_iterator position) {
+    const_iterator last = position;
+    std::advance(last, 1);
+    return erase(position, last);
+  }
+  iterator erase(const_iterator first, const_iterator last) {
+    if (first != last) {
+      ListNodeBase* next = last.GetBase();
+      ListNodeBase* first_base = first.GetBase();
+      DCHECK(first_base != nullptr);
+      ListNodeBase* prev = first_base->GetPrev();
+      DCHECK_EQ(prev == nullptr, first_base == head_);
+      if (prev != nullptr) {
+        prev->SetNext(next);
+      } else {
+        head_ = next;
+      }
+      if (next != nullptr) {
+        next->SetPrev(prev);
+      }
+    }
+    return iterator(last.GetBase());
+  }
+  void clear() {
+    head_ = nullptr;
+  }
+  void swap(HUseList& other) {
+    std::swap(head_, other.head_);
   }
 
   // Adds a new entry at the beginning of the use list and returns
-  // the newly created node.
-  HUseListNode<T>* AddUse(T user, size_t index, ArenaAllocator* arena) {
+  // an iterator pointing to the newly created node.
+  iterator AddUse(T user, size_t index, ArenaAllocator* arena) {
     HUseListNode<T>* new_node = new (arena) HUseListNode<T>(user, index);
-    if (IsEmpty()) {
-      first_ = new_node;
-    } else {
-      first_->prev_ = new_node;
-      new_node->next_ = first_;
-      first_ = new_node;
+    new_node->SetPrev(nullptr);
+    new_node->SetNext(head_);
+    if (head_ != nullptr) {
+      head_->SetPrev(new_node);
     }
-    return new_node;
+    head_ = new_node;
+    return iterator(new_node);
   }
 
-  HUseListNode<T>* GetFirst() const {
-    return first_;
-  }
-
-  void Remove(HUseListNode<T>* node) {
-    DCHECK(node != nullptr);
-    DCHECK(Contains(node));
-
-    if (node->prev_ != nullptr) {
-      node->prev_->next_ = node->next_;
-    }
-    if (node->next_ != nullptr) {
-      node->next_->prev_ = node->prev_;
-    }
-    if (node == first_) {
-      first_ = node->next_;
-    }
-  }
-
-  bool Contains(const HUseListNode<T>* node) const {
-    if (node == nullptr) {
+  bool Contains(iterator node) const {
+    if (node.GetBase() == nullptr) {
       return false;
     }
-    for (HUseListNode<T>* current = first_; current != nullptr; current = current->GetNext()) {
-      if (current == node) {
+    for (auto it = begin(), it_end = end(); it != it_end; ++it) {
+      if (it == node) {
         return true;
       }
     }
     return false;
   }
 
-  bool IsEmpty() const {
-    return first_ == nullptr;
-  }
-
   bool HasOnlyOneUse() const {
-    return first_ != nullptr && first_->next_ == nullptr;
+    return !empty() && ++begin() == end();
   }
 
   size_t SizeSlow() const {
-    size_t count = 0;
-    for (HUseListNode<T>* current = first_; current != nullptr; current = current->GetNext()) {
-      ++count;
-    }
-    return count;
+    return std::distance(begin(), end());
   }
 
  private:
-  HUseListNode<T>* first_;
-};
-
-template<typename T>
-class HUseIterator : public ValueObject {
- public:
-  explicit HUseIterator(const HUseList<T>& uses) : current_(uses.GetFirst()) {}
-
-  bool Done() const { return current_ == nullptr; }
-
-  void Advance() {
-    DCHECK(!Done());
-    current_ = current_->GetNext();
-  }
-
-  HUseListNode<T>* Current() const {
-    DCHECK(!Done());
-    return current_;
-  }
-
- private:
-  HUseListNode<T>* current_;
-
-  friend class HValue;
+  ListNodeBase* head_;
 };
 
 // This class is used by HEnvironment and HInstruction classes to record the
-// instructions they use and pointers to the corresponding HUseListNodes kept
+// instructions they use and pointers to the corresponding HUseListValue<>s kept
 // by the used instructions.
 template <typename T>
 class HUserRecord : public ValueObject {
@@ -1299,22 +1451,22 @@ class HUserRecord : public ValueObject {
   HUserRecord() : instruction_(nullptr), use_node_(nullptr) {}
   explicit HUserRecord(HInstruction* instruction) : instruction_(instruction), use_node_(nullptr) {}
 
-  HUserRecord(const HUserRecord<T>& old_record, HUseListNode<T>* use_node)
+  HUserRecord(const HUserRecord<T>& old_record, typename HUseList<T>::iterator use_node)
     : instruction_(old_record.instruction_), use_node_(use_node) {
     DCHECK(instruction_ != nullptr);
-    DCHECK(use_node_ != nullptr);
-    DCHECK(old_record.use_node_ == nullptr);
+    DCHECK(use_node_.GetBase() != nullptr);
+    DCHECK(old_record.use_node_.GetBase() == nullptr);
   }
 
   HInstruction* GetInstruction() const { return instruction_; }
-  HUseListNode<T>* GetUseNode() const { return use_node_; }
+  typename HUseList<T>::iterator GetUseNode() const { return use_node_; }
 
  private:
   // Instruction used by the user.
   HInstruction* instruction_;
 
   // Corresponding entry in the use list kept by 'instruction_'.
-  HUseListNode<T>* use_node_;
+  typename HUseList<T>::iterator use_node_;
 };
 
 /**
@@ -1658,7 +1810,7 @@ class HEnvironment : public ArenaObject<kArenaAllocEnvironment> {
  private:
   // Record instructions' use entries of this environment for constant-time removal.
   // It should only be called by HInstruction when a new environment use is added.
-  void RecordEnvUse(HUseListNode<HEnvironment*>* env_use) {
+  void RecordEnvUse(HUseList<HEnvironment*>::iterator env_use) {
     DCHECK(env_use->GetUser() == this);
     size_t index = env_use->GetIndex();
     vregs_[index] = HUserRecord<HEnvironment*>(vregs_[index], env_use);
@@ -1877,29 +2029,29 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
 
   void AddUseAt(HInstruction* user, size_t index) {
     DCHECK(user != nullptr);
-    HUseListNode<HInstruction*>* use =
+    HUseList<HInstruction*>::iterator use =
         uses_.AddUse(user, index, GetBlock()->GetGraph()->GetArena());
     user->SetRawInputRecordAt(index, HUserRecord<HInstruction*>(user->InputRecordAt(index), use));
   }
 
   void AddEnvUseAt(HEnvironment* user, size_t index) {
     DCHECK(user != nullptr);
-    HUseListNode<HEnvironment*>* env_use =
+    HUseList<HEnvironment*>::iterator env_use =
         env_uses_.AddUse(user, index, GetBlock()->GetGraph()->GetArena());
     user->RecordEnvUse(env_use);
   }
 
   void RemoveAsUserOfInput(size_t input) {
     HUserRecord<HInstruction*> input_use = InputRecordAt(input);
-    input_use.GetInstruction()->uses_.Remove(input_use.GetUseNode());
+    input_use.GetInstruction()->uses_.erase(input_use.GetUseNode());
   }
 
   const HUseList<HInstruction*>& GetUses() const { return uses_; }
   const HUseList<HEnvironment*>& GetEnvUses() const { return env_uses_; }
 
-  bool HasUses() const { return !uses_.IsEmpty() || !env_uses_.IsEmpty(); }
-  bool HasEnvironmentUses() const { return !env_uses_.IsEmpty(); }
-  bool HasNonEnvironmentUses() const { return !uses_.IsEmpty(); }
+  bool HasUses() const { return !uses_.empty() || !env_uses_.empty(); }
+  bool HasEnvironmentUses() const { return !env_uses_.empty(); }
+  bool HasNonEnvironmentUses() const { return !uses_.empty(); }
   bool HasOnlyOneNonEnvironmentUse() const {
     return !HasEnvironmentUses() && GetUses().HasOnlyOneUse();
   }
@@ -2065,7 +2217,9 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
   virtual void SetRawInputRecordAt(size_t index, const HUserRecord<HInstruction*>& input) = 0;
 
  private:
-  void RemoveEnvironmentUser(HUseListNode<HEnvironment*>* use_node) { env_uses_.Remove(use_node); }
+  void RemoveEnvironmentUser(HUseList<HEnvironment*>::iterator use_node) {
+    env_uses_.erase(use_node);
+  }
 
   HInstruction* previous_;
   HInstruction* next_;

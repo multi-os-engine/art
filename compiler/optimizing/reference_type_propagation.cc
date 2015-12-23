@@ -294,8 +294,8 @@ static bool ShouldCreateBoundType(HInstruction* position,
   if (existing_bound_type->GetUpperBound().IsSupertypeOf(upper_bound)) {
     if (kIsDebugBuild) {
       // Check that the existing HBoundType dominates all the uses.
-      for (HUseIterator<HInstruction*> it(obj->GetUses()); !it.Done(); it.Advance()) {
-        HInstruction* user = it.Current()->GetUser();
+      for (const HUseListValue<HInstruction*>& use : obj->GetUses()) {
+        HInstruction* user = use.GetUser();
         if (dominator_instr != nullptr) {
           DCHECK(!dominator_instr->StrictlyDominates(user)
               || user == existing_bound_type
@@ -349,8 +349,8 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
       ? ifInstruction->IfTrueSuccessor()
       : ifInstruction->IfFalseSuccessor();
 
-  for (HUseIterator<HInstruction*> it(obj->GetUses()); !it.Done(); it.Advance()) {
-    HInstruction* user = it.Current()->GetUser();
+  for (const HUseListValue<HInstruction*>& use : obj->GetUses()) {
+    HInstruction* user = use.GetUser();
     if (notNullBlock->Dominates(user->GetBlock())) {
       if (bound_type == nullptr) {
         ScopedObjectAccess soa(Thread::Current());
@@ -371,7 +371,7 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
           break;
         }
       }
-      user->ReplaceInput(bound_type, it.Current()->GetIndex());
+      user->ReplaceInput(bound_type, use.GetIndex());
     }
   }
 }
@@ -428,8 +428,8 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
     return;
   }
   DCHECK(!obj->IsLoadClass()) << "We should not replace HLoadClass instructions";
-  for (HUseIterator<HInstruction*> it(obj->GetUses()); !it.Done(); it.Advance()) {
-    HInstruction* user = it.Current()->GetUser();
+  for (const HUseListValue<HInstruction*>& use : obj->GetUses()) {
+    HInstruction* user = use.GetUser();
     if (instanceOfTrueBlock->Dominates(user->GetBlock())) {
       if (bound_type == nullptr) {
         ScopedObjectAccess soa(Thread::Current());
@@ -448,7 +448,7 @@ void ReferenceTypePropagation::BoundTypeForIfInstanceOf(HBasicBlock* block) {
           break;
         }
       }
-      user->ReplaceInput(bound_type, it.Current()->GetIndex());
+      user->ReplaceInput(bound_type, use.GetIndex());
     }
   }
 }
@@ -637,8 +637,8 @@ void RTPVisitor::VisitCheckCast(HCheckCast* check_cast) {
   }
   HInstruction* obj = check_cast->InputAt(0);
   HBoundType* bound_type = nullptr;
-  for (HUseIterator<HInstruction*> it(obj->GetUses()); !it.Done(); it.Advance()) {
-    HInstruction* user = it.Current()->GetUser();
+  for (const HUseListValue<HInstruction*>& use : obj->GetUses()) {
+    HInstruction* user = use.GetUser();
     if (check_cast->StrictlyDominates(user)) {
       if (bound_type == nullptr) {
         ScopedObjectAccess soa(Thread::Current());
@@ -660,7 +660,7 @@ void RTPVisitor::VisitCheckCast(HCheckCast* check_cast) {
           break;
         }
       }
-      user->ReplaceInput(bound_type, it.Current()->GetIndex());
+      user->ReplaceInput(bound_type, use.GetIndex());
     }
   }
 }
@@ -914,8 +914,8 @@ void ReferenceTypePropagation::AddToWorklist(HInstruction* instruction) {
 }
 
 void ReferenceTypePropagation::AddDependentInstructionsToWorklist(HInstruction* instruction) {
-  for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
-    HInstruction* user = it.Current()->GetUser();
+  for (const HUseListValue<HInstruction*>& use : instruction->GetUses()) {
+    HInstruction* user = use.GetUser();
     if (user->IsPhi()
        || user->IsBoundType()
        || user->IsNullCheck()

@@ -1192,10 +1192,8 @@ class BCEVisitor : public HGraphVisitor {
       size_t counter = 0;
       // Count the constant indexing for which bounds checks haven't
       // been removed yet.
-      for (HUseIterator<HInstruction*> it2(array_length->GetUses());
-           !it2.Done();
-           it2.Advance()) {
-        HInstruction* user = it2.Current()->GetUser();
+      for (const HUseListValue<HInstruction*>& use : array_length->GetUses()) {
+        HInstruction* user = use.GetUser();
         if (user->GetBlock() == block &&
             user->IsBoundsCheck() &&
             user->AsBoundsCheck()->InputAt(0)->IsIntConstant()) {
@@ -1551,29 +1549,25 @@ class BCEVisitor : public HGraphVisitor {
         Primitive::Type type = instruction->GetType();
         HPhi* phi = nullptr;
         // Scan all uses of an instruction and replace each later use with a phi node.
-        for (HUseIterator<HInstruction*> it2(instruction->GetUses());
-             !it2.Done();
-             it2.Advance()) {
-          HInstruction* user = it2.Current()->GetUser();
+        for (const HUseListValue<HInstruction*>& use : instruction->GetUses()) {
+          HInstruction* user = use.GetUser();
           if (user->GetBlock() != true_block) {
             if (phi == nullptr) {
               phi = NewPhi(new_preheader, instruction, type);
             }
-            user->ReplaceInput(phi, it2.Current()->GetIndex());
+            user->ReplaceInput(phi, use.GetIndex());
           }
         }
         // Scan all environment uses of an instruction and replace each later use with a phi node.
-        for (HUseIterator<HEnvironment*> it2(instruction->GetEnvUses());
-             !it2.Done();
-             it2.Advance()) {
-          HEnvironment* user = it2.Current()->GetUser();
+        for (const HUseListValue<HEnvironment*>& use : instruction->GetEnvUses()) {
+          HEnvironment* user = use.GetUser();
           if (user->GetHolder()->GetBlock() != true_block) {
             if (phi == nullptr) {
               phi = NewPhi(new_preheader, instruction, type);
             }
-            user->RemoveAsUserOfInput(it2.Current()->GetIndex());
-            user->SetRawEnvAt(it2.Current()->GetIndex(), phi);
-            phi->AddEnvUseAt(user, it2.Current()->GetIndex());
+            user->RemoveAsUserOfInput(use.GetIndex());
+            user->SetRawEnvAt(use.GetIndex(), phi);
+            phi->AddEnvUseAt(user, use.GetIndex());
           }
         }
       }

@@ -554,9 +554,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       HInstruction* instruction = it.Current();
       int bci = 0;
       size_t num_uses = 0;
-      for (HUseIterator<HInstruction*> use_it(instruction->GetUses());
-           !use_it.Done();
-           use_it.Advance()) {
+      for (const HUseListValue<HInstruction*>& use ATTRIBUTE_UNUSED : instruction->GetUses()) {
         ++num_uses;
       }
       AddIndent();

@@ -351,9 +351,9 @@ bool InstructionSimplifierVisitor::CanEnsureNotNullAt(HInstruction* input, HInst
     return true;
   }
 
-  for (HUseIterator<HInstruction*> it(input->GetUses()); !it.Done(); it.Advance()) {
-    HInstruction* use = it.Current()->GetUser();
-    if (use->IsNullCheck() && use->StrictlyDominates(at)) {
+  for (const HUseListValue<HInstruction*>& use : input->GetUses()) {
+    HInstruction* user = use.GetUser();
+    if (user->IsNullCheck() && user->StrictlyDominates(at)) {
       return true;
     }
   }
@@ -793,7 +793,7 @@ void InstructionSimplifierVisitor::VisitCondition(HCondition* condition) {
     return;
   }
 
-  if (!left->GetEnvUses().IsEmpty()) {
+  if (!left->GetEnvUses().empty()) {
     // There is a reference to the compare result in an environment. Do we really need it?
     if (GetGraph()->IsDebuggable()) {
       return;
@@ -1197,12 +1197,12 @@ void InstructionSimplifierVisitor::VisitFakeString(HFakeString* instruction) {
 
   // Find the string we need to replace this instruction with. The actual string is
   // the return value of a StringFactory call.
-  for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
-    HInstruction* use = it.Current()->GetUser();
-    if (use->IsInvokeStaticOrDirect()
-        && use->AsInvokeStaticOrDirect()->IsStringFactoryFor(instruction)) {
-      use->AsInvokeStaticOrDirect()->RemoveFakeStringArgumentAsLastInput();
-      actual_string = use;
+  for (const HUseListValue<HInstruction*>& use : instruction->GetUses()) {
+    HInstruction* user = use.GetUser();
+    if (user->IsInvokeStaticOrDirect()
+        && user->AsInvokeStaticOrDirect()->IsStringFactoryFor(instruction)) {
+      user->AsInvokeStaticOrDirect()->RemoveFakeStringArgumentAsLastInput();
+      actual_string = user;
       break;
     }
   }
@@ -1210,21 +1210,21 @@ void InstructionSimplifierVisitor::VisitFakeString(HFakeString* instruction) {
   // Check that there is no other instruction that thinks it is the factory for that string.
   if (kIsDebugBuild) {
     CHECK(actual_string != nullptr);
-    for (HUseIterator<HInstruction*> it(instruction->GetUses()); !it.Done(); it.Advance()) {
-      HInstruction* use = it.Current()->GetUser();
-      if (use->IsInvokeStaticOrDirect()) {
-        CHECK(!use->AsInvokeStaticOrDirect()->IsStringFactoryFor(instruction));
+    for (const HUseListValue<HInstruction*>& use : instruction->GetUses()) {
+      HInstruction* user = use.GetUser();
+      if (user->IsInvokeStaticOrDirect()) {
+        CHECK(!user->AsInvokeStaticOrDirect()->IsStringFactoryFor(instruction));
       }
     }
   }
 
   // We need to remove any environment uses of the fake string that are not dominated by
   // `actual_string` to null.
-  for (HUseIterator<HEnvironment*> it(instruction->GetEnvUses()); !it.Done(); it.Advance()) {
-    HEnvironment* environment = it.Current()->GetUser();
+  for (const HUseListValue<HEnvironment*>& use : instruction->GetEnvUses()) {
+    HEnvironment* environment = use.GetUser();
     if (!actual_string->StrictlyDominates(environment->GetHolder())) {
-      environment->RemoveAsUserOfInput(it.Current()->GetIndex());
-      environment->SetRawEnvAt(it.Current()->GetIndex(), nullptr);
+      environment->RemoveAsUserOfInput(use.GetIndex());
+      environment->SetRawEnvAt(use.GetIndex(), nullptr);
     }
   }
 

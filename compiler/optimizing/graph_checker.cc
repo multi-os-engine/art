@@ -246,36 +246,34 @@ void GraphChecker::VisitInstruction(HInstruction* instruction) {
 
   // Ensure the uses of `instruction` are defined in a block of the graph,
   // and the entry in the use list is consistent.
-  for (HUseIterator<HInstruction*> use_it(instruction->GetUses());
-       !use_it.Done(); use_it.Advance()) {
-    HInstruction* use = use_it.Current()->GetUser();
-    const HInstructionList& list = use->IsPhi()
-        ? use->GetBlock()->GetPhis()
-        : use->GetBlock()->GetInstructions();
-    if (!list.Contains(use)) {
+  for (const HUseListValue<HInstruction*>& use : instruction->GetUses()) {
+    HInstruction* user = use.GetUser();
+    const HInstructionList& list = user->IsPhi()
+        ? user->GetBlock()->GetPhis()
+        : user->GetBlock()->GetInstructions();
+    if (!list.Contains(user)) {
       AddError(StringPrintf("User %s:%d of instruction %d is not defined "
                             "in a basic block of the control-flow graph.",
-                            use->DebugName(),
-                            use->GetId(),
+                            user->DebugName(),
+                            user->GetId(),
                             instruction->GetId()));
     }
-    size_t use_index = use_it.Current()->GetIndex();
-    if ((use_index >= use->InputCount()) || (use->InputAt(use_index) != instruction)) {
+    size_t use_index = use.GetIndex();
+    if ((use_index >= user->InputCount()) || (user->InputAt(use_index) != instruction)) {
       AddError(StringPrintf("User %s:%d of instruction %s:%d has a wrong "
                             "UseListNode index.",
-                            use->DebugName(),
-                            use->GetId(),
+                            user->DebugName(),
+                            user->GetId(),
                             instruction->DebugName(),
                             instruction->GetId()));
     }
   }
 
   // Ensure the environment uses entries are consistent.
-  for (HUseIterator<HEnvironment*> use_it(instruction->GetEnvUses());
-       !use_it.Done(); use_it.Advance()) {
-    HEnvironment* use = use_it.Current()->GetUser();
-    size_t use_index = use_it.Current()->GetIndex();
-    if ((use_index >= use->Size()) || (use->GetInstructionAt(use_index) != instruction)) {
+  for (const HUseListValue<HEnvironment*>& use : instruction->GetEnvUses()) {
+    HEnvironment* user = use.GetUser();
+    size_t use_index = use.GetIndex();
+    if ((use_index >= user->Size()) || (user->GetInstructionAt(use_index) != instruction)) {
       AddError(StringPrintf("Environment user of %s:%d has a wrong "
                             "UseListNode index.",
                             instruction->DebugName(),
@@ -287,9 +285,9 @@ void GraphChecker::VisitInstruction(HInstruction* instruction) {
   for (size_t i = 0, e = instruction->InputCount(); i < e; ++i) {
     HUserRecord<HInstruction*> input_record = instruction->InputRecordAt(i);
     HInstruction* input = input_record.GetInstruction();
-    HUseListNode<HInstruction*>* use_node = input_record.GetUseNode();
+    HUseList<HInstruction*>::iterator use_node = input_record.GetUseNode();
     size_t use_index = use_node->GetIndex();
-    if ((use_node == nullptr)
+    if ((use_node.GetBase() == nullptr)
         || !input->GetUses().Contains(use_node)
         || (use_index >= e)
         || (use_index != i)) {
@@ -561,18 +559,17 @@ void SSAChecker::VisitInstruction(HInstruction* instruction) {
   super_type::VisitInstruction(instruction);
 
   // Ensure an instruction dominates all its uses.
-  for (HUseIterator<HInstruction*> use_it(instruction->GetUses());
-       !use_it.Done(); use_it.Advance()) {
-    HInstruction* use = use_it.Current()->GetUser();
-    if (!use->IsPhi() && !instruction->StrictlyDominates(use)) {
+  for (const HUseListValue<HInstruction*>& use : instruction->GetUses()) {
+    HInstruction* user = use.GetUser();
+    if (!user->IsPhi() && !instruction->StrictlyDominates(user)) {
       AddError(StringPrintf("Instruction %s:%d in block %d does not dominate "
                             "use %s:%d in block %d.",
                             instruction->DebugName(),
                             instruction->GetId(),
                             current_block_->GetBlockId(),
-                            use->DebugName(),
-                            use->GetId(),
-                            use->GetBlock()->GetBlockId()));
+                            user->DebugName(),
+                            user->GetId(),
+                            user->GetBlock()->GetBlockId()));
     }
   }
 
