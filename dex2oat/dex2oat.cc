@@ -338,6 +338,12 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      --profile-file will be merged into --reference-profile-file. Valid only when");
   UsageError("      specified together with --profile-file.");
   UsageError("");
+  UsageError("  --profile-file-fd=<number>: same as --profile-file but accepts a file descriptor.");
+  UsageError("      Cannot be used together with --profile-file.");
+  UsageError("");
+  UsageError("  --reference-profile-file-fd=<number>: same as --reference-profile-file but");
+  UsageError("      accepts a file descriptor. Cannot be used together with");
+  UsageError("       --reference-profile-file.");
   UsageError("  --print-pass-names: print a list of pass names");
   UsageError("");
   UsageError("  --disable-passes=<pass-names>:  disable one or more passes separated by comma.");
@@ -492,6 +498,28 @@ static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files) {
   return dex_files_size >= kMinDexFileCumulativeSizeForSwap;
 }
 
+static bool LockAllFds(const std::vector<uint32_t>& fds) {
+  for (size_t i = 0; i < fds.size(); i++) {
+    int err = flock(fds[i], LOCK_EX | LOCK_NB);
+    if (err < 0) {
+      PLOG(WARNING) << "Failed to lock profile file " << fds[i];
+      return false;
+    }
+  }
+  return true;
+}
+
+static void UnlockAndCloseAllFds(const std::vector<uint32_t>& fds) {
+  for (size_t i = 0; i < fds.size(); i++) {
+    if (flock(fds[i], LOCK_UN) < 0) {
+      PLOG(WARNING) << "Failed to unlock profile file " << fds[i];
+    }
+    if (close(fds[i]) < 0) {
+      PLOG(WARNING) << "Failed to close descriptor for profile file " << fds[i];
+    }
+  }
+}
+
 class Dex2Oat FINAL {
  public:
   explicit Dex2Oat(TimingLogger* timings) :
@@ -566,6 +594,14 @@ class Dex2Oat FINAL {
 
   void ParseOatFd(const StringPiece& option) {
     ParseUintOption(option, "--oat-fd", &oat_fd_, Usage);
+  }
+
+  void ParseFdForCollection(const StringPiece& option,
+                            const char* arg_name,
+                            std::vector<uint32_t>* fds) {
+    uint32_t fd;
+    ParseUintOption(option, arg_name, &fd, Usage);
+    fds->push_back(fd);
   }
 
   void ParseJ(const StringPiece& option) {
@@ -756,10 +792,19 @@ class Dex2Oat FINAL {
       }
     }
 
+    if (!profile_files_.empty() && !profile_files_fd_.empty()) {
+      Usage("Profile files should be specified with either --profile-file-fd or --profile-file");
+    }
     if (!profile_files_.empty()) {
       if (!reference_profile_files_.empty() &&
           (reference_profile_files_.size() != profile_files_.size())) {
         Usage("--reference-profile-file should be supplied with --profile-file");
+      }
+    }
+    if (!profile_files_fd_.empty()) {
+      if (!reference_profile_files_fd_.empty() &&
+          (reference_profile_files_fd_.size() != profile_files_fd_.size())) {
+        Usage("--reference-profile-file-fd should be supplied with --profile-file-fd");
       }
     }
 
@@ -944,6 +989,10 @@ class Dex2Oat FINAL {
       } else if (option.starts_with("--reference-profile-file=")) {
         reference_profile_files_.push_back(
             option.substr(strlen("--reference-profile-file=")).ToString());
+      } else if (option.starts_with("--profile-file-fd=")) {
+        ParseFdForCollection(option, "--profile-file-fd", &profile_files_fd_);
+      } else if (option.starts_with("--reference-profile-file-fd=")) {
+        ParseFdForCollection(option, "--reference_profile-file-fd", &reference_profile_files_fd_);
       } else if (option == "--no-profile-file") {
         // No profile
       } else if (option == "--host") {
@@ -1495,17 +1544,35 @@ class Dex2Oat FINAL {
   }
 
   bool IsProfileGuidedCompilation() const {
-    return !profile_files_.empty();
+    return !profile_files_.empty() || !profile_files_fd_.empty();
   }
 
   bool ProcessProfiles() {
     DCHECK(IsProfileGuidedCompilation());
     ProfileCompilationInfo* info = nullptr;
-    if (ProfileAssistant::ProcessProfiles(profile_files_, reference_profile_files_, &info)) {
-      profile_compilation_info_.reset(info);
-      return true;
+    bool result = false;
+    if (profile_files_.empty()) {
+      if (!LockAllFds(profile_files_fd_)) {
+        UnlockAndCloseAllFds(profile_files_fd_);
+        return false;
+      }
+      if (!LockAllFds(reference_profile_files_fd_)) {
+        UnlockAndCloseAllFds(profile_files_fd_);
+        UnlockAndCloseAllFds(reference_profile_files_fd_);
+        return false;
+      }
+
+      ProfileAssistant::ProcessProfiles(profile_files_fd_, reference_profile_files_fd_, &info);
+
+      UnlockAndCloseAllFds(profile_files_fd_);
+      UnlockAndCloseAllFds(reference_profile_files_fd_);
+    } else {
+      ProfileAssistant::ProcessProfiles(profile_files_, reference_profile_files_, &info);
     }
-    return false;
+
+    profile_compilation_info_.reset(info);
+
+    return result;
   }
 
   bool ShouldCompileBasedOnProfiles() const {
@@ -1953,6 +2020,8 @@ class Dex2Oat FINAL {
   int app_image_fd_;
   std::vector<std::string> profile_files_;
   std::vector<std::string> reference_profile_files_;
+  std::vector<uint32_t> profile_files_fd_;
+  std::vector<uint32_t> reference_profile_files_fd_;
   std::unique_ptr<ProfileCompilationInfo> profile_compilation_info_;
   TimingLogger* timings_;
   std::unique_ptr<CumulativeLogger> compiler_phases_timings_;
