@@ -21,19 +21,19 @@ namespace art {
 static constexpr const uint32_t kMethodsThreshold = 10;
 
 bool ProfileAssistant::ProcessProfiles(
-      const std::vector<std::string>& profile_files,
-      const std::vector<std::string>& reference_profile_files,
-      /*out*/ ProfileCompilationInfo** profile_compilation_info) {
-  DCHECK(!profile_files.empty());
-  DCHECK(!reference_profile_files.empty() ||
-      (profile_files.size() == reference_profile_files.size()));
+        const std::vector<uint32_t>& profile_files_fd,
+        const std::vector<uint32_t>& reference_profile_files_fd,
+        /*out*/ ProfileCompilationInfo** profile_compilation_info) {
+  DCHECK(!profile_files_fd.empty());
+  DCHECK(!reference_profile_files_fd.empty() ||
+      (profile_files_fd.size() == reference_profile_files_fd.size()));
 
-  std::vector<ProfileCompilationInfo> new_info(profile_files.size());
+  std::vector<ProfileCompilationInfo> new_info(profile_files_fd.size());
   bool should_compile = false;
   // Read the main profile files.
-  for (size_t i = 0; i < profile_files.size(); i++) {
-    if (!new_info[i].Load(profile_files[i])) {
-      LOG(WARNING) << "Could not load profile file: " << profile_files[i];
+  for (size_t i = 0; i < profile_files_fd.size(); i++) {
+    if (!new_info[i].Load(profile_files_fd[i])) {
+      LOG(WARNING) << "Could not load profile file: " << profile_files_fd[i];
       return false;
     }
     // Do we have enough new profiled methods that will make the compilation worth while?
@@ -50,13 +50,13 @@ bool ProfileAssistant::ProcessProfiles(
     result->Load(new_info[i]);
     // If we have any reference profile information merge their information with
     // the current profiles and save them back to disk.
-    if (!reference_profile_files.empty()) {
-      if (!new_info[i].Load(reference_profile_files[i])) {
-        LOG(WARNING) << "Could not load reference profile file: " << reference_profile_files[i];
+    if (!reference_profile_files_fd.empty()) {
+      if (!new_info[i].Load(reference_profile_files_fd[i])) {
+        LOG(WARNING) << "Could not load reference profile file: " << reference_profile_files_fd[i];
         return false;
       }
-      if (!new_info[i].Save(reference_profile_files[i])) {
-        LOG(WARNING) << "Could not save reference profile file: " << reference_profile_files[i];
+      if (!new_info[i].Save(reference_profile_files_fd[i])) {
+        LOG(WARNING) << "Could not save reference profile file: " << reference_profile_files_fd[i];
         return false;
       }
     }
@@ -64,5 +64,46 @@ bool ProfileAssistant::ProcessProfiles(
   *profile_compilation_info = result.release();
   return true;
 }
+
+static void CloseAllFds(const std::vector<uint32_t>& fds, const std::vector<std::string>& names) {
+  for (size_t i = 0; i < fds.size(); i++) {
+    ProfileCompilationInfo::CloseDescriptorForFile(fds[i], names[i]);
+  }
+}
+
+bool ProfileAssistant::ProcessProfiles(
+        const std::vector<std::string>& profile_files,
+        const std::vector<std::string>& reference_profile_files,
+        /*out*/ ProfileCompilationInfo** profile_compilation_info) {
+  std::vector<uint32_t> profile_files_fd;
+  std::vector<uint32_t> reference_profile_files_fd;
+  for (size_t i = 0; i < profile_files.size(); i++) {
+    int fd = ProfileCompilationInfo::OpenFile(profile_files[i],
+                                              ProfileCompilationInfo::OpenMode::kRead);
+    if (fd < 0) {
+      CloseAllFds(profile_files_fd, profile_files);
+    }
+    profile_files_fd.push_back(fd);
+  }
+  for (size_t i = 0; i < reference_profile_files.size(); i++) {
+    int fd = ProfileCompilationInfo::OpenFile(reference_profile_files[i],
+                                              ProfileCompilationInfo::OpenMode::kReadWrite);
+    if (fd < 0) {
+      CloseAllFds(profile_files_fd, profile_files);
+      CloseAllFds(reference_profile_files_fd, reference_profile_files);
+    }
+    profile_files_fd.push_back(fd);
+  }
+
+  bool result = ProcessProfiles(profile_files_fd,
+                                reference_profile_files_fd,
+                                profile_compilation_info);
+
+  CloseAllFds(profile_files_fd, profile_files);
+  CloseAllFds(reference_profile_files_fd, reference_profile_files);
+
+  return result;
+}
+
 
 }  // namespace art

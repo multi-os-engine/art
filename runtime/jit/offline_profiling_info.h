@@ -42,12 +42,12 @@ class ProfileCompilationInfo {
   static bool SaveProfilingInfo(const std::string& filename,
                                 const std::vector<ArtMethod*>& methods);
 
-  // Loads profile information from the given file.
-  bool Load(const std::string& profile_filename);
+  // Loads profile information from the given file descriptor.
+  bool Load(uint32_t fd);
   // Loads the data from another ProfileCompilationInfo object.
   bool Load(const ProfileCompilationInfo& info);
-  // Saves the profile data to the given file.
-  bool Save(const std::string& profile_filename);
+  // Saves the profile data to the given file descriptor.
+  bool Save(uint32_t fd);
   // Returns the number of methods that were profiled.
   uint32_t GetNumberOfMethods() const;
 
@@ -60,6 +60,14 @@ class ProfileCompilationInfo {
   // This is intended for testing and debugging.
   std::string DumpInfo(const std::vector<const DexFile*>* dex_files,
                        bool print_full_dex_location = true) const;
+
+  // Open/Close utilities for profile files
+  enum OpenMode {
+    kRead,
+    kReadWrite
+  };
+  static int OpenFile(const std::string& filename, OpenMode open_mode);
+  static bool CloseDescriptorForFile(int fd, const std::string& filename);
 
  private:
   bool AddData(const std::string& dex_location, uint32_t checksum, uint16_t method_idx);
