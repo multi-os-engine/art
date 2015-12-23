@@ -42,12 +42,12 @@ class ProfileCompilationInfo {
   static bool SaveProfilingInfo(const std::string& filename,
                                 const std::vector<ArtMethod*>& methods);
 
-  // Loads profile information from the given file.
-  bool Load(const std::string& profile_filename);
+  // Loads profile information from the given file descriptor.
+  bool Load(uint32_t fd);
   // Loads the data from another ProfileCompilationInfo object.
   bool Load(const ProfileCompilationInfo& info);
-  // Saves the profile data to the given file.
-  bool Save(const std::string& profile_filename);
+  // Saves the profile data to the given file descriptor.
+  bool Save(uint32_t fd);
   // Returns the number of methods that were profiled.
   uint32_t GetNumberOfMethods() const;
 
