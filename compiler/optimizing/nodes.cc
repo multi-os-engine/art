@@ -2060,6 +2060,18 @@ void HGraph::TransformLoopHeaderForBCE(HBasicBlock* header) {
   new_pre_header->SetTryCatchInformation(try_catch_info);
 }
 
+static void CheckAgainstUpperBound(ReferenceTypeInfo rti, ReferenceTypeInfo upper_bound_rti)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  // Upper bound RTI must be set first.
+  DCHECK(upper_bound_rti.IsValid());
+  if (rti.IsValid()) {
+    DCHECK(upper_bound_rti.IsSupertypeOf(rti))
+        << " upper_bound_rti: " << upper_bound_rti
+        << " rti: " << rti;
+    DCHECK(!upper_bound_rti.GetTypeHandle()->CannotBeAssignedFromOtherTypes() || rti.IsExact());
+  }
+}
+
 void HInstruction::SetReferenceTypeInfo(ReferenceTypeInfo rti) {
   if (kIsDebugBuild) {
     DCHECK_EQ(GetType(), Primitive::kPrimNot);
@@ -2068,14 +2080,19 @@ void HInstruction::SetReferenceTypeInfo(ReferenceTypeInfo rti) {
     if (IsBoundType()) {
       // Having the test here spares us from making the method virtual just for
       // the sake of a DCHECK.
-      ReferenceTypeInfo upper_bound_rti = AsBoundType()->GetUpperBound();
-      DCHECK(upper_bound_rti.IsSupertypeOf(rti))
-          << " upper_bound_rti: " << upper_bound_rti
-          << " rti: " << rti;
-      DCHECK(!upper_bound_rti.GetTypeHandle()->CannotBeAssignedFromOtherTypes() || rti.IsExact());
+      CheckAgainstUpperBound(rti, AsBoundType()->GetUpperBound());
     }
   }
   reference_type_info_ = rti;
+}
+
+void HBoundType::SetUpperBound(const ReferenceTypeInfo& upper_bound, bool can_be_null) {
+  upper_bound_ = upper_bound;
+  upper_can_be_null_ = can_be_null;
+  if (kIsDebugBuild) {
+    ScopedObjectAccess soa(Thread::Current());
+    CheckAgainstUpperBound(GetReferenceTypeInfo(), upper_bound_);
+  }
 }
 
 ReferenceTypeInfo::ReferenceTypeInfo() : type_handle_(TypeHandle()), is_exact_(false) {}
