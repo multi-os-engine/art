@@ -1818,6 +1818,8 @@ void HGraphBuilder::BuildTypeCheck(const Instruction& instruction,
   } else {
     DCHECK_EQ(instruction.Opcode(), Instruction::CHECK_CAST);
     current_block_->AddInstruction(new (arena_) HCheckCast(object, cls, check_kind, dex_pc));
+    current_block_->AddInstruction(new (arena_) HBoundType(object, dex_pc));
+    UpdateLocal(destination, current_block_->GetLastInstruction(), dex_pc);
   }
 }
 
@@ -2974,7 +2976,7 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
     case Instruction::CHECK_CAST: {
       uint8_t reference = instruction.VRegA_21c();
       uint16_t type_index = instruction.VRegB_21c();
-      BuildTypeCheck(instruction, -1, reference, type_index, dex_pc);
+      BuildTypeCheck(instruction, reference, reference, type_index, dex_pc);
       break;
     }
 
