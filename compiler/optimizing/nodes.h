@@ -5405,24 +5405,19 @@ class HInstanceOf : public HExpression<2> {
 
 class HBoundType : public HExpression<1> {
  public:
-  // Constructs an HBoundType with the given upper_bound.
-  // Ensures that the upper_bound is valid.
-  HBoundType(HInstruction* input,
-             ReferenceTypeInfo upper_bound,
-             bool upper_can_be_null,
-             uint32_t dex_pc = kNoDexPc)
+  HBoundType(HInstruction* input, uint32_t dex_pc = kNoDexPc)
       : HExpression(Primitive::kPrimNot, SideEffects::None(), dex_pc),
-        upper_bound_(upper_bound),
-        upper_can_be_null_(upper_can_be_null),
-        can_be_null_(upper_can_be_null) {
+        upper_bound_(ReferenceTypeInfo::CreateInvalid()),
+        upper_can_be_null_(true),
+        can_be_null_(true) {
     DCHECK_EQ(input->GetType(), Primitive::kPrimNot);
     SetRawInputAt(0, input);
-    SetReferenceTypeInfo(upper_bound_);
   }
 
-  // GetUpper* should only be used in reference type propagation.
+  // {Get,Set}Upper* should only be used in reference type propagation.
   const ReferenceTypeInfo& GetUpperBound() const { return upper_bound_; }
   bool GetUpperCanBeNull() const { return upper_can_be_null_; }
+  void SetUpperBound(const ReferenceTypeInfo& upper_bound, bool can_be_null);
 
   void SetCanBeNull(bool can_be_null) {
     DCHECK(upper_can_be_null_ || !can_be_null);
@@ -5440,10 +5435,10 @@ class HBoundType : public HExpression<1> {
   //   if (x instanceof ClassX) {
   //     // uper_bound_ will be ClassX
   //   }
-  const ReferenceTypeInfo upper_bound_;
+  ReferenceTypeInfo upper_bound_;
   // Represents the top constraint that can_be_null_ cannot exceed (i.e. if this
   // is false then can_be_null_ cannot be true).
-  const bool upper_can_be_null_;
+  bool upper_can_be_null_;
   bool can_be_null_;
 
   DISALLOW_COPY_AND_ASSIGN(HBoundType);
