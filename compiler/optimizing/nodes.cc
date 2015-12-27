@@ -2088,6 +2088,19 @@ ReferenceTypeInfo::ReferenceTypeInfo(TypeHandle type_handle, bool is_exact)
   }
 }
 
+void HBoundType::SetUpperBound(const ReferenceTypeInfo& upper_bound, bool can_be_null) {
+  upper_bound_ = upper_bound;
+  upper_can_be_null_ = can_be_null;
+  if (kIsDebugBuild) {
+    ScopedObjectAccess soa(Thread::Current());
+    DCHECK(upper_bound_.IsValid());
+    ReferenceTypeInfo rti = GetReferenceTypeInfo();
+    if (rti.IsValid()) {
+      SetReferenceTypeInfo(rti);
+    }
+  }
+}
+
 std::ostream& operator<<(std::ostream& os, const ReferenceTypeInfo& rhs) {
   ScopedObjectAccess soa(Thread::Current());
   os << "["
