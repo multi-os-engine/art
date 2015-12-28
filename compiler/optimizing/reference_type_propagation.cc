@@ -671,11 +671,17 @@ void RTPVisitor::VisitBoundType(HBoundType* instr) {
   if (class_rti.GetTypeHandle()->CannotBeAssignedFromOtherTypes()) {
     instr->SetReferenceTypeInfo(
         ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ true));
-  } else if (obj_rti.IsValid() && class_rti.IsSupertypeOf(obj_rti)) {
-    instr->SetReferenceTypeInfo(obj_rti);
-  } else {
-    instr->SetReferenceTypeInfo(
+  } else if (obj_rti.IsValid()) {
+    if (class_rti.IsSupertypeOf(obj_rti)) {
+      // Object type is more specific.
+      instr->SetReferenceTypeInfo(obj_rti);
+    } else {
+      // Upper bound is more specific.
+      instr->SetReferenceTypeInfo(
         ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ false));
+    }
+  } else {
+    // Object not typed yet. Leave untyped for now rather than assign conservatively.
   }
   instr->SetCanBeNull(obj->CanBeNull() && instr->GetUpperCanBeNull());
 }
