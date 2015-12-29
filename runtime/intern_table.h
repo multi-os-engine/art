@@ -103,17 +103,14 @@ class InternTable {
   void AddImageStringsToTable(gc::space::ImageSpace* image_space)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Locks::intern_table_lock_);
 
-  // Copy the post zygote tables to pre zygote to save memory by preventing dirty pages.
-  void SwapPostZygoteWithPreZygote()
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Locks::intern_table_lock_);
-
-  // Add an intern table which was serialized to the image.
-  void AddImageInternTable(gc::space::ImageSpace* image_space)
+  // Add a new intern table for inserting to, previous intern tables are still there but no
+  // longer inserted into and ideally unmodified. This is done to prevent dirty pages.
+  void AddNewTable()
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Locks::intern_table_lock_);
 
   // Read the intern table from memory. The elements aren't copied, the intern hash set data will
   // point to somewhere within ptr. Only reads the strong interns.
-  size_t ReadFromMemory(const uint8_t* ptr) REQUIRES(!Locks::intern_table_lock_)
+  size_t AddTableFromMemory(const uint8_t* ptr) REQUIRES(!Locks::intern_table_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Write the post zygote intern table to a pointer. Only writes the strong interns since it is
@@ -157,15 +154,17 @@ class InternTable {
         SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
     void SweepWeaks(IsMarkedVisitor* visitor)
         SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
-    void SwapPostZygoteWithPreZygote() REQUIRES(Locks::intern_table_lock_);
+    // Add a new intern table that will only be inserted into from now on.
+    void AddNewTable() REQUIRES(Locks::intern_table_lock_);
     size_t Size() const REQUIRES(Locks::intern_table_lock_);
-    // Read pre zygote table is called from ReadFromMemory which happens during runtime creation
-    // when we load the image intern table. Returns how many bytes were read.
-    size_t ReadIntoPreZygoteTable(const uint8_t* ptr)
+    // Read and add an intern table from ptr.
+    // Tables read are inserted at the front of the table array. Only checks for conflicts in
+    // debug builds. Returns how many bytes were read.
+    size_t AddTableFromMemory(const uint8_t* ptr)
         REQUIRES(Locks::intern_table_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
-    // The image writer calls WritePostZygoteTable through WriteToMemory, it writes the interns in
-    // the post zygote table. Returns how many bytes were written.
-    size_t WriteFromPostZygoteTable(uint8_t* ptr)
+    // Write the intern tables to ptr, if there are multiple tables they are combined into a single one.
+    // Returns how many bytes were written.
+    size_t WriteToMemory(uint8_t* ptr)
         REQUIRES(Locks::intern_table_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
 
    private:
@@ -179,8 +178,7 @@ class InternTable {
     // caused by modifying the zygote intern table hash table. The pre zygote table are the
     // interned strings which were interned before we created the zygote space. Post zygote is self
     // explanatory.
-    UnorderedSet pre_zygote_table_;
-    UnorderedSet post_zygote_table_;
+    std::vector<UnorderedSet> tables_;
   };
 
   // Insert if non null, otherwise return null. Must be called holding the mutator lock.
@@ -214,7 +212,7 @@ class InternTable {
   void RemoveWeakFromTransaction(mirror::String* s)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(Locks::intern_table_lock_);
 
-  size_t ReadFromMemoryLocked(const uint8_t* ptr)
+  size_t AddTableFromMemoryLocked(const uint8_t* ptr)
       REQUIRES(Locks::intern_table_lock_) SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Change the weak root state. May broadcast to waiters.
