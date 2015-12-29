@@ -706,7 +706,8 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::LookupInfo(HLoopInf
     }
   }
   if (loop->IsDefinedOutOfTheLoop(instruction)) {
-    DCHECK(instruction->GetBlock()->Dominates(loop->GetPreHeader()));
+    // Note that we don't check dominance here, as this is method can be called while
+    // the graph is not in SSA form (for example, when running BCE).
     InductionInfo* info = CreateInvariantFetch(instruction);
     AssignInfo(loop, instruction, info);
     return info;
