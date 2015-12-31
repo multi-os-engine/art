@@ -56,6 +56,9 @@ vm_args=""
 # By default, we run the whole JDWP test suite.
 test="org.apache.harmony.jpda.tests.share.AllTests"
 host="no"
+have_variant="no"
+variant_cmdline_parameter=""
+optional_variant_parameter=""
 
 while true; do
   if [[ "$1" == "--mode=host" ]]; then
@@ -97,10 +100,41 @@ while true; do
     shift
   elif [[ "$1" == "" ]]; then
     break
+  elif [[ $1 == --variant=* ]]; then
+    have_variant="yes"
+    variant_cmdline_parameter=$1
+    shift
   else
     shift
   fi
 done
+
+# For the host:
+#
+# If we don't have a variant set, make it x32. Otherwise the main process will be 32-bit (vogar
+# default) and the debuggee process will be 64-bit (art default), so the debuggee won't have a
+# boot image (and the fork code doesn't push a boot classpath to create one).
+#
+# If, on the other hand, there is a variant set, use it to modify the art_debugee parameter to
+# force the fork to have the same bitness as the controller. This should be fine and not impact
+# testing (cross-bitness), as the protocol is always 64-bit anyways (our implementation).
+#
+# Note: this isn't necessary for the device as the BOOTCLASSPATH environment variable is set there
+#       and used as a fallback.
+if [[ $host == "yes" ]]; then
+  if [[ $have_variant == "no" ]]; then
+    variant_cmdline_parameter="--variant=X32"
+  fi
+  variant=${variant_cmdline_parameter:10}
+  if [[ $variant == "x32" || $variant == "X32" ]]; then
+    art_debugee="$art_debugee --32"
+  elif [[ $variant == "x64" || $variant == "X64" ]]; then
+    art_debugee="$art_debugee --64"
+  else
+    echo "Error, do not understand variant $variant_cmdline_parameter."
+    exit 1
+  fi
+fi
 
 if [[ "$image" != "" ]]; then
   vm_args="--vm-arg $image"
