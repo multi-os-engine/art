@@ -2163,10 +2163,7 @@ void HInvoke::SetIntrinsic(Intrinsics intrinsic,
     SetSideEffects(GetSideEffects().Union(SideEffects::CanTriggerGC()));
   }
   // Adjust method's exception status from intrinsic table.
-  switch (exceptions) {
-    case kNoThrow: SetCanThrow(false); break;
-    case kCanThrow: SetCanThrow(true); break;
-  }
+  SetCanThrow(exceptions == kCanThrow);
 }
 
 bool HInvoke::NeedsEnvironment() const {
