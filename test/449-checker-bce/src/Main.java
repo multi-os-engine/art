@@ -622,28 +622,28 @@ public class Main {
   static int[][] mA;
 
   /// CHECK-START: void Main.dynamicBCEAndIntrinsic(int) BCE (before)
-  /// CHECK-DAG: NullCheck
-  /// CHECK-DAG: ArrayLength
-  /// CHECK-DAG: BoundsCheck
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: NullCheck
-  /// CHECK-DAG: ArrayLength
-  /// CHECK-DAG: BoundsCheck
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: InvokeStaticOrDirect
-  /// CHECK-DAG: ArraySet
+  /// CHECK-DAG:  <<Get1:l\d+>>  ArrayGet [<<Array1:l\d+>>,<<Bounds1:i\d+>>] loop:<<InnerLoop:B\d+>>
+  /// CHECK-DAG:  <<Array1>>     NullCheck                                   loop:<<InnerLoop>>
+  /// CHECK-DAG:  <<Len1:i\d+>>  ArrayLength [<<Array1>>]                    loop:<<InnerLoop>>
+  /// CHECK-DAG:  <<Bounds1>>    BoundsCheck [<<Index1:i\d+>>,<<Len1>>]      loop:<<InnerLoop>>
+  /// CHECK-DAG:  <<Get2:i\d+>>  ArrayGet [<<Array2:l\d+>>,<<Bounds2:i\d+>>] loop:<<InnerLoop>>
+  /// CHECK-DAG:  <<Array2>>     NullCheck [<<Get1>>]                        loop:<<InnerLoop>>
+  /// CHECK-DAG:  <<Len2:i\d+>>  ArrayLength [<<Array2>>]                    loop:<<InnerLoop>>
+  /// CHECK-DAG:  <<Bounds2>>    BoundsCheck [<<Index2:i\d+>>,<<Len2>>]      loop:<<InnerLoop>>
+  /// CHECK-DAG:                 InvokeStaticOrDirect [<<Get2>>]             loop:<<InnerLoop>>
+  /// CHECK-DAG:  <<Index2>>     Phi                                         loop:<<InnerLoop>>
+  /// CHECK-DAG:  <<Index1>>     Phi                                         loop:<<OuterLoop:B\d+>>
+  /// CHECK-EVAL: "<<InnerLoop>>" != "<<OuterLoop>>"
 
   /// CHECK-START: void Main.dynamicBCEAndIntrinsic(int) BCE (after)
-  /// CHECK-NOT: NullCheck
-  /// CHECK-NOT: ArrayLength
-  /// CHECK-NOT: BoundsCheck
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-NOT: ArrayGet
-  /// CHECK-DAG: InvokeStaticOrDirect
-  /// CHECK-DAG: ArraySet
-  /// CHECK-DAG: Exit
-  /// CHECK-DAG: Deoptimize
-
+  /// CHECK-NOT:  {{l\d+}}       ArrayGet                                    loop:<<InnerLoop>>
+  /// CHECK-NOT:                 NullCheck                                   loop:<<InnerLoop>>
+  /// CHECK-NOT:                 ArrayLength                                 loop:<<InnerLoop>>
+  /// CHECK-NOT:                 BoundsCheck                                 loop:<<InnerLoop>>
+  /// CHECK-DAG:  <<Get:i\d+>>   ArrayGet [{{l\d+}},{{i\d+}}]                loop:<<InnerLoop:B\d+>>
+  /// CHECK-DAG:                 InvokeStaticOrDirect [<<Get>>]              loop:<<InnerLoop>>
+  /// CHECK-DAG:                 Deoptimize                                  loop:<<OuterLoop:B\d+>>
+  /// CHECK-EVAL: "<<InnerLoop>>" != "<<OuterLoop>>"
   static void dynamicBCEAndIntrinsic(int n) {
     for (int i = 0; i < n; i++) {
       for (int j = 0; j < n; j++) {

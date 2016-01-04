@@ -2141,10 +2141,7 @@ void HInvoke::SetIntrinsic(Intrinsics intrinsic,
     case kAllSideEffects: SetSideEffects(SideEffects::AllExceptGCDependency()); break;
   }
   // Adjust method's exception status from intrinsic table.
-  switch (exceptions) {
-    case kNoThrow: SetCanThrow(false); break;
-    case kCanThrow: SetCanThrow(true); break;
-  }
+  SetCanThrow(exceptions == kCanThrow);
 }
 
 bool HInvoke::NeedsEnvironment() const {
