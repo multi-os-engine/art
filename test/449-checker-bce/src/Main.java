@@ -622,27 +622,27 @@ public class Main {
   static int[][] mA;
 
   /// CHECK-START: void Main.dynamicBCEAndIntrinsic(int) BCE (before)
-  /// CHECK-DAG: NullCheck
-  /// CHECK-DAG: ArrayLength
-  /// CHECK-DAG: BoundsCheck
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: NullCheck
-  /// CHECK-DAG: ArrayLength
-  /// CHECK-DAG: BoundsCheck
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: InvokeStaticOrDirect
-  /// CHECK-DAG: ArraySet
+  /// CHECK: NullCheck
+  /// CHECK: ArrayLength
+  /// CHECK: BoundsCheck
+  /// CHECK: ArrayGet
+  /// CHECK: NullCheck
+  /// CHECK: ArrayLength
+  /// CHECK: BoundsCheck
+  /// CHECK: ArrayGet
+  /// CHECK: InvokeStaticOrDirect
+  /// CHECK: ArraySet
 
   /// CHECK-START: void Main.dynamicBCEAndIntrinsic(int) BCE (after)
   /// CHECK-NOT: NullCheck
   /// CHECK-NOT: ArrayLength
   /// CHECK-NOT: BoundsCheck
-  /// CHECK-DAG: ArrayGet
+  /// CHECK: ArrayGet
   /// CHECK-NOT: ArrayGet
-  /// CHECK-DAG: InvokeStaticOrDirect
-  /// CHECK-DAG: ArraySet
-  /// CHECK-DAG: Exit
-  /// CHECK-DAG: Deoptimize
+  /// CHECK: InvokeStaticOrDirect
+  /// CHECK: ArraySet
+  /// CHECK: Exit
+  /// CHECK: Deoptimize
 
   static void dynamicBCEAndIntrinsic(int n) {
     for (int i = 0; i < n; i++) {
