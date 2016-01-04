@@ -194,6 +194,10 @@ void ThrowRuntimeException(const char* fmt, ...)
     __attribute__((__format__(__printf__, 1, 2)))
     SHARED_REQUIRES(Locks::mutator_lock_) COLD_ATTR;
 
+// Stack overflow.
+
+void ThrowStackOverflowError(Thread* self) SHARED_REQUIRES(Locks::mutator_lock_);
+
 // VerifyError
 
 void ThrowVerifyError(mirror::Class* referrer, const char* fmt, ...)
