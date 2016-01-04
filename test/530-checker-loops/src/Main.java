@@ -1166,7 +1166,7 @@ public class Main {
     return result;
   }
 
-  /// CHECK-START: int Main.dynamicBCEAndConstantIndicesAllTypes(int[], boolean[], byte[], char[], short[], int[], long[], float[], double[], java.lang.Integer[], int, int) BCE (before)
+  /// CHECK-START: int Main.dynamicBCEAndConstantIndicesAllPrimTypes(int[], boolean[], byte[], char[], short[], int[], long[], float[], double[], int, int) BCE (before)
   /// CHECK: If
   /// CHECK: BoundsCheck
   /// CHECK: ArrayGet
@@ -1186,60 +1186,83 @@ public class Main {
   /// CHECK: ArrayGet
   /// CHECK: BoundsCheck
   /// CHECK: ArrayGet
+  //
+  /// CHECK-START: int Main.dynamicBCEAndConstantIndicesAllPrimTypes(int[], boolean[], byte[], char[], short[], int[], long[], float[], double[], int, int) BCE (after)
+  /// CHECK: If
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK: ArrayGet
+  /// CHECK-NOT: ArrayGet
+  /// CHECK: Exit
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: ArrayGet
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: ArrayGet
+  static int dynamicBCEAndConstantIndicesAllPrimTypes(int[] q,
+                                                      boolean[] r,
+                                                      byte[] s,
+                                                      char[] t,
+                                                      short[] u,
+                                                      int[] v,
+                                                      long[] w,
+                                                      float[] x,
+                                                      double[] y, int lo, int hi) {
+    int result = 0;
+    for (int i = lo; i < hi; i++) {
+      // All constant index array references can be hoisted out of the loop during BCE on q[i].
+      result += q[i] + (r[0] ? 1 : 0) + (int) s[0] + (int) t[0] + (int) u[0] + (int) v[0] +
+                                        (int) w[0] + (int) x[0] + (int) y[0];
+    }
+    return result;
+  }
+
+  /// CHECK-START: int Main.dynamicBCEAndConstantIndexRefType(int[], java.lang.Integer[], int, int) BCE (before)
+  /// CHECK: If
+  /// CHECK: BoundsCheck
+  /// CHECK: ArrayGet
   /// CHECK: BoundsCheck
   /// CHECK: ArrayGet
   //
-  /// CHECK-START: int Main.dynamicBCEAndConstantIndicesAllTypes(int[], boolean[], byte[], char[], short[], int[], long[], float[], double[], java.lang.Integer[], int, int) BCE (after)
-  /// CHECK-DAG: If
+  /// CHECK-START: int Main.dynamicBCEAndConstantIndexRefType(int[], java.lang.Integer[], int, int) BCE (after)
+  /// CHECK: If
   /// CHECK-NOT: BoundsCheck
-  /// CHECK-DAG: ArrayGet
+  /// CHECK: ArrayGet
   /// CHECK-NOT: BoundsCheck
-  /// CHECK-NOT: ArrayGet
-  /// CHECK-DAG: Exit
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: ArrayGet
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: Deoptimize
-  /// CHECK-DAG: ArrayGet
-  static int dynamicBCEAndConstantIndicesAllTypes(int[] q,
-                                                  boolean[] r,
-                                                  byte[] s,
-                                                  char[] t,
-                                                  short[] u,
-                                                  int[] v,
-                                                  long[] w,
-                                                  float[] x,
-                                                  double[] y,
-                                                  Integer[] z, int lo, int hi) {
+  /// CHECK: ArrayGet
+  /// CHECK: Exit
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  /// CHECK: Deoptimize
+  static int dynamicBCEAndConstantIndexRefType(int[] q, Integer[] x, int lo, int hi) {
     int result = 0;
     for (int i = lo; i < hi; i++) {
-      result += q[i] + (r[0] ? 1 : 0) + (int) s[0] + (int) t[0] + (int) u[0] + (int) v[0] +
-                                        (int) w[0] + (int) x[0] + (int) y[0] + (int) z[0];
+      // Similar to above, but now implicit virtual call to intValue()
+      // prevents hoisting x[0] during BCE on q[i].
+      result += q[i] + x[0];
     }
     return result;
   }
@@ -1501,9 +1524,9 @@ public class Main {
     long[] x6 = { 6 };
     float[] x7 = { 7 };
     double[] x8 = { 8 };
+    expectEquals(415, dynamicBCEAndConstantIndicesAllPrimTypes(x, x1, x2, x3, x4, x5, x6, x7, x8, 0, 10));
     Integer[] x9 = { 9 };
-    expectEquals(505,
-        dynamicBCEAndConstantIndicesAllTypes(x, x1, x2, x3, x4, x5, x6, x7, x8, x9, 0, 10));
+    expectEquals(145, dynamicBCEAndConstantIndexRefType(x, x9, 0, 10));
   }
 
   private static void expectEquals(int expected, int result) {
