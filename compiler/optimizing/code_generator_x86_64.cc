@@ -3347,13 +3347,13 @@ void InstructionCodeGeneratorX86_64::DivByPowerOfTwo(HDiv* instruction) {
   CpuRegister numerator = locations->InAt(0).AsRegister<CpuRegister>();
 
   int64_t imm = Int64FromConstant(second.GetConstant());
-
-  DCHECK(IsPowerOfTwo(std::abs(imm)));
+  DCHECK(imm == LONG_MIN || IsPowerOfTwo(std::abs(imm)));
+  uint64_t abs_imm = (imm == LONG_MIN ? imm : std::abs(imm));
 
   CpuRegister tmp = locations->GetTemp(0).AsRegister<CpuRegister>();
 
   if (instruction->GetResultType() == Primitive::kPrimInt) {
-    __ leal(tmp, Address(numerator, std::abs(imm) - 1));
+    __ leal(tmp, Address(numerator, abs_imm - 1));
     __ testl(numerator, numerator);
     __ cmov(kGreaterEqual, tmp, numerator);
     int shift = CTZ(imm);
@@ -3368,7 +3368,7 @@ void InstructionCodeGeneratorX86_64::DivByPowerOfTwo(HDiv* instruction) {
     DCHECK_EQ(instruction->GetResultType(), Primitive::kPrimLong);
     CpuRegister rdx = locations->GetTemp(0).AsRegister<CpuRegister>();
 
-    codegen_->Load64BitValue(rdx, std::abs(imm) - 1);
+    codegen_->Load64BitValue(rdx, abs_imm - 1);
     __ addq(rdx, numerator);
     __ testq(numerator, numerator);
     __ cmov(kGreaterEqual, rdx, numerator);
