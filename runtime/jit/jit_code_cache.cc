@@ -668,6 +668,10 @@ ProfilingInfo* JitCodeCache::AddProfilingInfoInternal(Thread* self,
     return nullptr;
   }
   info = new (data) ProfilingInfo(method, entries);
+
+  // Make sure other threads see the data in the profiling info object.
+  QuasiAtomic::ThreadFenceRelease();
+
   method->SetProfilingInfo(info);
   profiling_infos_.push_back(info);
   return info;
