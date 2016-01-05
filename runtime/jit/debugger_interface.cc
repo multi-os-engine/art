@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "compiler/elf_writer_debug.h"
 #include "debugger_interface.h"
 
 namespace art {

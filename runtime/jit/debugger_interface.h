@@ -18,6 +18,7 @@
 #define ART_RUNTIME_JIT_DEBUGGER_INTERFACE_H_
 
 #include <inttypes.h>
+#include "mirror/class.h"
 
 namespace art {
 

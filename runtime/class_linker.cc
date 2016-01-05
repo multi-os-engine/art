@@ -54,6 +54,7 @@
 #include "handle_scope-inl.h"
 #include "intern_table.h"
 #include "interpreter/interpreter.h"
+#include "jit/debugger_interface.h"
 #include "jit/jit.h"
 #include "jit/jit_code_cache.h"
 #include "leb128.h"
@@ -2752,6 +2753,9 @@ mirror::Class* ClassLinker::CreateArrayClass(Thread* self, const char* descripto
 
   mirror::Class* existing = InsertClass(descriptor, new_class.Get(), hash);
   if (existing == nullptr) {
+    if (jit::Jit* jit = Runtime::Current()->GetJit()) {
+      jit->NewTypeLoaded(new_class.Get());
+    }
     return new_class.Get();
   }
   // Another thread must have loaded the class after we
@@ -3891,6 +3895,11 @@ bool ClassLinker::InitializeClass(Thread* self, Handle<mirror::Class> klass,
       }
       // Opportunistically set static method trampolines to their destination.
       FixupStaticTrampolines(klass.Get());
+    }
+  }
+  if (success) {
+    if (jit::Jit* jit = Runtime::Current()->GetJit()) {
+      jit->NewTypeLoaded(klass.Get());
     }
   }
   return success;
