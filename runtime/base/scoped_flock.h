@@ -33,9 +33,12 @@ class ScopedFlock {
   // at filename, and blocks until it can do so.
   //
   // Returns true if the lock could be acquired, or false if an error
-  // occurred. It is an error if the file does not exist, or if its inode
-  // changed (usually due to a new file being created at the same path)
-  // between attempts to lock it.
+  // occurred. It is an error if if its inode changed (usually due to a new file
+  // being created at the same path) between attempts to lock it.
+  //
+  // The file is opened with the provided flags.
+  bool Init(const char* filename, int flags, std::string* error_msg);
+  // Calls Init(filename, O_CREAT | O_RDWR, errror_msg)
   bool Init(const char* filename, std::string* error_msg);
   // Attempt to acquire an exclusive file lock (see flock(2)) on 'file'.
   // Returns true if the lock could be acquired or false if an error
