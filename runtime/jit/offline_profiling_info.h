@@ -39,15 +39,16 @@ class ArtMethod;
  */
 class ProfileCompilationInfo {
  public:
+  // Acquires a file lock on filename and blocks until it can do so.
   static bool SaveProfilingInfo(const std::string& filename,
                                 const std::vector<ArtMethod*>& methods);
 
-  // Loads profile information from the given file.
-  bool Load(const std::string& profile_filename);
+  // Loads profile information from the given file descriptor.
+  bool Load(uint32_t fd);
   // Loads the data from another ProfileCompilationInfo object.
   bool Load(const ProfileCompilationInfo& info);
-  // Saves the profile data to the given file.
-  bool Save(const std::string& profile_filename);
+  // Saves the profile data to the given file descriptor.
+  bool Save(uint32_t fd);
   // Returns the number of methods that were profiled.
   uint32_t GetNumberOfMethods() const;
 
@@ -61,6 +62,9 @@ class ProfileCompilationInfo {
   std::string DumpInfo(const std::vector<const DexFile*>* dex_files,
                        bool print_full_dex_location = true) const;
 
+  // For testing purposes.
+  bool Equals(ProfileCompilationInfo& other);
+
  private:
   bool AddData(const std::string& dex_location, uint32_t checksum, uint16_t method_idx);
   bool ProcessLine(const std::string& line);
@@ -69,9 +73,17 @@ class ProfileCompilationInfo {
     explicit DexFileData(uint32_t location_checksum) : checksum(location_checksum) {}
     uint32_t checksum;
     std::set<uint16_t> method_set;
+
+    bool operator==(const DexFileData& other) const {
+      return checksum == other.checksum && method_set == other.method_set;
+    }
   };
 
   using DexFileToProfileInfoMap = SafeMap<const std::string, DexFileData>;
+
+  friend class ProfileCompilationInfoTest;
+  friend class CompilerDriverProfileTest;
+  friend class ProfileAssistantTest;
 
   DexFileToProfileInfoMap info_;
 };
