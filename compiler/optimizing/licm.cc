@@ -104,6 +104,11 @@ void LICM::Run() {
       }
       visited.SetBit(inner->GetBlockId());
 
+      if (loop_info->IsIrreducible()) {
+        // We cannot licm in an irreducible loop.
+        continue;
+      }
+
       // We can move an instruction that can throw only if it is the first
       // throwing instruction in the loop. Note that the first potentially
       // throwing instruction encountered that is not hoisted stops this
