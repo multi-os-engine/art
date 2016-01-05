@@ -79,6 +79,9 @@ class FdFile : public RandomAccessFile {
 
   // Copy data from another file.
   bool Copy(FdFile* input_file, int64_t offset, int64_t size);
+  // Clears the file content and resets the file offset to 0.
+  // Returns true upon success, false otherwise.
+  bool ClearContent();
 
   // This enum is public so that we can define the << operator over it.
   enum class GuardState {
