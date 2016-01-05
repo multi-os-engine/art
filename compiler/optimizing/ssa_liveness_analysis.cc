@@ -273,6 +273,12 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
     }
 
     if (block->IsLoopHeader()) {
+      if (kIsDebugBuild && block->GetLoopInformation()->IsIrreducible()) {
+ //       for (uint32_t idx : live_in->Indexes()) {
+//          DCHECK(GetInstructionFromSsaIndex(idx)->GetBlock()->IsEntryBlock())
+//              << GetInstructionFromSsaIndex(idx)->DebugName();
+  //      }
+      }
       size_t last_position = block->GetLoopInformation()->GetLifetimeEnd();
       // For all live_in instructions at the loop header, we need to create a range
       // that covers the full loop.
