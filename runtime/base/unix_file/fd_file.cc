@@ -316,4 +316,14 @@ void FdFile::MarkUnchecked() {
   guard_state_ = GuardState::kNoCheck;
 }
 
+bool FdFile::ClearContent() {
+  if (SetLength(0) < 0) {
+    return false;
+  }
+  if (lseek(fd_, 0, SEEK_SET) == static_cast<off_t>(-1)) {
+    return false;
+  }
+  return true;
+}
+
 }  // namespace unix_file
