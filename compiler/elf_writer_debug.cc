@@ -30,6 +30,9 @@
 #include "dwarf/register.h"
 #include "elf_builder.h"
 #include "linker/vector_output_stream.h"
+#include "mirror/array.h"
+#include "mirror/class-inl.h"
+#include "mirror/class.h"
 #include "oat_writer.h"
 #include "stack_map.h"
 #include "utils.h"
@@ -468,8 +471,16 @@ class DebugInfoWriter {
           if (last_dex_class_desc != nullptr) {
             EndClassTag(last_dex_class_desc);
           }
-          size_t offset = StartClassTag(dex_class_desc);
-          type_cache_.emplace(dex_class_desc, offset);
+          // Write reference tag for the class witch we are about to declare.
+          size_t reference_tag_offset = info_.StartTag(DW_TAG_reference_type);
+          type_cache_.emplace(std::string(dex_class_desc), reference_tag_offset);
+          size_t type_attrib_offset = info_.size();
+          info_.WriteRef4(DW_AT_type, 0);
+          info_.EndTag();
+          // Declare the class with owns this method.
+          size_t class_offset = StartClassTag(dex_class_desc);
+          info_.UpdateUint32(type_attrib_offset, class_offset);
+          info_.WriteFlag(DW_AT_declaration, true);
           // Check that each class is defined only once.
           bool unique = owner_->defined_dex_classes_.insert(dex_class_desc).second;
           CHECK(unique) << "Redefinition of " << dex_class_desc;
@@ -557,6 +568,91 @@ class DebugInfoWriter {
       CHECK_EQ(info_.Depth(), 1);
       FinishLazyTypes();
       info_.EndTag();  // DW_TAG_compile_unit
+      std::vector<uint8_t> buffer;
+      buffer.reserve(info_.data()->size() + KB);
+      const size_t offset = owner_->builder_->GetDebugInfo()->GetSize();
+      const size_t debug_abbrev_offset =
+          owner_->debug_abbrev_.Insert(debug_abbrev_.data(), debug_abbrev_.size());
+      WriteDebugInfoCU(debug_abbrev_offset, info_, offset, &buffer, &owner_->debug_info_patches_);
+      owner_->builder_->GetDebugInfo()->WriteFully(buffer.data(), buffer.size());
+    }
+
+    void Write(const ArrayRef<mirror::Class*>& types) SHARED_REQUIRES(Locks::mutator_lock_) {
+      info_.StartTag(DW_TAG_compile_unit);
+      info_.WriteStrp(DW_AT_producer, owner_->WriteString("Android dex2oat"));
+      info_.WriteData1(DW_AT_language, DW_LANG_Java);
+
+      for (mirror::Class* type : types) {
+        if (type->IsPrimitive()) {
+          // For primitive types the definition and the declaration is the same.
+          if (type->GetPrimitiveType() != Primitive::kPrimVoid) {
+            WriteTypeDeclaration(type->GetDescriptor(nullptr));
+          }
+        } else if (type->IsArrayClass()) {
+          mirror::Class* element_type = type->GetComponentType();
+          uint32_t component_size = type->GetComponentSize();
+          uint32_t data_offset = mirror::Array::DataOffset(component_size).Uint32Value();
+          uint32_t length_offset = mirror::Array::LengthOffset().Uint32Value();
+
+          info_.StartTag(DW_TAG_array_type);
+          std::string descriptor_string;
+          WriteLazyType(element_type->GetDescriptor(&descriptor_string));
+          info_.WriteUdata(DW_AT_data_member_location, data_offset);
+          info_.StartTag(DW_TAG_subrange_type);
+          DCHECK_LT(length_offset, 32u);
+          uint8_t count[] = {
+            DW_OP_push_object_address,
+            static_cast<uint8_t>(DW_OP_lit0 + length_offset),
+            DW_OP_plus,
+            DW_OP_deref_size,
+            4  // Array length is always 32-bit wide.
+          };
+          info_.WriteExprLoc(DW_AT_count, &count, sizeof(count));
+          info_.EndTag();  // DW_TAG_subrange_type.
+          info_.EndTag();  // DW_TAG_array_type.
+        } else {
+          std::string descriptor_string;
+          const char* desc = type->GetDescriptor(&descriptor_string);
+          StartClassTag(desc);
+
+          if (!type->IsVariableSize()) {
+            info_.WriteUdata(DW_AT_byte_size, type->GetObjectSize());
+          }
+
+          // Base class.
+          if (mirror::Class* base_class = type->GetSuperClass()) {
+            info_.StartTag(DW_TAG_inheritance);
+            WriteLazyType(base_class->GetDescriptor(&descriptor_string));
+            info_.WriteUdata(DW_AT_data_member_location, 0);
+            info_.WriteSdata(DW_AT_accessibility, DW_ACCESS_public);
+            info_.EndTag();  // DW_TAG_inheritance.
+          }
+
+          // Member variables.
+          for (uint32_t i = 0, count = type->NumInstanceFields(); i < count; ++i) {
+            ArtField* field = type->GetInstanceField(i);
+            info_.StartTag(DW_TAG_member);
+            WriteName(field->GetName());
+            WriteLazyType(field->GetTypeDescriptor());
+            info_.WriteUdata(DW_AT_data_member_location, field->GetOffset().Uint32Value());
+            uint32_t access_flags = field->GetAccessFlags();
+            if (access_flags & kAccPublic) {
+              info_.WriteSdata(DW_AT_accessibility, DW_ACCESS_public);
+            } else if (access_flags & kAccProtected) {
+              info_.WriteSdata(DW_AT_accessibility, DW_ACCESS_protected);
+            } else if (access_flags & kAccPrivate) {
+              info_.WriteSdata(DW_AT_accessibility, DW_ACCESS_private);
+            }
+            info_.EndTag();  // DW_TAG_member.
+          }
+
+          EndClassTag(desc);
+        }
+      }
+
+      CHECK_EQ(info_.Depth(), 1);
+      FinishLazyTypes();
+      info_.EndTag();  // DW_TAG_compile_unit.
       std::vector<uint8_t> buffer;
       buffer.reserve(info_.data()->size() + KB);
       const size_t offset = owner_->builder_->GetDebugInfo()->GetSize();
@@ -719,14 +815,14 @@ class DebugInfoWriter {
     // just define all types lazily at the end of compilation unit.
     void WriteLazyType(const char* type_descriptor) {
       if (type_descriptor != nullptr && type_descriptor[0] != 'V') {
-        lazy_types_.emplace(type_descriptor, info_.size());
+        lazy_types_.emplace(std::string(type_descriptor), info_.size());
         info_.WriteRef4(DW_AT_type, 0);
       }
     }
 
     void FinishLazyTypes() {
       for (const auto& lazy_type : lazy_types_) {
-        info_.UpdateUint32(lazy_type.second, WriteType(lazy_type.first));
+        info_.UpdateUint32(lazy_type.second, WriteTypeDeclaration(lazy_type.first));
       }
       lazy_types_.clear();
     }
@@ -751,21 +847,26 @@ class DebugInfoWriter {
 
     // Convert dex type descriptor to DWARF.
     // Returns offset in the compilation unit.
-    size_t WriteType(const char* desc) {
+    size_t WriteTypeDeclaration(const std::string& desc) {
+      DCHECK(!desc.empty());
       const auto& it = type_cache_.find(desc);
       if (it != type_cache_.end()) {
         return it->second;
       }
 
       size_t offset;
-      if (*desc == 'L') {
+      if (desc[0] == 'L') {
         // Class type. For example: Lpackage/name;
-        offset = StartClassTag(desc);
+        size_t class_offset = StartClassTag(desc.c_str());
         info_.WriteFlag(DW_AT_declaration, true);
-        EndClassTag(desc);
-      } else if (*desc == '[') {
+        EndClassTag(desc.c_str());
+        // Reference to the class type.
+        offset = info_.StartTag(DW_TAG_reference_type);
+        info_.WriteRef(DW_AT_type, class_offset);
+        info_.EndTag();
+      } else if (desc[0] == '[') {
         // Array type.
-        size_t element_type = WriteType(desc + 1);
+        size_t element_type = WriteTypeDeclaration(desc.substr(1));
         offset = info_.StartTag(DW_TAG_array_type);
         info_.WriteRef(DW_AT_type, element_type);
         info_.EndTag();
@@ -774,7 +875,7 @@ class DebugInfoWriter {
         const char* name;
         uint32_t encoding;
         uint32_t byte_size;
-        switch (*desc) {
+        switch (desc[0]) {
         case 'B':
           name = "byte";
           encoding = DW_ATE_signed;
@@ -819,7 +920,7 @@ class DebugInfoWriter {
           LOG(FATAL) << "Void type should not be encoded";
           UNREACHABLE();
         default:
-          LOG(FATAL) << "Unknown dex type descriptor: " << desc;
+          LOG(FATAL) << "Unknown dex type descriptor: \"" << desc << "\"";
           UNREACHABLE();
         }
         offset = info_.StartTag(DW_TAG_base_type);
@@ -869,9 +970,9 @@ class DebugInfoWriter {
     // Temporary buffer to create and store the entries.
     DebugInfoEntryWriter<> info_;
     // Cache of already translated type descriptors.
-    std::map<const char*, size_t, CStringLess> type_cache_;  // type_desc -> definition_offset.
+    std::map<std::string, size_t> type_cache_;  // type_desc -> definition_offset.
     // 32-bit references which need to be resolved to a type later.
-    std::multimap<const char*, size_t, CStringLess> lazy_types_;  // type_desc -> patch_offset.
+    std::multimap<std::string, size_t> lazy_types_;  // type_desc -> patch_offset.
   };
 
  public:
@@ -885,6 +986,11 @@ class DebugInfoWriter {
   void WriteCompilationUnit(const CompilationUnit& compilation_unit) {
     CompilationUnitWriter writer(this);
     writer.Write(compilation_unit);
+  }
+
+  void WriteTypes(const ArrayRef<mirror::Class*>& types) SHARED_REQUIRES(Locks::mutator_lock_) {
+    CompilationUnitWriter writer(this);
+    writer.Write(types);
   }
 
   void End() {
@@ -1107,9 +1213,27 @@ class DebugLineWriter {
   std::vector<uintptr_t> debug_line_patches;
 };
 
+// Get all types loaded by the runtime.
+static std::vector<mirror::Class*> GetLoadedRuntimeTypes() SHARED_REQUIRES(Locks::mutator_lock_) {
+  std::vector<mirror::Class*> result;
+  class CollectClasses : public ClassVisitor {
+   public:
+    virtual bool Visit(mirror::Class* klass) {
+      classes_->push_back(klass);
+      return true;
+    }
+    std::vector<mirror::Class*>* classes_;
+  };
+  CollectClasses visitor;
+  visitor.classes_ = &result;
+  Runtime::Current()->GetClassLinker()->VisitClasses(&visitor);
+  return result;
+}
+
 template<typename ElfTypes>
-void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
-                        const ArrayRef<const MethodDebugInfo>& method_infos) {
+static void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
+                               bool write_loaded_runtime_types,
+                               const ArrayRef<const MethodDebugInfo>& method_infos) {
   // Group the methods into compilation units based on source file.
   std::vector<CompilationUnit> compilation_units;
   const char* last_source_file = nullptr;
@@ -1142,6 +1266,12 @@ void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
     info_writer.Start();
     for (const auto& compilation_unit : compilation_units) {
       info_writer.WriteCompilationUnit(compilation_unit);
+    }
+    if (write_loaded_runtime_types) {
+      Thread* self = Thread::Current();
+      ReaderMutexLock mu(self, *Locks::mutator_lock_);
+      std::vector<mirror::Class*> types = GetLoadedRuntimeTypes();
+      info_writer.WriteTypes(ArrayRef<mirror::Class*>(types.data(), types.size()));
     }
     info_writer.End();
   }
@@ -1209,6 +1339,7 @@ void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
 
 template <typename ElfTypes>
 void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
+                    bool write_loaded_runtime_types,
                     const ArrayRef<const MethodDebugInfo>& method_infos,
                     CFIFormat cfi_format) {
   if (!method_infos.empty()) {
@@ -1217,7 +1348,7 @@ void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
     // Generate CFI (stack unwinding information).
     WriteCFISection(builder, method_infos, cfi_format);
     // Write DWARF .debug_* sections.
-    WriteDebugSections(builder, method_infos);
+    WriteDebugSections(builder, write_loaded_runtime_types, method_infos);
   }
 }
 
@@ -1231,6 +1362,7 @@ static ArrayRef<const uint8_t> WriteDebugElfFileInternal(
   std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(isa, &out));
   builder->Start();
   WriteDebugInfo(builder.get(),
+                 false,
                  ArrayRef<const MethodDebugInfo>(&method_info, 1),
                  DW_DEBUG_FRAME_FORMAT);
   builder->End();
@@ -1251,13 +1383,47 @@ ArrayRef<const uint8_t> WriteDebugElfFile(const dwarf::MethodDebugInfo& method_i
   }
 }
 
+template <typename ElfTypes>
+static ArrayRef<const uint8_t> WriteDebugElfFileInternal(const InstructionSet isa,
+                                                         mirror::Class* type)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  std::vector<uint8_t> buffer;
+  buffer.reserve(KB);
+  VectorOutputStream out("Debug ELF file", &buffer);
+  std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(isa, &out));
+  builder->Start();
+
+  DebugInfoWriter<ElfTypes> info_writer(builder.get());
+  info_writer.Start();
+  info_writer.WriteTypes(ArrayRef<mirror::Class*>(&type, 1));
+  info_writer.End();
+
+  builder->End();
+  CHECK(builder->Good());
+  // Make a copy of the buffer.  We want to shrink it anyway.
+  uint8_t* result = new uint8_t[buffer.size()];
+  CHECK(result != nullptr);
+  memcpy(result, buffer.data(), buffer.size());
+  return ArrayRef<const uint8_t>(result, buffer.size());
+}
+
+ArrayRef<const uint8_t> WriteDebugElfFile(const InstructionSet isa, mirror::Class* type) {
+  if (Is64BitInstructionSet(isa)) {
+    return WriteDebugElfFileInternal<ElfTypes64>(isa, type);
+  } else {
+    return WriteDebugElfFileInternal<ElfTypes32>(isa, type);
+  }
+}
+
 // Explicit instantiations
 template void WriteDebugInfo<ElfTypes32>(
     ElfBuilder<ElfTypes32>* builder,
+    bool write_loaded_runtime_types,
     const ArrayRef<const MethodDebugInfo>& method_infos,
     CFIFormat cfi_format);
 template void WriteDebugInfo<ElfTypes64>(
     ElfBuilder<ElfTypes64>* builder,
+    bool write_loaded_runtime_types,
     const ArrayRef<const MethodDebugInfo>& method_infos,
     CFIFormat cfi_format);
 
