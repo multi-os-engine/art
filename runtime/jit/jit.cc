@@ -34,6 +34,9 @@
 namespace art {
 namespace jit {
 
+// Generate DWARF debugging information and pass it to the native debugger.
+static constexpr bool kGenerateNativeDebugInfoInJIT = false;
+
 JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& options) {
   auto* jit_options = new JitOptions;
   jit_options->use_jit_ = options.GetOrDefault(RuntimeArgumentMap::UseJIT);
@@ -120,6 +123,13 @@ bool Jit::LoadCompiler(std::string* error_msg) {
     *error_msg = "JIT couldn't find jit_compile_method entry point";
     return false;
   }
+  jit_type_loaded_ = reinterpret_cast<void (*)(void*, mirror::Class*)>(
+      dlsym(jit_library_handle_, "jit_type_loaded"));
+  if (jit_type_loaded_ == nullptr) {
+    dlclose(jit_library_handle_);
+    *error_msg = "JIT couldn't find jit_type_loaded entry point";
+    return false;
+  }
   CompilerCallbacks* callbacks = nullptr;
   VLOG(jit) << "Calling JitLoad interpreter_only="
       << Runtime::Current()->GetInstrumentation()->InterpretOnly();
@@ -203,6 +213,13 @@ void Jit::CreateInstrumentationCache(size_t compile_threshold, size_t warmup_thr
   CHECK_GT(compile_threshold, 0U);
   instrumentation_cache_.reset(
       new jit::JitInstrumentationCache(compile_threshold, warmup_threshold));
+}
+
+void Jit::NewTypeLoaded(mirror::Class* type) {
+  DCHECK(jit_type_loaded_ != nullptr);
+  if (kGenerateNativeDebugInfoInJIT) {
+    jit_type_loaded_(jit_compiler_handle_, type);
+  }
 }
 
 }  // namespace jit
