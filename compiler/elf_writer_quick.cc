@@ -152,7 +152,8 @@ template <typename ElfTypes>
 void ElfWriterQuick<ElfTypes>::WriteDebugInfo(
     const ArrayRef<const dwarf::MethodDebugInfo>& method_infos) {
   if (compiler_options_->GetGenerateDebugInfo()) {
-    dwarf::WriteDebugInfo(builder_.get(), method_infos, kCFIFormat);
+    constexpr bool write_types = true;
+    dwarf::WriteDebugInfo(builder_.get(), write_types, method_infos, kCFIFormat);
   }
 }
 
