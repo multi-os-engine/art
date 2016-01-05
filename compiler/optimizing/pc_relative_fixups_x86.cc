@@ -86,36 +86,48 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
     }
     // We need to replace the HPackedSwitch with a HX86PackedSwitch in order to
     // address the constant area.
-    InitializePCRelativeBasePointer();
+    HX86ComputeBaseMethodAddress* method_base = InitializePCRelativeBasePointer(switch_insn);
     HGraph* graph = GetGraph();
     HBasicBlock* block = switch_insn->GetBlock();
     HX86PackedSwitch* x86_switch = new (graph->GetArena()) HX86PackedSwitch(
         switch_insn->GetStartValue(),
         switch_insn->GetNumEntries(),
         switch_insn->InputAt(0),
-        base_,
+        method_base,
         switch_insn->GetDexPc());
     block->ReplaceAndRemoveInstructionWith(switch_insn, x86_switch);
   }
 
-  void InitializePCRelativeBasePointer() {
-    // Ensure we only initialize the pointer once.
+  HX86ComputeBaseMethodAddress* InitializePCRelativeBasePointer(HInstruction* instruction) {
     if (base_ != nullptr) {
-      return;
+      return base_;
     }
 
-    // Insert the base at the start of the entry block, move it to a better
+    // Insert the base at the start of the entry block. We move it to a better
     // position later in MoveBaseIfNeeded().
-    base_ = new (GetGraph()->GetArena()) HX86ComputeBaseMethodAddress();
-    HBasicBlock* entry_block = GetGraph()->GetEntryBlock();
-    entry_block->InsertInstructionBefore(base_, entry_block->GetFirstInstruction());
-    DCHECK(base_ != nullptr);
+    HInstruction* insertion_point = GetGraph()->GetEntryBlock()->GetFirstInstruction();
+
+    if (GetGraph()->HasIrreducibleLoops()) {
+      // Irreducible loops do not work with an instruction
+      // that can be live-in at the irreducible loop header, so we just create a base
+      // for each instruction that needs it.
+      insertion_point = instruction;
+    }
+
+    HX86ComputeBaseMethodAddress* method_base =
+        new (GetGraph()->GetArena()) HX86ComputeBaseMethodAddress();
+    insertion_point->GetBlock()->InsertInstructionBefore(method_base, insertion_point);
+    if (!GetGraph()->HasIrreducibleLoops()) {
+      // Ensure we only initialize the pointer once.
+      base_ = method_base;
+    }
+    return method_base;
   }
 
   void ReplaceInput(HInstruction* insn, HConstant* value, int input_index, bool materialize) {
-    InitializePCRelativeBasePointer();
+    HX86ComputeBaseMethodAddress* method_base = InitializePCRelativeBasePointer(insn);
     HX86LoadFromConstantTable* load_constant =
-        new (GetGraph()->GetArena()) HX86LoadFromConstantTable(base_, value, materialize);
+        new (GetGraph()->GetArena()) HX86LoadFromConstantTable(method_base, value, materialize);
     insn->GetBlock()->InsertInstructionBefore(load_constant, insn);
     insn->ReplaceInput(load_constant, input_index);
   }
@@ -125,10 +137,10 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
     // addressing, we need the PC-relative address base.
     HInvokeStaticOrDirect* invoke_static_or_direct = invoke->AsInvokeStaticOrDirect();
     if (invoke_static_or_direct != nullptr && invoke_static_or_direct->HasPcRelativeDexCache()) {
-      InitializePCRelativeBasePointer();
-      // Add the extra parameter base_.
+      HInstruction* method_base = InitializePCRelativeBasePointer(invoke);
+      // Add the extra parameter method_base.
       DCHECK(!invoke_static_or_direct->HasCurrentMethodInput());
-      invoke_static_or_direct->AddSpecialInput(base_);
+      invoke_static_or_direct->AddSpecialInput(method_base);
     }
     // Ensure that we can load FP arguments from the constant area.
     for (size_t i = 0, e = invoke->InputCount(); i < e; i++) {
