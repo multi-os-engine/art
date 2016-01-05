@@ -125,6 +125,14 @@ class ValueSet : public ArenaObject<kArenaAllocGvn> {
     });
   }
 
+  void Clear() {
+    num_entries_ = 0;
+    for (size_t i = 0; i < num_buckets_; ++i) {
+      buckets_[i] = nullptr;
+    }
+    buckets_owned_.SetInitialBits(num_buckets_);
+  }
+
   // Updates this set by intersecting with instructions in a predecessor's set.
   void IntersectWith(ValueSet* predecessor) {
     if (IsEmpty()) {
@@ -189,14 +197,6 @@ class ValueSet : public ArenaObject<kArenaAllocGvn> {
     }
     buckets_owned_.SetBit(index);
     return clone_iterator;
-  }
-
-  void Clear() {
-    num_entries_ = 0;
-    for (size_t i = 0; i < num_buckets_; ++i) {
-      buckets_[i] = nullptr;
-    }
-    buckets_owned_.SetInitialBits(num_buckets_);
   }
 
   // Iterates over buckets with impure instructions (even indices) and deletes
@@ -360,8 +360,12 @@ void GlobalValueNumberer::VisitBasicBlock(HBasicBlock* block) {
     }
     if (!set->IsEmpty()) {
       if (block->IsLoopHeader()) {
-        DCHECK_EQ(block->GetDominator(), block->GetLoopInformation()->GetPreHeader());
-        set->Kill(side_effects_.GetLoopEffects(block));
+        if (block->GetLoopInformation()->IsIrreducible()) {
+          set->Clear();
+        } else {
+          DCHECK_EQ(block->GetDominator(), block->GetLoopInformation()->GetPreHeader());
+          set->Kill(side_effects_.GetLoopEffects(block));
+        }
       } else if (predecessors.size() > 1) {
         for (HBasicBlock* predecessor : predecessors) {
           set->IntersectWith(sets_[predecessor->GetBlockId()]);

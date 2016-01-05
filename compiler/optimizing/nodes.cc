@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include <iostream>
 #include "nodes.h"
 
 #include "code_generator.h"
@@ -149,6 +149,12 @@ void HGraph::ClearDominanceInformation() {
   reverse_post_order_.clear();
 }
 
+void HGraph::ClearLoopInformation() {
+  for (HReversePostOrderIterator it(*this); !it.Done(); it.Advance()) {
+    it.Current()->SetLoopInformation(nullptr);
+  }
+}
+
 void HBasicBlock::ClearDominanceInformation() {
   dominated_blocks_.clear();
   dominator_ = nullptr;
@@ -190,10 +196,16 @@ void HGraph::ComputeDominanceInformation() {
       // dominator of the block. We can then start visiting its successors.
       if (++visits[successor->GetBlockId()] ==
           successor->GetPredecessors().size() - successor->NumberOfBackEdges()) {
-        successor->GetDominator()->AddDominatedBlock(successor);
         reverse_post_order_.push_back(successor);
         worklist.push_back(successor);
       }
+    }
+  }
+
+  for (HReversePostOrderIterator it(*this); !it.Done(); it.Advance()) {
+    HBasicBlock* block = it.Current();
+    if (block->GetDominator() != nullptr) {
+      block->GetDominator()->AddDominatedBlock(block);
     }
   }
 }
@@ -201,11 +213,7 @@ void HGraph::ComputeDominanceInformation() {
 BuildSsaResult HGraph::TryBuildingSsa(StackHandleScopeCollection* handles) {
   BuildDominatorTree();
 
-  // The SSA builder requires loops to all be natural. Specifically, the dead phi
-  // elimination phase checks the consistency of the graph when doing a post-order
-  // visit for eliminating dead phis: a dead phi can only have loop header phi
-  // users remaining when being visited.
-  BuildSsaResult result = AnalyzeNaturalLoops();
+  BuildSsaResult result = AnalyzeLoops();
   if (result != kBuildSsaSuccess) {
     return result;
   }
@@ -438,7 +446,7 @@ void HGraph::SimplifyCFG() {
   }
 }
 
-BuildSsaResult HGraph::AnalyzeNaturalLoops() const {
+BuildSsaResult HGraph::AnalyzeLoops() const {
   // Order does not matter.
   for (HReversePostOrderIterator it(*this); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
@@ -448,14 +456,24 @@ BuildSsaResult HGraph::AnalyzeNaturalLoops() const {
         //       they only approximate the real control flow. Bail out for now.
         return kBuildSsaFailThrowCatchLoop;
       }
-      HLoopInformation* info = block->GetLoopInformation();
-      if (!info->Populate()) {
-        // Abort if the loop is non natural. We currently bailout in such cases.
-        return kBuildSsaFailNonNaturalLoop;
-      }
+      block->GetLoopInformation()->Populate();
     }
   }
   return kBuildSsaSuccess;
+}
+
+void HLoopInformation::Dump(std::ostream& os) {
+  os << "header: " << header_->GetBlockId() << std::endl;
+  os << "pre header: " << GetPreHeader()->GetBlockId() << std::endl;
+  for (HBasicBlock* block : back_edges_) {
+    os << "back edge: " << block->GetBlockId() << std::endl;
+  }
+  for (HBasicBlock* block : header_->GetPredecessors()) {
+    os << "predecessor: " << block->GetBlockId() << std::endl;
+  }
+  for (uint32_t idx : blocks_.Indexes()) {
+    os << "  in loop: " << idx << std::endl;
+  }
 }
 
 void HGraph::InsertConstant(HConstant* constant) {
@@ -555,24 +573,50 @@ void HLoopInformation::PopulateRecursive(HBasicBlock* block) {
   }
 }
 
-bool HLoopInformation::Populate() {
+void HLoopInformation::PopulateIrreducibleRecursive(HBasicBlock* block) {
+  if (blocks_.IsBitSet(block->GetBlockId())) {
+    return;
+  }
+
+  if (block->IsLoopHeader()) {
+    HLoopInformation* info = block->GetLoopInformation();
+    PopulateIrreducibleRecursive(info->GetPreHeader());
+    if (blocks_.IsBitSet(info->GetPreHeader()->GetBlockId())) {
+      blocks_.SetBit(block->GetBlockId());
+      block->SetInLoop(this);
+      for (HBasicBlock* back_edge : info->GetBackEdges()) {
+        PopulateIrreducibleRecursive(back_edge);
+      }
+    }
+  } else {
+    for (HBasicBlock* predecessor : block->GetPredecessors()) {
+      PopulateIrreducibleRecursive(predecessor);
+      if (blocks_.IsBitSet(predecessor->GetBlockId())) {
+        blocks_.SetBit(block->GetBlockId());
+        block->SetInLoop(this);
+      }
+    }
+  }
+}
+
+void HLoopInformation::Populate() {
   DCHECK_EQ(blocks_.NumSetBits(), 0u) << "Loop information has already been populated";
+  // Populate this loop: starting with the back edge, recursively add predecessors
+  // that are not already part of that loop. Set the header as part of the loop
+  // to end the recursion.
+  // This is a recursive implementation of the algorithm described in
+  // "Advanced Compiler Design & Implementation" (Muchnick) p192.
+  blocks_.SetBit(header_->GetBlockId());
+  header_->SetInLoop(this);
   for (HBasicBlock* back_edge : GetBackEdges()) {
     DCHECK(back_edge->GetDominator() != nullptr);
     if (!header_->Dominates(back_edge)) {
-      // This loop is not natural. Do not bother going further.
-      return false;
+      irreducible_ = true;
+      PopulateIrreducibleRecursive(back_edge);
+    } else {
+      PopulateRecursive(back_edge);
     }
-
-    // Populate this loop: starting with the back edge, recursively add predecessors
-    // that are not already part of that loop. Set the header as part of the loop
-    // to end the recursion.
-    // This is a recursive implementation of the algorithm described in
-    // "Advanced Compiler Design & Implementation" (Muchnick) p192.
-    blocks_.SetBit(header_->GetBlockId());
-    PopulateRecursive(back_edge);
   }
-  return true;
 }
 
 void HLoopInformation::Update() {
@@ -603,13 +647,14 @@ void HLoopInformation::Update() {
       }
     }
     // This loop still has reachable back edges. Repopulate the list of blocks.
-    bool populate_successful = Populate();
-    DCHECK(populate_successful);
+    Populate();
   }
 }
 
 HBasicBlock* HLoopInformation::GetPreHeader() const {
-  return header_->GetDominator();
+  HBasicBlock* block = header_->GetPredecessors()[0];
+  DCHECK(irreducible_ || (block == header_->GetDominator()));
+  return block;
 }
 
 bool HLoopInformation::Contains(const HBasicBlock& block) const {

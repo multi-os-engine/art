@@ -499,12 +499,15 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         DumpLocation(attr, locations->Out());
       }
     } else if (IsPass(LICM::kLoopInvariantCodeMotionPassName)
-               || IsPass(HDeadCodeElimination::kFinalDeadCodeEliminationPassName)) {
+               || IsPass(HDeadCodeElimination::kFinalDeadCodeEliminationPassName)
+               || IsPass(HDeadCodeElimination::kInitialDeadCodeEliminationPassName)) {
       HLoopInformation* info = instruction->GetBlock()->GetLoopInformation();
       if (info == nullptr) {
         StartAttributeStream("loop") << "none";
       } else {
         StartAttributeStream("loop") << "B" << info->GetHeader()->GetBlockId();
+        StartAttributeStream("irreducible")
+            << std::boolalpha << info->IsIrreducible() << std::noboolalpha;
       }
     } else if ((IsPass(SsaBuilder::kSsaBuilderPassName)
         || IsPass(HInliner::kInlinerPassName))

@@ -42,7 +42,7 @@ class BoundsCheckEliminationTest : public testing::Test {
 
   void RunBCE() {
     graph_->BuildDominatorTree();
-    graph_->AnalyzeNaturalLoops();
+    graph_->AnalyzeLoops();
 
     InstructionSimplifier(graph_).Run();
 

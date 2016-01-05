@@ -91,6 +91,13 @@ void LICM::Run() {
     }
 
     HLoopInformation* loop_info = block->GetLoopInformation();
+    if (loop_info->IsIrreducible()) {
+      for (HBlocksInLoopIterator it_loop(*loop_info); !it_loop.Done(); it_loop.Advance()) {
+        visited.SetBit(it_loop.Current()->GetBlockId());
+      }
+      // We cannot licm in an irreducible loop.
+      continue;
+    }
     SideEffects loop_effects = side_effects_.GetLoopEffects(block);
     HBasicBlock* pre_header = loop_info->GetPreHeader();
 

@@ -1295,6 +1295,9 @@ class BCEVisitor : public HGraphVisitor {
    */
   bool DynamicBCESeemsProfitable(HLoopInformation* loop, HBasicBlock* block) {
     if (loop != nullptr) {
+      if (loop->IsIrreducible()) {
+        return false;
+      }
       // A try boundary preheader is hard to handle.
       // TODO: remove this restriction
       if (loop->GetPreHeader()->GetLastInstruction()->IsTryBoundary()) {

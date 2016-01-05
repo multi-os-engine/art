@@ -102,12 +102,16 @@ void HDeadCodeElimination::RemoveDeadBlocks() {
 
   MarkReachableBlocks(graph_, &live_blocks);
   bool removed_one_or_more_blocks = false;
+  bool has_irreducible_loops = false;
 
   // Remove all dead blocks. Iterate in post order because removal needs the
   // block's chain of dominators and nested loops need to be updated from the
   // inside out.
   for (HPostOrderIterator it(*graph_); !it.Done(); it.Advance()) {
     HBasicBlock* block  = it.Current();
+    if (block->IsLoopHeader() && block->GetLoopInformation()->IsIrreducible()) {
+      has_irreducible_loops = true;
+    }
     int id = block->GetBlockId();
     if (live_blocks.IsBitSet(id)) {
       if (affected_loops.IsBitSet(id)) {
@@ -125,9 +129,23 @@ void HDeadCodeElimination::RemoveDeadBlocks() {
   // If we removed at least one block, we need to recompute the full
   // dominator tree and try block membership.
   if (removed_one_or_more_blocks) {
-    graph_->ClearDominanceInformation();
-    graph_->ComputeDominanceInformation();
-    graph_->ComputeTryBlockInformation();
+    if (has_irreducible_loops) {
+      // If the graph has irreducible loops we need to reset all graph analysis we have done
+      // before: the irreducible loop can be turned into a reducible one.
+      graph_->ClearLoopInformation();
+      graph_->ClearDominanceInformation();
+      ArenaBitVector visited(allocator, graph_->GetBlocks().size(), false);
+      graph_->FindBackEdges(&visited);
+      graph_->SimplifyCFG();
+      graph_->ComputeDominanceInformation();
+      graph_->ComputeTryBlockInformation();
+      bool success = graph_->AnalyzeLoops();
+      DCHECK(success);
+    } else {
+      graph_->ClearDominanceInformation();
+      graph_->ComputeDominanceInformation();
+      graph_->ComputeTryBlockInformation();
+    }
   }
 
   // Connect successive blocks created by dead branches. Order does not matter.
