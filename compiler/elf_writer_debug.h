@@ -19,18 +19,23 @@
 
 #include "elf_builder.h"
 #include "dwarf/dwarf_constants.h"
-#include "oat_writer.h"
+#include "mirror/class.h"
 #include "utils/array_ref.h"
 
 namespace art {
 namespace dwarf {
+struct MethodDebugInfo;
 
 template <typename ElfTypes>
 void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
+                    bool write_loaded_runtime_types,
                     const ArrayRef<const MethodDebugInfo>& method_infos,
                     CFIFormat cfi_format);
 
-ArrayRef<const uint8_t> WriteDebugElfFile(const dwarf::MethodDebugInfo& method_info);
+ArrayRef<const uint8_t> WriteDebugElfFileForMethod(const dwarf::MethodDebugInfo& method_info);
+
+ArrayRef<const uint8_t> WriteDebugElfFileForClass(const InstructionSet isa, mirror::Class* type)
+    SHARED_REQUIRES(Locks::mutator_lock_);
 
 }  // namespace dwarf
 }  // namespace art
