@@ -68,7 +68,7 @@ void SsaBuilder::FixNullConstantType() {
       // should be replaced with a null constant.
       // Both type propagation and redundant phi elimination ensure `int_operand`
       // can only be the 0 constant.
-      DCHECK(int_operand->IsIntConstant());
+      DCHECK(int_operand->IsIntConstant()) << int_operand->DebugName();
       DCHECK_EQ(0, int_operand->AsIntConstant()->GetValue());
       equality_instr->ReplaceInput(GetGraph()->GetNullConstant(), int_operand == right ? 1 : 0);
     }
