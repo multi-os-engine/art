@@ -43,6 +43,9 @@ class JitCompiler {
   size_t GetTotalCompileTime() const {
     return total_time_;
   }
+  InstructionSet GetInstructionSet() const {
+     return compiler_driver_->GetInstructionSet();
+  }
 
  private:
   uint64_t total_time_;
