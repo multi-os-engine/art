@@ -26,11 +26,15 @@
 namespace art {
 
 bool ScopedFlock::Init(const char* filename, std::string* error_msg) {
+  return Init(filename, O_CREAT | O_RDWR, error_msg);
+}
+
+bool ScopedFlock::Init(const char* filename, int flags, std::string* error_msg) {
   while (true) {
     if (file_.get() != nullptr) {
       UNUSED(file_->FlushCloseOrErase());  // Ignore result.
     }
-    file_.reset(OS::OpenFileWithFlags(filename, O_CREAT | O_RDWR));
+    file_.reset(OS::OpenFileWithFlags(filename, flags));
     if (file_.get() == nullptr) {
       *error_msg = StringPrintf("Failed to open file '%s': %s", filename, strerror(errno));
       return false;

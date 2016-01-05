@@ -24,8 +24,11 @@
 
 #include "art_method-inl.h"
 #include "base/mutex.h"
+#include "base/scoped_flock.h"
 #include "base/stl_util.h"
+#include "base/unix_file/fd_file.h"
 #include "jit/profiling_info.h"
+#include "os.h"
 #include "safe_map.h"
 
 namespace art {
@@ -37,8 +40,18 @@ bool ProfileCompilationInfo::SaveProfilingInfo(const std::string& filename,
     return true;
   }
 
+  ScopedFlock flock;
+  std::string error;
+  // Note: this will block until the lock is acquired.
+  if (!flock.Init(filename.c_str(), O_RDWR | O_NOFOLLOW | O_CLOEXEC, &error)) {
+    LOG(WARNING) << "Couldn't lock the profile file " << filename << ": " << error;
+    return false;
+  }
+
+  int fd = flock.GetFile()->Fd();
+
   ProfileCompilationInfo info;
-  if (!info.Load(filename)) {
+  if (!info.Load(fd)) {
     LOG(WARNING) << "Could not load previous profile data from file " << filename;
     return false;
   }
@@ -56,7 +69,7 @@ bool ProfileCompilationInfo::SaveProfilingInfo(const std::string& filename,
 
   // This doesn't need locking because we are trying to lock the file for exclusive
   // access and fail immediately if we can't.
-  bool result = info.Save(filename);
+  bool result = info.Save(fd);
   if (result) {
     VLOG(profiler) << "Successfully saved profile info to " << filename
         << " Size: " << GetFileSizeBytes(filename);
@@ -66,64 +79,20 @@ bool ProfileCompilationInfo::SaveProfilingInfo(const std::string& filename,
   return result;
 }
 
-enum OpenMode {
-  READ,
-  READ_WRITE
-};
-
-static int OpenFile(const std::string& filename, OpenMode open_mode) {
-  int fd = -1;
-  switch (open_mode) {
-    case READ:
-      fd = open(filename.c_str(), O_RDONLY);
-      break;
-    case READ_WRITE:
-      // TODO(calin) allow the shared uid of the app to access the file.
-      fd = open(filename.c_str(), O_WRONLY | O_TRUNC | O_NOFOLLOW | O_CLOEXEC);
-      break;
-  }
-
-  if (fd < 0) {
-    PLOG(WARNING) << "Failed to open profile file " << filename;
-    return -1;
-  }
-
-  // Lock the file for exclusive access but don't wait if we can't lock it.
-  int err = flock(fd, LOCK_EX | LOCK_NB);
-  if (err < 0) {
-    PLOG(WARNING) << "Failed to lock profile file " << filename;
-    return -1;
-  }
-  return fd;
-}
-
-static bool CloseDescriptorForFile(int fd, const std::string& filename) {
-  // Now unlock the file, allowing another process in.
-  int err = flock(fd, LOCK_UN);
-  if (err < 0) {
-    PLOG(WARNING) << "Failed to unlock profile file " << filename;
-    return false;
-  }
-
-  // Done, close the file.
-  err = ::close(fd);
-  if (err < 0) {
-    PLOG(WARNING) << "Failed to close descriptor for profile file" << filename;
-    return false;
-  }
-
-  return true;
-}
-
-static void WriteToFile(int fd, const std::ostringstream& os) {
+static bool WriteToFile(int fd, const std::ostringstream& os) {
   std::string data(os.str());
   const char *p = data.c_str();
   size_t length = data.length();
   do {
-    int n = ::write(fd, p, length);
+    int n = write(fd, p, length);
+    if (n < 0) {
+      PLOG(WARNING) << "Failed to write to descriptor: " << fd;
+      return false;
+    }
     p += n;
     length -= n;
   } while (length > 0);
+  return true;
 }
 
 static constexpr const char kFieldSeparator = ',';
@@ -137,13 +106,8 @@ static constexpr const char kLineSeparator = '\n';
  *    /system/priv-app/app/app.apk,131232145,11,23,454,54
  *    /system/priv-app/app/app.apk:classes5.dex,218490184,39,13,49,1
  **/
-bool ProfileCompilationInfo::Save(const std::string& filename) {
-  int fd = OpenFile(filename, READ_WRITE);
-  if (fd == -1) {
-    return false;
-  }
-
-  // TODO(calin): Merge with a previous existing profile.
+bool ProfileCompilationInfo::Save(uint32_t fd) {
+  DCHECK_GE(fd, 0u);
   // TODO(calin): Profile this and see how much memory it takes. If too much,
   // write to file directly.
   std::ostringstream os;
@@ -158,9 +122,7 @@ bool ProfileCompilationInfo::Save(const std::string& filename) {
     os << kLineSeparator;
   }
 
-  WriteToFile(fd, os);
-
-  return CloseDescriptorForFile(fd, filename);
+  return WriteToFile(fd, os);
 }
 
 // TODO(calin): This a duplicate of Utils::Split fixing the case where the first character
@@ -249,23 +211,18 @@ static int GetLineFromBuffer(char* buffer, int n, int start_from, std::string& l
   return new_line_pos == -1 ? new_line_pos : new_line_pos + 1;
 }
 
-bool ProfileCompilationInfo::Load(const std::string& filename) {
-  int fd = OpenFile(filename, READ);
-  if (fd == -1) {
-    return false;
-  }
+bool ProfileCompilationInfo::Load(uint32_t fd) {
+  DCHECK_GE(fd, 0u);
 
   std::string current_line;
   const int kBufferSize = 1024;
   char buffer[kBufferSize];
-  bool success = true;
 
-  while (success) {
+  while (true) {
     int n = read(fd, buffer, kBufferSize);
     if (n < 0) {
-      PLOG(WARNING) << "Error when reading profile file " << filename;
-      success = false;
-      break;
+      PLOG(WARNING) << "Error when reading profile file";
+      return false;
     } else if (n == 0) {
       break;
     }
@@ -278,17 +235,13 @@ bool ProfileCompilationInfo::Load(const std::string& filename) {
         break;
       }
       if (!ProcessLine(current_line)) {
-        success = false;
-        break;
+        return false;
       }
       // Reset the current line (we just processed it).
       current_line.clear();
     }
   }
-  if (!success) {
-    info_.clear();
-  }
-  return CloseDescriptorForFile(fd, filename) && success;
+  return true;
 }
 
 bool ProfileCompilationInfo::Load(const ProfileCompilationInfo& other) {
