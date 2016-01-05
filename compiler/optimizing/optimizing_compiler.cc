@@ -780,9 +780,6 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
       BuildSsaResult result = graph->TryBuildingSsa(&handles);
       if (result != kBuildSsaSuccess) {
         switch (result) {
-          case kBuildSsaFailNonNaturalLoop:
-            MaybeRecordStat(MethodCompilationStat::kNotCompiledNonNaturalLoop);
-            break;
           case kBuildSsaFailThrowCatchLoop:
             MaybeRecordStat(MethodCompilationStat::kNotCompiledThrowCatchLoop);
             break;
