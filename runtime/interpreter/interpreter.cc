@@ -455,6 +455,7 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
       InterpreterJni(self, method, shorty, receiver, args, result);
     }
   }
+
   self->PopShadowFrame();
 }
 
