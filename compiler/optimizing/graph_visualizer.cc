@@ -22,6 +22,7 @@
 #include <sstream>
 
 #include "code_generator.h"
+#include "bounds_check_elimination.h"
 #include "dead_code_elimination.h"
 #include "disassembler.h"
 #include "inliner.h"
@@ -426,6 +427,16 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     StartAttributeStream("kind") << (try_boundary->IsEntry() ? "entry" : "exit");
   }
 
+  void VisitGoto(HGoto* instruction) OVERRIDE {
+    StartAttributeStream("successor")
+        << "B" << instruction->GetBlock()->GetSingleSuccessor()->GetBlockId();
+  }
+
+  void VisitIf(HIf* instruction) OVERRIDE {
+    StartAttributeStream("true_successor") << "B" << instruction->IfTrueSuccessor()->GetBlockId();
+    StartAttributeStream("false_successor") << "B" << instruction->IfFalseSuccessor()->GetBlockId();
+  }
+
 #ifdef ART_ENABLE_CODEGEN_arm64
   void VisitArm64DataProcWithShifterOp(HArm64DataProcWithShifterOp* instruction) OVERRIDE {
     StartAttributeStream("kind") << instruction->GetInstrKind() << "+" << instruction->GetOpKind();
@@ -498,8 +509,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         attr << inputs << "->";
         DumpLocation(attr, locations->Out());
       }
-    } else if (IsPass(LICM::kLoopInvariantCodeMotionPassName)
-               || IsPass(HDeadCodeElimination::kFinalDeadCodeEliminationPassName)) {
+    } else if (IsPass(LICM::kLoopInvariantCodeMotionPassName) ||
+               IsPass(HDeadCodeElimination::kFinalDeadCodeEliminationPassName) ||
+               IsPass(BoundsCheckElimination::kBoundsCheckEliminiationPassName)) {
+      StartAttributeStream("block") << "B" << instruction->GetBlock()->GetBlockId();
       HLoopInformation* info = instruction->GetBlock()->GetLoopInformation();
       if (info == nullptr) {
         StartAttributeStream("loop") << "none";

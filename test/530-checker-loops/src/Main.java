@@ -936,24 +936,40 @@ public class Main {
   }
 
   /// CHECK-START: int Main.linearDynamicBCE1(int[], int, int) BCE (before)
-  /// CHECK: StaticFieldGet
-  /// CHECK: NullCheck
-  /// CHECK: ArrayLength
-  /// CHECK: BoundsCheck
-  /// CHECK: ArrayGet
-  /// CHECK: StaticFieldSet
-  //
+  /// CHECK-DAG:  <<Array:l\d+>>     ParameterValue
+  /// CHECK-DAG:  <<Index:i\d+>>     Phi block:<<BLoop:B\d+>>                loop:<<BLoop>>
+  /// CHECK-DAG:  <<OldValue:i\d+>>  StaticFieldGet [<<Class:l\d+>>]         loop:<<BLoop>>
+  /// CHECK-DAG:  <<NCArray:l\d+>>   NullCheck [<<Array>>]                   loop:<<BLoop>>
+  /// CHECK-DAG:  <<ArrayLen:i\d+>>  ArrayLength [<<NCArray>>]               loop:<<BLoop>>
+  /// CHECK-DAG:  <<BCIndex:i\d+>>   BoundsCheck [<<Index>>,<<ArrayLen>>]    loop:<<BLoop>>
+  /// CHECK-DAG:  <<ArrayGet:i\d+>>  ArrayGet [<<NCArray>>,<<BCIndex>>]      loop:<<BLoop>>
+  /// CHECK-DAG:  <<NewValue:i\d+>>  Add [<<OldValue>>,<<ArrayGet>>]         loop:<<BLoop>>
+  /// CHECK-DAG:                     StaticFieldSet [<<Class>>,<<NewValue>>] loop:<<BLoop>>
+
   /// CHECK-START: int Main.linearDynamicBCE1(int[], int, int) BCE (after)
-  /// CHECK: StaticFieldGet
-  /// CHECK-NOT: NullCheck
-  /// CHECK-NOT: ArrayLength
-  /// CHECK-NOT: BoundsCheck
-  /// CHECK: ArrayGet
-  /// CHECK: StaticFieldSet
-  /// CHECK: Exit
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
+  /// CHECK-DAG:  <<Array:l\d+>>     ParameterValue
+  /// CHECK-DAG:  <<Low:i\d+>>       ParameterValue
+  /// CHECK-DAG:  <<High:i\d+>>      ParameterValue
+  //
+  //  Block structure
+  /// CHECK-DAG:  <<LowLtHigh:z\d+>> LessThan [<<Low>>,<<High>>]
+  /// CHECK-DAG:                     If [<<LowLtHigh>>] true_successor:<<BDeopt:B\d+>> false_successor:<<BNoDeopt:B\d+>>
+  /// CHECK-DAG:                     Goto successor:<<BPreheader:B\d+>>      block:<<BDeopt>>
+  /// CHECK-DAG:                     Goto successor:<<BPreheader>>           block:<<BNoDeopt>>
+  /// CHECK-DAG:                     Goto successor:<<BLoop:B\d+>>           block:<<BPreheader>>
+  //
+  //  Deoptimize block
+  /// CHECK-DAG:                     Deoptimize                              block:<<BDeopt>> loop:none
+  /// CHECK-DAG:                     Deoptimize                              block:<<BDeopt>> loop:none
+  /// CHECK-DAG:                     Deoptimize                              block:<<BDeopt>> loop:none
+  //
+  //  Loop
+  /// CHECK-DAG:  <<Index:i\d+>>     Phi                                     block:<<BLoop>>  loop:<<BLoop>>
+  /// CHECK-DAG:  <<OldValue:i\d+>>  StaticFieldGet [<<Class:l\d+>>]         loop:<<BLoop>>
+  /// CHECK-DAG:  <<ArrayGet:i\d+>>  ArrayGet [<<Array>>,<<Index>>]          loop:<<BLoop>>
+  /// CHECK-DAG:  <<NewValue:i\d+>>  Add [<<OldValue>>,<<ArrayGet>>]         loop:<<BLoop>>
+  /// CHECK-DAG:                     StaticFieldSet [<<Class>>,<<NewValue>>] loop:<<BLoop>>
+
   private static int linearDynamicBCE1(int[] x, int lo, int hi) {
     int result = 0;
     for (int i = lo; i < hi; i++) {
