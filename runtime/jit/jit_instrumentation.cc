@@ -162,6 +162,17 @@ void JitInstrumentationListener::MethodEntered(Thread* thread,
                                                mirror::Object* /*this_object*/,
                                                ArtMethod* method,
                                                uint32_t /*dex_pc*/) {
+  if (UNLIKELY(instrumentation_cache_->HotMethodThreshold() == 0)) {
+    bool success = ProfilingInfo::Create(thread, method, /* retry_allocation */ true);
+    if (success) {
+      VLOG(jit) << "Start profiling " << PrettyMethod(method);
+    }
+
+    JitCompileTask compile_task(method, JitCompileTask::kCompile);
+    compile_task.Run(thread);
+    return;
+  }
+
   instrumentation_cache_->AddSamples(thread, method, 1);
 }
 
