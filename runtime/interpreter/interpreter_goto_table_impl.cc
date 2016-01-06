@@ -21,6 +21,7 @@
 #include "base/stl_util.h"  // MakeUnique
 #include "experimental_flags.h"
 #include "interpreter_common.h"
+#include "jit/jit.h"
 #include "safe_math.h"
 
 #include <memory>  // std::unique_ptr
@@ -178,19 +179,33 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   uint16_t inst_data;
   const void* const* currentHandlersTable;
   UPDATE_HANDLER_TABLE();
+  std::unique_ptr<lambda::ClosureBuilder> lambda_closure_builder;
+  size_t lambda_captured_variable_index = 0;
+
   if (LIKELY(dex_pc == 0)) {  // We are entering the method as opposed to deoptimizing.
     if (kIsDebugBuild) {
       self->AssertNoPendingException();
     }
     instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+    ArtMethod *method = shadow_frame.GetMethod();
+
     if (UNLIKELY(instrumentation->HasMethodEntryListeners())) {
       instrumentation->MethodEnterEvent(self, shadow_frame.GetThisObject(code_item->ins_size_),
-                                        shadow_frame.GetMethod(), 0);
+                                        method, 0);
+    }
+
+    if (UNLIKELY(Runtime::Current()->GetJit() != nullptr &&
+                 Runtime::Current()->GetJit()->JitAtFirstUse() &&
+                 method->HasAnyCompiledCode())) {
+      JValue result;
+
+      self->PopShadowFrame();
+      ArtInterpreterToCompiledCodeBridge(self, code_item, &shadow_frame, &result);
+      self->PushShadowFrame(&shadow_frame);
+
+      return result;
     }
   }
-
-  std::unique_ptr<lambda::ClosureBuilder> lambda_closure_builder;
-  size_t lambda_captured_variable_index = 0;
 
   // Jump to first instruction.
   ADVANCE(0);

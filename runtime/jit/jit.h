@@ -79,6 +79,8 @@ class Jit {
     DumpInfo(os);
   }
 
+  bool JitAtFirstUse();
+
  private:
   Jit();
   bool LoadCompiler(std::string* error_msg);
@@ -133,6 +135,10 @@ class JitOptions {
   }
   void SetSaveProfilingInfo(bool b) {
     save_profiling_info_ = b;
+  }
+  void SetJitAtFirstUse() {
+    use_jit_ = true;
+    compile_threshold_ = 0;
   }
 
  private:

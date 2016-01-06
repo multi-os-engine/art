@@ -154,7 +154,8 @@ void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t
 }
 
 JitInstrumentationListener::JitInstrumentationListener(JitInstrumentationCache* cache)
-    : instrumentation_cache_(cache) {
+    : instrumentation_cache_(cache),
+      compilation_method_mutex_("Compilation method") {
   CHECK(instrumentation_cache_ != nullptr);
 }
 
@@ -162,7 +163,62 @@ void JitInstrumentationListener::MethodEntered(Thread* thread,
                                                mirror::Object* /*this_object*/,
                                                ArtMethod* method,
                                                uint32_t /*dex_pc*/) {
+  if (UNLIKELY(instrumentation_cache_->HotMethodThreshold() == 0)) {
+    SetupMethodForInlineCompilation(thread, method);
+    if (IsBeingCompiled(thread, method)) {
+      while (IsBeingCompiled(thread, method)) {
+        ; // Wait for compilation to finish.
+      }
+      ReleaseMethod(thread, method);
+      return;
+    }
+
+    if (method->HasAnyCompiledCode()) {
+      ReleaseMethod(thread, method);
+      return;
+    }
+
+    bool success = ProfilingInfo::Create(thread, method, /* retry_allocation */ false);
+    if (success) {
+      VLOG(jit) << "Start profiling " << PrettyMethod(method);
+    }
+
+    JitCompileTask compile_task(method, JitCompileTask::kCompile);
+    compile_task.Run(thread);
+
+    ReleaseMethod(thread, method);
+    return;
+  }
+
   instrumentation_cache_->AddSamples(thread, method, 1);
+}
+
+void JitInstrumentationListener::SetupMethodForInlineCompilation(Thread *thread,
+                                                                 ArtMethod *method) {
+  MutexLock l(thread, compilation_method_mutex_);
+  if (compilation_method_map_.find(method) == compilation_method_map_.end()) {
+    compilation_method_map_[method] = thread;
+  }
+}
+bool JitInstrumentationListener::IsBeingCompiled(Thread *thread, ArtMethod *method) {
+  MutexLock l(thread, compilation_method_mutex_);
+  auto iter = compilation_method_map_.find(method);
+  if (iter != compilation_method_map_.end()) {
+    // Return true only if the querying thread is not the same as the one compiling.
+    return thread != iter->second;
+  }
+  return false;
+}
+
+void JitInstrumentationListener::ReleaseMethod(Thread *thread, ArtMethod *method) {
+  MutexLock l(thread, compilation_method_mutex_);
+  auto iter = compilation_method_map_.find(method);
+  if (iter != compilation_method_map_.end()) {
+    if (iter->second == thread) {
+      // Only the thread compiling the method can release it.
+      compilation_method_map_.erase(iter);
+    }
+  }
 }
 
 void JitInstrumentationListener::BackwardBranch(Thread* thread,

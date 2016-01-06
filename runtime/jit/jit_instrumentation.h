@@ -49,7 +49,7 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
 
   void MethodEntered(Thread* thread, mirror::Object* /*this_object*/,
                      ArtMethod* method, uint32_t /*dex_pc*/)
-      OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_);
+      OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!compilation_method_mutex_);
 
   void MethodExited(Thread* /*thread*/, mirror::Object* /*this_object*/,
                     ArtMethod* /*method*/, uint32_t /*dex_pc*/,
@@ -88,7 +88,14 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
       instrumentation::Instrumentation::kInvokeVirtualOrInterface;
 
  private:
+  void SetupMethodForInlineCompilation(Thread *thread,
+                                       ArtMethod *method) REQUIRES(!compilation_method_mutex_);
+  bool IsBeingCompiled(Thread *thread, ArtMethod *method) REQUIRES(!compilation_method_mutex_);
+  void ReleaseMethod(Thread *thread, ArtMethod *method) REQUIRES(!compilation_method_mutex_);
+
   JitInstrumentationCache* const instrumentation_cache_;
+  Mutex compilation_method_mutex_;
+  std::unordered_map<ArtMethod*, Thread*> compilation_method_map_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(JitInstrumentationListener);
 };
@@ -101,6 +108,15 @@ class JitInstrumentationCache {
       SHARED_REQUIRES(Locks::mutator_lock_);
   void CreateThreadPool();
   void DeleteThreadPool(Thread* self);
+
+  size_t HotMethodThreshold() const {
+    return hot_method_threshold_;
+  }
+
+  void SetHotMethodThreshold(size_t hot_method_threshold) {
+    hot_method_threshold_ = hot_method_threshold;
+  }
+
   // Wait until there is no more pending compilation tasks.
   void WaitForCompilationToFinish(Thread* self);
 

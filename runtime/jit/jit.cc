@@ -194,6 +194,13 @@ void Jit::StopProfileSaver() {
   }
 }
 
+bool Jit::JitAtFirstUse() {
+  if (instrumentation_cache_.get() != nullptr) {
+    return instrumentation_cache_->HotMethodThreshold() == 0;
+  }
+  return false;
+}
+
 Jit::~Jit() {
   DCHECK(!save_profiling_info_ || !ProfileSaver::IsStarted());
   if (dump_info_on_shutdown_) {
@@ -209,7 +216,7 @@ Jit::~Jit() {
 }
 
 void Jit::CreateInstrumentationCache(size_t compile_threshold, size_t warmup_threshold) {
-  CHECK_GT(compile_threshold, 0U);
+  //CHECK_GT(compile_threshold, 0U);
   instrumentation_cache_.reset(
       new jit::JitInstrumentationCache(compile_threshold, warmup_threshold));
 }
