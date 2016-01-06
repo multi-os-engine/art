@@ -138,6 +138,15 @@ public class Main extends UnresolvedSuperClass {
     callUnresolvedInstanceFieldAccess(c);
     testInstanceOf(m);
     testCheckCast(m);
+    testLicm(2);
+  }
+
+  static public void testLicm(int count) {
+    UnresolvedClass c;
+    int i = 0;
+    do {
+      c = new UnresolvedClass();
+    } while (i++ != count);
   }
 
   public static void expectEquals(byte expected, byte result) {
