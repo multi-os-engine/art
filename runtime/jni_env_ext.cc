@@ -59,12 +59,18 @@ JNIEnvExt::JNIEnvExt(Thread* self_in, JavaVMExt* vm_in)
       local_ref_cookie(IRT_FIRST_SEGMENT),
       locals(kLocalsInitial, kLocalsMax, kLocal, false),
       check_jni(false),
+      stub_jni_functions(false),
       critical(0),
       monitors("monitors", kMonitorsInitial, kMonitorsMax) {
   functions = unchecked_functions = GetJniNativeInterface();
   if (vm->IsCheckJniEnabled()) {
     SetCheckJniEnabled(true);
   }
+}
+
+void JNIEnvExt::SetFunctionsToStubJNI() {
+  functions = GetStubJniNativeInterface();
+  stub_jni_functions = true;
 }
 
 JNIEnvExt::~JNIEnvExt() {

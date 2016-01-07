@@ -855,6 +855,17 @@ void ConditionVariable::WaitHoldingLocks(Thread* self) {
       PLOG(FATAL) << "futex wait failed for " << name_;
     }
   }
+  if (self != nullptr) {
+    JNIEnvExt* const env = self->GetJniEnv();
+    if (UNLIKELY(env != nullptr && env->stub_jni_functions)) {
+      CHECK(self->IsDaemon());
+      // If the stub JNI functions are set then we cannot proceed. Just sleep forever. This may
+      // occur for user daemon threads that get a spurrious wakeup.
+      while (true) {
+        usleep(1000000);
+      }
+    }
+  }
   guard_.ExclusiveLock(self);
   CHECK_GE(num_waiters_, 0);
   num_waiters_--;

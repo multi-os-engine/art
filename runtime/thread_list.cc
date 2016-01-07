@@ -1154,6 +1154,7 @@ void ThreadList::SuspendAllDaemonThreads() {
       if (thread != self) {
         thread->ModifySuspendCount(self, +1, nullptr, false);
       }
+      thread->GetJniEnv()->SetFunctionsToStubJNI();
     }
   }
   // Give the threads a chance to suspend, complaining if they're slow.
