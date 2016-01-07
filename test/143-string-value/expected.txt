@@ -1,0 +1,1 @@
+art E     art/runtime/native/java_lang_Class.cc:] Asking for String#value does not work on Android versions >= .
