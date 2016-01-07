@@ -3714,8 +3714,10 @@ ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(
     const bool default_methods_supported =
         runtime == nullptr ||
         runtime->AreExperimentalFlagsEnabled(ExperimentalFlags::kDefaultMethods);
+    // methods called on interfaces should be invoke-interface or, if default methods are enabled,
+    // invoke-super or invoke-static.
     if (method_type != METHOD_INTERFACE &&
-        (!default_methods_supported || method_type != METHOD_STATIC)) {
+        (!default_methods_supported || (!is_super && method_type != METHOD_STATIC))) {
       Fail(VERIFY_ERROR_CLASS_CHANGE)
           << "non-interface method " << PrettyMethod(dex_method_idx, *dex_file_)
           << " is in an interface class " << PrettyClass(klass);
@@ -3954,12 +3956,17 @@ ArtMethod* MethodVerifier::VerifyInvocationArgs(
   // If we're using invoke-super(method), make sure that the executing method's class' superclass
   // has a vtable entry for the target method. Or the target is on a interface.
   if (is_super) {
+    uint16_t class_idx = dex_file_->GetMethodId(method_idx).class_idx_;
+    mirror::Class* reference_class = dex_cache_->GetResolvedType(class_idx);
+    if (reference_class == nullptr) {
+      Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "Unable to find referenced class from invoke-super";
+      return nullptr;
+    }
     DCHECK(method_type == METHOD_VIRTUAL);
-    if (res_method->GetDeclaringClass()->IsInterface()) {
-      // TODO Fill in this part. Verify what we can...
-      if (Runtime::Current()->IsAotCompiler()) {
-        Fail(VERIFY_ERROR_FORCE_INTERPRETER) << "Currently we only allow invoke-super in "
-                                             << "interpreter when using interface methods";
+    if (reference_class->IsInterface()) {
+      // TODO Can we verify anything else.
+      if (class_idx == class_def_->class_idx_) {
+        Fail(VERIFY_ERROR_CLASS_CHANGE) << "Cannot invoke-super on self as interface";
       }
     } else {
       const RegType& super = GetDeclaringClass().GetSuperClass(&reg_types_);
