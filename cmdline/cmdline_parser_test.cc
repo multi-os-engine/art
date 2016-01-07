@@ -535,8 +535,8 @@ TEST_F(CmdlineParserTest, TestProfilerOptions) {
 
 /* -Xexperimental:_ */
 TEST_F(CmdlineParserTest, TestExperimentalFlags) {
-  // Off by default
-  EXPECT_SINGLE_PARSE_DEFAULT_VALUE(ExperimentalFlags::kNone,
+  // DefaultMethods are on by default
+  EXPECT_SINGLE_PARSE_DEFAULT_VALUE(ExperimentalFlags::kDefaultMethods,
                                     "",
                                     M::Experimental);
 
