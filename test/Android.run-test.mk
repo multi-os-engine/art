@@ -241,7 +241,8 @@ TEST_ART_PYTHON3_DEPENDENCY_RUN_TESTS := \
   964-default-iface-init-generated \
   968-default-partial-compile-generated \
   970-iface-super-resolution-generated \
-  971-iface-super-partial-compile-generated
+  971-iface-super-partial-compile-generated \
+  973-iface-super-multidex-generated
 
 # Check if we have python3 to run our tests.
 ifeq ($(wildcard /usr/bin/python3),)
