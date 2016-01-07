@@ -72,6 +72,10 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
     HandleInvoke(invoke);
   }
 
+  void VisitInvokeSuperInterface(HInvokeSuperInterface* invoke) OVERRIDE {
+    HandleInvoke(invoke);
+  }
+
   void BinaryFP(HBinaryOperation* bin) {
     HConstant* rhs = bin->InputAt(1)->AsConstant();
     if (rhs != nullptr && Primitive::IsFloatingPointType(bin->GetResultType())) {

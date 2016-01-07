@@ -395,6 +395,12 @@ void CodeGenerator::CreateCommonInvokeLocationSummary(
   }
 }
 
+void CodeGenerator::GenerateInvokeSuperInterfaceRuntimeCall(HInvokeSuperInterface* invoke) {
+  // Just go straight to the InvokeSuper trampoline.
+  MoveConstant(invoke->GetLocations()->GetTemp(0), invoke->GetDexMethodIndex());
+  InvokeRuntime(kQuickInvokeSuperTrampolineWithAccessCheck, invoke, invoke->GetDexPc(), nullptr);
+}
+
 void CodeGenerator::GenerateInvokeUnresolvedRuntimeCall(HInvokeUnresolved* invoke) {
   MoveConstant(invoke->GetLocations()->GetTemp(0), invoke->GetDexMethodIndex());
 

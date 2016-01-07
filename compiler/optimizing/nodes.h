@@ -25,6 +25,7 @@
 #include "base/arena_containers.h"
 #include "base/arena_object.h"
 #include "base/stl_util.h"
+#include "class_reference.h"
 #include "dex/compiler_enums.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "handle.h"
@@ -1169,6 +1170,7 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(InvokeUnresolved, Invoke)                                           \
   M(InvokeInterface, Invoke)                                            \
   M(InvokeStaticOrDirect, Invoke)                                       \
+  M(InvokeSuperInterface, Invoke)                                       \
   M(InvokeVirtual, Invoke)                                              \
   M(LessThan, Condition)                                                \
   M(LessThanOrEqual, Condition)                                         \
@@ -3307,6 +3309,8 @@ class HInvoke : public HInstruction {
     return intrinsic_;
   }
 
+  void CopyInputsFrom(const HInvoke* invoke);
+
   void SetIntrinsic(Intrinsics intrinsic,
                     IntrinsicNeedsEnvironmentOrCache needs_env_or_cache,
                     IntrinsicSideEffects side_effects,
@@ -3689,6 +3693,35 @@ class HInvokeStaticOrDirect : public HInvoke {
 };
 std::ostream& operator<<(std::ostream& os, HInvokeStaticOrDirect::MethodLoadKind rhs);
 std::ostream& operator<<(std::ostream& os, HInvokeStaticOrDirect::ClinitCheckRequirement rhs);
+
+// A invoke for interface super invokes.
+class HInvokeSuperInterface : public HInvoke {
+ public:
+  HInvokeSuperInterface(ArenaAllocator* arena,
+                        uint32_t number_of_arguments,
+                        Primitive::Type return_type,
+                        uint32_t dex_pc,
+                        uint32_t dex_method_index,
+                        ClassReference target_class)
+      // We need to add an extra input for reliance on the current method.
+      : HInvoke(arena, number_of_arguments, 1u, return_type, dex_pc, dex_method_index, kSuper),
+        target_class_(target_class) {}
+
+  bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
+    // We access the method via the dex cache so we can't do an implicit null check.
+    // TODO: for intrinsics we can generate implicit null checks.
+    return false;
+  }
+
+  ClassReference GetTargetClass() const { return target_class_; }
+
+  DECLARE_INSTRUCTION(InvokeSuperInterface);
+
+ private:
+  ClassReference target_class_;
+
+  DISALLOW_COPY_AND_ASSIGN(HInvokeSuperInterface);
+};
 
 class HInvokeVirtual : public HInvoke {
  public:

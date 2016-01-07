@@ -320,6 +320,8 @@ class HGraphBuilder : public ValueObject {
   bool IsInitialized(Handle<mirror::Class> cls) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  mirror::Class* ResolveClassForMethod(uint16_t method_idx);
+
   // Try to resolve a method using the class linker. Return null if a method could
   // not be resolved.
   ArtMethod* ResolveMethod(uint16_t method_idx, InvokeType invoke_type);

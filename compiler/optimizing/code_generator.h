@@ -409,6 +409,7 @@ class CodeGenerator {
       HInvoke* invoke, InvokeDexCallingConventionVisitor* visitor);
 
   void GenerateInvokeUnresolvedRuntimeCall(HInvokeUnresolved* invoke);
+  void GenerateInvokeSuperInterfaceRuntimeCall(HInvokeSuperInterface* invoke);
 
   void CreateUnresolvedFieldLocationSummary(
       HInstruction* field_access,

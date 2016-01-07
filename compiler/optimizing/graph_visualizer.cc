@@ -392,6 +392,12 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     StartAttributeStream("invoke_type") << invoke->GetOriginalInvokeType();
   }
 
+  void VisitInvokeSuperInterface(HInvokeSuperInterface* invoke) OVERRIDE {
+    VisitInvoke(invoke);
+    auto target_class = invoke->GetTargetClass();
+    StartAttributeStream("target_class") << PrettyType(target_class.second, *target_class.first);
+  }
+
   void VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) OVERRIDE {
     VisitInvoke(invoke);
     StartAttributeStream("method_load_kind") << invoke->GetMethodLoadKind();
