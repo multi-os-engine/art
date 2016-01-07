@@ -1621,7 +1621,7 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
   int stats_flags = 0;
   ScopedObjectAccess soa(Thread::Current());
   // Try to resolve the method and compiling method's class.
-  StackHandleScope<2> hs(soa.Self());
+  StackHandleScope<3> hs(soa.Self());
   Handle<mirror::DexCache> dex_cache(mUnit->GetDexCache());
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
       soa.Decode<mirror::ClassLoader*>(mUnit->GetClassLoader())));

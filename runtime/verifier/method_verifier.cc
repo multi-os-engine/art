@@ -3715,7 +3715,7 @@ ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(
         runtime == nullptr ||
         runtime->AreExperimentalFlagsEnabled(ExperimentalFlags::kDefaultMethods);
     if (method_type != METHOD_INTERFACE &&
-        (!default_methods_supported || method_type != METHOD_STATIC)) {
+        (!default_methods_supported || (!is_super && method_type != METHOD_STATIC))) {
       Fail(VERIFY_ERROR_CLASS_CHANGE)
           << "non-interface method " << PrettyMethod(dex_method_idx, *dex_file_)
           << " is in an interface class " << PrettyClass(klass);
@@ -3954,13 +3954,34 @@ ArtMethod* MethodVerifier::VerifyInvocationArgs(
   // If we're using invoke-super(method), make sure that the executing method's class' superclass
   // has a vtable entry for the target method. Or the target is on a interface.
   if (is_super) {
+    uint16_t class_idx = dex_file_->GetMethodId(method_idx).class_idx_;
+    mirror::Class* reference_class = dex_cache_->GetResolvedType(class_idx);
+    if (reference_class == nullptr) {
+      Fail(VERIFY_ERROR_FORCE_INTERPRETER) << "Unable to find referenced class from invoke-super";
+      return nullptr;
+    }
     DCHECK(method_type == METHOD_VIRTUAL);
-    if (res_method->GetDeclaringClass()->IsInterface()) {
-      // TODO Fill in this part. Verify what we can...
-      if (Runtime::Current()->IsAotCompiler()) {
-        Fail(VERIFY_ERROR_FORCE_INTERPRETER) << "Currently we only allow invoke-super in "
-                                             << "interpreter when using interface methods";
+    if (reference_class->IsInterface()) {
+      if (class_idx == class_def_->class_idx_) {
+        Fail(VERIFY_ERROR_CLASS_CHANGE) << "Cannot invoke-super on self as interface";
       }
+      const DexFile::TypeList* ifaces = dex_file_->GetInterfacesList(*class_def_);
+      bool found_iface = false;
+      if (ifaces != nullptr) {
+        for (uint32_t i = 0; i < ifaces->Size(); i++) {
+          if (class_idx == ifaces->GetTypeItem(i).type_idx_) {
+            found_iface = true;
+            break;
+          }
+        }
+      }
+      if (!found_iface) {
+        // TODO is this needed.
+        Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "Interface super references non-direct "
+                                          << "super-interface. Conservative fall-back to "
+                                          << "interpreter.";
+      }
+      // TODO Can we verify anything else?
     } else {
       const RegType& super = GetDeclaringClass().GetSuperClass(&reg_types_);
       if (super.IsUnresolvedTypes()) {
