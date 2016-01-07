@@ -47,6 +47,12 @@ class HSharpening : public HOptimization {
 
  private:
   void ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke);
+  void ProcessInvokeSuperInterface(HInvokeSuperInterface* invoke);
+  void UpdateInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke,
+                                  InvokeType optimized_invoke_type,
+                                  MethodReference target_method,
+                                  uintptr_t direct_code,
+                                  uintptr_t direct_method);
 
   CodeGenerator* codegen_;
   const DexCompilationUnit& compilation_unit_;

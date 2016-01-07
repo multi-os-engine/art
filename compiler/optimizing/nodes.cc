@@ -2086,6 +2086,15 @@ bool HInstruction::HasAnyEnvironmentUseBefore(HInstruction* other) {
   return false;
 }
 
+void HInvoke::CopyInputsFrom(const HInvoke* other) {
+  DCHECK_LE(other->InputCount(), InputCount());
+  DCHECK_EQ(other->GetNumberOfArguments(), GetNumberOfArguments());
+  size_t inputs = other->InputCount();
+  for (size_t i = 0; i < inputs; i++) {
+    SetArgumentAt(i, other->InputAt(i));
+  }
+}
+
 void HInvoke::SetIntrinsic(Intrinsics intrinsic,
                            IntrinsicNeedsEnvironmentOrCache needs_env_or_cache) {
   intrinsic_ = intrinsic;

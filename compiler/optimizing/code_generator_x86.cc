@@ -1956,6 +1956,17 @@ void InstructionCodeGeneratorX86::VisitReturn(HReturn* ret) {
   codegen_->GenerateFrameExit();
 }
 
+void LocationsBuilderX86::VisitInvokeSuperInterface(HInvokeSuperInterface* invoke) {
+  // The trampoline uses the same calling convention as dex calling conventions,
+  // except instead of loading arg0/r0 with the target Method*, arg0/r0 will contain
+  // the method_idx.
+  HandleInvoke(invoke);
+}
+
+void InstructionCodeGeneratorX86::VisitInvokeSuperInterface(HInvokeSuperInterface* invoke) {
+  codegen_->GenerateInvokeSuperInterfaceRuntimeCall(invoke);
+}
+
 void LocationsBuilderX86::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
   // The trampoline uses the same calling convention as dex calling conventions,
   // except instead of loading arg0/r0 with the target Method*, arg0/r0 will contain

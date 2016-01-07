@@ -2138,6 +2138,17 @@ Location InvokeDexCallingConventionVisitorX86_64::GetNextLocation(Primitive::Typ
   return Location::NoLocation();
 }
 
+void LocationsBuilderX86_64::VisitInvokeSuperInterface(HInvokeSuperInterface* invoke) {
+  // The trampoline uses the same calling convention as dex calling conventions,
+  // except instead of loading arg0/r0 with the target Method*, arg0/r0 will contain
+  // the method_idx.
+  HandleInvoke(invoke);
+}
+
+void InstructionCodeGeneratorX86_64::VisitInvokeSuperInterface(HInvokeSuperInterface* invoke) {
+  codegen_->GenerateInvokeSuperInterfaceRuntimeCall(invoke);
+}
+
 void LocationsBuilderX86_64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
   // The trampoline uses the same calling convention as dex calling conventions,
   // except instead of loading arg0/r0 with the target Method*, arg0/r0 will contain

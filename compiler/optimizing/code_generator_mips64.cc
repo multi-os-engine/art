@@ -2753,6 +2753,17 @@ void InstructionCodeGeneratorMIPS64::VisitNullConstant(HNullConstant* constant A
   // Will be generated at use site.
 }
 
+void LocationsBuilderMIPS64::VisitInvokeSuperInterface(HInvokeSuperInterface* invoke) {
+  // The trampoline uses the same calling convention as dex calling conventions,
+  // except instead of loading arg0/r0 with the target Method*, arg0/r0 will contain
+  // the method_idx.
+  HandleInvoke(invoke);
+}
+
+void InstructionCodeGeneratorMIPS64::VisitInvokeSuperInterface(HInvokeSuperInterface* invoke) {
+  codegen_->GenerateInvokeSuperInterfaceRuntimeCall(invoke);
+}
+
 void LocationsBuilderMIPS64::VisitInvokeUnresolved(HInvokeUnresolved* invoke) {
   // The trampoline uses the same calling convention as dex calling conventions,
   // except instead of loading arg0/r0 with the target Method*, arg0/r0 will contain

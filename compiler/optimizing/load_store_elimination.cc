@@ -426,6 +426,10 @@ class HeapLocationCollector : public HGraphVisitor {
     CreateReferenceInfoForReferenceType(instruction);
   }
 
+  void VisitInvokeSuperInterface(HInvokeSuperInterface* instruction) OVERRIDE {
+    CreateReferenceInfoForReferenceType(instruction);
+  }
+
   void VisitInvokeVirtual(HInvokeVirtual* instruction) OVERRIDE {
     CreateReferenceInfoForReferenceType(instruction);
   }
@@ -863,6 +867,10 @@ class LSEVisitor : public HGraphVisitor {
   }
 
   void VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) OVERRIDE {
+    HandleInvoke(invoke);
+  }
+
+  void VisitInvokeSuperInterface(HInvokeSuperInterface* invoke) OVERRIDE {
     HandleInvoke(invoke);
   }
 

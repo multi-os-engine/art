@@ -16,11 +16,19 @@
 
 #include "sharpening.h"
 
+#include "art_method-inl.h"
+#include "builder.h"
+#include "class_linker.h"
 #include "code_generator.h"
-#include "utils/dex_cache_arrays_layout-inl.h"
 #include "driver/compiler_driver.h"
+#include "driver/compiler_driver-inl.h"
+#include "driver/dex_compilation_unit.h"
+#include "mirror/class-inl.h"
+#include "mirror/class_loader.h"
+#include "mirror/dex_cache.h"
 #include "nodes.h"
 #include "runtime.h"
+#include "utils/dex_cache_arrays_layout-inl.h"
 
 namespace art {
 
@@ -31,6 +39,8 @@ void HSharpening::Run() {
       HInstruction* instruction = it.Current();
       if (instruction->IsInvokeStaticOrDirect()) {
         ProcessInvokeStaticOrDirect(instruction->AsInvokeStaticOrDirect());
+      } else if (instruction->IsInvokeSuperInterface()) {
+        ProcessInvokeSuperInterface(instruction->AsInvokeSuperInterface());
       }
       // TODO: Move the sharpening of invoke-virtual/-interface/-super from HGraphBuilder
       //       here. Rewrite it to avoid the CompilerDriver's reliance on verifier data
@@ -39,6 +49,130 @@ void HSharpening::Run() {
       //       available.
     }
   }
+}
+
+void HSharpening::ProcessInvokeSuperInterface(HInvokeSuperInterface* invoke) {
+  // TODO Check if we can get a direct call; Class is in same dex file, has a non-conflict,
+  // non-abstract resolution. If so use it. Otherwise we do nothing. We will simply force going to
+  // interpreter if we aren't sure that there is no conflict. This should be the common case and
+  // otherwise probably means something went wrong/class loader trickery so we might as well be
+  // careful.
+  // TODO alternatively we might want to only sharpen in cases where the 'exact' class has the given
+  // method. This would be the most common scenario.
+  uint32_t method_index = invoke->GetDexMethodIndex();
+  ScopedObjectAccess soa(Thread::Current());
+  StackHandleScope<3> hs(soa.Self());
+
+  const DexFile* dex_file = compilation_unit_.GetDexFile();
+  Handle<mirror::DexCache> dex_cache(compilation_unit_.GetDexCache());
+  ClassLinker* class_linker = compilation_unit_.GetClassLinker();
+  Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
+      soa.Decode<mirror::ClassLoader*>(compilation_unit_.GetClassLoader())));
+  // Get the method.
+  ArtMethod* resolved_method = class_linker->ResolveMethod<ClassLinker::kForceICCECheck>(
+      *dex_file,
+      method_index,
+      dex_cache,
+      class_loader,
+      /* referrer */ nullptr,
+      kSuper);
+
+  if (UNLIKELY(resolved_method == nullptr)) {
+    // Clean up any exception left by type resolution.
+    // Just return, we cannot do anything right now.
+    soa.Self()->ClearException();
+    return;
+  }
+
+  const DexFile::MethodId& method_id =
+      dex_file->GetMethodId(invoke->GetDexMethodIndex());
+  // Find the class we are invoking on.
+  Handle<mirror::Class> ref_class(hs.NewHandle(class_linker->ResolveType(*dex_file,
+                                                                         method_id.class_idx_,
+                                                                         dex_cache,
+                                                                         class_loader)));
+  if (ref_class.Get() == nullptr) {
+    // Couldn't find class. Ignore it. Try at runtime.
+    soa.Self()->ClearException();
+    return;
+  }
+
+  // Find the method we will actually run.
+  ArtMethod* real_method = ref_class->FindVirtualMethodForInterfaceSuper(
+      resolved_method, GetInstructionSetPointerSize(codegen_->GetInstructionSet()));
+  if (real_method == nullptr ||
+      !real_method->IsInvokable() ||
+      // TODO Should I have this next line?
+      // We don't want to do stuff across dex files (maybe).
+      real_method->GetDexFile() != dex_file ||
+      &ref_class->GetDexFile() != dex_file) {
+    // No method or bad method found.
+    return;
+  }
+  Handle<mirror::Class> compiling_class(hs.NewHandle(compiler_driver_->ResolveCompilingMethodsClass(
+      soa, dex_cache, class_loader, &compilation_unit_)));
+  MethodReference target_method(real_method->GetDexFile(), real_method->GetMethodIndex());
+  if (UNLIKELY(compiling_class.Get() == nullptr ||
+               !compiling_class->CanAccessResolvedMethod(resolved_method->GetDeclaringClass(),
+                                                         resolved_method,
+                                                         dex_cache.Get(),
+                                                         target_method.dex_method_index))) {
+    return;
+  }
+  // Try to process it even more.
+  uintptr_t direct_code, direct_method;
+  InvokeType new_invoke_type;
+  int stats_flag = 0;
+  // TODO: Avoid CompilerDriver.
+  compiler_driver_->GetCodeAndMethodForDirectCall(&new_invoke_type,
+                                                  kDirect,
+                                                  false,
+                                                  compiling_class.Get(),
+                                                  real_method,
+                                                  &stats_flag,
+                                                  &target_method,
+                                                  &direct_code,
+                                                  &direct_method);
+  if (UNLIKELY(new_invoke_type != kDirect)) {
+    return;
+  }
+
+  // This is the Reference to the actual method we are running.
+  // We know what we are invoking on. Lets use it.
+  ArenaAllocator* arena = invoke->GetBlock()->GetGraph()->GetArena();
+  HInvokeStaticOrDirect* sharp_invoke = new (arena) HInvokeStaticOrDirect(
+          arena,
+          invoke->GetNumberOfArguments(),
+          invoke->GetType(),
+          invoke->GetDexPc(),
+          method_index,
+          target_method,
+          HInvokeStaticOrDirect::DispatchInfo {
+            HInvokeStaticOrDirect::MethodLoadKind::kDexCacheViaMethod,
+            HInvokeStaticOrDirect::CodePtrLocation::kCallArtMethod,
+            0u,
+            0u
+          },
+          kSuper,
+          kDirect,
+          HInvokeStaticOrDirect::ClinitCheckRequirement::kImplicit);
+
+  // The new invoke needs to have the same inputs.
+  sharp_invoke->CopyInputsFrom(invoke);
+  // Replace instruction with the sharpened version.
+  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, sharp_invoke);
+  // Set the new reference type.
+  if (sharp_invoke->GetType() == Primitive::kPrimNot) {
+    sharp_invoke->SetReferenceTypeInfo(invoke->GetReferenceTypeInfo());
+  }
+  // Copy the environment.
+  sharp_invoke->CopyEnvironmentFrom(invoke->GetEnvironment());
+  // Update the invoke.
+  UpdateInvokeStaticOrDirect(sharp_invoke,
+                             kDirect,
+                             target_method,
+                             direct_code,
+                             direct_method);
 }
 
 void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
@@ -50,25 +184,39 @@ void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
 
   // TODO: Avoid CompilerDriver.
   InvokeType original_invoke_type = invoke->GetOriginalInvokeType();
+  if (original_invoke_type != invoke->GetOptimizedInvokeType()) {
+    LOG(WARNING) << "Already optimized "
+                 << PrettyMethod(invoke->GetDexMethodIndex(),
+                                 invoke->GetDexFile());
+    return;
+  }
   InvokeType optimized_invoke_type = original_invoke_type;
   MethodReference target_method(&graph_->GetDexFile(), invoke->GetDexMethodIndex());
-  int vtable_idx;
+  int vtable_idx = 0;
   uintptr_t direct_code, direct_method;
-  bool success = compiler_driver_->ComputeInvokeInfo(
-      &compilation_unit_,
-      invoke->GetDexPc(),
-      false /* update_stats: already updated in builder */,
-      true /* enable_devirtualization */,
-      &optimized_invoke_type,
-      &target_method,
-      &vtable_idx,
-      &direct_code,
-      &direct_method);
-  if (!success) {
+  if (compiler_driver_->ComputeInvokeInfo(&compilation_unit_,
+                                          invoke->GetDexPc(),
+                                          false /* update_stats: already updated in builder */,
+                                          true /* enable_devirtualization */,
+                                          &optimized_invoke_type,
+                                          &target_method,
+                                          &vtable_idx,
+                                          &direct_code,
+                                          &direct_method)) {
+    UpdateInvokeStaticOrDirect(
+        invoke, optimized_invoke_type, target_method, direct_code, direct_method);
+  } else {
     // TODO: try using kDexCachePcRelative. It's always a valid method load
     // kind as long as it's supported by the codegen
     return;
   }
+}
+
+void HSharpening::UpdateInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke,
+                                             InvokeType optimized_invoke_type,
+                                             MethodReference target_method,
+                                             uintptr_t direct_code,
+                                             uintptr_t direct_method) {
   invoke->SetOptimizedInvokeType(optimized_invoke_type);
   invoke->SetTargetMethod(target_method);
 

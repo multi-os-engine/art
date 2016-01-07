@@ -270,6 +270,9 @@ class ClassLinker {
 
   ArtMethod* GetResolvedMethod(uint32_t method_idx, ArtMethod* referrer)
       SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Class* ResolveTypeFromMethod(Thread* self, uint32_t method_idx, ArtMethod* referrer)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!dex_lock_, !Roles::uninterruptible_);
   template <ResolveMode kResolveMode>
   ArtMethod* ResolveMethod(Thread* self, uint32_t method_idx, ArtMethod* referrer, InvokeType type)
       SHARED_REQUIRES(Locks::mutator_lock_)
