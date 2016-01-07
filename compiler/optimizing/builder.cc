@@ -27,6 +27,7 @@
 #include "dex/verified_method.h"
 #include "driver/compiler_driver-inl.h"
 #include "driver/compiler_options.h"
+#include "experimental_flags.h"
 #include "mirror/class_loader.h"
 #include "mirror/dex_cache.h"
 #include "nodes.h"
@@ -796,9 +797,31 @@ static InvokeType GetInvokeTypeFromOpCode(Instruction::Code opcode) {
   }
 }
 
+mirror::Class* HGraphBuilder::ResolveClassForMethod(uint16_t method_idx) {
+  ScopedObjectAccess soa(Thread::Current());
+  StackHandleScope<1> hs(soa.Self());
+
+  ClassLinker* class_linker = dex_compilation_unit_->GetClassLinker();
+  Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
+      soa.Decode<mirror::ClassLoader*>(dex_compilation_unit_->GetClassLoader())));
+
+  const DexFile::MethodId& method_id = dex_compilation_unit_->GetDexFile()->GetMethodId(method_idx);
+  mirror::Class* klass = class_linker->ResolveType(*dex_compilation_unit_->GetDexFile(),
+                                                   method_id.class_idx_,
+                                                   dex_cache_,
+                                                   class_loader);
+  if (klass == nullptr) {
+    DCHECK(Thread::Current()->IsExceptionPending());
+    // Clean up any exception left by type resolution.
+    soa.Self()->ClearException();
+    return nullptr;
+  }
+  return klass;
+}
+
 ArtMethod* HGraphBuilder::ResolveMethod(uint16_t method_idx, InvokeType invoke_type) {
   ScopedObjectAccess soa(Thread::Current());
-  StackHandleScope<2> hs(soa.Self());
+  StackHandleScope<3> hs(soa.Self());
 
   ClassLinker* class_linker = dex_compilation_unit_->GetClassLinker();
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
@@ -833,31 +856,59 @@ ArtMethod* HGraphBuilder::ResolveMethod(uint16_t method_idx, InvokeType invoke_t
   }
 
   // We have to special case the invoke-super case, as ClassLinker::ResolveMethod does not.
-  // We need to look at the referrer's super class vtable.
+  // We need to look at the referrer's super class vtable. We need to do this to know if we need to
+  // make this an invoke-unresolved to handle cross-dex invokes or abstract super methods, both of
+  // which require runtime handling.
   if (invoke_type == kSuper) {
-    if (compiling_class.Get() == nullptr) {
-      // Invoking a super method requires knowing the actual super class. If we did not resolve
-      // the compiling method's declaring class (which only happens for ahead of time compilation),
-      // bail out.
+    Handle<mirror::Class> methods_class(hs.NewHandle(ResolveClassForMethod(method_idx)));
+    bool default_methods_enabled = Runtime::Current()->AreExperimentalFlagsEnabled(
+        ExperimentalFlags::kDefaultMethods);
+    if (methods_class.Get() == nullptr) {
+      // We could not determine the method's class we need to wait until runtime.
       DCHECK(Runtime::Current()->IsAotCompiler());
       return nullptr;
+    } else {
+      if (compiling_class.Get() == nullptr) {
+        // Invoking a super method requires knowing the actual super class. If we did not resolve
+        // the compiling method's declaring class (which only happens for ahead of time
+        // compilation), bail out.
+        DCHECK(Runtime::Current()->IsAotCompiler());
+        return nullptr;
+      }
+      ArtMethod* actual_method;
+      if (default_methods_enabled && methods_class->IsInterface()) {
+        actual_method = methods_class->FindVirtualMethodForInterfaceSuper(
+            resolved_method, class_linker->GetImagePointerSize());
+      } else {
+        if (methods_class->IsInterface()) {
+          LOG(WARNING) << "Found invoke-super with interface when support is disabled. The behavior"
+                       << " of this instruction may change in the future. Found during compilation "
+                       << "of '" << PrettyMethod(graph_->GetArtMethod()) << "' when invoking "
+                       << "method_idx: " << method_idx;
+        }
+        uint16_t vtable_index = resolved_method->GetMethodIndex();
+        actual_method = compiling_class->GetSuperClass()->GetVTableEntry(
+            vtable_index, class_linker->GetImagePointerSize());
+      }
+      if (actual_method != resolved_method &&
+          !IsSameDexFile(*actual_method->GetDexFile(), *dex_compilation_unit_->GetDexFile())) {
+        // TODO: The compiler driver relies on this check in order to ensure that sharpening
+        //       does not sharpen to an incorrect method. If this check does not fail then the
+        //       method_index of the target method will not be changed which means that the
+        //       sharpening code will incorrectly sharpen using the 'resolved_method' not the
+        //       'actual_method'.
+        // TODO: The actual method could still be referenced in the current dex file, so we
+        //       could try locating it.
+        // TODO: Remove the dex_file restriction.
+        return nullptr;
+      }
+      if (!actual_method->IsInvokable()) {
+        // Fail if the actual method cannot be invoked. Otherwise, the runtime resolution stub
+        // could resolve the callee to the wrong method.
+        return nullptr;
+      }
+      resolved_method = actual_method;
     }
-    uint16_t vtable_index = resolved_method->GetMethodIndex();
-    ArtMethod* actual_method = compiling_class->GetSuperClass()->GetVTableEntry(
-        vtable_index, class_linker->GetImagePointerSize());
-    if (actual_method != resolved_method &&
-        !IsSameDexFile(*actual_method->GetDexFile(), *dex_compilation_unit_->GetDexFile())) {
-      // TODO: The actual method could still be referenced in the current dex file, so we
-      // could try locating it.
-      // TODO: Remove the dex_file restriction.
-      return nullptr;
-    }
-    if (!actual_method->IsInvokable()) {
-      // Fail if the actual method cannot be invoked. Otherwise, the runtime resolution stub
-      // could resolve the callee to the wrong method.
-      return nullptr;
-    }
-    resolved_method = actual_method;
   }
 
   // Check for incompatible class changes. The class linker has a fast path for
@@ -923,7 +974,7 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
 
   ArtMethod* resolved_method = ResolveMethod(method_idx, invoke_type);
 
-  if (resolved_method == nullptr) {
+  if (UNLIKELY(resolved_method == nullptr)) {
     MaybeRecordStat(MethodCompilationStat::kUnresolvedMethod);
     HInvoke* invoke = new (arena_) HInvokeUnresolved(arena_,
                                                      number_of_arguments,
@@ -943,7 +994,6 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
   // Potential class initialization check, in the case of a static method call.
   HClinitCheck* clinit_check = nullptr;
   HInvoke* invoke = nullptr;
-
   if (invoke_type == kDirect || invoke_type == kStatic || invoke_type == kSuper) {
     // By default, consider that the called method implicitly requires
     // an initialization check of its declaring method.
@@ -955,6 +1005,11 @@ bool HGraphBuilder::BuildInvoke(const Instruction& instruction,
           dex_pc, resolved_method, method_idx, &clinit_check_requirement);
     } else if (invoke_type == kSuper) {
       if (IsSameDexFile(*resolved_method->GetDexFile(), *dex_compilation_unit_->GetDexFile())) {
+        // TODO: The compiler driver relies on this check in order to ensure that sharpening
+        //       does not sharpen to an incorrect method. If this check does not fail then the
+        //       method_index of the target method will not be changed which means that the
+        //       sharpening code will incorrectly sharpen using the 'resolved_method' not the
+        //       'actual_method'.
         // Update the target method to the one resolved. Note that this may be a no-op if
         // we resolved to the method referenced by the instruction.
         method_idx = resolved_method->GetDexMethodIndex();
@@ -1189,8 +1244,8 @@ bool HGraphBuilder::SetupInvokeArguments(HInvoke* invoke,
   }
 
   if (invoke->IsInvokeStaticOrDirect() &&
-      HInvokeStaticOrDirect::NeedsCurrentMethodInput(
-          invoke->AsInvokeStaticOrDirect()->GetMethodLoadKind())) {
+       HInvokeStaticOrDirect::NeedsCurrentMethodInput(
+           invoke->AsInvokeStaticOrDirect()->GetMethodLoadKind())) {
     invoke->SetArgumentAt(*argument_index, graph_->GetCurrentMethod());
     (*argument_index)++;
   }
