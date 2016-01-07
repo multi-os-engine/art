@@ -400,6 +400,32 @@ oat-target-sync: oat-target
 	$(TEST_ART_ADB_ROOT_AND_REMOUNT)
 	adb sync
 
+##################################################################################################
+# Fake package to ensure generation of libopenjdkd when one builds inside art/. The library
+# is required for starting a runtime in debug mode, but libartd does not depend on it (dependency
+# cycle otherwise).
+include $(CLEAR_VARS)
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE := art-libartd-libopenjdkd-dependency
+LOCAL_ADDITIONAL_DEPENDENCIES :=
+
+# ART on the host.
+ifeq ($(ART_BUILD_HOST_DEBUG),true)
+  LOCAL_ADDITIONAL_DEPENDENCIES += $(ART_HOST_OUT_SHARED_LIBRARIES)/libopenjdkd$(ART_HOST_SHLIB_EXTENSION)
+  ifdef HOST_2ND_ARCH
+    LOCAL_ADDITIONAL_DEPENDENCIES += $(2ND_HOST_OUT_SHARED_LIBRARIES)/libopenjdkd$(ART_HOST_SHLIB_EXTENSION)
+  endif
+endif
+
+# ART on the target.
+ifeq ($(ART_BUILD_TARGET_DEBUG),true)
+  LOCAL_ADDITIONAL_DEPENDENCIES += $(TARGET_OUT_SHARED_LIBRARIES)/libopenjdkd.so
+  ifdef HOST_2ND_ARCH
+    LOCAL_ADDITIONAL_DEPENDENCIES += $(2ND_TARGET_OUT_SHARED_LIBRARIES)/libopenjdkd.so
+  endif
+endif
+include $(BUILD_PHONY_PACKAGE)
+
 ########################################################################
 # "m build-art" for quick minimal build
 .PHONY: build-art
