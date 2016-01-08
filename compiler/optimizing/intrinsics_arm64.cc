@@ -1035,7 +1035,11 @@ static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGenerat
     __ Stlxr(tmp_32, value, MemOperand(tmp_ptr));
     __ Cbnz(tmp_32, &loop_head);
   } else {
-    __ Dmb(InnerShareable, BarrierWrites);
+    // Emit a `Dmb(InnerShareable, BarrierAll)` (DMB ISH) instruction
+    // instead of a `Dmb(InnerShareable, BarrierWrites)` (DMB ISHST)
+    // one, as the latter allows a preceding load to be delayed past
+    // the STXR instruction below.
+    __ Dmb(InnerShareable, BarrierAll);
     __ Bind(&loop_head);
     // TODO: When `type == Primitive::kPrimNot`, add a read barrier for
     // the reference stored in the object before attempting the CAS,
@@ -1050,7 +1054,10 @@ static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGenerat
     __ B(&exit_loop, ne);
     __ Stxr(tmp_32, value, MemOperand(tmp_ptr));
     __ Cbnz(tmp_32, &loop_head);
-    __ Dmb(InnerShareable, BarrierAll);
+    // A `Dmb(InnerShareable, BarrierReads)` (DMB ISHLD) instruction
+    // is enough here, i.e. we do not need a `Dmb(InnerShareable, BarrierAll)`
+    // (DMB ISH) barrier.
+    __ Dmb(InnerShareable, BarrierReads);
   }
   __ Bind(&exit_loop);
   __ Cset(out, eq);

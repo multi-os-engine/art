@@ -847,6 +847,9 @@ static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGenerat
   }
 
   // Prevent reordering with prior memory operations.
+  // Emit a DMB ISH instruction instead of an DMB ISHLD one, as the
+  // latter allows a preceding load to be delayed past the STXR
+  // instruction below.
   __ dmb(ISH);
 
   __ add(tmp_ptr, base, ShifterOperand(offset));
@@ -882,6 +885,8 @@ static void GenCas(LocationSummary* locations, Primitive::Type type, CodeGenerat
 
   __ b(&loop_head, EQ);
 
+  // A DMB ISHLD barrier should be enough here, but this instruction
+  // does not exist on 32-bit ARM; use a DMB ISH barrier instead.
   __ dmb(ISH);
 
   __ rsbs(out, tmp_lo, ShifterOperand(1));
