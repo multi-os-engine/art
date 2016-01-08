@@ -44,7 +44,6 @@ class HBasicBlock;
 class HCurrentMethod;
 class HDoubleConstant;
 class HEnvironment;
-class HFakeString;
 class HFloatConstant;
 class HGraphBuilder;
 class HGraphVisitor;
@@ -1156,7 +1155,6 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(DoubleConstant, Constant)                                           \
   M(Equal, Condition)                                                   \
   M(Exit, Instruction)                                                  \
-  M(FakeString, Instruction)                                            \
   M(FloatConstant, Constant)                                            \
   M(Goto, Instruction)                                                  \
   M(GreaterThan, Condition)                                             \
@@ -1733,6 +1731,7 @@ class HEnvironment : public ArenaObject<kArenaAllocEnvironment> {
   }
 
   void RemoveAsUserOfInput(size_t index) const;
+  void ReplaceInput(HInstruction* replacement, size_t index);
 
   size_t Size() const { return vregs_.size(); }
 
@@ -1904,6 +1903,9 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
   bool HasUses() const { return !uses_.IsEmpty() || !env_uses_.IsEmpty(); }
   bool HasEnvironmentUses() const { return !env_uses_.IsEmpty(); }
   bool HasNonEnvironmentUses() const { return !uses_.IsEmpty(); }
+  bool HasOnlyOneEnvironmentUse() const {
+    return !HasNonEnvironmentUses() && GetEnvUses().HasOnlyOneUse();
+  }
   bool HasOnlyOneNonEnvironmentUse() const {
     return !HasEnvironmentUses() && GetUses().HasOnlyOneUse();
   }
@@ -3543,10 +3545,9 @@ class HInvokeStaticOrDirect : public HInvoke {
 
   // Get the index of the special input, if any.
   //
-  // If the invoke IsStringInit(), it initially has a HFakeString special argument
-  // which is removed by the instruction simplifier; if the invoke HasCurrentMethodInput(),
-  // the "special input" is the current method pointer; otherwise there may be one
-  // platform-specific special input, such as PC-relative addressing base.
+  // If the invoke HasCurrentMethodInput(), the "special input" is the current
+  // method pointer; otherwise there may be one platform-specific special input,
+  // such as PC-relative addressing base.
   uint32_t GetSpecialInputIndex() const { return GetNumberOfArguments(); }
 
   InvokeType GetOptimizedInvokeType() const { return optimized_invoke_type_; }
@@ -3620,20 +3621,9 @@ class HInvokeStaticOrDirect : public HInvoke {
     DCHECK(!IsStaticWithExplicitClinitCheck());
   }
 
-  bool IsStringFactoryFor(HFakeString* str) const {
-    if (!IsStringInit()) return false;
-    DCHECK(!HasCurrentMethodInput());
-    if (InputCount() == (number_of_arguments_)) return false;
-    return InputAt(InputCount() - 1)->AsFakeString() == str;
-  }
-
-  void RemoveFakeStringArgumentAsLastInput() {
+  void RemoveLastArgumentOfStringInit() {
     DCHECK(IsStringInit());
-    size_t last_input_index = InputCount() - 1;
-    HInstruction* last_input = InputAt(last_input_index);
-    DCHECK(last_input != nullptr);
-    DCHECK(last_input->IsFakeString()) << last_input->DebugName();
-    RemoveAsUserOfInput(last_input_index);
+    DCHECK(InputAt(InputCount() - 1) == nullptr);
     inputs_.pop_back();
   }
 
@@ -3781,6 +3771,8 @@ class HNewInstance : public HExpression<2> {
   void SetEntrypoint(QuickEntrypointEnum entrypoint) {
     entrypoint_ = entrypoint;
   }
+
+  bool IsStringAlloc() const;
 
   DECLARE_INSTRUCTION(NewInstance);
 
@@ -5566,26 +5558,6 @@ class HMonitorOperation : public HTemplateInstruction<1> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(HMonitorOperation);
-};
-
-/**
- * A HInstruction used as a marker for the replacement of new + <init>
- * of a String to a call to a StringFactory. Only baseline will see
- * the node at code generation, where it will be be treated as null.
- * When compiling non-baseline, `HFakeString` instructions are being removed
- * in the instruction simplifier.
- */
-class HFakeString : public HTemplateInstruction<0> {
- public:
-  explicit HFakeString(uint32_t dex_pc = kNoDexPc)
-      : HTemplateInstruction(SideEffects::None(), dex_pc) {}
-
-  Primitive::Type GetType() const OVERRIDE { return Primitive::kPrimNot; }
-
-  DECLARE_INSTRUCTION(FakeString);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(HFakeString);
 };
 
 class MoveOperands : public ArenaObject<kArenaAllocMoveOperands> {
