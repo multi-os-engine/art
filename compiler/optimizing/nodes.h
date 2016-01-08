@@ -1733,6 +1733,7 @@ class HEnvironment : public ArenaObject<kArenaAllocEnvironment> {
   }
 
   void RemoveAsUserOfInput(size_t index) const;
+  void ReplaceInput(HInstruction* replacement, size_t index);
 
   size_t Size() const { return vregs_.size(); }
 
