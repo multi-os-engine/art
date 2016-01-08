@@ -1623,6 +1623,10 @@ void LocationsBuilderARM::VisitNativeDebugInfo(HNativeDebugInfo* info) {
 }
 
 void InstructionCodeGeneratorARM::VisitNativeDebugInfo(HNativeDebugInfo* info) {
+  if (codegen_->HasPcInfoHere()) {
+    // Ensure that we do not collide with the stack map of the previous instruction.
+    __ nop();
+  }
   codegen_->RecordPcInfo(info, info->GetDexPc());
 }
 
