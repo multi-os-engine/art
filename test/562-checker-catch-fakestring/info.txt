@@ -1,0 +1,2 @@
+Regression test for FakeString simplification which would leave an environment
+slot empty.

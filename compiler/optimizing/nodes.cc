@@ -973,6 +973,12 @@ void HInstruction::ReplaceInput(HInstruction* replacement, size_t index) {
   replacement->AddUseAt(this, index);
 }
 
+void HEnvironment::ReplaceInput(HInstruction* replacement, size_t index) {
+  RemoveAsUserOfInput(index);
+  SetRawEnvAt(index, replacement);
+  replacement->AddEnvUseAt(this, index);
+}
+
 size_t HInstruction::EnvironmentSize() const {
   return HasEnvironment() ? environment_->Size() : 0;
 }

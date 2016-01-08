@@ -1223,8 +1223,7 @@ void InstructionSimplifierVisitor::VisitFakeString(HFakeString* instruction) {
   for (HUseIterator<HEnvironment*> it(instruction->GetEnvUses()); !it.Done(); it.Advance()) {
     HEnvironment* environment = it.Current()->GetUser();
     if (!actual_string->StrictlyDominates(environment->GetHolder())) {
-      environment->RemoveAsUserOfInput(it.Current()->GetIndex());
-      environment->SetRawEnvAt(it.Current()->GetIndex(), nullptr);
+      environment->ReplaceInput(GetGraph()->GetNullConstant(), it.Current()->GetIndex());
     }
   }
 
