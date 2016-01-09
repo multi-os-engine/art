@@ -274,6 +274,9 @@ class OptimizingCompiler FINAL : public Compiler {
   CompiledMethod* JniCompile(uint32_t access_flags,
                              uint32_t method_idx,
                              const DexFile& dex_file) const OVERRIDE {
+    VLOG(compiler) << "Compiling native "
+                   << PrettyMethod(method_idx, dex_file)
+                   << ", method_idx = " << method_idx;
     return ArtQuickJniCompileMethod(GetCompilerDriver(), access_flags, method_idx, dex_file);
   }
 

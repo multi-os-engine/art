@@ -73,6 +73,8 @@ class CompilerOptions FINAL {
                   size_t inline_depth_limit,
                   size_t inline_max_code_units,
                   const DexFile* no_inline_from,
+                  size_t stop_compiling_after,
+                  bool cond_compilation,
                   bool include_patch_information,
                   double top_k_profile_threshold,
                   bool debuggable,
@@ -156,6 +158,14 @@ class CompilerOptions FINAL {
     return inline_max_code_units_;
   }
 
+  size_t GetStopCompilingAfter() const {
+    return stop_compiling_after_;
+  }
+
+  bool IsConditionalCompilation() const {
+    return cond_compilation_;
+  }
+
   double GetTopKProfileThreshold() const {
     return top_k_profile_threshold_;
   }
@@ -225,6 +235,7 @@ class CompilerOptions FINAL {
   bool ParseCompilerOption(const StringPiece& option, UsageFn Usage);
 
  private:
+  void ParseStopCompilingAfter(const StringPiece& option, UsageFn Usage);
   void ParseDumpInitFailures(const StringPiece& option, UsageFn Usage);
   void ParsePassOptions(const StringPiece& option, UsageFn Usage);
   void ParseDumpCfgPasses(const StringPiece& option, UsageFn Usage);
@@ -250,6 +261,9 @@ class CompilerOptions FINAL {
   // A dex file from which we should not inline code.
   const DexFile* no_inline_from_;
 
+  // Conditional compilation used for debug in run-time.
+  size_t stop_compiling_after_;
+  bool cond_compilation_;
   bool include_patch_information_;
   // When using a profile file only the top K% of the profiled samples will be compiled.
   double top_k_profile_threshold_;
