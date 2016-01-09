@@ -42,6 +42,8 @@ class QuickAssembleX86TestBase : public testing::Test {
         CompilerOptions::kDefaultInlineDepthLimit,
         CompilerOptions::kDefaultInlineMaxCodeUnits,
         nullptr,
+        std::numeric_limits<uint32_t>::max() - 1,
+        false,
         false,
         CompilerOptions::kDefaultTopKProfileThreshold,
         false,

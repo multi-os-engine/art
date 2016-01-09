@@ -85,6 +85,8 @@ JitCompiler::JitCompiler() : total_time_(0) {
       CompilerOptions::kDefaultInlineDepthLimit,
       CompilerOptions::kDefaultInlineMaxCodeUnits,
       /* no_inline_from */ nullptr,
+      std::numeric_limits<uint32_t>::max() - 1,
+      /* conditional compilation */ false,
       /* include_patch_information */ false,
       CompilerOptions::kDefaultTopKProfileThreshold,
       Runtime::Current()->IsDebuggable(),

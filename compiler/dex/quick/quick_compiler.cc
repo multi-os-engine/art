@@ -683,7 +683,8 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
   // build default.
   CompilerDriver* driver = GetCompilerDriver();
 
-  VLOG(compiler) << "Compiling " << PrettyMethod(method_idx, dex_file) << "...";
+  VLOG(compiler) << "Compiling " << PrettyMethod(method_idx, dex_file)
+                 << ", method_idx = " << method_idx << " ...";
   if (Compiler::IsPathologicalCase(*code_item, method_idx, dex_file)) {
     return nullptr;
   }
@@ -841,6 +842,8 @@ CompiledMethod* QuickCompiler::Compile(const DexFile::CodeItem* code_item,
 CompiledMethod* QuickCompiler::JniCompile(uint32_t access_flags,
                                           uint32_t method_idx,
                                           const DexFile& dex_file) const {
+  VLOG(compiler) << "Compiling native " << PrettyMethod(method_idx, dex_file)
+                 << ", method_idx = " << method_idx << " ...";
   return ArtQuickJniCompileMethod(GetCompilerDriver(), access_flags, method_idx, dex_file);
 }
 
