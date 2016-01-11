@@ -1212,11 +1212,20 @@ void MipsAssembler::LoadDConst64(FRegister rd, int64_t value, Register temp) {
     LoadConst32(temp, low);
     Mtc1(temp, rd);
   }
-  if (high == 0) {
-    Mthc1(ZERO, rd);
+  if (Is32BitFPU()) {
+    if (high == 0) {
+      Mtc1(ZERO, static_cast<FRegister>(rd + 1));
+    } else {
+      LoadConst32(temp, high);
+      Mtc1(temp, static_cast<FRegister>(rd + 1));
+    }
   } else {
-    LoadConst32(temp, high);
-    Mthc1(temp, rd);
+    if (high == 0) {
+      Mthc1(ZERO, rd);
+    } else {
+      LoadConst32(temp, high);
+      Mthc1(temp, rd);
+    }
   }
 }
 

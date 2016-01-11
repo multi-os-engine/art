@@ -43,12 +43,16 @@ ArenaAllocator* IntrinsicCodeGeneratorMIPS::GetAllocator() {
   return codegen_->GetGraph()->GetArena();
 }
 
-inline bool IntrinsicCodeGeneratorMIPS::IsR2OrNewer() {
+inline bool IntrinsicCodeGeneratorMIPS::IsR2OrNewer() const {
   return codegen_->GetInstructionSetFeatures().IsMipsIsaRevGreaterThanEqual2();
 }
 
-inline bool IntrinsicCodeGeneratorMIPS::IsR6() {
+inline bool IntrinsicCodeGeneratorMIPS::IsR6() const {
   return codegen_->GetInstructionSetFeatures().IsR6();
+}
+
+inline bool IntrinsicCodeGeneratorMIPS::Is32BitFPU() const {
+  return codegen_->GetInstructionSetFeatures().Is32BitFloatingPoint();
 }
 
 #define __ codegen->GetAssembler()->
@@ -154,7 +158,10 @@ static void CreateFPToIntLocations(ArenaAllocator* arena, HInvoke* invoke) {
   locations->SetOut(Location::RequiresRegister());
 }
 
-static void MoveFPToInt(LocationSummary* locations, bool is64bit, MipsAssembler* assembler) {
+static void MoveFPToInt(LocationSummary* locations,
+                        bool is64bit,
+                        bool fpu_32bit,
+                        MipsAssembler* assembler) {
   FRegister in = locations->InAt(0).AsFpuRegister<FRegister>();
 
   if (is64bit) {
@@ -162,7 +169,11 @@ static void MoveFPToInt(LocationSummary* locations, bool is64bit, MipsAssembler*
     Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
 
     __ Mfc1(out_lo, in);
-    __ Mfhc1(out_hi, in);
+    if (fpu_32bit) {
+      __ Mfc1(out_hi, static_cast<FRegister>(in + 1));
+    } else {
+      __ Mfhc1(out_hi, in);
+    }
   } else {
     Register out = locations->Out().AsRegister<Register>();
 
@@ -176,7 +187,7 @@ void IntrinsicLocationsBuilderMIPS::VisitDoubleDoubleToRawLongBits(HInvoke* invo
 }
 
 void IntrinsicCodeGeneratorMIPS::VisitDoubleDoubleToRawLongBits(HInvoke* invoke) {
-  MoveFPToInt(invoke->GetLocations(), /* is64bit */ true, GetAssembler());
+  MoveFPToInt(invoke->GetLocations(), /* is64bit */ true, Is32BitFPU(), GetAssembler());
 }
 
 // int java.lang.Float.floatToRawIntBits(float)
@@ -185,7 +196,7 @@ void IntrinsicLocationsBuilderMIPS::VisitFloatFloatToRawIntBits(HInvoke* invoke)
 }
 
 void IntrinsicCodeGeneratorMIPS::VisitFloatFloatToRawIntBits(HInvoke* invoke) {
-  MoveFPToInt(invoke->GetLocations(), /* is64bit */ false, GetAssembler());
+  MoveFPToInt(invoke->GetLocations(), /* is64bit */ false, Is32BitFPU(), GetAssembler());
 }
 
 static void CreateIntToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
@@ -196,7 +207,10 @@ static void CreateIntToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
   locations->SetOut(Location::RequiresFpuRegister());
 }
 
-static void MoveIntToFP(LocationSummary* locations, bool is64bit, MipsAssembler* assembler) {
+static void MoveIntToFP(LocationSummary* locations,
+                        bool is64bit,
+                        bool fpu_32bit,
+                        MipsAssembler* assembler) {
   FRegister out = locations->Out().AsFpuRegister<FRegister>();
 
   if (is64bit) {
@@ -204,7 +218,11 @@ static void MoveIntToFP(LocationSummary* locations, bool is64bit, MipsAssembler*
     Register in_hi = locations->InAt(0).AsRegisterPairHigh<Register>();
 
     __ Mtc1(in_lo, out);
-    __ Mthc1(in_hi, out);
+    if (fpu_32bit) {
+      __ Mtc1(in_hi, static_cast<FRegister>(out + 1));
+    } else {
+      __ Mthc1(in_hi, out);
+    }
   } else {
     Register in = locations->InAt(0).AsRegister<Register>();
 
@@ -218,7 +236,7 @@ void IntrinsicLocationsBuilderMIPS::VisitDoubleLongBitsToDouble(HInvoke* invoke)
 }
 
 void IntrinsicCodeGeneratorMIPS::VisitDoubleLongBitsToDouble(HInvoke* invoke) {
-  MoveIntToFP(invoke->GetLocations(), /* is64bit */ true, GetAssembler());
+  MoveIntToFP(invoke->GetLocations(), /* is64bit */ true, Is32BitFPU(), GetAssembler());
 }
 
 // float java.lang.Float.intBitsToFloat(int)
@@ -227,7 +245,7 @@ void IntrinsicLocationsBuilderMIPS::VisitFloatIntBitsToFloat(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorMIPS::VisitFloatIntBitsToFloat(HInvoke* invoke) {
-  MoveIntToFP(invoke->GetLocations(), /* is64bit */ false, GetAssembler());
+  MoveIntToFP(invoke->GetLocations(), /* is64bit */ false, Is32BitFPU(), GetAssembler());
 }
 
 static void CreateIntToIntLocations(ArenaAllocator* arena,
