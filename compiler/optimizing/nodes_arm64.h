@@ -152,6 +152,59 @@ class HArm64MultiplyAccumulate : public HExpression<3> {
   DISALLOW_COPY_AND_ASSIGN(HArm64MultiplyAccumulate);
 };
 
+class HArm64BitwiseNegatedRight : public HBinaryOperation {
+ public:
+  HArm64BitwiseNegatedRight(Primitive::Type result_type,
+                            InstructionKind op,
+                            HInstruction* left,
+                            HInstruction* right,
+                            uint32_t dex_pc = kNoDexPc)
+    : HBinaryOperation(result_type, left, right, SideEffects::None(), dex_pc),
+      op_kind_(op) {
+    DCHECK(op == HInstruction::kAnd || op == HInstruction::kOr || op == HInstruction::kXor);
+  }
+
+  // We arbitrarily use & for decltype, the result type should be the same
+  // regardless of the actual bitwise operation.
+  template <typename T, typename U>
+  auto Compute(T x, U y) const -> decltype(x & y) {
+    switch (op_kind_) {
+      case HInstruction::kAnd: return x & ~y;
+      case HInstruction::kOr:  return x | ~y;
+      case HInstruction::kXor: return x ^ ~y;
+      // return needed to prevent compiler warning.
+      default: LOG(FATAL) << "Unreachable"; return 0;
+    }
+  }
+
+  HConstant* Evaluate(HIntConstant* x, HIntConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetIntConstant(
+        Compute(x->GetValue(), y->GetValue()), GetDexPc());
+  }
+  HConstant* Evaluate(HIntConstant* x, HLongConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetLongConstant(
+        Compute(x->GetValue(), y->GetValue()), GetDexPc());
+  }
+  HConstant* Evaluate(HLongConstant* x, HIntConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetLongConstant(
+        Compute(x->GetValue(), y->GetValue()), GetDexPc());
+  }
+  HConstant* Evaluate(HLongConstant* x, HLongConstant* y) const OVERRIDE {
+    return GetBlock()->GetGraph()->GetLongConstant(
+        Compute(x->GetValue(), y->GetValue()), GetDexPc());
+  }
+
+  InstructionKind GetOpKind() const { return op_kind_; }
+
+  DECLARE_INSTRUCTION(Arm64BitwiseNegatedRight);
+
+ private:
+  // Specifies the bitwise operation, which will be then negated.
+  const InstructionKind op_kind_;
+
+  DISALLOW_COPY_AND_ASSIGN(HArm64BitwiseNegatedRight);
+};
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_NODES_ARM64_H_
