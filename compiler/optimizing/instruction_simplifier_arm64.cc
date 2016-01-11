@@ -240,6 +240,52 @@ bool InstructionSimplifierArm64Visitor::TrySimpleMultiplyAccumulatePatterns(
   return false;
 }
 
+bool InstructionSimplifierArm64Visitor::TryMergeNegatedInput(HBinaryOperation* op) {
+  HInstruction* left = op->GetLeft();
+  HInstruction* right = op->GetRight();
+
+  // Only consider the case where there is exactly one Not, with 2 Not's De
+  // Morgan's laws should be applied instead.
+  if (left->IsNot() ^ right->IsNot()) {
+    HInstruction* hnot;
+    HInstruction* hother;
+    if (left->IsNot()) {
+      hnot = left;
+      hother = right;
+    } else {
+      hnot = right;
+      hother = left;
+    }
+
+    // Only do the simplification if the Not has only use and can thus be
+    // safely removed. Don't do it either if the other input is a constant,
+    // because ARM64 negated bitwise operations do not have an immediate variant
+    // (only register).
+    if (hnot->HasOnlyOneNonEnvironmentUse() && !hother->IsConstant()) {
+      // Replace code looking like
+      //    NOT tmp, mask
+      //    AND dst, src, tmp   (respectively ORR, EOR)
+      // with
+      //    BIC dst, src, mask  (respectively ORN, EON)
+      HInstruction* src = hnot->AsNot()->GetInput();
+
+      HArm64BitwiseNegatedRight* neg_op = new (GetGraph()->GetArena())
+          HArm64BitwiseNegatedRight(op->GetType(), op->GetKind(), hother, src, op->GetDexPc());
+
+      op->GetBlock()->ReplaceAndRemoveInstructionWith(op, neg_op);
+      hnot->GetBlock()->RemoveInstruction(hnot);
+      RecordSimplification();
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void InstructionSimplifierArm64Visitor::VisitAnd(HAnd* instruction) {
+  TryMergeNegatedInput(instruction);
+}
+
 void InstructionSimplifierArm64Visitor::VisitArrayGet(HArrayGet* instruction) {
   TryExtractArrayAccessAddress(instruction,
                                instruction->GetArray(),
@@ -327,6 +373,10 @@ void InstructionSimplifierArm64Visitor::VisitMul(HMul* instruction) {
   }
 }
 
+void InstructionSimplifierArm64Visitor::VisitOr(HOr* instruction) {
+  TryMergeNegatedInput(instruction);
+}
+
 void InstructionSimplifierArm64Visitor::VisitShl(HShl* instruction) {
   if (instruction->InputAt(1)->IsConstant()) {
     TryMergeIntoUsersShifterOperand(instruction);
@@ -357,6 +407,10 @@ void InstructionSimplifierArm64Visitor::VisitUShr(HUShr* instruction) {
   if (instruction->InputAt(1)->IsConstant()) {
     TryMergeIntoUsersShifterOperand(instruction);
   }
+}
+
+void InstructionSimplifierArm64Visitor::VisitXor(HXor* instruction) {
+  TryMergeNegatedInput(instruction);
 }
 
 }  // namespace arm64
