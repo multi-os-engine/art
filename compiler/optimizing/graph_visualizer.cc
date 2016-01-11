@@ -437,6 +437,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
   void VisitArm64MultiplyAccumulate(HArm64MultiplyAccumulate* instruction) OVERRIDE {
     StartAttributeStream("kind") << instruction->GetOpKind();
   }
+
+  void VisitArm64BitwiseNegatedRight(HArm64BitwiseNegatedRight* instruction) OVERRIDE {
+    StartAttributeStream("kind") << instruction->GetOpKind();
+  }
 #endif
 
   bool IsPass(const char* name) {

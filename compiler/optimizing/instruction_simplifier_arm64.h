@@ -55,14 +55,21 @@ class InstructionSimplifierArm64Visitor : public HGraphVisitor {
                                            HBinaryOperation* input_binop,
                                            HInstruction* input_other);
 
+  // For bitwise operations (And/Or/Xor) with a negated input, try to use
+  // a negated bitwise instruction.
+  bool TryMergeNegatedInput(HBinaryOperation* op);
+
   // HInstruction visitors, sorted alphabetically.
+  void VisitAnd(HAnd* instruction) OVERRIDE;
   void VisitArrayGet(HArrayGet* instruction) OVERRIDE;
   void VisitArraySet(HArraySet* instruction) OVERRIDE;
   void VisitMul(HMul* instruction) OVERRIDE;
+  void VisitOr(HOr* instruction) OVERRIDE;
   void VisitShl(HShl* instruction) OVERRIDE;
   void VisitShr(HShr* instruction) OVERRIDE;
   void VisitTypeConversion(HTypeConversion* instruction) OVERRIDE;
   void VisitUShr(HUShr* instruction) OVERRIDE;
+  void VisitXor(HXor* instruction) OVERRIDE;
 
   OptimizingCompilerStats* stats_;
 };
