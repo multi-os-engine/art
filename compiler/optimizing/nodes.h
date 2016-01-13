@@ -4531,7 +4531,7 @@ class HPhi : public HInstruction {
 class HNullCheck : public HExpression<1> {
  public:
   HNullCheck(HInstruction* value, uint32_t dex_pc)
-      : HExpression(value->GetType(), SideEffects::None(), dex_pc) {
+      : HExpression(value->GetType(), SideEffects::CanTriggerGC(), dex_pc) {
     SetRawInputAt(0, value);
   }
 
@@ -4853,7 +4853,7 @@ class HArrayLength : public HExpression<1> {
 class HBoundsCheck : public HExpression<2> {
  public:
   HBoundsCheck(HInstruction* index, HInstruction* length, uint32_t dex_pc)
-      : HExpression(index->GetType(), SideEffects::None(), dex_pc) {
+      : HExpression(index->GetType(), SideEffects::CanTriggerGC(), dex_pc) {
     DCHECK(index->GetType() == Primitive::kPrimInt);
     SetRawInputAt(0, index);
     SetRawInputAt(1, length);
