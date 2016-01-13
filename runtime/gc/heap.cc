@@ -331,9 +331,10 @@ Heap::Heap(size_t initial_size,
                                      +-main alloc space2 / bump space 2 (capacity_)+-
                                      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
   */
-  // We don't have hspace compaction enabled with GSS or CC.
+  // We don't have hspace compaction enabled with GSS, CC and AotCompiler (dex2oat).
   if (foreground_collector_type_ == kCollectorTypeGSS ||
-      foreground_collector_type_ == kCollectorTypeCC) {
+      foreground_collector_type_ == kCollectorTypeCC ||
+      Runtime::Current()->IsAotCompiler()) {
     use_homogeneous_space_compaction_for_oom_ = false;
   }
   bool support_homogeneous_space_compaction =

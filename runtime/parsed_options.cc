@@ -512,6 +512,13 @@ bool ParsedOptions::DoParse(const RuntimeOptions& options,
       }
     }
 
+    // If collector type is CMS, disable Compact for dex2oat.
+    if (args.Exists(M::CompilerCallbacksPtr) &&
+       (collector_type_ == gc::kCollectorTypeMS ||
+        collector_type_ == gc::kCollectorTypeCMS)) {
+          background_collector_type_ = collector_type_;
+    }
+
     args.Set(M::BackgroundGc, BackgroundGcOption { background_collector_type_ });
   }
 
