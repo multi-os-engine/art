@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+#define INCLUDE_DWARF5_VALUES  // DW_AT_linkage_name.
+
 #include "elf_writer_debug.h"
 
 #include <unordered_set>
 #include <vector>
+#include <cstdio>
 
 #include "base/casts.h"
 #include "base/stl_util.h"
@@ -591,7 +594,7 @@ class DebugInfoWriter {
       info_.WriteStrp(DW_AT_producer, owner_->WriteString("Android dex2oat"));
       info_.WriteData1(DW_AT_language, DW_LANG_Java);
 
-      std::vector<uint8_t> count_expr_buffer;
+      std::vector<uint8_t> expr_buffer;
       for (mirror::Class* type : types) {
         if (type->IsPrimitive()) {
           // For primitive types the definition and the declaration is the same.
@@ -607,29 +610,71 @@ class DebugInfoWriter {
           info_.StartTag(DW_TAG_array_type);
           std::string descriptor_string;
           WriteLazyType(element_type->GetDescriptor(&descriptor_string));
+          WriteLinkageName(type);
           info_.WriteUdata(DW_AT_data_member_location, data_offset);
           info_.StartTag(DW_TAG_subrange_type);
-          Expression count_expr(&count_expr_buffer);
+          Expression count_expr(&expr_buffer);
           count_expr.WriteOpPushObjectAddress();
           count_expr.WriteOpPlusUconst(length_offset);
           count_expr.WriteOpDerefSize(4);  // Array length is always 32-bit wide.
           info_.WriteExprLoc(DW_AT_count, count_expr);
           info_.EndTag();  // DW_TAG_subrange_type.
           info_.EndTag();  // DW_TAG_array_type.
+        } else if (type->IsInterface()) {
         } else {
           std::string descriptor_string;
           const char* desc = type->GetDescriptor(&descriptor_string);
+
+          // Declare base class.  We can not use the standard WriteLazyType
+          // since we want to avoid the DW_TAG_reference_tag wrapping.
+          mirror::Class* base_class = type->GetSuperClass();
+          size_t base_class_declaration_offset = 0;
+          if (base_class != nullptr) {
+            base_class_declaration_offset = StartClassTag(desc);
+            info_.WriteFlag(DW_AT_declaration, true);
+            WriteLinkageName(base_class);
+            EndClassTag(desc);
+          }
+
           StartClassTag(desc);
 
           if (!type->IsVariableSize()) {
             info_.WriteUdata(DW_AT_byte_size, type->GetObjectSize());
           }
 
+          WriteLinkageName(type);
+
+          if (type->IsObjectClass()) {
+            // Generate artificial member which is used to get the dynamic type of variable.
+            // The run-time value of this field will correspond to linkage name of some type.
+            info_.StartTag(DW_TAG_member);
+            WriteName(".dynamic_type");
+            WriteLazyType("J");  // long.
+            info_.WriteFlag(DW_AT_artificial, true);
+            // Create DWARF expression to get the value.
+            Expression expr(&expr_buffer);
+            // The address of the object has been implicitly pushed on the stack.
+            // Dereference the klass_ field of Object (32-bit; possibly poisoned).
+            DCHECK_EQ(type->ClassOffset().Uint32Value(), 0u);
+            DCHECK_EQ(sizeof(mirror::HeapReference<mirror::Class>), 4u);
+            expr.WriteOpDerefSize(4);
+            if (kPoisonHeapReferences) {
+              expr.WriteOpNeg();
+              // DWARF stack is pointer sized. Ensure that the high bits are clear.
+              expr.WriteOpConstu(0xFFFFFFFF);
+              expr.WriteOpAnd();
+            }
+            // Add offset to the methods_ field.
+            expr.WriteOpPlusUconst(mirror::Class::UniqueIdOffset().Uint32Value());
+            // Top of stack holds the location of the field now.
+            info_.WriteExprLoc(DW_AT_data_member_location, expr);
+            info_.EndTag();  // DW_TAG_member.
+          }
+
           // Base class.
-          mirror::Class* base_class = type->GetSuperClass();
           if (base_class != nullptr) {
             info_.StartTag(DW_TAG_inheritance);
-            WriteLazyType(base_class->GetDescriptor(&descriptor_string));
+            info_.WriteRef4(DW_AT_type, base_class_declaration_offset);
             info_.WriteUdata(DW_AT_data_member_location, 0);
             info_.WriteSdata(DW_AT_accessibility, DW_ACCESS_public);
             info_.EndTag();  // DW_TAG_inheritance.
@@ -682,6 +727,16 @@ class DebugInfoWriter {
           owner_->debug_abbrev_.Insert(debug_abbrev_.data(), debug_abbrev_.size());
       WriteDebugInfoCU(debug_abbrev_offset, info_, offset, &buffer, &owner_->debug_info_patches_);
       owner_->builder_->GetDebugInfo()->WriteFully(buffer.data(), buffer.size());
+    }
+
+    // Linkage name uniquely identifies type. It is used to determine the dynamic type of objects.
+    void WriteLinkageName(mirror::Class* type) SHARED_REQUIRES(Locks::mutator_lock_) {
+      uint64_t id = type->GetUniqueId();
+      std::string tmp_storage;
+      DCHECK_NE(id, 0u) << type->GetDescriptor(&tmp_storage);
+      char name[32];
+      snprintf(name, sizeof(name), "0x%" PRIX64, id);
+      info_.WriteString(DW_AT_linkage_name, name);
     }
 
     // Write table into .debug_loc which describes location of dex register.
