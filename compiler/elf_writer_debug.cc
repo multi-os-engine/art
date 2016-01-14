@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define INCLUDE_DWARF5_VALUES  // DW_AT_linkage_name.
+
 #include "elf_writer_debug.h"
 
 #include <unordered_set>
@@ -501,7 +503,7 @@ class DebugInfoWriter {
         info_.WriteUdata(DW_AT_high_pc, dchecked_integral_cast<uint32_t>(mi->high_pc_-mi->low_pc_));
         std::vector<uint8_t> expr_buffer;
         Expression expr(&expr_buffer);
-        expr.CallFrameCfa();
+        expr.WriteOpCallFrameCfa();
         info_.WriteExprLoc(DW_AT_frame_base, expr);
         WriteLazyType(dex->GetReturnTypeDescriptor(dex_proto));
 
@@ -591,7 +593,7 @@ class DebugInfoWriter {
       info_.WriteStrp(DW_AT_producer, owner_->WriteString("Android dex2oat"));
       info_.WriteData1(DW_AT_language, DW_LANG_Java);
 
-      std::vector<uint8_t> count_expr_buffer;
+      std::vector<uint8_t> expr_buffer;
       for (mirror::Class* type : types) {
         if (type->IsPrimitive()) {
           // For primitive types the definition and the declaration is the same.
@@ -605,24 +607,59 @@ class DebugInfoWriter {
           uint32_t length_offset = mirror::Array::LengthOffset().Uint32Value();
 
           info_.StartTag(DW_TAG_array_type);
-          std::string descriptor_string;
-          WriteLazyType(element_type->GetDescriptor(&descriptor_string));
+          std::string tmp_storage;
+          info_.WriteStrp(DW_AT_linkage_name,
+                          owner_->WriteString(type->GetDescriptor(&tmp_storage)));
+          WriteLazyType(element_type->GetDescriptor(&tmp_storage));
           info_.WriteUdata(DW_AT_data_member_location, data_offset);
           info_.StartTag(DW_TAG_subrange_type);
-          Expression count_expr(&count_expr_buffer);
-          count_expr.PushObjectAddress();
-          count_expr.PlusUconst(length_offset);
-          count_expr.DerefSize(4);  // Array length is always 32-bit wide.
+          Expression count_expr(&expr_buffer);
+          count_expr.WriteOpPushObjectAddress();
+          count_expr.WriteOpPlusUconst(length_offset);
+          count_expr.WriteOpDerefSize(4);  // Array length is always 32-bit wide.
           info_.WriteExprLoc(DW_AT_count, count_expr);
+          WriteVtableAddressForType(type);
           info_.EndTag();  // DW_TAG_subrange_type.
           info_.EndTag();  // DW_TAG_array_type.
+        } else if (type->IsInterface()) {
         } else {
           std::string descriptor_string;
           const char* desc = type->GetDescriptor(&descriptor_string);
           StartClassTag(desc);
+          info_.WriteStrp(DW_AT_linkage_name, owner_->WriteString(desc));
 
           if (!type->IsVariableSize()) {
             info_.WriteUdata(DW_AT_byte_size, type->GetObjectSize());
+          }
+
+          // Note the vtable address for this type (type-specific constant).
+          WriteVtableAddressForType(type);
+
+          if (type->IsObjectClass()) {
+            // Generate artificial member for the object's vtable pointer.
+            // The run-time value of this member is used to determine the dynamic type.
+            info_.StartTag(DW_TAG_member);
+            WriteName("$vtable_pointer");
+            info_.WriteFlag(DW_AT_artificial, true);
+            // Create DWARF expression to get the value of the vtable pointer.
+            // Unlike C++, we need more indirection, but that is just implementation detail.
+            Expression expr(&expr_buffer);
+            // The address of the object has been implicitly pushed on the stack.
+            // Dereference the klass_ field of Object (32-bit; possibly poisoned).
+            DCHECK_EQ(type->ClassOffset().Uint32Value(), 0u);
+            DCHECK_EQ(sizeof(mirror::HeapReference<mirror::Class>), 4u);
+            expr.WriteOpDerefSize(4);
+            if (kPoisonHeapReferences) {
+              expr.WriteOpNeg();
+              // DWARF stack is pointer sized. Ensure that the high bits are clear.
+              expr.WriteOpConstu(0xFFFFFFFF);
+              expr.WriteOpAnd();
+            }
+            // Add offset to the methods_ field.
+            expr.WriteOpPlusUconst(mirror::Class::MethodsOffset().Uint32Value());
+            // Top of stack holds the location of the field now.
+            info_.WriteExprLoc(DW_AT_data_member_location, expr);
+            info_.EndTag();  // DW_TAG_member.
           }
 
           // Base class.
@@ -684,6 +721,22 @@ class DebugInfoWriter {
       owner_->builder_->GetDebugInfo()->WriteFully(buffer.data(), buffer.size());
     }
 
+    void WriteVtableAddressForType(mirror::Class* type)
+        SHARED_REQUIRES(Locks::mutator_lock_) {
+      info_.StartTag(DW_TAG_member);
+      WriteName("$vtable_address");
+      info_.WriteFlag(DW_AT_artificial, true);
+      uintptr_t vtable_address = reinterpret_cast<uintptr_t>(type->GetMethodsPtr());
+      std::string tmp_storage;
+      DCHECK_NE(vtable_address, 0u) << type->GetDescriptor(&tmp_storage);
+      if (sizeof(Elf_Addr) == 8) {
+        info_.WriteData8(DW_AT_const_value, vtable_address);
+      } else {
+        info_.WriteData4(DW_AT_const_value, dchecked_integral_cast<uint32_t>(vtable_address));
+      }
+      info_.EndTag();  // DW_TAG_member.
+    }
+
     // Write table into .debug_loc which describes location of dex register.
     // The dex register might be valid only at some points and it might
     // move between machine registers and stack.
@@ -728,13 +781,13 @@ class DebugInfoWriter {
           if (kind == Kind::kInStack) {
             const size_t frame_size = method_info->compiled_method_->GetFrameSizeInBytes();
             // The stack offset is relative to SP. Make it relative to CFA.
-            expr.Fbreg(value - frame_size);
+            expr.WriteOpFbreg(value - frame_size);
             if (piece == 0 && reg_hi.GetKind() == Kind::kInStack &&
                 reg_hi.GetValue() == value + 4) {
               break;  // the high word is correctly implied by the low word.
             }
           } else if (kind == Kind::kInRegister) {
-            expr.Reg(GetDwarfCoreReg(isa, value).num());
+            expr.WriteOpReg(GetDwarfCoreReg(isa, value).num());
             if (piece == 0 && reg_hi.GetKind() == Kind::kInRegisterHigh &&
                 reg_hi.GetValue() == value) {
               break;  // the high word is correctly implied by the low word.
@@ -744,21 +797,21 @@ class DebugInfoWriter {
                 piece == 0 && reg_hi.GetKind() == Kind::kInFpuRegister &&
                 reg_hi.GetValue() == value + 1 && value % 2 == 0) {
               // Translate S register pair to D register (e.g. S4+S5 to D2).
-              expr.Reg(Reg::ArmDp(value / 2).num());
+              expr.WriteOpReg(Reg::ArmDp(value / 2).num());
               break;
             }
             if (isa == kMips || isa == kMips64) {
               // TODO: Find what the DWARF floating point register numbers are on MIPS.
               break;
             }
-            expr.Reg(GetDwarfFpReg(isa, value).num());
+            expr.WriteOpReg(GetDwarfFpReg(isa, value).num());
             if (piece == 0 && reg_hi.GetKind() == Kind::kInFpuRegisterHigh &&
                 reg_hi.GetValue() == reg_lo.GetValue()) {
               break;  // the high word is correctly implied by the low word.
             }
           } else if (kind == Kind::kConstant) {
-            expr.Consts(value);
-            expr.StackValue();
+            expr.WriteOpConsts(value);
+            expr.WriteOpStackValue();
           } else if (kind == Kind::kNone) {
             break;
           } else {
@@ -772,7 +825,7 @@ class DebugInfoWriter {
           if (is64bitValue) {
             // Write the marker which is needed by split 64-bit values.
             // This code is skipped by the special cases.
-            expr.Piece(4);
+            expr.WriteOpPiece(4);
           }
         }
 
@@ -1004,6 +1057,30 @@ class DebugInfoWriter {
   void WriteTypes(const ArrayRef<mirror::Class*>& types) SHARED_REQUIRES(Locks::mutator_lock_) {
     CompilationUnitWriter writer(this);
     writer.Write(types);
+  }
+
+  // Create map from vtable address to dex type descriptors.
+  // This helps the debugger resolve dynamic types.
+  void WriteVtableAddressesToSymtab(const ArrayRef<mirror::Class*>& types)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    auto* strtab = builder_->GetStrTab();
+    auto* symtab = builder_->GetSymTab();
+
+    strtab->Start();
+    strtab->Write("");  // strtab should start with empty string.
+    for (mirror::Class* type : types) {
+      std::string tmp_storage;
+      const char* dex_desc = type->GetDescriptor(&tmp_storage);
+      uintptr_t addr = reinterpret_cast<uintptr_t>(type->GetMethodsPtr());
+      symtab->Add(strtab->Write(dex_desc), nullptr, addr, false, 0, STB_GLOBAL, STT_OBJECT);
+    }
+    strtab->End();
+
+    // Symbols are buffered and written after names (because they are smaller).
+    // We could also do two passes in this function to avoid the buffering.
+    symtab->Start();
+    symtab->Write();
+    symtab->End();
   }
 
   void End() {
@@ -1383,6 +1460,7 @@ static ArrayRef<const uint8_t> WriteDebugElfFileForClassesInternal(
   info_writer.Start();
   info_writer.WriteTypes(types);
   info_writer.End();
+  info_writer.WriteVtableAddressesToSymtab(types);
 
   builder->End();
   CHECK(builder->Good());

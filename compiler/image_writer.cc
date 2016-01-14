@@ -1106,8 +1106,8 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
         }
       }
       // Visit and assign offsets for methods.
-      size_t num_methods = as_klass->NumMethods();
-      if (num_methods != 0) {
+      // Note that empty method array is allowed.
+      if (as_klass->GetMethodsPtr() != nullptr) {
         bool any_dirty = false;
         for (auto& m : as_klass->GetMethods(target_ptr_size_)) {
           if (WillMethodBeDirty(&m)) {
@@ -1141,7 +1141,7 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
         for (auto& m : as_klass->GetMethods(target_ptr_size_)) {
           AssignMethodOffset(&m, type, oat_file);
         }
-        (any_dirty ? dirty_methods_ : clean_methods_) += num_methods;
+        (any_dirty ? dirty_methods_ : clean_methods_) += as_klass->NumMethods();
       }
     } else if (h_obj->IsObjectArray()) {
       // Walk elements of an object array.
