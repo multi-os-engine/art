@@ -43,6 +43,7 @@ class CompilerOptions FINAL {
 
   // Guide heuristics to determine whether to compile method if profile data not available.
   static const CompilerFilter kDefaultCompilerFilter = kSpeed;
+  static const size_t kDefaultAllDexFileThreshold = 0x7FFFFFFF;
   static const size_t kDefaultHugeMethodThreshold = 10000;
   static const size_t kDefaultLargeMethodThreshold = 600;
   static const size_t kDefaultSmallMethodThreshold = 60;
@@ -65,6 +66,7 @@ class CompilerOptions FINAL {
   ~CompilerOptions();
 
   CompilerOptions(CompilerFilter compiler_filter,
+                  size_t all_dex_file_threshold,
                   size_t huge_method_threshold,
                   size_t large_method_threshold,
                   size_t small_method_threshold,
@@ -110,6 +112,10 @@ class CompilerOptions FINAL {
 
   bool NeverVerify() const {
     return compiler_filter_ == CompilerOptions::kVerifyNone;
+  }
+
+  size_t GetAllDexFileThreshold() const {
+    return all_dex_file_threshold_;
   }
 
   size_t GetHugeMethodThreshold() const {
@@ -237,8 +243,10 @@ class CompilerOptions FINAL {
   void ParseSmallMethodMax(const StringPiece& option, UsageFn Usage);
   void ParseLargeMethodMax(const StringPiece& option, UsageFn Usage);
   void ParseHugeMethodMax(const StringPiece& option, UsageFn Usage);
+  void ParseAllDexFileMax(const StringPiece& option, UsageFn Usage);
 
   CompilerFilter compiler_filter_;
+  size_t all_dex_file_threshold_;
   size_t huge_method_threshold_;
   size_t large_method_threshold_;
   size_t small_method_threshold_;

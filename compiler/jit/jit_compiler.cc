@@ -77,6 +77,7 @@ NO_RETURN static void Usage(const char* fmt, ...) {
 JitCompiler::JitCompiler() : total_time_(0) {
   compiler_options_.reset(new CompilerOptions(
       CompilerOptions::kDefaultCompilerFilter,
+      CompilerOptions::kDefaultAllDexFileThreshold,
       CompilerOptions::kDefaultHugeMethodThreshold,
       CompilerOptions::kDefaultLargeMethodThreshold,
       CompilerOptions::kDefaultSmallMethodThreshold,

@@ -51,6 +51,7 @@ class QuickCFITest : public CFITest {
     ArenaAllocator arena(&pool);
     CompilerOptions compiler_options(
       CompilerOptions::kDefaultCompilerFilter,
+      CompilerOptions::kDefaultAllDexFileThreshold,
       CompilerOptions::kDefaultHugeMethodThreshold,
       CompilerOptions::kDefaultLargeMethodThreshold,
       CompilerOptions::kDefaultSmallMethodThreshold,
