@@ -30,6 +30,7 @@
 #include "dex_file.h"
 #include "gc/heap-inl.h"
 #include "iftable.h"
+#include "linear_alloc.h"
 #include "object_array-inl.h"
 #include "read_barrier-inl.h"
 #include "reference-inl.h"
