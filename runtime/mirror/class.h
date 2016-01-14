@@ -706,6 +706,15 @@ class MANAGED Class FINAL : public Object {
   ALWAYS_INLINE LengthPrefixedArray<ArtMethod>* GetMethodsPtr()
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Returns unique identifier for this class which will not be affected by the GC.
+  // This currently returns the methods_ field.  It will be set if it is zero.
+  // It is used by the native debugger to identify types.
+  uint64_t GetUniqueId() SHARED_REQUIRES(Locks::mutator_lock_);
+
+  static MemberOffset UniqueIdOffset() {
+    return MemberOffset(OFFSETOF_MEMBER(Class, methods_));
+  }
+
   ALWAYS_INLINE IterationRange<StrideIterator<ArtMethod>> GetMethods(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -1357,6 +1366,8 @@ class MANAGED Class FINAL : public Object {
   // The slice methods_ [copied_methods_offset_, |methods_|) are the methods that are copied from
   // interfaces such as miranda or default methods. These are copied for resolution purposes as this
   // class is where they are (logically) declared as far as the virtual dispatch is concerned.
+  //
+  // This field is also used by the GetUniqueId method as the unique identifier of the class.
   uint64_t methods_;
 
   // Static fields length-prefixed array.
