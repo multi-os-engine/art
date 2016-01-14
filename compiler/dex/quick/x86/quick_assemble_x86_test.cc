@@ -34,6 +34,7 @@ class QuickAssembleX86TestBase : public testing::Test {
     pool_.reset(new ArenaPool());
     compiler_options_.reset(new CompilerOptions(
         CompilerOptions::kDefaultCompilerFilter,
+        CompilerOptions::kDefaultAllDexFileThreshold,
         CompilerOptions::kDefaultHugeMethodThreshold,
         CompilerOptions::kDefaultLargeMethodThreshold,
         CompilerOptions::kDefaultSmallMethodThreshold,

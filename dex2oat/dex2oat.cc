@@ -261,6 +261,11 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      Example: --compiler-filter=everything");
   UsageError("      Default: speed");
   UsageError("");
+  UsageError("  --all-dex-file-max=<dex-file-size>: threshold size for all");
+  UsageError("      dex files for compiler filter tuning.");
+  UsageError("      Example: --all-dex-file-max=%d", CompilerOptions::kDefaultAllDexFileThreshold);
+  UsageError("      Default: %d", CompilerOptions::kDefaultAllDexFileThreshold);
+  UsageError("");
   UsageError("  --huge-method-max=<method-instruction-count>: threshold size for a huge");
   UsageError("      method for compiler filter tuning.");
   UsageError("      Example: --huge-method-max=%d", CompilerOptions::kDefaultHugeMethodThreshold);
@@ -481,7 +486,8 @@ class WatchDog {
 static constexpr size_t kMinDexFilesForSwap = 2;
 static constexpr size_t kMinDexFileCumulativeSizeForSwap = 20 * MB;
 
-static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files) {
+static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files,
+                    size_t dex_files_size) {
   if (is_image) {
     // Don't use swap, we know generation should succeed, and we don't want to slow it down.
     return false;
@@ -489,10 +495,6 @@ static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files) {
   if (dex_files.size() < kMinDexFilesForSwap) {
     // If there are less dex files than the threshold, assume it's gonna be fine.
     return false;
-  }
-  size_t dex_files_size = 0;
-  for (const auto* dex_file : dex_files) {
-    dex_files_size += dex_file->GetHeader().file_size_;
   }
   return dex_files_size >= kMinDexFileCumulativeSizeForSwap;
 }
@@ -1287,7 +1289,9 @@ class Dex2Oat FINAL {
     }
     // Ensure opened dex files are writable for dex-to-dex transformations. Also ensure that
     // the dex caches stay live since we don't want class unloading to occur during compilation.
+    size_t dex_files_size = 0;
     for (const auto& dex_file : dex_files_) {
+      dex_files_size += dex_file->GetHeader().file_size_;
       if (!dex_file->EnableWrite()) {
         PLOG(ERROR) << "Failed to make .dex file writeable '" << dex_file->GetLocation() << "'\n";
       }
@@ -1299,7 +1303,7 @@ class Dex2Oat FINAL {
 
     // If we use a swap file, ensure we are above the threshold to make it necessary.
     if (swap_fd_ != -1) {
-      if (!UseSwap(IsBootImage(), dex_files_)) {
+      if (!UseSwap(IsBootImage(), dex_files_, dex_files_size)) {
         close(swap_fd_);
         swap_fd_ = -1;
         VLOG(compiler) << "Decided to run without swap.";
@@ -1308,6 +1312,14 @@ class Dex2Oat FINAL {
       }
     }
     // Note that dex2oat won't close the swap_fd_. The compiler driver's swap space will do that.
+
+    // For large apps, we use the interpreter or JIT to help.
+    if (!IsBootImage() &&
+        compiler_options_->IsCompilationEnabled() &&
+        dex_files_size > compiler_options_->GetAllDexFileThreshold()) {
+      compiler_options_->SetCompilerFilter(CompilerOptions::kInterpretOnly);
+      LOG(INFO) << "Don't compile large app that interpreter or JIT will help instead";
+    }
 
     /*
      * If we're not in interpret-only or verify-none mode, go ahead and compile small applications.

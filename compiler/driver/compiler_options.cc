@@ -24,6 +24,7 @@ namespace art {
 
 CompilerOptions::CompilerOptions()
     : compiler_filter_(kDefaultCompilerFilter),
+      all_dex_file_threshold_(kDefaultAllDexFileThreshold),
       huge_method_threshold_(kDefaultHugeMethodThreshold),
       large_method_threshold_(kDefaultLargeMethodThreshold),
       small_method_threshold_(kDefaultSmallMethodThreshold),
@@ -53,6 +54,7 @@ CompilerOptions::~CompilerOptions() {
 }
 
 CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
+                                 size_t all_dex_file_threshold,
                                  size_t huge_method_threshold,
                                  size_t large_method_threshold,
                                  size_t small_method_threshold,
@@ -74,6 +76,7 @@ CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
                                  bool abort_on_hard_verifier_failure
                                  ) :  // NOLINT(whitespace/parens)
     compiler_filter_(compiler_filter),
+    all_dex_file_threshold_(all_dex_file_threshold),
     huge_method_threshold_(huge_method_threshold),
     large_method_threshold_(large_method_threshold),
     small_method_threshold_(small_method_threshold),
@@ -95,6 +98,10 @@ CompilerOptions::CompilerOptions(CompilerFilter compiler_filter,
     pass_manager_options_(),
     abort_on_hard_verifier_failure_(abort_on_hard_verifier_failure),
     init_failure_output_(init_failure_output) {
+}
+
+void CompilerOptions::ParseAllDexFileMax(const StringPiece& option, UsageFn Usage) {
+  ParseUintOption(option, "--all-dex-file-max", &all_dex_file_threshold_, Usage);
 }
 
 void CompilerOptions::ParseHugeMethodMax(const StringPiece& option, UsageFn Usage) {
@@ -191,6 +198,8 @@ bool CompilerOptions::ParseCompilerOption(const StringPiece& option, UsageFn Usa
     }
   } else if (option == "--compile-pic") {
     compile_pic_ = true;
+  } else if (option.starts_with("--all-dex-file-max=")) {
+    ParseAllDexFileMax(option, Usage);
   } else if (option.starts_with("--huge-method-max=")) {
     ParseHugeMethodMax(option, Usage);
   } else if (option.starts_with("--large-method-max=")) {
