@@ -2256,9 +2256,8 @@ LengthPrefixedArray<ArtField>* ClassLinker::AllocArtFieldArray(Thread* self,
 LengthPrefixedArray<ArtMethod>* ClassLinker::AllocArtMethodArray(Thread* self,
                                                                  LinearAlloc* allocator,
                                                                  size_t length) {
-  if (length == 0) {
-    return nullptr;
-  }
+  // The native debugger uses the method array as unique identifier.
+  // Therefore we need to create it even it if is empty.
   const size_t method_alignment = ArtMethod::Alignment(image_pointer_size_);
   const size_t method_size = ArtMethod::Size(image_pointer_size_);
   const size_t storage_size =
@@ -2762,6 +2761,11 @@ mirror::Class* ClassLinker::CreateArrayClass(Thread* self, const char* descripto
   access_flags &= ~kAccInterface;
 
   new_class->SetAccessFlags(access_flags);
+
+  // The native debugger uses the method array as unique identifier.
+  // Therefore we need to create it even though it will be empty.
+  LinearAlloc* const allocator = GetAllocatorForClassLoader(new_class->GetClassLoader());
+  new_class->SetMethodsPtr(AllocArtMethodArray(self, allocator, 0), 0, 0);
 
   mirror::Class* existing = InsertClass(descriptor, new_class.Get(), hash);
   if (existing == nullptr) {

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define INCLUDE_DWARF5_VALUES  // DW_AT_linkage_name.
+
 #include "elf_writer_debug.h"
 
 #include <unordered_set>
@@ -591,7 +593,7 @@ class DebugInfoWriter {
       info_.WriteStrp(DW_AT_producer, owner_->WriteString("Android dex2oat"));
       info_.WriteData1(DW_AT_language, DW_LANG_Java);
 
-      std::vector<uint8_t> count_expr_buffer;
+      std::vector<uint8_t> expr_buffer;
       for (mirror::Class* type : types) {
         if (type->IsPrimitive()) {
           // For primitive types the definition and the declaration is the same.
@@ -605,24 +607,59 @@ class DebugInfoWriter {
           uint32_t length_offset = mirror::Array::LengthOffset().Uint32Value();
 
           info_.StartTag(DW_TAG_array_type);
-          std::string descriptor_string;
-          WriteLazyType(element_type->GetDescriptor(&descriptor_string));
+          std::string tmp_storage;
+          info_.WriteStrp(DW_AT_linkage_name,
+                          owner_->WriteString(type->GetDescriptor(&tmp_storage)));
+          WriteLazyType(element_type->GetDescriptor(&tmp_storage));
           info_.WriteUdata(DW_AT_data_member_location, data_offset);
           info_.StartTag(DW_TAG_subrange_type);
-          Expression count_expr(&count_expr_buffer);
+          Expression count_expr(&expr_buffer);
           count_expr.PushObjectAddress();
           count_expr.PlusUconst(length_offset);
           count_expr.DerefSize(4);  // Array length is always 32-bit wide.
           info_.WriteExprLoc(DW_AT_count, count_expr);
+          WriteVtableAddressForType(type);
           info_.EndTag();  // DW_TAG_subrange_type.
           info_.EndTag();  // DW_TAG_array_type.
+        } else if (type->IsInterface()) {
         } else {
           std::string descriptor_string;
           const char* desc = type->GetDescriptor(&descriptor_string);
           StartClassTag(desc);
+          info_.WriteStrp(DW_AT_linkage_name, owner_->WriteString(desc));
 
           if (!type->IsVariableSize()) {
             info_.WriteUdata(DW_AT_byte_size, type->GetObjectSize());
+          }
+
+          // Note the vtable address for this type (type-specific constant).
+          WriteVtableAddressForType(type);
+
+          if (type->IsObjectClass()) {
+            // Generate artificial member for the object's vtable pointer.
+            // The run-time value of this member is used to determine the dynamic type.
+            info_.StartTag(DW_TAG_member);
+            WriteName("$vtable_pointer");
+            info_.WriteFlag(DW_AT_artificial, true);
+            // Create DWARF expression to get the value of the vtable pointer.
+            // Unlike C++, we need more indirection, but that is just implementation detail.
+            Expression expr(&expr_buffer);
+            // The address of the object has been implicitly pushed on the stack.
+            // Dereference the klass_ field of Object (32-bit; possibly poisoned).
+            DCHECK_EQ(type->ClassOffset().Uint32Value(), 0u);
+            DCHECK_EQ(sizeof(mirror::HeapReference<mirror::Class>), 4u);
+            expr.DerefSize(4);
+            if (kPoisonHeapReferences) {
+              expr.Neg();
+              // DWARF stack is pointer sized. Ensure that the high bits are clear.
+              expr.Constu(0xFFFFFFFF);
+              expr.And();
+            }
+            // Add offset to the methods_ field.
+            expr.PlusUconst(mirror::Class::MethodsOffset().Uint32Value());
+            // Top of stack holds the location of the field now.
+            info_.WriteExprLoc(DW_AT_data_member_location, expr);
+            info_.EndTag();  // DW_TAG_member.
           }
 
           // Base class.
@@ -667,6 +704,22 @@ class DebugInfoWriter {
           owner_->debug_abbrev_.Insert(debug_abbrev_.data(), debug_abbrev_.size());
       WriteDebugInfoCU(debug_abbrev_offset, info_, offset, &buffer, &owner_->debug_info_patches_);
       owner_->builder_->GetDebugInfo()->WriteFully(buffer.data(), buffer.size());
+    }
+
+    void WriteVtableAddressForType(mirror::Class* type)
+        SHARED_REQUIRES(Locks::mutator_lock_) {
+      info_.StartTag(DW_TAG_member);
+      WriteName("$vtable_address");
+      info_.WriteFlag(DW_AT_artificial, true);
+      uintptr_t vtable_address = reinterpret_cast<uintptr_t>(type->GetMethodsPtr());
+      std::string tmp_storage;
+      DCHECK_NE(vtable_address, 0u) << type->GetDescriptor(&tmp_storage);
+      if (sizeof(Elf_Addr) == 8) {
+        info_.WriteData8(DW_AT_const_value, vtable_address);
+      } else {
+        info_.WriteData4(DW_AT_const_value, dchecked_integral_cast<uint32_t>(vtable_address));
+      }
+      info_.EndTag();  // DW_TAG_member.
     }
 
     // Write table into .debug_loc which describes location of dex register.
@@ -987,6 +1040,30 @@ class DebugInfoWriter {
   void WriteTypes(const ArrayRef<mirror::Class*>& types) SHARED_REQUIRES(Locks::mutator_lock_) {
     CompilationUnitWriter writer(this);
     writer.Write(types);
+  }
+
+  // Create map from vtable address to dex type descriptors.
+  // This helps the debugger resolve dynamic types.
+  void WriteVtableAddressesToSymtab(const ArrayRef<mirror::Class*>& types)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    auto* strtab = builder_->GetStrTab();
+    auto* symtab = builder_->GetSymTab();
+
+    strtab->Start();
+    strtab->Write("");  // strtab should start with empty string.
+    for (mirror::Class* type : types) {
+      std::string tmp_storage;
+      const char* dex_desc = type->GetDescriptor(&tmp_storage);
+      uintptr_t addr = reinterpret_cast<uintptr_t>(type->GetMethodsPtr());
+      symtab->Add(strtab->Write(dex_desc), nullptr, addr, false, 0, STB_GLOBAL, STT_OBJECT);
+    }
+    strtab->End();
+
+    // Symbols are buffered and written after names (because they are smaller).
+    // We could also do two passes in this function to avoid the buffering.
+    symtab->Start();
+    symtab->Write();
+    symtab->End();
   }
 
   void End() {
@@ -1393,6 +1470,7 @@ static ArrayRef<const uint8_t> WriteDebugElfFileForClassInternal(const Instructi
   info_writer.Start();
   info_writer.WriteTypes(ArrayRef<mirror::Class*>(&type, 1));
   info_writer.End();
+  info_writer.WriteVtableAddressesToSymtab(ArrayRef<mirror::Class*>(&type, 1));
 
   builder->End();
   CHECK(builder->Good());

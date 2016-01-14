@@ -214,10 +214,10 @@ enum Attribute {
   DW_AT_all_call_sites = 0x75,
   DW_AT_all_source_call_sites = 0x76,
   DW_AT_call_site_parameter = 0x77,
-  DW_AT_tail_call = 0x78,
-  DW_AT_all_tail_call_sites = 0x79,
-  DW_AT_all_call_sites = 0x7a,
-  DW_AT_all_source_call_sites = 0x7b,
+  // DW_AT_tail_call = 0x78,  // Redefinition.
+  // DW_AT_all_tail_call_sites = 0x79,  // Redefinition.
+  // DW_AT_all_call_sites = 0x7a,  // Redefinition.
+  // DW_AT_all_source_call_sites = 0x7b,  // Redefinition.
   DW_AT_rank = 0x7c,
   DW_AT_string_bitsize = 0x7d,
   DW_AT_string_byte_size = 0x7e,
@@ -582,7 +582,7 @@ enum LineNumberExtendedOpcode : uint8_t {
 };
 
 #ifdef INCLUDE_DWARF5_VALUES
-enum LineNumberFormat : uint8_t {
+enum LineNumberFormat : uint16_t {
   // Values to be added in Dwarf 5. Final value not yet specified. Values listed
   // may be different than other implementations. Use with caution.
   // TODO Update these values when Dwarf 5 is released.
