@@ -142,23 +142,6 @@ size_t CodeGenerator::GetCachePointerOffset(uint32_t index) {
   return pointer_size * index;
 }
 
-void CodeGenerator::CompileBaseline(CodeAllocator* allocator, bool is_leaf) {
-  Initialize();
-  if (!is_leaf) {
-    MarkNotLeaf();
-  }
-  const bool is_64_bit = Is64BitInstructionSet(GetInstructionSet());
-  InitializeCodeGeneration(GetGraph()->GetNumberOfLocalVRegs()
-                             + GetGraph()->GetTemporariesVRegSlots()
-                             + 1 /* filler */,
-                           0, /* the baseline compiler does not have live registers at slow path */
-                           0, /* the baseline compiler does not have live registers at slow path */
-                           GetGraph()->GetMaximumNumberOfOutVRegs()
-                             + (is_64_bit ? 2 : 1) /* current method */,
-                           GetGraph()->GetBlocks());
-  CompileInternal(allocator, /* is_baseline */ true);
-}
-
 bool CodeGenerator::GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) const {
   DCHECK_EQ((*block_order_)[current_block_index_], current);
   return GetNextBlockToEmit() == FirstNonEmptyBlock(next);
@@ -220,8 +203,12 @@ void CodeGenerator::GenerateSlowPaths() {
   current_slow_path_ = nullptr;
 }
 
-void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) {
-  is_baseline_ = is_baseline;
+void CodeGenerator::Compile(CodeAllocator* allocator) {
+  // The register allocator already called `InitializeCodeGeneration`,
+  // where the frame size has been computed.
+  DCHECK(block_order_ != nullptr);
+  Initialize();
+
   HGraphVisitor* instruction_visitor = GetInstructionVisitor();
   DCHECK_EQ(current_block_index_, 0u);
 
@@ -242,9 +229,6 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
     for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
       HInstruction* current = it.Current();
       DisassemblyScope disassembly_scope(current, *this);
-      if (is_baseline) {
-        InitLocationsBaseline(current);
-      }
       DCHECK(CheckTypeConsistency(current));
       current->Accept(instruction_visitor);
     }
@@ -254,20 +238,12 @@ void CodeGenerator::CompileInternal(CodeAllocator* allocator, bool is_baseline) 
 
   // Emit catch stack maps at the end of the stack map stream as expected by the
   // runtime exception handler.
-  if (!is_baseline && graph_->HasTryCatch()) {
+  if (graph_->HasTryCatch()) {
     RecordCatchBlockInfo();
   }
 
   // Finalize instructions in assember;
   Finalize(allocator);
-}
-
-void CodeGenerator::CompileOptimized(CodeAllocator* allocator) {
-  // The register allocator already called `InitializeCodeGeneration`,
-  // where the frame size has been computed.
-  DCHECK(block_order_ != nullptr);
-  Initialize();
-  CompileInternal(allocator, /* is_baseline */ false);
 }
 
 void CodeGenerator::Finalize(CodeAllocator* allocator) {
@@ -280,29 +256,6 @@ void CodeGenerator::Finalize(CodeAllocator* allocator) {
 
 void CodeGenerator::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patches ATTRIBUTE_UNUSED) {
   // No linker patches by default.
-}
-
-size_t CodeGenerator::FindFreeEntry(bool* array, size_t length) {
-  for (size_t i = 0; i < length; ++i) {
-    if (!array[i]) {
-      array[i] = true;
-      return i;
-    }
-  }
-  LOG(FATAL) << "Could not find a register in baseline register allocator";
-  UNREACHABLE();
-}
-
-size_t CodeGenerator::FindTwoFreeConsecutiveAlignedEntries(bool* array, size_t length) {
-  for (size_t i = 0; i < length - 1; i += 2) {
-    if (!array[i] && !array[i + 1]) {
-      array[i] = true;
-      array[i + 1] = true;
-      return i;
-    }
-  }
-  LOG(FATAL) << "Could not find a register in baseline register allocator";
-  UNREACHABLE();
 }
 
 void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
@@ -589,123 +542,6 @@ void CodeGenerator::BlockIfInRegister(Location location, bool is_out) const {
     blocked_core_registers_[location.AsRegisterPairLow<int>()] = true;
     DCHECK(is_out || !blocked_core_registers_[location.AsRegisterPairHigh<int>()]);
     blocked_core_registers_[location.AsRegisterPairHigh<int>()] = true;
-  }
-}
-
-void CodeGenerator::AllocateRegistersLocally(HInstruction* instruction) const {
-  LocationSummary* locations = instruction->GetLocations();
-  if (locations == nullptr) return;
-
-  for (size_t i = 0, e = GetNumberOfCoreRegisters(); i < e; ++i) {
-    blocked_core_registers_[i] = false;
-  }
-
-  for (size_t i = 0, e = GetNumberOfFloatingPointRegisters(); i < e; ++i) {
-    blocked_fpu_registers_[i] = false;
-  }
-
-  for (size_t i = 0, e = number_of_register_pairs_; i < e; ++i) {
-    blocked_register_pairs_[i] = false;
-  }
-
-  // Mark all fixed input, temp and output registers as used.
-  for (size_t i = 0, e = locations->GetInputCount(); i < e; ++i) {
-    BlockIfInRegister(locations->InAt(i));
-  }
-
-  for (size_t i = 0, e = locations->GetTempCount(); i < e; ++i) {
-    Location loc = locations->GetTemp(i);
-    BlockIfInRegister(loc);
-  }
-  Location result_location = locations->Out();
-  if (locations->OutputCanOverlapWithInputs()) {
-    BlockIfInRegister(result_location, /* is_out */ true);
-  }
-
-  SetupBlockedRegisters(/* is_baseline */ true);
-
-  // Allocate all unallocated input locations.
-  for (size_t i = 0, e = locations->GetInputCount(); i < e; ++i) {
-    Location loc = locations->InAt(i);
-    HInstruction* input = instruction->InputAt(i);
-    if (loc.IsUnallocated()) {
-      if ((loc.GetPolicy() == Location::kRequiresRegister)
-          || (loc.GetPolicy() == Location::kRequiresFpuRegister)) {
-        loc = AllocateFreeRegister(input->GetType());
-      } else {
-        DCHECK_EQ(loc.GetPolicy(), Location::kAny);
-        HLoadLocal* load = input->AsLoadLocal();
-        if (load != nullptr) {
-          loc = GetStackLocation(load);
-        } else {
-          loc = AllocateFreeRegister(input->GetType());
-        }
-      }
-      locations->SetInAt(i, loc);
-    }
-  }
-
-  // Allocate all unallocated temp locations.
-  for (size_t i = 0, e = locations->GetTempCount(); i < e; ++i) {
-    Location loc = locations->GetTemp(i);
-    if (loc.IsUnallocated()) {
-      switch (loc.GetPolicy()) {
-        case Location::kRequiresRegister:
-          // Allocate a core register (large enough to fit a 32-bit integer).
-          loc = AllocateFreeRegister(Primitive::kPrimInt);
-          break;
-
-        case Location::kRequiresFpuRegister:
-          // Allocate a core register (large enough to fit a 64-bit double).
-          loc = AllocateFreeRegister(Primitive::kPrimDouble);
-          break;
-
-        default:
-          LOG(FATAL) << "Unexpected policy for temporary location "
-                     << loc.GetPolicy();
-      }
-      locations->SetTempAt(i, loc);
-    }
-  }
-  if (result_location.IsUnallocated()) {
-    switch (result_location.GetPolicy()) {
-      case Location::kAny:
-      case Location::kRequiresRegister:
-      case Location::kRequiresFpuRegister:
-        result_location = AllocateFreeRegister(instruction->GetType());
-        break;
-      case Location::kSameAsFirstInput:
-        result_location = locations->InAt(0);
-        break;
-    }
-    locations->UpdateOut(result_location);
-  }
-}
-
-void CodeGenerator::InitLocationsBaseline(HInstruction* instruction) {
-  AllocateLocations(instruction);
-  if (instruction->GetLocations() == nullptr) {
-    if (instruction->IsTemporary()) {
-      HInstruction* previous = instruction->GetPrevious();
-      Location temp_location = GetTemporaryLocation(instruction->AsTemporary());
-      Move(previous, temp_location, instruction);
-    }
-    return;
-  }
-  AllocateRegistersLocally(instruction);
-  for (size_t i = 0, e = instruction->InputCount(); i < e; ++i) {
-    Location location = instruction->GetLocations()->InAt(i);
-    HInstruction* input = instruction->InputAt(i);
-    if (location.IsValid()) {
-      // Move the input to the desired location.
-      if (input->GetNext()->IsTemporary()) {
-        // If the input was stored in a temporary, use that temporary to
-        // perform the move.
-        Move(input->GetNext(), location, instruction);
-      } else {
-        Move(input, location, instruction);
-      }
-    }
   }
 }
 
