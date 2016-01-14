@@ -605,6 +605,11 @@ void JitCodeCache::GarbageCollectCache(Thread* self) {
     // Free all profiling infos of methods that were not being compiled.
     auto profiling_kept_end = std::remove_if(profiling_infos_.begin(), profiling_infos_.end(),
       [data_mspace] (ProfilingInfo* info) {
+        if (info->AllocatedDuringGC()) {
+          // Allocated during code cache GC, avoid sweeping in case someone has a reference to it.
+          info->SetAllocatedDuringGC(false);
+          return false;
+        }
         if (info->GetMethod()->GetProfilingInfo(sizeof(void*)) == nullptr) {
           mspace_free(data_mspace, reinterpret_cast<uint8_t*>(info));
           return true;
@@ -674,9 +679,7 @@ ProfilingInfo* JitCodeCache::AddProfilingInfoInternal(Thread* self,
   size_t profile_info_size = RoundUp(
       sizeof(ProfilingInfo) + sizeof(InlineCache) * entries.size(),
       sizeof(void*));
-  ScopedThreadSuspension sts(self, kSuspended);
   MutexLock mu(self, lock_);
-  WaitForPotentialCollectionToComplete(self);
 
   // Check whether some other thread has concurrently created it.
   ProfilingInfo* info = method->GetProfilingInfo(sizeof(void*));
@@ -695,6 +698,9 @@ ProfilingInfo* JitCodeCache::AddProfilingInfoInternal(Thread* self,
   QuasiAtomic::ThreadFenceRelease();
 
   method->SetProfilingInfo(info);
+  // We do not need to wait for the GC to finish since we call SetAllocatedDuringGC which ensures
+  // that the allocated profile info won't incorrectly get freed early by the code cache GC.
+  info->SetAllocatedDuringGC(collection_in_progress_);
   profiling_infos_.push_back(info);
   return info;
 }
