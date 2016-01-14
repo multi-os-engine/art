@@ -164,6 +164,8 @@ static void UsageError(const char* fmt, ...) {
   va_end(ap);
 }
 
+static constexpr size_t kDefaultAllDexFileMax = 0x7FFFFFFF;
+
 NO_RETURN static void Usage(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -260,6 +262,11 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      select compiler filter.");
   UsageError("      Example: --compiler-filter=everything");
   UsageError("      Default: speed");
+  UsageError("");
+  UsageError("  --all-dex-file-max=<dex-file-size>: threshold size for all");
+  UsageError("      dex files for compiler filter tuning.");
+  UsageError("      Example: --all-dex-file-max=%d", kDefaultAllDexFileMax);
+  UsageError("      Default: %d", kDefaultAllDexFileMax);
   UsageError("");
   UsageError("  --huge-method-max=<method-instruction-count>: threshold size for a huge");
   UsageError("      method for compiler filter tuning.");
@@ -481,7 +488,8 @@ class WatchDog {
 static constexpr size_t kMinDexFilesForSwap = 2;
 static constexpr size_t kMinDexFileCumulativeSizeForSwap = 20 * MB;
 
-static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files) {
+static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files,
+                    size_t dex_files_size) {
   if (is_image) {
     // Don't use swap, we know generation should succeed, and we don't want to slow it down.
     return false;
@@ -489,10 +497,6 @@ static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files) {
   if (dex_files.size() < kMinDexFilesForSwap) {
     // If there are less dex files than the threshold, assume it's gonna be fine.
     return false;
-  }
-  size_t dex_files_size = 0;
-  for (const auto* dex_file : dex_files) {
-    dex_files_size += dex_file->GetHeader().file_size_;
   }
   return dex_files_size >= kMinDexFileCumulativeSizeForSwap;
 }
@@ -530,7 +534,8 @@ class Dex2Oat FINAL {
       dump_cfg_append_(false),
       swap_fd_(-1),
       app_image_fd_(kInvalidImageFd),
-      timings_(timings) {}
+      timings_(timings),
+      all_dex_file_max_(kDefaultAllDexFileMax) {}
 
   ~Dex2Oat() {
     // Free opened dex files before deleting the runtime_, because ~DexFile
@@ -566,6 +571,10 @@ class Dex2Oat FINAL {
     bool requested_specific_compiler = false;
     std::string error_msg;
   };
+
+  void ParseAllDexFileMax(const StringPiece& option) {
+    ParseUintOption(option, "--all-dex-file-max", &all_dex_file_max_, Usage);
+  }
 
   void ParseZipFd(const StringPiece& option) {
     ParseUintOption(option, "--zip-fd", &zip_fd_, Usage);
@@ -1287,7 +1296,9 @@ class Dex2Oat FINAL {
     }
     // Ensure opened dex files are writable for dex-to-dex transformations. Also ensure that
     // the dex caches stay live since we don't want class unloading to occur during compilation.
+    size_t dex_files_size = 0;
     for (const auto& dex_file : dex_files_) {
+      dex_files_size += dex_file->GetHeader().file_size_;
       if (!dex_file->EnableWrite()) {
         PLOG(ERROR) << "Failed to make .dex file writeable '" << dex_file->GetLocation() << "'\n";
       }
@@ -1299,7 +1310,7 @@ class Dex2Oat FINAL {
 
     // If we use a swap file, ensure we are above the threshold to make it necessary.
     if (swap_fd_ != -1) {
-      if (!UseSwap(IsBootImage(), dex_files_)) {
+      if (!UseSwap(IsBootImage(), dex_files_, dex_files_size)) {
         close(swap_fd_);
         swap_fd_ = -1;
         VLOG(compiler) << "Decided to run without swap.";
@@ -1308,6 +1319,14 @@ class Dex2Oat FINAL {
       }
     }
     // Note that dex2oat won't close the swap_fd_. The compiler driver's swap space will do that.
+
+    // For large apps, we use the interpreter or JIT to help.
+    if (!IsBootImage() &&
+        compiler_options_->IsCompilationEnabled() &&
+        dex_files_size > all_dex_file_max_) {
+      compiler_options_->SetCompilerFilter(CompilerOptions::kInterpretOnly);
+      LOG(INFO) << "Don't compile large app that interpreter or JIT will help instead";
+    }
 
     /*
      * If we're not in interpret-only or verify-none mode, go ahead and compile small applications.
@@ -2308,6 +2327,7 @@ class Dex2Oat FINAL {
   std::unique_ptr<CumulativeLogger> compiler_phases_timings_;
   std::vector<std::vector<const DexFile*>> dex_files_per_oat_file_;
   std::unordered_map<const DexFile*, const char*> dex_file_oat_filename_map_;
+  size_t all_dex_file_max_;
 
   // Backing storage.
   std::vector<std::string> char_backing_storage_;
