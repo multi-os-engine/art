@@ -706,6 +706,10 @@ class MANAGED Class FINAL : public Object {
   ALWAYS_INLINE LengthPrefixedArray<ArtMethod>* GetMethodsPtr()
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  static MemberOffset MethodsOffset() {
+    return MemberOffset(OFFSETOF_MEMBER(Class, methods_));
+  }
+
   ALWAYS_INLINE IterationRange<StrideIterator<ArtMethod>> GetMethods(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 

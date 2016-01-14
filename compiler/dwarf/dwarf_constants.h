@@ -227,6 +227,11 @@ enum Attribute {
   DW_AT_alignment = 0x82,
 #endif
   DW_AT_lo_user = 0x2000,
+  // Android-specific extensions.
+  // Constant value uniquely identifying type.
+  DW_AT_ANDROID_dynamic_type_id = 0xA01D,
+  // DWARF expression which returns the dynamic type of variable.
+  DW_AT_ANDROID_dynamic_type_expr = 0xA01E,
   DW_AT_hi_user = 0xffff
 };
 

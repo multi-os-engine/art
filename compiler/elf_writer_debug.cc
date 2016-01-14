@@ -625,6 +625,34 @@ class DebugInfoWriter {
             info_.WriteUdata(DW_AT_byte_size, type->GetObjectSize());
           }
 
+          // Use method table as the unique identifier.
+          uintptr_t id = reinterpret_cast<uintptr_t>(type->GetMethodsPtr());
+          if (id != 0) {
+            if (sizeof(Elf_Addr) == 8) {
+              info_.WriteData8(DW_AT_ANDROID_dynamic_type_id, id);
+            } else {
+              info_.WriteData4(DW_AT_ANDROID_dynamic_type_id, id);
+            }
+          }
+
+          // Also write expression to get the id at run-time.
+          if (type->IsObjectClass()) {
+            // Check that objects start with 32-bit class reference.
+            DCHECK_EQ(type->ClassOffset().Uint32Value(), 0u);
+            DCHECK_EQ(sizeof(mirror::HeapReference<mirror::Class>), 4u);
+            uint8_t expr[] = {
+              DW_OP_push_object_address,
+              DW_OP_deref_size,
+              4,
+              kPoisonHeapReferences ? DW_OP_neg : DW_OP_nop,
+              DW_OP_const1u,
+              dchecked_integral_cast<uint8_t>(mirror::Class::MethodsOffset().Uint32Value()),
+              DW_OP_plus,
+              DW_OP_deref,
+            };
+            info_.WriteExprLoc(DW_AT_ANDROID_dynamic_type_expr, &expr, sizeof(expr));
+          }
+
           // Base class.
           mirror::Class* base_class = type->GetSuperClass();
           if (base_class != nullptr) {
