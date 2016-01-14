@@ -156,6 +156,16 @@ inline LengthPrefixedArray<ArtMethod>* Class::GetMethodsPtr() {
       GetField64(OFFSET_OF_OBJECT_MEMBER(Class, methods_)));
 }
 
+inline uint64_t Class::GetUniqueId() SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (GetMethodsPtr() == nullptr) {
+    // Allocate empty array so we still have unique memory address.
+    ClassLinker* linker = Runtime::Current()->GetClassLinker();
+    LinearAlloc* allocator = Runtime::Current()->GetLinearAlloc();
+    SetMethodsPtr(linker->AllocArtMethodArray(Thread::Current(), allocator, 0), 0, 0);
+  }
+  return GetField64(OFFSET_OF_OBJECT_MEMBER(Class, methods_));
+}
+
 template<VerifyObjectFlags kVerifyFlags>
 inline ArraySlice<ArtMethod> Class::GetMethodsSlice(size_t pointer_size) {
   DCHECK(IsLoaded() || IsErroneous());
