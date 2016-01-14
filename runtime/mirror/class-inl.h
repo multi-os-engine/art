@@ -30,6 +30,7 @@
 #include "dex_file.h"
 #include "gc/heap-inl.h"
 #include "iftable.h"
+#include "linear_alloc.h"
 #include "object_array-inl.h"
 #include "read_barrier-inl.h"
 #include "reference-inl.h"
@@ -154,6 +155,17 @@ inline ArraySlice<ArtMethod> Class::GetCopiedMethodsSliceUnchecked(size_t pointe
 inline LengthPrefixedArray<ArtMethod>* Class::GetMethodsPtr() {
   return reinterpret_cast<LengthPrefixedArray<ArtMethod>*>(
       GetField64(OFFSET_OF_OBJECT_MEMBER(Class, methods_)));
+}
+
+inline uint64_t Class::GetUniqueId() SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (GetMethodsPtr() == nullptr) {
+    // Allocate empty array so we still have unique memory address.
+    LinearAlloc* allocator = Runtime::Current()->GetLinearAlloc();
+    void* storage = allocator->Alloc(Thread::Current(), sizeof(LengthPrefixedArray<ArtMethod>));
+    auto* array = new (storage) LengthPrefixedArray<ArtMethod>(0);
+    SetMethodsPtr(array, 0, 0);
+  }
+  return GetField64(OFFSET_OF_OBJECT_MEMBER(Class, methods_));
 }
 
 template<VerifyObjectFlags kVerifyFlags>
