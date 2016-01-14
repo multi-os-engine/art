@@ -931,6 +931,7 @@ void Instrumentation::InvokeVirtualOrInterfaceImpl(Thread* thread,
                                                    ArtMethod* caller,
                                                    uint32_t dex_pc,
                                                    ArtMethod* callee) const {
+  ScopedAssertNoThreadSuspension ants(thread, __FUNCTION__);
   for (InstrumentationListener* listener : invoke_virtual_or_interface_listeners_) {
     if (listener != nullptr) {
       listener->InvokeVirtualOrInterface(thread, this_object, caller, dex_pc, callee);
