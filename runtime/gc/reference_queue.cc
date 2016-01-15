@@ -32,13 +32,13 @@ ReferenceQueue::ReferenceQueue(Mutex* lock) : lock_(lock), list_(nullptr) {
 void ReferenceQueue::AtomicEnqueueIfNotEnqueued(Thread* self, mirror::Reference* ref) {
   DCHECK(ref != nullptr);
   MutexLock mu(self, *lock_);
-  if (!ref->IsEnqueued()) {
+  if (!ref->IsPendingEnqueued()) {
     EnqueuePendingReference(ref);
   }
 }
 
 void ReferenceQueue::EnqueueReference(mirror::Reference* ref) {
-  CHECK(ref->IsEnqueuable());
+  CHECK(!ref->IsPendingEnqueued());
   EnqueuePendingReference(ref);
 }
 
@@ -49,8 +49,10 @@ void ReferenceQueue::EnqueuePendingReference(mirror::Reference* ref) {
     list_ = ref;
   } else {
     mirror::Reference* head = list_->GetPendingNext();
+    DCHECK(head != nullptr);
     ref->SetPendingNext(Runtime::Current()->IsActiveTransaction(), head);
   }
+  // Add the reference in the middle to preserve the cycle.
   list_->SetPendingNext(Runtime::Current()->IsActiveTransaction(), ref);
 }
 
@@ -152,9 +154,7 @@ void ReferenceQueue::ClearWhiteReferences(ReferenceQueue* cleared_references,
       } else {
         ref->ClearReferent<false>();
       }
-      if (ref->IsEnqueuable()) {
-        cleared_references->EnqueuePendingReference(ref);
-      }
+      cleared_references->EnqueuePendingReference(ref);
     }
   }
 }
@@ -167,8 +167,6 @@ void ReferenceQueue::EnqueueFinalizerReferences(ReferenceQueue* cleared_referenc
     if (referent_addr->AsMirrorPtr() != nullptr &&
         !collector->IsMarkedHeapReference(referent_addr)) {
       mirror::Object* forward_address = collector->MarkObject(referent_addr->AsMirrorPtr());
-      // If the referent is non-null the reference must queuable.
-      DCHECK(ref->IsEnqueuable());
       // Move the updated referent to the zombie field.
       if (Runtime::Current()->IsActiveTransaction()) {
         ref->SetZombie<true>(forward_address);
