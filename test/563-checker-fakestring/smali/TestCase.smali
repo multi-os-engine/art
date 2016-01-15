@@ -135,3 +135,23 @@
    return-void
 
 .end method
+
+# Test that a redundant NewInstance is removed if not used and not compiling
+# --debuggable.
+
+## CHECK-START: java.lang.String TestCase.removeNewInstance(byte[]) register (after)
+## CHECK-NOT:     NewInstance
+## CHECK-NOT:     LoadClass
+
+## CHECK-START-DEBUGGABLE: java.lang.String TestCase.removeNewInstance(byte[]) register (after)
+## CHECK:         NewInstance
+
+.method public static removeNewInstance([B)Ljava/lang/String;
+   .registers 5
+
+   new-instance v0, Ljava/lang/String;
+   const-string v1, "UTF8"
+   invoke-direct {v0, p0, v1}, Ljava/lang/String;-><init>([BLjava/lang/String;)V
+   return-object v0
+
+.end method

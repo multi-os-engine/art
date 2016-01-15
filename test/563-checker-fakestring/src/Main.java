@@ -61,5 +61,11 @@ public class Main {
     {
       c.getMethod("catchNewInstance").invoke(null, (Object[]) null);
     }
+
+    {
+      Method m = c.getMethod("removeNewInstance", byte[].class);
+      String result = (String) m.invoke(null, new Object[] { testData });
+      assertEqual(testString, result);
+    }
   }
 }
