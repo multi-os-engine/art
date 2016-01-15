@@ -79,6 +79,11 @@ static inline const void* GetQuickInstrumentationExitPc() {
   return reinterpret_cast<const void*>(art_quick_instrumentation_exit);
 }
 
+extern "C" void art_jit_heartbeat_trampoline();
+static inline const void* GetJitHeartbeatTrampoline() {
+  return reinterpret_cast<const void*>(art_jit_heartbeat_trampoline);
+}
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_ENTRYPOINTS_RUNTIME_ASM_ENTRYPOINTS_H_

@@ -99,7 +99,6 @@ ANDROID_DATA=$ANDROID_DATA \
     -XXlib:$LIBART \
     -Xnorelocate \
     -Ximage:$ANDROID_ROOT/framework/core-optimizing-pic.art \
-    -Xcompiler-option --generate-debug-info \
     "$@"
 
 EXIT_STATUS=$?

@@ -24,6 +24,7 @@
 #include "debugger_interface.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
 #include "gc/accounting/bitmap-inl.h"
+#include "jit/jit.h"
 #include "jit/profiling_info.h"
 #include "linear_alloc.h"
 #include "mem_map.h"
@@ -125,7 +126,10 @@ JitCodeCache::JitCodeCache(MemMap* code_map,
       data_end_(initial_data_capacity),
       has_done_one_collection_(false),
       last_update_time_ns_(0),
-      garbage_collect_code_(garbage_collect_code) {
+      garbage_collect_code_(garbage_collect_code),
+      allocated_data_(0),
+      allocated_code_(0),
+      number_of_compilations_(0) {
 
   DCHECK_GE(max_capacity, initial_code_capacity + initial_data_capacity);
   code_mspace_ = create_mspace_with_base(code_map_->Begin(), code_end_, false /*locked*/);
@@ -233,10 +237,12 @@ void JitCodeCache::FreeCode(const void* code_ptr, ArtMethod* method ATTRIBUTE_UN
   // It does nothing if we are not using native debugger.
   DeleteJITCodeEntryForAddress(reinterpret_cast<uintptr_t>(code_ptr));
   if (data != nullptr) {
+    allocated_data_ -= mspace_usable_size(const_cast<uint8_t*>(data));
     mspace_free(data_mspace_, const_cast<uint8_t*>(data));
   }
   data = method_header->GetMappingTable();
   if (data != nullptr) {
+    allocated_data_ -= mspace_usable_size(const_cast<uint8_t*>(data));
     mspace_free(data_mspace_, const_cast<uint8_t*>(data));
   }
   // Use the offset directly to prevent sanity check that the method is
@@ -244,8 +250,10 @@ void JitCodeCache::FreeCode(const void* code_ptr, ArtMethod* method ATTRIBUTE_UN
   // TODO(ngeoffray): Clean up.
   if (method_header->vmap_table_offset_ != 0) {
     data = method_header->code_ - method_header->vmap_table_offset_;
+    allocated_data_ -= mspace_usable_size(const_cast<uint8_t*>(data));
     mspace_free(data_mspace_, const_cast<uint8_t*>(data));
   }
+  allocated_code_ -= mspace_usable_size(reinterpret_cast<uint8_t*>(allocation));
   mspace_free(code_mspace_, reinterpret_cast<uint8_t*>(allocation));
 }
 
@@ -269,6 +277,7 @@ void JitCodeCache::RemoveMethodsIn(Thread* self, const LinearAlloc& alloc) {
     ProfilingInfo* info = *it;
     if (alloc.ContainsUnsafe(info->GetMethod())) {
       info->GetMethod()->SetProfilingInfo(nullptr);
+      allocated_data_ -= mspace_usable_size(reinterpret_cast<uint8_t*>(info));
       mspace_free(data_mspace_, reinterpret_cast<uint8_t*>(info));
       it = profiling_infos_.erase(it);
     } else {
@@ -294,13 +303,14 @@ uint8_t* JitCodeCache::CommitCodeInternal(Thread* self,
 
   OatQuickMethodHeader* method_header = nullptr;
   uint8_t* code_ptr = nullptr;
+  uint8_t* result = nullptr;
   {
     ScopedThreadSuspension sts(self, kSuspended);
     MutexLock mu(self, lock_);
     WaitForPotentialCollectionToComplete(self);
     {
       ScopedCodeCacheWrite scc(code_map_.get());
-      uint8_t* result = reinterpret_cast<uint8_t*>(
+      result = reinterpret_cast<uint8_t*>(
           mspace_memalign(code_mspace_, alignment, total_size));
       if (result == nullptr) {
         return nullptr;
@@ -319,6 +329,8 @@ uint8_t* JitCodeCache::CommitCodeInternal(Thread* self,
           fp_spill_mask,
           code_size);
     }
+    IncrementAllocatedCode(mspace_usable_size(result));
+    number_of_compilations_++;
 
     __builtin___clear_cache(reinterpret_cast<char*>(code_ptr),
                             reinterpret_cast<char*>(code_ptr + code_size));
@@ -374,8 +386,14 @@ size_t JitCodeCache::NumberOfCompiledCode() {
   return method_code_map_.size();
 }
 
+size_t JitCodeCache::NumberOfCompilations() {
+  MutexLock mu(Thread::Current(), lock_);
+  return number_of_compilations_;
+}
+
 void JitCodeCache::ClearData(Thread* self, void* data) {
   MutexLock mu(self, lock_);
+  allocated_data_ -= mspace_usable_size(data);
   mspace_free(data_mspace_, data);
 }
 
@@ -388,6 +406,7 @@ uint8_t* JitCodeCache::ReserveData(Thread* self, size_t size) {
     MutexLock mu(self, lock_);
     WaitForPotentialCollectionToComplete(self);
     result = reinterpret_cast<uint8_t*>(mspace_malloc(data_mspace_, size));
+    IncrementAllocatedData(mspace_usable_size(result));
   }
 
   if (result == nullptr) {
@@ -397,6 +416,7 @@ uint8_t* JitCodeCache::ReserveData(Thread* self, size_t size) {
     MutexLock mu(self, lock_);
     WaitForPotentialCollectionToComplete(self);
     result = reinterpret_cast<uint8_t*>(mspace_malloc(data_mspace_, size));
+    IncrementAllocatedData(mspace_usable_size(result));
   }
 
   return result;
@@ -511,7 +531,7 @@ bool JitCodeCache::IncreaseCodeCacheCapacity() {
   return true;
 }
 
-void JitCodeCache::GarbageCollectCache(Thread* self) {
+void JitCodeCache::GarbageCollectCache2(Thread* self) {
   instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
 
   // Wait for an existing collection, or let everyone know we are starting one.
@@ -602,10 +622,12 @@ void JitCodeCache::GarbageCollectCache(Thread* self) {
     }
 
     void* data_mspace = data_mspace_;
+    size_t* allocated_data = &allocated_data_;
     // Free all profiling infos of methods that were not being compiled.
     auto profiling_kept_end = std::remove_if(profiling_infos_.begin(), profiling_infos_.end(),
-      [data_mspace] (ProfilingInfo* info) {
+      [allocated_data, data_mspace] (ProfilingInfo* info) {
         if (info->GetMethod()->GetProfilingInfo(sizeof(void*)) == nullptr) {
+          *allocated_data = *allocated_data - mspace_usable_size(reinterpret_cast<uint8_t*>(info));
           mspace_free(data_mspace, reinterpret_cast<uint8_t*>(info));
           return true;
         }
@@ -622,6 +644,143 @@ void JitCodeCache::GarbageCollectCache(Thread* self) {
     LOG(INFO) << "After clearing code cache, code="
               << PrettySize(CodeCacheSize())
               << ", data=" << PrettySize(DataCacheSize());
+  }
+}
+
+void JitCodeCache::StartCodeMarking() {
+  if (!kIsDebugBuild || VLOG_IS_ON(jit)) {
+    LOG(INFO) << "StartCodeMarking "
+              << PrettySize(CodeCacheSizeLocked())
+              << ", data=" << PrettySize(DataCacheSizeLocked());
+  }
+  DCHECK(live_bitmap_ == nullptr);
+
+  live_bitmap_.reset(CodeCacheBitmap::Create(
+      "code-cache-bitmap",
+      reinterpret_cast<uintptr_t>(code_map_->Begin()),
+      reinterpret_cast<uintptr_t>(code_map_->Begin() + current_capacity_ / 2)));
+
+  for (ProfilingInfo* info : profiling_infos_) {
+    const void* entry_point = info->GetMethod()->GetEntryPointFromQuickCompiledCode();
+    if (ContainsPc(entry_point)) {
+      info->SetSavedEntryPoint(entry_point);
+      QuasiAtomic::ThreadFenceRelease();
+      info->GetMethod()->SetEntryPointFromQuickCompiledCode(GetJitHeartbeatTrampoline());
+    }
+  }
+
+  if (kIsDebugBuild) {
+    // Check that methods we have compiled do have a ProfilingInfo object. We would
+    // have memory leaks otherwise.
+    for (auto it = method_code_map_.begin(); it != method_code_map_.end(); ++it) {
+      DCHECK(it->second->GetProfilingInfo(sizeof(void*)) != nullptr);
+    }
+  }
+}
+
+void JitCodeCache::GarbageCollectCache(Thread* self) {
+  instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+
+  // Wait for an existing collection, or let everyone know we are starting one.
+  {
+    ScopedThreadSuspension sts(self, kSuspended);
+    MutexLock mu(self, lock_);
+    if (WaitForPotentialCollectionToComplete(self)) {
+      return;
+    } else {
+      collection_in_progress_ = true;
+    }
+  }
+
+  {
+    MutexLock mu(self, lock_);
+    if (live_bitmap_ == nullptr) {
+      StartCodeMarking();
+    }
+    for (ProfilingInfo* info : profiling_infos_) {
+      const void* entry_point = info->GetMethod()->GetEntryPointFromQuickCompiledCode();
+      if (ContainsPc(entry_point)) {
+        // This is for allocations since we initiated the collection.
+        live_bitmap_->AtomicTestAndSet(FromCodeToAllocation(entry_point));
+      } else {
+        if (entry_point == GetJitHeartbeatTrampoline()) {
+          instrumentation->UpdateMethodsCode(info->GetMethod(), GetQuickToInterpreterBridge());
+        }
+        if (!info->IsMethodBeingCompiled()) {
+          info->GetMethod()->SetProfilingInfo(nullptr);
+        }
+      }
+    }
+  }
+
+  // Run a checkpoint on all threads to mark the JIT compiled code they are running.
+  {
+    Barrier barrier(0);
+    size_t threads_running_checkpoint = 0;
+    MarkCodeClosure closure(this, &barrier);
+    threads_running_checkpoint =
+        Runtime::Current()->GetThreadList()->RunCheckpoint(&closure);
+    // Now that we have run our checkpoint, move to a suspended state and wait
+    // for other threads to run the checkpoint.
+    ScopedThreadSuspension sts(self, kSuspended);
+    if (threads_running_checkpoint != 0) {
+      barrier.Increment(self, threads_running_checkpoint);
+    }
+  }
+
+  {
+    MutexLock mu(self, lock_);
+    // Free unused compiled code, and restore the entry point of used compiled code.
+    {
+      ScopedCodeCacheWrite scc(code_map_.get());
+      for (auto it = method_code_map_.begin(); it != method_code_map_.end();) {
+        const void* code_ptr = it->first;
+        ArtMethod* method = it->second;
+        uintptr_t allocation = FromCodeToAllocation(code_ptr);
+        const OatQuickMethodHeader* method_header = OatQuickMethodHeader::FromCodePointer(code_ptr);
+        if (GetLiveBitmap()->Test(allocation)) {
+          instrumentation->UpdateMethodsCode(method, method_header->GetEntryPoint());
+          ++it;
+        } else {
+          method->ClearCounter();
+          DCHECK_NE(method->GetEntryPointFromQuickCompiledCode(), method_header->GetEntryPoint());
+          FreeCode(code_ptr, method);
+          it = method_code_map_.erase(it);
+        }
+      }
+    }
+
+    void* data_mspace = data_mspace_;
+    // Free all profiling infos of methods that were not being compiled.
+    auto profiling_kept_end = std::remove_if(profiling_infos_.begin(), profiling_infos_.end(),
+      [this, data_mspace] (ProfilingInfo* info) NO_THREAD_SAFETY_ANALYSIS {
+        info->SetSavedEntryPoint(nullptr);
+        if (ContainsPc(info->GetMethod()->GetEntryPointFromQuickCompiledCode())) {
+          info->GetMethod()->SetProfilingInfo(info);
+          return false;
+        } else if (info->GetMethod()->GetProfilingInfo(sizeof(void*)) == nullptr) {
+          allocated_data_ -= mspace_usable_size(reinterpret_cast<uint8_t*>(info));
+          mspace_free(data_mspace, reinterpret_cast<uint8_t*>(info));
+          return true;
+        }
+        return false;
+      });
+    profiling_infos_.erase(profiling_kept_end, profiling_infos_.end());
+
+    live_bitmap_.reset(nullptr);
+    if (!kIsDebugBuild || VLOG_IS_ON(jit)) {
+      LOG(INFO) << "After clearing code cache, code="
+                << PrettySize(CodeCacheSizeLocked())
+                << ", data=" << PrettySize(DataCacheSizeLocked())
+                << ", code = "<< PrettySize(allocated_code_)
+                << ", data=" << PrettySize(allocated_data_);
+    }
+
+    if ((allocated_data_ >= current_capacity_ / 4) || (allocated_code_ >= current_capacity_ / 4)) {
+      IncreaseCodeCacheCapacity();
+    }
+
+    NotifyCollectionDone(self);
   }
 }
 
@@ -686,6 +845,7 @@ ProfilingInfo* JitCodeCache::AddProfilingInfoInternal(Thread* self,
   if (data == nullptr) {
     return nullptr;
   }
+  IncrementAllocatedData(mspace_usable_size(data));
   info = new (data) ProfilingInfo(method, entries);
 
   // Make sure other threads see the data in the profiling info object before the
@@ -748,6 +908,36 @@ void JitCodeCache::DoneCompiling(ArtMethod* method, Thread* self ATTRIBUTE_UNUSE
 size_t JitCodeCache::GetMemorySizeOfCodePointer(const void* ptr) {
   MutexLock mu(Thread::Current(), lock_);
   return mspace_usable_size(reinterpret_cast<const void*>(FromCodeToAllocation(ptr)));
+}
+
+void JitCodeCache::IncrementAllocatedCode(size_t increment) {
+  allocated_code_ += increment;
+
+  size_t threshold = (current_capacity_ / 2) * 2 / 3;
+  if (live_bitmap_ == nullptr && allocated_code_ >= threshold) {
+    StartCodeMarking();
+  }
+}
+
+void JitCodeCache::IncrementAllocatedData(size_t increment) {
+  allocated_data_ += increment;
+
+  size_t threshold = (current_capacity_ / 2) * 2 / 3;
+  if (live_bitmap_ == nullptr && allocated_data_ >= threshold) {
+    StartCodeMarking();
+  }
+}
+
+extern "C" const void* artJitHeartbeat(ArtMethod* method, Thread* self ATTRIBUTE_UNUSED) {
+  ProfilingInfo* info = method->GetProfilingInfo(sizeof(void*));
+  if (info == nullptr) {
+    method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
+    return GetQuickToInterpreterBridge();
+  }
+  JitCodeCache* code_cache = Runtime::Current()->GetJit()->GetCodeCache();
+  code_cache->GetLiveBitmap()->AtomicTestAndSet(FromCodeToAllocation(info->GetSavedEntryPoint()));
+  method->SetEntryPointFromQuickCompiledCode(info->GetSavedEntryPoint());
+  return info->GetSavedEntryPoint();
 }
 
 }  // namespace jit

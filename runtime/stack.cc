@@ -702,7 +702,8 @@ static void AssertPcIsWithinQuickCode(ArtMethod* method, uintptr_t pc)
 
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   if (class_linker->IsQuickToInterpreterBridge(code) ||
-      class_linker->IsQuickResolutionStub(code)) {
+      class_linker->IsQuickResolutionStub(code) ||
+      code == GetJitHeartbeatTrampoline()) {
     return;
   }
 

@@ -68,6 +68,9 @@ class JitCodeCache {
   // of methods that got JIT compiled, as we might have collected some.
   size_t NumberOfCompiledCode() REQUIRES(!lock_);
 
+  // Number of compilations that were done.
+  size_t NumberOfCompilations() REQUIRES(!lock_);
+
   bool NotifyCompilationOf(ArtMethod* method, Thread* self)
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!lock_);
@@ -118,6 +121,10 @@ class JitCodeCache {
 
   // Perform a collection on the code cache.
   void GarbageCollectCache(Thread* self)
+      REQUIRES(!lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void GarbageCollectCache2(Thread* self)
       REQUIRES(!lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -260,6 +267,14 @@ class JitCodeCache {
 
   // Whether we can do garbage collection.
   const bool garbage_collect_code_;
+
+  size_t allocated_data_ GUARDED_BY(lock_);
+  size_t allocated_code_ GUARDED_BY(lock_);
+
+  void IncrementAllocatedCode(size_t increment) REQUIRES(lock_);
+  void IncrementAllocatedData(size_t increment) REQUIRES(lock_);
+  void StartCodeMarking() REQUIRES(lock_);
+  size_t number_of_compilations_ GUARDED_BY(lock_);
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(JitCodeCache);
 };

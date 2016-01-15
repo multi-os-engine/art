@@ -1420,6 +1420,42 @@ DEFINE_FUNCTION art_quick_resolution_trampoline
     DELIVER_PENDING_EXCEPTION
 END_FUNCTION art_quick_resolution_trampoline
 
+DEFINE_FUNCTION art_jit_heartbeat_trampoline
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME ebx, ebx
+    movl %esp, %edx  // remember SP
+
+    // Outgoing argument set up
+    subl MACRO_LITERAL(8), %esp   // alignment padding
+    pushl %fs:THREAD_SELF_OFFSET  // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH eax                      // pass method
+    call SYMBOL(artJitHeartbeat)  // artJitHeartbeat(ArtMethod*, Thread*)
+    movl %eax, %edi               // save code pointer in EDI
+    POP eax
+    addl MACRO_LITERAL(16), %esp  // Pop arguments skip eax
+    CFI_ADJUST_CFA_OFFSET(16)
+
+    // Restore FPRs.
+    movsd 0(%esp), %xmm0
+    movsd 8(%esp), %xmm1
+    movsd 16(%esp), %xmm2
+    movsd 24(%esp), %xmm3
+
+    // Remove space for FPR args.
+    addl MACRO_LITERAL(4 * 8), %esp
+    CFI_ADJUST_CFA_OFFSET(-4 * 8)
+
+    POP ecx  // Restore args except eax
+    POP edx
+    POP ebx
+    POP ebp  // Restore callee saves
+    POP esi
+    // Swap EDI callee save with code pointer.
+    xchgl %edi, (%esp)
+    // Tail call to intended method.
+    ret
+END_FUNCTION art_jit_heartbeat_trampoline
+
 DEFINE_FUNCTION art_quick_generic_jni_trampoline
     SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_EAX
     movl %esp, %ebp               // save SP at callee-save frame

@@ -1744,3 +1744,6 @@ DEFINE_FUNCTION art_quick_read_barrier_for_root_slow
     RESTORE_FP_CALLEE_SAVE_FRAME
     ret
 END_FUNCTION art_quick_read_barrier_for_root_slow
+
+DEFINE_FUNCTION art_jit_heartbeat_trampoline
+END_FUNCTION art_jit_heartbeat_trampoline

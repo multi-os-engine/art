@@ -354,6 +354,17 @@ INVOKE_TRAMPOLINE art_quick_invoke_direct_trampoline_with_access_check, artInvok
 INVOKE_TRAMPOLINE art_quick_invoke_super_trampoline_with_access_check, artInvokeSuperTrampolineWithAccessCheck
 INVOKE_TRAMPOLINE art_quick_invoke_virtual_trampoline_with_access_check, artInvokeVirtualTrampolineWithAccessCheck
 
+ENTRY art_jit_heartbeat_trampoline
+    .extern artJitHeartbeat
+    SETUP_REFS_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_R0
+    mov    r1, r9                         @ pass Thread::Current
+    bl     artJitHeartbeat                @ (ArtMethod*, Thread*)
+    mov    r12, r0                        @ save Method*->code_
+    ldr    r0, [sp, #0]                   @ Restore ArtMethod
+    RESTORE_REFS_AND_ARGS_CALLEE_SAVE_FRAME
+    bx     r12                            @ tail call to target
+END art_jit_heartbeat_trampoline
+
     /*
      * Quick invocation stub internal.
      * On entry:
