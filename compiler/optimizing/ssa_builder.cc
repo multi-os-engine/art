@@ -422,6 +422,32 @@ bool SsaBuilder::FixAmbiguousArrayOps() {
   return true;
 }
 
+void SsaBuilder::RemoveRedundantUninitializedStrings() {
+  if (GetGraph()->IsDebuggable()) {
+    // Do not perform the optimization for consistency with the interpreter
+    // which always allocates an object for new-instance of String.
+    return;
+  }
+
+  for (HNewInstance* new_instance : uninitialized_objects_) {
+    // Replace NewInstance of String with NullConstant if not used prior to
+    // calling StringFactory. In case of deoptimization, the interpreter is
+    // expected to skip null check on the `this` argument of the StringFactory call.
+    if (new_instance->IsStringAlloc() && !new_instance->HasNonEnvironmentUses()) {
+      new_instance->ReplaceWith(GetGraph()->GetNullConstant());
+      new_instance->GetBlock()->RemoveInstruction(new_instance);
+
+      // Remove LoadClass if not needed any more.
+      HLoadClass* load_class = new_instance->InputAt(0)->AsLoadClass();
+      DCHECK(load_class != nullptr);
+      DCHECK(!load_class->NeedsAccessCheck()) << "String class is always accessible";
+      if (!load_class->HasUses()) {
+        load_class->GetBlock()->RemoveInstruction(load_class);
+      }
+    }
+  }
+}
+
 GraphAnalysisResult SsaBuilder::BuildSsa() {
   // 1) Visit in reverse post order. We need to have all predecessors of a block
   // visited (with the exception of loops) in order to create the right environment
@@ -487,7 +513,15 @@ GraphAnalysisResult SsaBuilder::BuildSsa() {
   // input types.
   dead_phi_elimimation.EliminateDeadPhis();
 
-  // 11) Clear locals.
+  // 11) Step 1) replaced uses of NewInstances of String with the results of
+  // their corresponding StringFactory calls. Unless the String objects are used
+  // before they are initialized, they can be replaced with NullConstant.
+  // Note that this optimization is valid only if unsimplified code does not use
+  // the uninitialized value because we assume execution can be deoptimized at
+  // any safepoint. We must therefore perform it before any other optimizations.
+  RemoveRedundantUninitializedStrings();
+
+  // 12) Clear locals.
   for (HInstructionIterator it(GetGraph()->GetEntryBlock()->GetInstructions());
        !it.Done();
        it.Advance()) {
@@ -883,6 +917,15 @@ void SsaBuilder::VisitArraySet(HArraySet* aset) {
     ambiguous_asets_.push_back(aset);
   }
   VisitInstruction(aset);
+}
+
+void SsaBuilder::VisitNewInstance(HNewInstance* new_instance) {
+  VisitInstruction(new_instance);
+
+  // NewInstance of String will be replaced with the result of a StringFactory
+  // call which can render the NewInstance redundant. Keep a list of these to be
+  // visited once it is clear whether it is used prior to the StringFactory call.
+  uninitialized_objects_.push_back(new_instance);
 }
 
 void SsaBuilder::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
