@@ -169,6 +169,8 @@ static void UsageError(const char* fmt, ...) {
   va_end(ap);
 }
 
+static constexpr size_t kDefaultAllDexFileMax = 0x7FFFFFFF;
+
 NO_RETURN static void Usage(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -265,6 +267,11 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      select compiler filter.");
   UsageError("      Example: --compiler-filter=everything");
   UsageError("      Default: speed");
+  UsageError("");
+  UsageError("  --all-dex-file-max=<dex-file-size>: threshold size for all");
+  UsageError("      dex files for compiler filter tuning.");
+  UsageError("      Example: --all-dex-file-max=%d", kDefaultAllDexFileMax);
+  UsageError("      Default: %d", kDefaultAllDexFileMax);
   UsageError("");
   UsageError("  --huge-method-max=<method-instruction-count>: threshold size for a huge");
   UsageError("      method for compiler filter tuning.");
@@ -570,7 +577,8 @@ class Dex2Oat FINAL {
       swap_fd_(-1),
       app_image_fd_(kInvalidFd),
       timings_(timings),
-      force_determinism_(false) {}
+      force_determinism_(false),
+      all_dex_file_max_(kDefaultAllDexFileMax) {}
 
   ~Dex2Oat() {
     // Log completion time before deleting the runtime_, because this accesses
@@ -604,6 +612,10 @@ class Dex2Oat FINAL {
     bool requested_specific_compiler = false;
     std::string error_msg;
   };
+
+  void ParseAllDexFileMax(const StringPiece& option) {
+    ParseUintOption(option, "--all-dex-file-max", &all_dex_file_max_, Usage);
+  }
 
   void ParseZipFd(const StringPiece& option) {
     ParseUintOption(option, "--zip-fd", &zip_fd_, Usage);
@@ -1201,6 +1213,8 @@ class Dex2Oat FINAL {
           Usage("Cannot use --force-determinism with read barriers or non-CMS garbage collector");
         }
         force_determinism_ = true;
+      } else if (option.starts_with("--all-dex-file-max=")) {
+        ParseAllDexFileMax(option);
       } else if (!compiler_options_->ParseCompilerOption(option, Usage)) {
         Usage("Unknown argument %s", option.data());
       }
@@ -1463,10 +1477,20 @@ class Dex2Oat FINAL {
 
     // Ensure that the dex caches stay live since we don't want class unloading
     // to occur during compilation.
+    size_t dex_files_size = 0;
     for (const auto& dex_file : dex_files_) {
       ScopedObjectAccess soa(self);
       dex_caches_.push_back(soa.AddLocalReference<jobject>(
           class_linker->RegisterDexFile(*dex_file, Runtime::Current()->GetLinearAlloc())));
+      dex_files_size += dex_file->GetHeader().file_size_;
+    }
+
+    // For large apps, we don't compile.
+    if (!IsBootImage() &&
+        compiler_options_->IsCompilationEnabled() &&
+        dex_files_size > all_dex_file_max_) {
+      compiler_options_->SetCompilerFilter(CompilerOptions::kInterpretOnly);
+      LOG(INFO) << "App is over compilation threshold.";
     }
 
     /*
@@ -2475,6 +2499,7 @@ class Dex2Oat FINAL {
 
   // See CompilerOptions.force_determinism_.
   bool force_determinism_;
+  size_t all_dex_file_max_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(Dex2Oat);
 };
