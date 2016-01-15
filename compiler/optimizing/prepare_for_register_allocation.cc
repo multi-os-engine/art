@@ -106,23 +106,40 @@ void PrepareForRegisterAllocation::VisitClinitCheck(HClinitCheck* check) {
 
 void PrepareForRegisterAllocation::VisitNewInstance(HNewInstance* instruction) {
   HLoadClass* load_class = instruction->InputAt(0)->AsLoadClass();
-  bool has_only_one_use = load_class->HasOnlyOneNonEnvironmentUse();
-  // Change the entrypoint to kQuickAllocObject if either:
-  // - the class is finalizable (only kQuickAllocObject handles finalizable classes),
-  // - the class needs access checks (we do not know if it's finalizable),
-  // - or the load class has only one use.
-  if (instruction->IsFinalizable() || has_only_one_use || load_class->NeedsAccessCheck()) {
-    instruction->SetEntrypoint(kQuickAllocObject);
-    instruction->ReplaceInput(GetGraph()->GetIntConstant(load_class->GetTypeIndex()), 0);
-    // The allocation entry point that deals with access checks does not work with inlined
-    // methods, so we need to check whether this allocation comes from an inlined method.
-    if (has_only_one_use && !instruction->GetEnvironment()->IsFromInlinedInvoke()) {
-      // We can remove the load class from the graph. If it needed access checks, we delegate
-      // the access check to the allocation.
-      if (load_class->NeedsAccessCheck()) {
-        instruction->SetEntrypoint(kQuickAllocObjectWithAccessCheck);
-      }
+  DCHECK(load_class != nullptr);
+
+  // Replace NewInstance of String with NullConstant if not used prior to calling
+  // StringFactory. In case of deoptimization, the interpreter is expected to
+  // skip the null check on the `this` argument of the StringFactory call.
+  // If compiling with --debuggable, we do not perform the optimization for
+  // consistency with the interpreter which always allocates an object.
+  if (instruction->IsStringAlloc() &&
+      !instruction->HasNonEnvironmentUses() &&
+      !GetGraph()->IsDebuggable()) {
+    instruction->ReplaceWith(GetGraph()->GetNullConstant());
+    instruction->GetBlock()->RemoveInstruction(instruction);
+    if (!load_class->HasUses() && !load_class->NeedsAccessCheck()) {
       load_class->GetBlock()->RemoveInstruction(load_class);
+    }
+  } else {
+    bool has_only_one_use = load_class->HasOnlyOneNonEnvironmentUse();
+    // Change the entrypoint to kQuickAllocObject if either:
+    // - the class is finalizable (only kQuickAllocObject handles finalizable classes),
+    // - the class needs access checks (we do not know if it's finalizable),
+    // - or the load class has only one use.
+    if (instruction->IsFinalizable() || has_only_one_use || load_class->NeedsAccessCheck()) {
+      instruction->SetEntrypoint(kQuickAllocObject);
+      instruction->ReplaceInput(GetGraph()->GetIntConstant(load_class->GetTypeIndex()), 0);
+      // The allocation entry point that deals with access checks does not work with inlined
+      // methods, so we need to check whether this allocation comes from an inlined method.
+      if (has_only_one_use && !instruction->GetEnvironment()->IsFromInlinedInvoke()) {
+        // We can remove the load class from the graph. If it needed access checks, we delegate
+        // the access check to the allocation.
+        if (load_class->NeedsAccessCheck()) {
+          instruction->SetEntrypoint(kQuickAllocObjectWithAccessCheck);
+        }
+      load_class->GetBlock()->RemoveInstruction(load_class);
+      }
     }
   }
 }
