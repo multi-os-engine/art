@@ -57,6 +57,7 @@ class SsaBuilder : public HGraphVisitor {
         loop_headers_(graph->GetArena()->Adapter(kArenaAllocSsaBuilder)),
         ambiguous_agets_(graph->GetArena()->Adapter(kArenaAllocSsaBuilder)),
         ambiguous_asets_(graph->GetArena()->Adapter(kArenaAllocSsaBuilder)),
+        uninitialized_objects_(graph->GetArena()->Adapter(kArenaAllocSsaBuilder)),
         locals_for_(graph->GetBlocks().size(),
                     ArenaVector<HInstruction*>(graph->GetArena()->Adapter(kArenaAllocSsaBuilder)),
                     graph->GetArena()->Adapter(kArenaAllocSsaBuilder)) {
@@ -77,6 +78,7 @@ class SsaBuilder : public HGraphVisitor {
   void VisitTemporary(HTemporary* instruction) OVERRIDE;
   void VisitArrayGet(HArrayGet* aget) OVERRIDE;
   void VisitArraySet(HArraySet* aset) OVERRIDE;
+  void VisitNewInstance(HNewInstance* new_instance) OVERRIDE;
   void VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) OVERRIDE;
 
   static constexpr const char* kSsaBuilderPassName = "ssa_builder";
@@ -105,6 +107,8 @@ class SsaBuilder : public HGraphVisitor {
   HPhi* GetFloatDoubleOrReferenceEquivalentOfPhi(HPhi* phi, Primitive::Type type);
   HArrayGet* GetFloatOrDoubleEquivalentOfArrayGet(HArrayGet* aget);
 
+  void RemoveRedundantUninitializedStrings();
+
   StackHandleScopeCollection* const handles_;
 
   // True if types of ambiguous ArrayGets have been resolved.
@@ -119,6 +123,7 @@ class SsaBuilder : public HGraphVisitor {
 
   ArenaVector<HArrayGet*> ambiguous_agets_;
   ArenaVector<HArraySet*> ambiguous_asets_;
+  ArenaVector<HNewInstance*> uninitialized_objects_;
 
   // HEnvironment for each block.
   ArenaVector<ArenaVector<HInstruction*>> locals_for_;
