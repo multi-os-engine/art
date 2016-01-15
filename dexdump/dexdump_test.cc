@@ -32,10 +32,10 @@
 
 namespace art {
 
-class DexDumpTest : public CommonRuntimeTest {
+class DexDumpTest : public CommonRuntimeTest<> {
  protected:
   virtual void SetUp() {
-    CommonRuntimeTest::SetUp();
+    CommonRuntimeTest<>::SetUp();
     // Dogfood our own lib core dex file.
     dex_file_ = GetLibCoreDexFileNames()[0];
   }

@@ -24,17 +24,17 @@
 
 namespace art {
 
-class JavaVmExtTest : public CommonRuntimeTest {
+class JavaVmExtTest : public CommonRuntimeTest<> {
  protected:
   virtual void SetUp() {
-    CommonRuntimeTest::SetUp();
+    CommonRuntimeTest<>::SetUp();
 
     vm_ = Runtime::Current()->GetJavaVM();
   }
 
 
   virtual void TearDown() OVERRIDE {
-    CommonRuntimeTest::TearDown();
+    CommonRuntimeTest<>::TearDown();
   }
 
   JavaVMExt* vm_;

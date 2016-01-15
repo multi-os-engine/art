@@ -24,7 +24,7 @@
 
 namespace art {
 
-class MemMapTest : public CommonRuntimeTest {
+class MemMapTest : public CommonRuntimeTest<> {
  public:
   static uint8_t* BaseBegin(MemMap* mem_map) {
     return reinterpret_cast<uint8_t*>(mem_map->base_begin_);

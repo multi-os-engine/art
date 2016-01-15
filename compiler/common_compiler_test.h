@@ -38,7 +38,7 @@ class VerificationResults;
 
 template<class T> class Handle;
 
-class CommonCompilerTest : public CommonRuntimeTest {
+class CommonCompilerTest : public CommonRuntimeTest<> {
  public:
   CommonCompilerTest();
   ~CommonCompilerTest();

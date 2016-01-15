@@ -22,7 +22,7 @@
 
 namespace art {
 
-class ArchTest : public CommonRuntimeTest {
+class ArchTest : public CommonRuntimeTest<> {
  protected:
   void SetUpRuntimeOptions(RuntimeOptions *options) OVERRIDE {
     // Use 64-bit ISA for runtime setup to make method size potentially larger

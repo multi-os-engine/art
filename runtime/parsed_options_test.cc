@@ -27,7 +27,7 @@ namespace art {
 class ParsedOptionsTest : public ::testing::Test {
  public:
   static void SetUpTestCase() {
-    CommonRuntimeTest::SetUpAndroidRoot();
+    CommonRuntimeTest<>::SetUpAndroidRoot();
   }
 };
 
@@ -42,7 +42,7 @@ TEST_F(ParsedOptionsTest, ParsedOptions) {
 
   bool first_dex_file = true;
   for (const std::string &dex_file_name :
-           CommonRuntimeTest::GetLibCoreDexFileNames()) {
+           CommonRuntimeTest<>::GetLibCoreDexFileNames()) {
     if (!first_dex_file) {
       class_path += ":";
     } else {

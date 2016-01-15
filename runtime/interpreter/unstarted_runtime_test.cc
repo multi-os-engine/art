@@ -31,7 +31,7 @@
 namespace art {
 namespace interpreter {
 
-class UnstartedRuntimeTest : public CommonRuntimeTest {
+class UnstartedRuntimeTest : public CommonRuntimeTest<> {
  protected:
   // Re-expose all UnstartedRuntime implementations so we don't need to declare a million
   // test friends.

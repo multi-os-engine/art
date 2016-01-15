@@ -24,7 +24,7 @@
 
 namespace art {
 
-class DexMethodIteratorTest : public CommonRuntimeTest {
+class DexMethodIteratorTest : public CommonRuntimeTest<> {
 };
 
 TEST_F(DexMethodIteratorTest, Basic) {

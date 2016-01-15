@@ -35,10 +35,10 @@
 
 namespace art {
 
-class ExceptionTest : public CommonRuntimeTest {
+class ExceptionTest : public CommonRuntimeTest<> {
  protected:
   virtual void SetUp() {
-    CommonRuntimeTest::SetUp();
+    CommonRuntimeTest<>::SetUp();
 
     ScopedObjectAccess soa(Thread::Current());
     StackHandleScope<2> hs(soa.Self());

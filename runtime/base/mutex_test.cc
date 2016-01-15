@@ -21,7 +21,7 @@
 
 namespace art {
 
-class MutexTest : public CommonRuntimeTest {};
+class MutexTest : public CommonRuntimeTest<> {};
 
 struct MutexTester {
   static void AssertDepth(Mutex& mu, uint32_t expected_depth) {

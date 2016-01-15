@@ -41,10 +41,10 @@ static const char* kImgDiagBinaryName = "imgdiag";
 
 static const pid_t kImgDiagGuaranteedBadPid = (PID_MAX_LIMIT + 1);
 
-class ImgDiagTest : public CommonRuntimeTest {
+class ImgDiagTest : public CommonRuntimeTest<> {
  protected:
   virtual void SetUp() {
-    CommonRuntimeTest::SetUp();
+    CommonRuntimeTest<>::SetUp();
 
     // We loaded the runtime with an explicit image. Therefore the image space must exist.
     std::vector<gc::space::ImageSpace*> image_spaces =
@@ -54,7 +54,7 @@ class ImgDiagTest : public CommonRuntimeTest {
   }
 
   virtual void SetUpRuntimeOptions(RuntimeOptions* options) OVERRIDE {
-    // Needs to live until CommonRuntimeTest::SetUp finishes, since we pass it a cstring.
+    // Needs to live until CommonRuntimeTest<>::SetUp finishes, since we pass it a cstring.
     runtime_args_image_ = StringPrintf("-Ximage:%s", GetCoreArtLocation().c_str());
     options->push_back(std::make_pair(runtime_args_image_, nullptr));
   }

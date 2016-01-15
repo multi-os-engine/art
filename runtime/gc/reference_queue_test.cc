@@ -23,7 +23,7 @@
 namespace art {
 namespace gc {
 
-class ReferenceQueueTest : public CommonRuntimeTest {};
+class ReferenceQueueTest : public CommonRuntimeTest<> {};
 
 TEST_F(ReferenceQueueTest, EnqueueDequeue) {
   Thread* self = Thread::Current();

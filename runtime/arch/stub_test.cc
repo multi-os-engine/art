@@ -28,12 +28,12 @@
 namespace art {
 
 
-class StubTest : public CommonRuntimeTest {
+class StubTest : public CommonRuntimeTest<> {
  protected:
   // We need callee-save methods set up in the Runtime for exceptions.
   void SetUp() OVERRIDE {
     // Do the normal setup.
-    CommonRuntimeTest::SetUp();
+    CommonRuntimeTest<>::SetUp();
 
     {
       // Create callee-save methods

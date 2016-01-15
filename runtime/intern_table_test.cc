@@ -24,7 +24,7 @@
 
 namespace art {
 
-class InternTableTest : public CommonRuntimeTest {};
+class InternTableTest : public CommonRuntimeTest<> {};
 
 TEST_F(InternTableTest, Intern) {
   ScopedObjectAccess soa(Thread::Current());

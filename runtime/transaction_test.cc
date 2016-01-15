@@ -25,7 +25,7 @@
 
 namespace art {
 
-class TransactionTest : public CommonRuntimeTest {
+class TransactionTest : public CommonRuntimeTest<> {
  public:
   // Tests failing class initialization due to native call with transaction rollback.
   void testTransactionAbort(const char* tested_class_signature) {

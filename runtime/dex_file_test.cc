@@ -28,7 +28,7 @@
 
 namespace art {
 
-class DexFileTest : public CommonRuntimeTest {};
+class DexFileTest : public CommonRuntimeTest<> {};
 
 TEST_F(DexFileTest, Open) {
   ScopedObjectAccess soa(Thread::Current());

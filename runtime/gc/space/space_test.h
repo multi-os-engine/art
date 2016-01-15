@@ -33,7 +33,7 @@ namespace art {
 namespace gc {
 namespace space {
 
-class SpaceTest : public CommonRuntimeTest {
+class SpaceTest : public CommonRuntimeTest<> {
  public:
   jobject byte_array_class_;
 

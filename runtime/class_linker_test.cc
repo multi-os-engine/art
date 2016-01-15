@@ -44,7 +44,7 @@
 
 namespace art {
 
-class ClassLinkerTest : public CommonRuntimeTest {
+class ClassLinkerTest : public CommonRuntimeTest<> {
  protected:
   void AssertNonExistentClass(const std::string& descriptor)
       SHARED_REQUIRES(Locks::mutator_lock_) {

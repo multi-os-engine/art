@@ -169,7 +169,7 @@ std::unordered_set<std::string>* CommonCompilerTest::GetCompiledMethods() {
 }
 
 void CommonCompilerTest::SetUp() {
-  CommonRuntimeTest::SetUp();
+  CommonRuntimeTest<>::SetUp();
   {
     ScopedObjectAccess soa(Thread::Current());
 
@@ -215,7 +215,7 @@ void CommonCompilerTest::CreateCompilerDriver(Compiler::Kind kind, InstructionSe
 }
 
 void CommonCompilerTest::SetUpRuntimeOptions(RuntimeOptions* options) {
-  CommonRuntimeTest::SetUpRuntimeOptions(options);
+  CommonRuntimeTest<>::SetUpRuntimeOptions(options);
 
   compiler_options_.reset(new CompilerOptions);
   verification_results_.reset(new VerificationResults(compiler_options_.get()));
@@ -246,7 +246,7 @@ void CommonCompilerTest::TearDown() {
   verification_results_.reset();
   compiler_options_.reset();
 
-  CommonRuntimeTest::TearDown();
+  CommonRuntimeTest<>::TearDown();
 }
 
 void CommonCompilerTest::CompileClass(mirror::ClassLoader* class_loader, const char* class_name) {

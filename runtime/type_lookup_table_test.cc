@@ -25,7 +25,7 @@
 
 namespace art {
 
-class TypeLookupTableTest : public CommonRuntimeTest {
+class TypeLookupTableTest : public CommonRuntimeTest<> {
  public:
   size_t kDexNoIndex = DexFile::kDexNoIndex;  // Make copy to prevent linking errors.
 };

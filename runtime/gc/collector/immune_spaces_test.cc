@@ -28,7 +28,7 @@ class Object;
 namespace gc {
 namespace collector {
 
-class ImmuneSpacesTest : public CommonRuntimeTest {};
+class ImmuneSpacesTest : public CommonRuntimeTest<> {};
 
 class DummySpace : public space::ContinuousSpace {
  public:

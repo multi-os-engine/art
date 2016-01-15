@@ -27,7 +27,7 @@
 namespace art {
 namespace gc {
 
-class HeapTest : public CommonRuntimeTest {};
+class HeapTest : public CommonRuntimeTest<> {};
 
 TEST_F(HeapTest, ClearGrowthLimit) {
   Heap* heap = Runtime::Current()->GetHeap();
@@ -72,9 +72,9 @@ TEST_F(HeapTest, HeapBitmapCapacityTest) {
   bitmap->Set(fake_end_of_heap_object);
 }
 
-class ZygoteHeapTest : public CommonRuntimeTest {
+class ZygoteHeapTest : public CommonRuntimeTest<> {
   void SetUpRuntimeOptions(RuntimeOptions* options) {
-    CommonRuntimeTest::SetUpRuntimeOptions(options);
+    CommonRuntimeTest<>::SetUpRuntimeOptions(options);
     options->push_back(std::make_pair("-Xzygote", nullptr));
   }
 };

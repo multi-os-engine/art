@@ -25,7 +25,7 @@ namespace art {
 // Run the tests only on host.
 #ifndef __ANDROID__
 
-class PrebuiltToolsTest : public CommonRuntimeTest {
+class PrebuiltToolsTest : public CommonRuntimeTest<> {
 };
 
 static void CheckToolsExist(const std::string& tools_dir) {

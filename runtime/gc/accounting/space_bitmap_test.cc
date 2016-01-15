@@ -27,7 +27,7 @@ namespace art {
 namespace gc {
 namespace accounting {
 
-class SpaceBitmapTest : public CommonRuntimeTest {};
+class SpaceBitmapTest : public CommonRuntimeTest<> {};
 
 TEST_F(SpaceBitmapTest, Init) {
   uint8_t* heap_begin = reinterpret_cast<uint8_t*>(0x10000000);

@@ -22,7 +22,7 @@
 
 namespace art {
 
-class MonitorPoolTest : public CommonRuntimeTest {};
+class MonitorPoolTest : public CommonRuntimeTest<> {};
 
 class RandGen {
  public:

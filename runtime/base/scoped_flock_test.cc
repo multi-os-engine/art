@@ -20,7 +20,7 @@
 
 namespace art {
 
-class ScopedFlockTest : public CommonRuntimeTest {};
+class ScopedFlockTest : public CommonRuntimeTest<> {};
 
 TEST_F(ScopedFlockTest, TestLocking) {
   ScratchFile scratch_file;

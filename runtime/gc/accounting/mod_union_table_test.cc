@@ -40,7 +40,7 @@ class ModUnionTableFactory {
       TableType type, space::ContinuousSpace* space, space::ContinuousSpace* target_space);
 };
 
-class ModUnionTableTest : public CommonRuntimeTest {
+class ModUnionTableTest : public CommonRuntimeTest<> {
  public:
   ModUnionTableTest() : java_lang_object_array_(nullptr) {
   }

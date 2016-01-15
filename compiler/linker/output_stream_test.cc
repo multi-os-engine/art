@@ -25,7 +25,7 @@
 
 namespace art {
 
-class OutputStreamTest : public CommonRuntimeTest {
+class OutputStreamTest : public CommonRuntimeTest<> {
  protected:
   void CheckOffset(off_t expected) {
     off_t actual = output_stream_->Seek(0, kSeekCurrent);

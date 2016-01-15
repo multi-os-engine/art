@@ -33,7 +33,7 @@ namespace art {
 std::string PrettyArguments(const char* signature);
 std::string PrettyReturnType(const char* signature);
 
-class UtilsTest : public CommonRuntimeTest {};
+class UtilsTest : public CommonRuntimeTest<> {};
 
 TEST_F(UtilsTest, PrettyDescriptor_ArrayReferences) {
   EXPECT_EQ("java.lang.Class[]", PrettyDescriptor("[Ljava/lang/Class;"));

@@ -28,7 +28,7 @@
 
 namespace art {
 
-class SwapSpaceTest : public CommonRuntimeTest {
+class SwapSpaceTest : public CommonRuntimeTest<> {
 };
 
 static void SwapTest(bool use_file) {

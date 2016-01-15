@@ -27,7 +27,7 @@
 namespace art {
 namespace verifier {
 
-class MethodVerifierTest : public CommonRuntimeTest {
+class MethodVerifierTest : public CommonRuntimeTest<> {
  protected:
   void VerifyClass(const std::string& descriptor)
       SHARED_REQUIRES(Locks::mutator_lock_) {

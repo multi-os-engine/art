@@ -36,7 +36,7 @@ namespace mirror {
 namespace gc {
 namespace accounting {
 
-class CardTableTest : public CommonRuntimeTest {
+class CardTableTest : public CommonRuntimeTest<> {
  public:
   std::unique_ptr<CardTable> card_table_;
 

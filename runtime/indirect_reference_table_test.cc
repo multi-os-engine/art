@@ -23,7 +23,7 @@
 
 namespace art {
 
-class IndirectReferenceTableTest : public CommonRuntimeTest {};
+class IndirectReferenceTableTest : public CommonRuntimeTest<> {};
 
 static void CheckDump(IndirectReferenceTable* irt, size_t num_objects, size_t num_unique)
     SHARED_REQUIRES(Locks::mutator_lock_) {

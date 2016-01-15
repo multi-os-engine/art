@@ -33,10 +33,10 @@
 
 namespace art {
 
-class OatDumpTest : public CommonRuntimeTest {
+class OatDumpTest : public CommonRuntimeTest<> {
  protected:
   virtual void SetUp() {
-    CommonRuntimeTest::SetUp();
+    CommonRuntimeTest<>::SetUp();
     core_art_location_ = GetCoreArtLocation();
     core_oat_location_ = GetSystemImageFilename(GetCoreOatLocation().c_str(), kRuntimeISA);
   }

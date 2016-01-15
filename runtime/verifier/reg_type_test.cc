@@ -30,7 +30,7 @@
 namespace art {
 namespace verifier {
 
-class BaseRegTypeTest : public CommonRuntimeTest {
+class BaseRegTypeTest : public CommonRuntimeTest<> {
  public:
   void PostRuntimeCreate() OVERRIDE {
     stack.reset(new ArenaStack(Runtime::Current()->GetArenaPool()));

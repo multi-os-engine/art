@@ -50,7 +50,7 @@ class CheckWaitTask : public Task {
   AtomicInteger* const count2_;
 };
 
-class BarrierTest : public CommonRuntimeTest {
+class BarrierTest : public CommonRuntimeTest<> {
  public:
   static int32_t num_threads;
 };

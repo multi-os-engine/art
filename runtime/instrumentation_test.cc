@@ -142,7 +142,7 @@ class TestInstrumentationListener FINAL : public instrumentation::Instrumentatio
   DISALLOW_COPY_AND_ASSIGN(TestInstrumentationListener);
 };
 
-class InstrumentationTest : public CommonRuntimeTest {
+class InstrumentationTest : public CommonRuntimeTest<> {
  public:
   // Unique keys used to test Instrumentation::ConfigureStubs.
   static constexpr const char* kClientOneKey = "TestClient1";

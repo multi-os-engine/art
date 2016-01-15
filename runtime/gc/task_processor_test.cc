@@ -23,7 +23,7 @@
 namespace art {
 namespace gc {
 
-class TaskProcessorTest : public CommonRuntimeTest {
+class TaskProcessorTest : public CommonRuntimeTest<> {
  public:
 };
 

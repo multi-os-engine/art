@@ -42,7 +42,7 @@
 namespace art {
 namespace mirror {
 
-class ObjectTest : public CommonRuntimeTest {
+class ObjectTest : public CommonRuntimeTest<> {
  protected:
   void AssertString(int32_t expected_utf16_length,
                     const char* utf8_in,

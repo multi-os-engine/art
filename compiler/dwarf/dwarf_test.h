@@ -38,7 +38,7 @@ namespace dwarf {
 #define DW_CHECK(substring) Check(substring, false, __FILE__, __LINE__)
 #define DW_CHECK_NEXT(substring) Check(substring, true, __FILE__, __LINE__)
 
-class DwarfTest : public CommonRuntimeTest {
+class DwarfTest : public CommonRuntimeTest<> {
  public:
   static constexpr bool kPrintObjdumpOutput = false;  // debugging.
 

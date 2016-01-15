@@ -20,7 +20,7 @@
 
 namespace art {
 
-class TimingLoggerTest : public CommonRuntimeTest {};
+class TimingLoggerTest : public CommonRuntimeTest<> {};
 
 // TODO: Negative test cases (improper pairing of EndSplit, etc.)
 

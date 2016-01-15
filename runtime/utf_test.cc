@@ -24,7 +24,7 @@
 
 namespace art {
 
-class UtfTest : public CommonRuntimeTest {};
+class UtfTest : public CommonRuntimeTest<> {};
 
 TEST_F(UtfTest, GetLeadingUtf16Char) {
   EXPECT_EQ(0xffff, GetLeadingUtf16Char(0xeeeeffff));

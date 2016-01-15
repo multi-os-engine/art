@@ -28,7 +28,7 @@
 namespace art {
 namespace mirror {
 
-class DexCacheTest : public CommonRuntimeTest {};
+class DexCacheTest : public CommonRuntimeTest<> {};
 
 TEST_F(DexCacheTest, Open) {
   ScopedObjectAccess soa(Thread::Current());

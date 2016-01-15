@@ -125,7 +125,7 @@ struct DexFileDeleter {
 
 using DexFileUniquePtr = std::unique_ptr<DexFile, DexFileDeleter>;
 
-class DexFileVerifierTest : public CommonRuntimeTest {
+class DexFileVerifierTest : public CommonRuntimeTest<> {
  protected:
   void VerifyModification(const char* dex_file_base64_content,
                           const char* location,

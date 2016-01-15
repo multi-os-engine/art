@@ -39,11 +39,11 @@
 
 namespace art {
 
-class OatFileAssistantTest : public CommonRuntimeTest {
+class OatFileAssistantTest : public CommonRuntimeTest<> {
  public:
   virtual void SetUp() {
     ReserveImageSpace();
-    CommonRuntimeTest::SetUp();
+    CommonRuntimeTest<>::SetUp();
 
     // Create a scratch directory to work from.
     scratch_dir_ = android_data_ + "/OatFileAssistantTest";
@@ -116,7 +116,7 @@ class OatFileAssistantTest : public CommonRuntimeTest {
     ClearDirectory(scratch_dir_.c_str());
     ASSERT_EQ(0, rmdir(scratch_dir_.c_str()));
 
-    CommonRuntimeTest::TearDown();
+    CommonRuntimeTest<>::TearDown();
   }
 
   void Copy(std::string src, std::string dst) {

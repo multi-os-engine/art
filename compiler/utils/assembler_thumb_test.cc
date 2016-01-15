@@ -78,7 +78,7 @@ std::string GetToolsDir() {
 
   if (toolsdir.empty()) {
     setup_results();
-    toolsdir = CommonRuntimeTest::GetAndroidTargetToolsDir(kThumb2);
+    toolsdir = CommonRuntimeTest<>::GetAndroidTargetToolsDir(kThumb2);
     SetAndroidData();
   }
 

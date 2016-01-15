@@ -28,7 +28,7 @@
 
 namespace art {
 
-class ZipArchiveTest : public CommonRuntimeTest {};
+class ZipArchiveTest : public CommonRuntimeTest<> {};
 
 TEST_F(ZipArchiveTest, FindAndExtract) {
   std::string error_msg;

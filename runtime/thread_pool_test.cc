@@ -50,7 +50,7 @@ class CountTask : public Task {
   const bool verbose_;
 };
 
-class ThreadPoolTest : public CommonRuntimeTest {
+class ThreadPoolTest : public CommonRuntimeTest<> {
  public:
   static int32_t num_threads;
 };

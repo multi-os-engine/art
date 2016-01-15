@@ -26,7 +26,7 @@
 
 namespace art {
 
-class ReferenceTableTest : public CommonRuntimeTest {};
+class ReferenceTableTest : public CommonRuntimeTest<> {};
 
 TEST_F(ReferenceTableTest, Basics) {
   ScopedObjectAccess soa(Thread::Current());

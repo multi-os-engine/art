@@ -25,7 +25,7 @@
 
 namespace art {
 
-class OatFileTest : public CommonRuntimeTest {
+class OatFileTest : public CommonRuntimeTest<> {
 };
 
 TEST_F(OatFileTest, ResolveRelativeEncodedDexLocation) {

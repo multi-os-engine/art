@@ -31,7 +31,7 @@
 
 namespace art {
 
-class MonitorTest : public CommonRuntimeTest {
+class MonitorTest : public CommonRuntimeTest<> {
  protected:
   void SetUpRuntimeOptions(RuntimeOptions *options) OVERRIDE {
     // Use a smaller heap
