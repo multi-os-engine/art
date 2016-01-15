@@ -67,13 +67,14 @@ extern "C" bool jit_compile_method(void* handle, ArtMethod* method, Thread* self
   return jit_compiler->CompileMethod(self, method);
 }
 
-extern "C" void jit_type_loaded(void* handle, mirror::Class* type)
+extern "C" void jit_types_loaded(void* handle, mirror::Class** types, size_t count)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   auto* jit_compiler = reinterpret_cast<JitCompiler*>(handle);
   DCHECK(jit_compiler != nullptr);
   if (jit_compiler->GetCompilerOptions()->GetGenerateDebugInfo()) {
     const InstructionSet isa = jit_compiler->GetInstructionSet();
-    ArrayRef<const uint8_t> elf_file = dwarf::WriteDebugElfFileForClass(isa, type);
+    const ArrayRef<mirror::Class*> types_array(types, count);
+    ArrayRef<const uint8_t> elf_file = dwarf::WriteDebugElfFileForClasses(isa, types_array);
     CreateJITCodeEntry(std::unique_ptr<const uint8_t[]>(elf_file.data()), elf_file.size());
   }
 }
