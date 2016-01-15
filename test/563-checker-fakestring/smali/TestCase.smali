@@ -67,8 +67,8 @@
 # Test deoptimization between String's allocation and initialization.
 
 ## CHECK-START: int TestCase.deoptimizeNewInstance(int[], byte[]) register (after)
-## CHECK:         <<String:l\d+>> NewInstance
-## CHECK:                         Deoptimize env:[[<<String>>,{{.*]]}}
+## CHECK:         <<Null:l\d+>>   NullConstant
+## CHECK:                         Deoptimize env:[[<<Null>>,{{.*]]}}
 ## CHECK:                         InvokeStaticOrDirect method_name:java.lang.String.<init>
 
 .method public static deoptimizeNewInstance([I[B)I
@@ -133,5 +133,37 @@
 
    :return
    return-void
+
+.end method
+
+# Test that a redundant NewInstance is removed if not used and not compiling
+# --debuggable.
+
+## CHECK-START: java.lang.String TestCase.removeNewInstance(byte[]) register (after)
+## CHECK-NOT:     NewInstance
+## CHECK-NOT:     LoadClass
+
+## CHECK-START-DEBUGGABLE: java.lang.String TestCase.removeNewInstance(byte[]) register (after)
+## CHECK:         NewInstance
+
+.method public static removeNewInstance([B)Ljava/lang/String;
+   .registers 5
+
+   new-instance v0, Ljava/lang/String;
+   const-string v1, "UTF8"
+   invoke-direct {v0, p0, v1}, Ljava/lang/String;-><init>([BLjava/lang/String;)V
+   return-object v0
+
+.end method
+
+.method public static foo(Z)Ljava/lang/String;
+   .registers 5
+
+   new-instance v0, Ljava/lang/String;
+   if-eqz p0, :Label1
+   const v0, 0x0
+   :Label1
+   invoke-direct {v0}, Ljava/lang/String;-><init>()V
+   return-object v0
 
 .end method

@@ -410,10 +410,16 @@ inline ArtMethod* FindMethodFromCode(uint32_t method_idx, mirror::Object** this_
     DCHECK(self->IsExceptionPending());  // Throw exception and unwind.
     return nullptr;  // Failure.
   } else if (UNLIKELY(*this_object == nullptr && type != kStatic)) {
-    // Maintain interpreter-like semantics where NullPointerException is thrown
-    // after potential NoSuchMethodError from class linker.
-    ThrowNullPointerExceptionForMethodAccess(method_idx, type);
-    return nullptr;  // Failure.
+    if (UNLIKELY(resolved_method->GetDeclaringClass()->IsStringClass() &&
+                 resolved_method->IsConstructor())) {
+      // Nothing to do.
+    } else {
+      // Maintain interpreter-like semantics where NullPointerException is thrown
+      // after potential NoSuchMethodError from class linker.
+      LOG(INFO) << "THROWING NULLPTR";
+      ThrowNullPointerExceptionForMethodAccess(method_idx, type);
+      return nullptr;  // Failure.
+    }
   } else if (access_check) {
     mirror::Class* methods_class = resolved_method->GetDeclaringClass();
     bool can_access_resolved_method =
