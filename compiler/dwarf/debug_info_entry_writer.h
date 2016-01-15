@@ -22,6 +22,7 @@
 
 #include "base/casts.h"
 #include "dwarf/dwarf_constants.h"
+#include "dwarf/expression.h"
 #include "dwarf/writer.h"
 #include "leb128.h"
 
@@ -112,10 +113,11 @@ class DebugInfoEntryWriter FINAL : private Writer<Vector> {
     this->PushData(ptr, num_bytes);
   }
 
-  void WriteExprLoc(Attribute attrib, const void* ptr, size_t num_bytes) {
+  template<size_t BufferSize>
+  void WriteExprLoc(Attribute attrib, const Expression<BufferSize>& expr) {
     AddAbbrevAttribute(attrib, DW_FORM_exprloc);
-    this->PushUleb128(dchecked_integral_cast<uint32_t>(num_bytes));
-    this->PushData(ptr, num_bytes);
+    this->PushUleb128(dchecked_integral_cast<uint32_t>(expr.Size()));
+    this->PushData(expr.Data(), expr.Size());
   }
 
   void WriteData1(Attribute attrib, uint8_t value) {
