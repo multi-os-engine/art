@@ -653,6 +653,20 @@ class DebugInfoWriter {
             info_.EndTag();  // DW_TAG_member.
           }
 
+          if (type->IsStringClass()) {
+            // Emit debug info about an artifical class member for java.lang.String what represents
+            // the first elemnt of the data stored in this string class. Consumers of the debug info
+            // will be able to read the content of java.lang.String based on the count (real field)
+            // and based on the location of this data member.
+            info_.StartTag(DW_TAG_member);
+            WriteName("value");
+            WriteLazyType("Char");
+            info_.WriteUdata(DW_AT_data_member_location,
+                             mirror::String::ValueOffset().Uint32Value());
+            info_.WriteSdata(DW_AT_accessibility, DW_ACCESS_private);
+            info_.EndTag();  // DW_TAG_member.
+          }
+
           EndClassTag(desc);
         }
       }
