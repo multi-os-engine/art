@@ -53,7 +53,7 @@ class FaultManager {
 
   // Note that the following two functions are called in the context of a signal handler.
   // The IsInGeneratedCode() function checks that the mutator lock is held before it
-  // calls GetMethodAndReturnPCAndSP().
+  // calls GetMethodAndReturnPCAndSP(). 
   // TODO: think about adding lock assertions and fake lock and unlock functions.
   void GetMethodAndReturnPcAndSp(siginfo_t* siginfo, void* context, ArtMethod** out_method,
                                  uintptr_t* out_return_pc, uintptr_t* out_sp)
@@ -62,6 +62,10 @@ class FaultManager {
                          NO_THREAD_SAFETY_ANALYSIS;
 
  private:
+  // The HandleFaultByOtherHandlers function is only called by HandleFault function for generated code.
+  bool HandleFaultByOtherHandlers(int sig, siginfo_t* info, void* context)
+                                  NO_THREAD_SAFETY_ANALYSIS;
+
   std::vector<FaultHandler*> generated_code_handlers_;
   std::vector<FaultHandler*> other_handlers_;
   struct sigaction oldaction_;
