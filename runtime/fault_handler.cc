@@ -169,102 +169,102 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
 #endif
       }
     }
-  }
 
-  // We hit a signal we didn't handle.  This might be something for which
-  // we can give more information about so call all registered handlers to see
-  // if it is.
+    // We hit a signal we didn't handle.  This might be something for which
+    // we can give more information about so call all registered handlers to see
+    // if it is.
 
-  Thread* self = Thread::Current();
+    Thread* self = Thread::Current();
 
-  // If ART is not running, or the thread is not attached to ART pass the
-  // signal on to the next handler in the chain.
-  if (self == nullptr || Runtime::Current() == nullptr || !Runtime::Current()->IsStarted()) {
-    InvokeUserSignalHandler(sig, info, context);
-    return;
-  }
-  // Now set up the nested signal handler.
-
-  // TODO: add SIGSEGV back to the nested signals when we can handle running out stack gracefully.
-  static const int handled_nested_signals[] = {SIGABRT};
-  constexpr size_t num_handled_nested_signals = arraysize(handled_nested_signals);
-
-  // Release the fault manager so that it will remove the signal chain for
-  // SIGSEGV and we call the real sigaction.
-  fault_manager.Release();
-
-  // The action for SIGSEGV should be the default handler now.
-
-  // Unblock the signals we allow so that they can be delivered in the signal handler.
-  sigset_t sigset;
-  sigemptyset(&sigset);
-  for (int signal : handled_nested_signals) {
-    sigaddset(&sigset, signal);
-  }
-  pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
-
-  // If we get a signal in this code we want to invoke our nested signal
-  // handler.
-  struct sigaction action;
-  struct sigaction oldactions[num_handled_nested_signals];
-  action.sa_sigaction = art_nested_signal_handler;
-
-  // Explicitly mask out SIGSEGV and SIGABRT from the nested signal handler.  This
-  // should be the default but we definitely don't want these happening in our
-  // nested signal handler.
-  sigemptyset(&action.sa_mask);
-  for (int signal : handled_nested_signals) {
-    sigaddset(&action.sa_mask, signal);
-  }
-
-  action.sa_flags = SA_SIGINFO | SA_ONSTACK;
-#if !defined(__APPLE__) && !defined(__mips__)
-  action.sa_restorer = nullptr;
-#endif
-
-  // Catch handled signals to invoke our nested handler.
-  bool success = true;
-  for (size_t i = 0; i < num_handled_nested_signals; ++i) {
-    success = sigaction(handled_nested_signals[i], &action, &oldactions[i]) == 0;
-    if (!success) {
-      PLOG(ERROR) << "Unable to set up nested signal handler";
-      break;
+    // If ART is not running, or the thread is not attached to ART pass the
+    // signal on to the next handler in the chain.
+    if (self == nullptr || Runtime::Current() == nullptr || !Runtime::Current()->IsStarted()) {
+      InvokeUserSignalHandler(sig, info, context);
+      return;
     }
-  }
-  if (success) {
-    // Save the current state and call the handlers.  If anything causes a signal
-    // our nested signal handler will be invoked and this will longjmp to the saved
-    // state.
-    if (setjmp(*self->GetNestedSignalState()) == 0) {
-      for (const auto& handler : other_handlers_) {
-        if (handler->Action(sig, info, context)) {
-          // Restore the signal handlers, reinit the fault manager and return.  Signal was
-          // handled.
-          for (size_t i = 0; i < num_handled_nested_signals; ++i) {
-            success = sigaction(handled_nested_signals[i], &oldactions[i], nullptr) == 0;
-            if (!success) {
-              PLOG(ERROR) << "Unable to restore signal handler";
+    // Now set up the nested signal handler.
+
+    // TODO: add SIGSEGV back to the nested signals when we can handle running out stack gracefully.
+    static const int handled_nested_signals[] = {SIGABRT};
+    constexpr size_t num_handled_nested_signals = arraysize(handled_nested_signals);
+
+    // Release the fault manager so that it will remove the signal chain for
+    // SIGSEGV and we call the real sigaction.
+    fault_manager.Release();
+
+    // The action for SIGSEGV should be the default handler now.
+
+    // Unblock the signals we allow so that they can be delivered in the signal handler.
+    sigset_t sigset;
+    sigemptyset(&sigset);
+    for (int signal : handled_nested_signals) {
+      sigaddset(&sigset, signal);
+    }
+    pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
+
+    // If we get a signal in this code we want to invoke our nested signal
+    // handler.
+    struct sigaction action;
+    struct sigaction oldactions[num_handled_nested_signals];
+    action.sa_sigaction = art_nested_signal_handler;
+
+    // Explicitly mask out SIGSEGV and SIGABRT from the nested signal handler.  This
+    // should be the default but we definitely don't want these happening in our
+    // nested signal handler.
+    sigemptyset(&action.sa_mask);
+    for (int signal : handled_nested_signals) {
+      sigaddset(&action.sa_mask, signal);
+    }
+
+    action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+  #if !defined(__APPLE__) && !defined(__mips__)
+    action.sa_restorer = nullptr;
+  #endif
+
+    // Catch handled signals to invoke our nested handler.
+    bool success = true;
+    for (size_t i = 0; i < num_handled_nested_signals; ++i) {
+      success = sigaction(handled_nested_signals[i], &action, &oldactions[i]) == 0;
+      if (!success) {
+        PLOG(ERROR) << "Unable to set up nested signal handler";
+        break;
+      }
+    }
+    if (success) {
+      // Save the current state and call the handlers.  If anything causes a signal
+      // our nested signal handler will be invoked and this will longjmp to the saved
+      // state.
+      if (setjmp(*self->GetNestedSignalState()) == 0) {
+        for (const auto& handler : other_handlers_) {
+          if (handler->Action(sig, info, context)) {
+            // Restore the signal handlers, reinit the fault manager and return.  Signal was
+            // handled.
+            for (size_t i = 0; i < num_handled_nested_signals; ++i) {
+              success = sigaction(handled_nested_signals[i], &oldactions[i], nullptr) == 0;
+              if (!success) {
+                PLOG(ERROR) << "Unable to restore signal handler";
+              }
             }
+            fault_manager.Init();
+            return;
           }
-          fault_manager.Init();
-          return;
+        }
+      } else {
+        LOG(ERROR) << "Nested signal detected - original signal being reported";
+      }
+
+      // Restore the signal handlers.
+      for (size_t i = 0; i < num_handled_nested_signals; ++i) {
+        success = sigaction(handled_nested_signals[i], &oldactions[i], nullptr) == 0;
+        if (!success) {
+          PLOG(ERROR) << "Unable to restore signal handler";
         }
       }
-    } else {
-      LOG(ERROR) << "Nested signal detected - original signal being reported";
     }
 
-    // Restore the signal handlers.
-    for (size_t i = 0; i < num_handled_nested_signals; ++i) {
-      success = sigaction(handled_nested_signals[i], &oldactions[i], nullptr) == 0;
-      if (!success) {
-        PLOG(ERROR) << "Unable to restore signal handler";
-      }
-    }
+    // Now put the fault manager back in place.
+    fault_manager.Init();
   }
-
-  // Now put the fault manager back in place.
-  fault_manager.Init();
 
   // Set a breakpoint in this function to catch unhandled signals.
   art_sigsegv_fault();
