@@ -419,7 +419,10 @@ bool HInliner::TryInline(HInvoke* invoke_instruction, ArtMethod* method, bool do
   size_t inline_max_code_units = compiler_driver_->GetCompilerOptions().GetInlineMaxCodeUnits();
   if (code_item->insns_size_in_code_units_ > inline_max_code_units) {
     VLOG(compiler) << "Method " << PrettyMethod(method)
-                   << " is too big to inline";
+                   << " is too big to inline: "
+                   << code_item->insns_size_in_code_units_
+                   << " > "
+                   << inline_max_code_units;
     return false;
   }
 
@@ -639,11 +642,6 @@ bool HInliner::TryBuildAndInline(ArtMethod* resolved_method,
 
   for (; !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
-    if (block->IsLoopHeader()) {
-      VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                     << " could not be inlined because it contains a loop";
-      return false;
-    }
 
     for (HInstructionIterator instr_it(block->GetInstructions());
          !instr_it.Done();
