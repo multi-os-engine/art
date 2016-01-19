@@ -2085,7 +2085,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
           } else if (reg_type.IsConflict()) {
             Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "returning register with conflict";
           } else if (reg_type.IsUninitializedTypes()) {
-            Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "returning uninitialized object '"
+            Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "returning uninitialized object '"
                                               << reg_type << "'";
           } else if (!reg_type.IsReferenceTypes()) {
             // We really do expect a reference here.
@@ -2189,8 +2189,16 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
                                                          : reg_types_.JavaLangClass());
       break;
     }
-    case Instruction::MONITOR_ENTER:
-      work_line_->PushMonitor(this, inst->VRegA_11x(), work_insn_idx_);
+    case Instruction::MONITOR_ENTER: {
+      uint32_t obj_reg = inst->VRegA_11x();
+      const RegType& obj_type = work_line_->GetRegisterType(this, obj_reg);
+      if (obj_type.IsUninitializedTypes()) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD)
+            << "monitor-enter on uninitialized reference in v" << obj_reg;
+        break;
+      }
+
+      work_line_->PushMonitor(this, obj_reg, work_insn_idx_);
       // Check whether the previous instruction is a move-object with vAA as a source, creating
       // untracked lock aliasing.
       if (0 != work_insn_idx_ && !GetInstructionFlags(work_insn_idx_).IsBranchTarget()) {
@@ -2218,7 +2226,8 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
         }
       }
       break;
-    case Instruction::MONITOR_EXIT:
+    }
+    case Instruction::MONITOR_EXIT: {
       /*
        * monitor-exit instructions are odd. They can throw exceptions,
        * but when they do they act as if they succeeded and the PC is
@@ -2239,10 +2248,18 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
        * we skip them here); if we can't, then the code path could be
        * "live" so we still need to check it.
        */
-      opcode_flags &= ~Instruction::kThrow;
-      work_line_->PopMonitor(this, inst->VRegA_11x());
-      break;
+      uint32_t obj_reg = inst->VRegA_11x();
+      const RegType& obj_type = work_line_->GetRegisterType(this, obj_reg);
+      if (obj_type.IsUninitializedTypes()) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD)
+            << "monitor-enter on uninitialized reference in v" << obj_reg;
+        break;
+      }
 
+      opcode_flags &= ~Instruction::kThrow;
+      work_line_->PopMonitor(this, obj_reg);
+      break;
+    }
     case Instruction::CHECK_CAST:
     case Instruction::INSTANCE_OF: {
       /*
@@ -2287,6 +2304,14 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
           Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "check-cast on non-reference in v" << orig_type_reg;
         } else {
           Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "instance-of on non-reference in v" << orig_type_reg;
+        }
+      } else if (orig_type.IsUninitializedTypes()) {
+        if (is_checkcast) {
+          Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "check-cast on uninitialized reference in v"
+                                            << orig_type_reg;
+        } else {
+          Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "instance-of on uninitialized reference in v"
+                                            << orig_type_reg;
         }
       } else {
         if (is_checkcast) {
@@ -2384,6 +2409,8 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       if (!reg_types_.JavaLangThrowable(false).IsAssignableFrom(res_type)) {
         Fail(res_type.IsUnresolvedTypes() ? VERIFY_ERROR_NO_CLASS : VERIFY_ERROR_BAD_CLASS_SOFT)
             << "thrown class " << res_type << " not instanceof Throwable";
+      } else if (res_type.IsUninitializedTypes()) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "thrown exception not initialized";
       }
       break;
     }
@@ -3857,8 +3884,8 @@ ArtMethod* MethodVerifier::VerifyInvocationArgsFromIterator(
     const RegType& reg_type = reg_types_.FromDescriptor(GetClassLoader(), param_descriptor, false);
     uint32_t get_reg = is_range ? inst->VRegC_3rc() + static_cast<uint32_t>(sig_registers) :
         arg[sig_registers];
+    const RegType& src_type = work_line_->GetRegisterType(this, get_reg);
     if (reg_type.IsIntegralTypes()) {
-      const RegType& src_type = work_line_->GetRegisterType(this, get_reg);
       if (!src_type.IsIntegralTypes()) {
         Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "register v" << get_reg << " has type " << src_type
             << " but expected " << reg_type;
@@ -3885,6 +3912,10 @@ ArtMethod* MethodVerifier::VerifyInvocationArgsFromIterator(
             return nullptr;
           }
         }
+      } else if (src_type.IsUninitializedTypes()) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "invoke parameter in register v" << get_reg
+            << " is an uninitialized reference";
+        return nullptr;
       }
     }
     sig_registers += reg_type.IsLongOrDoubleTypes() ?  2 : 1;
@@ -4492,6 +4523,12 @@ void MethodVerifier::VerifyISFieldAccess(const Instruction* inst, const RegType&
                     << " to be compatible with type '" << insn_type
                     << "' but found type '" << *field_type
                     << "' in put-object";
+        return;
+      }
+      const RegType& reg_type = work_line_->GetRegisterType(this, vregA);
+      if (reg_type.IsUninitializedTypes()) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD)
+            << "put-object storing uninitialized reference '" << reg_type << "'";
         return;
       }
       work_line_->VerifyRegisterType(this, vregA, *field_type);
