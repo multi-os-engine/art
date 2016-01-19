@@ -53,7 +53,7 @@ class CompilerOptions FINAL {
   static const bool kDefaultGenerateDebugInfo = false;
   static const bool kDefaultIncludePatchInformation = false;
   static const size_t kDefaultInlineDepthLimit = 3;
-  static const size_t kDefaultInlineMaxCodeUnits = 32;
+  static const size_t kDefaultInlineMaxCodeUnits = 40;
   static constexpr size_t kUnsetInlineDepthLimit = -1;
   static constexpr size_t kUnsetInlineMaxCodeUnits = -1;
 
