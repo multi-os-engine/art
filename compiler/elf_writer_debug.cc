@@ -16,6 +16,7 @@
 
 #include "elf_writer_debug.h"
 
+#include <algorithm>
 #include <unordered_set>
 #include <vector>
 
@@ -37,6 +38,11 @@
 #include "oat_writer.h"
 #include "stack_map.h"
 #include "utils.h"
+
+// liblzma.
+#include "XzEnc.h"
+#include "7zCrc.h"
+#include "XzCrc64.h"
 
 namespace art {
 namespace dwarf {
@@ -217,10 +223,17 @@ static void WriteCIE(InstructionSet isa,
   UNREACHABLE();
 }
 
+static bool CompareOpcodes(const MethodDebugInfo* lhs, const MethodDebugInfo* rhs) {
+  ArrayRef<const uint8_t> l = lhs->compiled_method_->GetCFIInfo();
+  ArrayRef<const uint8_t> r = rhs->compiled_method_->GetCFIInfo();
+  return std::lexicographical_compare(l.begin(), l.end(), r.begin(), r.end());
+}
+
 template<typename ElfTypes>
 void WriteCFISection(ElfBuilder<ElfTypes>* builder,
                      const ArrayRef<const MethodDebugInfo>& method_infos,
-                     CFIFormat format) {
+                     CFIFormat format,
+                     bool write_oat_patches) {
   CHECK(format == DW_DEBUG_FRAME_FORMAT || format == DW_EH_FRAME_FORMAT);
   typedef typename ElfTypes::Addr Elf_Addr;
 
@@ -235,6 +248,16 @@ void WriteCFISection(ElfBuilder<ElfTypes>* builder,
   } else {
     patch_locations.reserve(method_infos.size());
   }
+
+  // The methods can be written any order.
+  // Let's therefore sort them in the lexicographical order of the opcodes.
+  // This helps any compression algorithm to find similarities (about 25% saving).
+  std::vector<const MethodDebugInfo*> sorted_method_infos;
+  sorted_method_infos.reserve(method_infos.size());
+  for (size_t i = 0; i < method_infos.size(); i++) {
+    sorted_method_infos.push_back(&method_infos[i]);
+  }
+  std::sort(sorted_method_infos.begin(), sorted_method_infos.end(), CompareOpcodes);
 
   // Write .eh_frame/.debug_frame section.
   auto* cfi_section = (format == DW_DEBUG_FRAME_FORMAT
@@ -254,11 +277,11 @@ void WriteCFISection(ElfBuilder<ElfTypes>* builder,
     cfi_section->WriteFully(buffer.data(), buffer.size());
     buffer_address += buffer.size();
     buffer.clear();
-    for (const MethodDebugInfo& mi : method_infos) {
-      if (!mi.deduped_) {  // Only one FDE per unique address.
-        ArrayRef<const uint8_t> opcodes = mi.compiled_method_->GetCFIInfo();
+    for (const MethodDebugInfo* mi : sorted_method_infos) {
+      if (!mi->deduped_) {  // Only one FDE per unique address.
+        ArrayRef<const uint8_t> opcodes = mi->compiled_method_->GetCFIInfo();
         if (!opcodes.empty()) {
-          const Elf_Addr code_address = text_address + mi.low_pc_;
+          const Elf_Addr code_address = text_address + mi->low_pc_;
           if (format == DW_EH_FRAME_FORMAT) {
             binary_search_table.push_back(
                 dchecked_integral_cast<uint32_t>(code_address));
@@ -266,7 +289,7 @@ void WriteCFISection(ElfBuilder<ElfTypes>* builder,
                 dchecked_integral_cast<uint32_t>(buffer_address));
           }
           WriteFDE(is64bit, cfi_address, cie_address,
-                   code_address, mi.high_pc_ - mi.low_pc_,
+                   code_address, mi->high_pc_ - mi->low_pc_,
                    opcodes, format, buffer_address, &buffer,
                    &patch_locations);
           cfi_section->WriteFully(buffer.data(), buffer.size());
@@ -307,8 +330,10 @@ void WriteCFISection(ElfBuilder<ElfTypes>* builder,
     header_section->WriteFully(binary_search_table.data(), binary_search_table.size());
     header_section->End();
   } else {
-    builder->WritePatches(".debug_frame.oat_patches",
-                          ArrayRef<const uintptr_t>(patch_locations));
+    if (write_oat_patches) {
+      builder->WritePatches(".debug_frame.oat_patches",
+                            ArrayRef<const uintptr_t>(patch_locations));
+    }
   }
 }
 
@@ -1268,8 +1293,9 @@ static void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
 }
 
 template <typename ElfTypes>
-void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
-                       const ArrayRef<const MethodDebugInfo>& method_infos) {
+static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
+                              const ArrayRef<const MethodDebugInfo>& method_infos,
+                              bool with_signature) {
   bool generated_mapping_symbol = false;
   auto* strtab = builder->GetStrTab();
   auto* symtab = builder->GetSymTab();
@@ -1289,21 +1315,25 @@ void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
 
   strtab->Start();
   strtab->Write("");  // strtab should start with empty string.
+  std::string last_name;
+  size_t last_name_offset = 0;
   for (const MethodDebugInfo& info : method_infos) {
     if (info.deduped_) {
       continue;  // Add symbol only for the first instance.
     }
-    std::string name = PrettyMethod(info.dex_method_index_, *info.dex_file_, true);
+    std::string name = PrettyMethod(info.dex_method_index_, *info.dex_file_, with_signature);
     if (deduped_addresses.find(info.low_pc_) != deduped_addresses.end()) {
       name += " [DEDUPED]";
     }
+    // If we write method names without signature we might have repetitions.
+    size_t name_offset = (name == last_name ? last_name_offset : strtab->Write(name));
 
     const auto* text = builder->GetText()->Exists() ? builder->GetText() : nullptr;
     const bool is_relative = (text != nullptr);
     uint32_t low_pc = info.low_pc_;
     // Add in code delta, e.g., thumb bit 0 for Thumb2 code.
     low_pc += info.compiled_method_->CodeDelta();
-    symtab->Add(strtab->Write(name), text, low_pc,
+    symtab->Add(name_offset, text, low_pc,
                 is_relative, info.high_pc_ - info.low_pc_, STB_GLOBAL, STT_FUNC);
 
     // Conforming to aaelf, add $t mapping symbol to indicate start of a sequence of thumb2
@@ -1317,6 +1347,9 @@ void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
         generated_mapping_symbol = true;
       }
     }
+
+    last_name = std::move(name);
+    last_name_offset = name_offset;
   }
   strtab->End();
 
@@ -1332,11 +1365,81 @@ void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
                     const ArrayRef<const MethodDebugInfo>& method_infos,
                     CFIFormat cfi_format) {
   // Add methods to .symtab.
-  WriteDebugSymbols(builder, method_infos);
+  WriteDebugSymbols(builder, method_infos, true /* with_signature */);
   // Generate CFI (stack unwinding information).
-  WriteCFISection(builder, method_infos, cfi_format);
+  WriteCFISection(builder, method_infos, cfi_format, true /* write_oat_patches */);
   // Write DWARF .debug_* sections.
   WriteDebugSections(builder, method_infos);
+}
+
+static void XzCompress(const std::vector<uint8_t>* src, std::vector<uint8_t>* dst) {
+  // Configure the compression library.
+  CrcGenerateTable();
+  Crc64GenerateTable();
+  CLzma2EncProps lzma2Props;
+  Lzma2EncProps_Init(&lzma2Props);
+  lzma2Props.lzmaProps.level = 1;  // Fast compression.
+  Lzma2EncProps_Normalize(&lzma2Props);
+  CXzProps props;
+  XzProps_Init(&props);
+  props.lzma2Props = &lzma2Props;
+  // Implement the required interface for communication (written in C so no virtual methods).
+  struct XzCallbacks : public ISeqInStream, public ISeqOutStream, public ICompressProgress {
+    static SRes ReadImpl(void* p, void* buf, size_t* size) {
+      auto* ctx = static_cast<XzCallbacks*>(reinterpret_cast<ISeqInStream*>(p));
+      *size = std::min(*size, ctx->src_->size() - ctx->src_pos_);
+      memcpy(buf, ctx->src_->data() + ctx->src_pos_, *size);
+      ctx->src_pos_ += *size;
+      return SZ_OK;
+    }
+    static size_t WriteImpl(void* p, const void* buf, size_t size) {
+      auto* ctx = static_cast<XzCallbacks*>(reinterpret_cast<ISeqOutStream*>(p));
+      const uint8_t* buffer = reinterpret_cast<const uint8_t*>(buf);
+      ctx->dst_->insert(ctx->dst_->end(), buffer, buffer + size);
+      return size;
+    }
+    static SRes ProgressImpl(void* , UInt64, UInt64) {
+      return SZ_OK;
+    }
+    size_t src_pos_;
+    const std::vector<uint8_t>* src_;
+    std::vector<uint8_t>* dst_;
+  };
+  XzCallbacks callbacks;
+  callbacks.Read = XzCallbacks::ReadImpl;
+  callbacks.Write = XzCallbacks::WriteImpl;
+  callbacks.Progress = XzCallbacks::ProgressImpl;
+  callbacks.src_pos_ = 0;
+  callbacks.src_ = src;
+  callbacks.dst_ = dst;
+  // Compress.
+  SRes res = Xz_Encode(&callbacks, &callbacks, &props, &callbacks);
+  CHECK_EQ(res, SZ_OK);
+}
+
+template <typename ElfTypes>
+void WriteMiniDebugInfo(ElfBuilder<ElfTypes>* parent_builder,
+                        const ArrayRef<const MethodDebugInfo>& method_infos) {
+  const InstructionSet isa = parent_builder->GetIsa();
+  std::vector<uint8_t> buffer;
+  buffer.reserve(KB);
+  VectorOutputStream out("Mini-debug-info ELF file", &buffer);
+  std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(isa, &out));
+  builder->Start();
+  // Write .rodata and .text as NOBITS sections.
+  // This allows tools to detect virtual address relocation of the parent ELF file.
+  builder->SetVirtualAddress(parent_builder->GetRoData()->GetAddress());
+  builder->GetRoData()->WriteNoBitsSection(parent_builder->GetRoData()->GetSize());
+  builder->SetVirtualAddress(parent_builder->GetText()->GetAddress());
+  builder->GetText()->WriteNoBitsSection(parent_builder->GetText()->GetSize());
+  WriteDebugSymbols(builder.get(), method_infos, false /* with_signature */);
+  WriteCFISection(builder.get(), method_infos, DW_DEBUG_FRAME_FORMAT, false /* write_oat_paches */);
+  builder->End();
+  CHECK(builder->Good());
+  std::vector<uint8_t> compressed_buffer;
+  compressed_buffer.reserve(buffer.size() / 4);
+  XzCompress(&buffer, &compressed_buffer);
+  parent_builder->WriteSection(".gnu_debugdata", &compressed_buffer);
 }
 
 template <typename ElfTypes>
@@ -1411,6 +1514,12 @@ template void WriteDebugInfo<ElfTypes64>(
     ElfBuilder<ElfTypes64>* builder,
     const ArrayRef<const MethodDebugInfo>& method_infos,
     CFIFormat cfi_format);
+template void WriteMiniDebugInfo<ElfTypes32>(
+    ElfBuilder<ElfTypes32>* builder,
+    const ArrayRef<const MethodDebugInfo>& method_infos);
+template void WriteMiniDebugInfo<ElfTypes64>(
+    ElfBuilder<ElfTypes64>* builder,
+    const ArrayRef<const MethodDebugInfo>& method_infos);
 
 }  // namespace dwarf
 }  // namespace art
