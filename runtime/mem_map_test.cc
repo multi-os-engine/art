@@ -251,6 +251,12 @@ TEST_F(MemMapTest, RemapAtEnd32bit) {
 #endif
 
 TEST_F(MemMapTest, MapAnonymousExactAddr32bitHighAddr) {
+  if (kRuntimeISA == kMips) {
+    // MIPS32 hardware cannot allocate in the 2GB-4GB region.
+    printf("WARNING: TEST DISABLED FOR MIPS\n");
+    return;
+  }
+
   CommonInit();
   // This test may not work under valgrind.
   if (RUNNING_ON_MEMORY_TOOL == 0) {
