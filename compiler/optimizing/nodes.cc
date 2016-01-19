@@ -167,11 +167,7 @@ void HGraph::ClearDominanceInformation() {
 void HGraph::ClearLoopInformation() {
   SetHasIrreducibleLoops(false);
   for (HReversePostOrderIterator it(*this); !it.Done(); it.Advance()) {
-    HBasicBlock* current = it.Current();
-    if (current->IsLoopHeader()) {
-      current->RemoveInstruction(current->GetLoopInformation()->GetSuspendCheck());
-    }
-    current->SetLoopInformation(nullptr);
+    it.Current()->SetLoopInformation(nullptr);
   }
 }
 
@@ -457,6 +453,10 @@ void HGraph::SimplifyCFG() {
     }
     if (block->IsLoopHeader()) {
       SimplifyLoop(block);
+    } else if (!block->IsEntryBlock() && block->GetFirstInstruction()->IsSuspendCheck()) {
+      // We are being called by the dead code elimiation pass, and what used to be
+      // a loop got dismantled. Just remove the suspend check.
+      block->RemoveInstruction(block->GetFirstInstruction());
     }
   }
 }

@@ -589,6 +589,14 @@ void SSAChecker::VisitInstruction(HInstruction* instruction) {
     }
   }
 
+  if (instruction->NeedsEnvironment() && !instruction->HasEnvironment()) {
+    AddError(StringPrintf("Instruction %s:%d in block %d requires an environment "
+                          "but does not have one.",
+                          instruction->DebugName(),
+                          instruction->GetId(),
+                          current_block_->GetBlockId()));
+  }
+
   // Ensure an instruction having an environment is dominated by the
   // instructions contained in the environment.
   for (HEnvironment* environment = instruction->GetEnvironment();
