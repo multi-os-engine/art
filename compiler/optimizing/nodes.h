@@ -2589,7 +2589,7 @@ class HUnaryOperation : public HExpression<1> {
 
   // Try to statically evaluate `operation` and return a HConstant
   // containing the result of this evaluation.  If `operation` cannot
-  // be evaluated as a constant, return null.
+  // be evaluated as a constant, return nullptr.
   HConstant* TryStaticEvaluation() const;
 
   // Apply this operation to `x`.
@@ -2659,7 +2659,7 @@ class HBinaryOperation : public HExpression<2> {
 
   // Try to statically evaluate `operation` and return a HConstant
   // containing the result of this evaluation.  If `operation` cannot
-  // be evaluated as a constant, return null.
+  // be evaluated as a constant, return nullptr.
   HConstant* TryStaticEvaluation() const;
 
   // Apply this operation to `x` and `y`.
