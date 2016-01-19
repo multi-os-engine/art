@@ -67,6 +67,7 @@ class JitCodeCache {
   // Number of compiled code in the code cache. Note that this is not the number
   // of methods that got JIT compiled, as we might have collected some.
   size_t NumberOfCompiledCode() REQUIRES(!lock_);
+  size_t NumberOfCompilations() REQUIRES(!lock_);
 
   bool NotifyCompilationOf(ArtMethod* method, Thread* self)
       SHARED_REQUIRES(Locks::mutator_lock_)
@@ -260,6 +261,8 @@ class JitCodeCache {
 
   // Whether we can do garbage collection.
   const bool garbage_collect_code_;
+
+  size_t number_of_compilations_ GUARDED_BY(lock_);
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(JitCodeCache);
 };
