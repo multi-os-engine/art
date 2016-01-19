@@ -2538,6 +2538,13 @@ bool DexFileVerifier::CheckMethodAccessFlags(uint32_t method_index,
     return false;
   }
 
+  // init method should not be present in interfaces.
+  if (((class_access_flags & kAccInterface) != 0) && is_init_by_name) {
+    *error_msg = StringPrintf("init interface method %" PRIu32 " should not have code",
+                              method_index);
+    return false;
+  }
+
   // Only the static initializer may have code in an interface.
   // TODO We should have some way determine whether to allow this experimental flag without the
   // runtime being started.

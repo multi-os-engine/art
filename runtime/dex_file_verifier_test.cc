@@ -756,7 +756,7 @@ TEST_F(DexFileVerifierTest, MethodAccessFlagsInterfaces) {
       kMethodFlagsInterfaceWithInit,
       "method_flags_interface_with_init",
       [](DexFile* dex_file ATTRIBUTE_UNUSED) {},
-      "Non-clinit interface method 1 should not have code");
+      "init interface method 1 should not have code");
 
   VerifyModification(
       kMethodFlagsInterface,
