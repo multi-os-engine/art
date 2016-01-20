@@ -352,6 +352,11 @@ Heap::Heap(size_t initial_size,
   }
   std::unique_ptr<MemMap> main_mem_map_1;
   std::unique_ptr<MemMap> main_mem_map_2;
+
+  // Gross hack to make dex2oat deterministic.
+  if (requested_alloc_space_begin == nullptr && Runtime::Current()->IsAotCompiler()) {
+    requested_alloc_space_begin = reinterpret_cast<uint8_t*>(0x40000000);
+  }
   uint8_t* request_begin = requested_alloc_space_begin;
   if (request_begin != nullptr && separate_non_moving_space) {
     request_begin += non_moving_space_capacity;
