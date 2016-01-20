@@ -559,19 +559,31 @@ class CompilerDriver {
   // Attempt to resolve all type, methods, fields, and strings
   // referenced from code in the dex file following PathClassLoader
   // ordering semantics.
-  void Resolve(jobject class_loader, const std::vector<const DexFile*>& dex_files,
-               ThreadPool* thread_pool, TimingLogger* timings)
+  void Resolve(jobject class_loader,
+               const std::vector<const DexFile*>& dex_files,
+               ThreadPool* thread_pool,
+               size_t thread_count,
+               TimingLogger* timings)
       REQUIRES(!Locks::mutator_lock_);
-  void ResolveDexFile(jobject class_loader, const DexFile& dex_file,
+  void ResolveDexFile(jobject class_loader,
+                      const DexFile& dex_file,
                       const std::vector<const DexFile*>& dex_files,
-                      ThreadPool* thread_pool, TimingLogger* timings)
+                      ThreadPool* thread_pool,
+                      size_t thread_count,
+                      TimingLogger* timings)
       REQUIRES(!Locks::mutator_lock_);
 
-  void Verify(jobject class_loader, const std::vector<const DexFile*>& dex_files,
-              ThreadPool* thread_pool, TimingLogger* timings);
-  void VerifyDexFile(jobject class_loader, const DexFile& dex_file,
+  void Verify(jobject class_loader,
+              const std::vector<const DexFile*>& dex_files,
+              ThreadPool* thread_pool,
+              size_t thread_count,
+              TimingLogger* timings);
+  void VerifyDexFile(jobject class_loader,
+                     const DexFile& dex_file,
                      const std::vector<const DexFile*>& dex_files,
-                     ThreadPool* thread_pool, TimingLogger* timings)
+                     ThreadPool* thread_pool,
+                     size_t thread_count,
+                     TimingLogger* timings)
       REQUIRES(!Locks::mutator_lock_);
 
   void SetVerified(jobject class_loader, const std::vector<const DexFile*>& dex_files,
@@ -581,12 +593,18 @@ class CompilerDriver {
                           ThreadPool* thread_pool, TimingLogger* timings)
       REQUIRES(!Locks::mutator_lock_);
 
-  void InitializeClasses(jobject class_loader, const std::vector<const DexFile*>& dex_files,
-                         ThreadPool* thread_pool, TimingLogger* timings)
-      REQUIRES(!Locks::mutator_lock_, !compiled_classes_lock_);
-  void InitializeClasses(jobject class_loader, const DexFile& dex_file,
+  void InitializeClasses(jobject class_loader,
                          const std::vector<const DexFile*>& dex_files,
-                         ThreadPool* thread_pool, TimingLogger* timings)
+                         ThreadPool* thread_pool,
+                         size_t thread_count,
+                         TimingLogger* timings)
+      REQUIRES(!Locks::mutator_lock_, !compiled_classes_lock_);
+  void InitializeClasses(jobject class_loader,
+                         const DexFile& dex_file,
+                         const std::vector<const DexFile*>& dex_files,
+                         ThreadPool* thread_pool,
+                         size_t thread_count,
+                         TimingLogger* timings)
       REQUIRES(!Locks::mutator_lock_, !compiled_classes_lock_);
 
   void UpdateImageClasses(TimingLogger* timings) REQUIRES(!Locks::mutator_lock_);
