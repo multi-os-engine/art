@@ -1753,8 +1753,8 @@ END art_quick_string_compareto
 /* java.lang.String.indexOf(int ch, int fromIndex=0) */
 ENTRY_NO_GP art_quick_indexof
 /* $a0 holds address of "this" */
-/* $a1 holds address of "ch" */
-/* $a2 holds address of "fromIndex" */
+/* $a1 holds "ch" */
+/* $a2 holds "fromIndex" */
   lw    $t0,MIRROR_STRING_COUNT_OFFSET($a0)     # this.length()
   subu  $t0,$t0,$a2     # this.length() - offset
   blez  $t0,6f          # if this.length()-offset <= 0
