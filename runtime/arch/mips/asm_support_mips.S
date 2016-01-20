@@ -129,4 +129,46 @@
 #endif  // USE_HEAP_POISONING
 .endm
 
+// Find minimum of two signed registers
+.macro MINs dreg,rreg,sreg
+  .set push
+  .set noat
+  slt    $at, \rreg, \sreg
+#if defined(_MIPS_ARCH_MIPS32R6) || defined(_MIPS_ARCH_MIPS64R6)
+  .ifc \dreg,\rreg
+  selnez \dreg, \rreg, $at
+  seleqz $at, \sreg, $at
+  .else
+  seleqz \dreg, \sreg, $at
+  selnez $at, \rreg, $at
+  .endif
+  or     \dreg, \dreg, $at
+#else
+  movn   \dreg, \rreg, $at
+  movz   \dreg, \sreg, $at
+#endif
+  .set pop
+.endm
+
+// Find minimum of two unsigned registers
+.macro MINu dreg,rreg,sreg
+  .set push
+  .set noat
+  sltu   $at, \rreg, \sreg
+#if defined(_MIPS_ARCH_MIPS32R6) || defined(_MIPS_ARCH_MIPS64R6)
+  .ifc \dreg,\rreg
+  selnez \dreg, \rreg, $at
+  seleqz $at, \sreg, $at
+  .else
+  seleqz \dreg, \sreg, $at
+  selnez $at, \rreg, $at
+  .endif
+  or     \dreg, \dreg, $at
+#else
+  movn   \dreg, \rreg, $at
+  movz   \dreg, \sreg, $at
+#endif
+  .set pop
+.endm
+
 #endif  // ART_RUNTIME_ARCH_MIPS_ASM_SUPPORT_MIPS_S_
