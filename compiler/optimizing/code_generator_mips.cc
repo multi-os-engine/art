@@ -251,7 +251,7 @@ class LoadClassSlowPathMIPS : public SlowPathCodeMIPS {
     if (out.IsValid()) {
       DCHECK(out.IsRegister() && !locations->GetLiveRegisters()->ContainsCoreRegister(out.reg()));
       Primitive::Type type = at_->GetType();
-      mips_codegen->MoveLocation(out, calling_convention.GetReturnLocation(type), type);
+      mips_codegen->Move(out, calling_convention.GetReturnLocation(type), type);
     }
 
     RestoreLiveRegisters(codegen, locations);
@@ -298,9 +298,9 @@ class LoadStringSlowPathMIPS : public SlowPathCodeMIPS {
                                 IsDirectEntrypoint(kQuickResolveString));
     CheckEntrypointTypes<kQuickResolveString, void*, uint32_t>();
     Primitive::Type type = instruction_->GetType();
-    mips_codegen->MoveLocation(locations->Out(),
-                               calling_convention.GetReturnLocation(type),
-                               type);
+    mips_codegen->Move(locations->Out(),
+                       calling_convention.GetReturnLocation(type),
+                       type);
 
     RestoreLiveRegisters(codegen, locations);
     __ B(GetExitLabel());
@@ -419,7 +419,7 @@ class TypeCheckSlowPathMIPS : public SlowPathCodeMIPS {
           kQuickInstanceofNonTrivial, uint32_t, const mirror::Class*, const mirror::Class*>();
       Primitive::Type ret_type = instruction_->GetType();
       Location ret_loc = calling_convention.GetReturnLocation(ret_type);
-      mips_codegen->MoveLocation(locations->Out(), ret_loc, ret_type);
+      mips_codegen->Move(locations->Out(), ret_loc, ret_type);
     } else {
       DCHECK(instruction_->IsCheckCast());
       mips_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pCheckCast),
@@ -531,7 +531,7 @@ MipsAssembler* ParallelMoveResolverMIPS::GetAssembler() const {
 void ParallelMoveResolverMIPS::EmitMove(size_t index) {
   DCHECK_LT(index, moves_.size());
   MoveOperands* move = moves_[index];
-  codegen_->MoveLocation(move->GetDestination(), move->GetSource(), move->GetType());
+  codegen_->Move(move->GetDestination(), move->GetSource(), move->GetType());
 }
 
 void ParallelMoveResolverMIPS::EmitSwap(size_t index) {
@@ -792,28 +792,12 @@ void CodeGeneratorMIPS::Bind(HBasicBlock* block) {
   __ Bind(GetLabelOf(block));
 }
 
-void CodeGeneratorMIPS::MoveLocation(Location dst, Location src, Primitive::Type dst_type) {
-  if (src.Equals(dst)) {
-    return;
-  }
-
-  if (src.IsConstant()) {
-    MoveConstant(dst, src.GetConstant());
-  } else {
-    if (Primitive::Is64BitType(dst_type)) {
-      Move64(dst, src);
-    } else {
-      Move32(dst, src);
-    }
-  }
-}
-
-void CodeGeneratorMIPS::Move32(Location destination, Location source) {
+void CodeGeneratorMIPS::Move(Location destination,
+                             Location source,
+                             Primitive::Type dst_type ATTRIBUTE_UNUSED) {
   if (source.Equals(destination)) {
     return;
-  }
-
-  if (destination.IsRegister()) {
+  } else if (destination.IsRegister()) {
     if (source.IsRegister()) {
       __ Move(destination.AsRegister<Register>(), source.AsRegister<Register>());
     } else if (source.IsFpuRegister()) {
@@ -822,35 +806,7 @@ void CodeGeneratorMIPS::Move32(Location destination, Location source) {
       DCHECK(source.IsStackSlot()) << "Cannot move from " << source << " to " << destination;
       __ LoadFromOffset(kLoadWord, destination.AsRegister<Register>(), SP, source.GetStackIndex());
     }
-  } else if (destination.IsFpuRegister()) {
-    if (source.IsRegister()) {
-      __ Mtc1(source.AsRegister<Register>(), destination.AsFpuRegister<FRegister>());
-    } else if (source.IsFpuRegister()) {
-      __ MovS(destination.AsFpuRegister<FRegister>(), source.AsFpuRegister<FRegister>());
-    } else {
-      DCHECK(source.IsStackSlot()) << "Cannot move from " << source << " to " << destination;
-      __ LoadSFromOffset(destination.AsFpuRegister<FRegister>(), SP, source.GetStackIndex());
-    }
-  } else {
-    DCHECK(destination.IsStackSlot()) << destination;
-    if (source.IsRegister()) {
-      __ StoreToOffset(kStoreWord, source.AsRegister<Register>(), SP, destination.GetStackIndex());
-    } else if (source.IsFpuRegister()) {
-      __ StoreSToOffset(source.AsFpuRegister<FRegister>(), SP, destination.GetStackIndex());
-    } else {
-      DCHECK(source.IsStackSlot()) << "Cannot move from " << source << " to " << destination;
-      __ LoadFromOffset(kLoadWord, TMP, SP, source.GetStackIndex());
-      __ StoreToOffset(kStoreWord, TMP, SP, destination.GetStackIndex());
-    }
-  }
-}
-
-void CodeGeneratorMIPS::Move64(Location destination, Location source) {
-  if (source.Equals(destination)) {
-    return;
-  }
-
-  if (destination.IsRegisterPair()) {
+  } else if (destination.IsRegisterPair()) {
     if (source.IsRegisterPair()) {
       __ Move(destination.AsRegisterPairHigh<Register>(), source.AsRegisterPairHigh<Register>());
       __ Move(destination.AsRegisterPairLow<Register>(), source.AsRegisterPairLow<Register>());
@@ -867,17 +823,31 @@ void CodeGeneratorMIPS::Move64(Location destination, Location source) {
       __ LoadFromOffset(kLoadDoubleword, r, SP, off);
     }
   } else if (destination.IsFpuRegister()) {
-    if (source.IsRegisterPair()) {
+    if (source.IsRegister()) {
+      __ Mtc1(source.AsRegister<Register>(), destination.AsFpuRegister<FRegister>());
+    } else if (source.IsFpuRegister()) {
+      __ MovD(destination.AsFpuRegister<FRegister>(), source.AsFpuRegister<FRegister>());
+    } else if (source.IsRegisterPair()) {
       FRegister dst = destination.AsFpuRegister<FRegister>();
       Register src_high = source.AsRegisterPairHigh<Register>();
       Register src_low = source.AsRegisterPairLow<Register>();
       __ Mtc1(src_low, dst);
       __ MoveToFpuHigh(src_high, dst);
-    } else if (source.IsFpuRegister()) {
-      __ MovD(destination.AsFpuRegister<FRegister>(), source.AsFpuRegister<FRegister>());
+    } else if (source.IsStackSlot()) {
+      __ LoadSFromOffset(destination.AsFpuRegister<FRegister>(), SP, source.GetStackIndex());
     } else {
       DCHECK(source.IsDoubleStackSlot()) << "Cannot move from " << source << " to " << destination;
       __ LoadDFromOffset(destination.AsFpuRegister<FRegister>(), SP, source.GetStackIndex());
+    }
+  } else if (destination.IsStackSlot()) {
+    if (source.IsRegister()) {
+      __ StoreToOffset(kStoreWord, source.AsRegister<Register>(), SP, destination.GetStackIndex());
+    } else if (source.IsFpuRegister()) {
+      __ StoreSToOffset(source.AsFpuRegister<FRegister>(), SP, destination.GetStackIndex());
+    } else {
+      DCHECK(source.IsStackSlot()) << "Cannot move from " << source << " to " << destination;
+      __ LoadFromOffset(kLoadWord, TMP, SP, source.GetStackIndex());
+      __ StoreToOffset(kStoreWord, TMP, SP, destination.GetStackIndex());
     }
   } else {
     DCHECK(destination.IsDoubleStackSlot()) << destination;
@@ -949,46 +919,6 @@ void CodeGeneratorMIPS::MoveConstant(Location destination, int32_t value) {
   DCHECK(destination.IsRegister());
   Register dst = destination.AsRegister<Register>();
   __ LoadConst32(dst, value);
-}
-
-void CodeGeneratorMIPS::Move(HInstruction* instruction,
-                             Location location,
-                             HInstruction* move_for) {
-  LocationSummary* locations = instruction->GetLocations();
-  Primitive::Type type = instruction->GetType();
-  DCHECK_NE(type, Primitive::kPrimVoid);
-
-  if (instruction->IsCurrentMethod()) {
-    Move32(location, Location::StackSlot(kCurrentMethodStackOffset));
-  } else if (locations != nullptr && locations->Out().Equals(location)) {
-    return;
-  } else if (instruction->IsIntConstant()
-             || instruction->IsLongConstant()
-             || instruction->IsNullConstant()) {
-    MoveConstant(location, instruction->AsConstant());
-  } else if (instruction->IsTemporary()) {
-    Location temp_location = GetTemporaryLocation(instruction->AsTemporary());
-    if (temp_location.IsStackSlot()) {
-      Move32(location, temp_location);
-    } else {
-      DCHECK(temp_location.IsDoubleStackSlot());
-      Move64(location, temp_location);
-    }
-  } else if (instruction->IsLoadLocal()) {
-    uint32_t stack_slot = GetStackSlot(instruction->AsLoadLocal()->GetLocal());
-    if (Primitive::Is64BitType(type)) {
-      Move64(location, Location::DoubleStackSlot(stack_slot));
-    } else {
-      Move32(location, Location::StackSlot(stack_slot));
-    }
-  } else {
-    DCHECK((instruction->GetNext() == move_for) || instruction->GetNext()->IsTemporary());
-    if (Primitive::Is64BitType(type)) {
-      Move64(location, locations->Out());
-    } else {
-      Move32(location, locations->Out());
-    }
-  }
 }
 
 void CodeGeneratorMIPS::AddLocationAsTemp(Location location, LocationSummary* locations) {
@@ -1547,7 +1477,7 @@ void InstructionCodeGeneratorMIPS::HandleShift(HBinaryOperation* instr) {
       Register lhs_low = locations->InAt(0).AsRegisterPairLow<Register>();
       if (use_imm) {
           if (shift_value == 0) {
-            codegen_->Move64(locations->Out(), locations->InAt(0));
+            codegen_->Move(locations->Out(), locations->InAt(0));
           } else if (shift_value < kMipsBitsPerWord) {
             if (has_ins_rotr) {
               if (instr->IsShl()) {

@@ -270,8 +270,6 @@ class CodeGeneratorMIPS64 : public CodeGenerator {
 
   void Bind(HBasicBlock* block) OVERRIDE;
 
-  void Move(HInstruction* instruction, Location location, HInstruction* move_for) OVERRIDE;
-
   size_t GetWordSize() const OVERRIDE { return kMips64WordSize; }
 
   size_t GetFloatingPointSpillSlotSize() const OVERRIDE { return kMips64WordSize; }
@@ -318,7 +316,9 @@ class CodeGeneratorMIPS64 : public CodeGenerator {
   void Finalize(CodeAllocator* allocator) OVERRIDE;
 
   // Code generation helpers.
-  void MoveLocation(Location dst, Location src, Primitive::Type dst_type) OVERRIDE;
+  void Move(Location destination,
+            Location source,
+            Primitive::Type dst_type = Primitive::kPrimVoid) OVERRIDE;
 
   void MoveConstant(Location destination, int32_t value) OVERRIDE;
 
