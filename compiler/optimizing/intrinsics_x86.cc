@@ -2314,11 +2314,15 @@ static void CreateBitCountLocations(
                                                            LocationSummary::kNoCall,
                                                            kIntrinsified);
   if (is_long) {
-    locations->SetInAt(0, Location::RequiresRegister());
     locations->AddTemp(Location::RequiresRegister());
-  } else {
-    locations->SetInAt(0, Location::Any());
+
+    locations->AddTemp(Location::RequiresRegister());
+    locations->AddTemp(Location::RequiresRegister());
+    locations->AddTemp(Location::RequiresRegister());
+    locations->AddTemp(Location::RequiresRegister());
+    locations->AddTemp(Location::RequiresRegister());
   }
+  locations->SetInAt(0, Location::Any());
   locations->SetOut(Location::RequiresRegister());
 }
 
@@ -2349,17 +2353,23 @@ static void GenBitCount(X86Assembler* assembler, HInvoke* invoke, bool is_long) 
       DCHECK(src.IsStackSlot());
       __ popcntl(out, Address(ESP, src.GetStackIndex()));
     }
-    return;
+  } else {
+    DCHECK_LT(0u, locations->GetTempCount());
+    Register temp = locations->GetTemp(0).AsRegister<Register>();
+    // The 64-bit case needs to worry about two parts.
+    if (src.IsRegisterPair()) {
+      Register src_lo = src.AsRegisterPairLow<Register>();
+      Register src_hi = src.AsRegisterPairHigh<Register>();
+      __ popcntl(temp, src_lo);
+      __ popcntl(out, src_hi);
+      __ addl(out, temp);
+    } else {
+      DCHECK(src.IsDoubleStackSlot());
+      __ popcntl(temp, Address(ESP, src.GetStackIndex()));
+      __ popcntl(out, Address(ESP, src.GetHighStackIndex(kX86WordSize)));
+      __ addl(out, temp);
+    }
   }
-
-  // The 64-bit case needs to worry about both parts of the register.
-  DCHECK(src.IsRegisterPair());
-  Register src_lo = src.AsRegisterPairLow<Register>();
-  Register src_hi = src.AsRegisterPairHigh<Register>();
-  Register temp = locations->GetTemp(0).AsRegister<Register>();
-  __ popcntl(temp, src_lo);
-  __ popcntl(out, src_hi);
-  __ addl(out, temp);
 }
 
 void IntrinsicLocationsBuilderX86::VisitIntegerBitCount(HInvoke* invoke) {
