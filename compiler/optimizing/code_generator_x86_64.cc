@@ -1121,162 +1121,124 @@ Location CodeGeneratorX86_64::GetStackLocation(HLoadLocal* load) const {
   UNREACHABLE();
 }
 
-void CodeGeneratorX86_64::Move(Location destination, Location source) {
-  if (source.Equals(destination)) {
-    return;
-  }
-  if (destination.IsRegister()) {
-    if (source.IsRegister()) {
-      __ movq(destination.AsRegister<CpuRegister>(), source.AsRegister<CpuRegister>());
-    } else if (source.IsFpuRegister()) {
-      __ movd(destination.AsRegister<CpuRegister>(), source.AsFpuRegister<XmmRegister>());
-    } else if (source.IsStackSlot()) {
-      __ movl(destination.AsRegister<CpuRegister>(),
-              Address(CpuRegister(RSP), source.GetStackIndex()));
-    } else {
-      DCHECK(source.IsDoubleStackSlot());
-      __ movq(destination.AsRegister<CpuRegister>(),
-              Address(CpuRegister(RSP), source.GetStackIndex()));
-    }
-  } else if (destination.IsFpuRegister()) {
-    if (source.IsRegister()) {
-      __ movd(destination.AsFpuRegister<XmmRegister>(), source.AsRegister<CpuRegister>());
-    } else if (source.IsFpuRegister()) {
-      __ movaps(destination.AsFpuRegister<XmmRegister>(), source.AsFpuRegister<XmmRegister>());
-    } else if (source.IsStackSlot()) {
-      __ movss(destination.AsFpuRegister<XmmRegister>(),
-              Address(CpuRegister(RSP), source.GetStackIndex()));
-    } else {
-      DCHECK(source.IsDoubleStackSlot());
-      __ movsd(destination.AsFpuRegister<XmmRegister>(),
-               Address(CpuRegister(RSP), source.GetStackIndex()));
-    }
-  } else if (destination.IsStackSlot()) {
-    if (source.IsRegister()) {
-      __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()),
-              source.AsRegister<CpuRegister>());
-    } else if (source.IsFpuRegister()) {
-      __ movss(Address(CpuRegister(RSP), destination.GetStackIndex()),
-               source.AsFpuRegister<XmmRegister>());
-    } else if (source.IsConstant()) {
-      HConstant* constant = source.GetConstant();
-      int32_t value = GetInt32ValueOf(constant);
-      __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), Immediate(value));
-    } else {
-      DCHECK(source.IsStackSlot()) << source;
-      __ movl(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
-      __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), CpuRegister(TMP));
-    }
-  } else {
-    DCHECK(destination.IsDoubleStackSlot());
-    if (source.IsRegister()) {
-      __ movq(Address(CpuRegister(RSP), destination.GetStackIndex()),
-              source.AsRegister<CpuRegister>());
-    } else if (source.IsFpuRegister()) {
-      __ movsd(Address(CpuRegister(RSP), destination.GetStackIndex()),
-               source.AsFpuRegister<XmmRegister>());
-    } else if (source.IsConstant()) {
-      HConstant* constant = source.GetConstant();
-      int64_t value;
-      if (constant->IsDoubleConstant()) {
-        value = bit_cast<int64_t, double>(constant->AsDoubleConstant()->GetValue());
-      } else {
-        DCHECK(constant->IsLongConstant());
-        value = constant->AsLongConstant()->GetValue();
-      }
-      Store64BitValueToStack(destination, value);
-    } else {
-      DCHECK(source.IsDoubleStackSlot());
-      __ movq(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
-      __ movq(Address(CpuRegister(RSP), destination.GetStackIndex()), CpuRegister(TMP));
-    }
-  }
-}
-
-void CodeGeneratorX86_64::Move(HInstruction* instruction,
-                               Location location,
-                               HInstruction* move_for) {
-  LocationSummary* locations = instruction->GetLocations();
-  if (instruction->IsCurrentMethod()) {
-    Move(location, Location::DoubleStackSlot(kCurrentMethodStackOffset));
-  } else if (locations != nullptr && locations->Out().Equals(location)) {
-    return;
-  } else if (locations != nullptr && locations->Out().IsConstant()) {
-    HConstant* const_to_move = locations->Out().GetConstant();
-    if (const_to_move->IsIntConstant() || const_to_move->IsNullConstant()) {
-      Immediate imm(GetInt32ValueOf(const_to_move));
-      if (location.IsRegister()) {
-        __ movl(location.AsRegister<CpuRegister>(), imm);
-      } else if (location.IsStackSlot()) {
-        __ movl(Address(CpuRegister(RSP), location.GetStackIndex()), imm);
-      } else {
-        DCHECK(location.IsConstant());
-        DCHECK_EQ(location.GetConstant(), const_to_move);
-      }
-    } else if (const_to_move->IsLongConstant()) {
-      int64_t value = const_to_move->AsLongConstant()->GetValue();
-      if (location.IsRegister()) {
-        Load64BitValue(location.AsRegister<CpuRegister>(), value);
-      } else if (location.IsDoubleStackSlot()) {
-        Store64BitValueToStack(location, value);
-      } else {
-        DCHECK(location.IsConstant());
-        DCHECK_EQ(location.GetConstant(), const_to_move);
-      }
-    }
-  } else if (instruction->IsLoadLocal()) {
-    switch (instruction->GetType()) {
-      case Primitive::kPrimBoolean:
-      case Primitive::kPrimByte:
-      case Primitive::kPrimChar:
-      case Primitive::kPrimShort:
-      case Primitive::kPrimInt:
-      case Primitive::kPrimNot:
-      case Primitive::kPrimFloat:
-        Move(location, Location::StackSlot(GetStackSlot(instruction->AsLoadLocal()->GetLocal())));
-        break;
-
-      case Primitive::kPrimLong:
-      case Primitive::kPrimDouble:
-        Move(location,
-             Location::DoubleStackSlot(GetStackSlot(instruction->AsLoadLocal()->GetLocal())));
-        break;
-
-      default:
-        LOG(FATAL) << "Unexpected local type " << instruction->GetType();
-    }
-  } else if (instruction->IsTemporary()) {
-    Location temp_location = GetTemporaryLocation(instruction->AsTemporary());
-    Move(location, temp_location);
-  } else {
-    DCHECK((instruction->GetNext() == move_for) || instruction->GetNext()->IsTemporary());
-    switch (instruction->GetType()) {
-      case Primitive::kPrimBoolean:
-      case Primitive::kPrimByte:
-      case Primitive::kPrimChar:
-      case Primitive::kPrimShort:
-      case Primitive::kPrimInt:
-      case Primitive::kPrimNot:
-      case Primitive::kPrimLong:
-      case Primitive::kPrimFloat:
-      case Primitive::kPrimDouble:
-        Move(location, locations->Out());
-        break;
-
-      default:
-        LOG(FATAL) << "Unexpected type " << instruction->GetType();
-    }
-  }
-}
-
 void CodeGeneratorX86_64::MoveConstant(Location location, int32_t value) {
   DCHECK(location.IsRegister());
   Load64BitValue(location.AsRegister<CpuRegister>(), static_cast<int64_t>(value));
 }
 
-void CodeGeneratorX86_64::MoveLocation(
-    Location dst, Location src, Primitive::Type dst_type ATTRIBUTE_UNUSED) {
-  Move(dst, src);
+void CodeGeneratorX86_64::Move(Location destination,
+                               Location source,
+                               Primitive::Type dst_type ATTRIBUTE_UNUSED) {
+  if (source.Equals(destination)) {
+    // Nothing to do.
+  } else if (source.IsRegister()) {
+    if (destination.IsRegister()) {
+      __ movq(destination.AsRegister<CpuRegister>(), source.AsRegister<CpuRegister>());
+    } else if (destination.IsFpuRegister()) {
+      __ movd(destination.AsFpuRegister<XmmRegister>(), source.AsRegister<CpuRegister>());
+    } else if (destination.IsStackSlot()) {
+      __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()),
+              source.AsRegister<CpuRegister>());
+    } else {
+      DCHECK(destination.IsDoubleStackSlot());
+      __ movq(Address(CpuRegister(RSP), destination.GetStackIndex()),
+              source.AsRegister<CpuRegister>());
+    }
+  } else if (source.IsFpuRegister()) {
+    if (destination.IsRegister()) {
+      __ movd(destination.AsRegister<CpuRegister>(), source.AsFpuRegister<XmmRegister>());
+    } else if (destination.IsFpuRegister()) {
+      __ movaps(destination.AsFpuRegister<XmmRegister>(), source.AsFpuRegister<XmmRegister>());
+    } else if (destination.IsStackSlot()) {
+      __ movss(Address(CpuRegister(RSP), destination.GetStackIndex()),
+               source.AsFpuRegister<XmmRegister>());
+    } else {
+      DCHECK(destination.IsDoubleStackSlot()) << destination;
+      __ movsd(Address(CpuRegister(RSP), destination.GetStackIndex()),
+               source.AsFpuRegister<XmmRegister>());
+    }
+  } else if (source.IsStackSlot()) {
+    if (destination.IsRegister()) {
+      __ movl(destination.AsRegister<CpuRegister>(),
+              Address(CpuRegister(RSP), source.GetStackIndex()));
+    } else if (destination.IsFpuRegister()) {
+      __ movss(destination.AsFpuRegister<XmmRegister>(),
+              Address(CpuRegister(RSP), source.GetStackIndex()));
+    } else {
+      DCHECK(destination.IsStackSlot());
+      __ movl(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
+      __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), CpuRegister(TMP));
+    }
+  } else if (source.IsDoubleStackSlot()) {
+    if (destination.IsRegister()) {
+      __ movq(destination.AsRegister<CpuRegister>(),
+              Address(CpuRegister(RSP), source.GetStackIndex()));
+    } else if (destination.IsFpuRegister()) {
+      __ movsd(destination.AsFpuRegister<XmmRegister>(),
+               Address(CpuRegister(RSP), source.GetStackIndex()));
+    } else {
+      DCHECK(destination.IsDoubleStackSlot()) << destination;
+      __ movq(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
+      __ movq(Address(CpuRegister(RSP), destination.GetStackIndex()), CpuRegister(TMP));
+    }
+  } else if (source.IsConstant()) {
+    HConstant* constant = source.GetConstant();
+    if (constant->IsIntConstant() || constant->IsNullConstant()) {
+      int32_t value = CodeGenerator::GetInt32ValueOf(constant);
+      if (destination.IsRegister()) {
+        if (value == 0) {
+          __ xorl(destination.AsRegister<CpuRegister>(), destination.AsRegister<CpuRegister>());
+        } else {
+          __ movl(destination.AsRegister<CpuRegister>(), Immediate(value));
+        }
+      } else {
+        DCHECK(destination.IsStackSlot()) << destination;
+        __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), Immediate(value));
+      }
+    } else if (constant->IsLongConstant()) {
+      int64_t value = constant->AsLongConstant()->GetValue();
+      if (destination.IsRegister()) {
+        Load64BitValue(destination.AsRegister<CpuRegister>(), value);
+      } else {
+        DCHECK(destination.IsDoubleStackSlot()) << destination;
+        Store64BitValueToStack(destination, value);
+      }
+    } else if (constant->IsFloatConstant()) {
+      float fp_value = constant->AsFloatConstant()->GetValue();
+      int32_t value = bit_cast<int32_t, float>(fp_value);
+      if (destination.IsFpuRegister()) {
+        XmmRegister dest = destination.AsFpuRegister<XmmRegister>();
+        if (value == 0) {
+          // easy FP 0.0.
+          __ xorps(dest, dest);
+        } else {
+          __ movss(dest, LiteralFloatAddress(fp_value));
+        }
+      } else {
+        DCHECK(destination.IsStackSlot()) << destination;
+        Immediate imm(value);
+        __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), imm);
+      }
+    } else {
+      DCHECK(constant->IsDoubleConstant()) << constant->DebugName();
+      double fp_value =  constant->AsDoubleConstant()->GetValue();
+      int64_t value = bit_cast<int64_t, double>(fp_value);
+      if (destination.IsFpuRegister()) {
+        XmmRegister dest = destination.AsFpuRegister<XmmRegister>();
+        if (value == 0) {
+          __ xorpd(dest, dest);
+        } else {
+          __ movsd(dest, LiteralDoubleAddress(fp_value));
+        }
+      } else {
+        DCHECK(destination.IsDoubleStackSlot()) << destination;
+        Store64BitValueToStack(destination, value);
+      }
+    }
+  } else {
+    LOG(FATAL) << "Undefined move from " << source << " to " << destination;
+    UNREACHABLE();
+  }
 }
 
 void CodeGeneratorX86_64::AddLocationAsTemp(Location location, LocationSummary* locations) {
@@ -5087,110 +5049,7 @@ X86_64Assembler* ParallelMoveResolverX86_64::GetAssembler() const {
 
 void ParallelMoveResolverX86_64::EmitMove(size_t index) {
   MoveOperands* move = moves_[index];
-  Location source = move->GetSource();
-  Location destination = move->GetDestination();
-
-  if (source.IsRegister()) {
-    if (destination.IsRegister()) {
-      __ movq(destination.AsRegister<CpuRegister>(), source.AsRegister<CpuRegister>());
-    } else if (destination.IsStackSlot()) {
-      __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()),
-              source.AsRegister<CpuRegister>());
-    } else {
-      DCHECK(destination.IsDoubleStackSlot());
-      __ movq(Address(CpuRegister(RSP), destination.GetStackIndex()),
-              source.AsRegister<CpuRegister>());
-    }
-  } else if (source.IsStackSlot()) {
-    if (destination.IsRegister()) {
-      __ movl(destination.AsRegister<CpuRegister>(),
-              Address(CpuRegister(RSP), source.GetStackIndex()));
-    } else if (destination.IsFpuRegister()) {
-      __ movss(destination.AsFpuRegister<XmmRegister>(),
-              Address(CpuRegister(RSP), source.GetStackIndex()));
-    } else {
-      DCHECK(destination.IsStackSlot());
-      __ movl(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
-      __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), CpuRegister(TMP));
-    }
-  } else if (source.IsDoubleStackSlot()) {
-    if (destination.IsRegister()) {
-      __ movq(destination.AsRegister<CpuRegister>(),
-              Address(CpuRegister(RSP), source.GetStackIndex()));
-    } else if (destination.IsFpuRegister()) {
-      __ movsd(destination.AsFpuRegister<XmmRegister>(),
-               Address(CpuRegister(RSP), source.GetStackIndex()));
-    } else {
-      DCHECK(destination.IsDoubleStackSlot()) << destination;
-      __ movq(CpuRegister(TMP), Address(CpuRegister(RSP), source.GetStackIndex()));
-      __ movq(Address(CpuRegister(RSP), destination.GetStackIndex()), CpuRegister(TMP));
-    }
-  } else if (source.IsConstant()) {
-    HConstant* constant = source.GetConstant();
-    if (constant->IsIntConstant() || constant->IsNullConstant()) {
-      int32_t value = CodeGenerator::GetInt32ValueOf(constant);
-      if (destination.IsRegister()) {
-        if (value == 0) {
-          __ xorl(destination.AsRegister<CpuRegister>(), destination.AsRegister<CpuRegister>());
-        } else {
-          __ movl(destination.AsRegister<CpuRegister>(), Immediate(value));
-        }
-      } else {
-        DCHECK(destination.IsStackSlot()) << destination;
-        __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), Immediate(value));
-      }
-    } else if (constant->IsLongConstant()) {
-      int64_t value = constant->AsLongConstant()->GetValue();
-      if (destination.IsRegister()) {
-        codegen_->Load64BitValue(destination.AsRegister<CpuRegister>(), value);
-      } else {
-        DCHECK(destination.IsDoubleStackSlot()) << destination;
-        codegen_->Store64BitValueToStack(destination, value);
-      }
-    } else if (constant->IsFloatConstant()) {
-      float fp_value = constant->AsFloatConstant()->GetValue();
-      int32_t value = bit_cast<int32_t, float>(fp_value);
-      if (destination.IsFpuRegister()) {
-        XmmRegister dest = destination.AsFpuRegister<XmmRegister>();
-        if (value == 0) {
-          // easy FP 0.0.
-          __ xorps(dest, dest);
-        } else {
-          __ movss(dest, codegen_->LiteralFloatAddress(fp_value));
-        }
-      } else {
-        DCHECK(destination.IsStackSlot()) << destination;
-        Immediate imm(value);
-        __ movl(Address(CpuRegister(RSP), destination.GetStackIndex()), imm);
-      }
-    } else {
-      DCHECK(constant->IsDoubleConstant()) << constant->DebugName();
-      double fp_value =  constant->AsDoubleConstant()->GetValue();
-      int64_t value = bit_cast<int64_t, double>(fp_value);
-      if (destination.IsFpuRegister()) {
-        XmmRegister dest = destination.AsFpuRegister<XmmRegister>();
-        if (value == 0) {
-          __ xorpd(dest, dest);
-        } else {
-          __ movsd(dest, codegen_->LiteralDoubleAddress(fp_value));
-        }
-      } else {
-        DCHECK(destination.IsDoubleStackSlot()) << destination;
-        codegen_->Store64BitValueToStack(destination, value);
-      }
-    }
-  } else if (source.IsFpuRegister()) {
-    if (destination.IsFpuRegister()) {
-      __ movaps(destination.AsFpuRegister<XmmRegister>(), source.AsFpuRegister<XmmRegister>());
-    } else if (destination.IsStackSlot()) {
-      __ movss(Address(CpuRegister(RSP), destination.GetStackIndex()),
-               source.AsFpuRegister<XmmRegister>());
-    } else {
-      DCHECK(destination.IsDoubleStackSlot()) << destination;
-      __ movsd(Address(CpuRegister(RSP), destination.GetStackIndex()),
-               source.AsFpuRegister<XmmRegister>());
-    }
-  }
+  codegen_->Move(move->GetDestination(), move->GetSource(), move->GetType());
 }
 
 void ParallelMoveResolverX86_64::Exchange32(CpuRegister reg, int mem) {
@@ -6531,16 +6390,7 @@ void CodeGeneratorX86_64::MoveFromReturnRegister(Location trg, Primitive::Type t
   }
 
   DCHECK_NE(type, Primitive::kPrimVoid);
-
-  Location return_loc = InvokeDexCallingConventionVisitorX86_64().GetReturnLocation(type);
-  if (trg.Equals(return_loc)) {
-    return;
-  }
-
-  // Let the parallel move resolver take care of all of this.
-  HParallelMove parallel_move(GetGraph()->GetArena());
-  parallel_move.AddMove(return_loc, trg, type, nullptr);
-  GetMoveResolver()->EmitNativeCode(&parallel_move);
+  Move(trg, InvokeDexCallingConventionVisitorX86_64().GetReturnLocation(type), type);
 }
 
 Address CodeGeneratorX86_64::LiteralCaseTable(HPackedSwitch* switch_instr) {
