@@ -309,7 +309,7 @@ class LoadClassSlowPathARM64 : public SlowPathCodeARM64 {
     if (out.IsValid()) {
       DCHECK(out.IsRegister() && !locations->GetLiveRegisters()->ContainsCoreRegister(out.reg()));
       Primitive::Type type = at_->GetType();
-      arm64_codegen->MoveLocation(out, calling_convention.GetReturnLocation(type), type);
+      arm64_codegen->Move(out, calling_convention.GetReturnLocation(type), type);
     }
 
     RestoreLiveRegisters(codegen, locations);
@@ -353,7 +353,7 @@ class LoadStringSlowPathARM64 : public SlowPathCodeARM64 {
         QUICK_ENTRY_POINT(pResolveString), instruction_, instruction_->GetDexPc(), this);
     CheckEntrypointTypes<kQuickResolveString, void*, uint32_t>();
     Primitive::Type type = instruction_->GetType();
-    arm64_codegen->MoveLocation(locations->Out(), calling_convention.GetReturnLocation(type), type);
+    arm64_codegen->Move(locations->Out(), calling_convention.GetReturnLocation(type), type);
 
     RestoreLiveRegisters(codegen, locations);
     __ B(GetExitLabel());
@@ -470,7 +470,7 @@ class TypeCheckSlowPathARM64 : public SlowPathCodeARM64 {
                            const mirror::Class*, const mirror::Class*>();
       Primitive::Type ret_type = instruction_->GetType();
       Location ret_loc = calling_convention.GetReturnLocation(ret_type);
-      arm64_codegen->MoveLocation(locations->Out(), ret_loc, ret_type);
+      arm64_codegen->Move(locations->Out(), ret_loc, ret_type);
     } else {
       DCHECK(instruction_->IsCheckCast());
       arm64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pCheckCast), instruction_, dex_pc, this);
@@ -725,7 +725,7 @@ class ReadBarrierForHeapReferenceSlowPathARM64 : public SlowPathCodeARM64 {
                                  this);
     CheckEntrypointTypes<
         kQuickReadBarrierSlow, mirror::Object*, mirror::Object*, mirror::Object*, uint32_t>();
-    arm64_codegen->MoveLocation(out_, calling_convention.GetReturnLocation(type), type);
+    arm64_codegen->Move(out_, calling_convention.GetReturnLocation(type), type);
 
     RestoreLiveRegisters(codegen, locations);
 
@@ -787,7 +787,7 @@ class ReadBarrierForRootSlowPathARM64 : public SlowPathCodeARM64 {
     // reference (`mirror::Object*`), but a `GcRoot<mirror::Object>*`;
     // thus we need a 64-bit move here, and we cannot use
     //
-    //   arm64_codegen->MoveLocation(
+    //   arm64_codegen->Move(
     //       LocationFrom(calling_convention.GetRegisterAt(0)),
     //       root_,
     //       type);
@@ -800,7 +800,7 @@ class ReadBarrierForRootSlowPathARM64 : public SlowPathCodeARM64 {
                                  instruction_->GetDexPc(),
                                  this);
     CheckEntrypointTypes<kQuickReadBarrierForRootSlow, mirror::Object*, GcRoot<mirror::Object>*>();
-    arm64_codegen->MoveLocation(out_, calling_convention.GetReturnLocation(type), type);
+    arm64_codegen->Move(out_, calling_convention.GetReturnLocation(type), type);
 
     RestoreLiveRegisters(codegen, locations);
     __ B(GetExitLabel());
@@ -941,7 +941,7 @@ void ParallelMoveResolverARM64::FreeScratchLocation(Location loc) {
 
 void ParallelMoveResolverARM64::EmitMove(size_t index) {
   MoveOperands* move = moves_[index];
-  codegen_->MoveLocation(move->GetDestination(), move->GetSource(), Primitive::kPrimVoid);
+  codegen_->Move(move->GetDestination(), move->GetSource(), move->GetType());
 }
 
 void CodeGeneratorARM64::GenerateFrameEntry() {
@@ -1008,54 +1008,6 @@ vixl::CPURegList CodeGeneratorARM64::GetFramePreservedFPRegisters() const {
 
 void CodeGeneratorARM64::Bind(HBasicBlock* block) {
   __ Bind(GetLabelOf(block));
-}
-
-void CodeGeneratorARM64::Move(HInstruction* instruction,
-                              Location location,
-                              HInstruction* move_for) {
-  LocationSummary* locations = instruction->GetLocations();
-  Primitive::Type type = instruction->GetType();
-  DCHECK_NE(type, Primitive::kPrimVoid);
-
-  if (instruction->IsCurrentMethod()) {
-    MoveLocation(location,
-                 Location::DoubleStackSlot(kCurrentMethodStackOffset),
-                 Primitive::kPrimVoid);
-  } else if (locations != nullptr && locations->Out().Equals(location)) {
-    return;
-  } else if (instruction->IsIntConstant()
-             || instruction->IsLongConstant()
-             || instruction->IsNullConstant()) {
-    int64_t value = GetInt64ValueOf(instruction->AsConstant());
-    if (location.IsRegister()) {
-      Register dst = RegisterFrom(location, type);
-      DCHECK(((instruction->IsIntConstant() || instruction->IsNullConstant()) && dst.Is32Bits()) ||
-             (instruction->IsLongConstant() && dst.Is64Bits()));
-      __ Mov(dst, value);
-    } else {
-      DCHECK(location.IsStackSlot() || location.IsDoubleStackSlot());
-      UseScratchRegisterScope temps(GetVIXLAssembler());
-      Register temp = (instruction->IsIntConstant() || instruction->IsNullConstant())
-          ? temps.AcquireW()
-          : temps.AcquireX();
-      __ Mov(temp, value);
-      __ Str(temp, StackOperandFrom(location));
-    }
-  } else if (instruction->IsTemporary()) {
-    Location temp_location = GetTemporaryLocation(instruction->AsTemporary());
-    MoveLocation(location, temp_location, type);
-  } else if (instruction->IsLoadLocal()) {
-    uint32_t stack_slot = GetStackSlot(instruction->AsLoadLocal()->GetLocal());
-    if (Primitive::Is64BitType(type)) {
-      MoveLocation(location, Location::DoubleStackSlot(stack_slot), type);
-    } else {
-      MoveLocation(location, Location::StackSlot(stack_slot), type);
-    }
-
-  } else {
-    DCHECK((instruction->GetNext() == move_for) || instruction->GetNext()->IsTemporary());
-    MoveLocation(location, locations->Out(), type);
-  }
 }
 
 void CodeGeneratorARM64::MoveConstant(Location location, int32_t value) {
@@ -1203,9 +1155,7 @@ static bool CoherentConstantAndType(Location constant, Primitive::Type type) {
          (cst->IsDoubleConstant() && type == Primitive::kPrimDouble);
 }
 
-void CodeGeneratorARM64::MoveLocation(Location destination,
-                                      Location source,
-                                      Primitive::Type dst_type) {
+void CodeGeneratorARM64::Move(Location destination, Location source, Primitive::Type dst_type) {
   if (source.Equals(destination)) {
     return;
   }

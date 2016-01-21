@@ -226,7 +226,7 @@ class LoadStringSlowPathX86 : public SlowPathCode {
                                instruction_->GetDexPc(),
                                this);
     CheckEntrypointTypes<kQuickResolveString, void*, uint32_t>();
-    x86_codegen->Move32(locations->Out(), Location::RegisterLocation(EAX));
+    x86_codegen->Move(locations->Out(), Location::RegisterLocation(EAX));
     RestoreLiveRegisters(codegen, locations);
 
     __ jmp(GetExitLabel());
@@ -271,7 +271,7 @@ class LoadClassSlowPathX86 : public SlowPathCode {
     Location out = locations->Out();
     if (out.IsValid()) {
       DCHECK(out.IsRegister() && !locations->GetLiveRegisters()->ContainsCoreRegister(out.reg()));
-      x86_codegen->Move32(out, Location::RegisterLocation(EAX));
+      x86_codegen->Move(out, Location::RegisterLocation(EAX));
     }
 
     RestoreLiveRegisters(codegen, locations);
@@ -345,7 +345,7 @@ class TypeCheckSlowPathX86 : public SlowPathCode {
 
     if (!is_fatal_) {
       if (instruction_->IsInstanceOf()) {
-        x86_codegen->Move32(locations->Out(), Location::RegisterLocation(EAX));
+        x86_codegen->Move(locations->Out(), Location::RegisterLocation(EAX));
       }
       RestoreLiveRegisters(codegen, locations);
 
@@ -462,13 +462,13 @@ class ReadBarrierMarkSlowPathX86 : public SlowPathCode {
 
     InvokeRuntimeCallingConvention calling_convention;
     CodeGeneratorX86* x86_codegen = down_cast<CodeGeneratorX86*>(codegen);
-    x86_codegen->Move32(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), obj_);
+    x86_codegen->Move(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), obj_);
     x86_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierMark),
                                instruction_,
                                instruction_->GetDexPc(),
                                this);
     CheckEntrypointTypes<kQuickReadBarrierMark, mirror::Object*, mirror::Object*>();
-    x86_codegen->Move32(out_, Location::RegisterLocation(EAX));
+    x86_codegen->Move(out_, Location::RegisterLocation(EAX));
 
     RestoreLiveRegisters(codegen, locations);
     __ jmp(GetExitLabel());
@@ -620,7 +620,7 @@ class ReadBarrierForHeapReferenceSlowPathX86 : public SlowPathCode {
                                this);
     CheckEntrypointTypes<
         kQuickReadBarrierSlow, mirror::Object*, mirror::Object*, mirror::Object*, uint32_t>();
-    x86_codegen->Move32(out_, Location::RegisterLocation(EAX));
+    x86_codegen->Move(out_, Location::RegisterLocation(EAX));
 
     RestoreLiveRegisters(codegen, locations);
     __ jmp(GetExitLabel());
@@ -681,13 +681,13 @@ class ReadBarrierForRootSlowPathX86 : public SlowPathCode {
 
     InvokeRuntimeCallingConvention calling_convention;
     CodeGeneratorX86* x86_codegen = down_cast<CodeGeneratorX86*>(codegen);
-    x86_codegen->Move32(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), root_);
+    x86_codegen->Move(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), root_);
     x86_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierForRootSlow),
                                instruction_,
                                instruction_->GetDexPc(),
                                this);
     CheckEntrypointTypes<kQuickReadBarrierForRootSlow, mirror::Object*, GcRoot<mirror::Object>*>();
-    x86_codegen->Move32(out_, Location::RegisterLocation(EAX));
+    x86_codegen->Move(out_, Location::RegisterLocation(EAX));
 
     RestoreLiveRegisters(codegen, locations);
     __ jmp(GetExitLabel());
@@ -1012,217 +1012,24 @@ Location InvokeDexCallingConventionVisitorX86::GetNextLocation(Primitive::Type t
   return Location::NoLocation();
 }
 
-void CodeGeneratorX86::Move32(Location destination, Location source) {
-  if (source.Equals(destination)) {
-    return;
-  }
-  if (destination.IsRegister()) {
-    if (source.IsRegister()) {
-      __ movl(destination.AsRegister<Register>(), source.AsRegister<Register>());
-    } else if (source.IsFpuRegister()) {
-      __ movd(destination.AsRegister<Register>(), source.AsFpuRegister<XmmRegister>());
-    } else {
-      DCHECK(source.IsStackSlot());
-      __ movl(destination.AsRegister<Register>(), Address(ESP, source.GetStackIndex()));
-    }
-  } else if (destination.IsFpuRegister()) {
-    if (source.IsRegister()) {
-      __ movd(destination.AsFpuRegister<XmmRegister>(), source.AsRegister<Register>());
-    } else if (source.IsFpuRegister()) {
-      __ movaps(destination.AsFpuRegister<XmmRegister>(), source.AsFpuRegister<XmmRegister>());
-    } else {
-      DCHECK(source.IsStackSlot());
-      __ movss(destination.AsFpuRegister<XmmRegister>(), Address(ESP, source.GetStackIndex()));
-    }
-  } else {
-    DCHECK(destination.IsStackSlot()) << destination;
-    if (source.IsRegister()) {
-      __ movl(Address(ESP, destination.GetStackIndex()), source.AsRegister<Register>());
-    } else if (source.IsFpuRegister()) {
-      __ movss(Address(ESP, destination.GetStackIndex()), source.AsFpuRegister<XmmRegister>());
-    } else if (source.IsConstant()) {
-      HConstant* constant = source.GetConstant();
-      int32_t value = GetInt32ValueOf(constant);
-      __ movl(Address(ESP, destination.GetStackIndex()), Immediate(value));
-    } else {
-      DCHECK(source.IsStackSlot());
-      __ pushl(Address(ESP, source.GetStackIndex()));
-      __ popl(Address(ESP, destination.GetStackIndex()));
-    }
-  }
-}
-
-void CodeGeneratorX86::Move64(Location destination, Location source) {
-  if (source.Equals(destination)) {
-    return;
-  }
-  if (destination.IsRegisterPair()) {
-    if (source.IsRegisterPair()) {
-      EmitParallelMoves(
-          Location::RegisterLocation(source.AsRegisterPairHigh<Register>()),
-          Location::RegisterLocation(destination.AsRegisterPairHigh<Register>()),
-          Primitive::kPrimInt,
-          Location::RegisterLocation(source.AsRegisterPairLow<Register>()),
-          Location::RegisterLocation(destination.AsRegisterPairLow<Register>()),
-          Primitive::kPrimInt);
-    } else if (source.IsFpuRegister()) {
-      XmmRegister src_reg = source.AsFpuRegister<XmmRegister>();
-      __ movd(destination.AsRegisterPairLow<Register>(), src_reg);
-      __ psrlq(src_reg, Immediate(32));
-      __ movd(destination.AsRegisterPairHigh<Register>(), src_reg);
-    } else {
-      // No conflict possible, so just do the moves.
-      DCHECK(source.IsDoubleStackSlot());
-      __ movl(destination.AsRegisterPairLow<Register>(), Address(ESP, source.GetStackIndex()));
-      __ movl(destination.AsRegisterPairHigh<Register>(),
-              Address(ESP, source.GetHighStackIndex(kX86WordSize)));
-    }
-  } else if (destination.IsFpuRegister()) {
-    if (source.IsFpuRegister()) {
-      __ movaps(destination.AsFpuRegister<XmmRegister>(), source.AsFpuRegister<XmmRegister>());
-    } else if (source.IsDoubleStackSlot()) {
-      __ movsd(destination.AsFpuRegister<XmmRegister>(), Address(ESP, source.GetStackIndex()));
-    } else if (source.IsRegisterPair()) {
-      size_t elem_size = Primitive::ComponentSize(Primitive::kPrimInt);
-      // Create stack space for 2 elements.
-      __ subl(ESP, Immediate(2 * elem_size));
-      __ movl(Address(ESP, 0), source.AsRegisterPairLow<Register>());
-      __ movl(Address(ESP, elem_size), source.AsRegisterPairHigh<Register>());
-      __ movsd(destination.AsFpuRegister<XmmRegister>(), Address(ESP, 0));
-      // And remove the temporary stack space we allocated.
-      __ addl(ESP, Immediate(2 * elem_size));
-    } else {
-      LOG(FATAL) << "Unimplemented";
-    }
-  } else {
-    DCHECK(destination.IsDoubleStackSlot()) << destination;
-    if (source.IsRegisterPair()) {
-      // No conflict possible, so just do the moves.
-      __ movl(Address(ESP, destination.GetStackIndex()), source.AsRegisterPairLow<Register>());
-      __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)),
-              source.AsRegisterPairHigh<Register>());
-    } else if (source.IsFpuRegister()) {
-      __ movsd(Address(ESP, destination.GetStackIndex()), source.AsFpuRegister<XmmRegister>());
-    } else if (source.IsConstant()) {
-      HConstant* constant = source.GetConstant();
-      int64_t value;
-      if (constant->IsLongConstant()) {
-        value = constant->AsLongConstant()->GetValue();
-      } else {
-        DCHECK(constant->IsDoubleConstant());
-        value = bit_cast<int64_t, double>(constant->AsDoubleConstant()->GetValue());
-      }
-      __ movl(Address(ESP, destination.GetStackIndex()), Immediate(Low32Bits(value)));
-      __ movl(Address(ESP, destination.GetHighStackIndex(kX86WordSize)), Immediate(High32Bits(value)));
-    } else {
-      DCHECK(source.IsDoubleStackSlot()) << source;
-      EmitParallelMoves(
-          Location::StackSlot(source.GetStackIndex()),
-          Location::StackSlot(destination.GetStackIndex()),
-          Primitive::kPrimInt,
-          Location::StackSlot(source.GetHighStackIndex(kX86WordSize)),
-          Location::StackSlot(destination.GetHighStackIndex(kX86WordSize)),
-          Primitive::kPrimInt);
-    }
-  }
-}
-
-void CodeGeneratorX86::Move(HInstruction* instruction, Location location, HInstruction* move_for) {
-  LocationSummary* locations = instruction->GetLocations();
-  if (instruction->IsCurrentMethod()) {
-    Move32(location, Location::StackSlot(kCurrentMethodStackOffset));
-  } else if (locations != nullptr && locations->Out().Equals(location)) {
-    return;
-  } else if (locations != nullptr && locations->Out().IsConstant()) {
-    HConstant* const_to_move = locations->Out().GetConstant();
-    if (const_to_move->IsIntConstant() || const_to_move->IsNullConstant()) {
-      Immediate imm(GetInt32ValueOf(const_to_move));
-      if (location.IsRegister()) {
-        __ movl(location.AsRegister<Register>(), imm);
-      } else if (location.IsStackSlot()) {
-        __ movl(Address(ESP, location.GetStackIndex()), imm);
-      } else {
-        DCHECK(location.IsConstant());
-        DCHECK_EQ(location.GetConstant(), const_to_move);
-      }
-    } else if (const_to_move->IsLongConstant()) {
-      int64_t value = const_to_move->AsLongConstant()->GetValue();
-      if (location.IsRegisterPair()) {
-        __ movl(location.AsRegisterPairLow<Register>(), Immediate(Low32Bits(value)));
-        __ movl(location.AsRegisterPairHigh<Register>(), Immediate(High32Bits(value)));
-      } else if (location.IsDoubleStackSlot()) {
-        __ movl(Address(ESP, location.GetStackIndex()), Immediate(Low32Bits(value)));
-        __ movl(Address(ESP, location.GetHighStackIndex(kX86WordSize)),
-                Immediate(High32Bits(value)));
-      } else {
-        DCHECK(location.IsConstant());
-        DCHECK_EQ(location.GetConstant(), instruction);
-      }
-    }
-  } else if (instruction->IsTemporary()) {
-    Location temp_location = GetTemporaryLocation(instruction->AsTemporary());
-    if (temp_location.IsStackSlot()) {
-      Move32(location, temp_location);
-    } else {
-      DCHECK(temp_location.IsDoubleStackSlot());
-      Move64(location, temp_location);
-    }
-  } else if (instruction->IsLoadLocal()) {
-    int slot = GetStackSlot(instruction->AsLoadLocal()->GetLocal());
-    switch (instruction->GetType()) {
-      case Primitive::kPrimBoolean:
-      case Primitive::kPrimByte:
-      case Primitive::kPrimChar:
-      case Primitive::kPrimShort:
-      case Primitive::kPrimInt:
-      case Primitive::kPrimNot:
-      case Primitive::kPrimFloat:
-        Move32(location, Location::StackSlot(slot));
-        break;
-
-      case Primitive::kPrimLong:
-      case Primitive::kPrimDouble:
-        Move64(location, Location::DoubleStackSlot(slot));
-        break;
-
-      default:
-        LOG(FATAL) << "Unimplemented local type " << instruction->GetType();
-    }
-  } else {
-    DCHECK((instruction->GetNext() == move_for) || instruction->GetNext()->IsTemporary());
-    switch (instruction->GetType()) {
-      case Primitive::kPrimBoolean:
-      case Primitive::kPrimByte:
-      case Primitive::kPrimChar:
-      case Primitive::kPrimShort:
-      case Primitive::kPrimInt:
-      case Primitive::kPrimNot:
-      case Primitive::kPrimFloat:
-        Move32(location, locations->Out());
-        break;
-
-      case Primitive::kPrimLong:
-      case Primitive::kPrimDouble:
-        Move64(location, locations->Out());
-        break;
-
-      default:
-        LOG(FATAL) << "Unexpected type " << instruction->GetType();
-    }
-  }
-}
-
 void CodeGeneratorX86::MoveConstant(Location location, int32_t value) {
   DCHECK(location.IsRegister());
   __ movl(location.AsRegister<Register>(), Immediate(value));
 }
 
-void CodeGeneratorX86::MoveLocation(Location dst, Location src, Primitive::Type dst_type) {
-  if (Primitive::Is64BitType(dst_type)) {
-    Move64(dst, src);
+void CodeGeneratorX86::Move(Location destination, Location source, Primitive::Type dst_type) {
+  // X86 moves may request temp registers from the ParallelMoveResolver. Rather
+  // than the move resolver calling this method like other codegens do, we
+  // implement the logic in the move resolver and call it from here.
+  HParallelMove parallel_move(GetGraph()->GetArena());
+  if ((destination.IsRegisterPair() && !source.IsConstant()) || source.IsRegisterPair()) {
+    // Move of type long, split registers.
+    parallel_move.AddMove(source.ToLow(), destination.ToLow(), dst_type, nullptr);
+    parallel_move.AddMove(source.ToHigh(), destination.ToHigh(), dst_type, nullptr);
   } else {
-    Move32(dst, src);
+    parallel_move.AddMove(source, destination, dst_type, nullptr);
   }
+  GetMoveResolver()->EmitNativeCode(&parallel_move);
 }
 
 void CodeGeneratorX86::AddLocationAsTemp(Location location, LocationSummary* locations) {
@@ -2556,7 +2363,7 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
           } else {
             __ fstps(Address(ESP, 0));
             Location stack_temp = Location::StackSlot(0);
-            codegen_->Move32(out, stack_temp);
+            codegen_->Move(out, stack_temp);
           }
 
           // Remove the temporary stack space we allocated.
@@ -2609,7 +2416,7 @@ void InstructionCodeGeneratorX86::VisitTypeConversion(HTypeConversion* conversio
           } else {
             __ fstpl(Address(ESP, 0));
             Location stack_temp = Location::DoubleStackSlot(0);
-            codegen_->Move64(out, stack_temp);
+            codegen_->Move(out, stack_temp);
           }
 
           // Remove the temporary stack space we allocated.
@@ -3058,7 +2865,7 @@ void InstructionCodeGeneratorX86::PushOntoFPStack(Location source,
     // Write the value to the temporary location on the stack and load to FP stack.
     if (!is_wide) {
       Location stack_temp = Location::StackSlot(temp_offset);
-      codegen_->Move32(stack_temp, source);
+      codegen_->Move(stack_temp, source);
       if (is_fp) {
         __ flds(Address(ESP, temp_offset));
       } else {
@@ -3066,7 +2873,7 @@ void InstructionCodeGeneratorX86::PushOntoFPStack(Location source,
       }
     } else {
       Location stack_temp = Location::DoubleStackSlot(temp_offset);
-      codegen_->Move64(stack_temp, source);
+      codegen_->Move(stack_temp, source);
       if (is_fp) {
         __ fldl(Address(ESP, temp_offset));
       } else {
