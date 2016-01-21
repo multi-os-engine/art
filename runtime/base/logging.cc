@@ -43,6 +43,9 @@ static LogSeverity gMinimumLogSeverity = INFO;
 static std::unique_ptr<std::string> gCmdLine;
 static std::unique_ptr<std::string> gProgramInvocationName;
 static std::unique_ptr<std::string> gProgramInvocationShortName;
+static const char gDirectPrintLogCharacters[] = "VDIWEFF";
+static_assert(sizeof(gDirectPrintLogCharacters) == INTERNAL_FATAL + 2,
+              "Log characters number mismatch");
 
 // Print INTERNAL_FATAL messages directly instead of at destruction time. This only works on the
 // host right now: for the device, a stream buf collating output into lines and calling LogLine or
@@ -185,10 +188,9 @@ class LogMessageData {
 LogMessage::LogMessage(const char* file, unsigned int line, LogSeverity severity, int error)
   : data_(new LogMessageData(file, line, severity, error)) {
   if (PrintDirectly(severity)) {
-    static const char* log_characters = "VDIWEFF";
-    CHECK_EQ(strlen(log_characters), INTERNAL_FATAL + 1U);
-    stream() << ProgramInvocationShortName() << " " << log_characters[static_cast<size_t>(severity)]
-             << " " << getpid() << " " << ::art::GetTid() << " " << file << ":" <<  line << "]";
+    char char_severity = gDirectPrintLogCharacters[severity];
+    stream() << ProgramInvocationShortName() << " " << char_severity << " "
+             << getpid() << " " << ::art::GetTid() << " " << file << ":" <<  line << "]";
   }
 }
 LogMessage::~LogMessage() {
@@ -254,9 +256,7 @@ void LogMessage::LogLine(const char* file, unsigned int line, LogSeverity log_se
     LOG_PRI(priority, tag, "%s", message);
   }
 #else
-  static const char* log_characters = "VDIWEFF";
-  CHECK_EQ(strlen(log_characters), INTERNAL_FATAL + 1U);
-  char severity = log_characters[log_severity];
+  char severity = gDirectPrintLogCharacters[log_severity];
   fprintf(stderr, "%s %c %5d %5d %s:%u] %s\n",
           ProgramInvocationShortName(), severity, getpid(), ::art::GetTid(), file, line, message);
 #endif
@@ -285,13 +285,10 @@ void LogMessage::LogLineLowStack(const char* file, unsigned int line, LogSeverit
     android_writeLog(priority, tag, message);
   }
 #else
-  static const char* log_characters = "VDIWEFF";
-  CHECK_EQ(strlen(log_characters), INTERNAL_FATAL + 1U);
-
   const char* program_name = ProgramInvocationShortName();
   TEMP_FAILURE_RETRY(write(STDERR_FILENO, program_name, strlen(program_name)));
   TEMP_FAILURE_RETRY(write(STDERR_FILENO, " ", 1));
-  TEMP_FAILURE_RETRY(write(STDERR_FILENO, &log_characters[log_severity], 1));
+  TEMP_FAILURE_RETRY(write(STDERR_FILENO, &gDirectPrintLogCharacters[log_severity], 1));
   TEMP_FAILURE_RETRY(write(STDERR_FILENO, " ", 1));
   // TODO: pid and tid.
   TEMP_FAILURE_RETRY(write(STDERR_FILENO, file, strlen(file)));
