@@ -206,7 +206,7 @@ class LoadClassSlowPathMIPS64 : public SlowPathCodeMIPS64 {
     if (out.IsValid()) {
       DCHECK(out.IsRegister() && !locations->GetLiveRegisters()->ContainsCoreRegister(out.reg()));
       Primitive::Type type = at_->GetType();
-      mips64_codegen->MoveLocation(out, calling_convention.GetReturnLocation(type), type);
+      mips64_codegen->Move(out, calling_convention.GetReturnLocation(type), type);
     }
 
     RestoreLiveRegisters(codegen, locations);
@@ -252,9 +252,9 @@ class LoadStringSlowPathMIPS64 : public SlowPathCodeMIPS64 {
                                   this);
     CheckEntrypointTypes<kQuickResolveString, void*, uint32_t>();
     Primitive::Type type = instruction_->GetType();
-    mips64_codegen->MoveLocation(locations->Out(),
-                                 calling_convention.GetReturnLocation(type),
-                                 type);
+    mips64_codegen->Move(locations->Out(),
+                         calling_convention.GetReturnLocation(type),
+                         type);
 
     RestoreLiveRegisters(codegen, locations);
     __ Bc(GetExitLabel());
@@ -370,7 +370,7 @@ class TypeCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
           kQuickInstanceofNonTrivial, uint32_t, const mirror::Class*, const mirror::Class*>();
       Primitive::Type ret_type = instruction_->GetType();
       Location ret_loc = calling_convention.GetReturnLocation(ret_type);
-      mips64_codegen->MoveLocation(locations->Out(), ret_loc, ret_type);
+      mips64_codegen->Move(locations->Out(), ret_loc, ret_type);
     } else {
       DCHECK(instruction_->IsCheckCast());
       mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pCheckCast), instruction_, dex_pc, this);
@@ -475,7 +475,7 @@ Mips64Assembler* ParallelMoveResolverMIPS64::GetAssembler() const {
 
 void ParallelMoveResolverMIPS64::EmitMove(size_t index) {
   MoveOperands* move = moves_[index];
-  codegen_->MoveLocation(move->GetDestination(), move->GetSource(), move->GetType());
+  codegen_->Move(move->GetDestination(), move->GetSource(), move->GetType());
 }
 
 void ParallelMoveResolverMIPS64::EmitSwap(size_t index) {
@@ -638,9 +638,7 @@ void CodeGeneratorMIPS64::Bind(HBasicBlock* block) {
   __ Bind(GetLabelOf(block));
 }
 
-void CodeGeneratorMIPS64::MoveLocation(Location destination,
-                                       Location source,
-                                       Primitive::Type dst_type) {
+void CodeGeneratorMIPS64::Move(Location destination, Location source, Primitive::Type dst_type) {
   if (source.Equals(destination)) {
     return;
   }
@@ -864,65 +862,6 @@ void CodeGeneratorMIPS64::SwapLocations(Location loc1, Location loc2, Primitive:
                             loc1.IsDoubleStackSlot());
   } else {
     LOG(FATAL) << "Unimplemented swap between locations " << loc1 << " and " << loc2;
-  }
-}
-
-void CodeGeneratorMIPS64::Move(HInstruction* instruction,
-                               Location location,
-                               HInstruction* move_for) {
-  LocationSummary* locations = instruction->GetLocations();
-  Primitive::Type type = instruction->GetType();
-  DCHECK_NE(type, Primitive::kPrimVoid);
-
-  if (instruction->IsCurrentMethod()) {
-    MoveLocation(location, Location::DoubleStackSlot(kCurrentMethodStackOffset), type);
-  } else if (locations != nullptr && locations->Out().Equals(location)) {
-    return;
-  } else if (instruction->IsIntConstant()
-             || instruction->IsLongConstant()
-             || instruction->IsNullConstant()) {
-    if (location.IsRegister()) {
-      // Move to GPR from constant
-      GpuRegister dst = location.AsRegister<GpuRegister>();
-      if (instruction->IsNullConstant() || instruction->IsIntConstant()) {
-        __ LoadConst32(dst, GetInt32ValueOf(instruction->AsConstant()));
-      } else {
-        __ LoadConst64(dst, instruction->AsLongConstant()->GetValue());
-      }
-    } else {
-      DCHECK(location.IsStackSlot() || location.IsDoubleStackSlot());
-      // Move to stack from constant
-      GpuRegister gpr = ZERO;
-      if (location.IsStackSlot()) {
-        int32_t value = GetInt32ValueOf(instruction->AsConstant());
-        if (value != 0) {
-          gpr = TMP;
-          __ LoadConst32(gpr, value);
-        }
-        __ StoreToOffset(kStoreWord, gpr, SP, location.GetStackIndex());
-      } else {
-        DCHECK(location.IsDoubleStackSlot());
-        int64_t value = instruction->AsLongConstant()->GetValue();
-        if (value != 0) {
-          gpr = TMP;
-          __ LoadConst64(gpr, value);
-        }
-        __ StoreToOffset(kStoreDoubleword, gpr, SP, location.GetStackIndex());
-      }
-    }
-  } else if (instruction->IsTemporary()) {
-    Location temp_location = GetTemporaryLocation(instruction->AsTemporary());
-    MoveLocation(location, temp_location, type);
-  } else if (instruction->IsLoadLocal()) {
-    uint32_t stack_slot = GetStackSlot(instruction->AsLoadLocal()->GetLocal());
-    if (Primitive::Is64BitType(type)) {
-      MoveLocation(location, Location::DoubleStackSlot(stack_slot), type);
-    } else {
-      MoveLocation(location, Location::StackSlot(stack_slot), type);
-    }
-  } else {
-    DCHECK((instruction->GetNext() == move_for) || instruction->GetNext()->IsTemporary());
-    MoveLocation(location, locations->Out(), type);
   }
 }
 

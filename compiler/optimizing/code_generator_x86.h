@@ -309,9 +309,10 @@ class CodeGeneratorX86 : public CodeGenerator {
   void GenerateFrameEntry() OVERRIDE;
   void GenerateFrameExit() OVERRIDE;
   void Bind(HBasicBlock* block) OVERRIDE;
-  void Move(HInstruction* instruction, Location location, HInstruction* move_for) OVERRIDE;
   void MoveConstant(Location destination, int32_t value) OVERRIDE;
-  void MoveLocation(Location dst, Location src, Primitive::Type dst_type) OVERRIDE;
+  void Move(Location destination,
+            Location source,
+            Primitive::Type dst_type = Primitive::kPrimVoid) OVERRIDE;
   void AddLocationAsTemp(Location location, LocationSummary* locations) OVERRIDE;
 
   size_t SaveCoreRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
@@ -376,11 +377,6 @@ class CodeGeneratorX86 : public CodeGenerator {
   InstructionSet GetInstructionSet() const OVERRIDE {
     return InstructionSet::kX86;
   }
-
-  // Helper method to move a 32bits value between two locations.
-  void Move32(Location destination, Location source);
-  // Helper method to move a 64bits value between two locations.
-  void Move64(Location destination, Location source);
 
   // Check if the desired_dispatch_info is supported. If it is, return it,
   // otherwise return a fall-back info that should be used instead.

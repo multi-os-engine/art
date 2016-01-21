@@ -311,8 +311,6 @@ class CodeGeneratorARM64 : public CodeGenerator {
     return CommonGetLabelOf<vixl::Label>(block_labels_, block);
   }
 
-  void Move(HInstruction* instruction, Location location, HInstruction* move_for) OVERRIDE;
-
   size_t GetWordSize() const OVERRIDE {
     return kArm64WordSize;
   }
@@ -382,7 +380,9 @@ class CodeGeneratorARM64 : public CodeGenerator {
   // Code generation helpers.
   void MoveConstant(vixl::CPURegister destination, HConstant* constant);
   void MoveConstant(Location destination, int32_t value) OVERRIDE;
-  void MoveLocation(Location dst, Location src, Primitive::Type dst_type) OVERRIDE;
+  void Move(Location destination,
+            Location source,
+            Primitive::Type dst_type = Primitive::kPrimVoid) OVERRIDE;
   void AddLocationAsTemp(Location location, LocationSummary* locations) OVERRIDE;
 
   void Load(Primitive::Type type, vixl::CPURegister dst, const vixl::MemOperand& src);

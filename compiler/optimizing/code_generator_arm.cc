@@ -226,7 +226,7 @@ class LoadClassSlowPathARM : public SlowPathCode {
     Location out = locations->Out();
     if (out.IsValid()) {
       DCHECK(out.IsRegister() && !locations->GetLiveRegisters()->ContainsCoreRegister(out.reg()));
-      arm_codegen->Move32(locations->Out(), Location::RegisterLocation(R0));
+      arm_codegen->Move(locations->Out(), Location::RegisterLocation(R0));
     }
     RestoreLiveRegisters(codegen, locations);
     __ b(GetExitLabel());
@@ -268,7 +268,7 @@ class LoadStringSlowPathARM : public SlowPathCode {
     arm_codegen->InvokeRuntime(
         QUICK_ENTRY_POINT(pResolveString), instruction_, instruction_->GetDexPc(), this);
     CheckEntrypointTypes<kQuickResolveString, void*, uint32_t>();
-    arm_codegen->Move32(locations->Out(), Location::RegisterLocation(R0));
+    arm_codegen->Move(locations->Out(), Location::RegisterLocation(R0));
 
     RestoreLiveRegisters(codegen, locations);
     __ b(GetExitLabel());
@@ -319,7 +319,7 @@ class TypeCheckSlowPathARM : public SlowPathCode {
                                  this);
       CheckEntrypointTypes<
           kQuickInstanceofNonTrivial, uint32_t, const mirror::Class*, const mirror::Class*>();
-      arm_codegen->Move32(locations->Out(), Location::RegisterLocation(R0));
+      arm_codegen->Move(locations->Out(), Location::RegisterLocation(R0));
     } else {
       DCHECK(instruction_->IsCheckCast());
       arm_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pCheckCast),
@@ -445,13 +445,13 @@ class ReadBarrierMarkSlowPathARM : public SlowPathCode {
 
     InvokeRuntimeCallingConvention calling_convention;
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
-    arm_codegen->Move32(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), obj_);
+    arm_codegen->Move(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), obj_);
     arm_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierMark),
                                instruction_,
                                instruction_->GetDexPc(),
                                this);
     CheckEntrypointTypes<kQuickReadBarrierMark, mirror::Object*, mirror::Object*>();
-    arm_codegen->Move32(out_, Location::RegisterLocation(R0));
+    arm_codegen->Move(out_, Location::RegisterLocation(R0));
 
     RestoreLiveRegisters(codegen, locations);
     __ b(GetExitLabel());
@@ -603,7 +603,7 @@ class ReadBarrierForHeapReferenceSlowPathARM : public SlowPathCode {
                                this);
     CheckEntrypointTypes<
         kQuickReadBarrierSlow, mirror::Object*, mirror::Object*, mirror::Object*, uint32_t>();
-    arm_codegen->Move32(out_, Location::RegisterLocation(R0));
+    arm_codegen->Move(out_, Location::RegisterLocation(R0));
 
     RestoreLiveRegisters(codegen, locations);
     __ b(GetExitLabel());
@@ -664,13 +664,13 @@ class ReadBarrierForRootSlowPathARM : public SlowPathCode {
 
     InvokeRuntimeCallingConvention calling_convention;
     CodeGeneratorARM* arm_codegen = down_cast<CodeGeneratorARM*>(codegen);
-    arm_codegen->Move32(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), root_);
+    arm_codegen->Move(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), root_);
     arm_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierForRootSlow),
                                instruction_,
                                instruction_->GetDexPc(),
                                this);
     CheckEntrypointTypes<kQuickReadBarrierForRootSlow, mirror::Object*, GcRoot<mirror::Object>*>();
-    arm_codegen->Move32(out_, Location::RegisterLocation(R0));
+    arm_codegen->Move(out_, Location::RegisterLocation(R0));
 
     RestoreLiveRegisters(codegen, locations);
     __ b(GetExitLabel());
@@ -1095,200 +1095,123 @@ Location InvokeDexCallingConventionVisitorARM::GetMethodLocation() const {
   return Location::RegisterLocation(kMethodRegisterArgument);
 }
 
-void CodeGeneratorARM::Move32(Location destination, Location source) {
-  if (source.Equals(destination)) {
-    return;
-  }
-  if (destination.IsRegister()) {
-    if (source.IsRegister()) {
-      __ Mov(destination.AsRegister<Register>(), source.AsRegister<Register>());
-    } else if (source.IsFpuRegister()) {
-      __ vmovrs(destination.AsRegister<Register>(), source.AsFpuRegister<SRegister>());
-    } else {
-      __ LoadFromOffset(kLoadWord, destination.AsRegister<Register>(), SP, source.GetStackIndex());
-    }
-  } else if (destination.IsFpuRegister()) {
-    if (source.IsRegister()) {
-      __ vmovsr(destination.AsFpuRegister<SRegister>(), source.AsRegister<Register>());
-    } else if (source.IsFpuRegister()) {
-      __ vmovs(destination.AsFpuRegister<SRegister>(), source.AsFpuRegister<SRegister>());
-    } else {
-      __ LoadSFromOffset(destination.AsFpuRegister<SRegister>(), SP, source.GetStackIndex());
-    }
-  } else {
-    DCHECK(destination.IsStackSlot()) << destination;
-    if (source.IsRegister()) {
-      __ StoreToOffset(kStoreWord, source.AsRegister<Register>(), SP, destination.GetStackIndex());
-    } else if (source.IsFpuRegister()) {
-      __ StoreSToOffset(source.AsFpuRegister<SRegister>(), SP, destination.GetStackIndex());
-    } else {
-      DCHECK(source.IsStackSlot()) << source;
-      __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
-    }
-  }
-}
-
-void CodeGeneratorARM::Move64(Location destination, Location source) {
-  if (source.Equals(destination)) {
-    return;
-  }
-  if (destination.IsRegisterPair()) {
-    if (source.IsRegisterPair()) {
-      EmitParallelMoves(
-          Location::RegisterLocation(source.AsRegisterPairHigh<Register>()),
-          Location::RegisterLocation(destination.AsRegisterPairHigh<Register>()),
-          Primitive::kPrimInt,
-          Location::RegisterLocation(source.AsRegisterPairLow<Register>()),
-          Location::RegisterLocation(destination.AsRegisterPairLow<Register>()),
-          Primitive::kPrimInt);
-    } else if (source.IsFpuRegister()) {
-      UNIMPLEMENTED(FATAL);
-    } else if (source.IsFpuRegisterPair()) {
-      __ vmovrrd(destination.AsRegisterPairLow<Register>(),
-                 destination.AsRegisterPairHigh<Register>(),
-                 FromLowSToD(source.AsFpuRegisterPairLow<SRegister>()));
-    } else {
-      DCHECK(source.IsDoubleStackSlot());
-      DCHECK(ExpectedPairLayout(destination));
-      __ LoadFromOffset(kLoadWordPair, destination.AsRegisterPairLow<Register>(),
-                        SP, source.GetStackIndex());
-    }
-  } else if (destination.IsFpuRegisterPair()) {
-    if (source.IsDoubleStackSlot()) {
-      __ LoadDFromOffset(FromLowSToD(destination.AsFpuRegisterPairLow<SRegister>()),
-                         SP,
-                         source.GetStackIndex());
-    } else if (source.IsRegisterPair()) {
-      __ vmovdrr(FromLowSToD(destination.AsFpuRegisterPairLow<SRegister>()),
-                 source.AsRegisterPairLow<Register>(),
-                 source.AsRegisterPairHigh<Register>());
-    } else {
-      UNIMPLEMENTED(FATAL);
-    }
-  } else {
-    DCHECK(destination.IsDoubleStackSlot());
-    if (source.IsRegisterPair()) {
-      // No conflict possible, so just do the moves.
-      if (source.AsRegisterPairLow<Register>() == R1) {
-        DCHECK_EQ(source.AsRegisterPairHigh<Register>(), R2);
-        __ StoreToOffset(kStoreWord, R1, SP, destination.GetStackIndex());
-        __ StoreToOffset(kStoreWord, R2, SP, destination.GetHighStackIndex(kArmWordSize));
-      } else {
-        __ StoreToOffset(kStoreWordPair, source.AsRegisterPairLow<Register>(),
-                         SP, destination.GetStackIndex());
-      }
-    } else if (source.IsFpuRegisterPair()) {
-      __ StoreDToOffset(FromLowSToD(source.AsFpuRegisterPairLow<SRegister>()),
-                        SP,
-                        destination.GetStackIndex());
-    } else {
-      DCHECK(source.IsDoubleStackSlot());
-      EmitParallelMoves(
-          Location::StackSlot(source.GetStackIndex()),
-          Location::StackSlot(destination.GetStackIndex()),
-          Primitive::kPrimInt,
-          Location::StackSlot(source.GetHighStackIndex(kArmWordSize)),
-          Location::StackSlot(destination.GetHighStackIndex(kArmWordSize)),
-          Primitive::kPrimInt);
-    }
-  }
-}
-
-void CodeGeneratorARM::Move(HInstruction* instruction, Location location, HInstruction* move_for) {
-  LocationSummary* locations = instruction->GetLocations();
-  if (instruction->IsCurrentMethod()) {
-    Move32(location, Location::StackSlot(kCurrentMethodStackOffset));
-  } else if (locations != nullptr && locations->Out().Equals(location)) {
-    return;
-  } else if (locations != nullptr && locations->Out().IsConstant()) {
-    HConstant* const_to_move = locations->Out().GetConstant();
-    if (const_to_move->IsIntConstant() || const_to_move->IsNullConstant()) {
-      int32_t value = GetInt32ValueOf(const_to_move);
-      if (location.IsRegister()) {
-        __ LoadImmediate(location.AsRegister<Register>(), value);
-      } else {
-        DCHECK(location.IsStackSlot());
-        __ LoadImmediate(IP, value);
-        __ StoreToOffset(kStoreWord, IP, SP, location.GetStackIndex());
-      }
-    } else {
-      DCHECK(const_to_move->IsLongConstant()) << const_to_move->DebugName();
-      int64_t value = const_to_move->AsLongConstant()->GetValue();
-      if (location.IsRegisterPair()) {
-        __ LoadImmediate(location.AsRegisterPairLow<Register>(), Low32Bits(value));
-        __ LoadImmediate(location.AsRegisterPairHigh<Register>(), High32Bits(value));
-      } else {
-        DCHECK(location.IsDoubleStackSlot());
-        __ LoadImmediate(IP, Low32Bits(value));
-        __ StoreToOffset(kStoreWord, IP, SP, location.GetStackIndex());
-        __ LoadImmediate(IP, High32Bits(value));
-        __ StoreToOffset(kStoreWord, IP, SP, location.GetHighStackIndex(kArmWordSize));
-      }
-    }
-  } else if (instruction->IsLoadLocal()) {
-    uint32_t stack_slot = GetStackSlot(instruction->AsLoadLocal()->GetLocal());
-    switch (instruction->GetType()) {
-      case Primitive::kPrimBoolean:
-      case Primitive::kPrimByte:
-      case Primitive::kPrimChar:
-      case Primitive::kPrimShort:
-      case Primitive::kPrimInt:
-      case Primitive::kPrimNot:
-      case Primitive::kPrimFloat:
-        Move32(location, Location::StackSlot(stack_slot));
-        break;
-
-      case Primitive::kPrimLong:
-      case Primitive::kPrimDouble:
-        Move64(location, Location::DoubleStackSlot(stack_slot));
-        break;
-
-      default:
-        LOG(FATAL) << "Unexpected type " << instruction->GetType();
-    }
-  } else if (instruction->IsTemporary()) {
-    Location temp_location = GetTemporaryLocation(instruction->AsTemporary());
-    if (temp_location.IsStackSlot()) {
-      Move32(location, temp_location);
-    } else {
-      DCHECK(temp_location.IsDoubleStackSlot());
-      Move64(location, temp_location);
-    }
-  } else {
-    DCHECK((instruction->GetNext() == move_for) || instruction->GetNext()->IsTemporary());
-    switch (instruction->GetType()) {
-      case Primitive::kPrimBoolean:
-      case Primitive::kPrimByte:
-      case Primitive::kPrimChar:
-      case Primitive::kPrimShort:
-      case Primitive::kPrimNot:
-      case Primitive::kPrimInt:
-      case Primitive::kPrimFloat:
-        Move32(location, locations->Out());
-        break;
-
-      case Primitive::kPrimLong:
-      case Primitive::kPrimDouble:
-        Move64(location, locations->Out());
-        break;
-
-      default:
-        LOG(FATAL) << "Unexpected type " << instruction->GetType();
-    }
-  }
-}
-
 void CodeGeneratorARM::MoveConstant(Location location, int32_t value) {
   DCHECK(location.IsRegister());
   __ LoadImmediate(location.AsRegister<Register>(), value);
 }
 
-void CodeGeneratorARM::MoveLocation(Location dst, Location src, Primitive::Type dst_type) {
-  if (Primitive::Is64BitType(dst_type)) {
-    Move64(dst, src);
+void CodeGeneratorARM::Move(Location destination,
+                            Location source,
+                            Primitive::Type dst_type ATTRIBUTE_UNUSED) {
+  if (source.Equals(destination)) {
+    // Nothing to do.
+  } else if (source.IsRegister()) {
+    if (destination.IsRegister()) {
+      __ Mov(destination.AsRegister<Register>(), source.AsRegister<Register>());
+    } else {
+      DCHECK(destination.IsStackSlot());
+      __ StoreToOffset(kStoreWord, source.AsRegister<Register>(),
+                       SP, destination.GetStackIndex());
+    }
+  } else if (source.IsStackSlot()) {
+    if (destination.IsRegister()) {
+      __ LoadFromOffset(kLoadWord, destination.AsRegister<Register>(),
+                        SP, source.GetStackIndex());
+    } else if (destination.IsFpuRegister()) {
+      __ LoadSFromOffset(destination.AsFpuRegister<SRegister>(), SP, source.GetStackIndex());
+    } else {
+      DCHECK(destination.IsStackSlot());
+      __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
+      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+    }
+  } else if (source.IsFpuRegister()) {
+    if (destination.IsFpuRegister()) {
+      __ vmovs(destination.AsFpuRegister<SRegister>(), source.AsFpuRegister<SRegister>());
+    } else {
+      DCHECK(destination.IsStackSlot());
+      __ StoreSToOffset(source.AsFpuRegister<SRegister>(), SP, destination.GetStackIndex());
+    }
+  } else if (source.IsDoubleStackSlot()) {
+    if (destination.IsDoubleStackSlot()) {
+      __ LoadDFromOffset(DTMP, SP, source.GetStackIndex());
+      __ StoreDToOffset(DTMP, SP, destination.GetStackIndex());
+    } else if (destination.IsRegisterPair()) {
+      DCHECK(ExpectedPairLayout(destination));
+      __ LoadFromOffset(
+          kLoadWordPair, destination.AsRegisterPairLow<Register>(), SP, source.GetStackIndex());
+    } else {
+      DCHECK(destination.IsFpuRegisterPair()) << destination;
+      __ LoadDFromOffset(FromLowSToD(destination.AsFpuRegisterPairLow<SRegister>()),
+                         SP,
+                         source.GetStackIndex());
+    }
+  } else if (source.IsRegisterPair()) {
+    if (destination.IsRegisterPair()) {
+      __ Mov(destination.AsRegisterPairLow<Register>(), source.AsRegisterPairLow<Register>());
+      __ Mov(destination.AsRegisterPairHigh<Register>(), source.AsRegisterPairHigh<Register>());
+    } else {
+      DCHECK(destination.IsDoubleStackSlot()) << destination;
+      DCHECK(ExpectedPairLayout(source));
+      __ StoreToOffset(
+          kStoreWordPair, source.AsRegisterPairLow<Register>(), SP, destination.GetStackIndex());
+    }
+  } else if (source.IsFpuRegisterPair()) {
+    if (destination.IsFpuRegisterPair()) {
+      __ vmovd(FromLowSToD(destination.AsFpuRegisterPairLow<SRegister>()),
+               FromLowSToD(source.AsFpuRegisterPairLow<SRegister>()));
+    } else {
+      DCHECK(destination.IsDoubleStackSlot()) << destination;
+      __ StoreDToOffset(FromLowSToD(source.AsFpuRegisterPairLow<SRegister>()),
+                        SP,
+                        destination.GetStackIndex());
+    }
   } else {
-    Move32(dst, src);
+    DCHECK(source.IsConstant()) << source;
+    HConstant* constant = source.GetConstant();
+    if (constant->IsIntConstant() || constant->IsNullConstant()) {
+      int32_t value = CodeGenerator::GetInt32ValueOf(constant);
+      if (destination.IsRegister()) {
+        __ LoadImmediate(destination.AsRegister<Register>(), value);
+      } else {
+        DCHECK(destination.IsStackSlot());
+        __ LoadImmediate(IP, value);
+        __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+      }
+    } else if (constant->IsLongConstant()) {
+      int64_t value = constant->AsLongConstant()->GetValue();
+      if (destination.IsRegisterPair()) {
+        __ LoadImmediate(destination.AsRegisterPairLow<Register>(), Low32Bits(value));
+        __ LoadImmediate(destination.AsRegisterPairHigh<Register>(), High32Bits(value));
+      } else {
+        DCHECK(destination.IsDoubleStackSlot()) << destination;
+        __ LoadImmediate(IP, Low32Bits(value));
+        __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+        __ LoadImmediate(IP, High32Bits(value));
+        __ StoreToOffset(kStoreWord, IP, SP, destination.GetHighStackIndex(kArmWordSize));
+      }
+    } else if (constant->IsDoubleConstant()) {
+      double value = constant->AsDoubleConstant()->GetValue();
+      if (destination.IsFpuRegisterPair()) {
+        __ LoadDImmediate(FromLowSToD(destination.AsFpuRegisterPairLow<SRegister>()), value);
+      } else {
+        DCHECK(destination.IsDoubleStackSlot()) << destination;
+        uint64_t int_value = bit_cast<uint64_t, double>(value);
+        __ LoadImmediate(IP, Low32Bits(int_value));
+        __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+        __ LoadImmediate(IP, High32Bits(int_value));
+        __ StoreToOffset(kStoreWord, IP, SP, destination.GetHighStackIndex(kArmWordSize));
+      }
+    } else {
+      DCHECK(constant->IsFloatConstant()) << constant->DebugName();
+      float value = constant->AsFloatConstant()->GetValue();
+      if (destination.IsFpuRegister()) {
+        __ LoadSImmediate(destination.AsFpuRegister<SRegister>(), value);
+      } else {
+        DCHECK(destination.IsStackSlot());
+        __ LoadImmediate(IP, bit_cast<int32_t, float>(value));
+        __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
+      }
+    }
   }
 }
 
@@ -4967,117 +4890,7 @@ ArmAssembler* ParallelMoveResolverARM::GetAssembler() const {
 
 void ParallelMoveResolverARM::EmitMove(size_t index) {
   MoveOperands* move = moves_[index];
-  Location source = move->GetSource();
-  Location destination = move->GetDestination();
-
-  if (source.IsRegister()) {
-    if (destination.IsRegister()) {
-      __ Mov(destination.AsRegister<Register>(), source.AsRegister<Register>());
-    } else {
-      DCHECK(destination.IsStackSlot());
-      __ StoreToOffset(kStoreWord, source.AsRegister<Register>(),
-                       SP, destination.GetStackIndex());
-    }
-  } else if (source.IsStackSlot()) {
-    if (destination.IsRegister()) {
-      __ LoadFromOffset(kLoadWord, destination.AsRegister<Register>(),
-                        SP, source.GetStackIndex());
-    } else if (destination.IsFpuRegister()) {
-      __ LoadSFromOffset(destination.AsFpuRegister<SRegister>(), SP, source.GetStackIndex());
-    } else {
-      DCHECK(destination.IsStackSlot());
-      __ LoadFromOffset(kLoadWord, IP, SP, source.GetStackIndex());
-      __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
-    }
-  } else if (source.IsFpuRegister()) {
-    if (destination.IsFpuRegister()) {
-      __ vmovs(destination.AsFpuRegister<SRegister>(), source.AsFpuRegister<SRegister>());
-    } else {
-      DCHECK(destination.IsStackSlot());
-      __ StoreSToOffset(source.AsFpuRegister<SRegister>(), SP, destination.GetStackIndex());
-    }
-  } else if (source.IsDoubleStackSlot()) {
-    if (destination.IsDoubleStackSlot()) {
-      __ LoadDFromOffset(DTMP, SP, source.GetStackIndex());
-      __ StoreDToOffset(DTMP, SP, destination.GetStackIndex());
-    } else if (destination.IsRegisterPair()) {
-      DCHECK(ExpectedPairLayout(destination));
-      __ LoadFromOffset(
-          kLoadWordPair, destination.AsRegisterPairLow<Register>(), SP, source.GetStackIndex());
-    } else {
-      DCHECK(destination.IsFpuRegisterPair()) << destination;
-      __ LoadDFromOffset(FromLowSToD(destination.AsFpuRegisterPairLow<SRegister>()),
-                         SP,
-                         source.GetStackIndex());
-    }
-  } else if (source.IsRegisterPair()) {
-    if (destination.IsRegisterPair()) {
-      __ Mov(destination.AsRegisterPairLow<Register>(), source.AsRegisterPairLow<Register>());
-      __ Mov(destination.AsRegisterPairHigh<Register>(), source.AsRegisterPairHigh<Register>());
-    } else {
-      DCHECK(destination.IsDoubleStackSlot()) << destination;
-      DCHECK(ExpectedPairLayout(source));
-      __ StoreToOffset(
-          kStoreWordPair, source.AsRegisterPairLow<Register>(), SP, destination.GetStackIndex());
-    }
-  } else if (source.IsFpuRegisterPair()) {
-    if (destination.IsFpuRegisterPair()) {
-      __ vmovd(FromLowSToD(destination.AsFpuRegisterPairLow<SRegister>()),
-               FromLowSToD(source.AsFpuRegisterPairLow<SRegister>()));
-    } else {
-      DCHECK(destination.IsDoubleStackSlot()) << destination;
-      __ StoreDToOffset(FromLowSToD(source.AsFpuRegisterPairLow<SRegister>()),
-                        SP,
-                        destination.GetStackIndex());
-    }
-  } else {
-    DCHECK(source.IsConstant()) << source;
-    HConstant* constant = source.GetConstant();
-    if (constant->IsIntConstant() || constant->IsNullConstant()) {
-      int32_t value = CodeGenerator::GetInt32ValueOf(constant);
-      if (destination.IsRegister()) {
-        __ LoadImmediate(destination.AsRegister<Register>(), value);
-      } else {
-        DCHECK(destination.IsStackSlot());
-        __ LoadImmediate(IP, value);
-        __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
-      }
-    } else if (constant->IsLongConstant()) {
-      int64_t value = constant->AsLongConstant()->GetValue();
-      if (destination.IsRegisterPair()) {
-        __ LoadImmediate(destination.AsRegisterPairLow<Register>(), Low32Bits(value));
-        __ LoadImmediate(destination.AsRegisterPairHigh<Register>(), High32Bits(value));
-      } else {
-        DCHECK(destination.IsDoubleStackSlot()) << destination;
-        __ LoadImmediate(IP, Low32Bits(value));
-        __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
-        __ LoadImmediate(IP, High32Bits(value));
-        __ StoreToOffset(kStoreWord, IP, SP, destination.GetHighStackIndex(kArmWordSize));
-      }
-    } else if (constant->IsDoubleConstant()) {
-      double value = constant->AsDoubleConstant()->GetValue();
-      if (destination.IsFpuRegisterPair()) {
-        __ LoadDImmediate(FromLowSToD(destination.AsFpuRegisterPairLow<SRegister>()), value);
-      } else {
-        DCHECK(destination.IsDoubleStackSlot()) << destination;
-        uint64_t int_value = bit_cast<uint64_t, double>(value);
-        __ LoadImmediate(IP, Low32Bits(int_value));
-        __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
-        __ LoadImmediate(IP, High32Bits(int_value));
-        __ StoreToOffset(kStoreWord, IP, SP, destination.GetHighStackIndex(kArmWordSize));
-      }
-    } else {
-      DCHECK(constant->IsFloatConstant()) << constant->DebugName();
-      float value = constant->AsFloatConstant()->GetValue();
-      if (destination.IsFpuRegister()) {
-        __ LoadSImmediate(destination.AsFpuRegister<SRegister>(), value);
-      } else {
-        DCHECK(destination.IsStackSlot());
-        __ LoadImmediate(IP, bit_cast<int32_t, float>(value));
-        __ StoreToOffset(kStoreWord, IP, SP, destination.GetStackIndex());
-      }
-    }
-  }
+  codegen_->Move(move->GetDestination(), move->GetSource(), move->GetType());
 }
 
 void ParallelMoveResolverARM::Exchange(Register reg, int mem) {

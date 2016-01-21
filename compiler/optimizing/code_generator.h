@@ -187,9 +187,10 @@ class CodeGenerator {
   virtual void GenerateFrameEntry() = 0;
   virtual void GenerateFrameExit() = 0;
   virtual void Bind(HBasicBlock* block) = 0;
-  virtual void Move(HInstruction* instruction, Location location, HInstruction* move_for) = 0;
   virtual void MoveConstant(Location destination, int32_t value) = 0;
-  virtual void MoveLocation(Location dst, Location src, Primitive::Type dst_type) = 0;
+  virtual void Move(Location destination,
+                            Location source,
+                            Primitive::Type dst_type = Primitive::kPrimVoid) = 0;
   virtual void AddLocationAsTemp(Location location, LocationSummary* locations) = 0;
 
   virtual Assembler* GetAssembler() = 0;

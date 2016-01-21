@@ -443,7 +443,7 @@ void CodeGenerator::GenerateUnresolvedFieldAccess(
     // Note that using directly the temp location is problematic as we don't
     // support temp register pairs. To avoid boilerplate conversion code, use
     // the location from the calling convention.
-    MoveLocation(calling_convention.GetSetValueLocation(field_type, is_instance),
+    Move(calling_convention.GetSetValueLocation(field_type, is_instance),
                  locations->InAt(is_instance ? 1 : 0),
                  (Primitive::Is64BitType(field_type) ? Primitive::kPrimLong : Primitive::kPrimInt));
   }
@@ -493,7 +493,7 @@ void CodeGenerator::GenerateUnresolvedFieldAccess(
   InvokeRuntime(entrypoint, field_access, dex_pc, nullptr);
 
   if (is_get && Primitive::IsFloatingPointType(field_type)) {
-    MoveLocation(locations->Out(), calling_convention.GetReturnLocation(field_type), field_type);
+    Move(locations->Out(), calling_convention.GetReturnLocation(field_type), field_type);
   }
 }
 

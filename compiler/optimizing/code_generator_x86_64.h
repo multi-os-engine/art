@@ -292,9 +292,10 @@ class CodeGeneratorX86_64 : public CodeGenerator {
   void GenerateFrameEntry() OVERRIDE;
   void GenerateFrameExit() OVERRIDE;
   void Bind(HBasicBlock* block) OVERRIDE;
-  void Move(HInstruction* instruction, Location location, HInstruction* move_for) OVERRIDE;
   void MoveConstant(Location destination, int32_t value) OVERRIDE;
-  void MoveLocation(Location dst, Location src, Primitive::Type dst_type) OVERRIDE;
+  void Move(Location destination,
+            Location source,
+            Primitive::Type dst_type = Primitive::kPrimVoid) OVERRIDE;
   void AddLocationAsTemp(Location location, LocationSummary* locations) OVERRIDE;
 
   size_t SaveCoreRegister(size_t stack_index, uint32_t reg_id) OVERRIDE;
@@ -364,9 +365,6 @@ class CodeGeneratorX86_64 : public CodeGenerator {
                   bool value_can_be_null);
 
   void GenerateMemoryBarrier(MemBarrierKind kind);
-
-  // Helper method to move a value between two locations.
-  void Move(Location destination, Location source);
 
   Label* GetLabelOf(HBasicBlock* block) const {
     return CommonGetLabelOf<Label>(block_labels_, block);
