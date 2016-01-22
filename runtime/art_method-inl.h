@@ -223,9 +223,16 @@ inline bool ArtMethod::CheckIncompatibleClassChange(InvokeType type) {
       mirror::Class* methods_class = GetDeclaringClass();
       return IsDirect() || (methods_class->IsInterface() && !IsDefault() && !IsMiranda());
     }
-    case kSuper:
-      // Constructors and static methods are called with invoke-direct.
-      return IsConstructor() || IsStatic();
+    case kSuper: {
+      // Constructors and static methods are called with invoke-direct. For compatibility with
+      // previous versions of Art we need to return true if the declaring class is an interface when
+      // default methods are not enabled.
+      const bool default_methods_enabled =
+          Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kDefaultMethods);
+      return IsConstructor()
+          || IsStatic()
+          || (!default_methods_enabled && GetDeclaringClass()->IsInterface());
+    }
     case kInterface: {
       mirror::Class* methods_class = GetDeclaringClass();
       return IsDirect() || !(methods_class->IsInterface() || methods_class->IsObjectClass());

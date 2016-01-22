@@ -24,6 +24,7 @@
 #include "common_throws.h"
 #include "dex_file.h"
 #include "entrypoints/quick/callee_save_frame.h"
+#include "experimental_flags.h"
 #include "handle_scope-inl.h"
 #include "indirect_reference_table.h"
 #include "invoke_type.h"
@@ -459,7 +460,6 @@ inline ArtMethod* FindMethodFromCode(uint32_t method_idx, mirror::Object** this_
       return klass->GetVTableEntry(vtable_index, class_linker->GetImagePointerSize());
     }
     case kSuper: {
-      // TODO This lookup is quite slow.
       // NB This is actually quite tricky to do any other way. We cannot use GetDeclaringClass since
       //    that will actually not be what we want in some cases where there are miranda methods or
       //    defaults. What we actually need is a GetContainingClass that says which classes virtuals
@@ -467,12 +467,14 @@ inline ArtMethod* FindMethodFromCode(uint32_t method_idx, mirror::Object** this_
       mirror::Class* referring_class = referrer->GetDeclaringClass();
       uint16_t method_type_idx = referring_class->GetDexFile().GetMethodId(method_idx).class_idx_;
       mirror::Class* method_reference_class = class_linker->ResolveType(method_type_idx, referrer);
+      const bool default_methods_enabled =
+          Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kDefaultMethods);
       if (UNLIKELY(method_reference_class == nullptr)) {
         // Bad type idx.
         CHECK(self->IsExceptionPending());
         return nullptr;
-      } else if (!method_reference_class->IsInterface()) {
-        // It is not an interface.
+      } else if (!default_methods_enabled || !method_reference_class->IsInterface()) {
+        // It is not an interface (or default methods are not enabled).
         mirror::Class* super_class = referring_class->GetSuperClass();
         uint16_t vtable_index = resolved_method->GetMethodIndex();
         if (access_check) {
@@ -499,7 +501,6 @@ inline ArtMethod* FindMethodFromCode(uint32_t method_idx, mirror::Object** this_
             return nullptr;  // Failure.
           }
         }
-        // TODO We can do better than this for a (compiled) fastpath.
         ArtMethod* result = method_reference_class->FindVirtualMethodForInterfaceSuper(
             resolved_method, class_linker->GetImagePointerSize());
         // Throw an NSME if nullptr;
@@ -643,15 +644,16 @@ inline ArtMethod* FindMethodFast(uint32_t method_idx, mirror::Object* this_objec
   } else if (type == kStatic || type == kDirect) {
     return resolved_method;
   } else if (type == kSuper) {
-    // TODO This lookup is rather slow.
+    const bool default_methods_enabled =
+        Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kDefaultMethods);
     uint16_t method_type_idx = referring_class->GetDexFile().GetMethodId(method_idx).class_idx_;
     mirror::Class* method_reference_class =
         referring_class->GetDexCache()->GetResolvedType(method_type_idx);
     if (method_reference_class == nullptr) {
       // Need to do full type resolution...
       return nullptr;
-    } else if (!method_reference_class->IsInterface()) {
-      // It is not an interface.
+    } else if (!default_methods_enabled || !method_reference_class->IsInterface()) {
+      // It is not an interface (or default methods are disabled).
       mirror::Class* super_class = referrer->GetDeclaringClass()->GetSuperClass();
       if (resolved_method->GetMethodIndex() >= super_class->GetVTableLength()) {
         // The super class does not have the method.
