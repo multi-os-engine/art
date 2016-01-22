@@ -1601,6 +1601,290 @@ void IntrinsicCodeGeneratorARM64::VisitMathNextAfter(HInvoke* invoke) {
   GenFPToFPCall(invoke, GetVIXLAssembler(), codegen_, kQuickNextAfter);
 }
 
+void IntrinsicLocationsBuilderARM64::VisitSystemArrayCopy(HInvoke* invoke) {
+  CodeGenerator::CreateSystemArrayCopyLocationSummary(invoke);
+  LocationSummary* locations = invoke->GetLocations();
+  if (locations == nullptr) {
+    return;
+  }
+  HIntConstant* src_pos = invoke->InputAt(1)->AsIntConstant();
+  HIntConstant* dest_pos = invoke->InputAt(3)->AsIntConstant();
+  HIntConstant* length = invoke->InputAt(4)->AsIntConstant();
+
+  if (src_pos != nullptr && !vixl::Assembler::IsImmAddSub(src_pos->GetValue())) {
+    locations->SetInAt(1, Location::RequiresRegister());
+  }
+  if (dest_pos != nullptr && !vixl::Assembler::IsImmAddSub(dest_pos->GetValue())) {
+    locations->SetInAt(3, Location::RequiresRegister());
+  }
+  if (length != nullptr && !vixl::Assembler::IsImmAddSub(length->GetValue())) {
+    locations->SetInAt(4, Location::RequiresRegister());
+  }
+}
+
+static void CheckPosition(vixl::MacroAssembler* masm,
+                          Location pos,
+                          Register input,
+                          Location length,
+                          SlowPathCodeARM64* slow_path,
+                          Register input_len,
+                          Register temp,
+                          bool length_is_input_length = false) {
+  // Where is the length in the Array?
+  const int32_t length_offset = mirror::Array::LengthOffset().Int32Value();
+  if (pos.IsConstant()) {
+    int32_t pos_const = pos.GetConstant()->AsIntConstant()->GetValue();
+    if (pos_const == 0) {
+      if (!length_is_input_length) {
+        // Check that length(input) >= length.
+        __ Ldr(temp, MemOperand(input, length_offset));
+        __ Cmp(temp, OperandFrom(length, Primitive::kPrimInt));
+        __ B(slow_path->GetEntryLabel(), lt);
+      }
+    } else {
+      // Check that length(input) >= pos.
+      __ Ldr(input_len, MemOperand(input, length_offset));
+      __ Subs(temp, input_len, pos_const);
+      __ B(slow_path->GetEntryLabel(), lt);
+
+      // Check that (length(input) - pos) >= length.
+      __ Cmp(temp, OperandFrom(length, Primitive::kPrimInt));
+      __ B(slow_path->GetEntryLabel(), lt);
+    }
+  } else if (length_is_input_length) {
+    // The only way the copy can succeed is if pos is zero.
+    __ Cbnz(WRegisterFrom(pos), slow_path->GetEntryLabel());
+  } else {
+    // Check that pos >= 0.
+    Register pos_reg = WRegisterFrom(pos);
+    __ Cmp(pos_reg, 0);
+    __ B(slow_path->GetEntryLabel(), lt);
+
+    // Check that pos <= length(input).
+    __ Ldr(temp, MemOperand(input, length_offset));
+    __ Subs(temp, temp, pos_reg);
+    __ B(slow_path->GetEntryLabel(), lt);
+
+    // Check that (length(input) - pos) >= length.
+    __ Cmp(temp, OperandFrom(length, Primitive::kPrimInt));
+    __ B(slow_path->GetEntryLabel(), lt);
+  }
+}
+
+void IntrinsicCodeGeneratorARM64::VisitSystemArrayCopy(HInvoke* invoke) {
+  vixl::MacroAssembler* masm = GetVIXLAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
+  uint32_t super_offset = mirror::Class::SuperClassOffset().Int32Value();
+  uint32_t component_offset = mirror::Class::ComponentTypeOffset().Int32Value();
+  uint32_t primitive_offset = mirror::Class::PrimitiveTypeOffset().Int32Value();
+
+  Register src = XRegisterFrom(locations->InAt(0));
+  Location src_pos = locations->InAt(1);
+  Register dest = XRegisterFrom(locations->InAt(2));
+  Location dest_pos = locations->InAt(3);
+  Location length = locations->InAt(4);
+  Register temp1 = WRegisterFrom(locations->GetTemp(0));
+  Register temp2 = WRegisterFrom(locations->GetTemp(1));
+  Register temp3 = WRegisterFrom(locations->GetTemp(2));
+
+  SlowPathCodeARM64* slow_path = new (GetAllocator()) IntrinsicSlowPathARM64(invoke);
+  codegen_->AddSlowPath(slow_path);
+
+  vixl::Label ok;
+  SystemArrayCopyOptimizations optimizations(invoke);
+
+  if (!optimizations.GetDestinationIsSource()) {
+    if (!src_pos.IsConstant() || !dest_pos.IsConstant()) {
+      __ Cmp(src, dest);
+    }
+  }
+
+  // If source and destination are the same, we go to slow path if we need to do
+  // forward copying.
+  if (src_pos.IsConstant()) {
+    int32_t src_pos_constant = src_pos.GetConstant()->AsIntConstant()->GetValue();
+    if (dest_pos.IsConstant()) {
+      // Checked when building locations.
+      DCHECK(!optimizations.GetDestinationIsSource()
+             || (src_pos_constant >= dest_pos.GetConstant()->AsIntConstant()->GetValue()));
+    } else {
+      if (!optimizations.GetDestinationIsSource()) {
+        __ B(&ok, ne);
+      }
+      __ Cmp(WRegisterFrom(dest_pos), src_pos_constant);
+      __ B(slow_path->GetEntryLabel(), gt);
+    }
+  } else {
+    if (!optimizations.GetDestinationIsSource()) {
+      __ B(&ok, ne);
+    }
+    __ Cmp(RegisterFrom(src_pos, invoke->InputAt(1)->GetType()),
+           OperandFrom(dest_pos, invoke->InputAt(3)->GetType()));
+    __ B(slow_path->GetEntryLabel(), lt);
+  }
+
+  __ Bind(&ok);
+
+  if (!optimizations.GetSourceIsNotNull()) {
+    // Bail out if the source is null.
+    __ Cbz(src, slow_path->GetEntryLabel());
+  }
+
+  if (!optimizations.GetDestinationIsNotNull() && !optimizations.GetDestinationIsSource()) {
+    // Bail out if the destination is null.
+    __ Cbz(dest, slow_path->GetEntryLabel());
+  }
+
+  // If the length is negative, bail out.
+  // We have already checked in the LocationsBuilder for the constant case.
+  if (!length.IsConstant() &&
+      !optimizations.GetCountIsSourceLength() &&
+      !optimizations.GetCountIsDestinationLength()) {
+    __ Cmp(WRegisterFrom(length), 0);
+    __ B(slow_path->GetEntryLabel(), lt);
+  }
+  // Validity checks: source.
+  CheckPosition(masm,
+                src_pos,
+                src,
+                length,
+                slow_path,
+                temp1,
+                temp2,
+                optimizations.GetCountIsSourceLength());
+
+  // Validity checks: dest.
+  CheckPosition(masm,
+                dest_pos,
+                dest,
+                length,
+                slow_path,
+                temp1,
+                temp2,
+                optimizations.GetCountIsDestinationLength());
+
+  if (!optimizations.GetDoesNotNeedTypeCheck()) {
+    // Check whether all elements of the source array are assignable to the component
+    // type of the destination array. We do two checks: the classes are the same,
+    // or the destination is Object[]. If none of these checks succeed, we go to the
+    // slow path.
+    __ Ldr(temp1, MemOperand(dest, class_offset));
+    __ Ldr(temp2, MemOperand(src, class_offset));
+    bool did_unpoison = false;
+    if (!optimizations.GetDestinationIsNonPrimitiveArray() ||
+        !optimizations.GetSourceIsNonPrimitiveArray()) {
+      // One or two of the references need to be unpoisoned. Unpoisoned them
+      // both to make the identity check valid.
+      codegen_->GetAssembler()->MaybeUnpoisonHeapReference(temp1);
+      codegen_->GetAssembler()->MaybeUnpoisonHeapReference(temp2);
+      did_unpoison = true;
+    }
+
+    if (!optimizations.GetDestinationIsNonPrimitiveArray()) {
+      // Bail out if the destination is not a non primitive array.
+      __ Ldr(temp3, HeapOperand(temp1, component_offset));
+      __ Cbz(temp3, slow_path->GetEntryLabel());
+      codegen_->GetAssembler()->MaybeUnpoisonHeapReference(temp3);
+      __ Ldrh(temp3, HeapOperand(temp3, primitive_offset));
+      static_assert(Primitive::kPrimNot == 0, "Expected 0 for kPrimNot");
+      __ Cbnz(temp3, slow_path->GetEntryLabel());
+    }
+
+    if (!optimizations.GetSourceIsNonPrimitiveArray()) {
+      // Bail out if the source is not a non primitive array.
+      // Bail out if the destination is not a non primitive array.
+      __ Ldr(temp3, HeapOperand(temp2, component_offset));
+      __ Cbz(temp3, slow_path->GetEntryLabel());
+      codegen_->GetAssembler()->MaybeUnpoisonHeapReference(temp3);
+      __ Ldrh(temp3, HeapOperand(temp3, primitive_offset));
+      static_assert(Primitive::kPrimNot == 0, "Expected 0 for kPrimNot");
+      __ Cbnz(temp3, slow_path->GetEntryLabel());
+    }
+
+    __ Cmp(temp1, temp2);
+
+    if (optimizations.GetDestinationIsTypedObjectArray()) {
+      vixl::Label do_copy;
+      __ B(&do_copy, eq);
+      if (!did_unpoison) {
+        codegen_->GetAssembler()->MaybeUnpoisonHeapReference(temp1);
+      }
+      __ Ldr(temp1, HeapOperand(temp1, component_offset));
+      codegen_->GetAssembler()->MaybeUnpoisonHeapReference(temp1);
+      __ Ldr(temp1, HeapOperand(temp1, super_offset));
+      // No need to unpoison the result, we're comparing against null.
+      __ Cbnz(temp1, slow_path->GetEntryLabel());
+      __ Bind(&do_copy);
+    } else {
+      __ B(slow_path->GetEntryLabel(), ne);
+    }
+  } else if (!optimizations.GetSourceIsNonPrimitiveArray()) {
+    DCHECK(optimizations.GetDestinationIsNonPrimitiveArray());
+    // Bail out if the source is not a non primitive array.
+    __ Ldr(temp1, HeapOperand(src, class_offset));
+    codegen_->GetAssembler()->MaybeUnpoisonHeapReference(temp1);
+    __ Ldr(temp3, HeapOperand(temp1, component_offset));
+    __ Cbz(temp3, slow_path->GetEntryLabel());
+    codegen_->GetAssembler()->MaybeUnpoisonHeapReference(temp3);
+    __ Ldrh(temp3, HeapOperand(temp3, primitive_offset));
+    static_assert(Primitive::kPrimNot == 0, "Expected 0 for kPrimNot");
+    __ Cbnz(temp3, slow_path->GetEntryLabel());
+  }
+
+  temp1 = temp1.X();
+  temp2 = temp2.X();
+  temp3 = temp3.X();
+  // Compute base source address, base destination address, and end source address.
+  uint32_t element_size = sizeof(int32_t);
+  uint32_t offset = mirror::Array::DataOffset(element_size).Uint32Value();
+  if (src_pos.IsConstant()) {
+    int32_t constant = src_pos.GetConstant()->AsIntConstant()->GetValue();
+    __ Add(temp1, src, element_size * constant + offset);
+  } else {
+    __ Add(temp1, src, Operand(XRegisterFrom(src_pos), LSL, 2));
+    __ Add(temp1, temp1, offset);
+  }
+
+  if (dest_pos.IsConstant()) {
+    int32_t constant = dest_pos.GetConstant()->AsIntConstant()->GetValue();
+    __ Add(temp2, dest, element_size * constant + offset);
+  } else {
+    __ Add(temp2, dest, Operand(XRegisterFrom(dest_pos), LSL, 2));
+    __ Add(temp2, temp2, offset);
+  }
+
+  if (length.IsConstant()) {
+    int32_t constant = length.GetConstant()->AsIntConstant()->GetValue();
+    __ Add(temp3, temp1, element_size * constant);
+  } else {
+    __ Add(temp3, temp1, Operand(XRegisterFrom(length), LSL, 2));
+  }
+
+  // Iterate over the arrays and do a raw copy of the objects. We don't need to
+  // poison/unpoison, nor do any read barrier as the next uses of the destination
+  // array will do it.
+  vixl::Label loop, done;
+  __ Bind(&loop);
+  __ Cmp(temp1, temp3);
+  __ B(&done, eq);
+  {
+    // We use a block to end the scratch scope before the write barrier, thus
+    // freeing the temporary registers so they can be used in `MarkGCCard`.
+    UseScratchRegisterScope temps(masm);
+    Register tmp = temps.AcquireW();
+    __ Ldr(tmp, MemOperand(temp1, element_size, vixl::PostIndex));
+    __ Str(tmp, MemOperand(temp2, element_size, vixl::PostIndex));
+  }
+  __ B(&loop);
+  __ Bind(&done);
+
+  // We only need one card marking on the destination array.
+  codegen_->MarkGCCard(dest.W(), Register(), /* can_be_null */ false);
+
+  __ Bind(slow_path->GetExitLabel());
+}
 // Unimplemented intrinsics.
 
 #define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
@@ -1612,7 +1896,6 @@ void IntrinsicCodeGeneratorARM64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED
 UNIMPLEMENTED_INTRINSIC(IntegerBitCount)
 UNIMPLEMENTED_INTRINSIC(LongBitCount)
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
-UNIMPLEMENTED_INTRINSIC(SystemArrayCopy)
 UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
 
