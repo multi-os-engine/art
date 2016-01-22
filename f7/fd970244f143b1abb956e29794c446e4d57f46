@@ -1,0 +1,8 @@
+Presubmit-Ready+1: Treehugger Robot <android-build-prod@system.gserviceaccount.com>
+Code-Review+2: Mathieu Chartier <mathieuc@google.com>
+Verified+1: Mathieu Chartier <mathieuc@google.com>
+Submitted-by: Mathieu Chartier <mathieuc@google.com>
+Submitted-at: Fri, 22 Jan 2016 23:18:19 +0000
+Reviewed-on: https://android-review.googlesource.com/182119
+Project: platform/art
+Branch: refs/heads/master
