@@ -1,0 +1,1 @@
+Test pattern recognition-based "inlining."
