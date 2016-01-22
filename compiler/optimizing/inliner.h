@@ -65,6 +65,18 @@ class HInliner : public HOptimization {
   bool TryInline(HInvoke* invoke_instruction, ArtMethod* resolved_method, bool do_rtp = true)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Try to recognize known simple patterns and replace invoke call with appropriate instructions.
+  bool TryPatternReplacement(HInvoke* invoke_instruction, ArtMethod* resolved_method, bool do_rtp)
+    SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Create a new HInstanceFieldGet.
+  HInstanceFieldGet* CreateInstanceFieldGet(ArtField* resolved_field,
+                                            HInstruction* obj);
+  // Create a new HInstanceFieldSet.
+  HInstanceFieldSet* CreateInstanceFieldSet(ArtField* resolved_field,
+                                            HInstruction* obj,
+                                            HInstruction* value);
+
   // Try to inline the target of a monomorphic call. If successful, the code
   // in the graph will look like:
   // if (receiver.getClass() != ic.GetMonomorphicType()) deopt
@@ -84,6 +96,12 @@ class HInliner : public HOptimization {
                          HInvoke* invoke_instruction,
                          bool same_dex_file,
                          bool do_rtp = true);
+
+  void FixUpReturnReferenceType(ArtMethod* resolved_method,
+                                HInvoke* invoke_instruction,
+                                HInstruction* return_replacement,
+                                bool do_rtp)
+    SHARED_REQUIRES(Locks::mutator_lock_);
 
   HGraph* const outermost_graph_;
   const DexCompilationUnit& outer_compilation_unit_;
