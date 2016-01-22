@@ -67,7 +67,7 @@ static bool CheckStack(Backtrace* bt, const std::vector<std::string>& seq) {
   for (Backtrace::const_iterator it = bt->begin(); it != bt->end(); ++it) {
     if (BacktraceMap::IsValid(it->map)) {
       LOG(INFO) << "Got " << it->func_name << ", looking for " << seq[cur_search_index];
-      if (it->func_name == seq[cur_search_index]) {
+      if (it->func_name.find(seq[cur_search_index]) != std::string::npos) {
         cur_search_index++;
         if (cur_search_index == seq.size()) {
           return true;
@@ -123,10 +123,10 @@ extern "C" JNIEXPORT jboolean JNICALL Java_Main_unwindInProcess(JNIEnv*, jobject
   // This is also risky, as deduping might play a trick on us, so the test needs to make sure that
   // only unique functions are being expected.
   std::vector<std::string> seq = {
-      "Java_Main_unwindInProcess",                   // This function.
-      "boolean Main.unwindInProcess(int, boolean)",  // The corresponding Java native method frame.
-      "int java.util.Arrays.binarySearch(java.lang.Object[], int, int, java.lang.Object, java.util.Comparator)",  // Framework method.
-      "void Main.main(java.lang.String[])"           // The Java entry method.
+      "Java_Main_unwindInProcess",      // This function.
+      "Main.unwindInProcess",           // The corresponding Java native method frame.
+      "java.util.Arrays.binarySearch",  // Framework method.
+      "Main.main"                       // The Java entry method.
   };
 
   bool result = CheckStack(bt.get(), seq);
@@ -215,13 +215,12 @@ extern "C" JNIEXPORT jboolean JNICALL Java_Main_unwindOtherProcess(JNIEnv*, jobj
   if (result) {
     // See comment in unwindInProcess for non-exact stack matching.
     std::vector<std::string> seq = {
-        // "Java_Main_sleep",                        // The sleep function being executed in the
-                                                     // other runtime.
-                                                     // Note: For some reason, the name isn't
-                                                     // resolved, so don't look for it right now.
-        "boolean Main.sleep(int, boolean, double)",  // The corresponding Java native method frame.
-        "int java.util.Arrays.binarySearch(java.lang.Object[], int, int, java.lang.Object, java.util.Comparator)",  // Framework method.
-        "void Main.main(java.lang.String[])"         // The Java entry method.
+        // "Java_Main_sleep",             // The sleep function being executed in the other runtime.
+                                          // Note: For some reason, the name isn't
+                                          // resolved, so don't look for it right now.
+        "Main.sleep",                     // The corresponding Java native method frame.
+        "java.util.Arrays.binarySearch",  // Framework method.
+        "Main.main"                       // The Java entry method.
     };
 
     result = CheckStack(bt.get(), seq);
