@@ -80,9 +80,14 @@ class MANAGED Reference : public Object {
   Reference* GetPendingNext() SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldObject<Reference>(PendingNextOffset());
   }
-  template<bool kTransactionActive>
-  void SetPendingNext(Reference* pending_next) SHARED_REQUIRES(Locks::mutator_lock_) {
-    SetFieldObject<kTransactionActive>(PendingNextOffset(), pending_next);
+
+  void SetPendingNext(bool transactionActive, Reference* pending_next)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    if (transactionActive) {
+      SetFieldObject<true>(PendingNextOffset(), pending_next);
+    } else {
+      SetFieldObject<false>(PendingNextOffset(), pending_next);
+    }
   }
 
   bool IsEnqueued() SHARED_REQUIRES(Locks::mutator_lock_) {
