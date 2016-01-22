@@ -1643,6 +1643,8 @@ class Dex2Oat FINAL {
         std::vector<const DexFile*>& dex_files = dex_files_per_oat_file_[i];
         oat_writer->PrepareLayout(driver_.get(), image_writer_.get(), dex_files);
 
+        elf_writer->PrepareDebugInfo(oat_writer->GetMethodDebugInfo());
+
         OutputStream*& rodata = rodata_[i];
         DCHECK(rodata != nullptr);
         if (!oat_writer->WriteRodata(rodata)) {

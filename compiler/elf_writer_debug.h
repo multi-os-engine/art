@@ -35,9 +35,8 @@ void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
                     const ArrayRef<const MethodDebugInfo>& method_infos,
                     CFIFormat cfi_format);
 
-template <typename ElfTypes>
-void WriteMiniDebugInfo(ElfBuilder<ElfTypes>* builder,
-                        const ArrayRef<const MethodDebugInfo>& method_infos);
+std::vector<uint8_t> MakeMiniDebugInfo(InstructionSet isa,
+                                       const ArrayRef<const MethodDebugInfo>& method_infos);
 
 ArrayRef<const uint8_t> WriteDebugElfFileForMethod(const dwarf::MethodDebugInfo& method_info);
 
