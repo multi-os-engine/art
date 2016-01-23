@@ -179,7 +179,7 @@ void RegisterAllocator::AllocateRegistersInternal() {
     }
 
     if (block->IsCatchBlock() ||
-        (block->GetLoopInformation() != nullptr && block->GetLoopInformation()->IsIrreducible())) {
+        (block->IsLoopHeader() && block->GetLoopInformation()->IsIrreducible())) {
       // By blocking all registers at the top of each catch block or irreducible loop, we force
       // intervals belonging to the live-in set of the catch/header block to be spilled.
       // TODO(ngeoffray): Phis in this block could be allocated in register.
@@ -1775,18 +1775,33 @@ void RegisterAllocator::ConnectSplitSiblings(LiveInterval* interval,
     return;
   }
 
+  Location location_source;
+  if (source == nullptr) {
+    DCHECK(IsMaterializableEntryBlockInstructionOfGraphWithIrreducibleLoop(defined_by));
+    if (defined_by->IsConstant()) {
+      location_source = defined_by->GetLocations()->Out();
+    } else {
+      DCHECK(defined_by->IsCurrentMethod());
+      location_source = parent->NeedsTwoSpillSlots()
+          ? Location::DoubleStackSlot(parent->GetSpillSlot())
+          : Location::StackSlot(parent->GetSpillSlot());
+    }
+  } else {
+    location_source = source->ToLocation();
+  }
+
   // If `from` has only one successor, we can put the moves at the exit of it. Otherwise
   // we need to put the moves at the entry of `to`.
   if (from->GetNormalSuccessors().size() == 1) {
     InsertParallelMoveAtExitOf(from,
                                defined_by,
-                               source->ToLocation(),
+                               location_source,
                                destination->ToLocation());
   } else {
     DCHECK_EQ(to->GetPredecessors().size(), 1u);
     InsertParallelMoveAtEntryOf(to,
                                 defined_by,
-                                source->ToLocation(),
+                                location_source,
                                 destination->ToLocation());
   }
 }
@@ -1890,7 +1905,7 @@ void RegisterAllocator::Resolve() {
   for (HLinearOrderIterator it(*codegen_->GetGraph()); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     if (block->IsCatchBlock() ||
-        (block->GetLoopInformation() != nullptr && block->GetLoopInformation()->IsIrreducible())) {
+        (block->IsLoopHeader() && block->GetLoopInformation()->IsIrreducible())) {
       // Instructions live at the top of catch blocks or irreducible loop header
       // were forced to spill.
       if (kIsDebugBuild) {
