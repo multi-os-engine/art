@@ -539,7 +539,10 @@ LiveInterval* LiveInterval::GetSiblingAt(size_t position) {
   while (current != nullptr && !current->IsDefinedAt(position)) {
     current = current->GetNextSibling();
   }
-  return current;
+  // `IsDefinedAt` returns whether `position` is withing the interval,
+  // so we need to also call `Covers` to check whether the interval
+  // is active at that position.
+  return (current == nullptr || !current->CoversSlow(position)) ? nullptr : current;
 }
 
 }  // namespace art
