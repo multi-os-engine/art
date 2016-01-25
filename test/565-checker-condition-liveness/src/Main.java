@@ -16,6 +16,24 @@
 
 public class Main {
 
+  /// CHECK-START-X86: int Main.p(float) liveness (after)
+  /// CHECK:         <<Arg:f\d+>>  ParameterValue
+  /// CHECK:         <<Five:f\d+>> FloatConstant 5
+  /// CHECK:         <<Zero:i\d+>> IntConstant 0
+  /// CHECK:         <<MinusOne:i\d+>> IntConstant -1
+  /// CHECK:         <<Base:i\d+>> X86ComputeBaseMethodAddress uses:[<<UseInput:\d+>>]
+  /// CHECK-NEXT:    <<Load:f\d+>> X86LoadFromConstantTable [<<Base>>,<<Five>>]
+  /// CHECK-NEXT:    <<Cond:z\d+>> LessThanOrEqual [<<Arg>>,<<Load>>]
+  /// CHECK-NEXT:                  Select [<<Zero>>,<<MinusOne>>,<<Cond>>] liveness:<<LivSel:\d+>>
+  /// CHECK-EVAL:    <<UseInput>> == <<LivSel>> + 1
+
+  public static int p(float arg) {
+    if (arg > 5.0f) {
+      return 0;
+    }
+    return -1;
+  }
+
   /// CHECK-START: void Main.main(java.lang.String[]) liveness (after)
   /// CHECK:         <<X:i\d+>>    ArrayLength uses:[<<UseInput:\d+>>]
   /// CHECK:         <<Y:i\d+>>    StaticFieldGet uses:[<<UseInput>>]
