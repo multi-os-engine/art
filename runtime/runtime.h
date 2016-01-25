@@ -469,7 +469,8 @@ class Runtime {
   }
 
   void RegisterAppInfo(const std::vector<std::string>& code_paths,
-                       const std::string& profile_output_filename);
+                       const std::string& profile_output_filename,
+                       const std::string& application_directory);
 
   // Transaction support.
   bool IsActiveTransaction() const {
@@ -602,6 +603,8 @@ class Runtime {
   void SetSafeMode(bool mode) {
     safe_mode_ = mode;
   }
+
+  const std::string& GetApplicationDirectory() const { return application_directory_; }
 
  private:
   static void InitPlatformSignalHandlers();
@@ -809,6 +812,8 @@ class Runtime {
 
   // Whether the application should run in safe mode, that is, interpreter only.
   bool safe_mode_;
+
+  std::string application_directory_;
 
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };

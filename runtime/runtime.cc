@@ -1703,7 +1703,10 @@ void Runtime::SetCalleeSaveMethod(ArtMethod* method, CalleeSaveType type) {
 }
 
 void Runtime::RegisterAppInfo(const std::vector<std::string>& code_paths,
-                              const std::string& profile_output_filename) {
+                              const std::string& profile_output_filename,
+                              const std::string& application_directory) {
+  application_directory_ = application_directory;
+
   if (jit_.get() == nullptr) {
     // We are not JITing. Nothing to do.
     return;

@@ -178,7 +178,8 @@ JitCompiler::JitCompiler() : total_time_(0) {
 
   if (compiler_options_->GetGenerateDebugInfo()) {
 #ifdef __ANDROID__
-    const char* prefix = GetAndroidData();
+    const std::string& app_dir = Runtime::Current()->GetApplicationDirectory();
+    const char* prefix = app_dir.empty() ? GetAndroidData() : app_dir.c_str();
 #else
     const char* prefix = "/tmp";
 #endif
