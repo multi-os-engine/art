@@ -37,6 +37,25 @@ namespace art {
 
 namespace JDWP {
 
+// Bounds of the size of the work buffer used in gethostbyname_r.
+//
+// The call to gethostbyname_r below requires a user-allocated buffer,
+// the size of which depends on the system. The initial implementation
+// used to use a 128-byte buffer, but that was not enough on some
+// systems (maybe because of IPv6), causing failures in JDWP host
+// testing; thus it was increased to 256.
+//
+// However, we should not have used a fixed size: gethostbyname_r's
+// documentation states that if the work buffer is too small (i.e. if
+// gethostbyname_r returns `ERANGE`), then the function should be
+// called again with a bigger buffer.
+//
+// So we now try values between 256 (our previous "default" value) and
+// 8192 (the maximum possible value according to Stevens' "Unix
+// Network Programming", 2nd edition, p. 304).
+static constexpr size_t kMinAuxBufSize = 256;
+static constexpr size_t kMaxAuxBufSize = 8192;
+
 /*
  * JDWP network state.
  *
@@ -276,16 +295,34 @@ bool JdwpSocketState::Establish(const JdwpOptions* options) {
    */
 #if defined(__linux__)
   hostent he;
-  // The size of the work buffer used in the gethostbyname_r call
-  // below. It used to be 128, but this was not enough on some
-  // configurations (maybe because of IPv6?), causing failures in JDWP
-  // host testing; thus it was increased to 256.
-  static constexpr size_t kAuxBufSize = 256;
-  char auxBuf[kAuxBufSize];
+  size_t auxBufSize = kMinAuxBufSize;
+  char* auxBuf = static_cast<char*>(malloc(auxBufSize));
+  if (auxBuf == nullptr) {
+    LOG(WARNING) << "malloc(" << auxBufSize << ") failed";
+    return false;
+  }
   int error;
-  int cc = gethostbyname_r(options->host.c_str(), &he, auxBuf, sizeof(auxBuf), &pEntry, &error);
-  if (cc != 0) {
+  int cc;
+  while ((cc = gethostbyname_r(options->host.c_str(), &he, auxBuf, auxBufSize, &pEntry, &error))
+         == ERANGE) {
+    // The work buffer `auxBuf` is too small; enlarge it.
+    auxBufSize *= 2;
+    if (auxBufSize > kMaxAuxBufSize) {
+      // We reached the maximum allowed buffer size; bail out.
+      LOG(WARNING) << "gethostbyname_r('" << options->host << "') failed: "
+                   << "could not find a work buffer size large enough between "
+                   << kMinAuxBufSize << " and " << kMaxAuxBufSize;
+      break;
+    }
+    auxBuf = static_cast<char*>(realloc(auxBuf, auxBufSize));
+    if (auxBuf == nullptr) {
+      LOG(WARNING) << "realloc(" << auxBuf << ", " << auxBufSize << ") failed";
+      return false;
+    }
+  }
+  if (cc != 0 || pEntry == nullptr) {
     LOG(WARNING) << "gethostbyname_r('" << options->host << "') failed: " << hstrerror(error);
+    free(auxBuf);
     return false;
   }
 #else
@@ -299,6 +336,9 @@ bool JdwpSocketState::Establish(const JdwpOptions* options) {
 
   /* copy it out ASAP to minimize risk of multithreaded annoyances */
   memcpy(&addr.addrInet.sin_addr, pEntry->h_addr, pEntry->h_length);
+#if defined(__linux__)
+  free(auxBuf);
+#endif
   addr.addrInet.sin_family = pEntry->h_addrtype;
 
   addr.addrInet.sin_port = htons(options->port);
