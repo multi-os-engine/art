@@ -288,6 +288,10 @@ unspecified registers or condition codes.
     movl    $0, 4(rREFS,\_vreg,4)
 .endm
 
+.macro VREG_INDEX_TO_ADDR _reg _vreg
+    leal    (rFP,\_vreg,4), \_reg
+.endm
+
 /* File: x86/entry.S */
 /*
  * Copyright (C) 2016 The Android Open Source Project
@@ -575,6 +579,12 @@ artMterpAsmInstructionStart = .L_op_nop
 /* File: x86/op_return_void.S */
     .extern MterpThreadFenceForConstructor
     call    MterpThreadFenceForConstructor
+    movl    rSELF, %eax
+    testl   $(THREAD_SUSPEND_REQUEST | THREAD_CHECKPOINT_REQUEST), THREAD_FLAGS_OFFSET(%eax)
+    jz      1f
+    movl    %eax, OUT_ARG0(%esp)
+    call    MterpSuspendCheck
+1:
     xorl    %eax, %eax
     xorl    %ecx, %ecx
     jmp     MterpReturn
@@ -591,6 +601,12 @@ artMterpAsmInstructionStart = .L_op_nop
     /* op vAA */
     .extern MterpThreadFenceForConstructor
     call    MterpThreadFenceForConstructor
+    movl    rSELF, %eax
+    testl   $(THREAD_SUSPEND_REQUEST | THREAD_CHECKPOINT_REQUEST), THREAD_FLAGS_OFFSET(%eax)
+    jz      1f
+    movl    %eax, OUT_ARG0(%esp)
+    call    MterpSuspendCheck
+1:
     GET_VREG %eax rINST                     # eax <- vAA
     xorl    %ecx, %ecx
     jmp     MterpReturn
@@ -605,6 +621,12 @@ artMterpAsmInstructionStart = .L_op_nop
     /* return-wide vAA */
     .extern MterpThreadFenceForConstructor
     call    MterpThreadFenceForConstructor
+    movl    rSELF, %eax
+    testl   $(THREAD_SUSPEND_REQUEST | THREAD_CHECKPOINT_REQUEST), THREAD_FLAGS_OFFSET(%eax)
+    jz      1f
+    movl    %eax, OUT_ARG0(%esp)
+    call    MterpSuspendCheck
+1:
     GET_VREG %eax rINST                     # eax <- v[AA+0]
     GET_VREG_HIGH %ecx rINST                # ecx <- v[AA+1]
     jmp     MterpReturn
@@ -622,6 +644,12 @@ artMterpAsmInstructionStart = .L_op_nop
     /* op vAA */
     .extern MterpThreadFenceForConstructor
     call    MterpThreadFenceForConstructor
+    movl    rSELF, %eax
+    testl   $(THREAD_SUSPEND_REQUEST | THREAD_CHECKPOINT_REQUEST), THREAD_FLAGS_OFFSET(%eax)
+    jz      1f
+    movl    %eax, OUT_ARG0(%esp)
+    call    MterpSuspendCheck
+1:
     GET_VREG %eax rINST                     # eax <- vAA
     xorl    %ecx, %ecx
     jmp     MterpReturn
@@ -827,13 +855,13 @@ artMterpAsmInstructionStart = .L_op_nop
     EXPORT_PC
     movzwl  2(rPC), %eax                    # eax <- BBBB
     movl    %eax, OUT_ARG0(%esp)
-    GET_VREG %ecx rINST
+    VREG_INDEX_TO_ADDR %ecx, rINST
     movl    %ecx, OUT_ARG1(%esp)
     movl    OFF_FP_METHOD(rFP),%eax
     movl    %eax, OUT_ARG2(%esp)
     movl    rSELF, %ecx
     movl    %ecx, OUT_ARG3(%esp)
-    call    MterpCheckCast                  # (index, obj, method, self)
+    call    MterpCheckCast                  # (index, &obj, method, self)
     REFRESH_IBASE
     testl   %eax, %eax
     jnz     MterpPossibleException
@@ -855,13 +883,13 @@ artMterpAsmInstructionStart = .L_op_nop
     movl    %eax, OUT_ARG0(%esp)
     movl    rINST, %eax                     # eax <- BA
     sarl    $4, %eax                       # eax <- B
-    GET_VREG %ecx %eax                      # Get object
+    VREG_INDEX_TO_ADDR %ecx %ecx            # Get object address
     movl    %ecx, OUT_ARG1(%esp)
     movl    OFF_FP_METHOD(rFP),%eax
     movl    %eax, OUT_ARG2(%esp)
     movl    rSELF, %ecx
     movl    %ecx, OUT_ARG3(%esp)
-    call    MterpInstanceOf                 # (index, obj, method, self)
+    call    MterpInstanceOf                 # (index, &obj, method, self)
     movl    rSELF, %ecx
     REFRESH_IBASE_FROM_SELF %ecx
     cmpl    $0, THREAD_EXCEPTION_OFFSET(%ecx)
@@ -3145,6 +3173,12 @@ artMterpAsmInstructionStart = .L_op_nop
     .balign 128
 .L_op_return_void_no_barrier: /* 0x73 */
 /* File: x86/op_return_void_no_barrier.S */
+    movl    rSELF, %eax
+    testl   $(THREAD_SUSPEND_REQUEST | THREAD_CHECKPOINT_REQUEST), THREAD_FLAGS_OFFSET(%eax)
+    jz      1f
+    movl    %eax, OUT_ARG0(%esp)
+    call    MterpSuspendCheck
+1:
     xorl    %eax, %eax
     xorl    %ecx, %ecx
     jmp     MterpReturn
@@ -12921,12 +12955,6 @@ MterpReturn:
     movl    OFF_FP_RESULT_REGISTER(rFP), %edx
     movl    %eax, (%edx)
     movl    %ecx, 4(%edx)
-    movl    rSELF, %eax
-    testl   $(THREAD_SUSPEND_REQUEST | THREAD_CHECKPOINT_REQUEST), THREAD_FLAGS_OFFSET(%eax)
-    jz      1f
-    movl    %eax, OUT_ARG0(%esp)
-    call    MterpSuspendCheck
-1:
     mov     $1, %eax
 MterpDone:
     /* Restore callee save register */
