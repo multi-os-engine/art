@@ -280,3 +280,7 @@ unspecified registers or condition codes.
     movl    $$0,  (rREFS,\_vreg,4)
     movl    $$0, 4(rREFS,\_vreg,4)
 .endm
+
+.macro VREG_INDEX_TO_ADDR _reg _vreg
+    leal    (rFP,\_vreg,4), \_reg
+.endm
