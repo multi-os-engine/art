@@ -603,6 +603,10 @@ class Runtime {
     safe_mode_ = mode;
   }
 
+  void EnableNativeDebugging();
+
+  bool IsNativeDebuggingEnabled() { return native_debugging_enabled_; }
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -809,6 +813,8 @@ class Runtime {
 
   // Whether the application should run in safe mode, that is, interpreter only.
   bool safe_mode_;
+
+  bool native_debugging_enabled_;
 
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };

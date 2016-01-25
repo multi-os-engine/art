@@ -208,7 +208,8 @@ Runtime::Runtime()
       experimental_flags_(ExperimentalFlags::kNone),
       oat_file_manager_(nullptr),
       is_low_memory_mode_(false),
-      safe_mode_(false) {
+      safe_mode_(false),
+      native_debugging_enabled_(false) {
   CheckAsmSupportOffsetsAndSizes();
   std::fill(callee_save_methods_, callee_save_methods_ + arraysize(callee_save_methods_), 0u);
   interpreter::CheckInterpreterAsmConstants();
@@ -1932,6 +1933,23 @@ double Runtime::GetHashTableMinLoadFactor() const {
 
 double Runtime::GetHashTableMaxLoadFactor() const {
   return is_low_memory_mode_ ? kLowMemoryMaxLoadFactor : kNormalMaxLoadFactor;
+}
+
+void Runtime::EnableNativeDebugging() {
+  native_debugging_enabled_ = true;
+
+  AddCompilerOption("--generate-debug-info");
+  AddCompilerOption("--native-debuggable");
+
+  // Turn on jit at first use.
+  if (jit_options_ != nullptr) {
+    jit_options_->SetJitAtFirstUse();
+  }
+
+  // Create the JIT if we haven't created it yet.
+  if (jit_ == nullptr) {
+    CreateJit();
+  }
 }
 
 }  // namespace art

@@ -606,6 +606,12 @@ static jstring VMRuntime_getCurrentInstructionSet(JNIEnv* env, jclass) {
   return env->NewStringUTF(GetInstructionSetString(kRuntimeISA));
 }
 
+// Enable all features in the runtime required by the native debugger (swicth to jit, enable force
+// jit, disable optimizations, enable debug info generation).
+static void VMRuntime_enableNativeDebugging(JNIEnv*, jobject) {
+  Runtime::Current()->EnableNativeDebugging();
+}
+
 static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(VMRuntime, addressOf, "!(Ljava/lang/Object;)J"),
   NATIVE_METHOD(VMRuntime, bootClassPath, "()Ljava/lang/String;"),
@@ -641,6 +647,7 @@ static JNINativeMethod gMethods[] = {
                 "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)V"),
   NATIVE_METHOD(VMRuntime, isBootClassPathOnDisk, "(Ljava/lang/String;)Z"),
   NATIVE_METHOD(VMRuntime, getCurrentInstructionSet, "()Ljava/lang/String;"),
+  NATIVE_METHOD(VMRuntime, enableNativeDebugging, "()V"),
 };
 
 void register_dalvik_system_VMRuntime(JNIEnv* env) {
