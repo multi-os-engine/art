@@ -1940,6 +1940,15 @@ OatFile::OatClass ClassLinker::FindOatClass(const DexFile& dex_file,
                                             uint16_t class_def_idx,
                                             bool* found) {
   DCHECK_NE(class_def_idx, DexFile::kDexNoIndex16);
+
+  Runtime* runtime = Runtime::Current();
+  if (runtime->UseJit() && runtime->GetJit()->JitAtFirstUse()) {
+    // If we are running in force jit mode then we don't want to use any precompiled code from the
+    // oat files as they are not jitted.
+    *found = false;
+    return OatFile::OatClass::Invalid();
+  }
+
   const OatFile::OatDexFile* oat_dex_file = dex_file.GetOatDexFile();
   if (oat_dex_file == nullptr) {
     *found = false;
