@@ -119,7 +119,8 @@ class OatSymbolizer FINAL {
     File* elf_file = OS::CreateEmptyFile(output_name_.c_str());
     std::unique_ptr<BufferedOutputStream> output_stream(
         MakeUnique<BufferedOutputStream>(MakeUnique<FileOutputStream>(elf_file)));
-    builder_.reset(new ElfBuilder<ElfTypes32>(isa, output_stream.get()));
+    uint32_t base_address = oat_file_->GetOatHeader().GetImagePatchDelta();
+    builder_.reset(new ElfBuilder<ElfTypes32>(isa, output_stream.get(), base_address));
 
     builder_->Start();
 

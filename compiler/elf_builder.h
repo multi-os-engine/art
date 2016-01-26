@@ -276,7 +276,7 @@ class ElfBuilder FINAL {
     std::vector<Elf_Sym> symbols_;
   };
 
-  ElfBuilder(InstructionSet isa, OutputStream* output)
+  ElfBuilder(InstructionSet isa, OutputStream* output, Elf_Addr base_address = 0)
       : isa_(isa),
         stream_(output),
         rodata_(this, ".rodata", SHT_PROGBITS, SHF_ALLOC, nullptr, 0, kPageSize, 0),
@@ -294,7 +294,7 @@ class ElfBuilder FINAL {
         debug_info_(this, ".debug_info", SHT_PROGBITS, 0, nullptr, 0, 1, 0),
         debug_line_(this, ".debug_line", SHT_PROGBITS, 0, nullptr, 0, 1, 0),
         shstrtab_(this, ".shstrtab", 0, 1),
-        virtual_address_(0) {
+        virtual_address_(base_address) {
     text_.phdr_flags_ = PF_R | PF_X;
     bss_.phdr_flags_ = PF_R | PF_W;
     dynamic_.phdr_flags_ = PF_R | PF_W;
