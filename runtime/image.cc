@@ -132,18 +132,20 @@ mirror::Object* ImageHeader::GetImageRoot(ImageRoot image_root) const {
   return GetImageRoots()->Get(image_root);
 }
 
-mirror::ObjectArray<mirror::Object>* ImageHeader::GetImageRoots() const {
+mirror::ObjectArray<mirror::Object>* ImageHeader::GetImageRoots(bool use_read_barrier) const {
   // Need a read barrier as it's not visited during root scan.
   // Pass in the address of the local variable to the read barrier
   // rather than image_roots_ because it won't move (asserted below)
   // and it's a const member.
   mirror::ObjectArray<mirror::Object>* image_roots =
       reinterpret_cast<mirror::ObjectArray<mirror::Object>*>(image_roots_);
-  mirror::ObjectArray<mirror::Object>* result =
-      ReadBarrier::BarrierForRoot<mirror::ObjectArray<mirror::Object>, kWithReadBarrier>(
-          &image_roots);
-  DCHECK_EQ(image_roots, result);
-  return result;
+  if (use_read_barrier) {
+    mirror::ObjectArray<mirror::Object>* result =
+        ReadBarrier::BarrierForRoot<mirror::ObjectArray<mirror::Object>, kWithReadBarrier>(
+            &image_roots);
+    DCHECK_EQ(image_roots, result);
+  }
+  return image_roots;
 }
 
 ArtMethod* ImageHeader::GetImageMethod(ImageMethod index) const {

@@ -214,7 +214,7 @@ class PACKED(4) ImageHeader {
 
   mirror::Object* GetImageRoot(ImageRoot image_root) const
       SHARED_REQUIRES(Locks::mutator_lock_);
-  mirror::ObjectArray<mirror::Object>* GetImageRoots() const
+  mirror::ObjectArray<mirror::Object>* GetImageRoots(bool use_read_barrier = true) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void RelocateImage(off_t delta);

@@ -1032,12 +1032,14 @@ static bool RelocateInPlace(ImageHeader& image_header,
     bitmap->VisitMarkedRange(objects_begin, objects_end, fixup_object_visitor);
     FixupObjectAdapter fixup_adapter(boot_image, boot_oat, app_image, app_oat);
     // Fixup image roots.
-    CHECK(app_image.ContainsSource(reinterpret_cast<uintptr_t>(image_header.GetImageRoots())));
+    CHECK(app_image.ContainsSource(reinterpret_cast<uintptr_t>(
+        image_header.GetImageRoots(/*use_read_barrier*/false))));
     image_header.RelocateImageObjects(app_image.Delta());
     CHECK_EQ(image_header.GetImageBegin(), target_base);
     // Fix up dex cache DexFile pointers.
-    auto* dex_caches = image_header.GetImageRoot(ImageHeader::kDexCaches)->
-        AsObjectArray<mirror::DexCache>();
+    auto* dex_caches = image_header.GetImageRoots(/*use_read_barrier*/false)->Get<
+        kVerifyNone,
+        kWithoutReadBarrier>(ImageHeader::kDexCaches)->AsObjectArray<mirror::DexCache>();
     for (int32_t i = 0, count = dex_caches->GetLength(); i < count; ++i) {
       mirror::DexCache* dex_cache = dex_caches->Get(i);
       // Fix up dex cache pointers.
