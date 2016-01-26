@@ -547,9 +547,13 @@ TEST_ART_BROKEN_OPTIMIZING_READ_BARRIER_RUN_TESTS := \
   537-checker-arraycopy
 
 # Tests that should fail in the read barrier configuration with JIT.
+# 004: Occasional timeout: "TEST TIMED OUT!" (b/26786154).
 # 141: Disabled because of intermittent failures on the ART Builtbot (b/25866001).
+# 496: Occasional timeout: "Fault message: timeout: the monitored command dumped core" (b/26786304).
 TEST_ART_BROKEN_JIT_READ_BARRIER_RUN_TESTS := \
-  141-class-unload
+  004-ThreadStress \
+  141-class-unload \
+  496-checker-inlining-and-class-loader
 
 ifeq ($(ART_USE_READ_BARRIER),true)
   ifneq (,$(filter default,$(COMPILER_TYPES)))
