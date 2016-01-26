@@ -1027,7 +1027,7 @@ gc::space::ImageSpace* OatFileAssistant::OpenImageSpace(const OatFile* oat_file)
                                                                          oat_file,
                                                                          &error_msg);
   if (ret == nullptr) {
-    LOG(INFO) << "Failed to open app image " << art_file.c_str() << " " << error_msg;
+    VLOG(image) << "Failed to open app image " << art_file.c_str() << " " << error_msg;
   }
   return ret;
 }
