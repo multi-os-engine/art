@@ -174,6 +174,29 @@ void SsaLivenessAnalysis::ComputeLiveness() {
   ComputeLiveInAndLiveOutSets();
 }
 
+static bool IsNonMaterializedCondition(HInstruction* instruction) {
+  return instruction->IsCondition() && !instruction->AsCondition()->NeedsMaterialization();
+}
+
+static void ProcessInstructionInputs(HInstruction* instruction,
+                                     HInstruction* real_user,
+                                     BitVector* live_in) {
+  for (size_t i = 0, e = instruction->InputCount(); i < e; ++i) {
+    HInstruction* input = instruction->InputAt(i);
+    if (IsNonMaterializedCondition(input)) {
+      DCHECK_EQ(instruction, real_user);
+      ProcessInstructionInputs(input, real_user, live_in);
+    } else {
+      // Some instructions 'inline' their inputs, that is they do not need
+      // to be materialized.
+      if (input->HasSsaIndex() && instruction->GetLocations()->InAt(i).IsValid()) {
+        live_in->SetBit(input->GetSsaIndex());
+        input->GetLiveInterval()->AddUse(instruction, real_user, /* environment */ nullptr, i);
+      }
+    }
+  }
+}
+
 void SsaLivenessAnalysis::ComputeLiveRanges() {
   // Do a post order visit, adding inputs of instructions live in the block where
   // that instruction is defined, and killing instructions that are being visited.
@@ -242,20 +265,14 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
           }
           if (instruction != nullptr) {
             instruction->GetLiveInterval()->AddUse(
-                current, environment, i, should_be_live);
+                current, current, environment, i, should_be_live);
           }
         }
       }
 
       // All inputs of an instruction must be live.
-      for (size_t i = 0, e = current->InputCount(); i < e; ++i) {
-        HInstruction* input = current->InputAt(i);
-        // Some instructions 'inline' their inputs, that is they do not need
-        // to be materialized.
-        if (input->HasSsaIndex() && current->GetLocations()->InAt(i).IsValid()) {
-          live_in->SetBit(input->GetSsaIndex());
-          input->GetLiveInterval()->AddUse(current, /* environment */ nullptr, i);
-        }
+      if (!IsNonMaterializedCondition(current)) {
+        ProcessInstructionInputs(current, current, live_in);
       }
     }
 

@@ -113,12 +113,8 @@ class UsePosition : public ArenaObject<kArenaAllocSsaLiveness> {
         input_index_(input_index),
         position_(position),
         next_(next) {
-    DCHECK((user == nullptr)
-        || user->IsPhi()
-        || (GetPosition() == user->GetLifetimePosition() + 1)
-        || (GetPosition() == user->GetLifetimePosition()));
     DCHECK(environment == nullptr || user == nullptr);
-    DCHECK(next_ == nullptr || next->GetPosition() >= GetPosition());
+    DCHECK(next_ == nullptr || next->GetPosition() >= GetPosition()) << user->GetId();
   }
 
   static constexpr size_t kNoInput = -1;
@@ -244,12 +240,13 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
   }
 
   void AddUse(HInstruction* instruction,
+              HInstruction* real_user,
               HEnvironment* environment,
               size_t input_index,
               bool keep_alive = false) {
     // Set the use within the instruction.
     bool is_environment = (environment != nullptr);
-    size_t position = instruction->GetLifetimePosition() + 1;
+    size_t position = real_user->GetLifetimePosition() + 1;
     LocationSummary* locations = instruction->GetLocations();
     if (!is_environment) {
       if (locations->IsFixedInput(input_index) || locations->OutputUsesSameAs(input_index)) {
@@ -257,7 +254,8 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
         // requires to have inputs die at the instruction, so that input moves use the
         // location of the input just before that instruction (and not potential moves due
         // to splitting).
-        position = instruction->GetLifetimePosition();
+        DCHECK_EQ(instruction, real_user);
+        position = real_user->GetLifetimePosition();
       } else if (!locations->InAt(input_index).IsValid()) {
         return;
       }
@@ -267,11 +265,8 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
       AddBackEdgeUses(*instruction->GetBlock());
     }
 
-    DCHECK(position == instruction->GetLifetimePosition()
-           || position == instruction->GetLifetimePosition() + 1);
-
     if ((first_use_ != nullptr)
-        && (first_use_->GetUser() == instruction)
+        && (first_use_->GetUser() == real_user)
         && (first_use_->GetPosition() < position)) {
       // The user uses the instruction multiple times, and one use dies before the other.
       // We update the use list so that the latter is first.
