@@ -16,8 +16,14 @@
 
 # Test with full DWARF debugging information.
 # Check full signatures of methods.
-${RUN} "$@" -Xcompiler-option --generate-debug-info --args --full-signatures
+${RUN} "$@" -Xcompiler-option --generate-debug-info \
+            -Xcompiler-option --no-generate-mini-debug-info \
+            --args --full-signatures
+
+# Clear the cache for the second run.
+rm -rf $DEX_LOCATION/dalvik-cache/
 
 # Test with minimal compressed debugging information.
 # Check only method names (parameters are omitted to save space).
-${RUN} "$@" -Xcompiler-option --generate-mini-debug-info
+${RUN} "$@" -Xcompiler-option --no-generate-debug-info \
+            -Xcompiler-option --generate-mini-debug-info
