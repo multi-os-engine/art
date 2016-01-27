@@ -36,27 +36,27 @@ op-start arm64
     # (override example:) op OP_SUB_FLOAT_2ADDR arm-vfp
     # (fallback example:) op OP_SUB_FLOAT_2ADDR FALLBACK
 
-    op op_nop FALLBACK
-    op op_move FALLBACK
-    op op_move_from16 FALLBACK
-    op op_move_16 FALLBACK
+    # op op_nop FALLBACK
+    # op op_move FALLBACK
+    # op op_move_from16 FALLBACK
+    # op op_move_16 FALLBACK
     op op_move_wide FALLBACK
     op op_move_wide_from16 FALLBACK
     op op_move_wide_16 FALLBACK
-    op op_move_object FALLBACK
-    op op_move_object_from16 FALLBACK
-    op op_move_object_16 FALLBACK
-    op op_move_result FALLBACK
+    # op op_move_object FALLBACK
+    # op op_move_object_from16 FALLBACK
+    # op op_move_object_16 FALLBACK
+    # op op_move_result FALLBACK
     op op_move_result_wide FALLBACK
-    op op_move_result_object FALLBACK
+    # op op_move_result_object FALLBACK
     op op_move_exception FALLBACK
     op op_return_void FALLBACK
     op op_return FALLBACK
     op op_return_wide FALLBACK
     op op_return_object FALLBACK
-    op op_const_4 FALLBACK
-    op op_const_16 FALLBACK
-    op op_const FALLBACK
+    # op op_const_4 FALLBACK
+    # op op_const_16 FALLBACK
+    # op op_const FALLBACK
     op op_const_high16 FALLBACK
     op op_const_wide_16 FALLBACK
     op op_const_wide_32 FALLBACK
@@ -98,26 +98,26 @@ op-start arm64
     op op_if_gez FALLBACK
     op op_if_gtz FALLBACK
     op op_if_lez FALLBACK
-    op_unused_3e FALLBACK
-    op_unused_3f FALLBACK
-    op_unused_40 FALLBACK
-    op_unused_41 FALLBACK
-    op_unused_42 FALLBACK
-    op_unused_43 FALLBACK
-    op op_aget FALLBACK
+    # op op_unused_3e FALLBACK
+    # op op_unused_3f FALLBACK
+    # op op_unused_40 FALLBACK
+    # op op_unused_41 FALLBACK
+    # op op_unused_42 FALLBACK
+    # op op_unused_43 FALLBACK
+    # op op_aget FALLBACK
     op op_aget_wide FALLBACK
     op op_aget_object FALLBACK
-    op op_aget_boolean FALLBACK
-    op op_aget_byte FALLBACK
-    op op_aget_char FALLBACK
-    op op_aget_short FALLBACK
-    op op_aput FALLBACK
+    # op op_aget_boolean FALLBACK
+    # op op_aget_byte FALLBACK
+    # op op_aget_char FALLBACK
+    # op op_aget_short FALLBACK
+    # op op_aput FALLBACK
     op op_aput_wide FALLBACK
     op op_aput_object FALLBACK
-    op op_aput_boolean FALLBACK
-    op op_aput_byte FALLBACK
-    op op_aput_char FALLBACK
-    op op_aput_short FALLBACK
+    # op op_aput_boolean FALLBACK
+    # op op_aput_byte FALLBACK
+    # op op_aput_char FALLBACK
+    # op op_aput_short FALLBACK
     op op_iget FALLBACK
     op op_iget_wide FALLBACK
     op op_iget_object FALLBACK
@@ -146,19 +146,19 @@ op-start arm64
     op op_sput_byte FALLBACK
     op op_sput_char FALLBACK
     op op_sput_short FALLBACK
-    op op_invoke_virtual FALLBACK
-    op op_invoke_super FALLBACK
-    op op_invoke_direct FALLBACK
-    op op_invoke_static FALLBACK
-    op op_invoke_interface FALLBACK
+    # op op_invoke_virtual FALLBACK
+    # op op_invoke_super FALLBACK
+    # op op_invoke_direct FALLBACK
+    # op op_invoke_static FALLBACK
+    # op op_invoke_interface FALLBACK
     op op_return_void_no_barrier FALLBACK
-    op op_invoke_virtual_range FALLBACK
-    op op_invoke_super_range FALLBACK
-    op op_invoke_direct_range FALLBACK
-    op op_invoke_static_range FALLBACK
-    op op_invoke_interface_range FALLBACK
-    op_unused_79 FALLBACK
-    op_unused_7a FALLBACK
+    # op op_invoke_virtual_range FALLBACK
+    # op op_invoke_super_range FALLBACK
+    # op op_invoke_direct_range FALLBACK
+    # op op_invoke_static_range FALLBACK
+    # op op_invoke_interface_range FALLBACK
+    # op op_unused_79 FALLBACK
+    # op op_unused_7a FALLBACK
     op op_neg_int FALLBACK
     op op_not_int FALLBACK
     op op_neg_long FALLBACK
@@ -180,17 +180,17 @@ op-start arm64
     op op_int_to_byte FALLBACK
     op op_int_to_char FALLBACK
     op op_int_to_short FALLBACK
-    op op_add_int FALLBACK
-    op op_sub_int FALLBACK
-    op op_mul_int FALLBACK
-    op op_div_int FALLBACK
+    # op op_add_int FALLBACK
+    # op op_sub_int FALLBACK
+    # op op_mul_int FALLBACK
+    # op op_div_int FALLBACK
     op op_rem_int FALLBACK
-    op op_and_int FALLBACK
-    op op_or_int FALLBACK
-    op op_xor_int FALLBACK
-    op op_shl_int FALLBACK
-    op op_shr_int FALLBACK
-    op op_ushr_int FALLBACK
+    # op op_and_int FALLBACK
+    # op op_or_int FALLBACK
+    # op op_xor_int FALLBACK
+    # op op_shl_int FALLBACK
+    # op op_shr_int FALLBACK
+    # op op_ushr_int FALLBACK
     op op_add_long FALLBACK
     op op_sub_long FALLBACK
     op op_mul_long FALLBACK
@@ -202,27 +202,27 @@ op-start arm64
     op op_shl_long FALLBACK
     op op_shr_long FALLBACK
     op op_ushr_long FALLBACK
-    op op_add_float FALLBACK
-    op op_sub_float FALLBACK
-    op op_mul_float FALLBACK
-    op op_div_float FALLBACK
+    # op op_add_float FALLBACK
+    # op op_sub_float FALLBACK
+    # op op_mul_float FALLBACK
+    # op op_div_float FALLBACK
     op op_rem_float FALLBACK
     op op_add_double FALLBACK
     op op_sub_double FALLBACK
     op op_mul_double FALLBACK
     op op_div_double FALLBACK
     op op_rem_double FALLBACK
-    op op_add_int_2addr FALLBACK
-    op op_sub_int_2addr FALLBACK
-    op op_mul_int_2addr FALLBACK
+    # op op_add_int_2addr FALLBACK
+    # op op_sub_int_2addr FALLBACK
+    # op op_mul_int_2addr FALLBACK
     op op_div_int_2addr FALLBACK
     op op_rem_int_2addr FALLBACK
-    op op_and_int_2addr FALLBACK
-    op op_or_int_2addr FALLBACK
-    op op_xor_int_2addr FALLBACK
-    op op_shl_int_2addr FALLBACK
-    op op_shr_int_2addr FALLBACK
-    op op_ushr_int_2addr FALLBACK
+    # op op_and_int_2addr FALLBACK
+    # op op_or_int_2addr FALLBACK
+    # op op_xor_int_2addr FALLBACK
+    # op op_shl_int_2addr FALLBACK
+    # op op_shr_int_2addr FALLBACK
+    # op op_ushr_int_2addr FALLBACK
     op op_add_long_2addr FALLBACK
     op op_sub_long_2addr FALLBACK
     op op_mul_long_2addr FALLBACK
@@ -244,33 +244,33 @@ op-start arm64
     op op_mul_double_2addr FALLBACK
     op op_div_double_2addr FALLBACK
     op op_rem_double_2addr FALLBACK
-    op op_add_int_lit16 FALLBACK
-    op op_rsub_int FALLBACK
-    op op_mul_int_lit16 FALLBACK
+    # op op_add_int_lit16 FALLBACK
+    # op op_rsub_int FALLBACK
+    # op op_mul_int_lit16 FALLBACK
     op op_div_int_lit16 FALLBACK
     op op_rem_int_lit16 FALLBACK
-    op op_and_int_lit16 FALLBACK
-    op op_or_int_lit16 FALLBACK
-    op op_xor_int_lit16 FALLBACK
-    op op_add_int_lit8 FALLBACK
-    op op_rsub_int_lit8 FALLBACK
-    op op_mul_int_lit8 FALLBACK
+    # op op_and_int_lit16 FALLBACK
+    # op op_or_int_lit16 FALLBACK
+    # op op_xor_int_lit16 FALLBACK
+    # op op_add_int_lit8 FALLBACK
+    # op op_rsub_int_lit8 FALLBACK
+    # op op_mul_int_lit8 FALLBACK
     op op_div_int_lit8 FALLBACK
     op op_rem_int_lit8 FALLBACK
-    op op_and_int_lit8 FALLBACK
-    op op_or_int_lit8 FALLBACK
-    op op_xor_int_lit8 FALLBACK
-    op op_shl_int_lit8 FALLBACK
-    op op_shr_int_lit8 FALLBACK
-    op op_ushr_int_lit8 FALLBACK
+    # op op_and_int_lit8 FALLBACK
+    # op op_or_int_lit8 FALLBACK
+    # op op_xor_int_lit8 FALLBACK
+    # op op_shl_int_lit8 FALLBACK
+    # op op_shr_int_lit8 FALLBACK
+    # op op_ushr_int_lit8 FALLBACK
     op op_iget_quick FALLBACK
     op op_iget_wide_quick FALLBACK
     op op_iget_object_quick FALLBACK
     op op_iput_quick FALLBACK
     op op_iput_wide_quick FALLBACK
     op op_iput_object_quick FALLBACK
-    op op_invoke_virtual_quick FALLBACK
-    op op_invoke_virtual_range_quick FALLBACK
+    # op op_invoke_virtual_quick FALLBACK
+    # op op_invoke_virtual_range_quick FALLBACK
     op op_iput_boolean_quick FALLBACK
     op op_iput_byte_quick FALLBACK
     op op_iput_char_quick FALLBACK
@@ -279,19 +279,19 @@ op-start arm64
     op op_iget_byte_quick FALLBACK
     op op_iget_char_quick FALLBACK
     op op_iget_short_quick FALLBACK
-    op_unused_f3 FALLBACK
-    op_unused_f4 FALLBACK
-    op_unused_f5 FALLBACK
-    op_unused_f6 FALLBACK
-    op_unused_f7 FALLBACK
-    op_unused_f8 FALLBACK
-    op_unused_f9 FALLBACK
-    op_unused_fa FALLBACK
-    op_unused_fb FALLBACK
-    op_unused_fc FALLBACK
-    op_unused_fd FALLBACK
-    op_unused_fe FALLBACK
-    op_unused_ff FALLBACK
+    op op_invoke_lambda FALLBACK
+    # op op_unused_f4 FALLBACK
+    op op_capture_variable FALLBACK
+    op op_create_lambda FALLBACK
+    op op_liberate_variable FALLBACK
+    op op_box_lambda FALLBACK
+    op op_unbox_lambda FALLBACK
+    # op op_unused_fa FALLBACK
+    # op op_unused_fb FALLBACK
+    # op op_unused_fc FALLBACK
+    # op op_unused_fd FALLBACK
+    # op op_unused_fe FALLBACK
+    # op op_unused_ff FALLBACK
 op-end
 
 # common subroutines for asm
