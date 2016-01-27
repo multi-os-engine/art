@@ -51,8 +51,10 @@ class RosAllocSpace : public MallocSpace {
       OVERRIDE REQUIRES(!lock_);
   mirror::Object* Alloc(Thread* self, size_t num_bytes, size_t* bytes_allocated,
                         size_t* usable_size, size_t* bytes_tl_bulk_allocated) OVERRIDE {
-    return AllocNonvirtual(self, num_bytes, bytes_allocated, usable_size,
-                           bytes_tl_bulk_allocated);
+    mirror::Object* obj = AllocNonvirtual(self, num_bytes, bytes_allocated, usable_size,
+                                          bytes_tl_bulk_allocated);
+
+    return obj;
   }
   mirror::Object* AllocThreadUnsafe(Thread* self, size_t num_bytes, size_t* bytes_allocated,
                                     size_t* usable_size, size_t* bytes_tl_bulk_allocated)
@@ -68,7 +70,10 @@ class RosAllocSpace : public MallocSpace {
   size_t FreeList(Thread* self, size_t num_ptrs, mirror::Object** ptrs) OVERRIDE
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  mirror::Object* AllocNonvirtual(Thread* self, size_t num_bytes, size_t* bytes_allocated,
+  size_t FreeNonThread(Thread* self, mirror::Object* ptr)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+    mirror::Object* AllocNonvirtual(Thread* self, size_t num_bytes, size_t* bytes_allocated,
                                   size_t* usable_size, size_t* bytes_tl_bulk_allocated) {
     // RosAlloc zeroes memory internally.
     return AllocCommon(self, num_bytes, bytes_allocated, usable_size,
@@ -89,6 +94,10 @@ class RosAllocSpace : public MallocSpace {
   // run without allocating a new run.
   ALWAYS_INLINE mirror::Object* AllocThreadLocal(Thread* self, size_t num_bytes,
                                                  size_t* bytes_allocated);
+  // Free one object slot in an existing thread local run.
+  // Used for Parallel Copy in GSS
+  ALWAYS_INLINE bool FreeThreadLocal(Thread* self, size_t num_bytes,
+                                     mirror::Object* obj);
   size_t MaxBytesBulkAllocatedFor(size_t num_bytes) OVERRIDE {
     return MaxBytesBulkAllocatedForNonvirtual(num_bytes);
   }
