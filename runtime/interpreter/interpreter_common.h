@@ -71,7 +71,7 @@ namespace interpreter {
 
 template<bool do_access_check, bool transaction_active>
 extern JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
-                                ShadowFrame& shadow_frame, JValue result_register,
+                                ShadowFrame& shadow_frame, JValue& result_register,
                                 bool interpret_one_instruction);
 
 template<bool do_access_check, bool transaction_active>

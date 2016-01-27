@@ -36,27 +36,27 @@ op-start arm64
     # (override example:) op OP_SUB_FLOAT_2ADDR arm-vfp
     # (fallback example:) op OP_SUB_FLOAT_2ADDR FALLBACK
 
-    op op_nop FALLBACK
-    op op_move FALLBACK
-    op op_move_from16 FALLBACK
-    op op_move_16 FALLBACK
+    # op op_nop FALLBACK
+    # op op_move FALLBACK
+    # op op_move_from16 FALLBACK
+    # op op_move_16 FALLBACK
     op op_move_wide FALLBACK
     op op_move_wide_from16 FALLBACK
     op op_move_wide_16 FALLBACK
-    op op_move_object FALLBACK
-    op op_move_object_from16 FALLBACK
-    op op_move_object_16 FALLBACK
-    op op_move_result FALLBACK
+    # op op_move_object FALLBACK
+    # op op_move_object_from16 FALLBACK
+    # op op_move_object_16 FALLBACK
+    # op op_move_result FALLBACK
     op op_move_result_wide FALLBACK
-    op op_move_result_object FALLBACK
+    # op op_move_result_object FALLBACK
     op op_move_exception FALLBACK
     op op_return_void FALLBACK
     op op_return FALLBACK
     op op_return_wide FALLBACK
     op op_return_object FALLBACK
-    op op_const_4 FALLBACK
-    op op_const_16 FALLBACK
-    op op_const FALLBACK
+    # op op_const_4 FALLBACK
+    # op op_const_16 FALLBACK
+    # op op_const FALLBACK
     op op_const_high16 FALLBACK
     op op_const_wide_16 FALLBACK
     op op_const_wide_32 FALLBACK
@@ -98,12 +98,12 @@ op-start arm64
     op op_if_gez FALLBACK
     op op_if_gtz FALLBACK
     op op_if_lez FALLBACK
-    op_unused_3e FALLBACK
-    op_unused_3f FALLBACK
-    op_unused_40 FALLBACK
-    op_unused_41 FALLBACK
-    op_unused_42 FALLBACK
-    op_unused_43 FALLBACK
+    # op op_unused_3e FALLBACK
+    # op op_unused_3f FALLBACK
+    # op op_unused_40 FALLBACK
+    # op op_unused_41 FALLBACK
+    # op op_unused_42 FALLBACK
+    # op op_unused_43 FALLBACK
     op op_aget FALLBACK
     op op_aget_wide FALLBACK
     op op_aget_object FALLBACK
@@ -157,8 +157,8 @@ op-start arm64
     op op_invoke_direct_range FALLBACK
     op op_invoke_static_range FALLBACK
     op op_invoke_interface_range FALLBACK
-    op_unused_79 FALLBACK
-    op_unused_7a FALLBACK
+    # op op_unused_79 FALLBACK
+    # op op_unused_7a FALLBACK
     op op_neg_int FALLBACK
     op op_not_int FALLBACK
     op op_neg_long FALLBACK
@@ -279,19 +279,19 @@ op-start arm64
     op op_iget_byte_quick FALLBACK
     op op_iget_char_quick FALLBACK
     op op_iget_short_quick FALLBACK
-    op_unused_f3 FALLBACK
-    op_unused_f4 FALLBACK
-    op_unused_f5 FALLBACK
-    op_unused_f6 FALLBACK
-    op_unused_f7 FALLBACK
-    op_unused_f8 FALLBACK
-    op_unused_f9 FALLBACK
-    op_unused_fa FALLBACK
-    op_unused_fb FALLBACK
-    op_unused_fc FALLBACK
-    op_unused_fd FALLBACK
-    op_unused_fe FALLBACK
-    op_unused_ff FALLBACK
+    op op_invoke_lambda FALLBACK
+    # op op_unused_f4 FALLBACK
+    op op_capture_variable FALLBACK
+    op op_create_lambda FALLBACK
+    op op_liberate_variable FALLBACK
+    op op_box_lambda FALLBACK
+    op op_unbox_lambda FALLBACK
+    # op op_unused_fa FALLBACK
+    # op op_unused_fb FALLBACK
+    # op op_unused_fc FALLBACK
+    # op op_unused_fd FALLBACK
+    # op op_unused_fe FALLBACK
+    # op op_unused_ff FALLBACK
 op-end
 
 # common subroutines for asm
