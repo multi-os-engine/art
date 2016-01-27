@@ -114,7 +114,8 @@ size_t BumpPointerSpace::RevokeAllThreadLocalBuffers() {
 void BumpPointerSpace::AssertThreadLocalBuffersAreRevoked(Thread* thread) {
   if (kIsDebugBuild) {
     MutexLock mu(Thread::Current(), block_lock_);
-    DCHECK(!thread->HasTlab());
+    DCHECK(!thread->HasTlab() ||
+           !HasAddress(reinterpret_cast<mirror::Object*>(thread->GetTlabStart())));
   }
 }
 
@@ -222,7 +223,9 @@ uint64_t BumpPointerSpace::GetBytesAllocated() {
   // since there can exist multiple bump pointer spaces which exist at the same time.
   if (num_blocks_ > 0) {
     for (Thread* thread : thread_list) {
-      total += thread->GetThreadLocalBytesAllocated();
+      if (HasAddress(reinterpret_cast<mirror::Object*>(thread->GetTlabStart()))) {
+        total += thread->GetThreadLocalBytesAllocated();
+      }
     }
   }
   return total;
@@ -240,20 +243,26 @@ uint64_t BumpPointerSpace::GetObjectsAllocated() {
   // since there can exist multiple bump pointer spaces which exist at the same time.
   if (num_blocks_ > 0) {
     for (Thread* thread : thread_list) {
-      total += thread->GetThreadLocalObjectsAllocated();
+      if (HasAddress(reinterpret_cast<mirror::Object*>(thread->GetTlabStart()))) {
+        total += thread->GetThreadLocalObjectsAllocated();
+      }
     }
   }
   return total;
 }
 
 void BumpPointerSpace::RevokeThreadLocalBuffersLocked(Thread* thread) {
-  objects_allocated_.FetchAndAddSequentiallyConsistent(thread->GetThreadLocalObjectsAllocated());
-  bytes_allocated_.FetchAndAddSequentiallyConsistent(thread->GetThreadLocalBytesAllocated());
-  thread->SetTlab(nullptr, nullptr);
+  if (HasAddress(reinterpret_cast<mirror::Object*>(thread->GetTlabStart()))) {
+    objects_allocated_.FetchAndAddSequentiallyConsistent(thread->GetThreadLocalObjectsAllocated());
+    bytes_allocated_.FetchAndAddSequentiallyConsistent(thread->GetThreadLocalBytesAllocated());
+    thread->SetTlab(nullptr, nullptr);
+  }
 }
 
 bool BumpPointerSpace::AllocNewTlab(Thread* self, size_t bytes) {
   MutexLock mu(Thread::Current(), block_lock_);
+  DCHECK(HasAddress(reinterpret_cast<mirror::Object*>(self->GetTlabStart())) ||
+         self->GetTlabStart() == nullptr);
   RevokeThreadLocalBuffersLocked(self);
   uint8_t* start = AllocBlock(bytes);
   if (start == nullptr) {

@@ -324,6 +324,7 @@ ifeq ($(ART_USE_READ_BARRIER),true)
   art_cflags += -fstack-protector
 endif
 
+ART_USE_TLAB := true
 ifeq ($(ART_USE_TLAB),true)
   art_cflags += -DART_USE_TLAB=1
 endif

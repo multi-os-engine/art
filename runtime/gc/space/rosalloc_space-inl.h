@@ -102,6 +102,13 @@ inline mirror::Object* RosAllocSpace::AllocThreadLocal(Thread* self, size_t num_
       rosalloc_->AllocFromThreadLocalRun(self, num_bytes, bytes_allocated));
 }
 
+inline bool RosAllocSpace::FreeThreadLocal(Thread* self, size_t num_bytes,
+                                                      mirror::Object* obj) {
+  DCHECK_GT(num_bytes, 0u);
+  return rosalloc_->FreeFromThreadLocalRun(self, num_bytes,
+                                           reinterpret_cast<void*>(obj));
+}
+
 inline size_t RosAllocSpace::MaxBytesBulkAllocatedForNonvirtual(size_t num_bytes) {
   return rosalloc_->MaxBytesBulkAllocatedFor(num_bytes);
 }

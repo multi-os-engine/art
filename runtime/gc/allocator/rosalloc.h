@@ -810,7 +810,9 @@ class RosAlloc {
   // Allocate the given allocation request in an existing thread local
   // run without allocating a new run.
   ALWAYS_INLINE void* AllocFromThreadLocalRun(Thread* self, size_t size, size_t* bytes_allocated);
-
+  // Free object in thread local run.
+  // Used for parallel copy in GSS.
+  ALWAYS_INLINE bool FreeFromThreadLocalRun(Thread* self, size_t size, void* addr);
   // Returns the maximum bytes that could be allocated for the given
   // size in bulk, that is the maximum value for the
   // bytes_allocated_bulk out param returned by RosAlloc::Alloc().

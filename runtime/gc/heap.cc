@@ -130,6 +130,7 @@ Heap::Heap(size_t initial_size,
            size_t large_object_threshold,
            size_t parallel_gc_threads,
            size_t conc_gc_threads,
+           size_t first_iter_copy_size,
            bool low_memory_mode,
            size_t long_pause_log_threshold,
            size_t long_gc_log_threshold,
@@ -155,6 +156,7 @@ Heap::Heap(size_t initial_size,
       pending_task_lock_(nullptr),
       parallel_gc_threads_(parallel_gc_threads),
       conc_gc_threads_(conc_gc_threads),
+      first_iter_copy_size_(first_iter_copy_size),
       low_memory_mode_(low_memory_mode),
       long_pause_log_threshold_(long_pause_log_threshold),
       long_gc_log_threshold_(long_gc_log_threshold),
@@ -3150,6 +3152,17 @@ void Heap::RevokeAllThreadLocalAllocationStacks(Thread* self) {
   }
 }
 
+void Heap::AssertAllThreadLocalBuffersAreRevoked() {
+  if (kIsDebugBuild) {
+    if (rosalloc_space_ != nullptr) {
+      rosalloc_space_->AssertAllThreadLocalBuffersAreRevoked();
+    }
+    if (bump_pointer_space_ != nullptr) {
+      bump_pointer_space_->AssertAllThreadLocalBuffersAreRevoked();
+    }
+  }
+}
+
 void Heap::AssertThreadLocalBuffersAreRevoked(Thread* thread) {
   if (kIsDebugBuild) {
     if (rosalloc_space_ != nullptr) {
@@ -3725,10 +3738,10 @@ void Heap::RequestTrim(Thread* self) {
   task_processor_->AddTask(self, added_task);
 }
 
-void Heap::RevokeThreadLocalBuffers(Thread* thread) {
+void Heap::RevokeThreadLocalBuffers(Thread* thread, bool record_free) {
   if (rosalloc_space_ != nullptr) {
     size_t freed_bytes_revoke = rosalloc_space_->RevokeThreadLocalBuffers(thread);
-    if (freed_bytes_revoke > 0U) {
+    if (record_free && freed_bytes_revoke > 0U) {
       num_bytes_freed_revoke_.FetchAndAddSequentiallyConsistent(freed_bytes_revoke);
       CHECK_GE(num_bytes_allocated_.LoadRelaxed(), num_bytes_freed_revoke_.LoadRelaxed());
     }
@@ -3751,10 +3764,10 @@ void Heap::RevokeRosAllocThreadLocalBuffers(Thread* thread) {
   }
 }
 
-void Heap::RevokeAllThreadLocalBuffers() {
+void Heap::RevokeAllThreadLocalBuffers(bool record_free) {
   if (rosalloc_space_ != nullptr) {
     size_t freed_bytes_revoke = rosalloc_space_->RevokeAllThreadLocalBuffers();
-    if (freed_bytes_revoke > 0U) {
+    if (record_free && freed_bytes_revoke > 0U) {
       num_bytes_freed_revoke_.FetchAndAddSequentiallyConsistent(freed_bytes_revoke);
       CHECK_GE(num_bytes_allocated_.LoadRelaxed(), num_bytes_freed_revoke_.LoadRelaxed());
     }

@@ -86,6 +86,14 @@ class SemiSpace : public GarbageCollector {
   // Set the space where we copy objects from.
   void SetFromSpace(space::ContinuousMemMapAllocSpace* from_space);
 
+  // Get from space.
+  space::ContinuousMemMapAllocSpace* GetFromSpace();
+  // Get to space.
+  space::ContinuousMemMapAllocSpace* GetToSpace();
+  // Get promote space.
+  space::ContinuousMemMapAllocSpace* GetPromoSpace();
+  // Used by parallel copying task to determine the promoted space.
+  bool IsCollectFromSpaceOnly();
   // Set whether or not we swap the semi spaces in the heap. This needs to be done with mutators
   // suspended.
   void SetSwapSemiSpaces(bool swap_semi_spaces) {
@@ -196,8 +204,50 @@ class SemiSpace : public GarbageCollector {
   inline mirror::Object* GetForwardingAddressInFromSpace(mirror::Object* obj) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  inline bool IsMarkedParallel(mirror::Object* obj)
+      SHARED_REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_);
   // Revoke all the thread-local buffers.
   void RevokeAllThreadLocalBuffers();
+  // Get the first iteration copy task size.
+  size_t GetFirstIterCopySize() const;
+  // Get thread count for parallel copy.
+  size_t GetThreadCount() const;
+
+  // Used to fill a memory block when updating the forwarding pointer fails.
+  ALWAYS_INLINE void FillWithDummyObject(mirror::Object* dummy_obj, size_t byte_size)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  virtual mirror::Object* MarkNonForwardedObjectParallel(mirror::Object* obj,
+                                                         bool* win,
+                                                         void* task)
+      SHARED_REQUIRES(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
+
+  mirror::Object* TryInstallForwardingAddress(mirror::Object* obj,
+                                              space::ContinuousMemMapAllocSpace* dest_space,
+                                              size_t* bytes_allocated,
+                                              bool* win) ALWAYS_INLINE
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  template<bool kPoisonReference>
+  void MarkParallel(mirror::ObjectReference<kPoisonReference, mirror::Object>* obj_ptr,
+                    void* task) ALWAYS_INLINE
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(Locks::heap_bitmap_lock_);
+
+  template<bool kPoisonReferences>
+  void MarkObjectIfNotInToSpaceParallel(mirror::ObjectReference<kPoisonReferences, mirror::Object>* obj_ptr,
+                                        void* task)
+      REQUIRES(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
+
+  // Process the mark stack parallel.
+  void ProcessMarkStackParallel(size_t thread_count)
+      REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_);
+
+  template<typename MarkVisitor, typename ReferenceVisitor>
+  ALWAYS_INLINE void ScanObjectVisit(mirror::Object* obj,
+                                     const MarkVisitor& visitor,
+                                     const ReferenceVisitor& ref_visitor)
+      SHARED_REQUIRES(Locks::heap_bitmap_lock_, Locks::mutator_lock_);
 
   // Current space, we check this space first to avoid searching for the appropriate space for an
   // object.
@@ -233,6 +283,7 @@ class SemiSpace : public GarbageCollector {
   // of how many bytes of objects have been copied so far from the
   // bump pointer space to the non-moving space.
   uint64_t bytes_promoted_;
+  uint64_t bytes_wasted_;
 
   // Used for the generational mode. Keeps track of how many bytes of
   // objects have been copied so far from the bump pointer space to
@@ -271,8 +322,23 @@ class SemiSpace : public GarbageCollector {
   // Whether or not we swap the semi spaces in the heap during the marking phase.
   bool swap_semi_spaces_;
 
+  AtomicInteger work_chunks_created_;
+  AtomicInteger work_chunks_deleted_;
+  Atomic<size_t> bytes_promoted_parallel_;
+  Atomic<size_t> bytes_wasted_promoted_parallel_;
+  Atomic<size_t> objects_promoted_parallel_;
+  Atomic<size_t> objects_moved_parallel_;
+  Atomic<size_t> bytes_moved_parallel_;
+  Atomic<size_t> dummy_bytes_;
+  Atomic<size_t> dummy_objects_;
+  Atomic<size_t> fallback_bytes_parallel_;
+  Atomic<size_t> fallback_objects_parallel_;
+  Atomic<size_t> wasted_bytes_;
+
  private:
   friend class BitmapSetSlowPathVisitor;
+  friend class SSBitmapSetSlowPathVisitor;
+  friend class MarkStackCopyTask;
   DISALLOW_IMPLICIT_CONSTRUCTORS(SemiSpace);
 };
 

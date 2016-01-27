@@ -203,6 +203,14 @@ size_t RosAllocSpace::Free(Thread* self, mirror::Object* ptr) {
   return rosalloc_->Free(self, ptr);
 }
 
+size_t RosAllocSpace::FreeNonThread(Thread* self, mirror::Object* ptr) {
+  if (kDebugSpaces) {
+    CHECK(ptr != nullptr);
+    CHECK(Contains(ptr)) << "Free (" << ptr << ") not in bounds of heap " << *this;
+  }
+  return rosalloc_->Free(self, ptr);
+}
+
 size_t RosAllocSpace::FreeList(Thread* self, size_t num_ptrs, mirror::Object** ptrs) {
   DCHECK(ptrs != nullptr);
 

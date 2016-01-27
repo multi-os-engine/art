@@ -965,6 +965,7 @@ class Thread {
   size_t TlabSize() const;
   // Doesn't check that there is room.
   mirror::Object* AllocTlab(size_t bytes);
+  void RollBackTlab(size_t bytes);
   void SetTlab(uint8_t* start, uint8_t* end);
   bool HasTlab() const;
   uint8_t* GetTlabStart() {
