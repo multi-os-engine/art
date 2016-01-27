@@ -2268,7 +2268,7 @@ void Heap::ChangeCollector(CollectorType collector_type) {
 class ZygoteCompactingCollector FINAL : public collector::SemiSpace {
  public:
   ZygoteCompactingCollector(gc::Heap* heap, bool is_running_on_memory_tool)
-      : SemiSpace(heap, false, "zygote collector"),
+      : SemiSpace(heap, false, "zygote collector", false),
         bin_live_bitmap_(nullptr),
         bin_mark_bitmap_(nullptr),
         is_running_on_memory_tool_(is_running_on_memory_tool) {}
@@ -3196,6 +3196,17 @@ void Heap::RevokeAllThreadLocalAllocationStacks(Thread* self) {
   }
 }
 
+void Heap::AssertAllThreadLocalBuffersAreRevoked() {
+  if (kIsDebugBuild) {
+    if (rosalloc_space_ != nullptr) {
+      rosalloc_space_->AssertAllThreadLocalBuffersAreRevoked();
+    }
+    if (bump_pointer_space_ != nullptr) {
+      bump_pointer_space_->AssertAllThreadLocalBuffersAreRevoked();
+    }
+  }
+}
+
 void Heap::AssertThreadLocalBuffersAreRevoked(Thread* thread) {
   if (kIsDebugBuild) {
     if (rosalloc_space_ != nullptr) {
@@ -3770,10 +3781,10 @@ void Heap::RequestTrim(Thread* self) {
   task_processor_->AddTask(self, added_task);
 }
 
-void Heap::RevokeThreadLocalBuffers(Thread* thread) {
+void Heap::RevokeThreadLocalBuffers(Thread* thread, bool record_free) {
   if (rosalloc_space_ != nullptr) {
     size_t freed_bytes_revoke = rosalloc_space_->RevokeThreadLocalBuffers(thread);
-    if (freed_bytes_revoke > 0U) {
+    if (record_free && freed_bytes_revoke > 0U) {
       num_bytes_freed_revoke_.FetchAndAddSequentiallyConsistent(freed_bytes_revoke);
       CHECK_GE(num_bytes_allocated_.LoadRelaxed(), num_bytes_freed_revoke_.LoadRelaxed());
     }
@@ -3796,10 +3807,10 @@ void Heap::RevokeRosAllocThreadLocalBuffers(Thread* thread) {
   }
 }
 
-void Heap::RevokeAllThreadLocalBuffers() {
+void Heap::RevokeAllThreadLocalBuffers(bool record_free) {
   if (rosalloc_space_ != nullptr) {
     size_t freed_bytes_revoke = rosalloc_space_->RevokeAllThreadLocalBuffers();
-    if (freed_bytes_revoke > 0U) {
+    if (record_free && freed_bytes_revoke > 0U) {
       num_bytes_freed_revoke_.FetchAndAddSequentiallyConsistent(freed_bytes_revoke);
       CHECK_GE(num_bytes_allocated_.LoadRelaxed(), num_bytes_freed_revoke_.LoadRelaxed());
     }

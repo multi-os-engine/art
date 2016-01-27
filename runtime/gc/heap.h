@@ -470,11 +470,12 @@ class Heap {
 
   void AddFinalizerReference(Thread* self, mirror::Object** object);
 
-  // Returns the number of bytes currently allocated.
   size_t GetBytesAllocated() const {
     return num_bytes_allocated_.LoadSequentiallyConsistent();
   }
-
+  size_t GetRevokeBytes() const {
+    return num_bytes_freed_revoke_.LoadSequentiallyConsistent();
+  }
   // Returns the number of objects currently allocated.
   size_t GetObjectsAllocated() const
       REQUIRES(!Locks::heap_bitmap_lock_);
@@ -547,9 +548,10 @@ class Heap {
   // Deflate monitors, ... and trim the spaces.
   void Trim(Thread* self) REQUIRES(!*gc_complete_lock_);
 
-  void RevokeThreadLocalBuffers(Thread* thread);
+  void RevokeThreadLocalBuffers(Thread* thread, bool record_free = true);
   void RevokeRosAllocThreadLocalBuffers(Thread* thread);
-  void RevokeAllThreadLocalBuffers();
+  void RevokeAllThreadLocalBuffers(bool record_free = true);
+  void AssertAllThreadLocalBuffersAreRevoked();
   void AssertThreadLocalBuffersAreRevoked(Thread* thread);
   void AssertAllBumpPointerSpaceThreadLocalBuffersAreRevoked();
   void RosAllocVerification(TimingLogger* timings, const char* name)
@@ -623,7 +625,6 @@ class Heap {
   space::RosAllocSpace* GetRosAllocSpace() const {
     return rosalloc_space_;
   }
-
   // Return the corresponding rosalloc space.
   space::RosAllocSpace* GetRosAllocSpace(gc::allocator::RosAlloc* rosalloc) const
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -681,6 +682,7 @@ class Heap {
   size_t GetConcGCThreadCount() const {
     return conc_gc_threads_;
   }
+
   accounting::ModUnionTable* FindModUnionTableFromSpace(space::Space* space);
   void AddModUnionTable(accounting::ModUnionTable* mod_union_table);
 

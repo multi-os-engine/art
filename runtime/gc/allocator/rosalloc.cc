@@ -890,6 +890,21 @@ void RosAlloc::Run::FreeSlot(void* ptr) {
   }
 }
 
+void RosAlloc::Run::FreeSlotForThreadLocalRun(void* ptr) {
+  DCHECK(IsThreadLocal());
+  const uint8_t idx = size_bracket_idx_;
+  const size_t bracket_size = bracketSizes[idx];
+  Slot* slot = ToSlot(ptr);
+  // Zero out the memory.
+  // TODO: Investigate alternate memset since ptr is guaranteed to be aligned to 16.
+  memset(slot, 0, bracket_size);
+  free_list_.Add(slot);
+  if (kTraceRosAlloc) {
+    LOG(INFO) << "RosAlloc::Run::FreeSlot() : " << slot
+              << ", bracket_size=" << std::dec << bracket_size << ", slot_idx=" << SlotIndex(slot);
+  }
+}
+
 inline bool RosAlloc::Run::MergeThreadLocalFreeListToFreeList(bool* is_all_free_after_out) {
   DCHECK(IsThreadLocal());
   // Merge the thread local free list into the free list and clear the thread local free list.
