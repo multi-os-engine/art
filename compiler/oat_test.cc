@@ -183,6 +183,7 @@ class OatTest : public CommonCompilerTest {
                                          compiler_driver_->GetInstructionSet(),
                                          compiler_driver_->GetInstructionSetFeatures(),
                                          &key_value_store,
+                                         /* verify */ false,   // Built dex files can't be verified.
                                          &opened_dex_files_map,
                                          &opened_dex_files)) {
       return false;
