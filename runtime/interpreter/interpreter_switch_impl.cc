@@ -81,7 +81,7 @@ static bool IsExperimentalInstructionEnabled(const Instruction *inst) {
 
 template<bool do_access_check, bool transaction_active>
 JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
-                         ShadowFrame& shadow_frame, JValue result_register,
+                         ShadowFrame& shadow_frame, JValue& result_register,
                          bool interpret_one_instruction) {
   constexpr bool do_assignability_check = do_access_check;
   if (UNLIKELY(!shadow_frame.HasReferenceArray())) {
@@ -2398,19 +2398,19 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
 // Explicit definitions of ExecuteSwitchImpl.
 template SHARED_REQUIRES(Locks::mutator_lock_) HOT_ATTR
 JValue ExecuteSwitchImpl<true, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                      ShadowFrame& shadow_frame, JValue result_register,
+                                      ShadowFrame& shadow_frame, JValue& result_register,
                                       bool interpret_one_instruction);
 template SHARED_REQUIRES(Locks::mutator_lock_) HOT_ATTR
 JValue ExecuteSwitchImpl<false, false>(Thread* self, const DexFile::CodeItem* code_item,
-                                       ShadowFrame& shadow_frame, JValue result_register,
+                                       ShadowFrame& shadow_frame, JValue& result_register,
                                        bool interpret_one_instruction);
 template SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteSwitchImpl<true, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                     ShadowFrame& shadow_frame, JValue result_register,
+                                     ShadowFrame& shadow_frame, JValue& result_register,
                                      bool interpret_one_instruction);
 template SHARED_REQUIRES(Locks::mutator_lock_)
 JValue ExecuteSwitchImpl<false, true>(Thread* self, const DexFile::CodeItem* code_item,
-                                      ShadowFrame& shadow_frame, JValue result_register,
+                                      ShadowFrame& shadow_frame, JValue& result_register,
                                       bool interpret_one_instruction);
 
 }  // namespace interpreter
