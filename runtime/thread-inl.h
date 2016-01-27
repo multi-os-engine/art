@@ -241,6 +241,12 @@ inline mirror::Object* Thread::AllocTlab(size_t bytes) {
   return ret;
 }
 
+inline void Thread::RollBackTlab(size_t bytes) {
+  --tlsPtr_.thread_local_objects;
+  tlsPtr_.thread_local_pos -= bytes;
+  return;
+}
+
 inline bool Thread::PushOnThreadLocalAllocationStack(mirror::Object* obj) {
   DCHECK_LE(tlsPtr_.thread_local_alloc_stack_top, tlsPtr_.thread_local_alloc_stack_end);
   if (tlsPtr_.thread_local_alloc_stack_top < tlsPtr_.thread_local_alloc_stack_end) {

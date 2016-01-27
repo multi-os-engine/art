@@ -526,6 +526,13 @@ bool ParsedOptions::DoParse(const RuntimeOptions& options,
     }
 
     args.Set(M::BackgroundGc, BackgroundGcOption { background_collector_type_ });
+
+    // If foregroud is SS/GSS, Enable Parallel GC without considering kDefaultEnableParallelGC.
+    if (collector_type_ == gc::kCollectorTypeGSS ||
+        collector_type_ == gc::kCollectorTypeSS) {
+        args.SetIfMissing(M::ParallelGCThreads,
+            static_cast<unsigned int>(sysconf(_SC_NPROCESSORS_CONF) - 1u) );
+    }
   }
 
   // If a reference to the dalvik core.jar snuck in, replace it with
