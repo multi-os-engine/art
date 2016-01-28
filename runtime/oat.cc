@@ -466,6 +466,10 @@ bool OatHeader::IsDebuggable() const {
   return IsKeyEnabled(OatHeader::kDebuggableKey);
 }
 
+bool OatHeader::IsVerifyAtRuntime() const {
+  return IsKeyEnabled(OatHeader::kVerifyAtRuntimeKey);
+}
+
 bool OatHeader::IsKeyEnabled(const char* key) const {
   const char* key_value = GetStoreValueByKey(key);
   return (key_value != nullptr && strncmp(key_value, kTrueValue, sizeof(kTrueValue)) == 0);

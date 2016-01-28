@@ -461,6 +461,11 @@ bool OatFileAssistant::GivenOatFileIsOutOfDate(const OatFile& file) {
     }
   }
 
+  if (file.IsVerifyAtRuntime()) {
+    VLOG(oat) << "Oat file is verify-at-runtime. Image checksum test skipped.";
+    return false;
+  }
+
   // Verify the image checksum
   const ImageInfo* image_info = GetImageInfo();
   if (image_info == nullptr) {
@@ -486,7 +491,7 @@ bool OatFileAssistant::GivenOatFileIsUpToDate(const OatFile& file) {
     return false;
   }
 
-  if (file.IsPic()) {
+  if (file.IsPic() || file.IsVerifyAtRuntime()) {
     return true;
   }
 
