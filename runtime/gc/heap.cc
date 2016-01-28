@@ -357,7 +357,10 @@ Heap::Heap(size_t initial_size,
   std::unique_ptr<MemMap> main_mem_map_2;
 
   // Gross hack to make dex2oat deterministic.
-  if (requested_alloc_space_begin == nullptr && Runtime::Current()->IsAotCompiler()) {
+  if (foreground_collector_type_ != kCollectorTypeGSS &&
+      requested_alloc_space_begin == nullptr &&
+      Runtime::Current()->IsAotCompiler()) {
+    // Disabled for GSS due to failing image_test.
     requested_alloc_space_begin = reinterpret_cast<uint8_t*>(kAllocSpaceBeginForDeterministicAoT);
   }
   uint8_t* request_begin = requested_alloc_space_begin;
