@@ -33,7 +33,8 @@ struct MethodDebugInfo;
 template <typename ElfTypes>
 void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
                     const ArrayRef<const MethodDebugInfo>& method_infos,
-                    CFIFormat cfi_format);
+                    CFIFormat cfi_format,
+                    bool write_oat_patches);
 
 std::vector<uint8_t> MakeMiniDebugInfo(InstructionSet isa,
                                        size_t rodata_section_size,

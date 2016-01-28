@@ -1440,11 +1440,12 @@ static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
 template <typename ElfTypes>
 void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
                     const ArrayRef<const MethodDebugInfo>& method_infos,
-                    CFIFormat cfi_format) {
+                    CFIFormat cfi_format,
+                    bool write_oat_patches) {
   // Add methods to .symtab.
   WriteDebugSymbols(builder, method_infos, true /* with_signature */);
   // Generate CFI (stack unwinding information).
-  WriteCFISection(builder, method_infos, cfi_format, true /* write_oat_patches */);
+  WriteCFISection(builder, method_infos, cfi_format, write_oat_patches);
   // Write DWARF .debug_* sections.
   WriteDebugSections(builder, method_infos);
 }
@@ -1539,10 +1540,12 @@ static ArrayRef<const uint8_t> WriteDebugElfFileForMethodInternal(
   buffer.reserve(KB);
   VectorOutputStream out("Debug ELF file", &buffer);
   std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(isa, &out));
-  builder->Start();
+  // No program headers since the ELF file is not linked and has no allocated sections.
+  builder->Start(false /* write_program_headers */);
   WriteDebugInfo(builder.get(),
                  ArrayRef<const MethodDebugInfo>(&method_info, 1),
-                 DW_DEBUG_FRAME_FORMAT);
+                 DW_DEBUG_FRAME_FORMAT,
+                 false /* write_oat_patches */);
   builder->End();
   CHECK(builder->Good());
   // Make a copy of the buffer.  We want to shrink it anyway.
@@ -1569,8 +1572,8 @@ static ArrayRef<const uint8_t> WriteDebugElfFileForClassesInternal(
   buffer.reserve(KB);
   VectorOutputStream out("Debug ELF file", &buffer);
   std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(isa, &out));
-  builder->Start();
-
+  // No program headers since the ELF file is not linked and has no allocated sections.
+  builder->Start(false /* write_program_headers */);
   DebugInfoWriter<ElfTypes> info_writer(builder.get());
   info_writer.Start();
   info_writer.WriteTypes(types);
@@ -1598,10 +1601,13 @@ ArrayRef<const uint8_t> WriteDebugElfFileForClasses(const InstructionSet isa,
 template void WriteDebugInfo<ElfTypes32>(
     ElfBuilder<ElfTypes32>* builder,
     const ArrayRef<const MethodDebugInfo>& method_infos,
-    CFIFormat cfi_format);
+    CFIFormat cfi_format,
+    bool write_oat_patches);
 template void WriteDebugInfo<ElfTypes64>(
     ElfBuilder<ElfTypes64>* builder,
     const ArrayRef<const MethodDebugInfo>& method_infos,
-    CFIFormat cfi_format);
+    CFIFormat cfi_format,
+    bool write_oat_patches);
+
 }  // namespace dwarf
 }  // namespace art
