@@ -4270,8 +4270,10 @@ void CodeGeneratorX86::GenerateMemoryBarrier(MemBarrierKind kind) {
       // nop
       break;
     }
-    default:
-      LOG(FATAL) << "Unexpected memory barrier " << kind;
+    case MemBarrierKind::kNTStoreStore:
+      // Non-Temporal Store/Store needs a sfence or mfence.
+      MemoryFence(/* non-temporal */ true);
+      break;
   }
 }
 
