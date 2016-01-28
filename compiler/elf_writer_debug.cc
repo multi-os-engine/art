@@ -1099,10 +1099,12 @@ class DebugInfoWriter {
     writer.Write(types);
   }
 
-  void End() {
+  void End(bool write_oat_patches) {
     builder_->GetDebugInfo()->End();
-    builder_->WritePatches(".debug_info.oat_patches",
-                           ArrayRef<const uintptr_t>(debug_info_patches_));
+    if (write_oat_patches) {
+      builder_->WritePatches(".debug_info.oat_patches",
+                             ArrayRef<const uintptr_t>(debug_info_patches_));
+    }
     builder_->WriteSection(".debug_abbrev", &debug_abbrev_.Data());
     builder_->WriteSection(".debug_str", &debug_str_.Data());
     builder_->WriteSection(".debug_loc", &debug_loc_);
@@ -1313,10 +1315,12 @@ class DebugLineWriter {
     return buffer.size();
   }
 
-  void End() {
+  void End(bool write_oat_patches) {
     builder_->GetDebugLine()->End();
-    builder_->WritePatches(".debug_line.oat_patches",
-                           ArrayRef<const uintptr_t>(debug_line_patches));
+    if (write_oat_patches) {
+      builder_->WritePatches(".debug_line.oat_patches",
+                             ArrayRef<const uintptr_t>(debug_line_patches));
+    }
   }
 
  private:
@@ -1326,7 +1330,8 @@ class DebugLineWriter {
 
 template<typename ElfTypes>
 static void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
-                               const ArrayRef<const MethodDebugInfo>& method_infos) {
+                               const ArrayRef<const MethodDebugInfo>& method_infos,
+                               bool write_oat_patches) {
   // Group the methods into compilation units based on source file.
   std::vector<CompilationUnit> compilation_units;
   const char* last_source_file = nullptr;
@@ -1350,7 +1355,7 @@ static void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
     for (auto& compilation_unit : compilation_units) {
       line_writer.WriteCompilationUnit(compilation_unit);
     }
-    line_writer.End();
+    line_writer.End(write_oat_patches);
   }
 
   // Write .debug_info section.
@@ -1360,7 +1365,7 @@ static void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
     for (const auto& compilation_unit : compilation_units) {
       info_writer.WriteCompilationUnit(compilation_unit);
     }
-    info_writer.End();
+    info_writer.End(write_oat_patches);
   }
 }
 
@@ -1440,13 +1445,14 @@ static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
 template <typename ElfTypes>
 void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
                     const ArrayRef<const MethodDebugInfo>& method_infos,
-                    CFIFormat cfi_format) {
+                    CFIFormat cfi_format,
+                    bool write_oat_patches) {
   // Add methods to .symtab.
   WriteDebugSymbols(builder, method_infos, true /* with_signature */);
   // Generate CFI (stack unwinding information).
-  WriteCFISection(builder, method_infos, cfi_format, true /* write_oat_patches */);
+  WriteCFISection(builder, method_infos, cfi_format, write_oat_patches);
   // Write DWARF .debug_* sections.
-  WriteDebugSections(builder, method_infos);
+  WriteDebugSections(builder, method_infos, write_oat_patches);
 }
 
 static void XzCompress(const std::vector<uint8_t>* src, std::vector<uint8_t>* dst) {
@@ -1527,10 +1533,11 @@ static ArrayRef<const uint8_t> WriteDebugElfFileForMethodInternal(
   buffer.reserve(KB);
   VectorOutputStream out("Debug ELF file", &buffer);
   std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(isa, &out));
-  builder->Start();
+  builder->Start(0 /* max_program_headers */);
   WriteDebugInfo(builder.get(),
                  ArrayRef<const MethodDebugInfo>(&method_info, 1),
-                 DW_DEBUG_FRAME_FORMAT);
+                 DW_DEBUG_FRAME_FORMAT,
+                 false /* write_oat_patches */);
   builder->End();
   CHECK(builder->Good());
   // Make a copy of the buffer.  We want to shrink it anyway.
@@ -1557,12 +1564,12 @@ static ArrayRef<const uint8_t> WriteDebugElfFileForClassesInternal(
   buffer.reserve(KB);
   VectorOutputStream out("Debug ELF file", &buffer);
   std::unique_ptr<ElfBuilder<ElfTypes>> builder(new ElfBuilder<ElfTypes>(isa, &out));
-  builder->Start();
+  builder->Start(0 /* max_program_headers */);
 
   DebugInfoWriter<ElfTypes> info_writer(builder.get());
   info_writer.Start();
   info_writer.WriteTypes(types);
-  info_writer.End();
+  info_writer.End(false /* write_oat_patches */);
 
   builder->End();
   CHECK(builder->Good());
@@ -1586,11 +1593,13 @@ ArrayRef<const uint8_t> WriteDebugElfFileForClasses(const InstructionSet isa,
 template void WriteDebugInfo<ElfTypes32>(
     ElfBuilder<ElfTypes32>* builder,
     const ArrayRef<const MethodDebugInfo>& method_infos,
-    CFIFormat cfi_format);
+    CFIFormat cfi_format,
+    bool write_oat_patches);
 template void WriteDebugInfo<ElfTypes64>(
     ElfBuilder<ElfTypes64>* builder,
     const ArrayRef<const MethodDebugInfo>& method_infos,
-    CFIFormat cfi_format);
+    CFIFormat cfi_format,
+    bool write_oat_patches);
 template void WriteMiniDebugInfo<ElfTypes32>(
     ElfBuilder<ElfTypes32>* builder,
     const ArrayRef<const MethodDebugInfo>& method_infos);
