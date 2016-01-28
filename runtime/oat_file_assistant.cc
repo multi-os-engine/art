@@ -461,6 +461,23 @@ bool OatFileAssistant::GivenOatFileIsOutOfDate(const OatFile& file) {
     }
   }
 
+  if (file.IsExtractOnly()) {
+    VLOG(oat) << "Oat file is extract-only. Image checksum test skipped.";
+    if (kIsDebugBuild) {
+      // Sanity check that no classes have compiled code. Does not test that
+      // the DEX code has not been quickened.
+      std::string error_msg;
+      for (const OatFile::OatDexFile* current : file.GetOatDexFiles()) {
+        const DexFile* const dex_file = current->OpenDexFile(&error_msg).release();
+        DCHECK(dex_file != nullptr);
+        for (size_t i = 0, e = dex_file->NumClassDefs(); i < e; ++i) {
+          DCHECK_EQ(current->GetOatClass(i).GetType(), kOatClassNoneCompiled);
+        }
+      }
+    }
+    return false;
+  }
+
   // Verify the image checksum
   const ImageInfo* image_info = GetImageInfo();
   if (image_info == nullptr) {
@@ -486,7 +503,7 @@ bool OatFileAssistant::GivenOatFileIsUpToDate(const OatFile& file) {
     return false;
   }
 
-  if (file.IsPic()) {
+  if (file.IsPic() || file.IsExtractOnly()) {
     return true;
   }
 
