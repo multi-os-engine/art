@@ -209,7 +209,7 @@ void ElfWriterQuick<ElfTypes>::WriteDebugInfo(
     const ArrayRef<const dwarf::MethodDebugInfo>& method_infos) {
   if (compiler_options_->GetGenerateDebugInfo()) {
     // Generate all the debug information we can.
-    dwarf::WriteDebugInfo(builder_.get(), method_infos, kCFIFormat);
+    dwarf::WriteDebugInfo(builder_.get(), method_infos, kCFIFormat, true /* write_oat_patches */);
   }
   if (compiler_options_->GetGenerateMiniDebugInfo()) {
     // Wait for the mini-debug-info generation to finish and write it to disk.
