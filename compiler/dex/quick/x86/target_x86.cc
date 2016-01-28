@@ -615,33 +615,20 @@ bool X86Mir2Lir::GenMemBarrier(MemBarrierKind barrier_kind) {
    * For those cases, all we need to ensure is that there is a scheduling barrier in place.
    */
   const RegStorage rs_rSP = cu_->target64 ? rs_rX86_SP_64 : rs_rX86_SP_32;
-  bool use_locked_add = features->PrefersLockedAddSynchronization();
   if (barrier_kind == kAnyAny) {
     // If no LIR exists already that can be used a barrier, then generate a barrier.
     if (mem_barrier == nullptr) {
-      if (use_locked_add) {
-        mem_barrier = NewLIR3(kX86LockAdd32MI8, rs_rSP.GetReg(), 0, 0);
-      } else {
-        mem_barrier = NewLIR0(kX86Mfence);
-      }
+      mem_barrier = NewLIR3(kX86LockAdd32MI8, rs_rSP.GetReg(), 0, 0);
       ret = true;
     }
 
     // If last instruction does not provide full barrier, then insert a barrier.
     if (ProvidesFullMemoryBarrier(static_cast<X86OpCode>(mem_barrier->opcode)) == false) {
-      if (use_locked_add) {
-        mem_barrier = NewLIR3(kX86LockAdd32MI8, rs_rSP.GetReg(), 0, 0);
-      } else {
-        mem_barrier = NewLIR0(kX86Mfence);
-      }
+      mem_barrier = NewLIR3(kX86LockAdd32MI8, rs_rSP.GetReg(), 0, 0);
       ret = true;
     }
   } else if (barrier_kind == kNTStoreStore) {
-      if (use_locked_add) {
-        mem_barrier = NewLIR3(kX86LockAdd32MI8, rs_rSP.GetReg(), 0, 0);
-      } else {
-        mem_barrier = NewLIR0(kX86Sfence);
-      }
+      mem_barrier = NewLIR3(kX86LockAdd32MI8, rs_rSP.GetReg(), 0, 0);
       ret = true;
   }
 
