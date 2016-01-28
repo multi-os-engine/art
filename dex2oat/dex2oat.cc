@@ -1055,6 +1055,11 @@ class Dex2Oat FINAL {
     key_value_store_->Put(
         OatHeader::kDebuggableKey,
         compiler_options_->debuggable_ ? OatHeader::kTrueValue : OatHeader::kFalseValue);
+    key_value_store_->Put(
+        OatHeader::kVerifyAtRuntimeKey,
+        (compiler_options_->compiler_filter_ == CompilerOptions::kVerifyAtRuntime) ?
+            OatHeader::kTrueValue :
+            OatHeader::kFalseValue);
   }
 
   // Parse the arguments from the command line. In case of an unrecognized option or impossible
@@ -1332,7 +1337,11 @@ class Dex2Oat FINAL {
         return false;
       }
 
-      {
+      if (compiler_options_->compiler_filter_ == CompilerOptions::kVerifyAtRuntime) {
+        image_file_location_oat_checksum_ = 0u;
+        image_file_location_oat_data_begin_ = 0u;
+        image_patch_delta_ = 0;
+      } else {
         TimingLogger::ScopedTiming t3("Loading image checksum", timings_);
         std::vector<gc::space::ImageSpace*> image_spaces =
             Runtime::Current()->GetHeap()->GetBootImageSpaces();
