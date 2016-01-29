@@ -928,11 +928,13 @@ class Dex2Oat FINAL {
     // Fill some values into the key-value store for the oat header.
     key_value_store_.reset(new SafeMap<std::string, std::string>());
 
-    // Automatically force determinism for the boot image in a host
-    // build, except when read barriers are enabled, as the former
-    // switches the GC to a non-concurrent one by passing the
-    // option `-Xgc:nonconcurrent` (see below).
-    if (!kIsTargetBuild && IsBootImage() && !kEmitCompilerReadBarrier) {
+    // Automatically force determinism for the boot image in a host build if the default GC is CMS
+    // or MS and read barriers are not enabled, as the former switches the GC to a non-concurrent
+    // one by passing the option `-Xgc:nonconcurrent` (see below).
+    if (!kIsTargetBuild && IsBootImage() &&
+        (gc::kCollectorTypeDefault == gc::kCollectorTypeCMS ||
+         gc::kCollectorTypeDefault == gc::kCollectorTypeMS) &&
+        !kEmitCompilerReadBarrier) {
       force_determinism_ = true;
     }
     compiler_options_->force_determinism_ = force_determinism_;
