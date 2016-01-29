@@ -60,11 +60,12 @@ extern "C" void jit_unload(void* handle) {
   delete reinterpret_cast<JitCompiler*>(handle);
 }
 
-extern "C" bool jit_compile_method(void* handle, ArtMethod* method, Thread* self)
+extern "C" const OatQuickMethodHeader* jit_compile_method(
+    void* handle, ArtMethod* method, Thread* self, bool osr)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   auto* jit_compiler = reinterpret_cast<JitCompiler*>(handle);
   DCHECK(jit_compiler != nullptr);
-  return jit_compiler->CompileMethod(self, method);
+  return jit_compiler->CompileMethod(self, method, osr);
 }
 
 extern "C" void jit_types_loaded(void* handle, mirror::Class** types, size_t count)
@@ -201,7 +202,7 @@ JitCompiler::~JitCompiler() {
   }
 }
 
-bool JitCompiler::CompileMethod(Thread* self, ArtMethod* method) {
+const OatQuickMethodHeader* JitCompiler::CompileMethod(Thread* self, ArtMethod* method, bool osr) {
   TimingLogger logger("JIT compiler timing logger", true, VLOG_IS_ON(jit));
   const uint64_t start_time = NanoTime();
   StackHandleScope<2> hs(self);
@@ -212,25 +213,24 @@ bool JitCompiler::CompileMethod(Thread* self, ArtMethod* method) {
   Handle<mirror::Class> h_class(hs.NewHandle(method->GetDeclaringClass()));
   if (!runtime->GetClassLinker()->EnsureInitialized(self, h_class, true, true)) {
     VLOG(jit) << "JIT failed to initialize " << PrettyMethod(method);
-    return false;
+    return nullptr;
   }
 
   // Do the compilation.
-  bool success = false;
+  const OatQuickMethodHeader* header = nullptr;
   {
     TimingLogger::ScopedTiming t2("Compiling", &logger);
     // If we get a request to compile a proxy method, we pass the actual Java method
     // of that proxy method, as the compiler does not expect a proxy method.
     ArtMethod* method_to_compile = method->GetInterfaceMethodIfProxy(sizeof(void*));
     JitCodeCache* const code_cache = runtime->GetJit()->GetCodeCache();
-    success = compiler_driver_->GetCompiler()->JitCompile(self, code_cache, method_to_compile);
-    if (success && perf_file_ != nullptr) {
-      const void* ptr = method_to_compile->GetEntryPointFromQuickCompiledCode();
+    header = compiler_driver_->GetCompiler()->JitCompile(self, code_cache, method_to_compile, osr);
+    if ((header != nullptr) && (perf_file_ != nullptr)) {
       std::ostringstream stream;
       stream << std::hex
-             << reinterpret_cast<uintptr_t>(ptr)
+             << reinterpret_cast<uintptr_t>(header->GetCode())
              << " "
-             << code_cache->GetMemorySizeOfCodePointer(ptr)
+             << code_cache->GetMemorySizeOfCodePointer(header->GetCode())
              << " "
              << PrettyMethod(method_to_compile)
              << std::endl;
@@ -249,7 +249,7 @@ bool JitCompiler::CompileMethod(Thread* self, ArtMethod* method) {
 
   total_time_ += NanoTime() - start_time;
   runtime->GetJit()->AddTimingLogger(logger);
-  return success;
+  return header;
 }
 
 CompilerCallbacks* JitCompiler::GetCompilerCallbacks() const {

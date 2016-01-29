@@ -1195,11 +1195,34 @@ class CodeInfo {
     return StackMap();
   }
 
+  StackMap GetOsrStackMapForDexPc(uint32_t dex_pc, const StackMapEncoding& encoding) const {
+    size_t e = GetNumberOfStackMaps();
+    if (e == 0) {
+      return StackMap();
+    }
+    for (size_t i = 0; i < e - 1; ++i) {
+      StackMap stack_map = GetStackMapAt(i, encoding);
+      if (stack_map.GetDexPc(encoding) == dex_pc) {
+        StackMap other = GetStackMapAt(i + 1, encoding);
+        if (other.GetDexPc(encoding) == dex_pc &&
+            other.GetNativePcOffset(encoding) == stack_map.GetNativePcOffset(encoding)) {
+          DCHECK_EQ(other.GetDexRegisterMapOffset(encoding),
+                    stack_map.GetDexRegisterMapOffset(encoding));
+          DCHECK(!stack_map.HasInlineInfo(encoding));
+          return stack_map;
+        }
+      }
+    }
+    return StackMap();
+  }
+
   StackMap GetStackMapForNativePcOffset(uint32_t native_pc_offset,
                                         const StackMapEncoding& encoding) const {
     // TODO: Safepoint stack maps are sorted by native_pc_offset but catch stack
     //       maps are not. If we knew that the method does not have try/catch,
     //       we could do binary search.
+    //       Also, OSR stack maps are duplicated, so we'd need to skip the
+    //       one without dex register map.
     for (size_t i = 0, e = GetNumberOfStackMaps(); i < e; ++i) {
       StackMap stack_map = GetStackMapAt(i, encoding);
       if (stack_map.GetNativePcOffset(encoding) == native_pc_offset) {

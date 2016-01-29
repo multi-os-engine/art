@@ -30,6 +30,7 @@ namespace art {
 
 class ArtMethod;
 class InstructionSetFeatures;
+class OatQuickMethodHeader;
 
 namespace jit {
 
@@ -37,7 +38,7 @@ class JitCompiler {
  public:
   static JitCompiler* Create();
   virtual ~JitCompiler();
-  bool CompileMethod(Thread* self, ArtMethod* method)
+  const OatQuickMethodHeader* CompileMethod(Thread* self, ArtMethod* method, bool osr)
       SHARED_REQUIRES(Locks::mutator_lock_);
   CompilerCallbacks* GetCompilerCallbacks() const;
   size_t GetTotalCompileTime() const {

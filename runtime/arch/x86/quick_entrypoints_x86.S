@@ -1712,5 +1712,61 @@ DEFINE_FUNCTION art_quick_read_barrier_for_root_slow
     ret
 END_FUNCTION art_quick_read_barrier_for_root_slow
 
+  /*
+     * On stack replacement stub.
+     * On entry:
+     *   [sp] = return address
+     *   [sp + 4] = stack to copy
+     *   [sp + 8] = size of stack
+     *   [sp + 12] = pc to call
+     *   [sp + 16] = JValue* result
+     *   [sp + 20] = shorty
+     *   [sp + 24] = thread
+     */
+DEFINE_FUNCTION art_quick_osr_stub
+    // Save native callee saves.
+    PUSH ebp
+    PUSH ebx
+    PUSH esi
+    PUSH edi
+    mov 4+16(%esp), %esi          // ESI = argument array
+    mov 8+16(%esp), %ecx          // ECX = size of args
+    mov 12+16(%esp), %ebx         // EBX = pc to call
+    mov %esp, %ebp                // Save stack pointer
+    andl LITERAL(0xFFFFFFF0), %esp // Align stack
+    PUSH ebp
+    subl LITERAL(12), %esp
+    movl LITERAL(0), (%esp)       // store null for ArtMethod* slot
+    call .Losr_entry
+    addl LITERAL(12), %esp
+    POP ebp
+    mov %ebp, %esp
+    POP edi
+    POP esi
+    POP ebx
+    POP ebp
+    mov 16(%esp), %ecx            // get result pointer
+    mov %eax, (%ecx)              // store the result assuming its a long, int or Object*
+    mov %edx, 4(%ecx)             // store the other half of the result
+    mov 20(%esp), %edx            // get the shorty
+    cmpb LITERAL(68), (%edx)      // test if result type char == 'D'
+    je .Losr_return_double_quick
+    cmpb LITERAL(70), (%edx)      // test if result type char == 'F'
+    je .Losr_return_float_quick
+    ret
+.Losr_return_double_quick:
+    movsd %xmm0, (%ecx)           // store the floating point result
+    ret
+.Losr_return_float_quick:
+    movss %xmm0, (%ecx)           // store the floating point result
+    ret
+.Losr_entry:
+    subl LITERAL(4), %ecx         // Given stack size contains pushed frame pointer, substract it.
+    subl %ecx, %esp
+    mov %esp, %edi                // EDI = beginning of stack
+    rep movsb                     // while (ecx--) { *edi++ = *esi++ }
+    jmp *%ebx
+END_FUNCTION art_quick_osr_stub
+
     // TODO: implement these!
 UNIMPLEMENTED art_quick_memcmp16
