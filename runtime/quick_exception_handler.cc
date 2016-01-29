@@ -320,8 +320,9 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     } else if (method->IsNative()) {
       // If we return from JNI with a pending exception and want to deoptimize, we need to skip
       // the native method.
-      // The top method is a runtime method, the native method comes next.
-      CHECK_EQ(GetFrameDepth(), 1U);
+      // In non-testing mode, the top method is a runtime method, the native method comes next.
+      // For tests, we use JNI methods to throw the deoptimization exception.
+      CHECK(GetFrameDepth() == 1U || GetFrameDepth() == 0U) << GetFrameDepth();
       return true;
     } else {
       // Check if a shadow frame already exists for debugger's set-local-value purpose.
