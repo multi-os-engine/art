@@ -20,10 +20,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "art_method.h"
 #include "atomic.h"
 #include "base/logging.h"
 #include "base/time_utils.h"
+#include "mirror/class-inl.h"
 #include "debugger.h"
+#include "entrypoints/runtime_asm_entrypoints.h"
 #include "jdwp/jdwp_priv.h"
 #include "scoped_thread_state_change.h"
 
@@ -438,6 +441,32 @@ static void* StartJdwpThread(void* arg) {
   return nullptr;
 }
 
+class UpdateEntryPointsClassVisitor : public ClassVisitor {
+ public:
+  explicit UpdateEntryPointsClassVisitor(instrumentation::Instrumentation* instrumentation)
+      : instrumentation_(instrumentation) {}
+
+  bool operator()(mirror::Class* klass) OVERRIDE REQUIRES(Locks::mutator_lock_) {
+    const OatFile* boot_image_oat_file =
+        Runtime::Current()->GetHeap()->FindBootImageOatFile(klass);
+    if (boot_image_oat_file == nullptr) {
+      // Not boot image class.
+      return true;
+    }
+    auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+    for (auto& m : klass->GetMethods(pointer_size)) {
+      const void* code = m.GetEntryPointFromQuickCompiledCode();
+      if (boot_image_oat_file->Contains(code) && m.GetCodeItem() != nullptr) {
+        instrumentation_->UpdateMethodsCode(&m, GetQuickToInterpreterBridge());
+      }
+    }
+    return true;
+  }
+
+ private:
+  instrumentation::Instrumentation* const instrumentation_;
+};
+
 void JdwpState::Run() {
   Runtime* runtime = Runtime::Current();
   CHECK(runtime->AttachCurrentThread("JDWP", true, runtime->GetSystemThreadGroup(),
@@ -462,6 +491,8 @@ void JdwpState::Run() {
   CHECK_EQ(thread_->GetState(), kNative);
   Locks::mutator_lock_->AssertNotHeld(thread_);
   thread_->SetState(kWaitingInMainDebuggerLoop);
+
+  bool boot_image_code_invalidated = false;
 
   /*
    * Loop forever if we're in server mode, processing connections.  In
@@ -498,6 +529,19 @@ void JdwpState::Run() {
 
     /* prep debug code to handle the new connection */
     Dbg::Connected();
+
+    /*
+     * Since boot image code is AOT compiled as not debuggable, we need to patch
+     * entry points of methods in boot image to quick to interpreter bridge.
+     */
+    if (!boot_image_code_invalidated) {
+      if (!runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
+        ScopedObjectAccess soa(thread_);
+        UpdateEntryPointsClassVisitor visitor(runtime->GetInstrumentation());
+        runtime->GetClassLinker()->VisitClasses(&visitor);
+      }
+      boot_image_code_invalidated = true;
+    }
 
     /* process requests until the debugger drops */
     bool first = true;

@@ -43,6 +43,7 @@ namespace art {
 
 class ConditionVariable;
 class Mutex;
+class OatFile;
 class StackVisitor;
 class Thread;
 class ThreadPool;
@@ -603,6 +604,9 @@ class Heap {
   }
 
   bool ObjectIsInBootImageSpace(mirror::Object* obj) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  const OatFile* FindBootImageOatFile(mirror::Object* obj) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void GetBootImagesSize(uint32_t* boot_image_begin,

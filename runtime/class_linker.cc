@@ -2654,6 +2654,7 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
   OatFile::OatClass oat_class = FindOatClass(dex_file,
                                              klass->GetDexClassDefIndex(),
                                              &has_oat_class);
+  bool is_boot_image_class = Runtime::Current()->GetHeap()->ObjectIsInBootImageSpace(klass);
   // Link the code of methods skipped by LinkCode.
   for (size_t method_index = 0; it.HasNextDirectMethod(); ++method_index, it.Next()) {
     ArtMethod* method = klass->GetDirectMethod(method_index, image_pointer_size_);
@@ -2665,6 +2666,10 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
     if (has_oat_class) {
       OatFile::OatMethod oat_method = oat_class.GetOatMethod(method_index);
       quick_code = oat_method.GetQuickCode();
+      if (is_boot_image_class && Dbg::IsDebuggerActive() && method->GetCodeItem() != nullptr) {
+        // Boot image is not compiled as debuggable. Use interpreter entry point.
+        quick_code = GetQuickToInterpreterBridge();
+      }
     }
     const bool enter_interpreter = NeedsInterpreter(method, quick_code);
     if (enter_interpreter) {
