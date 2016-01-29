@@ -28,6 +28,7 @@
 #include "class_linker-inl.h"
 #include "dex_file-inl.h"
 #include "dex_instruction.h"
+#include "entrypoints/runtime_asm_entrypoints.h"
 #include "gc/accounting/card_table-inl.h"
 #include "gc/allocation_record.h"
 #include "gc/scoped_gc_critical_section.h"
@@ -570,6 +571,34 @@ bool Dbg::RequiresDeoptimization() {
   return !Runtime::Current()->GetInstrumentation()->IsForcedInterpretOnly();
 }
 
+class UpdateEntryPointsClassVisitor : public ClassVisitor {
+ public:
+  explicit UpdateEntryPointsClassVisitor(instrumentation::Instrumentation* instrumentation)
+      : instrumentation_(instrumentation) {}
+
+  bool operator()(mirror::Class* klass) OVERRIDE REQUIRES(Locks::mutator_lock_) {
+    const OatFile* boot_image_oat_file =
+        Runtime::Current()->GetHeap()->FindBootImageOatFile(klass);
+    if (boot_image_oat_file == nullptr) {
+      // Not boot image class.
+      return true;
+    }
+    auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+    for (auto& m : klass->GetMethods(pointer_size)) {
+      const void* code = m.GetEntryPointFromQuickCompiledCode();
+      if (boot_image_oat_file->Contains(code) && m.GetCodeItem() != nullptr) {
+        instrumentation_->UpdateMethodsCode(&m, GetQuickToInterpreterBridge());
+      }
+    }
+    return true;
+  }
+
+ private:
+  instrumentation::Instrumentation* const instrumentation_;
+};
+
+static bool boot_image_code_invalidated = false;
+
 void Dbg::GoActive() {
   // Enable all debugging features, including scans for breakpoints.
   // This is a no-op if we're already active.
@@ -598,6 +627,19 @@ void Dbg::GoActive() {
   }
 
   Runtime* runtime = Runtime::Current();
+  /*
+   * Since boot image code is AOT compiled as not debuggable, we need to patch
+   * entry points of methods in boot image to quick to interpreter bridge.
+   */
+  if (!boot_image_code_invalidated) {
+    if (!runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
+      ScopedObjectAccess soa(self);
+      UpdateEntryPointsClassVisitor visitor(runtime->GetInstrumentation());
+      runtime->GetClassLinker()->VisitClasses(&visitor);
+    }
+    boot_image_code_invalidated = true;
+  }
+
   ScopedSuspendAll ssa(__FUNCTION__);
   if (RequiresDeoptimization()) {
     runtime->GetInstrumentation()->EnableDeoptimization();

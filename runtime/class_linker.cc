@@ -2585,7 +2585,7 @@ const void* ClassLinker::GetQuickOatCodeFor(ArtMethod* method) {
   OatFile::OatMethod oat_method = FindOatMethodFor(method, &found);
   if (found) {
     auto* code = oat_method.GetQuickCode();
-    if (code != nullptr) {
+    if (code != nullptr && CanUseAOTCode(method, code)) {
       return code;
     }
   }
@@ -2606,18 +2606,6 @@ const void* ClassLinker::GetOatMethodQuickCodeFor(ArtMethod* method) {
     return oat_method.GetQuickCode();
   }
   return nullptr;
-}
-
-const void* ClassLinker::GetQuickOatCodeFor(const DexFile& dex_file,
-                                            uint16_t class_def_idx,
-                                            uint32_t method_idx) {
-  bool found;
-  OatFile::OatClass oat_class = FindOatClass(dex_file, class_def_idx, &found);
-  if (!found) {
-    return nullptr;
-  }
-  uint32_t oat_method_idx = GetOatMethodIndexFromMethodIndex(dex_file, class_def_idx, method_idx);
-  return oat_class.GetOatMethod(oat_method_idx).GetQuickCode();
 }
 
 bool ClassLinker::CanUseAOTCode(ArtMethod* method, const void* quick_code) {
@@ -2650,6 +2638,14 @@ bool ClassLinker::CanUseAOTCode(ArtMethod* method, const void* quick_code) {
     // Don't use AOT code in force JIT mode.
     return false;
   }
+
+  if (Dbg::IsDebuggerActive()) {
+    bool is_boot_image_class = runtime->GetHeap()->
+        ObjectIsInBootImageSpace(method->GetDeclaringClass());
+    // Boot image classes are AOT-compiled as non-debuggable.
+    return !is_boot_image_class;
+  }
+
   return true;
 }
 
