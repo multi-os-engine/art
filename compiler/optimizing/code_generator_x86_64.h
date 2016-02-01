@@ -264,6 +264,7 @@ class InstructionCodeGeneratorX86_64 : public InstructionCodeGenerator {
   void GenerateExplicitNullCheck(HNullCheck* instruction);
   void PushOntoFPStack(Location source, uint32_t temp_offset,
                        uint32_t stack_adjustment, bool is_float);
+  void GenerateCompareTest(HCondition* condition);
   template<class LabelType>
   void GenerateTestAndBranch(HInstruction* instruction,
                              size_t condition_input_index,
