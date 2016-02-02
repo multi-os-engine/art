@@ -7113,6 +7113,14 @@ Address CodeGeneratorX86::LiteralInt64Address(int64_t v, Register reg) {
   return Address(reg, kDummy32BitOffset, fixup);
 }
 
+void CodeGeneratorX86::Load32BitValue(Register dest, int32_t value) {
+  if (value == 0) {
+    __ xorl(dest, dest);
+  } else {
+    __ movl(dest, Immediate(value));
+  }
+}
+
 Address CodeGeneratorX86::LiteralCaseTable(HX86PackedSwitch* switch_instr,
                                            Register reg,
                                            Register value) {
