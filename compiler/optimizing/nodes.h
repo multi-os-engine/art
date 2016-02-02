@@ -98,6 +98,7 @@ enum IfCondition {
 };
 
 enum GraphAnalysisResult {
+  kAnalysisInvalidBytecode,
   kAnalysisFailThrowCatchLoop,
   kAnalysisFailAmbiguousArrayOp,
   kAnalysisSuccess,
@@ -308,10 +309,14 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
     blocks_.reserve(kDefaultNumberOfBlocks);
   }
 
+  // Acquires and stores RTI of inexact Object to be used when creating HNullConstant.
+  void InitializeInexactObjectRTI(StackHandleScopeCollection* handles);
+
   ArenaAllocator* GetArena() const { return arena_; }
   const ArenaVector<HBasicBlock*>& GetBlocks() const { return blocks_; }
 
   bool IsInSsaForm() const { return in_ssa_form_; }
+  void SetInSsaForm() { in_ssa_form_ = true; }
 
   HBasicBlock* GetEntryBlock() const { return entry_block_; }
   HBasicBlock* GetExitBlock() const { return exit_block_; }
@@ -325,7 +330,7 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   // Try building the SSA form of this graph, with dominance computation and
   // loop recognition. Returns a code specifying that it was successful or the
   // reason for failure.
-  GraphAnalysisResult TryBuildingSsa(StackHandleScopeCollection* handles);
+  GraphAnalysisResult TryBuildingSsa();
 
   void ComputeDominanceInformation();
   void ClearDominanceInformation();

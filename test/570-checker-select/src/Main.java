@@ -322,4 +322,16 @@ public class Main {
     assertEqual(8, FloatGtMatCond_FloatVarVar(Float.NaN, 2, 5, 7));
     assertEqual(8, FloatGtMatCond_FloatVarVar(2, Float.NaN, 5, 7));
   }
+
+  public static int foo() {
+    int k = 0;
+    for (int i0 = 0; i0 < 100; i0++) {
+      for (int i1 = 0; i1 < 100; i1++) {
+        for (int i2 = 0; i2 < 100; i2++) {
+          k += 1;
+        }
+      }
+    }
+    return k;
+  }
 }

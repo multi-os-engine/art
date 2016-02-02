@@ -60,7 +60,8 @@ class HGraphBuilder : public ValueObject {
         dex_cache_(dex_cache) {}
 
   // Only for unit testing.
-  HGraphBuilder(HGraph* graph, Primitive::Type return_type = Primitive::kPrimInt)
+  HGraphBuilder(HGraph* graph,
+                Primitive::Type return_type = Primitive::kPrimInt)
       : arena_(graph->GetArena()),
         branch_targets_(graph->GetArena()->Adapter(kArenaAllocGraphBuilder)),
         locals_(graph->GetArena()->Adapter(kArenaAllocGraphBuilder)),
@@ -80,7 +81,8 @@ class HGraphBuilder : public ValueObject {
         null_dex_cache_(),
         dex_cache_(null_dex_cache_) {}
 
-  bool BuildGraph(const DexFile::CodeItem& code);
+  GraphAnalysisResult BuildGraph(const DexFile::CodeItem& code,
+                                 StackHandleScopeCollection* handles);
 
   static constexpr const char* kBuilderPassName = "builder";
 
