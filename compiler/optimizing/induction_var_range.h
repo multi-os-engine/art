@@ -60,9 +60,9 @@ class InductionVarRange {
    * Given a context denoted by the first instruction, returns a possibly conservative
    * lower and upper bound on the instruction's value in the output parameters min_val
    * and max_val, respectively. The need_finite_test flag denotes if an additional finite-test
-   * is needed to protect the range evaluation inside its loop.
+   * is needed to protect the range evaluation inside its loop. Returns false on failure.
    */
-  void GetInductionRange(HInstruction* context,
+  bool GetInductionRange(HInstruction* context,
                          HInstruction* instruction,
                          /*out*/Value* min_val,
                          /*out*/Value* max_val,
