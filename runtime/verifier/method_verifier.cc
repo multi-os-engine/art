@@ -4605,7 +4605,7 @@ void MethodVerifier::VerifyQuickFieldAccess(const Instruction* inst, const RegTy
                                               field->GetTypeDescriptor(),
                                               false);
     }
-    if (field_type == nullptr) {
+    if (field_type->IsConflict()) {
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Cannot infer field type from " << inst->Name();
       return;
     }
