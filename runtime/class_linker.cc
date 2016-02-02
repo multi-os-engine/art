@@ -1291,8 +1291,10 @@ bool ClassLinker::UpdateAppImageClassLoadersAndDexCaches(
           // the app image.
           klass->SetClassLoader(class_loader.Get());
           // The resolved type could be from another dex cache, go through the dex cache just in
-          // case.
-          klass->SetDexCacheStrings(klass->GetDexCache()->GetStrings());
+          // case. May be null for array classes.
+          if (klass->GetDexCacheStrings() != nullptr) {
+            klass->SetDexCacheStrings(klass->GetDexCache()->GetStrings());
+          }
           // If there are multiple dex caches, there may be the same class multiple times
           // in different dex caches. Check for this since inserting will add duplicates
           // otherwise.
@@ -1406,8 +1408,8 @@ class UpdateClassLoaderAndResolvedStringsVisitor {
     if (forward_strings_) {
       GcRoot<mirror::String>* strings = klass->GetDexCacheStrings();
       if (strings != nullptr) {
-        DCHECK(space_->GetImageHeader().GetImageSection(ImageHeader::kSectionDexCacheArrays).Contains(
-            reinterpret_cast<uint8_t*>(strings) - space_->Begin()))
+        DCHECK(space_->GetImageHeader().GetImageSection(ImageHeader::kSectionDexCacheArrays).
+            Contains(reinterpret_cast<uint8_t*>(strings) - space_->Begin()))
             << "String dex cache array for " << PrettyClass(klass) << " is not in app image";
         GcRoot<mirror::String>* new_strings = *reinterpret_cast<GcRoot<mirror::String>**>(strings);
         DCHECK_NE(strings, new_strings);
