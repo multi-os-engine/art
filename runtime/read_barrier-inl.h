@@ -32,54 +32,61 @@ template <typename MirrorType, ReadBarrierOption kReadBarrierOption, bool kAlway
 inline MirrorType* ReadBarrier::Barrier(
     mirror::Object* obj, MemberOffset offset, mirror::HeapReference<MirrorType>* ref_addr) {
   constexpr bool with_read_barrier = kReadBarrierOption == kWithReadBarrier;
-  if (with_read_barrier && kUseBakerReadBarrier) {
-    // The higher bits of the rb_ptr, rb_ptr_high_bits (must be zero)
-    // is used to create artificial data dependency from the is_gray
-    // load to the ref field (ptr) load to avoid needing a load-load
-    // barrier between the two.
-    uintptr_t rb_ptr_high_bits;
-    bool is_gray = HasGrayReadBarrierPointer(obj, &rb_ptr_high_bits);
-    ref_addr = reinterpret_cast<mirror::HeapReference<MirrorType>*>(
-        rb_ptr_high_bits | reinterpret_cast<uintptr_t>(ref_addr));
-    MirrorType* ref = ref_addr->AsMirrorPtr();
-    MirrorType* old_ref = ref;
-    if (is_gray) {
-      // Slow-path.
-      ref = reinterpret_cast<MirrorType*>(Mark(ref));
-      // If kAlwaysUpdateField is true, update the field atomically. This may fail if mutator
-      // updates before us, but it's ok.
-      if (kAlwaysUpdateField && ref != old_ref) {
-        obj->CasFieldStrongRelaxedObjectWithoutWriteBarrier<false, false>(
-            offset, old_ref, ref);
+  if (with_read_barrier) {
+    if (kIsDebugBuild) {
+      Thread* const self = Thread::Current();
+      if (self != nullptr) {
+        DCHECK_EQ(self->GetDebugDisallowReadBarrierCount(), 0u);
       }
     }
-    if (kEnableReadBarrierInvariantChecks) {
-      CHECK_EQ(rb_ptr_high_bits, 0U) << obj << " rb_ptr=" << obj->GetReadBarrierPointer();
-    }
-    AssertToSpaceInvariant(obj, offset, ref);
-    return ref;
-  } else if (with_read_barrier && kUseBrooksReadBarrier) {
-    // To be implemented.
-    return ref_addr->AsMirrorPtr();
-  } else if (with_read_barrier && kUseTableLookupReadBarrier) {
-    MirrorType* ref = ref_addr->AsMirrorPtr();
-    MirrorType* old_ref = ref;
-    // The heap or the collector can be null at startup. TODO: avoid the need for this null check.
-    gc::Heap* heap = Runtime::Current()->GetHeap();
-    if (heap != nullptr && heap->GetReadBarrierTable()->IsSet(old_ref)) {
-      ref = reinterpret_cast<MirrorType*>(Mark(old_ref));
-      // Update the field atomically. This may fail if mutator updates before us, but it's ok.
-      if (ref != old_ref) {
-        obj->CasFieldStrongRelaxedObjectWithoutWriteBarrier<false, false>(
-            offset, old_ref, ref);
+    if (kUseBakerReadBarrier) {
+      // The higher bits of the rb_ptr, rb_ptr_high_bits (must be zero)
+      // is used to create artificial data dependency from the is_gray
+      // load to the ref field (ptr) load to avoid needing a load-load
+      // barrier between the two.
+      uintptr_t rb_ptr_high_bits;
+      bool is_gray = HasGrayReadBarrierPointer(obj, &rb_ptr_high_bits);
+      ref_addr = reinterpret_cast<mirror::HeapReference<MirrorType>*>(
+          rb_ptr_high_bits | reinterpret_cast<uintptr_t>(ref_addr));
+      MirrorType* ref = ref_addr->AsMirrorPtr();
+      MirrorType* old_ref = ref;
+      if (is_gray) {
+        // Slow-path.
+        ref = reinterpret_cast<MirrorType*>(Mark(ref));
+        // If kAlwaysUpdateField is true, update the field atomically. This may fail if mutator
+        // updates before us, but it's ok.
+        if (kAlwaysUpdateField && ref != old_ref) {
+          obj->CasFieldStrongRelaxedObjectWithoutWriteBarrier<false, false>(
+              offset, old_ref, ref);
+        }
       }
+      if (kEnableReadBarrierInvariantChecks) {
+        CHECK_EQ(rb_ptr_high_bits, 0U) << obj << " rb_ptr=" << obj->GetReadBarrierPointer();
+      }
+      AssertToSpaceInvariant(obj, offset, ref);
+      return ref;
+    } else if (kUseBrooksReadBarrier) {
+      // To be implemented.
+      return ref_addr->AsMirrorPtr();
+    } else if (kUseTableLookupReadBarrier) {
+      MirrorType* ref = ref_addr->AsMirrorPtr();
+      MirrorType* old_ref = ref;
+      // The heap or the collector can be null at startup. TODO: avoid the need for this null check.
+      gc::Heap* heap = Runtime::Current()->GetHeap();
+      if (heap != nullptr && heap->GetReadBarrierTable()->IsSet(old_ref)) {
+        ref = reinterpret_cast<MirrorType*>(Mark(old_ref));
+        // Update the field atomically. This may fail if mutator updates before us, but it's ok.
+        if (ref != old_ref) {
+          obj->CasFieldStrongRelaxedObjectWithoutWriteBarrier<false, false>(
+              offset, old_ref, ref);
+        }
+      }
+      AssertToSpaceInvariant(obj, offset, ref);
+      return ref;
     }
-    AssertToSpaceInvariant(obj, offset, ref);
-    return ref;
-  } else {
-    // No read barrier.
-    return ref_addr->AsMirrorPtr();
   }
+  // No read barrier.
+  return ref_addr->AsMirrorPtr();
 }
 
 template <typename MirrorType, ReadBarrierOption kReadBarrierOption>

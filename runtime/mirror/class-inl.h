@@ -253,14 +253,18 @@ inline MemberOffset Class::EmbeddedImTableEntryOffset(uint32_t i, size_t pointer
       EmbeddedImTableOffset(pointer_size).Uint32Value() + i * ImTableEntrySize(pointer_size));
 }
 
+template <VerifyObjectFlags kVerifyFlags,
+          ReadBarrierOption kReadBarrierOption>
 inline ArtMethod* Class::GetEmbeddedImTableEntry(uint32_t i, size_t pointer_size) {
-  DCHECK(ShouldHaveEmbeddedImtAndVTable());
+  DCHECK((ShouldHaveEmbeddedImtAndVTable<kVerifyFlags, kReadBarrierOption>()));
   return GetFieldPtrWithSize<ArtMethod*>(
       EmbeddedImTableEntryOffset(i, pointer_size), pointer_size);
 }
 
+template <VerifyObjectFlags kVerifyFlags,
+          ReadBarrierOption kReadBarrierOption>
 inline void Class::SetEmbeddedImTableEntry(uint32_t i, ArtMethod* method, size_t pointer_size) {
-  DCHECK(ShouldHaveEmbeddedImtAndVTable());
+  DCHECK((ShouldHaveEmbeddedImtAndVTable<kVerifyFlags, kReadBarrierOption>()));
   SetFieldPtrWithSize<false>(EmbeddedImTableEntryOffset(i, pointer_size), method, pointer_size);
 }
 
@@ -538,10 +542,12 @@ inline MemberOffset Class::GetFirstReferenceInstanceFieldOffset() {
       : ClassOffset();
 }
 
+template <VerifyObjectFlags kVerifyFlags,
+          ReadBarrierOption kReadBarrierOption>
 inline MemberOffset Class::GetFirstReferenceStaticFieldOffset(size_t pointer_size) {
   DCHECK(IsResolved());
   uint32_t base = sizeof(mirror::Class);  // Static fields come after the class.
-  if (ShouldHaveEmbeddedImtAndVTable()) {
+  if (ShouldHaveEmbeddedImtAndVTable<kVerifyFlags, kReadBarrierOption>()) {
     // Static fields come after the embedded tables.
     base = mirror::Class::ComputeClassSize(
         true, GetEmbeddedVTableLength(), 0, 0, 0, 0, 0, pointer_size);
@@ -1057,7 +1063,9 @@ inline uint32_t Class::NumStaticFields() {
   return arr != nullptr ? arr->size() : 0u;
 }
 
-template <typename Visitor>
+template <VerifyObjectFlags kVerifyFlags,
+          ReadBarrierOption kReadBarrierOption,
+          typename Visitor>
 inline void Class::FixupNativePointers(mirror::Class* dest,
                                        size_t pointer_size,
                                        const Visitor& visitor) {
@@ -1085,7 +1093,7 @@ inline void Class::FixupNativePointers(mirror::Class* dest,
     dest->SetDexCacheStrings(new_strings);
   }
   // Fix up embedded tables.
-  if (!IsTemp() && ShouldHaveEmbeddedImtAndVTable()) {
+  if (!IsTemp() && ShouldHaveEmbeddedImtAndVTable<kVerifyNone, kReadBarrierOption>()) {
     for (int32_t i = 0, count = GetEmbeddedVTableLength(); i < count; ++i) {
       ArtMethod* method = GetEmbeddedVTableEntry(i, pointer_size);
       ArtMethod* new_method = visitor(method);
@@ -1094,10 +1102,13 @@ inline void Class::FixupNativePointers(mirror::Class* dest,
       }
     }
     for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
-      ArtMethod* method = GetEmbeddedImTableEntry(i, pointer_size);
+      ArtMethod* method = GetEmbeddedImTableEntry<kVerifyNone, kWithoutReadBarrier>(i,
+                                                                                    pointer_size);
       ArtMethod* new_method = visitor(method);
       if (method != new_method) {
-        dest->SetEmbeddedImTableEntry(i, new_method, pointer_size);
+        dest->SetEmbeddedImTableEntry<kVerifyNone, kWithoutReadBarrier>(i,
+                                                                        new_method,
+                                                                        pointer_size);
       }
     }
   }
