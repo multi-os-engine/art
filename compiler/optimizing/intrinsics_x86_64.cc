@@ -2763,7 +2763,10 @@ static void CreateSignLocations(ArenaAllocator* arena, HInvoke* invoke) {
                                                            kIntrinsified);
   locations->SetInAt(0, Location::Any());
   locations->SetOut(Location::RequiresRegister());
-  locations->AddTemp(Location::RequiresRegister());  // Need a writeable register.
+  if (!invoke->InputAt(0)->IsConstant()) {
+    // Bit twiddling needs an extra writeable register.
+    locations->AddTemp(Location::RequiresRegister());
+  }
 }
 
 static void GenSign(X86_64Assembler* assembler,
