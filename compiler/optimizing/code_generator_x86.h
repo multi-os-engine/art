@@ -450,6 +450,9 @@ class CodeGeneratorX86 : public CodeGenerator {
   Address LiteralInt32Address(int32_t v, Register reg);
   Address LiteralInt64Address(int64_t v, Register reg);
 
+  // Load a 32-bit value into a register in the most efficient manner.
+  void Load32BitValue(Register dest, int32_t value);
+
   Address LiteralCaseTable(HX86PackedSwitch* switch_instr, Register reg, Register value);
 
   void Finalize(CodeAllocator* allocator) OVERRIDE;
