@@ -4077,6 +4077,7 @@ void LocationsBuilderX86::VisitCompare(HCompare* compare) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(compare, LocationSummary::kNoCall);
   switch (compare->InputAt(0)->GetType()) {
+    case Primitive::kPrimInt:
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RequiresRegister());
       locations->SetInAt(1, Location::Any());
@@ -4102,7 +4103,27 @@ void InstructionCodeGeneratorX86::VisitCompare(HCompare* compare) {
   Location right = locations->InAt(1);
 
   NearLabel less, greater, done;
+  Condition less_cond = kLess;
+
+  __ xorl(out, out);
+
   switch (compare->InputAt(0)->GetType()) {
+    case Primitive::kPrimInt: {
+      Register left_reg = left.AsRegister<Register>();
+      if (right.IsConstant()) {
+        int32_t value = right.GetConstant()->AsIntConstant()->GetValue();
+        if (value == 0) {
+          __ testl(left_reg, left_reg);
+        } else {
+          __ cmpl(left_reg, Immediate(value));
+        }
+      } else if (right.IsStackSlot()) {
+        __ cmpl(left_reg, Address(ESP, right.GetStackIndex()));
+      } else {
+        __ cmpl(left_reg, right.AsRegister<Register>());
+      }
+      break;
+    }
     case Primitive::kPrimLong: {
       Register left_low = left.AsRegisterPairLow<Register>();
       Register left_high = left.AsRegisterPairHigh<Register>();
@@ -4144,24 +4165,27 @@ void InstructionCodeGeneratorX86::VisitCompare(HCompare* compare) {
           __ cmpl(left_low, Immediate(val_low));
         }
       }
+      less_cond = kBelow;  // for CF (unsigned).
       break;
     }
     case Primitive::kPrimFloat: {
       __ ucomiss(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
       __ j(kUnordered, compare->IsGtBias() ? &greater : &less);
+      less_cond = kBelow;  // for CF (floats).
       break;
     }
     case Primitive::kPrimDouble: {
       __ ucomisd(left.AsFpuRegister<XmmRegister>(), right.AsFpuRegister<XmmRegister>());
       __ j(kUnordered, compare->IsGtBias() ? &greater : &less);
+      less_cond = kBelow;  // for CF (floats).
       break;
     }
     default:
       LOG(FATAL) << "Unexpected type for compare operation " << compare->InputAt(0)->GetType();
   }
-  __ movl(out, Immediate(0));
+
   __ j(kEqual, &done);
-  __ j(kBelow, &less);  // kBelow is for CF (unsigned & floats).
+  __ j(less_cond, &less);
 
   __ Bind(&greater);
   __ movl(out, Immediate(1));
@@ -7119,6 +7143,14 @@ Address CodeGeneratorX86::LiteralInt32Address(int32_t v, Register reg) {
 Address CodeGeneratorX86::LiteralInt64Address(int64_t v, Register reg) {
   AssemblerFixup* fixup = new (GetGraph()->GetArena()) RIPFixup(*this, __ AddInt64(v));
   return Address(reg, kDummy32BitOffset, fixup);
+}
+
+void CodeGeneratorX86::Load32BitValue(Register dest, int32_t value) {
+  if (value == 0) {
+    __ xorl(dest, dest);
+  } else {
+    __ movl(dest, Immediate(value));
+  }
 }
 
 Address CodeGeneratorX86::LiteralCaseTable(HX86PackedSwitch* switch_instr,

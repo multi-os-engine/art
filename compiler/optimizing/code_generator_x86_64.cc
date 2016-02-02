@@ -1850,6 +1850,7 @@ void LocationsBuilderX86_64::VisitCompare(HCompare* compare) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(compare, LocationSummary::kNoCall);
   switch (compare->InputAt(0)->GetType()) {
+    case Primitive::kPrimInt:
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RequiresRegister());
       locations->SetInAt(1, Location::Any());
@@ -1876,7 +1877,27 @@ void InstructionCodeGeneratorX86_64::VisitCompare(HCompare* compare) {
 
   NearLabel less, greater, done;
   Primitive::Type type = compare->InputAt(0)->GetType();
+  Condition less_cond = kLess;
+
+  __ xorl(out, out);
+
   switch (type) {
+    case Primitive::kPrimInt: {
+      CpuRegister left_reg = left.AsRegister<CpuRegister>();
+      if (right.IsConstant()) {
+        int32_t value = right.GetConstant()->AsIntConstant()->GetValue();
+        if (value == 0) {
+          __ testl(left_reg, left_reg);
+        } else {
+          __ cmpl(left_reg, Immediate(value));
+        }
+      } else if (right.IsStackSlot()) {
+        __ cmpl(left_reg, Address(CpuRegister(RSP), right.GetStackIndex()));
+      } else {
+        __ cmpl(left_reg, right.AsRegister<CpuRegister>());
+      }
+      break;
+    }
     case Primitive::kPrimLong: {
       CpuRegister left_reg = left.AsRegister<CpuRegister>();
       if (right.IsConstant()) {
@@ -1909,6 +1930,7 @@ void InstructionCodeGeneratorX86_64::VisitCompare(HCompare* compare) {
         __ ucomiss(left_reg, right.AsFpuRegister<XmmRegister>());
       }
       __ j(kUnordered, compare->IsGtBias() ? &greater : &less);
+      less_cond = kBelow;  //  ucomis{s,d} sets CF
       break;
     }
     case Primitive::kPrimDouble: {
@@ -1922,14 +1944,15 @@ void InstructionCodeGeneratorX86_64::VisitCompare(HCompare* compare) {
         __ ucomisd(left_reg, right.AsFpuRegister<XmmRegister>());
       }
       __ j(kUnordered, compare->IsGtBias() ? &greater : &less);
+      less_cond = kBelow;  //  ucomis{s,d} sets CF
       break;
     }
     default:
       LOG(FATAL) << "Unexpected compare type " << type;
   }
-  __ movl(out, Immediate(0));
+
   __ j(kEqual, &done);
-  __ j(type == Primitive::kPrimLong ? kLess : kBelow, &less);  //  ucomis{s,d} sets CF (kBelow)
+  __ j(less_cond, &less);
 
   __ Bind(&greater);
   __ movl(out, Immediate(1));
