@@ -1365,16 +1365,7 @@ void InstructionCodeGeneratorX86_64::GenerateCompareTestAndBranch(HCondition* co
       CpuRegister left_reg = left.AsRegister<CpuRegister>();
       if (right.IsConstant()) {
         int64_t value = right.GetConstant()->AsLongConstant()->GetValue();
-        if (IsInt<32>(value)) {
-          if (value == 0) {
-            __ testq(left_reg, left_reg);
-          } else {
-            __ cmpq(left_reg, Immediate(static_cast<int32_t>(value)));
-          }
-        } else {
-          // Value won't fit in a 32-bit integer.
-          __ cmpq(left_reg, codegen_->LiteralInt64Address(value));
-        }
+        codegen_->Compare64BitValue(left_reg, value);
       } else if (right.IsDoubleStackSlot()) {
         __ cmpq(left_reg, Address(CpuRegister(RSP), right.GetStackIndex()));
       } else {
@@ -1508,11 +1499,7 @@ void InstructionCodeGeneratorX86_64::GenerateTestAndBranch(HInstruction* instruc
       __ cmpl(lhs.AsRegister<CpuRegister>(), rhs.AsRegister<CpuRegister>());
     } else if (rhs.IsConstant()) {
       int32_t constant = CodeGenerator::GetInt32ValueOf(rhs.GetConstant());
-      if (constant == 0) {
-        __ testl(lhs.AsRegister<CpuRegister>(), lhs.AsRegister<CpuRegister>());
-      } else {
-        __ cmpl(lhs.AsRegister<CpuRegister>(), Immediate(constant));
-      }
+      codegen_->Compare32BitValue(lhs.AsRegister<CpuRegister>(), constant);
     } else {
       __ cmpl(lhs.AsRegister<CpuRegister>(),
               Address(CpuRegister(RSP), rhs.GetStackIndex()));
@@ -1691,11 +1678,7 @@ void InstructionCodeGeneratorX86_64::HandleCondition(HCondition* cond) {
         __ cmpl(lhs.AsRegister<CpuRegister>(), rhs.AsRegister<CpuRegister>());
       } else if (rhs.IsConstant()) {
         int32_t constant = CodeGenerator::GetInt32ValueOf(rhs.GetConstant());
-        if (constant == 0) {
-          __ testl(lhs.AsRegister<CpuRegister>(), lhs.AsRegister<CpuRegister>());
-        } else {
-          __ cmpl(lhs.AsRegister<CpuRegister>(), Immediate(constant));
-        }
+        codegen_->Compare32BitValue(lhs.AsRegister<CpuRegister>(), constant);
       } else {
         __ cmpl(lhs.AsRegister<CpuRegister>(), Address(CpuRegister(RSP), rhs.GetStackIndex()));
       }
@@ -1709,16 +1692,7 @@ void InstructionCodeGeneratorX86_64::HandleCondition(HCondition* cond) {
         __ cmpq(lhs.AsRegister<CpuRegister>(), rhs.AsRegister<CpuRegister>());
       } else if (rhs.IsConstant()) {
         int64_t value = rhs.GetConstant()->AsLongConstant()->GetValue();
-        if (IsInt<32>(value)) {
-          if (value == 0) {
-            __ testq(lhs.AsRegister<CpuRegister>(), lhs.AsRegister<CpuRegister>());
-          } else {
-            __ cmpq(lhs.AsRegister<CpuRegister>(), Immediate(static_cast<int32_t>(value)));
-          }
-        } else {
-          // Value won't fit in an int.
-          __ cmpq(lhs.AsRegister<CpuRegister>(), codegen_->LiteralInt64Address(value));
-        }
+        codegen_->Compare64BitValue(lhs.AsRegister<CpuRegister>(), value);
       } else {
         __ cmpq(lhs.AsRegister<CpuRegister>(), Address(CpuRegister(RSP), rhs.GetStackIndex()));
       }
@@ -1850,6 +1824,7 @@ void LocationsBuilderX86_64::VisitCompare(HCompare* compare) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(compare, LocationSummary::kNoCall);
   switch (compare->InputAt(0)->GetType()) {
+    case Primitive::kPrimInt:
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RequiresRegister());
       locations->SetInAt(1, Location::Any());
@@ -1876,21 +1851,28 @@ void InstructionCodeGeneratorX86_64::VisitCompare(HCompare* compare) {
 
   NearLabel less, greater, done;
   Primitive::Type type = compare->InputAt(0)->GetType();
+  Condition less_cond = kLess;
+
+  __ xorl(out, out);
+
   switch (type) {
+    case Primitive::kPrimInt: {
+      CpuRegister left_reg = left.AsRegister<CpuRegister>();
+      if (right.IsConstant()) {
+        int32_t value = right.GetConstant()->AsIntConstant()->GetValue();
+        codegen_->Compare32BitValue(left_reg, value);
+      } else if (right.IsStackSlot()) {
+        __ cmpl(left_reg, Address(CpuRegister(RSP), right.GetStackIndex()));
+      } else {
+        __ cmpl(left_reg, right.AsRegister<CpuRegister>());
+      }
+      break;
+    }
     case Primitive::kPrimLong: {
       CpuRegister left_reg = left.AsRegister<CpuRegister>();
       if (right.IsConstant()) {
         int64_t value = right.GetConstant()->AsLongConstant()->GetValue();
-        if (IsInt<32>(value)) {
-          if (value == 0) {
-            __ testq(left_reg, left_reg);
-          } else {
-            __ cmpq(left_reg, Immediate(static_cast<int32_t>(value)));
-          }
-        } else {
-          // Value won't fit in an int.
-          __ cmpq(left_reg, codegen_->LiteralInt64Address(value));
-        }
+        codegen_->Compare64BitValue(left_reg, value);
       } else if (right.IsDoubleStackSlot()) {
         __ cmpq(left_reg, Address(CpuRegister(RSP), right.GetStackIndex()));
       } else {
@@ -1909,6 +1891,7 @@ void InstructionCodeGeneratorX86_64::VisitCompare(HCompare* compare) {
         __ ucomiss(left_reg, right.AsFpuRegister<XmmRegister>());
       }
       __ j(kUnordered, compare->IsGtBias() ? &greater : &less);
+      less_cond = kBelow;  //  ucomis{s,d} sets CF
       break;
     }
     case Primitive::kPrimDouble: {
@@ -1922,14 +1905,15 @@ void InstructionCodeGeneratorX86_64::VisitCompare(HCompare* compare) {
         __ ucomisd(left_reg, right.AsFpuRegister<XmmRegister>());
       }
       __ j(kUnordered, compare->IsGtBias() ? &greater : &less);
+      less_cond = kBelow;  //  ucomis{s,d} sets CF
       break;
     }
     default:
       LOG(FATAL) << "Unexpected compare type " << type;
   }
-  __ movl(out, Immediate(0));
+
   __ j(kEqual, &done);
-  __ j(type == Primitive::kPrimLong ? kLess : kBelow, &less);  //  ucomis{s,d} sets CF (kBelow)
+  __ j(less_cond, &less);
 
   __ Bind(&greater);
   __ movl(out, Immediate(1));
@@ -3537,14 +3521,14 @@ void InstructionCodeGeneratorX86_64::GenerateDivRemIntegral(HBinaryOperation* in
     // Dividing by -1 is actually negation and -0x800000000(00000000) = 0x80000000(00000000)
     // so it's safe to just use negl instead of more complex comparisons.
     if (type == Primitive::kPrimInt) {
-      __ cmpl(second_reg, Immediate(-1));
+      codegen_->Compare32BitValue(second_reg, -1);
       __ j(kEqual, slow_path->GetEntryLabel());
       // edx:eax <- sign-extended of eax
       __ cdq();
       // eax = quotient, edx = remainder
       __ idivl(second_reg);
     } else {
-      __ cmpq(second_reg, Immediate(-1));
+      codegen_->Compare32BitValue(second_reg, -1);
       __ j(kEqual, slow_path->GetEntryLabel());
       // rdx:rax <- sign-extended of rax
       __ cqo();
@@ -5030,14 +5014,14 @@ void InstructionCodeGeneratorX86_64::VisitBoundsCheck(HBoundsCheck* instruction)
 
     // We have to reverse the jump condition because the length is the constant.
     CpuRegister index_reg = index_loc.AsRegister<CpuRegister>();
-    __ cmpl(index_reg, Immediate(length));
+    codegen_->Compare32BitValue(index_reg, length);
     codegen_->AddSlowPath(slow_path);
     __ j(kAboveEqual, slow_path->GetEntryLabel());
   } else {
     CpuRegister length = length_loc.AsRegister<CpuRegister>();
     if (index_loc.IsConstant()) {
       int32_t value = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
-      __ cmpl(length, Immediate(value));
+      codegen_->Compare32BitValue(length, value);
     } else {
       __ cmpl(length, index_loc.AsRegister<CpuRegister>());
     }
@@ -6464,6 +6448,27 @@ void CodeGeneratorX86_64::Load64BitValue(CpuRegister dest, int64_t value) {
     __ movl(dest, Immediate(static_cast<int32_t>(value)));
   } else {
     __ movq(dest, Immediate(value));
+  }
+}
+
+void CodeGeneratorX86_64::Compare32BitValue(CpuRegister dest, int32_t value) {
+  if (value == 0) {
+    __ testl(dest, dest);
+  } else {
+    __ cmpl(dest, Immediate(value));
+  }
+}
+
+void CodeGeneratorX86_64::Compare64BitValue(CpuRegister dest, int64_t value) {
+  if (IsInt<32>(value)) {
+    if (value == 0) {
+      __ testq(dest, dest);
+    } else {
+      __ cmpq(dest, Immediate(static_cast<int32_t>(value)));
+    }
+  } else {
+    // Value won't fit in an int.
+    __ cmpq(dest, LiteralInt64Address(value));
   }
 }
 
