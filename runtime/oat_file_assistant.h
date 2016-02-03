@@ -275,6 +275,8 @@ class OatFileAssistant {
   // describing why there was failure. error_msg must not be null.
   bool GenerateOatFile(std::string* error_msg);
 
+  bool IsAllowedToUpdateOatFiles();
+
   // Executes dex2oat using the current runtime configuration overridden with
   // the given arguments. This does not check to see if dex2oat is enabled in
   // the runtime configuration.
@@ -295,6 +297,10 @@ class OatFileAssistant {
   static bool DexFilenameToOdexFilename(const std::string& location,
       InstructionSet isa, std::string* odex_filename, std::string* error_msg);
 
+  // Constructs a default oat filename located in the dalvik-cache.
+  static bool DefaultDalvikCacheOatFilename(const std::string& location,
+      InstructionSet isa, std::string* oat_filename, std::string* error_msg);
+
  private:
   struct ImageInfo {
     uint32_t oat_checksum = 0;
@@ -307,7 +313,7 @@ class OatFileAssistant {
   // Does not check existence of the cache or try to create it.
   // Includes the trailing slash.
   // Returns an empty string if we can't get the dalvik cache directory path.
-  std::string DalvikCacheDirectory();
+  static std::string DalvikCacheDirectory();
 
   // Constructs the filename for the profile file.
   // Returns an empty string if we do not have the necessary information to
@@ -468,6 +474,16 @@ class OatFileAssistant {
   // of the OatFileAssistant object and the OatFileAssistant object is in a
   // bad state and should no longer be used.
   bool oat_file_released_ = false;
+
+  // Indicates whether or not the we should try to make the dex file up to date
+  // (i.e. compiling or relocating). This is true only if we are given a not
+  // null oat location in the constructor which is the signal that the caller
+  // wants the dexfile to be optimized.
+  // If this ends up being false the dex file will not be compiled or relocated
+  // even if out of date. However, when trying to load, the default lookup paths
+  // for a compiled (.oat or .odex) file will be searched. There are:
+  // 1) dalvik-cache and 2) the parent folder of the dex file.
+  bool allow_oat_file_update_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(OatFileAssistant);
 };
