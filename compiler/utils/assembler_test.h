@@ -460,7 +460,7 @@ class AssemblerTest : public testing::Test {
   explicit AssemblerTest() {}
 
   void SetUp() OVERRIDE {
-    assembler_.reset(new Ass());
+    assembler_.reset(CreateAssembler());
     test_helper_.reset(
         new AssemblerTestInfrastructure(GetArchitectureString(),
                                         GetAssemblerCmdName(),
@@ -476,6 +476,11 @@ class AssemblerTest : public testing::Test {
 
   void TearDown() OVERRIDE {
     test_helper_.reset();  // Clean up the helper.
+  }
+
+  // Override this to set up any architecture-specific things, e.g., CPU revision.
+  virtual Ass* CreateAssembler() {
+    return new Ass();
   }
 
   // Override this to set up any architecture-specific things, e.g., register vectors.
