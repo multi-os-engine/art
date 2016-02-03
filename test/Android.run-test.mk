@@ -326,13 +326,15 @@ TEST_ART_BROKEN_INTERPRETER_ACCESS_CHECK_TESTS :=
 # Tests that are broken with GC stress.
 # * 137-cfi needs to unwind a second forked process. We're using a primitive sleep to wait till we
 #   hope the second process got into the expected state. The slowness of gcstress makes this bad.
-# * 961-default-iface-resolution-generated and 964-default-iface-init-generated are very long tests
-#   that often will take more than the timeout to run when gcstress is enabled. This is because
-#   gcstress slows down allocations significantly which these tests do a lot.
+# * 961-default-iface-resolution-generated, 964-default-iface-init-generated
+#   and, 971-iface-super are very long tests that often will take more than the
+#   timeout to run when gcstress is enabled. This is because gcstress slows
+#   down allocations significantly which these tests do a lot.
 TEST_ART_BROKEN_GCSTRESS_RUN_TESTS := \
   137-cfi \
   961-default-iface-resolution-generated \
-  964-default-iface-init-generated
+  964-default-iface-init-generated \
+  971-iface-super
 
 ifneq (,$(filter gcstress,$(GC_TYPES)))
   ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,$(TARGET_TYPES),$(RUN_TYPES),$(PREBUILD_TYPES), \
