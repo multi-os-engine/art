@@ -322,8 +322,13 @@ static inline JValue Execute(Thread* self, const DexFile::CodeItem* code_item,
         const instrumentation::Instrumentation* const instrumentation =
             Runtime::Current()->GetInstrumentation();
         while (true) {
-          if (instrumentation->IsActive() || !Runtime::Current()->IsStarted()) {
-            // TODO: allow JIT profiling instrumentation.  Now, just punt on all instrumentation.
+          // Mterp does not support all instrumentation.
+#if (defined(__aarch64__) || defined(__arm__))
+          bool unhandled_instrumentation = instrumentation->NonJitProfilingActive();
+#else
+          bool unhandled_instrumentation = instrumentation->IsActive();
+#endif
+          if (unhandled_instrumentation || !Runtime::Current()->IsStarted()) {
 #if !defined(__clang__)
             return ExecuteGotoImpl<false, false>(self, code_item, shadow_frame, result_register);
 #else
