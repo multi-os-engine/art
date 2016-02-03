@@ -76,12 +76,17 @@ OatFileAssistant::OatFileAssistant(const char* dex_location,
     load_executable_ = false;
   }
 
-  // If the user gave a target oat location, save that as the cached oat
-  // location now so we won't try to construct the default location later.
-  if (oat_location != nullptr) {
+  // If the user gave a target oat location then it means that we are allowed to
+  // update the oat file (either compile or relocate).
+  // Save that as the cached oat location now so we won't try to construct the
+  // default location for loading later.
+  if (oat_location == nullptr) {
+    allow_oat_file_update_ = false;
+  } else if (oat_location != nullptr) {
     cached_oat_file_name_ = std::string(oat_location);
     cached_oat_file_name_attempted_ = true;
     cached_oat_file_name_found_ = true;
+    allow_oat_file_update_ = true;
   }
 
   // If there is no package name given, we will not be able to find any
@@ -157,7 +162,13 @@ OatFileAssistant::DexOptNeeded OatFileAssistant::GetDexOptNeeded() {
   return HasOriginalDexFiles() ? kDex2OatNeeded : kNoDexOptNeeded;
 }
 
+bool OatFileAssistant::IsAllowedToUpdateOatFiles() {
+  return allow_oat_file_update_;
+}
+
 bool OatFileAssistant::MakeUpToDate(std::string* error_msg) {
+  DCHECK(allow_oat_file_update_);
+
   switch (GetDexOptNeeded()) {
     case kNoDexOptNeeded: return true;
     case kDex2OatNeeded: return GenerateOatFile(error_msg);
