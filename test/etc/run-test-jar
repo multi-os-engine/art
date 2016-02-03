@@ -119,6 +119,12 @@ while true; do
         ANDROID_ROOT="$ANDROID_HOST_OUT"
         shift
     elif [ "x$1" = "x--no-prebuild" ]; then
+        # Historically, --no-prebuild will trigger compilation when the dex files
+        # are being loaded. The runtime behaviour changed and this is no longer true.
+        # Add the flag which forces oat file update to preserve the same test semantic.
+        # Note: --no-prebuild without -Xforce-oat-update-at-load-time is basically
+        # the same test configuration as interpret-only (or jit if that's enabled).
+        FLAGS="${FLAGS} -Xforce-oat-update-at-load-time"
         PREBUILD="n"
         shift
     elif [ "x$1" = "x--no-image" ]; then

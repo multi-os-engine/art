@@ -208,7 +208,8 @@ Runtime::Runtime()
       experimental_flags_(ExperimentalFlags::kNone),
       oat_file_manager_(nullptr),
       is_low_memory_mode_(false),
-      safe_mode_(false) {
+      safe_mode_(false),
+      force_oat_update_at_load_time_(false) {
   CheckAsmSupportOffsetsAndSizes();
   std::fill(callee_save_methods_, callee_save_methods_ + arraysize(callee_save_methods_), 0u);
   interpreter::CheckInterpreterAsmConstants();
@@ -945,6 +946,7 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
 
   no_sig_chain_ = runtime_options.Exists(Opt::NoSigChain);
   force_native_bridge_ = runtime_options.Exists(Opt::ForceNativeBridge);
+  force_oat_update_at_load_time_ = runtime_options.Exists(Opt::ForceOatUpdateAtLoadTime);
 
   Split(runtime_options.GetOrDefault(Opt::CpuAbiList), ',', &cpu_abilist_);
 

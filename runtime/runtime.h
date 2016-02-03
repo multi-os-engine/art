@@ -607,6 +607,10 @@ class Runtime {
     return dump_native_stack_on_sig_quit_;
   }
 
+  bool GetForceOatUpdateAtLoadTime() const {
+    return force_oat_update_at_load_time_;
+  }
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -819,6 +823,11 @@ class Runtime {
 
   // Whether threads should dump their native stack on SIGQUIT.
   bool dump_native_stack_on_sig_quit_;
+
+  // Whether or not we should force the update of the oat file at load time.
+  // By default, if no explicit oat location is provided, OatFileManager will
+  // not attempt to make dex files up to date.
+  bool force_oat_update_at_load_time_;
 
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };
