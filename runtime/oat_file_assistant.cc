@@ -76,12 +76,17 @@ OatFileAssistant::OatFileAssistant(const char* dex_location,
     load_executable_ = false;
   }
 
-  // If the user gave a target oat location, save that as the cached oat
-  // location now so we won't try to construct the default location later.
-  if (oat_location != nullptr) {
+  // If the user gave a target oat location then it means we are allowed to
+  // update the oat file (either compile or relocate).
+  // Save that as the cached oat location now so we won't try to construct the
+  // default location for loading later.
+  if (oat_location == nullptr) {
+    allow_oat_file_update_ = false;
+  } else if (oat_location != nullptr) {
     cached_oat_file_name_ = std::string(oat_location);
     cached_oat_file_name_attempted_ = true;
     cached_oat_file_name_found_ = true;
+    allow_oat_file_update_ = true;
   }
 
   // If there is no package name given, we will not be able to find any
@@ -157,7 +162,13 @@ OatFileAssistant::DexOptNeeded OatFileAssistant::GetDexOptNeeded() {
   return HasOriginalDexFiles() ? kDex2OatNeeded : kNoDexOptNeeded;
 }
 
+bool OatFileAssistant::IsAllowedToUpdateOatFiles() {
+  return allow_oat_file_update_;
+}
+
 bool OatFileAssistant::MakeUpToDate(std::string* error_msg) {
+  DCHECK(allow_oat_file_update_);
+
   switch (GetDexOptNeeded()) {
     case kNoDexOptNeeded: return true;
     case kDex2OatNeeded: return GenerateOatFile(error_msg);
@@ -338,19 +349,23 @@ std::string OatFileAssistant::ArtFileName(const OatFile* oat_file) const {
   return oat_file_location.substr(0, last_ext) + ".art";
 }
 
+bool OatFileAssistant::DefaultDalvikCacheOatFilename(const std::string& location,
+      InstructionSet isa, std::string* oat_filename, std::string* error_msg) {
+  // Compute the oat file name from the dex location.
+  // TODO: The oat file assistant should be the definitive place for
+  // determining the oat file name from the dex location, not
+  // GetDalvikCacheFilename.
+  std::string cache_dir = StringPrintf("%s%s",
+      DalvikCacheDirectory().c_str(), GetInstructionSetString(isa));
+  return GetDalvikCacheFilename(location.c_str(), cache_dir.c_str(), oat_filename, error_msg);
+}
+
 const std::string* OatFileAssistant::OatFileName() {
   if (!cached_oat_file_name_attempted_) {
     cached_oat_file_name_attempted_ = true;
-
-    // Compute the oat file name from the dex location.
-    // TODO: The oat file assistant should be the definitive place for
-    // determining the oat file name from the dex location, not
-    // GetDalvikCacheFilename.
-    std::string cache_dir = StringPrintf("%s%s",
-        DalvikCacheDirectory().c_str(), GetInstructionSetString(isa_));
     std::string error_msg;
-    cached_oat_file_name_found_ = GetDalvikCacheFilename(dex_location_.c_str(),
-        cache_dir.c_str(), &cached_oat_file_name_, &error_msg);
+    cached_oat_file_name_found_ = DefaultDalvikCacheOatFilename(
+          dex_location_, isa_, &cached_oat_file_name_, &error_msg);
     if (!cached_oat_file_name_found_) {
       // If we can't determine the oat file name, we treat the oat file as
       // inaccessible.
