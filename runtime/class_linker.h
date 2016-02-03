@@ -957,9 +957,9 @@ class ClassLinker {
   void CreateProxyMethod(Handle<mirror::Class> klass, ArtMethod* prototype, ArtMethod* out)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  // Ensures that methods have the kAccPreverified bit set. We use the kAccPreverfied bit on the
+  // Ensures that methods have the kAccSkipAccessChecks bit set. We use the kAccVerificationAttempted bit on the
   // class access flags to determine whether this has been done before.
-  void EnsurePreverifiedMethods(Handle<mirror::Class> c)
+  void EnsureSkipAccessChecksMethods(Handle<mirror::Class> c)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   mirror::Class* LookupClassFromBootImage(const char* descriptor)
