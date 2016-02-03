@@ -664,28 +664,19 @@ public class Main {
     System.out.println("testFinalizableByForcingGc() failed to force gc.");
   }
 
-  /// CHECK-START: int Main.testHSelect(boolean) load_store_elimination (before)
+  /// CHECK-START: int Main.$noinline$testHSelect(boolean) load_store_elimination (before)
   /// CHECK: InstanceFieldSet
   /// CHECK: Select
 
-  /// CHECK-START: int Main.testHSelect(boolean) load_store_elimination (after)
+  /// CHECK-START: int Main.$noinline$testHSelect(boolean) load_store_elimination (after)
   /// CHECK: InstanceFieldSet
   /// CHECK: Select
 
   // Test that HSelect creates alias.
-  public static int testHSelect(boolean b) {
-    // Disable inlining.
-    System.out.print("");
-    System.out.print("");
-    System.out.print("");
-    System.out.print("");
-    System.out.print("");
-    System.out.print("");
-    System.out.print("");
-    System.out.print("");
-    System.out.print("");
-    System.out.print("");
-
+  public static int $noinline$testHSelect(boolean b) throws Exception {
+    if (sFlag) {
+      throw new Exception();
+    }
     TestClass obj = new TestClass();
     TestClass obj2 = null;
     obj.i = 0xdead;
@@ -713,7 +704,7 @@ public class Main {
     }
   }
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
     assertDoubleEquals(Math.PI * Math.PI * Math.PI, calcCircleArea(Math.PI));
     assertIntEquals(test1(new TestClass(), new TestClass()), 3);
     assertIntEquals(test2(new TestClass()), 1);
@@ -754,6 +745,8 @@ public class Main {
     assertIntEquals(test23(false), 5);
     assertFloatEquals(test24(), 8.0f);
     testFinalizableByForcingGc();
-    assertIntEquals(testHSelect(true), 0xdead);
+    assertIntEquals($noinline$testHSelect(true), 0xdead);
   }
+
+  static boolean sFlag;
 }
