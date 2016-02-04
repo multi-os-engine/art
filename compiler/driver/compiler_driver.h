@@ -478,7 +478,7 @@ class CompilerDriver {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   bool MayInline(const DexFile* inlined_from, const DexFile* inlined_into) const {
-    if (!kIsTargetBuild) {
+    if (UNLIKELY(inlined_from != inlined_into)) {
       return MayInlineInternal(inlined_from, inlined_into);
     }
     return true;

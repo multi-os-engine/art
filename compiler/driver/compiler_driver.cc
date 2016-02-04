@@ -2762,8 +2762,8 @@ bool CompilerDriver::IsStringInit(uint32_t method_index, const DexFile* dex_file
 bool CompilerDriver::MayInlineInternal(const DexFile* inlined_from,
                                        const DexFile* inlined_into) const {
   // We're not allowed to inline across dex files if we're the no-inline-from dex file.
-  if (inlined_from != inlined_into &&
-      compiler_options_->GetNoInlineFromDexFile() != nullptr &&
+  DCHECK_NE(inlined_from, inlined_into);
+  if (compiler_options_->GetNoInlineFromDexFile() != nullptr &&
       ContainsElement(*compiler_options_->GetNoInlineFromDexFile(), inlined_from)) {
     return false;
   }
