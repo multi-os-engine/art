@@ -1669,6 +1669,19 @@ bool ClassLinker::AddImageSpace(
                                                          forward_dex_cache_arrays);
       class_table->Visit(visitor);
     }
+    // forward_dex_cache_arrays is true iff we copied all of the dex cache arrays into the .bss.
+    // In this case, madvise away the dex cache arrays section of the image to reduce RAM usage and
+    // mark as PROT_NONE to catch any invalid accesses.
+    if (forward_dex_cache_arrays) {
+      const ImageSection& dex_cache_section = header.GetImageSection(
+          ImageHeader::kSectionDexCacheArrays);
+      uint8_t* section_begin = AlignUp(space->Begin() + dex_cache_section.Offset(), kPageSize);
+      uint8_t* section_end = AlignDown(space->Begin() + dex_cache_section.End(), kPageSize);
+      if (section_begin < section_end) {
+        madvise(section_begin, section_end - section_begin, MADV_DONTNEED);
+        mprotect(section_begin, section_end - section_begin, PROT_NONE);
+      }
+    }
   }
   VLOG(class_linker) << "Adding image space took " << PrettyDuration(NanoTime() - start_time);
   return true;
