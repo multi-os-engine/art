@@ -324,6 +324,797 @@ public class Main {
       return new Object();
     }
 
+    /// CHECK-START: double Main.constructBase() inliner (before)
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBase() {
+      Base b = new Base();
+      return b.intField + b.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructBase(int) inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase(int) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructBase(int) inliner (after)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+
+    /// CHECK-START: double Main.constructBase(int) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBase(int intValue) {
+      Base b = new Base(intValue);
+      return b.intField + b.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructBaseWith0() inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      IntConstant 0
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBaseWith0() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBaseWith0() {
+      Base b = new Base(0);
+      return b.intField + b.doubleField;
+    }
+
+    /// CHECK-START: java.lang.String Main.constructBase(java.lang.String) inliner (before)
+    /// CHECK-DAG:  <<Value:l\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: java.lang.String Main.constructBase(java.lang.String) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: java.lang.String Main.constructBase(java.lang.String) inliner (after)
+    /// CHECK-DAG:  <<Value:l\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+
+    /// CHECK-START: java.lang.String Main.constructBase(java.lang.String) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static String constructBase(String stringValue) {
+      Base b = new Base(stringValue);
+      return b.stringField;
+    }
+
+    /// CHECK-START: java.lang.String Main.constructBaseWithNullString() inliner (before)
+    /// CHECK-DAG:  <<Null:l\d+>>       NullConstant
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Null>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: java.lang.String Main.constructBaseWithNullString() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: java.lang.String Main.constructBaseWithNullString() inliner (after)
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static String constructBaseWithNullString() {
+      String stringValue = null;
+      Base b = new Base(stringValue);
+      return b.stringField;
+    }
+
+    /// CHECK-START: double Main.constructBase(double, java.lang.Object) inliner (before)
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<OValue:l\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<DValue>>,<<OValue>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase(double, java.lang.Object) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructBase(double, java.lang.Object) inliner (after)
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<OValue:l\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<DValue>>]
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<OValue>>]
+
+    /// CHECK-START: double Main.constructBase(double, java.lang.Object) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBase(double doubleValue, Object objectValue) {
+      Base b = new Base(doubleValue, objectValue);
+      return (b.objectField != null) ? b.doubleField : -b.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructBase(int, double, java.lang.Object) inliner (before)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<OValue:l\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>,<<OValue>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase(int, double, java.lang.Object) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructBase(int, double, java.lang.Object) inliner (after)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<OValue:l\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<IValue>>]
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<DValue>>]
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<OValue>>]
+
+    /// CHECK-START: double Main.constructBase(int, double, java.lang.Object) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBase(int intValue, double doubleValue, Object objectValue) {
+      Base b = new Base(intValue, doubleValue, objectValue);
+      double tmp = b.intField + b.doubleField;
+      return (b.objectField != null) ? tmp : -tmp;
+    }
+
+    /// CHECK-START: double Main.constructBaseWith0DoubleNull(double) inliner (before)
+    /// CHECK-DAG:  <<IValue:i\d+>>     IntConstant 0
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<OValue:l\d+>>     NullConstant
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>,<<OValue>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBaseWith0DoubleNull(double) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructBaseWith0DoubleNull(double) inliner (after)
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<DValue>>]
+
+    /// CHECK-START: double Main.constructBaseWith0DoubleNull(double) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBaseWith0DoubleNull(double doubleValue) {
+      Base b = new Base(0, doubleValue, null);
+      double tmp = b.intField + b.doubleField;
+      return (b.objectField != null) ? tmp : -tmp;
+    }
+
+    /// CHECK-START: double Main.constructBase(int, double, java.lang.Object, java.lang.String) inliner (before)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>,{{l\d+}},{{l\d+}}{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase(int, double, java.lang.Object, java.lang.String) inliner (after)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>,{{l\d+}},{{l\d+}}{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase(int, double, java.lang.Object, java.lang.String) inliner (after)
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBase(
+        int intValue, double doubleValue, Object objectValue, String stringValue) {
+      Base b = new Base(intValue, doubleValue, objectValue, stringValue);
+      double tmp = b.intField + b.doubleField;
+      tmp = (b.objectField != null) ? tmp : -tmp;
+      return (b.stringField != null) ? 2.0 * tmp : 0.5 * tmp;
+    }
+
+    /// CHECK-START: double Main.constructBase(double) inliner (before)
+    /// CHECK-DAG:  <<Value:d\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase(double) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructBase(double) inliner (after)
+    /// CHECK-DAG:  <<Value:d\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+
+    /// CHECK-START: double Main.constructBase(double) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBase(double doubleValue) {
+      Base b = new Base(doubleValue);
+      return b.intField + b.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructBaseWith0d() inliner (before)
+    /// CHECK-DAG:  <<Value:d\d+>>      DoubleConstant
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBaseWith0d() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBaseWith0d() {
+      Base b = new Base(0.0);
+      return b.intField + b.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructBase(java.lang.Object) inliner (before)
+    /// CHECK-DAG:  <<OValue:l\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<OValue>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase(java.lang.Object) inliner (after)
+    /// CHECK-DAG:  <<OValue:l\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<OValue>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase(java.lang.Object) inliner (after)
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBase(Object objectValue) {
+      Base b = new Base(objectValue);
+      double tmp = b.intField + b.doubleField;
+      return (b.objectField != null) ? tmp + 1.0 : tmp - 1.0;
+    }
+
+    /// CHECK-START: double Main.constructBase(int, long) inliner (before)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<JValue:j\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<JValue>>{{(,[ij]\d+)?}}] method_name:Base.<init>
+
+    /// CHECK-START: double Main.constructBase(int, long) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructBase(int, long) inliner (after)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<IValue>>]
+
+    /// CHECK-START: double Main.constructBase(int, long) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructBase(int intValue, long dummy) {
+      Base b = new Base(intValue, dummy);
+      return b.intField + b.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerived() inliner (before)
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerived() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerived() {
+      Derived d = new Derived();
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerived(int) inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerived(int) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructDerived(int) inliner (after)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+
+    /// CHECK-START: double Main.constructDerived(int) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerived(int intValue) {
+      Derived d = new Derived(intValue);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerivedWith0() inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      IntConstant 0
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerivedWith0() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerivedWith0() {
+      Derived d = new Derived(0);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: java.lang.String Main.constructDerived(java.lang.String) inliner (before)
+    /// CHECK-DAG:  <<Value:l\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: java.lang.String Main.constructDerived(java.lang.String) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: java.lang.String Main.constructDerived(java.lang.String) inliner (after)
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static String constructDerived(String stringValue) {
+      Derived d = new Derived(stringValue);
+      return d.stringField;
+    }
+
+    /// CHECK-START: double Main.constructDerived(double) inliner (before)
+    /// CHECK-DAG:  <<Value:d\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerived(double) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructDerived(double) inliner (after)
+    /// CHECK-DAG:  <<Value:d\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+
+    /// CHECK-START: double Main.constructDerived(double) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerived(double doubleValue) {
+      Derived d = new Derived(doubleValue);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerivedWith0d() inliner (before)
+    /// CHECK-DAG:  <<Value:d\d+>>      DoubleConstant
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerivedWith0d() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerivedWith0d() {
+      Derived d = new Derived(0.0);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object) inliner (before)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<OValue:l\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>,<<OValue>>{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object) inliner (after)
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<DValue>>]
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerived(int intValue, double doubleValue, Object objectValue) {
+      Derived d = new Derived(intValue, doubleValue, objectValue);
+      double tmp = d.intField + d.doubleField;
+      return (d.objectField != null) ? tmp : -tmp;
+    }
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object, java.lang.String) inliner (before)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>,{{l\d+}},{{l\d+}}{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object, java.lang.String) inliner (after)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>,{{l\d+}},{{l\d+}}{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object, java.lang.String) inliner (after)
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerived(
+        int intValue, double doubleValue, Object objectValue, String stringValue) {
+      Derived d = new Derived(intValue, doubleValue, objectValue, stringValue);
+      double tmp = d.intField + d.doubleField;
+      tmp = (d.objectField != null) ? tmp : -tmp;
+      return (d.stringField != null) ? 2.0 * tmp : 0.5 * tmp;
+    }
+
+    /// CHECK-START: double Main.constructDerived(float) inliner (before)
+    /// CHECK-DAG:  <<Value:f\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerived(float) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructDerived(float) inliner (after)
+    /// CHECK-DAG:  <<Value:f\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+
+    /// CHECK-START: double Main.constructDerived(float) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerived(float floatValue) {
+      Derived d = new Derived(floatValue);
+      return d.intField + d.doubleField + d.floatField;
+    }
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object, float) inliner (before)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<OValue:l\d+>>     ParameterValue
+    /// CHECK-DAG:  <<FValue:f\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>,<<OValue>>,<<FValue>>{{(,[ij]\d+)?}}] method_name:Derived.<init>
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object, float) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object, float) inliner (after)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<FValue:f\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<IValue>>]
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<DValue>>]
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<FValue>>]
+
+    /// CHECK-START: double Main.constructDerived(int, double, java.lang.Object, float) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerived(
+        int intValue, double doubleValue, Object objectValue, float floatValue) {
+      Derived d = new Derived(intValue, doubleValue, objectValue, floatValue);
+      double tmp = d.intField + d.doubleField + d.floatField;
+      return (d.objectField != null) ? tmp : -tmp;
+    }
+
+    /// CHECK-START: int Main.constructBaseWithFinalField() inliner (before)
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>{{(,[ij]\d+)?}}] method_name:BaseWithFinalField.<init>
+
+    /// CHECK-START: int Main.constructBaseWithFinalField() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static int constructBaseWithFinalField() {
+      BaseWithFinalField b = new BaseWithFinalField();
+      return b.intField;
+    }
+
+    /// CHECK-START: int Main.constructBaseWithFinalField(int) inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:BaseWithFinalField.<init>
+
+    /// CHECK-START: int Main.constructBaseWithFinalField(int) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+
+    /// CHECK-START: int Main.constructBaseWithFinalField(int) inliner (after)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+    /// CHECK-DAG:                      MemoryBarrier
+
+    /// CHECK-START: int Main.constructBaseWithFinalField(int) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static int constructBaseWithFinalField(int intValue) {
+      BaseWithFinalField b = new BaseWithFinalField(intValue);
+      return b.intField;
+    }
+
+    /// CHECK-START: int Main.constructBaseWithFinalFieldWith0() inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      IntConstant 0
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:BaseWithFinalField.<init>
+
+    /// CHECK-START: int Main.constructBaseWithFinalFieldWith0() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static int constructBaseWithFinalFieldWith0() {
+      BaseWithFinalField b = new BaseWithFinalField(0);
+      return b.intField;
+    }
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField() inliner (before)
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>{{(,[ij]\d+)?}}] method_name:DerivedWithFinalField.<init>
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerivedWithFinalField() {
+      DerivedWithFinalField d = new DerivedWithFinalField();
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(int) inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:DerivedWithFinalField.<init>
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(int) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(int) inliner (after)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+    /// CHECK-DAG:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(int) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerivedWithFinalField(int intValue) {
+      DerivedWithFinalField d = new DerivedWithFinalField(intValue);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerivedWithFinalFieldWith0() inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      IntConstant 0
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:DerivedWithFinalField.<init>
+
+    /// CHECK-START: double Main.constructDerivedWithFinalFieldWith0() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerivedWithFinalFieldWith0() {
+      DerivedWithFinalField d = new DerivedWithFinalField(0);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(double) inliner (before)
+    /// CHECK-DAG:  <<Value:d\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:DerivedWithFinalField.<init>
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(double) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(double) inliner (after)
+    /// CHECK-DAG:  <<Value:d\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+    /// CHECK-DAG:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(double) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerivedWithFinalField(double doubleValue) {
+      DerivedWithFinalField d = new DerivedWithFinalField(doubleValue);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerivedWithFinalFieldWith0d() inliner (before)
+    /// CHECK-DAG:  <<Value:d\d+>>      DoubleConstant
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:DerivedWithFinalField.<init>
+
+    /// CHECK-START: double Main.constructDerivedWithFinalFieldWith0d() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerivedWithFinalFieldWith0d() {
+      DerivedWithFinalField d = new DerivedWithFinalField(0.0);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(int, double) inliner (before)
+    /// CHECK-DAG:  <<IValue:i\d+>>     ParameterValue
+    /// CHECK-DAG:  <<DValue:d\d+>>     ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>{{(,[ij]\d+)?}}] method_name:DerivedWithFinalField.<init>
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(int, double) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(int, double) inliner (after)
+    /// CHECK-DAG:  <<Value:d\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    /// CHECK-DAG:                      InstanceFieldSet [<<Obj>>,<<Value>>]
+    /// CHECK-DAG:                      MemoryBarrier
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(int, double) inliner (after)
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-DAG:                      InstanceFieldSet
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    /// CHECK-START: double Main.constructDerivedWithFinalField(int, double) inliner (after)
+    /// CHECK-DAG:                      MemoryBarrier
+    /// CHECK-NOT:                      MemoryBarrier
+
+    public static double constructDerivedWithFinalField(int intValue, double doubleValue) {
+      DerivedWithFinalField d = new DerivedWithFinalField(intValue, doubleValue);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: double Main.constructDerivedWithFinalFieldWith0And0d() inliner (before)
+    /// CHECK-DAG:  <<IValue:i\d+>>     IntConstant 0
+    /// CHECK-DAG:  <<DValue:d\d+>>     DoubleConstant
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<IValue>>,<<DValue>>{{(,[ij]\d+)?}}] method_name:DerivedWithFinalField.<init>
+
+    /// CHECK-START: double Main.constructDerivedWithFinalFieldWith0And0d() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static double constructDerivedWithFinalFieldWith0And0d() {
+      DerivedWithFinalField d = new DerivedWithFinalField(0, 0.0);
+      return d.intField + d.doubleField;
+    }
+
+    /// CHECK-START: int Main.constructDerivedInSecondDex() inliner (before)
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>{{(,[ij]\d+)?}}] method_name:DerivedInSecondDex.<init>
+
+    /// CHECK-START: int Main.constructDerivedInSecondDex() inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static int constructDerivedInSecondDex() {
+      DerivedInSecondDex d = new DerivedInSecondDex();
+      return d.intField;
+    }
+
+    /// CHECK-START: int Main.constructDerivedInSecondDex(int) inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:DerivedInSecondDex.<init>
+
+    /// CHECK-START: int Main.constructDerivedInSecondDex(int) inliner (after)
+    /// CHECK-DAG:  <<Value:i\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:DerivedInSecondDex.<init>
+
+    /// CHECK-START: int Main.constructDerivedInSecondDex(int) inliner (after)
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static int constructDerivedInSecondDex(int intValue) {
+      DerivedInSecondDex d = new DerivedInSecondDex(intValue);
+      return d.intField;
+    }
+
+    /// CHECK-START: int Main.constructDerivedInSecondDexWith0() inliner (before)
+    /// CHECK-DAG:  <<Value:i\d+>>      IntConstant 0
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:DerivedInSecondDex.<init>
+
+    /// CHECK-START: int Main.constructDerivedInSecondDexWith0() inliner (after)
+    /// CHECK-DAG:  <<Value:i\d+>>      IntConstant 0
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:DerivedInSecondDex.<init>
+
+    /// CHECK-START: int Main.constructDerivedInSecondDexWith0() inliner (after)
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static int constructDerivedInSecondDexWith0() {
+      DerivedInSecondDex d = new DerivedInSecondDex(0);
+      return d.intField;
+    }
+
+    /// CHECK-START: int Main.constructDerivedInSecondDex(long) inliner (before)
+    /// CHECK-DAG:  <<Value:j\d+>>      ParameterValue
+    /// CHECK-DAG:  <<Obj:l\d+>>        NewInstance
+    // Note: The ArtMethod* (typed as int or long) is optional after sharpening.
+    /// CHECK-DAG:                      InvokeStaticOrDirect [<<Obj>>,<<Value>>{{(,[ij]\d+)?}}] method_name:DerivedInSecondDex.<init>
+
+    /// CHECK-START: int Main.constructDerivedInSecondDex(long) inliner (after)
+    /// CHECK-NOT:                      InvokeStaticOrDirect
+    /// CHECK-NOT:                      MemoryBarrier
+    /// CHECK-NOT:                      InstanceFieldSet
+
+    public static int constructDerivedInSecondDex(long dummy) {
+      DerivedInSecondDex d = new DerivedInSecondDex(dummy);
+      return d.intField;
+    }
+
     public static void main(String[] args) throws Exception {
       Second s = new Second();
 
@@ -360,6 +1151,57 @@ public class Main {
       if (newObject() == null) {
         throw new AssertionError("new Object() cannot be null.");
       }
+
+      assertEquals(0.0, constructBase());
+      assertEquals(42.0, constructBase(42));
+      assertEquals(0.0, constructBaseWith0());
+      assertEquals("something", constructBase("something"));
+      assertEquals(null, constructBaseWithNullString());
+      assertEquals(11.0, constructBase(11.0, new Object()));
+      assertEquals(-12.0, constructBase(12.0, null));
+      assertEquals(30.0, constructBase(17, 13.0, new Object()));
+      assertEquals(-34.0, constructBase(19, 15.0, null));
+      assertEquals(-22.5, constructBaseWith0DoubleNull(22.5));
+      assertEquals(-8.0, constructBase(2, 14.0, null, null));
+      assertEquals(-64.0, constructBase(4, 28.0, null, "dummy"));
+      assertEquals(13.0, constructBase(24, 2.0, new Object(), null));
+      assertEquals(30.0, constructBase(11, 4.0, new Object(), "dummy"));
+      assertEquals(43.0, constructBase(43.0));
+      assertEquals(0.0, constructBaseWith0d());
+      assertEquals(1.0, constructBase(new Object()));
+      assertEquals(-1.0, constructBase((Object) null));
+      assertEquals(123.0, constructBase(123, 65L));
+
+      assertEquals(0.0, constructDerived());
+      assertEquals(73.0, constructDerived(73));
+      assertEquals(0.0, constructDerivedWith0());
+      assertEquals(null, constructDerived("something else"));
+      assertEquals(18.0, constructDerived(18.0));
+      assertEquals(0.0, constructDerivedWith0d());
+      assertEquals(-7.0, constructDerived(5, 7.0, new Object()));
+      assertEquals(-4.0, constructDerived(9, 4.0, null));
+      assertEquals(0.0, constructDerived(1, 9.0, null, null));
+      assertEquals(0.0, constructDerived(2, 8.0, null, "dummy"));
+      assertEquals(0.0, constructDerived(3, 7.0, new Object(), null));
+      assertEquals(0.0, constructDerived(4, 6.0, new Object(), "dummy"));
+      assertEquals(17.0, constructDerived(17.0f));
+      assertEquals(-5.5, constructDerived(6, -7.0, new Object(), 6.5f));
+
+      assertEquals(0, constructBaseWithFinalField());
+      assertEquals(77, constructBaseWithFinalField(77));
+      assertEquals(0, constructBaseWithFinalFieldWith0());
+      assertEquals(0.0, constructDerivedWithFinalField());
+      assertEquals(-33.0, constructDerivedWithFinalField(-33));
+      assertEquals(0.0, constructDerivedWithFinalFieldWith0());
+      assertEquals(-44.0, constructDerivedWithFinalField(-44.0));
+      assertEquals(0.0, constructDerivedWithFinalFieldWith0d());
+      assertEquals(88, constructDerivedWithFinalField(22, 66.0));
+      assertEquals(0.0, constructDerivedWithFinalFieldWith0And0d());
+
+      assertEquals(0, constructDerivedInSecondDex());
+      assertEquals(123, constructDerivedInSecondDex(123));
+      assertEquals(0, constructDerivedInSecondDexWith0());
+      assertEquals(0, constructDerivedInSecondDex(7L));
     }
 
     private static void assertEquals(int expected, int actual) {
