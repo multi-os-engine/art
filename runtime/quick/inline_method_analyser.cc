@@ -18,10 +18,12 @@
 
 #include "art_field-inl.h"
 #include "art_method-inl.h"
+#include "base/casts.h"
 #include "class_linker-inl.h"
 #include "dex_file-inl.h"
 #include "dex_instruction.h"
 #include "dex_instruction-inl.h"
+#include "dex_instruction_utils.h"
 #include "mirror/class-inl.h"
 #include "mirror/dex_cache-inl.h"
 #include "verifier/method_verifier-inl.h"
@@ -32,6 +34,341 @@
  */
 
 namespace art {
+
+namespace {  // anonymous namespace
+
+// Helper class for matching a pattern.
+class Matcher {
+ public:
+  // Match function type.
+  typedef bool MatchFn(Matcher* matcher);
+
+  template <size_t size>
+  static bool Match(const DexFile::CodeItem* code_item, MatchFn* const (&pattern)[size]);
+
+  // Match and advance.
+
+  static bool Mark(Matcher* matcher);
+
+  template <bool (Matcher::*Fn)()>
+  static bool Required(Matcher* matcher);
+
+  template <bool (Matcher::*Fn)()>
+  static bool Repeated(Matcher* matcher);  // On match, returns to the mark.
+
+  // Match an individual instruction.
+
+  template <Instruction::Code opcode> bool Opcode();
+  bool Const0();
+  bool IPutOnThis();
+
+ private:
+  explicit Matcher(const DexFile::CodeItem* code_item)
+      : code_item_(code_item),
+        instruction_(Instruction::At(code_item->insns_)),
+        pos_(0u),
+        mark_(0u) { }
+
+  static bool DoMatch(const DexFile::CodeItem* code_item, MatchFn* const* pattern, size_t size);
+
+  const DexFile::CodeItem* const code_item_;
+  const Instruction* instruction_;
+  size_t pos_;
+  size_t mark_;
+};
+
+template <size_t size>
+bool Matcher::Match(const DexFile::CodeItem* code_item, MatchFn* const (&pattern)[size]) {
+  return DoMatch(code_item, pattern, size);
+}
+
+bool Matcher::Mark(Matcher* matcher) {
+  matcher->pos_ += 1u;  // Advance to the next match function before marking.
+  matcher->mark_ = matcher->pos_;
+  return true;
+}
+
+template <bool (Matcher::*Fn)()>
+bool Matcher::Required(Matcher* matcher) {
+  if (!(matcher->*Fn)()) {
+    return false;
+  }
+  matcher->pos_ += 1u;
+  matcher->instruction_ = matcher->instruction_->Next();
+  return true;
+}
+
+template <bool (Matcher::*Fn)()>
+bool Matcher::Repeated(Matcher* matcher) {
+  if (!(matcher->*Fn)()) {
+    // Didn't match optional instruction, try the next match function.
+    matcher->pos_ += 1u;
+    return true;
+  }
+  matcher->pos_ = matcher->mark_;
+  matcher->instruction_ = matcher->instruction_->Next();
+  return true;
+}
+
+template <Instruction::Code opcode>
+bool Matcher::Opcode() {
+  return instruction_->Opcode() == opcode;
+}
+
+// Match const 0.
+bool Matcher::Const0() {
+  return IsInstructionDirectConst(instruction_->Opcode()) &&
+      (instruction_->Opcode() == Instruction::CONST_WIDE ? instruction_->VRegB_51l() == 0
+                                                         : instruction_->VRegB() == 0);
+}
+
+bool Matcher::IPutOnThis() {
+  DCHECK_NE(code_item_->ins_size_, 0u);
+  return IsInstructionIPut(instruction_->Opcode()) &&
+      instruction_->VRegB_22c() == code_item_->registers_size_ - code_item_->ins_size_;
+}
+
+bool Matcher::DoMatch(const DexFile::CodeItem* code_item, MatchFn* const* pattern, size_t size) {
+  Matcher matcher(code_item);
+  while (matcher.pos_ != size) {
+    if (!pattern[matcher.pos_](&matcher)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Used for a single invoke in a constructor. In that situation, the method verifier makes
+// sure we invoke a constructor either in the same class or superclass with at least "this".
+ArtMethod* GetTargetConstructor(ArtMethod* method, const Instruction* invoke_direct)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  DCHECK_EQ(invoke_direct->Opcode(), Instruction::INVOKE_DIRECT);
+  DCHECK_EQ(invoke_direct->VRegC_35c(),
+            method->GetCodeItem()->registers_size_ - method->GetCodeItem()->ins_size_);
+  uint32_t method_index = invoke_direct->VRegB_35c();
+  size_t pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+  ArtMethod* target_method =
+      method->GetDexCache()->GetResolvedMethod(method_index, pointer_size);
+  if (kIsDebugBuild && target_method != nullptr) {
+    CHECK(!target_method->IsStatic());
+    CHECK(target_method->IsConstructor());
+    CHECK(target_method->GetDeclaringClass() == method->GetDeclaringClass() ||
+          target_method->GetDeclaringClass() == method->GetDeclaringClass()->GetSuperClass());
+  }
+  return target_method;
+}
+
+// Return the forwarded arguments and check that all remaining arguments are zero.
+// If the check fails, return static_cast<size_t>(-1).
+size_t CountForwardedConstructorArguments(const DexFile::CodeItem* code_item,
+                                          const Instruction* invoke_direct,
+                                          uint16_t zero_vreg_mask) {
+  DCHECK_EQ(invoke_direct->Opcode(), Instruction::INVOKE_DIRECT);
+  size_t number_of_args = invoke_direct->VRegA_35c();
+  DCHECK_NE(number_of_args, 0u);
+  uint32_t args[Instruction::kMaxVarArgRegs];
+  invoke_direct->GetVarArgs(args);
+  uint16_t this_vreg = args[0];
+  DCHECK_EQ(this_vreg, code_item->registers_size_ - code_item->ins_size_);  // Checked by verifier.
+  size_t forwarded = 1u;
+  while (forwarded < number_of_args &&
+      args[forwarded] == this_vreg + forwarded &&
+      (zero_vreg_mask & (1u << args[forwarded])) == 0) {
+    ++forwarded;
+  }
+  for (size_t i = forwarded; i != number_of_args; ++i) {
+    if ((zero_vreg_mask & (1u << args[i])) == 0) {
+      return static_cast<size_t>(-1);
+    }
+  }
+  return forwarded;
+}
+
+uint16_t GetZeroVRegMask(const Instruction* const0) {
+  DCHECK(IsInstructionDirectConst(const0->Opcode()));
+  if (const0->Opcode() == Instruction::CONST_WIDE) {
+    DCHECK_EQ(const0->VRegB_51l(), 0u);
+    return 3u << const0->VRegA_51l();
+  } else {
+    DCHECK_EQ(const0->VRegB(), 0);
+    return 1u << const0->VRegA();
+  }
+}
+
+// We limit the number of IPUTs storing parameters. There can be any number
+// of IPUTs that store the value 0 as they are useless in a constructor as
+// the object always starts zero-initialized. We also eliminate all but the
+// last store to any field as they are not observable; not even if the field
+// is volatile as no reference to the object can escape from a constructor
+// with this pattern.
+static constexpr size_t kMaxConstructorIPuts = 3u;
+
+bool RecordConstructorIPut(const Instruction* new_iput,
+                           uint16_t zero_vreg_mask,
+                           /*inout*/ const Instruction* (&iputs)[kMaxConstructorIPuts]) {
+  DCHECK(IsInstructionIPut(new_iput->Opcode()));
+  // Remove previous IPUT to the same field, if any.
+  uint32_t field_index = new_iput->VRegC_22c();
+  auto iputs_end = iputs + arraysize(iputs);
+  auto it = std::find_if(iputs, iputs_end, [field_index](const Instruction* iput) {
+    return iput == nullptr || iput->VRegC_22c() == field_index;
+  });
+  if (it != iputs + arraysize(iputs) && *it != nullptr) {
+    DCHECK_EQ((*it)->VRegA_22c(), field_index);
+    std::copy(it + 1, iputs_end, it);
+    it = std::find(it, iputs_end, nullptr);
+  }
+  // If the stored value isn't zero, record the IPUT.
+  if ((zero_vreg_mask & (1u << new_iput->VRegA_22c())) == 0u) {
+    if (it == iputs_end) {
+      return false;  // Exceeded capacity of the output array.
+    }
+    DCHECK(*it == nullptr);
+    *it = new_iput;
+  }
+  return true;
+}
+
+bool DoAnalyseConstructor(const DexFile::CodeItem* code_item,
+                          ArtMethod* method,
+                          /*out*/ const Instruction* (&iputs)[kMaxConstructorIPuts])
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  DCHECK_EQ(static_cast<size_t>(std::count(iputs, iputs + arraysize(iputs), nullptr)),
+            arraysize(iputs));
+
+  // Limit the maximum number of code units we're willing to match.
+  static constexpr size_t kMaxCodeUnits = 16u;
+
+  // Limit the number of registers that the constructor may use to 16.
+  // Given that IPUTs must use low 16 registers and we do not match MOVEs,
+  // this is a reasonable limitation.
+  static constexpr size_t kMaxVRegs = 16u;
+
+  // We try to match a constructor that calls another constructor (either in
+  // superclass or in the same class) with the same parameters, or with some
+  // parameters truncated (allowed only for calls to superclass constructor)
+  // or with extra parameters with value 0 (with any type, including null).
+  // This call can be followed by optional IPUTs on "this" storing either one
+  // of the parameters or 0 and the code must then finish with RETURN_VOID.
+  // The called constructor must be either java.lang.Object.<init>() or it
+  // must also match the same pattern.
+  static Matcher::MatchFn* const kConstructorPattern[] = {
+      &Matcher::Mark,
+      &Matcher::Repeated<&Matcher::Const0>,
+      &Matcher::Required<&Matcher::Opcode<Instruction::INVOKE_DIRECT>>,
+      &Matcher::Mark,
+      &Matcher::Repeated<&Matcher::Const0>,
+      &Matcher::Repeated<&Matcher::IPutOnThis>,
+      &Matcher::Required<&Matcher::Opcode<Instruction::RETURN_VOID>>,
+  };
+
+  DCHECK(method != nullptr);
+  DCHECK(!method->IsStatic());
+  DCHECK(method->IsConstructor());
+  DCHECK(code_item != nullptr);
+  if (!method->GetDeclaringClass()->IsVerified() ||
+      code_item->insns_size_in_code_units_ > kMaxCodeUnits ||
+      code_item->registers_size_ > kMaxVRegs ||
+      !Matcher::Match(code_item, kConstructorPattern)) {
+    return false;
+  }
+
+  // Verify the invoke, prevent a few odd cases and collect IPUTs.
+  uint16_t this_vreg = code_item->registers_size_ - code_item->ins_size_;
+  uint16_t zero_vreg_mask = 0u;
+  for (const Instruction* instruction = Instruction::At(code_item->insns_);
+      instruction->Opcode() != Instruction::RETURN_VOID;
+      instruction = instruction->Next()) {
+    if (instruction->Opcode() == Instruction::INVOKE_DIRECT) {
+      ArtMethod* target_method = GetTargetConstructor(method, instruction);
+      if (target_method == nullptr) {
+        return false;
+      }
+      // We allow forwarding constructors only if they pass more arguments
+      // to prevent infinite recursion.
+      if (target_method->GetDeclaringClass() == method->GetDeclaringClass() &&
+          instruction->VRegA_35c() <= code_item->ins_size_) {
+        return false;
+      }
+      size_t forwarded = CountForwardedConstructorArguments(code_item, instruction, zero_vreg_mask);
+      if (forwarded == static_cast<size_t>(-1)) {
+        return false;
+      }
+      if (target_method->GetDeclaringClass()->IsObjectClass()) {
+        DCHECK_EQ(Instruction::At(target_method->GetCodeItem()->insns_)->Opcode(),
+                  Instruction::RETURN_VOID);
+      } else {
+        const DexFile::CodeItem* target_code_item = target_method->GetCodeItem();
+        if (target_code_item == nullptr) {
+          return false;  // Native constructor?
+        }
+        if (!DoAnalyseConstructor(target_code_item, target_method, iputs)) {
+          return false;
+        }
+        // Prune IPUTs with zero input.
+        auto kept_end = std::remove_if(
+            iputs,
+            iputs + arraysize(iputs), [forwarded](const Instruction* iput) {
+          return iput == nullptr || iput->VRegA_22c() >= forwarded;
+        });
+        std::fill(kept_end, iputs + arraysize(iputs), nullptr);
+        // If we have any IPUTs from the call, check that the target method is in the same
+        // dex file (compare DexCache references), otherwise field_indexes would be bogus.
+        if (iputs[0] != nullptr && target_method->GetDexCache() != method->GetDexCache()) {
+          return false;
+        }
+      }
+    } else if (IsInstructionDirectConst(instruction->Opcode())) {
+      zero_vreg_mask |= GetZeroVRegMask(instruction);
+      if ((zero_vreg_mask & (1u << this_vreg)) != 0u) {
+        return false;  // Overwriting `this` is unsupported.
+      }
+    } else {
+      DCHECK(IsInstructionIPut(instruction->Opcode()));
+      DCHECK_EQ(instruction->VRegB_22c(), this_vreg);
+      if (!RecordConstructorIPut(instruction, zero_vreg_mask, iputs)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+}  // anonymous namespace
+
+bool AnalyseConstructor(const DexFile::CodeItem* code_item,
+                        ArtMethod* method,
+                        InlineMethod* result)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  const Instruction* iputs[kMaxConstructorIPuts];
+  std::fill_n(iputs, arraysize(iputs), nullptr);
+  if (!DoAnalyseConstructor(code_item, method, iputs)) {
+    return false;
+  }
+  uint16_t this_vreg = code_item->registers_size_ - code_item->ins_size_;
+  static_assert(kMaxConstructorIPuts == 3, "Unexpected limit");  // Code below depends on this.
+  DCHECK(iputs[0] != nullptr || iputs[1] == nullptr);
+  DCHECK(iputs[1] != nullptr || iputs[2] == nullptr);
+
+#define STORE_IPUT(n)                                                             \
+  do {                                                                            \
+    DCHECK(iputs[n] == nullptr || IsInstructionIPut(iputs[n]->Opcode()));         \
+    result->d.constructor_data.iput##n##_field_index =                            \
+        (iputs[n] != nullptr) ? iputs[n]->VRegC_22c() : DexFile::kDexNoIndex16;   \
+    result->d.constructor_data.iput##n##_arg =                                    \
+        (iputs[n] != nullptr) ? iputs[n]->VRegA_22c() - this_vreg : 0u;           \
+  } while (false)
+
+  STORE_IPUT(0);
+  STORE_IPUT(1);
+  STORE_IPUT(2);
+#undef STORE_IPUT
+
+  result->opcode = kInlineOpConstructor;
+  result->flags = kInlineSpecial;
+  result->d.constructor_data.reserved = 0u;
+  return true;
+}
 
 static_assert(InlineMethodAnalyser::IsInstructionIGet(Instruction::IGET), "iget type");
 static_assert(InlineMethodAnalyser::IsInstructionIGet(Instruction::IGET_WIDE), "iget_wide type");
@@ -123,7 +460,19 @@ bool InlineMethodAnalyser::AnalyseMethodCode(const DexFile::CodeItem* code_item,
     case Instruction::CONST_16:
     case Instruction::CONST_HIGH16:
       // TODO: Support wide constants (RETURN_WIDE).
-      return AnalyseConstMethod(code_item, result);
+      if (AnalyseConstMethod(code_item, result)) {
+        return true;
+      }
+      FALLTHROUGH_INTENDED;
+    case Instruction::CONST_WIDE:
+    case Instruction::CONST_WIDE_16:
+    case Instruction::CONST_WIDE_32:
+    case Instruction::CONST_WIDE_HIGH16:
+    case Instruction::INVOKE_DIRECT:
+      if (method != nullptr && !method->IsStatic() && method->IsConstructor()) {
+        return AnalyseConstructor(code_item, method, result);
+      }
+      return false;
     case Instruction::IGET:
     case Instruction::IGET_OBJECT:
     case Instruction::IGET_BOOLEAN:
