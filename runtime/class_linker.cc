@@ -2593,19 +2593,39 @@ const void* ClassLinker::GetQuickOatCodeFor(const DexFile& dex_file,
   return oat_class.GetOatMethod(oat_method_idx).GetQuickCode();
 }
 
-// Returns true if the method must run with interpreter, false otherwise.
-static bool NeedsInterpreter(ArtMethod* method, const void* quick_code)
-    SHARED_REQUIRES(Locks::mutator_lock_) {
+bool ClassLinker::CanUseAOTCode(ArtMethod* method, const void* quick_code) {
   if (quick_code == nullptr) {
     // No code: need interpreter.
-    // May return true for native code, in the case of generic JNI
+    // May return true for native code, in the case of generic JNI.
     // DCHECK(!method->IsNative());
+    return false;
+  }
+
+  if (UNLIKELY(method->IsNative() || method->IsProxyMethod())) {
     return true;
   }
-  // If interpreter mode is enabled, every method (except native and proxy) must
-  // be run with interpreter.
-  return Runtime::Current()->GetInstrumentation()->InterpretOnly() &&
-         !method->IsNative() && !method->IsProxyMethod();
+
+  Runtime* runtime = Runtime::Current();
+  instrumentation::Instrumentation* instr = runtime->GetInstrumentation();
+  if (instr->InterpretOnly() || instr->IsForcedInterpretOnly()) {
+    return false;
+  }
+
+  if (runtime->GetClassLinker()->IsQuickToInterpreterBridge(quick_code)) {
+    // Doing this check avoids doing compiled/interpreter transitions.
+    return false;
+  }
+
+  if (Dbg::IsForcedInterpreterNeededForCalling(Thread::Current(), method)) {
+    // Force the use of interpreter when it is required by the debugger.
+    return false;
+  }
+
+  if (runtime->UseJit() && runtime->GetJit()->JitAtFirstUse()) {
+    // Don't use AOT code in force JIT mode.
+    return false;
+  }
+  return true;
 }
 
 void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
@@ -2650,7 +2670,7 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
       OatFile::OatMethod oat_method = oat_class.GetOatMethod(method_index);
       quick_code = oat_method.GetQuickCode();
     }
-    const bool enter_interpreter = NeedsInterpreter(method, quick_code);
+    const bool enter_interpreter = !CanUseAOTCode(method, quick_code);
     if (enter_interpreter) {
       // Use interpreter entry point.
       // Check whether the method is native, in which case it's generic JNI.
@@ -2689,7 +2709,7 @@ void ClassLinker::LinkCode(ArtMethod* method, const OatFile::OatClass* oat_class
   }
 
   // Install entry point from interpreter.
-  bool enter_interpreter = NeedsInterpreter(method, method->GetEntryPointFromQuickCompiledCode());
+  bool enter_interpreter = !CanUseAOTCode(method, method->GetEntryPointFromQuickCompiledCode());
 
   if (!method->IsInvokable()) {
     EnsureThrowsInvocationError(method);
