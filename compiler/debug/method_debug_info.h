@@ -19,9 +19,11 @@
 
 #include "dex_file.h"
 
+#include "compiled_method.h"
+
 namespace art {
 class CompiledMethod;
-namespace dwarf {
+namespace debug {
 
 struct MethodDebugInfo {
   const DexFile* dex_file_;
@@ -33,9 +35,16 @@ struct MethodDebugInfo {
   uintptr_t low_pc_;
   uintptr_t high_pc_;
   CompiledMethod* compiled_method_;
+
+  bool IsFromOptimizingCompiler() const {
+    return compiled_method_->GetQuickCode().size() > 0 &&
+           compiled_method_->GetVmapTable().size() > 0 &&
+           compiled_method_->GetGcMap().size() == 0 &&
+           code_item_ != nullptr;
+  }
 };
 
-}  // namespace dwarf
+}  // namespace debug
 }  // namespace art
 
 #endif  // ART_COMPILER_DEBUG_METHOD_DEBUG_INFO_H_
