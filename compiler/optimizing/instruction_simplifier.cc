@@ -176,8 +176,8 @@ bool InstructionSimplifierVisitor::TryDeMorganNegationFactoring(HBinaryOperation
 
   // We can apply De Morgan's laws if both inputs are Not's and are only used
   // by `op`.
-  if (left->IsNot() &&
-      right->IsNot() &&
+  if (((left->IsNot() && right->IsNot()) ||
+       (left->IsBooleanNot() && right->IsBooleanNot())) &&
       left->HasOnlyOneNonEnvironmentUse() &&
       right->HasOnlyOneNonEnvironmentUse()) {
     // Replace code looking like
@@ -187,8 +187,11 @@ bool InstructionSimplifierVisitor::TryDeMorganNegationFactoring(HBinaryOperation
     // with
     //    OR or, a, b         (respectively AND)
     //    NOT dest, or
-    HInstruction* src_left = left->AsNot()->GetInput();
-    HInstruction* src_right = right->AsNot()->GetInput();
+    bool boolean_not = left->IsBooleanNot();
+    HInstruction* src_left = boolean_not ? left->AsBooleanNot()->GetInput()
+                                         : left->AsNot()->GetInput();
+    HInstruction* src_right = boolean_not ? right->AsBooleanNot()->GetInput()
+                                          : right->AsNot()->GetInput();
     uint32_t dex_pc = op->GetDexPc();
 
     // Remove the negations on the inputs.
@@ -204,7 +207,12 @@ bool InstructionSimplifierVisitor::TryDeMorganNegationFactoring(HBinaryOperation
     } else {
       hbin = new (GetGraph()->GetArena()) HAnd(type, src_left, src_right, dex_pc);
     }
-    HNot* hnot = new (GetGraph()->GetArena()) HNot(type, hbin, dex_pc);
+    HInstruction* hnot;
+    if (boolean_not) {
+      hnot = new (GetGraph()->GetArena()) HBooleanNot(hbin, dex_pc);
+    } else {
+      hnot = new (GetGraph()->GetArena()) HNot(type, hbin, dex_pc);
+    }
 
     op->GetBlock()->InsertInstructionBefore(hbin, op);
     op->GetBlock()->ReplaceAndRemoveInstructionWith(op, hnot);
@@ -1308,8 +1316,8 @@ void InstructionSimplifierVisitor::VisitXor(HXor* instruction) {
 
   HInstruction* left = instruction->GetLeft();
   HInstruction* right = instruction->GetRight();
-  if (left->IsNot() &&
-      right->IsNot() &&
+  if (((left->IsNot() && right->IsNot()) ||
+       (left->IsBooleanNot() && right->IsBooleanNot())) &&
       left->HasOnlyOneNonEnvironmentUse() &&
       right->HasOnlyOneNonEnvironmentUse()) {
     // Replace code looking like
@@ -1318,8 +1326,13 @@ void InstructionSimplifierVisitor::VisitXor(HXor* instruction) {
     //    XOR dst, nota, notb
     // with
     //    XOR dst, a, b
-    instruction->ReplaceInput(left->AsNot()->GetInput(), 0);
-    instruction->ReplaceInput(right->AsNot()->GetInput(), 1);
+    bool boolean_not = left->IsBooleanNot();
+    HInstruction* src_left = boolean_not ? left->AsBooleanNot()->GetInput()
+                                         : left->AsNot()->GetInput();
+    HInstruction* src_right = boolean_not ? right->AsBooleanNot()->GetInput()
+                                          : right->AsNot()->GetInput();
+    instruction->ReplaceInput(src_left, 0);
+    instruction->ReplaceInput(src_right, 1);
     left->GetBlock()->RemoveInstruction(left);
     right->GetBlock()->RemoveInstruction(right);
     RecordSimplification();
