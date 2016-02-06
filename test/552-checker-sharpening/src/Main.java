@@ -50,7 +50,7 @@ public class Main {
   /// CHECK:                ArmDexCacheArraysBase
   /// CHECK-NOT:            ArmDexCacheArraysBase
 
-  /// CHECK-START-X86: int Main.testSimple(int) pc_relative_fixups_x86 (after)
+  /// CHECK-START-X86: int Main.testSimple(int) prepare_for_register_allocation_x86 (after)
   /// CHECK:                X86ComputeBaseMethodAddress
   /// CHECK-NOT:            X86ComputeBaseMethodAddress
 
@@ -88,11 +88,11 @@ public class Main {
   /// CHECK:                ArmDexCacheArraysBase
   /// CHECK-NEXT:           If
 
-  /// CHECK-START-X86: int Main.testDiamond(boolean, int) pc_relative_fixups_x86 (after)
+  /// CHECK-START-X86: int Main.testDiamond(boolean, int) prepare_for_register_allocation_x86 (after)
   /// CHECK:                X86ComputeBaseMethodAddress
   /// CHECK-NOT:            X86ComputeBaseMethodAddress
 
-  /// CHECK-START-X86: int Main.testDiamond(boolean, int) pc_relative_fixups_x86 (after)
+  /// CHECK-START-X86: int Main.testDiamond(boolean, int) prepare_for_register_allocation_x86 (after)
   /// CHECK:                X86ComputeBaseMethodAddress
   /// CHECK-NEXT:           If
 
@@ -106,18 +106,18 @@ public class Main {
     }
   }
 
-  /// CHECK-START-X86: int Main.testLoop(int[], int) pc_relative_fixups_x86 (before)
+  /// CHECK-START-X86: int Main.testLoop(int[], int) prepare_for_register_allocation_x86 (before)
   /// CHECK-NOT:            X86ComputeBaseMethodAddress
 
-  /// CHECK-START-X86: int Main.testLoop(int[], int) pc_relative_fixups_x86 (after)
+  /// CHECK-START-X86: int Main.testLoop(int[], int) prepare_for_register_allocation_x86 (after)
   /// CHECK:                X86ComputeBaseMethodAddress
   /// CHECK-NOT:            X86ComputeBaseMethodAddress
 
-  /// CHECK-START-X86: int Main.testLoop(int[], int) pc_relative_fixups_x86 (after)
+  /// CHECK-START-X86: int Main.testLoop(int[], int) prepare_for_register_allocation_x86 (after)
   /// CHECK:                InvokeStaticOrDirect
   /// CHECK-NOT:            InvokeStaticOrDirect
 
-  /// CHECK-START-X86: int Main.testLoop(int[], int) pc_relative_fixups_x86 (after)
+  /// CHECK-START-X86: int Main.testLoop(int[], int) prepare_for_register_allocation_x86 (after)
   /// CHECK:                ArrayLength
   /// CHECK-NEXT:           X86ComputeBaseMethodAddress
   /// CHECK-NEXT:           Goto
@@ -150,10 +150,10 @@ public class Main {
     return x;
   }
 
-  /// CHECK-START-X86: int Main.testLoopWithDiamond(int[], boolean, int) pc_relative_fixups_x86 (before)
+  /// CHECK-START-X86: int Main.testLoopWithDiamond(int[], boolean, int) prepare_for_register_allocation_x86 (before)
   /// CHECK-NOT:            X86ComputeBaseMethodAddress
 
-  /// CHECK-START-X86: int Main.testLoopWithDiamond(int[], boolean, int) pc_relative_fixups_x86 (after)
+  /// CHECK-START-X86: int Main.testLoopWithDiamond(int[], boolean, int) prepare_for_register_allocation_x86 (after)
   /// CHECK:                If
   /// CHECK:                begin_block
   /// CHECK:                ArrayLength

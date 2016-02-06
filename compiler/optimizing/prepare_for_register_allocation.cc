@@ -138,15 +138,15 @@ bool PrepareForRegisterAllocation::CanEmitConditionAt(HCondition* condition,
   }
 
   if (user->IsSelect() && user->AsSelect()->GetCondition() == condition) {
-    if (GetGraph()->GetInstructionSet() == kX86) {
+    if (kIsDebugBuild && GetGraph()->GetInstructionSet() == kX86) {
       // Long values and long condition inputs result in 8 required core registers.
-      // We don't have that many on x86. Materialize the condition in such case.
-      return user->GetType() != Primitive::kPrimLong ||
+      // We don't have that many on x86. This should have been prevented by
+      // the X86 code preparation pass.
+      DCHECK(user->GetType() != Primitive::kPrimLong ||
              condition->InputAt(1)->GetType() != Primitive::kPrimLong ||
-             condition->InputAt(1)->IsConstant();
-    } else {
-      return true;
+             condition->InputAt(1)->IsConstant());
     }
+    return true;
   }
 
   return false;
