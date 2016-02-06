@@ -16,16 +16,17 @@
 
 public class Main {
 
-  /// CHECK-START: long Main.$noinline$longSelect(long) register (before)
+  // Moved from register (after) due to X86 rewrite of long compare/move.
+  /// CHECK-START: long Main.$noinline$longSelect(long) instruction_simplifier_before_codegen (before)
   /// CHECK:         <<Cond:z\d+>> LessThanOrEqual [{{j\d+}},{{j\d+}}]
   /// CHECK-NEXT:                  Select [{{j\d+}},{{j\d+}},<<Cond>>]
 
-  // Condition must be materialized on X86 because it would need too many
-  // registers otherwise.
+  // Select will be changed back to an HIf on X86, as otherwise it would need too
+  // many registers to allocate or need to be materialized (slower code).
   /// CHECK-START-X86: long Main.$noinline$longSelect(long) disassembly (after)
-  /// CHECK:             LessThanOrEqual
-  /// CHECK-NEXT:          cmp
-  /// CHECK:             Select
+  /// CHECK:         <<Cond:z\d+>> LessThanOrEqual [{{j\d+}},{{j\d+}}]
+  /// CHECK:                       If [<<Cond>>]
+  /// CHECK-NEXT:                  cmp
 
   public long $noinline$longSelect(long param) {
     if (doThrow) { throw new Error(); }

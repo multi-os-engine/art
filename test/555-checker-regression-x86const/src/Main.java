@@ -22,10 +22,11 @@ public class Main extends UnresolvedClass {
   /// CHECK:       InvokeStaticOrDirect [<<ParamValue>>,<<CurrentMethod>>] method_name:java.lang.Math.abs
   static public float callAbs(float f) {
     // An intrinsic invoke in a method that has unresolved references will still
-    // have a CurrentMethod as an argument.  The X86 pc_relative_fixups_x86 pass
-    // must be able to handle Math.abs invokes that have a CurrentMethod, as both
-    // the CurrentMethod and the HX86LoadFromConstantTable (for the bitmask)
-    // expect to be in the 'SpecialInputIndex' input index.
+    // have a CurrentMethod as an argument.  The X86
+    // prepare_for_register_allocation_x86 pass must be able to handle Math.abs
+    // invokes that have a CurrentMethod, as both the CurrentMethod and the
+    // HX86LoadFromConstantTable (for the bitmask) expect to be in the
+    // 'SpecialInputIndex' input index.
     return Math.abs(f);
   }
 
