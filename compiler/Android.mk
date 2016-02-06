@@ -89,8 +89,8 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/optimization.cc \
 	optimizing/optimizing_compiler.cc \
 	optimizing/parallel_move_resolver.cc \
-	optimizing/pc_relative_fixups_x86.cc \
 	optimizing/prepare_for_register_allocation.cc \
+	optimizing/prepare_for_register_allocation_x86.cc \
 	optimizing/reference_type_propagation.cc \
 	optimizing/register_allocator.cc \
 	optimizing/select_generator.cc \
