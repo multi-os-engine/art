@@ -14,18 +14,130 @@
  * limitations under the License.
  */
 
-#include "pc_relative_fixups_x86.h"
+#include "prepare_for_register_allocation_x86.h"
 #include "code_generator_x86.h"
 
 namespace art {
 namespace x86 {
 
 /**
+ * Fixes HSelect opcodes with long compare and long operands, which can't be
+ * handled in general, as it may need 8 registers.
+ */
+class SelectFixups : public HGraphVisitor {
+ public:
+  explicit SelectFixups(HGraph* graph)
+      : HGraphVisitor(graph),
+        recompute_dominance_(false) {}
+
+  void VisitBlocks() {
+    VisitInsertionOrder();
+    if (recompute_dominance_) {
+      GetGraph()->ClearDominanceInformation();
+      GetGraph()->ComputeDominanceInformation();
+    }
+  }
+
+ private:
+  void VisitSelect(HSelect* select) OVERRIDE {
+    // Work around the register limitations of X86.  If we have a Select that has
+    // both a long comparison AND long operands, we would need 8 registers in the
+    // worst case.  Unfortunately, we have only 7 registers.  One possibility is to
+    // force one of the operands to memory, but we don't have an easy way to do that.
+    //
+    // The register allocator is unable to allocate 8 registers, and so will prevent
+    // this case from occuring by forcing the comparison to be materialized.  This
+    // generates inefficient code.  Fix this by recreating an HIf in this case.
+    if (select->InputAt(0)->GetType() != Primitive::kPrimLong) {
+      return;
+    }
+
+    HCondition* select_condition = select->GetCondition()->AsCondition();
+    if (select_condition == nullptr ||
+        select_condition->InputAt(0)->GetType() != Primitive::kPrimLong ||
+        select_condition->InputAt(1)->IsConstant()) {
+      // We can't run into the problem.
+      return;
+    }
+
+    // We are left with the case with a long comparison and long inputs. Split the
+    // block at this point, and create some new blocks.  We also need a Phi to
+    // represent the merge point.
+    HBasicBlock* current_block = select->GetBlock();
+    ArenaAllocator* arena = GetGraph()->GetArena();
+    HBasicBlock* rest_of_block = current_block->SplitAfter(select);
+    GetGraph()->AddBlock(rest_of_block);
+
+    // Add an HIf after the select.
+    current_block->AddInstruction(new(arena) HIf(select_condition));
+
+    // Create the true block.  This will be predecessor 0.
+    HBasicBlock* true_block = new(arena) HBasicBlock(GetGraph(), rest_of_block->GetDexPc());
+    GetGraph()->AddBlock(true_block);
+    true_block->AddInstruction(new(arena) HGoto(rest_of_block->GetDexPc()));
+    current_block->AddSuccessor(true_block);
+    true_block->AddSuccessor(rest_of_block);
+
+    // Add the false block, and set up the flow.  This will be predecessor 1.
+    HBasicBlock* false_block = new(arena) HBasicBlock(GetGraph(), rest_of_block->GetDexPc());
+    GetGraph()->AddBlock(false_block);
+    false_block->AddInstruction(new(arena) HGoto(rest_of_block->GetDexPc()));
+    current_block->AddSuccessor(false_block);
+    false_block->AddSuccessor(rest_of_block);
+
+    // Now add the Phi to the rest of the block.
+    HPhi* phi = new(arena) HPhi(arena, kNoRegNumber, 2, Primitive::kPrimLong);
+    phi->SetRawInputAt(0, select->GetTrueValue());
+    phi->SetRawInputAt(1, select->GetFalseValue());
+    rest_of_block->AddPhi(phi);
+
+    // Replace the HSelect with the new Phi.
+    select->ReplaceWith(phi);
+    current_block->RemoveInstruction(select);
+
+    // Mark the need to recompute dominance and reverse post order after.
+    recompute_dominance_ = true;
+
+    // Fix loop information.
+    HLoopInformation* loop_info = current_block->GetLoopInformation();
+    if (loop_info != nullptr) {
+      rest_of_block->SetLoopInformation(loop_info);
+      true_block->SetLoopInformation(loop_info);
+      false_block->SetLoopInformation(loop_info);
+      // Add blocks to all enveloping loops.
+      for (HLoopInformationOutwardIterator loop_it(*current_block);
+           !loop_it.Done();
+           loop_it.Advance()) {
+        loop_it.Current()->Add(rest_of_block);
+        loop_it.Current()->Add(true_block);
+        loop_it.Current()->Add(false_block);
+      }
+
+      if (loop_info->IsBackEdge(*current_block)) {
+        loop_info->RemoveBackEdge(current_block);
+        loop_info->AddBackEdge(rest_of_block);
+      }
+    }
+
+    // Fix try/catch information.
+    TryCatchInformation* try_catch_info = current_block->IsTryBlock()
+        ? current_block->GetTryCatchInformation()
+        : nullptr;
+    rest_of_block->SetTryCatchInformation(try_catch_info);
+    true_block->SetTryCatchInformation(try_catch_info);
+    false_block->SetTryCatchInformation(try_catch_info);
+  }
+
+  bool recompute_dominance_;
+};
+
+/**
  * Finds instructions that need the constant area base as an input.
  */
-class PCRelativeHandlerVisitor : public HGraphVisitor {
+class SelectAndPcRelativeFixups : public SelectFixups {
  public:
-  explicit PCRelativeHandlerVisitor(HGraph* graph) : HGraphVisitor(graph), base_(nullptr) {}
+  explicit SelectAndPcRelativeFixups(HGraph* graph)
+      : SelectFixups(graph), base_(nullptr) {}
 
   void MoveBaseIfNeeded() {
     if (base_ != nullptr) {
@@ -220,15 +332,18 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
   HX86ComputeBaseMethodAddress* base_;
 };
 
-void PcRelativeFixups::Run() {
+void PrepareForRegisterAllocationX86::Run() {
   if (graph_->HasIrreducibleLoops()) {
-    // Do not run this optimization, as irreducible loops do not work with an instruction
-    // that can be live-in at the irreducible loop header.
-    return;
+    // Only fix up long/long Selects, as irreducible loops do not work with an
+    // instruction that can be live-in at the irreducible loop header.
+    SelectFixups visitor(graph_);
+    visitor.VisitBlocks();
+  } else {
+    // Fix up both Selects and long/float constants.
+    SelectAndPcRelativeFixups visitor(graph_);
+    visitor.VisitBlocks();
+    visitor.MoveBaseIfNeeded();
   }
-  PCRelativeHandlerVisitor visitor(graph_);
-  visitor.VisitInsertionOrder();
-  visitor.MoveBaseIfNeeded();
 }
 
 }  // namespace x86
