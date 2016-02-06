@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_COMPILER_OPTIMIZING_PC_RELATIVE_FIXUPS_X86_H_
-#define ART_COMPILER_OPTIMIZING_PC_RELATIVE_FIXUPS_X86_H_
+#ifndef ART_COMPILER_OPTIMIZING_PREPARE_FOR_REGISTER_ALLOCATION_X86_H_
+#define ART_COMPILER_OPTIMIZING_PREPARE_FOR_REGISTER_ALLOCATION_X86_H_
 
 #include "nodes.h"
 #include "optimization.h"
@@ -23,10 +23,10 @@
 namespace art {
 namespace x86 {
 
-class PcRelativeFixups : public HOptimization {
+class PrepareForRegisterAllocationX86 : public HOptimization {
  public:
-  PcRelativeFixups(HGraph* graph, OptimizingCompilerStats* stats)
-      : HOptimization(graph, "pc_relative_fixups_x86", stats) {}
+  PrepareForRegisterAllocationX86(HGraph* graph, OptimizingCompilerStats* stats)
+      : HOptimization(graph, "prepare_for_register_allocation_x86", stats) {}
 
   void Run() OVERRIDE;
 };
@@ -34,4 +34,4 @@ class PcRelativeFixups : public HOptimization {
 }  // namespace x86
 }  // namespace art
 
-#endif  // ART_COMPILER_OPTIMIZING_PC_RELATIVE_FIXUPS_X86_H_
+#endif  // ART_COMPILER_OPTIMIZING_PREPARE_FOR_REGISTER_ALLOCATION_X86_H_
