@@ -363,6 +363,13 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   // Returns the new block which is empty and has the same dex pc as `successor`.
   HBasicBlock* SplitEdge(HBasicBlock* block, HBasicBlock* successor);
 
+  // Splits the block after 'insn', and creates a diamond pattern.  Returns the new
+  // block containing instructions after 'insn'.  Updates all necessary data
+  // structures.
+  // The 'diamond' blocks can be located by using the successors of the block
+  // containing 'insn' or the predecessors of the returned block.
+  HBasicBlock* InsertDiamondAfter(HInstruction* insn);
+
   void SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor);
   void SimplifyLoop(HBasicBlock* header);
 

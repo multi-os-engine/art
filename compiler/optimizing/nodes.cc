@@ -2147,6 +2147,70 @@ static void CheckAgainstUpperBound(ReferenceTypeInfo rti, ReferenceTypeInfo uppe
   }
 }
 
+HBasicBlock* HGraph::InsertDiamondAfter(HInstruction* insn) {
+  HBasicBlock* current_block = insn->GetBlock();
+  HBasicBlock* rest_of_block = current_block->SplitAfter(insn);
+  AddBlock(rest_of_block);
+
+  // Create the true block.  This will be predecessor 0.
+  HBasicBlock* true_block = new (arena_) HBasicBlock(this, rest_of_block->GetDexPc());
+  AddBlock(true_block);
+  current_block->AddSuccessor(true_block);
+  true_block->AddSuccessor(rest_of_block);
+
+  // Add the false block, and set up the flow.  This will be predecessor 1.
+  HBasicBlock* false_block = new (arena_) HBasicBlock(this, rest_of_block->GetDexPc());
+  AddBlock(false_block);
+  current_block->AddSuccessor(false_block);
+  false_block->AddSuccessor(rest_of_block);
+
+  // Update the domininance information.
+  true_block->SetDominator(current_block);
+  current_block->AddDominatedBlock(true_block);
+  false_block->SetDominator(current_block);
+  current_block->AddDominatedBlock(false_block);
+  rest_of_block->SetDominator(current_block);
+  current_block->AddDominatedBlock(rest_of_block);
+
+  // Update the reverse post order.
+  size_t index = IndexOfElement(reverse_post_order_, current_block);
+  MakeRoomFor(&reverse_post_order_, 3, index);
+  reverse_post_order_[++index] = true_block;
+  reverse_post_order_[++index] = false_block;
+  reverse_post_order_[++index] = rest_of_block;
+
+  // Set loop information for the new blocks.
+  HLoopInformation* loop_info = current_block->GetLoopInformation();
+  if (loop_info != nullptr) {
+    rest_of_block->SetLoopInformation(loop_info);
+    true_block->SetLoopInformation(loop_info);
+    false_block->SetLoopInformation(loop_info);
+    // Add blocks to all enveloping loops.
+    for (HLoopInformationOutwardIterator loop_it(*current_block);
+         !loop_it.Done();
+         loop_it.Advance()) {
+      loop_it.Current()->Add(rest_of_block);
+      loop_it.Current()->Add(true_block);
+      loop_it.Current()->Add(false_block);
+    }
+
+    if (loop_info->IsBackEdge(*current_block)) {
+      loop_info->RemoveBackEdge(current_block);
+      loop_info->AddBackEdge(rest_of_block);
+    }
+  }
+
+  // Set try/catch information for the new blocks.
+  TryCatchInformation* try_catch_info = current_block->IsTryBlock()
+      ? current_block->GetTryCatchInformation()
+      : nullptr;
+  rest_of_block->SetTryCatchInformation(try_catch_info);
+  true_block->SetTryCatchInformation(try_catch_info);
+  false_block->SetTryCatchInformation(try_catch_info);
+
+  return rest_of_block;
+}
+
 void HInstruction::SetReferenceTypeInfo(ReferenceTypeInfo rti) {
   if (kIsDebugBuild) {
     DCHECK_EQ(GetType(), Primitive::kPrimNot);
