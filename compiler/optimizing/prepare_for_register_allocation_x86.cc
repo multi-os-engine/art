@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "pc_relative_fixups_x86.h"
+#include "prepare_for_register_allocation_x86.h"
 #include "code_generator_x86.h"
 
 namespace art {
@@ -23,9 +23,9 @@ namespace x86 {
 /**
  * Finds instructions that need the constant area base as an input.
  */
-class PCRelativeHandlerVisitor : public HGraphVisitor {
+class PcRelativeFixups : public HGraphVisitor {
  public:
-  explicit PCRelativeHandlerVisitor(HGraph* graph) : HGraphVisitor(graph), base_(nullptr) {}
+  explicit PcRelativeFixups(HGraph* graph) : HGraphVisitor(graph), base_(nullptr) {}
 
   void MoveBaseIfNeeded() {
     if (base_ != nullptr) {
@@ -220,13 +220,14 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
   HX86ComputeBaseMethodAddress* base_;
 };
 
-void PcRelativeFixups::Run() {
+void PrepareForRegisterAllocationX86::Run() {
   if (graph_->HasIrreducibleLoops()) {
-    // Do not run this optimization, as irreducible loops do not work with an instruction
-    // that can be live-in at the irreducible loop header.
+    // Irreducible loops do not work with an instruction that can be live-in
+    // at the irreducible loop header.
     return;
   }
-  PCRelativeHandlerVisitor visitor(graph_);
+
+  PcRelativeFixups visitor(graph_);
   visitor.VisitInsertionOrder();
   visitor.MoveBaseIfNeeded();
 }

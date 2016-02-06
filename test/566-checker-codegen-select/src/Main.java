@@ -16,16 +16,9 @@
 
 public class Main {
 
-  /// CHECK-START: long Main.$noinline$longSelect(long) register (before)
+  /// CHECK-START: long Main.$noinline$longSelect(long) register (after)
   /// CHECK:         <<Cond:z\d+>> LessThanOrEqual [{{j\d+}},{{j\d+}}]
   /// CHECK-NEXT:                  Select [{{j\d+}},{{j\d+}},<<Cond>>]
-
-  // Condition must be materialized on X86 because it would need too many
-  // registers otherwise.
-  /// CHECK-START-X86: long Main.$noinline$longSelect(long) disassembly (after)
-  /// CHECK:             LessThanOrEqual
-  /// CHECK-NEXT:          cmp
-  /// CHECK:             Select
 
   public long $noinline$longSelect(long param) {
     if (doThrow) { throw new Error(); }
