@@ -126,7 +126,6 @@ class SSAChecker : public GraphChecker {
   void VisitCondition(HCondition* op) OVERRIDE;
   void VisitIf(HIf* instruction) OVERRIDE;
   void VisitPackedSwitch(HPackedSwitch* instruction) OVERRIDE;
-  void VisitSelect(HSelect* instruction) OVERRIDE;
   void VisitBooleanNot(HBooleanNot* instruction) OVERRIDE;
   void VisitConstant(HConstant* instruction) OVERRIDE;
   void VisitBoundType(HBoundType* instruction) OVERRIDE;

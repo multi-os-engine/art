@@ -38,6 +38,7 @@
 #include "base/dumpable.h"
 #include "base/macros.h"
 #include "base/timing_logger.h"
+#include "boolean_simplifier.h"
 #include "bounds_check_elimination.h"
 #include "builder.h"
 #include "code_generator.h"
@@ -72,7 +73,6 @@
 #include "reference_type_propagation.h"
 #include "register_allocator.h"
 #include "oat_quick_method_header.h"
-#include "select_generator.h"
 #include "sharpening.h"
 #include "side_effects_analysis.h"
 #include "ssa_builder.h"
@@ -512,7 +512,7 @@ static void RunOptimizations(HGraph* graph,
       graph, stats, HDeadCodeElimination::kFinalDeadCodeEliminationPassName);
   HConstantFolding* fold1 = new (arena) HConstantFolding(graph);
   InstructionSimplifier* simplify1 = new (arena) InstructionSimplifier(graph, stats);
-  HSelectGenerator* select_generator = new (arena) HSelectGenerator(graph);
+  HBooleanSimplifier* boolean_simplify = new (arena) HBooleanSimplifier(graph);
   HConstantFolding* fold2 = new (arena) HConstantFolding(graph, "constant_folding_after_inlining");
   HConstantFolding* fold3 = new (arena) HConstantFolding(graph, "constant_folding_after_bce");
   SideEffectsAnalysis* side_effects = new (arena) SideEffectsAnalysis(graph);
@@ -540,9 +540,9 @@ static void RunOptimizations(HGraph* graph,
   MaybeRunInliner(graph, codegen, driver, stats, dex_compilation_unit, pass_observer, handles);
 
   HOptimization* optimizations2[] = {
-    // SelectGenerator depends on the InstructionSimplifier removing
+    // BooleanSimplifier depends on the InstructionSimplifier removing
     // redundant suspend checks to recognize empty blocks.
-    select_generator,
+    boolean_simplify,
     fold2,  // TODO: if we don't inline we can also skip fold2.
     side_effects,
     gvn,

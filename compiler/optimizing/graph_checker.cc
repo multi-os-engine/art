@@ -859,12 +859,8 @@ void SSAChecker::HandleBooleanInput(HInstruction* instruction, size_t input_inde
           value));
     }
   } else if (input->GetType() == Primitive::kPrimInt
-             && (input->IsPhi() ||
-                 input->IsAnd() ||
-                 input->IsOr() ||
-                 input->IsXor() ||
-                 input->IsSelect())) {
-    // TODO: We need a data-flow analysis to determine if the Phi or Select or
+             && (input->IsPhi() || input->IsAnd() || input->IsOr() || input->IsXor())) {
+    // TODO: We need a data-flow analysis to determine if the Phi or
     //       binary operation is actually Boolean. Allow for now.
   } else if (input->GetType() != Primitive::kPrimBoolean) {
     AddError(StringPrintf(
@@ -895,11 +891,6 @@ void SSAChecker::VisitPackedSwitch(HPackedSwitch* instruction) {
 void SSAChecker::VisitIf(HIf* instruction) {
   VisitInstruction(instruction);
   HandleBooleanInput(instruction, 0);
-}
-
-void SSAChecker::VisitSelect(HSelect* instruction) {
-  VisitInstruction(instruction);
-  HandleBooleanInput(instruction, 2);
 }
 
 void SSAChecker::VisitBooleanNot(HBooleanNot* instruction) {
