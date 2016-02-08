@@ -2976,30 +2976,108 @@ void InstructionCodeGeneratorARM64::VisitDeoptimize(HDeoptimize* deoptimize) {
                         /* false_target */ nullptr);
 }
 
+enum SelectVariant {
+  kCsel,
+  kCselSwapped,
+  kFcsel,
+};
+
+static bool IsConditionOnFloatingPointValues(HCondition* condition) {
+  return condition != nullptr && Primitive::IsFloatingPointType(condition->InputAt(0)->GetType());
+}
+
+static SelectVariant GetSelectVariant(HSelect* select) {
+  if (Primitive::IsFloatingPointType(select->GetType())) {
+    return kFcsel;
+  } else if (select->InputAt(1)->IsConstant() &&
+             !IsConditionOnFloatingPointValues(select->GetCondition()->AsCondition())) {
+    return kCselSwapped;
+  } else {
+    return kCsel;
+  }
+}
+
+static Condition GetConditionForSelect(HCondition* condition, SelectVariant variant) {
+  if (IsConditionOnFloatingPointValues(condition)) {
+    DCHECK(variant != kCselSwapped);
+    return ARM64FPCondition(condition->GetCondition(), condition->IsGtBias());
+  } else {
+    return ARM64Condition((variant == kCselSwapped) ? condition->GetOppositeCondition()
+                                                    : condition->GetCondition());
+  }
+}
+
 void LocationsBuilderARM64::VisitSelect(HSelect* select) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(select);
-  if (Primitive::IsFloatingPointType(select->GetType())) {
-    locations->SetInAt(0, Location::RequiresFpuRegister());
-    locations->SetInAt(1, Location::RequiresFpuRegister());
-  } else {
-    locations->SetInAt(0, Location::RequiresRegister());
-    locations->SetInAt(1, Location::RequiresRegister());
+  switch (GetSelectVariant(select)) {
+    case kCsel:
+      locations->SetInAt(0, Location::RegisterOrConstant(select->InputAt(0)));
+      locations->SetInAt(1, Location::RequiresRegister());
+      locations->SetOut(Location::RequiresRegister());
+      break;
+    case kCselSwapped:
+      locations->SetInAt(0, Location::RequiresRegister());
+      locations->SetInAt(1, Location::RegisterOrConstant(select->InputAt(1)));
+      locations->SetOut(Location::RequiresRegister());
+      break;
+    case kFcsel:
+      locations->SetInAt(0, Location::RequiresFpuRegister());
+      locations->SetInAt(1, Location::RequiresFpuRegister());
+      locations->SetOut(Location::RequiresFpuRegister());
+      break;
   }
   if (IsBooleanValueOrMaterializedCondition(select->GetCondition())) {
     locations->SetInAt(2, Location::RequiresRegister());
   }
-  locations->SetOut(Location::SameAsFirstInput());
 }
 
 void InstructionCodeGeneratorARM64::VisitSelect(HSelect* select) {
-  LocationSummary* locations = select->GetLocations();
-  vixl::Label false_target;
-  GenerateTestAndBranch(select,
-                        /* condition_input_index */ 2,
-                        /* true_target */ nullptr,
-                        &false_target);
-  codegen_->MoveLocation(locations->Out(), locations->InAt(1), select->GetType());
-  __ Bind(&false_target);
+  HInstruction* cond = select->GetCondition();
+  SelectVariant variant = GetSelectVariant(select);
+  Condition csel_cond;
+
+  if (IsBooleanValueOrMaterializedCondition(cond)) {
+    if (cond->IsCondition() && cond->GetNext() == select) {
+      // Condition codes set from previous instruction.
+      csel_cond = GetConditionForSelect(cond->AsCondition(), variant);
+    } else {
+      __ Cmp(InputRegisterAt(select, 2), Operand(0));
+      csel_cond = (variant == kCselSwapped) ? eq : ne;
+    }
+  } else if (IsConditionOnFloatingPointValues(cond->AsCondition())) {
+    Location rhs = cond->GetLocations()->InAt(1);
+    if (rhs.IsConstant()) {
+      DCHECK(IsFloatingPointZeroConstant(rhs.GetConstant()));
+      __ Fcmp(InputFPRegisterAt(cond, 0), 0.0);
+    } else {
+      __ Fcmp(InputFPRegisterAt(cond, 0), InputFPRegisterAt(cond, 1));
+    }
+    csel_cond = GetConditionForSelect(cond->AsCondition(), variant);
+  } else {
+    __ Cmp(InputRegisterAt(cond, 0), InputOperandAt(cond, 1));
+    csel_cond = GetConditionForSelect(cond->AsCondition(), variant);
+  }
+
+  switch (variant) {
+    case kCsel:
+      __ Csel(OutputRegister(select),
+              InputRegisterAt(select, 1),
+              InputOperandAt(select, 0),
+              csel_cond);
+      break;
+    case kCselSwapped:
+      __ Csel(OutputRegister(select),
+              InputRegisterAt(select, 0),
+              InputOperandAt(select, 1),
+              csel_cond);
+      break;
+    case kFcsel:
+      __ Fcsel(OutputFPRegister(select),
+               InputFPRegisterAt(select, 1),
+               InputFPRegisterAt(select, 0),
+               csel_cond);
+      break;
+  }
 }
 
 void LocationsBuilderARM64::VisitNativeDebugInfo(HNativeDebugInfo* info) {
