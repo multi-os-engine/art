@@ -73,6 +73,10 @@ std::ostream& operator<<(std::ostream& os, const MemMap::Maps& mem_maps) {
 
 MemMap::Maps* MemMap::maps_ = nullptr;
 
+#if !defined(__ANDROID__) && !defined(NDEBUG)
+uint32_t MemMap::try_readable_hash_;
+#endif
+
 #if USE_ART_LOW_4G_ALLOCATOR
 // Handling mem_map in 32b address range for 64b architectures that do not support MAP_32BIT.
 
@@ -876,5 +880,27 @@ std::ostream& operator<<(std::ostream& os, const MemMap& mem_map) {
                      mem_map.GetName().c_str());
   return os;
 }
+
+#if !defined(__ANDROID__) && !defined(NDEBUG)
+void MemMap::TryReadable() {
+  if (base_begin_ == nullptr && base_size_ == 0) {
+    return;
+  }
+  CHECK_NE(prot_ & PROT_READ, 0);
+  uint8_t* begin = reinterpret_cast<uint8_t*>(base_begin_);
+  uint8_t* end = begin + base_size_;
+  DCHECK(IsAligned<kPageSize>(begin));
+  DCHECK(IsAligned<kPageSize>(end));
+  // Read the first byte of each page.
+  uint32_t hash = 0U;
+  for (uint8_t* ptr = begin; ptr < end; ptr += kPageSize) {
+    // This read could fault if protection wasn't set correctly.
+    uint8_t value = *ptr;
+    hash ^= value;
+  }
+  // Write to a static member so the compiler won't optimize away the above reads.
+  try_readable_hash_ = hash;
+}
+#endif
 
 }  // namespace art

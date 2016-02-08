@@ -184,6 +184,13 @@ class MemMap {
   static void Init() REQUIRES(!Locks::mem_maps_lock_);
   static void Shutdown() REQUIRES(!Locks::mem_maps_lock_);
 
+#if !defined(__ANDROID__) && !defined(NDEBUG)
+  // If the map is PROT_READ, try to read each page of the map to check it is in fact readable (not
+  // faulting). This is used to diagnose a bug b/19894268 where mprotect doesn't seem to be working
+  // intermittently.
+  void TryReadable();
+#endif
+
  private:
   MemMap(const std::string& name,
          uint8_t* begin,
@@ -226,6 +233,12 @@ class MemMap {
   const bool reuse_;
 
   const size_t redzone_size_;
+
+#if !defined(__ANDROID__) && !defined(NDEBUG)
+  // TryReadable() writes the hash of the memory content that it reads to this so that the
+  // compiler won't optimize away the reads.
+  static uint32_t try_readable_hash_;
+#endif
 
 #if USE_ART_LOW_4G_ALLOCATOR
   static uintptr_t next_mem_pos_;   // Next memory location to check for low_4g extent.
