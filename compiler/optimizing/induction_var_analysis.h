@@ -65,6 +65,7 @@ class HInductionVarAnalysis : public HOptimization {
     kMul,
     kDiv,
     kFetch,
+    kTypeConversion,
     // Trip-counts.
     kTripCountInLoop,        // valid in full loop; loop is finite
     kTripCountInBody,        // valid in body only; loop is finite
@@ -83,6 +84,8 @@ class HInductionVarAnalysis : public HOptimization {
    *         operation: a + b, a - b, -b, a * b, a / b
    *       or:
    *         fetch: fetch from HIR
+   *       or:
+   *         typeconversion: a
    *   (2) linear:
    *         nop: a * i + b
    *   (3) wrap-around
@@ -102,12 +105,16 @@ class HInductionVarAnalysis : public HOptimization {
           operation(op),
           op_a(a),
           op_b(b),
-          fetch(f) {}
+          fetch(f),
+          result_type(Primitive::kPrimVoid) {}
     InductionClass induction_class;
     InductionOp operation;
     InductionInfo* op_a;
     InductionInfo* op_b;
     HInstruction* fetch;
+    Primitive::Type result_type;
+
+    void SetResultType(Primitive::Type t) { result_type = t; }
   };
 
   bool IsVisitedNode(HInstruction* instruction) const {
@@ -117,6 +124,13 @@ class HInductionVarAnalysis : public HOptimization {
   InductionInfo* CreateInvariantOp(InductionOp op, InductionInfo* a, InductionInfo* b) {
     DCHECK(((op != kNeg && a != nullptr) || (op == kNeg && a == nullptr)) && b != nullptr);
     return CreateSimplifiedInvariant(op, a, b);
+  }
+
+  InductionInfo* CreateInvariantTypeConversion(InductionInfo* a, Primitive::Type result_type) {
+    DCHECK(a != nullptr);
+    InductionInfo* ii = new (graph_->GetArena()) InductionInfo(kInvariant, kTypeConversion, a, nullptr, nullptr);
+    ii->SetResultType(result_type);
+    return ii;
   }
 
   InductionInfo* CreateInvariantFetch(HInstruction* f) {
@@ -161,6 +175,7 @@ class HInductionVarAnalysis : public HOptimization {
                              HInstruction* y,
                              InductionOp op,
                              bool is_first_call);
+  InductionInfo* SolveTypeConversion(HTypeConversion* conversion, HInstruction* input);
 
   // Trip count information.
   void VisitControl(HLoopInformation* loop);
@@ -204,6 +219,8 @@ class HInductionVarAnalysis : public HOptimization {
   ArenaSafeMap<HInstruction*, NodeInfo> map_;
   ArenaSafeMap<HInstruction*, InductionInfo*> cycle_;
 
+  // Order is important, as we want to keep the narrowest range.
+  enum {kNoTypeConversion, kShortIntTypeConversion, kByteIntTypeConversion} type_conv_;
   /**
    * Maintains the results of the analysis as a mapping from loops to a mapping from instructions
    * to the induction information for that instruction in that loop.

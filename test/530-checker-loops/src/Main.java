@@ -430,14 +430,11 @@ public class Main {
   /// CHECK-DAG: BoundsCheck
   //
   /// CHECK-START: int Main.linearShort() BCE (after)
-  /// CHECK-DAG: BoundsCheck
-  //
-  /// CHECK-START: int Main.linearShort() BCE (after)
+  /// CHECK-NOT: BoundsCheck
   /// CHECK-NOT: Deoptimize
   private static int linearShort() {
     int[] x = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
     int result = 0;
-    // TODO: make this work
     for (short i = 0; i < 10; i++) {
       result += x[i];
     }

@@ -57,6 +57,27 @@ static bool IsIntAndGet(HInstruction* instruction, int32_t* value) {
       return true;
     }
   }
+  // Also handle a FP constant with an integer value.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+  if (instruction->IsFloatConstant()) {
+    float fp_value = instruction->AsFloatConstant()->GetValue();
+    const int32_t c = static_cast<int32_t>(fp_value);
+    if (static_cast<double>(c) == fp_value) {
+      *value = c;
+      return true;
+    }
+  } else if (instruction->IsDoubleConstant()) {
+    double fp_value = instruction->AsDoubleConstant()->GetValue();
+    const int64_t c = static_cast<int64_t>(fp_value);
+    if (static_cast<double>(c) == fp_value) {
+      if (CanLongValueFitIntoInt(c)) {
+        *value = static_cast<int32_t>(c);
+        return true;
+      }
+    }
+  }
+#pragma GCC diagnostic pop
   return false;
 }
 
@@ -292,6 +313,8 @@ InductionVarRange::Value InductionVarRange::GetVal(HInductionVarAnalysis::Induct
             return GetDiv(info->op_a, info->op_b, trip, in_body, is_min);
           case HInductionVarAnalysis::kFetch:
             return GetFetch(info->fetch, trip, in_body, is_min);
+          case HInductionVarAnalysis::kTypeConversion:
+             return GetVal(info->op_a, trip, in_body, is_min);
           case HInductionVarAnalysis::kTripCountInLoop:
           case HInductionVarAnalysis::kTripCountInLoopUnsafe:
             if (!in_body && !is_min) {  // one extra!
@@ -632,6 +655,8 @@ bool InductionVarRange::GenerateCode(HInductionVarAnalysis::InductionInfo* info,
               }
             }
             break;
+          case HInductionVarAnalysis::kTypeConversion:
+            return GenerateCode(info->op_a, trip, graph, block, result, in_body, is_min);
           default:
             break;
         }

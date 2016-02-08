@@ -66,6 +66,8 @@ HInductionVarAnalysis::HInductionVarAnalysis(HGraph* graph)
            graph->GetArena()->Adapter(kArenaAllocInductionVarAnalysis)),
       cycle_(std::less<HInstruction*>(),
              graph->GetArena()->Adapter(kArenaAllocInductionVarAnalysis)),
+      type_conv_(kNoTypeConversion),
+
       induction_(std::less<HLoopInformation*>(),
                  graph->GetArena()->Adapter(kArenaAllocInductionVarAnalysis)) {
 }
@@ -90,6 +92,7 @@ void HInductionVarAnalysis::VisitLoop(HLoopInformation* loop) {
   global_depth_ = 0;
   DCHECK(stack_.empty());
   map_.clear();
+  type_conv_ = kNoTypeConversion;
 
   for (HBlocksInLoopIterator it_loop(*loop); !it_loop.Done(); it_loop.Advance()) {
     HBasicBlock* loop_block = it_loop.Current();
@@ -204,6 +207,10 @@ void HInductionVarAnalysis::ClassifyTrivial(HLoopInformation* loop, HInstruction
     // TODO: accept different conversion scenarios.
     if (conversion->GetResultType() == conversion->GetInputType()) {
       info = LookupInfo(loop, conversion->GetInput());
+    } else if (conversion->GetResultType() == Primitive::kPrimInt &&
+        (conversion->GetInputType() == Primitive::kPrimShort ||
+         conversion->GetInputType() == Primitive::kPrimByte)) {
+      info = LookupInfo(loop, conversion->GetInput());
     }
   }
 
@@ -257,6 +264,23 @@ void HInductionVarAnalysis::ClassifyNonTrivial(HLoopInformation* loop) {
     } else if (instruction->IsSub()) {
       update = SolveAddSub(
           loop, phi, instruction, instruction->InputAt(0), instruction->InputAt(1), kSub, true);
+    } else if (instruction->IsTypeConversion()) {
+      // We only supprt very limited conversions.
+      HTypeConversion* conversion = instruction->AsTypeConversion();
+      if (conversion->GetInputType() == Primitive::kPrimInt &&
+          (conversion->GetResultType() == Primitive::kPrimShort ||
+           conversion->GetResultType() == Primitive::kPrimByte)) {
+        update = SolveTypeConversion(conversion, instruction->InputAt(0));
+        if (update != nullptr) {
+          // Remember this so that we can check the range later.
+          // We keep the narrowest conversion using an ordered enum.
+          if (conversion->GetResultType() == Primitive::kPrimShort) {
+            type_conv_ = std::max(type_conv_, kShortIntTypeConversion);
+          } else {
+            type_conv_ = std::max(type_conv_, kByteIntTypeConversion);
+          }
+        }
+      }
     }
     if (update == nullptr) {
       return;
@@ -453,6 +477,19 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::SolvePhiAllInputs(
   return nullptr;
 }
 
+HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::SolveTypeConversion(
+    HTypeConversion* conversion,
+    HInstruction* input) {
+  auto it = cycle_.find(input);
+  if (it != cycle_.end()) {
+    InductionInfo* a = it->second;
+    if (a->induction_class == kInvariant) {
+      return CreateInvariantTypeConversion(a, conversion->GetResultType());
+    }
+  }
+  return nullptr;
+}
+
 HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::SolveAddSub(HLoopInformation* loop,
                                                                          HInstruction* entry_phi,
                                                                          HInstruction* instruction,
@@ -514,8 +551,9 @@ void HInductionVarAnalysis::VisitControl(HLoopInformation* loop) {
       Primitive::Type type = condition->InputAt(0)->GetType();
       // Determine if the loop control uses integral arithmetic and an if-exit (X outside) or an
       // if-iterate (X inside), always expressed as if-iterate when passing into VisitCondition().
-      if (type != Primitive::kPrimInt && type != Primitive::kPrimLong) {
-        // Loop control is not 32/64-bit integral.
+      if (type != Primitive::kPrimInt && type != Primitive::kPrimLong &&
+          type != Primitive::kPrimFloat && type != Primitive::kPrimDouble) {
+        // Loop control is not 32/64-bit integral (or possibly a FP version of it).
       } else if (a == nullptr || b == nullptr) {
         // Loop control is not a sequence.
       } else if (if_true->GetLoopInformation() != loop && if_false->GetLoopInformation() == loop) {
@@ -599,6 +637,38 @@ void HInductionVarAnalysis::VisitTripCount(HLoopInformation* loop,
   //     with an explicit finite-test.
   // (4) For loops which early-exits, the TC forms an upper bound, as in:
   //     for (int i = 0; i < 10 && ....; i++) // TC <= 10
+  if (type == Primitive::kPrimFloat || type == Primitive::kPrimDouble) {
+    // We have to ensure that the upper and lower bounds have integer values.
+    int64_t value = 0;
+    if (!IsIntAndGet(lower_expr, &value) || !IsIntAndGet(upper_expr, &value)) {
+      return;
+    }
+  }
+  if (type_conv_ != kNoTypeConversion) {
+    // Ensure that the upper and lower bounds are within range.
+    int64_t lower_bound = 0;
+    int64_t upper_bound = 0;
+    if (!IsIntAndGet(lower_expr, &lower_bound) || !IsIntAndGet(upper_expr, &upper_bound)) {
+      // We don't have known upper and lower bounds.
+      return;
+    }
+    // Check the bounds tto be sure that they are in range.
+    if (type_conv_ == kByteIntTypeConversion) {
+      constexpr int64_t max_byte = std::numeric_limits<char>::max();
+      constexpr int64_t min_byte = std::numeric_limits<char>::min();
+      if (lower_bound < min_byte || lower_bound > max_byte ||
+          upper_bound < min_byte || upper_bound > max_byte) {
+        return;
+      }
+    } else {
+      constexpr int64_t max_short = std::numeric_limits<int16_t>::max();
+      constexpr int64_t min_short = std::numeric_limits<int16_t>::min();
+      if (lower_bound < min_short || lower_bound > max_short ||
+          upper_bound < min_short || upper_bound > max_short) {
+        return;
+      }
+    }
+  }
   InductionInfo* trip_count = upper_expr;
   const bool is_taken = IsTaken(lower_expr, upper_expr, cmp);
   const bool is_finite = IsFinite(upper_expr, stride_value, type, cmp);
@@ -796,6 +866,26 @@ bool HInductionVarAnalysis::IsIntAndGet(InductionInfo* info, int64_t* value) {
         *value = info->fetch->AsLongConstant()->GetValue();
         return true;
       }
+
+      // Also handle a FP constant with an integer value.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+      if (info->fetch->IsFloatConstant()) {
+        float fp_value = info->fetch->AsFloatConstant()->GetValue();
+        const int32_t c = static_cast<int32_t>(fp_value);
+        if (static_cast<double>(c) == fp_value) {
+          *value = c;
+          return true;
+        }
+      } else if (info->fetch->IsDoubleConstant()) {
+        double fp_value = info->fetch->AsDoubleConstant()->GetValue();
+        const int64_t c = static_cast<int64_t>(fp_value);
+        if (static_cast<double>(c) == fp_value) {
+          *value = c;
+          return true;
+        }
+      }
+#pragma GCC diagnostic pop
     }
     // Use range analysis to resolve compound values.
     InductionVarRange range(this);
@@ -846,10 +936,16 @@ std::string HInductionVarAnalysis::InductionToString(InductionInfo* info) {
             inv += std::to_string(info->fetch->AsIntConstant()->GetValue());
           } else if (info->fetch->IsLongConstant()) {
             inv += std::to_string(info->fetch->AsLongConstant()->GetValue());
+          } else if (info->fetch->IsFloatConstant()) {
+            inv += std::to_string(info->fetch->AsFloatConstant()->GetValue()) + 'f';
+          } else if (info->fetch->IsDoubleConstant()) {
+            inv += std::to_string(info->fetch->AsDoubleConstant()->GetValue());
           } else {
             inv += std::to_string(info->fetch->GetId()) + ":" + info->fetch->DebugName();
           }
           break;
+        case kTypeConversion:
+          return "TypeConv: " + inv + ")";
         case kTripCountInLoop:       inv += " (TC-loop) ";        break;
         case kTripCountInBody:       inv += " (TC-body) ";        break;
         case kTripCountInLoopUnsafe: inv += " (TC-loop-unsafe) "; break;
