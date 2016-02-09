@@ -1628,6 +1628,10 @@ void InstructionCodeGeneratorX86::VisitNativeDebugInfo(HNativeDebugInfo* info) {
   codegen_->RecordPcInfo(info, info->GetDexPc());
 }
 
+void CodeGeneratorX86::GenerateNop() {
+  __ nop();
+}
+
 void LocationsBuilderX86::VisitLocal(HLocal* local) {
   local->SetLocations(nullptr);
 }

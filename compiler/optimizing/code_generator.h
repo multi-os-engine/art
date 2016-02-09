@@ -442,6 +442,8 @@ class CodeGenerator {
   // Copy the result of a call into the given target.
   virtual void MoveFromReturnRegister(Location trg, Primitive::Type type) = 0;
 
+  virtual void GenerateNop() = 0;
+
  protected:
   // Method patch info used for recording locations of required linker patches and
   // target methods. The target method can be used for various purposes, whether for

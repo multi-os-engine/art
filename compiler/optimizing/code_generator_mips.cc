@@ -3453,6 +3453,10 @@ void InstructionCodeGeneratorMIPS::VisitNativeDebugInfo(HNativeDebugInfo* info) 
   codegen_->RecordPcInfo(info, info->GetDexPc());
 }
 
+void CodeGeneratorMIPS::GenerateNop() {
+  __ Nop();
+}
+
 void LocationsBuilderMIPS::HandleFieldGet(HInstruction* instruction, const FieldInfo& field_info) {
   Primitive::Type field_type = field_info.GetFieldType();
   bool is_wide = (field_type == Primitive::kPrimLong) || (field_type == Primitive::kPrimDouble);
