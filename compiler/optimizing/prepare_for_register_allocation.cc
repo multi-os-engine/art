@@ -127,8 +127,8 @@ void PrepareForRegisterAllocation::VisitNewInstance(HNewInstance* instruction) {
   }
 }
 
-bool PrepareForRegisterAllocation::CanEmitConditionAt(HCondition* condition,
-                                                      HInstruction* user) const {
+bool PrepareForRegisterAllocation::CanEmitConditionAt(const HCondition* condition,
+                                                      const HInstruction* user) {
   if (condition->GetNext() != user) {
     return false;
   }
@@ -138,7 +138,7 @@ bool PrepareForRegisterAllocation::CanEmitConditionAt(HCondition* condition,
   }
 
   if (user->IsSelect() && user->AsSelect()->GetCondition() == condition) {
-    if (GetGraph()->GetInstructionSet() == kX86) {
+    if (condition->GetBlock()->GetGraph()->GetInstructionSet() == kX86) {
       // Long values and long condition inputs result in 8 required core registers.
       // We don't have that many on x86. Materialize the condition in such case.
       return user->GetType() != Primitive::kPrimLong ||
