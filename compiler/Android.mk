@@ -94,6 +94,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/reference_type_propagation.cc \
 	optimizing/register_allocator.cc \
 	optimizing/select_generator.cc \
+	optimizing/scheduler.cc \
 	optimizing/sharpening.cc \
 	optimizing/side_effects_analysis.cc \
 	optimizing/ssa_builder.cc \
@@ -145,6 +146,7 @@ LIBART_COMPILER_SRC_FILES_arm64 := \
 	optimizing/code_generator_arm64.cc \
 	optimizing/instruction_simplifier_arm64.cc \
 	optimizing/intrinsics_arm64.cc \
+	optimizing/scheduler_arm64.cc \
 	utils/arm64/assembler_arm64.cc \
 	utils/arm64/managed_register_arm64.cc \
 

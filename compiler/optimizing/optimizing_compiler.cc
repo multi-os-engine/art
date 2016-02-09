@@ -73,6 +73,7 @@
 #include "register_allocator.h"
 #include "oat_quick_method_header.h"
 #include "select_generator.h"
+#include "scheduler.h"
 #include "sharpening.h"
 #include "side_effects_analysis.h"
 #include "ssa_builder.h"
@@ -437,12 +438,12 @@ static void MaybeRunInliner(HGraph* graph,
   RunOptimizations(optimizations, arraysize(optimizations), pass_observer);
 }
 
-static void RunArchOptimizations(InstructionSet instruction_set,
+static void RunArchOptimizations(const InstructionSetFeatures* instruction_set_features,
                                  HGraph* graph,
                                  OptimizingCompilerStats* stats,
                                  PassObserver* pass_observer) {
   ArenaAllocator* arena = graph->GetArena();
-  switch (instruction_set) {
+  switch (instruction_set_features->GetInstructionSet()) {
 #ifdef ART_ENABLE_CODEGEN_arm
     case kThumb2:
     case kArm: {
@@ -460,10 +461,13 @@ static void RunArchOptimizations(InstructionSet instruction_set,
           new (arena) arm64::InstructionSimplifierArm64(graph, stats);
       SideEffectsAnalysis* side_effects = new (arena) SideEffectsAnalysis(graph);
       GVNOptimization* gvn = new (arena) GVNOptimization(graph, *side_effects, "GVN_after_arch");
+      HInstructionScheduling* scheduling =
+          new (arena) HInstructionScheduling(graph, instruction_set_features);
       HOptimization* arm64_optimizations[] = {
         simplifier,
         side_effects,
-        gvn
+        gvn,
+        scheduling,
       };
       RunOptimizations(arm64_optimizations, arraysize(arm64_optimizations), pass_observer);
       break;
@@ -562,7 +566,7 @@ static void RunOptimizations(HGraph* graph,
   };
   RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
 
-  RunArchOptimizations(driver->GetInstructionSet(), graph, stats, pass_observer);
+  RunArchOptimizations(driver->GetInstructionSetFeatures(), graph, stats, pass_observer);
   AllocateRegisters(graph, codegen, pass_observer);
 }
 

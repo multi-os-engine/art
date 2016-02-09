@@ -1609,6 +1609,16 @@ class SideEffects : public ValueObject {
     return (other.flags_ & depends_on_flags);
   }
 
+  // Returns true if we cannot reorder this and other instructions given their side effects.
+  bool MayHaveReorderingDependency(SideEffects other) const {
+    const uint64_t this_memory_writes = flags_ & kAllWrites;
+    const uint64_t other_memory_writes = other.flags_ & kAllWrites;
+    // RAW, WAR and memory WAW.
+    return MayDependOn(other) ||  // Read after write.
+        other.MayDependOn(*this) ||  // Write after read.
+        (other_memory_writes & this_memory_writes);  // Memory write after write.
+  }
+
   // Returns string representation of flags (for debugging only).
   // Format: |x|DFJISCBZL|DFJISCBZL|y|DFJISCBZL|DFJISCBZL|
   std::string ToString() const {
