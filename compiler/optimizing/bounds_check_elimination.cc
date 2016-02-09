@@ -63,9 +63,10 @@ class ValueBound : public ValueObject {
     return true;
   }
 
+  // Return true if instruction can be expressed as "left_instruction + right_constant".
   static bool IsAddOrSubAConstant(HInstruction* instruction,
                                   HInstruction** left_instruction,
-                                  int* right_constant) {
+                                  int32_t* right_constant) {
     if (instruction->IsAdd() || instruction->IsSub()) {
       HBinaryOperation* bin_op = instruction->AsBinaryOperation();
       HInstruction* left = bin_op->GetLeft();
@@ -80,6 +81,19 @@ class ValueBound : public ValueObject {
     *left_instruction = nullptr;
     *right_constant = 0;
     return false;
+  }
+
+  // Expresses any instruction as a value bound.
+  static ValueBound AsValueBound(HInstruction* instruction) {
+    if (instruction->IsIntConstant()) {
+      return ValueBound(nullptr, instruction->AsIntConstant()->GetValue());
+    }
+    HInstruction *left;
+    int32_t right;
+    if (IsAddOrSubAConstant(instruction, &left, &right)) {
+      return ValueBound(left, right);
+    }
+    return ValueBound(instruction, 0);
   }
 
   // Try to detect useful value bound format from an instruction, e.g.
@@ -491,6 +505,8 @@ class BCEVisitor : public HGraphVisitor {
   // Very large constant index is considered as an anomaly. This is a threshold
   // beyond which we don't bother to apply the deoptimization technique since
   // it's likely some AIOOBE will be thrown.
+  static constexpr int32_t kMinConstantForSubtractingDeoptimize =
+        std::numeric_limits<int32_t>::min() + 1024 * 1024;
   static constexpr int32_t kMaxConstantForAddingDeoptimize =
       std::numeric_limits<int32_t>::max() - 1024 * 1024;
 
@@ -508,7 +524,7 @@ class BCEVisitor : public HGraphVisitor {
                   std::less<int>(),
                   graph->GetArena()->Adapter(kArenaAllocBoundsCheckElimination)),
               graph->GetArena()->Adapter(kArenaAllocBoundsCheckElimination)),
-        first_constant_index_bounds_check_map_(
+        first_invariant_index_bounds_check_map_(
             std::less<int>(),
             graph->GetArena()->Adapter(kArenaAllocBoundsCheckElimination)),
         early_exit_loop_(
@@ -519,20 +535,23 @@ class BCEVisitor : public HGraphVisitor {
             graph->GetArena()->Adapter(kArenaAllocBoundsCheckElimination)),
         finite_loop_(graph->GetArena()->Adapter(kArenaAllocBoundsCheckElimination)),
         need_to_revisit_block_(false),
-        has_deoptimization_on_constant_subscripts_(false),
+        revisiting_block_(false),
+        has_deoptimization_on_invariant_index_(false),
         initial_block_size_(graph->GetBlocks().size()),
         side_effects_(side_effects),
         induction_range_(induction_analysis) {}
 
   void VisitBasicBlock(HBasicBlock* block) OVERRIDE {
     DCHECK(!IsAddedBlock(block));
-    first_constant_index_bounds_check_map_.clear();
+    need_to_revisit_block_ = revisiting_block_ = false;
+    first_invariant_index_bounds_check_map_.clear();
     HGraphVisitor::VisitBasicBlock(block);
     if (need_to_revisit_block_) {
+      GetValueRangeMap(block)->clear();  // start over
       AddComparesWithDeoptimization(block);
       need_to_revisit_block_ = false;
-      first_constant_index_bounds_check_map_.clear();
-      GetValueRangeMap(block)->clear();
+      revisiting_block_ = true;
+      first_invariant_index_bounds_check_map_.clear();
       HGraphVisitor::VisitBasicBlock(block);
     }
   }
@@ -555,8 +574,7 @@ class BCEVisitor : public HGraphVisitor {
       // Added blocks don't keep value ranges.
       return nullptr;
     }
-    uint32_t block_id = basic_block->GetBlockId();
-    return &maps_[block_id];
+    return &maps_[basic_block->GetBlockId()];
   }
 
   // Traverse up the dominator tree to look for value range info.
@@ -576,6 +594,11 @@ class BCEVisitor : public HGraphVisitor {
     return nullptr;
   }
 
+  // Helper method to assign a new range to an instruction in given basic block.
+  void AssignRange(HBasicBlock* basic_block, HInstruction* instruction, ValueRange* range) {
+    GetValueRangeMap(basic_block)->Overwrite(instruction->GetId(), range);
+  }
+
   // Narrow the value range of `instruction` at the end of `basic_block` with `range`,
   // and push the narrowed value range to `successor`.
   void ApplyRangeFromComparison(HInstruction* instruction, HBasicBlock* basic_block,
@@ -583,7 +606,7 @@ class BCEVisitor : public HGraphVisitor {
     ValueRange* existing_range = LookupValueRange(instruction, basic_block);
     if (existing_range == nullptr) {
       if (range != nullptr) {
-        GetValueRangeMap(successor)->Overwrite(instruction->GetId(), range);
+        AssignRange(successor, instruction, range);
       }
       return;
     }
@@ -595,8 +618,7 @@ class BCEVisitor : public HGraphVisitor {
         return;
       }
     }
-    ValueRange* narrowed_range = existing_range->Narrow(range);
-    GetValueRangeMap(successor)->Overwrite(instruction->GetId(), narrowed_range);
+    AssignRange(successor, instruction, existing_range->Narrow(range));
   }
 
   // Special case that we may simultaneously narrow two MonotonicValueRange's to
@@ -778,82 +800,83 @@ class BCEVisitor : public HGraphVisitor {
            array_length->IsPhi());
     bool try_dynamic_bce = true;
 
+    // First, analyze array length range.
+    ValueRange* array_length_range = LookupValueRange(array_length, block);
+    ValueBound index_value = ValueBound::AsValueBound(index);
+    if (array_length_range != nullptr &&
+        (index_value.GetConstant() >= 0 || index_value.GetInstruction() != nullptr) &&  // safe comp?
+        index_value.LessThan(array_length_range->GetLower())) {
+      ReplaceInstruction(bounds_check, index);
+      return;
+    }
+
+    // Next, analyze range on index.
     if (!index->IsIntConstant()) {
-      // Non-constant subscript.
+      // Non-constant index.
       ValueBound lower = ValueBound(nullptr, 0);        // constant 0
       ValueBound upper = ValueBound(array_length, -1);  // array_length - 1
       ValueRange array_range(GetGraph()->GetArena(), lower, upper);
-      // Try range obtained by dominator-based analysis.
+      // Try index range obtained by dominator-based analysis.
       ValueRange* index_range = LookupValueRange(index, block);
       if (index_range != nullptr && index_range->FitsIn(&array_range)) {
         ReplaceInstruction(bounds_check, index);
         return;
       }
-      // Try range obtained by induction variable analysis.
+      // Try index range obtained by induction variable analysis.
       // Disables dynamic bce if OOB is certain.
       if (InductionRangeFitsIn(&array_range, bounds_check, index, &try_dynamic_bce)) {
         ReplaceInstruction(bounds_check, index);
         return;
       }
     } else {
-      // Constant subscript.
+      // Constant index.
       int32_t constant = index->AsIntConstant()->GetValue();
       if (constant < 0) {
         // Will always throw exception.
         return;
-      }
-      if (array_length->IsIntConstant()) {
+      } else if (array_length->IsIntConstant()) {
         if (constant < array_length->AsIntConstant()->GetValue()) {
           ReplaceInstruction(bounds_check, index);
         }
+        // Will always throw exception.
         return;
       }
-
-      DCHECK(array_length->IsArrayLength());
-      ValueRange* existing_range = LookupValueRange(array_length, block);
-      if (existing_range != nullptr) {
-        ValueBound lower = existing_range->GetLower();
-        DCHECK(lower.IsConstant());
-        if (constant < lower.GetConstant()) {
-          ReplaceInstruction(bounds_check, index);
-          return;
-        } else {
-          // Existing range isn't strong enough to eliminate the bounds check.
-          // Fall through to update the array_length range with info from this
-          // bounds check.
-        }
-      }
-
-      if (first_constant_index_bounds_check_map_.find(array_length->GetId()) ==
-          first_constant_index_bounds_check_map_.end()) {
-        // Remember the first bounds check against array_length of a constant index.
-        // That bounds check instruction has an associated HEnvironment where we
-        // may add an HDeoptimize to eliminate bounds checks of constant indices
-        // against array_length.
-        first_constant_index_bounds_check_map_.Put(array_length->GetId(), bounds_check);
-      } else {
-        // We've seen it at least twice. It's beneficial to introduce a compare with
-        // deoptimization fallback to eliminate the bounds checks.
-        need_to_revisit_block_ = true;
-      }
-
       // Once we have an array access like 'array[5] = 1', we record array.length >= 6.
       // We currently don't do it for non-constant index since a valid array[i] can't prove
-      // a valid array[i-1] yet due to the lower bound side.
+      // a valid array[i-1] yet due to the lower bound side. We also don't do it during the
+      // second visit in order to preserve the deoptimization range on array lengths.
       if (constant == std::numeric_limits<int32_t>::max()) {
         // Max() as an index will definitely throw AIOOBE.
         return;
+      } else if (!revisiting_block_) {
+        ValueBound lower = ValueBound(nullptr, constant + 1);
+        ValueBound upper = ValueBound::Max();
+        ValueRange* range = new (GetGraph()->GetArena())
+            ValueRange(GetGraph()->GetArena(), lower, upper);
+        AssignRange(block, array_length, range);
       }
-      ValueBound lower = ValueBound(nullptr, constant + 1);
-      ValueBound upper = ValueBound::Max();
-      ValueRange* range = new (GetGraph()->GetArena())
-          ValueRange(GetGraph()->GetArena(), lower, upper);
-      GetValueRangeMap(block)->Overwrite(array_length->GetId(), range);
     }
 
     // If static analysis fails, and OOB is not certain, try dynamic elimination.
     if (try_dynamic_bce) {
-      TryDynamicBCE(bounds_check);
+      // Try loop-based dynamic elimination.
+      if (TryDynamicBCE(bounds_check)) {
+        return;
+      }
+      // Try invariant index dynamic elimination (e.g. a[0], a[1], etc. or a[x], a[x+1], etc.).
+      if (IsDefinedOutsideBlock(index, bounds_check->GetBlock())) {
+        if (first_invariant_index_bounds_check_map_.find(array_length->GetId()) ==
+            first_invariant_index_bounds_check_map_.end()) {
+          // Remember the first bounds check against array_length of a invariant index.
+          // That bounds check instruction has an associated HEnvironment where we may add
+          // an HDeoptimize to eliminate bounds checks of constant indices against array_length.
+          first_invariant_index_bounds_check_map_.Put(array_length->GetId(), bounds_check);
+        } else {
+          // We've seen it at least twice. It may be beneficial to introduce a compare
+          // with deoptimization fallback to eliminate the bounds checks.
+          need_to_revisit_block_ = true;
+        }
+      }
     }
   }
 
@@ -914,7 +937,7 @@ class BCEVisitor : public HGraphVisitor {
                 increment,
                 bound);
           }
-          GetValueRangeMap(phi->GetBlock())->Overwrite(phi->GetId(), range);
+          AssignRange(phi->GetBlock(), phi, range);
         }
       }
     }
@@ -942,7 +965,7 @@ class BCEVisitor : public HGraphVisitor {
       }
       ValueRange* range = left_range->Add(right->AsIntConstant()->GetValue());
       if (range != nullptr) {
-        GetValueRangeMap(add->GetBlock())->Overwrite(add->GetId(), range);
+        AssignRange(add->GetBlock(), add, range);
       }
     }
   }
@@ -957,7 +980,7 @@ class BCEVisitor : public HGraphVisitor {
       }
       ValueRange* range = left_range->Add(-right->AsIntConstant()->GetValue());
       if (range != nullptr) {
-        GetValueRangeMap(sub->GetBlock())->Overwrite(sub->GetId(), range);
+        AssignRange(sub->GetBlock(), sub, range);
         return;
       }
     }
@@ -997,7 +1020,7 @@ class BCEVisitor : public HGraphVisitor {
                     GetGraph()->GetArena(),
                     ValueBound(nullptr, right_const - upper.GetConstant()),
                     ValueBound(array_length, right_const - lower.GetConstant()));
-                GetValueRangeMap(sub->GetBlock())->Overwrite(sub->GetId(), range);
+                AssignRange(sub->GetBlock(), sub, range);
               }
             }
           }
@@ -1045,7 +1068,7 @@ class BCEVisitor : public HGraphVisitor {
           GetGraph()->GetArena(),
           ValueBound(nullptr, std::numeric_limits<int32_t>::min()),
           ValueBound(left, 0));
-      GetValueRangeMap(instruction->GetBlock())->Overwrite(instruction->GetId(), range);
+      AssignRange(instruction->GetBlock(), instruction, range);
     }
   }
 
@@ -1071,7 +1094,7 @@ class BCEVisitor : public HGraphVisitor {
             GetGraph()->GetArena(),
             ValueBound(nullptr, 0),
             ValueBound(nullptr, constant));
-        GetValueRangeMap(instruction->GetBlock())->Overwrite(instruction->GetId(), range);
+        AssignRange(instruction->GetBlock(), instruction, range);
       }
     }
   }
@@ -1095,27 +1118,8 @@ class BCEVisitor : public HGraphVisitor {
         if (existing_range != nullptr) {
           range = existing_range->Narrow(range);
         }
-        GetValueRangeMap(new_array->GetBlock())->Overwrite(left->GetId(), range);
+        AssignRange(new_array->GetBlock(), left, range);
       }
-    }
-  }
-
-  void VisitDeoptimize(HDeoptimize* deoptimize) OVERRIDE {
-    if (!deoptimize->InputAt(0)->IsLessThanOrEqual()) {
-      return;
-    }
-    // If this instruction was added by AddCompareWithDeoptimization(), narrow
-    // the range accordingly in subsequent basic blocks.
-    HLessThanOrEqual* less_than_or_equal = deoptimize->InputAt(0)->AsLessThanOrEqual();
-    HInstruction* instruction = less_than_or_equal->InputAt(0);
-    if (instruction->IsArrayLength()) {
-      HInstruction* constant = less_than_or_equal->InputAt(1);
-      DCHECK(constant->IsIntConstant());
-      DCHECK(constant->AsIntConstant()->GetValue() <= kMaxConstantForAddingDeoptimize);
-      ValueBound lower = ValueBound(nullptr, constant->AsIntConstant()->GetValue() + 1);
-      ValueRange* range = new (GetGraph()->GetArena())
-          ValueRange(GetGraph()->GetArena(), lower, ValueBound::Max());
-      GetValueRangeMap(deoptimize->GetBlock())->Overwrite(instruction->GetId(), range);
     }
   }
 
@@ -1131,12 +1135,12 @@ class BCEVisitor : public HGraphVisitor {
     * }
     *
     * Note: this optimization is no longer applied after deoptimization on array references
-    * with constant subscripts has occurred (see AddCompareWithDeoptimization()), since in
+    * with an invariant index has occurred (see AddCompareWithDeoptimization()), since in
     * those cases it would be unsafe to hoist array references across their deoptimization
     * instruction inside a loop.
     */
   void VisitArrayGet(HArrayGet* array_get) OVERRIDE {
-    if (!has_deoptimization_on_constant_subscripts_ && array_get->IsInLoop()) {
+    if (!has_deoptimization_on_invariant_index_ && array_get->IsInLoop()) {
       HLoopInformation* loop = array_get->GetBlock()->GetLoopInformation();
       if (loop->IsDefinedOutOfTheLoop(array_get->InputAt(0)) &&
           loop->IsDefinedOutOfTheLoop(array_get->InputAt(1))) {
@@ -1148,69 +1152,86 @@ class BCEVisitor : public HGraphVisitor {
     }
   }
 
-  void AddCompareWithDeoptimization(HInstruction* array_length,
-                                    HIntConstant* const_instr,
-                                    HBasicBlock* block) {
-    DCHECK(array_length->IsArrayLength());
-    ValueRange* range = LookupValueRange(array_length, block);
-    ValueBound lower_bound = range->GetLower();
-    DCHECK(lower_bound.IsConstant());
-    DCHECK(const_instr->GetValue() <= kMaxConstantForAddingDeoptimize);
-    // Note that the lower bound of the array length may have been refined
-    // through other instructions (such as `HNewArray(length - 4)`).
-    DCHECK_LE(const_instr->GetValue() + 1, lower_bound.GetConstant());
+  // Perform a single block deoptimization on invariant indices.
+  void AddCompareWithDeoptimization(HBasicBlock* block,
 
-    // If array_length is less than lower_const, deoptimize.
-    HBoundsCheck* bounds_check = first_constant_index_bounds_check_map_.Get(
-        array_length->GetId())->AsBoundsCheck();
-    HCondition* cond = new (GetGraph()->GetArena()) HLessThanOrEqual(array_length, const_instr);
-    HDeoptimize* deoptimize = new (GetGraph()->GetArena())
-        HDeoptimize(cond, bounds_check->GetDexPc());
-    block->InsertInstructionBefore(cond, bounds_check);
-    block->InsertInstructionBefore(deoptimize, bounds_check);
-    deoptimize->CopyEnvironmentFrom(bounds_check->GetEnvironment());
-    // Flag that this kind of deoptimization on array references with constant
-    // subscripts has occurred to prevent further hoisting of these references.
-    has_deoptimization_on_constant_subscripts_ = true;
+                                    HInstruction* array_length,
+                                    HInstruction* offset,
+                                    int32_t min_c, int32_t max_c) {
+    HBoundsCheck* bounds_check =
+        first_invariant_index_bounds_check_map_.Get(array_length->GetId())->AsBoundsCheck();
+    // Construct deoptimization on single or upper bound on "range".
+    // E.g. either for a[0]..a[3] just 3 or for a[off-1]..a[off+3] both off-1 and off_3.
+    HInstruction* upper = GetGraph()->GetIntConstant(max_c);
+    if (offset == nullptr) {
+      if (min_c < 0) {
+        return;  // reject certain OOB
+      }
+    } else {
+      HInstruction* lower = new (GetGraph()->GetArena())
+          HAdd(Primitive::kPrimInt, offset, GetGraph()->GetIntConstant(min_c));
+      upper = new (GetGraph()->GetArena()) HAdd(Primitive::kPrimInt, offset, upper);
+      block->InsertInstructionBefore(lower, bounds_check);
+      block->InsertInstructionBefore(upper, bounds_check);
+      InsertDeoptInBlock(bounds_check, new (GetGraph()->GetArena()) HAbove(lower, upper));
+    }
+    InsertDeoptInBlock(bounds_check, new (GetGraph()->GetArena()) HAboveOrEqual(upper, array_length));
+    // Flag that this kind of deoptimization on array references with an invariant
+    // index has occurred to prevent further hoisting of these references.
+    has_deoptimization_on_invariant_index_ = true;
+    // Set new range on the array length.
+    ValueRange* range = new (GetGraph()->GetArena())
+        ValueRange(GetGraph()->GetArena(), ValueBound(offset, max_c + 1), ValueBound::Max());
+    AssignRange(block, array_length, range);
   }
 
+  // Iterate over all candidates for single block deoptimization.
   void AddComparesWithDeoptimization(HBasicBlock* block) {
     for (ArenaSafeMap<int, HBoundsCheck*>::iterator it =
-             first_constant_index_bounds_check_map_.begin();
-         it != first_constant_index_bounds_check_map_.end();
+             first_invariant_index_bounds_check_map_.begin();
+         it != first_invariant_index_bounds_check_map_.end();
          ++it) {
       HBoundsCheck* bounds_check = it->second;
+      HInstruction* index = bounds_check->InputAt(0);
       HInstruction* array_length = bounds_check->InputAt(1);
       if (!array_length->IsArrayLength()) {
-        // Prior deoptimizations may have changed the array length to a phi.
-        // TODO(mingyao): propagate the range to the phi?
-        DCHECK(array_length->IsPhi()) << array_length->DebugName();
-        continue;
+        continue;  // disregard phis and constants
+      } else if (!IsDefinedOutsideBlock(index, block)) {
+        continue;  // disregard index that changes inside the block
       }
-      HIntConstant* lower_bound_const_instr = nullptr;
-      int32_t lower_bound_const = std::numeric_limits<int32_t>::min();
+      // Count invariant indexing for which bounds checks are still there and that
+      // are all related as "a[offset + constant]" for a fixed invariant offset
+      // instruction (possibly absent) and varying constants. Note that no attempt
+      // is made to partition the set into matching subsets (viz. a[0], a[1] and
+      // a[off+1] and a[off+2] are considered as one set, compared to the first).
+      // TODO: would such a partitioning be worthwhile?
+      ValueBound value = ValueBound::AsValueBound(index);
+      int32_t min_c = value.GetConstant();
+      int32_t max_c = value.GetConstant();
       size_t counter = 0;
-      // Count the constant indexing for which bounds checks haven't
-      // been removed yet.
       for (HUseIterator<HInstruction*> it2(array_length->GetUses());
-           !it2.Done();
-           it2.Advance()) {
+          !it2.Done();
+          it2.Advance()) {
         HInstruction* user = it2.Current()->GetUser();
-        if (user->GetBlock() == block &&
-            user->IsBoundsCheck() &&
-            user->AsBoundsCheck()->InputAt(0)->IsIntConstant()) {
-          DCHECK_EQ(array_length, user->AsBoundsCheck()->InputAt(1));
-          HIntConstant* const_instr = user->AsBoundsCheck()->InputAt(0)->AsIntConstant();
-          if (const_instr->GetValue() > lower_bound_const) {
-            lower_bound_const = const_instr->GetValue();
-            lower_bound_const_instr = const_instr;
+        if (user->GetBlock() == block && user->IsBoundsCheck()) {
+          HInstruction* other_index = user->AsBoundsCheck()->InputAt(0);
+          HInstruction* other_array_length = user->AsBoundsCheck()->InputAt(1);
+          ValueBound other_value = ValueBound::AsValueBound(other_index);
+          if (array_length == other_array_length &&
+              value.GetInstruction() == other_value.GetInstruction()) {
+            min_c = std::min(min_c, other_value.GetConstant());
+            max_c = std::max(max_c, other_value.GetConstant());
+            counter++;
           }
-          counter++;
         }
       }
-      if (counter >= kThresholdForAddingDeoptimize &&
-          lower_bound_const_instr->GetValue() <= kMaxConstantForAddingDeoptimize) {
-        AddCompareWithDeoptimization(array_length, lower_bound_const_instr, block);
+      // Perform single block deoptimization if it seems profitable.
+      HInstruction* offset = value.GetInstruction();
+      size_t threshold = kThresholdForAddingDeoptimize + (offset == nullptr ? 0 : 1);  // extra test?
+      if (counter >= threshold &&
+          min_c >= kMinConstantForSubtractingDeoptimize &&
+          max_c <= kMaxConstantForAddingDeoptimize) {
+        AddCompareWithDeoptimization(block, array_length, offset, min_c, max_c);
       }
     }
   }
@@ -1259,7 +1280,7 @@ class BCEVisitor : public HGraphVisitor {
    * deoptimization). If no deoptimization occurs, the loop is executed with all corresponding
    * bounds checks and related null checks removed.
    */
-  void TryDynamicBCE(HBoundsCheck* instruction) {
+  bool TryDynamicBCE(HBoundsCheck* instruction) {
     HLoopInformation* loop = instruction->GetBlock()->GetLoopInformation();
     HInstruction* index = instruction->InputAt(0);
     HInstruction* length = instruction->InputAt(1);
@@ -1285,11 +1306,13 @@ class BCEVisitor : public HGraphVisitor {
       HBasicBlock* block = GetPreHeader(loop, instruction);
       induction_range_.GenerateRangeCode(instruction, index, GetGraph(), block, &lower, &upper);
       if (lower != nullptr) {
-        InsertDeopt(loop, block, new (GetGraph()->GetArena()) HAbove(lower, upper));
+        InsertDeoptInLoop(loop, block, new (GetGraph()->GetArena()) HAbove(lower, upper));
       }
-      InsertDeopt(loop, block, new (GetGraph()->GetArena()) HAboveOrEqual(upper, length));
+      InsertDeoptInLoop(loop, block, new (GetGraph()->GetArena()) HAboveOrEqual(upper, length));
       ReplaceInstruction(instruction, index);
+      return true;
     }
+    return false;
   }
 
   /**
@@ -1382,7 +1405,7 @@ class BCEVisitor : public HGraphVisitor {
         HBasicBlock* block = GetPreHeader(loop, check);
         HInstruction* cond =
             new (GetGraph()->GetArena()) HEqual(array, GetGraph()->GetNullConstant());
-        InsertDeopt(loop, block, cond);
+        InsertDeoptInLoop(loop, block, cond);
         ReplaceInstruction(check, array);
         return true;
       }
@@ -1448,8 +1471,8 @@ class BCEVisitor : public HGraphVisitor {
     return loop->GetPreHeader();
   }
 
-  /** Inserts a deoptimization test. */
-  void InsertDeopt(HLoopInformation* loop, HBasicBlock* block, HInstruction* condition) {
+  /** Inserts a deoptimization test in a loop preheader. */
+  void InsertDeoptInLoop(HLoopInformation* loop, HBasicBlock* block, HInstruction* condition) {
     HInstruction* suspend = loop->GetSuspendCheck();
     block->InsertInstructionBefore(condition, block->GetLastInstruction());
     HDeoptimize* deoptimize =
@@ -1459,6 +1482,16 @@ class BCEVisitor : public HGraphVisitor {
       deoptimize->CopyEnvironmentFromWithLoopPhiAdjustment(
           suspend->GetEnvironment(), loop->GetHeader());
     }
+  }
+
+  /** Inserts a deoptimization test right before a bounds check. */
+  void InsertDeoptInBlock(HBoundsCheck* bounds_check, HInstruction* condition) {
+    HBasicBlock* block = bounds_check->GetBlock();
+    block->InsertInstructionBefore(condition, bounds_check);
+    HDeoptimize* deoptimize =
+        new (GetGraph()->GetArena()) HDeoptimize(condition, bounds_check->GetDexPc());
+    block->InsertInstructionBefore(deoptimize, bounds_check);
+    deoptimize->CopyEnvironmentFrom(bounds_check->GetEnvironment());
   }
 
   /** Hoists instruction out of the loop to preheader or deoptimization block. */
@@ -1619,6 +1652,18 @@ class BCEVisitor : public HGraphVisitor {
     return phi;
   }
 
+  /** Check if instruction is defined outside block, not counting simple local arithmetic. */
+  static bool IsDefinedOutsideBlock(HInstruction* instruction, HBasicBlock* block) {
+    if (instruction->GetBlock() != block) {
+      return true;
+    } else if (instruction->IsAdd() || instruction->IsSub()) {
+      HBinaryOperation* bin_op = instruction->AsBinaryOperation();
+      return IsDefinedOutsideBlock(bin_op->GetLeft(), block) &&
+             IsDefinedOutsideBlock(bin_op->GetRight(), block);
+    }
+    return false;
+  }
+
   /** Helper method to replace an instruction with another instruction. */
   static void ReplaceInstruction(HInstruction* instruction, HInstruction* replacement) {
     instruction->ReplaceWith(replacement);
@@ -1629,8 +1674,8 @@ class BCEVisitor : public HGraphVisitor {
   ArenaVector<ArenaSafeMap<int, ValueRange*>> maps_;
 
   // Map an HArrayLength instruction's id to the first HBoundsCheck instruction in
-  // a block that checks a constant index against that HArrayLength.
-  ArenaSafeMap<int, HBoundsCheck*> first_constant_index_bounds_check_map_;
+  // a block that checks an invariant index against that HArrayLength.
+  ArenaSafeMap<int, HBoundsCheck*> first_invariant_index_bounds_check_map_;
 
   // Early-exit loop bookkeeping.
   ArenaSafeMap<uint32_t, bool> early_exit_loop_;
@@ -1646,10 +1691,11 @@ class BCEVisitor : public HGraphVisitor {
   // beneficial to add a compare instruction that has deoptimization fallback and
   // eliminate those bounds checks.
   bool need_to_revisit_block_;
+  bool revisiting_block_;
 
   // Flag that denotes whether deoptimization has occurred on array references
-  // with constant subscripts (see AddCompareWithDeoptimization()).
-  bool has_deoptimization_on_constant_subscripts_;
+  // with an invariant index (see AddCompareWithDeoptimization()).
+  bool has_deoptimization_on_invariant_index_;
 
   // Initial number of blocks.
   uint32_t initial_block_size_;
