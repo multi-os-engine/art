@@ -32,6 +32,8 @@ class PrepareForRegisterAllocation : public HGraphDelegateVisitor {
 
   void Run();
 
+  static bool CanEmitConditionAt(const HCondition* condition, const HInstruction* user);
+
  private:
   void VisitNullCheck(HNullCheck* check) OVERRIDE;
   void VisitDivZeroCheck(HDivZeroCheck* check) OVERRIDE;
@@ -43,7 +45,6 @@ class PrepareForRegisterAllocation : public HGraphDelegateVisitor {
   void VisitNewInstance(HNewInstance* instruction) OVERRIDE;
 
   bool CanMoveClinitCheck(HInstruction* input, HInstruction* user) const;
-  bool CanEmitConditionAt(HCondition* condition, HInstruction* user) const;
 
   DISALLOW_COPY_AND_ASSIGN(PrepareForRegisterAllocation);
 };
