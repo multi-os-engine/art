@@ -100,6 +100,23 @@ TEST_ART_RUN_TEST_BUILD_RULES :=
 ########################################################################
 # General rules to build and run a run-test.
 
+simulator_mode := false
+ifneq (,$(ART_TEST_SIMULATOR))
+  ifeq ($(ART_TEST_SIMULATOR),$(TARGET_ARCH))
+    simulator_mode := true
+  else
+    ifeq ($(ART_TEST_SIMULATOR),$(TARGET_2ND_ARCH))
+      simulator_mode := true
+    endif
+  endif
+endif
+
+# Simulator mode conflicts with interpreter and jit.
+ifeq ($(simulator_mode),true)
+  ART_TEST_INTERPRETER := false
+  ART_TSET_JIT := false
+endif
+
 TARGET_TYPES := host target
 PREBUILD_TYPES :=
 ifeq ($(ART_TEST_RUN_TEST_PREBUILD),true)
@@ -187,6 +204,18 @@ ifeq ($(ART_TEST_RUN_TEST_2ND_ARCH),true)
   ADDRESS_SIZES_HOST += $(2ND_ART_PHONY_TEST_HOST_SUFFIX)
 endif
 ALL_ADDRESS_SIZES := 64 32
+
+ifeq ($(simulator_mode),true)
+# No simulator support for 32bits target.
+ALL_ADDRESS_SIZES := 64
+# Simulator only runs on target for now.
+TARGET_TYPES := host
+ifneq (,$(filter 64,$(ADDRESS_SIZES_HOST)))
+  ADDRESS_SIZES_HOST := 64
+else
+  ADDRESS_SIZES_HOST :=
+endif
+endif
 
 # List all run test names with number arguments agreeing with the comment above.
 define all-run-test-names
@@ -347,6 +376,54 @@ TEST_ART_BROKEN_GCSTRESS_RUN_TESTS :=
 ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,target,$(RUN_TYPES),$(PREBUILD_TYPES),$(COMPILER_TYPES), \
     $(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES),$(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES), 115-native-bridge, \
     $(ALL_ADDRESS_SIZES))
+
+# TODO: figure out the specific configuration where simulator fails on these cases, and explicitly
+# diable each test case.
+TEST_ART_BROKEN_SIMULATOR_RUN_TESTS := \
+  003-omnibus-opcodes \
+  004-SignalTest \
+  005-annotations \
+  018-stack-overflow \
+  033-calss-init-deadlock \
+  044-proxy \
+  046-reflect \
+  062-character-encodings \
+  065-mismatched-implements \
+  066-mismatched-super \
+  068-classloader \
+  071-dexfile \
+  074-gc-thrash \
+  086-null-super \
+  087-gc-after-link \
+  092-locale \
+  111-unresolvable-exception \
+  115-native-bridge \
+  119-noimage-patchoat \
+  121-modifiers \
+  124-missing-classes \
+  130-hprof \
+  137-cfi \
+  138-duplicate-classes-check \
+  138-duplicate-classes-check2 \
+  141-class-unload \
+  142-classloader2 \
+  201-built-in-exception-detail-messages \
+  435-new-instance \
+  496-checker-inlining-and-class-loader \
+  497-inlining-and-class-loader \
+  515-dce-dominator \
+  526-checker-caller-callee-regs \
+  542-unresolved-access-check \
+  555-enum-performance \
+  800-smali \
+
+ifeq ($(simulator_mode),true)
+  ART_TEST_KNOWN_BROKEN += $(call all-run-test-names,host,$(RUN_TYPES),$(PREBUILD_TYPES),$(COMPILER_TYPES), \
+      $(RELOCATE_TYPES),$(TRACE_TYPES),$(GC_TYPES),$(JNI_TYPES),$(IMAGE_TYPES),$(PICTEST_TYPES),$(DEBUGGABLE_TYPES), \
+      $(TEST_ART_BROKEN_SIMULATOR_RUN_TESTS), $(ALL_ADDRESS_SIZES))
+endif
+
+TEST_ART_BROKEN_SIMULATOR_RUN_TESTS :=
 
 # 130-hprof dumps the heap and runs hprof-conv to check whether the file is somewhat readable. This
 # is only possible on the host.
@@ -718,8 +795,11 @@ define define-test-art-run-test
     uc_host_or_target := HOST
     test_groups := ART_RUN_TEST_HOST_RULES
     run_test_options += --host
-    prereq_rule := $(ART_TEST_HOST_RUN_TEST_DEPENDENCIES) $(HOST_JACK_CLASSPATH_DEPENDENCIES)
     jack_classpath := $(HOST_JACK_CLASSPATH)
+    prereq_rule := $(ART_TEST_HOST_RUN_TEST_DEPENDENCIES) $(HOST_JACK_CLASSPATH_DEPENDENCIES)
+    ifeq ($(simulator_mode),true)
+      prereq_rule := $(prereq_rule) $(TEST_ART_TARGET_SYNC_DEPS) $(TARGET_JACK_CLASSPATH_DEPENDENCIES)
+    endif
   else
     ifeq ($(1),target)
       uc_host_or_target := TARGET
@@ -862,6 +942,9 @@ define define-test-art-run-test
       # Add the core dependency.
       ifeq ($(1),host)
         prereq_rule += $$(HOST_CORE_IMAGE_$$(image_suffix)_no-pic_$(13))
+        ifeq ($(simulator_mode),true)
+          prereq_rule += $$(TARGET_CORE_IMAGE_$$(image_suffix)_no-pic_$(13))
+        endif
       else
         prereq_rule += $$(TARGET_CORE_IMAGE_$$(image_suffix)_no-pic_$(13))
       endif
@@ -871,6 +954,9 @@ define define-test-art-run-test
         run_test_options += --pic-image
         ifeq ($(1),host)
           prereq_rule += $$(HOST_CORE_IMAGE_$$(image_suffix)_pic_$(13))
+          ifeq ($(simulator_mode),true)
+            prereq_rule += $$(HOST_CORE_IMAGE_$$(image_suffix)_pic_$(13))
+          endif
         else
           prereq_rule += $$(TARGET_CORE_IMAGE_$$(image_suffix)_pic_$(13))
         endif

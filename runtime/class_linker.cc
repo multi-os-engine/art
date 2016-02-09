@@ -915,6 +915,38 @@ static void CheckTrampolines(mirror::Object* obj, void* arg) NO_THREAD_SAFETY_AN
   }
 }
 
+// TODO(simulator): Remove when simulator supports all entry points.
+class SetSimulatorEntrypointArtMethodVisitor : public ArtMethodVisitor {
+ public:
+  explicit SetSimulatorEntrypointArtMethodVisitor(size_t image_pointer_size)
+      : image_pointer_size_(image_pointer_size) {}
+
+  void Visit(ArtMethod* method) OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+    DCHECK(Runtime::NeedsSimulator());
+    if (kIsDebugBuild && !method->IsRuntimeMethod()) {
+      CHECK(method->GetDeclaringClass() != nullptr);
+    }
+
+    // Simulator don't need to handle runtime methods and resolution methods.
+    if (method->IsRuntimeMethod() || method->IsResolutionMethod()) {
+      return;
+    }
+
+    const void* code = nullptr;
+    if (!method->IsNative()) {
+      code = GetQuickToInterpreterBridge();
+    } else {
+      code = GetQuickGenericJniStub();
+    }
+    method->SetEntryPointFromQuickCompiledCodePtrSize(code, image_pointer_size_);
+  }
+
+ private:
+  const size_t image_pointer_size_;
+
+  DISALLOW_COPY_AND_ASSIGN(SetSimulatorEntrypointArtMethodVisitor);
+};
+
 bool ClassLinker::InitFromBootImage(std::string* error_msg) {
   VLOG(startup) << __FUNCTION__ << " entering";
   CHECK(!init_done_);
@@ -1639,6 +1671,15 @@ bool ClassLinker::AddImageSpace(
   if (!runtime->IsAotCompiler() && runtime->GetInstrumentation()->InterpretOnly()) {
     const ImageSection& methods = header.GetMethodsSection();
     SetInterpreterEntrypointArtMethodVisitor visitor(image_pointer_size_);
+    methods.VisitPackedArtMethods(&visitor, space->Begin(), image_pointer_size_);
+  }
+
+  // Currently, the simulator only supports a few methods. To get the tests to pass, we set entry
+  // points to a fake "quick to simulator bridge".
+  // TODO(simulator): Remove when simulator supports all entry points.
+  if (Runtime::NeedsSimulator()) {
+    const ImageSection& methods = header.GetMethodsSection();
+    SetSimulatorEntrypointArtMethodVisitor visitor(image_pointer_size_);
     methods.VisitPackedArtMethods(&visitor, space->Begin(), image_pointer_size_);
   }
 
@@ -2581,6 +2622,16 @@ const void* ClassLinker::GetQuickOatCodeFor(ArtMethod* method) {
   if (method->IsProxyMethod()) {
     return GetQuickProxyInvokeHandler();
   }
+
+  // TODO(simulator): Remove when the simulator supports all entry points.
+  if (Runtime::NeedsSimulator()) {
+    if (method->IsNative()) {
+      return GetQuickGenericJniStub();
+    } else {
+      return GetQuickToInterpreterBridge();
+    }
+  }
+
   bool found;
   OatFile::OatMethod oat_method = FindOatMethodFor(method, &found);
   if (found) {
@@ -2600,6 +2651,13 @@ const void* ClassLinker::GetOatMethodQuickCodeFor(ArtMethod* method) {
   if (method->IsNative() || !method->IsInvokable() || method->IsProxyMethod()) {
     return nullptr;
   }
+
+  // Return nullptr for simulator mode. This will force interpreter mode.
+  // TODO(simulator): Remove when the simulator supports all entry points.
+  if (Runtime::NeedsSimulator()) {
+    return nullptr;
+  }
+
   bool found;
   OatFile::OatMethod oat_method = FindOatMethodFor(method, &found);
   if (found) {
@@ -2611,6 +2669,13 @@ const void* ClassLinker::GetOatMethodQuickCodeFor(ArtMethod* method) {
 const void* ClassLinker::GetQuickOatCodeFor(const DexFile& dex_file,
                                             uint16_t class_def_idx,
                                             uint32_t method_idx) {
+  // Return nullptr so that we can set it later. This forces interpreter mode if simulator has no
+  // support for current method.
+  // TODO(simulator): Remove when the simulator supports all entry points.
+  if (Runtime::NeedsSimulator()) {
+    return nullptr;
+  }
+
   bool found;
   OatFile::OatClass oat_class = FindOatClass(dex_file, class_def_idx, &found);
   if (!found) {
@@ -2677,6 +2742,19 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
       OatFile::OatMethod oat_method = oat_class.GetOatMethod(method_index);
       quick_code = oat_method.GetQuickCode();
     }
+
+    // Force interpreter mode for all methods. Later, simulator will choose some of them and start
+    // simulation.
+    // TODO(simulator): Remove when the simulator supports all entry points.
+    const bool enter_simulator = Runtime::NeedsSimulator();
+    if (enter_simulator) {
+      if (method->IsNative()) {
+        quick_code = GetQuickGenericJniStub();
+      } else {
+        quick_code = GetQuickToInterpreterBridge();
+      }
+    }
+
     const bool enter_interpreter = NeedsInterpreter(method, quick_code);
     if (enter_interpreter) {
       // Use interpreter entry point.

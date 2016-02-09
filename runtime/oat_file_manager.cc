@@ -307,7 +307,7 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
   Runtime* const runtime = Runtime::Current();
   OatFileAssistant oat_file_assistant(dex_location,
                                       oat_location,
-                                      kRuntimeISA,
+                                      Runtime::GetQuickCodeISA(),
                                       !runtime->IsAotCompiler());
 
   // Lock the target oat location to avoid races generating and loading the

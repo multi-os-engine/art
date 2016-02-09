@@ -1209,6 +1209,13 @@ const OatFile::OatMethod OatFile::OatClass::GetOatMethod(uint32_t method_index) 
 
 void OatFile::OatMethod::LinkMethod(ArtMethod* method) const {
   CHECK(method != nullptr);
+
+  // Skip the linkage in simulator mode. This will force interpreter mode later.
+  // TODO(simulator): Remove when simulator supports all entry points.
+  if (Runtime::NeedsSimulator()) {
+    return;
+  }
+
   method->SetEntryPointFromQuickCompiledCode(GetQuickCode());
 }
 

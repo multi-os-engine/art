@@ -183,6 +183,8 @@ class ArtMethod FINAL {
     SetAccessFlags(GetAccessFlags() | kAccSkipAccessChecks);
   }
 
+  bool CanBeSimulated() SHARED_REQUIRES(Locks::mutator_lock_);
+
   // Returns true if this method could be overridden by a default method.
   bool IsOverridableByDefaultMethod() SHARED_REQUIRES(Locks::mutator_lock_);
 
