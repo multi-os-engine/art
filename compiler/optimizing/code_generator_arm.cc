@@ -4057,6 +4057,12 @@ bool LocationsBuilderARM::CanEncodeConstantAsImmediate(uint32_t value, Opcode op
     case ORR:
       neg_opcode = ORN;
       break;
+    case BIC:
+      neg_opcode = AND;
+      break;
+    case ORN:
+      neg_opcode = ORR;
+      break;
     default:
       return false;
   }
@@ -5725,6 +5731,134 @@ void InstructionCodeGeneratorARM::VisitOr(HOr* instruction) {
 
 void InstructionCodeGeneratorARM::VisitXor(HXor* instruction) {
   HandleBitwiseOperation(instruction);
+}
+
+
+void LocationsBuilderARM::VisitBitwiseNegatedRight(HBitwiseNegatedRight* instruction) {
+  Opcode opcode = kNoOperand;
+  switch (instruction->GetOpKind()) {
+    case HInstruction::kAnd:
+      opcode = BIC;
+      break;
+    case HInstruction::kOr:
+      opcode = ORN;
+      break;
+    // There is no EON on arm.
+    case HInstruction::kXor:
+    default:
+      LOG(FATAL) << "Unexpected instruction " << instruction->DebugName();
+      UNREACHABLE();
+  }
+  HandleBitwiseOperation(instruction, opcode);
+}
+
+void InstructionCodeGeneratorARM::VisitBitwiseNegatedRight(HBitwiseNegatedRight* instruction) {
+  LocationSummary* locations = instruction->GetLocations();
+  Location first = locations->InAt(0);
+  Location second = locations->InAt(1);
+  Location out = locations->Out();
+
+  // Now BitwiseNegatedRight is only created by instructions simplifier (shared).
+  // It will transform
+  //
+  // v2 = Not v1         ->
+  // v3 = And v2 v0      ->      v3 = BitwiseNegatedRight v0, v1
+  //
+  // But if the v1 = Constant, constant propagation will replace Contant value by
+  // its negated value and eliminate Not instruction. In this case BitwiseNegatedRight
+  // will not be created.
+  if (second.IsConstant()) {
+    uint64_t value = static_cast<uint64_t>(Int64FromConstant(second.GetConstant()));
+    uint32_t value_low = Low32Bits(value);
+    if (instruction->GetResultType() == Primitive::kPrimInt) {
+      Register first_reg = first.AsRegister<Register>();
+      Register out_reg = out.AsRegister<Register>();
+
+      switch (instruction->GetOpKind()) {
+        case HInstruction::kAnd:
+          GenerateAndConst(out_reg, first_reg, ~value_low);
+          break;
+        case HInstruction::kOr:
+          GenerateOrrConst(out_reg, first_reg, ~value_low);
+          break;
+        // There is no EON on arm.
+        case HInstruction::kXor:
+        default:
+          LOG(FATAL) << "Unexpected instruction " << instruction->DebugName();
+          UNREACHABLE();
+      }
+    } else {
+      DCHECK_EQ(instruction->GetResultType(), Primitive::kPrimLong);
+      uint32_t value_high = High32Bits(value);
+      Register first_low = first.AsRegisterPairLow<Register>();
+      Register first_high = first.AsRegisterPairHigh<Register>();
+      Register out_low = out.AsRegisterPairLow<Register>();
+      Register out_high = out.AsRegisterPairHigh<Register>();
+
+      switch (instruction->GetOpKind()) {
+        case HInstruction::kAnd:
+          GenerateAndConst(out_low, first_low, ~value_low);
+          GenerateAndConst(out_high, first_high, ~value_high);
+          break;
+        case HInstruction::kOr:
+          GenerateOrrConst(out_low, first_low, ~value_low);
+          GenerateOrrConst(out_high, first_high, ~value_high);
+          break;
+        // There is no EON on arm.
+        case HInstruction::kXor:
+        default:
+          LOG(FATAL) << "Unexpected instruction " << instruction->DebugName();
+          UNREACHABLE();
+      }
+    }
+    return;
+  }
+
+  if (instruction->GetResultType() == Primitive::kPrimInt) {
+    Register first_reg = first.AsRegister<Register>();
+    ShifterOperand second_reg(second.AsRegister<Register>());
+    Register out_reg = out.AsRegister<Register>();
+
+    switch (instruction->GetOpKind()) {
+      case HInstruction::kAnd:
+        __ bic(out_reg, first_reg, second_reg);
+        break;
+      case HInstruction::kOr:
+        __ orn(out_reg, first_reg, second_reg);
+        break;
+      // There is no EON on arm.
+      case HInstruction::kXor:
+      default:
+        LOG(FATAL) << "Unexpected instruction " << instruction->DebugName();
+        UNREACHABLE();
+    }
+    return;
+
+  } else {
+    DCHECK_EQ(instruction->GetResultType(), Primitive::kPrimLong);
+    Register first_low = first.AsRegisterPairLow<Register>();
+    Register first_high = first.AsRegisterPairHigh<Register>();
+    ShifterOperand second_low(second.AsRegisterPairLow<Register>());
+    ShifterOperand second_high(second.AsRegisterPairHigh<Register>());
+    Register out_low = out.AsRegisterPairLow<Register>();
+    Register out_high = out.AsRegisterPairHigh<Register>();
+
+    switch (instruction->GetOpKind()) {
+      case HInstruction::kAnd:
+        __ bic(out_low, first_low, second_low);
+        __ bic(out_high, first_high, second_high);
+        break;
+      case HInstruction::kOr:
+        __ orn(out_low, first_low, second_low);
+        __ orn(out_high, first_high, second_high);
+        break;
+      // There is no EON on arm.
+      case HInstruction::kXor:
+      default:
+        LOG(FATAL) << "Unexpected instruction " << instruction->DebugName();
+        UNREACHABLE();
+    }
+  }
 }
 
 void InstructionCodeGeneratorARM::GenerateAndConst(Register out, Register first, uint32_t value) {
