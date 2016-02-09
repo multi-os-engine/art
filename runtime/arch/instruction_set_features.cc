@@ -92,9 +92,9 @@ const InstructionSetFeatures* InstructionSetFeatures::FromBitmap(InstructionSet 
   return result;
 }
 
-const InstructionSetFeatures* InstructionSetFeatures::FromCppDefines() {
+const InstructionSetFeatures* InstructionSetFeatures::FromCppDefines(InstructionSet isa) {
   const InstructionSetFeatures* result;
-  switch (kRuntimeISA) {
+  switch (isa) {
     case kArm:
     case kThumb2:
       result = ArmInstructionSetFeatures::FromCppDefines();
@@ -115,7 +115,7 @@ const InstructionSetFeatures* InstructionSetFeatures::FromCppDefines() {
       result = X86_64InstructionSetFeatures::FromCppDefines();
       break;
     default:
-      UNIMPLEMENTED(FATAL) << kRuntimeISA;
+      UNIMPLEMENTED(FATAL) << isa;
       UNREACHABLE();
   }
   return result;

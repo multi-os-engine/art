@@ -28,6 +28,8 @@
 namespace art {
 namespace arm64 {
 
+class CustomSimulator;
+
 class CodeSimulatorArm64 : public CodeSimulator {
  public:
   static CodeSimulatorArm64* CreateCodeSimulatorArm64();
@@ -39,11 +41,22 @@ class CodeSimulatorArm64 : public CodeSimulator {
   int32_t GetCReturnInt32() const OVERRIDE;
   int64_t GetCReturnInt64() const OVERRIDE;
 
+  void Invoke(ArtMethod* method, uint32_t* args, uint32_t args_size, Thread* self, JValue* result,
+              const char* shorty, bool isStatic) OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void InitEntryPoints(QuickEntryPoints* qpoints) OVERRIDE;
+
  private:
   CodeSimulatorArm64();
 
+  void InitRegistersForInvokeStub(ArtMethod* method, uint32_t* args, uint32_t args_size,
+                                  Thread* self, JValue* result, const char* shorty, bool isStatic)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void GetResultFromShorty(JValue* result, const char* shorty);
+
   vixl::Decoder* decoder_;
-  vixl::Simulator* simulator_;
+  CustomSimulator* simulator_;
 
   // TODO: Enable CodeSimulatorArm64 for more host ISAs once vixl::Simulator supports them.
   static constexpr bool kCanSimulate = (kRuntimeISA == kX86_64);

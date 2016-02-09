@@ -661,6 +661,8 @@ SAVE_SIZE_AND_METHOD=SAVE_SIZE+8
  *  SP = & of ArtMethod*
  *  x1 = "this" pointer.
  *
+ * Note: Also used by CodeSimulatorArm64::InitRegistersForInvokeStub, see
+ * runtime/simulator/code_simulator_arm64.cc
  */
 ENTRY art_quick_invoke_stub
     // Spill registers as per AACPS64 calling convention.

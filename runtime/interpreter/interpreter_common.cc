@@ -511,6 +511,14 @@ static inline bool NeedsInterpreter(Thread* self, ShadowFrame* new_shadow_frame)
   }
   Runtime* runtime = Runtime::Current();
   ClassLinker* class_linker = runtime->GetClassLinker();
+
+  // TODO(simulator): Simulator mode should not influence interpreter mode, so remove this when
+  // all methods can be simulated.
+  // If we have simulator support, we can exit interpreter mode and enter simulator mode later.
+  if (Runtime::NeedsSimulator()) {
+    return !target->CanBeSimulated();
+  }
+
   return runtime->GetInstrumentation()->IsForcedInterpretOnly() ||
         // Doing this check avoids doing compiled/interpreter transitions.
         class_linker->IsQuickToInterpreterBridge(target->GetEntryPointFromQuickCompiledCode()) ||

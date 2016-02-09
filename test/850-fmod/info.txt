@@ -1,0 +1,1 @@
+Test invocation of runtime in simulator mode.

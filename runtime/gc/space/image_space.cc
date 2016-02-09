@@ -1366,6 +1366,13 @@ ImageSpace* ImageSpace::Init(const char* image_filename,
   }
 
   Runtime* runtime = Runtime::Current();
+  // The runtime ISA must be kRuntimeISA in simulator mode, not the ISA of image. Otherwise, we will
+  // get wrong frame infos from current runtime instance.
+  InstructionSet runtime_ISA = kRuntimeISA;
+  if (!Runtime::NeedsSimulator()) {
+    runtime_ISA = space->oat_file_->GetOatHeader().GetInstructionSet();
+  }
+  runtime->SetInstructionSet(runtime_ISA);
 
   // If oat_file is null, then it is the boot image space. Use oat_file_non_owned_ from the space
   // to set the runtime methods.

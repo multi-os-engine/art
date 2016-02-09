@@ -382,6 +382,12 @@ function err_echo() {
   echo "$@" 1>&${real_stderr}
 }
 
+if [ -z "$ART_TEST_SIMULATOR" ]; then
+  simulator="none"
+else
+  simulator=$ART_TEST_SIMULATOR
+fi
+
 # tmp_dir may be relative, resolve.
 #
 # Cannot use realpath, as it does not exist on Mac.
@@ -474,7 +480,12 @@ elif [ "$runtime" = "art" ]; then
             export ANDROID_HOST_OUT=${OUT_DIR:-$ANDROID_BUILD_TOP/out/}host/linux-x86
         fi
         guess_host_arch_name
-        run_args="${run_args} --boot ${ANDROID_HOST_OUT}/framework/core${image_suffix}${pic_image_suffix}${multi_image_suffix}.art"
+        if [ "x$simulator" = "xnone" ]; then
+          run_args="${run_args} --boot ${ANDROID_HOST_OUT}/framework/core${image_suffix}${pic_image_suffix}${multi_image_suffix}.art"
+        else
+          run_args="${run_args} --simulate-isa $simulator"
+          run_args="${run_args} --boot ${ANDROID_PRODUCT_OUT}/data/art-test/core${image_suffix}${pic_image_suffix}${multi_image_suffix}.art"
+        fi
         run_args="${run_args} --runtime-option -Djava.library.path=${ANDROID_HOST_OUT}/lib${suffix64}"
     else
         guess_target_arch_name

@@ -16,11 +16,16 @@
 
 #include "art_method.h"
 
+// For checking whether the method name contains $simulate$.
+// TODO(simulator): Remove when we remove CanBeSimulated().
+#include <string>
+
 #include "arch/context.h"
 #include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "base/stringpiece.h"
 #include "class_linker-inl.h"
+#include "code_simulator_container.h"
 #include "debugger.h"
 #include "dex_file-inl.h"
 #include "dex_instruction.h"
@@ -47,6 +52,34 @@ extern "C" void art_quick_invoke_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, 
                                       const char*);
 extern "C" void art_quick_invoke_static_stub(ArtMethod*, uint32_t*, uint32_t, Thread*, JValue*,
                                              const char*);
+
+
+// TODO(simulator): Remove this function when simulator is fully implemented.
+// Simulator is not fully implemented, so only simulate methods marked $simulate$.
+bool ArtMethod::CanBeSimulated() SHARED_REQUIRES(Locks::mutator_lock_) {
+  std::string name = PrettyMethod(this);
+  return name.find("$simulate$") != std::string::npos;
+}
+
+
+static void InvokeArtQuickEntrypoint(ArtMethod* method, uint32_t* args, uint32_t args_size,
+                                     Thread* self, JValue* result, const char* shorty)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (Runtime::NeedsSimulator() && method->CanBeSimulated()) {
+    // Create a new simulator for each invocation, and each invocation has its own stack in
+    // simulator.
+    CodeSimulatorContainer simulator(Runtime::Current()->GetSimulateISA());
+    DCHECK(simulator.CanSimulate());
+    simulator.Get()->Invoke(method, args, args_size, self, result, shorty, method->IsStatic());
+  } else {
+    if (method->IsStatic()) {
+      art_quick_invoke_static_stub(method, args, args_size, self, result, shorty);
+    } else {
+      art_quick_invoke_stub(method, args, args_size, self, result, shorty);
+    }
+  }
+}
+
 
 ArtMethod* ArtMethod::FromReflectedMethod(const ScopedObjectAccessAlreadyRunnable& soa,
                                           jobject jlr_method) {
@@ -283,11 +316,8 @@ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue*
             << "Don't call compiled code when -Xint " << PrettyMethod(this);
       }
 
-      if (!IsStatic()) {
-        (*art_quick_invoke_stub)(this, args, args_size, self, result, shorty);
-      } else {
-        (*art_quick_invoke_static_stub)(this, args, args_size, self, result, shorty);
-      }
+      InvokeArtQuickEntrypoint(this, args, args_size, self, result, shorty);
+
       if (UNLIKELY(self->GetException() == Thread::GetDeoptimizationException())) {
         // Unusual case where we were running generated code and an
         // exception was thrown to force the activations to be removed from the
@@ -357,6 +387,12 @@ bool ArtMethod::EqualParameters(Handle<mirror::ObjectArray<mirror::Class>> param
 }
 
 const uint8_t* ArtMethod::GetQuickenedInfo() {
+  // Return nullptr in simulator mode to force interpreter mode.
+  // TODO(simulator): Remove when we support all entry points.
+  if (Runtime::NeedsSimulator()) {
+    return nullptr;
+  }
+
   bool found = false;
   OatFile::OatMethod oat_method =
       Runtime::Current()->GetClassLinker()->FindOatMethodFor(this, &found);
@@ -436,6 +472,13 @@ const OatQuickMethodHeader* ArtMethod::GetOatQuickMethodHeader(uintptr_t pc) {
     // TODO(ngeoffray): Update these tests to pass the right pc?
     return OatQuickMethodHeader::FromEntryPoint(existing_entry_point);
   }
+
+  // Return nullptr in simulator mode to force interpreter mode.
+  // TODO(simulator): Remove when simulator supports all entry points.
+  if (Runtime::NeedsSimulator()) {
+    return nullptr;
+  }
+
   const void* oat_entry_point = oat_method.GetQuickCode();
   if (oat_entry_point == nullptr || class_linker->IsQuickGenericJniStub(oat_entry_point)) {
     DCHECK(IsNative()) << PrettyMethod(this);

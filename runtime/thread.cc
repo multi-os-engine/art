@@ -40,6 +40,7 @@
 #include "base/timing_logger.h"
 #include "base/to_str.h"
 #include "class_linker-inl.h"
+#include "code_simulator_container.h"
 #include "debugger.h"
 #include "dex_file-inl.h"
 #include "entrypoints/entrypoint_utils.h"
@@ -120,6 +121,14 @@ void Thread::InitTlsEntryPoints() {
     *it = reinterpret_cast<uintptr_t>(UnimplementedEntryPoint);
   }
   InitEntryPoints(&tlsPtr_.jni_entrypoints, &tlsPtr_.quick_entrypoints);
+
+  // Initialize entry points for simulator because some entry points are not needed in normal run,
+  // but required in simulator mode.
+  if (Runtime::NeedsSimulator()) {
+    CodeSimulatorContainer simulator(Runtime::Current()->GetSimulateISA());
+    DCHECK(simulator.CanSimulate());
+    simulator.Get()->InitEntryPoints(&tlsPtr_.quick_entrypoints);
+  }
 }
 
 void Thread::InitStringEntryPoints() {
