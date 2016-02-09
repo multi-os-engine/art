@@ -132,6 +132,7 @@ JNIEXPORT void* JVM_RawMonitorCreate(void) {
 
 JNIEXPORT void JVM_RawMonitorDestroy(void* mon) {
     pthread_mutex_destroy(reinterpret_cast<pthread_mutex_t*>(mon));
+    free(mon);
 }
 
 JNIEXPORT jint JVM_RawMonitorEnter(void* mon) {
