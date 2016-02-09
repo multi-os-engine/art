@@ -1648,6 +1648,10 @@ void InstructionCodeGeneratorARM::VisitNativeDebugInfo(HNativeDebugInfo* info) {
   codegen_->RecordPcInfo(info, info->GetDexPc());
 }
 
+void CodeGeneratorARM::GenerateNop() {
+  __ nop();
+}
+
 void LocationsBuilderARM::HandleCondition(HCondition* cond) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(cond, LocationSummary::kNoCall);

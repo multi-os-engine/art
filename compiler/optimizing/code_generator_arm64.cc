@@ -3014,6 +3014,10 @@ void InstructionCodeGeneratorARM64::VisitNativeDebugInfo(HNativeDebugInfo* info)
   codegen_->RecordPcInfo(info, info->GetDexPc());
 }
 
+void CodeGeneratorARM64::GenerateNop() {
+  __ Nop();
+}
+
 void LocationsBuilderARM64::VisitInstanceFieldGet(HInstanceFieldGet* instruction) {
   HandleFieldGet(instruction);
 }

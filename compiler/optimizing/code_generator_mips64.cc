@@ -2799,6 +2799,10 @@ void InstructionCodeGeneratorMIPS64::VisitNativeDebugInfo(HNativeDebugInfo* info
   codegen_->RecordPcInfo(info, info->GetDexPc());
 }
 
+void CodeGeneratorMIPS64::GenerateNop() {
+  __ Nop();
+}
+
 void LocationsBuilderMIPS64::HandleFieldGet(HInstruction* instruction,
                                             const FieldInfo& field_info ATTRIBUTE_UNUSED) {
   LocationSummary* locations =

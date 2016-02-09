@@ -226,6 +226,18 @@ void CodeGenerator::Compile(CodeAllocator* allocator) {
     // errors where we reference that label.
     if (block->IsSingleJump()) continue;
     Bind(block);
+    if (GetCompilerOptions().GetNativeDebuggable() && block->GetDexPc() != kNoDexPc) {
+      DCHECK(!block->GetInstructions().IsEmpty());
+      // There is no need to generate mapping now if the first instruction will do it.
+      if (!block->GetFirstInstruction()->IsNativeDebugInfo()) {
+        if (HasStackMapAtCurrentPc()) {
+          // Ensure that we do not collide with the stack map of the previous instruction.
+          GenerateNop();
+        }
+        // Record the dex pc at start of basic block (required for java line number mapping).
+        RecordPcInfo(nullptr /* instruction */, block->GetDexPc());
+      }
+    }
     for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
       HInstruction* current = it.Current();
       DisassemblyScope disassembly_scope(current, *this);
@@ -746,7 +758,7 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
   uint32_t native_pc = GetAssembler()->CodeSize();
 
   if (instruction == nullptr) {
-    // For stack overflow checks.
+    // For stack overflow checks and some native-debug-info entries.
     stack_map_stream_.BeginStackMapEntry(outer_dex_pc, native_pc, 0, 0, 0, 0);
     stack_map_stream_.EndStackMapEntry();
     return;
