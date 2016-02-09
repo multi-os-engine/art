@@ -69,7 +69,7 @@ class CodeAllocator {
 
 class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
  public:
-  SlowPathCode() {
+  explicit SlowPathCode(uint32_t dex_pc = kNoDexPc) : dex_pc_(dex_pc) {
     for (size_t i = 0; i < kMaximumNumberOfExpectedRegisters; ++i) {
       saved_core_stack_offsets_[i] = kRegisterNotSaved;
       saved_fpu_stack_offsets_[i] = kRegisterNotSaved;
@@ -103,6 +103,8 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
 
   virtual const char* GetDescription() const = 0;
 
+  uint32_t GetDexPc() const { return dex_pc_; }
+  void SetDexPc(uint32_t dex_pc) { dex_pc_ = dex_pc; }
   Label* GetEntryLabel() { return &entry_label_; }
   Label* GetExitLabel() { return &exit_label_; }
 
@@ -113,6 +115,7 @@ class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
   uint32_t saved_fpu_stack_offsets_[kMaximumNumberOfExpectedRegisters];
 
  private:
+  uint32_t dex_pc_;
   Label entry_label_;
   Label exit_label_;
 
@@ -269,6 +272,8 @@ class CodeGenerator {
   void RecordPcInfo(HInstruction* instruction, uint32_t dex_pc, SlowPathCode* slow_path = nullptr);
   // Check whether we have already recorded mapping at this PC.
   bool HasStackMapAtCurrentPc();
+  // Get the most recently recently emitted dex pc.
+  uint32_t GetDexPcOfLastStackMap();
 
   bool CanMoveNullCheckToUser(HNullCheck* null_check);
   void MaybeRecordImplicitNullCheck(HInstruction* instruction);
@@ -285,6 +290,11 @@ class CodeGenerator {
   bool IsImplicitNullCheckAllowed(HNullCheck* null_check) const;
 
   void AddSlowPath(SlowPathCode* slow_path) {
+    if (GetCompilerOptions().GetNativeDebuggable() && slow_path->GetDexPc() == kNoDexPc) {
+      // Associate the slow path with the code which is currently being emitted
+      // for the purposes of native debugging and profiling.
+      slow_path->SetDexPc(GetDexPcOfLastStackMap());
+    }
     slow_paths_.push_back(slow_path);
   }
 

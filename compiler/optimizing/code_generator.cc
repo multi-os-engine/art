@@ -195,6 +195,14 @@ void CodeGenerator::GenerateSlowPaths() {
     if (disasm_info_ != nullptr) {
       code_start = GetAssembler()->CodeSize();
     }
+    if (GetCompilerOptions().GetNativeDebuggable() && slow_path->GetDexPc() != kNoDexPc) {
+      if (HasStackMapAtCurrentPc()) {
+        // Ensure that we do not collide with the stack map of the previous instruction.
+        GenerateNop();
+      }
+      // Record the dex pc at start of slow path (required for java line number mapping).
+      RecordPcInfo(nullptr /* instruction */, slow_path->GetDexPc());
+    }
     slow_path->EmitNativeCode(this);
     if (disasm_info_ != nullptr) {
       disasm_info_->AddSlowPathInterval(slow_path, code_start, GetAssembler()->CodeSize());
@@ -831,6 +839,11 @@ bool CodeGenerator::HasStackMapAtCurrentPc() {
   uint32_t pc = GetAssembler()->CodeSize();
   size_t count = stack_map_stream_.GetNumberOfStackMaps();
   return count > 0 && stack_map_stream_.GetStackMap(count - 1).native_pc_offset == pc;
+}
+
+uint32_t CodeGenerator::GetDexPcOfLastStackMap() {
+  size_t count = stack_map_stream_.GetNumberOfStackMaps();
+  return count > 0 ? stack_map_stream_.GetStackMap(count - 1).dex_pc : kNoDexPc;
 }
 
 void CodeGenerator::RecordCatchBlockInfo() {
