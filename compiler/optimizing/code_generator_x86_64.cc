@@ -5840,7 +5840,9 @@ void InstructionCodeGeneratorX86_64::VisitCheckCast(HCheckCast* instruction) {
                                                            is_type_check_slow_path_fatal);
   codegen_->AddSlowPath(type_check_slow_path);
 
-  NearLabel done;
+  // We cannot use a NearLabel here, as its range might be too short
+  // when read barriers are enabled.
+  Label done;
   // Avoid null check if we know obj is not null.
   if (instruction->MustDoNullCheck()) {
     __ testl(obj, obj);
