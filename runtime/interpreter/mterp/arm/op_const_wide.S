@@ -6,6 +6,10 @@
     FETCH r3, 4                         @ r3<- HHHH (high)
     mov     r9, rINST, lsr #8           @ r9<- AA
     orr     r1, r2, r3, lsl #16         @ r1<- HHHHhhhh (high word)
+    mov     r2, #0
+    add     r3, r9, #1                  @ r3<- AA+1
+    SET_VREG_SHADOW r2, r9              @ clear AA shadow
+    SET_VREG_SHADOW r2, r3              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 5                @ advance rPC, load rINST
     add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
     GET_INST_OPCODE ip                  @ extract opcode from rINST

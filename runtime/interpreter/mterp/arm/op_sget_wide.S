@@ -12,10 +12,14 @@
     bl    artGet64StaticFromCode
     ldr   r3, [rSELF, #THREAD_EXCEPTION_OFFSET]
     mov   r9, rINST, lsr #8             @ r9<- AA
-    add   r9, rFP, r9, lsl #2           @ r9<- &fp[AA]
+    add   lr, rFP, r9, lsl #2           @ r9<- &fp[AA]
     cmp   r3, #0                        @ Fail to resolve?
     bne   MterpException                @ bail out
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-    stmia   r9, {r0-r1}                 @ vAA/vAA+1<- r0/r1
+    mov   ip, #0
+    add   r2, r9, #1                    @ r2<- AA+1
+    SET_VREG_SHADOW ip, r9              @ clear AA shadow
+    SET_VREG_SHADOW ip, r2              @ clear AA+1 shadow
+    stmia lr, {r0-r1}                   @ vAA/vAA+1<- r0/r1
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     GOTO_OPCODE ip                      @ jump to next instruction

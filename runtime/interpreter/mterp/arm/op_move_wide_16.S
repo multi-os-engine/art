@@ -3,9 +3,13 @@
     FETCH r3, 2                         @ r3<- BBBB
     FETCH r2, 1                         @ r2<- AAAA
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[BBBB]
-    add     r2, rFP, r2, lsl #2         @ r2<- &fp[AAAA]
+    add     lr, rFP, r2, lsl #2         @ r2<- &fp[AAAA]
     ldmia   r3, {r0-r1}                 @ r0/r1<- fp[BBBB]
     FETCH_ADVANCE_INST 3                @ advance rPC, load rINST
-    stmia   r2, {r0-r1}                 @ fp[AAAA]<- r0/r1
+    mov     ip, #0
+    add     r3, r2, #1                  @ r3<- AAAA+1
+    SET_VREG_SHADOW ip, r2              @ clear AAAA shadow
+    SET_VREG_SHADOW ip, r3              @ clear AAAA+1 shadow
+    stmia   lr, {r0-r1}                 @ fp[AAAA]<- r0/r1
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     GOTO_OPCODE ip                      @ jump to next instruction

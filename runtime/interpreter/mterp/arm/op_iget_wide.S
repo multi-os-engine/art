@@ -15,8 +15,12 @@
     PREFETCH_INST 2
     cmp      r3, #0
     bne      MterpException                @ bail out
-    add     r3, rFP, r2, lsl #2            @ r3<- &fp[A]
-    stmia   r3, {r0-r1}                    @ fp[A]<- r0/r1
+    mov      ip, #0
+    add      lr, r2, #1                    @ lr<- A+1
+    SET_VREG_SHADOW ip, r2                 @ clear A shadow
+    SET_VREG_SHADOW ip, lr                 @ clear A+1 shadow
+    add      r3, rFP, r2, lsl #2           @ r3<- &fp[A]
+    stmia    r3, {r0-r1}                   @ fp[A]<- r0/r1
     ADVANCE 2
     GET_INST_OPCODE ip                     @ extract opcode from rINST
     GOTO_OPCODE ip                         @ jump to next instruction

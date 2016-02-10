@@ -270,6 +270,9 @@ unspecified registers or condition codes.
     str     \reg, [rFP, \vreg, lsl #2]
     str     \reg, [rREFS, \vreg, lsl #2]
 .endm
+.macro SET_VREG_SHADOW reg, vreg
+    str     \reg, [rREFS, \vreg, lsl #2]
+.endm
 
 /*
  * Convert a virtual register index into an address.
@@ -426,10 +429,14 @@ artMterpAsmInstructionStart = .L_op_nop
     /* move-wide vA, vB */
     /* NOTE: regs can overlap, e.g. "move v6,v7" or "move v7,v6" */
     mov     r3, rINST, lsr #12          @ r3<- B
-    ubfx    r2, rINST, #8, #4           @ r2<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[B]
-    add     r2, rFP, r2, lsl #2         @ r2<- &fp[A]
+    add     r2, rFP, rINST, lsl #2      @ r2<- &fp[A]
     ldmia   r3, {r0-r1}                 @ r0/r1<- fp[B]
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- A+1
+    SET_VREG_SHADOW ip, rINST           @ clear A shadow
+    SET_VREG_SHADOW ip, lr              @ clear A shadow
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r2, {r0-r1}                 @ fp[A]<- r0/r1
@@ -442,10 +449,14 @@ artMterpAsmInstructionStart = .L_op_nop
     /* move-wide/from16 vAA, vBBBB */
     /* NOTE: regs can overlap, e.g. "move v6,v7" or "move v7,v6" */
     FETCH r3, 1                         @ r3<- BBBB
-    mov     r2, rINST, lsr #8           @ r2<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[BBBB]
-    add     r2, rFP, r2, lsl #2         @ r2<- &fp[AA]
+    add     r2, rFP, rINST, lsl #2      @ r2<- &fp[AA]
     ldmia   r3, {r0-r1}                 @ r0/r1<- fp[BBBB]
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r2, {r0-r1}                 @ fp[AA]<- r0/r1
@@ -460,10 +471,14 @@ artMterpAsmInstructionStart = .L_op_nop
     FETCH r3, 2                         @ r3<- BBBB
     FETCH r2, 1                         @ r2<- AAAA
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[BBBB]
-    add     r2, rFP, r2, lsl #2         @ r2<- &fp[AAAA]
+    add     lr, rFP, r2, lsl #2         @ r2<- &fp[AAAA]
     ldmia   r3, {r0-r1}                 @ r0/r1<- fp[BBBB]
     FETCH_ADVANCE_INST 3                @ advance rPC, load rINST
-    stmia   r2, {r0-r1}                 @ fp[AAAA]<- r0/r1
+    mov     ip, #0
+    add     r3, r2, #1                  @ r3<- AAAA+1
+    SET_VREG_SHADOW ip, r2              @ clear AAAA shadow
+    SET_VREG_SHADOW ip, r3              @ clear AAAA+1 shadow
+    stmia   lr, {r0-r1}                 @ fp[AAAA]<- r0/r1
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     GOTO_OPCODE ip                      @ jump to next instruction
 
@@ -550,10 +565,14 @@ artMterpAsmInstructionStart = .L_op_nop
 .L_op_move_result_wide: /* 0x0b */
 /* File: arm/op_move_result_wide.S */
     /* move-result-wide vAA */
-    mov     r2, rINST, lsr #8           @ r2<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     ldr     r3, [rFP, #OFF_FP_RESULT_REGISTER]
-    add     r2, rFP, r2, lsl #2         @ r2<- &fp[AA]
+    add     r2, rFP, rINST, lsl #2      @ r2<- &fp[AA]
     ldmia   r3, {r0-r1}                 @ r0/r1<- retval.j
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     stmia   r2, {r0-r1}                 @ fp[AA]<- r0/r1
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -731,6 +750,10 @@ artMterpAsmInstructionStart = .L_op_nop
     mov     r3, rINST, lsr #8           @ r3<- AA
     mov     r1, r0, asr #31             @ r1<- ssssssss
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
+    mov     r2, #0
+    add     lr, r3, #1                  @ r3<- AA+1
+    SET_VREG_SHADOW r2, r3              @ clear AA shadow
+    SET_VREG_SHADOW r2, lr              @ clear AA+1 shadow
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[AA]
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r3, {r0-r1}                 @ vAA<- r0/r1
@@ -746,6 +769,10 @@ artMterpAsmInstructionStart = .L_op_nop
     FETCH_S r2, 2                       @ r2<- ssssBBBB (high)
     FETCH_ADVANCE_INST 3                @ advance rPC, load rINST
     orr     r0, r0, r2, lsl #16         @ r0<- BBBBbbbb
+    mov     r2, #0
+    add     lr, r3, #1                  @ lr<- AA+1
+    SET_VREG_SHADOW r2, r3              @ clear AA shadow
+    SET_VREG_SHADOW r2, lr              @ clear AA+1 shadow
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[AA]
     mov     r1, r0, asr #31             @ r1<- ssssssss
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -764,6 +791,10 @@ artMterpAsmInstructionStart = .L_op_nop
     FETCH r3, 4                         @ r3<- HHHH (high)
     mov     r9, rINST, lsr #8           @ r9<- AA
     orr     r1, r2, r3, lsl #16         @ r1<- HHHHhhhh (high word)
+    mov     r2, #0
+    add     r3, r9, #1                  @ r3<- AA+1
+    SET_VREG_SHADOW r2, r9              @ clear AA shadow
+    SET_VREG_SHADOW r2, r3              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 5                @ advance rPC, load rINST
     add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -780,6 +811,9 @@ artMterpAsmInstructionStart = .L_op_nop
     mov     r0, #0                      @ r0<- 00000000
     mov     r1, r1, lsl #16             @ r1<- BBBB0000
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
+    add     r2, r3, #1                  @ r2<- AA+1
+    SET_VREG_SHADOW r0, r3              @ clear AA shadow
+    SET_VREG_SHADOW r0, r2              @ clear AA+1 shadow
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[AA]
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r3, {r0-r1}                 @ vAA<- r0/r1
@@ -2068,6 +2102,10 @@ artMterpAsmInstructionStart = .L_op_nop
     mov     r3, r0, lsr #8              @ r3<- CC
     GET_VREG r0, r2                     @ r0<- vBB (array object)
     GET_VREG r1, r3                     @ r1<- vCC (requested index)
+    add     r2, r9, #1                  @ r2<- AA+1
+    mov     r3, #0
+    SET_VREG_SHADOW r3, r9              @ clear AA shadow
+    SET_VREG_SHADOW r3, r2              @ clear AA+1 shadow
     cmp     r0, #0                      @ null array object?
     beq     common_errNullObject        @ yes, bail
     ldr     r3, [r0, #MIRROR_ARRAY_LENGTH_OFFSET]    @ r3<- arrayObj->length
@@ -2519,8 +2557,12 @@ artMterpAsmInstructionStart = .L_op_nop
     PREFETCH_INST 2
     cmp      r3, #0
     bne      MterpException                @ bail out
-    add     r3, rFP, r2, lsl #2            @ r3<- &fp[A]
-    stmia   r3, {r0-r1}                    @ fp[A]<- r0/r1
+    mov      ip, #0
+    add      lr, r2, #1                    @ lr<- A+1
+    SET_VREG_SHADOW ip, r2                 @ clear A shadow
+    SET_VREG_SHADOW ip, lr                 @ clear A+1 shadow
+    add      r3, rFP, r2, lsl #2           @ r3<- &fp[A]
+    stmia    r3, {r0-r1}                   @ fp[A]<- r0/r1
     ADVANCE 2
     GET_INST_OPCODE ip                     @ extract opcode from rINST
     GOTO_OPCODE ip                         @ jump to next instruction
@@ -2909,11 +2951,15 @@ artMterpAsmInstructionStart = .L_op_nop
     bl    artGet64StaticFromCode
     ldr   r3, [rSELF, #THREAD_EXCEPTION_OFFSET]
     mov   r9, rINST, lsr #8             @ r9<- AA
-    add   r9, rFP, r9, lsl #2           @ r9<- &fp[AA]
+    add   lr, rFP, r9, lsl #2           @ r9<- &fp[AA]
     cmp   r3, #0                        @ Fail to resolve?
     bne   MterpException                @ bail out
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-    stmia   r9, {r0-r1}                 @ vAA/vAA+1<- r0/r1
+    mov   ip, #0
+    add   r2, r9, #1                    @ r2<- AA+1
+    SET_VREG_SHADOW ip, r9              @ clear AA shadow
+    SET_VREG_SHADOW ip, r2              @ clear AA+1 shadow
+    stmia lr, {r0-r1}                   @ vAA/vAA+1<- r0/r1
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     GOTO_OPCODE ip                      @ jump to next instruction
 
@@ -3622,10 +3668,14 @@ artMterpAsmInstructionStart = .L_op_nop
      */
     /* unop vA, vB */
     mov     r3, rINST, lsr #12          @ r3<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r3, {r0-r1}                 @ r0/r1<- vAA
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- A+1
+    SET_VREG_SHADOW ip, rINST           @ clear A shadow
+    SET_VREG_SHADOW ip, lr              @ clear A+1 shadow
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     rsbs    r0, r0, #0                           @ optional op; may set condition codes
     rsc     r1, r1, #0                              @ r0/r1<- op, r2-r3 changed
@@ -3649,10 +3699,14 @@ artMterpAsmInstructionStart = .L_op_nop
      */
     /* unop vA, vB */
     mov     r3, rINST, lsr #12          @ r3<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r3, {r0-r1}                 @ r0/r1<- vAA
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- A+1
+    SET_VREG_SHADOW ip, rINST           @ clear A shadow
+    SET_VREG_SHADOW ip, lr              @ clear A+1 shadow
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     mvn     r0, r0                           @ optional op; may set condition codes
     mvn     r1, r1                              @ r0/r1<- op, r2-r3 changed
@@ -3702,10 +3756,14 @@ artMterpAsmInstructionStart = .L_op_nop
      */
     /* unop vA, vB */
     mov     r3, rINST, lsr #12          @ r3<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r3, {r0-r1}                 @ r0/r1<- vAA
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- A+1
+    SET_VREG_SHADOW ip, rINST           @ clear A shadow
+    SET_VREG_SHADOW ip, lr              @ clear A+1 shadow
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
                                @ optional op; may set condition codes
     add     r1, r1, #0x80000000                              @ r0/r1<- op, r2-r3 changed
@@ -3729,10 +3787,14 @@ artMterpAsmInstructionStart = .L_op_nop
      */
     /* unop vA, vB */
     mov     r3, rINST, lsr #12          @ r3<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     GET_VREG r0, r3                     @ r0<- vB
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
                                @ optional op; may set condition codes
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- A+1
+    SET_VREG_SHADOW ip, rINST           @ clear A shadow
+    SET_VREG_SHADOW ip, lr              @ clear A+1 shadow
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     mov     r1, r0, asr #31                              @ r0<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -3785,6 +3847,10 @@ artMterpAsmInstructionStart = .L_op_nop
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     and     r9, r9, #15                 @ r9<- A
     fsitod  d0, s0                              @ d0<- op
+    mov     ip, #0
+    add     lr, r9, #1                  @ lr<- A+1
+    SET_VREG_SHADOW ip, r9              @ clear A shadow
+    SET_VREG_SHADOW ip, lr              @ clear A+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vA
     fstd    d0, [r9]                    @ vA<- d0
@@ -3912,10 +3978,14 @@ constvalop_long_to_double:
      */
     /* unop vA, vB */
     mov     r3, rINST, lsr #12          @ r3<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     GET_VREG r0, r3                     @ r0<- vB
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
                                @ optional op; may set condition codes
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- A+1
+    SET_VREG_SHADOW ip, rINST           @ clear A shadow
+    SET_VREG_SHADOW ip, lr              @ clear A+1 shadow
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     bl      f2l_doconv                              @ r0<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -3944,6 +4014,10 @@ constvalop_long_to_double:
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     and     r9, r9, #15                 @ r9<- A
     fcvtds  d0, s0                              @ d0<- op
+    mov     ip, #0
+    add     lr, r9, #1                  @ lr<- A+1
+    SET_VREG_SHADOW ip, r9              @ clear A shadow
+    SET_VREG_SHADOW ip, lr              @ clear A+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vA
     fstd    d0, [r9]                    @ vA<- d0
@@ -3990,10 +4064,14 @@ constvalop_long_to_double:
      */
     /* unop vA, vB */
     mov     r3, rINST, lsr #12          @ r3<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r3, {r0-r1}                 @ r0/r1<- vAA
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- A+1
+    SET_VREG_SHADOW ip, rINST           @ clear A shadow
+    SET_VREG_SHADOW ip, lr              @ clear A+1 shadow
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
                                @ optional op; may set condition codes
     bl      d2l_doconv                              @ r0/r1<- op, r2-r3 changed
@@ -4570,10 +4648,10 @@ constvalop_long_to_double:
      */
     /* binop vAA, vBB, vCC */
     FETCH r0, 1                         @ r0<- CCBB
-    mov     r9, rINST, lsr #8           @ r9<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     and     r2, r0, #255                @ r2<- BB
     mov     r3, r0, lsr #8              @ r3<- CC
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[AA]
     add     r2, rFP, r2, lsl #2         @ r2<- &fp[BB]
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[CC]
     ldmia   r2, {r0-r1}                 @ r0/r1<- vBB/vBB+1
@@ -4582,8 +4660,11 @@ constvalop_long_to_double:
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-
     adds    r0, r0, r2                           @ optional op; may set condition codes
     adc     r1, r1, r3                              @ result<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -4614,10 +4695,10 @@ constvalop_long_to_double:
      */
     /* binop vAA, vBB, vCC */
     FETCH r0, 1                         @ r0<- CCBB
-    mov     r9, rINST, lsr #8           @ r9<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     and     r2, r0, #255                @ r2<- BB
     mov     r3, r0, lsr #8              @ r3<- CC
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[AA]
     add     r2, rFP, r2, lsl #2         @ r2<- &fp[BB]
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[CC]
     ldmia   r2, {r0-r1}                 @ r0/r1<- vBB/vBB+1
@@ -4626,8 +4707,11 @@ constvalop_long_to_double:
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-
     subs    r0, r0, r2                           @ optional op; may set condition codes
     sbc     r1, r1, r3                              @ result<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -4699,10 +4783,10 @@ constvalop_long_to_double:
      */
     /* binop vAA, vBB, vCC */
     FETCH r0, 1                         @ r0<- CCBB
-    mov     r9, rINST, lsr #8           @ r9<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     and     r2, r0, #255                @ r2<- BB
     mov     r3, r0, lsr #8              @ r3<- CC
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[AA]
     add     r2, rFP, r2, lsl #2         @ r2<- &fp[BB]
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[CC]
     ldmia   r2, {r0-r1}                 @ r0/r1<- vBB/vBB+1
@@ -4711,8 +4795,11 @@ constvalop_long_to_double:
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-
                                @ optional op; may set condition codes
     bl      __aeabi_ldivmod                              @ result<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -4744,10 +4831,10 @@ constvalop_long_to_double:
      */
     /* binop vAA, vBB, vCC */
     FETCH r0, 1                         @ r0<- CCBB
-    mov     r9, rINST, lsr #8           @ r9<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     and     r2, r0, #255                @ r2<- BB
     mov     r3, r0, lsr #8              @ r3<- CC
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[AA]
     add     r2, rFP, r2, lsl #2         @ r2<- &fp[BB]
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[CC]
     ldmia   r2, {r0-r1}                 @ r0/r1<- vBB/vBB+1
@@ -4756,8 +4843,11 @@ constvalop_long_to_double:
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-
                                @ optional op; may set condition codes
     bl      __aeabi_ldivmod                              @ result<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -4788,10 +4878,10 @@ constvalop_long_to_double:
      */
     /* binop vAA, vBB, vCC */
     FETCH r0, 1                         @ r0<- CCBB
-    mov     r9, rINST, lsr #8           @ r9<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     and     r2, r0, #255                @ r2<- BB
     mov     r3, r0, lsr #8              @ r3<- CC
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[AA]
     add     r2, rFP, r2, lsl #2         @ r2<- &fp[BB]
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[CC]
     ldmia   r2, {r0-r1}                 @ r0/r1<- vBB/vBB+1
@@ -4800,8 +4890,11 @@ constvalop_long_to_double:
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-
     and     r0, r0, r2                           @ optional op; may set condition codes
     and     r1, r1, r3                              @ result<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -4832,10 +4925,10 @@ constvalop_long_to_double:
      */
     /* binop vAA, vBB, vCC */
     FETCH r0, 1                         @ r0<- CCBB
-    mov     r9, rINST, lsr #8           @ r9<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     and     r2, r0, #255                @ r2<- BB
     mov     r3, r0, lsr #8              @ r3<- CC
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[AA]
     add     r2, rFP, r2, lsl #2         @ r2<- &fp[BB]
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[CC]
     ldmia   r2, {r0-r1}                 @ r0/r1<- vBB/vBB+1
@@ -4844,8 +4937,11 @@ constvalop_long_to_double:
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-
     orr     r0, r0, r2                           @ optional op; may set condition codes
     orr     r1, r1, r3                              @ result<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -4876,10 +4972,10 @@ constvalop_long_to_double:
      */
     /* binop vAA, vBB, vCC */
     FETCH r0, 1                         @ r0<- CCBB
-    mov     r9, rINST, lsr #8           @ r9<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     and     r2, r0, #255                @ r2<- BB
     mov     r3, r0, lsr #8              @ r3<- CC
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[AA]
     add     r2, rFP, r2, lsl #2         @ r2<- &fp[BB]
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[CC]
     ldmia   r2, {r0-r1}                 @ r0/r1<- vBB/vBB+1
@@ -4888,8 +4984,11 @@ constvalop_long_to_double:
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-
     eor     r0, r0, r2                           @ optional op; may set condition codes
     eor     r1, r1, r3                              @ result<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -5177,9 +5276,12 @@ constvalop_long_to_double:
     VREG_INDEX_TO_ADDR r2, r2           @ r2<- &vBB
     fldd    d1, [r3]                    @ d1<- vCC
     fldd    d0, [r2]                    @ d0<- vBB
-
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
     faddd   d2, d0, d1                              @ s2<- op
+    mov     ip, #0
+    add     lr, r9, #1                  @ lr<- AA+1
+    SET_VREG_SHADOW ip, r9              @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vAA
     fstd    d2, [r9]                    @ vAA<- d2
@@ -5207,9 +5309,12 @@ constvalop_long_to_double:
     VREG_INDEX_TO_ADDR r2, r2           @ r2<- &vBB
     fldd    d1, [r3]                    @ d1<- vCC
     fldd    d0, [r2]                    @ d0<- vBB
-
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
     fsubd   d2, d0, d1                              @ s2<- op
+    mov     ip, #0
+    add     lr, r9, #1                  @ lr<- AA+1
+    SET_VREG_SHADOW ip, r9              @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vAA
     fstd    d2, [r9]                    @ vAA<- d2
@@ -5237,9 +5342,12 @@ constvalop_long_to_double:
     VREG_INDEX_TO_ADDR r2, r2           @ r2<- &vBB
     fldd    d1, [r3]                    @ d1<- vCC
     fldd    d0, [r2]                    @ d0<- vBB
-
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
     fmuld   d2, d0, d1                              @ s2<- op
+    mov     ip, #0
+    add     lr, r9, #1                  @ lr<- AA+1
+    SET_VREG_SHADOW ip, r9              @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vAA
     fstd    d2, [r9]                    @ vAA<- d2
@@ -5267,9 +5375,12 @@ constvalop_long_to_double:
     VREG_INDEX_TO_ADDR r2, r2           @ r2<- &vBB
     fldd    d1, [r3]                    @ d1<- vCC
     fldd    d0, [r2]                    @ d0<- vBB
-
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
     fdivd   d2, d0, d1                              @ s2<- op
+    mov     ip, #0
+    add     lr, r9, #1                  @ lr<- AA+1
+    SET_VREG_SHADOW ip, r9              @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vAA
     fstd    d2, [r9]                    @ vAA<- d2
@@ -5299,10 +5410,10 @@ constvalop_long_to_double:
      */
     /* binop vAA, vBB, vCC */
     FETCH r0, 1                         @ r0<- CCBB
-    mov     r9, rINST, lsr #8           @ r9<- AA
+    mov     rINST, rINST, lsr #8        @ rINST<- AA
     and     r2, r0, #255                @ r2<- BB
     mov     r3, r0, lsr #8              @ r3<- CC
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[AA]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[AA]
     add     r2, rFP, r2, lsl #2         @ r2<- &fp[BB]
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[CC]
     ldmia   r2, {r0-r1}                 @ r0/r1<- vBB/vBB+1
@@ -5311,8 +5422,11 @@ constvalop_long_to_double:
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
-
                                @ optional op; may set condition codes
     bl      fmod                              @ result<- op, r0-r3 changed
     GET_INST_OPCODE ip                  @ extract opcode from rINST
@@ -5754,19 +5868,22 @@ constvalop_long_to_double:
      */
     /* binop/2addr vA, vB */
     mov     r1, rINST, lsr #12          @ r1<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r1, rFP, r1, lsl #2         @ r1<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r1, {r2-r3}                 @ r2/r3<- vBB/vBB+1
     ldmia   r9, {r0-r1}                 @ r0/r1<- vAA/vAA+1
     .if 0
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
-    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
-
     adds    r0, r0, r2                           @ optional op; may set condition codes
     adc     r1, r1, r3                              @ result<- op, r0-r3 changed
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r9, {r0,r1}     @ vAA/vAA+1<- r0/r1
     GOTO_OPCODE ip                      @ jump to next instruction
@@ -5794,19 +5911,22 @@ constvalop_long_to_double:
      */
     /* binop/2addr vA, vB */
     mov     r1, rINST, lsr #12          @ r1<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r1, rFP, r1, lsl #2         @ r1<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r1, {r2-r3}                 @ r2/r3<- vBB/vBB+1
     ldmia   r9, {r0-r1}                 @ r0/r1<- vAA/vAA+1
     .if 0
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
-    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
-
     subs    r0, r0, r2                           @ optional op; may set condition codes
     sbc     r1, r1, r3                              @ result<- op, r0-r3 changed
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r9, {r0,r1}     @ vAA/vAA+1<- r0/r1
     GOTO_OPCODE ip                      @ jump to next instruction
@@ -5863,19 +5983,22 @@ constvalop_long_to_double:
      */
     /* binop/2addr vA, vB */
     mov     r1, rINST, lsr #12          @ r1<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r1, rFP, r1, lsl #2         @ r1<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r1, {r2-r3}                 @ r2/r3<- vBB/vBB+1
     ldmia   r9, {r0-r1}                 @ r0/r1<- vAA/vAA+1
     .if 1
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
-    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
-
                                @ optional op; may set condition codes
     bl      __aeabi_ldivmod                              @ result<- op, r0-r3 changed
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r9, {r0,r1}     @ vAA/vAA+1<- r0/r1
     GOTO_OPCODE ip                      @ jump to next instruction
@@ -5904,19 +6027,22 @@ constvalop_long_to_double:
      */
     /* binop/2addr vA, vB */
     mov     r1, rINST, lsr #12          @ r1<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r1, rFP, r1, lsl #2         @ r1<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r1, {r2-r3}                 @ r2/r3<- vBB/vBB+1
     ldmia   r9, {r0-r1}                 @ r0/r1<- vAA/vAA+1
     .if 1
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
-    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
-
                                @ optional op; may set condition codes
     bl      __aeabi_ldivmod                              @ result<- op, r0-r3 changed
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r9, {r2,r3}     @ vAA/vAA+1<- r2/r3
     GOTO_OPCODE ip                      @ jump to next instruction
@@ -5944,19 +6070,22 @@ constvalop_long_to_double:
      */
     /* binop/2addr vA, vB */
     mov     r1, rINST, lsr #12          @ r1<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r1, rFP, r1, lsl #2         @ r1<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r1, {r2-r3}                 @ r2/r3<- vBB/vBB+1
     ldmia   r9, {r0-r1}                 @ r0/r1<- vAA/vAA+1
     .if 0
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
-    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
-
     and     r0, r0, r2                           @ optional op; may set condition codes
     and     r1, r1, r3                              @ result<- op, r0-r3 changed
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r9, {r0,r1}     @ vAA/vAA+1<- r0/r1
     GOTO_OPCODE ip                      @ jump to next instruction
@@ -5984,19 +6113,22 @@ constvalop_long_to_double:
      */
     /* binop/2addr vA, vB */
     mov     r1, rINST, lsr #12          @ r1<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r1, rFP, r1, lsl #2         @ r1<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r1, {r2-r3}                 @ r2/r3<- vBB/vBB+1
     ldmia   r9, {r0-r1}                 @ r0/r1<- vAA/vAA+1
     .if 0
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
-    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
-
     orr     r0, r0, r2                           @ optional op; may set condition codes
     orr     r1, r1, r3                              @ result<- op, r0-r3 changed
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r9, {r0,r1}     @ vAA/vAA+1<- r0/r1
     GOTO_OPCODE ip                      @ jump to next instruction
@@ -6024,19 +6156,22 @@ constvalop_long_to_double:
      */
     /* binop/2addr vA, vB */
     mov     r1, rINST, lsr #12          @ r1<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r1, rFP, r1, lsl #2         @ r1<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r1, {r2-r3}                 @ r2/r3<- vBB/vBB+1
     ldmia   r9, {r0-r1}                 @ r0/r1<- vAA/vAA+1
     .if 0
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
-    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
-
     eor     r0, r0, r2                           @ optional op; may set condition codes
     eor     r1, r1, r3                              @ result<- op, r0-r3 changed
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r9, {r0,r1}     @ vAA/vAA+1<- r0/r1
     GOTO_OPCODE ip                      @ jump to next instruction
@@ -6294,10 +6429,13 @@ constvalop_long_to_double:
     VREG_INDEX_TO_ADDR r3, r3           @ r3<- &vB
     and     r9, r9, #15                 @ r9<- A
     fldd    d1, [r3]                    @ d1<- vB
+    mov     ip, #0
+    add     r0, r9, #1                  @ r0<- A+1
+    SET_VREG_SHADOW ip, r9              @ clear A shadow
+    SET_VREG_SHADOW ip, r0              @ clear A+1 shadow
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vA
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     fldd    d0, [r9]                    @ d0<- vA
-
     faddd   d2, d0, d1                              @ d2<- op
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     fstd    d2, [r9]                    @ vAA<- d2
@@ -6323,10 +6461,13 @@ constvalop_long_to_double:
     VREG_INDEX_TO_ADDR r3, r3           @ r3<- &vB
     and     r9, r9, #15                 @ r9<- A
     fldd    d1, [r3]                    @ d1<- vB
+    mov     ip, #0
+    add     r0, r9, #1                  @ r0<- A+1
+    SET_VREG_SHADOW ip, r9              @ clear A shadow
+    SET_VREG_SHADOW ip, r0              @ clear A+1 shadow
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vA
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     fldd    d0, [r9]                    @ d0<- vA
-
     fsubd   d2, d0, d1                              @ d2<- op
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     fstd    d2, [r9]                    @ vAA<- d2
@@ -6352,10 +6493,13 @@ constvalop_long_to_double:
     VREG_INDEX_TO_ADDR r3, r3           @ r3<- &vB
     and     r9, r9, #15                 @ r9<- A
     fldd    d1, [r3]                    @ d1<- vB
+    mov     ip, #0
+    add     r0, r9, #1                  @ r0<- A+1
+    SET_VREG_SHADOW ip, r9              @ clear A shadow
+    SET_VREG_SHADOW ip, r0              @ clear A+1 shadow
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vA
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     fldd    d0, [r9]                    @ d0<- vA
-
     fmuld   d2, d0, d1                              @ d2<- op
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     fstd    d2, [r9]                    @ vAA<- d2
@@ -6381,10 +6525,13 @@ constvalop_long_to_double:
     VREG_INDEX_TO_ADDR r3, r3           @ r3<- &vB
     and     r9, r9, #15                 @ r9<- A
     fldd    d1, [r3]                    @ d1<- vB
+    mov     ip, #0
+    add     r0, r9, #1                  @ r0<- A+1
+    SET_VREG_SHADOW ip, r9              @ clear A shadow
+    SET_VREG_SHADOW ip, r0              @ clear A+1 shadow
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vA
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
     fldd    d0, [r9]                    @ d0<- vA
-
     fdivd   d2, d0, d1                              @ d2<- op
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     fstd    d2, [r9]                    @ vAA<- d2
@@ -6413,19 +6560,22 @@ constvalop_long_to_double:
      */
     /* binop/2addr vA, vB */
     mov     r1, rINST, lsr #12          @ r1<- B
-    ubfx    r9, rINST, #8, #4           @ r9<- A
+    ubfx    rINST, rINST, #8, #4        @ rINST<- A
     add     r1, rFP, r1, lsl #2         @ r1<- &fp[B]
-    add     r9, rFP, r9, lsl #2         @ r9<- &fp[A]
+    add     r9, rFP, rINST, lsl #2      @ r9<- &fp[A]
     ldmia   r1, {r2-r3}                 @ r2/r3<- vBB/vBB+1
     ldmia   r9, {r0-r1}                 @ r0/r1<- vAA/vAA+1
     .if 0
     orrs    ip, r2, r3                  @ second arg (r2-r3) is zero?
     beq     common_errDivideByZero
     .endif
-    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
-
                                @ optional op; may set condition codes
     bl      fmod                              @ result<- op, r0-r3 changed
+    mov     ip, #0
+    add     lr, rINST, #1               @ lr<- AA+1
+    SET_VREG_SHADOW ip, rINST           @ clear AA shadow
+    FETCH_ADVANCE_INST 1                @ advance rPC, load rINST
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r9, {r0,r1}     @ vAA/vAA+1<- r0/r1
     GOTO_OPCODE ip                      @ jump to next instruction
@@ -7155,6 +7305,10 @@ constvalop_long_to_double:
     ldrd    r0, [r3, ip]                @ r0<- obj.field (64 bits, aligned)
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
     add     r3, rFP, r2, lsl #2         @ r3<- &fp[A]
+    mov     ip, #0
+    add     lr, r2, #1                  @ lr<- AA+1
+    SET_VREG_SHADOW ip, r2              @ clear AA shadow
+    SET_VREG_SHADOW ip, lr              @ clear AA+1 shadow
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r3, {r0-r1}                 @ fp[A]<- r0/r1
     GOTO_OPCODE ip                      @ jump to next instruction

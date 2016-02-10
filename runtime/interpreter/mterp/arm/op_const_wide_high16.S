@@ -4,6 +4,9 @@
     mov     r0, #0                      @ r0<- 00000000
     mov     r1, r1, lsl #16             @ r1<- BBBB0000
     FETCH_ADVANCE_INST 2                @ advance rPC, load rINST
+    add     r2, r3, #1                  @ r2<- AA+1
+    SET_VREG_SHADOW r0, r3              @ clear AA shadow
+    SET_VREG_SHADOW r0, r2              @ clear AA+1 shadow
     add     r3, rFP, r3, lsl #2         @ r3<- &fp[AA]
     GET_INST_OPCODE ip                  @ extract opcode from rINST
     stmia   r3, {r0-r1}                 @ vAA<- r0/r1

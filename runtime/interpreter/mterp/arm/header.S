@@ -263,6 +263,9 @@ unspecified registers or condition codes.
     str     \reg, [rFP, \vreg, lsl #2]
     str     \reg, [rREFS, \vreg, lsl #2]
 .endm
+.macro SET_VREG_SHADOW reg, vreg
+    str     \reg, [rREFS, \vreg, lsl #2]
+.endm
 
 /*
  * Convert a virtual register index into an address.
