@@ -298,13 +298,17 @@ class StubTest : public CommonRuntimeTest {
           // Use the result from r0
         : [arg0] "0"(arg0), [arg1] "r"(arg1), [arg2] "r"(arg2), [code] "r"(code), [self] "r"(self),
           [referrer] "r"(referrer), [hidden] "r"(hidden), [fpr_result] "m" (fpr_result)
-        : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19", "x20",
+          // Leave one register unclobbered, which is needed for compiling with
+          // -fstack-protector-strong. According to AAPCS64 registers x9-x15 are caller-saved,
+          // which means we should unclobber one of the callee-saved registers that are unused,
+          // for example x20.
+        : "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19",
           "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "x30",
           "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7",
           "d8", "d9", "d10", "d11", "d12", "d13", "d14", "d15",
           "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23",
           "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
-          "memory");  // clobber.
+          "memory");
 #elif defined(__mips__) && !defined(__LP64__)
     __asm__ __volatile__ (
         // Spill a0-a3 and t0-t7 which we say we don't clobber. May contain args.
