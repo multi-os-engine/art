@@ -5468,6 +5468,30 @@ const char* const CmpConstantResults[] = {
   nullptr
 };
 
+const char* const BitFieldExtractResults[] = {
+  "   0:	f340 0000 	sbfx	r0, r0, #0, #1\n",
+  "   4:	f344 0707 	sbfx	r7, r4, #0, #8\n",
+  "   8:	f341 090f 	sbfx	r9, r1, #0, #16\n",
+  "   c:	f348 021e 	sbfx	r2, r8, #0, #31\n",
+  "  10:	f348 091f 	sbfx	r9, r8, #0, #32\n",
+  "  14:	f340 0040 	sbfx	r0, r0, #1, #1\n",
+  "  18:	f344 1747 	sbfx	r7, r4, #5, #8\n",
+  "  1c:	f341 490e 	sbfx	r9, r1, #16, #15\n",
+  "  20:	f348 6207 	sbfx	r2, r8, #24, #8\n",
+  "  24:	f348 79c0 	sbfx	r9, r8, #31, #1\n",
+  "  28:	f3c0 0000 	ubfx	r0, r0, #0, #1\n",
+  "  2c:	f3c4 0707 	ubfx	r7, r4, #0, #8\n",
+  "  30:	f3c1 090f 	ubfx	r9, r1, #0, #16\n",
+  "  34:	f3c8 021e 	ubfx	r2, r8, #0, #31\n",
+  "  38:	f3c8 091f 	ubfx	r9, r8, #0, #32\n",
+  "  3c:	f3c0 0040 	ubfx	r0, r0, #1, #1\n",
+  "  40:	f3c4 1747 	ubfx	r7, r4, #5, #8\n",
+  "  44:	f3c1 490e 	ubfx	r9, r1, #16, #15\n",
+  "  48:	f3c8 6207 	ubfx	r2, r8, #24, #8\n",
+  "  4c:	f3c8 79c0 	ubfx	r9, r8, #31, #1\n",
+  nullptr
+};
+
 std::map<std::string, const char* const*> test_results;
 void setup_results() {
     test_results["SimpleMov"] = SimpleMovResults;
@@ -5520,4 +5544,5 @@ void setup_results() {
     test_results["CompareAndBranch"] = CompareAndBranchResults;
     test_results["AddConstant"] = AddConstantResults;
     test_results["CmpConstant"] = CmpConstantResults;
+    test_results["BitFieldExtract"] = BitFieldExtractResults;
 }

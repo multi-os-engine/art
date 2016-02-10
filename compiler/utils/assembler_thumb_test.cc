@@ -1696,6 +1696,34 @@ TEST(Thumb2AssemblerTest, CmpConstant) {
   EmitAndCheck(&assembler, "CmpConstant");
 }
 
+TEST(Thumb2AssemblerTest, BitFieldExtract) {
+  arm::Thumb2Assembler assembler;
+
+  __ sbfx(R0, R0, 0, 1);
+  __ sbfx(R7, R4, 0, 8);
+  __ sbfx(R9, R1, 0, 16);
+  __ sbfx(R2, R8, 0, 31);
+  __ sbfx(R9, R8, 0, 32);
+  __ sbfx(R0, R0, 1, 1);
+  __ sbfx(R7, R4, 5, 8);
+  __ sbfx(R9, R1, 16, 15);
+  __ sbfx(R2, R8, 24, 8);
+  __ sbfx(R9, R8, 31, 1);
+
+  __ ubfx(R0, R0, 0, 1);
+  __ ubfx(R7, R4, 0, 8);
+  __ ubfx(R9, R1, 0, 16);
+  __ ubfx(R2, R8, 0, 31);
+  __ ubfx(R9, R8, 0, 32);
+  __ ubfx(R0, R0, 1, 1);
+  __ ubfx(R7, R4, 5, 8);
+  __ ubfx(R9, R1, 16, 15);
+  __ ubfx(R2, R8, 24, 8);
+  __ ubfx(R9, R8, 31, 1);
+
+  EmitAndCheck(&assembler, "BitFieldExtract");
+}
+
 #undef __
 }  // namespace arm
 }  // namespace art
