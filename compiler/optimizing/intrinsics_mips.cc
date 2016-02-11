@@ -1948,6 +1948,134 @@ void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromString(HInvoke* invoke)
   __ Bind(slow_path->GetExitLabel());
 }
 
+enum FpValueClass {
+  kInfinite,
+  kNaN,
+};
+
+static void IsInfiniteOrNaN(LocationSummary* locations,
+                       bool is64bit,
+                       bool isR6,
+                       FpValueClass infiniteOrNaN,
+                       MipsAssembler* assembler) {
+  FRegister in = locations->InAt(0).AsFpuRegister<FRegister>();
+  Register out = locations->Out().AsRegister<Register>();
+
+  if (isR6) {
+    if (is64bit) {
+        __ ClassD(FTMP, in);
+    } else {
+        __ ClassS(FTMP, in);
+    }
+    __ Mfc1(out, FTMP);
+    if (infiniteOrNaN == kInfinite) {
+      __ Andi(out, out, kPositiveInfinity | kNegativeInfinity);
+    } else {
+      __ Andi(out, out, kQuietNaN | kSignalingNaN);
+    }
+    __ Sltu(out, ZERO, out);
+  } else {
+    if (infiniteOrNaN == kInfinite) {
+      MipsLabel isNumber;
+      MipsLabel done;
+
+      // Is one, or more, of the exponent bits is zero, then the number can't be infinite.
+      if (is64bit) {
+        __ MoveFromFpuHigh(TMP, in);
+        __ LoadConst32(AT, 0x7FF00000);
+      } else {
+        __ Mfc1(TMP, in);
+        __ LoadConst32(AT, 0x7F800000);
+      }
+      __ And(out, TMP, AT);
+      __ Xor(out, out, AT);
+      __ Bnez(out, &isNumber);
+
+      // If we get here, all of the exponent bits are one. Now we need to test that all
+      // of the significand bits are zero.
+      if (is64bit) {
+        __ LoadConst32(AT, 0x000FFFFF);
+      } else {
+        __ LoadConst32(AT, 0x007FFFFF);
+      }
+      __ And(out, TMP, AT);
+      if (is64bit) {
+        __ Mfc1(TMP, in);
+        __ Or(out, out, TMP);
+      }
+      // If any of the significand bits are one, then the number is not infinite.
+      __ Sltiu(out, out, 1);
+      __ B(&done);
+
+      // One or more of the exponent bits are zero, so not infinite.
+      __ Bind(&isNumber);
+      __ Move(out, ZERO);
+
+      __ Bind(&done);
+    } else {
+      if (is64bit) {
+        __ CunD(in, in);
+      } else {
+        __ CunS(in, in);
+      }
+      __ LoadConst32(out, 1);
+      __ Movf(out, ZERO);
+    }
+  }
+}
+
+// boolean java.lang.Float.isInfinite(float)
+void IntrinsicLocationsBuilderMIPS::VisitFloatIsInfinite(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitFloatIsInfinite(HInvoke* invoke) {
+  IsInfiniteOrNaN(invoke->GetLocations(),
+                  /* is64bit */ false,
+                  /* isR6 */ IsR6(),
+                  kInfinite,
+                  GetAssembler());
+}
+
+// boolean java.lang.Double.isInfinite(double)
+void IntrinsicLocationsBuilderMIPS::VisitDoubleIsInfinite(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitDoubleIsInfinite(HInvoke* invoke) {
+  IsInfiniteOrNaN(invoke->GetLocations(),
+                  /* is64bit */ true,
+                  /* isR6 */ IsR6(),
+                  kInfinite,
+                  GetAssembler());
+}
+
+// boolean java.lang.Float.isNaN(float)
+void IntrinsicLocationsBuilderMIPS::VisitFloatIsNaN(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitFloatIsNaN(HInvoke* invoke) {
+  IsInfiniteOrNaN(invoke->GetLocations(),
+                  /* is64bit */ false,
+                  /* isR6 */ IsR6(),
+                  kNaN,
+                  GetAssembler());
+}
+
+// boolean java.lang.Double.isNaN(double)
+void IntrinsicLocationsBuilderMIPS::VisitDoubleIsNaN(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitDoubleIsNaN(HInvoke* invoke) {
+  IsInfiniteOrNaN(invoke->GetLocations(),
+                  /* is64bit */ true,
+                  /* isR6 */ IsR6(),
+                  kNaN,
+                  GetAssembler());
+}
+
 // Unimplemented intrinsics.
 
 #define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
@@ -2005,11 +2133,6 @@ UNIMPLEMENTED_INTRINSIC(MathNextAfter)
 UNIMPLEMENTED_INTRINSIC(MathSinh)
 UNIMPLEMENTED_INTRINSIC(MathTan)
 UNIMPLEMENTED_INTRINSIC(MathTanh)
-
-UNIMPLEMENTED_INTRINSIC(FloatIsInfinite)
-UNIMPLEMENTED_INTRINSIC(DoubleIsInfinite)
-UNIMPLEMENTED_INTRINSIC(FloatIsNaN)
-UNIMPLEMENTED_INTRINSIC(DoubleIsNaN)
 
 UNIMPLEMENTED_INTRINSIC(IntegerHighestOneBit)
 UNIMPLEMENTED_INTRINSIC(LongHighestOneBit)
