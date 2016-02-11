@@ -1,0 +1,2 @@
+Regression for dex2oatd crash during compilation of method which
+use throw with argument of non-reference type.
