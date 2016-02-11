@@ -1956,6 +1956,62 @@ void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromString(HInvoke* invoke)
   __ Bind(slow_path->GetExitLabel());
 }
 
+static void GenIsInfinite(LocationSummary* locations,
+                          bool is64bit,
+                          bool isR6,
+                          MipsAssembler* assembler) {
+  FRegister in = locations->InAt(0).AsFpuRegister<FRegister>();
+  Register out = locations->Out().AsRegister<Register>();
+
+  if (isR6) {
+    if (is64bit) {
+        __ ClassD(FTMP, in);
+    } else {
+        __ ClassS(FTMP, in);
+    }
+    __ Mfc1(out, FTMP);
+    __ Andi(out, out, kPositiveInfinity | kNegativeInfinity);
+    __ Sltu(out, ZERO, out);
+  } else {
+    // Is one, or more, of the exponent bits is zero, then the number can't be infinite.
+    if (is64bit) {
+      __ MoveFromFpuHigh(TMP, in);
+      __ LoadConst32(AT, 0x7FF00000);
+    } else {
+      __ Mfc1(TMP, in);
+      __ LoadConst32(AT, 0x7F800000);
+    }
+    __ Xor(TMP, TMP, AT);
+
+    __ Sll(TMP, TMP, 1);
+
+    if (is64bit) {
+      __ Mfc1(AT, in);
+      __ Or(TMP, TMP, AT);
+    }
+    // If any of the significand bits are one, then the number is not infinite.
+    __ Sltiu(out, TMP, 1);
+  }
+}
+
+// boolean java.lang.Float.isInfinite(float)
+void IntrinsicLocationsBuilderMIPS::VisitFloatIsInfinite(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitFloatIsInfinite(HInvoke* invoke) {
+  GenIsInfinite(invoke->GetLocations(), /* is64bit */ false, /* isR6 */ IsR6(), GetAssembler());
+}
+
+// boolean java.lang.Double.isInfinite(double)
+void IntrinsicLocationsBuilderMIPS::VisitDoubleIsInfinite(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitDoubleIsInfinite(HInvoke* invoke) {
+  GenIsInfinite(invoke->GetLocations(), /* is64bit */ true, /* isR6 */ IsR6(), GetAssembler());
+}
+
 // Unimplemented intrinsics.
 
 #define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
@@ -2014,8 +2070,6 @@ UNIMPLEMENTED_INTRINSIC(MathSinh)
 UNIMPLEMENTED_INTRINSIC(MathTan)
 UNIMPLEMENTED_INTRINSIC(MathTanh)
 
-UNIMPLEMENTED_INTRINSIC(FloatIsInfinite)
-UNIMPLEMENTED_INTRINSIC(DoubleIsInfinite)
 UNIMPLEMENTED_INTRINSIC(FloatIsNaN)
 UNIMPLEMENTED_INTRINSIC(DoubleIsNaN)
 

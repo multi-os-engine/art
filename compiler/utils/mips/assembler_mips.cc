@@ -1174,6 +1174,10 @@ void MipsAssembler::ClassS(FRegister fd, FRegister fs) {
   EmitFR(0x11, 0x10, static_cast<FRegister>(0), fs, fd, 0x1b);
 }
 
+void MipsAssembler::ClassD(FRegister fd, FRegister fs) {
+  EmitFR(0x11, 0x11, static_cast<FRegister>(0), fs, fd, 0x1b);
+}
+
 void MipsAssembler::MinS(FRegister fd, FRegister fs, FRegister ft) {
   CHECK(IsR6());
   EmitFR(0x11, 0x10, ft, fs, fd, 0x1c);

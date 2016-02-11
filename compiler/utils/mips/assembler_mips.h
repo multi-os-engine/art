@@ -309,6 +309,7 @@ class MipsAssembler FINAL : public Assembler {
   void SelS(FRegister fd, FRegister fs, FRegister ft);  // R6
   void SelD(FRegister fd, FRegister fs, FRegister ft);  // R6
   void ClassS(FRegister fd, FRegister fs);  // R6
+  void ClassD(FRegister fd, FRegister fs);  // R6
   void MinS(FRegister fd, FRegister fs, FRegister ft);  // R6
   void MinD(FRegister fd, FRegister fs, FRegister ft);  // R6
   void MaxS(FRegister fd, FRegister fs, FRegister ft);  // R6
