@@ -75,7 +75,7 @@ namespace interpreter {
     ArtMethod* method = shadow_frame.GetMethod();                                              \
     instrumentation->Branch(self, method, dex_pc, offset);                                     \
     JValue result;                                                                             \
-    if (jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, &result)) {          \
+    if (jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, &result, false)) {   \
       return result;                                                                           \
     }                                                                                          \
   } while (false)

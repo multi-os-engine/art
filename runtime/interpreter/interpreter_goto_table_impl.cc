@@ -70,7 +70,7 @@ namespace interpreter {
     instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation(); \
     instrumentation->Branch(self, method, dex_pc, offset);                                        \
     JValue result;                                                                                \
-    if (jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, &result)) {             \
+    if (jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, &result, false)) {      \
       return result;                                                                              \
     }                                                                                             \
   } while (false)

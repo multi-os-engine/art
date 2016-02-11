@@ -90,15 +90,17 @@ class Jit {
 
   bool JitAtFirstUse();
 
-  // If an OSR compiled version is available for `method`,
-  // and `dex_pc + dex_pc_offset` is an entry point of that compiled
-  // version, this method will jump to the compiled code, let it run,
-  // and return true afterwards. Return false otherwise.
+  // Determine whether an OSR compiled version of 'method' exists,
+  // and whether 'dex_pc + dex_pc_offset" is an entry pont of that
+  // compiled method.  If 'test_only' is true, simply return the status.
+  // Otherwise, if the conditions hold this method will jump to the
+  // compiled code.
   static bool MaybeDoOnStackReplacement(Thread* thread,
                                         ArtMethod* method,
                                         uint32_t dex_pc,
                                         int32_t dex_pc_offset,
-                                        JValue* result)
+                                        JValue* result,
+                                        bool test_only)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:

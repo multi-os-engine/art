@@ -279,7 +279,8 @@ bool Jit::MaybeDoOnStackReplacement(Thread* thread,
                                     ArtMethod* method,
                                     uint32_t dex_pc,
                                     int32_t dex_pc_offset,
-                                    JValue* result) {
+                                    JValue* result,
+                                    bool test_only) {
   if (!kEnableOnStackReplacement) {
     return false;
   }
@@ -340,6 +341,11 @@ bool Jit::MaybeDoOnStackReplacement(Thread* thread,
       // There is no OSR stack map for this dex pc offset. Just return to the interpreter in the
       // hope that the next branch has one.
       return false;
+    }
+
+    // At this point, we're good to go.  Return if not actually doing the OSR right now.
+    if (test_only) {
+      return true;
     }
 
     // We found a stack map, now fill the frame with dex register values from the interpreter's
