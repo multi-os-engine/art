@@ -104,15 +104,16 @@ class HGraphBuilder : public ValueObject {
   // create a code unit in which branches fall-through out of it).
   bool ComputeBranchTargets(const uint16_t* start,
                             const uint16_t* end,
+                            const DexFile::CodeItem& code_item,
                             size_t* number_of_branches);
   void MaybeUpdateCurrentBlock(size_t dex_pc);
   void FindNativeDebugInfoLocations(const DexFile::CodeItem& code_item, ArenaBitVector* locations);
   HBasicBlock* FindBlockStartingAt(int32_t dex_pc) const;
   HBasicBlock* FindOrCreateBlockStartingAt(int32_t dex_pc);
 
-  // Adds new blocks to `branch_targets_` starting at the limits of TryItems and
-  // their exception handlers.
-  void CreateBlocksForTryCatch(const DexFile::CodeItem& code_item);
+  bool CreateInstructions(const uint16_t* code_ptr,
+                          const uint16_t* code_end,
+                          BitVector* native_debug_info_locations);
 
   // Splits edges which cross the boundaries of TryItems, inserts TryBoundary
   // instructions and links them to the corresponding catch blocks.

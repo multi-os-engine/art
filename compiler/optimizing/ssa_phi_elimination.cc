@@ -97,7 +97,7 @@ void SsaDeadPhiElimination::EliminateDeadPhis() {
           for (HUseIterator<HInstruction*> use_it(phi->GetUses()); !use_it.Done();
                use_it.Advance()) {
             HInstruction* user = use_it.Current()->GetUser();
-            DCHECK(user->IsLoopHeaderPhi());
+            DCHECK(user->IsLoopHeaderPhi()) << user->GetId() << user->DebugName();
             DCHECK(user->AsPhi()->IsDead());
           }
         }

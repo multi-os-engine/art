@@ -171,44 +171,6 @@ bool HGraphBuilder::SkipCompilation(const DexFile::CodeItem& code_item,
   return false;
 }
 
-void HGraphBuilder::CreateBlocksForTryCatch(const DexFile::CodeItem& code_item) {
-  if (code_item.tries_size_ == 0) {
-    return;
-  }
-
-  // Create branch targets at the start/end of the TryItem range. These are
-  // places where the program might fall through into/out of the a block and
-  // where TryBoundary instructions will be inserted later. Other edges which
-  // enter/exit the try blocks are a result of branches/switches.
-  for (size_t idx = 0; idx < code_item.tries_size_; ++idx) {
-    const DexFile::TryItem* try_item = DexFile::GetTryItems(code_item, idx);
-    uint32_t dex_pc_start = try_item->start_addr_;
-    uint32_t dex_pc_end = dex_pc_start + try_item->insn_count_;
-    FindOrCreateBlockStartingAt(dex_pc_start);
-    if (dex_pc_end < code_item.insns_size_in_code_units_) {
-      // TODO: Do not create block if the last instruction cannot fall through.
-      FindOrCreateBlockStartingAt(dex_pc_end);
-    } else {
-      // The TryItem spans until the very end of the CodeItem (or beyond if
-      // invalid) and therefore cannot have any code afterwards.
-    }
-  }
-
-  // Create branch targets for exception handlers.
-  const uint8_t* handlers_ptr = DexFile::GetCatchHandlerData(code_item, 0);
-  uint32_t handlers_size = DecodeUnsignedLeb128(&handlers_ptr);
-  for (uint32_t idx = 0; idx < handlers_size; ++idx) {
-    CatchHandlerIterator iterator(handlers_ptr);
-    for (; iterator.HasNext(); iterator.Next()) {
-      uint32_t address = iterator.GetHandlerAddress();
-      HBasicBlock* block = FindOrCreateBlockStartingAt(address);
-      block->SetTryCatchInformation(
-        new (arena_) TryCatchInformation(iterator.GetHandlerTypeIndex(), *dex_file_));
-    }
-    handlers_ptr = iterator.EndDataPointer();
-  }
-}
-
 // Returns the TryItem stored for `block` or nullptr if there is no info for it.
 static const DexFile::TryItem* GetTryItem(
     HBasicBlock* block,
@@ -243,13 +205,8 @@ void HGraphBuilder::InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item) 
   for (size_t i = 0, e = graph_->GetBlocks().size(); i < e; ++i) {
     HBasicBlock* block = graph_->GetBlocks()[i];
 
-    // Do not bother creating exceptional edges for try blocks which have no
-    // throwing instructions. In that case we simply assume that the block is
-    // not covered by a TryItem. This prevents us from creating a throw-catch
-    // loop for synchronized blocks.
-    if (block->HasThrowingInstructions()) {
-      // Try to find a TryItem covering the block.
-      DCHECK_NE(block->GetDexPc(), kNoDexPc) << "Block must have a dex_pc to find its TryItem.";
+    // Try to find a TryItem covering the block.
+    if (block->GetDexPc() != kNoDexPc) {
       const int32_t try_item_idx = DexFile::FindTryItem(code_item, block->GetDexPc());
       if (try_item_idx != -1) {
         // Block throwing and in a TryItem. Store the try block information.
@@ -323,6 +280,32 @@ void HGraphBuilder::InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item) 
   }
 }
 
+bool HGraphBuilder::CreateInstructions(const uint16_t* code_ptr,
+                                       const uint16_t* code_end,
+                                       BitVector* native_debug_info_locations) {
+  // graph_->ComputeDominanceInformation();
+
+  size_t dex_pc = 0;
+  while (code_ptr < code_end) {
+    // Update the current block if dex_pc starts a new block.
+    MaybeUpdateCurrentBlock(dex_pc);
+    const Instruction& instruction = *Instruction::At(code_ptr);
+    if (native_debug_info_locations != nullptr && native_debug_info_locations->IsBitSet(dex_pc)) {
+      if (current_block_ != nullptr) {
+        current_block_->AddInstruction(new (arena_) HNativeDebugInfo(dex_pc));
+      }
+    }
+    if (!AnalyzeDexInstruction(instruction, dex_pc)) {
+      return false;
+    }
+    dex_pc += instruction.SizeInCodeUnits();
+    code_ptr += instruction.SizeInCodeUnits();
+  }
+
+  // graph_->ClearDominanceInformation();
+  return true;
+}
+
 GraphAnalysisResult HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item,
                                               StackHandleScopeCollection* handles) {
   DCHECK(graph_->GetBlocks().empty());
@@ -349,7 +332,7 @@ GraphAnalysisResult HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item
 
   // To avoid splitting blocks, we compute ahead of time the instructions that
   // start a new block, and create these blocks.
-  if (!ComputeBranchTargets(code_ptr, code_end, &number_of_branches)) {
+  if (!ComputeBranchTargets(code_ptr, code_end, code_item, &number_of_branches)) {
     MaybeRecordStat(MethodCompilationStat::kNotCompiledBranchOutsideMethodCode);
     return kAnalysisInvalidBytecode;
   }
@@ -364,7 +347,7 @@ GraphAnalysisResult HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item
   // at start of java statement) rather than before every dex instruction.
   const bool native_debuggable = compiler_driver_ != nullptr &&
                                  compiler_driver_->GetCompilerOptions().GetNativeDebuggable();
-  ArenaBitVector* native_debug_info_locations;
+  ArenaBitVector* native_debug_info_locations = nullptr;
   if (native_debuggable) {
     const uint32_t num_instructions = code_item.insns_size_in_code_units_;
     native_debug_info_locations = new (arena_) ArenaBitVector (arena_, num_instructions, false);
@@ -372,25 +355,15 @@ GraphAnalysisResult HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item
     FindNativeDebugInfoLocations(code_item, native_debug_info_locations);
   }
 
-  CreateBlocksForTryCatch(code_item);
-
   InitializeParameters(code_item.ins_size_);
 
-  size_t dex_pc = 0;
-  while (code_ptr < code_end) {
-    // Update the current block if dex_pc starts a new block.
-    MaybeUpdateCurrentBlock(dex_pc);
-    const Instruction& instruction = *Instruction::At(code_ptr);
-    if (native_debuggable && native_debug_info_locations->IsBitSet(dex_pc)) {
-      if (current_block_ != nullptr) {
-        current_block_->AddInstruction(new (arena_) HNativeDebugInfo(dex_pc));
-      }
+  // Walk over all blocks in dex_pc order and add them to the graph.
+  // TODO: We can get rid of this and add them to graph when created, but that
+  // would break poorly written tests.
+  for (HBasicBlock* block : branch_targets_) {
+    if (block != nullptr) {
+      graph_->AddBlock(block);
     }
-    if (!AnalyzeDexInstruction(instruction, dex_pc)) {
-      return kAnalysisInvalidBytecode;
-    }
-    dex_pc += instruction.SizeInCodeUnits();
-    code_ptr += instruction.SizeInCodeUnits();
   }
 
   // Add Exit to the exit block.
@@ -405,6 +378,10 @@ GraphAnalysisResult HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item
   // and exit points. This requires all control-flow instructions and
   // non-exceptional edges to have been created.
   InsertTryBoundaryBlocks(code_item);
+
+  if (!CreateInstructions(code_ptr, code_end, native_debug_info_locations)) {
+    return kAnalysisInvalidBytecode;
+  }
 
   GraphAnalysisResult result = graph_->BuildDominatorTree();
   if (result != kAnalysisSuccess) {
@@ -428,7 +405,6 @@ void HGraphBuilder::MaybeUpdateCurrentBlock(size_t dex_pc) {
     current_block_->AddInstruction(new (arena_) HGoto(dex_pc));
     current_block_->AddSuccessor(block);
   }
-  graph_->AddBlock(block);
   current_block_ = block;
 }
 
@@ -475,6 +451,7 @@ void HGraphBuilder::FindNativeDebugInfoLocations(const DexFile::CodeItem& code_i
 
 bool HGraphBuilder::ComputeBranchTargets(const uint16_t* code_ptr,
                                          const uint16_t* code_end,
+                                         const DexFile::CodeItem& code_item,
                                          size_t* number_of_branches) {
   branch_targets_.resize(code_end - code_ptr, nullptr);
 
@@ -543,6 +520,41 @@ bool HGraphBuilder::ComputeBranchTargets(const uint16_t* code_ptr,
       dex_pc += instruction.SizeInCodeUnits();
     }
   }
+
+  if (code_item.tries_size_ != 0) {
+    // Create branch targets at the start/end of the TryItem range. These are
+    // places where the program might fall through into/out of the a block and
+    // where TryBoundary instructions will be inserted later. Other edges which
+    // enter/exit the try blocks are a result of branches/switches.
+    for (size_t idx = 0; idx < code_item.tries_size_; ++idx) {
+      const DexFile::TryItem* try_item = DexFile::GetTryItems(code_item, idx);
+      uint32_t dex_pc_start = try_item->start_addr_;
+      uint32_t dex_pc_end = dex_pc_start + try_item->insn_count_;
+      FindOrCreateBlockStartingAt(dex_pc_start);
+      if (dex_pc_end < code_item.insns_size_in_code_units_) {
+        // TODO: Do not create block if the last instruction cannot fall through.
+        FindOrCreateBlockStartingAt(dex_pc_end);
+      } else {
+        // The TryItem spans until the very end of the CodeItem (or beyond if
+        // invalid) and therefore cannot have any code afterwards.
+      }
+    }
+
+    // Create branch targets for exception handlers.
+    const uint8_t* handlers_ptr = DexFile::GetCatchHandlerData(code_item, 0);
+    uint32_t handlers_size = DecodeUnsignedLeb128(&handlers_ptr);
+    for (uint32_t idx = 0; idx < handlers_size; ++idx) {
+      CatchHandlerIterator iterator(handlers_ptr);
+      for (; iterator.HasNext(); iterator.Next()) {
+        uint32_t address = iterator.GetHandlerAddress();
+        block = FindOrCreateBlockStartingAt(address);
+        block->SetTryCatchInformation(
+          new (arena_) TryCatchInformation(iterator.GetHandlerTypeIndex(), *dex_file_));
+      }
+      handlers_ptr = iterator.EndDataPointer();
+    }
+  }
+
   return true;
 }
 
