@@ -74,13 +74,11 @@ class StackMapStream : public ValueObject {
                                            allocator->Adapter(kArenaAllocStackMapStream)),
         current_entry_(),
         current_inline_info_(),
-        stack_mask_size_(0),
         inline_info_size_(0),
         dex_register_maps_size_(0),
         stack_maps_size_(0),
         dex_register_location_catalog_size_(0),
         dex_register_location_catalog_start_(0),
-        stack_maps_start_(0),
         dex_register_maps_start_(0),
         inline_infos_start_(0),
         needed_size_(0),
@@ -193,13 +191,12 @@ class StackMapStream : public ValueObject {
   StackMapEntry current_entry_;
   InlineInfoEntry current_inline_info_;
   StackMapEncoding stack_map_encoding_;
-  size_t stack_mask_size_;
+  CodeInfo::Header<CodeInfo::kNumberOfHeaderFields> header_;
   size_t inline_info_size_;
   size_t dex_register_maps_size_;
   size_t stack_maps_size_;
   size_t dex_register_location_catalog_size_;
   size_t dex_register_location_catalog_start_;
-  size_t stack_maps_start_;
   size_t dex_register_maps_start_;
   size_t inline_infos_start_;
   size_t needed_size_;
