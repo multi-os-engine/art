@@ -138,34 +138,41 @@ uint32_t StackMapStream::ComputeMaxNativePcOffset() const {
 
 size_t StackMapStream::PrepareForFillIn() {
   int stack_mask_number_of_bits = stack_mask_max_ + 1;  // Need room for max element too.
-  stack_mask_size_ = RoundUp(stack_mask_number_of_bits, kBitsPerByte) / kBitsPerByte;
   inline_info_size_ = ComputeInlineInfoSize();
   dex_register_maps_size_ = ComputeDexRegisterMapsSize();
   uint32_t max_native_pc_offset = ComputeMaxNativePcOffset();
-  stack_map_encoding_ = StackMapEncoding::CreateFromSizes(stack_mask_size_,
-                                                          inline_info_size_,
-                                                          dex_register_maps_size_,
-                                                          dex_pc_max_,
-                                                          max_native_pc_offset,
-                                                          register_mask_max_);
-  stack_maps_size_ = stack_maps_.size() * stack_map_encoding_.ComputeStackMapSize();
+  size_t stack_map_size = stack_map_encoding_.SetFromSizes(stack_mask_number_of_bits,
+                                                           inline_info_size_,
+                                                           dex_register_maps_size_,
+                                                           dex_pc_max_,
+                                                           max_native_pc_offset,
+                                                           register_mask_max_);
+  stack_maps_size_ = stack_maps_.size() * stack_map_size;
   dex_register_location_catalog_size_ = ComputeDexRegisterLocationCatalogSize();
 
-  // Note: use RoundUp to word-size here if you want CodeInfo objects to be word aligned.
-  needed_size_ = CodeInfo::kFixedSize
-      + stack_maps_size_
-      + dex_register_location_catalog_size_
-      + dex_register_maps_size_
-      + inline_info_size_;
+  size_t non_header_size =
+      stack_maps_size_ +
+      dex_register_location_catalog_size_ +
+      dex_register_maps_size_ +
+      inline_info_size_;
 
-  stack_maps_start_ = CodeInfo::kFixedSize;
+  // Prepare the CodeInfo variable-sized header.
+  CodeInfoHeader header;
+  header.non_header_size = non_header_size;
+  header.stack_map_encoding = stack_map_encoding_;
+  header.number_of_stack_maps = stack_maps_.size();
+  header.stack_map_size_in_bytes = stack_map_size;
+  header.number_of_location_catalog_entries = location_catalog_entries_.size();
+  header.Encode(&encoded_header_);
+
   // TODO: Move the catalog at the end. It is currently too expensive at runtime
   // to compute its size (note that we do not encode that size in the CodeInfo).
-  dex_register_location_catalog_start_ = stack_maps_start_ + stack_maps_size_;
+  dex_register_location_catalog_start_ = encoded_header_.size() + stack_maps_size_;
   dex_register_maps_start_ =
       dex_register_location_catalog_start_ + dex_register_location_catalog_size_;
   inline_infos_start_ = dex_register_maps_start_ + dex_register_maps_size_;
 
+  needed_size_ = encoded_header_.size() + non_header_size;
   return needed_size_;
 }
 
@@ -228,9 +235,12 @@ void StackMapStream::FillIn(MemoryRegion region) {
   DCHECK_EQ(0u, current_entry_.dex_pc) << "EndStackMapEntry not called after BeginStackMapEntry";
   DCHECK_NE(0u, needed_size_) << "PrepareForFillIn not called before FillIn";
 
-  CodeInfo code_info(region);
   DCHECK_EQ(region.size(), needed_size_);
-  code_info.SetOverallSize(region.size());
+
+  // Note that the memory region does not have to be zeroed.
+
+  // Write the CodeInfo header.
+  region.CopyFrom(0, MemoryRegion(encoded_header_.data(), encoded_header_.size()));
 
   MemoryRegion dex_register_locations_region = region.Subregion(
       dex_register_maps_start_, dex_register_maps_size_);
@@ -238,12 +248,10 @@ void StackMapStream::FillIn(MemoryRegion region) {
   MemoryRegion inline_infos_region = region.Subregion(
       inline_infos_start_, inline_info_size_);
 
-  code_info.SetEncoding(stack_map_encoding_);
-  code_info.SetNumberOfStackMaps(stack_maps_.size());
+  CodeInfo code_info(region);
   DCHECK_EQ(code_info.GetStackMapsSize(code_info.ExtractEncoding()), stack_maps_size_);
 
   // Set the Dex register location catalog.
-  code_info.SetNumberOfLocationCatalogEntries(location_catalog_entries_.size());
   MemoryRegion dex_register_location_catalog_region = region.Subregion(
       dex_register_location_catalog_start_, dex_register_location_catalog_size_);
   DexRegisterLocationCatalog dex_register_location_catalog(dex_register_location_catalog_region);
@@ -266,8 +274,15 @@ void StackMapStream::FillIn(MemoryRegion region) {
     stack_map.SetDexPc(stack_map_encoding_, entry.dex_pc);
     stack_map.SetNativePcOffset(stack_map_encoding_, entry.native_pc_offset);
     stack_map.SetRegisterMask(stack_map_encoding_, entry.register_mask);
+    size_t number_of_stack_mask_bits = stack_map.GetNumberOfStackMaskBits(stack_map_encoding_);
     if (entry.sp_mask != nullptr) {
-      stack_map.SetStackMask(stack_map_encoding_, *entry.sp_mask);
+      for (size_t bit = 0; bit < number_of_stack_mask_bits; bit++) {
+        stack_map.SetStackMaskBit(stack_map_encoding_, bit, entry.sp_mask->IsBitSet(bit));
+      }
+    } else {
+      for (size_t bit = 0; bit < number_of_stack_mask_bits; bit++) {
+        stack_map.SetStackMaskBit(stack_map_encoding_, bit, false);
+      }
     }
 
     if (entry.num_dex_registers == 0 || (entry.live_dex_registers_mask->NumSetBits() == 0)) {
