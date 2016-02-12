@@ -406,7 +406,10 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
             added_image_space = false;
             // Non-fatal, don't update error_msg.
           }
-          image_space.release();
+        }
+        if (added_image_space) {
+          // Successfully added image space to heap, release the map so that it does not get freed.
+          CHECK(image_space.release() != nullptr);
         }
       }
     }
