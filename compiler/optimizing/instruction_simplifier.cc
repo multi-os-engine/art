@@ -830,6 +830,24 @@ void InstructionSimplifierVisitor::VisitTypeConversion(HTypeConversion* instruct
         return;
       }
     }
+  } else if (input->IsAnd()) {
+    DCHECK(Primitive::IsIntegralType(input_type));
+    HAnd* input_and = input->AsAnd();
+    HConstant* constant = input_and->GetConstantRight();
+    if (constant != nullptr) {
+      int64_t value = Int64FromConstant(constant);
+      DCHECK_NE(value, -1);  // "& -1" would have been optimized away in VisitAnd().
+      size_t trailing_ones = CTZ(~static_cast<uint64_t>(value));
+      if (trailing_ones >= 8 * Primitive::ComponentSize(result_type) &&
+          Primitive::IsIntegralType(result_type) &&
+          input->HasOnlyOneNonEnvironmentUse()) {
+        // The `HAnd` is useless, for example in `(byte) (x & 0xff)`, get rid of it.
+        input_and->ReplaceWith(input_and->GetLeastConstantLeft());
+        input_and->GetBlock()->RemoveInstruction(input_and);
+        RecordSimplification();
+        return;
+      }
+    }
   }
 }
 
