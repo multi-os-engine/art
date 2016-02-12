@@ -389,7 +389,6 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     StackMapEncoding encoding = code_info.ExtractEncoding();
     StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
     const size_t number_of_vregs = m->GetCodeItem()->registers_size_;
-    MemoryRegion stack_mask = stack_map.GetStackMask(encoding);
     uint32_t register_mask = stack_map.GetRegisterMask(encoding);
     DexRegisterMap vreg_map = IsInInlinedFrame()
         ? code_info.GetDexRegisterMapAtDepth(GetCurrentInliningDepth() - 1,
@@ -423,7 +422,8 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
           const uint8_t* addr = reinterpret_cast<const uint8_t*>(GetCurrentQuickFrame()) + offset;
           value = *reinterpret_cast<const uint32_t*>(addr);
           uint32_t bit = (offset >> 2);
-          if (stack_mask.size_in_bits() > bit && stack_mask.LoadBit(bit)) {
+          if (stack_map.GetNumberOfStackMaskBits(encoding) > bit &&
+              stack_map.GetStackMaskBit(encoding, bit)) {
             is_reference = true;
           }
           break;
