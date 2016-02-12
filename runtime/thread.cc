@@ -2734,10 +2734,9 @@ class ReferenceMapVisitor : public StackVisitor {
         StackMapEncoding encoding = code_info.ExtractEncoding();
         StackMap map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
         DCHECK(map.IsValid());
-        MemoryRegion mask = map.GetStackMask(encoding);
         // Visit stack entries that hold pointers.
-        for (size_t i = 0; i < mask.size_in_bits(); ++i) {
-          if (mask.LoadBit(i)) {
+        for (size_t i = 0, e = map.GetNumberOfStackMaskBits(encoding); i < e; ++i) {
+          if (map.GetStackMaskBit(encoding, i)) {
             auto* ref_addr = vreg_base + i;
             mirror::Object* ref = ref_addr->AsMirrorPtr();
             if (ref != nullptr) {
