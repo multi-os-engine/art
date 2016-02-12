@@ -23,9 +23,18 @@
 
 namespace art {
 
-static bool SameBits(MemoryRegion region, const BitVector& bit_vector) {
-  for (size_t i = 0; i < region.size_in_bits(); ++i) {
-    if (region.LoadBit(i) != bit_vector.IsBitSet(i)) {
+// Check that the stack mask of given stack map is identical
+// to the given bit vector. Returns true if they are same.
+static bool CheckStackMask(
+    const StackMap& stack_map,
+    StackMapEncoding& encoding,
+    const BitVector& bit_vector) {
+  int number_of_bits = stack_map.GetNumberOfStackMaskBits(encoding);
+  if (bit_vector.GetHighestBitSet() >= number_of_bits) {
+    return false;
+  }
+  for (int i = 0; i < number_of_bits; ++i) {
+    if (stack_map.GetStackMaskBit(encoding, i) != bit_vector.IsBitSet(i)) {
       return false;
     }
   }
@@ -53,7 +62,6 @@ TEST(StackMapTest, Test1) {
 
   CodeInfo code_info(region);
   StackMapEncoding encoding = code_info.ExtractEncoding();
-  ASSERT_EQ(0u, encoding.NumberOfBytesForStackMask());
   ASSERT_EQ(1u, code_info.GetNumberOfStackMaps());
 
   uint32_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
@@ -72,8 +80,7 @@ TEST(StackMapTest, Test1) {
   ASSERT_EQ(64u, stack_map.GetNativePcOffset(encoding));
   ASSERT_EQ(0x3u, stack_map.GetRegisterMask(encoding));
 
-  MemoryRegion stack_mask = stack_map.GetStackMask(encoding);
-  ASSERT_TRUE(SameBits(stack_mask, sp_mask));
+  ASSERT_TRUE(CheckStackMask(stack_map, encoding, sp_mask));
 
   ASSERT_TRUE(stack_map.HasDexRegisterMap(encoding));
   DexRegisterMap dex_register_map =
@@ -167,7 +174,6 @@ TEST(StackMapTest, Test2) {
 
   CodeInfo code_info(region);
   StackMapEncoding encoding = code_info.ExtractEncoding();
-  ASSERT_EQ(2u, encoding.NumberOfBytesForStackMask());
   ASSERT_EQ(4u, code_info.GetNumberOfStackMaps());
 
   uint32_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
@@ -188,8 +194,7 @@ TEST(StackMapTest, Test2) {
     ASSERT_EQ(64u, stack_map.GetNativePcOffset(encoding));
     ASSERT_EQ(0x3u, stack_map.GetRegisterMask(encoding));
 
-    MemoryRegion stack_mask = stack_map.GetStackMask(encoding);
-    ASSERT_TRUE(SameBits(stack_mask, sp_mask1));
+    ASSERT_TRUE(CheckStackMask(stack_map, encoding, sp_mask1));
 
     ASSERT_TRUE(stack_map.HasDexRegisterMap(encoding));
     DexRegisterMap dex_register_map =
@@ -250,8 +255,7 @@ TEST(StackMapTest, Test2) {
     ASSERT_EQ(128u, stack_map.GetNativePcOffset(encoding));
     ASSERT_EQ(0xFFu, stack_map.GetRegisterMask(encoding));
 
-    MemoryRegion stack_mask = stack_map.GetStackMask(encoding);
-    ASSERT_TRUE(SameBits(stack_mask, sp_mask2));
+    ASSERT_TRUE(CheckStackMask(stack_map, encoding, sp_mask2));
 
     ASSERT_TRUE(stack_map.HasDexRegisterMap(encoding));
     DexRegisterMap dex_register_map =
@@ -305,8 +309,7 @@ TEST(StackMapTest, Test2) {
     ASSERT_EQ(192u, stack_map.GetNativePcOffset(encoding));
     ASSERT_EQ(0xABu, stack_map.GetRegisterMask(encoding));
 
-    MemoryRegion stack_mask = stack_map.GetStackMask(encoding);
-    ASSERT_TRUE(SameBits(stack_mask, sp_mask3));
+    ASSERT_TRUE(CheckStackMask(stack_map, encoding, sp_mask3));
 
     ASSERT_TRUE(stack_map.HasDexRegisterMap(encoding));
     DexRegisterMap dex_register_map =
@@ -360,8 +363,7 @@ TEST(StackMapTest, Test2) {
     ASSERT_EQ(256u, stack_map.GetNativePcOffset(encoding));
     ASSERT_EQ(0xCDu, stack_map.GetRegisterMask(encoding));
 
-    MemoryRegion stack_mask = stack_map.GetStackMask(encoding);
-    ASSERT_TRUE(SameBits(stack_mask, sp_mask4));
+    ASSERT_TRUE(CheckStackMask(stack_map, encoding, sp_mask4));
 
     ASSERT_TRUE(stack_map.HasDexRegisterMap(encoding));
     DexRegisterMap dex_register_map =
@@ -426,7 +428,6 @@ TEST(StackMapTest, TestNonLiveDexRegisters) {
 
   CodeInfo code_info(region);
   StackMapEncoding encoding = code_info.ExtractEncoding();
-  ASSERT_EQ(0u, encoding.NumberOfBytesForStackMask());
   ASSERT_EQ(1u, code_info.GetNumberOfStackMaps());
 
   uint32_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
@@ -625,7 +626,6 @@ TEST(StackMapTest, TestNoDexRegisterMap) {
 
   CodeInfo code_info(region);
   StackMapEncoding encoding = code_info.ExtractEncoding();
-  ASSERT_EQ(0u, encoding.NumberOfBytesForStackMask());
   ASSERT_EQ(2u, code_info.GetNumberOfStackMaps());
 
   uint32_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
