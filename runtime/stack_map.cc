@@ -54,41 +54,40 @@ DexRegisterLocation DexRegisterMap::GetDexRegisterLocation(uint16_t dex_register
   return dex_register_location_catalog.GetDexRegisterLocation(location_catalog_entry_index);
 }
 
-uint32_t StackMap::LoadAt(size_t number_of_bytes, size_t offset, bool check_max) const {
-  if (number_of_bytes == 0u) {
-    DCHECK(!check_max);
+uint32_t StackMap::LoadAt(size_t bit_count, size_t bit_offset, bool check_max) const {
+  DCHECK_LE(bit_count, 32u);
+  DCHECK_LE(bit_offset + bit_count, region_.size_in_bits());
+  if (bit_count == 0) {
     return 0;
-  } else if (number_of_bytes == 1u) {
-    uint8_t value = region_.LoadUnaligned<uint8_t>(offset);
-    return (check_max && value == 0xFF) ? -1 : value;
-  } else if (number_of_bytes == 2u) {
-    uint16_t value = region_.LoadUnaligned<uint16_t>(offset);
-    return (check_max && value == 0xFFFF) ? -1 : value;
-  } else if (number_of_bytes == 3u) {
-    uint16_t low = region_.LoadUnaligned<uint16_t>(offset);
-    uint16_t high = region_.LoadUnaligned<uint8_t>(offset + sizeof(uint16_t));
-    uint32_t value = (high << 16) + low;
-    return (check_max && value == 0xFFFFFF) ? -1 : value;
-  } else {
-    DCHECK_EQ(number_of_bytes, 4u);
-    return region_.LoadUnaligned<uint32_t>(offset);
   }
+  // Ensure that the bit offset is in range 0-7.
+  uint8_t* address_bytes = region_.start() + bit_offset / kBitsPerByte;
+  uint32_t address_bits = bit_offset & (kBitsPerByte - 1);
+  // Load the value (reading only the required bytes).
+  uint32_t value = *address_bytes++ >> address_bits;
+  for (size_t loaded_bits = 8; loaded_bits < address_bits + bit_count; loaded_bits += 8) {
+    value |= *address_bytes++ << (loaded_bits - address_bits);
+  }
+  // Clear unwanted most significant bits.
+  const uint32_t mask = (1 << bit_count) - 1;
+  value &= mask;
+  // Compare with the trivial bit-for-bit implementation.
+  DCHECK_EQ(value, region_.LoadBits(bit_offset, bit_count));
+  // Check for maximum representable value.
+  if (check_max) {
+    DCHECK_GT(bit_count, 0u);
+    value = (value == mask ? 0xFFFFFFFF : value);
+  }
+  return value;
 }
 
-void StackMap::StoreAt(size_t number_of_bytes, size_t offset, uint32_t value) const {
-  if (number_of_bytes == 0u) {
-    DCHECK_EQ(value, 0u);
-  } else if (number_of_bytes == 1u) {
-    region_.StoreUnaligned<uint8_t>(offset, value);
-  } else if (number_of_bytes == 2u) {
-    region_.StoreUnaligned<uint16_t>(offset, value);
-  } else if (number_of_bytes == 3u) {
-    region_.StoreUnaligned<uint16_t>(offset, Low16Bits(value));
-    region_.StoreUnaligned<uint8_t>(offset + sizeof(uint16_t), High16Bits(value));
-  } else {
-    region_.StoreUnaligned<uint32_t>(offset, value);
-    DCHECK_EQ(number_of_bytes, 4u);
+void StackMap::StoreAt(size_t bit_count, size_t bit_offset, uint32_t value, bool check_max) {
+  uint32_t clamped_value = value;
+  if (check_max && value == 0xFFFFFFFF) {
+    clamped_value = (1u << bit_count) - 1u;
   }
+  region_.StoreBits(bit_offset, clamped_value, bit_count);
+  DCHECK_EQ(LoadAt(bit_count, bit_offset, check_max), value);
 }
 
 static void DumpRegisterMapping(std::ostream& os,
@@ -106,18 +105,16 @@ void CodeInfo::Dump(VariableIndentationOutputStream* vios,
                     uint16_t number_of_dex_registers,
                     bool dump_stack_maps) const {
   StackMapEncoding encoding = ExtractEncoding();
-  uint32_t code_info_size = GetOverallSize();
   size_t number_of_stack_maps = GetNumberOfStackMaps();
   vios->Stream()
-      << "Optimized CodeInfo (size=" << code_info_size
-      << ", number_of_dex_registers=" << number_of_dex_registers
+      << "Optimized CodeInfo (number_of_dex_registers=" << number_of_dex_registers
       << ", number_of_stack_maps=" << number_of_stack_maps
       << ", has_inline_info=" << encoding.HasInlineInfo()
-      << ", number_of_bytes_for_inline_info=" << encoding.NumberOfBytesForInlineInfo()
-      << ", number_of_bytes_for_dex_register_map=" << encoding.NumberOfBytesForDexRegisterMap()
-      << ", number_of_bytes_for_dex_pc=" << encoding.NumberOfBytesForDexPc()
-      << ", number_of_bytes_for_native_pc=" << encoding.NumberOfBytesForNativePc()
-      << ", number_of_bytes_for_register_mask=" << encoding.NumberOfBytesForRegisterMask()
+      << ", inline_info_bit_size=" << encoding.InlineInfoBitSize()
+      << ", dex_register_map_bit_size=" << encoding.DexRegisterMapBitSize()
+      << ", dex_pc_bit_size=" << encoding.DexPcBitSize()
+      << ", native_pc_bit_size=" << encoding.NativePcBitSize()
+      << ", register_mask_bit_size=" << encoding.RegisterMaskBitSize()
       << ")\n";
   ScopedIndentation indent1(vios);
   // Display the Dex register location catalog.
@@ -192,9 +189,8 @@ void StackMap::Dump(VariableIndentationOutputStream* vios,
       << ", register_mask=0x" << GetRegisterMask(encoding)
       << std::dec
       << ", stack_mask=0b";
-  MemoryRegion stack_mask = GetStackMask(encoding);
-  for (size_t i = 0, e = stack_mask.size_in_bits(); i < e; ++i) {
-    vios->Stream() << stack_mask.LoadBit(e - i - 1);
+  for (size_t i = 0, e = GetNumberOfStackMaskBits(encoding); i < e; ++i) {
+    vios->Stream() << GetStackMaskBit(encoding, e - i - 1);
   }
   vios->Stream() << ")\n";
   if (HasDexRegisterMap(encoding)) {
