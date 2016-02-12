@@ -79,43 +79,6 @@ DexRegisterLocation DexRegisterMap::GetDexRegisterLocation(uint16_t dex_register
   return dex_register_location_catalog.GetDexRegisterLocation(location_catalog_entry_index);
 }
 
-uint32_t StackMap::LoadAt(size_t number_of_bytes, size_t offset, bool check_max) const {
-  if (number_of_bytes == 0u) {
-    DCHECK(!check_max);
-    return 0;
-  } else if (number_of_bytes == 1u) {
-    uint8_t value = region_.LoadUnaligned<uint8_t>(offset);
-    return (check_max && value == 0xFF) ? -1 : value;
-  } else if (number_of_bytes == 2u) {
-    uint16_t value = region_.LoadUnaligned<uint16_t>(offset);
-    return (check_max && value == 0xFFFF) ? -1 : value;
-  } else if (number_of_bytes == 3u) {
-    uint16_t low = region_.LoadUnaligned<uint16_t>(offset);
-    uint16_t high = region_.LoadUnaligned<uint8_t>(offset + sizeof(uint16_t));
-    uint32_t value = (high << 16) + low;
-    return (check_max && value == 0xFFFFFF) ? -1 : value;
-  } else {
-    DCHECK_EQ(number_of_bytes, 4u);
-    return region_.LoadUnaligned<uint32_t>(offset);
-  }
-}
-
-void StackMap::StoreAt(size_t number_of_bytes, size_t offset, uint32_t value) const {
-  if (number_of_bytes == 0u) {
-    DCHECK_EQ(value, 0u);
-  } else if (number_of_bytes == 1u) {
-    region_.StoreUnaligned<uint8_t>(offset, value);
-  } else if (number_of_bytes == 2u) {
-    region_.StoreUnaligned<uint16_t>(offset, value);
-  } else if (number_of_bytes == 3u) {
-    region_.StoreUnaligned<uint16_t>(offset, Low16Bits(value));
-    region_.StoreUnaligned<uint8_t>(offset + sizeof(uint16_t), High16Bits(value));
-  } else {
-    region_.StoreUnaligned<uint32_t>(offset, value);
-    DCHECK_EQ(number_of_bytes, 4u);
-  }
-}
-
 static void DumpRegisterMapping(std::ostream& os,
                                 size_t dex_register_num,
                                 DexRegisterLocation location,
@@ -126,24 +89,29 @@ static void DumpRegisterMapping(std::ostream& os,
      << " (" << location.GetValue() << ")" << suffix << '\n';
 }
 
+void StackMapEncoding::Dump(VariableIndentationOutputStream* vios) const {
+  vios->Stream()
+      << "StackMapEncoding"
+      << " (native_pc_bit_offset=" << kNativePcBitOffset
+      << ", dex_pc_bit_offset=" << dex_pc_bit_offset_
+      << ", dex_register_map_bit_offset=" << dex_register_map_bit_offset_
+      << ", inline_info_bit_offset=" << inline_info_bit_offset_
+      << ", register_mask_bit_offset=" << register_mask_bit_offset_
+      << ", stack_mask_bit_offset=" << stack_mask_bit_offset_
+      << ")\n";
+}
+
 void CodeInfo::Dump(VariableIndentationOutputStream* vios,
                     uint32_t code_offset,
                     uint16_t number_of_dex_registers,
                     bool dump_stack_maps) const {
   StackMapEncoding encoding = ExtractEncoding();
-  uint32_t code_info_size = GetOverallSize();
   size_t number_of_stack_maps = GetNumberOfStackMaps();
   vios->Stream()
-      << "Optimized CodeInfo (size=" << code_info_size
-      << ", number_of_dex_registers=" << number_of_dex_registers
+      << "Optimized CodeInfo (number_of_dex_registers=" << number_of_dex_registers
       << ", number_of_stack_maps=" << number_of_stack_maps
-      << ", has_inline_info=" << encoding.HasInlineInfo()
-      << ", number_of_bytes_for_inline_info=" << encoding.NumberOfBytesForInlineInfo()
-      << ", number_of_bytes_for_dex_register_map=" << encoding.NumberOfBytesForDexRegisterMap()
-      << ", number_of_bytes_for_dex_pc=" << encoding.NumberOfBytesForDexPc()
-      << ", number_of_bytes_for_native_pc=" << encoding.NumberOfBytesForNativePc()
-      << ", number_of_bytes_for_register_mask=" << encoding.NumberOfBytesForRegisterMask()
       << ")\n";
+  encoding.Dump(vios);
   ScopedIndentation indent1(vios);
   // Display the Dex register location catalog.
   GetDexRegisterLocationCatalog(encoding).Dump(vios, *this);
@@ -217,9 +185,8 @@ void StackMap::Dump(VariableIndentationOutputStream* vios,
       << ", register_mask=0x" << GetRegisterMask(encoding)
       << std::dec
       << ", stack_mask=0b";
-  MemoryRegion stack_mask = GetStackMask(encoding);
-  for (size_t i = 0, e = stack_mask.size_in_bits(); i < e; ++i) {
-    vios->Stream() << stack_mask.LoadBit(e - i - 1);
+  for (size_t i = 0, e = GetNumberOfStackMaskBits(encoding); i < e; ++i) {
+    vios->Stream() << GetStackMaskBit(encoding, e - i - 1);
   }
   vios->Stream() << ")\n";
   if (HasDexRegisterMap(encoding)) {
