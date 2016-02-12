@@ -547,7 +547,7 @@ endif
     # For android::FileMap used by libziparchive.
     LOCAL_SHARED_LIBRARIES += libutils
     # For liblog, atrace, properties, ashmem, set_sched_policy and socket_peer_is_trusted.
-    LOCAL_SHARED_LIBRARIES += libcutils
+    LOCAL_SHARED_LIBRARIES += liblog libcutils
   else # host
     ifeq ($$(art_static_or_shared),static)
       LOCAL_STATIC_LIBRARIES += libziparchive-host libz
