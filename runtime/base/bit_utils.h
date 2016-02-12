@@ -85,6 +85,15 @@ static constexpr size_t MinimumBitsToStore(T value) {
   return static_cast<size_t>(MostSignificantBit(value) + 1);
 }
 
+// Maximum value which can be represented using the given number of bits. i.e. 255 for 8, etc.
+template <typename T>
+static uint32_t MaximumValueFromBits(size_t num_bits) {
+  static_assert(std::is_integral<T>::value, "T must be integral");
+  static_assert(std::is_unsigned<T>::value, "T must be unsigned");
+  DCHECK_LE(num_bits, 8 * sizeof(T));
+  return num_bits == 8 * sizeof(T) ? std::numeric_limits<T>::max() : ((1u << num_bits) - 1u);
+}
+
 template <typename T>
 static constexpr inline T RoundUpToPowerOfTwo(T x) {
   static_assert(std::is_integral<T>::value, "T must be integral");
