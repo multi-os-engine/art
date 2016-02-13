@@ -254,6 +254,11 @@ void MipsAssembler::MuhR6(Register rd, Register rs, Register rt) {
   EmitR(0, rs, rt, rd, 3, 0x18);
 }
 
+void MipsAssembler::MuluR6(Register rd, Register rs, Register rt) {
+  CHECK(IsR6());
+  EmitR(0, rs, rt, rd, 2, 0x19);
+}
+
 void MipsAssembler::MuhuR6(Register rd, Register rs, Register rt) {
   CHECK(IsR6());
   EmitR(0, rs, rt, rd, 3, 0x19);
