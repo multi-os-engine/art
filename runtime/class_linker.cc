@@ -2778,6 +2778,7 @@ void ClassLinker::LoadClass(Thread* self,
                             const DexFile& dex_file,
                             const DexFile::ClassDef& dex_class_def,
                             Handle<mirror::Class> klass) {
+  WriterMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
   const uint8_t* class_data = dex_file.GetClassData(dex_class_def);
   if (class_data == nullptr) {
     return;  // no fields or methods - for example a marker interface
@@ -4781,6 +4782,7 @@ bool ClassLinker::EnsureInitialized(Thread* self, Handle<mirror::Class> c, bool 
 
 void ClassLinker::FixupTemporaryDeclaringClass(mirror::Class* temp_class,
                                                mirror::Class* new_class) {
+  WriterMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
   DCHECK_EQ(temp_class->NumInstanceFields(), 0u);
   for (ArtField& field : new_class->GetIFields()) {
     if (field.GetDeclaringClass() == temp_class) {

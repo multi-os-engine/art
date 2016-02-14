@@ -704,7 +704,8 @@ class ClassLinker {
                         const uint8_t* class_data,
                         Handle<mirror::Class> klass,
                         const OatFile::OatClass* oat_class)
-      SHARED_REQUIRES(Locks::mutator_lock_);
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      EXCLUSIVE_LOCKS_REQUIRED(Locks::classlinker_classes_lock_);
 
   void LoadField(const ClassDataItemIterator& it, Handle<mirror::Class> klass, ArtField* dst)
       SHARED_REQUIRES(Locks::mutator_lock_);
