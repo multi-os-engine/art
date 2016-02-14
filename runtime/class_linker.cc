@@ -2861,6 +2861,8 @@ void ClassLinker::LoadClassMembers(Thread* self,
     // Note: We cannot have thread suspension until the field and method arrays are setup or else
     // Class::VisitFieldRoots may miss some fields or methods.
     ScopedAssertNoThreadSuspension nts(self, __FUNCTION__);
+
+    WriterMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
     // Load static fields.
     // We allow duplicate definitions of the same field in a class_data_item
     // but ignore the repeated indexes here, b/21868015.
@@ -4781,6 +4783,7 @@ bool ClassLinker::EnsureInitialized(Thread* self, Handle<mirror::Class> c, bool 
 
 void ClassLinker::FixupTemporaryDeclaringClass(mirror::Class* temp_class,
                                                mirror::Class* new_class) {
+  WriterMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
   DCHECK_EQ(temp_class->NumInstanceFields(), 0u);
   for (ArtField& field : new_class->GetIFields()) {
     if (field.GetDeclaringClass() == temp_class) {
