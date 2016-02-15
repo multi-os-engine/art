@@ -1770,6 +1770,34 @@ public class Main {
     return (short) (value & 0x17fff);
   }
 
+  /// CHECK-START: int Main.intReverseCondition(int) instruction_simplifier (before)
+  /// CHECK-DAG:      <<Arg:i\d+>>      ParameterValue
+  /// CHECK-DAG:      <<Const42:i\d+>>  IntConstant 42
+  /// CHECK-DAG:      <<LE:z\d+>>       LessThanOrEqual [<<Const42>>,<<Arg>>]
+
+  /// CHECK-START: int Main.intReverseCondition(int) instruction_simplifier (after)
+  /// CHECK-DAG:      <<Arg:i\d+>>      ParameterValue
+  /// CHECK-DAG:      <<Const42:i\d+>>  IntConstant 42
+  /// CHECK-DAG:      <<GE:z\d+>>       GreaterThanOrEqual [<<Arg>>,<<Const42>>]
+
+  public static int intReverseCondition(int i) {
+    return (42 > i) ? 13 : 54;
+  }
+
+  /// CHECK-START: int Main.intReverseConditionNaN(int) instruction_simplifier (before)
+  /// CHECK-DAG:      <<Const42:d\d+>>  DoubleConstant 42
+  /// CHECK-DAG:      <<Result:d\d+>>   InvokeStaticOrDirect
+  /// CHECK-DAG:      <<CMP:i\d+>>      Compare [<<Const42>>,<<Result>>]
+
+  /// CHECK-START: int Main.intReverseConditionNaN(int) instruction_simplifier (after)
+  /// CHECK-DAG:      <<Const42:d\d+>>  DoubleConstant 42
+  /// CHECK-DAG:      <<Result:d\d+>>   InvokeStaticOrDirect
+  /// CHECK-DAG:      <<EQ:z\d+>>       Equal [<<Result>>,<<Const42>>]
+
+  public static int intReverseConditionNaN(int i) {
+    return (42 != Math.sqrt(i)) ? 13 : 54;
+  }
+
   public static void main(String[] args) {
     int arg = 123456;
 
@@ -1906,6 +1934,8 @@ public class Main {
     assertIntEquals(intAnd0x17fffToShort(0x88888888), 0x0888);
     assertIntEquals(intAnd0x17fffToShort(Integer.MIN_VALUE), 0);
     assertIntEquals(intAnd0x17fffToShort(Integer.MAX_VALUE), Short.MAX_VALUE);
+    assertIntEquals(intReverseCondition(41), 13);
+    assertIntEquals(intReverseConditionNaN(-5), 13);
   }
 
   public static boolean booleanField;
