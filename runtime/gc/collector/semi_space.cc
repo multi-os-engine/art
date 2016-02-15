@@ -591,9 +591,41 @@ mirror::Object* SemiSpace::MarkNonForwardedObject(mirror::Object* obj) {
     forward_address = fallback_space_->AllocThreadUnsafe(self_, object_size, &bytes_allocated,
                                                          nullptr, &dummy);
     CHECK(forward_address != nullptr) << "Out of memory in the to-space and fallback space.";
-    accounting::ContinuousSpaceBitmap* bitmap = fallback_space_->GetLiveBitmap();
-    if (bitmap != nullptr) {
-      bitmap->Set(forward_address);
+    // Dirty the card at the destionation as it may contain
+    // references (including the class pointer) to the bump pointer
+    // space.
+    GetHeap()->WriteBarrierEveryFieldOf(forward_address);
+    // Handle the bitmaps marking.
+    accounting::ContinuousSpaceBitmap* live_bitmap = fallback_space_->GetLiveBitmap();
+    DCHECK(live_bitmap != nullptr);
+    accounting::ContinuousSpaceBitmap* mark_bitmap = fallback_space_->GetMarkBitmap();
+    DCHECK(mark_bitmap != nullptr);
+    DCHECK(!live_bitmap->Test(forward_address));
+    if (collect_from_space_only_) {
+      // If collecting the bump pointer spaces only, live_bitmap == mark_bitmap.
+      DCHECK_EQ(live_bitmap, mark_bitmap);
+      // If a bump pointer space only collection, delay the live
+      // bitmap marking of the promoted object until it's popped off
+      // the mark stack (ProcessMarkStack()). The rationale: we may
+      // be in the middle of scanning the objects in the promo
+      // destination space for
+      // non-moving-space-to-bump-pointer-space references by
+      // iterating over the marked bits of the live bitmap
+      // (MarkReachableObjects()). If we don't delay it (and instead
+      // mark the promoted object here), the above promo destination
+      // space scan could encounter the just-promoted object and
+      // forward the references in the promoted object's fields even
+      // through it is pushed onto the mark stack. If this happens,
+      // the promoted object would be in an inconsistent state, that
+      // is, it's on the mark stack (gray) but its fields are
+      // already forwarded (black), which would cause a
+      // DCHECK(!to_space_->HasAddress(obj)) failure below.
+    } else {
+      // Mark forward_address on the live bit map.
+      live_bitmap->Set(forward_address);
+      // Mark forward_address on the mark bit map.
+      DCHECK(!mark_bitmap->Test(forward_address));
+      mark_bitmap->Set(forward_address);
     }
   }
   ++objects_moved_;
