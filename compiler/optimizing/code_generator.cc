@@ -661,7 +661,7 @@ static void CheckLoopEntriesCanBeUsedForOsr(const HGraph& graph,
       uint32_t target = dex_pc + instruction.GetTargetOffset();
       CheckCovers(target, graph, code_info, loop_headers, &covered);
     } else if (instruction.IsSwitch()) {
-      SwitchTable table(instruction, dex_pc, instruction.Opcode() == Instruction::SPARSE_SWITCH);
+      SwitchTable table(instruction, dex_pc);
       uint16_t num_entries = table.GetNumEntries();
       size_t offset = table.GetFirstValueIndex();
 

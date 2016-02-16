@@ -6033,11 +6033,13 @@ inline bool IsSameDexFile(const DexFile& lhs, const DexFile& rhs) {
 
 class SwitchTable : public ValueObject {
  public:
-  SwitchTable(const Instruction& instruction, uint32_t dex_pc, bool sparse)
-      : instruction_(instruction), dex_pc_(dex_pc), sparse_(sparse) {
+  SwitchTable(const Instruction& instruction, uint32_t dex_pc)
+      : instruction_(instruction),
+        dex_pc_(dex_pc),
+        sparse_(instruction.Opcode() == Instruction::SPARSE_SWITCH) {
     int32_t table_offset = instruction.VRegB_31t();
     const uint16_t* table = reinterpret_cast<const uint16_t*>(&instruction) + table_offset;
-    if (sparse) {
+    if (sparse_) {
       CHECK_EQ(table[0], static_cast<uint16_t>(Instruction::kSparseSwitchSignature));
     } else {
       CHECK_EQ(table[0], static_cast<uint16_t>(Instruction::kPackedSwitchSignature));
@@ -6082,6 +6084,16 @@ class SwitchTable : public ValueObject {
       return 1;
     }
   }
+
+  bool IsSparseTable() const { return sparse_; }
+
+  bool BuildsDecisionTree() const {
+    return sparse_ || num_entries_ <= kSmallSwitchThreshold;
+  }
+
+  // The number of entries in a packed switch before we use a jump table or specified
+  // compare/jump series.
+  static constexpr uint16_t kSmallSwitchThreshold = 3;
 
  private:
   const Instruction& instruction_;

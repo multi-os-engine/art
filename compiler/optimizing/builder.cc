@@ -36,7 +36,69 @@
 #include "thread.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 
+#include "pretty_printer.h"
+
 namespace art {
+
+class BytecodeIterator {
+ public:
+  explicit BytecodeIterator(const DexFile::CodeItem& code_item)
+      : code_ptr_(code_item.insns_),
+        code_end_(code_item.insns_ + code_item.insns_size_in_code_units_),
+        dex_pc_(0u) {}
+
+  bool Done() const { return code_ptr_ >= code_end_; }
+  bool IsLast() const { return code_ptr_ + CurrentInstruction().SizeInCodeUnits() >= code_end_; }
+
+  const Instruction& CurrentInstruction() const { return *Instruction::At(code_ptr_); }
+  uint32_t CurrentDexPc() const { return dex_pc_; }
+
+  void Advance() {
+    DCHECK(!Done());
+    size_t instruction_size = CurrentInstruction().SizeInCodeUnits();
+    code_ptr_ += instruction_size;
+    dex_pc_ += instruction_size;
+  }
+
+ private:
+  const uint16_t* code_ptr_;
+  const uint16_t* const code_end_;
+  uint32_t dex_pc_;
+};
+
+class SwitchTableIterator {
+ public:
+  explicit SwitchTableIterator(const SwitchTable& table)
+      : table_(table),
+        num_entries_(static_cast<size_t>(table_.GetNumEntries())),
+        first_target_offset_(table_.GetFirstValueIndex()),
+        index_(0u) {}
+
+  bool Done() const { return index_ >= num_entries_; }
+  bool IsLast() const { return index_ == num_entries_ - 1; }
+
+  void Advance() {
+    DCHECK(!Done());
+    index_++;
+  }
+
+  int32_t CurrentKey() const {
+    return table_.IsSparseTable() ? table_.GetEntryAt(index_) : table_.GetEntryAt(0) + index_;
+  }
+
+  int32_t CurrentTargetOffset() const {
+    return table_.GetEntryAt(index_ + first_target_offset_);
+  }
+
+  uint32_t GetDexPcForCurrentIndex() const { return table_.GetDexPcForIndex(index_); }
+
+ private:
+  const SwitchTable& table_;
+  const size_t num_entries_;
+  const size_t first_target_offset_;
+
+  size_t index_;
+};
 
 void HGraphBuilder::InitializeLocals(uint16_t count) {
   graph_->SetNumberOfVRegs(count);
@@ -103,9 +165,6 @@ template<typename T>
 void HGraphBuilder::If_22t(const Instruction& instruction, uint32_t dex_pc) {
   int32_t target_offset = instruction.GetTargetOffset();
   HBasicBlock* branch_target = FindBlockStartingAt(dex_pc + target_offset);
-  HBasicBlock* fallthrough_target = FindBlockStartingAt(dex_pc + instruction.SizeInCodeUnits());
-  DCHECK(branch_target != nullptr);
-  DCHECK(fallthrough_target != nullptr);
   PotentiallyAddSuspendCheck(branch_target, dex_pc);
   HInstruction* first = LoadLocal(instruction.VRegA(), Primitive::kPrimInt, dex_pc);
   HInstruction* second = LoadLocal(instruction.VRegB(), Primitive::kPrimInt, dex_pc);
@@ -113,8 +172,6 @@ void HGraphBuilder::If_22t(const Instruction& instruction, uint32_t dex_pc) {
   current_block_->AddInstruction(comparison);
   HInstruction* ifinst = new (arena_) HIf(comparison, dex_pc);
   current_block_->AddInstruction(ifinst);
-  current_block_->AddSuccessor(branch_target);
-  current_block_->AddSuccessor(fallthrough_target);
   current_block_ = nullptr;
 }
 
@@ -122,17 +179,12 @@ template<typename T>
 void HGraphBuilder::If_21t(const Instruction& instruction, uint32_t dex_pc) {
   int32_t target_offset = instruction.GetTargetOffset();
   HBasicBlock* branch_target = FindBlockStartingAt(dex_pc + target_offset);
-  HBasicBlock* fallthrough_target = FindBlockStartingAt(dex_pc + instruction.SizeInCodeUnits());
-  DCHECK(branch_target != nullptr);
-  DCHECK(fallthrough_target != nullptr);
   PotentiallyAddSuspendCheck(branch_target, dex_pc);
   HInstruction* value = LoadLocal(instruction.VRegA(), Primitive::kPrimInt, dex_pc);
   T* comparison = new (arena_) T(value, graph_->GetIntConstant(0, dex_pc), dex_pc);
   current_block_->AddInstruction(comparison);
   HInstruction* ifinst = new (arena_) HIf(comparison, dex_pc);
   current_block_->AddInstruction(ifinst);
-  current_block_->AddSuccessor(branch_target);
-  current_block_->AddSuccessor(fallthrough_target);
   current_block_ = nullptr;
 }
 
@@ -169,44 +221,6 @@ bool HGraphBuilder::SkipCompilation(const DexFile::CodeItem& code_item,
   }
 
   return false;
-}
-
-void HGraphBuilder::CreateBlocksForTryCatch(const DexFile::CodeItem& code_item) {
-  if (code_item.tries_size_ == 0) {
-    return;
-  }
-
-  // Create branch targets at the start/end of the TryItem range. These are
-  // places where the program might fall through into/out of the a block and
-  // where TryBoundary instructions will be inserted later. Other edges which
-  // enter/exit the try blocks are a result of branches/switches.
-  for (size_t idx = 0; idx < code_item.tries_size_; ++idx) {
-    const DexFile::TryItem* try_item = DexFile::GetTryItems(code_item, idx);
-    uint32_t dex_pc_start = try_item->start_addr_;
-    uint32_t dex_pc_end = dex_pc_start + try_item->insn_count_;
-    FindOrCreateBlockStartingAt(dex_pc_start);
-    if (dex_pc_end < code_item.insns_size_in_code_units_) {
-      // TODO: Do not create block if the last instruction cannot fall through.
-      FindOrCreateBlockStartingAt(dex_pc_end);
-    } else {
-      // The TryItem spans until the very end of the CodeItem (or beyond if
-      // invalid) and therefore cannot have any code afterwards.
-    }
-  }
-
-  // Create branch targets for exception handlers.
-  const uint8_t* handlers_ptr = DexFile::GetCatchHandlerData(code_item, 0);
-  uint32_t handlers_size = DecodeUnsignedLeb128(&handlers_ptr);
-  for (uint32_t idx = 0; idx < handlers_size; ++idx) {
-    CatchHandlerIterator iterator(handlers_ptr);
-    for (; iterator.HasNext(); iterator.Next()) {
-      uint32_t address = iterator.GetHandlerAddress();
-      HBasicBlock* block = FindOrCreateBlockStartingAt(address);
-      block->SetTryCatchInformation(
-        new (arena_) TryCatchInformation(iterator.GetHandlerTypeIndex(), *dex_file_));
-    }
-    handlers_ptr = iterator.EndDataPointer();
-  }
 }
 
 // Returns the TryItem stored for `block` or nullptr if there is no info for it.
@@ -349,7 +363,7 @@ GraphAnalysisResult HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item
 
   // To avoid splitting blocks, we compute ahead of time the instructions that
   // start a new block, and create these blocks.
-  if (!ComputeBranchTargets(code_ptr, code_end, &number_of_branches)) {
+  if (!ComputeBranchTargets(code_ptr, code_end, code_item, &number_of_branches)) {
     MaybeRecordStat(MethodCompilationStat::kNotCompiledBranchOutsideMethodCode);
     return kAnalysisInvalidBytecode;
   }
@@ -372,9 +386,11 @@ GraphAnalysisResult HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item
     FindNativeDebugInfoLocations(code_item, native_debug_info_locations);
   }
 
-  CreateBlocksForTryCatch(code_item);
+  ConnectBlocks(code_item);
 
   InitializeParameters(code_item.ins_size_);
+
+  current_block_ = nullptr;
 
   size_t dex_pc = 0;
   while (code_ptr < code_end) {
@@ -426,7 +442,6 @@ void HGraphBuilder::MaybeUpdateCurrentBlock(size_t dex_pc) {
     // the last instruction of the current block is not a branching
     // instruction. We add an unconditional goto to the found block.
     current_block_->AddInstruction(new (arena_) HGoto(dex_pc));
-    current_block_->AddSuccessor(block);
   }
   graph_->AddBlock(block);
   current_block_ = block;
@@ -475,75 +490,178 @@ void HGraphBuilder::FindNativeDebugInfoLocations(const DexFile::CodeItem& code_i
 
 bool HGraphBuilder::ComputeBranchTargets(const uint16_t* code_ptr,
                                          const uint16_t* code_end,
+                                         const DexFile::CodeItem& code_item,
                                          size_t* number_of_branches) {
   branch_targets_.resize(code_end - code_ptr, nullptr);
 
   // Create the first block for the dex instructions, single successor of the entry block.
-  HBasicBlock* block = new (arena_) HBasicBlock(graph_, 0);
-  branch_targets_[0] = block;
-  entry_block_->AddSuccessor(block);
+  FindOrCreateBlockStartingAt(0);
+
+  if (code_item.tries_size_ != 0) {
+    // Create branch targets at the start/end of the TryItem range. These are
+    // places where the program might fall through into/out of the a block and
+    // where TryBoundary instructions will be inserted later. Other edges which
+    // enter/exit the try blocks are a result of branches/switches.
+    for (size_t idx = 0; idx < code_item.tries_size_; ++idx) {
+      const DexFile::TryItem* try_item = DexFile::GetTryItems(code_item, idx);
+      uint32_t dex_pc_start = try_item->start_addr_;
+      uint32_t dex_pc_end = dex_pc_start + try_item->insn_count_;
+      FindOrCreateBlockStartingAt(dex_pc_start);
+      if (dex_pc_end < code_item.insns_size_in_code_units_) {
+        // TODO: Do not create block if the last instruction cannot fall through.
+        FindOrCreateBlockStartingAt(dex_pc_end);
+      } else {
+        // The TryItem spans until the very end of the CodeItem (or beyond if
+        // invalid) and therefore cannot have any code afterwards.
+      }
+    }
+
+    // Create branch targets for exception handlers.
+    const uint8_t* handlers_ptr = DexFile::GetCatchHandlerData(code_item, 0);
+    uint32_t handlers_size = DecodeUnsignedLeb128(&handlers_ptr);
+    for (uint32_t idx = 0; idx < handlers_size; ++idx) {
+      CatchHandlerIterator iterator(handlers_ptr);
+      for (; iterator.HasNext(); iterator.Next()) {
+        uint32_t address = iterator.GetHandlerAddress();
+        HBasicBlock* catch_block = FindOrCreateBlockStartingAt(address);
+        catch_block->SetTryCatchInformation(
+          new (arena_) TryCatchInformation(iterator.GetHandlerTypeIndex(), *dex_file_));
+      }
+      handlers_ptr = iterator.EndDataPointer();
+    }
+  }
 
   // Iterate over all instructions and find branching instructions. Create blocks for
   // the locations these instructions branch to.
-  uint32_t dex_pc = 0;
-  while (code_ptr < code_end) {
-    const Instruction& instruction = *Instruction::At(code_ptr);
+  for (BytecodeIterator it(code_item); !it.Done(); it.Advance()) {
+    uint32_t dex_pc = it.CurrentDexPc();
+    const Instruction& instruction = it.CurrentInstruction();
+
     if (instruction.IsBranch()) {
       (*number_of_branches)++;
-      int32_t target = instruction.GetTargetOffset() + dex_pc;
-      // Create a block for the target instruction.
-      FindOrCreateBlockStartingAt(target);
+      FindOrCreateBlockStartingAt(dex_pc + instruction.GetTargetOffset());
+    } else if (instruction.IsSwitch()) {
+      SwitchTable table(instruction, dex_pc);
+      for (SwitchTableIterator s_it(table); !s_it.Done(); s_it.Advance()) {
+        FindOrCreateBlockStartingAt(dex_pc + s_it.CurrentTargetOffset());
 
-      dex_pc += instruction.SizeInCodeUnits();
-      code_ptr += instruction.SizeInCodeUnits();
-
-      if (instruction.CanFlowThrough()) {
-        if (code_ptr >= code_end) {
-          // In the normal case we should never hit this but someone can artificially forge a dex
-          // file to fall-through out the method code. In this case we bail out compilation.
-          return false;
-        } else {
-          FindOrCreateBlockStartingAt(dex_pc);
+        // Create N-1 blocks where we will insert comparisons of the input value
+        // against the Switch's case keys.
+        if (table.BuildsDecisionTree() && !s_it.IsLast()) {
+          // Store the block under dex_pc of the current key at the switch data
+          // instruction for uniqueness but give it the dex_pc of the SWITCH
+          // instruction which it semantically belongs to.
+          CreateBlockStartingAt(s_it.GetDexPcForCurrentIndex(), dex_pc);
         }
       }
-    } else if (instruction.IsSwitch()) {
-      SwitchTable table(instruction, dex_pc, instruction.Opcode() == Instruction::SPARSE_SWITCH);
+    } else {
+      continue;
+    }
 
-      uint16_t num_entries = table.GetNumEntries();
-
-      // In a packed-switch, the entry at index 0 is the starting key. In a sparse-switch, the
-      // entry at index 0 is the first key, and values are after *all* keys.
-      size_t offset = table.GetFirstValueIndex();
-
-      // Use a larger loop counter type to avoid overflow issues.
-      for (size_t i = 0; i < num_entries; ++i) {
-        // The target of the case.
-        uint32_t target = dex_pc + table.GetEntryAt(i + offset);
-        FindOrCreateBlockStartingAt(target);
-
-        // Create a block for the switch-case logic. The block gets the dex_pc
-        // of the SWITCH instruction because it is part of its semantics.
-        block = new (arena_) HBasicBlock(graph_, dex_pc);
-        branch_targets_[table.GetDexPcForIndex(i)] = block;
-      }
-
-      // Fall-through. Add a block if there is more code afterwards.
-      dex_pc += instruction.SizeInCodeUnits();
-      code_ptr += instruction.SizeInCodeUnits();
-      if (code_ptr >= code_end) {
+    if (instruction.CanFlowThrough()) {
+      if (it.IsLast()) {
         // In the normal case we should never hit this but someone can artificially forge a dex
         // file to fall-through out the method code. In this case we bail out compilation.
-        // (A switch can fall-through so we don't need to check CanFlowThrough().)
         return false;
       } else {
-        FindOrCreateBlockStartingAt(dex_pc);
+        FindOrCreateBlockStartingAt(dex_pc + it.CurrentInstruction().SizeInCodeUnits());
       }
-    } else {
-      code_ptr += instruction.SizeInCodeUnits();
-      dex_pc += instruction.SizeInCodeUnits();
     }
   }
+
   return true;
+}
+
+void HGraphBuilder::ConnectBlocks(const DexFile::CodeItem& code_item) {
+  HBasicBlock* block = entry_block_;
+  for (BytecodeIterator it(code_item); !it.Done(); it.Advance()) {
+    uint32_t dex_pc = it.CurrentDexPc();
+
+    // Check if this dex_pc address starts a new basic block.
+    HBasicBlock* next_block = FindBlockStartingAt(dex_pc);
+    if (next_block != nullptr) {
+      if (block != nullptr) {
+        // Last instruction did not end its basic block but a new one starts here.
+        // It must have been a block falling through into the next one.
+        block->AddSuccessor(next_block);
+      }
+      block = next_block;
+    }
+
+    if (block == nullptr) {
+      // Ignore dead code.
+      continue;
+    }
+
+    const Instruction& instruction = it.CurrentInstruction();
+    if (instruction.IsBranch()) {
+      uint32_t target_dex_pc = dex_pc + instruction.GetTargetOffset();
+      block->AddSuccessor(FindBlockStartingAt(target_dex_pc));
+    } else if (instruction.IsReturn() || (instruction.Opcode() == Instruction::THROW)) {
+      block->AddSuccessor(exit_block_);
+    } else if (instruction.IsSwitch()) {
+      SwitchTable table(instruction, dex_pc);
+      for (SwitchTableIterator s_it(table); !s_it.Done(); s_it.Advance()) {
+        uint32_t target_dex_pc = dex_pc + s_it.CurrentTargetOffset();
+        block->AddSuccessor(FindBlockStartingAt(target_dex_pc));
+
+        if (table.BuildsDecisionTree() && !s_it.IsLast()) {
+          uint32_t next_case_dex_pc = s_it.GetDexPcForCurrentIndex();
+          HBasicBlock* next_case_block = FindBlockStartingAt(next_case_dex_pc);
+          block->AddSuccessor(next_case_block);
+          block = next_case_block;
+        }
+      }
+    } else {
+      // Remaining code only applies to instructions which end their basic block.
+      continue;
+    }
+
+    if (instruction.CanFlowThrough()) {
+      uint32_t next_dex_pc = dex_pc + instruction.SizeInCodeUnits();
+      block->AddSuccessor(FindBlockStartingAt(next_dex_pc));
+    }
+
+    // The basic block ends here. Do not add any more instructions.
+    block = nullptr;
+  }
+}
+
+void HGraphBuilder::BuildSwitch(const Instruction& instruction, uint32_t dex_pc) {
+  HInstruction* value = LoadLocal(instruction.VRegA(), Primitive::kPrimInt, dex_pc);
+  SwitchTable table(instruction, dex_pc);
+
+  if (table.GetNumEntries() == 0) {
+    // Empty Switch. Code falls through to the next block.
+    DCHECK_EQ(
+        current_block_->GetSingleSuccessor()->GetDexPc(), dex_pc + instruction.SizeInCodeUnits());
+    current_block_->AddInstruction(new (arena_) HGoto(dex_pc));
+  } else if (table.BuildsDecisionTree()) {
+    for (SwitchTableIterator it(table); !it.Done(); it.Advance()) {
+      HInstruction* case_value = graph_->GetIntConstant(it.CurrentKey(), dex_pc);
+      HEqual* comparison = new (arena_) HEqual(value, case_value, dex_pc);
+      current_block_->AddInstruction(comparison);
+      HInstruction* ifinst = new (arena_) HIf(comparison, dex_pc);
+      current_block_->AddInstruction(ifinst);
+
+      if (!it.IsLast()) {
+        int32_t next_case_dex_pc = it.GetDexPcForCurrentIndex();
+        HBasicBlock* next_case = FindBlockStartingAt(next_case_dex_pc);
+        graph_->AddBlock(next_case);
+        current_block_ = next_case;
+      }
+    }
+  } else {
+    current_block_->AddInstruction(
+        new (arena_) HPackedSwitch(table.GetEntryAt(0), table.GetNumEntries(), value, dex_pc));
+  }
+
+  for (SwitchTableIterator it(table); !it.Done(); it.Advance()) {
+    uint32_t target_dex_pc = dex_pc + it.CurrentTargetOffset();
+    PotentiallyAddSuspendCheck(FindBlockStartingAt(target_dex_pc), dex_pc);
+  }
+
+  current_block_ = nullptr;
 }
 
 HBasicBlock* HGraphBuilder::FindBlockStartingAt(int32_t dex_pc) const {
@@ -551,13 +669,17 @@ HBasicBlock* HGraphBuilder::FindBlockStartingAt(int32_t dex_pc) const {
   return branch_targets_[dex_pc];
 }
 
+HBasicBlock* HGraphBuilder::CreateBlockStartingAt(int32_t dex_pc, int32_t semantic_dex_pc) {
+  DCHECK(branch_targets_[dex_pc] == nullptr);
+
+  HBasicBlock* block = new (arena_) HBasicBlock(graph_, semantic_dex_pc);
+  branch_targets_[dex_pc] = block;
+  return block;
+}
+
 HBasicBlock* HGraphBuilder::FindOrCreateBlockStartingAt(int32_t dex_pc) {
   HBasicBlock* block = FindBlockStartingAt(dex_pc);
-  if (block == nullptr) {
-    block = new (arena_) HBasicBlock(graph_, dex_pc);
-    branch_targets_[dex_pc] = block;
-  }
-  return block;
+  return (block == nullptr) ? CreateBlockStartingAt(dex_pc, dex_pc) : block;
 }
 
 template<typename T>
@@ -672,7 +794,6 @@ void HGraphBuilder::BuildReturn(const Instruction& instruction,
     HInstruction* value = LoadLocal(instruction.VRegA(), type, dex_pc);
     current_block_->AddInstruction(new (arena_) HReturn(value, dex_pc));
   }
-  current_block_->AddSuccessor(exit_block_);
   current_block_ = nullptr;
 }
 
@@ -1707,131 +1828,6 @@ bool HGraphBuilder::NeedsAccessCheck(uint32_t type_index, bool* finalizable) con
       dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index, finalizable);
 }
 
-void HGraphBuilder::BuildSwitchJumpTable(const SwitchTable& table,
-                                         const Instruction& instruction,
-                                         HInstruction* value,
-                                         uint32_t dex_pc) {
-  // Add the successor blocks to the current block.
-  uint16_t num_entries = table.GetNumEntries();
-  for (size_t i = 1; i <= num_entries; i++) {
-    int32_t target_offset = table.GetEntryAt(i);
-    HBasicBlock* case_target = FindBlockStartingAt(dex_pc + target_offset);
-    DCHECK(case_target != nullptr);
-
-    // Add the target block as a successor.
-    current_block_->AddSuccessor(case_target);
-  }
-
-  // Add the default target block as the last successor.
-  HBasicBlock* default_target = FindBlockStartingAt(dex_pc + instruction.SizeInCodeUnits());
-  DCHECK(default_target != nullptr);
-  current_block_->AddSuccessor(default_target);
-
-  // Now add the Switch instruction.
-  int32_t starting_key = table.GetEntryAt(0);
-  current_block_->AddInstruction(
-      new (arena_) HPackedSwitch(starting_key, num_entries, value, dex_pc));
-  // This block ends with control flow.
-  current_block_ = nullptr;
-}
-
-void HGraphBuilder::BuildPackedSwitch(const Instruction& instruction, uint32_t dex_pc) {
-  // Verifier guarantees that the payload for PackedSwitch contains:
-  //   (a) number of entries (may be zero)
-  //   (b) first and lowest switch case value (entry 0, always present)
-  //   (c) list of target pcs (entries 1 <= i <= N)
-  SwitchTable table(instruction, dex_pc, false);
-
-  // Value to test against.
-  HInstruction* value = LoadLocal(instruction.VRegA(), Primitive::kPrimInt, dex_pc);
-
-  // Starting key value.
-  int32_t starting_key = table.GetEntryAt(0);
-
-  // Retrieve number of entries.
-  uint16_t num_entries = table.GetNumEntries();
-  if (num_entries == 0) {
-    return;
-  }
-
-  // Don't use a packed switch if there are very few entries.
-  if (num_entries > kSmallSwitchThreshold) {
-    BuildSwitchJumpTable(table, instruction, value, dex_pc);
-  } else {
-    // Chained cmp-and-branch, starting from starting_key.
-    for (size_t i = 1; i <= num_entries; i++) {
-      BuildSwitchCaseHelper(instruction,
-                            i,
-                            i == num_entries,
-                            table,
-                            value,
-                            starting_key + i - 1,
-                            table.GetEntryAt(i),
-                            dex_pc);
-    }
-  }
-}
-
-void HGraphBuilder::BuildSparseSwitch(const Instruction& instruction, uint32_t dex_pc) {
-  // Verifier guarantees that the payload for SparseSwitch contains:
-  //   (a) number of entries (may be zero)
-  //   (b) sorted key values (entries 0 <= i < N)
-  //   (c) target pcs corresponding to the switch values (entries N <= i < 2*N)
-  SwitchTable table(instruction, dex_pc, true);
-
-  // Value to test against.
-  HInstruction* value = LoadLocal(instruction.VRegA(), Primitive::kPrimInt, dex_pc);
-
-  uint16_t num_entries = table.GetNumEntries();
-
-  for (size_t i = 0; i < num_entries; i++) {
-    BuildSwitchCaseHelper(instruction, i, i == static_cast<size_t>(num_entries) - 1, table, value,
-                          table.GetEntryAt(i), table.GetEntryAt(i + num_entries), dex_pc);
-  }
-}
-
-void HGraphBuilder::BuildSwitchCaseHelper(const Instruction& instruction, size_t index,
-                                          bool is_last_case, const SwitchTable& table,
-                                          HInstruction* value, int32_t case_value_int,
-                                          int32_t target_offset, uint32_t dex_pc) {
-  HBasicBlock* case_target = FindBlockStartingAt(dex_pc + target_offset);
-  DCHECK(case_target != nullptr);
-  PotentiallyAddSuspendCheck(case_target, dex_pc);
-
-  // The current case's value.
-  HInstruction* this_case_value = graph_->GetIntConstant(case_value_int, dex_pc);
-
-  // Compare value and this_case_value.
-  HEqual* comparison = new (arena_) HEqual(value, this_case_value, dex_pc);
-  current_block_->AddInstruction(comparison);
-  HInstruction* ifinst = new (arena_) HIf(comparison, dex_pc);
-  current_block_->AddInstruction(ifinst);
-
-  // Case hit: use the target offset to determine where to go.
-  current_block_->AddSuccessor(case_target);
-
-  // Case miss: go to the next case (or default fall-through).
-  // When there is a next case, we use the block stored with the table offset representing this
-  // case (that is where we registered them in ComputeBranchTargets).
-  // When there is no next case, we use the following instruction.
-  // TODO: Find a good way to peel the last iteration to avoid conditional, but still have re-use.
-  if (!is_last_case) {
-    HBasicBlock* next_case_target = FindBlockStartingAt(table.GetDexPcForIndex(index));
-    DCHECK(next_case_target != nullptr);
-    current_block_->AddSuccessor(next_case_target);
-
-    // Need to manually add the block, as there is no dex-pc transition for the cases.
-    graph_->AddBlock(next_case_target);
-
-    current_block_ = next_case_target;
-  } else {
-    HBasicBlock* default_target = FindBlockStartingAt(dex_pc + instruction.SizeInCodeUnits());
-    DCHECK(default_target != nullptr);
-    current_block_->AddSuccessor(default_target);
-    current_block_ = nullptr;
-  }
-}
-
 void HGraphBuilder::PotentiallyAddSuspendCheck(HBasicBlock* target, uint32_t dex_pc) {
   int32_t target_offset = target->GetDexPc() - dex_pc;
   if (target_offset <= 0) {
@@ -1979,10 +1975,8 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
     case Instruction::GOTO_32: {
       int32_t offset = instruction.GetTargetOffset();
       HBasicBlock* target = FindBlockStartingAt(offset + dex_pc);
-      DCHECK(target != nullptr);
       PotentiallyAddSuspendCheck(target, dex_pc);
       current_block_->AddInstruction(new (arena_) HGoto(dex_pc));
-      current_block_->AddSuccessor(target);
       current_block_ = nullptr;
       break;
     }
@@ -2826,8 +2820,6 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
     case Instruction::THROW: {
       HInstruction* exception = LoadLocal(instruction.VRegA_11x(), Primitive::kPrimNot, dex_pc);
       current_block_->AddInstruction(new (arena_) HThrow(exception, dex_pc));
-      // A throw instruction must branch to the exit block.
-      current_block_->AddSuccessor(exit_block_);
       // We finished building this block. Set the current block to null to avoid
       // adding dead instructions to it.
       current_block_ = nullptr;
@@ -2865,13 +2857,9 @@ bool HGraphBuilder::AnalyzeDexInstruction(const Instruction& instruction, uint32
       break;
     }
 
+    case Instruction::SPARSE_SWITCH:
     case Instruction::PACKED_SWITCH: {
-      BuildPackedSwitch(instruction, dex_pc);
-      break;
-    }
-
-    case Instruction::SPARSE_SWITCH: {
-      BuildSparseSwitch(instruction, dex_pc);
+      BuildSwitch(instruction, dex_pc);
       break;
     }
 
