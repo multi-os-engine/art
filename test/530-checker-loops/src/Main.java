@@ -528,28 +528,56 @@ public class Main {
     }
   }
 
-  /// CHECK-START: void Main.linearTriangularVariations(int) BCE (before)
+  /// CHECK-START: void Main.linearTriangularVariationsInnerStrict(int) BCE (before)
   /// CHECK-DAG: BoundsCheck
   /// CHECK-DAG: BoundsCheck
   /// CHECK-DAG: BoundsCheck
   /// CHECK-DAG: BoundsCheck
   //
-  /// CHECK-START: void Main.linearTriangularVariations(int) BCE (after)
+  /// CHECK-START: void Main.linearTriangularVariationsInnerStrict(int) BCE (after)
   /// CHECK-NOT: BoundsCheck
   /// CHECK-NOT: Deoptimize
-  private static void linearTriangularVariations(int n) {
+  private static void linearTriangularVariationsInnerStrict(int n) {
     int[] a = new int[n];
     for (int i = 0; i < n; i++) {
       for (int j = 0; j < i; j++) {
         a[j] += 1;
       }
-      for (int j = i - 1; j >= 0; j--) {
+      for (int j = i - 1; j > -1; j--) {
         a[j] += 1;
       }
       for (int j = i; j < n; j++) {
         a[j] += 1;
       }
       for (int j = n - 1; j > i - 1; j--) {
+        a[j] += 1;
+      }
+    }
+    verifyTriangular(a);
+  }
+
+  /// CHECK-START: void Main.linearTriangularVariationsInnerNonStrict(int) BCE (before)
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: BoundsCheck
+  /// CHECK-DAG: BoundsCheck
+  //
+  /// CHECK-START: void Main.linearTriangularVariationsInnerNonStrict(int) BCE (after)
+  /// CHECK-NOT: BoundsCheck
+  //  TODO: also CHECK-NOT: Deoptimize, see b/27151190
+  private static void linearTriangularVariationsInnerNonStrict(int n) {
+    int[] a = new int[n];
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j <= i - 1; j++) {
+        a[j] += 1;
+      }
+      for (int j = i - 1; j >= 0; j--) {
+        a[j] += 1;
+      }
+      for (int j = i; j <= n - 1; j++) {
+        a[j] += 1;
+      }
+      for (int j = n - 1; j >= i; j--) {
         a[j] += 1;
       }
     }
@@ -1053,6 +1081,40 @@ public class Main {
     return result;
   }
 
+  /// CHECK-START: int Main.dynamicBCEConstantRange(int[]) BCE (before)
+  /// CHECK-DAG: BoundsCheck loop:<<InnerLoop:B\d+>>
+  /// CHECK-DAG: ArrayGet    loop:<<InnerLoop>>
+  /// CHECK-DAG: If          loop:<<InnerLoop>>
+  /// CHECK-DAG: If          loop:<<OuterLoop:B\d+>>
+  /// CHECK-EVAL: "<<InnerLoop>>" != "<<OuterLoop>>"
+  //
+  /// CHECK-START: int Main.dynamicBCEConstantRange(int[]) BCE (after)
+  /// CHECK-DAG: ArrayGet   loop:<<InnerLoop:B\d+>>
+  /// CHECK-DAG: Deoptimize loop:<<OuterLoop:B\d+>>
+  /// CHECK-EVAL: "<<InnerLoop>>" != "<<OuterLoop>>"
+  //
+  /// CHECK-START: int Main.dynamicBCEConstantRange(int[]) BCE (after)
+  /// CHECK-NOT: BoundsCheck
+  //
+  //  No additional top tests were introduced.
+  /// CHECK-START: int Main.dynamicBCEConstantRange(int[]) BCE (after)
+  /// CHECK-DAG: If
+  /// CHECK-DAG: If
+  /// CHECK-NOT: If
+  static int dynamicBCEConstantRange(int[] x) {
+    int result = 0;
+    for (int i = 2; i <= 6 ; i++) {
+      // Range analysis sees that for innermost loop:
+      // (1) loop is finite
+      // (2) always taken
+      // (3) subscript has range 0..8
+      for (int j = i - 2; j <= i + 2; j++) {
+        result += x[j];
+      }
+    }
+    return result;
+  }
+
   /// CHECK-START: int Main.dynamicBCEAndConstantIndices(int[], int[][], int, int) BCE (before)
   /// CHECK-DAG: {{l\d+}} ArrayGet loop:<<Loop:B\d+>>
   /// CHECK-DAG: {{l\d+}} ArrayGet loop:<<Loop>>
@@ -1239,7 +1301,8 @@ public class Main {
     linearTriangularOnTwoArrayLengths(10);
     linearTriangularOnOneArrayLength(10);
     linearTriangularOnParameter(10);
-    linearTriangularVariations(10);
+    linearTriangularVariationsInnerStrict(10);
+    linearTriangularVariationsInnerNonStrict(10);
 
     // Sorting.
     int[] sort = { 5, 4, 1, 9, 10, 2, 7, 6, 3, 8 };
@@ -1388,6 +1451,7 @@ public class Main {
     expectEquals(55, dynamicBCEPossiblyInfiniteLoop(x, 0, 9));
     expectEquals(55, noDynamicBCEPossiblyInfiniteLoop(x, 0, 9));
     expectEquals(55, noDynamicBCEMixedInductionTypes(x, 0, 10));
+    expectEquals(125, dynamicBCEConstantRange(x));
 
     // Dynamic BCE combined with constant indices.
     int[][] a;
