@@ -92,28 +92,28 @@ public class Main {
   }
 
   public static Class $noinline$inlineCache(Main m, int count) {
-    for (int i = 0; i < 500; ++i) {
-      // Warm me up.
+    // If we are running in non-JIT mode, or were unlucky enough to get this method
+    // already JITted, just return the expected value.
+    if (!ensureInInterpreter()) {
+      return SubMain.class;
     }
+
+    ensureProfilingInfo();
+
+    // Ensure that we have OSR code to jump to.
     if (count == 1) {
-      // Lots of back edges to trigger OSR compilation.
-      for (int i = 0; i < 1000; ++i) {
-      }
-      // Best effort to wait for OSR compilation.
-      try {
-        Thread.sleep(1);
-      } catch (Exception e) {}
+      ensureOsrCode();
     }
 
     // This call will be optimized in the OSR compiled code
     // to check and deoptimize if m is not of type 'Main'.
     Main other = m.inlineCache();
 
+    // Jump to OSR compiled code. The second run
+    // of this method will have 'm' as a SubMain, and the compiled
+    // code we are jumping to will have wrongly optimize other as being a
+    // 'Main'.
     if (count == 1) {
-      // Jump to OSR compiled code. The second run
-      // of this method will have 'm' as a SubMain, and the compiled
-      // code we are jumping to will have wrongly optimize other as being a
-      // 'Main'.
       while (!ensureInOsrCode()) {}
     }
 
@@ -131,7 +131,10 @@ public class Main {
 
   public static int[] array = new int[4];
 
+  public static native boolean ensureInInterpreter();
   public static native boolean ensureInOsrCode();
+  public static native void ensureProfilingInfo();
+  public static native void ensureOsrCode();
 
   public static boolean doThrow = false;
 }
