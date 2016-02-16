@@ -323,6 +323,7 @@ uint8_t* JitCodeCache::CommitCodeInternal(Thread* self,
           core_spill_mask,
           fp_spill_mask,
           code_size);
+      DCHECK(method_header->IsOptimized());
     }
 
     FlushInstructionCache(reinterpret_cast<char*>(code_ptr),
