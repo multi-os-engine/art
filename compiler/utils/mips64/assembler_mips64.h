@@ -127,12 +127,16 @@ class Mips64Assembler FINAL : public Assembler {
 
   void MulR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void MuhR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
+  void MuluR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
+  void MuhuR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void DivR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void ModR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void DivuR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void ModuR6(GpuRegister rd, GpuRegister rs, GpuRegister rt);
   void Dmul(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
   void Dmuh(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
+  void Dmulu(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
+  void Dmuhu(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
   void Ddiv(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
   void Dmod(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
   void Ddivu(GpuRegister rd, GpuRegister rs, GpuRegister rt);  // MIPS64
