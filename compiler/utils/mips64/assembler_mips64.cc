@@ -208,6 +208,14 @@ void Mips64Assembler::MuhR6(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
   EmitR(0, rs, rt, rd, 3, 0x18);
 }
 
+void Mips64Assembler::MuluR6(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
+  EmitR(0, rs, rt, rd, 2, 0x19);
+}
+
+void Mips64Assembler::MuhuR6(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
+  EmitR(0, rs, rt, rd, 3, 0x19);
+}
+
 void Mips64Assembler::DivR6(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
   EmitR(0, rs, rt, rd, 2, 0x1a);
 }
@@ -230,6 +238,14 @@ void Mips64Assembler::Dmul(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
 
 void Mips64Assembler::Dmuh(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
   EmitR(0, rs, rt, rd, 3, 0x1c);
+}
+
+void Mips64Assembler::Dmulu(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
+  EmitR(0, rs, rt, rd, 2, 0x1d);
+}
+
+void Mips64Assembler::Dmuhu(GpuRegister rd, GpuRegister rs, GpuRegister rt) {
+  EmitR(0, rs, rt, rd, 3, 0x1d);
 }
 
 void Mips64Assembler::Ddiv(GpuRegister rd, GpuRegister rs, GpuRegister rt) {

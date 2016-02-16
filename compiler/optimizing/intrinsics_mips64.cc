@@ -508,6 +508,76 @@ static void CreateFPToFPLocations(ArenaAllocator* arena, HInvoke* invoke) {
   locations->SetOut(Location::RequiresFpuRegister(), Location::kNoOutputOverlap);
 }
 
+static void GenBitCount(LocationSummary* locations,
+                       Primitive::Type type,
+                       Mips64Assembler* assembler) {
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+
+  GpuRegister out = locations->Out().AsRegister<GpuRegister>();
+  GpuRegister in = locations->InAt(0).AsRegister<GpuRegister>();
+
+  if (type == Primitive::kPrimInt) {
+    __ LoadConst32(AT, 0x55555555);
+    __ Srl(TMP, in, 1);
+    __ And(TMP, TMP, AT);
+    __ And(out, in, AT);
+    __ Addu(out, TMP, out);
+    __ LoadConst32(AT, 0x33333333);
+    __ Srl(TMP, out, 2);
+    __ And(TMP, TMP, AT);
+    __ And(out, out, AT);
+    __ Addu(out, TMP, out);
+    __ LoadConst32(AT, 0x0F0F0F0F);
+    __ Srl(TMP, out, 4);
+    __ And(TMP, TMP, AT);
+    __ And(out, out, AT);
+    __ Addu(out, TMP, out);
+    __ LoadConst32(AT, 0x00FF00FF);
+    __ Srl(TMP, out, 8);
+    __ And(TMP, TMP, AT);
+    __ And(out, out, AT);
+    __ Addu(out, TMP, out);
+    __ Srl(TMP, out, 16);
+    __ Andi(out, out, 0xFFFF);
+    __ Addu(out, TMP, out);
+  } else if (type == Primitive::kPrimLong) {
+    __ Dsrl(TMP, in, 1);
+    __ LoadConst64(AT, 0x5555555555555555);
+    __ And(TMP, TMP, AT);
+    __ Dsubu(TMP, in, TMP);
+    __ LoadConst64(AT, 0x3333333333333333);
+    __ And(out, TMP, AT);
+    __ Dsrl(TMP, TMP, 2);
+    __ And(TMP, TMP, AT);
+    __ Daddu(TMP, out, TMP);
+    __ Dsrl(out, TMP, 4);
+    __ Daddu(out, out, TMP);
+    __ LoadConst64(AT, 0x0F0F0F0F0F0F0F0F);
+    __ And(out, out, AT);
+    __ LoadConst64(TMP, 0x0101010101010101);
+    __ Dmulu(out, out, TMP);
+    __ Dsrl32(out, out, 24);
+  }
+}
+
+// int java.lang.Integer.bitCount(int)
+void IntrinsicLocationsBuilderMIPS64::VisitIntegerBitCount(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS64::VisitIntegerBitCount(HInvoke* invoke) {
+  GenBitCount(invoke->GetLocations(), Primitive::kPrimInt, GetAssembler());
+}
+
+// int java.lang.Long.bitCount(int)
+void IntrinsicLocationsBuilderMIPS64::VisitLongBitCount(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS64::VisitLongBitCount(HInvoke* invoke) {
+  GenBitCount(invoke->GetLocations(), Primitive::kPrimLong, GetAssembler());
+}
+
 static void MathAbsFP(LocationSummary* locations, bool is64bit, Mips64Assembler* assembler) {
   FpuRegister in = locations->InAt(0).AsFpuRegister<FpuRegister>();
   FpuRegister out = locations->Out().AsFpuRegister<FpuRegister>();
@@ -1766,9 +1836,6 @@ void IntrinsicLocationsBuilderMIPS64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UN
 }                                                                                      \
 void IntrinsicCodeGeneratorMIPS64::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) {    \
 }
-
-UNIMPLEMENTED_INTRINSIC(IntegerBitCount)
-UNIMPLEMENTED_INTRINSIC(LongBitCount)
 
 UNIMPLEMENTED_INTRINSIC(MathRoundDouble)
 UNIMPLEMENTED_INTRINSIC(MathRoundFloat)
