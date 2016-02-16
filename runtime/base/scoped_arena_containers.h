@@ -201,6 +201,34 @@ inline ScopedArenaAllocatorAdapter<void> ScopedArenaAllocator::Adapter(ArenaAllo
 template <typename T>
 class ArenaDelete {
   static constexpr uint8_t kMagicFill = 0xCE;
+ protected:
+  // Special private API that can be used for variable sized objects such as RegisterLine.
+  void ProtectMemory(T* ptr, size_t size) const {
+    if (RUNNING_ON_MEMORY_TOOL > 0) {
+      // Writing to the memory will fail if it we already destroyed the pointer with
+      // DestroyOnlyDelete since we make it no access.
+      memset(ptr, kMagicFill, size);
+      MEMORY_TOOL_MAKE_NOACCESS(ptr, size);
+    } else if (kIsDebugBuild) {
+      CHECK(ArenaStack::ArenaTagForAllocation(reinterpret_cast<void*>(ptr)) == ArenaFreeTag::kUsed)
+          << "Freeing invalid object " << ptr;
+      ArenaStack::ArenaTagForAllocation(reinterpret_cast<void*>(ptr)) = ArenaFreeTag::kFree;
+      // Write a magic value to try and catch use after free error.
+      memset(ptr, kMagicFill, size);
+    }
+  }
+
+ public:
+  void operator()(T* ptr) const {
+    ptr->~T();
+    ProtectMemory(ptr, sizeof(T));
+  }
+};
+
+// Unchecked version for the case where we don't know the size of the object.
+template <typename T>
+class ArenaDeleteUnchecked {
+  static constexpr uint8_t kMagicFill = 0xCE;
  public:
   void operator()(T* ptr) const {
     ptr->~T();
@@ -218,6 +246,7 @@ class ArenaDelete {
     }
   }
 };
+
 
 // In general we lack support for arrays. We would need to call the destructor on each element,
 // which requires access to the array size. Support for that is future work.
