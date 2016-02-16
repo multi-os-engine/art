@@ -988,6 +988,22 @@ TEST_F(AssemblerMIPS64Test, Selnez) {
             "selnez");
 }
 
+TEST_F(AssemblerMIPS64Test, MuluR6) {
+  DriverStr(RepeatRRR(&mips64::Mips64Assembler::MuluR6, "mulu ${reg1}, ${reg2}, ${reg3}"), "mulu");
+}
+
+TEST_F(AssemblerMIPS64Test, MuhuR6) {
+  DriverStr(RepeatRRR(&mips64::Mips64Assembler::MuhuR6, "muhu ${reg1}, ${reg2}, ${reg3}"), "muhu");
+}
+
+TEST_F(AssemblerMIPS64Test, Dmulu) {
+  DriverStr(RepeatRRR(&mips64::Mips64Assembler::Dmulu, "dmulu ${reg1}, ${reg2}, ${reg3}"), "dmulu");
+}
+
+TEST_F(AssemblerMIPS64Test, Dmuhu) {
+  DriverStr(RepeatRRR(&mips64::Mips64Assembler::Dmuhu, "dmuhu ${reg1}, ${reg2}, ${reg3}"), "dmuhu");
+}
+
 TEST_F(AssemblerMIPS64Test, Clz) {
   DriverStr(RepeatRR(&mips64::Mips64Assembler::Clz, "clz ${reg1}, ${reg2}"), "clz");
 }
