@@ -725,7 +725,11 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
       GraphAnalysisResult result = builder.BuildGraph(*code_item, &handles);
       if (result != kAnalysisSuccess) {
         switch (result) {
+          case kAnalysisSkipped:
+            MaybeRecordStat(MethodCompilationStat::kNotCompiledSkipped);
+            break;
           case kAnalysisInvalidBytecode:
+            MaybeRecordStat(MethodCompilationStat::kNotCompiledInvalidBytecode);
             break;
           case kAnalysisFailThrowCatchLoop:
             MaybeRecordStat(MethodCompilationStat::kNotCompiledThrowCatchLoop);
