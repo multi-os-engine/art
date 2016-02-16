@@ -1778,6 +1778,40 @@ void IntrinsicCodeGeneratorMIPS64::VisitStringNewStringFromString(HInvoke* invok
   __ Bind(slow_path->GetExitLabel());
 }
 
+static void GenIsInfinite(LocationSummary* locations,
+                          bool is64bit,
+                          Mips64Assembler* assembler) {
+  FpuRegister in = locations->InAt(0).AsFpuRegister<FpuRegister>();
+  GpuRegister out = locations->Out().AsRegister<GpuRegister>();
+
+  if (is64bit) {
+      __ ClassD(FTMP, in);
+  } else {
+      __ ClassS(FTMP, in);
+  }
+  __ Mfc1(out, FTMP);
+  __ Andi(out, out, kPositiveInfinity | kNegativeInfinity);
+  __ Sltu(out, ZERO, out);
+}
+
+// boolean java.lang.Float.isInfinite(float)
+void IntrinsicLocationsBuilderMIPS64::VisitFloatIsInfinite(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS64::VisitFloatIsInfinite(HInvoke* invoke) {
+  GenIsInfinite(invoke->GetLocations(), /* is64bit */ false, GetAssembler());
+}
+
+// boolean java.lang.Double.isInfinite(double)
+void IntrinsicLocationsBuilderMIPS64::VisitDoubleIsInfinite(HInvoke* invoke) {
+  CreateFPToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS64::VisitDoubleIsInfinite(HInvoke* invoke) {
+  GenIsInfinite(invoke->GetLocations(), /* is64bit */ true, GetAssembler());
+}
+
 // Unimplemented intrinsics.
 
 #define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
@@ -1814,9 +1848,6 @@ UNIMPLEMENTED_INTRINSIC(MathNextAfter)
 UNIMPLEMENTED_INTRINSIC(MathSinh)
 UNIMPLEMENTED_INTRINSIC(MathTan)
 UNIMPLEMENTED_INTRINSIC(MathTanh)
-
-UNIMPLEMENTED_INTRINSIC(FloatIsInfinite)
-UNIMPLEMENTED_INTRINSIC(DoubleIsInfinite)
 
 UNIMPLEMENTED_INTRINSIC(IntegerHighestOneBit)
 UNIMPLEMENTED_INTRINSIC(LongHighestOneBit)
