@@ -124,6 +124,12 @@ void HGraph::RemoveDeadBlocks(const ArenaBitVector& visited) {
       for (HBasicBlock* successor : block->GetSuccessors()) {
         successor->RemovePredecessor(block);
       }
+      if (block->IsExitBlock()) {
+        SetExitBlock(nullptr);
+      }
+      // Mark the block as removed. This is used by the HGraphBuilder to discard
+      // the block as a branch target.
+      block->SetGraph(nullptr);
       // Remove the block from the list of blocks, so that further analyses
       // never see it.
       blocks_[i] = nullptr;
@@ -132,41 +138,36 @@ void HGraph::RemoveDeadBlocks(const ArenaBitVector& visited) {
 }
 
 GraphAnalysisResult HGraph::BuildDominatorTree() {
-  // (1) Simplify the CFG so that catch blocks have only exceptional incoming
-  //     edges. This invariant simplifies building SSA form because Phis cannot
-  //     collect both normal- and exceptional-flow values at the same time.
-  SimplifyCatchBlocks();
-
   ArenaBitVector visited(arena_, blocks_.size(), false);
 
-  // (2) Find the back edges in the graph doing a DFS traversal.
+  // (1) Find the back edges in the graph doing a DFS traversal.
   FindBackEdges(&visited);
 
-  // (3) Remove instructions and phis from blocks not visited during
+  // (2) Remove instructions and phis from blocks not visited during
   //     the initial DFS as users from other instructions, so that
   //     users can be safely removed before uses later.
   RemoveInstructionsAsUsersFromDeadBlocks(visited);
 
-  // (4) Remove blocks not visited during the initial DFS.
+  // (3) Remove blocks not visited during the initial DFS.
   //     Step (5) requires dead blocks to be removed from the
   //     predecessors list of live blocks.
   RemoveDeadBlocks(visited);
 
-  // (5) Simplify the CFG now, so that we don't need to recompute
+  // (4) Simplify the CFG now, so that we don't need to recompute
   //     dominators and the reverse post order.
   SimplifyCFG();
 
-  // (6) Compute the dominance information and the reverse post order.
+  // (5) Compute the dominance information and the reverse post order.
   ComputeDominanceInformation();
 
-  // (7) Analyze loops discover through back edge analysis, and
+  // (6) Analyze loops discover through back edge analysis, and
   //     set the loop information on each block.
   GraphAnalysisResult result = AnalyzeLoops();
   if (result != kAnalysisSuccess) {
     return result;
   }
 
-  // (8) Precompute per-block try membership before entering the SSA builder,
+  // (7) Precompute per-block try membership before entering the SSA builder,
   //     which needs the information to build catch block phis from values of
   //     locals at throwing instructions inside try blocks.
   ComputeTryBlockInformation();
@@ -318,81 +319,16 @@ void HGraph::SimplifyLoop(HBasicBlock* header) {
   // generate the suspend check at the back edge, but needs to be careful with
   // loop phi spill slots (which are not written to at back edge).
   HInstruction* first_instruction = header->GetFirstInstruction();
-  if (!first_instruction->IsSuspendCheck()) {
+  if (first_instruction == nullptr) {
+    HSuspendCheck* check = new (arena_) HSuspendCheck(header->GetDexPc());
+    header->AddInstruction(check);
+    first_instruction = check;
+  } else if (!first_instruction->IsSuspendCheck()) {
     HSuspendCheck* check = new (arena_) HSuspendCheck(header->GetDexPc());
     header->InsertInstructionBefore(check, first_instruction);
     first_instruction = check;
   }
   info->SetSuspendCheck(first_instruction->AsSuspendCheck());
-}
-
-static bool CheckIfPredecessorAtIsExceptional(const HBasicBlock& block, size_t pred_idx) {
-  HBasicBlock* predecessor = block.GetPredecessors()[pred_idx];
-  if (!predecessor->EndsWithTryBoundary()) {
-    // Only edges from HTryBoundary can be exceptional.
-    return false;
-  }
-  HTryBoundary* try_boundary = predecessor->GetLastInstruction()->AsTryBoundary();
-  if (try_boundary->GetNormalFlowSuccessor() == &block) {
-    // This block is the normal-flow successor of `try_boundary`, but it could
-    // also be one of its exception handlers if catch blocks have not been
-    // simplified yet. Predecessors are unordered, so we will consider the first
-    // occurrence to be the normal edge and a possible second occurrence to be
-    // the exceptional edge.
-    return !block.IsFirstIndexOfPredecessor(predecessor, pred_idx);
-  } else {
-    // This is not the normal-flow successor of `try_boundary`, hence it must be
-    // one of its exception handlers.
-    DCHECK(try_boundary->HasExceptionHandler(block));
-    return true;
-  }
-}
-
-void HGraph::SimplifyCatchBlocks() {
-  // NOTE: We're appending new blocks inside the loop, so we need to use index because iterators
-  // can be invalidated. We remember the initial size to avoid iterating over the new blocks.
-  for (size_t block_id = 0u, end = blocks_.size(); block_id != end; ++block_id) {
-    HBasicBlock* catch_block = blocks_[block_id];
-    if (catch_block == nullptr || !catch_block->IsCatchBlock()) {
-      continue;
-    }
-
-    bool exceptional_predecessors_only = true;
-    for (size_t j = 0; j < catch_block->GetPredecessors().size(); ++j) {
-      if (!CheckIfPredecessorAtIsExceptional(*catch_block, j)) {
-        exceptional_predecessors_only = false;
-        break;
-      }
-    }
-
-    if (!exceptional_predecessors_only) {
-      // Catch block has normal-flow predecessors and needs to be simplified.
-      // Splitting the block before its first instruction moves all its
-      // instructions into `normal_block` and links the two blocks with a Goto.
-      // Afterwards, incoming normal-flow edges are re-linked to `normal_block`,
-      // leaving `catch_block` with the exceptional edges only.
-      //
-      // Note that catch blocks with normal-flow predecessors cannot begin with
-      // a move-exception instruction, as guaranteed by the verifier. However,
-      // trivially dead predecessors are ignored by the verifier and such code
-      // has not been removed at this stage. We therefore ignore the assumption
-      // and rely on GraphChecker to enforce it after initial DCE is run (b/25492628).
-      HBasicBlock* normal_block = catch_block->SplitCatchBlockAfterMoveException();
-      if (normal_block == nullptr) {
-        // Catch block is either empty or only contains a move-exception. It must
-        // therefore be dead and will be removed during initial DCE. Do nothing.
-        DCHECK(!catch_block->EndsWithControlFlowInstruction());
-      } else {
-        // Catch block was split. Re-link normal-flow edges to the new block.
-        for (size_t j = 0; j < catch_block->GetPredecessors().size(); ++j) {
-          if (!CheckIfPredecessorAtIsExceptional(*catch_block, j)) {
-            catch_block->GetPredecessors()[j]->ReplaceSuccessor(catch_block, normal_block);
-            --j;
-          }
-        }
-      }
-    }
-  }
 }
 
 void HGraph::ComputeTryBlockInformation() {
@@ -440,10 +376,9 @@ void HGraph::SimplifyCFG() {
         HBasicBlock* successor = normal_successors[j];
         DCHECK(!successor->IsCatchBlock());
         if (successor == exit_block_) {
-          // Throw->TryBoundary->Exit. Special case which we do not want to split
-          // because Goto->Exit is not allowed.
+          // (Throw/Return/ReturnVoid)->TryBoundary->Exit. Special case which we
+          // do not want to split because Goto->Exit is not allowed.
           DCHECK(block->IsSingleTryBoundary());
-          DCHECK(block->GetSinglePredecessor()->GetLastInstruction()->IsThrow());
         } else if (successor->GetPredecessors().size() > 1) {
           SplitCriticalEdge(block, successor);
           // SplitCriticalEdge could have invalidated the `normal_successors`
@@ -456,7 +391,9 @@ void HGraph::SimplifyCFG() {
     }
     if (block->IsLoopHeader()) {
       SimplifyLoop(block);
-    } else if (!block->IsEntryBlock() && block->GetFirstInstruction()->IsSuspendCheck()) {
+    } else if (!block->IsEntryBlock() &&
+               block->GetFirstInstruction() != nullptr &&
+               block->GetFirstInstruction()->IsSuspendCheck()) {
       // We are being called by the dead code elimiation pass, and what used to be
       // a loop got dismantled. Just remove the suspend check.
       block->RemoveInstruction(block->GetFirstInstruction());
@@ -1392,34 +1329,6 @@ HBasicBlock* HBasicBlock::CreateImmediateDominator() {
   return new_block;
 }
 
-HBasicBlock* HBasicBlock::SplitCatchBlockAfterMoveException() {
-  DCHECK(!graph_->IsInSsaForm()) << "Support for SSA form not implemented.";
-  DCHECK(IsCatchBlock()) << "This method is intended for catch blocks only.";
-
-  HInstruction* first_insn = GetFirstInstruction();
-  HInstruction* split_before = nullptr;
-
-  if (first_insn != nullptr && first_insn->IsLoadException()) {
-    // Catch block starts with a LoadException. Split the block after
-    // the StoreLocal and ClearException which must come after the load.
-    DCHECK(first_insn->GetNext()->IsStoreLocal());
-    DCHECK(first_insn->GetNext()->GetNext()->IsClearException());
-    split_before = first_insn->GetNext()->GetNext()->GetNext();
-  } else {
-    // Catch block does not load the exception. Split at the beginning
-    // to create an empty catch block.
-    split_before = first_insn;
-  }
-
-  if (split_before == nullptr) {
-    // Catch block has no instructions after the split point (must be dead).
-    // Do not split it but rather signal error by returning nullptr.
-    return nullptr;
-  } else {
-    return SplitBefore(split_before);
-  }
-}
-
 HBasicBlock* HBasicBlock::SplitBeforeForInlining(HInstruction* cursor) {
   DCHECK_EQ(cursor->GetBlock(), this);
 
@@ -1915,6 +1824,7 @@ void HGraph::UpdateLoopAndTryInformationOfNewBlock(HBasicBlock* block,
 
 HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
   DCHECK(HasExitBlock()) << "Unimplemented scenario";
+
   // Update the environments in this graph to have the invoke's environment
   // as parent.
   {
