@@ -85,10 +85,6 @@ class HGraphBuilder : public ValueObject {
 
   static constexpr const char* kBuilderPassName = "builder";
 
-  // The number of entries in a packed switch before we use a jump table or specified
-  // compare/jump series.
-  static constexpr uint16_t kSmallSwitchThreshold = 3;
-
  private:
   // Analyzes the dex instruction and adds HInstruction to the graph
   // to execute that instruction. Returns whether the instruction can
@@ -104,15 +100,15 @@ class HGraphBuilder : public ValueObject {
   // create a code unit in which branches fall-through out of it).
   bool ComputeBranchTargets(const uint16_t* start,
                             const uint16_t* end,
+                            const DexFile::CodeItem& code_item,
                             size_t* number_of_branches);
   void MaybeUpdateCurrentBlock(size_t dex_pc);
   void FindNativeDebugInfoLocations(const DexFile::CodeItem& code_item, ArenaBitVector* locations);
   HBasicBlock* FindBlockStartingAt(int32_t dex_pc) const;
+  HBasicBlock* CreateBlockStartingAt(int32_t dex_pc, int32_t semantic_dex_pc);
   HBasicBlock* FindOrCreateBlockStartingAt(int32_t dex_pc);
 
-  // Adds new blocks to `branch_targets_` starting at the limits of TryItems and
-  // their exception handlers.
-  void CreateBlocksForTryCatch(const DexFile::CodeItem& code_item);
+  void ConnectBlocks(const DexFile::CodeItem& code_item);
 
   // Splits edges which cross the boundaries of TryItems, inserts TryBoundary
   // instructions and links them to the corresponding catch blocks.
@@ -242,22 +238,8 @@ class HGraphBuilder : public ValueObject {
                       uint16_t type_index,
                       uint32_t dex_pc);
 
-  // Builds an instruction sequence for a packed switch statement.
-  void BuildPackedSwitch(const Instruction& instruction, uint32_t dex_pc);
-
-  // Build a switch instruction from a packed switch statement.
-  void BuildSwitchJumpTable(const SwitchTable& table,
-                            const Instruction& instruction,
-                            HInstruction* value,
-                            uint32_t dex_pc);
-
-  // Builds an instruction sequence for a sparse switch statement.
-  void BuildSparseSwitch(const Instruction& instruction, uint32_t dex_pc);
-
-  void BuildSwitchCaseHelper(const Instruction& instruction, size_t index,
-                             bool is_last_case, const SwitchTable& table,
-                             HInstruction* value, int32_t case_value_int,
-                             int32_t target_offset, uint32_t dex_pc);
+  // Builds an instruction sequence for a switch statement.
+  void BuildSwitch(const Instruction& instruction, uint32_t dex_pc);
 
   bool SkipCompilation(const DexFile::CodeItem& code_item, size_t number_of_branches);
 
