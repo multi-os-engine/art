@@ -64,7 +64,7 @@ class Logger(object):
     Logger.log(location, Logger.Level.Error, color=Logger.Color.Gray, newLine=False, out=sys.stderr)
     Logger.log("error: ", Logger.Level.Error, color=Logger.Color.Red, newLine=False, out=sys.stderr)
     Logger.log(msg, Logger.Level.Error, out=sys.stderr)
-    sys.exit(msg)
+    sys.exit(1)
 
   @staticmethod
   def startTest(name):
