@@ -1744,6 +1744,9 @@ ENTRY_NO_GP art_quick_ushr_long
     nop
 END art_quick_ushr_long
 
+  .set push
+  .set noat
+
 /* java.lang.String.indexOf(int ch, int fromIndex=0) */
 ENTRY_NO_GP art_quick_indexof
 /* $a0 holds address of "this" */
@@ -1780,8 +1783,6 @@ ENTRY_NO_GP art_quick_indexof
   nop
 END art_quick_indexof
 
-  .set push
-  .set noat
 /* java.lang.String.compareTo(String anotherString) */
 ENTRY_NO_GP art_quick_string_compareto
 /* $a0 holds address of "this" */
