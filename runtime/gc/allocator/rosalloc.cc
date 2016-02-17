@@ -1664,36 +1664,17 @@ void RosAlloc::Initialize() {
   for (size_t i = 0; i < kNumOfSizeBrackets; i++) {
     size_t bracket_size = bracketSizes[i];
     size_t run_size = kPageSize * numOfPages[i];
-    size_t max_num_of_slots = run_size / bracket_size;
     // Compute the actual number of slots by taking the header and
     // alignment into account.
     size_t fixed_header_size = RoundUp(Run::fixed_header_size(), sizeof(uint64_t));
     DCHECK_EQ(fixed_header_size, 80U);
-    size_t header_size = 0;
-    size_t num_of_slots = 0;
-    // Search for the maximum number of slots that allows enough space
-    // for the header.
-    for (int s = max_num_of_slots; s >= 0; s--) {
-      size_t tmp_slots_size = bracket_size * s;
-      size_t tmp_unaligned_header_size = fixed_header_size;
-      // Align up the unaligned header size. bracket_size may not be a power of two.
-      size_t tmp_header_size = (tmp_unaligned_header_size % bracket_size == 0) ?
-          tmp_unaligned_header_size :
-          tmp_unaligned_header_size + (bracket_size - tmp_unaligned_header_size % bracket_size);
-      DCHECK_EQ(tmp_header_size % bracket_size, 0U);
-      DCHECK_EQ(tmp_header_size % sizeof(uint64_t), 0U);
-      if (tmp_slots_size + tmp_header_size <= run_size) {
-        // Found the right number of slots, that is, there was enough
-        // space for the header (including the bit maps.)
-        num_of_slots = s;
-        header_size = tmp_header_size;
-        break;
-      }
-    }
+    size_t num_of_slots = (run_size - fixed_header_size) / bracket_size;
+    // Add the padding for the alignment remainder.
+    size_t padding_size = run_size - fixed_header_size - num_of_slots * bracket_size;
+    size_t header_size = fixed_header_size + padding_size;
+
     DCHECK_GT(num_of_slots, 0U) << i;
     DCHECK_GT(header_size, 0U) << i;
-    // Add the padding for the alignment remainder.
-    header_size += run_size % bracket_size;
     DCHECK_EQ(header_size + num_of_slots * bracket_size, run_size);
     numOfSlots[i] = num_of_slots;
     headerSizes[i] = header_size;
