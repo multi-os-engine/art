@@ -2118,6 +2118,156 @@ void IntrinsicCodeGeneratorMIPS::VisitDoubleIsInfinite(HInvoke* invoke) {
   GenIsInfinite(invoke->GetLocations(), Primitive::kPrimDouble, IsR6(), GetAssembler());
 }
 
+static void GenHighestOneBit(LocationSummary* locations,
+                             const Primitive::Type type,
+                             bool isR6,
+                             MipsAssembler* assembler) {
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+
+  if (type == Primitive::kPrimLong) {
+    Register in_lo = locations->InAt(0).AsRegisterPairLow<Register>();
+    Register in_hi = locations->InAt(0).AsRegisterPairHigh<Register>();
+    Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+    Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+    if (isR6) {
+      // TMP = in_hi ? in_hi : in_lo;
+      __ Selnez(TMP, in_hi, in_hi);
+      __ Seleqz(AT, in_lo, in_hi);
+      __ Or(TMP, TMP, AT);
+
+      // Count number of leading zeroes.
+      __ ClzR6(TMP, TMP);
+    } else {
+      // TMP = in_hi ? in_hi : in_lo;
+      __ Move(TMP, in_hi);
+      __ Movz(TMP, in_lo, in_hi);
+
+      // Count number of leading zeroes.
+      __ ClzR2(TMP, TMP);
+    }
+
+    __ LoadConst32(AT, 0x80000000);
+    __ Srlv(AT, AT, TMP);  // Shift zero to 31 bits
+    __ Srl(TMP, TMP, 5);
+    __ Sllv(AT, AT, TMP);  // If TMP was 32, shift out most significant bit
+
+    if (isR6) {
+      // out_lo = in_hi ? 0 : AT;
+      __ Seleqz(out_lo, AT, in_hi);
+      // out_hi = in_hi ? AT : 0;
+      __ Selnez(out_hi, AT, in_hi);
+    } else {
+      // out_lo = in_hi ? 0 : AT;
+      __ Move(out_lo, ZERO);
+      __ Movz(out_lo, AT, out_hi);
+      // out_hi = in_hi ? AT : 0;
+      __ Move(out_hi, AT);
+      __ Movz(out_hi, ZERO, out_hi);
+    }
+  } else {
+    Register in = locations->InAt(0).AsRegister<Register>();
+    Register out = locations->Out().AsRegister<Register>();
+
+    if (isR6) {
+      __ ClzR6(TMP, in);
+    } else {
+      __ ClzR2(TMP, in);
+    }
+    __ LoadConst32(out, 0x80000000);
+    __ Srlv(out, out, TMP);  // Shift zero to 31 bits
+    __ Srl(TMP, TMP, 5);
+    __ Sllv(out, out, TMP);  // If TMP was 32, shift out most significant bit
+  }
+}
+
+// int java.lang.Integer.highestOneBit(int)
+void IntrinsicLocationsBuilderMIPS::VisitIntegerHighestOneBit(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitIntegerHighestOneBit(HInvoke* invoke) {
+  GenHighestOneBit(invoke->GetLocations(), Primitive::kPrimInt, IsR6(), GetAssembler());
+}
+
+// long java.lang.Long.highestOneBit(long)
+void IntrinsicLocationsBuilderMIPS::VisitLongHighestOneBit(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitLongHighestOneBit(HInvoke* invoke) {
+  GenHighestOneBit(invoke->GetLocations(), Primitive::kPrimLong, IsR6(), GetAssembler());
+}
+
+static void GenLowestOneBit(LocationSummary* locations,
+                             const Primitive::Type type,
+                             bool isR6,
+                             MipsAssembler* assembler) {
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+
+  if (type == Primitive::kPrimLong) {
+    Register in_lo = locations->InAt(0).AsRegisterPairLow<Register>();
+    Register in_hi = locations->InAt(0).AsRegisterPairHigh<Register>();
+    Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+    Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+    // AT = in_lo ? in_lo : in_hi;
+    if (isR6) {
+      __ Selnez(AT, in_lo, in_lo);
+      __ Seleqz(TMP, in_hi, in_lo);
+      __ Or(AT, AT, TMP);
+    } else {
+      __ Move(AT, in_lo);
+      __ Movz(AT, in_hi, in_lo);
+    }
+
+    __ Addiu(TMP, AT, -1);
+    __ Xor(AT, AT, TMP);
+    __ And(AT, AT, TMP);
+    __ Addiu(AT, AT, 1);
+
+    if (isR6) {
+      // out_lo = in_lo ? AT : 0;
+      __ Selnez(out_lo, AT, in_lo);
+      // out_hi = in_lo ? 0 : AT;
+      __ Seleqz(out_hi, AT, in_lo);
+    } else {
+      // out_lo = in_lo ? AT : 0;
+      __ Move(out_lo, AT);
+      __ Movz(out_lo, ZERO, in_lo);
+      // out_hi = in_lo ? 0 : AT;
+      __ Move(out_hi, ZERO);
+      __ Movz(out_hi, AT, in_lo);
+    }
+  } else {
+    Register in = locations->InAt(0).AsRegister<Register>();
+    Register out = locations->Out().AsRegister<Register>();
+
+    __ Addiu(TMP, in, -1);
+    __ Xor(out, in, TMP);
+    __ And(out, out, TMP);
+    __ Addiu(out, out, 1);
+  }
+}
+
+// int java.lang.Integer.lowestOneBit(int)
+void IntrinsicLocationsBuilderMIPS::VisitIntegerLowestOneBit(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitIntegerLowestOneBit(HInvoke* invoke) {
+  GenLowestOneBit(invoke->GetLocations(), Primitive::kPrimInt, IsR6(), GetAssembler());
+}
+
+// long java.lang.Long.lowestOneBit(long)
+void IntrinsicLocationsBuilderMIPS::VisitLongLowestOneBit(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitLongLowestOneBit(HInvoke* invoke) {
+  GenLowestOneBit(invoke->GetLocations(), Primitive::kPrimLong, IsR6(), GetAssembler());
+}
+
 // Unimplemented intrinsics.
 
 #define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
@@ -2172,11 +2322,6 @@ UNIMPLEMENTED_INTRINSIC(MathNextAfter)
 UNIMPLEMENTED_INTRINSIC(MathSinh)
 UNIMPLEMENTED_INTRINSIC(MathTan)
 UNIMPLEMENTED_INTRINSIC(MathTanh)
-
-UNIMPLEMENTED_INTRINSIC(IntegerHighestOneBit)
-UNIMPLEMENTED_INTRINSIC(LongHighestOneBit)
-UNIMPLEMENTED_INTRINSIC(IntegerLowestOneBit)
-UNIMPLEMENTED_INTRINSIC(LongLowestOneBit)
 
 // Handled as HIR instructions.
 UNIMPLEMENTED_INTRINSIC(FloatFloatToIntBits)
