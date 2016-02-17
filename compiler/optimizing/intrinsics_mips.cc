@@ -2118,6 +2118,119 @@ void IntrinsicCodeGeneratorMIPS::VisitDoubleIsInfinite(HInvoke* invoke) {
   GenIsInfinite(invoke->GetLocations(), Primitive::kPrimDouble, IsR6(), GetAssembler());
 }
 
+static void GenHighestOneBit(LocationSummary* locations,
+                             const Primitive::Type type,
+                             bool isR6,
+                             MipsAssembler* assembler) {
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+
+  if (type == Primitive::kPrimLong) {
+    Register in_lo = locations->InAt(0).AsRegisterPairLow<Register>();
+    Register in_hi = locations->InAt(0).AsRegisterPairHigh<Register>();
+    Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+    Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+    if (isR6) {
+      __ ClzR6(TMP, in_hi);
+    } else {
+      __ ClzR2(TMP, in_hi);
+    }
+    __ LoadConst32(AT, 0x80000000);
+    __ Srlv(out_hi, AT, TMP);
+    __ And(out_hi, out_hi, in_hi);
+    if (isR6) {
+      __ ClzR6(TMP, in_lo);
+    } else {
+      __ ClzR2(TMP, in_lo);
+    }
+    __ Srlv(out_lo, AT, TMP);
+    __ And(out_lo, out_lo, in_lo);
+    if (isR6) {
+      __ Seleqz(out_lo, out_lo, out_hi);
+    } else {
+      __ Movn(out_lo, ZERO, out_hi);
+    }
+  } else {
+    Register in = locations->InAt(0).AsRegister<Register>();
+    Register out = locations->Out().AsRegister<Register>();
+
+    if (isR6) {
+      __ ClzR6(TMP, in);
+    } else {
+      __ ClzR2(TMP, in);
+    }
+    __ LoadConst32(AT, 0x80000000);
+    __ Srlv(AT, AT, TMP);  // Shift zero to 31 bits
+    __ And(out, AT, in);
+  }
+}
+
+// int java.lang.Integer.highestOneBit(int)
+void IntrinsicLocationsBuilderMIPS::VisitIntegerHighestOneBit(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitIntegerHighestOneBit(HInvoke* invoke) {
+  GenHighestOneBit(invoke->GetLocations(), Primitive::kPrimInt, IsR6(), GetAssembler());
+}
+
+// long java.lang.Long.highestOneBit(long)
+void IntrinsicLocationsBuilderMIPS::VisitLongHighestOneBit(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke, Location::kOutputOverlap);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitLongHighestOneBit(HInvoke* invoke) {
+  GenHighestOneBit(invoke->GetLocations(), Primitive::kPrimLong, IsR6(), GetAssembler());
+}
+
+static void GenLowestOneBit(LocationSummary* locations,
+                             const Primitive::Type type,
+                             bool isR6,
+                             MipsAssembler* assembler) {
+  DCHECK(type == Primitive::kPrimInt || type == Primitive::kPrimLong);
+
+  if (type == Primitive::kPrimLong) {
+    Register in_lo = locations->InAt(0).AsRegisterPairLow<Register>();
+    Register in_hi = locations->InAt(0).AsRegisterPairHigh<Register>();
+    Register out_lo = locations->Out().AsRegisterPairLow<Register>();
+    Register out_hi = locations->Out().AsRegisterPairHigh<Register>();
+
+    __ Subu(TMP, ZERO, in_lo);
+    __ And(out_lo, TMP, in_lo);
+    __ Subu(TMP, ZERO, in_hi);
+    __ And(out_hi, TMP, in_hi);
+    if (isR6) {
+      __ Seleqz(out_hi, out_hi, out_lo);
+    } else {
+      __ Movn(out_hi, ZERO, out_lo);
+    }
+  } else {
+    Register in = locations->InAt(0).AsRegister<Register>();
+    Register out = locations->Out().AsRegister<Register>();
+
+    __ Subu(TMP, ZERO, in);
+    __ And(out, TMP, in);
+  }
+}
+
+// int java.lang.Integer.lowestOneBit(int)
+void IntrinsicLocationsBuilderMIPS::VisitIntegerLowestOneBit(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitIntegerLowestOneBit(HInvoke* invoke) {
+  GenLowestOneBit(invoke->GetLocations(), Primitive::kPrimInt, IsR6(), GetAssembler());
+}
+
+// long java.lang.Long.lowestOneBit(long)
+void IntrinsicLocationsBuilderMIPS::VisitLongLowestOneBit(HInvoke* invoke) {
+  CreateIntToIntLocations(arena_, invoke);
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitLongLowestOneBit(HInvoke* invoke) {
+  GenLowestOneBit(invoke->GetLocations(), Primitive::kPrimLong, IsR6(), GetAssembler());
+}
+
 // Unimplemented intrinsics.
 
 #define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
@@ -2172,11 +2285,6 @@ UNIMPLEMENTED_INTRINSIC(MathNextAfter)
 UNIMPLEMENTED_INTRINSIC(MathSinh)
 UNIMPLEMENTED_INTRINSIC(MathTan)
 UNIMPLEMENTED_INTRINSIC(MathTanh)
-
-UNIMPLEMENTED_INTRINSIC(IntegerHighestOneBit)
-UNIMPLEMENTED_INTRINSIC(LongHighestOneBit)
-UNIMPLEMENTED_INTRINSIC(IntegerLowestOneBit)
-UNIMPLEMENTED_INTRINSIC(LongLowestOneBit)
 
 // Handled as HIR instructions.
 UNIMPLEMENTED_INTRINSIC(FloatFloatToIntBits)
