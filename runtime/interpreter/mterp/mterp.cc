@@ -618,5 +618,11 @@ extern "C" mirror::Object* artIGetObjectFromMterp(mirror::Object* obj, uint32_t 
   return obj->GetFieldObject<mirror::Object>(MemberOffset(field_offset));
 }
 
+extern "C" void MterpTraceExecution(ShadowFrame* shadow_frame)
+  SHARED_REQUIRES(Locks::mutator_lock_) {
+  const Instruction* inst = Instruction::At(shadow_frame->GetDexPCPtr());
+  TraceExecution(*shadow_frame, inst, shadow_frame->GetDexPC());
+}
+
 }  // namespace interpreter
 }  // namespace art

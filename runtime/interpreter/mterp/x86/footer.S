@@ -13,6 +13,17 @@
  * TUNING: for consistency, we may want to just go ahead and handle these here.
  */
 #define MTERP_LOGGING 0
+
+MterpTracingAndGoTo:
+#if MTERP_TRACING
+    EXPORT_PC
+    lea     OFF_FP_SHADOWFRAME(rFP), %eax
+    movl    %eax, OUT_ARG0(%esp)
+    call    SYMBOL(MterpTraceExecution)
+    REFRESH_IBASE
+    GOTO_NEXT_WITHOUT_TRACING
+#endif
+
 common_errDivideByZero:
     EXPORT_PC
 #if MTERP_LOGGING

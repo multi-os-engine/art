@@ -165,6 +165,12 @@ unspecified registers or condition codes.
 #define MTERP_SUSPEND 0
 
 /*
+ * Dump each bytecode before execution.
+ * You need also enable tracing in TraceExecution method itself to have an effect.
+ */
+#define MTERP_TRACING 0
+
+/*
  * "export" the PC to dex_pc field in the shadow frame, f/b/o future exception objects.  Must
  * be done *before* something throws.
  *
@@ -229,12 +235,20 @@ unspecified registers or condition codes.
 /*
  * Remove opcode from rINST, compute the address of handler and jump to it.
  */
-.macro GOTO_NEXT
+.macro GOTO_NEXT_WITHOUT_TRACING
     movzx   rINSTbl,%eax
     movzbl  rINSTbh,rINST
     shll    MACRO_LITERAL(${handler_size_bits}), %eax
     addl    rIBASE, %eax
     jmp     *%eax
+.endm
+
+.macro GOTO_NEXT
+#if MTERP_TRACING
+    jmp     MterpTracingAndGoTo
+#else
+    GOTO_NEXT_WITHOUT_TRACING
+#endif
 .endm
 
 /*
