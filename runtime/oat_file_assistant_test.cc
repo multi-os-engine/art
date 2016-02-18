@@ -260,7 +260,7 @@ class OatFileAssistantTest : public CommonRuntimeTest {
   }
 
   void GenerateExtractOnlyOdexForTest(const std::string& dex_location,
-                                          const std::string& odex_location) {
+                                      const std::string& odex_location) {
     std::vector<std::string> args;
     args.push_back("--dex-file=" + dex_location);
     args.push_back("--oat-file=" + odex_location);
@@ -843,7 +843,7 @@ TEST_F(OatFileAssistantTest, DexExtractOnlyOdexNoOat) {
   // Verify the status.
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kOatIsExtractOnly, oat_file_assistant.GetDexOptNeeded());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());

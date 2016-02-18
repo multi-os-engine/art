@@ -69,6 +69,11 @@ class OatFileAssistant {
     // up to date, patchoat must be run on the oat file.
     // Matches Java: dalvik.system.DexFile.SELF_PATCHOAT_NEEDED = 3
     kSelfPatchOatNeeded = 3,
+
+    // kOatIsExtractOnly - There is an oat file but it is only extracted. The
+    // user should determine if dex2oat is needed or not on it.
+    // Matches Java: dalvik.system.DexFile.OAT_IS_EXTRACT_ONLY = 4
+    kOatIsExtractOnly = 4,
   };
 
   enum OatStatus {

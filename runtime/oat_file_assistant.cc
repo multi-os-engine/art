@@ -143,6 +143,17 @@ OatFileAssistant::DexOptNeeded OatFileAssistant::GetDexOptNeeded() {
   // whether we should check to see if the profile is out of date here.
 
   if (OatFileIsUpToDate() || OdexFileIsUpToDate()) {
+    // Extract only oat files are considered up to date from runtime perspective as they don't
+    // necessary need (re)compilation or relocation. However, it is useful to return a more refined
+    // code to the caller so that they can decide whether or not just an extracted oat file is good
+    // enough.
+    if (cached_oat_file_ != nullptr && cached_oat_file_->IsExtractOnly()) {
+      return kOatIsExtractOnly;
+    }
+    if (cached_odex_file_ != nullptr && cached_odex_file_->IsExtractOnly()) {
+      return kOatIsExtractOnly;
+    }
+    // The oat/odex file is not extract only and up to date. There is no need for dexopt.
     return kNoDexOptNeeded;
   }
 
@@ -160,6 +171,7 @@ OatFileAssistant::DexOptNeeded OatFileAssistant::GetDexOptNeeded() {
 bool OatFileAssistant::MakeUpToDate(std::string* error_msg) {
   switch (GetDexOptNeeded()) {
     case kNoDexOptNeeded: return true;
+    case kOatIsExtractOnly: return true;  // We don't need to generate an oat file or relocate.
     case kDex2OatNeeded: return GenerateOatFile(error_msg);
     case kPatchOatNeeded: return RelocateOatFile(OdexFileName(), error_msg);
     case kSelfPatchOatNeeded: return RelocateOatFile(OatFileName(), error_msg);
