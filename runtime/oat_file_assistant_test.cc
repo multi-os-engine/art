@@ -260,7 +260,7 @@ class OatFileAssistantTest : public CommonRuntimeTest {
   }
 
   void GenerateExtractOnlyOdexForTest(const std::string& dex_location,
-                                          const std::string& odex_location) {
+                                      const std::string& odex_location) {
     std::vector<std::string> args;
     args.push_back("--dex-file=" + dex_location);
     args.push_back("--oat-file=" + odex_location);
@@ -277,7 +277,7 @@ class OatFileAssistantTest : public CommonRuntimeTest {
     EXPECT_EQ(odex_file->GetOatHeader().GetImageFileLocationOatChecksum(), 0u);
     EXPECT_EQ(odex_file->GetOatHeader().GetImageFileLocationOatDataBegin(), 0u);
     EXPECT_EQ(odex_file->GetOatHeader().GetImagePatchDelta(), 0);
-}
+  }
 
  private:
   // Reserve memory around where the image will be loaded so other memory
@@ -381,7 +381,7 @@ TEST_F(OatFileAssistantTest, NoDexNoOat) {
 
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
   EXPECT_FALSE(oat_file_assistant.HasOriginalDexFiles());
 
   // Trying to make the oat file up to date should not fail or crash.
@@ -402,7 +402,7 @@ TEST_F(OatFileAssistantTest, OatUpToDate) {
 
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
   EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
@@ -423,7 +423,7 @@ TEST_F(OatFileAssistantTest, MultiDexOatUpToDate) {
   GenerateOatForTest(dex_location.c_str());
 
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
   EXPECT_TRUE(oat_file_assistant.HasOriginalDexFiles());
 
   // Verify we can load both dex files.
@@ -595,7 +595,7 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexNoOat) {
   std::string error_msg;
   ASSERT_TRUE(oat_file_assistant.MakeUpToDate(&error_msg)) << error_msg;
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -651,7 +651,7 @@ TEST_F(OatFileAssistantTest, StrippedDexOdexOat) {
   std::string error_msg;
   ASSERT_TRUE(oat_file_assistant.MakeUpToDate(&error_msg)) << error_msg;
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -683,7 +683,7 @@ TEST_F(OatFileAssistantTest, ResourceOnlyDex) {
   // Verify the status.
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
@@ -699,7 +699,7 @@ TEST_F(OatFileAssistantTest, ResourceOnlyDex) {
   std::string error_msg;
   EXPECT_TRUE(oat_file_assistant.MakeUpToDate(&error_msg)) << error_msg;
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
@@ -743,7 +743,7 @@ TEST_F(OatFileAssistantTest, SelfRelocation) {
   std::string error_msg;
   ASSERT_TRUE(oat_file_assistant.MakeUpToDate(&error_msg)) << error_msg;
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
@@ -818,7 +818,7 @@ TEST_F(OatFileAssistantTest, DexPicOdexNoOat) {
   // Verify the status.
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -831,7 +831,7 @@ TEST_F(OatFileAssistantTest, DexPicOdexNoOat) {
 }
 
 // Case: We have a DEX file and a ExtractOnly ODEX file, but no OAT file.
-// Expect: The status is kNoDexOptNeeded, because ExtractOnly contains no code.
+// Expect: The status is kNoDexOptNeededOnlyExtracted, because ExtractOnly contains no code.
 TEST_F(OatFileAssistantTest, DexExtractOnlyOdexNoOat) {
   std::string dex_location = GetScratchDir() + "/DexExtractOnlyOdexNoOat.jar";
   std::string odex_location = GetOdexDir() + "/DexExtractOnlyOdexNoOat.odex";
@@ -843,7 +843,7 @@ TEST_F(OatFileAssistantTest, DexExtractOnlyOdexNoOat) {
   // Verify the status.
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, false);
 
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededOnlyExtracted, oat_file_assistant.GetDexOptNeeded());
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
   EXPECT_TRUE(oat_file_assistant.OdexFileExists());
@@ -1016,7 +1016,7 @@ TEST_F(OatFileAssistantTest, ShortDexLocation) {
   OatFileAssistant oat_file_assistant(dex_location.c_str(), kRuntimeISA, true);
 
   EXPECT_FALSE(oat_file_assistant.IsInBootClassPath());
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, oat_file_assistant.GetDexOptNeeded());
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, oat_file_assistant.GetDexOptNeeded());
   EXPECT_FALSE(oat_file_assistant.OdexFileExists());
   EXPECT_FALSE(oat_file_assistant.OatFileExists());
   EXPECT_TRUE(oat_file_assistant.OdexFileIsOutOfDate());
@@ -1199,7 +1199,7 @@ TEST_F(OatFileAssistantTest, DexOptStatusValues) {
       soa.Self(), dexfile, "NO_DEXOPT_NEEDED", "I");
   ASSERT_FALSE(no_dexopt_needed == nullptr);
   EXPECT_EQ(no_dexopt_needed->GetTypeAsPrimitiveType(), Primitive::kPrimInt);
-  EXPECT_EQ(OatFileAssistant::kNoDexOptNeeded, no_dexopt_needed->GetInt(dexfile.Get()));
+  EXPECT_EQ(OatFileAssistant::kNoDexOptNeededFullyCompiled, no_dexopt_needed->GetInt(dexfile.Get()));
 
   ArtField* dex2oat_needed = mirror::Class::FindStaticField(
       soa.Self(), dexfile, "DEX2OAT_NEEDED", "I");

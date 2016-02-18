@@ -138,12 +138,27 @@ bool OatFileAssistant::Lock(std::string* error_msg) {
   return true;
 }
 
+static OatFileAssistant::DexOptNeeded RefineNoDexOptNeeded(const OatFile& oat_file) {
+    if (oat_file.IsExtractOnly()) {
+      DCHECK(!oat_file.IsProfileGuideCompiled());
+      return OatFileAssistant::kNoDexOptNeededOnlyExtracted;
+    }
+    if (oat_file.IsProfileGuideCompiled()) {
+      return OatFileAssistant::kNoDexOptNeededProfileGuideCompiled;
+    }
+    return OatFileAssistant::kNoDexOptNeededFullyCompiled;
+}
+
 OatFileAssistant::DexOptNeeded OatFileAssistant::GetDexOptNeeded() {
   // TODO: If the profiling code is ever restored, it's worth considering
   // whether we should check to see if the profile is out of date here.
 
-  if (OatFileIsUpToDate() || OdexFileIsUpToDate()) {
-    return kNoDexOptNeeded;
+  if (OatFileIsUpToDate()) {
+    return RefineNoDexOptNeeded(*cached_oat_file_);
+  }
+
+  if (OdexFileIsUpToDate()) {
+    return RefineNoDexOptNeeded(*cached_odex_file_);
   }
 
   if (OdexFileNeedsRelocation()) {
@@ -154,12 +169,16 @@ OatFileAssistant::DexOptNeeded OatFileAssistant::GetDexOptNeeded() {
     return kSelfPatchOatNeeded;
   }
 
-  return HasOriginalDexFiles() ? kDex2OatNeeded : kNoDexOptNeeded;
+  // TODO(calin): Is the false branch really possible? It means that we are not
+  // up to date, don't need relocation and have no original dex file...
+  return HasOriginalDexFiles() ? kDex2OatNeeded : kNoDexOptNeededFullyCompiled;
 }
 
 bool OatFileAssistant::MakeUpToDate(std::string* error_msg) {
   switch (GetDexOptNeeded()) {
-    case kNoDexOptNeeded: return true;
+    case kNoDexOptNeededFullyCompiled: return true;
+    case kNoDexOptNeededOnlyExtracted: return true;
+    case kNoDexOptNeededProfileGuideCompiled: return true;
     case kDex2OatNeeded: return GenerateOatFile(error_msg);
     case kPatchOatNeeded: return RelocateOatFile(OdexFileName(), error_msg);
     case kSelfPatchOatNeeded: return RelocateOatFile(OatFileName(), error_msg);

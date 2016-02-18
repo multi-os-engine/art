@@ -470,6 +470,10 @@ bool OatHeader::IsExtractOnly() const {
   return IsKeyEnabled(OatHeader::kExtractOnlyKey);
 }
 
+bool OatHeader::IsProfileGuideCompiled() const {
+  return IsKeyEnabled(OatHeader::kProfileGuideCompiledKey);
+}
+
 bool OatHeader::IsKeyEnabled(const char* key) const {
   const char* key_value = GetStoreValueByKey(key);
   return (key_value != nullptr && strncmp(key_value, kTrueValue, sizeof(kTrueValue)) == 0);
