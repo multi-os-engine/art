@@ -72,6 +72,14 @@ TEST_F(ImmuneSpacesTest, AppendBasic) {
   EXPECT_EQ(reinterpret_cast<uint8_t*>(spaces.GetLargestImmuneRegion().End()), b.Limit());
 }
 
+class DummyOatFile : public OatFile {
+ public:
+  DummyOatFile(uint8_t* begin, uint8_t* end) : OatFile("Location", /*is_executable*/ false) {
+    begin_ = begin;
+    end_ = end;
+  }
+};
+
 class DummyImageSpace : public space::ImageSpace {
  public:
   DummyImageSpace(MemMap* map, accounting::ContinuousSpaceBitmap* live_bitmap)
@@ -82,7 +90,7 @@ class DummyImageSpace : public space::ImageSpace {
                    map->End()) {}
 
   // OatSize is how large the oat file is after the image.
-  static DummyImageSpace* Create(size_t size, size_t oat_size) {
+  static DummyImageSpace* Create(size_t size, size_t oat_offset, size_t oat_size) {
     std::string error_str;
     std::unique_ptr<MemMap> map(MemMap::MapAnonymous("DummyImageSpace",
                                                      nullptr,
@@ -100,6 +108,9 @@ class DummyImageSpace : public space::ImageSpace {
     if (live_bitmap == nullptr) {
       return nullptr;
     }
+    // The actual mapped oat file may not be directly after the image for the app image case.
+    std::unique_ptr<DummyOatFile> oat_file(new DummyOatFile(map->End() + oat_offset,
+                                                            map->End() + oat_offset + oat_size));
     // Create image header.
     ImageSection sections[ImageHeader::kSectionCount];
     new (map->Begin()) ImageHeader(
@@ -108,6 +119,7 @@ class DummyImageSpace : public space::ImageSpace {
         sections,
         /*image_roots*/PointerToLowMemUInt32(map->Begin()) + 1,
         /*oat_checksum*/0u,
+        // The oat file data in the header is always right after the image space.
         /*oat_file_begin*/PointerToLowMemUInt32(map->End()),
         /*oat_data_begin*/PointerToLowMemUInt32(map->End()),
         /*oat_data_end*/PointerToLowMemUInt32(map->End() + oat_size),
@@ -121,7 +133,10 @@ class DummyImageSpace : public space::ImageSpace {
         /*is_pic*/false,
         ImageHeader::kStorageModeUncompressed,
         /*storage_size*/0u);
-    return new DummyImageSpace(map.release(), live_bitmap.release());
+    auto* ret = new DummyImageSpace(map.release(), live_bitmap.release());
+    ret->oat_file_ = std::move(oat_file);
+    ret->oat_file_non_owned_ = ret->oat_file_.get();
+    return ret;
   }
 };
 
@@ -129,7 +144,9 @@ TEST_F(ImmuneSpacesTest, AppendAfterImage) {
   ImmuneSpaces spaces;
   constexpr size_t image_size = 123 * kPageSize;
   constexpr size_t image_oat_size = 321 * kPageSize;
-  std::unique_ptr<DummyImageSpace> image_space(DummyImageSpace::Create(image_size, image_oat_size));
+  std::unique_ptr<DummyImageSpace> image_space(DummyImageSpace::Create(image_size,
+                                                                       0,
+                                                                       image_oat_size));
   ASSERT_TRUE(image_space != nullptr);
   const ImageHeader& image_header = image_space->GetImageHeader();
   EXPECT_EQ(image_header.GetImageSize(), image_size);
@@ -150,6 +167,18 @@ TEST_F(ImmuneSpacesTest, AppendAfterImage) {
   EXPECT_EQ(reinterpret_cast<uint8_t*>(spaces.GetLargestImmuneRegion().Begin()),
             image_space->Begin());
   EXPECT_EQ(reinterpret_cast<uint8_t*>(spaces.GetLargestImmuneRegion().End()), space.Limit());
+  // Check that appending with a gap between the map does not include the oat file.
+  image_space.reset(DummyImageSpace::Create(image_size, kPageSize, image_oat_size));
+  spaces.Reset();
+  {
+    WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
+    spaces.AddSpace(image_space.get());
+  }
+  EXPECT_EQ(reinterpret_cast<uint8_t*>(spaces.GetLargestImmuneRegion().Begin()),
+            image_space->Begin());
+  // Size should be equal, we should not add the oat file since it is not adjacent to the image
+  // space.
+  EXPECT_EQ(spaces.GetLargestImmuneRegion().Size(), image_size);
 }
 
 }  // namespace collector
