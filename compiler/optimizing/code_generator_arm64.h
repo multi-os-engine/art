@@ -492,12 +492,11 @@ class CodeGeneratorARM64 : public CodeGenerator {
   void InvokeRuntime(QuickEntrypointEnum entrypoint,
                      HInstruction* instruction,
                      uint32_t dex_pc,
-                     SlowPathCode* slow_path) OVERRIDE;
+                     SlowPathCode* slow_path = nullptr) OVERRIDE;
 
-  void InvokeRuntime(int32_t offset,
-                     HInstruction* instruction,
-                     uint32_t dex_pc,
-                     SlowPathCode* slow_path);
+  void InvokeRuntimeHelper(int32_t entry_point_offset,
+                           HInstruction* instruction,
+                           SlowPathCode* slow_path);
 
   ParallelMoveResolverARM64* GetMoveResolver() OVERRIDE { return &move_resolver_; }
 
