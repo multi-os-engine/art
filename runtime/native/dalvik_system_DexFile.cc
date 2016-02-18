@@ -345,17 +345,18 @@ static jobjectArray DexFile_getClassNameList(JNIEnv* env, jclass, jobject cookie
   return result;
 }
 
+// TODO(calin): remove `defer` attribute. It's no longer needed.
 static jint GetDexOptNeeded(JNIEnv* env,
                             const char* filename,
                             const char* pkgname,
                             const char* instruction_set,
-                            const jboolean defer) {
+                            const jboolean defer ATTRIBUTE_UNUSED) {
   if ((filename == nullptr) || !OS::FileExists(filename)) {
     LOG(ERROR) << "DexFile_getDexOptNeeded file '" << filename << "' does not exist";
     ScopedLocalRef<jclass> fnfe(env, env->FindClass("java/io/FileNotFoundException"));
     const char* message = (filename == nullptr) ? "<empty file name>" : filename;
     env->ThrowNew(fnfe.get(), message);
-    return OatFileAssistant::kNoDexOptNeeded;
+    return -1;
   }
 
   const InstructionSet target_instruction_set = GetInstructionSetFromString(instruction_set);
@@ -363,7 +364,7 @@ static jint GetDexOptNeeded(JNIEnv* env,
     ScopedLocalRef<jclass> iae(env, env->FindClass("java/lang/IllegalArgumentException"));
     std::string message(StringPrintf("Instruction set %s is invalid.", instruction_set));
     env->ThrowNew(iae.get(), message.c_str());
-    return 0;
+    return -1;
   }
 
   // TODO: Verify the dex location is well formed, and throw an IOException if
@@ -373,27 +374,7 @@ static jint GetDexOptNeeded(JNIEnv* env,
 
   // Always treat elements of the bootclasspath as up-to-date.
   if (oat_file_assistant.IsInBootClassPath()) {
-    return OatFileAssistant::kNoDexOptNeeded;
-  }
-
-  // TODO: Checking the profile should probably be done in the GetStatus()
-  // function. We have it here because GetStatus() should not be copying
-  // profile files. But who should be copying profile files?
-  if (oat_file_assistant.OdexFileIsOutOfDate()) {
-    // Needs recompile if profile has changed significantly.
-    if (Runtime::Current()->GetProfilerOptions().IsEnabled()) {
-      if (oat_file_assistant.IsProfileChangeSignificant()) {
-        if (!defer) {
-          oat_file_assistant.CopyProfileFile();
-        }
-        return OatFileAssistant::kDex2OatNeeded;
-      } else if (oat_file_assistant.ProfileExists()
-          && !oat_file_assistant.OldProfileExists()) {
-        if (!defer) {
-          oat_file_assistant.CopyProfileFile();
-        }
-      }
-    }
+    return OatFileAssistant::kNoDexOptNeededFullyCompiled;
   }
 
   return oat_file_assistant.GetDexOptNeeded();
@@ -430,7 +411,10 @@ static jboolean DexFile_isDexOptNeeded(JNIEnv* env, jclass, jstring javaFilename
   ScopedUtfChars filename(env, javaFilename);
   jint status = GetDexOptNeeded(env, filename.c_str(), nullptr /* pkgname */,
                                 instruction_set, false /* defer */);
-  return (status != OatFileAssistant::kNoDexOptNeeded) ? JNI_TRUE : JNI_FALSE;
+  bool dexopt_needed = status != OatFileAssistant::kNoDexOptNeededFullyCompiled &&
+      status != OatFileAssistant::kNoDexOptNeededOnlyExtracted &&
+      status != OatFileAssistant::kNoDexOptNeededProfileGuideCompiled;
+  return dexopt_needed ? JNI_TRUE : JNI_FALSE;
 }
 
 static JNINativeMethod gMethods[] = {

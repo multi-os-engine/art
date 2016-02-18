@@ -1072,6 +1072,9 @@ class Dex2Oat FINAL {
     key_value_store_->Put(
         OatHeader::kExtractOnlyKey,
         compiler_options_->IsExtractOnly() ? OatHeader::kTrueValue : OatHeader::kFalseValue);
+    key_value_store_->Put(
+        OatHeader::kProfileGuideCompiledKey,
+        UseProfileGuidedCompilation() ? OatHeader::kTrueValue : OatHeader::kFalseValue);
   }
 
   // Parse the arguments from the command line. In case of an unrecognized option or impossible

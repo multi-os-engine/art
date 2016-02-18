@@ -39,6 +39,7 @@ class PACKED(4) OatHeader {
   static constexpr const char* kPicKey = "pic";
   static constexpr const char* kDebuggableKey = "debuggable";
   static constexpr const char* kExtractOnlyKey = "extract-only";
+  static constexpr const char* kProfileGuideCompiledKey = "profile-guide-compiled";
   static constexpr const char* kClassPathKey = "classpath";
   static constexpr const char* kBootClassPath = "bootclasspath";
 
@@ -108,6 +109,7 @@ class PACKED(4) OatHeader {
   bool IsPic() const;
   bool IsDebuggable() const;
   bool IsExtractOnly() const;
+  bool IsProfileGuideCompiled() const;
 
  private:
   OatHeader(InstructionSet instruction_set,

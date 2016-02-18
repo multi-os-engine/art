@@ -50,10 +50,11 @@ class ImageSpace;
 class OatFileAssistant {
  public:
   enum DexOptNeeded {
-    // kNoDexOptNeeded - The code for this dex location is up to date and can
-    // be used as is.
-    // Matches Java: dalvik.system.DexFile.NO_DEXOPT_NEEDED = 0
-    kNoDexOptNeeded = 0,
+    // kNoDexOptNeededFullyCompiled - The code for this dex location is up to
+    // date and can be used as it is, without further compilation or
+    // relocation. The code was fully compiled before.
+    // Matches Java: dalvik.system.DexFile.NO_DEXOPT_NEEDED_FULLY_COMPILED = 0
+    kNoDexOptNeededFullyCompiled = 0,
 
     // kDex2OatNeeded - In order to make the code for this dex location up to
     // date, dex2oat must be run on the dex file.
@@ -69,6 +70,19 @@ class OatFileAssistant {
     // up to date, patchoat must be run on the oat file.
     // Matches Java: dalvik.system.DexFile.SELF_PATCHOAT_NEEDED = 3
     kSelfPatchOatNeeded = 3,
+
+    // kNoDexOptNeededOnlyExtracted - The code for this dex location is up to
+    // date and can be used as it is,  without further compilation or
+    // relocation. The code was only extracted from the dex file and nothing
+    // was compiled.
+    // Matches Java: dalvik.system.DexFile.NO_DEXOPT_NEEDED_ONLY_EXTRACTED = 4
+    kNoDexOptNeededOnlyExtracted = 4,
+
+    // kNoDexOptNeededProfileGuideCompiled - The code for this dex location is
+    // up to date and can be used as it is,  without further compilation or
+    // relocation. The code was profile guide compiled before.
+    // Matches Java: dalvik.system.DexFile.NO_DEXOPT_NEEDED_PROFILE_GUIDE_COMPILED = 5
+    kNoDexOptNeededProfileGuideCompiled = 5,
   };
 
   enum OatStatus {
