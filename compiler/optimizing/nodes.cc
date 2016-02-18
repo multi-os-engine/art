@@ -1202,6 +1202,113 @@ HConstant* HBinaryOperation::TryStaticEvaluation() const {
   return nullptr;
 }
 
+#define CASE_ONE_ARG_METHOD(Intrinsic, ReturnType, ArgType, Function)       \
+    case Intrinsics::k ## Intrinsic:                                        \
+      DCHECK_EQ(1u, GetNumberOfArguments());                                \
+      DCHECK_EQ(Primitive::kPrim ## ReturnType, GetType());                 \
+      DCHECK_EQ(Primitive::kPrim ## ArgType, InputAt(0)->GetType());        \
+      if (InputAt(0)->Is ## ArgType ## Constant()) {                        \
+        return GetBlock()->GetGraph()->Get ## ReturnType ## Constant(       \
+            Function(InputAt(0)->As ## ArgType ## Constant()->GetValue())); \
+      }                                                                     \
+      break
+
+#define CASE_TWO_ARGS_METHOD(Intrinsic, ReturnType, Arg0Type, Arg1Type, Function) \
+    case Intrinsics::k ## Intrinsic:                                              \
+      DCHECK_EQ(2u, GetNumberOfArguments());                                      \
+      DCHECK_EQ(Primitive::kPrim ## ReturnType, GetType());                       \
+      DCHECK_EQ(Primitive::kPrim ## Arg0Type, InputAt(0)->GetType());             \
+      DCHECK_EQ(Primitive::kPrim ## Arg1Type, InputAt(1)->GetType());             \
+      if (InputAt(0)->Is ## Arg0Type ## Constant() &&                             \
+          InputAt(1)->Is ## Arg1Type ## Constant()) {                             \
+        return GetBlock()->GetGraph()->Get ## ReturnType ## Constant(             \
+            Function(InputAt(0)->As ## Arg0Type ## Constant()->GetValue(),        \
+                     InputAt(1)->As ## Arg1Type ## Constant()->GetValue()));      \
+      }                                                                           \
+      break
+
+// Special case for methods taking an `int` as argument, but accepting
+// other "small" integer types (`byte`, `short`, `char`) as well.
+#define CASE_ONE_INT_ARG_METHOD(Intrinsic, ReturnType, Function)            \
+    case Intrinsics::k ## Intrinsic:                                        \
+      DCHECK_EQ(1u, GetNumberOfArguments());                                \
+      DCHECK_EQ(Primitive::kPrim ## ReturnType, GetType());                 \
+      DCHECK(Primitive::IsIntOrShortOrByteOrChar(InputAt(0)->GetType()))    \
+          << InputAt(0)->GetType();                                         \
+      if (InputAt(0)->IsIntConstant()) {                                    \
+        return GetBlock()->GetGraph()->Get ## ReturnType ## Constant(       \
+            Function(InputAt(0)->AsIntConstant()->GetValue()));             \
+      }                                                                     \
+      break
+
+// Special case for methods taking two `int`s as arguments, but accepting
+// other "small" integer types (`byte`, `short`, `char`) as well.
+#define CASE_TWO_INT_ARGS_METHOD(Intrinsic, ReturnType, Function)           \
+    case Intrinsics::k ## Intrinsic:                                        \
+      DCHECK_EQ(2u, GetNumberOfArguments());                                \
+      DCHECK_EQ(Primitive::kPrim ## ReturnType, GetType());                 \
+      DCHECK(Primitive::IsIntOrShortOrByteOrChar(InputAt(0)->GetType()))    \
+          << InputAt(1)->GetType();                                         \
+      DCHECK(Primitive::IsIntOrShortOrByteOrChar(InputAt(1)->GetType()))    \
+          << InputAt(1)->GetType();                                         \
+      if (InputAt(0)->IsIntConstant() &&                                    \
+          InputAt(1)->IsIntConstant()) {                                    \
+        return GetBlock()->GetGraph()->Get ## ReturnType ## Constant(       \
+            Function(InputAt(0)->AsIntConstant()->GetValue(),               \
+                     InputAt(1)->AsIntConstant()->GetValue()));             \
+      }                                                                     \
+      break
+
+HConstant* HInvoke::TryStaticEvaluation() const {
+  switch (GetIntrinsic()) {
+    // java.lang.Math functions recognized as intrinsics.
+    CASE_ONE_ARG_METHOD(MathAbsDouble, Double, Double, std::abs);
+    CASE_ONE_ARG_METHOD(MathAbsFloat, Float, Float, std::abs);
+    CASE_ONE_ARG_METHOD(MathAbsLong, Long, Long, std::abs);
+    CASE_ONE_INT_ARG_METHOD(MathAbsInt, Int, std::abs);
+    CASE_TWO_ARGS_METHOD(MathMinDoubleDouble, Double, Double, Double, std::min);
+    CASE_TWO_ARGS_METHOD(MathMinFloatFloat, Float, Float, Float, std::min);
+    CASE_TWO_ARGS_METHOD(MathMinLongLong, Long, Long, Long, std::min);
+    CASE_TWO_INT_ARGS_METHOD(MathMinIntInt, Int, std::min);
+    CASE_TWO_ARGS_METHOD(MathMaxDoubleDouble, Double, Double, Double, std::max);
+    CASE_TWO_ARGS_METHOD(MathMaxFloatFloat, Float, Float, Float, std::max);
+    CASE_TWO_ARGS_METHOD(MathMaxLongLong, Long, Long, Long, std::max);
+    CASE_TWO_INT_ARGS_METHOD(MathMaxIntInt, Int, std::max);
+    CASE_ONE_ARG_METHOD(MathCos, Double, Double, std::cos);
+    CASE_ONE_ARG_METHOD(MathSin, Double, Double, std::sin);
+    CASE_ONE_ARG_METHOD(MathAcos, Double, Double, std::acos);
+    CASE_ONE_ARG_METHOD(MathAsin, Double, Double, std::asin);
+    CASE_ONE_ARG_METHOD(MathAtan, Double, Double, std::atan);
+    CASE_TWO_ARGS_METHOD(MathAtan2, Double, Double, Double, std::atan2);
+    CASE_ONE_ARG_METHOD(MathCbrt, Double, Double, std::cbrt);
+    CASE_ONE_ARG_METHOD(MathCosh, Double, Double, std::cosh);
+    CASE_ONE_ARG_METHOD(MathExp, Double, Double, std::exp);
+    CASE_ONE_ARG_METHOD(MathExpm1, Double, Double, std::expm1);
+    CASE_TWO_ARGS_METHOD(MathHypot, Double, Double, Double, std::hypot);
+    CASE_ONE_ARG_METHOD(MathLog, Double, Double, std::log);
+    CASE_ONE_ARG_METHOD(MathLog10, Double, Double, std::log10);
+    CASE_TWO_ARGS_METHOD(MathNextAfter, Double, Double, Double, std::nextafter);
+    CASE_ONE_ARG_METHOD(MathSinh, Double, Double, std::sinh);
+    CASE_ONE_ARG_METHOD(MathTan, Double, Double, std::tan);
+    CASE_ONE_ARG_METHOD(MathTanh, Double, Double, std::tanh);
+    CASE_ONE_ARG_METHOD(MathSqrt, Double, Double, std::sqrt);
+    CASE_ONE_ARG_METHOD(MathCeil, Double, Double, std::ceil);
+    CASE_ONE_ARG_METHOD(MathFloor, Double, Double, std::floor);
+    CASE_ONE_ARG_METHOD(MathRint, Double, Double, std::rint);
+    // TODO: Handle MathRoundDouble.
+    // TODO: Handle MathRoundFloat.
+    default:
+      // Do nothing.
+      break;
+  }
+  return nullptr;
+}
+
+#undef CASE_ONE_ARG_METHOD
+#undef CASE_TWO_ARGS_METHOD
+#undef CASE_ONE_INT_ARG_METHOD
+#undef CASE_TWO_INT_ARGS_METHOD
+
 HConstant* HBinaryOperation::GetConstantRight() const {
   if (GetRight()->IsConstant()) {
     return GetRight()->AsConstant();

@@ -32,6 +32,9 @@ class HConstantFoldingVisitor : public HGraphDelegateVisitor {
   void VisitBinaryOperation(HBinaryOperation* inst) OVERRIDE;
 
   void VisitTypeConversion(HTypeConversion* inst) OVERRIDE;
+
+  void VisitInvoke(HInvoke* inst) OVERRIDE;
+
   void VisitDivZeroCheck(HDivZeroCheck* inst) OVERRIDE;
 
   DISALLOW_COPY_AND_ASSIGN(HConstantFoldingVisitor);
@@ -110,7 +113,18 @@ void HConstantFoldingVisitor::VisitBinaryOperation(HBinaryOperation* inst) {
 void HConstantFoldingVisitor::VisitTypeConversion(HTypeConversion* inst) {
   // Constant folding: replace `TypeConversion(a)' with a constant at
   // compile time if `a' is a constant.
-  HConstant* constant = inst->AsTypeConversion()->TryStaticEvaluation();
+  HConstant* constant = inst->TryStaticEvaluation();
+  if (constant != nullptr) {
+    inst->ReplaceWith(constant);
+    inst->GetBlock()->RemoveInstruction(inst);
+  }
+}
+
+void HConstantFoldingVisitor::VisitInvoke(HInvoke* inst) {
+  // Constant folding: replace some method calls `m(args...)' with a
+  // constant at compile time if its effective argument `args...' are
+  // all constants, for some well known methods.
+  HConstant* constant = inst->TryStaticEvaluation();
   if (constant != nullptr) {
     inst->ReplaceWith(constant);
     inst->GetBlock()->RemoveInstruction(inst);
