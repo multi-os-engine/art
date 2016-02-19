@@ -875,19 +875,19 @@ class Dex2Oat FINAL {
     // It they are not set, use default values for inlining settings.
     // TODO: We should rethink the compiler filter. We mostly save
     // time here, which is orthogonal to space.
-    if (compiler_options_->inline_depth_limit_ == CompilerOptions::kUnsetInlineDepthLimit) {
-      compiler_options_->inline_depth_limit_ =
+    if (compiler_options_->GetInlineDepthLimit() == CompilerOptions::kUnsetInlineDepthLimit) {
+      compiler_options_->SetInlineDepthLimit(
           (compiler_options_->compiler_filter_ == CompilerOptions::kSpace)
           // Implementation of the space filter: limit inlining depth.
           ? CompilerOptions::kSpaceFilterInlineDepthLimit
-          : CompilerOptions::kDefaultInlineDepthLimit;
+          : CompilerOptions::kDefaultInlineDepthLimit);
     }
-    if (compiler_options_->inline_max_code_units_ == CompilerOptions::kUnsetInlineMaxCodeUnits) {
-      compiler_options_->inline_max_code_units_ =
+    if (compiler_options_->GetInlineMaxCodeUnits() == CompilerOptions::kUnsetInlineMaxCodeUnits) {
+      compiler_options_->SetInlineMaxCodeUnits(
           (compiler_options_->compiler_filter_ == CompilerOptions::kSpace)
           // Implementation of the space filter: limit inlining max code units.
           ? CompilerOptions::kSpaceFilterInlineMaxCodeUnits
-          : CompilerOptions::kDefaultInlineMaxCodeUnits;
+          : CompilerOptions::kDefaultInlineMaxCodeUnits);
     }
 
     // Checks are all explicit until we know the architecture.

@@ -187,7 +187,9 @@ void CommonCompilerTest::SetUp() {
   }
 }
 
-void CommonCompilerTest::CreateCompilerDriver(Compiler::Kind kind, InstructionSet isa) {
+void CommonCompilerTest::CreateCompilerDriver(Compiler::Kind kind,
+                                              InstructionSet isa,
+                                              size_t threads) {
   compiler_driver_.reset(new CompilerDriver(compiler_options_.get(),
                                             verification_results_.get(),
                                             method_inliner_map_.get(),
@@ -198,7 +200,7 @@ void CommonCompilerTest::CreateCompilerDriver(Compiler::Kind kind, InstructionSe
                                             GetImageClasses(),
                                             GetCompiledClasses(),
                                             GetCompiledMethods(),
-                                            2,
+                                            threads,
                                             true,
                                             true,
                                             timer_.get(),
