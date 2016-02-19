@@ -833,23 +833,39 @@ class Thread {
   }
 
   bool GetIsGcMarking() const {
-    CHECK(kUseReadBarrier);
+    DCHECK(kUseReadBarrier);
     return tls32_.is_gc_marking;
   }
 
   void SetIsGcMarking(bool is_marking) {
-    CHECK(kUseReadBarrier);
+    DCHECK(kUseReadBarrier);
     tls32_.is_gc_marking = is_marking;
   }
 
   bool GetWeakRefAccessEnabled() const {
-    CHECK(kUseReadBarrier);
+    DCHECK(kUseReadBarrier);
     return tls32_.weak_ref_access_enabled;
   }
 
   void SetWeakRefAccessEnabled(bool enabled) {
-    CHECK(kUseReadBarrier);
+    DCHECK(kUseReadBarrier);
     tls32_.weak_ref_access_enabled = enabled;
+  }
+
+  uint32_t GetDisableThreadFlipCount() {
+    DCHECK(kUseReadBarrier);
+    return tls32_.disable_thread_flip_count;
+  }
+
+  void IncrementDisableThreadFlipCount() {
+    DCHECK(kUseReadBarrier);
+    ++tls32_.disable_thread_flip_count;
+  }
+
+  void DecrementDisableThreadFlipCount() {
+    DCHECK(kUseReadBarrier);
+    DCHECK_GT(tls32_.disable_thread_flip_count, 0U);
+    --tls32_.disable_thread_flip_count;
   }
 
   // Activates single step control for debugging. The thread takes the
@@ -1214,7 +1230,8 @@ class Thread {
       daemon(is_daemon), throwing_OutOfMemoryError(false), no_thread_suspension(0),
       thread_exit_check_count(0), handling_signal_(false),
       suspended_at_suspend_check(false), ready_for_debug_invoke(false),
-      debug_method_entry_(false), is_gc_marking(false), weak_ref_access_enabled(true) {
+      debug_method_entry_(false), is_gc_marking(false), weak_ref_access_enabled(true),
+      disable_thread_flip_count(0) {
     }
 
     union StateAndFlags state_and_flags;
@@ -1281,6 +1298,11 @@ class Thread {
     // pause, this is not an issue.) Other collectors use Runtime::DisallowNewSystemWeaks() and
     // ReferenceProcessor::EnableSlowPath().
     bool32_t weak_ref_access_enabled;
+
+    // A thread local version of Heap::disable_thread_flip_count_. This keeps track of how many
+    // levels of (nested) JNI critical sections the thread is in and is used to detect a nested JNI
+    // critical section enter.
+    uint32_t disable_thread_flip_count;
   } tls32_;
 
   struct PACKED(8) tls_64bit_sized_values {
