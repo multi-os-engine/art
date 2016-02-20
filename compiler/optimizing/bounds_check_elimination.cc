@@ -18,6 +18,7 @@
 
 #include <limits>
 
+#include "aart.h"
 #include "base/arena_containers.h"
 #include "induction_var_range.h"
 #include "side_effects_analysis.h"
@@ -46,6 +47,18 @@ class ValueBound : public ValueObject {
     instruction_ = instruction;
     constant_ = constant;
   }
+
+#ifdef AART
+  std::string ToString() const {
+    std::string r = "<";
+    HInstruction* i1 = instruction_;
+    int32_t c1 = constant_;
+    if (i1)
+      r += " I" + std::to_string(i1->GetId()) + " ";
+    r += std::to_string(c1) + ">";
+    return r;
+  }
+#endif
 
   // Return whether (left + right) overflows or underflows.
   static bool WouldAddOverflowOrUnderflow(int32_t left, int32_t right) {
@@ -307,6 +320,12 @@ class ValueRange : public ArenaObject<kArenaAllocBoundsCheckElimination> {
 
   virtual ~ValueRange() {}
 
+#ifdef AART
+  std::string ToString() const {
+    return "[" + lower_.ToString() + "," + upper_.ToString() + "]";
+  }
+#endif
+
   virtual MonotonicValueRange* AsMonotonicValueRange() { return nullptr; }
   bool IsMonotonicValueRange() {
     return AsMonotonicValueRange() != nullptr;
@@ -546,6 +565,9 @@ class BCEVisitor : public HGraphVisitor {
         induction_range_(induction_analysis) {}
 
   void VisitBasicBlock(HBasicBlock* block) OVERRIDE {
+#ifdef AART2
+    std::cout << "\nBCE VISIT B" << block->GetBlockId() << std::endl;
+#endif
     DCHECK(!IsAddedBlock(block));
     first_index_bounds_check_map_.clear();
     HGraphVisitor::VisitBasicBlock(block);
@@ -575,10 +597,17 @@ class BCEVisitor : public HGraphVisitor {
 
   // Traverse up the dominator tree to look for value range info.
   ValueRange* LookupValueRange(HInstruction* instruction, HBasicBlock* basic_block) {
+#ifdef AART2
+    HBasicBlock* org = basic_block;
+#endif
     while (basic_block != nullptr) {
       ArenaSafeMap<int, ValueRange*>* map = GetValueRangeMap(basic_block);
       if (map != nullptr) {
         if (map->find(instruction->GetId()) != map->end()) {
+#ifdef AART2
+          std::cout << "found-range for " << instruction->GetId() << " in B" << org->GetBlockId() << " in B"
+              << org->GetBlockId() << std::endl;
+#endif
           return map->Get(instruction->GetId());
         }
       } else {
@@ -591,8 +620,14 @@ class BCEVisitor : public HGraphVisitor {
   }
 
   // Helper method to assign a new range to an instruction in given basic block.
-  void AssignRange(HBasicBlock* basic_block, HInstruction* instruction, ValueRange* range) {
+  void AssignRange(const char* reason, HBasicBlock* basic_block, HInstruction* instruction, ValueRange* range) {
     GetValueRangeMap(basic_block)->Overwrite(instruction->GetId(), range);
+#ifdef AART2
+    std::cout << "SET-RANGE " << reason << " B" << basic_block->GetBlockId() << " : " << instruction->GetId()
+              << " = " << range->ToString() << std::endl;
+#else
+    DCHECK(reason);
+#endif
   }
 
   // Narrow the value range of `instruction` at the end of `basic_block` with `range`,
@@ -602,7 +637,7 @@ class BCEVisitor : public HGraphVisitor {
     ValueRange* existing_range = LookupValueRange(instruction, basic_block);
     if (existing_range == nullptr) {
       if (range != nullptr) {
-        AssignRange(successor, instruction, range);
+        AssignRange("comparison", successor, instruction, range);
       }
       return;
     }
@@ -614,7 +649,7 @@ class BCEVisitor : public HGraphVisitor {
         return;
       }
     }
-    AssignRange(successor, instruction, existing_range->Narrow(range));
+    AssignRange("comparison alt", successor, instruction, existing_range->Narrow(range));
   }
 
   // Special case that we may simultaneously narrow two MonotonicValueRange's to
@@ -795,6 +830,9 @@ class BCEVisitor : public HGraphVisitor {
            array_length->IsArrayLength() ||
            array_length->IsPhi());
     bool try_dynamic_bce = true;
+#ifdef AART
+    std::cout << "\n** consider bc " << bounds_check->GetId() << std::endl;
+#endif
 
     // Analyze index range.
     if (!index->IsIntConstant()) {
@@ -805,12 +843,19 @@ class BCEVisitor : public HGraphVisitor {
       // Try index range obtained by dominator-based analysis.
       ValueRange* index_range = LookupValueRange(index, block);
       if (index_range != nullptr && index_range->FitsIn(&array_range)) {
+#ifdef AART
+        std::cout << "simple removes " << bounds_check->GetId() << " index=" << index_range->ToString()
+                  << " array=" << array_range.ToString() << std::endl;
+#endif
         ReplaceInstruction(bounds_check, index);
         return;
       }
       // Try index range obtained by induction variable analysis.
       // Disables dynamic bce if OOB is certain.
       if (InductionRangeFitsIn(&array_range, bounds_check, index, &try_dynamic_bce)) {
+#ifdef AART
+        std::cout << "advanced removes " << bounds_check->GetId() << " array=" << array_range.ToString() << std::endl;
+#endif
         ReplaceInstruction(bounds_check, index);
         return;
       }
@@ -822,6 +867,9 @@ class BCEVisitor : public HGraphVisitor {
         return;
       } else if (array_length->IsIntConstant()) {
         if (constant < array_length->AsIntConstant()->GetValue()) {
+#ifdef AART
+          std::cout << "simple constant removes " << bounds_check->GetId() << std::endl;
+#endif
           ReplaceInstruction(bounds_check, index);
         }
         return;
@@ -833,6 +881,9 @@ class BCEVisitor : public HGraphVisitor {
         ValueBound lower = existing_range->GetLower();
         DCHECK(lower.IsConstant());
         if (constant < lower.GetConstant()) {
+#ifdef AART
+          std::cout << "length-related constant removes " << bounds_check->GetId() << std::endl;
+#endif
           ReplaceInstruction(bounds_check, index);
           return;
         } else {
@@ -852,7 +903,7 @@ class BCEVisitor : public HGraphVisitor {
         ValueBound upper = ValueBound::Max();
         ValueRange* range = new (GetGraph()->GetArena())
             ValueRange(GetGraph()->GetArena(), lower, upper);
-        AssignRange(block, array_length, range);
+        AssignRange("constant", block, array_length, range);
       }
     }
 
@@ -930,7 +981,7 @@ class BCEVisitor : public HGraphVisitor {
                 increment,
                 bound);
           }
-          AssignRange(phi->GetBlock(), phi, range);
+          AssignRange("phi", phi->GetBlock(), phi, range);
         }
       }
     }
@@ -958,7 +1009,7 @@ class BCEVisitor : public HGraphVisitor {
       }
       ValueRange* range = left_range->Add(right->AsIntConstant()->GetValue());
       if (range != nullptr) {
-        AssignRange(add->GetBlock(), add, range);
+        AssignRange("add", add->GetBlock(), add, range);
       }
     }
   }
@@ -973,7 +1024,7 @@ class BCEVisitor : public HGraphVisitor {
       }
       ValueRange* range = left_range->Add(-right->AsIntConstant()->GetValue());
       if (range != nullptr) {
-        AssignRange(sub->GetBlock(), sub, range);
+        AssignRange("sub", sub->GetBlock(), sub, range);
         return;
       }
     }
@@ -1013,7 +1064,7 @@ class BCEVisitor : public HGraphVisitor {
                     GetGraph()->GetArena(),
                     ValueBound(nullptr, right_const - upper.GetConstant()),
                     ValueBound(array_length, right_const - lower.GetConstant()));
-                AssignRange(sub->GetBlock(), sub, range);
+                AssignRange("sub array length", sub->GetBlock(), sub, range);
               }
             }
           }
@@ -1061,7 +1112,7 @@ class BCEVisitor : public HGraphVisitor {
           GetGraph()->GetArena(),
           ValueBound(nullptr, std::numeric_limits<int32_t>::min()),
           ValueBound(left, 0));
-      AssignRange(instruction->GetBlock(), instruction, range);
+      AssignRange("partial", instruction->GetBlock(), instruction, range);
     }
   }
 
@@ -1087,7 +1138,7 @@ class BCEVisitor : public HGraphVisitor {
             GetGraph()->GetArena(),
             ValueBound(nullptr, 0),
             ValueBound(nullptr, constant));
-        AssignRange(instruction->GetBlock(), instruction, range);
+        AssignRange("and", instruction->GetBlock(), instruction, range);
       }
     }
   }
@@ -1111,7 +1162,7 @@ class BCEVisitor : public HGraphVisitor {
         if (existing_range != nullptr) {
           range = existing_range->Narrow(range);
         }
-        AssignRange(new_array->GetBlock(), left, range);
+        AssignRange("new", new_array->GetBlock(), left, range);
       }
     }
   }
@@ -1242,6 +1293,10 @@ class BCEVisitor : public HGraphVisitor {
         AddCompareWithDeoptimization(block, array_length, base, min_c, max_c);
         for (HInstruction* other_bounds_check : candidates) {
           ReplaceInstruction(other_bounds_check, other_bounds_check->InputAt(0));
+#ifdef AART
+          std::cout << "second chance removes #" << candidates.size() << " : " << other_bounds_check->GetId()
+                    << " " << min_c << ":" << max_c << " = " << distance << std::endl;
+#endif
         }
       }
     }
@@ -1261,6 +1316,9 @@ class BCEVisitor : public HGraphVisitor {
     bool needs_finite_test = false;
     if (induction_range_.GetInductionRange(context, index, &v1, &v2, &needs_finite_test)) {
       do {
+#ifdef AART
+        std::cout << "range-> " << v1.ToString() << " , " << v2.ToString() << std::endl;
+#endif
         if (v1.is_known && (v1.a_constant == 0 || v1.a_constant == 1) &&
             v2.is_known && (v2.a_constant == 0 || v2.a_constant == 1)) {
           DCHECK(v1.a_constant == 1 || v1.instruction == nullptr);
@@ -1292,6 +1350,11 @@ class BCEVisitor : public HGraphVisitor {
    * bounds checks and related null checks removed.
    */
   bool TryDynamicBCE(HBoundsCheck* instruction) {
+#if 0  // BRUTUS
+    static int joho = 0;
+    if (joho >= 1) return;
+    std::cout << "BRUTUS DYN BCE #" << ++joho << std::endl;
+#endif
     HLoopInformation* loop = instruction->GetBlock()->GetLoopInformation();
     HInstruction* index = instruction->InputAt(0);
     HInstruction* length = instruction->InputAt(1);
@@ -1316,10 +1379,25 @@ class BCEVisitor : public HGraphVisitor {
       TransformLoopForDeoptimizationIfNeeded(loop, needs_taken_test);
       HBasicBlock* block = GetPreHeader(loop, instruction);
       induction_range_.GenerateRangeCode(instruction, index, GetGraph(), block, &lower, &upper);
+#if 1
       if (lower != nullptr) {
         InsertDeoptInLoop(loop, block, new (GetGraph()->GetArena()) HAbove(lower, upper));
       }
       InsertDeoptInLoop(loop, block, new (GetGraph()->GetArena()) HAboveOrEqual(upper, length));
+#else
+      // FAILING CODE TO TEST NO-DEOPT
+      if (lower != nullptr) {
+        HInstruction* add  = new (GetGraph()->GetArena()) HAdd(Primitive::kPrimInt, upper, GetGraph()->GetIntConstant(1));
+        block->InsertInstructionBefore(add, block->GetLastInstruction());
+        block->InsertInstructionBefore(new (GetGraph()->GetArena()) HBoundsCheck(lower, add, 0),
+                                       block->GetLastInstruction());
+      }
+      block->InsertInstructionBefore(new (GetGraph()->GetArena()) HBoundsCheck(upper, length, 0),
+                                     block->GetLastInstruction());
+#endif
+#ifdef AART
+      std::cout << "dynamic removes " << instruction->GetId() << std::endl;
+#endif
       ReplaceInstruction(instruction, index);
       return true;
     }
@@ -1414,9 +1492,18 @@ class BCEVisitor : public HGraphVisitor {
         // Generate: if (array == null) deoptimize;
         TransformLoopForDeoptimizationIfNeeded(loop, needs_taken_test);
         HBasicBlock* block = GetPreHeader(loop, check);
+#if 1
         HInstruction* cond =
             new (GetGraph()->GetArena()) HEqual(array, GetGraph()->GetNullConstant());
         InsertDeoptInLoop(loop, block, cond);
+#else
+        // FAILING CODE TO TEST NO-DEOPT
+        HInstruction* cond = new (GetGraph()->GetArena()) HNullCheck(array, check->GetDexPc());
+        block->InsertInstructionBefore(cond, block->GetLastInstruction());
+#endif
+#ifdef AART
+        std::cout << "dynamic removes null " << check->GetId() << std::endl;
+#endif
         ReplaceInstruction(check, array);
         return true;
       }
@@ -1508,6 +1595,9 @@ class BCEVisitor : public HGraphVisitor {
   /** Hoists instruction out of the loop to preheader or deoptimization block. */
   void HoistToPreHeaderOrDeoptBlock(HLoopInformation* loop, HInstruction* instruction) {
     HBasicBlock* block = GetPreHeader(loop, instruction);
+#ifdef AART
+    std::cout << "HOIST " << instruction->GetId() << " to B" << block->GetBlockId() << std::endl;
+#endif
     DCHECK(!instruction->HasEnvironment());
     instruction->MoveBefore(block->GetLastInstruction());
   }
@@ -1730,6 +1820,12 @@ void BoundsCheckElimination::Run() {
 
   // Perform cleanup.
   visitor.Finish();
+
+#ifdef AART
+  StringPrettyPrinter printer(graph_);
+  printer.VisitInsertionOrder();
+  std::cout << "\n* after bce\n\n" << printer.str() << std::endl;
+#endif
 }
 
 }  // namespace art
