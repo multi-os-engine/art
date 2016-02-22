@@ -6151,6 +6151,12 @@ void CodeGeneratorARM::GenerateReadBarrierForRootSlow(HInstruction* instruction,
   __ Bind(slow_path->GetExitLabel());
 }
 
+HLoadString::LoadKind CodeGeneratorARM::GetSupportedLoadStringKind(
+    HLoadString::LoadKind desired_string_load_kind ATTRIBUTE_UNUSED) {
+  // TODO: Implement other kinds.
+  return HLoadString::LoadKind::kDexCacheViaMethod;
+}
+
 HInvokeStaticOrDirect::DispatchInfo CodeGeneratorARM::GetSupportedInvokeStaticOrDirectDispatch(
       const HInvokeStaticOrDirect::DispatchInfo& desired_dispatch_info,
       MethodReference target_method) {

@@ -151,10 +151,10 @@ void Arm64RelativePatcher::PatchCall(std::vector<uint8_t>* code,
   SetInsn(code, literal_offset, insn);
 }
 
-void Arm64RelativePatcher::PatchDexCacheReference(std::vector<uint8_t>* code,
-                                                  const LinkerPatch& patch,
-                                                  uint32_t patch_offset,
-                                                  uint32_t target_offset) {
+void Arm64RelativePatcher::PatchPcRelativeReference(std::vector<uint8_t>* code,
+                                                    const LinkerPatch& patch,
+                                                    uint32_t patch_offset,
+                                                    uint32_t target_offset) {
   DCHECK_EQ(patch_offset & 3u, 0u);
   DCHECK_EQ(target_offset & 3u, 0u);
   uint32_t literal_offset = patch.LiteralOffset();
@@ -199,9 +199,21 @@ void Arm64RelativePatcher::PatchDexCacheReference(std::vector<uint8_t>* code,
     // Write the new ADRP (or B to the erratum 843419 thunk).
     SetInsn(code, literal_offset, insn);
   } else {
-    // LDR 32-bit or 64-bit with imm12 == 0 (unset).
-    DCHECK_EQ(insn & 0xbffffc00, 0xb9400000) << insn;
     if (kIsDebugBuild) {
+      switch (patch.Type()) {
+        case kLinkerPatchDexCacheArray:
+          // LDR 32-bit or 64-bit with imm12 == 0 (unset).
+          CHECK_EQ(insn & 0xbffffc00, 0xb9400000) << insn;
+          break;
+        case kLinkerPatchStringRelative:
+          // ADD immediate, 64-bit with imm12 == 0 (unset) and Rd == Rn.
+          CHECK_EQ(insn & 0xfffffc00, 0x91000000) << insn;
+          CHECK_EQ(insn & 0x1f, (insn >> 5) & 0x1f);
+          break;
+        default:
+          LOG(FATAL) << "Unexpected patch type: " << static_cast<int>(patch.Type());
+          UNREACHABLE();
+      }
       uint32_t adrp = GetInsn(code, pc_insn_offset);
       if ((adrp & 0x9f000000u) != 0x90000000u) {
         CHECK(fix_cortex_a53_843419_);
