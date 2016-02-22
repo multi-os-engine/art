@@ -3023,6 +3023,12 @@ static bool TryGenerateIntrinsicCode(HInvoke* invoke, CodeGeneratorMIPS64* codeg
   return false;
 }
 
+HLoadString::LoadKind CodeGeneratorMIPS64::GetSupportedLoadStringKind(
+    HLoadString::LoadKind desired_string_load_kind ATTRIBUTE_UNUSED) {
+  // TODO: Implement other kinds.
+  return HLoadString::LoadKind::kDexCacheViaMethod;
+}
+
 HInvokeStaticOrDirect::DispatchInfo CodeGeneratorMIPS64::GetSupportedInvokeStaticOrDirectDispatch(
       const HInvokeStaticOrDirect::DispatchInfo& desired_dispatch_info,
       MethodReference target_method ATTRIBUTE_UNUSED) {
