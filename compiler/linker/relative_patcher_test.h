@@ -150,10 +150,10 @@ class RelativePatcherTest : public testing::Test {
                                 offset + patch.LiteralOffset(), target_offset);
           } else if (patch.Type() == kLinkerPatchDexCacheArray) {
             uint32_t target_offset = dex_cache_arrays_begin_ + patch.TargetDexCacheElementOffset();
-            patcher_->PatchDexCacheReference(&patched_code_,
-                                             patch,
-                                             offset + patch.LiteralOffset(),
-                                             target_offset);
+            patcher_->PatchPcRelativeReference(&patched_code_,
+                                               patch,
+                                               offset + patch.LiteralOffset(),
+                                               target_offset);
           } else {
             LOG(FATAL) << "Bad patch type.";
           }
