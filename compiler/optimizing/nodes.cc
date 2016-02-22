@@ -1266,7 +1266,7 @@ HConstant* HBinaryOperation::TryStaticEvaluation() const {
 
 HConstant* HInvoke::TryStaticEvaluation() const {
   switch (GetIntrinsic()) {
-    // java.lang.Math functions recognized as intrinsics.
+    // Integer java.lang.Math functions recognized as intrinsics.
     CASE_ONE_ARG_METHOD(MathAbsLong, Long, Long, std::abs);
     CASE_ONE_INT_ARG_METHOD(MathAbsInt, Int, std::abs);
     CASE_TWO_ARGS_METHOD(MathMinLongLong, Long, Long, Long, std::min);
@@ -1276,6 +1276,44 @@ HConstant* HInvoke::TryStaticEvaluation() const {
     default:
       // Do nothing.
       break;
+  }
+  if (kEnableFloatingPointStaticEvaluation) {
+    switch (GetIntrinsic()) {
+      // Floating-point java.lang.Math functions recognized as intrinsics.
+      CASE_ONE_ARG_METHOD(MathAbsDouble, Double, Double, std::abs);
+      CASE_ONE_ARG_METHOD(MathAbsFloat, Float, Float, std::abs);
+      CASE_TWO_ARGS_METHOD(MathMinDoubleDouble, Double, Double, Double, std::min);
+      CASE_TWO_ARGS_METHOD(MathMinFloatFloat, Float, Float, Float, std::min);
+      CASE_TWO_ARGS_METHOD(MathMaxDoubleDouble, Double, Double, Double, std::max);
+      CASE_TWO_ARGS_METHOD(MathMaxFloatFloat, Float, Float, Float, std::max);
+      CASE_ONE_ARG_METHOD(MathCos, Double, Double, std::cos);
+      CASE_ONE_ARG_METHOD(MathSin, Double, Double, std::sin);
+      CASE_ONE_ARG_METHOD(MathAcos, Double, Double, std::acos);
+      CASE_ONE_ARG_METHOD(MathAsin, Double, Double, std::asin);
+      CASE_ONE_ARG_METHOD(MathAtan, Double, Double, std::atan);
+      CASE_TWO_ARGS_METHOD(MathAtan2, Double, Double, Double, std::atan2);
+      CASE_ONE_ARG_METHOD(MathCbrt, Double, Double, std::cbrt);
+      CASE_ONE_ARG_METHOD(MathCosh, Double, Double, std::cosh);
+      CASE_ONE_ARG_METHOD(MathExp, Double, Double, std::exp);
+      CASE_ONE_ARG_METHOD(MathExpm1, Double, Double, std::expm1);
+      CASE_TWO_ARGS_METHOD(MathHypot, Double, Double, Double, std::hypot);
+      CASE_ONE_ARG_METHOD(MathLog, Double, Double, std::log);
+      CASE_ONE_ARG_METHOD(MathLog10, Double, Double, std::log10);
+      CASE_TWO_ARGS_METHOD(MathNextAfter, Double, Double, Double, std::nextafter);
+      CASE_ONE_ARG_METHOD(MathSinh, Double, Double, std::sinh);
+      CASE_ONE_ARG_METHOD(MathTan, Double, Double, std::tan);
+      CASE_ONE_ARG_METHOD(MathTanh, Double, Double, std::tanh);
+      CASE_ONE_ARG_METHOD(MathSqrt, Double, Double, std::sqrt);
+      CASE_ONE_ARG_METHOD(MathCeil, Double, Double, std::ceil);
+      CASE_ONE_ARG_METHOD(MathFloor, Double, Double, std::floor);
+      CASE_ONE_ARG_METHOD(MathRint, Double, Double, std::rint);
+      // TODO: Handle MathRoundDouble.
+      // TODO: Handle MathRoundFloat.
+      // TODO: Handle java.lang.Math methods not recognized as intrinsics?
+      default:
+        // Do nothing.
+        break;
+    }
   }
   return nullptr;
 }
