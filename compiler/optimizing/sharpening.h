@@ -20,11 +20,15 @@
 #include "optimization.h"
 
 namespace art {
+namespace mirror {
+class String;
+}  // namespace mirror
 
 class CodeGenerator;
 class CompilerDriver;
 class DexCompilationUnit;
 class HInvokeStaticOrDirect;
+class Thread;
 
 // Optimization that tries to improve the way we dispatch methods and access types,
 // fields, etc. Besides actual method sharpening based on receiver type (for example
@@ -47,6 +51,7 @@ class HSharpening : public HOptimization {
 
  private:
   void ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke);
+  void ProcessLoadString(HLoadString* load_string);
 
   CodeGenerator* codegen_;
   const DexCompilationUnit& compilation_unit_;
