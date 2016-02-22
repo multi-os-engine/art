@@ -1,0 +1,1 @@
+Testing constant folding of invoke instructions in the optimizing compiler.

@@ -3716,6 +3716,11 @@ class HInvoke : public HInstruction {
 
   bool IsIntrinsic() const { return intrinsic_ != Intrinsics::kNone; }
 
+  // Try to statically evaluate `this` and return a HConstant
+  // containing the result of this evaluation.  If `this` cannot
+  // be evaluated as a constant, return null.
+  HConstant* TryStaticEvaluation() const;
+
   DECLARE_ABSTRACT_INSTRUCTION(Invoke);
 
  protected:
