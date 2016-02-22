@@ -30,10 +30,15 @@
 namespace art {
 
 // Enable floating-point static evaluation during constant folding
-// only if all floating-point operations and constants evaluate in the
-// range and precision of the type used (i.e., 32-bit float, 64-bit
-// double).
-static constexpr bool kEnableFloatingPointStaticEvaluation = (FLT_EVAL_METHOD == 0);
+// only if:
+// - `float` and `double` are IEC 559/IEEE 754 floating-point types; and
+// - all floating-point operations and constants evaluate in the range
+//   and precision of the type used (i.e., 32-bit float, 64-bit
+//   double).
+static constexpr bool kEnableFloatingPointStaticEvaluation =
+    std::numeric_limits<float>::is_iec559 &&
+    std::numeric_limits<double>::is_iec559 &&
+    (FLT_EVAL_METHOD == 0);
 
 void HGraph::InitializeInexactObjectRTI(StackHandleScopeCollection* handles) {
   ScopedObjectAccess soa(Thread::Current());
@@ -1207,6 +1212,34 @@ HConstant* HBinaryOperation::TryStaticEvaluation() const {
   return nullptr;
 }
 
+template<typename T>
+static T MathFPMax(T a, T b) {
+  if (std::isnan(a)) {
+    return a;
+  }
+  if (std::isnan(b)) {
+    return b;
+  }
+  if ((std::fpclassify(a) == FP_ZERO) && (std::fpclassify(b) == FP_ZERO) && std::signbit(a)) {
+    return b;
+  }
+  return (a >= b) ? a : b;
+}
+
+template<typename T>
+static T MathFPMin(T a, T b) {
+  if (std::isnan(a)) {
+    return a;
+  }
+  if (std::isnan(b)) {
+    return b;
+  }
+  if ((std::fpclassify(a) == FP_ZERO) && (std::fpclassify(b) == FP_ZERO) && std::signbit(b)) {
+    return b;
+  }
+  return (a <= b) ? a : b;
+}
+
 #define CASE_ONE_ARG_METHOD(Intrinsic, ReturnType, ArgType, Function)       \
     case Intrinsics::k ## Intrinsic:                                        \
       DCHECK_EQ(1u, GetNumberOfArguments());                                \
@@ -1266,7 +1299,7 @@ HConstant* HBinaryOperation::TryStaticEvaluation() const {
 
 HConstant* HInvoke::TryStaticEvaluation() const {
   switch (GetIntrinsic()) {
-    // java.lang.Math functions recognized as intrinsics.
+    // Integer java.lang.Math functions recognized as intrinsics.
     CASE_ONE_ARG_METHOD(MathAbsLong, Long, Long, std::abs);
     CASE_ONE_INT_ARG_METHOD(MathAbsInt, Int, std::abs);
     CASE_TWO_ARGS_METHOD(MathMinLongLong, Long, Long, Long, std::min);
@@ -1276,6 +1309,44 @@ HConstant* HInvoke::TryStaticEvaluation() const {
     default:
       // Do nothing.
       break;
+  }
+  if (kEnableFloatingPointStaticEvaluation) {
+    switch (GetIntrinsic()) {
+      // Floating-point java.lang.Math functions recognized as intrinsics.
+      CASE_ONE_ARG_METHOD(MathAbsDouble, Double, Double, std::abs);
+      CASE_ONE_ARG_METHOD(MathAbsFloat, Float, Float, std::abs);
+      CASE_TWO_ARGS_METHOD(MathMinDoubleDouble, Double, Double, Double, MathFPMin<double>);
+      CASE_TWO_ARGS_METHOD(MathMinFloatFloat, Float, Float, Float, MathFPMin<float>);
+      CASE_TWO_ARGS_METHOD(MathMaxDoubleDouble, Double, Double, Double, MathFPMax<double>);
+      CASE_TWO_ARGS_METHOD(MathMaxFloatFloat, Float, Float, Float, MathFPMax<float>);
+      CASE_ONE_ARG_METHOD(MathCos, Double, Double, std::cos);
+      CASE_ONE_ARG_METHOD(MathSin, Double, Double, std::sin);
+      CASE_ONE_ARG_METHOD(MathAcos, Double, Double, std::acos);
+      CASE_ONE_ARG_METHOD(MathAsin, Double, Double, std::asin);
+      CASE_ONE_ARG_METHOD(MathAtan, Double, Double, std::atan);
+      CASE_TWO_ARGS_METHOD(MathAtan2, Double, Double, Double, std::atan2);
+      CASE_ONE_ARG_METHOD(MathCbrt, Double, Double, std::cbrt);
+      CASE_ONE_ARG_METHOD(MathCosh, Double, Double, std::cosh);
+      CASE_ONE_ARG_METHOD(MathExp, Double, Double, std::exp);
+      CASE_ONE_ARG_METHOD(MathExpm1, Double, Double, std::expm1);
+      CASE_TWO_ARGS_METHOD(MathHypot, Double, Double, Double, std::hypot);
+      CASE_ONE_ARG_METHOD(MathLog, Double, Double, std::log);
+      CASE_ONE_ARG_METHOD(MathLog10, Double, Double, std::log10);
+      CASE_TWO_ARGS_METHOD(MathNextAfter, Double, Double, Double, std::nextafter);
+      CASE_ONE_ARG_METHOD(MathSinh, Double, Double, std::sinh);
+      CASE_ONE_ARG_METHOD(MathTan, Double, Double, std::tan);
+      CASE_ONE_ARG_METHOD(MathTanh, Double, Double, std::tanh);
+      CASE_ONE_ARG_METHOD(MathSqrt, Double, Double, std::sqrt);
+      CASE_ONE_ARG_METHOD(MathCeil, Double, Double, std::ceil);
+      CASE_ONE_ARG_METHOD(MathFloor, Double, Double, std::floor);
+      CASE_ONE_ARG_METHOD(MathRint, Double, Double, std::rint);
+      // TODO: Handle MathRoundDouble.
+      // TODO: Handle MathRoundFloat.
+      // TODO: Handle java.lang.Math methods not recognized as intrinsics?
+      default:
+        // Do nothing.
+        break;
+    }
   }
   return nullptr;
 }
