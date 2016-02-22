@@ -1236,6 +1236,7 @@ TEST_F(ClassLinkerTest, RegisterDexFileName) {
     // Check that inserting with a UTF16 name works.
     class_linker->RegisterDexFileLocked(*dex_file, dex_cache);
   }
+  delete dex_file;
 }
 
 }  // namespace art
