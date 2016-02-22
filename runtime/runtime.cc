@@ -549,19 +549,6 @@ bool Runtime::Start() {
 
   started_ = true;
 
-  // Use !IsAotCompiler so that we get test coverage, tests are never the zygote.
-  if (!IsAotCompiler()) {
-    ScopedObjectAccess soa(self);
-    {
-      ScopedTrace trace2("AddImageStringsToTable");
-      GetInternTable()->AddImagesStringsToTable(heap_->GetBootImageSpaces());
-    }
-    {
-      ScopedTrace trace2("MoveImageClassesToClassTable");
-      GetClassLinker()->AddBootImageClassesToClassTable();
-    }
-  }
-
   // If we are the zygote then we need to wait until after forking to create the code cache
   // due to SELinux restrictions on r/w/x memory regions.
   if (!IsZygote() && jit_options_->UseJIT()) {
@@ -1114,6 +1101,14 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
         dex_locations.push_back(dex_file->GetLocation());
       }
       boot_class_path_string_ = Join(dex_locations, ':');
+    }
+    {
+      ScopedTrace trace2("AddImageStringsToTable");
+      GetInternTable()->AddImagesStringsToTable(heap_->GetBootImageSpaces());
+    }
+    {
+      ScopedTrace trace2("MoveImageClassesToClassTable");
+      GetClassLinker()->AddBootImageClassesToClassTable();
     }
   } else {
     std::vector<std::string> dex_filenames;
