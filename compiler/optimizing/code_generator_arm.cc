@@ -5224,7 +5224,7 @@ void InstructionCodeGeneratorARM::GenerateClassInitializationCheck(
 }
 
 void LocationsBuilderARM::VisitLoadString(HLoadString* load) {
-  LocationSummary::CallKind call_kind = (!load->IsInDexCache() || kEmitCompilerReadBarrier)
+  LocationSummary::CallKind call_kind = (load->NeedsEnvironment() || kEmitCompilerReadBarrier)
       ? LocationSummary::kCallOnSlowPath
       : LocationSummary::kNoCall;
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(load, call_kind);
@@ -6149,6 +6149,12 @@ void CodeGeneratorARM::GenerateReadBarrierForRootSlow(HInstruction* instruction,
 
   __ b(slow_path->GetEntryLabel());
   __ Bind(slow_path->GetExitLabel());
+}
+
+HLoadString::LoadKind CodeGeneratorARM::GetSupportedLoadStringKind(
+    HLoadString::LoadKind desired_string_load_kind ATTRIBUTE_UNUSED) {
+  // TODO: Implement other kinds.
+  return HLoadString::LoadKind::kDexCacheViaMethod;
 }
 
 HInvokeStaticOrDirect::DispatchInfo CodeGeneratorARM::GetSupportedInvokeStaticOrDirectDispatch(
