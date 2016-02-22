@@ -29,6 +29,8 @@ class X86_64RelativePatcherTest : public RelativePatcherTest {
   static const ArrayRef<const uint8_t> kCallCode;
   static const uint8_t kDexCacheLoadRawCode[];
   static const ArrayRef<const uint8_t> kDexCacheLoadCode;
+  static const uint8_t kStringReferenceRawCode[];
+  static const ArrayRef<const uint8_t> kStringReferenceCode;
 
   uint32_t GetMethodOffset(uint32_t method_idx) {
     auto result = method_offset_map_.FindMethodOffset(MethodRef(method_idx));
@@ -50,6 +52,14 @@ const uint8_t X86_64RelativePatcherTest::kDexCacheLoadRawCode[] = {
 
 const ArrayRef<const uint8_t> X86_64RelativePatcherTest::kDexCacheLoadCode(
     kDexCacheLoadRawCode);
+
+const uint8_t X86_64RelativePatcherTest::kStringReferenceRawCode[] = {
+    0x8d, 0x05,  // lea eax, [rip + <offset>]
+    0x00, 0x01, 0x00, 0x00
+};
+
+const ArrayRef<const uint8_t> X86_64RelativePatcherTest::kStringReferenceCode(
+    kStringReferenceRawCode);
 
 TEST_F(X86_64RelativePatcherTest, CallSelf) {
   LinkerPatch patches[] = {
@@ -126,6 +136,28 @@ TEST_F(X86_64RelativePatcherTest, DexCacheReference) {
       dex_cache_arrays_begin_ + kElementOffset - (result.second + kDexCacheLoadCode.size());
   static const uint8_t expected_code[] = {
       0x8b, 0x05,
+      static_cast<uint8_t>(diff), static_cast<uint8_t>(diff >> 8),
+      static_cast<uint8_t>(diff >> 16), static_cast<uint8_t>(diff >> 24)
+  };
+  EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
+}
+
+TEST_F(X86_64RelativePatcherTest, StringReference) {
+  constexpr uint32_t kStringIndex = 1u;
+  constexpr uint32_t kStringOffset = 0x12345678;
+  string_index_to_offset_map_.Put(kStringIndex, kStringOffset);
+  LinkerPatch patches[] = {
+      LinkerPatch::RelativeStringPatch(
+          kStringReferenceCode.size() - 4u, nullptr, 0u, kStringIndex),
+  };
+  AddCompiledMethod(MethodRef(1u), kStringReferenceCode, ArrayRef<const LinkerPatch>(patches));
+  Link();
+
+  auto result = method_offset_map_.FindMethodOffset(MethodRef(1u));
+  ASSERT_TRUE(result.first);
+  uint32_t diff = kStringOffset - (result.second + kStringReferenceCode.size());
+  static const uint8_t expected_code[] = {
+      0x8d, 0x05,
       static_cast<uint8_t>(diff), static_cast<uint8_t>(diff >> 8),
       static_cast<uint8_t>(diff >> 16), static_cast<uint8_t>(diff >> 24)
   };
