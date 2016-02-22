@@ -151,10 +151,10 @@ void Arm64RelativePatcher::PatchCall(std::vector<uint8_t>* code,
   SetInsn(code, literal_offset, insn);
 }
 
-void Arm64RelativePatcher::PatchDexCacheReference(std::vector<uint8_t>* code,
-                                                  const LinkerPatch& patch,
-                                                  uint32_t patch_offset,
-                                                  uint32_t target_offset) {
+void Arm64RelativePatcher::PatchPcRelativeReference(std::vector<uint8_t>* code,
+                                                    const LinkerPatch& patch,
+                                                    uint32_t patch_offset,
+                                                    uint32_t target_offset) {
   DCHECK_EQ(patch_offset & 3u, 0u);
   DCHECK_EQ(target_offset & 3u, 0u);
   uint32_t literal_offset = patch.LiteralOffset();
@@ -199,8 +199,16 @@ void Arm64RelativePatcher::PatchDexCacheReference(std::vector<uint8_t>* code,
     // Write the new ADRP (or B to the erratum 843419 thunk).
     SetInsn(code, literal_offset, insn);
   } else {
-    // LDR 32-bit or 64-bit with imm12 == 0 (unset).
-    DCHECK_EQ(insn & 0xbffffc00, 0xb9400000) << insn;
+    if ((insn & 0xfffffc00) == 0x91000000) {
+      // ADD immediate, 64-bit with imm12 == 0 (unset) and Rd == Rn.
+      DCHECK(patch.Type() == kLinkerPatchStringRelative);
+      DCHECK_EQ(insn & 0x1f, (insn >> 5) & 0x1f);
+      shift = 0u;  // No shift for ADD.
+    } else {
+      // LDR 32-bit or 64-bit with imm12 == 0 (unset).
+      DCHECK(patch.Type() == kLinkerPatchDexCacheArray);
+      DCHECK_EQ(insn & 0xbffffc00, 0xb9400000) << insn;
+    }
     if (kIsDebugBuild) {
       uint32_t adrp = GetInsn(code, pc_insn_offset);
       if ((adrp & 0x9f000000u) != 0x90000000u) {

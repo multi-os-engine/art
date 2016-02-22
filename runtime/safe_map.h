@@ -124,6 +124,16 @@ class SafeMap {
     return result.first;
   }
 
+  template <typename CreateFn>
+  V GetOrCreate(const K& k, CreateFn create) {
+    auto lb = lower_bound(k);
+    if (lb != end() && !key_comp()(k, lb->first)) {
+      return lb->second;
+    }
+    auto it = PutBefore(lb, k, create());
+    return it->second;
+  }
+
   bool Equals(const Self& rhs) const {
     return map_ == rhs.map_;
   }
