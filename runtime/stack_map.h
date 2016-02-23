@@ -19,6 +19,7 @@
 
 #include "base/bit_vector.h"
 #include "base/bit_utils.h"
+#include "base/dchecked_vector.h"
 #include "memory_region.h"
 #include "leb128.h"
 
@@ -52,10 +53,15 @@ class StackMapEncoding;
 // Dex register location container used by DexRegisterMap and StackMapStream.
 class DexRegisterLocation {
  public:
+  // The maximum number of bytes the location takes when encoded.
+  static constexpr size_t kMaximumEncodedSize = 5;
+
   /*
    * The location kind used to populate the Dex register information in a
    * StackMapStream can either be:
+   * - kNone: the register has no location, meaning it has not been set.
    * - kStack: vreg stored on the stack, value holds the stack offset;
+   * - kConstant: value holds the constant;
    * - kInRegister: vreg stored in low 32 bits of a core physical register,
    *                value holds the register number;
    * - kInRegisterHigh: vreg stored in high 32 bits of a core physical register,
@@ -64,47 +70,16 @@ class DexRegisterLocation {
    *                   value holds the register number;
    * - kInFpuRegisterHigh: vreg stored in high 32 bits of an FPU register,
    *                       value holds the register number;
-   * - kConstant: value holds the constant;
-   *
-   * In addition, DexRegisterMap also uses these values:
-   * - kInStackLargeOffset: value holds a "large" stack offset (greater than
-   *   or equal to 128 bytes);
-   * - kConstantLargeValue: value holds a "large" constant (lower than 0, or
-   *   or greater than or equal to 32);
-   * - kNone: the register has no location, meaning it has not been set.
    */
-  enum class Kind : uint8_t {
-    // Short location kinds, for entries fitting on one byte (3 bits
-    // for the kind, 5 bits for the value) in a DexRegisterMap.
-    kInStack = 0,             // 0b000
-    kInRegister = 1,          // 0b001
-    kInRegisterHigh = 2,      // 0b010
-    kInFpuRegister = 3,       // 0b011
-    kInFpuRegisterHigh = 4,   // 0b100
-    kConstant = 5,            // 0b101
-
-    // Large location kinds, requiring a 5-byte encoding (1 byte for the
-    // kind, 4 bytes for the value).
-
-    // Stack location at a large offset, meaning that the offset value
-    // divided by the stack frame slot size (4 bytes) cannot fit on a
-    // 5-bit unsigned integer (i.e., this offset value is greater than
-    // or equal to 2^5 * 4 = 128 bytes).
-    kInStackLargeOffset = 6,  // 0b110
-
-    // Large constant, that cannot fit on a 5-bit signed integer (i.e.,
-    // lower than 0, or greater than or equal to 2^5 = 32).
-    kConstantLargeValue = 7,  // 0b111
-
-    // Entries with no location are not stored and do not need own marker.
-    kNone = static_cast<uint8_t>(-1),
-
-    kLastLocationKind = kConstantLargeValue
+  enum class Kind {
+    kNone = 0,                // 0b000
+    kInStack = 2,             // 0b010
+    kConstant = 3,            // 0b011
+    kInRegister = 4,          // 0b100
+    kInRegisterHigh = 5,      // 0b101
+    kInFpuRegister = 6,       // 0b110
+    kInFpuRegisterHigh = 7,   // 0b111
   };
-
-  static_assert(
-      sizeof(Kind) == 1u,
-      "art::DexRegisterLocation::Kind has a size different from one byte.");
 
   static const char* PrettyDescriptor(Kind kind) {
     switch (kind) {
@@ -122,60 +97,10 @@ class DexRegisterLocation {
         return "in fpu register high";
       case Kind::kConstant:
         return "as constant";
-      case Kind::kInStackLargeOffset:
-        return "in stack (large offset)";
-      case Kind::kConstantLargeValue:
-        return "as constant (large value)";
     }
     UNREACHABLE();
   }
 
-  static bool IsShortLocationKind(Kind kind) {
-    switch (kind) {
-      case Kind::kInStack:
-      case Kind::kInRegister:
-      case Kind::kInRegisterHigh:
-      case Kind::kInFpuRegister:
-      case Kind::kInFpuRegisterHigh:
-      case Kind::kConstant:
-        return true;
-
-      case Kind::kInStackLargeOffset:
-      case Kind::kConstantLargeValue:
-        return false;
-
-      case Kind::kNone:
-        LOG(FATAL) << "Unexpected location kind " << PrettyDescriptor(kind);
-    }
-    UNREACHABLE();
-  }
-
-  // Convert `kind` to a "surface" kind, i.e. one that doesn't include
-  // any value with a "large" qualifier.
-  // TODO: Introduce another enum type for the surface kind?
-  static Kind ConvertToSurfaceKind(Kind kind) {
-    switch (kind) {
-      case Kind::kInStack:
-      case Kind::kInRegister:
-      case Kind::kInRegisterHigh:
-      case Kind::kInFpuRegister:
-      case Kind::kInFpuRegisterHigh:
-      case Kind::kConstant:
-        return kind;
-
-      case Kind::kInStackLargeOffset:
-        return Kind::kInStack;
-
-      case Kind::kConstantLargeValue:
-        return Kind::kConstant;
-
-      case Kind::kNone:
-        return kind;
-    }
-    UNREACHABLE();
-  }
-
-  // Required by art::StackMapStream::LocationCatalogEntriesIndices.
   DexRegisterLocation() : kind_(Kind::kNone), value_(0) {}
 
   DexRegisterLocation(Kind kind, int32_t value) : kind_(kind), value_(value) {}
@@ -184,17 +109,18 @@ class DexRegisterLocation {
     return DexRegisterLocation(Kind::kNone, 0);
   }
 
-  // Get the "surface" kind of the location, i.e., the one that doesn't
-  // include any value with a "large" qualifier.
-  Kind GetKind() const {
-    return ConvertToSurfaceKind(kind_);
-  }
+  // Get the kind of the location.
+  Kind GetKind() const { return kind_; }
 
   // Get the value of the location.
   int32_t GetValue() const { return value_; }
 
-  // Get the actual kind of the location.
-  Kind GetInternalKind() const { return kind_; }
+  // Write the DexRegisterLocation to memory. It will consume either one or five bytes.
+  // Large stack or constant locations are escaped by storing b11111 in the value field.
+  void Encode(const MemoryRegion* region, size_t* offset) const;
+
+  // Decode previously encoded value.
+  static DexRegisterLocation Decode(const MemoryRegion* region, size_t* offset);
 
   bool operator==(DexRegisterLocation other) const {
     return kind_ == other.kind_ && value_ == other.value_;
@@ -208,396 +134,76 @@ class DexRegisterLocation {
   Kind kind_;
   int32_t value_;
 
-  friend class DexRegisterLocationHashFn;
-};
-
-/**
- * Store information on unique Dex register locations used in a method.
- * The information is of the form:
- *
- *   [DexRegisterLocation+].
- *
- * DexRegisterLocations are either 1- or 5-byte wide (see art::DexRegisterLocation::Kind).
- */
-class DexRegisterLocationCatalog {
- public:
-  explicit DexRegisterLocationCatalog(MemoryRegion region) : region_(region) {}
-
-  // Short (compressed) location, fitting on one byte.
-  typedef uint8_t ShortLocation;
-
-  void SetRegisterInfo(size_t offset, const DexRegisterLocation& dex_register_location) {
-    DexRegisterLocation::Kind kind = ComputeCompressedKind(dex_register_location);
-    int32_t value = dex_register_location.GetValue();
-    if (DexRegisterLocation::IsShortLocationKind(kind)) {
-      // Short location.  Compress the kind and the value as a single byte.
-      if (kind == DexRegisterLocation::Kind::kInStack) {
-        // Instead of storing stack offsets expressed in bytes for
-        // short stack locations, store slot offsets.  A stack offset
-        // is a multiple of 4 (kFrameSlotSize).  This means that by
-        // dividing it by 4, we can fit values from the [0, 128)
-        // interval in a short stack location, and not just values
-        // from the [0, 32) interval.
-        DCHECK_EQ(value % kFrameSlotSize, 0);
-        value /= kFrameSlotSize;
-      }
-      DCHECK(IsShortValue(value)) << value;
-      region_.StoreUnaligned<ShortLocation>(offset, MakeShortLocation(kind, value));
-    } else {
-      // Large location.  Write the location on one byte and the value
-      // on 4 bytes.
-      DCHECK(!IsShortValue(value)) << value;
-      if (kind == DexRegisterLocation::Kind::kInStackLargeOffset) {
-        // Also divide large stack offsets by 4 for the sake of consistency.
-        DCHECK_EQ(value % kFrameSlotSize, 0);
-        value /= kFrameSlotSize;
-      }
-      // Data can be unaligned as the written Dex register locations can
-      // either be 1-byte or 5-byte wide.  Use
-      // art::MemoryRegion::StoreUnaligned instead of
-      // art::MemoryRegion::Store to prevent unligned word accesses on ARM.
-      region_.StoreUnaligned<DexRegisterLocation::Kind>(offset, kind);
-      region_.StoreUnaligned<int32_t>(offset + sizeof(DexRegisterLocation::Kind), value);
-    }
-  }
-
-  // Find the offset of the location catalog entry number `location_catalog_entry_index`.
-  size_t FindLocationOffset(size_t location_catalog_entry_index) const {
-    size_t offset = kFixedSize;
-    // Skip the first `location_catalog_entry_index - 1` entries.
-    for (uint16_t i = 0; i < location_catalog_entry_index; ++i) {
-      // Read the first next byte and inspect its first 3 bits to decide
-      // whether it is a short or a large location.
-      DexRegisterLocation::Kind kind = ExtractKindAtOffset(offset);
-      if (DexRegisterLocation::IsShortLocationKind(kind)) {
-        // Short location.  Skip the current byte.
-        offset += SingleShortEntrySize();
-      } else {
-        // Large location.  Skip the 5 next bytes.
-        offset += SingleLargeEntrySize();
-      }
-    }
-    return offset;
-  }
-
-  // Get the internal kind of entry at `location_catalog_entry_index`.
-  DexRegisterLocation::Kind GetLocationInternalKind(size_t location_catalog_entry_index) const {
-    if (location_catalog_entry_index == kNoLocationEntryIndex) {
-      return DexRegisterLocation::Kind::kNone;
-    }
-    return ExtractKindAtOffset(FindLocationOffset(location_catalog_entry_index));
-  }
-
-  // Get the (surface) kind and value of entry at `location_catalog_entry_index`.
-  DexRegisterLocation GetDexRegisterLocation(size_t location_catalog_entry_index) const {
-    if (location_catalog_entry_index == kNoLocationEntryIndex) {
-      return DexRegisterLocation::None();
-    }
-    size_t offset = FindLocationOffset(location_catalog_entry_index);
-    // Read the first byte and inspect its first 3 bits to get the location.
-    ShortLocation first_byte = region_.LoadUnaligned<ShortLocation>(offset);
-    DexRegisterLocation::Kind kind = ExtractKindFromShortLocation(first_byte);
-    if (DexRegisterLocation::IsShortLocationKind(kind)) {
-      // Short location.  Extract the value from the remaining 5 bits.
-      int32_t value = ExtractValueFromShortLocation(first_byte);
-      if (kind == DexRegisterLocation::Kind::kInStack) {
-        // Convert the stack slot (short) offset to a byte offset value.
-        value *= kFrameSlotSize;
-      }
-      return DexRegisterLocation(kind, value);
-    } else {
-      // Large location.  Read the four next bytes to get the value.
-      int32_t value = region_.LoadUnaligned<int32_t>(offset + sizeof(DexRegisterLocation::Kind));
-      if (kind == DexRegisterLocation::Kind::kInStackLargeOffset) {
-        // Convert the stack slot (large) offset to a byte offset value.
-        value *= kFrameSlotSize;
-      }
-      return DexRegisterLocation(kind, value);
-    }
-  }
-
-  // Compute the compressed kind of `location`.
-  static DexRegisterLocation::Kind ComputeCompressedKind(const DexRegisterLocation& location) {
-    DexRegisterLocation::Kind kind = location.GetInternalKind();
-    switch (kind) {
-      case DexRegisterLocation::Kind::kInStack:
-        return IsShortStackOffsetValue(location.GetValue())
-            ? DexRegisterLocation::Kind::kInStack
-            : DexRegisterLocation::Kind::kInStackLargeOffset;
-
-      case DexRegisterLocation::Kind::kInRegister:
-      case DexRegisterLocation::Kind::kInRegisterHigh:
-        DCHECK_GE(location.GetValue(), 0);
-        DCHECK_LT(location.GetValue(), 1 << kValueBits);
-        return kind;
-
-      case DexRegisterLocation::Kind::kInFpuRegister:
-      case DexRegisterLocation::Kind::kInFpuRegisterHigh:
-        DCHECK_GE(location.GetValue(), 0);
-        DCHECK_LT(location.GetValue(), 1 << kValueBits);
-        return kind;
-
-      case DexRegisterLocation::Kind::kConstant:
-        return IsShortConstantValue(location.GetValue())
-            ? DexRegisterLocation::Kind::kConstant
-            : DexRegisterLocation::Kind::kConstantLargeValue;
-
-      case DexRegisterLocation::Kind::kConstantLargeValue:
-      case DexRegisterLocation::Kind::kInStackLargeOffset:
-      case DexRegisterLocation::Kind::kNone:
-        LOG(FATAL) << "Unexpected location kind " << DexRegisterLocation::PrettyDescriptor(kind);
-    }
-    UNREACHABLE();
-  }
-
-  // Can `location` be turned into a short location?
-  static bool CanBeEncodedAsShortLocation(const DexRegisterLocation& location) {
-    DexRegisterLocation::Kind kind = location.GetInternalKind();
-    switch (kind) {
-      case DexRegisterLocation::Kind::kInStack:
-        return IsShortStackOffsetValue(location.GetValue());
-
-      case DexRegisterLocation::Kind::kInRegister:
-      case DexRegisterLocation::Kind::kInRegisterHigh:
-      case DexRegisterLocation::Kind::kInFpuRegister:
-      case DexRegisterLocation::Kind::kInFpuRegisterHigh:
-        return true;
-
-      case DexRegisterLocation::Kind::kConstant:
-        return IsShortConstantValue(location.GetValue());
-
-      case DexRegisterLocation::Kind::kConstantLargeValue:
-      case DexRegisterLocation::Kind::kInStackLargeOffset:
-      case DexRegisterLocation::Kind::kNone:
-        LOG(FATAL) << "Unexpected location kind " << DexRegisterLocation::PrettyDescriptor(kind);
-    }
-    UNREACHABLE();
-  }
-
-  static size_t EntrySize(const DexRegisterLocation& location) {
-    return CanBeEncodedAsShortLocation(location) ? SingleShortEntrySize() : SingleLargeEntrySize();
-  }
-
-  static size_t SingleShortEntrySize() {
-    return sizeof(ShortLocation);
-  }
-
-  static size_t SingleLargeEntrySize() {
-    return sizeof(DexRegisterLocation::Kind) + sizeof(int32_t);
-  }
-
-  size_t Size() const {
-    return region_.size();
-  }
-
-  void Dump(VariableIndentationOutputStream* vios, const CodeInfo& code_info);
-
-  // Special (invalid) Dex register location catalog entry index meaning
-  // that there is no location for a given Dex register (i.e., it is
-  // mapped to a DexRegisterLocation::Kind::kNone location).
-  static constexpr size_t kNoLocationEntryIndex = -1;
-
- private:
-  static constexpr int kFixedSize = 0;
-
-  // Width of the kind "field" in a short location, in bits.
-  static constexpr size_t kKindBits = 3;
-  // Width of the value "field" in a short location, in bits.
+  // Width of the value field in short encoded form.
   static constexpr size_t kValueBits = 5;
-
-  static constexpr uint8_t kKindMask = (1 << kKindBits) - 1;
-  static constexpr int32_t kValueMask = (1 << kValueBits) - 1;
-  static constexpr size_t kKindOffset = 0;
-  static constexpr size_t kValueOffset = kKindBits;
-
-  static bool IsShortStackOffsetValue(int32_t value) {
-    DCHECK_EQ(value % kFrameSlotSize, 0);
-    return IsShortValue(value / kFrameSlotSize);
-  }
-
-  static bool IsShortConstantValue(int32_t value) {
-    return IsShortValue(value);
-  }
-
-  static bool IsShortValue(int32_t value) {
-    return IsUint<kValueBits>(value);
-  }
-
-  static ShortLocation MakeShortLocation(DexRegisterLocation::Kind kind, int32_t value) {
-    uint8_t kind_integer_value = static_cast<uint8_t>(kind);
-    DCHECK(IsUint<kKindBits>(kind_integer_value)) << kind_integer_value;
-    DCHECK(IsShortValue(value)) << value;
-    return (kind_integer_value & kKindMask) << kKindOffset
-        | (value & kValueMask) << kValueOffset;
-  }
-
-  static DexRegisterLocation::Kind ExtractKindFromShortLocation(ShortLocation location) {
-    uint8_t kind = (location >> kKindOffset) & kKindMask;
-    DCHECK_LE(kind, static_cast<uint8_t>(DexRegisterLocation::Kind::kLastLocationKind));
-    // We do not encode kNone locations in the stack map.
-    DCHECK_NE(kind, static_cast<uint8_t>(DexRegisterLocation::Kind::kNone));
-    return static_cast<DexRegisterLocation::Kind>(kind);
-  }
-
-  static int32_t ExtractValueFromShortLocation(ShortLocation location) {
-    return (location >> kValueOffset) & kValueMask;
-  }
-
-  // Extract a location kind from the byte at position `offset`.
-  DexRegisterLocation::Kind ExtractKindAtOffset(size_t offset) const {
-    ShortLocation first_byte = region_.LoadUnaligned<ShortLocation>(offset);
-    return ExtractKindFromShortLocation(first_byte);
-  }
-
-  MemoryRegion region_;
-
-  friend class CodeInfo;
-  friend class StackMapStream;
+  // Maximum representable value of the value field in short encoded form.
+  static constexpr uint32_t kValueMask = (1 << kValueBits) - 1;
 };
 
-/* Information on Dex register locations for a specific PC, mapping a
- * stack map's Dex register to a location entry in a DexRegisterLocationCatalog.
- * The information is of the form:
- *
- *   [live_bit_mask, entries*]
- *
- * where entries are concatenated unsigned integer values encoded on a number
- * of bits (fixed per DexRegisterMap instances of a CodeInfo object) depending
- * on the number of entries in the Dex register location catalog
- * (see DexRegisterMap::SingleEntrySizeInBits).  The map is 1-byte aligned.
- */
+std::ostream& operator<<(std::ostream& stream, const DexRegisterLocation::Kind& kind);
+std::ostream& operator<<(std::ostream& stream, const DexRegisterLocation& location);
+
+// Decoded Dex register locations for a specific PC.
+// TODO: Remove all the unused arguments in this class.
 class DexRegisterMap {
  public:
-  explicit DexRegisterMap(MemoryRegion region) : region_(region) {}
-  DexRegisterMap() {}
+  DexRegisterMap() : locations_() {}
 
-  bool IsValid() const { return region_.pointer() != nullptr; }
+  explicit DexRegisterMap(dchecked_vector<DexRegisterLocation>&& locations)
+      : locations_(locations) {}
 
-  // Get the surface kind of Dex register `dex_register_number`.
+  bool IsValid() const { return !locations_.empty(); }
+
+  // Get the kind of Dex register `dex_register_number`.
   DexRegisterLocation::Kind GetLocationKind(uint16_t dex_register_number,
-                                            uint16_t number_of_dex_registers,
-                                            const CodeInfo& code_info,
-                                            const StackMapEncoding& enc) const {
-    return DexRegisterLocation::ConvertToSurfaceKind(
-        GetLocationInternalKind(dex_register_number, number_of_dex_registers, code_info, enc));
+                                            uint16_t number_of_dex_registers ATTRIBUTE_UNUSED,
+                                            const CodeInfo& code_info ATTRIBUTE_UNUSED,
+                                            const StackMapEncoding& enc ATTRIBUTE_UNUSED) const {
+    return locations_[dex_register_number].GetKind();
   }
-
-  // Get the internal kind of Dex register `dex_register_number`.
-  DexRegisterLocation::Kind GetLocationInternalKind(uint16_t dex_register_number,
-                                                    uint16_t number_of_dex_registers,
-                                                    const CodeInfo& code_info,
-                                                    const StackMapEncoding& enc) const;
 
   // Get the Dex register location `dex_register_number`.
   DexRegisterLocation GetDexRegisterLocation(uint16_t dex_register_number,
-                                             uint16_t number_of_dex_registers,
-                                             const CodeInfo& code_info,
-                                             const StackMapEncoding& enc) const;
+                                             uint16_t number_of_dex_registers ATTRIBUTE_UNUSED,
+                                             const CodeInfo& code_info ATTRIBUTE_UNUSED,
+                                             const StackMapEncoding& enc ATTRIBUTE_UNUSED) const {
+    return locations_[dex_register_number];
+  }
 
   int32_t GetStackOffsetInBytes(uint16_t dex_register_number,
-                                uint16_t number_of_dex_registers,
-                                const CodeInfo& code_info,
-                                const StackMapEncoding& enc) const {
-    DexRegisterLocation location =
-        GetDexRegisterLocation(dex_register_number, number_of_dex_registers, code_info, enc);
+                                uint16_t number_of_dex_registers ATTRIBUTE_UNUSED,
+                                const CodeInfo& code_info ATTRIBUTE_UNUSED,
+                                const StackMapEncoding& enc ATTRIBUTE_UNUSED) const {
+    const DexRegisterLocation& location = locations_[dex_register_number];
     DCHECK(location.GetKind() == DexRegisterLocation::Kind::kInStack);
     // GetDexRegisterLocation returns the offset in bytes.
     return location.GetValue();
   }
 
   int32_t GetConstant(uint16_t dex_register_number,
-                      uint16_t number_of_dex_registers,
-                      const CodeInfo& code_info,
-                      const StackMapEncoding& enc) const {
-    DexRegisterLocation location =
-        GetDexRegisterLocation(dex_register_number, number_of_dex_registers, code_info, enc);
-    DCHECK(location.GetKind() == DexRegisterLocation::Kind::kConstant)
-        << DexRegisterLocation::PrettyDescriptor(location.GetKind());
+                      uint16_t number_of_dex_registers ATTRIBUTE_UNUSED,
+                      const CodeInfo& code_info ATTRIBUTE_UNUSED,
+                      const StackMapEncoding& enc ATTRIBUTE_UNUSED) const {
+    const DexRegisterLocation& location = locations_[dex_register_number];
+    DCHECK_EQ(location.GetKind(), DexRegisterLocation::Kind::kConstant);
     return location.GetValue();
   }
 
   int32_t GetMachineRegister(uint16_t dex_register_number,
-                             uint16_t number_of_dex_registers,
-                             const CodeInfo& code_info,
-                             const StackMapEncoding& enc) const {
-    DexRegisterLocation location =
-        GetDexRegisterLocation(dex_register_number, number_of_dex_registers, code_info, enc);
-    DCHECK(location.GetInternalKind() == DexRegisterLocation::Kind::kInRegister ||
-           location.GetInternalKind() == DexRegisterLocation::Kind::kInRegisterHigh ||
-           location.GetInternalKind() == DexRegisterLocation::Kind::kInFpuRegister ||
-           location.GetInternalKind() == DexRegisterLocation::Kind::kInFpuRegisterHigh)
-        << DexRegisterLocation::PrettyDescriptor(location.GetInternalKind());
+                             uint16_t number_of_dex_registers ATTRIBUTE_UNUSED,
+                             const CodeInfo& code_info ATTRIBUTE_UNUSED,
+                             const StackMapEncoding& enc ATTRIBUTE_UNUSED) const {
+    const DexRegisterLocation& location = locations_[dex_register_number];
+    DCHECK(location.GetKind() == DexRegisterLocation::Kind::kInRegister ||
+           location.GetKind() == DexRegisterLocation::Kind::kInRegisterHigh ||
+           location.GetKind() == DexRegisterLocation::Kind::kInFpuRegister ||
+           location.GetKind() == DexRegisterLocation::Kind::kInFpuRegisterHigh)
+        << location.GetKind();
     return location.GetValue();
   }
 
-  // Get the index of the entry in the Dex register location catalog
-  // corresponding to `dex_register_number`.
-  size_t GetLocationCatalogEntryIndex(uint16_t dex_register_number,
-                                      uint16_t number_of_dex_registers,
-                                      size_t number_of_location_catalog_entries) const {
-    if (!IsDexRegisterLive(dex_register_number)) {
-      return DexRegisterLocationCatalog::kNoLocationEntryIndex;
-    }
-
-    if (number_of_location_catalog_entries == 1) {
-      // We do not allocate space for location maps in the case of a
-      // single-entry location catalog, as it is useless.  The only valid
-      // entry index is 0;
-      return 0;
-    }
-
-    // The bit offset of the beginning of the map locations.
-    size_t map_locations_offset_in_bits =
-        GetLocationMappingDataOffset(number_of_dex_registers) * kBitsPerByte;
-    size_t index_in_dex_register_map = GetIndexInDexRegisterMap(dex_register_number);
-    DCHECK_LT(index_in_dex_register_map, GetNumberOfLiveDexRegisters(number_of_dex_registers));
-    // The bit size of an entry.
-    size_t map_entry_size_in_bits = SingleEntrySizeInBits(number_of_location_catalog_entries);
-    // The bit offset where `index_in_dex_register_map` is located.
-    size_t entry_offset_in_bits =
-        map_locations_offset_in_bits + index_in_dex_register_map * map_entry_size_in_bits;
-    size_t location_catalog_entry_index =
-        region_.LoadBits(entry_offset_in_bits, map_entry_size_in_bits);
-    DCHECK_LT(location_catalog_entry_index, number_of_location_catalog_entries);
-    return location_catalog_entry_index;
-  }
-
-  // Map entry at `index_in_dex_register_map` to `location_catalog_entry_index`.
-  void SetLocationCatalogEntryIndex(size_t index_in_dex_register_map,
-                                    size_t location_catalog_entry_index,
-                                    uint16_t number_of_dex_registers,
-                                    size_t number_of_location_catalog_entries) {
-    DCHECK_LT(index_in_dex_register_map, GetNumberOfLiveDexRegisters(number_of_dex_registers));
-    DCHECK_LT(location_catalog_entry_index, number_of_location_catalog_entries);
-
-    if (number_of_location_catalog_entries == 1) {
-      // We do not allocate space for location maps in the case of a
-      // single-entry location catalog, as it is useless.
-      return;
-    }
-
-    // The bit offset of the beginning of the map locations.
-    size_t map_locations_offset_in_bits =
-        GetLocationMappingDataOffset(number_of_dex_registers) * kBitsPerByte;
-    // The bit size of an entry.
-    size_t map_entry_size_in_bits = SingleEntrySizeInBits(number_of_location_catalog_entries);
-    // The bit offset where `index_in_dex_register_map` is located.
-    size_t entry_offset_in_bits =
-        map_locations_offset_in_bits + index_in_dex_register_map * map_entry_size_in_bits;
-    region_.StoreBits(entry_offset_in_bits, location_catalog_entry_index, map_entry_size_in_bits);
-  }
-
-  void SetLiveBitMask(uint16_t number_of_dex_registers,
-                      const BitVector& live_dex_registers_mask) {
-    size_t live_bit_mask_offset_in_bits = GetLiveBitMaskOffset() * kBitsPerByte;
-    for (uint16_t i = 0; i < number_of_dex_registers; ++i) {
-      region_.StoreBit(live_bit_mask_offset_in_bits + i, live_dex_registers_mask.IsBitSet(i));
-    }
-  }
-
   bool IsDexRegisterLive(uint16_t dex_register_number) const {
-    size_t live_bit_mask_offset_in_bits = GetLiveBitMaskOffset() * kBitsPerByte;
-    return region_.LoadBit(live_bit_mask_offset_in_bits + dex_register_number);
+    return locations_[dex_register_number].GetKind() != DexRegisterLocation::Kind::kNone;
   }
 
   size_t GetNumberOfLiveDexRegisters(uint16_t number_of_dex_registers) const {
@@ -610,71 +216,19 @@ class DexRegisterMap {
     return number_of_live_dex_registers;
   }
 
-  static size_t GetLiveBitMaskOffset() {
-    return kFixedSize;
-  }
+  size_t Size() const { return locations_.size(); }
 
-  // Compute the size of the live register bit mask (in bytes), for a
-  // method having `number_of_dex_registers` Dex registers.
-  static size_t GetLiveBitMaskSize(uint16_t number_of_dex_registers) {
-    return RoundUp(number_of_dex_registers, kBitsPerByte) / kBitsPerByte;
-  }
+  void Dump(VariableIndentationOutputStream* vios) const;
 
-  static size_t GetLocationMappingDataOffset(uint16_t number_of_dex_registers) {
-    return GetLiveBitMaskOffset() + GetLiveBitMaskSize(number_of_dex_registers);
+  const DexRegisterLocation& operator[](size_t index) const {
+    return locations_[index];
   }
-
-  size_t GetLocationMappingDataSize(uint16_t number_of_dex_registers,
-                                    size_t number_of_location_catalog_entries) const {
-    size_t location_mapping_data_size_in_bits =
-        GetNumberOfLiveDexRegisters(number_of_dex_registers)
-        * SingleEntrySizeInBits(number_of_location_catalog_entries);
-    return RoundUp(location_mapping_data_size_in_bits, kBitsPerByte) / kBitsPerByte;
-  }
-
-  // Return the size of a map entry in bits.  Note that if
-  // `number_of_location_catalog_entries` equals 1, this function returns 0,
-  // which is fine, as there is no need to allocate a map for a
-  // single-entry location catalog; the only valid location catalog entry index
-  // for a live register in this case is 0 and there is no need to
-  // store it.
-  static size_t SingleEntrySizeInBits(size_t number_of_location_catalog_entries) {
-    // Handle the case of 0, as we cannot pass 0 to art::WhichPowerOf2.
-    return number_of_location_catalog_entries == 0
-        ? 0u
-        : WhichPowerOf2(RoundUpToPowerOfTwo(number_of_location_catalog_entries));
-  }
-
-  // Return the size of the DexRegisterMap object, in bytes.
-  size_t Size() const {
-    return region_.size();
-  }
-
-  void Dump(VariableIndentationOutputStream* vios,
-            const CodeInfo& code_info, uint16_t number_of_dex_registers) const;
 
  private:
-  // Return the index in the Dex register map corresponding to the Dex
-  // register number `dex_register_number`.
-  size_t GetIndexInDexRegisterMap(uint16_t dex_register_number) const {
-    if (!IsDexRegisterLive(dex_register_number)) {
-      return kInvalidIndexInDexRegisterMap;
-    }
-    return GetNumberOfLiveDexRegisters(dex_register_number);
-  }
-
-  // Special (invalid) Dex register map entry index meaning that there
-  // is no index in the map for a given Dex register (i.e., it must
-  // have been mapped to a DexRegisterLocation::Kind::kNone location).
-  static constexpr size_t kInvalidIndexInDexRegisterMap = -1;
-
-  static constexpr int kFixedSize = 0;
-
-  MemoryRegion region_;
-
-  friend class CodeInfo;
-  friend class StackMapStream;
+  dchecked_vector<DexRegisterLocation> locations_;
 };
+
+typedef std::vector<DexRegisterMap> DexRegisterMaps;
 
 class StackMapEncoding {
  public:
@@ -682,29 +236,27 @@ class StackMapEncoding {
 
   // Create stack map bit layout based on given sizes.
   // Returns the size of stack map in bytes.
-  size_t SetFromSizes(size_t stack_mask_bit_size,
-                      size_t inline_info_size,
-                      size_t dex_register_map_size,
+  size_t SetFromSizes(size_t native_pc_max,
                       size_t dex_pc_max,
-                      size_t native_pc_max,
-                      size_t register_mask_max) {
+                      size_t flags_max,
+                      size_t inline_info_size,
+                      size_t register_mask_max,
+                      size_t stack_mask_bit_size) {
     size_t bit_offset = 0;
     DCHECK_EQ(kNativePcBitOffset, bit_offset);
     bit_offset += MinimumBitsToStore(native_pc_max);
 
     dex_pc_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
-    bit_offset += MinimumBitsToStore(dex_pc_max);
+    bit_offset += MinimumBitsToStore(dex_pc_max + 1 /* for kDexNoIndex */);
 
-    // + 1 to also encode kNoDexRegisterMap as the maximum value (all ones).
-    dex_register_map_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
-    bit_offset += MinimumBitsToStore(dex_register_map_size + 1);
+    flags_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
+    bit_offset += MinimumBitsToStore(flags_max);
 
-    // + 1 to also encode kNoInlineInfo as the maximum value (all ones).
-    // The offset is relative to the dex register map. TODO: Change this.
+    // We also need +1 for kNoInlineInfo, but since the inline_info_size is strictly
+    // greater than the offset we might try to encode, we already implicitly have it.
+    // If inline_info_size == 0, then kNoInlineInfo is the only encodable value.
     inline_info_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
-    bit_offset += inline_info_size == 0
-        ? 0
-        : MinimumBitsToStore(dex_register_map_size + inline_info_size + 1);
+    bit_offset += MinimumBitsToStore(inline_info_size);
 
     register_mask_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
     bit_offset += MinimumBitsToStore(register_mask_max);
@@ -722,11 +274,11 @@ class StackMapEncoding {
   }
 
   size_t DexPcBitSize() const {
-    return dex_register_map_bit_offset_ - dex_pc_bit_offset_;
+    return flags_bit_offset_ - dex_pc_bit_offset_;
   }
 
-  size_t DexRegisterMapBitSize() const {
-    return inline_info_bit_offset_ - dex_register_map_bit_offset_;
+  size_t FlagsBitSize() const {
+    return inline_info_bit_offset_ - flags_bit_offset_;
   }
 
   size_t InlineInfoBitSize() const {
@@ -739,15 +291,17 @@ class StackMapEncoding {
 
   size_t NativePcBitOffset() const { return kNativePcBitOffset; }
   size_t DexPcBitOffset() const { return dex_pc_bit_offset_; }
-  size_t DexRegisterMapBitOffset() const { return dex_register_map_bit_offset_; }
+  size_t FlagsBitOffset() const { return flags_bit_offset_; }
   size_t InlineInfoBitOffset() const { return inline_info_bit_offset_; }
   size_t RegisterMaskBitOffset() const { return register_mask_bit_offset_; }
   size_t StackMaskBitOffset() const { return stack_mask_bit_offset_; }
 
+  void Dump(VariableIndentationOutputStream* vios) const;
+
  private:
   static constexpr size_t kNativePcBitOffset = 0;
   uint8_t dex_pc_bit_offset_;
-  uint8_t dex_register_map_bit_offset_;
+  uint8_t flags_bit_offset_;
   uint8_t inline_info_bit_offset_;
   uint8_t register_mask_bit_offset_;
   uint8_t stack_mask_bit_offset_;
@@ -763,22 +317,30 @@ class StackMapEncoding {
  *
  * The information is of the form:
  *
- *   [native_pc_offset, dex_pc, dex_register_map_offset, inlining_info_offset, register_mask,
- *   stack_mask].
+ *   [native_pc_offset, dex_pc, flags, inlining_info_offset, register_mask, stack_mask].
  */
 class StackMap {
  public:
+  enum Flags {
+    // This flag is set if the stack map has any encoded dex register location mappings.
+    // It is set if and only if StackMapEntry::num_dex_registers was non-zero.
+    // Inlined infos may or may not have own mappings regardless of this flags.
+    kHasDexRegisterMap = 1 << 0,
+    // All locations (including inlined) are identical to the last state.
+    kSameDexRegisterMap = 1 << 1,
+  };
+
   StackMap() {}
   explicit StackMap(MemoryRegion region) : region_(region) {}
 
   bool IsValid() const { return region_.pointer() != nullptr; }
 
   uint32_t GetDexPc(const StackMapEncoding& encoding) const {
-    return LoadAt(encoding.DexPcBitSize(), encoding.DexPcBitOffset());
+    return LoadAtPlus1(encoding.DexPcBitSize(), encoding.DexPcBitOffset());
   }
 
   void SetDexPc(const StackMapEncoding& encoding, uint32_t dex_pc) {
-    StoreAt(encoding.DexPcBitSize(), encoding.DexPcBitOffset(), dex_pc);
+    StoreAtPlus1(encoding.DexPcBitSize(), encoding.DexPcBitOffset(), dex_pc);
   }
 
   uint32_t GetNativePcOffset(const StackMapEncoding& encoding) const {
@@ -789,32 +351,20 @@ class StackMap {
     StoreAt(encoding.NativePcBitSize(), encoding.NativePcBitOffset(), native_pc_offset);
   }
 
-  uint32_t GetDexRegisterMapOffset(const StackMapEncoding& encoding) const {
-    return LoadAt(encoding.DexRegisterMapBitSize(),
-                  encoding.DexRegisterMapBitOffset(),
-                  /* check_max */ true);
+  uint32_t GetFlags(const StackMapEncoding& encoding) const {
+    return LoadAt(encoding.FlagsBitSize(), encoding.FlagsBitOffset());
   }
 
-  void SetDexRegisterMapOffset(const StackMapEncoding& encoding, uint32_t offset) {
-    StoreAt(encoding.DexRegisterMapBitSize(),
-            encoding.DexRegisterMapBitOffset(),
-            offset,
-            /* check_max */ true);
+  void SetFlags(const StackMapEncoding& encoding, uint32_t offset) {
+    StoreAt(encoding.FlagsBitSize(), encoding.FlagsBitOffset(), offset);
   }
 
   uint32_t GetInlineDescriptorOffset(const StackMapEncoding& encoding) const {
-    if (!encoding.HasInlineInfo()) return kNoInlineInfo;
-    return LoadAt(encoding.InlineInfoBitSize(),
-                  encoding.InlineInfoBitOffset(),
-                  /* check_max */ true);
+    return LoadAtPlus1(encoding.InlineInfoBitSize(), encoding.InlineInfoBitOffset());
   }
 
   void SetInlineDescriptorOffset(const StackMapEncoding& encoding, uint32_t offset) {
-    DCHECK(encoding.HasInlineInfo());
-    StoreAt(encoding.InlineInfoBitSize(),
-            encoding.InlineInfoBitOffset(),
-            offset,
-            /* check_max */ true);
+    StoreAtPlus1(encoding.InlineInfoBitSize(), encoding.InlineInfoBitOffset(), offset);
   }
 
   uint32_t GetRegisterMask(const StackMapEncoding& encoding) const {
@@ -838,7 +388,7 @@ class StackMap {
   }
 
   bool HasDexRegisterMap(const StackMapEncoding& encoding) const {
-    return GetDexRegisterMapOffset(encoding) != kNoDexRegisterMap;
+    return (GetFlags(encoding) & Flags::kHasDexRegisterMap) != 0;
   }
 
   bool HasInlineInfo(const StackMapEncoding& encoding) const {
@@ -856,10 +406,6 @@ class StackMap {
             uint16_t number_of_dex_registers,
             const std::string& header_suffix = "") const;
 
-  // Special (invalid) offset for the DexRegisterMapOffset field meaning
-  // that there is no Dex register map for this stack map.
-  static constexpr uint32_t kNoDexRegisterMap = -1;
-
   // Special (invalid) offset for the InlineDescriptorOffset field meaning
   // that there is no inline info for this stack map.
   static constexpr uint32_t kNoInlineInfo = -1;
@@ -867,10 +413,17 @@ class StackMap {
  private:
   static constexpr int kFixedSize = 0;
 
-  // Loads `bit_count` at the given `bit_offset` and assemble a uint32_t. If `check_max` is true,
-  // this method converts a maximum value of size `bit_count` into a uint32_t 0xFFFFFFFF.
-  uint32_t LoadAt(size_t bit_count, size_t bit_offset, bool check_max = false) const;
-  void StoreAt(size_t bit_count, size_t bit_offset, uint32_t value, bool check_max = false);
+  // Load/store `bit_count` at the given `bit_offset` as uint32_t.
+  uint32_t LoadAt(size_t bit_count, size_t bit_offset) const;
+  void StoreAt(size_t bit_count, size_t bit_offset, uint32_t value);
+
+  // The following variants store 'value + 1' which allows us to store -1.
+  uint32_t LoadAtPlus1(size_t bit_count, size_t bit_offset) const {
+    return LoadAt(bit_count, bit_offset) - 1;  // Can return -1.
+  }
+  void StoreAtPlus1(size_t bit_count, size_t bit_offset, uint32_t value) {
+    return StoreAt(bit_count, bit_offset, value + 1);  // Can store -1.
+  }
 
   MemoryRegion region_;
 
@@ -884,7 +437,7 @@ class StackMap {
  *
  * where `entry` is of the form:
  *
- *   [dex_pc, method_index, dex_register_map_offset].
+ *   [dex_pc, method_index, num_dex_registers].
  */
 class InlineInfo {
  public:
@@ -894,7 +447,7 @@ class InlineInfo {
   typedef uint32_t MethodIndexType;
   typedef uint32_t DexPcType;
   typedef uint8_t InvokeTypeType;
-  typedef uint32_t DexRegisterMapType;
+  typedef uint16_t NumDexRegistersType;
 
   explicit InlineInfo(MemoryRegion region) : region_(region) {}
 
@@ -936,27 +489,29 @@ class InlineInfo {
         kFixedSize + depth * SingleEntrySize() + kInvokeTypeOffset, invoke_type);
   }
 
-  DexRegisterMapType GetDexRegisterMapOffsetAtDepth(DepthType depth) const {
-    return region_.LoadUnaligned<DexRegisterMapType>(
-        kFixedSize + depth * SingleEntrySize() + kDexRegisterMapOffset);
+  NumDexRegistersType GetNumDexRegistersAtDepth(DepthType depth) const {
+    return region_.LoadUnaligned<NumDexRegistersType>(
+        kFixedSize + depth * SingleEntrySize() + kNumDexRegistersOffset);
   }
 
-  void SetDexRegisterMapOffsetAtDepth(DepthType depth, DexRegisterMapType offset) {
-    region_.StoreUnaligned<DexRegisterMapType>(
-        kFixedSize + depth * SingleEntrySize() + kDexRegisterMapOffset, offset);
+  void SetNumDexRegistersAtDepth(DepthType depth, NumDexRegistersType offset) {
+    region_.StoreUnaligned<NumDexRegistersType>(
+        kFixedSize + depth * SingleEntrySize() + kNumDexRegistersOffset, offset);
   }
 
   bool HasDexRegisterMapAtDepth(DepthType depth) const {
-    return GetDexRegisterMapOffsetAtDepth(depth) != StackMap::kNoDexRegisterMap;
+    return GetNumDexRegistersAtDepth(depth) != 0;
   }
 
   static size_t SingleEntrySize() {
     return kFixedEntrySize;
   }
 
-  void Dump(VariableIndentationOutputStream* vios,
-            const CodeInfo& info, uint16_t* number_of_dex_registers) const;
+  void Dump(VariableIndentationOutputStream* vios, const CodeInfo& info) const;
 
+  bool Equals(const InlineInfo& other) {
+    return region_.start() == other.region_.start();
+  }
 
  private:
   static constexpr int kDepthOffset = 0;
@@ -965,8 +520,8 @@ class InlineInfo {
   static constexpr int kMethodIndexOffset = 0;
   static constexpr int kDexPcOffset = ELEMENT_BYTE_OFFSET_AFTER(MethodIndex);
   static constexpr int kInvokeTypeOffset = ELEMENT_BYTE_OFFSET_AFTER(DexPc);
-  static constexpr int kDexRegisterMapOffset = ELEMENT_BYTE_OFFSET_AFTER(InvokeType);
-  static constexpr int kFixedEntrySize = ELEMENT_BYTE_OFFSET_AFTER(DexRegisterMap);
+  static constexpr int kNumDexRegistersOffset = ELEMENT_BYTE_OFFSET_AFTER(InvokeType);
+  static constexpr int kFixedEntrySize = ELEMENT_BYTE_OFFSET_AFTER(NumDexRegisters);
 
   MemoryRegion region_;
 
@@ -977,139 +532,101 @@ class InlineInfo {
 
 // Most of the fields are encoded as ULEB128 to save space.
 struct CodeInfoHeader {
-  uint32_t non_header_size;
-  uint32_t number_of_stack_maps;
-  uint32_t stack_map_size_in_bytes;
-  uint32_t number_of_location_catalog_entries;
-  StackMapEncoding stack_map_encoding;
-  uint8_t header_size;
+  uint32_t number_of_stack_maps;  // Number of stack map entries.
+  uint32_t stack_map_size;  // Byte size of single stack map entry.
+  uint32_t inline_infos_size;
+  uint32_t number_of_dex_registers;  // Excluding inlined.
+  uint32_t dex_register_maps_size;
 
-  CodeInfoHeader() { }
-
-  explicit CodeInfoHeader(const void* data) {
-    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(data);
-    non_header_size = DecodeUnsignedLeb128(&ptr);
-    number_of_stack_maps = DecodeUnsignedLeb128(&ptr);
-    stack_map_size_in_bytes = DecodeUnsignedLeb128(&ptr);
-    number_of_location_catalog_entries = DecodeUnsignedLeb128(&ptr);
-    static_assert(alignof(StackMapEncoding) == 1, "StackMapEncoding should not require alignment");
-    stack_map_encoding = *reinterpret_cast<const StackMapEncoding*>(ptr);
-    ptr += sizeof(StackMapEncoding);
-    header_size = dchecked_integral_cast<uint8_t>(ptr - reinterpret_cast<const uint8_t*>(data));
+  void Decode(const uint8_t** data) {
+    number_of_stack_maps = DecodeUnsignedLeb128(data);
+    stack_map_size = DecodeUnsignedLeb128(data);
+    inline_infos_size = DecodeUnsignedLeb128(data);
+    number_of_dex_registers = DecodeUnsignedLeb128(data);
+    dex_register_maps_size = DecodeUnsignedLeb128(data);
   }
 
   template<typename Vector>
   void Encode(Vector* dest) const {
-    EncodeUnsignedLeb128(dest, non_header_size);
     EncodeUnsignedLeb128(dest, number_of_stack_maps);
-    EncodeUnsignedLeb128(dest, stack_map_size_in_bytes);
-    EncodeUnsignedLeb128(dest, number_of_location_catalog_entries);
-    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(&stack_map_encoding);
-    dest->insert(dest->end(), ptr, ptr + sizeof(stack_map_encoding));
+    EncodeUnsignedLeb128(dest, stack_map_size);
+    EncodeUnsignedLeb128(dest, inline_infos_size);
+    EncodeUnsignedLeb128(dest, number_of_dex_registers);
+    EncodeUnsignedLeb128(dest, dex_register_maps_size);
   }
+
+  void Dump(VariableIndentationOutputStream* vios) const;
 };
 
 /**
  * Wrapper around all compiler information collected for a method.
  * The information is of the form:
  *
- *   [Header, StackMap+, DexRegisterLocationCatalog+, DexRegisterMap+, InlineInfo*]
+ *   [Header, StackMapEncoding, StackMap*, InlineInfo*, DexRegisterMap*]
  */
 class CodeInfo {
  public:
-  explicit CodeInfo(MemoryRegion region) : header_(region.start()), region_(region) {
-    DCHECK_EQ(region.size(), header_.header_size + header_.non_header_size);
+  explicit CodeInfo(const void* data) {
+    uint8_t* ptr = reinterpret_cast<uint8_t*>(const_cast<void*>(data));
+    header_.Decode(const_cast<const uint8_t**>(&ptr));
+    stack_map_encoding_ = reinterpret_cast<StackMapEncoding*>(ptr);
+    ptr += sizeof(StackMapEncoding);
+    stack_maps_region_ = MemoryRegion(ptr, header_.number_of_stack_maps * header_.stack_map_size);
+    ptr += stack_maps_region_.size();
+    inline_infos_region_ = MemoryRegion(ptr, header_.inline_infos_size);
+    ptr += inline_infos_region_.size();
+    dex_register_maps_region_ = MemoryRegion(ptr, header_.dex_register_maps_size);
   }
 
-  explicit CodeInfo(const void* data) : header_(data) {
-    region_ = MemoryRegion(const_cast<void*>(data),
-                           header_.header_size + header_.non_header_size);
+  explicit CodeInfo(MemoryRegion region) : CodeInfo(region.start()) {
+    DCHECK_EQ(dex_register_maps_region_.end(), region.end());
   }
 
   StackMapEncoding ExtractEncoding() const {
-    return header_.stack_map_encoding;
+    return *stack_map_encoding_;
   }
 
   bool HasInlineInfo() const {
-    return header_.stack_map_encoding.InlineInfoBitSize() > 0;
+    return stack_map_encoding_->InlineInfoBitSize() > 0;
   }
 
-  DexRegisterLocationCatalog GetDexRegisterLocationCatalog(const StackMapEncoding& encoding) const {
-    return DexRegisterLocationCatalog(region_.Subregion(
-        GetDexRegisterLocationCatalogOffset(encoding),
-        GetDexRegisterLocationCatalogSize(encoding)));
+  void SetStackMapEncoding(StackMapEncoding& encoding) const {
+    *stack_map_encoding_ = encoding;
   }
 
-  StackMap GetStackMapAt(size_t i, const StackMapEncoding& encoding) const {
-    size_t stack_map_size = header_.stack_map_size_in_bytes;
-    return StackMap(GetStackMaps(encoding).Subregion(i * stack_map_size, stack_map_size));
-  }
-
-  uint32_t GetNumberOfLocationCatalogEntries() const {
-    return header_.number_of_location_catalog_entries;
-  }
-
-  uint32_t GetDexRegisterLocationCatalogSize(const StackMapEncoding& encoding) const {
-    return ComputeDexRegisterLocationCatalogSize(GetDexRegisterLocationCatalogOffset(encoding),
-                                                 GetNumberOfLocationCatalogEntries());
+  StackMap GetStackMapAt(size_t i, const StackMapEncoding&) const {
+    return StackMap(stack_maps_region_.Subregion(header_.stack_map_size * i,
+                                                 header_.stack_map_size));
   }
 
   uint32_t GetNumberOfStackMaps() const {
     return header_.number_of_stack_maps;
   }
 
-  // Get the size of all the stack maps of this CodeInfo object, in bytes.
-  size_t GetStackMapsSize(const StackMapEncoding&) const {
-    return header_.stack_map_size_in_bytes * GetNumberOfStackMaps();
+  // Get the number dex register for stack map excluding inlined one.
+  size_t GetNumberOfDexRegistersOf(const StackMap& stack_map) const {
+    bool has_dex_registers = stack_map.HasDexRegisterMap(*stack_map_encoding_);
+    return has_dex_registers ? header_.number_of_dex_registers : 0;
   }
 
-  uint32_t GetDexRegisterLocationCatalogOffset(const StackMapEncoding& encoding) const {
-    return GetStackMapsOffset() + GetStackMapsSize(encoding);
-  }
+  // Return all DexRegisterMaps - one for each stack map. Inlined info is ignored.
+  std::vector<DexRegisterMap> GetDexRegisterMaps() const;
 
-  size_t GetDexRegisterMapsOffset(const StackMapEncoding& encoding) const {
-    return GetDexRegisterLocationCatalogOffset(encoding)
-         + GetDexRegisterLocationCatalogSize(encoding);
-  }
-
-  uint32_t GetStackMapsOffset() const {
-    return header_.header_size;
-  }
-
-  DexRegisterMap GetDexRegisterMapOf(StackMap stack_map,
+  DexRegisterMap GetDexRegisterMapOf(StackMap for_stack_map,
                                      const StackMapEncoding& encoding,
-                                     uint32_t number_of_dex_registers) const {
-    if (!stack_map.HasDexRegisterMap(encoding)) {
-      return DexRegisterMap();
-    } else {
-      uint32_t offset = GetDexRegisterMapsOffset(encoding)
-                        + stack_map.GetDexRegisterMapOffset(encoding);
-      size_t size = ComputeDexRegisterMapSizeOf(offset, number_of_dex_registers);
-      return DexRegisterMap(region_.Subregion(offset, size));
-    }
-  }
+                                     uint32_t number_of_dex_registers) const;
 
   // Return the `DexRegisterMap` pointed by `inline_info` at depth `depth`.
-  DexRegisterMap GetDexRegisterMapAtDepth(uint8_t depth,
-                                          InlineInfo inline_info,
+  DexRegisterMap GetDexRegisterMapAtDepth(size_t depth,
+                                          InlineInfo for_inline_info,
                                           const StackMapEncoding& encoding,
-                                          uint32_t number_of_dex_registers) const {
-    if (!inline_info.HasDexRegisterMapAtDepth(depth)) {
-      return DexRegisterMap();
-    } else {
-      uint32_t offset = GetDexRegisterMapsOffset(encoding)
-                        + inline_info.GetDexRegisterMapOffsetAtDepth(depth);
-      size_t size = ComputeDexRegisterMapSizeOf(offset, number_of_dex_registers);
-      return DexRegisterMap(region_.Subregion(offset, size));
-    }
-  }
+                                          uint32_t number_of_dex_registers) const;
 
   InlineInfo GetInlineInfoOf(StackMap stack_map, const StackMapEncoding& encoding) const {
     DCHECK(stack_map.HasInlineInfo(encoding));
-    uint32_t offset = stack_map.GetInlineDescriptorOffset(encoding)
-                      + GetDexRegisterMapsOffset(encoding);
-    uint8_t depth = region_.LoadUnaligned<uint8_t>(offset);
-    return InlineInfo(region_.Subregion(offset,
+    uint32_t offset = stack_map.GetInlineDescriptorOffset(encoding);
+    uint8_t depth = inline_infos_region_.LoadUnaligned<uint8_t>(offset);
+    return InlineInfo(inline_infos_region_.Subregion(offset,
         InlineInfo::kFixedSize + depth * InlineInfo::SingleEntrySize()));
   }
 
@@ -1149,8 +666,6 @@ class CodeInfo {
         StackMap other = GetStackMapAt(i + 1, encoding);
         if (other.GetDexPc(encoding) == dex_pc &&
             other.GetNativePcOffset(encoding) == stack_map.GetNativePcOffset(encoding)) {
-          DCHECK_EQ(other.GetDexRegisterMapOffset(encoding),
-                    stack_map.GetDexRegisterMapOffset(encoding));
           DCHECK(!stack_map.HasInlineInfo(encoding));
           if (i < e - 2) {
             // Make sure there are not three identical stack maps following each other.
@@ -1189,67 +704,20 @@ class CodeInfo {
             bool dump_stack_maps) const;
 
  private:
-  MemoryRegion GetStackMaps(const StackMapEncoding& encoding) const {
-    return region_.size() == 0
-        ? MemoryRegion()
-        : region_.Subregion(GetStackMapsOffset(), GetStackMapsSize(encoding));
-  }
-
-  // Compute the size of the Dex register map associated to the stack map at
-  // `dex_register_map_offset_in_code_info`.
-  size_t ComputeDexRegisterMapSizeOf(uint32_t dex_register_map_offset_in_code_info,
-                                     uint16_t number_of_dex_registers) const {
-    // Offset where the actual mapping data starts within art::DexRegisterMap.
-    size_t location_mapping_data_offset_in_dex_register_map =
-        DexRegisterMap::GetLocationMappingDataOffset(number_of_dex_registers);
-    // Create a temporary art::DexRegisterMap to be able to call
-    // art::DexRegisterMap::GetNumberOfLiveDexRegisters and
-    DexRegisterMap dex_register_map_without_locations(
-        MemoryRegion(region_.Subregion(dex_register_map_offset_in_code_info,
-                                       location_mapping_data_offset_in_dex_register_map)));
-    size_t number_of_live_dex_registers =
-        dex_register_map_without_locations.GetNumberOfLiveDexRegisters(number_of_dex_registers);
-    size_t location_mapping_data_size_in_bits =
-        DexRegisterMap::SingleEntrySizeInBits(GetNumberOfLocationCatalogEntries())
-        * number_of_live_dex_registers;
-    size_t location_mapping_data_size_in_bytes =
-        RoundUp(location_mapping_data_size_in_bits, kBitsPerByte) / kBitsPerByte;
-    size_t dex_register_map_size =
-        location_mapping_data_offset_in_dex_register_map + location_mapping_data_size_in_bytes;
-    return dex_register_map_size;
-  }
-
-  // Compute the size of a Dex register location catalog starting at offset `origin`
-  // in `region_` and containing `number_of_dex_locations` entries.
-  size_t ComputeDexRegisterLocationCatalogSize(uint32_t origin,
-                                               uint32_t number_of_dex_locations) const {
-    // TODO: Ideally, we would like to use art::DexRegisterLocationCatalog::Size or
-    // art::DexRegisterLocationCatalog::FindLocationOffset, but the
-    // DexRegisterLocationCatalog is not yet built.  Try to factor common code.
-    size_t offset = origin + DexRegisterLocationCatalog::kFixedSize;
-
-    // Skip the first `number_of_dex_locations - 1` entries.
-    for (uint16_t i = 0; i < number_of_dex_locations; ++i) {
-      // Read the first next byte and inspect its first 3 bits to decide
-      // whether it is a short or a large location.
-      DexRegisterLocationCatalog::ShortLocation first_byte =
-          region_.LoadUnaligned<DexRegisterLocationCatalog::ShortLocation>(offset);
-      DexRegisterLocation::Kind kind =
-          DexRegisterLocationCatalog::ExtractKindFromShortLocation(first_byte);
-      if (DexRegisterLocation::IsShortLocationKind(kind)) {
-        // Short location.  Skip the current byte.
-        offset += DexRegisterLocationCatalog::SingleShortEntrySize();
-      } else {
-        // Large location.  Skip the 5 next bytes.
-        offset += DexRegisterLocationCatalog::SingleLargeEntrySize();
-      }
-    }
-    size_t size = offset - origin;
-    return size;
-  }
+  // Internal method to decode dex register locations for one stack map.
+  // This method must be called repeatedly to search thought the encoded data.
+  // The arguments keep the state and need to be preserved between calls.
+  // Returns the number of valid entries (since the location vector never shrinks).
+  size_t DecodeNextDexRegisterMap(const StackMap& stack_map,
+                                  size_t* encoded_offset,
+                                  dchecked_vector<DexRegisterLocation>* locations) const;
 
   CodeInfoHeader header_;
-  MemoryRegion region_;
+  StackMapEncoding* stack_map_encoding_;
+  MemoryRegion stack_maps_region_;
+  MemoryRegion inline_infos_region_;
+  MemoryRegion dex_register_maps_region_;
+  friend class StackMapEncoding;
   friend class StackMapStream;
 };
 

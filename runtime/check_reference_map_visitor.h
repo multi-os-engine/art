@@ -100,7 +100,7 @@ class CheckReferenceMapVisitor : public StackVisitor {
           break;
         default:
           LOG(FATAL) << "Unexpected location kind"
-                     << DexRegisterLocation::PrettyDescriptor(location.GetInternalKind());
+                     << DexRegisterLocation::PrettyDescriptor(location.GetKind());
       }
     }
   }

@@ -452,10 +452,10 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
           LOG(FATAL)
               << "Unexpected location kind"
               << DexRegisterLocation::PrettyDescriptor(
-                    vreg_map.GetLocationInternalKind(vreg,
-                                                     number_of_vregs,
-                                                     code_info,
-                                                     encoding));
+                    vreg_map.GetLocationKind(vreg,
+                                             number_of_vregs,
+                                             code_info,
+                                             encoding));
           UNREACHABLE();
         }
       }
