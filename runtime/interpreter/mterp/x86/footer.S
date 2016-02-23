@@ -143,6 +143,21 @@ MterpCheckSuspendAndContinue:
     GOTO_NEXT
 
 /*
+ * On-stack replacement has happened, and now we've returned from the compiled method.
+ */
+MterpOnStackReplacement:
+#if MTERP_LOGGING
+    movl    rSELF, %eax
+    movl    %eax, OUT_ARG0(%esp)
+    lea     OFF_FP_SHADOWFRAME(rFP), %ecx
+    movl    %ecx, OUT_ARG1(%esp)
+    movl    rINST, OUT_ARG2(%esp)
+    call    SYMBOL(MterpLogOSR)
+#endif
+    movl    $$1, %eax
+    jmp     MterpDone
+
+/*
  * Bail out to reference interpreter.
  */
 MterpFallback:

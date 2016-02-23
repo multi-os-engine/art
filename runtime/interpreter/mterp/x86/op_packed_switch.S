@@ -15,8 +15,19 @@
     movl    %eax, OUT_ARG1(%esp)            # ARG1 <- vAA
     movl    %ecx, OUT_ARG0(%esp)            # ARG0 <- switchData
     call    SYMBOL($func)
-    addl    %eax, %eax
-    leal    (rPC, %eax), rPC
+    movl    rINST, %eax
+    EXPORT_PC
+    movl    rSELF, %eax
+    movl    %eax, OUT_ARG0(%esp)
+    leal    OFF_FP_SHADOWFRAME(rFP), %eax
+    movl    %eax, OUT_ARG1(%esp)
+    movl    rINST, OUT_ARG2(%esp)
+    call    SYMBOL(MterpProfileBranch)
+    RESTORE_IBASE
+    testb   %al, %al
+    jnz     MterpOnStackReplacement
+    addl    rINST, rINST
+    leal    (rPC, rINST), rPC
     FETCH_INST
     REFRESH_IBASE
     jg      1f

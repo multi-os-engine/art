@@ -7,12 +7,22 @@
  */
     /* if-cmp vAA, +BBBB */
     cmpl    $$0, VREG_ADDRESS(rINST)        # compare (vA, 0)
-    movl    $$2, %eax                       # assume branch not taken
+    movl    $$2, rINST                      # assume branch not taken
     j${revcmp}   1f
-    movswl  2(rPC),%eax                     # fetch signed displacement
+    movswl  2(rPC),rINST                    # fetch signed displacement
 1:
-    addl    %eax, %eax                      # eax <- AA * 2
-    leal    (rPC, %eax), rPC
+    EXPORT_PC
+    movl    rSELF, %eax
+    movl    %eax, OUT_ARG0(%esp)
+    leal    OFF_FP_SHADOWFRAME(rFP), %eax
+    movl    %eax, OUT_ARG1(%esp)
+    movl    rINST, OUT_ARG2(%esp)
+    call    SYMBOL(MterpProfileBranch)
+    RESTORE_IBASE
+    testb   %al, %al
+    jnz     MterpOnStackReplacement
+    addl    rINST, rINST                    # eax <- AA * 2
+    leal    (rPC, rINST), rPC
     FETCH_INST
     jg      2f                              # AA * 2 > 0 => no suspend check
 #if MTERP_SUSPEND
