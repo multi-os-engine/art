@@ -354,10 +354,10 @@ bool StackVisitor::GetVRegFromOptimizedCode(ArtMethod* m, uint16_t vreg, VRegKin
       LOG(FATAL)
           << "Unexpected location kind"
           << DexRegisterLocation::PrettyDescriptor(
-                dex_register_map.GetLocationInternalKind(vreg,
-                                                         number_of_dex_registers,
-                                                         code_info,
-                                                         encoding));
+                dex_register_map.GetLocationKind(vreg,
+                                                 number_of_dex_registers,
+                                                 code_info,
+                                                 encoding));
       UNREACHABLE();
   }
 }
