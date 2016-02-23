@@ -72,12 +72,22 @@ class ValueBound : public ValueObject {
       HInstruction* left = bin_op->GetLeft();
       HInstruction* right = bin_op->GetRight();
       if (right->IsIntConstant()) {
+        int32_t v = right->AsIntConstant()->GetValue();
+        int32_t c = instruction->IsAdd() ? v : -v;
+        // Try to go even more left ((left + d) + c).
+        int32_t d = 0;
+        if (IsAddOrSubAConstant(left, left_instruction, &d) &&
+            !WouldAddOverflowOrUnderflow(d, c)) {
+          *right_constant = d + c;
+          return true;
+        }
+        // Otherwise just report (left + c).
         *left_instruction = left;
-        int32_t c = right->AsIntConstant()->GetValue();
-        *right_constant = instruction->IsAdd() ? c : -c;
+        *right_constant = c;
         return true;
       }
     }
+    // Nothing found.
     *left_instruction = nullptr;
     *right_constant = 0;
     return false;
