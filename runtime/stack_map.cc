@@ -23,10 +23,6 @@
 
 namespace art {
 
-constexpr size_t DexRegisterLocationCatalog::kNoLocationEntryIndex;
-constexpr uint32_t StackMap::kNoDexRegisterMap;
-constexpr uint32_t StackMap::kNoInlineInfo;
-
 std::ostream& operator<<(std::ostream& stream, const DexRegisterLocation::Kind& kind) {
   using Kind = DexRegisterLocation::Kind;
   switch (kind) {
@@ -44,47 +40,105 @@ std::ostream& operator<<(std::ostream& stream, const DexRegisterLocation::Kind& 
       return stream << "in fpu register high";
     case Kind::kConstant:
       return stream << "as constant";
-    case Kind::kInStackLargeOffset:
-      return stream << "in stack (large offset)";
-    case Kind::kConstantLargeValue:
-      return stream << "as constant (large value)";
   }
   return stream << "Kind<" << static_cast<uint32_t>(kind) << ">";
 }
 
-DexRegisterLocation::Kind DexRegisterMap::GetLocationInternalKind(
-    uint16_t dex_register_number,
-    uint16_t number_of_dex_registers,
-    const CodeInfo& code_info) const {
-  DexRegisterLocationCatalog dex_register_location_catalog =
-      code_info.GetDexRegisterLocationCatalog();
-  size_t location_catalog_entry_index = GetLocationCatalogEntryIndex(
-      dex_register_number,
-      number_of_dex_registers,
-      code_info.GetNumberOfLocationCatalogEntries());
-  return dex_register_location_catalog.GetLocationInternalKind(location_catalog_entry_index);
+std::ostream& operator<<(std::ostream& stream, const DexRegisterLocation& location) {
+  return stream << location.GetKind() << " (" << location.GetValue() << ")";
 }
 
-DexRegisterLocation DexRegisterMap::GetDexRegisterLocation(uint16_t dex_register_number,
-                                                           uint16_t number_of_dex_registers,
-                                                           const CodeInfo& code_info) const {
-  DexRegisterLocationCatalog dex_register_location_catalog =
-      code_info.GetDexRegisterLocationCatalog();
-  size_t location_catalog_entry_index = GetLocationCatalogEntryIndex(
-      dex_register_number,
-      number_of_dex_registers,
-      code_info.GetNumberOfLocationCatalogEntries());
-  return dex_register_location_catalog.GetDexRegisterLocation(location_catalog_entry_index);
+std::vector<DexRegisterMap> CodeInfo::GetDexRegisterMaps() const {
+  std::vector<DexRegisterMap> result;
+  size_t encoded_offset = 0;
+  dchecked_vector<DexRegisterLocation> locations;
+  for (size_t i = 0; i < GetNumberOfStackMaps(); ++i) {
+    StackMap stack_map = GetStackMapAt(i);
+    size_t count = DecodeNextDexRegisterMap(stack_map, &encoded_offset, &locations);
+    result.push_back(DexRegisterMap(
+        dchecked_vector<DexRegisterLocation>(locations.begin(), locations.begin() + count)));
+  }
+  return result;
 }
 
-static void DumpRegisterMapping(std::ostream& os,
-                                size_t dex_register_num,
-                                DexRegisterLocation location,
-                                const std::string& prefix = "v",
-                                const std::string& suffix = "") {
-  os << prefix << dex_register_num << ": "
-     << location.GetInternalKind()
-     << " (" << location.GetValue() << ")" << suffix << '\n';
+DexRegisterMap CodeInfo::GetDexRegisterMapOf(StackMap for_stack_map,
+                                             uint32_t num_dex_regs ATTRIBUTE_UNUSED) const {
+  size_t encoded_offset = 0;
+  dchecked_vector<DexRegisterLocation> locations;
+  for (size_t i = 0; i < GetNumberOfStackMaps(); ++i) {
+    StackMap stack_map = GetStackMapAt(i);
+    DecodeNextDexRegisterMap(stack_map, &encoded_offset, &locations);
+    if (stack_map.Equals(for_stack_map)) {
+      locations.resize(GetNumberOfDexRegistersOf(stack_map, 0 /* max_depth */));  // Trim.
+      return DexRegisterMap(std::move(locations));
+    }
+  }
+  LOG(FATAL) << "Stack map not found";
+  UNREACHABLE();
+}
+
+DexRegisterMap CodeInfo::GetDexRegisterMapAtDepth(size_t depth,
+                                                  InlineInfo for_inline_info,
+                                                  uint32_t num_dex_regs ATTRIBUTE_UNUSED) const {
+  size_t encoded_offset = 0;
+  dchecked_vector<DexRegisterLocation> locations;
+  for (size_t i = 0; i < GetNumberOfStackMaps(); ++i) {
+    StackMap stack_map = GetStackMapAt(i);
+    DecodeNextDexRegisterMap(stack_map, &encoded_offset, &locations);
+    if (stack_map.HasInlineInfo()) {
+      InlineInfo inline_info = GetInlineInfoOf(stack_map);
+      if (inline_info.Equals(for_inline_info)) {
+        // Trim the result to just the registers of the inlined method.
+        size_t start = GetNumberOfDexRegistersOf(stack_map, depth /* max_depth */);
+        locations.resize(start + inline_info.GetNumberOfDexRegistersAtDepth(depth));  // Trim end.
+        locations.erase(locations.begin(), locations.begin() + start);  // Trim start.
+        return DexRegisterMap(std::move(locations));
+      }
+    }
+  }
+  LOG(FATAL) << "Stack map not found";
+  UNREACHABLE();
+}
+
+size_t CodeInfo::DecodeNextDexRegisterMap(const StackMap& stack_map,
+                                          size_t* encoded_offset,
+                                          dchecked_vector<DexRegisterLocation>* locations) const {
+  // Grow the locations vector to the needed size (but never shrink it).
+  // Inlined registers (if any) are encoded together with the main registers.
+  size_t num_locations = GetNumberOfDexRegistersOf(stack_map, 0xFFFFFFFF /* max_depth */);
+  locations->resize(std::max(locations->size(), num_locations));
+
+  // Decode register locations which changed since last stack map.
+  if ((stack_map.GetFlags() & StackMap::Flags::kSameDexRegisterMap) == 0) {
+    size_t bitmap_size = RoundUp(num_locations, kBitsPerByte) / kBitsPerByte;
+    MemoryRegion bitmap = dex_register_maps_region_.Subregion(*encoded_offset, bitmap_size);
+    *encoded_offset += bitmap_size;
+    for (size_t r = 0; r < num_locations; ++r) {
+      if (bitmap.LoadBit(r)) {
+        (*locations)[r] = DexRegisterLocation::Decode(&dex_register_maps_region_, encoded_offset);
+      }
+    }
+  }
+
+  return num_locations;
+}
+
+void CodeInfoHeader::Dump(VariableIndentationOutputStream* vios) const {
+  vios->Stream()
+      << "CodeInfoHeader"
+      << " (number_of_stack_maps=" << number_of_stack_maps
+      << ", stack_map_size=" << stack_map_size
+      << ", number_of_dex_registers=" << number_of_dex_registers
+      << ", dex_register_maps_size=" << dex_register_maps_size
+      << ", inline_infos_size=" << inline_infos_size
+      << ")\n";
+  ScopedIndentation indent(vios);
+  if (stack_map_encoding != nullptr) {
+    stack_map_encoding->Dump(vios);
+  }
+  if (inline_info_encoding != nullptr) {
+    inline_info_encoding->Dump(vios);
+  }
 }
 
 void StackMapEncoding::Dump(VariableIndentationOutputStream* vios) const {
@@ -92,7 +146,7 @@ void StackMapEncoding::Dump(VariableIndentationOutputStream* vios) const {
       << "StackMapEncoding"
       << " (native_pc_bit_offset=" << kNativePcBitOffset
       << ", dex_pc_bit_offset=" << dex_pc_bit_offset_
-      << ", dex_register_map_bit_offset=" << dex_register_map_bit_offset_
+      << ", flags_bit_offset=" << flags_bit_offset_
       << ", inline_info_bit_offset=" << inline_info_bit_offset_
       << ", register_mask_bit_offset=" << register_mask_bit_offset_
       << ", stack_mask_bit_offset=" << stack_mask_bit_offset_
@@ -105,7 +159,7 @@ void InlineInfoEncoding::Dump(VariableIndentationOutputStream* vios) const {
       << " (method_index_bit_offset=" << kMethodIndexBitOffset
       << ", dex_pc_bit_offset=" << dex_pc_bit_offset_
       << ", invoke_type_bit_offset=" << invoke_type_bit_offset_
-      << ", dex_register_map_bit_offset=" << dex_register_map_bit_offset_
+      << ", number_of_dex_registers_bit_offset=" << number_of_dex_registers_bit_offset_
       << ", total_bit_size=" << total_bit_size_
       << ")\n";
 }
@@ -115,19 +169,9 @@ void CodeInfo::Dump(VariableIndentationOutputStream* vios,
                     uint16_t number_of_dex_registers,
                     bool dump_stack_maps) const {
   size_t number_of_stack_maps = GetNumberOfStackMaps();
-  vios->Stream()
-      << "Optimized CodeInfo (number_of_dex_registers=" << number_of_dex_registers
-      << ", number_of_stack_maps=" << number_of_stack_maps
-      << ")\n";
+  vios->Stream() << "Optimized CodeInfo\n";
   ScopedIndentation indent1(vios);
-  if (header_.stack_map_encoding != nullptr) {
-    header_.stack_map_encoding->Dump(vios);
-  }
-  if (header_.inline_info_encoding != nullptr) {
-    header_.inline_info_encoding->Dump(vios);
-  }
-  // Display the Dex register location catalog.
-  GetDexRegisterLocationCatalog().Dump(vios, *this);
+  header_.Dump(vios);
   // Display stack maps along with (live) Dex register maps.
   if (dump_stack_maps) {
     for (size_t i = 0; i < number_of_stack_maps; ++i) {
@@ -139,40 +183,14 @@ void CodeInfo::Dump(VariableIndentationOutputStream* vios,
                      " " + std::to_string(i));
     }
   }
-  // TODO: Dump the stack map's inline information? We need to know more from the caller:
-  //       we need to know the number of dex registers for each inlined method.
 }
 
-void DexRegisterLocationCatalog::Dump(VariableIndentationOutputStream* vios,
-                                      const CodeInfo& code_info) {
-  size_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
-  size_t location_catalog_size_in_bytes = code_info.GetDexRegisterLocationCatalogSize();
-  vios->Stream()
-      << "DexRegisterLocationCatalog (number_of_entries=" << number_of_location_catalog_entries
-      << ", size_in_bytes=" << location_catalog_size_in_bytes << ")\n";
-  for (size_t i = 0; i < number_of_location_catalog_entries; ++i) {
-    DexRegisterLocation location = GetDexRegisterLocation(i);
-    ScopedIndentation indent1(vios);
-    DumpRegisterMapping(vios->Stream(), i, location, "entry ");
-  }
-}
-
-void DexRegisterMap::Dump(VariableIndentationOutputStream* vios,
-                          const CodeInfo& code_info,
-                          uint16_t number_of_dex_registers) const {
-  size_t number_of_location_catalog_entries = code_info.GetNumberOfLocationCatalogEntries();
-  // TODO: Display the bit mask of live Dex registers.
-  for (size_t j = 0; j < number_of_dex_registers; ++j) {
-    if (IsDexRegisterLive(j)) {
-      size_t location_catalog_entry_index = GetLocationCatalogEntryIndex(
-          j, number_of_dex_registers, number_of_location_catalog_entries);
-      DexRegisterLocation location = GetDexRegisterLocation(j,
-                                                            number_of_dex_registers,
-                                                            code_info);
+void DexRegisterMap::Dump(VariableIndentationOutputStream* vios) const {
+  for (size_t j = 0; j < locations_.size(); ++j) {
+    const DexRegisterLocation& location = locations_[j];
+    if (location.GetKind() != DexRegisterLocation::Kind::kNone) {
       ScopedIndentation indent1(vios);
-      DumpRegisterMapping(
-          vios->Stream(), j, location, "v",
-          "\t[entry " + std::to_string(static_cast<int>(location_catalog_entry_index)) + "]");
+      vios->Stream() << "v" << j << ": " << location << '\n';
     }
   }
 }
@@ -186,36 +204,30 @@ void StackMap::Dump(VariableIndentationOutputStream* vios,
       << "StackMap" << header_suffix
       << std::hex
       << " [native_pc=0x" << code_offset + GetNativePcOffset() << "]"
-      << " (dex_pc=0x" << GetDexPc()
-      << ", native_pc_offset=0x" << GetNativePcOffset()
-      << ", dex_register_map_offset=0x" << GetDexRegisterMapOffset()
-      << ", inline_info_offset=0x" << GetInlineDescriptorOffset()
+      << " (native_pc_offset=0x" << GetNativePcOffset()
+      << ", dex_pc=0x" << GetDexPc()
+      << ", flags=0x" << GetFlags()
+      << ", inline_descriptor_offset=0x" << GetInlineDescriptorOffset()
       << ", register_mask=0x" << GetRegisterMask()
       << std::dec
       << ", stack_mask=0b";
   for (size_t i = 0, e = GetNumberOfStackMaskBits(); i < e; ++i) {
-    vios->Stream() << GetStackMaskBit(e - i - 1);
+    vios->Stream() << (GetStackMaskBit(e - i - 1) ? 1 : 0);
   }
   vios->Stream() << ")\n";
   if (HasDexRegisterMap()) {
     DexRegisterMap dex_register_map = code_info.GetDexRegisterMapOf(
         *this, number_of_dex_registers);
-    dex_register_map.Dump(vios, code_info, number_of_dex_registers);
+    dex_register_map.Dump(vios);
   }
   if (HasInlineInfo()) {
     InlineInfo inline_info = code_info.GetInlineInfoOf(*this);
-    // We do not know the length of the dex register maps of inlined frames
-    // at this level, so we just pass null to `InlineInfo::Dump` to tell
-    // it not to look at these maps.
-    inline_info.Dump(vios, code_info, nullptr);
+    inline_info.Dump(vios, code_info);
   }
 }
 
-void InlineInfo::Dump(VariableIndentationOutputStream* vios,
-                      const CodeInfo& code_info,
-                      uint16_t number_of_dex_registers[]) const {
+void InlineInfo::Dump(VariableIndentationOutputStream* vios, const CodeInfo& code_info) const {
   vios->Stream() << "InlineInfo with depth " << static_cast<uint32_t>(GetDepth()) << "\n";
-
   for (size_t i = 0; i < GetDepth(); ++i) {
     vios->Stream()
         << " At depth " << i
@@ -225,12 +237,10 @@ void InlineInfo::Dump(VariableIndentationOutputStream* vios,
         << ", method_index=" << GetMethodIndexAtDepth(i)
         << ", invoke_type=" << static_cast<InvokeType>(GetInvokeTypeAtDepth(i))
         << ")\n";
-    if (HasDexRegisterMapAtDepth(i) && (number_of_dex_registers != nullptr)) {
-      DexRegisterMap dex_register_map =
-          code_info.GetDexRegisterMapAtDepth(i, *this, number_of_dex_registers[i]);
-      ScopedIndentation indent1(vios);
-      dex_register_map.Dump(vios, code_info, number_of_dex_registers[i]);
-    }
+    DexRegisterMap dex_register_map =
+        code_info.GetDexRegisterMapAtDepth(i, *this, GetNumberOfDexRegistersAtDepth(i));
+    ScopedIndentation indent1(vios);
+    dex_register_map.Dump(vios);
   }
 }
 

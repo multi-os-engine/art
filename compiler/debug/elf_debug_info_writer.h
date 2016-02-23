@@ -173,6 +173,14 @@ class ElfCompilationUnitWriter {
       info_.WriteExprLoc(DW_AT_frame_base, expr);
       WriteLazyType(dex->GetReturnTypeDescriptor(dex_proto));
 
+      // Decode dex register locations for all stack maps.
+      // It is expensive, so do it just once and reuse the result.
+      DexRegisterMaps dex_reg_maps;
+      if (mi->IsFromOptimizingCompiler()) {
+        const CodeInfo code_info(mi->compiled_method->GetVmapTable().data());
+        dex_reg_maps = code_info.GetDexRegisterMaps();
+      }
+
       // Write parameters. DecodeDebugLocalInfo returns them as well, but it does not
       // guarantee order or uniqueness so it is safer to iterate over them manually.
       // DecodeDebugLocalInfo might not also be available if there is no debug info.
@@ -187,7 +195,7 @@ class ElfCompilationUnitWriter {
           // Write the stack location of the parameter.
           const uint32_t vreg = dex_code->registers_size_ - dex_code->ins_size_ + arg_reg;
           const bool is64bitValue = false;
-          WriteRegLocation(mi, vreg, is64bitValue, compilation_unit.low_pc);
+          WriteRegLocation(mi, dex_reg_maps, vreg, is64bitValue, compilation_unit.low_pc);
         }
         arg_reg++;
         info_.EndTag();
@@ -206,7 +214,7 @@ class ElfCompilationUnitWriter {
           if (dex_code != nullptr) {
             // Write the stack location of the parameter.
             const uint32_t vreg = dex_code->registers_size_ - dex_code->ins_size_ + arg_reg;
-            WriteRegLocation(mi, vreg, is64bitValue, compilation_unit.low_pc);
+            WriteRegLocation(mi, dex_reg_maps, vreg, is64bitValue, compilation_unit.low_pc);
           }
           arg_reg += is64bitValue ? 2 : 1;
           info_.EndTag();
@@ -229,7 +237,7 @@ class ElfCompilationUnitWriter {
             WriteName(var.name_);
             WriteLazyType(var.descriptor_);
             bool is64bitValue = var.descriptor_[0] == 'D' || var.descriptor_[0] == 'J';
-            WriteRegLocation(mi, var.reg_, is64bitValue, compilation_unit.low_pc,
+            WriteRegLocation(mi, dex_reg_maps, var.reg_, is64bitValue, compilation_unit.low_pc,
                              var.start_address_, var.end_address_);
             info_.EndTag();
           }
@@ -424,12 +432,14 @@ class ElfCompilationUnitWriter {
   // The dex register might be valid only at some points and it might
   // move between machine registers and stack.
   void WriteRegLocation(const MethodDebugInfo* method_info,
+                        DexRegisterMaps& dex_register_maps,
                         uint16_t vreg,
                         bool is64bitValue,
                         uint32_t compilation_unit_low_pc,
                         uint32_t dex_pc_low = 0,
                         uint32_t dex_pc_high = 0xFFFFFFFF) {
     WriteDebugLocEntry(method_info,
+                       dex_register_maps,
                        vreg,
                        is64bitValue,
                        compilation_unit_low_pc,
