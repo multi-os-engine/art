@@ -84,23 +84,32 @@ class DummyImageSpace : public space::ImageSpace {
  public:
   DummyImageSpace(MemMap* map,
                   accounting::ContinuousSpaceBitmap* live_bitmap,
-                  std::unique_ptr<DummyOatFile>&& oat_file)
+                  std::unique_ptr<DummyOatFile>&& oat_file,
+                  std::unique_ptr<MemMap>&& oat_map)
       : ImageSpace("DummyImageSpace",
                    /*image_location*/"",
                    map,
                    live_bitmap,
-                   map->End()) {
+                   map->End()),
+        oat_map_(std::move(oat_map)) {
     oat_file_ = std::move(oat_file);
     oat_file_non_owned_ = oat_file_.get();
   }
 
   // Size is the size of the image space, oat offset is where the oat file is located
-  // after the end of image space. oat_size is the size of the oat file.
-  static DummyImageSpace* Create(size_t size, size_t oat_offset, size_t oat_size) {
+  // after the end of image space. oat_size is the size of the oat file. oat_begin and oat_end
+  // are for faking up the oat file if we want it to be at an arbitrary address instead of directly
+  // after the image.
+  static DummyImageSpace* Create(size_t size,
+                                 size_t oat_offset,
+                                 size_t oat_size,
+                                 uint8_t* oat_begin = nullptr,
+                                 uint8_t* oat_end = nullptr) {
     std::string error_str;
+    const size_t oat_reserve = oat_offset + oat_size;
     std::unique_ptr<MemMap> map(MemMap::MapAnonymous("DummyImageSpace",
                                                      nullptr,
-                                                     size,
+                                                     size + oat_reserve,
                                                      PROT_READ | PROT_WRITE,
                                                      /*low_4gb*/true,
                                                      /*reuse*/false,
@@ -109,14 +118,29 @@ class DummyImageSpace : public space::ImageSpace {
       LOG(ERROR) << error_str;
       return nullptr;
     }
+    std::unique_ptr<MemMap> oat_map(map->RemapAtEnd(map->End() - oat_reserve,
+                                                    "oat part",
+                                                    PROT_NONE,
+                                                    &error_str,
+                                                    /*use_ashmem*/true));
+    CHECK_EQ(map->End(), oat_map->Begin());
+    if (oat_map == nullptr) {
+      LOG(ERROR) << error_str;
+      return nullptr;
+    }
     std::unique_ptr<accounting::ContinuousSpaceBitmap> live_bitmap(
         accounting::ContinuousSpaceBitmap::Create("bitmap", map->Begin(), map->Size()));
     if (live_bitmap == nullptr) {
       return nullptr;
     }
+    if (oat_begin == nullptr) {
+      oat_begin = map->End() + oat_offset;
+    }
+    if (oat_end == nullptr) {
+      oat_end = oat_begin + oat_size;
+    }
     // The actual mapped oat file may not be directly after the image for the app image case.
-    std::unique_ptr<DummyOatFile> oat_file(new DummyOatFile(map->End() + oat_offset,
-                                                            map->End() + oat_offset + oat_size));
+    std::unique_ptr<DummyOatFile> oat_file(new DummyOatFile(oat_begin, oat_end));
     // Create image header.
     ImageSection sections[ImageHeader::kSectionCount];
     new (map->Begin()) ImageHeader(
@@ -139,8 +163,14 @@ class DummyImageSpace : public space::ImageSpace {
         /*is_pic*/false,
         ImageHeader::kStorageModeUncompressed,
         /*storage_size*/0u);
-    return new DummyImageSpace(map.release(), live_bitmap.release(), std::move(oat_file));
+    return new DummyImageSpace(map.release(),
+                               live_bitmap.release(),
+                               std::move(oat_file),
+                               std::move(oat_map));
   }
+
+ private:
+  std::unique_ptr<MemMap> oat_map_;
 };
 
 TEST_F(ImmuneSpacesTest, AppendAfterImage) {
@@ -155,11 +185,20 @@ TEST_F(ImmuneSpacesTest, AppendAfterImage) {
   EXPECT_EQ(image_header.GetImageSize(), image_size);
   EXPECT_EQ(static_cast<size_t>(image_header.GetOatFileEnd() - image_header.GetOatFileBegin()),
             image_oat_size);
+  // Check that we do not include the oat if there is no image after.
+  {
+    WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
+    spaces.AddSpace(image_space.get());
+  }
+  EXPECT_EQ(reinterpret_cast<uint8_t*>(spaces.GetLargestImmuneRegion().Begin()),
+            image_space->Begin());
+  EXPECT_EQ(reinterpret_cast<uint8_t*>(spaces.GetLargestImmuneRegion().End()),
+            image_space->Limit());
+  // Add another space and ensure it gets appended.
   DummySpace space(image_header.GetOatFileEnd(), image_header.GetOatFileEnd() + 813 * kPageSize);
   EXPECT_NE(image_space->Limit(), space.Begin());
   {
     WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
-    spaces.AddSpace(image_space.get());
     spaces.AddSpace(&space);
   }
   EXPECT_TRUE(spaces.ContainsSpace(image_space.get()));
@@ -182,6 +221,54 @@ TEST_F(ImmuneSpacesTest, AppendAfterImage) {
   // Size should be equal, we should not add the oat file since it is not adjacent to the image
   // space.
   EXPECT_EQ(spaces.GetLargestImmuneRegion().Size(), image_size);
+}
+
+TEST_F(ImmuneSpacesTest, MultiImage) {
+  // Image 2 needs to be smaller or else it may be chosen for immune region.
+  constexpr size_t kImage1Size = kPageSize * 17;
+  constexpr size_t kImage2Size = kPageSize * 13;
+  constexpr size_t kImage3Size = kPageSize;
+  constexpr size_t kImage1OatSize = kPageSize * 5;
+  constexpr size_t kImage2OatSize = kPageSize * 5;
+  // Test [image] ... [image][oat][oat][image] case to make sure everything is included in the
+  // immune space.
+  ImmuneSpaces spaces;
+  std::unique_ptr<DummyImageSpace> space1(DummyImageSpace::Create(/*size*/kImage1Size,
+                                                                  /*oat_offset*/kImage2OatSize,
+                                                                  /*oat_size*/kImage1OatSize));
+  // The second image space is wherever, but the oat file is in the gap between space1 and it's
+  // space1's oat file.
+  std::unique_ptr<DummyImageSpace> space2(DummyImageSpace::Create(
+      kImage2Size,
+      0,
+      kImage2OatSize,
+      space1->Limit(),
+      space1->Limit() + kImage2OatSize));
+  // Finally put a 3rd dummy image.
+  uint8_t* start = space1->Limit() + kImage1OatSize + kImage2OatSize;
+  // if (space2->Limit() == space1->)
+  DummySpace last(start, start + kImage3Size);
+  ASSERT_TRUE(space1 != nullptr);
+  // Check that we do not include the oat if there is no image after.
+  {
+    WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
+    LOG(INFO) << "Adding space " << reinterpret_cast<const void*>(space1->Begin());
+    spaces.AddSpace(space1.get());
+    LOG(INFO) << "Adding space " << reinterpret_cast<const void*>(space2->Begin());
+    spaces.AddSpace(space2.get());
+    // We don't know where space 2 actually got mapped, it could be right where we want to put the
+    // last space. In this case, do not add the last space.
+    if (space2->Begin() != last.Begin()) {
+      LOG(INFO) << "Adding space " << reinterpret_cast<const void*>(last.Begin());
+      spaces.AddSpace(&last);
+    }
+  }
+  // We don't know where the space 2 map could be, check that the immune region is at least as
+  // large as we expect it to be.
+  EXPECT_LE(reinterpret_cast<uint8_t*>(spaces.GetLargestImmuneRegion().Begin()),
+            space1->Begin());
+  EXPECT_GE(reinterpret_cast<uint8_t*>(spaces.GetLargestImmuneRegion().End()),
+            space1->Limit() + kImage1OatSize + kImage2OatSize + kImage3Size);
 }
 
 }  // namespace collector
