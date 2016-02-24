@@ -683,21 +683,25 @@ OatQuickMethodHeader* JitCodeCache::LookupOsrMethodHeader(ArtMethod* method) {
 ProfilingInfo* JitCodeCache::AddProfilingInfo(Thread* self,
                                               ArtMethod* method,
                                               const std::vector<uint32_t>& entries,
+                                              uint32_t insns_size_in_code_units,
                                               bool retry_allocation) {
-  ProfilingInfo* info = AddProfilingInfoInternal(self, method, entries);
+  ProfilingInfo* info = AddProfilingInfoInternal(self, method, entries, insns_size_in_code_units);
 
   if (info == nullptr && retry_allocation) {
     GarbageCollectCache(self);
-    info = AddProfilingInfoInternal(self, method, entries);
+    info = AddProfilingInfoInternal(self, method, entries, insns_size_in_code_units);
   }
   return info;
 }
 
 ProfilingInfo* JitCodeCache::AddProfilingInfoInternal(Thread* self,
                                                       ArtMethod* method,
-                                                      const std::vector<uint32_t>& entries) {
+                                                      const std::vector<uint32_t>& entries,
+                                                      uint32_t insns_size_in_code_units) {
   size_t profile_info_size = RoundUp(
-      sizeof(ProfilingInfo) + sizeof(InlineCache) * entries.size(),
+      sizeof(ProfilingInfo) +
+          sizeof(InlineCache) * entries.size() +
+          BitVector::BitsToWords(insns_size_in_code_units) * sizeof(uint32_t),
       sizeof(void*));
   MutexLock mu(self, lock_);
 
@@ -711,7 +715,7 @@ ProfilingInfo* JitCodeCache::AddProfilingInfoInternal(Thread* self,
   if (data == nullptr) {
     return nullptr;
   }
-  info = new (data) ProfilingInfo(method, entries);
+  info = new (data) ProfilingInfo(method, entries, insns_size_in_code_units);
 
   // Make sure other threads see the data in the profiling info object before the
   // store in the ArtMethod's ProfilingInfo pointer.

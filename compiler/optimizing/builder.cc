@@ -109,8 +109,21 @@ void HGraphBuilder::If_22t(const Instruction& instruction, uint32_t dex_pc) {
   PotentiallyAddSuspendCheck(branch_target, dex_pc);
   HInstruction* first = LoadLocal(instruction.VRegA(), Primitive::kPrimInt, dex_pc);
   HInstruction* second = LoadLocal(instruction.VRegB(), Primitive::kPrimInt, dex_pc);
-  T* comparison = new (arena_) T(first, second, dex_pc);
+  HInstruction* comparison = new (arena_) T(first, second, dex_pc);
   current_block_->AddInstruction(comparison);
+  if (Runtime::Current()->UseJit()) {
+    ProfilingInfo* info = graph_->GetArtMethod()->GetProfilingInfo(sizeof(void*));
+    if (info != nullptr) {
+      if (!info->IsTakenBranch(dex_pc, target_offset)) {
+        current_block_->AddInstruction(new (arena_) HDeoptimize(comparison, dex_pc));
+        comparison = graph_->GetIntConstant(0);
+      } else if (!info->IsTakenBranch(dex_pc, instruction.SizeInCodeUnits())) {
+        current_block_->AddInstruction(new (arena_) HBooleanNot(comparison, dex_pc));
+        current_block_->AddInstruction(new (arena_) HDeoptimize(current_block_->GetLastInstruction(), dex_pc));
+        comparison = graph_->GetIntConstant(1);
+      }
+    }
+  }
   HInstruction* ifinst = new (arena_) HIf(comparison, dex_pc);
   current_block_->AddInstruction(ifinst);
   current_block_->AddSuccessor(branch_target);
@@ -127,8 +140,21 @@ void HGraphBuilder::If_21t(const Instruction& instruction, uint32_t dex_pc) {
   DCHECK(fallthrough_target != nullptr);
   PotentiallyAddSuspendCheck(branch_target, dex_pc);
   HInstruction* value = LoadLocal(instruction.VRegA(), Primitive::kPrimInt, dex_pc);
-  T* comparison = new (arena_) T(value, graph_->GetIntConstant(0, dex_pc), dex_pc);
+  HInstruction* comparison = new (arena_) T(value, graph_->GetIntConstant(0, dex_pc), dex_pc);
   current_block_->AddInstruction(comparison);
+  if (Runtime::Current()->UseJit()) {
+    ProfilingInfo* info = graph_->GetArtMethod()->GetProfilingInfo(sizeof(void*));
+    if (info != nullptr) {
+      if (!info->IsTakenBranch(dex_pc, target_offset)) {
+        current_block_->AddInstruction(new (arena_) HDeoptimize(comparison, dex_pc));
+        comparison = graph_->GetIntConstant(0);
+      } else if (!info->IsTakenBranch(dex_pc, instruction.SizeInCodeUnits())) {
+        current_block_->AddInstruction(new (arena_) HBooleanNot(comparison, dex_pc));
+        current_block_->AddInstruction(new (arena_) HDeoptimize(current_block_->GetLastInstruction(), dex_pc));
+        comparison = graph_->GetIntConstant(1);
+      }
+    }
+  }
   HInstruction* ifinst = new (arena_) HIf(comparison, dex_pc);
   current_block_->AddInstruction(ifinst);
   current_block_->AddSuccessor(branch_target);

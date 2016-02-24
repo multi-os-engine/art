@@ -150,6 +150,7 @@ class JitCodeCache {
   ProfilingInfo* AddProfilingInfo(Thread* self,
                                   ArtMethod* method,
                                   const std::vector<uint32_t>& entries,
+                                  uint32_t insns_size_in_code_units,
                                   bool retry_allocation)
       REQUIRES(!lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -206,7 +207,8 @@ class JitCodeCache {
 
   ProfilingInfo* AddProfilingInfoInternal(Thread* self,
                                           ArtMethod* method,
-                                          const std::vector<uint32_t>& entries)
+                                          const std::vector<uint32_t>& entries,
+                                          uint32_t insns_size_in_code_units)
       REQUIRES(!lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 

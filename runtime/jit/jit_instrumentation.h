@@ -71,7 +71,9 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
                   ArtMethod* /*method*/, uint32_t /*new_dex_pc*/) OVERRIDE { }
 
   void Branch(Thread* thread, ArtMethod* method, uint32_t dex_pc, int32_t dex_pc_offset)
-      OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_);
+      OVERRIDE
+      REQUIRES(Roles::uninterruptible_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   void InvokeVirtualOrInterface(Thread* thread,
                                 mirror::Object* this_object,

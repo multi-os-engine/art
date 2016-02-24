@@ -19,8 +19,10 @@
 
 #include <vector>
 
+#include "base/bit_vector.h"
 #include "base/macros.h"
 #include "gc_root.h"
+#include "memory_region.h"
 
 namespace art {
 
@@ -112,6 +114,18 @@ class ProfilingInfo {
     }
   }
 
+  void SetTakenBranch(uint32_t dex_pc, int32_t dex_pc_offset) {
+    MemoryRegion region(GetBranchesTakenAddress(),
+                        BitVector::BitsToWords(dex_pc + dex_pc_offset + 1) * sizeof(uint32_t));
+    region.StoreBit(dex_pc + dex_pc_offset, true);
+  }
+
+  bool IsTakenBranch(uint32_t dex_pc, int32_t dex_pc_offset) {
+    MemoryRegion region(GetBranchesTakenAddress(),
+                        BitVector::BitsToWords(dex_pc + dex_pc_offset + 1) * sizeof(uint32_t));
+    return region.LoadBit(dex_pc + dex_pc_offset);
+  }
+
   ArtMethod* GetMethod() const {
     return method_;
   }
@@ -127,7 +141,9 @@ class ProfilingInfo {
   }
 
  private:
-  ProfilingInfo(ArtMethod* method, const std::vector<uint32_t>& entries)
+  ProfilingInfo(ArtMethod* method,
+                const std::vector<uint32_t>& entries,
+                uint32_t insns_size_in_code_units)
       : number_of_inline_caches_(entries.size()),
         method_(method),
         is_method_being_compiled_(false) {
@@ -135,6 +151,14 @@ class ProfilingInfo {
     for (size_t i = 0; i < number_of_inline_caches_; ++i) {
       cache_[i].dex_pc_ = entries[i];
     }
+    memset(GetBranchesTakenAddress(),
+           0,
+           BitVector::BitsToWords(insns_size_in_code_units) * sizeof(uint32_t));
+  }
+
+  uint32_t* GetBranchesTakenAddress() {
+    return reinterpret_cast<uint32_t*>(
+        reinterpret_cast<uint8_t*>(&cache_) + number_of_inline_caches_ * sizeof(InlineCache));
   }
 
   // Number of instructions we are profiling in the ArtMethod.

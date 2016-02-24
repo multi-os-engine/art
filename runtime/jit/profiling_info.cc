@@ -59,7 +59,8 @@ bool ProfilingInfo::Create(Thread* self, ArtMethod* method, bool retry_allocatio
 
   // Allocate the `ProfilingInfo` object int the JIT's data space.
   jit::JitCodeCache* code_cache = Runtime::Current()->GetJit()->GetCodeCache();
-  return code_cache->AddProfilingInfo(self, method, entries, retry_allocation) != nullptr;
+  return code_cache->AddProfilingInfo(
+      self, method, entries, code_item.insns_size_in_code_units_, retry_allocation) != nullptr;
 }
 
 InlineCache* ProfilingInfo::GetInlineCache(uint32_t dex_pc) {
