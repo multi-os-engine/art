@@ -167,6 +167,8 @@ class StackMapStream : public ValueObject {
                             const BitVector& live_dex_registers_mask,
                             uint32_t start_index_in_dex_register_locations) const;
 
+  bool CheckCodeInfo(MemoryRegion region) const;
+
   ArenaAllocator* allocator_;
   ArenaVector<StackMapEntry> stack_maps_;
 

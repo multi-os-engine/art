@@ -344,6 +344,9 @@ void StackMapStream::FillIn(MemoryRegion region) {
       }
     }
   }
+
+  // Verify all written data in debug build.
+  DCHECK(CheckCodeInfo(region));
 }
 
 void StackMapStream::FillInDexRegisterMap(DexRegisterMap dex_register_map,
@@ -418,6 +421,103 @@ bool StackMapStream::HaveTheSameDexMaps(const StackMapEntry& a, const StackMapEn
     auto b_begin = dex_register_locations_.begin() + b.dex_register_locations_start_index;
     if (!std::equal(a_begin, a_begin + number_of_live_dex_registers, b_begin)) {
       return false;
+    }
+  }
+  return true;
+}
+
+// Check that all StackMapStream inputs are correctly encoded by trying to read them back.
+bool StackMapStream::CheckCodeInfo(MemoryRegion region) const {
+  CodeInfo code_info(region);
+  StackMapEncoding encoding = code_info.ExtractEncoding();
+  DCHECK_EQ(code_info.GetNumberOfStackMaps(), stack_maps_.size());
+  for (size_t s = 0; s < stack_maps_.size(); ++s) {
+    const StackMap stack_map = code_info.GetStackMapAt(s, encoding);
+    StackMapEntry entry = stack_maps_[s];
+
+    // Check main stack map fields.
+    DCHECK_EQ(stack_map.GetNativePcOffset(encoding), entry.native_pc_offset);
+    DCHECK_EQ(stack_map.GetDexPc(encoding), entry.dex_pc);
+    DCHECK_EQ(stack_map.GetRegisterMask(encoding), entry.register_mask);
+    MemoryRegion stack_mask = stack_map.GetStackMask(encoding);
+    if (entry.sp_mask != nullptr) {
+      DCHECK_GE(stack_mask.size_in_bits(), entry.sp_mask->GetNumberOfBits());
+      for (size_t b = 0; b < stack_mask.size_in_bits(); b++) {
+        DCHECK_EQ(stack_mask.LoadBit(b), entry.sp_mask->IsBitSet(b));
+      }
+    } else {
+      for (size_t b = 0; b < stack_mask.size_in_bits(); b++) {
+        DCHECK_EQ(stack_mask.LoadBit(b), 0u);
+      }
+    }
+
+    // Check dex register map.
+    {
+      DexRegisterMap dex_register_map = code_info.GetDexRegisterMapOf(
+          stack_map, encoding, entry.num_dex_registers);
+      size_t dex_register_locations_index = entry.dex_register_locations_start_index;
+      for (size_t reg = 0; reg < entry.num_dex_registers; reg++) {
+        // Find the location we tried to encode - this takes a few indirections.
+        DexRegisterLocation expected = DexRegisterLocation::None();
+        if (entry.live_dex_registers_mask->IsBitSet(reg)) {
+          size_t catalog_index = dex_register_locations_[dex_register_locations_index++];
+          expected = location_catalog_entries_[catalog_index];
+        }
+        // Compare to the seen location.
+        if (expected.GetKind() == DexRegisterLocation::Kind::kNone) {
+          DCHECK(!dex_register_map.IsValid() || !dex_register_map.IsDexRegisterLive(reg));
+        } else {
+          DCHECK(dex_register_map.IsDexRegisterLive(reg));
+          DexRegisterLocation seen = dex_register_map.GetDexRegisterLocation(
+              reg, entry.num_dex_registers, code_info, encoding);
+          DCHECK(expected.GetKind() == seen.GetKind());
+          DCHECK(expected.GetValue() == seen.GetValue());
+        }
+      }
+      if (entry.num_dex_registers == 0) {
+        DCHECK(!dex_register_map.IsValid());
+      }
+    }
+
+    // Check inline info.
+    DCHECK_EQ(stack_map.HasInlineInfo(encoding), entry.inlining_depth != 0);
+    if (entry.inlining_depth != 0) {
+      InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map, encoding);
+      DCHECK_EQ(inline_info.GetDepth(), entry.inlining_depth);
+      for (size_t d = 0; d < entry.inlining_depth; ++d) {
+        size_t inline_info_index = entry.inline_infos_start_index + d;
+        DCHECK_LT(inline_info_index, inline_infos_.size());
+        InlineInfoEntry inline_entry = inline_infos_[inline_info_index];
+        DCHECK_EQ(inline_info.GetDexPcAtDepth(d), inline_entry.dex_pc);
+        DCHECK_EQ(inline_info.GetMethodIndexAtDepth(d), inline_entry.method_index);
+        DCHECK_EQ(inline_info.GetInvokeTypeAtDepth(d), inline_entry.invoke_type);
+
+        // Check inlined dex register map.
+        DexRegisterMap dex_register_map = code_info.GetDexRegisterMapAtDepth(
+            d, inline_info, encoding, inline_entry.num_dex_registers);
+        size_t dex_register_locations_index = inline_entry.dex_register_locations_start_index;
+        for (size_t reg = 0; reg < inline_entry.num_dex_registers; reg++) {
+          // Find the location we tried to encode - this takes a few indirections.
+          DexRegisterLocation expected = DexRegisterLocation::None();
+          if (inline_entry.live_dex_registers_mask->IsBitSet(reg)) {
+            size_t catalog_index = dex_register_locations_[dex_register_locations_index++];
+            expected = location_catalog_entries_[catalog_index];
+          }
+          // Compare to the seen location.
+          if (expected.GetKind() == DexRegisterLocation::Kind::kNone) {
+            DCHECK(!dex_register_map.IsValid() || !dex_register_map.IsDexRegisterLive(reg));
+          } else {
+            DCHECK(dex_register_map.IsDexRegisterLive(reg));
+            DexRegisterLocation seen = dex_register_map.GetDexRegisterLocation(
+                reg, inline_entry.num_dex_registers, code_info, encoding);
+            DCHECK(expected.GetKind() == seen.GetKind());
+            DCHECK(expected.GetValue() == seen.GetValue());
+          }
+        }
+        if (inline_entry.num_dex_registers == 0) {
+          DCHECK(!dex_register_map.IsValid());
+        }
+      }
     }
   }
   return true;
