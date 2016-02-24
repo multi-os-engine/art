@@ -781,9 +781,9 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_EQ) {
+    int16_t offset = inst->VRegC_22t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_22t(inst_data)) == shadow_frame.GetVReg(inst->VRegB_22t(inst_data))) {
-      int16_t offset = inst->VRegC_22t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -798,10 +798,10 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_NE) {
+    int16_t offset = inst->VRegC_22t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_22t(inst_data)) !=
         shadow_frame.GetVReg(inst->VRegB_22t(inst_data))) {
-      int16_t offset = inst->VRegC_22t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -816,10 +816,10 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_LT) {
+    int16_t offset = inst->VRegC_22t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_22t(inst_data)) <
         shadow_frame.GetVReg(inst->VRegB_22t(inst_data))) {
-      int16_t offset = inst->VRegC_22t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -834,10 +834,10 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_GE) {
+    int16_t offset = inst->VRegC_22t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_22t(inst_data)) >=
         shadow_frame.GetVReg(inst->VRegB_22t(inst_data))) {
-      int16_t offset = inst->VRegC_22t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -852,10 +852,10 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_GT) {
+    int16_t offset = inst->VRegC_22t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_22t(inst_data)) >
     shadow_frame.GetVReg(inst->VRegB_22t(inst_data))) {
-      int16_t offset = inst->VRegC_22t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -870,10 +870,10 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_LE) {
+    int16_t offset = inst->VRegC_22t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_22t(inst_data)) <=
         shadow_frame.GetVReg(inst->VRegB_22t(inst_data))) {
-      int16_t offset = inst->VRegC_22t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -888,9 +888,9 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_EQZ) {
+    int16_t offset = inst->VRegB_21t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_21t(inst_data)) == 0) {
-      int16_t offset = inst->VRegB_21t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -905,9 +905,9 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_NEZ) {
+    int16_t offset = inst->VRegB_21t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_21t(inst_data)) != 0) {
-      int16_t offset = inst->VRegB_21t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -922,9 +922,9 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_LTZ) {
+    int16_t offset = inst->VRegB_21t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_21t(inst_data)) < 0) {
-      int16_t offset = inst->VRegB_21t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -939,9 +939,9 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_GEZ) {
+    int16_t offset = inst->VRegB_21t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_21t(inst_data)) >= 0) {
-      int16_t offset = inst->VRegB_21t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -956,9 +956,9 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_GTZ) {
+    int16_t offset = inst->VRegB_21t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_21t(inst_data)) > 0) {
-      int16_t offset = inst->VRegB_21t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
@@ -973,9 +973,9 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   HANDLE_INSTRUCTION_END();
 
   HANDLE_INSTRUCTION_START(IF_LEZ)  {
+    int16_t offset = inst->VRegB_21t();
+    BRANCH_INSTRUMENTATION(offset);
     if (shadow_frame.GetVReg(inst->VRegA_21t(inst_data)) <= 0) {
-      int16_t offset = inst->VRegB_21t();
-      BRANCH_INSTRUMENTATION(offset);
       if (IsBackwardBranch(offset)) {
         if (UNLIKELY(self->TestAllFlags())) {
           self->CheckSuspend();
