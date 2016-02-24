@@ -170,6 +170,17 @@ bool MipsInstructionSetFeatures::Equals(const InstructionSetFeatures* other) con
       (r6_ == other_as_mips->r6_);
 }
 
+bool MipsInstructionSetFeatures::IsSupersetOf(const InstructionSetFeatures* other) const {
+  if (kMips != other->GetInstructionSet()) {
+    return false;
+  }
+  const MipsInstructionSetFeatures* other_as_mips = other->AsMipsInstructionSetFeatures();
+  return (IsSmp() || !other->IsSmp()) &&
+      (fpu_32bit_ || !other_as_mips->fpu_32bit_) &&
+      (mips_isa_gte2_ || !other_as_mips->mips_isa_gte2_) &&
+      (r6_ || !other_as_mips->r6_);
+}
+
 uint32_t MipsInstructionSetFeatures::AsBitmap() const {
   return (IsSmp() ? kSmpBitfield : 0) |
       (fpu_32bit_ ? kFpu32Bitfield : 0) |

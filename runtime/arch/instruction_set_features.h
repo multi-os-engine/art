@@ -65,6 +65,8 @@ class InstructionSetFeatures {
   // Are these features the same as the other given features?
   virtual bool Equals(const InstructionSetFeatures* other) const = 0;
 
+  virtual bool IsSupersetOf(const InstructionSetFeatures* other) const = 0;
+
   // Return the ISA these features relate to.
   virtual InstructionSet GetInstructionSet() const = 0;
 

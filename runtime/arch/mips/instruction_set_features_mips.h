@@ -46,6 +46,7 @@ class MipsInstructionSetFeatures FINAL : public InstructionSetFeatures {
   static const MipsInstructionSetFeatures* FromAssembly();
 
   bool Equals(const InstructionSetFeatures* other) const OVERRIDE;
+  bool IsSupersetOf(const InstructionSetFeatures* other) const OVERRIDE;
 
   InstructionSet GetInstructionSet() const OVERRIDE {
     return kMips;

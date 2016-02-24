@@ -111,6 +111,14 @@ bool Arm64InstructionSetFeatures::Equals(const InstructionSetFeatures* other) co
   return fix_cortex_a53_835769_ == other_as_arm->fix_cortex_a53_835769_;
 }
 
+bool Arm64InstructionSetFeatures::IsSupersetOf(const InstructionSetFeatures* other) const {
+  if (kArm64 != other->GetInstructionSet()) {
+    return false;
+  }
+  const Arm64InstructionSetFeatures* other_as_arm = other->AsArm64InstructionSetFeatures();
+  return fix_cortex_a53_835769_ || !other_as_arm->fix_cortex_a53_835769_;
+}
+
 uint32_t Arm64InstructionSetFeatures::AsBitmap() const {
   return (IsSmp() ? kSmpBitfield : 0) | (fix_cortex_a53_835769_ ? kA53Bitfield : 0);
 }

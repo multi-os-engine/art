@@ -47,6 +47,7 @@ class X86InstructionSetFeatures : public InstructionSetFeatures {
   static const X86InstructionSetFeatures* FromAssembly(bool x86_64 = false);
 
   bool Equals(const InstructionSetFeatures* other) const OVERRIDE;
+  bool IsSupersetOf(const InstructionSetFeatures* other) const OVERRIDE;
 
   virtual InstructionSet GetInstructionSet() const OVERRIDE {
     return kX86;

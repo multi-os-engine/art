@@ -78,6 +78,13 @@ const Mips64InstructionSetFeatures* Mips64InstructionSetFeatures::FromAssembly()
   return FromCppDefines();
 }
 
+bool Mips64InstructionSetFeatures::IsSupersetOf(const InstructionSetFeatures* other) const {
+  if (kMips64 != other->GetInstructionSet()) {
+    return false;
+  }
+  return (IsSmp() || !other->IsSmp());
+}
+
 bool Mips64InstructionSetFeatures::Equals(const InstructionSetFeatures* other) const {
   if (kMips64 != other->GetInstructionSet()) {
     return false;

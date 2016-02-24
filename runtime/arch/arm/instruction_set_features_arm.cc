@@ -238,6 +238,16 @@ bool ArmInstructionSetFeatures::Equals(const InstructionSetFeatures* other) cons
       has_atomic_ldrd_strd_ == other_as_arm->has_atomic_ldrd_strd_;
 }
 
+bool ArmInstructionSetFeatures::IsSupersetOf(const InstructionSetFeatures* other) const {
+  if (kArm != other->GetInstructionSet()) {
+    return false;
+  }
+  const ArmInstructionSetFeatures* other_as_arm = other->AsArmInstructionSetFeatures();
+  return (IsSmp() || !other_as_arm->IsSmp()) &&
+      (has_div_ || !other_as_arm->has_div_) &&
+      (has_atomic_ldrd_strd_ || !other_as_arm->has_atomic_ldrd_strd_);
+}
+
 uint32_t ArmInstructionSetFeatures::AsBitmap() const {
   return (IsSmp() ? kSmpBitfield : 0) |
       (has_div_ ? kDivBitfield : 0) |

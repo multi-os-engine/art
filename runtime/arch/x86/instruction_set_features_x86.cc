@@ -249,6 +249,21 @@ bool X86InstructionSetFeatures::Equals(const InstructionSetFeatures* other) cons
       (has_POPCNT_ == other_as_x86->has_POPCNT_);
 }
 
+bool X86InstructionSetFeatures::IsSupersetOf(const InstructionSetFeatures* other) const {
+  if (GetInstructionSet() != other->GetInstructionSet()) {
+    return false;
+  }
+  const X86InstructionSetFeatures* other_as_x86 = other->AsX86InstructionSetFeatures();
+  return (IsSmp() || !other->IsSmp()) &&
+      (has_SSSE3_ || !other_as_x86->has_SSSE3_) &&
+      (has_SSE4_1_ || !other_as_x86->has_SSE4_1_) &&
+      (has_SSE4_2_ || !other_as_x86->has_SSE4_2_) &&
+      (has_AVX_ || !other_as_x86->has_AVX_) &&
+      (has_AVX2_ || !other_as_x86->has_AVX2_) &&
+      (prefers_locked_add_ || !other_as_x86->prefers_locked_add_) &&
+      (has_POPCNT_ || !other_as_x86->has_POPCNT_);
+}
+
 uint32_t X86InstructionSetFeatures::AsBitmap() const {
   return (IsSmp() ? kSmpBitfield : 0) |
       (has_SSSE3_ ? kSsse3Bitfield : 0) |
