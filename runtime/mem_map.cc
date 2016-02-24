@@ -338,11 +338,18 @@ MemMap* MemMap::MapAnonymous(const char* name,
   saved_errno = errno;
 
   if (actual == MAP_FAILED) {
-    PrintFileToLog("/proc/self/maps", LogSeverity::WARNING);
+    if (error_msg != nullptr) {
+      PrintFileToLog("/proc/self/maps", LogSeverity::WARNING);
 
-    *error_msg = StringPrintf("Failed anonymous mmap(%p, %zd, 0x%x, 0x%x, %d, 0): %s. See process "
-                              "maps in the log.", expected_ptr, page_aligned_byte_count, prot,
-                              flags, fd.get(), strerror(saved_errno));
+      *error_msg = StringPrintf("Failed anonymous mmap(%p, %zd, 0x%x, 0x%x, %d, 0): %s. "
+                                    "See process maps in the log.",
+                                expected_ptr,
+                                page_aligned_byte_count,
+                                prot,
+                                flags,
+                                fd.get(),
+                                strerror(saved_errno));
+    }
     return nullptr;
   }
   std::ostringstream check_map_request_error_msg;
