@@ -2731,12 +2731,11 @@ class ReferenceMapVisitor : public StackVisitor {
             reinterpret_cast<uintptr_t>(cur_quick_frame));
         uintptr_t native_pc_offset = method_header->NativeQuickPcOffset(GetCurrentQuickFramePc());
         CodeInfo code_info = method_header->GetOptimizedCodeInfo();
-        StackMapEncoding encoding = code_info.ExtractEncoding();
-        StackMap map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
+        StackMap map = code_info.GetStackMapForNativePcOffset(native_pc_offset);
         DCHECK(map.IsValid());
         // Visit stack entries that hold pointers.
-        for (size_t i = 0; i < map.GetNumberOfStackMaskBits(encoding); ++i) {
-          if (map.GetStackMaskBit(encoding, i)) {
+        for (size_t i = 0; i < map.GetNumberOfStackMaskBits(); ++i) {
+          if (map.GetStackMaskBit(i)) {
             auto* ref_addr = vreg_base + i;
             mirror::Object* ref = ref_addr->AsMirrorPtr();
             if (ref != nullptr) {
@@ -2749,7 +2748,7 @@ class ReferenceMapVisitor : public StackVisitor {
           }
         }
         // Visit callee-save registers that hold pointers.
-        uint32_t register_mask = map.GetRegisterMask(encoding);
+        uint32_t register_mask = map.GetRegisterMask();
         for (size_t i = 0; i < BitSizeOf<uint32_t>(); ++i) {
           if (register_mask & (1 << i)) {
             mirror::Object** ref_addr = reinterpret_cast<mirror::Object**>(GetGPRAddress(i));

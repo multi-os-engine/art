@@ -1108,10 +1108,9 @@ class OatDumper {
   void DumpCodeInfo(VariableIndentationOutputStream* vios,
                     const CodeInfo& code_info,
                     const OatFile::OatMethod& oat_method,
-                    const DexFile::CodeItem& code_item) {
+                    const DexFile::CodeItem& code_item ATTRIBUTE_UNUSED) {
     code_info.Dump(vios,
                    oat_method.GetCodeOffset(),
-                   code_item.registers_size_,
                    options_.dump_code_info_stack_maps_);
   }
 
@@ -1432,11 +1431,9 @@ class OatDumper {
     const void* raw_code_info = oat_method.GetVmapTable();
     if (raw_code_info != nullptr) {
       CodeInfo code_info(raw_code_info);
-      StackMapEncoding encoding = code_info.ExtractEncoding();
-      StackMap stack_map = code_info.GetStackMapForNativePcOffset(offset, encoding);
+      StackMap stack_map = code_info.GetStackMapForNativePcOffset(offset);
       if (stack_map.IsValid()) {
-        stack_map.Dump(vios, code_info, encoding, oat_method.GetCodeOffset(),
-                       code_item->registers_size_);
+        stack_map.Dump(vios, code_info, oat_method.GetCodeOffset());
       }
     }
   }

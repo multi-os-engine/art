@@ -621,11 +621,10 @@ static void CheckCovers(uint32_t dex_pc,
                         const CodeInfo& code_info,
                         const ArenaVector<HSuspendCheck*>& loop_headers,
                         ArenaVector<size_t>* covered) {
-  StackMapEncoding encoding = code_info.ExtractEncoding();
   for (size_t i = 0; i < loop_headers.size(); ++i) {
     if (loop_headers[i]->GetDexPc() == dex_pc) {
       if (graph.IsCompilingOsr()) {
-        DCHECK(code_info.GetOsrStackMapForDexPc(dex_pc, encoding).IsValid());
+        DCHECK(code_info.GetOsrStackMapForDexPc(dex_pc).IsValid());
       }
       ++(*covered)[i];
     }
@@ -715,14 +714,12 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
   }
 
   uint32_t outer_dex_pc = dex_pc;
-  uint32_t outer_environment_size = 0;
   uint32_t inlining_depth = 0;
   if (instruction != nullptr) {
     for (HEnvironment* environment = instruction->GetEnvironment();
          environment != nullptr;
          environment = environment->GetParent()) {
       outer_dex_pc = environment->GetDexPc();
-      outer_environment_size = environment->Size();
       if (environment != instruction->GetEnvironment()) {
         inlining_depth++;
       }
@@ -734,7 +731,7 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
 
   if (instruction == nullptr) {
     // For stack overflow checks.
-    stack_map_stream_.BeginStackMapEntry(outer_dex_pc, native_pc, 0, 0, 0, 0);
+    stack_map_stream_.BeginStackMapEntry(outer_dex_pc, native_pc, 0, 0);
     stack_map_stream_.EndStackMapEntry();
     return;
   }
@@ -754,9 +751,7 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
   stack_map_stream_.BeginStackMapEntry(outer_dex_pc,
                                        native_pc,
                                        register_mask,
-                                       locations->GetStackMask(),
-                                       outer_environment_size,
-                                       inlining_depth);
+                                       locations->GetStackMask());
 
   EmitEnvironment(instruction->GetEnvironment(), slow_path);
   stack_map_stream_.EndStackMapEntry();
@@ -771,7 +766,7 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
     // Duplicating it avoids having the runtime recognize and skip an OSR stack map.
     DCHECK(info->IsIrreducible());
     stack_map_stream_.BeginStackMapEntry(
-        dex_pc, native_pc, register_mask, locations->GetStackMask(), outer_environment_size, 0);
+        dex_pc, native_pc, register_mask, locations->GetStackMask());
     EmitEnvironment(instruction->GetEnvironment(), slow_path);
     stack_map_stream_.EndStackMapEntry();
     if (kIsDebugBuild) {
@@ -818,19 +813,13 @@ void CodeGenerator::RecordCatchBlockInfo() {
 
     uint32_t dex_pc = block->GetDexPc();
     uint32_t num_vregs = graph_->GetNumberOfVRegs();
-    uint32_t inlining_depth = 0;  // Inlining of catch blocks is not supported at the moment.
     uint32_t native_pc = GetAddressOf(block);
     uint32_t register_mask = 0;   // Not used.
 
     // The stack mask is not used, so we leave it empty.
     ArenaBitVector* stack_mask = new (arena) ArenaBitVector(arena, 0, /* expandable */ true);
 
-    stack_map_stream_.BeginStackMapEntry(dex_pc,
-                                         native_pc,
-                                         register_mask,
-                                         stack_mask,
-                                         num_vregs,
-                                         inlining_depth);
+    stack_map_stream_.BeginStackMapEntry(dex_pc, native_pc, register_mask, stack_mask);
 
     HInstruction* current_phi = block->GetFirstPhi();
     for (size_t vreg = 0; vreg < num_vregs; ++vreg) {
@@ -882,8 +871,7 @@ void CodeGenerator::EmitEnvironment(HEnvironment* environment, SlowPathCode* slo
     EmitEnvironment(environment->GetParent(), slow_path);
     stack_map_stream_.BeginInlineInfoEntry(environment->GetMethodIdx(),
                                            environment->GetDexPc(),
-                                           environment->GetInvokeType(),
-                                           environment->Size());
+                                           environment->GetInvokeType());
   }
 
   // Walk over the environment, and record the location of dex registers.

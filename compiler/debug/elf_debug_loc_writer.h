@@ -95,12 +95,11 @@ std::vector<VariableLocation> GetVariableLocations(const MethodDebugInfo* method
 
   // Get stack maps sorted by pc (they might not be sorted internally).
   const CodeInfo code_info(method_info->compiled_method->GetVmapTable().data());
-  const StackMapEncoding encoding = code_info.ExtractEncoding();
   std::map<uint32_t, uint32_t> stack_maps;  // low_pc -> stack_map_index.
   for (uint32_t s = 0; s < code_info.GetNumberOfStackMaps(); s++) {
-    StackMap stack_map = code_info.GetStackMapAt(s, encoding);
+    StackMap stack_map = code_info.GetStackMapAt(s);
     DCHECK(stack_map.IsValid());
-    const uint32_t low_pc = method_info->low_pc + stack_map.GetNativePcOffset(encoding);
+    const uint32_t low_pc = method_info->low_pc + stack_map.GetNativePcOffset();
     DCHECK_LE(low_pc, method_info->high_pc);
     stack_maps.emplace(low_pc, s);
   }
@@ -109,7 +108,7 @@ std::vector<VariableLocation> GetVariableLocations(const MethodDebugInfo* method
   for (auto it = stack_maps.begin(); it != stack_maps.end(); it++) {
     const uint32_t low_pc = it->first;
     const uint32_t stack_map_index = it->second;
-    StackMap stack_map = code_info.GetStackMapAt(stack_map_index, encoding);
+    StackMap stack_map = code_info.GetStackMapAt(stack_map_index);
     auto next_it = it;
     next_it++;
     const uint32_t high_pc = next_it != stack_maps.end() ? next_it->first
@@ -120,7 +119,7 @@ std::vector<VariableLocation> GetVariableLocations(const MethodDebugInfo* method
     }
 
     // Check that the stack map is in the requested range.
-    uint32_t dex_pc = stack_map.GetDexPc(encoding);
+    uint32_t dex_pc = stack_map.GetDexPc();
     if (!(dex_pc_low <= dex_pc && dex_pc < dex_pc_high)) {
       continue;
     }
@@ -230,11 +229,9 @@ static void WriteDebugLocEntry(const MethodDebugInfo* method_info,
       } else if (kind == Kind::kNone) {
         break;
       } else {
-        // kInStackLargeOffset and kConstantLargeValue are hidden by GetKind().
         // kInRegisterHigh and kInFpuRegisterHigh should be handled by
         // the special cases above and they should not occur alone.
-        LOG(ERROR) << "Unexpected register location kind: "
-                   << DexRegisterLocation::PrettyDescriptor(kind);
+        LOG(ERROR) << "Unexpected register location kind: " << kind;
         break;
       }
       if (is64bitValue) {

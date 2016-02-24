@@ -70,17 +70,14 @@ class StackMapStream : public ValueObject {
   void BeginStackMapEntry(uint32_t dex_pc,
                           uint32_t native_pc_offset,
                           uint32_t register_mask,
-                          BitVector* stack_mask,
-                          uint32_t num_dex_registers,
-                          uint8_t inlining_depth);
+                          BitVector* stack_mask);
   void EndStackMapEntry();
 
   void AddDexRegisterEntry(DexRegisterLocation::Kind kind, int32_t value);
 
   void BeginInlineInfoEntry(uint32_t method_index,
                             uint32_t dex_pc,
-                            InvokeType invoke_type,
-                            uint32_t num_dex_registers);
+                            InvokeType invoke_type);
   void EndInlineInfoEntry();
 
   size_t GetNumberOfStackMaps() const {
