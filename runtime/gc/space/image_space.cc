@@ -1243,6 +1243,7 @@ ImageSpace* ImageSpace::Init(const char* image_filename,
     // Can also map at a random low_4gb address since we can relocate in-place.
     addresses.push_back(nullptr);
   }
+  CHECK_EQ(image_header->IsPic(), oat_file != nullptr);
 
   // Note: The image header is part of the image due to mmap page alignment required of offset.
   std::unique_ptr<MemMap> map;
