@@ -101,6 +101,17 @@ void StackMapEncoding::Dump(VariableIndentationOutputStream* vios) const {
       << ")\n";
 }
 
+void InlineInfoEncoding::Dump(VariableIndentationOutputStream* vios) const {
+  vios->Stream()
+      << "InlineInfoEncoding"
+      << " (method_index_bit_offset=" << kMethodIndexBitOffset
+      << ", dex_pc_bit_offset=" << dex_pc_bit_offset_
+      << ", invoke_type_bit_offset=" << invoke_type_bit_offset_
+      << ", dex_register_map_bit_offset=" << dex_register_map_bit_offset_
+      << ", total_bit_size=" << total_bit_size_
+      << ")\n";
+}
+
 void CodeInfo::Dump(VariableIndentationOutputStream* vios,
                     uint32_t code_offset,
                     uint16_t number_of_dex_registers,
@@ -112,7 +123,12 @@ void CodeInfo::Dump(VariableIndentationOutputStream* vios,
       << ", number_of_stack_maps=" << number_of_stack_maps
       << ")\n";
   ScopedIndentation indent1(vios);
-  encoding.Dump(vios);
+  if (header_.stack_map_encoding != nullptr) {
+    header_.stack_map_encoding->Dump(vios);
+  }
+  if (header_.inline_info_encoding != nullptr) {
+    header_.inline_info_encoding->Dump(vios);
+  }
   // Display the Dex register location catalog.
   GetDexRegisterLocationCatalog(encoding).Dump(vios, *this);
   // Display stack maps along with (live) Dex register maps.
