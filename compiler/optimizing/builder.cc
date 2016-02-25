@@ -282,7 +282,7 @@ void HGraphBuilder::InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item) 
         // Found a predecessor not covered by the same TryItem. Insert entering
         // boundary block.
         HTryBoundary* try_entry =
-            new (arena_) HTryBoundary(HTryBoundary::kEntry, try_block->GetDexPc());
+            new (arena_) HTryBoundary(HTryBoundary::BoundaryKind::kEntry, try_block->GetDexPc());
         try_block->CreateImmediateDominator()->AddInstruction(try_entry);
         LinkToCatchBlocks(try_entry, code_item, entry.second);
         break;
@@ -316,7 +316,7 @@ void HGraphBuilder::InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item) 
 
       // Insert TryBoundary and link to catch blocks.
       HTryBoundary* try_exit =
-          new (arena_) HTryBoundary(HTryBoundary::kExit, successor->GetDexPc());
+          new (arena_) HTryBoundary(HTryBoundary::BoundaryKind::kExit, successor->GetDexPc());
       graph_->SplitEdge(try_block, successor)->AddInstruction(try_exit);
       LinkToCatchBlocks(try_exit, code_item, entry.second);
     }

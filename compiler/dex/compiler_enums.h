@@ -569,6 +569,7 @@ enum MemBarrierKind {
   kStoreStore,
   kAnyAny,
   kNTStoreStore,
+  kLastMemBarrierType = kNTStoreStore
 };
 std::ostream& operator<<(std::ostream& os, const MemBarrierKind& kind);
 
