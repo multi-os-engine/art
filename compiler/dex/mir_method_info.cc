@@ -86,7 +86,8 @@ void MirMethodLoweringInfo::Resolve(CompilerDriver* compiler_driver,
     ArtMethod* resolved_method = nullptr;
 
     bool string_init = false;
-    if (default_inliner->IsStringInitMethodIndex(it->MethodIndex())) {
+    if (default_inliner->IsStringInitMethodIndex(
+            it->IsQuickened() ? it->target_method_idx_ : it->MethodIndex())) {
       string_init = true;
       invoke_type = kDirect;
     }
