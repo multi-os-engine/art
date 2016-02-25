@@ -137,8 +137,9 @@ uint32_t StackMapStream::ComputeMaxNativePcOffset() const {
 
 size_t StackMapStream::PrepareForFillIn() {
   int stack_mask_number_of_bits = stack_mask_max_ + 1;  // Need room for max element too.
-  inline_info_size_ = ComputeInlineInfoSize();
   dex_register_maps_size_ = ComputeDexRegisterMapsSize();
+  ComputeInlineInfoEncoding();  // needs dex_register_maps_size_.
+  inline_info_size_ = inline_infos_.size() * inline_info_encoding_.GetEntrySize();
   uint32_t max_native_pc_offset = ComputeMaxNativePcOffset();
   size_t stack_map_size = stack_map_encoding_.SetFromSizes(max_native_pc_offset,
                                                            dex_pc_max_,
@@ -158,10 +159,11 @@ size_t StackMapStream::PrepareForFillIn() {
   // Prepare the CodeInfo variable-sized header.
   CodeInfoHeader header;
   header.non_header_size = non_header_size;
-  header.stack_map_encoding = stack_map_encoding_;
   header.number_of_stack_maps = stack_maps_.size();
   header.stack_map_size_in_bytes = stack_map_size;
   header.number_of_location_catalog_entries = location_catalog_entries_.size();
+  header.stack_map_encoding = &stack_map_encoding_;
+  header.inline_info_encoding = &inline_info_encoding_;
   header.Encode(&encoded_header_);
 
   // TODO: Move the catalog at the end. It is currently too expensive at runtime
@@ -224,10 +226,26 @@ size_t StackMapStream::ComputeDexRegisterMapsSize() const {
   return size;
 }
 
-size_t StackMapStream::ComputeInlineInfoSize() const {
-  return inline_infos_.size() * InlineInfo::SingleEntrySize()
-    // For encoding the depth.
-    + (number_of_stack_maps_with_inline_info_ * InlineInfo::kFixedSize);
+void StackMapStream::ComputeInlineInfoEncoding() {
+  uint32_t method_index_max = 0;
+  uint32_t dex_pc_max = 0;
+  uint32_t invoke_type_max = 0;
+
+  uint32_t inline_info_index = 0;
+  for (const StackMapEntry& entry : stack_maps_) {
+    for (size_t j = 0; j < entry.inlining_depth; ++j) {
+      InlineInfoEntry inline_entry = inline_infos_[inline_info_index++];
+      method_index_max = std::max(method_index_max, inline_entry.method_index);
+      dex_pc_max = std::max(dex_pc_max, inline_entry.dex_pc);
+      invoke_type_max = std::max(invoke_type_max, static_cast<uint32_t>(inline_entry.invoke_type));
+    }
+  }
+  DCHECK_EQ(inline_info_index, inline_infos_.size());
+
+  inline_info_encoding_.SetFromSizes(method_index_max,
+                                     dex_pc_max,
+                                     invoke_type_max,
+                                     dex_register_maps_size_);
 }
 
 void StackMapStream::FillIn(MemoryRegion region) {
@@ -319,9 +337,9 @@ void StackMapStream::FillIn(MemoryRegion region) {
     if (entry.inlining_depth != 0) {
       MemoryRegion inline_region = inline_infos_region.Subregion(
           next_inline_info_offset,
-          InlineInfo::kFixedSize + entry.inlining_depth * InlineInfo::SingleEntrySize());
+          entry.inlining_depth * inline_info_encoding_.GetEntrySize());
       next_inline_info_offset += inline_region.size();
-      InlineInfo inline_info(inline_region);
+      InlineInfo inline_info(&inline_info_encoding_, inline_region);
 
       // Currently relative to the dex register map.
       stack_map.SetInlineDescriptorOffset(
