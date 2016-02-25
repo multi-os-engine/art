@@ -204,8 +204,7 @@ static VRegKind ToVRegKind(DexRegisterLocation::Kind kind) {
       return VRegKind::kDoubleHiVReg;
 
     default:
-      LOG(FATAL) << "Unexpected vreg location "
-                 << DexRegisterLocation::PrettyDescriptor(kind);
+      LOG(FATAL) << "Unexpected vreg location " << kind;
       UNREACHABLE();
   }
 }
@@ -451,11 +450,10 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
         default: {
           LOG(FATAL)
               << "Unexpected location kind"
-              << DexRegisterLocation::PrettyDescriptor(
-                    vreg_map.GetLocationInternalKind(vreg,
-                                                     number_of_vregs,
-                                                     code_info,
-                                                     encoding));
+              << vreg_map.GetLocationInternalKind(vreg,
+                                                  number_of_vregs,
+                                                  code_info,
+                                                  encoding);
           UNREACHABLE();
         }
       }
