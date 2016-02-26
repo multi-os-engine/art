@@ -46,10 +46,9 @@ uint32_t OatQuickMethodHeader::ToDexPc(ArtMethod* method,
   uint32_t sought_offset = pc - reinterpret_cast<uintptr_t>(entry_point);
   if (IsOptimized()) {
     CodeInfo code_info = GetOptimizedCodeInfo();
-    StackMapEncoding encoding = code_info.ExtractEncoding();
-    StackMap stack_map = code_info.GetStackMapForNativePcOffset(sought_offset, encoding);
+    StackMap stack_map = code_info.GetStackMapForNativePcOffset(sought_offset);
     if (stack_map.IsValid()) {
-      return stack_map.GetDexPc(encoding);
+      return stack_map.GetDexPc();
     }
   } else {
     MappingTable table(GetMappingTable());
@@ -95,16 +94,15 @@ uintptr_t OatQuickMethodHeader::ToNativeQuickPc(ArtMethod* method,
     // Optimized code does not have a mapping table. Search for the dex-to-pc
     // mapping in stack maps.
     CodeInfo code_info = GetOptimizedCodeInfo();
-    StackMapEncoding encoding = code_info.ExtractEncoding();
 
     // All stack maps are stored in the same CodeItem section, safepoint stack
     // maps first, then catch stack maps. We use `is_for_catch_handler` to select
     // the order of iteration.
     StackMap stack_map =
-        LIKELY(is_for_catch_handler) ? code_info.GetCatchStackMapForDexPc(dex_pc, encoding)
-                                     : code_info.GetStackMapForDexPc(dex_pc, encoding);
+        LIKELY(is_for_catch_handler) ? code_info.GetCatchStackMapForDexPc(dex_pc)
+                                     : code_info.GetStackMapForDexPc(dex_pc);
     if (stack_map.IsValid()) {
-      return reinterpret_cast<uintptr_t>(entry_point) + stack_map.GetNativePcOffset(encoding);
+      return reinterpret_cast<uintptr_t>(entry_point) + stack_map.GetNativePcOffset();
     }
   } else {
     MappingTable table(GetMappingTable());
