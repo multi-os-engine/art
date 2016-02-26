@@ -266,7 +266,7 @@ void StackMapStream::FillIn(MemoryRegion region) {
       inline_infos_start_, inline_info_size_);
 
   CodeInfo code_info(region);
-  DCHECK_EQ(code_info.GetStackMapsSize(code_info.ExtractEncoding()), stack_maps_size_);
+  DCHECK_EQ(code_info.GetStackMapsSize(), stack_maps_size_);
 
   // Set the Dex register location catalog.
   MemoryRegion dex_register_location_catalog_region = region.Subregion(
@@ -286,35 +286,34 @@ void StackMapStream::FillIn(MemoryRegion region) {
   uintptr_t next_dex_register_map_offset = 0;
   uintptr_t next_inline_info_offset = 0;
   for (size_t i = 0, e = stack_maps_.size(); i < e; ++i) {
-    StackMap stack_map = code_info.GetStackMapAt(i, stack_map_encoding_);
+    StackMap stack_map = code_info.GetStackMapAt(i);
     StackMapEntry entry = stack_maps_[i];
 
-    stack_map.SetDexPc(stack_map_encoding_, entry.dex_pc);
-    stack_map.SetNativePcOffset(stack_map_encoding_, entry.native_pc_offset);
-    stack_map.SetRegisterMask(stack_map_encoding_, entry.register_mask);
-    size_t number_of_stack_mask_bits = stack_map.GetNumberOfStackMaskBits(stack_map_encoding_);
+    stack_map.SetDexPc(entry.dex_pc);
+    stack_map.SetNativePcOffset(entry.native_pc_offset);
+    stack_map.SetRegisterMask(entry.register_mask);
+    size_t number_of_stack_mask_bits = stack_map.GetNumberOfStackMaskBits();
     if (entry.sp_mask != nullptr) {
       for (size_t bit = 0; bit < number_of_stack_mask_bits; bit++) {
-        stack_map.SetStackMaskBit(stack_map_encoding_, bit, entry.sp_mask->IsBitSet(bit));
+        stack_map.SetStackMaskBit(bit, entry.sp_mask->IsBitSet(bit));
       }
     } else {
       // The MemoryRegion does not have to be zeroed, so make sure we clear the bits.
       for (size_t bit = 0; bit < number_of_stack_mask_bits; bit++) {
-        stack_map.SetStackMaskBit(stack_map_encoding_, bit, false);
+        stack_map.SetStackMaskBit(bit, false);
       }
     }
 
     if (entry.num_dex_registers == 0 || (entry.live_dex_registers_mask->NumSetBits() == 0)) {
       // No dex map available.
-      stack_map.SetDexRegisterMapOffset(stack_map_encoding_, StackMap::kNoDexRegisterMap);
+      stack_map.SetDexRegisterMapOffset(StackMap::kNoDexRegisterMap);
     } else {
       // Search for an entry with the same dex map.
       if (entry.same_dex_register_map_as_ != kNoSameDexMapFound) {
         // If we have a hit reuse the offset.
         stack_map.SetDexRegisterMapOffset(
-            stack_map_encoding_,
-            code_info.GetStackMapAt(entry.same_dex_register_map_as_, stack_map_encoding_)
-                .GetDexRegisterMapOffset(stack_map_encoding_));
+            code_info.GetStackMapAt(entry.same_dex_register_map_as_)
+                .GetDexRegisterMapOffset());
       } else {
         // New dex registers maps should be added to the stack map.
         MemoryRegion register_region = dex_register_locations_region.Subregion(
@@ -323,7 +322,7 @@ void StackMapStream::FillIn(MemoryRegion region) {
         next_dex_register_map_offset += register_region.size();
         DexRegisterMap dex_register_map(register_region);
         stack_map.SetDexRegisterMapOffset(
-            stack_map_encoding_, register_region.start() - dex_register_locations_region.start());
+            register_region.start() - dex_register_locations_region.start());
 
         // Set the dex register location.
         FillInDexRegisterMap(dex_register_map,
@@ -343,7 +342,7 @@ void StackMapStream::FillIn(MemoryRegion region) {
 
       // Currently relative to the dex register map.
       stack_map.SetInlineDescriptorOffset(
-          stack_map_encoding_, inline_region.start() - dex_register_locations_region.start());
+          inline_region.start() - dex_register_locations_region.start());
 
       inline_info.SetDepth(entry.inlining_depth);
       DCHECK_LE(entry.inline_infos_start_index + entry.inlining_depth, inline_infos_.size());
@@ -374,7 +373,7 @@ void StackMapStream::FillIn(MemoryRegion region) {
       }
     } else {
       if (inline_info_size_ != 0) {
-        stack_map.SetInlineDescriptorOffset(stack_map_encoding_, StackMap::kNoInlineInfo);
+        stack_map.SetInlineDescriptorOffset(StackMap::kNoInlineInfo);
       }
     }
   }
@@ -468,7 +467,6 @@ void StackMapStream::CheckDexRegisterMap(const CodeInfo& code_info,
                                          size_t num_dex_registers,
                                          BitVector* live_dex_registers_mask,
                                          size_t dex_register_locations_index) const {
-  StackMapEncoding encoding = code_info.ExtractEncoding();
   for (size_t reg = 0; reg < num_dex_registers; reg++) {
     // Find the location we tried to encode.
     DexRegisterLocation expected = DexRegisterLocation::None();
@@ -482,7 +480,7 @@ void StackMapStream::CheckDexRegisterMap(const CodeInfo& code_info,
     } else {
       DCHECK(dex_register_map.IsDexRegisterLive(reg));
       DexRegisterLocation seen = dex_register_map.GetDexRegisterLocation(
-          reg, num_dex_registers, code_info, encoding);
+          reg, num_dex_registers, code_info);
       DCHECK_EQ(expected.GetKind(), seen.GetKind());
       DCHECK_EQ(expected.GetValue(), seen.GetValue());
     }
@@ -495,39 +493,38 @@ void StackMapStream::CheckDexRegisterMap(const CodeInfo& code_info,
 // Check that all StackMapStream inputs are correctly encoded by trying to read them back.
 void StackMapStream::CheckCodeInfo(MemoryRegion region) const {
   CodeInfo code_info(region);
-  StackMapEncoding encoding = code_info.ExtractEncoding();
   DCHECK_EQ(code_info.GetNumberOfStackMaps(), stack_maps_.size());
   for (size_t s = 0; s < stack_maps_.size(); ++s) {
-    const StackMap stack_map = code_info.GetStackMapAt(s, encoding);
+    const StackMap stack_map = code_info.GetStackMapAt(s);
     StackMapEntry entry = stack_maps_[s];
 
     // Check main stack map fields.
-    DCHECK_EQ(stack_map.GetNativePcOffset(encoding), entry.native_pc_offset);
-    DCHECK_EQ(stack_map.GetDexPc(encoding), entry.dex_pc);
-    DCHECK_EQ(stack_map.GetRegisterMask(encoding), entry.register_mask);
-    size_t num_stack_mask_bits = stack_map.GetNumberOfStackMaskBits(encoding);
+    DCHECK_EQ(stack_map.GetNativePcOffset(), entry.native_pc_offset);
+    DCHECK_EQ(stack_map.GetDexPc(), entry.dex_pc);
+    DCHECK_EQ(stack_map.GetRegisterMask(), entry.register_mask);
+    size_t num_stack_mask_bits = stack_map.GetNumberOfStackMaskBits();
     if (entry.sp_mask != nullptr) {
       DCHECK_GE(num_stack_mask_bits, entry.sp_mask->GetNumberOfBits());
       for (size_t b = 0; b < num_stack_mask_bits; b++) {
-        DCHECK_EQ(stack_map.GetStackMaskBit(encoding, b), entry.sp_mask->IsBitSet(b));
+        DCHECK_EQ(stack_map.GetStackMaskBit(b), entry.sp_mask->IsBitSet(b));
       }
     } else {
       for (size_t b = 0; b < num_stack_mask_bits; b++) {
-        DCHECK_EQ(stack_map.GetStackMaskBit(encoding, b), 0u);
+        DCHECK_EQ(stack_map.GetStackMaskBit(b), 0u);
       }
     }
 
     CheckDexRegisterMap(code_info,
                         code_info.GetDexRegisterMapOf(
-                            stack_map, encoding, entry.num_dex_registers),
+                            stack_map, entry.num_dex_registers),
                         entry.num_dex_registers,
                         entry.live_dex_registers_mask,
                         entry.dex_register_locations_start_index);
 
     // Check inline info.
-    DCHECK_EQ(stack_map.HasInlineInfo(encoding), (entry.inlining_depth != 0));
+    DCHECK_EQ(stack_map.HasInlineInfo(), (entry.inlining_depth != 0));
     if (entry.inlining_depth != 0) {
-      InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map, encoding);
+      InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map);
       DCHECK_EQ(inline_info.GetDepth(), entry.inlining_depth);
       for (size_t d = 0; d < entry.inlining_depth; ++d) {
         size_t inline_info_index = entry.inline_infos_start_index + d;
@@ -539,7 +536,7 @@ void StackMapStream::CheckCodeInfo(MemoryRegion region) const {
 
         CheckDexRegisterMap(code_info,
                             code_info.GetDexRegisterMapAtDepth(
-                                d, inline_info, encoding, inline_entry.num_dex_registers),
+                                d, inline_info, inline_entry.num_dex_registers),
                             inline_entry.num_dex_registers,
                             inline_entry.live_dex_registers_mask,
                             inline_entry.dex_register_locations_start_index);
