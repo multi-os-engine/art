@@ -94,12 +94,11 @@ std::vector<VariableLocation> GetVariableLocations(const MethodDebugInfo* method
 
   // Get stack maps sorted by pc (they might not be sorted internally).
   const CodeInfo code_info(method_info->compiled_method->GetVmapTable().data());
-  const StackMapEncoding encoding = code_info.ExtractEncoding();
   std::map<uint32_t, StackMap> stack_maps;
   for (uint32_t s = 0; s < code_info.GetNumberOfStackMaps(); s++) {
-    StackMap stack_map = code_info.GetStackMapAt(s, encoding);
+    StackMap stack_map = code_info.GetStackMapAt(s);
     DCHECK(stack_map.IsValid());
-    const uint32_t low_pc = method_info->low_pc + stack_map.GetNativePcOffset(encoding);
+    const uint32_t low_pc = method_info->low_pc + stack_map.GetNativePcOffset();
     DCHECK_LE(low_pc, method_info->high_pc);
     stack_maps.emplace(low_pc, stack_map);
   }
@@ -118,7 +117,7 @@ std::vector<VariableLocation> GetVariableLocations(const MethodDebugInfo* method
     }
 
     // Check that the stack map is in the requested range.
-    uint32_t dex_pc = stack_map.GetDexPc(encoding);
+    uint32_t dex_pc = stack_map.GetDexPc();
     if (!(dex_pc_low <= dex_pc && dex_pc < dex_pc_high)) {
       continue;
     }
@@ -126,14 +125,14 @@ std::vector<VariableLocation> GetVariableLocations(const MethodDebugInfo* method
     // Find the location of the dex register.
     DexRegisterLocation reg_lo = DexRegisterLocation::None();
     DexRegisterLocation reg_hi = DexRegisterLocation::None();
-    if (stack_map.HasDexRegisterMap(encoding)) {
+    if (stack_map.HasDexRegisterMap()) {
       DexRegisterMap dex_register_map = code_info.GetDexRegisterMapOf(
-          stack_map, encoding, method_info->code_item->registers_size_);
+          stack_map, method_info->code_item->registers_size_);
       reg_lo = dex_register_map.GetDexRegisterLocation(
-          vreg, method_info->code_item->registers_size_, code_info, encoding);
+          vreg, method_info->code_item->registers_size_, code_info);
       if (is64bitValue) {
         reg_hi = dex_register_map.GetDexRegisterLocation(
-            vreg + 1, method_info->code_item->registers_size_, code_info, encoding);
+            vreg + 1, method_info->code_item->registers_size_, code_info);
       }
     }
 
