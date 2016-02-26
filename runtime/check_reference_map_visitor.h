@@ -66,17 +66,16 @@ class CheckReferenceMapVisitor : public StackVisitor {
       SHARED_REQUIRES(Locks::mutator_lock_) {
     ArtMethod* m = GetMethod();
     CodeInfo code_info = GetCurrentOatQuickMethodHeader()->GetOptimizedCodeInfo();
-    StackMapEncoding encoding = code_info.ExtractEncoding();
-    StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
+    StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset);
     uint16_t number_of_dex_registers = m->GetCodeItem()->registers_size_;
     DexRegisterMap dex_register_map =
-        code_info.GetDexRegisterMapOf(stack_map, encoding, number_of_dex_registers);
-    uint32_t register_mask = stack_map.GetRegisterMask(encoding);
+        code_info.GetDexRegisterMapOf(stack_map, number_of_dex_registers);
+    uint32_t register_mask = stack_map.GetRegisterMask();
     for (int i = 0; i < number_of_references; ++i) {
       int reg = registers[i];
       CHECK(reg < m->GetCodeItem()->registers_size_);
       DexRegisterLocation location = dex_register_map.GetDexRegisterLocation(
-          reg, number_of_dex_registers, code_info, encoding);
+          reg, number_of_dex_registers, code_info);
       switch (location.GetKind()) {
         case DexRegisterLocation::Kind::kNone:
           // Not set, should not be a reference.
@@ -84,7 +83,7 @@ class CheckReferenceMapVisitor : public StackVisitor {
           break;
         case DexRegisterLocation::Kind::kInStack:
           DCHECK_EQ(location.GetValue() % kFrameSlotSize, 0);
-          CHECK(stack_map.GetStackMaskBit(encoding, location.GetValue() / kFrameSlotSize));
+          CHECK(stack_map.GetStackMaskBit(location.GetValue() / kFrameSlotSize));
           break;
         case DexRegisterLocation::Kind::kInRegister:
         case DexRegisterLocation::Kind::kInRegisterHigh:

@@ -275,11 +275,10 @@ ArtMethod* GetCalleeSaveMethodCaller(ArtMethod** sp,
       if (current_code->IsOptimized()) {
         uintptr_t native_pc_offset = current_code->NativeQuickPcOffset(caller_pc);
         CodeInfo code_info = current_code->GetOptimizedCodeInfo();
-        StackMapEncoding encoding = code_info.ExtractEncoding();
-        StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset, encoding);
+        StackMap stack_map = code_info.GetStackMapForNativePcOffset(native_pc_offset);
         DCHECK(stack_map.IsValid());
-        if (stack_map.HasInlineInfo(encoding)) {
-          InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map, encoding);
+        if (stack_map.HasInlineInfo()) {
+          InlineInfo inline_info = code_info.GetInlineInfoOf(stack_map);
           caller = GetResolvedMethod(outer_method, inline_info, inline_info.GetDepth() - 1);
         }
       }
