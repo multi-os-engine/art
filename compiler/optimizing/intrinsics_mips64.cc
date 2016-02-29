@@ -1713,6 +1713,7 @@ void IntrinsicCodeGeneratorMIPS64::VisitStringNewStringFromBytes(HInvoke* invoke
                     TR,
                     QUICK_ENTRYPOINT_OFFSET(kMips64DoublewordSize,
                                             pAllocStringFromBytes).Int32Value());
+  CheckEntrypointTypes<kQuickAllocStringFromBytes, void*, void*, int32_t, int32_t, int32_t>();
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Jalr(TMP);
   __ Nop();
@@ -1746,20 +1747,19 @@ void IntrinsicCodeGeneratorMIPS64::VisitStringNewStringFromChars(HInvoke* invoke
                     TR,
                     QUICK_ENTRYPOINT_OFFSET(kMips64DoublewordSize,
                                             pAllocStringFromChars).Int32Value());
+  CheckEntrypointTypes<kQuickAllocStringFromChars, void*, int32_t, int32_t, void*>();
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Jalr(TMP);
   __ Nop();
 }
 
-// java.lang.String.String(String original)
+// java.lang.StringFactory.newStringFromString(String toCopy)
 void IntrinsicLocationsBuilderMIPS64::VisitStringNewStringFromString(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                             LocationSummary::kCall,
                                                             kIntrinsified);
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
-  locations->SetInAt(1, Location::RegisterLocation(calling_convention.GetRegisterAt(1)));
-  locations->SetInAt(2, Location::RegisterLocation(calling_convention.GetRegisterAt(2)));
   Location outLocation = calling_convention.GetReturnLocation(Primitive::kPrimInt);
   locations->SetOut(Location::RegisterLocation(outLocation.AsRegister<GpuRegister>()));
 }
@@ -1778,6 +1778,7 @@ void IntrinsicCodeGeneratorMIPS64::VisitStringNewStringFromString(HInvoke* invok
                     TR,
                     QUICK_ENTRYPOINT_OFFSET(kMips64DoublewordSize,
                                             pAllocStringFromString).Int32Value());
+  CheckEntrypointTypes<kQuickAllocStringFromString, void*, void*>();
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Jalr(TMP);
   __ Nop();
