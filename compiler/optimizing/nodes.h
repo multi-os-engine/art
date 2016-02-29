@@ -295,6 +295,7 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
         has_irreducible_loops_(false),
         debuggable_(debuggable),
         current_instruction_id_(start_instruction_id),
+        current_instruction_id_lock_(false),
         dex_file_(dex_file),
         method_idx_(method_idx),
         invoke_type_(invoke_type),
@@ -378,6 +379,7 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   void SimplifyLoop(HBasicBlock* header);
 
   int32_t GetNextInstructionId() {
+    DCHECK(!current_instruction_id_lock_);
     DCHECK_NE(current_instruction_id_, INT32_MAX);
     return current_instruction_id_++;
   }
@@ -387,8 +389,11 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   }
 
   void SetCurrentInstructionId(int32_t id) {
+    DCHECK(!current_instruction_id_lock_);
     current_instruction_id_ = id;
   }
+
+  void SetCurrentInstructionIdLock(bool value) { current_instruction_id_lock_ = value; }
 
   uint16_t GetMaximumNumberOfOutVRegs() const {
     return maximum_number_of_out_vregs_;
@@ -584,6 +589,8 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
 
   // The current id to assign to a newly added instruction. See HInstruction.id_.
   int32_t current_instruction_id_;
+  // Debug flag. If set to true, `current_instruction_id_` must not be modified.
+  bool current_instruction_id_lock_;
 
   // The dex file from which the method is from.
   const DexFile& dex_file_;
