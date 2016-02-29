@@ -183,7 +183,12 @@ void JitInstrumentationListener::MethodEntered(Thread* thread,
     return;
   }
 
-  instrumentation_cache_->AddSamples(thread, method, 1);
+  ProfilingInfo* profiling_info = method->GetProfilingInfo(sizeof(void*));
+  if (profiling_info != nullptr && (profiling_info->GetSavedEntryPoint() != nullptr)) {
+    method->SetEntryPointFromQuickCompiledCode(profiling_info->GetSavedEntryPoint());
+  } else {
+    instrumentation_cache_->AddSamples(thread, method, 1);
+  }
 }
 
 void JitInstrumentationListener::Branch(Thread* thread,
