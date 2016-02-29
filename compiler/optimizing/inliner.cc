@@ -52,6 +52,26 @@ static constexpr size_t kMaximumNumberOfCumulatedDexRegisters = 64;
 // Avoid inlining within a huge method due to memory pressure.
 static constexpr size_t kMaximumCodeUnitSize = 4096;
 
+class ScopedInstructionIdLock : public ValueObject {
+ public:
+  explicit ScopedInstructionIdLock(HGraph* graph) : graph_(graph) {
+    if (kIsDebugBuild) {
+      graph_->SetCurrentInstructionIdLock(true);
+    }
+  }
+
+  ~ScopedInstructionIdLock() {
+    if (kIsDebugBuild) {
+      graph_->SetCurrentInstructionIdLock(false);
+    }
+  }
+
+ private:
+  HGraph* graph_;
+
+  DISALLOW_COPY_AND_ASSIGN(ScopedInstructionIdLock);
+};
+
 void HInliner::Run() {
   const CompilerOptions& compiler_options = compiler_driver_->GetCompilerOptions();
   if ((compiler_options.GetInlineDepthLimit() == 0)
@@ -1020,6 +1040,11 @@ bool HInliner::TryBuildAndInlineHelper(HInvoke* invoke_instruction,
     // at runtime, we change this call as if it was a virtual call.
     invoke_type = kVirtual;
   }
+
+  // Lock the instruction ID counter of the graph until the inner graph is constructed.
+  // This prevents us from creating instructions with duplicate IDs.
+  ScopedInstructionIdLock id_lock(graph_);
+
   HGraph* callee_graph = new (graph_->GetArena()) HGraph(
       graph_->GetArena(),
       callee_dex_file,

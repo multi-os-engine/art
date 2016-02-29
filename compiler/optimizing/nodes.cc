@@ -1877,6 +1877,19 @@ void HGraph::DeleteDeadEmptyBlock(HBasicBlock* block) {
   blocks_[block->GetBlockId()] = nullptr;
 }
 
+static void FinalizeInnerGraph(HGraph* inner_graph, HGraph* outer_graph) {
+  // Update the next instruction id of the outer graph, so that instructions
+  // added later get bigger ids than those in the inner graph.
+  int32_t next_instruction_id = inner_graph->GetNextInstructionId();
+  if (kIsDebugBuild) {
+    // Unlock the instruction ID counter of the outer graph and lock this one.
+    // This prevents us from creating instructions with duplicate IDs.
+    outer_graph->SetCurrentInstructionIdLock(false);
+    inner_graph->SetCurrentInstructionIdLock(true);
+  }
+  outer_graph->SetCurrentInstructionId(next_instruction_id);
+}
+
 HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
   DCHECK(HasExitBlock()) << "Unimplemented scenario";
   // Update the environments in this graph to have the invoke's environment
@@ -1925,6 +1938,7 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
     }
 
     invoke->GetBlock()->RemoveInstruction(last);
+    FinalizeInnerGraph(this, outer_graph);
   } else {
     // Need to inline multiple blocks. We split `invoke`'s block
     // into two blocks, merge the first block of the inlined graph into
@@ -1939,34 +1953,6 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
     DCHECK(!first->IsInLoop());
     at->MergeWithInlined(first);
     exit_block_->ReplaceWith(to);
-
-    // Update all predecessors of the exit block (now the `to` block)
-    // to not `HReturn` but `HGoto` instead.
-    bool returns_void = to->GetPredecessors()[0]->GetLastInstruction()->IsReturnVoid();
-    if (to->GetPredecessors().size() == 1) {
-      HBasicBlock* predecessor = to->GetPredecessors()[0];
-      HInstruction* last = predecessor->GetLastInstruction();
-      if (!returns_void) {
-        return_value = last->InputAt(0);
-      }
-      predecessor->AddInstruction(new (allocator) HGoto(last->GetDexPc()));
-      predecessor->RemoveInstruction(last);
-    } else {
-      if (!returns_void) {
-        // There will be multiple returns.
-        return_value = new (allocator) HPhi(
-            allocator, kNoRegNumber, 0, HPhi::ToPhiType(invoke->GetType()), to->GetDexPc());
-        to->AddPhi(return_value->AsPhi());
-      }
-      for (HBasicBlock* predecessor : to->GetPredecessors()) {
-        HInstruction* last = predecessor->GetLastInstruction();
-        if (!returns_void) {
-          return_value->AsPhi()->AddInput(last->InputAt(0));
-        }
-        predecessor->AddInstruction(new (allocator) HGoto(last->GetDexPc()));
-        predecessor->RemoveInstruction(last);
-      }
-    }
 
     // Update the meta information surrounding blocks:
     // (1) the graph they are now in,
@@ -2043,11 +2029,38 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
       }
     }
     to->SetTryCatchInformation(try_catch_info);
-  }
 
-  // Update the next instruction id of the outer graph, so that instructions
-  // added later get bigger ids than those in the inner graph.
-  outer_graph->SetCurrentInstructionId(GetNextInstructionId());
+    FinalizeInnerGraph(this, outer_graph);
+
+    // Update all predecessors of the exit block (now the `to` block)
+    // to not `HReturn` but `HGoto` instead.
+    bool returns_void = to->GetPredecessors()[0]->GetLastInstruction()->IsReturnVoid();
+    if (to->GetPredecessors().size() == 1) {
+      HBasicBlock* predecessor = to->GetPredecessors()[0];
+      HInstruction* last = predecessor->GetLastInstruction();
+      if (!returns_void) {
+        return_value = last->InputAt(0);
+      }
+      predecessor->AddInstruction(new (allocator) HGoto(last->GetDexPc()));
+      predecessor->RemoveInstruction(last);
+    } else {
+      if (!returns_void) {
+        // There will be multiple returns.
+        return_value = new (allocator) HPhi(
+            allocator, kNoRegNumber, 0, HPhi::ToPhiType(invoke->GetType()), to->GetDexPc());
+        to->AddPhi(return_value->AsPhi());
+      }
+      for (HBasicBlock* predecessor : to->GetPredecessors()) {
+        HInstruction* last = predecessor->GetLastInstruction();
+        if (!returns_void) {
+          DCHECK(last->IsReturn());
+          return_value->AsPhi()->AddInput(last->InputAt(0));
+        }
+        predecessor->AddInstruction(new (allocator) HGoto(last->GetDexPc()));
+        predecessor->RemoveInstruction(last);
+      }
+    }
+  }
 
   // Walk over the entry block and:
   // - Move constants from the entry block to the outer_graph's entry block,
