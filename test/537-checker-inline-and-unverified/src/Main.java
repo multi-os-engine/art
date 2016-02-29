@@ -50,7 +50,7 @@ public class Main {
         } catch (IllegalAccessError e) {
             // expected
         }
-        return false;
+        throw new Error("Unreachable");
     }
 
     public static boolean $opt$inline$testInline() {
