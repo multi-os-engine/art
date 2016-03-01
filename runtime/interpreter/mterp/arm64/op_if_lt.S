@@ -1,1 +1,1 @@
-%include "arm64/bincmp.S" { "condition":"lt" }
+%include "arm64/bincmp.S" { "cmpcond":"lt" }
