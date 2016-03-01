@@ -72,7 +72,8 @@ The following registers have fixed assignments:
   r6  rSELF     self (Thread) pointer
   r7  rINST     first 16-bit code unit of current instruction
   r8  rIBASE    interpreted instruction base pointer, used for computed goto
-  r11 rREFS	base of object references in shadow frame  (ideally, we'll get rid of this later).
+  r10 rPROFILE  branch profiling countdown
+  r11 rREFS     base of object references in shadow frame  (ideally, we'll get rid of this later).
 
 Macros are provided for common operations.  Each macro MUST emit only
 one instruction to make instruction-counting easier.  They MUST NOT alter
@@ -90,12 +91,13 @@ unspecified registers or condition codes.
 
 /* During bringup, we'll use the shadow frame model instead of rFP */
 /* single-purpose registers, given names for clarity */
-#define rPC     r4
-#define rFP     r5
-#define rSELF   r6
-#define rINST   r7
-#define rIBASE  r8
-#define rREFS   r11
+#define rPC      r4
+#define rFP      r5
+#define rSELF    r6
+#define rINST    r7
+#define rIBASE   r8
+#define rPROFILE r10
+#define rREFS    r11
 
 /*
  * Instead of holding a pointer to the shadow frame, we keep rFP at the base of the vregs.  So,

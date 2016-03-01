@@ -8,10 +8,9 @@
      */
     /* binop/2addr vA, vB */
     mov     r3, rINST, lsr #12          @ r3<- B
-    mov     r9, rINST, lsr #8           @ r9<- A+
     VREG_INDEX_TO_ADDR r3, r3           @ r3<- &vB
-    and     r9, r9, #15                 @ r9<- A
     fldd    d1, [r3]                    @ d1<- vB
+    ubfx    r9, rINST, #8, #4           @ r9<- A
     CLEAR_SHADOW_PAIR r9, ip, r0        @ Zero out shadow regs
     VREG_INDEX_TO_ADDR r9, r9           @ r9<- &vA
     FETCH_ADVANCE_INST 1                @ advance rPC, load rINST

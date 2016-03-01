@@ -1,1 +1,1 @@
-%include "arm64/zcmp.S" { "condition":"lt" }
+%include "arm64/zcmp.S" { "revcmp":"ge", "cmpcond":"lt" }

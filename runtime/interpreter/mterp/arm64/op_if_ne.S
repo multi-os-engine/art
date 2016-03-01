@@ -1,1 +1,1 @@
-%include "arm64/bincmp.S" { "condition":"ne" }
+%include "arm64/bincmp.S" { "revcmp":"eq", "cmpcond":"ne" }
