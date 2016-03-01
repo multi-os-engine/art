@@ -22,6 +22,7 @@
 #include "experimental_flags.h"
 #include "interpreter_common.h"
 #include "jit/jit.h"
+#include "jit/jit_instrumentation.h"
 #include "safe_math.h"
 
 #include <memory>  // std::unique_ptr
@@ -66,13 +67,18 @@ namespace interpreter {
 
 #define BRANCH_INSTRUMENTATION(offset)                                                            \
   do {                                                                                            \
-    ArtMethod* method = shadow_frame.GetMethod();                                                 \
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation(); \
     instrumentation->Branch(self, method, dex_pc, offset);                                        \
-    JValue result;                                                                                \
-    if (jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, &result)) {             \
-      return result;                                                                              \
-    }                                                                                             \
+    JValue result;                                                                              \
+    if (jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, &result)) {           \
+      return result;                                                                            \
+    }                                                                                           \
+  } while (false)
+
+#define HOTNESS_UPDATE()                                                                       \
+  do {                                                                                         \
+    if (instrumentation_cache != nullptr) {                                                    \
+      instrumentation_cache->AddSamples(self, method, 1);                                      \
+    }                                                                                          \
   } while (false)
 
 #define UNREACHABLE_CODE_CHECK()                \
@@ -186,6 +192,13 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   UPDATE_HANDLER_TABLE();
   std::unique_ptr<lambda::ClosureBuilder> lambda_closure_builder;
   size_t lambda_captured_variable_index = 0;
+  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+  ArtMethod* method = shadow_frame.GetMethod();                                              \
+  jit::Jit* jit = Runtime::Current()->GetJit();
+  jit::JitInstrumentationCache* instrumentation_cache = nullptr;
+  if (jit != nullptr) {
+    instrumentation_cache = jit->GetInstrumentationCache();
+  }
 
   // Jump to first instruction.
   ADVANCE(0);
