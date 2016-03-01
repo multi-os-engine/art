@@ -652,8 +652,10 @@ extern "C" bool  MterpProfileBranch(Thread* self, ShadowFrame* shadow_frame, int
   ArtMethod* method = shadow_frame->GetMethod();
   JValue* result = shadow_frame->GetResultRegister();
   uint32_t dex_pc = shadow_frame->GetDexPC();
-  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
-  instrumentation->Branch(self, method, dex_pc, offset);
+  if (offset < 0) {
+    const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+    instrumentation->BackwardsBranches(self, method, 1);
+  }
   return jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, result);
 }
 

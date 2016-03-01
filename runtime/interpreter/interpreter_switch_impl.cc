@@ -80,6 +80,12 @@ namespace interpreter {
     }                                                                                          \
   } while (false)
 
+#define BACKWARDS_BRANCH_INSTRUMENTATION()                                                     \
+  do {                                                                                         \
+    ArtMethod* method = shadow_frame.GetMethod();                                              \
+    instrumentation->BackwardsBranches(self, method, 1);                                       \
+  } while (false)
+
 static bool IsExperimentalInstructionEnabled(const Instruction *inst) {
   DCHECK(inst->IsExperimental());
   return Runtime::Current()->AreExperimentalFlagsEnabled(ExperimentalFlags::kLambdas);
@@ -564,6 +570,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         int8_t offset = inst->VRegA_10t(inst_data);
         BRANCH_INSTRUMENTATION(offset);
         if (IsBackwardBranch(offset)) {
+          BACKWARDS_BRANCH_INSTRUMENTATION();
           self->AllowThreadSuspension();
         }
         inst = inst->RelativeAt(offset);
@@ -574,6 +581,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         int16_t offset = inst->VRegA_20t();
         BRANCH_INSTRUMENTATION(offset);
         if (IsBackwardBranch(offset)) {
+          BACKWARDS_BRANCH_INSTRUMENTATION();
           self->AllowThreadSuspension();
         }
         inst = inst->RelativeAt(offset);
@@ -584,6 +592,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         int32_t offset = inst->VRegA_30t();
         BRANCH_INSTRUMENTATION(offset);
         if (IsBackwardBranch(offset)) {
+          BACKWARDS_BRANCH_INSTRUMENTATION();
           self->AllowThreadSuspension();
         }
         inst = inst->RelativeAt(offset);
@@ -594,6 +603,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         int32_t offset = DoPackedSwitch(inst, shadow_frame, inst_data);
         BRANCH_INSTRUMENTATION(offset);
         if (IsBackwardBranch(offset)) {
+          BACKWARDS_BRANCH_INSTRUMENTATION();
           self->AllowThreadSuspension();
         }
         inst = inst->RelativeAt(offset);
@@ -604,6 +614,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         int32_t offset = DoSparseSwitch(inst, shadow_frame, inst_data);
         BRANCH_INSTRUMENTATION(offset);
         if (IsBackwardBranch(offset)) {
+          BACKWARDS_BRANCH_INSTRUMENTATION();
           self->AllowThreadSuspension();
         }
         inst = inst->RelativeAt(offset);
@@ -708,6 +719,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegC_22t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -724,6 +736,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegC_22t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -740,6 +753,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegC_22t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -756,6 +770,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegC_22t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -772,6 +787,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegC_22t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -788,6 +804,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegC_22t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -803,6 +820,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegB_21t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -818,6 +836,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegB_21t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -833,6 +852,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegB_21t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -848,6 +868,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegB_21t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -863,6 +884,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegB_21t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);
@@ -878,6 +900,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
           int16_t offset = inst->VRegB_21t();
           BRANCH_INSTRUMENTATION(offset);
           if (IsBackwardBranch(offset)) {
+            BACKWARDS_BRANCH_INSTRUMENTATION();
             self->AllowThreadSuspension();
           }
           inst = inst->RelativeAt(offset);

@@ -196,6 +196,13 @@ void JitInstrumentationListener::Branch(Thread* thread,
   }
 }
 
+void JitInstrumentationListener::BackwardsBranches(Thread* thread,
+                                                   ArtMethod* method,
+                                                   uint16_t count) {
+  // Increment method hotness.
+  instrumentation_cache_->AddSamples(thread, method, count);
+}
+
 void JitInstrumentationListener::InvokeVirtualOrInterface(Thread* thread,
                                                           mirror::Object* this_object,
                                                           ArtMethod* caller,
