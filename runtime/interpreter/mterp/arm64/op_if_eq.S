@@ -1,1 +1,1 @@
-%include "arm64/bincmp.S" { "condition":"eq" }
+%include "arm64/bincmp.S" { "cmpcond":"eq" }

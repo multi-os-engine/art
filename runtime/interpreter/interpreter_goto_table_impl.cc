@@ -22,6 +22,7 @@
 #include "experimental_flags.h"
 #include "interpreter_common.h"
 #include "jit/jit.h"
+#include "jit/jit_instrumentation.h"
 #include "safe_math.h"
 
 #include <memory>  // std::unique_ptr
@@ -64,15 +65,16 @@ namespace interpreter {
   currentHandlersTable = handlersTable[ \
       Runtime::Current()->GetInstrumentation()->GetInterpreterHandlerTable()]
 
+// FIXME: add hotness update
 #define BRANCH_INSTRUMENTATION(offset)                                                            \
   do {                                                                                            \
     ArtMethod* method = shadow_frame.GetMethod();                                                 \
     instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation(); \
     instrumentation->Branch(self, method, dex_pc, offset);                                        \
-    JValue result;                                                                                \
-    if (jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, &result)) {             \
-      return result;                                                                              \
-    }                                                                                             \
+    JValue result;                                                                              \
+    if (jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, &result)) {           \
+      return result;                                                                            \
+    }                                                                                           \
   } while (false)
 
 #define UNREACHABLE_CODE_CHECK()                \

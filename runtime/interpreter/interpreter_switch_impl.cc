@@ -18,6 +18,7 @@
 #include "experimental_flags.h"
 #include "interpreter_common.h"
 #include "jit/jit.h"
+#include "jit/jit_instrumentation.h"
 #include "safe_math.h"
 
 #include <memory>  // std::unique_ptr
@@ -70,6 +71,7 @@ namespace interpreter {
     }                                                                                           \
   } while (false)
 
+// FIXME: add call to jit_instrumentation for hotness update
 #define BRANCH_INSTRUMENTATION(offset)                                                         \
   do {                                                                                         \
     ArtMethod* method = shadow_frame.GetMethod();                                              \

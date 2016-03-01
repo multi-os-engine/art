@@ -303,7 +303,8 @@ class Instrumentation {
   bool NonJitProfilingActive() const SHARED_REQUIRES(Locks::mutator_lock_) {
     return have_dex_pc_listeners_ || have_method_exit_listeners_ ||
         have_field_read_listeners_ || have_field_write_listeners_ ||
-        have_exception_caught_listeners_ || have_method_unwind_listeners_;
+        have_exception_caught_listeners_ || have_method_unwind_listeners_ ||
+        have_branch_listeners_;
   }
 
   // Inform listeners that a method has been entered. A dex PC is provided as we may install
@@ -541,6 +542,10 @@ class Instrumentation {
   // Do we have any invoke listeners? Short-cut to avoid taking the instrumentation_lock_.
   bool have_invoke_virtual_or_interface_listeners_ GUARDED_BY(Locks::mutator_lock_);
 
+  // Do we have Any backwards branches listeners? Short-cut to avoid taking the
+  // instrumentation_lock_.
+  bool have_backwards_branches_listeners_ GUARDED_BY(Locks::mutator_lock_);
+
   // Contains the instrumentation level required by each client of the instrumentation identified
   // by a string key.
   typedef SafeMap<const char*, InstrumentationLevel> InstrumentationLevelTable;
@@ -560,6 +565,8 @@ class Instrumentation {
   std::list<InstrumentationListener*> method_exit_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> method_unwind_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> branch_listeners_ GUARDED_BY(Locks::mutator_lock_);
+  std::list<InstrumentationListener*> backwards_branches_listeners_
+      GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> invoke_virtual_or_interface_listeners_
       GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> dex_pc_listeners_ GUARDED_BY(Locks::mutator_lock_);
