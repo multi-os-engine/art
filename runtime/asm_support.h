@@ -25,6 +25,7 @@
 #include "mirror/string.h"
 #include "runtime.h"
 #include "thread.h"
+#include "jit/jit_instrumentation.h"
 #endif
 
 #include "read_barrier_c.h"
@@ -183,7 +184,13 @@ ADD_TEST_EQ(SHADOWFRAME_NUMBER_OF_VREGS_OFFSET,
 #define SHADOWFRAME_DEX_PC_OFFSET (SHADOWFRAME_NUMBER_OF_VREGS_OFFSET + 4)
 ADD_TEST_EQ(SHADOWFRAME_DEX_PC_OFFSET,
             static_cast<int32_t>(art::ShadowFrame::DexPCOffset()))
-#define SHADOWFRAME_VREGS_OFFSET (SHADOWFRAME_NUMBER_OF_VREGS_OFFSET + 8)
+#define SHADOWFRAME_CACHED_HOTNESS_COUNTER_OFFSET (SHADOWFRAME_NUMBER_OF_VREGS_OFFSET + 8)
+ADD_TEST_EQ(SHADOWFRAME_CACHED_HOTNESS_COUNTER_OFFSET,
+            static_cast<int32_t>(art::ShadowFrame::CachedHotnessCounterOffset()))
+#define SHADOWFRAME_HOTNESS_COUNTDOWN_OFFSET (SHADOWFRAME_NUMBER_OF_VREGS_OFFSET + 10)
+ADD_TEST_EQ(SHADOWFRAME_HOTNESS_COUNTDOWN_OFFSET,
+            static_cast<int32_t>(art::ShadowFrame::HotnessCountdownOffset()))
+#define SHADOWFRAME_VREGS_OFFSET (SHADOWFRAME_NUMBER_OF_VREGS_OFFSET + 12)
 ADD_TEST_EQ(SHADOWFRAME_VREGS_OFFSET,
             static_cast<int32_t>(art::ShadowFrame::VRegsOffset()))
 
@@ -372,6 +379,12 @@ ADD_TEST_EQ(THREAD_SUSPEND_REQUEST, static_cast<int32_t>(art::kSuspendRequest))
 
 #define THREAD_CHECKPOINT_REQUEST 2
 ADD_TEST_EQ(THREAD_CHECKPOINT_REQUEST, static_cast<int32_t>(art::kCheckpointRequest))
+
+#define JIT_HOTNESS_DISABLE -1
+ADD_TEST_EQ(JIT_HOTNESS_DISABLE, static_cast<int32_t>(art::jit::kJitHotnessDisable))
+
+#define JIT_CHECK_OSR -2
+ADD_TEST_EQ(JIT_CHECK_OSR, static_cast<int32_t>(art::jit::kJitCheckForOSR))
 
 #if defined(__cplusplus)
 }  // End of CheckAsmSupportOffsets.
