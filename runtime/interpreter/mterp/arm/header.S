@@ -72,7 +72,7 @@ The following registers have fixed assignments:
   r6  rSELF     self (Thread) pointer
   r7  rINST     first 16-bit code unit of current instruction
   r8  rIBASE    interpreted instruction base pointer, used for computed goto
-  r11 rREFS	base of object references in shadow frame  (ideally, we'll get rid of this later).
+  r11 rREFS     base of object references in shadow frame  (ideally, we'll get rid of this later).
 
 Macros are provided for common operations.  Each macro MUST emit only
 one instruction to make instruction-counting easier.  They MUST NOT alter

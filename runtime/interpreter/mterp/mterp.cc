@@ -21,6 +21,7 @@
 #include "entrypoints/entrypoint_utils-inl.h"
 #include "mterp.h"
 #include "jit/jit.h"
+#include "jit/jit_instrumentation.h"
 #include "debugger.h"
 
 namespace art {
@@ -639,14 +640,51 @@ extern "C" mirror::Object* artIGetObjectFromMterp(mirror::Object* obj, uint32_t 
   return obj->GetFieldObject<mirror::Object>(MemberOffset(field_offset));
 }
 
+// TUNING: targets should move this operation inline, and batch updates.
 extern "C" bool  MterpProfileBranch(Thread* self, ShadowFrame* shadow_frame, int32_t offset)
   SHARED_REQUIRES(Locks::mutator_lock_) {
   ArtMethod* method = shadow_frame->GetMethod();
   JValue* result = shadow_frame->GetResultRegister();
   uint32_t dex_pc = shadow_frame->GetDexPC();
-  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
-  instrumentation->Branch(self, method, dex_pc, offset);
+  if (offset < 0) {
+    const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+    instrumentation->BackwardsBranches(self, method, 1);
+  }
+  if (method->GetCounter() == ArtMethod::kMethodCheckForOSR) {
+    return jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, result);
+  } else {
+    return false;
+  }
+}
+
+extern "C" bool MterpCheckForOSR(Thread* self, ShadowFrame* shadow_frame, int32_t offset)
+  SHARED_REQUIRES(Locks::mutator_lock_) {
+  ArtMethod* method = shadow_frame->GetMethod();
+  JValue* result = shadow_frame->GetResultRegister();
+  uint32_t dex_pc = shadow_frame->GetDexPC();
+  // Assumes caller has already determined that an OSR check is appropriate.
   return jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, result);
+}
+
+extern "C" void MterpSetUpHotnessCountdown(ArtMethod* method, ShadowFrame* shadow_frame)
+  SHARED_REQUIRES(Locks::mutator_lock_) {
+  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+  int16_t hotness_count = method->GetCounter();
+  if (!instrumentation->HasBackwardsBranchesListeners()) {
+    hotness_count = ArtMethod::kMethodHotnessDisable;
+  }
+  shadow_frame->SetCachedHotnessCounter(hotness_count);
+  shadow_frame->SetHotnessCountdown(hotness_count);
+}
+
+extern "C" int16_t MterpAddHotnessBatch(ArtMethod* method, ShadowFrame* shadow_frame,
+                                        Thread* self)
+  SHARED_REQUIRES(Locks::mutator_lock_) {
+  int16_t count = shadow_frame->GetCachedHotnessCounter() - shadow_frame->GetHotnessCountdown();
+  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+  instrumentation->BackwardsBranches(self, method, count);
+  MterpSetUpHotnessCountdown(method, shadow_frame);
+  return shadow_frame->GetHotnessCountdown();
 }
 
 }  // namespace interpreter
