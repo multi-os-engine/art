@@ -80,6 +80,7 @@ Instrumentation::Instrumentation()
       have_exception_caught_listeners_(false),
       have_branch_listeners_(false),
       have_invoke_virtual_or_interface_listeners_(false),
+      have_backwards_branches_listeners_(false),
       deoptimized_methods_lock_("deoptimized methods lock"),
       deoptimization_enabled_(false),
       interpreter_handler_table_(kMainHandlerTable),
@@ -455,6 +456,11 @@ void Instrumentation::AddListener(InstrumentationListener* listener, uint32_t ev
                            invoke_virtual_or_interface_listeners_,
                            listener,
                            &have_invoke_virtual_or_interface_listeners_);
+  PotentiallyAddListenerTo(kBackwardsBranches,
+                           events,
+                           backwards_branches_listeners_,
+                           listener,
+                           &have_backwards_branches_listeners_);
   PotentiallyAddListenerTo(kDexPcMoved,
                            events,
                            dex_pc_listeners_,
@@ -532,6 +538,11 @@ void Instrumentation::RemoveListener(InstrumentationListener* listener, uint32_t
                                 invoke_virtual_or_interface_listeners_,
                                 listener,
                                 &have_invoke_virtual_or_interface_listeners_);
+  PotentiallyRemoveListenerFrom(kBackwardsBranches,
+                                events,
+                                backwards_branches_listeners_,
+                                listener,
+                                &have_backwards_branches_listeners_);
   PotentiallyRemoveListenerFrom(kDexPcMoved,
                                 events,
                                 dex_pc_listeners_,
@@ -956,6 +967,16 @@ void Instrumentation::InvokeVirtualOrInterfaceImpl(Thread* thread,
   for (InstrumentationListener* listener : invoke_virtual_or_interface_listeners_) {
     if (listener != nullptr) {
       listener->InvokeVirtualOrInterface(thread, this_object, caller, dex_pc, callee);
+    }
+  }
+}
+
+void Instrumentation::BackwardsBranchesImpl(Thread* thread,
+                                            ArtMethod* method,
+                                            uint16_t count) const {
+  for (InstrumentationListener* listener : backwards_branches_listeners_) {
+    if (listener != nullptr) {
+      listener->BackwardsBranches(thread, method, count);
     }
   }
 }

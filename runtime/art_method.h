@@ -46,6 +46,10 @@ class PointerArray;
 
 class ArtMethod FINAL {
  public:
+  // Special states for method's hotness_counter_.
+  static constexpr int16_t kMethodCheckForOSR = -1;
+  static constexpr int16_t kMethodHotnessDisabled = -2;
+
   ArtMethod() : access_flags_(0), dex_code_item_offset_(0), dex_method_index_(0),
       method_index_(0) { }
 
@@ -468,12 +472,30 @@ class ArtMethod FINAL {
   ALWAYS_INLINE GcRoot<mirror::Class>* GetDexCacheResolvedTypes(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  uint16_t IncrementCounter() {
-    return ++hotness_count_;
+  // Attempt to avoid overflow while incrementing hotness.  Because hotness_count_ updates are
+  // not atomic, overflows are possible.  However, an overflow would represent a lost
+  // opportunity rather than a correctness issue.  Worst case, we could miss identifying
+  // an on-stack-replacement opportunity for the JIT.  The updates need to be fast though,
+  // so we will attempt to minimize rather than eliminate overflow possibilities.
+  int16_t IncrementCounter() {
+    int16_t count = hotness_count_;    // Single read.
+    if ((count >= 0) && (count < std::numeric_limits<int16_t>::max())) {
+      ++count;
+      ++hotness_count_ = count;        // Single write.
+    }
+    return count;
   }
 
   void ClearCounter() {
     hotness_count_ = 0;
+  }
+
+  void SetCounter(int16_t hotness_count) {
+    hotness_count_ = hotness_count;
+  }
+
+  int16_t GetCounter() {
+    return hotness_count_;
   }
 
   const uint8_t* GetQuickenedInfo() SHARED_REQUIRES(Locks::mutator_lock_);
@@ -520,9 +542,11 @@ class ArtMethod FINAL {
   // ifTable.
   uint16_t method_index_;
 
-  // The hotness we measure for this method. Incremented by the interpreter. Not atomic, as we allow
-  // missing increments: if the method is hot, we will see it eventually.
-  uint16_t hotness_count_;
+  // The hotness we measure for this method. Managed by the interpreter. Not atomic, as we allow
+  // missing increments: if the method is hot, we will see it eventually.  Note that the hotness
+  // count values have special meaning.  Non-negative values denote hotness, while negative
+  // values denote special state.
+  volatile int16_t hotness_count_;
 
   // Fake padding field gets inserted here.
 

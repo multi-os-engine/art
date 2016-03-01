@@ -117,6 +117,13 @@ class TestInstrumentationListener FINAL : public instrumentation::Instrumentatio
     received_invoke_virtual_or_interface_event = true;
   }
 
+  void BackwardsBranches(Thread* thread ATTRIBUTE_UNUSED,
+                         ArtMethod* method ATTRIBUTE_UNUSED,
+                         uint16_t count ATTRIBUTE_UNUSED)
+      OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+    received_backwards_branches_event = true;
+  }
+
   void Reset() {
     received_method_enter_event = false;
     received_method_exit_event = false;
@@ -127,6 +134,7 @@ class TestInstrumentationListener FINAL : public instrumentation::Instrumentatio
     received_exception_caught_event = false;
     received_branch_event = false;
     received_invoke_virtual_or_interface_event = false;
+    received_backwards_branches_event = false;
   }
 
   bool received_method_enter_event;
@@ -138,6 +146,7 @@ class TestInstrumentationListener FINAL : public instrumentation::Instrumentatio
   bool received_exception_caught_event;
   bool received_branch_event;
   bool received_invoke_virtual_or_interface_event;
+  bool received_backwards_branches_event;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(TestInstrumentationListener);
@@ -310,6 +319,8 @@ class InstrumentationTest : public CommonRuntimeTest {
         return instr->HasBranchListeners();
       case instrumentation::Instrumentation::kInvokeVirtualOrInterface:
         return instr->HasInvokeVirtualOrInterfaceListeners();
+      case instrumentation::Instrumentation::kBackwardsBranches:
+        return instr->HasBackwardsBranchesListeners();
       default:
         LOG(FATAL) << "Unknown instrumentation event " << event_type;
         UNREACHABLE();
@@ -356,6 +367,9 @@ class InstrumentationTest : public CommonRuntimeTest {
       case instrumentation::Instrumentation::kInvokeVirtualOrInterface:
         instr->InvokeVirtualOrInterface(self, obj, method, dex_pc, method);
         break;
+      case instrumentation::Instrumentation::kBackwardsBranches:
+        instr->BackwardsBranches(self, method, 1);
+        break;
       default:
         LOG(FATAL) << "Unknown instrumentation event " << event_type;
         UNREACHABLE();
@@ -383,6 +397,8 @@ class InstrumentationTest : public CommonRuntimeTest {
         return listener.received_branch_event;
       case instrumentation::Instrumentation::kInvokeVirtualOrInterface:
         return listener.received_invoke_virtual_or_interface_event;
+      case instrumentation::Instrumentation::kBackwardsBranches:
+        return listener.received_backwards_branches_event;
       default:
         LOG(FATAL) << "Unknown instrumentation event " << event_type;
         UNREACHABLE();
@@ -448,6 +464,10 @@ TEST_F(InstrumentationTest, BranchEvent) {
 
 TEST_F(InstrumentationTest, InvokeVirtualOrInterfaceEvent) {
   TestEvent(instrumentation::Instrumentation::kInvokeVirtualOrInterface);
+}
+
+TEST_F(InstrumentationTest, BackwardsBranchesEvent) {
+  TestEvent(instrumentation::Instrumentation::kBackwardsBranches);
 }
 
 TEST_F(InstrumentationTest, DeoptimizeDirectMethod) {

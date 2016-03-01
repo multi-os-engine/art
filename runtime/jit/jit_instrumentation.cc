@@ -80,9 +80,9 @@ class JitCompileTask FINAL : public Task {
   DISALLOW_IMPLICIT_CONSTRUCTORS(JitCompileTask);
 };
 
-JitInstrumentationCache::JitInstrumentationCache(size_t hot_method_threshold,
-                                                 size_t warm_method_threshold,
-                                                 size_t osr_method_threshold)
+JitInstrumentationCache::JitInstrumentationCache(int16_t hot_method_threshold,
+                                                 int16_t warm_method_threshold,
+                                                 int16_t osr_method_threshold)
     : hot_method_threshold_(hot_method_threshold),
       warm_method_threshold_(warm_method_threshold),
       osr_method_threshold_(osr_method_threshold),
@@ -130,44 +130,72 @@ void JitInstrumentationCache::DeleteThreadPool(Thread* self) {
   }
 }
 
-void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, size_t) {
+void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, int16_t count) {
   // Since we don't have on-stack replacement, some methods can remain in the interpreter longer
   // than we want resulting in samples even after the method is compiled.
   if (method->IsClassInitializer() || method->IsNative()) {
     return;
   }
   DCHECK(thread_pool_ != nullptr);
+  DCHECK_GT(warm_method_threshold_, 0);
+  DCHECK_GT(hot_method_threshold_, warm_method_threshold_);
+  DCHECK_GT(osr_method_threshold_, hot_method_threshold_);
 
-  uint16_t sample_count = method->IncrementCounter();
-  if (sample_count == warm_method_threshold_) {
-    bool success = ProfilingInfo::Create(self, method, /* retry_allocation */ false);
-    if (success) {
-      VLOG(jit) << "Start profiling " << PrettyMethod(method);
+  int16_t starting_count = method->GetCounter();
+  int32_t new_count = starting_count + count;   // int32 here to avoid wrap-around;
+  if (starting_count < 0) {
+    return;
+  }
+  if (starting_count < warm_method_threshold_) {
+    if (new_count >= warm_method_threshold_) {
+      bool success = ProfilingInfo::Create(self, method, /* retry_allocation */ false);
+      if (success) {
+        VLOG(jit) << "Start profiling " << PrettyMethod(method);
+      }
+
+      if (thread_pool_ == nullptr) {
+        // Calling ProfilingInfo::Create might put us in a suspended state, which could
+        // lead to the thread pool being deleted when we are shutting down.
+        DCHECK(Runtime::Current()->IsShuttingDown(self));
+        return;
+      }
+
+      if (!success) {
+        // We failed allocating. Instead of doing the collection on the Java thread, we push
+        // an allocation to a compiler thread, that will do the collection.
+        thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kAllocateProfile));
+      }
     }
+    // Avoid jumping more than one state at a time.
+    method->SetCounter(std::min(new_count, hot_method_threshold_ - 1));
+    return;
+  }
 
-    if (thread_pool_ == nullptr) {
-      // Calling ProfilingInfo::Create might put us in a suspended state, which could
-      // lead to the thread pool being deleted when we are shutting down.
-      DCHECK(Runtime::Current()->IsShuttingDown(self));
+  if (starting_count < hot_method_threshold_) {
+    if (new_count >= hot_method_threshold_) {
+      DCHECK(thread_pool_ != nullptr);
+      thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kCompile));
+    }
+    // Avoid jumping more than one state at a time.
+    method->SetCounter(std::min(new_count, osr_method_threshold_ - 1));
+    return;
+  }
+
+  if (starting_count < osr_method_threshold_) {
+    if (new_count >= osr_method_threshold_) {
+      DCHECK(thread_pool_ != nullptr);
+      thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kCompileOsr));
+      // Disable counting and enable OSR check.
+      // TUNING: might be better to disable counting here, and enable OSR check once OSR
+      // compilation is complete.  However, counting here does provide a signal that could
+      // be used to tell if the method is still hot.
+      method->SetCounter(ArtMethod::kMethodCheckForOSR);
       return;
     }
-
-    if (!success) {
-      // We failed allocating. Instead of doing the collection on the Java thread, we push
-      // an allocation to a compiler thread, that will do the collection.
-      thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kAllocateProfile));
-    }
   }
-
-  if (sample_count == hot_method_threshold_) {
-    DCHECK(thread_pool_ != nullptr);
-    thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kCompile));
-  }
-
-  if (sample_count == osr_method_threshold_) {
-    DCHECK(thread_pool_ != nullptr);
-    thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kCompileOsr));
-  }
+  // Make sure we don't wrap around.
+  method->SetCounter(std::min(new_count,
+                     static_cast<int32_t>(std::numeric_limits<int16_t>::max())));
 }
 
 JitInstrumentationListener::JitInstrumentationListener(JitInstrumentationCache* cache)
@@ -209,6 +237,13 @@ void JitInstrumentationListener::Branch(Thread* thread,
     // Increment method hotness if it is a backward branch.
     instrumentation_cache_->AddSamples(thread, method, 1);
   }
+}
+
+void JitInstrumentationListener::BackwardsBranches(Thread* thread,
+                                                   ArtMethod* method,
+                                                   uint16_t count) {
+  // Increment method hotness.
+  instrumentation_cache_->AddSamples(thread, method, count);
 }
 
 void JitInstrumentationListener::InvokeVirtualOrInterface(Thread* thread,
