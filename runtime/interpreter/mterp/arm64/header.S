@@ -74,6 +74,7 @@ The following registers have fixed assignments:
   x23  xINST     first 16-bit code unit of current instruction
   x24  xIBASE    interpreted instruction base pointer, used for computed goto
   x25  xREFS     base of object references in shadow frame  (ideally, we'll get rid of this later).
+  x26  wPROFILE  jit profile hotness countdown
   x16  ip        scratch reg
   x17  ip2       scratch reg (used by macros)
 
@@ -92,15 +93,17 @@ codes.
 
 /* During bringup, we'll use the shadow frame model instead of xFP */
 /* single-purpose registers, given names for clarity */
-#define xPC     x20
-#define xFP     x21
-#define xSELF   x22
-#define xINST   x23
-#define wINST   w23
-#define xIBASE  x24
-#define xREFS   x25
-#define ip      x16
-#define ip2     x17
+#define xPC      x20
+#define xFP      x21
+#define xSELF    x22
+#define xINST    x23
+#define wINST    w23
+#define xIBASE   x24
+#define xREFS    x25
+#define wPROFILE w26
+#define xPROFILE x26
+#define ip       x16
+#define ip2      x17
 
 /*
  * Instead of holding a pointer to the shadow frame, we keep xFP at the base of the vregs.  So,
