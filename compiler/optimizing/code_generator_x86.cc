@@ -378,6 +378,39 @@ class DeoptimizationSlowPathX86 : public SlowPathCode {
   DISALLOW_COPY_AND_ASSIGN(DeoptimizationSlowPathX86);
 };
 
+class VisitMonitorOperationSlowPathX86 : public SlowPathCode {
+ public:
+  explicit VisitMonitorOperationSlowPathX86(HMonitorOperation* instruction)
+    : SlowPathCode(instruction) {}
+
+  void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    __ Bind(GetEntryLabel());
+    LocationSummary* locations = instruction_->GetLocations();
+    Register obj = locations->InAt(0).AsRegister<Register>();
+    __ movl(EAX, obj);
+    SaveLiveRegisters(codegen, instruction_->GetLocations());
+    bool is_enter = instruction_->AsMonitorOperation()->IsEnter();
+    CodeGeneratorX86* x86_codegen = down_cast<CodeGeneratorX86*>(codegen);
+    x86_codegen->InvokeRuntime(is_enter ? QUICK_ENTRY_POINT(pLockObject)
+                                        : QUICK_ENTRY_POINT(pUnlockObject),
+                               instruction_,
+                               instruction_->GetDexPc(),
+                               nullptr);
+    if (is_enter) {
+      CheckEntrypointTypes<kQuickLockObject, void, mirror::Object*>();
+    } else {
+      CheckEntrypointTypes<kQuickUnlockObject, void, mirror::Object*>();
+    }
+    RestoreLiveRegisters(codegen, instruction_->GetLocations());
+    __ jmp(GetExitLabel());
+  }
+
+  const char* GetDescription() const OVERRIDE { return "VisitMonitorOperationSlowPathX86"; }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(VisitMonitorOperationSlowPathX86);
+};
+
 class ArraySetSlowPathX86 : public SlowPathCode {
  public:
   explicit ArraySetSlowPathX86(HInstruction* instruction) : SlowPathCode(instruction) {}
@@ -6475,22 +6508,62 @@ void InstructionCodeGeneratorX86::VisitCheckCast(HCheckCast* instruction) {
 
 void LocationsBuilderX86::VisitMonitorOperation(HMonitorOperation* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnSlowPath);
   InvokeRuntimeCallingConvention calling_convention;
-  locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->AddTemp(Location::RegisterLocation(EAX));   // need EAX for cmpxchg
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
 }
 
 void InstructionCodeGeneratorX86::VisitMonitorOperation(HMonitorOperation* instruction) {
-  codegen_->InvokeRuntime(instruction->IsEnter() ? QUICK_ENTRY_POINT(pLockObject)
-                                                 : QUICK_ENTRY_POINT(pUnlockObject),
-                          instruction,
-                          instruction->GetDexPc(),
-                          nullptr);
+  SlowPathCode* slow_path =
+      new (GetGraph()->GetArena()) VisitMonitorOperationSlowPathX86(instruction);
+  codegen_->AddSlowPath(slow_path);
+  NearLabel recursive_unlock, write_lockword;
+  LocationSummary* locations = instruction->GetLocations();
+  Register obj = locations->InAt(0).AsRegister<Register>();
+  Register temp_reg = locations->GetTemp(0).AsRegister<Register>();
+  Register temp_reg1 = locations->GetTemp(1).AsRegister<Register>();
+  Register temp_reg2 = locations->GetTemp(2).AsRegister<Register>();
+  uint32_t monitor_offset = mirror::Object::MonitorOffset().Int32Value();
+  __ testl(obj, obj);
+  __ j(kEqual, slow_path->GetEntryLabel());
+  __ movl(temp_reg, Address(obj, monitor_offset));
+  __ fs()->movl(temp_reg2, Address::Absolute(Thread::ThinLockIdOffset<4>().Int32Value()));
   if (instruction->IsEnter()) {
-    CheckEntrypointTypes<kQuickLockObject, void, mirror::Object*>();
+    __ movl(temp_reg1, temp_reg);
+    __ andl(temp_reg1, Immediate(LockWord::kReadBarrierStateMaskShiftedToggled));
+    __ testl(temp_reg1, temp_reg1);
+    __ j(kNotEqual, slow_path->GetEntryLabel());
+    __ andl(temp_reg, Immediate(LockWord::kReadBarrierStateMaskShifted));
+    __ orl(temp_reg2, temp_reg);
+    __ LockCmpxchgl(Address(obj, monitor_offset), temp_reg2);
+    __ j(kNotEqual, slow_path->GetEntryLabel());
   } else {
-    CheckEntrypointTypes<kQuickUnlockObject, void, mirror::Object*>();
+    __ movl(temp_reg1, temp_reg);
+    __ andl(temp_reg1, Immediate(LockWord::kStateMaskShifted |
+                                 LockWord::kThinLockOwnerMask << LockWord::kThinLockOwnerShift));
+    __ subl(temp_reg2, temp_reg1);
+    __ j(kNotEqual, slow_path->GetEntryLabel());
+    __ movl(temp_reg1, temp_reg);
+    __ andl(temp_reg1, Immediate(LockWord::kThinLockCountMask << LockWord::kThinLockCountShift));
+    __ testl(temp_reg1, temp_reg1);
+    __ movl(temp_reg1, temp_reg);
+    __ j(kNotEqual, &recursive_unlock);
+    __ andl(temp_reg1, Immediate(LockWord::kReadBarrierStateMaskShifted));
+    __ jmp(&write_lockword);
+    __ Bind(&recursive_unlock);
+    __ subl(temp_reg1, Immediate(LockWord::kThinLockCountOne));
+    __ Bind(&write_lockword);
+    if (kUseReadBarrier) {
+      __ LockCmpxchgl(Address(obj, monitor_offset), temp_reg1);
+      __ j(kNotEqual, slow_path->GetEntryLabel());
+    } else {
+      __ movl(Address(obj, monitor_offset), temp_reg1);
+    }
   }
+  __ Bind(slow_path->GetExitLabel());
 }
 
 void LocationsBuilderX86::VisitAnd(HAnd* instruction) { HandleBitwiseOperation(instruction); }
