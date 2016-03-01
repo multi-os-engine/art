@@ -37,6 +37,12 @@
 namespace art {
 namespace gc {
 
+static inline bool EntrypointsInstrumented() SHARED_REQUIRES(Locks::mutator_lock_) {
+  instrumentation::Instrumentation* const instrumentation =
+      Runtime::Current()->GetInstrumentation();
+  return instrumentation != nullptr && instrumentation->EntrypointsInstrumented();
+}
+
 template <bool kInstrumented, bool kCheckLargeObject, typename PreFenceVisitor>
 inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self,
                                                       mirror::Class* klass,
@@ -110,13 +116,22 @@ inline mirror::Object* Heap::AllocObjectWithAllocator(Thread* self,
                                               &usable_size, &bytes_tl_bulk_allocated);
     if (UNLIKELY(obj == nullptr)) {
       bool is_current_allocator = allocator == GetCurrentAllocator();
-      obj = AllocateInternalWithGc(self, allocator, byte_count, &bytes_allocated, &usable_size,
+      // AllocateInternalWithGc can cause thread suspension, if someone instruments the entrypoints
+      // or changes the allocator in a suspend point here, we need to retry the allocation.
+      obj = AllocateInternalWithGc(self,
+                                   allocator,
+                                   kInstrumented,
+                                   byte_count,
+                                   &bytes_allocated,
+                                   &usable_size,
                                    &bytes_tl_bulk_allocated, &klass);
       if (obj == nullptr) {
-        bool after_is_current_allocator = allocator == GetCurrentAllocator();
+        const bool after_is_current_allocator = allocator == GetCurrentAllocator();
+        const bool changed_to_instrumented = !kInstrumented && EntrypointsInstrumented();
         // If there is a pending exception, fail the allocation right away since the next one
         // could cause OOM and abort the runtime.
-        if (!self->IsExceptionPending() && is_current_allocator && !after_is_current_allocator) {
+        if (!self->IsExceptionPending() &&
+            ((is_current_allocator && !after_is_current_allocator) || changed_to_instrumented)) {
           // If the allocator changed, we need to restart the allocation.
           return AllocObject<kInstrumented>(self, klass, byte_count, pre_fence_visitor);
         }

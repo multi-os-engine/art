@@ -1652,6 +1652,7 @@ space::RosAllocSpace* Heap::GetRosAllocSpace(gc::allocator::RosAlloc* rosalloc) 
 
 mirror::Object* Heap::AllocateInternalWithGc(Thread* self,
                                              AllocatorType allocator,
+                                             bool instrumented,
                                              size_t alloc_size,
                                              size_t* bytes_allocated,
                                              size_t* usable_size,
@@ -1670,7 +1671,8 @@ mirror::Object* Heap::AllocateInternalWithGc(Thread* self,
   if (last_gc != collector::kGcTypeNone) {
     // If we were the default allocator but the allocator changed while we were suspended,
     // abort the allocation.
-    if (was_default_allocator && allocator != GetCurrentAllocator()) {
+    if ((was_default_allocator && allocator != GetCurrentAllocator()) ||
+        (!instrumented && EntrypointsInstrumented())) {
       return nullptr;
     }
     // A GC was in progress and we blocked, retry allocation now that memory has been freed.
@@ -1684,7 +1686,8 @@ mirror::Object* Heap::AllocateInternalWithGc(Thread* self,
   collector::GcType tried_type = next_gc_type_;
   const bool gc_ran =
       CollectGarbageInternal(tried_type, kGcCauseForAlloc, false) != collector::kGcTypeNone;
-  if (was_default_allocator && allocator != GetCurrentAllocator()) {
+  if ((was_default_allocator && allocator != GetCurrentAllocator()) ||
+      (!instrumented && EntrypointsInstrumented())) {
     return nullptr;
   }
   if (gc_ran) {
@@ -1703,7 +1706,8 @@ mirror::Object* Heap::AllocateInternalWithGc(Thread* self,
     // Attempt to run the collector, if we succeed, re-try the allocation.
     const bool plan_gc_ran =
         CollectGarbageInternal(gc_type, kGcCauseForAlloc, false) != collector::kGcTypeNone;
-    if (was_default_allocator && allocator != GetCurrentAllocator()) {
+    if ((was_default_allocator && allocator != GetCurrentAllocator()) ||
+        (!instrumented && EntrypointsInstrumented())) {
       return nullptr;
     }
     if (plan_gc_ran) {
@@ -1732,7 +1736,8 @@ mirror::Object* Heap::AllocateInternalWithGc(Thread* self,
   // We don't need a WaitForGcToComplete here either.
   DCHECK(!gc_plan_.empty());
   CollectGarbageInternal(gc_plan_.back(), kGcCauseForAlloc, true);
-  if (was_default_allocator && allocator != GetCurrentAllocator()) {
+  if ((was_default_allocator && allocator != GetCurrentAllocator()) ||
+      (!instrumented && EntrypointsInstrumented())) {
     return nullptr;
   }
   ptr = TryToAllocate<true, true>(self, allocator, alloc_size, bytes_allocated, usable_size,
@@ -1806,6 +1811,10 @@ mirror::Object* Heap::AllocateInternalWithGc(Thread* self,
         // Do nothing for others allocators.
       }
     }
+  }
+  if ((was_default_allocator && allocator != GetCurrentAllocator()) ||
+      (!instrumented && EntrypointsInstrumented())) {
+    return nullptr;
   }
   // If the allocation hasn't succeeded by this point, throw an OOM error.
   if (ptr == nullptr) {
