@@ -57,6 +57,11 @@ ExecuteMterpImpl:
     /* Starting ibase */
     ldr     rIBASE, [rSELF, #THREAD_CURRENT_IBASE_OFFSET]
 
+    /* Set up for backwards branches & osr profiling */
+    ldr     r0, [rFP, #OFF_FP_METHOD]
+    add     r1, rFP, #OFF_FP_SHADOWFRAME
+    bl      MterpSetUpHotnessCountdown
+
     /* start executing the instruction at rPC */
     FETCH_INST                          @ load rINST from rPC
     GET_INST_OPCODE ip                  @ extract opcode from rINST

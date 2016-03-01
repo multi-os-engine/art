@@ -830,6 +830,11 @@ void Trace::InvokeVirtualOrInterface(Thread*,
              << " " << dex_pc;
 }
 
+void Trace::BackwardsBranches(Thread* /*thread*/, ArtMethod* method, uint16_t /*count*/)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+  LOG(ERROR) << "Unexpected backwards branch event in tracing" << PrettyMethod(method);
+}
+
 void Trace::ReadClocks(Thread* thread, uint32_t* thread_clock_diff, uint32_t* wall_clock_diff) {
   if (UseThreadCpuClock()) {
     uint64_t clock_base = thread->GetTraceClockBase();

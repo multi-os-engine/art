@@ -41,6 +41,10 @@ class Thread;
 
 namespace jit {
 
+// Special state markers for a method's hotness_counter.
+static constexpr int16_t kJitHotnessDisable = -1;
+static constexpr int16_t kJitCheckForOSR = -2;
+
 class JitInstrumentationCache;
 
 class JitInstrumentationListener : public instrumentation::InstrumentationListener {
@@ -73,6 +77,9 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
   void Branch(Thread* thread, ArtMethod* method, uint32_t dex_pc, int32_t dex_pc_offset)
       OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_);
 
+  void BackwardsBranches(Thread* thread, ArtMethod* method, uint16_t count)
+      OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_);
+
   void InvokeVirtualOrInterface(Thread* thread,
                                 mirror::Object* this_object,
                                 ArtMethod* caller,
@@ -84,7 +91,7 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
 
   static constexpr uint32_t kJitEvents =
       instrumentation::Instrumentation::kMethodEntered |
-      instrumentation::Instrumentation::kBranch |
+      instrumentation::Instrumentation::kBackwardsBranches |
       instrumentation::Instrumentation::kInvokeVirtualOrInterface;
 
  private:
@@ -96,10 +103,10 @@ class JitInstrumentationListener : public instrumentation::InstrumentationListen
 // Keeps track of which methods are hot.
 class JitInstrumentationCache {
  public:
-  JitInstrumentationCache(size_t hot_method_threshold,
-                          size_t warm_method_threshold,
-                          size_t osr_method_threshold);
-  void AddSamples(Thread* self, ArtMethod* method, size_t samples)
+  JitInstrumentationCache(int16_t hot_method_threshold,
+                          int16_t warm_method_threshold,
+                          int16_t osr_method_threshold);
+  void AddSamples(Thread* self, ArtMethod* method, int16_t samples)
       SHARED_REQUIRES(Locks::mutator_lock_);
   void CreateThreadPool();
   void DeleteThreadPool(Thread* self);
@@ -112,9 +119,9 @@ class JitInstrumentationCache {
   void WaitForCompilationToFinish(Thread* self);
 
  private:
-  size_t hot_method_threshold_;
-  size_t warm_method_threshold_;
-  size_t osr_method_threshold_;
+  int16_t hot_method_threshold_;
+  int16_t warm_method_threshold_;
+  int16_t osr_method_threshold_;
   JitInstrumentationListener listener_;
   std::unique_ptr<ThreadPool> thread_pool_;
 
