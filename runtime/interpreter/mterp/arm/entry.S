@@ -33,10 +33,8 @@
 
 ExecuteMterpImpl:
     .fnstart
-    .save {r4-r10,fp,lr}
-    stmfd   sp!, {r4-r10,fp,lr}         @ save 9 regs
-    .pad    #4
-    sub     sp, sp, #4                  @ align 64
+    .save {r3-r10,fp,lr}
+    stmfd   sp!, {r3-r10,fp,lr}         @ save 10 regs, (r3 just to align 64)
 
     /* Remember the return register */
     str     r3, [r2, #SHADOWFRAME_RESULT_REGISTER_OFFSET]
@@ -47,8 +45,8 @@ ExecuteMterpImpl:
     /* set up "named" registers */
     mov     rSELF, r0
     ldr     r0, [r2, #SHADOWFRAME_NUMBER_OF_VREGS_OFFSET]
-    add     rFP, r2, #SHADOWFRAME_VREGS_OFFSET     @ point to insns[] (i.e. - the dalivk byte code).
-    add     rREFS, rFP, r0, lsl #2                 @ point to reference array in shadow frame
+    add     rFP, r2, #SHADOWFRAME_VREGS_OFFSET     @ point to vregs.
+    VREG_INDEX_TO_ADDR rREFS, r0                   @ point to reference array in shadow frame
     ldr     r0, [r2, #SHADOWFRAME_DEX_PC_OFFSET]   @ Get starting dex_pc.
     add     rPC, r1, #CODEITEM_INSNS_OFFSET        @ Point to base of insns[]
     add     rPC, rPC, r0, lsl #1                   @ Create direct pointer to 1st dex opcode
@@ -56,6 +54,12 @@ ExecuteMterpImpl:
 
     /* Starting ibase */
     ldr     rIBASE, [rSELF, #THREAD_CURRENT_IBASE_OFFSET]
+
+    /* Set up for backwards branches & osr profiling */
+    ldr     r0, [rFP, #OFF_FP_METHOD]
+    add     r1, rFP, #OFF_FP_SHADOWFRAME
+    bl      MterpSetUpHotnessCountdown
+    mov     rPROFILE, r0                @ Starting hotness countdown to rPROFILE
 
     /* start executing the instruction at rPC */
     FETCH_INST                          @ load rINST from rPC

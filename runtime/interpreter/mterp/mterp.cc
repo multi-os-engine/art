@@ -21,6 +21,7 @@
 #include "entrypoints/entrypoint_utils-inl.h"
 #include "mterp.h"
 #include "jit/jit.h"
+#include "jit/jit_instrumentation.h"
 #include "debugger.h"
 
 namespace art {
@@ -639,14 +640,72 @@ extern "C" mirror::Object* artIGetObjectFromMterp(mirror::Object* obj, uint32_t 
   return obj->GetFieldObject<mirror::Object>(MemberOffset(field_offset));
 }
 
+// TUNING: targets should move this operation inline, and batch updates.
 extern "C" bool  MterpProfileBranch(Thread* self, ShadowFrame* shadow_frame, int32_t offset)
   SHARED_REQUIRES(Locks::mutator_lock_) {
   ArtMethod* method = shadow_frame->GetMethod();
   JValue* result = shadow_frame->GetResultRegister();
   uint32_t dex_pc = shadow_frame->GetDexPC();
-  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
-  instrumentation->Branch(self, method, dex_pc, offset);
+  if (offset <= 0) {
+    const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+    instrumentation->BackwardsBranches(self, method, 1);
+  }
+  if (method->GetCounter() == ArtMethod::kMethodCheckForOSR) {
+    return jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, result);
+  } else {
+    return false;
+  }
+}
+
+extern "C" bool MterpCheckForOSR(Thread* self, ShadowFrame* shadow_frame, int32_t offset)
+  SHARED_REQUIRES(Locks::mutator_lock_) {
+  ArtMethod* method = shadow_frame->GetMethod();
+  JValue* result = shadow_frame->GetResultRegister();
+  uint32_t dex_pc = shadow_frame->GetDexPC();
+  // Assumes caller has already determined that an OSR check is appropriate.
   return jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, result);
+}
+
+extern "C" int MterpSetUpHotnessCountdown(ArtMethod* method, ShadowFrame* shadow_frame)
+  SHARED_REQUIRES(Locks::mutator_lock_) {
+  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+  int32_t hotness_count = method->GetCounter();
+  jit::Jit* jit = Runtime::Current()->GetJit();
+  if (!instrumentation->HasBackwardsBranchesListeners() || (jit == nullptr) ||
+      (jit->GetInstrumentationCache() == nullptr)) {
+    hotness_count = ArtMethod::kMethodHotnessDisabled;
+  } else if (hotness_count >= 0) {
+    jit::JitInstrumentationCache* cache = jit->GetInstrumentationCache();
+    int32_t warm_threshold = cache->WarmMethodThreshold();
+    int32_t hot_threshold = cache->HotMethodThreshold();
+    if (hotness_count < warm_threshold) {
+      hotness_count = warm_threshold - hotness_count;
+    } else if (hotness_count < hot_threshold) {
+      hotness_count = hot_threshold - hotness_count;
+    } else {
+      /*
+       * If here, we ought to be checking for OSR.  But, let the instrumentation make the
+       * call.  Just set count to 1 to ensure a rapid visit to the instrumentation
+       * callback.
+       */
+      hotness_count = 1;
+    }
+  }
+  DCHECK_GT(hotness_count, std::numeric_limits<int16_t>::min());
+  hotness_count = std::min(hotness_count,
+                           static_cast<int32_t>(std::numeric_limits<int16_t>::max()));
+  shadow_frame->SetCachedHotnessCounter(hotness_count);
+  shadow_frame->SetHotnessCountdown(hotness_count);
+  return hotness_count;
+}
+
+extern "C" int16_t MterpAddHotnessBatch(ArtMethod* method, ShadowFrame* shadow_frame,
+                                        Thread* self)
+  SHARED_REQUIRES(Locks::mutator_lock_) {
+  int16_t count = shadow_frame->GetCachedHotnessCounter() - shadow_frame->GetHotnessCountdown();
+  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+  instrumentation->BackwardsBranches(self, method, count);
+  return MterpSetUpHotnessCountdown(method, shadow_frame);
 }
 
 }  // namespace interpreter
