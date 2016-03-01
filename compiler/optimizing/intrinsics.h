@@ -193,6 +193,37 @@ class SystemArrayCopyOptimizations : public IntrinsicOptimizations {
 
 #undef INTRISIC_OPTIMIZATION
 
+//
+// Macros for use in the intrinsics code generators.
+//
+
+// Defines an unimplemented intrinsic: that is, a method call that is recognized as an
+// intrinsic to exploit e.g. no side-effects or exceptions, but otherwise not handled
+// by this architecture-specific intrinsics code generator. Eventually it is implemented
+// as a true method call.
+#define UNIMPLEMENTED_INTRINSIC(Arch, Name)                                               \
+void IntrinsicLocationsBuilder ## Arch::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) { \
+}                                                                                         \
+void IntrinsicCodeGenerator ## Arch::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) {    \
+}
+
+// Defines a list of unreached intrinsics: that is, method calls that are recognized as
+// an intrinsic, and then always converted into HIR instructions before they reach any
+// architecture-specific intrinsics code generator.
+#define UNREACHED_INTRINSICS(Arch)                \
+UNIMPLEMENTED_INTRINSIC(Arch, FloatFloatToIntBits)    \
+UNIMPLEMENTED_INTRINSIC(Arch, DoubleDoubleToLongBits) \
+UNIMPLEMENTED_INTRINSIC(Arch, FloatIsNaN)             \
+UNIMPLEMENTED_INTRINSIC(Arch, DoubleIsNaN)            \
+UNIMPLEMENTED_INTRINSIC(Arch, IntegerRotateLeft)      \
+UNIMPLEMENTED_INTRINSIC(Arch, LongRotateLeft)         \
+UNIMPLEMENTED_INTRINSIC(Arch, IntegerRotateRight)     \
+UNIMPLEMENTED_INTRINSIC(Arch, LongRotateRight)        \
+UNIMPLEMENTED_INTRINSIC(Arch, IntegerCompare)         \
+UNIMPLEMENTED_INTRINSIC(Arch, LongCompare)            \
+UNIMPLEMENTED_INTRINSIC(Arch, IntegerSignum)          \
+UNIMPLEMENTED_INTRINSIC(Arch, LongSignum)
+
 }  // namespace art
 
 #endif  // ART_COMPILER_OPTIMIZING_INTRINSICS_H_
