@@ -51,7 +51,7 @@ vm_command="--vm-command=$art"
 image_compiler_option=""
 debug="no"
 verbose="no"
-image="-Ximage:/data/art-test/core-jit.art"
+image="-Ximage:/data/art-test/core-optimizing-pic.art"
 vm_args=""
 # By default, we run the whole JDWP test suite.
 test="org.apache.harmony.jpda.tests.share.AllTests"
