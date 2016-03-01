@@ -76,7 +76,7 @@ op-start arm
     # op op_filled_new_array_range FALLBACK
     # op op_fill_array_data FALLBACK
     # op op_throw FALLBACK
-    # op op_goto FALLBACK
+    op op_goto FALLBACK
     # op op_goto_16 FALLBACK
     # op op_goto_32 FALLBACK
     # op op_packed_switch FALLBACK

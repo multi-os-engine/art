@@ -101,6 +101,12 @@ struct InstrumentationListener {
                       int32_t dex_pc_offset)
       SHARED_REQUIRES(Locks::mutator_lock_) = 0;
 
+  // Call-back to record backwards branch counts only (a subset of Branch call-back).
+  virtual void BackwardsBranches(Thread* thread,
+                                 ArtMethod* method,
+                                 uint16_t count)
+      SHARED_REQUIRES(Locks::mutator_lock_) = 0;
+
   // Call-back for when we get an invokevirtual or an invokeinterface.
   virtual void InvokeVirtualOrInterface(Thread* thread,
                                         mirror::Object* this_object,
@@ -127,6 +133,7 @@ class Instrumentation {
     kExceptionCaught = 0x40,
     kBranch = 0x80,
     kInvokeVirtualOrInterface = 0x100,
+    kBackwardsBranches = 0x200,
   };
 
   enum class InstrumentationLevel {
@@ -292,18 +299,24 @@ class Instrumentation {
     return have_invoke_virtual_or_interface_listeners_;
   }
 
+  bool HasBackwardsBranchesListeners() const SHARED_REQUIRES(Locks::mutator_lock_) {
+    return have_backwards_branches_listeners_;
+  }
+
   bool IsActive() const SHARED_REQUIRES(Locks::mutator_lock_) {
     return have_dex_pc_listeners_ || have_method_entry_listeners_ || have_method_exit_listeners_ ||
         have_field_read_listeners_ || have_field_write_listeners_ ||
         have_exception_caught_listeners_ || have_method_unwind_listeners_ ||
-        have_branch_listeners_ || have_invoke_virtual_or_interface_listeners_;
+        have_branch_listeners_ || have_invoke_virtual_or_interface_listeners_ ||
+        have_backwards_branches_listeners_;
   }
 
   // Any instrumentation *other* than what is needed for Jit profiling active?
   bool NonJitProfilingActive() const SHARED_REQUIRES(Locks::mutator_lock_) {
     return have_dex_pc_listeners_ || have_method_exit_listeners_ ||
         have_field_read_listeners_ || have_field_write_listeners_ ||
-        have_exception_caught_listeners_ || have_method_unwind_listeners_;
+        have_exception_caught_listeners_ || have_method_unwind_listeners_ ||
+        have_branch_listeners_;
   }
 
   // Inform listeners that a method has been entered. A dex PC is provided as we may install
@@ -345,6 +358,14 @@ class Instrumentation {
       SHARED_REQUIRES(Locks::mutator_lock_) {
     if (UNLIKELY(HasBranchListeners())) {
       BranchImpl(thread, method, dex_pc, offset);
+    }
+  }
+
+  // Inform listeners that backwards branches have been taken (only supported by the interpreter).
+  void BackwardsBranches(Thread* thread, ArtMethod* method, uint16_t count) const
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    if (UNLIKELY(HasBackwardsBranchesListeners())) {
+      BackwardsBranchesImpl(thread, method, count);
     }
   }
 
@@ -460,6 +481,8 @@ class Instrumentation {
       SHARED_REQUIRES(Locks::mutator_lock_);
   void BranchImpl(Thread* thread, ArtMethod* method, uint32_t dex_pc, int32_t offset) const
       SHARED_REQUIRES(Locks::mutator_lock_);
+  void BackwardsBranchesImpl(Thread* thread, ArtMethod* method, uint16_t count) const
+      SHARED_REQUIRES(Locks::mutator_lock_);
   void InvokeVirtualOrInterfaceImpl(Thread* thread,
                                     mirror::Object* this_object,
                                     ArtMethod* caller,
@@ -535,6 +558,10 @@ class Instrumentation {
   // Do we have any invoke listeners? Short-cut to avoid taking the instrumentation_lock_.
   bool have_invoke_virtual_or_interface_listeners_ GUARDED_BY(Locks::mutator_lock_);
 
+  // Do we have Any backwards branches listeners? Short-cut to avoid taking the
+  // instrumentation_lock_.
+  bool have_backwards_branches_listeners_ GUARDED_BY(Locks::mutator_lock_);
+
   // Contains the instrumentation level required by each client of the instrumentation identified
   // by a string key.
   typedef SafeMap<const char*, InstrumentationLevel> InstrumentationLevelTable;
@@ -554,6 +581,8 @@ class Instrumentation {
   std::list<InstrumentationListener*> method_exit_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> method_unwind_listeners_ GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> branch_listeners_ GUARDED_BY(Locks::mutator_lock_);
+  std::list<InstrumentationListener*> backwards_branches_listeners_
+      GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> invoke_virtual_or_interface_listeners_
       GUARDED_BY(Locks::mutator_lock_);
   std::list<InstrumentationListener*> dex_pc_listeners_ GUARDED_BY(Locks::mutator_lock_);

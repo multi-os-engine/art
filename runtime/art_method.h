@@ -468,12 +468,25 @@ class ArtMethod FINAL {
   ALWAYS_INLINE GcRoot<mirror::Class>* GetDexCacheResolvedTypes(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  uint16_t IncrementCounter() {
-    return ++hotness_count_;
+  // Increment hotness without overflowing.  Negative starting values denote special
+  // state in which increment requests are ignored.
+  int16_t IncrementCounter() {
+    if ((hotness_count_ >= 0) && (hotness_count_ < SHRT_MAX)) {
+      ++hotness_count_;
+    }
+    return hotness_count_;
   }
 
   void ClearCounter() {
     hotness_count_ = 0;
+  }
+
+  void SetCounter(int16_t hotness_count) {
+    hotness_count_ = hotness_count;
+  }
+
+  int16_t GetCounter() {
+    return hotness_count_;
   }
 
   const uint8_t* GetQuickenedInfo() SHARED_REQUIRES(Locks::mutator_lock_);
@@ -520,9 +533,11 @@ class ArtMethod FINAL {
   // ifTable.
   uint16_t method_index_;
 
-  // The hotness we measure for this method. Incremented by the interpreter. Not atomic, as we allow
-  // missing increments: if the method is hot, we will see it eventually.
-  uint16_t hotness_count_;
+  // The hotness we measure for this method. Managed by the interpreter. Not atomic, as we allow
+  // missing increments: if the method is hot, we will see it eventually.  Note that the hotness
+  // count values have special meaning.  Non-negative values denote hotness, while negative
+  // values denote special state.
+  int16_t hotness_count_;
 
   // Fake padding field gets inserted here.
 
