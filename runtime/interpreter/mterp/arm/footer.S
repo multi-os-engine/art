@@ -114,6 +114,59 @@ MterpException:
     /* NOTE: no fallthrough */
 
 /*
+ * Common handling for taken branches with support for Jit profiling.
+ * On entry:
+ *    rINST          <= signed offset
+ *    rPROFILE       <= signed hotness countdown (expanded to 32 bits)
+ *    condition bits <= set to establish sign of offset (use "NoFlags" entry if not)
+ */
+MterpCommonTakenBranchNoFlags:
+    cmp     rINST, #0
+MterpCommonTakenBranch:
+    bgt     .L_no_count                 @ don't add forward branches to hotness
+    cmp     rPROFILE, #0
+    ble     .L_no_count                 @ <= 0 means no countdown
+    subs    rPROFILE, #1                @ countdown
+    beq     .L_add_batch                @ counted down to zero - report
+.L_no_count:
+    cmp     r2, #METHOD_CHECK_OSR       @ possible OSR re-entry?
+    beq     .L_check_osr
+.L_resume_branch:
+    ldr     lr, [rSELF, #THREAD_FLAGS_OFFSET]
+    adds    r2, rINST, rINST            @ r2<- byte offset, set flags
+    FETCH_ADVANCE_INST_RB r2            @ update rPC, load rINST
+       @ If backwards branch refresh rIBASE
+@ TUNING: perhaps fold check suspend and hotness?  Why test/branch twice of < 0 offsets?
+    bmi     MterpCheckSuspendAndContinue
+    GET_INST_OPCODE ip                  @ extract opcode from rINST
+    GOTO_OPCODE ip                      @ jump to next instruction
+
+.L_add_batch:
+    add     r1, rFP, #OFF_FP_SHADOWFRAME
+    strh    rPROFILE, [r1, #SHADOWFRAME_HOTNESS_COUNTDOWN_OFFSET]
+    ldr     r0, [rFP, #OFF_FP_METHOD]
+    mov     r2, rSELF
+    bl      MterpAddHotnessBatch        @ (method, shadow_frame, self)
+    mov     r2, r0                      @ restore new hotness countdown to r2
+    b       .L_no_count
+
+.L_check_osr:
+    mov     r0, rSELF
+    mov     r2, rINST
+    bl      MterpCheckForOSR            @ (self, shadow_frame, offset)
+    bne     MterpOnStackReplacement
+    b       .L_resume_branch
+
+.L_check_not_taken_osr:
+    mov     r0, rSELF
+    mov     r2, #2
+    bl      MterpCheckForOSR            @ (self, shadow_frame, offset)
+    bne     MterpOnStackReplacement
+    FETCH_ADVANCE_INST 2
+    GET_INST_OPCODE ip                  @ extract opcode from rINST
+    GOTO_OPCODE ip                      @ jump to next instruction
+
+/*
  * Check for suspend check request.  Assumes rINST already loaded, rPC advanced and
  * still needs to get the opcode and branch to it, and flags are in lr.
  */
@@ -176,9 +229,22 @@ MterpReturn:
     str     r1, [r2, #4]
     mov     r0, #1                                  @ signal return to caller.
 MterpDone:
+    cmp     rPROFILE, #0
+    bge     MterpProfileActive
+MterpExit:
     add     sp, sp, #4                              @ un-align 64
     ldmfd   sp!, {r4-r10,fp,pc}                     @ restore 9 regs and return
 
+MterpProfileActive:
+    mov     rINST, r0                               @ stash return value
+    /* Report cached hotness counts */
+    ldr     r0, [rFP, #OFF_FP_METHOD]
+    add     r1, rFP, #OFF_FP_SHADOWFRAME
+    mov     r2, rSELF
+    strh    rPROFILE, [r1, #SHADOWFRAME_HOTNESS_COUNTDOWN_OFFSET]
+    bl      MterpAddHotnessBatch        @ (method, shadow_frame, self)
+    mov     r0, rINST                               @ restore return value
+    b       MterpExit
 
     .fnend
     .size   ExecuteMterpImpl, .-ExecuteMterpImpl
