@@ -172,6 +172,8 @@ class Trace FINAL : public instrumentation::InstrumentationListener {
                                 uint32_t dex_pc,
                                 ArtMethod* callee)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_) OVERRIDE;
+  void BackwardsBranches(Thread* thread, ArtMethod* method, uint16_t count)
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!*unique_methods_lock_) OVERRIDE;
   // Reuse an old stack trace if it exists, otherwise allocate a new one.
   static std::vector<ArtMethod*>* AllocStackTrace();
   // Clear and store an old stack trace for later use.

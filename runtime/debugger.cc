@@ -249,6 +249,13 @@ class DebugInstrumentationListener FINAL : public instrumentation::Instrumentati
                << " " << dex_pc;
   }
 
+  // We only care about backwards branches in the Jit.
+  void BackwardsBranches(Thread* /*thread*/, ArtMethod* method, uint16_t count)
+      OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+    LOG(ERROR) << "Unexpected backwards branch event in debugger " << PrettyMethod(method)
+               << " " << count;
+  }
+
  private:
   static bool IsReturn(ArtMethod* method, uint32_t dex_pc)
       SHARED_REQUIRES(Locks::mutator_lock_) {
