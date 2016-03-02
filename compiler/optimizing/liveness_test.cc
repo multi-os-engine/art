@@ -181,6 +181,31 @@ TEST_F(LivenessTest, CFG4) {
     "  live out: (0000)\n"
     "  kill: (0000)\n";
 
+    "Block 0\n"
+    "  live in: (0000)\n"
+    "  live out: (1110)\n"
+    "  kill: (1110)\n"
+    "Block 1\n"
+    "  live in: (1110)\n"
+    "  live out: (0110)\n"
+    "  kill: (0000)\n"
+    "Block 2\n"
+    "  live in: (0010)\n"
+    "  live out: (0000)\n"
+    "  kill: (0000)\n"
+    "Block 3\n"
+    "  live in: (0100)\n"
+    "  live out: (0000)\n"
+    "  kill: (0000)\n"
+    "Block 4\n"
+    "  live in: (0000)\n"
+    "  live out: (0000)\n"
+    "  kill: (0001)\n"
+    "Block 5\n"
+    "  live in: (0000)\n"
+    "  live out: (0000)\n"
+    "  kill: (0000)\n";
+
   const uint16_t data[] = ONE_REGISTER_CODE_ITEM(
     Instruction::CONST_4 | 0 | 0,
     Instruction::IF_EQ, 4,

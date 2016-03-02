@@ -111,18 +111,18 @@ TEST_F(ConstantFoldingTest, IntConstantFoldingNegation) {
 
   std::string expected_before =
       "BasicBlock 0, succ: 1\n"
-      "  4: IntConstant [7]\n"
-      "  2: SuspendCheck\n"
-      "  3: Goto 1\n"
+      "  2: IntConstant [3]\n"
+      "  0: SuspendCheck\n"
+      "  1: Goto 1\n"
       "BasicBlock 1, pred: 0, succ: 2\n"
-      "  7: Neg(4) [10]\n"
-      "  10: Return(7)\n"
+      "  3: Neg(2) [4]\n"
+      "  4: Return(3)\n"
       "BasicBlock 2, pred: 1\n"
-      "  11: Exit\n";
+      "  5: Exit\n";
 
   // Expected difference after constant folding.
   diff_t expected_cf_diff = {
-    { "  4: IntConstant [7]\n", "  4: IntConstant\n"
+    { "  2: IntConstant [3]\n", "  2: IntConstant\n"
                                 "  12: IntConstant [10]\n" },
     { "  7: Neg(4) [10]\n",     removed },
     { "  10: Return(7)\n",      "  10: Return(12)\n" }
