@@ -434,6 +434,17 @@ void CommonRuntimeTestImpl::TearDown() {
     {
       void* handle = dlopen("libopenjdkd.so", RTLD_LAZY);
       dlclose(handle);
+
+      // net_util_md has loRoutes and localIfs that are never freed after
+      // initialization. Free them before unloading the library to avoid
+      // memory leak.
+      // Bug: 27301951
+      typedef void (*netUtilCleanUpFn)();
+      void* fnsym = dlsym(handle, "netUtilCleanUp");
+      CHECK(fnsym != nullptr) << dlerror();
+      netUtilCleanUpFn netUtilCleanUp_fn = reinterpret_cast<netUtilCleanUpFn>(fnsym);
+      (*netUtilCleanUp_fn)();
+
       CHECK_EQ(0, dlclose(handle));
     }
   }
