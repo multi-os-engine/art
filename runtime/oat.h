@@ -38,12 +38,18 @@ class PACKED(4) OatHeader {
   static constexpr const char* kDex2OatHostKey = "dex2oat-host";
   static constexpr const char* kPicKey = "pic";
   static constexpr const char* kDebuggableKey = "debuggable";
-  static constexpr const char* kExtractOnlyKey = "extract-only";
+  static constexpr const char* kCompilationLevelKey = "compilation-level";
   static constexpr const char* kClassPathKey = "classpath";
   static constexpr const char* kBootClassPath = "bootclasspath";
 
   static constexpr const char kTrueValue[] = "true";
   static constexpr const char kFalseValue[] = "false";
+
+  static constexpr const char kNoneValue[] = "none";
+  static constexpr const char kExtractOnlyValue[] = "extract-only";
+  static constexpr const char kInterpretOnlyValue[] = "interpret-only";
+  static constexpr const char kProfileGuidedAotValue[] = "profile-guided-aot";
+  static constexpr const char kFullAotValue[] = "full-aot";
 
   static OatHeader* Create(InstructionSet instruction_set,
                            const InstructionSetFeatures* instruction_set_features,
@@ -117,6 +123,9 @@ class PACKED(4) OatHeader {
 
   // Returns true if the value of the given key is "true", false otherwise.
   bool IsKeyEnabled(const char* key) const;
+
+  // Returns true if the value of the given key is equal to `value`, false otherwise.
+  bool IsKeyValueEqualTo(const char* key, const char* value, size_t value_length) const;
 
   void Flatten(const SafeMap<std::string, std::string>* variable_data);
 
