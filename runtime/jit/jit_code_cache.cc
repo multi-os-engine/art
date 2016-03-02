@@ -708,6 +708,10 @@ void JitCodeCache::DoCollection(Thread* self, bool collect_profiling_info) {
         if (ContainsPc(ptr) && info->GetMethod()->GetProfilingInfo(sizeof(void*)) == nullptr) {
           // Make sure compiled methods have a ProfilingInfo object. It is needed for
           // code cache collection.
+          // We clear the inline caches as classes in it might be stalled.
+          info->ClearInlineCaches();
+          // Do a fence to make sure the clearing is seen before attaching to the method.
+          QuasiAtomic::ThreadFenceRelease();
           info->GetMethod()->SetProfilingInfo(info);
         } else if (info->GetMethod()->GetProfilingInfo(sizeof(void*)) != info) {
           // No need for this ProfilingInfo object anymore.
