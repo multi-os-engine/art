@@ -116,6 +116,9 @@ static void EnableDebugFeatures(uint32_t debug_flags) {
     CHECK(jit_options != nullptr);
     jit_options->SetJitAtFirstUse();
     debug_flags &= ~DEBUG_ALWAYS_JIT;
+    // We might have AOT code for the boot image.
+    // Redirect all methods to the interpreter bridge which will JIT them on first use.
+    Dbg::SetEntryPointsInBootImageToInterpreterBridge();
   }
 
   if ((debug_flags & DEBUG_NATIVE_DEBUGGABLE) != 0) {

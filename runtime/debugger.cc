@@ -625,9 +625,7 @@ void Dbg::GoActive() {
   // Since boot image code is AOT compiled as not debuggable, we need to patch
   // entry points of methods in boot image to interpreter bridge.
   if (!runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
-    ScopedObjectAccess soa(self);
-    UpdateEntryPointsClassVisitor visitor(runtime->GetInstrumentation());
-    runtime->GetClassLinker()->VisitClasses(&visitor);
+    SetEntryPointsInBootImageToInterpreterBridge();
   }
 
   ScopedSuspendAll ssa(__FUNCTION__);
@@ -637,6 +635,14 @@ void Dbg::GoActive() {
   instrumentation_events_ = 0;
   gDebuggerActive = true;
   LOG(INFO) << "Debugger is active";
+}
+
+void Dbg::SetEntryPointsInBootImageToInterpreterBridge() {
+  Thread* const self = Thread::Current();
+  Runtime* runtime = Runtime::Current();
+  ScopedObjectAccess soa(self);
+  UpdateEntryPointsClassVisitor visitor(runtime->GetInstrumentation());
+  runtime->GetClassLinker()->VisitClasses(&visitor);
 }
 
 void Dbg::Disconnected() {
