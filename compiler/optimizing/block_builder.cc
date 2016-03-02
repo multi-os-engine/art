@@ -24,8 +24,7 @@ HBasicBlock* HBasicBlockBuilder::MaybeCreateBlockAt(uint32_t dex_pc) {
   return MaybeCreateBlockAt(dex_pc, dex_pc);
 }
 
-HBasicBlock* HBasicBlockBuilder::MaybeCreateBlockAt(uint32_t dex_pc,
-                                                            uint32_t semantic_dex_pc) {
+HBasicBlock* HBasicBlockBuilder::MaybeCreateBlockAt(uint32_t dex_pc, uint32_t semantic_dex_pc) {
   HBasicBlock* block = branch_targets_[dex_pc];
   if (block == nullptr) {
     block = new (arena_) HBasicBlock(graph_, semantic_dex_pc);
@@ -207,7 +206,7 @@ bool HBasicBlockBuilder::ContainsThrowingInstructions(HBasicBlock* block) {
     uint32_t dex_pc = it.CurrentDexPc();
     if (dex_pc != start_dex_pc && GetBlockAt(dex_pc) != nullptr) {
       break;
-    } else if (CanDexInstructionThrow(it.CurrentInstruction())) {
+    } else if (IsThrowingDexInstruction(it.CurrentInstruction())) {
       return true;
     }
   }
