@@ -171,7 +171,7 @@ inline const Instruction& GetDexInstructionAt(const DexFile::CodeItem& code_item
   return CodeItemIterator(code_item, dex_pc).CurrentInstruction();
 }
 
-inline bool CanDexInstructionThrow(const Instruction& instruction) {
+inline bool IsThrowingDexInstruction(const Instruction& instruction) {
   // Special-case MONITOR_EXIT which is a throwing instruction but the verifier
   // guarantees that it will never throw. This is necessary to avoid rejecting
   // 'synchronized' blocks/methods.

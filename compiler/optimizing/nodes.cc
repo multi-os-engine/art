@@ -264,8 +264,7 @@ HBasicBlock* HGraph::SplitEdge(HBasicBlock* block, HBasicBlock* successor) {
 }
 
 void HGraph::SplitCriticalEdge(HBasicBlock* block, HBasicBlock* successor) {
-  // Insert a new node between `block` and `successor` to split the
-  // critical edge.
+  // Insert a new node between `block` and `successor` to split the critical edge.
   HBasicBlock* new_block = SplitEdge(block, successor);
   new_block->AddInstruction(new (arena_) HGoto(successor->GetDexPc()));
   if (successor->IsLoopHeader()) {
@@ -314,21 +313,11 @@ void HGraph::SimplifyLoop(HBasicBlock* header) {
     }
   }
 
-  // Place the suspend check at the beginning of the header, so that live registers
-  // will be known when allocating registers. Note that code generation can still
-  // generate the suspend check at the back edge, but needs to be careful with
-  // loop phi spill slots (which are not written to at back edge).
   HInstruction* first_instruction = header->GetFirstInstruction();
-  if (first_instruction == nullptr) {
-    HSuspendCheck* check = new (arena_) HSuspendCheck(header->GetDexPc());
-    header->AddInstruction(check);
-    first_instruction = check;
-  } else if (!first_instruction->IsSuspendCheck()) {
-    HSuspendCheck* check = new (arena_) HSuspendCheck(header->GetDexPc());
-    header->InsertInstructionBefore(check, first_instruction);
-    first_instruction = check;
+  if (first_instruction != nullptr && first_instruction->IsSuspendCheck()) {
+    // Called from DeadBlockElimination. Reset the SuspendCheck information.
+    info->SetSuspendCheck(first_instruction->AsSuspendCheck());
   }
-  info->SetSuspendCheck(first_instruction->AsSuspendCheck());
 }
 
 void HGraph::ComputeTryBlockInformation() {
@@ -1848,6 +1837,7 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
            instr_it.Advance()) {
         HInstruction* current = instr_it.Current();
         if (current->NeedsEnvironment()) {
+          DCHECK(current->HasEnvironment());
           current->GetEnvironment()->SetAndCopyParentChain(
             outer_graph->GetArena(), invoke->GetEnvironment());
         }

@@ -19,6 +19,8 @@
 #include "base/arena_containers.h"
 #include "base/bit_vector-inl.h"
 
+#include "pretty_printer.h"
+
 namespace art {
 
 void SsaDeadPhiElimination::Run() {
@@ -143,7 +145,7 @@ void SsaRedundantPhiElimination::Run() {
     }
 
     if (phi->InputCount() == 0) {
-      DCHECK(phi->IsDead());
+      DCHECK(phi->IsDead()) << phi->GetId();
       continue;
     }
 
