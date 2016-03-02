@@ -127,6 +127,9 @@ void HGraph::RemoveDeadBlocks(const ArenaBitVector& visited) {
       // Remove the block from the list of blocks, so that further analyses
       // never see it.
       blocks_[i] = nullptr;
+      if (exit_block_ == block) {
+        exit_block_ = nullptr;
+      }
     }
   }
 }
@@ -1875,6 +1878,9 @@ void HGraph::DeleteDeadEmptyBlock(HBasicBlock* block) {
 
   RemoveElement(reverse_post_order_, block);
   blocks_[block->GetBlockId()] = nullptr;
+  if (exit_block_ == block) {
+    exit_block_ = nullptr;
+  }
 }
 
 void HGraph::UpdateLoopAndTryInformationOfNewBlock(HBasicBlock* block,
