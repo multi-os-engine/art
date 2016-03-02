@@ -31,6 +31,10 @@
 #include "thread-inl.h"
 #include "trace.h"
 
+#if defined(__ANDROID__)
+#include "cutils/properties.h"
+#endif
+
 #if defined(__linux__)
 #include <sys/prctl.h>
 #endif
@@ -121,6 +125,13 @@ static void EnableDebugFeatures(uint32_t debug_flags) {
   if ((debug_flags & DEBUG_NATIVE_DEBUGGABLE) != 0) {
     runtime->AddCompilerOption("--native-debuggable");
     debug_flags &= ~DEBUG_NATIVE_DEBUGGABLE;
+
+#ifdef __ANDROID__
+    if (property_get_bool("dalvik.vm.JITBootImageIfDebuggable", false)) {
+      // Redirect AOT methods to the interpreter bridge which will JIT them on first use.
+      Dbg::SetEntryPointsInBootImageToInterpreterBridge();
+    }
+#endif
   }
 
   if (debug_flags != 0) {

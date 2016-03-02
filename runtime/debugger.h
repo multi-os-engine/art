@@ -225,6 +225,7 @@ class Dbg {
   static void Dispose() {
     gDisposed = true;
   }
+  static void SetEntryPointsInBootImageToInterpreterBridge();
 
   // Returns true if we're actually debugging with a real debugger, false if it's
   // just DDMS (or nothing at all).
