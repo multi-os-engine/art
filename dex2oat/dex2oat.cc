@@ -1031,9 +1031,20 @@ class Dex2Oat FINAL {
     key_value_store_->Put(
         OatHeader::kDebuggableKey,
         compiler_options_->debuggable_ ? OatHeader::kTrueValue : OatHeader::kFalseValue);
-    key_value_store_->Put(
-        OatHeader::kExtractOnlyKey,
-        compiler_options_->IsExtractOnly() ? OatHeader::kTrueValue : OatHeader::kFalseValue);
+
+    const char* compilation_mode = nullptr;
+    if (compiler_options_->IsCompilationEnabled()) {
+      compilation_mode = UseProfileGuidedCompilation() ? OatHeader::kProfileGuidedAotValue
+                                                        : OatHeader::kFullAotValue;
+    } else if (compiler_options_->IsVerificationEnabled()) {
+      compilation_mode = OatHeader::kInterpretOnlyValue;
+    } else if (compiler_options_->IsExtractOnly()) {
+      compilation_mode = OatHeader::kExtractOnlyValue;
+    } else {
+      DCHECK(compiler_options_->NeverVerify());
+      compilation_mode = OatHeader::kNoneValue;
+    }
+    key_value_store_->Put(OatHeader::kCompilationModeKey, compilation_mode);
   }
 
   // Parse the arguments from the command line. In case of an unrecognized option or impossible
