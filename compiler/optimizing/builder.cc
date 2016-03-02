@@ -28,6 +28,7 @@
 #include "dex/verified_method.h"
 #include "driver/compiler_driver-inl.h"
 #include "driver/compiler_options.h"
+#include "instruction_builder.h"
 #include "mirror/class_loader.h"
 #include "mirror/dex_cache.h"
 #include "nodes.h"
