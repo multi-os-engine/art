@@ -30,6 +30,15 @@ namespace art {
 
 class Mutex;
 
+static inline void ThreadFenceAsmX86() {
+#if defined(__i386__)
+  __asm__ __volatile__("lock; addl $0,0(%%esp)" : : : "cc", "memory");
+#elif defined(__x86_64__)
+  __asm__ __volatile__("lock; addl $0,0(%%rsp)" : : : "cc", "memory");
+#endif
+}
+
+
 // QuasiAtomic encapsulates two separate facilities that we are
 // trying to move away from:  "quasiatomic" 64 bit operations
 // and custom memory fences.  For the time being, they remain
@@ -168,7 +177,11 @@ class QuasiAtomic {
   }
 
   static void ThreadFenceSequentiallyConsistent() {
+#if defined(__i386__) || defined(__x86_64__)
+    ThreadFenceAsmX86();
+#else
     std::atomic_thread_fence(std::memory_order_seq_cst);
+#endif
   }
 
  private:
@@ -232,7 +245,12 @@ class PACKED(sizeof(T)) Atomic : public std::atomic<T> {
 
   // Store to memory with a total ordering.
   void StoreSequentiallyConsistent(T desired) {
+#if defined(__i386__) || defined(__x86_64__)
+    this->store(desired, std::memory_order_relaxed);
+    ThreadFenceAsmX86();
+#else
     this->store(desired, std::memory_order_seq_cst);
+#endif
   }
 
   // Atomically replace the value with desired value if it matches the expected value.
