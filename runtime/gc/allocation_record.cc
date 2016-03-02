@@ -245,6 +245,7 @@ void AllocRecordObjectMap::SetAllocTrackingEnabled(bool enable) {
       heap->SetAllocTrackingEnabled(true);
     }
   } else {
+    AllocRecordObjectMap* map = nullptr;
     {
       MutexLock mu(self, *Locks::alloc_tracker_lock_);
       if (!heap->IsAllocTrackingEnabled()) {
@@ -252,8 +253,11 @@ void AllocRecordObjectMap::SetAllocTrackingEnabled(bool enable) {
       }
       heap->SetAllocTrackingEnabled(false);
       LOG(INFO) << "Disabling alloc tracker";
-      heap->SetAllocationRecords(nullptr);
+      map = heap->ReleaseAllocationRecords();
     }
+    // Delete outside of the critical section to avoid possible lock violations like the runtime
+    // shutdown lock.
+    delete map;
     // If an allocation comes in before we uninstrument, we will safely drop it on the floor.
     Runtime::Current()->GetInstrumentation()->UninstrumentQuickAllocEntryPoints();
   }
