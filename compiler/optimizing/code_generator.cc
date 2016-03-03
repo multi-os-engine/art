@@ -816,7 +816,7 @@ bool CodeGenerator::HasStackMapAtCurrentPc() {
 }
 
 void CodeGenerator::MaybeRecordNativeDebugInfo(HInstruction* instruction, uint32_t dex_pc) {
-  if (GetCompilerOptions().GetNativeDebuggable() && dex_pc != kNoDexPc) {
+  if (GetCompilerOptions().GetDebuggable() && dex_pc != kNoDexPc) {
     if (HasStackMapAtCurrentPc()) {
       // Ensure that we do not collide with the stack map of the previous instruction.
       GenerateNop();

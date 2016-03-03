@@ -362,10 +362,10 @@ GraphAnalysisResult HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item
   // Find locations where we want to generate extra stackmaps for native debugging.
   // This allows us to generate the info only at interesting points (for example,
   // at start of java statement) rather than before every dex instruction.
-  const bool native_debuggable = compiler_driver_ != nullptr &&
-                                 compiler_driver_->GetCompilerOptions().GetNativeDebuggable();
+  const bool debuggable = compiler_driver_ != nullptr &&
+                          compiler_driver_->GetCompilerOptions().GetDebuggable();
   ArenaBitVector* native_debug_info_locations;
-  if (native_debuggable) {
+  if (debuggable) {
     const uint32_t num_instructions = code_item.insns_size_in_code_units_;
     native_debug_info_locations = new (arena_) ArenaBitVector (arena_, num_instructions, false);
     FindNativeDebugInfoLocations(code_item, native_debug_info_locations);
@@ -380,7 +380,7 @@ GraphAnalysisResult HGraphBuilder::BuildGraph(const DexFile::CodeItem& code_item
     // Update the current block if dex_pc starts a new block.
     MaybeUpdateCurrentBlock(dex_pc);
     const Instruction& instruction = *Instruction::At(code_ptr);
-    if (native_debuggable && native_debug_info_locations->IsBitSet(dex_pc)) {
+    if (debuggable && native_debug_info_locations->IsBitSet(dex_pc)) {
       if (current_block_ != nullptr) {
         current_block_->AddInstruction(new (arena_) HNativeDebugInfo(dex_pc));
       }

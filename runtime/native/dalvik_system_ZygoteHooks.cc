@@ -119,7 +119,7 @@ static void EnableDebugFeatures(uint32_t debug_flags) {
   }
 
   if ((debug_flags & DEBUG_NATIVE_DEBUGGABLE) != 0) {
-    runtime->AddCompilerOption("--native-debuggable");
+    runtime->AddCompilerOption("--debuggable");
     debug_flags &= ~DEBUG_NATIVE_DEBUGGABLE;
   }
 
