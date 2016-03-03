@@ -115,7 +115,7 @@ else
 ART_TARGET_CLANG := false
 endif
 # b/25130937
-ART_TARGET_CLANG_arm := false
+ART_TARGET_CLANG_arm :=
 ART_TARGET_CLANG_arm64 :=
 ART_TARGET_CLANG_mips :=
 ART_TARGET_CLANG_mips64 :=
@@ -137,6 +137,8 @@ ART_TARGET_CLANG_CFLAGS_mips :=
 ART_TARGET_CLANG_CFLAGS_mips64 :=
 ART_TARGET_CLANG_CFLAGS_x86 :=
 ART_TARGET_CLANG_CFLAGS_x86_64 :=
+
+ART_TARGET_CLANG_ASFLAGS_arm := -no-integrated-as
 
 # Warn about thread safety violations with clang.
 art_clang_cflags := -Wthread-safety -Wthread-safety-negative
@@ -430,6 +432,8 @@ define set-target-local-cflags-vars
   LOCAL_CLANG_CFLAGS := $(ART_TARGET_CLANG_CFLAGS)
   $(foreach arch,$(ART_TARGET_SUPPORTED_ARCH),
     LOCAL_CLANG_CFLAGS_$(arch) += $$(ART_TARGET_CLANG_CFLAGS_$(arch)))
+  $(foreach arch,$(ART_TARGET_SUPPORTED_ARCH),
+    LOCAL_CLANG_ASFLAGS_$(arch) += $$(ART_TARGET_CLANG_ASFLAGS_$(arch)))
 
   # Clear locally used variables.
   art_target_cflags_ndebug_or_debug :=
