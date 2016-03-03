@@ -115,7 +115,7 @@ else
 ART_TARGET_CLANG := false
 endif
 # b/25130937
-ART_TARGET_CLANG_arm := false
+ART_TARGET_CLANG_arm :=
 ART_TARGET_CLANG_arm64 :=
 ART_TARGET_CLANG_mips :=
 ART_TARGET_CLANG_mips64 :=
