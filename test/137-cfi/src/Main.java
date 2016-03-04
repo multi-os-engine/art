@@ -21,43 +21,48 @@ import java.util.Arrays;
 import java.util.Comparator;
 
 public class Main implements Comparator<Main> {
-  // Whether to test local unwinding. Libunwind uses linker info to find executables. As we do
-  // not dlopen at the moment, this doesn't work, so keep it off for now.
-  public final static boolean TEST_LOCAL_UNWINDING = true;
+  // Whether to test local unwinding.
+  private boolean test_local;
 
-  // Unwinding another process, modelling debuggerd. This doesn't use the linker, so should work
-  // no matter whether we're using dlopen or not.
-  public final static boolean TEST_REMOTE_UNWINDING = true;
+  // Unwinding another process, modelling debuggerd.
+  private boolean test_remote;
 
+  // We fork ourself to create the secondary process for remote unwinding.
   private boolean secondary;
 
+  // Expect the symbols to contain full method signatures including parameters.
   private boolean full_signatures;
 
   private boolean passed;
 
-  public Main(boolean secondary, boolean full_signatures) {
-      this.secondary = secondary;
-      this.full_signatures = full_signatures;
+  public Main(String[] args) throws Exception {
+      System.loadLibrary(args[0]);
+      for (String arg : args) {
+          if (arg.equals("--test-local")) {
+              test_local = true;
+          }
+          if (arg.equals("--test-remote")) {
+              test_remote = true;
+          }
+          if (arg.equals("--secondary")) {
+              secondary = true;
+          }
+          if (arg.equals("--full-signatures")) {
+              full_signatures = true;
+          }
+      }
+      if (!test_local && !test_remote) {
+          System.out.println("No test selected.");
+      }
   }
 
   public static void main(String[] args) throws Exception {
-    System.loadLibrary(args[0]);
-      boolean secondary = false;
-      boolean full_signatures = false;
-      for (String arg : args) {
-        if (arg.equals("--secondary")) {
-          secondary = true;
-        }
-        if (arg.equals("--full-signatures")) {
-          full_signatures = true;
-        }
-      }
-      new Main(secondary, full_signatures).run();
+      new Main(args).run();
   }
 
   private void run() {
       if (secondary) {
-          if (!TEST_REMOTE_UNWINDING) {
+          if (!test_remote) {
               throw new RuntimeException("Should not be running secondary!");
           }
           runSecondary();
@@ -73,11 +78,11 @@ public class Main implements Comparator<Main> {
 
   private void runPrimary() {
       // First do the in-process unwinding.
-      if (TEST_LOCAL_UNWINDING && !foo()) {
+      if (test_local && !foo()) {
           System.out.println("Unwinding self failed.");
       }
 
-      if (!TEST_REMOTE_UNWINDING) {
+      if (!test_remote) {
           // Skip the remote step.
           return;
       }
