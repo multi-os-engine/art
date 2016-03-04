@@ -381,7 +381,7 @@ static void GenBitCount(HInvoke* instr, bool is_long, vixl::MacroAssembler* masm
   Register   dst = is_long ? XRegisterFrom(out) : WRegisterFrom(out);
 
   __ Fmov(fpr, src);
-  __ Cnt (fpr.V8B(), fpr.V8B());
+  __ Cnt(fpr.V8B(), fpr.V8B());
   __ Addv(fpr.B(),   fpr.V8B());
   __ Fmov(dst, fpr);
 }
