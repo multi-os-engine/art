@@ -810,6 +810,11 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
         // Record debug information for this function if we are doing that.
         const uint32_t quick_code_start = quick_code_offset -
             writer_->oat_header_->GetExecutableOffset() - thumb_offset;
+        bool is_from_optimizing_compiler =
+           compiled_method->GetQuickCode().size() > 0 &&
+           compiled_method->GetVmapTable().size() > 0 &&
+           compiled_method->GetGcMap().size() == 0 &&
+           it.GetMethodCodeItem() != nullptr;
         writer_->method_info_.push_back(debug::MethodDebugInfo {
             dex_file_,
             class_def_index_,
@@ -819,7 +824,10 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
             deduped,
             quick_code_start,
             quick_code_start + code_size,
-            compiled_method});
+            compiled_method->GetVmapTable().data(),
+            compiled_method->GetFrameSizeInBytes(),
+            is_from_optimizing_compiler,
+            writer_->compiler_driver_->GetCompilerOptions().GetNativeDebuggable()});
       }
 
       if (kIsDebugBuild) {

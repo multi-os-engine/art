@@ -175,10 +175,6 @@ void WriteCFISection(ElfBuilder<ElfTypes>* builder,
   CHECK(format == dwarf::DW_DEBUG_FRAME_FORMAT || format == dwarf::DW_EH_FRAME_FORMAT);
   typedef typename ElfTypes::Addr Elf_Addr;
 
-  if (method_infos.empty()) {
-    return;
-  }
-
   std::vector<uint32_t> binary_search_table;
   std::vector<uintptr_t> patch_locations;
   if (format == dwarf::DW_EH_FRAME_FORMAT) {
@@ -194,7 +190,12 @@ void WriteCFISection(ElfBuilder<ElfTypes>* builder,
   std::vector<const MethodDebugInfo*> sorted_method_infos;
   sorted_method_infos.reserve(method_infos.size());
   for (size_t i = 0; i < method_infos.size(); i++) {
-    sorted_method_infos.push_back(&method_infos[i]);
+    if (!method_infos[i].compiled_method->GetCFIInfo().empty()) {
+      sorted_method_infos.push_back(&method_infos[i]);
+    }
+  }
+  if (sorted_method_infos.empty()) {
+    return;
   }
   std::sort(
       sorted_method_infos.begin(),

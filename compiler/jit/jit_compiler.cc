@@ -24,6 +24,7 @@
 #include "base/timing_logger.h"
 #include "base/unix_file/fd_file.h"
 #include "debug/elf_debug_writer.h"
+#include "debug/method_debug_info.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
 #include "jit/debugger_interface.h"
@@ -69,8 +70,31 @@ extern "C" void jit_types_loaded(void* handle, mirror::Class** types, size_t cou
   DCHECK(jit_compiler != nullptr);
   if (jit_compiler->GetCompilerOptions()->GetGenerateDebugInfo()) {
     const ArrayRef<mirror::Class*> types_array(types, count);
-    ArrayRef<const uint8_t> elf_file = debug::WriteDebugElfFileForClasses(kRuntimeISA, types_array);
-    CreateJITCodeEntry(std::unique_ptr<const uint8_t[]>(elf_file.data()), elf_file.size());
+    ArrayRef<const uint8_t> classes_elf_file =
+        debug::WriteDebugElfFileForClasses(kRuntimeISA, types_array);
+    CreateJITCodeEntry(std::unique_ptr<const uint8_t[]>(
+        classes_elf_file.data()), classes_elf_file.size());
+
+    // Also create debug info any methods which were already compiled.
+    std::vector<debug::MethodDebugInfo> method_debug_infos;
+    ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+    size_t pointer_size = class_linker->GetImagePointerSize();
+    for (size_t i = 0; i < count; ++i) {
+      for (ArtMethod& method : types[i]->GetDeclaredMethods(pointer_size)) {
+        const void* code = class_linker->GetOatMethodQuickCodeFor(&method);
+        if (code != nullptr) {
+          const auto* header = method.GetOatQuickMethodHeader(reinterpret_cast<uintptr_t>(code));
+          if (header != nullptr) {
+            method_debug_infos.push_back(debug::MethodDebugInfo::FormArtMethod(method, header));
+          }
+        }
+      }
+      // TODO(dsrbecky): Is it possible that the class has JITed methods at this point?
+    }
+    ArrayRef<const uint8_t> methods_elf_file = debug::WriteDebugElfFileForMethods(kRuntimeISA,
+        ArrayRef<const debug::MethodDebugInfo>(method_debug_infos));
+    CreateJITCodeEntry(std::unique_ptr<const uint8_t[]>(
+        methods_elf_file.data()), methods_elf_file.size());
   }
 }
 

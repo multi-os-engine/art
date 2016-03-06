@@ -184,6 +184,10 @@ class ElfDebugLineWriter {
 
       // Generate mapping opcodes from PC to Java lines.
       if (file_index != 0) {
+        // If the methods was not compiled as native debuggable we still generate all available
+        // lines, but we try to prevent the debugger from stepping and setting breakpoints since
+        // the information is too inaccurate for that (the breakpoints would be set after calls).
+        bool allow_breakpoints = mi->compiled_method != nullptr;
         bool first = true;
         for (SrcMapElem pc2dex : pc2dex_map) {
           uint32_t pc = pc2dex.from_;
@@ -205,13 +209,14 @@ class ElfDebugLineWriter {
                 // Assume that any preceding code is prologue.
                 int first_line = dex2line_map.front().line_;
                 // Prologue is not a sensible place for a breakpoint.
-                opcodes.NegateStmt();
+                opcodes.SetIsStmt(false);
                 opcodes.AddRow(method_address, first_line);
-                opcodes.NegateStmt();
                 opcodes.SetPrologueEnd();
               }
+              opcodes.SetIsStmt(allow_breakpoints);
               opcodes.AddRow(method_address + pc, line);
             } else if (line != opcodes.CurrentLine()) {
+              opcodes.SetIsStmt(allow_breakpoints);
               opcodes.AddRow(method_address + pc, line);
             }
           }

@@ -73,6 +73,10 @@ class PACKED(4) OatQuickMethodHeader {
     return code_;
   }
 
+  uint32_t GetCodeSize() const {
+    return code_size_;
+  }
+
   const uint8_t* GetNativeGcMap() const {
     return (gc_map_offset_ == 0) ? nullptr : code_ - gc_map_offset_;
   }

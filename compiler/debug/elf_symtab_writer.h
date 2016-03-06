@@ -39,6 +39,7 @@ template <typename ElfTypes>
 static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
                               const ArrayRef<const MethodDebugInfo>& method_infos,
                               bool with_signature) {
+  InstructionSet isa = builder->GetIsa();
   bool generated_mapping_symbol = false;
   auto* strtab = builder->GetStrTab();
   auto* symtab = builder->GetSymTab();
@@ -75,7 +76,7 @@ static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
     const bool is_relative = (text != nullptr);
     uint32_t low_pc = info.low_pc;
     // Add in code delta, e.g., thumb bit 0 for Thumb2 code.
-    low_pc += info.compiled_method->CodeDelta();
+    low_pc += CompiledMethod::CodeDelta(isa);
     symtab->Add(name_offset,
                 text,
                 low_pc,
@@ -88,7 +89,7 @@ static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
     // instructions, so that disassembler tools can correctly disassemble.
     // Note that even if we generate just a single mapping symbol, ARM's Streamline
     // requires it to match function symbol.  Just address 0 does not work.
-    if (info.compiled_method->GetInstructionSet() == kThumb2) {
+    if (isa == kThumb2) {
       if (!generated_mapping_symbol || !kGenerateSingleArmMappingSymbol) {
         symtab->Add(strtab->Write("$t"), text, info.low_pc & ~1,
                     is_relative, 0, STB_LOCAL, STT_NOTYPE);

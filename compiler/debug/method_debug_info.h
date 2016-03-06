@@ -17,8 +17,10 @@
 #ifndef ART_COMPILER_DEBUG_METHOD_DEBUG_INFO_H_
 #define ART_COMPILER_DEBUG_METHOD_DEBUG_INFO_H_
 
+#include "art_method.h"
 #include "compiled_method.h"
 #include "dex_file.h"
+#include "oat_quick_method_header.h"
 
 namespace art {
 namespace debug {
@@ -32,13 +34,27 @@ struct MethodDebugInfo {
   bool deduped;
   uintptr_t low_pc;
   uintptr_t high_pc;
-  CompiledMethod* compiled_method;
+  const void* code_info;
+  size_t frame_size;
+  bool is_from_optimizing_compiler;
+  bool is_compiled_as_native_debuggable;
 
-  bool IsFromOptimizingCompiler() const {
-    return compiled_method->GetQuickCode().size() > 0 &&
-           compiled_method->GetVmapTable().size() > 0 &&
-           compiled_method->GetGcMap().size() == 0 &&
-           code_item != nullptr;
+  static MethodDebugInfo FormArtMethod(ArtMethod& method, const OatQuickMethodHeader* header)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    MethodDebugInfo info;
+    info.dex_file = method.GetDexFile();
+    info.class_def_index = method.GetClassDefIndex();
+    info.dex_method_index = method.GetDexMethodIndex();
+    info.access_flags = method.GetAccessFlags();
+    info.code_item = method.GetCodeItem();
+    info.deduped = false;
+    info.low_pc = reinterpret_cast<uintptr_t>(header->GetCode());
+    info.high_pc = header->GetCodeSize();
+    info.code_info;
+    info.frame_size = header->GetFrameSizeInBytes();
+    info.is_from_optimizing_compiler;
+    info.is_compiled_as_native_debuggable = false;
+    return info;
   }
 };
 

@@ -916,12 +916,10 @@ bool OptimizingCompiler::JitCompile(Thread* self,
         GetCompilerDriver(),
         codegen->GetInstructionSet(),
         ArrayRef<const uint8_t>(code_allocator.GetMemory()),
-        codegen->HasEmptyFrame() ? 0 : codegen->GetFrameSize(),
         codegen->GetCoreSpillMask(),
         codegen->GetFpuSpillMask(),
         ArrayRef<const SrcMapElem>(),
         ArrayRef<const uint8_t>(),  // mapping_table.
-        ArrayRef<const uint8_t>(stack_map_data, stack_map_size),
         ArrayRef<const uint8_t>(),  // native_gc_map.
         ArrayRef<const uint8_t>(*codegen->GetAssembler()->cfi().data()),
         ArrayRef<const LinkerPatch>());
@@ -934,9 +932,14 @@ bool OptimizingCompiler::JitCompile(Thread* self,
         false,  // deduped.
         code_address,
         code_address + code_allocator.GetSize(),
-        &compiled_method
+        stack_map_data,
+        codegen->HasEmptyFrame() ? 0 : codegen->GetFrameSize(),
+        true,  // is_from_optimizing_compiler.
+        GetCompilerDriver()->GetCompilerOptions().GetNativeDebuggable()
     };
-    ArrayRef<const uint8_t> elf_file = debug::WriteDebugElfFileForMethod(method_debug_info);
+    ArrayRef<const uint8_t> elf_file = debug::WriteDebugElfFileForMethods(
+        kRuntimeISA,
+        ArrayRef<const debug::MethodDebugInfo>(&method_debug_info, 1));
     CreateJITCodeEntryForAddress(code_address,
                                  std::unique_ptr<const uint8_t[]>(elf_file.data()),
                                  elf_file.size());

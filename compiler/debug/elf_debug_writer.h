@@ -41,7 +41,9 @@ std::vector<uint8_t> MakeMiniDebugInfo(InstructionSet isa,
                                        size_t text_section_size,
                                        const ArrayRef<const MethodDebugInfo>& method_infos);
 
-ArrayRef<const uint8_t> WriteDebugElfFileForMethod(const MethodDebugInfo& method_info);
+ArrayRef<const uint8_t> WriteDebugElfFileForMethods(
+    InstructionSet isa,
+    const ArrayRef<const MethodDebugInfo>& method_infos);
 
 ArrayRef<const uint8_t> WriteDebugElfFileForClasses(const InstructionSet isa,
                                                     const ArrayRef<mirror::Class*>& types)
