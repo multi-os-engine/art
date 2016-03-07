@@ -143,6 +143,8 @@ class JitCodeCache {
       REQUIRES(Locks::classlinker_classes_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  void ClearInlineCaches(Thread* self) REQUIRES(!lock_);
+
   // Create a 'ProfileInfo' for 'method'. If 'retry_allocation' is true,
   // will collect and retry if the first allocation is unsuccessful.
   ProfilingInfo* AddProfilingInfo(Thread* self,
