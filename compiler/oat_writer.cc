@@ -808,20 +808,24 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
 
       const CompilerOptions& compiler_options = writer_->compiler_driver_->GetCompilerOptions();
       if (compiler_options.GenerateAnyDebugInfo()) {
+        bool has_code_info = method_header->IsOptimized() && code_size > 0;
         // Record debug information for this function if we are doing that.
-        const uint32_t quick_code_start = quick_code_offset -
-            writer_->oat_header_->GetExecutableOffset() - thumb_offset;
-        writer_->method_info_.push_back(debug::MethodDebugInfo {
-            dex_file_,
-            class_def_index_,
-            it.GetMemberIndex(),
-            it.GetMethodAccessFlags(),
-            it.GetMethodCodeItem(),
-            deduped,
-            compiler_options.GetNativeDebuggable(),
-            quick_code_start,
-            quick_code_start + code_size,
-            compiled_method});
+        debug::MethodDebugInfo info;
+        info.dex_file = dex_file_;
+        info.class_def_index = class_def_index_;
+        info.dex_method_index = it.GetMemberIndex();
+        info.access_flags = it.GetMethodAccessFlags();
+        info.code_item = it.GetMethodCodeItem();
+        info.isa = compiled_method->GetInstructionSet();
+        info.deduped = deduped;
+        info.is_native_debuggable = compiler_options.GetNativeDebuggable();
+        info.is_optimized = method_header->IsOptimized();
+        info.code_address = writer_->GetOatDataOffset() + code_offset;
+        info.code_size = code_size;
+        info.frame_size_in_bytes = compiled_method->GetFrameSizeInBytes();
+        info.code_info = has_code_info ? compiled_method->GetVmapTable().data() : nullptr;
+        info.cfi = compiled_method->GetCFIInfo();
+        writer_->method_info_.push_back(info);
       }
 
       if (kIsDebugBuild) {
