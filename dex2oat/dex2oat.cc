@@ -46,6 +46,7 @@
 #include "class_linker.h"
 #include "compiler.h"
 #include "compiler_callbacks.h"
+#include "debug/elf_debug_writer.h"
 #include "debug/method_debug_info.h"
 #include "dex/pass_manager.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
@@ -1038,6 +1039,9 @@ class Dex2Oat FINAL {
     key_value_store_->Put(
         OatHeader::kDebuggableKey,
         compiler_options_->debuggable_ ? OatHeader::kTrueValue : OatHeader::kFalseValue);
+    key_value_store_->Put(
+        OatHeader::kNativeDebuggableKey,
+        compiler_options_->native_debuggable_ ? OatHeader::kTrueValue : OatHeader::kFalseValue);
     if (compiler_options_->IsExtractOnly()) {
       key_value_store_->Put(OatHeader::kCompilationType, OatHeader::kExtractOnlyValue);
     } else if (UseProfileGuidedCompilation()) {
@@ -1690,6 +1694,8 @@ class Dex2Oat FINAL {
         std::unique_ptr<File>& oat_file = oat_files_[i];
         std::unique_ptr<ElfWriter>& elf_writer = elf_writers_[i];
         std::unique_ptr<OatWriter>& oat_writer = oat_writers_[i];
+
+        oat_writer->AddMethodDebugInfos(debug::MakeTrampolineInfos(oat_writer->GetOatHeader()));
 
         // We need to mirror the layout of the ELF file in the compressed debug-info.
         // Therefore PrepareDebugInfo() relies on the SetLoadedSectionSizes() call further above.
