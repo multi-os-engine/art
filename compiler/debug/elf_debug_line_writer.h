@@ -53,10 +53,6 @@ class ElfDebugLineWriter {
   // Returns the number of bytes written.
   size_t WriteCompilationUnit(ElfCompilationUnit& compilation_unit) {
     const bool is64bit = Is64BitInstructionSet(builder_->GetIsa());
-    const Elf_Addr text_address = builder_->GetText()->Exists()
-        ? builder_->GetText()->GetAddress()
-        : 0;
-
     compilation_unit.debug_line_offset = builder_->GetDebugLine()->GetSize();
 
     std::vector<dwarf::FileEntry> files;
@@ -92,9 +88,9 @@ class ElfDebugLineWriter {
       uint32_t prologue_end = std::numeric_limits<uint32_t>::max();
       ArrayRef<const SrcMapElem> pc2dex_map;
       std::vector<SrcMapElem> pc2dex_map_from_stack_maps;
-      if (mi->IsFromOptimizingCompiler()) {
+      if (mi->is_optimized) {
         // Use stack maps to create mapping table from pc to dex.
-        const CodeInfo code_info(mi->compiled_method->GetVmapTable().data());
+        const CodeInfo code_info(mi->code_info);
         const StackMapEncoding encoding = code_info.ExtractEncoding();
         for (uint32_t s = 0; s < code_info.GetNumberOfStackMaps(); s++) {
           StackMap stack_map = code_info.GetStackMapAt(s, encoding);
@@ -110,17 +106,11 @@ class ElfDebugLineWriter {
         std::sort(pc2dex_map_from_stack_maps.begin(),
                   pc2dex_map_from_stack_maps.end());
         pc2dex_map = ArrayRef<const SrcMapElem>(pc2dex_map_from_stack_maps);
-      } else {
-        // Use the mapping table provided by the quick compiler.
-        pc2dex_map = mi->compiled_method->GetSrcMappingTable();
-        prologue_end = 0;
       }
 
       if (pc2dex_map.empty()) {
         continue;
       }
-
-      Elf_Addr method_address = text_address + mi->low_pc;
 
       PositionInfos dex2line_map;
       const DexFile* dex = mi->dex_file;
@@ -132,7 +122,7 @@ class ElfDebugLineWriter {
         continue;
       }
 
-      opcodes.SetAddress(method_address);
+      opcodes.SetAddress(mi->code_address);
       if (dwarf_isa != -1) {
         opcodes.SetISA(dwarf_isa);
       }
@@ -210,23 +200,23 @@ class ElfDebugLineWriter {
                 int first_line = dex2line_map.front().line_;
                 // Prologue is not a sensible place for a breakpoint.
                 opcodes.SetIsStmt(false);
-                opcodes.AddRow(method_address, first_line);
+                opcodes.AddRow(mi->code_address, first_line);
                 opcodes.SetPrologueEnd();
               }
               opcodes.SetIsStmt(default_is_stmt);
-              opcodes.AddRow(method_address + pc, line);
+              opcodes.AddRow(mi->code_address + pc, line);
             } else if (line != opcodes.CurrentLine()) {
               opcodes.SetIsStmt(default_is_stmt);
-              opcodes.AddRow(method_address + pc, line);
+              opcodes.AddRow(mi->code_address + pc, line);
             }
           }
         }
       } else {
         // line 0 - instruction cannot be attributed to any source line.
-        opcodes.AddRow(method_address, 0);
+        opcodes.AddRow(mi->code_address, 0);
       }
 
-      opcodes.AdvancePC(text_address + mi->high_pc);
+      opcodes.AdvancePC(mi->code_address + mi->code_size);
       opcodes.EndSequence();
     }
     std::vector<uint8_t> buffer;
