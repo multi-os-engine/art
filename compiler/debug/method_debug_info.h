@@ -17,8 +17,10 @@
 #ifndef ART_COMPILER_DEBUG_METHOD_DEBUG_INFO_H_
 #define ART_COMPILER_DEBUG_METHOD_DEBUG_INFO_H_
 
+#include "art_method.h"
 #include "compiled_method.h"
 #include "dex_file.h"
+#include "oat_quick_method_header.h"
 
 namespace art {
 namespace debug {
@@ -36,8 +38,30 @@ struct MethodDebugInfo {
   uint64_t code_address;  // Absolute address (i.e. not relative to .text).
   uint32_t code_size;
   uint32_t frame_size_in_bytes;
-  const uint8_t* code_info;
+  const void* code_info;
   ArrayRef<const uint8_t> cfi;
+
+  static MethodDebugInfo CreateFormArtMethod(ArtMethod& method, const OatQuickMethodHeader* header)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    MethodDebugInfo info;
+    info.dex_file = method.GetDexFile();
+    info.class_def_index = method.GetClassDefIndex();
+    info.dex_method_index = method.GetDexMethodIndex();
+    info.access_flags = method.GetAccessFlags();
+    info.code_item = method.GetCodeItem();
+    info.isa = kRuntimeISA;
+    info.deduped = false;
+    info.is_debuggable = false;
+    info.is_optimized = header->IsOptimized() &&
+                        header->GetCode() != nullptr &&
+                        method.GetCodeItem() != nullptr;
+    info.code_address = reinterpret_cast<uintptr_t>(header->GetCode());
+    info.code_size = header->GetCodeSize();
+    info.frame_size_in_bytes = header->GetFrameSizeInBytes();
+    info.code_info = header->GetOptimizedCodeInfoPointer();
+    info.cfi = ArrayRef<const uint8_t>();
+    return info;
+  }
 };
 
 }  // namespace debug
