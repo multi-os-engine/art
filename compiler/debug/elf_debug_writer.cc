@@ -41,16 +41,10 @@ void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
                     bool write_oat_patches) {
   // Add methods to .symtab.
   WriteDebugSymbols(builder, method_infos, true /* with_signature */);
+
   // Generate CFI (stack unwinding information).
   WriteCFISection(builder, method_infos, cfi_format, write_oat_patches);
-  // Write DWARF .debug_* sections.
-  WriteDebugSections(builder, method_infos, write_oat_patches);
-}
 
-template<typename ElfTypes>
-static void WriteDebugSections(ElfBuilder<ElfTypes>* builder,
-                               const ArrayRef<const MethodDebugInfo>& method_infos,
-                               bool write_oat_patches) {
   // Group the methods into compilation units based on source file.
   std::vector<ElfCompilationUnit> compilation_units;
   const char* last_source_file = nullptr;
@@ -111,10 +105,10 @@ std::vector<uint8_t> MakeMiniDebugInfo(
 }
 
 template <typename ElfTypes>
-static ArrayRef<const uint8_t> WriteDebugElfFileForMethodInternal(
-    const InstructionSet isa,
+static ArrayRef<const uint8_t> WriteDebugElfFileForMethodsInternal(
+    InstructionSet isa,
     const InstructionSetFeatures* features,
-    const MethodDebugInfo& method_info) {
+    const ArrayRef<const MethodDebugInfo>& method_infos) {
   std::vector<uint8_t> buffer;
   buffer.reserve(KB);
   VectorOutputStream out("Debug ELF file", &buffer);
@@ -122,7 +116,7 @@ static ArrayRef<const uint8_t> WriteDebugElfFileForMethodInternal(
   // No program headers since the ELF file is not linked and has no allocated sections.
   builder->Start(false /* write_program_headers */);
   WriteDebugInfo(builder.get(),
-                 ArrayRef<const MethodDebugInfo>(&method_info, 1),
+                 method_infos,
                  dwarf::DW_DEBUG_FRAME_FORMAT,
                  false /* write_oat_patches */);
   builder->End();
@@ -134,19 +128,20 @@ static ArrayRef<const uint8_t> WriteDebugElfFileForMethodInternal(
   return ArrayRef<const uint8_t>(result, buffer.size());
 }
 
-ArrayRef<const uint8_t> WriteDebugElfFileForMethod(const InstructionSet isa,
-                                                   const InstructionSetFeatures* features,
-                                                   const MethodDebugInfo& method_info) {
+ArrayRef<const uint8_t> WriteDebugElfFileForMethods(
+    InstructionSet isa,
+    const InstructionSetFeatures* features,
+    const ArrayRef<const MethodDebugInfo>& method_infos) {
   if (Is64BitInstructionSet(isa)) {
-    return WriteDebugElfFileForMethodInternal<ElfTypes64>(isa, features, method_info);
+    return WriteDebugElfFileForMethodsInternal<ElfTypes64>(isa, features, method_infos);
   } else {
-    return WriteDebugElfFileForMethodInternal<ElfTypes32>(isa, features, method_info);
+    return WriteDebugElfFileForMethodsInternal<ElfTypes32>(isa, features, method_infos);
   }
 }
 
 template <typename ElfTypes>
 static ArrayRef<const uint8_t> WriteDebugElfFileForClassesInternal(
-    const InstructionSet isa,
+    InstructionSet isa,
     const InstructionSetFeatures* features,
     const ArrayRef<mirror::Class*>& types)
     SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -171,7 +166,7 @@ static ArrayRef<const uint8_t> WriteDebugElfFileForClassesInternal(
   return ArrayRef<const uint8_t>(result, buffer.size());
 }
 
-ArrayRef<const uint8_t> WriteDebugElfFileForClasses(const InstructionSet isa,
+ArrayRef<const uint8_t> WriteDebugElfFileForClasses(InstructionSet isa,
                                                     const InstructionSetFeatures* features,
                                                     const ArrayRef<mirror::Class*>& types) {
   if (Is64BitInstructionSet(isa)) {

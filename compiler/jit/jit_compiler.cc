@@ -24,6 +24,7 @@
 #include "base/timing_logger.h"
 #include "base/unix_file/fd_file.h"
 #include "debug/elf_debug_writer.h"
+#include "debug/method_debug_info.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
 #include "jit/debugger_interface.h"
@@ -68,10 +69,39 @@ extern "C" void jit_types_loaded(void* handle, mirror::Class** types, size_t cou
   auto* jit_compiler = reinterpret_cast<JitCompiler*>(handle);
   DCHECK(jit_compiler != nullptr);
   if (jit_compiler->GetCompilerOptions()->GetGenerateDebugInfo()) {
+    // Generate debug info for the provided types.
+    std::unique_ptr<const InstructionSetFeatures> runtime_features(
+        InstructionSetFeatures::FromCppDefines());
     const ArrayRef<mirror::Class*> types_array(types, count);
-    ArrayRef<const uint8_t> elf_file = debug::WriteDebugElfFileForClasses(
-        kRuntimeISA, jit_compiler->GetCompilerDriver()->GetInstructionSetFeatures(), types_array);
-    CreateJITCodeEntry(std::unique_ptr<const uint8_t[]>(elf_file.data()), elf_file.size());
+    ArrayRef<const uint8_t> elf_file_for_classes = debug::WriteDebugElfFileForClasses(
+        kRuntimeISA, runtime_features.get(), types_array);
+    CreateJITCodeEntry(std::unique_ptr<const uint8_t[]>(
+        elf_file_for_classes.data()), elf_file_for_classes.size());
+
+    // Generate debug info for methods which were already compiled.
+    std::vector<debug::MethodDebugInfo> method_debug_infos;
+    size_t pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+    for (size_t i = 0; i < count; ++i) {
+      for (ArtMethod& method : types[i]->GetDeclaredMethods(pointer_size)) {
+        const void* code = Runtime::Current()->GetClassLinker()->GetOatMethodQuickCodeFor(&method);
+        if (code != nullptr) {
+          const auto* header = method.GetOatQuickMethodHeader(reinterpret_cast<uintptr_t>(code));
+          if (header != nullptr && header->IsOptimized()) {
+            method_debug_infos.push_back(
+                debug::MethodDebugInfo::CreateFormArtMethod(method, header));
+          }
+        }
+      }
+      // TODO(dsrbecky): Is it possible that the class has JITed methods at this point?
+    }
+    if (!method_debug_infos.empty()) {
+      ArrayRef<const uint8_t> elf_file_for_methods = debug::WriteDebugElfFileForMethods(
+          kRuntimeISA,
+          runtime_features.get(),
+          ArrayRef<const debug::MethodDebugInfo>(method_debug_infos));
+      CreateJITCodeEntry(std::unique_ptr<const uint8_t[]>(
+          elf_file_for_methods.data()), elf_file_for_methods.size());
+    }
   }
 }
 

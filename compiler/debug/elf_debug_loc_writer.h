@@ -178,7 +178,7 @@ static void WriteDebugLocEntry(const MethodDebugInfo* method_info,
                                std::vector<uint8_t>* debug_loc_buffer,
                                std::vector<uint8_t>* debug_ranges_buffer) {
   using Kind = DexRegisterLocation::Kind;
-  if (!method_info->is_optimized) {
+  if (!method_info->is_optimized || dex_register_maps.empty()) {
     return;
   }
 
