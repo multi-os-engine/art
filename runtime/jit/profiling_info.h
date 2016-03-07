@@ -135,7 +135,12 @@ class ProfilingInfo {
   }
 
   void ClearInlineCaches() {
-    memset(&cache_, 0, number_of_inline_caches_ * sizeof(InlineCache));
+    for (size_t i = 0; i < number_of_inline_caches_; ++i) {
+      InlineCache* cache = &cache_[i];
+      memset(&cache->classes_[0],
+             0,
+             InlineCache::kIndividualCacheSize * sizeof(GcRoot<mirror::Class>));
+    }
   }
 
  private:
@@ -144,7 +149,7 @@ class ProfilingInfo {
         method_(method),
         is_method_being_compiled_(false),
         saved_entry_point_(nullptr) {
-    ClearInlineCaches();
+    memset(&cache_, 0, number_of_inline_caches_ * sizeof(InlineCache));
     for (size_t i = 0; i < number_of_inline_caches_; ++i) {
       cache_[i].dex_pc_ = entries[i];
     }

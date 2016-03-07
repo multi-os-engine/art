@@ -293,6 +293,13 @@ void JitCodeCache::RemoveMethodsIn(Thread* self, const LinearAlloc& alloc) {
   }
 }
 
+void JitCodeCache::ClearInlineCaches(Thread* self) {
+  MutexLock mu(self, lock_);
+  for (ProfilingInfo* info : profiling_infos_) {
+    info->ClearInlineCaches();
+  }
+}
+
 uint8_t* JitCodeCache::CommitCodeInternal(Thread* self,
                                           ArtMethod* method,
                                           const uint8_t* mapping_table,

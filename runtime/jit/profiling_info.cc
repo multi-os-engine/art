@@ -98,7 +98,6 @@ void ProfilingInfo::AddInvokeInfo(uint32_t dex_pc, mirror::Class* cls) {
     }
   }
   // Unsuccessfull - cache is full, making it megamorphic.
-  DCHECK(cache->IsMegamorphic());
 }
 
 }  // namespace art
