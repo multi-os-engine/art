@@ -1224,8 +1224,8 @@ void IntrinsicCodeGeneratorARM::VisitStringNewStringFromBytes(HInvoke* invoke) {
 
   __ LoadFromOffset(
       kLoadWord, LR, TR, QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pAllocStringFromBytes).Int32Value());
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ blx(LR);
+  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -1251,8 +1251,8 @@ void IntrinsicCodeGeneratorARM::VisitStringNewStringFromChars(HInvoke* invoke) {
   // all include a null check on `data` before calling that method.
   __ LoadFromOffset(
       kLoadWord, LR, TR, QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pAllocStringFromChars).Int32Value());
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ blx(LR);
+  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
 }
 
 void IntrinsicLocationsBuilderARM::VisitStringNewStringFromString(HInvoke* invoke) {
@@ -1276,8 +1276,8 @@ void IntrinsicCodeGeneratorARM::VisitStringNewStringFromString(HInvoke* invoke) 
 
   __ LoadFromOffset(kLoadWord,
       LR, TR, QUICK_ENTRYPOINT_OFFSET(kArmWordSize, pAllocStringFromString).Int32Value());
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ blx(LR);
+  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Bind(slow_path->GetExitLabel());
 }
 

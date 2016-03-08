@@ -686,7 +686,14 @@ END_MACRO
 
 MACRO3(FOUR_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     DEFINE_FUNCTION VAR(c_name)
+    subl MACRO_LITERAL(12), %esp                 // alignment padding
+    CFI_ADJUST_CFA_OFFSET(12)
+    PUSH ebx                                     // Save ebx as the expansion of the
+                                                 //   SETUP_REFS_ONLY_CALLEE_SAVE_FRAME
+                                                 //   macro below clobbers it.
     SETUP_REFS_ONLY_CALLEE_SAVE_FRAME  ebx, ebx  // save ref containing registers for GC
+    movl 28(%esp), %ebx                          // restore ebx
+
     // Outgoing argument set up
     subl MACRO_LITERAL(12), %esp                 // alignment padding
     CFI_ADJUST_CFA_OFFSET(12)
@@ -700,6 +707,8 @@ MACRO3(FOUR_ARG_DOWNCALL, c_name, cxx_name, return_macro)
     addl MACRO_LITERAL(32), %esp                 // pop arguments
     CFI_ADJUST_CFA_OFFSET(-32)
     RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME          // restore frame up to return address
+    addl MACRO_LITERAL(16), %esp                 // pop ebx + padding
+    CFI_ADJUST_CFA_OFFSET(16)                    //
     CALL_MACRO(return_macro)                     // return or deliver exception
     END_FUNCTION VAR(c_name)
 END_MACRO
