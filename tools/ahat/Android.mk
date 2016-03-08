@@ -54,7 +54,7 @@ AHAT_TEST_JAR := $(LOCAL_BUILT_MODULE)
 # --- ahat-test-dump.jar --------------
 include $(CLEAR_VARS)
 LOCAL_MODULE := ahat-test-dump
-LOCAL_MODULE_TAGS := tests
+LOCAL_MODULE_TAGS := optional
 LOCAL_SRC_FILES := $(call all-java-files-under, test-dump)
 include $(BUILD_HOST_DALVIK_JAVA_LIBRARY)
 
