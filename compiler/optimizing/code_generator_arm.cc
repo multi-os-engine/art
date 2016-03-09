@@ -1209,7 +1209,9 @@ void CodeGeneratorARM::InvokeRuntime(QuickEntrypointEnum entrypoint,
   ValidateInvokeRuntime(instruction, slow_path);
   __ LoadFromOffset(kLoadWord, LR, TR, GetThreadOffset<kArmWordSize>(entrypoint).Int32Value());
   __ blx(LR);
-  RecordPcInfo(instruction, dex_pc, slow_path);
+  if (EntrypointRequiresStackMap(entrypoint)) {
+    RecordPcInfo(instruction, dex_pc, slow_path);
+  }
 }
 
 void InstructionCodeGeneratorARM::HandleGoto(HInstruction* got, HBasicBlock* successor) {
