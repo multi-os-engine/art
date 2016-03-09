@@ -1172,9 +1172,10 @@ void IntrinsicCodeGeneratorARM64::VisitStringCharAt(HInvoke* invoke) {
 }
 
 void IntrinsicLocationsBuilderARM64::VisitStringCompareTo(HInvoke* invoke) {
-  LocationSummary* locations = new (arena_) LocationSummary(invoke,
-                                                            LocationSummary::kCall,
-                                                            kIntrinsified);
+  LocationSummary* locations =
+      new (arena_) LocationSummary(invoke,
+                                   LocationSummary::kCallOnMainAndSlowPath,
+                                   kIntrinsified);
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
   locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
@@ -1344,9 +1345,10 @@ static void GenerateVisitStringIndexOf(HInvoke* invoke,
 }
 
 void IntrinsicLocationsBuilderARM64::VisitStringIndexOf(HInvoke* invoke) {
-  LocationSummary* locations = new (arena_) LocationSummary(invoke,
-                                                            LocationSummary::kCall,
-                                                            kIntrinsified);
+  LocationSummary* locations =
+      new (arena_) LocationSummary(invoke,
+                                   LocationSummary::kCallOnMainAndSlowPath,
+                                   kIntrinsified);
   // We have a hand-crafted assembly stub that follows the runtime calling convention. So it's
   // best to align the inputs accordingly.
   InvokeRuntimeCallingConvention calling_convention;
@@ -1364,9 +1366,10 @@ void IntrinsicCodeGeneratorARM64::VisitStringIndexOf(HInvoke* invoke) {
 }
 
 void IntrinsicLocationsBuilderARM64::VisitStringIndexOfAfter(HInvoke* invoke) {
-  LocationSummary* locations = new (arena_) LocationSummary(invoke,
-                                                            LocationSummary::kCall,
-                                                            kIntrinsified);
+  LocationSummary* locations =
+      new (arena_) LocationSummary(invoke,
+                                   LocationSummary::kCallOnMainAndSlowPath,
+                                   kIntrinsified);
   // We have a hand-crafted assembly stub that follows the runtime calling convention. So it's
   // best to align the inputs accordingly.
   InvokeRuntimeCallingConvention calling_convention;
@@ -1385,9 +1388,10 @@ void IntrinsicCodeGeneratorARM64::VisitStringIndexOfAfter(HInvoke* invoke) {
 }
 
 void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromBytes(HInvoke* invoke) {
-  LocationSummary* locations = new (arena_) LocationSummary(invoke,
-                                                            LocationSummary::kCall,
-                                                            kIntrinsified);
+  LocationSummary* locations =
+      new (arena_) LocationSummary(invoke,
+                                   LocationSummary::kCallOnMainAndSlowPath,
+                                   kIntrinsified);
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
   locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
@@ -1442,9 +1446,10 @@ void IntrinsicCodeGeneratorARM64::VisitStringNewStringFromChars(HInvoke* invoke)
 }
 
 void IntrinsicLocationsBuilderARM64::VisitStringNewStringFromString(HInvoke* invoke) {
-  LocationSummary* locations = new (arena_) LocationSummary(invoke,
-                                                            LocationSummary::kCall,
-                                                            kIntrinsified);
+  LocationSummary* locations =
+      new (arena_) LocationSummary(invoke,
+                                   LocationSummary::kCallOnMainAndSlowPath,
+                                   kIntrinsified);
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
   locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimNot));
