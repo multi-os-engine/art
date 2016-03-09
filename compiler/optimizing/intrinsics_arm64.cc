@@ -621,56 +621,6 @@ void IntrinsicCodeGeneratorARM64::VisitMathRint(HInvoke* invoke) {
   __ Frintn(DRegisterFrom(locations->Out()), DRegisterFrom(locations->InAt(0)));
 }
 
-static void CreateFPToIntPlusTempLocations(ArenaAllocator* arena, HInvoke* invoke) {
-  LocationSummary* locations = new (arena) LocationSummary(invoke,
-                                                           LocationSummary::kNoCall,
-                                                           kIntrinsified);
-  locations->SetInAt(0, Location::RequiresFpuRegister());
-  locations->SetOut(Location::RequiresRegister());
-}
-
-static void GenMathRound(LocationSummary* locations,
-                         bool is_double,
-                         vixl::MacroAssembler* masm) {
-  FPRegister in_reg = is_double ?
-      DRegisterFrom(locations->InAt(0)) : SRegisterFrom(locations->InAt(0));
-  Register out_reg = is_double ?
-      XRegisterFrom(locations->Out()) : WRegisterFrom(locations->Out());
-  UseScratchRegisterScope temps(masm);
-  FPRegister temp1_reg = temps.AcquireSameSizeAs(in_reg);
-
-  // 0.5 can be encoded as an immediate, so use fmov.
-  if (is_double) {
-    __ Fmov(temp1_reg, static_cast<double>(0.5));
-  } else {
-    __ Fmov(temp1_reg, static_cast<float>(0.5));
-  }
-  __ Fadd(temp1_reg, in_reg, temp1_reg);
-  __ Fcvtms(out_reg, temp1_reg);
-}
-
-void IntrinsicLocationsBuilderARM64::VisitMathRoundDouble(HInvoke* invoke) {
-  // See intrinsics.h.
-  if (kRoundIsPlusPointFive) {
-    CreateFPToIntPlusTempLocations(arena_, invoke);
-  }
-}
-
-void IntrinsicCodeGeneratorARM64::VisitMathRoundDouble(HInvoke* invoke) {
-  GenMathRound(invoke->GetLocations(), /* is_double */ true, GetVIXLAssembler());
-}
-
-void IntrinsicLocationsBuilderARM64::VisitMathRoundFloat(HInvoke* invoke) {
-  // See intrinsics.h.
-  if (kRoundIsPlusPointFive) {
-    CreateFPToIntPlusTempLocations(arena_, invoke);
-  }
-}
-
-void IntrinsicCodeGeneratorARM64::VisitMathRoundFloat(HInvoke* invoke) {
-  GenMathRound(invoke->GetLocations(), /* is_double */ false, GetVIXLAssembler());
-}
-
 void IntrinsicLocationsBuilderARM64::VisitMemoryPeekByte(HInvoke* invoke) {
   CreateIntToIntLocations(arena_, invoke);
 }
