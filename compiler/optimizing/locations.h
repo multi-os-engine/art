@@ -474,6 +474,7 @@ class LocationSummary : public ArenaObject<kArenaAllocLocationSummary> {
  public:
   enum CallKind {
     kNoCall,
+    kCallOnMainAndSlowPath,
     kCallOnSlowPath,
     kCall
   };
@@ -530,10 +531,29 @@ class LocationSummary : public ArenaObject<kArenaAllocLocationSummary> {
 
   Location Out() const { return output_; }
 
-  bool CanCall() const { return call_kind_ != kNoCall; }
-  bool WillCall() const { return call_kind_ == kCall; }
-  bool OnlyCallsOnSlowPath() const { return call_kind_ == kCallOnSlowPath; }
-  bool NeedsSafepoint() const { return CanCall(); }
+  bool CanCall() const {
+    return call_kind_ != kNoCall;
+  }
+
+  bool WillCall() const {
+    return call_kind_ == kCall || call_kind_ == kCallOnMainAndSlowPath;
+  }
+
+  bool CallsOnSlowPath() const {
+    return call_kind_ == kCallOnSlowPath || call_kind_ == kCallOnMainAndSlowPath;
+  }
+
+  bool OnlyCallsOnSlowPath() const {
+    return call_kind_ == kCallOnSlowPath;
+  }
+
+  bool CallsOnMainAndSlowPath() const {
+    return call_kind_ == kCallOnMainAndSlowPath;
+  }
+
+  bool NeedsSafepoint() const {
+    return CanCall();
+  }
 
   void SetStackBit(uint32_t index) {
     stack_mask_->SetBit(index);
