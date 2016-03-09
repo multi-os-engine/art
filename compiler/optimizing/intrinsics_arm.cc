@@ -1990,8 +1990,6 @@ UNIMPLEMENTED_INTRINSIC(ARM, MathMaxLongLong)
 UNIMPLEMENTED_INTRINSIC(ARM, MathCeil)          // Could be done by changing rounding mode, maybe?
 UNIMPLEMENTED_INTRINSIC(ARM, MathFloor)         // Could be done by changing rounding mode, maybe?
 UNIMPLEMENTED_INTRINSIC(ARM, MathRint)
-UNIMPLEMENTED_INTRINSIC(ARM, MathRoundDouble)   // Could be done by changing rounding mode, maybe?
-UNIMPLEMENTED_INTRINSIC(ARM, MathRoundFloat)    // Could be done by changing rounding mode, maybe?
 UNIMPLEMENTED_INTRINSIC(ARM, UnsafeCASLong)     // High register pressure.
 UNIMPLEMENTED_INTRINSIC(ARM, SystemArrayCopyChar)
 UNIMPLEMENTED_INTRINSIC(ARM, ReferenceGetReferent)

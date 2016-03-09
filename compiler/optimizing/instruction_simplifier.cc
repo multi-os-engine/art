@@ -94,6 +94,7 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   void SimplifyCompare(HInvoke* invoke, bool has_zero_op);
   void SimplifyIsNaN(HInvoke* invoke);
   void SimplifyFP2Int(HInvoke* invoke);
+  void SimplifyRound(HInvoke* invoke);
   void SimplifyMemBarrier(HInvoke* invoke, MemBarrierKind barrier_kind);
 
   OptimizingCompilerStats* stats_;
@@ -1569,19 +1570,21 @@ void InstructionSimplifierVisitor::SimplifyFP2Int(HInvoke* invoke) {
   uint32_t dex_pc = invoke->GetDexPc();
   HInstruction* x = invoke->InputAt(0);
   Primitive::Type type = x->GetType();
-  // Set proper bit pattern for NaN and replace intrinsic with raw version.
+  // Set proper bit pattern for NaN and replace intrinsic with raw version. Since
+  // all architectures implement this raw intrinsic, we leave the method information
+  // unchanged, even though the HInvoke now actually denotes another method call.
   HInstruction* nan;
   if (type == Primitive::kPrimDouble) {
     nan = GetGraph()->GetLongConstant(0x7ff8000000000000L);
     invoke->SetIntrinsic(Intrinsics::kDoubleDoubleToRawLongBits,
-                         kNeedsEnvironmentOrCache,
+                         kNoEnvironmentOrCache,
                          kNoSideEffects,
                          kNoThrow);
   } else {
     DCHECK_EQ(type, Primitive::kPrimFloat);
     nan = GetGraph()->GetIntConstant(0x7fc00000);
     invoke->SetIntrinsic(Intrinsics::kFloatFloatToRawIntBits,
-                         kNeedsEnvironmentOrCache,
+                         kNoEnvironmentOrCache,
                          kNoSideEffects,
                          kNoThrow);
   }
@@ -1593,6 +1596,82 @@ void InstructionSimplifierVisitor::SimplifyFP2Int(HInvoke* invoke) {
   HInstruction* select = new (GetGraph()->GetArena()) HSelect(condition, nan, invoke, dex_pc);
   invoke->GetBlock()->InsertInstructionBefore(select, condition->GetNext());
   invoke->ReplaceWithExceptInReplacementAtIndex(select, 0);  // false at index 0
+}
+
+void InstructionSimplifierVisitor::SimplifyRound(HInvoke* invoke) {
+  DCHECK(invoke->IsInvokeStaticOrDirect());
+  uint32_t dex_pc = invoke->GetDexPc();
+  HInstruction* x = invoke->InputAt(0);
+  HInstruction* arg = x;
+  Primitive::Type type = x->GetType();
+  // if (dex_pc != 1717171) return;
+  // Replace i = round(x) with the following, for integral i, j and floating-point x, y.
+  //    y = floor(x)
+  //    j = y;
+  //    i = (x - y) >= 0.5 ? j+1 : j
+  HInstruction* half;
+  HInstruction* one;
+  Primitive::Type int_type;
+  if (type == Primitive::kPrimDouble) {
+    half = GetGraph()->GetDoubleConstant(0.5);
+    one = GetGraph()->GetLongConstant(1L);
+    int_type = Primitive::kPrimLong;
+  } else {
+    DCHECK_EQ(type, Primitive::kPrimFloat);
+    half = GetGraph()->GetFloatConstant(0.5f);
+    one = GetGraph()->GetIntConstant(1);
+    int_type = Primitive::kPrimInt;
+    // Need to promote argument into double Math.floor().
+    arg = new (GetGraph()->GetArena()) HTypeConversion(Primitive::kPrimDouble, x, dex_pc);
+    invoke->GetBlock()->InsertInstructionBefore(arg, invoke);
+  }
+  // Construct the floor intrinsic call. Because the return type changes and due to
+  // following reuse pattern, we cannot simply reuse the existing HInvoke. Since all
+  // architectures implement the floor intrinsic, we leave the method information empty.
+  HInvokeStaticOrDirect::DispatchInfo dispatch_info = {
+      HInvokeStaticOrDirect::MethodLoadKind::kDirectAddress,
+      HInvokeStaticOrDirect::CodePtrLocation::kCallDirect,
+      0u,
+      0U
+  };
+  HInvokeStaticOrDirect* floor = new (GetGraph()->GetArena()) HInvokeStaticOrDirect(
+      GetGraph()->GetArena(),
+      1,
+      Primitive::kPrimDouble,
+      dex_pc,
+      -1,  // method_index
+      MethodReference(nullptr, -1),
+      dispatch_info,
+      kStatic,
+      kStatic,
+      HInvokeStaticOrDirect::ClinitCheckRequirement::kNone);
+  floor->SetArgumentAt(0, arg);
+  floor->SetIntrinsic(Intrinsics::kMathFloor,
+                      kNoEnvironmentOrCache,
+                      kNoSideEffects,
+                      kNoThrow);
+  invoke->GetBlock()->InsertInstructionBefore(floor, invoke);
+  // Float needs to promote back after calling double Math.floor().
+  if (type == Primitive::kPrimDouble) {
+    arg = floor;
+  } else {
+    arg = new (GetGraph()->GetArena()) HTypeConversion(Primitive::kPrimFloat, floor, dex_pc);
+    invoke->GetBlock()->InsertInstructionBefore(arg, invoke);
+  }
+  // Integral j = y and j + 1.
+  HTypeConversion* conversion = new (GetGraph()->GetArena()) HTypeConversion(int_type, arg, dex_pc);
+  invoke->GetBlock()->InsertInstructionBefore(conversion, invoke);
+  HAdd* add = new (GetGraph()->GetArena()) HAdd(int_type, conversion, one, dex_pc);
+  invoke->GetBlock()->InsertInstructionBefore(add, invoke);
+  // Test difference.
+  HSub* sub = new (GetGraph()->GetArena()) HSub(type, x, arg, dex_pc);
+  invoke->GetBlock()->InsertInstructionBefore(sub, invoke);
+  HCondition* condition = new (GetGraph()->GetArena()) HGreaterThanOrEqual(sub, half, dex_pc);
+  condition->SetBias(ComparisonBias::kLtBias);
+  invoke->GetBlock()->InsertInstructionBefore(condition, invoke);
+  // Select between the two.
+  HInstruction* select = new (GetGraph()->GetArena()) HSelect(condition, add, conversion, dex_pc);
+  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, select);
 }
 
 void InstructionSimplifierVisitor::SimplifyMemBarrier(HInvoke* invoke, MemBarrierKind barrier_kind) {
@@ -1632,6 +1711,10 @@ void InstructionSimplifierVisitor::VisitInvoke(HInvoke* instruction) {
     case Intrinsics::kFloatFloatToIntBits:
     case Intrinsics::kDoubleDoubleToLongBits:
       SimplifyFP2Int(instruction);
+      break;
+    case Intrinsics::kMathRoundFloat:
+    case Intrinsics::kMathRoundDouble:
+      SimplifyRound(instruction);
       break;
     case Intrinsics::kUnsafeLoadFence:
       SimplifyMemBarrier(instruction, MemBarrierKind::kLoadAny);
