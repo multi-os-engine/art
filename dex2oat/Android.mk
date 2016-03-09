@@ -14,18 +14,16 @@
 # limitations under the License.
 #
 
-# ASan slows down dex2oat by ~3.5x, which translates into extremely slow first
-# boot. Disabled to help speed up SANITIZE_TARGET mode.
-# The supported way of using SANITIZE_TARGET is by first running a normal build,
-# followed by a SANITIZE_TARGET=address build on top of it (in the same build
-# tree). By disabling this module in SANITIZE_TARGET build, we keep the regular,
-# uninstrumented version of it.
-# Bug: 22233158
-ifeq (,$(filter address, $(SANITIZE_TARGET)))
-
 LOCAL_PATH := $(call my-dir)
 
 include art/build/Android.executable.mk
+
+# ASan slows down dex2oat by ~3.5x, which translates into extremely slow first
+# boot. Disabled to help speed up SANITIZE_TARGET mode.
+# Bug: 22233158
+ifneq (,$(filter address, $(SANITIZE_TARGET)))
+LOCAL_SANITIZE := never
+endif
 
 DEX2OAT_SRC_FILES := \
 	dex2oat.cc
@@ -97,5 +95,3 @@ endif
 # Clear locals now they've served their purpose.
 dex2oat_target_arch :=
 dex2oat_host_arch :=
-
-endif
