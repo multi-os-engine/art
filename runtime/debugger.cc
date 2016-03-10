@@ -44,6 +44,8 @@
 #include "mirror/object_array-inl.h"
 #include "mirror/string-inl.h"
 #include "mirror/throwable.h"
+#include "oat_file.h"
+#include "oat_file_manager.h"
 #include "quick/inline_method_analyser.h"
 #include "reflection.h"
 #include "safe_map.h"
@@ -622,9 +624,12 @@ void Dbg::GoActive() {
   }
 
   Runtime* runtime = Runtime::Current();
-  // Since boot image code is AOT compiled as not debuggable, we need to patch
+  const auto& boot_oat_files = runtime->GetOatFileManager().GetBootOatFiles();
+  // If boot image code is AOT compiled as not debuggable, we need to patch
   // entry points of methods in boot image to interpreter bridge.
-  if (!runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
+  if (!boot_oat_files.empty() &&
+      !boot_oat_files.front()->IsDebuggable() &&
+      !runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
     ScopedObjectAccess soa(self);
     UpdateEntryPointsClassVisitor visitor(runtime->GetInstrumentation());
     runtime->GetClassLinker()->VisitClasses(&visitor);
