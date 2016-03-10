@@ -698,6 +698,10 @@ class Dex2Oat FINAL {
     if (IsBootImage()) {
       // We need the boot image to always be debuggable.
       // TODO: Remove this once we better deal with full frame deoptimization.
+      // TODO(dsrbecky) When this gets removed we need to make sure that the entry point
+      //   patching in Dbg::GoActive() is *not* done during native-debugging session.
+      //   Native debugging does blocking JIT at first use, which has non-negligible
+      //   impact if we JIT whole boot.oat (we can still do it, but not by default).
       compiler_options_->debuggable_ = true;
     }
 
