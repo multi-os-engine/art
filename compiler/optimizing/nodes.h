@@ -4365,8 +4365,28 @@ class HRem : public HBinaryOperation {
   }
 
   template <typename T>
-  T ComputeFP(T x, T y) const {
+  int32_t CompareFP(T x, T y) const { return x > y ? 1 : (x < y ? -1 : 0); }
+
+  template <typename T>
+  T ComputeFP(T x, T y, bool single) const {
     DCHECK(Primitive::IsFloatingPointType(GetType())) << GetType();
+    if (std::isnan(x) || std::isnan(y) ||
+        std::isinf(x) || CompareFP(y, 0) == 0) {
+      return std::numeric_limits<float>::quiet_NaN();
+    }
+
+    if (std::isinf(y)) {
+      return x;
+    }
+
+    if (CompareFP(x, 0) == 0) {
+      return x;
+    }
+
+    if (single) {
+      return std::fmodf(x, y);
+    }
+
     return std::fmod(x, y);
   }
 
@@ -4380,11 +4400,11 @@ class HRem : public HBinaryOperation {
   }
   HConstant* Evaluate(HFloatConstant* x, HFloatConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetFloatConstant(
-        ComputeFP(x->GetValue(), y->GetValue()), GetDexPc());
+        ComputeFP(x->GetValue(), y->GetValue(), true), GetDexPc());
   }
   HConstant* Evaluate(HDoubleConstant* x, HDoubleConstant* y) const OVERRIDE {
     return GetBlock()->GetGraph()->GetDoubleConstant(
-        ComputeFP(x->GetValue(), y->GetValue()), GetDexPc());
+        ComputeFP(x->GetValue(), y->GetValue(), false), GetDexPc());
   }
 
   static SideEffects SideEffectsForArchRuntimeCalls() {
