@@ -15,6 +15,7 @@
  */
 
 import java.lang.reflect.Field;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import sun.misc.Unsafe;
 
@@ -167,7 +168,7 @@ public class Main {
       throw new Error("No offset: " + e);
     }
 
-    // Some sanity within same thread.
+    // Some sanity on setters and adders within same thread.
 
     set32(m, intOffset, 3);
     expectEquals32(3, m.i);
@@ -233,7 +234,61 @@ public class Main {
     join();
     expectEquals64(659L, m.l);  // all values accounted for
 
-    // TODO: the fences
+    // Some sanity on fences within same thread.
+
+    m.i = -1;
+    m.l = -2L;
+    m.o = null;
+
+    load();
+    store();
+    full();
+
+    expectEquals32(-1, m.i);
+    expectEquals64(-2L, m.l);
+    expectEqualsObj(null, m.o);
+
+    // Some sanity on full fence within different threads.
+
+    final AtomicBoolean guard1 = new AtomicBoolean();
+    m.l = 0L;
+
+    fork(new Runnable() {
+      public void run() {
+        while (!guard1.get());  // busy-waiting
+        full();
+        expectEquals64(-123456789L, m.l);
+      }
+    });
+
+    // We set the non-volatile m.l after the fork(), which means there is no happens-before
+    // relation in the Java memory model with respect to the read in the threads. This
+    // relation is enforced by the full memory fence and the weak-set->get signal.
+    m.l = -123456789L;
+    full();
+    while (!guard1.weakCompareAndSet(false, true));  // relaxed memory order
+    join();
+
+    // Some sanity on release/acquire fence within different threads.
+
+    final AtomicBoolean guard2 = new AtomicBoolean();
+    m.l = 0L;
+
+    fork(new Runnable() {
+      public void run() {
+        while (!guard2.get());  // busy-waiting
+        load();
+        expectEquals64(-987654321L, m.l);
+      }
+    });
+
+    // We set the non-volatile m.l after the fork(), which means there is no happens-before
+    // relation in the Java memory model with respect to the read in the threads. This
+    // relation is enforced by the release/acquire memory fences and the weak-set->get signal.
+    m.l = -987654321L;
+    store();
+    while (!guard2.weakCompareAndSet(false, true));  // relaxed memory order
+    join();
 
     System.out.println("passed");
   }
