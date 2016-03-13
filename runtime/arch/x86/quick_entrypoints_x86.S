@@ -1406,7 +1406,27 @@ END_FUNCTION art_quick_proxy_invoke_handler
      * dex method index.
      */
 DEFINE_FUNCTION art_quick_imt_conflict_trampoline
+    PUSH EDI
+    movl 8(%esp), %edi // Load referrer
+    movl ART_METHOD_DEX_CACHE_METHODS_OFFSET_32(%edi), %edi   // Load dex cache methods array
+    PUSH EAX
     movd %xmm7, %eax              // get target method index stored in xmm7
+    movl 0(%edi, %eax, __SIZEOF_POINTER__), %edi  // Load interface method
+    POP EAX
+    movl ART_METHOD_JNI_OFFSET_32(%eax), %eax
+.Limt_table_iterate:
+    cmpl %edi, 0(%eax)
+    jne .Limt_table_next_entry
+    POP EDI
+    movl __SIZEOF_POINTER__(%eax), %eax
+    jmp *ART_METHOD_QUICK_CODE_OFFSET_32(%eax)
+.Limt_table_next_entry:
+    cmpl LITERAL(0), 0(%eax)
+    jz .Lconflict_trampoline
+    addl LITERAL(2 * __SIZEOF_POINTER__), %eax
+    jmp .Limt_table_iterate
+.Lconflict_trampoline:
+    POP EDI
     INVOKE_TRAMPOLINE_BODY artInvokeInterfaceTrampoline
 END_FUNCTION art_quick_imt_conflict_trampoline
 
