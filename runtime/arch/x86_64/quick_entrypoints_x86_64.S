@@ -1321,7 +1321,21 @@ DEFINE_FUNCTION art_quick_imt_conflict_trampoline
     int3
     int3
 #else
-    movq %rax, %rdi
+    movq __SIZEOF_POINTER__(%rsp), %r10 // Load referrer
+    movq ART_METHOD_DEX_CACHE_METHODS_OFFSET_64(%r10), %r10   // Load dex cache methods array
+    movq 0(%r10, %rax, __SIZEOF_POINTER__), %r10 // Load interface method
+    movq ART_METHOD_JNI_OFFSET_64(%rdi), %rdi
+.Limt_table_iterate:
+    cmpq %r10, 0(%rdi)
+    jne .Limt_table_next_entry
+    movq __SIZEOF_POINTER__(%rdi), %rdi
+    jmp *ART_METHOD_QUICK_CODE_OFFSET_64(%rdi)
+.Limt_table_next_entry:
+    cmpq LITERAL(0), 0(%rdi)
+    jz .Lconflict_trampoline
+    addq LITERAL(2 * __SIZEOF_POINTER__), %rdi
+    jmp .Limt_table_iterate
+.Lconflict_trampoline:
     INVOKE_TRAMPOLINE_BODY artInvokeInterfaceTrampoline
 #endif  // __APPLE__
 END_FUNCTION art_quick_imt_conflict_trampoline

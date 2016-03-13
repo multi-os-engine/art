@@ -1967,9 +1967,13 @@ class ImageDumper {
             method->GetEntryPointFromQuickCompiledCodePtrSize(image_pointer_size)) {
         indent_os << StringPrintf("OAT CODE: %p\n", quick_oat_code_begin);
       }
-    } else if (method->IsAbstract() || method->IsCalleeSaveMethod() ||
-      method->IsResolutionMethod() || method->IsImtConflictMethod() ||
-      method->IsImtUnimplementedMethod() || method->IsClassInitializer()) {
+    } else if (method->IsAbstract() ||
+               method->IsCalleeSaveMethod() ||
+               method->IsResolutionMethod() ||
+               (method == Runtime::Current()->GetImtConflictMethod()) ||
+               method->IsImtUnimplementedMethod() ||
+               method->IsClassInitializer()) {
+      // Don't print information for these.
     } else {
       const DexFile::CodeItem* code_item = method->GetCodeItem();
       size_t dex_instruction_bytes = code_item->insns_size_in_code_units_ * 2;
