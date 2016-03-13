@@ -1589,8 +1589,10 @@ void Runtime::VisitImageRoots(RootVisitor* visitor) {
   }
 }
 
-ArtMethod* Runtime::CreateImtConflictMethod() {
-  auto* method = Runtime::Current()->GetClassLinker()->CreateRuntimeMethod();
+static ImtConflictTable::Entry empty_entry = { nullptr, nullptr };
+
+ArtMethod* Runtime::CreateImtConflictMethod(LinearAlloc* linear_alloc) {
+  auto* method = Runtime::Current()->GetClassLinker()->CreateRuntimeMethod(linear_alloc);
   // When compiling, the code pointer will get set later when the image is loaded.
   if (IsAotCompiler()) {
     size_t pointer_size = GetInstructionSetPointerSize(instruction_set_);
@@ -1598,6 +1600,7 @@ ArtMethod* Runtime::CreateImtConflictMethod() {
   } else {
     method->SetEntryPointFromQuickCompiledCode(GetQuickImtConflictStub());
   }
+  method->SetImtConflictTable(reinterpret_cast<ImtConflictTable*>(&empty_entry));
   return method;
 }
 
@@ -1605,10 +1608,11 @@ void Runtime::SetImtConflictMethod(ArtMethod* method) {
   CHECK(method != nullptr);
   CHECK(method->IsRuntimeMethod());
   imt_conflict_method_ = method;
+  method->SetImtConflictTable(reinterpret_cast<ImtConflictTable*>(&empty_entry));
 }
 
 ArtMethod* Runtime::CreateResolutionMethod() {
-  auto* method = Runtime::Current()->GetClassLinker()->CreateRuntimeMethod();
+  auto* method = GetClassLinker()->CreateRuntimeMethod(GetLinearAlloc());
   // When compiling, the code pointer will get set later when the image is loaded.
   if (IsAotCompiler()) {
     size_t pointer_size = GetInstructionSetPointerSize(instruction_set_);
@@ -1620,7 +1624,7 @@ ArtMethod* Runtime::CreateResolutionMethod() {
 }
 
 ArtMethod* Runtime::CreateCalleeSaveMethod() {
-  auto* method = Runtime::Current()->GetClassLinker()->CreateRuntimeMethod();
+  auto* method = GetClassLinker()->CreateRuntimeMethod(GetLinearAlloc());
   size_t pointer_size = GetInstructionSetPointerSize(instruction_set_);
   method->SetEntryPointFromQuickCompiledCodePtrSize(nullptr, pointer_size);
   DCHECK_NE(instruction_set_, kNone);
@@ -1922,6 +1926,7 @@ void Runtime::SetImtUnimplementedMethod(ArtMethod* method) {
   CHECK(method != nullptr);
   CHECK(method->IsRuntimeMethod());
   imt_unimplemented_method_ = method;
+  method->SetImtConflictTable(reinterpret_cast<ImtConflictTable*>(&empty_entry));
 }
 
 bool Runtime::IsVerificationEnabled() const {
