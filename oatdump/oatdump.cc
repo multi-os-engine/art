@@ -1968,7 +1968,7 @@ class ImageDumper {
         indent_os << StringPrintf("OAT CODE: %p\n", quick_oat_code_begin);
       }
     } else if (method->IsAbstract() || method->IsCalleeSaveMethod() ||
-      method->IsResolutionMethod() || method->IsImtConflictMethod() ||
+      method->IsResolutionMethod() || (method == Runtime::Current()->GetImtConflictMethod()) ||
       method->IsImtUnimplementedMethod() || method->IsClassInitializer()) {
     } else {
       const DexFile::CodeItem* code_item = method->GetCodeItem();
