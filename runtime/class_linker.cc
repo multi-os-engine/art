@@ -5836,9 +5836,11 @@ static void SetIMTRef(ArtMethod* unimplemented_method,
   // Place method in imt if entry is empty, place conflict otherwise.
   if (*imt_ref == unimplemented_method) {
     *imt_ref = current_method;
-  } else if (*imt_ref != imt_conflict_method) {
+  } else if (!(*imt_ref)->IsRuntimeMethod()) {
     // If we are not a conflict and we have the same signature and name as the imt
     // entry, it must be that we overwrote a superclass vtable entry.
+    // Note that we have checked IsRuntimeMethod, as there may be multiple different
+    // conflict methods.
     MethodNameAndSignatureComparator imt_comparator(
         (*imt_ref)->GetInterfaceMethodIfProxy(image_pointer_size));
     if (imt_comparator.HasSameNameAndSignature(

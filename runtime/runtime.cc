@@ -1604,7 +1604,9 @@ ArtMethod* Runtime::CreateImtConflictMethod() {
 void Runtime::SetImtConflictMethod(ArtMethod* method) {
   CHECK(method != nullptr);
   CHECK(method->IsRuntimeMethod());
+  static ImtConflictTable::Entry empty_entry = { nullptr, nullptr };
   imt_conflict_method_ = method;
+  method->SetImtConflictTable(reinterpret_cast<ImtConflictTable*>(&empty_entry));
 }
 
 ArtMethod* Runtime::CreateResolutionMethod() {
