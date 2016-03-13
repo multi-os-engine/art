@@ -1589,6 +1589,8 @@ void Runtime::VisitImageRoots(RootVisitor* visitor) {
   }
 }
 
+static ImtConflictTable::Entry empty_entry = { nullptr, nullptr };
+
 ArtMethod* Runtime::CreateImtConflictMethod() {
   auto* method = Runtime::Current()->GetClassLinker()->CreateRuntimeMethod();
   // When compiling, the code pointer will get set later when the image is loaded.
@@ -1598,6 +1600,7 @@ ArtMethod* Runtime::CreateImtConflictMethod() {
   } else {
     method->SetEntryPointFromQuickCompiledCode(GetQuickImtConflictStub());
   }
+  method->SetImtConflictTable(reinterpret_cast<ImtConflictTable*>(&empty_entry));
   return method;
 }
 
@@ -1605,6 +1608,7 @@ void Runtime::SetImtConflictMethod(ArtMethod* method) {
   CHECK(method != nullptr);
   CHECK(method->IsRuntimeMethod());
   imt_conflict_method_ = method;
+  method->SetImtConflictTable(reinterpret_cast<ImtConflictTable*>(&empty_entry));
 }
 
 ArtMethod* Runtime::CreateResolutionMethod() {
@@ -1922,6 +1926,7 @@ void Runtime::SetImtUnimplementedMethod(ArtMethod* method) {
   CHECK(method != nullptr);
   CHECK(method->IsRuntimeMethod());
   imt_unimplemented_method_ = method;
+  method->SetImtConflictTable(reinterpret_cast<ImtConflictTable*>(&empty_entry));
 }
 
 bool Runtime::IsVerificationEnabled() const {

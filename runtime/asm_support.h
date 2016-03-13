@@ -304,6 +304,14 @@ ADD_TEST_EQ(ART_METHOD_QUICK_CODE_OFFSET_32,
 ADD_TEST_EQ(ART_METHOD_QUICK_CODE_OFFSET_64,
             art::ArtMethod::EntryPointFromQuickCompiledCodeOffset(8).Int32Value())
 
+#define ART_METHOD_JNI_OFFSET_32 28
+ADD_TEST_EQ(ART_METHOD_JNI_OFFSET_32,
+            art::ArtMethod::EntryPointFromJniOffset(4).Int32Value())
+
+#define ART_METHOD_JNI_OFFSET_64 40
+ADD_TEST_EQ(ART_METHOD_JNI_OFFSET_64,
+            art::ArtMethod::EntryPointFromJniOffset(8).Int32Value())
+
 #define LOCK_WORD_STATE_SHIFT 30
 ADD_TEST_EQ(LOCK_WORD_STATE_SHIFT, static_cast<int32_t>(art::LockWord::kStateShift))
 

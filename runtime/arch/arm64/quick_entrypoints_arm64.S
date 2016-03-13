@@ -1690,7 +1690,23 @@ END art_quick_proxy_invoke_handler
      */
     .extern artInvokeInterfaceTrampoline
 ENTRY art_quick_imt_conflict_trampoline
-    mov    x0, xIP1
+    ldr xIP0, [sp, #0]  // Load referrer
+    ldr xIP0, [xIP0, #ART_METHOD_DEX_CACHE_METHODS_OFFSET_64]   // Load dex cache methods array
+    ldr xIP0, [xIP0, xIP1, lsl #POINTER_SIZE_SHIFT]  // Load interface method
+    ldr x0, [x0, #ART_METHOD_JNI_OFFSET_64]
+.Limt_table_iterate:
+    ldr xIP1, [x0, #0]
+    cmp xIP0, xIP1
+    beq .Limt_table_found
+    cmp xIP1, #0
+    be .Lconflict_trampoline
+    add x0, x0, #16
+    b .Limt_table_iterate
+.Limt_table_found:
+    ldr x0, [x0, #__SIZEOF_POINTER__]
+    ldr xIP0, [r0, #ART_METHOD_QUICK_CODE_OFFSET_64]
+    br xIP0
+.Lconflict_trampoline:
     INVOKE_TRAMPOLINE_BODY artInvokeInterfaceTrampoline
 END art_quick_imt_conflict_trampoline
 
