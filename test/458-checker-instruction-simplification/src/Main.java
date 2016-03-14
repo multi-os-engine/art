@@ -1601,6 +1601,24 @@ public class Main {
     return (short) (value & 0x17fff);
   }
 
+  /// CHECK-START: double Main.shortAnd0xffffToShortToDouble(short) instruction_simplifier (before)
+  /// CHECK-DAG:      <<Arg:s\d+>>      ParameterValue
+  /// CHECK-DAG:      <<Mask:i\d+>>     IntConstant 65535
+  /// CHECK-DAG:      <<And:i\d+>>      And [<<Mask>>,<<Arg>>]
+  /// CHECK-DAG:      <<Same:s\d+>>     TypeConversion [<<And>>]
+  /// CHECK-DAG:      <<Double:d\d+>>   TypeConversion [<<Same>>]
+  /// CHECK-DAG:                        Return [<<Double>>]
+
+  /// CHECK-START: double Main.shortAnd0xffffToShortToDouble(short) instruction_simplifier (after)
+  /// CHECK-DAG:      <<Arg:s\d+>>      ParameterValue
+  /// CHECK-DAG:      <<Double:d\d+>>   TypeConversion [<<Arg>>]
+  /// CHECK-DAG:                        Return [<<Double>>]
+
+  public static double shortAnd0xffffToShortToDouble(short value) {
+    short same = (short) (value & 0xffff);
+    return (double) same;
+  }
+
   /// CHECK-START: int Main.intReverseCondition(int) instruction_simplifier (before)
   /// CHECK-DAG:      <<Arg:i\d+>>      ParameterValue
   /// CHECK-DAG:      <<Const42:i\d+>>  IntConstant 42
@@ -1767,6 +1785,13 @@ public static void main(String[] args) {
     assertIntEquals(intAnd0x17fffToShort(0x88888888), 0x0888);
     assertIntEquals(intAnd0x17fffToShort(Integer.MIN_VALUE), 0);
     assertIntEquals(intAnd0x17fffToShort(Integer.MAX_VALUE), Short.MAX_VALUE);
+
+    assertDoubleEquals(shortAnd0xffffToShortToDouble((short) 0), 0.0);
+    assertDoubleEquals(shortAnd0xffffToShortToDouble((short) 1), 1.0);
+    assertDoubleEquals(shortAnd0xffffToShortToDouble((short) -2), -2.0);
+    assertDoubleEquals(shortAnd0xffffToShortToDouble((short) 12345), 12345.0);
+    assertDoubleEquals(shortAnd0xffffToShortToDouble(Short.MAX_VALUE), (double)Short.MAX_VALUE);
+    assertDoubleEquals(shortAnd0xffffToShortToDouble(Short.MIN_VALUE), (double)Short.MIN_VALUE);
 
     assertIntEquals(intReverseCondition(41), 13);
     assertIntEquals(intReverseConditionNaN(-5), 13);
