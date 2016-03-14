@@ -3393,8 +3393,7 @@ void LocationsBuilderMIPS::VisitNativeDebugInfo(HNativeDebugInfo* info) {
   new (GetGraph()->GetArena()) LocationSummary(info);
 }
 
-void InstructionCodeGeneratorMIPS::VisitNativeDebugInfo(HNativeDebugInfo* info) {
-  codegen_->MaybeRecordNativeDebugInfo(info, info->GetDexPc());
+void InstructionCodeGeneratorMIPS::VisitNativeDebugInfo(HNativeDebugInfo*) {
 }
 
 void CodeGeneratorMIPS::GenerateNop() {

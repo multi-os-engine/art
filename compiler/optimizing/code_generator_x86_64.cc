@@ -1617,8 +1617,7 @@ void LocationsBuilderX86_64::VisitNativeDebugInfo(HNativeDebugInfo* info) {
   new (GetGraph()->GetArena()) LocationSummary(info);
 }
 
-void InstructionCodeGeneratorX86_64::VisitNativeDebugInfo(HNativeDebugInfo* info) {
-  codegen_->MaybeRecordNativeDebugInfo(info, info->GetDexPc());
+void InstructionCodeGeneratorX86_64::VisitNativeDebugInfo(HNativeDebugInfo*) {
 }
 
 void CodeGeneratorX86_64::GenerateNop() {
