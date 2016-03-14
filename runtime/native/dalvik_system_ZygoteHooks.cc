@@ -21,7 +21,9 @@
 #include <cutils/process_name.h>
 
 #include "arch/instruction_set.h"
+#include "class_linker-inl.h"
 #include "debugger.h"
+#include "entrypoints/runtime_asm_entrypoints.h"
 #include "java_vm_ext.h"
 #include "jit/jit.h"
 #include "jni_internal.h"
@@ -38,6 +40,29 @@
 #include <sys/resource.h>
 
 namespace art {
+
+// Used to patch boot image method entry point to interpreter bridge.
+class UpdateEntryPointsClassVisitor : public ClassVisitor {
+ public:
+  explicit UpdateEntryPointsClassVisitor(instrumentation::Instrumentation* instrumentation)
+      : instrumentation_(instrumentation) {}
+
+  bool operator()(mirror::Class* klass) OVERRIDE REQUIRES(Locks::mutator_lock_) {
+    auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+    for (auto& m : klass->GetMethods(pointer_size)) {
+      const void* code = m.GetEntryPointFromQuickCompiledCode();
+      if (Runtime::Current()->GetHeap()->IsInBootImageOatFile(code) &&
+          !m.IsNative() &&
+          !m.IsProxyMethod()) {
+        instrumentation_->UpdateMethodsCode(&m, GetQuickToInterpreterBridge());
+      }
+    }
+    return true;
+  }
+
+ private:
+  instrumentation::Instrumentation* const instrumentation_;
+};
 
 static void EnableDebugger() {
 #if defined(__linux__)
@@ -69,7 +94,19 @@ static void EnableDebugFeatures(uint32_t debug_flags) {
     DEBUG_NATIVE_DEBUGGABLE         = 1 << 7,
   };
 
+  Thread* const self = Thread::Current();
   Runtime* const runtime = Runtime::Current();
+  if ((debug_flags & DEBUG_ENABLE_DEBUGGER) != 0 ||
+      (debug_flags & DEBUG_NATIVE_DEBUGGABLE) != 0) {
+    // Since boot image code may be AOT compiled as not debuggable, we need to patch
+    // entry points of methods in boot image to interpreter bridge.
+    if (!runtime->GetInstrumentation()->IsForcedInterpretOnly()) {
+      ScopedObjectAccess soa(self);
+      UpdateEntryPointsClassVisitor visitor(runtime->GetInstrumentation());
+      runtime->GetClassLinker()->VisitClasses(&visitor);
+    }
+  }
+
   if ((debug_flags & DEBUG_ENABLE_CHECKJNI) != 0) {
     JavaVMExt* vm = runtime->GetJavaVM();
     if (!vm->IsCheckJniEnabled()) {
