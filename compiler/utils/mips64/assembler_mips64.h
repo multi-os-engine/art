@@ -513,6 +513,9 @@ class Mips64Assembler FINAL : public Assembler {
   friend std::ostream& operator<<(std::ostream& os, const BranchCondition& rhs);
 
  private:
+  // Utility routine for Mips64Assembler::LoadConst64(GpuRegister, int64_t).
+  void EmitDinsu(GpuRegister, int64_t);
+
   class Branch {
    public:
     enum Type {

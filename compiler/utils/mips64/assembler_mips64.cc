@@ -1046,8 +1046,36 @@ void Mips64Assembler::LoadConst32(GpuRegister rd, int32_t value) {
   }
 }
 
+static int CountDinsu(int64_t value) {
+  int32_t x = Low32Bits(value);
+  int32_t y = High32Bits(value);
+
+  if (x == y) {
+    return (IsUint<16>(x) ||
+            IsInt<16>(x) ||
+            ((value & 0xFFFF) == 0 && IsInt<16>(value >> 16))) ? 2 : 3;
+  }
+
+  return INT_MAX;
+}
+
+// This method is private.
+void Mips64Assembler::EmitDinsu(GpuRegister rd, int64_t value) {
+  int32_t x = Low32Bits(value);
+
+  if (IsUint<16>(x)) {
+    Ori(rd, ZERO, x);
+  } else if (IsInt<16>(x)) {
+    Daddiu(rd, ZERO, x);
+  } else {
+    LoadConst32(rd, x);
+  }
+  Dinsu(rd, rd, 32, 32);
+}
+
 void Mips64Assembler::LoadConst64(GpuRegister rd, int64_t value) {
   int bit31 = (value & UINT64_C(0x80000000)) != 0;
+  int countDinsu = CountDinsu(value);
 
   // Loads with 1 instruction.
   if (IsUint<16>(value)) {
@@ -1098,6 +1126,8 @@ void Mips64Assembler::LoadConst64(GpuRegister rd, int64_t value) {
       } else {
         Dsll32(rd, rd, shift_cnt & 31);
       }
+    } else if (countDinsu < 3) {
+      EmitDinsu(rd, value);
     } else if (IsInt<32>(tmp)) {
       // Loads with 3 instructions.
       Lui(rd, tmp >> 16);
@@ -1126,6 +1156,8 @@ void Mips64Assembler::LoadConst64(GpuRegister rd, int64_t value) {
           Dsll32(rd, rd, shift_cnt & 31);
         }
         Ori(rd, rd, value);
+      } else if (countDinsu < 4) {
+        EmitDinsu(rd, value);
       } else {
         // Loads with 3-4 instructions.
         uint64_t tmp2 = value;
