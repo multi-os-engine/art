@@ -3995,10 +3995,11 @@ ArtMethod* MethodVerifier::VerifyInvocationArgs(
       }
       // TODO Revisit whether we want to allow invoke-super on direct interfaces only like the JLS
       // does.
-      mirror::Class* this_class = GetDeclaringClass().GetClass();
-      if (!reference_class->IsAssignableFrom(this_class)) {
+      // TODO We might want to be more intelligent if we don't have a good class.
+      if (GetDeclaringClass().HasClass() &&
+          !reference_class->IsAssignableFrom(GetDeclaringClass().GetClass())) {
         Fail(VERIFY_ERROR_CLASS_CHANGE)
-            << "invoke-super in " << PrettyClass(this_class) << " in method "
+            << "invoke-super in " << PrettyClass(GetDeclaringClass().GetClass()) << " in method "
             << PrettyMethod(dex_method_idx_, *dex_file_) << " to method "
             << PrettyMethod(method_idx, *dex_file_) << " references "
             << "non-super-interface type " << PrettyClass(reference_class);
