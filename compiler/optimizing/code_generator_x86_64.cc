@@ -1860,6 +1860,9 @@ void LocationsBuilderX86_64::VisitCompare(HCompare* compare) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(compare, LocationSummary::kNoCall);
   switch (compare->InputAt(0)->GetType()) {
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
     case Primitive::kPrimInt:
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RequiresRegister());
@@ -1890,6 +1893,9 @@ void InstructionCodeGeneratorX86_64::VisitCompare(HCompare* compare) {
   Condition less_cond = kLess;
 
   switch (type) {
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
     case Primitive::kPrimInt: {
       CpuRegister left_reg = left.AsRegister<CpuRegister>();
       if (right.IsConstant()) {

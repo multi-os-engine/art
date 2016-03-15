@@ -95,7 +95,7 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   void SimplifyRotate(HInvoke* invoke, bool is_left);
   void SimplifySystemArrayCopy(HInvoke* invoke);
   void SimplifyStringEquals(HInvoke* invoke);
-  void SimplifyCompare(HInvoke* invoke, bool has_zero_op);
+  void SimplifyCompare(HInvoke* invoke, bool is_signum, Primitive::Type type);
   void SimplifyIsNaN(HInvoke* invoke);
   void SimplifyFP2Int(HInvoke* invoke);
   void SimplifyMemBarrier(HInvoke* invoke, MemBarrierKind barrier_kind);
@@ -1612,12 +1612,13 @@ void InstructionSimplifierVisitor::SimplifySystemArrayCopy(HInvoke* instruction)
   }
 }
 
-void InstructionSimplifierVisitor::SimplifyCompare(HInvoke* invoke, bool is_signum) {
+void InstructionSimplifierVisitor::SimplifyCompare(HInvoke* invoke,
+                                                   bool is_signum,
+                                                   Primitive::Type type) {
   DCHECK(invoke->IsInvokeStaticOrDirect());
   uint32_t dex_pc = invoke->GetDexPc();
   HInstruction* left = invoke->InputAt(0);
   HInstruction* right;
-  Primitive::Type type = left->GetType();
   if (!is_signum) {
     right = invoke->InputAt(1);
   } else if (type == Primitive::kPrimLong) {
@@ -1694,12 +1695,16 @@ void InstructionSimplifierVisitor::VisitInvoke(HInvoke* instruction) {
       SimplifyRotate(instruction, true);
       break;
     case Intrinsics::kIntegerCompare:
+      SimplifyCompare(instruction, /* is_signum */ false, Primitive::kPrimInt);
+      break;
     case Intrinsics::kLongCompare:
-      SimplifyCompare(instruction, /* is_signum */ false);
+      SimplifyCompare(instruction, /* is_signum */ false, Primitive::kPrimLong);
       break;
     case Intrinsics::kIntegerSignum:
+      SimplifyCompare(instruction, /* is_signum */ true, Primitive::kPrimInt);
+      break;
     case Intrinsics::kLongSignum:
-      SimplifyCompare(instruction, /* is_signum */ true);
+      SimplifyCompare(instruction, /* is_signum */ true, Primitive::kPrimLong);
       break;
     case Intrinsics::kFloatIsNaN:
     case Intrinsics::kDoubleIsNaN:

@@ -2070,6 +2070,9 @@ void LocationsBuilderMIPS::VisitCompare(HCompare* compare) {
       new (GetGraph()->GetArena()) LocationSummary(compare, LocationSummary::kNoCall);
 
   switch (in_type) {
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
     case Primitive::kPrimInt:
     case Primitive::kPrimLong:
       locations->SetInAt(0, Location::RequiresRegister());
@@ -2100,6 +2103,9 @@ void InstructionCodeGeneratorMIPS::VisitCompare(HCompare* instruction) {
   //  1 if: left  > right
   // -1 if: left  < right
   switch (in_type) {
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
     case Primitive::kPrimInt: {
       Register lhs = locations->InAt(0).AsRegister<Register>();
       Register rhs = locations->InAt(1).AsRegister<Register>();
