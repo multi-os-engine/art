@@ -350,7 +350,6 @@ JNIEXPORT jstring JVM_NativeLoad(JNIEnv* env,
   std::string error_msg;
   {
     art::ScopedObjectAccess soa(env);
-    art::StackHandleScope<1> hs(soa.Self());
     art::JavaVMExt* vm = art::Runtime::Current()->GetJavaVM();
     bool success = vm->LoadNativeLibrary(env,
                                          filename.c_str(),
