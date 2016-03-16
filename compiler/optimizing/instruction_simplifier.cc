@@ -39,6 +39,12 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
     }
   }
 
+  void MaybeRecordStat(MethodCompilationStat stat) {
+    if (stats_) {
+      stats_->RecordStat(stat);
+    }
+  }
+
   bool ReplaceRotateWithRor(HBinaryOperation* op, HUShr* ushr, HShl* shl);
   bool TryReplaceWithRotate(HBinaryOperation* instruction);
   bool TryReplaceWithRotateConstantPattern(HBinaryOperation* op, HUShr* ushr, HShl* shl);
@@ -505,6 +511,7 @@ void InstructionSimplifierVisitor::VisitInstanceOf(HInstanceOf* instruction) {
 
   HGraph* graph = GetGraph();
   if (object->IsNullConstant()) {
+    MaybeRecordStat(kRemovedInstanceOf);
     instruction->ReplaceWith(graph->GetIntConstant(0));
     instruction->GetBlock()->RemoveInstruction(instruction);
     RecordSimplification();
@@ -513,6 +520,7 @@ void InstructionSimplifierVisitor::VisitInstanceOf(HInstanceOf* instruction) {
 
   bool outcome;
   if (TypeCheckHasKnownOutcome(load_class, object, &outcome)) {
+    MaybeRecordStat(kRemovedInstanceOf);
     if (outcome && can_be_null) {
       // Type test will succeed, we just need a null test.
       HNotEqual* test = new (graph->GetArena()) HNotEqual(graph->GetNullConstant(), object);

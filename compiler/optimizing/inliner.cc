@@ -263,6 +263,7 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
   // We can query the dex cache directly. The verifier has populated it already.
   ArtMethod* resolved_method;
   ArtMethod* actual_method = nullptr;
+  bool inlined_because_of_rtp = false;
   if (invoke_instruction->IsInvokeStaticOrDirect()) {
     if (invoke_instruction->AsInvokeStaticOrDirect()->IsStringInit()) {
       VLOG(compiler) << "Not inlining a String.<init> method";
@@ -282,6 +283,9 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
     if (resolved_method != nullptr) {
       // Check if we can statically find the method.
       actual_method = FindVirtualOrInterfaceTarget(invoke_instruction, resolved_method);
+      if (actual_method != nullptr) {
+        inlined_because_of_rtp = true;
+      }
     }
   }
 
@@ -293,7 +297,11 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
   }
 
   if (actual_method != nullptr) {
-    return TryInlineAndReplace(invoke_instruction, actual_method, /* do_rtp */ true);
+    bool result = TryInlineAndReplace(invoke_instruction, actual_method, /* do_rtp */ true);
+    if (result && inlined_because_of_rtp) {
+      MaybeRecordStat(kInlinedInvokeBecauseOfRTP);
+    }
+    return result;
   }
 
   DCHECK(!invoke_instruction->IsInvokeStaticOrDirect());

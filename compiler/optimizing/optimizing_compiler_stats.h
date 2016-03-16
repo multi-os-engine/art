@@ -60,6 +60,8 @@ enum MethodCompilationStat {
   kIntrinsicRecognized,
   kLoopInvariantMoved,
   kSelectGenerated,
+  kRemovedInstanceOf,
+  kInlinedInvokeBecauseOfRTP,
   kLastStat
 };
 
@@ -133,6 +135,8 @@ class OptimizingCompilerStats {
       case kIntrinsicRecognized : name = "IntrinsicRecognized"; break;
       case kLoopInvariantMoved : name = "LoopInvariantMoved"; break;
       case kSelectGenerated : name = "SelectGenerated"; break;
+      case kRemovedInstanceOf: name = "RemovedInstanceOf"; break;
+      case kInlinedInvokeBecauseOfRTP: name = "InlinedInvokeBecauseOfRTP"; break;
 
       case kLastStat:
         LOG(FATAL) << "invalid stat "
