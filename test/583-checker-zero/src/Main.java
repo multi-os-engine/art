@@ -15,7 +15,7 @@
  */
 
 public class Main {
-  /// CHECK-START: void Main.main(String[]) inliner (after)
+  /// CHECK-START: void Main.main(java.lang.String[]) inliner (after)
   /// CHECK: HInstanceFieldSet
   public static void main(String[] args) {
     if (new Float(0f).equals(new Float(-0f))) {
