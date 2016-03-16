@@ -332,8 +332,8 @@ inline const char* ArtMethod::GetName() {
 }
 
 inline const DexFile::CodeItem* ArtMethod::GetCodeItem() {
-  DCHECK(!IsProxyMethod());
-  return GetDeclaringClass()->GetDexFile().GetCodeItem(GetCodeItemOffset());
+  return IsProxyMethod() ? nullptr
+                         : GetDeclaringClass()->GetDexFile().GetCodeItem(GetCodeItemOffset());
 }
 
 inline bool ArtMethod::IsResolvedTypeIdx(uint16_t type_idx, size_t ptr_size) {

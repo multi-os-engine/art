@@ -557,8 +557,7 @@ static inline bool DoCallCommon(ArtMethod* called_method,
 
   // Compute method information. Need to specifically check for proxy methods since default-method
   // proxies might have a CodeItem from the default version.
-  const DexFile::CodeItem* code_item =
-      called_method->IsProxyMethod() ? nullptr : called_method->GetCodeItem();
+  const DexFile::CodeItem* code_item = called_method->GetCodeItem();
 
   // Number of registers for the callee's call frame.
   uint16_t num_regs;
