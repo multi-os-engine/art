@@ -304,6 +304,8 @@ public class Main {
   }
 
   private static void longToFloat() {
+    assertFloatEquals(1F, $opt$inline$LongToFloat(1L));
+
     assertFloatEquals(1F, $opt$noinline$LongToFloat(1L));
     assertFloatEquals(0F, $opt$noinline$LongToFloat(0L));
     assertFloatEquals(-1F, $opt$noinline$LongToFloat(-1L));
@@ -650,8 +652,10 @@ public class Main {
   static int $opt$noinline$LongToInt(long a) { if (doThrow) throw new Error(); return (int)a; }
   static int $opt$noinline$LongLiteralToInt() { if (doThrow) throw new Error(); return (int)42L; }
 
-  // This method produces a long-to-float Dex instruction.
+  // This methods produces a long-to-float Dex instruction.
   static float $opt$noinline$LongToFloat(long a) { if (doThrow) throw new Error(); return (float)a; }
+  static long longValue;
+  static float $opt$inline$LongToFloat(long a) { longValue = a; return (float)longValue; }
 
   // This method produces a long-to-double Dex instruction.
   static double $opt$noinline$LongToDouble(long a) { if (doThrow) throw new Error(); return (double)a; }
