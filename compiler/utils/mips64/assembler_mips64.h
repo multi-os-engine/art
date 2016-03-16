@@ -681,6 +681,9 @@ class Mips64Assembler FINAL : public Assembler {
   void EmitFI(int opcode, int fmt, FpuRegister rt, uint16_t imm);
   void EmitBcondc(BranchCondition cond, GpuRegister rs, GpuRegister rt, uint32_t imm16_21);
 
+  // Utility routine for Mips64Assembler::LoadConst64(GpuRegister, int64_t).
+  void LoadReplicatedConst32(GpuRegister, int64_t);
+
   void Buncond(Mips64Label* label);
   void Bcond(Mips64Label* label,
              BranchCondition condition,
