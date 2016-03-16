@@ -1355,4 +1355,30 @@ TEST_F(AssemblerThumb2Test, revsh) {
   DriverStr(expected, "revsh");
 }
 
+TEST_F(AssemblerThumb2Test, vcnt) {
+  __ vcntd(arm::D0, arm::D0);    // test M=0, D=0
+  __ vcntd(arm::D20, arm::D20);  // test M=1, D=1
+
+  std::string expected =
+    "vcnt.8 d0, d0\n"
+    "vcnt.8 d20, d20\n";
+
+  DriverStr(expected, "vcnt");
+}
+
+TEST_F(AssemblerThumb2Test, vpaddl) {
+  __ vpaddld(arm::D0, arm::D0, 8);    // test M=0, D=0
+  __ vpaddld(arm::D20, arm::D20, 8);  // test M=1, D=1
+  __ vpaddld(arm::D0, arm::D20, 16);
+  __ vpaddld(arm::D20, arm::D0, 32);
+
+  std::string expected =
+      "vpaddl.u8 d0, d0\n"
+      "vpaddl.u8 d20, d20\n"
+      "vpaddl.u16 d0, d20\n"
+      "vpaddl.u32 d20, d0\n";
+
+  DriverStr(expected, "vpaddl");
+}
+
 }  // namespace art

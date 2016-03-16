@@ -1264,6 +1264,45 @@ void Arm32Assembler::vmstat(Condition cond) {  // VMRS APSR_nzcv, FPSCR
   Emit(encoding);
 }
 
+void Arm32Assembler::vcntd(DRegister dd, DRegister dm, Condition cond) {
+  uint32_t encoding = 0;
+  encoding = (static_cast<uint32_t>(cond) << kConditionShift) |
+    (0xF3B0 << 16) |
+    ((static_cast<uint32_t>(dd) & 0xf)*B12) |
+    (B10 | B8) |
+    (static_cast<uint32_t>(dm) & 0xf);
+
+  if (dd > 15) {  // D:Vd
+    encoding |= B22;
+  }
+
+  if (dm > 15) {  // M:Vd
+    encoding |= B5;
+  }
+
+  Emit(encoding);
+}
+
+void Arm32Assembler::vpaddld(DRegister dd, DRegister dm, int32_t size, Condition cond) {
+  uint32_t encoding = 0;
+  encoding = (static_cast<uint32_t>(cond) << kConditionShift) |
+    (0xF3B0 << 16) |
+    ((static_cast<uint32_t>(size >> 4) & 0x3)*B18) |
+    ((static_cast<uint32_t>(dd) & 0xf)*B12) |
+    (B9 | B7) |
+    (static_cast<uint32_t>(dm) & 0xf);
+
+  if (dd > 15) {  // D:Vd
+    encoding |= B22;
+  }
+
+  if (dm > 15) {  // M:Vd
+    encoding |= B5;
+  }
+
+  Emit(encoding);
+}
+
 
 void Arm32Assembler::svc(uint32_t imm24) {
   CHECK(IsUint<24>(imm24)) << imm24;

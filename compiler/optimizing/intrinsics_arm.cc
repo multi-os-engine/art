@@ -1922,6 +1922,53 @@ void IntrinsicCodeGeneratorARM::VisitShortReverseBytes(HInvoke* invoke) {
   __ revsh(out, in);
 }
 
+static void GenBitCount(HInvoke* instr, bool is_long, ArmAssembler* assembler) {
+  DCHECK(instr->GetType() == Primitive::kPrimInt);
+  DCHECK((is_long && instr->InputAt(0)->GetType() == Primitive::kPrimLong) ||
+         (!is_long && instr->InputAt(0)->GetType() == Primitive::kPrimInt));
+
+  LocationSummary* locations = instr->GetLocations();
+  Location     in = locations->InAt(0);
+  Register  src_0 = is_long ? in.AsRegisterPairLow<Register>() : in.AsRegister<Register>();
+  Register  src_1 = is_long ? in.AsRegisterPairHigh<Register>() : src_0;
+  SRegister s_reg = locations->GetTemp(0).AsFpuRegisterPairLow<SRegister>();
+  DRegister d_reg = FromLowSToD(s_reg);
+  Register  out_r = locations->Out().AsRegister<Register>();
+
+  // According to Cortex A57 and A72 optimisation guide, compared to transferring to full D-reg,
+  // transferring data from core reg to upper or lower half of vfp D-reg requires extra latency,
+  // That's why for integer bit count, we use 'VMOV D0, r0, r0' instead of 'VMOV D0[0], r0'.
+  __ vmovdrr(d_reg, src_1, src_0);  // DReg |--src_1|--src_0|
+  __ vcntd(d_reg, d_reg);           // DReg |c|c|c|c|c|c|c|c|
+  __ vpaddld(d_reg, d_reg, 8);      // DReg |--c|--c|--c|--c|
+  __ vpaddld(d_reg, d_reg, 16);     // DReg |------c|------c|
+  if (is_long) {
+    __ vpaddld(d_reg, d_reg, 32);   // DReg |--------------c|
+  }
+  __ vmovrs(out_r, s_reg);
+}
+
+void IntrinsicLocationsBuilderARM::VisitIntegerBitCount(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  locations->AddTemp(Location::RequiresFpuRegister());
+}
+
+void IntrinsicLocationsBuilderARM::VisitLongBitCount(HInvoke* invoke) {
+  VisitIntegerBitCount(invoke);
+}
+
+void IntrinsicCodeGeneratorARM::VisitIntegerBitCount(HInvoke* invoke) {
+  GenBitCount(invoke, /* is_long */ false, GetAssembler());
+}
+
+void IntrinsicCodeGeneratorARM::VisitLongBitCount(HInvoke* invoke) {
+  GenBitCount(invoke, /* is_long */ true, GetAssembler());
+}
+
 void IntrinsicLocationsBuilderARM::VisitStringGetCharsNoCheck(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
                                                             LocationSummary::kNoCall,
@@ -1985,8 +2032,6 @@ void IntrinsicCodeGeneratorARM::VisitStringGetCharsNoCheck(HInvoke* invoke) {
   __ Bind(&done);
 }
 
-UNIMPLEMENTED_INTRINSIC(ARM, IntegerBitCount)
-UNIMPLEMENTED_INTRINSIC(ARM, LongBitCount)
 UNIMPLEMENTED_INTRINSIC(ARM, MathMinDoubleDouble)
 UNIMPLEMENTED_INTRINSIC(ARM, MathMinFloatFloat)
 UNIMPLEMENTED_INTRINSIC(ARM, MathMaxDoubleDouble)
