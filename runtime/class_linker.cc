@@ -2673,13 +2673,15 @@ bool ClassLinker::ShouldUseInterpreterEntrypoint(ArtMethod* method, const void* 
     return true;
   }
 
-  if (runtime->UseJit() && runtime->GetJit()->JitAtFirstUse()) {
-    // The force JIT uses the interpreter entry point to execute the JIT.
-    return true;
-  }
-
-  if (Dbg::IsDebuggerActive()) {
-    // Boot image classes are AOT-compiled as non-debuggable.
+  if (runtime->IsNativeDebuggable()) {
+    // If we are doing native debugging, ignore application's AOT code,
+    // since we want to JIT it with extra stackmaps for native debugging.
+    // On the other hand, keep all AOT code from the boot image, since the
+    // blocking JIT would results in non-negligible performance impact.
+    return !runtime->GetHeap()->IsInBootImageOatFile(quick_code);
+  } else if (Dbg::IsDebuggerActive()) {
+    // Boot image classes may be AOT-compiled as non-debuggable.
+    // This is not suitable for the Java debugger, so ignore the AOT code.
     return runtime->GetHeap()->IsInBootImageOatFile(quick_code);
   }
 
