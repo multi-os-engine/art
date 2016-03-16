@@ -1949,7 +1949,7 @@ void InstructionCodeGeneratorARM64::VisitArm64DataProcWithShifterOp(
       __ And(out, left, right_operand);
       break;
     case HInstruction::kNeg:
-      DCHECK(instruction->InputAt(0)->AsConstant()->IsZero());
+      DCHECK(instruction->InputAt(0)->AsConstant()->IsArithmeticZero());
       __ Neg(out, right_operand);
       break;
     case HInstruction::kOr:
@@ -1994,7 +1994,7 @@ void LocationsBuilderARM64::VisitMultiplyAccumulate(HMultiplyAccumulate* instr) 
   HInstruction* accumulator = instr->InputAt(HMultiplyAccumulate::kInputAccumulatorIndex);
   if (instr->GetOpKind() == HInstruction::kSub &&
       accumulator->IsConstant() &&
-      accumulator->AsConstant()->IsZero()) {
+      accumulator->AsConstant()->IsArithmeticZero()) {
     // Don't allocate register for Mneg instruction.
   } else {
     locations->SetInAt(HMultiplyAccumulate::kInputAccumulatorIndex,
@@ -2033,7 +2033,7 @@ void InstructionCodeGeneratorARM64::VisitMultiplyAccumulate(HMultiplyAccumulate*
   } else {
     DCHECK(instr->GetOpKind() == HInstruction::kSub);
     HInstruction* accum_instr = instr->InputAt(HMultiplyAccumulate::kInputAccumulatorIndex);
-    if (accum_instr->IsConstant() && accum_instr->AsConstant()->IsZero()) {
+    if (accum_instr->IsConstant() && accum_instr->AsConstant()->IsArithmeticZero()) {
       __ Mneg(res, mul_left, mul_right);
     } else {
       Register accumulator = InputRegisterAt(instr, HMultiplyAccumulate::kInputAccumulatorIndex);
@@ -2378,9 +2378,9 @@ void InstructionCodeGeneratorARM64::VisitClinitCheck(HClinitCheck* check) {
   GenerateClassInitializationCheck(slow_path, InputRegisterAt(check, 0));
 }
 
-static bool IsFloatingPointZeroConstant(HInstruction* instruction) {
-  return (instruction->IsFloatConstant() && (instruction->AsFloatConstant()->GetValue() == 0.0f))
-      || (instruction->IsDoubleConstant() && (instruction->AsDoubleConstant()->GetValue() == 0.0));
+static bool IsFloatingPointPositiveZeroConstant(HInstruction* inst) {
+  return (inst->IsFloatConstant() && (inst->AsFloatConstant()->IsArithmeticPositiveZero()))
+      || (inst->IsDoubleConstant() && (inst->AsDoubleConstant()->IsArithmeticPositiveZero()));
 }
 
 void LocationsBuilderARM64::VisitCompare(HCompare* compare) {
@@ -2399,7 +2399,7 @@ void LocationsBuilderARM64::VisitCompare(HCompare* compare) {
     case Primitive::kPrimDouble: {
       locations->SetInAt(0, Location::RequiresFpuRegister());
       locations->SetInAt(1,
-                         IsFloatingPointZeroConstant(compare->InputAt(1))
+                         IsFloatingPointPositiveZeroConstant(compare->InputAt(1))
                              ? Location::ConstantLocation(compare->InputAt(1)->AsConstant())
                              : Location::RequiresFpuRegister());
       locations->SetOut(Location::RequiresRegister());
@@ -2432,7 +2432,7 @@ void InstructionCodeGeneratorARM64::VisitCompare(HCompare* compare) {
       Register result = OutputRegister(compare);
       FPRegister left = InputFPRegisterAt(compare, 0);
       if (compare->GetLocations()->InAt(1).IsConstant()) {
-        DCHECK(IsFloatingPointZeroConstant(compare->GetLocations()->InAt(1).GetConstant()));
+        DCHECK(IsFloatingPointPositiveZeroConstant(compare->GetLocations()->InAt(1).GetConstant()));
         // 0.0 is the only immediate that can be encoded directly in an FCMP instruction.
         __ Fcmp(left, 0.0);
       } else {
@@ -2453,7 +2453,7 @@ void LocationsBuilderARM64::HandleCondition(HCondition* instruction) {
   if (Primitive::IsFloatingPointType(instruction->InputAt(0)->GetType())) {
     locations->SetInAt(0, Location::RequiresFpuRegister());
     locations->SetInAt(1,
-                       IsFloatingPointZeroConstant(instruction->InputAt(1))
+                       IsFloatingPointPositiveZeroConstant(instruction->InputAt(1))
                            ? Location::ConstantLocation(instruction->InputAt(1)->AsConstant())
                            : Location::RequiresFpuRegister());
   } else {
@@ -2479,7 +2479,7 @@ void InstructionCodeGeneratorARM64::HandleCondition(HCondition* instruction) {
   if (Primitive::IsFloatingPointType(instruction->InputAt(0)->GetType())) {
     FPRegister lhs = InputFPRegisterAt(instruction, 0);
     if (locations->InAt(1).IsConstant()) {
-      DCHECK(IsFloatingPointZeroConstant(locations->InAt(1).GetConstant()));
+      DCHECK(IsFloatingPointPositiveZeroConstant(locations->InAt(1).GetConstant()));
       // 0.0 is the only immediate that can be encoded directly in an FCMP instruction.
       __ Fcmp(lhs, 0.0);
     } else {
@@ -2815,13 +2815,13 @@ void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruct
     // Nothing to do. The code always falls through.
     return;
   } else if (cond->IsIntConstant()) {
-    // Constant condition, statically compared against 1.
-    if (cond->AsIntConstant()->IsOne()) {
+    // Constant condition, statically compared against "true" (integer value 1).
+    if (cond->AsIntConstant()->IsTrue()) {
       if (true_target != nullptr) {
         __ B(true_target);
       }
     } else {
-      DCHECK(cond->AsIntConstant()->IsZero());
+      DCHECK(cond->AsIntConstant()->IsFalse()) << cond->AsIntConstant()->GetValue();
       if (false_target != nullptr) {
         __ B(false_target);
       }
@@ -2855,7 +2855,8 @@ void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruct
     if (Primitive::IsFloatingPointType(type)) {
       FPRegister lhs = InputFPRegisterAt(condition, 0);
       if (condition->GetLocations()->InAt(1).IsConstant()) {
-        DCHECK(IsFloatingPointZeroConstant(condition->GetLocations()->InAt(1).GetConstant()));
+        DCHECK(IsFloatingPointPositiveZeroConstant(
+            condition->GetLocations()->InAt(1).GetConstant()));
         // 0.0 is the only immediate that can be encoded directly in an FCMP instruction.
         __ Fcmp(lhs, 0.0);
       } else {
@@ -3046,7 +3047,8 @@ void InstructionCodeGeneratorARM64::VisitSelect(HSelect* select) {
   } else if (IsConditionOnFloatingPointValues(cond)) {
     Location rhs = cond->GetLocations()->InAt(1);
     if (rhs.IsConstant()) {
-      DCHECK(IsFloatingPointZeroConstant(rhs.GetConstant()));
+      DCHECK(IsFloatingPointPositiveZeroConstant(rhs.GetConstant()));
+        // 0.0 is the only immediate that can be encoded directly in an FCMP instruction.
       __ Fcmp(InputFPRegisterAt(cond, 0), 0.0);
     } else {
       __ Fcmp(InputFPRegisterAt(cond, 0), InputFPRegisterAt(cond, 1));
