@@ -42,26 +42,53 @@ extern "C" NO_RETURN void artDeoptimize(Thread* self) SHARED_REQUIRES(Locks::mut
   self->QuickDeliverException();
 }
 
-extern "C" NO_RETURN void artDeoptimizeFromCompiledCode(Thread* self)
+// Do single frame deoptimization.
+// `from_code` whether it's triggered from compiled code as a result of HDeoptimize.
+// `grp_result` integer return result.
+// `fpr_result` floating-point return result.
+NO_RETURN void artDeoptimizeSingleFrame(bool from_code,
+                                        uint64_t gpr_result,
+                                        uint64_t fpr_result)
     SHARED_REQUIRES(Locks::mutator_lock_) {
+  Thread* self = Thread::Current();
   ScopedQuickEntrypointChecks sqec(self);
 
   // Deopt logging will be in DeoptimizeSingleFrame. It is there to take advantage of the
   // specialized visitor that will show whether a method is Quick or Shadow.
 
-  // Before deoptimizing to interpreter, we must push the deoptimization context.
-  JValue return_value;
-  return_value.SetJ(0);  // we never deoptimize from compiled code with an invoke result.
-  self->PushDeoptimizationContext(return_value, false, /* from_code */ true, self->GetException());
-
   QuickExceptionHandler exception_handler(self, true);
-  exception_handler.DeoptimizeSingleFrame();
+  const char* shorty = exception_handler.DeoptimizeSingleFrame(from_code);
   exception_handler.UpdateInstrumentationStack();
   exception_handler.DeoptimizeSingleFrameArchDependentFixup();
+
+  // Before deoptimizing to interpreter, we must push the deoptimization context.
+  JValue return_value;
+  if (shorty == nullptr || (shorty[0] != 'F' && shorty[0] != 'D')) {
+    // int type.
+    return_value.SetJ(gpr_result);
+  } else {
+    // float type.
+    return_value.SetJ(fpr_result);
+  }
+  self->PushDeoptimizationContext(return_value,
+                                  shorty != nullptr && shorty[0] == 'J',
+                                  from_code,
+                                  self->GetException());
+
   // We cannot smash the caller-saves, as we need the ArtMethod in a parameter register that would
   // be caller-saved. This has the downside that we cannot track incorrect register usage down the
   // line.
   exception_handler.DoLongJump(false);
 }
 
+extern "C" NO_RETURN void artDeoptimizeFromCompiledCode()
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  // We never deoptimize from compiled code with an invocation result.
+  artDeoptimizeSingleFrame(true, 0, 0);
+}
+
+extern "C" NO_RETURN void artDeoptimizeWhenReturnedTo(uint64_t gpr_result, uint64_t fpr_result)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  artDeoptimizeSingleFrame(false, gpr_result, fpr_result);
+}
 }  // namespace art

@@ -49,7 +49,9 @@ class QuickExceptionHandler {
   // Deoptimize the stack to the upcall. For every compiled frame, we create a "copy"
   // shadow frame that will be executed with the interpreter.
   void DeoptimizeStack() SHARED_REQUIRES(Locks::mutator_lock_);
-  void DeoptimizeSingleFrame() SHARED_REQUIRES(Locks::mutator_lock_);
+  // Deoptimze a single compiled frame (which possibly includes inlined frames) and
+  // return the method shorty of the callee method that's returned from.
+  const char* DeoptimizeSingleFrame(bool from_code) SHARED_REQUIRES(Locks::mutator_lock_);
   void DeoptimizeSingleFrameArchDependentFixup() SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Update the instrumentation stack by removing all methods that will be unwound

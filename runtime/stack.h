@@ -612,6 +612,13 @@ class StackVisitor {
   // Return 'true' if we should continue to visit more frames, 'false' to stop.
   virtual bool VisitFrame() SHARED_REQUIRES(Locks::mutator_lock_) = 0;
 
+  // Return true if the return pc for correct stack walking is installed.
+  virtual bool PatchReturnPcIfNeeded(ArtMethod* next_method ATTRIBUTE_UNUSED,
+                                     ArtMethod** next_frame ATTRIBUTE_UNUSED)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    return false;
+  }
+
   void WalkStack(bool include_transitions = false)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
