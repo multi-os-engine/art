@@ -262,10 +262,8 @@ static bool IsSubRegBitsMinusOther(HSub* sub, size_t reg_bits, HInstruction* oth
 bool InstructionSimplifierVisitor::ReplaceRotateWithRor(HBinaryOperation* op,
                                                         HUShr* ushr,
                                                         HShl* shl) {
-  DCHECK(op->IsAdd() || op->IsXor() || op->IsOr());
-  HRor* ror = new (GetGraph()->GetArena()) HRor(ushr->GetType(),
-                                                ushr->GetLeft(),
-                                                ushr->GetRight());
+  DCHECK(op->IsAdd() || op->IsXor() || op->IsOr()) << op->DebugName();
+  HRor* ror = new (GetGraph()->GetArena()) HRor(ushr->GetType(), ushr->GetLeft(), ushr->GetRight());
   op->GetBlock()->ReplaceAndRemoveInstructionWith(op, ror);
   if (!ushr->HasUses()) {
     ushr->GetBlock()->RemoveInstruction(ushr);

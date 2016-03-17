@@ -3273,10 +3273,15 @@ void InstructionCodeGeneratorARM::HandleLongRotate(LocationSummary* locations) {
     __ Bind(&end);
   }
 }
-void LocationsBuilderARM::HandleRotate(HRor* ror) {
+
+void LocationsBuilderARM::VisitRor(HRor* ror) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(ror, LocationSummary::kNoCall);
-  switch (ror->GetResultType()) {
+  switch (ror->InputAt(0)->GetType()) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
     case Primitive::kPrimInt: {
       locations->SetInAt(0, Location::RequiresRegister());
       locations->SetInAt(1, Location::RegisterOrConstant(ror->InputAt(1)));
@@ -3296,14 +3301,18 @@ void LocationsBuilderARM::HandleRotate(HRor* ror) {
       break;
     }
     default:
-      LOG(FATAL) << "Unexpected operation type " << ror->GetResultType();
+      LOG(FATAL) << "Unexpected rotate input type " << ror->InputAt(0)->GetType();
   }
 }
 
-void InstructionCodeGeneratorARM::HandleRotate(HRor* ror) {
+void InstructionCodeGeneratorARM::VisitRor(HRor* ror) {
   LocationSummary* locations = ror->GetLocations();
-  Primitive::Type type = ror->GetResultType();
+  Primitive::Type type = ror->InputAt(0)->GetType();
   switch (type) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
     case Primitive::kPrimInt: {
       HandleIntegerRotate(locations);
       break;
@@ -3313,17 +3322,9 @@ void InstructionCodeGeneratorARM::HandleRotate(HRor* ror) {
       break;
     }
     default:
-      LOG(FATAL) << "Unexpected operation type " << type;
+      LOG(FATAL) << "Unexpected rotate input type " << type;
       UNREACHABLE();
   }
-}
-
-void LocationsBuilderARM::VisitRor(HRor* op) {
-  HandleRotate(op);
-}
-
-void InstructionCodeGeneratorARM::VisitRor(HRor* op) {
-  HandleRotate(op);
 }
 
 void LocationsBuilderARM::HandleShift(HBinaryOperation* op) {

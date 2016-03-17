@@ -3932,11 +3932,15 @@ void LocationsBuilderX86::VisitRor(HRor* ror) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(ror, LocationSummary::kNoCall);
 
-  switch (ror->GetResultType()) {
+  switch (ror->InputAt(0)->GetType()) {
     case Primitive::kPrimLong:
       // Add the temporary needed.
       locations->AddTemp(Location::RequiresRegister());
       FALLTHROUGH_INTENDED;
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
     case Primitive::kPrimInt:
       locations->SetInAt(0, Location::RequiresRegister());
       // The shift count needs to be in CL (unless it is a constant).
@@ -3944,7 +3948,7 @@ void LocationsBuilderX86::VisitRor(HRor* ror) {
       locations->SetOut(Location::SameAsFirstInput());
       break;
     default:
-      LOG(FATAL) << "Unexpected operation type " << ror->GetResultType();
+      LOG(FATAL) << "Unexpected rotate input type " << ror->InputAt(0)->GetType();
       UNREACHABLE();
   }
 }
@@ -3954,7 +3958,7 @@ void InstructionCodeGeneratorX86::VisitRor(HRor* ror) {
   Location first = locations->InAt(0);
   Location second = locations->InAt(1);
 
-  if (ror->GetResultType() == Primitive::kPrimInt) {
+  if (Primitive::PrimitiveKind(ror->InputAt(0)->GetType()) == Primitive::kPrimInt) {
     Register first_reg = first.AsRegister<Register>();
     if (second.IsRegister()) {
       Register second_reg = second.AsRegister<Register>();
@@ -3966,7 +3970,7 @@ void InstructionCodeGeneratorX86::VisitRor(HRor* ror) {
     return;
   }
 
-  DCHECK_EQ(ror->GetResultType(), Primitive::kPrimLong);
+  DCHECK_EQ(ror->InputAt(0)->GetType(), Primitive::kPrimLong);
   Register first_reg_lo = first.AsRegisterPairLow<Register>();
   Register first_reg_hi = first.AsRegisterPairHigh<Register>();
   Register temp_reg = locations->GetTemp(0).AsRegister<Register>();
@@ -3981,8 +3985,7 @@ void InstructionCodeGeneratorX86::VisitRor(HRor* ror) {
     __ cmovl(kNotEqual, first_reg_hi, first_reg_lo);
     __ cmovl(kNotEqual, first_reg_lo, temp_reg);
   } else {
-    int32_t shift_amt =
-      CodeGenerator::GetInt64ValueOf(second.GetConstant()) & kMaxLongShiftValue;
+    int32_t shift_amt = CodeGenerator::GetInt64ValueOf(second.GetConstant()) & kMaxLongShiftValue;
     if (shift_amt == 0) {
       // Already fine.
       return;

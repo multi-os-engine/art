@@ -1169,7 +1169,7 @@ void InstructionCodeGeneratorMIPS64::HandleBinaryOp(HBinaryOperation* instructio
 }
 
 void LocationsBuilderMIPS64::HandleShift(HBinaryOperation* instr) {
-  DCHECK(instr->IsShl() || instr->IsShr() || instr->IsUShr() || instr->IsRor());
+  DCHECK(instr->IsShl() || instr->IsShr() || instr->IsUShr());
 
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instr);
   Primitive::Type type = instr->GetResultType();
@@ -1187,7 +1187,7 @@ void LocationsBuilderMIPS64::HandleShift(HBinaryOperation* instr) {
 }
 
 void InstructionCodeGeneratorMIPS64::HandleShift(HBinaryOperation* instr) {
-  DCHECK(instr->IsShl() || instr->IsShr() || instr->IsUShr() || instr->IsRor());
+  DCHECK(instr->IsShl() || instr->IsShr() || instr->IsUShr());
   LocationSummary* locations = instr->GetLocations();
   Primitive::Type type = instr->GetType();
 
@@ -1221,10 +1221,9 @@ void InstructionCodeGeneratorMIPS64::HandleShift(HBinaryOperation* instr) {
             __ Sll(dst, lhs, shift_value);
           } else if (instr->IsShr()) {
             __ Sra(dst, lhs, shift_value);
-          } else if (instr->IsUShr()) {
-            __ Srl(dst, lhs, shift_value);
           } else {
-            __ Rotr(dst, lhs, shift_value);
+            DCHECK(instr->IsUShr());
+            __ Srl(dst, lhs, shift_value);
           }
         } else {
           if (shift_value < 32) {
@@ -1232,10 +1231,9 @@ void InstructionCodeGeneratorMIPS64::HandleShift(HBinaryOperation* instr) {
               __ Dsll(dst, lhs, shift_value);
             } else if (instr->IsShr()) {
               __ Dsra(dst, lhs, shift_value);
-            } else if (instr->IsUShr()) {
-              __ Dsrl(dst, lhs, shift_value);
             } else {
-              __ Drotr(dst, lhs, shift_value);
+              DCHECK(instr->IsUShr());
+              __ Dsrl(dst, lhs, shift_value);
             }
           } else {
             shift_value -= 32;
@@ -1243,10 +1241,9 @@ void InstructionCodeGeneratorMIPS64::HandleShift(HBinaryOperation* instr) {
               __ Dsll32(dst, lhs, shift_value);
             } else if (instr->IsShr()) {
               __ Dsra32(dst, lhs, shift_value);
-            } else if (instr->IsUShr()) {
-              __ Dsrl32(dst, lhs, shift_value);
             } else {
-              __ Drotr32(dst, lhs, shift_value);
+              DCHECK(instr->IsUShr());
+              __ Dsrl32(dst, lhs, shift_value);
             }
           }
         }
@@ -1256,20 +1253,18 @@ void InstructionCodeGeneratorMIPS64::HandleShift(HBinaryOperation* instr) {
             __ Sllv(dst, lhs, rhs_reg);
           } else if (instr->IsShr()) {
             __ Srav(dst, lhs, rhs_reg);
-          } else if (instr->IsUShr()) {
-            __ Srlv(dst, lhs, rhs_reg);
           } else {
-            __ Rotrv(dst, lhs, rhs_reg);
+            DCHECK(instr->IsUShr());
+            __ Srlv(dst, lhs, rhs_reg);
           }
         } else {
           if (instr->IsShl()) {
             __ Dsllv(dst, lhs, rhs_reg);
           } else if (instr->IsShr()) {
             __ Dsrav(dst, lhs, rhs_reg);
-          } else if (instr->IsUShr()) {
-            __ Dsrlv(dst, lhs, rhs_reg);
           } else {
-            __ Drotrv(dst, lhs, rhs_reg);
+            DCHECK(instr->IsUShr());
+            __ Dsrlv(dst, lhs, rhs_reg);
           }
         }
       }
@@ -3717,11 +3712,61 @@ void InstructionCodeGeneratorMIPS64::VisitReturnVoid(HReturnVoid* ret ATTRIBUTE_
 }
 
 void LocationsBuilderMIPS64::VisitRor(HRor* ror) {
-  HandleShift(ror);
+  DCHECK(Primitive::IsIntegralType(ror->InputAt(0)->GetType()))
+      << "Unexpected rotate input type " << ror->InputAt(0)->GetType();
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(ror);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RegisterOrConstant(ror->InputAt(1)));
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
 }
 
 void InstructionCodeGeneratorMIPS64::VisitRor(HRor* ror) {
-  HandleShift(ror);
+  DCHECK(Primitive::IsIntegralType(ror->InputAt(0)->GetType()))
+      << "Unexpected rotate input type " << ror->InputAt(0)->GetType();
+  LocationSummary* locations = ror->GetLocations();
+  Primitive::Type kind = Primitive::PrimitiveKind(ror->InputAt(0)->GetType());
+
+  GpuRegister dst = locations->Out().AsRegister<GpuRegister>();
+  GpuRegister lhs = locations->InAt(0).AsRegister<GpuRegister>();
+  Location rhs_location = locations->InAt(1);
+
+  GpuRegister rhs_reg = ZERO;
+  int64_t rhs_imm = 0;
+  bool use_imm = rhs_location.IsConstant();
+  if (use_imm) {
+    rhs_imm = CodeGenerator::GetInt64ValueOf(rhs_location.GetConstant());
+  } else {
+    rhs_reg = rhs_location.AsRegister<GpuRegister>();
+  }
+
+  if (use_imm) {
+    uint32_t shift_value = (kind == Primitive::kPrimInt)
+        ? static_cast<uint32_t>(rhs_imm & kMaxIntShiftValue)
+        : static_cast<uint32_t>(rhs_imm & kMaxLongShiftValue);
+
+    if (shift_value == 0) {
+      if (dst != lhs) {
+        __ Move(dst, lhs);
+      }
+    } else if (kind == Primitive::kPrimInt) {
+      __ Rotr(dst, lhs, shift_value);
+    } else {
+      DCHECK_EQ(kind, Primitive::kPrimLong);
+      if (shift_value < 32) {
+        __ Drotr(dst, lhs, shift_value);
+      } else {
+        shift_value -= 32;
+        __ Drotr32(dst, lhs, shift_value);
+      }
+    }
+  } else {
+    if (kind == Primitive::kPrimInt) {
+      __ Rotrv(dst, lhs, rhs_reg);
+    } else {
+      DCHECK_EQ(kind, Primitive::kPrimLong);
+      __ Drotrv(dst, lhs, rhs_reg);
+    }
+  }
 }
 
 void LocationsBuilderMIPS64::VisitShl(HShl* shl) {

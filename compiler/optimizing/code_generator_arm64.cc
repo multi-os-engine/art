@@ -1753,17 +1753,6 @@ void InstructionCodeGeneratorARM64::HandleBinaryOp(HBinaryOperation* instr) {
         __ Orr(dst, lhs, rhs);
       } else if (instr->IsSub()) {
         __ Sub(dst, lhs, rhs);
-      } else if (instr->IsRor()) {
-        if (rhs.IsImmediate()) {
-          uint32_t shift = rhs.immediate() & (lhs.SizeInBits() - 1);
-          __ Ror(dst, lhs, shift);
-        } else {
-          // Ensure shift distance is in the same size register as the result. If
-          // we are rotating a long and the shift comes in a w register originally,
-          // we don't need to sxtw for use as an x since the shift distances are
-          // all & reg_bits - 1.
-          __ Ror(dst, lhs, RegisterFrom(instr->GetLocations()->InAt(1), type));
-        }
       } else {
         DCHECK(instr->IsXor());
         __ Eor(dst, lhs, rhs);
@@ -4366,11 +4355,31 @@ void InstructionCodeGeneratorARM64::VisitReturnVoid(HReturnVoid* instruction ATT
 }
 
 void LocationsBuilderARM64::VisitRor(HRor* ror) {
-  HandleBinaryOp(ror);
+  DCHECK(Primitive::IsIntegralType(ror->InputAt(0)->GetType()))
+      << "Unexpected rotate input type " << ror->InputAt(0)->GetType();
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(ror);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, ARM64EncodableConstantOrRegister(ror->InputAt(1), ror));
+  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
 }
 
 void InstructionCodeGeneratorARM64::VisitRor(HRor* ror) {
-  HandleBinaryOp(ror);
+  DCHECK(Primitive::IsIntegralType(ror->InputAt(0)->GetType()))
+      << "Unexpected rotate input type " << ror->InputAt(0)->GetType();
+  Register dst = OutputRegister(ror);
+  Register lhs = InputRegisterAt(ror, 0);
+  Operand rhs = InputOperandAt(ror, 1);
+
+  if (rhs.IsImmediate()) {
+    uint32_t shift = rhs.immediate() & (lhs.SizeInBits() - 1);
+    __ Ror(dst, lhs, shift);
+  } else {
+    // Ensure shift distance is in the same size register as the result. If
+    // we are rotating a long and the shift comes in a w register originally,
+    // we don't need to sxtw for use as an x since the shift distances are
+    // all & reg_bits - 1.
+    __ Ror(dst, lhs, RegisterFrom(ror->GetLocations()->InAt(1), ror->GetType()));
+  }
 }
 
 void LocationsBuilderARM64::VisitShl(HShl* shl) {

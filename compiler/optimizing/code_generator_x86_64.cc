@@ -3842,7 +3842,11 @@ void LocationsBuilderX86_64::VisitRor(HRor* ror) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(ror, LocationSummary::kNoCall);
 
-  switch (ror->GetResultType()) {
+  switch (ror->InputAt(0)->GetType()) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
     case Primitive::kPrimInt:
     case Primitive::kPrimLong: {
       locations->SetInAt(0, Location::RequiresRegister());
@@ -3852,7 +3856,7 @@ void LocationsBuilderX86_64::VisitRor(HRor* ror) {
       break;
     }
     default:
-      LOG(FATAL) << "Unexpected operation type " << ror->GetResultType();
+      LOG(FATAL) << "Unexpected operation type " << ror->InputAt(0)->GetType();
       UNREACHABLE();
   }
 }
@@ -3862,7 +3866,11 @@ void InstructionCodeGeneratorX86_64::VisitRor(HRor* ror) {
   CpuRegister first_reg = locations->InAt(0).AsRegister<CpuRegister>();
   Location second = locations->InAt(1);
 
-  switch (ror->GetResultType()) {
+  switch (ror->InputAt(0)->GetType()) {
+    case Primitive::kPrimBoolean:
+    case Primitive::kPrimByte:
+    case Primitive::kPrimShort:
+    case Primitive::kPrimChar:
     case Primitive::kPrimInt:
       if (second.IsRegister()) {
         CpuRegister second_reg = second.AsRegister<CpuRegister>();
@@ -3882,7 +3890,7 @@ void InstructionCodeGeneratorX86_64::VisitRor(HRor* ror) {
       }
       break;
     default:
-      LOG(FATAL) << "Unexpected operation type " << ror->GetResultType();
+      LOG(FATAL) << "Unexpected operation type " << ror->InputAt(0)->GetType();
       UNREACHABLE();
   }
 }
