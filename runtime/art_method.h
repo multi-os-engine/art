@@ -585,6 +585,10 @@ class ArtMethod FINAL {
   template <ReadBarrierOption kReadBarrierOption = kWithReadBarrier, typename Visitor>
   ALWAYS_INLINE void UpdateEntrypoints(const Visitor& visitor, size_t pointer_size);
 
+  void Deoptimize() SHARED_REQUIRES(Locks::mutator_lock_);
+
+  static void Deoptimize(std::vector<ArtMethod*>* methods) SHARED_REQUIRES(Locks::mutator_lock_);
+
  protected:
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
   // The class we are a part of.

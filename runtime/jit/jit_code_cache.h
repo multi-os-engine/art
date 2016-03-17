@@ -180,7 +180,9 @@ class JitCodeCache {
 
   size_t GetMemorySizeOfCodePointer(const void* ptr) REQUIRES(!lock_);
 
-  void InvalidateCompiledCodeFor(ArtMethod* method, const OatQuickMethodHeader* code)
+  // Invalidate compiled versions of `method` that may relate to the one prefixed by `header`.
+  // A null `header` will invalidate all compiled versions for `method`.
+  void InvalidateCompiledCodeFor(ArtMethod* method, const OatQuickMethodHeader* header)
       REQUIRES(!lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 

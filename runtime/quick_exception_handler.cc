@@ -18,7 +18,7 @@
 
 #include "arch/context.h"
 #include "art_method-inl.h"
-#include "dex_instruction.h"
+#include "dex_instruction-inl.h"
 #include "entrypoints/entrypoint_utils.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
@@ -281,16 +281,20 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
   DeoptimizeStackVisitor(Thread* self,
                          Context* context,
                          QuickExceptionHandler* exception_handler,
-                         bool single_frame)
+                         bool single_frame,
+                         bool from_code)
       SHARED_REQUIRES(Locks::mutator_lock_)
       : StackVisitor(self, context, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
         exception_handler_(exception_handler),
         prev_shadow_frame_(nullptr),
         stacked_shadow_frame_pushed_(false),
         single_frame_deopt_(single_frame),
+        from_code_(from_code),
+        single_frame_deopt_first_frame_seen_(false),
         single_frame_done_(false),
         single_frame_deopt_method_(nullptr),
-        single_frame_deopt_quick_method_header_(nullptr) {
+        single_frame_deopt_quick_method_header_(nullptr),
+        callee_method_shorty_(nullptr) {
   }
 
   ArtMethod* GetSingleFrameDeoptMethod() const {
@@ -299,6 +303,10 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
 
   const OatQuickMethodHeader* GetSingleFrameDeoptQuickMethodHeader() const {
     return single_frame_deopt_quick_method_header_;
+  }
+
+  const char* GetCalleeMethodShorty() const {
+    return callee_method_shorty_;
   }
 
   bool VisitFrame() OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -330,6 +338,14 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
       CHECK_EQ(GetFrameDepth(), 1U);
       return true;
     } else {
+      if (single_frame_deopt_ && !from_code_ && !single_frame_deopt_first_frame_seen_) {
+        // For a single frame deoptimization that's not triggered from compiled code,
+        // we need to analyze the called method's shorty to correctly return
+        // integer/floating-point result.
+        RetrieveCalleeMethodShorty();
+        single_frame_deopt_first_frame_seen_ = true;
+      }
+
       // Check if a shadow frame already exists for debugger's set-local-value purpose.
       const size_t frame_id = GetFrameId();
       ShadowFrame* new_frame = GetThread()->FindDebuggerShadowFrame(frame_id);
@@ -374,7 +390,74 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
     }
   }
 
+  bool PatchReturnPcIfNeeded(ArtMethod* next_method ATTRIBUTE_UNUSED, ArtMethod** next_frame)
+      OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+    if (single_frame_deopt_ && !from_code_ && GetMethod()->IsRuntimeMethod()) {
+      DCHECK(!single_frame_deopt_first_frame_seen_);
+      // For single frame deoptimization, put the correct return pc in the top frame
+      // for correct stack walking.
+      SetReturnPc(GetThread()->GetReturnPcFromReturnPcMapping(next_frame));
+      return true;
+    }
+    return false;
+  }
+
  private:
+  void RetrieveCalleeMethodShorty() SHARED_REQUIRES(Locks::mutator_lock_) {
+    ArtMethod* method = GetMethod();
+    uint32_t dex_pc = GetDexPc();
+    const Instruction* instr = Instruction::At(&method->GetCodeItem()->insns_[dex_pc]);
+    bool is_range, is_quickened;
+    Instruction::Code opcode = instr->Opcode();
+    switch (opcode) {
+      case Instruction::INVOKE_DIRECT:
+      case Instruction::INVOKE_INTERFACE:
+      case Instruction::INVOKE_STATIC:
+      case Instruction::INVOKE_SUPER:
+      case Instruction::INVOKE_VIRTUAL:
+        is_range = false;
+        is_quickened = false;
+        break;
+      case Instruction::INVOKE_VIRTUAL_QUICK:
+        is_range = false;
+        is_quickened = true;
+        break;
+      case Instruction::INVOKE_DIRECT_RANGE:
+      case Instruction::INVOKE_INTERFACE_RANGE:
+      case Instruction::INVOKE_STATIC_RANGE:
+      case Instruction::INVOKE_SUPER_RANGE:
+      case Instruction::INVOKE_VIRTUAL_RANGE:
+        is_range = true;
+        is_quickened = false;
+        break;
+      case Instruction::INVOKE_VIRTUAL_RANGE_QUICK:
+        is_range = true;
+        is_quickened = true;
+        break;
+      default:
+        DCHECK(!instr->IsInvoke());
+        // Not a call. It can be a result of an HDeoptimize from compiled code directly.
+        return;
+    }
+
+    uint16_t callee_method_idx;
+    if (is_range) {
+      callee_method_idx = instr->VRegB_3rc();
+    } else {
+      callee_method_idx = instr->VRegB_35c();
+    }
+
+    mirror::Class* klass = method->GetDeclaringClass();
+    if (is_quickened) {
+      auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+      ArtMethod* resolved_method = klass->GetVTableEntry(callee_method_idx, pointer_size);
+      callee_method_shorty_ = resolved_method->GetShorty();
+    } else {
+      const DexFile::MethodId& method_id = method->GetDexFile()->GetMethodId(callee_method_idx);
+      callee_method_shorty_ = method->GetDexFile()->GetShorty(method_id.proto_idx_);
+    }
+  }
+
   void HandleOptimizingDeoptimization(ArtMethod* m,
                                       ShadowFrame* new_frame,
                                       const bool* updated_vregs)
@@ -475,9 +558,16 @@ class DeoptimizeStackVisitor FINAL : public StackVisitor {
   ShadowFrame* prev_shadow_frame_;
   bool stacked_shadow_frame_pushed_;
   const bool single_frame_deopt_;
+  const bool from_code_;
+  // First method (possibly inlined) has been seen for single frame deopt.
+  bool single_frame_deopt_first_frame_seen_;
   bool single_frame_done_;
   ArtMethod* single_frame_deopt_method_;
   const OatQuickMethodHeader* single_frame_deopt_quick_method_header_;
+  // For deoptimization that's triggered when returning to a method,
+  // grab the Shorty for the callee method that's returned from.
+  // It's used for parsing return result and type.
+  const char* callee_method_shorty_;
 
   DISALLOW_COPY_AND_ASSIGN(DeoptimizeStackVisitor);
 };
@@ -488,14 +578,14 @@ void QuickExceptionHandler::DeoptimizeStack() {
     self_->DumpStack(LOG(INFO) << "Deoptimizing: ");
   }
 
-  DeoptimizeStackVisitor visitor(self_, context_, this, false);
+  DeoptimizeStackVisitor visitor(self_, context_, this, false, false);
   visitor.WalkStack(true);
 
   // Restore deoptimization exception
   self_->SetException(Thread::GetDeoptimizationException());
 }
 
-void QuickExceptionHandler::DeoptimizeSingleFrame() {
+const char* QuickExceptionHandler::DeoptimizeSingleFrame(bool from_code) {
   DCHECK(is_deoptimization_);
 
   if (VLOG_IS_ON(deopt) || kDebugExceptionDelivery) {
@@ -503,7 +593,7 @@ void QuickExceptionHandler::DeoptimizeSingleFrame() {
     DumpFramesWithType(self_, true);
   }
 
-  DeoptimizeStackVisitor visitor(self_, context_, this, true);
+  DeoptimizeStackVisitor visitor(self_, context_, this, true, from_code);
   visitor.WalkStack(true);
 
   // Compiled code made an explicit deoptimization.
@@ -527,6 +617,8 @@ void QuickExceptionHandler::DeoptimizeSingleFrame() {
   #endif
   handler_quick_frame_pc_ = *reinterpret_cast<uintptr_t*>(
       reinterpret_cast<uint8_t*>(self_) + offset);
+
+  return visitor.GetCalleeMethodShorty();
 }
 
 void QuickExceptionHandler::DeoptimizeSingleFrameArchDependentFixup() {
@@ -595,6 +687,9 @@ void QuickExceptionHandler::UpdateInstrumentationStack() {
 }
 
 void QuickExceptionHandler::DoLongJump(bool smash_caller_saves) {
+  // Some return pc mapping are not needed anymore.
+  self_->PopReturnPcMapping(handler_quick_frame_);
+
   // Place context back on thread so it will be available when we continue.
   self_->ReleaseLongJumpContext(context_);
   context_->SetSP(reinterpret_cast<uintptr_t>(handler_quick_frame_));

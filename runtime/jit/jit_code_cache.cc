@@ -967,19 +967,30 @@ void JitCodeCache::InvalidateCompiledCodeFor(ArtMethod* method,
                                              const OatQuickMethodHeader* header) {
   ProfilingInfo* profiling_info = method->GetProfilingInfo(sizeof(void*));
   if ((profiling_info != nullptr) &&
-      (profiling_info->GetSavedEntryPoint() == header->GetEntryPoint())) {
+      (header == nullptr ||
+       profiling_info->GetSavedEntryPoint() == header->GetEntryPoint())) {
     // Prevent future uses of the compiled code.
     profiling_info->SetSavedEntryPoint(nullptr);
   }
 
-  if (method->GetEntryPointFromQuickCompiledCode() == header->GetEntryPoint()) {
+  bool invalidate_osr = true;
+
+  if (header == nullptr ||
+      method->GetEntryPointFromQuickCompiledCode() == header->GetEntryPoint()) {
     // The entrypoint is the one to invalidate, so we just update
     // it to the interpreter entry point and clear the counter to get the method
     // Jitted again.
     Runtime::Current()->GetInstrumentation()->UpdateMethodsCode(
         method, GetQuickToInterpreterBridge());
     method->ClearCounter();
-  } else {
+
+    if (header != nullptr) {
+      // We only invalidate the one with the matching header.
+      invalidate_osr = false;
+    }
+  }
+
+  if (invalidate_osr) {
     MutexLock mu(Thread::Current(), lock_);
     auto it = osr_code_map_.find(method);
     if (it != osr_code_map_.end() && OatQuickMethodHeader::FromCodePointer(it->second) == header) {
