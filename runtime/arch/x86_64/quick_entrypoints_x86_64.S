@@ -1669,11 +1669,22 @@ END_FUNCTION art_quick_deoptimize
      */
 DEFINE_FUNCTION art_quick_deoptimize_from_compiled_code
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
-                                                // Stack should be aligned now.
-    movq %gs:THREAD_SELF_OFFSET, %rdi           // Pass Thread.
-    call SYMBOL(artDeoptimizeFromCompiledCode)  // artDeoptimizeFromCompiledCode(Thread*)
+    call SYMBOL(artDeoptimizeFromCompiledCode)  // artDeoptimizeFromCompiledCode()
     UNREACHABLE
 END_FUNCTION art_quick_deoptimize_from_compiled_code
+
+    /*
+     * Deoptimize into the interpreter when an (invalidated) compiled method is returned to. The
+     * deoptimization will long jump to the interpreter bridge.
+     */
+DEFINE_FUNCTION art_quick_deoptimize_when_returned_to
+    subq LITERAL(8), %rsp                     // Entry point for a jump. Fake that we were called.
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
+    movq  %rax, %rdi                          // Pass integer result.
+    movq  %xmm0, %rsi                         // Pass floating-point result.
+    call SYMBOL(artDeoptimizeWhenReturnedTo)  // artDeoptimizeWhenReturnedTo(gpr_result, fpr_result)
+    UNREACHABLE
+END_FUNCTION art_quick_deoptimize_when_returned_to
 
     /*
      * String's compareTo.

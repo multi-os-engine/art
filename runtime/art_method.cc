@@ -38,6 +38,7 @@
 #include "mirror/string.h"
 #include "oat_file-inl.h"
 #include "scoped_thread_state_change.h"
+#include "thread_list.h"
 #include "well_known_classes.h"
 
 namespace art {
@@ -492,6 +493,84 @@ void ArtMethod::CopyFrom(ArtMethod* src, size_t image_pointer_size) {
   }
   // Clear hotness to let the JIT properly decide when to compile this method.
   hotness_count_ = 0;
+}
+
+// Patch return pc to do deoptimization.
+static void DeoptimizationInstallStack(Thread* thread, void* arg)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  struct InstallStackVisitor FINAL : public StackVisitor {
+    InstallStackVisitor(Thread* thread_in,
+                        Context* context,
+                        std::vector<ArtMethod*>* methods)
+        : StackVisitor(thread_in, context, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
+          methods_(methods) {
+    }
+
+    bool VisitFrame() OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+      return true;
+    }
+
+    bool PatchReturnPcIfNeeded(ArtMethod* next_method, ArtMethod** next_frame)
+        OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
+      DCHECK(next_method != nullptr);
+      // Always only patch quick frames.
+      DCHECK(!IsShadowFrame());
+      if (std::find(methods_->begin(), methods_->end(), next_method) != methods_->end()) {
+        // The mapping uses next_frame since that stays the same before that frame is popped.
+        GetThread()->InsertReturnPcMapping(next_frame, GetReturnPc());
+        // Patch the return pc to do deoptimization.
+        SetReturnPc(reinterpret_cast<uintptr_t>(GetQuickDeoptimizationWhenReturnedToEntryPoint()));
+      }
+      return false;
+    }
+
+    std::vector<ArtMethod*>* const methods_;  // List of methods that should be deoptimized.
+  };
+
+  std::vector<ArtMethod*>* methods = reinterpret_cast<std::vector<ArtMethod*>*>(arg);
+  // Deoptimize invocations of the methods on stack.
+  std::unique_ptr<Context> context(Context::Create());
+  InstallStackVisitor visitor(thread, context.get(), methods);
+  visitor.WalkStack(false);
+}
+
+// Deoptimize a list of methods if they are live on the stack.
+static void DeoptimizeMethodsOnStack(std::vector<ArtMethod*>* methods) {
+  Thread* self = Thread::Current();
+  ScopedThreadStateChange tsc(self, kSuspended);
+  ScopedSuspendAll ssa(__FUNCTION__);
+  MutexLock mu(self, *Locks::thread_list_lock_);
+  Runtime::Current()->GetThreadList()->ForEach(DeoptimizationInstallStack, methods);
+}
+
+void ArtMethod::Deoptimize() {
+  // Invalidate all compiled code for this method.
+  if (Runtime::Current()->GetJit() != nullptr) {
+    Runtime::Current()->GetJit()->GetCodeCache()->InvalidateCompiledCodeFor(this, nullptr);
+  } else {
+    Runtime::Current()->GetInstrumentation()->UpdateMethodsCode(
+      this, GetQuickToInterpreterBridge());
+  }
+
+  std::vector<ArtMethod*> methods;
+  methods.push_back(this);
+  DeoptimizeMethodsOnStack(&methods);
+}
+
+void ArtMethod::Deoptimize(std::vector<ArtMethod*>* methods) {
+  // Invalidate all compiled code for the methods.
+  if (Runtime::Current()->GetJit() != nullptr) {
+    for (ArtMethod* method : *methods) {
+      Runtime::Current()->GetJit()->GetCodeCache()->InvalidateCompiledCodeFor(method, nullptr);
+    }
+  } else {
+    for (ArtMethod* method : *methods) {
+      Runtime::Current()->GetInstrumentation()->UpdateMethodsCode(
+        method, GetQuickToInterpreterBridge());
+    }
+  }
+
+  DeoptimizeMethodsOnStack(methods);
 }
 
 }  // namespace art

@@ -1603,6 +1603,7 @@ Thread::Thread(bool daemon) : tls32_(daemon), wait_monitor_(nullptr), interrupte
   wait_mutex_ = new Mutex("a thread wait mutex");
   wait_cond_ = new ConditionVariable("a thread wait condition variable", *wait_mutex_);
   tlsPtr_.instrumentation_stack = new std::deque<instrumentation::InstrumentationStackFrame>;
+  tlsPtr_.return_pc_mapping_stack = new std::deque<ReturnPcMappingStackFrame>;
   tlsPtr_.name = new std::string(kThreadNameDuringStartup);
   tlsPtr_.nested_signal_state = static_cast<jmp_buf*>(malloc(sizeof(jmp_buf)));
 
@@ -2998,6 +2999,50 @@ void Thread::PushVerifier(verifier::MethodVerifier* verifier) {
 void Thread::PopVerifier(verifier::MethodVerifier* verifier) {
   CHECK_EQ(tlsPtr_.method_verifier, verifier);
   tlsPtr_.method_verifier = verifier->link_;
+}
+
+void Thread::InsertReturnPcMapping(ArtMethod** quick_frame, uintptr_t ret_pc) {
+  ReturnPcMappingStackFrame mapping_frame(quick_frame, ret_pc);
+  if (tlsPtr_.return_pc_mapping_stack->empty()) {
+    tlsPtr_.return_pc_mapping_stack->push_back(mapping_frame);
+    return;
+  }
+
+  for (auto it = tlsPtr_.return_pc_mapping_stack->begin();
+       it != tlsPtr_.return_pc_mapping_stack->end();
+       it++) {
+    if (quick_frame == it->GetQuickFrame()) {
+      it->SetReturnPc(ret_pc);
+      return;
+    }
+    if (quick_frame < it->GetQuickFrame()) {
+      tlsPtr_.return_pc_mapping_stack->insert(it, mapping_frame);
+      return;
+    }
+  }
+  tlsPtr_.return_pc_mapping_stack->push_back(mapping_frame);
+}
+
+uintptr_t Thread::GetReturnPcFromReturnPcMapping(ArtMethod** quick_frame) {
+  for (auto it = tlsPtr_.return_pc_mapping_stack->begin();
+       it != tlsPtr_.return_pc_mapping_stack->end();
+       it++) {
+    if (it->GetQuickFrame() == quick_frame) {
+      return it->GetReturnPc();
+    }
+  }
+  return 0;
+}
+
+void Thread::PopReturnPcMapping(ArtMethod** quick_frame) {
+  for (auto it = tlsPtr_.return_pc_mapping_stack->begin();
+       it != tlsPtr_.return_pc_mapping_stack->end();
+       it++) {
+    if (it->GetQuickFrame() <= quick_frame) {
+      tlsPtr_.return_pc_mapping_stack->erase(it);
+      return;
+    }
+  }
 }
 
 size_t Thread::NumberOfHeldMutexes() const {

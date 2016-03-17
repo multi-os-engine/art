@@ -825,9 +825,7 @@ void StackVisitor::WalkStack(bool include_transitions) {
         }
         // Compute PC for next stack frame from return PC.
         size_t frame_size = frame_info.FrameSizeInBytes();
-        size_t return_pc_offset = frame_size - sizeof(void*);
-        uint8_t* return_pc_addr = reinterpret_cast<uint8_t*>(cur_quick_frame_) + return_pc_offset;
-        uintptr_t return_pc = *reinterpret_cast<uintptr_t*>(return_pc_addr);
+        uintptr_t return_pc = GetReturnPc();
 
         if (UNLIKELY(exit_stubs_installed)) {
           // While profiling, the return pc is restored from the side stack, except when walking
@@ -860,9 +858,24 @@ void StackVisitor::WalkStack(bool include_transitions) {
           }
         }
 
+        ArtMethod** next_frame = reinterpret_cast<ArtMethod**>(
+            reinterpret_cast<uint8_t*>(cur_quick_frame_) + frame_size);
+        if (return_pc ==
+            reinterpret_cast<uintptr_t>(GetQuickDeoptimizationWhenReturnedToEntryPoint())) {
+          // May walk a stack that already has patched return pc's.
+          // Fetch the correct return pc for stack walking.
+          return_pc = GetThread()->GetReturnPcFromReturnPcMapping(next_frame);
+        }
+        ArtMethod* next_method = *reinterpret_cast<ArtMethod**>(next_frame);
+        if (next_method != nullptr && PatchReturnPcIfNeeded(next_method, next_frame)) {
+          // Reload return pc from stack since the correct one for stack walking
+          // is just installed. This is for single frame deoptimization that's
+          // not triggered from compiled code. A invocation to
+          // GetQuickDeoptimizationWhenReturnedToEntryPoint() is simulated.
+          return_pc = GetReturnPc();
+        }
         cur_quick_frame_pc_ = return_pc;
-        uint8_t* next_frame = reinterpret_cast<uint8_t*>(cur_quick_frame_) + frame_size;
-        cur_quick_frame_ = reinterpret_cast<ArtMethod**>(next_frame);
+        cur_quick_frame_ = next_frame;
 
         if (kDebugStackWalk) {
           LOG(INFO) << PrettyMethod(method) << "@" << method << " size=" << frame_size
@@ -877,7 +890,7 @@ void StackVisitor::WalkStack(bool include_transitions) {
         }
 
         cur_depth_++;
-        method = *cur_quick_frame_;
+        method = next_method;
       }
     } else if (cur_shadow_frame_ != nullptr) {
       do {

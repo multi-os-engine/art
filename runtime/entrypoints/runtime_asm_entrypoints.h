@@ -64,14 +64,21 @@ static inline const void* GetQuickDeoptimizationEntryPoint() {
   return reinterpret_cast<const void*>(art_quick_deoptimize);
 }
 
+// Stub to deoptimize from compiled code as a result of HDeoptimize.
+extern "C" void art_quick_deoptimize_from_compiled_code();
+
+// Entry point for quick code that performs deoptimization when an (invalidated) compiled
+// method is returned to.
+extern "C" void art_quick_deoptimize_when_returned_to();
+static inline const void* GetQuickDeoptimizationWhenReturnedToEntryPoint() {
+  return reinterpret_cast<const void*>(art_quick_deoptimize_when_returned_to);
+}
+
 // Return address of instrumentation entry point used by non-interpreter based tracing.
 extern "C" void art_quick_instrumentation_entry(void*);
 static inline const void* GetQuickInstrumentationEntryPoint() {
   return reinterpret_cast<const void*>(art_quick_instrumentation_entry);
 }
-
-// Stub to deoptimize from compiled code.
-extern "C" void art_quick_deoptimize_from_compiled_code();
 
 // The return_pc of instrumentation exit stub.
 extern "C" void art_quick_instrumentation_exit();

@@ -1,0 +1,1 @@
+Test deoptimizing a method when that method is returned to.
