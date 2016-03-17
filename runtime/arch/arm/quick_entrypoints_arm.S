@@ -1453,9 +1453,19 @@ END art_quick_deoptimize
     .extern artDeoptimizeFromCompiledCode
 ENTRY art_quick_deoptimize_from_compiled_code
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r0, r1
-    mov    r0, r9                         @ Set up args.
-    blx    artDeoptimizeFromCompiledCode  @ artDeoptimizeFromCompiledCode(Thread*)
+    blx    artDeoptimizeFromCompiledCode  @ artDeoptimizeFromCompiledCode()
 END art_quick_deoptimize_from_compiled_code
+
+    /*
+     * Deoptimize into the interpreter when an (invalidated) compiled method is returned to. The
+     * deoptimization will long jump to the interpreter bridge.
+     */
+    .extern artDeoptimizeWhenReturnedTo
+ENTRY art_quick_deoptimize_when_returned_to
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME r2, r3 @ integer result preserved
+    vmov   r2, r3, d0                     @ pass floating-point result
+    blx    artDeoptimizeWhenReturnedTo    @ artDeoptimizeWhenReturnedTo(gpr_result, fpr_result)
+END art_quick_deoptimize_when_returned_to
 
     /*
      * Signed 64-bit integer multiply.

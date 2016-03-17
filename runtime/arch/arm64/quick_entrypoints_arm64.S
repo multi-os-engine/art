@@ -2041,16 +2041,26 @@ END art_quick_deoptimize
 
     /*
      * Compiled code has requested that we deoptimize into the interpreter. The deoptimization
-     * will long jump to the upcall with a special exception of -1.
+     * will long jump to the interpreter bridge.
      */
     .extern artDeoptimizeFromCompiledCode
 ENTRY art_quick_deoptimize_from_compiled_code
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
-    mov    x0, xSELF                      // Pass thread.
-    bl     artDeoptimizeFromCompiledCode  // artDeoptimizeFromCompiledCode(Thread*)
+    bl     artDeoptimizeFromCompiledCode  // artDeoptimizeFromCompiledCode()
     brk 0
 END art_quick_deoptimize_from_compiled_code
 
+    /*
+     * Deoptimize into the interpreter when an (invalidated) compiled method is returned to. The
+     * deoptimization will long jump to the interpreter bridge.
+     */
+    .extern artDeoptimizeWhenReturnedTo
+ENTRY art_quick_deoptimize_when_returned_to
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME     // integer result preserved
+    fmov   x1, d0                        // Pass floating-point result
+    bl     artDeoptimizeWhenReturnedTo   // artDeoptimizeWhenReturnedTo(gpr_result, fpr_result)
+    brk 0
+END art_quick_deoptimize_when_returned_to
 
     /*
      * String's indexOf.

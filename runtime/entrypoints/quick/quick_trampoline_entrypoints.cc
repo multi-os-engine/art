@@ -689,7 +689,6 @@ extern "C" uint64_t artQuickToInterpreterBridge(ArtMethod* method, Thread* self,
     mirror::Throwable* pending_exception = nullptr;
     bool from_code = false;
     self->PopDeoptimizationContext(&result, &pending_exception, /* out */ &from_code);
-    CHECK(from_code);
 
     // Push a transition back into managed code onto the linked list in thread.
     self->PushManagedStackFragment(&fragment);

@@ -1663,13 +1663,25 @@ END_FUNCTION art_quick_deoptimize
      */
 DEFINE_FUNCTION art_quick_deoptimize_from_compiled_code
     SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx
-    subl LITERAL(12), %esp                      // Align stack.
-    CFI_ADJUST_CFA_OFFSET(12)
-    pushl %fs:THREAD_SELF_OFFSET                // Pass Thread::Current().
-    CFI_ADJUST_CFA_OFFSET(4)
-    call SYMBOL(artDeoptimizeFromCompiledCode)  // artDeoptimizeFromCompiledCode(Thread*)
+    call SYMBOL(artDeoptimizeFromCompiledCode)  // artDeoptimizeFromCompiledCode()
     UNREACHABLE
 END_FUNCTION art_quick_deoptimize_from_compiled_code
+
+    /*
+     * Deoptimize into the interpreter when an (invalidated) compiled method is returned to. The
+     * deoptimization will long jump to the interpreter bridge.
+     */
+DEFINE_FUNCTION art_quick_deoptimize_when_returned_to
+    subl LITERAL(4), %esp         // Entry point for a jump. Fake that we were called.
+    SETUP_SAVE_ALL_CALLEE_SAVE_FRAME ebx, ebx
+    subl LITERAL(8), %esp
+    movq %xmm0, (%esp)            // Pass floating-point result
+    PUSH edx                      // Pass integer result
+    PUSH eax
+    call SYMBOL(artDeoptimizeWhenReturnedTo)  // artDeoptimizeWhenReturnedTo(gpr_result, fpr_result)
+    addl LITERAL(16), %esp         // Pop arguments
+    UNREACHABLE
+END_FUNCTION art_quick_deoptimize_when_returned_to
 
     /*
      * String's compareTo.
