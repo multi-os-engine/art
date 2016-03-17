@@ -967,12 +967,14 @@ void JitCodeCache::InvalidateCompiledCodeFor(ArtMethod* method,
                                              const OatQuickMethodHeader* header) {
   ProfilingInfo* profiling_info = method->GetProfilingInfo(sizeof(void*));
   if ((profiling_info != nullptr) &&
-      (profiling_info->GetSavedEntryPoint() == header->GetEntryPoint())) {
+      (header == nullptr ||
+       profiling_info->GetSavedEntryPoint() == header->GetEntryPoint())) {
     // Prevent future uses of the compiled code.
     profiling_info->SetSavedEntryPoint(nullptr);
   }
 
-  if (method->GetEntryPointFromQuickCompiledCode() == header->GetEntryPoint()) {
+  if (header == nullptr ||
+      method->GetEntryPointFromQuickCompiledCode() == header->GetEntryPoint()) {
     // The entrypoint is the one to invalidate, so we just update
     // it to the interpreter entry point and clear the counter to get the method
     // Jitted again.

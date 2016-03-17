@@ -269,7 +269,9 @@ ArtMethod* GetCalleeSaveMethodCaller(ArtMethod** sp,
       (reinterpret_cast<uint8_t*>(sp) + callee_return_pc_offset));
   ArtMethod* outer_method = *caller_sp;
   ArtMethod* caller = outer_method;
-  if (LIKELY(caller_pc != reinterpret_cast<uintptr_t>(GetQuickInstrumentationExitPc()))) {
+  if (LIKELY(caller_pc != reinterpret_cast<uintptr_t>(GetQuickInstrumentationExitPc())) &&
+      LIKELY(caller_pc !=
+             reinterpret_cast<uintptr_t>(GetQuickDeoptimizationWhenReturnedToEntryPoint()))) {
     if (outer_method != nullptr) {
       const OatQuickMethodHeader* current_code = outer_method->GetOatQuickMethodHeader(caller_pc);
       DCHECK(current_code != nullptr);

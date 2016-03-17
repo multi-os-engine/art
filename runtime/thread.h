@@ -84,6 +84,7 @@ class FrameIdToShadowFrame;
 class JavaVMExt;
 struct JNIEnvExt;
 class Monitor;
+class ReturnPcMappingStackFrame;
 class Runtime;
 class ScopedObjectAccessAlreadyRunnable;
 class ShadowFrame;
@@ -115,6 +116,29 @@ enum class StackedShadowFrameType {
 
 // This should match RosAlloc::kNumThreadLocalSizeBrackets.
 static constexpr size_t kNumRosAllocThreadLocalSizeBracketsInThread = 16;
+
+class ReturnPcMappingStackFrame {
+ public:
+  ReturnPcMappingStackFrame(ArtMethod** quick_frame, uintptr_t ret_pc)
+      : quick_frame_(quick_frame), ret_pc_(ret_pc) {
+  }
+
+  ArtMethod** GetQuickFrame() const {
+    return quick_frame_;
+  }
+
+  uintptr_t GetReturnPc() const {
+    return ret_pc_;
+  }
+
+  void SetReturnPc(uintptr_t ret_pc) {
+    ret_pc_ = ret_pc;
+  }
+
+ private:
+  ArtMethod** quick_frame_;
+  uintptr_t ret_pc_;
+};
 
 // Thread's stack layout for implicit stack overflow checks:
 //
@@ -910,6 +934,17 @@ class Thread {
   void PushStackedShadowFrame(ShadowFrame* sf, StackedShadowFrameType type);
   ShadowFrame* PopStackedShadowFrame(StackedShadowFrameType type, bool must_be_present = true);
 
+  // The following three methods are for keeping track of return pc's after we patch
+  // return pc's for deoptimization.
+
+  // Insert a mapping of ret_pc for quick_frame (the quick frame that's returned to).
+  void InsertReturnPcMapping(ArtMethod** quick_frame, uintptr_t ret_pc)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  uintptr_t GetReturnPcFromReturnPcMapping(ArtMethod** quick_frame)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  // Pop return pc mapping for all quick frames that are at least as deep as quick_frame.
+  void PopReturnPcMapping(ArtMethod** quick_frame) SHARED_REQUIRES(Locks::mutator_lock_);
+
   // For debugger, find the shadow frame that corresponds to a frame id.
   // Or return null if there is none.
   ShadowFrame* FindDebuggerShadowFrame(size_t frame_id)
@@ -1329,7 +1364,7 @@ class Thread {
       mterp_current_ibase(nullptr), mterp_default_ibase(nullptr), mterp_alt_ibase(nullptr),
       thread_local_alloc_stack_top(nullptr), thread_local_alloc_stack_end(nullptr),
       nested_signal_state(nullptr), flip_function(nullptr), method_verifier(nullptr),
-      thread_local_mark_stack(nullptr) {
+      thread_local_mark_stack(nullptr), return_pc_mapping_stack(nullptr) {
       std::fill(held_mutexes, held_mutexes + kLockLevelCount, nullptr);
     }
 
@@ -1473,6 +1508,11 @@ class Thread {
 
     // Thread-local mark stack for the concurrent copying collector.
     gc::accounting::AtomicStack<mirror::Object>* thread_local_mark_stack;
+
+    // Additional stack used by deoptimization to store return pc values.
+    // Stored as a pointer since std::deque is not PACKED.
+    // Entries are sorted by the frame pointer from low to high.
+    std::deque<ReturnPcMappingStackFrame>* return_pc_mapping_stack;
   } tlsPtr_;
 
   // Guards the 'interrupted_' and 'wait_monitor_' members.
