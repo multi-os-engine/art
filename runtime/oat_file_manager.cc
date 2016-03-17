@@ -477,4 +477,19 @@ void OatFileManager::UnRegisterOatFileLocation(const std::string& oat_location) 
   }
 }
 
+void OatFileManager::DumpForSigQuit(std::ostream& os) {
+  ReaderMutexLock mu(Thread::Current(), *Locks::oat_file_manager_lock_);
+  for (const std::unique_ptr<const OatFile>& oat_file : oat_files_) {
+    // Use "platform-default" if it's neither extract nor profile guided.
+    // Saying 'full' could be misleading if for example the platform uses
+    // compiler filters.
+    const char* status = oat_file->IsExtractOnly()
+        ? OatHeader::kExtractOnlyValue
+        : oat_file->IsProfileGuideCompiled()
+            ? OatHeader::kProfileGuideCompiledValue
+            : "platform-default";
+    os << oat_file->GetLocation() << ": " << status;
+  }
+}
+
 }  // namespace art
