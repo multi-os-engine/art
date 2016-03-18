@@ -760,7 +760,8 @@ static void SanityCheckArtMethod(ArtMethod* m,
                                  const std::vector<gc::space::ImageSpace*>& spaces)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   if (m->IsRuntimeMethod()) {
-    CHECK(m->GetDeclaringClass() == nullptr) << PrettyMethod(m);
+    mirror::Class* declaring_class = m->GetDeclaringClassUnchecked();
+    CHECK(declaring_class == nullptr) << declaring_class << " " << PrettyMethod(m);
   } else if (m->IsCopied()) {
     CHECK(m->GetDeclaringClass() != nullptr) << PrettyMethod(m);
   } else if (expected_class != nullptr) {
@@ -1542,6 +1543,7 @@ bool ClassLinker::AddImageSpace(
       hs.NewHandle(dex_caches_object->AsObjectArray<mirror::DexCache>()));
   Handle<mirror::ObjectArray<mirror::Class>> class_roots(hs.NewHandle(
       header.GetImageRoot(ImageHeader::kClassRoots)->AsObjectArray<mirror::Class>()));
+  const ImageSection& methods = header.GetMethodsSection();
   const OatFile* oat_file = space->GetOatFile();
   std::unordered_set<mirror::ClassLoader*> image_class_loaders;
   // Check that the image is what we are expecting.
@@ -1700,7 +1702,6 @@ bool ClassLinker::AddImageSpace(
 
   // Set entry point to interpreter if in InterpretOnly mode.
   if (!runtime->IsAotCompiler() && runtime->GetInstrumentation()->InterpretOnly()) {
-    const ImageSection& methods = header.GetMethodsSection();
     SetInterpreterEntrypointArtMethodVisitor visitor(image_pointer_size_);
     methods.VisitPackedArtMethods(&visitor, space->Begin(), image_pointer_size_);
   }
