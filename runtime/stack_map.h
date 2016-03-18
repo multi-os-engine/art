@@ -708,40 +708,40 @@ class StackMapEncoding {
   StackMapEncoding() {}
 
   // Set stack map bit layout based on given sizes.
-  // Returns the size of stack map in bytes.
-  size_t SetFromSizes(size_t native_pc_max,
-                      size_t dex_pc_max,
-                      size_t dex_register_map_size,
-                      size_t inline_info_size,
-                      size_t register_mask_max,
-                      size_t stack_mask_bit_size) {
-    size_t bit_offset = 0;
-    DCHECK_EQ(kNativePcBitOffset, bit_offset);
-    bit_offset += MinimumBitsToStore(native_pc_max);
+  void SetFromSizes(size_t native_pc_max,
+                    size_t dex_pc_max,
+                    size_t dex_register_map_size,
+                    size_t inline_info_size,
+                    size_t register_mask_max,
+                    size_t number_of_stack_masks,
+                    size_t flags_max) {
+    total_bit_size_ = kNativePcBitOffset;
+    total_bit_size_ += MinimumBitsToStore(native_pc_max);
 
-    dex_pc_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
-    bit_offset += MinimumBitsToStore(1 /* kNoDexPc */ + dex_pc_max);
+    dex_pc_bit_offset_ = dchecked_integral_cast<uint8_t>(total_bit_size_);
+    total_bit_size_ += MinimumBitsToStore(1 /* kNoDexPc */ + dex_pc_max);
 
     // We also need +1 for kNoDexRegisterMap, but since the size is strictly
     // greater than any offset we might try to encode, we already implicitly have it.
-    dex_register_map_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
-    bit_offset += MinimumBitsToStore(dex_register_map_size);
+    dex_register_map_bit_offset_ = dchecked_integral_cast<uint8_t>(total_bit_size_);
+    total_bit_size_ += MinimumBitsToStore(dex_register_map_size);
 
     // We also need +1 for kNoInlineInfo, but since the inline_info_size is strictly
     // greater than the offset we might try to encode, we already implicitly have it.
     // If inline_info_size is zero, we can encode only kNoInlineInfo (in zero bits).
-    inline_info_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
+    inline_info_bit_offset_ = dchecked_integral_cast<uint8_t>(total_bit_size_);
     if (inline_info_size != 0) {
-      bit_offset += MinimumBitsToStore(dex_register_map_size + inline_info_size);
+      total_bit_size_ += MinimumBitsToStore(dex_register_map_size + inline_info_size);
     }
 
-    register_mask_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
-    bit_offset += MinimumBitsToStore(register_mask_max);
+    register_mask_bit_offset_ = dchecked_integral_cast<uint8_t>(total_bit_size_);
+    total_bit_size_ += MinimumBitsToStore(register_mask_max);
 
-    stack_mask_bit_offset_ = dchecked_integral_cast<uint8_t>(bit_offset);
-    bit_offset += stack_mask_bit_size;
+    stack_mask_index_bit_offset_ = dchecked_integral_cast<uint8_t>(total_bit_size_);
+    total_bit_size_ += MinimumBitsToStore(number_of_stack_masks);
 
-    return RoundUp(bit_offset, kBitsPerByte) / kBitsPerByte;
+    flags_bit_offset_ = dchecked_integral_cast<uint8_t>(total_bit_size_);
+    total_bit_size_ += MinimumBitsToStore(flags_max);
   }
 
   ALWAYS_INLINE FieldEncoding GetNativePcEncoding() const {
@@ -757,11 +757,16 @@ class StackMapEncoding {
     return FieldEncoding(inline_info_bit_offset_, register_mask_bit_offset_, -1 /* min_value */);
   }
   ALWAYS_INLINE FieldEncoding GetRegisterMaskEncoding() const {
-    return FieldEncoding(register_mask_bit_offset_, stack_mask_bit_offset_);
+    return FieldEncoding(register_mask_bit_offset_, stack_mask_index_bit_offset_);
   }
-  ALWAYS_INLINE size_t GetStackMaskBitOffset() const {
-    // The end offset is not encoded. It is implicitly the end of stack map entry.
-    return stack_mask_bit_offset_;
+  ALWAYS_INLINE FieldEncoding GetStackMaskIndexEncoding() const {
+    return FieldEncoding(stack_mask_index_bit_offset_, flags_bit_offset_);
+  }
+  ALWAYS_INLINE FieldEncoding GetFlagsEncoding() const {
+    return FieldEncoding(flags_bit_offset_, total_bit_size_);
+  }
+  ALWAYS_INLINE size_t GetEntrySize() const {
+    return RoundUp(total_bit_size_, kBitsPerByte) / kBitsPerByte;
   }
 
   void Dump(VariableIndentationOutputStream* vios) const;
@@ -772,7 +777,9 @@ class StackMapEncoding {
   uint8_t dex_register_map_bit_offset_;
   uint8_t inline_info_bit_offset_;
   uint8_t register_mask_bit_offset_;
-  uint8_t stack_mask_bit_offset_;
+  uint8_t stack_mask_index_bit_offset_;
+  uint8_t flags_bit_offset_;
+  uint8_t total_bit_size_;
 };
 
 /**
@@ -835,16 +842,20 @@ class StackMap {
     encoding.GetRegisterMaskEncoding().Store(region_, mask);
   }
 
-  ALWAYS_INLINE size_t GetNumberOfStackMaskBits(const StackMapEncoding& encoding) const {
-    return region_.size_in_bits() - encoding.GetStackMaskBitOffset();
+  ALWAYS_INLINE uint32_t GetStackMaskIndex(const StackMapEncoding& encoding) const {
+    return encoding.GetStackMaskIndexEncoding().Load(region_);
   }
 
-  ALWAYS_INLINE bool GetStackMaskBit(const StackMapEncoding& encoding, size_t index) const {
-    return region_.LoadBit(encoding.GetStackMaskBitOffset() + index);
+  ALWAYS_INLINE void SetStackMaskIndex(const StackMapEncoding& encoding, uint32_t mask) {
+    encoding.GetStackMaskIndexEncoding().Store(region_, mask);
   }
 
-  ALWAYS_INLINE void SetStackMaskBit(const StackMapEncoding& encoding, size_t index, bool value) {
-    region_.StoreBit(encoding.GetStackMaskBitOffset() + index, value);
+  ALWAYS_INLINE uint32_t GetFlags(const StackMapEncoding& encoding) const {
+    return encoding.GetFlagsEncoding().Load(region_);
+  }
+
+  ALWAYS_INLINE void SetFlags(const StackMapEncoding& encoding, uint32_t value) {
+    encoding.GetFlagsEncoding().Store(region_, value);
   }
 
   ALWAYS_INLINE bool HasDexRegisterMap(const StackMapEncoding& encoding) const {
@@ -1021,7 +1032,8 @@ class InlineInfo {
 struct CodeInfoEncoding {
   uint32_t non_header_size;
   uint32_t number_of_stack_maps;
-  uint32_t stack_map_size_in_bytes;
+  uint32_t number_of_stack_masks;
+  uint32_t stack_mask_size_in_bytes;
   uint32_t number_of_location_catalog_entries;
   StackMapEncoding stack_map_encoding;
   InlineInfoEncoding inline_info_encoding;
@@ -1033,7 +1045,8 @@ struct CodeInfoEncoding {
     const uint8_t* ptr = reinterpret_cast<const uint8_t*>(data);
     non_header_size = DecodeUnsignedLeb128(&ptr);
     number_of_stack_maps = DecodeUnsignedLeb128(&ptr);
-    stack_map_size_in_bytes = DecodeUnsignedLeb128(&ptr);
+    number_of_stack_masks = DecodeUnsignedLeb128(&ptr);
+    stack_mask_size_in_bytes = DecodeUnsignedLeb128(&ptr);
     number_of_location_catalog_entries = DecodeUnsignedLeb128(&ptr);
     static_assert(alignof(StackMapEncoding) == 1,
                   "StackMapEncoding should not require alignment");
@@ -1054,7 +1067,8 @@ struct CodeInfoEncoding {
   void Encode(Vector* dest) const {
     EncodeUnsignedLeb128(dest, non_header_size);
     EncodeUnsignedLeb128(dest, number_of_stack_maps);
-    EncodeUnsignedLeb128(dest, stack_map_size_in_bytes);
+    EncodeUnsignedLeb128(dest, number_of_stack_masks);
+    EncodeUnsignedLeb128(dest, stack_mask_size_in_bytes);
     EncodeUnsignedLeb128(dest, number_of_location_catalog_entries);
     const uint8_t* stack_map_ptr = reinterpret_cast<const uint8_t*>(&stack_map_encoding);
     dest->insert(dest->end(), stack_map_ptr, stack_map_ptr + sizeof(StackMapEncoding));
@@ -1097,8 +1111,17 @@ class CodeInfo {
   }
 
   StackMap GetStackMapAt(size_t i, const CodeInfoEncoding& encoding) const {
-    size_t stack_map_size = encoding.stack_map_size_in_bytes;
+    size_t stack_map_size = encoding.stack_map_encoding.GetEntrySize();
     return StackMap(GetStackMaps(encoding).Subregion(i * stack_map_size, stack_map_size));
+  }
+
+  MemoryRegion GetStackMaskOf(const CodeInfoEncoding& encoding, const StackMap& stack_map) const {
+    // All stack mask data is stored at the very end.
+    size_t entry_size = encoding.stack_mask_size_in_bytes;
+    size_t total_size = entry_size * encoding.number_of_stack_masks;
+    MemoryRegion stack_masks = region_.Subregion(region_.size() - total_size, total_size);
+    size_t index = stack_map.GetStackMaskIndex(encoding.stack_map_encoding);
+    return stack_masks.Subregion(entry_size * index, entry_size);
   }
 
   uint32_t GetNumberOfLocationCatalogEntries(const CodeInfoEncoding& encoding) const {
@@ -1116,7 +1139,7 @@ class CodeInfo {
 
   // Get the size of all the stack maps of this CodeInfo object, in bytes.
   size_t GetStackMapsSize(const CodeInfoEncoding& encoding) const {
-    return encoding.stack_map_size_in_bytes * GetNumberOfStackMaps(encoding);
+    return encoding.stack_map_encoding.GetEntrySize() * GetNumberOfStackMaps(encoding);
   }
 
   uint32_t GetDexRegisterLocationCatalogOffset(const CodeInfoEncoding& encoding) const {

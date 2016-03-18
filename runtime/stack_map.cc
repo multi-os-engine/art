@@ -97,7 +97,9 @@ void StackMapEncoding::Dump(VariableIndentationOutputStream* vios) const {
       << ", dex_register_map_bit_offset=" << static_cast<uint32_t>(dex_register_map_bit_offset_)
       << ", inline_info_bit_offset=" << static_cast<uint32_t>(inline_info_bit_offset_)
       << ", register_mask_bit_offset=" << static_cast<uint32_t>(register_mask_bit_offset_)
-      << ", stack_mask_bit_offset=" << static_cast<uint32_t>(stack_mask_bit_offset_)
+      << ", stack_mask_index_bit_offset=" << static_cast<uint32_t>(stack_mask_index_bit_offset_)
+      << ", flags_bit_offset_=" << static_cast<uint32_t>(flags_bit_offset_)
+      << ", total_bit_size=" << static_cast<uint32_t>(total_bit_size_)
       << ")\n";
 }
 
@@ -200,8 +202,9 @@ void StackMap::Dump(VariableIndentationOutputStream* vios,
       << ", register_mask=0x" << GetRegisterMask(stack_map_encoding)
       << std::dec
       << ", stack_mask=0b";
-  for (size_t i = 0, e = GetNumberOfStackMaskBits(stack_map_encoding); i < e; ++i) {
-    vios->Stream() << GetStackMaskBit(stack_map_encoding, e - i - 1);
+  MemoryRegion stack_mask = code_info.GetStackMaskOf(encoding, *this);
+  for (size_t i = 0, e = stack_mask.size_in_bits(); i < e; ++i) {
+    vios->Stream() << stack_mask.LoadBit(e - i - 1);
   }
   vios->Stream() << ")\n";
   if (HasDexRegisterMap(stack_map_encoding)) {

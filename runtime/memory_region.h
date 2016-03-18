@@ -35,6 +35,12 @@ namespace art {
 // of the region.
 class MemoryRegion FINAL : public ValueObject {
  public:
+  struct ContentEquals {
+    constexpr bool operator()(const MemoryRegion& lhs, const MemoryRegion& rhs) const {
+      return lhs.size() == rhs.size() && memcmp(lhs.start(), rhs.start(), lhs.size()) == 0;
+    }
+  };
+
   MemoryRegion() : pointer_(nullptr), size_(0) {}
   MemoryRegion(void* pointer_in, uintptr_t size_in) : pointer_(pointer_in), size_(size_in) {}
 
@@ -46,6 +52,7 @@ class MemoryRegion FINAL : public ValueObject {
     return OFFSETOF_MEMBER(MemoryRegion, pointer_);
   }
 
+  uint8_t* begin() const { return reinterpret_cast<uint8_t*>(pointer_); }
   uint8_t* start() const { return reinterpret_cast<uint8_t*>(pointer_); }
   uint8_t* end() const { return start() + size_; }
 
@@ -146,6 +153,13 @@ class MemoryRegion FINAL : public ValueObject {
   }
 
   void CopyFrom(size_t offset, const MemoryRegion& from) const;
+
+  template<class Vector>
+  void CopyFromVector(size_t offset, Vector& vector) const {
+    if (!vector.empty()) {
+      CopyFrom(offset, MemoryRegion(vector.data(), vector.size()));
+    }
+  }
 
   // Compute a sub memory region based on an existing one.
   MemoryRegion Subregion(uintptr_t offset, uintptr_t size_in) const {
