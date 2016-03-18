@@ -5141,17 +5141,19 @@ class HArrayGet : public HExpression<2> {
             HInstruction* index,
             Primitive::Type type,
             uint32_t dex_pc,
+            bool is_unsigned = false,
             SideEffects additional_side_effects = SideEffects::None())
       : HExpression(type,
                     SideEffects::ArrayReadOfType(type).Union(additional_side_effects),
-                    dex_pc) {
+                    dex_pc),
+        is_unsigned_(is_unsigned) {
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
-  bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
-    return true;
+  bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
+    return other->AsArrayGet()->IsUnsigned() == IsUnsigned();
   }
   bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
     // TODO: We can be smarter here.
@@ -5181,9 +5183,14 @@ class HArrayGet : public HExpression<2> {
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }
 
+  void SetUnsigned(bool is_unsigned) { is_unsigned_ = is_unsigned; }
+  bool IsUnsigned() const { return is_unsigned_; }
+
   DECLARE_INSTRUCTION(ArrayGet);
 
  private:
+  bool is_unsigned_;
+
   DISALLOW_COPY_AND_ASSIGN(HArrayGet);
 };
 

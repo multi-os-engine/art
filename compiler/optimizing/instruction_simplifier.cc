@@ -59,9 +59,10 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   void VisitEqual(HEqual* equal) OVERRIDE;
   void VisitNotEqual(HNotEqual* equal) OVERRIDE;
   void VisitBooleanNot(HBooleanNot* bool_not) OVERRIDE;
-  void VisitInstanceFieldSet(HInstanceFieldSet* equal) OVERRIDE;
-  void VisitStaticFieldSet(HStaticFieldSet* equal) OVERRIDE;
-  void VisitArraySet(HArraySet* equal) OVERRIDE;
+  void VisitInstanceFieldSet(HInstanceFieldSet* instruction) OVERRIDE;
+  void VisitStaticFieldSet(HStaticFieldSet* instruction) OVERRIDE;
+  void VisitArrayGet(HArrayGet* instruction) OVERRIDE;
+  void VisitArraySet(HArraySet* instruction) OVERRIDE;
   void VisitTypeConversion(HTypeConversion* instruction) OVERRIDE;
   void VisitNullCheck(HNullCheck* instruction) OVERRIDE;
   void VisitArrayLength(HArrayLength* instruction) OVERRIDE;
@@ -739,6 +740,55 @@ void InstructionSimplifierVisitor::VisitArrayLength(HArrayLength* instruction) {
     input = input->InputAt(0);
     if (input->IsIntConstant()) {
       instruction->ReplaceWith(input);
+    }
+  }
+}
+
+static int32_t GetTypeBitMask(Primitive::Type type) {
+  DCHECK(type == Primitive::kPrimByte ||
+         type == Primitive::kPrimChar ||
+         type == Primitive::kPrimShort);
+  return type == Primitive::kPrimByte ? 0xFF : 0xFFFF;
+}
+
+static HInstruction* GetZeroExtension(HInstruction* mem_read_instr) {
+  if (!mem_read_instr->HasOnlyOneNonEnvironmentUse()) {
+    return nullptr;
+  }
+
+  // Accept only byte, char or short.
+  Primitive::Type type = mem_read_instr->GetType();
+  if (type != Primitive::kPrimByte &&
+      type != Primitive::kPrimChar &&
+      type != Primitive::kPrimShort) {
+    return nullptr;
+  }
+
+  HAnd* and_instr = mem_read_instr->GetUses().GetFirst()->GetUser()->AsAnd();
+  if (and_instr != nullptr && Primitive::IsIntOrLongType(and_instr->GetType())) {
+    HConstant* const_instr = and_instr->GetConstantRight();
+    if (const_instr != nullptr) {
+      HIntConstant* int_const = const_instr->AsIntConstant();
+      if (int_const != nullptr) {
+        if (GetTypeBitMask(mem_read_instr->GetType()) == int_const->GetValue()) {
+          return and_instr;
+        }
+      }
+    }
+  }
+
+  return nullptr;
+}
+
+void InstructionSimplifierVisitor::VisitArrayGet(HArrayGet* instruction) {
+  // TODO Enable this for other archs.
+  if (GetGraph()->GetInstructionSet() == InstructionSet::kX86 ||
+      GetGraph()->GetInstructionSet() == InstructionSet::kX86_64) {
+    HInstruction* zero_ext = GetZeroExtension(instruction);
+    if (zero_ext != nullptr) {
+      zero_ext->ReplaceWith(instruction);
+      instruction->SetUnsigned(true);
+      RecordSimplification();
     }
   }
 }

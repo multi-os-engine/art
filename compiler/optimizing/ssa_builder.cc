@@ -298,7 +298,8 @@ static HArrayGet* CreateFloatOrDoubleEquivalentOfArrayGet(HArrayGet* aget) {
       aget->GetArray(),
       aget->GetIndex(),
       type == Primitive::kPrimInt ? Primitive::kPrimFloat : Primitive::kPrimDouble,
-      aget->GetDexPc());
+      aget->GetDexPc(),
+      aget->IsUnsigned());
   aget->GetBlock()->InsertInstructionAfter(equivalent, aget);
   return equivalent;
 }

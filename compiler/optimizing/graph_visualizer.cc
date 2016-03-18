@@ -389,6 +389,12 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         << instance_of->MustDoNullCheck() << std::noboolalpha;
   }
 
+  void VisitArrayGet(HArrayGet* array_get) OVERRIDE {
+    if (array_get->IsUnsigned()) {
+      output_ << " Unsigned";
+    }
+  }
+
   void VisitArraySet(HArraySet* array_set) OVERRIDE {
     StartAttributeStream("value_can_be_null") << std::boolalpha
         << array_set->GetValueCanBeNull() << std::noboolalpha;

@@ -5049,11 +5049,13 @@ void InstructionCodeGeneratorX86::VisitArrayGet(HArrayGet* instruction) {
     case Primitive::kPrimByte: {
       uint32_t data_offset = mirror::Array::DataOffset(sizeof(int8_t)).Uint32Value();
       Register out = out_loc.AsRegister<Register>();
-      if (index.IsConstant()) {
-        __ movsxb(out, Address(obj,
-            (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_1) + data_offset));
+      Address addr = index.IsConstant() ? Address(obj,
+            (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_1) + data_offset) :
+            Address(obj, index.AsRegister<Register>(), TIMES_1, data_offset);
+      if (instruction->IsUnsigned()) {
+        __ movzxb(out, addr);
       } else {
-        __ movsxb(out, Address(obj, index.AsRegister<Register>(), TIMES_1, data_offset));
+        __ movsxb(out, addr);
       }
       break;
     }
@@ -5061,11 +5063,13 @@ void InstructionCodeGeneratorX86::VisitArrayGet(HArrayGet* instruction) {
     case Primitive::kPrimShort: {
       uint32_t data_offset = mirror::Array::DataOffset(sizeof(int16_t)).Uint32Value();
       Register out = out_loc.AsRegister<Register>();
-      if (index.IsConstant()) {
-        __ movsxw(out, Address(obj,
-            (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_2) + data_offset));
+      Address addr = index.IsConstant() ? Address(obj,
+            (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_2) + data_offset) :
+            Address(obj, index.AsRegister<Register>(), TIMES_2, data_offset);
+      if (instruction->IsUnsigned()) {
+        __ movzxw(out, addr);
       } else {
-        __ movsxw(out, Address(obj, index.AsRegister<Register>(), TIMES_2, data_offset));
+        __ movsxw(out, addr);
       }
       break;
     }
@@ -5073,12 +5077,11 @@ void InstructionCodeGeneratorX86::VisitArrayGet(HArrayGet* instruction) {
     case Primitive::kPrimChar: {
       uint32_t data_offset = mirror::Array::DataOffset(sizeof(uint16_t)).Uint32Value();
       Register out = out_loc.AsRegister<Register>();
-      if (index.IsConstant()) {
-        __ movzxw(out, Address(obj,
-            (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_2) + data_offset));
-      } else {
-        __ movzxw(out, Address(obj, index.AsRegister<Register>(), TIMES_2, data_offset));
-      }
+      Address addr = index.IsConstant() ? Address(obj,
+            (index.GetConstant()->AsIntConstant()->GetValue() << TIMES_2) + data_offset) :
+            Address(obj, index.AsRegister<Register>(), TIMES_2, data_offset);
+      // No sign-extension for chars.
+      __ movzxw(out, addr);
       break;
     }
 
