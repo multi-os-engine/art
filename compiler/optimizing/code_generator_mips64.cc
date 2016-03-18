@@ -1295,7 +1295,7 @@ void InstructionCodeGeneratorMIPS64::VisitArrayGet(HArrayGet* instruction) {
   Location index = locations->InAt(1);
   uint32_t data_offset = CodeGenerator::GetArrayDataOffset(instruction);
 
-  Primitive::Type type = instruction->GetType();
+  Primitive::Type type = instruction->GetArrayType();
   switch (type) {
     case Primitive::kPrimBoolean: {
       GpuRegister out = locations->Out().AsRegister<GpuRegister>();

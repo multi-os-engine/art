@@ -554,6 +554,21 @@ class LSEVisitor : public HGraphVisitor {
         substitute = sub_sub;
         sub_sub = FindSubstitute(substitute);
       }
+      // TODO will do the same for FieldGet.
+      HArrayGet* array_get = load->AsArrayGet();
+      if (array_get != nullptr && array_get->IsUnsigned()) {
+        // Recreate zero-ext for the substitution.
+        Primitive::Type array_type = array_get->GetArrayType();
+        DCHECK(array_type == Primitive::kPrimByte ||
+               array_type == Primitive::kPrimChar ||
+               array_type == Primitive::kPrimShort);
+        int32_t mask = array_type == Primitive::kPrimByte ? 0xFF : 0xFFFF;
+        HAnd* zero_ext = new (GetGraph()->GetArena()) HAnd(Primitive::kPrimInt, substitute,
+                         GetGraph()->GetIntConstant(mask, array_get->GetDexPc()),
+                         array_get->GetDexPc());
+        load->GetBlock()->InsertInstructionAfter(zero_ext, load);
+        substitute = zero_ext;
+      }
       load->ReplaceWith(substitute);
       load->GetBlock()->RemoveInstruction(load);
     }

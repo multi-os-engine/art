@@ -27,6 +27,8 @@ public class Main extends TestCase {
     ensureThrows(new boolean[2], -1);
     ensureThrows(new boolean[2], Integer.MIN_VALUE);
     ensureThrows(new boolean[2], Integer.MAX_VALUE);
+    assertEquals(-1, unsignedExtension$noinline$(new short[] {-1}));
+    assertEquals(0xDeadBeef, getInt(new byte[] {-34, -83, -66, -17}, 0));
   }
 
   static void $opt$testReads(boolean[] bools, byte[] bytes, char[] chars, short[] shorts,
@@ -158,5 +160,20 @@ public class Main extends TestCase {
 
   public static void $opt$doArrayStore(boolean[] array, int index) {
     array[index] = false;
+  }
+
+  public static boolean NEVER;
+
+  public static int unsignedExtension$noinline$(short[] a) {
+    if (NEVER) throw new RuntimeException();
+    int x = a[0] & 0xffff;  // Unsigned load.
+    return (short) x;       // Implicit conversion.
+  }
+
+  static int getInt(byte[] b, int off) {
+      return ((b[off + 3] & 0xFF)      ) +
+             ((b[off + 2] & 0xFF) <<  8) +
+             ((b[off + 1] & 0xFF) << 16) +
+             ((b[off    ]       ) << 24);
   }
 }

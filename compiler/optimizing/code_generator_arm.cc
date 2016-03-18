@@ -4466,7 +4466,7 @@ void InstructionCodeGeneratorARM::VisitArrayGet(HArrayGet* instruction) {
   Location index = locations->InAt(1);
   Location out_loc = locations->Out();
   uint32_t data_offset = CodeGenerator::GetArrayDataOffset(instruction);
-  Primitive::Type type = instruction->GetType();
+  Primitive::Type type = instruction->GetArrayType();
   HInstruction* array_instr = instruction->GetArray();
   bool has_intermediate_address = array_instr->IsIntermediateAddress();
   // The read barrier instrumentation does not support the HIntermediateAddress instruction yet.

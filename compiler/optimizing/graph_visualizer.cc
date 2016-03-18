@@ -420,6 +420,9 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
   void VisitArrayGet(HArrayGet* array_get) OVERRIDE {
     StartAttributeStream("is_string_char_at") << std::boolalpha
         << array_get->IsStringCharAt() << std::noboolalpha;
+    if (array_get->IsUnsigned()) {
+      output_ << " Unsigned(" << GetTypeId(array_get->GetArrayType()) << ")";
+    }
   }
 
   void VisitArraySet(HArraySet* array_set) OVERRIDE {
