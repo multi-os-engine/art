@@ -275,5 +275,15 @@
   description: "Wrong junit constructor for test",
   result: EXEC_FAILED,
   names: [ "jsr166.CollectionTest#testEmptyMeansEmpty" ]
+},
+{
+  description: "Wrong junit constructor for test",
+  result: EXEC_FAILED,
+  names: [ "jsr166.Collection8Test#testForEach" ]
+},
+{
+  description: "Wrong junit constructor for test",
+  result: EXEC_FAILED,
+  names: [ "jsr166.Collection8Test#testForEachConcurrentStressTest" ]
 }
 ]
