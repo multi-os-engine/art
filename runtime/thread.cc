@@ -511,9 +511,6 @@ static size_t FixStackSize(size_t stack_size) {
   return stack_size;
 }
 
-// Global variable to prevent the compiler optimizing away the page reads for the stack.
-uint8_t dont_optimize_this;
-
 // Install a protected region in the stack.  This is used to trigger a SIGSEGV if a stack
 // overflow is detected.  It is located right below the stack_begin_.
 //
@@ -538,16 +535,24 @@ void Thread::InstallImplicitProtection() {
   // First remove the protection on the protected region as will want to read and
   // write it.  This may fail (on the first attempt when the stack is not mapped)
   // but we ignore that.
-  UnprotectStack();
+  bool unprotect_success = UnprotectStack();
 
-  // Map in the stack.  This must be done by reading from the
-  // current stack pointer downwards as the stack may be mapped using VM_GROWSDOWN
-  // in the kernel.  Any access more than a page below the current SP might cause
-  // a segv.
+  if (!unprotect_success) {
+    VLOG(threads) << "Need to map in stack for thread at " << std::hex <<
+        static_cast<void*>(pregion);
 
-  // Read every page from the high address to the low.
-  for (uint8_t* p = stack_top; p >= pregion; p -= kPageSize) {
-    dont_optimize_this = *p;
+    // Map in the stack.  This must be done by reading from the
+    // current stack pointer downwards as the stack may be mapped using VM_GROWSDOWN
+    // in the kernel.  Any access more than a page below the current SP might cause
+    // a segv.
+    // TODO: This comment may be out of date. It seems possible to speed this up. As
+    //       this is normally done once in the zygote on startup, ignore for now.
+
+    // Read every page from the high address to the low.
+    volatile uint8_t dont_optimize_this;
+    for (uint8_t* p = stack_top; p >= pregion; p -= kPageSize) {
+      dont_optimize_this = *p;
+    }
   }
 
   VLOG(threads) << "installing stack protected region at " << std::hex <<
