@@ -17,6 +17,7 @@
 public class Main {
   public static Object[] getObjectArray() { return null; }
   public static long[] getLongArray() { return null; }
+  public static Object getNull() { return null; }
 
   public static void main(String[] args) {
     try {
@@ -35,6 +36,19 @@ public class Main {
   public static void foo() {
     longField = getLongArray()[0];
     objectField = getObjectArray()[0];
+  }
+
+  public static void bar() {
+    String[] array = ((String[])getNull());
+    objectField = array[0];
+    objectField = array[1];
+    objectField = array[2];
+    objectField = array[3];
+    long[] longArray = getLongArray();
+    longField = longArray[0];
+    longField = longArray[1];
+    longField = longArray[2];
+    longField = longArray[3];
   }
 
   public static long longField;
