@@ -1899,6 +1899,20 @@ void RegisterAllocator::Resolve() {
     if (location.IsUnallocated()) {
       if (location.GetPolicy() == Location::kSameAsFirstInput) {
         if (locations->InAt(0).IsUnallocated()) {
+          // For inputs other then first but equal to first one we
+          // set the position to enable allocating registers to be the same
+          // for that inputs, first input and output, so handle this
+          // here in the same way.
+          if (!locations->HasTemps()) {
+            const size_t count = instruction->InputCount();
+            for (size_t index = 1; index < count; ++index) {
+              if (instruction->InputAt(index) == instruction->InputAt(0)) {
+                if (locations->InAt(index).IsUnallocated()) {
+                  locations->SetInAt(index, source);
+                }
+              }
+            }
+          }
           locations->SetInAt(0, source);
         } else {
           DCHECK(locations->InAt(0).Equals(source));
