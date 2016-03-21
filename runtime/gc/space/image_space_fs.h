@@ -228,9 +228,14 @@ static void MarkZygoteStart(const InstructionSet isa, const uint32_t max_failed_
     }
   } else {
     if (!file->ReadFully(&num_failed_boots, sizeof(num_failed_boots))) {
-      PLOG(WARNING) << "Failed to read boot marker.";
-      file->Erase();
-      return;
+      if (0 != file->GetLength()) {
+        PLOG(WARNING) << "Failed to read boot marker.";
+        file->Erase();
+        return;
+      }
+
+      // since we may done file->Erase() in previous mark, it is possible the length is 0
+      LOG(WARNING) << "found empty .booting";
     }
   }
 
