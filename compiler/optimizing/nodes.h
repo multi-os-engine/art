@@ -6253,6 +6253,12 @@ class MoveOperands : public ArenaObject<kArenaAllocMoveOperands> {
 
   HInstruction* GetInstruction() const { return instruction_; }
 
+  bool Equals(Location source, Location destination, Primitive::Type type) const {
+    return source_.Equals(source) &&
+           destination_.Equals(destination) &&
+           type_ == type;
+  }
+
  private:
   Location source_;
   Location destination_;
@@ -6283,6 +6289,12 @@ class HParallelMove : public HTemplateInstruction<0> {
                HInstruction* instruction) {
     DCHECK(source.IsValid());
     DCHECK(destination.IsValid());
+    for (const MoveOperands& move : moves_) {
+      if (move.Equals(source, destination, type)) {
+        // No need to add the same move.
+        return;
+      }
+    }
     if (kIsDebugBuild) {
       if (instruction != nullptr) {
         for (const MoveOperands& move : moves_) {
