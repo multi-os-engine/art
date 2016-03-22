@@ -724,6 +724,12 @@ class MANAGED Class FINAL : public Object {
   ALWAYS_INLINE IterationRange<StrideIterator<ArtMethod>> GetMethods(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Replaces the old methods_ pointer with 'new_methods' and does any nessecary bookkeeping for the
+  // change to be observed.
+  void UpdateMethodsPtr(LengthPrefixedArray<ArtMethod>* new_methods)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!Locks::classlinker_classes_lock_);
+
   void SetMethodsPtr(LengthPrefixedArray<ArtMethod>* new_methods,
                      uint32_t num_direct,
                      uint32_t num_virtual)
