@@ -66,6 +66,13 @@ inline void Class::SetVerifyError(mirror::Object* error) {
   }
 }
 
+void Class::UpdateMethodsPtr(LengthPrefixedArray<ArtMethod>* new_methods) {
+  DCHECK_LE(NumDeclaredVirtualMethods() + NumDirectMethods(), new_methods->size());
+  SetMethodsPtrInternal(new_methods);
+  // Need to mark the card so that the remembered sets and mod union tables get updated.
+  Runtime::Current()->GetHeap()->WriteBarrierEveryFieldOf(this);
+}
+
 void Class::SetStatus(Handle<Class> h_this, Status new_status, Thread* self) {
   Status old_status = h_this->GetStatus();
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();

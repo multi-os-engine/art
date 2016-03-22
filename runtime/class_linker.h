@@ -28,6 +28,7 @@
 #include "base/hash_set.h"
 #include "base/macros.h"
 #include "base/mutex.h"
+#include "base/scoped_arena_containers.h"
 #include "class_table.h"
 #include "dex_cache_resolved_classes.h"
 #include "dex_file.h"
@@ -966,6 +967,57 @@ class ClassLinker {
           ArtMethod** out_imt)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  void FixupIfTable(Handle<mirror::Class> klass,
+                    const ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table,
+                    Handle<mirror::IfTable> iftable)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  void FixupIMTable(const ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table,
+                    ArtMethod** out_imt)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  void FillInVTable(Handle<mirror::PointerArray> new_vtable,
+                    size_t old_vtable_count,
+                    size_t new_vtable_count,
+                    IterationRange<StrideIterator<ArtMethod>> new_methods)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  void FixupVTable(Handle<mirror::PointerArray> vtable,
+                   size_t old_vtable_length,
+                   const ScopedArenaVector<ArtMethod*>& miranda_methods,
+                   const ScopedArenaVector<ArtMethod*>& default_conflict_methods,
+                   const std::unordered_map<size_t, ClassLinker::MethodTranslation>& translations,
+                   const ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+  // CHECKs that the dex cache does not contain any obsolete methods.
+  void CheckDexCacheNotObsolete(Handle<mirror::Class> klass,
+                                const ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  LengthPrefixedArray<ArtMethod>* ReallocAndCopyMethodsArray(
+          Thread* self,
+          LengthPrefixedArray<ArtMethod>* old_methods,
+          size_t old_method_count,
+          size_t new_method_count,
+          /*out*/ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(Roles::uninterruptible_);
+
+  void CopyAndRecordNewMethods(ScopedArenaVector<ArtMethod*>& miranda_methods,
+                               ScopedArenaVector<ArtMethod*>& default_methods,
+                               ScopedArenaVector<ArtMethod*>& default_conflict_methods,
+                               /*out*/StrideIterator<ArtMethod> out,
+                               /*out*/ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(Roles::uninterruptible_);
+
+  bool AllocateAndFillIFTable(Thread* self,
+                              Handle<mirror::IfTable> super_iftable,
+                              /*out*/Handle<mirror::IfTable> iftable)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void FillImtFromSuperClass(Handle<mirror::Class> klass,
+                             Handle<mirror::IfTable> iftable,
+                             ArtMethod** out_imt)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   bool LinkStaticFields(Thread* self, Handle<mirror::Class> klass, size_t* class_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
   bool LinkInstanceFields(Thread* self, Handle<mirror::Class> klass)
@@ -1055,11 +1107,6 @@ class ClassLinker {
 
   bool CanWeInitializeClass(mirror::Class* klass, bool can_init_statics, bool can_init_parents)
       SHARED_REQUIRES(Locks::mutator_lock_);
-
-  void UpdateClassMethods(mirror::Class* klass,
-                          LengthPrefixedArray<ArtMethod>* new_methods)
-      SHARED_REQUIRES(Locks::mutator_lock_)
-      REQUIRES(!Locks::classlinker_classes_lock_);
 
   // new_class_set is the set of classes that were read from the class table section in the image.
   // If there was no class table section, it is null.

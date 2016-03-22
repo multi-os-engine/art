@@ -3545,16 +3545,6 @@ mirror::Class* ClassLinker::InsertClass(const char* descriptor, mirror::Class* k
   return nullptr;
 }
 
-// TODO This should really be in mirror::Class.
-void ClassLinker::UpdateClassMethods(mirror::Class* klass,
-                                     LengthPrefixedArray<ArtMethod>* new_methods) {
-  klass->SetMethodsPtrUnchecked(new_methods,
-                                klass->NumDirectMethods(),
-                                klass->NumDeclaredVirtualMethods());
-  // Need to mark the card so that the remembered sets and mod union tables get updated.
-  Runtime::Current()->GetHeap()->WriteBarrierEveryFieldOf(klass);
-}
-
 bool ClassLinker::RemoveClass(const char* descriptor, mirror::ClassLoader* class_loader) {
   WriterMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
   ClassTable* const class_table = ClassTableForClassLoader(class_loader);
@@ -6432,13 +6422,48 @@ void ClassLinker::FillImtFromSuperClass(Handle<mirror::Class> klass,
   }
 }
 
-// TODO This method needs to be split up into several smaller methods.
+bool ClassLinker::AllocateAndFillIFTable(
+    Thread* self,
+    Handle<mirror::IfTable> super_iftable,
+    /*out*/Handle<mirror::IfTable> iftable) {
+  if (iftable.Get() == nullptr) {
+    return true;
+  }
+  size_t ifcount = iftable->Count();
+  bool extend_super_iftable = super_iftable.Get() != nullptr;
+  size_t super_ifcount = (extend_super_iftable) ? super_iftable->Count() : 0;
+  for (size_t i = 0; i < ifcount; ++i) {
+    size_t num_methods = iftable->GetInterface(i)->NumDeclaredVirtualMethods();
+    if (num_methods > 0) {
+      const bool is_super = i < super_ifcount;
+      // This is an interface implemented by a super-class. Therefore we can just copy the method
+      // array from the superclass.
+      const bool super_interface = is_super && extend_super_iftable;
+      mirror::PointerArray* method_array;
+      if (super_interface) {
+        // If we are working on a super interface, try extending the existing method array.
+        method_array = down_cast<mirror::PointerArray*>(
+            super_iftable->GetMethodArray(i)->Clone(self));
+      } else {
+        method_array = AllocPointerArray(self, num_methods);
+      }
+      if (UNLIKELY(method_array == nullptr)) {
+        self->AssertPendingOOMException();
+        return false;
+      }
+      iftable->SetMethodArray(i, method_array);
+    }
+  }
+  return true;
+}
+
+// TODO This method needs some more cleanup.
 bool ClassLinker::LinkInterfaceMethods(
     Thread* self,
     Handle<mirror::Class> klass,
     const std::unordered_map<size_t, ClassLinker::MethodTranslation>& default_translations,
     ArtMethod** out_imt) {
-  StackHandleScope<3> hs(self);
+  StackHandleScope<4> hs(self);
   Runtime* const runtime = Runtime::Current();
 
   const bool is_interface = klass->IsInterface();
@@ -6466,7 +6491,6 @@ bool ClassLinker::LinkInterfaceMethods(
   MutableHandle<mirror::PointerArray> vtable(hs.NewHandle(klass->GetVTableDuringLinking()));
   ArtMethod* const unimplemented_method = runtime->GetImtUnimplementedMethod();
   ArtMethod* const imt_conflict_method = runtime->GetImtConflictMethod();
-  // Copy the IMT from the super class if possible.
   const bool extend_super_iftable = has_superclass;
   if (has_superclass && fill_tables) {
     FillImtFromSuperClass(klass,
@@ -6477,29 +6501,11 @@ bool ClassLinker::LinkInterfaceMethods(
   // Allocate method arrays before since we don't want miss visiting miranda method roots due to
   // thread suspension.
   if (fill_tables) {
-    for (size_t i = 0; i < ifcount; ++i) {
-      size_t num_methods = iftable->GetInterface(i)->NumDeclaredVirtualMethods();
-      if (num_methods > 0) {
-        const bool is_super = i < super_ifcount;
-        // This is an interface implemented by a super-class. Therefore we can just copy the method
-        // array from the superclass.
-        const bool super_interface = is_super && extend_super_iftable;
-        mirror::PointerArray* method_array;
-        if (super_interface) {
-          mirror::IfTable* if_table = klass->GetSuperClass()->GetIfTable();
-          DCHECK(if_table != nullptr);
-          DCHECK(if_table->GetMethodArray(i) != nullptr);
-          // If we are working on a super interface, try extending the existing method array.
-          method_array = down_cast<mirror::PointerArray*>(if_table->GetMethodArray(i)->Clone(self));
-        } else {
-          method_array = AllocPointerArray(self, num_methods);
-        }
-        if (UNLIKELY(method_array == nullptr)) {
-          self->AssertPendingOOMException();
-          return false;
-        }
-        iftable->SetMethodArray(i, method_array);
-      }
+    Handle<mirror::IfTable> super_iftable(hs.NewHandle<mirror::IfTable>(
+        has_superclass ?  klass->GetSuperClass()->GetIfTable() : nullptr));
+    if (UNLIKELY(!AllocateAndFillIFTable(self, super_iftable, iftable))) {
+      self->AssertPendingOOMException();
+      return false;
     }
   }
 
@@ -6754,7 +6760,7 @@ bool ClassLinker::LinkInterfaceMethods(
   const bool has_new_virtuals = !(miranda_methods.empty() &&
                                   default_methods.empty() &&
                                   default_conflict_methods.empty());
-  // TODO don't extend virtuals of interface unless necessary (when is it?).
+  // don't extend virtuals of interface unless adding default-conflict methods.
   if (has_new_virtuals) {
     DCHECK(!is_interface || (default_methods.empty() && miranda_methods.empty()))
         << "Interfaces should only have default-conflict methods appended to them.";
@@ -6766,92 +6772,31 @@ bool ClassLinker::LinkInterfaceMethods(
                                     miranda_methods.size() +
                                     default_methods.size() +
                                     default_conflict_methods.size();
-    // Attempt to realloc to save RAM if possible.
+
+    ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*> move_table(allocator.Adapter());
     LengthPrefixedArray<ArtMethod>* old_methods = klass->GetMethodsPtr();
-    // The Realloced virtual methods aren't visible from the class roots, so there is no issue
-    // where GCs could attempt to mark stale pointers due to memcpy. And since we overwrite the
-    // realloced memory with out->CopyFrom, we are guaranteed to have objects in the to space since
-    // CopyFrom has internal read barriers.
-    //
-    // TODO We should maybe move some of this into mirror::Class or at least into another method.
-    const size_t old_size = LengthPrefixedArray<ArtMethod>::ComputeSize(old_method_count,
-                                                                        method_size,
-                                                                        method_alignment);
-    const size_t new_size = LengthPrefixedArray<ArtMethod>::ComputeSize(new_method_count,
-                                                                        method_size,
-                                                                        method_alignment);
-    const size_t old_methods_ptr_size = (old_methods != nullptr) ? old_size : 0;
-    auto* methods = reinterpret_cast<LengthPrefixedArray<ArtMethod>*>(
-        runtime->GetLinearAlloc()->Realloc(self, old_methods, old_methods_ptr_size, new_size));
+    // Attempt to realloc to save RAM if possible.
+    LengthPrefixedArray<ArtMethod>* methods = ReallocAndCopyMethodsArray(self,
+                                                                         old_methods,
+                                                                         old_method_count,
+                                                                         new_method_count,
+                                                                         move_table);
     if (UNLIKELY(methods == nullptr)) {
       self->AssertPendingOOMException();
       self->EndAssertNoThreadSuspension(old_cause);
       return false;
     }
-    ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*> move_table(allocator.Adapter());
-    if (methods != old_methods) {
-      // Maps from heap allocated miranda method to linear alloc miranda method.
-      StrideIterator<ArtMethod> out = methods->begin(method_size, method_alignment);
-      // Copy over the old methods.
-      for (auto& m : klass->GetMethods(image_pointer_size_)) {
-        move_table.emplace(&m, &*out);
-        // The CopyFrom is only necessary to not miss read barriers since Realloc won't do read
-        // barriers when it copies.
-        out->CopyFrom(&m, image_pointer_size_);
-        ++out;
-      }
-    }
-    StrideIterator<ArtMethod> out(methods->begin(method_size, method_alignment) + old_method_count);
-    // Copy over miranda methods before copying vtable since CopyOf may cause thread suspension and
-    // we want the roots of the miranda methods to get visited.
-    for (ArtMethod* mir_method : miranda_methods) {
-      ArtMethod& new_method = *out;
-      new_method.CopyFrom(mir_method, image_pointer_size_);
-      new_method.SetAccessFlags(new_method.GetAccessFlags() | kAccMiranda | kAccCopied);
-      DCHECK_NE(new_method.GetAccessFlags() & kAccAbstract, 0u)
-          << "Miranda method should be abstract!";
-      move_table.emplace(mir_method, &new_method);
-      ++out;
-    }
-    // We need to copy the default methods into our own method table since the runtime requires that
-    // every method on a class's vtable be in that respective class's virtual method table.
-    // NOTE This means that two classes might have the same implementation of a method from the same
-    // interface but will have different ArtMethod*s for them. This also means we cannot compare a
-    // default method found on a class with one found on the declaring interface directly and must
-    // look at the declaring class to determine if they are the same.
-    for (ArtMethod* def_method : default_methods) {
-      ArtMethod& new_method = *out;
-      new_method.CopyFrom(def_method, image_pointer_size_);
-      // Clear the kAccSkipAccessChecks flag if it is present. Since this class hasn't been verified
-      // yet it shouldn't have methods that are skipping access checks.
-      // TODO This is rather arbitrary. We should maybe support classes where only some of its
-      // methods are skip_access_checks.
-      constexpr uint32_t kSetFlags = kAccDefault | kAccCopied;
-      constexpr uint32_t kMaskFlags = ~kAccSkipAccessChecks;
-      new_method.SetAccessFlags((new_method.GetAccessFlags() | kSetFlags) & kMaskFlags);
-      move_table.emplace(def_method, &new_method);
-      ++out;
-    }
-    for (ArtMethod* conf_method : default_conflict_methods) {
-      ArtMethod& new_method = *out;
-      new_method.CopyFrom(conf_method, image_pointer_size_);
-      // This is a type of default method (there are default method impls, just a conflict) so mark
-      // this as a default, non-abstract method, since thats what it is. Also clear the
-      // kAccSkipAccessChecks bit since this class hasn't been verified yet it shouldn't have
-      // methods that are skipping access checks.
-      constexpr uint32_t kSetFlags = kAccDefault | kAccDefaultConflict | kAccCopied;
-      constexpr uint32_t kMaskFlags = ~(kAccAbstract | kAccSkipAccessChecks);
-      new_method.SetAccessFlags((new_method.GetAccessFlags() | kSetFlags) & kMaskFlags);
-      DCHECK(new_method.IsDefaultConflicting());
-      // The actual method might or might not be marked abstract since we just copied it from a
-      // (possibly default) interface method. We need to set it entry point to be the bridge so that
-      // the compiler will not invoke the implementation of whatever method we copied from.
-      EnsureThrowsInvocationError(&new_method);
-      move_table.emplace(conf_method, &new_method);
-      ++out;
-    }
-    methods->SetSize(new_method_count);
-    UpdateClassMethods(klass.Get(), methods);
+    CHECK_EQ(methods->size(), new_method_count);
+    // Copy the methods into the methods array begining at 'new_methods_out'. Put the translations
+    // into move_table.
+    StrideIterator<ArtMethod> new_methods_iter(
+        methods->begin(method_size, method_alignment) + old_method_count);
+    CopyAndRecordNewMethods(miranda_methods,
+                            default_methods,
+                            default_conflict_methods,
+                            new_methods_iter,
+                            move_table);
+    klass->UpdateMethodsPtr(methods);
     // Done copying methods, they are all roots in the class now, so we can end the no thread
     // suspension assert.
     self->EndAssertNoThreadSuspension(old_cause);
@@ -6869,107 +6814,37 @@ bool ClassLinker::LinkInterfaceMethods(
         self->AssertPendingOOMException();
         return false;
       }
-      out = methods->begin(method_size, method_alignment) + old_method_count;
-      size_t vtable_pos = old_vtable_count;
-      // Update all the newly copied method's indexes so they denote their placement in the vtable.
-      for (size_t i = old_method_count; i < new_method_count; ++i) {
-        // Leave the declaring class alone the method's dex_code_item_offset_ and dex_method_index_
-        // fields are references into the dex file the method was defined in. Since the ArtMethod
-        // does not store that information it uses declaring_class_->dex_cache_.
-        out->SetMethodIndex(0xFFFF & vtable_pos);
-        vtable->SetElementPtrSize(vtable_pos, &*out, image_pointer_size_);
-        ++out;
-        ++vtable_pos;
-      }
-      CHECK_EQ(vtable_pos, new_vtable_count);
-      // Update old vtable methods. We use the default_translations map to figure out what each
-      // vtable entry should be updated to, if they need to be at all.
-      for (size_t i = 0; i < old_vtable_count; ++i) {
-        ArtMethod* translated_method = vtable->GetElementPtrSize<ArtMethod*>(
-              i, image_pointer_size_);
-        // Try and find what we need to change this method to.
-        auto translation_it = default_translations.find(i);
-        bool found_translation = false;
-        if (translation_it != default_translations.end()) {
-          if (translation_it->second.IsInConflict()) {
-            // Find which conflict method we are to use for this method.
-            MethodNameAndSignatureComparator old_method_comparator(
-                translated_method->GetInterfaceMethodIfProxy(image_pointer_size_));
-            ArtMethod* new_conflict_method = FindSameNameAndSignature(old_method_comparator,
-                                                                      default_conflict_methods);
-            CHECK(new_conflict_method != nullptr) << "Expected a conflict method!";
-            translated_method = new_conflict_method;
-          } else if (translation_it->second.IsAbstract()) {
-            // Find which miranda method we are to use for this method.
-            MethodNameAndSignatureComparator old_method_comparator(
-                translated_method->GetInterfaceMethodIfProxy(image_pointer_size_));
-            ArtMethod* miranda_method = FindSameNameAndSignature(old_method_comparator,
-                                                                miranda_methods);
-            DCHECK(miranda_method != nullptr);
-            translated_method = miranda_method;
-          } else {
-            // Normal default method (changed from an older default or abstract interface method).
-            DCHECK(translation_it->second.IsTranslation());
-            translated_method = translation_it->second.GetTranslation();
-          }
-          found_translation = true;
-        }
-        DCHECK(translated_method != nullptr);
-        auto it = move_table.find(translated_method);
-        if (it != move_table.end()) {
-          auto* new_method = it->second;
-          DCHECK(new_method != nullptr);
-          vtable->SetElementPtrSize(i, new_method, image_pointer_size_);
-        } else {
-          // If it was not going to be updated we wouldn't have put it into the default_translations
-          // map.
-          CHECK(!found_translation) << "We were asked to update this vtable entry. Must not fail.";
-        }
-      }
+
+      IterationRange<StrideIterator<ArtMethod>> new_methods(
+          methods->begin(method_size, method_alignment) + old_method_count,
+          methods->end(method_size, method_alignment));
+      // Add all new methods to the vtable.
+      FillInVTable(vtable, old_vtable_count, new_vtable_count, new_methods);
+      // Make sure everything in the vtable is translated and pointing to real methods.
+      FixupVTable(vtable,
+                  old_vtable_count,
+                  miranda_methods,
+                  default_conflict_methods,
+                  default_translations,
+                  move_table);
       klass->SetVTable(vtable.Get());
 
-      // Go fix up all the stale iftable pointers.
-      for (size_t i = 0; i < ifcount; ++i) {
-        for (size_t j = 0, count = iftable->GetMethodArrayCount(i); j < count; ++j) {
-          auto* method_array = iftable->GetMethodArray(i);
-          auto* m = method_array->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_);
-          DCHECK(m != nullptr) << PrettyClass(klass.Get());
-          auto it = move_table.find(m);
-          if (it != move_table.end()) {
-            auto* new_m = it->second;
-            DCHECK(new_m != nullptr) << PrettyClass(klass.Get());
-            method_array->SetElementPtrSize(j, new_m, image_pointer_size_);
-          }
-        }
-      }
+      // Make sure the IfTable is translated.
+      FixupIfTable(klass, move_table, iftable);
 
-      // Fix up IMT next
-      for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
-        auto it = move_table.find(out_imt[i]);
-        if (it != move_table.end()) {
-          out_imt[i] = it->second;
-        }
-      }
+      // Make sure the IMTable is translated.
+      FixupIMTable(move_table, out_imt);
     }
 
     // Check that there are no stale methods are in the dex cache array.
     if (kIsDebugBuild) {
-      auto* resolved_methods = klass->GetDexCache()->GetResolvedMethods();
-      for (size_t i = 0, count = klass->GetDexCache()->NumResolvedMethods(); i < count; ++i) {
-        auto* m = mirror::DexCache::GetElementPtrSize(resolved_methods, i, image_pointer_size_);
-        CHECK(move_table.find(m) == move_table.end() ||
-              // The original versions of copied methods will still be present so allow those too.
-              // Note that if the first check passes this might fail to GetDeclaringClass().
-              std::find_if(m->GetDeclaringClass()->GetMethods(image_pointer_size_).begin(),
-                           m->GetDeclaringClass()->GetMethods(image_pointer_size_).end(),
-                           [m] (ArtMethod& meth) {
-                             return &meth == m;
-                           }) != m->GetDeclaringClass()->GetMethods(image_pointer_size_).end())
-            << "Obsolete methods " << PrettyMethod(m) << " is in dex cache!";
-      }
+      CheckDexCacheNotObsolete(klass, move_table);
     }
     // Put some random garbage in old methods to help find stale pointers.
     if (methods != old_methods && old_methods != nullptr) {
+      const size_t old_size = LengthPrefixedArray<ArtMethod>::ComputeSize(old_method_count,
+                                                                          method_size,
+                                                                          method_alignment);
       memset(old_methods, 0xFEu, old_size);
     }
   } else {
@@ -6979,6 +6854,237 @@ bool ClassLinker::LinkInterfaceMethods(
     SanityCheckVTable(klass, image_pointer_size_);
   }
   return true;
+}
+
+void ClassLinker::FillInVTable(Handle<mirror::PointerArray> vtable,
+                               size_t old_vtable_count,
+                               size_t new_vtable_count,
+                               IterationRange<StrideIterator<ArtMethod>> new_methods) {
+  size_t vtable_pos = old_vtable_count;
+  // Update all the newly copied method's indexes so they denote their placement in the vtable.
+  for (ArtMethod& out : new_methods) {
+    // Leave the declaring class alone the method's dex_code_item_offset_ and dex_method_index_
+    // fields are references into the dex file the method was defined in. Since the ArtMethod
+    // does not store that information it uses declaring_class_->dex_cache_.
+    out.SetMethodIndex(0xFFFF & vtable_pos);
+    vtable->SetElementPtrSize(vtable_pos, &out, image_pointer_size_);
+    ++vtable_pos;
+  }
+  CHECK_EQ(vtable_pos, new_vtable_count);
+}
+
+void ClassLinker::FixupVTable(
+    Handle<mirror::PointerArray> vtable,
+    size_t old_vtable_count,
+    const ScopedArenaVector<ArtMethod*>& miranda_methods,
+    const ScopedArenaVector<ArtMethod*>& default_conflict_methods,
+    const std::unordered_map<size_t, ClassLinker::MethodTranslation>& default_translations,
+    const ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table) {
+  // Update old vtable methods. We use the default_translations map to figure out what each
+  // vtable entry should be updated to, if they need to be at all.
+  for (size_t i = 0; i < old_vtable_count; ++i) {
+    ArtMethod* translated_method = vtable->GetElementPtrSize<ArtMethod*>(
+          i, image_pointer_size_);
+    // Try and find what we need to change this method to.
+    auto translation_it = default_translations.find(i);
+    bool found_translation = false;
+    if (translation_it != default_translations.end()) {
+      if (translation_it->second.IsInConflict()) {
+        // Find which conflict method we are to use for this method.
+        MethodNameAndSignatureComparator old_method_comparator(
+            translated_method->GetInterfaceMethodIfProxy(image_pointer_size_));
+        ArtMethod* new_conflict_method = FindSameNameAndSignature(old_method_comparator,
+                                                                  default_conflict_methods);
+        CHECK(new_conflict_method != nullptr) << "Expected a conflict method!";
+        translated_method = new_conflict_method;
+      } else if (translation_it->second.IsAbstract()) {
+        // Find which miranda method we are to use for this method.
+        MethodNameAndSignatureComparator old_method_comparator(
+            translated_method->GetInterfaceMethodIfProxy(image_pointer_size_));
+        ArtMethod* miranda_method = FindSameNameAndSignature(old_method_comparator,
+                                                            miranda_methods);
+        DCHECK(miranda_method != nullptr);
+        translated_method = miranda_method;
+      } else {
+        // Normal default method (changed from an older default or abstract interface method).
+        DCHECK(translation_it->second.IsTranslation());
+        translated_method = translation_it->second.GetTranslation();
+      }
+      found_translation = true;
+    }
+    DCHECK(translated_method != nullptr);
+    auto it = move_table.find(translated_method);
+    if (it != move_table.end()) {
+      auto* new_method = it->second;
+      DCHECK(new_method != nullptr);
+      vtable->SetElementPtrSize(i, new_method, image_pointer_size_);
+    } else {
+      // If it wasn't going to be updated we wouldn't have put it into the default_translations map.
+      CHECK(!found_translation) << "We were asked to update this vtable entry. Must not fail.";
+    }
+  }
+}
+
+void ClassLinker::FixupIfTable(Handle<mirror::Class> klass,
+                               const ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table,
+                               Handle<mirror::IfTable> iftable) {
+  // Go fix up all the stale iftable pointers.
+  const size_t ifcount = iftable->Count();
+  for (size_t i = 0; i < ifcount; ++i) {
+    for (size_t j = 0, count = iftable->GetMethodArrayCount(i); j < count; ++j) {
+      auto* method_array = iftable->GetMethodArray(i);
+      auto* m = method_array->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_);
+      DCHECK(m != nullptr) << PrettyClass(klass.Get());
+      auto it = move_table.find(m);
+      if (it != move_table.end()) {
+        auto* new_m = it->second;
+        DCHECK(new_m != nullptr) << PrettyClass(klass.Get());
+        method_array->SetElementPtrSize(j, new_m, image_pointer_size_);
+      }
+    }
+  }
+}
+
+void ClassLinker::FixupIMTable(const ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table,
+                               /*out*/ArtMethod** out_imt) {
+  for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
+    auto it = move_table.find(out_imt[i]);
+    if (it != move_table.end()) {
+      out_imt[i] = it->second;
+    }
+  }
+}
+
+void ClassLinker::CheckDexCacheNotObsolete(
+    Handle<mirror::Class> klass,
+    const ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table) {
+  auto* resolved_methods = klass->GetDexCache()->GetResolvedMethods();
+  for (size_t i = 0, count = klass->GetDexCache()->NumResolvedMethods(); i < count; ++i) {
+    auto* m = mirror::DexCache::GetElementPtrSize(resolved_methods, i, image_pointer_size_);
+    CHECK(move_table.find(m) == move_table.end() ||
+          // The original versions of copied methods will still be present so allow those too.
+          // Note that if the first check passes this might fail to GetDeclaringClass().
+          std::find_if(
+              m->GetDeclaringClass()->GetMethods(image_pointer_size_).begin(),
+              m->GetDeclaringClass()->GetMethods(image_pointer_size_).end(),
+              [m] (ArtMethod& meth) {
+                return &meth == m;
+              }) != m->GetDeclaringClass()->GetMethods(image_pointer_size_).end())
+        << "Obsolete methods " << PrettyMethod(m) << " is in dex cache!";
+  }
+}
+
+LengthPrefixedArray<ArtMethod>* ClassLinker::ReallocAndCopyMethodsArray(
+    Thread* self,
+    LengthPrefixedArray<ArtMethod>* old_methods,
+    size_t old_method_count,
+    size_t new_method_count,
+    /*out*/ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(Roles::uninterruptible_) {
+  // The Realloced virtual methods aren't visible from the class roots, so there is no issue
+  // where GCs could attempt to mark stale pointers due to memcpy. And since we overwrite the
+  // realloced memory with out->CopyFrom, we are guaranteed to have objects in the to space since
+  // CopyFrom has internal read barriers.
+  //
+  // TODO We should maybe move some of this into mirror::Class.
+  const size_t method_alignment = ArtMethod::Alignment(image_pointer_size_);
+  const size_t method_size = ArtMethod::Size(image_pointer_size_);
+  const size_t old_size = LengthPrefixedArray<ArtMethod>::ComputeSize(old_method_count,
+                                                                      method_size,
+                                                                      method_alignment);
+  const size_t new_size = LengthPrefixedArray<ArtMethod>::ComputeSize(new_method_count,
+                                                                      method_size,
+                                                                      method_alignment);
+  DCHECK_GE(new_size, old_size);
+  const size_t old_methods_ptr_size = (old_methods != nullptr) ? old_size : 0;
+  Runtime* runtime = Runtime::Current();
+  LengthPrefixedArray<ArtMethod>* methods = reinterpret_cast<LengthPrefixedArray<ArtMethod>*>(
+      runtime->GetLinearAlloc()->Realloc(self, old_methods, old_methods_ptr_size, new_size));
+  if (methods != old_methods) {
+    DCHECK_GT(new_size, old_size);
+    // We need to note the translation and use CopyFrom to setup the read barriers.
+    if (methods == nullptr) {
+      self->AssertPendingOOMException();
+      return nullptr;
+    }
+    StrideIterator<ArtMethod> out = methods->begin(method_size, method_alignment);
+    // Copy over the old methods.
+    for (auto& m : MakeIterationRangeFromLengthPrefixedArray(old_methods,
+                                                             method_size,
+                                                             method_alignment)) {
+      move_table.emplace(&m, &*out);
+      // The CopyFrom is only necessary to not miss read barriers since Realloc won't do read
+      // barriers when it copies.
+      out->CopyFrom(&m, image_pointer_size_);
+      ++out;
+    }
+    if (kIsDebugBuild) {
+      // Just fill in the rest of the array with a sentinel pattern. It will get overridden by the
+      // copied methods.
+      memset(&*out, 0xFEu, new_size - old_size);
+    }
+  }
+  if (methods != nullptr) {
+    methods->SetSize(new_method_count);
+  }
+  return methods;
+}
+
+void ClassLinker::CopyAndRecordNewMethods(
+    ScopedArenaVector<ArtMethod*>& miranda_methods,
+    ScopedArenaVector<ArtMethod*>& default_methods,
+    ScopedArenaVector<ArtMethod*>& default_conflict_methods,
+    /*out*/StrideIterator<ArtMethod> out,
+    /*out*/ScopedArenaUnorderedMap<ArtMethod*, ArtMethod*>& move_table) {
+  // Copy over miranda methods before copying vtable since CopyOf may cause thread suspension and
+  // we want the roots of the miranda methods to get visited.
+  for (ArtMethod* mir_method : miranda_methods) {
+    ArtMethod& new_method = *out;
+    new_method.CopyFrom(mir_method, image_pointer_size_);
+    new_method.SetAccessFlags(new_method.GetAccessFlags() | kAccMiranda | kAccCopied);
+    DCHECK_NE(new_method.GetAccessFlags() & kAccAbstract, 0u)
+        << "Miranda method should be abstract!";
+    move_table.emplace(mir_method, &new_method);
+    ++out;
+  }
+  // We need to copy the default methods into our own method table since the runtime requires that
+  // every method on a class's vtable be in that respective class's virtual method table.
+  // NOTE This means that two classes might have the same implementation of a method from the same
+  // interface but will have different ArtMethod*s for them. This also means we cannot compare a
+  // default method found on a class with one found on the declaring interface directly and must
+  // look at the declaring class to determine if they are the same.
+  for (ArtMethod* def_method : default_methods) {
+    ArtMethod& new_method = *out;
+    new_method.CopyFrom(def_method, image_pointer_size_);
+    // Clear the kAccSkipAccessChecks flag if it is present. Since this class hasn't been verified
+    // yet it shouldn't have methods that are skipping access checks.
+    // TODO This is rather arbitrary. We should maybe support classes where only some of its
+    // methods are skip_access_checks.
+    constexpr uint32_t kSetFlags = kAccDefault | kAccCopied;
+    constexpr uint32_t kMaskFlags = ~kAccSkipAccessChecks;
+    new_method.SetAccessFlags((new_method.GetAccessFlags() | kSetFlags) & kMaskFlags);
+    move_table.emplace(def_method, &new_method);
+    ++out;
+  }
+  for (ArtMethod* conf_method : default_conflict_methods) {
+    ArtMethod& new_method = *out;
+    new_method.CopyFrom(conf_method, image_pointer_size_);
+    // This is a type of default method (there are default method impls, just a conflict) so mark
+    // this as a default, non-abstract method, since thats what it is. Also clear the
+    // kAccSkipAccessChecks bit since this class hasn't been verified yet it shouldn't have
+    // methods that are skipping access checks.
+    constexpr uint32_t kSetFlags = kAccDefault | kAccDefaultConflict | kAccCopied;
+    constexpr uint32_t kMaskFlags = ~(kAccAbstract | kAccSkipAccessChecks);
+    new_method.SetAccessFlags((new_method.GetAccessFlags() | kSetFlags) & kMaskFlags);
+    DCHECK(new_method.IsDefaultConflicting());
+    // The actual method might or might not be marked abstract since we just copied it from a
+    // (possibly default) interface method. We need to set it entry point to be the bridge so that
+    // the compiler will not invoke the implementation of whatever method we copied from.
+    EnsureThrowsInvocationError(&new_method);
+    move_table.emplace(conf_method, &new_method);
+    ++out;
+  }
 }
 
 bool ClassLinker::LinkInstanceFields(Thread* self, Handle<mirror::Class> klass) {
@@ -7053,7 +7159,7 @@ bool ClassLinker::LinkFields(Thread* self,
   // minimizes disruption of C++ version such as Class and Method.
   //
   // The overall sort order order is:
-  // 1) All object reference fields, sorted alphabetically.
+  // 1) All object reference (32-bit) fields, sorted alphabetically.
   // 2) All java long (64-bit) integer fields, sorted alphabetically.
   // 3) All java double (64-bit) floating point fields, sorted alphabetically.
   // 4) All java int (32-bit) integer fields, sorted alphabetically.
