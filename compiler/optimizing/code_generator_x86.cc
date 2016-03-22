@@ -47,6 +47,8 @@ static constexpr int kC2ConditionMask = 0x400;
 
 static constexpr int kFakeReturnRegister = Register(8);
 
+static constexpr bool kEnableInexactReadBarrier = true;
+
 #define __ down_cast<X86Assembler*>(codegen->GetAssembler())->
 #define QUICK_ENTRY_POINT(x) QUICK_ENTRYPOINT_OFFSET(kX86WordSize, x).Int32Value()
 
@@ -5325,7 +5327,7 @@ void InstructionCodeGeneratorX86::VisitArraySet(HArraySet* instruction) {
           __ Bind(&not_null);
         }
 
-        if (kEmitCompilerReadBarrier) {
+        if (kEmitCompilerReadBarrier && !kEnableInexactReadBarrier) {
           // When read barriers are enabled, the type checking
           // instrumentation requires two read barriers:
           //
@@ -5353,6 +5355,14 @@ void InstructionCodeGeneratorX86::VisitArraySet(HArraySet* instruction) {
           // going into the slow path when read barriers are enabled.
           __ jmp(slow_path->GetEntryLabel());
         } else {
+          if (kEmitCompilerReadBarrier) {
+            // Use inexact read barrier.
+            // It's safe if the fast path does not expand across safepoint.
+            __ fs()->cmpl(Address::Absolute(Thread::IsGcMarkingOffset<kX86WordSize>()),
+                          Immediate(0));
+            __ j(kNotEqual, slow_path->GetEntryLabel());
+          }
+
           // /* HeapReference<Class> */ temp = array->klass_
           __ movl(temp, Address(array, class_offset));
           codegen_->MaybeRecordImplicitNullCheck(instruction);
