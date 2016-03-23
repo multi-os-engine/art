@@ -19,7 +19,17 @@
 
 #include "linker/relative_patcher.h"
 
+#include <stdint.h>
+#include <vector>
+
+#include "base/macros.h"
+
 namespace art {
+
+class CompiledMethod;
+class OutputStream;
+struct MethodReference;
+
 namespace linker {
 
 class X86BaseRelativePatcher : public RelativePatcher {

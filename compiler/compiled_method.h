@@ -17,20 +17,28 @@
 #ifndef ART_COMPILER_COMPILED_METHOD_H_
 #define ART_COMPILER_COMPILED_METHOD_H_
 
-#include <memory>
+#include <stddef.h>
+#include <stdint.h>
+
+#include <algorithm>
+#include <iosfwd>
+#include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "arch/instruction_set.h"
 #include "base/bit_utils.h"
 #include "base/length_prefixed_array.h"
+#include "base/logging.h"
+#include "base/macros.h"
 #include "method_reference.h"
 #include "utils/array_ref.h"
 
 namespace art {
 
 class CompilerDriver;
-class CompiledMethodStorage;
+class DexFile;
 
 class CompiledCode {
  public:

@@ -19,14 +19,18 @@
 
 #include <stdint.h>
 
+#include <iosfwd>
+#include <string>
+
+#include "base/arena_allocator.h"
 #include "base/arena_object.h"
 #include "dex_file.h"
 #include "handle.h"
 #include "jni.h"
+#include "modifiers.h"
 
 namespace art {
 namespace mirror {
-class ClassLoader;
 class DexCache;
 }  // namespace mirror
 class ClassLinker;

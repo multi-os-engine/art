@@ -18,6 +18,9 @@
 
 #include <string.h>
 
+#include <memory>
+#include <type_traits>
+
 namespace art {
 
 BufferedOutputStream::BufferedOutputStream(std::unique_ptr<OutputStream> out)

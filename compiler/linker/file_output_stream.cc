@@ -16,7 +16,6 @@
 
 #include "file_output_stream.h"
 
-#include <sys/types.h>
 #include <unistd.h>
 
 #include "base/unix_file/fd_file.h"

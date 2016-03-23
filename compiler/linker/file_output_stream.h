@@ -19,6 +19,10 @@
 
 #include "output_stream.h"
 
+#include <stddef.h>
+#include <sys/types.h>
+
+#include "base/macros.h"
 #include "os.h"
 
 namespace art {

@@ -16,8 +16,9 @@
 
 #include "dex_compilation_unit.h"
 
-#include "base/stringprintf.h"
-#include "mirror/dex_cache.h"
+#include <iosfwd>
+#include <string>
+
 #include "utils.h"
 
 namespace art {

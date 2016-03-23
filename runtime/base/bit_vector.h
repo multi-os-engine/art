@@ -17,10 +17,17 @@
 #ifndef ART_RUNTIME_BASE_BIT_VECTOR_H_
 #define ART_RUNTIME_BASE_BIT_VECTOR_H_
 
+#include <stddef.h>
 #include <stdint.h>
+#include <string.h>
+
+#include <iosfwd>
 #include <iterator>
+#include <ostream>
+#include <string>
 
 #include "base/bit_utils.h"
+#include "base/logging.h"
 #include "globals.h"
 
 namespace art {

@@ -17,10 +17,21 @@
 #ifndef ART_COMPILER_JNI_QUICK_CALLING_CONVENTION_H_
 #define ART_COMPILER_JNI_QUICK_CALLING_CONVENTION_H_
 
+#include <stdint.h>
+#include <string.h>
+
+#include <iosfwd>
+#include <ostream>
+#include <string>
 #include <vector>
+
+#include "arch/instruction_set.h"
+#include "base/logging.h"
 #include "handle_scope.h"
+#include "mirror/object_reference.h"
+#include "offsets.h"
 #include "primitive.h"
-#include "thread.h"
+#include "stack.h"
 #include "utils/managed_register.h"
 
 namespace art {
