@@ -73,7 +73,7 @@ bool RegisterLine::VerifyRegisterTypeWide(MethodVerifier* verifier, uint32_t vsr
   DCHECK(check_type1.CheckWidePair(check_type2));
   // Verify the src register type against the check type refining the type of the register
   const RegType& src_type = GetRegisterType(verifier, vsrc);
-  if (!check_type1.IsAssignableFrom(src_type)) {
+  if (!check_type1.IsAssignableFrom(src_type, *verifier->GetRegTypeCache())) {
     verifier->Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "register v" << vsrc << " has type " << src_type
                                << " but expected " << check_type1;
     return false;

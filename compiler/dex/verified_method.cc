@@ -352,7 +352,8 @@ void VerifiedMethod::GenerateSafeCastSet(verifier::MethodVerifier* method_verifi
                                                                 inst->VRegA_21c()));
         const verifier::RegType& cast_type =
             method_verifier->ResolveCheckedClass(inst->VRegB_21c());
-        is_safe_cast = cast_type.IsStrictlyAssignableFrom(reg_type);
+        is_safe_cast = cast_type.IsStrictlyAssignableFrom(reg_type,
+                                                          *method_verifier->GetRegTypeCache());
       } else {
         const verifier::RegType& array_type(line->GetRegisterType(method_verifier,
                                                                   inst->VRegB_23x()));
@@ -364,7 +365,9 @@ void VerifiedMethod::GenerateSafeCastSet(verifier::MethodVerifier* method_verifi
                                                                     inst->VRegA_23x()));
           const verifier::RegType& component_type = method_verifier->GetRegTypeCache()
               ->GetComponentType(array_type, method_verifier->GetClassLoader());
-          is_safe_cast = component_type.IsStrictlyAssignableFrom(value_type);
+          is_safe_cast = component_type.IsStrictlyAssignableFrom(
+              value_type,
+              *method_verifier->GetRegTypeCache());
         }
       }
       if (is_safe_cast) {

@@ -172,8 +172,8 @@ class RegType {
   }
   virtual bool HasClassVirtual() const { return false; }
   bool IsJavaLangObject() const SHARED_REQUIRES(Locks::mutator_lock_);
-  bool IsArrayTypes() const SHARED_REQUIRES(Locks::mutator_lock_);
-  bool IsObjectArrayTypes() const SHARED_REQUIRES(Locks::mutator_lock_);
+  bool IsArrayTypes(const RegTypeCache& cache) const SHARED_REQUIRES(Locks::mutator_lock_);
+  bool IsObjectArrayTypes(const RegTypeCache& cache) const SHARED_REQUIRES(Locks::mutator_lock_);
   Primitive::Type GetPrimitiveType() const;
   bool IsJavaLangObjectArray() const
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -209,7 +209,7 @@ class RegType {
   // Note: Object and interface types may always be assigned to one another, see
   // comment on
   // ClassJoin.
-  bool IsAssignableFrom(const RegType& src) const
+  bool IsAssignableFrom(const RegType& src, const RegTypeCache& cache) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Can this array type potentially be assigned by src.
@@ -226,7 +226,7 @@ class RegType {
   // Can this type be assigned by src? Variant of IsAssignableFrom that doesn't
   // allow assignment to
   // an interface from an Object.
-  bool IsStrictlyAssignableFrom(const RegType& src) const
+  bool IsStrictlyAssignableFrom(const RegType& src, const RegTypeCache& cache) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Are these RegTypes the same?
@@ -297,7 +297,10 @@ class RegType {
   friend class RegTypeCache;
 
  private:
-  static bool AssignableFrom(const RegType& lhs, const RegType& rhs, bool strict)
+  static bool AssignableFrom(const RegType& lhs,
+                             const RegType& rhs,
+                             const RegTypeCache& cache,
+                             bool strict)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   DISALLOW_COPY_AND_ASSIGN(RegType);
