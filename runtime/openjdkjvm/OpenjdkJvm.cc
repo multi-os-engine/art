@@ -50,6 +50,7 @@
 #include "base/logging.h"
 #include "base/macros.h"
 #include "../../libcore/ojluni/src/main/native/jvm.h"  // TODO(narayan): fix it
+#include "jni.h"
 #include "jni_internal.h"
 #include "mirror/string-inl.h"
 #include "native/scoped_fast_native_object_access.h"
@@ -205,8 +206,35 @@ JNIEXPORT jlong JVM_CurrentTimeMillis(JNIEnv* env ATTRIBUTE_UNUSED,
     return when;
 }
 
+jint tagSocket(jint fd) {
+    JNIEnv* env = art::Thread::Current()->GetJniEnv();
+    if(env->ExceptionOccurred()) { return fd; }
+    jclass handlerCls = env->FindClass("dalvik/system/SocketTagger");
+    jmethodID get = env->GetStaticMethodID(handlerCls, "get", "()Ldalvik/system/SocketTagger;");
+    jobject socketTaggerInstance = env->CallStaticObjectMethod(handlerCls, get);
+    jmethodID tag = env->GetMethodID(handlerCls, "tag", "(I)V");
+    env->CallVoidMethod(socketTaggerInstance, tag, fd);
+    return fd;
+}
+
+jint untagSocket(jint fd) {
+    JNIEnv* env = art::Thread::Current()->GetJniEnv();
+    if(env->ExceptionOccurred()) { return fd; }
+    jclass handlerCls = env->FindClass("dalvik/system/SocketTagger");
+    jmethodID get = env->GetStaticMethodID(handlerCls, "get", "()Ldalvik/system/SocketTagger;");
+    jobject socketTaggerInstance = env->CallStaticObjectMethod(handlerCls, get);
+    jmethodID untag = env->GetMethodID(handlerCls, "untag", "(I)V");
+    env->CallVoidMethod(socketTaggerInstance, untag, fd);
+    return fd;
+}
+
+JNIEXPORT jint JVM_Accept(jint fd, struct sockaddr *him, jint *len) {
+    socklen_t socklen = *len;
+    return tagSocket(TEMP_FAILURE_RETRY(accept(fd, him, &socklen)));
+}
+
 JNIEXPORT jint JVM_Socket(jint domain, jint type, jint protocol) {
-    return TEMP_FAILURE_RETRY(socket(domain, type, protocol));
+    return tagSocket(TEMP_FAILURE_RETRY(socket(domain, type, protocol)));
 }
 
 JNIEXPORT jint JVM_InitializeSocketLibrary() {
@@ -265,7 +293,7 @@ JNIEXPORT jint JVM_Send(jint fd, char* buf, jint nBytes, jint flags) {
 
 JNIEXPORT jint JVM_SocketClose(jint fd) {
   // Don't want TEMP_FAILURE_RETRY here -- file is closed even if EINTR.
-  return close(fd);
+  return untagSocket(close(fd));
 }
 
 JNIEXPORT jint JVM_Listen(jint fd, jint count) {
