@@ -17,7 +17,10 @@
 #ifndef ART_COMPILER_OPTIMIZING_SIDE_EFFECTS_ANALYSIS_H_
 #define ART_COMPILER_OPTIMIZING_SIDE_EFFECTS_ANALYSIS_H_
 
+#include "base/arena_allocator.h"
 #include "base/arena_containers.h"
+#include "base/dchecked_vector.h"
+#include "base/macros.h"
 #include "nodes.h"
 #include "optimization.h"
 

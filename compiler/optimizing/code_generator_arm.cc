@@ -18,15 +18,33 @@
 
 #include "arch/arm/instruction_set_features_arm.h"
 #include "art_method.h"
+#include "base/arena_allocator.h"
+#include "base/bit_utils.h"
+#include "base/casts.h"
+#include "code_generator.h"
 #include "code_generator_utils.h"
 #include "compiled_method.h"
+#include "debug/dwarf/register.h"
+#include "driver/compiler_options.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "gc/accounting/card_table.h"
-#include "intrinsics.h"
+#include "gc_root.h"
+#include "graph_visualizer.h"
 #include "intrinsics_arm.h"
+#include "lock_word.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/object.h"
+#include "mirror/object_reference.h"
+#include "nodes_arm.h"
+#include "nodes_shared.h"
+#include "offsets.h"
+#include "parallel_move_resolver.h"
+#include "read_barrier.h"
+#include "runtime.h"
+#include "stack_map_stream.h"
 #include "thread.h"
+#include "utils.h"
 #include "utils/arm/assembler_arm.h"
 #include "utils/arm/managed_register_arm.h"
 #include "utils/assembler.h"
@@ -34,8 +52,12 @@
 
 namespace art {
 
-template<class MirrorType>
-class GcRoot;
+class DexFile;
+class OptimizingCompilerStats;
+
+namespace mirror {
+class String;
+}  // namespace mirror
 
 namespace arm {
 

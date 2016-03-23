@@ -18,16 +18,26 @@
 #define ART_COMPILER_UTILS_X86_ASSEMBLER_X86_H_
 
 #include <vector>
+
+#include "arch/x86/registers_x86.h"
 #include "base/bit_utils.h"
+#include "base/logging.h"
 #include "base/macros.h"
+#include "base/value_object.h"
 #include "constants_x86.h"
 #include "globals.h"
-#include "managed_register_x86.h"
 #include "offsets.h"
 #include "utils/assembler.h"
+#include "utils/label.h"
 
 namespace art {
+
+class ManagedRegister;
+class ManagedRegisterEntrySpills;
+
 namespace x86 {
+
+class X86Assembler;
 
 class Immediate : public ValueObject {
  public:

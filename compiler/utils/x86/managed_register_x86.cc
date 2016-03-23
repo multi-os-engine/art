@@ -16,7 +16,7 @@
 
 #include "managed_register_x86.h"
 
-#include "globals.h"
+#include "utils/x86/constants_x86.h"
 
 namespace art {
 namespace x86 {

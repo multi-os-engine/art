@@ -17,9 +17,13 @@
 #ifndef ART_COMPILER_LINKER_X86_RELATIVE_PATCHER_X86_H_
 #define ART_COMPILER_LINKER_X86_RELATIVE_PATCHER_X86_H_
 
+#include "base/macros.h"
 #include "linker/x86/relative_patcher_x86_base.h"
 
 namespace art {
+
+class LinkerPatch;
+
 namespace linker {
 
 class X86RelativePatcher FINAL : public X86BaseRelativePatcher {

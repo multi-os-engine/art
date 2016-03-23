@@ -19,13 +19,16 @@
 
 #include <vector>
 
-#include "base/logging.h"
+#include "arch/arm/registers_arm.h"
+#include "base/macros.h"
 #include "constants_arm.h"
-#include "utils/arm/managed_register_arm.h"
 #include "utils/arm/assembler_arm.h"
-#include "offsets.h"
 
 namespace art {
+
+class Label;
+class ManagedRegister;
+
 namespace arm {
 
 class Arm32Assembler FINAL : public ArmAssembler {

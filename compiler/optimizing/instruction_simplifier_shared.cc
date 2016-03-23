@@ -16,7 +16,14 @@
 
 #include "instruction_simplifier_shared.h"
 
+#include "base/logging.h"
+#include "nodes.h"
+#include "nodes_shared.h"
+#include "primitive.h"
+
 namespace art {
+
+class ArenaAllocator;
 
 namespace {
 

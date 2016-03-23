@@ -17,9 +17,12 @@
 #ifndef ART_COMPILER_OPTIMIZING_INSTRUCTION_SIMPLIFIER_SHARED_H_
 #define ART_COMPILER_OPTIMIZING_INSTRUCTION_SIMPLIFIER_SHARED_H_
 
-#include "nodes.h"
+#include "arch/instruction_set.h"
 
 namespace art {
+
+class HBinaryOperation;
+class HMul;
 
 bool TryCombineMultiplyAccumulate(HMul* mul, InstructionSet isa);
 // For bitwise operations (And/Or/Xor) with a negated input, try to use

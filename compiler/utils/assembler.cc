@@ -38,9 +38,14 @@
 #ifdef ART_ENABLE_CODEGEN_x86_64
 #include "x86_64/assembler_x86_64.h"
 #endif
+
+
+#include "arch/instruction_set_features.h"
 #include "base/casts.h"
 #include "globals.h"
 #include "memory_region.h"
+#include "offsets.h"
+#include "utils/managed_register.h"
 
 namespace art {
 

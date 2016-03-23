@@ -19,21 +19,38 @@
 #include "arch/mips/entrypoints_direct_mips.h"
 #include "arch/mips/instruction_set_features_mips.h"
 #include "art_method.h"
+#include "base/arena_containers.h"
+#include "base/bit_utils.h"
+#include "base/casts.h"
+#include "base/dchecked_vector.h"
 #include "code_generator_utils.h"
+#include "debug/dwarf/register.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
-#include "intrinsics.h"
+#include "globals.h"
+#include "graph_visualizer.h"
 #include "intrinsics_mips.h"
+#include "method_reference.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/object.h"
+#include "mirror/object_reference.h"
 #include "offsets.h"
+#include "stack_map_stream.h"
 #include "thread.h"
+#include "utils.h"
 #include "utils/assembler.h"
 #include "utils/mips/assembler_mips.h"
+#include "utils/mips/constants_mips.h"
+#include "utils/mips/managed_register_mips.h"
 #include "utils/stack_checks.h"
 
 namespace art {
+
+class CompilerOptions;
+class OptimizingCompilerStats;
+
 namespace mips {
 
 static constexpr int kCurrentMethodStackOffset = 0;

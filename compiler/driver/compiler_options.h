@@ -17,16 +17,21 @@
 #ifndef ART_COMPILER_DRIVER_COMPILER_OPTIONS_H_
 #define ART_COMPILER_DRIVER_COMPILER_OPTIONS_H_
 
-#include <ostream>
+#include <stddef.h>
+
+#include <iosfwd>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "base/macros.h"
+#include "base/stringpiece.h"
 #include "compiler_filter.h"
-#include "globals.h"
 #include "utils.h"
 
 namespace art {
+
+class DexFile;
 
 class CompilerOptions FINAL {
  public:

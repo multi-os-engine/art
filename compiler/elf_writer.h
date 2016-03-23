@@ -22,15 +22,13 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
-#include "base/mutex.h"
 #include "os.h"
-#include "utils/array_ref.h"
 
 namespace art {
 
 class ElfFile;
 class OutputStream;
+template <typename T> class ArrayRef;
 
 namespace debug {
 struct MethodDebugInfo;

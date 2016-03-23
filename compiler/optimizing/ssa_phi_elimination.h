@@ -17,7 +17,14 @@
 #ifndef ART_COMPILER_OPTIMIZING_SSA_PHI_ELIMINATION_H_
 #define ART_COMPILER_OPTIMIZING_SSA_PHI_ELIMINATION_H_
 
+#include <stddef.h>
+
+#include <vector>
+
+#include "base/arena_allocator.h"
 #include "base/arena_containers.h"
+#include "base/dchecked_vector.h"
+#include "base/macros.h"
 #include "nodes.h"
 #include "optimization.h"
 

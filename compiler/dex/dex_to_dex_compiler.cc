@@ -16,18 +16,29 @@
 
 #include "dex_to_dex_compiler.h"
 
-#include "art_field-inl.h"
-#include "art_method-inl.h"
+#include <vector>
+
+#include "arch/instruction_set.h"
+#include "base/bit_utils.h"
 #include "base/logging.h"
-#include "base/mutex.h"
+#include "base/macros.h"
+#include "base/stringprintf.h"
+#include "class_linker.h"
 #include "compiled_method.h"
-#include "dex_file-inl.h"
 #include "dex_instruction-inl.h"
+#include "dex_instruction_list.h"
 #include "driver/compiler_driver.h"
 #include "driver/dex_compilation_unit.h"
-#include "mirror/class-inl.h"
+#include "handle_scope-inl.h"
+#include "leb128.h"
+#include "method_reference.h"
 #include "mirror/dex_cache.h"
+#include "offsets.h"
+#include "runtime.h"
+#include "scoped_thread_state_change.h"
 #include "thread-inl.h"
+#include "utils.h"
+#include "utils/array_ref.h"
 
 namespace art {
 namespace optimizer {

@@ -17,7 +17,12 @@
 #ifndef ART_COMPILER_OPTIMIZING_INTRINSICS_H_
 #define ART_COMPILER_OPTIMIZING_INTRINSICS_H_
 
+#include "base/logging.h"
+#include "base/macros.h"
+#include "base/value_object.h"
 #include "code_generator.h"
+#include "globals.h"
+#include "locations.h"
 #include "nodes.h"
 #include "optimization.h"
 #include "parallel_move_resolver.h"
@@ -25,7 +30,10 @@
 namespace art {
 
 class CompilerDriver;
-class DexFile;
+class IntrinsicOptimizations;
+class OptimizingCompilerStats;
+class StringEqualsOptimizations;
+class SystemArrayCopyOptimizations;
 
 // Temporary measure until we have caught up with the Java 7 definition of Math.round. b/26327751
 static constexpr bool kRoundIsPlusPointFive = false;

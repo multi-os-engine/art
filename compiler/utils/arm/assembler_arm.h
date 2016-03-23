@@ -20,20 +20,29 @@
 #include <type_traits>
 #include <vector>
 
+#include "arch/arm/registers_arm.h"
 #include "base/bit_utils.h"
+#include "base/casts.h"
 #include "base/logging.h"
+#include "base/macros.h"
 #include "base/stl_util.h"
 #include "base/value_object.h"
 #include "constants_arm.h"
+#include "globals.h"
 #include "utils/arm/managed_register_arm.h"
 #include "utils/assembler.h"
-#include "offsets.h"
+#include "utils/label.h"
 
 namespace art {
-namespace arm {
 
-class Arm32Assembler;
-class Thumb2Assembler;
+class FrameOffset;
+class ManagedRegister;
+class ManagedRegisterEntrySpills;
+class MemberOffset;
+class Offset;
+template <size_t pointer_size> class ThreadOffset;
+
+namespace arm {
 
 // Assembler literal is a value embedded in code, retrieved using a PC-relative load.
 class Literal {

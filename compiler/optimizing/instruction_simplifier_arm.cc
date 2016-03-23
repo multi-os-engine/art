@@ -15,7 +15,10 @@
  */
 
 #include "instruction_simplifier_arm.h"
+
+#include "arch/instruction_set.h"
 #include "instruction_simplifier_shared.h"
+#include "nodes.h"
 
 namespace art {
 namespace arm {

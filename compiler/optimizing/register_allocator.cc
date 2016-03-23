@@ -19,9 +19,18 @@
 #include <iostream>
 #include <sstream>
 
-#include "base/bit_vector-inl.h"
+#include "base/arena_allocator.h"
+#include "base/arena_bit_vector.h"
+#include "base/bit_vector.h"
+#include "base/logging.h"
+#include "base/value_object.h"
 #include "code_generator.h"
+#include "globals.h"
+#include "locations.h"
+#include "nodes.h"
 #include "ssa_liveness_analysis.h"
+#include "stack_map.h"
+#include "utils/array_ref.h"
 
 namespace art {
 

@@ -18,14 +18,15 @@
 #define ART_COMPILER_DEX_QUICK_DEX_FILE_METHOD_INLINER_H_
 
 #include <stdint.h>
-#include "base/mutex.h"
+
 #include "base/macros.h"
-#include "safe_map.h"
-#include "dex/compiler_enums.h"
-#include "dex_file.h"
+#include "base/mutex.h"
 #include "quick/inline_method_analyser.h"
+#include "safe_map.h"
 
 namespace art {
+
+class DexFile;
 
 namespace verifier {
 class MethodVerifier;

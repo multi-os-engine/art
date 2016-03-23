@@ -17,15 +17,17 @@
 
 #include <cfloat>
 
-#include "code_generator.h"
-#include "common_dominator.h"
-#include "ssa_builder.h"
-#include "base/bit_vector-inl.h"
 #include "base/bit_utils.h"
 #include "base/stl_util.h"
+#include "class_linker-inl.h"
+#include "code_generator.h"
+#include "common_dominator.h"
+#include "handle_scope-inl.h"
 #include "intrinsics.h"
-#include "mirror/class-inl.h"
+#include "locations.h"
+#include "runtime.h"
 #include "scoped_thread_state_change.h"
+#include "thread-inl.h"
 
 namespace art {
 

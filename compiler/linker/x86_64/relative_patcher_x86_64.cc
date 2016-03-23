@@ -16,6 +16,7 @@
 
 #include "linker/x86_64/relative_patcher_x86_64.h"
 
+#include "base/logging.h"
 #include "compiled_method.h"
 
 namespace art {

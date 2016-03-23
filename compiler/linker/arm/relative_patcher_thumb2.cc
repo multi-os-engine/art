@@ -16,12 +16,21 @@
 
 #include "linker/arm/relative_patcher_thumb2.h"
 
+#include "arch/arm/registers_arm.h"
+#include "arch/instruction_set.h"
 #include "art_method.h"
+#include "base/logging.h"
 #include "compiled_method.h"
+#include "memory_region.h"
+#include "offsets.h"
+#include "utils/arm/assembler_arm.h"
 #include "utils/arm/assembler_thumb2.h"
+#include "utils/array_ref.h"
 
 namespace art {
 namespace linker {
+
+class RelativePatcherTargetProvider;
 
 Thumb2RelativePatcher::Thumb2RelativePatcher(RelativePatcherTargetProvider* provider)
     : ArmBaseRelativePatcher(provider, kThumb2, CompileThunkCode(),

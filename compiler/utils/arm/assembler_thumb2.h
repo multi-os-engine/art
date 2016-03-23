@@ -21,14 +21,19 @@
 #include <utility>
 #include <vector>
 
+#include "arch/arm/registers_arm.h"
+#include "assembler_arm.h"
 #include "base/logging.h"
+#include "base/macros.h"
 #include "constants_arm.h"
-#include "utils/arm/managed_register_arm.h"
-#include "utils/arm/assembler_arm.h"
 #include "utils/array_ref.h"
-#include "offsets.h"
+#include "utils/assembler.h"
 
 namespace art {
+
+class Label;
+class ManagedRegister;
+
 namespace arm {
 
 class Thumb2Assembler FINAL : public ArmAssembler {

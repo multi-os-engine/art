@@ -17,7 +17,12 @@
 #ifndef ART_COMPILER_LINKER_MULTI_OAT_RELATIVE_PATCHER_H_
 #define ART_COMPILER_LINKER_MULTI_OAT_RELATIVE_PATCHER_H_
 
+#include <stdint.h>
+
+#include <vector>
+
 #include "arch/instruction_set.h"
+#include "base/macros.h"
 #include "method_reference.h"
 #include "relative_patcher.h"
 #include "safe_map.h"
@@ -25,8 +30,9 @@
 namespace art {
 
 class CompiledMethod;
-class LinkerPatch;
 class InstructionSetFeatures;
+class LinkerPatch;
+class OutputStream;
 
 namespace linker {
 

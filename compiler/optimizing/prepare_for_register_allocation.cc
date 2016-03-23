@@ -16,6 +16,12 @@
 
 #include "prepare_for_register_allocation.h"
 
+#include "base/logging.h"
+#include "entrypoints/quick/quick_entrypoints_enum.h"
+#include "globals.h"
+#include "nodes.h"
+#include "primitive.h"
+
 namespace art {
 
 void PrepareForRegisterAllocation::Run() {

@@ -17,11 +17,17 @@
 #ifndef ART_COMPILER_OPTIMIZING_SSA_BUILDER_H_
 #define ART_COMPILER_OPTIMIZING_SSA_BUILDER_H_
 
+#include "base/arena_allocator.h"
 #include "base/arena_containers.h"
+#include "base/dchecked_vector.h"
+#include "base/macros.h"
+#include "dex_file.h"
 #include "nodes.h"
-#include "optimization.h"
+#include "primitive.h"
 
 namespace art {
+
+class StackHandleScopeCollection;
 
 static constexpr int kDefaultNumberOfLoops = 2;
 

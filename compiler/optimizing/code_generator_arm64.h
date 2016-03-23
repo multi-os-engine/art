@@ -17,19 +17,42 @@
 #ifndef ART_COMPILER_OPTIMIZING_CODE_GENERATOR_ARM64_H_
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_ARM64_H_
 
-#include "arch/arm64/quick_method_frame_info_arm64.h"
+#include "arch/instruction_set.h"
+#include "base/arena_allocator.h"
+#include "base/arena_containers.h"
+#include "base/arena_object.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "base/macros.h"
 #include "code_generator.h"
 #include "common_arm64.h"
 #include "dex/compiler_enums.h"
-#include "driver/compiler_options.h"
+#include "entrypoints/quick/quick_entrypoints_enum.h"
+#include "locations.h"
+#include "method_reference.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
+#include "primitive.h"
+#include "safe_map.h"
 #include "utils/arm64/assembler_arm64.h"
 #include "utils/string_reference.h"
-#include "vixl/a64/disasm-a64.h"
+#include "vixl/a64/assembler-a64.h"
+#include "vixl/a64/constants-a64.h"
+#include "vixl/a64/instructions-a64.h"
 #include "vixl/a64/macro-assembler-a64.h"
 
 namespace art {
+
+class Arm64InstructionSetFeatures;
+class CompilerOptions;
+class DexFile;
+class HArm64DataProcWithShifterOp;
+class HArm64IntermediateAddress;
+class HBitwiseNegatedRight;
+class HMultiplyAccumulate;
+class LinkerPatch;
+class OptimizingCompilerStats;
+
 namespace arm64 {
 
 class CodeGeneratorARM64;

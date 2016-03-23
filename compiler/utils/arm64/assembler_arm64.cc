@@ -14,11 +14,18 @@
  * limitations under the License.
  */
 
+#include "arch/instruction_set.h"
 #include "assembler_arm64.h"
+#include "base/bit_utils.h"
 #include "base/logging.h"
+#include "debug/dwarf/register.h"
 #include "entrypoints/quick/quick_entrypoints.h"
+#include "globals.h"
+#include "memory_region.h"
 #include "offsets.h"
 #include "thread.h"
+#include "utils/managed_register.h"
+#include "vixl/a64/instructions-a64.h"
 
 using namespace vixl;  // NOLINT(build/namespaces)
 

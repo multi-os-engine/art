@@ -16,6 +16,9 @@
 
 #include "side_effects_analysis.h"
 
+#include "base/logging.h"
+#include "globals.h"
+
 namespace art {
 
 void SideEffectsAnalysis::Run() {

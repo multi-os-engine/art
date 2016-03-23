@@ -17,21 +17,38 @@
 #include "code_generator_mips64.h"
 
 #include "art_method.h"
+#include "base/arena_containers.h"
+#include "base/bit_utils.h"
+#include "base/casts.h"
+#include "base/dchecked_vector.h"
 #include "code_generator_utils.h"
+#include "debug/dwarf/register.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
-#include "intrinsics.h"
+#include "graph_visualizer.h"
 #include "intrinsics_mips64.h"
+#include "method_reference.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/object.h"
+#include "mirror/object_reference.h"
 #include "offsets.h"
+#include "parallel_move_resolver.h"
+#include "stack_map_stream.h"
 #include "thread.h"
+#include "utils.h"
 #include "utils/assembler.h"
 #include "utils/mips64/assembler_mips64.h"
+#include "utils/mips64/constants_mips64.h"
 #include "utils/stack_checks.h"
 
 namespace art {
+
+class CompilerOptions;
+class Mips64InstructionSetFeatures;
+class OptimizingCompilerStats;
+
 namespace mips64 {
 
 static constexpr int kCurrentMethodStackOffset = 0;

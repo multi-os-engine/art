@@ -17,10 +17,13 @@
 #include "assembler_thumb2.h"
 
 #include "base/bit_utils.h"
+#include "base/casts.h"
 #include "base/logging.h"
-#include "entrypoints/quick/quick_entrypoints.h"
-#include "offsets.h"
-#include "thread.h"
+#include "constants_arm.h"
+#include "globals.h"
+#include "managed_register_arm.h"
+#include "utils/label.h"
+#include "utils/managed_register.h"
 
 namespace art {
 namespace arm {

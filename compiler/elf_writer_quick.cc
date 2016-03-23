@@ -19,25 +19,30 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "base/casts.h"
+#include "./elf.h"
+
 #include "base/logging.h"
+#include "base/macros.h"
 #include "base/stl_util.h"
-#include "compiled_method.h"
+#include "base/unix_file/fd_file.h"
+#include "debug/dwarf/dwarf_constants.h"
 #include "debug/elf_debug_writer.h"
-#include "debug/method_debug_info.h"
 #include "driver/compiler_options.h"
-#include "elf.h"
 #include "elf_builder.h"
-#include "elf_utils.h"
-#include "globals.h"
-#include "leb128.h"
+#include "elf_writer.h"
 #include "linker/buffered_output_stream.h"
 #include "linker/file_output_stream.h"
 #include "thread-inl.h"
 #include "thread_pool.h"
-#include "utils.h"
+#include "utils/array_ref.h"
 
 namespace art {
+
+class OutputStream;
+
+namespace debug {
+struct MethodDebugInfo;
+}  // namespace debug
 
 // .eh_frame and .debug_frame are almost identical.
 // Except for some minor formatting differences, the main difference

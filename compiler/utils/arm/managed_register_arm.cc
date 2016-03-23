@@ -16,8 +16,6 @@
 
 #include "managed_register_arm.h"
 
-#include "globals.h"
-
 namespace art {
 namespace arm {
 

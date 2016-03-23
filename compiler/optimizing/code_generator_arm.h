@@ -17,15 +17,40 @@
 #ifndef ART_COMPILER_OPTIMIZING_CODE_GENERATOR_ARM_H_
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_ARM_H_
 
+#include "arch/arm/registers_arm.h"
+#include "arch/instruction_set.h"
+#include "base/arena_containers.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "base/macros.h"
 #include "code_generator.h"
 #include "dex/compiler_enums.h"
-#include "driver/compiler_options.h"
+#include "entrypoints/quick/quick_entrypoints_enum.h"
+#include "globals.h"
+#include "method_reference.h"
 #include "nodes.h"
+#include "locations.h"
 #include "parallel_move_resolver.h"
+#include "primitive.h"
+#include "safe_map.h"
+#include "utils/arm/assembler_arm.h"
 #include "utils/arm/assembler_thumb2.h"
+#include "utils/arm/constants_arm.h"
+#include "utils/label.h"
 #include "utils/string_reference.h"
 
 namespace art {
+
+class ArenaAllocator;
+class ArmInstructionSetFeatures;
+class CompilerOptions;
+class DexFile;
+class HArmDexCacheArraysBase;
+class HBitwiseNegatedRight;
+class HMultiplyAccumulate;
+class LinkerPatch;
+class OptimizingCompilerStats;
+
 namespace arm {
 
 class CodeGeneratorARM;

@@ -15,7 +15,6 @@
  */
 
 #include "managed_register_arm64.h"
-#include "globals.h"
 
 namespace art {
 namespace arm64 {

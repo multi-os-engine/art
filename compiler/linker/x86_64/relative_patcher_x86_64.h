@@ -19,7 +19,12 @@
 
 #include "linker/x86/relative_patcher_x86_base.h"
 
+#include "base/macros.h"
+
 namespace art {
+
+class LinkerPatch;
+
 namespace linker {
 
 class X86_64RelativePatcher FINAL : public X86BaseRelativePatcher {

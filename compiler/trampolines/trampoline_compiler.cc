@@ -19,18 +19,24 @@
 #include "jni_env_ext.h"
 
 #ifdef ART_ENABLE_CODEGEN_arm
+#include "arch/arm/registers_arm.h"
+#include "utils/arm/assembler_arm.h"
 #include "utils/arm/assembler_thumb2.h"
 #endif
 
 #ifdef ART_ENABLE_CODEGEN_arm64
+#include "arch/arm64/registers_arm64.h"
 #include "utils/arm64/assembler_arm64.h"
+#include "utils/arm64/managed_register_arm64.h"
 #endif
 
 #ifdef ART_ENABLE_CODEGEN_mips
+#include "arch/mips/registers_mips.h"
 #include "utils/mips/assembler_mips.h"
 #endif
 
 #ifdef ART_ENABLE_CODEGEN_mips64
+#include "arch/mips64/registers_mips64.h"
 #include "utils/mips64/assembler_mips64.h"
 #endif
 
@@ -41,6 +47,11 @@
 #ifdef ART_ENABLE_CODEGEN_x86_64
 #include "utils/x86_64/assembler_x86_64.h"
 #endif
+
+#include "base/logging.h"
+#include "base/macros.h"
+#include "memory_region.h"
+#include "offsets.h"
 
 #define __ assembler.
 

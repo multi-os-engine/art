@@ -19,21 +19,33 @@
 #include <dlfcn.h>
 
 #include <cctype>
+#include <ostream>
 #include <sstream>
 
+#include "arch/instruction_set.h"
+#include "base/logging.h"
 #include "bounds_check_elimination.h"
 #include "builder.h"
 #include "code_generator.h"
 #include "dead_code_elimination.h"
+#include "dex/compiler_enums.h"
 #include "disassembler.h"
+#include "globals.h"
+#include "handle.h"
 #include "inliner.h"
+#include "invoke_type.h"
 #include "licm.h"
+#include "locations.h"
 #include "nodes.h"
-#include "optimization.h"
-#include "reference_type_propagation.h"
+#include "nodes_arm64.h"
+#include "nodes_shared.h"
+#include "primitive.h"
 #include "register_allocator.h"
+#include "scoped_thread_state_change.h"
 #include "ssa_liveness_analysis.h"
+#include "thread-inl.h"
 #include "utils/assembler.h"
+#include "utils.h"
 
 namespace art {
 

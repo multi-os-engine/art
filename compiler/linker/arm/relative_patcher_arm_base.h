@@ -19,10 +19,16 @@
 
 #include <deque>
 
+#include "arch/instruction_set.h"
+#include "base/macros.h"
 #include "linker/relative_patcher.h"
 #include "method_reference.h"
 
 namespace art {
+
+class CompiledMethod;
+class OutputStream;
+
 namespace linker {
 
 class ArmBaseRelativePatcher : public RelativePatcher {

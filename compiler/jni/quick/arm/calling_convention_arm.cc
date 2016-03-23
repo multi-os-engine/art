@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 
+#include "arch/arm/registers_arm.h"
+#include "arch/instruction_set.h"
+#include "base/bit_utils.h"
 #include "base/logging.h"
 #include "calling_convention_arm.h"
+#include "globals.h"
 #include "handle_scope-inl.h"
+#include "utils/arm/constants_arm.h"
 #include "utils/arm/managed_register_arm.h"
 
 namespace art {

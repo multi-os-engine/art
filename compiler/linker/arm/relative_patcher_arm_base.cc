@@ -16,12 +16,15 @@
 
 #include "linker/arm/relative_patcher_arm_base.h"
 
+#include "base/logging.h"
 #include "compiled_method.h"
-#include "linker/output_stream.h"
-#include "oat.h"
 #include "oat_quick_method_header.h"
+#include "utils/array_ref.h"
 
 namespace art {
+
+class OutputStream;
+
 namespace linker {
 
 uint32_t ArmBaseRelativePatcher::ReserveSpace(uint32_t offset,

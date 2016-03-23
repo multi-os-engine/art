@@ -15,6 +15,14 @@
  */
 #include "stack_map_stream.h"
 
+#include "base/arena_bit_vector.h"
+#include "base/bit_utils.h"
+#include "base/bit_vector-inl.h"
+#include "base/hash_set.h"
+#include "base/logging.h"
+#include "globals.h"
+#include "memory_region.h"
+
 namespace art {
 
 void StackMapStream::BeginStackMapEntry(uint32_t dex_pc,

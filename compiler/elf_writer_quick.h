@@ -20,12 +20,12 @@
 #include <memory>
 
 #include "arch/instruction_set.h"
-#include "elf_writer.h"
 #include "os.h"
 
 namespace art {
 
 class CompilerOptions;
+class ElfWriter;
 class InstructionSetFeatures;
 
 std::unique_ptr<ElfWriter> CreateElfWriterQuick(InstructionSet instruction_set,

@@ -16,10 +16,20 @@
 
 #include "ssa_builder.h"
 
+#include "base/casts.h"
+#include "base/logging.h"
+#include "base/mutex.h"
+#include "base/stl_util.h"
 #include "bytecode_utils.h"
+#include "globals.h"
+#include "handle.h"
+#include "mirror/class-inl.h"
 #include "nodes.h"
 #include "reference_type_propagation.h"
+#include "scoped_thread_state_change.h"
 #include "ssa_phi_elimination.h"
+#include "thread-inl.h"
+#include "verify_object-inl.h"
 
 namespace art {
 

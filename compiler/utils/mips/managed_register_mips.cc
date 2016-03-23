@@ -16,8 +16,6 @@
 
 #include "managed_register_mips.h"
 
-#include "globals.h"
-
 namespace art {
 namespace mips {
 

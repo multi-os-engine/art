@@ -14,8 +14,12 @@
  * limitations under the License.
  */
 
+#include "base/logging.h"
+#include "base/macros.h"
 #include "common_arm64.h"
 #include "nodes.h"
+#include "nodes_arm64.h"
+#include "primitive.h"
 
 namespace art {
 

@@ -16,11 +16,16 @@
 
 #include "gvn.h"
 
+#include "base/arena_allocator.h"
 #include "base/arena_bit_vector.h"
 #include "base/arena_containers.h"
-#include "base/bit_vector-inl.h"
+#include "base/arena_object.h"
+#include "base/bit_utils.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "base/value_object.h"
+#include "nodes.h"
 #include "side_effects_analysis.h"
-#include "utils.h"
 
 namespace art {
 

@@ -18,11 +18,15 @@
 
 #include <algorithm>
 
+#include "arch/instruction_set.h"
 #include "base/bit_utils.h"
 #include "base/logging.h"
+#include "debug/dwarf/register.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "offsets.h"
 #include "thread.h"
+#include "utils/arm/constants_arm.h"
+#include "utils/managed_register.h"
 
 namespace art {
 namespace arm {

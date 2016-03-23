@@ -17,11 +17,25 @@
 #ifndef ART_COMPILER_OPTIMIZING_SSA_LIVENESS_ANALYSIS_H_
 #define ART_COMPILER_OPTIMIZING_SSA_LIVENESS_ANALYSIS_H_
 
-#include "nodes.h"
 #include <iostream>
+
+#include "base/arena_allocator.h"
+#include "base/arena_bit_vector.h"
+#include "base/arena_containers.h"
+#include "base/arena_object.h"
+#include "base/bit_vector-inl.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "base/macros.h"
+#include "base/value_object.h"
+#include "globals.h"
+#include "locations.h"
+#include "nodes.h"
+#include "primitive.h"
 
 namespace art {
 
+class BitVector;
 class CodeGenerator;
 class SsaLivenessAnalysis;
 

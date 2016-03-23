@@ -16,10 +16,14 @@
 
 #include "assembler_x86_64.h"
 
+#include "arch/instruction_set.h"
 #include "base/casts.h"
+#include "constants_x86_64.h"
+#include "debug/dwarf/register.h"
 #include "entrypoints/quick/quick_entrypoints.h"
-#include "memory_region.h"
+#include "managed_register_x86_64.h"
 #include "thread.h"
+#include "utils/managed_register.h"
 
 namespace art {
 namespace x86_64 {

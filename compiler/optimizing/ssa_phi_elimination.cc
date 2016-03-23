@@ -16,8 +16,17 @@
 
 #include "ssa_phi_elimination.h"
 
+#include <stdint.h>
+
+#include <iosfwd>
+#include <ostream>
+#include <set>
+#include <string>
+
 #include "base/arena_containers.h"
-#include "base/bit_vector-inl.h"
+#include "base/logging.h"
+#include "base/stl_util.h"
+#include "globals.h"
 
 namespace art {
 

@@ -17,9 +17,15 @@
 #ifndef ART_COMPILER_OPTIMIZING_NODES_ARM64_H_
 #define ART_COMPILER_OPTIMIZING_NODES_ARM64_H_
 
+#include "base/bit_utils.h"
+#include "base/logging.h"
+#include "base/macros.h"
 #include "nodes.h"
+#include "primitive.h"
 
 namespace art {
+
+class HInstruction;
 
 class HArm64DataProcWithShifterOp : public HExpression<2> {
  public:

@@ -18,14 +18,19 @@
 #define ART_COMPILER_OPTIMIZING_STACK_MAP_STREAM_H_
 
 #include "base/arena_containers.h"
-#include "base/bit_vector-inl.h"
+#include "base/arena_allocator.h"
+#include "base/dchecked_vector.h"
 #include "base/hash_map.h"
+#include "base/macros.h"
 #include "base/value_object.h"
-#include "memory_region.h"
-#include "nodes.h"
+#include "invoke_type.h"
+#include "safe_map.h"
 #include "stack_map.h"
 
 namespace art {
+
+class BitVector;
+class MemoryRegion;
 
 // Helper to build art::StackMapStream::LocationCatalogEntriesIndices.
 class LocationCatalogEntriesIndicesEmptyFn {

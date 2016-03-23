@@ -17,18 +17,22 @@
 #ifndef ART_COMPILER_LINKER_RELATIVE_PATCHER_H_
 #define ART_COMPILER_LINKER_RELATIVE_PATCHER_H_
 
+#include <stdint.h>
+
+#include <memory>
+#include <utility>
 #include <vector>
 
 #include "arch/instruction_set.h"
-#include "arch/instruction_set_features.h"
 #include "base/macros.h"
-#include "method_reference.h"
-#include "utils/array_ref.h"
 
 namespace art {
 
+template <typename T> class ArrayRef;
 class CompiledMethod;
+class InstructionSetFeatures;
 class LinkerPatch;
+struct MethodReference;
 class OutputStream;
 
 namespace linker {

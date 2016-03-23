@@ -17,8 +17,9 @@
 #ifndef ART_COMPILER_UTILS_MIPS_MANAGED_REGISTER_MIPS_H_
 #define ART_COMPILER_UTILS_MIPS_MANAGED_REGISTER_MIPS_H_
 
+#include "arch/mips/registers_mips.h"
+#include "base/logging.h"
 #include "constants_mips.h"
-#include "debug/dwarf/register.h"
 #include "utils/managed_register.h"
 
 namespace art {

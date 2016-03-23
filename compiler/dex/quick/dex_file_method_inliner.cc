@@ -20,11 +20,12 @@
 
 #include "base/logging.h"
 #include "base/macros.h"
-#include "base/mutex-inl.h"
-#include "driver/compiler_driver.h"
+#include "dex/compiler_enums.h"
+#include "dex_file.h"
+#include "entrypoints/quick/quick_entrypoints.h"
+#include "method_reference.h"
 #include "thread-inl.h"
-#include "dex_instruction-inl.h"
-#include "driver/dex_compilation_unit.h"
+#include "utils.h"
 #include "verifier/method_verifier-inl.h"
 
 namespace art {
