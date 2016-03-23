@@ -19,14 +19,22 @@
 #include <unistd.h>
 #include <zlib.h>
 
+#include "ScopedFd.h"
+
 #include "arch/arm64/instruction_set_features_arm64.h"
 #include "art_method-inl.h"
 #include "base/allocator.h"
+#include "base/bit_utils.h"
 #include "base/bit_vector.h"
+#include "base/casts.h"
 #include "base/file_magic.h"
+#include "base/logging.h"
+#include "base/mutex.h"
 #include "base/stl_util.h"
+#include "base/timing_logger.h"
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
+#include "class_reference.h"
 #include "compiled_class.h"
 #include "compiled_method.h"
 #include "debug/method_debug_info.h"
@@ -34,26 +42,47 @@
 #include "dex_file-inl.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
+#include "gc/heap.h"
 #include "gc/space/image_space.h"
 #include "gc/space/space.h"
+#include "globals.h"
+#include "handle.h"
 #include "handle_scope-inl.h"
+#include "image.h"
 #include "image_writer.h"
+#include "invoke_type.h"
 #include "linker/multi_oat_relative_patcher.h"
 #include "linker/output_stream.h"
+#include "mem_map.h"
+#include "method_reference.h"
 #include "mirror/array.h"
+#include "mirror/class.h"
 #include "mirror/class_loader.h"
 #include "mirror/dex_cache-inl.h"
 #include "mirror/object-inl.h"
+#include "mirror/string.h"
+#include "mirror/throwable.h"
+#include "oat.h"
 #include "oat_quick_method_header.h"
 #include "os.h"
+#include "runtime.h"
 #include "safe_map.h"
 #include "scoped_thread_state_change.h"
+#include "thread-inl.h"
 #include "type_lookup_table.h"
+#include "utils.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 #include "verifier/method_verifier.h"
 #include "zip_archive.h"
 
+
 namespace art {
+
+class InstructionSetFeatures;
+namespace mirror {
+class ClassLoader;
+class Object;
+}  // namespace mirror
 
 namespace {  // anonymous namespace
 

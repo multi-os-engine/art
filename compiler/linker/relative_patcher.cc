@@ -16,6 +16,18 @@
 
 #include "linker/relative_patcher.h"
 
+#include <iosfwd>
+#include <memory>
+#include <new>
+#include <ostream>
+#include <vector>
+
+#include "arch/instruction_set_features.h"
+#include "base/logging.h"
+#include "method_reference.h"
+#include "output_stream.h"
+#include "utils/array_ref.h"
+
 #ifdef ART_ENABLE_CODEGEN_arm
 #include "linker/arm/relative_patcher_thumb2.h"
 #endif
@@ -28,7 +40,6 @@
 #ifdef ART_ENABLE_CODEGEN_x86_64
 #include "linker/x86_64/relative_patcher_x86_64.h"
 #endif
-#include "output_stream.h"
 
 namespace art {
 namespace linker {

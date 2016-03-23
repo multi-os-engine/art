@@ -17,7 +17,10 @@
 #ifndef ART_COMPILER_JNI_QUICK_ARM64_CALLING_CONVENTION_ARM64_H_
 #define ART_COMPILER_JNI_QUICK_ARM64_CALLING_CONVENTION_ARM64_H_
 
+#include "base/macros.h"
 #include "jni/quick/calling_convention.h"
+#include "offsets.h"
+#include "utils/managed_register.h"
 
 namespace art {
 namespace arm64 {

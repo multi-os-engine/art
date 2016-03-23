@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include <algorithm>
+#include <iosfwd>
 #include <memory>
+#include <new>
+#include <string>
 
 #include "jni.h"
 #include "JniInvocation.h"

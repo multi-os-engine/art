@@ -16,7 +16,10 @@
 
 #include "calling_convention_mips64.h"
 
+#include "arch/mips64/registers_mips64.h"
+#include "base/bit_utils.h"
 #include "base/logging.h"
+#include "globals.h"
 #include "handle_scope-inl.h"
 #include "utils/mips64/managed_register_mips64.h"
 

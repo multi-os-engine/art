@@ -16,8 +16,10 @@
 
 #include "locations.h"
 
-#include "nodes.h"
+#include "base/arena_bit_vector.h"
+#include "base/bit_utils.h"
 #include "code_generator.h"
+#include "nodes.h"
 
 namespace art {
 

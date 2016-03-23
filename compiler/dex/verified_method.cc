@@ -20,19 +20,23 @@
 #include <memory>
 #include <vector>
 
+#include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "base/logging.h"
-#include "base/stl_util.h"
+#include "class_linker.h"
 #include "dex_file.h"
 #include "dex_instruction-inl.h"
+#include "dex_instruction_list.h"
 #include "dex_instruction_utils.h"
 #include "mirror/class-inl.h"
 #include "mirror/dex_cache-inl.h"
-#include "mirror/object-inl.h"
-#include "utils.h"
+#include "runtime.h"
+#include "verifier/instruction_flags.h"
 #include "verifier/method_verifier-inl.h"
 #include "verifier/reg_type-inl.h"
+#include "verifier/reg_type_cache.h"
 #include "verifier/register_line-inl.h"
+#include "verify_object-inl.h"             // for VerifyObject
 
 namespace art {
 

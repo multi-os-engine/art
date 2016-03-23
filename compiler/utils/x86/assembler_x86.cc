@@ -17,9 +17,12 @@
 #include "assembler_x86.h"
 
 #include "base/casts.h"
+#include "constants_x86.h"
 #include "entrypoints/quick/quick_entrypoints.h"
-#include "memory_region.h"
+#include "debug/dwarf/register.h"
+#include "managed_register_x86.h"
 #include "thread.h"
+#include "utils/managed_register.h"
 
 namespace art {
 namespace x86 {

@@ -20,9 +20,12 @@
 #include <stdint.h>
 #include <vector>
 
+#include "arch/instruction_set.h"
 #include "driver/compiler_driver.h"
 
 namespace art {
+
+template <size_t pointer_size> class ThreadOffset;
 
 // Create code that will invoke the function held in thread local storage.
 const std::vector<uint8_t>* CreateTrampoline32(InstructionSet isa,

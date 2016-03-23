@@ -18,37 +18,44 @@
 #define ART_COMPILER_IMAGE_WRITER_H_
 
 #include <stdint.h>
-#include "base/memory_tool.h"
 
 #include <cstddef>
 #include <memory>
-#include <set>
-#include <string>
 #include <ostream>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "base/bit_utils.h"
 #include "base/dchecked_vector.h"
 #include "base/length_prefixed_array.h"
+#include "base/logging.h"
 #include "base/macros.h"
-#include "driver/compiler_driver.h"
-#include "gc/space/space.h"
+#include "base/mutex.h"
+#include "class_table.h"
+#include "gc/accounting/space_bitmap.h"
+#include "globals.h"
 #include "image.h"
+#include "intern_table.h"
 #include "lock_word.h"
 #include "mem_map.h"
-#include "oat_file.h"
-#include "mirror/dex_cache.h"
-#include "os.h"
 #include "safe_map.h"
-#include "utils.h"
 
 namespace art {
-namespace gc {
-namespace space {
-class ImageSpace;
-}  // namespace space
-}  // namespace gc
 
-class ClassTable;
+class ArtMethod;
+class CompilerDriver;
+class DexFile;
+class OatHeader;
+namespace mirror {
+class Class;
+class ClassLoader;
+class DexCache;
+class Object;
+class PointerArray;
+class String;
+template <class T> class ObjectArray;
+}  // namespace mirror
 
 static constexpr int kInvalidFd = -1;
 

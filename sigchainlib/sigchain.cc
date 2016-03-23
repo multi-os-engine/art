@@ -26,6 +26,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <exception>
+#include <iosfwd>
+#include <ostream>
+
 #include "sigchain.h"
 
 #if defined(__APPLE__)

@@ -19,10 +19,19 @@
 
 #include "compiler_callbacks.h"
 
+#include "base/logging.h"
+#include "base/macros.h"
+#include "base/mutex.h"
+#include "class_reference.h"
+
 namespace art {
 
-class VerificationResults;
 class DexFileToMethodInlinerMap;
+class VerificationResults;
+
+namespace verifier {
+class MethodVerifier;
+}
 
 class QuickCompilerCallbacks FINAL : public CompilerCallbacks {
   public:

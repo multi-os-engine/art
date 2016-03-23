@@ -16,6 +16,8 @@
 
 #include "output_stream.h"
 
+#include <ostream>
+
 namespace art {
 
 std::ostream& operator<<(std::ostream& os, const Whence& rhs) {

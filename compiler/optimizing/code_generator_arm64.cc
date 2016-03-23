@@ -17,22 +17,36 @@
 #include "code_generator_arm64.h"
 
 #include "arch/arm64/instruction_set_features_arm64.h"
+#include "arch/arm64/registers_arm64.h"
 #include "art_method.h"
+#include "base/bit_utils.h"
+#include "base/casts.h"
 #include "code_generator_utils.h"
+#include "common_arm64.h"
 #include "compiled_method.h"
+#include "driver/compiler_options.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
-#include "intrinsics.h"
+#include "gc_root.h"
+#include "globals.h"
 #include "intrinsics_arm64.h"
+#include "lock_word.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/object.h"
+#include "mirror/object_reference.h"
+#include "nodes_arm64.h"
+#include "nodes_shared.h"
 #include "offsets.h"
+#include "read_barrier.h"
+#include "runtime.h"
+#include "stack_map.h"
 #include "thread.h"
+#include "utils.h"
 #include "utils/arm64/assembler_arm64.h"
 #include "utils/assembler.h"
 #include "utils/stack_checks.h"
-
 
 using namespace vixl;   // NOLINT(build/namespaces)
 
@@ -42,8 +56,12 @@ using namespace vixl;   // NOLINT(build/namespaces)
 
 namespace art {
 
-template<class MirrorType>
-class GcRoot;
+class DexFile;
+class OptimizingCompilerStats;
+
+namespace mirror {
+class String;
+}  // namespace mirror
 
 namespace arm64 {
 

@@ -17,14 +17,27 @@
 #ifndef ART_COMPILER_OPTIMIZING_CODE_GENERATOR_MIPS64_H_
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_MIPS64_H_
 
+#include "arch/instruction_set.h"
+#include "arch/mips64/registers_mips64.h"
+#include "base/logging.h"
+#include "base/macros.h"
 #include "code_generator.h"
 #include "dex/compiler_enums.h"
-#include "driver/compiler_options.h"
+#include "entrypoints/quick/quick_entrypoints_enum.h"
+#include "locations.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
+#include "primitive.h"
 #include "utils/mips64/assembler_mips64.h"
 
 namespace art {
+
+class ArenaAllocator;
+class CompilerOptions;
+class Mips64InstructionSetFeatures;
+class OptimizingCompilerStats;
+struct MethodReference;
+
 namespace mips64 {
 
 // InvokeDexCallingConvention registers

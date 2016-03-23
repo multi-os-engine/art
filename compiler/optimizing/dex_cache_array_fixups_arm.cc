@@ -16,10 +16,20 @@
 
 #include "dex_cache_array_fixups_arm.h"
 
+#include "arch/instruction_set.h"
+#include "base/arena_allocator.h"
 #include "base/arena_containers.h"
+#include "base/logging.h"
+#include "method_reference.h"
+#include "nodes.h"
+#include "nodes_arm.h"
+#include "safe_map.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 
 namespace art {
+
+class DexFile;
+
 namespace arm {
 
 /**

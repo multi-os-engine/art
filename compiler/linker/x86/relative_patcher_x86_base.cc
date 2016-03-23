@@ -16,6 +16,13 @@
 
 #include "linker/x86/relative_patcher_x86_base.h"
 
+#include <iosfwd>
+#include <ostream>
+#include <string>
+
+#include "base/logging.h"
+#include "method_reference.h"
+
 namespace art {
 namespace linker {
 

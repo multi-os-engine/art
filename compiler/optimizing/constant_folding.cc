@@ -16,6 +16,10 @@
 
 #include "constant_folding.h"
 
+#include "base/logging.h"
+#include "nodes.h"
+#include "primitive.h"
+
 namespace art {
 
 // This visitor tries to simplify instructions that can be evaluated

@@ -17,13 +17,24 @@
 #include "assembler_mips.h"
 
 #include "base/bit_utils.h"
-#include "base/casts.h"
+#include "constants_mips.h"
+#include "debug/dwarf/register.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
-#include "memory_region.h"
+#include "globals.h"
+#include "managed_register_mips.h"
+#include "offsets.h"
 #include "thread.h"
+#include "utils/managed_register.h"
 
 namespace art {
+
+class MemoryRegion;
+
+namespace mirror {
+class Object;
+}  // namespace mirror
+
 namespace mips {
 
 std::ostream& operator<<(std::ostream& os, const DRegister& rhs) {

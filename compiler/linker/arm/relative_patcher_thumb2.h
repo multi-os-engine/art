@@ -17,10 +17,17 @@
 #ifndef ART_COMPILER_LINKER_ARM_RELATIVE_PATCHER_THUMB2_H_
 #define ART_COMPILER_LINKER_ARM_RELATIVE_PATCHER_THUMB2_H_
 
+#include "base/macros.h"
 #include "linker/arm/relative_patcher_arm_base.h"
 
 namespace art {
+
+class LinkerPatch;
+template <typename T> class ArrayRef;
+
 namespace linker {
+
+class RelativePatcherTargetProvider;
 
 class Thumb2RelativePatcher FINAL : public ArmBaseRelativePatcher {
  public:

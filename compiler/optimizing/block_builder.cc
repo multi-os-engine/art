@@ -16,7 +16,16 @@
 
 #include "block_builder.h"
 
+#include "base/logging.h"
+#include "base/stl_util.h"
 #include "bytecode_utils.h"
+#include "dex_file-inl.h"
+#include "dex_instruction.h"
+#include "dex_instruction_list.h"
+#include "globals.h"
+#include "leb128.h"
+#include "nodes.h"
+#include "safe_map.h"
 
 namespace art {
 

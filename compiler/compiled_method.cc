@@ -16,8 +16,10 @@
 
 #include "compiled_method.h"
 
+#include "base/length_prefixed_array.h"
 #include "driver/compiled_method_storage.h"
 #include "driver/compiler_driver.h"
+#include "stride_iterator.h"
 #include "utils/swap_space.h"
 
 namespace art {

@@ -20,15 +20,24 @@
 #include <utility>
 #include <vector>
 
+#include "arch/mips64/registers_mips64.h"
+#include "base/casts.h"
+#include "base/logging.h"
 #include "base/macros.h"
-#include "constants_mips64.h"
-#include "globals.h"
 #include "managed_register_mips64.h"
-#include "offsets.h"
 #include "utils/assembler.h"
 #include "utils/label.h"
 
 namespace art {
+
+class FrameOffset;
+class ManagedRegister;
+class ManagedRegisterEntrySpills;
+class MemberOffset;
+class MemoryRegion;
+class Offset;
+template <size_t pointer_size> class ThreadOffset;
+
 namespace mips64 {
 
 static constexpr size_t kMips64WordSize = 4;

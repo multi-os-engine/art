@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-#include <algorithm>
+#include "dex_file_to_method_inliner_map.h"
+
 #include <utility>
+
+#include "base/mutex.h"
+#include "base/logging.h"
+#include "dex/quick/dex_file_method_inliner.h"
 #include "thread.h"
 #include "thread-inl.h"
-#include "base/mutex.h"
-#include "base/mutex-inl.h"
-#include "base/logging.h"
-#include "driver/compiler_driver.h"
-
-#include "dex_file_to_method_inliner_map.h"
 
 namespace art {
 

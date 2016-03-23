@@ -17,53 +17,54 @@
 #ifndef ART_COMPILER_DRIVER_COMPILER_DRIVER_H_
 #define ART_COMPILER_DRIVER_COMPILER_DRIVER_H_
 
+#include "jni.h"
+
 #include <set>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
 #include "arch/instruction_set.h"
-#include "base/arena_allocator.h"
-#include "base/bit_utils.h"
+#include "base/logging.h"
+#include "base/macros.h"
 #include "base/mutex.h"
-#include "base/timing_logger.h"
 #include "class_reference.h"
+#include "compiled_method_storage.h"
 #include "compiler.h"
-#include "dex_file.h"
-#include "driver/compiled_method_storage.h"
-#include "jit/offline_profiling_info.h"
+#include "globals.h"
 #include "invoke_type.h"
 #include "method_reference.h"
-#include "mirror/class.h"  // For mirror::Class::Status.
-#include "os.h"
+#include "mirror/class.h"
+#include "offsets.h"
+#include "primitive.h"
 #include "runtime.h"
 #include "safe_map.h"
-#include "thread_pool.h"
 #include "utils/array_ref.h"
 #include "utils/dex_cache_arrays_layout.h"
 
 namespace art {
 
-namespace mirror {
-class DexCache;
-}  // namespace mirror
+class ArtField;
+class ArtMethod;
+class CumulativeLogger;
+class DexFile;
+class ProfileCompilationInfo;
+class Thread;
+class ThreadPool;
 
-namespace verifier {
-class MethodVerifier;
-}  // namespace verifier
+namespace mirror {
+class ClassLoader;
+class DexCache;
+class Object;
+}  // namespace mirror
 
 class CompiledClass;
 class CompiledMethod;
 class CompilerOptions;
 class DexCompilationUnit;
 class DexFileToMethodInlinerMap;
-struct InlineIGetIPutData;
 class InstructionSetFeatures;
-class ParallelCompilationManager;
 class ScopedObjectAccess;
-template <class Allocator> class SrcMap;
-class SrcMapElem;
-using SwapSrcMap = SrcMap<SwapAllocator<SrcMapElem>>;
 template<class T> class Handle;
 class TimingLogger;
 class VerificationResults;

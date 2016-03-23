@@ -18,18 +18,22 @@
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_H_
 
 #include "arch/instruction_set.h"
-#include "arch/instruction_set_features.h"
+#include "base/arena_allocator.h"
 #include "base/arena_containers.h"
 #include "base/arena_object.h"
-#include "base/bit_field.h"
-#include "compiled_method.h"
-#include "driver/compiler_options.h"
-#include "globals.h"
-#include "graph_visualizer.h"
+#include "base/bit_utils.h"
+#include "base/casts.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "base/macros.h"
+#include "dex_file.h"
+#include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "locations.h"
-#include "memory_region.h"
+#include "method_reference.h"
 #include "nodes.h"
 #include "optimizing_compiler_stats.h"
+#include "primitive.h"
+#include "stack_map.h"
 #include "stack_map_stream.h"
 #include "utils/label.h"
 
@@ -52,8 +56,11 @@ static int64_t constexpr kPrimLongMax = INT64_C(0x7fffffffffffffff);
 
 class Assembler;
 class CodeGenerator;
-class CompilerDriver;
+class CompilerOptions;
+class DisassemblyInformation;
+class InstructionSetFeatures;
 class LinkerPatch;
+class MemoryRegion;
 class ParallelMoveResolver;
 
 class CodeAllocator {

@@ -16,6 +16,8 @@
 
 #include "quick_compiler_callbacks.h"
 
+#include "method_reference.h"
+#include "quick/dex_file_method_inliner.h"
 #include "quick/dex_file_to_method_inliner_map.h"
 #include "verifier/method_verifier-inl.h"
 #include "verification_results.h"

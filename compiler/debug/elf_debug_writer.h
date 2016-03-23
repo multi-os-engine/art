@@ -19,18 +19,24 @@
 
 #include <vector>
 
+#include "arch/instruction_set.h"
 #include "base/macros.h"
 #include "base/mutex.h"
 #include "debug/dwarf/dwarf_constants.h"
-#include "elf_builder.h"
 #include "utils/array_ref.h"
 
 namespace art {
+
+class InstructionSetFeatures;
 class OatHeader;
+template <typename ElfTypes> class ElfBuilder;
+
 namespace mirror {
 class Class;
 }
+
 namespace debug {
+
 struct MethodDebugInfo;
 
 template <typename ElfTypes>

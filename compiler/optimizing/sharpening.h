@@ -17,6 +17,7 @@
 #ifndef ART_COMPILER_OPTIMIZING_SHARPENING_H_
 #define ART_COMPILER_OPTIMIZING_SHARPENING_H_
 
+#include "base/macros.h"
 #include "optimization.h"
 
 namespace art {
@@ -24,7 +25,9 @@ namespace art {
 class CodeGenerator;
 class CompilerDriver;
 class DexCompilationUnit;
+class HGraph;
 class HInvokeStaticOrDirect;
+class HLoadString;
 
 // Optimization that tries to improve the way we dispatch methods and access types,
 // fields, etc. Besides actual method sharpening based on receiver type (for example

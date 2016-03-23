@@ -21,26 +21,47 @@
 #include <array>
 #include <type_traits>
 
+#include "arch/instruction_set.h"
+#include "base/arena_allocator.h"
 #include "base/arena_bit_vector.h"
 #include "base/arena_containers.h"
 #include "base/arena_object.h"
+#include "base/bit_field.h"
+#include "base/bit_utils.h"
+#include "base/bit_vector-inl.h"
+#include "base/bit_vector.h"
+#include "base/casts.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "base/macros.h"
+#include "base/mutex.h"
 #include "base/stl_util.h"
+#include "base/value_object.h"
 #include "dex/compiler_enums.h"
+#include "dex_file.h"
+#include "dex_instruction-inl.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
+#include "globals.h"
 #include "handle.h"
 #include "handle_scope.h"
 #include "invoke_type.h"
 #include "locations.h"
 #include "method_reference.h"
-#include "mirror/class.h"
+#include "mirror/class-inl.h"
+#include "mirror/object-inl.h"
 #include "offsets.h"
 #include "primitive.h"
+#include "safe_map.h"
+#include "utils.h"
 #include "utils/array_ref.h"
+#include "verify_object-inl.h"
 
 namespace art {
 
+class ArtMethod;
 class GraphChecker;
 class HBasicBlock;
+class HConstant;
 class HCurrentMethod;
 class HDoubleConstant;
 class HEnvironment;
@@ -59,6 +80,7 @@ class LiveInterval;
 class LocationSummary;
 class SlowPathCode;
 class SsaBuilder;
+class StackHandleScopeCollection;
 
 namespace mirror {
 class DexCache;

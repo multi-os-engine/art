@@ -17,19 +17,28 @@
 #ifndef ART_COMPILER_COMPILER_H_
 #define ART_COMPILER_COMPILER_H_
 
+#include "jni.h"
+
+#include "base/macros.h"
+#include "base/mutex.h"
 #include "dex_file.h"
-#include "os.h"
+#include "invoke_type.h"
 
 namespace art {
 
-namespace jit {
-  class JitCodeCache;
-}
-
 class ArtMethod;
-class CompilerDriver;
 class CompiledMethod;
-class OatWriter;
+class CompilerDriver;
+class Thread;
+template <class T> class Handle;
+
+namespace jit {
+class JitCodeCache;
+}  // namespace jit
+
+namespace mirror {
+class DexCache;
+}  // namespace mirror
 
 class Compiler {
  public:

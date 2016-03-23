@@ -18,13 +18,17 @@
 #define ART_COMPILER_OPTIMIZING_REFERENCE_TYPE_PROPAGATION_H_
 
 #include "base/arena_containers.h"
-#include "driver/dex_compilation_unit.h"
+#include "base/dchecked_vector.h"
+#include "base/macros.h"
+#include "base/mutex.h"
+#include "handle.h"
 #include "handle_scope-inl.h"
 #include "nodes.h"
 #include "optimization.h"
-#include "optimizing_compiler_stats.h"
 
 namespace art {
+
+class StackHandleScopeCollection;
 
 /**
  * Propagates reference types to instructions.

@@ -20,23 +20,23 @@
 #include <vector>
 
 #include "arch/instruction_set.h"
-#include "arch/instruction_set_features.h"
-#include "arm/constants_arm.h"
 #include "base/logging.h"
 #include "base/macros.h"
 #include "debug/dwarf/debug_frame_opcode_writer.h"
 #include "label.h"
-#include "managed_register.h"
-#include "memory_region.h"
-#include "mips/constants_mips.h"
-#include "offsets.h"
-#include "x86/constants_x86.h"
-#include "x86_64/constants_x86_64.h"
 
 namespace art {
 
 class Assembler;
 class AssemblerBuffer;
+class FrameOffset;
+class InstructionSetFeatures;
+class ManagedRegister;
+class ManagedRegisterEntrySpills;
+class MemberOffset;
+class MemoryRegion;
+class Offset;
+template <size_t pointer_size> class ThreadOffset;
 
 // Assembler fixups are positions in generated code that require processing
 // after the code has been copied to executable memory. This includes building

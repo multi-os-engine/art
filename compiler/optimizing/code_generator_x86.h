@@ -17,15 +17,38 @@
 #ifndef ART_COMPILER_OPTIMIZING_CODE_GENERATOR_X86_H_
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_X86_H_
 
+#include "arch/instruction_set.h"
 #include "arch/x86/instruction_set_features_x86.h"
+#include "arch/x86/registers_x86.h"
+#include "base/arena_containers.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "base/macros.h"
 #include "code_generator.h"
 #include "dex/compiler_enums.h"
-#include "driver/compiler_options.h"
+#include "entrypoints/quick/quick_entrypoints_enum.h"
+#include "locations.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
+#include "primitive.h"
+#include "utils/label.h"
 #include "utils/x86/assembler_x86.h"
+#include "utils/x86/constants_x86.h"
+#include "utils/x86/managed_register_x86.h"
 
 namespace art {
+
+class ArenaAllocator;
+class CompilerOptions;
+class DexFile;
+class HX86ComputeBaseMethodAddress;
+class HX86FPNeg;
+class HX86LoadFromConstantTable;
+class HX86PackedSwitch;
+class LinkerPatch;
+class OptimizingCompilerStats;
+struct MethodReference;
+
 namespace x86 {
 
 // Use a local definition to prevent copying mistakes.

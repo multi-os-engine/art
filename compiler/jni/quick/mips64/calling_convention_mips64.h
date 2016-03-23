@@ -19,6 +19,10 @@
 
 #include "jni/quick/calling_convention.h"
 
+#include "base/macros.h"
+#include "offsets.h"
+#include "utils/managed_register.h"
+
 namespace art {
 namespace mips64 {
 

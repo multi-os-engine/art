@@ -19,33 +19,31 @@
 
 #include <stdint.h>
 #include <cstddef>
+#include <list>
 #include <memory>
 
+#include "arch/instruction_set.h"
 #include "base/dchecked_vector.h"
-#include "linker/relative_patcher.h"  // For linker::RelativePatcherTargetProvider.
-#include "mem_map.h"
-#include "method_reference.h"
-#include "mirror/class.h"
-#include "oat.h"
+#include "base/macros.h"
+#include "debug/method_debug_info.h"
 #include "os.h"
 #include "safe_map.h"
-#include "ScopedFd.h"
 #include "utils/array_ref.h"
+
+class ScopedFd;
 
 namespace art {
 
-class BitVector;
-class CompiledMethod;
 class CompilerDriver;
+class DexFile;
 class ImageWriter;
+class InstructionSetFeatures;
+class MemMap;
+class OatHeader;
 class OutputStream;
 class TimingLogger;
-class TypeLookupTable;
+class ZipArchive;
 class ZipEntry;
-
-namespace debug {
-struct MethodDebugInfo;
-}  // namespace debug
 
 namespace linker {
 class MultiOatRelativePatcher;

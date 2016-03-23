@@ -16,12 +16,29 @@
 
 #include "reference_type_propagation.h"
 
+#include "art_field-inl.h"
+#include "art_method-inl.h"
+#include "base/arena_allocator.h"
+#include "base/logging.h"
 #include "class_linker-inl.h"
+#include "globals.h"
+#include "invoke_type.h"
 #include "mirror/class-inl.h"
-#include "mirror/dex_cache.h"
+#include "mirror/dex_cache-inl.h"
+#include "primitive.h"
+#include "runtime.h"
 #include "scoped_thread_state_change.h"
+#include "thread-inl.h"
+#include "utils.h"
+#include "verify_object-inl.h"
 
 namespace art {
+
+class DexFile;
+
+namespace mirror {
+class ClassLoader;
+}  // namespace mirror
 
 static inline ReferenceTypeInfo::TypeHandle GetRootHandle(StackHandleScopeCollection* handles,
                                                           ClassLinker::ClassRoot class_root,

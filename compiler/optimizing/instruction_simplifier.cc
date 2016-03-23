@@ -16,11 +16,23 @@
 
 #include "instruction_simplifier.h"
 
+#include "base/bit_utils.h"
+#include "base/casts.h"
+#include "base/logging.h"
+#include "dex/compiler_enums.h"
+#include "globals.h"
 #include "intrinsics.h"
-#include "mirror/class-inl.h"
+#include "invoke_type.h"
+#include "nodes.h"
+#include "optimizing_compiler_stats.h"
+#include "primitive.h"
 #include "scoped_thread_state_change.h"
+#include "thread-inl.h"
+#include "utils.h"
 
 namespace art {
+
+class ArenaAllocator;
 
 class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
  public:

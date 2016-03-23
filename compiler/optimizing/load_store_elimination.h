@@ -17,10 +17,12 @@
 #ifndef ART_COMPILER_OPTIMIZING_LOAD_STORE_ELIMINATION_H_
 #define ART_COMPILER_OPTIMIZING_LOAD_STORE_ELIMINATION_H_
 
+#include "base/macros.h"
 #include "optimization.h"
 
 namespace art {
 
+class HGraph;
 class SideEffectsAnalysis;
 
 class LoadStoreElimination : public HOptimization {

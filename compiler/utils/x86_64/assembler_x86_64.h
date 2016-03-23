@@ -19,16 +19,25 @@
 
 #include <vector>
 
+#include "arch/x86_64/registers_x86_64.h"
 #include "base/bit_utils.h"
+#include "base/logging.h"
 #include "base/macros.h"
+#include "base/value_object.h"
 #include "constants_x86_64.h"
 #include "globals.h"
-#include "managed_register_x86_64.h"
 #include "offsets.h"
 #include "utils/assembler.h"
+#include "utils/label.h"
 
 namespace art {
+
+class ManagedRegister;
+class ManagedRegisterEntrySpills;
+
 namespace x86_64 {
+
+class X86_64Assembler;
 
 // Encodes an immediate value for operands.
 //
@@ -324,7 +333,7 @@ class NearLabel : private Label {
   using Label::BindTo;
   using Label::LinkTo;
 
-  friend class x86_64::X86_64Assembler;
+  friend class X86_64Assembler;
 
   DISALLOW_COPY_AND_ASSIGN(NearLabel);
 };

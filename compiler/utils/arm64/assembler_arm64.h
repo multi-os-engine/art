@@ -21,22 +21,34 @@
 #include <memory>
 #include <vector>
 
+#include "arch/arm64/registers_arm64.h"
 #include "base/logging.h"
+#include "base/macros.h"
 #include "constants_arm64.h"
 #include "utils/arm64/managed_register_arm64.h"
 #include "utils/assembler.h"
-#include "offsets.h"
 
 // TODO: make vixl clean wrt -Wshadow.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
 #pragma GCC diagnostic ignored "-Wshadow"
 #pragma GCC diagnostic ignored "-Wmissing-noreturn"
+#include "vixl/a64/assembler-a64.h"
+#include "vixl/a64/constants-a64.h"
 #include "vixl/a64/macro-assembler-a64.h"
-#include "vixl/a64/disasm-a64.h"
 #pragma GCC diagnostic pop
 
 namespace art {
+
+class FrameOffset;
+class Label;
+class ManagedRegister;
+class ManagedRegisterEntrySpills;
+class MemberOffset;
+class MemoryRegion;
+class Offset;
+template <size_t pointer_size> class ThreadOffset;
+
 namespace arm64 {
 
 #define MEM_OP(...)      vixl::MemOperand(__VA_ARGS__)

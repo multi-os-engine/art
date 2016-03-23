@@ -40,15 +40,22 @@
 #include "code_generator_mips64.h"
 #endif
 
+#include "arch/instruction_set_features.h"
+#include "base/arena_bit_vector.h"
 #include "bytecode_utils.h"
 #include "compiled_method.h"
-#include "dex/verified_method.h"
+#include "dex_instruction.h"
 #include "driver/compiler_driver.h"
+#include "driver/compiler_options.h"
 #include "gc_map_builder.h"
+#include "gc_root.h"
+#include "globals.h"
 #include "graph_visualizer.h"
 #include "intrinsics.h"
+#include "invoke_type.h"
 #include "leb128.h"
 #include "mapping_table.h"
+#include "memory_region.h"
 #include "mirror/array-inl.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/object_reference.h"
@@ -57,7 +64,13 @@
 #include "utils/assembler.h"
 #include "vmap_table.h"
 
+namespace art {  }
+
 namespace art {
+
+namespace mirror {
+class Object;
+}  // namespace mirror
 
 // Return whether a location is consistent with a type.
 static bool CheckType(Primitive::Type type, Location location) {

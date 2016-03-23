@@ -17,16 +17,33 @@
 #include "code_generator_x86.h"
 
 #include "art_method.h"
+#include "base/arena_allocator.h"
+#include "base/arena_object.h"
+#include "base/bit_utils.h"
+#include "base/casts.h"
 #include "code_generator_utils.h"
 #include "compiled_method.h"
+#include "debug/dwarf/register.h"
+#include "driver/compiler_options.h"
 #include "entrypoints/quick/quick_entrypoints.h"
 #include "entrypoints/quick/quick_entrypoints_enum.h"
 #include "gc/accounting/card_table.h"
-#include "intrinsics.h"
+#include "gc_root.h"
+#include "globals.h"
 #include "intrinsics_x86.h"
+#include "lock_word.h"
+#include "memory_region.h"
+#include "method_reference.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/object.h"
+#include "mirror/object_reference.h"
+#include "nodes_x86.h"
+#include "offsets.h"
+#include "read_barrier.h"
+#include "runtime.h"
 #include "thread.h"
+#include "utils.h"
 #include "utils/assembler.h"
 #include "utils/stack_checks.h"
 #include "utils/x86/assembler_x86.h"
@@ -34,8 +51,8 @@
 
 namespace art {
 
-template<class MirrorType>
-class GcRoot;
+class DexFile;
+class OptimizingCompilerStats;
 
 namespace x86 {
 

@@ -17,10 +17,14 @@
 #ifndef ART_COMPILER_OPTIMIZING_DEX_CACHE_ARRAY_FIXUPS_ARM_H_
 #define ART_COMPILER_OPTIMIZING_DEX_CACHE_ARRAY_FIXUPS_ARM_H_
 
-#include "nodes.h"
+#include "base/macros.h"
 #include "optimization.h"
 
 namespace art {
+
+class HGraph;
+class OptimizingCompilerStats;
+
 namespace arm {
 
 class DexCacheArrayFixups : public HOptimization {

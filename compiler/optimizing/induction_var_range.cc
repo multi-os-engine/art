@@ -18,6 +18,11 @@
 
 #include <limits>
 
+#include "base/logging.h"
+#include "induction_var_analysis.h"
+#include "nodes.h"
+#include "primitive.h"
+
 namespace art {
 
 /** Returns true if 64-bit constant fits in 32-bit constant. */

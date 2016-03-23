@@ -16,7 +16,13 @@
 
 #include "compiler_options.h"
 
+#include <string.h>
+
 #include <fstream>
+#include <new>
+#include <ostream>
+
+#include "base/logging.h"
 
 namespace art {
 

@@ -16,6 +16,12 @@
 
 #include "select_generator.h"
 
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "nodes.h"
+#include "optimizing_compiler_stats.h"
+#include "primitive.h"
+
 namespace art {
 
 static constexpr size_t kMaxInstructionsInBranch = 1u;

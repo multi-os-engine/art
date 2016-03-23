@@ -21,6 +21,7 @@
 
 #include "base/logging.h"
 #include "compiled_method.h"
+#include "globals.h"
 #include "thread-inl.h"
 #include "utils.h"
 #include "utils/dedupe_set-inl.h"

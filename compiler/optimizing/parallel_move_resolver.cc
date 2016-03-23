@@ -16,7 +16,10 @@
 
 #include "parallel_move_resolver.h"
 
+#include "base/logging.h"
 #include "base/stl_util.h"
+#include "globals.h"
+#include "locations.h"
 #include "nodes.h"
 
 namespace art {

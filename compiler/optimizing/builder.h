@@ -17,20 +17,34 @@
 #ifndef ART_COMPILER_OPTIMIZING_BUILDER_H_
 #define ART_COMPILER_OPTIMIZING_BUILDER_H_
 
+#include "base/arena_allocator.h"
 #include "base/arena_containers.h"
-#include "base/arena_object.h"
+#include "base/dchecked_vector.h"
+#include "base/macros.h"
+#include "base/mutex.h"
+#include "base/value_object.h"
 #include "block_builder.h"
 #include "dex_file.h"
-#include "dex_file-inl.h"
-#include "driver/compiler_driver.h"
 #include "driver/dex_compilation_unit.h"
+#include "handle.h"
+#include "invoke_type.h"
 #include "optimizing_compiler_stats.h"
 #include "primitive.h"
 #include "nodes.h"
 
+
 namespace art {
 
+class ArenaBitVector;
+class ArtMethod;
+class CompilerDriver;
 class Instruction;
+class StackHandleScopeCollection;
+
+namespace mirror {
+class Class;
+class DexCache;
+}  // namespace mirror
 
 class HGraphBuilder : public ValueObject {
  public:

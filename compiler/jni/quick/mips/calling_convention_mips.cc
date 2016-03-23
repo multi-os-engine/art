@@ -16,8 +16,13 @@
 
 #include "calling_convention_mips.h"
 
+#include "arch/instruction_set.h"
+#include "arch/mips/registers_mips.h"
+#include "base/bit_utils.h"
 #include "base/logging.h"
+#include "globals.h"
 #include "handle_scope-inl.h"
+#include "utils/mips/constants_mips.h"
 #include "utils/mips/managed_register_mips.h"
 
 namespace art {

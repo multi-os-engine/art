@@ -16,8 +16,10 @@
 
 #include "calling_convention_x86_64.h"
 
+#include "arch/instruction_set.h"
+#include "arch/x86_64/registers_x86_64.h"
 #include "base/bit_utils.h"
-#include "base/logging.h"
+#include "globals.h"
 #include "handle_scope-inl.h"
 #include "utils/x86_64/managed_register_x86_64.h"
 
