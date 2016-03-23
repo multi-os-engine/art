@@ -62,7 +62,10 @@
 namespace art {
 
 const uint8_t DexFile::kDexMagic[] = { 'd', 'e', 'x', '\n' };
-const uint8_t DexFile::kDexMagicVersion[] = { '0', '3', '5', '\0' };
+const uint8_t DexFile::kDexMagicVersions[DexFile::kNumDexVersions][DexFile::kDexVersionLen] = {
+  {'0', '3', '5', '\0'},
+  {'0', '3', '6', '\0'}
+};
 
 bool DexFile::GetChecksum(const char* filename, uint32_t* checksum, std::string* error_msg) {
   CHECK(checksum != nullptr);
@@ -493,7 +496,12 @@ bool DexFile::IsMagicValid(const uint8_t* magic) {
 
 bool DexFile::IsVersionValid(const uint8_t* magic) {
   const uint8_t* version = &magic[sizeof(kDexMagic)];
-  return (memcmp(version, kDexMagicVersion, sizeof(kDexMagicVersion)) == 0);
+  for (uint32_t i = 0; i < kNumDexVersions; i++) {
+    if (memcmp(version, kDexMagicVersions[i], kDexVersionLen) == 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 uint32_t DexFile::GetVersion() const {
