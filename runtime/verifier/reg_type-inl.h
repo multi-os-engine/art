@@ -62,7 +62,10 @@ inline bool RegType::IsConstantBoolean() const {
   }
 }
 
-inline bool RegType::AssignableFrom(const RegType& lhs, const RegType& rhs, bool strict) {
+inline bool RegType::AssignableFrom(const RegType& lhs,
+                                    const RegType& rhs,
+                                    const RegTypeCache& cache,
+                                    bool strict) {
   if (lhs.Equals(rhs)) {
     return true;
   } else {
@@ -103,7 +106,7 @@ inline bool RegType::AssignableFrom(const RegType& lhs, const RegType& rhs, bool
         // If we're not strict allow assignment to any interface, see comment in ClassJoin.
         return true;
       } else if (lhs.IsJavaLangObjectArray()) {
-        return rhs.IsObjectArrayTypes();  // All reference arrays may be assigned to Object[]
+        return rhs.IsObjectArrayTypes(cache);  // All reference arrays may be assigned to Object[]
       } else if (lhs.HasClass() && rhs.HasClass() &&
                  lhs.GetClass()->IsAssignableFrom(rhs.GetClass())) {
         // We're assignable from the Class point-of-view.
@@ -116,12 +119,12 @@ inline bool RegType::AssignableFrom(const RegType& lhs, const RegType& rhs, bool
   }
 }
 
-inline bool RegType::IsAssignableFrom(const RegType& src) const {
-  return AssignableFrom(*this, src, false);
+inline bool RegType::IsAssignableFrom(const RegType& src, const RegTypeCache& cache) const {
+  return AssignableFrom(*this, src, cache, false);
 }
 
-inline bool RegType::IsStrictlyAssignableFrom(const RegType& src) const {
-  return AssignableFrom(*this, src, true);
+inline bool RegType::IsStrictlyAssignableFrom(const RegType& src, const RegTypeCache& cache) const {
+  return AssignableFrom(*this, src, cache, true);
 }
 
 inline const DoubleHiType* DoubleHiType::GetInstance() {

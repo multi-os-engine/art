@@ -517,9 +517,35 @@ const RegType& RegType::GetSuperClass(RegTypeCache* cache) const {
   }
 }
 
-bool RegType::IsObjectArrayTypes() const SHARED_REQUIRES(Locks::mutator_lock_) {
-  if (IsUnresolvedTypes() && !IsUnresolvedMergedReference() && !IsUnresolvedSuperClass()) {
-    // Primitive arrays will always resolve
+bool RegType::IsObjectArrayTypes(const RegTypeCache& cache) const
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (IsUnresolvedTypes()) {
+    if (IsUnresolvedSuperClass()) {
+      // Can't be an array.
+      return false;
+    }
+    if (IsUnresolvedMergedReference()) {
+      // Need to check that all merged types are object arrays.
+      const UnresolvedMergedType* merged_type = down_cast<const UnresolvedMergedType*>(this);
+
+      const RegType& resolved = merged_type->GetResolvedPart();
+      if (!resolved.IsZero() && !resolved.IsObjectArrayTypes(cache)) {
+        return false;
+      }
+
+      const BitVector& types = merged_type->GetUnresolvedTypes();
+      for (uint32_t idx : types.Indexes()) {
+        const RegType& unresolved = cache.GetFromId(idx);
+        if (!unresolved.IsObjectArrayTypes(cache)) {
+          return false;
+        }
+      }
+
+      // OK, resolved and unresolved types were OK.
+      return true;
+    }
+
+    // Primitive arrays will always resolve.
     DCHECK(descriptor_[1] == 'L' || descriptor_[1] == '[');
     return descriptor_[0] == '[';
   } else if (HasClass()) {
@@ -534,8 +560,32 @@ bool RegType::IsJavaLangObject() const SHARED_REQUIRES(Locks::mutator_lock_) {
   return IsReference() && GetClass()->IsObjectClass();
 }
 
-bool RegType::IsArrayTypes() const SHARED_REQUIRES(Locks::mutator_lock_) {
-  if (IsUnresolvedTypes() && !IsUnresolvedMergedReference() && !IsUnresolvedSuperClass()) {
+bool RegType::IsArrayTypes(const RegTypeCache& cache) const SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (IsUnresolvedTypes()) {
+    if (IsUnresolvedSuperClass()) {
+      // Can't be an array.
+      return false;
+    }
+    if (IsUnresolvedMergedReference()) {
+      // Need to check that all merged types are arrays.
+      const UnresolvedMergedType* merged_type = down_cast<const UnresolvedMergedType*>(this);
+
+      const RegType& resolved = merged_type->GetResolvedPart();
+      if (!resolved.IsZero() && !resolved.IsArrayTypes(cache)) {
+        return false;
+      }
+
+      const BitVector& types = merged_type->GetUnresolvedTypes();
+      for (uint32_t idx : types.Indexes()) {
+        const RegType& unresolved = cache.GetFromId(idx);
+        if (!unresolved.IsArrayTypes(cache)) {
+          return false;
+        }
+      }
+
+      // OK, resolved and unresolved types were OK.
+      return true;
+    }
     return descriptor_[0] == '[';
   } else if (HasClass()) {
     return GetClass()->IsArrayClass();
@@ -819,19 +869,26 @@ std::ostream& operator<<(std::ostream& os, const RegType& rhs) {
 
 bool RegType::CanAssignArray(const RegType& src, RegTypeCache& reg_types,
                              Handle<mirror::ClassLoader> class_loader, bool* soft_error) const {
-  if (!IsArrayTypes() || !src.IsArrayTypes()) {
+  if (!IsArrayTypes(reg_types) || !src.IsArrayTypes(reg_types)) {
     *soft_error = false;
+    return false;
+  }
+
+  if (IsUnresolvedTypes() || src.IsUnresolvedTypes()) {
+    // An unresolved array type means that it's an array of some reference type. Make sure that
+    // both are object arrays.
+    *soft_error = IsObjectArrayTypes(reg_types) && src.IsObjectArrayTypes(reg_types);
     return false;
   }
 
   const RegType& cmp1 = reg_types.GetComponentType(*this, class_loader.Get());
   const RegType& cmp2 = reg_types.GetComponentType(src, class_loader.Get());
 
-  if (cmp1.IsAssignableFrom(cmp2)) {
+  if (cmp1.IsAssignableFrom(cmp2, reg_types)) {
     return true;
   }
   if (cmp1.IsUnresolvedTypes()) {
-    if (cmp2.IsIntegralTypes() || cmp2.IsFloatTypes() || cmp2.IsArrayTypes()) {
+    if (cmp2.IsIntegralTypes() || cmp2.IsFloatTypes() || cmp2.IsArrayTypes(reg_types)) {
       *soft_error = false;
       return false;
     }
@@ -839,14 +896,14 @@ bool RegType::CanAssignArray(const RegType& src, RegTypeCache& reg_types,
     return false;
   }
   if (cmp2.IsUnresolvedTypes()) {
-    if (cmp1.IsIntegralTypes() || cmp1.IsFloatTypes() || cmp1.IsArrayTypes()) {
+    if (cmp1.IsIntegralTypes() || cmp1.IsFloatTypes() || cmp1.IsArrayTypes(reg_types)) {
       *soft_error = false;
       return false;
     }
     *soft_error = true;
     return false;
   }
-  if (!cmp1.IsArrayTypes() || !cmp2.IsArrayTypes()) {
+  if (!cmp1.IsArrayTypes(reg_types) || !cmp2.IsArrayTypes(reg_types)) {
     *soft_error = false;
     return false;
   }

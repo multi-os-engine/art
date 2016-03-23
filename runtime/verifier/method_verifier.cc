@@ -2096,7 +2096,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
             // We really do expect a reference here.
             Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "return-object returns a non-reference type "
                                               << reg_type;
-          } else if (!return_type.IsAssignableFrom(reg_type)) {
+          } else if (!return_type.IsAssignableFrom(reg_type, reg_types_)) {
             if (reg_type.IsUnresolvedTypes() || return_type.IsUnresolvedTypes()) {
               Fail(VERIFY_ERROR_NO_CLASS) << " can't resolve returned type '" << return_type
                   << "' or '" << reg_type << "'";
@@ -2104,7 +2104,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
               bool soft_error = false;
               // Check whether arrays are involved. They will show a valid class status, even
               // if their components are erroneous.
-              if (reg_type.IsArrayTypes() && return_type.IsArrayTypes()) {
+              if (reg_type.IsArrayTypes(reg_types_) && return_type.IsArrayTypes(reg_types_)) {
                 return_type.CanAssignArray(reg_type, reg_types_, class_loader_, &soft_error);
                 if (soft_error) {
                   Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "array with erroneous component type: "
@@ -2314,7 +2314,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
     case Instruction::ARRAY_LENGTH: {
       const RegType& res_type = work_line_->GetRegisterType(this, inst->VRegB_12x());
       if (res_type.IsReferenceTypes()) {
-        if (!res_type.IsArrayTypes() && !res_type.IsZero()) {  // ie not an array or null
+        if (!res_type.IsArrayTypes(reg_types_) && !res_type.IsZero()) {  // ie not an array or null
           Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "array-length on non-array " << res_type;
         } else {
           work_line_->SetRegisterType<LockOp::kClear>(this,
@@ -2393,7 +2393,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       break;
     case Instruction::THROW: {
       const RegType& res_type = work_line_->GetRegisterType(this, inst->VRegA_11x());
-      if (!reg_types_.JavaLangThrowable(false).IsAssignableFrom(res_type)) {
+      if (!reg_types_.JavaLangThrowable(false).IsAssignableFrom(res_type, reg_types_)) {
         if (res_type.IsUninitializedTypes()) {
           Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "thrown exception not initialized";
         } else if (!res_type.IsReferenceTypes()) {
@@ -2422,7 +2422,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       const RegType& array_type = work_line_->GetRegisterType(this, inst->VRegA_31t());
       /* array_type can be null if the reg type is Zero */
       if (!array_type.IsZero()) {
-        if (!array_type.IsArrayTypes()) {
+        if (!array_type.IsArrayTypes(reg_types_)) {
           Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "invalid fill-array-data with array type "
                                             << array_type;
         } else {
@@ -2542,7 +2542,8 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
             cast_type.HasClass() &&             // Could be conflict type, make sure it has a class.
             !cast_type.GetClass()->IsInterface() &&
             (orig_type.IsZero() ||
-                orig_type.IsStrictlyAssignableFrom(cast_type.Merge(orig_type, &reg_types_)))) {
+                orig_type.IsStrictlyAssignableFrom(cast_type.Merge(orig_type, &reg_types_),
+                                                   reg_types_))) {
           RegisterLine* update_line = RegisterLine::Create(code_item_->registers_size_, this);
           if (inst->Opcode() == Instruction::IF_EQZ) {
             fallthrough_line.reset(update_line);
@@ -3621,7 +3622,7 @@ const RegType& MethodVerifier::GetCaughtExceptionType() {
             common_super = &reg_types_.JavaLangThrowable(false);
           } else {
             const RegType& exception = ResolveClassAndCheckAccess(iterator.GetHandlerTypeIndex());
-            if (!reg_types_.JavaLangThrowable(false).IsAssignableFrom(exception)) {
+            if (!reg_types_.JavaLangThrowable(false).IsAssignableFrom(exception, reg_types_)) {
               DCHECK(!exception.IsUninitializedTypes());  // Comes from dex, shouldn't be uninit.
               if (exception.IsUnresolvedTypes()) {
                 // We don't know enough about the type. Fail here and let runtime handle it.
@@ -3638,7 +3639,8 @@ const RegType& MethodVerifier::GetCaughtExceptionType() {
             } else {
               common_super = &common_super->Merge(exception, &reg_types_);
               if (FailOrAbort(this,
-                              reg_types_.JavaLangThrowable(false).IsAssignableFrom(*common_super),
+                              reg_types_.JavaLangThrowable(false).IsAssignableFrom(*common_super,
+                                                                                   reg_types_),
                               "java.lang.Throwable is not assignable-from common_super at ",
                               work_insn_idx_)) {
                 break;
@@ -3851,7 +3853,7 @@ ArtMethod* MethodVerifier::VerifyInvocationArgsFromIterator(
             dex_file_->StringByTypeIdx(class_idx),
             false);
       }
-      if (!res_method_class->IsAssignableFrom(adjusted_type)) {
+      if (!res_method_class->IsAssignableFrom(adjusted_type, reg_types_)) {
         Fail(adjusted_type.IsUnresolvedTypes()
                  ? VERIFY_ERROR_NO_CLASS
                  : VERIFY_ERROR_BAD_CLASS_SOFT)
@@ -4131,7 +4133,7 @@ ArtMethod* MethodVerifier::VerifyInvokeVirtualQuickArgs(const Instruction* inst,
     std::string temp;
     const RegType& res_method_class =
         FromClass(klass->GetDescriptor(&temp), klass, klass->CannotBeAssignedFromOtherTypes());
-    if (!res_method_class.IsAssignableFrom(actual_arg_type)) {
+    if (!res_method_class.IsAssignableFrom(actual_arg_type, reg_types_)) {
       Fail(actual_arg_type.IsUninitializedTypes()    // Just overcautious - should have never
                ? VERIFY_ERROR_BAD_CLASS_HARD         // quickened this.
                : actual_arg_type.IsUnresolvedTypes()
@@ -4200,7 +4202,7 @@ void MethodVerifier::VerifyNewArray(const Instruction* inst, bool is_filled, boo
     DCHECK_NE(failures_.size(), 0U);
   } else {
     // TODO: check Compiler::CanAccessTypeWithoutChecks returns false when res_type is unresolved
-    if (!res_type.IsArrayTypes()) {
+    if (!res_type.IsArrayTypes(reg_types_)) {
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "new-array on non-array class " << res_type;
     } else if (!is_filled) {
       /* make sure "size" register is valid type */
@@ -4251,8 +4253,17 @@ void MethodVerifier::VerifyAGet(const Instruction* inst,
                                         reg_types_.FromCat2ConstLo(0, false),
                                         reg_types_.FromCat2ConstHi(0, false));
       }
-    } else if (!array_type.IsArrayTypes()) {
+    } else if (!array_type.IsArrayTypes(reg_types_)) {
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "not array type " << array_type << " with aget";
+    } else if (array_type.IsUnresolvedTypes()) {
+      // Unresolved array types must be reference array types.
+      if (is_primitive) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "reference array type " << array_type
+                    << " source for category 1 aget";
+      } else {
+        Fail(VERIFY_ERROR_NO_CLASS) << "can't check aget for " << array_type
+            << " because of missing class";
+      }
     } else {
       /* verify the class */
       const RegType& component_type = reg_types_.GetComponentType(array_type, GetClassLoader());
@@ -4361,8 +4372,17 @@ void MethodVerifier::VerifyAPut(const Instruction* inst,
         }
       }
       work_line_->VerifyRegisterType(this, inst->VRegA_23x(), *modified_reg_type);
-    } else if (!array_type.IsArrayTypes()) {
+    } else if (!array_type.IsArrayTypes(reg_types_)) {
       Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "not array type " << array_type << " with aput";
+    } else if (array_type.IsUnresolvedTypes()) {
+      // Unresolved array types must be reference array types.
+      if (is_primitive) {
+        Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "put insn has type '" << insn_type
+                                          << "' but unresolved type '" << array_type << "'";
+      } else {
+        Fail(VERIFY_ERROR_NO_CLASS) << "can't check aput for " << array_type
+                                    << " because of missing class";
+      }
     } else {
       const RegType& component_type = reg_types_.GetComponentType(array_type, GetClassLoader());
       const uint32_t vregA = inst->VRegA_23x();
@@ -4477,7 +4497,7 @@ ArtField* MethodVerifier::GetInstanceField(const RegType& obj_type, int field_id
         return nullptr;
       }
       return field;
-    } else if (!field_klass.IsAssignableFrom(obj_type)) {
+    } else if (!field_klass.IsAssignableFrom(obj_type, reg_types_)) {
       // Trying to access C1.field1 using reference of type C2, which is neither C1 or a sub-class
       // of C1. For resolution to occur the declared class of the field must be compatible with
       // obj_type, we've discovered this wasn't so, so report the field didn't exist.
@@ -4562,7 +4582,7 @@ void MethodVerifier::VerifyISFieldAccess(const Instruction* inst, const RegType&
     if (is_primitive) {
       VerifyPrimitivePut(*field_type, insn_type, vregA);
     } else {
-      if (!insn_type.IsAssignableFrom(*field_type)) {
+      if (!insn_type.IsAssignableFrom(*field_type, reg_types_)) {
         // If the field type is not a reference, this is a global failure rather than
         // a class change failure as the instructions and the descriptors for the type
         // should have been consistent within the same file at compile time.
@@ -4594,7 +4614,7 @@ void MethodVerifier::VerifyISFieldAccess(const Instruction* inst, const RegType&
         return;
       }
     } else {
-      if (!insn_type.IsAssignableFrom(*field_type)) {
+      if (!insn_type.IsAssignableFrom(*field_type, reg_types_)) {
         // If the field type is not a reference, this is a global failure rather than
         // a class change failure as the instructions and the descriptors for the type
         // should have been consistent within the same file at compile time.
@@ -4725,7 +4745,7 @@ void MethodVerifier::VerifyQuickFieldAccess(const Instruction* inst, const RegTy
         return;
       }
     } else {
-      if (!insn_type.IsAssignableFrom(*field_type)) {
+      if (!insn_type.IsAssignableFrom(*field_type, reg_types_)) {
         Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "expected field " << PrettyField(field)
                                           << " to be compatible with type '" << insn_type
                                           << "' but found type '" << *field_type
@@ -4751,7 +4771,7 @@ void MethodVerifier::VerifyQuickFieldAccess(const Instruction* inst, const RegTy
         return;
       }
     } else {
-      if (!insn_type.IsAssignableFrom(*field_type)) {
+      if (!insn_type.IsAssignableFrom(*field_type, reg_types_)) {
         Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "expected field " << PrettyField(field)
                                           << " to be compatible with type '" << insn_type
                                           << "' but found type '" << *field_type
