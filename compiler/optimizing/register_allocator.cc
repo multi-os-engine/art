@@ -1927,7 +1927,10 @@ void RegisterAllocator::Resolve() {
         BitVector* live = liveness_.GetLiveInSet(*block);
         for (uint32_t idx : live->Indexes()) {
           LiveInterval* interval = liveness_.GetInstructionFromSsaIndex(idx)->GetLiveInterval();
-          DCHECK(!interval->GetSiblingAt(block->GetLifetimeStart())->HasRegister());
+          LiveInterval* sibling = interval->GetSiblingAt(block->GetLifetimeStart());
+          if (sibling != nullptr) {
+            DCHECK(!interval->HasRegister());
+          }
         }
       }
     } else {
