@@ -18,16 +18,20 @@
 
 #include <vector>
 
+#include "./elf.h"
+
+#include "base/logging.h"
 #include "debug/dwarf/dwarf_constants.h"
 #include "debug/elf_compilation_unit.h"
 #include "debug/elf_debug_frame_writer.h"
 #include "debug/elf_debug_info_writer.h"
 #include "debug/elf_debug_line_writer.h"
-#include "debug/elf_debug_loc_writer.h"
 #include "debug/elf_gnu_debugdata_writer.h"
 #include "debug/elf_symtab_writer.h"
 #include "debug/method_debug_info.h"
+#include "dex_file.h"
 #include "elf_builder.h"
+#include "globals.h"
 #include "linker/vector_output_stream.h"
 #include "utils/array_ref.h"
 

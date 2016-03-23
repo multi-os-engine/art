@@ -17,10 +17,15 @@
 #ifndef ART_COMPILER_LINKER_BUFFERED_OUTPUT_STREAM_H_
 #define ART_COMPILER_LINKER_BUFFERED_OUTPUT_STREAM_H_
 
+#include <stddef.h>
+#include <stdint.h>
+#include <sys/types.h>
+
 #include <memory>
 
 #include "output_stream.h"
 
+#include "base/macros.h"
 #include "globals.h"
 
 namespace art {

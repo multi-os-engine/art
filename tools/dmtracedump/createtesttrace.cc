@@ -19,16 +19,13 @@
  */
 #include "profile.h"  // from VM header
 
-#include <assert.h>
 #include <ctype.h>
-#include <errno.h>
+#include <getopt.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
-#include <time.h>
-#include <unistd.h>
 
 /*
  * Values from the header of the data file.

@@ -17,12 +17,15 @@
 #ifndef ART_RUNTIME_BASE_ARENA_BIT_VECTOR_H_
 #define ART_RUNTIME_BASE_ARENA_BIT_VECTOR_H_
 
+#include <stdint.h>
+
+#include "base/arena_allocator.h"
 #include "base/arena_object.h"
 #include "base/bit_vector.h"
+#include "base/macros.h"
 
 namespace art {
 
-class ArenaAllocator;
 class ScopedArenaAllocator;
 
 /*

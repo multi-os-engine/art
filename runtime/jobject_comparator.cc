@@ -16,10 +16,16 @@
 
 #include "jobject_comparator.h"
 
+#include "jni.h"
+
+#include "handle.h"
+#include "handle_scope-inl.h"
 #include "mirror/array-inl.h"
-#include "mirror/class-inl.h"
+#include "mirror/class.h"
 #include "mirror/object-inl.h"
 #include "scoped_thread_state_change.h"
+#include "thread-inl.h"
+#include "verify_object-inl.h"
 
 namespace art {
 

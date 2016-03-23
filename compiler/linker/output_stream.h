@@ -17,7 +17,10 @@
 #ifndef ART_COMPILER_LINKER_OUTPUT_STREAM_H_
 #define ART_COMPILER_LINKER_OUTPUT_STREAM_H_
 
-#include <ostream>
+#include <stdio.h>
+#include <sys/types.h>
+
+#include <iosfwd>
 #include <string>
 
 #include "base/macros.h"

@@ -17,16 +17,16 @@
 #ifndef ART_COMPILER_OPTIMIZING_GRAPH_VISUALIZER_H_
 #define ART_COMPILER_OPTIMIZING_GRAPH_VISUALIZER_H_
 
-#include <ostream>
-
-#include "arch/instruction_set.h"
+#include "base/arena_allocator.h"
 #include "base/arena_containers.h"
+#include "base/dchecked_vector.h"
+#include "base/macros.h"
 #include "base/value_object.h"
+#include "safe_map.h"
 
 namespace art {
 
 class CodeGenerator;
-class DexCompilationUnit;
 class HGraph;
 class HInstruction;
 class SlowPathCode;

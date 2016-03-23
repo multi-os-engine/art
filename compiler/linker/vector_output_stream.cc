@@ -16,6 +16,8 @@
 
 #include "vector_output_stream.h"
 
+#include <ostream>
+
 #include "base/logging.h"
 
 namespace art {

@@ -16,9 +16,10 @@
 
 #include "lambda/closure.h"
 
+#include "base/bit_utils.h"
 #include "base/logging.h"
 #include "lambda/art_lambda_method.h"
-#include "runtime/mirror/object_reference.h"
+#include "mirror/object_reference.h"
 
 static constexpr const bool kClosureSupportsReferences = false;
 static constexpr const bool kClosureSupportsGarbageCollection = false;

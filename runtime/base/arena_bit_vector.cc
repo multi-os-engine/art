@@ -16,8 +16,15 @@
 
 #include "arena_bit_vector.h"
 
+#include <stddef.h>
+
+#include <iosfwd>
+#include <new>
+#include <ostream>
+
 #include "base/allocator.h"
-#include "base/arena_allocator.h"
+#include "base/logging.h"
+#include "base/scoped_arena_allocator.h"
 
 namespace art {
 

@@ -18,7 +18,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include "base/memory_tool.h"
+
+#include "jni.h"
+#include "ScopedFd.h"
 
 #include <fstream>
 #include <iostream>
@@ -32,53 +34,67 @@
 #include <sys/utsname.h>
 #endif
 
+#include "arch/instruction_set.h"
 #include "arch/instruction_set_features.h"
-#include "arch/mips/instruction_set_features_mips.h"
-#include "art_method-inl.h"
+#include "base/bit_utils.h"
+#include "base/dchecked_vector.h"
 #include "base/dumpable.h"
+#include "base/logging.h"
 #include "base/macros.h"
+#include "base/memory_tool.h"
+#include "base/mutex.h"
 #include "base/scoped_flock.h"
 #include "base/stl_util.h"
 #include "base/stringpiece.h"
+#include "base/stringprintf.h"
 #include "base/time_utils.h"
 #include "base/timing_logger.h"
 #include "base/unix_file/fd_file.h"
 #include "class_linker.h"
 #include "compiler.h"
 #include "compiler_callbacks.h"
+#include "compiler_filter.h"
 #include "debug/elf_debug_writer.h"
-#include "debug/method_debug_info.h"
 #include "dex/quick/dex_file_to_method_inliner_map.h"
 #include "dex/quick_compiler_callbacks.h"
 #include "dex/verification_results.h"
-#include "dex_file-inl.h"
+#include "dex_cache_resolved_classes.h"
+#include "dex_file.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
-#include "elf_file.h"
 #include "elf_writer.h"
 #include "elf_writer_quick.h"
+#include "gc/collector_type.h"
+#include "gc/heap.h"
 #include "gc/space/image_space.h"
-#include "gc/space/space-inl.h"
+#include "globals.h"
+#include "image.h"
 #include "image_writer.h"
 #include "interpreter/unstarted_runtime.h"
 #include "jit/offline_profiling_info.h"
-#include "leb128.h"
+#include "jni_env_ext.h"
 #include "linker/multi_oat_relative_patcher.h"
-#include "mirror/class-inl.h"
-#include "mirror/class_loader.h"
-#include "mirror/object-inl.h"
-#include "mirror/object_array-inl.h"
+#include "mem_map.h"
+#include "mirror/dex_cache.h"
+#include "mirror/object.h"
+#include "oat.h"
+#include "oat_file.h"
 #include "oat_writer.h"
 #include "os.h"
-#include "runtime.h"
+#include "runtime-inl.h"
 #include "runtime_options.h"
-#include "ScopedLocalRef.h"
+#include "safe_map.h"
 #include "scoped_thread_state_change.h"
+#include "thread-inl.h"
+#include "thread_state.h"
 #include "utils.h"
+#include "verify_object.h"
 #include "well_known_classes.h"
 #include "zip_archive.h"
 
 namespace art {
+
+class OutputStream;
 
 static int original_argc;
 static char** original_argv;

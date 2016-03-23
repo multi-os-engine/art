@@ -17,18 +17,31 @@
 #ifndef ART_COMPILER_OPTIMIZING_INLINER_H_
 #define ART_COMPILER_OPTIMIZING_INLINER_H_
 
-#include "invoke_type.h"
+#include "base/macros.h"
+#include "base/mutex.h"
 #include "optimization.h"
 
 namespace art {
 
+class ArtMethod;
+class ClassLinker;
 class CodeGenerator;
 class CompilerDriver;
 class DexCompilationUnit;
+class HBasicBlock;
 class HGraph;
+class HInstanceFieldGet;
+class HInstanceFieldSet;
+class HInstruction;
 class HInvoke;
 class InlineCache;
 class OptimizingCompilerStats;
+class StackHandleScopeCollection;
+template <class T> class Handle;
+
+namespace mirror {
+class DexCache;
+}  // namespace mirror
 
 class HInliner : public HOptimization {
  public:

@@ -31,7 +31,6 @@ class Object;  // forward declaration
 
 namespace lambda {
 class ArtLambdaMethod;  // forward declaration
-class ClosureBuilder;   // forward declaration
 
 // Inline representation of a lambda closure.
 // Contains the target method and the set of packed captured variables as a copy.

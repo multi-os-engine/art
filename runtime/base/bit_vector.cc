@@ -16,7 +16,9 @@
 
 #include "bit_vector.h"
 
+#include <algorithm>
 #include <limits>
+#include <memory>
 #include <sstream>
 
 #include "allocator.h"

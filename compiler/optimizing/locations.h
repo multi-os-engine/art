@@ -17,11 +17,16 @@
 #ifndef ART_COMPILER_OPTIMIZING_LOCATIONS_H_
 #define ART_COMPILER_OPTIMIZING_LOCATIONS_H_
 
+#include "base/arena_allocator.h"
 #include "base/arena_containers.h"
 #include "base/arena_object.h"
 #include "base/bit_field.h"
 #include "base/bit_vector.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "base/macros.h"
 #include "base/value_object.h"
+#include "globals.h"
 
 namespace art {
 

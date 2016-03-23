@@ -17,10 +17,12 @@
 #ifndef ART_COMPILER_OPTIMIZING_CONSTANT_FOLDING_H_
 #define ART_COMPILER_OPTIMIZING_CONSTANT_FOLDING_H_
 
-#include "nodes.h"
+#include "base/macros.h"
 #include "optimization.h"
 
 namespace art {
+
+class HGraph;
 
 /**
  * Optimization pass performing a simple constant-expression

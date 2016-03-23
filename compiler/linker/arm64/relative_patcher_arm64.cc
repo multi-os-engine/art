@@ -16,16 +16,30 @@
 
 #include "linker/arm64/relative_patcher_arm64.h"
 
+#include <ios>
+#include <iosfwd>
+#include <ostream>
+#include <string>
+#include <vector>
+
 #include "arch/arm64/instruction_set_features_arm64.h"
+#include "arch/arm64/registers_arm64.h"
+#include "arch/instruction_set.h"
 #include "art_method.h"
+#include "base/bit_utils.h"
+#include "base/logging.h"
 #include "compiled_method.h"
-#include "driver/compiler_driver.h"
-#include "linker/output_stream.h"
-#include "oat.h"
+#include "globals.h"
+#include "memory_region.h"
+#include "method_reference.h"
 #include "oat_quick_method_header.h"
+#include "offsets.h"
 #include "utils/arm64/assembler_arm64.h"
+#include "utils/array_ref.h"
+#include "utils/managed_register.h"
 
 namespace art {
+
 namespace linker {
 
 namespace {

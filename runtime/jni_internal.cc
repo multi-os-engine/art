@@ -16,7 +16,8 @@
 
 #include "jni_internal.h"
 
-#include <dlfcn.h>
+#include <inttypes.h>
+#include <limits.h>
 
 #include <cstdarg>
 #include <memory>
@@ -25,37 +26,43 @@
 
 #include "art_field-inl.h"
 #include "art_method-inl.h"
-#include "atomic.h"
-#include "base/allocator.h"
+#include "base/bit_utils.h"
+#include "base/casts.h"
 #include "base/logging.h"
+#include "base/macros.h"
 #include "base/mutex.h"
-#include "base/stl_util.h"
+#include "base/stringpiece.h"
 #include "class_linker-inl.h"
 #include "dex_file-inl.h"
-#include "fault_handler.h"
-#include "gc_root.h"
-#include "gc/accounting/card_table-inl.h"
-#include "indirect_reference_table-inl.h"
-#include "interpreter/interpreter.h"
+#include "gc/allocator_type.h"
+#include "gc/heap.h"
+#include "globals.h"
+#include "handle.h"
+#include "handle_scope-inl.h"
 #include "jni_env_ext.h"
 #include "java_vm_ext.h"
+#include "mirror/abstract_method.h"
+#include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
+#include "mirror/dex_cache.h"
 #include "mirror/field-inl.h"
 #include "mirror/method.h"
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/string-inl.h"
 #include "mirror/throwable.h"
-#include "parsed_options.h"
+#include "primitive.h"
+#include "reference_table.h"
 #include "reflection.h"
 #include "runtime.h"
-#include "safe_map.h"
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
-#include "thread.h"
+#include "thread-inl.h"
 #include "utf.h"
+#include "utils.h"
 #include "well_known_classes.h"
+#include "verify_object-inl.h"
 
 namespace art {
 

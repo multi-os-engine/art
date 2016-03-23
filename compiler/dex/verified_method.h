@@ -19,6 +19,7 @@
 
 #include <vector>
 
+#include "base/macros.h"
 #include "base/mutex.h"
 #include "dex_file.h"
 #include "method_reference.h"

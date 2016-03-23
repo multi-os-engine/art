@@ -22,8 +22,14 @@
 
 #include "base/arena_containers.h"
 #include "base/bit_vector-inl.h"
+#include "base/stl_util.h"
 #include "base/stringprintf.h"
 #include "handle_scope-inl.h"
+#include "nodes.h"
+#include "primitive.h"
+#include "scoped_thread_state_change.h"
+#include "thread-inl.h"
+#include "utils/array_ref.h"
 
 namespace art {
 

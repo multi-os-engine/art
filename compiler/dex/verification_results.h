@@ -19,7 +19,6 @@
 
 #include <stdint.h>
 #include <set>
-#include <vector>
 
 #include "base/macros.h"
 #include "base/mutex.h"

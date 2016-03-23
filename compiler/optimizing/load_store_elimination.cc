@@ -15,13 +15,23 @@
  */
 
 #include "load_store_elimination.h"
-#include "side_effects_analysis.h"
 
 #include <iostream>
 
-namespace art {
+#include "base/arena_allocator.h"
+#include "base/arena_bit_vector.h"
+#include "base/arena_containers.h"
+#include "base/arena_object.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "globals.h"
+#include "mirror/object.h"
+#include "nodes.h"
+#include "offsets.h"
+#include "primitive.h"
+#include "side_effects_analysis.h"
 
-class ReferenceInfo;
+namespace art {
 
 // A cap for the number of heap locations to prevent pathological time/space consumption.
 // The number of heap locations for most of the methods stays below this threshold.

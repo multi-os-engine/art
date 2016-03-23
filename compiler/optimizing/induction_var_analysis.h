@@ -19,8 +19,16 @@
 
 #include <string>
 
+#include "base/arena_allocator.h"
+#include "base/arena_containers.h"
+#include "base/arena_object.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "base/macros.h"
 #include "nodes.h"
 #include "optimization.h"
+#include "primitive.h"
+#include "safe_map.h"
 
 namespace art {
 

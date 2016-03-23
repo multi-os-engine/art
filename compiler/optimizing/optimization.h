@@ -17,11 +17,14 @@
 #ifndef ART_COMPILER_OPTIMIZING_OPTIMIZATION_H_
 #define ART_COMPILER_OPTIMIZING_OPTIMIZATION_H_
 
+#include "base/arena_allocator.h"
 #include "base/arena_object.h"
-#include "nodes.h"
+#include "base/macros.h"
 #include "optimizing_compiler_stats.h"
 
 namespace art {
+
+class HGraph;
 
 /**
  * Abstraction to implement an optimization pass.

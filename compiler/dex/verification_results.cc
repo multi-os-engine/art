@@ -16,13 +16,19 @@
 
 #include "verification_results.h"
 
+#include <vector>
+
 #include "base/logging.h"
 #include "base/stl_util.h"
 #include "base/mutex-inl.h"
+#include "compiler_filter.h"
 #include "driver/compiler_driver.h"
 #include "driver/compiler_options.h"
+#include "modifiers.h"
+#include "runtime.h"
 #include "thread.h"
 #include "thread-inl.h"
+#include "utils.h"
 #include "verified_method.h"
 #include "verifier/method_verifier-inl.h"
 

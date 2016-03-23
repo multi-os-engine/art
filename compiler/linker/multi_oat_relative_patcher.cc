@@ -16,9 +16,15 @@
 
 #include "multi_oat_relative_patcher.h"
 
-#include "globals.h"
+#include <iosfwd>
+#include <map>
+#include <memory>
+#include <ostream>
+#include <utility>
+
 #include "base/bit_utils.h"
 #include "base/logging.h"
+#include "globals.h"
 
 namespace art {
 namespace linker {

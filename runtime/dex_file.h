@@ -517,25 +517,12 @@ class DexFile {
   // as the string length of the string data.
   const char* GetStringDataAndUtf16Length(const StringId& string_id, uint32_t* utf16_length) const;
 
-  const char* GetStringData(const StringId& string_id) const {
-    uint32_t ignored;
-    return GetStringDataAndUtf16Length(string_id, &ignored);
-  }
+  const char* GetStringData(const StringId& string_id) const;
 
   // Index version of GetStringDataAndUtf16Length.
-  const char* StringDataAndUtf16LengthByIdx(uint32_t idx, uint32_t* utf16_length) const {
-    if (idx == kDexNoIndex) {
-      *utf16_length = 0;
-      return nullptr;
-    }
-    const StringId& string_id = GetStringId(idx);
-    return GetStringDataAndUtf16Length(string_id, utf16_length);
-  }
+  const char* StringDataAndUtf16LengthByIdx(uint32_t idx, uint32_t* utf16_length) const;
 
-  const char* StringDataByIdx(uint32_t idx) const {
-    uint32_t unicode_length;
-    return StringDataAndUtf16LengthByIdx(idx, &unicode_length);
-  }
+  const char* StringDataByIdx(uint32_t idx) const;
 
   // Looks up a string id for a given modified utf8 string.
   const StringId* FindStringId(const char* string) const;
@@ -662,23 +649,15 @@ class DexFile {
   const Signature GetMethodSignature(const MethodId& method_id) const;
 
   // Returns the name of a method id.
-  const char* GetMethodName(const MethodId& method_id) const {
-    return StringDataByIdx(method_id.name_idx_);
-  }
+  const char* GetMethodName(const MethodId& method_id) const;
 
   // Returns the shorty of a method by its index.
-  const char* GetMethodShorty(uint32_t idx) const {
-    return StringDataByIdx(GetProtoId(GetMethodId(idx).proto_idx_).shorty_idx_);
-  }
+  const char* GetMethodShorty(uint32_t idx) const;
 
   // Returns the shorty of a method id.
-  const char* GetMethodShorty(const MethodId& method_id) const {
-    return StringDataByIdx(GetProtoId(method_id.proto_idx_).shorty_idx_);
-  }
-  const char* GetMethodShorty(const MethodId& method_id, uint32_t* length) const {
-    // Using the UTF16 length is safe here as shorties are guaranteed to be ASCII characters.
-    return StringDataAndUtf16LengthByIdx(GetProtoId(method_id.proto_idx_).shorty_idx_, length);
-  }
+  const char* GetMethodShorty(const MethodId& method_id) const;
+  const char* GetMethodShorty(const MethodId& method_id, uint32_t* length) const;
+
   // Returns the number of class definitions in the .dex file.
   uint32_t NumClassDefs() const {
     DCHECK(header_ != nullptr) << GetLocation();
@@ -698,9 +677,7 @@ class DexFile {
   }
 
   // Returns the class descriptor string of a class definition.
-  const char* GetClassDescriptor(const ClassDef& class_def) const {
-    return StringByTypeIdx(class_def.class_idx_);
-  }
+  const char* GetClassDescriptor(const ClassDef& class_def) const;
 
   // Looks up a class definition by its class descriptor. Hash must be
   // ComputeModifiedUtf8Hash(descriptor).
@@ -777,10 +754,7 @@ class DexFile {
   const Signature CreateSignature(const StringPiece& signature) const;
 
   // Returns the short form method descriptor for the given prototype.
-  const char* GetShorty(uint32_t proto_idx) const {
-    const ProtoId& proto_id = GetProtoId(proto_idx);
-    return StringDataByIdx(proto_id.shorty_idx_);
-  }
+  const char* GetShorty(uint32_t proto_idx) const;
 
   const TypeList* GetProtoParameters(const ProtoId& proto_id) const {
     if (proto_id.parameters_off_ == 0) {

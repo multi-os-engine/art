@@ -19,14 +19,27 @@
 
 #include "compiler_driver.h"
 
+#include "arch/instruction_set.h"
 #include "art_field-inl.h"
 #include "art_method-inl.h"
-#include "class_linker-inl.h"
+#include "base/logging.h"
+#include "base/macros.h"
+#include "class_linker.h"
 #include "dex_compilation_unit.h"
+#include "dex_file.h"
+#include "handle.h"
+#include "handle_scope-inl.h"
+#include "invoke_type.h"
+#include "method_reference.h"
+#include "mirror/class-inl.h"
 #include "mirror/class_loader.h"
 #include "mirror/dex_cache-inl.h"
+#include "offsets.h"
+#include "runtime.h"
 #include "scoped_thread_state_change.h"
-#include "handle_scope-inl.h"
+#include "thread-inl.h"
+#include "utils.h"
+#include "verify_object-inl.h"
 
 namespace art {
 

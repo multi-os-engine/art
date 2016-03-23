@@ -17,16 +17,21 @@
 #ifndef ART_COMPILER_JIT_JIT_COMPILER_H_
 #define ART_COMPILER_JIT_JIT_COMPILER_H_
 
+#include "base/macros.h"
 #include "base/mutex.h"
-#include "compiled_method.h"
-#include "dex/quick/dex_file_to_method_inliner_map.h"
-#include "driver/compiler_driver.h"
-#include "driver/compiler_options.h"
+#include "os.h"
+
 
 namespace art {
 
 class ArtMethod;
+class CompiledMethod;
+class CompilerDriver;
+class CompilerOptions;
+class CumulativeLogger;
+class DexFileToMethodInlinerMap;
 class InstructionSetFeatures;
+class Thread;
 
 namespace jit {
 

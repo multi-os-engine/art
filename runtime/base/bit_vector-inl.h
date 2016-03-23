@@ -17,8 +17,10 @@
 #ifndef ART_RUNTIME_BASE_BIT_VECTOR_INL_H_
 #define ART_RUNTIME_BASE_BIT_VECTOR_INL_H_
 
-#include "base/bit_utils.h"
 #include "bit_vector.h"
+
+#include "base/bit_utils.h"
+#include "base/macros.h"
 #include "logging.h"
 
 namespace art {

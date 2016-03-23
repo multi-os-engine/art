@@ -17,11 +17,27 @@
 #ifndef ART_COMPILER_LINKER_ARM64_RELATIVE_PATCHER_ARM64_H_
 #define ART_COMPILER_LINKER_ARM64_RELATIVE_PATCHER_ARM64_H_
 
+#include <stddef.h>
+#include <stdint.h>
+
+#include <utility>
+#include <vector>
+
+#include "base/macros.h"
 #include "linker/arm/relative_patcher_arm_base.h"
-#include "utils/array_ref.h"
 
 namespace art {
+
+class Arm64InstructionSetFeatures;
+template <typename T> class ArrayRef;
+class CompiledMethod;
+class LinkerPatch;
+class OutputStream;
+struct MethodReference;
+
 namespace linker {
+
+class RelativePatcherTargetProvider;
 
 class Arm64RelativePatcher FINAL : public ArmBaseRelativePatcher {
  public:

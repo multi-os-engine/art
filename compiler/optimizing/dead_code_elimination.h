@@ -17,11 +17,14 @@
 #ifndef ART_COMPILER_OPTIMIZING_DEAD_CODE_ELIMINATION_H_
 #define ART_COMPILER_OPTIMIZING_DEAD_CODE_ELIMINATION_H_
 
-#include "nodes.h"
+#include "base/macros.h"
 #include "optimization.h"
-#include "optimizing_compiler_stats.h"
 
 namespace art {
+
+class HBasicBlock;
+class HGraph;
+class OptimizingCompilerStats;
 
 /**
  * Optimization pass performing dead code elimination (removal of

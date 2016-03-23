@@ -16,22 +16,34 @@
 
 #include "sharpening.h"
 
+#include "arch/instruction_set.h"
 #include "base/casts.h"
+#include "base/logging.h"
+#include "base/stl_util.h"
 #include "class_linker.h"
 #include "code_generator.h"
+#include "driver/compiler_options.h"
 #include "driver/dex_compilation_unit.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 #include "driver/compiler_driver.h"
 #include "gc/heap.h"
-#include "gc/space/image_space.h"
+#include "gc_root.h"
+#include "handle.h"
 #include "handle_scope-inl.h"
-#include "mirror/dex_cache.h"
+#include "invoke_type.h"
+#include "method_reference.h"
+#include "mirror/dex_cache-inl.h"
 #include "mirror/string.h"
 #include "nodes.h"
 #include "runtime.h"
 #include "scoped_thread_state_change.h"
+#include "thread-inl.h"
+#include "utils/array_ref.h"
+#include "utils/dex_cache_arrays_layout.h"
 
 namespace art {
+
+class DexFile;
 
 void HSharpening::Run() {
   // We don't care about the order of the blocks here.

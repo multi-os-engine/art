@@ -15,6 +15,13 @@
  */
 
 #include "licm.h"
+
+#include "base/arena_allocator.h"
+#include "base/arena_bit_vector.h"
+#include "base/dchecked_vector.h"
+#include "base/logging.h"
+#include "nodes.h"
+#include "optimizing_compiler_stats.h"
 #include "side_effects_analysis.h"
 
 namespace art {

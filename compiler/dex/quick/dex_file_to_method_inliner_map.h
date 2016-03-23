@@ -19,15 +19,15 @@
 
 #include <map>
 #include <vector>
+
 #include "base/macros.h"
 #include "base/mutex.h"
-
-#include "dex/quick/dex_file_method_inliner.h"
 
 namespace art {
 
 class CompilerDriver;
 class DexFile;
+class DexFileMethodInliner;
 
 /**
  * Map each DexFile to its DexFileMethodInliner.
