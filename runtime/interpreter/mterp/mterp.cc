@@ -527,25 +527,6 @@ extern "C" bool MterpSuspendCheck(Thread* self)
   return MterpShouldSwitchInterpreters();
 }
 
-extern "C" int artSet64IndirectStaticFromMterp(uint32_t field_idx, ArtMethod* referrer,
-                                               uint64_t* new_value, Thread* self)
-    SHARED_REQUIRES(Locks::mutator_lock_) {
-  ScopedQuickEntrypointChecks sqec(self);
-  ArtField* field = FindFieldFast(field_idx, referrer, StaticPrimitiveWrite, sizeof(int64_t));
-  if (LIKELY(field != nullptr)) {
-    // Compiled code can't use transactional mode.
-    field->Set64<false>(field->GetDeclaringClass(), *new_value);
-    return 0;  // success
-  }
-  field = FindFieldFromCode<StaticPrimitiveWrite, true>(field_idx, referrer, self, sizeof(int64_t));
-  if (LIKELY(field != nullptr)) {
-    // Compiled code can't use transactional mode.
-    field->Set64<false>(field->GetDeclaringClass(), *new_value);
-    return 0;  // success
-  }
-  return -1;  // failure
-}
-
 extern "C" int artSet8InstanceFromMterp(uint32_t field_idx, mirror::Object* obj, uint8_t new_value,
                                         ArtMethod* referrer)
     SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -617,6 +598,201 @@ extern "C" int artSetObjInstanceFromMterp(uint32_t field_idx, mirror::Object* ob
   return -1;  // failure
 }
 
+extern "C" uint8_t MterpGetBooleanStatic(uint32_t field_idx, ArtMethod* referrer, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  uint8_t res = 0;  // On exception, the result will be ignored.
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveRead, false>(field_idx,
+                                                  referrer,
+                                                  self,
+                                                  Primitive::kPrimBoolean);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      res = f->GetBoolean(obj);
+    }
+  return res;
+}
+
+extern "C" int8_t MterpGetByteStatic(uint32_t field_idx, ArtMethod* referrer, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  int8_t res = 0;  // On exception, the result will be ignored.
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveRead, false>(field_idx, referrer, self, Primitive::kPrimByte);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      res = f->GetByte(obj);
+    }
+  return res;
+}
+
+extern "C" uint16_t MterpGetCharStatic(uint32_t field_idx, ArtMethod* referrer, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  uint16_t res = 0;  // On exception, the result will be ignored.
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveRead, false>(field_idx, referrer, self, Primitive::kPrimChar);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      res = f->GetChar(obj);
+    }
+  return res;
+}
+
+extern "C" int16_t MterpGetShortStatic(uint32_t field_idx, ArtMethod* referrer, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  int16_t res = 0;  // On exception, the result will be ignored.
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveRead, false>(field_idx, referrer, self, Primitive::kPrimShort);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      res = f->GetShort(obj);
+    }
+  return res;
+}
+
+extern "C" mirror::Object* MterpGetObjStatic(uint32_t field_idx, ArtMethod* referrer, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  mirror::Object* res = nullptr;  // On exception, the result will be ignored.
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveRead, false>(field_idx, referrer, self, Primitive::kPrimNot);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      res = f->GetObject(obj);
+    }
+  return res;
+}
+
+extern "C" uint32_t MterpGet32Static(uint32_t field_idx, ArtMethod* referrer, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  uint32_t res = 0;  // On exception, the result will be ignored.
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveRead, false>(field_idx, referrer, self, Primitive::kPrimInt);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      res = f->GetInt(obj);
+    }
+  return res;
+}
+
+extern "C" uint32_t MterpGet64Static(uint32_t field_idx, ArtMethod* referrer, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  uint64_t res = 0;  // On exception, the result will be ignored.
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveRead, false>(field_idx, referrer, self, Primitive::kPrimLong);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      res = f->GetLong(obj);
+    }
+  return res;
+}
+
+extern "C" int MterpSet32Static(uint32_t field_idx,
+                                uint32_t new_value,
+                                ArtMethod* referrer,
+                                Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  int res = 0;  // Assume success (following quick_field_entrypoints conventions)
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveWrite, false>(field_idx, referrer, self, Primitive::kPrimInt);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      f->SetInt<false>(obj, new_value);
+    } else {
+      res = -1;  // Failure
+    }
+  return res;
+}
+
+extern "C" int MterpSetBooleanStatic(uint32_t field_idx,
+                                     uint32_t new_value,
+                                     ArtMethod* referrer,
+                                     Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  int res = 0;  // Assume success (following quick_field_entrypoints conventions)
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveWrite, false>(field_idx,
+                                                   referrer,
+                                                   self,
+                                                   Primitive::kPrimBoolean);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      f->SetBoolean<false>(obj, new_value);
+    } else {
+      res = -1;  // Failure
+    }
+  return res;
+}
+
+extern "C" int MterpSetByteStatic(uint32_t field_idx,
+                                  uint32_t new_value,
+                                  ArtMethod* referrer,
+                                  Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  int res = 0;  // Assume success (following quick_field_entrypoints conventions)
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveWrite, false>(field_idx, referrer, self, Primitive::kPrimByte);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      f->SetByte<false>(obj, new_value);
+    } else {
+      res = -1;  // Failure
+    }
+  return res;
+}
+
+extern "C" int MterpSetCharStatic(uint32_t field_idx,
+                                  uint32_t new_value,
+                                  ArtMethod* referrer,
+                                  Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  int res = 0;  // Assume success (following quick_field_entrypoints conventions)
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveWrite, false>(field_idx, referrer, self, Primitive::kPrimChar);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      f->SetChar<false>(obj, new_value);
+    } else {
+      res = -1;  // Failure
+    }
+  return res;
+}
+
+extern "C" int MterpSetShortStatic(uint32_t field_idx,
+                                   uint32_t new_value,
+                                   ArtMethod* referrer,
+                                   Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  int res = 0;  // Assume success (following quick_field_entrypoints conventions)
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveWrite, false>(field_idx,
+                                                   referrer,
+                                                   self,
+                                                   Primitive::kPrimShort);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      f->SetShort<false>(obj, new_value);
+    } else {
+      res = -1;  // Failure
+    }
+  return res;
+}
+
+extern "C" int MterpSet64Static(uint32_t field_idx,
+                                ArtMethod* referrer,
+                                uint64_t* new_value,
+                                Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  int res = 0;  // Assume success (following quick_field_entrypoints conventions)
+  ArtField* f =
+    FindFieldFromCode<StaticPrimitiveWrite, false>(field_idx, referrer, self, Primitive::kPrimLong);
+    if (LIKELY(f != nullptr)) {
+      Object* obj = f->GetDeclaringClass();
+      f->SetLong<false>(obj, *new_value);
+    } else {
+      res = -1;  // Failure
+    }
+  return res;
+}
+
 extern "C" mirror::Object* artAGetObjectFromMterp(mirror::Object* arr, int32_t index)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   if (UNLIKELY(arr == nullptr)) {
@@ -639,6 +815,26 @@ extern "C" mirror::Object* artIGetObjectFromMterp(mirror::Object* obj, uint32_t 
   }
   return obj->GetFieldObject<mirror::Object>(MemberOffset(field_offset));
 }
+
+extern "C" int artSet64IndirectStaticFromMterp(uint32_t field_idx, ArtMethod* referrer,
+                                               uint64_t* new_value, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  ScopedQuickEntrypointChecks sqec(self);
+  ArtField* field = FindFieldFast(field_idx, referrer, StaticPrimitiveWrite, sizeof(int64_t));
+  if (LIKELY(field != nullptr)) {
+    // Compiled code can't use transactional mode.
+    field->Set64<false>(field->GetDeclaringClass(), *new_value);
+    return 0;  // success
+  }
+  field = FindFieldFromCode<StaticPrimitiveWrite, true>(field_idx, referrer, self, sizeof(int64_t));
+  if (LIKELY(field != nullptr)) {
+    // Compiled code can't use transactional mode.
+    field->Set64<false>(field->GetDeclaringClass(), *new_value);
+    return 0;  // success
+  }
+  return -1;  // failure
+}
+
 
 /*
  * Create a hotness_countdown based on the current method hotness_count and profiling

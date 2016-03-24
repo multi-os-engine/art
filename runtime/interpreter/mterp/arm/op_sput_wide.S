@@ -3,7 +3,7 @@
      *
      */
     /* sput-wide vAA, field@BBBB */
-    .extern artSet64IndirectStaticFromMterp
+    .extern MterpSet64Static
     EXPORT_PC
     FETCH   r0, 1                       @ r0<- field ref BBBB
     ldr     r1, [rFP, #OFF_FP_METHOD]
@@ -11,7 +11,7 @@
     VREG_INDEX_TO_ADDR r2, r2
     mov     r3, rSELF
     PREFETCH_INST 2                     @ Get next inst, but don't advance rPC
-    bl      artSet64IndirectStaticFromMterp
+    bl      MterpSet64Static
     cmp     r0, #0                      @ 0 on success, -1 on failure
     bne     MterpException
     ADVANCE 2                           @ Past exception point - now advance rPC
