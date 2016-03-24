@@ -829,6 +829,8 @@ void GraphChecker::VisitPhi(HPhi* phi) {
 }
 
 void GraphChecker::HandleBooleanInput(HInstruction* instruction, size_t input_index) {
+  // TODO: We need a data-flow analysis to determine if an input like Phi, Select
+  //       or a binary operation is actually Boolean. Allow for now.
   HInstruction* input = instruction->InputAt(input_index);
   if (input->IsIntConstant()) {
     int32_t value = input->AsIntConstant()->GetValue();
@@ -840,17 +842,9 @@ void GraphChecker::HandleBooleanInput(HInstruction* instruction, size_t input_in
           static_cast<int>(input_index),
           value));
     }
-  } else if (input->GetType() == Primitive::kPrimInt
-             && (input->IsPhi() ||
-                 input->IsAnd() ||
-                 input->IsOr() ||
-                 input->IsXor() ||
-                 input->IsSelect())) {
-    // TODO: We need a data-flow analysis to determine if the Phi or Select or
-    //       binary operation is actually Boolean. Allow for now.
-  } else if (input->GetType() != Primitive::kPrimBoolean) {
+  } else if (Primitive::PrimitiveKind(input->GetType()) != Primitive::kPrimInt) {
     AddError(StringPrintf(
-        "%s instruction %d has a non-Boolean input %d whose type is: %s.",
+        "%s instruction %d has a non-integer input %d whose type is: %s.",
         instruction->DebugName(),
         instruction->GetId(),
         static_cast<int>(input_index),
