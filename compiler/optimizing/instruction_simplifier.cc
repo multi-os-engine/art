@@ -895,6 +895,7 @@ void InstructionSimplifierVisitor::VisitTypeConversion(HTypeConversion* instruct
 void InstructionSimplifierVisitor::VisitAdd(HAdd* instruction) {
   HConstant* input_cst = instruction->GetConstantRight();
   HInstruction* input_other = instruction->GetLeastConstantLeft();
+  bool integral_type = Primitive::IsIntegralType(instruction->GetType());
   if ((input_cst != nullptr) && input_cst->IsArithmeticZero()) {
     // Replace code looking like
     //    ADD dst, src, 0
@@ -903,7 +904,7 @@ void InstructionSimplifierVisitor::VisitAdd(HAdd* instruction) {
     // Note that we cannot optimize `x + 0.0` to `x` for floating-point. When
     // `x` is `-0.0`, the former expression yields `0.0`, while the later
     // yields `-0.0`.
-    if (Primitive::IsIntegralType(instruction->GetType())) {
+    if (integral_type) {
       instruction->ReplaceWith(input_other);
       instruction->GetBlock()->RemoveInstruction(instruction);
       return;
@@ -937,6 +938,18 @@ void InstructionSimplifierVisitor::VisitAdd(HAdd* instruction) {
     instruction->GetBlock()->ReplaceAndRemoveInstructionWith(instruction, sub);
     RecordSimplification();
     neg->GetBlock()->RemoveInstruction(neg);
+    return;
+  }
+
+  if (integral_type && left->IsSub() && left->InputAt(1) == right) {
+    // Replace code looking like
+    //    SUB dst1, x, y
+    //    ADD dst2, dst1, y
+    // with
+    //    SUB dst1, x, y
+    // ADD instruction is not needed in this case, we may use
+    // the first input of SUB instead.
+    instruction->ReplaceAndRemoveInstructionWith(left->InputAt(0));
     return;
   }
 
@@ -1441,6 +1454,19 @@ void InstructionSimplifierVisitor::VisitSub(HSub* instruction) {
     instruction->GetBlock()->RemoveInstruction(instruction);
     RecordSimplification();
     left->GetBlock()->RemoveInstruction(left);
+    return;
+  }
+
+  if (left->IsAdd() && left->InputAt(1) == right) {
+    // Replace code looking like
+    //    ADD dst1, x, y
+    //    SUB dst2, dst1, y
+    // with
+    //    ADD dst1, x, y
+    // SUB instruction is not needed in this case, we may use
+    // the first input of ADD instead.
+    DCHECK(Primitive::IsIntegralType(type));
+    instruction->ReplaceAndRemoveInstructionWith(left->InputAt(0));
   }
 }
 
