@@ -461,7 +461,9 @@ void SsaBuilder::RemoveRedundantUninitializedStrings() {
     // Replace NewInstance of String with NullConstant if not used prior to
     // calling StringFactory. In case of deoptimization, the interpreter is
     // expected to skip null check on the `this` argument of the StringFactory call.
-    if (!new_instance->HasNonEnvironmentUses() && !HasAliasInEnvironments(new_instance)) {
+    if (!new_instance->HasNonEnvironmentUses() &&
+        !HasAliasInEnvironments(new_instance) &&
+        new_instance->IsInBlock()) {  // not already removed?
       new_instance->ReplaceWith(GetGraph()->GetNullConstant());
       new_instance->GetBlock()->RemoveInstruction(new_instance);
 
