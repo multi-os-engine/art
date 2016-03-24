@@ -458,6 +458,14 @@ void SsaBuilder::RemoveRedundantUninitializedStrings() {
   }
 
   for (HNewInstance* new_instance : uninitialized_strings_) {
+    // Skip the NewInstance if it was previously removed (b/27847265).
+    if (!new_instance->IsInBlock()) {
+      // Verify that NewInstance occurs multiple times in the vector,
+      // since that should be the only reason it has been removed already.
+      DCHECK(ContainsElement(uninitialized_strings_, new_instance,
+                             IndexOfElement(uninitialized_strings_, new_instance) + 1));
+      continue;
+    }
     // Replace NewInstance of String with NullConstant if not used prior to
     // calling StringFactory. In case of deoptimization, the interpreter is
     // expected to skip null check on the `this` argument of the StringFactory call.
