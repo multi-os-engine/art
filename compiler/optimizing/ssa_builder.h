@@ -119,7 +119,7 @@ class SsaBuilder : public HGraphVisitor {
 
   ArenaVector<HArrayGet*> ambiguous_agets_;
   ArenaVector<HArraySet*> ambiguous_asets_;
-  ArenaVector<HNewInstance*> uninitialized_strings_;
+  ArenaSet<HNewInstance*> uninitialized_strings_;
 
   // HEnvironment for each block.
   ArenaVector<ArenaVector<HInstruction*>> locals_for_;
