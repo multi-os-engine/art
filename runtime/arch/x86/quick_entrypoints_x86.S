@@ -897,8 +897,113 @@ DEFINE_FUNCTION art_quick_alloc_object_rosalloc
     RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER      // return or deliver exception
 END_FUNCTION art_quick_alloc_object_rosalloc
 
-GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_tlab, TLAB)
-GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_region_tlab, RegionTLAB)
+// The common fast path code for art_quick_alloc_object_tlab and art_quick_alloc_object_region_tlab.
+//
+// EAX: type_idx/return_value, ECX: ArtMethod*, EDX: the class.
+MACRO1(ALLOC_OBJECT_TLAB_FAST_PATH, slowPathLabel)
+    testl %edx, %edx                                           // Check null class
+    jz   VAR(slowPathLabel)
+                                                               // Check class status.
+    cmpl LITERAL(MIRROR_CLASS_STATUS_INITIALIZED), MIRROR_CLASS_STATUS_OFFSET(%edx)
+    jne  VAR(slowPathLabel)
+                                                               // Check access flags has kAccClassIsFinalizable
+    testl LITERAL(ACCESS_FLAGS_CLASS_IS_FINALIZABLE), MIRROR_CLASS_ACCESS_FLAGS_OFFSET(%edx)
+    jnz  VAR(slowPathLabel)
+    movl MIRROR_CLASS_OBJECT_SIZE_OFFSET(%edx), %esi           // Load the object size.
+    addl LITERAL(OBJECT_ALIGNMENT_MASK), %esi                  // Align the size by 8. (addr + 7) & ~7.
+    andl LITERAL(OBJECT_ALIGNMENT_MASK_TOGGLED), %esi
+    movl %fs:THREAD_SELF_OFFSET, %ebx                          // ebx = thread
+    movl THREAD_LOCAL_POS_OFFSET(%ebx), %edi                   // Load thread_local_pos.
+    addl %edi, %esi                                            // Add the object size.
+    cmpl THREAD_LOCAL_END_OFFSET(%ebx), %esi                   // Check if it fits.
+    ja   VAR(slowPathLabel)
+    movl %esi, THREAD_LOCAL_POS_OFFSET(%ebx)                   // Update thread_local_pos.
+    addl LITERAL(1), THREAD_LOCAL_OBJECTS_OFFSET(%ebx)         // Increment thread_local_objects.
+                                                               // Store the class pointer in the header.
+                                                               // No fence needed for x86.
+    POISON_HEAP_REF edx
+    movl %edx, MIRROR_OBJECT_CLASS_OFFSET(%edi)
+    movl %edi, %eax                                            // Fill return value.
+    POP edi
+    POP esi
+    ret                                                        // Fast path succeeded.
+END_MACRO
+
+// The common slow path code for art_quick_alloc_object_tlab and art_quick_alloc_object_region_tlab.
+MACRO1(ALLOC_OBJECT_TLAB_SLOW_PATH, cxx_name)
+    POP edi
+    POP esi
+    SETUP_REFS_ONLY_CALLEE_SAVE_FRAME ebx, ebx                 // save ref containing registers for GC
+    // Outgoing argument set up
+    PUSH eax                                                   // alignment padding
+    pushl %fs:THREAD_SELF_OFFSET                               // pass Thread::Current()
+    CFI_ADJUST_CFA_OFFSET(4)
+    PUSH ecx
+    PUSH eax
+    call VAR(cxx_name)                                         // cxx_name(arg0, arg1, Thread*)
+    addl LITERAL(16), %esp
+    CFI_ADJUST_CFA_OFFSET(-16)
+    RESTORE_REFS_ONLY_CALLEE_SAVE_FRAME                        // restore frame up to return address
+    RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER                    // return or deliver exception
+END_MACRO
+
+// A hand-written override for GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_tlab, TLAB).
+DEFINE_FUNCTION art_quick_alloc_object_tlab
+    // Fast path tlab allocation.
+    // EAX: uint32_t type_idx/return value, ECX: ArtMethod*.
+    // EBX, EDX: free.
+#if defined(USE_READ_BARRIER)
+    int3
+    int3
+#endif
+    PUSH esi
+    PUSH edi
+    movl ART_METHOD_DEX_CACHE_TYPES_OFFSET_32(%ecx), %edx      // Load dex cache resolved types array
+    // Might need to break down into multiple instructions to get the base address in a register.
+                                                               // Load the class
+    movl 0(%edx, %eax, COMPRESSED_REFERENCE_SIZE), %edx
+    UNPOISON_HEAP_REF edx
+    ALLOC_OBJECT_TLAB_FAST_PATH .Lart_quick_alloc_object_tlab_slow_path
+.Lart_quick_alloc_object_tlab_slow_path:
+    ALLOC_OBJECT_TLAB_SLOW_PATH artAllocObjectFromCodeTLAB
+END_FUNCTION art_quick_alloc_object_tlab
+
+// A hand-written override for GENERATE_ALLOC_ENTRYPOINTS_ALLOC_OBJECT(_region_tlab, RegionTLAB).
+DEFINE_FUNCTION art_quick_alloc_object_region_tlab
+    // Fast path region tlab allocation.
+    // EAX: uint32_t type_idx/return value, ECX: ArtMethod*.
+    // EBX, EDX: free.
+#if !defined(USE_READ_BARRIER)
+    int3
+    int3
+#endif
+    PUSH esi
+    PUSH edi
+    movl ART_METHOD_DEX_CACHE_TYPES_OFFSET_32(%ecx), %edx      // Load dex cache resolved types array
+    // Might need to break down into multiple instructions to get the base address in a register.
+                                                               // Load the class
+    movl 0(%edx, %eax, COMPRESSED_REFERENCE_SIZE), %edx
+    UNPOISON_HEAP_REF edx
+	                                                       // Read barrier for class load.
+    cmpl LITERAL(0), %fs:THREAD_IS_GC_MARKING_OFFSET
+    jne .Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path
+.Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path_exit:
+    ALLOC_OBJECT_TLAB_FAST_PATH .Lart_quick_alloc_object_region_tlab_slow_path
+.Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path:
+    // The read barrier slow path. Mark the class.
+    PUSH eax
+    PUSH ecx
+    // Outgoing argument set up
+    PUSH edx                                                   // Pass the class as the first param.
+    call SYMBOL(artReadBarrierMark)                            // cxx_name(mirror::Object* obj)
+    POP edx
+    movl %eax, %edx
+    POP ecx
+    POP eax
+    jmp .Lart_quick_alloc_object_region_tlab_class_load_read_barrier_slow_path_exit
+.Lart_quick_alloc_object_region_tlab_slow_path:
+    ALLOC_OBJECT_TLAB_SLOW_PATH artAllocObjectFromCodeRegionTLAB
+END_FUNCTION art_quick_alloc_object_region_tlab
 
 ONE_ARG_DOWNCALL art_quick_resolve_string, artResolveStringFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
 ONE_ARG_DOWNCALL art_quick_initialize_static_storage, artInitializeStaticStorageFromCode, RETURN_IF_RESULT_IS_NON_ZERO_OR_DELIVER
