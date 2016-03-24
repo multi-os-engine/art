@@ -132,11 +132,11 @@ void JitInstrumentationCache::DeleteThreadPool(Thread* self) {
 
 void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, uint16_t count) {
   // Since we don't have on-stack replacement, some methods can remain in the interpreter longer
-  // than we want resulting in samples even after the method is compiled.
-  if (method->IsClassInitializer() || method->IsNative()) {
+  // than we want resulting in samples even after the method is compiled.  Also, if the
+  // jit is not ready for (or no longer interested in) hotness samples, just return.
+  if (method->IsClassInitializer() || method->IsNative() || (thread_pool_ == nullptr)) {
     return;
   }
-  DCHECK(thread_pool_ != nullptr);
   DCHECK_GT(warm_method_threshold_, 0);
   DCHECK_GT(hot_method_threshold_, warm_method_threshold_);
   DCHECK_GT(osr_method_threshold_, hot_method_threshold_);
