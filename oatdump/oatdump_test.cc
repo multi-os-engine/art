@@ -59,6 +59,11 @@ class OatDumpTest : public CommonRuntimeTest {
 
   // Run the test with custom arguments.
   bool Exec(Mode mode, const std::vector<std::string>& args, std::string* error_msg) {
+    if (InstructionSetPointerSize(kRuntimeISA) == 8U) {
+      // Skip for 64-bit. We only have one oatdump, and the arch of the test is irrelevant.
+      return true;
+    }
+
     std::string file_path = GetOatDumpFilePath();
 
     EXPECT_TRUE(OS::FileExists(file_path.c_str())) << file_path << " should be a valid file path";
