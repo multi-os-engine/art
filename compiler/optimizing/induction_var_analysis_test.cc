@@ -157,6 +157,13 @@ class InductionVarAnalysisTest : public CommonCompilerTest {
         iva_->LookupInfo(loop_body_[d]->GetLoopInformation(), instruction));
   }
 
+  // Returns true if instructions have identical induction.
+  bool HaveSameInduction(HInstruction* instruction1, HInstruction* instruction2) {
+    return HInductionVarAnalysis::InductionEqual(
+      iva_->LookupInfo(loop_body_[0]->GetLoopInformation(), instruction1),
+      iva_->LookupInfo(loop_body_[0]->GetLoopInformation(), instruction2));
+  }
+
   // Performs InductionVarAnalysis (after proper set up).
   void PerformInductionVarAnalysis() {
     graph_->BuildDominatorTree();
@@ -228,6 +235,9 @@ TEST_F(InductionVarAnalysisTest, FindBasicInduction) {
   EXPECT_STREQ("((1) * i + (0)):PrimInt", GetInductionInfo(store->InputAt(1), 0).c_str());
   EXPECT_STREQ("((1) * i + (1)):PrimInt", GetInductionInfo(increment_[0], 0).c_str());
 
+  // Not the same.
+  EXPECT_FALSE(HaveSameInduction(store->InputAt(1), increment_[0]));
+
   // Trip-count.
   EXPECT_STREQ("((100) (TC-loop) ((0) < (100)))",
                GetInductionInfo(loop_header_[0]->GetLastInstruction(), 0).c_str());
@@ -288,6 +298,12 @@ TEST_F(InductionVarAnalysisTest, FindChainInduction) {
                GetInductionInfo(store1->InputAt(1), 0).c_str());
   EXPECT_STREQ("(((100) - (1)) * i + ((100) - (1))):PrimInt",
                GetInductionInfo(store2->InputAt(1), 0).c_str());
+
+  // Compare some.
+  EXPECT_TRUE(HaveSameInduction(store1->InputAt(1), add));
+  EXPECT_TRUE(HaveSameInduction(store2->InputAt(1), sub));
+  EXPECT_FALSE(HaveSameInduction(store1->InputAt(1), sub));
+  EXPECT_FALSE(HaveSameInduction(store2->InputAt(1), add));
 }
 
 TEST_F(InductionVarAnalysisTest, FindTwoWayBasicInduction) {
@@ -320,6 +336,10 @@ TEST_F(InductionVarAnalysisTest, FindTwoWayBasicInduction) {
   PerformInductionVarAnalysis();
 
   EXPECT_STREQ("((1) * i + (1)):PrimInt", GetInductionInfo(store->InputAt(1), 0).c_str());
+
+  // Both increments get same induction.
+  EXPECT_TRUE(HaveSameInduction(store->InputAt(1), inc1));
+  EXPECT_TRUE(HaveSameInduction(store->InputAt(1), inc2));
 }
 
 TEST_F(InductionVarAnalysisTest, FindTwoWayDerivedInduction) {
@@ -568,6 +588,33 @@ TEST_F(InductionVarAnalysisTest, FindDeepLoopInduction) {
     EXPECT_STREQ("((100) (TC-loop) ((0) < (100)))",
                  GetInductionInfo(loop_header_[d]->GetLastInstruction(), d).c_str());
   }
+}
+
+TEST_F(InductionVarAnalysisTest, ByteInductionIntLoopControl) {
+  // Setup:
+  // for (int i = 0; i < 100; i++) {
+  //   k = (byte) i;
+  //   a[k] = 0;
+  //   a[i] = 0;
+  // }
+  BuildLoopNest(1);
+  HInstruction *conv = InsertInstruction(
+      new (&allocator_) HTypeConversion(Primitive::kPrimByte, basic_[0], -1), 0);
+  HInstruction* store1 = InsertArrayStore(conv, 0);
+  HInstruction* store2 = InsertArrayStore(basic_[0], 0);
+  PerformInductionVarAnalysis();
+
+  // Regular int induction (i) is "transferred" over conversion into byte induction (k).
+  EXPECT_STREQ("((1) * i + (0)):PrimByte", GetInductionInfo(store1->InputAt(1), 0).c_str());
+  EXPECT_STREQ("((1) * i + (0)):PrimInt",  GetInductionInfo(store2->InputAt(1), 0).c_str());
+  EXPECT_STREQ("((1) * i + (1)):PrimInt",  GetInductionInfo(increment_[0], 0).c_str());
+
+  // Type matters!
+  EXPECT_FALSE(HaveSameInduction(store1->InputAt(1), store2->InputAt(2)));
+
+  // Trip-count.
+  EXPECT_STREQ("((100) (TC-loop) ((0) < (100)))",
+               GetInductionInfo(loop_header_[0]->GetLastInstruction(), 0).c_str());
 }
 
 TEST_F(InductionVarAnalysisTest, ByteLoopControl1) {
