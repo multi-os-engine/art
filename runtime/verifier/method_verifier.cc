@@ -47,7 +47,6 @@
 #include "scoped_thread_state_change.h"
 #include "utils.h"
 #include "handle_scope-inl.h"
-#include "verifier/dex_gc_map.h"
 
 namespace art {
 namespace verifier {
@@ -123,7 +122,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                         mirror::Class* klass,
                                                         CompilerCallbacks* callbacks,
                                                         bool allow_soft_failures,
-                                                        bool log_hard_failures,
+                                                        LogSeverity log_level,
                                                         std::string* error) {
   if (klass->IsVerified()) {
     return kNoFailure;
@@ -162,7 +161,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                      class_def,
                      callbacks,
                      allow_soft_failures,
-                     log_hard_failures,
+                     log_level,
                      error);
 }
 
@@ -196,7 +195,7 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethods(Thread* self,
                                                           Handle<mirror::ClassLoader> class_loader,
                                                           CompilerCallbacks* callbacks,
                                                           bool allow_soft_failures,
-                                                          bool log_hard_failures,
+                                                          LogSeverity log_level,
                                                           bool need_precise_constants,
                                                           std::string* error_string) {
   DCHECK(it != nullptr);
@@ -237,7 +236,7 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethods(Thread* self,
                                                       it->GetMethodAccessFlags(),
                                                       callbacks,
                                                       allow_soft_failures,
-                                                      log_hard_failures,
+                                                      log_level,
                                                       need_precise_constants,
                                                       &hard_failure_msg);
     if (result.kind == kHardFailure) {
@@ -267,7 +266,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                         const DexFile::ClassDef* class_def,
                                                         CompilerCallbacks* callbacks,
                                                         bool allow_soft_failures,
-                                                        bool log_hard_failures,
+                                                        LogSeverity log_level,
                                                         std::string* error) {
   DCHECK(class_def != nullptr);
   ScopedTrace trace(__FUNCTION__);
@@ -300,7 +299,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                           class_loader,
                                                           callbacks,
                                                           allow_soft_failures,
-                                                          log_hard_failures,
+                                                          log_level,
                                                           false /* need precise constants */,
                                                           error);
   // Virtual methods.
@@ -313,7 +312,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                            class_loader,
                                                            callbacks,
                                                            allow_soft_failures,
-                                                           log_hard_failures,
+                                                           log_level,
                                                            false /* need precise constants */,
                                                            error);
 
@@ -361,15 +360,26 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethod(Thread* self,
                                                          uint32_t method_access_flags,
                                                          CompilerCallbacks* callbacks,
                                                          bool allow_soft_failures,
-                                                         bool log_hard_failures,
+                                                         LogSeverity log_level,
                                                          bool need_precise_constants,
                                                          std::string* hard_failure_msg) {
   MethodVerifier::FailureData result;
   uint64_t start_ns = kTimeVerifyMethod ? NanoTime() : 0;
 
-  MethodVerifier verifier(self, dex_file, dex_cache, class_loader, class_def, code_item,
-                          method_idx, method, method_access_flags, true, allow_soft_failures,
-                          need_precise_constants, true);
+  MethodVerifier verifier(self,
+                          dex_file,
+                          dex_cache,
+                          class_loader,
+                          class_def,
+                          code_item,
+                          method_idx,
+                          method,
+                          method_access_flags,
+                          true /* can_load_classes */,
+                          allow_soft_failures,
+                          need_precise_constants,
+                          false /* verify to dump */,
+                          true /* allow_thread_suspension */);
   if (verifier.Verify()) {
     // Verification completed, however failures may be pending that didn't cause the verification
     // to hard fail.
@@ -397,9 +407,12 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethod(Thread* self,
       result.kind = kSoftFailure;
     } else {
       CHECK(verifier.have_pending_hard_failure_);
-      if (VLOG_IS_ON(verifier) || log_hard_failures) {
-        verifier.DumpFailures(LOG(INFO) << "Verification error in "
-                                        << PrettyMethod(method_idx, *dex_file) << "\n");
+      if (VLOG_IS_ON(verifier)) {
+        log_level = LogSeverity::VERBOSE;
+      }
+      if (log_level > LogSeverity::VERBOSE) {
+        verifier.DumpFailures(LOG(log_level) << "Verification error in "
+                                             << PrettyMethod(method_idx, *dex_file) << "\n");
       }
       if (hard_failure_msg != nullptr) {
         CHECK(!verifier.failure_messages_.empty());
@@ -441,9 +454,20 @@ MethodVerifier* MethodVerifier::VerifyMethodAndDump(Thread* self,
                                                     const DexFile::CodeItem* code_item,
                                                     ArtMethod* method,
                                                     uint32_t method_access_flags) {
-  MethodVerifier* verifier = new MethodVerifier(self, dex_file, dex_cache, class_loader,
-                                                class_def, code_item, dex_method_idx, method,
-                                                method_access_flags, true, true, true, true);
+  MethodVerifier* verifier = new MethodVerifier(self,
+                                                dex_file,
+                                                dex_cache,
+                                                class_loader,
+                                                class_def,
+                                                code_item,
+                                                dex_method_idx,
+                                                method,
+                                                method_access_flags,
+                                                true /* can_load_classes */,
+                                                true /* allow_soft_failures */,
+                                                true /* need_precise_constants */,
+                                                true /* verify_to_dump */,
+                                                true /* allow_thread_suspension */);
   verifier->Verify();
   verifier->DumpFailures(vios->Stream());
   vios->Stream() << verifier->info_messages_.str();
@@ -520,9 +544,20 @@ void MethodVerifier::FindLocksAtDexPc(ArtMethod* m, uint32_t dex_pc,
   StackHandleScope<2> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(m->GetDexCache()));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(m->GetClassLoader()));
-  MethodVerifier verifier(hs.Self(), m->GetDexFile(), dex_cache, class_loader, &m->GetClassDef(),
-                          m->GetCodeItem(), m->GetDexMethodIndex(), m, m->GetAccessFlags(),
-                          false, true, false, false);
+  MethodVerifier verifier(hs.Self(),
+                          m->GetDexFile(),
+                          dex_cache,
+                          class_loader,
+                          &m->GetClassDef(),
+                          m->GetCodeItem(),
+                          m->GetDexMethodIndex(),
+                          m,
+                          m->GetAccessFlags(),
+                          false /* can_load_classes */,
+                          true  /* allow_soft_failures */,
+                          false /* need_precise_constants */,
+                          false /* verify_to_dump */,
+                          false /* allow_thread_suspension */);
   verifier.interesting_dex_pc_ = dex_pc;
   verifier.monitor_enter_dex_pcs_ = monitor_enter_dex_pcs;
   verifier.FindLocksAtDexPc();
@@ -564,9 +599,20 @@ ArtField* MethodVerifier::FindAccessedFieldAtDexPc(ArtMethod* m, uint32_t dex_pc
   StackHandleScope<2> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(m->GetDexCache()));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(m->GetClassLoader()));
-  MethodVerifier verifier(hs.Self(), m->GetDexFile(), dex_cache, class_loader, &m->GetClassDef(),
-                          m->GetCodeItem(), m->GetDexMethodIndex(), m, m->GetAccessFlags(), true,
-                          true, false, true);
+  MethodVerifier verifier(hs.Self(),
+                          m->GetDexFile(),
+                          dex_cache,
+                          class_loader,
+                          &m->GetClassDef(),
+                          m->GetCodeItem(),
+                          m->GetDexMethodIndex(),
+                          m,
+                          m->GetAccessFlags(),
+                          true  /* can_load_classes */,
+                          true  /* allow_soft_failures */,
+                          false /* need_precise_constants */,
+                          false /* verify_to_dump */,
+                          true  /* allow_thread_suspension */);
   return verifier.FindAccessedFieldAtDexPc(dex_pc);
 }
 
@@ -593,9 +639,20 @@ ArtMethod* MethodVerifier::FindInvokedMethodAtDexPc(ArtMethod* m, uint32_t dex_p
   StackHandleScope<2> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(m->GetDexCache()));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(m->GetClassLoader()));
-  MethodVerifier verifier(hs.Self(), m->GetDexFile(), dex_cache, class_loader, &m->GetClassDef(),
-                          m->GetCodeItem(), m->GetDexMethodIndex(), m, m->GetAccessFlags(), true,
-                          true, false, true);
+  MethodVerifier verifier(hs.Self(),
+                          m->GetDexFile(),
+                          dex_cache,
+                          class_loader,
+                          &m->GetClassDef(),
+                          m->GetCodeItem(),
+                          m->GetDexMethodIndex(),
+                          m,
+                          m->GetAccessFlags(),
+                          true  /* can_load_classes */,
+                          true  /* allow_soft_failures */,
+                          false /* need_precise_constants */,
+                          false /* verify_to_dump */,
+                          true  /* allow_thread_suspension */);
   return verifier.FindInvokedMethodAtDexPc(dex_pc);
 }
 

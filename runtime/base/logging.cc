@@ -192,7 +192,7 @@ LogMessage::LogMessage(const char* file, unsigned int line, LogSeverity severity
   }
 }
 LogMessage::~LogMessage() {
-  if (!PrintDirectly(data_->GetSeverity())) {
+  if (!PrintDirectly(data_->GetSeverity()) && data_->GetSeverity() != LogSeverity::NONE) {
     if (data_->GetSeverity() < gMinimumLogSeverity) {
       return;  // No need to format something we're not going to output.
     }
@@ -236,6 +236,7 @@ std::ostream& LogMessage::stream() {
 
 #ifdef __ANDROID__
 static const android_LogPriority kLogSeverityToAndroidLogPriority[] = {
+  ANDROID_LOG_VERBOSE,  // NONE, use verbose as stand-in, will never be printed.
   ANDROID_LOG_VERBOSE, ANDROID_LOG_DEBUG, ANDROID_LOG_INFO, ANDROID_LOG_WARN,
   ANDROID_LOG_ERROR, ANDROID_LOG_FATAL, ANDROID_LOG_FATAL
 };
@@ -245,6 +246,10 @@ static_assert(arraysize(kLogSeverityToAndroidLogPriority) == INTERNAL_FATAL + 1,
 
 void LogMessage::LogLine(const char* file, unsigned int line, LogSeverity log_severity,
                          const char* message) {
+  if (log_severity == LogSeverity::NONE) {
+    return;
+  }
+
 #ifdef __ANDROID__
   const char* tag = ProgramInvocationShortName();
   int priority = kLogSeverityToAndroidLogPriority[log_severity];
@@ -254,7 +259,7 @@ void LogMessage::LogLine(const char* file, unsigned int line, LogSeverity log_se
     LOG_PRI(priority, tag, "%s", message);
   }
 #else
-  static const char* log_characters = "VDIWEFF";
+  static const char* log_characters = "NVDIWEFF";
   CHECK_EQ(strlen(log_characters), INTERNAL_FATAL + 1U);
   char severity = log_characters[log_severity];
   fprintf(stderr, "%s %c %5d %5d %s:%u] %s\n",
@@ -264,6 +269,10 @@ void LogMessage::LogLine(const char* file, unsigned int line, LogSeverity log_se
 
 void LogMessage::LogLineLowStack(const char* file, unsigned int line, LogSeverity log_severity,
                                  const char* message) {
+  if (log_severity == LogSeverity::NONE) {
+    return;
+  }
+
 #ifdef __ANDROID__
   // Use android_writeLog() to avoid stack-based buffers used by android_printLog().
   const char* tag = ProgramInvocationShortName();
