@@ -15,6 +15,7 @@
  */
 
 #include <inttypes.h>
+#include <limits>
 #include <sstream>
 
 #include "time_utils.h"
@@ -191,8 +192,14 @@ void InitTimeSpec(bool absolute, int clock, int64_t ms, int32_t ns, timespec* ts
 
   int64_t end_sec = ts->tv_sec + ms / 1000;
   if (UNLIKELY(end_sec >= 0x7fffffff)) {
-    LOG(INFO) << "Note: end time exceeds INT32_MAX: " << end_sec;
-    end_sec = 0x7ffffffe;
+    // Either ms was intended to denote an infinite timeout, or we have a
+    // problem.  The former generally uses the largest possible millisecond
+    // or nanosecond value.  Log only in the latter case.
+    constexpr int64_t int64_max = std::numeric_limits<int64_t>::max();
+    if (ms != int64_max && ms != int64_max / (1000 * 1000)) {
+      LOG(INFO) << "Note: end time exceeds INT32_MAX: " << end_sec;
+      end_sec = 0x7ffffffe;
+    }
   }
   ts->tv_sec = end_sec;
   ts->tv_nsec = (ts->tv_nsec + (ms % 1000) * 1000000) + ns;
