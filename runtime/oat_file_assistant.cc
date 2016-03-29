@@ -31,6 +31,7 @@
 #include "base/logging.h"
 #include "base/stringprintf.h"
 #include "class_linker.h"
+#include "elf_file.h"
 #include "gc/heap.h"
 #include "gc/space/image_space.h"
 #include "image.h"
@@ -166,15 +167,11 @@ OatFileAssistant::DexOptNeeded OatFileAssistant::GetDexOptNeeded(CompilerFilter:
 
   // See if we can get an up-to-date file by running patchoat.
   if (compilation_desired) {
-    if (odex_okay && OdexFileNeedsRelocation()) {
-      // TODO: don't return kPatchOatNeeded if the odex file contains no
-      // patch information.
+    if (odex_okay && OdexFileNeedsRelocation() && OdexFileHasPatchInfo()) {
       return kPatchOatNeeded;
     }
 
-    if (oat_okay && OatFileNeedsRelocation()) {
-      // TODO: don't return kSelfPatchOatNeeded if the oat file contains no
-      // patch information.
+    if (oat_okay && OatFileNeedsRelocation() && OatFileHasPatchInfo()) {
       return kSelfPatchOatNeeded;
     }
   }
@@ -863,6 +860,27 @@ bool OatFileAssistant::OdexFileIsExecutable() {
   return (odex_file != nullptr && odex_file->IsExecutable());
 }
 
+static bool GivenOatFileHasPatchInfo(const char* filename) {
+  std::unique_ptr<File> file;
+  file.reset(OS::OpenFileForReading(filename));
+  if (file == nullptr) {
+    return false;
+  }
+
+  std::string error_msg;
+  std::unique_ptr<ElfFile> elf(ElfFile::Open(file.get(), PROT_READ, MAP_PRIVATE, &error_msg));
+  if (elf.get() == nullptr) {
+    return false;
+  }
+  return elf->HasSection(".text.oat_patches");
+}
+
+
+bool OatFileAssistant::OdexFileHasPatchInfo() {
+  const std::string* odex_file_name = OdexFileName();
+  return odex_file_name != nullptr && GivenOatFileHasPatchInfo(odex_file_name->c_str());
+}
+
 void OatFileAssistant::ClearOdexFileCache() {
   odex_file_load_attempted_ = false;
   cached_odex_file_.reset();
@@ -897,6 +915,11 @@ const OatFile* OatFileAssistant::GetOatFile() {
 bool OatFileAssistant::OatFileIsExecutable() {
   const OatFile* oat_file = GetOatFile();
   return (oat_file != nullptr && oat_file->IsExecutable());
+}
+
+bool OatFileAssistant::OatFileHasPatchInfo() {
+  const std::string* oat_file_name = OatFileName();
+  return oat_file_name != nullptr && GivenOatFileHasPatchInfo(oat_file_name->c_str());
 }
 
 void OatFileAssistant::ClearOatFileCache() {
