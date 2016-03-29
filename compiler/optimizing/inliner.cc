@@ -69,17 +69,10 @@ void HInliner::Run() {
     // doing some logic in the runtime to discover if a method could have been inlined.
     return;
   }
-  const ArenaVector<HBasicBlock*>& blocks = graph_->GetReversePostOrder();
+  // Get copy of all blocks we are going to visit.
+  const ArenaVector<HBasicBlock*> blocks = graph_->GetReversePostOrder();
   DCHECK(!blocks.empty());
-  HBasicBlock* next_block = blocks[0];
-  for (size_t i = 0; i < blocks.size(); ++i) {
-    // Because we are changing the graph when inlining, we need to remember the next block.
-    // This avoids doing the inlining work again on the inlined blocks.
-    if (blocks[i] != next_block) {
-      continue;
-    }
-    HBasicBlock* block = next_block;
-    next_block = (i == blocks.size() - 1) ? nullptr : blocks[i + 1];
+  for (auto block : blocks) {
     for (HInstruction* instruction = block->GetFirstInstruction(); instruction != nullptr;) {
       HInstruction* next = instruction->GetNext();
       HInvoke* call = instruction->AsInvoke();
@@ -87,19 +80,21 @@ void HInliner::Run() {
       if (call != nullptr && call->GetIntrinsic() == Intrinsics::kNone) {
         // We use the original invoke type to ensure the resolution of the called method
         // works properly.
-        if (!TryInline(call)) {
-          if (kIsDebugBuild && IsCompilingWithCoreImage()) {
-            std::string callee_name =
-                PrettyMethod(call->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
-            bool should_inline = callee_name.find("$inline$") != std::string::npos;
-            CHECK(!should_inline) << "Could not inline " << callee_name;
-          }
-        } else {
-          if (kIsDebugBuild && IsCompilingWithCoreImage()) {
-            std::string callee_name =
-                PrettyMethod(call->GetDexMethodIndex(), *outer_compilation_unit_.GetDexFile());
-            bool must_not_inline = callee_name.find("$noinline$") != std::string::npos;
-            CHECK(!must_not_inline) << "Should not have inlined " << callee_name;
+
+        // TODO Find a better way to prevent inlining (used in ART tests) rather than
+        // adding 'if (doThrow) throw new Error();' to the method's body or naming it with
+        // '$noinline$' substring. Checking for '$noinline$' avoid calling PrettyMethod()
+        // that allocates a new std::string. Instead, just get a char* to unqualified name.
+        const DexFile* dex_file = outer_compilation_unit_.GetDexFile();
+        const char* callee_name = call->GetDexMethodIndex() >= dex_file->NumMethodIds() ?
+            "<<a-method-with-invalid-idx>>" :
+            dex_file->GetMethodName(dex_file->GetMethodId(call->GetDexMethodIndex()));
+        bool must_not_inline = strstr(callee_name, "$noinline$") != nullptr;
+        if (!must_not_inline) {
+          if (!TryInline(call) && kIsDebugBuild && IsCompilingWithCoreImage()) {
+            bool should_inline = strstr(callee_name, "$inline$") != nullptr;
+            CHECK(!should_inline) << "Could not inline "
+                                  << PrettyMethod(call->GetDexMethodIndex(), *dex_file);
           }
         }
       }
@@ -1211,9 +1206,6 @@ bool HInliner::TryBuildAndInlineHelper(HInvoke* invoke_instruction,
       RunOptimizations(callee_graph, code_item, dex_compilation_unit);
   number_of_instructions_budget += number_of_inlined_instructions;
 
-  // TODO: We should abort only if all predecessors throw. However,
-  // HGraph::InlineInto currently does not handle an exit block with
-  // a throw predecessor.
   HBasicBlock* exit_block = callee_graph->GetExitBlock();
   if (exit_block == nullptr) {
     VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
@@ -1221,17 +1213,27 @@ bool HInliner::TryBuildAndInlineHelper(HInvoke* invoke_instruction,
     return false;
   }
 
-  bool has_throw_predecessor = false;
-  for (HBasicBlock* predecessor : exit_block->GetPredecessors()) {
-    if (predecessor->GetLastInstruction()->IsThrow()) {
-      has_throw_predecessor = true;
-      break;
+  if (invoke_instruction->GetBlock()->IsTryBlock()) {
+    for (HBasicBlock* predecessor : exit_block->GetPredecessors()) {
+      if (predecessor->GetLastInstruction()->IsThrow()) {
+        VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                       << " could not be inlined because one branch always throws";
+        return false;
+      }
     }
-  }
-  if (has_throw_predecessor) {
-    VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
-                   << " could not be inlined because one branch always throws";
-    return false;
+  } else {
+    bool has_return_predecessor = false;
+    for (HBasicBlock* predecessor : exit_block->GetPredecessors()) {
+      if (!predecessor->GetLastInstruction()->IsThrow()) {
+        has_return_predecessor = true;
+        break;
+      }
+    }
+    if (!has_return_predecessor) {
+      VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
+                     << " could not be inlined because no statement returns";
+      return false;
+    }
   }
 
   HReversePostOrderIterator it(*callee_graph);

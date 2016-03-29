@@ -2008,7 +2008,7 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
   }
 
   HInstruction* return_value = nullptr;
-  if (GetBlocks().size() == 3) {
+  if (GetBlocks().size() == 3 && !GetBlocks()[1]->GetLastInstruction()->IsThrow()) {
     // Simple case of an entry block, a body block, and an exit block.
     // Put the body block's instruction into `invoke`'s block.
     HBasicBlock* body = GetBlocks()[1];
@@ -2092,31 +2092,66 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
 
     // Update all predecessors of the exit block (now the `to` block)
     // to not `HReturn` but `HGoto` instead.
-    bool returns_void = to->GetPredecessors()[0]->GetLastInstruction()->IsReturnVoid();
-    if (to->GetPredecessors().size() == 1) {
-      HBasicBlock* predecessor = to->GetPredecessors()[0];
+    // Connect HThrow to the outer graph's HExit
+    HPhi* return_value_phi = nullptr;
+    bool rebuild_dominance = false;
+    bool rebuild_loop_info = false;
+    for (size_t pred = 0; pred < to->GetPredecessors().size(); ++pred) {
+      HBasicBlock* predecessor = to->GetPredecessors()[pred];
       HInstruction* last = predecessor->GetLastInstruction();
-      if (!returns_void) {
+      if (last->IsThrow()) {
+        // TODO If the outer graph has an exception handler
+        // then we have to create a TryBoundary and link to
+        // the catch block. This case is disabled by the inliner.
+        DCHECK(!at->IsTryBlock());
+        predecessor->ReplaceSuccessor(to, outer_graph->GetExitBlock());
+        --pred;
+        rebuild_dominance = true;
+        if (predecessor->GetLoopInformation() != nullptr) {
+          rebuild_loop_info = true;
+        }
+        continue;
+      }
+
+      if (last->IsReturnVoid()) {
+        DCHECK(return_value == nullptr);
+      } else if (return_value_phi != nullptr) {
+        DCHECK(last->IsReturn());
+        // More than two non-void returns: add to the new phi.
+        return_value_phi->AddInput(last->InputAt(0));
+      } else if (return_value == nullptr) {
+        DCHECK(last->IsReturn());
         return_value = last->InputAt(0);
+      } else {
+        DCHECK(last->IsReturn());
+        // More than one non-void return: create a phi node.
+        return_value_phi = new (allocator) HPhi(
+            allocator, kNoRegNumber, 0, HPhi::ToPhiType(invoke->GetType()), to->GetDexPc());
+        to->AddPhi(return_value_phi);
+        return_value_phi->AddInput(return_value);
+        return_value_phi->AddInput(last->InputAt(0));
+        return_value = return_value_phi;
       }
       predecessor->AddInstruction(new (allocator) HGoto(last->GetDexPc()));
       predecessor->RemoveInstruction(last);
-    } else {
-      if (!returns_void) {
-        // There will be multiple returns.
-        return_value = new (allocator) HPhi(
-            allocator, kNoRegNumber, 0, HPhi::ToPhiType(invoke->GetType()), to->GetDexPc());
-        to->AddPhi(return_value->AsPhi());
-      }
-      for (HBasicBlock* predecessor : to->GetPredecessors()) {
-        HInstruction* last = predecessor->GetLastInstruction();
-        if (!returns_void) {
-          DCHECK(last->IsReturn());
-          return_value->AsPhi()->AddInput(last->InputAt(0));
-        }
-        predecessor->AddInstruction(new (allocator) HGoto(last->GetDexPc()));
-        predecessor->RemoveInstruction(last);
-      }
+    }
+
+    if (rebuild_loop_info) {
+      // TODO Instead of rebuilding the loop information it is faster to just
+      // remove the loop info from the throwing blocks and their postdominated blocks.
+      outer_graph->ClearLoopInformation();
+      outer_graph->ClearDominanceInformation();
+      outer_graph->BuildDominatorTree();
+    } else if (rebuild_dominance) {
+      // TODO There could be a way to update the dominators
+      // without rebuilding them from scratch.
+      outer_graph->ClearDominanceInformation();
+      outer_graph->ComputeDominanceInformation();
+    }
+
+    if (rebuild_loop_info || rebuild_dominance) {
+      // The split tail must be reachable.
+      DCHECK_NE(to->GetPredecessors().size(), 0u) << "Must stay reachable.";
     }
   }
 
