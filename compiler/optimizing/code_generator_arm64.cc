@@ -3607,6 +3607,13 @@ HInvokeStaticOrDirect::DispatchInfo CodeGeneratorARM64::GetSupportedInvokeStatic
   return desired_dispatch_info;
 }
 
+HLoadClass::LoadKind CodeGeneratorARM64::GetSupportedLoadClassKind(
+    HLoadClass::LoadKind desired_class_load_kind) {
+  DCHECK_NE(desired_class_load_kind, HLoadClass::LoadKind::kReferrersClass);
+  // TODO: Implement other kinds.
+  return HLoadClass::LoadKind::kDexCacheViaMethod;
+}
+
 void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invoke, Location temp) {
   // For better instruction scheduling we load the direct code pointer before the method pointer.
   bool direct_code_loaded = false;

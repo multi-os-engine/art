@@ -28,6 +28,12 @@ public class Main {
     }
   }
 
+  public static void assertClassEquals(Class<?> expected, Class<?> result) {
+    if (expected != result) {
+      throw new Error("Expected: " + expected + ", found: " + result);
+    }
+  }
+
   public static boolean doThrow = false;
 
   private static int $noinline$foo(int x) {
@@ -251,6 +257,36 @@ public class Main {
     return "non-boot-image-string";
   }
 
+  /// CHECK-START: java.lang.Class Main.$noinline$getStringClass() sharpening (before)
+  /// CHECK:                LoadClass load_kind:DexCacheViaMethod class_name:java.lang.String
+
+  /// CHECK-START-X86: java.lang.Class Main.$noinline$getStringClass() sharpening (after)
+  // Note: load kind depends on PIC/non-PIC
+  // TODO: Remove DexCacheViaMethod when read barrier config supports BootImageAddress.
+  /// CHECK:                LoadClass load_kind:{{BootImageAddress|DexCachePcRelative|DexCacheViaMethod}} class_name:java.lang.String
+
+  /// CHECK-START-X86_64: java.lang.Class Main.$noinline$getStringClass() sharpening (after)
+  // Note: load kind depends on PIC/non-PIC
+  // TODO: Remove DexCacheViaMethod when read barrier config supports BootImageAddress.
+  /// CHECK:                LoadClass load_kind:{{BootImageAddress|DexCachePcRelative|DexCacheViaMethod}} class_name:java.lang.String
+
+  /// CHECK-START-ARM: java.lang.Class Main.$noinline$getStringClass() sharpening (after)
+  // Note: load kind depends on PIC/non-PIC
+  // TODO: Remove DexCacheViaMethod when read barrier config supports BootImageAddress.
+  /// CHECK:                LoadClass load_kind:{{BootImageAddress|DexCachePcRelative|DexCacheViaMethod}} class_name:java.lang.String
+
+  /// CHECK-START-ARM64: java.lang.Class Main.$noinline$getStringClass() sharpening (after)
+  // Note: load kind depends on PIC/non-PIC
+  // TODO: Remove DexCacheViaMethod when read barrier config supports BootImageAddress.
+  /// CHECK:                LoadClass load_kind:{{BootImageAddress|DexCachePcRelative|DexCacheViaMethod}} class_name:java.lang.String
+
+  public static Class<?> $noinline$getStringClass() {
+    // Prevent inlining to avoid the string comparison being optimized away.
+    if (doThrow) { throw new Error(); }
+    // Empty string is known to be in the boot image.
+    return String.class;
+  }
+
   public static void main(String[] args) {
     assertIntEquals(1, testSimple(1));
     assertIntEquals(1, testDiamond(false, 1));
@@ -262,5 +298,7 @@ public class Main {
     assertIntEquals(-6, testLoopWithDiamond(new int[]{ 3, 4 }, true, 1));
     assertStringEquals("", $noinline$getBootImageString());
     assertStringEquals("non-boot-image-string", $noinline$getNonBootImageString());
+    assertClassEquals(String.class, $noinline$getStringClass());
+    // TODO: Add test for a non-image const-class.
   }
 }

@@ -5203,6 +5203,13 @@ HLoadString::LoadKind CodeGeneratorARM::GetSupportedLoadStringKind(
   return desired_string_load_kind;
 }
 
+HLoadClass::LoadKind CodeGeneratorARM::GetSupportedLoadClassKind(
+    HLoadClass::LoadKind desired_class_load_kind) {
+  DCHECK_NE(desired_class_load_kind, HLoadClass::LoadKind::kReferrersClass);
+  // TODO: Implement other kinds.
+  return HLoadClass::LoadKind::kDexCacheViaMethod;
+}
+
 void LocationsBuilderARM::VisitLoadString(HLoadString* load) {
   LocationSummary::CallKind call_kind = (load->NeedsEnvironment() || kEmitCompilerReadBarrier)
       ? LocationSummary::kCallOnSlowPath
