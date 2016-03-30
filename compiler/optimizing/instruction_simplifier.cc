@@ -790,10 +790,13 @@ static bool IsTypeConversionImplicit(Primitive::Type input_type, Primitive::Type
   // excluding conversions to long and the byte->char conversion where we need to
   // clear the high 16 bits of the 32-bit sign-extended representation of byte.
   return result_type == input_type ||
-      (result_type == Primitive::kPrimInt && input_type == Primitive::kPrimByte) ||
-      (result_type == Primitive::kPrimInt && input_type == Primitive::kPrimShort) ||
-      (result_type == Primitive::kPrimInt && input_type == Primitive::kPrimChar) ||
-      (result_type == Primitive::kPrimShort && input_type == Primitive::kPrimByte);
+      (result_type == Primitive::kPrimInt && (input_type == Primitive::kPrimBoolean ||
+                                              input_type == Primitive::kPrimByte ||
+                                              input_type == Primitive::kPrimShort ||
+                                              input_type == Primitive::kPrimChar)) ||
+      (result_type == Primitive::kPrimShort && (input_type == Primitive::kPrimBoolean ||
+                                                input_type == Primitive::kPrimByte)) ||
+      (result_type == Primitive::kPrimByte && input_type == Primitive::kPrimBoolean);
 }
 
 static bool IsTypeConversionLossless(Primitive::Type input_type, Primitive::Type result_type) {
