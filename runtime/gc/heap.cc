@@ -528,10 +528,14 @@ Heap::Heap(size_t initial_size,
     // Don't add the image mod union table if we are running without an image, this can crash if
     // we use the CardCache implementation.
     for (space::ImageSpace* image_space : GetBootImageSpaces()) {
-      accounting::ModUnionTable* mod_union_table = new accounting::ModUnionTableToZygoteAllocspace(
-          "Image mod-union table", this, image_space);
-      CHECK(mod_union_table != nullptr) << "Failed to create image mod-union table";
-      AddModUnionTable(mod_union_table);
+      accounting::ModUnionTable* table = FindModUnionTableFromSpace(image_space);
+      if (table == nullptr) {
+        accounting::ModUnionTable* mod_union_table =
+            new accounting::ModUnionTableToZygoteAllocspace(
+            "Image mod-union table", this, image_space);
+        CHECK(mod_union_table != nullptr) << "Failed to create image mod-union table";
+        AddModUnionTable(mod_union_table);
+      }
     }
   }
   if (collector::SemiSpace::kUseRememberedSet && non_moving_space_ != main_space_) {
@@ -1082,6 +1086,18 @@ void Heap::AddSpace(space::Space* space) {
   }
   if (space->IsAllocSpace()) {
     alloc_spaces_.push_back(space->AsAllocSpace());
+  }
+  if (space->IsImageSpace() && HasBootImageSpace()) {
+    // Check if the image space has already created mod union table.
+    // If not, Create one.
+    accounting::ModUnionTable* table = FindModUnionTableFromSpace(space);
+    if (table == nullptr) {
+      accounting::ModUnionTable* mod_union_table =
+          new accounting::ModUnionTableToZygoteAllocspace(
+          "Image mod-union table", this, space->AsContinuousSpace());
+      CHECK(mod_union_table != nullptr) << "Failed to create image mod-union table";
+      AddModUnionTable(mod_union_table);
+    }
   }
 }
 
