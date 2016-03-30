@@ -24,6 +24,7 @@
 #include "parallel_move_resolver.h"
 #include "utils/arm/assembler_thumb2.h"
 #include "utils/string_reference.h"
+#include "utils/type_reference.h"
 
 namespace art {
 namespace arm {
@@ -407,6 +408,11 @@ class CodeGeneratorARM : public CodeGenerator {
   HLoadString::LoadKind GetSupportedLoadStringKind(
       HLoadString::LoadKind desired_string_load_kind) OVERRIDE;
 
+  // Check if the desired_class_load_kind is supported. If it is, return it,
+  // otherwise return a fall-back kind that should be used instead.
+  HLoadClass::LoadKind GetSupportedLoadClassKind(
+      HLoadClass::LoadKind desired_class_load_kind) OVERRIDE;
+
   // Check if the desired_dispatch_info is supported. If it is, return it,
   // otherwise return a fall-back info that should be used instead.
   HInvokeStaticOrDirect::DispatchInfo GetSupportedInvokeStaticOrDirectDispatch(
@@ -439,9 +445,11 @@ class CodeGeneratorARM : public CodeGenerator {
   };
 
   PcRelativePatchInfo* NewPcRelativeStringPatch(const DexFile& dex_file, uint32_t string_index);
+  PcRelativePatchInfo* NewPcRelativeTypePatch(const DexFile& dex_file, uint32_t type_index);
   PcRelativePatchInfo* NewPcRelativeDexCacheArrayPatch(const DexFile& dex_file,
                                                        uint32_t element_offset);
   Literal* DeduplicateBootImageStringLiteral(const DexFile& dex_file, uint32_t string_index);
+  Literal* DeduplicateBootImageTypeLiteral(const DexFile& dex_file, uint32_t type_index);
   Literal* DeduplicateBootImageAddressLiteral(uint32_t address);
   Literal* DeduplicateDexCacheAddressLiteral(uint32_t address);
 
@@ -536,6 +544,9 @@ class CodeGeneratorARM : public CodeGenerator {
   using BootStringToLiteralMap = ArenaSafeMap<StringReference,
                                               Literal*,
                                               StringReferenceValueComparator>;
+  using BootTypeToLiteralMap = ArenaSafeMap<TypeReference,
+                                            Literal*,
+                                            TypeReferenceValueComparator>;
 
   Literal* DeduplicateUint32Literal(uint32_t value, Uint32ToLiteralMap* map);
   Literal* DeduplicateMethodLiteral(MethodReference target_method, MethodToLiteralMap* map);
@@ -568,6 +579,10 @@ class CodeGeneratorARM : public CodeGenerator {
   BootStringToLiteralMap boot_image_string_patches_;
   // PC-relative String patch info.
   ArenaDeque<PcRelativePatchInfo> pc_relative_string_patches_;
+  // Deduplication map for boot type literals for kBootImageLinkTimeAddress.
+  BootTypeToLiteralMap boot_image_type_patches_;
+  // PC-relative type patch info.
+  ArenaDeque<PcRelativePatchInfo> pc_relative_type_patches_;
   // Deduplication map for patchable boot image addresses.
   Uint32ToLiteralMap boot_image_address_patches_;
 
