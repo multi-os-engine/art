@@ -1179,6 +1179,9 @@ void IntrinsicLocationsBuilderARM64::VisitStringCompareTo(HInvoke* invoke) {
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
   locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
+  locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(2)));
+  locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(3)));
+  locations->AddTemp(LocationFrom(calling_convention.GetRegisterAt(4)));
   locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimInt));
 }
 
@@ -1186,18 +1189,88 @@ void IntrinsicCodeGeneratorARM64::VisitStringCompareTo(HInvoke* invoke) {
   vixl::MacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
+  Register str = WRegisterFrom(locations->InAt(0));
+  Register arg = WRegisterFrom(locations->InAt(1));
+  Register out = XRegisterFrom(locations->Out());
+
+  Register temp0 = WRegisterFrom(locations->GetTemp(0));
+  Register temp1 = WRegisterFrom(locations->GetTemp(1));
+  Register temp2 = WRegisterFrom(locations->GetTemp(2));
+  UseScratchRegisterScope scratch_scope(masm);
+  Register temp3 = scratch_scope.AcquireW();
+  Register temp4 = scratch_scope.AcquireW();
+
+  vixl::Label loop;
+  vixl::Label end;
+  vixl::Label compare;
+  vixl::Label return_zero;
+  vixl::Label return_diff;
+
+  // Get offsets of count, value, and class fields within a string object.
+  const int32_t count_offset = mirror::String::CountOffset().Int32Value();
+  const int32_t value_offset = mirror::String::ValueOffset().Int32Value();
+
   // Note that the null check must have been done earlier.
   DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
 
-  Register argument = WRegisterFrom(locations->InAt(1));
-  __ Cmp(argument, 0);
+  const size_t char_size = Primitive::ComponentSize(Primitive::kPrimChar);
+  DCHECK_EQ(char_size, 2u);
+
+  // Take slow path and throw if input is null.
+  __ Cmp(arg, 0);
   SlowPathCodeARM64* slow_path = new (GetAllocator()) IntrinsicSlowPathARM64(invoke);
   codegen_->AddSlowPath(slow_path);
   __ B(eq, slow_path->GetEntryLabel());
 
-  __ Ldr(
-      lr, MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pStringCompareTo).Int32Value()));
+  // Reference equality check, return 0 if same reference.
+  __ Cmp(str, arg);
+  __ B(&return_zero, eq);
+  // Load lengths of this and argument strings.
+  __ Ldr(temp0, MemOperand(str.X(), count_offset));
+  __ Ldr(temp1, MemOperand(arg.X(), count_offset));
+  // Return zero if both strings are empty.
+  __ Add(temp2, temp0, temp1, SetFlags);
+  __ B(&return_zero, eq);
+  // temp2 = min(len(str), len(arg)).
+  __ Cmp(temp0, temp1);
+  __ Csel(temp2, temp1, temp0, ge);
+  // Use runtime for longer minimum compare lengths.
+  __ Cmp(temp2, Operand(16));
+  __ B(&compare, lt);
+  __ Ldr(lr,
+         MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pStringCompareTo).Int32Value()));
   __ Blr(lr);
+  __ B(&end);
+
+  temp1 = temp1.X();
+  temp2 = temp2.X();
+
+  __ Bind(&compare);
+  // Calculate the length difference now so we can re-use a length register.
+  __ Sub(temp3, temp0, temp1, SetFlags);
+  // Store offset of string value in preparation for comparison loop.
+  __ Mov(temp1, value_offset);
+
+  __ Bind(&loop);
+  __ Ldrh(temp4, MemOperand(str.X(), temp1));
+  __ Ldrh(temp0, MemOperand(arg.X(), temp1));
+  __ Sub(temp4, temp4, temp0, SetFlags);
+  __ B(&return_diff, ne);
+  __ Add(temp1, temp1, Operand(char_size));
+  __ Sub(temp2, temp2, Operand(1), SetFlags);
+  __ B(&loop, gt);
+  __ Mov(out, temp3);
+  __ B(&end);
+
+  __ Bind(&return_zero);
+  __ Mov(out, 0);
+  __ B(&end);
+
+  __ Bind(&return_diff);
+  __ Mov(out, temp4);
+
+  __ Bind(&end);
+
   __ Bind(slow_path->GetExitLabel());
 }
 

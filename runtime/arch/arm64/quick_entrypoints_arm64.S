@@ -2178,10 +2178,9 @@ ENTRY art_quick_string_compareto
     // Min(count1, count2) into w3.
     csel x3, x3, x4, ge
 
-    // TODO: Tune this value.
     // Check for long string, do memcmp16 for them.
-    cmp w3, #28  // Constant from arm32.
-    bgt .Ldo_memcmp16
+    cmp w3, #16
+    bge .Ldo_memcmp16
 
     /*
      * Now:
@@ -2235,8 +2234,8 @@ ENTRY art_quick_string_compareto
     ret
 
 .Ldo_memcmp16:
-    mov x14, x0                  // Save x0 and LR. __memcmp16 does not use these temps.
-    mov x15, xLR                 //                 TODO: Codify and check that?
+    mov x14, x0                  // Save x0 (string length difference).
+    mov x15, xLR                 // Save LR (x30) as we will bl to __memcmp16.
 
     mov x0, x2
     uxtw x2, w3
@@ -2245,6 +2244,6 @@ ENTRY art_quick_string_compareto
     mov xLR, x15                 // Restore LR.
 
     cmp x0, #0                   // Check the memcmp difference.
-    csel x0, x0, x14, ne         // x0 := x0 != 0 ? x14(prev x0=length diff) : x1.
+    csel x0, x0, x14, ne         // x0 := x0 != 0 ? x14(length diff) : x0(now memcmp result).
     ret
 END art_quick_string_compareto
