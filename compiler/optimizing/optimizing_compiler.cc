@@ -713,7 +713,7 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
                              visualizer_output_.get(),
                              compiler_driver);
 
-  VLOG(compiler) << "Building " << pass_observer.GetMethodName();
+  // VLOG(compiler) << "Building " << pass_observer.GetMethodName();
 
   {
     ScopedObjectAccess soa(Thread::Current());
