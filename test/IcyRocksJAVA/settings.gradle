@@ -1,0 +1,2 @@
+include 'desktop', 'android', 'html', 'core', 'core-jbox2d'
+
