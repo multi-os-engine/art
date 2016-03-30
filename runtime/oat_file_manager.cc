@@ -44,7 +44,7 @@ static constexpr bool kDuplicateClassesCheck = kIsDebugBuild;
 // If true, then we attempt to load the application image if it exists.
 static constexpr bool kEnableAppImage = true;
 
-CompilerFilter::Filter OatFileManager::filter_ = CompilerFilter::Filter::kSpeed;
+CompilerFilter::Filter OatFileManager::filter_ = CompilerFilter::Filter::kVerifyAtRuntime;
 
 const OatFile* OatFileManager::RegisterOatFile(std::unique_ptr<const OatFile> oat_file) {
   WriterMutexLock mu(Thread::Current(), *Locks::oat_file_manager_lock_);
@@ -327,9 +327,16 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
 
   const OatFile* source_oat_file = nullptr;
 
+  CompilerFilter::Filter filter = filter_;
+
+  // If an oat_location is provided, we must try to compile for speed.
+  if (oat_location != nullptr) {
+    filter = CompilerFilter::kSpeed;
+  }
+
   // Update the oat file on disk if we can. This may fail, but that's okay.
   // Best effort is all that matters here.
-  switch (oat_file_assistant.MakeUpToDate(filter_, /*out*/ &error_msg)) {
+  switch (oat_file_assistant.MakeUpToDate(filter, /*out*/ &error_msg)) {
     case OatFileAssistant::kUpdateFailed:
       LOG(WARNING) << error_msg;
       break;
