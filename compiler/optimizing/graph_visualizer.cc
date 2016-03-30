@@ -180,39 +180,39 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
 
   void StartTag(const char* name) {
     AddIndent();
-    output_ << "begin_" << name << std::endl;
+    output_ << "begin_" << name << kNewLine;
     indent_++;
   }
 
   void EndTag(const char* name) {
     indent_--;
     AddIndent();
-    output_ << "end_" << name << std::endl;
+    output_ << "end_" << name << kNewLine;
   }
 
   void PrintProperty(const char* name, const char* property) {
     AddIndent();
-    output_ << name << " \"" << property << "\"" << std::endl;
+    output_ << name << " \"" << property << "\"" << kNewLine;
   }
 
   void PrintProperty(const char* name, const char* property, int id) {
     AddIndent();
-    output_ << name << " \"" << property << id << "\"" << std::endl;
+    output_ << name << " \"" << property << id << "\"" << kNewLine;
   }
 
   void PrintEmptyProperty(const char* name) {
     AddIndent();
-    output_ << name << std::endl;
+    output_ << name << kNewLine;
   }
 
   void PrintTime(const char* name) {
     AddIndent();
-    output_ << name << " " << time(nullptr) << std::endl;
+    output_ << name << " " << time(nullptr) << kNewLine;
   }
 
   void PrintInt(const char* name, int value) {
     AddIndent();
-    output_ << name << " " << value << std::endl;
+    output_ << name << " " << value << kNewLine;
   }
 
   void AddIndent() {
@@ -249,7 +249,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     if (block->IsEntryBlock() && (disasm_info_ != nullptr)) {
       output_ << " \"" << kDisassemblyBlockFrameEntry << "\" ";
     }
-    output_<< std::endl;
+    output_<< kNewLine;
   }
 
   void PrintSuccessors(HBasicBlock* block) {
@@ -258,7 +258,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     for (HBasicBlock* successor : block->GetNormalSuccessors()) {
       output_ << " \"B" << successor->GetBlockId() << "\" ";
     }
-    output_<< std::endl;
+    output_<< kNewLine;
   }
 
   void PrintExceptionHandlers(HBasicBlock* block) {
@@ -272,7 +272,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         !disasm_info_->GetSlowPathIntervals().empty()) {
       output_ << " \"" << kDisassemblyBlockSlowPaths << "\" ";
     }
-    output_<< std::endl;
+    output_<< kNewLine;
   }
 
   void DumpLocation(std::ostream& stream, const Location& location) {
@@ -588,7 +588,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       auto it = disasm_info_->GetInstructionIntervals().find(instruction);
       if (it != disasm_info_->GetInstructionIntervals().end()
           && it->second.start != it->second.end) {
-        output_ << std::endl;
+        output_ << kNewLine;
         disassembler_->Disassemble(output_, it->second.start, it->second.end);
       }
     }
@@ -608,7 +608,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       output_ << bci << " " << num_uses << " "
               << GetTypeId(instruction->GetType()) << instruction->GetId() << " ";
       PrintInstruction(instruction);
-      output_ << " " << kEndInstructionMarker << std::endl;
+      output_ << " " << kEndInstructionMarker << kNewLine;
     }
   }
 
@@ -652,10 +652,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     output_ << "    0 0 disasm " << kDisassemblyBlockFrameEntry << " ";
     GeneratedCodeInterval frame_entry = disasm_info_->GetFrameEntryInterval();
     if (frame_entry.start != frame_entry.end) {
-      output_ << std::endl;
+      output_ << kNewLine;
       disassembler_->Disassemble(output_, frame_entry.start, frame_entry.end);
     }
-    output_ << kEndInstructionMarker << std::endl;
+    output_ << kEndInstructionMarker << kNewLine;
     DumpEndOfDisassemblyBlock();
   }
 
@@ -671,9 +671,9 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
         GetGraph()->HasExitBlock() ? GetGraph()->GetExitBlock()->GetBlockId() : -1,
         -1);
     for (SlowPathCodeInfo info : disasm_info_->GetSlowPathIntervals()) {
-      output_ << "    0 0 disasm " << info.slow_path->GetDescription() << std::endl;
+      output_ << "    0 0 disasm " << info.slow_path->GetDescription() << kNewLine;
       disassembler_->Disassemble(output_, info.code_interval.start, info.code_interval.end);
-      output_ << kEndInstructionMarker << std::endl;
+      output_ << kEndInstructionMarker << kNewLine;
     }
     DumpEndOfDisassemblyBlock();
   }
@@ -694,6 +694,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       DumpDisassemblyBlockForSlowPaths();
     }
     EndTag("cfg");
+
+    // Need to explicitly flush the output stream because we do not end lines
+    // with std::endl.
+    output_.flush();
   }
 
   void VisitBasicBlock(HBasicBlock* block) OVERRIDE {
@@ -733,7 +737,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       for (HInputIterator inputs(instruction); !inputs.Done(); inputs.Advance()) {
         output_ << inputs.Current()->GetId() << " ";
       }
-      output_ << "]" << std::endl;
+      output_ << "]" << kNewLine;
     }
     EndTag("locals");
     EndTag("states");
@@ -748,6 +752,10 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
   static constexpr const char* const kEndInstructionMarker = "<|@";
   static constexpr const char* const kDisassemblyBlockFrameEntry = "FrameEntry";
   static constexpr const char* const kDisassemblyBlockSlowPaths = "SlowPaths";
+
+  // Use "\n" instead of std::endl to avoid implicit flushing which generates
+  // too many syscalls during tests which debug GC (b/27826765).
+  static constexpr const char* const kNewLine = "\n";
 
  private:
   std::ostream& output_;
