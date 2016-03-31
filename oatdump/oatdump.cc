@@ -248,6 +248,11 @@ class OatSymbolizer FINAL {
       return;
     }
 
+    uint32_t code = oat_method.GetCodeOffset() - oat_header.GetExecutableOffset();
+    // Clear Thumb2 bit.
+    // It is benign on other architectures as code is always at least 2 byte aligned.
+    code &= ~0x1;
+
     debug::MethodDebugInfo info = debug::MethodDebugInfo();
     info.trampoline_name = nullptr;
     info.dex_file = &dex_file;
@@ -260,7 +265,7 @@ class OatSymbolizer FINAL {
     info.is_native_debuggable = oat_header.IsNativeDebuggable();
     info.is_optimized = method_header->IsOptimized();
     info.is_code_address_text_relative = true;
-    info.code_address = oat_method.GetCodeOffset() - oat_header.GetExecutableOffset();
+    info.code_address = code;
     info.code_size = method_header->GetCodeSize();
     info.frame_size_in_bytes = method_header->GetFrameSizeInBytes();
     info.code_info = info.is_optimized ? method_header->GetOptimizedCodeInfoPtr() : nullptr;
