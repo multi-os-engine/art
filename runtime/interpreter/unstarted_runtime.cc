@@ -393,19 +393,11 @@ void UnstartedRuntime::UnstartedSystemArraycopy(
       return;
     }
 
-    // For simplicity only do this if the component types are the same. Otherwise we have to copy
-    // even more code from the object-array functions.
-    if (src_type != trg_type) {
-      AbortTransactionOrFail(self, "Types not the same in arraycopy: %s vs %s",
-                             PrettyDescriptor(src_array->GetClass()->GetComponentType()).c_str(),
-                             PrettyDescriptor(dst_array->GetClass()->GetComponentType()).c_str());
-      return;
-    }
-
     mirror::ObjectArray<mirror::Object>* src = src_array->AsObjectArray<mirror::Object>();
     mirror::ObjectArray<mirror::Object>* dst = dst_array->AsObjectArray<mirror::Object>();
     if (src == dst) {
       // Can overlap, but not have type mismatches.
+      // We cannot use ObjectArray::MemMove here, as it doesn't support transactions.
       const bool copy_forward = (dst_pos < src_pos) || (dst_pos - src_pos >= length);
       if (copy_forward) {
         for (int32_t i = 0; i < length; ++i) {
@@ -417,9 +409,15 @@ void UnstartedRuntime::UnstartedSystemArraycopy(
         }
       }
     } else {
-      // Can't overlap. Would need type checks, but we abort above.
-      for (int32_t i = 0; i < length; ++i) {
-        dst->Set(dst_pos + i, src->Get(src_pos + i));
+      // We're being lazy here. Optimally this could be a memcpy (if component types are
+      // assignable), but the ObjectArray implementation doesn't support transactions. The
+      // checking version, however, does.
+      if (Runtime::Current()->IsActiveTransaction()) {
+        dst->AssignableCheckingMemcpy<true>(
+            dst_pos, src, src_pos, length, true /* throw_exception */);
+      } else {
+        dst->AssignableCheckingMemcpy<false>(
+                    dst_pos, src, src_pos, length, true /* throw_exception */);
       }
     }
   } else if (src_type->IsPrimitiveChar()) {
