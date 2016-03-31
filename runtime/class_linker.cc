@@ -3751,39 +3751,49 @@ bool ClassLinker::AttemptSupertypeVerification(Thread* self,
 }
 
 void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass, LogSeverity log_level) {
-  // TODO: assert that the monitor on the Class is held
-  ObjectLock<mirror::Class> lock(self, klass);
+  {
+    // TODO: assert that the monitor on the Class is held
+    ObjectLock<mirror::Class> lock(self, klass);
 
-  // Don't attempt to re-verify if already sufficiently verified.
-  if (klass->IsVerified()) {
-    EnsureSkipAccessChecksMethods(klass);
-    return;
-  }
-  if (klass->IsCompileTimeVerified() && Runtime::Current()->IsAotCompiler()) {
-    return;
-  }
+    // Is somebody verifying this now?
+    mirror::Class::Status old_status = klass->GetStatus();
+    if (old_status == mirror::Class::kStatusVerifying ||
+        old_status == mirror::Class::kStatusVerifyingAtRuntime) {
+      lock.WaitIgnoringInterrupts();
+      CHECK_GT(klass->GetStatus(), old_status);
+    }
 
-  // The class might already be erroneous, for example at compile time if we attempted to verify
-  // this class as a parent to another.
-  if (klass->IsErroneous()) {
-    ThrowEarlierClassFailure(klass.Get());
-    return;
-  }
+    // The class might already be erroneous, for example at compile time if we attempted to verify
+    // this class as a parent to another.
+    if (klass->IsErroneous()) {
+      ThrowEarlierClassFailure(klass.Get());
+      return;
+    }
 
-  if (klass->GetStatus() == mirror::Class::kStatusResolved) {
-    mirror::Class::SetStatus(klass, mirror::Class::kStatusVerifying, self);
-  } else {
-    CHECK_EQ(klass->GetStatus(), mirror::Class::kStatusRetryVerificationAtRuntime)
-        << PrettyClass(klass.Get());
-    CHECK(!Runtime::Current()->IsAotCompiler());
-    mirror::Class::SetStatus(klass, mirror::Class::kStatusVerifyingAtRuntime, self);
-  }
+    // Don't attempt to re-verify if already sufficiently verified.
+    if (klass->IsVerified()) {
+      EnsureSkipAccessChecksMethods(klass);
+      return;
+    }
+    if (klass->IsCompileTimeVerified() && Runtime::Current()->IsAotCompiler()) {
+      return;
+    }
 
-  // Skip verification if disabled.
-  if (!Runtime::Current()->IsVerificationEnabled()) {
-    mirror::Class::SetStatus(klass, mirror::Class::kStatusVerified, self);
-    EnsureSkipAccessChecksMethods(klass);
-    return;
+    if (klass->GetStatus() == mirror::Class::kStatusResolved) {
+      mirror::Class::SetStatus(klass, mirror::Class::kStatusVerifying, self);
+    } else {
+      CHECK_EQ(klass->GetStatus(), mirror::Class::kStatusRetryVerificationAtRuntime)
+            << PrettyClass(klass.Get());
+      CHECK(!Runtime::Current()->IsAotCompiler());
+      mirror::Class::SetStatus(klass, mirror::Class::kStatusVerifyingAtRuntime, self);
+    }
+
+    // Skip verification if disabled.
+    if (!Runtime::Current()->IsVerificationEnabled()) {
+      mirror::Class::SetStatus(klass, mirror::Class::kStatusVerified, self);
+      EnsureSkipAccessChecksMethods(klass);
+      return;
+    }
   }
 
   // Verify super class.
@@ -3856,6 +3866,10 @@ void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass, LogSeve
                                                              log_level,
                                                              &error_msg);
   }
+
+  // Verification is done, grab the lock again.
+  ObjectLock<mirror::Class> lock(self, klass);
+
   if (preverified || verifier_failure != verifier::MethodVerifier::kHardFailure) {
     if (!preverified && verifier_failure != verifier::MethodVerifier::kNoFailure) {
       VLOG(class_linker) << "Soft verification failure in class " << PrettyDescriptor(klass.Get())
