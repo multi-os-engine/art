@@ -368,7 +368,14 @@ endif
 # toolchains).
 ART_TARGET_CFLAGS += $(art_cflags) -DART_TARGET \
                      -DART_BASE_ADDRESS=$(LIBART_IMG_TARGET_BASE_ADDRESS) \
-                     -DART_TARGET_ANDROID \
+
+# Setting ART_TARGET_LINUX to true compiles art/ assuming that the target device
+# will be running linux rather than android.
+ifeq ($(ART_TARGET_LINUX),true)
+ART_TARGET_CFLAGS += -DART_TARGET_LINUX
+else
+ART_TARGET_CFLAGS += -DART_TARGET_ANDROID
+endif
 
 ART_TARGET_CFLAGS += $(art_target_cflags)
 ART_TARGET_ASFLAGS += $(art_asflags)
