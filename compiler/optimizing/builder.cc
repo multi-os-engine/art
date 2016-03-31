@@ -784,7 +784,6 @@ ArtMethod* HGraphBuilder::ResolveMethod(uint16_t method_idx, InvokeType invoke_t
         // could resolve the callee to the wrong method.
         return nullptr;
       }
-
       resolved_method = actual_method;
     }
   }

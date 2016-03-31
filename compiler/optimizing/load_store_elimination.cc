@@ -736,6 +736,7 @@ class LSEVisitor : public HGraphVisitor {
         // The only situation where the same heap location has different type is when
         // we do an array get from a null constant. In order to stay properly typed
         // we do not merge the array gets.
+#if 0
         if (kIsDebugBuild) {
           DCHECK(heap_value->IsArrayGet()) << heap_value->DebugName();
           DCHECK(instruction->IsArrayGet()) << instruction->DebugName();
@@ -748,6 +749,7 @@ class LSEVisitor : public HGraphVisitor {
           input = HuntForOriginalReference(array->InputAt(0));
           DCHECK(input->IsNullConstant()) << input->DebugName();
         }
+#endif
         return;
       }
       removed_loads_.push_back(instruction);
@@ -1022,6 +1024,8 @@ void LoadStoreElimination::Run() {
     // Debugger may set heap values or trigger deoptimization of callers.
     // Try/catch support not implemented yet.
     // Skip this optimization.
+    return;
+  } else if (graph_) {
     return;
   }
   HeapLocationCollector heap_location_collector(graph_);

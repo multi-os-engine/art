@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "aart.h"
 #include "induction_var_analysis.h"
 #include "induction_var_range.h"
 
@@ -97,6 +98,17 @@ HInductionVarAnalysis::HInductionVarAnalysis(HGraph* graph)
 }
 
 void HInductionVarAnalysis::Run() {
+#ifdef AART
+  StringPrettyPrinter printer(graph_);
+  printer.VisitInsertionOrder();
+  std::cout << "\n* induction variable analysis\n\n" << printer.str() << std::endl;
+  std::cout << "reverse post order\n{";
+  for (HReversePostOrderIterator it_graph(*graph_); !it_graph.Done(); it_graph.Advance()) {
+    HBasicBlock* block = it_graph.Current();
+    std::cout << "  B" << block->GetBlockId();
+  }
+  std::cout << "  }" << std::endl;
+#endif
   // Detects sequence variables (generalized induction variables) during an outer to inner
   // traversal of all loops using Gerlek's algorithm. The order is important to enable
   // range analysis on outer loop while visiting inner loops.
@@ -111,6 +123,16 @@ void HInductionVarAnalysis::Run() {
 }
 
 void HInductionVarAnalysis::VisitLoop(HLoopInformation* loop) {
+#ifdef AART
+  std::cout << "\nAnalyze loop B" << loop->GetHeader()->GetBlockId() << " {";
+  for (HBlocksInLoopIterator it(*loop); !it.Done(); it.Advance()) {
+    std::cout << " B" <<  it.Current()->GetBlockId();
+    if (it.Current()->GetLoopInformation() != loop) {
+      std::cout << "!";
+    }
+  }
+  std::cout << " }\n" << std::endl;
+#endif
   // Find strongly connected components (SSCs) in the SSA graph of this loop using Tarjan's
   // algorithm. Due to the descendant-first nature, classification happens "on-demand".
   global_depth_ = 0;
@@ -250,6 +272,12 @@ void HInductionVarAnalysis::ClassifyNonTrivial(HLoopInformation* loop) {
     ArenaVector<HInstruction*> other(graph_->GetArena()->Adapter(kArenaAllocInductionVarAnalysis));
     RotateEntryPhiFirst(loop, &scc_, &other);
   }
+#ifdef AART2
+  std::cout << "Classify nontrivial #" << size << std::endl;
+  for (size_t i = 0; i < size; i++) {
+    std::cout << "  " << scc_[i]->GetId() << std::endl;
+  }
+#endif
 
   // Analyze from entry-phi onwards.
   HInstruction* phi = scc_[0];
@@ -653,6 +681,21 @@ void HInductionVarAnalysis::VisitTripCount(HLoopInformation* loop,
                                            int64_t stride_value,
                                            Primitive::Type type,
                                            IfCondition cmp) {
+#ifdef AART
+  std::cout << "BIK TRIPC: " << InductionToString(lower_expr) << ", "
+                             << InductionToString(upper_expr) << ", "
+                             << InductionToString(stride_expr) << " = "
+                             << stride_value << " cmp = " << cmp << std::endl;
+  int64_t value;
+  if (IsAtLeast(lower_expr, &value))
+      std::cout << "LOWER IS AT LEAST " << value << std::endl;
+  if (IsAtMost(lower_expr, &value))
+      std::cout << "LOWER IS AT MOST " << value << std::endl;
+  if (IsAtLeast(upper_expr, &value))
+      std::cout << "UPPER IS AT LEAST " << value << std::endl;
+  if (IsAtMost(upper_expr, &value))
+      std::cout << "UPPER IS AT MOST " << value << std::endl;
+#endif
   // Any loop of the general form:
   //
   //    for (i = L; i <= U; i += S) // S > 0
@@ -809,6 +852,9 @@ void HInductionVarAnalysis::AssignInfo(HLoopInformation* loop,
                             graph_->GetArena()->Adapter(kArenaAllocInductionVarAnalysis)));
   }
   it->second.Put(instruction, info);
+#ifdef AART
+  std::cout << "BIK INDUC: " << instruction->GetId() << " : " << InductionToString(info) << std::endl;
+#endif
 }
 
 HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::LookupInfo(HLoopInformation* loop,
@@ -958,6 +1004,10 @@ std::string HInductionVarAnalysis::InductionToString(InductionInfo* info) {
       }
       inv += InductionToString(info->op_b);
       inv += ")";
+#ifdef AART2
+      inv += ":";
+      inv += Primitive::PrettyDescriptor(info->type);
+#endif
       return inv;
     } else {
       DCHECK(info->operation == kNop);
@@ -973,6 +1023,8 @@ std::string HInductionVarAnalysis::InductionToString(InductionInfo* info) {
         return "periodic(" + InductionToString(info->op_a) + ", " +
                              InductionToString(info->op_b) + "):" +
                              Primitive::PrettyDescriptor(info->type);
+      } else {
+        return "????";
       }
     }
   }

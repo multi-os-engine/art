@@ -230,6 +230,7 @@ class HInductionVarAnalysis : public HOptimization {
    */
   ArenaSafeMap<HLoopInformation*, ArenaSafeMap<HInstruction*, InductionInfo*>> induction_;
 
+  friend class HLoopOptimization;
   friend class InductionVarAnalysisTest;
   friend class InductionVarRange;
   friend class InductionVarRangeTest;

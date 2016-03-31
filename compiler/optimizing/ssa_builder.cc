@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include "aart.h"
 #include "ssa_builder.h"
 
 #include "nodes.h"
@@ -495,6 +495,11 @@ void SsaBuilder::RemoveRedundantUninitializedStrings() {
 
 GraphAnalysisResult SsaBuilder::BuildSsa() {
   DCHECK(!GetGraph()->IsInSsaForm());
+#ifdef AART2
+  StringPrettyPrinter printer0(GetGraph());
+  printer0.VisitInsertionOrder();
+  std::cout << "\n* before ssa\n\n" << printer0.str() << std::endl;
+#endif
 
   // 1) Visit in reverse post order. We need to have all predecessors of a block
   // visited (with the exception of loops) in order to create the right environment
@@ -502,6 +507,12 @@ GraphAnalysisResult SsaBuilder::BuildSsa() {
   for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
     VisitBasicBlock(it.Current());
   }
+
+#ifdef AART2
+  StringPrettyPrinter printer(GetGraph());
+  printer.VisitInsertionOrder();
+  std::cout << "\n* after ssa\n\n" << printer.str() << std::endl;
+#endif
 
   // 2) Set inputs of loop header phis.
   SetLoopHeaderPhiInputs();
@@ -528,6 +539,11 @@ GraphAnalysisResult SsaBuilder::BuildSsa() {
 
   // 6) Compute type of reference type instructions. The pass assumes that
   // NullConstant has been fixed up.
+#ifdef AART
+  StringPrettyPrinter printer3(GetGraph());
+  printer3.VisitInsertionOrder();
+  std::cout << "\n* before ref prop\n\n" << printer3.str() << std::endl;
+#endif
   ReferenceTypePropagation(GetGraph(), handles_, /* is_first_run */ true).Run();
 
   // 7) Step 1) duplicated ArrayGet instructions with ambiguous type (int/float

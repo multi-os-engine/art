@@ -52,25 +52,35 @@ class InductionVarRange {
     int32_t b_constant;
     // If true, represented by prior fields. Otherwise unknown value.
     bool is_known;
+#if 1
+    std::string ToString() {
+      if (!is_known)
+        return "{?}";
+      std::string r = "{";
+      if (a_constant != 0)
+        r += std::to_string(a_constant) + "x(" + std::to_string(instruction->GetId())
+            + ":" + instruction->DebugName() + ")+";
+      r += std::to_string(b_constant);
+      return r + "}";
+    }
+#endif
   };
 
   explicit InductionVarRange(HInductionVarAnalysis* induction);
 
   /**
-   * Given a context denoted by the first instruction, returns a possibly conservative
-   * lower and upper bound on the instruction's value in the output parameters min_val
-   * and max_val, respectively. The need_finite_test flag denotes if an additional finite-test
-   * is needed to protect the range evaluation inside its loop. Returns false on failure.
+   * Given a context denoted by the first instruction, returns a possibly conservative lower
+   * and upper bound on the instruction's value in the output parameters min_val and max_val,
+   * respectively. The need_finite_test flag denotes if an additional finite-test is needed to
+   * protect the range evaluation inside its loop. The optional hint parameter * defines an
+   * instruction at which chasing outer loop ranges should stop. Returns false on failure.
    */
   bool GetInductionRange(HInstruction* context,
                          HInstruction* instruction,
                          /*out*/ Value* min_val,
                          /*out*/ Value* max_val,
-                         /*out*/ bool* needs_finite_test);
-
-  /** Refines the values with induction of next outer loop. Returns true on change. */
-  bool RefineOuter(/*in-out*/ Value* min_val,
-                   /*in-out*/ Value* max_val) const;
+                         /*out*/ bool* needs_finite_test,
+                         HInstruction* hint = nullptr);
 
   /**
    * Returns true if range analysis is able to generate code for the lower and upper
@@ -137,6 +147,7 @@ class InductionVarRange {
   bool NeedsTripCount(HInductionVarAnalysis::InductionInfo* info) const;
   bool IsBodyTripCount(HInductionVarAnalysis::InductionInfo* trip) const;
   bool IsUnsafeTripCount(HInductionVarAnalysis::InductionInfo* trip) const;
+  bool IsSafeLoop(HLoopInformation* loop) const;
 
   Value GetLinear(HInductionVarAnalysis::InductionInfo* info,
                   HInductionVarAnalysis::InductionInfo* trip,
@@ -161,20 +172,22 @@ class InductionVarRange {
                bool in_body,
                bool is_min) const;
 
-  Value MulRangeAndConstant(Value v1, Value v2, Value c, bool is_min) const;
-  Value DivRangeAndConstant(Value v1, Value v2, Value c, bool is_min) const;
+  Value MulRangeAndConstant(int64_t value,
+                            HInductionVarAnalysis::InductionInfo* info,
+                            HInductionVarAnalysis::InductionInfo* trip,
+                            bool in_body,
+                            bool is_min) const;
+  Value DivRangeAndConstant(int64_t value,
+                            HInductionVarAnalysis::InductionInfo* info,
+                            HInductionVarAnalysis::InductionInfo* trip,
+                            bool in_body,
+                            bool is_min) const;
 
   Value AddValue(Value v1, Value v2) const;
   Value SubValue(Value v1, Value v2) const;
   Value MulValue(Value v1, Value v2) const;
   Value DivValue(Value v1, Value v2) const;
   Value MergeVal(Value v1, Value v2, bool is_min) const;
-
-  /**
-   * Returns refined value using induction of next outer loop or the input value if no
-   * further refinement is possible.
-   */
-  Value RefineOuter(Value val, bool is_min) const;
 
   /**
    * Generates code for lower/upper/taken-test in the HIR. Returns true on success.
@@ -199,8 +212,11 @@ class InductionVarRange {
                     bool in_body,
                     bool is_min) const;
 
+  /** Instruction at which chasing outer loop ranges should stop. */
+  HInstruction* termination_hint_;
+
   /** Results of prior induction variable analysis. */
-  HInductionVarAnalysis *induction_analysis_;
+  HInductionVarAnalysis* induction_analysis_;
 
   friend class HInductionVarAnalysis;
   friend class InductionVarRangeTest;

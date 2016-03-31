@@ -877,7 +877,8 @@ if [ "$always_clean" = "yes" -o "$good" = "yes" ] && [ "$never_clean" = "no" ]; 
     cd "$oldwd"
     rm -rf "$tmp_dir"
     if [ "$target_mode" = "yes" -a "$build_exit" = "0" ]; then
-        adb shell rm -rf $DEX_LOCATION
+        #adb shell rm -rf $DEX_LOCATION
+        echo "AART DOES NOT" $DEX_LOCATION
     fi
     if [ "$good" = "yes" ]; then
         exit 0

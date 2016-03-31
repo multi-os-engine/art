@@ -31,7 +31,7 @@ public class Main {
   //
   /// CHECK-START: void Main.bubble(int[]) BCE (after)
   /// CHECK-NOT: BoundsCheck
-  //  TODO: also CHECK-NOT: Deoptimize, see b/27151190
+  /// CHECK-NOT: Deoptimize
   private static void bubble(int[] a) {
     for (int i = a.length; --i >= 0;) {
       for (int j = 0; j < i; j++) {
@@ -217,6 +217,21 @@ public class Main {
       result += x[k++];
     }
     return result;
+  }
+
+  /// CHECK-START: int Main.justRightTriangular() BCE (before)
+  /// CHECK-DAG: BoundsCheck
+  //
+  /// CHECK-START: int Main.justRightTriangular() BCE (after)
+  /// CHECK-NOT: BoundsCheck
+  /// CHECK-NOT: Deoptimize
+  private static void justRightTriangular() {
+    int[] a = { 1 } ;
+    for (int i = Integer.MIN_VALUE + 5; i <= Integer.MIN_VALUE + 10; i++) {
+      for (int j = Integer.MIN_VALUE + 4; j < i - 5; j++) {
+        sResult += a[j - (Integer.MIN_VALUE + 4)];
+      }
+    }
   }
 
   /// CHECK-START: int Main.justOOBDown() BCE (before)
@@ -794,9 +809,6 @@ public class Main {
   //
 
   public static void main(String[] args) {
-    // Set to run expensive tests for correctness too.
-    boolean HEAVY = false;
-
     int[] x = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 
     int[] a200 = new int[200];
@@ -839,6 +851,11 @@ public class Main {
     expectEquals(55, justRightDown1());
     expectEquals(55, justRightDown2());
     expectEquals(55, justRightDown3());
+    sResult = 0;
+    justRightTriangular();
+    expectEquals(1, sResult);
+
+    // Large bounds OOB.
     sResult = 0;
     try {
       justOOBUp();
@@ -912,7 +929,9 @@ public class Main {
       sResult += 1000;
     }
     expectEquals(1, sResult);
-    if (HEAVY) {
+
+    // Expensive hidden OOB test, only when compiled.
+    if (compiledWithOptimizing()) {
       sResult = 0;
       try {
         hiddenOOB2(2147483647);  // OOB
@@ -921,6 +940,8 @@ public class Main {
       }
       expectEquals(1002, sResult);
     }
+
+    // More hidden OOB.
     sResult = 0;
     try {
       hiddenInfiniteOOB();
@@ -1079,4 +1100,6 @@ public class Main {
       throw new Error("Expected: " + expected + ", found: " + result);
     }
   }
+
+  public static native boolean compiledWithOptimizing();
 }

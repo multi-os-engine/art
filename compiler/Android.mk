@@ -58,6 +58,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/licm.cc \
 	optimizing/load_store_elimination.cc \
 	optimizing/locations.cc \
+	optimizing/loop_optimization.cc \
 	optimizing/nodes.cc \
 	optimizing/nodes_arm64.cc \
 	optimizing/optimization.cc \

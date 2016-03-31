@@ -574,19 +574,16 @@ TEST_F(InductionVarRangeTest, ConstantTripCountUp) {
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(0), v1);
   ExpectEqual(Value(1000), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
 
   // In context of loop-body: known.
   range_.GetInductionRange(increment_, condition_->InputAt(0), &v1, &v2, &needs_finite_test);
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(0), v1);
   ExpectEqual(Value(999), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
   range_.GetInductionRange(increment_, increment_, &v1, &v2, &needs_finite_test);
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(1), v1);
   ExpectEqual(Value(1000), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
 }
 
 TEST_F(InductionVarRangeTest, ConstantTripCountDown) {
@@ -601,19 +598,16 @@ TEST_F(InductionVarRangeTest, ConstantTripCountDown) {
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(0), v1);
   ExpectEqual(Value(1000), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
 
   // In context of loop-body: known.
   range_.GetInductionRange(increment_, condition_->InputAt(0), &v1, &v2, &needs_finite_test);
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(1), v1);
   ExpectEqual(Value(1000), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
   range_.GetInductionRange(increment_, increment_, &v1, &v2, &needs_finite_test);
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(0), v1);
   ExpectEqual(Value(999), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
 }
 
 TEST_F(InductionVarRangeTest, SymbolicTripCountUp) {
@@ -629,19 +623,16 @@ TEST_F(InductionVarRangeTest, SymbolicTripCountUp) {
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(0), v1);
   ExpectEqual(Value(), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
 
   // In context of loop-body: known.
   range_.GetInductionRange(increment_, condition_->InputAt(0), &v1, &v2, &needs_finite_test);
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(0), v1);
   ExpectEqual(Value(x_, 1, -1), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
   range_.GetInductionRange(increment_, increment_, &v1, &v2, &needs_finite_test);
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(1), v1);
   ExpectEqual(Value(x_, 1, 0), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
 
   HInstruction* lower = nullptr;
   HInstruction* upper = nullptr;
@@ -699,19 +690,16 @@ TEST_F(InductionVarRangeTest, SymbolicTripCountDown) {
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(), v1);
   ExpectEqual(Value(1000), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
 
   // In context of loop-body: known.
   range_.GetInductionRange(increment_, condition_->InputAt(0), &v1, &v2, &needs_finite_test);
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(x_, 1, 1), v1);
   ExpectEqual(Value(1000), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
   range_.GetInductionRange(increment_, increment_, &v1, &v2, &needs_finite_test);
   EXPECT_FALSE(needs_finite_test);
   ExpectEqual(Value(x_, 1, 0), v1);
   ExpectEqual(Value(999), v2);
-  EXPECT_FALSE(range_.RefineOuter(&v1, &v2));
 
   HInstruction* lower = nullptr;
   HInstruction* upper = nullptr;

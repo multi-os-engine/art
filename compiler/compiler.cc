@@ -48,12 +48,12 @@ bool Compiler::IsPathologicalCase(const DexFile::CodeItem& code_item,
     LOG(INFO) << "Method exceeds compiler instruction limit: "
               << code_item.insns_size_in_code_units_
               << " in " << PrettyMethod(method_idx, dex_file);
-    return true;
+//    return true;
   }
   if (code_item.registers_size_ >= UINT16_MAX / 4) {
     LOG(INFO) << "Method exceeds compiler virtual register limit: "
               << code_item.registers_size_ << " in " << PrettyMethod(method_idx, dex_file);
-    return true;
+ //   return true;
   }
   return false;
 }

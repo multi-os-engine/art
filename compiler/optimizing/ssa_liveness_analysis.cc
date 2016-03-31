@@ -84,6 +84,7 @@ void SsaLivenessAnalysis::LinearizeGraph() {
   //      iterate over the successors. When all non-back edge predecessors of a
   //      successor block are visited, the successor block is added in the worklist
   //      following an order that satisfies the requirements to build our linear graph.
+  graph_->linear_order_.clear();
   graph_->linear_order_.reserve(graph_->GetReversePostOrder().size());
   ArenaVector<HBasicBlock*> worklist(graph_->GetArena()->Adapter(kArenaAllocSsaLiveness));
   worklist.push_back(graph_->GetEntryBlock());

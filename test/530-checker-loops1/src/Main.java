@@ -562,7 +562,7 @@ public class Main {
   //
   /// CHECK-START: void Main.linearTriangularOnTwoArrayLengths(int) BCE (after)
   /// CHECK-NOT: BoundsCheck
-  //  TODO: also CHECK-NOT: Deoptimize, see b/27151190
+  /// CHECK-NOT: Deoptimize
   private static void linearTriangularOnTwoArrayLengths(int n) {
     int[] a = new int[n];
     for (int i = 0; i < a.length; i++) {
@@ -604,7 +604,7 @@ public class Main {
   //
   /// CHECK-START: void Main.linearTriangularOnParameter(int) BCE (after)
   /// CHECK-NOT: BoundsCheck
-  //  TODO: also CHECK-NOT: Deoptimize, see b/27151190
+  /// CHECK-NOT: Deoptimize
   private static void linearTriangularOnParameter(int n) {
     int[] a = new int[n];
     for (int i = 0; i < n; i++) {
@@ -627,7 +627,7 @@ public class Main {
   //
   /// CHECK-START: void Main.linearTriangularVariationsInnerStrict(int) BCE (after)
   /// CHECK-NOT: BoundsCheck
-  //  TODO: also CHECK-NOT: Deoptimize, see b/27151190
+  /// CHECK-NOT: Deoptimize
   private static void linearTriangularVariationsInnerStrict(int n) {
     int[] a = new int[n];
     for (int i = 0; i < n; i++) {

@@ -17,6 +17,8 @@
 #ifndef ART_COMPILER_OPTIMIZING_PRETTY_PRINTER_H_
 #define ART_COMPILER_OPTIMIZING_PRETTY_PRINTER_H_
 
+#include "aart.h"
+
 #include "base/stringprintf.h"
 #include "nodes.h"
 
@@ -35,6 +37,17 @@ class HPrettyPrinter : public HGraphVisitor {
   void VisitInstruction(HInstruction* instruction) OVERRIDE {
     PrintPreInstruction(instruction);
     PrintString(instruction->DebugName());
+#ifdef AART
+    if (instruction->IsInvoke()) {
+      HInvoke* invoke = instruction->AsInvoke();
+      PrintString(" ");
+      PrintString(PrettyMethod(invoke->GetDexMethodIndex(), GetGraph()->GetDexFile(), true).c_str());
+      if (invoke->IsIntrinsic()) {
+        PrintString(" [INTRIN]");
+      }
+      PrintString(" ");
+    }
+#endif
     PrintPostInstruction(instruction);
   }
 
@@ -65,6 +78,54 @@ class HPrettyPrinter : public HGraphVisitor {
       }
       PrintString("]");
     }
+#ifdef AART
+    if (instruction->HasEnvironmentUses()) {
+      PrintString(" HAS-ENV-USES {");
+#ifdef AART2
+      for (HUseIterator<HEnvironment*> it(instruction->GetEnvUses()); !it.Done(); it.Advance()) {
+        HEnvironment* env = it.Current()->GetUser();
+        PrintString("holder=");
+        PrintInt(env->GetHolder()->GetId());
+        PrintString(", ");
+      }
+#endif
+      PrintString("}");
+    }
+    if (instruction->NeedsEnvironment()) {
+      PrintString(" NEEDS-ENV");
+    }
+    if (instruction->HasEnvironment()) {
+      PrintString(" HAS-ENV [");
+#ifdef AART2
+      HEnvironment* env = instruction->GetEnvironment();
+      PrintString("holder=");
+      PrintInt(env->GetHolder()->GetId());
+      PrintString("(me) {");
+      // These are dex-registers.
+      for (size_t i = 0; i < env->Size(); i++) {
+        PrintString("v"); PrintInt(i); PrintString("=");
+        if (env->GetInstructionAt(i)) {
+          PrintInt(env->GetInstructionAt(i)->GetId());
+          PrintString(", ");
+        } else {
+          PrintString("!, ");
+        }
+      }
+      PrintString("}");
+#endif
+      PrintString("]");
+    }
+    if (instruction->CanBeMoved()) {
+      PrintString(" CAN-MOVE");
+    }
+    if (instruction->CanThrow()) {
+      PrintString(" CAN-THROW");
+    }
+    PrintString(" ");
+    PrintString(instruction->GetSideEffects().ToString().c_str());
+    PrintString(" PC=");
+    PrintInt(instruction->GetDexPc());
+#endif
     PrintNewLine();
   }
 
@@ -89,6 +150,17 @@ class HPrettyPrinter : public HGraphVisitor {
       }
       PrintInt(successors.back()->GetBlockId());
     }
+#ifdef AART
+    if (block->IsTryBlock()) {
+      PrintString(" IS-TRY");
+    }
+    if (block->IsCatchBlock()) {
+      PrintString(" IS-CATCH");
+    }
+    if (block->GetTryCatchInformation()) {
+      PrintString(" HAS-TRY/CATCH-INFO");
+    }
+#endif
     PrintNewLine();
     HGraphVisitor::VisitBasicBlock(block);
   }
