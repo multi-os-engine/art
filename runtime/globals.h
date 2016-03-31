@@ -58,6 +58,16 @@ static constexpr bool kIsTargetBuild = true;
 static constexpr bool kIsTargetBuild = false;
 #endif
 
+// Linux target - if the ART_TARGET_LINUX macro is defined we are compiling art for a linux
+// target. We excplicitly set ashmem to not be used by default to calls to functions in
+// mem_map.h when the target is linux, and keep the previous default value of true for all other
+// builds as it was before.
+#if defined(ART_TARGET_LINUX)
+static constexpr bool kIsTargetLinux = true;
+#else
+static constexpr bool kIsTargetLinux = false;
+#endif
+
 // Garbage collector constants.
 static constexpr bool kMovingCollector = true;
 static constexpr bool kMarkCompactSupport = false && kMovingCollector;
