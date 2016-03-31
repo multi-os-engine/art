@@ -3786,7 +3786,9 @@ void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass, LogSeve
     while (old_status == mirror::Class::kStatusVerifying ||
         old_status == mirror::Class::kStatusVerifyingAtRuntime) {
       lock.WaitIgnoringInterrupts();
-      CHECK_GT(klass->GetStatus(), old_status);
+      CHECK(klass->IsErroneous() || (klass->GetStatus() > old_status))
+          << "Class '" << PrettyClass(klass.Get()) << "' performed an illegal verification state "
+          << "transition from " << old_status << " to " << klass->GetStatus();
       old_status = klass->GetStatus();
     }
 
@@ -5874,9 +5876,14 @@ ClassLinker::DefaultMethodSearchResult ClassLinker::FindDefaultMethodImplementat
           !target_name_comparator.HasSameNameAndSignature(
               current_method->GetInterfaceMethodIfProxy(image_pointer_size_))) {
         continue;
+      } else if (!current_method->IsPublic()) {
+        // The verifier should have caught the non-public method for dex version 37. Just warn and
+        // skip it since this is from before default-methods so we don't really need to care that it
+        // has code.
+        LOG(WARNING) << "Interface method " << PrettyMethod(current_method) << " is not public! "
+                     << "This will be a fatal error in subsequent versions of android. "
+                     << "Continuing anyway.";
       }
-      // The verifier should have caught the non-public method.
-      DCHECK(current_method->IsPublic()) << "Interface method is not public!";
       if (UNLIKELY(chosen_iface.Get() != nullptr)) {
         // We have multiple default impls of the same method. This is a potential default conflict.
         // We need to check if this possibly conflicting method is either a superclass of the chosen
