@@ -759,17 +759,25 @@ ArtMethod* HGraphBuilder::ResolveMethod(uint16_t method_idx, InvokeType invoke_t
         actual_method = compiling_class->GetSuperClass()->GetVTableEntry(
             vtable_index, class_linker->GetImagePointerSize());
       }
-      if (actual_method != resolved_method &&
-          !IsSameDexFile(*actual_method->GetDexFile(), *dex_compilation_unit_->GetDexFile())) {
-        // The back-end code generator relies on this check in order to ensure that it will not
-        // attempt to read the dex_cache with a dex_method_index that is not from the correct
-        // dex_file. If we didn't do this check then the dex_method_index will not be updated in the
-        // builder, which means that the code-generator (and compiler driver during sharpening and
-        // inliner, maybe) might invoke an incorrect method.
-        // TODO: The actual method could still be referenced in the current dex file, so we
-        //       could try locating it.
-        // TODO: Remove the dex_file restriction.
-        return nullptr;
+      if (actual_method != resolved_method) {
+        if (!IsSameDexFile(*actual_method->GetDexFile(), *dex_compilation_unit_->GetDexFile())) {
+          // The back-end code generator relies on this check in order to ensure that it will not
+          // attempt to read the dex_cache with a dex_method_index that is not from the correct
+          // dex_file. If we didn't do this check then the dex_method_index will not be updated in the
+          // builder, which means that the code-generator (and compiler driver during sharpening and
+          // inliner, maybe) might invoke an incorrect method.
+          // TODO: The actual method could still be referenced in the current dex file, so we
+          //       could try locating it.
+          // TODO: Remove the dex_file restriction.
+          return nullptr;
+        } else if (actual_method->GetReturnTypeDescriptor()[0] !=
+                   resolved_method->GetReturnTypeDescriptor()[0]) {
+          // If this resolution changes the fundamental return type, this was likely the result
+          // of a non-standard optimization on invoke-super. Since accepting this resolution can
+          // result in corrupt HIR (accepting no or some value where there is one or none), we
+          // simply play and safe and bail!
+          return nullptr;
+        }
       }
       if (!actual_method->IsInvokable()) {
         // Fail if the actual method cannot be invoked. Otherwise, the runtime resolution stub
@@ -785,6 +793,7 @@ ArtMethod* HGraphBuilder::ResolveMethod(uint16_t method_idx, InvokeType invoke_t
   if (resolved_method->CheckIncompatibleClassChange(invoke_type)) {
     return nullptr;
   }
+
 
   return resolved_method;
 }
