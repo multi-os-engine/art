@@ -668,10 +668,10 @@ void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
 
 ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& a,
                                                        const ReferenceTypeInfo& b) {
-  if (!b.IsValid()) {
+  if (!b.IsValid() || b.IsErroneous()) {
     return a;
   }
-  if (!a.IsValid()) {
+  if (!a.IsValid() || a.IsErroneous()) {
     return b;
   }
 
