@@ -21,7 +21,6 @@
 #include "base/hex_dump.h"
 #include "entrypoints/entrypoint_utils-inl.h"
 #include "entrypoints/runtime_asm_entrypoints.h"
-#include "gc_map.h"
 #include "gc/space/image_space.h"
 #include "gc/space/space-inl.h"
 #include "jit/jit.h"
@@ -204,31 +203,15 @@ size_t StackVisitor::GetNativePcOffset() const {
   return GetCurrentOatQuickMethodHeader()->NativeQuickPcOffset(cur_quick_frame_pc_);
 }
 
-bool StackVisitor::IsReferenceVReg(ArtMethod* m, uint16_t vreg) {
+bool StackVisitor::IsReferenceVReg(ArtMethod* m, uint16_t vreg ATTRIBUTE_UNUSED) {
   DCHECK_EQ(m, GetMethod());
   // Process register map (which native and runtime methods don't have)
   if (m->IsNative() || m->IsRuntimeMethod() || m->IsProxyMethod()) {
     return false;
   }
   const OatQuickMethodHeader* method_header = GetCurrentOatQuickMethodHeader();
-  if (method_header->IsOptimized()) {
-    return true;  // TODO: Implement.
-  }
-  const uint8_t* native_gc_map = method_header->GetNativeGcMap();
-  CHECK(native_gc_map != nullptr) << PrettyMethod(m);
-  const DexFile::CodeItem* code_item = m->GetCodeItem();
-  // Can't be null or how would we compile its instructions?
-  DCHECK(code_item != nullptr) << PrettyMethod(m);
-  NativePcOffsetToReferenceMap map(native_gc_map);
-  size_t num_regs = std::min(map.RegWidth() * 8, static_cast<size_t>(code_item->registers_size_));
-  const uint8_t* reg_bitmap = nullptr;
-  if (num_regs > 0) {
-    uintptr_t native_pc_offset = method_header->NativeQuickPcOffset(GetCurrentQuickFramePc());
-    reg_bitmap = map.FindBitMap(native_pc_offset);
-    DCHECK(reg_bitmap != nullptr);
-  }
-  // Does this register hold a reference?
-  return vreg < num_regs && TestBitmap(vreg, reg_bitmap);
+  CHECK(method_header->IsOptimized());
+  return true;  // TODO: Implement.
 }
 
 bool StackVisitor::GetVRegFromDebuggerShadowFrame(uint16_t vreg,
