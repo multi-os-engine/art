@@ -2603,8 +2603,6 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
 // a constant condition that would remove the "if" statement so the test is free.
 #define INSTRUMENTATION_INSTRUCTION_HANDLER(o, code, n, f, r, i, a, v)                        \
   alt_op_##code: {                                                                            \
-    Runtime* const runtime = Runtime::Current();                                              \
-    const instrumentation::Instrumentation* instrumentation = runtime->GetInstrumentation();  \
     if (UNLIKELY(instrumentation->HasDexPcListeners())) {                                     \
       Object* this_object = shadow_frame.GetThisObject(code_item->ins_size_);                 \
       instrumentation->DexPcMovedEvent(self, this_object, shadow_frame.GetMethod(), dex_pc);  \
