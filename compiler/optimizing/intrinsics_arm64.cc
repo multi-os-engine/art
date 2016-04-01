@@ -369,9 +369,14 @@ void IntrinsicCodeGeneratorARM64::VisitLongReverse(HInvoke* invoke) {
 }
 
 static void GenBitCount(HInvoke* instr, bool is_long, vixl::MacroAssembler* masm) {
-  DCHECK(instr->GetType() == Primitive::kPrimInt);
-  DCHECK((is_long && instr->InputAt(0)->GetType() == Primitive::kPrimLong) ||
-         (!is_long && instr->InputAt(0)->GetType() == Primitive::kPrimInt));
+  DCHECK_EQ(instr->GetType(), Primitive::kPrimInt);
+  if (kIsDebugBuild) {
+    if (is_long) {
+      DCHECK_EQ(instr->InputAt(0)->GetType(), Primitive::kPrimLong);
+    } else {
+      DCHECK_EQ(Primitive::PrimitiveKind(instr->InputAt(0)->GetType()), Primitive::kPrimInt);
+    }
+  }
 
   Location out = instr->GetLocations()->Out();
   UseScratchRegisterScope temps(masm);
