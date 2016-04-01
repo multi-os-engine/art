@@ -172,7 +172,8 @@ def MatchFiles(checkerFile, c1File, targetArch, debuggableMode):
     # match a check group against the first output group of the same name.
     c1Pass = c1File.findPass(testCase.name)
     if c1Pass is None:
-      Logger.fail("Test case \"{}\" not found in the CFG file".format(testCase.name),
+      msg = "Test case \"{}\" on line {} not found in the CFG file"
+      Logger.fail(msg.format(testCase.name, testCase.startLineNo),
                   testCase.fileName, testCase.startLineNo)
 
     Logger.startTest(testCase.name)
