@@ -175,7 +175,15 @@ class CodeGenerator {
                                const InstructionSetFeatures& isa_features,
                                const CompilerOptions& compiler_options,
                                OptimizingCompilerStats* stats = nullptr);
-  virtual ~CodeGenerator() {}
+
+  virtual ~CodeGenerator() {
+    // The memory for the allocated slow paths will be freed as part of the
+    // associated arena, but we must destroy them correctly. For example the
+    // ARM64 slow paths may allocate (through `vixl::Label`) memory out of the arena.
+    for (SlowPathCode* slow_path : slow_paths_) {
+      slow_path->~SlowPathCode();
+    }
+  }
 
   // Get the graph. This is the outermost graph, never the graph of a method being inlined.
   HGraph* GetGraph() const { return graph_; }

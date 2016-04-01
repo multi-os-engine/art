@@ -938,6 +938,14 @@ void CodeGeneratorARM64::Finalize(CodeAllocator* allocator) {
   __ FinalizeCode();
 
   CodeGenerator::Finalize(allocator);
+
+  // The memory for those labels (allocated in `CommonInitializeLabels()` called
+  // from `Initialize()`) will be freed as part of the associated arena, but we
+  // must destroy them correctly as they may have allocated memory out of the arena.
+    size_t size = GetGraph()->GetBlocks().size();
+    for (size_t i = 0; i != size; ++i) {
+      block_labels_[i].~Label();
+    }
 }
 
 void ParallelMoveResolverARM64::PrepareForEmitNativeCode() {
