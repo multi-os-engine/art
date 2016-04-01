@@ -43,7 +43,7 @@ class ImmuneRegion {
   void Reset();
 
   // Returns true if an object is inside of the immune region (assumed to be marked).
-  ALWAYS_INLINE bool ContainsObject(const mirror::Object* obj) const {
+  MC bool ContainsObject(const mirror::Object* obj) const {
     // Note: Relies on integer underflow behavior.
     return reinterpret_cast<uintptr_t>(obj) - reinterpret_cast<uintptr_t>(begin_) < size_;
   }

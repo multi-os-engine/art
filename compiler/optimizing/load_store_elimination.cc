@@ -577,7 +577,7 @@ class LSEVisitor : public HGraphVisitor {
         !heap_value->IsInstanceFieldSet()) {
       return;
     }
-    auto idx = std::find(possibly_removed_stores_.begin(),
+    _ idx = std::find(possibly_removed_stores_.begin(),
         possibly_removed_stores_.end(), heap_value);
     if (idx != possibly_removed_stores_.end()) {
       // Make sure the store is kept.

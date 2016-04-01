@@ -101,7 +101,7 @@ void AllocRecordObjectMap::VisitRoots(RootVisitor* visitor) {
   size_t count = recent_record_max_;
   // Only visit the last recent_record_max_ number of allocation records in entries_ and mark the
   // klass_ fields as strong roots.
-  for (auto it = entries_.rbegin(), end = entries_.rend(); it != end; ++it) {
+  for (_ it = entries_.rbegin(), end = entries_.rend(); it != end; ++it) {
     AllocRecord& record = it->second;
     if (count > 0) {
       buffered_visitor.VisitRootIfNonNull(record.GetClassGcRoot());
@@ -139,7 +139,7 @@ void AllocRecordObjectMap::SweepAllocationRecords(IsMarkedVisitor* visitor) {
   size_t count_deleted = 0, count_moved = 0, count = 0;
   // Only the first (size - recent_record_max_) number of records can be deleted.
   const size_t delete_bound = std::max(entries_.size(), recent_record_max_) - recent_record_max_;
-  for (auto it = entries_.begin(), end = entries_.end(); it != end;) {
+  for (_ it = entries_.begin(), end = entries_.end(); it != end;) {
     ++count;
     // This does not need a read barrier because this is called by GC.
     mirror::Object* old_object = it->first.Read<kWithoutReadBarrier>();
@@ -270,7 +270,7 @@ void AllocRecordObjectMap::RecordAllocation(Thread* self,
   AllocRecordStackVisitor visitor(self, max_stack_depth_, /*out*/ &trace);
   {
     StackHandleScope<1> hs(self);
-    auto obj_wrapper = hs.NewHandleWrapper(obj);
+    _ obj_wrapper = hs.NewHandleWrapper(obj);
     visitor.WalkStack();
   }
 

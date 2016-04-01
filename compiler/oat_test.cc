@@ -397,7 +397,7 @@ TEST_F(OatTest, WriteRead) {
   ASSERT_TRUE(oat_dex_file != nullptr);
   CHECK_EQ(dex_file.GetLocationChecksum(), oat_dex_file->GetDexFileLocationChecksum());
   ScopedObjectAccess soa(Thread::Current());
-  auto pointer_size = class_linker->GetImagePointerSize();
+  _ pointer_size = class_linker->GetImagePointerSize();
   for (size_t i = 0; i < dex_file.NumClassDefs(); i++) {
     const DexFile::ClassDef& class_def = dex_file.GetClassDef(i);
     const uint8_t* class_data = dex_file.GetClassData(class_def);
@@ -419,13 +419,13 @@ TEST_F(OatTest, WriteRead) {
              oat_class.GetType()) << descriptor;
 
     size_t method_index = 0;
-    for (auto& m : klass->GetDirectMethods(pointer_size)) {
+    for (_& m : klass->GetDirectMethods(pointer_size)) {
       CheckMethod(&m, oat_class.GetOatMethod(method_index), dex_file);
       ++method_index;
     }
     size_t visited_virtuals = 0;
     // TODO We should also check copied methods in this test.
-    for (auto& m : klass->GetDeclaredVirtualMethods(pointer_size)) {
+    for (_& m : klass->GetDeclaredVirtualMethods(pointer_size)) {
       if (!klass->IsInterface()) {
         EXPECT_FALSE(m.IsCopied());
       }

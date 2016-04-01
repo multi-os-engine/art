@@ -1644,7 +1644,7 @@ void Thread::AssertPendingException() const {
 
 void Thread::AssertPendingOOMException() const {
   AssertPendingException();
-  auto* e = GetException();
+  _* e = GetException();
   CHECK_EQ(e->GetClass(), DecodeJObject(WellKnownClasses::java_lang_OutOfMemoryError)->AsClass())
       << e->Dump();
 }
@@ -2128,7 +2128,7 @@ jobject Thread::CreateInternalStackTrace(const ScopedObjectAccessAlreadyRunnable
     mirror::PointerArray* trace_methods = build_trace_visitor.GetTraceMethodsAndPCs();
     // Second half of trace_methods is dex PCs.
     for (uint32_t i = 0; i < static_cast<uint32_t>(trace_methods->GetLength() / 2); ++i) {
-      auto* method = trace_methods->GetElementPtrSize<ArtMethod*>(
+      _* method = trace_methods->GetElementPtrSize<ArtMethod*>(
           i, Runtime::Current()->GetClassLinker()->GetImagePointerSize());
       CHECK(method != nullptr);
     }
@@ -2194,8 +2194,8 @@ jobjectArray Thread::InternalStackTraceToStackTraceElementArray(
         i + method_trace->GetLength() / 2, sizeof(void*));
     int32_t line_number;
     StackHandleScope<3> hs(soa.Self());
-    auto class_name_object(hs.NewHandle<mirror::String>(nullptr));
-    auto source_name_object(hs.NewHandle<mirror::String>(nullptr));
+    _ class_name_object(hs.NewHandle<mirror::String>(nullptr));
+    _ source_name_object(hs.NewHandle<mirror::String>(nullptr));
     if (method->IsProxyMethod()) {
       line_number = -1;
       class_name_object.Assign(method->GetDeclaringClass()->GetName());
@@ -2278,7 +2278,7 @@ void Thread::ThrowNewWrappedException(const char* exception_class_descriptor,
   ScopedLocalRef<jobject> cause(GetJniEnv(), soa.AddLocalReference<jobject>(GetException()));
   ClearException();
   Runtime* runtime = Runtime::Current();
-  auto* cl = runtime->GetClassLinker();
+  _* cl = runtime->GetClassLinker();
   Handle<mirror::Class> exception_class(
       hs.NewHandle(cl->FindClass(this, exception_class_descriptor, class_loader)));
   if (UNLIKELY(exception_class.Get() == nullptr)) {
@@ -2766,7 +2766,7 @@ class ReferenceMapVisitor : public StackVisitor {
     if (!m->IsNative() && !m->IsRuntimeMethod() && !m->IsProxyMethod()) {
       const OatQuickMethodHeader* method_header = GetCurrentOatQuickMethodHeader();
       if (method_header->IsOptimized()) {
-        auto* vreg_base = reinterpret_cast<StackReference<mirror::Object>*>(
+        _* vreg_base = reinterpret_cast<StackReference<mirror::Object>*>(
             reinterpret_cast<uintptr_t>(cur_quick_frame));
         uintptr_t native_pc_offset = method_header->NativeQuickPcOffset(GetCurrentQuickFramePc());
         CodeInfo code_info = method_header->GetOptimizedCodeInfo();
@@ -2777,7 +2777,7 @@ class ReferenceMapVisitor : public StackVisitor {
         // Visit stack entries that hold pointers.
         for (size_t i = 0; i < mask.size_in_bits(); ++i) {
           if (mask.LoadBit(i)) {
-            auto* ref_addr = vreg_base + i;
+            _* ref_addr = vreg_base + i;
             mirror::Object* ref = ref_addr->AsMirrorPtr();
             if (ref != nullptr) {
               mirror::Object* new_ref = ref;
@@ -2913,7 +2913,7 @@ void Thread::VisitRoots(RootVisitor* visitor) {
       mapper.VisitShadowFrame(record->GetShadowFrame());
     }
   }
-  for (auto* verifier = tlsPtr_.method_verifier; verifier != nullptr; verifier = verifier->link_) {
+  for (_* verifier = tlsPtr_.method_verifier; verifier != nullptr; verifier = verifier->link_) {
     verifier->VisitRoots(visitor, RootInfo(kRootNativeStack, thread_id));
   }
   // Visit roots on this thread's stack

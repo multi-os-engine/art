@@ -320,8 +320,8 @@ static_assert(!IsAbsoluteUint<32, int64_t>(kUint32MaxPlus1), "TestIsAbsoluteUint
 
 template <typename Container>
 void CheckElements(const std::initializer_list<uint32_t>& expected, const Container& elements) {
-  auto expected_it = expected.begin();
-  auto element_it = elements.begin();
+  _ expected_it = expected.begin();
+  _ element_it = elements.begin();
   size_t idx = 0u;
   while (expected_it != expected.end() && element_it != elements.end()) {
     EXPECT_EQ(*expected_it, *element_it) << idx;

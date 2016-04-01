@@ -38,7 +38,7 @@ inline constexpr bool FindFieldTypeIsRead(FindFieldType type) {
 // does not exist there. There is a suspend check, object is a double pointer to update the value
 // in the caller in case it moves.
 template<FindFieldType type, bool kAccessCheck>
-ALWAYS_INLINE static inline ArtField* FindInstanceField(uint32_t field_idx,
+MC static inline ArtField* FindInstanceField(uint32_t field_idx,
                                                         ArtMethod* referrer,
                                                         Thread* self,
                                                         size_t size,

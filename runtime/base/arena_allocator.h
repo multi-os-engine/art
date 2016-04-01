@@ -296,7 +296,7 @@ class ArenaAllocator
   ArenaAllocatorAdapter<void> Adapter(ArenaAllocKind kind = kArenaAllocSTL);
 
   // Returns zeroed memory.
-  void* Alloc(size_t bytes, ArenaAllocKind kind = kArenaAllocMisc) ALWAYS_INLINE {
+  void* Alloc(size_t bytes, ArenaAllocKind kind = kArenaAllocMisc) MC {
     if (UNLIKELY(IsRunningOnMemoryTool())) {
       return AllocWithMemoryTool(bytes, kind);
     }
@@ -316,10 +316,10 @@ class ArenaAllocator
 
   // Realloc never frees the input pointer, it is the caller's job to do this if necessary.
   void* Realloc(void* ptr, size_t ptr_size, size_t new_size,
-                ArenaAllocKind kind = kArenaAllocMisc) ALWAYS_INLINE {
+                ArenaAllocKind kind = kArenaAllocMisc) MC {
     DCHECK_GE(new_size, ptr_size);
     DCHECK_EQ(ptr == nullptr, ptr_size == 0u);
-    auto* end = reinterpret_cast<uint8_t*>(ptr) + ptr_size;
+    _* end = reinterpret_cast<uint8_t*>(ptr) + ptr_size;
     // If we haven't allocated anything else, we can safely extend.
     if (end == ptr_) {
       DCHECK(!IsRunningOnMemoryTool());  // Red zone prevents end == ptr_.
@@ -332,7 +332,7 @@ class ArenaAllocator
         return ptr;
       }
     }
-    auto* new_ptr = Alloc(new_size, kind);
+    _* new_ptr = Alloc(new_size, kind);
     memcpy(new_ptr, ptr, ptr_size);
     // TODO: Call free on ptr if linear alloc supports free.
     return new_ptr;

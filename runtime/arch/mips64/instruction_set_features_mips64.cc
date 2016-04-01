@@ -101,7 +101,7 @@ std::string Mips64InstructionSetFeatures::GetFeatureString() const {
 
 const InstructionSetFeatures* Mips64InstructionSetFeatures::AddFeaturesFromSplitString(
     const bool smp, const std::vector<std::string>& features, std::string* error_msg) const {
-  auto i = features.begin();
+  _ i = features.begin();
   if (i != features.end()) {
     // We don't have any features.
     std::string feature = Trim(*i);

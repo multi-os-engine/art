@@ -126,7 +126,7 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, uint8_t page_map_type
   FreePageRun* res = nullptr;
   const size_t req_byte_size = num_pages * kPageSize;
   // Find the lowest address free page run that's large enough.
-  for (auto it = free_page_runs_.begin(); it != free_page_runs_.end(); ) {
+  for (_ it = free_page_runs_.begin(); it != free_page_runs_.end(); ) {
     FreePageRun* fpr = *it;
     DCHECK(fpr->IsFree());
     size_t fpr_byte_size = fpr->ByteSize(this);
@@ -168,7 +168,7 @@ void* RosAlloc::AllocPages(Thread* self, size_t num_pages, uint8_t page_map_type
   if (UNLIKELY(res == nullptr && capacity_ > footprint_)) {
     FreePageRun* last_free_page_run = nullptr;
     size_t last_free_page_run_size;
-    auto it = free_page_runs_.rbegin();
+    _ it = free_page_runs_.rbegin();
     if (it != free_page_runs_.rend() && (last_free_page_run = *it)->End(this) == base_ + footprint_) {
       // There is a free page run at the end.
       DCHECK(last_free_page_run->IsFree());
@@ -364,9 +364,9 @@ size_t RosAlloc::FreePages(Thread* self, void* ptr, bool already_zero) {
                 << std::hex << reinterpret_cast<uintptr_t>(fpr->End(this)) << " [" << std::dec
                 << (fpr->End(this) == End() ? page_map_size_ : ToPageMapIndex(fpr->End(this))) << "]";
     }
-    auto higher_it = free_page_runs_.upper_bound(fpr);
+    _ higher_it = free_page_runs_.upper_bound(fpr);
     if (higher_it != free_page_runs_.end()) {
-      for (auto it = higher_it; it != free_page_runs_.end(); ) {
+      for (_ it = higher_it; it != free_page_runs_.end(); ) {
         FreePageRun* h = *it;
         DCHECK_EQ(h->ByteSize(this) % kPageSize, static_cast<size_t>(0));
         if (kTraceRosAlloc) {
@@ -401,10 +401,10 @@ size_t RosAlloc::FreePages(Thread* self, void* ptr, bool already_zero) {
       }
     }
     // Try to coalesce in the lower address direction.
-    auto lower_it = free_page_runs_.upper_bound(fpr);
+    _ lower_it = free_page_runs_.upper_bound(fpr);
     if (lower_it != free_page_runs_.begin()) {
       --lower_it;
-      for (auto it = lower_it; ; ) {
+      for (_ it = lower_it; ; ) {
         // We want to try to coalesce with the first element but
         // there's no "<=" operator for the iterator.
         bool to_exit_loop = it == free_page_runs_.begin();
@@ -585,10 +585,10 @@ RosAlloc::Run* RosAlloc::AllocRun(Thread* self, size_t idx) {
 
 RosAlloc::Run* RosAlloc::RefillRun(Thread* self, size_t idx) {
   // Get the lowest address non-full run from the binary tree.
-  auto* const bt = &non_full_runs_[idx];
+  _* const bt = &non_full_runs_[idx];
   if (!bt->empty()) {
     // If there's one, use it as the current run.
-    auto it = bt->begin();
+    _ it = bt->begin();
     Run* non_full_run = *it;
     DCHECK(non_full_run != nullptr);
     DCHECK(!non_full_run->IsThreadLocal());
@@ -789,7 +789,7 @@ size_t RosAlloc::FreeFromRun(Thread* self, void* ptr, Run* run) {
   }
   // Free the slot in the run.
   run->FreeSlot(ptr);
-  auto* non_full_runs = &non_full_runs_[idx];
+  _* non_full_runs = &non_full_runs_[idx];
   if (run->IsAllFree()) {
     // It has just become completely free. Free the pages of this run.
     std::set<Run*>::iterator pos = non_full_runs->find(run);
@@ -815,8 +815,8 @@ size_t RosAlloc::FreeFromRun(Thread* self, void* ptr, Run* run) {
     // already in the non-full run set (i.e., it was full) insert it
     // into the non-full run set.
     if (run != current_runs_[idx]) {
-      auto* full_runs = kIsDebugBuild ? &full_runs_[idx] : nullptr;
-      auto pos = non_full_runs->find(run);
+      _* full_runs = kIsDebugBuild ? &full_runs_[idx] : nullptr;
+      _ pos = non_full_runs->find(run);
       if (pos == non_full_runs->end()) {
         DCHECK(run_was_full);
         DCHECK(full_runs->find(run) != full_runs->end());
@@ -1130,8 +1130,8 @@ size_t RosAlloc::BulkFree(Thread* self, void** ptrs, size_t num_ptrs) {
       }
       // Check if the run should be moved to non_full_runs_ or
       // free_page_runs_.
-      auto* non_full_runs = &non_full_runs_[idx];
-      auto* full_runs = kIsDebugBuild ? &full_runs_[idx] : nullptr;
+      _* non_full_runs = &non_full_runs_[idx];
+      _* full_runs = kIsDebugBuild ? &full_runs_[idx] : nullptr;
       if (run->IsAllFree()) {
         // It has just become completely free. Free the pages of the
         // run.
@@ -1354,7 +1354,7 @@ bool RosAlloc::Trim() {
   MutexLock mu(Thread::Current(), lock_);
   FreePageRun* last_free_page_run;
   DCHECK_EQ(footprint_ % kPageSize, static_cast<size_t>(0));
-  auto it = free_page_runs_.rbegin();
+  _ it = free_page_runs_.rbegin();
   if (it != free_page_runs_.rend() && (last_free_page_run = *it)->End(this) == base_ + footprint_) {
     // Remove the last free page run, if any.
     DCHECK(last_free_page_run->IsFree());
@@ -1867,7 +1867,7 @@ void RosAlloc::Verify() {
     }
   }
   // Call Verify() here for the lock order.
-  for (auto& run : runs) {
+  for (_& run : runs) {
     run->Verify(self, this, is_running_on_memory_tool_);
   }
 }
@@ -1889,7 +1889,7 @@ void RosAlloc::Run::Verify(Thread* self, RosAlloc* rosalloc, bool running_on_mem
     // If it's a thread local run, then it must be pointed to by an owner thread.
     bool owner_found = false;
     std::list<Thread*> thread_list = Runtime::Current()->GetThreadList()->GetList();
-    for (auto it = thread_list.begin(); it != thread_list.end(); ++it) {
+    for (_ it = thread_list.begin(); it != thread_list.end(); ++it) {
       Thread* thread = *it;
       for (size_t i = 0; i < kNumThreadLocalSizeBrackets; i++) {
         MutexLock mu(self, *rosalloc->size_bracket_locks_[i]);
@@ -1929,7 +1929,7 @@ void RosAlloc::Run::Verify(Thread* self, RosAlloc* rosalloc, bool running_on_mem
     // in a run set.
     if (!is_current_run) {
       MutexLock mu(self, rosalloc->lock_);
-      auto& non_full_runs = rosalloc->non_full_runs_[idx];
+      _& non_full_runs = rosalloc->non_full_runs_[idx];
       // If it's all free, it must be a free page run rather than a run.
       CHECK(!IsAllFree()) << "A free run must be in a free page run set " << Dump();
       if (!IsFull()) {
@@ -1939,7 +1939,7 @@ void RosAlloc::Run::Verify(Thread* self, RosAlloc* rosalloc, bool running_on_mem
       } else {
         // If it's full, it must in the full run set (debug build only.)
         if (kIsDebugBuild) {
-          auto& full_runs = rosalloc->full_runs_[idx];
+          _& full_runs = rosalloc->full_runs_[idx];
           CHECK(full_runs.find(this) != full_runs.end())
               << " A full run isn't in the full run set " << Dump();
         }

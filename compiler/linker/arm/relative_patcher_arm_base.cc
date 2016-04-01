@@ -158,7 +158,7 @@ bool ArmBaseRelativePatcher::ReserveSpaceProcessPatches(uint32_t quick_code_offs
         return true;
       }
     } else {
-      auto result = provider_->FindMethodOffset(patch_ref);
+      _ result = provider_->FindMethodOffset(patch_ref);
       if (!result.first) {
         // If still unresolved, check if we have a thunk within range.
         if (thunk_locations_.empty() ||

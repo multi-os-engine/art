@@ -499,18 +499,18 @@ OatWriter::~OatWriter() {
 }
 
 struct OatWriter::GcMapDataAccess {
-  static ArrayRef<const uint8_t> GetData(const CompiledMethod* compiled_method) ALWAYS_INLINE {
+  static ArrayRef<const uint8_t> GetData(const CompiledMethod* compiled_method) MC {
     return compiled_method->GetGcMap();
   }
 
-  static uint32_t GetOffset(OatClass* oat_class, size_t method_offsets_index) ALWAYS_INLINE {
+  static uint32_t GetOffset(OatClass* oat_class, size_t method_offsets_index) MC {
     uint32_t offset = oat_class->method_headers_[method_offsets_index].gc_map_offset_;
     return offset == 0u ? 0u :
         (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1) - offset;
   }
 
   static void SetOffset(OatClass* oat_class, size_t method_offsets_index, uint32_t offset)
-      ALWAYS_INLINE {
+      MC {
     oat_class->method_headers_[method_offsets_index].gc_map_offset_ =
         (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1) - offset;
   }
@@ -521,18 +521,18 @@ struct OatWriter::GcMapDataAccess {
 };
 
 struct OatWriter::MappingTableDataAccess {
-  static ArrayRef<const uint8_t> GetData(const CompiledMethod* compiled_method) ALWAYS_INLINE {
+  static ArrayRef<const uint8_t> GetData(const CompiledMethod* compiled_method) MC {
     return compiled_method->GetMappingTable();
   }
 
-  static uint32_t GetOffset(OatClass* oat_class, size_t method_offsets_index) ALWAYS_INLINE {
+  static uint32_t GetOffset(OatClass* oat_class, size_t method_offsets_index) MC {
     uint32_t offset = oat_class->method_headers_[method_offsets_index].mapping_table_offset_;
     return offset == 0u ? 0u :
         (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1) - offset;
   }
 
   static void SetOffset(OatClass* oat_class, size_t method_offsets_index, uint32_t offset)
-      ALWAYS_INLINE {
+      MC {
     oat_class->method_headers_[method_offsets_index].mapping_table_offset_ =
         (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1) - offset;
   }
@@ -543,18 +543,18 @@ struct OatWriter::MappingTableDataAccess {
 };
 
 struct OatWriter::VmapTableDataAccess {
-  static ArrayRef<const uint8_t> GetData(const CompiledMethod* compiled_method) ALWAYS_INLINE {
+  static ArrayRef<const uint8_t> GetData(const CompiledMethod* compiled_method) MC {
     return compiled_method->GetVmapTable();
   }
 
-  static uint32_t GetOffset(OatClass* oat_class, size_t method_offsets_index) ALWAYS_INLINE {
+  static uint32_t GetOffset(OatClass* oat_class, size_t method_offsets_index) MC {
     uint32_t offset = oat_class->method_headers_[method_offsets_index].vmap_table_offset_;
     return offset == 0u ? 0u :
         (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1) - offset;
   }
 
   static void SetOffset(OatClass* oat_class, size_t method_offsets_index, uint32_t offset)
-      ALWAYS_INLINE {
+      MC {
     oat_class->method_headers_[method_offsets_index].vmap_table_offset_ =
         (oat_class->method_offsets_[method_offsets_index].code_offset_ & ~1) - offset;
   }
@@ -738,7 +738,7 @@ class OatWriter::InitCodeMethodVisitor : public OatDexMethodVisitor {
           quick_code_offset = NewQuickCodeOffset(compiled_method, it, thumb_offset);
         }
       } else {
-        auto lb = dedupe_map_.lower_bound(compiled_method);
+        _ lb = dedupe_map_.lower_bound(compiled_method);
         if (lb != dedupe_map_.end() && !dedupe_map_.key_comp()(compiled_method, lb->first)) {
           quick_code_offset = lb->second;
           deduped = true;
@@ -926,7 +926,7 @@ class OatWriter::InitMapMethodVisitor : public OatDexMethodVisitor {
       ArrayRef<const uint8_t> map = DataAccess::GetData(compiled_method);
       uint32_t map_size = map.size() * sizeof(map[0]);
       if (map_size != 0u) {
-        auto lb = dedupe_map_.lower_bound(map.data());
+        _ lb = dedupe_map_.lower_bound(map.data());
         if (lb != dedupe_map_.end() && !dedupe_map_.key_comp()(map.data(), lb->first)) {
           DataAccess::SetOffset(oat_class, method_offsets_index_, lb->second);
         } else {
@@ -1467,7 +1467,7 @@ size_t OatWriter::InitOatClasses(size_t offset) {
   offset = visitor.GetOffset();
 
   // Update oat_dex_files_.
-  auto oat_class_it = oat_classes_.begin();
+  _ oat_class_it = oat_classes_.begin();
   for (OatDexFile& oat_dex_file : oat_dex_files_) {
     for (uint32_t& class_offset : oat_dex_file.class_offsets_) {
       DCHECK(oat_class_it != oat_classes_.end());

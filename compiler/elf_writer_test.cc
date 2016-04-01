@@ -108,7 +108,7 @@ TEST_F(ElfWriterTest, EncodeDecodeOatPatches) {
       { 8, 8 + 128 },
       { },
   };
-  for (const auto& patch_locations : test_data) {
+  for (const _& patch_locations : test_data) {
     constexpr int32_t delta = 0x11235813;
 
     // Encode patch locations.

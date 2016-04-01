@@ -49,15 +49,15 @@ inline mirror::Field* Field::CreateFromArtField(Thread* self, ArtField* field,
       self->ClearException();
     }
   }
-  auto ret = hs.NewHandle(static_cast<Field*>(StaticClass()->AllocObject(self)));
+  _ ret = hs.NewHandle(static_cast<Field*>(StaticClass()->AllocObject(self)));
   if (UNLIKELY(ret.Get() == nullptr)) {
     self->AssertPendingOOMException();
     return nullptr;
   }
-  const auto pointer_size = kTransactionActive ?
+  const _ pointer_size = kTransactionActive ?
       Runtime::Current()->GetClassLinker()->GetImagePointerSize() : sizeof(void*);
-  auto dex_field_index = field->GetDexFieldIndex();
-  auto* resolved_field = field->GetDexCache()->GetResolvedField(dex_field_index, pointer_size);
+  _ dex_field_index = field->GetDexFieldIndex();
+  _* resolved_field = field->GetDexCache()->GetResolvedField(dex_field_index, pointer_size);
   if (field->GetDeclaringClass()->IsProxyClass()) {
     DCHECK(field->IsStatic());
     DCHECK_LT(dex_field_index, 2U);

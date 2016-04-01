@@ -33,13 +33,13 @@ TEST_F(ReferenceQueueTest, EnqueueDequeue) {
   ReferenceQueue queue(&lock);
   ASSERT_TRUE(queue.IsEmpty());
   ASSERT_EQ(queue.GetLength(), 0U);
-  auto ref_class = hs.NewHandle(
+  _ ref_class = hs.NewHandle(
       Runtime::Current()->GetClassLinker()->FindClass(self, "Ljava/lang/ref/WeakReference;",
                                                       ScopedNullHandle<mirror::ClassLoader>()));
   ASSERT_TRUE(ref_class.Get() != nullptr);
-  auto ref1(hs.NewHandle(ref_class->AllocObject(self)->AsReference()));
+  _ ref1(hs.NewHandle(ref_class->AllocObject(self)->AsReference()));
   ASSERT_TRUE(ref1.Get() != nullptr);
-  auto ref2(hs.NewHandle(ref_class->AllocObject(self)->AsReference()));
+  _ ref2(hs.NewHandle(ref_class->AllocObject(self)->AsReference()));
   ASSERT_TRUE(ref2.Get() != nullptr);
   queue.EnqueueReference(ref1.Get());
   ASSERT_TRUE(!queue.IsEmpty());
@@ -66,17 +66,17 @@ TEST_F(ReferenceQueueTest, Dump) {
   Mutex lock("Reference queue lock");
   ReferenceQueue queue(&lock);
   queue.Dump(LOG(INFO));
-  auto weak_ref_class = hs.NewHandle(
+  _ weak_ref_class = hs.NewHandle(
       Runtime::Current()->GetClassLinker()->FindClass(self, "Ljava/lang/ref/WeakReference;",
                                                       ScopedNullHandle<mirror::ClassLoader>()));
   ASSERT_TRUE(weak_ref_class.Get() != nullptr);
-  auto finalizer_ref_class = hs.NewHandle(
+  _ finalizer_ref_class = hs.NewHandle(
       Runtime::Current()->GetClassLinker()->FindClass(self, "Ljava/lang/ref/FinalizerReference;",
                                                       ScopedNullHandle<mirror::ClassLoader>()));
   ASSERT_TRUE(finalizer_ref_class.Get() != nullptr);
-  auto ref1(hs.NewHandle(weak_ref_class->AllocObject(self)->AsReference()));
+  _ ref1(hs.NewHandle(weak_ref_class->AllocObject(self)->AsReference()));
   ASSERT_TRUE(ref1.Get() != nullptr);
-  auto ref2(hs.NewHandle(finalizer_ref_class->AllocObject(self)->AsReference()));
+  _ ref2(hs.NewHandle(finalizer_ref_class->AllocObject(self)->AsReference()));
   ASSERT_TRUE(ref2.Get() != nullptr);
   queue.EnqueueReference(ref1.Get());
   queue.Dump(LOG(INFO));

@@ -42,7 +42,7 @@ void MarkCompact::BindBitmaps() {
   TimingLogger::ScopedTiming t(__FUNCTION__, GetTimings());
   WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
   // Mark all of the spaces we never collect as immune.
-  for (const auto& space : GetHeap()->GetContinuousSpaces()) {
+  for (const _& space : GetHeap()->GetContinuousSpaces()) {
     if (space->GetGcRetentionPolicy() == space::kGcRetentionPolicyNeverCollect ||
         space->GetGcRetentionPolicy() == space::kGcRetentionPolicyFullCollect) {
       immune_spaces_.AddSpace(space);
@@ -216,7 +216,7 @@ void MarkCompact::MarkingPhase() {
 
 void MarkCompact::UpdateAndMarkModUnion() {
   TimingLogger::ScopedTiming t(__FUNCTION__, GetTimings());
-  for (auto& space : heap_->GetContinuousSpaces()) {
+  for (_& space : heap_->GetContinuousSpaces()) {
     // If the space is immune then we need to mark the references to other spaces.
     if (immune_spaces_.ContainsSpace(space)) {
       accounting::ModUnionTable* table = heap_->FindModUnionTableFromSpace(space);
@@ -260,7 +260,7 @@ void MarkCompact::ResizeMarkStack(size_t new_size) {
   std::vector<StackReference<mirror::Object>> temp(mark_stack_->Begin(), mark_stack_->End());
   CHECK_LE(mark_stack_->Size(), new_size);
   mark_stack_->Resize(new_size);
-  for (auto& obj : temp) {
+  for (_& obj : temp) {
     mark_stack_->PushBack(obj.AsMirrorPtr());
   }
 }
@@ -337,7 +337,7 @@ class UpdateObjectReferencesVisitor {
   explicit UpdateObjectReferencesVisitor(MarkCompact* collector) : collector_(collector) {
   }
   void operator()(mirror::Object* obj) const SHARED_REQUIRES(Locks::heap_bitmap_lock_)
-          REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+          REQUIRES(Locks::mutator_lock_) MC {
     collector_->UpdateObjectReferences(obj);
   }
 
@@ -353,7 +353,7 @@ void MarkCompact::UpdateReferences() {
   UpdateRootVisitor update_root_visitor(this);
   runtime->VisitRoots(&update_root_visitor);
   // Update object references in mod union tables and spaces.
-  for (const auto& space : heap_->GetContinuousSpaces()) {
+  for (const _& space : heap_->GetContinuousSpaces()) {
     // If the space is immune then we need to mark the references to other spaces.
     accounting::ModUnionTable* table = heap_->FindModUnionTableFromSpace(space);
     if (table != nullptr) {
@@ -429,7 +429,7 @@ class UpdateReferenceVisitor {
   }
 
   void operator()(mirror::Object* obj, MemberOffset offset, bool /*is_static*/) const
-      ALWAYS_INLINE REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
+      MC REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
     collector_->UpdateHeapReference(obj->GetFieldObjectReferenceAddr<kVerifyNone>(offset));
   }
 
@@ -506,7 +506,7 @@ class MoveObjectVisitor {
   explicit MoveObjectVisitor(MarkCompact* collector) : collector_(collector) {
   }
   void operator()(mirror::Object* obj) const SHARED_REQUIRES(Locks::heap_bitmap_lock_)
-          REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+          REQUIRES(Locks::mutator_lock_) MC {
       collector_->MoveObject(obj, obj->SizeOf());
   }
 
@@ -544,7 +544,7 @@ void MarkCompact::MoveObjects() {
 void MarkCompact::Sweep(bool swap_bitmaps) {
   TimingLogger::ScopedTiming t(__FUNCTION__, GetTimings());
   DCHECK(mark_stack_->IsEmpty());
-  for (const auto& space : GetHeap()->GetContinuousSpaces()) {
+  for (const _& space : GetHeap()->GetContinuousSpaces()) {
     if (space->IsContinuousMemMapAllocSpace()) {
       space::ContinuousMemMapAllocSpace* alloc_space = space->AsContinuousMemMapAllocSpace();
       if (!ShouldSweepSpace(alloc_space)) {
@@ -577,7 +577,7 @@ class MarkCompactMarkObjectVisitor {
   explicit MarkCompactMarkObjectVisitor(MarkCompact* collector) : collector_(collector) {
   }
 
-  void operator()(mirror::Object* obj, MemberOffset offset, bool /*is_static*/) const ALWAYS_INLINE
+  void operator()(mirror::Object* obj, MemberOffset offset, bool /*is_static*/) const MC
       REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
     // Object was already verified when we scanned it.
     collector_->MarkObject(obj->GetFieldObject<mirror::Object, kVerifyNone>(offset));

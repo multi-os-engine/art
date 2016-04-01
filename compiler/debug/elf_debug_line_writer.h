@@ -172,7 +172,7 @@ class ElfDebugLineWriter {
 
       // Get and deduplicate directory and filename.
       int file_index = 0;  // 0 - primary source file of the compilation.
-      auto& dex_class_def = dex->GetClassDef(mi->class_def_index);
+      _& dex_class_def = dex->GetClassDef(mi->class_def_index);
       const char* source_file = dex->GetSourceFile(dex_class_def);
       if (source_file != nullptr) {
         std::string file_name(source_file);
@@ -187,7 +187,7 @@ class ElfDebugLineWriter {
             class_name.front() == 'L' &&  // Type descriptor for a class.
             class_name_slash != std::string::npos) {  // Has package name.
           std::string package_name = class_name.substr(1, class_name_slash - 1);
-          auto it = directories_map.find(package_name);
+          _ it = directories_map.find(package_name);
           if (it == directories_map.end()) {
             directory_index = 1 + directories.size();
             directories_map.emplace(package_name, directory_index);
@@ -199,7 +199,7 @@ class ElfDebugLineWriter {
         }
 
         // Add file entry.
-        auto it2 = files_map.find(full_path);
+        _ it2 = files_map.find(full_path);
         if (it2 == files_map.end()) {
           file_index = 1 + files.size();
           files_map.emplace(full_path, file_index);
@@ -226,7 +226,7 @@ class ElfDebugLineWriter {
           uint32_t pc = pc2dex.from_;
           int dex_pc = pc2dex.to_;
           // Find mapping with address with is greater than our dex pc; then go back one step.
-          auto dex2line = std::upper_bound(
+          _ dex2line = std::upper_bound(
               dex2line_map.begin(),
               dex2line_map.end(),
               dex_pc,

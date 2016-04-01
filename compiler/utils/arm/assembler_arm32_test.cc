@@ -327,7 +327,7 @@ class AssemblerArm32Test : public AssemblerArmTest<arm::Arm32Assembler,
                       bool without_pc, std::string fmt, std::string filter,
                       std::ostringstream& oss) {
     std::vector<arm::Register*> registers = without_pc ? GetRegistersWithoutPC() : GetRegisters();
-    for (auto reg : registers) {
+    for (_ reg : registers) {
       std::string after_reg = fmt;
       std::string after_reg_filter = filter;
 
@@ -426,7 +426,7 @@ class AssemblerArm32Test : public AssemblerArmTest<arm::Arm32Assembler,
   void TemplateHelper(std::function<void(arm::Register, Args...)> f, int depth, bool without_pc,
                       std::string fmt, std::string filter, std::ostringstream& oss) {
     std::vector<arm::Register*> registers = without_pc ? GetRegistersWithoutPC() : GetRegisters();
-    for (auto reg : registers) {
+    for (_ reg : registers) {
       std::string after_reg = fmt;
       std::string after_reg_filter = filter;
 
@@ -445,7 +445,7 @@ class AssemblerArm32Test : public AssemblerArmTest<arm::Arm32Assembler,
         continue;
       }
 
-      auto lambda = [&] (Args... args) { f(*reg, args...); };  // NOLINT [readability/braces] [4]
+      _ lambda = [&] (Args... args) { f(*reg, args...); };  // NOLINT [readability/braces] [4]
       TemplateHelper(std::function<void(Args...)>(lambda), depth + 1, without_pc,
           after_reg, after_reg_filter, oss);
     }
@@ -472,7 +472,7 @@ class AssemblerArm32Test : public AssemblerArmTest<arm::Arm32Assembler,
         continue;
       }
 
-      auto lambda = [&] (Args... args) { f(shift, args...); };  // NOLINT [readability/braces] [4]
+      _ lambda = [&] (Args... args) { f(shift, args...); };  // NOLINT [readability/braces] [4]
       TemplateHelper(std::function<void(Args...)>(lambda), depth, without_pc,
           after_shift, after_shift_filter, oss);
     }
@@ -498,7 +498,7 @@ class AssemblerArm32Test : public AssemblerArmTest<arm::Arm32Assembler,
         continue;
       }
 
-      auto lambda = [&] (Args... args) { f(c, args...); };  // NOLINT [readability/braces] [4]
+      _ lambda = [&] (Args... args) { f(c, args...); };  // NOLINT [readability/braces] [4]
       TemplateHelper(std::function<void(Args...)>(lambda), depth, without_pc,
           after_cond, after_cond_filter, oss);
     }
@@ -524,7 +524,7 @@ class AssemblerArm32Test : public AssemblerArmTest<arm::Arm32Assembler,
         continue;
       }
 
-      auto lambda = [&] (Args... args) { f(s, args...); };  // NOLINT [readability/braces] [4]
+      _ lambda = [&] (Args... args) { f(s, args...); };  // NOLINT [readability/braces] [4]
       TemplateHelper(std::function<void(Args...)>(lambda), depth, without_pc,
           after_cond, after_cond_filter, oss);
     }

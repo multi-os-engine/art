@@ -94,7 +94,7 @@ void CumulativeLogger::AddPair(const std::string& label, uint64_t delta_time) {
   total_time_ += delta_time;
   Histogram<uint64_t>* histogram;
   Histogram<uint64_t> dummy(label.c_str());
-  auto it = histograms_.find(&dummy);
+  _ it = histograms_.find(&dummy);
   if (it == histograms_.end()) {
     const size_t max_buckets = Runtime::Current()->GetHeap()->IsLowMemoryMode() ?
         kLowMemoryBucketCount : kDefaultBucketCount;

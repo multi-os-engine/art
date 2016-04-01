@@ -719,10 +719,10 @@ class SlowPathGenerator {
     // slow-paths with exactly the same dex-pc are viable candidates.
     // TODO: pass dex-pc/slow-path-type to run-time to allow even more sharing?
     const uint32_t dex_pc = instruction->GetDexPc();
-    auto iter = slow_path_map_.find(dex_pc);
+    _ iter = slow_path_map_.find(dex_pc);
     if (iter != slow_path_map_.end()) {
-      auto candidates = iter->second;
-      for (const auto& it : candidates) {
+      _ candidates = iter->second;
+      for (const _& it : candidates) {
         InstructionType* other_instruction = it.first;
         SlowPathCodeType* other_slow_path = down_cast<SlowPathCodeType*>(it.second);
         // Determine if the instructions allow for slow-path sharing.

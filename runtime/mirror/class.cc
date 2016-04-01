@@ -199,7 +199,7 @@ void Class::DumpClass(std::ostream& os, int flags) {
   StackHandleScope<2> hs(self);
   Handle<mirror::Class> h_this(hs.NewHandle(this));
   Handle<mirror::Class> h_super(hs.NewHandle(GetSuperClass()));
-  auto image_pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+  _ image_pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
 
   std::string temp;
   os << "----- " << (IsInterface() ? "interface" : "class") << " "
@@ -394,7 +394,7 @@ ArtMethod* Class::FindInterfaceMethod(const DexCache* dex_cache, uint32_t dex_me
 
 ArtMethod* Class::FindDeclaredDirectMethod(const StringPiece& name, const StringPiece& signature,
                                            size_t pointer_size) {
-  for (auto& method : GetDirectMethods(pointer_size)) {
+  for (_& method : GetDirectMethods(pointer_size)) {
     if (name == method.GetName() && method.GetSignature() == signature) {
       return &method;
     }
@@ -404,7 +404,7 @@ ArtMethod* Class::FindDeclaredDirectMethod(const StringPiece& name, const String
 
 ArtMethod* Class::FindDeclaredDirectMethod(const StringPiece& name, const Signature& signature,
                                            size_t pointer_size) {
-  for (auto& method : GetDirectMethods(pointer_size)) {
+  for (_& method : GetDirectMethods(pointer_size)) {
     if (name == method.GetName() && signature == method.GetSignature()) {
       return &method;
     }
@@ -415,7 +415,7 @@ ArtMethod* Class::FindDeclaredDirectMethod(const StringPiece& name, const Signat
 ArtMethod* Class::FindDeclaredDirectMethod(const DexCache* dex_cache, uint32_t dex_method_idx,
                                            size_t pointer_size) {
   if (GetDexCache() == dex_cache) {
-    for (auto& method : GetDirectMethods(pointer_size)) {
+    for (_& method : GetDirectMethods(pointer_size)) {
       if (method.GetDexMethodIndex() == dex_method_idx) {
         return &method;
       }
@@ -458,7 +458,7 @@ ArtMethod* Class::FindDirectMethod(
 }
 
 ArtMethod* Class::FindDeclaredDirectMethodByName(const StringPiece& name, size_t pointer_size) {
-  for (auto& method : GetDirectMethods(pointer_size)) {
+  for (_& method : GetDirectMethods(pointer_size)) {
     ArtMethod* const np_method = method.GetInterfaceMethodIfProxy(pointer_size);
     if (name == np_method->GetName()) {
       return &method;
@@ -473,7 +473,7 @@ ArtMethod* Class::FindDeclaredDirectMethodByName(const StringPiece& name, size_t
 // excludes interface methods which might be found by this.
 ArtMethod* Class::FindDeclaredVirtualMethod(const StringPiece& name, const StringPiece& signature,
                                             size_t pointer_size) {
-  for (auto& method : GetVirtualMethods(pointer_size)) {
+  for (_& method : GetVirtualMethods(pointer_size)) {
     ArtMethod* const np_method = method.GetInterfaceMethodIfProxy(pointer_size);
     if (name == np_method->GetName() && np_method->GetSignature() == signature) {
       return &method;
@@ -484,7 +484,7 @@ ArtMethod* Class::FindDeclaredVirtualMethod(const StringPiece& name, const Strin
 
 ArtMethod* Class::FindDeclaredVirtualMethod(const StringPiece& name, const Signature& signature,
                                             size_t pointer_size) {
-  for (auto& method : GetVirtualMethods(pointer_size)) {
+  for (_& method : GetVirtualMethods(pointer_size)) {
     ArtMethod* const np_method = method.GetInterfaceMethodIfProxy(pointer_size);
     if (name == np_method->GetName() && signature == np_method->GetSignature()) {
       return &method;
@@ -496,7 +496,7 @@ ArtMethod* Class::FindDeclaredVirtualMethod(const StringPiece& name, const Signa
 ArtMethod* Class::FindDeclaredVirtualMethod(const DexCache* dex_cache, uint32_t dex_method_idx,
                                             size_t pointer_size) {
   if (GetDexCache() == dex_cache) {
-    for (auto& method : GetDeclaredVirtualMethods(pointer_size)) {
+    for (_& method : GetDeclaredVirtualMethods(pointer_size)) {
       if (method.GetDexMethodIndex() == dex_method_idx) {
         return &method;
       }
@@ -506,7 +506,7 @@ ArtMethod* Class::FindDeclaredVirtualMethod(const DexCache* dex_cache, uint32_t 
 }
 
 ArtMethod* Class::FindDeclaredVirtualMethodByName(const StringPiece& name, size_t pointer_size) {
-  for (auto& method : GetVirtualMethods(pointer_size)) {
+  for (_& method : GetVirtualMethods(pointer_size)) {
     ArtMethod* const np_method = method.GetInterfaceMethodIfProxy(pointer_size);
     if (name == np_method->GetName()) {
       return &method;
@@ -578,7 +578,7 @@ ArtMethod* Class::FindVirtualMethodForInterfaceSuper(ArtMethod* method, size_t p
     iface.Assign(iftable->GetInterface(k));
     // Iterate through every declared method on this interface. Each direct method's name/signature
     // is unique so the order of the inner loop doesn't matter.
-    for (auto& method_iter : iface->GetDeclaredVirtualMethods(pointer_size)) {
+    for (_& method_iter : iface->GetDeclaredVirtualMethods(pointer_size)) {
       ArtMethod* current_method = &method_iter;
       if (current_method->HasSameNameAndSignature(method)) {
         if (current_method->IsDefault()) {
@@ -802,7 +802,7 @@ ArtField* Class::FindField(Thread* self, Handle<Class> klass, const StringPiece&
 
 void Class::SetSkipAccessChecksFlagOnAllMethods(size_t pointer_size) {
   DCHECK(IsVerified());
-  for (auto& m : GetMethods(pointer_size)) {
+  for (_& m : GetMethods(pointer_size)) {
     if (!m.IsNative() && m.IsInvokable()) {
       m.SetSkipAccessChecks();
     }
@@ -916,7 +916,7 @@ const DexFile::TypeList* Class::GetInterfaceTypeList() {
 void Class::PopulateEmbeddedImtAndVTable(ArtMethod* const (&methods)[kImtSize],
                                          size_t pointer_size) {
   for (size_t i = 0; i < kImtSize; i++) {
-    auto method = methods[i];
+    _ method = methods[i];
     DCHECK(method != nullptr);
     SetEmbeddedImTableEntry(i, method, pointer_size);
   }
@@ -953,7 +953,7 @@ class ReadBarrierOnNativeRootsVisitor {
     mirror::Object* new_ref = ReadBarrier::BarrierForRoot(root);
     if (old_ref != new_ref) {
       // Update the field atomically. This may fail if mutator updates before us, but it's ok.
-      auto* atomic_root =
+      _* atomic_root =
           reinterpret_cast<Atomic<mirror::CompressedReference<mirror::Object>>*>(root);
       atomic_root->CompareExchangeStrongSequentiallyConsistent(
           mirror::CompressedReference<mirror::Object>::FromMirrorPtr(old_ref),
@@ -1024,7 +1024,7 @@ bool Class::ProxyDescriptorEquals(const char* match) {
 // TODO: Move this to java_lang_Class.cc?
 ArtMethod* Class::GetDeclaredConstructor(
     Thread* self, Handle<mirror::ObjectArray<mirror::Class>> args) {
-  for (auto& m : GetDirectMethods(sizeof(void*))) {
+  for (_& m : GetDirectMethods(sizeof(void*))) {
     // Skip <clinit> which is a static constructor, as well as non constructors.
     if (m.IsStatic() || !m.IsConstructor()) {
       continue;
@@ -1067,19 +1067,19 @@ mirror::Method* Class::GetDeclaredMethodInternal(Thread* self,
   // were synthesized by the runtime.
   constexpr uint32_t kSkipModifiers = kAccMiranda | kAccSynthetic;
   StackHandleScope<3> hs(self);
-  auto h_method_name = hs.NewHandle(name);
+  _ h_method_name = hs.NewHandle(name);
   if (UNLIKELY(h_method_name.Get() == nullptr)) {
     ThrowNullPointerException("name == null");
     return nullptr;
   }
-  auto h_args = hs.NewHandle(args);
+  _ h_args = hs.NewHandle(args);
   Handle<mirror::Class> h_klass = hs.NewHandle(klass);
   ArtMethod* result = nullptr;
   const size_t pointer_size = kTransactionActive
                                   ? Runtime::Current()->GetClassLinker()->GetImagePointerSize()
                                   : sizeof(void*);
-  for (auto& m : h_klass->GetDeclaredVirtualMethods(pointer_size)) {
-    auto* np_method = m.GetInterfaceMethodIfProxy(pointer_size);
+  for (_& m : h_klass->GetDeclaredVirtualMethods(pointer_size)) {
+    _* np_method = m.GetInterfaceMethodIfProxy(pointer_size);
     // May cause thread suspension.
     mirror::String* np_name = np_method->GetNameAsString(self);
     if (!np_name->Equals(h_method_name.Get()) || !np_method->EqualParameters(h_args)) {
@@ -1088,7 +1088,7 @@ mirror::Method* Class::GetDeclaredMethodInternal(Thread* self,
       }
       continue;
     }
-    auto modifiers = m.GetAccessFlags();
+    _ modifiers = m.GetAccessFlags();
     if ((modifiers & kSkipModifiers) == 0) {
       return mirror::Method::CreateFromArtMethod<kTransactionActive>(self, &m);
     }
@@ -1097,12 +1097,12 @@ mirror::Method* Class::GetDeclaredMethodInternal(Thread* self,
     }
   }
   if (result == nullptr) {
-    for (auto& m : h_klass->GetDirectMethods(pointer_size)) {
-      auto modifiers = m.GetAccessFlags();
+    for (_& m : h_klass->GetDirectMethods(pointer_size)) {
+      _ modifiers = m.GetAccessFlags();
       if ((modifiers & kAccConstructor) != 0) {
         continue;
       }
-      auto* np_method = m.GetInterfaceMethodIfProxy(pointer_size);
+      _* np_method = m.GetInterfaceMethodIfProxy(pointer_size);
       // May cause thread suspension.
       mirror::String* np_name = np_method->GetNameAsString(self);
       if (np_name == nullptr) {

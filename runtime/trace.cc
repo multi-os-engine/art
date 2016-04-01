@@ -105,7 +105,7 @@ ArtMethod* Trace::DecodeTraceMethod(uint32_t tmid) {
 uint32_t Trace::EncodeTraceMethod(ArtMethod* method) {
   MutexLock mu(Thread::Current(), *unique_methods_lock_);
   uint32_t idx;
-  auto it = art_method_id_map_.find(method);
+  _ it = art_method_id_map_.find(method);
   if (it != art_method_id_map_.end()) {
     idx = it->second;
   } else {
@@ -247,22 +247,22 @@ void Trace::CompareAndUpdateStackTrace(Thread* thread,
   if (old_stack_trace == nullptr) {
     // If there's no previous stack trace sample for this thread, log an entry event for all
     // methods in the trace.
-    for (auto rit = stack_trace->rbegin(); rit != stack_trace->rend(); ++rit) {
+    for (_ rit = stack_trace->rbegin(); rit != stack_trace->rend(); ++rit) {
       LogMethodTraceEvent(thread, *rit, instrumentation::Instrumentation::kMethodEntered,
                           thread_clock_diff, wall_clock_diff);
     }
   } else {
     // If there's a previous stack trace for this thread, diff the traces and emit entry and exit
     // events accordingly.
-    auto old_rit = old_stack_trace->rbegin();
-    auto rit = stack_trace->rbegin();
+    _ old_rit = old_stack_trace->rbegin();
+    _ rit = stack_trace->rbegin();
     // Iterate bottom-up over both traces until there's a difference between them.
     while (old_rit != old_stack_trace->rend() && rit != stack_trace->rend() && *old_rit == *rit) {
       old_rit++;
       rit++;
     }
     // Iterate top-down over the old trace until the point where they differ, emitting exit events.
-    for (auto old_it = old_stack_trace->begin(); old_it != old_rit.base(); ++old_it) {
+    for (_ old_it = old_stack_trace->begin(); old_it != old_rit.base(); ++old_it) {
       LogMethodTraceEvent(thread, *old_it, instrumentation::Instrumentation::kMethodExited,
                           thread_clock_diff, wall_clock_diff);
     }
@@ -650,7 +650,7 @@ static void GetVisitedMethodsFromBitSets(
     std::set<ArtMethod*>* visited_methods) SHARED_REQUIRES(Locks::mutator_lock_) {
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   Thread* const self = Thread::Current();
-  for (auto& e : seen_methods) {
+  for (_& e : seen_methods) {
     DexIndexBitSet* bit_set = e.second;
     // TODO: Visit trace methods as roots.
     mirror::DexCache* dex_cache = class_linker->FindDexCache(self, *e.first, false);
@@ -850,7 +850,7 @@ void Trace::ReadClocks(Thread* thread, uint32_t* thread_clock_diff, uint32_t* wa
 bool Trace::RegisterMethod(ArtMethod* method) {
   mirror::DexCache* dex_cache = method->GetDexCache();
   const DexFile* dex_file = dex_cache->GetDexFile();
-  auto* resolved_method = dex_cache->GetResolvedMethod(method->GetDexMethodIndex(), sizeof(void*));
+  _* resolved_method = dex_cache->GetResolvedMethod(method->GetDexMethodIndex(), sizeof(void*));
   if (resolved_method != method) {
     DCHECK(resolved_method == nullptr);
     dex_cache->SetResolvedMethod(method->GetDexMethodIndex(), method, sizeof(void*));
@@ -1013,7 +1013,7 @@ void Trace::GetVisitedMethods(size_t buf_size,
 }
 
 void Trace::DumpMethodList(std::ostream& os, const std::set<ArtMethod*>& visited_methods) {
-  for (const auto& method : visited_methods) {
+  for (const _& method : visited_methods) {
     os << GetMethodLine(method);
   }
 }
@@ -1027,7 +1027,7 @@ static void DumpThread(Thread* t, void* arg) {
 
 void Trace::DumpThreadList(std::ostream& os) {
   Thread* self = Thread::Current();
-  for (auto it : exited_threads_) {
+  for (_ it : exited_threads_) {
     os << it.first << "\t" << it.second << "\n";
   }
   Locks::thread_list_lock_->AssertNotHeld(self);

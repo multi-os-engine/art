@@ -573,7 +573,7 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject javaM
     return nullptr;
   }
 
-  auto* abstract_method = soa.Decode<mirror::AbstractMethod*>(javaMethod);
+  _* abstract_method = soa.Decode<mirror::AbstractMethod*>(javaMethod);
   const bool accessible = abstract_method->IsAccessible();
   ArtMethod* m = abstract_method->GetArtMethod();
 
@@ -607,8 +607,8 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject javaM
   }
 
   // Get our arrays of arguments and their types, and check they're the same size.
-  auto* objects = soa.Decode<mirror::ObjectArray<mirror::Object>*>(javaArgs);
-  auto* np_method = m->GetInterfaceMethodIfProxy(sizeof(void*));
+  _* objects = soa.Decode<mirror::ObjectArray<mirror::Object>*>(javaArgs);
+  _* np_method = m->GetInterfaceMethodIfProxy(sizeof(void*));
   const DexFile::TypeList* classes = np_method->GetParameterTypeList();
   uint32_t classes_size = (classes == nullptr) ? 0 : classes->Size();
   uint32_t arg_count = (objects != nullptr) ? objects->GetLength() : 0;
@@ -845,7 +845,7 @@ bool VerifyAccess(Thread* self, mirror::Object* obj, mirror::Class* declaring_cl
   if ((access_flags & kAccPublic) != 0) {
     return true;
   }
-  auto* klass = GetCallingClass(self, num_frames);
+  _* klass = GetCallingClass(self, num_frames);
   if (UNLIKELY(klass == nullptr)) {
     // The caller is an attached native thread.
     return false;

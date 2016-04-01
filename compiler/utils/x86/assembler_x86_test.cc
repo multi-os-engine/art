@@ -280,7 +280,7 @@ std::string rorl_fn(AssemblerX86Test::Base* assembler_test, x86::X86Assembler* a
   std::vector<x86::Register*> registers = assembler_test->GetRegisters();
 
   x86::Register shifter(x86::ECX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->rorl(*reg, shifter);
     str << "rorl %cl, %" << assembler_test->GetRegisterName(*reg) << "\n";
   }
@@ -303,7 +303,7 @@ std::string roll_fn(AssemblerX86Test::Base* assembler_test, x86::X86Assembler* a
   std::vector<x86::Register*> registers = assembler_test->GetRegisters();
 
   x86::Register shifter(x86::ECX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->roll(*reg, shifter);
     str << "roll %cl, %" << assembler_test->GetRegisterName(*reg) << "\n";
   }

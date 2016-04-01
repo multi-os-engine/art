@@ -66,7 +66,7 @@ class TestPredicate : public IsMarkedVisitor {
  public:
   mirror::Object* IsMarked(mirror::Object* s) OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
     bool erased = false;
-    for (auto it = expected_.begin(), end = expected_.end(); it != end; ++it) {
+    for (_ it = expected_.begin(), end = expected_.end(); it != end; ++it) {
       if (*it == s) {
         expected_.erase(it);
         erased = true;

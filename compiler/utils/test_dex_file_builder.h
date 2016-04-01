@@ -37,7 +37,7 @@ class TestDexFileBuilder {
 
   void AddString(const std::string& str) {
     CHECK(dex_file_data_.empty());
-    auto it = strings_.emplace(str, IdxAndDataOffset()).first;
+    _ it = strings_.emplace(str, IdxAndDataOffset()).first;
     CHECK_LT(it->first.length(), 128u);  // Don't allow multi-byte length in uleb128.
   }
 
@@ -66,10 +66,10 @@ class TestDexFileBuilder {
     ProtoKey proto_key = CreateProtoKey(signature);
     AddString(proto_key.shorty);
     AddType(proto_key.return_type);
-    for (const auto& arg_type : proto_key.args) {
+    for (const _& arg_type : proto_key.args) {
       AddType(arg_type);
     }
-    auto it = protos_.emplace(proto_key, IdxAndDataOffset()).first;
+    _ it = protos_.emplace(proto_key, IdxAndDataOffset()).first;
     const ProtoKey* proto = &it->first;  // Valid as long as the element remains in protos_.
 
     MethodKey method_key = {
@@ -100,7 +100,7 @@ class TestDexFileBuilder {
 
     uint32_t string_ids_offset = sizeof(DexFile::Header);
     uint32_t string_idx = 0u;
-    for (auto& entry : strings_) {
+    for (_& entry : strings_) {
       entry.second.idx = string_idx;
       string_idx += 1u;
       entry.second.data_offset = data_section_size;
@@ -111,7 +111,7 @@ class TestDexFileBuilder {
 
     uint32_t type_ids_offset = string_ids_offset + strings_.size() * sizeof(DexFile::StringId);
     uint32_t type_idx = 0u;
-    for (auto& entry : types_) {
+    for (_& entry : types_) {
       entry.second = type_idx;
       type_idx += 1u;
     }
@@ -120,7 +120,7 @@ class TestDexFileBuilder {
 
     uint32_t proto_ids_offset = type_ids_offset + types_.size() * sizeof(DexFile::TypeId);
     uint32_t proto_idx = 0u;
-    for (auto& entry : protos_) {
+    for (_& entry : protos_) {
       entry.second.idx = proto_idx;
       proto_idx += 1u;
       size_t num_args = entry.first.args.size();
@@ -136,7 +136,7 @@ class TestDexFileBuilder {
 
     uint32_t field_ids_offset = proto_ids_offset + protos_.size() * sizeof(DexFile::ProtoId);
     uint32_t field_idx = 0u;
-    for (auto& entry : fields_) {
+    for (_& entry : fields_) {
       entry.second = field_idx;
       field_idx += 1u;
     }
@@ -145,7 +145,7 @@ class TestDexFileBuilder {
 
     uint32_t method_ids_offset = field_ids_offset + fields_.size() * sizeof(DexFile::FieldId);
     uint32_t method_idx = 0u;
-    for (auto& entry : methods_) {
+    for (_& entry : methods_) {
       entry.second = method_idx;
       method_idx += 1u;
     }
@@ -164,7 +164,7 @@ class TestDexFileBuilder {
 
     dex_file_data_.resize(total_size);
 
-    for (const auto& entry : strings_) {
+    for (const _& entry : strings_) {
       CHECK_LT(entry.first.size(), 128u);
       uint32_t raw_offset = data_section_offset + entry.second.data_offset;
       dex_file_data_[raw_offset] = static_cast<uint8_t>(entry.first.size());
@@ -172,12 +172,12 @@ class TestDexFileBuilder {
       Write32(string_ids_offset + entry.second.idx * sizeof(DexFile::StringId), raw_offset);
     }
 
-    for (const auto& entry : types_) {
+    for (const _& entry : types_) {
       Write32(type_ids_offset + entry.second * sizeof(DexFile::TypeId), GetStringIdx(entry.first));
       ++type_idx;
     }
 
-    for (const auto& entry : protos_) {
+    for (const _& entry : protos_) {
       size_t num_args = entry.first.args.size();
       uint32_t type_list_offset =
           (num_args != 0u) ? data_section_offset + entry.second.data_offset : 0u;
@@ -195,17 +195,17 @@ class TestDexFileBuilder {
       }
     }
 
-    for (const auto& entry : fields_) {
+    for (const _& entry : fields_) {
       uint32_t raw_offset = field_ids_offset + entry.second * sizeof(DexFile::FieldId);
       Write16(raw_offset + 0u, GetTypeIdx(entry.first.class_descriptor));
       Write16(raw_offset + 2u, GetTypeIdx(entry.first.type));
       Write32(raw_offset + 4u, GetStringIdx(entry.first.name));
     }
 
-    for (const auto& entry : methods_) {
+    for (const _& entry : methods_) {
       uint32_t raw_offset = method_ids_offset + entry.second * sizeof(DexFile::MethodId);
       Write16(raw_offset + 0u, GetTypeIdx(entry.first.class_descriptor));
-      auto it = protos_.find(*entry.first.proto);
+      _ it = protos_.find(*entry.first.proto);
       CHECK(it != protos_.end());
       Write16(raw_offset + 2u, it->second.idx);
       Write32(raw_offset + 4u, GetStringIdx(entry.first.name));
@@ -235,13 +235,13 @@ class TestDexFileBuilder {
   }
 
   uint32_t GetStringIdx(const std::string& type) {
-    auto it = strings_.find(type);
+    _ it = strings_.find(type);
     CHECK(it != strings_.end());
     return it->second.idx;
   }
 
   uint32_t GetTypeIdx(const std::string& type) {
-    auto it = types_.find(type);
+    _ it = types_.find(type);
     CHECK(it != types_.end());
     return it->second;
   }
@@ -249,7 +249,7 @@ class TestDexFileBuilder {
   uint32_t GetFieldIdx(const std::string& class_descriptor, const std::string& type,
                        const std::string& name) {
     FieldKey key = { class_descriptor, type, name };
-    auto it = fields_.find(key);
+    _ it = fields_.find(key);
     CHECK(it != fields_.end());
     return it->second;
   }
@@ -258,7 +258,7 @@ class TestDexFileBuilder {
                         const std::string& name) {
     ProtoKey proto_key = CreateProtoKey(signature);
     MethodKey method_key = { class_descriptor, name, &proto_key };
-    auto it = methods_.find(method_key);
+    _ it = methods_.find(method_key);
     CHECK(it != methods_.end());
     return it->second;
   }

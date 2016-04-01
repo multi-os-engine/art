@@ -88,7 +88,7 @@ bool OatFileAssistant::IsInBootClassPath() {
   // TODO: Can we verify the boot class path is the same for all ISAs?
   Runtime* runtime = Runtime::Current();
   ClassLinker* class_linker = runtime->GetClassLinker();
-  const auto& boot_class_path = class_linker->GetBootClassPath();
+  const _& boot_class_path = class_linker->GetBootClassPath();
   for (size_t i = 0; i < boot_class_path.size(); i++) {
     if (boot_class_path[i]->GetLocation() == dex_location_) {
       VLOG(oat) << "Dex location " << dex_location_ << " is in boot class path";

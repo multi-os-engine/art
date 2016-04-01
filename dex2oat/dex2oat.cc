@@ -485,7 +485,7 @@ static bool UseSwap(bool is_image, std::vector<const DexFile*>& dex_files) {
     return false;
   }
   size_t dex_files_size = 0;
-  for (const auto* dex_file : dex_files) {
+  for (const _* dex_file : dex_files) {
     dex_files_size += dex_file->GetHeader().file_size_;
   }
   return dex_files_size >= kMinDexFileCumulativeSizeForSwap;
@@ -1433,7 +1433,7 @@ class Dex2Oat FINAL {
 
     // Ensure that the dex caches stay live since we don't want class unloading
     // to occur during compilation.
-    for (const auto& dex_file : dex_files_) {
+    for (const _& dex_file : dex_files_) {
       ScopedObjectAccess soa(self);
       dex_caches_.push_back(soa.AddLocalReference<jobject>(
           class_linker->RegisterDexFile(*dex_file, Runtime::Current()->GetLinearAlloc())));
@@ -1952,7 +1952,7 @@ class Dex2Oat FINAL {
 
     std::vector<std::string> parsed;
     Split(class_path, ':', &parsed);
-    auto kept_it = std::remove_if(parsed.begin(),
+    _ kept_it = std::remove_if(parsed.begin(),
                                   parsed.end(),
                                   [dex_files_canonical_locations](const std::string& location) {
       return ContainsElement(dex_files_canonical_locations,

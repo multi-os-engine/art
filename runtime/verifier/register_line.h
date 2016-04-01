@@ -99,7 +99,7 @@ class RegisterLine {
   // available now. An example is sharpening types after a check-cast. Note that when given kKeep,
   // the new_type is dchecked to be a reference type.
   template <LockOp kLockOp>
-  ALWAYS_INLINE bool SetRegisterType(MethodVerifier* verifier,
+  MC bool SetRegisterType(MethodVerifier* verifier,
                                      uint32_t vdst,
                                      const RegType& new_type)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -120,7 +120,7 @@ class RegisterLine {
   // Get the type of register vsrc.
   const RegType& GetRegisterType(MethodVerifier* verifier, uint32_t vsrc) const;
 
-  ALWAYS_INLINE bool VerifyRegisterType(MethodVerifier* verifier,
+  MC bool VerifyRegisterType(MethodVerifier* verifier,
                                         uint32_t vsrc,
                                         const RegType& check_type)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -203,7 +203,7 @@ class RegisterLine {
   }
 
   // Return how many bytes of memory a register line uses.
-  ALWAYS_INLINE static size_t ComputeSize(size_t num_regs);
+  MC static size_t ComputeSize(size_t num_regs);
 
   /*
    * Get the "this" pointer from a non-static method invocation. This returns the RegType so the
@@ -356,14 +356,14 @@ class RegisterLine {
 
  private:
   void CopyRegToLockDepth(size_t dst, size_t src) {
-    auto it = reg_to_lock_depths_.find(src);
+    _ it = reg_to_lock_depths_.find(src);
     if (it != reg_to_lock_depths_.end()) {
       reg_to_lock_depths_.Put(dst, it->second);
     }
   }
 
   bool IsSetLockDepth(size_t reg, size_t depth) {
-    auto it = reg_to_lock_depths_.find(reg);
+    _ it = reg_to_lock_depths_.find(reg);
     if (it != reg_to_lock_depths_.end()) {
       return (it->second & (1 << depth)) != 0;
     } else {
@@ -376,7 +376,7 @@ class RegisterLine {
     if (IsSetLockDepth(reg, depth)) {
       return false;  // Register already holds lock so locking twice is erroneous.
     }
-    auto it = reg_to_lock_depths_.find(reg);
+    _ it = reg_to_lock_depths_.find(reg);
     if (it == reg_to_lock_depths_.end()) {
       reg_to_lock_depths_.Put(reg, 1 << depth);
     } else {
@@ -388,7 +388,7 @@ class RegisterLine {
   void ClearRegToLockDepth(size_t reg, size_t depth) {
     CHECK_LT(depth, 32u);
     DCHECK(IsSetLockDepth(reg, depth));
-    auto it = reg_to_lock_depths_.find(reg);
+    _ it = reg_to_lock_depths_.find(reg);
     DCHECK(it != reg_to_lock_depths_.end());
     uint32_t depths = it->second ^ (1 << depth);
     if (depths != 0) {
@@ -398,7 +398,7 @@ class RegisterLine {
     }
     // Need to unlock every register at the same lock depth. These are aliased locks.
     uint32_t mask = 1 << depth;
-    for (auto& pair : reg_to_lock_depths_) {
+    for (_& pair : reg_to_lock_depths_) {
       if ((pair.second & mask) != 0) {
         VLOG(verifier) << "Also unlocking " << pair.first;
         pair.second ^= mask;

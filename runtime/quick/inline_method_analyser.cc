@@ -229,7 +229,7 @@ bool RecordConstructorIPut(ArtMethod* method,
     ArtField* f = dex_cache->GetResolvedField(iputs[old_pos].field_index, pointer_size);
     DCHECK(f != nullptr);
     if (f == field) {
-      auto back_it = std::copy(iputs + old_pos + 1, iputs + arraysize(iputs), iputs + old_pos);
+      _ back_it = std::copy(iputs + old_pos + 1, iputs + arraysize(iputs), iputs + old_pos);
       *back_it = ConstructorIPutData();
       break;
     }
@@ -331,7 +331,7 @@ bool DoAnalyseConstructor(const DexFile::CodeItem* code_item,
           return false;
         }
         // Prune IPUTs with zero input.
-        auto kept_end = std::remove_if(
+        _ kept_end = std::remove_if(
             iputs,
             iputs + arraysize(iputs),
             [forwarded](const ConstructorIPutData& iput_data) {

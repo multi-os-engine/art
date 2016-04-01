@@ -36,7 +36,7 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
   ArenaVector<HBasicBlock*>& sorted_predecessors = blocks_storage_;
   sorted_predecessors.assign(block->GetPredecessors().begin(), block->GetPredecessors().end());
   std::sort(sorted_predecessors.begin(), sorted_predecessors.end());
-  for (auto it = sorted_predecessors.begin(), end = sorted_predecessors.end(); it != end; ) {
+  for (_ it = sorted_predecessors.begin(), end = sorted_predecessors.end(); it != end; ) {
     HBasicBlock* p = *it++;
     size_t p_count_in_block_predecessors = 1u;
     for (; it != end && *it == p; ++it) {
@@ -59,7 +59,7 @@ void GraphChecker::VisitBasicBlock(HBasicBlock* block) {
   ArenaVector<HBasicBlock*>& sorted_successors = blocks_storage_;
   sorted_successors.assign(block->GetSuccessors().begin(), block->GetSuccessors().end());
   std::sort(sorted_successors.begin(), sorted_successors.end());
-  for (auto it = sorted_successors.begin(), end = sorted_successors.end(); it != end; ) {
+  for (_ it = sorted_successors.begin(), end = sorted_successors.end(); it != end; ) {
     HBasicBlock* s = *it++;
     size_t s_count_in_block_successors = 1u;
     for (; it != end && *it == s; ++it) {

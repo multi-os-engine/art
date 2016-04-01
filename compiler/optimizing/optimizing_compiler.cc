@@ -927,7 +927,7 @@ bool OptimizingCompiler::JitCompile(Thread* self,
 
   const CompilerOptions& compiler_options = GetCompilerDriver()->GetCompilerOptions();
   if (compiler_options.GetGenerateDebugInfo()) {
-    const auto* method_header = reinterpret_cast<const OatQuickMethodHeader*>(code);
+    const _* method_header = reinterpret_cast<const OatQuickMethodHeader*>(code);
     const uintptr_t code_address = reinterpret_cast<uintptr_t>(method_header->GetCode());
     debug::MethodDebugInfo info = debug::MethodDebugInfo();
     info.trampoline_name = nullptr;

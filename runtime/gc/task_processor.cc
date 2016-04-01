@@ -74,8 +74,8 @@ HeapTask* TaskProcessor::GetTask(Thread* self) {
 void TaskProcessor::UpdateTargetRunTime(Thread* self, HeapTask* task, uint64_t new_target_time) {
   MutexLock mu(self, *lock_);
   // Find the task.
-  auto range = tasks_.equal_range(task);
-  for (auto it = range.first; it != range.second; ++it) {
+  _ range = tasks_.equal_range(task);
+  for (_ it = range.first; it != range.second; ++it) {
     if (*it == task) {
       // Check if the target time was updated, if so re-insert then wait.
       if (new_target_time != task->GetTargetRunTime()) {

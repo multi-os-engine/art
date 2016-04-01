@@ -120,11 +120,11 @@ std::vector<VariableLocation> GetVariableLocations(
   }
 
   // Create entries for the requested register based on stack map data.
-  for (auto it = stack_maps.begin(); it != stack_maps.end(); it++) {
+  for (_ it = stack_maps.begin(); it != stack_maps.end(); it++) {
     const uint32_t low_pc = it->first;
     const uint32_t stack_map_index = it->second;
     const StackMap& stack_map = code_info.GetStackMapAt(stack_map_index, encoding);
-    auto next_it = it;
+    _ next_it = it;
     next_it++;
     const uint32_t high_pc = next_it != stack_maps.end()
       ? next_it->first

@@ -104,7 +104,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
 
     // Check assumptions.
     CHECK_EQ(GetMethodOffset(1), method1_offset);
-    auto last_result = method_offset_map_.FindMethodOffset(MethodRef(method_idx));
+    _ last_result = method_offset_map_.FindMethodOffset(MethodRef(method_idx));
     CHECK(last_result.first);
     // There may be a thunk before method2.
     if (last_result.second != last_method_offset) {
@@ -116,7 +116,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
   }
 
   uint32_t GetMethodOffset(uint32_t method_idx) {
-    auto result = method_offset_map_.FindMethodOffset(MethodRef(method_idx));
+    _ result = method_offset_map_.FindMethodOffset(MethodRef(method_idx));
     CHECK(result.first);
     CHECK_ALIGNED(result.second, 4u);
     return result.second;
@@ -203,7 +203,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
 
   void TestNopsAdrpLdr(size_t num_nops, uint32_t dex_cache_arrays_begin, uint32_t element_offset) {
     dex_cache_arrays_begin_ = dex_cache_arrays_begin;
-    auto code = GenNopsAndAdrpLdr(num_nops, 0u, 0u);  // Unpatched.
+    _ code = GenNopsAndAdrpLdr(num_nops, 0u, 0u);  // Unpatched.
     LinkerPatch patches[] = {
         LinkerPatch::DexCacheArrayPatch(num_nops * 4u     , nullptr, num_nops * 4u, element_offset),
         LinkerPatch::DexCacheArrayPatch(num_nops * 4u + 4u, nullptr, num_nops * 4u, element_offset),
@@ -215,7 +215,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
 
     uint32_t method1_offset = GetMethodOffset(1u);
     uint32_t target_offset = dex_cache_arrays_begin_ + element_offset;
-    auto expected_code = GenNopsAndAdrpLdr(num_nops, method1_offset, target_offset);
+    _ expected_code = GenNopsAndAdrpLdr(num_nops, method1_offset, target_offset);
     EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
   }
 
@@ -228,7 +228,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
   void TestNopsAdrpAdd(size_t num_nops, uint32_t string_offset) {
     constexpr uint32_t kStringIndex = 1u;
     string_index_to_offset_map_.Put(kStringIndex, string_offset);
-    auto code = GenNopsAndAdrpAdd(num_nops, 0u, 0u);  // Unpatched.
+    _ code = GenNopsAndAdrpAdd(num_nops, 0u, 0u);  // Unpatched.
     LinkerPatch patches[] = {
         LinkerPatch::RelativeStringPatch(num_nops * 4u     , nullptr, num_nops * 4u, kStringIndex),
         LinkerPatch::RelativeStringPatch(num_nops * 4u + 4u, nullptr, num_nops * 4u, kStringIndex),
@@ -239,7 +239,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
     Link();
 
     uint32_t method1_offset = GetMethodOffset(1u);
-    auto expected_code = GenNopsAndAdrpAdd(num_nops, method1_offset, string_offset);
+    _ expected_code = GenNopsAndAdrpAdd(num_nops, method1_offset, string_offset);
     EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
   }
 
@@ -258,7 +258,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
                                uint32_t dex_cache_arrays_begin,
                                uint32_t element_offset) {
     dex_cache_arrays_begin_ = dex_cache_arrays_begin;
-    auto code = GenNopsAndAdrpLdr(num_nops, 0u, 0u);  // Unpatched.
+    _ code = GenNopsAndAdrpLdr(num_nops, 0u, 0u);  // Unpatched.
     InsertInsn(&code, num_nops * 4u + 4u, insn2);
     LinkerPatch patches[] = {
         LinkerPatch::DexCacheArrayPatch(num_nops * 4u     , nullptr, num_nops * 4u, element_offset),
@@ -273,7 +273,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
   void PrepareNopsAdrpInsn2Add(size_t num_nops, uint32_t insn2, uint32_t string_offset) {
     constexpr uint32_t kStringIndex = 1u;
     string_index_to_offset_map_.Put(kStringIndex, string_offset);
-    auto code = GenNopsAndAdrpAdd(num_nops, 0u, 0u);  // Unpatched.
+    _ code = GenNopsAndAdrpAdd(num_nops, 0u, 0u);  // Unpatched.
     InsertInsn(&code, num_nops * 4u + 4u, insn2);
     LinkerPatch patches[] = {
         LinkerPatch::RelativeStringPatch(num_nops * 4u     , nullptr, num_nops * 4u, kStringIndex),
@@ -290,7 +290,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
                                uint32_t target_offset,
                                uint32_t use_insn) {
     uint32_t method1_offset = GetMethodOffset(1u);
-    auto expected_code = GenNopsAndAdrpAndUse(num_nops, method1_offset, target_offset, use_insn);
+    _ expected_code = GenNopsAndAdrpAndUse(num_nops, method1_offset, target_offset, use_insn);
     InsertInsn(&expected_code, num_nops * 4u + 4u, insn2);
     EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
   }
@@ -311,7 +311,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
     uint32_t b_out = kBPlus0 + ((b_diff >> 2) & 0x03ffffffu);
     uint32_t b_in = kBPlus0 + ((-b_diff >> 2) & 0x03ffffffu);
 
-    auto expected_code = GenNopsAndAdrpAndUse(num_nops, method1_offset, target_offset, use_insn);
+    _ expected_code = GenNopsAndAdrpAndUse(num_nops, method1_offset, target_offset, use_insn);
     InsertInsn(&expected_code, num_nops * 4u + 4u, insn2);
     // Replace adrp with bl.
     expected_code.erase(expected_code.begin() + num_nops * 4u,
@@ -319,7 +319,7 @@ class Arm64RelativePatcherTest : public RelativePatcherTest {
     InsertInsn(&expected_code, num_nops * 4u, b_out);
     EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
 
-    auto expected_thunk_code = GenNopsAndAdrpLdr(0u, thunk_offset, target_offset);
+    _ expected_thunk_code = GenNopsAndAdrpLdr(0u, thunk_offset, target_offset);
     ASSERT_EQ(expected_thunk_code.size(), 8u);
     expected_thunk_code.erase(expected_thunk_code.begin() + 4u, expected_thunk_code.begin() + 8u);
     InsertInsn(&expected_thunk_code, 4u, b_in);
@@ -489,7 +489,7 @@ TEST_F(Arm64RelativePatcherTestDefault, CallOther) {
   uint32_t diff_before = method1_offset - method2_offset;
   CHECK_ALIGNED(diff_before, 4u);
   ASSERT_GE(diff_before, -1u << 27);
-  auto method2_expected_code = GenNopsAndBl(0u, kBlPlus0 | ((diff_before >> 2) & 0x03ffffffu));
+  _ method2_expected_code = GenNopsAndBl(0u, kBlPlus0 | ((diff_before >> 2) & 0x03ffffffu));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(2u), ArrayRef<const uint8_t>(method2_expected_code)));
 }
 
@@ -504,13 +504,13 @@ TEST_F(Arm64RelativePatcherTestDefault, CallTrampoline) {
   uint32_t diff = kTrampolineOffset - method1_offset;
   ASSERT_EQ(diff & 1u, 0u);
   ASSERT_GE(diff, -1u << 9);  // Simple encoding, -256 <= (diff >> 1) < 0 (checked as unsigned).
-  auto expected_code = GenNopsAndBl(0u, kBlPlus0 | ((diff >> 2) & 0x03ffffffu));
+  _ expected_code = GenNopsAndBl(0u, kBlPlus0 | ((diff >> 2) & 0x03ffffffu));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
 }
 
 TEST_F(Arm64RelativePatcherTestDefault, CallTrampolineTooFar) {
   constexpr uint32_t missing_method_index = 1024u;
-  auto last_method_raw_code = GenNopsAndBl(1u, kBlPlus0);
+  _ last_method_raw_code = GenNopsAndBl(1u, kBlPlus0);
   constexpr uint32_t bl_offset_in_last_method = 1u * 4u;  // After NOPs.
   ArrayRef<const uint8_t> last_method_code(last_method_raw_code);
   ASSERT_EQ(bl_offset_in_last_method + 4u, last_method_code.size());
@@ -535,14 +535,14 @@ TEST_F(Arm64RelativePatcherTestDefault, CallTrampolineTooFar) {
   uint32_t diff = thunk_offset - (last_method_offset + bl_offset_in_last_method);
   CHECK_ALIGNED(diff, 4u);
   ASSERT_LT(diff, 128 * MB);
-  auto expected_code = GenNopsAndBl(1u, kBlPlus0 | (diff >> 2));
+  _ expected_code = GenNopsAndBl(1u, kBlPlus0 | (diff >> 2));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(last_method_idx),
                                 ArrayRef<const uint8_t>(expected_code)));
   EXPECT_TRUE(CheckThunk(thunk_offset));
 }
 
 TEST_F(Arm64RelativePatcherTestDefault, CallOtherAlmostTooFarAfter) {
-  auto method1_raw_code = GenNopsAndBl(1u, kBlPlus0);
+  _ method1_raw_code = GenNopsAndBl(1u, kBlPlus0);
   constexpr uint32_t bl_offset_in_method1 = 1u * 4u;  // After NOPs.
   ArrayRef<const uint8_t> method1_code(method1_raw_code);
   ASSERT_EQ(bl_offset_in_method1 + 4u, method1_code.size());
@@ -564,12 +564,12 @@ TEST_F(Arm64RelativePatcherTestDefault, CallOtherAlmostTooFarAfter) {
   ASSERT_EQ(method1_offset + bl_offset_in_method1 + max_positive_disp, last_method_offset);
 
   // Check linked code.
-  auto expected_code = GenNopsAndBl(1u, kBlPlusMax);
+  _ expected_code = GenNopsAndBl(1u, kBlPlusMax);
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
 }
 
 TEST_F(Arm64RelativePatcherTestDefault, CallOtherAlmostTooFarBefore) {
-  auto last_method_raw_code = GenNopsAndBl(0u, kBlPlus0);
+  _ last_method_raw_code = GenNopsAndBl(0u, kBlPlus0);
   constexpr uint32_t bl_offset_in_last_method = 0u * 4u;  // After NOPs.
   ArrayRef<const uint8_t> last_method_code(last_method_raw_code);
   ASSERT_EQ(bl_offset_in_last_method + 4u, last_method_code.size());
@@ -588,13 +588,13 @@ TEST_F(Arm64RelativePatcherTestDefault, CallOtherAlmostTooFarBefore) {
   ASSERT_EQ(method1_offset, last_method_offset + bl_offset_in_last_method - max_negative_disp);
 
   // Check linked code.
-  auto expected_code = GenNopsAndBl(0u, kBlMinusMax);
+  _ expected_code = GenNopsAndBl(0u, kBlMinusMax);
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(last_method_idx),
                                 ArrayRef<const uint8_t>(expected_code)));
 }
 
 TEST_F(Arm64RelativePatcherTestDefault, CallOtherJustTooFarAfter) {
-  auto method1_raw_code = GenNopsAndBl(0u, kBlPlus0);
+  _ method1_raw_code = GenNopsAndBl(0u, kBlPlus0);
   constexpr uint32_t bl_offset_in_method1 = 0u * 4u;  // After NOPs.
   ArrayRef<const uint8_t> method1_code(method1_raw_code);
   ASSERT_EQ(bl_offset_in_method1 + 4u, method1_code.size());
@@ -621,13 +621,13 @@ TEST_F(Arm64RelativePatcherTestDefault, CallOtherJustTooFarAfter) {
   uint32_t diff = thunk_offset - (method1_offset + bl_offset_in_method1);
   CHECK_ALIGNED(diff, 4u);
   ASSERT_LT(diff, 128 * MB);
-  auto expected_code = GenNopsAndBl(0u, kBlPlus0 | (diff >> 2));
+  _ expected_code = GenNopsAndBl(0u, kBlPlus0 | (diff >> 2));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
   CheckThunk(thunk_offset);
 }
 
 TEST_F(Arm64RelativePatcherTestDefault, CallOtherJustTooFarBefore) {
-  auto last_method_raw_code = GenNopsAndBl(1u, kBlPlus0);
+  _ last_method_raw_code = GenNopsAndBl(1u, kBlPlus0);
   constexpr uint32_t bl_offset_in_last_method = 1u * 4u;  // After NOPs.
   ArrayRef<const uint8_t> last_method_code(last_method_raw_code);
   ASSERT_EQ(bl_offset_in_last_method + 4u, last_method_code.size());
@@ -651,7 +651,7 @@ TEST_F(Arm64RelativePatcherTestDefault, CallOtherJustTooFarBefore) {
   uint32_t diff = thunk_offset - (last_method_offset + bl_offset_in_last_method);
   CHECK_ALIGNED(diff, 4u);
   ASSERT_LT(diff, 128 * MB);
-  auto expected_code = GenNopsAndBl(1u, kBlPlus0 | (diff >> 2));
+  _ expected_code = GenNopsAndBl(1u, kBlPlus0 | (diff >> 2));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(last_method_idx),
                                 ArrayRef<const uint8_t>(expected_code)));
   EXPECT_TRUE(CheckThunk(thunk_offset));

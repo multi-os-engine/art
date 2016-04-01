@@ -118,7 +118,7 @@ std::unique_ptr<T> MakeUnique(Args&& ... args) {
 // Find index of the first element with the specified value known to be in the container.
 template <typename Container, typename T>
 size_t IndexOfElement(const Container& container, const T& value) {
-  auto it = std::find(container.begin(), container.end(), value);
+  _ it = std::find(container.begin(), container.end(), value);
   DCHECK(it != container.end());  // Must exist.
   return std::distance(container.begin(), it);
 }
@@ -126,7 +126,7 @@ size_t IndexOfElement(const Container& container, const T& value) {
 // Remove the first element with the specified value known to be in the container.
 template <typename Container, typename T>
 void RemoveElement(Container& container, const T& value) {
-  auto it = std::find(container.begin(), container.end(), value);
+  _ it = std::find(container.begin(), container.end(), value);
   DCHECK(it != container.end());  // Must exist.
   container.erase(it);
 }
@@ -134,7 +134,7 @@ void RemoveElement(Container& container, const T& value) {
 // Replace the first element with the specified old_value known to be in the container.
 template <typename Container, typename T>
 void ReplaceElement(Container& container, const T& old_value, const T& new_value) {
-  auto it = std::find(container.begin(), container.end(), old_value);
+  _ it = std::find(container.begin(), container.end(), old_value);
   DCHECK(it != container.end());  // Must exist.
   *it = new_value;
 }
@@ -143,9 +143,9 @@ void ReplaceElement(Container& container, const T& old_value, const T& new_value
 template <typename Container, typename T>
 bool ContainsElement(const Container& container, const T& value, size_t start_pos = 0u) {
   DCHECK_LE(start_pos, container.size());
-  auto start = container.begin();
+  _ start = container.begin();
   std::advance(start, start_pos);
-  auto it = std::find(start, container.end(), value);
+  _ it = std::find(start, container.end(), value);
   return it != container.end();
 }
 
@@ -163,7 +163,7 @@ template <typename Vector>
 struct FNVHash {
   size_t operator()(const Vector& vector) const {
     uint32_t hash = 2166136261u;
-    for (const auto& value : vector) {
+    for (const _& value : vector) {
       hash = (hash ^ value) * 16777619u;
     }
     return hash;

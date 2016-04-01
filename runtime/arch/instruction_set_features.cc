@@ -220,7 +220,7 @@ const InstructionSetFeatures* InstructionSetFeatures::AddFeaturesFromString(
   bool smp = smp_;
   bool use_default = false;  // Have we seen the 'default' feature?
   bool first = false;  // Is this first feature?
-  for (auto it = features.begin(); it != features.end();) {
+  for (_ it = features.begin(); it != features.end();) {
     if (use_default) {
       *error_msg = "Unexpected instruction set features after 'default'";
       return nullptr;

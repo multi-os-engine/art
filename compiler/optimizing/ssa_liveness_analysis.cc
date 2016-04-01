@@ -45,8 +45,8 @@ static bool IsInnerLoop(HLoopInformation* outer, HLoopInformation* inner) {
 
 static void AddToListForLinearization(ArenaVector<HBasicBlock*>* worklist, HBasicBlock* block) {
   HLoopInformation* block_loop = block->GetLoopInformation();
-  auto insert_pos = worklist->rbegin();  // insert_pos.base() will be the actual position.
-  for (auto end = worklist->rend(); insert_pos != end; ++insert_pos) {
+  _ insert_pos = worklist->rbegin();  // insert_pos.base() will be the actual position.
+  for (_ end = worklist->rend(); insert_pos != end; ++insert_pos) {
     HBasicBlock* current = *insert_pos;
     HLoopInformation* current_loop = current->GetLoopInformation();
     if (InSameLoop(block_loop, current_loop)

@@ -44,7 +44,7 @@ TEST_P(TypeLookupTableTest, Find) {
   std::unique_ptr<const DexFile> dex_file(OpenTestDexFile("Lookup"));
   std::unique_ptr<TypeLookupTable> table(TypeLookupTable::Create(*dex_file));
   ASSERT_NE(nullptr, table.get());
-  auto pair = GetParam();
+  _ pair = GetParam();
   const char* descriptor = pair.first;
   size_t hash = ComputeModifiedUtf8Hash(descriptor);
   uint32_t class_def_idx = table->Lookup(descriptor, hash);

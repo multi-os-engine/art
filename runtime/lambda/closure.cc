@@ -313,7 +313,7 @@ size_t Closure::GetCapturedClosureSize(size_t index) const {
   DCHECK(GetCapturedShortyType(index).IsLambda());
   size_t offset = GetCapturedVariableOffset(index);
 
-  auto* captured_ptr = reinterpret_cast<const uint8_t*>(&captured_);
+  _* captured_ptr = reinterpret_cast<const uint8_t*>(&captured_);
   size_t closure_size = GetClosureSize(captured_ptr + offset);
 
   return closure_size;
@@ -323,7 +323,7 @@ void Closure::CopyCapturedClosure(size_t index, void* destination, size_t destin
   DCHECK(GetCapturedShortyType(index).IsLambda());
   size_t offset = GetCapturedVariableOffset(index);
 
-  auto* captured_ptr = reinterpret_cast<const uint8_t*>(&captured_);
+  _* captured_ptr = reinterpret_cast<const uint8_t*>(&captured_);
   size_t closure_size = GetClosureSize(captured_ptr + offset);
 
   static_assert(ShortyFieldTypeTraits::IsLambdaType<Closure*>(),

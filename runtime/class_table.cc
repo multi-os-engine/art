@@ -32,7 +32,7 @@ void ClassTable::FreezeSnapshot() {
 
 bool ClassTable::Contains(mirror::Class* klass) {
   for (ClassSet& class_set : classes_) {
-    auto it = class_set.Find(GcRoot<mirror::Class>(klass));
+    _ it = class_set.Find(GcRoot<mirror::Class>(klass));
     if (it != class_set.end()) {
       return it->Read() == klass;
     }
@@ -42,7 +42,7 @@ bool ClassTable::Contains(mirror::Class* klass) {
 
 mirror::Class* ClassTable::LookupByDescriptor(mirror::Class* klass) {
   for (ClassSet& class_set : classes_) {
-    auto it = class_set.Find(GcRoot<mirror::Class>(klass));
+    _ it = class_set.Find(GcRoot<mirror::Class>(klass));
     if (it != class_set.end()) {
       return it->Read();
     }
@@ -52,7 +52,7 @@ mirror::Class* ClassTable::LookupByDescriptor(mirror::Class* klass) {
 
 mirror::Class* ClassTable::UpdateClass(const char* descriptor, mirror::Class* klass, size_t hash) {
   // Should only be updating latest table.
-  auto existing_it = classes_.back().FindWithHash(descriptor, hash);
+  _ existing_it = classes_.back().FindWithHash(descriptor, hash);
   if (kIsDebugBuild && existing_it == classes_.back().end()) {
     for (const ClassSet& class_set : classes_) {
       if (class_set.FindWithHash(descriptor, hash) != class_set.end()) {
@@ -87,7 +87,7 @@ size_t ClassTable::NumNonZygoteClasses() const {
 
 mirror::Class* ClassTable::Lookup(const char* descriptor, size_t hash) {
   for (ClassSet& class_set : classes_) {
-    auto it = class_set.FindWithHash(descriptor, hash);
+    _ it = class_set.FindWithHash(descriptor, hash);
     if (it != class_set.end()) {
      return it->Read();
     }
@@ -105,7 +105,7 @@ void ClassTable::InsertWithHash(mirror::Class* klass, size_t hash) {
 
 bool ClassTable::Remove(const char* descriptor) {
   for (ClassSet& class_set : classes_) {
-    auto it = class_set.Find(descriptor);
+    _ it = class_set.Find(descriptor);
     if (it != class_set.end()) {
       class_set.Erase(it);
       return true;

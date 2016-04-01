@@ -62,7 +62,7 @@ class OptimizingCFITest : public CFITest {
     for (int i = 0; i < 2; i++) {  // Two registers of each kind.
       for (; core_reg < 32; core_reg++) {
         if (code_gen_->IsCoreCalleeSaveRegister(core_reg)) {
-          auto location = Location::RegisterLocation(core_reg);
+          _ location = Location::RegisterLocation(core_reg);
           code_gen_->AddAllocatedRegister(location);
           core_reg++;
           break;
@@ -70,7 +70,7 @@ class OptimizingCFITest : public CFITest {
       }
       for (; fp_reg < 32; fp_reg++) {
         if (code_gen_->IsFloatingPointCalleeSaveRegister(fp_reg)) {
-          auto location = Location::FpuRegisterLocation(fp_reg);
+          _ location = Location::FpuRegisterLocation(fp_reg);
           code_gen_->AddAllocatedRegister(location);
           fp_reg++;
           break;

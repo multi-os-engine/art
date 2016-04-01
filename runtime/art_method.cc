@@ -50,7 +50,7 @@ extern "C" void art_quick_invoke_static_stub(ArtMethod*, uint32_t*, uint32_t, Th
 
 ArtMethod* ArtMethod::FromReflectedMethod(const ScopedObjectAccessAlreadyRunnable& soa,
                                           jobject jlr_method) {
-  auto* abstract_method = soa.Decode<mirror::AbstractMethod*>(jlr_method);
+  _* abstract_method = soa.Decode<mirror::AbstractMethod*>(jlr_method);
   DCHECK(abstract_method != nullptr);
   return abstract_method->GetArtMethod();
 }
@@ -59,7 +59,7 @@ mirror::String* ArtMethod::GetNameAsString(Thread* self) {
   CHECK(!IsProxyMethod());
   StackHandleScope<1> hs(self);
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(GetDexCache()));
-  auto* dex_file = dex_cache->GetDexFile();
+  _* dex_file = dex_cache->GetDexFile();
   uint32_t dex_method_idx = GetDexMethodIndex();
   const DexFile::MethodId& method_id = dex_file->GetMethodId(dex_method_idx);
   return Runtime::Current()->GetClassLinker()->ResolveString(*dex_file, method_id.name_idx_,
@@ -331,20 +331,20 @@ bool ArtMethod::IsOverridableByDefaultMethod() {
 }
 
 bool ArtMethod::EqualParameters(Handle<mirror::ObjectArray<mirror::Class>> params) {
-  auto* dex_cache = GetDexCache();
-  auto* dex_file = dex_cache->GetDexFile();
-  const auto& method_id = dex_file->GetMethodId(GetDexMethodIndex());
-  const auto& proto_id = dex_file->GetMethodPrototype(method_id);
+  _* dex_cache = GetDexCache();
+  _* dex_file = dex_cache->GetDexFile();
+  const _& method_id = dex_file->GetMethodId(GetDexMethodIndex());
+  const _& proto_id = dex_file->GetMethodPrototype(method_id);
   const DexFile::TypeList* proto_params = dex_file->GetProtoParameters(proto_id);
-  auto count = proto_params != nullptr ? proto_params->Size() : 0u;
-  auto param_len = params.Get() != nullptr ? params->GetLength() : 0u;
+  _ count = proto_params != nullptr ? proto_params->Size() : 0u;
+  _ param_len = params.Get() != nullptr ? params->GetLength() : 0u;
   if (param_len != count) {
     return false;
   }
-  auto* cl = Runtime::Current()->GetClassLinker();
+  _* cl = Runtime::Current()->GetClassLinker();
   for (size_t i = 0; i < count; ++i) {
-    auto type_idx = proto_params->GetTypeItem(i).type_idx_;
-    auto* type = cl->ResolveType(type_idx, this);
+    _ type_idx = proto_params->GetTypeItem(i).type_idx_;
+    _* type = cl->ResolveType(type_idx, this);
     if (type == nullptr) {
       Thread::Current()->AssertPendingException();
       return false;

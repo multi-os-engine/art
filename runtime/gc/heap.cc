@@ -790,14 +790,14 @@ void Heap::DumpObject(std::ostream& stream, mirror::Object* obj) {
     space::Space* space = nullptr;
     // Don't use find space since it only finds spaces which actually contain objects instead of
     // spaces which may contain objects (e.g. cleared bump pointer spaces).
-    for (const auto& cur_space : continuous_spaces_) {
+    for (const _& cur_space : continuous_spaces_) {
       if (cur_space->HasAddress(obj)) {
         space = cur_space;
         break;
       }
     }
     // Unprotect all the spaces.
-    for (const auto& con_space : continuous_spaces_) {
+    for (const _& con_space : continuous_spaces_) {
       mprotect(con_space->Begin(), con_space->Capacity(), PROT_READ | PROT_WRITE);
     }
     stream << "Object " << obj;
@@ -819,7 +819,7 @@ bool Heap::IsCompilingBoot() const {
     return false;
   }
   ScopedObjectAccess soa(Thread::Current());
-  for (const auto& space : continuous_spaces_) {
+  for (const _& space : continuous_spaces_) {
     if (space->IsImageSpace() || space->IsZygoteSpace()) {
       return false;
     }
@@ -1023,7 +1023,7 @@ void Heap::VisitObjectsInternal(ObjectCallback callback, void* arg) {
     bump_pointer_space_->Walk(callback, arg);
   }
   // TODO: Switch to standard begin and end to use ranged a based loop.
-  for (auto* it = allocation_stack_->Begin(), *end = allocation_stack_->End(); it < end; ++it) {
+  for (_* it = allocation_stack_->Begin(), *end = allocation_stack_->End(); it < end; ++it) {
     mirror::Object* const obj = it->AsMirrorPtr();
     if (obj != nullptr && obj->GetClass() != nullptr) {
       // Avoid the race condition caused by the object not yet being written into the allocation
@@ -1108,7 +1108,7 @@ void Heap::RemoveSpace(space::Space* space) {
       live_bitmap_->RemoveContinuousSpaceBitmap(live_bitmap);
       mark_bitmap_->RemoveContinuousSpaceBitmap(mark_bitmap);
     }
-    auto it = std::find(continuous_spaces_.begin(), continuous_spaces_.end(), continuous_space);
+    _ it = std::find(continuous_spaces_.begin(), continuous_spaces_.end(), continuous_space);
     DCHECK(it != continuous_spaces_.end());
     continuous_spaces_.erase(it);
   } else {
@@ -1116,13 +1116,13 @@ void Heap::RemoveSpace(space::Space* space) {
     space::DiscontinuousSpace* discontinuous_space = space->AsDiscontinuousSpace();
     live_bitmap_->RemoveLargeObjectBitmap(discontinuous_space->GetLiveBitmap());
     mark_bitmap_->RemoveLargeObjectBitmap(discontinuous_space->GetMarkBitmap());
-    auto it = std::find(discontinuous_spaces_.begin(), discontinuous_spaces_.end(),
+    _ it = std::find(discontinuous_spaces_.begin(), discontinuous_spaces_.end(),
                         discontinuous_space);
     DCHECK(it != discontinuous_spaces_.end());
     discontinuous_spaces_.erase(it);
   }
   if (space->IsAllocSpace()) {
-    auto it = std::find(alloc_spaces_.begin(), alloc_spaces_.end(), space->AsAllocSpace());
+    _ it = std::find(alloc_spaces_.begin(), alloc_spaces_.end(), space->AsAllocSpace());
     DCHECK(it != alloc_spaces_.end());
     alloc_spaces_.erase(it);
   }
@@ -1134,7 +1134,7 @@ void Heap::DumpGcPerformanceInfo(std::ostream& os) {
   uint64_t total_duration = 0;
   // Dump cumulative loggers for each GC type.
   uint64_t total_paused_time = 0;
-  for (auto& collector : garbage_collectors_) {
+  for (_& collector : garbage_collectors_) {
     total_duration += collector->GetCumulativeTimings().GetTotalNs();
     total_paused_time += collector->GetTotalPausedTimeNs();
     collector->DumpPerformanceInfo(os);
@@ -1189,7 +1189,7 @@ void Heap::DumpGcPerformanceInfo(std::ostream& os) {
 }
 
 void Heap::ResetGcPerformanceInfo() {
-  for (auto& collector : garbage_collectors_) {
+  for (_& collector : garbage_collectors_) {
     collector->ResetMeasurements();
   }
   total_bytes_freed_ever_ = 0;
@@ -1210,7 +1210,7 @@ void Heap::ResetGcPerformanceInfo() {
 
 uint64_t Heap::GetGcCount() const {
   uint64_t gc_count = 0U;
-  for (auto& collector : garbage_collectors_) {
+  for (_& collector : garbage_collectors_) {
     gc_count += collector->GetCumulativeTimings().GetIterations();
   }
   return gc_count;
@@ -1218,7 +1218,7 @@ uint64_t Heap::GetGcCount() const {
 
 uint64_t Heap::GetGcTime() const {
   uint64_t gc_time = 0U;
-  for (auto& collector : garbage_collectors_) {
+  for (_& collector : garbage_collectors_) {
     gc_time += collector->GetCumulativeTimings().GetTotalNs();
   }
   return gc_time;
@@ -1271,7 +1271,7 @@ Heap::~Heap() {
 
 space::ContinuousSpace* Heap::FindContinuousSpaceFromObject(const mirror::Object* obj,
                                                             bool fail_ok) const {
-  for (const auto& space : continuous_spaces_) {
+  for (const _& space : continuous_spaces_) {
     if (space->Contains(obj)) {
       return space;
     }
@@ -1284,7 +1284,7 @@ space::ContinuousSpace* Heap::FindContinuousSpaceFromObject(const mirror::Object
 
 space::DiscontinuousSpace* Heap::FindDiscontinuousSpaceFromObject(const mirror::Object* obj,
                                                                   bool fail_ok) const {
-  for (const auto& space : discontinuous_spaces_) {
+  for (const _& space : discontinuous_spaces_) {
     if (space->Contains(obj)) {
       return space;
     }
@@ -1417,7 +1417,7 @@ void Heap::TrimSpaces(Thread* self) {
   uint64_t managed_reclaimed = 0;
   {
     ScopedObjectAccess soa(self);
-    for (const auto& space : continuous_spaces_) {
+    for (const _& space : continuous_spaces_) {
       if (space->IsMallocSpace()) {
         gc::space::MallocSpace* malloc_space = space->AsMallocSpace();
         if (malloc_space->IsRosAllocSpace() || !CareAboutPauseTimes()) {
@@ -1467,7 +1467,7 @@ bool Heap::IsValidContinuousSpaceObjectAddress(const mirror::Object* obj) const 
   if (obj == nullptr || !IsAligned<kObjectAlignment>(obj)) {
     return false;
   }
-  for (const auto& space : continuous_spaces_) {
+  for (const _& space : continuous_spaces_) {
     if (space->HasAddress(obj)) {
       return true;
     }
@@ -1556,7 +1556,7 @@ std::string Heap::DumpSpaces() const {
 }
 
 void Heap::DumpSpaces(std::ostream& stream) const {
-  for (const auto& space : continuous_spaces_) {
+  for (const _& space : continuous_spaces_) {
     accounting::ContinuousSpaceBitmap* live_bitmap = space->GetLiveBitmap();
     accounting::ContinuousSpaceBitmap* mark_bitmap = space->GetMarkBitmap();
     stream << space << " " << *space << "\n";
@@ -1567,7 +1567,7 @@ void Heap::DumpSpaces(std::ostream& stream) const {
       stream << mark_bitmap << " " << *mark_bitmap << "\n";
     }
   }
-  for (const auto& space : discontinuous_spaces_) {
+  for (const _& space : discontinuous_spaces_) {
     stream << space << " " << *space << "\n";
   }
 }
@@ -1637,7 +1637,7 @@ space::RosAllocSpace* Heap::GetRosAllocSpace(gc::allocator::RosAlloc* rosalloc) 
   if (rosalloc_space_ != nullptr && rosalloc_space_->GetRosAlloc() == rosalloc) {
     return rosalloc_space_;
   }
-  for (const auto& space : continuous_spaces_) {
+  for (const _& space : continuous_spaces_) {
     if (space->AsContinuousSpace()->IsRosAllocSpace()) {
       if (space->AsContinuousSpace()->AsRosAllocSpace()->GetRosAlloc() == rosalloc) {
         return space->AsContinuousSpace()->AsRosAllocSpace();
@@ -2343,7 +2343,7 @@ class ZygoteCompactingCollector FINAL : public collector::SemiSpace {
     size_t alloc_size = RoundUp(obj_size, kObjectAlignment);
     mirror::Object* forward_address;
     // Find the smallest bin which we can move obj in.
-    auto it = bins_.lower_bound(alloc_size);
+    _ it = bins_.lower_bound(alloc_size);
     if (it == bins_.end()) {
       // No available space in the bins, place it in the target space instead (grows the zygote
       // space).
@@ -2383,7 +2383,7 @@ class ZygoteCompactingCollector FINAL : public collector::SemiSpace {
 
 void Heap::UnBindBitmaps() {
   TimingLogger::ScopedTiming t("UnBindBitmaps", GetCurrentGcIteration()->GetTimings());
-  for (const auto& space : GetContinuousSpaces()) {
+  for (const _& space : GetContinuousSpaces()) {
     if (space->IsContinuousMemMapAllocSpace()) {
       space::ContinuousMemMapAllocSpace* alloc_space = space->AsContinuousMemMapAllocSpace();
       if (alloc_space->HasBoundBitmaps()) {
@@ -2534,8 +2534,8 @@ void Heap::MarkAllocStack(accounting::ContinuousSpaceBitmap* bitmap1,
                           accounting::ObjectStack* stack) {
   DCHECK(bitmap1 != nullptr);
   DCHECK(bitmap2 != nullptr);
-  const auto* limit = stack->End();
-  for (auto* it = stack->Begin(); it != limit; ++it) {
+  const _* limit = stack->End();
+  for (_* it = stack->Begin(); it != limit; ++it) {
     const mirror::Object* obj = it->AsMirrorPtr();
     if (!kUseThreadLocalAllocationStack || obj != nullptr) {
       if (bitmap1->HasAddress(obj)) {
@@ -3067,12 +3067,12 @@ size_t Heap::VerifyHeapReferences(bool verify_referents) {
   visitor.VerifyRoots();
   if (visitor.GetFailureCount() > 0) {
     // Dump mod-union tables.
-    for (const auto& table_pair : mod_union_tables_) {
+    for (const _& table_pair : mod_union_tables_) {
       accounting::ModUnionTable* mod_union_table = table_pair.second;
       mod_union_table->Dump(LOG(ERROR) << mod_union_table->GetName() << ": ");
     }
     // Dump remembered sets.
-    for (const auto& table_pair : remembered_sets_) {
+    for (const _& table_pair : remembered_sets_) {
       accounting::RememberedSet* remembered_set = table_pair.second;
       remembered_set->Dump(LOG(ERROR) << remembered_set->GetName() << ": ");
     }
@@ -3187,7 +3187,7 @@ bool Heap::VerifyMissingCardMarks() {
   VerifyLiveStackReferences visitor(this);
   GetLiveBitmap()->Visit(visitor);
   // We can verify objects in the live stack since none of these should reference dead objects.
-  for (auto* it = live_stack_->Begin(); it != live_stack_->End(); ++it) {
+  for (_* it = live_stack_->Begin(); it != live_stack_->End(); ++it) {
     if (!kUseThreadLocalAllocationStack || it->AsMirrorPtr() != nullptr) {
       visitor(it->AsMirrorPtr());
     }
@@ -3233,7 +3233,7 @@ void Heap::AssertAllBumpPointerSpaceThreadLocalBuffersAreRevoked() {
 }
 
 accounting::ModUnionTable* Heap::FindModUnionTableFromSpace(space::Space* space) {
-  auto it = mod_union_tables_.find(space);
+  _ it = mod_union_tables_.find(space);
   if (it == mod_union_tables_.end()) {
     return nullptr;
   }
@@ -3241,7 +3241,7 @@ accounting::ModUnionTable* Heap::FindModUnionTableFromSpace(space::Space* space)
 }
 
 accounting::RememberedSet* Heap::FindRememberedSetFromSpace(space::Space* space) {
-  auto it = remembered_sets_.find(space);
+  _ it = remembered_sets_.find(space);
   if (it == remembered_sets_.end()) {
     return nullptr;
   }
@@ -3254,7 +3254,7 @@ void Heap::ProcessCards(TimingLogger* timings,
                         bool clear_alloc_space_cards) {
   TimingLogger::ScopedTiming t(__FUNCTION__, timings);
   // Clear cards and keep track of cards cleared in the mod-union table.
-  for (const auto& space : continuous_spaces_) {
+  for (const _& space : continuous_spaces_) {
     accounting::ModUnionTable* table = FindModUnionTableFromSpace(space);
     accounting::RememberedSet* rem_set = FindRememberedSetFromSpace(space);
     if (table != nullptr) {
@@ -3325,7 +3325,7 @@ void Heap::PreGcVerificationPaused(collector::GarbageCollector* gc) {
   if (verify_mod_union_table_) {
     TimingLogger::ScopedTiming t2("(Paused)PreGcVerifyModUnionTables", timings);
     ReaderMutexLock reader_lock(self, *Locks::heap_bitmap_lock_);
-    for (const auto& table_pair : mod_union_tables_) {
+    for (const _& table_pair : mod_union_tables_) {
       accounting::ModUnionTable* mod_union_table = table_pair.second;
       IdentityMarkHeapReferenceVisitor visitor;
       mod_union_table->UpdateAndMarkReferences(&visitor);
@@ -3411,7 +3411,7 @@ void Heap::PostGcVerification(collector::GarbageCollector* gc) {
 
 void Heap::RosAllocVerification(TimingLogger* timings, const char* name) {
   TimingLogger::ScopedTiming t(name, timings);
-  for (const auto& space : continuous_spaces_) {
+  for (const _& space : continuous_spaces_) {
     if (space->IsRosAllocSpace()) {
       VLOG(heap) << name << " : " << space->GetName();
       space->AsRosAllocSpace()->Verify();
@@ -3501,7 +3501,7 @@ void Heap::UpdateMaxNativeFootprint() {
 }
 
 collector::GarbageCollector* Heap::FindCollectorByGcType(collector::GcType gc_type) {
-  for (const auto& collector : garbage_collectors_) {
+  for (const _& collector : garbage_collectors_) {
     if (collector->GetCollectorType() == collector_type_ &&
         collector->GetGcType() == gc_type) {
       return collector;
@@ -3603,7 +3603,7 @@ void Heap::ClampGrowthLimit() {
   ScopedObjectAccess soa(Thread::Current());
   WriterMutexLock mu(soa.Self(), *Locks::heap_bitmap_lock_);
   capacity_ = growth_limit_;
-  for (const auto& space : continuous_spaces_) {
+  for (const _& space : continuous_spaces_) {
     if (space->IsMallocSpace()) {
       gc::space::MallocSpace* malloc_space = space->AsMallocSpace();
       malloc_space->ClampGrowthLimit();
@@ -3618,7 +3618,7 @@ void Heap::ClampGrowthLimit() {
 void Heap::ClearGrowthLimit() {
   growth_limit_ = capacity_;
   ScopedObjectAccess soa(Thread::Current());
-  for (const auto& space : continuous_spaces_) {
+  for (const _& space : continuous_spaces_) {
     if (space->IsMallocSpace()) {
       gc::space::MallocSpace* malloc_space = space->AsMallocSpace();
       malloc_space->ClearGrowthLimit();
@@ -3924,7 +3924,7 @@ void Heap::AddRememberedSet(accounting::RememberedSet* remembered_set) {
 
 void Heap::RemoveRememberedSet(space::Space* space) {
   CHECK(space != nullptr);
-  auto it = remembered_sets_.find(space);
+  _ it = remembered_sets_.find(space);
   CHECK(it != remembered_sets_.end());
   delete it->second;
   remembered_sets_.erase(it);
@@ -3933,14 +3933,14 @@ void Heap::RemoveRememberedSet(space::Space* space) {
 
 void Heap::ClearMarkedObjects() {
   // Clear all of the spaces' mark bitmaps.
-  for (const auto& space : GetContinuousSpaces()) {
+  for (const _& space : GetContinuousSpaces()) {
     accounting::ContinuousSpaceBitmap* mark_bitmap = space->GetMarkBitmap();
     if (space->GetLiveBitmap() != mark_bitmap) {
       mark_bitmap->Clear();
     }
   }
   // Clear the marked objects in the discontinous space object sets.
-  for (const auto& space : GetDiscontinuousSpaces()) {
+  for (const _& space : GetDiscontinuousSpaces()) {
     space->GetMarkBitmap()->Clear();
   }
 }
@@ -4007,7 +4007,7 @@ class StackCrawlState {
     return frame_count_;
   }
   static _Unwind_Reason_Code Callback(_Unwind_Context* context, void* arg) {
-    auto* const state = reinterpret_cast<StackCrawlState*>(arg);
+    _* const state = reinterpret_cast<StackCrawlState*>(arg);
     const uintptr_t ip = _Unwind_GetIP(context);
     // The first stack frame is get_backtrace itself. Skip it.
     if (ip != 0 && state->skip_count_ > 0) {
@@ -4034,7 +4034,7 @@ static size_t get_backtrace(uintptr_t* frames, size_t max_depth) {
 }
 
 void Heap::CheckGcStressMode(Thread* self, mirror::Object** obj) {
-  auto* const runtime = Runtime::Current();
+  _* const runtime = Runtime::Current();
   if (gc_stress_mode_ && runtime->GetClassLinker()->IsInitialized() &&
       !runtime->IsActiveTransaction() && mirror::Class::HasJavaLangClass()) {
     // Check if we should GC.
@@ -4056,7 +4056,7 @@ void Heap::CheckGcStressMode(Thread* self, mirror::Object** obj) {
     }
     if (new_backtrace) {
       StackHandleScope<1> hs(self);
-      auto h = hs.NewHandleWrapper(obj);
+      _ h = hs.NewHandleWrapper(obj);
       CollectGarbage(false);
       unique_backtrace_count_.FetchAndAddSequentiallyConsistent(1);
     } else {

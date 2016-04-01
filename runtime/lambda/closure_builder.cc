@@ -46,7 +46,7 @@ namespace lambda {
  */
 
 void ClosureBuilder::CaptureVariableObject(mirror::Object* object) {
-  auto compressed_reference = mirror::CompressedReference<mirror::Object>::FromMirrorPtr(object);
+  _ compressed_reference = mirror::CompressedReference<mirror::Object>::FromMirrorPtr(object);
   ShortyFieldTypeTraits::MaxType storage = 0;
 
   static_assert(sizeof(storage) >= sizeof(compressed_reference),

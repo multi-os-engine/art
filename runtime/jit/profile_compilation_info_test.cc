@@ -41,9 +41,9 @@ class ProfileCompilationInfoTest : public CommonRuntimeTest {
         reinterpret_cast<mirror::ClassLoader*>(self->DecodeJObject(class_loader))));
     mirror::Class* klass = class_linker->FindClass(self, clazz.c_str(), h_loader);
 
-    const auto pointer_size = class_linker->GetImagePointerSize();
+    const _ pointer_size = class_linker->GetImagePointerSize();
     std::vector<ArtMethod*> methods;
-    for (auto& m : klass->GetVirtualMethods(pointer_size)) {
+    for (_& m : klass->GetVirtualMethods(pointer_size)) {
       methods.push_back(&m);
     }
     return methods;

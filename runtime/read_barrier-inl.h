@@ -162,12 +162,12 @@ inline MirrorType* ReadBarrier::BarrierForRoot(mirror::CompressedReference<Mirro
     if (self != nullptr &&
         self->GetIsGcMarking() &&
         Runtime::Current()->GetHeap()->GetReadBarrierTable()->IsSet(ref)) {
-      auto old_ref = mirror::CompressedReference<MirrorType>::FromMirrorPtr(ref);
+      _ old_ref = mirror::CompressedReference<MirrorType>::FromMirrorPtr(ref);
       ref = reinterpret_cast<MirrorType*>(Mark(ref));
-      auto new_ref = mirror::CompressedReference<MirrorType>::FromMirrorPtr(ref);
+      _ new_ref = mirror::CompressedReference<MirrorType>::FromMirrorPtr(ref);
       // Update the field atomically. This may fail if mutator updates before us, but it's ok.
       if (new_ref.AsMirrorPtr() != old_ref.AsMirrorPtr()) {
-        auto* atomic_root =
+        _* atomic_root =
             reinterpret_cast<Atomic<mirror::CompressedReference<MirrorType>>*>(root);
         atomic_root->CompareExchangeStrongRelaxed(old_ref, new_ref);
       }

@@ -50,7 +50,7 @@ void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
   const char* last_source_file = nullptr;
   for (const MethodDebugInfo& mi : method_infos) {
     if (mi.dex_file != nullptr) {
-      auto& dex_class_def = mi.dex_file->GetClassDef(mi.class_def_index);
+      _& dex_class_def = mi.dex_file->GetClassDef(mi.class_def_index);
       const char* source_file = mi.dex_file->GetSourceFile(dex_class_def);
       if (compilation_units.empty() || source_file != last_source_file) {
         compilation_units.push_back(ElfCompilationUnit());
@@ -70,7 +70,7 @@ void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
   if (!compilation_units.empty()) {
     ElfDebugLineWriter<ElfTypes> line_writer(builder);
     line_writer.Start();
-    for (auto& compilation_unit : compilation_units) {
+    for (_& compilation_unit : compilation_units) {
       line_writer.WriteCompilationUnit(compilation_unit);
     }
     line_writer.End(write_oat_patches);
@@ -80,7 +80,7 @@ void WriteDebugInfo(ElfBuilder<ElfTypes>* builder,
   if (!compilation_units.empty()) {
     ElfDebugInfoWriter<ElfTypes> info_writer(builder);
     info_writer.Start();
-    for (const auto& compilation_unit : compilation_units) {
+    for (const _& compilation_unit : compilation_units) {
       ElfCompilationUnitWriter<ElfTypes> cu_writer(&info_writer);
       cu_writer.Write(compilation_unit);
     }
@@ -192,7 +192,7 @@ std::vector<MethodDebugInfo> MakeTrampolineInfos(const OatHeader& header) {
     { "quickToInterpreterBridge", header.GetQuickToInterpreterBridgeOffset() },
   };
   std::vector<MethodDebugInfo> result;
-  for (const auto& it : trampolines) {
+  for (const _& it : trampolines) {
     if (it.second != 0) {
       MethodDebugInfo info = MethodDebugInfo();
       info.trampoline_name = it.first;

@@ -167,7 +167,7 @@ bool JitCodeCache::ContainsPc(const void* ptr) const {
 
 bool JitCodeCache::ContainsMethod(ArtMethod* method) {
   MutexLock mu(Thread::Current(), lock_);
-  for (auto& it : method_code_map_) {
+  for (_& it : method_code_map_) {
     if (it.second == method) {
       return true;
     }
@@ -274,7 +274,7 @@ void JitCodeCache::RemoveMethodsIn(Thread* self, const LinearAlloc& alloc) {
   // lead to a deadlock.
   {
     ScopedCodeCacheWrite scc(code_map_.get());
-    for (auto it = method_code_map_.begin(); it != method_code_map_.end();) {
+    for (_ it = method_code_map_.begin(); it != method_code_map_.end();) {
       if (alloc.ContainsUnsafe(it->second)) {
         FreeCode(it->first, it->second);
         it = method_code_map_.erase(it);
@@ -283,7 +283,7 @@ void JitCodeCache::RemoveMethodsIn(Thread* self, const LinearAlloc& alloc) {
       }
     }
   }
-  for (auto it = osr_code_map_.begin(); it != osr_code_map_.end();) {
+  for (_ it = osr_code_map_.begin(); it != osr_code_map_.end();) {
     if (alloc.ContainsUnsafe(it->first)) {
       // Note that the code has already been removed in the loop above.
       it = osr_code_map_.erase(it);
@@ -291,7 +291,7 @@ void JitCodeCache::RemoveMethodsIn(Thread* self, const LinearAlloc& alloc) {
       ++it;
     }
   }
-  for (auto it = profiling_infos_.begin(); it != profiling_infos_.end();) {
+  for (_ it = profiling_infos_.begin(); it != profiling_infos_.end();) {
     ProfilingInfo* info = *it;
     if (alloc.ContainsUnsafe(info->GetMethod())) {
       info->GetMethod()->SetProfilingInfo(nullptr);
@@ -675,7 +675,7 @@ void JitCodeCache::RemoveUnmarkedCode(Thread* self) {
   MutexLock mu(self, lock_);
   ScopedCodeCacheWrite scc(code_map_.get());
   // Iterate over all compiled code and remove entries that are not marked.
-  for (auto it = method_code_map_.begin(); it != method_code_map_.end();) {
+  for (_ it = method_code_map_.begin(); it != method_code_map_.end();) {
     const void* code_ptr = it->first;
     ArtMethod* method = it->second;
     uintptr_t allocation = FromCodeToAllocation(code_ptr);
@@ -719,7 +719,7 @@ void JitCodeCache::DoCollection(Thread* self, bool collect_profiling_info) {
     // an entry point is either:
     // - an osr compiled code, that will be removed if not in a thread call stack.
     // - discarded compiled code, that will be removed if not in a thread call stack.
-    for (const auto& it : method_code_map_) {
+    for (const _& it : method_code_map_) {
       ArtMethod* method = it.second;
       const void* code_ptr = it.first;
       const OatQuickMethodHeader* method_header = OatQuickMethodHeader::FromCodePointer(code_ptr);
@@ -744,7 +744,7 @@ void JitCodeCache::DoCollection(Thread* self, bool collect_profiling_info) {
   if (collect_profiling_info) {
     MutexLock mu(self, lock_);
     // Free all profiling infos of methods not compiled nor being compiled.
-    auto profiling_kept_end = std::remove_if(profiling_infos_.begin(), profiling_infos_.end(),
+    _ profiling_kept_end = std::remove_if(profiling_infos_.begin(), profiling_infos_.end(),
       [this] (ProfilingInfo* info) NO_THREAD_SAFETY_ANALYSIS {
         const void* ptr = info->GetMethod()->GetEntryPointFromQuickCompiledCode();
         // We have previously cleared the ProfilingInfo pointer in the ArtMethod in the hope
@@ -775,7 +775,7 @@ bool JitCodeCache::CheckLiveCompiledCodeHasProfilingInfo() {
   ScopedTrace trace(__FUNCTION__);
   // Check that methods we have compiled do have a ProfilingInfo object. We would
   // have memory leaks of compiled code otherwise.
-  for (const auto& it : method_code_map_) {
+  for (const _& it : method_code_map_) {
     ArtMethod* method = it.second;
     if (method->GetProfilingInfo(sizeof(void*)) == nullptr) {
       const void* code_ptr = it.first;
@@ -805,7 +805,7 @@ OatQuickMethodHeader* JitCodeCache::LookupMethodHeader(uintptr_t pc, ArtMethod* 
   if (method_code_map_.empty()) {
     return nullptr;
   }
-  auto it = method_code_map_.lower_bound(reinterpret_cast<const void*>(pc));
+  _ it = method_code_map_.lower_bound(reinterpret_cast<const void*>(pc));
   --it;
 
   const void* code_ptr = it->first;
@@ -822,7 +822,7 @@ OatQuickMethodHeader* JitCodeCache::LookupMethodHeader(uintptr_t pc, ArtMethod* 
 
 OatQuickMethodHeader* JitCodeCache::LookupOsrMethodHeader(ArtMethod* method) {
   MutexLock mu(Thread::Current(), lock_);
-  auto it = osr_code_map_.find(method);
+  _ it = osr_code_map_.find(method);
   if (it == osr_code_map_.end()) {
     return nullptr;
   }
@@ -906,7 +906,7 @@ void JitCodeCache::GetCompiledArtMethods(const std::set<std::string>& dex_base_l
                                          std::vector<ArtMethod*>& methods) {
   ScopedTrace trace(__FUNCTION__);
   MutexLock mu(Thread::Current(), lock_);
-  for (auto it : method_code_map_) {
+  for (_ it : method_code_map_) {
     if (ContainsElement(dex_base_locations, it.second->GetDexFile()->GetBaseLocation())) {
       methods.push_back(it.second);
     }
@@ -993,7 +993,7 @@ void JitCodeCache::InvalidateCompiledCodeFor(ArtMethod* method,
     method->ClearCounter();
   } else {
     MutexLock mu(Thread::Current(), lock_);
-    auto it = osr_code_map_.find(method);
+    _ it = osr_code_map_.find(method);
     if (it != osr_code_map_.end() && OatQuickMethodHeader::FromCodePointer(it->second) == header) {
       // Remove the OSR method, to avoid using it again.
       osr_code_map_.erase(it);

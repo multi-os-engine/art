@@ -28,7 +28,7 @@ class ScopedFastNativeObjectAccess : public ScopedObjectAccessAlreadyRunnable {
  public:
   explicit ScopedFastNativeObjectAccess(JNIEnv* env)
     REQUIRES(!Locks::thread_suspend_count_lock_)
-    SHARED_LOCK_FUNCTION(Locks::mutator_lock_) ALWAYS_INLINE
+    SHARED_LOCK_FUNCTION(Locks::mutator_lock_) MC
      : ScopedObjectAccessAlreadyRunnable(env) {
     Locks::mutator_lock_->AssertSharedHeld(Self());
     DCHECK((*Self()->GetManagedStack()->GetTopQuickFrame())->IsFastNative());
@@ -36,7 +36,7 @@ class ScopedFastNativeObjectAccess : public ScopedObjectAccessAlreadyRunnable {
     DCHECK_EQ(Self()->GetState(), kRunnable);
   }
 
-  ~ScopedFastNativeObjectAccess() UNLOCK_FUNCTION(Locks::mutator_lock_) ALWAYS_INLINE {
+  ~ScopedFastNativeObjectAccess() UNLOCK_FUNCTION(Locks::mutator_lock_) MC {
   }
 
  private:

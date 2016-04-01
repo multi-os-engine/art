@@ -595,7 +595,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       DCHECK(disassembler_ != nullptr);
       // If the information is available, disassemble the code generated for
       // this instruction.
-      auto it = disasm_info_->GetInstructionIntervals().find(instruction);
+      _ it = disasm_info_->GetInstructionIntervals().find(instruction);
       if (it != disasm_info_->GetInstructionIntervals().end()
           && it->second.start != it->second.end) {
         output_ << "\n";

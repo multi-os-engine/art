@@ -134,7 +134,7 @@ void ConcurrentCopying::BindBitmaps() {
   Thread* self = Thread::Current();
   WriterMutexLock mu(self, *Locks::heap_bitmap_lock_);
   // Mark all of the spaces we never collect as immune.
-  for (const auto& space : heap_->GetContinuousSpaces()) {
+  for (const _& space : heap_->GetContinuousSpaces()) {
     if (space->GetGcRetentionPolicy() == space::kGcRetentionPolicyNeverCollect ||
         space->GetGcRetentionPolicy() == space::kGcRetentionPolicyFullCollect) {
       CHECK(space->IsZygoteSpace() || space->IsImageSpace());
@@ -388,7 +388,7 @@ void ConcurrentCopying::MarkingPhase() {
   }
 
   // Immune spaces.
-  for (auto& space : immune_spaces_.GetSpaces()) {
+  for (_& space : immune_spaces_.GetSpaces()) {
     DCHECK(space->IsImageSpace() || space->IsZygoteSpace());
     accounting::ContinuousSpaceBitmap* live_bitmap = space->GetLiveBitmap();
     ConcurrentCopyingImmuneSpaceObjVisitor visitor(this);
@@ -574,7 +574,7 @@ void ConcurrentCopying::ExpandGcMarkStack() {
   std::vector<StackReference<mirror::Object>> temp(gc_mark_stack_->Begin(),
                                                    gc_mark_stack_->End());
   gc_mark_stack_->Resize(new_size);
-  for (auto& ref : temp) {
+  for (_& ref : temp) {
     gc_mark_stack_->PushBack(ref.AsMirrorPtr());
   }
   DCHECK(!gc_mark_stack_->IsFull());
@@ -663,7 +663,7 @@ class ConcurrentCopyingVerifyNoFromSpaceRefsVisitor : public SingleRootVisitor {
       : collector_(collector) {}
 
   void operator()(mirror::Object* ref) const
-      SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+      SHARED_REQUIRES(Locks::mutator_lock_) MC {
     if (ref == nullptr) {
       // OK.
       return;
@@ -703,14 +703,14 @@ class ConcurrentCopyingVerifyNoFromSpaceRefsFieldVisitor {
       : collector_(collector) {}
 
   void operator()(mirror::Object* obj, MemberOffset offset, bool is_static ATTRIBUTE_UNUSED) const
-      SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+      SHARED_REQUIRES(Locks::mutator_lock_) MC {
     mirror::Object* ref =
         obj->GetFieldObject<mirror::Object, kDefaultVerifyFlags, kWithoutReadBarrier>(offset);
     ConcurrentCopyingVerifyNoFromSpaceRefsVisitor visitor(collector_);
     visitor(ref);
   }
   void operator()(mirror::Class* klass, mirror::Reference* ref) const
-      SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+      SHARED_REQUIRES(Locks::mutator_lock_) MC {
     CHECK(klass->IsTypeOfReferenceClass());
     this->operator()(ref, mirror::Reference::ReferentOffset(), false);
   }
@@ -798,7 +798,7 @@ void ConcurrentCopying::VerifyNoFromSpaceReferences() {
   // The alloc stack.
   {
     ConcurrentCopyingVerifyNoFromSpaceRefsVisitor ref_visitor(this);
-    for (auto* it = heap_->allocation_stack_->Begin(), *end = heap_->allocation_stack_->End();
+    for (_* it = heap_->allocation_stack_->Begin(), *end = heap_->allocation_stack_->End();
         it < end; ++it) {
       mirror::Object* const obj = it->AsMirrorPtr();
       if (obj != nullptr && obj->GetClass() != nullptr) {
@@ -818,7 +818,7 @@ class ConcurrentCopyingAssertToSpaceInvariantRefsVisitor {
       : collector_(collector) {}
 
   void operator()(mirror::Object* ref) const
-      SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+      SHARED_REQUIRES(Locks::mutator_lock_) MC {
     if (ref == nullptr) {
       // OK.
       return;
@@ -836,14 +836,14 @@ class ConcurrentCopyingAssertToSpaceInvariantFieldVisitor {
       : collector_(collector) {}
 
   void operator()(mirror::Object* obj, MemberOffset offset, bool is_static ATTRIBUTE_UNUSED) const
-      SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+      SHARED_REQUIRES(Locks::mutator_lock_) MC {
     mirror::Object* ref =
         obj->GetFieldObject<mirror::Object, kDefaultVerifyFlags, kWithoutReadBarrier>(offset);
     ConcurrentCopyingAssertToSpaceInvariantRefsVisitor visitor(collector_);
     visitor(ref);
   }
   void operator()(mirror::Class* klass, mirror::Reference* ref ATTRIBUTE_UNUSED) const
-      SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+      SHARED_REQUIRES(Locks::mutator_lock_) MC {
     CHECK(klass->IsTypeOfReferenceClass());
   }
 
@@ -1207,7 +1207,7 @@ void ConcurrentCopying::Sweep(bool swap_bitmaps) {
   }
   CheckEmptyMarkStack();
   TimingLogger::ScopedTiming split("Sweep", GetTimings());
-  for (const auto& space : GetHeap()->GetContinuousSpaces()) {
+  for (const _& space : GetHeap()->GetContinuousSpaces()) {
     if (space->IsContinuousMemMapAllocSpace()) {
       space::ContinuousMemMapAllocSpace* alloc_space = space->AsContinuousMemMapAllocSpace();
       if (space == region_space_ || immune_spaces_.ContainsSpace(space)) {
@@ -1248,7 +1248,7 @@ void ConcurrentCopying::ClearBlackPtrs() {
   CHECK(kUseBakerReadBarrier);
   TimingLogger::ScopedTiming split("ClearBlackPtrs", GetTimings());
   ConcurrentCopyingClearBlackPtrsVisitor visitor(this);
-  for (auto& space : heap_->GetContinuousSpaces()) {
+  for (_& space : heap_->GetContinuousSpaces()) {
     if (space == region_space_) {
       continue;
     }
@@ -1268,8 +1268,8 @@ void ConcurrentCopying::ClearBlackPtrs() {
   // Objects on the allocation stack?
   if (ReadBarrier::kEnableReadBarrierInvariantChecks || kIsDebugBuild) {
     size_t count = GetAllocationStack()->Size();
-    auto* it = GetAllocationStack()->Begin();
-    auto* end = GetAllocationStack()->End();
+    _* it = GetAllocationStack()->Begin();
+    _* end = GetAllocationStack()->End();
     for (size_t i = 0; i < count; ++i, ++it) {
       CHECK_LT(it, end);
       mirror::Object* obj = it->AsMirrorPtr();
@@ -1434,7 +1434,7 @@ class RootPrinter {
   RootPrinter() { }
 
   template <class MirrorType>
-  ALWAYS_INLINE void VisitRootIfNonNull(mirror::CompressedReference<MirrorType>* root)
+  MC void VisitRootIfNonNull(mirror::CompressedReference<MirrorType>* root)
       SHARED_REQUIRES(Locks::mutator_lock_) {
     if (!root->IsNull()) {
       VisitRoot(root);
@@ -1589,19 +1589,19 @@ class ConcurrentCopyingRefFieldsVisitor {
       : collector_(collector) {}
 
   void operator()(mirror::Object* obj, MemberOffset offset, bool /* is_static */)
-      const ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_)
+      const MC SHARED_REQUIRES(Locks::mutator_lock_)
       SHARED_REQUIRES(Locks::heap_bitmap_lock_) {
     collector_->Process(obj, offset);
   }
 
   void operator()(mirror::Class* klass, mirror::Reference* ref) const
-      SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+      SHARED_REQUIRES(Locks::mutator_lock_) MC {
     CHECK(klass->IsTypeOfReferenceClass());
     collector_->DelayReferenceReferent(klass, ref);
   }
 
   void VisitRootIfNonNull(mirror::CompressedReference<mirror::Object>* root) const
-      ALWAYS_INLINE
+      MC
       SHARED_REQUIRES(Locks::mutator_lock_) {
     if (!root->IsNull()) {
       VisitRoot(root);
@@ -1609,7 +1609,7 @@ class ConcurrentCopyingRefFieldsVisitor {
   }
 
   void VisitRoot(mirror::CompressedReference<mirror::Object>* root) const
-      ALWAYS_INLINE
+      MC
       SHARED_REQUIRES(Locks::mutator_lock_) {
     collector_->MarkRoot(root);
   }
@@ -1675,9 +1675,9 @@ inline void ConcurrentCopying::MarkRoot(mirror::CompressedReference<mirror::Obje
   mirror::Object* const ref = root->AsMirrorPtr();
   mirror::Object* to_ref = Mark(ref);
   if (to_ref != ref) {
-    auto* addr = reinterpret_cast<Atomic<mirror::CompressedReference<mirror::Object>>*>(root);
-    auto expected_ref = mirror::CompressedReference<mirror::Object>::FromMirrorPtr(ref);
-    auto new_ref = mirror::CompressedReference<mirror::Object>::FromMirrorPtr(to_ref);
+    _* addr = reinterpret_cast<Atomic<mirror::CompressedReference<mirror::Object>>*>(root);
+    _ expected_ref = mirror::CompressedReference<mirror::Object>::FromMirrorPtr(ref);
+    _ new_ref = mirror::CompressedReference<mirror::Object>::FromMirrorPtr(to_ref);
     // If the cas fails, then it was updated by the mutator.
     do {
       if (ref != addr->LoadRelaxed().AsMirrorPtr()) {
@@ -1739,7 +1739,7 @@ mirror::Object* ConcurrentCopying::AllocateInSkippedBlock(size_t alloc_size) {
   Thread* self = Thread::Current();
   size_t min_object_size = RoundUp(sizeof(mirror::Object), space::RegionSpace::kAlignment);
   MutexLock mu(self, skipped_blocks_lock_);
-  auto it = skipped_blocks_map_.lower_bound(alloc_size);
+  _ it = skipped_blocks_map_.lower_bound(alloc_size);
   if (it == skipped_blocks_map_.end()) {
     // Not found.
     return nullptr;

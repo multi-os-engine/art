@@ -83,7 +83,7 @@ inline ArtMethod* GetCalleeSaveMethodCaller(Thread* self, Runtime::CalleeSaveTyp
 }
 
 template <const bool kAccessCheck>
-ALWAYS_INLINE
+MC
 inline mirror::Class* CheckObjectAlloc(uint32_t type_idx,
                                        ArtMethod* method,
                                        Thread* self, bool* slow_path) {
@@ -136,7 +136,7 @@ inline mirror::Class* CheckObjectAlloc(uint32_t type_idx,
   return klass;
 }
 
-ALWAYS_INLINE
+MC
 inline mirror::Class* CheckClassInitializedForObjectAlloc(mirror::Class* klass,
                                                           Thread* self,
                                                           bool* slow_path) {
@@ -166,7 +166,7 @@ inline mirror::Class* CheckClassInitializedForObjectAlloc(mirror::Class* klass,
 // When verification/compiler hasn't been able to verify access, optionally perform an access
 // check.
 template <bool kAccessCheck, bool kInstrumented>
-ALWAYS_INLINE
+MC
 inline mirror::Object* AllocObjectFromCode(uint32_t type_idx,
                                            ArtMethod* method,
                                            Thread* self,
@@ -188,7 +188,7 @@ inline mirror::Object* AllocObjectFromCode(uint32_t type_idx,
 
 // Given the context of a calling Method and a resolved class, create an instance.
 template <bool kInstrumented>
-ALWAYS_INLINE
+MC
 inline mirror::Object* AllocObjectFromCodeResolved(mirror::Class* klass,
                                                    Thread* self,
                                                    gc::AllocatorType allocator_type) {
@@ -211,7 +211,7 @@ inline mirror::Object* AllocObjectFromCodeResolved(mirror::Class* klass,
 
 // Given the context of a calling Method and an initialized class, create an instance.
 template <bool kInstrumented>
-ALWAYS_INLINE
+MC
 inline mirror::Object* AllocObjectFromCodeInitialized(mirror::Class* klass,
                                                       Thread* self,
                                                       gc::AllocatorType allocator_type) {
@@ -222,7 +222,7 @@ inline mirror::Object* AllocObjectFromCodeInitialized(mirror::Class* klass,
 
 
 template <bool kAccessCheck>
-ALWAYS_INLINE
+MC
 inline mirror::Class* CheckArrayAlloc(uint32_t type_idx,
                                       int32_t component_count,
                                       ArtMethod* method,
@@ -260,7 +260,7 @@ inline mirror::Class* CheckArrayAlloc(uint32_t type_idx,
 // When verification/compiler hasn't been able to verify access, optionally perform an access
 // check.
 template <bool kAccessCheck, bool kInstrumented>
-ALWAYS_INLINE
+MC
 inline mirror::Array* AllocArrayFromCode(uint32_t type_idx,
                                          int32_t component_count,
                                          ArtMethod* method,
@@ -286,7 +286,7 @@ inline mirror::Array* AllocArrayFromCode(uint32_t type_idx,
 }
 
 template <bool kAccessCheck, bool kInstrumented>
-ALWAYS_INLINE
+MC
 inline mirror::Array* AllocArrayFromCodeResolved(mirror::Class* klass,
                                                  int32_t component_count,
                                                  ArtMethod* method,
@@ -408,7 +408,7 @@ inline ArtField* FindFieldFromCode(uint32_t field_idx,
 
 // Explicit template declarations of FindFieldFromCode for all field access types.
 #define EXPLICIT_FIND_FIELD_FROM_CODE_TEMPLATE_DECL(_type, _access_check) \
-template SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE \
+template SHARED_REQUIRES(Locks::mutator_lock_) MC \
 ArtField* FindFieldFromCode<_type, _access_check>(uint32_t field_idx, \
                                                   ArtMethod* referrer, \
                                                   Thread* self, size_t expected_size) \
@@ -581,7 +581,7 @@ inline ArtMethod* FindMethodFromCode(uint32_t method_idx, mirror::Object** this_
 
 // Explicit template declarations of FindMethodFromCode for all invoke types.
 #define EXPLICIT_FIND_METHOD_FROM_CODE_TEMPLATE_DECL(_type, _access_check)                 \
-  template SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE                       \
+  template SHARED_REQUIRES(Locks::mutator_lock_) MC                       \
   ArtMethod* FindMethodFromCode<_type, _access_check>(uint32_t method_idx,         \
                                                       mirror::Object** this_object, \
                                                       ArtMethod* referrer, \

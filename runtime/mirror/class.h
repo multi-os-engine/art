@@ -200,13 +200,13 @@ class MANAGED Class FINAL : public Object {
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE uint32_t GetAccessFlags() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t GetAccessFlags() SHARED_REQUIRES(Locks::mutator_lock_);
   static MemberOffset AccessFlagsOffset() {
     return OFFSET_OF_OBJECT_MEMBER(Class, access_flags_);
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE uint32_t GetClassFlags() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC uint32_t GetClassFlags() SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetField32<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Class, class_flags_));
   }
   void SetClassFlags(uint32_t new_flags) SHARED_REQUIRES(Locks::mutator_lock_);
@@ -214,77 +214,77 @@ class MANAGED Class FINAL : public Object {
   void SetAccessFlags(uint32_t new_access_flags) SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Returns true if the class is an interface.
-  ALWAYS_INLINE bool IsInterface() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsInterface() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccInterface) != 0;
   }
 
   // Returns true if the class is declared public.
-  ALWAYS_INLINE bool IsPublic() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsPublic() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccPublic) != 0;
   }
 
   // Returns true if the class is declared final.
-  ALWAYS_INLINE bool IsFinal() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsFinal() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccFinal) != 0;
   }
 
-  ALWAYS_INLINE bool IsFinalizable() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsFinalizable() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccClassIsFinalizable) != 0;
   }
 
-  ALWAYS_INLINE void SetRecursivelyInitialized() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC void SetRecursivelyInitialized() SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK_EQ(GetLockOwnerThreadId(), Thread::Current()->GetThreadId());
     uint32_t flags = GetField32(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_));
     SetAccessFlags(flags | kAccRecursivelyInitialized);
   }
 
-  ALWAYS_INLINE void SetHasDefaultMethods() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC void SetHasDefaultMethods() SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK_EQ(GetLockOwnerThreadId(), Thread::Current()->GetThreadId());
     uint32_t flags = GetField32(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_));
     SetAccessFlags(flags | kAccHasDefaultMethod);
   }
 
-  ALWAYS_INLINE void SetFinalizable() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC void SetFinalizable() SHARED_REQUIRES(Locks::mutator_lock_) {
     uint32_t flags = GetField32(OFFSET_OF_OBJECT_MEMBER(Class, access_flags_));
     SetAccessFlags(flags | kAccClassIsFinalizable);
   }
 
-  ALWAYS_INLINE bool IsStringClass() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsStringClass() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetClassFlags() & kClassFlagString) != 0;
   }
 
-  ALWAYS_INLINE void SetStringClass() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC void SetStringClass() SHARED_REQUIRES(Locks::mutator_lock_) {
     SetClassFlags(kClassFlagString | kClassFlagNoReferenceFields);
   }
 
-  ALWAYS_INLINE bool IsClassLoaderClass() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsClassLoaderClass() SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetClassFlags() == kClassFlagClassLoader;
   }
 
-  ALWAYS_INLINE void SetClassLoaderClass() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC void SetClassLoaderClass() SHARED_REQUIRES(Locks::mutator_lock_) {
     SetClassFlags(kClassFlagClassLoader);
   }
 
-  ALWAYS_INLINE bool IsDexCacheClass() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsDexCacheClass() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetClassFlags() & kClassFlagDexCache) != 0;
   }
 
-  ALWAYS_INLINE void SetDexCacheClass() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC void SetDexCacheClass() SHARED_REQUIRES(Locks::mutator_lock_) {
     SetClassFlags(GetClassFlags() | kClassFlagDexCache);
   }
 
   // Returns true if the class is abstract.
-  ALWAYS_INLINE bool IsAbstract() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsAbstract() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccAbstract) != 0;
   }
 
   // Returns true if the class is an annotation.
-  ALWAYS_INLINE bool IsAnnotation() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsAnnotation() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccAnnotation) != 0;
   }
 
   // Returns true if the class is synthetic.
-  ALWAYS_INLINE bool IsSynthetic() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC bool IsSynthetic() SHARED_REQUIRES(Locks::mutator_lock_) {
     return (GetAccessFlags() & kAccSynthetic) != 0;
   }
 
@@ -372,7 +372,7 @@ class MANAGED Class FINAL : public Object {
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  Primitive::Type GetPrimitiveType() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_);
+  Primitive::Type GetPrimitiveType() MC SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetPrimitiveType(Primitive::Type new_type) SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK_EQ(sizeof(Primitive::Type), sizeof(int32_t));
@@ -384,7 +384,7 @@ class MANAGED Class FINAL : public Object {
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  size_t GetPrimitiveTypeSizeShift() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_);
+  size_t GetPrimitiveTypeSizeShift() MC SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Returns true if the class is a primitive type.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
@@ -509,21 +509,21 @@ class MANAGED Class FINAL : public Object {
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsIntArrayClass() SHARED_REQUIRES(Locks::mutator_lock_) {
-    constexpr auto kNewFlags = static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis);
-    auto* component_type = GetComponentType<kVerifyFlags>();
+    constexpr _ kNewFlags = static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis);
+    _* component_type = GetComponentType<kVerifyFlags>();
     return component_type != nullptr && component_type->template IsPrimitiveInt<kNewFlags>();
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   bool IsLongArrayClass() SHARED_REQUIRES(Locks::mutator_lock_) {
-    constexpr auto kNewFlags = static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis);
-    auto* component_type = GetComponentType<kVerifyFlags>();
+    constexpr _ kNewFlags = static_cast<VerifyObjectFlags>(kVerifyFlags & ~kVerifyThis);
+    _* component_type = GetComponentType<kVerifyFlags>();
     return component_type != nullptr && component_type->template IsPrimitiveLong<kNewFlags>();
   }
 
   // Creates a raw object instance but does not invoke the default constructor.
   template<bool kIsInstrumented, bool kCheckAddFinalizer = true>
-  ALWAYS_INLINE Object* Alloc(Thread* self, gc::AllocatorType allocator_type)
+  MC Object* Alloc(Thread* self, gc::AllocatorType allocator_type)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
   Object* AllocObject(Thread* self)
@@ -661,11 +661,11 @@ class MANAGED Class FINAL : public Object {
   // downcast would be necessary. Similarly for interfaces, a class that implements (or an interface
   // that extends) another can be assigned to its parent, but not vice-versa. All Classes may assign
   // to themselves. Classes for primitive types may not assign to each other.
-  ALWAYS_INLINE bool IsAssignableFrom(Class* src) SHARED_REQUIRES(Locks::mutator_lock_);
+  MC bool IsAssignableFrom(Class* src) SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  ALWAYS_INLINE Class* GetSuperClass() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC Class* GetSuperClass() SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Get first common super class. It will never return null.
   // `This` and `klass` must be classes.
@@ -687,7 +687,7 @@ class MANAGED Class FINAL : public Object {
     return MemberOffset(OFFSETOF_MEMBER(Class, super_class_));
   }
 
-  ClassLoader* GetClassLoader() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_);
+  ClassLoader* GetClassLoader() MC SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetClassLoader(ClassLoader* new_cl) SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -709,17 +709,17 @@ class MANAGED Class FINAL : public Object {
   // Also updates the dex_cache_strings_ variable from new_dex_cache.
   void SetDexCache(DexCache* new_dex_cache) SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE IterationRange<StrideIterator<ArtMethod>> GetDirectMethods(size_t pointer_size)
+  MC IterationRange<StrideIterator<ArtMethod>> GetDirectMethods(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE LengthPrefixedArray<ArtMethod>* GetMethodsPtr()
+  MC LengthPrefixedArray<ArtMethod>* GetMethodsPtr()
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   static MemberOffset MethodsOffset() {
     return MemberOffset(OFFSETOF_MEMBER(Class, methods_));
   }
 
-  ALWAYS_INLINE IterationRange<StrideIterator<ArtMethod>> GetMethods(size_t pointer_size)
+  MC IterationRange<StrideIterator<ArtMethod>> GetMethods(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetMethodsPtr(LengthPrefixedArray<ArtMethod>* new_methods,
@@ -733,30 +733,30 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetDirectMethodsSlice(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetDirectMethodsSlice(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE ArtMethod* GetDirectMethod(size_t i, size_t pointer_size)
+  MC ArtMethod* GetDirectMethod(size_t i, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Use only when we are allocating populating the method arrays.
-  ALWAYS_INLINE ArtMethod* GetDirectMethodUnchecked(size_t i, size_t pointer_size)
+  MC ArtMethod* GetDirectMethodUnchecked(size_t i, size_t pointer_size)
         SHARED_REQUIRES(Locks::mutator_lock_);
-  ALWAYS_INLINE ArtMethod* GetVirtualMethodUnchecked(size_t i, size_t pointer_size)
+  MC ArtMethod* GetVirtualMethodUnchecked(size_t i, size_t pointer_size)
         SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Returns the number of static, private, and constructor methods.
-  ALWAYS_INLINE uint32_t NumDirectMethods() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t NumDirectMethods() SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetMethodsSlice(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetMethodsSlice(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetDeclaredMethodsSlice(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetDeclaredMethodsSlice(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE IterationRange<StrideIterator<ArtMethod>> GetDeclaredMethods(
+  MC IterationRange<StrideIterator<ArtMethod>> GetDeclaredMethods(
         size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -768,37 +768,37 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetDeclaredVirtualMethodsSlice(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetDeclaredVirtualMethodsSlice(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE IterationRange<StrideIterator<ArtMethod>> GetDeclaredVirtualMethods(
+  MC IterationRange<StrideIterator<ArtMethod>> GetDeclaredVirtualMethods(
         size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetCopiedMethodsSlice(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetCopiedMethodsSlice(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE IterationRange<StrideIterator<ArtMethod>> GetCopiedMethods(size_t pointer_size)
+  MC IterationRange<StrideIterator<ArtMethod>> GetCopiedMethods(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetVirtualMethodsSlice(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetVirtualMethodsSlice(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE IterationRange<StrideIterator<ArtMethod>> GetVirtualMethods(size_t pointer_size)
+  MC IterationRange<StrideIterator<ArtMethod>> GetVirtualMethods(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Returns the number of non-inherited virtual methods (sum of declared and copied methods).
-  ALWAYS_INLINE uint32_t NumVirtualMethods() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t NumVirtualMethods() SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Returns the number of copied virtual methods.
-  ALWAYS_INLINE uint32_t NumCopiedVirtualMethods() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t NumCopiedVirtualMethods() SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Returns the number of declared virtual methods.
-  ALWAYS_INLINE uint32_t NumDeclaredVirtualMethods() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t NumDeclaredVirtualMethods() SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE uint32_t NumMethods() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t NumMethods() SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
   ArtMethod* GetVirtualMethod(size_t i, size_t pointer_size)
@@ -809,9 +809,9 @@ class MANAGED Class FINAL : public Object {
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  ALWAYS_INLINE PointerArray* GetVTable() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC PointerArray* GetVTable() SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE PointerArray* GetVTableDuringLinking() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC PointerArray* GetVTableDuringLinking() SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetVTable(PointerArray* new_vtable) SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -885,7 +885,7 @@ class MANAGED Class FINAL : public Object {
   // super class or interface, return the specific implementation
   // method for this class.
   ArtMethod* FindVirtualMethodForInterface(ArtMethod* method, size_t pointer_size)
-      SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE;
+      SHARED_REQUIRES(Locks::mutator_lock_) MC;
 
   ArtMethod* FindVirtualMethodForVirtualOrInterface(ArtMethod* method, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -966,18 +966,18 @@ class MANAGED Class FINAL : public Object {
     return (GetAccessFlags() & kAccRecursivelyInitialized) != 0;
   }
 
-  ALWAYS_INLINE int32_t GetIfTableCount() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC int32_t GetIfTableCount() SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  ALWAYS_INLINE IfTable* GetIfTable() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC IfTable* GetIfTable() SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE void SetIfTable(IfTable* new_iftable) SHARED_REQUIRES(Locks::mutator_lock_);
+  MC void SetIfTable(IfTable* new_iftable) SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Get instance fields of the class (See also GetSFields).
   LengthPrefixedArray<ArtField>* GetIFieldsPtr() SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE IterationRange<StrideIterator<ArtField>> GetIFields()
+  MC IterationRange<StrideIterator<ArtField>> GetIFields()
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetIFieldsPtr(LengthPrefixedArray<ArtField>* new_ifields)
@@ -1008,7 +1008,7 @@ class MANAGED Class FINAL : public Object {
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  uint32_t GetReferenceInstanceOffsets() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_);
+  uint32_t GetReferenceInstanceOffsets() MC SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetReferenceInstanceOffsets(uint32_t new_reference_offsets)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -1047,7 +1047,7 @@ class MANAGED Class FINAL : public Object {
 
   // Gets the static fields of the class.
   LengthPrefixedArray<ArtField>* GetSFieldsPtr() SHARED_REQUIRES(Locks::mutator_lock_);
-  ALWAYS_INLINE IterationRange<StrideIterator<ArtField>> GetSFields()
+  MC IterationRange<StrideIterator<ArtField>> GetSFields()
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetSFieldsPtr(LengthPrefixedArray<ArtField>* new_sfields)
@@ -1168,7 +1168,7 @@ class MANAGED Class FINAL : public Object {
 
   const DexFile::ClassDef* GetClassDef() SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE uint32_t NumDirectInterfaces() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t NumDirectInterfaces() SHARED_REQUIRES(Locks::mutator_lock_);
 
   uint16_t GetDirectInterfaceTypeIdx(uint32_t idx) SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -1245,19 +1245,19 @@ class MANAGED Class FINAL : public Object {
     return pointer_size;
   }
 
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetDirectMethodsSliceUnchecked(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetDirectMethodsSliceUnchecked(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetVirtualMethodsSliceUnchecked(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetVirtualMethodsSliceUnchecked(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetDeclaredMethodsSliceUnchecked(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetDeclaredMethodsSliceUnchecked(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetDeclaredVirtualMethodsSliceUnchecked(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetDeclaredVirtualMethodsSliceUnchecked(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE ArraySlice<ArtMethod> GetCopiedMethodsSliceUnchecked(size_t pointer_size)
+  MC ArraySlice<ArtMethod> GetCopiedMethodsSliceUnchecked(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Fix up all of the native pointers in the class by running them through the visitor. Only sets
@@ -1271,7 +1271,7 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:
-  ALWAYS_INLINE void SetMethodsPtrInternal(LengthPrefixedArray<ArtMethod>* new_methods)
+  MC void SetMethodsPtrInternal(LengthPrefixedArray<ArtMethod>* new_methods)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetVerifyError(Object* klass) SHARED_REQUIRES(Locks::mutator_lock_);
@@ -1300,18 +1300,18 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // The index in the methods_ array where the first declared virtual method is.
-  ALWAYS_INLINE uint32_t GetVirtualMethodsStartOffset() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t GetVirtualMethodsStartOffset() SHARED_REQUIRES(Locks::mutator_lock_);
 
   // The index in the methods_ array where the first direct method is.
-  ALWAYS_INLINE uint32_t GetDirectMethodsStartOffset() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t GetDirectMethodsStartOffset() SHARED_REQUIRES(Locks::mutator_lock_);
 
   // The index in the methods_ array where the first copied method is.
-  ALWAYS_INLINE uint32_t GetCopiedMethodsStartOffset() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t GetCopiedMethodsStartOffset() SHARED_REQUIRES(Locks::mutator_lock_);
 
   bool ProxyDescriptorEquals(const char* match) SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Check that the pointer size matches the one in the class linker.
-  ALWAYS_INLINE static void CheckPointerSize(size_t pointer_size);
+  MC static void CheckPointerSize(size_t pointer_size);
 
   static MemberOffset EmbeddedImTableOffset(size_t pointer_size);
   static MemberOffset EmbeddedVTableOffset(size_t pointer_size);

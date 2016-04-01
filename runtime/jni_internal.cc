@@ -127,7 +127,7 @@ static jmethodID FindMethodID(ScopedObjectAccess& soa, jclass jni_class,
     return nullptr;
   }
   ArtMethod* method = nullptr;
-  auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+  _ pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
   if (is_static) {
     method = c->FindDirectMethod(name, sig, pointer_size);
   } else if (c->IsInterface()) {
@@ -315,8 +315,8 @@ static JavaVMExt* JavaVmExtFromEnv(JNIEnv* env) {
 template <bool kNative>
 static ArtMethod* FindMethod(mirror::Class* c, const StringPiece& name, const StringPiece& sig)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
-  for (auto& method : c->GetMethods(pointer_size)) {
+  _ pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+  for (_& method : c->GetMethods(pointer_size)) {
     if (kNative == method.IsNative() && name == method.GetName() && method.GetSignature() == sig) {
       return &method;
     }
@@ -366,7 +366,7 @@ class JNI {
       // Not even a java.lang.reflect.Field, return null. TODO, is this check necessary?
       return nullptr;
     }
-    auto* field = static_cast<mirror::Field*>(obj_field);
+    _* field = static_cast<mirror::Field*>(obj_field);
     return soa.EncodeField(field->GetArtField());
   }
 
@@ -557,7 +557,7 @@ class JNI {
     // We don't want to have the GC attempt to mark a null root if we just removed
     // it. b/22119403
     ScopedObjectAccess soa(env);
-    auto* ext_env = down_cast<JNIEnvExt*>(env);
+    _* ext_env = down_cast<JNIEnvExt*>(env);
     if (!ext_env->locals.Remove(ext_env->local_ref_cookie, obj)) {
       // Attempting to delete a local reference that is not in the
       // topmost local reference frame is a no-op.  DeleteLocalRef returns
@@ -2214,8 +2214,8 @@ class JNI {
     VLOG(jni) << "[Unregistering JNI native methods for " << PrettyClass(c) << "]";
 
     size_t unregistered_count = 0;
-    auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
-    for (auto& m : c->GetMethods(pointer_size)) {
+    _ pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+    for (_& m : c->GetMethods(pointer_size)) {
       if (m.IsNative()) {
         m.UnregisterNative();
         unregistered_count++;

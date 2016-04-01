@@ -45,14 +45,14 @@ static void XzCompress(const std::vector<uint8_t>* src, std::vector<uint8_t>* ds
   // Implement the required interface for communication (written in C so no virtual methods).
   struct XzCallbacks : public ISeqInStream, public ISeqOutStream, public ICompressProgress {
     static SRes ReadImpl(void* p, void* buf, size_t* size) {
-      auto* ctx = static_cast<XzCallbacks*>(reinterpret_cast<ISeqInStream*>(p));
+      _* ctx = static_cast<XzCallbacks*>(reinterpret_cast<ISeqInStream*>(p));
       *size = std::min(*size, ctx->src_->size() - ctx->src_pos_);
       memcpy(buf, ctx->src_->data() + ctx->src_pos_, *size);
       ctx->src_pos_ += *size;
       return SZ_OK;
     }
     static size_t WriteImpl(void* p, const void* buf, size_t size) {
-      auto* ctx = static_cast<XzCallbacks*>(reinterpret_cast<ISeqOutStream*>(p));
+      _* ctx = static_cast<XzCallbacks*>(reinterpret_cast<ISeqOutStream*>(p));
       const uint8_t* buffer = reinterpret_cast<const uint8_t*>(buf);
       ctx->dst_->insert(ctx->dst_->end(), buffer, buffer + size);
       return size;

@@ -1354,12 +1354,12 @@ bool ElfFileImpl<ElfTypes>::FixupDebugSections(Elf_Addr base_address_delta) {
 template <typename ElfTypes>
 bool ElfFileImpl<ElfTypes>::ApplyOatPatchesTo(
     const char* target_section_name, Elf_Addr delta) {
-  auto target_section = FindSectionByName(target_section_name);
+  _ target_section = FindSectionByName(target_section_name);
   if (target_section == nullptr) {
     return true;
   }
   std::string patches_name = target_section_name + std::string(".oat_patches");
-  auto patches_section = FindSectionByName(patches_name.c_str());
+  _ patches_section = FindSectionByName(patches_name.c_str());
   if (patches_section == nullptr) {
     LOG(ERROR) << patches_name << " section not found.";
     return false;

@@ -249,7 +249,7 @@ class Instruction {
 
   // VRegA
   bool HasVRegA() const;
-  ALWAYS_INLINE int32_t VRegA() const;
+  MC int32_t VRegA() const;
 
   int8_t VRegA_10t() const {
     return VRegA_10t(Fetch16(0));

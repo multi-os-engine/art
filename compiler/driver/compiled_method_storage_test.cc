@@ -100,13 +100,13 @@ TEST(CompiledMethodStorage, Deduplicate) {
 
   std::vector<CompiledMethod*> compiled_methods;
   compiled_methods.reserve(1u << 7);
-  for (auto&& c : code) {
-    for (auto&& s : src_map) {
-      for (auto&& m : mapping_table) {
-        for (auto&& v : vmap_table) {
-          for (auto&& g : gc_map) {
-            for (auto&& f : cfi_info) {
-              for (auto&& p : patches) {
+  for (_&& c : code) {
+    for (_&& s : src_map) {
+      for (_&& m : mapping_table) {
+        for (_&& v : vmap_table) {
+          for (_&& g : gc_map) {
+            for (_&& f : cfi_info) {
+              for (_&& p : patches) {
                 compiled_methods.push_back(CompiledMethod::SwapAllocCompiledMethod(
                         &driver, kNone, c, 0u, 0u, 0u, s, m, v, g, f, p));
               }

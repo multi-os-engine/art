@@ -825,7 +825,7 @@ void BuildQuickArgumentVisitor::Visit() {
 
 void BuildQuickArgumentVisitor::FixupReferences() {
   // Fixup any references which may have changed.
-  for (const auto& pair : references_) {
+  for (const _& pair : references_) {
     pair.second->Assign(soa_->Decode<mirror::Object*>(pair.first));
     soa_->Env()->DeleteLocalRef(pair.first);
   }
@@ -914,7 +914,7 @@ void RememberForGcArgumentVisitor::Visit() {
 
 void RememberForGcArgumentVisitor::FixupReferences() {
   // Fixup any references which may have changed.
-  for (const auto& pair : references_) {
+  for (const _& pair : references_) {
     pair.second->Assign(soa_->Decode<mirror::Object*>(pair.first));
     soa_->Env()->DeleteLocalRef(pair.first);
   }
@@ -1076,7 +1076,7 @@ extern "C" const void* artQuickResolutionTrampoline(
         caller->SetDexCacheResolvedMethod(update_dex_cache_method_index, called, sizeof(void*));
       }
     } else if (invoke_type == kStatic) {
-      const auto called_dex_method_idx = called->GetDexMethodIndex();
+      const _ called_dex_method_idx = called->GetDexMethodIndex();
       // For static invokes, we may dispatch to the static method in the superclass but resolve
       // using the subclass. To prevent getting slow paths on each invoke, we force set the
       // resolved method for the super class dex method index if we are in the same dex file.
@@ -1641,7 +1641,7 @@ class ComputeGenericJniFrameSize FINAL : public ComputeNativeCallFrameSize {
 
     // Add a slot for the method pointer, and fill it. Fix the pointer-pointer given to us.
     uint8_t* method_pointer = sp8;
-    auto** new_method_ref = reinterpret_cast<ArtMethod**>(method_pointer);
+    _** new_method_ref = reinterpret_cast<ArtMethod**>(method_pointer);
     *new_method_ref = method;
     *m = new_method_ref;
   }

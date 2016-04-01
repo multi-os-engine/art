@@ -101,7 +101,7 @@ bool ThreadList::Contains(Thread* thread) {
 }
 
 bool ThreadList::Contains(pid_t tid) {
-  for (const auto& thread : list_) {
+  for (const _& thread : list_) {
     if (thread->GetTid() == tid) {
       return true;
     }
@@ -116,7 +116,7 @@ pid_t ThreadList::GetLockOwner() {
 void ThreadList::DumpNativeStacks(std::ostream& os) {
   MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
   std::unique_ptr<BacktraceMap> map(BacktraceMap::Create(getpid()));
-  for (const auto& thread : list_) {
+  for (const _& thread : list_) {
     os << "DUMPING THREAD " << thread->GetTid() << "\n";
     DumpNativeStack(os, thread->GetTid(), map.get(), "\t");
     os << "\n";
@@ -243,7 +243,7 @@ void ThreadList::Dump(std::ostream& os, bool dump_native_stack) {
 void ThreadList::AssertThreadsAreSuspended(Thread* self, Thread* ignore1, Thread* ignore2) {
   MutexLock mu(self, *Locks::thread_list_lock_);
   MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
-  for (const auto& thread : list_) {
+  for (const _& thread : list_) {
     if (thread != ignore1 && thread != ignore2) {
       CHECK(thread->IsSuspended())
             << "\nUnsuspended thread: <<" << *thread << "\n"
@@ -291,7 +291,7 @@ size_t ThreadList::RunCheckpoint(Closure* checkpoint_function) {
     MutexLock mu(self, *Locks::thread_list_lock_);
     MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
     count = list_.size();
-    for (const auto& thread : list_) {
+    for (const _& thread : list_) {
       if (thread != self) {
         while (true) {
           if (thread->RequestCheckpoint(checkpoint_function)) {
@@ -317,7 +317,7 @@ size_t ThreadList::RunCheckpoint(Closure* checkpoint_function) {
   checkpoint_function->Run(self);
 
   // Run the checkpoint on the suspended threads.
-  for (const auto& thread : suspended_count_modified_threads) {
+  for (const _& thread : suspended_count_modified_threads) {
     if (!thread->IsSuspended()) {
       if (ATRACE_ENABLED()) {
         std::ostringstream oss;
@@ -370,7 +370,7 @@ size_t ThreadList::RunCheckpointOnRunnableThreads(Closure* checkpoint_function) 
     // Call a checkpoint function for each non-suspended thread.
     MutexLock mu(self, *Locks::thread_list_lock_);
     MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
-    for (const auto& thread : list_) {
+    for (const _& thread : list_) {
       if (thread != self) {
         if (thread->RequestCheckpoint(checkpoint_function)) {
           // This thread will run its checkpoint some time in the near future.
@@ -414,7 +414,7 @@ size_t ThreadList::FlipThreadRoots(Closure* thread_flip_visitor,
     MutexLock mu(self, *Locks::thread_list_lock_);
     MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
     --suspend_all_count_;
-    for (const auto& thread : list_) {
+    for (const _& thread : list_) {
       if (thread == self) {
         continue;
       }
@@ -438,7 +438,7 @@ size_t ThreadList::FlipThreadRoots(Closure* thread_flip_visitor,
   // Run the closure on the other threads and let them resume.
   {
     ReaderMutexLock mu(self, *Locks::mutator_lock_);
-    for (const auto& thread : other_threads) {
+    for (const _& thread : other_threads) {
       Closure* flip_func = thread->GetFlipFunction();
       if (flip_func != nullptr) {
         flip_func->Run(thread);
@@ -451,7 +451,7 @@ size_t ThreadList::FlipThreadRoots(Closure* thread_flip_visitor,
   // Resume other threads.
   {
     MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
-    for (const auto& thread : other_threads) {
+    for (const _& thread : other_threads) {
       thread->ModifySuspendCount(self, -1, nullptr, false);
     }
     Thread::resume_cond_->Broadcast(self);
@@ -554,7 +554,7 @@ void ThreadList::SuspendAllInternal(Thread* self,
       ++debug_suspend_all_count_;
     pending_threads.StoreRelaxed(list_.size() - num_ignored);
     // Increment everybody's suspend count (except those that should be ignored).
-    for (const auto& thread : list_) {
+    for (const _& thread : list_) {
       if (thread == ignore1 || thread == ignore2) {
         continue;
       }
@@ -650,7 +650,7 @@ void ThreadList::ResumeAll() {
     // Update global suspend all state for attaching threads.
     --suspend_all_count_;
     // Decrement the suspend counts for all threads.
-    for (const auto& thread : list_) {
+    for (const _& thread : list_) {
       if (thread == self) {
         continue;
       }
@@ -851,7 +851,7 @@ Thread* ThreadList::SuspendThreadByThreadId(uint32_t thread_id,
       ScopedObjectAccess soa(self);
       MutexLock thread_list_mu(self, *Locks::thread_list_lock_);
       Thread* thread = nullptr;
-      for (const auto& it : list_) {
+      for (const _& it : list_) {
         if (it->GetThreadId() == thread_id) {
           thread = it;
           break;
@@ -926,7 +926,7 @@ Thread* ThreadList::SuspendThreadByThreadId(uint32_t thread_id,
 Thread* ThreadList::FindThreadByThreadId(uint32_t thin_lock_id) {
   Thread* self = Thread::Current();
   MutexLock mu(self, *Locks::thread_list_lock_);
-  for (const auto& thread : list_) {
+  for (const _& thread : list_) {
     if (thread->GetThreadId() == thin_lock_id) {
       CHECK(thread == self || thread->IsSuspended());
       return thread;
@@ -1059,7 +1059,7 @@ void ThreadList::ResumeAllForDebugger() {
                      << "having suspended them all before.";
       }
       // Decrement everybody's suspend count (except our own).
-      for (const auto& thread : list_) {
+      for (const _& thread : list_) {
         if (thread == self || thread == debug_thread) {
           continue;
         }
@@ -1093,7 +1093,7 @@ void ThreadList::UndoDebuggerSuspensions() {
     suspend_all_count_ -= debug_suspend_all_count_;
     debug_suspend_all_count_ = 0;
     // Update running threads.
-    for (const auto& thread : list_) {
+    for (const _& thread : list_) {
       if (thread == self || thread->GetDebugSuspendCount() == 0) {
         continue;
       }
@@ -1126,7 +1126,7 @@ void ThreadList::WaitForOtherNonDaemonThreadsToExit() {
     // threads since they could unregister at the wrong time.
     bool done = unregistering_count_ == 0;
     if (done) {
-      for (const auto& thread : list_) {
+      for (const _& thread : list_) {
         if (thread != self && !thread->IsDaemon()) {
           done = false;
           break;
@@ -1148,7 +1148,7 @@ void ThreadList::SuspendAllDaemonThreadsForShutdown() {
   size_t daemons_left = 0;
   {  // Tell all the daemons it's time to suspend.
     MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
-    for (const auto& thread : list_) {
+    for (const _& thread : list_) {
       // This is only run after all non-daemon threads have exited, so the remainder should all be
       // daemons.
       CHECK(thread->IsDaemon()) << *thread;
@@ -1175,7 +1175,7 @@ void ThreadList::SuspendAllDaemonThreadsForShutdown() {
   static constexpr size_t kSleepMicroseconds = 1000;
   for (size_t i = 0; i < kTimeoutMicroseconds / kSleepMicroseconds; ++i) {
     bool all_suspended = true;
-    for (const auto& thread : list_) {
+    for (const _& thread : list_) {
       if (thread != self && thread->GetState() == kRunnable) {
         if (!have_complained) {
           LOG(WARNING) << "daemon thread not yet suspended: " << *thread;
@@ -1293,14 +1293,14 @@ void ThreadList::Unregister(Thread* self) {
 }
 
 void ThreadList::ForEach(void (*callback)(Thread*, void*), void* context) {
-  for (const auto& thread : list_) {
+  for (const _& thread : list_) {
     callback(thread, context);
   }
 }
 
 void ThreadList::VisitRoots(RootVisitor* visitor) const {
   MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
-  for (const auto& thread : list_) {
+  for (const _& thread : list_) {
     thread->VisitRoots(visitor);
   }
 }

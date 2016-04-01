@@ -149,8 +149,8 @@ class AssemblerTest : public testing::Test {
     std::string str;
     std::vector<int64_t> imms = CreateImmediateValuesBits(abs(imm_bits), (imm_bits > 0));
 
-    for (auto reg1 : reg1_registers) {
-      for (auto reg2 : reg2_registers) {
+    for (_ reg1 : reg1_registers) {
+      for (_ reg2 : reg2_registers) {
         for (int64_t imm : imms) {
           ImmType new_imm = CreateImmediate(imm);
           (assembler_.get()->*f)(*reg1, *reg2, new_imm);
@@ -201,8 +201,8 @@ class AssemblerTest : public testing::Test {
     WarnOnCombinations(reg1_registers.size() * reg2_registers.size() * imms.size());
 
     std::string str;
-    for (auto reg1 : reg1_registers) {
-      for (auto reg2 : reg2_registers) {
+    for (_ reg1 : reg1_registers) {
+      for (_ reg2 : reg2_registers) {
         for (int64_t imm : imms) {
           ImmType new_imm = CreateImmediate(imm);
           (assembler_.get()->*f)(new_imm, *reg1, *reg2);
@@ -249,7 +249,7 @@ class AssemblerTest : public testing::Test {
     std::string str;
     std::vector<int64_t> imms = CreateImmediateValuesBits(abs(imm_bits), (imm_bits > 0));
 
-    for (auto reg : registers) {
+    for (_ reg : registers) {
       for (int64_t imm : imms) {
         ImmType new_imm = CreateImmediate(imm);
         (assembler_.get()->*f)(*reg, new_imm);
@@ -622,7 +622,7 @@ class AssemblerTest : public testing::Test {
                                       std::string (AssemblerTest::*GetName)(const RegType&),
                                       std::string fmt) {
     std::string str;
-    for (auto reg : registers) {
+    for (_ reg : registers) {
       (assembler_.get()->*f)(*reg);
       std::string base = fmt;
 
@@ -652,8 +652,8 @@ class AssemblerTest : public testing::Test {
     WarnOnCombinations(reg1_registers.size() * reg2_registers.size());
 
     std::string str;
-    for (auto reg1 : reg1_registers) {
-      for (auto reg2 : reg2_registers) {
+    for (_ reg1 : reg1_registers) {
+      for (_ reg2 : reg2_registers) {
         (assembler_.get()->*f)(*reg1, *reg2);
         std::string base = fmt;
 
@@ -690,8 +690,8 @@ class AssemblerTest : public testing::Test {
     WarnOnCombinations(reg1_registers.size() * reg2_registers.size());
 
     std::string str;
-    for (auto reg1 : reg1_registers) {
-      for (auto reg2 : reg2_registers) {
+    for (_ reg1 : reg1_registers) {
+      for (_ reg2 : reg2_registers) {
         if (reg1 == reg2) continue;
         (assembler_.get()->*f)(*reg1, *reg2);
         std::string base = fmt;
@@ -729,9 +729,9 @@ class AssemblerTest : public testing::Test {
                                        std::string (AssemblerTest::*GetName3)(const Reg3&),
                                        std::string fmt) {
     std::string str;
-    for (auto reg1 : reg1_registers) {
-      for (auto reg2 : reg2_registers) {
-        for (auto reg3 : reg3_registers) {
+    for (_ reg1 : reg1_registers) {
+      for (_ reg2 : reg2_registers) {
+        for (_ reg3 : reg3_registers) {
           (assembler_.get()->*f)(*reg1, *reg2, *reg3);
           std::string base = fmt;
 
@@ -777,8 +777,8 @@ class AssemblerTest : public testing::Test {
     WarnOnCombinations(reg1_registers.size() * reg2_registers.size() * imms.size());
 
     std::string str;
-    for (auto reg1 : reg1_registers) {
-      for (auto reg2 : reg2_registers) {
+    for (_ reg1 : reg1_registers) {
+      for (_ reg2 : reg2_registers) {
         for (int64_t imm : imms) {
           Imm new_imm = CreateImmediate(imm);
           (assembler_.get()->*f)(*reg1, *reg2, new_imm);
@@ -872,7 +872,7 @@ class AssemblerTest : public testing::Test {
 
     WarnOnCombinations(registers.size() * imms.size());
 
-    for (auto reg : registers) {
+    for (_ reg : registers) {
       for (int64_t imm : imms) {
         Imm new_imm = CreateImmediate(imm);
         (assembler_.get()->*f)(*reg, new_imm);

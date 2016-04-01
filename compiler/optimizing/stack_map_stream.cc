@@ -70,7 +70,7 @@ void StackMapStream::AddDexRegisterEntry(DexRegisterLocation::Kind kind, int32_t
     // companion hash map of locations to indices).  Use its index if it
     // is already in the location catalog.  If not, insert it (in the
     // location catalog and the hash map) and use the newly created index.
-    auto it = location_catalog_entries_indices_.Find(location);
+    _ it = location_catalog_entries_indices_.Find(location);
     if (it != location_catalog_entries_indices_.end()) {
       // Retrieve the index from the hash map.
       dex_register_locations_.push_back(it->second);
@@ -379,7 +379,7 @@ void StackMapStream::FillInDexRegisterMap(DexRegisterMap dex_register_map,
 
 size_t StackMapStream::FindEntryWithTheSameDexMap() {
   size_t current_entry_index = stack_maps_.size();
-  auto entries_it = dex_map_hash_to_stack_map_indices_.find(current_entry_.dex_register_map_hash);
+  _ entries_it = dex_map_hash_to_stack_map_indices_.find(current_entry_.dex_register_map_hash);
   if (entries_it == dex_map_hash_to_stack_map_indices_.end()) {
     // We don't have a perfect hash functions so we need a list to collect all stack maps
     // which might have the same dex register map.
@@ -422,8 +422,8 @@ bool StackMapStream::HaveTheSameDexMaps(const StackMapEntry& a, const StackMapEn
               dex_register_locations_.size() - number_of_live_dex_registers);
     DCHECK_LE(b.dex_register_locations_start_index,
               dex_register_locations_.size() - number_of_live_dex_registers);
-    auto a_begin = dex_register_locations_.begin() + a.dex_register_locations_start_index;
-    auto b_begin = dex_register_locations_.begin() + b.dex_register_locations_start_index;
+    _ a_begin = dex_register_locations_.begin() + a.dex_register_locations_start_index;
+    _ b_begin = dex_register_locations_.begin() + b.dex_register_locations_start_index;
     if (!std::equal(a_begin, a_begin + number_of_live_dex_registers, b_begin)) {
       return false;
     }

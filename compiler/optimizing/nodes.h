@@ -523,7 +523,7 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
                                   uint32_t dex_pc = kNoDexPc) {
     // Try to find an existing constant of the given value.
     InstructionType* constant = nullptr;
-    auto cached_constant = cache->find(value);
+    _ cached_constant = cache->find(value);
     if (cached_constant != cache->end()) {
       constant = cached_constant->second;
     }

@@ -55,7 +55,7 @@ void VerificationResults::ProcessVerifiedMethod(verifier::MethodVerifier* method
   }
 
   WriterMutexLock mu(Thread::Current(), verified_methods_lock_);
-  auto it = verified_methods_.find(ref);
+  _ it = verified_methods_.find(ref);
   if (it != verified_methods_.end()) {
     // TODO: Investigate why are we doing the work again for this method and try to avoid it.
     LOG(WARNING) << "Method processed more than once: "
@@ -76,13 +76,13 @@ void VerificationResults::ProcessVerifiedMethod(verifier::MethodVerifier* method
 
 const VerifiedMethod* VerificationResults::GetVerifiedMethod(MethodReference ref) {
   ReaderMutexLock mu(Thread::Current(), verified_methods_lock_);
-  auto it = verified_methods_.find(ref);
+  _ it = verified_methods_.find(ref);
   return (it != verified_methods_.end()) ? it->second : nullptr;
 }
 
 void VerificationResults::RemoveVerifiedMethod(MethodReference ref) {
   WriterMutexLock mu(Thread::Current(), verified_methods_lock_);
-  auto it = verified_methods_.find(ref);
+  _ it = verified_methods_.find(ref);
   if (it != verified_methods_.end()) {
     delete it->second;
     verified_methods_.erase(it);

@@ -271,7 +271,7 @@ void BaseMutex::DumpContention(std::ostream& os) const {
         uint64_t owner_tid = log[i].owner_tid;
         uint32_t count = log[i].count.LoadRelaxed();
         if (count > 0) {
-          auto it = most_common_blocked.find(blocked_tid);
+          _ it = most_common_blocked.find(blocked_tid);
           if (it != most_common_blocked.end()) {
             most_common_blocked.Overwrite(blocked_tid, it->second + count);
           } else {
@@ -287,7 +287,7 @@ void BaseMutex::DumpContention(std::ostream& os) const {
       }
       uint64_t max_tid = 0;
       size_t max_tid_count = 0;
-      for (const auto& pair : most_common_blocked) {
+      for (const _& pair : most_common_blocked) {
         if (pair.second > max_tid_count) {
           max_tid = pair.first;
           max_tid_count = pair.second;
@@ -298,7 +298,7 @@ void BaseMutex::DumpContention(std::ostream& os) const {
       }
       max_tid = 0;
       max_tid_count = 0;
-      for (const auto& pair : most_common_blocker) {
+      for (const _& pair : most_common_blocker) {
         if (pair.second > max_tid_count) {
           max_tid = pair.first;
           max_tid_count = pair.second;

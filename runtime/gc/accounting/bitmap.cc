@@ -56,7 +56,7 @@ MemMap* Bitmap::AllocateMemMap(const std::string& name, size_t num_bits) {
 }
 
 Bitmap* Bitmap::Create(const std::string& name, size_t num_bits) {
-  auto* const mem_map = AllocateMemMap(name, num_bits);
+  _* const mem_map = AllocateMemMap(name, num_bits);
   if (mem_map == nullptr) {
     return nullptr;
   }
@@ -81,7 +81,7 @@ MemoryRangeBitmap<kAlignment>* MemoryRangeBitmap<kAlignment>::Create(
   CHECK_ALIGNED(cover_begin, kAlignment);
   CHECK_ALIGNED(cover_end, kAlignment);
   const size_t num_bits = (cover_end - cover_begin) / kAlignment;
-  auto* const mem_map = Bitmap::AllocateMemMap(name, num_bits);
+  _* const mem_map = Bitmap::AllocateMemMap(name, num_bits);
   return CreateFromMemMap(mem_map, cover_begin, num_bits);
 }
 

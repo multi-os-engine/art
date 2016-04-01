@@ -728,7 +728,7 @@ static void AssertPcIsWithinQuickCode(ArtMethod* method, uintptr_t pc)
 void StackVisitor::SanityCheckFrame() const {
   if (kIsDebugBuild) {
     ArtMethod* method = GetMethod();
-    auto* declaring_class = method->GetDeclaringClass();
+    _* declaring_class = method->GetDeclaringClass();
     // Runtime methods have null declaring class.
     if (!method->IsRuntimeMethod()) {
       CHECK(declaring_class != nullptr);
@@ -748,11 +748,11 @@ void StackVisitor::SanityCheckFrame() const {
       if (!class_linear_alloc->Contains(method)) {
         // Check image space.
         bool in_image = false;
-        for (auto& space : runtime->GetHeap()->GetContinuousSpaces()) {
+        for (_& space : runtime->GetHeap()->GetContinuousSpaces()) {
           if (space->IsImageSpace()) {
-            auto* image_space = space->AsImageSpace();
-            const auto& header = image_space->GetImageHeader();
-            const auto* methods = &header.GetMethodsSection();
+            _* image_space = space->AsImageSpace();
+            const _& header = image_space->GetImageHeader();
+            const _* methods = &header.GetMethodsSection();
             if (methods->Contains(reinterpret_cast<const uint8_t*>(method) - image_space->Begin())) {
               in_image = true;
               break;
@@ -989,7 +989,7 @@ int StackVisitor::GetVRegOffsetFromQuickCode(const DexFile::CodeItem* code_item,
                                              size_t frame_size, int reg, InstructionSet isa) {
   size_t pointer_size = InstructionSetPointerSize(isa);
   if (kIsDebugBuild) {
-    auto* runtime = Runtime::Current();
+    _* runtime = Runtime::Current();
     if (runtime != nullptr) {
       CHECK_EQ(runtime->GetClassLinker()->GetImagePointerSize(), pointer_size);
     }
@@ -1047,7 +1047,7 @@ void LockCountData::RemoveMonitorInternal(Thread* self, const mirror::Object* ob
   if (monitors_ != nullptr) {
     // We need to remove one pointer to ref, as duplicates are used for counting recursive locks.
     // We arbitrarily choose the first one.
-    auto it = std::find(monitors_->begin(), monitors_->end(), obj);
+    _ it = std::find(monitors_->begin(), monitors_->end(), obj);
     if (it != monitors_->end()) {
       monitors_->erase(it);
       found_object = true;

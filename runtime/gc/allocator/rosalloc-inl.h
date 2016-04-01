@@ -23,12 +23,12 @@ namespace art {
 namespace gc {
 namespace allocator {
 
-inline ALWAYS_INLINE bool RosAlloc::ShouldCheckZeroMemory() {
+inline MC bool RosAlloc::ShouldCheckZeroMemory() {
   return kCheckZeroMemory && !is_running_on_memory_tool_;
 }
 
 template<bool kThreadSafe>
-inline ALWAYS_INLINE void* RosAlloc::Alloc(Thread* self, size_t size, size_t* bytes_allocated,
+inline MC void* RosAlloc::Alloc(Thread* self, size_t size, size_t* bytes_allocated,
                                            size_t* usable_size,
                                            size_t* bytes_tl_bulk_allocated) {
   if (UNLIKELY(size > kLargeSizeThreshold)) {

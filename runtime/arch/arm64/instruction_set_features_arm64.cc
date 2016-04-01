@@ -133,7 +133,7 @@ std::string Arm64InstructionSetFeatures::GetFeatureString() const {
 const InstructionSetFeatures* Arm64InstructionSetFeatures::AddFeaturesFromSplitString(
     const bool smp, const std::vector<std::string>& features, std::string* error_msg) const {
   bool is_a53 = fix_cortex_a53_835769_;
-  for (auto i = features.begin(); i != features.end(); i++) {
+  for (_ i = features.begin(); i != features.end(); i++) {
     std::string feature = Trim(*i);
     if (feature == "a53") {
       is_a53 = true;

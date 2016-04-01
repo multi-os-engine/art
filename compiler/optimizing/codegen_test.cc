@@ -209,7 +209,7 @@ static void RunCode(CodeGenerator* codegen,
   GraphChecker graph_checker(graph);
   graph_checker.Run();
   if (!graph_checker.IsValid()) {
-    for (auto error : graph_checker.GetErrors()) {
+    for (_ error : graph_checker.GetErrors()) {
       std::cout << error << std::endl;
     }
   }
@@ -280,7 +280,7 @@ static ::std::vector<InstructionSet> GetTargetISAs() {
     kMips64
   };
 
-  for (auto target_isa : executable_isa_candidates) {
+  for (_ target_isa : executable_isa_candidates) {
     if (CanExecute(target_isa)) {
       v.push_back(target_isa);
     }
@@ -670,7 +670,7 @@ TEST_F(CodegenTest, NonMaterializedCondition) {
     PrepareForRegisterAllocation(graph).Run();
     ASSERT_TRUE(equal->IsEmittedAtUseSite());
 
-    auto hook_before_codegen = [](HGraph* graph_in) {
+    _ hook_before_codegen = [](HGraph* graph_in) {
       HBasicBlock* block = graph_in->GetEntryBlock()->GetSuccessors()[0];
       HParallelMove* move = new (graph_in->GetArena()) HParallelMove(graph_in->GetArena());
       block->InsertInstructionBefore(move, block->GetLastInstruction());
@@ -718,7 +718,7 @@ TEST_F(CodegenTest, MaterializedCondition1) {
       code_block->AddInstruction(&ret);
 
       graph->BuildDominatorTree();
-      auto hook_before_codegen = [](HGraph* graph_in) {
+      _ hook_before_codegen = [](HGraph* graph_in) {
         HBasicBlock* block = graph_in->GetEntryBlock()->GetSuccessors()[0];
         HParallelMove* move = new (graph_in->GetArena()) HParallelMove(graph_in->GetArena());
         block->InsertInstructionBefore(move, block->GetLastInstruction());
@@ -786,7 +786,7 @@ TEST_F(CodegenTest, MaterializedCondition2) {
       if_false_block->AddInstruction(&ret_ge);
 
       graph->BuildDominatorTree();
-      auto hook_before_codegen = [](HGraph* graph_in) {
+      _ hook_before_codegen = [](HGraph* graph_in) {
         HBasicBlock* block = graph_in->GetEntryBlock()->GetSuccessors()[0];
         HParallelMove* move = new (graph_in->GetArena()) HParallelMove(graph_in->GetArena());
         block->InsertInstructionBefore(move, block->GetLastInstruction());

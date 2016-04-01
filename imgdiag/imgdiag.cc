@@ -106,7 +106,7 @@ class ImgDiagDumper {
     }
 
     // Open /proc/$pid/maps to view memory maps
-    auto proc_maps = std::unique_ptr<BacktraceMap>(BacktraceMap::Create(image_diff_pid));
+    _ proc_maps = std::unique_ptr<BacktraceMap>(BacktraceMap::Create(image_diff_pid));
     if (proc_maps == nullptr) {
       os << "Could not read backtrace maps";
       return false;
@@ -151,7 +151,7 @@ class ImgDiagDumper {
     size_t boot_map_size = boot_map.end - boot_map.start;
 
     // Open /proc/$pid/mem as a file
-    auto map_file = std::unique_ptr<File>(OS::OpenFileForReading(file_name.c_str()));
+    _ map_file = std::unique_ptr<File>(OS::OpenFileForReading(file_name.c_str()));
     if (map_file == nullptr) {
       os << "Failed to open " << file_name << " for reading";
       return false;
@@ -200,7 +200,7 @@ class ImgDiagDumper {
 
     std::string page_map_file_name = StringPrintf(
         "/proc/%ld/pagemap", static_cast<long>(image_diff_pid));  // NOLINT [runtime/int]
-    auto page_map_file = std::unique_ptr<File>(OS::OpenFileForReading(page_map_file_name.c_str()));
+    _ page_map_file = std::unique_ptr<File>(OS::OpenFileForReading(page_map_file_name.c_str()));
     if (page_map_file == nullptr) {
       os << "Failed to open " << page_map_file_name << " for reading: " << strerror(errno);
       return false;
@@ -208,20 +208,20 @@ class ImgDiagDumper {
 
     // Not truly clean, mmap-ing boot.art again would be more pristine, but close enough
     const char* clean_page_map_file_name = "/proc/self/pagemap";
-    auto clean_page_map_file = std::unique_ptr<File>(
+    _ clean_page_map_file = std::unique_ptr<File>(
         OS::OpenFileForReading(clean_page_map_file_name));
     if (clean_page_map_file == nullptr) {
       os << "Failed to open " << clean_page_map_file_name << " for reading: " << strerror(errno);
       return false;
     }
 
-    auto kpage_flags_file = std::unique_ptr<File>(OS::OpenFileForReading("/proc/kpageflags"));
+    _ kpage_flags_file = std::unique_ptr<File>(OS::OpenFileForReading("/proc/kpageflags"));
     if (kpage_flags_file == nullptr) {
       os << "Failed to open /proc/kpageflags for reading: " << strerror(errno);
       return false;
     }
 
-    auto kpage_count_file = std::unique_ptr<File>(OS::OpenFileForReading("/proc/kpagecount"));
+    _ kpage_count_file = std::unique_ptr<File>(OS::OpenFileForReading("/proc/kpagecount"));
     if (kpage_count_file == nullptr) {
       os << "Failed to open /proc/kpagecount for reading:" << strerror(errno);
       return false;
@@ -489,11 +489,11 @@ class ImgDiagDumper {
        << "";
 
     // vector of pairs (int count, Class*)
-    auto dirty_object_class_values = SortByValueDesc(dirty_object_class_map);
-    auto clean_object_class_values = SortByValueDesc(clean_object_class_map);
+    _ dirty_object_class_values = SortByValueDesc(dirty_object_class_map);
+    _ clean_object_class_values = SortByValueDesc(clean_object_class_map);
 
     os << "\n" << "  Dirty object count by class:\n";
-    for (const auto& vk_pair : dirty_object_class_values) {
+    for (const _& vk_pair : dirty_object_class_values) {
       int dirty_object_count = vk_pair.first;
       mirror::Class* klass = vk_pair.second;
       int object_sizes = dirty_object_size_in_bytes[klass];
@@ -511,15 +511,15 @@ class ImgDiagDumper {
       if (strcmp(descriptor.c_str(), "Ljava/lang/reflect/ArtMethod;") == 0) {
         os << "      sample object addresses: ";
         for (size_t i = 0; i < art_method_dirty_objects.size() && i < kMaxAddressPrint; ++i) {
-          auto art_method = art_method_dirty_objects[i];
+          _ art_method = art_method_dirty_objects[i];
 
           os << reinterpret_cast<void*>(art_method) << ", ";
         }
         os << "\n";
 
         os << "      dirty byte +offset:count list = ";
-        auto art_method_field_dirty_count_sorted = SortByValueDesc(art_method_field_dirty_count);
-        for (auto pair : art_method_field_dirty_count_sorted) {
+        _ art_method_field_dirty_count_sorted = SortByValueDesc(art_method_field_dirty_count);
+        for (_ pair : art_method_field_dirty_count_sorted) {
           off_t offset = pair.second;
           int count = pair.first;
 
@@ -529,10 +529,10 @@ class ImgDiagDumper {
         os << "\n";
 
         os << "      field contents:\n";
-        const auto& dirty_objects_list = dirty_objects_by_class[klass];
+        const _& dirty_objects_list = dirty_objects_by_class[klass];
         for (mirror::Object* obj : dirty_objects_list) {
           // remote method
-          auto art_method = reinterpret_cast<ArtMethod*>(obj);
+          _ art_method = reinterpret_cast<ArtMethod*>(obj);
 
           // remote class
           mirror::Class* remote_declaring_class =
@@ -561,15 +561,15 @@ class ImgDiagDumper {
       if (strcmp(descriptor.c_str(), "Ljava/lang/Class;") == 0) {
         os << "       sample object addresses: ";
         for (size_t i = 0; i < class_dirty_objects.size() && i < kMaxAddressPrint; ++i) {
-          auto class_ptr = class_dirty_objects[i];
+          _ class_ptr = class_dirty_objects[i];
 
           os << reinterpret_cast<void*>(class_ptr) << ", ";
         }
         os << "\n";
 
         os << "       dirty byte +offset:count list = ";
-        auto class_field_dirty_count_sorted = SortByValueDesc(class_field_dirty_count);
-        for (auto pair : class_field_dirty_count_sorted) {
+        _ class_field_dirty_count_sorted = SortByValueDesc(class_field_dirty_count);
+        for (_ pair : class_field_dirty_count_sorted) {
           off_t offset = pair.second;
           int count = pair.first;
 
@@ -578,13 +578,13 @@ class ImgDiagDumper {
         os << "\n";
 
         os << "      field contents:\n";
-        const auto& dirty_objects_list = dirty_objects_by_class[klass];
+        const _& dirty_objects_list = dirty_objects_by_class[klass];
         for (mirror::Object* obj : dirty_objects_list) {
           // remote class object
-          auto remote_klass = reinterpret_cast<mirror::Class*>(obj);
+          _ remote_klass = reinterpret_cast<mirror::Class*>(obj);
 
           // local class object
-          auto local_klass = RemoteContentsPointerToLocal(remote_klass,
+          _ local_klass = RemoteContentsPointerToLocal(remote_klass,
                                                           remote_contents,
                                                           boot_image_header);
 
@@ -596,10 +596,10 @@ class ImgDiagDumper {
       }
     }
 
-    auto false_dirty_object_class_values = SortByValueDesc(false_dirty_object_count);
+    _ false_dirty_object_class_values = SortByValueDesc(false_dirty_object_count);
 
     os << "\n" << "  False-dirty object count by class:\n";
-    for (const auto& vk_pair : false_dirty_object_class_values) {
+    for (const _& vk_pair : false_dirty_object_class_values) {
       int object_count = vk_pair.first;
       mirror::Class* klass = vk_pair.second;
       int object_sizes = false_dirty_byte_count[klass];
@@ -613,12 +613,12 @@ class ImgDiagDumper {
          << ")\n";
 
       if (strcmp(descriptor.c_str(), "Ljava/lang/reflect/ArtMethod;") == 0) {
-        auto& art_method_false_dirty_objects = false_dirty_objects_map[klass];
+        _& art_method_false_dirty_objects = false_dirty_objects_map[klass];
 
         os << "      field contents:\n";
         for (mirror::Object* obj : art_method_false_dirty_objects) {
           // local method
-          auto art_method = reinterpret_cast<ArtMethod*>(obj);
+          _ art_method = reinterpret_cast<ArtMethod*>(obj);
 
           // local class
           mirror::Class* declaring_class = art_method->GetDeclaringClass();
@@ -639,7 +639,7 @@ class ImgDiagDumper {
     }
 
     os << "\n" << "  Clean object count by class:\n";
-    for (const auto& vk_pair : clean_object_class_values) {
+    for (const _& vk_pair : clean_object_class_values) {
       os << "    " << PrettyClass(vk_pair.second) << " (" << vk_pair.first << ")\n";
     }
 
@@ -698,7 +698,7 @@ class ImgDiagDumper {
     // sorts by value first and then key
     std::vector<std::pair<V, K>> value_key_vector;
 
-    for (const auto& kv_pair : map) {
+    for (const _& kv_pair : map) {
       value_key_vector.push_back(std::make_pair(kv_pair.second, kv_pair.first));
     }
 

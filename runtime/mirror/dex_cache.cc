@@ -71,7 +71,7 @@ void DexCache::Fixup(ArtMethod* trampoline, size_t pointer_size) {
   // Fixup the resolve methods array to contain trampoline for resolution.
   CHECK(trampoline != nullptr);
   CHECK(trampoline->IsRuntimeMethod());
-  auto* resolved_methods = GetResolvedMethods();
+  _* resolved_methods = GetResolvedMethods();
   for (size_t i = 0, length = NumResolvedMethods(); i < length; i++) {
     if (GetElementPtrSize<ArtMethod*>(resolved_methods, i, pointer_size) == nullptr) {
       SetElementPtrSize(resolved_methods, i, trampoline, pointer_size);

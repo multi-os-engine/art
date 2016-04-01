@@ -67,13 +67,13 @@ const VerifiedMethod* VerifiedMethod::Create(verifier::MethodVerifier* method_ve
 }
 
 const MethodReference* VerifiedMethod::GetDevirtTarget(uint32_t dex_pc) const {
-  auto it = devirt_map_.find(dex_pc);
+  _ it = devirt_map_.find(dex_pc);
   return (it != devirt_map_.end()) ? &it->second : nullptr;
 }
 
 const DexFileReference* VerifiedMethod::GetDequickenIndex(uint32_t dex_pc) const {
   DCHECK(Runtime::Current()->UseJit());
-  auto it = dequicken_map_.find(dex_pc);
+  _ it = dequicken_map_.find(dex_pc);
   return (it != dequicken_map_.end()) ? &it->second : nullptr;
 }
 
@@ -167,7 +167,7 @@ void VerifiedMethod::GenerateDevirtMap(verifier::MethodVerifier* method_verifier
       // We can't devirtualize abstract classes except on arrays of abstract classes.
       continue;
     }
-    auto* cl = Runtime::Current()->GetClassLinker();
+    _* cl = Runtime::Current()->GetClassLinker();
     size_t pointer_size = cl->GetImagePointerSize();
     ArtMethod* abstract_method = method_verifier->GetDexCache()->GetResolvedMethod(
         is_range ? inst->VRegB_3rc() : inst->VRegB_35c(), pointer_size);

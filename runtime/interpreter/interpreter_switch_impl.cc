@@ -104,7 +104,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
   self->VerifyStack();
 
   uint32_t dex_pc = shadow_frame.GetDexPC();
-  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+  const _* const instrumentation = Runtime::Current()->GetInstrumentation();
   const uint16_t* const insns = code_item->insns_;
   const Instruction* inst = Instruction::At(insns + dex_pc);
   uint16_t inst_data;
@@ -999,7 +999,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         }
         int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
         DCHECK(a->IsIntArray() || a->IsFloatArray()) << PrettyTypeOf(a);
-        auto* array = down_cast<IntArray*>(a);
+        _* array = down_cast<IntArray*>(a);
         if (array->CheckIsValidIndex(index)) {
           shadow_frame.SetVReg(inst->VRegA_23x(inst_data), array->GetWithoutChecks(index));
           inst = inst->Next_2xx();
@@ -1018,7 +1018,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         }
         int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
         DCHECK(a->IsLongArray() || a->IsDoubleArray()) << PrettyTypeOf(a);
-        auto* array = down_cast<LongArray*>(a);
+        _* array = down_cast<LongArray*>(a);
         if (array->CheckIsValidIndex(index)) {
           shadow_frame.SetVRegLong(inst->VRegA_23x(inst_data), array->GetWithoutChecks(index));
           inst = inst->Next_2xx();
@@ -1132,7 +1132,7 @@ JValue ExecuteSwitchImpl(Thread* self, const DexFile::CodeItem* code_item,
         int32_t val = shadow_frame.GetVReg(inst->VRegA_23x(inst_data));
         int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
         DCHECK(a->IsIntArray() || a->IsFloatArray()) << PrettyTypeOf(a);
-        auto* array = down_cast<IntArray*>(a);
+        _* array = down_cast<IntArray*>(a);
         if (array->CheckIsValidIndex(index)) {
           array->SetWithoutChecks<transaction_active>(index, val);
           inst = inst->Next_2xx();

@@ -590,7 +590,7 @@ void ImageSpace::VerifyImageAllocations() {
   uint8_t* current = Begin() + RoundUp(sizeof(ImageHeader), kObjectAlignment);
   while (current < End()) {
     CHECK_ALIGNED(current, kObjectAlignment);
-    auto* obj = reinterpret_cast<mirror::Object*>(current);
+    _* obj = reinterpret_cast<mirror::Object*>(current);
     CHECK(obj->GetClass() != nullptr) << "Image object at address " << obj << " has null class";
     CHECK(live_bitmap_->Test(obj)) << PrettyTypeOf(obj);
     if (kUseBakerOrBrooksReadBarrier) {
@@ -667,7 +667,7 @@ class FixupVisitor : public ValueObject {
 
   // Return the relocated address of a heap object.
   template <typename T>
-  ALWAYS_INLINE T* ForwardObject(T* src) const {
+  MC T* ForwardObject(T* src) const {
     const uintptr_t uint_src = reinterpret_cast<uintptr_t>(src);
     if (boot_image_.InSource(uint_src)) {
       return reinterpret_cast<T*>(boot_image_.ToDest(uint_src));
@@ -682,7 +682,7 @@ class FixupVisitor : public ValueObject {
   }
 
   // Return the relocated address of a code pointer (contained by an oat file).
-  ALWAYS_INLINE const void* ForwardCode(const void* src) const {
+  MC const void* ForwardCode(const void* src) const {
     const uintptr_t uint_src = reinterpret_cast<uintptr_t>(src);
     if (boot_oat_.InSource(uint_src)) {
       return reinterpret_cast<const void*>(boot_oat_.ToDest(uint_src));
@@ -709,7 +709,7 @@ class FixupObjectAdapter : public FixupVisitor {
   explicit FixupObjectAdapter(Args... args) : FixupVisitor(args...) {}
 
   // Must be called on pointers that already have been relocated to the destination relocation.
-  ALWAYS_INLINE bool IsInAppImage(mirror::Object* object) const {
+  MC bool IsInAppImage(mirror::Object* object) const {
     return app_image_.InDest(reinterpret_cast<uintptr_t>(object));
   }
 
@@ -726,7 +726,7 @@ class FixupClassVisitor : public FixupVisitor {
 
   // The image space is contained so the GC doesn't need to know about it. Avoid requiring mutator
   // lock to prevent possible pauses.
-  ALWAYS_INLINE void operator()(mirror::Object* obj) const NO_THREAD_SAFETY_ANALYSIS {
+  MC void operator()(mirror::Object* obj) const NO_THREAD_SAFETY_ANALYSIS {
     mirror::Class* klass = obj->GetClass<kVerifyNone, kWithoutReadBarrier>();
     DCHECK(klass != nullptr) << "Null class in image";
     // No AsClass since our fields aren't quite fixed up yet.
@@ -743,14 +743,14 @@ class FixupRootVisitor : public FixupVisitor {
   template<typename... Args>
   explicit FixupRootVisitor(Args... args) : FixupVisitor(args...) {}
 
-  ALWAYS_INLINE void VisitRootIfNonNull(mirror::CompressedReference<mirror::Object>* root) const
+  MC void VisitRootIfNonNull(mirror::CompressedReference<mirror::Object>* root) const
       SHARED_REQUIRES(Locks::mutator_lock_) {
     if (!root->IsNull()) {
       VisitRoot(root);
     }
   }
 
-  ALWAYS_INLINE void VisitRoot(mirror::CompressedReference<mirror::Object>* root) const
+  MC void VisitRoot(mirror::CompressedReference<mirror::Object>* root) const
       SHARED_REQUIRES(Locks::mutator_lock_) {
     mirror::Object* ref = root->AsMirrorPtr();
     mirror::Object* new_ref = ForwardObject(ref);
@@ -771,13 +771,13 @@ class FixupObjectVisitor : public FixupVisitor {
         pointer_array_visited_(pointer_array_visited) {}
 
   // Fix up separately since we also need to fix up method entrypoints.
-  ALWAYS_INLINE void VisitRootIfNonNull(
+  MC void VisitRootIfNonNull(
       mirror::CompressedReference<mirror::Object>* root ATTRIBUTE_UNUSED) const {}
 
-  ALWAYS_INLINE void VisitRoot(mirror::CompressedReference<mirror::Object>* root ATTRIBUTE_UNUSED)
+  MC void VisitRoot(mirror::CompressedReference<mirror::Object>* root ATTRIBUTE_UNUSED)
       const {}
 
-  ALWAYS_INLINE void operator()(mirror::Object* obj,
+  MC void operator()(mirror::Object* obj,
                                 MemberOffset offset,
                                 bool is_static ATTRIBUTE_UNUSED) const
       NO_THREAD_SAFETY_ANALYSIS {
@@ -815,7 +815,7 @@ class FixupObjectVisitor : public FixupVisitor {
         ForwardObject(obj));
   }
 
-  ALWAYS_INLINE void operator()(mirror::Object* obj) const NO_THREAD_SAFETY_ANALYSIS {
+  MC void operator()(mirror::Object* obj) const NO_THREAD_SAFETY_ANALYSIS {
     obj->VisitReferences</*visit native roots*/false, kVerifyNone, kWithoutReadBarrier>(
         *this,
         *this);
@@ -848,10 +848,10 @@ class FixupObjectVisitor : public FixupVisitor {
 
 class ForwardObjectAdapter {
  public:
-  ALWAYS_INLINE ForwardObjectAdapter(const FixupVisitor* visitor) : visitor_(visitor) {}
+  MC ForwardObjectAdapter(const FixupVisitor* visitor) : visitor_(visitor) {}
 
   template <typename T>
-  ALWAYS_INLINE T* operator()(T* src) const {
+  MC T* operator()(T* src) const {
     return visitor_->ForwardObject(src);
   }
 
@@ -861,11 +861,11 @@ class ForwardObjectAdapter {
 
 class ForwardCodeAdapter {
  public:
-  ALWAYS_INLINE ForwardCodeAdapter(const FixupVisitor* visitor)
+  MC ForwardCodeAdapter(const FixupVisitor* visitor)
       : visitor_(visitor) {}
 
   template <typename T>
-  ALWAYS_INLINE T* operator()(T* src) const {
+  MC T* operator()(T* src) const {
     return visitor_->ForwardCode(src);
   }
 
@@ -1011,7 +1011,7 @@ static bool RelocateInPlace(ImageHeader& image_header,
     image_header.RelocateImageObjects(app_image.Delta());
     CHECK_EQ(image_header.GetImageBegin(), target_base);
     // Fix up dex cache DexFile pointers.
-    auto* dex_caches = image_header.GetImageRoot<kWithoutReadBarrier>(ImageHeader::kDexCaches)->
+    _* dex_caches = image_header.GetImageRoot<kWithoutReadBarrier>(ImageHeader::kDexCaches)->
         AsObjectArray<mirror::DexCache, kVerifyNone, kWithoutReadBarrier>();
     for (int32_t i = 0, count = dex_caches->GetLength(); i < count; ++i) {
       mirror::DexCache* dex_cache = dex_caches->Get<kVerifyNone, kWithoutReadBarrier>(i);
@@ -1087,7 +1087,7 @@ static bool RelocateInPlace(ImageHeader& image_header,
     }
     // In the app image case, the image methods are actually in the boot image.
     image_header.RelocateImageMethods(boot_image.Delta());
-    const auto& class_table_section = image_header.GetImageSection(ImageHeader::kSectionClassTable);
+    const _& class_table_section = image_header.GetImageSection(ImageHeader::kSectionClassTable);
     if (class_table_section.Size() > 0u) {
       // Note that we require that ReadFromMemory does not make an internal copy of the elements.
       // This also relies on visit roots not doing any verification which could fail after we update
@@ -1162,15 +1162,15 @@ ImageSpace* ImageSpace::Init(const char* image_filename,
   if (VLOG_IS_ON(startup)) {
     LOG(INFO) << "Dumping image sections";
     for (size_t i = 0; i < ImageHeader::kSectionCount; ++i) {
-      const auto section_idx = static_cast<ImageHeader::ImageSections>(i);
-      auto& section = image_header->GetImageSection(section_idx);
+      const _ section_idx = static_cast<ImageHeader::ImageSections>(i);
+      _& section = image_header->GetImageSection(section_idx);
       LOG(INFO) << section_idx << " start="
                 << reinterpret_cast<void*>(image_header->GetImageBegin() + section.Offset()) << " "
                 << section;
     }
   }
 
-  const auto& bitmap_section = image_header->GetImageSection(ImageHeader::kSectionImageBitmap);
+  const _& bitmap_section = image_header->GetImageSection(ImageHeader::kSectionImageBitmap);
   // The location we want to map from is the first aligned page after the end of the stored
   // (possibly compressed) data.
   const size_t image_bitmap_offset = RoundUp(sizeof(ImageHeader) + image_header->GetDataSize(),
@@ -1524,7 +1524,7 @@ void ImageSpace::DumpSections(std::ostream& os) const {
   const uint8_t* base = Begin();
   const ImageHeader& header = GetImageHeader();
   for (size_t i = 0; i < ImageHeader::kSectionCount; ++i) {
-    auto section_type = static_cast<ImageHeader::ImageSections>(i);
+    _ section_type = static_cast<ImageHeader::ImageSections>(i);
     const ImageSection& section = header.GetImageSection(section_type);
     os << section_type << " " << reinterpret_cast<const void*>(base + section.Offset())
        << "-" << reinterpret_cast<const void*>(base + section.End()) << "\n";

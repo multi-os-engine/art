@@ -23,7 +23,7 @@ namespace mirror {
 
 template <bool kTransactionActive>
 bool AbstractMethod::CreateFromArtMethod(ArtMethod* method) {
-  auto* interface_method = method->GetInterfaceMethodIfProxy(
+  _* interface_method = method->GetInterfaceMethodIfProxy(
       kTransactionActive
           ? Runtime::Current()->GetClassLinker()->GetImagePointerSize()
           : sizeof(void*));

@@ -50,7 +50,7 @@ using helpers::InputRegisterAt;
 
 namespace {
 
-ALWAYS_INLINE inline MemOperand AbsoluteHeapOperandFrom(Location location, size_t offset = 0) {
+MC inline MemOperand AbsoluteHeapOperandFrom(Location location, size_t offset = 0) {
   return MemOperand(XRegisterFrom(location), offset);
 }
 

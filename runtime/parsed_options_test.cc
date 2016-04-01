@@ -105,7 +105,7 @@ TEST_F(ParsedOptionsTest, ParsedOptions) {
   EXPECT_FALSE(VLOG_IS_ON(third_party_jni));
   EXPECT_FALSE(VLOG_IS_ON(threads));
 
-  auto&& properties_list = map.GetOrDefault(Opt::PropertiesList);
+  _&& properties_list = map.GetOrDefault(Opt::PropertiesList);
   ASSERT_EQ(2U, properties_list.size());
   EXPECT_EQ("foo=bar", properties_list[0]);
   EXPECT_EQ("baz=qux", properties_list[1]);

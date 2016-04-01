@@ -368,7 +368,7 @@ class ClassLinkerTest : public CommonRuntimeTest {
     class_linker_->VisitRoots(&visitor, kVisitRootFlagAllRoots);
     // Verify the dex cache has resolution methods in all resolved method slots
     mirror::DexCache* dex_cache = class_linker_->FindDexCache(Thread::Current(), dex);
-    auto* resolved_methods = dex_cache->GetResolvedMethods();
+    _* resolved_methods = dex_cache->GetResolvedMethods();
     for (size_t i = 0, num_methods = dex_cache->NumResolvedMethods(); i != num_methods; ++i) {
       EXPECT_TRUE(
           mirror::DexCache::GetElementPtrSize(resolved_methods, i, sizeof(void*)) != nullptr)
@@ -1134,7 +1134,7 @@ static void CheckVerificationAttempted(mirror::Class* c, bool preverified)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   EXPECT_EQ((c->GetAccessFlags() & kAccVerificationAttempted) != 0U, preverified)
       << "Class " << PrettyClass(c) << " not as expected";
-  for (auto& m : c->GetMethods(sizeof(void*))) {
+  for (_& m : c->GetMethods(sizeof(void*))) {
     CheckMethod(&m, preverified);
   }
 }

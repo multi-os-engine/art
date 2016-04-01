@@ -213,7 +213,7 @@ class Heap {
   }
 
   template <bool kInstrumented, bool kCheckLargeObject, typename PreFenceVisitor>
-  ALWAYS_INLINE mirror::Object* AllocObjectWithAllocator(Thread* self,
+  MC mirror::Object* AllocObjectWithAllocator(Thread* self,
                                                          mirror::Class* klass,
                                                          size_t byte_count,
                                                          AllocatorType allocator,
@@ -435,21 +435,21 @@ class Heap {
 
   // Must be called if a field of an Object in the heap changes, and before any GC safe-point.
   // The call is not needed if null is stored in the field.
-  ALWAYS_INLINE void WriteBarrierField(const mirror::Object* dst,
+  MC void WriteBarrierField(const mirror::Object* dst,
                                        MemberOffset offset ATTRIBUTE_UNUSED,
                                        const mirror::Object* new_value ATTRIBUTE_UNUSED) {
     card_table_->MarkCard(dst);
   }
 
   // Write barrier for array operations that update many field positions
-  ALWAYS_INLINE void WriteBarrierArray(const mirror::Object* dst,
+  MC void WriteBarrierArray(const mirror::Object* dst,
                                        int start_offset ATTRIBUTE_UNUSED,
                                        // TODO: element_count or byte_count?
                                        size_t length ATTRIBUTE_UNUSED) {
     card_table_->MarkCard(dst);
   }
 
-  ALWAYS_INLINE void WriteBarrierEveryFieldOf(const mirror::Object* obj) {
+  MC void WriteBarrierEveryFieldOf(const mirror::Object* obj) {
     card_table_->MarkCard(obj);
   }
 
@@ -808,14 +808,14 @@ class Heap {
     return main_space_backup_ != nullptr;
   }
 
-  static ALWAYS_INLINE bool AllocatorHasAllocationStack(AllocatorType allocator_type) {
+  static MC bool AllocatorHasAllocationStack(AllocatorType allocator_type) {
     return
         allocator_type != kAllocatorTypeBumpPointer &&
         allocator_type != kAllocatorTypeTLAB &&
         allocator_type != kAllocatorTypeRegion &&
         allocator_type != kAllocatorTypeRegionTLAB;
   }
-  static ALWAYS_INLINE bool AllocatorMayHaveConcurrentGC(AllocatorType allocator_type) {
+  static MC bool AllocatorMayHaveConcurrentGC(AllocatorType allocator_type) {
     return
         allocator_type != kAllocatorTypeBumpPointer &&
         allocator_type != kAllocatorTypeTLAB;
@@ -830,7 +830,7 @@ class Heap {
   }
   bool ShouldAllocLargeObject(mirror::Class* c, size_t byte_count) const
       SHARED_REQUIRES(Locks::mutator_lock_);
-  ALWAYS_INLINE void CheckConcurrentGC(Thread* self,
+  MC void CheckConcurrentGC(Thread* self,
                                        size_t new_num_bytes_allocated,
                                        mirror::Object** obj)
       SHARED_REQUIRES(Locks::mutator_lock_)
@@ -876,7 +876,7 @@ class Heap {
   // Try to allocate a number of bytes, this function never does any GCs. Needs to be inlined so
   // that the switch statement is constant optimized in the entrypoints.
   template <const bool kInstrumented, const bool kGrow>
-  ALWAYS_INLINE mirror::Object* TryToAllocate(Thread* self,
+  MC mirror::Object* TryToAllocate(Thread* self,
                                               AllocatorType allocator_type,
                                               size_t alloc_size,
                                               size_t* bytes_allocated,
@@ -888,7 +888,7 @@ class Heap {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   template <bool kGrow>
-  ALWAYS_INLINE bool IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t alloc_size);
+  MC bool IsOutOfMemoryOnAllocation(AllocatorType allocator_type, size_t alloc_size);
 
   // Returns true if the address passed in is within the address range of a continuous space.
   bool IsValidContinuousSpaceObjectAddress(const mirror::Object* obj) const
@@ -993,7 +993,7 @@ class Heap {
 
   // What kind of concurrency behavior is the runtime after? Currently true for concurrent mark
   // sweep GC, false for other GC types.
-  bool IsGcConcurrent() const ALWAYS_INLINE {
+  bool IsGcConcurrent() const MC {
     return collector_type_ == kCollectorTypeCMS || collector_type_ == kCollectorTypeCC;
   }
 

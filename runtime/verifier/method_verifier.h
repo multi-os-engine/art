@@ -236,8 +236,8 @@ class MethodVerifier {
   // Accessors used by the compiler via CompilerCallback
   const DexFile::CodeItem* CodeItem() const;
   RegisterLine* GetRegLine(uint32_t dex_pc);
-  ALWAYS_INLINE const InstructionFlags& GetInstructionFlags(size_t index) const;
-  ALWAYS_INLINE InstructionFlags& GetInstructionFlags(size_t index);
+  MC const InstructionFlags& GetInstructionFlags(size_t index) const;
+  MC InstructionFlags& GetInstructionFlags(size_t index);
   mirror::ClassLoader* GetClassLoader() SHARED_REQUIRES(Locks::mutator_lock_);
   mirror::DexCache* GetDexCache() SHARED_REQUIRES(Locks::mutator_lock_);
   ArtMethod* GetMethod() const SHARED_REQUIRES(Locks::mutator_lock_);

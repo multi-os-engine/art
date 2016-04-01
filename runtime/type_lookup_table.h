@@ -41,7 +41,7 @@ class TypeLookupTable {
 
   // Method search class_def_idx by class descriptor and it's hash.
   // If no data found then the method returns DexFile::kDexNoIndex
-  ALWAYS_INLINE uint32_t Lookup(const char* str, uint32_t hash) const {
+  MC uint32_t Lookup(const char* str, uint32_t hash) const {
     uint32_t pos = hash & GetSizeMask();
     // Thanks to special insertion algorithm, the element at position pos can be empty or start of
     // bucket.

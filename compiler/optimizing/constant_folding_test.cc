@@ -131,7 +131,7 @@ TEST_F(ConstantFoldingTest, IntConstantFoldingNegation) {
   std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlocks()[1]->GetFirstInstruction()->InputAt(0);
     ASSERT_TRUE(inst->IsIntConstant());
     ASSERT_EQ(inst->AsIntConstant()->GetValue(), -1);
@@ -193,7 +193,7 @@ TEST_F(ConstantFoldingTest, LongConstantFoldingNegation) {
   std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlocks()[1]->GetFirstInstruction()->InputAt(0);
     ASSERT_TRUE(inst->IsLongConstant());
     ASSERT_EQ(inst->AsLongConstant()->GetValue(), INT64_C(-4294967296));
@@ -255,7 +255,7 @@ TEST_F(ConstantFoldingTest, IntConstantFoldingOnAddition1) {
   std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlocks()[1]->GetFirstInstruction()->InputAt(0);
     ASSERT_TRUE(inst->IsIntConstant());
     ASSERT_EQ(inst->AsIntConstant()->GetValue(), 3);
@@ -335,7 +335,7 @@ TEST_F(ConstantFoldingTest, IntConstantFoldingOnAddition2) {
   std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
 
   // Check the values of the computed constants.
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     HInstruction* inst1 = graph->GetBlocks()[1]->GetFirstInstruction()->InputAt(0);
     ASSERT_TRUE(inst1->IsIntConstant());
     ASSERT_EQ(inst1->AsIntConstant()->GetValue(), 12);
@@ -407,7 +407,7 @@ TEST_F(ConstantFoldingTest, IntConstantFoldingOnSubtraction) {
   std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlocks()[1]->GetFirstInstruction()->InputAt(0);
     ASSERT_TRUE(inst->IsIntConstant());
     ASSERT_EQ(inst->AsIntConstant()->GetValue(), 1);
@@ -471,7 +471,7 @@ TEST_F(ConstantFoldingTest, LongConstantFoldingOnAddition) {
   std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlocks()[1]->GetFirstInstruction()->InputAt(0);
     ASSERT_TRUE(inst->IsLongConstant());
     ASSERT_EQ(inst->AsLongConstant()->GetValue(), 3);
@@ -536,7 +536,7 @@ TEST_F(ConstantFoldingTest, LongConstantFoldingOnSubtraction) {
   std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
 
   // Check the value of the computed constant.
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlocks()[1]->GetFirstInstruction()->InputAt(0);
     ASSERT_TRUE(inst->IsLongConstant());
     ASSERT_EQ(inst->AsLongConstant()->GetValue(), 1);
@@ -637,7 +637,7 @@ TEST_F(ConstantFoldingTest, IntConstantFoldingAndJumps) {
   std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
 
   // Check the values of the computed constants.
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     HInstruction* inst1 = graph->GetBlocks()[4]->GetFirstInstruction()->InputAt(0);
     ASSERT_TRUE(inst1->IsIntConstant());
     ASSERT_EQ(inst1->AsIntConstant()->GetValue(), 20);
@@ -722,7 +722,7 @@ TEST_F(ConstantFoldingTest, ConstantCondition) {
   std::string expected_after_cf = Patch(expected_before, expected_cf_diff);
 
   // Check the values of the computed constants.
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     HInstruction* inst = graph->GetBlocks()[1]->GetFirstInstruction()->InputAt(0);
     ASSERT_TRUE(inst->IsIntConstant());
     ASSERT_EQ(inst->AsIntConstant()->GetValue(), 1);
@@ -851,7 +851,7 @@ TEST_F(ConstantFoldingTest, UnsignedComparisonsWithZero) {
       "BasicBlock 2, pred: 1\n"
       "  20: Exit\n";
 
-  auto check_after_cf = [](HGraph* graph) {
+  _ check_after_cf = [](HGraph* graph) {
     CHECK(graph != nullptr);
   };
 

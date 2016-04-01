@@ -811,11 +811,11 @@ void CodeGeneratorARM::Finalize(CodeAllocator* allocator) {
     GeneratedCodeInterval* frame_entry_interval = disasm_info_->GetFrameEntryInterval();
     frame_entry_interval->start = __ GetAdjustedPosition(frame_entry_interval->start);
     frame_entry_interval->end = __ GetAdjustedPosition(frame_entry_interval->end);
-    for (auto& it : *disasm_info_->GetInstructionIntervals()) {
+    for (_& it : *disasm_info_->GetInstructionIntervals()) {
       it.second.start = __ GetAdjustedPosition(it.second.start);
       it.second.end = __ GetAdjustedPosition(it.second.end);
     }
-    for (auto& it : *disasm_info_->GetSlowPathIntervals()) {
+    for (_& it : *disasm_info_->GetSlowPathIntervals()) {
       it.code_interval.start = __ GetAdjustedPosition(it.code_interval.start);
       it.code_interval.end = __ GetAdjustedPosition(it.code_interval.end);
     }
@@ -6553,7 +6553,7 @@ void CodeGeneratorARM::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patche
       /* MOVW+MOVT for each base */ 2u * pc_relative_string_patches_.size() +
       boot_image_address_patches_.size();
   linker_patches->reserve(size);
-  for (const auto& entry : method_patches_) {
+  for (const _& entry : method_patches_) {
     const MethodReference& target_method = entry.first;
     Literal* literal = entry.second;
     DCHECK(literal->GetLabel()->IsBound());
@@ -6562,7 +6562,7 @@ void CodeGeneratorARM::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patche
                                                        target_method.dex_file,
                                                        target_method.dex_method_index));
   }
-  for (const auto& entry : call_patches_) {
+  for (const _& entry : call_patches_) {
     const MethodReference& target_method = entry.first;
     Literal* literal = entry.second;
     DCHECK(literal->GetLabel()->IsBound());
@@ -6597,7 +6597,7 @@ void CodeGeneratorARM::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patche
                                                               add_pc_offset,
                                                               base_element_offset));
   }
-  for (const auto& entry : boot_image_string_patches_) {
+  for (const _& entry : boot_image_string_patches_) {
     const StringReference& target_string = entry.first;
     Literal* literal = entry.second;
     DCHECK(literal->GetLabel()->IsBound());
@@ -6626,7 +6626,7 @@ void CodeGeneratorARM::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patche
                                                                add_pc_offset,
                                                                string_index));
   }
-  for (const auto& entry : boot_image_address_patches_) {
+  for (const _& entry : boot_image_address_patches_) {
     DCHECK(GetCompilerOptions().GetIncludePatchInformation());
     Literal* literal = entry.second;
     DCHECK(literal->GetLabel()->IsBound());

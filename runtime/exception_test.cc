@@ -233,7 +233,7 @@ TEST_F(ExceptionTest, StackTraceElement) {
   ASSERT_TRUE(internal != nullptr);
   jobjectArray ste_array = Thread::InternalStackTraceToStackTraceElementArray(soa, internal);
   ASSERT_TRUE(ste_array != nullptr);
-  auto* trace_array = soa.Decode<mirror::ObjectArray<mirror::StackTraceElement>*>(ste_array);
+  _* trace_array = soa.Decode<mirror::ObjectArray<mirror::StackTraceElement>*>(ste_array);
 
   ASSERT_TRUE(trace_array != nullptr);
   ASSERT_TRUE(trace_array->Get(0) != nullptr);

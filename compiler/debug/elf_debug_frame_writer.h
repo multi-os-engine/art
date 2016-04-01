@@ -57,7 +57,7 @@ static void WriteCIE(InstructionSet isa,
           opcodes.SameValue(Reg::ArmFp(reg));
         }
       }
-      auto return_reg = Reg::ArmCore(14);  // R14(LR).
+      _ return_reg = Reg::ArmCore(14);  // R14(LR).
       WriteCIE(is64bit, return_reg, opcodes, format, buffer);
       return;
     }
@@ -80,7 +80,7 @@ static void WriteCIE(InstructionSet isa,
           opcodes.SameValue(Reg::Arm64Fp(reg));
         }
       }
-      auto return_reg = Reg::Arm64Core(30);  // R30(LR).
+      _ return_reg = Reg::Arm64Core(30);  // R30(LR).
       WriteCIE(is64bit, return_reg, opcodes, format, buffer);
       return;
     }
@@ -104,7 +104,7 @@ static void WriteCIE(InstructionSet isa,
           opcodes.SameValue(Reg::Mips64Fp(reg));
         }
       }
-      auto return_reg = Reg::MipsCore(31);  // R31(RA).
+      _ return_reg = Reg::MipsCore(31);  // R31(RA).
       WriteCIE(is64bit, return_reg, opcodes, format, buffer);
       return;
     }
@@ -130,7 +130,7 @@ static void WriteCIE(InstructionSet isa,
           opcodes.Undefined(Reg::X86Fp(reg));
         }
       }
-      auto return_reg = Reg::X86Core(8);  // R8(EIP).
+      _ return_reg = Reg::X86Core(8);  // R8(EIP).
       WriteCIE(is64bit, return_reg, opcodes, format, buffer);
       return;
     }
@@ -156,7 +156,7 @@ static void WriteCIE(InstructionSet isa,
           opcodes.SameValue(Reg::X86_64Fp(reg));
         }
       }
-      auto return_reg = Reg::X86_64Core(16);  // R16(RIP).
+      _ return_reg = Reg::X86_64Core(16);  // R16(RIP).
       WriteCIE(is64bit, return_reg, opcodes, format, buffer);
       return;
     }
@@ -207,7 +207,7 @@ void WriteCFISection(ElfBuilder<ElfTypes>* builder,
   }
 
   // Write .eh_frame/.debug_frame section.
-  auto* cfi_section = (format == dwarf::DW_DEBUG_FRAME_FORMAT
+  _* cfi_section = (format == dwarf::DW_DEBUG_FRAME_FORMAT
                        ? builder->GetDebugFrame()
                        : builder->GetEhFrame());
   {
@@ -242,7 +242,7 @@ void WriteCFISection(ElfBuilder<ElfTypes>* builder,
   }
 
   if (format == dwarf::DW_EH_FRAME_FORMAT) {
-    auto* header_section = builder->GetEhFrameHdr();
+    _* header_section = builder->GetEhFrameHdr();
     header_section->Start();
     uint32_t header_address = dchecked_integral_cast<int32_t>(header_section->GetAddress());
     // Write .eh_frame_hdr section.

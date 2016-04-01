@@ -37,7 +37,7 @@ class MANAGED Array : public Object {
   // least component_count size, however, if there's usable space at the end of the allocation the
   // array will fill it.
   template <bool kIsInstrumented, bool kFillUsable = false>
-  ALWAYS_INLINE static Array* Alloc(Thread* self, Class* array_class, int32_t component_count,
+  MC static Array* Alloc(Thread* self, Class* array_class, int32_t component_count,
                                     size_t component_size_shift, gc::AllocatorType allocator_type)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
@@ -49,7 +49,7 @@ class MANAGED Array : public Object {
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   size_t SizeOf() SHARED_REQUIRES(Locks::mutator_lock_);
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE int32_t GetLength() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC int32_t GetLength() SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetField32<kVerifyFlags>(OFFSET_OF_OBJECT_MEMBER(Array, length_));
   }
 
@@ -82,7 +82,7 @@ class MANAGED Array : public Object {
   // Returns true if the index is valid. If not, throws an ArrayIndexOutOfBoundsException and
   // returns false.
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  ALWAYS_INLINE bool CheckIsValidIndex(int32_t index) SHARED_REQUIRES(Locks::mutator_lock_);
+  MC bool CheckIsValidIndex(int32_t index) SHARED_REQUIRES(Locks::mutator_lock_);
 
   Array* CopyOf(Thread* self, int32_t new_length) SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!Roles::uninterruptible_);
@@ -111,34 +111,34 @@ class MANAGED PrimitiveArray : public Array {
   static PrimitiveArray<T>* Alloc(Thread* self, size_t length)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
-  const T* GetData() const ALWAYS_INLINE  SHARED_REQUIRES(Locks::mutator_lock_) {
+  const T* GetData() const MC  SHARED_REQUIRES(Locks::mutator_lock_) {
     return reinterpret_cast<const T*>(GetRawData(sizeof(T), 0));
   }
 
-  T* GetData() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
+  T* GetData() MC SHARED_REQUIRES(Locks::mutator_lock_) {
     return reinterpret_cast<T*>(GetRawData(sizeof(T), 0));
   }
 
-  T Get(int32_t i) ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_);
+  T Get(int32_t i) MC SHARED_REQUIRES(Locks::mutator_lock_);
 
-  T GetWithoutChecks(int32_t i) ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
+  T GetWithoutChecks(int32_t i) MC SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(CheckIsValidIndex(i)) << "i=" << i << " length=" << GetLength();
     return GetData()[i];
   }
 
-  void Set(int32_t i, T value) ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_);
+  void Set(int32_t i, T value) MC SHARED_REQUIRES(Locks::mutator_lock_);
 
   // TODO fix thread safety analysis broken by the use of template. This should be
   // SHARED_REQUIRES(Locks::mutator_lock_).
   template<bool kTransactionActive, bool kCheckTransaction = true>
-  void Set(int32_t i, T value) ALWAYS_INLINE NO_THREAD_SAFETY_ANALYSIS;
+  void Set(int32_t i, T value) MC NO_THREAD_SAFETY_ANALYSIS;
 
   // TODO fix thread safety analysis broken by the use of template. This should be
   // SHARED_REQUIRES(Locks::mutator_lock_).
   template<bool kTransactionActive,
            bool kCheckTransaction = true,
            VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags>
-  void SetWithoutChecks(int32_t i, T value) ALWAYS_INLINE NO_THREAD_SAFETY_ANALYSIS;
+  void SetWithoutChecks(int32_t i, T value) MC NO_THREAD_SAFETY_ANALYSIS;
 
   /*
    * Works like memmove(), except we guarantee not to allow tearing of array values (ie using

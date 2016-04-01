@@ -52,7 +52,7 @@ class MemoryRegion FINAL : public ValueObject {
   // Load value of type `T` at `offset`.  The memory address corresponding
   // to `offset` should be word-aligned (on ARM, this is a requirement).
   template<typename T>
-  ALWAYS_INLINE T Load(uintptr_t offset) const {
+  MC T Load(uintptr_t offset) const {
     T* address = ComputeInternalPointer<T>(offset);
     DCHECK(IsWordAligned(address));
     return *address;
@@ -62,7 +62,7 @@ class MemoryRegion FINAL : public ValueObject {
   // corresponding to `offset` should be word-aligned (on ARM, this is
   // a requirement).
   template<typename T>
-  ALWAYS_INLINE void Store(uintptr_t offset, T value) const {
+  MC void Store(uintptr_t offset, T value) const {
     T* address = ComputeInternalPointer<T>(offset);
     DCHECK(IsWordAligned(address));
     *address = value;
@@ -71,7 +71,7 @@ class MemoryRegion FINAL : public ValueObject {
   // Load value of type `T` at `offset`.  The memory address corresponding
   // to `offset` does not need to be word-aligned.
   template<typename T>
-  ALWAYS_INLINE T LoadUnaligned(uintptr_t offset) const {
+  MC T LoadUnaligned(uintptr_t offset) const {
     // Equivalent unsigned integer type corresponding to T.
     typedef typename std::make_unsigned<T>::type U;
     U equivalent_unsigned_integer_value = 0;
@@ -86,7 +86,7 @@ class MemoryRegion FINAL : public ValueObject {
   // Store `value` (of type `T`) at `offset`.  The memory address
   // corresponding to `offset` does not need to be word-aligned.
   template<typename T>
-  ALWAYS_INLINE void StoreUnaligned(uintptr_t offset, T value) const {
+  MC void StoreUnaligned(uintptr_t offset, T value) const {
     // Equivalent unsigned integer type corresponding to T.
     typedef typename std::make_unsigned<T>::type U;
     U equivalent_unsigned_integer_value = bit_cast<U, T>(value);
@@ -98,19 +98,19 @@ class MemoryRegion FINAL : public ValueObject {
   }
 
   template<typename T>
-  ALWAYS_INLINE T* PointerTo(uintptr_t offset) const {
+  MC T* PointerTo(uintptr_t offset) const {
     return ComputeInternalPointer<T>(offset);
   }
 
   // Load a single bit in the region. The bit at offset 0 is the least
   // significant bit in the first byte.
-  ALWAYS_INLINE bool LoadBit(uintptr_t bit_offset) const {
+  MC bool LoadBit(uintptr_t bit_offset) const {
     uint8_t bit_mask;
     uint8_t byte = *ComputeBitPointer(bit_offset, &bit_mask);
     return byte & bit_mask;
   }
 
-  ALWAYS_INLINE void StoreBit(uintptr_t bit_offset, bool value) const {
+  MC void StoreBit(uintptr_t bit_offset, bool value) const {
     uint8_t bit_mask;
     uint8_t* byte = ComputeBitPointer(bit_offset, &bit_mask);
     if (value) {
@@ -162,7 +162,7 @@ class MemoryRegion FINAL : public ValueObject {
 
  private:
   template<typename T>
-  ALWAYS_INLINE T* ComputeInternalPointer(size_t offset) const {
+  MC T* ComputeInternalPointer(size_t offset) const {
     CHECK_GE(size(), sizeof(T));
     CHECK_LE(offset, size() - sizeof(T));
     return reinterpret_cast<T*>(start() + offset);
@@ -170,7 +170,7 @@ class MemoryRegion FINAL : public ValueObject {
 
   // Locate the bit with the given offset. Returns a pointer to the byte
   // containing the bit, and sets bit_mask to the bit within that byte.
-  ALWAYS_INLINE uint8_t* ComputeBitPointer(uintptr_t bit_offset, uint8_t* bit_mask) const {
+  MC uint8_t* ComputeBitPointer(uintptr_t bit_offset, uint8_t* bit_mask) const {
     uintptr_t bit_remainder = (bit_offset & (kBitsPerByte - 1));
     *bit_mask = (1U << bit_remainder);
     uintptr_t byte_offset = (bit_offset >> kBitsPerByteLog2);

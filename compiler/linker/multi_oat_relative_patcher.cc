@@ -61,7 +61,7 @@ uint32_t MultiOatRelativePatcher::MiscThunksSize() const {
 
 std::pair<bool, uint32_t> MultiOatRelativePatcher::MethodOffsetMap::FindMethodOffset(
     MethodReference ref) {
-  auto it = map.find(ref);
+  _ it = map.find(ref);
   if (it == map.end()) {
     return std::pair<bool, uint32_t>(false, 0u);
   } else {

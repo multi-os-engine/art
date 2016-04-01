@@ -55,7 +55,7 @@ class CFITest : public dwarf::DwarfTest {
                     kCFIFormat, 0, &debug_frame_data_, &debug_frame_patches);
     ReformatCfi(Objdump(false, "-W"), &lines);
     // Pretty-print assembly.
-    auto* opts = new DisassemblerOptions(false, actual_asm.data(), true);
+    _* opts = new DisassemblerOptions(false, actual_asm.data(), true);
     std::unique_ptr<Disassembler> disasm(Disassembler::Create(isa, opts));
     std::stringstream stream;
     const uint8_t* base = actual_asm.data() + (isa == kThumb2 ? 1 : 0);

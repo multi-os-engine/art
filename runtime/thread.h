@@ -251,13 +251,13 @@ class Thread {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Transition from non-runnable to runnable state acquiring share on mutator_lock_.
-  ALWAYS_INLINE ThreadState TransitionFromSuspendedToRunnable()
+  MC ThreadState TransitionFromSuspendedToRunnable()
       REQUIRES(!Locks::thread_suspend_count_lock_)
       SHARED_LOCK_FUNCTION(Locks::mutator_lock_);
 
   // Transition from runnable into a state where mutator privileges are denied. Releases share of
   // mutator lock.
-  ALWAYS_INLINE void TransitionFromRunnableToSuspended(ThreadState new_state)
+  MC void TransitionFromRunnableToSuspended(ThreadState new_state)
       REQUIRES(!Locks::thread_suspend_count_lock_, !Roles::uninterruptible_)
       UNLOCK_FUNCTION(Locks::mutator_lock_);
 
@@ -528,7 +528,7 @@ class Thread {
 
   void VisitRoots(RootVisitor* visitor) SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE void VerifyStack() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC void VerifyStack() SHARED_REQUIRES(Locks::mutator_lock_);
 
   //
   // Offsets of various members of native Thread class, used by compiled code.
@@ -1166,10 +1166,10 @@ class Thread {
   void SetUpAlternateSignalStack();
   void TearDownAlternateSignalStack();
 
-  ALWAYS_INLINE void TransitionToSuspendedAndRunCheckpoints(ThreadState new_state)
+  MC void TransitionToSuspendedAndRunCheckpoints(ThreadState new_state)
       REQUIRES(!Locks::thread_suspend_count_lock_, !Roles::uninterruptible_);
 
-  ALWAYS_INLINE void PassActiveSuspendBarriers()
+  MC void PassActiveSuspendBarriers()
       REQUIRES(!Locks::thread_suspend_count_lock_, !Roles::uninterruptible_);
 
   // 32 bits of atomically changed state and flags. Keeping as 32 bits allows and atomic CAS to

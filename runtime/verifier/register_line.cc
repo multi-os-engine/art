@@ -141,10 +141,10 @@ std::string RegisterLine::Dump(MethodVerifier* verifier) const {
     result += GetRegisterType(verifier, i).Dump();
     result += "],";
   }
-  for (const auto& monitor : monitors_) {
+  for (const _& monitor : monitors_) {
     result += StringPrintf("{%d},", monitor);
   }
-  for (auto& pairs : reg_to_lock_depths_) {
+  for (_& pairs : reg_to_lock_depths_) {
     result += StringPrintf("<%d -> %x>", pairs.first, pairs.second);
   }
   return result;
@@ -404,7 +404,7 @@ void RegisterLine::PopMonitor(MethodVerifier* verifier, uint32_t reg_idx) {
 bool FindLockAliasedRegister(uint32_t src,
                              const RegisterLine::RegToLockDepthsMap& src_map,
                              const RegisterLine::RegToLockDepthsMap& search_map) {
-  auto it = src_map.find(src);
+  _ it = src_map.find(src);
   if (it == src_map.end()) {
     // "Not locked" is trivially aliased.
     return true;

@@ -132,7 +132,7 @@ void CommonCompilerTest::MakeExecutable(mirror::ClassLoader* class_loader, const
   mirror::Class* klass = class_linker_->FindClass(self, class_descriptor.c_str(), loader);
   CHECK(klass != nullptr) << "Class not found " << class_name;
   size_t pointer_size = class_linker_->GetImagePointerSize();
-  for (auto& m : klass->GetMethods(pointer_size)) {
+  for (_& m : klass->GetMethods(pointer_size)) {
     MakeExecutable(&m);
   }
 }
@@ -251,8 +251,8 @@ void CommonCompilerTest::CompileClass(mirror::ClassLoader* class_loader, const c
   Handle<mirror::ClassLoader> loader(hs.NewHandle(class_loader));
   mirror::Class* klass = class_linker_->FindClass(self, class_descriptor.c_str(), loader);
   CHECK(klass != nullptr) << "Class not found " << class_name;
-  auto pointer_size = class_linker_->GetImagePointerSize();
-  for (auto& m : klass->GetMethods(pointer_size)) {
+  _ pointer_size = class_linker_->GetImagePointerSize();
+  for (_& m : klass->GetMethods(pointer_size)) {
     CompileMethod(&m);
   }
 }
@@ -273,7 +273,7 @@ void CommonCompilerTest::CompileDirectMethod(Handle<mirror::ClassLoader> class_l
   Thread* self = Thread::Current();
   mirror::Class* klass = class_linker_->FindClass(self, class_descriptor.c_str(), class_loader);
   CHECK(klass != nullptr) << "Class not found " << class_name;
-  auto pointer_size = class_linker_->GetImagePointerSize();
+  _ pointer_size = class_linker_->GetImagePointerSize();
   ArtMethod* method = klass->FindDirectMethod(method_name, signature, pointer_size);
   CHECK(method != nullptr) << "Direct method not found: "
       << class_name << "." << method_name << signature;
@@ -287,7 +287,7 @@ void CommonCompilerTest::CompileVirtualMethod(Handle<mirror::ClassLoader> class_
   Thread* self = Thread::Current();
   mirror::Class* klass = class_linker_->FindClass(self, class_descriptor.c_str(), class_loader);
   CHECK(klass != nullptr) << "Class not found " << class_name;
-  auto pointer_size = class_linker_->GetImagePointerSize();
+  _ pointer_size = class_linker_->GetImagePointerSize();
   ArtMethod* method = klass->FindVirtualMethod(method_name, signature, pointer_size);
   CHECK(method != nullptr) << "Virtual method not found: "
       << class_name << "." << method_name << signature;

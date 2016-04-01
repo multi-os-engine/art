@@ -183,7 +183,7 @@ static void RemoveMonitors(Thread* self,
                            ReferenceTable* monitors,
                            std::vector<std::pair<uintptr_t, jobject>>* locked_objects)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  auto kept_end = std::remove_if(
+  _ kept_end = std::remove_if(
       locked_objects->begin(),
       locked_objects->end(),
       [self, frame, monitors](const std::pair<uintptr_t, jobject>& pair)
@@ -201,7 +201,7 @@ static void RemoveMonitors(Thread* self,
 void JNIEnvExt::CheckMonitorRelease(jobject obj) {
   uintptr_t current_frame = GetJavaCallFrame(self);
   std::pair<uintptr_t, jobject> exact_pair = std::make_pair(current_frame, obj);
-  auto it = std::find(locked_objects_.begin(), locked_objects_.end(), exact_pair);
+  _ it = std::find(locked_objects_.begin(), locked_objects_.end(), exact_pair);
   bool will_abort = false;
   if (it != locked_objects_.end()) {
     locked_objects_.erase(it);

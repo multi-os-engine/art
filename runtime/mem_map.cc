@@ -62,7 +62,7 @@ static std::ostream& operator<<(
 
 std::ostream& operator<<(std::ostream& os, const MemMap::Maps& mem_maps) {
   os << "MemMap:" << std::endl;
-  for (auto it = mem_maps.begin(); it != mem_maps.end(); ++it) {
+  for (_ it = mem_maps.begin(); it != mem_maps.end(); ++it) {
     void* base = it->first;
     MemMap* map = it->second;
     CHECK_EQ(base, map->BaseBegin());
@@ -141,7 +141,7 @@ bool MemMap::ContainedWithinExistingMap(uint8_t* ptr, size_t size, std::string* 
   // further.
   {
     MutexLock mu(Thread::Current(), *Locks::mem_maps_lock_);
-    for (auto& pair : *maps_) {
+    for (_& pair : *maps_) {
       MemMap* const map = pair.second;
       if (begin >= reinterpret_cast<uintptr_t>(map->Begin()) &&
           end <= reinterpret_cast<uintptr_t>(map->End())) {
@@ -424,7 +424,7 @@ MemMap* MemMap::MapFileAtAddress(uint8_t* expected_ptr,
                                                            low_4gb));
   if (actual == MAP_FAILED) {
     if (error_msg != nullptr) {
-      auto saved_errno = errno;
+      _ saved_errno = errno;
 
       PrintFileToLog("/proc/self/maps", LogSeverity::WARNING);
 
@@ -479,7 +479,7 @@ MemMap::~MemMap() {
   MutexLock mu(Thread::Current(), *Locks::mem_maps_lock_);
   bool found = false;
   DCHECK(maps_ != nullptr);
-  for (auto it = maps_->lower_bound(base_begin_), end = maps_->end();
+  for (_ it = maps_->lower_bound(base_begin_), end = maps_->end();
        it != end && it->first == base_begin_; ++it) {
     if (it->second == this) {
       found = true;
@@ -646,7 +646,7 @@ void MemMap::DumpMaps(std::ostream& os, bool terse) {
 }
 
 void MemMap::DumpMapsLocked(std::ostream& os, bool terse) {
-  const auto& mem_maps = *maps_;
+  const _& mem_maps = *maps_;
   if (!terse) {
     os << mem_maps;
     return;
@@ -660,7 +660,7 @@ void MemMap::DumpMapsLocked(std::ostream& os, bool terse) {
   //   "~0x11dP" means a gap of 0x11d pages,
   //   "+0x6bP(3)" means 3 mappings one after another, together taking 0x6b pages.
   os << "MemMap:" << std::endl;
-  for (auto it = mem_maps.begin(), maps_end = mem_maps.end(); it != maps_end;) {
+  for (_ it = mem_maps.begin(), maps_end = mem_maps.end(); it != maps_end;) {
     MemMap* map = it->second;
     void* base = it->first;
     CHECK_EQ(base, map->BaseBegin());
@@ -706,7 +706,7 @@ void MemMap::DumpMapsLocked(std::ostream& os, bool terse) {
 
 bool MemMap::HasMemMap(MemMap* map) {
   void* base_begin = map->BaseBegin();
-  for (auto it = maps_->lower_bound(base_begin), end = maps_->end();
+  for (_ it = maps_->lower_bound(base_begin), end = maps_->end();
        it != end && it->first == base_begin; ++it) {
     if (it->second == map) {
       return true;
@@ -719,7 +719,7 @@ MemMap* MemMap::GetLargestMemMapAt(void* address) {
   size_t largest_size = 0;
   MemMap* largest_map = nullptr;
   DCHECK(maps_ != nullptr);
-  for (auto it = maps_->lower_bound(address), end = maps_->end();
+  for (_ it = maps_->lower_bound(address), end = maps_->end();
        it != end && it->first == address; ++it) {
     MemMap* map = it->second;
     CHECK(map != nullptr);
@@ -802,9 +802,9 @@ void* MemMap::MapInternal(void* addr,
     for (uintptr_t ptr = next_mem_pos_; ptr < 4 * GB; ptr += kPageSize) {
       // Use maps_ as an optimization to skip over large maps.
       // Find the first map which is address > ptr.
-      auto it = maps_->upper_bound(reinterpret_cast<void*>(ptr));
+      _ it = maps_->upper_bound(reinterpret_cast<void*>(ptr));
       if (it != maps_->begin()) {
-        auto before_it = it;
+        _ before_it = it;
         --before_it;
         // Start at the end of the map before the upper bound.
         ptr = std::max(ptr, reinterpret_cast<uintptr_t>(before_it->second->BaseEnd()));

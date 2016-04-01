@@ -399,7 +399,7 @@ CompilerDriver::~CompilerDriver() {
   }
   {
     MutexLock mu(self, compiled_methods_lock_);
-    for (auto& pair : compiled_methods_) {
+    for (_& pair : compiled_methods_) {
       CompiledMethod::ReleaseSwapAllocatedCompiledMethod(this, pair.second);
     }
   }
@@ -468,7 +468,7 @@ static optimizer::DexToDexCompilationLevel GetDexToDexCompilationLevel(
     Thread* self, const CompilerDriver& driver, Handle<mirror::ClassLoader> class_loader,
     const DexFile& dex_file, const DexFile::ClassDef& class_def)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  auto* const runtime = Runtime::Current();
+  _* const runtime = Runtime::Current();
   if (runtime->UseJit() || driver.GetCompilerOptions().VerifyAtRuntime()) {
     // Verify at runtime shouldn't dex to dex since we didn't resolve of verify.
     return optimizer::DexToDexCompilationLevel::kDontDexToDexCompile;
@@ -946,8 +946,8 @@ class ResolveCatchBlockExceptionsClassVisitor : public ClassVisitor {
      : exceptions_to_resolve_(exceptions_to_resolve) {}
 
   virtual bool operator()(mirror::Class* c) OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_) {
-    const auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
-    for (auto& m : c->GetMethods(pointer_size)) {
+    const _ pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+    for (_& m : c->GetMethods(pointer_size)) {
       ResolveExceptionsForMethod(&m, pointer_size);
     }
     return true;
@@ -1022,7 +1022,7 @@ void CompilerDriver::LoadImageClasses(TimingLogger* timings) {
   ScopedObjectAccess soa(self);
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   CHECK(image_classes_.get() != nullptr);
-  for (auto it = image_classes_->begin(), end = image_classes_->end(); it != end;) {
+  for (_ it = image_classes_->begin(), end = image_classes_->end(); it != end;) {
     const std::string& descriptor(*it);
     StackHandleScope<1> hs(self);
     Handle<mirror::Class> klass(
@@ -1101,7 +1101,7 @@ static void MaybeAddToImageClasses(Handle<mirror::Class> c,
       MaybeAddToImageClasses(hs2.NewHandle(mirror::Class::GetDirectInterface(self, klass, i)),
                              image_classes);
     }
-    for (auto& m : c->GetVirtualMethods(pointer_size)) {
+    for (_& m : c->GetVirtualMethods(pointer_size)) {
       StackHandleScope<1> hs2(self);
       MaybeAddToImageClasses(hs2.NewHandle(m.GetDeclaringClass()), image_classes);
     }
@@ -1646,8 +1646,8 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
   *direct_method = 0;
   Runtime* const runtime = Runtime::Current();
   gc::Heap* const heap = runtime->GetHeap();
-  auto* cl = runtime->GetClassLinker();
-  const auto pointer_size = cl->GetImagePointerSize();
+  _* cl = runtime->GetClassLinker();
+  const _ pointer_size = cl->GetImagePointerSize();
   bool use_dex_cache = GetCompilerOptions().GetCompilePic();  // Off by default
   const bool compiling_boot = heap->IsCompilingBoot();
   // TODO This is somewhat hacky. We should refactor all of this invoke codepath.
@@ -1736,7 +1736,7 @@ void CompilerDriver::GetCodeAndMethodForDirectCall(InvokeType* type, InvokeType 
     bool method_in_image = false;
     const std::vector<gc::space::ImageSpace*> image_spaces = heap->GetBootImageSpaces();
     for (gc::space::ImageSpace* image_space : image_spaces) {
-      const auto& method_section = image_space->GetImageHeader().GetMethodsSection();
+      const _& method_section = image_space->GetImageHeader().GetMethodsSection();
       if (method_section.Contains(reinterpret_cast<uint8_t*>(method) - image_space->Begin())) {
         method_in_image = true;
         break;
@@ -1786,7 +1786,7 @@ bool CompilerDriver::ComputeInvokeInfo(const DexCompilationUnit* mUnit, const ui
   uint32_t method_idx = target_method->dex_method_index;
   ArtMethod* resolved_method = ResolveMethod(
       soa, dex_cache, class_loader, mUnit, method_idx, orig_invoke_type);
-  auto h_referrer_class = hs.NewHandle(resolved_method != nullptr ?
+  _ h_referrer_class = hs.NewHandle(resolved_method != nullptr ?
       ResolveCompilingMethodsClass(soa, dex_cache, class_loader, mUnit) : nullptr);
   bool result = false;
   if (resolved_method != nullptr) {
@@ -2659,7 +2659,7 @@ void CompilerDriver::RemoveCompiledMethod(const MethodReference& method_ref) {
   CompiledMethod* compiled_method = nullptr;
   {
     MutexLock mu(Thread::Current(), compiled_methods_lock_);
-    auto it = compiled_methods_.find(method_ref);
+    _ it = compiled_methods_.find(method_ref);
     if (it != compiled_methods_.end()) {
       compiled_method = it->second;
       compiled_methods_.erase(it);
@@ -2682,7 +2682,7 @@ CompiledClass* CompilerDriver::GetCompiledClass(ClassReference ref) const {
 
 void CompilerDriver::RecordClassStatus(ClassReference ref, mirror::Class::Status status) {
   MutexLock mu(Thread::Current(), compiled_classes_lock_);
-  auto it = compiled_classes_.find(ref);
+  _ it = compiled_classes_.find(ref);
   if (it == compiled_classes_.end() || it->second->GetStatus() != status) {
     // An entry doesn't exist or the status is lower than the new status.
     if (it != compiled_classes_.end()) {

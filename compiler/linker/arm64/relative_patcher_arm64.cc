@@ -122,7 +122,7 @@ uint32_t Arm64RelativePatcher::WriteThunks(OutputStream* out, uint32_t offset) {
         size_t num_thunks = current_method_thunks_.size() / kAdrpThunkSize;
         CHECK_LE(num_thunks, processed_adrp_thunks_);
         for (size_t i = 0u; i != num_thunks; ++i) {
-          const auto& entry = adrp_thunk_locations_[processed_adrp_thunks_ - num_thunks + i];
+          const _& entry = adrp_thunk_locations_[processed_adrp_thunks_ - num_thunks + i];
           CHECK_EQ(entry.second, aligned_offset + i * kAdrpThunkSize);
         }
       }

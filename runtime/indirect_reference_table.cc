@@ -180,9 +180,9 @@ bool IndirectReferenceTable::Remove(uint32_t cookie, IndirectRef iref) {
   DCHECK_GE(segment_state_.parts.numHoles, prevState.parts.numHoles);
 
   if (GetIndirectRefKind(iref) == kHandleScopeOrInvalid) {
-    auto* self = Thread::Current();
+    _* self = Thread::Current();
     if (self->HandleScopeContains(reinterpret_cast<jobject>(iref))) {
-      auto* env = self->GetJniEnv();
+      _* env = self->GetJniEnv();
       DCHECK(env != nullptr);
       if (env->check_jni) {
         ScopedObjectAccess soa(self);
@@ -264,14 +264,14 @@ bool IndirectReferenceTable::Remove(uint32_t cookie, IndirectRef iref) {
 void IndirectReferenceTable::Trim() {
   ScopedTrace trace(__PRETTY_FUNCTION__);
   const size_t top_index = Capacity();
-  auto* release_start = AlignUp(reinterpret_cast<uint8_t*>(&table_[top_index]), kPageSize);
+  _* release_start = AlignUp(reinterpret_cast<uint8_t*>(&table_[top_index]), kPageSize);
   uint8_t* release_end = table_mem_map_->End();
   madvise(release_start, release_end - release_start, MADV_DONTNEED);
 }
 
 void IndirectReferenceTable::VisitRoots(RootVisitor* visitor, const RootInfo& root_info) {
   BufferedRootVisitor<kDefaultBufferedRootCount> root_visitor(visitor, root_info);
-  for (auto ref : *this) {
+  for (_ ref : *this) {
     if (!ref->IsNull()) {
       root_visitor.VisitRoot(*ref);
       DCHECK(!ref->IsNull());

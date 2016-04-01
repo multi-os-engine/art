@@ -78,7 +78,7 @@ static bool InitFlock(const std::string& filename, ScopedFlock& flock, std::stri
 
 static bool InitFlock(int fd, ScopedFlock& flock, std::string* error) {
   DCHECK_GE(fd, 0);
-  // We do not own the descriptor, so disable auto-close and don't check usage.
+  // We do not own the descriptor, so disable _-close and don't check usage.
   File file(fd, false);
   file.DisableAutoClose();
   return flock.Init(&file, error);

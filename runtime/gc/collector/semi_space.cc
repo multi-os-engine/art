@@ -63,7 +63,7 @@ void SemiSpace::BindBitmaps() {
   TimingLogger::ScopedTiming t(__FUNCTION__, GetTimings());
   WriterMutexLock mu(self_, *Locks::heap_bitmap_lock_);
   // Mark all of the spaces we never collect as immune.
-  for (const auto& space : GetHeap()->GetContinuousSpaces()) {
+  for (const _& space : GetHeap()->GetContinuousSpaces()) {
     if (space->GetGcRetentionPolicy() == space::kGcRetentionPolicyNeverCollect ||
         space->GetGcRetentionPolicy() == space::kGcRetentionPolicyFullCollect) {
       immune_spaces_.AddSpace(space);
@@ -300,7 +300,7 @@ class SemiSpaceVerifyNoFromSpaceReferencesVisitor {
       from_space_(from_space) {}
 
   void operator()(Object* obj, MemberOffset offset, bool /* is_static */) const
-      SHARED_REQUIRES(Locks::mutator_lock_) ALWAYS_INLINE {
+      SHARED_REQUIRES(Locks::mutator_lock_) MC {
     mirror::Object* ref = obj->GetFieldObject<mirror::Object>(offset);
     if (from_space_->HasAddress(ref)) {
       Runtime::Current()->GetHeap()->DumpObject(LOG(INFO), obj);
@@ -356,7 +356,7 @@ void SemiSpace::MarkReachableObjects() {
     heap_->MarkAllocStackAsLive(live_stack);
     live_stack->Reset();
   }
-  for (auto& space : heap_->GetContinuousSpaces()) {
+  for (_& space : heap_->GetContinuousSpaces()) {
     // If the space is immune then we need to mark the references to other spaces.
     accounting::ModUnionTable* table = heap_->FindModUnionTableFromSpace(space);
     if (table != nullptr) {
@@ -459,7 +459,7 @@ void SemiSpace::ResizeMarkStack(size_t new_size) {
   std::vector<StackReference<Object>> temp(mark_stack_->Begin(), mark_stack_->End());
   CHECK_LE(mark_stack_->Size(), new_size);
   mark_stack_->Resize(new_size);
-  for (auto& obj : temp) {
+  for (_& obj : temp) {
     mark_stack_->PushBack(obj.AsMirrorPtr());
   }
 }
@@ -618,7 +618,7 @@ mirror::Object* SemiSpace::MarkNonForwardedObject(mirror::Object* obj) {
 }
 
 mirror::Object* SemiSpace::MarkObject(mirror::Object* root) {
-  auto ref = StackReference<mirror::Object>::FromMirrorPtr(root);
+  _ ref = StackReference<mirror::Object>::FromMirrorPtr(root);
   MarkObjectIfNotInToSpace(&ref);
   return ref.AsMirrorPtr();
 }
@@ -630,8 +630,8 @@ void SemiSpace::MarkHeapReference(mirror::HeapReference<mirror::Object>* obj_ptr
 void SemiSpace::VisitRoots(mirror::Object*** roots, size_t count,
                            const RootInfo& info ATTRIBUTE_UNUSED) {
   for (size_t i = 0; i < count; ++i) {
-    auto* root = roots[i];
-    auto ref = StackReference<mirror::Object>::FromMirrorPtr(*root);
+    _* root = roots[i];
+    _ ref = StackReference<mirror::Object>::FromMirrorPtr(*root);
     // The root can be in the to-space since we may visit the declaring class of an ArtMethod
     // multiple times if it is on the call stack.
     MarkObjectIfNotInToSpace(&ref);
@@ -666,7 +666,7 @@ bool SemiSpace::ShouldSweepSpace(space::ContinuousSpace* space) const {
 void SemiSpace::Sweep(bool swap_bitmaps) {
   TimingLogger::ScopedTiming t(__FUNCTION__, GetTimings());
   DCHECK(mark_stack_->IsEmpty());
-  for (const auto& space : GetHeap()->GetContinuousSpaces()) {
+  for (const _& space : GetHeap()->GetContinuousSpaces()) {
     if (space->IsContinuousMemMapAllocSpace()) {
       space::ContinuousMemMapAllocSpace* alloc_space = space->AsContinuousMemMapAllocSpace();
       if (!ShouldSweepSpace(alloc_space)) {
@@ -702,7 +702,7 @@ class SemiSpaceMarkObjectVisitor {
   explicit SemiSpaceMarkObjectVisitor(SemiSpace* collector) : collector_(collector) {
   }
 
-  void operator()(Object* obj, MemberOffset offset, bool /* is_static */) const ALWAYS_INLINE
+  void operator()(Object* obj, MemberOffset offset, bool /* is_static */) const MC
       REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
     // Object was already verified when we scanned it.
     collector_->MarkObject(obj->GetFieldObjectReferenceAddr<kVerifyNone>(offset));

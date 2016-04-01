@@ -41,12 +41,12 @@ Transaction::~Transaction() {
     MutexLock mu(Thread::Current(), log_lock_);
     size_t objects_count = object_logs_.size();
     size_t field_values_count = 0;
-    for (auto it : object_logs_) {
+    for (_ it : object_logs_) {
       field_values_count += it.second.Size();
     }
     size_t array_count = array_logs_.size();
     size_t array_values_count = 0;
-    for (auto it : array_logs_) {
+    for (_ it : array_logs_) {
       array_values_count += it.second.Size();
     }
     size_t string_count = intern_string_logs_.size();
@@ -205,7 +205,7 @@ void Transaction::Rollback() {
 void Transaction::UndoObjectModifications() {
   // TODO we may not need to restore objects allocated during this transaction. Or we could directly
   // remove them from the heap.
-  for (auto it : object_logs_) {
+  for (_ it : object_logs_) {
     it.second.Undo(it.first);
   }
   object_logs_.clear();
@@ -214,7 +214,7 @@ void Transaction::UndoObjectModifications() {
 void Transaction::UndoArrayModifications() {
   // TODO we may not need to restore array allocated during this transaction. Or we could directly
   // remove them from the heap.
-  for (auto it : array_logs_) {
+  for (_ it : array_logs_) {
     it.second.Undo(it.first);
   }
   array_logs_.clear();
@@ -243,7 +243,7 @@ void Transaction::VisitObjectLogs(RootVisitor* visitor) {
   std::list<ObjectPair> moving_roots;
 
   // Visit roots.
-  for (auto it : object_logs_) {
+  for (_ it : object_logs_) {
     it.second.VisitRoots(visitor);
     mirror::Object* old_root = it.first;
     mirror::Object* new_root = old_root;
@@ -257,7 +257,7 @@ void Transaction::VisitObjectLogs(RootVisitor* visitor) {
   for (const ObjectPair& pair : moving_roots) {
     mirror::Object* old_root = pair.first;
     mirror::Object* new_root = pair.second;
-    auto old_root_it = object_logs_.find(old_root);
+    _ old_root_it = object_logs_.find(old_root);
     CHECK(old_root_it != object_logs_.end());
     CHECK(object_logs_.find(new_root) == object_logs_.end());
     object_logs_.insert(std::make_pair(new_root, old_root_it->second));
@@ -270,7 +270,7 @@ void Transaction::VisitArrayLogs(RootVisitor* visitor) {
   typedef std::pair<mirror::Array*, mirror::Array*> ArrayPair;
   std::list<ArrayPair> moving_roots;
 
-  for (auto it : array_logs_) {
+  for (_ it : array_logs_) {
     mirror::Array* old_root = it.first;
     CHECK(!old_root->IsObjectArray());
     mirror::Array* new_root = old_root;
@@ -284,7 +284,7 @@ void Transaction::VisitArrayLogs(RootVisitor* visitor) {
   for (const ArrayPair& pair : moving_roots) {
     mirror::Array* old_root = pair.first;
     mirror::Array* new_root = pair.second;
-    auto old_root_it = array_logs_.find(old_root);
+    _ old_root_it = array_logs_.find(old_root);
     CHECK(old_root_it != array_logs_.end());
     CHECK(array_logs_.find(new_root) == array_logs_.end());
     array_logs_.insert(std::make_pair(new_root, old_root_it->second));
@@ -328,7 +328,7 @@ void Transaction::ObjectLog::LogReferenceValue(MemberOffset offset, mirror::Obje
 
 void Transaction::ObjectLog::LogValue(ObjectLog::FieldValueKind kind,
                                       MemberOffset offset, uint64_t value, bool is_volatile) {
-  auto it = field_values_.find(offset.Uint32Value());
+  _ it = field_values_.find(offset.Uint32Value());
   if (it == field_values_.end()) {
     ObjectLog::FieldValue field_value;
     field_value.value = value;
@@ -339,7 +339,7 @@ void Transaction::ObjectLog::LogValue(ObjectLog::FieldValueKind kind,
 }
 
 void Transaction::ObjectLog::Undo(mirror::Object* obj) {
-  for (auto& it : field_values_) {
+  for (_& it : field_values_) {
     // Garbage collector needs to access object's class and array's length. So we don't rollback
     // these values.
     MemberOffset field_offset(it.first);
@@ -431,7 +431,7 @@ void Transaction::ObjectLog::UndoFieldWrite(mirror::Object* obj, MemberOffset fi
 }
 
 void Transaction::ObjectLog::VisitRoots(RootVisitor* visitor) {
-  for (auto it : field_values_) {
+  for (_ it : field_values_) {
     FieldValue& field_value = it.second;
     if (field_value.kind == ObjectLog::kReference) {
       visitor->VisitRootIfNonNull(reinterpret_cast<mirror::Object**>(&field_value.value),
@@ -482,7 +482,7 @@ void Transaction::InternStringLog::VisitRoots(RootVisitor* visitor) {
 }
 
 void Transaction::ArrayLog::LogValue(size_t index, uint64_t value) {
-  auto it = array_values_.find(index);
+  _ it = array_values_.find(index);
   if (it == array_values_.end()) {
     array_values_.insert(std::make_pair(index, value));
   }
@@ -492,7 +492,7 @@ void Transaction::ArrayLog::Undo(mirror::Array* array) {
   DCHECK(array != nullptr);
   DCHECK(array->IsArrayInstance());
   Primitive::Type type = array->GetClass()->GetComponentType()->GetPrimitiveType();
-  for (auto it : array_values_) {
+  for (_ it : array_values_) {
     UndoArrayWrite(array, type, it.first, it.second);
   }
 }

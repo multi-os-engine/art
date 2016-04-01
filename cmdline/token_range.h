@@ -115,7 +115,7 @@ struct TokenRange {
     TokenList new_token_list;
 
     std::string tok;
-    for (auto&& c : string) {
+    for (_&& c : string) {
       for (char sep : separators) {
         if (c == sep) {
           // We spotted a separator character.
@@ -197,8 +197,8 @@ struct TokenRange {
       return false;
     }
 
-    auto& smaller = Size() < other.Size() ? *this : other;
-    auto& greater = Size() < other.Size() ? other : *this;
+    _& smaller = Size() < other.Size() ? *this : other;
+    _& greater = Size() < other.Size() ? other : *this;
 
     return std::equal(smaller.begin(), smaller.end(), greater.begin());
   }
@@ -208,8 +208,8 @@ struct TokenRange {
     TokenList new_token_list(begin(), end());
 
     bool changed = false;
-    for (auto&& token : new_token_list) {
-      auto it = std::remove_if(token.begin(), token.end(), [&](char ch) {
+    for (_&& token : new_token_list) {
+      _ it = std::remove_if(token.begin(), token.end(), [&](char ch) {
         if (ch == c) {
           changed = true;
           return true;
@@ -276,7 +276,7 @@ struct TokenRange {
     // Function to push all the characters matched as a wildcard so far
     // as a brand new token. It resets the wildcard matching.
     // Empty wildcards are possible and ok, but only if wildcard matching was on.
-    auto maybe_push_wildcard_token = [&]() {
+    _ maybe_push_wildcard_token = [&]() {
       if (wildcard_idx != std::string::npos) {
         size_t wildcard_length = string_idx - wildcard_idx;
         std::string wildcard_substr = string.substr(wildcard_idx, wildcard_length);
@@ -335,10 +335,10 @@ struct TokenRange {
   // Returns how many tokens were either matched (or ignored because there was a
   // wildcard present). 0 means no match. If the size() tokens are returned.
   size_t MaybeMatches(const TokenRange& token_list, const std::string& wildcard) const {
-    auto token_it = token_list.begin();
-    auto token_end = token_list.end();
-    auto name_it = begin();
-    auto name_end = end();
+    _ token_it = token_list.begin();
+    _ token_end = token_list.end();
+    _ name_it = begin();
+    _ name_end = end();
 
     size_t matched_tokens = 0;
 
@@ -392,8 +392,8 @@ struct TokenRange {
     // If any of the tokens in the token lists are empty, then
     // we need to remove them and compress the token list into a smaller one.
     bool remove = false;
-    for (auto it = begin_; it != end_; ++it) {
-      auto&& token = *it;
+    for (_ it = begin_; it != end_; ++it) {
+      _&& token = *it;
 
       if (predicate(token)) {
         remove = true;
@@ -403,7 +403,7 @@ struct TokenRange {
 
     // Actually copy the token list and remove the tokens that don't match our predicate.
     if (remove) {
-      auto token_list = std::make_shared<TokenList>(begin(), end());
+      _ token_list = std::make_shared<TokenList>(begin(), end());
       TokenList::iterator new_end =
           std::remove_if(token_list->begin(), token_list->end(), predicate);
       token_list->erase(new_end, token_list->end());

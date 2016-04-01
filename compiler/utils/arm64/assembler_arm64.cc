@@ -692,7 +692,7 @@ void Arm64Assembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
   // Setup VIXL CPURegList for callee-saves.
   CPURegList core_reg_list(CPURegister::kRegister, kXRegSize, 0);
   CPURegList fp_reg_list(CPURegister::kFPRegister, kDRegSize, 0);
-  for (auto r : callee_save_regs) {
+  for (_ r : callee_save_regs) {
     Arm64ManagedRegister reg = r.AsArm64();
     if (reg.IsXRegister()) {
       core_reg_list.Combine(reg_x(reg.AsXRegister()).code());
@@ -748,7 +748,7 @@ void Arm64Assembler::RemoveFrame(size_t frame_size,
   // Setup VIXL CPURegList for callee-saves.
   CPURegList core_reg_list(CPURegister::kRegister, kXRegSize, 0);
   CPURegList fp_reg_list(CPURegister::kFPRegister, kDRegSize, 0);
-  for (auto r : callee_save_regs) {
+  for (_ r : callee_save_regs) {
     Arm64ManagedRegister reg = r.AsArm64();
     if (reg.IsXRegister()) {
       core_reg_list.Combine(reg_x(reg.AsXRegister()).code());

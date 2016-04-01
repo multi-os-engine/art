@@ -27,7 +27,7 @@ namespace art {
 namespace mips64 {
 
 void Mips64Assembler::FinalizeCode() {
-  for (auto& exception_block : exception_blocks_) {
+  for (_& exception_block : exception_blocks_) {
     EmitExceptionPoll(&exception_block);
   }
   PromoteBranches();
@@ -45,7 +45,7 @@ void Mips64Assembler::PatchCFI() {
   }
 
   typedef DebugFrameOpCodeWriterForAssembler::DelayedAdvancePC DelayedAdvancePC;
-  const auto data = cfi().ReleaseStreamAndPrepareForDelayedAdvancePC();
+  const _ data = cfi().ReleaseStreamAndPrepareForDelayedAdvancePC();
   const std::vector<uint8_t>& old_stream = data.first;
   const std::vector<DelayedAdvancePC>& advances = data.second;
 
@@ -70,7 +70,7 @@ void Mips64Assembler::EmitBranches() {
   // Switch from appending instructions at the end of the buffer to overwriting
   // existing instructions (branch placeholders) in the buffer.
   overwriting_ = true;
-  for (auto& branch : branches_) {
+  for (_& branch : branches_) {
     EmitBranch(&branch);
   }
   overwriting_ = false;
@@ -1637,7 +1637,7 @@ void Mips64Assembler::PromoteBranches() {
   bool changed;
   do {
     changed = false;
-    for (auto& branch : branches_) {
+    for (_& branch : branches_) {
       CHECK(branch.IsResolved());
       uint32_t delta = branch.PromoteIfNeeded();
       // If this branch has been promoted and needs to expand in size,
@@ -1645,7 +1645,7 @@ void Mips64Assembler::PromoteBranches() {
       if (delta) {
         changed = true;
         uint32_t expand_location = branch.GetLocation();
-        for (auto& branch2 : branches_) {
+        for (_& branch2 : branches_) {
           branch2.Relocate(expand_location, delta);
         }
       }

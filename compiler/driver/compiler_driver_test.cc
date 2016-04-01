@@ -86,8 +86,8 @@ class CompilerDriverTest : public CommonCompilerTest {
           hs.NewHandle(soa.Decode<mirror::ClassLoader*>(class_loader)));
       mirror::Class* c = class_linker->FindClass(soa.Self(), descriptor, loader);
       CHECK(c != nullptr);
-      const auto pointer_size = class_linker->GetImagePointerSize();
-      for (auto& m : c->GetMethods(pointer_size)) {
+      const _ pointer_size = class_linker->GetImagePointerSize();
+      for (_& m : c->GetMethods(pointer_size)) {
         MakeExecutable(&m);
       }
     }
@@ -119,8 +119,8 @@ TEST_F(CompilerDriverTest, DISABLED_LARGE_CompileDexLibCore) {
                               << " " << dex.GetTypeDescriptor(dex.GetTypeId(i));
   }
   EXPECT_EQ(dex.NumMethodIds(), dex_cache->NumResolvedMethods());
-  auto* cl = Runtime::Current()->GetClassLinker();
-  auto pointer_size = cl->GetImagePointerSize();
+  _* cl = Runtime::Current()->GetClassLinker();
+  _ pointer_size = cl->GetImagePointerSize();
   for (size_t i = 0; i < dex_cache->NumResolvedMethods(); i++) {
     ArtMethod* method = dex_cache->GetResolvedMethod(i, pointer_size);
     EXPECT_TRUE(method != nullptr) << "method_idx=" << i
@@ -226,8 +226,8 @@ TEST_F(CompilerDriverMethodsTest, Selection) {
 
   std::unique_ptr<std::unordered_set<std::string>> expected(GetCompiledMethods());
 
-  const auto pointer_size = class_linker->GetImagePointerSize();
-  for (auto& m : klass->GetDirectMethods(pointer_size)) {
+  const _ pointer_size = class_linker->GetImagePointerSize();
+  for (_& m : klass->GetDirectMethods(pointer_size)) {
     std::string name = PrettyMethod(&m, true);
     const void* code = m.GetEntryPointFromQuickCompiledCodePtrSize(pointer_size);
     ASSERT_NE(code, nullptr);
@@ -282,9 +282,9 @@ class CompilerDriverProfileTest : public CompilerDriverTest {
     mirror::Class* klass = class_linker->FindClass(self, clazz.c_str(), h_loader);
     ASSERT_NE(klass, nullptr);
 
-    const auto pointer_size = class_linker->GetImagePointerSize();
+    const _ pointer_size = class_linker->GetImagePointerSize();
     size_t number_of_compiled_methods = 0;
-    for (auto& m : klass->GetVirtualMethods(pointer_size)) {
+    for (_& m : klass->GetVirtualMethods(pointer_size)) {
       std::string name = PrettyMethod(&m, true);
       const void* code = m.GetEntryPointFromQuickCompiledCodePtrSize(pointer_size);
       ASSERT_NE(code, nullptr);

@@ -315,7 +315,7 @@ const InstructionSetFeatures* X86InstructionSetFeatures::AddFeaturesFromSplitStr
   bool has_AVX2 = has_AVX2_;
   bool prefers_locked_add = prefers_locked_add_;
   bool has_POPCNT = has_POPCNT_;
-  for (auto i = features.begin(); i != features.end(); i++) {
+  for (_ i = features.begin(); i != features.end(); i++) {
     std::string feature = Trim(*i);
     if (feature == "ssse3") {
       has_SSSE3 = true;

@@ -94,7 +94,7 @@ inline size_t CardTable::Scan(ContinuousSpaceBitmap* bitmap, uint8_t* scan_begin
     // more efficient.
     for (size_t i = 0; i < sizeof(uintptr_t); ++i) {
       if (static_cast<uint8_t>(start_word) >= minimum_age) {
-        auto* card = reinterpret_cast<uint8_t*>(word_cur) + i;
+        _* card = reinterpret_cast<uint8_t*>(word_cur) + i;
         DCHECK(*card == static_cast<uint8_t>(start_word) || *card == kCardDirty)
             << "card " << static_cast<size_t>(*card) << " intptr_t " << (start_word & 0xFF);
         bitmap->VisitMarkedRange(start, start + kCardSize, visitor);

@@ -72,7 +72,7 @@ struct CmdlineParser {
     // Get the existing value from a map, creating the value if it did not already exist.
     template <typename TArg>
     TArg& GetOrCreateFromMap(const TVariantMapKey<TArg>& key) {
-      auto* ptr = variant_map_->Get(key);
+      _* ptr = variant_map_->Get(key);
       if (ptr == nullptr) {
         variant_map_->Set(key, TArg());
         ptr = variant_map_->Get(key);
@@ -173,7 +173,7 @@ struct CmdlineParser {
     CmdlineParser::Builder& IntoKey(const MapKey& key) {
       // Only capture save destination as a pointer.
       // This allows the parser to later on change the specific save targets.
-      auto save_destination = save_destination_;
+      _ save_destination = save_destination_;
       save_value_ = [save_destination, &key](TArg& value) {
         save_destination->SaveToMap(key, value);
         CMDLINE_DEBUG_LOG << "Saved value into map '"
@@ -294,7 +294,7 @@ struct CmdlineParser {
     // When used with multiple aliases, map the position of the alias to the value position.
     template <typename TArg>
     ArgumentBuilder<TArg> WithValues(std::initializer_list<TArg> values) {
-      auto&& a = CreateTypedBuilder<TArg>();
+      _&& a = CreateTypedBuilder<TArg>();
       a.WithValues(values);
       return std::move(a);
     }
@@ -330,7 +330,7 @@ struct CmdlineParser {
 
     template <typename TArg>
     ArgumentBuilder<TArg> CreateTypedBuilder() {
-      auto&& b = CreateArgumentBuilder<TArg>(parent_);
+      _&& b = CreateArgumentBuilder<TArg>(parent_);
       InitializeTypedBuilder(&b);  // Type-specific initialization
       b.SetNames(std::move(names_));
       return std::move(b);
@@ -369,7 +369,7 @@ struct CmdlineParser {
 
     // Define a single argument with multiple aliases.
     UntypedArgumentBuilder Define(std::initializer_list<const char*> names) {
-      auto&& b = UntypedArgumentBuilder(*this);
+      _&& b = UntypedArgumentBuilder(*this);
       b.SetNames(names);
       return std::move(b);
     }
@@ -382,7 +382,7 @@ struct CmdlineParser {
 
     // Provide a list of arguments to ignore for backwards compatibility.
     Builder& Ignore(std::initializer_list<const char*> ignore_list) {
-      for (auto&& ignore_name : ignore_list) {
+      for (_&& ignore_name : ignore_list) {
         std::string ign = ignore_name;
 
         // Ignored arguments are just like a regular definition which have very
@@ -392,12 +392,12 @@ struct CmdlineParser {
 
         if (ign.find("_") != std::string::npos) {  // Does the arg-def have a wildcard?
           // pretend this is a string, e.g. -Xjitconfig:<anythinggoeshere>
-          auto&& builder = Define(ignore_name).template WithType<std::string>().IntoIgnore();
+          _&& builder = Define(ignore_name).template WithType<std::string>().IntoIgnore();
           assert(&builder == this);
           (void)builder;  // Ignore pointless unused warning, it's used in the assert.
         } else {
           // pretend this is a unit, e.g. -Xjitblocking
-          auto&& builder = Define(ignore_name).template WithType<Unit>().IntoIgnore();
+          _&& builder = Define(ignore_name).template WithType<Unit>().IntoIgnore();
           assert(&builder == this);
           (void)builder;  // Ignore pointless unused warning, it's used in the assert.
         }
@@ -412,7 +412,7 @@ struct CmdlineParser {
       assert(!built_);
       built_ = true;
 
-      auto&& p = CmdlineParser(ignore_unrecognized_,
+      _&& p = CmdlineParser(ignore_unrecognized_,
                                std::move(ignore_list_),
                                save_destination_,
                                std::move(completed_arguments_));
@@ -422,7 +422,7 @@ struct CmdlineParser {
 
    protected:
     void AppendCompletedArgument(detail::CmdlineParseArgumentAny* arg) {
-      auto smart_ptr = std::unique_ptr<detail::CmdlineParseArgumentAny>(arg);
+      _ smart_ptr = std::unique_ptr<detail::CmdlineParseArgumentAny>(arg);
       completed_arguments_.push_back(std::move(smart_ptr));
     }
 
@@ -526,7 +526,7 @@ struct CmdlineParser {
 
       // Find the closest argument definition for the remaining token range.
       size_t arg_idx = 0;
-      for (auto&& arg : completed_arguments_) {
+      for (_&& arg : completed_arguments_) {
         size_t local_match = arg->MaybeMatches(possible_name);
 
         if (local_match > best_match_size) {
@@ -551,7 +551,7 @@ struct CmdlineParser {
       }
 
       // Look at the best-matched argument definition and try to parse against that.
-      auto&& arg = completed_arguments_[best_match_arg_idx];
+      _&& arg = completed_arguments_[best_match_arg_idx];
 
       assert(arg->MaybeMatches(possible_name) == best_match_size);
 

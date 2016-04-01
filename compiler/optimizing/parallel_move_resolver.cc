@@ -387,7 +387,7 @@ void ParallelMoveResolverNoSwap::AddScratchLocation(Location loc) {
 
 void ParallelMoveResolverNoSwap::RemoveScratchLocation(Location loc) {
   DCHECK(!IsBlockedByMoves(loc));
-  for (auto it = scratches_.begin(), end = scratches_.end(); it != end; ++it) {
+  for (_ it = scratches_.begin(), end = scratches_.end(); it != end; ++it) {
     if (loc.Equals(*it)) {
       scratches_.erase(it);
       break;

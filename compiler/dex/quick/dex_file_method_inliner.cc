@@ -689,7 +689,7 @@ bool DexFileMethodInliner::AnalyseMethodCode(verifier::MethodVerifier* verifier)
 
 InlineMethodFlags DexFileMethodInliner::IsIntrinsicOrSpecial(uint32_t method_index) {
   ReaderMutexLock mu(Thread::Current(), lock_);
-  auto it = inline_methods_.find(method_index);
+  _ it = inline_methods_.find(method_index);
   if (it != inline_methods_.end()) {
     DCHECK_NE(it->second.flags & (kInlineIntrinsic | kInlineSpecial), 0);
     return it->second.flags;
@@ -700,7 +700,7 @@ InlineMethodFlags DexFileMethodInliner::IsIntrinsicOrSpecial(uint32_t method_ind
 
 bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index, InlineMethod* intrinsic) {
   ReaderMutexLock mu(Thread::Current(), lock_);
-  auto it = inline_methods_.find(method_index);
+  _ it = inline_methods_.find(method_index);
   bool res = (it != inline_methods_.end() && (it->second.flags & kInlineIntrinsic) != 0);
   if (res && intrinsic != nullptr) {
     *intrinsic = it->second;
@@ -710,7 +710,7 @@ bool DexFileMethodInliner::IsIntrinsic(uint32_t method_index, InlineMethod* intr
 
 bool DexFileMethodInliner::IsSpecial(uint32_t method_index) {
   ReaderMutexLock mu(Thread::Current(), lock_);
-  auto it = inline_methods_.find(method_index);
+  _ it = inline_methods_.find(method_index);
   return it != inline_methods_.end() && (it->second.flags & kInlineSpecial) != 0;
 }
 
@@ -845,7 +845,7 @@ bool DexFileMethodInliner::AddInlineMethod(int32_t method_idx, const InlineMetho
 
 uint32_t DexFileMethodInliner::GetOffsetForStringInit(uint32_t method_index, size_t pointer_size) {
   ReaderMutexLock mu(Thread::Current(), lock_);
-  auto it = inline_methods_.find(method_index);
+  _ it = inline_methods_.find(method_index);
   if (it != inline_methods_.end() && (it->second.opcode == kInlineStringInit)) {
     uint32_t string_init_base_offset = Thread::QuickEntryPointOffsetWithSize(
               OFFSETOF_MEMBER(QuickEntryPoints, pNewEmptyString), pointer_size);
@@ -856,7 +856,7 @@ uint32_t DexFileMethodInliner::GetOffsetForStringInit(uint32_t method_index, siz
 
 bool DexFileMethodInliner::IsStringInitMethodIndex(uint32_t method_index) {
   ReaderMutexLock mu(Thread::Current(), lock_);
-  auto it = inline_methods_.find(method_index);
+  _ it = inline_methods_.find(method_index);
   return (it != inline_methods_.end()) && (it->second.opcode == kInlineStringInit);
 }
 

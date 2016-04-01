@@ -289,11 +289,11 @@ inline bool ArtField::IsPrimitiveType() SHARED_REQUIRES(Locks::mutator_lock_) {
 template <bool kResolve>
 inline mirror::Class* ArtField::GetType() {
   const uint32_t field_index = GetDexFieldIndex();
-  auto* declaring_class = GetDeclaringClass();
+  _* declaring_class = GetDeclaringClass();
   if (UNLIKELY(declaring_class->IsProxyClass())) {
     return ProxyFindSystemClass(GetTypeDescriptor());
   }
-  auto* dex_cache = declaring_class->GetDexCache();
+  _* dex_cache = declaring_class->GetDexCache();
   const DexFile* const dex_file = dex_cache->GetDexFile();
   const DexFile::FieldId& field_id = dex_file->GetFieldId(field_index);
   mirror::Class* type = dex_cache->GetResolvedType(field_id.type_idx_);
@@ -317,12 +317,12 @@ inline const DexFile* ArtField::GetDexFile() SHARED_REQUIRES(Locks::mutator_lock
 }
 
 inline mirror::String* ArtField::GetStringName(Thread* self, bool resolve) {
-  auto dex_field_index = GetDexFieldIndex();
+  _ dex_field_index = GetDexFieldIndex();
   CHECK_NE(dex_field_index, DexFile::kDexNoIndex);
-  auto* dex_cache = GetDexCache();
-  const auto* dex_file = dex_cache->GetDexFile();
-  const auto& field_id = dex_file->GetFieldId(dex_field_index);
-  auto* name = dex_cache->GetResolvedString(field_id.name_idx_);
+  _* dex_cache = GetDexCache();
+  const _* dex_file = dex_cache->GetDexFile();
+  const _& field_id = dex_file->GetFieldId(dex_field_index);
+  _* name = dex_cache->GetResolvedString(field_id.name_idx_);
   if (resolve && name == nullptr) {
     name = ResolveGetStringName(self, *dex_file, field_id.name_idx_, dex_cache);
   }

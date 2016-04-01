@@ -274,7 +274,7 @@ static jlongArray VMDebug_countInstancesOfClasses(JNIEnv* env, jclass, jobjectAr
   ScopedObjectAccess soa(env);
   gc::Heap* const heap = Runtime::Current()->GetHeap();
   // Caller's responsibility to do GC if desired.
-  auto* decoded_classes = soa.Decode<mirror::ObjectArray<mirror::Class>*>(javaClasses);
+  _* decoded_classes = soa.Decode<mirror::ObjectArray<mirror::Class>*>(javaClasses);
   if (decoded_classes == nullptr) {
     return nullptr;
   }
@@ -285,7 +285,7 @@ static jlongArray VMDebug_countInstancesOfClasses(JNIEnv* env, jclass, jobjectAr
   std::vector<uint64_t> counts(classes.size(), 0u);
   // Heap::CountInstances can handle null and will put 0 for these classes.
   heap->CountInstances(classes, countAssignable, &counts[0]);
-  auto* long_counts = mirror::LongArray::Alloc(soa.Self(), counts.size());
+  _* long_counts = mirror::LongArray::Alloc(soa.Self(), counts.size());
   if (long_counts == nullptr) {
     soa.Self()->AssertPendingOOMException();
     return nullptr;

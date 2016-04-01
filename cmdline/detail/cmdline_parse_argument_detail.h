@@ -109,7 +109,7 @@ namespace art {
       // a guarantee that the argument is correct, it's more of a strong hint that the
       // user-provided input *probably* was trying to match this argument.
       size_t MaybeMatches(TokenRange token_list) const {
-        auto best_match = FindClosestMatch(token_list);
+        _ best_match = FindClosestMatch(token_list);
 
         return best_match.second;
       }
@@ -122,7 +122,7 @@ namespace art {
         const TokenRange* best_match_ptr = nullptr;
 
         size_t best_match = 0;
-        for (auto&& token_range : tokenized_names_) {
+        for (_&& token_range : tokenized_names_) {
           size_t this_match = token_range.MaybeMatches(token_list, std::string("_"));
 
           if (this_match > best_match) {
@@ -149,7 +149,7 @@ namespace art {
 
         size_t global_blank_count = 0;
         size_t global_token_count = 0;
-        for (auto&& name : names_) {
+        for (_&& name : names_) {
           std::string s(name);
 
           size_t local_blank_count = std::count(s.begin(), s.end(), '_');
@@ -180,7 +180,7 @@ namespace art {
 
           // Tokenize every name, turning it from a string to a token list.
           tokenized_names_.clear();
-          for (auto&& name1 : names_) {
+          for (_&& name1 : names_) {
             // Split along ' ' only, removing any duplicated spaces.
             tokenized_names_.push_back(
                 TokenRange::Split(name1, {' '}).RemoveToken(" "));
@@ -192,7 +192,7 @@ namespace art {
           // range comparisons
           simple_names_.clear();
 
-          for (auto&& tokenized_name : tokenized_names_) {
+          for (_&& tokenized_name : tokenized_names_) {
             simple_names_.push_back(tokenized_name.RemoveCharacter('_'));
           }
         }
@@ -314,7 +314,7 @@ namespace art {
         assert(arguments.Size() > 0);
         assert(consumed_tokens != nullptr);
 
-        auto closest_match_res = argument_info_.FindClosestMatch(arguments);
+        _ closest_match_res = argument_info_.FindClosestMatch(arguments);
         size_t best_match_size = closest_match_res.second;
         const TokenRange* best_match_arg_def = closest_match_res.first;
 
@@ -335,8 +335,8 @@ namespace art {
         // e.g. for a def of "foo:_" and input "foo:bar", blank_value == "bar"
         std::string blank_value = "";
         size_t idx = 0;
-        for (auto&& def_token : *best_match_arg_def) {
-          auto&& arg_token = arguments[idx];
+        for (_&& def_token : *best_match_arg_def) {
+          _&& arg_token = arguments[idx];
 
           // Does this definition-token have a wildcard in it?
           if (def_token.find('_') == std::string::npos) {
@@ -384,7 +384,7 @@ namespace art {
 
         // Handle the 'WithValueMap(...)' argument definition
         if (argument_info_.has_value_map_) {
-          for (auto&& value_pair : argument_info_.value_map_) {
+          for (_&& value_pair : argument_info_.value_map_) {
             const char* name = value_pair.first;
 
             if (argument == name) {
@@ -394,7 +394,7 @@ namespace art {
 
           // Error case: Fail, telling the user what the allowed values were.
           std::vector<std::string> allowed_values;
-          for (auto&& value_pair : argument_info_.value_map_) {
+          for (_&& value_pair : argument_info_.value_map_) {
             const char* name = value_pair.first;
             allowed_values.push_back(name);
           }
@@ -408,8 +408,8 @@ namespace art {
         // Handle the 'WithValues(...)' argument definition
         if (argument_info_.has_value_list_) {
           size_t arg_def_idx = 0;
-          for (auto&& value : argument_info_.value_list_) {
-            auto&& arg_def_token = argument_info_.names_[arg_def_idx];
+          for (_&& value : argument_info_.value_list_) {
+            _&& arg_def_token = argument_info_.names_[arg_def_idx];
 
             if (arg_def_token == argument) {
               return SaveArgument(value);
@@ -422,7 +422,7 @@ namespace art {
 
           // Error case: Fail, telling the user what the allowed values were.
           std::vector<std::string> allowed_values;
-          for (auto&& arg_name : argument_info_.names_) {
+          for (_&& arg_name : argument_info_.names_) {
             allowed_values.push_back(arg_name);
           }
 

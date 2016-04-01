@@ -50,7 +50,7 @@ class RegionSpace FINAL : public ContinuousMemMapAllocSpace {
       OVERRIDE REQUIRES(Locks::mutator_lock_) REQUIRES(!region_lock_);
   // The main allocation routine.
   template<bool kForEvac>
-  ALWAYS_INLINE mirror::Object* AllocNonvirtual(size_t num_bytes, size_t* bytes_allocated,
+  MC mirror::Object* AllocNonvirtual(size_t num_bytes, size_t* bytes_allocated,
                                                 size_t* usable_size,
                                                 size_t* bytes_tl_bulk_allocated)
       REQUIRES(!region_lock_);
@@ -272,7 +272,7 @@ class RegionSpace FINAL : public ContinuousMemMapAllocSpace {
       thread_ = nullptr;
     }
 
-    ALWAYS_INLINE mirror::Object* Alloc(size_t num_bytes, size_t* bytes_allocated,
+    MC mirror::Object* Alloc(size_t num_bytes, size_t* bytes_allocated,
                                         size_t* usable_size,
                                         size_t* bytes_tl_bulk_allocated);
 
@@ -372,7 +372,7 @@ class RegionSpace FINAL : public ContinuousMemMapAllocSpace {
       type_ = RegionType::kRegionTypeToSpace;
     }
 
-    ALWAYS_INLINE bool ShouldBeEvacuated();
+    MC bool ShouldBeEvacuated();
 
     void AddLiveBytes(size_t live_bytes) {
       DCHECK(IsInUnevacFromSpace());

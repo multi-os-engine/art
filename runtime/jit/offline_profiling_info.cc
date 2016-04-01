@@ -139,7 +139,7 @@ bool ProfileCompilationInfo::Save(int fd) {
   // TODO(calin): Profile this and see how much memory it takes. If too much,
   // write to file directly.
   std::ostringstream os;
-  for (const auto& it : info_) {
+  for (const _& it : info_) {
     const std::string& dex_location = it.first;
     const DexFileData& dex_data = it.second;
     if (dex_data.method_set.empty() && dex_data.class_set.empty()) {
@@ -147,12 +147,12 @@ bool ProfileCompilationInfo::Save(int fd) {
     }
 
     os << dex_location << kFieldSeparator << dex_data.checksum;
-    for (auto method_it : dex_data.method_set) {
+    for (_ method_it : dex_data.method_set) {
       os << kFieldSeparator << method_it;
     }
     if (!dex_data.class_set.empty()) {
       os << kFieldSeparator << kClassesMarker;
-      for (auto class_id : dex_data.class_set) {
+      for (_ class_id : dex_data.class_set) {
         os << kFieldSeparator << class_id;
       }
     }
@@ -189,7 +189,7 @@ static void SplitString(const std::string& s, char separator, std::vector<std::s
 ProfileCompilationInfo::DexFileData* ProfileCompilationInfo::GetOrAddDexFileData(
     const std::string& dex_location,
     uint32_t checksum) {
-  auto info_it = info_.find(dex_location);
+  _ info_it = info_.find(dex_location);
   if (info_it == info_.end()) {
     info_it = info_.Put(dex_location, DexFileData(checksum));
   }
@@ -335,11 +335,11 @@ bool ProfileCompilationInfo::Load(int fd) {
 }
 
 bool ProfileCompilationInfo::Load(const ProfileCompilationInfo& other) {
-  for (const auto& other_it : other.info_) {
+  for (const _& other_it : other.info_) {
     const std::string& other_dex_location = other_it.first;
     const DexFileData& other_dex_data = other_it.second;
 
-    auto info_it = info_.find(other_dex_location);
+    _ info_it = info_.find(other_dex_location);
     if (info_it == info_.end()) {
       info_it = info_.Put(other_dex_location, DexFileData(other_dex_data.checksum));
     }
@@ -356,7 +356,7 @@ bool ProfileCompilationInfo::Load(const ProfileCompilationInfo& other) {
 }
 
 bool ProfileCompilationInfo::ContainsMethod(const MethodReference& method_ref) const {
-  auto info_it = info_.find(GetProfileDexFileKey(method_ref.dex_file->GetLocation()));
+  _ info_it = info_.find(GetProfileDexFileKey(method_ref.dex_file->GetLocation()));
   if (info_it != info_.end()) {
     if (method_ref.dex_file->GetLocationChecksum() != info_it->second.checksum) {
       return false;
@@ -368,7 +368,7 @@ bool ProfileCompilationInfo::ContainsMethod(const MethodReference& method_ref) c
 }
 
 bool ProfileCompilationInfo::ContainsClass(const DexFile& dex_file, uint16_t class_def_idx) const {
-  auto info_it = info_.find(GetProfileDexFileKey(dex_file.GetLocation()));
+  _ info_it = info_.find(GetProfileDexFileKey(dex_file.GetLocation()));
   if (info_it != info_.end()) {
     if (dex_file.GetLocationChecksum() != info_it->second.checksum) {
       return false;
@@ -381,7 +381,7 @@ bool ProfileCompilationInfo::ContainsClass(const DexFile& dex_file, uint16_t cla
 
 uint32_t ProfileCompilationInfo::GetNumberOfMethods() const {
   uint32_t total = 0;
-  for (const auto& it : info_) {
+  for (const _& it : info_) {
     total += it.second.method_set.size();
   }
   return total;
@@ -397,7 +397,7 @@ std::string ProfileCompilationInfo::DumpInfo(const std::vector<const DexFile*>* 
   os << "ProfileInfo:";
 
   const std::string kFirstDexFileKeySubstitute = ":classes.dex";
-  for (const auto& it : info_) {
+  for (const _& it : info_) {
     os << "\n";
     const std::string& location = it.first;
     const DexFileData& dex_data = it.second;
@@ -408,7 +408,7 @@ std::string ProfileCompilationInfo::DumpInfo(const std::vector<const DexFile*>* 
       std::string multidex_suffix = DexFile::GetMultiDexSuffix(location);
       os << (multidex_suffix.empty() ? kFirstDexFileKeySubstitute : multidex_suffix);
     }
-    for (const auto method_it : dex_data.method_set) {
+    for (const _ method_it : dex_data.method_set) {
       if (dex_files != nullptr) {
         const DexFile* dex_file = nullptr;
         for (size_t i = 0; i < dex_files->size(); i++) {
@@ -432,7 +432,7 @@ bool ProfileCompilationInfo::Equals(const ProfileCompilationInfo& other) {
 
 std::set<DexCacheResolvedClasses> ProfileCompilationInfo::GetResolvedClasses() const {
   std::set<DexCacheResolvedClasses> ret;
-  for (auto&& pair : info_) {
+  for (_&& pair : info_) {
     const std::string& profile_key = pair.first;
     const DexFileData& data = pair.second;
     DexCacheResolvedClasses classes(profile_key, data.checksum);

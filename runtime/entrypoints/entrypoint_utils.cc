@@ -186,7 +186,7 @@ JValue InvokeProxyInvocationHandler(ScopedObjectAccessAlreadyRunnable& soa, cons
       return zero;
     } else {
       StackHandleScope<1> hs(soa.Self());
-      auto h_interface_method(hs.NewHandle(soa.Decode<mirror::Method*>(interface_method_jobj)));
+      _ h_interface_method(hs.NewHandle(soa.Decode<mirror::Method*>(interface_method_jobj)));
       // This can cause thread suspension.
       size_t pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
       mirror::Class* result_type =
@@ -209,7 +209,7 @@ JValue InvokeProxyInvocationHandler(ScopedObjectAccessAlreadyRunnable& soa, cons
       mirror::Method* interface_method = soa.Decode<mirror::Method*>(interface_method_jobj);
       ArtMethod* proxy_method = rcvr->GetClass()->FindVirtualMethodForInterface(
           interface_method->GetArtMethod(), sizeof(void*));
-      auto virtual_methods = proxy_class->GetVirtualMethodsSlice(sizeof(void*));
+      _ virtual_methods = proxy_class->GetVirtualMethodsSlice(sizeof(void*));
       size_t num_virtuals = proxy_class->NumVirtualMethods();
       size_t method_size = ArtMethod::Size(sizeof(void*));
       // Rely on the fact that the methods are contiguous to determine the index of the method in
@@ -262,7 +262,7 @@ ArtMethod* GetCalleeSaveMethodCaller(ArtMethod** sp,
   DCHECK_EQ(*sp, Runtime::Current()->GetCalleeSaveMethod(type));
 
   const size_t callee_frame_size = GetCalleeSaveFrameSize(kRuntimeISA, type);
-  auto** caller_sp = reinterpret_cast<ArtMethod**>(
+  _** caller_sp = reinterpret_cast<ArtMethod**>(
       reinterpret_cast<uintptr_t>(sp) + callee_frame_size);
   const size_t callee_return_pc_offset = GetCalleeSaveReturnPcOffset(kRuntimeISA, type);
   uintptr_t caller_pc = *reinterpret_cast<uintptr_t*>(

@@ -129,8 +129,8 @@ TEST_F(TaskProcessorTest, Ordering) {
   for (size_t i = 0; i < kNumTasks; ++i) {
     std::swap(orderings[i], orderings[(i * 87654231 + 12345) % orderings.size()]);
   }
-  for (const auto& pair : orderings) {
-    auto* task = new TestOrderTask(pair.first, pair.second, &counter);
+  for (const _& pair : orderings) {
+    _* task = new TestOrderTask(pair.first, pair.second, &counter);
     task_processor.AddTask(self, task);
   }
   ThreadPool thread_pool("task processor test", 1U);

@@ -97,7 +97,7 @@ static jlongArray ConvertDexFilesToJavaArray(JNIEnv* env,
   }
 
   // Now release all the unique_ptrs.
-  for (auto& dex_file : vec) {
+  for (_& dex_file : vec) {
     dex_file.release();
   }
 
@@ -182,7 +182,7 @@ static jobject DexFile_openDexFileNative(JNIEnv* env,
     jlongArray array = ConvertDexFilesToJavaArray(env, oat_file, dex_files);
     if (array == nullptr) {
       ScopedObjectAccess soa(env);
-      for (auto& dex_file : dex_files) {
+      for (_& dex_file : dex_files) {
         if (linker->FindDexCache(soa.Self(), *dex_file, true) != nullptr) {
           dex_file.release();
         }
@@ -194,8 +194,8 @@ static jobject DexFile_openDexFileNative(JNIEnv* env,
     CHECK(!error_msgs.empty());
     // The most important message is at the end. So set up nesting by going forward, which will
     // wrap the existing exception as a cause for the following one.
-    auto it = error_msgs.begin();
-    auto itEnd = error_msgs.end();
+    _ it = error_msgs.begin();
+    _ itEnd = error_msgs.end();
     for ( ; it != itEnd; ++it) {
       ThrowWrappedIOException("%s", it->c_str());
     }
@@ -267,7 +267,7 @@ static jclass DexFile_defineClassNative(JNIEnv* env,
   }
   const std::string descriptor(DotToDescriptor(class_name.c_str()));
   const size_t hash(ComputeModifiedUtf8Hash(descriptor.c_str()));
-  for (auto& dex_file : dex_files) {
+  for (_& dex_file : dex_files) {
     const DexFile::ClassDef* dex_class_def = dex_file->FindClassDef(descriptor.c_str(), hash);
     if (dex_class_def != nullptr) {
       ScopedObjectAccess soa(env);
@@ -318,7 +318,7 @@ static jobjectArray DexFile_getClassNameList(JNIEnv* env, jclass, jobject cookie
   // Push all class descriptors into a set. Use set instead of unordered_set as we want to
   // retrieve all in the end.
   std::set<const char*, CharPointerComparator> descriptors;
-  for (auto& dex_file : dex_files) {
+  for (_& dex_file : dex_files) {
     for (size_t i = 0; i < dex_file->NumClassDefs(); ++i) {
       const DexFile::ClassDef& class_def = dex_file->GetClassDef(i);
       const char* descriptor = dex_file->GetClassDescriptor(class_def);
@@ -331,8 +331,8 @@ static jobjectArray DexFile_getClassNameList(JNIEnv* env, jclass, jobject cookie
                                             WellKnownClasses::java_lang_String,
                                             nullptr);
   if (result != nullptr) {
-    auto it = descriptors.begin();
-    auto it_end = descriptors.end();
+    _ it = descriptors.begin();
+    _ it_end = descriptors.end();
     jsize i = 0;
     for (; it != it_end; it++, ++i) {
       std::string descriptor(DescriptorToDot(*it));

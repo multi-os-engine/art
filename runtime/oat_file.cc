@@ -657,7 +657,7 @@ void DlOpenOatFile::PreSetup(const std::string& elf_filename) {
 #else
   struct dl_iterate_context {
     static int callback(struct dl_phdr_info *info, size_t /* size */, void *data) {
-      auto* context = reinterpret_cast<dl_iterate_context*>(data);
+      _* context = reinterpret_cast<dl_iterate_context*>(data);
       // See whether this callback corresponds to the file which we have just loaded.
       bool contains_begin = false;
       for (int i = 0; i < info->dlpi_phnum; i++) {
@@ -1026,7 +1026,7 @@ const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
   StringPiece key(dex_location);
   // Try to find the key cheaply in the oat_dex_files_ map which holds dex locations
   // directly mentioned in the oat file and doesn't require locking.
-  auto primary_it = oat_dex_files_.find(key);
+  _ primary_it = oat_dex_files_.find(key);
   if (primary_it != oat_dex_files_.end()) {
     oat_dex_file = primary_it->second;
     DCHECK(oat_dex_file != nullptr);
@@ -1035,7 +1035,7 @@ const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
     // oat file. The correct lookup is via the canonical location but first see in
     // the secondary_oat_dex_files_ whether we've looked up this location before.
     MutexLock mu(Thread::Current(), secondary_lookup_lock_);
-    auto secondary_lb = secondary_oat_dex_files_.lower_bound(key);
+    _ secondary_lb = secondary_oat_dex_files_.lower_bound(key);
     if (secondary_lb != secondary_oat_dex_files_.end() && key == secondary_lb->first) {
       oat_dex_file = secondary_lb->second;  // May be null.
     } else {
@@ -1043,7 +1043,7 @@ const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
       std::string dex_canonical_location = DexFile::GetDexCanonicalLocation(dex_location);
       if (dex_canonical_location != dex_location) {
         StringPiece canonical_key(dex_canonical_location);
-        auto canonical_it = oat_dex_files_.find(canonical_key);
+        _ canonical_it = oat_dex_files_.find(canonical_key);
         if (canonical_it != oat_dex_files_.end()) {
           oat_dex_file = canonical_it->second;
         }  // else keep null.
@@ -1296,7 +1296,7 @@ bool OatFile::CheckStaticDexFileDependencies(const char* dex_dependencies, std::
     return false;
   }
 
-  for (auto it = split.begin(), end = split.end(); it != end; it += 2) {
+  for (_ it = split.begin(), end = split.end(); it != end; it += 2) {
     std::string& location = *it;
     std::string& checksum = *(it + 1);
     int64_t converted = strtoll(checksum.c_str(), nullptr, 10);
@@ -1344,7 +1344,7 @@ bool OatFile::GetDexLocationsFromDependencies(const char* dex_dependencies,
     return false;
   }
 
-  for (auto it = split.begin(), end = split.end(); it != end; it += 2) {
+  for (_ it = split.begin(), end = split.end(); it != end; it += 2) {
     locations->push_back(*it);
   }
 

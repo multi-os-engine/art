@@ -418,7 +418,7 @@ class RosAlloc {
     // to the thread-local free list.
     void MergeBulkFreeListToThreadLocalFreeList();
     // Allocates a slot in a run.
-    ALWAYS_INLINE void* AllocSlot();
+    MC void* AllocSlot();
     // Frees a slot in a run. This is used in a non-bulk free.
     void FreeSlot(void* ptr);
     // Add the given slot to the bulk free list. Returns the bracket size.
@@ -434,7 +434,7 @@ class RosAlloc {
       return free_list_.Size();
     }
     // Returns true if all the slots in the run are in use.
-    ALWAYS_INLINE bool IsFull();
+    MC bool IsFull();
     // Returns true if the bulk free list is empty.
     bool IsBulkFreeListEmpty() const {
       return bulk_free_list_.Size() == 0;
@@ -627,7 +627,7 @@ class RosAlloc {
   // Valgrind protects memory, so do not check memory when running under valgrind. In a normal
   // build with kCheckZeroMemory the whole test should be optimized away.
   // TODO: Unprotect before checks.
-  ALWAYS_INLINE bool ShouldCheckZeroMemory();
+  MC bool ShouldCheckZeroMemory();
 
   // If true, log verbose details of operations.
   static constexpr bool kTraceRosAlloc = false;
@@ -853,15 +853,15 @@ class RosAlloc {
 
   // Returns true if the given allocation request can be allocated in
   // an existing thread local run without allocating a new run.
-  ALWAYS_INLINE bool CanAllocFromThreadLocalRun(Thread* self, size_t size);
+  MC bool CanAllocFromThreadLocalRun(Thread* self, size_t size);
   // Allocate the given allocation request in an existing thread local
   // run without allocating a new run.
-  ALWAYS_INLINE void* AllocFromThreadLocalRun(Thread* self, size_t size, size_t* bytes_allocated);
+  MC void* AllocFromThreadLocalRun(Thread* self, size_t size, size_t* bytes_allocated);
 
   // Returns the maximum bytes that could be allocated for the given
   // size in bulk, that is the maximum value for the
   // bytes_allocated_bulk out param returned by RosAlloc::Alloc().
-  ALWAYS_INLINE size_t MaxBytesBulkAllocatedFor(size_t size);
+  MC size_t MaxBytesBulkAllocatedFor(size_t size);
 
   // Returns the size of the allocated slot for a given allocated memory chunk.
   size_t UsableSize(const void* ptr) REQUIRES(!lock_);

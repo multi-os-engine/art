@@ -112,7 +112,7 @@ class Mips64Assembler FINAL : public Assembler {
   }
 
   virtual ~Mips64Assembler() {
-    for (auto& branch : branches_) {
+    for (_& branch : branches_) {
       CHECK(branch.IsResolved());
     }
   }

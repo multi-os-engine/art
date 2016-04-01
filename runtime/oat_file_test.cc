@@ -65,7 +65,7 @@ TEST_F(OatFileTest, ResolveRelativeEncodedDexLocation) {
 static std::vector<const DexFile*> ToConstDexFiles(
     const std::vector<std::unique_ptr<const DexFile>>& in) {
   std::vector<const DexFile*> ret;
-  for (auto& d : in) {
+  for (_& d : in) {
     ret.push_back(d.get());
   }
   return ret;

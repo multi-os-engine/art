@@ -500,7 +500,7 @@ static inline bool DoCallCommon(ArtMethod* called_method,
                                 JValue* result,
                                 uint16_t number_of_inputs,
                                 uint32_t (&arg)[kVarArgMax],
-                                uint32_t vregC) ALWAYS_INLINE;
+                                uint32_t vregC) MC;
 
 void ArtInterpreterToCompiledCodeBridge(Thread* self,
                                         const DexFile::CodeItem* code_item,

@@ -7348,7 +7348,7 @@ void CodeGeneratorX86::Finalize(CodeAllocator* allocator) {
     constant_area_start_ = assembler->CodeSize();
 
     // Populate any jump tables.
-    for (auto jump_table : fixups_to_jump_tables_) {
+    for (_ jump_table : fixups_to_jump_tables_) {
       jump_table->CreateJumpTable();
     }
 

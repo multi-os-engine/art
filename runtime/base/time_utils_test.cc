@@ -50,7 +50,7 @@ TEST(TimeUtilsTest, PrettyDuration) {
 }
 
 TEST(TimeUtilsTest, TestSleep) {
-  auto start = NanoTime();
+  _ start = NanoTime();
   NanoSleep(MsToNs(1500));
   EXPECT_GT(NanoTime() - start, MsToNs(1000));
 }

@@ -119,7 +119,7 @@ class ElfBuilder FINAL {
       CHECK(!started_);
       CHECK(!finished_);
       started_ = true;
-      auto& sections = owner_->sections_;
+      _& sections = owner_->sections_;
       // Check that the previous section is complete.
       CHECK(sections.empty() || sections.back()->finished_);
       // The first ELF section index is 1. Index 0 is reserved for NULL.
@@ -565,7 +565,7 @@ class ElfBuilder FINAL {
     // Write section names and finish the section headers.
     shstrtab_.Start();
     shstrtab_.Write("");
-    for (auto* section : sections_) {
+    for (_* section : sections_) {
       section->header_.sh_name = shstrtab_.Write(section->name_);
       if (section->link_ != nullptr) {
         section->header_.sh_link = section->link_->GetSectionIndex();
@@ -577,7 +577,7 @@ class ElfBuilder FINAL {
     std::vector<Elf_Shdr> shdrs;
     shdrs.reserve(1u + sections_.size());
     shdrs.push_back(Elf_Shdr());  // NULL at index 0.
-    for (auto* section : sections_) {
+    for (_* section : sections_) {
       shdrs.push_back(section->header_);
     }
     Elf_Off section_headers_offset;
@@ -846,7 +846,7 @@ class ElfBuilder FINAL {
       phdrs.push_back(load);
     }
     // Create program headers for sections.
-    for (auto* section : sections_) {
+    for (_* section : sections_) {
       const Elf_Shdr& shdr = section->header_;
       if ((shdr.sh_flags & SHF_ALLOC) != 0 && shdr.sh_size != 0) {
         // PT_LOAD tells the linker to mmap part of the file.
@@ -876,7 +876,7 @@ class ElfBuilder FINAL {
         }
       }
     }
-    for (auto* section : sections_) {
+    for (_* section : sections_) {
       const Elf_Shdr& shdr = section->header_;
       if ((shdr.sh_flags & SHF_ALLOC) != 0 && shdr.sh_size != 0) {
         // Other PT_* types allow the program to locate interesting

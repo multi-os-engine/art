@@ -118,7 +118,7 @@ class DwarfTest : public CommonRuntimeTest {
   // Compare objdump output to the recorded checks.
   void CheckObjdumpOutput(bool is64bit, const char* args) {
     std::vector<std::string> actual_lines = Objdump(is64bit, args);
-    auto actual_line = actual_lines.begin();
+    _ actual_line = actual_lines.begin();
     for (const ExpectedLine& expected_line : expected_lines_) {
       const std::string& substring = expected_line.substring;
       if (actual_line == actual_lines.end()) {
@@ -136,7 +136,7 @@ class DwarfTest : public CommonRuntimeTest {
         actual_line++;
       } else {
         bool found = false;
-        for (auto it = actual_line; it < actual_lines.end(); it++) {
+        for (_ it = actual_line; it < actual_lines.end(); it++) {
           if (it->find(substring) != std::string::npos) {
             actual_line = it;
             found = true;

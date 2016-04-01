@@ -41,7 +41,7 @@
 
 namespace art {
 
-ALWAYS_INLINE static inline mirror::Class* DecodeClass(
+MC static inline mirror::Class* DecodeClass(
     const ScopedFastNativeObjectAccess& soa, jobject java_class)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   mirror::Class* c = soa.Decode<mirror::Class*>(java_class);
@@ -64,7 +64,7 @@ static jclass Class_classForName(JNIEnv* env, jclass, jstring javaName, jboolean
 
   // We need to validate and convert the name (from x.y.z to x/y/z).  This
   // is especially handy for array types, since we want to avoid
-  // auto-generating bogus array classes.
+  // _-generating bogus array classes.
   if (!IsValidBinaryClassName(name.c_str())) {
     soa.Self()->ThrowNewExceptionF("Ljava/lang/ClassNotFoundException;",
                                    "Invalid name: %s", name.c_str());
@@ -129,14 +129,14 @@ static mirror::ObjectArray<mirror::Field>* GetDeclaredFields(
     }
   }
   size_t array_idx = 0;
-  auto object_array = hs.NewHandle(mirror::ObjectArray<mirror::Field>::Alloc(
+  _ object_array = hs.NewHandle(mirror::ObjectArray<mirror::Field>::Alloc(
       self, mirror::Field::ArrayClass(), array_size));
   if (object_array.Get() == nullptr) {
     return nullptr;
   }
   for (ArtField& field : ifields) {
     if (!public_only || field.IsPublic()) {
-      auto* reflect_field = mirror::Field::CreateFromArtField(self, &field, force_resolve);
+      _* reflect_field = mirror::Field::CreateFromArtField(self, &field, force_resolve);
       if (reflect_field == nullptr) {
         if (kIsDebugBuild) {
           self->AssertPendingException();
@@ -149,7 +149,7 @@ static mirror::ObjectArray<mirror::Field>* GetDeclaredFields(
   }
   for (ArtField& field : sfields) {
     if (!public_only || field.IsPublic()) {
-      auto* reflect_field = mirror::Field::CreateFromArtField(self, &field, force_resolve);
+      _* reflect_field = mirror::Field::CreateFromArtField(self, &field, force_resolve);
       if (reflect_field == nullptr) {
         if (kIsDebugBuild) {
           self->AssertPendingException();
@@ -185,7 +185,7 @@ static jobjectArray Class_getPublicDeclaredFields(JNIEnv* env, jobject javaThis)
 // Performs a binary search through an array of fields, TODO: Is this fast enough if we don't use
 // the dex cache for lookups? I think CompareModifiedUtf8ToUtf16AsCodePointValues should be fairly
 // fast.
-ALWAYS_INLINE static inline ArtField* FindFieldByName(
+MC static inline ArtField* FindFieldByName(
     Thread* self ATTRIBUTE_UNUSED, mirror::String* name, LengthPrefixedArray<ArtField>* fields)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   if (fields == nullptr) {
@@ -196,7 +196,7 @@ ALWAYS_INLINE static inline ArtField* FindFieldByName(
   const uint16_t* const data = name->GetValue();
   const size_t length = name->GetLength();
   while (low < high) {
-    auto mid = (low + high) / 2;
+    _ mid = (low + high) / 2;
     ArtField& field = fields->At(mid);
     int result = CompareModifiedUtf8ToUtf16AsCodePointValues(field.GetName(), data, length);
     // Alternate approach, only a few % faster at the cost of more allocations.
@@ -217,7 +217,7 @@ ALWAYS_INLINE static inline ArtField* FindFieldByName(
   return nullptr;
 }
 
-ALWAYS_INLINE static inline mirror::Field* GetDeclaredField(
+MC static inline mirror::Field* GetDeclaredField(
     Thread* self, mirror::Class* c, mirror::String* name)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ArtField* art_field = FindFieldByName(self, name, c->GetIFieldsPtr());
@@ -281,7 +281,7 @@ static mirror::Field* GetPublicFieldRecursive(
 
 static jobject Class_getPublicFieldRecursive(JNIEnv* env, jobject javaThis, jstring name) {
   ScopedFastNativeObjectAccess soa(env);
-  auto* name_string = soa.Decode<mirror::String*>(name);
+  _* name_string = soa.Decode<mirror::String*>(name);
   if (UNLIKELY(name_string == nullptr)) {
     ThrowNullPointerException("name == null");
     return nullptr;
@@ -292,12 +292,12 @@ static jobject Class_getPublicFieldRecursive(JNIEnv* env, jobject javaThis, jstr
 
 static jobject Class_getDeclaredField(JNIEnv* env, jobject javaThis, jstring name) {
   ScopedFastNativeObjectAccess soa(env);
-  auto* name_string = soa.Decode<mirror::String*>(name);
+  _* name_string = soa.Decode<mirror::String*>(name);
   if (name_string == nullptr) {
     ThrowNullPointerException("name == null");
     return nullptr;
   }
-  auto* klass = DecodeClass(soa, javaThis);
+  _* klass = DecodeClass(soa, javaThis);
   mirror::Field* result = GetDeclaredField(soa.Self(), klass, name_string);
   if (result == nullptr) {
     std::string name_str = name_string->ToModifiedUtf8();
@@ -322,10 +322,10 @@ static jobject Class_getDeclaredField(JNIEnv* env, jobject javaThis, jstring nam
 static jobject Class_getDeclaredConstructorInternal(
     JNIEnv* env, jobject javaThis, jobjectArray args) {
   ScopedFastNativeObjectAccess soa(env);
-  auto* klass = DecodeClass(soa, javaThis);
-  auto* params = soa.Decode<mirror::ObjectArray<mirror::Class>*>(args);
+  _* klass = DecodeClass(soa, javaThis);
+  _* params = soa.Decode<mirror::ObjectArray<mirror::Class>*>(args);
   StackHandleScope<1> hs(soa.Self());
-  auto* declared_constructor = klass->GetDeclaredConstructor(soa.Self(), hs.NewHandle(params));
+  _* declared_constructor = klass->GetDeclaredConstructor(soa.Self(), hs.NewHandle(params));
   if (declared_constructor != nullptr) {
     return soa.AddLocalReference<jobject>(
         mirror::Constructor::CreateFromArtMethod(soa.Self(), declared_constructor));
@@ -333,7 +333,7 @@ static jobject Class_getDeclaredConstructorInternal(
   return nullptr;
 }
 
-static ALWAYS_INLINE inline bool MethodMatchesConstructor(ArtMethod* m, bool public_only)
+static MC inline bool MethodMatchesConstructor(ArtMethod* m, bool public_only)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   DCHECK(m != nullptr);
   return (!public_only || m->IsPublic()) && !m->IsStatic() && m->IsConstructor();
@@ -346,19 +346,19 @@ static jobjectArray Class_getDeclaredConstructorsInternal(
   Handle<mirror::Class> h_klass = hs.NewHandle(DecodeClass(soa, javaThis));
   size_t constructor_count = 0;
   // Two pass approach for speed.
-  for (auto& m : h_klass->GetDirectMethods(sizeof(void*))) {
+  for (_& m : h_klass->GetDirectMethods(sizeof(void*))) {
     constructor_count += MethodMatchesConstructor(&m, publicOnly != JNI_FALSE) ? 1u : 0u;
   }
-  auto h_constructors = hs.NewHandle(mirror::ObjectArray<mirror::Constructor>::Alloc(
+  _ h_constructors = hs.NewHandle(mirror::ObjectArray<mirror::Constructor>::Alloc(
       soa.Self(), mirror::Constructor::ArrayClass(), constructor_count));
   if (UNLIKELY(h_constructors.Get() == nullptr)) {
     soa.Self()->AssertPendingException();
     return nullptr;
   }
   constructor_count = 0;
-  for (auto& m : h_klass->GetDirectMethods(sizeof(void*))) {
+  for (_& m : h_klass->GetDirectMethods(sizeof(void*))) {
     if (MethodMatchesConstructor(&m, publicOnly != JNI_FALSE)) {
-      auto* constructor = mirror::Constructor::CreateFromArtMethod(soa.Self(), &m);
+      _* constructor = mirror::Constructor::CreateFromArtMethod(soa.Self(), &m);
       if (UNLIKELY(constructor == nullptr)) {
         soa.Self()->AssertPendingOOMException();
         return nullptr;
@@ -386,22 +386,22 @@ static jobjectArray Class_getDeclaredMethodsUnchecked(JNIEnv* env, jobject javaT
   StackHandleScope<2> hs(soa.Self());
   Handle<mirror::Class> klass = hs.NewHandle(DecodeClass(soa, javaThis));
   size_t num_methods = 0;
-  for (auto& m : klass->GetDeclaredMethods(sizeof(void*))) {
-    auto modifiers = m.GetAccessFlags();
+  for (_& m : klass->GetDeclaredMethods(sizeof(void*))) {
+    _ modifiers = m.GetAccessFlags();
     // Add non-constructor declared methods.
     if ((publicOnly == JNI_FALSE || (modifiers & kAccPublic) != 0) &&
         (modifiers & kAccConstructor) == 0) {
       ++num_methods;
     }
   }
-  auto ret = hs.NewHandle(mirror::ObjectArray<mirror::Method>::Alloc(
+  _ ret = hs.NewHandle(mirror::ObjectArray<mirror::Method>::Alloc(
       soa.Self(), mirror::Method::ArrayClass(), num_methods));
   num_methods = 0;
-  for (auto& m : klass->GetDeclaredMethods(sizeof(void*))) {
-    auto modifiers = m.GetAccessFlags();
+  for (_& m : klass->GetDeclaredMethods(sizeof(void*))) {
+    _ modifiers = m.GetAccessFlags();
     if ((publicOnly == JNI_FALSE || (modifiers & kAccPublic) != 0) &&
         (modifiers & kAccConstructor) == 0) {
-      auto* method = mirror::Method::CreateFromArtMethod(soa.Self(), &m);
+      _* method = mirror::Method::CreateFromArtMethod(soa.Self(), &m);
       if (method == nullptr) {
         soa.Self()->AssertPendingException();
         return nullptr;
@@ -595,7 +595,7 @@ static jobject Class_newInstance(JNIEnv* env, jobject javaThis) {
                                    "%s cannot be instantiated", PrettyClass(klass.Get()).c_str());
     return nullptr;
   }
-  auto caller = hs.NewHandle<mirror::Class>(nullptr);
+  _ caller = hs.NewHandle<mirror::Class>(nullptr);
   // Verify that we can access the class.
   if (!klass->IsPublic()) {
     caller.Assign(GetCallingClass(soa.Self(), 1));
@@ -606,7 +606,7 @@ static jobject Class_newInstance(JNIEnv* env, jobject javaThis) {
       return nullptr;
     }
   }
-  auto* constructor = klass->GetDeclaredConstructor(
+  _* constructor = klass->GetDeclaredConstructor(
       soa.Self(),
       ScopedNullHandle<mirror::ObjectArray<mirror::Class>>());
   if (UNLIKELY(constructor == nullptr)) {
@@ -626,13 +626,13 @@ static jobject Class_newInstance(JNIEnv* env, jobject javaThis) {
       return soa.AddLocalReference<jobject>(obj);
     }
   }
-  auto receiver = hs.NewHandle(klass->AllocObject(soa.Self()));
+  _ receiver = hs.NewHandle(klass->AllocObject(soa.Self()));
   if (UNLIKELY(receiver.Get() == nullptr)) {
     soa.Self()->AssertPendingOOMException();
     return nullptr;
   }
   // Verify that we can access the constructor.
-  auto* declaring_class = constructor->GetDeclaringClass();
+  _* declaring_class = constructor->GetDeclaringClass();
   if (!constructor->IsPublic()) {
     if (caller.Get() == nullptr) {
       caller.Assign(GetCallingClass(soa.Self(), 1));

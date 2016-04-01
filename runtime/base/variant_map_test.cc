@@ -83,7 +83,7 @@ TEST(VariantMaps, SetPreviousValue) {
 
   // Indirect remove by setting yourself again
   fm.Set(FruitMap::Label, std::string("hello_world"));
-  auto* ptr = fm.Get(FruitMap::Label);
+  _* ptr = fm.Get(FruitMap::Label);
   ASSERT_TRUE(ptr != nullptr);
   *ptr = "foobar";
 
@@ -91,7 +91,7 @@ TEST(VariantMaps, SetPreviousValue) {
   // This should cleanly 'just work' and not try to delete the value too early.
   fm.Set(FruitMap::Label, *ptr);
 
-  auto* new_ptr = fm.Get(FruitMap::Label);
+  _* new_ptr = fm.Get(FruitMap::Label);
   ASSERT_TRUE(ptr != nullptr);
   EXPECT_EQ(std::string("foobar"), *new_ptr);
 }

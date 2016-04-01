@@ -69,7 +69,7 @@ class DedupeSet<InKey, StoreKey, Alloc, HashType, HashFunc, kShard>::Shard {
   const StoreKey* Add(Thread* self, size_t hash, const InKey& in_key) REQUIRES(!lock_) {
     MutexLock lock(self, lock_);
     HashedKey<InKey> hashed_in_key(hash, &in_key);
-    auto it = keys_.Find(hashed_in_key);
+    _ it = keys_.Find(hashed_in_key);
     if (it != keys_.end()) {
       DCHECK(it->Key() != nullptr);
       return it->Key();
@@ -90,7 +90,7 @@ class DedupeSet<InKey, StoreKey, Alloc, HashType, HashFunc, kShard>::Shard {
       global_stats->total_probe_distance += keys_.TotalProbeDistance();
       global_stats->total_size += keys_.Size();
       for (const HashedKey<StoreKey>& key : keys_) {
-        auto it = stats.find(key.Hash());
+        _ it = stats.find(key.Hash());
         if (it == stats.end()) {
           stats.insert({key.Hash(), 1u});
         } else {
@@ -98,7 +98,7 @@ class DedupeSet<InKey, StoreKey, Alloc, HashType, HashFunc, kShard>::Shard {
         }
       }
     }
-    for (const auto& entry : stats) {
+    for (const _& entry : stats) {
       size_t number_of_entries = entry.second;
       if (number_of_entries > 1u) {
         global_stats->collision_sum += number_of_entries - 1u;

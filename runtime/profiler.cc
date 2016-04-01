@@ -585,7 +585,7 @@ uint32_t ProfileSampleResults::Write(std::ostream& os, ProfileDataType type) {
     for (int i = 0 ; i < kHashSize; i++) {
       Map *map = table[i];
       if (map != nullptr) {
-        for (const auto &meth_iter : *map) {
+        for (const _ &meth_iter : *map) {
           ArtMethod *method = meth_iter.first;
           std::string method_name = PrettyMethod(method);
 
@@ -610,14 +610,14 @@ uint32_t ProfileSampleResults::Write(std::ostream& os, ProfileDataType type) {
     }
   } else if (type == kProfilerBoundedStack) {
     if (method_context_table != nullptr) {
-      for (const auto &method_iter : *method_context_table) {
+      for (const _ &method_iter : *method_context_table) {
         MethodReference method = method_iter.first;
         TrieNodeSet* node_set = method_iter.second;
         std::string method_name = PrettyMethod(method.dex_method_index, *(method.dex_file));
         uint32_t method_size = 0;
         uint32_t total_count = 0;
         PreviousContextMap new_context_map;
-        for (const auto &trie_node_i : *node_set) {
+        for (const _ &trie_node_i : *node_set) {
           StackTrieNode* node = trie_node_i;
           method_size = node->GetMethodSize();
           uint32_t count = node->GetCount();
@@ -643,7 +643,7 @@ uint32_t ProfileSampleResults::Write(std::ostream& os, ProfileDataType type) {
           total_count += pi->second.count_;
           PreviousContextMap* previous_context_map = pi->second.context_map_;
           if (previous_context_map != nullptr) {
-            for (const auto &context_i : *previous_context_map) {
+            for (const _ &context_i : *previous_context_map) {
               uint32_t count = context_i.second;
               PreviousContextMap::iterator ci = new_context_map.find(context_i.first);
               if (ci == new_context_map.end()) {
@@ -659,7 +659,7 @@ uint32_t ProfileSampleResults::Write(std::ostream& os, ProfileDataType type) {
         // We write out profile data with dex pc and context information in the following format:
         // "method/total_count/size/[pc_1:count_1:context_1#pc_2:count_2:context_2#...]".
         std::vector<std::string> context_count_vector;
-        for (const auto &context_i : new_context_map) {
+        for (const _ &context_i : new_context_map) {
           context_count_vector.push_back(StringPrintf("%u:%u:%s", context_i.first.first,
               context_i.second, context_i.first.second.c_str()));
         }
@@ -671,7 +671,7 @@ uint32_t ProfileSampleResults::Write(std::ostream& os, ProfileDataType type) {
   }
 
   // Now we write out the remaining previous methods.
-  for (const auto &pi : previous_) {
+  for (const _ &pi : previous_) {
     if (type == kProfilerMethod) {
       os << StringPrintf("%s/%u/%u\n",  pi.first.c_str(), pi.second.count_, pi.second.method_size_);
     } else if (type == kProfilerBoundedStack) {
@@ -679,7 +679,7 @@ uint32_t ProfileSampleResults::Write(std::ostream& os, ProfileDataType type) {
       PreviousContextMap* previous_context_map = pi.second.context_map_;
       if (previous_context_map != nullptr) {
         std::vector<std::string> context_count_vector;
-        for (const auto &context_i : *previous_context_map) {
+        for (const _ &context_i : *previous_context_map) {
           context_count_vector.push_back(StringPrintf("%u:%u:%s", context_i.first.first,
               context_i.second, context_i.first.second.c_str()));
         }
@@ -709,7 +709,7 @@ void ProfileSampleResults::Clear() {
       method_context_table = nullptr;
     }
   }
-  for (auto &pi : previous_) {
+  for (_ &pi : previous_) {
     if (pi.second.context_map_ != nullptr) {
       delete pi.second.context_map_;
       pi.second.context_map_ = nullptr;
@@ -909,7 +909,7 @@ StackTrieNode* StackTrieNode::FindChild(MethodReference method, uint32_t dex_pc)
 }
 
 void StackTrieNode::DeleteChildren() {
-  for (auto &child : children_) {
+  for (_ &child : children_) {
     if (child != nullptr) {
       child->DeleteChildren();
       delete child;

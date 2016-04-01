@@ -44,7 +44,7 @@ class MANAGED Field : public AccessibleObject {
     return array_class_.Read();
   }
 
-  ALWAYS_INLINE uint32_t GetDexFieldIndex() SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC uint32_t GetDexFieldIndex() SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetField32(OFFSET_OF_OBJECT_MEMBER(Field, dex_field_index_));
   }
 
@@ -68,7 +68,7 @@ class MANAGED Field : public AccessibleObject {
     return (GetAccessFlags() & kAccVolatile) != 0;
   }
 
-  ALWAYS_INLINE Primitive::Type GetTypeAsPrimitiveType()
+  MC Primitive::Type GetTypeAsPrimitiveType()
       SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetType()->GetPrimitiveType();
   }

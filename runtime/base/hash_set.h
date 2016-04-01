@@ -625,7 +625,7 @@ class HashSet {
     elements_until_expand_ = NumBuckets() * max_load_factor_;
   }
 
-  ALWAYS_INLINE size_t FirstAvailableSlot(size_t index) const {
+  MC size_t FirstAvailableSlot(size_t index) const {
     DCHECK_LT(index, NumBuckets());  // Don't try to get a slot out of range.
     size_t non_empty_count = 0;
     while (!emptyfn_.IsEmpty(data_[index])) {

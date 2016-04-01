@@ -66,7 +66,7 @@ class DebugAbbrevWriter FINAL : private Writer<Vector> {
   uint32_t EndAbbrev(Children has_children) {
     DCHECK(!current_abbrev_.empty());
     current_abbrev_[has_children_offset_] = has_children;
-    auto it = abbrev_codes_.insert(std::make_pair(std::move(current_abbrev_), NextAbbrevCode()));
+    _ it = abbrev_codes_.insert(std::make_pair(std::move(current_abbrev_), NextAbbrevCode()));
     uint32_t abbrev_code = it.first->second;
     if (UNLIKELY(it.second)) {  // Inserted new entry.
       const Vector& abbrev = it.first->first;

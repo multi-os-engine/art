@@ -589,7 +589,7 @@ void RegisterAllocator::DumpAllIntervals(std::ostream& stream) const {
     DumpInterval(stream, active_interval);
   }
   stream << "unhandled: " << std::endl;
-  auto unhandled = (unhandled_ != nullptr) ?
+  _ unhandled = (unhandled_ != nullptr) ?
       unhandled_ : &unhandled_core_intervals_;
   for (LiveInterval* unhandled_interval : *unhandled) {
     DumpInterval(stream, unhandled_interval);
@@ -627,7 +627,7 @@ void RegisterAllocator::LinearScan() {
     // (2) Remove currently active intervals that are dead at this position.
     //     Move active intervals that have a lifetime hole at this position
     //     to inactive.
-    auto active_kept_end = std::remove_if(
+    _ active_kept_end = std::remove_if(
         active_.begin(),
         active_.end(),
         [this, position](LiveInterval* interval) {
@@ -645,8 +645,8 @@ void RegisterAllocator::LinearScan() {
 
     // (3) Remove currently inactive intervals that are dead at this position.
     //     Move inactive intervals that cover this position to active.
-    auto inactive_to_handle_end = inactive_.begin() + inactive_intervals_to_handle;
-    auto inactive_kept_end = std::remove_if(
+    _ inactive_to_handle_end = inactive_.begin() + inactive_intervals_to_handle;
+    _ inactive_kept_end = std::remove_if(
         inactive_.begin(),
         inactive_to_handle_end,
         [this, position](LiveInterval* interval) {
@@ -957,7 +957,7 @@ static ArenaVector<LiveInterval*>::iterator RemoveIntervalAndPotentialOtherHalf(
 bool RegisterAllocator::TrySplitNonPairOrUnalignedPairIntervalAt(size_t position,
                                                                  size_t first_register_use,
                                                                  size_t* next_use) {
-  for (auto it = active_.begin(), end = active_.end(); it != end; ++it) {
+  for (_ it = active_.begin(), end = active_.end(); it != end; ++it) {
     LiveInterval* active = *it;
     DCHECK(active->HasRegister());
     if (active->IsFixed()) continue;
@@ -1112,7 +1112,7 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
     // have that register.
     current->SetRegister(reg);
 
-    for (auto it = active_.begin(), end = active_.end(); it != end; ++it) {
+    for (_ it = active_.begin(), end = active_.end(); it != end; ++it) {
       LiveInterval* active = *it;
       if (active->GetRegister() == reg) {
         DCHECK(!active->IsFixed());
@@ -1127,7 +1127,7 @@ bool RegisterAllocator::AllocateBlockedReg(LiveInterval* current) {
     }
 
     // NOTE: Retrieve end() on each iteration because we're removing elements in the loop body.
-    for (auto it = inactive_.begin(); it != inactive_.end(); ) {
+    for (_ it = inactive_.begin(); it != inactive_.end(); ) {
       LiveInterval* inactive = *it;
       bool erased = false;
       if (inactive->GetRegister() == reg) {
@@ -1188,7 +1188,7 @@ void RegisterAllocator::AddSorted(ArenaVector<LiveInterval*>* array, LiveInterva
   }
 
   // Insert the high interval before the low, to ensure the low is processed before.
-  auto insert_pos = array->begin() + insert_at;
+  _ insert_pos = array->begin() + insert_at;
   if (interval->HasHighInterval()) {
     array->insert(insert_pos, { interval->GetHighInterval(), interval });
   } else if (interval->HasLowInterval()) {

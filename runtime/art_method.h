@@ -128,10 +128,10 @@ class ArtMethod FINAL {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   template <ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  ALWAYS_INLINE mirror::Class* GetDeclaringClass() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC mirror::Class* GetDeclaringClass() SHARED_REQUIRES(Locks::mutator_lock_);
 
   template <ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  ALWAYS_INLINE mirror::Class* GetDeclaringClassUnchecked()
+  MC mirror::Class* GetDeclaringClassUnchecked()
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetDeclaringClass(mirror::Class *new_declaring_class)
@@ -147,7 +147,7 @@ class ArtMethod FINAL {
   // Note: GetAccessFlags acquires the mutator lock in debug mode to check that it is not called for
   // a proxy method.
   template <ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  ALWAYS_INLINE uint32_t GetAccessFlags();
+  MC uint32_t GetAccessFlags();
 
   void SetAccessFlags(uint32_t new_access_flags) {
     // Not called within a transaction.
@@ -304,22 +304,22 @@ class ArtMethod FINAL {
   // Number of 32bit registers that would be required to hold all the arguments
   static size_t NumArgRegisters(const StringPiece& shorty);
 
-  ALWAYS_INLINE uint32_t GetDexMethodIndex() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC uint32_t GetDexMethodIndex() SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetDexMethodIndex(uint32_t new_idx) {
     // Not called within a transaction.
     dex_method_index_ = new_idx;
   }
 
-  ALWAYS_INLINE ArtMethod** GetDexCacheResolvedMethods(size_t pointer_size)
+  MC ArtMethod** GetDexCacheResolvedMethods(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
-  ALWAYS_INLINE ArtMethod* GetDexCacheResolvedMethod(uint16_t method_index, size_t ptr_size)
+  MC ArtMethod* GetDexCacheResolvedMethod(uint16_t method_index, size_t ptr_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
-  ALWAYS_INLINE void SetDexCacheResolvedMethod(uint16_t method_index,
+  MC void SetDexCacheResolvedMethod(uint16_t method_index,
                                                ArtMethod* new_method,
                                                size_t ptr_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
-  ALWAYS_INLINE void SetDexCacheResolvedMethods(ArtMethod** new_dex_cache_methods, size_t ptr_size)
+  MC void SetDexCacheResolvedMethods(ArtMethod** new_dex_cache_methods, size_t ptr_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
   bool HasDexCacheResolvedMethods(size_t pointer_size) SHARED_REQUIRES(Locks::mutator_lock_);
   bool HasSameDexCacheResolvedMethods(ArtMethod* other, size_t pointer_size)
@@ -364,7 +364,7 @@ class ArtMethod FINAL {
   const void* GetEntryPointFromQuickCompiledCode() {
     return GetEntryPointFromQuickCompiledCodePtrSize(sizeof(void*));
   }
-  ALWAYS_INLINE const void* GetEntryPointFromQuickCompiledCodePtrSize(size_t pointer_size) {
+  MC const void* GetEntryPointFromQuickCompiledCodePtrSize(size_t pointer_size) {
     return GetNativePointer<const void*>(
         EntryPointFromQuickCompiledCodeOffset(pointer_size), pointer_size);
   }
@@ -373,7 +373,7 @@ class ArtMethod FINAL {
     SetEntryPointFromQuickCompiledCodePtrSize(entry_point_from_quick_compiled_code,
                                               sizeof(void*));
   }
-  ALWAYS_INLINE void SetEntryPointFromQuickCompiledCodePtrSize(
+  MC void SetEntryPointFromQuickCompiledCodePtrSize(
       const void* entry_point_from_quick_compiled_code, size_t pointer_size) {
     SetNativePointer(EntryPointFromQuickCompiledCodeOffset(pointer_size),
                      entry_point_from_quick_compiled_code, pointer_size);
@@ -413,15 +413,15 @@ class ArtMethod FINAL {
     return reinterpret_cast<ImtConflictTable*>(GetEntryPointFromJniPtrSize(pointer_size));
   }
 
-  ALWAYS_INLINE void SetImtConflictTable(ImtConflictTable* table) {
+  MC void SetImtConflictTable(ImtConflictTable* table) {
     SetEntryPointFromJniPtrSize(table, sizeof(void*));
   }
 
-  ALWAYS_INLINE void SetProfilingInfo(ProfilingInfo* info) {
+  MC void SetProfilingInfo(ProfilingInfo* info) {
     SetEntryPointFromJniPtrSize(info, sizeof(void*));
   }
 
-  ALWAYS_INLINE void SetProfilingInfoPtrSize(ProfilingInfo* info, size_t pointer_size) {
+  MC void SetProfilingInfoPtrSize(ProfilingInfo* info, size_t pointer_size) {
     SetEntryPointFromJniPtrSize(info, pointer_size);
   }
 
@@ -433,7 +433,7 @@ class ArtMethod FINAL {
     return GetEntryPointFromJniPtrSize(sizeof(void*));
   }
 
-  ALWAYS_INLINE void* GetEntryPointFromJniPtrSize(size_t pointer_size) {
+  MC void* GetEntryPointFromJniPtrSize(size_t pointer_size) {
     return GetNativePointer<void*>(EntryPointFromJniOffset(pointer_size), pointer_size);
   }
 
@@ -442,13 +442,13 @@ class ArtMethod FINAL {
     SetEntryPointFromJniPtrSize(entrypoint, sizeof(void*));
   }
 
-  ALWAYS_INLINE void SetEntryPointFromJniPtrSize(const void* entrypoint, size_t pointer_size) {
+  MC void SetEntryPointFromJniPtrSize(const void* entrypoint, size_t pointer_size) {
     SetNativePointer(EntryPointFromJniOffset(pointer_size), entrypoint, pointer_size);
   }
 
   // Is this a CalleSaveMethod or ResolutionMethod and therefore doesn't adhere to normal
   // conventions for a method of managed code. Returns false for Proxy methods.
-  ALWAYS_INLINE bool IsRuntimeMethod();
+  MC bool IsRuntimeMethod();
 
   // Is this a hand crafted method used for something like describing callee saves?
   bool IsCalleeSaveMethod() SHARED_REQUIRES(Locks::mutator_lock_);
@@ -485,7 +485,7 @@ class ArtMethod FINAL {
 
   const Signature GetSignature() SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE const char* GetName() SHARED_REQUIRES(Locks::mutator_lock_);
+  MC const char* GetName() SHARED_REQUIRES(Locks::mutator_lock_);
 
   mirror::String* GetNameAsString(Thread* self) SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -519,7 +519,7 @@ class ArtMethod FINAL {
 
   mirror::DexCache* GetDexCache() SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE ArtMethod* GetInterfaceMethodIfProxy(size_t pointer_size)
+  MC ArtMethod* GetInterfaceMethodIfProxy(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // May cause thread suspension due to class resolution.
@@ -542,7 +542,7 @@ class ArtMethod FINAL {
   void CopyFrom(ArtMethod* src, size_t image_pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE GcRoot<mirror::Class>* GetDexCacheResolvedTypes(size_t pointer_size)
+  MC GcRoot<mirror::Class>* GetDexCacheResolvedTypes(size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Note, hotness_counter_ updates are non-atomic but it doesn't need to be precise.  Also,
@@ -578,12 +578,12 @@ class ArtMethod FINAL {
   // Update heap objects and non-entrypoint pointers by the passed in visitor for image relocation.
   // Does not use read barrier.
   template <typename Visitor>
-  ALWAYS_INLINE void UpdateObjectsForImageRelocation(const Visitor& visitor, size_t pointer_size)
+  MC void UpdateObjectsForImageRelocation(const Visitor& visitor, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Update entry points by passing them through the visitor.
   template <ReadBarrierOption kReadBarrierOption = kWithReadBarrier, typename Visitor>
-  ALWAYS_INLINE void UpdateEntrypoints(const Visitor& visitor, size_t pointer_size);
+  MC void UpdateEntrypoints(const Visitor& visitor, size_t pointer_size);
 
  protected:
   // Field order required by test "ValidateFieldOrderOfJavaCppUnionClasses".
@@ -640,23 +640,23 @@ class ArtMethod FINAL {
   }
 
   template<typename T>
-  ALWAYS_INLINE T GetNativePointer(MemberOffset offset, size_t pointer_size) const {
+  MC T GetNativePointer(MemberOffset offset, size_t pointer_size) const {
     static_assert(std::is_pointer<T>::value, "T must be a pointer type");
     DCHECK(ValidPointerSize(pointer_size)) << pointer_size;
-    const auto addr = reinterpret_cast<uintptr_t>(this) + offset.Uint32Value();
+    const _ addr = reinterpret_cast<uintptr_t>(this) + offset.Uint32Value();
     if (pointer_size == sizeof(uint32_t)) {
       return reinterpret_cast<T>(*reinterpret_cast<const uint32_t*>(addr));
     } else {
-      auto v = *reinterpret_cast<const uint64_t*>(addr);
+      _ v = *reinterpret_cast<const uint64_t*>(addr);
       return reinterpret_cast<T>(dchecked_integral_cast<uintptr_t>(v));
     }
   }
 
   template<typename T>
-  ALWAYS_INLINE void SetNativePointer(MemberOffset offset, T new_value, size_t pointer_size) {
+  MC void SetNativePointer(MemberOffset offset, T new_value, size_t pointer_size) {
     static_assert(std::is_pointer<T>::value, "T must be a pointer type");
     DCHECK(ValidPointerSize(pointer_size)) << pointer_size;
-    const auto addr = reinterpret_cast<uintptr_t>(this) + offset.Uint32Value();
+    const _ addr = reinterpret_cast<uintptr_t>(this) + offset.Uint32Value();
     if (pointer_size == sizeof(uint32_t)) {
       uintptr_t ptr = reinterpret_cast<uintptr_t>(new_value);
       *reinterpret_cast<uint32_t*>(addr) = dchecked_integral_cast<uint32_t>(ptr);

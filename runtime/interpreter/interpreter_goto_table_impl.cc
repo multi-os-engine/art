@@ -192,7 +192,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
   UPDATE_HANDLER_TABLE();
   std::unique_ptr<lambda::ClosureBuilder> lambda_closure_builder;
   size_t lambda_captured_variable_index = 0;
-  const auto* const instrumentation = Runtime::Current()->GetInstrumentation();
+  const _* const instrumentation = Runtime::Current()->GetInstrumentation();
   ArtMethod* method = shadow_frame.GetMethod();
   jit::Jit* jit = Runtime::Current()->GetJit();
   jit::JitInstrumentationCache* jit_instrumentation_cache = nullptr;
@@ -1106,7 +1106,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     } else {
       int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
       DCHECK(a->IsIntArray() || a->IsFloatArray()) << PrettyTypeOf(a);
-      auto* array = down_cast<IntArray*>(a);
+      _* array = down_cast<IntArray*>(a);
       if (LIKELY(array->CheckIsValidIndex(index))) {
         shadow_frame.SetVReg(inst->VRegA_23x(inst_data), array->GetWithoutChecks(index));
         ADVANCE(2);
@@ -1125,7 +1125,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
     } else {
       int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
       DCHECK(a->IsLongArray() || a->IsDoubleArray()) << PrettyTypeOf(a);
-      auto* array = down_cast<LongArray*>(a);
+      _* array = down_cast<LongArray*>(a);
       if (LIKELY(array->CheckIsValidIndex(index))) {
         shadow_frame.SetVRegLong(inst->VRegA_23x(inst_data), array->GetWithoutChecks(index));
         ADVANCE(2);
@@ -1239,7 +1239,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
       int32_t val = shadow_frame.GetVReg(inst->VRegA_23x(inst_data));
       int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
       DCHECK(a->IsIntArray() || a->IsFloatArray()) << PrettyTypeOf(a);
-      auto* array = down_cast<IntArray*>(a);
+      _* array = down_cast<IntArray*>(a);
       if (LIKELY(array->CheckIsValidIndex(index))) {
         array->SetWithoutChecks<transaction_active>(index, val);
         ADVANCE(2);
@@ -1259,7 +1259,7 @@ JValue ExecuteGotoImpl(Thread* self, const DexFile::CodeItem* code_item, ShadowF
       int64_t val = shadow_frame.GetVRegLong(inst->VRegA_23x(inst_data));
       int32_t index = shadow_frame.GetVReg(inst->VRegC_23x());
       DCHECK(a->IsLongArray() || a->IsDoubleArray()) << PrettyTypeOf(a);
-      auto* array = down_cast<LongArray*>(a);
+      _* array = down_cast<LongArray*>(a);
       if (LIKELY(array->CheckIsValidIndex(index))) {
         array->SetWithoutChecks<transaction_active>(index, val);
         ADVANCE(2);

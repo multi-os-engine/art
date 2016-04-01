@@ -147,7 +147,7 @@ class PatchOat {
       return nullptr;
     }
     // Find ImageSpace this belongs to.
-    auto image_spaces = Runtime::Current()->GetHeap()->GetBootImageSpaces();
+    _ image_spaces = Runtime::Current()->GetHeap()->GetBootImageSpaces();
     for (gc::space::ImageSpace* image_space : image_spaces) {
       if (image_space->Contains(obj)) {
         uintptr_t heap_off = reinterpret_cast<uintptr_t>(obj) -
@@ -164,7 +164,7 @@ class PatchOat {
     if (obj == nullptr) {
       return obj;
     }
-    auto ret = reinterpret_cast<uintptr_t>(obj) + delta_;
+    _ ret = reinterpret_cast<uintptr_t>(obj) + delta_;
     // Trim off high bits in case negative relocation with 64 bit patchoat.
     if (InstructionSetPointerSize(isa_) == sizeof(uint32_t)) {
       ret = static_cast<uintptr_t>(static_cast<uint32_t>(ret));

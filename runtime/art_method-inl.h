@@ -78,7 +78,7 @@ inline bool ArtMethod::CASDeclaringClass(mirror::Class* expected_class,
 // AssertSharedHeld doesn't work in GetAccessFlags, so use a NO_THREAD_SAFETY_ANALYSIS helper.
 // TODO: Figure out why ASSERT_SHARED_CAPABILITY doesn't work.
 template <ReadBarrierOption kReadBarrierOption>
-ALWAYS_INLINE static inline void DoGetAccessFlagsHelper(ArtMethod* method)
+MC static inline void DoGetAccessFlagsHelper(ArtMethod* method)
     NO_THREAD_SAFETY_ANALYSIS {
   CHECK(method->IsRuntimeMethod() ||
         method->GetDeclaringClass<kReadBarrierOption>()->IsIdxLoaded() ||
@@ -135,7 +135,7 @@ inline ArtMethod* ArtMethod::GetDexCacheResolvedMethod(uint16_t method_index, si
                                                           method_index,
                                                           ptr_size);
   if (LIKELY(method != nullptr)) {
-    auto* declaring_class = method->GetDeclaringClass();
+    _* declaring_class = method->GetDeclaringClass();
     if (LIKELY(declaring_class == nullptr || !declaring_class->IsErroneous())) {
       return method;
     }

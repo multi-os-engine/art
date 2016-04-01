@@ -201,7 +201,7 @@ void Thumb2Assembler::EmitFixups(uint32_t adjusted_code_size) {
   size_t dest_end = adjusted_code_size;
   buffer_.Resize(dest_end);
   DCHECK_GE(dest_end, src_end);
-  for (auto i = fixups_.rbegin(), end = fixups_.rend(); i != end; ++i) {
+  for (_ i = fixups_.rbegin(), end = fixups_.rend(); i != end; ++i) {
     Fixup* fixup = &*i;
     if (fixup->GetOriginalSize() == fixup->GetSize()) {
       // The size of this Fixup didn't change. To avoid moving the data
@@ -288,7 +288,7 @@ void Thumb2Assembler::PatchCFI() {
   }
 
   typedef DebugFrameOpCodeWriterForAssembler::DelayedAdvancePC DelayedAdvancePC;
-  const auto data = cfi().ReleaseStreamAndPrepareForDelayedAdvancePC();
+  const _ data = cfi().ReleaseStreamAndPrepareForDelayedAdvancePC();
   const std::vector<uint8_t>& old_stream = data.first;
   const std::vector<DelayedAdvancePC>& advances = data.second;
 

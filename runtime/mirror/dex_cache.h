@@ -109,64 +109,64 @@ class MANAGED DexCache FINAL : public Object {
     return OFFSET_OF_OBJECT_MEMBER(DexCache, num_resolved_methods_);
   }
 
-  String* GetResolvedString(uint32_t string_idx) ALWAYS_INLINE
+  String* GetResolvedString(uint32_t string_idx) MC
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  void SetResolvedString(uint32_t string_idx, String* resolved) ALWAYS_INLINE
+  void SetResolvedString(uint32_t string_idx, String* resolved) MC
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   Class* GetResolvedType(uint32_t type_idx) SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetResolvedType(uint32_t type_idx, Class* resolved) SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE ArtMethod* GetResolvedMethod(uint32_t method_idx, size_t ptr_size)
+  MC ArtMethod* GetResolvedMethod(uint32_t method_idx, size_t ptr_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE void SetResolvedMethod(uint32_t method_idx, ArtMethod* resolved, size_t ptr_size)
-      SHARED_REQUIRES(Locks::mutator_lock_);
-
-  // Pointer sized variant, used for patching.
-  ALWAYS_INLINE ArtField* GetResolvedField(uint32_t idx, size_t ptr_size)
+  MC void SetResolvedMethod(uint32_t method_idx, ArtMethod* resolved, size_t ptr_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Pointer sized variant, used for patching.
-  ALWAYS_INLINE void SetResolvedField(uint32_t idx, ArtField* field, size_t ptr_size)
+  MC ArtField* GetResolvedField(uint32_t idx, size_t ptr_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  GcRoot<String>* GetStrings() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
+  // Pointer sized variant, used for patching.
+  MC void SetResolvedField(uint32_t idx, ArtField* field, size_t ptr_size)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  GcRoot<String>* GetStrings() MC SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldPtr<GcRoot<String>*>(StringsOffset());
   }
 
-  void SetStrings(GcRoot<String>* strings) ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
+  void SetStrings(GcRoot<String>* strings) MC SHARED_REQUIRES(Locks::mutator_lock_) {
     SetFieldPtr<false>(StringsOffset(), strings);
   }
 
-  GcRoot<Class>* GetResolvedTypes() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
+  GcRoot<Class>* GetResolvedTypes() MC SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldPtr<GcRoot<Class>*>(ResolvedTypesOffset());
   }
 
   void SetResolvedTypes(GcRoot<Class>* resolved_types)
-      ALWAYS_INLINE
+      MC
       SHARED_REQUIRES(Locks::mutator_lock_) {
     SetFieldPtr<false>(ResolvedTypesOffset(), resolved_types);
   }
 
-  ArtMethod** GetResolvedMethods() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
+  ArtMethod** GetResolvedMethods() MC SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldPtr<ArtMethod**>(ResolvedMethodsOffset());
   }
 
   void SetResolvedMethods(ArtMethod** resolved_methods)
-      ALWAYS_INLINE
+      MC
       SHARED_REQUIRES(Locks::mutator_lock_) {
     SetFieldPtr<false>(ResolvedMethodsOffset(), resolved_methods);
   }
 
-  ArtField** GetResolvedFields() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
+  ArtField** GetResolvedFields() MC SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldPtr<ArtField**>(ResolvedFieldsOffset());
   }
 
   void SetResolvedFields(ArtField** resolved_fields)
-      ALWAYS_INLINE
+      MC
       SHARED_REQUIRES(Locks::mutator_lock_) {
     SetFieldPtr<false>(ResolvedFieldsOffset(), resolved_fields);
   }
@@ -187,7 +187,7 @@ class MANAGED DexCache FINAL : public Object {
     return GetField32(NumResolvedFieldsOffset());
   }
 
-  const DexFile* GetDexFile() ALWAYS_INLINE SHARED_REQUIRES(Locks::mutator_lock_) {
+  const DexFile* GetDexFile() MC SHARED_REQUIRES(Locks::mutator_lock_) {
     return GetFieldPtr<const DexFile*>(OFFSET_OF_OBJECT_MEMBER(DexCache, dex_file_));
   }
 

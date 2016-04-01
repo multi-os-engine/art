@@ -56,7 +56,7 @@ class CardTable {
   ~CardTable();
 
   // Set the card associated with the given address to GC_CARD_DIRTY.
-  ALWAYS_INLINE void MarkCard(const void *addr) {
+  MC void MarkCard(const void *addr) {
     *CardFromAddr(addr) = kCardDirty;
   }
 
@@ -123,10 +123,10 @@ class CardTable {
   void ClearSpaceCards(space::ContinuousSpace* space);
 
   // Returns the first address in the heap which maps to this card.
-  void* AddrFromCard(const uint8_t *card_addr) const ALWAYS_INLINE;
+  void* AddrFromCard(const uint8_t *card_addr) const MC;
 
   // Returns the address of the relevant byte in the card table, given an address on the heap.
-  uint8_t* CardFromAddr(const void *addr) const ALWAYS_INLINE;
+  uint8_t* CardFromAddr(const void *addr) const MC;
 
   bool AddrIsInCardTable(const void* addr) const;
 
@@ -134,9 +134,9 @@ class CardTable {
   CardTable(MemMap* begin, uint8_t* biased_begin, size_t offset);
 
   // Returns true iff the card table address is within the bounds of the card table.
-  bool IsValidCard(const uint8_t* card_addr) const ALWAYS_INLINE;
+  bool IsValidCard(const uint8_t* card_addr) const MC;
 
-  void CheckCardValid(uint8_t* card) const ALWAYS_INLINE;
+  void CheckCardValid(uint8_t* card) const MC;
 
   // Verifies that all gray objects are on a dirty card.
   void VerifyCardTable();

@@ -211,7 +211,7 @@ void HGraphBuilder::CreateBlocksForTryCatch(const DexFile::CodeItem& code_item) 
 static const DexFile::TryItem* GetTryItem(
     HBasicBlock* block,
     const ArenaSafeMap<uint32_t, const DexFile::TryItem*>& try_block_info) {
-  auto iterator = try_block_info.find(block->GetBlockId());
+  _ iterator = try_block_info.find(block->GetBlockId());
   return (iterator == try_block_info.end()) ? nullptr : iterator->second;
 }
 
@@ -273,7 +273,7 @@ void HGraphBuilder::InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item) 
   // least one predecessor is not covered by the same TryItem as the try block.
   // We do not split each edge separately, but rather create one boundary block
   // that all predecessors are relinked to. This preserves loop headers (b/23895756).
-  for (auto entry : try_block_info) {
+  for (_ entry : try_block_info) {
     HBasicBlock* try_block = graph_->GetBlocks()[entry.first];
     for (HBasicBlock* predecessor : try_block->GetPredecessors()) {
       if (GetTryItem(predecessor, try_block_info) != entry.second) {
@@ -290,7 +290,7 @@ void HGraphBuilder::InsertTryBoundaryBlocks(const DexFile::CodeItem& code_item) 
 
   // Do a second pass over the try blocks and insert exit TryBoundaries where
   // the successor is not in the same TryItem.
-  for (auto entry : try_block_info) {
+  for (_ entry : try_block_info) {
     HBasicBlock* try_block = graph_->GetBlocks()[entry.first];
     // NOTE: Do not use iterators because SplitEdge would invalidate them.
     for (size_t i = 0, e = try_block->GetSuccessors().size(); i < e; ++i) {

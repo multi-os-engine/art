@@ -90,7 +90,7 @@ static std::map<const OatFile::OatDexFile*,
 
 const DexFile* OpenDexFile(const OatFile::OatDexFile* oat_dex_file, std::string* error_msg) {
   DCHECK(oat_dex_file != nullptr);
-  auto it = opened_dex_files.find(oat_dex_file);
+  _ it = opened_dex_files.find(oat_dex_file);
   if (it != opened_dex_files.end()) {
     return it->second.get();
   }
@@ -121,9 +121,9 @@ class OatSymbolizer FINAL {
 
     builder_->Start();
 
-    auto* rodata = builder_->GetRoData();
-    auto* text = builder_->GetText();
-    auto* bss = builder_->GetBss();
+    _* rodata = builder_->GetRoData();
+    _* text = builder_->GetText();
+    _* bss = builder_->GetBss();
 
     const uint8_t* rodata_begin = oat_file_->Begin();
     const size_t rodata_size = oat_file_->GetOatHeader().GetExecutableOffset();
@@ -157,7 +157,7 @@ class OatSymbolizer FINAL {
     builder_->WriteDynamicSection();
 
     Walk();
-    for (const auto& trampoline : debug::MakeTrampolineInfos(oat_file_->GetOatHeader())) {
+    for (const _& trampoline : debug::MakeTrampolineInfos(oat_file_->GetOatHeader())) {
       method_debug_infos_.push_back(trampoline);
     }
 
@@ -479,7 +479,7 @@ class OatDumper {
     }
     uintptr_t begin_offset = reinterpret_cast<uintptr_t>(oat_data) -
                              reinterpret_cast<uintptr_t>(oat_file_.Begin());
-    auto it = offsets_.upper_bound(begin_offset);
+    _ it = offsets_.upper_bound(begin_offset);
     CHECK(it != offsets_.end());
     uintptr_t end_offset = *it;
     return end_offset - begin_offset;
@@ -1473,7 +1473,7 @@ class ImageDumper {
     os << "IMAGE SIZE: " << image_header_.GetImageSize() << "\n\n";
 
     for (size_t i = 0; i < ImageHeader::kSectionCount; ++i) {
-      auto section = static_cast<ImageHeader::ImageSections>(i);
+      _ section = static_cast<ImageHeader::ImageSections>(i);
       os << "IMAGE SECTION " << section << ": " << image_header_.GetImageSection(section) << "\n\n";
     }
 
@@ -1535,9 +1535,9 @@ class ImageDumper {
       static_assert(arraysize(image_methods_descriptions_) ==
           static_cast<size_t>(ImageHeader::kImageMethodsCount), "sizes must match");
       for (int i = 0; i < ImageHeader::kImageMethodsCount; i++) {
-        auto image_root = static_cast<ImageHeader::ImageMethod>(i);
+        _ image_root = static_cast<ImageHeader::ImageMethod>(i);
         const char* description = image_methods_descriptions_[i];
-        auto* image_method = image_header_.GetImageMethod(image_root);
+        _* image_method = image_header_.GetImageMethod(image_root);
         indent_os << StringPrintf("%s: %p\n", description, image_method);
       }
     }
@@ -1616,7 +1616,7 @@ class ImageDumper {
       indent_os << "\n";
       // TODO: Dump fields.
       // Dump methods after.
-      const auto& methods_section = image_header_.GetMethodsSection();
+      const _& methods_section = image_header_.GetMethodsSection();
       DumpArtMethodVisitor visitor(this);
       methods_section.VisitPackedArtMethods(&visitor,
                                             image_space_.Begin(),
@@ -1640,16 +1640,16 @@ class ImageDumper {
       stats_.file_bytes += uncompressed_size - data_size;
     }
     size_t header_bytes = sizeof(ImageHeader);
-    const auto& object_section = image_header_.GetImageSection(ImageHeader::kSectionObjects);
-    const auto& field_section = image_header_.GetImageSection(ImageHeader::kSectionArtFields);
-    const auto& method_section = image_header_.GetMethodsSection();
-    const auto& dex_cache_arrays_section = image_header_.GetImageSection(
+    const _& object_section = image_header_.GetImageSection(ImageHeader::kSectionObjects);
+    const _& field_section = image_header_.GetImageSection(ImageHeader::kSectionArtFields);
+    const _& method_section = image_header_.GetMethodsSection();
+    const _& dex_cache_arrays_section = image_header_.GetImageSection(
         ImageHeader::kSectionDexCacheArrays);
-    const auto& intern_section = image_header_.GetImageSection(
+    const _& intern_section = image_header_.GetImageSection(
         ImageHeader::kSectionInternedStrings);
-    const auto& class_table_section = image_header_.GetImageSection(
+    const _& class_table_section = image_header_.GetImageSection(
         ImageHeader::kSectionClassTable);
-    const auto& bitmap_section = image_header_.GetImageSection(ImageHeader::kSectionImageBitmap);
+    const _& bitmap_section = image_header_.GetImageSection(ImageHeader::kSectionImageBitmap);
 
     stats_.header_bytes = header_bytes;
 
@@ -1867,7 +1867,7 @@ class ImageDumper {
     DumpFields(os, obj, obj_class);
     const size_t image_pointer_size = state->image_header_.GetPointerSize();
     if (obj->IsObjectArray()) {
-      auto* obj_array = obj->AsObjectArray<mirror::Object>();
+      _* obj_array = obj->AsObjectArray<mirror::Object>();
       for (int32_t i = 0, length = obj_array->GetLength(); i < length; i++) {
         mirror::Object* value = obj_array->Get(i);
         size_t run = 0;
@@ -1898,19 +1898,19 @@ class ImageDumper {
         }
       }
     } else {
-      auto it = state->dex_caches_.find(obj);
+      _ it = state->dex_caches_.find(obj);
       if (it != state->dex_caches_.end()) {
-        auto* dex_cache = down_cast<mirror::DexCache*>(obj);
-        const auto& field_section = state->image_header_.GetImageSection(
+        _* dex_cache = down_cast<mirror::DexCache*>(obj);
+        const _& field_section = state->image_header_.GetImageSection(
             ImageHeader::kSectionArtFields);
-        const auto& method_section = state->image_header_.GetMethodsSection();
+        const _& method_section = state->image_header_.GetMethodsSection();
         size_t num_methods = dex_cache->NumResolvedMethods();
         if (num_methods != 0u) {
           os << "Methods (size=" << num_methods << "):";
           ScopedIndentation indent2(&state->vios_);
-          auto* resolved_methods = dex_cache->GetResolvedMethods();
+          _* resolved_methods = dex_cache->GetResolvedMethods();
           for (size_t i = 0, length = dex_cache->NumResolvedMethods(); i < length; ++i) {
-            auto* elem = mirror::DexCache::GetElementPtrSize(resolved_methods,
+            _* elem = mirror::DexCache::GetElementPtrSize(resolved_methods,
                                                              i,
                                                              image_pointer_size);
             size_t run = 0;
@@ -1941,9 +1941,9 @@ class ImageDumper {
         if (num_fields != 0u) {
           os << "Fields (size=" << num_fields << "):";
           ScopedIndentation indent2(&state->vios_);
-          auto* resolved_fields = dex_cache->GetResolvedFields();
+          _* resolved_fields = dex_cache->GetResolvedFields();
           for (size_t i = 0, length = dex_cache->NumResolvedFields(); i < length; ++i) {
-            auto* elem = mirror::DexCache::GetElementPtrSize(resolved_fields, i, image_pointer_size);
+            _* elem = mirror::DexCache::GetElementPtrSize(resolved_fields, i, image_pointer_size);
             size_t run = 0;
             for (size_t j = i + 1;
                 j != length && elem == mirror::DexCache::GetElementPtrSize(resolved_fields,
@@ -2306,7 +2306,7 @@ class ImageDumper {
 
       os << "object_bytes breakdown:\n";
       size_t object_bytes_total = 0;
-      for (const auto& sizes_and_count : sizes_and_counts) {
+      for (const _& sizes_and_count : sizes_and_counts) {
         const std::string& descriptor(sizes_and_count.first);
         double average = static_cast<double>(sizes_and_count.second.bytes) /
             static_cast<double>(sizes_and_count.second.count);

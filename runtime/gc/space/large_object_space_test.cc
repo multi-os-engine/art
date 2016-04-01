@@ -73,12 +73,12 @@ void LargeObjectSpaceTest::LargeObjectTest() {
 
       // Check the zygote flag for the first phase.
       if (phase == 0) {
-        for (const auto& pair : requests) {
+        for (const _& pair : requests) {
           mirror::Object* obj = pair.first;
           ASSERT_FALSE(los->IsZygoteLargeObject(self, obj));
         }
         los->SetAllLargeObjectsAsZygoteObjects(self);
-        for (const auto& pair : requests) {
+        for (const _& pair : requests) {
           mirror::Object* obj = pair.first;
           ASSERT_TRUE(los->IsZygoteLargeObject(self, obj));
         }

@@ -71,9 +71,9 @@ template<typename T> ART_FRIEND_TEST(test_set_name, individual_test)
 // NOTE: Providing placement new (and matching delete) for constructing container elements.
 #define DISALLOW_ALLOCATION() \
   public: \
-    NO_RETURN ALWAYS_INLINE void operator delete(void*, size_t) { UNREACHABLE(); } \
-    ALWAYS_INLINE void* operator new(size_t, void* ptr) noexcept { return ptr; } \
-    ALWAYS_INLINE void operator delete(void*, void*) noexcept { } \
+    NO_RETURN MC void operator delete(void*, size_t) { UNREACHABLE(); } \
+    MC void* operator new(size_t, void* ptr) noexcept { return ptr; } \
+    MC void operator delete(void*, void*) noexcept { } \
   private: \
     void* operator new(size_t) = delete
 
@@ -152,17 +152,19 @@ char (&ArraySizeHelper(T (&array)[N]))[N];
 #define QUOTE(x) #x
 #define STRINGIFY(x) QUOTE(x)
 
+#define _ auto
+
 #ifndef NDEBUG
-#define ALWAYS_INLINE
+#define MC
 #else
-#define ALWAYS_INLINE  __attribute__ ((always_inline))
+#define MC  __attribute__ ((always_inline))
 #endif
 
 #ifdef __clang__
 /* clang doesn't like attributes on lambda functions */
-#define ALWAYS_INLINE_LAMBDA
+#define MC_LAMBDA
 #else
-#define ALWAYS_INLINE_LAMBDA ALWAYS_INLINE
+#define MC_LAMBDA MC
 #endif
 
 #define NO_INLINE __attribute__ ((noinline))

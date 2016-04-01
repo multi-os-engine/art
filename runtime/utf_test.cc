@@ -175,13 +175,13 @@ TEST_F(UtfTest, CountAndConvertUtf8Bytes_UnpairedSurrogate) {
       {{ 0xd801, 0xd801 }, { 0xed, 0xa0, 0x81, 0xed, 0xa0, 0x81 }},
       {{ 0xdc00, 0xdc00 }, { 0xed, 0xb0, 0x80, 0xed, 0xb0, 0x80 }},
   };
-  for (const auto& prefix : prefixes) {
+  for (const _& prefix : prefixes) {
     const std::vector<uint16_t>& prefix_in = prefix.first;
     const std::vector<uint8_t>& prefix_out = prefix.second;
-    for (const auto& test : tests) {
+    for (const _& test : tests) {
       const std::vector<uint16_t>& test_in = test.first;
       const std::vector<uint8_t>& test_out = test.second;
-      for (const auto& suffix : suffixes) {
+      for (const _& suffix : suffixes) {
         const std::vector<uint16_t>& suffix_in = suffix.first;
         const std::vector<uint8_t>& suffix_out = suffix.second;
         std::vector<uint16_t> in = prefix_in;

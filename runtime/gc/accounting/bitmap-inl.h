@@ -33,7 +33,7 @@ inline bool Bitmap::AtomicTestAndSetBit(uintptr_t bit_index) {
   CheckValidBitIndex(bit_index);
   const size_t word_index = BitIndexToWordIndex(bit_index);
   const uintptr_t word_mask = BitIndexToMask(bit_index);
-  auto* atomic_entry = reinterpret_cast<Atomic<uintptr_t>*>(&bitmap_begin_[word_index]);
+  _* atomic_entry = reinterpret_cast<Atomic<uintptr_t>*>(&bitmap_begin_[word_index]);
   uintptr_t old_word;
   do {
     old_word = atomic_entry->LoadRelaxed();

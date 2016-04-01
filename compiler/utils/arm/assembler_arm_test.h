@@ -125,7 +125,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
             base2.replace(imm2_index, ConstexprStrLen(IMM2_TOKEN), imm_string);
           }
 
-          for (auto reg1 : reg1_registers) {
+          for (_ reg1 : reg1_registers) {
             std::string base3 = base2;
 
             std::string reg1_string = (this->*GetName1)(*reg1);
@@ -134,7 +134,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
               base3.replace(reg1_index, ConstexprStrLen(Base::REG1_TOKEN), reg1_string);
             }
 
-            for (auto reg2 : reg2_registers) {
+            for (_ reg2 : reg2_registers) {
               std::string base4 = base3;
 
               std::string reg2_string = (this->*GetName2)(*reg2);
@@ -217,7 +217,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
           after_imm2.replace(imm2_index, ConstexprStrLen(IMM2_TOKEN), imm_string);
         }
 
-        for (auto reg1 : reg1_registers) {
+        for (_ reg1 : reg1_registers) {
           std::string after_reg1 = after_imm2;
 
           std::string reg1_string = (this->*GetName1)(*reg1);
@@ -226,7 +226,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
             after_reg1.replace(reg1_index, ConstexprStrLen(Base::REG1_TOKEN), reg1_string);
           }
 
-          for (auto reg2 : reg2_registers) {
+          for (_ reg2 : reg2_registers) {
             std::string after_reg2 = after_reg1;
 
             std::string reg2_string = (this->*GetName2)(*reg2);
@@ -280,7 +280,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
         after_cond.replace(cond_index, ConstexprStrLen(COND_TOKEN), GetConditionString(c));
       }
 
-      for (auto reg1 : reg1_registers) {
+      for (_ reg1 : reg1_registers) {
         std::string after_reg1 = after_cond;
 
         std::string reg1_string = (this->*GetName1)(*reg1);
@@ -289,7 +289,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
           after_reg1.replace(reg1_index, ConstexprStrLen(Base::REG1_TOKEN), reg1_string);
         }
 
-        for (auto reg2 : reg2_registers) {
+        for (_ reg2 : reg2_registers) {
           std::string after_reg2 = after_reg1;
 
           std::string reg2_string = (this->*GetName2)(*reg2);
@@ -346,7 +346,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
         after_cond.replace(cond_index, ConstexprStrLen(COND_TOKEN), GetConditionString(c));
       }
 
-      for (auto reg1 : reg1_registers) {
+      for (_ reg1 : reg1_registers) {
         std::string after_reg1 = after_cond;
 
         std::string reg1_string = (this->*GetName1)(*reg1);
@@ -355,7 +355,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
           after_reg1.replace(reg1_index, ConstexprStrLen(Base::REG1_TOKEN), reg1_string);
         }
 
-        for (auto reg2 : reg2_registers) {
+        for (_ reg2 : reg2_registers) {
           std::string after_reg2 = after_reg1;
 
           std::string reg2_string = (this->*GetName2)(*reg2);
@@ -364,7 +364,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
             after_reg2.replace(reg2_index, ConstexprStrLen(Base::REG2_TOKEN), reg2_string);
           }
 
-          for (auto reg3 : reg3_registers) {
+          for (_ reg3 : reg3_registers) {
             std::string after_reg3 = after_reg2;
 
             std::string reg3_string = (this->*GetName3)(*reg3);
@@ -419,7 +419,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
           after_shift.replace(shift_index, ConstexprStrLen(Base::SHIFT_TOKEN), shift_string);
         }
 
-        for (auto reg : registers) {
+        for (_ reg : registers) {
           std::string after_reg = after_shift;
 
           std::string reg_string = (this->*GetName)(*reg);
@@ -475,7 +475,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
           after_shift.replace(shift_index, ConstexprStrLen(SHIFT_TOKEN), shift_string);
         }
 
-        for (auto reg1 : reg1_registers) {
+        for (_ reg1 : reg1_registers) {
           std::string after_reg1 = after_shift;
 
           std::string reg1_string = (this->*GetName1)(*reg1);
@@ -484,7 +484,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
             after_reg1.replace(reg1_index, ConstexprStrLen(Base::REG1_TOKEN), reg1_string);
           }
 
-          for (auto reg2 : reg2_registers) {
+          for (_ reg2 : reg2_registers) {
             std::string after_reg2 = after_reg1;
 
             std::string reg2_string = (this->*GetName2)(*reg2);
@@ -528,7 +528,7 @@ class AssemblerArmTest : public AssemblerTest<Ass, Reg, FPReg, Imm> {
     std::vector<Reg*> without_pc = GetRegisters();
     Reg pc_reg = GetPCRegister();
 
-    for (auto it = without_pc.begin(); it != without_pc.end(); ++it) {
+    for (_ it = without_pc.begin(); it != without_pc.end(); ++it) {
       if (**it == pc_reg) {
         without_pc.erase(it);
         break;

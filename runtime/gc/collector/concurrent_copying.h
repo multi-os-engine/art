@@ -93,7 +93,7 @@ class ConcurrentCopying : public GarbageCollector {
     DCHECK(ref != nullptr);
     return IsMarked(ref) == ref;
   }
-  ALWAYS_INLINE mirror::Object* Mark(mirror::Object* from_ref) SHARED_REQUIRES(Locks::mutator_lock_)
+  MC mirror::Object* Mark(mirror::Object* from_ref) SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
   bool IsMarking() const {
     return is_marking_;

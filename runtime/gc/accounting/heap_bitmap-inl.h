@@ -27,10 +27,10 @@ namespace accounting {
 
 template <typename Visitor>
 inline void HeapBitmap::Visit(const Visitor& visitor) {
-  for (const auto& bitmap : continuous_space_bitmaps_) {
+  for (const _& bitmap : continuous_space_bitmaps_) {
     bitmap->VisitMarkedRange(bitmap->HeapBegin(), bitmap->HeapLimit(), visitor);
   }
-  for (const auto& bitmap : large_object_bitmaps_) {
+  for (const _& bitmap : large_object_bitmaps_) {
     bitmap->VisitMarkedRange(bitmap->HeapBegin(), bitmap->HeapLimit(), visitor);
   }
 }
@@ -40,7 +40,7 @@ inline bool HeapBitmap::Test(const mirror::Object* obj) {
   if (LIKELY(bitmap != nullptr)) {
     return bitmap->Test(obj);
   }
-  for (const auto& lo_bitmap : large_object_bitmaps_) {
+  for (const _& lo_bitmap : large_object_bitmaps_) {
     if (LIKELY(lo_bitmap->HasAddress(obj))) {
       return lo_bitmap->Test(obj);
     }
@@ -55,7 +55,7 @@ inline void HeapBitmap::Clear(const mirror::Object* obj) {
     bitmap->Clear(obj);
     return;
   }
-  for (const auto& lo_bitmap : large_object_bitmaps_) {
+  for (const _& lo_bitmap : large_object_bitmaps_) {
     if (LIKELY(lo_bitmap->HasAddress(obj))) {
       lo_bitmap->Clear(obj);
     }
@@ -70,7 +70,7 @@ inline bool HeapBitmap::Set(const mirror::Object* obj, const LargeObjectSetVisit
     return bitmap->Set(obj);
   }
   visitor(obj);
-  for (const auto& lo_bitmap : large_object_bitmaps_) {
+  for (const _& lo_bitmap : large_object_bitmaps_) {
     if (LIKELY(lo_bitmap->HasAddress(obj))) {
       return lo_bitmap->Set(obj);
     }
@@ -87,7 +87,7 @@ inline bool HeapBitmap::AtomicTestAndSet(const mirror::Object* obj,
     return bitmap->AtomicTestAndSet(obj);
   }
   visitor(obj);
-  for (const auto& lo_bitmap : large_object_bitmaps_) {
+  for (const _& lo_bitmap : large_object_bitmaps_) {
     if (LIKELY(lo_bitmap->HasAddress(obj))) {
       return lo_bitmap->AtomicTestAndSet(obj);
     }
@@ -97,7 +97,7 @@ inline bool HeapBitmap::AtomicTestAndSet(const mirror::Object* obj,
 }
 
 inline ContinuousSpaceBitmap* HeapBitmap::GetContinuousSpaceBitmap(const mirror::Object* obj) const {
-  for (const auto& bitmap : continuous_space_bitmaps_) {
+  for (const _& bitmap : continuous_space_bitmaps_) {
     if (bitmap->HasAddress(obj)) {
       return bitmap;
     }
@@ -106,7 +106,7 @@ inline ContinuousSpaceBitmap* HeapBitmap::GetContinuousSpaceBitmap(const mirror:
 }
 
 inline LargeObjectBitmap* HeapBitmap::GetLargeObjectBitmap(const mirror::Object* obj) const {
-  for (const auto& bitmap : large_object_bitmaps_) {
+  for (const _& bitmap : large_object_bitmaps_) {
     if (LIKELY(bitmap->HasAddress(obj))) {
       return bitmap;
     }

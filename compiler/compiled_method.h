@@ -143,7 +143,7 @@ class SrcMap FINAL : public std::vector<SrcMapElem, Allocator> {
   // Oterwise returns false and 0.
   std::pair<bool, int32_t> Find(uint32_t from) const {
     // Finds first mapping such that lb.from_ >= from.
-    auto lb = std::lower_bound(begin(), end(), SrcMapElem {from, INT32_MIN});
+    _ lb = std::lower_bound(begin(), end(), SrcMapElem {from, INT32_MIN});
     if (lb != end() && lb->from_ == from) {
       // Found exact match.
       return std::make_pair(true, lb->to_);

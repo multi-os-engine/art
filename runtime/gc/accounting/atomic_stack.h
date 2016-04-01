@@ -199,7 +199,7 @@ class AtomicStack {
   }
 
   bool Contains(const T* value) const SHARED_REQUIRES(Locks::mutator_lock_) {
-    for (auto cur = Begin(), end = End(); cur != end; ++cur) {
+    for (_ cur = Begin(), end = End(); cur != end; ++cur) {
       if (cur->AsMirrorPtr() == value) {
         return true;
       }
@@ -219,7 +219,7 @@ class AtomicStack {
   }
 
   // Returns false if we overflowed the stack.
-  bool AtomicPushBackInternal(T* value, size_t limit) ALWAYS_INLINE
+  bool AtomicPushBackInternal(T* value, size_t limit) MC
       SHARED_REQUIRES(Locks::mutator_lock_) {
     if (kIsDebugBuild) {
       debug_is_sorted_ = false;

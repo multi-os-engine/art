@@ -286,7 +286,7 @@ class IndirectReferenceTable {
    */
   template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   mirror::Object* Get(IndirectRef iref) const SHARED_REQUIRES(Locks::mutator_lock_)
-      ALWAYS_INLINE;
+      MC;
 
   // Synchronized get which reads a reference, acquiring a lock if necessary.
   template<ReadBarrierOption kReadBarrierOption = kWithReadBarrier>

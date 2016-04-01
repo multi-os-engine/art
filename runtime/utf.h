@@ -58,7 +58,7 @@ void ConvertModifiedUtf8ToUtf16(uint16_t* utf16_out, size_t out_chars,
 /*
  * Compare two modified UTF-8 strings as UTF-16 code point values in a non-locale sensitive manner
  */
-ALWAYS_INLINE int CompareModifiedUtf8ToModifiedUtf8AsUtf16CodePointValues(const char* utf8_1,
+MC int CompareModifiedUtf8ToModifiedUtf8AsUtf16CodePointValues(const char* utf8_1,
                                                                           const char* utf8_2);
 
 /*
@@ -113,13 +113,13 @@ uint32_t GetUtf16FromUtf8(const char** utf8_data_in);
  * Gets the leading UTF-16 character from a surrogate pair, or the sole
  * UTF-16 character from the return value of GetUtf16FromUtf8.
  */
-ALWAYS_INLINE uint16_t GetLeadingUtf16Char(uint32_t maybe_pair);
+MC uint16_t GetLeadingUtf16Char(uint32_t maybe_pair);
 
 /**
  * Gets the trailing UTF-16 character from a surrogate pair, or 0 otherwise
  * from the return value of GetUtf16FromUtf8.
  */
-ALWAYS_INLINE uint16_t GetTrailingUtf16Char(uint32_t maybe_pair);
+MC uint16_t GetTrailingUtf16Char(uint32_t maybe_pair);
 
 }  // namespace art
 

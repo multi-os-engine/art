@@ -40,11 +40,11 @@ class HeapBitmap {
   template<typename LargeObjectSetVisitor>
   bool Set(const mirror::Object* obj, const LargeObjectSetVisitor& visitor)
       SHARED_REQUIRES(Locks::mutator_lock_)
-      REQUIRES(Locks::heap_bitmap_lock_) ALWAYS_INLINE;
+      REQUIRES(Locks::heap_bitmap_lock_) MC;
   template<typename LargeObjectSetVisitor>
   bool AtomicTestAndSet(const mirror::Object* obj, const LargeObjectSetVisitor& visitor)
       SHARED_REQUIRES(Locks::mutator_lock_)
-      REQUIRES(Locks::heap_bitmap_lock_) ALWAYS_INLINE;
+      REQUIRES(Locks::heap_bitmap_lock_) MC;
   ContinuousSpaceBitmap* GetContinuousSpaceBitmap(const mirror::Object* obj) const;
   LargeObjectBitmap* GetLargeObjectBitmap(const mirror::Object* obj) const;
 

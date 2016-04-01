@@ -232,7 +232,7 @@ struct VariantMap {
   // The default value is either the key's default, or TValue{} if the key doesn't have a default.
   template <typename TValue>
   TValue GetOrDefault(const TKey<TValue>& key) const {
-    auto* ptr = Get(key);
+    _* ptr = Get(key);
     return (ptr == nullptr) ? key.CreateDefaultValue() : *ptr;
   }
 
@@ -275,7 +275,7 @@ struct VariantMap {
   template <typename TValue>
   void Set(const TKey<TValue>& key, const typename Identity<TValue>::type& value) {
     // Clone the value first, to protect against &value == GetValuePtr(key).
-    auto* new_value = new TValue(value);
+    _* new_value = new TValue(value);
 
     Remove(key);
     storage_map_.insert({{key.Clone(), new_value}});
@@ -299,7 +299,7 @@ struct VariantMap {
   void Remove(const TKey<TValue>& key) {
     StaticAssertKeyType<TValue>();
 
-    auto&& it = GetKeyValueIterator(key);
+    _&& it = GetKeyValueIterator(key);
     if (it != storage_map_.end()) {
       key.ValueDelete(it->second);
       delete it->first;
@@ -340,7 +340,7 @@ struct VariantMap {
 
     Clear();
 
-    for (auto&& kv_pair : other.storage_map_) {
+    for (_&& kv_pair : other.storage_map_) {
       const detail::VariantMapKeyRaw* raw_key_other = kv_pair.first;
       void* value = kv_pair.second;
 
@@ -431,7 +431,7 @@ struct VariantMap {
 
   template <typename TValue>
   const TValue* GetValueConstPtr(const TKey<TValue>& key) const {
-    auto&& it = GetKeyValueIterator(key);
+    _&& it = GetKeyValueIterator(key);
     if (it == storage_map_.end()) {
       return nullptr;
     }
@@ -446,7 +446,7 @@ struct VariantMap {
   }
 
   void DeleteStoredValues() {
-    for (auto&& kv_pair : storage_map_) {
+    for (_&& kv_pair : storage_map_) {
       kv_pair.first->ValueDelete(kv_pair.second);
       delete kv_pair.first;
     }

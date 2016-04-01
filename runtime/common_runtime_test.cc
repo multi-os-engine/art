@@ -504,7 +504,7 @@ std::vector<std::unique_ptr<const DexFile>> CommonRuntimeTestImpl::OpenTestDexFi
   std::vector<std::unique_ptr<const DexFile>> dex_files;
   bool success = DexFile::Open(filename.c_str(), filename.c_str(), &error_msg, &dex_files);
   CHECK(success) << "Failed to open '" << filename << "': " << error_msg;
-  for (auto& dex_file : dex_files) {
+  for (_& dex_file : dex_files) {
     CHECK_EQ(PROT_READ, dex_file->GetPermissions());
     CHECK(dex_file->IsReadOnly());
   }
@@ -589,7 +589,7 @@ jobject CommonRuntimeTestImpl::LoadDex(const char* dex_name) {
   std::vector<std::unique_ptr<const DexFile>> dex_files = OpenTestDexFiles(dex_name);
   std::vector<const DexFile*> class_path;
   CHECK_NE(0U, dex_files.size());
-  for (auto& dex_file : dex_files) {
+  for (_& dex_file : dex_files) {
     class_path.push_back(dex_file.get());
     loaded_dex_files_.push_back(std::move(dex_file));
   }

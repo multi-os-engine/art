@@ -120,7 +120,7 @@ struct PACKED(sizeof(ArtLambdaMethod*)) Closure {
   // Parse a type descriptor, stopping at index "upto_index".
   // Returns only the information requested in flags. All other fields are indeterminate.
   template <VariableInfo::Flags flags>
-  inline VariableInfo ALWAYS_INLINE ParseTypeDescriptor(const char* type_descriptor,
+  inline VariableInfo MC ParseTypeDescriptor(const char* type_descriptor,
                                                         size_t upto_index) const;
 
   // Convenience function to call ParseTypeDescriptor with just the type and offset.

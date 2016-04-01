@@ -483,7 +483,7 @@ static jobject CreateSystemClassLoader(Runtime* runtime) {
 
   ScopedObjectAccess soa(Thread::Current());
   ClassLinker* cl = Runtime::Current()->GetClassLinker();
-  auto pointer_size = cl->GetImagePointerSize();
+  _ pointer_size = cl->GetImagePointerSize();
 
   StackHandleScope<2> hs(soa.Self());
   Handle<mirror::Class> class_loader_class(
@@ -569,7 +569,7 @@ bool Runtime::Start() {
   if (!IsImageDex2OatEnabled() || !GetHeap()->HasBootImageSpace()) {
     ScopedObjectAccess soa(self);
     StackHandleScope<1> hs(soa.Self());
-    auto klass(hs.NewHandle<mirror::Class>(mirror::Class::GetJavaLangClass()));
+    _ klass(hs.NewHandle<mirror::Class>(mirror::Class::GetJavaLangClass()));
     class_linker_->EnsureInitialized(soa.Self(), klass, true, true);
   }
 
@@ -1113,7 +1113,7 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
       return false;
     }
     if (kIsDebugBuild) {
-      for (auto image_space : GetHeap()->GetBootImageSpaces()) {
+      for (_ image_space : GetHeap()->GetBootImageSpaces()) {
         image_space->VerifyImageAllocations();
       }
     }
@@ -1188,7 +1188,7 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   }
 
   {
-    auto&& profiler_options = runtime_options.ReleaseOrDefault(Opt::ProfilerOpts);
+    _&& profiler_options = runtime_options.ReleaseOrDefault(Opt::ProfilerOpts);
     profile_output_filename_ = profiler_options.output_file_name_;
 
     // TODO: Don't do this, just change ProfilerOptions to include the output file name?
@@ -1539,7 +1539,7 @@ void Runtime::VisitConstantRoots(RootVisitor* visitor) {
     imt_unimplemented_method_->VisitRoots(buffered_visitor, pointer_size);
   }
   for (size_t i = 0; i < kLastCalleeSaveType; ++i) {
-    auto* m = reinterpret_cast<ArtMethod*>(callee_save_methods_[i]);
+    _* m = reinterpret_cast<ArtMethod*>(callee_save_methods_[i]);
     if (m != nullptr) {
       m->VisitRoots(buffered_visitor, pointer_size);
     }
@@ -1592,14 +1592,14 @@ void Runtime::VisitRoots(RootVisitor* visitor, VisitRootFlags flags) {
 }
 
 void Runtime::VisitImageRoots(RootVisitor* visitor) {
-  for (auto* space : GetHeap()->GetContinuousSpaces()) {
+  for (_* space : GetHeap()->GetContinuousSpaces()) {
     if (space->IsImageSpace()) {
-      auto* image_space = space->AsImageSpace();
-      const auto& image_header = image_space->GetImageHeader();
+      _* image_space = space->AsImageSpace();
+      const _& image_header = image_space->GetImageHeader();
       for (size_t i = 0; i < ImageHeader::kImageRootsMax; ++i) {
-        auto* obj = image_header.GetImageRoot(static_cast<ImageHeader::ImageRoot>(i));
+        _* obj = image_header.GetImageRoot(static_cast<ImageHeader::ImageRoot>(i));
         if (obj != nullptr) {
-          auto* after_obj = obj;
+          _* after_obj = obj;
           visitor->VisitRoot(&after_obj, RootInfo(kRootStickyClass));
           CHECK_EQ(after_obj, obj);
         }
@@ -1611,7 +1611,7 @@ void Runtime::VisitImageRoots(RootVisitor* visitor) {
 static ImtConflictTable::Entry empty_entry = { nullptr, nullptr };
 
 ArtMethod* Runtime::CreateImtConflictMethod(LinearAlloc* linear_alloc) {
-  auto* method = Runtime::Current()->GetClassLinker()->CreateRuntimeMethod(linear_alloc);
+  _* method = Runtime::Current()->GetClassLinker()->CreateRuntimeMethod(linear_alloc);
   // When compiling, the code pointer will get set later when the image is loaded.
   if (IsAotCompiler()) {
     size_t pointer_size = GetInstructionSetPointerSize(instruction_set_);
@@ -1633,7 +1633,7 @@ void Runtime::SetImtConflictMethod(ArtMethod* method) {
 }
 
 ArtMethod* Runtime::CreateResolutionMethod() {
-  auto* method = GetClassLinker()->CreateRuntimeMethod(GetLinearAlloc());
+  _* method = GetClassLinker()->CreateRuntimeMethod(GetLinearAlloc());
   // When compiling, the code pointer will get set later when the image is loaded.
   if (IsAotCompiler()) {
     size_t pointer_size = GetInstructionSetPointerSize(instruction_set_);
@@ -1645,7 +1645,7 @@ ArtMethod* Runtime::CreateResolutionMethod() {
 }
 
 ArtMethod* Runtime::CreateCalleeSaveMethod() {
-  auto* method = GetClassLinker()->CreateRuntimeMethod(GetLinearAlloc());
+  _* method = GetClassLinker()->CreateRuntimeMethod(GetLinearAlloc());
   size_t pointer_size = GetInstructionSetPointerSize(instruction_set_);
   method->SetEntryPointFromQuickCompiledCodePtrSize(nullptr, pointer_size);
   DCHECK_NE(instruction_set_, kNone);

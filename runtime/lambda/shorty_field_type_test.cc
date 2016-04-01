@@ -53,7 +53,7 @@ class ShortyFieldTypeTest : public ::testing::Test {
     std::stringstream stream;
 
     stream << "[";
-    for (auto&& val : list) {
+    for (_&& val : list) {
       stream << val << ", ";
     }
     stream << "]";
@@ -252,7 +252,7 @@ struct ShortyTypeCharacteristics {
     // Test compile-time ShortyFieldType selectors
     static_assert(std::is_same<T, typename ShortyFieldTypeSelectType<kShortyEnum>::type>::value,
                   "ShortyFieldType Enum->Type incorrect mapping");
-    auto kActualEnum = ShortyFieldTypeSelectEnum<T>::value;  // Do not ODR-use, avoid linker error.
+    _ kActualEnum = ShortyFieldTypeSelectEnum<T>::value;  // Do not ODR-use, avoid linker error.
     EXPECT_EQ(kShortyEnum, kActualEnum);
   }
 };

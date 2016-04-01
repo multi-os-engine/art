@@ -72,7 +72,7 @@ class Thumb2RelativePatcherTest : public RelativePatcherTest {
     // Check assumptions.
     CHECK_EQ(GetMethodOffset(1), method1_offset);
     CHECK_EQ(GetMethodOffset(2), method2_offset);
-    auto result3 = method_offset_map_.FindMethodOffset(MethodRef(3));
+    _ result3 = method_offset_map_.FindMethodOffset(MethodRef(3));
     CHECK(result3.first);
     // There may be a thunk before method2.
     if (result3.second == method3_offset + 1 /* thumb mode */) {
@@ -85,7 +85,7 @@ class Thumb2RelativePatcherTest : public RelativePatcherTest {
   }
 
   uint32_t GetMethodOffset(uint32_t method_idx) {
-    auto result = method_offset_map_.FindMethodOffset(MethodRef(method_idx));
+    _ result = method_offset_map_.FindMethodOffset(MethodRef(method_idx));
     CHECK(result.first);
     CHECK_NE(result.second & 1u, 0u);
     return result.second - 1 /* thumb mode */;
@@ -240,7 +240,7 @@ TEST_F(Thumb2RelativePatcherTest, CallOther) {
   uint32_t diff_before = method1_offset - (method2_offset + 4u /* PC adjustment */);
   ASSERT_EQ(diff_before & 1u, 0u);
   ASSERT_GE(diff_before, -1u << 9);  // Simple encoding, -256 <= (diff >> 1) < 0.
-  auto method2_expected_code = GenNopsAndBl(0u, kBlMinus256 | ((diff_before >> 1) & 0xffu));
+  _ method2_expected_code = GenNopsAndBl(0u, kBlMinus256 | ((diff_before >> 1) & 0xffu));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(2u), ArrayRef<const uint8_t>(method2_expected_code)));
 }
 
@@ -255,13 +255,13 @@ TEST_F(Thumb2RelativePatcherTest, CallTrampoline) {
   uint32_t diff = kTrampolineOffset - (method1_offset + 4u);
   ASSERT_EQ(diff & 1u, 0u);
   ASSERT_GE(diff, -1u << 9);  // Simple encoding, -256 <= (diff >> 1) < 0 (checked as unsigned).
-  auto expected_code = GenNopsAndBl(0u, kBlMinus256 | ((diff >> 1) & 0xffu));
+  _ expected_code = GenNopsAndBl(0u, kBlMinus256 | ((diff >> 1) & 0xffu));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
 }
 
 TEST_F(Thumb2RelativePatcherTest, CallTrampolineTooFar) {
   constexpr uint32_t missing_method_index = 1024u;
-  auto method3_raw_code = GenNopsAndBl(3u, kBlPlus0);
+  _ method3_raw_code = GenNopsAndBl(3u, kBlPlus0);
   constexpr uint32_t bl_offset_in_method3 = 3u * 2u;  // After NOPs.
   ArrayRef<const uint8_t> method3_code(method3_raw_code);
   ASSERT_EQ(bl_offset_in_method3 + 4u, method3_code.size());
@@ -284,13 +284,13 @@ TEST_F(Thumb2RelativePatcherTest, CallTrampolineTooFar) {
   uint32_t diff = thunk_offset - (method3_offset + bl_offset_in_method3 + 4u /* PC adjustment */);
   ASSERT_EQ(diff & 1u, 0u);
   ASSERT_LT(diff >> 1, 1u << 8);  // Simple encoding, (diff >> 1) fits into 8 bits.
-  auto expected_code = GenNopsAndBl(3u, kBlPlus0 | ((diff >> 1) & 0xffu));
+  _ expected_code = GenNopsAndBl(3u, kBlPlus0 | ((diff >> 1) & 0xffu));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(3u), ArrayRef<const uint8_t>(expected_code)));
   EXPECT_TRUE(CheckThunk(thunk_offset));
 }
 
 TEST_F(Thumb2RelativePatcherTest, CallOtherAlmostTooFarAfter) {
-  auto method1_raw_code = GenNopsAndBl(3u, kBlPlus0);
+  _ method1_raw_code = GenNopsAndBl(3u, kBlPlus0);
   constexpr uint32_t bl_offset_in_method1 = 3u * 2u;  // After NOPs.
   ArrayRef<const uint8_t> method1_code(method1_raw_code);
   ASSERT_EQ(bl_offset_in_method1 + 4u, method1_code.size());
@@ -307,12 +307,12 @@ TEST_F(Thumb2RelativePatcherTest, CallOtherAlmostTooFarAfter) {
   ASSERT_FALSE(thunk_in_gap);  // There should be no thunk.
 
   // Check linked code.
-  auto expected_code = GenNopsAndBl(3u, kBlPlusMax);
+  _ expected_code = GenNopsAndBl(3u, kBlPlusMax);
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
 }
 
 TEST_F(Thumb2RelativePatcherTest, CallOtherAlmostTooFarBefore) {
-  auto method3_raw_code = GenNopsAndBl(2u, kBlPlus0);
+  _ method3_raw_code = GenNopsAndBl(2u, kBlPlus0);
   constexpr uint32_t bl_offset_in_method3 = 2u * 2u;  // After NOPs.
   ArrayRef<const uint8_t> method3_code(method3_raw_code);
   ASSERT_EQ(bl_offset_in_method3 + 4u, method3_code.size());
@@ -329,12 +329,12 @@ TEST_F(Thumb2RelativePatcherTest, CallOtherAlmostTooFarBefore) {
   ASSERT_FALSE(thunk_in_gap);  // There should be no thunk.
 
   // Check linked code.
-  auto expected_code = GenNopsAndBl(2u, kBlMinusMax);
+  _ expected_code = GenNopsAndBl(2u, kBlMinusMax);
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(3u), ArrayRef<const uint8_t>(expected_code)));
 }
 
 TEST_F(Thumb2RelativePatcherTest, CallOtherJustTooFarAfter) {
-  auto method1_raw_code = GenNopsAndBl(2u, kBlPlus0);
+  _ method1_raw_code = GenNopsAndBl(2u, kBlPlus0);
   constexpr uint32_t bl_offset_in_method1 = 2u * 2u;  // After NOPs.
   ArrayRef<const uint8_t> method1_code(method1_raw_code);
   ASSERT_EQ(bl_offset_in_method1 + 4u, method1_code.size());
@@ -359,13 +359,13 @@ TEST_F(Thumb2RelativePatcherTest, CallOtherJustTooFarAfter) {
   uint32_t diff = thunk_offset - (method1_offset + bl_offset_in_method1 + 4u /* PC adjustment */);
   ASSERT_EQ(diff & 1u, 0u);
   ASSERT_GE(diff, 16 * MB - (1u << 9));  // Simple encoding, unknown bits fit into the low 8 bits.
-  auto expected_code = GenNopsAndBl(2u, 0xf3ffd700 | ((diff >> 1) & 0xffu));
+  _ expected_code = GenNopsAndBl(2u, 0xf3ffd700 | ((diff >> 1) & 0xffu));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(1u), ArrayRef<const uint8_t>(expected_code)));
   CheckThunk(thunk_offset);
 }
 
 TEST_F(Thumb2RelativePatcherTest, CallOtherJustTooFarBefore) {
-  auto method3_raw_code = GenNopsAndBl(3u, kBlPlus0);
+  _ method3_raw_code = GenNopsAndBl(3u, kBlPlus0);
   constexpr uint32_t bl_offset_in_method3 = 3u * 2u;  // After NOPs.
   ArrayRef<const uint8_t> method3_code(method3_raw_code);
   ASSERT_EQ(bl_offset_in_method3 + 4u, method3_code.size());
@@ -387,7 +387,7 @@ TEST_F(Thumb2RelativePatcherTest, CallOtherJustTooFarBefore) {
   uint32_t diff = thunk_offset - (method3_offset + bl_offset_in_method3 + 4u /* PC adjustment */);
   ASSERT_EQ(diff & 1u, 0u);
   ASSERT_LT(diff >> 1, 1u << 8);  // Simple encoding, (diff >> 1) fits into 8 bits.
-  auto expected_code = GenNopsAndBl(3u, kBlPlus0 | ((diff >> 1) & 0xffu));
+  _ expected_code = GenNopsAndBl(3u, kBlPlus0 | ((diff >> 1) & 0xffu));
   EXPECT_TRUE(CheckLinkedMethod(MethodRef(3u), ArrayRef<const uint8_t>(expected_code)));
   EXPECT_TRUE(CheckThunk(thunk_offset));
 }

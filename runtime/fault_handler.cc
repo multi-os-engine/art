@@ -207,7 +207,7 @@ bool FaultManager::HandleFaultByOtherHandlers(int sig, siginfo_t* info, void* co
     // our nested signal handler will be invoked and this will longjmp to the saved
     // state.
     if (setjmp(*self->GetNestedSignalState()) == 0) {
-      for (const auto& handler : other_handlers_) {
+      for (const _& handler : other_handlers_) {
         if (handler->Action(sig, info, context)) {
           // Restore the signal handlers, reinit the fault manager and return.  Signal was
           // handled.
@@ -247,7 +247,7 @@ void FaultManager::HandleFault(int sig, siginfo_t* info, void* context) {
   VLOG(signals) << "Handling fault";
   if (IsInGeneratedCode(info, context, true)) {
     VLOG(signals) << "in generated code, looking for handler";
-    for (const auto& handler : generated_code_handlers_) {
+    for (const _& handler : generated_code_handlers_) {
       VLOG(signals) << "invoking Action on handler " << handler;
       if (handler->Action(sig, info, context)) {
 #ifdef TEST_NESTED_SIGNAL
@@ -288,12 +288,12 @@ void FaultManager::AddHandler(FaultHandler* handler, bool generated_code) {
 }
 
 void FaultManager::RemoveHandler(FaultHandler* handler) {
-  auto it = std::find(generated_code_handlers_.begin(), generated_code_handlers_.end(), handler);
+  _ it = std::find(generated_code_handlers_.begin(), generated_code_handlers_.end(), handler);
   if (it != generated_code_handlers_.end()) {
     generated_code_handlers_.erase(it);
     return;
   }
-  auto it2 = std::find(other_handlers_.begin(), other_handlers_.end(), handler);
+  _ it2 = std::find(other_handlers_.begin(), other_handlers_.end(), handler);
   if (it2 != other_handlers_.end()) {
     other_handlers_.erase(it);
     return;

@@ -1028,7 +1028,7 @@ std::string GetSchedulerGroupName(pid_t tid) {
 
 #if defined(__linux__)
 
-ALWAYS_INLINE
+MC
 static inline void WritePrefix(std::ostream* os, const char* prefix, bool odd) {
   if (prefix != nullptr) {
     *os << prefix;
@@ -1600,13 +1600,13 @@ static void DumpMethodCFGImpl(const DexFile* dex_file,
           dex_pc < code_item->insns_size_in_code_units_;
           old_dex_pc = dex_pc, dex_pc += inst->SizeInCodeUnits(), inst = inst->Next()) {
         {
-          auto it = dex_pc_to_node_id.find(dex_pc);
+          _ it = dex_pc_to_node_id.find(dex_pc);
           if (it != dex_pc_to_node_id.end()) {
             if (!exception_targets.empty()) {
               // It seems the last block had common exception handlers. Add the exception edges now.
               uint32_t node_id = dex_pc_to_node_id.find(block_start_dex_pc)->second;
               for (uint32_t handler_pc : exception_targets) {
-                auto node_id_it = dex_pc_to_incl_id.find(handler_pc);
+                _ node_id_it = dex_pc_to_incl_id.find(handler_pc);
                 if (node_id_it != dex_pc_to_incl_id.end()) {
                   exception_edges << "  node" << node_id
                       << " -> node" << node_id_it->second << ":p" << handler_pc
@@ -1643,7 +1643,7 @@ static void DumpMethodCFGImpl(const DexFile* dex_file,
           const int32_t offset = inst->GetTargetOffset();
           const bool conditional = !inst->IsUnconditional();
 
-          auto target_it = dex_pc_to_node_id.find(dex_pc + offset);
+          _ target_it = dex_pc_to_node_id.find(dex_pc + offset);
           if (target_it != dex_pc_to_node_id.end()) {
             taken_edges << "  node" << last_node_id << ":p" << dex_pc
                 << " -> node" << target_it->second << ":p" << (dex_pc + offset)
@@ -1676,7 +1676,7 @@ static void DumpMethodCFGImpl(const DexFile* dex_file,
                 static_cast<int32_t>(switch_insns[targets_offset + targ * 2]) |
                 static_cast<int32_t>(switch_insns[targets_offset + targ * 2 + 1] << 16);
             int32_t abs_offset = dex_pc + offset;
-            auto target_it = dex_pc_to_node_id.find(abs_offset);
+            _ target_it = dex_pc_to_node_id.find(abs_offset);
             if (target_it != dex_pc_to_node_id.end()) {
               // TODO: value label.
               taken_edges << "  node" << last_node_id << ":p" << dex_pc
@@ -1711,7 +1711,7 @@ static void DumpMethodCFGImpl(const DexFile* dex_file,
         // It seems the last block had common exception handlers. Add the exception edges now.
         uint32_t node_id = dex_pc_to_node_id.find(block_start_dex_pc)->second;
         for (uint32_t handler_pc : exception_targets) {
-          auto node_id_it = dex_pc_to_incl_id.find(handler_pc);
+          _ node_id_it = dex_pc_to_incl_id.find(handler_pc);
           if (node_id_it != dex_pc_to_incl_id.end()) {
             exception_edges << "  node" << node_id
                 << " -> node" << node_id_it->second << ":p" << handler_pc
@@ -1734,9 +1734,9 @@ static void DumpMethodCFGImpl(const DexFile* dex_file,
           std::set<uint32_t> handled_targets;
           for (; catch_it.HasNext(); catch_it.Next()) {
             uint32_t handler_pc = catch_it.GetHandlerAddress();
-            auto it = handled_targets.find(handler_pc);
+            _ it = handled_targets.find(handler_pc);
             if (it == handled_targets.end()) {
-              auto node_id_it = dex_pc_to_incl_id.find(handler_pc);
+              _ node_id_it = dex_pc_to_incl_id.find(handler_pc);
               if (node_id_it != dex_pc_to_incl_id.end()) {
                 exception_edges << "  node" << this_node_id << ":p" << dex_pc
                     << " -> node" << node_id_it->second << ":p" << handler_pc

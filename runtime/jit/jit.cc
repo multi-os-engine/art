@@ -48,7 +48,7 @@ void (*Jit::jit_types_loaded_)(void*, mirror::Class**, size_t count) = nullptr;
 bool Jit::generate_debug_info_ = false;
 
 JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& options) {
-  auto* jit_options = new JitOptions;
+  _* jit_options = new JitOptions;
   jit_options->use_jit_ = options.GetOrDefault(RuntimeArgumentMap::UseJIT);
 
   jit_options->code_cache_initial_capacity_ =

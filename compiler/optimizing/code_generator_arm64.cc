@@ -927,7 +927,7 @@ CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
 #define __ GetVIXLAssembler()->
 
 void CodeGeneratorARM64::EmitJumpTables() {
-  for (auto jump_table : jump_tables_) {
+  for (_ jump_table : jump_tables_) {
     jump_table->EmitTable(this);
   }
 }
@@ -3830,14 +3830,14 @@ void CodeGeneratorARM64::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patc
       pc_relative_string_patches_.size() +
       boot_image_address_patches_.size();
   linker_patches->reserve(size);
-  for (const auto& entry : method_patches_) {
+  for (const _& entry : method_patches_) {
     const MethodReference& target_method = entry.first;
     vixl::Literal<uint64_t>* literal = entry.second;
     linker_patches->push_back(LinkerPatch::MethodPatch(literal->offset(),
                                                        target_method.dex_file,
                                                        target_method.dex_method_index));
   }
-  for (const auto& entry : call_patches_) {
+  for (const _& entry : call_patches_) {
     const MethodReference& target_method = entry.first;
     vixl::Literal<uint64_t>* literal = entry.second;
     linker_patches->push_back(LinkerPatch::CodePatch(literal->offset(),
@@ -3855,7 +3855,7 @@ void CodeGeneratorARM64::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patc
                                                               info.pc_insn_label->location(),
                                                               info.offset_or_index));
   }
-  for (const auto& entry : boot_image_string_patches_) {
+  for (const _& entry : boot_image_string_patches_) {
     const StringReference& target_string = entry.first;
     vixl::Literal<uint32_t>* literal = entry.second;
     linker_patches->push_back(LinkerPatch::StringPatch(literal->offset(),
@@ -3868,7 +3868,7 @@ void CodeGeneratorARM64::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patc
                                                                info.pc_insn_label->location(),
                                                                info.offset_or_index));
   }
-  for (const auto& entry : boot_image_address_patches_) {
+  for (const _& entry : boot_image_address_patches_) {
     DCHECK(GetCompilerOptions().GetIncludePatchInformation());
     vixl::Literal<uint32_t>* literal = entry.second;
     linker_patches->push_back(LinkerPatch::RecordPosition(literal->offset()));

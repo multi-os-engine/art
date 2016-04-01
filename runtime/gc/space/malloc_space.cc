@@ -59,7 +59,7 @@ MallocSpace::MallocSpace(const std::string& name, MemMap* mem_map,
     CHECK(mark_bitmap_.get() != nullptr) << "could not create allocspace mark bitmap #"
         << bitmap_index;
   }
-  for (auto& freed : recent_freed_objects_) {
+  for (_& freed : recent_freed_objects_) {
     freed.first = nullptr;
     freed.second = nullptr;
   }

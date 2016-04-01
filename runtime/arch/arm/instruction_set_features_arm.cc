@@ -268,7 +268,7 @@ const InstructionSetFeatures* ArmInstructionSetFeatures::AddFeaturesFromSplitStr
     const bool smp, const std::vector<std::string>& features, std::string* error_msg) const {
   bool has_atomic_ldrd_strd = has_atomic_ldrd_strd_;
   bool has_div = has_div_;
-  for (auto i = features.begin(); i != features.end(); i++) {
+  for (_ i = features.begin(); i != features.end(); i++) {
     std::string feature = Trim(*i);
     if (feature == "div") {
       has_div = true;

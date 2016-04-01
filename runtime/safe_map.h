@@ -129,11 +129,11 @@ class SafeMap {
   V GetOrCreate(const K& k, CreateFn create) {
     static_assert(std::is_same<V, typename std::result_of<CreateFn()>::type>::value,
                   "Argument `create` should return a value of type V.");
-    auto lb = lower_bound(k);
+    _ lb = lower_bound(k);
     if (lb != end() && !key_comp()(k, lb->first)) {
       return lb->second;
     }
-    auto it = PutBefore(lb, k, create());
+    _ it = PutBefore(lb, k, create());
     return it->second;
   }
 

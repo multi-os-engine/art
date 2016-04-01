@@ -43,7 +43,7 @@ JitCompiler* JitCompiler::Create() {
 
 extern "C" void* jit_load(bool* generate_debug_info) {
   VLOG(jit) << "loading jit compiler";
-  auto* const jit_compiler = JitCompiler::Create();
+  _* const jit_compiler = JitCompiler::Create();
   CHECK(jit_compiler != nullptr);
   *generate_debug_info = jit_compiler->GetCompilerOptions()->GetGenerateDebugInfo();
   VLOG(jit) << "Done loading jit compiler";
@@ -58,14 +58,14 @@ extern "C" void jit_unload(void* handle) {
 extern "C" bool jit_compile_method(
     void* handle, ArtMethod* method, Thread* self, bool osr)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  auto* jit_compiler = reinterpret_cast<JitCompiler*>(handle);
+  _* jit_compiler = reinterpret_cast<JitCompiler*>(handle);
   DCHECK(jit_compiler != nullptr);
   return jit_compiler->CompileMethod(self, method, osr);
 }
 
 extern "C" void jit_types_loaded(void* handle, mirror::Class** types, size_t count)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  auto* jit_compiler = reinterpret_cast<JitCompiler*>(handle);
+  _* jit_compiler = reinterpret_cast<JitCompiler*>(handle);
   DCHECK(jit_compiler != nullptr);
   if (jit_compiler->GetCompilerOptions()->GetGenerateDebugInfo()) {
     const ArrayRef<mirror::Class*> types_array(types, count);

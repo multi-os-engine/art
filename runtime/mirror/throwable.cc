@@ -102,7 +102,7 @@ std::string Throwable::Dump() {
     mirror::PointerArray* method_trace = down_cast<mirror::PointerArray*>(methods_and_dex_pcs);
     const int32_t array_len = method_trace->GetLength();
     CHECK_EQ(array_len % 2, 0);
-    const auto depth = array_len / 2;
+    const _ depth = array_len / 2;
     if (depth == 0) {
       result += "(Throwable with empty stack trace)";
     } else {
@@ -121,15 +121,15 @@ std::string Throwable::Dump() {
     if (stack_trace != nullptr && stack_trace->IsObjectArray()) {
       CHECK_EQ(stack_trace->GetClass()->GetComponentType(),
                StackTraceElement::GetStackTraceElement());
-      auto* ste_array = down_cast<ObjectArray<StackTraceElement>*>(stack_trace);
+      _* ste_array = down_cast<ObjectArray<StackTraceElement>*>(stack_trace);
       if (ste_array->GetLength() == 0) {
         result += "(Throwable with empty stack trace)";
       } else {
         for (int32_t i = 0; i < ste_array->GetLength(); ++i) {
           StackTraceElement* ste = ste_array->Get(i);
           DCHECK(ste != nullptr);
-          auto* method_name = ste->GetMethodName();
-          auto* file_name = ste->GetFileName();
+          _* method_name = ste->GetMethodName();
+          _* file_name = ste->GetFileName();
           result += StringPrintf(
               "  at %s (%s:%d)\n",
               method_name != nullptr ? method_name->ToModifiedUtf8().c_str() : "<unknown method>",

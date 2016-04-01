@@ -32,7 +32,7 @@ DexFileToMethodInlinerMap::DexFileToMethodInlinerMap()
 }
 
 DexFileToMethodInlinerMap::~DexFileToMethodInlinerMap() {
-  for (auto& entry : inliners_) {
+  for (_& entry : inliners_) {
     delete entry.second;
   }
 }
@@ -41,7 +41,7 @@ DexFileMethodInliner* DexFileToMethodInlinerMap::GetMethodInliner(const DexFile*
   Thread* self = Thread::Current();
   {
     ReaderMutexLock mu(self, lock_);
-    auto it = inliners_.find(dex_file);
+    _ it = inliners_.find(dex_file);
     if (it != inliners_.end()) {
       return it->second;
     }

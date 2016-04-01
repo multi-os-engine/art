@@ -83,26 +83,26 @@ class MANAGED String FINAL : public Object {
   String* Intern() SHARED_REQUIRES(Locks::mutator_lock_);
 
   template <bool kIsInstrumented, typename PreFenceVisitor>
-  ALWAYS_INLINE static String* Alloc(Thread* self, int32_t utf16_length,
+  MC static String* Alloc(Thread* self, int32_t utf16_length,
                                      gc::AllocatorType allocator_type,
                                      const PreFenceVisitor& pre_fence_visitor)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
   template <bool kIsInstrumented>
-  ALWAYS_INLINE static String* AllocFromByteArray(Thread* self, int32_t byte_length,
+  MC static String* AllocFromByteArray(Thread* self, int32_t byte_length,
                                                   Handle<ByteArray> array, int32_t offset,
                                                   int32_t high_byte,
                                                   gc::AllocatorType allocator_type)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
   template <bool kIsInstrumented>
-  ALWAYS_INLINE static String* AllocFromCharArray(Thread* self, int32_t count,
+  MC static String* AllocFromCharArray(Thread* self, int32_t count,
                                                   Handle<CharArray> array, int32_t offset,
                                                   gc::AllocatorType allocator_type)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
   template <bool kIsInstrumented>
-  ALWAYS_INLINE static String* AllocFromString(Thread* self, int32_t string_length,
+  MC static String* AllocFromString(Thread* self, int32_t string_length,
                                                Handle<String> string, int32_t offset,
                                                gc::AllocatorType allocator_type)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);

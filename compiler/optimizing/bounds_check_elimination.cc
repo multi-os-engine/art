@@ -1186,7 +1186,7 @@ class BCEVisitor : public HGraphVisitor {
 
   // Attempt dominator-based dynamic elimination on remaining candidates.
   void AddComparesWithDeoptimization(HBasicBlock* block) {
-    for (const auto& entry : first_index_bounds_check_map_) {
+    for (const _& entry : first_index_bounds_check_map_) {
       HBoundsCheck* bounds_check = entry.second;
       HInstruction* index = bounds_check->InputAt(0);
       HInstruction* array_length = bounds_check->InputAt(1);
@@ -1388,7 +1388,7 @@ class BCEVisitor : public HGraphVisitor {
   bool IsEarlyExitLoop(HLoopInformation* loop) {
     const uint32_t loop_id = loop->GetHeader()->GetBlockId();
     // If loop has been analyzed earlier for early-exit, don't repeat the analysis.
-    auto it = early_exit_loop_.find(loop_id);
+    _ it = early_exit_loop_.find(loop_id);
     if (it != early_exit_loop_.end()) {
       return it->second;
     }
@@ -1496,7 +1496,7 @@ class BCEVisitor : public HGraphVisitor {
     // hoisted expressions may depend on and/or used by the deoptimization tests.
     HBasicBlock* header = loop->GetHeader();
     const uint32_t loop_id = header->GetBlockId();
-    auto it = taken_test_loop_.find(loop_id);
+    _ it = taken_test_loop_.find(loop_id);
     if (it != taken_test_loop_.end()) {
       HBasicBlock* block = it->second;
       // If always taken, keep it that way by returning the original preheader,
@@ -1626,7 +1626,7 @@ class BCEVisitor : public HGraphVisitor {
    */
   void InsertPhiNodes() {
     // Scan all new deoptimization blocks.
-    for (auto it1 = taken_test_loop_.begin(); it1 != taken_test_loop_.end(); ++it1) {
+    for (_ it1 = taken_test_loop_.begin(); it1 != taken_test_loop_.end(); ++it1) {
       HBasicBlock* true_block = it1->second;
       HBasicBlock* new_preheader = true_block->GetSingleSuccessor();
       // Scan all instructions in a new deoptimization block.

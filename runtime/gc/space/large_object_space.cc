@@ -44,7 +44,7 @@ class MemoryToolLargeObjectMapSpace FINAL : public LargeObjectMapSpace {
     // Keep valgrind happy if there is any large objects such as dex cache arrays which aren't
     // freed since they are held live by the class linker.
     MutexLock mu(Thread::Current(), lock_);
-    for (auto& m : large_objects_) {
+    for (_& m : large_objects_) {
       delete m.second.mem_map;
     }
   }
@@ -143,11 +143,11 @@ mirror::Object* LargeObjectMapSpace::Alloc(Thread* self, size_t num_bytes,
   mirror::Object* const obj = reinterpret_cast<mirror::Object*>(mem_map->Begin());
   if (kIsDebugBuild) {
     ReaderMutexLock mu2(Thread::Current(), *Locks::heap_bitmap_lock_);
-    auto* heap = Runtime::Current()->GetHeap();
-    auto* live_bitmap = heap->GetLiveBitmap();
-    auto* space_bitmap = live_bitmap->GetContinuousSpaceBitmap(obj);
+    _* heap = Runtime::Current()->GetHeap();
+    _* live_bitmap = heap->GetLiveBitmap();
+    _* space_bitmap = live_bitmap->GetContinuousSpaceBitmap(obj);
     CHECK(space_bitmap == nullptr) << obj << " overlaps with bitmap " << *space_bitmap;
-    auto* obj_end = reinterpret_cast<mirror::Object*>(mem_map->End());
+    _* obj_end = reinterpret_cast<mirror::Object*>(mem_map->End());
     space_bitmap = live_bitmap->GetContinuousSpaceBitmap(obj_end - 1);
     CHECK(space_bitmap == nullptr) << obj_end << " overlaps with bitmap " << *space_bitmap;
   }
@@ -175,21 +175,21 @@ mirror::Object* LargeObjectMapSpace::Alloc(Thread* self, size_t num_bytes,
 
 bool LargeObjectMapSpace::IsZygoteLargeObject(Thread* self, mirror::Object* obj) const {
   MutexLock mu(self, lock_);
-  auto it = large_objects_.find(obj);
+  _ it = large_objects_.find(obj);
   CHECK(it != large_objects_.end());
   return it->second.is_zygote;
 }
 
 void LargeObjectMapSpace::SetAllLargeObjectsAsZygoteObjects(Thread* self) {
   MutexLock mu(self, lock_);
-  for (auto& pair : large_objects_) {
+  for (_& pair : large_objects_) {
     pair.second.is_zygote = true;
   }
 }
 
 size_t LargeObjectMapSpace::Free(Thread* self, mirror::Object* ptr) {
   MutexLock mu(self, lock_);
-  auto it = large_objects_.find(ptr);
+  _ it = large_objects_.find(ptr);
   if (UNLIKELY(it == large_objects_.end())) {
     ScopedObjectAccess soa(self);
     Runtime::Current()->GetHeap()->DumpSpaces(LOG(INTERNAL_FATAL));
@@ -208,7 +208,7 @@ size_t LargeObjectMapSpace::Free(Thread* self, mirror::Object* ptr) {
 
 size_t LargeObjectMapSpace::AllocationSize(mirror::Object* obj, size_t* usable_size) {
   MutexLock mu(Thread::Current(), lock_);
-  auto it = large_objects_.find(obj);
+  _ it = large_objects_.find(obj);
   CHECK(it != large_objects_.end()) << "Attempted to get size of a large object which is not live";
   size_t alloc_size = it->second.mem_map->BaseSize();
   if (usable_size != nullptr) {
@@ -230,7 +230,7 @@ size_t LargeObjectSpace::FreeList(Thread* self, size_t num_ptrs, mirror::Object*
 
 void LargeObjectMapSpace::Walk(DlMallocSpace::WalkCallback callback, void* arg) {
   MutexLock mu(Thread::Current(), lock_);
-  for (auto& pair : large_objects_) {
+  for (_& pair : large_objects_) {
     MemMap* mem_map = pair.second.mem_map;
     callback(mem_map->Begin(), mem_map->End(), mem_map->Size(), arg);
     callback(nullptr, nullptr, 0, arg);
@@ -400,7 +400,7 @@ void FreeListSpace::Walk(DlMallocSpace::WalkCallback callback, void* arg) {
 
 void FreeListSpace::RemoveFreePrev(AllocationInfo* info) {
   CHECK_GT(info->GetPrevFree(), 0U);
-  auto it = free_blocks_.lower_bound(info);
+  _ it = free_blocks_.lower_bound(info);
   CHECK(it != free_blocks_.end());
   CHECK_EQ(*it, info);
   free_blocks_.erase(it);
@@ -485,7 +485,7 @@ mirror::Object* FreeListSpace::Alloc(Thread* self, size_t num_bytes, size_t* byt
   temp_info.SetByteSize(0, false);
   AllocationInfo* new_info;
   // Find the smallest chunk at least num_bytes in size.
-  auto it = free_blocks_.lower_bound(&temp_info);
+  _ it = free_blocks_.lower_bound(&temp_info);
   if (it != free_blocks_.end()) {
     AllocationInfo* info = *it;
     free_blocks_.erase(it);

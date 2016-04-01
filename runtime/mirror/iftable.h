@@ -25,19 +25,19 @@ namespace mirror {
 
 class MANAGED IfTable FINAL : public ObjectArray<Object> {
  public:
-  ALWAYS_INLINE Class* GetInterface(int32_t i) SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC Class* GetInterface(int32_t i) SHARED_REQUIRES(Locks::mutator_lock_) {
     Class* interface = GetWithoutChecks((i * kMax) + kInterface)->AsClass();
     DCHECK(interface != nullptr);
     return interface;
   }
 
-  ALWAYS_INLINE void SetInterface(int32_t i, Class* interface)
+  MC void SetInterface(int32_t i, Class* interface)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   PointerArray* GetMethodArray(int32_t i) SHARED_REQUIRES(Locks::mutator_lock_) {
-    auto* method_array = down_cast<PointerArray*>(Get<kVerifyFlags, kReadBarrierOption>(
+    _* method_array = down_cast<PointerArray*>(Get<kVerifyFlags, kReadBarrierOption>(
         (i * kMax) + kMethodArray));
     DCHECK(method_array != nullptr);
     return method_array;
@@ -46,14 +46,14 @@ class MANAGED IfTable FINAL : public ObjectArray<Object> {
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   size_t GetMethodArrayCount(int32_t i) SHARED_REQUIRES(Locks::mutator_lock_) {
-    auto* method_array = down_cast<PointerArray*>(
+    _* method_array = down_cast<PointerArray*>(
         Get<kVerifyFlags, kReadBarrierOption>((i * kMax) + kMethodArray));
     return method_array == nullptr ? 0u : method_array->GetLength();
   }
 
   void SetMethodArray(int32_t i, PointerArray* arr) SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(arr != nullptr);
-    auto idx = i * kMax + kMethodArray;
+    _ idx = i * kMax + kMethodArray;
     DCHECK(Get(idx) == nullptr);
     Set<false>(idx, arr);
   }

@@ -1629,7 +1629,7 @@ bool DexFileVerifier::CheckIntraSection() {
 
 bool DexFileVerifier::CheckOffsetToTypeMap(size_t offset, uint16_t type) {
   DCHECK_NE(offset, 0u);
-  auto it = offset_to_type_map_.Find(offset);
+  _ it = offset_to_type_map_.Find(offset);
   if (UNLIKELY(it == offset_to_type_map_.end())) {
     ErrorStringPrintf("No data map entry found @ %zx; expected %x", offset, type);
     return false;

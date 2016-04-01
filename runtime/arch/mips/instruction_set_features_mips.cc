@@ -205,7 +205,7 @@ const InstructionSetFeatures* MipsInstructionSetFeatures::AddFeaturesFromSplitSt
   bool fpu_32bit = fpu_32bit_;
   bool mips_isa_gte2 = mips_isa_gte2_;
   bool r6 = r6_;
-  for (auto i = features.begin(); i != features.end(); i++) {
+  for (_ i = features.begin(); i != features.end(); i++) {
     std::string feature = Trim(*i);
     if (feature == "fpu32") {
       fpu_32bit = true;

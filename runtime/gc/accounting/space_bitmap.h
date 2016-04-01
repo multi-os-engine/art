@@ -73,11 +73,11 @@ class SpaceBitmap {
     return (static_cast<size_t>(1)) << ((offset / kAlignment) % kBitsPerIntPtrT);
   }
 
-  bool Set(const mirror::Object* obj) ALWAYS_INLINE {
+  bool Set(const mirror::Object* obj) MC {
     return Modify<true>(obj);
   }
 
-  bool Clear(const mirror::Object* obj) ALWAYS_INLINE {
+  bool Clear(const mirror::Object* obj) MC {
     return Modify<false>(obj);
   }
 

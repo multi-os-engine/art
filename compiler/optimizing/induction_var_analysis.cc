@@ -202,7 +202,7 @@ uint32_t HInductionVarAnalysis::VisitDescendant(HLoopInformation* loop, HInstruc
     VisitNode(loop, instruction);
     return map_.find(instruction)->second.depth;
   } else {
-    auto it = map_.find(instruction);
+    _ it = map_.find(instruction);
     return it->second.done ? global_depth_ : it->second.depth;
   }
 }
@@ -466,10 +466,10 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::SolvePhi(HInstructi
   // Match all phi inputs from input_index onwards exactly.
   const size_t count = phi->InputCount();
   DCHECK_LT(input_index, count);
-  auto ita = cycle_.find(phi->InputAt(input_index));
+  _ ita = cycle_.find(phi->InputAt(input_index));
   if (ita != cycle_.end()) {
     for (size_t i = input_index + 1; i < count; i++) {
-      auto itb = cycle_.find(phi->InputAt(i));
+      _ itb = cycle_.find(phi->InputAt(i));
       if (itb == cycle_.end() ||
           !HInductionVarAnalysis::InductionEqual(ita->second, itb->second)) {
         return nullptr;
@@ -523,7 +523,7 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::SolveAddSub(HLoopIn
     if (x == entry_phi) {
       return (op == kAdd) ? b : CreateInvariantOp(kNeg, nullptr, b);
     }
-    auto it = cycle_.find(x);
+    _ it = cycle_.find(x);
     if (it != cycle_.end()) {
       InductionInfo* a = it->second;
       if (a->induction_class == kInvariant) {
@@ -559,7 +559,7 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::SolveCnv(HTypeConve
   // A narrowing conversion is allowed within the cycle of a linear induction, provided that the
   // narrowest encountered type is recorded with the induction to account for the precision loss.
   if (IsNarrowingIntegralConversion(from, to)) {
-    auto it = cycle_.find(conversion->GetInput());
+    _ it = cycle_.find(conversion->GetInput());
     if (it != cycle_.end() && it->second->induction_class == kInvariant) {
       type_ = Narrowest(type_, to);
       return it->second;
@@ -801,7 +801,7 @@ bool HInductionVarAnalysis::FitsNarrowerControl(InductionInfo* lower_expr,
 void HInductionVarAnalysis::AssignInfo(HLoopInformation* loop,
                                        HInstruction* instruction,
                                        InductionInfo* info) {
-  auto it = induction_.find(loop);
+  _ it = induction_.find(loop);
   if (it == induction_.end()) {
     it = induction_.Put(loop,
                         ArenaSafeMap<HInstruction*, InductionInfo*>(
@@ -813,9 +813,9 @@ void HInductionVarAnalysis::AssignInfo(HLoopInformation* loop,
 
 HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::LookupInfo(HLoopInformation* loop,
                                                                         HInstruction* instruction) {
-  auto it = induction_.find(loop);
+  _ it = induction_.find(loop);
   if (it != induction_.end()) {
-    auto loop_it = it->second.find(instruction);
+    _ loop_it = it->second.find(instruction);
     if (loop_it != it->second.end()) {
       return loop_it->second;
     }

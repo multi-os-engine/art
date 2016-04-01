@@ -107,7 +107,7 @@ static const std::string removed = "";
 // Naive patch command: apply a diff to a string.
 inline std::string Patch(const std::string& original, const diff_t& diff) {
   std::string result = original;
-  for (const auto& p : diff) {
+  for (const _& p : diff) {
     std::string::size_type pos = result.find(p.first);
     EXPECT_NE(pos, std::string::npos);
     result.replace(pos, p.first.size(), p.second);

@@ -35,7 +35,7 @@ static constexpr bool kCheckFreeMaps = false;
 template <typename FreeBySizeSet>
 static void DumpFreeMap(const FreeBySizeSet& free_by_size) {
   size_t last_size = static_cast<size_t>(-1);
-  for (const auto& entry : free_by_size) {
+  for (const _& entry : free_by_size) {
     if (last_size != entry.first) {
       last_size = entry.first;
       LOG(INFO) << "Size " << last_size;
@@ -46,14 +46,14 @@ static void DumpFreeMap(const FreeBySizeSet& free_by_size) {
 }
 
 void SwapSpace::RemoveChunk(FreeBySizeSet::const_iterator free_by_size_pos) {
-  auto free_by_start_pos = free_by_size_pos->second;
+  _ free_by_start_pos = free_by_size_pos->second;
   free_by_size_.erase(free_by_size_pos);
   free_by_start_.erase(free_by_start_pos);
 }
 
 inline void SwapSpace::InsertChunk(const SpaceChunk& chunk) {
   DCHECK_NE(chunk.size, 0u);
-  auto insert_result = free_by_start_.insert(chunk);
+  _ insert_result = free_by_start_.insert(chunk);
   DCHECK(insert_result.second);
   free_by_size_.emplace(chunk.size, insert_result.first);
 }
@@ -88,13 +88,13 @@ static size_t CollectFree(const FreeByStartSet& free_by_start, const FreeBySizeS
 
   // Calculate over free_by_size.
   size_t sum1 = 0;
-  for (const auto& entry : free_by_size) {
+  for (const _& entry : free_by_size) {
     sum1 += entry.second->size;
   }
 
   // Calculate over free_by_start.
   size_t sum2 = 0;
-  for (const auto& entry : free_by_start) {
+  for (const _& entry : free_by_start) {
     sum2 += entry.size;
   }
 
@@ -111,7 +111,7 @@ void* SwapSpace::Alloc(size_t size) {
   // Check the free list for something that fits.
   // TODO: Smarter implementation. Global biggest chunk, ...
   SpaceChunk old_chunk;
-  auto it = free_by_start_.empty()
+  _ it = free_by_start_.empty()
       ? free_by_size_.end()
       : free_by_size_.lower_bound(FreeBySizeEntry { size, free_by_start_.begin() });
   if (it != free_by_size_.end()) {
@@ -171,16 +171,16 @@ void SwapSpace::Free(void* ptr, size_t size) {
   }
 
   SpaceChunk chunk = { reinterpret_cast<uint8_t*>(ptr), size };
-  auto it = free_by_start_.lower_bound(chunk);
+  _ it = free_by_start_.lower_bound(chunk);
   if (it != free_by_start_.begin()) {
-    auto prev = it;
+    _ prev = it;
     --prev;
     CHECK_LE(prev->End(), chunk.Start());
     if (prev->End() == chunk.Start()) {
       // Merge *prev with this chunk.
       chunk.size += prev->size;
       chunk.ptr -= prev->size;
-      auto erase_pos = free_by_size_.find(FreeBySizeEntry { prev->size, prev });
+      _ erase_pos = free_by_size_.find(FreeBySizeEntry { prev->size, prev });
       DCHECK(erase_pos != free_by_size_.end());
       RemoveChunk(erase_pos);
       // "prev" is invalidated but "it" remains valid.
@@ -191,7 +191,7 @@ void SwapSpace::Free(void* ptr, size_t size) {
     if (chunk.End() == it->Start()) {
       // Merge *it with this chunk.
       chunk.size += it->size;
-      auto erase_pos = free_by_size_.find(FreeBySizeEntry { it->size, it });
+      _ erase_pos = free_by_size_.find(FreeBySizeEntry { it->size, it });
       DCHECK(erase_pos != free_by_size_.end());
       RemoveChunk(erase_pos);
       // "it" is invalidated but we don't need it anymore.

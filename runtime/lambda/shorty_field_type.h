@@ -142,7 +142,7 @@ struct ShortyFieldType : ValueObject {
 
     // Lambda that keeps skipping characters until it sees ';'.
     // Stops one character -after- the ';'.
-    auto skip_until_semicolon = [&field_type_descriptor]() {
+    _ skip_until_semicolon = [&field_type_descriptor]() {
       while (*field_type_descriptor != ';' && *field_type_descriptor != '\0') {
         ++field_type_descriptor;
       }
@@ -455,7 +455,7 @@ struct ShortyFieldTypeSelectType<ShortyFieldType::enum_element> { \
 \
 template <> \
 struct ShortyFieldTypeSelectEnum<cpp_type> { \
-  static constexpr const auto value = ShortyFieldType::enum_element; \
+  static constexpr const _ value = ShortyFieldType::enum_element; \
 }; \
 
 SHORTY_FIELD_TYPE_SELECT_IMPL(bool, kBoolean);

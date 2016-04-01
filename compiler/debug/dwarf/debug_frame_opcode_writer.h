@@ -44,7 +44,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
   static constexpr int kCodeAlignmentFactor = 1;
 
   // Explicitely advance the program counter to given location.
-  void ALWAYS_INLINE AdvancePC(int absolute_pc) {
+  void MC AdvancePC(int absolute_pc) {
     DCHECK_GE(absolute_pc, current_pc_);
     if (UNLIKELY(enabled_)) {
       int delta = FactorCodeOffset(absolute_pc - current_pc_);
@@ -70,17 +70,17 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
   virtual void ImplicitlyAdvancePC() { }
 
   // Common alias in assemblers - spill relative to current stack pointer.
-  void ALWAYS_INLINE RelOffset(Reg reg, int offset) {
+  void MC RelOffset(Reg reg, int offset) {
     Offset(reg, offset - current_cfa_offset_);
   }
 
   // Common alias in assemblers - increase stack frame size.
-  void ALWAYS_INLINE AdjustCFAOffset(int delta) {
+  void MC AdjustCFAOffset(int delta) {
     DefCFAOffset(current_cfa_offset_ + delta);
   }
 
   // Custom alias - spill many registers based on bitmask.
-  void ALWAYS_INLINE RelOffsetForMany(Reg reg_base, int offset,
+  void MC RelOffsetForMany(Reg reg_base, int offset,
                                       uint32_t reg_mask, int reg_size) {
     DCHECK(reg_size == 4 || reg_size == 8);
     if (UNLIKELY(enabled_)) {
@@ -96,7 +96,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
   }
 
   // Custom alias - unspill many registers based on bitmask.
-  void ALWAYS_INLINE RestoreMany(Reg reg_base, uint32_t reg_mask) {
+  void MC RestoreMany(Reg reg_base, uint32_t reg_mask) {
     if (UNLIKELY(enabled_)) {
       for (int i = 0; reg_mask != 0u; reg_mask >>= 1, i++) {
         // Skip zero bits and go to the set bit.
@@ -108,13 +108,13 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     }
   }
 
-  void ALWAYS_INLINE Nop() {
+  void MC Nop() {
     if (UNLIKELY(enabled_)) {
       this->PushUint8(DW_CFA_nop);
     }
   }
 
-  void ALWAYS_INLINE Offset(Reg reg, int offset) {
+  void MC Offset(Reg reg, int offset) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       int factored_offset = FactorDataOffset(offset);  // May change sign.
@@ -136,7 +136,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     }
   }
 
-  void ALWAYS_INLINE Restore(Reg reg) {
+  void MC Restore(Reg reg) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       if (0 <= reg.num() && reg.num() <= 0x3F) {
@@ -148,7 +148,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     }
   }
 
-  void ALWAYS_INLINE Undefined(Reg reg) {
+  void MC Undefined(Reg reg) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       this->PushUint8(DW_CFA_undefined);
@@ -156,7 +156,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     }
   }
 
-  void ALWAYS_INLINE SameValue(Reg reg) {
+  void MC SameValue(Reg reg) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       this->PushUint8(DW_CFA_same_value);
@@ -165,7 +165,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
   }
 
   // The previous value of "reg" is stored in register "new_reg".
-  void ALWAYS_INLINE Register(Reg reg, Reg new_reg) {
+  void MC Register(Reg reg, Reg new_reg) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       this->PushUint8(DW_CFA_register);
@@ -174,21 +174,21 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     }
   }
 
-  void ALWAYS_INLINE RememberState() {
+  void MC RememberState() {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       this->PushUint8(DW_CFA_remember_state);
     }
   }
 
-  void ALWAYS_INLINE RestoreState() {
+  void MC RestoreState() {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       this->PushUint8(DW_CFA_restore_state);
     }
   }
 
-  void ALWAYS_INLINE DefCFA(Reg reg, int offset) {
+  void MC DefCFA(Reg reg, int offset) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       if (offset >= 0) {
@@ -205,7 +205,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     current_cfa_offset_ = offset;
   }
 
-  void ALWAYS_INLINE DefCFARegister(Reg reg) {
+  void MC DefCFARegister(Reg reg) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       this->PushUint8(DW_CFA_def_cfa_register);
@@ -213,7 +213,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     }
   }
 
-  void ALWAYS_INLINE DefCFAOffset(int offset) {
+  void MC DefCFAOffset(int offset) {
     if (UNLIKELY(enabled_)) {
       if (current_cfa_offset_ != offset) {
         ImplicitlyAdvancePC();
@@ -231,7 +231,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     current_cfa_offset_ = offset;
   }
 
-  void ALWAYS_INLINE ValOffset(Reg reg, int offset) {
+  void MC ValOffset(Reg reg, int offset) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       uses_dwarf3_features_ = true;
@@ -248,7 +248,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     }
   }
 
-  void ALWAYS_INLINE DefCFAExpression(uint8_t* expr, int expr_size) {
+  void MC DefCFAExpression(uint8_t* expr, int expr_size) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       uses_dwarf3_features_ = true;
@@ -258,7 +258,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     }
   }
 
-  void ALWAYS_INLINE Expression(Reg reg, uint8_t* expr, int expr_size) {
+  void MC Expression(Reg reg, uint8_t* expr, int expr_size) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       uses_dwarf3_features_ = true;
@@ -269,7 +269,7 @@ class DebugFrameOpCodeWriter : private Writer<Vector> {
     }
   }
 
-  void ALWAYS_INLINE ValExpression(Reg reg, uint8_t* expr, int expr_size) {
+  void MC ValExpression(Reg reg, uint8_t* expr, int expr_size) {
     if (UNLIKELY(enabled_)) {
       ImplicitlyAdvancePC();
       uses_dwarf3_features_ = true;

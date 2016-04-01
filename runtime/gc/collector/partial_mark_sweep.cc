@@ -36,7 +36,7 @@ void PartialMarkSweep::BindBitmaps() {
   WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
   // For partial GCs we need to bind the bitmap of the zygote space so that all objects in the
   // zygote space are viewed as marked.
-  for (const auto& space : GetHeap()->GetContinuousSpaces()) {
+  for (const _& space : GetHeap()->GetContinuousSpaces()) {
     if (space->GetGcRetentionPolicy() == space::kGcRetentionPolicyFullCollect) {
       CHECK(space->IsZygoteSpace());
       immune_spaces_.AddSpace(space);

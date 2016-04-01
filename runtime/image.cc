@@ -149,7 +149,7 @@ std::ostream& operator<<(std::ostream& os, const ImageSection& section) {
 
 void ImageSection::VisitPackedArtFields(ArtFieldVisitor* visitor, uint8_t* base) const {
   for (size_t pos = 0; pos < Size(); ) {
-    auto* array = reinterpret_cast<LengthPrefixedArray<ArtField>*>(base + Offset() + pos);
+    _* array = reinterpret_cast<LengthPrefixedArray<ArtField>*>(base + Offset() + pos);
     for (size_t i = 0; i < array->size(); ++i) {
       visitor->Visit(&array->At(i, sizeof(ArtField)));
     }
@@ -163,7 +163,7 @@ void ImageSection::VisitPackedArtMethods(ArtMethodVisitor* visitor,
   const size_t method_alignment = ArtMethod::Alignment(pointer_size);
   const size_t method_size = ArtMethod::Size(pointer_size);
   for (size_t pos = 0; pos < Size(); ) {
-    auto* array = reinterpret_cast<LengthPrefixedArray<ArtMethod>*>(base + Offset() + pos);
+    _* array = reinterpret_cast<LengthPrefixedArray<ArtMethod>*>(base + Offset() + pos);
     for (size_t i = 0; i < array->size(); ++i) {
       visitor->Visit(&array->At(i, method_size, method_alignment));
     }

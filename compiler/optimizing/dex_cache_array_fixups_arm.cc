@@ -34,7 +34,7 @@ class DexCacheArrayFixupsVisitor : public HGraphVisitor {
                                graph->GetArena()->Adapter(kArenaAllocCodeGenerator)) {}
 
   void MoveBasesIfNeeded() {
-    for (const auto& entry : dex_cache_array_bases_) {
+    for (const _& entry : dex_cache_array_bases_) {
       // Bring the base closer to the first use (previously, it was in the
       // entry block) and relieve some pressure on the register allocator
       // while avoiding recalculation of the base in a loop.
@@ -77,7 +77,7 @@ class DexCacheArrayFixupsVisitor : public HGraphVisitor {
 
   HArmDexCacheArraysBase* GetOrCreateDexCacheArrayBase(const DexFile& dex_file) {
     // Ensure we only initialize the pointer once for each dex file.
-    auto lb = dex_cache_array_bases_.lower_bound(&dex_file);
+    _ lb = dex_cache_array_bases_.lower_bound(&dex_file);
     if (lb != dex_cache_array_bases_.end() &&
         !dex_cache_array_bases_.key_comp()(&dex_file, lb->first)) {
       return lb->second;

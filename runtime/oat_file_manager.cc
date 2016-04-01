@@ -68,7 +68,7 @@ void OatFileManager::UnRegisterAndDeleteOatFile(const OatFile* oat_file) {
   WriterMutexLock mu(Thread::Current(), *Locks::oat_file_manager_lock_);
   DCHECK(oat_file != nullptr);
   std::unique_ptr<const OatFile> compare(oat_file);
-  auto it = oat_files_.find(compare);
+  _ it = oat_files_.find(compare);
   CHECK(it != oat_files_.end());
   oat_files_.erase(it);
   compare.release();
@@ -468,7 +468,7 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
 
 bool OatFileManager::RegisterOatFileLocation(const std::string& oat_location) {
   WriterMutexLock mu(Thread::Current(), *Locks::oat_file_count_lock_);
-  auto it = oat_file_count_.find(oat_location);
+  _ it = oat_file_count_.find(oat_location);
   if (it != oat_file_count_.end()) {
     ++it->second;
     return false;
@@ -479,7 +479,7 @@ bool OatFileManager::RegisterOatFileLocation(const std::string& oat_location) {
 
 void OatFileManager::UnRegisterOatFileLocation(const std::string& oat_location) {
   WriterMutexLock mu(Thread::Current(), *Locks::oat_file_count_lock_);
-  auto it = oat_file_count_.find(oat_location);
+  _ it = oat_file_count_.find(oat_location);
   if (it != oat_file_count_.end()) {
     --it->second;
     if (it->second == 0) {

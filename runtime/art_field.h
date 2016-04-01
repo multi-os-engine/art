@@ -192,7 +192,7 @@ class ArtField FINAL {
 
   // Update the declaring class with the passed in visitor. Does not use read barrier.
   template <typename Visitor>
-  ALWAYS_INLINE void UpdateObjects(const Visitor& visitor)
+  MC void UpdateObjects(const Visitor& visitor)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:

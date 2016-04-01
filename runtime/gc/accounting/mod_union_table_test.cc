@@ -48,10 +48,10 @@ class ModUnionTableTest : public CommonRuntimeTest {
   mirror::ObjectArray<mirror::Object>* AllocObjectArray(
       Thread* self, space::ContinuousMemMapAllocSpace* space, size_t component_count)
       SHARED_REQUIRES(Locks::mutator_lock_) {
-    auto* klass = GetObjectArrayClass(self, space);
+    _* klass = GetObjectArrayClass(self, space);
     const size_t size = mirror::ComputeArraySize(component_count, 2);
     size_t bytes_allocated = 0, bytes_tl_bulk_allocated;
-    auto* obj = down_cast<mirror::ObjectArray<mirror::Object>*>(
+    _* obj = down_cast<mirror::ObjectArray<mirror::Object>*>(
         space->Alloc(self, size, &bytes_allocated, nullptr, &bytes_tl_bulk_allocated));
     if (obj != nullptr) {
       obj->SetClass(klass);
@@ -80,7 +80,7 @@ class ModUnionTableTest : public CommonRuntimeTest {
       DCHECK(java_lang_object_array_ != nullptr);
       const size_t class_size = java_lang_object_array_->GetClassSize();
       size_t bytes_allocated = 0, bytes_tl_bulk_allocated;
-      auto* klass = down_cast<mirror::Class*>(space->Alloc(self, class_size, &bytes_allocated,
+      _* klass = down_cast<mirror::Class*>(space->Alloc(self, class_size, &bytes_allocated,
                                                            nullptr,
                                                            &bytes_tl_bulk_allocated));
       DCHECK(klass != nullptr);
@@ -179,7 +179,7 @@ void ModUnionTableTest::RunTest(ModUnionTableFactory::TableType type) {
   Runtime* const runtime = Runtime::Current();
   gc::Heap* const heap = runtime->GetHeap();
   // Use non moving space since moving GC don't necessarily have a primary free list space.
-  auto* space = heap->GetNonMovingSpace();
+  _* space = heap->GetNonMovingSpace();
   ResetClass();
   // Create another space that we can put references in.
   std::unique_ptr<space::DlMallocSpace> other_space(space::DlMallocSpace::Create(
@@ -194,13 +194,13 @@ void ModUnionTableTest::RunTest(ModUnionTableFactory::TableType type) {
       type, space, other_space.get()));
   ASSERT_TRUE(table.get() != nullptr);
   // Create some fake objects and put the main space and dirty cards in the non moving space.
-  auto* obj1 = AllocObjectArray(self, space, CardTable::kCardSize);
+  _* obj1 = AllocObjectArray(self, space, CardTable::kCardSize);
   ASSERT_TRUE(obj1 != nullptr);
-  auto* obj2 = AllocObjectArray(self, space, CardTable::kCardSize);
+  _* obj2 = AllocObjectArray(self, space, CardTable::kCardSize);
   ASSERT_TRUE(obj2 != nullptr);
-  auto* obj3 = AllocObjectArray(self, space, CardTable::kCardSize);
+  _* obj3 = AllocObjectArray(self, space, CardTable::kCardSize);
   ASSERT_TRUE(obj3 != nullptr);
-  auto* obj4 = AllocObjectArray(self, space, CardTable::kCardSize);
+  _* obj4 = AllocObjectArray(self, space, CardTable::kCardSize);
   ASSERT_TRUE(obj4 != nullptr);
   // Dirty some cards.
   obj1->Set(0, obj2);
@@ -208,9 +208,9 @@ void ModUnionTableTest::RunTest(ModUnionTableFactory::TableType type) {
   obj3->Set(0, obj4);
   obj4->Set(0, obj1);
   // Dirty some more cards to objects in another space.
-  auto* other_space_ref1 = AllocObjectArray(self, other_space.get(), CardTable::kCardSize);
+  _* other_space_ref1 = AllocObjectArray(self, other_space.get(), CardTable::kCardSize);
   ASSERT_TRUE(other_space_ref1 != nullptr);
-  auto* other_space_ref2 = AllocObjectArray(self, other_space.get(), CardTable::kCardSize);
+  _* other_space_ref2 = AllocObjectArray(self, other_space.get(), CardTable::kCardSize);
   ASSERT_TRUE(other_space_ref2 != nullptr);
   obj1->Set(1, other_space_ref1);
   obj2->Set(3, other_space_ref2);
@@ -242,7 +242,7 @@ void ModUnionTableTest::RunTest(ModUnionTableFactory::TableType type) {
   // Set all the cards, then verify.
   table->SetCards();
   // TODO: Check that the cards are actually set.
-  for (auto* ptr = space->Begin(); ptr < AlignUp(space->End(), CardTable::kCardSize);
+  for (_* ptr = space->Begin(); ptr < AlignUp(space->End(), CardTable::kCardSize);
       ptr += CardTable::kCardSize) {
     ASSERT_TRUE(table->ContainsCardFor(reinterpret_cast<uintptr_t>(ptr)));
   }
@@ -251,7 +251,7 @@ void ModUnionTableTest::RunTest(ModUnionTableFactory::TableType type) {
   CollectVisitedVisitor collector_after(&visited_after);
   table->UpdateAndMarkReferences(&collector_after);
   // Check that we visited a superset after.
-  for (auto* obj : visited_before) {
+  for (_* obj : visited_before) {
     ASSERT_TRUE(visited_after.find(obj) != visited_after.end()) << obj;
   }
   // Verify that the dump still works.

@@ -364,7 +364,7 @@ std::string shll_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->shll(*reg, shifter);
     str << "shll %cl, %" << assembler_test->GetSecondaryRegisterName(*reg) << "\n";
   }
@@ -387,7 +387,7 @@ std::string shlq_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->shlq(*reg, shifter);
     str << "shlq %cl, %" << assembler_test->GetRegisterName(*reg) << "\n";
   }
@@ -410,7 +410,7 @@ std::string shrl_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->shrl(*reg, shifter);
     str << "shrl %cl, %" << assembler_test->GetSecondaryRegisterName(*reg) << "\n";
   }
@@ -433,7 +433,7 @@ std::string shrq_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->shrq(*reg, shifter);
     str << "shrq %cl, %" << assembler_test->GetRegisterName(*reg) << "\n";
   }
@@ -456,7 +456,7 @@ std::string sarl_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->sarl(*reg, shifter);
     str << "sarl %cl, %" << assembler_test->GetSecondaryRegisterName(*reg) << "\n";
   }
@@ -479,7 +479,7 @@ std::string sarq_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->sarq(*reg, shifter);
     str << "sarq %cl, %" << assembler_test->GetRegisterName(*reg) << "\n";
   }
@@ -502,7 +502,7 @@ std::string rorl_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->rorl(*reg, shifter);
     str << "rorl %cl, %" << assembler_test->GetSecondaryRegisterName(*reg) << "\n";
   }
@@ -525,7 +525,7 @@ std::string roll_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->roll(*reg, shifter);
     str << "roll %cl, %" << assembler_test->GetSecondaryRegisterName(*reg) << "\n";
   }
@@ -548,7 +548,7 @@ std::string rorq_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->rorq(*reg, shifter);
     str << "rorq %cl, %" << assembler_test->GetRegisterName(*reg) << "\n";
   }
@@ -571,7 +571,7 @@ std::string rolq_fn(AssemblerX86_64Test::Base* assembler_test, x86_64::X86_64Ass
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
 
   x86_64::CpuRegister shifter(x86_64::RCX);
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     assembler->rolq(*reg, shifter);
     str << "rolq %cl, %" << assembler_test->GetRegisterName(*reg) << "\n";
   }
@@ -1469,7 +1469,7 @@ std::string setcc_test_fn(AssemblerX86_64Test::Base* assembler_test,
   std::vector<x86_64::CpuRegister*> registers = assembler_test->GetRegisters();
   std::ostringstream str;
 
-  for (auto reg : registers) {
+  for (_ reg : registers) {
     for (size_t i = 0; i < 15; ++i) {
       assembler->setcc(static_cast<x86_64::Condition>(i), *reg);
       str << "set" << suffixes[i] << " %" << assembler_test->GetQuaternaryRegisterName(*reg) << "\n";

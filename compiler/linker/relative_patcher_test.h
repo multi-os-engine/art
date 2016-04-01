@@ -96,7 +96,7 @@ class RelativePatcherTest : public testing::Test {
     static_assert(kTrampolineOffset == 0u, "Unexpected trampoline offset.");
     uint32_t offset = kTrampolineSize;
     size_t idx = 0u;
-    for (auto& compiled_method : compiled_methods_) {
+    for (_& compiled_method : compiled_methods_) {
       offset = patcher_->ReserveSpace(offset, compiled_method.get(), compiled_method_refs_[idx]);
 
       uint32_t aligned_offset = compiled_method->AlignCode(offset);
@@ -105,7 +105,7 @@ class RelativePatcherTest : public testing::Test {
 
       offset += sizeof(OatQuickMethodHeader);
       uint32_t quick_code_offset = offset + compiled_method->CodeDelta();
-      const auto code = compiled_method->GetQuickCode();
+      const _ code = compiled_method->GetQuickCode();
       offset += code.size();
 
       method_offset_map_.map.Put(compiled_method_refs_[idx], quick_code_offset);
@@ -126,7 +126,7 @@ class RelativePatcherTest : public testing::Test {
     };
     uint8_t dummy_header[sizeof(OatQuickMethodHeader)];
     memset(dummy_header, 0, sizeof(dummy_header));
-    for (auto& compiled_method : compiled_methods_) {
+    for (_& compiled_method : compiled_methods_) {
       offset = patcher_->WriteThunks(&out_, offset);
 
       uint32_t aligned_offset = compiled_method->AlignCode(offset);
@@ -143,7 +143,7 @@ class RelativePatcherTest : public testing::Test {
         code = ArrayRef<const uint8_t>(patched_code_);
         for (const LinkerPatch& patch : compiled_method->GetPatches()) {
           if (patch.GetType() == LinkerPatch::Type::kCallRelative) {
-            auto result = method_offset_map_.FindMethodOffset(patch.TargetMethod());
+            _ result = method_offset_map_.FindMethodOffset(patch.TargetMethod());
             uint32_t target_offset =
                 result.first ? result.second : kTrampolineOffset + compiled_method->CodeDelta();
             patcher_->PatchCall(&patched_code_, patch.LiteralOffset(),
@@ -177,7 +177,7 @@ class RelativePatcherTest : public testing::Test {
   bool CheckLinkedMethod(MethodReference method_ref, const ArrayRef<const uint8_t>& expected_code) {
     // Sanity check: original code size must match linked_code.size().
     size_t idx = 0u;
-    for (auto ref : compiled_method_refs_) {
+    for (_ ref : compiled_method_refs_) {
       if (ref.dex_file == method_ref.dex_file &&
           ref.dex_method_index == method_ref.dex_method_index) {
         break;
@@ -187,7 +187,7 @@ class RelativePatcherTest : public testing::Test {
     CHECK_NE(idx, compiled_method_refs_.size());
     CHECK_EQ(compiled_methods_[idx]->GetQuickCode().size(), expected_code.size());
 
-    auto result = method_offset_map_.FindMethodOffset(method_ref);
+    _ result = method_offset_map_.FindMethodOffset(method_ref);
     CHECK(result.first);  // Must have been linked.
     size_t offset = result.second - compiled_methods_[idx]->CodeDelta();
     CHECK_LT(offset, output_.size());
@@ -241,7 +241,7 @@ class RelativePatcherTest : public testing::Test {
   class MethodOffsetMap FINAL : public linker::RelativePatcherTargetProvider {
    public:
     std::pair<bool, uint32_t> FindMethodOffset(MethodReference ref) OVERRIDE {
-      auto it = map.find(ref);
+      _ it = map.find(ref);
       if (it == map.end()) {
         return std::pair<bool, uint32_t>(false, 0u);
       } else {

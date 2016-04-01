@@ -36,7 +36,7 @@ std::ostream& operator<<(std::ostream& os, const DRegister& rhs) {
 }
 
 void MipsAssembler::FinalizeCode() {
-  for (auto& exception_block : exception_blocks_) {
+  for (_& exception_block : exception_blocks_) {
     EmitExceptionPoll(&exception_block);
   }
   PromoteBranches();
@@ -56,7 +56,7 @@ void MipsAssembler::PatchCFI(size_t number_of_delayed_adjust_pcs) {
   }
 
   typedef DebugFrameOpCodeWriterForAssembler::DelayedAdvancePC DelayedAdvancePC;
-  const auto data = cfi().ReleaseStreamAndPrepareForDelayedAdvancePC();
+  const _ data = cfi().ReleaseStreamAndPrepareForDelayedAdvancePC();
   const std::vector<uint8_t>& old_stream = data.first;
   const std::vector<DelayedAdvancePC>& advances = data.second;
 
@@ -64,7 +64,7 @@ void MipsAssembler::PatchCFI(size_t number_of_delayed_adjust_pcs) {
   // PCs recorded during EmitBranches() are already adjusted.
   // Both ranges are separately sorted but they may overlap.
   if (kIsDebugBuild) {
-    auto cmp = [](const DelayedAdvancePC& lhs, const DelayedAdvancePC& rhs) {
+    _ cmp = [](const DelayedAdvancePC& lhs, const DelayedAdvancePC& rhs) {
       return lhs.pc < rhs.pc;
     };
     CHECK(std::is_sorted(advances.begin(), advances.begin() + number_of_delayed_adjust_pcs, cmp));
@@ -104,7 +104,7 @@ void MipsAssembler::EmitBranches() {
   // Switch from appending instructions at the end of the buffer to overwriting
   // existing instructions (branch placeholders) in the buffer.
   overwriting_ = true;
-  for (auto& branch : branches_) {
+  for (_& branch : branches_) {
     EmitBranch(&branch);
   }
   overwriting_ = false;
@@ -1969,7 +1969,7 @@ void MipsAssembler::PromoteBranches() {
   bool changed;
   do {
     changed = false;
-    for (auto& branch : branches_) {
+    for (_& branch : branches_) {
       CHECK(branch.IsResolved());
       uint32_t delta = branch.PromoteIfNeeded();
       // If this branch has been promoted and needs to expand in size,
@@ -1977,7 +1977,7 @@ void MipsAssembler::PromoteBranches() {
       if (delta) {
         changed = true;
         uint32_t expand_location = branch.GetLocation();
-        for (auto& branch2 : branches_) {
+        for (_& branch2 : branches_) {
           branch2.Relocate(expand_location, delta);
         }
       }

@@ -63,7 +63,7 @@ void InternTable::VisitRoots(RootVisitor* visitor, VisitRootFlags flags) {
   if ((flags & kVisitRootFlagAllRoots) != 0) {
     strong_interns_.VisitRoots(visitor);
   } else if ((flags & kVisitRootFlagNewRoots) != 0) {
-    for (auto& root : new_strong_intern_roots_) {
+    for (_& root : new_strong_intern_roots_) {
       mirror::String* old_ref = root.Read<kWithoutReadBarrier>();
       root.VisitRoot(visitor, RootInfo(kRootInternedString));
       mirror::String* new_ref = root.Read<kWithoutReadBarrier>();
@@ -285,7 +285,7 @@ mirror::String* InternTable::Insert(mirror::String* s, bool is_strong, bool hold
     // cleared.
     CHECK(!holding_locks);
     StackHandleScope<1> hs(self);
-    auto h = hs.NewHandleWrapper(&s);
+    _ h = hs.NewHandleWrapper(&s);
     WaitUntilAccessible(self);
   }
   if (!kUseReadBarrier) {
@@ -426,7 +426,7 @@ size_t InternTable::Table::WriteToMemory(uint8_t* ptr) {
 
 void InternTable::Table::Remove(mirror::String* s) {
   for (UnorderedSet& table : tables_) {
-    auto it = table.Find(GcRoot<mirror::String>(s));
+    _ it = table.Find(GcRoot<mirror::String>(s));
     if (it != table.end()) {
       table.Erase(it);
       return;
@@ -438,7 +438,7 @@ void InternTable::Table::Remove(mirror::String* s) {
 mirror::String* InternTable::Table::Find(mirror::String* s) {
   Locks::intern_table_lock_->AssertHeld(Thread::Current());
   for (UnorderedSet& table : tables_) {
-    auto it = table.Find(GcRoot<mirror::String>(s));
+    _ it = table.Find(GcRoot<mirror::String>(s));
     if (it != table.end()) {
       return it->Read();
     }
@@ -449,7 +449,7 @@ mirror::String* InternTable::Table::Find(mirror::String* s) {
 mirror::String* InternTable::Table::Find(const Utf8String& string) {
   Locks::intern_table_lock_->AssertHeld(Thread::Current());
   for (UnorderedSet& table : tables_) {
-    auto it = table.Find(string);
+    _ it = table.Find(string);
     if (it != table.end()) {
       return it->Read();
     }
@@ -472,7 +472,7 @@ void InternTable::Table::VisitRoots(RootVisitor* visitor) {
   BufferedRootVisitor<kDefaultBufferedRootCount> buffered_visitor(
       visitor, RootInfo(kRootInternedString));
   for (UnorderedSet& table : tables_) {
-    for (auto& intern : table) {
+    for (_& intern : table) {
       buffered_visitor.VisitRoot(intern);
     }
   }
@@ -485,7 +485,7 @@ void InternTable::Table::SweepWeaks(IsMarkedVisitor* visitor) {
 }
 
 void InternTable::Table::SweepWeaks(UnorderedSet* set, IsMarkedVisitor* visitor) {
-  for (auto it = set->begin(), end = set->end(); it != end;) {
+  for (_ it = set->begin(), end = set->end(); it != end;) {
     // This does not need a read barrier because this is called by GC.
     mirror::Object* object = it->Read<kWithoutReadBarrier>();
     mirror::Object* new_object = visitor->IsMarked(object);

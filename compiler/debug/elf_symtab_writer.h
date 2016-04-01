@@ -40,8 +40,8 @@ static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
                               const ArrayRef<const MethodDebugInfo>& method_infos,
                               bool with_signature) {
   uint64_t mapping_symbol_address = std::numeric_limits<uint64_t>::max();
-  auto* strtab = builder->GetStrTab();
-  auto* symtab = builder->GetSymTab();
+  _* strtab = builder->GetStrTab();
+  _* symtab = builder->GetSymTab();
 
   if (method_infos.empty()) {
     return;
@@ -79,7 +79,7 @@ static void WriteDebugSymbols(ElfBuilder<ElfTypes>* builder,
       last_name_offset = name_offset;
     }
 
-    const auto* text = info.is_code_address_text_relative ? builder->GetText() : nullptr;
+    const _* text = info.is_code_address_text_relative ? builder->GetText() : nullptr;
     uint64_t address = info.code_address + (text != nullptr ? text->GetAddress() : 0);
     // Add in code delta, e.g., thumb bit 0 for Thumb2 code.
     address += CompiledMethod::CodeDelta(info.isa);

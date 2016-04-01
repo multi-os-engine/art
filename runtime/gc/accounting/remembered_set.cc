@@ -162,8 +162,8 @@ void RememberedSet::Dump(std::ostream& os) {
   CardTable* card_table = heap_->GetCardTable();
   os << "RememberedSet dirty cards: [";
   for (const uint8_t* card_addr : dirty_cards_) {
-    auto start = reinterpret_cast<uintptr_t>(card_table->AddrFromCard(card_addr));
-    auto end = start + CardTable::kCardSize;
+    _ start = reinterpret_cast<uintptr_t>(card_table->AddrFromCard(card_addr));
+    _ end = start + CardTable::kCardSize;
     os << reinterpret_cast<void*>(start) << "-" << reinterpret_cast<void*>(end) << "\n";
   }
   os << "]";
@@ -172,8 +172,8 @@ void RememberedSet::Dump(std::ostream& os) {
 void RememberedSet::AssertAllDirtyCardsAreWithinSpace() const {
   CardTable* card_table = heap_->GetCardTable();
   for (const uint8_t* card_addr : dirty_cards_) {
-    auto start = reinterpret_cast<uint8_t*>(card_table->AddrFromCard(card_addr));
-    auto end = start + CardTable::kCardSize;
+    _ start = reinterpret_cast<uint8_t*>(card_table->AddrFromCard(card_addr));
+    _ end = start + CardTable::kCardSize;
     DCHECK_LE(space_->Begin(), start);
     DCHECK_LE(end, space_->Limit());
   }

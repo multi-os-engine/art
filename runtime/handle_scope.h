@@ -59,18 +59,18 @@ class PACKED(4) HandleScope {
     return link_;
   }
 
-  ALWAYS_INLINE mirror::Object* GetReference(size_t i) const
+  MC mirror::Object* GetReference(size_t i) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE Handle<mirror::Object> GetHandle(size_t i);
+  MC Handle<mirror::Object> GetHandle(size_t i);
 
-  ALWAYS_INLINE MutableHandle<mirror::Object> GetMutableHandle(size_t i)
+  MC MutableHandle<mirror::Object> GetMutableHandle(size_t i)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE void SetReference(size_t i, mirror::Object* object)
+  MC void SetReference(size_t i, mirror::Object* object)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE bool Contains(StackReference<mirror::Object>* handle_scope_entry) const;
+  MC bool Contains(StackReference<mirror::Object>* handle_scope_entry) const;
 
   // Offset of link within HandleScope, used by generated code.
   static size_t LinkOffset(size_t pointer_size ATTRIBUTE_UNUSED) {
@@ -95,7 +95,7 @@ class PACKED(4) HandleScope {
 
  protected:
   // Return backing storage used for references.
-  ALWAYS_INLINE StackReference<mirror::Object>* GetReferences() const {
+  MC StackReference<mirror::Object>* GetReferences() const {
     uintptr_t address = reinterpret_cast<uintptr_t>(this) + ReferencesOffset(sizeof(void*));
     return reinterpret_cast<StackReference<mirror::Object>*>(address);
   }
@@ -145,17 +145,17 @@ class HandleWrapper : public MutableHandle<T> {
 template<size_t kNumReferences>
 class PACKED(4) StackHandleScope FINAL : public HandleScope {
  public:
-  explicit ALWAYS_INLINE StackHandleScope(Thread* self, mirror::Object* fill_value = nullptr);
-  ALWAYS_INLINE ~StackHandleScope();
+  explicit MC StackHandleScope(Thread* self, mirror::Object* fill_value = nullptr);
+  MC ~StackHandleScope();
 
   template<class T>
-  ALWAYS_INLINE MutableHandle<T> NewHandle(T* object) SHARED_REQUIRES(Locks::mutator_lock_);
+  MC MutableHandle<T> NewHandle(T* object) SHARED_REQUIRES(Locks::mutator_lock_);
 
   template<class T>
-  ALWAYS_INLINE HandleWrapper<T> NewHandleWrapper(T** object)
+  MC HandleWrapper<T> NewHandleWrapper(T** object)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ALWAYS_INLINE void SetReference(size_t i, mirror::Object* object)
+  MC void SetReference(size_t i, mirror::Object* object)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   Thread* Self() const {
@@ -164,7 +164,7 @@ class PACKED(4) StackHandleScope FINAL : public HandleScope {
 
  private:
   template<class T>
-  ALWAYS_INLINE MutableHandle<T> GetHandle(size_t i) SHARED_REQUIRES(Locks::mutator_lock_) {
+  MC MutableHandle<T> GetHandle(size_t i) SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK_LT(i, kNumReferences);
     return MutableHandle<T>(&GetReferences()[i]);
   }

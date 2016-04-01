@@ -194,7 +194,7 @@ void ImageTest::TestWriteRead(ImageHeader::StorageMode storage_mode) {
     ImageHeader image_header;
     ASSERT_EQ(file->ReadFully(&image_header, sizeof(image_header)), true);
     ASSERT_TRUE(image_header.IsValid());
-    const auto& bitmap_section = image_header.GetImageSection(ImageHeader::kSectionImageBitmap);
+    const _& bitmap_section = image_header.GetImageSection(ImageHeader::kSectionImageBitmap);
     ASSERT_GE(bitmap_section.Offset(), sizeof(image_header));
     ASSERT_NE(0U, bitmap_section.Size());
 

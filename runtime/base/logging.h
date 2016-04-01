@@ -120,7 +120,7 @@ extern const char* ProgramInvocationShortName();
 
 // Helper for CHECK_xx(x,y) macros.
 #define CHECK_OP(LHS, RHS, OP) \
-  for (auto _values = ::art::MakeEagerEvaluator(LHS, RHS); \
+  for (_ _values = ::art::MakeEagerEvaluator(LHS, RHS); \
        UNLIKELY(!(_values.lhs OP _values.rhs)); /* empty */) \
     ::art::LogMessage(__FILE__, __LINE__, ::art::FATAL, -1).stream() \
         << "Check failed: " << #LHS << " " << #OP << " " << #RHS \

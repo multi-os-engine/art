@@ -181,7 +181,7 @@ void ElfWriterQuick<ElfTypes>::SetLoadedSectionSizes(size_t rodata_size,
 
 template <typename ElfTypes>
 OutputStream* ElfWriterQuick<ElfTypes>::StartRoData() {
-  auto* rodata = builder_->GetRoData();
+  _* rodata = builder_->GetRoData();
   rodata->Start();
   return rodata;
 }
@@ -194,7 +194,7 @@ void ElfWriterQuick<ElfTypes>::EndRoData(OutputStream* rodata) {
 
 template <typename ElfTypes>
 OutputStream* ElfWriterQuick<ElfTypes>::StartText() {
-  auto* text = builder_->GetText();
+  _* text = builder_->GetText();
   text->Start();
   return text;
 }

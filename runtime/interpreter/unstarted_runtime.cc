@@ -205,9 +205,9 @@ void UnstartedRuntime::UnstartedClassNewInstance(
   //  2) If we can't find the default constructor. We'll postpone the exception to runtime.
   // Note that 2) could likely be handled here, but for safety abort the transaction.
   bool ok = false;
-  auto* cl = Runtime::Current()->GetClassLinker();
+  _* cl = Runtime::Current()->GetClassLinker();
   if (cl->EnsureInitialized(self, h_klass, true, true)) {
-    auto* cons = h_klass->FindDeclaredDirectMethod("<init>", "()V", cl->GetImagePointerSize());
+    _* cons = h_klass->FindDeclaredDirectMethod("<init>", "()V", cl->GetImagePointerSize());
     if (cons != nullptr) {
       Handle<mirror::Object> h_obj(hs.NewHandle(klass->AllocObject(self)));
       CHECK(h_obj.Get() != nullptr);  // We don't expect OOM at compile-time.
@@ -470,7 +470,7 @@ void UnstartedRuntime::UnstartedThreadLocalGet(
         Handle<mirror::Object> h_real_to_string_obj(hs.NewHandle(
             h_real_to_string_class->AllocObject(self)));
         if (h_real_to_string_obj.Get() != nullptr) {
-          auto* cl = Runtime::Current()->GetClassLinker();
+          _* cl = Runtime::Current()->GetClassLinker();
           ArtMethod* init_method = h_real_to_string_class->FindDirectMethod(
               "<init>", "()V", cl->GetImagePointerSize());
           if (init_method == nullptr) {
@@ -771,7 +771,7 @@ void UnstartedRuntime::UnstartedSecurityGetSecurityPropertiesReader(
     return;
   }
 
-  auto* cl = Runtime::Current()->GetClassLinker();
+  _* cl = Runtime::Current()->GetClassLinker();
   ArtMethod* constructor = h_class->FindDeclaredDirectMethod(
       "<init>", "(Ljava/lang/String;)V", cl->GetImagePointerSize());
   if (constructor == nullptr) {
@@ -1165,8 +1165,8 @@ void UnstartedRuntime::UnstartedJNIArrayCreateMultiArray(
     Thread* self, ArtMethod* method ATTRIBUTE_UNUSED, mirror::Object* receiver ATTRIBUTE_UNUSED,
     uint32_t* args, JValue* result) {
   StackHandleScope<2> hs(self);
-  auto h_class(hs.NewHandle(reinterpret_cast<mirror::Class*>(args[0])->AsClass()));
-  auto h_dimensions(hs.NewHandle(reinterpret_cast<mirror::IntArray*>(args[1])->AsIntArray()));
+  _ h_class(hs.NewHandle(reinterpret_cast<mirror::Class*>(args[0])->AsClass()));
+  _ h_dimensions(hs.NewHandle(reinterpret_cast<mirror::IntArray*>(args[1])->AsIntArray()));
   result->SetL(mirror::Array::CreateMultiArray(self, h_class, h_dimensions));
 }
 
@@ -1309,7 +1309,7 @@ void UnstartedRuntime::Invoke(Thread* self, const DexFile::CodeItem* code_item,
   CHECK(tables_initialized_);
 
   std::string name(PrettyMethod(shadow_frame->GetMethod()));
-  const auto& iter = invoke_handlers_.find(name);
+  const _& iter = invoke_handlers_.find(name);
   if (iter != invoke_handlers_.end()) {
     // Clear out the result in case it's not zeroed out.
     result->SetL(0);
@@ -1324,7 +1324,7 @@ void UnstartedRuntime::Invoke(Thread* self, const DexFile::CodeItem* code_item,
 void UnstartedRuntime::Jni(Thread* self, ArtMethod* method, mirror::Object* receiver,
                            uint32_t* args, JValue* result) {
   std::string name(PrettyMethod(method));
-  const auto& iter = jni_handlers_.find(name);
+  const _& iter = jni_handlers_.find(name);
   if (iter != jni_handlers_.end()) {
     // Clear out the result in case it's not zeroed out.
     result->SetL(0);

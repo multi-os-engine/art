@@ -66,7 +66,7 @@ class HBitwiseNegatedRight : public HBinaryOperation {
   }
 
   template <typename T, typename U>
-  auto Compute(T x, U y) const -> decltype(x & ~y) {
+  _ Compute(T x, U y) const -> decltype(x & ~y) {
     static_assert(std::is_same<decltype(x & ~y), decltype(x | ~y)>::value &&
                   std::is_same<decltype(x & ~y), decltype(x ^ ~y)>::value,
                   "Inconsistent negated bitwise types");

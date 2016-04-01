@@ -472,7 +472,7 @@ class PatchOatArtFieldVisitor : public ArtFieldVisitor {
 
 void PatchOat::PatchArtFields(const ImageHeader* image_header) {
   PatchOatArtFieldVisitor visitor(this);
-  const auto& section = image_header->GetImageSection(ImageHeader::kSectionArtFields);
+  const _& section = image_header->GetImageSection(ImageHeader::kSectionArtFields);
   section.VisitPackedArtFields(&visitor, heap_->Begin());
 }
 
@@ -490,7 +490,7 @@ class PatchOatArtMethodVisitor : public ArtMethodVisitor {
 };
 
 void PatchOat::PatchArtMethods(const ImageHeader* image_header) {
-  const auto& section = image_header->GetMethodsSection();
+  const _& section = image_header->GetMethodsSection();
   const size_t pointer_size = InstructionSetPointerSize(isa_);
   PatchOatArtMethodVisitor visitor(this);
   section.VisitPackedArtMethods(&visitor, heap_->Begin(), pointer_size);
@@ -521,7 +521,7 @@ class FixupRootVisitor : public RootVisitor {
 };
 
 void PatchOat::PatchInternedStrings(const ImageHeader* image_header) {
-  const auto& section = image_header->GetImageSection(ImageHeader::kSectionInternedStrings);
+  const _& section = image_header->GetImageSection(ImageHeader::kSectionInternedStrings);
   InternTable temp_table;
   // Note that we require that ReadFromMemory does not make an internal copy of the elements.
   // This also relies on visit roots not doing any verification which could fail after we update
@@ -532,7 +532,7 @@ void PatchOat::PatchInternedStrings(const ImageHeader* image_header) {
 }
 
 void PatchOat::PatchClassTable(const ImageHeader* image_header) {
-  const auto& section = image_header->GetImageSection(ImageHeader::kSectionClassTable);
+  const _& section = image_header->GetImageSection(ImageHeader::kSectionClassTable);
   if (section.Size() == 0) {
     return;
   }
@@ -562,12 +562,12 @@ class RelocatedPointerVisitor {
 };
 
 void PatchOat::PatchDexFileArrays(mirror::ObjectArray<mirror::Object>* img_roots) {
-  auto* dex_caches = down_cast<mirror::ObjectArray<mirror::DexCache>*>(
+  _* dex_caches = down_cast<mirror::ObjectArray<mirror::DexCache>*>(
       img_roots->Get(ImageHeader::kDexCaches));
   const size_t pointer_size = InstructionSetPointerSize(isa_);
   for (size_t i = 0, count = dex_caches->GetLength(); i < count; ++i) {
-    auto* orig_dex_cache = dex_caches->GetWithoutChecks(i);
-    auto* copy_dex_cache = RelocatedCopyOf(orig_dex_cache);
+    _* orig_dex_cache = dex_caches->GetWithoutChecks(i);
+    _* copy_dex_cache = RelocatedCopyOf(orig_dex_cache);
     // Though the DexCache array fields are usually treated as native pointers, we set the full
     // 64-bit values here, clearing the top 32 bits for 32-bit targets. The zero-extension is
     // done by casting to the unsigned type uintptr_t before casting to int64_t, i.e.
@@ -622,7 +622,7 @@ bool PatchOat::PatchImage(bool primary_image) {
   ImageHeader* image_header = reinterpret_cast<ImageHeader*>(image_->Begin());
   CHECK_GT(image_->Size(), sizeof(ImageHeader));
   // These are the roots from the original file.
-  auto* img_roots = image_header->GetImageRoots();
+  _* img_roots = image_header->GetImageRoots();
   image_header->RelocateImage(delta_);
 
   PatchArtFields(image_header);
@@ -693,15 +693,15 @@ void PatchOat::VisitObject(mirror::Object* object) {
     mirror::Class* copy_klass = down_cast<mirror::Class*>(copy);
     RelocatedPointerVisitor native_visitor(this);
     klass->FixupNativePointers(copy_klass, pointer_size, native_visitor);
-    auto* vtable = klass->GetVTable();
+    _* vtable = klass->GetVTable();
     if (vtable != nullptr) {
       vtable->Fixup(RelocatedCopyOfFollowImages(vtable), pointer_size, native_visitor);
     }
-    auto* iftable = klass->GetIfTable();
+    _* iftable = klass->GetIfTable();
     if (iftable != nullptr) {
       for (int32_t i = 0; i < klass->GetIfTableCount(); ++i) {
         if (iftable->GetMethodArrayCount(i) > 0) {
-          auto* method_array = iftable->GetMethodArray(i);
+          _* method_array = iftable->GetMethodArray(i);
           CHECK(method_array != nullptr);
           method_array->Fixup(RelocatedCopyOfFollowImages(method_array),
                               pointer_size,
@@ -712,8 +712,8 @@ void PatchOat::VisitObject(mirror::Object* object) {
   } else if (object->GetClass() == mirror::Method::StaticClass() ||
              object->GetClass() == mirror::Constructor::StaticClass()) {
     // Need to go update the ArtMethod.
-    auto* dest = down_cast<mirror::AbstractMethod*>(copy);
-    auto* src = down_cast<mirror::AbstractMethod*>(object);
+    _* dest = down_cast<mirror::AbstractMethod*>(copy);
+    _* src = down_cast<mirror::AbstractMethod*>(object);
     dest->SetArtMethod(RelocatedAddressOfPointer(src->GetArtMethod()));
   }
 }
@@ -780,7 +780,7 @@ bool PatchOat::Patch(File* input_oat, off_t delta, File* output_oat, TimingLogge
 
 template <typename ElfFileImpl>
 bool PatchOat::PatchOatHeader(ElfFileImpl* oat_file) {
-  auto rodata_sec = oat_file->FindSectionByName(".rodata");
+  _ rodata_sec = oat_file->FindSectionByName(".rodata");
   if (rodata_sec == nullptr) {
     return false;
   }
@@ -816,7 +816,7 @@ bool PatchOat::PatchElf(ElfFileImpl* oat_file) {
 
   bool need_boot_oat_fixup = true;
   for (unsigned int i = 0; i < oat_file->GetProgramHeaderNum(); ++i) {
-    auto hdr = oat_file->GetProgramHeader(i);
+    _ hdr = oat_file->GetProgramHeader(i);
     if (hdr->p_type == PT_LOAD && hdr->p_vaddr == 0u) {
       need_boot_oat_fixup = false;
       break;
@@ -1144,7 +1144,7 @@ static int patchoat_oat(TimingLogger& timings,
   }
 
   // TODO: get rid of this.
-  auto cleanup = [&output_oat_filename, &new_oat_out](bool success) {
+  _ cleanup = [&output_oat_filename, &new_oat_out](bool success) {
     if (!success) {
       if (new_oat_out) {
         CHECK(!output_oat_filename.empty());

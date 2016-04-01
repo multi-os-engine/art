@@ -113,7 +113,7 @@ void GarbageCollector::SwapBitmaps() {
   // these bitmaps. The bitmap swapping is an optimization so that we do not need to clear the live
   // bits of dead objects in the live bitmap.
   const GcType gc_type = GetGcType();
-  for (const auto& space : GetHeap()->GetContinuousSpaces()) {
+  for (const _& space : GetHeap()->GetContinuousSpaces()) {
     // We never allocate into zygote spaces.
     if (space->GetGcRetentionPolicy() == space::kGcRetentionPolicyAlwaysCollect ||
         (gc_type == kGcTypeFull &&
@@ -128,7 +128,7 @@ void GarbageCollector::SwapBitmaps() {
       }
     }
   }
-  for (const auto& disc_space : GetHeap()->GetDiscontinuousSpaces()) {
+  for (const _& disc_space : GetHeap()->GetDiscontinuousSpaces()) {
     space::LargeObjectSpace* space = disc_space->AsLargeObjectSpace();
     accounting::LargeObjectBitmap* live_set = space->GetLiveBitmap();
     accounting::LargeObjectBitmap* mark_set = space->GetMarkBitmap();

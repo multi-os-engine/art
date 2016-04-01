@@ -226,7 +226,7 @@ inline mirror::Object* Heap::AllocLargeObject(Thread* self,
                                               const PreFenceVisitor& pre_fence_visitor) {
   // Save and restore the class in case it moves.
   StackHandleScope<1> hs(self);
-  auto klass_wrapper = hs.NewHandleWrapper(klass);
+  _ klass_wrapper = hs.NewHandleWrapper(klass);
   return AllocObjectWithAllocator<kInstrumented, false, PreFenceVisitor>(self, *klass, byte_count,
                                                                          kAllocatorTypeLOS,
                                                                          pre_fence_visitor);

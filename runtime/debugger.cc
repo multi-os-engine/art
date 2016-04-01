@@ -576,8 +576,8 @@ class UpdateEntryPointsClassVisitor : public ClassVisitor {
       : instrumentation_(instrumentation) {}
 
   bool operator()(mirror::Class* klass) OVERRIDE REQUIRES(Locks::mutator_lock_) {
-    auto pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
-    for (auto& m : klass->GetMethods(pointer_size)) {
+    _ pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+    for (_& m : klass->GetMethods(pointer_size)) {
       const void* code = m.GetEntryPointFromQuickCompiledCode();
       if (Runtime::Current()->GetHeap()->IsInBootImageOatFile(code) &&
           !m.IsNative() &&
@@ -1525,8 +1525,8 @@ JDWP::JdwpError Dbg::OutputDeclaredMethods(JDWP::RefTypeId class_id, bool with_g
 
   expandBufAdd4BE(pReply, c->NumMethods());
 
-  auto* cl = Runtime::Current()->GetClassLinker();
-  auto ptr_size = cl->GetImagePointerSize();
+  _* cl = Runtime::Current()->GetClassLinker();
+  _ ptr_size = cl->GetImagePointerSize();
   for (ArtMethod& m : c->GetMethods(ptr_size)) {
     expandBufAddMethodId(pReply, ToMethodId(&m));
     expandBufAddUtf8String(pReply, m.GetInterfaceMethodIfProxy(sizeof(void*))->GetName());
@@ -4752,7 +4752,7 @@ void Dbg::DdmSendHeapSegments(bool native) {
     UNIMPLEMENTED(WARNING) << "Native heap inspection is not supported";
   } else {
     gc::Heap* heap = Runtime::Current()->GetHeap();
-    for (const auto& space : heap->GetContinuousSpaces()) {
+    for (const _& space : heap->GetContinuousSpaces()) {
       if (space->IsDlMallocSpace()) {
         ReaderMutexLock mu(self, *Locks::heap_bitmap_lock_);
         // dlmalloc's chunk header is 2 * sizeof(size_t), but if the previous chunk is in use for an
@@ -4816,7 +4816,7 @@ void Dbg::DumpRecentAllocations() {
   uint16_t count = capped_count;
 
   LOG(INFO) << "Tracked allocations, (count=" << count << ")";
-  for (auto it = records->RBegin(), end = records->REnd();
+  for (_ it = records->RBegin(), end = records->REnd();
       count > 0 && it != end; count--, it++) {
     const gc::AllocRecord* record = &it->second;
 
@@ -4850,7 +4850,7 @@ class StringTable {
   }
 
   size_t IndexOf(const char* s) const {
-    auto it = table_.find(s);
+    _ it = table_.find(s);
     if (it == table_.end()) {
       LOG(FATAL) << "IndexOf(\"" << s << "\") failed";
     }
@@ -4955,7 +4955,7 @@ jbyteArray Dbg::GetRecentAllocations() {
 
     const uint16_t capped_count = CappedAllocRecordCount(records->GetRecentAllocationSize());
     uint16_t count = capped_count;
-    for (auto it = records->RBegin(), end = records->REnd();
+    for (_ it = records->RBegin(), end = records->REnd();
          count > 0 && it != end; count--, it++) {
       const gc::AllocRecord* record = &it->second;
       std::string temp;
@@ -5001,7 +5001,7 @@ jbyteArray Dbg::GetRecentAllocations() {
     count = capped_count;
     // The last "count" number of allocation records in "records" are the most recent "count" number
     // of allocations. Reverse iterate to get them. The most recent allocation is sent first.
-    for (auto it = records->RBegin(), end = records->REnd();
+    for (_ it = records->RBegin(), end = records->REnd();
          count > 0 && it != end; count--, it++) {
       // For each entry:
       // (4b) total allocation size

@@ -84,15 +84,15 @@ class RosAllocSpace : public MallocSpace {
 
   // Returns true if the given allocation request can be allocated in
   // an existing thread local run without allocating a new run.
-  ALWAYS_INLINE bool CanAllocThreadLocal(Thread* self, size_t num_bytes);
+  MC bool CanAllocThreadLocal(Thread* self, size_t num_bytes);
   // Allocate the given allocation request in an existing thread local
   // run without allocating a new run.
-  ALWAYS_INLINE mirror::Object* AllocThreadLocal(Thread* self, size_t num_bytes,
+  MC mirror::Object* AllocThreadLocal(Thread* self, size_t num_bytes,
                                                  size_t* bytes_allocated);
   size_t MaxBytesBulkAllocatedFor(size_t num_bytes) OVERRIDE {
     return MaxBytesBulkAllocatedForNonvirtual(num_bytes);
   }
-  ALWAYS_INLINE size_t MaxBytesBulkAllocatedForNonvirtual(size_t num_bytes);
+  MC size_t MaxBytesBulkAllocatedForNonvirtual(size_t num_bytes);
 
   // TODO: NO_THREAD_SAFETY_ANALYSIS because SizeOf() requires that mutator_lock is held.
   template<bool kMaybeIsRunningOnMemoryTool>

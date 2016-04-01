@@ -251,8 +251,8 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
 
         // Insert frame at the right position so we do not corrupt the instrumentation stack.
         // Instrumentation stack frames are in descending frame id order.
-        auto it = instrumentation_stack_->begin();
-        for (auto end = instrumentation_stack_->end(); it != end; ++it) {
+        _ it = instrumentation_stack_->begin();
+        for (_ end = instrumentation_stack_->end(); it != end; ++it) {
           const InstrumentationStackFrame& current = *it;
           if (instrumentation_frame.frame_id_ >= current.frame_id_) {
             break;
@@ -292,8 +292,8 @@ static void InstrumentationInstallStack(Thread* thread, void* arg)
   if (instrumentation->ShouldNotifyMethodEnterExitEvents()) {
     // Create method enter events for all methods currently on the thread's stack. We only do this
     // if no debugger is attached to prevent from posting events twice.
-    auto ssi = visitor.shadow_stack_.rbegin();
-    for (auto isi = thread->GetInstrumentationStack()->rbegin(),
+    _ ssi = visitor.shadow_stack_.rbegin();
+    for (_ isi = thread->GetInstrumentationStack()->rbegin(),
         end = thread->GetInstrumentationStack()->rend(); isi != end; ++isi) {
       while (ssi != visitor.shadow_stack_.rend() && (*ssi).frame_id_ < (*isi).frame_id_) {
         instrumentation->MethodEnterEvent(thread, (*ssi).this_object_, (*ssi).method_, 0);
@@ -420,7 +420,7 @@ static void PotentiallyAddListenerTo(Instrumentation::InstrumentationEvent event
   }
   // If there is a free slot in the list, we insert the listener in that slot.
   // Otherwise we add it to the end of the list.
-  auto it = std::find(list.begin(), list.end(), nullptr);
+  _ it = std::find(list.begin(), list.end(), nullptr);
   if (it != list.end()) {
     *it = listener;
   } else {
@@ -489,7 +489,7 @@ static void PotentiallyRemoveListenerFrom(Instrumentation::InstrumentationEvent 
   if (!HasEvent(event, events)) {
     return;
   }
-  auto it = std::find(list.begin(), list.end(), listener);
+  _ it = std::find(list.begin(), list.end(), listener);
   if (it != list.end()) {
     // Just update the entry, do not remove from the list. Removing entries in the list
     // is unsafe when mutators are iterating over it.
@@ -578,7 +578,7 @@ void Instrumentation::ConfigureStubs(const char* key, InstrumentationLevel desir
 
   // Look for the highest required instrumentation level.
   InstrumentationLevel requested_level = InstrumentationLevel::kInstrumentNothing;
-  for (const auto& v : requested_instrumentation_levels_) {
+  for (const _& v : requested_instrumentation_levels_) {
     requested_level = std::max(requested_level, v.second);
   }
 
@@ -733,7 +733,7 @@ ArtMethod* Instrumentation::BeginDeoptimizedMethod() {
 }
 
 bool Instrumentation::RemoveDeoptimizedMethod(ArtMethod* method) {
-  auto it = deoptimized_methods_.find(method);
+  _ it = deoptimized_methods_.find(method);
   if (it == deoptimized_methods_.end()) {
     return false;
   }

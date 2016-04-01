@@ -1316,7 +1316,7 @@ TEST_F(OatFileAssistantTest, RaceToGenerate) {
 
   // Verify every task got a unique oat file.
   std::set<const OatFile*> oat_files;
-  for (auto& task : tasks) {
+  for (_& task : tasks) {
     const OatFile* oat_file = task->GetLoadedOatFile();
     EXPECT_TRUE(oat_files.find(oat_file) == oat_files.end());
     oat_files.insert(oat_file);

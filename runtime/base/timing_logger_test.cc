@@ -29,7 +29,7 @@ TEST_F(TimingLoggerTest, StartEnd) {
   TimingLogger logger("StartEnd", true, false);
   logger.StartTiming(split1name);
   logger.EndTiming();  // Ends split1.
-  const auto& timings = logger.GetTimings();
+  const _& timings = logger.GetTimings();
   EXPECT_EQ(2U, timings.size());  // Start, End splits
   EXPECT_TRUE(timings[0].IsStartTiming());
   EXPECT_STREQ(timings[0].GetName(), split1name);
@@ -47,7 +47,7 @@ TEST_F(TimingLoggerTest, StartNewEnd) {
   logger.NewTiming(split3name);
   logger.EndTiming();
   // Get the timings and verify that they are sane.
-  const auto& timings = logger.GetTimings();
+  const _& timings = logger.GetTimings();
   // 6 timings in the timing logger at this point.
   EXPECT_EQ(6U, timings.size());
   EXPECT_TRUE(timings[0].IsStartTiming());
@@ -76,7 +76,7 @@ TEST_F(TimingLoggerTest, StartNewEndNested) {
   logger.EndTiming();  // Ends timing5.
   logger.EndTiming();  // Ends timing3.
   logger.EndTiming();  // Ends timing2.
-  const auto& timings = logger.GetTimings();
+  const _& timings = logger.GetTimings();
   EXPECT_EQ(10U, timings.size());
   size_t idx_1 = logger.FindTimingIndex(name1, 0);
   size_t idx_2 = logger.FindTimingIndex(name2, 0);
@@ -121,7 +121,7 @@ TEST_F(TimingLoggerTest, Scoped) {
   const size_t idx_innersplit1 = logger.FindTimingIndex(innersplit1, 0);
   const size_t idx_innerinnersplit1 = logger.FindTimingIndex(innerinnersplit1, 0);
   const size_t idx_innersplit2 = logger.FindTimingIndex(innersplit2, 0);
-  const auto& timings = logger.GetTimings();
+  const _& timings = logger.GetTimings();
   EXPECT_EQ(8U, timings.size());  // 4 start timings and 4 end timings.
   EXPECT_GE(timings[idx_innerinnersplit1].GetTime(), timings[idx_innersplit1].GetTime());
   EXPECT_GE(timings[idx_innersplit2].GetTime(), timings[idx_innersplit1].GetTime());
@@ -151,7 +151,7 @@ TEST_F(TimingLoggerTest, ScopedAndExplicit) {
   const size_t idx_innersplit = logger.FindTimingIndex(innersplit, 0);
   const size_t idx_innerinnersplit1 = logger.FindTimingIndex(innerinnersplit1, 0);
   const size_t idx_innerinnersplit2 = logger.FindTimingIndex(innerinnersplit2, 0);
-  const auto& timings = logger.GetTimings();
+  const _& timings = logger.GetTimings();
   EXPECT_EQ(8U, timings.size());
   EXPECT_LE(timings[idx_outersplit].GetTime(), timings[idx_innersplit].GetTime());
   EXPECT_LE(timings[idx_innersplit].GetTime(), timings[idx_innerinnersplit1].GetTime());

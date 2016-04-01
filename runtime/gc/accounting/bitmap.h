@@ -46,31 +46,31 @@ class Bitmap {
   static Bitmap* CreateFromMemMap(MemMap* mem_map, size_t num_bits);
 
   // offset is the difference from base to a index.
-  static ALWAYS_INLINE constexpr size_t BitIndexToWordIndex(uintptr_t offset) {
+  static MC constexpr size_t BitIndexToWordIndex(uintptr_t offset) {
     return offset / kBitsPerBitmapWord;
   }
 
   template<typename T>
-  static ALWAYS_INLINE constexpr T WordIndexToBitIndex(T word_index) {
+  static MC constexpr T WordIndexToBitIndex(T word_index) {
     return static_cast<T>(word_index * kBitsPerBitmapWord);
   }
 
-  static ALWAYS_INLINE constexpr uintptr_t BitIndexToMask(uintptr_t bit_index) {
+  static MC constexpr uintptr_t BitIndexToMask(uintptr_t bit_index) {
     return static_cast<uintptr_t>(1) << (bit_index % kBitsPerBitmapWord);
   }
 
-  ALWAYS_INLINE bool SetBit(size_t bit_index) {
+  MC bool SetBit(size_t bit_index) {
     return ModifyBit<true>(bit_index);
   }
 
-  ALWAYS_INLINE bool ClearBit(size_t bit_index) {
+  MC bool ClearBit(size_t bit_index) {
     return ModifyBit<false>(bit_index);
   }
 
-  ALWAYS_INLINE bool TestBit(size_t bit_index) const;
+  MC bool TestBit(size_t bit_index) const;
 
   // Returns true if the bit_index was previously set.
-  ALWAYS_INLINE bool AtomicTestAndSetBit(size_t bit_index);
+  MC bool AtomicTestAndSetBit(size_t bit_index);
 
   // Fill the bitmap with zeroes.  Returns the bitmap's memory to the system as a side-effect.
   void Clear();
@@ -93,7 +93,7 @@ class Bitmap {
   }
 
   // Check that a bit index is valid with a DCHECK.
-  ALWAYS_INLINE void CheckValidBitIndex(size_t bit_index) const {
+  MC void CheckValidBitIndex(size_t bit_index) const {
     DCHECK_LT(bit_index, BitmapSize());
   }
 
@@ -109,7 +109,7 @@ class Bitmap {
   static MemMap* AllocateMemMap(const std::string& name, size_t num_bits);
 
   template<bool kSetBit>
-  ALWAYS_INLINE bool ModifyBit(uintptr_t bit_index);
+  MC bool ModifyBit(uintptr_t bit_index);
 
   // Backing storage for bitmap.
   std::unique_ptr<MemMap> mem_map_;
@@ -134,46 +134,46 @@ class MemoryRangeBitmap : public Bitmap {
                                              size_t num_bits);
 
   // Beginning of the memory range that the bitmap covers.
-  ALWAYS_INLINE uintptr_t CoverBegin() const {
+  MC uintptr_t CoverBegin() const {
     return cover_begin_;
   }
 
   // End of the memory range that the bitmap covers.
-  ALWAYS_INLINE uintptr_t CoverEnd() const {
+  MC uintptr_t CoverEnd() const {
     return cover_end_;
   }
 
   // Return the address associated with a bit index.
-  ALWAYS_INLINE uintptr_t AddrFromBitIndex(size_t bit_index) const {
+  MC uintptr_t AddrFromBitIndex(size_t bit_index) const {
     const uintptr_t addr = CoverBegin() + bit_index * kAlignment;
     DCHECK_EQ(BitIndexFromAddr(addr), bit_index);
     return addr;
   }
 
   // Return the bit index associated with an address .
-  ALWAYS_INLINE uintptr_t BitIndexFromAddr(uintptr_t addr) const {
+  MC uintptr_t BitIndexFromAddr(uintptr_t addr) const {
     DCHECK(HasAddress(addr)) << CoverBegin() << " <= " <<  addr << " < " << CoverEnd();
     return (addr - CoverBegin()) / kAlignment;
   }
 
-  ALWAYS_INLINE bool HasAddress(const uintptr_t addr) const {
+  MC bool HasAddress(const uintptr_t addr) const {
     return cover_begin_ <= addr && addr < cover_end_;
   }
 
-  ALWAYS_INLINE bool Set(uintptr_t addr) {
+  MC bool Set(uintptr_t addr) {
     return SetBit(BitIndexFromAddr(addr));
   }
 
-  ALWAYS_INLINE bool Clear(size_t addr) {
+  MC bool Clear(size_t addr) {
     return ClearBit(BitIndexFromAddr(addr));
   }
 
-  ALWAYS_INLINE bool Test(size_t addr) const {
+  MC bool Test(size_t addr) const {
     return TestBit(BitIndexFromAddr(addr));
   }
 
   // Returns true if the object was previously set.
-  ALWAYS_INLINE bool AtomicTestAndSet(size_t addr) {
+  MC bool AtomicTestAndSet(size_t addr) {
     return AtomicTestAndSetBit(BitIndexFromAddr(addr));
   }
 

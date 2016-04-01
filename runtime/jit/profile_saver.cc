@@ -133,7 +133,7 @@ bool ProfileSaver::ProcessProfilingInfo() {
     MutexLock mu(Thread::Current(), *Locks::profiler_lock_);
     tracked_locations = tracked_dex_base_locations_;
   }
-  for (const auto& it : tracked_locations) {
+  for (const _& it : tracked_locations) {
     if (ShuttingDown(Thread::Current())) {
       return true;
     }
@@ -268,7 +268,7 @@ bool ProfileSaver::IsStarted() {
 
 void ProfileSaver::AddTrackedLocations(const std::string& output_filename,
                                        const std::vector<std::string>& code_paths) {
-  auto it = tracked_dex_base_locations_.find(output_filename);
+  _ it = tracked_dex_base_locations_.find(output_filename);
   if (it == tracked_dex_base_locations_.end()) {
     tracked_dex_base_locations_.Put(output_filename,
                                     std::set<std::string>(code_paths.begin(), code_paths.end()));
@@ -285,7 +285,7 @@ void ProfileSaver::NotifyDexUse(const std::string& dex_location) {
     MutexLock mu(Thread::Current(), *Locks::profiler_lock_);
     DCHECK(instance_ != nullptr);
     // Make a copy so that we don't hold the lock while doing I/O.
-    for (const auto& it : instance_->tracked_dex_base_locations_) {
+    for (const _& it : instance_->tracked_dex_base_locations_) {
       app_code_paths.insert(it.second.begin(), it.second.end());
     }
     foreign_dex_profile_path = instance_->foreign_dex_profile_path_;
@@ -334,7 +334,7 @@ void ProfileSaver::MaybeRecordDexUseInternal(
   // operation). However we expect that app_code_paths is small (usually 1 element), and
   // NotifyDexUse is called just a few times in the app lifetime. So we make the compromise
   // to save some bytes of memory usage.
-  for (const auto& app_code_location : app_code_paths) {
+  for (const _& app_code_location : app_code_paths) {
     UniqueCPtr<const char[]> real_app_code_location(realpath(app_code_location.c_str(), nullptr));
     if (real_app_code_location == nullptr) {
       PLOG(WARNING) << "Could not get realpath for " << app_code_location;

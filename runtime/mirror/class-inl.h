@@ -281,7 +281,7 @@ inline ArtMethod* Class::GetVTableEntry(uint32_t i, size_t pointer_size) {
   if (ShouldHaveEmbeddedImtAndVTable()) {
     return GetEmbeddedVTableEntry(i, pointer_size);
   }
-  auto* vtable = GetVTable();
+  _* vtable = GetVTable();
   DCHECK(vtable != nullptr);
   return vtable->GetElementPtrSize<ArtMethod*>(i, pointer_size);
 }
@@ -309,7 +309,7 @@ inline void Class::SetEmbeddedVTableEntryUnchecked(
 }
 
 inline void Class::SetEmbeddedVTableEntry(uint32_t i, ArtMethod* method, size_t pointer_size) {
-  auto* vtable = GetVTableDuringLinking();
+  _* vtable = GetVTableDuringLinking();
   CHECK_EQ(method, vtable->GetElementPtrSize<ArtMethod*>(i, pointer_size));
   SetEmbeddedVTableEntryUnchecked(i, method, pointer_size);
 }
@@ -825,7 +825,7 @@ inline void Class::AssertInitializedOrInitializingInThread(Thread* self) {
 inline ObjectArray<Class>* Class::GetInterfaces() {
   CHECK(IsProxyClass());
   // First static field.
-  auto* field = GetStaticField(0);
+  _* field = GetStaticField(0);
   DCHECK_STREQ(field->GetName(), "interfaces");
   MemberOffset field_offset = field->GetOffset();
   return GetFieldObject<ObjectArray<Class>>(field_offset);
@@ -834,7 +834,7 @@ inline ObjectArray<Class>* Class::GetInterfaces() {
 inline ObjectArray<ObjectArray<Class>>* Class::GetThrows() {
   CHECK(IsProxyClass());
   // Second static field.
-  auto* field = GetStaticField(1);
+  _* field = GetStaticField(1);
   DCHECK_STREQ(field->GetName(), "throws");
   MemberOffset field_offset = field->GetOffset();
   return GetFieldObject<ObjectArray<ObjectArray<Class>>>(field_offset);
@@ -843,7 +843,7 @@ inline ObjectArray<ObjectArray<Class>>* Class::GetThrows() {
 inline MemberOffset Class::GetDisableIntrinsicFlagOffset() {
   CHECK(IsReferenceClass());
   // First static field
-  auto* field = GetStaticField(0);
+  _* field = GetStaticField(0);
   DCHECK_STREQ(field->GetName(), "disableIntrinsic");
   return field->GetOffset();
 }
@@ -851,7 +851,7 @@ inline MemberOffset Class::GetDisableIntrinsicFlagOffset() {
 inline MemberOffset Class::GetSlowPathFlagOffset() {
   CHECK(IsReferenceClass());
   // Second static field
-  auto* field = GetStaticField(1);
+  _* field = GetStaticField(1);
   DCHECK_STREQ(field->GetName(), "slowPathEnabled");
   return field->GetOffset();
 }

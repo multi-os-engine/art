@@ -69,9 +69,9 @@ TEST_F(HashSetTest, TestSmoke) {
   ASSERT_TRUE(hash_set.Empty());
   ASSERT_EQ(hash_set.Size(), 0U);
   hash_set.Insert(test_string);
-  auto it = hash_set.Find(test_string);
+  _ it = hash_set.Find(test_string);
   ASSERT_EQ(*it, test_string);
-  auto after_it = hash_set.Erase(it);
+  _ after_it = hash_set.Erase(it);
   ASSERT_TRUE(after_it == hash_set.end());
   ASSERT_TRUE(hash_set.Empty());
   ASSERT_EQ(hash_set.Size(), 0U);
@@ -87,25 +87,25 @@ TEST_F(HashSetTest, TestInsertAndErase) {
     // Insert a bunch of elements and make sure we can find them.
     strings.push_back(RandomString(10));
     hash_set.Insert(strings[i]);
-    auto it = hash_set.Find(strings[i]);
+    _ it = hash_set.Find(strings[i]);
     ASSERT_TRUE(it != hash_set.end());
     ASSERT_EQ(*it, strings[i]);
   }
   ASSERT_EQ(strings.size(), hash_set.Size());
   // Try to erase the odd strings.
   for (size_t i = 1; i < count; i += 2) {
-    auto it = hash_set.Find(strings[i]);
+    _ it = hash_set.Find(strings[i]);
     ASSERT_TRUE(it != hash_set.end());
     ASSERT_EQ(*it, strings[i]);
     hash_set.Erase(it);
   }
   // Test removed.
   for (size_t i = 1; i < count; i += 2) {
-    auto it = hash_set.Find(strings[i]);
+    _ it = hash_set.Find(strings[i]);
     ASSERT_TRUE(it == hash_set.end());
   }
   for (size_t i = 0; i < count; i += 2) {
-    auto it = hash_set.Find(strings[i]);
+    _ it = hash_set.Find(strings[i]);
     ASSERT_TRUE(it != hash_set.end());
     ASSERT_EQ(*it, strings[i]);
   }
@@ -131,7 +131,7 @@ TEST_F(HashSetTest, TestIterator) {
   }
   found_count.clear();
   // Remove all the elements with iterator erase.
-  for (auto it = hash_set.begin(); it != hash_set.end();) {
+  for (_ it = hash_set.begin(); it != hash_set.end();) {
     ++found_count[*it];
     it = hash_set.Erase(it);
     ASSERT_EQ(hash_set.Verify(), 0U);
@@ -245,8 +245,8 @@ TEST_F(HashSetTest, TestStress) {
       ASSERT_EQ(*hash_set.Find(s), *std_set.find(s));
     } else {
       const std::string& s = strings[PRand() % string_count];
-      auto it1 = hash_set.Find(s);
-      auto it2 = std_set.find(s);
+      _ it1 = hash_set.Find(s);
+      _ it2 = std_set.find(s);
       ASSERT_EQ(it1 == hash_set.end(), it2 == std_set.end());
       if (it1 != hash_set.end()) {
         ASSERT_EQ(*it1, *it2);
@@ -271,7 +271,7 @@ TEST_F(HashSetTest, TestHashMap) {
   hash_map.Insert(std::make_pair(std::string("abcd"), 123));
   hash_map.Insert(std::make_pair(std::string("abcd"), 124));
   hash_map.Insert(std::make_pair(std::string("bags"), 444));
-  auto it = hash_map.Find(std::string("abcd"));
+  _ it = hash_map.Find(std::string("abcd"));
   ASSERT_EQ(it->second, 123);
   hash_map.Erase(it);
   it = hash_map.Find(std::string("abcd"));
@@ -290,7 +290,7 @@ struct IsEmptyFnVectorInt {
 template <typename T>
 size_t HashIntSequence(T begin, T end) {
   size_t hash = 0;
-  for (auto iter = begin; iter != end; ++iter) {
+  for (_ iter = begin; iter != end; ++iter) {
     hash = hash * 2 + *iter;
   }
   return hash;
@@ -310,8 +310,8 @@ struct VectorIntHashEquals {
   }
 
   bool operator()(const std::vector<int>& a, const std::forward_list<int>& b) const {
-    auto aiter = a.begin();
-    auto biter = b.begin();
+    _ aiter = a.begin();
+    _ biter = b.begin();
     while (aiter != a.end() && biter != b.end()) {
       if (*aiter != *biter) {
         return false;

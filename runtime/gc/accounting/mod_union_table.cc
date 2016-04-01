@@ -316,7 +316,7 @@ class ModUnionCheckReferences {
 
 void ModUnionTableReferenceCache::Verify() {
   // Start by checking that everything in the mod union table is marked.
-  for (const auto& ref_pair : references_) {
+  for (const _& ref_pair : references_) {
     for (mirror::HeapReference<mirror::Object>* ref : ref_pair.second) {
       CHECK(heap_->IsLiveObjectLocked(ref->AsMirrorPtr()));
     }
@@ -325,7 +325,7 @@ void ModUnionTableReferenceCache::Verify() {
   // Check the references of each clean card which is also in the mod union table.
   CardTable* card_table = heap_->GetCardTable();
   ContinuousSpaceBitmap* live_bitmap = space_->GetLiveBitmap();
-  for (const auto& ref_pair : references_) {
+  for (const _& ref_pair : references_) {
     const uint8_t* card = ref_pair.first;
     if (*card == CardTable::kCardClean) {
       std::set<mirror::Object*> reference_set;
@@ -348,7 +348,7 @@ void ModUnionTableReferenceCache::Dump(std::ostream& os) {
     os << reinterpret_cast<void*>(start) << "-" << reinterpret_cast<void*>(end) << ",";
   }
   os << "]\nModUnionTable references: [";
-  for (const auto& ref_pair : references_) {
+  for (const _& ref_pair : references_) {
     const uint8_t* card_addr = ref_pair.first;
     uintptr_t start = reinterpret_cast<uintptr_t>(card_table->AddrFromCard(card_addr));
     uintptr_t end = start + CardTable::kCardSize;
@@ -382,7 +382,7 @@ void ModUnionTableReferenceCache::UpdateAndMarkReferences(MarkObjectVisitor* vis
     ContinuousSpaceBitmap* live_bitmap = space->GetLiveBitmap();
     live_bitmap->VisitMarkedRange(start, end, add_visitor);
     // Update the corresponding references for the card.
-    auto found = references_.find(card);
+    _ found = references_.find(card);
     if (found == references_.end()) {
       // Don't add card for an empty reference array.
       if (!cards_references.empty()) {
@@ -403,7 +403,7 @@ void ModUnionTableReferenceCache::UpdateAndMarkReferences(MarkObjectVisitor* vis
   }
   cleared_cards_ = std::move(new_cleared_cards);
   size_t count = 0;
-  for (auto it = references_.begin(); it != references_.end();) {
+  for (_ it = references_.begin(); it != references_.end();) {
     std::vector<mirror::HeapReference<mirror::Object>*>& references = it->second;
     // Since there is no card mark for setting a reference to null, we check each reference.
     // If all of the references of a card are null then we can remove that card. This is racy
@@ -531,7 +531,7 @@ void ModUnionTableReferenceCache::SetCards() {
 }
 
 bool ModUnionTableReferenceCache::ContainsCardFor(uintptr_t addr) {
-  auto* card_ptr = heap_->GetCardTable()->CardFromAddr(reinterpret_cast<void*>(addr));
+  _* card_ptr = heap_->GetCardTable()->CardFromAddr(reinterpret_cast<void*>(addr));
   return cleared_cards_.find(card_ptr) != cleared_cards_.end() ||
       references_.find(card_ptr) != references_.end();
 }

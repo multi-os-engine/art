@@ -60,7 +60,7 @@ struct TestProfilerOptions;
   // Use the VariantMap interface to look up or to store a RuntimeArgumentMapKey,Value pair.
   //
   // Example:
-  //    auto map = RuntimeArgumentMap();
+  //    _ map = RuntimeArgumentMap();
   //    map.Set(RuntimeArgumentMap::HeapTargetUtilization, 5.0);
   //    double *target_utilization = map.Get(RuntimeArgumentMap);
   //

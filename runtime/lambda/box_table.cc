@@ -62,7 +62,7 @@ BoxTable::BoxTable()
 
 BoxTable::~BoxTable() {
   // Free all the copies of our closures.
-  for (auto map_iterator = map_.begin(); map_iterator != map_.end(); ) {
+  for (_ map_iterator = map_.begin(); map_iterator != map_.end(); ) {
     std::pair<UnorderedMapKeyType, ValueType>& key_value_pair = *map_iterator;
 
     Closure* closure = key_value_pair.first;
@@ -194,7 +194,7 @@ bool BoxTable::UnboxLambda(mirror::Object* object, ClosureType* out_closure) {
 }
 
 BoxTable::ValueType BoxTable::FindBoxedLambda(const ClosureType& closure) const {
-  auto map_iterator = map_.Find(closure);
+  _ map_iterator = map_.Find(closure);
   if (map_iterator != map_.end()) {
     const std::pair<UnorderedMapKeyType, ValueType>& key_value_pair = *map_iterator;
     const ValueType& value = key_value_pair.second;
@@ -225,7 +225,7 @@ void BoxTable::SweepWeakBoxedLambdas(IsMarkedVisitor* visitor) {
    * Remove unmarked objects, update marked objects to new address.
    */
   std::vector<ClosureType> remove_list;
-  for (auto map_iterator = map_.begin(); map_iterator != map_.end(); ) {
+  for (_ map_iterator = map_.begin(); map_iterator != map_.end(); ) {
     std::pair<UnorderedMapKeyType, ValueType>& key_value_pair = *map_iterator;
 
     const ValueType& old_value = key_value_pair.second;

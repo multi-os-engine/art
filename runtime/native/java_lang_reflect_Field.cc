@@ -30,7 +30,7 @@
 namespace art {
 
 template<bool kIsSet>
-ALWAYS_INLINE inline static bool VerifyFieldAccess(Thread* self, mirror::Field* field,
+MC inline static bool VerifyFieldAccess(Thread* self, mirror::Field* field,
                                                    mirror::Object* obj)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   if (kIsSet && field->IsFinal()) {
@@ -58,7 +58,7 @@ ALWAYS_INLINE inline static bool VerifyFieldAccess(Thread* self, mirror::Field* 
 }
 
 template<bool kAllowReferences>
-ALWAYS_INLINE inline static bool GetFieldValue(mirror::Object* o, mirror::Field* f,
+MC inline static bool GetFieldValue(mirror::Object* o, mirror::Field* f,
                                                Primitive::Type field_type, JValue* value)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   DCHECK_EQ(value->GetJ(), INT64_C(0));
@@ -102,7 +102,7 @@ ALWAYS_INLINE inline static bool GetFieldValue(mirror::Object* o, mirror::Field*
   return false;
 }
 
-ALWAYS_INLINE inline static bool CheckReceiver(const ScopedFastNativeObjectAccess& soa,
+MC inline static bool CheckReceiver(const ScopedFastNativeObjectAccess& soa,
                                                jobject j_rcvr, mirror::Field** f,
                                                mirror::Object** class_or_rcvr)
     SHARED_REQUIRES(Locks::mutator_lock_) {
@@ -155,7 +155,7 @@ static jobject Field_get(JNIEnv* env, jobject javaField, jobject javaObj) {
 }
 
 template<Primitive::Type kPrimitiveType>
-ALWAYS_INLINE inline static JValue GetPrimitiveField(JNIEnv* env, jobject javaField,
+MC inline static JValue GetPrimitiveField(JNIEnv* env, jobject javaField,
                                                      jobject javaObj) {
   ScopedFastNativeObjectAccess soa(env);
   mirror::Field* f = soa.Decode<mirror::Field*>(javaField);
@@ -229,7 +229,7 @@ static jshort Field_getShort(JNIEnv* env, jobject javaField, jobject javaObj) {
   return GetPrimitiveField<Primitive::kPrimShort>(env, javaField, javaObj).GetS();
 }
 
-ALWAYS_INLINE inline static void SetFieldValue(mirror::Object* o, mirror::Field* f,
+MC inline static void SetFieldValue(mirror::Object* o, mirror::Field* f,
                                                Primitive::Type field_type, bool allow_references,
                                                const JValue& new_value)
     SHARED_REQUIRES(Locks::mutator_lock_) {

@@ -533,7 +533,7 @@ class Hprof : public SingleRootVisitor {
   }
 
   void WriteClassTable() SHARED_REQUIRES(Locks::mutator_lock_) {
-    for (const auto& p : classes_) {
+    for (const _& p : classes_) {
       mirror::Class* c = p.first;
       HprofClassSerialNumber sn = p.second;
       CHECK(c != nullptr);
@@ -587,7 +587,7 @@ class Hprof : public SingleRootVisitor {
 
   HprofClassObjectId LookupClassId(mirror::Class* c) SHARED_REQUIRES(Locks::mutator_lock_) {
     if (c != nullptr) {
-      auto it = classes_.find(c);
+      _ it = classes_.find(c);
       if (it == classes_.end()) {
         // first time to see this class
         HprofClassSerialNumber sn = next_class_serial_number_++;
@@ -601,12 +601,12 @@ class Hprof : public SingleRootVisitor {
 
   HprofStackTraceSerialNumber LookupStackTraceSerialNumber(const mirror::Object* obj)
       SHARED_REQUIRES(Locks::mutator_lock_) {
-    auto r = allocation_records_.find(obj);
+    _ r = allocation_records_.find(obj);
     if (r == allocation_records_.end()) {
       return kHprofNullStackTrace;
     } else {
       const gc::AllocRecordStackTrace* trace = r->second;
-      auto result = traces_.find(trace);
+      _ result = traces_.find(trace);
       CHECK(result != traces_.end());
       return result->second;
     }
@@ -621,7 +621,7 @@ class Hprof : public SingleRootVisitor {
   }
 
   HprofStringId LookupStringId(const std::string& string) {
-    auto it = strings_.find(string);
+    _ it = strings_.find(string);
     if (it != strings_.end()) {
       return it->second;
     }
@@ -667,7 +667,7 @@ class Hprof : public SingleRootVisitor {
 
     // TODO: jhat complains "WARNING: Stack trace not found for serial # -1", but no trace should
     // have -1 as its serial number (as long as HprofStackTraceSerialNumber doesn't overflow).
-    for (const auto& it : traces_) {
+    for (const _& it : traces_) {
       const gc::AllocRecordStackTrace* trace = it.first;
       HprofStackTraceSerialNumber trace_sn = it.second;
       size_t depth = trace->GetDepth();
@@ -685,7 +685,7 @@ class Hprof : public SingleRootVisitor {
         // ID: source file name string ID
         // U4: class serial number
         // U4: >0, line number; 0, no line information available; -1, unknown location
-        auto frame_result = frames_.find(frame);
+        _ frame_result = frames_.find(frame);
         CHECK(frame_result != frames_.end());
         __ AddU4(frame_result->second);
         __ AddStringId(LookupStringId(method->GetName()));
@@ -695,7 +695,7 @@ class Hprof : public SingleRootVisitor {
           source_file = "";
         }
         __ AddStringId(LookupStringId(source_file));
-        auto class_result = classes_.find(method->GetDeclaringClass());
+        _ class_result = classes_.find(method->GetDeclaringClass());
         CHECK(class_result != classes_.end());
         __ AddU4(class_result->second);
         __ AddU4(frame->ComputeLineNumber());
@@ -713,7 +713,7 @@ class Hprof : public SingleRootVisitor {
       __ AddU4(depth);
       for (size_t i = 0; i < depth; ++i) {
         const gc::AllocRecordStackTraceElement* frame = &trace->GetStackElement(i);
-        auto frame_result = frames_.find(frame);
+        _ frame_result = frames_.find(frame);
         CHECK(frame_result != frames_.end());
         __ AddU4(frame_result->second);
       }
@@ -822,7 +822,7 @@ class Hprof : public SingleRootVisitor {
     HprofStackFrameId next_frame_id = 0;
     size_t count = 0;
 
-    for (auto it = records->Begin(), end = records->End(); it != end; ++it) {
+    for (_ it = records->Begin(), end = records->End(); it != end; ++it) {
       const mirror::Object* obj = it->first.Read();
       if (obj == nullptr) {
         continue;
@@ -831,18 +831,18 @@ class Hprof : public SingleRootVisitor {
       const gc::AllocRecordStackTrace* trace = it->second.GetStackTrace();
 
       // Copy the pair into a real hash map to speed up look up.
-      auto records_result = allocation_records_.emplace(obj, trace);
+      _ records_result = allocation_records_.emplace(obj, trace);
       // The insertion should always succeed, i.e. no duplicate object pointers in "records"
       CHECK(records_result.second);
 
       // Generate serial numbers for traces, and IDs for frames.
-      auto traces_result = traces_.find(trace);
+      _ traces_result = traces_.find(trace);
       if (traces_result == traces_.end()) {
         traces_.emplace(trace, next_trace_sn++);
         // only check frames if the trace is newly discovered
         for (size_t i = 0, depth = trace->GetDepth(); i < depth; ++i) {
           const gc::AllocRecordStackTraceElement* frame = &trace->GetStackElement(i);
-          auto frames_result = frames_.find(frame);
+          _ frames_result = frames_.find(frame);
           if (frames_result == frames_.end()) {
             frames_.emplace(frame, next_frame_id++);
           }
@@ -1078,7 +1078,7 @@ void Hprof::DumpHeapObject(mirror::Object* obj) {
       heap_type = HPROF_HEAP_IMAGE;
     }
   } else {
-    const auto* los = heap->GetLargeObjectsSpace();
+    const _* los = heap->GetLargeObjectsSpace();
     if (los->Contains(obj) && los->IsZygoteLargeObject(Thread::Current(), obj)) {
       heap_type = HPROF_HEAP_ZYGOTE;
     }

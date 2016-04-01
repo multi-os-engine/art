@@ -94,7 +94,7 @@ void PcToRegisterLineTable::Init(RegisterTrackingMode mode, InstructionFlags* fl
 PcToRegisterLineTable::~PcToRegisterLineTable() {}
 
 // Note: returns true on failure.
-ALWAYS_INLINE static inline bool FailOrAbort(MethodVerifier* verifier, bool condition,
+MC static inline bool FailOrAbort(MethodVerifier* verifier, bool condition,
                                              const char* error_msg, uint32_t work_insn_idx) {
   if (kIsDebugBuild) {
     // In a debug build, abort if the error condition is wrong.
@@ -3217,7 +3217,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
     // Special instructions.
     case Instruction::RETURN_VOID_NO_BARRIER:
       if (IsConstructor() && !IsStatic()) {
-        auto& declaring_class = GetDeclaringClass();
+        _& declaring_class = GetDeclaringClass();
         if (declaring_class.IsUnresolvedReference()) {
           // We must iterate over the fields, even if we cannot use mirror classes to do so. Do it
           // manually over the underlying dex file.
@@ -3229,7 +3229,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
           }
           break;
         }
-        auto* klass = declaring_class.GetClass();
+        _* klass = declaring_class.GetClass();
         for (uint32_t i = 0, num_fields = klass->NumInstanceFields(); i < num_fields; ++i) {
           if (klass->GetInstanceField(i)->IsFinal()) {
             Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "return-void-no-barrier not expected for "
@@ -3384,10 +3384,10 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       /* When AOT compiling, check that the last failure is a hard failure */
       if (failures_[failures_.size() - 1] != VERIFY_ERROR_BAD_CLASS_HARD) {
         LOG(ERROR) << "Pending failures:";
-        for (auto& error : failures_) {
+        for (_& error : failures_) {
           LOG(ERROR) << error;
         }
-        for (auto& error_msg : failure_messages_) {
+        for (_& error_msg : failure_messages_) {
           LOG(ERROR) << error_msg->str();
         }
         LOG(FATAL) << "Pending hard failure, but last failure not hard.";
@@ -3736,8 +3736,8 @@ ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(
   }
   mirror::Class* klass = klass_type.GetClass();
   const RegType& referrer = GetDeclaringClass();
-  auto* cl = Runtime::Current()->GetClassLinker();
-  auto pointer_size = cl->GetImagePointerSize();
+  _* cl = Runtime::Current()->GetClassLinker();
+  _ pointer_size = cl->GetImagePointerSize();
 
   ArtMethod* res_method = dex_cache_->GetResolvedMethod(dex_method_idx, pointer_size);
   bool stash_method = false;
@@ -4128,8 +4128,8 @@ ArtMethod* MethodVerifier::GetQuickInvokedMethod(const Instruction* inst, Regist
     return nullptr;
   }
   uint16_t vtable_index = is_range ? inst->VRegB_3rc() : inst->VRegB_35c();
-  auto* cl = Runtime::Current()->GetClassLinker();
-  auto pointer_size = cl->GetImagePointerSize();
+  _* cl = Runtime::Current()->GetClassLinker();
+  _ pointer_size = cl->GetImagePointerSize();
   if (static_cast<int32_t>(vtable_index) >= dispatch_class->GetVTableLength()) {
     FailOrAbort(this, allow_failure,
                 "Receiver class has not enough vtable slots for quickened invoke at ",

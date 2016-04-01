@@ -85,7 +85,7 @@ class ArenaStack : private DebugStackRefCounter, private ArenaAllocatorMemoryToo
   }
 
   // Private - access via ScopedArenaAllocator or ScopedArenaAllocatorAdapter.
-  void* Alloc(size_t bytes, ArenaAllocKind kind) ALWAYS_INLINE {
+  void* Alloc(size_t bytes, ArenaAllocKind kind) MC {
     if (UNLIKELY(IsRunningOnMemoryTool())) {
       return AllocWithMemoryTool(bytes, kind);
     }
@@ -146,7 +146,7 @@ class ScopedArenaAllocator
 
   void Reset();
 
-  void* Alloc(size_t bytes, ArenaAllocKind kind = kArenaAllocMisc) ALWAYS_INLINE {
+  void* Alloc(size_t bytes, ArenaAllocKind kind = kArenaAllocMisc) MC {
     DebugStackReference::CheckTop();
     return arena_stack_->Alloc(bytes, kind);
   }

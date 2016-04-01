@@ -204,7 +204,7 @@ class Libraries {
   void Dump(std::ostream& os) const NO_THREAD_SAFETY_ANALYSIS {
     Locks::jni_libraries_lock_->AssertHeld(Thread::Current());
     bool first = true;
-    for (const auto& library : libraries_) {
+    for (const _& library : libraries_) {
       if (!first) {
         os << ' ';
       }
@@ -218,7 +218,7 @@ class Libraries {
   }
 
   SharedLibrary* Get(const std::string& path) REQUIRES(Locks::jni_libraries_lock_) {
-    auto it = libraries_.find(path);
+    _ it = libraries_.find(path);
     return (it == libraries_.end()) ? nullptr : it->second;
   }
 
@@ -238,7 +238,7 @@ class Libraries {
     void* const declaring_class_loader_allocator =
         Runtime::Current()->GetClassLinker()->GetAllocatorForClassLoader(declaring_class_loader);
     CHECK(declaring_class_loader_allocator != nullptr);
-    for (const auto& lib : libraries_) {
+    for (const _& lib : libraries_) {
       SharedLibrary* const library = lib.second;
       // Use the allocator address for class loader equality to avoid unnecessary weak root decode.
       if (library->GetClassLoaderAllocator() != declaring_class_loader_allocator) {
@@ -275,7 +275,7 @@ class Libraries {
     std::vector<JNI_OnUnloadFn> unload_functions;
     {
       MutexLock mu(soa.Self(), *Locks::jni_libraries_lock_);
-      for (auto it = libraries_.begin(); it != libraries_.end(); ) {
+      for (_ it = libraries_.begin(); it != libraries_.end(); ) {
         SharedLibrary* const library = it->second;
         // If class loader is null then it was unloaded, call JNI_OnUnload.
         const jweak class_loader = library->GetClassLoader();
@@ -898,7 +898,7 @@ void* JavaVMExt::FindCodeForNativeMethod(ArtMethod* m) {
 void JavaVMExt::SweepJniWeakGlobals(IsMarkedVisitor* visitor) {
   MutexLock mu(Thread::Current(), weak_globals_lock_);
   Runtime* const runtime = Runtime::Current();
-  for (auto* entry : weak_globals_) {
+  for (_* entry : weak_globals_) {
     // Need to skip null here to distinguish between null entries and cleared weak ref entries.
     if (!entry->IsNull()) {
       // Since this is called by the GC, we don't need a read barrier.

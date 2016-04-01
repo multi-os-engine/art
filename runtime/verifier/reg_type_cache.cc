@@ -35,7 +35,7 @@ uint16_t RegTypeCache::primitive_count_ = 0;
 const PreciseConstType* RegTypeCache::small_precise_constants_[kMaxSmallConstant -
                                                                kMinSmallConstant + 1];
 
-ALWAYS_INLINE static inline bool MatchingPrecisionForClass(const RegType* entry, bool precise)
+MC static inline bool MatchingPrecisionForClass(const RegType* entry, bool precise)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   if (entry->IsPreciseReference() == precise) {
     // We were or weren't looking for a precise reference and we found what we need.
@@ -230,7 +230,7 @@ const RegType* RegTypeCache::FindClass(mirror::Class* klass, bool precise) const
     // primitive classes are final.
     return &RegTypeFromPrimitiveType(klass->GetPrimitiveType());
   }
-  for (auto& pair : klass_entries_) {
+  for (_& pair : klass_entries_) {
     mirror::Class* const reg_klass = pair.first.Read();
     if (reg_klass == klass) {
       const RegType* reg_type = pair.second;
@@ -666,7 +666,7 @@ void RegTypeCache::VisitRoots(RootVisitor* visitor, const RootInfo& root_info) {
   for (size_t i = primitive_count_; i < entries_.size(); ++i) {
     entries_[i]->VisitRoots(visitor, root_info);
   }
-  for (auto& pair : klass_entries_) {
+  for (_& pair : klass_entries_) {
     GcRoot<mirror::Class>& root = pair.first;
     root.VisitRoot(visitor, root_info);
   }

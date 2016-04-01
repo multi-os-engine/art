@@ -133,7 +133,7 @@ class ElfCompilationUnitWriter {
     info_.WriteSecOffset(DW_AT_stmt_list, compilation_unit.debug_line_offset);
 
     const char* last_dex_class_desc = nullptr;
-    for (auto mi : compilation_unit.methods) {
+    for (_ mi : compilation_unit.methods) {
       DCHECK(mi->dex_file != nullptr);
       const DexFile* dex = mi->dex_file;
       const DexFile::CodeItem* dex_code = mi->code_item;
@@ -407,10 +407,10 @@ class ElfCompilationUnitWriter {
     }
 
     // Write base class declarations.
-    for (const auto& base_class_reference : base_class_references) {
+    for (const _& base_class_reference : base_class_references) {
       size_t reference_offset = base_class_reference.first;
       mirror::Class* base_class = base_class_reference.second;
-      const auto& it = class_declarations.find(base_class);
+      const _& it = class_declarations.find(base_class);
       if (it != class_declarations.end()) {
         info_.UpdateUint32(reference_offset, it->second);
       } else {
@@ -467,7 +467,7 @@ class ElfCompilationUnitWriter {
   // It is used to determine the dynamic type of objects.
   // We use the methods_ field of class since it is unique and it is not moved by the GC.
   void WriteLinkageName(mirror::Class* type) SHARED_REQUIRES(Locks::mutator_lock_) {
-    auto* methods_ptr = type->GetMethodsPtr();
+    _* methods_ptr = type->GetMethodsPtr();
     if (methods_ptr == nullptr) {
       // Some types might have no methods.  Allocate empty array instead.
       LinearAlloc* allocator = Runtime::Current()->GetLinearAlloc();
@@ -492,7 +492,7 @@ class ElfCompilationUnitWriter {
   }
 
   void FinishLazyTypes() {
-    for (const auto& lazy_type : lazy_types_) {
+    for (const _& lazy_type : lazy_types_) {
       info_.UpdateUint32(lazy_type.second, WriteTypeDeclaration(lazy_type.first));
     }
     lazy_types_.clear();
@@ -511,7 +511,7 @@ class ElfCompilationUnitWriter {
     using namespace dwarf;  // NOLINT. For easy access to DWARF constants.
 
     DCHECK(!desc.empty());
-    const auto& it = type_cache_.find(desc);
+    const _& it = type_cache_.find(desc);
     if (it != type_cache_.end()) {
       return it->second;
     }

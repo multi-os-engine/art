@@ -1154,7 +1154,7 @@ void MonitorList::Add(Monitor* m) {
 void MonitorList::SweepMonitorList(IsMarkedVisitor* visitor) {
   Thread* self = Thread::Current();
   MutexLock mu(self, monitor_list_lock_);
-  for (auto it = list_.begin(); it != list_.end(); ) {
+  for (_ it = list_.begin(); it != list_.end(); ) {
     Monitor* m = *it;
     // Disable the read barrier in GetObject() as this is called by GC.
     mirror::Object* obj = m->GetObject<kWithoutReadBarrier>();

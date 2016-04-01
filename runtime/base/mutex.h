@@ -322,14 +322,14 @@ class SHARED_LOCKABLE ReaderWriterMutex : public BaseMutex {
 #endif
 
   // Block until ReaderWriterMutex is shared or free then acquire a share on the access.
-  void SharedLock(Thread* self) ACQUIRE_SHARED() ALWAYS_INLINE;
+  void SharedLock(Thread* self) ACQUIRE_SHARED() MC;
   void ReaderLock(Thread* self) ACQUIRE_SHARED() { SharedLock(self); }
 
   // Try to acquire share of ReaderWriterMutex.
   bool SharedTryLock(Thread* self) SHARED_TRYLOCK_FUNCTION(true);
 
   // Release a share of the access.
-  void SharedUnlock(Thread* self) RELEASE_SHARED() ALWAYS_INLINE;
+  void SharedUnlock(Thread* self) RELEASE_SHARED() MC;
   void ReaderUnlock(Thread* self) RELEASE_SHARED() { SharedUnlock(self); }
 
   // Is the current thread the exclusive holder of the ReaderWriterMutex.
@@ -431,8 +431,8 @@ class SHARED_LOCKABLE MutatorMutex : public ReaderWriterMutex {
 
  private:
   friend class Thread;
-  void TransitionFromRunnableToSuspended(Thread* self) UNLOCK_FUNCTION() ALWAYS_INLINE;
-  void TransitionFromSuspendedToRunnable(Thread* self) SHARED_LOCK_FUNCTION() ALWAYS_INLINE;
+  void TransitionFromRunnableToSuspended(Thread* self) UNLOCK_FUNCTION() MC;
+  void TransitionFromSuspendedToRunnable(Thread* self) SHARED_LOCK_FUNCTION() MC;
 
   DISALLOW_COPY_AND_ASSIGN(MutatorMutex);
 };

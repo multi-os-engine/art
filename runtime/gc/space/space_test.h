@@ -54,7 +54,7 @@ class SpaceTest : public Super {
 
   mirror::Class* GetByteArrayClass(Thread* self) SHARED_REQUIRES(Locks::mutator_lock_) {
     StackHandleScope<1> hs(self);
-    auto null_loader(hs.NewHandle<mirror::ClassLoader>(nullptr));
+    _ null_loader(hs.NewHandle<mirror::ClassLoader>(nullptr));
     if (byte_array_class_ == nullptr) {
       mirror::Class* byte_array_class =
           Runtime::Current()->GetClassLinker()->FindClass(self, "[B", null_loader);
@@ -191,7 +191,7 @@ void SpaceTest<Super>::SizeFootPrintGrowthLimitAndTrimBody(MallocSpace* space,
         }
       }
       StackHandleScope<1> hs(soa.Self());
-      auto object(hs.NewHandle<mirror::Object>(nullptr));
+      _ object(hs.NewHandle<mirror::Object>(nullptr));
       size_t bytes_allocated = 0;
       size_t bytes_tl_bulk_allocated;
       if (round <= 1) {
@@ -288,7 +288,7 @@ void SpaceTest<Super>::SizeFootPrintGrowthLimitAndTrimBody(MallocSpace* space,
 
   // All memory was released, try a large allocation to check freed memory is being coalesced
   StackHandleScope<1> hs(soa.Self());
-  auto large_object(hs.NewHandle<mirror::Object>(nullptr));
+  _ large_object(hs.NewHandle<mirror::Object>(nullptr));
   size_t three_quarters_space = (growth_limit / 2) + (growth_limit / 4);
   size_t bytes_allocated = 0;
   size_t bytes_tl_bulk_allocated;

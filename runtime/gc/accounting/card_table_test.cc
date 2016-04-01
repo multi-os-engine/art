@@ -81,7 +81,7 @@ class CardTableTest : public CommonRuntimeTest {
 TEST_F(CardTableTest, TestMarkCard) {
   CommonSetup();
   for (const uint8_t* addr = HeapBegin(); addr < HeapLimit(); addr += kObjectAlignment) {
-    auto obj = reinterpret_cast<const mirror::Object*>(addr);
+    _ obj = reinterpret_cast<const mirror::Object*>(addr);
     EXPECT_EQ(card_table_->GetCard(obj), CardTable::kCardClean);
     EXPECT_TRUE(!card_table_->IsDirty(obj));
     card_table_->MarkCard(addr);

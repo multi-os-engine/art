@@ -55,7 +55,7 @@ class MultiOatRelativePatcher FINAL {
 
   // Get relative offset. Returns 0 when the offset has not been set yet.
   uint32_t GetOffset(MethodReference method_ref) {
-    auto it = method_offset_map_.map.find(method_ref);
+    _ it = method_offset_map_.map.find(method_ref);
     return (it != method_offset_map_.map.end()) ? it->second - adjustment_ : 0u;
   }
 

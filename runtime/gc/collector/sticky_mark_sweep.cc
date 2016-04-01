@@ -35,14 +35,14 @@ void StickyMarkSweep::BindBitmaps() {
   // For sticky GC, we want to bind the bitmaps of all spaces as the allocation stack lets us
   // know what was allocated since the last GC. A side-effect of binding the allocation space mark
   // and live bitmap is that marking the objects will place them in the live bitmap.
-  for (const auto& space : GetHeap()->GetContinuousSpaces()) {
+  for (const _& space : GetHeap()->GetContinuousSpaces()) {
     if (space->IsContinuousMemMapAllocSpace() &&
         space->GetGcRetentionPolicy() == space::kGcRetentionPolicyAlwaysCollect) {
       DCHECK(space->IsContinuousMemMapAllocSpace());
       space->AsContinuousMemMapAllocSpace()->BindLiveToMarkBitmap();
     }
   }
-  for (const auto& space : GetHeap()->GetDiscontinuousSpaces()) {
+  for (const _& space : GetHeap()->GetDiscontinuousSpaces()) {
     CHECK(space->IsLargeObjectSpace());
     space->AsLargeObjectSpace()->CopyLiveToMarked();
   }

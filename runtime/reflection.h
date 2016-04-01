@@ -40,7 +40,7 @@ bool UnboxPrimitiveForField(mirror::Object* o, mirror::Class* dst_class, ArtFiel
 bool UnboxPrimitiveForResult(mirror::Object* o, mirror::Class* dst_class, JValue* unboxed_value)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
-ALWAYS_INLINE bool ConvertPrimitiveValue(bool unbox_for_result,
+MC bool ConvertPrimitiveValue(bool unbox_for_result,
                                          Primitive::Type src_class, Primitive::Type dst_class,
                                          const JValue& src, JValue* dst)
     SHARED_REQUIRES(Locks::mutator_lock_);
@@ -66,7 +66,7 @@ jobject InvokeMethod(const ScopedObjectAccessAlreadyRunnable& soa, jobject metho
                      jobject args, size_t num_frames = 1)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
-ALWAYS_INLINE bool VerifyObjectIsClass(mirror::Object* o, mirror::Class* c)
+MC bool VerifyObjectIsClass(mirror::Object* o, mirror::Class* c)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
 bool VerifyAccess(Thread* self, mirror::Object* obj, mirror::Class* declaring_class,

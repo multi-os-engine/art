@@ -321,7 +321,7 @@ bool ParsedOptions::ProcessSpecialOptions(const RuntimeOptions& options,
     const std::string option(options[i].first);
       // TODO: support -Djava.class.path
     if (option == "bootclasspath") {
-      auto boot_class_path = static_cast<std::vector<std::unique_ptr<const DexFile>>*>(
+      _ boot_class_path = static_cast<std::vector<std::unique_ptr<const DexFile>>*>(
           const_cast<void*>(options[i].second));
 
       if (runtime_options != nullptr) {
@@ -335,7 +335,7 @@ bool ParsedOptions::ProcessSpecialOptions(const RuntimeOptions& options,
       }
     } else if (option == "imageinstructionset") {
       const char* isa_str = reinterpret_cast<const char*>(options[i].second);
-      auto&& image_isa = GetInstructionSetFromString(isa_str);
+      _&& image_isa = GetInstructionSetFromString(isa_str);
       if (image_isa == kNone) {
         Usage("%s is not a valid instruction set.", isa_str);
         return false;
@@ -428,7 +428,7 @@ bool ParsedOptions::DoParse(const RuntimeOptions& options,
     }
   }
 
-  auto parser = MakeParser(ignore_unrecognized);
+  _ parser = MakeParser(ignore_unrecognized);
 
   // Convert to a simple string list (without the magic pointer options)
   std::vector<std::string> argv_list;
@@ -540,7 +540,7 @@ bool ParsedOptions::DoParse(const RuntimeOptions& options,
   std::string core_jar("/core-hostdex.jar");
   std::string core_libart_jar("/core-libart-hostdex.jar");
 #endif
-  auto boot_class_path_string = args.GetOrDefault(M::BootClassPath);
+  _ boot_class_path_string = args.GetOrDefault(M::BootClassPath);
 
   size_t core_jar_pos = boot_class_path_string.find(core_jar);
   if (core_jar_pos != std::string::npos) {
@@ -549,8 +549,8 @@ bool ParsedOptions::DoParse(const RuntimeOptions& options,
   }
 
   {
-    auto&& boot_class_path = args.GetOrDefault(M::BootClassPath);
-    auto&& boot_class_path_locations = args.GetOrDefault(M::BootClassPathLocations);
+    _&& boot_class_path = args.GetOrDefault(M::BootClassPath);
+    _&& boot_class_path_locations = args.GetOrDefault(M::BootClassPathLocations);
     if (args.Exists(M::BootClassPathLocations)) {
       size_t boot_class_path_count = ParseStringList<':'>::Split(boot_class_path).Size();
 

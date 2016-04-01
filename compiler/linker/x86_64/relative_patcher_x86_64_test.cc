@@ -33,7 +33,7 @@ class X86_64RelativePatcherTest : public RelativePatcherTest {
   static const ArrayRef<const uint8_t> kStringReferenceCode;
 
   uint32_t GetMethodOffset(uint32_t method_idx) {
-    auto result = method_offset_map_.FindMethodOffset(MethodRef(method_idx));
+    _ result = method_offset_map_.FindMethodOffset(MethodRef(method_idx));
     CHECK(result.first);
     return result.second;
   }
@@ -114,7 +114,7 @@ TEST_F(X86_64RelativePatcherTest, CallTrampoline) {
   AddCompiledMethod(MethodRef(1u), kCallCode, ArrayRef<const LinkerPatch>(patches));
   Link();
 
-  auto result = method_offset_map_.FindMethodOffset(MethodRef(1u));
+  _ result = method_offset_map_.FindMethodOffset(MethodRef(1u));
   ASSERT_TRUE(result.first);
   uint32_t diff = kTrampolineOffset - (result.second + kCallCode.size());
   static const uint8_t expected_code[] = {
@@ -136,7 +136,7 @@ TEST_F(X86_64RelativePatcherTest, DexCacheReference) {
   AddCompiledMethod(MethodRef(1u), kDexCacheLoadCode, ArrayRef<const LinkerPatch>(patches));
   Link();
 
-  auto result = method_offset_map_.FindMethodOffset(MethodRef(1u));
+  _ result = method_offset_map_.FindMethodOffset(MethodRef(1u));
   ASSERT_TRUE(result.first);
   uint32_t diff =
       dex_cache_arrays_begin_ + kElementOffset - (result.second + kDexCacheLoadCode.size());
@@ -161,7 +161,7 @@ TEST_F(X86_64RelativePatcherTest, StringReference) {
   AddCompiledMethod(MethodRef(1u), kStringReferenceCode, ArrayRef<const LinkerPatch>(patches));
   Link();
 
-  auto result = method_offset_map_.FindMethodOffset(MethodRef(1u));
+  _ result = method_offset_map_.FindMethodOffset(MethodRef(1u));
   ASSERT_TRUE(result.first);
   uint32_t diff = kStringOffset - (result.second + kStringReferenceCode.size());
   static const uint8_t expected_code[] = {

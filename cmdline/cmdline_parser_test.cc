@@ -89,7 +89,7 @@ namespace art {
   ::testing::AssertionResult IsExpectedKeyValue(const T& expected,
                                                 const TMap& map,
                                                 const TKey& key) {
-    auto* actual = map.Get(key);
+    _* actual = map.Get(key);
     if (actual != nullptr) {
       if (!UsuallyEquals(expected, *actual)) {
         return ::testing::AssertionFailure()
@@ -203,7 +203,7 @@ class CmdlineParserTest : public ::testing::Test {
     } while (false)
 
 TEST_F(CmdlineParserTest, TestSimpleSuccesses) {
-  auto& parser = *parser_;
+  _& parser = *parser_;
 
   EXPECT_LT(0u, parser.CountDefinedArguments());
 
@@ -592,7 +592,7 @@ TEST_F(CmdlineParserTest, TestIgnoredArguments) {
   };
 
   // Check they are ignored when parsed one at a time
-  for (auto&& arg : ignored_args) {
+  for (_&& arg : ignored_args) {
     SCOPED_TRACE(arg);
     EXPECT_SINGLE_PARSE_EMPTY_SUCCESS(arg);
   }
@@ -607,7 +607,7 @@ TEST_F(CmdlineParserTest, MultipleArguments) {
       "-help -XX:ForegroundHeapGrowthMultiplier=0.5 "
       "-Xnodex2oat -Xmethod-trace -XX:LargeObjectSpace=map")));
 
-  auto&& map = parser_->ReleaseArgumentsMap();
+  _&& map = parser_->ReleaseArgumentsMap();
   EXPECT_EQ(5u, map.Size());
   EXPECT_KEY_VALUE(map, M::Help, Unit{});  // NOLINT [whitespace/braces] [5]
   EXPECT_KEY_VALUE(map, M::ForegroundHeapGrowthMultiplier, 0.5);
