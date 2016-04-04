@@ -173,7 +173,7 @@ def MatchFiles(checkerFile, c1File, targetArch, debuggableMode):
     c1Pass = c1File.findPass(testCase.name)
     if c1Pass is None:
       Logger.fail("Test case \"{}\" not found in the CFG file".format(testCase.name),
-                  testCase.fileName, testCase.startLineNo)
+                  testCase.fileName, testCase.startLineNo, testCase.name)
 
     Logger.startTest(testCase.name)
     try:
