@@ -337,10 +337,9 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
   std::unique_ptr<const OatFile> oat_file(oat_file_assistant.GetBestOatFile().release());
 
   if (oat_file != nullptr) {
-    // Take the file only if it has no collisions, or we must take it because of preopting.
-    bool accept_oat_file = !HasCollisions(oat_file.get(), /*out*/ &error_msg);
-    if (!accept_oat_file) {
-      // Failed the collision check. Print warning.
+    // Reject the file if we have dex code to fall back to and it has collisions.
+    if (oat_file_assistant.HasOriginalDexFiles()
+        && HasCollisions(oat_file.get(), /*out*/ &error_msg)) {
       if (Runtime::Current()->IsDexFileFallbackEnabled()) {
         LOG(WARNING) << "Found duplicate classes, falling back to interpreter mode for "
                      << dex_location;
@@ -349,17 +348,7 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
                         " load classes for " << dex_location;
       }
       LOG(WARNING) << error_msg;
-
-      // However, if the app was part of /system and preopted, there is no original dex file
-      // available. In that case grudgingly accept the oat file.
-      if (!DexFile::MaybeDex(dex_location)) {
-        accept_oat_file = true;
-        LOG(WARNING) << "Dex location " << dex_location << " does not seem to include dex file. "
-                     << "Allow oat file use. This is potentially dangerous.";
-      }
-    }
-
-    if (accept_oat_file) {
+    } else {
       VLOG(class_linker) << "Registering " << oat_file->GetLocation();
       source_oat_file = RegisterOatFile(std::move(oat_file));
       *out_oat_file = source_oat_file;
