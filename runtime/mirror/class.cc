@@ -881,8 +881,8 @@ mirror::Class* Class::GetCommonSuperClass(Handle<Class> klass) {
   mirror::Class* common_super_class = this;
   while (!common_super_class->IsAssignableFrom(klass.Get())) {
     common_super_class = common_super_class->GetSuperClass();
+    DCHECK(common_super_class != nullptr);
   }
-  DCHECK(common_super_class != nullptr);
   return common_super_class;
 }
 
