@@ -1061,14 +1061,15 @@ bool HInliner::TryBuildAndInlineHelper(HInvoke* invoke_instruction,
       caller_instruction_counter);
   callee_graph->SetArtMethod(resolved_method);
 
-  OptimizingCompilerStats inline_stats;
+  std::unique_ptr<OptimizingCompilerStats> inline_stats =
+      (stats_ == nullptr) ? nullptr : MakeUnique<OptimizingCompilerStats>();
   HGraphBuilder builder(callee_graph,
                         &dex_compilation_unit,
                         &outer_compilation_unit_,
                         resolved_method->GetDexFile(),
                         *code_item,
                         compiler_driver_,
-                        &inline_stats,
+                        inline_stats.get(),
                         resolved_method->GetQuickenedInfo(),
                         dex_cache,
                         handles_);
