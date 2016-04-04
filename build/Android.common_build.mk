@@ -363,7 +363,10 @@ ART_HOST_ASFLAGS += $(art_asflags)
 ifndef LIBART_IMG_TARGET_BASE_ADDRESS
   $(error LIBART_IMG_TARGET_BASE_ADDRESS unset)
 endif
-ART_TARGET_CFLAGS += $(art_cflags) -DART_TARGET -DART_BASE_ADDRESS=$(LIBART_IMG_TARGET_BASE_ADDRESS)
+ART_TARGET_CFLAGS += $(art_cflags) -DART_TARGET \
+                     -DART_BASE_ADDRESS=$(LIBART_IMG_TARGET_BASE_ADDRESS) \
+                     -DART_TARGET_ANDROID \
+
 ART_TARGET_CFLAGS += $(art_target_cflags)
 ART_TARGET_ASFLAGS += $(art_asflags)
 
