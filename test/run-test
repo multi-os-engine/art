@@ -102,6 +102,7 @@ build_args=""
 quiet="no"
 debuggable="no"
 prebuild_mode="yes"
+prebuild_odex_mode="no"
 target_mode="yes"
 dev_mode="no"
 update_mode="no"
@@ -149,6 +150,7 @@ while true; do
         target_mode="no"
         runtime="jvm"
         prebuild_mode="no"
+        prebuild_odex_mode="no"
         NEED_DEX="false"
         USE_JACK="false"
         run_args="${run_args} --jvm"
@@ -190,6 +192,13 @@ while true; do
         run_args="${run_args} --prebuild"
         prebuild_mode="yes"
         shift;
+    elif [ "x$1" = "x--prebuild-odex" ]; then
+        run_args="${run_args} --prebuild-odex"
+        prebuild_odex_mode="yes"
+        shift;
+    elif [ "x$1" = "x--strip-dex" ]; then
+        run_args="${run_args} --strip-dex"
+        shift;
     elif [ "x$1" = "x--debuggable" ]; then
         run_args="${run_args} -Xcompiler-option --debuggable"
         debuggable="yes"
@@ -197,6 +206,10 @@ while true; do
     elif [ "x$1" = "x--no-prebuild" ]; then
         run_args="${run_args} --no-prebuild"
         prebuild_mode="no"
+        shift;
+    elif [ "x$1" = "x--no-prebuild_odex" ]; then
+        run_args="${run_args} --no-prebuild_odex"
+        prebuild_odex_mode="no"
         shift;
     elif [ "x$1" = "x--gcverify" ]; then
         basic_verify="true"
@@ -430,6 +443,10 @@ if [ "$target_mode" = "no" ]; then
             err_echo "--prebuild with --jvm is unsupported"
             exit 1;
         fi
+        if [ "$prebuild_odex_mode" = "yes" ]; then
+            err_echo "--prebuild-odex with --jvm is unsupported"
+            exit 1;
+        fi
     fi
 fi
 
@@ -568,9 +585,13 @@ if [ "$usage" = "yes" ]; then
         echo "                          other runtime options are ignored."
         echo "    --no-dex2oat          Run as though dex2oat was failing."
         echo "    --no-patchoat         Run as though patchoat was failing."
-        echo "    --prebuild            Run dex2oat on the files before starting test. (default)"
-        echo "    --no-prebuild         Do not run dex2oat on the files before starting"
+        echo "    --prebuild            Run dex2oat to generate oat files before starting test. (default)"
+        echo "    --no-prebuild         Do not run dex2oat to generate oat files before starting"
         echo "                          the test."
+        echo "    --prebuild-odex       Run dex2oat to generate odex files before starting test."
+        echo "    --no-prebuild-odex    Do not run dex2oat to generate odex files before starting"
+        echo "                          the test."
+        echo "    --strip-dex           Strip the dex files before starting test."
         echo "    --relocate            Force the use of relocating in the test, making"
         echo "                          the image and oat files be relocated to a random"
         echo "                          address before running. (default)"

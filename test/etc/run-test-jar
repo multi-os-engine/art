@@ -35,8 +35,10 @@ MAIN=""
 OPTIMIZE="y"
 PATCHOAT=""
 PREBUILD="y"
+PREBUILD_ODEX="n"
 QUIET="n"
 RELOCATE="y"
+STRIP_DEX="n"
 SECONDARY_DEX=""
 TIME_OUT="gdb"  # "n" (disabled), "timeout" (use timeout), "gdb" (use gdb)
 # Value in seconds
@@ -118,12 +120,21 @@ while true; do
     elif [ "x$1" = "x--prebuild" ]; then
         PREBUILD="y"
         shift
+    elif [ "x$1" = "x--prebuild-odex" ]; then
+        PREBUILD_ODEX="y"
+        shift
+    elif [ "x$1" = "x--strip-dex" ]; then
+        STRIP_DEX="y"
+        shift
     elif [ "x$1" = "x--host" ]; then
         HOST="y"
         ANDROID_ROOT="$ANDROID_HOST_OUT"
         shift
     elif [ "x$1" = "x--no-prebuild" ]; then
         PREBUILD="n"
+        shift
+    elif [ "x$1" = "x--no-prebuild-odex" ]; then
+        PREBUILD_ODEX="n"
         shift
     elif [ "x$1" = "x--no-image" ]; then
         HAVE_IMAGE="n"
@@ -333,7 +344,7 @@ if [ "$JIT" = "y" ]; then
     INT_OPTS="-Xusejit:true"
     if [ "$VERIFY" = "y" ] ; then
       COMPILE_FLAGS="${COMPILE_FLAGS} --compiler-filter=verify-at-runtime"
-      if [ "$PREBUILD" = "n" ]; then
+      if [ "$PREBUILD" = "n" -a "PREBUILD_ODEX" = "n"]; then
         # Make sure that if we have noprebuild we still JIT as DexClassLoader will
         # try to compile the dex file.
         INT_OPTS="${INT_OPTS} -Xcompiler-option --compiler-filter=verify-at-runtime"
@@ -341,7 +352,7 @@ if [ "$JIT" = "y" ]; then
     else
       COMPILE_FLAGS="${COMPILE_FLAGS} --compiler-filter=verify-none"
       DEX_VERIFY="${DEX_VERIFY} -Xverify:none"
-      if [ "$PREBUILD" = "n" ]; then
+      if [ "$PREBUILD" = "n" -a "PREBUILD_ODEX" = "n" ]; then
         INT_OPTS="${INT_OPTS} -Xcompiler-option --compiler-filter=verify-none"
       fi
     fi
@@ -378,13 +389,15 @@ if [ "$HOST" = "n" ]; then
   fi
 fi
 
-dex2oat_cmdline="true"
-mkdir_cmdline="mkdir -p ${DEX_LOCATION}/dalvik-cache/$ISA"
+prebuild_cmdline="true"
+prebuild_odex_cmdline="true"
+strip_cmdline="true"
+mkdir_cmdline="mkdir -p ${DEX_LOCATION}/dalvik-cache/$ISA ${DEX_LOCATION}/oat/$ISA"
 
-app_image="--app-image-file=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.art | cut -d/ -f 2- | sed "s:/:@:g")"
 
 if [ "$PREBUILD" = "y" ]; then
-  dex2oat_cmdline="$INVOKE_WITH $ANDROID_ROOT/bin/dex2oatd \
+  app_image="--app-image-file=$DEX_LOCATION/dalvik-cache/$ISA/$(echo $DEX_LOCATION/$TEST_NAME.jar/classes.art | cut -d/ -f 2- | sed "s:/:@:g")"
+  prebuild_cmdline="$INVOKE_WITH $ANDROID_ROOT/bin/dex2oatd \
                       $COMPILE_FLAGS \
                       --boot-image=${BOOT_IMAGE} \
                       --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
@@ -392,7 +405,7 @@ if [ "$PREBUILD" = "y" ]; then
                       ${app_image} \
                       --instruction-set=$ISA"
   if [ "x$INSTRUCTION_SET_FEATURES" != "x" ] ; then
-    dex2oat_cmdline="${dex2oat_cmdline} --instruction-set-features=${INSTRUCTION_SET_FEATURES}"
+    prebuild_cmdline="${prebuild_cmdline} --instruction-set-features=${INSTRUCTION_SET_FEATURES}"
   fi
 
   # Add in a timeout. This is important for testing the compilation/verification time of
@@ -403,8 +416,36 @@ if [ "$PREBUILD" = "y" ]; then
   if [ "$HOST" != "n" ]; then
     # Use SIGRTMIN+2 to try to dump threads.
     # Use -k 1m to SIGKILL it a minute later if it hasn't ended.
-    dex2oat_cmdline="timeout -k 1m -s SIGRTMIN+2 1m ${dex2oat_cmdline}"
+    prebuild_cmdline="timeout -k 1m -s SIGRTMIN+2 1m ${prebuild_cmdline}"
   fi
+fi
+
+if [ "$PREBUILD_ODEX" = "y" ]; then
+  prebuild_odex_cmdline="$INVOKE_WITH $ANDROID_ROOT/bin/dex2oatd \
+                      $COMPILE_FLAGS \
+                      --boot-image=${BOOT_IMAGE} \
+                      --dex-file=$DEX_LOCATION/$TEST_NAME.jar \
+                      --oat-file=$DEX_LOCATION/oat/$ISA/$TEST_NAME.odex \
+                      --app-image-file=$DEX_LOCATION/oat/$ISA/$TEST_NAME.art \
+                      --instruction-set=$ISA"
+  if [ "x$INSTRUCTION_SET_FEATURES" != "x" ] ; then
+    prebuild_odex_cmdline="${prebuild_odex_cmdline} --instruction-set-features=${INSTRUCTION_SET_FEATURES}"
+  fi
+
+  # Add in a timeout. This is important for testing the compilation/verification time of
+  # pathological cases.
+  # Note: as we don't know how decent targets are (e.g., emulator), only do this on the host for
+  #       now. We should try to improve this.
+  #       The current value is rather arbitrary. run-tests should compile quickly.
+  if [ "$HOST" != "n" ]; then
+    # Use SIGRTMIN+2 to try to dump threads.
+    # Use -k 1m to SIGKILL it a minute later if it hasn't ended.
+    prebuild_odex_cmdline="timeout -k 1m -s SIGRTMIN+2 1m ${prebuild_odex_cmdline}"
+  fi
+fi
+
+if [ "$STRIP_DEX" = "y" ]; then
+  strip_cmdline="zip --delete $DEX_LOCATION/$TEST_NAME.jar classes.dex"
 fi
 
 DALVIKVM_ISA_FEATURES_ARGS=""
@@ -439,7 +480,8 @@ dalvikvm_cmdline="$INVOKE_WITH $GDB $ANDROID_ROOT/bin/$DALVIKVM \
                   -cp $DEX_LOCATION/$TEST_NAME.jar$SECONDARY_DEX $MAIN $ARGS"
 
 # Remove whitespace.
-dex2oat_cmdline=$(echo $dex2oat_cmdline)
+prebuild_cmdline=$(echo $prebuild_cmdline)
+prebuild_odex_cmdline=$(echo $prebuild_odex_cmdline)
 dalvikvm_cmdline=$(echo $dalvikvm_cmdline)
 
 if [ "$HOST" = "n" ]; then
@@ -475,7 +517,9 @@ if [ "$HOST" = "n" ]; then
              $mkdir_cmdline && \
              export LD_LIBRARY_PATH=$LD_LIBRARY_PATH && \
              export PATH=$ANDROID_ROOT/bin:$PATH && \
-             $dex2oat_cmdline && \
+             $prebuild_cmdline && \
+             $prebuild_odex_cmdline && \
+             $strip_cmdline && \
              $dalvikvm_cmdline"
 
     cmdfile=$(tempfile -p "cmd-" -s "-$TEST_NAME")
@@ -546,20 +590,16 @@ else
     fi
 
     if [ "$DEV_MODE" = "y" ]; then
-      if [ "$PREBUILD" = "y" ]; then
-        echo "$mkdir_cmdline && $dex2oat_cmdline && $cmdline"
-      elif [ "$RELOCATE" = "y" ]; then
-        echo "$mkdir_cmdline && $cmdline"
-      else
-        echo $cmdline
-      fi
+      echo "$mkdir_cmdline && $prebuild_cmdline && $prebuild_odex_cmdline && $strip_cmdline && $cmdline"
     fi
 
     cd $ANDROID_BUILD_TOP
 
     rm -rf ${DEX_LOCATION}/dalvik-cache/
     $mkdir_cmdline || exit 1
-    $dex2oat_cmdline || { echo "Dex2oat failed." >&2 ; exit 2; }
+    $prebuild_cmdline || { echo "Dex2oat failed." >&2 ; exit 2; }
+    $prebuild_odex_cmdline || { echo "Dex2oat odex failed." >&2 ; exit 2; }
+    $strip_cmdline || { echo "Strip failed." >&2 ; exit 3; }
 
     # For running, we must turn off logging when dex2oat or patchoat are missing. Otherwise we use
     # the same defaults as for prebuilt: everything when --dev, otherwise errors and above only.
