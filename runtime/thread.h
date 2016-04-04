@@ -698,8 +698,9 @@ class Thread {
     return tlsPtr_.stack_end;
   }
 
-  // Set the stack end to that to be used during a stack overflow
-  void SetStackEndForStackOverflow() SHARED_REQUIRES(Locks::mutator_lock_);
+  // Set the stack end to that to be used during a stack overflow. Returns true if we are not
+  // already throwing a stack overflow.
+  bool SetStackEndForStackOverflow() SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Set the stack end to that to be used during regular execution
   void ResetDefaultStackEnd() {

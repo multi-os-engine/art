@@ -885,6 +885,16 @@ void Runtime::SetSentinel(mirror::Object* sentinel) {
   sentinel_ = GcRoot<mirror::Object>(sentinel);
 }
 
+// Pre-allocate an error for recursive cases.
+static inline mirror::Throwable* PreAllocateError(const char* descriptor, const char* message)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  Thread::Current()->ThrowNewException(descriptor, message);
+  mirror::Throwable* ret = Thread::Current()->GetException();
+  Thread::Current()->ClearException();
+  CHECK(ret != nullptr) << "Failed to preallocate exception";
+  return ret;
+}
+
 bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   RuntimeArgumentMap runtime_options(std::move(runtime_options_in));
   ScopedTrace trace(__FUNCTION__);
@@ -1211,18 +1221,20 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   Trace::SetDefaultClockSource(runtime_options.GetOrDefault(Opt::ProfileClock));
 
   // Pre-allocate an OutOfMemoryError for the double-OOME case.
-  self->ThrowNewException("Ljava/lang/OutOfMemoryError;",
-                          "OutOfMemoryError thrown while trying to throw OutOfMemoryError; "
-                          "no stack trace available");
-  pre_allocated_OutOfMemoryError_ = GcRoot<mirror::Throwable>(self->GetException());
-  self->ClearException();
+  pre_allocated_OutOfMemoryError_ = GcRoot<mirror::Throwable>(PreAllocateError(
+      "Ljava/lang/OutOfMemoryError;",
+      "OutOfMemoryError thrown while trying to throw OutOfMemoryError; no stack trace available"));
 
   // Pre-allocate a NoClassDefFoundError for the common case of failing to find a system class
   // ahead of checking the application's class loader.
-  self->ThrowNewException("Ljava/lang/NoClassDefFoundError;",
-                          "Class not found using the boot class loader; no stack trace available");
-  pre_allocated_NoClassDefFoundError_ = GcRoot<mirror::Throwable>(self->GetException());
-  self->ClearException();
+  pre_allocated_NoClassDefFoundError_ = GcRoot<mirror::Throwable>(PreAllocateError(
+      "Ljava/lang/NoClassDefFoundError;",
+      "Class not found using the boot class loader; no stack trace available"));
+
+  pre_allocated_StackOverflowError_ = GcRoot<mirror::Throwable>(PreAllocateError(
+        "Ljava/lang/StackOverflowError;",
+        "StackOverflowError thrown while trying to throw StackOverflowError; "
+        "no stack trace available"));
 
   // Look for a native bridge.
   //
@@ -1497,6 +1509,14 @@ mirror::Throwable* Runtime::GetPreAllocatedOutOfMemoryError() {
   return oome;
 }
 
+mirror::Throwable* Runtime::GetPreAllocatedStackOverflowError() {
+  mirror::Throwable* oome = pre_allocated_StackOverflowError_.Read();
+  if (oome == nullptr) {
+    LOG(ERROR) << "Failed to return pre-allocated StackOverflowError";
+  }
+  return oome;
+}
+
 mirror::Throwable* Runtime::GetPreAllocatedNoClassDefFoundError() {
   mirror::Throwable* ncdfe = pre_allocated_NoClassDefFoundError_.Read();
   if (ncdfe == nullptr) {
@@ -1568,6 +1588,7 @@ void Runtime::VisitNonThreadRoots(RootVisitor* visitor) {
   sentinel_.VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
   pre_allocated_OutOfMemoryError_.VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
   pre_allocated_NoClassDefFoundError_.VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
+  pre_allocated_StackOverflowError_.VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
   verifier::MethodVerifier::VisitStaticRoots(visitor);
   VisitTransactionRoots(visitor);
 }

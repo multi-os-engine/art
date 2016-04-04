@@ -2944,14 +2944,15 @@ void Thread::VerifyStackImpl() {
 }
 
 // Set the stack end to that to be used during a stack overflow
-void Thread::SetStackEndForStackOverflow() {
+bool Thread::SetStackEndForStackOverflow() {
   // During stack overflow we allow use of the full stack.
-  if (tlsPtr_.stack_end == tlsPtr_.stack_begin) {
+  if (IsHandlingStackOverflow()) {
     // However, we seem to have already extended to use the full stack.
-    LOG(ERROR) << "Need to increase kStackOverflowReservedBytes (currently "
+    LOG(ERROR) << "Recursive stack overflow, consider increasing "
+               << "kStackOverflowReservedBytes (currently "
                << GetStackOverflowReservedBytes(kRuntimeISA) << ")?";
     DumpStack(LOG(ERROR));
-    LOG(FATAL) << "Recursive stack overflow.";
+    return false;
   }
 
   tlsPtr_.stack_end = tlsPtr_.stack_begin;
@@ -2963,6 +2964,7 @@ void Thread::SetStackEndForStackOverflow() {
       LOG(ERROR) << "Unable to remove stack protection for stack overflow";
     }
   }
+  return true;
 }
 
 void Thread::SetTlab(uint8_t* start, uint8_t* end) {

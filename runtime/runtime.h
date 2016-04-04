@@ -300,10 +300,11 @@ class Runtime {
   // Get the special object used to mark a cleared JNI weak global.
   mirror::Object* GetClearedJniWeakGlobal() SHARED_REQUIRES(Locks::mutator_lock_);
 
+  mirror::Throwable* GetPreAllocatedStackOverflowError() SHARED_REQUIRES(Locks::mutator_lock_);
+
   mirror::Throwable* GetPreAllocatedOutOfMemoryError() SHARED_REQUIRES(Locks::mutator_lock_);
 
-  mirror::Throwable* GetPreAllocatedNoClassDefFoundError()
-      SHARED_REQUIRES(Locks::mutator_lock_);
+  mirror::Throwable* GetPreAllocatedNoClassDefFoundError() SHARED_REQUIRES(Locks::mutator_lock_);
 
   const std::vector<std::string>& GetProperties() const {
     return properties_;
@@ -664,6 +665,7 @@ class Runtime {
   uint64_t callee_save_methods_[kLastCalleeSaveType];
   GcRoot<mirror::Throwable> pre_allocated_OutOfMemoryError_;
   GcRoot<mirror::Throwable> pre_allocated_NoClassDefFoundError_;
+  GcRoot<mirror::Throwable> pre_allocated_StackOverflowError_;
   ArtMethod* resolution_method_;
   ArtMethod* imt_conflict_method_;
   // Unresolved method has the same behavior as the conflict method, it is used by the class linker

@@ -551,12 +551,11 @@ void ThrowRuntimeException(const char* fmt, ...) {
 // Stack overflow.
 
 void ThrowStackOverflowError(Thread* self) {
-  if (self->IsHandlingStackOverflow()) {
-    LOG(ERROR) << "Recursive stack overflow.";
-    // We don't fail here because SetStackEndForStackOverflow will print better diagnostics.
+  // Allow space on the stack for constructor to execute.
+  if (!self->SetStackEndForStackOverflow()) {
+    self->SetException(Runtime::Current()->GetPreAllocatedStackOverflowError());
+    return;
   }
-
-  self->SetStackEndForStackOverflow();  // Allow space on the stack for constructor to execute.
   JNIEnvExt* env = self->GetJniEnv();
   std::string msg("stack size ");
   msg += PrettySize(self->GetStackSize());
