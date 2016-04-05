@@ -486,6 +486,14 @@ class CodeGeneratorX86 : public CodeGenerator {
                                              Location index,
                                              Location temp,
                                              bool needs_null_check);
+  // Factored implementation of GenerateFieldLoadWithBakerReadBarrier
+  // and GenerateArrayLoadWithBakerReadBarrier.
+  void GenerateReferenceLoadWithBakerReadBarrier(HInstruction* instruction,
+                                                 Location ref,
+                                                 Register obj,
+                                                 const Address& src,
+                                                 Location temp,
+                                                 bool needs_null_check);
 
   // Generate a read barrier for a heap reference within `instruction`
   // using a slow path.
@@ -556,15 +564,6 @@ class CodeGeneratorX86 : public CodeGenerator {
   static constexpr int32_t kDummy32BitOffset = 256;
 
  private:
-  // Factored implementation of GenerateFieldLoadWithBakerReadBarrier
-  // and GenerateArrayLoadWithBakerReadBarrier.
-  void GenerateReferenceLoadWithBakerReadBarrier(HInstruction* instruction,
-                                                 Location ref,
-                                                 Register obj,
-                                                 const Address& src,
-                                                 Location temp,
-                                                 bool needs_null_check);
-
   Register GetInvokeStaticOrDirectExtraParameter(HInvokeStaticOrDirect* invoke, Register temp);
 
   struct PcRelativeDexCacheAccessInfo {
