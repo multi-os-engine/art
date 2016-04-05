@@ -514,8 +514,15 @@ inline ArtMethod* FindMethodFromCode(uint32_t method_idx, mirror::Object** this_
         CHECK(self->IsExceptionPending());
         return nullptr;
       } else if (!method_reference_class->IsInterface()) {
-        // It is not an interface.
-        mirror::Class* super_class = referring_class->GetSuperClass();
+        // It is not an interface. If the referring class is in the class hierarchy of the
+        // referenced class in the bytecode, we use its super class. Otherwise we use the super
+        // class of the given object.
+        mirror::Class* super_class = nullptr;
+        if (method_reference_class->IsAssignableFrom(referring_class)) {
+          super_class = referring_class->GetSuperClass();
+        } else {
+          super_class = (*this_object)->GetClass()->GetSuperClass();
+        }
         uint16_t vtable_index = resolved_method->GetMethodIndex();
         if (access_check) {
           // Check existence of super class.
@@ -693,8 +700,15 @@ inline ArtMethod* FindMethodFast(uint32_t method_idx, mirror::Object* this_objec
       // Need to do full type resolution...
       return nullptr;
     } else if (!method_reference_class->IsInterface()) {
-      // It is not an interface.
-      mirror::Class* super_class = referrer->GetDeclaringClass()->GetSuperClass();
+      // It is not an interface. If the referring class is in the class hierarchy of the
+      // referenced class in the bytecode, we use its super class. Otherwise we use the super
+      // class of the given object.
+      mirror::Class* super_class = nullptr;
+      if (method_reference_class->IsAssignableFrom(referring_class)) {
+        super_class = referring_class->GetSuperClass();
+      } else {
+        super_class = this_object->GetClass()->GetSuperClass();
+      }
       if (resolved_method->GetMethodIndex() >= super_class->GetVTableLength()) {
         // The super class does not have the method.
         return nullptr;
