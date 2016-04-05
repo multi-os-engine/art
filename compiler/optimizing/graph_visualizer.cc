@@ -722,7 +722,11 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     PrintSuccessors(block);
     PrintExceptionHandlers(block);
 
-    if (block->IsCatchBlock()) {
+    if (block->IsLoopHeader()) {
+      PrintProperty("flags", "loop_header");
+    } else if (block->IsInLoop() && block->GetLoopInformation()->IsBackEdge(*block)) {
+      PrintProperty("flags", "back_edge");
+    } else if (block->IsCatchBlock()) {
       PrintProperty("flags", "catch_block");
     } else {
       PrintEmptyProperty("flags");
