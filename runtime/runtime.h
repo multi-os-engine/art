@@ -635,6 +635,8 @@ class Runtime {
     return process_state_ == kProcessStateJankPerceptible;
   }
 
+  bool ReplaceOatFileForDexFile(const char* dex_location);
+
  private:
   static void InitPlatformSignalHandlers();
 

@@ -137,6 +137,8 @@
 #include "verifier/method_verifier.h"
 #include "well_known_classes.h"
 
+#include "oat_file_assistant.h"
+
 namespace art {
 
 // If a signal isn't handled properly, enable a handler that attempts to dump the Java stack.
@@ -1984,6 +1986,87 @@ void Runtime::UpdateProcessState(ProcessState process_state) {
   ProcessState old_process_state = process_state_;
   process_state_ = process_state;
   GetHeap()->UpdateProcessState(old_process_state, process_state);
+}
+
+namespace {  // anonymous namespace
+
+struct ScopedPause {
+  explicit ScopedPause(ThreadList* thread_list) EXCLUSIVE_LOCK_FUNCTION(Locks::mutator_lock_)
+      : thread_list_(thread_list) {
+    thread_list_->SuspendAll(__FUNCTION__);
+  }
+  ~ScopedPause() UNLOCK_FUNCTION(Locks::mutator_lock_) {
+    thread_list_->ResumeAll();
+  }
+  ThreadList* thread_list_;
+};
+
+class OatFilePruningVisitor : public StackVisitor {
+ public:
+  OatFilePruningVisitor(Thread* thread, std::map<uintptr_t, const OatFile*>* ofs)
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      : StackVisitor(thread, nullptr, StackVisitor::StackWalkKind::kSkipInlinedFrames),
+        oat_files_(ofs) { }
+
+  bool VisitFrame() SHARED_REQUIRES(Locks::mutator_lock_) {
+    if (IsCurrentFrameInInterpreter()) {
+      return true;
+    }
+    uintptr_t pc = GetCurrentQuickFramePc();
+    auto it = oat_files_->upper_bound(pc);
+    if (it != oat_files_->begin()) {
+      --it;
+      if (it->second->Contains(reinterpret_cast<const void*>(pc))) {
+        LOG(WARNING) << "Oat file " << it->second->GetLocation() << " is in use.";
+        oat_files_->erase(it);
+      }
+    }
+    return true;
+  }
+
+  std::map<uintptr_t, const OatFile*>* oat_files_;
+};
+
+}  // anonymous namespace
+
+bool Runtime::ReplaceOatFileForDexFile(const char* dex_location) {
+  OatFileAssistant assistant(dex_location,
+                             kRuntimeISA,
+                             /* profile_changed */ false,
+                             /* load_executable */ true);
+  std::unique_ptr<OatFile> oat_file = assistant.GetBestOatFile();
+  if (oat_file == nullptr) {
+    LOG(ERROR) << "Failed to load oat file.";
+    return false;
+  }
+
+  ScopedPause pause(GetThreadList());
+
+  std::vector<const DexFile*> dex_files_to_replace = GetClassLinker()->GetReplacementCandidates(*oat_file);
+  std::map<uintptr_t, const OatFile*> oat_files;
+  for (auto&& df : dex_files_to_replace) {
+    LOG(ERROR) << "Replace-able DexFile at " << df->GetLocation();
+    if (df->GetOatDexFile() != nullptr) {
+      const OatFile* of = df->GetOatDexFile()->GetOatFile();
+      uintptr_t begin = reinterpret_cast<uintptr_t>(of->Begin());
+      oat_files.insert(std::make_pair(begin, of));
+    }
+  }
+
+  {
+    MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
+    for (Thread* thread : GetThreadList()->GetList()) {
+      OatFilePruningVisitor pruning_visitor(thread, &oat_files);
+      pruning_visitor.WalkStack();
+    }
+  }
+
+  for (auto&& entry : oat_files) {
+    const OatFile* of = entry.second;
+    LOG(ERROR) << "Replace-able OatFile at " << of->GetLocation();
+  }
+
+  return false;
 }
 
 }  // namespace art

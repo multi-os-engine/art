@@ -3241,6 +3241,23 @@ void ClassLinker::RegisterDexFile(const DexFile& dex_file,
   RegisterDexFileLocked(dex_file, dex_cache);
 }
 
+std::vector<const DexFile*> ClassLinker::GetReplacementCandidates(OatFile& oat_file) {
+  std::vector<const DexFile*> replaced;
+  WriterMutexLock mu(Thread::Current(), dex_lock_);
+  for (DexCacheData& data : dex_caches_) {
+    const std::string& location = data.dex_file->GetLocation();
+    const std::string canonical_location = DexFile::GetDexCanonicalLocation(location.c_str());
+    for (auto&& odf : oat_file.GetOatDexFiles()) {
+      if (odf->GetDexFileLocation() == location ||
+          odf->GetCanonicalDexFileLocation() == canonical_location) {
+        replaced.push_back(data.dex_file);
+        break;
+      }
+    }
+  }
+  return replaced;
+}
+
 mirror::DexCache* ClassLinker::FindDexCache(Thread* self,
                                             const DexFile& dex_file,
                                             bool allow_failure) {

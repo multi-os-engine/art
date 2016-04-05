@@ -346,7 +346,7 @@ std::vector<std::unique_ptr<const DexFile>> OatFileManager::OpenDexFilesFromOat(
   }
 
   // Get the oat file on disk.
-  std::unique_ptr<const OatFile> oat_file(oat_file_assistant.GetBestOatFile().release());
+  std::unique_ptr<const OatFile> oat_file(oat_file_assistant.GetBestOatFile());
 
   if (oat_file != nullptr) {
     // Take the file only if it has no collisions, or we must take it because of preopting.

@@ -383,6 +383,10 @@ class ClassLinker {
       REQUIRES(!dex_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  std::vector<const DexFile*> GetReplacementCandidates(OatFile& oat_file)
+      REQUIRES(!dex_lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   const std::vector<const DexFile*>& GetBootClassPath() {
     return boot_class_path_;
   }
