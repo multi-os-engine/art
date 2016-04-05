@@ -1,0 +1,9 @@
+new A
+I am A's foo
+new B
+I am B's foo
+new A
+I am A's foo
+new B
+I am B's foo
+passed
