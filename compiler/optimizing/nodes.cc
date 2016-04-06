@@ -39,7 +39,7 @@ void HGraph::InitializeInexactObjectRTI(StackHandleScopeCollection* handles) {
   ScopedObjectAccess soa(Thread::Current());
   // Create the inexact Object reference type and store it in the HGraph.
   ClassLinker* linker = Runtime::Current()->GetClassLinker();
-  inexact_object_rti_ = ReferenceTypeInfo::Create(
+  inexact_object_rti_ = ReferenceTypeInfo::CreateChecked(
       handles->NewHandle(linker->GetClassRoot(ClassLinker::kJavaLangObject)),
       /* is_exact */ false);
 }
@@ -2186,10 +2186,10 @@ void HBoundType::SetUpperBound(const ReferenceTypeInfo& upper_bound, bool can_be
   SetPackedFlag<kFlagUpperCanBeNull>(can_be_null);
 }
 
-ReferenceTypeInfo ReferenceTypeInfo::Create(TypeHandle type_handle, bool is_exact) {
+ReferenceTypeInfo ReferenceTypeInfo::CreateChecked(TypeHandle type_handle, bool is_exact) {
   if (kIsDebugBuild) {
-    ScopedObjectAccess soa(Thread::Current());
     DCHECK(IsValidHandle(type_handle));
+    DCHECK(!type_handle->IsErroneous());
     if (!is_exact) {
       DCHECK(!type_handle->CannotBeAssignedFromOtherTypes())
           << "Callers of ReferenceTypeInfo::Create should ensure is_exact is properly computed";
