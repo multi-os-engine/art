@@ -682,7 +682,10 @@ ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& 
   bool a_is_interface = a_type_handle->IsInterface();
   bool b_is_interface = b_type_handle->IsInterface();
 
-  if (a.GetTypeHandle().Get() == b.GetTypeHandle().Get()) {
+  if (a.IsErroneous() || b.IsErroneous()) {
+    result_type_handle = handle_cache_.GetObjectClassHandle();
+    is_exact = false;
+  } else if (a.GetTypeHandle().Get() == b.GetTypeHandle().Get()) {
     result_type_handle = a_type_handle;
   } else if (a.IsSupertypeOf(b)) {
     result_type_handle = a_type_handle;
