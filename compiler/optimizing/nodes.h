@@ -157,7 +157,7 @@ class ReferenceTypeInfo : ValueObject {
  public:
   typedef Handle<mirror::Class> TypeHandle;
 
-  static ReferenceTypeInfo Create(TypeHandle type_handle, bool is_exact);
+  static ReferenceTypeInfo CreateChecked(TypeHandle type_handle, bool is_exact);
 
   static ReferenceTypeInfo CreateUnchecked(TypeHandle type_handle, bool is_exact) {
     return ReferenceTypeInfo(type_handle, is_exact);
@@ -516,6 +516,17 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   HInstruction* InsertOppositeCondition(HInstruction* cond, HInstruction* cursor);
 
   ReferenceTypeInfo GetInexactObjectRti() const { return inexact_object_rti_; }
+
+  ReferenceTypeInfo CreateReferenceTypeInfo(ReferenceTypeInfo::TypeHandle type_handle,
+                                            bool is_exact) SHARED_REQUIRES(Locks::mutator_lock_) {
+    if (ReferenceTypeInfo::IsValidHandle(type_handle) && type_handle->IsErroneous()) {
+      // Return inexact object type for erroneous types. This intercept prevents the
+      // introduction of erroneous reference types in clients that consistently use
+      // this CreateReferenceTypeInfo() method to obtain new reference types.
+      return GetInexactObjectRti();
+    }
+    return ReferenceTypeInfo::CreateChecked(type_handle, is_exact);
+  }
 
  private:
   void RemoveInstructionsAsUsersFromDeadBlocks(const ArenaBitVector& visited) const;

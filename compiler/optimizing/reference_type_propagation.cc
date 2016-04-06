@@ -248,7 +248,7 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
       if (bound_type == nullptr) {
         ScopedObjectAccess soa(Thread::Current());
         HInstruction* insert_point = notNullBlock->GetFirstInstruction();
-        ReferenceTypeInfo object_rti = ReferenceTypeInfo::Create(
+        ReferenceTypeInfo object_rti = graph_->CreateReferenceTypeInfo(
             handle_cache_.GetObjectClassHandle(), /* is_exact */ true);
         if (ShouldCreateBoundType(insert_point, obj, object_rti, nullptr, notNullBlock)) {
           bound_type = new (graph_->GetArena()) HBoundType(obj);
@@ -427,13 +427,15 @@ void ReferenceTypePropagation::RTPVisitor::SetClassAsTypeInfo(HInstruction* inst
       DCHECK(method->IsConstructor())
           << "Expected String.<init>: " << PrettyMethod(method);
     }
+    ScopedObjectAccess soa(Thread::Current());
     instr->SetReferenceTypeInfo(
-        ReferenceTypeInfo::Create(handle_cache_->GetStringClassHandle(), /* is_exact */ true));
+        GetGraph()->CreateReferenceTypeInfo(
+            handle_cache_->GetStringClassHandle(), /* is_exact */ true));
   } else if (klass != nullptr) {
     ScopedObjectAccess soa(Thread::Current());
     ReferenceTypeInfo::TypeHandle handle = handle_cache_->NewHandle(klass);
     is_exact = is_exact || handle->CannotBeAssignedFromOtherTypes();
-    instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(handle, is_exact));
+    instr->SetReferenceTypeInfo(GetGraph()->CreateReferenceTypeInfo(handle, is_exact));
   } else {
     instr->SetReferenceTypeInfo(instr->GetBlock()->GetGraph()->GetInexactObjectRti());
   }
@@ -535,11 +537,12 @@ void ReferenceTypePropagation::RTPVisitor::VisitLoadClass(HLoadClass* instr) {
   mirror::Class* resolved_class =
       GetClassFromDexCache(soa.Self(), instr->GetDexFile(), instr->GetTypeIndex());
   if (resolved_class != nullptr) {
-    instr->SetLoadedClassRTI(ReferenceTypeInfo::Create(
+    instr->SetLoadedClassRTI(GetGraph()->CreateReferenceTypeInfo(
         handle_cache_->NewHandle(resolved_class), /* is_exact */ true));
   }
   instr->SetReferenceTypeInfo(
-      ReferenceTypeInfo::Create(handle_cache_->GetClassClassHandle(), /* is_exact */ true));
+      GetGraph()->CreateReferenceTypeInfo(
+          handle_cache_->GetClassClassHandle(), /* is_exact */ true));
 }
 
 void ReferenceTypePropagation::RTPVisitor::VisitClinitCheck(HClinitCheck* instr) {
@@ -547,8 +550,10 @@ void ReferenceTypePropagation::RTPVisitor::VisitClinitCheck(HClinitCheck* instr)
 }
 
 void ReferenceTypePropagation::RTPVisitor::VisitLoadString(HLoadString* instr) {
+  ScopedObjectAccess soa(Thread::Current());
   instr->SetReferenceTypeInfo(
-      ReferenceTypeInfo::Create(handle_cache_->GetStringClassHandle(), /* is_exact */ true));
+      GetGraph()->CreateReferenceTypeInfo(
+          handle_cache_->GetStringClassHandle(), /* is_exact */ true));
 }
 
 void ReferenceTypePropagation::RTPVisitor::VisitLoadException(HLoadException* instr) {
@@ -556,8 +561,10 @@ void ReferenceTypePropagation::RTPVisitor::VisitLoadException(HLoadException* in
   TryCatchInformation* catch_info = instr->GetBlock()->GetTryCatchInformation();
 
   if (catch_info->IsCatchAllTypeIndex()) {
+    ScopedObjectAccess soa(Thread::Current());
     instr->SetReferenceTypeInfo(
-        ReferenceTypeInfo::Create(handle_cache_->GetThrowableClassHandle(), /* is_exact */ false));
+        GetGraph()->CreateReferenceTypeInfo(
+            handle_cache_->GetThrowableClassHandle(), /* is_exact */ false));
   } else {
     UpdateReferenceTypeInfo(instr,
                             catch_info->GetCatchTypeIndex(),
@@ -584,7 +591,7 @@ void ReferenceTypePropagation::RTPVisitor::VisitBoundType(HBoundType* instr) {
     ReferenceTypeInfo obj_rti = obj->GetReferenceTypeInfo();
     if (class_rti.GetTypeHandle()->CannotBeAssignedFromOtherTypes()) {
       instr->SetReferenceTypeInfo(
-          ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ true));
+          GetGraph()->CreateReferenceTypeInfo(class_rti.GetTypeHandle(), /* is_exact */ true));
     } else if (obj_rti.IsValid()) {
       if (class_rti.IsSupertypeOf(obj_rti)) {
         // Object type is more specific.
@@ -592,7 +599,7 @@ void ReferenceTypePropagation::RTPVisitor::VisitBoundType(HBoundType* instr) {
       } else {
         // Upper bound is more specific.
         instr->SetReferenceTypeInfo(
-            ReferenceTypeInfo::Create(class_rti.GetTypeHandle(), /* is_exact */ false));
+            GetGraph()->CreateReferenceTypeInfo(class_rti.GetTypeHandle(), /* is_exact */ false));
       }
     } else {
       // Object not typed yet. Leave BoundType untyped for now rather than
@@ -666,7 +673,8 @@ void ReferenceTypePropagation::VisitPhi(HPhi* phi) {
   }
 }
 
-ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& a,
+ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(HGraph* graph,
+                                                       const ReferenceTypeInfo& a,
                                                        const ReferenceTypeInfo& b) {
   if (!b.IsValid()) {
     return a;
@@ -706,7 +714,7 @@ ReferenceTypeInfo ReferenceTypePropagation::MergeTypes(const ReferenceTypeInfo& 
     is_exact = false;
   }
 
-  return ReferenceTypeInfo::Create(result_type_handle, is_exact);
+  return graph->CreateReferenceTypeInfo(result_type_handle, is_exact);
 }
 
 void ReferenceTypePropagation::UpdateArrayGet(HArrayGet* instr, HandleCache* handle_cache) {
@@ -722,7 +730,8 @@ void ReferenceTypePropagation::UpdateArrayGet(HArrayGet* instr, HandleCache* han
     ReferenceTypeInfo::TypeHandle component_handle =
         handle_cache->NewHandle(handle->GetComponentType());
     bool is_exact = component_handle->CannotBeAssignedFromOtherTypes();
-    instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(component_handle, is_exact));
+    instr->SetReferenceTypeInfo(
+        instr->GetBlock()->GetGraph()->CreateReferenceTypeInfo(component_handle, is_exact));
   } else {
     // We don't know what the parent actually is, so we fallback to object.
     instr->SetReferenceTypeInfo(instr->GetBlock()->GetGraph()->GetInexactObjectRti());
@@ -823,7 +832,8 @@ void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
     if (instr->InputAt(i)->IsNullConstant()) {
       continue;
     }
-    new_rti = MergeTypes(new_rti, instr->InputAt(i)->GetReferenceTypeInfo());
+    new_rti = MergeTypes(
+        instr->GetBlock()->GetGraph(), new_rti, instr->InputAt(i)->GetReferenceTypeInfo());
     if (new_rti.IsValid() && new_rti.IsObjectClass()) {
       if (!new_rti.IsExact()) {
         break;

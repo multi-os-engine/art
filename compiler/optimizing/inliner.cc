@@ -1305,8 +1305,9 @@ void HInliner::FixUpReturnReferenceType(HInvoke* invoke_instruction,
         mirror::Class* cls = resolved_method->GetReturnType(false /* resolve */, pointer_size);
         if (cls != nullptr) {
           ReferenceTypeInfo::TypeHandle return_handle = handles_->NewHandle(cls);
-          return_replacement->SetReferenceTypeInfo(ReferenceTypeInfo::Create(
-              return_handle, return_handle->CannotBeAssignedFromOtherTypes() /* is_exact */));
+          return_replacement->SetReferenceTypeInfo(
+              graph_->CreateReferenceTypeInfo(
+                  return_handle, return_handle->CannotBeAssignedFromOtherTypes() /* is_exact */));
         } else {
           return_replacement->SetReferenceTypeInfo(graph_->GetInexactObjectRti());
         }
