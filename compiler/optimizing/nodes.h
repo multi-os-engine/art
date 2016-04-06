@@ -175,6 +175,11 @@ class ReferenceTypeInfo : ValueObject {
 
   bool IsExact() const { return is_exact_; }
 
+  bool IsErroneous() const SHARED_REQUIRES(Locks::mutator_lock_) {
+    DCHECK(IsValid());
+    return GetTypeHandle()->IsErroneous();
+  }
+
   bool IsObjectClass() const SHARED_REQUIRES(Locks::mutator_lock_) {
     DCHECK(IsValid());
     return GetTypeHandle()->IsObjectClass();
