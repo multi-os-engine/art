@@ -117,7 +117,9 @@ void ReferenceTypePropagation::ValidateTypes() {
           } else if (instr->IsLoadClass()) {
             HLoadClass* cls = instr->AsLoadClass();
             DCHECK(cls->GetReferenceTypeInfo().IsExact());
-            DCHECK(!cls->GetLoadedClassRTI().IsValid() || cls->GetLoadedClassRTI().IsExact());
+            DCHECK(!cls->GetLoadedClassRTI().IsValid() ||
+                   cls->GetLoadedClassRTI().IsExact() ||
+                   cls->GetLoadedClassRTI().IsObjectClass());
           } else if (instr->IsNullCheck()) {
             DCHECK(instr->GetReferenceTypeInfo().IsEqual(instr->InputAt(0)->GetReferenceTypeInfo()))
                 << "NullCheck " << instr->GetReferenceTypeInfo()
@@ -248,7 +250,7 @@ void ReferenceTypePropagation::BoundTypeForIfNotNull(HBasicBlock* block) {
       if (bound_type == nullptr) {
         ScopedObjectAccess soa(Thread::Current());
         HInstruction* insert_point = notNullBlock->GetFirstInstruction();
-        ReferenceTypeInfo object_rti = ReferenceTypeInfo::Create(
+        ReferenceTypeInfo object_rti = graph_->CreateReferenceTypeInfoAndFixError(
             handle_cache_.GetObjectClassHandle(), /* is_exact */ true);
         if (ShouldCreateBoundType(insert_point, obj, object_rti, nullptr, notNullBlock)) {
           bound_type = new (graph_->GetArena()) HBoundType(obj);
@@ -433,7 +435,7 @@ void ReferenceTypePropagation::RTPVisitor::SetClassAsTypeInfo(HInstruction* inst
     ScopedObjectAccess soa(Thread::Current());
     ReferenceTypeInfo::TypeHandle handle = handle_cache_->NewHandle(klass);
     is_exact = is_exact || handle->CannotBeAssignedFromOtherTypes();
-    instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(handle, is_exact));
+    instr->SetReferenceTypeInfo(GetGraph()->CreateReferenceTypeInfoAndFixError(handle, is_exact));
   } else {
     instr->SetReferenceTypeInfo(instr->GetBlock()->GetGraph()->GetInexactObjectRti());
   }
@@ -535,11 +537,12 @@ void ReferenceTypePropagation::RTPVisitor::VisitLoadClass(HLoadClass* instr) {
   mirror::Class* resolved_class =
       GetClassFromDexCache(soa.Self(), instr->GetDexFile(), instr->GetTypeIndex());
   if (resolved_class != nullptr) {
-    instr->SetLoadedClassRTI(ReferenceTypeInfo::Create(
+    instr->SetLoadedClassRTI(GetGraph()->CreateReferenceTypeInfoAndFixError(
         handle_cache_->NewHandle(resolved_class), /* is_exact */ true));
   }
   instr->SetReferenceTypeInfo(
-      ReferenceTypeInfo::Create(handle_cache_->GetClassClassHandle(), /* is_exact */ true));
+      GetGraph()->CreateReferenceTypeInfoAndFixError(
+          handle_cache_->GetClassClassHandle(), /* is_exact */ true));
 }
 
 void ReferenceTypePropagation::RTPVisitor::VisitClinitCheck(HClinitCheck* instr) {
@@ -722,7 +725,9 @@ void ReferenceTypePropagation::UpdateArrayGet(HArrayGet* instr, HandleCache* han
     ReferenceTypeInfo::TypeHandle component_handle =
         handle_cache->NewHandle(handle->GetComponentType());
     bool is_exact = component_handle->CannotBeAssignedFromOtherTypes();
-    instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(component_handle, is_exact));
+    instr->SetReferenceTypeInfo(
+        instr->GetBlock()->GetGraph()->CreateReferenceTypeInfoAndFixError(
+            component_handle, is_exact));
   } else {
     // We don't know what the parent actually is, so we fallback to object.
     instr->SetReferenceTypeInfo(instr->GetBlock()->GetGraph()->GetInexactObjectRti());

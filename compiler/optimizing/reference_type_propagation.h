@@ -85,7 +85,8 @@ class ReferenceTypePropagation : public HOptimization {
   static void UpdateArrayGet(HArrayGet* instr, HandleCache* handle_cache)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  ReferenceTypeInfo MergeTypes(const ReferenceTypeInfo& a, const ReferenceTypeInfo& b)
+  ReferenceTypeInfo MergeTypes(const ReferenceTypeInfo& a,
+                               const ReferenceTypeInfo& b)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void ValidateTypes();
@@ -98,6 +99,8 @@ class ReferenceTypePropagation : public HOptimization {
   const bool is_first_run_;
 
   static constexpr size_t kDefaultWorklistSize = 8;
+
+  friend class ReferenceTypePropagationTest;
 
   DISALLOW_COPY_AND_ASSIGN(ReferenceTypePropagation);
 };
