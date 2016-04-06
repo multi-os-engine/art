@@ -5424,8 +5424,10 @@ class HLoadClass : public HExpression<1> {
   }
 
   void SetLoadedClassRTI(ReferenceTypeInfo rti) {
-    // Make sure we only set exact types (the loaded class should never be merged).
-    DCHECK(rti.IsExact());
+    if (kIsDebugBuild) {
+      // Make sure we only set exact types (the loaded class should never be merged).
+      DCHECK(rti.IsExact());
+    }
     loaded_class_rti_ = rti;
   }
 

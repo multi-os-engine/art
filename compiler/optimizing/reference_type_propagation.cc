@@ -117,7 +117,9 @@ void ReferenceTypePropagation::ValidateTypes() {
           } else if (instr->IsLoadClass()) {
             HLoadClass* cls = instr->AsLoadClass();
             DCHECK(cls->GetReferenceTypeInfo().IsExact());
-            DCHECK(!cls->GetLoadedClassRTI().IsValid() || cls->GetLoadedClassRTI().IsExact());
+            DCHECK(!cls->GetLoadedClassRTI().IsValid() ||
+                   cls->GetLoadedClassRTI().IsExact() ||
+                   cls->GetLoadedClassRTI().IsObjectClass());
           } else if (instr->IsNullCheck()) {
             DCHECK(instr->GetReferenceTypeInfo().IsEqual(instr->InputAt(0)->GetReferenceTypeInfo()))
                 << "NullCheck " << instr->GetReferenceTypeInfo()
@@ -431,9 +433,14 @@ void ReferenceTypePropagation::RTPVisitor::SetClassAsTypeInfo(HInstruction* inst
         ReferenceTypeInfo::Create(handle_cache_->GetStringClassHandle(), /* is_exact */ true));
   } else if (klass != nullptr) {
     ScopedObjectAccess soa(Thread::Current());
-    ReferenceTypeInfo::TypeHandle handle = handle_cache_->NewHandle(klass);
-    is_exact = is_exact || handle->CannotBeAssignedFromOtherTypes();
-    instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(handle, is_exact));
+    if (klass->IsErroneous()) {
+      // Set inexact object type for erroneous types.
+      instr->SetReferenceTypeInfo(instr->GetBlock()->GetGraph()->GetInexactObjectRti());
+    } else {
+      ReferenceTypeInfo::TypeHandle handle = handle_cache_->NewHandle(klass);
+      is_exact = is_exact || handle->CannotBeAssignedFromOtherTypes();
+      instr->SetReferenceTypeInfo(ReferenceTypeInfo::Create(handle, is_exact));
+    }
   } else {
     instr->SetReferenceTypeInfo(instr->GetBlock()->GetGraph()->GetInexactObjectRti());
   }
@@ -534,7 +541,7 @@ void ReferenceTypePropagation::RTPVisitor::VisitLoadClass(HLoadClass* instr) {
   // Get type from dex cache assuming it was populated by the verifier.
   mirror::Class* resolved_class =
       GetClassFromDexCache(soa.Self(), instr->GetDexFile(), instr->GetTypeIndex());
-  if (resolved_class != nullptr) {
+  if (resolved_class != nullptr && !resolved_class->IsErroneous()) {
     instr->SetLoadedClassRTI(ReferenceTypeInfo::Create(
         handle_cache_->NewHandle(resolved_class), /* is_exact */ true));
   }
@@ -718,7 +725,7 @@ void ReferenceTypePropagation::UpdateArrayGet(HArrayGet* instr, HandleCache* han
   }
 
   Handle<mirror::Class> handle = parent_rti.GetTypeHandle();
-  if (handle->IsObjectArrayClass()) {
+  if (handle->IsObjectArrayClass() && !handle->GetComponentType()->IsErroneous()) {
     ReferenceTypeInfo::TypeHandle component_handle =
         handle_cache->NewHandle(handle->GetComponentType());
     bool is_exact = component_handle->CannotBeAssignedFromOtherTypes();
