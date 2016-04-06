@@ -36,6 +36,7 @@
 #include "offsets.h"
 #include "primitive.h"
 #include "utils/array_ref.h"
+#include "scoped_thread_state_change.h"
 
 namespace art {
 
@@ -516,6 +517,19 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   HInstruction* InsertOppositeCondition(HInstruction* cond, HInstruction* cursor);
 
   ReferenceTypeInfo GetInexactObjectRti() const { return inexact_object_rti_; }
+
+  ReferenceTypeInfo CreateReferenceTypeInfoAndFixError(
+      ReferenceTypeInfo::TypeHandle type_handle,
+      bool is_exact)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    if (ReferenceTypeInfo::IsValidHandle(type_handle) && type_handle->IsErroneous()) {
+      // Return inexact object type for erroneous types. This intercept prevents the
+      // introduction of erroneous reference types in clients that consistently use
+      // this CreateReferenceTypeInfo() method to obtain new reference types.
+      return GetInexactObjectRti();
+    }
+    return ReferenceTypeInfo::Create(type_handle, is_exact);
+  }
 
  private:
   void RemoveInstructionsAsUsersFromDeadBlocks(const ArenaBitVector& visited) const;
@@ -5424,8 +5438,12 @@ class HLoadClass : public HExpression<1> {
   }
 
   void SetLoadedClassRTI(ReferenceTypeInfo rti) {
-    // Make sure we only set exact types (the loaded class should never be merged).
-    DCHECK(rti.IsExact());
+    if (kIsDebugBuild) {
+      // Make sure we only set exact types (the loaded class should never be merged).
+      // Exception: loading an erroneous class yields the inexact object class.
+      ScopedObjectAccess soa(Thread::Current());
+      DCHECK(rti.IsExact() || rti.IsObjectClass());
+    }
     loaded_class_rti_ = rti;
   }
 
