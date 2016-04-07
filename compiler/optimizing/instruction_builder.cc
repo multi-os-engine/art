@@ -567,7 +567,7 @@ void HInstructionBuilder::Binop_22b(const Instruction& instruction, bool reverse
   UpdateLocal(instruction.VRegA(), current_block_->GetLastInstruction());
 }
 
-static bool RequiresConstructorBarrier(const DexCompilationUnit* cu, const CompilerDriver& driver) {
+static bool RequiresConstructorBarrier(const DexCompilationUnit* cu, CompilerDriver& driver) {
   Thread* self = Thread::Current();
   return cu->IsConstructor()
       && driver.RequiresConstructorBarrier(self, cu->GetDexFile(), cu->GetClassDefIndex());
