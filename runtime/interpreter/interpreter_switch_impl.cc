@@ -76,6 +76,9 @@ namespace interpreter {
     instrumentation->Branch(self, method, dex_pc, offset);                                     \
     JValue result;                                                                             \
     if (jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, &result)) {          \
+      if (interpret_one_instruction) {                                                         \
+        shadow_frame.SetDexPC(DexFile::kDexNoIndex);                                           \
+      }                                                                                        \
       return result;                                                                           \
     }                                                                                          \
   } while (false)
