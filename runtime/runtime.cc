@@ -900,8 +900,8 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
 
   oat_file_manager_ = new OatFileManager;
 
-  Monitor::Init(runtime_options.GetOrDefault(Opt::LockProfThreshold),
-                runtime_options.GetOrDefault(Opt::HookIsSensitiveThread));
+  Thread::SetSensitiveThreadHook(runtime_options.GetOrDefault(Opt::HookIsSensitiveThread));
+  Monitor::Init(runtime_options.GetOrDefault(Opt::LockProfThreshold));
 
   boot_class_path_string_ = runtime_options.ReleaseOrDefault(Opt::BootClassPath);
   class_path_string_ = runtime_options.ReleaseOrDefault(Opt::ClassPath);
@@ -1921,7 +1921,8 @@ void Runtime::CreateJit() {
   if (jit_.get() != nullptr) {
     jit_->CreateInstrumentationCache(jit_options_->GetCompileThreshold(),
                                      jit_options_->GetWarmupThreshold(),
-                                     jit_options_->GetOsrThreshold());
+                                     jit_options_->GetOsrThreshold(),
+                                     jit_options_->GetPriorityThreadWeight());
     jit_->CreateThreadPool();
 
     // Notify native debugger about the classes already loaded before the creation of the jit.
