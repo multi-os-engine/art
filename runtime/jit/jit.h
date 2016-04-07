@@ -48,7 +48,8 @@ class Jit {
       SHARED_REQUIRES(Locks::mutator_lock_);
   void CreateInstrumentationCache(size_t compile_threshold,
                                   size_t warmup_threshold,
-                                  size_t osr_threshold);
+                                  size_t osr_threshold,
+                                  uint16_t priority_weight);
   void CreateThreadPool();
   const JitCodeCache* GetCodeCache() const {
     return code_cache_.get();
@@ -154,6 +155,9 @@ class JitOptions {
   size_t GetOsrThreshold() const {
     return osr_threshold_;
   }
+  uint16_t GetSensitiveThreadWeight() const {
+    return priority_weight_;
+  }
   size_t GetCodeCacheInitialCapacity() const {
     return code_cache_initial_capacity_;
   }
@@ -187,6 +191,7 @@ class JitOptions {
   size_t compile_threshold_;
   size_t warmup_threshold_;
   size_t osr_threshold_;
+  uint16_t priority_weight_;
   bool dump_info_on_shutdown_;
   bool save_profiling_info_;
 

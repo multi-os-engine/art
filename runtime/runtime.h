@@ -635,6 +635,8 @@ class Runtime {
     return process_state_ == kProcessStateJankPerceptible;
   }
 
+  bool IsSensitiveThread() const;
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -855,6 +857,8 @@ class Runtime {
 
   // Whether or not we currently care about pause times.
   ProcessState process_state_;
+
+  bool (*is_sensitive_thread_hook_)();
 
   DISALLOW_COPY_AND_ASSIGN(Runtime);
 };

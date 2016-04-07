@@ -15,6 +15,7 @@
  */
 
 #include "monitor.h"
+#include "runtime.h"
 #include "thread.h"
 
 #include <fcntl.h>
@@ -66,7 +67,7 @@ void Monitor::LogContentionEvent(Thread* self, uint32_t wait_ms, uint32_t sample
   cp = EventLogWriteString(cp, procName, len);
 
   // Emit the sensitive thread ("main thread") status, 5 bytes.
-  cp = EventLogWriteInt(cp, Monitor::IsSensitiveThread());
+  cp = EventLogWriteInt(cp, Runtime::Current()->IsSensitiveThread());
 
   // Emit self thread name string, <= 37 bytes.
   std::string thread_name;
