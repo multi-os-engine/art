@@ -928,7 +928,7 @@ CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
 #define __ GetVIXLAssembler()->
 
 void CodeGeneratorARM64::EmitJumpTables() {
-  for (auto jump_table : jump_tables_) {
+  for (auto& jump_table : jump_tables_) {
     jump_table->EmitTable(this);
   }
 }
@@ -939,6 +939,10 @@ void CodeGeneratorARM64::Finalize(CodeAllocator* allocator) {
   __ FinalizeCode();
 
   CodeGenerator::Finalize(allocator);
+
+  // Release the container early so that any asserts for non-bound labels fire
+  // now, instead of when the `unique_ptr` is next resetted.
+  block_labels_.reset(nullptr);
 }
 
 void ParallelMoveResolverARM64::PrepareForEmitNativeCode() {
