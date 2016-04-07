@@ -213,7 +213,8 @@ Runtime::Runtime()
       safe_mode_(false),
       pruned_dalvik_cache_(false),
       // Initially assume we perceive jank in case the process state is never updated.
-      process_state_(kProcessStateJankPerceptible) {
+      process_state_(kProcessStateJankPerceptible),
+      is_sensitive_thread_hook_(nullptr) {
   CheckAsmSupportOffsetsAndSizes();
   std::fill(callee_save_methods_, callee_save_methods_ + arraysize(callee_save_methods_), 0u);
   interpreter::CheckInterpreterAsmConstants();
@@ -900,8 +901,8 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
 
   oat_file_manager_ = new OatFileManager;
 
-  Monitor::Init(runtime_options.GetOrDefault(Opt::LockProfThreshold),
-                runtime_options.GetOrDefault(Opt::HookIsSensitiveThread));
+  is_sensitive_thread_hook_ = runtime_options.GetOrDefault(Opt::HookIsSensitiveThread);
+  Monitor::Init(runtime_options.GetOrDefault(Opt::LockProfThreshold));
 
   boot_class_path_string_ = runtime_options.ReleaseOrDefault(Opt::BootClassPath);
   class_path_string_ = runtime_options.ReleaseOrDefault(Opt::ClassPath);
@@ -1921,7 +1922,8 @@ void Runtime::CreateJit() {
   if (jit_.get() != nullptr) {
     jit_->CreateInstrumentationCache(jit_options_->GetCompileThreshold(),
                                      jit_options_->GetWarmupThreshold(),
-                                     jit_options_->GetOsrThreshold());
+                                     jit_options_->GetOsrThreshold(),
+                                     jit_options_->GetSensitiveThreadWeight());
     jit_->CreateThreadPool();
 
     // Notify native debugger about the classes already loaded before the creation of the jit.
@@ -1984,6 +1986,13 @@ void Runtime::UpdateProcessState(ProcessState process_state) {
   ProcessState old_process_state = process_state_;
   process_state_ = process_state;
   GetHeap()->UpdateProcessState(old_process_state, process_state);
+}
+
+bool Runtime::IsSensitiveThread() const {
+  if (is_sensitive_thread_hook_ != nullptr) {
+    return (*is_sensitive_thread_hook_)();
+  }
+  return false;
 }
 
 }  // namespace art

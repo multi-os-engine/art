@@ -21,6 +21,7 @@
 #include "jit_code_cache.h"
 #include "scoped_thread_state_change.h"
 #include "thread_list.h"
+#include "monitor.h"
 
 namespace art {
 namespace jit {
@@ -82,10 +83,12 @@ class JitCompileTask FINAL : public Task {
 
 JitInstrumentationCache::JitInstrumentationCache(uint16_t hot_method_threshold,
                                                  uint16_t warm_method_threshold,
-                                                 uint16_t osr_method_threshold)
+                                                 uint16_t osr_method_threshold,
+                                                 uint16_t sensitive_thread_weight)
     : hot_method_threshold_(hot_method_threshold),
       warm_method_threshold_(warm_method_threshold),
       osr_method_threshold_(osr_method_threshold),
+      sensitive_thread_weight_(sensitive_thread_weight),
       listener_(this) {
 }
 
@@ -145,14 +148,24 @@ void JitInstrumentationCache::AddSamples(Thread* self, ArtMethod* method, uint16
   DCHECK_GT(warm_method_threshold_, 0);
   DCHECK_GT(hot_method_threshold_, warm_method_threshold_);
   DCHECK_GT(osr_method_threshold_, hot_method_threshold_);
+  DCHECK_GE(sensitive_thread_weight_, 1);
+  DCHECK_LE(sensitive_thread_weight_, hot_method_threshold_);
 
   int32_t starting_count = method->GetCounter();
+  if (sensitive_thread_weight_ > 1) {
+    Runtime* runtime = Runtime::Current();
+    if (runtime->IsSensitiveThread() || runtime->InJankPerceptibleProcessState()) {
+      count *= sensitive_thread_weight_;
+    }
+  }
   int32_t new_count = starting_count + count;   // int32 here to avoid wrap-around;
   if (starting_count < warm_method_threshold_) {
     if (new_count >= warm_method_threshold_) {
       bool success = ProfilingInfo::Create(self, method, /* retry_allocation */ false);
       if (success) {
-        VLOG(jit) << "Start profiling " << PrettyMethod(method);
+        VLOG(jit) << "Start profiling " << PrettyMethod(method)
+            << " SensitiveThread: " << Runtime::Current()->IsSensitiveThread()
+            << " Jank Perceptible: " << Runtime::Current()->InJankPerceptibleProcessState();
       }
 
       if (thread_pool_ == nullptr) {

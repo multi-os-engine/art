@@ -41,6 +41,8 @@ class Jit {
  public:
   static constexpr bool kStressMode = kIsDebugBuild;
   static constexpr size_t kDefaultCompileThreshold = kStressMode ? 2 : 10000;
+  static constexpr size_t kDefaultSensitiveThreadWeight =
+      std::max(kDefaultCompileThreshold / 2000, static_cast<size_t>(1));
 
   virtual ~Jit();
   static Jit* Create(JitOptions* options, std::string* error_msg);
@@ -48,7 +50,8 @@ class Jit {
       SHARED_REQUIRES(Locks::mutator_lock_);
   void CreateInstrumentationCache(size_t compile_threshold,
                                   size_t warmup_threshold,
-                                  size_t osr_threshold);
+                                  size_t osr_threshold,
+                                  uint16_t sensitive_thread_weight);
   void CreateThreadPool();
   const JitCodeCache* GetCodeCache() const {
     return code_cache_.get();
@@ -154,6 +157,9 @@ class JitOptions {
   size_t GetOsrThreshold() const {
     return osr_threshold_;
   }
+  uint16_t GetSensitiveThreadWeight() const {
+    return sensitive_thread_weight_;
+  }
   size_t GetCodeCacheInitialCapacity() const {
     return code_cache_initial_capacity_;
   }
@@ -187,6 +193,7 @@ class JitOptions {
   size_t compile_threshold_;
   size_t warmup_threshold_;
   size_t osr_threshold_;
+  uint16_t sensitive_thread_weight_;
   bool dump_info_on_shutdown_;
   bool save_profiling_info_;
 
