@@ -67,7 +67,7 @@ class CodeAllocator {
   DISALLOW_COPY_AND_ASSIGN(CodeAllocator);
 };
 
-class SlowPathCode : public ArenaObject<kArenaAllocSlowPaths> {
+class SlowPathCode : public DeletableArenaObject<kArenaAllocSlowPaths> {
  public:
   explicit SlowPathCode(HInstruction* instruction) : instruction_(instruction) {
     for (size_t i = 0; i < kMaximumNumberOfExpectedRegisters; ++i) {
@@ -299,7 +299,7 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
   bool IsImplicitNullCheckAllowed(HNullCheck* null_check) const;
 
   void AddSlowPath(SlowPathCode* slow_path) {
-    slow_paths_.push_back(slow_path);
+    slow_paths_.push_back(std::unique_ptr<SlowPathCode>(slow_path));
   }
 
   void BuildStackMaps(MemoryRegion region, const DexFile::CodeItem& code_item);
@@ -617,7 +617,7 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
   HGraph* const graph_;
   const CompilerOptions& compiler_options_;
 
-  ArenaVector<SlowPathCode*> slow_paths_;
+  ArenaVector<std::unique_ptr<SlowPathCode>> slow_paths_;
 
   // The current slow-path that we're generating code for.
   SlowPathCode* current_slow_path_;

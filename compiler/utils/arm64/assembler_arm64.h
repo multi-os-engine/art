@@ -253,7 +253,7 @@ class Arm64Assembler FINAL : public Assembler {
   void AddConstant(XRegister rd, XRegister rn, int32_t value, vixl::Condition cond = vixl::al);
 
   // List of exception blocks to generate at the end of the code cache.
-  ArenaVector<Arm64Exception*> exception_blocks_;
+  ArenaVector<std::unique_ptr<Arm64Exception>> exception_blocks_;
 
  public:
   // Vixl assembler.
