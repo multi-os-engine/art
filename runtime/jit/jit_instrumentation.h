@@ -99,7 +99,8 @@ class JitInstrumentationCache {
  public:
   JitInstrumentationCache(uint16_t hot_method_threshold,
                           uint16_t warm_method_threshold,
-                          uint16_t osr_method_threshold);
+                          uint16_t osr_method_threshold,
+                          uint16_t sensitive_thread_weight);
   void AddSamples(Thread* self, ArtMethod* method, uint16_t samples)
       SHARED_REQUIRES(Locks::mutator_lock_);
   void CreateThreadPool();
@@ -124,6 +125,7 @@ class JitInstrumentationCache {
   uint16_t hot_method_threshold_;
   uint16_t warm_method_threshold_;
   uint16_t osr_method_threshold_;
+  uint16_t sensitive_thread_weight_;
   JitInstrumentationListener listener_;
   std::unique_ptr<ThreadPool> thread_pool_;
 

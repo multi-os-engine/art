@@ -86,6 +86,17 @@ JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& opt
     }
   }
 
+  if (options.Exists(RuntimeArgumentMap::JITSensitiveThreadWeight)) {
+    jit_options->sensitive_thread_weight_ =
+        *options.Get(RuntimeArgumentMap::JITSensitiveThreadWeight);
+    if (jit_options->sensitive_thread_weight_ > jit_options->compile_threshold_) {
+      LOG(FATAL) << "Sensitive thread weight is above the compilation threshold.";
+    }
+  } else {
+    jit_options->sensitive_thread_weight_ =
+      std::max(jit_options->compile_threshold_, static_cast<size_t>(1));
+  }
+
   return jit_options;
 }
 
@@ -267,9 +278,13 @@ Jit::~Jit() {
 
 void Jit::CreateInstrumentationCache(size_t compile_threshold,
                                      size_t warmup_threshold,
-                                     size_t osr_threshold) {
+                                     size_t osr_threshold,
+                                     uint16_t sensitive_thread_weight) {
   instrumentation_cache_.reset(
-      new jit::JitInstrumentationCache(compile_threshold, warmup_threshold, osr_threshold));
+      new jit::JitInstrumentationCache(compile_threshold,
+                                       warmup_threshold,
+                                       osr_threshold,
+                                       sensitive_thread_weight));
 }
 
 void Jit::NewTypeLoadedIfUsingJit(mirror::Class* type) {
