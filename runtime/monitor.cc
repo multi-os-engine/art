@@ -663,15 +663,19 @@ void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWo
       ScopedThreadSuspension sts(self, kBlocked);
       owner = thread_list->SuspendThreadByThreadId(owner_thread_id, false, &timed_out);
     }
-    if (owner != nullptr) {
-      // We succeeded in suspending the thread, check the lock's status didn't change.
+    // We succeeded in suspending the thread or owner do not exist.
+    if (!time_out) {
+      // Check the lock's status didn't change.
       lock_word = obj->GetLockWord(true);
       if (lock_word.GetState() == LockWord::kThinLocked &&
           lock_word.ThinLockOwner() == owner_thread_id) {
         // Go ahead and inflate the lock.
         Inflate(self, owner, obj.Get(), hash_code);
       }
-      thread_list->Resume(owner, false);
+      // Owner exist so resume it now.
+      if (owner != nullptr) {
+        thread_list->Resume(owner, false);
+      }
     }
     self->SetMonitorEnterObject(nullptr);
   }
