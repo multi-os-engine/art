@@ -672,6 +672,9 @@ void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWo
         Inflate(self, owner, obj.Get(), hash_code);
       }
       thread_list->Resume(owner, false);
+    } else if (!timed_out) {
+        // Can't get owner by thread id in SuspendThreadByThreadId, just resume to unlocked state.
+        obj->SetLockWord(LockWord(), true);
     }
     self->SetMonitorEnterObject(nullptr);
   }
