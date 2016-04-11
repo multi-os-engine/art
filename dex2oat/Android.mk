@@ -98,4 +98,11 @@ endif
 dex2oat_target_arch :=
 dex2oat_host_arch :=
 
+# Helper target that depends on boot image creation.
+#
+# Can be used, for example, to dump initialization failures:
+#   m art-boot-image ART_BOOT_IMAGE_EXTRA_ARGS=--dump-init-failures=fails.txt
+.PHONY: art-boot-image
+art-boot-image: $(DEFAULT_DEX_PREOPT_BUILT_IMAGE_FILENAME)
+
 endif
