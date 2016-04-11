@@ -98,4 +98,31 @@ endif
 dex2oat_target_arch :=
 dex2oat_host_arch :=
 
+# Generate a boot image and dump init failures.
+# This should be kept in line with build/core/dex_preopt_libart_boot.mk.
+ifeq ($(ART_BUILD_TARGET_NDEBUG),true)
+.PHONY: dump-boot-init-failures
+dump-boot-init-failures: $(LIBART_TARGET_BOOT_DEX_FILES) $(DEX2OAT_DEPENDENCY)
+	@mkdir -p $(dir $(DEFAULT_DEX_PREOPT_BUILT_IMAGE_FILENAME))
+	@mkdir -p $(dir $(LIBART_TARGET_BOOT_OAT_UNSTRIPPED))
+	$(DEX2OAT) --runtime-arg -Xms$(DEX2OAT_IMAGE_XMS) --runtime-arg -Xmx$(DEX2OAT_IMAGE_XMX) \
+		--image-classes=$(PRELOADED_CLASSES) \
+		$(addprefix --dex-file=,$(LIBART_TARGET_BOOT_DEX_FILES)) \
+		$(addprefix --dex-location=,$(LIBART_TARGET_BOOT_DEX_LOCATIONS)) \
+		--oat-symbols=$(LIBART_TARGET_BOOT_OAT_UNSTRIPPED) \
+		--oat-file=$(patsubst %.art,%.oat,$(DEFAULT_DEX_PREOPT_BUILT_IMAGE_FILENAME)) \
+		--oat-location=$(patsubst %.art,%.oat,$(LIBART_BOOT_IMAGE_FILENAME)) \
+		--image=$(DEFAULT_DEX_PREOPT_BUILT_IMAGE_FILENAME) --base=$(LIBART_IMG_TARGET_BASE_ADDRESS) \
+		--instruction-set=$(DEX2OAT_TARGET_ARCH) \
+		--instruction-set-variant=$(DEX2OAT_TARGET_CPU_VARIANT) \
+		--instruction-set-features=$(DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES) \
+		--android-root=$(PRODUCT_OUT)/system --include-patch-information --runtime-arg -Xnorelocate --no-generate-debug-info \
+		--multi-image --no-inline-from=core-oj.jar \
+		$(PRODUCT_DEX_PREOPT_BOOT_FLAGS) $(GLOBAL_DEXPREOPT_FLAGS) $(COMPILED_CLASSES_FLAGS) \
+		--dump-init-failures=boot.init.failures.txt
+	@echo Output in boot.init.failures.txt
+endif
+
+
+
 endif
