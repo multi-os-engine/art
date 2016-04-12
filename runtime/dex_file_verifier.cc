@@ -2629,7 +2629,7 @@ bool DexFileVerifier::CheckMethodAccessFlags(uint32_t method_index,
   // Interfaces are special.
   if ((class_access_flags & kAccInterface) != 0) {
     // Non-static interface methods must be public.
-    if ((method_access_flags & (kAccPublic | kAccStatic)) == 0) {
+    if ((method_access_flags & (kAccPrivate | kAccPublic | kAccStatic)) == 0) {
       *error_msg = StringPrintf("Interface virtual method %" PRIu32 "(%s) is not public",
           method_index,
           GetMethodDescriptionOrError(begin_, header_, method_index).c_str());
