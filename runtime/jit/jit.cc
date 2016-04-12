@@ -31,12 +31,15 @@
 #include "runtime.h"
 #include "runtime_options.h"
 #include "stack_map.h"
+#include "thread_list.h"
 #include "utils.h"
 
 namespace art {
 namespace jit {
 
 static constexpr bool kEnableOnStackReplacement = true;
+// At what priority to schedule jit threads. 9 is the lowest foreground priority on device.
+static constexpr int kJitPoolThreadPthreadPriority = 9;
 
 // JIT compiler
 void* Jit::jit_library_handle_= nullptr;
@@ -126,6 +129,16 @@ Jit* Jit::Create(JitOptions* options, std::string* error_msg) {
       << ", max_capacity=" << PrettySize(options->GetCodeCacheMaxCapacity())
       << ", compile_threshold=" << options->GetCompileThreshold()
       << ", save_profiling_info=" << options->GetSaveProfilingInfo();
+
+
+  jit->hot_method_threshold_ = options->GetCompileThreshold();
+  jit->warm_method_threshold_ = options->GetWarmupThreshold();
+  jit->osr_method_threshold_ = options->GetOsrThreshold();
+
+  jit->CreateThreadPool();
+
+  // Notify native debugger about the classes already loaded before the creation of the jit.
+  jit->DumpTypeInfoForLoadedTypes(Runtime::Current()->GetClassLinker());
   return jit.release();
 }
 
@@ -213,13 +226,31 @@ bool Jit::CompileMethod(ArtMethod* method, Thread* self, bool osr) {
 }
 
 void Jit::CreateThreadPool() {
-  CHECK(instrumentation_cache_.get() != nullptr);
-  instrumentation_cache_->CreateThreadPool();
+  // There is a DCHECK in the 'AddSamples' method to ensure the tread pool
+  // is not null when we instrument.
+  thread_pool_.reset(new ThreadPool("Jit thread pool", 1));
+  thread_pool_->SetPthreadPriority(kJitPoolThreadPthreadPriority);
+  thread_pool_->StartWorkers(Thread::Current());
 }
 
 void Jit::DeleteThreadPool() {
-  if (instrumentation_cache_.get() != nullptr) {
-    instrumentation_cache_->DeleteThreadPool(Thread::Current());
+  Thread* self = Thread::Current();
+  DCHECK(Runtime::Current()->IsShuttingDown(self));
+  if (thread_pool_ != nullptr) {
+    ThreadPool* cache = nullptr;
+    {
+      ScopedSuspendAll ssa(__FUNCTION__);
+      // Clear thread_pool_ field while the threads are suspended.
+      // A mutator in the 'AddSamples' method will check against it.
+      cache = thread_pool_.release();
+    }
+    cache->StopWorkers(self);
+    cache->RemoveAllTasks(self);
+    // We could just suspend all threads, but we know those threads
+    // will finish in a short period, so it's not worth adding a suspend logic
+    // here. Besides, this is only done for shutdown.
+    cache->Wait(self, false, false);
+    delete cache;
   }
 }
 
@@ -239,10 +270,7 @@ void Jit::StopProfileSaver() {
 }
 
 bool Jit::JitAtFirstUse() {
-  if (instrumentation_cache_ != nullptr) {
-    return instrumentation_cache_->HotMethodThreshold() == 0;
-  }
-  return false;
+  return HotMethodThreshold() == 0;
 }
 
 bool Jit::CanInvokeCompiledCode(ArtMethod* method) {
@@ -263,13 +291,6 @@ Jit::~Jit() {
     dlclose(jit_library_handle_);
     jit_library_handle_ = nullptr;
   }
-}
-
-void Jit::CreateInstrumentationCache(size_t compile_threshold,
-                                     size_t warmup_threshold,
-                                     size_t osr_threshold) {
-  instrumentation_cache_.reset(
-      new jit::JitInstrumentationCache(compile_threshold, warmup_threshold, osr_threshold));
 }
 
 void Jit::NewTypeLoadedIfUsingJit(mirror::Class* type) {

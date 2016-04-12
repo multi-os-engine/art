@@ -652,10 +652,9 @@ extern "C" int MterpSetUpHotnessCountdown(ArtMethod* method, ShadowFrame* shadow
   int32_t countdown_value = jit::kJitHotnessDisabled;
   jit::Jit* jit = Runtime::Current()->GetJit();
   if (jit != nullptr) {
-    jit::JitInstrumentationCache* cache = jit->GetInstrumentationCache();
-    int32_t warm_threshold = cache->WarmMethodThreshold();
-    int32_t hot_threshold = cache->HotMethodThreshold();
-    int32_t osr_threshold = cache->OSRMethodThreshold();
+    int32_t warm_threshold = jit->WarmMethodThreshold();
+    int32_t hot_threshold = jit->HotMethodThreshold();
+    int32_t osr_threshold = jit->OSRMethodThreshold();
     if (hotness_count < warm_threshold) {
       countdown_value = warm_threshold - hotness_count;
     } else if (hotness_count < hot_threshold) {
@@ -688,7 +687,7 @@ extern "C" int16_t MterpAddHotnessBatch(ArtMethod* method,
   jit::Jit* jit = Runtime::Current()->GetJit();
   if (jit != nullptr) {
     int16_t count = shadow_frame->GetCachedHotnessCountdown() - shadow_frame->GetHotnessCountdown();
-    jit->GetInstrumentationCache()->AddSamples(self, method, count);
+    jit->AddSamples(self, method, count);
   }
   return MterpSetUpHotnessCountdown(method, shadow_frame);
 }
@@ -701,7 +700,7 @@ extern "C" bool  MterpProfileBranch(Thread* self, ShadowFrame* shadow_frame, int
   uint32_t dex_pc = shadow_frame->GetDexPC();
   jit::Jit* jit = Runtime::Current()->GetJit();
   if ((jit != nullptr) && (offset <= 0)) {
-    jit->GetInstrumentationCache()->AddSamples(self, method, 1);
+    jit->AddSamples(self, method, 1);
   }
   int16_t countdown_value = MterpSetUpHotnessCountdown(method, shadow_frame);
   if (countdown_value == jit::kJitCheckForOSR) {
@@ -721,7 +720,7 @@ extern "C" bool MterpMaybeDoOnStackReplacement(Thread* self,
   jit::Jit* jit = Runtime::Current()->GetJit();
   if (offset <= 0) {
     // Keep updating hotness in case a compilation request was dropped.  Eventually it will retry.
-    jit->GetInstrumentationCache()->AddSamples(self, method, 1);
+    jit->AddSamples(self, method, 1);
   }
   // Assumes caller has already determined that an OSR check is appropriate.
   return jit::Jit::MaybeDoOnStackReplacement(self, method, dex_pc, offset, result);
