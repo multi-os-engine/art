@@ -34,7 +34,6 @@ struct RuntimeArgumentMap;
 namespace jit {
 
 class JitCodeCache;
-class JitInstrumentationCache;
 class JitOptions;
 
 class Jit {
@@ -46,16 +45,17 @@ class Jit {
   static Jit* Create(JitOptions* options, std::string* error_msg);
   bool CompileMethod(ArtMethod* method, Thread* self, bool osr)
       SHARED_REQUIRES(Locks::mutator_lock_);
-  void CreateInstrumentationCache(size_t compile_threshold,
-                                  size_t warmup_threshold,
-                                  size_t osr_threshold);
+
   void CreateThreadPool();
+
   const JitCodeCache* GetCodeCache() const {
     return code_cache_.get();
   }
+
   JitCodeCache* GetCodeCache() {
     return code_cache_.get();
   }
+
   void DeleteThreadPool();
   // Dump interesting info: #methods compiled, code vs data size, compile / verify cumulative
   // loggers.
@@ -67,9 +67,34 @@ class Jit {
       REQUIRES(!lock_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  JitInstrumentationCache* GetInstrumentationCache() const {
-    return instrumentation_cache_.get();
+  size_t OSRMethodThreshold() const {
+    return osr_method_threshold_;
   }
+
+  size_t HotMethodThreshold() const {
+    return hot_method_threshold_;
+  }
+
+  size_t WarmMethodThreshold() const {
+    return warm_method_threshold_;
+  }
+
+  // Wait until there is no more pending compilation tasks.
+  void WaitForCompilationToFinish(Thread* self);
+
+  // Profiling methods.
+  void MethodEntered(Thread* thread, ArtMethod* method)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void AddSamples(Thread* self, ArtMethod* method, uint16_t samples)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void InvokeVirtualOrInterface(Thread* thread,
+                                mirror::Object* this_object,
+                                ArtMethod* caller,
+                                uint32_t dex_pc,
+                                ArtMethod* callee)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Starts the profile saver if the config options allow profile recording.
   // The profile will be stored in the specified `filename` and will contain
@@ -133,11 +158,14 @@ class Jit {
   Histogram<uint64_t> memory_use_ GUARDED_BY(lock_);
   Mutex lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
 
-  std::unique_ptr<jit::JitInstrumentationCache> instrumentation_cache_;
   std::unique_ptr<jit::JitCodeCache> code_cache_;
 
   bool save_profiling_info_;
   static bool generate_debug_info_;
+  uint16_t hot_method_threshold_;
+  uint16_t warm_method_threshold_;
+  uint16_t osr_method_threshold_;
+  std::unique_ptr<ThreadPool> thread_pool_;
 
   DISALLOW_COPY_AND_ASSIGN(Jit);
 };
