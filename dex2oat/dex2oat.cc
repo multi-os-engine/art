@@ -686,9 +686,13 @@ class Dex2Oat FINAL {
     }
 
     if (IsBootImage()) {
-      // We need the boot image to always be debuggable.
-      // TODO: Remove this once we better deal with full frame deoptimization.
-      compiler_options_->debuggable_ = true;
+      // Space is important for the boot image, so disable inlining for now.
+      if (compiler_options_->inline_depth_limit_ == CompilerOptions::kUnsetInlineDepthLimit) {
+        compiler_options_->inline_depth_limit_ = 0;
+      }
+      if (compiler_options_->inline_max_code_units_ == CompilerOptions::kUnsetInlineMaxCodeUnits) {
+        compiler_options_->inline_max_code_units_ = 0;
+      }
     }
 
     if (oat_filenames_.empty() && oat_fd_ == -1) {

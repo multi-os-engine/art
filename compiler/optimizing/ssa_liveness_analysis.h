@@ -1097,11 +1097,14 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
  *     This is due to having to keep alive objects that have
  *     finalizers deleting native objects.
  * (c) When the graph has the debuggable property, environment uses
- *     of an instruction that has a primitive type make the instruction live.
- *     If the graph does not have the debuggable property, the environment
- *     use has no effect, and may get a 'none' value after register allocation.
+ *     of an instruction make the instruction live.
+ * (d) We could ideally make the environment use of an instruction have no
+ *     effect if the graph is not debuggable. However, we decided on supporting
+ *     full-frame deoptimization, which makes all environment users deoptimization
+ *     points. As we don't track interpreter liveness, we need to keep alive all
+ *     dex registers seen as holding a value at those deoptimization points.
  *
- * (b) and (c) are implemented through SsaLivenessAnalysis::ShouldBeLiveForEnvironment.
+ * (b), (c) and (d) are implemented through SsaLivenessAnalysis::ShouldBeLiveForEnvironment.
  */
 class SsaLivenessAnalysis : public ValueObject {
  public:
@@ -1208,15 +1211,22 @@ class SsaLivenessAnalysis : public ValueObject {
   // should be kept live by the HEnvironment.
   static bool ShouldBeLiveForEnvironment(HInstruction* env_holder,
                                          HInstruction* instruction) {
-    if (instruction == nullptr) return false;
     // A value that's not live in compiled code may still be needed in interpreter,
     // due to code motion, etc.
     if (env_holder->IsDeoptimize()) return true;
     // A value live at a throwing instruction in a try block may be copied by
     // the exception handler to its location at the top of the catch block.
     if (env_holder->CanThrowIntoCatchBlock()) return true;
+    // If the instruction is a reference, we keep it safe by keeping it in
+    // case the reference has a finalizer. See (b) in top-level comment.
+    if (instruction->GetType() == Primitive::kPrimNot) return true;
+    // If the graph is debuggable, be friendly and keep the instruction live
+    // in case it represents a Java local. See (c) in top-level comment.
     if (instruction->GetBlock()->GetGraph()->IsDebuggable()) return true;
-    return instruction->GetType() == Primitive::kPrimNot;
+    // In order to support full-frame deoptimization in all configurations, we need
+    // to keep everything alive: we consider all runtime entrypoints and all calls
+    // as deoptimization points. See (d) in top-level comment.
+    return true;
   }
 
   HGraph* const graph_;

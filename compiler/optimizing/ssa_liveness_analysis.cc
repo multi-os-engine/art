@@ -267,12 +267,12 @@ void SsaLivenessAnalysis::ComputeLiveRanges() {
         // SsaLivenessAnalysis.
         for (size_t i = 0, e = environment->Size(); i < e; ++i) {
           HInstruction* instruction = environment->GetInstructionAt(i);
-          bool should_be_live = ShouldBeLiveForEnvironment(current, instruction);
-          if (should_be_live) {
-            DCHECK(instruction->HasSsaIndex());
-            live_in->SetBit(instruction->GetSsaIndex());
-          }
           if (instruction != nullptr) {
+            bool should_be_live = ShouldBeLiveForEnvironment(current, instruction);
+            if (should_be_live) {
+              DCHECK(instruction->HasSsaIndex());
+              live_in->SetBit(instruction->GetSsaIndex());
+            }
             instruction->GetLiveInterval()->AddUse(
                 current, environment, i, /* actual_user */ nullptr, should_be_live);
           }
