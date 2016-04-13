@@ -30,8 +30,12 @@ namespace arm {
 
 class Arm32Assembler FINAL : public ArmAssembler {
  public:
-  Arm32Assembler() {
+  static std::unique_ptr<Arm32Assembler> Create(ArenaAllocator* arena) {
+    return std::unique_ptr<Arm32Assembler>(new (arena) Arm32Assembler(arena));
   }
+
+  explicit Arm32Assembler(ArenaAllocator* arena)
+      : ArmAssembler(arena) {}
   virtual ~Arm32Assembler() {}
 
   bool IsThumb() const OVERRIDE {

@@ -102,8 +102,17 @@ class MipsExceptionSlowPath {
 
 class MipsAssembler FINAL : public Assembler {
  public:
-  explicit MipsAssembler(const MipsInstructionSetFeatures* instruction_set_features = nullptr)
-      : overwriting_(false),
+  static std::unique_ptr<MipsAssembler> Create(
+      ArenaAllocator* arena,
+      const MipsInstructionSetFeatures* instruction_set_features = nullptr) {
+    return std::unique_ptr<MipsAssembler>(
+        new (arena) MipsAssembler(arena, instruction_set_features));
+  }
+
+  explicit MipsAssembler(ArenaAllocator* arena,
+                         const MipsInstructionSetFeatures* instruction_set_features = nullptr)
+      : Assembler(arena),
+        overwriting_(false),
         overwrite_location_(0),
         last_position_adjustment_(0),
         last_old_position_(0),

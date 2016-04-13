@@ -102,8 +102,13 @@ class Mips64ExceptionSlowPath {
 
 class Mips64Assembler FINAL : public Assembler {
  public:
-  Mips64Assembler()
-      : overwriting_(false),
+  static std::unique_ptr<Mips64Assembler> Create(ArenaAllocator* arena) {
+    return std::unique_ptr<Mips64Assembler>(new (arena) Mips64Assembler(arena));
+  }
+
+  explicit Mips64Assembler(ArenaAllocator* arena)
+      : Assembler(arena),
+        overwriting_(false),
         overwrite_location_(0),
         last_position_adjustment_(0),
         last_old_position_(0),
