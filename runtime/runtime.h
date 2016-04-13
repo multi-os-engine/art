@@ -28,6 +28,8 @@
 
 #include "arch/instruction_set.h"
 #include "base/macros.h"
+#include "base/stringpiece.h"
+#include "compiler_filter.h"
 #include "experimental_flags.h"
 #include "gc_root.h"
 #include "instrumentation.h"
@@ -180,9 +182,11 @@ class Runtime {
     return compiler_options_;
   }
 
-  void AddCompilerOption(std::string option) {
-    compiler_options_.push_back(option);
+  CompilerFilter::Filter GetCompilerFilterCompilerOption() const {
+    return compiler_filter_compiler_option_;
   }
+
+  void AddCompilerOption(const std::string& option);
 
   const std::vector<std::string>& GetImageCompilerOptions() const {
     return image_compiler_options_;
@@ -661,6 +665,10 @@ class Runtime {
 
   void MaybeSaveJitProfilingInfo();
 
+  // Update the compiler_filter_compiler_option_ if this is an option of the
+  // form "--compiler-filter=...". Otherwise do nothing.
+  void MaybeSetCompilerFilterCompilerOption(const StringPiece& option);
+
   // A pointer to the active runtime or null.
   static Runtime* instance_;
 
@@ -696,6 +704,7 @@ class Runtime {
   std::string compiler_executable_;
   std::string patchoat_executable_;
   std::vector<std::string> compiler_options_;
+  CompilerFilter::Filter compiler_filter_compiler_option_ = CompilerFilter::kSpeed;
   std::vector<std::string> image_compiler_options_;
   std::string image_location_;
 
