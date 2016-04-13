@@ -23,6 +23,23 @@
 
 namespace art {
 
+template <size_t kNumReferences>
+static inline Handle<mirror::DexCache> GetDexCacheForDexFile(
+    Thread* self,
+    StackHandleScope<kNumReferences>& hs,
+    const DexCompilationUnit& compilation_unit) SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (LIKELY(compilation_unit.GetDexCache()->GetDexFile() == compilation_unit.GetDexFile())) {
+    return compilation_unit.GetDexCache();
+  }
+  // Note: This may actually happen for app AOT when we have resolved the class
+  // we're compiling from a different dex file, see CompileClassVisitor::Visit()
+  // in compiler_driver.cc .
+  // TODO: Maybe CompileClassVisitor::Visit() should then actually use the
+  // ClassLinker::FindDexFile() to set up the correct dex cache?
+  return hs.NewHandle(
+      compilation_unit.GetClassLinker()->FindDexCache(self, *compilation_unit.GetDexFile()));
+}
+
 void HInstructionBuilder::MaybeRecordStat(MethodCompilationStat compilation_stat) {
   if (compilation_stats_ != nullptr) {
     compilation_stats_->RecordStat(compilation_stat);
@@ -889,8 +906,16 @@ bool HInstructionBuilder::BuildInvoke(const Instruction& instruction,
 }
 
 bool HInstructionBuilder::BuildNewInstance(uint16_t type_index, uint32_t dex_pc) {
+  ScopedObjectAccess soa(Thread::Current());
+  StackHandleScope<3> hs(soa.Self());
+  Handle<mirror::DexCache> dex_cache(GetDexCacheForDexFile(soa.Self(), hs, *dex_compilation_unit_));
+  Handle<mirror::Class> resolved_class(hs.NewHandle(dex_cache->GetResolvedType(type_index)));
+  const DexFile& outer_dex_file = *outer_compilation_unit_->GetDexFile();
+  Handle<mirror::DexCache> outer_dex_cache(
+      GetDexCacheForDexFile(soa.Self(), hs, *outer_compilation_unit_));
+
   bool finalizable;
-  bool can_throw = NeedsAccessCheck(type_index, &finalizable);
+  bool can_throw = NeedsAccessCheck(type_index, dex_cache, &finalizable);
 
   // Only the non-resolved entrypoint handles the finalizable class case. If we
   // need access checks, then we haven't resolved the method and the class may
@@ -898,16 +923,6 @@ bool HInstructionBuilder::BuildNewInstance(uint16_t type_index, uint32_t dex_pc)
   QuickEntrypointEnum entrypoint = (finalizable || can_throw)
       ? kQuickAllocObject
       : kQuickAllocObjectInitialized;
-
-  ScopedObjectAccess soa(Thread::Current());
-  StackHandleScope<3> hs(soa.Self());
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(
-      dex_compilation_unit_->GetClassLinker()->FindDexCache(
-          soa.Self(), *dex_compilation_unit_->GetDexFile())));
-  Handle<mirror::Class> resolved_class(hs.NewHandle(dex_cache->GetResolvedType(type_index)));
-  const DexFile& outer_dex_file = *outer_compilation_unit_->GetDexFile();
-  Handle<mirror::DexCache> outer_dex_cache(hs.NewHandle(
-      outer_compilation_unit_->GetClassLinker()->FindDexCache(soa.Self(), outer_dex_file)));
 
   if (outer_dex_cache.Get() != dex_cache.Get()) {
     // We currently do not support inlining allocations across dex files.
@@ -921,7 +936,7 @@ bool HInstructionBuilder::BuildNewInstance(uint16_t type_index, uint32_t dex_pc)
       IsOutermostCompilingClass(type_index),
       dex_pc,
       /*needs_access_check*/ can_throw,
-      compiler_driver_->CanAssumeTypeIsPresentInDexCache(outer_dex_file, type_index));
+      compiler_driver_->CanAssumeTypeIsPresentInDexCache(outer_dex_cache, type_index));
 
   AppendInstruction(load_class);
   HInstruction* cls = load_class;
@@ -980,12 +995,9 @@ HClinitCheck* HInstructionBuilder::ProcessClinitCheckForInvoke(
   const DexFile& outer_dex_file = *outer_compilation_unit_->GetDexFile();
   Thread* self = Thread::Current();
   StackHandleScope<4> hs(self);
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(
-      dex_compilation_unit_->GetClassLinker()->FindDexCache(
-          self, *dex_compilation_unit_->GetDexFile())));
-  Handle<mirror::DexCache> outer_dex_cache(hs.NewHandle(
-      outer_compilation_unit_->GetClassLinker()->FindDexCache(
-          self, outer_dex_file)));
+  Handle<mirror::DexCache> dex_cache(GetDexCacheForDexFile(self, hs, *dex_compilation_unit_));
+  Handle<mirror::DexCache> outer_dex_cache(
+      GetDexCacheForDexFile(self, hs, *outer_compilation_unit_));
   Handle<mirror::Class> outer_class(hs.NewHandle(GetOutermostCompilingClass()));
   Handle<mirror::Class> resolved_method_class(hs.NewHandle(resolved_method->GetDeclaringClass()));
 
@@ -1016,7 +1028,7 @@ HClinitCheck* HInstructionBuilder::ProcessClinitCheckForInvoke(
         is_outer_class,
         dex_pc,
         /*needs_access_check*/ false,
-        compiler_driver_->CanAssumeTypeIsPresentInDexCache(outer_dex_file, storage_index));
+        compiler_driver_->CanAssumeTypeIsPresentInDexCache(outer_dex_cache, storage_index));
     AppendInstruction(load_class);
     clinit_check = new (arena_) HClinitCheck(load_class, dex_pc);
     AppendInstruction(clinit_check);
@@ -1262,11 +1274,9 @@ static mirror::Class* GetClassFrom(CompilerDriver* driver,
                                    const DexCompilationUnit& compilation_unit) {
   ScopedObjectAccess soa(Thread::Current());
   StackHandleScope<2> hs(soa.Self());
-  const DexFile& dex_file = *compilation_unit.GetDexFile();
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
       soa.Decode<mirror::ClassLoader*>(compilation_unit.GetClassLoader())));
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(
-      compilation_unit.GetClassLinker()->FindDexCache(soa.Self(), dex_file)));
+  Handle<mirror::DexCache> dex_cache(GetDexCacheForDexFile(soa.Self(), hs, compilation_unit));
 
   return driver->ResolveCompilingMethodsClass(soa, dex_cache, class_loader, &compilation_unit);
 }
@@ -1282,9 +1292,7 @@ mirror::Class* HInstructionBuilder::GetCompilingClass() const {
 bool HInstructionBuilder::IsOutermostCompilingClass(uint16_t type_index) const {
   ScopedObjectAccess soa(Thread::Current());
   StackHandleScope<4> hs(soa.Self());
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(
-      dex_compilation_unit_->GetClassLinker()->FindDexCache(
-          soa.Self(), *dex_compilation_unit_->GetDexFile())));
+  Handle<mirror::DexCache> dex_cache(GetDexCacheForDexFile(soa.Self(), hs, *dex_compilation_unit_));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
       soa.Decode<mirror::ClassLoader*>(dex_compilation_unit_->GetClassLoader())));
   Handle<mirror::Class> cls(hs.NewHandle(compiler_driver_->ResolveClass(
@@ -1325,9 +1333,7 @@ bool HInstructionBuilder::BuildStaticFieldAccess(const Instruction& instruction,
 
   ScopedObjectAccess soa(Thread::Current());
   StackHandleScope<5> hs(soa.Self());
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(
-      dex_compilation_unit_->GetClassLinker()->FindDexCache(
-          soa.Self(), *dex_compilation_unit_->GetDexFile())));
+  Handle<mirror::DexCache> dex_cache(GetDexCacheForDexFile(soa.Self(), hs, *dex_compilation_unit_));
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
       soa.Decode<mirror::ClassLoader*>(dex_compilation_unit_->GetClassLoader())));
   ArtField* resolved_field = compiler_driver_->ResolveField(
@@ -1342,8 +1348,8 @@ bool HInstructionBuilder::BuildStaticFieldAccess(const Instruction& instruction,
 
   Primitive::Type field_type = resolved_field->GetTypeAsPrimitiveType();
   const DexFile& outer_dex_file = *outer_compilation_unit_->GetDexFile();
-  Handle<mirror::DexCache> outer_dex_cache(hs.NewHandle(
-      outer_compilation_unit_->GetClassLinker()->FindDexCache(soa.Self(), outer_dex_file)));
+  Handle<mirror::DexCache> outer_dex_cache(
+      GetDexCacheForDexFile(soa.Self(), hs, *outer_compilation_unit_));
   Handle<mirror::Class> outer_class(hs.NewHandle(GetOutermostCompilingClass()));
 
   // The index at which the field's class is stored in the DexCache's type array.
@@ -1371,7 +1377,7 @@ bool HInstructionBuilder::BuildStaticFieldAccess(const Instruction& instruction,
   }
 
   bool is_in_cache =
-      compiler_driver_->CanAssumeTypeIsPresentInDexCache(outer_dex_file, storage_index);
+      compiler_driver_->CanAssumeTypeIsPresentInDexCache(outer_dex_cache, storage_index);
   HLoadClass* constant = new (arena_) HLoadClass(graph_->GetCurrentMethod(),
                                                  storage_index,
                                                  outer_dex_file,
@@ -1634,21 +1640,16 @@ void HInstructionBuilder::BuildTypeCheck(const Instruction& instruction,
                                          uint8_t reference,
                                          uint16_t type_index,
                                          uint32_t dex_pc) {
-  bool type_known_final, type_known_abstract, use_declaring_class;
-  bool can_access = compiler_driver_->CanAccessTypeWithoutChecks(
-      dex_compilation_unit_->GetDexMethodIndex(),
-      *dex_compilation_unit_->GetDexFile(),
-      type_index,
-      &type_known_final,
-      &type_known_abstract,
-      &use_declaring_class);
-
   ScopedObjectAccess soa(Thread::Current());
   StackHandleScope<2> hs(soa.Self());
   const DexFile& dex_file = *dex_compilation_unit_->GetDexFile();
-  Handle<mirror::DexCache> dex_cache(hs.NewHandle(
-      dex_compilation_unit_->GetClassLinker()->FindDexCache(soa.Self(), dex_file)));
+  Handle<mirror::DexCache> dex_cache(GetDexCacheForDexFile(soa.Self(), hs, *dex_compilation_unit_));
   Handle<mirror::Class> resolved_class(hs.NewHandle(dex_cache->GetResolvedType(type_index)));
+
+  bool can_access = compiler_driver_->CanAccessTypeWithoutChecks(
+      dex_compilation_unit_->GetDexMethodIndex(),
+      dex_cache,
+      type_index);
 
   HInstruction* object = LoadLocal(reference, Primitive::kPrimNot);
   HLoadClass* cls = new (arena_) HLoadClass(
@@ -1658,7 +1659,7 @@ void HInstructionBuilder::BuildTypeCheck(const Instruction& instruction,
       IsOutermostCompilingClass(type_index),
       dex_pc,
       !can_access,
-      compiler_driver_->CanAssumeTypeIsPresentInDexCache(dex_file, type_index));
+      compiler_driver_->CanAssumeTypeIsPresentInDexCache(dex_cache, type_index));
   AppendInstruction(cls);
 
   TypeCheckKind check_kind = ComputeTypeCheckKind(resolved_class);
@@ -1676,9 +1677,18 @@ void HInstructionBuilder::BuildTypeCheck(const Instruction& instruction,
   }
 }
 
-bool HInstructionBuilder::NeedsAccessCheck(uint32_t type_index, bool* finalizable) const {
+bool HInstructionBuilder::NeedsAccessCheck(uint32_t type_index,
+                                           Handle<mirror::DexCache> dex_cache,
+                                           bool* finalizable) const {
   return !compiler_driver_->CanAccessInstantiableTypeWithoutChecks(
-      dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index, finalizable);
+      dex_compilation_unit_->GetDexMethodIndex(), dex_cache, type_index, finalizable);
+}
+
+bool HInstructionBuilder::NeedsAccessCheck(uint32_t type_index, bool* finalizable) const {
+  ScopedObjectAccess soa(Thread::Current());
+  StackHandleScope<1> hs(soa.Self());
+  Handle<mirror::DexCache> dex_cache(GetDexCacheForDexFile(soa.Self(), hs, *dex_compilation_unit_));
+  return NeedsAccessCheck(type_index, dex_cache, finalizable);
 }
 
 bool HInstructionBuilder::CanDecodeQuickenedInfo() const {
@@ -2612,16 +2622,18 @@ bool HInstructionBuilder::ProcessDexInstruction(const Instruction& instruction, 
 
     case Instruction::CONST_CLASS: {
       uint16_t type_index = instruction.VRegB_21c();
-      bool type_known_final;
-      bool type_known_abstract;
-      bool dont_use_is_referrers_class;
       // `CanAccessTypeWithoutChecks` will tell whether the method being
       // built is trying to access its own class, so that the generated
       // code can optimize for this case. However, the optimization does not
       // work for inlining, so we use `IsOutermostCompilingClass` instead.
+      ScopedObjectAccess soa(Thread::Current());
+      StackHandleScope<1> hs(soa.Self());
+      Handle<mirror::DexCache> dex_cache(
+          GetDexCacheForDexFile(soa.Self(), hs, *dex_compilation_unit_));
       bool can_access = compiler_driver_->CanAccessTypeWithoutChecks(
-          dex_compilation_unit_->GetDexMethodIndex(), *dex_file_, type_index,
-          &type_known_final, &type_known_abstract, &dont_use_is_referrers_class);
+          dex_compilation_unit_->GetDexMethodIndex(), dex_cache, type_index);
+      bool is_in_dex_cache =
+          compiler_driver_->CanAssumeTypeIsPresentInDexCache(dex_cache, type_index);
       AppendInstruction(new (arena_) HLoadClass(
           graph_->GetCurrentMethod(),
           type_index,
@@ -2629,7 +2641,7 @@ bool HInstructionBuilder::ProcessDexInstruction(const Instruction& instruction, 
           IsOutermostCompilingClass(type_index),
           dex_pc,
           !can_access,
-          compiler_driver_->CanAssumeTypeIsPresentInDexCache(*dex_file_, type_index)));
+          is_in_dex_cache));
       UpdateLocal(instruction.VRegA_21c(), current_block_->GetLastInstruction());
       break;
     }
