@@ -20,6 +20,7 @@
 #include "base/arena_containers.h"
 #include "base/bit_vector-inl.h"
 #include "side_effects_analysis.h"
+#include "scoped_thread_state_change.h"
 #include "utils.h"
 
 namespace art {
@@ -88,6 +89,39 @@ class ValueSet : public ArenaObject<kArenaAllocGvn> {
     ++num_entries_;
   }
 
+  static bool OriginalReferenceIsNullConstant(HInstruction* ref) {
+    // Track down the real reference.
+    while (ref->IsNullCheck() || ref->IsBoundType()) {
+      ref = ref->InputAt(0);
+    }
+    return ref->IsNullConstant();
+  }
+
+  static bool HaveSameType(HInstruction* instruction1, HInstruction* instruction2) {
+    DCHECK(instruction1->Equals(instruction2));
+    if (instruction1->GetType() != Primitive::kPrimNot) {
+      return true;
+    }
+
+    if (kIsDebugBuild) {
+      ReferenceTypeInfo info1 = instruction1->GetReferenceTypeInfo();
+      ReferenceTypeInfo info2 = instruction2->GetReferenceTypeInfo();
+      ScopedObjectAccess soa(Thread::Current());
+      if (!info1.IsEqual(info2)) {
+        // This can only happen when HNullConstant is used for InstanceFieldGet/ArrayGet.
+        DCHECK(OriginalReferenceIsNullConstant(instruction1->InputAt(0)));
+        DCHECK(OriginalReferenceIsNullConstant(instruction2->InputAt(0)));
+      }
+    }
+
+    if (instruction1->IsInstanceFieldGet() ||
+        instruction1->IsArrayGet()) {
+      // HNullConstant may represent different object types.
+      return !instruction1->InputAt(0)->IsNullConstant();
+    }
+    return true;
+  }
+
   // If in the set, returns an equivalent instruction to the given instruction.
   // Returns null otherwise.
   HInstruction* Lookup(HInstruction* instruction) const {
@@ -97,7 +131,7 @@ class ValueSet : public ArenaObject<kArenaAllocGvn> {
     for (Node* node = buckets_[index]; node != nullptr; node = node->GetNext()) {
       if (node->GetHashCode() == hash_code) {
         HInstruction* existing = node->GetInstruction();
-        if (existing->Equals(instruction)) {
+        if (existing->Equals(instruction) && HaveSameType(existing, instruction)) {
           return existing;
         }
       }
