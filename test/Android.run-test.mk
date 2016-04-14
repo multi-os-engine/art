@@ -245,7 +245,10 @@ ifneq (,$(filter target,$(TARGET_TYPES)))
       $(IMAGE_TYPES), $(PICTEST_TYPES), $(DEBUGGABLE_TYPES), $(TEST_ART_BROKEN_TARGET_TESTS), $(ALL_ADDRESS_SIZES))
 endif
 
-TEST_ART_BROKEN_TARGET_TESTS :=
+# 147-stripped-dex-fallback isn't supported on device because --strip-dex
+# requires the zip command.
+TEST_ART_BROKEN_TARGET_TESTS := \
+  147-stripped-dex-fallback
 
 # Tests that require python3.
 TEST_ART_PYTHON3_DEPENDENCY_RUN_TESTS := \
