@@ -365,7 +365,9 @@ class HeapLocationCollector : public HGraphVisitor {
     return ref_info;
   }
 
+  // Proactively create reference info which can help pre-existence-based aliasing analysis.
   void CreateReferenceInfoForReferenceType(HInstruction* instruction) {
+    DCHECK(instruction != nullptr);
     if (instruction->GetType() != Primitive::kPrimNot) {
       return;
     }
@@ -704,6 +706,11 @@ class LSEVisitor : public HGraphVisitor {
                         HInstruction* index,
                         int16_t declaring_class_def_index) {
     HInstruction* original_ref = HuntForOriginalReference(ref);
+    if (original_ref->IsNullConstant()) {
+      // Don't try to eliminate load from HNullConstant since HNullConstant can
+      // represent different object types.
+      return;
+    }
     ReferenceInfo* ref_info = heap_location_collector_.FindReferenceInfoOf(original_ref);
     size_t idx = heap_location_collector_.FindHeapLocationIndex(
         ref_info, offset, index, declaring_class_def_index);
@@ -731,25 +738,8 @@ class LSEVisitor : public HGraphVisitor {
       // This acts like GVN but with better aliasing analysis.
       heap_values[idx] = instruction;
     } else {
-      if (Primitive::PrimitiveKind(heap_value->GetType())
-              != Primitive::PrimitiveKind(instruction->GetType())) {
-        // The only situation where the same heap location has different type is when
-        // we do an array get from a null constant. In order to stay properly typed
-        // we do not merge the array gets.
-        if (kIsDebugBuild) {
-          DCHECK(heap_value->IsArrayGet()) << heap_value->DebugName();
-          DCHECK(instruction->IsArrayGet()) << instruction->DebugName();
-          HInstruction* array = instruction->AsArrayGet()->GetArray();
-          DCHECK(array->IsNullCheck()) << array->DebugName();
-          HInstruction* input = HuntForOriginalReference(array->InputAt(0));
-          DCHECK(input->IsNullConstant()) << input->DebugName();
-          array = heap_value->AsArrayGet()->GetArray();
-          DCHECK(array->IsNullCheck()) << array->DebugName();
-          input = HuntForOriginalReference(array->InputAt(0));
-          DCHECK(input->IsNullConstant()) << input->DebugName();
-        }
-        return;
-      }
+      DCHECK_EQ(Primitive::PrimitiveKind(heap_value->GetType()),
+                Primitive::PrimitiveKind(instruction->GetType()));
       removed_loads_.push_back(instruction);
       substitute_instructions_for_loads_.push_back(heap_value);
       TryRemovingNullCheck(instruction);
@@ -773,6 +763,11 @@ class LSEVisitor : public HGraphVisitor {
                         int16_t declaring_class_def_index,
                         HInstruction* value) {
     HInstruction* original_ref = HuntForOriginalReference(ref);
+    if (original_ref->IsNullConstant()) {
+      // Don't try to eliminate store to HNullConstant since HNullConstant can
+      // represent different object types.
+      return;
+    }
     ReferenceInfo* ref_info = heap_location_collector_.FindReferenceInfoOf(original_ref);
     size_t idx = heap_location_collector_.FindHeapLocationIndex(
         ref_info, offset, index, declaring_class_def_index);

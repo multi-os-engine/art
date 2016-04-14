@@ -5060,7 +5060,20 @@ class HInstanceFieldGet : public HExpression<1> {
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     HInstanceFieldGet* other_get = other->AsInstanceFieldGet();
-    return GetFieldOffset().SizeValue() == other_get->GetFieldOffset().SizeValue();
+    if (GetFieldOffset().SizeValue() != other_get->GetFieldOffset().SizeValue()) {
+      return false;
+    }
+    HInstruction* ref = InputAt(0);
+    // Track down the real reference.
+    while (ref->IsNullCheck() || ref->IsBoundType()) {
+      ref = ref->InputAt(0);
+    }
+    if (ref->IsNullConstant()) {
+      // HNullConstant can represent different object types. Treat them as different
+      // to maintain type consistency.
+      return false;
+    }
+    return true;
   }
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
@@ -5150,9 +5163,21 @@ class HArrayGet : public HExpression<2> {
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
+
   bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
+    HInstruction* ref = InputAt(0);
+    // Track down the real reference.
+    while (ref->IsNullCheck() || ref->IsBoundType()) {
+      ref = ref->InputAt(0);
+    }
+    if (ref->IsNullConstant()) {
+      // HNullConstant can represent different object types. Treat them as different
+      // to maintain type consistency.
+      return false;
+    }
     return true;
   }
+
   bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
     // TODO: We can be smarter here.
     // Currently, the array access is always preceded by an ArrayLength or a NullCheck
