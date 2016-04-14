@@ -2056,7 +2056,7 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
   // Returns whether two instructions are equal, that is:
   // 1) They have the same type and contain the same data (InstructionDataEquals).
   // 2) Their inputs are identical.
-  bool Equals(HInstruction* other) const;
+  virtual bool Equals(HInstruction* other) const;
 
   // TODO: Remove this indirection when the [[pure]] attribute proposal (n3744)
   // is adopted and implemented by our C++ compiler(s). Fow now, we need to hide
@@ -5042,6 +5042,7 @@ class HInstanceFieldGet : public HExpression<1> {
 
   bool CanBeMoved() const OVERRIDE { return !IsVolatile(); }
 
+  bool Equals(HInstruction* other) const OVERRIDE;
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     HInstanceFieldGet* other_get = other->AsInstanceFieldGet();
     return GetFieldOffset().SizeValue() == other_get->GetFieldOffset().SizeValue();
@@ -5128,6 +5129,7 @@ class HArrayGet : public HExpression<2> {
   }
 
   bool CanBeMoved() const OVERRIDE { return true; }
+  bool Equals(HInstruction* other) const OVERRIDE;
   bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }

@@ -1236,6 +1236,32 @@ bool HInstruction::Equals(HInstruction* other) const {
   return true;
 }
 
+static bool OriginalReferenceIsNullConstant(HInstruction* ref) {
+  // Track down the real reference.
+  while (ref->IsNullCheck() || ref->IsBoundType()) {
+    ref = ref->InputAt(0);
+  }
+  return ref->IsNullConstant();
+}
+
+bool HInstanceFieldGet::Equals(HInstruction* other) const {
+  if (!HInstruction::Equals(other)) {
+    return false;
+  }
+  // HNullConstant can represent different object types. Treat them as different
+  // to maintain type consistency.
+  return !OriginalReferenceIsNullConstant(InputAt(0));
+}
+
+bool HArrayGet::Equals(HInstruction* other) const {
+  if (!HInstruction::Equals(other)) {
+    return false;
+  }
+  // HNullConstant can represent different object types. Treat them as different
+  // to maintain type consistency.
+  return !OriginalReferenceIsNullConstant(InputAt(0));
+}
+
 std::ostream& operator<<(std::ostream& os, const HInstruction::InstructionKind& rhs) {
 #define DECLARE_CASE(type, super) case HInstruction::k##type: os << #type; break;
   switch (rhs) {
