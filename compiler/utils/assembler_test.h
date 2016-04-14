@@ -457,11 +457,13 @@ class AssemblerTest : public testing::Test {
   }
 
  protected:
+  std::unique_ptr<ArenaAllocator> arena_;
+
   explicit AssemblerTest() {}
 
   void SetUp() OVERRIDE {
     arena_.reset(new ArenaAllocator(&pool_));
-    assembler_.reset(new (arena_.get()) Ass(arena_.get()));
+    assembler_.reset(CreateAssembler());
     test_helper_.reset(
         new AssemblerTestInfrastructure(GetArchitectureString(),
                                         GetAssemblerCmdName(),
@@ -479,6 +481,11 @@ class AssemblerTest : public testing::Test {
     test_helper_.reset();  // Clean up the helper.
     assembler_.reset();
     arena_.reset();
+  }
+
+  // Override this to set up any architecture-specific things, e.g., CPU revision.
+  virtual Ass* CreateAssembler() {
+    return new (arena_.get()) Ass(arena_.get());
   }
 
   // Override this to set up any architecture-specific things, e.g., register vectors.
@@ -923,7 +930,6 @@ class AssemblerTest : public testing::Test {
   static constexpr size_t kWarnManyCombinationsThreshold = 500;
 
   ArenaPool pool_;
-  std::unique_ptr<ArenaAllocator> arena_;
   std::unique_ptr<Ass> assembler_;
   std::unique_ptr<AssemblerTestInfrastructure> test_helper_;
 
