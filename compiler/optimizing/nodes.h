@@ -2053,6 +2053,8 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
     return false;
   }
 
+  virtual bool InstructionInputsEqual(HInstruction* other) const;
+
   // Returns whether two instructions are equal, that is:
   // 1) They have the same type and contain the same data (InstructionDataEquals).
   // 2) Their inputs are identical.
@@ -5046,6 +5048,7 @@ class HInstanceFieldGet : public HExpression<1> {
     HInstanceFieldGet* other_get = other->AsInstanceFieldGet();
     return GetFieldOffset().SizeValue() == other_get->GetFieldOffset().SizeValue();
   }
+  bool InstructionInputsEqual(HInstruction* other) const OVERRIDE;
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
     return (obj == InputAt(0)) && GetFieldOffset().Uint32Value() < kPageSize;
@@ -5131,6 +5134,7 @@ class HArrayGet : public HExpression<2> {
   bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
+  bool InstructionInputsEqual(HInstruction* other) const OVERRIDE;
   bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
     // TODO: We can be smarter here.
     // Currently, the array access is always preceded by an ArrayLength or a NullCheck

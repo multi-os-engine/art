@@ -1222,16 +1222,45 @@ bool HCondition::IsBeforeWhenDisregardMoves(HInstruction* instruction) const {
   return this == instruction->GetPreviousDisregardingMoves();
 }
 
+bool HInstruction::InstructionInputsEqual(HInstruction* other) const {
+  if (InputCount() != other->InputCount()) return false;
+  for (size_t i = 0, e = InputCount(); i < e; ++i) {
+    if (InputAt(i) != other->InputAt(i)) return false;
+  }
+  return true;
+}
+
+static bool OriginalReferenceIsNullConstant(HInstruction* ref) {
+  // Track down the real reference.
+  while (ref->IsNullCheck() || ref->IsBoundType()) {
+    ref = ref->InputAt(0);
+  }
+  return ref->IsNullConstant();
+}
+
+bool HInstanceFieldGet::InstructionInputsEqual(HInstruction* other) const {
+  DCHECK_EQ(InputCount(), 1U);
+  // HNullConstant can represent different object types. Treat them as different
+  // to maintain type consistency.
+  return InputAt(0) == other->InputAt(0) &&
+         !OriginalReferenceIsNullConstant(InputAt(0));
+}
+
+bool HArrayGet::InstructionInputsEqual(HInstruction* other) const {
+  DCHECK_EQ(InputCount(), 2U);
+  // HNullConstant can represent different object types. Treat them as different
+  // to maintain type consistency.
+  return InputAt(0) == other->InputAt(0) &&
+         InputAt(1) == other->InputAt(1) &&
+         !OriginalReferenceIsNullConstant(InputAt(0));
+}
+
 bool HInstruction::Equals(HInstruction* other) const {
   if (!InstructionTypeEquals(other)) return false;
   DCHECK_EQ(GetKind(), other->GetKind());
   if (!InstructionDataEquals(other)) return false;
   if (GetType() != other->GetType()) return false;
-  if (InputCount() != other->InputCount()) return false;
-
-  for (size_t i = 0, e = InputCount(); i < e; ++i) {
-    if (InputAt(i) != other->InputAt(i)) return false;
-  }
+  if (!InstructionInputsEqual(other)) return false;
   DCHECK_EQ(ComputeHashCode(), other->ComputeHashCode());
   return true;
 }
