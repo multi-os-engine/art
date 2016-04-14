@@ -1324,9 +1324,6 @@ FOR_EACH_INSTRUCTION(FORWARD_DECLARATION)
 #define DECLARE_INSTRUCTION(type)                                       \
   InstructionKind GetKindInternal() const OVERRIDE { return k##type; }  \
   const char* DebugName() const OVERRIDE { return #type; }              \
-  bool InstructionTypeEquals(HInstruction* other) const OVERRIDE {      \
-    return other->Is##type();                                           \
-  }                                                                     \
   void Accept(HGraphVisitor* visitor) OVERRIDE
 
 #define DECLARE_ABSTRACT_INSTRUCTION(type)                              \
@@ -2042,8 +2039,8 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
   virtual bool CanBeMoved() const { return false; }
 
   // Returns whether the two instructions are of the same kind.
-  virtual bool InstructionTypeEquals(HInstruction* other ATTRIBUTE_UNUSED) const {
-    return false;
+  bool InstructionKindEquals(HInstruction* other) const {
+    return GetKind() == other->GetKind();
   }
 
   // Returns whether any data encoded in the two instructions is equal.
@@ -2052,6 +2049,8 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
   virtual bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const {
     return false;
   }
+
+  virtual bool InstructionInputsEqual(HInstruction* other) const;
 
   // Returns whether two instructions are equal, that is:
   // 1) They have the same type and contain the same data (InstructionDataEquals).
@@ -5046,6 +5045,7 @@ class HInstanceFieldGet : public HExpression<1> {
     HInstanceFieldGet* other_get = other->AsInstanceFieldGet();
     return GetFieldOffset().SizeValue() == other_get->GetFieldOffset().SizeValue();
   }
+  bool InstructionInputsEqual(HInstruction* other) const OVERRIDE;
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
     return (obj == InputAt(0)) && GetFieldOffset().Uint32Value() < kPageSize;
@@ -5131,6 +5131,7 @@ class HArrayGet : public HExpression<2> {
   bool InstructionDataEquals(HInstruction* other ATTRIBUTE_UNUSED) const OVERRIDE {
     return true;
   }
+  bool InstructionInputsEqual(HInstruction* other) const OVERRIDE;
   bool CanDoImplicitNullCheckOn(HInstruction* obj ATTRIBUTE_UNUSED) const OVERRIDE {
     // TODO: We can be smarter here.
     // Currently, the array access is always preceded by an ArrayLength or a NullCheck
