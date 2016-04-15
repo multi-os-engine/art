@@ -116,7 +116,7 @@ JNIEXPORT jint JVM_Write(jint fd, char* buf, jint nbytes) {
 
 /* posix lseek() */
 JNIEXPORT jlong JVM_Lseek(jint fd, jlong offset, jint whence) {
-    return TEMP_FAILURE_RETRY(lseek(fd, offset, whence));
+    return lseek64(fd, offset, whence);
 }
 
 /*
