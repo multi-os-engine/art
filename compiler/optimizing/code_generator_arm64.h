@@ -83,7 +83,7 @@ class SlowPathCodeARM64 : public SlowPathCode {
   DISALLOW_COPY_AND_ASSIGN(SlowPathCodeARM64);
 };
 
-class JumpTableARM64 : public ArenaObject<kArenaAllocSwitchTable> {
+class JumpTableARM64 : public DeletableArenaObject<kArenaAllocSwitchTable> {
  public:
   explicit JumpTableARM64(HPackedSwitch* switch_instr)
     : switch_instr_(switch_instr), table_start_() {}
@@ -352,8 +352,9 @@ class CodeGeneratorARM64 : public CodeGenerator {
 
   void Bind(HBasicBlock* block) OVERRIDE;
 
-  vixl::Label* GetLabelOf(HBasicBlock* block) const {
-    return CommonGetLabelOf<vixl::Label>(block_labels_, block);
+  vixl::Label* GetLabelOf(HBasicBlock* block) {
+    block = FirstNonEmptyBlock(block);
+    return &(block_labels_[block->GetBlockId()]);
   }
 
   size_t GetWordSize() const OVERRIDE {
@@ -365,7 +366,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
     return kArm64WordSize;
   }
 
-  uintptr_t GetAddressOf(HBasicBlock* block) const OVERRIDE {
+  uintptr_t GetAddressOf(HBasicBlock* block) OVERRIDE {
     vixl::Label* block_entry_label = GetLabelOf(block);
     DCHECK(block_entry_label->IsBound());
     return block_entry_label->location();
@@ -412,12 +413,18 @@ class CodeGeneratorARM64 : public CodeGenerator {
     return isa_features_;
   }
 
-  void Initialize() OVERRIDE {
-    block_labels_ = CommonInitializeLabels<vixl::Label>();
+  vixl::Label* CommonInitializeLabels() {
+    LOG(FATAL) << "We should never call this method, the initialization is done "
+                  "directly in `Initialize()`.";
+    UNREACHABLE();
   }
 
-  void AddJumpTable(JumpTableARM64* jump_table) {
-    jump_tables_.push_back(jump_table);
+  void Initialize() OVERRIDE {
+    block_labels_.resize(GetGraph()->GetBlocks().size());
+  }
+
+  void AddJumpTable(std::unique_ptr<JumpTableARM64>&& jump_table) {
+    jump_tables_.emplace_back(std::move(jump_table));
   }
 
   void Finalize(CodeAllocator* allocator) OVERRIDE;
@@ -616,9 +623,10 @@ class CodeGeneratorARM64 : public CodeGenerator {
   void EmitJumpTables();
 
   // Labels for each block that will be compiled.
-  vixl::Label* block_labels_;  // Indexed by block id.
+  // We use a deque so that the `vixl::Label` objects do not move in memory.
+  ArenaDeque<vixl::Label> block_labels_;  // Indexed by block id.
   vixl::Label frame_entry_label_;
-  ArenaVector<JumpTableARM64*> jump_tables_;
+  ArenaVector<std::unique_ptr<JumpTableARM64>> jump_tables_;
 
   LocationsBuilderARM64 location_builder_;
   InstructionCodeGeneratorARM64 instruction_visitor_;
