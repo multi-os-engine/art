@@ -178,7 +178,7 @@ class OatFileAssistant {
   std::unique_ptr<OatFile> GetBestOatFile();
 
   // Open and returns an image space associated with the oat file.
-  gc::space::ImageSpace* OpenImageSpace(const OatFile* oat_file);
+  static gc::space::ImageSpace* OpenImageSpace(const OatFile* oat_file);
 
   // Loads the dex files in the given oat file for the given dex location.
   // The oat file should be up to date for the given dex location.
@@ -230,9 +230,6 @@ class OatFileAssistant {
   bool OatFileIsOutOfDate();
   bool OatFileNeedsRelocation();
   bool OatFileIsUpToDate();
-
-  // Return image file name. Does not cache since it relies on the oat file.
-  std::string ArtFileName(const OatFile* oat_file) const;
 
   // These methods return the status for a given opened oat file with respect
   // to the dex location.
