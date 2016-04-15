@@ -378,13 +378,13 @@ static jint GetDexOptNeeded(JNIEnv* env,
   // TODO: Verify the dex location is well formed, and throw an IOException if
   // not?
 
-  OatFileAssistant oat_file_assistant(filename, target_instruction_set, profile_changed, false);
+  OatFileAssistant oat_file_assistant(filename, target_instruction_set, false);
 
   // Always treat elements of the bootclasspath as up-to-date.
   if (oat_file_assistant.IsInBootClassPath()) {
     return OatFileAssistant::kNoDexOptNeeded;
   }
-  return oat_file_assistant.GetDexOptNeeded(filter);
+  return oat_file_assistant.GetDexOptNeeded(filter, profile_changed);
 }
 
 static jint DexFile_getDexOptNeeded(JNIEnv* env,
