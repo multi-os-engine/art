@@ -198,10 +198,6 @@ class OatFileAssistantTest : public CommonRuntimeTest {
     args.push_back("--dex-file=" + dex_location);
     args.push_back("--oat-file=" + relocated_odex_location);
     args.push_back("--compiler-filter=" + CompilerFilter::NameOfFilter(filter));
-
-    // We need to use the quick compiler to generate non-PIC code, because
-    // the optimizing compiler always generates PIC.
-    args.push_back("--compiler-backend=Quick");
     args.push_back("--include-patch-information");
 
     std::string error_msg;
