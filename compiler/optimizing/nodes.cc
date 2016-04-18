@@ -618,7 +618,21 @@ void HLoopInformation::Populate() {
     }
   }
 
-  if (is_irreducible_loop || graph->IsCompilingOsr()) {
+  if (!is_irreducible_loop && graph->IsCompilingOsr()) {
+    // If compiling in OSR mode, we need to mark loops from the compiled method as irreducible.
+    if (suspend_check_ == nullptr) {
+      // Just building the graph in OSR mode, this loop is not inlined. We never build an
+      // inner graph in OSR mode as we can do OSR transition only from the outer method.
+      is_irreducible_loop = true;
+    } else {
+      // Look at the suspend check's environment to determine if the loop was inlined.
+      DCHECK(suspend_check_->HasEnvironment());
+      if (!suspend_check_->GetEnvironment()->IsFromInlinedInvoke()) {
+        is_irreducible_loop = true;
+      }
+    }
+  }
+  if (is_irreducible_loop) {
     irreducible_ = true;
     graph->SetHasIrreducibleLoops(true);
   }
