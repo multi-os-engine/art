@@ -20,15 +20,18 @@
 #include "jit/profiling_info.h"
 #include "oat_quick_method_header.h"
 #include "scoped_thread_state_change.h"
+#include "ScopedUtfChars.h"
 #include "stack_map.h"
 
 namespace art {
 
 class OsrVisitor : public StackVisitor {
  public:
-  explicit OsrVisitor(Thread* thread)
+  explicit OsrVisitor(Thread* thread, const char* method_name)
       SHARED_REQUIRES(Locks::mutator_lock_)
       : StackVisitor(thread, nullptr, StackVisitor::StackWalkKind::kIncludeInlinedFrames),
+        method_name_(method_name),
+        has_osr_method_(false),
         in_osr_method_(false),
         in_interpreter_(false) {}
 
@@ -36,15 +39,10 @@ class OsrVisitor : public StackVisitor {
     ArtMethod* m = GetMethod();
     std::string m_name(m->GetName());
 
-    if ((m_name.compare("$noinline$returnInt") == 0) ||
-        (m_name.compare("$noinline$returnFloat") == 0) ||
-        (m_name.compare("$noinline$returnDouble") == 0) ||
-        (m_name.compare("$noinline$returnLong") == 0) ||
-        (m_name.compare("$noinline$deopt") == 0) ||
-        (m_name.compare("$noinline$inlineCache") == 0) ||
-        (m_name.compare("$noinline$stackOverflow") == 0)) {
+    if (m_name.compare(method_name_) == 0) {
       const OatQuickMethodHeader* header =
           Runtime::Current()->GetJit()->GetCodeCache()->LookupOsrMethodHeader(m);
+      has_osr_method_ = (header != nullptr);
       if (header != nullptr && header == GetCurrentOatQuickMethodHeader()) {
         in_osr_method_ = true;
       } else if (IsCurrentFrameInInterpreter()) {
@@ -55,29 +53,55 @@ class OsrVisitor : public StackVisitor {
     return true;
   }
 
+  const char* const method_name_;
+  bool has_osr_method_;
   bool in_osr_method_;
   bool in_interpreter_;
 };
 
-extern "C" JNIEXPORT jboolean JNICALL Java_Main_ensureInOsrCode(JNIEnv*, jclass) {
+extern "C" JNIEXPORT jboolean JNICALL Java_Main_hasOsrCode(JNIEnv* env,
+                                                           jclass,
+                                                           jstring method_name) {
   jit::Jit* jit = Runtime::Current()->GetJit();
   if (jit == nullptr) {
     // Just return true for non-jit configurations to stop the infinite loop.
     return JNI_TRUE;
   }
+  ScopedUtfChars chars(env, method_name);
+  CHECK(chars.c_str() != nullptr);
   ScopedObjectAccess soa(Thread::Current());
-  OsrVisitor visitor(soa.Self());
+  OsrVisitor visitor(soa.Self(), chars.c_str());
+  visitor.WalkStack();
+  return visitor.has_osr_method_;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_Main_isInOsrCode(JNIEnv* env,
+                                                            jclass,
+                                                            jstring method_name) {
+  jit::Jit* jit = Runtime::Current()->GetJit();
+  if (jit == nullptr) {
+    // Just return true for non-jit configurations to stop the infinite loop.
+    return JNI_TRUE;
+  }
+  ScopedUtfChars chars(env, method_name);
+  CHECK(chars.c_str() != nullptr);
+  ScopedObjectAccess soa(Thread::Current());
+  OsrVisitor visitor(soa.Self(), chars.c_str());
   visitor.WalkStack();
   return visitor.in_osr_method_;
 }
 
-extern "C" JNIEXPORT jboolean JNICALL Java_Main_ensureInInterpreter(JNIEnv*, jclass) {
+extern "C" JNIEXPORT jboolean JNICALL Java_Main_isInInterpreter(JNIEnv* env,
+                                                                jclass,
+                                                                jstring method_name) {
   if (!Runtime::Current()->UseJit()) {
     // The return value is irrelevant if we're not using JIT.
     return false;
   }
+  ScopedUtfChars chars(env, method_name);
+  CHECK(chars.c_str() != nullptr);
   ScopedObjectAccess soa(Thread::Current());
-  OsrVisitor visitor(soa.Self());
+  OsrVisitor visitor(soa.Self(), chars.c_str());
   visitor.WalkStack();
   return visitor.in_interpreter_;
 }
