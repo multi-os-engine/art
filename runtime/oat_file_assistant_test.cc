@@ -1343,7 +1343,7 @@ TEST_F(OatFileAssistantNoDex2OatTest, LoadMultiDexOdexNoOat) {
   EXPECT_EQ(2u, dex_files.size());
 }
 
-TEST(OatFileAssistantUtilsTest, DexFilenameToOdexFilename) {
+TEST(OatFileAssistantUtilsTest, DexLocationToOdexFilename) {
   std::string error_msg;
   std::string odex_file;
 
