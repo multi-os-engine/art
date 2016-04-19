@@ -3336,6 +3336,8 @@ static DeoptimizationRequest::Kind GetRequiredDeoptimizationKind(Thread* self,
 
 // Installs a breakpoint at the specified location. Also indicates through the deoptimization
 // request if we need to deoptimize.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-larger-than="
 void Dbg::WatchLocation(const JDWP::JdwpLocation* location, DeoptimizationRequest* req) {
   Thread* const self = Thread::Current();
   ArtMethod* m = FromMethodId(location->method_id);
@@ -3368,6 +3370,7 @@ void Dbg::WatchLocation(const JDWP::JdwpLocation* location, DeoptimizationReques
                << gBreakpoints[gBreakpoints.size() - 1];
   }
 }
+#pragma GCC diagnostic pop
 
 // Uninstalls a breakpoint at the specified location. Also indicates through the deoptimization
 // request if we need to undeoptimize.

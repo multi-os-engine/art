@@ -39,7 +39,7 @@ class MemStats;
 template <typename T>
 class ArenaAllocatorAdapter;
 
-static constexpr bool kArenaAllocatorCountAllocations = false;
+static constexpr bool kArenaAllocatorCountAllocations = true;
 
 // Type of allocation for memory tuning.
 enum ArenaAllocKind {

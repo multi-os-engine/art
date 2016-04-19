@@ -349,6 +349,8 @@ static bool IsLargeMethod(const DexFile::CodeItem* const code_item) {
   return registers_size * insns_size > 4*1024*1024;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-larger-than="
 MethodVerifier::FailureData MethodVerifier::VerifyMethod(Thread* self,
                                                          uint32_t method_idx,
                                                          const DexFile* dex_file,
@@ -443,6 +445,7 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethod(Thread* self,
   result.types = verifier.encountered_failure_types_;
   return result;
 }
+#pragma GCC diagnostic pop
 
 MethodVerifier* MethodVerifier::VerifyMethodAndDump(Thread* self,
                                                     VariableIndentationOutputStream* vios,
@@ -539,6 +542,8 @@ MethodVerifier::~MethodVerifier() {
   STLDeleteElements(&failure_messages_);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-larger-than="
 void MethodVerifier::FindLocksAtDexPc(ArtMethod* m, uint32_t dex_pc,
                                       std::vector<uint32_t>* monitor_enter_dex_pcs) {
   StackHandleScope<2> hs(Thread::Current());
@@ -562,6 +567,7 @@ void MethodVerifier::FindLocksAtDexPc(ArtMethod* m, uint32_t dex_pc,
   verifier.monitor_enter_dex_pcs_ = monitor_enter_dex_pcs;
   verifier.FindLocksAtDexPc();
 }
+#pragma GCC diagnostic pop
 
 static bool HasMonitorEnterInstructions(const DexFile::CodeItem* const code_item) {
   const Instruction* inst = Instruction::At(code_item->insns_);
@@ -595,6 +601,8 @@ void MethodVerifier::FindLocksAtDexPc() {
   Verify();
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-larger-than="
 ArtField* MethodVerifier::FindAccessedFieldAtDexPc(ArtMethod* m, uint32_t dex_pc) {
   StackHandleScope<2> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(m->GetDexCache()));
@@ -615,6 +623,7 @@ ArtField* MethodVerifier::FindAccessedFieldAtDexPc(ArtMethod* m, uint32_t dex_pc
                           true  /* allow_thread_suspension */);
   return verifier.FindAccessedFieldAtDexPc(dex_pc);
 }
+#pragma GCC diagnostic pop
 
 ArtField* MethodVerifier::FindAccessedFieldAtDexPc(uint32_t dex_pc) {
   CHECK(code_item_ != nullptr);  // This only makes sense for methods with code.
@@ -635,6 +644,8 @@ ArtField* MethodVerifier::FindAccessedFieldAtDexPc(uint32_t dex_pc) {
   return GetQuickFieldAccess(inst, register_line);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-larger-than="
 ArtMethod* MethodVerifier::FindInvokedMethodAtDexPc(ArtMethod* m, uint32_t dex_pc) {
   StackHandleScope<2> hs(Thread::Current());
   Handle<mirror::DexCache> dex_cache(hs.NewHandle(m->GetDexCache()));
@@ -655,6 +666,7 @@ ArtMethod* MethodVerifier::FindInvokedMethodAtDexPc(ArtMethod* m, uint32_t dex_p
                           true  /* allow_thread_suspension */);
   return verifier.FindInvokedMethodAtDexPc(dex_pc);
 }
+#pragma GCC diagnostic pop
 
 ArtMethod* MethodVerifier::FindInvokedMethodAtDexPc(uint32_t dex_pc) {
   CHECK(code_item_ != nullptr);  // This only makes sense for methods with code.

@@ -6256,6 +6256,8 @@ static void FillImtFromSuperClass(Handle<mirror::Class> klass,
 }
 
 // TODO This method needs to be split up into several smaller methods.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-larger-than="
 bool ClassLinker::LinkInterfaceMethods(
     Thread* self,
     Handle<mirror::Class> klass,
@@ -6797,6 +6799,7 @@ bool ClassLinker::LinkInterfaceMethods(
   }
   return true;
 }
+#pragma GCC diagnostic pop
 
 bool ClassLinker::LinkInstanceFields(Thread* self, Handle<mirror::Class> klass) {
   CHECK(klass.Get() != nullptr);
