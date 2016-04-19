@@ -33,6 +33,15 @@
    .registers 10
    const/16 v0, 42
 
+   if-eqz p0, :branch_true
+
+   sub-int v0, p3, v0
+   goto :branch_merge
+
+   :branch_true
+   sub-int v0, v0, p3
+
+   :branch_merge
    if-eqz p0, :header
 
    :pre_entry
