@@ -44,13 +44,13 @@ void MonitorPool::AllocateChunk() {
       capacity_ = kInitialChunkStorage;
       uintptr_t* new_backing = new uintptr_t[capacity_]();
       DCHECK(monitor_chunks_.LoadRelaxed() == nullptr);
-      monitor_chunks_.StoreRelaxed(new_backing);
+      monitor_chunks_.StoreRelease(new_backing);
     } else {
       size_t new_capacity = 2 * capacity_;
       uintptr_t* new_backing = new uintptr_t[new_capacity]();
       uintptr_t* old_backing = monitor_chunks_.LoadRelaxed();
       memcpy(new_backing, old_backing, sizeof(uintptr_t) * capacity_);
-      monitor_chunks_.StoreRelaxed(new_backing);
+      monitor_chunks_.StoreRelease(new_backing);
       capacity_ = new_capacity;
       old_chunk_arrays_.push_back(std::unique_ptr<uintptr_t[]>(old_backing));
       VLOG(monitor) << "Resizing to capacity " << capacity_;
