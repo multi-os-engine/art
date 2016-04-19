@@ -1212,7 +1212,7 @@ TEST_F(OatFileAssistantTest, RuntimeCompilerFilterOptionUsed) {
       oat_file_assistant.MakeUpToDate(false, &error_msg));
 }
 
-TEST(OatFileAssistantUtilsTest, DexFilenameToOdexFilename) {
+TEST(OatFileAssistantUtilsTest, DexLocationToOdexFilename) {
   std::string error_msg;
   std::string odex_file;
 
