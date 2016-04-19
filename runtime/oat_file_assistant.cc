@@ -538,7 +538,8 @@ bool OatFileAssistant::DexLocationToOatFilename(const std::string& location,
   bool have_android_data;
   bool dalvik_cache_exists;
   bool is_global_cache;
-  GetDalvikCache("", false, &dalvik_cache_dir, &have_android_data, &dalvik_cache_exists, &is_global_cache);
+  GetDalvikCache("", false, &dalvik_cache_dir, &have_android_data,
+      &dalvik_cache_exists, &is_global_cache);
 
   // TODO: The oat file assistant should be the definitive place for
   // determining the oat file name from the dex location, not
