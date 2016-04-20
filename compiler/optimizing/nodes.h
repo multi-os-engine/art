@@ -6446,6 +6446,7 @@ class HReversePostOrderIterator : public ValueObject {
 
   bool Done() const { return index_ == graph_.GetReversePostOrder().size(); }
   HBasicBlock* Current() const { return graph_.GetReversePostOrder()[index_]; }
+  size_t CurrentIndex() const { return index_; }
   void Advance() { ++index_; }
 
  private:
