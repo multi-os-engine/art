@@ -23,6 +23,7 @@
 #include <sys/prctl.h>
 #endif
 
+#include <nativeloader/native_loader.h>
 #include <signal.h>
 #include <sys/syscall.h>
 #include "base/memory_tool.h"
@@ -550,6 +551,10 @@ bool Runtime::Start() {
     CHECK_EQ(prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY), 0);
   }
 #endif
+
+  // Initialize native loader. This step makes sure we have
+  // everything set up before we start using JNI.
+  android::InitializeNativeLoader();
 
   // Restore main thread state to kNative as expected by native code.
   Thread* self = Thread::Current();
