@@ -47,6 +47,7 @@ using helpers::SRegisterFrom;
 using helpers::WRegisterFrom;
 using helpers::XRegisterFrom;
 using helpers::InputRegisterAt;
+using helpers::OutputRegister;
 
 namespace {
 
@@ -1173,30 +1174,97 @@ void IntrinsicCodeGeneratorARM64::VisitStringCharAt(HInvoke* invoke) {
 
 void IntrinsicLocationsBuilderARM64::VisitStringCompareTo(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
-                                                            LocationSummary::kCall,
+                                                            LocationSummary::kCallOnSlowPath,
                                                             kIntrinsified);
-  InvokeRuntimeCallingConvention calling_convention;
-  locations->SetInAt(0, LocationFrom(calling_convention.GetRegisterAt(0)));
-  locations->SetInAt(1, LocationFrom(calling_convention.GetRegisterAt(1)));
-  locations->SetOut(calling_convention.GetReturnLocation(Primitive::kPrimInt));
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringCompareTo(HInvoke* invoke) {
   vixl::MacroAssembler* masm = GetVIXLAssembler();
   LocationSummary* locations = invoke->GetLocations();
 
+  Register str = XRegisterFrom(locations->InAt(0));
+  Register arg = XRegisterFrom(locations->InAt(1));
+  Register out = OutputRegister(invoke);
+
+  Register temp0 = WRegisterFrom(locations->GetTemp(0));
+  Register temp1 = WRegisterFrom(locations->GetTemp(1));
+  Register temp2 = WRegisterFrom(locations->GetTemp(2));
+
+  vixl::Label loop;
+  vixl::Label find_char_diff;
+  vixl::Label return_zero;
+  vixl::Label end;
+
+  // Get offsets of count and value fields within a string object.
+  const int32_t count_offset = mirror::String::CountOffset().Int32Value();
+  const int32_t value_offset = mirror::String::ValueOffset().Int32Value();
+
   // Note that the null check must have been done earlier.
   DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
 
-  Register argument = WRegisterFrom(locations->InAt(1));
-  __ Cmp(argument, 0);
+  // Take slow path and throw if input is null.
   SlowPathCodeARM64* slow_path = new (GetAllocator()) IntrinsicSlowPathARM64(invoke);
   codegen_->AddSlowPath(slow_path);
-  __ B(eq, slow_path->GetEntryLabel());
+  __ Cbz(arg, slow_path->GetEntryLabel());
 
-  __ Ldr(
-      lr, MemOperand(tr, QUICK_ENTRYPOINT_OFFSET(kArm64WordSize, pStringCompareTo).Int32Value()));
-  __ Blr(lr);
+  // Reference equality check, return 0 if same reference.
+  __ Cmp(str, arg);
+  __ B(&return_zero, eq);
+  // Load lengths of this and argument strings.
+  __ Ldr(temp0, MemOperand(str.X(), count_offset));
+  __ Ldr(temp1, MemOperand(arg.X(), count_offset));
+  // Return zero if both strings are empty.
+  __ Orr(temp2, temp0, temp1);
+  __ Cbz(temp2, &return_zero);
+  // temp2 = min(len(str), len(arg)).
+  __ Csel(temp2, temp1, temp0, ge);
+  // Shortest string is empty?
+  __ Cbz(temp2, &end);
+  // out = length diff.
+  __ Subs(out, temp0, temp1);
+
+  // Store offset of string value in preparation for comparison loop.
+  __ Mov(temp1, value_offset);
+
+  UseScratchRegisterScope scratch_scope(masm);
+  Register temp4 = scratch_scope.AcquireX();
+
+  const size_t char_size = Primitive::ComponentSize(Primitive::kPrimChar);
+  DCHECK_EQ(char_size, 2u);
+
+  temp0 = temp0.X();
+
+  __ Bind(&loop);
+  __ Ldr(temp4, MemOperand(str.X(), temp1));
+  __ Ldr(temp0, MemOperand(arg.X(), temp1));
+  __ Cmp(temp4, temp0);
+  __ B(ne, &find_char_diff);
+  __ Add(temp1, temp1, char_size * 4);
+  __ Subs(temp2, temp2, 4);
+  __ B(gt, &loop);
+  __ B(&end);
+
+  __ Bind(&find_char_diff);
+  __ Ldrh(temp4, MemOperand(str.X(), temp1));
+  __ Ldrh(temp0, MemOperand(arg.X(), temp1));
+  __ Subs(temp4, temp4, temp0);
+  __ Csel(out, temp4, out, ne);
+  __ B(ne, &end);
+  __ Add(temp1, temp1, char_size);
+  __ Subs(temp2, temp2, 1);
+  __ B(gt, &find_char_diff);
+
+  __ Bind(&return_zero);
+  __ Mov(out, 0);
+
+  __ Bind(&end);
+
   __ Bind(slow_path->GetExitLabel());
 }
 

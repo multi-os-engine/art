@@ -134,7 +134,7 @@ void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
 
   // Intrinsics
   qpoints->pIndexOf = art_quick_indexof;
-  qpoints->pStringCompareTo = art_quick_string_compareto;
+  qpoints->pStringCompareTo = nullptr;
   qpoints->pMemcpy = memcpy;
 
   // Invocation
