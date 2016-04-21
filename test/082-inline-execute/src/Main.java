@@ -808,6 +808,12 @@ public class Main {
     Assert.assertEquals(Math.round(-2.9d), -3l);
     Assert.assertEquals(Math.round(-3.0d), -3l);
     Assert.assertEquals(Math.round(0.49999999999999994d), 0l);
+    Assert.assertEquals(Math.round(4503599627370495.0d), 4503599627370495l);  // 2^52 - 1
+    Assert.assertEquals(Math.round(4503599627370495.5d), 4503599627370496l);  // 2^52 - 0.5
+    Assert.assertEquals(Math.round(4503599627370496.0d), 4503599627370496l);  // 2^52
+    Assert.assertEquals(Math.round(-4503599627370495.0d), -4503599627370495l);  // -(2^52 - 1)
+    Assert.assertEquals(Math.round(-4503599627370495.5d), -4503599627370495l);  // -(2^52 - 0.5)
+    Assert.assertEquals(Math.round(-4503599627370496.0d), -4503599627370496l);  // -2^52
     Assert.assertEquals(Math.round(9007199254740991.0d), 9007199254740991l);  // 2^53 - 1
     Assert.assertEquals(Math.round(-9007199254740991.0d), -9007199254740991l);  // -(2^53 - 1)
     Assert.assertEquals(Math.round(Double.NaN), (long)+0.0d);
@@ -1153,6 +1159,12 @@ public class Main {
     Assert.assertEquals(StrictMath.round(-2.9d), -3l);
     Assert.assertEquals(StrictMath.round(-3.0d), -3l);
     Assert.assertEquals(StrictMath.round(0.49999999999999994d), 0l);
+    Assert.assertEquals(StrictMath.round(4503599627370495.0d), 4503599627370495l);  // 2^52 - 1
+    Assert.assertEquals(StrictMath.round(4503599627370495.5d), 4503599627370496l);  // 2^52 - 0.5
+    Assert.assertEquals(StrictMath.round(4503599627370496.0d), 4503599627370496l);  // 2^52
+    Assert.assertEquals(StrictMath.round(-4503599627370495.0d), -4503599627370495l);  // -(2^52 - 1)
+    Assert.assertEquals(StrictMath.round(-4503599627370495.5d), -4503599627370495l);  // -(2^52 - 0.5)
+    Assert.assertEquals(StrictMath.round(-4503599627370496.0d), -4503599627370496l);  // -2^52
     Assert.assertEquals(StrictMath.round(9007199254740991.0d), 9007199254740991l);  // 2^53 - 1
     Assert.assertEquals(StrictMath.round(-9007199254740991.0d), -9007199254740991l);  // -(2^53 - 1)
     Assert.assertEquals(StrictMath.round(Double.NaN), (long)+0.0d);
