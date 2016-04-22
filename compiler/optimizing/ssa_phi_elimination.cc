@@ -205,12 +205,14 @@ void SsaRedundantPhiElimination::Run() {
       continue;
     }
 
-    if (irreducible_loop_phi_in_cycle && !candidate->IsConstant()) {
+    if (irreducible_loop_phi_in_cycle && !(candidate->IsConstant() && is_first_run_)) {
       // For irreducible loops, we need to keep the phis to satisfy our linear scan
       // algorithm.
       // There is one exception for constants, as the type propagation requires redundant
       // cyclic phis of a constant to be removed. This is ok for the linear scan as it
       // has to deal with constants anyway, and they can trivially be rematerialized.
+      // Note that we only do this exception the first time this pass is run, as the second
+      // time optimizations may have run that could make this exception invalid.
       continue;
     }
 

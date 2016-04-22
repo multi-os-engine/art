@@ -495,7 +495,7 @@ GraphAnalysisResult SsaBuilder::BuildSsa() {
   // otherwise we could get rid of phi equivalents, whose presence is a requirement
   // for the type propagation phase. Note that this is to satisfy statement (a)
   // of the SsaBuilder (see ssa_builder.h).
-  SsaRedundantPhiElimination(graph_).Run();
+  SsaRedundantPhiElimination(graph_, /* is_first_run */ true).Run();
 
   // 3) Fix the type for null constants which are part of an equality comparison.
   // We need to do this after redundant phi elimination, to ensure the only cases
