@@ -1248,21 +1248,26 @@ class BCEVisitor : public HGraphVisitor {
           candidates.push_back(other_bounds_check);
         }
       }
-      // Perform dominator-based deoptimization if it seems profitable. Note that we reject cases
-      // where the distance min_c:max_c range gets close to the maximum possible array length,
-      // since those cases are likely to always deopt (such situations do not necessarily go
-      // OOB, though, since the programmer could rely on wrap-around from max to min).
-      size_t threshold = kThresholdForAddingDeoptimize + (base == nullptr ? 0 : 1);  // extra test?
-      uint32_t distance = static_cast<uint32_t>(max_c) - static_cast<uint32_t>(min_c);
-      if (candidates.size() >= threshold &&
-          (base != nullptr || min_c >= 0) &&  // reject certain OOB
-           distance <= kMaxLengthForAddingDeoptimize) {  // reject likely/certain deopt
-        AddCompareWithDeoptimization(block, array_length, base, min_c, max_c);
-        for (HInstruction* other_bounds_check : candidates) {
-          // Only replace if still in the graph. This avoids visiting the same
-          // bounds check twice if it occurred multiple times in the use list.
-          if (other_bounds_check->IsInBlock()) {
-            ReplaceInstruction(other_bounds_check, other_bounds_check->InputAt(0));
+
+      // We should never deoptimize from an osr method, otherwise we might wrongly optimize
+      // code dominated by the deoptimization.
+      if (!GetGraph()->IsCompilingOsr()) {
+        // Perform dominator-based deoptimization if it seems profitable. Note that we reject cases
+        // where the distance min_c:max_c range gets close to the maximum possible array length,
+        // since those cases are likely to always deopt (such situations do not necessarily go
+        // OOB, though, since the programmer could rely on wrap-around from max to min).
+        size_t threshold = kThresholdForAddingDeoptimize + (base == nullptr ? 0 : 1);  // extra test?
+        uint32_t distance = static_cast<uint32_t>(max_c) - static_cast<uint32_t>(min_c);
+        if (candidates.size() >= threshold &&
+            (base != nullptr || min_c >= 0) &&  // reject certain OOB
+             distance <= kMaxLengthForAddingDeoptimize) {  // reject likely/certain deopt
+          AddCompareWithDeoptimization(block, array_length, base, min_c, max_c);
+          for (HInstruction* other_bounds_check : candidates) {
+            // Only replace if still in the graph. This avoids visiting the same
+            // bounds check twice if it occurred multiple times in the use list.
+            if (other_bounds_check->IsInBlock()) {
+              ReplaceInstruction(other_bounds_check, other_bounds_check->InputAt(0));
+            }
           }
         }
       }
@@ -1356,6 +1361,11 @@ class BCEVisitor : public HGraphVisitor {
       // The loop preheader of an irreducible loop does not dominate all the blocks in
       // the loop. We would need to find the common dominator of all blocks in the loop.
       if (loop->IsIrreducible()) {
+        return false;
+      }
+      // We should never deoptimize from an osr method, otherwise we might wrongly optimize
+      // code dominated by the deoptimization.
+      if (GetGraph()->IsCompilingOsr()) {
         return false;
       }
       // A try boundary preheader is hard to handle.
