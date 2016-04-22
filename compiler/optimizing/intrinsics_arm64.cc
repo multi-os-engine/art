@@ -1745,6 +1745,7 @@ void IntrinsicLocationsBuilderARM64::VisitStringGetCharsNoCheck(HInvoke* invoke)
 
   locations->AddTemp(Location::RequiresRegister());
   locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
 }
 
 void IntrinsicCodeGeneratorARM64::VisitStringGetCharsNoCheck(HInvoke* invoke) {
@@ -1770,29 +1771,43 @@ void IntrinsicCodeGeneratorARM64::VisitStringGetCharsNoCheck(HInvoke* invoke) {
   Register dstBegin = XRegisterFrom(locations->InAt(4));
 
   Register src_ptr = XRegisterFrom(locations->GetTemp(0));
-  Register src_ptr_end = XRegisterFrom(locations->GetTemp(1));
+  Register num_chr = XRegisterFrom(locations->GetTemp(1));
+  Register tmp1 = XRegisterFrom(locations->GetTemp(2));
 
   UseScratchRegisterScope temps(masm);
   Register dst_ptr = temps.AcquireX();
-  Register tmp = temps.AcquireW();
+  Register tmp2 = temps.AcquireX();
 
-  // src range to copy.
+  // src address to copy from.
   __ Add(src_ptr, srcObj, Operand(value_offset));
-  __ Add(src_ptr_end, src_ptr, Operand(srcEnd, LSL, 1));
   __ Add(src_ptr, src_ptr, Operand(srcBegin, LSL, 1));
 
-  // dst to be copied.
+  // dst address start to copy to.
   __ Add(dst_ptr, dstObj, Operand(data_offset));
   __ Add(dst_ptr, dst_ptr, Operand(dstBegin, LSL, 1));
 
+  __ Sub(num_chr, srcEnd, srcBegin);
+
   // Do the copy.
-  vixl::Label loop, done;
+  vixl::Label loop;
+  vixl::Label done;
+  vixl::Label remainder;
+
   __ Bind(&loop);
-  __ Cmp(src_ptr, src_ptr_end);
-  __ B(&done, eq);
-  __ Ldrh(tmp, MemOperand(src_ptr, char_size, vixl::PostIndex));
-  __ Strh(tmp, MemOperand(dst_ptr, char_size, vixl::PostIndex));
+  __ Cmp(num_chr, 8);
+  __ B(lt, &remainder);
+  __ Ldp(tmp1, tmp2, MemOperand(src_ptr, char_size * 8, vixl::PostIndex));
+  __ Subs(num_chr, num_chr, 8);
+  __ Stp(tmp1, tmp2, MemOperand(dst_ptr, char_size * 8, vixl::PostIndex));
+  __ B(eq, &done);
   __ B(&loop);
+
+  __ Bind(&remainder);
+  __ Ldrh(tmp1, MemOperand(src_ptr, char_size, vixl::PostIndex));
+  __ Subs(num_chr, num_chr, 1);
+  __ Strh(tmp1, MemOperand(dst_ptr, char_size, vixl::PostIndex));
+  __ B(gt, &remainder);
+
   __ Bind(&done);
 }
 
