@@ -2432,13 +2432,120 @@ void IntrinsicCodeGeneratorMIPS::VisitLongLowestOneBit(HInvoke* invoke) {
   GenLowestOneBit(invoke->GetLocations(), Primitive::kPrimLong, IsR6(), GetAssembler());
 }
 
+// int java.lang.Math.round(float)
+void IntrinsicLocationsBuilderMIPS::VisitMathRoundFloat(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  locations->SetInAt(0, Location::RequiresFpuRegister());
+  locations->AddTemp(Location::RequiresFpuRegister());
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitMathRoundFloat(HInvoke* invoke) {
+  LocationSummary* locations = invoke->GetLocations();
+  MipsAssembler* assembler = GetAssembler();
+  FRegister in = locations->InAt(0).AsFpuRegister<FRegister>();
+  FRegister half = locations->GetTemp(0).AsFpuRegister<FRegister>();
+  Register out = locations->Out().AsRegister<Register>();
+
+  MipsLabel done;
+
+  // if (in.isNaN) {
+  //   return 0;
+  // }
+  //
+  // if (in <= (float)Integer.MIN_VALUE) {
+  //   /*
+  //    * Needed for MIPS32 because values <= Integer.MIN_VALUE
+  //    * get output as Integer.MAX_VALUE by "floor.w.s" & Java requires Integer.MIN_VALUE.
+  //    */
+  //   return Integer.MIN_VALUE;
+  // }
+  //
+  // out = floor(in);
+  // TMP = (((in - out) >= 0.5f) && (out != java.lang.Integer.MAX_VALUE)) ? 1 : 0;
+  // return out += TMP;
+  //
+  // Note: Except for the two exception cases (in.isNaN &
+  // in <= (float)Integer.MIN_VALUE), branching is avoided
+  // to keep from breaking the pipeline.
+
+  // Test for NaN.
+  if (IsR6()) {
+    __ CmpUnS(FTMP, in, in);
+  } else {
+    __ CunS(in, in);
+  }
+
+  // Return zero for NaN.
+  __ Move(out, ZERO);
+  if (IsR6()) {
+    __ Bc1nez(FTMP, &done);
+  } else {
+    __ Bc1t(&done);
+  }
+
+  // Is in <= (float)Integer.MIN_VALUE?
+  __ LoadConst32(out, bit_cast<int32_t, float>(std::numeric_limits<int32_t>::min()));
+  __ Mtc1(out, FTMP);
+  if (IsR6()) {
+    __ CmpLeS(FTMP, in, FTMP);
+  } else {
+    __ ColeS(in, FTMP);
+  }
+
+  // If so, return Integer.MIN_VALUE.
+  __ LoadConst32(out, std::numeric_limits<int32_t>::min());
+  if (IsR6()) {
+    __ Bc1nez(FTMP, &done);
+  } else {
+    __ Bc1t(&done);
+  }
+
+  // out = floor(in);
+  __ FloorWS(FTMP, in);
+  __ Mfc1(out, FTMP);
+
+  // TMP = (((in - out) >= 0.5f) && (out != java.lang.Integer.MAX_VALUE)) ? 1 : 0;
+  // To start TMP = (0.5f <= (in - out)) ? 1 : 0;
+  __ Cvtsw(FTMP, FTMP);  // Convert output of floor.w.s back to "float".
+  __ LoadConst32(AT, bit_cast<int32_t, float>(0.5f));
+  __ SubS(FTMP, in, FTMP);
+  __ Mtc1(AT, half);
+  if (IsR6()) {
+    __ CmpLeS(FTMP, half, FTMP);
+    __ Mfc1(AT, FTMP);
+  } else {
+    __ ColeS(half, FTMP);
+  }
+  __ LoadConst32(TMP, 1);
+  if (IsR6()) {
+    __ Selnez(TMP, TMP, AT);
+  } else {
+    __ Movf(TMP, ZERO);
+  }
+  // TMP = (out - java.lang.Integer.MAX_VALUE) ? TMP : 0;
+  __ LoadConst32(AT, std::numeric_limits<int32_t>::max());
+  __ Subu(AT, AT, out);
+  if (IsR6()) {
+    __ Selnez(TMP, TMP, AT);
+  } else {
+    __ Movz(TMP, ZERO, AT);
+  }
+
+  // Return out += TMP.
+  __ Addu(out, out, TMP);
+
+  __ Bind(&done);
+}
+
 // Unimplemented intrinsics.
 
 UNIMPLEMENTED_INTRINSIC(MIPS, MathCeil)
 UNIMPLEMENTED_INTRINSIC(MIPS, MathFloor)
 UNIMPLEMENTED_INTRINSIC(MIPS, MathRint)
 UNIMPLEMENTED_INTRINSIC(MIPS, MathRoundDouble)
-UNIMPLEMENTED_INTRINSIC(MIPS, MathRoundFloat)
 UNIMPLEMENTED_INTRINSIC(MIPS, UnsafeCASLong)
 
 UNIMPLEMENTED_INTRINSIC(MIPS, ReferenceGetReferent)
