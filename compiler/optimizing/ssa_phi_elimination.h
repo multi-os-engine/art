@@ -58,9 +58,10 @@ class SsaDeadPhiElimination : public HOptimization {
  */
 class SsaRedundantPhiElimination : public HOptimization {
  public:
-  explicit SsaRedundantPhiElimination(HGraph* graph)
+  explicit SsaRedundantPhiElimination(HGraph* graph, bool is_first_run)
       : HOptimization(graph, kSsaRedundantPhiEliminationPassName),
-        worklist_(graph->GetArena()->Adapter(kArenaAllocSsaPhiElimination)) {
+        worklist_(graph->GetArena()->Adapter(kArenaAllocSsaPhiElimination)),
+        is_first_run_(is_first_run) {
     worklist_.reserve(kDefaultWorklistSize);
   }
 
@@ -70,6 +71,7 @@ class SsaRedundantPhiElimination : public HOptimization {
 
  private:
   ArenaVector<HPhi*> worklist_;
+  const bool is_first_run_;
 
   static constexpr size_t kDefaultWorklistSize = 8;
 

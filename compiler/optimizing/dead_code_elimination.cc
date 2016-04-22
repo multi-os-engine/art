@@ -182,7 +182,7 @@ void HDeadCodeElimination::RemoveDeadInstructions() {
 
 void HDeadCodeElimination::Run() {
   RemoveDeadBlocks();
-  SsaRedundantPhiElimination(graph_).Run();
+  SsaRedundantPhiElimination(graph_, /* is_first_run */ false).Run();
   RemoveDeadInstructions();
 }
 
