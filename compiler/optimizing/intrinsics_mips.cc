@@ -2432,13 +2432,103 @@ void IntrinsicCodeGeneratorMIPS::VisitLongLowestOneBit(HInvoke* invoke) {
   GenLowestOneBit(invoke->GetLocations(), Primitive::kPrimLong, IsR6(), GetAssembler());
 }
 
+// int java.lang.Math.round(float)
+void IntrinsicLocationsBuilderMIPS::VisitMathRoundFloat(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                           LocationSummary::kNoCall,
+                                                           kIntrinsified);
+  locations->SetInAt(0, Location::RequiresFpuRegister());
+  locations->AddTemp(Location::RequiresFpuRegister());
+  locations->SetOut(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitMathRoundFloat(HInvoke* invoke) {
+  LocationSummary* locations = invoke->GetLocations();
+  MipsAssembler* assembler = GetAssembler();
+  FRegister in = locations->InAt(0).AsFpuRegister<FRegister>();
+  FRegister abs_in = locations->GetTemp(0).AsFpuRegister<FRegister>();
+  Register out = locations->Out().AsRegister<Register>();
+
+  MipsLabel done;
+  MipsLabel notNaNorPath;
+  MipsLabel add;
+
+  // Test for pathlogical case 0.49999997f or NaN
+  __ LoadConst32(out, 0x3EFFFFFF);
+  __ Mtc1(out, FTMP);
+  if (IsR6()) {
+    __ CmpUeqS(FTMP, FTMP, in);   // in.isNaN or "in" is the pathological case
+    __ Bc1eqz(FTMP, &notNaNorPath);
+  } else {
+    __ CueqS(FTMP, in);   // in.isNaN or "in" is the pathological case
+    __ Bc1f(&notNaNorPath);
+  }
+
+  __ Move(out, ZERO);   // Return zero for NaN or pathological case
+  __ B(&done);
+
+  __ Bind(&notNaNorPath);
+
+  // in <= (float)Integer.MIN_VALUE
+  __ LoadConst32(out, bit_cast<int32_t, float>(std::numeric_limits<int32_t>::min()));
+  __ Mtc1(out, FTMP);
+  if (IsR6()) {
+    __ CmpLeS(FTMP, in, FTMP);
+    __ Bc1eqz(FTMP, &add);
+  } else {
+    __ ColeS(in, FTMP);
+    __ Bc1f(&add);
+  }
+
+  // return Integer.MIN_VALUE
+  __ LoadConst32(out, std::numeric_limits<int32_t>::min());
+  __ B(&done);
+
+  __ Bind(&add);
+
+  // Note: The values in the ranges [8388608, 16777216), and
+  // [-8388608, -16777216), are also pathological.  The ranges are the
+  // largest magnitude numbers which can exactly represent an integer
+  // using IEEE single precision encoding; none of the integers in this
+  // range has any fractional part.  If we add 0.5 to any of the values
+  // in either of these ranges the result of the addition will be
+  // rounded up, to the next higher integer, because the significand of
+  // the sum will require 25 bits, and the total number of significand
+  // bits available (explicit & implicit) is only 24.  Any number with
+  // a magnitude greater than the numbers in these ranges, the bit for
+  // 0.5 will be in the 26th (or even lower valued) bit position so,
+  // for any number in these ranges, or of greater magnitude than the
+  // numbers in these ranges, we calculate the rounded value without
+  // first adding 0.5.
+  // return (abs(in) < 8388608) ? (int)floor(in + 0.5f) : (int)floor(in);
+  __ LoadConst32(out, bit_cast<int32_t, float>(8388608.0f));
+  __ Mtc1(out, FTMP);
+  __ AbsS(abs_in, in);
+  // addend = (in < 8388608.0f) ? 0.5f : 0.0f;
+  __ LoadConst32(out, bit_cast<int32_t, float>(0.5f));
+  if (IsR6()) {
+    __ CmpLtS(FTMP, abs_in, FTMP);
+    __ Mfc1(AT, FTMP);
+    __ And(out, out, AT);
+  } else {
+    __ ColtS(abs_in, FTMP);
+    __ Movf(out, ZERO);
+  }
+  __ Mtc1(out, FTMP);
+  __ AddS(FTMP, FTMP, in);
+
+  __ FloorWS(FTMP, FTMP);
+  __ Mfc1(out, FTMP);
+
+  __ Bind(&done);
+}
+
 // Unimplemented intrinsics.
 
 UNIMPLEMENTED_INTRINSIC(MIPS, MathCeil)
 UNIMPLEMENTED_INTRINSIC(MIPS, MathFloor)
 UNIMPLEMENTED_INTRINSIC(MIPS, MathRint)
 UNIMPLEMENTED_INTRINSIC(MIPS, MathRoundDouble)
-UNIMPLEMENTED_INTRINSIC(MIPS, MathRoundFloat)
 UNIMPLEMENTED_INTRINSIC(MIPS, UnsafeCASLong)
 
 UNIMPLEMENTED_INTRINSIC(MIPS, ReferenceGetReferent)
