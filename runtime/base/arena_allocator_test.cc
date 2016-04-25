@@ -41,6 +41,23 @@ TEST_F(ArenaAllocatorTest, Test) {
   EXPECT_EQ(2U, bv.GetStorageSize());
 }
 
+TEST_F(ArenaAllocatorTest, MakeDefined) {
+  // Regression test to make sure we mark the allocated area defined.
+  ArenaPool pool;
+  {
+    // Allocate a little array from an arena and release it.
+    ArenaAllocator arena(&pool);
+    uint32_t* x = arena.AllocArray<uint32_t>(10);
+    ASSERT_EQ(0u, x[9]);
+  }
+  {
+    // Reuse the previous arena and allocate more than previous allocation including red zone.
+    ArenaAllocator arena(&pool);
+    uint32_t* x = arena.AllocArray<uint32_t>(50);
+    ASSERT_EQ(0u, x[49]);
+  }
+}
+
 TEST_F(ArenaAllocatorTest, LargeAllocations) {
   {
     ArenaPool pool;

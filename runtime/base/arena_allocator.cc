@@ -335,6 +335,7 @@ void* ArenaAllocator::AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind) {
       uint8_t* noaccess_begin = arena_head_->next_->Begin() + bytes;
       MEMORY_TOOL_MAKE_NOACCESS(noaccess_begin, arena_head_->next_->End() - noaccess_begin);
     }
+    MEMORY_TOOL_MAKE_DEFINED(ret, bytes);
     return ret;
   }
   uint8_t* ret = ptr_;
