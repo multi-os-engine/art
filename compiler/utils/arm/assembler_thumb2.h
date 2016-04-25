@@ -538,6 +538,20 @@ class Thumb2Assembler FINAL : public ArmAssembler {
       return GetType() >= kLoadLiteralNarrow;
     }
 
+    // Returns whether the Fixup can expand from the original size.
+    bool CanExpand() const {
+      switch (GetOriginalSize()) {
+        case kBranch32Bit:
+        case kCbxz48Bit:
+        case kLiteralFar:
+        case kLiteralAddrFar:
+        case kLongOrFPLiteralFar:
+          return false;
+        default:
+          return true;
+      }
+    }
+
     Size GetOriginalSize() const {
       return original_size_;
     }
@@ -560,6 +574,10 @@ class Thumb2Assembler FINAL : public ArmAssembler {
 
     // Prepare the assembler->fixup_dependents_ and each Fixup's dependents_start_/count_.
     static void PrepareDependents(Thumb2Assembler* assembler);
+
+    // Helper for PrepareDependents().
+    template <typename Function>
+    static void ForExpandableDependencies(Thumb2Assembler* assembler, Function fn);
 
     ArrayRef<const FixupId> Dependents(const Thumb2Assembler& assembler) const {
       return ArrayRef<const FixupId>(assembler.fixup_dependents_).SubArray(dependents_start_,
