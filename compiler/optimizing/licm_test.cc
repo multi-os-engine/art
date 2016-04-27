@@ -108,7 +108,6 @@ TEST_F(LICMTest, FieldHoisting) {
   BuildLoop();
 
   // Populate the loop with instructions: set/get field with different types.
-  ScopedNullHandle<mirror::DexCache> dex_cache;
   HInstruction* get_field = new (&allocator_) HInstanceFieldGet(parameter_,
                                                                 Primitive::kPrimLong,
                                                                 MemberOffset(10),
@@ -116,12 +115,12 @@ TEST_F(LICMTest, FieldHoisting) {
                                                                 kUnknownFieldIndex,
                                                                 kUnknownClassDefIndex,
                                                                 graph_->GetDexFile(),
-                                                                dex_cache,
+                                                                nullptr,
                                                                 0);
   loop_body_->InsertInstructionBefore(get_field, loop_body_->GetLastInstruction());
   HInstruction* set_field = new (&allocator_) HInstanceFieldSet(
       parameter_, int_constant_, Primitive::kPrimInt, MemberOffset(20),
-      false, kUnknownFieldIndex, kUnknownClassDefIndex, graph_->GetDexFile(), dex_cache, 0);
+      false, kUnknownFieldIndex, kUnknownClassDefIndex, graph_->GetDexFile(), nullptr, 0);
   loop_body_->InsertInstructionBefore(set_field, loop_body_->GetLastInstruction());
 
   EXPECT_EQ(get_field->GetBlock(), loop_body_);
@@ -135,7 +134,6 @@ TEST_F(LICMTest, NoFieldHoisting) {
   BuildLoop();
 
   // Populate the loop with instructions: set/get field with same types.
-  ScopedNullHandle<mirror::DexCache> dex_cache;
   HInstruction* get_field = new (&allocator_) HInstanceFieldGet(parameter_,
                                                                 Primitive::kPrimLong,
                                                                 MemberOffset(10),
@@ -143,7 +141,7 @@ TEST_F(LICMTest, NoFieldHoisting) {
                                                                 kUnknownFieldIndex,
                                                                 kUnknownClassDefIndex,
                                                                 graph_->GetDexFile(),
-                                                                dex_cache,
+                                                                nullptr,
                                                                 0);
   loop_body_->InsertInstructionBefore(get_field, loop_body_->GetLastInstruction());
   HInstruction* set_field = new (&allocator_) HInstanceFieldSet(parameter_,
@@ -154,7 +152,7 @@ TEST_F(LICMTest, NoFieldHoisting) {
                                                                 kUnknownFieldIndex,
                                                                 kUnknownClassDefIndex,
                                                                 graph_->GetDexFile(),
-                                                                dex_cache,
+                                                                nullptr,
                                                                 0);
   loop_body_->InsertInstructionBefore(set_field, loop_body_->GetLastInstruction());
 

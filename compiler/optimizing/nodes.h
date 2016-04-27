@@ -4925,6 +4925,9 @@ class HNullCheck : public HExpression<1> {
   DISALLOW_COPY_AND_ASSIGN(HNullCheck);
 };
 
+// PlaceHolder for an ArtField, that contains the interesting information
+// of the field so that we don't need to acquire the mutator lock when
+// reading them.
 class FieldInfo : public ValueObject {
  public:
   FieldInfo(MemberOffset field_offset,
@@ -4933,14 +4936,14 @@ class FieldInfo : public ValueObject {
             uint32_t index,
             uint16_t declaring_class_def_index,
             const DexFile& dex_file,
-            Handle<mirror::DexCache> dex_cache)
+            ArtField* field)
       : field_offset_(field_offset),
         field_type_(field_type),
         is_volatile_(is_volatile),
         index_(index),
         declaring_class_def_index_(declaring_class_def_index),
         dex_file_(dex_file),
-        dex_cache_(dex_cache) {}
+        field_(field) {}
 
   MemberOffset GetFieldOffset() const { return field_offset_; }
   Primitive::Type GetFieldType() const { return field_type_; }
@@ -4948,7 +4951,7 @@ class FieldInfo : public ValueObject {
   uint16_t GetDeclaringClassDefIndex() const { return declaring_class_def_index_;}
   const DexFile& GetDexFile() const { return dex_file_; }
   bool IsVolatile() const { return is_volatile_; }
-  Handle<mirror::DexCache> GetDexCache() const { return dex_cache_; }
+  ArtField* GetField() const { return field_; }
 
  private:
   const MemberOffset field_offset_;
@@ -4957,7 +4960,7 @@ class FieldInfo : public ValueObject {
   const uint32_t index_;
   const uint16_t declaring_class_def_index_;
   const DexFile& dex_file_;
-  const Handle<mirror::DexCache> dex_cache_;
+  ArtField* const field_;
 };
 
 class HInstanceFieldGet : public HExpression<1> {
@@ -4969,7 +4972,7 @@ class HInstanceFieldGet : public HExpression<1> {
                     uint32_t field_idx,
                     uint16_t declaring_class_def_index,
                     const DexFile& dex_file,
-                    Handle<mirror::DexCache> dex_cache,
+                    ArtField* field,
                     uint32_t dex_pc)
       : HExpression(field_type,
                     SideEffects::FieldReadOfType(field_type, is_volatile),
@@ -4980,7 +4983,7 @@ class HInstanceFieldGet : public HExpression<1> {
                     field_idx,
                     declaring_class_def_index,
                     dex_file,
-                    dex_cache) {
+                    field) {
     SetRawInputAt(0, value);
   }
 
@@ -4988,7 +4991,7 @@ class HInstanceFieldGet : public HExpression<1> {
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     HInstanceFieldGet* other_get = other->AsInstanceFieldGet();
-    return GetFieldOffset().SizeValue() == other_get->GetFieldOffset().SizeValue();
+    return GetField() == other_get->GetField();
   }
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
@@ -5003,6 +5006,7 @@ class HInstanceFieldGet : public HExpression<1> {
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
+  ArtField* GetField() const { return field_info_.GetField(); }
 
   DECLARE_INSTRUCTION(InstanceFieldGet);
 
@@ -5022,7 +5026,7 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     uint32_t field_idx,
                     uint16_t declaring_class_def_index,
                     const DexFile& dex_file,
-                    Handle<mirror::DexCache> dex_cache,
+                    ArtField* field,
                     uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::FieldWriteOfType(field_type, is_volatile),
                              dex_pc),
@@ -5032,7 +5036,7 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     field_idx,
                     declaring_class_def_index,
                     dex_file,
-                    dex_cache) {
+                    field) {
     SetPackedFlag<kFlagValueCanBeNull>(true);
     SetRawInputAt(0, object);
     SetRawInputAt(1, value);
@@ -5646,7 +5650,7 @@ class HStaticFieldGet : public HExpression<1> {
                   uint32_t field_idx,
                   uint16_t declaring_class_def_index,
                   const DexFile& dex_file,
-                  Handle<mirror::DexCache> dex_cache,
+                  ArtField* field,
                   uint32_t dex_pc)
       : HExpression(field_type,
                     SideEffects::FieldReadOfType(field_type, is_volatile),
@@ -5657,7 +5661,7 @@ class HStaticFieldGet : public HExpression<1> {
                     field_idx,
                     declaring_class_def_index,
                     dex_file,
-                    dex_cache) {
+                    field) {
     SetRawInputAt(0, cls);
   }
 
@@ -5666,7 +5670,7 @@ class HStaticFieldGet : public HExpression<1> {
 
   bool InstructionDataEquals(HInstruction* other) const OVERRIDE {
     HStaticFieldGet* other_get = other->AsStaticFieldGet();
-    return GetFieldOffset().SizeValue() == other_get->GetFieldOffset().SizeValue();
+    return GetField() == other_get->GetField();
   }
 
   size_t ComputeHashCode() const OVERRIDE {
@@ -5677,6 +5681,7 @@ class HStaticFieldGet : public HExpression<1> {
   MemberOffset GetFieldOffset() const { return field_info_.GetFieldOffset(); }
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
+  ArtField* GetField() const { return field_info_.GetField(); }
 
   DECLARE_INSTRUCTION(StaticFieldGet);
 
@@ -5696,7 +5701,7 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                   uint32_t field_idx,
                   uint16_t declaring_class_def_index,
                   const DexFile& dex_file,
-                  Handle<mirror::DexCache> dex_cache,
+                  ArtField* field,
                   uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::FieldWriteOfType(field_type, is_volatile),
                              dex_pc),
@@ -5706,7 +5711,7 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                     field_idx,
                     declaring_class_def_index,
                     dex_file,
-                    dex_cache) {
+                    field) {
     SetPackedFlag<kFlagValueCanBeNull>(true);
     SetRawInputAt(0, cls);
     SetRawInputAt(1, value);

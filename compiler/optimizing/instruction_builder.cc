@@ -1224,7 +1224,7 @@ bool HInstructionBuilder::BuildInstanceFieldAccess(const Instruction& instructio
                                                  field_index,
                                                  class_def_index,
                                                  *dex_file_,
-                                                 dex_compilation_unit_->GetDexCache(),
+                                                 resolved_field,
                                                  dex_pc);
     }
     AppendInstruction(field_set);
@@ -1245,7 +1245,7 @@ bool HInstructionBuilder::BuildInstanceFieldAccess(const Instruction& instructio
                                                  field_index,
                                                  class_def_index,
                                                  *dex_file_,
-                                                 dex_compilation_unit_->GetDexCache(),
+                                                 resolved_field,
                                                  dex_pc);
     }
     AppendInstruction(field_get);
@@ -1392,7 +1392,7 @@ bool HInstructionBuilder::BuildStaticFieldAccess(const Instruction& instruction,
                                                    field_index,
                                                    class_def_index,
                                                    *dex_file_,
-                                                   dex_cache_,
+                                                   resolved_field,
                                                    dex_pc));
   } else {
     AppendInstruction(new (arena_) HStaticFieldGet(cls,
@@ -1402,7 +1402,7 @@ bool HInstructionBuilder::BuildStaticFieldAccess(const Instruction& instruction,
                                                    field_index,
                                                    class_def_index,
                                                    *dex_file_,
-                                                   dex_cache_,
+                                                   resolved_field,
                                                    dex_pc));
     UpdateLocal(source_or_dest_reg, current_block_->GetLastInstruction());
   }
