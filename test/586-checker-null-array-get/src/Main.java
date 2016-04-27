@@ -14,10 +14,20 @@
  * limitations under the License.
  */
 
+class Test1 {
+  int[] iarr;
+}
+
+class Test2 {
+  float[] farr;
+}
+
 public class Main {
   public static Object[] getObjectArray() { return null; }
   public static long[] getLongArray() { return null; }
   public static Object getNull() { return null; }
+  public static Test1 getNullTest1() { return null; }
+  public static Test2 getNullTest2() { return null; }
 
   public static void main(String[] args) {
     try {
@@ -26,13 +36,26 @@ public class Main {
     } catch (NullPointerException e) {
       // Expected.
     }
+    try {
+      bar();
+      throw new Error("Expected NullPointerException");
+    } catch (NullPointerException e) {
+      // Expected.
+    }
+    try {
+      test1();
+      throw new Error("Expected NullPointerException");
+    } catch (NullPointerException e) {
+      // Expected.
+    }
   }
 
   /// CHECK-START: void Main.foo() load_store_elimination (after)
-  /// CHECK-DAG: <<Null:l\d+>>  NullConstant
-  /// CHECK-DAG: <<Check:l\d+>> NullCheck [<<Null>>]
-  /// CHECK-DAG: <<Get1:j\d+>>  ArrayGet [<<Check>>,{{i\d+}}]
-  /// CHECK-DAG: <<Get2:l\d+>>  ArrayGet [<<Check>>,{{i\d+}}]
+  /// CHECK-DAG: <<Null:l\d+>>   NullConstant
+  /// CHECK-DAG: <<Check1:l\d+>> NullCheck [<<Null>>]
+  /// CHECK-DAG: <<Get1:j\d+>>   ArrayGet [<<Check1>>,{{i\d+}}]
+  /// CHECK-DAG: <<Check2:l\d+>> NullCheck [<<Null>>]
+  /// CHECK-DAG: <<Get2:l\d+>>   ArrayGet [<<Check2>>,{{i\d+}}]
   public static void foo() {
     longField = getLongArray()[0];
     objectField = getObjectArray()[0];
@@ -56,7 +79,7 @@ public class Main {
     // elimination pass to add a HDeoptimize. Not having the bounds check helped
     // the load store elimination think it could merge two ArrayGet with different
     // types.
-    String[] array = ((String[])getNull());
+    String[] array = (String[])getNull();
     objectField = array[0];
     objectField = array[1];
     objectField = array[2];
@@ -66,6 +89,26 @@ public class Main {
     longField = longArray[1];
     longField = longArray[2];
     longField = longArray[3];
+  }
+
+  /// CHECK-START: float Main.test1() load_store_elimination (after)
+  /// CHECK-DAG: <<Null:l\d+>>       NullConstant
+  /// CHECK-DAG: <<Check1:l\d+>>     NullCheck [<<Null>>]
+  /// CHECK-DAG: <<Check2:l\d+>>     NullCheck [<<Null>>]
+  /// CHECK-DAG: <<FieldGet1:l\d+>>  InstanceFieldGet [<<Check1>>]
+  /// CHECK-DAG: <<FieldGet2:l\d+>>  InstanceFieldGet [<<Check2>>]
+  /// CHECK-DAG: <<Check3:l\d+>>     NullCheck [<<FieldGet1>>]
+  /// CHECK-DAG: <<Check4:l\d+>>     NullCheck [<<FieldGet2>>]
+  /// CHECK-DAG: <<ArrayGet1:i\d+>>  ArrayGet [<<Check3>>,{{i\d+}}]
+  /// CHECK-DAG: <<ArraySet1:v\d+>>  ArraySet [<<Check3>>,{{i\d+}},{{i\d+}}]
+  /// CHECK-DAG: <<ArrayGet2:f\d+>>  ArrayGet [<<Check4>>,{{i\d+}}]
+  public static float test1() {
+    Test1 test1 = getNullTest1();
+    Test2 test2 = getNullTest2();;
+    int[] iarr = test1.iarr;
+    float[] farr = test2.farr;
+    iarr[0] = iarr[1];
+    return farr[0];
   }
 
   public static long longField;

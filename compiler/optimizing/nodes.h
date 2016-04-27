@@ -245,7 +245,11 @@ class ReferenceTypeInfo : ValueObject {
   // Returns true if the type information provide the same amount of details.
   // Note that it does not mean that the instructions have the same actual type
   // (because the type can be the result of a merge).
-  bool IsEqual(ReferenceTypeInfo rti) const SHARED_REQUIRES(Locks::mutator_lock_) {
+  //
+  // We disable thread safety annotations, as Handle.Get() requires the mutator lock,
+  // due to fetching mirror::Objects, but we are only going to compare pointers, not
+  // looking at the contents of a mirror::Object.
+  bool IsEqual(ReferenceTypeInfo rti) const NO_THREAD_SAFETY_ANALYSIS {
     if (!IsValid() && !rti.IsValid()) {
       // Invalid types are equal.
       return true;

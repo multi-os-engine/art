@@ -1258,6 +1258,11 @@ bool HInstruction::Equals(HInstruction* other) const {
   for (size_t i = 0, e = InputCount(); i < e; ++i) {
     if (InputAt(i) != other->InputAt(i)) return false;
   }
+  if (GetType() == Primitive::kPrimNot) {
+    if (!GetReferenceTypeInfo().IsEqual(other->GetReferenceTypeInfo())) {
+      return false;
+    }
+  }
   DCHECK_EQ(ComputeHashCode(), other->ComputeHashCode());
   return true;
 }
