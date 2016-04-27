@@ -518,19 +518,7 @@ void ReferenceTypePropagation::RTPVisitor::UpdateFieldAccessTypeInfo(HInstructio
   }
 
   ScopedObjectAccess soa(Thread::Current());
-  mirror::Class* klass = nullptr;
-
-  // The field index is unknown only during tests.
-  if (info.GetFieldIndex() != kUnknownFieldIndex) {
-    ClassLinker* cl = Runtime::Current()->GetClassLinker();
-    ArtField* field = cl->GetResolvedField(info.GetFieldIndex(), info.GetDexCache().Get());
-    // TODO: There are certain cases where we can't resolve the field.
-    // b/21914925 is open to keep track of a repro case for this issue.
-    if (field != nullptr) {
-      klass = field->GetType<false>();
-    }
-  }
-
+  mirror::Class* klass = info.GetField()->GetType<false>();
   SetClassAsTypeInfo(instr, klass, /* is_exact */ false);
 }
 

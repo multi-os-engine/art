@@ -356,7 +356,7 @@ HInstanceFieldGet* HInliner::BuildGetReceiverClass(ClassLinker* class_linker,
       field->GetDexFieldIndex(),
       field->GetDeclaringClass()->GetDexClassDefIndex(),
       *field->GetDexFile(),
-      handles_->NewHandle(field->GetDexCache()),
+      field,
       dex_pc);
   // The class of a field is effectively final, and does not have any memory dependencies.
   result->SetSideEffects(SideEffects::None());
@@ -980,7 +980,7 @@ HInstanceFieldGet* HInliner::CreateInstanceFieldGet(Handle<mirror::DexCache> dex
       field_index,
       resolved_field->GetDeclaringClass()->GetDexClassDefIndex(),
       *dex_cache->GetDexFile(),
-      dex_cache,
+      resolved_field,
       // Read barrier generates a runtime call in slow path and we need a valid
       // dex pc for the associated stack map. 0 is bogus but valid. Bug: 26854537.
       /* dex_pc */ 0);
@@ -1009,7 +1009,7 @@ HInstanceFieldSet* HInliner::CreateInstanceFieldSet(Handle<mirror::DexCache> dex
       field_index,
       resolved_field->GetDeclaringClass()->GetDexClassDefIndex(),
       *dex_cache->GetDexFile(),
-      dex_cache,
+      resolved_field,
       // Read barrier generates a runtime call in slow path and we need a valid
       // dex pc for the associated stack map. 0 is bogus but valid. Bug: 26854537.
       /* dex_pc */ 0);

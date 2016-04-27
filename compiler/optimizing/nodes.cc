@@ -1258,6 +1258,12 @@ bool HInstruction::Equals(HInstruction* other) const {
   for (size_t i = 0, e = InputCount(); i < e; ++i) {
     if (InputAt(i) != other->InputAt(i)) return false;
   }
+  if (kIsDebugBuild) {
+    ScopedObjectAccess soa(Thread::Current());
+    if (GetType() == Primitive::kPrimNot && !IsNullCheck()) {
+      DCHECK(GetReferenceTypeInfo().IsEqual(other->GetReferenceTypeInfo())) << DebugName();
+    }
+  }
   DCHECK_EQ(ComputeHashCode(), other->ComputeHashCode());
   return true;
 }
