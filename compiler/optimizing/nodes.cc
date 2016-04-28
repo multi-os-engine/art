@@ -1994,8 +1994,7 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
            !instr_it.Done();
            instr_it.Advance()) {
         HInstruction* current = instr_it.Current();
-        if (current->NeedsEnvironment()) {
-          DCHECK(current->HasEnvironment());
+        if (current->HasEnvironment()) {
           current->GetEnvironment()->SetAndCopyParentChain(
               outer_graph->GetArena(), invoke->GetEnvironment());
         }
