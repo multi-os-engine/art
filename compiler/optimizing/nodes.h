@@ -1720,7 +1720,7 @@ class HEnvironment : public ArenaObject<kArenaAllocEnvironment> {
   const InvokeType invoke_type_;
 
   // The instruction that holds this environment.
-  HInstruction* const holder_;
+  HInstruction* holder_;
 
   friend class HInstruction;
 
@@ -5100,12 +5100,25 @@ class HArrayGet : public HExpression<2> {
     return result;
   }
 
+  void MarkAsStringCharAt() { SetPackedFlag<kFlagIsStringCharAt>(); }
+  bool IsStringCharAt() const { return GetPackedFlag<kFlagIsStringCharAt>(); }
+
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }
 
   DECLARE_INSTRUCTION(ArrayGet);
 
  private:
+  // We treat a String as an array, creating the HArrayGet from String.charAt()
+  // intrinsic in the instruction simplifier. We can always determine whether
+  // a particular HArrayGet is actually a String.charAt() by looking at the type
+  // of the input but that requires holding the mutator lock, so we prefer to use
+  // a flag, so that code generators don't need to do the locking.
+  static constexpr size_t kFlagIsStringCharAt = kNumberOfExpressionPackedBits;
+  static constexpr size_t kNumberOfArrayGetPackedBits = kFlagIsStringCharAt + 1;
+  static_assert(kNumberOfArrayGetPackedBits <= HInstruction::kMaxNumberOfPackedBits,
+                "Too many packed fields.");
+
   DISALLOW_COPY_AND_ASSIGN(HArrayGet);
 };
 

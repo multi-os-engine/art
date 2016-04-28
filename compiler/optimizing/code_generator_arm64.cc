@@ -2050,8 +2050,8 @@ void InstructionCodeGeneratorARM64::VisitArrayGet(HArrayGet* instruction) {
   Register obj = InputRegisterAt(instruction, 0);
   LocationSummary* locations = instruction->GetLocations();
   Location index = locations->InAt(1);
-  uint32_t offset = mirror::Array::DataOffset(Primitive::ComponentSize(type)).Uint32Value();
   Location out = locations->Out();
+  uint32_t offset = CodeGenerator::GetArrayDataOffset(instruction);
 
   MacroAssembler* masm = GetVIXLAssembler();
   UseScratchRegisterScope temps(masm);

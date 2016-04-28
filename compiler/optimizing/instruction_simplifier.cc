@@ -101,6 +101,7 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   void SimplifyCompare(HInvoke* invoke, bool is_signum, Primitive::Type type);
   void SimplifyIsNaN(HInvoke* invoke);
   void SimplifyFP2Int(HInvoke* invoke);
+  void SimplifyStringCharAt(HInvoke* invoke);
   void SimplifyStringIsEmptyOrLength(HInvoke* invoke);
   void SimplifyMemBarrier(HInvoke* invoke, MemBarrierKind barrier_kind);
 
@@ -1674,6 +1675,26 @@ void InstructionSimplifierVisitor::SimplifyFP2Int(HInvoke* invoke) {
   invoke->ReplaceWithExceptInReplacementAtIndex(select, 0);  // false at index 0
 }
 
+void InstructionSimplifierVisitor::SimplifyStringCharAt(HInvoke* invoke) {
+  HInstruction* str = invoke->InputAt(0);
+  HInstruction* index = invoke->InputAt(1);
+  uint32_t dex_pc = invoke->GetDexPc();
+  // We treat String as an array, so create the HArrayLength, HBoundsCheck and HArrayGet.
+  HArrayLength* length = new (GetGraph()->GetArena()) HArrayLength(str, dex_pc);
+  length->MarkAsStringLength();
+  invoke->GetBlock()->InsertInstructionBefore(length, invoke);
+  HBoundsCheck* bounds_check = new (GetGraph()->GetArena()) HBoundsCheck(index, length, dex_pc);
+  // TODO: Implement bounds_check->MarkAsStringCharAt();
+  invoke->GetBlock()->InsertInstructionBefore(bounds_check, invoke);
+  HArrayGet* array_get =
+      new (GetGraph()->GetArena()) HArrayGet(str, index, Primitive::kPrimChar, dex_pc);
+  array_get->MarkAsStringCharAt();
+  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, array_get);
+  // TODO: Implement TakeEnvironment() to save memory.
+  bounds_check->CopyEnvironmentFrom(invoke->GetEnvironment());
+  bounds_check->GetBlock()->GetGraph()->SetHasBoundsChecks(true);
+}
+
 void InstructionSimplifierVisitor::SimplifyStringIsEmptyOrLength(HInvoke* invoke) {
   HInstruction* str = invoke->InputAt(0);
   uint32_t dex_pc = invoke->GetDexPc();
@@ -1739,6 +1760,9 @@ void InstructionSimplifierVisitor::VisitInvoke(HInvoke* instruction) {
     case Intrinsics::kFloatFloatToIntBits:
     case Intrinsics::kDoubleDoubleToLongBits:
       SimplifyFP2Int(instruction);
+      break;
+    case Intrinsics::kStringCharAt:
+      SimplifyStringCharAt(instruction);
       break;
     case Intrinsics::kStringIsEmpty:
     case Intrinsics::kStringLength:
