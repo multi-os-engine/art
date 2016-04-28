@@ -1232,7 +1232,7 @@ bool HInliner::TryBuildAndInlineHelper(HInvoke* invoke_instruction,
         return false;
       }
       HInstruction* current = instr_it.Current();
-      if (!can_inline_environment && current->NeedsEnvironment()) {
+      if (!can_inline_environment && current->HasEnvironment()) {
         VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                        << " is not inlined because its caller has reached"
                        << " its environment budget limit.";
@@ -1247,7 +1247,7 @@ bool HInliner::TryBuildAndInlineHelper(HInvoke* invoke_instruction,
         return false;
       }
 
-      if (!same_dex_file && current->NeedsEnvironment()) {
+      if (!same_dex_file && current->HasEnvironment()) {
         VLOG(compiler) << "Method " << PrettyMethod(method_index, callee_dex_file)
                        << " could not be inlined because " << current->DebugName()
                        << " needs an environment and is in a different dex file";

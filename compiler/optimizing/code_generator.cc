@@ -751,6 +751,9 @@ void CodeGenerator::RecordPcInfo(HInstruction* instruction,
     }
   }
 
+  DCHECK(outer_environment_size == 0 ||
+         outer_environment_size == instruction->GetBlock()->GetGraph()->GetNumberOfVRegs());
+
   // Collect PC infos for the mapping table.
   uint32_t native_pc = GetAssembler()->CodeSize();
 
