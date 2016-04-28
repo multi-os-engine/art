@@ -16,8 +16,12 @@
 
 #include "callee_save_frame.h"
 #include "common_throws.h"
+#include "dex_file.h"
+#include "dex_instruction.h"
+#include "dex_instruction_utils.h"
 #include "mirror/object-inl.h"
 #include "thread.h"
+#include "utils.h"
 #include "well_known_classes.h"
 
 namespace art {
@@ -71,6 +75,16 @@ extern "C" NO_RETURN void artThrowArrayBoundsFromCode(int index, int length, Thr
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedQuickEntrypointChecks sqec(self);
   ThrowArrayIndexOutOfBoundsException(index, length);
+  self->QuickDeliverException();
+}
+
+// Called by generated call to throw a string index out of bounds exception
+// as if thrown from a call to String.charAt().
+extern "C" NO_RETURN void artThrowStringBoundsFromCode(int index, int length, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  ScopedQuickEntrypointChecks sqec(self);
+  // TODO: Add extra frame!
+  ThrowStringIndexOutOfBoundsException(index, length);
   self->QuickDeliverException();
 }
 
