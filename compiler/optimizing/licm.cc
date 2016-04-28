@@ -144,7 +144,7 @@ void LICM::Run() {
             && InputsAreDefinedBeforeLoop(instruction)) {
           // We need to update the environment if the instruction has a loop header
           // phi in it.
-          if (instruction->NeedsEnvironment()) {
+          if (instruction->HasEnvironment()) {
             UpdateLoopPhisIn(instruction->GetEnvironment(), loop_info);
           } else {
             DCHECK(!instruction->HasEnvironment());
