@@ -30,6 +30,12 @@ public class Main {
     }
   }
 
+  public static void assertCharEquals(char expected, char result) {
+    if (expected != result) {
+      throw new Error("Expected: " + expected + ", found: " + result);
+    }
+  }
+
   public static void main(String[] args) {
     stringEqualsSame();
     stringArgumentNotNull("Foo");
@@ -41,6 +47,30 @@ public class Main {
     assertBooleanEquals(true, $opt$noinline$isStringEmpty(""));
     assertBooleanEquals(false, $opt$noinline$isStringEmpty("abc"));
     assertBooleanEquals(false, $opt$noinline$isStringEmpty("0123456789"));
+
+    assertCharEquals('a', $opt$noinline$stringCharAt("a", 0));
+    assertCharEquals('a', $opt$noinline$stringCharAt("abc", 0));
+    assertCharEquals('b', $opt$noinline$stringCharAt("abc", 1));
+    assertCharEquals('c', $opt$noinline$stringCharAt("abc", 2));
+    assertCharEquals('7', $opt$noinline$stringCharAt("0123456789", 7));
+
+    try {
+      $opt$noinline$stringCharAt("abc", -1);
+      throw new Error("Should throw SIOOB.");
+    } catch (StringIndexOutOfBoundsException ignored) {
+    }
+    try {
+      $opt$noinline$stringCharAt("abc", 3);
+      throw new Error("Should throw SIOOB.");
+    } catch (StringIndexOutOfBoundsException ignored) {
+    }
+    try {
+      $opt$noinline$stringCharAt("abc", Integer.MAX_VALUE);
+      throw new Error("Should throw SIOOB.");
+    } catch (StringIndexOutOfBoundsException ignored) {
+    }
+
+    assertIntEquals('a' + 'b' + 'c', $opt$noinline$stringSumChars("abc"));
   }
 
   /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) instruction_simplifier (before)
@@ -79,6 +109,58 @@ public class Main {
   static public boolean $opt$noinline$isStringEmpty(String s) {
     if (doThrow) { throw new Error(); }
     return s.isEmpty();
+  }
+
+  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) instruction_simplifier (before)
+  /// CHECK-DAG:  <<Char:c\d+>>     InvokeVirtual intrinsic:StringCharAt
+  /// CHECK-DAG:                    Return [<<Char>>]
+
+  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) instruction_simplifier (after)
+  /// CHECK-DAG:  <<String:l\d+>>   ParameterValue
+  /// CHECK-DAG:  <<Pos:i\d+>>      ParameterValue
+  /// CHECK-DAG:  <<NullCk:l\d+>>   NullCheck [<<String>>]
+  /// CHECK-DAG:  <<Length:i\d+>>   ArrayLength [<<NullCk>>] is_string_length:true
+  /// CHECK-DAG:                    BoundsCheck [<<Pos>>,<<Length>>]
+  /// CHECK-DAG:  <<Char:c\d+>>     ArrayGet [<<NullCk>>,<<Pos>>] is_string_char_at:true
+  /// CHECK-DAG:                    Return [<<Char>>]
+
+  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) instruction_simplifier (after)
+  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
+
+  static public char $opt$noinline$stringCharAt(String s, int pos) {
+    if (doThrow) { throw new Error(); }
+    return s.charAt(pos);
+  }
+
+  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) instruction_simplifier (before)
+  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringLength
+  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
+
+  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) instruction_simplifier (after)
+  /// CHECK-DAG:                    ArrayLength is_string_length:true
+  /// CHECK-DAG:                    ArrayLength is_string_length:true
+  /// CHECK-DAG:                    BoundsCheck
+  /// CHECK-DAG:                    ArrayGet is_string_char_at:true
+
+  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) instruction_simplifier (after)
+  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringLength
+  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
+
+  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) GVN (after)
+  /// CHECK-DAG:                    ArrayLength is_string_length:true
+  /// CHECK-NOT:                    ArrayLength is_string_length:true
+
+  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) BCE (after)
+  /// CHECK-NOT:                    BoundsCheck
+
+  static public int $opt$noinline$stringSumChars(String s) {
+    if (doThrow) { throw new Error(); }
+    int sum = 0;
+    int len = s.length();
+    for (int i = 0; i < len; ++i) {
+      sum += s.charAt(i);
+    }
+    return sum;
   }
 
   /// CHECK-START: boolean Main.stringEqualsSame() instruction_simplifier (before)

@@ -16,8 +16,12 @@
 
 #include "callee_save_frame.h"
 #include "common_throws.h"
+#include "dex_file.h"
+#include "dex_instruction.h"
+#include "dex_instruction_utils.h"
 #include "mirror/object-inl.h"
 #include "thread.h"
+#include "utils.h"
 #include "well_known_classes.h"
 
 namespace art {
@@ -70,8 +74,31 @@ extern "C" NO_RETURN void artThrowDivZeroFromCode(Thread* self)
 extern "C" NO_RETURN void artThrowArrayBoundsFromCode(int index, int length, Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedQuickEntrypointChecks sqec(self);
-  ThrowArrayIndexOutOfBoundsException(index, length);
-  self->QuickDeliverException();
+  // TODO: Use a new entrypoint for SIOOB instead of hacking this one.
+  // Compiled code uses the AIIOB entrypoint also for the String.charAt() that throws SIIOB.
+  uint32_t dex_pc;
+  ArtMethod* current_method = self->GetCurrentMethod(&dex_pc);
+  // Note: current_method is null for stub_test.
+  const Instruction* instruction = nullptr;
+  Instruction::Code opcode = Instruction::AGET;
+  if (LIKELY(current_method != nullptr)) {
+    const DexFile::CodeItem* code_item = current_method->GetCodeItem();
+    DCHECK_LT(dex_pc, code_item->insns_size_in_code_units_);
+    instruction = Instruction::At(code_item->insns_ + dex_pc);
+    opcode = instruction->Opcode();
+  }
+  if (IsInstructionAGetOrAPut(opcode) || opcode == Instruction::FILL_ARRAY_DATA) {
+    ThrowArrayIndexOutOfBoundsException(index, length);
+    self->QuickDeliverException();
+  } else {
+    DCHECK(IsInstructionInvoke(opcode) || IsInstructionQuickInvoke(opcode)) << opcode;
+    DCHECK_EQ(PrettyMethod(instruction->VRegB(), *current_method->GetDexFile()),
+              "char java.lang.String.charAt(int)");
+    // TODO: Add extra frame!
+    self->ThrowNewExceptionF("Ljava/lang/StringIndexOutOfBoundsException;",
+                             "length=%i; index=%i", length, index);
+    self->QuickDeliverException();
+  }
 }
 
 extern "C" NO_RETURN void artThrowStackOverflowFromCode(Thread* self)
