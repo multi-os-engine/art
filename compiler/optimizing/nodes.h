@@ -5074,8 +5074,13 @@ class HInstanceFieldSet FINAL : public HTemplateInstruction<2> {
 
 class HArrayGet FINAL : public HExpression<2> {
  public:
-  HArrayGet(HInstruction* array, HInstruction* index, Primitive::Type type, uint32_t dex_pc)
+  HArrayGet(HInstruction* array,
+            HInstruction* index,
+            Primitive::Type type,
+            uint32_t dex_pc,
+            bool is_string_char_at = false)
       : HExpression(type, SideEffects::ArrayReadOfType(type), dex_pc) {
+    SetPackedFlag<kFlagIsStringCharAt>(is_string_char_at);
     SetRawInputAt(0, array);
     SetRawInputAt(1, index);
   }
@@ -5109,12 +5114,24 @@ class HArrayGet FINAL : public HExpression<2> {
     return result;
   }
 
+  bool IsStringCharAt() const { return GetPackedFlag<kFlagIsStringCharAt>(); }
+
   HInstruction* GetArray() const { return InputAt(0); }
   HInstruction* GetIndex() const { return InputAt(1); }
 
   DECLARE_INSTRUCTION(ArrayGet);
 
  private:
+  // We treat a String as an array, creating the HArrayGet from String.charAt()
+  // intrinsic in the instruction simplifier. We can always determine whether
+  // a particular HArrayGet is actually a String.charAt() by looking at the type
+  // of the input but that requires holding the mutator lock, so we prefer to use
+  // a flag, so that code generators don't need to do the locking.
+  static constexpr size_t kFlagIsStringCharAt = kNumberOfExpressionPackedBits;
+  static constexpr size_t kNumberOfArrayGetPackedBits = kFlagIsStringCharAt + 1;
+  static_assert(kNumberOfArrayGetPackedBits <= HInstruction::kMaxNumberOfPackedBits,
+                "Too many packed fields.");
+
   DISALLOW_COPY_AND_ASSIGN(HArrayGet);
 };
 
@@ -5220,8 +5237,9 @@ class HArraySet FINAL : public HTemplateInstruction<3> {
 
 class HArrayLength FINAL : public HExpression<1> {
  public:
-  HArrayLength(HInstruction* array, uint32_t dex_pc)
+  HArrayLength(HInstruction* array, uint32_t dex_pc, bool is_string_length = false)
       : HExpression(Primitive::kPrimInt, SideEffects::None(), dex_pc) {
+    SetPackedFlag<kFlagIsStringLength>(is_string_length);
     // Note that arrays do not change length, so the instruction does not
     // depend on any write.
     SetRawInputAt(0, array);
@@ -5235,7 +5253,6 @@ class HArrayLength FINAL : public HExpression<1> {
     return obj == InputAt(0);
   }
 
-  void MarkAsStringLength() { SetPackedFlag<kFlagIsStringLength>(); }
   bool IsStringLength() const { return GetPackedFlag<kFlagIsStringLength>(); }
 
   DECLARE_INSTRUCTION(ArrayLength);
@@ -5258,8 +5275,12 @@ class HBoundsCheck FINAL : public HExpression<2> {
  public:
   // `HBoundsCheck` can trigger GC, as it may call the `IndexOutOfBoundsException`
   // constructor.
-  HBoundsCheck(HInstruction* index, HInstruction* length, uint32_t dex_pc)
+  HBoundsCheck(HInstruction* index,
+               HInstruction* length,
+               uint32_t dex_pc,
+               bool is_string_char_at = false)
       : HExpression(index->GetType(), SideEffects::CanTriggerGC(), dex_pc) {
+    SetPackedFlag<kFlagIsStringCharAt>(is_string_char_at);
     DCHECK_EQ(Primitive::kPrimInt, Primitive::PrimitiveKind(index->GetType()));
     SetRawInputAt(0, index);
     SetRawInputAt(1, length);
@@ -5274,11 +5295,23 @@ class HBoundsCheck FINAL : public HExpression<2> {
 
   bool CanThrow() const OVERRIDE { return true; }
 
+  bool IsStringCharAt() const { return GetPackedFlag<kFlagIsStringCharAt>(); }
+
   HInstruction* GetIndex() const { return InputAt(0); }
 
   DECLARE_INSTRUCTION(BoundsCheck);
 
  private:
+  // We treat a String as an array, creating the HBoundsCheck from String.charAt()
+  // intrinsic in the instruction simplifier. We need this flag as we don't want
+  // to look again at the dex bytecode and the array length input may not be an
+  // actual HArrayLength (HArrayLength on HLoadString is a known constant and
+  // HArrayLength on HNewArray is the HNewArray's length input).
+  static constexpr size_t kFlagIsStringCharAt = kNumberOfExpressionPackedBits;
+  static constexpr size_t kNumberOfBoundsCheckPackedBits = kFlagIsStringCharAt + 1;
+  static_assert(kNumberOfBoundsCheckPackedBits <= HInstruction::kMaxNumberOfPackedBits,
+                "Too many packed fields.");
+
   DISALLOW_COPY_AND_ASSIGN(HBoundsCheck);
 };
 
