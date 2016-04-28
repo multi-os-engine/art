@@ -25,6 +25,7 @@
 #include "intrinsics_mips64.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/string.h"
 #include "offsets.h"
 #include "thread.h"
 #include "utils/assembler.h"
@@ -1426,7 +1427,9 @@ void LocationsBuilderMIPS64::VisitArrayLength(HArrayLength* instruction) {
 
 void InstructionCodeGeneratorMIPS64::VisitArrayLength(HArrayLength* instruction) {
   LocationSummary* locations = instruction->GetLocations();
-  uint32_t offset = mirror::Array::LengthOffset().Uint32Value();
+  uint32_t offset = instruction->IsStringLength()
+      ? mirror::String::CountOffset().Uint32Value()
+      : mirror::Array::LengthOffset().Uint32Value();
   GpuRegister obj = locations->InAt(0).AsRegister<GpuRegister>();
   GpuRegister out = locations->Out().AsRegister<GpuRegister>();
   __ LoadFromOffset(kLoadWord, out, obj, offset);

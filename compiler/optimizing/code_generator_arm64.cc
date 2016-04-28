@@ -27,6 +27,7 @@
 #include "intrinsics_arm64.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/string.h"
 #include "offsets.h"
 #include "thread.h"
 #include "utils/arm64/assembler_arm64.h"
@@ -2118,9 +2119,11 @@ void LocationsBuilderARM64::VisitArrayLength(HArrayLength* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::VisitArrayLength(HArrayLength* instruction) {
+  uint32_t offset = instruction->IsStringLength()
+      ? mirror::String::CountOffset().Uint32Value()
+      : mirror::Array::LengthOffset().Uint32Value();
   BlockPoolsScope block_pools(GetVIXLAssembler());
-  __ Ldr(OutputRegister(instruction),
-         HeapOperand(InputRegisterAt(instruction, 0), mirror::Array::LengthOffset()));
+  __ Ldr(OutputRegister(instruction), HeapOperand(InputRegisterAt(instruction, 0), offset));
   codegen_->MaybeRecordImplicitNullCheck(instruction);
 }
 
