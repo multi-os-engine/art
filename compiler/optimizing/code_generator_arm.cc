@@ -26,6 +26,7 @@
 #include "intrinsics_arm.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/string.h"
 #include "thread.h"
 #include "utils/arm/assembler_arm.h"
 #include "utils/arm/managed_register_arm.h"
@@ -4742,7 +4743,9 @@ void LocationsBuilderARM::VisitArrayLength(HArrayLength* instruction) {
 
 void InstructionCodeGeneratorARM::VisitArrayLength(HArrayLength* instruction) {
   LocationSummary* locations = instruction->GetLocations();
-  uint32_t offset = mirror::Array::LengthOffset().Uint32Value();
+  uint32_t offset = instruction->IsStringLength()
+      ? mirror::String::CountOffset().Uint32Value()
+      : mirror::Array::LengthOffset().Uint32Value();
   Register obj = locations->InAt(0).AsRegister<Register>();
   Register out = locations->Out().AsRegister<Register>();
   __ LoadFromOffset(kLoadWord, out, obj, offset);

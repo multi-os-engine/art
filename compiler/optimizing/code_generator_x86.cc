@@ -26,6 +26,7 @@
 #include "intrinsics_x86.h"
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
+#include "mirror/string.h"
 #include "thread.h"
 #include "utils/assembler.h"
 #include "utils/stack_checks.h"
@@ -5480,7 +5481,9 @@ void LocationsBuilderX86::VisitArrayLength(HArrayLength* instruction) {
 
 void InstructionCodeGeneratorX86::VisitArrayLength(HArrayLength* instruction) {
   LocationSummary* locations = instruction->GetLocations();
-  uint32_t offset = mirror::Array::LengthOffset().Uint32Value();
+  uint32_t offset = instruction->IsStringLength()
+      ? mirror::String::CountOffset().Uint32Value()
+      : mirror::Array::LengthOffset().Uint32Value();
   Register obj = locations->InAt(0).AsRegister<Register>();
   Register out = locations->Out().AsRegister<Register>();
   __ movl(out, Address(obj, offset));

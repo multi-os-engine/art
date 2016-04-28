@@ -101,6 +101,8 @@
   V(MemoryPokeIntNative, kStatic, kNeedsEnvironmentOrCache, kWriteSideEffects, kCanThrow) \
   V(MemoryPokeLongNative, kStatic, kNeedsEnvironmentOrCache, kWriteSideEffects, kCanThrow) \
   V(MemoryPokeShortNative, kStatic, kNeedsEnvironmentOrCache, kWriteSideEffects, kCanThrow) \
+  V(StringIsEmpty, kDirect, kNeedsEnvironmentOrCache, kReadSideEffects, kNoThrow) \
+  V(StringLength, kDirect, kNeedsEnvironmentOrCache, kReadSideEffects, kNoThrow) \
   V(StringCharAt, kDirect, kNeedsEnvironmentOrCache, kReadSideEffects, kCanThrow) \
   V(StringCompareTo, kDirect, kNeedsEnvironmentOrCache, kReadSideEffects, kCanThrow) \
   V(StringEquals, kDirect, kNeedsEnvironmentOrCache, kReadSideEffects, kCanThrow) \
