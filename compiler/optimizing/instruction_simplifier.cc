@@ -101,6 +101,7 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   void SimplifyCompare(HInvoke* invoke, bool is_signum, Primitive::Type type);
   void SimplifyIsNaN(HInvoke* invoke);
   void SimplifyFP2Int(HInvoke* invoke);
+  void SimplifyStringCharAt(HInvoke* invoke);
   void SimplifyStringIsEmptyOrLength(HInvoke* invoke);
   void SimplifyMemBarrier(HInvoke* invoke, MemBarrierKind barrier_kind);
 
@@ -1674,6 +1675,35 @@ void InstructionSimplifierVisitor::SimplifyFP2Int(HInvoke* invoke) {
   invoke->ReplaceWithExceptInReplacementAtIndex(select, 0);  // false at index 0
 }
 
+void InstructionSimplifierVisitor::SimplifyStringCharAt(HInvoke* invoke) {
+  HInstruction* str = invoke->InputAt(0);
+  HInstruction* index = invoke->InputAt(1);
+  uint32_t dex_pc = invoke->GetDexPc();
+  ArenaAllocator* arena = GetGraph()->GetArena();
+  // We treat String as an array to allow DCE and BCE to seamlessly work on strings,
+  // so create the HArrayLength, HBoundsCheck and HArrayGet.
+  HArrayLength* length = new (arena) HArrayLength(str, dex_pc);
+  length->MarkAsStringLength();
+  invoke->GetBlock()->InsertInstructionBefore(length, invoke);
+  HBoundsCheck* bounds_check = new (arena) HBoundsCheck(index, length, dex_pc);
+  bounds_check->MarkAsStringCharAt();
+  invoke->GetBlock()->InsertInstructionBefore(bounds_check, invoke);
+  HArrayGet* array_get = new (arena) HArrayGet(str, index, Primitive::kPrimChar, dex_pc);
+  array_get->MarkAsStringCharAt();
+  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, array_get);
+  // Add fake environment for String.charAt() inline info.
+  HEnvironment* environment = new (arena) HEnvironment(GetGraph()->GetArena(),
+                                                       /* number_of_vregs */ 0u,
+                                                       invoke->GetDexFile(),
+                                                       invoke->GetDexMethodIndex(),
+                                                       /* dex_pc */ DexFile::kDexNoIndex,
+                                                       invoke->GetOriginalInvokeType(),
+                                                       bounds_check);
+  environment->SetAndCopyParentChain(arena, invoke->GetEnvironment());
+  bounds_check->SetRawEnvironment(environment);
+  GetGraph()->SetHasBoundsChecks(true);
+}
+
 void InstructionSimplifierVisitor::SimplifyStringIsEmptyOrLength(HInvoke* invoke) {
   HInstruction* str = invoke->InputAt(0);
   uint32_t dex_pc = invoke->GetDexPc();
@@ -1740,6 +1770,9 @@ void InstructionSimplifierVisitor::VisitInvoke(HInvoke* instruction) {
     case Intrinsics::kFloatFloatToIntBits:
     case Intrinsics::kDoubleDoubleToLongBits:
       SimplifyFP2Int(instruction);
+      break;
+    case Intrinsics::kStringCharAt:
+      SimplifyStringCharAt(instruction);
       break;
     case Intrinsics::kStringIsEmpty:
     case Intrinsics::kStringLength:

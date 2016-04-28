@@ -1553,7 +1553,15 @@ class BCEVisitor : public HGraphVisitor {
     HDeoptimize* deoptimize =
         new (GetGraph()->GetArena()) HDeoptimize(condition, bounds_check->GetDexPc());
     block->InsertInstructionBefore(deoptimize, bounds_check);
-    deoptimize->CopyEnvironmentFrom(bounds_check->GetEnvironment());
+    HEnvironment* environment = bounds_check->GetEnvironment();
+    if (bounds_check->IsStringCharAt()) {
+      // Strip the extra environment representing the "inlined" String.charAt().
+      DCHECK_STREQ(PrettyMethod(environment->GetMethodIdx(), environment->GetDexFile()).c_str(),
+                   "char java.lang.String.charAt(int)");
+      environment = environment->GetParent();
+      DCHECK(environment != nullptr);
+    }
+    deoptimize->CopyEnvironmentFrom(environment);
   }
 
   /** Hoists instruction out of the loop to preheader or deoptimization block. */
