@@ -74,6 +74,15 @@ extern "C" NO_RETURN void artThrowArrayBoundsFromCode(int index, int length, Thr
   self->QuickDeliverException();
 }
 
+// Called by generated call to throw a string index out of bounds exception. The stack
+// trace shall contain String.charAt() thanks to an inline info added by the compiler.
+extern "C" NO_RETURN void artThrowStringBoundsFromCode(int index, int length, Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  ScopedQuickEntrypointChecks sqec(self);
+  ThrowStringIndexOutOfBoundsException(index, length);
+  self->QuickDeliverException();
+}
+
 extern "C" NO_RETURN void artThrowStackOverflowFromCode(Thread* self)
     SHARED_REQUIRES(Locks::mutator_lock_) {
   ScopedQuickEntrypointChecks sqec(self);

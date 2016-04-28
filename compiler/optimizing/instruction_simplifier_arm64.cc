@@ -19,6 +19,7 @@
 #include "common_arm64.h"
 #include "instruction_simplifier_shared.h"
 #include "mirror/array-inl.h"
+#include "mirror/string.h"
 
 namespace art {
 namespace arm64 {
@@ -55,8 +56,10 @@ void InstructionSimplifierArm64Visitor::TryExtractArrayAccessAddress(HInstructio
   // Proceed to extract the base address computation.
   ArenaAllocator* arena = GetGraph()->GetArena();
 
-  HIntConstant* offset =
-      GetGraph()->GetIntConstant(mirror::Array::DataOffset(access_size).Uint32Value());
+  uint32_t raw_offset = (access->IsArrayGet() && access->AsArrayGet()->IsStringCharAt())
+      ? mirror::String::ValueOffset().Uint32Value()
+      : mirror::Array::DataOffset(access_size).Uint32Value();
+  HIntConstant* offset = GetGraph()->GetIntConstant(raw_offset);
   HArm64IntermediateAddress* address =
       new (arena) HArm64IntermediateAddress(array, offset, kNoDexPc);
   address->SetReferenceTypeInfo(array->GetReferenceTypeInfo());
