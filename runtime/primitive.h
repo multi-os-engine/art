@@ -158,6 +158,10 @@ class Primitive {
     }
   }
 
+  static bool IsIntOrShortOrByteOrChar(Type type) {
+    return type == kPrimInt || type == kPrimShort || type == kPrimByte || type == kPrimChar;
+  }
+
   static bool IsIntOrLongType(Type type) {
     return type == kPrimInt || type == kPrimLong;
   }

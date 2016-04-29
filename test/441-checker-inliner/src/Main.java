@@ -152,6 +152,32 @@ public class Main {
     return x;
   }
 
+  /// CHECK-START: int Main.returnReverse(int) intrinsics_recognition (before)
+  /// CHECK-DAG:     <<Result:i\d+>>      InvokeStaticOrDirect
+  /// CHECK-DAG:                          Return [<<Result>>]
+
+  /// CHECK-START: int Main.returnReverse(int) intrinsics_recognition (after)
+  /// CHECK-DAG:     <<Result:i\d+>>      InvokeStaticOrDirect intrinsic:IntegerReverse
+  /// CHECK-DAG:                          Return [<<Result>>]
+
+  private static int returnReverse(int i) {
+    return Integer.reverse(i);
+  }
+
+  /// CHECK-START: int Main.InlinedIntrinsicsAreStillIntrinsic() inliner (before)
+  /// CHECK-DAG:     <<Const1:i\d+>>      IntConstant 1
+  /// CHECK-DAG:     <<Result:i\d+>>      InvokeStaticOrDirect
+  /// CHECK-DAG:                          Return [<<Result>>]
+
+  /// CHECK-START: int Main.InlinedIntrinsicsAreStillIntrinsic() inliner (after)
+  /// CHECK-DAG:     <<Const1:i\d+>>      IntConstant 1
+  /// CHECK-DAG:     <<Result:i\d+>>      InvokeStaticOrDirect intrinsic:IntegerReverse
+  /// CHECK-DAG:                          Return [<<Result>>]
+
+  public static int InlinedIntrinsicsAreStillIntrinsic() {
+    return returnReverse(1);
+  }
+
   /// CHECK-START: int Main.returnAbs(int) intrinsics_recognition (before)
   /// CHECK-DAG:     <<Result:i\d+>>      InvokeStaticOrDirect
   /// CHECK-DAG:                          Return [<<Result>>]
@@ -164,17 +190,17 @@ public class Main {
     return Math.abs(i);
   }
 
-  /// CHECK-START: int Main.InlinedIntrinsicsAreStillIntrinsic() inliner (before)
+  /// CHECK-START: int Main.InlinedStaticallyEvaluatedIntrinsicsAreConstant() inliner (before)
   /// CHECK-DAG:     <<ConstMinus1:i\d+>> IntConstant -1
   /// CHECK-DAG:     <<Result:i\d+>>      InvokeStaticOrDirect
   /// CHECK-DAG:                          Return [<<Result>>]
 
-  /// CHECK-START: int Main.InlinedIntrinsicsAreStillIntrinsic() inliner (after)
-  /// CHECK-DAG:     <<ConstMinus1:i\d+>> IntConstant -1
-  /// CHECK-DAG:     <<Result:i\d+>>      InvokeStaticOrDirect intrinsic:MathAbsInt
-  /// CHECK-DAG:                          Return [<<Result>>]
+  /// CHECK-START: int Main.InlinedStaticallyEvaluatedIntrinsicsAreConstant() inliner (after)
+  /// CHECK-DAG:                          IntConstant -1
+  /// CHECK-DAG:     <<Const1:i\d+>>      IntConstant 1
+  /// CHECK-DAG:                          Return [<<Const1>>]
 
-  public static int InlinedIntrinsicsAreStillIntrinsic() {
+  public static int InlinedStaticallyEvaluatedIntrinsicsAreConstant() {
     return returnAbs(-1);
   }
 
@@ -259,11 +285,19 @@ public class Main {
       throw new Error();
     }
 
-    if (InlinedIntrinsicsAreStillIntrinsic() != 1) {
+    if (returnReverse(1) != Integer.MIN_VALUE) {
+      throw new Error();
+    }
+
+    if (InlinedIntrinsicsAreStillIntrinsic() != Integer.MIN_VALUE) {
       throw new Error();
     }
 
     if (returnAbs(-1) != 1) {
+      throw new Error();
+    }
+
+    if (InlinedStaticallyEvaluatedIntrinsicsAreConstant() != 1) {
       throw new Error();
     }
   }
