@@ -247,38 +247,42 @@ inline void Class::SetVTable(PointerArray* new_vtable) {
   SetFieldObject<false>(OFFSET_OF_OBJECT_MEMBER(Class, vtable_), new_vtable);
 }
 
-inline MemberOffset Class::EmbeddedImTableEntryOffset(uint32_t i, size_t pointer_size) {
+inline MemberOffset Class::EmbeddedImTableEntryOffsetInTable(uint32_t i, size_t pointer_size) {
   DCHECK_LT(i, kImtSize);
-  return MemberOffset(
-      EmbeddedImTableOffset(pointer_size).Uint32Value() + i * ImTableEntrySize(pointer_size));
+  return MemberOffset(i * ImTableEntrySize(pointer_size));
 }
 
 template <VerifyObjectFlags kVerifyFlags, ReadBarrierOption kReadBarrierOption>
 inline ArtMethod* Class::GetEmbeddedImTableEntry(uint32_t i, size_t pointer_size) {
-  DCHECK((ShouldHaveEmbeddedImtAndVTable<kVerifyFlags, kReadBarrierOption>()));
-  return GetFieldPtrWithSize<ArtMethod*>(
-      EmbeddedImTableEntryOffset(i, pointer_size), pointer_size);
+  DCHECK((ShouldHaveEmbeddedImt<kVerifyFlags, kReadBarrierOption>()));
+  size_t offset = EmbeddedVTableOffset(pointer_size).SizeValue() +
+                  VTableEntrySize(pointer_size) * GetEmbeddedVTableLength() +
+                  EmbeddedImTableEntryOffsetInTable(i, pointer_size).SizeValue();
+  return GetFieldPtrWithSize<ArtMethod*>(MemberOffset(offset), pointer_size);
 }
 
 template <VerifyObjectFlags kVerifyFlags, ReadBarrierOption kReadBarrierOption>
 inline void Class::SetEmbeddedImTableEntry(uint32_t i, ArtMethod* method, size_t pointer_size) {
-  DCHECK((ShouldHaveEmbeddedImtAndVTable<kVerifyFlags, kReadBarrierOption>()));
-  SetFieldPtrWithSize<false>(EmbeddedImTableEntryOffset(i, pointer_size), method, pointer_size);
+  DCHECK((ShouldHaveEmbeddedImt<kVerifyFlags, kReadBarrierOption>()));
+  size_t offset = EmbeddedVTableOffset(pointer_size).SizeValue() +
+                  VTableEntrySize(pointer_size) * GetEmbeddedVTableLength() +
+                  EmbeddedImTableEntryOffsetInTable(i, pointer_size).SizeValue();
+  return SetFieldPtrWithSize<false>(MemberOffset(offset), method, pointer_size);
 }
 
 inline bool Class::HasVTable() {
-  return GetVTable() != nullptr || ShouldHaveEmbeddedImtAndVTable();
+  return GetVTable() != nullptr || ShouldHaveEmbeddedVTable();
 }
 
 inline int32_t Class::GetVTableLength() {
-  if (ShouldHaveEmbeddedImtAndVTable()) {
+  if (ShouldHaveEmbeddedVTable()) {
     return GetEmbeddedVTableLength();
   }
   return GetVTable() != nullptr ? GetVTable()->GetLength() : 0;
 }
 
 inline ArtMethod* Class::GetVTableEntry(uint32_t i, size_t pointer_size) {
-  if (ShouldHaveEmbeddedImtAndVTable()) {
+  if (ShouldHaveEmbeddedVTable()) {
     return GetEmbeddedVTableEntry(i, pointer_size);
   }
   auto* vtable = GetVTable();
@@ -292,6 +296,14 @@ inline int32_t Class::GetEmbeddedVTableLength() {
 
 inline void Class::SetEmbeddedVTableLength(int32_t len) {
   SetField32<false>(MemberOffset(EmbeddedVTableLengthOffset()), len);
+}
+
+inline ArtMethod** Class::GetEmbeddedImtPtr(size_t pointer_size) {
+  return GetFieldPtrWithSize<ArtMethod**>(MemberOffset(EmbeddedImtPtrOffset()), pointer_size);
+}
+
+inline void Class::SetEmbeddedImtPtr(ArtMethod** addr, size_t pointer_size) {
+  return SetFieldPtrWithSize<false>(MemberOffset(EmbeddedImtPtrOffset()), addr, pointer_size);
 }
 
 inline MemberOffset Class::EmbeddedVTableEntryOffset(uint32_t i, size_t pointer_size) {
@@ -543,9 +555,11 @@ template <VerifyObjectFlags kVerifyFlags, ReadBarrierOption kReadBarrierOption>
 inline MemberOffset Class::GetFirstReferenceStaticFieldOffset(size_t pointer_size) {
   DCHECK(IsResolved());
   uint32_t base = sizeof(mirror::Class);  // Static fields come after the class.
-  if (ShouldHaveEmbeddedImtAndVTable<kVerifyFlags, kReadBarrierOption>()) {
+  if (ShouldHaveEmbeddedImt<kVerifyFlags, kReadBarrierOption>() ||
+      ShouldHaveEmbeddedVTable<kVerifyFlags, kReadBarrierOption>()) {
     // Static fields come after the embedded tables.
     base = mirror::Class::ComputeClassSize(
+        ShouldHaveEmbeddedImt<kVerifyFlags, kReadBarrierOption>(),
         true, GetEmbeddedVTableLength(), 0, 0, 0, 0, 0, pointer_size);
   }
   return MemberOffset(base);
@@ -554,9 +568,9 @@ inline MemberOffset Class::GetFirstReferenceStaticFieldOffset(size_t pointer_siz
 inline MemberOffset Class::GetFirstReferenceStaticFieldOffsetDuringLinking(size_t pointer_size) {
   DCHECK(IsLoaded());
   uint32_t base = sizeof(mirror::Class);  // Static fields come after the class.
-  if (ShouldHaveEmbeddedImtAndVTable()) {
+  if (ShouldHaveEmbeddedImt() || ShouldHaveEmbeddedVTable()) {
     // Static fields come after the embedded tables.
-    base = mirror::Class::ComputeClassSize(true, GetVTableDuringLinking()->GetLength(),
+    base = mirror::Class::ComputeClassSize(ShouldHaveEmbeddedImt(), true, GetVTableDuringLinking()->GetLength(),
                                            0, 0, 0, 0, 0, pointer_size);
   }
   return MemberOffset(base);
@@ -713,7 +727,8 @@ inline Object* Class::AllocNonMovableObject(Thread* self) {
   return Alloc<true>(self, Runtime::Current()->GetHeap()->GetCurrentNonMovingAllocator());
 }
 
-inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
+inline uint32_t Class::ComputeClassSize(bool has_embedded_imt,
+                                        bool has_embedded_vtable,
                                         uint32_t num_vtable_entries,
                                         uint32_t num_8bit_static_fields,
                                         uint32_t num_16bit_static_fields,
@@ -724,11 +739,14 @@ inline uint32_t Class::ComputeClassSize(bool has_embedded_tables,
   // Space used by java.lang.Class and its instance fields.
   uint32_t size = sizeof(Class);
   // Space used by embedded tables.
-  if (has_embedded_tables) {
-    const uint32_t embedded_imt_size = kImtSize * ImTableEntrySize(pointer_size);
-    const uint32_t embedded_vtable_size = num_vtable_entries * VTableEntrySize(pointer_size);
-    size = RoundUp(size + sizeof(uint32_t) /* embedded vtable len */, pointer_size) +
-        embedded_imt_size + embedded_vtable_size;
+  if (has_embedded_vtable || has_embedded_imt) {
+    size += RoundUp(size + pointer_size + sizeof(uint32_t), pointer_size);
+    if (has_embedded_vtable) {
+      size += num_vtable_entries * VTableEntrySize(pointer_size);
+    }
+    if (has_embedded_imt) {
+      size += kImtSize * ImTableEntrySize(pointer_size);
+    }
   }
 
   // Space used by reference statics.
@@ -991,18 +1009,18 @@ inline IterationRange<StrideIterator<ArtField>> Class::GetSFieldsUnchecked() {
   return MakeIterationRangeFromLengthPrefixedArray(GetSFieldsPtrUnchecked());
 }
 
-inline MemberOffset Class::EmbeddedImTableOffset(size_t pointer_size) {
-  CheckPointerSize(pointer_size);
-  // Round up since we want the embedded imt and vtable to be pointer size aligned in case 64 bits.
-  // Add 32 bits for embedded vtable length.
-  return MemberOffset(
-      RoundUp(EmbeddedVTableLengthOffset().Uint32Value() + sizeof(uint32_t), pointer_size));
-}
-
 inline MemberOffset Class::EmbeddedVTableOffset(size_t pointer_size) {
   CheckPointerSize(pointer_size);
-  return MemberOffset(EmbeddedImTableOffset(pointer_size).Uint32Value() +
-                      kImtSize * ImTableEntrySize(pointer_size));
+  return MemberOffset(
+      RoundUp(EmbeddedImtPtrOffset().Uint32Value() + pointer_size, pointer_size));
+}
+
+inline ArtMethod** Class::ComputeEmbeddedImtAddr(Class* klass, size_t pointer_size) {
+  CheckPointerSize(pointer_size);
+  // Round up since we want the embedded imt to be pointer size aligned in case 64 bits.
+  return reinterpret_cast<ArtMethod**>(reinterpret_cast<uint8_t*>(klass) +
+                                       klass->EmbeddedVTableOffset(pointer_size).Uint32Value() +
+                                       klass->GetEmbeddedVTableLength()*pointer_size);
 }
 
 inline void Class::CheckPointerSize(size_t pointer_size) {
@@ -1087,7 +1105,7 @@ inline void Class::FixupNativePointers(mirror::Class* dest,
     dest->SetDexCacheStrings(new_strings);
   }
   // Fix up embedded tables.
-  if (!IsTemp() && ShouldHaveEmbeddedImtAndVTable<kVerifyNone, kReadBarrierOption>()) {
+  if (!IsTemp() && ShouldHaveEmbeddedVTable<kVerifyNone, kReadBarrierOption>()) {
     for (int32_t i = 0, count = GetEmbeddedVTableLength(); i < count; ++i) {
       ArtMethod* method = GetEmbeddedVTableEntry(i, pointer_size);
       ArtMethod* new_method = visitor(method);
@@ -1095,14 +1113,13 @@ inline void Class::FixupNativePointers(mirror::Class* dest,
         dest->SetEmbeddedVTableEntryUnchecked(i, new_method, pointer_size);
       }
     }
+  }
+  if (!IsTemp() && ShouldHaveEmbeddedImt<kVerifyNone, kReadBarrierOption>()) {
     for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
-      ArtMethod* method = GetEmbeddedImTableEntry<kVerifyFlags, kReadBarrierOption>(i,
-                                                                                    pointer_size);
+      ArtMethod* method = GetEmbeddedImTableEntry(i, pointer_size);
       ArtMethod* new_method = visitor(method);
-      if (method != new_method) {
-        dest->SetEmbeddedImTableEntry<kVerifyFlags, kReadBarrierOption>(i,
-                                                                        new_method,
-                                                                        pointer_size);
+      if (new_method != method) {
+        dest->SetEmbeddedImTableEntry(i, new_method, pointer_size);
       }
     }
   }

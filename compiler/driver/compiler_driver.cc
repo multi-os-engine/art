@@ -2456,7 +2456,7 @@ class InitializeArrayClassesAndCreateConflictTablesVisitor : public ClassVisitor
                                                               true);
     }
     // Create the conflict tables.
-    if (!klass->IsTemp() && klass->ShouldHaveEmbeddedImtAndVTable()) {
+    if (!klass->IsTemp() && klass->ShouldHaveEmbeddedImt()) {
       Runtime::Current()->GetClassLinker()->FillIMTAndConflictTables(klass);
     }
     return true;

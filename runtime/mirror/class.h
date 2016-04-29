@@ -351,7 +351,7 @@ class MANAGED Class FINAL : public Object {
   // be replaced with a class with the right size for embedded imt/vtable.
   bool IsTemp() SHARED_REQUIRES(Locks::mutator_lock_) {
     Status s = GetStatus();
-    return s < Status::kStatusResolving && ShouldHaveEmbeddedImtAndVTable();
+    return s < Status::kStatusResolving && ShouldHaveEmbeddedVTable();
   }
 
   String* GetName() SHARED_REQUIRES(Locks::mutator_lock_);  // Returns the cached name.
@@ -557,7 +557,8 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Compute how many bytes would be used a class with the given elements.
-  static uint32_t ComputeClassSize(bool has_embedded_tables,
+  static uint32_t ComputeClassSize(bool has_embedded_imt,
+                                   bool has_embedded_vtable,
                                    uint32_t num_vtable_entries,
                                    uint32_t num_8bit_static_fields,
                                    uint32_t num_16bit_static_fields,
@@ -570,12 +571,12 @@ class MANAGED Class FINAL : public Object {
   static uint32_t ClassClassSize(size_t pointer_size) {
     // The number of vtable entries in java.lang.Class.
     uint32_t vtable_entries = Object::kVTableLength + 72;
-    return ComputeClassSize(true, vtable_entries, 0, 0, 4, 1, 0, pointer_size);
+    return ComputeClassSize(true, true, vtable_entries, 0, 0, 4, 1, 0, pointer_size);
   }
 
   // The size of a java.lang.Class representing a primitive such as int.class.
   static uint32_t PrimitiveClassSize(size_t pointer_size) {
-    return ComputeClassSize(false, 0, 0, 0, 0, 0, 0, pointer_size);
+    return ComputeClassSize(false, false, 0, 0, 0, 0, 0, 0, pointer_size);
   }
 
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
@@ -830,15 +831,25 @@ class MANAGED Class FINAL : public Object {
     return MemberOffset(sizeof(Class));
   }
 
+  static MemberOffset EmbeddedImtPtrOffset() {
+      return MemberOffset(EmbeddedVTableLengthOffset().Uint32Value() + sizeof(uint32_t));
+  }
+
   template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
            ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
-  bool ShouldHaveEmbeddedImtAndVTable() SHARED_REQUIRES(Locks::mutator_lock_) {
+  bool ShouldHaveEmbeddedImt() SHARED_REQUIRES(Locks::mutator_lock_) {
+    return ShouldHaveEmbeddedVTable<kVerifyFlags, kReadBarrierOption>() && GetIfTable() != nullptr;
+  }
+
+  template<VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
+           ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
+  bool ShouldHaveEmbeddedVTable() SHARED_REQUIRES(Locks::mutator_lock_) {
     return IsInstantiable<kVerifyFlags, kReadBarrierOption>();
   }
 
   bool HasVTable() SHARED_REQUIRES(Locks::mutator_lock_);
 
-  static MemberOffset EmbeddedImTableEntryOffset(uint32_t i, size_t pointer_size);
+  static MemberOffset EmbeddedImTableEntryOffsetInTable(uint32_t i, size_t pointer_size);
 
   static MemberOffset EmbeddedVTableEntryOffset(uint32_t i, size_t pointer_size);
 
@@ -861,6 +872,10 @@ class MANAGED Class FINAL : public Object {
 
   void SetEmbeddedVTableLength(int32_t len) SHARED_REQUIRES(Locks::mutator_lock_);
 
+  ArtMethod** GetEmbeddedImtPtr(size_t pointer_size) SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void SetEmbeddedImtPtr(ArtMethod** offset, size_t pointer_size) SHARED_REQUIRES(Locks::mutator_lock_);
+
   ArtMethod* GetEmbeddedVTableEntry(uint32_t i, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -870,7 +885,10 @@ class MANAGED Class FINAL : public Object {
   inline void SetEmbeddedVTableEntryUnchecked(uint32_t i, ArtMethod* method, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  void PopulateEmbeddedImtAndVTable(ArtMethod* const (&methods)[kImtSize], size_t pointer_size)
+  void PopulateEmbeddedVTable(size_t pointer_size)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void PopulateEmbeddedImt(ArtMethod** methods, size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Given a method implemented by this class but potentially from a super class, return the
@@ -1195,7 +1213,7 @@ class MANAGED Class FINAL : public Object {
   void AssertInitializedOrInitializingInThread(Thread* self)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  Class* CopyOf(Thread* self, int32_t new_length, ArtMethod* const (&imt)[mirror::Class::kImtSize],
+  Class* CopyOf(Thread* self, int32_t new_length, ArtMethod** imt,
                 size_t pointer_size)
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!Roles::uninterruptible_);
 
@@ -1280,6 +1298,8 @@ class MANAGED Class FINAL : public Object {
   void FixupNativePointers(mirror::Class* dest, size_t pointer_size, const Visitor& visitor)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  static ArtMethod** ComputeEmbeddedImtAddr(Class* klass, size_t pointer_size) SHARED_REQUIRES(Locks::mutator_lock_);
+
  private:
   ALWAYS_INLINE void SetMethodsPtrInternal(LengthPrefixedArray<ArtMethod>* new_methods)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -1322,10 +1342,9 @@ class MANAGED Class FINAL : public Object {
 
   // Check that the pointer size matches the one in the class linker.
   ALWAYS_INLINE static void CheckPointerSize(size_t pointer_size);
-
-  static MemberOffset EmbeddedImTableOffset(size_t pointer_size);
+public:
   static MemberOffset EmbeddedVTableOffset(size_t pointer_size);
-
+private:
   template <bool kVisitNativeRoots,
             VerifyObjectFlags kVerifyFlags = kDefaultVerifyFlags,
             ReadBarrierOption kReadBarrierOption = kWithReadBarrier,

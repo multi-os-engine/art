@@ -846,6 +846,10 @@ class FixupObjectVisitor : public FixupVisitor {
       as_klass->FixupNativePointers<kVerifyNone, kWithoutReadBarrier>(as_klass,
                                                                       pointer_size_,
                                                                       visitor);
+      if (as_klass->ShouldHaveEmbeddedImt()) {
+        ArtMethod** imt_addr = visitor.ForwardObject(as_klass->GetEmbeddedImtPtr(pointer_size_));
+        as_klass->SetEmbeddedImtPtr(imt_addr, pointer_size_);
+      }
       // Deal with the pointer arrays. Use the helper function since multiple classes can reference
       // the same arrays.
       mirror::PointerArray* const vtable = as_klass->GetVTable<kVerifyNone, kWithoutReadBarrier>();

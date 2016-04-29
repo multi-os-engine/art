@@ -1216,7 +1216,7 @@ void ImageWriter::WalkFieldsInOrder(mirror::Object* obj) {
 
         // Assign offsets for all runtime methods in the IMT since these may hold conflict tables
         // live.
-        if (as_klass->ShouldHaveEmbeddedImtAndVTable()) {
+        if (as_klass->ShouldHaveEmbeddedImt()) {
           for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
             ArtMethod* imt_method = as_klass->GetEmbeddedImTableEntry(i, target_ptr_size_);
             DCHECK(imt_method != nullptr);
@@ -1874,6 +1874,14 @@ class NativeLocationVisitor {
 
 void ImageWriter::FixupClass(mirror::Class* orig, mirror::Class* copy) {
   orig->FixupNativePointers(copy, target_ptr_size_, NativeLocationVisitor(this));
+  mirror::Class* copy_in_image = GetImageAddress(orig);
+  if (orig->ShouldHaveEmbeddedImt()) {
+    ArtMethod** imt_addr = reinterpret_cast<ArtMethod**>(
+                           reinterpret_cast<uint8_t*>(copy_in_image) +
+                           mirror::Class::EmbeddedVTableOffset(target_ptr_size_).Uint32Value() +
+                           orig->GetEmbeddedVTableLength() * target_ptr_size_);
+    copy->SetEmbeddedImtPtr(imt_addr, target_ptr_size_);
+  }
   FixupClassVisitor visitor(this, copy);
   static_cast<mirror::Object*>(orig)->VisitReferences(visitor, visitor);
 

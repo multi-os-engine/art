@@ -697,6 +697,10 @@ void PatchOat::VisitObject(mirror::Object* object) {
     mirror::Class* klass = object->AsClass();
     mirror::Class* copy_klass = down_cast<mirror::Class*>(copy);
     RelocatedPointerVisitor native_visitor(this);
+    if (klass->ShouldHaveEmbeddedImt()) {
+        ArtMethod** imt_addr = RelocatedAddressOfPointer(klass->GetEmbeddedImtPtr(pointer_size));
+        copy_klass->SetEmbeddedImtPtr(imt_addr, pointer_size);
+    }
     klass->FixupNativePointers(copy_klass, pointer_size, native_visitor);
     auto* vtable = klass->GetVTable();
     if (vtable != nullptr) {

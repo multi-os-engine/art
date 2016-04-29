@@ -2376,6 +2376,15 @@ class ZygoteCompactingCollector FINAL : public collector::SemiSpace {
     }
     // Copy the object over to its new location. Don't use alloc_size to avoid valgrind error.
     memcpy(reinterpret_cast<void*>(forward_address), obj, obj_size);
+    if (obj->IsClass()) {
+      mirror::Class* src_klass = obj->AsClass();
+      if (src_klass->ShouldHaveEmbeddedImt()) {
+        size_t pointer_size = Runtime::Current()->GetClassLinker()->GetImagePointerSize();
+        mirror::Class* dst_klass = reinterpret_cast<mirror::Class*>(forward_address);
+        ArtMethod** imt = mirror::Class::ComputeEmbeddedImtAddr(dst_klass, pointer_size);
+        dst_klass->SetEmbeddedImtPtr(imt, pointer_size);
+      }
+    }
     if (kUseBakerOrBrooksReadBarrier) {
       obj->AssertReadBarrierPointer();
       if (kUseBrooksReadBarrier) {

@@ -34,7 +34,7 @@ namespace mirror {
 
 inline uint32_t String::ClassSize(size_t pointer_size) {
   uint32_t vtable_entries = Object::kVTableLength + 56;
-  return Class::ComputeClassSize(true, vtable_entries, 0, 0, 0, 1, 2, pointer_size);
+  return Class::ComputeClassSize(true, true, vtable_entries, 0, 0, 0, 1, 2, pointer_size);
 }
 
 // Sets string count in the allocation code path to ensure it is guarded by a CAS.

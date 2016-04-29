@@ -3731,8 +3731,6 @@ void LocationsBuilderMIPS::VisitInvokeInterface(HInvokeInterface* invoke) {
 void InstructionCodeGeneratorMIPS::VisitInvokeInterface(HInvokeInterface* invoke) {
   // TODO: b/18116999, our IMTs can miss an IncompatibleClassChangeError.
   Register temp = invoke->GetLocations()->GetTemp(0).AsRegister<Register>();
-  uint32_t method_offset = mirror::Class::EmbeddedImTableEntryOffset(
-      invoke->GetImtIndex() % mirror::Class::kImtSize, kMipsPointerSize).Uint32Value();
   Location receiver = invoke->GetLocations()->InAt(0);
   uint32_t class_offset = mirror::Object::ClassOffset().Int32Value();
   Offset entry_point = ArtMethod::EntryPointFromQuickCompiledCodeOffset(kMipsWordSize);
@@ -3749,6 +3747,9 @@ void InstructionCodeGeneratorMIPS::VisitInvokeInterface(HInvokeInterface* invoke
     __ LoadFromOffset(kLoadWord, temp, receiver.AsRegister<Register>(), class_offset);
   }
   codegen_->MaybeRecordImplicitNullCheck(invoke);
+  __ LoadFromOffset(kLoadWord, temp, temp, mirror::Class::EmbeddedImtPtrOffset().Uint32Value());
+  uint32_t method_offset = mirror::Class::EmbeddedImTableEntryOffsetInTable(
+      invoke->GetImtIndex() % mirror::Class::kImtSize, kMipsPointerSize).Uint32Value();
   // temp = temp->GetImtEntryAt(method_offset);
   __ LoadFromOffset(kLoadWord, temp, temp, method_offset);
   // T9 = temp->GetEntryPoint();
@@ -5192,7 +5193,11 @@ void InstructionCodeGeneratorMIPS::VisitClassTableGet(HClassTableGet* instructio
     method_offset = mirror::Class::EmbeddedVTableEntryOffset(
         instruction->GetIndex(), kMipsPointerSize).SizeValue();
   } else {
-    method_offset = mirror::Class::EmbeddedImTableEntryOffset(
+    __ LoadFromOffset(kLoadWord,
+                    locations->Out().AsRegister<Register>(),
+                    locations->InAt(0).AsRegister<Register>(),
+                    mirror::Class::EmbeddedImtPtrOffset().Uint32Value());
+    method_offset = mirror::Class::EmbeddedImTableEntryOffsetInTable(
         instruction->GetIndex() % mirror::Class::kImtSize, kMipsPointerSize).Uint32Value();
   }
   __ LoadFromOffset(kLoadWord,
