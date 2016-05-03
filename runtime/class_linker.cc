@@ -5671,6 +5671,8 @@ bool ClassLinker::LinkVirtualMethods(
     for (size_t j = 0; j < super_vtable_length; ++j) {
       // Search the hash table to see if we are overridden by any method.
       ArtMethod* super_method = vtable->GetElementPtrSize<ArtMethod*>(j, image_pointer_size_);
+      VLOG(class_linker) << "k: " << PrettyClass(klass.Get()) << " m: " <<
+                         PrettyMethod(super_method) << " v " << j;
       MethodNameAndSignatureComparator super_method_name_comparator(
           super_method->GetInterfaceMethodIfProxy(image_pointer_size_));
       uint32_t hash_index = hash_table.FindAndRemove(&super_method_name_comparator);
@@ -6531,13 +6533,9 @@ bool ClassLinker::LinkInterfaceMethods(
       Handle<mirror::PointerArray> input_vtable_array(null_handle);
       int32_t input_array_length = 0;
 
-      // TODO Cleanup Needed: In the presence of default methods this optimization is rather dirty
-      //      and confusing. Default methods should always look through all the superclasses
-      //      because they are the last choice of an implementation. We get around this by looking
-      //      at the super-classes iftable methods (copied into method_array previously) when we are
-      //      looking for the implementation of a super-interface method but that is rather dirty.
+      // TODO We should be able to skip running down all interfaces in some situations.
       bool using_virtuals;
-      if (super_interface || is_interface) {
+      if (is_interface) {
         // If we are overwriting a super class interface, try to only virtual methods instead of the
         // whole vtable.
         using_virtuals = true;
