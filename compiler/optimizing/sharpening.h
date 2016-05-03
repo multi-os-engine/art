@@ -46,7 +46,10 @@ class HSharpening : public HOptimization {
   static constexpr const char* kSharpeningPassName = "sharpening";
 
  private:
+  void ProcessInvokeVirtualOrInterface(HInvoke* invoke);
   void ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke);
+  HInvokeStaticOrDirect::DispatchInfo CalculateInvokeStaticOrDirectDispatchInfo(
+      MethodReference target_method, uintptr_t direct_method, uintptr_t direct_code);
   void ProcessLoadString(HLoadString* load_string);
 
   CodeGenerator* codegen_;
