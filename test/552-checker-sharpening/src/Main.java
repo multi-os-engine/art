@@ -251,6 +251,179 @@ public class Main {
     return "non-boot-image-string";
   }
 
+  /// CHECK-START: int Main.testVirtualFinalExactBase() sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getIntFinal
+
+  /// CHECK-START: int Main.testVirtualFinalExactBase() sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getIntFinal
+
+  /// CHECK-START: int Main.testVirtualFinalExactBase() sharpening (after)
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getIntFinal
+
+  public static int testVirtualFinalExactBase() {
+    Base b = new Base();
+    return b.$opt$noinline$getIntFinal();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactBase() sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactBase() sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactBase() sharpening (after)
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalExactBase() {
+    Base b = new Base();
+    return b.$opt$noinline$getInt();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived1() sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived1() sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Derived1.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived1() sharpening (after)
+  /// CHECK-NOT:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalExactDerived1() {
+    Base b = new Derived1();
+    return b.$opt$noinline$getInt();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived2() sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived2() sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Derived2.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived2() sharpening (after)
+  /// CHECK-NOT:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalExactDerived2() {
+    Base b = new Derived2();
+    return b.$opt$noinline$getInt();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived3() sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived3() sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived3() sharpening (after)
+  /// CHECK-NOT:            InvokeStaticOrDirect method_name:Derived3.$opt$noinline$getInt
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalExactDerived3() {
+    Base b = new Derived3();
+    return b.$opt$noinline$getInt();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived4() sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived4() sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Derived4.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalExactDerived4() sharpening (after)
+  /// CHECK-NOT:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalExactDerived4() {
+    Base b = new Derived4();
+    return b.$opt$noinline$getInt();
+  }
+
+  /// CHECK-START: int Main.testVirtualFinalNonExactBase(Base) sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getIntFinal
+
+  /// CHECK-START: int Main.testVirtualFinalNonExactBase(Base) sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getIntFinal
+
+  /// CHECK-START: int Main.testVirtualFinalNonExactBase(Base) sharpening (after)
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getIntFinal
+
+  public static int testVirtualFinalNonExactBase(Base b) {
+    return b.$opt$noinline$getIntFinal();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactBase(Base) sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactBase(Base) sharpening (after)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactBase(Base) sharpening (after)
+  /// CHECK-NOT:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalNonExactBase(Base b) {
+    return b.$opt$noinline$getInt();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived1(Derived1) sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived1(Derived1) sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Derived1.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived1(Derived1) sharpening (after)
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+  /// CHECK-NOT:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalNonExactDerived1(Derived1 d) {
+    Base b = d;
+    return b.$opt$noinline$getInt();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived2(Derived2) sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived2(Derived2) sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Derived2.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived2(Derived2) sharpening (after)
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+  /// CHECK-NOT:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalNonExactDerived2(Derived2 d) {
+    Base b = d;
+    return b.$opt$noinline$getInt();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived3(Derived3) sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived3(Derived3) sharpening (after)
+  /// CHECK-DAG:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived3(Derived3) sharpening (after)
+  /// CHECK-NOT:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalNonExactDerived3(Derived3 d) {
+    Base b = d;
+    return b.$opt$noinline$getInt();
+  }
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived4(Derived4) sharpening (before)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived4(Derived4) sharpening (after)
+  /// CHECK-DAG:            InvokeVirtual method_name:Base.$opt$noinline$getInt
+
+  /// CHECK-START: int Main.testVirtualNonFinalNonExactDerived4(Derived4) sharpening (after)
+  /// CHECK-NOT:            InvokeStaticOrDirect method_name:Base.$opt$noinline$getInt
+  /// CHECK-NOT:            InvokeStaticOrDirect method_name:Derived4.$opt$noinline$getInt
+
+  public static int testVirtualNonFinalNonExactDerived4(Derived4 d) {
+    Base b = d;
+    return b.$opt$noinline$getInt();
+  }
+
   public static void main(String[] args) {
     assertIntEquals(1, testSimple(1));
     assertIntEquals(1, testDiamond(false, 1));
@@ -262,5 +435,56 @@ public class Main {
     assertIntEquals(-6, testLoopWithDiamond(new int[]{ 3, 4 }, true, 1));
     assertStringEquals("", $noinline$getBootImageString());
     assertStringEquals("non-boot-image-string", $noinline$getNonBootImageString());
+
+    assertIntEquals(-1, testVirtualFinalExactBase());
+    assertIntEquals(1, testVirtualNonFinalExactBase());
+    assertIntEquals(11, testVirtualNonFinalExactDerived1());
+    assertIntEquals(21, testVirtualNonFinalExactDerived2());
+    assertIntEquals(1, testVirtualNonFinalExactDerived3());
+    assertIntEquals(41, testVirtualNonFinalExactDerived4());
+    assertIntEquals(-1, testVirtualFinalNonExactBase(new Base()));
+    assertIntEquals(1, testVirtualNonFinalNonExactBase(new Base()));
+    assertIntEquals(11, testVirtualNonFinalNonExactDerived1(new Derived1()));
+    assertIntEquals(21, testVirtualNonFinalNonExactDerived2(new Derived2()));
+    assertIntEquals(1, testVirtualNonFinalNonExactDerived3(new Derived3()));
+    assertIntEquals(41, testVirtualNonFinalNonExactDerived4(new Derived4()));
+  }
+}
+
+class Base {
+  public final int $opt$noinline$getIntFinal() {
+    if (doThrow) { throw new Error(); }
+    return -1;
+  }
+
+  public int $opt$noinline$getInt() {
+    if (doThrow) { throw new Error(); }
+    return 1;
+  }
+
+  public static boolean doThrow = false;
+}
+
+class Derived1 extends Base {
+  public final int $opt$noinline$getInt() {
+    if (doThrow) { throw new Error(); }
+    return 11;
+  }
+}
+
+final class Derived2 extends Base {
+  public int $opt$noinline$getInt() {
+    if (doThrow) { throw new Error(); }
+    return 21;
+  }
+}
+
+final class Derived3 extends Base {
+}
+
+class Derived4 extends Base {
+  public int $opt$noinline$getInt() {
+    if (doThrow) { throw new Error(); }
+    return 41;
   }
 }

@@ -795,7 +795,7 @@ bool HInstructionBuilder::BuildInvoke(const Instruction& instruction,
         HInvokeStaticOrDirect::MethodLoadKind::kStringInit,
         HInvokeStaticOrDirect::CodePtrLocation::kCallArtMethod,
         dchecked_integral_cast<uint64_t>(string_init_offset),
-        0U
+        0u
     };
     HInvoke* invoke = new (arena_) HInvokeStaticOrDirect(
         arena_,
@@ -860,7 +860,7 @@ bool HInstructionBuilder::BuildInvoke(const Instruction& instruction,
         HInvokeStaticOrDirect::MethodLoadKind::kDexCacheViaMethod,
         HInvokeStaticOrDirect::CodePtrLocation::kCallArtMethod,
         0u,
-        0U
+        0u
     };
     invoke = new (arena_) HInvokeStaticOrDirect(arena_,
                                                 number_of_arguments,
