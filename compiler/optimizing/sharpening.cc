@@ -21,7 +21,7 @@
 #include "code_generator.h"
 #include "driver/dex_compilation_unit.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
-#include "driver/compiler_driver.h"
+#include "driver/compiler_driver-inl.h"
 #include "gc/heap.h"
 #include "gc/space/image_space.h"
 #include "handle_scope-inl.h"
@@ -38,17 +38,177 @@ void HSharpening::Run() {
   for (HBasicBlock* block : graph_->GetReversePostOrder()) {
     for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
       HInstruction* instruction = it.Current();
-      if (instruction->IsInvokeStaticOrDirect()) {
+      if (instruction->IsInvokeVirtual() || instruction->IsInvokeInterface()) {
+        ProcessInvokeVirtualOrInterface(instruction->AsInvoke());
+      } else if (instruction->IsInvokeStaticOrDirect()) {
         ProcessInvokeStaticOrDirect(instruction->AsInvokeStaticOrDirect());
       } else if (instruction->IsLoadString()) {
         ProcessLoadString(instruction->AsLoadString());
       }
-      // TODO: Move the sharpening of invoke-virtual/-interface/-super from HGraphBuilder
-      //       here. Rewrite it to avoid the CompilerDriver's reliance on verifier data
-      //       because we know the type better when inlining.
       // TODO: HLoadClass - select better load kind if available.
     }
   }
+}
+
+/**
+ * Given the `resolved_method` looked up in the dex cache, try to find
+ * the actual runtime target of an interface or virtual call.
+ * Return nullptr if the runtime target cannot be proven.
+ */
+static ArtMethod* FindVirtualOrInterfaceTarget(HInvoke* invoke, ArtMethod* resolved_method)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (resolved_method->IsFinal() || resolved_method->GetDeclaringClass()->IsFinal()) {
+    // No need to lookup further, the resolved method will be the target.
+    return resolved_method;
+  }
+
+  HInstruction* receiver = invoke->InputAt(0);
+  ReferenceTypeInfo info = receiver->GetReferenceTypeInfo();
+  DCHECK(info.IsValid()) << "Invalid RTI for " << receiver->DebugName();
+  if (info.GetTypeHandle()->IsErroneous()) {
+    // If the type is erroneous, do not go further, as we are going to query the vtable or
+    // imt table, that we can only safely do on non-erroneous classes.
+    return nullptr;
+  } else if (info.GetTypeHandle()->IsInterface()) {
+    // Statically knowing that the receiver has an interface type cannot
+    // help us find what is the target method.
+    return nullptr;
+  } else if (!resolved_method->GetDeclaringClass()->IsAssignableFrom(info.GetTypeHandle().Get())) {
+    // The method that we're trying to call is not in the receiver's class or super classes.
+    return nullptr;
+  }
+
+  ClassLinker* cl = Runtime::Current()->GetClassLinker();
+  size_t pointer_size = cl->GetImagePointerSize();
+  if (invoke->IsInvokeInterface()) {
+    resolved_method = info.GetTypeHandle()->FindVirtualMethodForInterface(
+        resolved_method, pointer_size);
+  } else {
+    DCHECK(invoke->IsInvokeVirtual());
+    resolved_method = info.GetTypeHandle()->FindVirtualMethodForVirtual(
+        resolved_method, pointer_size);
+  }
+
+  if (resolved_method == nullptr) {
+    // The information we had on the receiver was not enough to find
+    // the target method.
+    return nullptr;
+  } else if (!resolved_method->IsInvokable()) {
+    // The information we had on the receiver was not enough to find
+    // the target method.
+    return nullptr;
+  } else if (resolved_method->IsFinal()) {
+    // A final method has to be the target method.
+    return resolved_method;
+  } else if (info.IsExact()) {
+    // If we found a method and the receiver's concrete type is statically
+    // known, we know for sure the target.
+    return resolved_method;
+  } else {
+    // Even if we did find a method, the receiver type was not enough to
+    // statically find the runtime target.
+    return nullptr;
+  }
+}
+
+void HSharpening::ProcessInvokeVirtualOrInterface(HInvoke* invoke) {
+  ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+  size_t pointer_size = class_linker->GetImagePointerSize();
+  ScopedObjectAccess soa(Thread::Current());
+  ArtMethod* resolved_method = compilation_unit_.GetDexCache()->GetResolvedMethod(
+      invoke->GetDexMethodIndex(), pointer_size);
+  ArtMethod* actual_method = FindVirtualOrInterfaceTarget(invoke, resolved_method);
+  if (actual_method == nullptr) {
+    return;
+  }
+  StackHandleScope<2> hs(soa.Self());
+  Handle<mirror::ClassLoader> class_loader(hs.NewHandle(
+      soa.Decode<mirror::ClassLoader*>(compilation_unit_.GetClassLoader())));
+  Handle<mirror::Class> referrer_class = hs.NewHandle(
+      compiler_driver_->ResolveCompilingMethodsClass(soa,
+                                                     compilation_unit_.GetDexCache(),
+                                                     class_loader,
+                                                     &compilation_unit_));
+  if (referrer_class.Get() == nullptr) {
+    return;
+  }
+
+  // TODO: Avoid CompilerDriver.
+  MethodReference target_method(actual_method->GetDexFile(), actual_method->GetDexMethodIndex());
+  InvokeType optimized_invoke_type = invoke->GetOriginalInvokeType();
+  uintptr_t direct_code, direct_method;
+  int stats_flags;
+  compiler_driver_->GetCodeAndMethodForDirectCall(
+      &optimized_invoke_type,
+      kDirect,
+      true,
+      referrer_class.Get(),
+      actual_method,
+      &stats_flags,
+      &target_method,
+      &direct_code,
+      &direct_method);
+
+  if (direct_method == 0u && !IsSameDexFile(*target_method.dex_file, invoke->GetDexFile())) {
+    // CalculateInvokeStaticOrDirectDispatchInfo() cannot currently handle this case.
+    // TODO: Clean this up when reducing dependency on the CompilerDriver.
+    return;
+  }
+
+  HInvokeStaticOrDirect::DispatchInfo dispatch_info =
+      CalculateInvokeStaticOrDirectDispatchInfo(target_method, direct_method, direct_code);
+  if (!IsSameDexFile(*target_method.dex_file, invoke->GetDexFile())) {
+    // Check if we need a valid method index to the invoke's dex file.
+    switch(dispatch_info.method_load_kind) {
+      case HInvokeStaticOrDirect::MethodLoadKind::kRecursive:
+      case HInvokeStaticOrDirect::MethodLoadKind::kDirectAddress:
+      case HInvokeStaticOrDirect::MethodLoadKind::kDirectAddressWithFixup:
+        break;
+      case HInvokeStaticOrDirect::MethodLoadKind::kDexCachePcRelative:
+        DCHECK(ContainsElement(compiler_driver_->GetDexFilesForOatFile(), target_method.dex_file));
+        break;
+      case HInvokeStaticOrDirect::MethodLoadKind::kDexCacheViaMethod:
+        // This load kind requires a valid method index into the referrer's dex file.
+        target_method.dex_file = &invoke->GetDexFile();
+        target_method.dex_method_index =
+            actual_method->FindDexMethodIndexInOtherDexFile(invoke->GetDexFile(),
+                                                            invoke->GetDexMethodIndex());
+        if (target_method.dex_method_index == DexFile::kDexNoIndex) {
+          return;
+        }
+        break;
+      default:
+        LOG(FATAL) << "Unexpected method load kind " << dispatch_info.method_load_kind;
+        UNREACHABLE();
+    }
+  }
+
+  HInvokeStaticOrDirect* invoke_direct = new (graph_->GetArena()) HInvokeStaticOrDirect(
+      graph_->GetArena(),
+      invoke->GetNumberOfArguments(),
+      invoke->GetType(),
+      invoke->GetDexPc(),
+      target_method.dex_method_index,  // May be bogus except for kDexCacheViaMethod.
+      target_method,
+      dispatch_info,
+      invoke->GetOriginalInvokeType(),
+      kDirect,
+      HInvokeStaticOrDirect::ClinitCheckRequirement::kNone);
+  if (invoke->GetType() == Primitive::kPrimNot) {
+    CHECK(invoke->GetReferenceTypeInfo().IsValid());
+    // TODO: Take covariant returns into account (and re-run RTP if needed).
+    invoke_direct->SetReferenceTypeInfo(invoke->GetReferenceTypeInfo());
+  }
+
+  for (size_t i = 0, num = invoke->GetNumberOfArguments(); i != num; ++i) {
+    invoke_direct->SetArgumentAt(i, invoke->InputAt(i));
+  }
+  if (HInvokeStaticOrDirect::NeedsCurrentMethodInput(invoke_direct->GetMethodLoadKind())) {
+    invoke_direct->SetArgumentAt(invoke_direct->GetSpecialInputIndex(), graph_->GetCurrentMethod());
+  }
+
+  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, invoke_direct);
+  invoke_direct->CopyEnvironmentFrom(invoke->GetEnvironment());
 }
 
 void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
@@ -82,13 +242,20 @@ void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
   invoke->SetOptimizedInvokeType(optimized_invoke_type);
   invoke->SetTargetMethod(target_method);
 
+  HInvokeStaticOrDirect::DispatchInfo dispatch_info =
+      CalculateInvokeStaticOrDirectDispatchInfo(target_method, direct_method, direct_code);
+  invoke->SetDispatchInfo(dispatch_info);
+}
+
+HInvokeStaticOrDirect::DispatchInfo HSharpening::CalculateInvokeStaticOrDirectDispatchInfo(
+    MethodReference target_method, uintptr_t direct_method, uintptr_t direct_code) {
   HInvokeStaticOrDirect::MethodLoadKind method_load_kind;
   HInvokeStaticOrDirect::CodePtrLocation code_ptr_location;
   uint64_t method_load_data = 0u;
   uint64_t direct_code_ptr = 0u;
 
   HGraph* outer_graph = codegen_->GetGraph();
-  if (target_method.dex_file == &outer_graph->GetDexFile() &&
+  if (IsSameDexFile(*target_method.dex_file, outer_graph->GetDexFile()) &&
       target_method.dex_method_index == outer_graph->GetMethodIdx()) {
     method_load_kind = HInvokeStaticOrDirect::MethodLoadKind::kRecursive;
     code_ptr_location = HInvokeStaticOrDirect::CodePtrLocation::kCallSelf;
@@ -148,9 +315,8 @@ void HSharpening::ProcessInvokeStaticOrDirect(HInvokeStaticOrDirect* invoke) {
       method_load_kind, code_ptr_location, method_load_data, direct_code_ptr
   };
   HInvokeStaticOrDirect::DispatchInfo dispatch_info =
-      codegen_->GetSupportedInvokeStaticOrDirectDispatch(desired_dispatch_info,
-                                                         invoke->GetTargetMethod());
-  invoke->SetDispatchInfo(dispatch_info);
+      codegen_->GetSupportedInvokeStaticOrDirectDispatch(desired_dispatch_info, target_method);
+  return dispatch_info;
 }
 
 void HSharpening::ProcessLoadString(HLoadString* load_string) {
