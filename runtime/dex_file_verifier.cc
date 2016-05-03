@@ -2358,7 +2358,7 @@ static bool CheckAtMostOneOfPublicProtectedPrivate(uint32_t flags) {
 static std::string GetStringOrError(const uint8_t* const begin,
                                     const DexFile::Header* const header,
                                     uint32_t string_idx) {
-  if (header->string_ids_size_ < string_idx) {
+  if (header->string_ids_size_ <= string_idx) {
     return "(error)";
   }
 
@@ -2375,7 +2375,7 @@ static std::string GetStringOrError(const uint8_t* const begin,
 static std::string GetClassOrError(const uint8_t* const begin,
                                    const DexFile::Header* const header,
                                    uint32_t class_idx) {
-  if (header->type_ids_size_ < class_idx) {
+  if (header->type_ids_size_ <= class_idx) {
     return "(error)";
   }
 
@@ -2390,7 +2390,7 @@ static std::string GetClassOrError(const uint8_t* const begin,
 static std::string GetFieldDescriptionOrError(const uint8_t* const begin,
                                               const DexFile::Header* const header,
                                               uint32_t idx) {
-  if (header->field_ids_size_ < idx) {
+  if (header->field_ids_size_ <= idx) {
     return "(error)";
   }
 
@@ -2408,7 +2408,7 @@ static std::string GetFieldDescriptionOrError(const uint8_t* const begin,
 static std::string GetMethodDescriptionOrError(const uint8_t* const begin,
                                                const DexFile::Header* const header,
                                                uint32_t idx) {
-  if (header->method_ids_size_ < idx) {
+  if (header->method_ids_size_ <= idx) {
     return "(error)";
   }
 
