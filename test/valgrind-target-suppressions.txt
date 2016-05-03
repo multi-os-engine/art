@@ -1,0 +1,24 @@
+{
+   ashmem ioctl
+   Memcheck:Param
+   ioctl(generic)
+   ...
+   fun:ioctl
+   fun:ashmem_create_region
+}
+
+{
+   jemalloc chunk_alloc_cache
+   Memcheck:Cond
+   fun:je_chunk_alloc_cache
+}
+
+{
+   VectorImpl
+   Memcheck:Leak
+   match-leak-kinds:possible
+   fun:malloc
+   # The wildcards make this rule work both for 32-bit and 64-bit environments.
+   fun:_ZN7android12SharedBuffer5allocE?
+   fun:_ZN7android10VectorImpl5_growE??
+}
