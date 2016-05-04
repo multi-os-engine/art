@@ -26,7 +26,6 @@ public class Main {
 
   /// CHECK-START: void Main.test1(boolean, int, int, int, int, int) register (after)
   /// CHECK:       name "B0"
-  /// CHECK-NOT:     ParallelMove
   /// CHECK:       name "B1"
   /// CHECK-NOT:   end_block
   /// CHECK:         If
@@ -61,7 +60,6 @@ public class Main {
 
   /// CHECK-START: void Main.test2(boolean, int, int, int, int, int) register (after)
   /// CHECK:       name "B0"
-  /// CHECK-NOT:     ParallelMove
   /// CHECK:       name "B1"
   /// CHECK-NOT:   end_block
   /// CHECK:         If
@@ -96,7 +94,6 @@ public class Main {
 
   /// CHECK-START: void Main.test3(boolean, int, int, int, int, int) register (after)
   /// CHECK:       name "B0"
-  /// CHECK-NOT:     ParallelMove
   /// CHECK:       name "B1"
   /// CHECK-NOT:   end_block
   /// CHECK:         If
