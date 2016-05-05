@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <dlfcn.h>
 #include <iostream>
 
 #include "base/casts.h"
@@ -27,7 +28,19 @@ namespace {
 
 static volatile std::atomic<bool> vm_was_shutdown(false);
 
-extern "C" JNIEXPORT void JNICALL Java_Main_waitAndCallIntoJniEnv(JNIEnv* env, jclass) {
+static void* LoadSelf() {
+  return dlopen(kIsDebugBuild ? "libarttestd.so" : "libarttest.so", RTLD_NOW);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_Main_waitAndCallIntoJniEnv(JNIEnv* env, jclass klass) {
+  if (klass != nullptr) {
+    void* handle = LoadSelf();
+    CHECK(handle != nullptr);
+    auto self_func = reinterpret_cast<void(*)(JNIEnv*, jclass)>(dlsym(handle, __FUNCTION__));
+    CHECK(self_func != nullptr);
+    self_func(env, nullptr);  // Pass null as a special marker.
+    return;
+  }
   // Wait until the runtime is shutdown.
   while (!vm_was_shutdown.load()) {
     usleep(1000);
@@ -38,7 +51,15 @@ extern "C" JNIEXPORT void JNICALL Java_Main_waitAndCallIntoJniEnv(JNIEnv* env, j
 }
 
 // NO_RETURN does not work with extern "C" for target builds.
-extern "C" JNIEXPORT void JNICALL Java_Main_destroyJavaVMAndExit(JNIEnv* env, jclass) {
+extern "C" JNIEXPORT void JNICALL Java_Main_destroyJavaVMAndExit(JNIEnv* env, jclass klass) {
+  if (klass != nullptr) {
+    void* handle = LoadSelf();
+    CHECK(handle != nullptr);
+    auto self_func = reinterpret_cast<void(*)(JNIEnv*, jclass)>(dlsym(handle, __FUNCTION__));
+    CHECK(self_func != nullptr);
+    self_func(env, nullptr);  // Pass null as a special marker.
+    return;
+  }
   // Fake up the managed stack so we can detach.
   Thread* const self = Thread::Current();
   self->SetTopOfStack(nullptr);
