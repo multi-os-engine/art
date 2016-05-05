@@ -1,0 +1,5 @@
+Hopefully inflated 5000 monitors
+Finished GC
+Finished first check
+Finished second check
+Total checks: 10000
