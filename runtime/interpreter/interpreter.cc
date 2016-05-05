@@ -264,15 +264,15 @@ JValue ExecuteGotoImpl<false, true>(Thread* self, const DexFile::CodeItem* code_
                                     ShadowFrame& shadow_frame, JValue result_register);
 #endif
 
-static JValue Execute(Thread* self, const DexFile::CodeItem* code_item, ShadowFrame& shadow_frame,
-                      JValue result_register)
-    SHARED_REQUIRES(Locks::mutator_lock_);
-
-static inline JValue Execute(Thread* self, const DexFile::CodeItem* code_item,
-                             ShadowFrame& shadow_frame, JValue result_register) {
+static inline JValue Execute(
+    Thread* self,
+    const DexFile::CodeItem* code_item,
+    ShadowFrame& shadow_frame, JValue result_register,
+    bool consider_jit = true) SHARED_REQUIRES(Locks::mutator_lock_) {
   DCHECK(!shadow_frame.GetMethod()->IsAbstract());
   DCHECK(!shadow_frame.GetMethod()->IsNative());
-  if (LIKELY(shadow_frame.GetDexPC() == 0)) {  // Entering the method, but not via deoptimization.
+  if (LIKELY(shadow_frame.GetDexPC() == 0 && consider_jit)) {
+    // Entering the method, but not via deoptimization, or when JIT is unrequested by client.
     if (kIsDebugBuild) {
       self->AssertNoPendingException();
     }
@@ -387,7 +387,8 @@ static inline JValue Execute(Thread* self, const DexFile::CodeItem* code_item,
 }
 
 void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receiver,
-                                uint32_t* args, JValue* result) {
+                                uint32_t* args, JValue* result,
+                                bool consider_jit) {
   DCHECK_EQ(self, Thread::Current());
   bool implicit_check = !Runtime::Current()->ExplicitStackOverflowChecks();
   if (UNLIKELY(__builtin_frame_address(0) < self->GetStackEndForInterpreter(implicit_check))) {
@@ -462,7 +463,7 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
     }
   }
   if (LIKELY(!method->IsNative())) {
-    JValue r = Execute(self, code_item, *shadow_frame, JValue());
+    JValue r = Execute(self, code_item, *shadow_frame, JValue(), consider_jit);
     if (result != nullptr) {
       *result = r;
     }
