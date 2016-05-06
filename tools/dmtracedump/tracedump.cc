@@ -512,10 +512,10 @@ int32_t compareUniqueExclusive(const void* a, const void* b) {
 void freeDataKeys(DataKeys* pKeys) {
   if (pKeys == nullptr) return;
 
-  free(pKeys->fileData);
-  free(pKeys->threads);
-  free(pKeys->methods);
-  free(pKeys);
+  delete[] pKeys->fileData;
+  delete[] pKeys->threads;
+  delete[] pKeys->methods;
+  delete pKeys;
 }
 
 /*
@@ -822,8 +822,8 @@ void sortMethodList(DataKeys* pKeys) {
 DataKeys* parseKeys(FILE* fp, int32_t verbose) {
   int64_t offset;
   DataKeys* pKeys = new DataKeys();
-  memset(pKeys, 0, sizeof(DataKeys));
   if (pKeys == nullptr) return nullptr;
+  memset(pKeys, 0, sizeof(DataKeys));
 
   /*
    * We load the entire file into memory.  We do this, rather than memory-
@@ -866,7 +866,11 @@ DataKeys* parseKeys(FILE* fp, int32_t verbose) {
   }
 
   /* Reduce our allocation now that we know where the end of the key section is. */
-  pKeys->fileData = reinterpret_cast<char*>(realloc(pKeys->fileData, offset));
+  assert(offset > 0 && offset < pKeys->fileLen);
+  char* new_file_data = new char[offset];
+  memcpy(new_file_data, pKeys->fileData, offset);
+  delete[] pKeys->fileData;
+  pKeys->fileData = new_file_data;
   pKeys->fileLen = offset;
   /* Leave fp pointing to the beginning of the data section. */
   fseek(fp, offset, SEEK_SET);
@@ -2607,7 +2611,7 @@ int32_t main(int32_t argc, char** argv) {
     if (gOptions.graphFileName != nullptr) {
       createInclusiveProfileGraphNew(dataKeys);
     }
-    free(methods);
+    delete[] methods;
   }
 
   freeDataKeys(dataKeys);
