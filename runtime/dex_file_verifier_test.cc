@@ -510,6 +510,7 @@ TEST_F(DexFileVerifierTest, MethodAccessFlagsConstructors) {
       kMethodFlagsTestDex,
       "init_not_allowed_flags",
       [&](DexFile* dex_file) {
+        MakeDexVersion37(dex_file);
         ApplyMaskToMethodFlags(dex_file, "foo", ~kAccDeclaredSynchronized);
         ApplyMaskToMethodFlags(dex_file, "bar", ~kAccDeclaredSynchronized);
 
