@@ -51,7 +51,7 @@ ArtMethod* ArtMethod::FromReflectedMethod(const ScopedObjectAccessAlreadyRunnabl
                                           jobject jlr_method) {
   auto* abstract_method = soa.Decode<mirror::AbstractMethod*>(jlr_method);
   DCHECK(abstract_method != nullptr);
-  return abstract_method->GetArtMethod();
+  return abstract_method->GetArtMethod()->GetInterfaceMethodIfProxy(sizeof(void*));
 }
 
 mirror::String* ArtMethod::GetNameAsString(Thread* self) {
