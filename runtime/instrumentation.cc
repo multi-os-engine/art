@@ -688,7 +688,10 @@ void Instrumentation::ResetQuickAllocEntryPoints() {
 }
 
 void Instrumentation::UpdateMethodsCode(ArtMethod* method, const void* quick_code) {
-  DCHECK(method->GetDeclaringClass()->IsResolved());
+  // When debugger attaches, we may update the entry points of all methods of a class
+  // to the interpreter bridge. A method's declaring class might not be in resolved
+  // state yet in that case.
+  DCHECK(Dbg::IsDebuggerActive() || method->GetDeclaringClass()->IsResolved());
   const void* new_quick_code;
   if (LIKELY(!instrumentation_stubs_installed_)) {
     new_quick_code = quick_code;
