@@ -174,8 +174,10 @@ public class Main {
         testCases.add(new TestCase("b/27799205 (5)", "B27799205Helper", "run5", null,
                 new VerifyError(), null));
         testCases.add(new TestCase("b/27799205 (6)", "B27799205Helper", "run6", null, null, null));
-        testCases.add(new TestCase("b/28187158", "B28187158", "run", new Object[] { null} ,
+        testCases.add(new TestCase("b/28187158", "B28187158", "run", new Object[] { null },
                 new VerifyError(), null));
+        testCases.add(new TestCase("b/28685551", "B28685551", "run", null,
+                new ClassCircularityError(), null));
     }
 
     public void runTests() {

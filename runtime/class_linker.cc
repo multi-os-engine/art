@@ -5317,6 +5317,12 @@ bool ClassLinker::LoadSuperAndInterfaces(Handle<mirror::Class> klass, const DexF
   const DexFile::ClassDef& class_def = dex_file.GetClassDef(klass->GetDexClassDefIndex());
   uint16_t super_class_idx = class_def.superclass_idx_;
   if (super_class_idx != DexFile::kDexNoIndex16) {
+    if (super_class_idx == class_def.class_idx_) {
+      ThrowClassCircularityError(klass.Get(),
+                                 "Class %s extends itself",
+                                 PrettyDescriptor(klass.Get()).c_str());
+      return false;
+    }
     mirror::Class* super_class = ResolveType(dex_file, super_class_idx, klass.Get());
     if (super_class == nullptr) {
       DCHECK(Thread::Current()->IsExceptionPending());
