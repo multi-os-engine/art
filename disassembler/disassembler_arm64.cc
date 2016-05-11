@@ -63,9 +63,16 @@ void CustomDisassembler::VisitLoadLiteral(const vixl::Instruction* instr) {
     return;
   }
 
+  // Get address of literal. Bail if not within expected buffer range to
+  // avoid trying to fetch literals for invalid "run-away" instructions.
   void* data_address = instr->LiteralAddress<void*>();
-  vixl::Instr op = instr->Mask(vixl::LoadLiteralMask);
+  if (data_address < base_address_ || data_address >= end_address_) {
+    AppendToOutput(" (?)");
+    return;
+  }
 
+  // Output information on literal.
+  vixl::Instr op = instr->Mask(vixl::LoadLiteralMask);
   switch (op) {
     case vixl::LDR_w_lit:
     case vixl::LDR_x_lit:

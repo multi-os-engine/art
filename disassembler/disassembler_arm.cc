@@ -418,7 +418,12 @@ std::ostream& operator<<(std::ostream& os, T2LitType type) {
   return os << static_cast<int>(type);
 }
 
-void DumpThumb2Literal(std::ostream& args, const uint8_t* instr_ptr, uint32_t U, uint32_t imm32,
+void DumpThumb2Literal(std::ostream& args,
+                       const uint8_t* instr_ptr,
+                       const uintptr_t lo_adr,
+                       const uintptr_t hi_adr,
+                       uint32_t U,
+                       uint32_t imm32,
                        T2LitType type) {
   // Literal offsets (imm32) are not required to be aligned so we may need unaligned access.
   typedef const int16_t unaligned_int16_t __attribute__ ((aligned (1)));
@@ -428,8 +433,15 @@ void DumpThumb2Literal(std::ostream& args, const uint8_t* instr_ptr, uint32_t U,
   typedef const int64_t unaligned_int64_t __attribute__ ((aligned (1)));
   typedef const uint64_t unaligned_uint64_t __attribute__ ((aligned (1)));
 
+  // Get address of literal. Bail if not within expected buffer range to
+  // avoid trying to fetch literals for invalid "run-away" instructions.
   uintptr_t pc = RoundDown(reinterpret_cast<intptr_t>(instr_ptr) + 4, 4);
   uintptr_t lit_adr = U ? pc + imm32 : pc - imm32;
+  if (lit_adr < lo_adr || lit_adr >= hi_adr) {
+    args << "  ; ?";
+    return;
+  }
+
   args << "  ; ";
   switch (type) {
     case kT2LitUByte:
@@ -481,6 +493,10 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
   if (op1 == 0) {
     return DumpThumb16(os, instr_ptr);
   }
+
+  // Set valid address range of backing buffer.
+  const uintptr_t lo_adr = reinterpret_cast<intptr_t>(GetDisassemblerOptions()->base_address_);
+  const uintptr_t hi_adr = reinterpret_cast<intptr_t>(GetDisassemblerOptions()->end_address_);
 
   uint32_t op2 = (instr >> 20) & 0x7F;
   std::ostringstream opcode;
@@ -824,7 +840,7 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
                 args << d << ", [" << Rn << ", #" << ((U == 1) ? "" : "-")
                      << (imm8 << 2) << "]";
                 if (Rn.r == 15 && U == 1) {
-                  DumpThumb2Literal(args, instr_ptr, U, imm8 << 2, kT2LitHexLong);
+                  DumpThumb2Literal(args, instr_ptr, lo_adr, hi_adr, U, imm8 << 2, kT2LitHexLong);
                 }
               } else if (Rn.r == 13 && W == 1 && U == L) {  // VPUSH/VPOP
                 opcode << (L == 1 ? "vpop" : "vpush");
@@ -1410,7 +1426,7 @@ size_t DisassemblerArm::DumpThumb32(std::ostream& os, const uint8_t* instr_ptr) 
               };
               DCHECK_LT(op2 >> 1, arraysize(lit_type));
               DCHECK_NE(lit_type[op2 >> 1], kT2LitInvalid);
-              DumpThumb2Literal(args, instr_ptr, U, imm12, lit_type[op2 >> 1]);
+              DumpThumb2Literal(args, instr_ptr, lo_adr, hi_adr, U, imm12, lit_type[op2 >> 1]);
             }
           } else if ((instr & 0xFC0) == 0) {
             opcode << ldr_str << sign << type << ".w";
