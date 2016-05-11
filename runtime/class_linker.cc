@@ -6968,10 +6968,6 @@ bool ClassLinker::LinkInterfaceMethods(
             << "Obsolete methods " << PrettyMethod(m) << " is in dex cache!";
       }
     }
-    // Put some random garbage in old methods to help find stale pointers.
-    if (methods != old_methods && old_methods != nullptr) {
-      memset(old_methods, 0xFEu, old_size);
-    }
   } else {
     self->EndAssertNoThreadSuspension(old_cause);
   }
