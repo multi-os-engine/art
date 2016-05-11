@@ -1956,11 +1956,33 @@ bool DexFileVerifier::CheckInterClassDefItem() {
   }
 
   if (item->superclass_idx_ != DexFile::kDexNoIndex16) {
+    // Check a class does not inherit from itself directly (by having
+    // the same type idx as its super class).
+    if (UNLIKELY(item->superclass_idx_ == item->class_idx_)) {
+      ErrorStringPrintf("Class with same type idx as its superclass: '%d'", item->class_idx_);
+      return false;
+    }
+
     LOAD_STRING_BY_TYPE(superclass_descriptor, item->superclass_idx_,
                         "inter_class_def_item superclass_idx")
     if (UNLIKELY(!IsValidDescriptor(superclass_descriptor) || superclass_descriptor[0] != 'L')) {
       ErrorStringPrintf("Invalid superclass: '%s'", superclass_descriptor);
       return false;
+    }
+
+    // Check a class does not inherit from itself transitively (by having
+    // the same type idx as one of its parent classes in this Dex file).
+    for (const DexFile::ClassDef* parent_class_def = dex_file_->FindClassDef(item->superclass_idx_);
+         parent_class_def != nullptr && parent_class_def->superclass_idx_ != DexFile::kDexNoIndex16;
+         parent_class_def = dex_file_->FindClassDef(parent_class_def->superclass_idx_)) {
+      if (UNLIKELY(parent_class_def->superclass_idx_ == item->class_idx_)) {
+        ErrorStringPrintf("Circular inheritance:"
+                          " class with same type idx as one of its parent classes: '%d'"
+                          " found from parent class with type idx: '%d'",
+                          item->class_idx_,
+                          parent_class_def->class_idx_);
+        return false;
+      }
     }
   }
 
