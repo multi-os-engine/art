@@ -577,9 +577,16 @@ bool Runtime::Start() {
 
   if (!IsImageDex2OatEnabled() || !GetHeap()->HasBootImageSpace()) {
     ScopedObjectAccess soa(self);
-    StackHandleScope<1> hs(soa.Self());
-    auto klass(hs.NewHandle<mirror::Class>(mirror::Class::GetJavaLangClass()));
-    class_linker_->EnsureInitialized(soa.Self(), klass, true, true);
+    StackHandleScope<2> hs(soa.Self());
+    {
+      auto klass(hs.NewHandle<mirror::Class>(mirror::Class::GetJavaLangClass()));
+      class_linker_->EnsureInitialized(soa.Self(), klass, true, true);
+    }
+    // Field class is needed for java.net.InetAddress register func, b/28153851
+    {
+      auto klass(hs.NewHandle<mirror::Class>(mirror::Field::StaticClass()));
+      class_linker_->EnsureInitialized(soa.Self(), klass, true, true);
+    }
   }
 
   // InitNativeMethods needs to be after started_ so that the classes
