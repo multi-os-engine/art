@@ -1607,4 +1607,26 @@ TEST_F(DexFileVerifierTest, CircularClassInheritance) {
       " found from parent class with type idx: '2'");
 }
 
+// Generated from:
+//
+//   .class public abstract interface LInterfaceImplementsItself;
+//   .super Ljava/lang/Object;
+//   .implements LInterfaceImplementsItself;
+
+static const char kInterfaceImplementsItselfTestDex[] =
+    "ZGV4CjAzNQBgK8ZUyZHMR7lmXBQ6uJSrndrDOAoPughEAQAAcAAAAHhWNBIAAAAAAAAAAOAAAAAC"
+    "AAAAcAAAAAIAAAB4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAIAAAACkAAAAoAAAAKAA"
+    "AAC9AAAAAAAAAAEAAAAAAAAAAQYAAAEAAADUAAAA/////wAAAAAAAAAAAAAAABtMSW50ZXJmYWNl"
+    "SW1wbGVtZW50c0l0c2VsZjsAEkxqYXZhL2xhbmcvT2JqZWN0OwAAAAABAAAAAAAAAAAAAAAIAAAA"
+    "AAAAAAEAAAAAAAAAAQAAAAIAAABwAAAAAgAAAAIAAAB4AAAABgAAAAEAAACAAAAAAiAAAAIAAACg"
+    "AAAAARAAAAEAAADUAAAAAxAAAAEAAADcAAAAABAAAAEAAADgAAAA";
+
+TEST_F(DexFileVerifierTest, InterfaceImplementsItself) {
+  VerifyModification(
+      kInterfaceImplementsItselfTestDex,
+      "interface_implements_itself",
+      [](DexFile* dex_file ATTRIBUTE_UNUSED) { /* empty */ },
+      "Class with same type idx as its implemented interface: '0'");
+}
+
 }  // namespace art

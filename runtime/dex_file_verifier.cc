@@ -1986,12 +1986,20 @@ bool DexFileVerifier::CheckInterClassDefItem() {
     }
   }
 
+  // Check interfaces.
   const DexFile::TypeList* interfaces = dex_file_->GetInterfacesList(*item);
   if (interfaces != nullptr) {
     uint32_t size = interfaces->Size();
-
-    // Ensure that all interfaces refer to classes (not arrays or primitives).
     for (uint32_t i = 0; i < size; i++) {
+      // Check a class does not implements itself directly (by having the
+      // same type idx as one of its immediate implemented interfaced).
+      if (UNLIKELY(interfaces->GetTypeItem(i).type_idx_ == item->class_idx_)) {
+        ErrorStringPrintf("Class with same type idx as its implemented interface: '%d'",
+                          item->class_idx_);
+        return false;
+      }
+
+      // Ensure that interface refer to a class (not an array nor a primitive type).
       LOAD_STRING_BY_TYPE(inf_descriptor, interfaces->GetTypeItem(i).type_idx_,
                           "inter_class_def_item interface type_idx")
       if (UNLIKELY(!IsValidDescriptor(inf_descriptor) || inf_descriptor[0] != 'L')) {
