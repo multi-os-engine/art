@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define MIPS_LOAD_CONST_PATH true
+
 #include "assembler_mips64.h"
 
 #include <inttypes.h>
@@ -1634,6 +1636,161 @@ TEST_F(AssemblerMIPS64Test, StoreFpuToOffset) {
       "daddu $at, $at, $a0\n"
       "sdc1 $f0, 0($at)\n";
   DriverStr(expected, "StoreFpuToOffset");
+}
+
+///////////////////////
+// Loading Constants //
+///////////////////////
+
+TEST_F(AssemblerMIPS64Test, LoadConst32) {
+  // IsUint<16>(value)
+  __ LoadConst32(mips64::V0, 0);
+  __ LoadConst32(mips64::V0, 65535);
+  // IsInt<16>(value)
+  __ LoadConst32(mips64::V0, -1);
+  __ LoadConst32(mips64::V0, -32768);
+  // Everything else
+  __ LoadConst32(mips64::V0, 65536);
+  __ LoadConst32(mips64::V0, 65537);
+  __ LoadConst32(mips64::V0, 2147483647);
+  __ LoadConst32(mips64::V0, -32769);
+  __ LoadConst32(mips64::V0, -65536);
+  __ LoadConst32(mips64::V0, -65537);
+  __ LoadConst32(mips64::V0, -2147483647);
+  __ LoadConst32(mips64::V0, -2147483648);
+
+  const char* expected =
+      // IsUint<16>(value)
+      "ori $v0, $zero, 0\n"         // __ LoadConst32(mips64::V0, 0);
+      "ori $v0, $zero, 65535\n"     // __ LoadConst32(mips64::V0, 65535);
+      // IsInt<16>(value)
+      "addiu $v0, $zero, -1\n"      // __ LoadConst32(mips64::V0, -1);
+      "addiu $v0, $zero, -32768\n"  // __ LoadConst32(mips64::V0, -32768);
+      // Everything else
+      "lui $v0, 1\n"                // __ LoadConst32(mips64::V0, 65536);
+      "lui $v0, 1\n"                // __ LoadConst32(mips64::V0, 65537);
+      "ori $v0, 1\n"                //                 "
+      "lui $v0, 32767\n"            // __ LoadConst32(mips64::V0, 2147483647);
+      "ori $v0, 65535\n"            //                 "
+      "lui $v0, 65535\n"            // __ LoadConst32(mips64::V0, -32769);
+      "ori $v0, 32767\n"            //                 "
+      "lui $v0, 65535\n"            // __ LoadConst32(mips64::V0, -65536);
+      "lui $v0, 65534\n"            // __ LoadConst32(mips64::V0, -65537);
+      "ori $v0, 65535\n"            //                 "
+      "lui $v0, 32768\n"            // __ LoadConst32(mips64::V0, -2147483647);
+      "ori $v0, 1\n"                //                 "
+      "lui $v0, 32768\n";           // __ LoadConst32(mips64::V0, -2147483648);
+  DriverStr(expected, "LoadConst32");
+}
+
+static uint64_t SignExtend16To64(uint16_t n) {
+  return static_cast<int16_t>(n);
+}
+
+struct LoadConstTester {
+  LoadConstTester() {
+    for (int r = 0; r < 32; r++)
+      regs[r] = 0;
+#ifdef  MIPS_LOAD_CONST_PATH
+    loadConst64Path = art::mips64::kMipsPathZero;
+    loadConst32Path = art::mips64::kMipsPathZero;
+#endif
+  }
+  void Addiu(int rd, int rs, uint16_t c) {
+    regs[rd] = static_cast<int32_t>(regs[rs] + SignExtend16To64(c));
+  }
+  void Daddiu(int rd, int rs, uint16_t c) {
+    regs[rd] = regs[rs] + SignExtend16To64(c);
+  }
+  void Dahi(int rd, uint16_t c) {
+    regs[rd] += SignExtend16To64(c) << 32;
+  }
+  void Dati(int rd, uint16_t c) {
+    regs[rd] += SignExtend16To64(c) << 48;
+  }
+  void Dinsu(int rt, int rs, int pos, int size) {
+    CHECK(IsUint<5>(pos - 32)) << pos;
+    CHECK(IsUint<5>(size - 1)) << size;
+    CHECK(IsUint<5>(pos + size - 33)) << pos << " + " << size;
+
+    uint64_t srcMask = (UINT64_C(1) << size) - 1;
+    uint64_t dstMask = ~(srcMask << pos);
+
+    regs[rt] = (regs[rt] & dstMask) | ((regs[rs] & srcMask) << pos);
+  }
+  void Dsll(int rd, int rt, int shamt) {
+    regs[rd] = regs[rt] << (shamt & 0x1f);
+  }
+  void Dsll32(int rd, int rt, int shamt) {
+    regs[rd] = regs[rt] << (32 + (shamt & 0x1f));
+  }
+  void Dsrl(int rd, int rt, int shamt) {
+    regs[rd] = regs[rt] >> (shamt & 0x1f);
+  }
+  void Dsrl32(int rd, int rt, int shamt) {
+    regs[rd] = regs[rt] >> (32 + (shamt & 0x1f));
+  }
+  void Lui(int rd, uint16_t c) {
+    regs[rd] = SignExtend16To64(c) << 16;
+  }
+  void Ori(int rd, int rs, uint16_t c) {
+    regs[rd] = regs[rs] | c;
+  }
+  void LoadConst32(int rd, int32_t c) {
+    mips64::TemplateLoadConst32<LoadConstTester>(this, rd, c);
+
+    CHECK_NE(rd, 0);
+    CHECK_EQ(regs[rd], static_cast<uint64_t>(c));
+  }
+  void LoadConst64(int rd, int64_t c) {
+    mips64::TemplateLoadConst64<LoadConstTester>(this, rd, c);
+
+    CHECK_NE(rd, 0);
+    CHECK_EQ(regs[rd], static_cast<uint64_t>(c));
+  }
+  uint64_t regs[32];
+#ifdef  MIPS_LOAD_CONST_PATH
+  int loadConst64Path;
+  int loadConst32Path;
+
+  // Need function to read 'path' value;
+  int pathsCovered(void) {
+    return loadConst64Path;
+  }
+#endif
+};
+
+TEST_F(AssemblerMIPS64Test, LoadConst64) {
+  uint16_t aimm[] = { 0, 1, 2, 3, 4, 0x33, 0x66, 0x55, 0x99, 0xaa, 0xcc, 0xff, 0x5500, 0x5555,
+                      0x7ffc, 0x7ffd, 0x7ffe, 0x7fff, 0x8000, 0x8001, 0x8002, 0x8003, 0x8004,
+                      0xaaaa, 0xfffc, 0xfffd, 0xfffe, 0xffff };
+  unsigned d0, d1, d2, d3;
+  LoadConstTester at;
+
+  for (d3 = 0; d3 < sizeof aimm / sizeof aimm[0]; d3++) {
+    union {
+      int64_t v64;
+      uint16_t v16[4];
+    } u;
+
+    u.v16[3] = aimm[d3];
+
+    for (d2 = 0; d2 < sizeof aimm / sizeof aimm[0]; d2++) {
+      u.v16[2] = aimm[d2];
+
+      for (d1 = 0; d1 < sizeof aimm / sizeof aimm[0]; d1++) {
+        u.v16[1] = aimm[d1];
+
+        for (d0 = 0; d0 < sizeof aimm / sizeof aimm[0]; d0++) {
+          u.v16[0] = aimm[d0];
+
+          at.LoadConst64(mips64::V0, u.v64);
+        }
+      }
+    }
+  }
+
+  CHECK_EQ(at.pathsCovered(), art::mips64::kMipsPathAllPaths) << at.pathsCovered();
 }
 
 #undef __
