@@ -518,9 +518,9 @@ static size_t FixStackSize(size_t stack_size) {
 ATTRIBUTE_NO_SANITIZE_ADDRESS
 void Thread::InstallImplicitProtection() {
   uint8_t* pregion = tlsPtr_.stack_begin - kStackOverflowProtectedSize;
-  uint8_t* stack_himem = tlsPtr_.stack_end;
-  uint8_t* stack_top = reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(&stack_himem) &
-      ~(kPageSize - 1));    // Page containing current top of stack.
+  uint8_t* stack_top = reinterpret_cast<uint8_t*>(
+      reinterpret_cast<uintptr_t>(__builtin_frame_address(0)) &
+      ~(kPageSize - 1));  // Page containing current top of stack.
 
   // Try to directly protect the stack.
   VLOG(threads) << "installing stack protected region at " << std::hex <<
@@ -932,8 +932,7 @@ bool Thread::InitStackHwm() {
   }
 
   // Sanity check.
-  int stack_variable;
-  CHECK_GT(&stack_variable, reinterpret_cast<void*>(tlsPtr_.stack_end));
+  CHECK_GT(__builtin_frame_address(0), reinterpret_cast<void*>(tlsPtr_.stack_end));
 
   return true;
 }
