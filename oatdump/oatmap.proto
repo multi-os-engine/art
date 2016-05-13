@@ -1,0 +1,44 @@
+syntax = "proto2";
+
+package oatmap;
+
+option optimize_for = LITE_RUNTIME;
+
+message DexMethod {
+  // index of this method (0-based) within class
+  required int32 mindex = 1;
+
+  // code offset for this method (relative to
+  // start of text for OAT file, in bytes)
+  required int32 mstart = 2;
+
+  // length in bytes of code for this method
+  required int32 msize = 3;
+};
+
+message DexClass {
+  // index of class in dex (0-based)
+  required int32 classindex = 1;
+
+  // list of compiled methods
+  repeated DexMethod methods = 2;
+};
+
+message DexFile {
+  // from the DEX header
+  optional string sha1signature = 1;
+
+  // list of classes that have compiled code
+  repeated DexClass classes = 2;
+};
+
+message OatFile {
+  // checksum from OAT file header
+  required int32 adler32_checksum = 1;
+
+  // Base code address for all code (.text) in OAT file
+  required int64 base_code_addr = 2;
+
+  // list of dex files in this OAT
+  repeated DexFile dexfiles = 3;
+};
