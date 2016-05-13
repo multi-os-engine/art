@@ -857,11 +857,13 @@ static void SanityCheckObjectsCallback(mirror::Object* obj, void* arg ATTRIBUTE_
     if (vtable != nullptr) {
       SanityCheckArtMethodPointerArray(vtable, nullptr, pointer_size, image_spaces);
     }
-    if (klass->ShouldHaveEmbeddedImtAndVTable()) {
-      for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
-        SanityCheckArtMethod(
-            klass->GetEmbeddedImTableEntry(i, pointer_size), nullptr, image_spaces);
+    if (klass->ShouldHaveImt()) {
+      ImTable* imt = klass->GetImt(pointer_size);
+      for (size_t i = 0; i < ImTable::kSize; ++i) {
+        SanityCheckArtMethod(imt->Get(i, pointer_size), nullptr, image_spaces);
       }
+    }
+    if (klass->ShouldHaveEmbeddedVTable()) {
       for (int32_t i = 0; i < klass->GetEmbeddedVTableLength(); ++i) {
         SanityCheckArtMethod(klass->GetEmbeddedVTableEntry(i, pointer_size), nullptr, image_spaces);
       }
@@ -3456,15 +3458,10 @@ mirror::Class* ClassLinker::CreateArrayClass(Thread* self, const char* descripto
     new_class->SetClassFlags(mirror::kClassFlagObjectArray);
   }
   mirror::Class::SetStatus(new_class, mirror::Class::kStatusLoaded, self);
-  {
-    ArtMethod* imt[mirror::Class::kImtSize];
-    std::fill_n(imt, arraysize(imt), Runtime::Current()->GetImtUnimplementedMethod());
-    new_class->PopulateEmbeddedImtAndVTable(imt, image_pointer_size_);
-  }
+  new_class->PopulateEmbeddedVTable(image_pointer_size_);
   mirror::Class::SetStatus(new_class, mirror::Class::kStatusInitialized, self);
   // don't need to set new_class->SetObjectSize(..)
   // because Object::SizeOf delegates to Array::SizeOf
-
 
   // All arrays have java/lang/Cloneable and java/io/Serializable as
   // interfaces.  We need to set that up here, so that stuff like
@@ -5062,9 +5059,9 @@ bool ClassLinker::LinkClass(Thread* self,
   if (!LinkSuperClass(klass)) {
     return false;
   }
-  ArtMethod* imt[mirror::Class::kImtSize];
-  std::fill_n(imt, arraysize(imt), Runtime::Current()->GetImtUnimplementedMethod());
-  if (!LinkMethods(self, klass, interfaces, imt)) {
+  ArtMethod* imt_data[ImTable::kSize];
+  std::fill_n(imt_data, arraysize(imt_data), Runtime::Current()->GetImtUnimplementedMethod());
+  if (!LinkMethods(self, klass, interfaces, imt_data)) {
     return false;
   }
   if (!LinkInstanceFields(self, klass)) {
@@ -5077,15 +5074,40 @@ bool ClassLinker::LinkClass(Thread* self,
   CreateReferenceInstanceOffsets(klass);
   CHECK_EQ(mirror::Class::kStatusLoaded, klass->GetStatus());
 
+  ImTable* imt = nullptr;
+  if (klass->ShouldHaveImt()) {
+    if (klass->HasSuperClass() && klass->GetSuperClass()->ShouldHaveImt()) {
+      ImTable* super_imt = klass->GetSuperClass()->GetImt(image_pointer_size_);
+      bool imt_equals = true;
+      for (size_t i = 0; i < ImTable::kSize && imt_equals; ++i) {
+        imt_equals = imt_equals && (super_imt->Get(i, image_pointer_size_) == imt_data[i]);
+      }
+      if (imt_equals) {
+        imt = super_imt;
+      }
+    }
+    if (imt == nullptr) {
+      LinearAlloc* allocator = GetAllocatorForClassLoader(klass->GetClassLoader());
+      imt = reinterpret_cast<ImTable*>(
+          allocator->Alloc(self, ImTable::SizeInBytes(image_pointer_size_)));
+      if (imt == nullptr) {
+        return false;
+      }
+      imt->Populate(imt_data, image_pointer_size_);
+    }
+  }
+
   if (!klass->IsTemp() || (!init_done_ && klass->GetClassSize() == class_size)) {
     // We don't need to retire this class as it has no embedded tables or it was created the
     // correct size during class linker initialization.
     CHECK_EQ(klass->GetClassSize(), class_size) << PrettyDescriptor(klass.Get());
 
-    if (klass->ShouldHaveEmbeddedImtAndVTable()) {
-      klass->PopulateEmbeddedImtAndVTable(imt, image_pointer_size_);
+    if (klass->ShouldHaveEmbeddedVTable()) {
+      klass->PopulateEmbeddedVTable(image_pointer_size_);
     }
-
+    if (klass->ShouldHaveImt()) {
+      klass->SetImt(imt, image_pointer_size_);
+    }
     // This will notify waiters on klass that saw the not yet resolved
     // class in the class_table_ during EnsureResolved.
     mirror::Class::SetStatus(klass, mirror::Class::kStatusResolved, self);
@@ -5646,7 +5668,7 @@ bool ClassLinker::LinkVirtualMethods(
     StackHandleScope<2> hs(self);
     Handle<mirror::Class> super_class(hs.NewHandle(klass->GetSuperClass()));
     MutableHandle<mirror::PointerArray> vtable;
-    if (super_class->ShouldHaveEmbeddedImtAndVTable()) {
+    if (super_class->ShouldHaveEmbeddedVTable()) {
       vtable = hs.NewHandle(AllocPointerArray(self, max_count));
       if (UNLIKELY(vtable.Get() == nullptr)) {
         self->AssertPendingOOMException();
@@ -6072,13 +6094,13 @@ void ClassLinker::SetIMTRef(ArtMethod* unimplemented_method,
 }
 
 void ClassLinker::FillIMTAndConflictTables(mirror::Class* klass) {
-  DCHECK(klass->ShouldHaveEmbeddedImtAndVTable()) << PrettyClass(klass);
+  DCHECK(klass->ShouldHaveImt()) << PrettyClass(klass);
   DCHECK(!klass->IsTemp()) << PrettyClass(klass);
-  ArtMethod* imt[mirror::Class::kImtSize];
+  ArtMethod* imt_data[ImTable::kSize];
   Runtime* const runtime = Runtime::Current();
   ArtMethod* const unimplemented_method = runtime->GetImtUnimplementedMethod();
   ArtMethod* const conflict_method = runtime->GetImtConflictMethod();
-  std::fill_n(imt, arraysize(imt), unimplemented_method);
+  std::fill_n(imt_data, arraysize(imt_data), unimplemented_method);
   if (klass->GetIfTable() != nullptr) {
     FillIMTFromIfTable(klass->GetIfTable(),
                        unimplemented_method,
@@ -6086,16 +6108,34 @@ void ClassLinker::FillIMTAndConflictTables(mirror::Class* klass) {
                        klass,
                        true,
                        false,
-                       &imt[0]);
+                       &imt_data[0]);
   }
-  for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
-    klass->SetEmbeddedImTableEntry(i, imt[i], image_pointer_size_);
+  ImTable* imt = klass->GetImt(image_pointer_size_);
+  if (imt == nullptr) {
+    return;
   }
+  // If the IMT is shared with an super class, we may need to make a copy if the conflicts
+  // are not the same. TODO: Share the conflict table if it is the same.
+  mirror::Class* super_class = klass->GetSuperClass();
+  while (super_class != nullptr) {
+    if (imt == super_class->GetImt(image_pointer_size_)) {
+      LinearAlloc* allocator = GetAllocatorForClassLoader(klass->GetClassLoader());
+      imt = reinterpret_cast<ImTable*>(
+          allocator->Alloc(Thread::Current(), ImTable::SizeInBytes(image_pointer_size_)));
+      if (imt == nullptr) {
+        return;
+      }
+      klass->SetImt(imt, image_pointer_size_);
+      break;
+    }
+    super_class = super_class->GetSuperClass();
+  }
+  imt->Populate(imt_data, image_pointer_size_);
 }
 
 static inline uint32_t GetIMTIndex(ArtMethod* interface_method)
     SHARED_REQUIRES(Locks::mutator_lock_) {
-  return interface_method->GetDexMethodIndex() % mirror::Class::kImtSize;
+  return interface_method->GetDexMethodIndex() % ImTable::kSize;
 }
 
 ImtConflictTable* ClassLinker::CreateImtConflictTable(size_t count,
@@ -6118,7 +6158,7 @@ void ClassLinker::FillIMTFromIfTable(mirror::IfTable* if_table,
                                      bool create_conflict_tables,
                                      bool ignore_copied_methods,
                                      ArtMethod** imt) {
-  uint32_t conflict_counts[mirror::Class::kImtSize] = {};
+  uint32_t conflict_counts[ImTable::kSize] = {};
   for (size_t i = 0, length = if_table->Count(); i < length; ++i) {
     mirror::Class* interface = if_table->GetInterface(i);
     const size_t num_virtuals = interface->NumVirtualMethods();
@@ -6167,7 +6207,7 @@ void ClassLinker::FillIMTFromIfTable(mirror::IfTable* if_table,
   if (create_conflict_tables) {
     // Create the conflict tables.
     LinearAlloc* linear_alloc = GetAllocatorForClassLoader(klass->GetClassLoader());
-    for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
+    for (size_t i = 0; i < ImTable::kSize; ++i) {
       size_t conflicts = conflict_counts[i];
       if (imt[i] == imt_conflict_method) {
         ImtConflictTable* new_table = CreateImtConflictTable(conflicts, linear_alloc);
@@ -6457,9 +6497,10 @@ void ClassLinker::FillImtFromSuperClass(Handle<mirror::Class> klass,
                                         ArtMethod** imt) {
   DCHECK(klass->HasSuperClass());
   mirror::Class* super_class = klass->GetSuperClass();
-  if (super_class->ShouldHaveEmbeddedImtAndVTable()) {
-    for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
-      imt[i] = super_class->GetEmbeddedImTableEntry(i, image_pointer_size_);
+  if (super_class->ShouldHaveImt()) {
+    ImTable* super_imt = super_class->GetImt(image_pointer_size_);
+    for (size_t i = 0; i < ImTable::kSize; ++i) {
+      imt[i] = super_imt->Get(i, image_pointer_size_);
     }
   } else {
     // No imt in the super class, need to reconstruct from the iftable.
@@ -6989,7 +7030,7 @@ bool ClassLinker::LinkInterfaceMethods(
       }
 
       // Fix up IMT next
-      for (size_t i = 0; i < mirror::Class::kImtSize; ++i) {
+      for (size_t i = 0; i < ImTable::kSize; ++i) {
         auto it = move_table.find(out_imt[i]);
         if (it != move_table.end()) {
           out_imt[i] = it->second;
