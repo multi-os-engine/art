@@ -31,6 +31,356 @@
 namespace art {
 namespace mips64 {
 
+enum LoadConst64Path {
+  kMipsPathZero           = 0x0,
+  kMipsPathOri            = 0x1,
+  kMipsPathDaddiu         = 0x2,
+  kMipsPathLui            = 0x4,
+  kMipsPathLuiOri         = 0x8,
+  kMipsPathOriDahi        = 0x10,
+  kMipsPathOriDati        = 0x20,
+  kMipsPathLuiDahi        = 0x40,
+  kMipsPathLuiDati        = 0x80,
+  kMipsPathDaddiuDsrlX    = 0x100,
+  kMipsPathOriDsllX       = 0x200,
+  kMipsPathDaddiuDsllX    = 0x400,
+  kMipsPathLuiOriDsllX    = 0x800,
+  kMipsPathOriDsllXOri    = 0x1000,
+  kMipsPathDaddiuDsllXOri = 0x2000,
+  kMipsPathOriDahiDati    = 0x4000,
+  kMipsPathDaddiuDahiDati = 0x8000,
+  kMipsPathDaddiuDahi     = 0x10000,
+  kMipsPathDaddiuDati     = 0x20000,
+  kMipsPathLuiOriDahiDati = 0x40000,
+  kMipsPathLuiOriDahi     = 0x80000,
+  kMipsPathLuiOriDati     = 0x100000,
+  kMipsPathLuiDahiDati    = 0x200000,
+  kMipsPathOriDinsu       = 0x400000,
+  kMipsPathDaddiuDinsu    = 0x800000,
+  kMipsPathLuiDinsu       = 0x1000000,
+  kMipsPathLuiOriDinsu    = 0x2000000,
+  kMipsPathAllPaths       = 67108863,
+  kMipsPathDahi           = 0x4000000,  // Not a path per se, but needed in calculating which paths
+  kMipsPathDati           = 0x8000000,  // were covered.
+  kMipsPathAddiu          = 0x10000000,  // ditto
+};
+
+template <typename Asm, typename Rtype, typename Vtype>
+void TemplateLoadConst32(Asm* a, Rtype rd, Vtype value) {
+  if (IsUint<16>(value)) {
+    // Use OR with (unsigned) immediate to encode 16b unsigned int.
+#ifdef  MIPS_LOAD_CONST_PATH
+    a->loadConst32Path |= kMipsPathOri;
+#endif
+    a->Ori(rd, ZERO, value);
+  } else if (IsInt<16>(value)) {
+    // Use ADD with (signed) immediate to encode 16b signed int.
+#ifdef  MIPS_LOAD_CONST_PATH
+    a->loadConst32Path |= kMipsPathDaddiu;
+#endif
+    a->Addiu(rd, ZERO, value);
+  } else {
+#ifdef  MIPS_LOAD_CONST_PATH
+    a->loadConst32Path |= kMipsPathLui;
+#endif
+    a->Lui(rd, value >> 16);
+    if (value & 0xFFFF) {
+#ifdef  MIPS_LOAD_CONST_PATH
+    a->loadConst32Path |= kMipsPathLuiOri;
+#endif
+      a->Ori(rd, rd, value);
+    }
+  }
+}
+
+template <typename Vtype>
+int InstrCountForLoadReplicatedConst32(Vtype value) {
+  int32_t x = Low32Bits(value);
+  int32_t y = High32Bits(value);
+
+  if (x == y) {
+    return (IsUint<16>(x) || IsInt<16>(x) || ((x & 0xFFFF) == 0 && IsInt<16>(value >> 16))) ? 2 : 3;
+  }
+
+  return INT_MAX;
+}
+
+template <typename Asm, typename Rtype>
+void LoadReplicatedConst32(Asm *a, Rtype rd, int64_t value) {
+  int32_t x = Low32Bits(value);
+  int32_t y = High32Bits(value);
+  CHECK_EQ(x, y);
+
+  if (IsUint<16>(x)) {
+#ifdef  MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathOriDinsu;
+#endif
+    a->Ori(rd, ZERO, x);
+  } else if (IsInt<16>(x)) {
+#ifdef  MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathDaddiuDinsu;
+#endif
+    a->Daddiu(rd, ZERO, x);
+  } else {
+#ifdef  MIPS_LOAD_CONST_PATH
+    a->loadConst32Path = kMipsPathZero;
+#endif
+    a->LoadConst32(rd, x);
+#ifdef  MIPS_LOAD_CONST_PATH
+    DCHECK_NE(a->loadConst64Path, kMipsPathOri);
+    DCHECK_NE(a->loadConst64Path, kMipsPathDaddiu);
+    if (a->loadConst32Path == kMipsPathLui) {
+      a->loadConst64Path |= kMipsPathLuiDinsu;
+    } else {
+      a->loadConst64Path |= kMipsPathLuiOriDinsu;
+    }
+#endif
+  }
+  a->Dinsu(rd, rd, 32, 32);
+}
+
+template <typename Asm, typename Rtype, typename Vtype>
+void TemplateLoadConst64(Asm* a, Rtype rd, Vtype value) {
+  int bit31 = (value & UINT64_C(0x80000000)) != 0;
+  int rep32_count = InstrCountForLoadReplicatedConst32(value);
+
+  // Loads with 1 instruction.
+  if (IsUint<16>(value)) {
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathOri;
+#endif
+    a->Ori(rd, ZERO, value);
+  } else if (IsInt<16>(value)) {
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathDaddiu;
+#endif
+    a->Daddiu(rd, ZERO, value);
+  } else if ((value & 0xFFFF) == 0 && IsInt<16>(value >> 16)) {
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathLui;
+#endif
+    a->Lui(rd, value >> 16);
+  } else if (IsInt<32>(value)) {
+    // Loads with 2 instructions.
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathLuiOri;
+#endif
+    a->Lui(rd, value >> 16);
+    a->Ori(rd, rd, value);
+  } else if ((value & 0xFFFF0000) == 0 && IsInt<16>(value >> 32)) {
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathOriDahi;
+#endif
+    a->Ori(rd, ZERO, value);
+    a->Dahi(rd, value >> 32);
+  } else if ((value & UINT64_C(0xFFFFFFFF0000)) == 0) {
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathOriDati;
+#endif
+    a->Ori(rd, ZERO, value);
+    a->Dati(rd, value >> 48);
+  } else if ((value & 0xFFFF) == 0 &&
+             (-32768 - bit31) <= (value >> 32) && (value >> 32) <= (32767 - bit31)) {
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathLuiDahi;
+#endif
+    a->Lui(rd, value >> 16);
+    a->Dahi(rd, (value >> 32) + bit31);
+  } else if ((value & 0xFFFF) == 0 && ((value >> 31) & 0x1FFFF) == ((0x20000 - bit31) & 0x1FFFF)) {
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathLuiDati;
+#endif
+    a->Lui(rd, value >> 16);
+    a->Dati(rd, (value >> 48) + bit31);
+  } else if (IsPowerOfTwo(value + UINT64_C(1))) {
+    int shift_cnt = 64 - CTZ(value + UINT64_C(1));
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathDaddiuDsrlX;
+#endif
+    a->Daddiu(rd, ZERO, -1);
+    if (shift_cnt < 32) {
+      a->Dsrl(rd, rd, shift_cnt);
+    } else {
+      a->Dsrl32(rd, rd, shift_cnt & 31);
+    }
+  } else {
+    int shift_cnt = CTZ(value);
+    int64_t tmp = value >> shift_cnt;
+#ifdef MIPS_LOAD_CONST_PATH
+    a->loadConst64Path |= kMipsPathOriDsllX;
+#endif
+    if (IsUint<16>(tmp)) {
+      a->Ori(rd, ZERO, tmp);
+      if (shift_cnt < 32) {
+        a->Dsll(rd, rd, shift_cnt);
+      } else {
+        a->Dsll32(rd, rd, shift_cnt & 31);
+      }
+    } else if (IsInt<16>(tmp)) {
+#ifdef MIPS_LOAD_CONST_PATH
+      a->loadConst64Path |= kMipsPathDaddiuDsllX;
+#endif
+      a->Daddiu(rd, ZERO, tmp);
+      if (shift_cnt < 32) {
+        a->Dsll(rd, rd, shift_cnt);
+      } else {
+        a->Dsll32(rd, rd, shift_cnt & 31);
+      }
+    } else if (rep32_count < 3) {
+      LoadReplicatedConst32(a, rd, value);
+    } else if (IsInt<32>(tmp)) {
+#ifdef MIPS_LOAD_CONST_PATH
+      a->loadConst64Path |= kMipsPathLuiOriDsllX;
+#endif
+      // Loads with 3 instructions.
+      a->Lui(rd, tmp >> 16);
+      a->Ori(rd, rd, tmp);
+      if (shift_cnt < 32) {
+        a->Dsll(rd, rd, shift_cnt);
+      } else {
+        a->Dsll32(rd, rd, shift_cnt & 31);
+      }
+    } else {
+      shift_cnt = 16 + CTZ(value >> 16);
+      tmp = value >> shift_cnt;
+      if (IsUint<16>(tmp)) {
+#ifdef MIPS_LOAD_CONST_PATH
+        a->loadConst64Path |= kMipsPathOriDsllXOri;
+#endif
+        a->Ori(rd, ZERO, tmp);
+        if (shift_cnt < 32) {
+          a->Dsll(rd, rd, shift_cnt);
+        } else {
+          a->Dsll32(rd, rd, shift_cnt & 31);
+        }
+        a->Ori(rd, rd, value);
+      } else if (IsInt<16>(tmp)) {
+#ifdef MIPS_LOAD_CONST_PATH
+        a->loadConst64Path |= kMipsPathDaddiuDsllXOri;
+#endif
+        a->Daddiu(rd, ZERO, tmp);
+        if (shift_cnt < 32) {
+          a->Dsll(rd, rd, shift_cnt);
+        } else {
+          a->Dsll32(rd, rd, shift_cnt & 31);
+        }
+        a->Ori(rd, rd, value);
+      } else if (rep32_count < 4) {
+        LoadReplicatedConst32(a, rd, value);
+      } else {
+        // Loads with 3-4 instructions.
+        uint64_t tmp2 = value;
+        int32_t tmp2_int32 = value;
+#ifdef  MIPS_LOAD_CONST_PATH
+        enum LoadConst64Path path1;
+        enum LoadConst64Path path2 = kMipsPathZero;
+        enum LoadConst64Path path3 = kMipsPathZero;
+#endif
+        if (IsUint<16>(tmp2_int32)) {
+#ifdef  MIPS_LOAD_CONST_PATH
+          path1 = kMipsPathOri;
+#endif
+          a->Ori(rd, ZERO, tmp2 & 0xFFFF);
+        } else if (IsInt<16>(tmp2_int32)) {
+#ifdef  MIPS_LOAD_CONST_PATH
+          path1 = kMipsPathDaddiu;
+#endif
+          a->Daddiu(rd, ZERO, tmp2 & 0xFFFF);
+        } else {
+          a->Lui(rd, tmp2 >> 16);
+          if ((tmp2 & 0xFFFF) != 0) {
+#ifdef  MIPS_LOAD_CONST_PATH
+            path1 = kMipsPathLuiOri;
+#endif
+            a->Ori(rd, rd, tmp2 & 0xFFFF);
+#ifdef  MIPS_LOAD_CONST_PATH
+          } else {
+            path1 = kMipsPathLui;
+#endif
+          }
+        }
+        if (bit31) {
+          tmp2 += UINT64_C(0x100000000);
+        }
+        if (((tmp2 >> 32) & 0xFFFF) != 0) {
+#ifdef  MIPS_LOAD_CONST_PATH
+          path2 = kMipsPathDahi;
+#endif
+          a->Dahi(rd, tmp2 >> 32);
+        }
+        if (tmp2 & UINT64_C(0x800000000000)) {
+          tmp2 += UINT64_C(0x1000000000000);
+        }
+        if ((tmp2 >> 48) != 0) {
+#ifdef  MIPS_LOAD_CONST_PATH
+          path3 = kMipsPathDati;
+#endif
+          a->Dati(rd, tmp2 >> 48);
+        }
+#ifdef  MIPS_LOAD_CONST_PATH
+        if (path1 == kMipsPathOri) {
+          if (path2 == kMipsPathDahi) {
+            if (path3 == kMipsPathDati) {
+              a->loadConst64Path |= kMipsPathOriDahiDati;
+            } else {
+              a->loadConst64Path |= kMipsPathOriDahi;
+            }
+          } else {
+            if (path3 == kMipsPathDati) {
+              a->loadConst64Path |= kMipsPathOriDati;
+            } else {
+              a->loadConst64Path |= kMipsPathOri;
+            }
+          }
+        } else if (path1 == kMipsPathDaddiu) {
+          if (path2 == kMipsPathDahi) {
+            if (path3 == kMipsPathDati) {
+              a->loadConst64Path |= kMipsPathDaddiuDahiDati;
+            } else {
+              a->loadConst64Path |= kMipsPathDaddiuDahi;
+            }
+          } else {
+            if (path3 == kMipsPathDati) {
+              a->loadConst64Path |= kMipsPathDaddiuDati;
+            } else {
+              a->loadConst64Path |= kMipsPathDaddiu;
+            }
+          }
+        } else if (path1 == kMipsPathLuiOri) {
+          if (path2 == kMipsPathDahi) {
+            if (path3 == kMipsPathDati) {
+              a->loadConst64Path |= kMipsPathLuiOriDahiDati;
+            } else {
+              a->loadConst64Path |= kMipsPathLuiOriDahi;
+            }
+          } else {
+            if (path3 == kMipsPathDati) {
+              a->loadConst64Path |= kMipsPathLuiOriDati;
+            } else {
+              a->loadConst64Path |= kMipsPathLuiOri;
+            }
+          }
+        } else if (path1 == kMipsPathLui) {
+          if (path2 == kMipsPathDahi) {
+            if (path3 == kMipsPathDati) {
+              a->loadConst64Path |= kMipsPathLuiDahiDati;
+            } else {
+              a->loadConst64Path |= kMipsPathLuiDahi;
+            }
+          } else {
+            if (path3 == kMipsPathDati) {
+              a->loadConst64Path |= kMipsPathLuiDati;
+            } else {
+              a->loadConst64Path |= kMipsPathLui;
+            }
+          }
+        }
+#endif  /* MIPS_LOAD_CONST_PATH */
+      }
+    }
+  }
+}
+
 static constexpr size_t kMips64WordSize = 4;
 static constexpr size_t kMips64DoublewordSize = 8;
 
@@ -321,6 +671,7 @@ class Mips64Assembler FINAL : public Assembler {
   void Not(GpuRegister rd, GpuRegister rs);
 
   // Higher level composite instructions.
+  int InstrCountForLoadReplicatedConst32(int64_t);
   void LoadConst32(GpuRegister rd, int32_t value);
   void LoadConst64(GpuRegister rd, int64_t value);  // MIPS64
 
