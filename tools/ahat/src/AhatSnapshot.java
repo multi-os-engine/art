@@ -19,6 +19,7 @@ package com.android.ahat;
 import com.android.tools.perflib.heap.ClassObj;
 import com.android.tools.perflib.heap.Heap;
 import com.android.tools.perflib.heap.Instance;
+import com.android.tools.perflib.heap.ProguardMap;
 import com.android.tools.perflib.heap.RootObj;
 import com.android.tools.perflib.heap.RootType;
 import com.android.tools.perflib.heap.Snapshot;
@@ -68,8 +69,8 @@ class AhatSnapshot {
   /**
    * Create an AhatSnapshot from an hprof file.
    */
-  public static AhatSnapshot fromHprof(File hprof) throws IOException {
-    Snapshot snapshot = Snapshot.createSnapshot(new MemoryMappedFileBuffer(hprof));
+  public static AhatSnapshot fromHprof(File hprof, ProguardMap map) throws IOException {
+    Snapshot snapshot = Snapshot.createSnapshot(new MemoryMappedFileBuffer(hprof), map);
     snapshot.computeDominators();
     return new AhatSnapshot(snapshot);
   }

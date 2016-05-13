@@ -19,6 +19,7 @@ package com.android.ahat;
 import com.android.tools.perflib.heap.ClassObj;
 import com.android.tools.perflib.heap.Field;
 import com.android.tools.perflib.heap.Instance;
+import com.android.tools.perflib.heap.ProguardMap;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -48,7 +49,7 @@ public class TestDump {
    */
   private TestDump() throws IOException {
       String hprof = System.getProperty("ahat.test.dump.hprof");
-      mSnapshot = AhatSnapshot.fromHprof(new File(hprof));
+      mSnapshot = AhatSnapshot.fromHprof(new File(hprof), new ProguardMap());
   }
 
   /**
