@@ -75,6 +75,27 @@ public class Main {
     return 0 + arg;
   }
 
+  /// CHECK-START: int Main.AddAddSubAddConst(int) instruction_simplifier (before)
+  /// CHECK-DAG:     <<ArgValue:i\d+>>  ParameterValue
+  /// CHECK-DAG:     <<Const1:i\d+>>    IntConstant 1
+  /// CHECK-DAG:     <<Const2:i\d+>>    IntConstant 2
+  /// CHECK-DAG:     <<ConstM3:i\d+>>   IntConstant -3
+  /// CHECK-DAG:     <<Const4:i\d+>>    IntConstant 4
+  /// CHECK-DAG:     <<Add1:i\d+>>      Add [<<ArgValue>>,<<Const1>>]
+  /// CHECK-DAG:     <<Add2:i\d+>>      Add [<<Add1>>,<<Const2>>]
+  /// CHECK-DAG:     <<Add3:i\d+>>      Add [<<Add2>>,<<ConstM3>>]
+  /// CHECK-DAG:     <<Add4:i\d+>>      Add [<<Add3>>,<<Const4>>]
+  /// CHECK-DAG:                        Return [<<Add4>>]
+
+  /// CHECK-START: int Main.AddAddSubAddConst(int) instruction_simplifier (after)
+  /// CHECK-DAG:     <<ArgValue:i\d+>>  ParameterValue
+  /// CHECK-DAG:     <<Const4:i\d+>>    IntConstant 4
+  /// CHECK-DAG:     <<Add:i\d+>>       Add [<<ArgValue>>,<<Const4>>]
+  /// CHECK-DAG:                        Return [<<Add>>]
+  public static int AddAddSubAddConst(int arg) {
+    return arg + 1 + 2 - 3 + 4;
+  }
+
   /// CHECK-START: int Main.AndAllOnes(int) instruction_simplifier (before)
   /// CHECK-DAG:     <<Arg:i\d+>>     ParameterValue
   /// CHECK-DAG:     <<ConstF:i\d+>>  IntConstant -1
@@ -347,6 +368,26 @@ public class Main {
     return arg * 128;
   }
 
+  /// CHECK-START: long Main.MulMulMulConst(long) instruction_simplifier (before)
+  /// CHECK-DAG:     <<ArgValue:j\d+>>  ParameterValue
+  /// CHECK-DAG:     <<Const10:j\d+>>   LongConstant 10
+  /// CHECK-DAG:     <<Const11:j\d+>>   LongConstant 11
+  /// CHECK-DAG:     <<Const12:j\d+>>   LongConstant 12
+  /// CHECK-DAG:     <<Mul1:j\d+>>      Mul [<<Const10>>,<<ArgValue>>]
+  /// CHECK-DAG:     <<Mul2:j\d+>>      Mul [<<Mul1>>,<<Const11>>]
+  /// CHECK-DAG:     <<Mul3:j\d+>>      Mul [<<Mul2>>,<<Const12>>]
+  /// CHECK-DAG:                        Return [<<Mul3>>]
+
+  /// CHECK-START: long Main.MulMulMulConst(long) instruction_simplifier (after)
+  /// CHECK-DAG:     <<ArgValue:j\d+>>   ParameterValue
+  /// CHECK-DAG:     <<Const1320:j\d+>>  LongConstant 1320
+  /// CHECK-DAG:     <<Mul:j\d+>>        Mul [<<ArgValue>>,<<Const1320>>]
+  /// CHECK-DAG:                         Return [<<Mul>>]
+  public static long MulMulMulConst(long arg) {
+    return 10 * arg * 11 * 12;
+  }
+
+
   /// CHECK-START: int Main.Or0(int) instruction_simplifier (before)
   /// CHECK-DAG:     <<Arg:i\d+>>      ParameterValue
   /// CHECK-DAG:     <<Const0:i\d+>>   IntConstant 0
@@ -464,6 +505,57 @@ public class Main {
 
   public static int SubAliasNeg(int arg) {
     return 0 - arg;
+  }
+
+  /// CHECK-START: int Main.SubAddConst1(int) instruction_simplifier (before)
+  /// CHECK-DAG:     <<ArgValue:i\d+>>  ParameterValue
+  /// CHECK-DAG:     <<Const5:i\d+>>    IntConstant 5
+  /// CHECK-DAG:     <<Const6:i\d+>>    IntConstant 6
+  /// CHECK-DAG:     <<Sub:i\d+>>       Sub [<<Const5>>,<<ArgValue>>]
+  /// CHECK-DAG:     <<Add:i\d+>>       Add [<<Sub>>,<<Const6>>]
+  /// CHECK-DAG:                        Return [<<Add>>]
+
+  /// CHECK-START: int Main.SubAddConst1(int) instruction_simplifier (after)
+  /// CHECK-DAG:     <<ArgValue:i\d+>>  ParameterValue
+  /// CHECK-DAG:     <<Const11:i\d+>>   IntConstant 11
+  /// CHECK-DAG:     <<Sub:i\d+>>       Sub [<<Const11>>,<<ArgValue>>]
+  /// CHECK-DAG:                        Return [<<Sub>>]
+  public static int SubAddConst1(int arg) {
+    return 5 - arg + 6;
+  }
+
+  /// CHECK-START: int Main.SubAddConst2(int) instruction_simplifier (before)
+  /// CHECK-DAG:     <<ArgValue:i\d+>>  ParameterValue
+  /// CHECK-DAG:     <<Const14:i\d+>>   IntConstant 14
+  /// CHECK-DAG:     <<Const13:i\d+>>   IntConstant 13
+  /// CHECK-DAG:     <<Add:i\d+>>       Add [<<ArgValue>>,<<Const13>>]
+  /// CHECK-DAG:     <<Sub:i\d+>>       Sub [<<Const14>>,<<Add>>]
+  /// CHECK-DAG:                        Return [<<Sub>>]
+
+  /// CHECK-START: int Main.SubAddConst2(int) instruction_simplifier (after)
+  /// CHECK-DAG:     <<ArgValue:i\d+>>  ParameterValue
+  /// CHECK-DAG:     <<Const1:i\d+>>    IntConstant 1
+  /// CHECK-DAG:     <<Sub:i\d+>>       Sub [<<Const1>>,<<ArgValue>>]
+  /// CHECK-DAG:                        Return [<<Sub>>]
+  public static int SubAddConst2(int arg) {
+    return 14 - (arg + 13);
+  }
+
+  /// CHECK-START: long Main.SubSubConst(long) instruction_simplifier (before)
+  /// CHECK-DAG:     <<ArgValue:j\d+>>  ParameterValue
+  /// CHECK-DAG:     <<Const17:j\d+>>   LongConstant 17
+  /// CHECK-DAG:     <<Const18:j\d+>>   LongConstant 18
+  /// CHECK-DAG:     <<Sub1:j\d+>>      Sub [<<Const18>>,<<ArgValue>>]
+  /// CHECK-DAG:     <<Sub2:j\d+>>      Sub [<<Const17>>,<<Sub1>>]
+  /// CHECK-DAG:                        Return [<<Sub2>>]
+
+  /// CHECK-START: long Main.SubSubConst(long) instruction_simplifier (after)
+  /// CHECK-DAG:     <<ArgValue:j\d+>>  ParameterValue
+  /// CHECK-DAG:     <<ConstM1:j\d+>>   LongConstant -1
+  /// CHECK-DAG:     <<Add:j\d+>>       Add [<<ArgValue>>,<<ConstM1>>]
+  /// CHECK-DAG:                        Return [<<Add>>]
+  public static long SubSubConst(long arg) {
+    return 17 - (18 - arg);
   }
 
   /// CHECK-START: long Main.UShr0(long) instruction_simplifier (before)
@@ -1674,16 +1766,28 @@ public class Main {
     }
   }
 
+  public static int runSmaliTestConst(String name, int arg) {
+    try {
+      Class<?> c = Class.forName("SmaliTests");
+      Method m = c.getMethod(name, int.class);
+      return (Integer) m.invoke(null, arg);
+    } catch (Exception ex) {
+      throw new Error(ex);
+    }
+  }
+
 public static void main(String[] args) {
     int arg = 123456;
 
     assertLongEquals(Add0(arg), arg);
+    assertIntEquals(5, AddAddSubAddConst(1));
     assertIntEquals(AndAllOnes(arg), arg);
     assertLongEquals(Div1(arg), arg);
     assertIntEquals(DivN1(arg), -arg);
     assertLongEquals(Mul1(arg), arg);
     assertIntEquals(MulN1(arg), -arg);
     assertLongEquals(MulPowerOfTwo128(arg), (128 * arg));
+    assertLongEquals(2640, MulMulMulConst(2));
     assertIntEquals(Or0(arg), arg);
     assertLongEquals(OrSame(arg), arg);
     assertIntEquals(Shl0(arg), arg);
@@ -1691,6 +1795,9 @@ public static void main(String[] args) {
     assertLongEquals(Shr64(arg), arg);
     assertLongEquals(Sub0(arg), arg);
     assertIntEquals(SubAliasNeg(arg), -arg);
+    assertIntEquals(9, SubAddConst1(2));
+    assertIntEquals(-2, SubAddConst2(3));
+    assertLongEquals(3, SubSubConst(4));
     assertLongEquals(UShr0(arg), arg);
     assertIntEquals(Xor0(arg), arg);
     assertIntEquals(XorAllOnes(arg), ~arg);
@@ -1823,6 +1930,12 @@ public static void main(String[] args) {
         }
       }
     }
+
+    assertIntEquals(0, runSmaliTestConst("AddSubConst", 1));
+    assertIntEquals(3, runSmaliTestConst("SubAddConst", 2));
+    assertIntEquals(-16, runSmaliTestConst("SubSubConst1", 3));
+    assertIntEquals(-5, runSmaliTestConst("SubSubConst2", 4));
+    assertIntEquals(26, runSmaliTestConst("SubSubConst3", 5));
   }
 
   private static boolean $inline$true() { return true; }

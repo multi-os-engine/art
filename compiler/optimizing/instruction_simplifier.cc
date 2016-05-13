@@ -54,6 +54,9 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   // De Morgan's laws:
   // ~a & ~b = ~(a | b)  and  ~a | ~b = ~(a & b)
   bool TryDeMorganNegationFactoring(HBinaryOperation* op);
+  bool TryHandleAssociativeAndCommutativeOperation(HBinaryOperation* instruction);
+  bool TrySubtractionChainSimplification(HBinaryOperation* instruction);
+
   void VisitShift(HBinaryOperation* shift);
 
   void VisitEqual(HEqual* equal) OVERRIDE;
@@ -944,6 +947,15 @@ void InstructionSimplifierVisitor::VisitAdd(HAdd* instruction) {
     return;
   }
 
+  // TryHandleAssociativeAndCommutativeOperation() does not remove its input,
+  // so no need to return.
+  TryHandleAssociativeAndCommutativeOperation(instruction);
+
+  if ((instruction->GetLeft()->IsSub() || instruction->GetRight()->IsSub())
+      && TrySubtractionChainSimplification(instruction)) {
+    return;
+  }
+
   TryReplaceWithRotate(instruction);
 }
 
@@ -1006,6 +1018,9 @@ void InstructionSimplifierVisitor::VisitAnd(HAnd* instruction) {
     return;
   }
 
+  // TryHandleAssociativeAndCommutativeOperation() does not remove its input,
+  // so no need to return.
+  TryHandleAssociativeAndCommutativeOperation(instruction);
   TryDeMorganNegationFactoring(instruction);
 }
 
@@ -1185,6 +1200,10 @@ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
     return;
   }
 
+  // TryHandleAssociativeAndCommutativeOperation() does not remove its input,
+  // so no need to return.
+  TryHandleAssociativeAndCommutativeOperation(instruction);
+
   if (input_cst->IsMinusOne() &&
       (Primitive::IsFloatingPointType(type) || Primitive::IsIntOrLongType(type))) {
     // Replace code looking like
@@ -1361,6 +1380,9 @@ void InstructionSimplifierVisitor::VisitOr(HOr* instruction) {
 
   if (TryDeMorganNegationFactoring(instruction)) return;
 
+  // TryHandleAssociativeAndCommutativeOperation() does not remove its input,
+  // so no need to return.
+  TryHandleAssociativeAndCommutativeOperation(instruction);
   TryReplaceWithRotate(instruction);
 }
 
@@ -1452,7 +1474,10 @@ void InstructionSimplifierVisitor::VisitSub(HSub* instruction) {
     instruction->GetBlock()->RemoveInstruction(instruction);
     RecordSimplification();
     left->GetBlock()->RemoveInstruction(left);
+    return;
   }
+
+  TrySubtractionChainSimplification(instruction);
 }
 
 void InstructionSimplifierVisitor::VisitUShr(HUShr* instruction) {
@@ -1505,6 +1530,9 @@ void InstructionSimplifierVisitor::VisitXor(HXor* instruction) {
     return;
   }
 
+  // TryHandleAssociativeAndCommutativeOperation() does not remove its input,
+  // so no need to return.
+  TryHandleAssociativeAndCommutativeOperation(instruction);
   TryReplaceWithRotate(instruction);
 }
 
@@ -1780,6 +1808,168 @@ void InstructionSimplifierVisitor::VisitDeoptimize(HDeoptimize* deoptimize) {
       // Always deopt.
     }
   }
+}
+
+// Replace code looking like
+//    OP y, x, const1
+//    OP z, y, const2
+// with
+//    OP z, x, const3
+// where OP is both an associative and a commutative operation.
+bool InstructionSimplifierVisitor::TryHandleAssociativeAndCommutativeOperation(
+  HBinaryOperation* instruction) {
+  DCHECK(instruction->IsCommutative());
+
+  if (!Primitive::IsIntegralType(instruction->GetType())) {
+    return false;
+  }
+
+  HInstruction* const left = instruction->GetLeft();
+  HInstruction* right = instruction->GetRight();
+  // Variable names as described above.
+  HInstruction* const2 = nullptr;
+  HBinaryOperation* y = nullptr;
+
+  if (instruction->InstructionTypeEquals(left) && right->IsConstant()) {
+    const2 = right;
+    y = left->AsBinaryOperation();
+  } else if (left->IsConstant() && instruction->InstructionTypeEquals(right)) {
+    const2 = left;
+    y = right->AsBinaryOperation();
+  }
+
+  // If y has more than one use, we do not perform the optimization because
+  // it might increase code size (e.g. if the new constant is no longer
+  // encodable as an immediate operand in the target ISA).
+  if ((y == nullptr) || !y->HasOnlyOneNonEnvironmentUse()) {
+    return false;
+  }
+
+  // GetConstantRight() returns both left and right constants
+  // for commutative operations.
+  HConstant* const const1 = y->GetConstantRight();
+
+  if (!const1) {
+    return false;
+  }
+
+  right = y->GetRight();
+
+  HInstruction* const x = (const1 == right) ? y->GetLeft() : right;
+
+  instruction->ReplaceInput(const1, 0);
+  instruction->ReplaceInput(const2, 1);
+
+  HConstant* const const3 = instruction->TryStaticEvaluation();
+
+  DCHECK(const3 != nullptr);
+  instruction->ReplaceInput(x, 0);
+  instruction->ReplaceInput(const3, 1);
+  RecordSimplification();
+  return true;
+}
+
+static HBinaryOperation* AsAddOrSub(HInstruction* binop) {
+  return (binop->IsAdd() || binop->IsSub()) ?
+         binop->AsBinaryOperation() :
+         nullptr;
+}
+
+static int64_t ComputeValue(Primitive::Type type, int64_t x, int64_t y) {
+  // Use the Compute() method for consistency with TryStaticEvaluation();
+  // Compute() is not a static method.
+  int64_t ret = HAdd(type, nullptr, nullptr).Compute(x, y);
+
+  if (type == Primitive::kPrimInt) {
+    ret = (int32_t) ret;
+  }
+
+  return ret;
+}
+
+static int64_t GetValue(HConstant* constant, bool is_negated) {
+  int64_t ret = 0;
+
+  if (constant->IsIntConstant()) {
+    ret = constant->AsIntConstant()->GetValue();
+  } else if (constant->IsLongConstant()) {
+    ret = constant->AsLongConstant()->GetValue();
+  }
+
+  return is_negated ? -ret : ret;
+}
+
+// Replace code looking like
+//    OP1 y, x, const1
+//    OP2 z, y, const2
+// with
+//    OP3 z, x, const3
+// where OPx is either ADD or SUB, and either OP1 or OP2 is SUB.
+bool InstructionSimplifierVisitor::TrySubtractionChainSimplification(
+  HBinaryOperation* instruction) {
+  DCHECK(instruction->IsAdd() || instruction->IsSub());
+
+  const Primitive::Type type = instruction->GetType();
+
+  if (!Primitive::IsIntegralType(type)) {
+    return false;
+  }
+
+  HInstruction* left = instruction->GetLeft();
+  HInstruction* right = instruction->GetRight();
+  // Variable names as described above.
+  HConstant* const const2 = right->IsConstant() ?
+                            right->AsConstant() :
+                            left->AsConstant();
+  HBinaryOperation* const y = (AsAddOrSub(left) != nullptr) ?
+                              left->AsBinaryOperation() :
+                              AsAddOrSub(right);
+
+  // If y has more than one use, we do not perform the optimization because
+  // it might increase code size (e.g. if the new constant is no longer
+  // encodable as an immediate operand in the target ISA).
+  if ((const2 == nullptr) ||
+      (y == nullptr) ||
+      !y->HasOnlyOneNonEnvironmentUse()) {
+    return false;
+  }
+
+  left = y->GetLeft();
+
+  HConstant* const const1 = left->IsConstant() ?
+                            left->AsConstant() :
+                            y->GetRight()->AsConstant();
+
+  if (const1 == nullptr) {
+    return false;
+  }
+
+  const bool is_const2_negated = (const2 == right) && instruction->IsSub();
+  const int64_t const2_val = GetValue(const2, is_const2_negated);
+  const bool is_y_negated = (y == right) && instruction->IsSub();
+
+  right = y->GetRight();
+
+  const bool is_const1_negated = is_y_negated ^ ((const1 == right) &&
+                                                 y->IsSub());
+  const int64_t const1_val = GetValue(const1, is_const1_negated);
+  HInstruction* const x = (const1 == right) ? left : right;
+  const bool is_x_negated = is_y_negated ^ ((x == right) && y->IsSub());
+  const int64_t const3_val = ComputeValue(type, const1_val, const2_val);
+  HBasicBlock* const block = instruction->GetBlock();
+  HConstant* const const3 = block->GetGraph()->GetConstant(type, const3_val);
+  ArenaAllocator* const arena = instruction->GetArena();
+  HInstruction* z;
+
+  if (is_x_negated) {
+    z = new (arena) HSub(type, const3, x, instruction->GetDexPc());
+  } else {
+    z = new (arena) HAdd(type, x, const3, instruction->GetDexPc());
+  }
+
+  block->ReplaceAndRemoveInstructionWith(instruction, z);
+  RecordSimplification();
+  return true;
 }
 
 }  // namespace art
