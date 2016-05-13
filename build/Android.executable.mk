@@ -50,6 +50,7 @@ define build-art-executable
   art_multilib := $(7)
   art_static_or_shared := $(8)
   art_out_binary_name :=
+  art_local_path = $$(LOCAL_PATH))
 
   include $(CLEAR_VARS)
   LOCAL_CPP_EXTENSION := $(ART_CPP_EXTENSION)
@@ -68,6 +69,10 @@ define build-art-executable
   else #debug
     LOCAL_MODULE := $$(art_executable)d
   endif
+
+  LOCAL_MODULE_CLASS := EXECUTABLES
+  proto_header_dir := $$(call local-generated-sources-dir)/proto/$(art_local_path)
+  LOCAL_C_INCLUDES += $(proto_header_dir)
 
   ifeq ($$(art_static_or_shared),static)
     LOCAL_MODULE := $(LOCAL_MODULE)s
@@ -185,6 +190,7 @@ define build-art-executable
   art_multilib :=
   art_static_or_shared :=
   art_out_binary_name :=
+  art_local_path :=
 
 endef
 

@@ -66,6 +66,8 @@
 #include <sys/stat.h>
 #include "cmdline.h"
 
+#include "emit_oatmap.h"
+
 namespace art {
 
 const char* image_methods_descriptions_[] = {
@@ -167,6 +169,51 @@ class OatSymbolizer FINAL {
     builder_->End();
 
     return builder_->Good();
+  }
+
+  bool EmitMapToFile(File *map_file, const std::vector<debug::MethodDebugInfo> &method_infos) {
+
+    const OatHeader& oat_header = oat_file_->GetOatHeader();
+    OatMapBuilder builder(oat_header.GetChecksum());
+    const DexFile* dex_file = nullptr;
+    size_t class_def_index = SIZE_MAX;
+    for (const debug::MethodDebugInfo& mi : method_infos) {
+      if (mi.dex_file == nullptr)
+        continue;
+      if (mi.dex_file != dex_file) {
+        std::stringstream sha1;
+        dex_file = mi.dex_file;
+        for (unsigned ii = 0; ii < DexFile::kSha1DigestSize; ++ii) {
+          int byt = static_cast<int>(dex_file->GetHeader().signature_[ii]);
+          sha1 << std::hex << byt;
+        }
+        LOG(INFO) << "sha1 is " << sha1.str();
+        builder.AddDexFile(sha1.str());
+      }
+      if (mi.class_def_index != class_def_index) {
+        class_def_index = mi.class_def_index;
+        builder.AddClass(class_def_index);
+      }
+      // TODO: handle dedup'd?
+      builder.AddMethod(mi.dex_method_index,
+                        mi.code_address,
+                        mi.code_size);
+    }
+    builder.EmitToFile(map_file->Fd());
+    return true;
+  }
+
+  bool EmitMap() {
+    Walk();
+
+    // Q: do we need this?
+    for (const auto& trampoline : debug::MakeTrampolineInfos(oat_file_->GetOatHeader())) {
+      method_debug_infos_.push_back(trampoline);
+    }
+
+    // Add guts here
+    File* map_file = OS::CreateEmptyFile(output_name_.c_str());
+    return EmitMapToFile(map_file, method_debug_infos_);
   }
 
   void Walk() {
@@ -2369,6 +2416,41 @@ static int SymbolizeOat(const char* oat_filename, std::string& output_name, bool
   return EXIT_SUCCESS;
 }
 
+static int EmitMap(const char* oat_filename, std::string& output_name) {
+  std::string error_msg;
+  OatFile* oat_file = OatFile::Open(oat_filename,
+                                    oat_filename,
+                                    nullptr,
+                                    nullptr,
+                                    false,
+                                    /*low_4gb*/false,
+                                    nullptr,
+                                    &error_msg);
+  if (oat_file == nullptr) {
+    fprintf(stderr, "Failed to open oat file from '%s': %s\n", oat_filename, error_msg.c_str());
+    return EXIT_FAILURE;
+  }
+
+  bool result;
+
+  // Try to produce an ELF file of the same type. This is finicky, as we have used 32-bit ELF
+  // files for 64-bit code in the past.
+  if (Is64BitInstructionSet(oat_file->GetOatHeader().GetInstructionSet())) {
+    OatSymbolizer<ElfTypes64> oat_symbolizer(oat_file, output_name, true);
+    result = oat_symbolizer.EmitMap();
+  } else {
+    OatSymbolizer<ElfTypes32> oat_symbolizer(oat_file, output_name, true);
+    result = oat_symbolizer.EmitMap();
+  }
+  if (!result) {
+    fprintf(stderr, "Failed to symbolize\n");
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
+}
+
+
 struct OatdumpArgs : public CmdlineArgs {
  protected:
   using Base = CmdlineArgs;
@@ -2397,6 +2479,9 @@ struct OatdumpArgs : public CmdlineArgs {
     } else if (option.starts_with("--symbolize=")) {
       oat_filename_ = option.substr(strlen("--symbolize=")).data();
       symbolize_ = true;
+    } else if (option.starts_with("--emitmap=")) {
+      oat_filename_ = option.substr(strlen("--emitmap=")).data();
+      emitmap_ = true;
     } else if (option.starts_with("--only-keep-debug")) {
       only_keep_debug_ = true;
     } else if (option.starts_with("--class-filter=")) {
@@ -2529,6 +2614,7 @@ struct OatdumpArgs : public CmdlineArgs {
   bool dump_code_info_stack_maps_ = false;
   bool disassemble_code_ = true;
   bool symbolize_ = false;
+  bool emitmap_ = false;
   bool only_keep_debug_ = false;
   bool list_classes_ = false;
   bool list_methods_ = false;
@@ -2562,7 +2648,7 @@ struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
         args_->addr2instr_));
 
     return (args_->boot_image_location_ != nullptr || args_->image_location_ != nullptr) &&
-          !args_->symbolize_;
+        !(args_->symbolize_ || args_->emitmap_);
   }
 
   virtual bool ExecuteWithoutRuntime() OVERRIDE {
@@ -2578,6 +2664,9 @@ struct OatdumpMain : public CmdlineMain<OatdumpArgs> {
       // with only debug data. We use it in similar way to exclude .rodata and .text.
       bool no_bits = args_->only_keep_debug_;
       return SymbolizeOat(args_->oat_filename_, args_->output_name_, no_bits) == EXIT_SUCCESS;
+    } else if (args_->emitmap_) {
+      // Prototype IP -> dex method idx map emitter.
+      return EmitMap(args_->oat_filename_, args_->output_name_) == EXIT_SUCCESS;
     } else {
       return DumpOat(nullptr,
                      args_->oat_filename_,

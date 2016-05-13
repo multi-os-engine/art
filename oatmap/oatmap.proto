@@ -1,0 +1,59 @@
+syntax = "proto2";
+
+package oatmap;
+
+option optimize_for = LITE_RUNTIME;
+
+//
+// This proto is used to encode information mapping base text addresses
+// in an OAT file to DEX method indices in the DEX files that were
+// used to compile the OAT.  Given an OAT file, you can generate
+// an encoded mapping file for it using
+//
+//     oatdump --emit-map=myoatfile.odex --output=encoded-mapping.data
+//
+// The mapping file also contains checksum information, including adler32
+// for the OAT itself along with sha1 signatures drawn from each of the
+// OAT's dex files.
+//
+// Note: the DEX method index used here is not the same as the method
+// index within the enclosing DEX class: the method indices used here
+// are assigned simply by walking each of the _compiled_ DEX methods
+// and incrementing a counter as we go.
+//
+
+message MapDexMethod {
+  // index of this method (0-based) within class
+  required int32 mindex = 1;
+
+  // code offset for this method (expressed as offset from
+  // the start of .text for the OAT file).
+  required int32 mstart = 2;
+
+  // length in bytes of code for this method
+  required int32 msize = 3;
+};
+
+message MapDexClass {
+  // index of class in dex (0-based)
+  required int32 classindex = 1;
+
+  // list of compiled methods
+  repeated MapDexMethod methods = 2;
+};
+
+message MapDexFile {
+  // from the DEX header
+  optional string sha1signature = 1;
+
+  // list of classes that have compiled code
+  repeated MapDexClass classes = 2;
+};
+
+message MapOatFile {
+  // checksum from OAT file header
+  required int32 adler32_checksum = 1;
+
+  // list of dex files in this OAT
+  repeated MapDexFile dexfiles = 3;
+};
