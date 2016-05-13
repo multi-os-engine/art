@@ -19,10 +19,10 @@ LOCAL_PATH := $(call my-dir)
 include art/build/Android.executable.mk
 
 OATDUMP_SRC_FILES := \
-	oatdump.cc
+	oatdump.cc oatmap.proto emit_oatmap.cc
 
 # Build variants {target,host} x {debug,ndebug}
-$(eval $(call build-art-multi-executable,oatdump,$(OATDUMP_SRC_FILES),libart-compiler libart-disassembler,libcutils,,art/compiler art/disassembler))
+$(eval $(call build-art-multi-executable,oatdump,$(OATDUMP_SRC_FILES),libart-compiler libart-disassembler,libcutils libprotobuf-cpp-lite,libprotobuf-cpp-lite,art/compiler art/disassembler))
 
 ########################################################################
 # oatdump targets
