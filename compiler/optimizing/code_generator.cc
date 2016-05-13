@@ -830,12 +830,11 @@ bool CodeGenerator::HasStackMapAtCurrentPc() {
 void CodeGenerator::MaybeRecordNativeDebugInfo(HInstruction* instruction,
                                                uint32_t dex_pc,
                                                SlowPathCode* slow_path) {
-  if (GetCompilerOptions().GetNativeDebuggable() && dex_pc != kNoDexPc) {
-    if (HasStackMapAtCurrentPc()) {
+  if (GetCompilerOptions().GetGenerateDebugInfo() && dex_pc != kNoDexPc) {
+    if (!HasStackMapAtCurrentPc()) {
       // Ensure that we do not collide with the stack map of the previous instruction.
-      GenerateNop();
+      RecordPcInfo(instruction, dex_pc, slow_path);
     }
-    RecordPcInfo(instruction, dex_pc, slow_path);
   }
 }
 
