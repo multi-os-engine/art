@@ -1162,17 +1162,31 @@ class BCEVisitor : public HGraphVisitor {
     * has occurred (see AddCompareWithDeoptimization()), since in those cases it would be
     * unsafe to hoist array references across their deoptimization instruction inside a loop.
     */
-  void VisitArrayGet(HArrayGet* array_get) OVERRIDE {
+  void VisitArrayGet(HArrayGet* array_get) {
     if (!has_dom_based_dynamic_bce_ && array_get->IsInLoop()) {
       HLoopInformation* loop = array_get->GetBlock()->GetLoopInformation();
       if (loop->IsDefinedOutOfTheLoop(array_get->InputAt(0)) &&
           loop->IsDefinedOutOfTheLoop(array_get->InputAt(1))) {
         SideEffects loop_effects = side_effects_.GetLoopEffects(loop->GetHeader());
         if (!array_get->GetSideEffects().MayDependOn(loop_effects)) {
-          HoistToPreHeaderOrDeoptBlock(loop, array_get);
+          // We can hoist ArrayGet only if its execution is guaranteed.
+          // In other words only if array_get_bb dominates all back branches.
+          HBasicBlock* array_get_bb = array_get->GetBlock();
+          if (DominatesAllBackEdges(loop, array_get_bb)) {
+            HoistToPreHeaderOrDeoptBlock(loop, array_get);
+          }
         }
       }
     }
+  }
+
+  bool DominatesAllBackEdges(HLoopInformation* loop, HBasicBlock* block) {
+    for (HBasicBlock* back_edge : loop->GetBackEdges()) {
+      if (!block->Dominates(back_edge)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   // Perform dominator-based dynamic elimination on suitable set of bounds checks.
@@ -1394,13 +1408,7 @@ class BCEVisitor : public HGraphVisitor {
       }
       // Does the current basic block dominate all back edges? If not,
       // don't apply dynamic bce to something that may not be executed.
-      for (HBasicBlock* back_edge : loop->GetBackEdges()) {
-        if (!block->Dominates(back_edge)) {
-          return false;
-        }
-      }
-      // Success!
-      return true;
+      return DominatesAllBackEdges(loop, block);
     }
     return false;
   }
