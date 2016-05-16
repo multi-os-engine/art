@@ -311,6 +311,10 @@ bool HInliner::TryInline(HInvoke* invoke_instruction) {
   if (Runtime::Current()->UseJitCompilation()) {
     // Under JIT, we should always know the caller.
     DCHECK(caller != nullptr);
+    if (invoke_instruction->IsFromInlinedInvoke()) {
+      // This is from a different method.  It should have been handled already.
+      return false;
+    }
     ScopedProfilingInfoInlineUse spiis(caller, soa.Self());
     ProfilingInfo* profiling_info = spiis.GetProfilingInfo();
     if (profiling_info != nullptr) {
