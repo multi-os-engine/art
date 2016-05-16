@@ -484,6 +484,33 @@ void EnterInterpreterFromInvoke(Thread* self, ArtMethod* method, Object* receive
   self->PopShadowFrame();
 }
 
+static bool IsStringInit(Thread* self, const Instruction* instr, ArtMethod* caller)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  if (instr->Opcode() == Instruction::INVOKE_DIRECT ||
+      instr->Opcode() == Instruction::INVOKE_DIRECT_RANGE) {
+    uint16_t callee_method_idx = (instr->Opcode() == Instruction::INVOKE_DIRECT_RANGE) ?
+        instr->VRegB_3rc() : instr->VRegB_35c();
+    ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+    ArtMethod* callee = class_linker->ResolveMethod<ClassLinker::kNoICCECheckForCache>(
+        self, callee_method_idx, caller, kDirect);
+    // We just returned from callee, the method should resolve. Check if it's a
+    // String constructor.
+    if (callee != nullptr &&
+        callee->GetDeclaringClass()->IsStringClass() &&
+        callee->IsConstructor()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static int16_t GetReceiverRegisterForStringInit(const Instruction* instr) {
+  DCHECK(instr->Opcode() == Instruction::INVOKE_DIRECT_RANGE ||
+         instr->Opcode() == Instruction::INVOKE_DIRECT);
+  return (instr->Opcode() == Instruction::INVOKE_DIRECT_RANGE) ?
+      instr->VRegC_3rc() : instr->VRegC_35c();
+}
+
 void EnterInterpreterFromDeoptimize(Thread* self,
                                     ShadowFrame* shadow_frame,
                                     bool from_code,
@@ -519,6 +546,13 @@ void EnterInterpreterFromDeoptimize(Thread* self,
       // TODO: should be tested more once b/17586779 is fixed.
       const Instruction* instr = Instruction::At(&code_item->insns_[dex_pc]);
       if (instr->IsInvoke()) {
+        if (IsStringInit(self, instr, shadow_frame->GetMethod())) {
+          int16_t this_obj_register = GetReceiverRegisterForStringInit(instr);
+          // Move the StringFactory.newStringFromChars() result into the register representing
+          // "this object" when invoking the string constructor in the original dex instruction.
+          // The compiler also verified there was no alias.
+          shadow_frame->SetVRegReference(this_obj_register, value.GetL());
+        }
         new_dex_pc = dex_pc + instr->SizeInCodeUnits();
       } else if (instr->Opcode() == Instruction::NEW_INSTANCE) {
         // It's possible to deoptimize at a NEW_INSTANCE dex instruciton that's for a
@@ -529,12 +563,14 @@ void EnterInterpreterFromDeoptimize(Thread* self,
               instr->VRegB_21c(), shadow_frame->GetMethod());
           DCHECK(klass->IsStringClass());
         }
+        // Move the StringFactory.newEmptyString() result into the destination register.
+        shadow_frame->SetVRegReference(instr->VRegA_21c(), value.GetL());
         // Skip the dex instruction since we essentially come back from an invocation.
         new_dex_pc = dex_pc + instr->SizeInCodeUnits();
       } else {
-        DCHECK(false) << "Unexpected instruction opcode " << instr->Opcode()
-                      << " at dex_pc " << dex_pc
-                      << " of method: " << PrettyMethod(shadow_frame->GetMethod(), false);
+        CHECK(false) << "Unexpected instruction opcode " << instr->Opcode()
+                     << " at dex_pc " << dex_pc
+                     << " of method: " << PrettyMethod(shadow_frame->GetMethod(), false);
       }
     } else {
       // Nothing to do, the dex_pc is the one at which the code requested
