@@ -1169,6 +1169,19 @@ class BCEVisitor : public HGraphVisitor {
           loop->IsDefinedOutOfTheLoop(array_get->InputAt(1))) {
         SideEffects loop_effects = side_effects_.GetLoopEffects(loop->GetHeader());
         if (!array_get->GetSideEffects().MayDependOn(loop_effects)) {
+          // Here we have one more restriction. We can hoist ArrayGet only if its
+          // execution is guaranteed at least one time. In other words only if
+          // array_get_bb dominates all exit blocks.
+          HBasicBlock* array_get_bb = array_get->GetBlock();
+          for (HBlocksInLoopIterator it_loop(*loop); !it_loop.Done(); it_loop.Advance()) {
+            HBasicBlock* loop_block = it_loop.Current();
+            for (auto it : loop_block->GetSuccessors()) {
+              if (it->GetLoopInformation() != loop &&
+                  !array_get_bb->Dominates(it)) {
+                return;
+              }
+            }
+          }
           HoistToPreHeaderOrDeoptBlock(loop, array_get);
         }
       }
