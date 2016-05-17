@@ -819,13 +819,13 @@ void ReferenceTypePropagation::UpdateBoundType(HBoundType* instr) {
 void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
   DCHECK(instr->IsLive());
 
-  size_t input_count = instr->InputCount();
+  ArrayRef<HUserRecord<HInstruction*>> input_records = instr->GetInputRecords();
   size_t first_input_index_not_null = 0;
-  while (first_input_index_not_null < input_count &&
-      instr->InputAt(first_input_index_not_null)->IsNullConstant()) {
+  while (first_input_index_not_null < input_records.size() &&
+      input_records[first_input_index_not_null].GetInstruction()->IsNullConstant()) {
     first_input_index_not_null++;
   }
-  if (first_input_index_not_null == input_count) {
+  if (first_input_index_not_null == input_records.size()) {
     // All inputs are NullConstants, set the type to object.
     // This may happen in the presence of inlining.
     instr->SetReferenceTypeInfo(instr->GetBlock()->GetGraph()->GetInexactObjectRti());
@@ -840,11 +840,11 @@ void ReferenceTypePropagation::UpdatePhi(HPhi* instr) {
     return;
   }
 
-  for (size_t i = first_input_index_not_null + 1; i < input_count; i++) {
-    if (instr->InputAt(i)->IsNullConstant()) {
+  for (size_t i = first_input_index_not_null + 1; i < input_records.size(); i++) {
+    if (input_records[i].GetInstruction()->IsNullConstant()) {
       continue;
     }
-    new_rti = MergeTypes(new_rti, instr->InputAt(i)->GetReferenceTypeInfo());
+    new_rti = MergeTypes(new_rti, input_records[i].GetInstruction()->GetReferenceTypeInfo());
     if (new_rti.IsValid() && new_rti.IsObjectClass()) {
       if (!new_rti.IsExact()) {
         break;
@@ -875,8 +875,8 @@ bool ReferenceTypePropagation::UpdateNullability(HInstruction* instr) {
   if (instr->IsPhi()) {
     HPhi* phi = instr->AsPhi();
     bool new_can_be_null = false;
-    for (size_t i = 0; i < phi->InputCount(); i++) {
-      if (phi->InputAt(i)->CanBeNull()) {
+    for (const HUserRecord<HInstruction*>& input_record : phi->GetInputRecords()) {
+      if (input_record.GetInstruction()->CanBeNull()) {
         new_can_be_null = true;
         break;
       }

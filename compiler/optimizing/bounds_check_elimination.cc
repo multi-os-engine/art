@@ -912,14 +912,15 @@ class BCEVisitor : public HGraphVisitor {
 
   static bool HasSameInputAtBackEdges(HPhi* phi) {
     DCHECK(phi->IsLoopHeaderPhi());
+    ArrayRef<HUserRecord<HInstruction*>> input_records = phi->GetInputRecords();
     // Start with input 1. Input 0 is from the incoming block.
-    HInstruction* input1 = phi->InputAt(1);
+    HInstruction* input1 = input_records[1].GetInstruction();
     DCHECK(phi->GetBlock()->GetLoopInformation()->IsBackEdge(
         *phi->GetBlock()->GetPredecessors()[1]));
-    for (size_t i = 2, e = phi->InputCount(); i < e; ++i) {
+    for (size_t i = 2; i < input_records.size(); ++i) {
       DCHECK(phi->GetBlock()->GetLoopInformation()->IsBackEdge(
           *phi->GetBlock()->GetPredecessors()[i]));
-      if (input1 != phi->InputAt(i)) {
+      if (input1 != input_records[i].GetInstruction()) {
         return false;
       }
     }

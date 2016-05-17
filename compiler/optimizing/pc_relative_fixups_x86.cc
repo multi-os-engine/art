@@ -202,8 +202,9 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
     }
 
     // Ensure that we can load FP arguments from the constant area.
-    for (size_t i = 0, e = invoke->InputCount(); i < e; i++) {
-      HConstant* input = invoke->InputAt(i)->AsConstant();
+    ArrayRef<HUserRecord<HInstruction*>> input_records = invoke->GetInputRecords();
+    for (size_t i = 0; i < input_records.size(); i++) {
+      HConstant* input = input_records[i].GetInstruction()->AsConstant();
       if (input != nullptr && Primitive::IsFloatingPointType(input->GetType())) {
         ReplaceInput(invoke, input, i, true);
       }
