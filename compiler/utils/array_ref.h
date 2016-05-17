@@ -39,9 +39,6 @@ namespace art {
  */
 template <typename T>
 class ArrayRef {
- private:
-  struct tag { };
-
  public:
   typedef T value_type;
   typedef T& reference;
@@ -66,10 +63,10 @@ class ArrayRef {
     : array_(array), size_(size) {
   }
 
-  template <typename U, size_t size>
-  explicit constexpr ArrayRef(U (&array)[size],
-                              typename std::enable_if<std::is_same<T, const U>::value, tag>::type
-                                  t ATTRIBUTE_UNUSED = tag())
+  template <typename U,
+            size_t size,
+            typename = typename std::enable_if<std::is_same<T, const U>::value>::type>
+  explicit constexpr ArrayRef(U (&array)[size])
     : array_(array), size_(size) {
   }
 

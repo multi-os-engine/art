@@ -177,8 +177,9 @@ void SsaLivenessAnalysis::ComputeLiveness() {
 static void RecursivelyProcessInputs(HInstruction* current,
                                      HInstruction* actual_user,
                                      BitVector* live_in) {
-  for (size_t i = 0, e = current->InputCount(); i < e; ++i) {
-    HInstruction* input = current->InputAt(i);
+  ArrayRef<HUserRecord<HInstruction*>> input_records = current->GetInputRecords();
+  for (size_t i = 0; i < input_records.size(); ++i) {
+    HInstruction* input = input_records[i].GetInstruction();
     bool has_in_location = current->GetLocations()->InAt(i).IsValid();
     bool has_out_location = input->GetLocations()->Out().IsValid();
 
@@ -430,11 +431,12 @@ int LiveInterval::FindFirstRegisterHint(size_t* free_until,
         // If the instruction dies at the phi assignment, we can try having the
         // same register.
         if (end == user->GetBlock()->GetPredecessors()[input_index]->GetLifetimeEnd()) {
-          for (size_t i = 0, e = user->InputCount(); i < e; ++i) {
+          ArrayRef<HUserRecord<HInstruction*>> input_records = user->GetInputRecords();
+          for (size_t i = 0; i < input_records.size(); ++i) {
             if (i == input_index) {
               continue;
             }
-            HInstruction* input = user->InputAt(i);
+            HInstruction* input = input_records[i].GetInstruction();
             Location location = input->GetLiveInterval()->GetLocationAt(
                 user->GetBlock()->GetPredecessors()[i]->GetLifetimeEnd() - 1);
             if (location.IsRegisterKind()) {
@@ -471,8 +473,9 @@ int LiveInterval::FindHintAtDefinition() const {
   if (defined_by_->IsPhi()) {
     // Try to use the same register as one of the inputs.
     const ArenaVector<HBasicBlock*>& predecessors = defined_by_->GetBlock()->GetPredecessors();
-    for (size_t i = 0, e = defined_by_->InputCount(); i < e; ++i) {
-      HInstruction* input = defined_by_->InputAt(i);
+    ArrayRef<HUserRecord<HInstruction*>> input_records = defined_by_->GetInputRecords();
+    for (size_t i = 0; i < input_records.size(); ++i) {
+      HInstruction* input = input_records[i].GetInstruction();
       size_t end = predecessors[i]->GetLifetimeEnd();
       LiveInterval* input_interval = input->GetLiveInterval()->GetSiblingAt(end - 1);
       if (input_interval->GetEnd() == end) {

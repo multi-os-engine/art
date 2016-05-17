@@ -67,8 +67,8 @@ void SsaDeadPhiElimination::MarkDeadPhis() {
   while (!worklist_.empty()) {
     HPhi* phi = worklist_.back();
     worklist_.pop_back();
-    for (HInputIterator it(phi); !it.Done(); it.Advance()) {
-      HPhi* input = it.Current()->AsPhi();
+    for (const HUserRecord<HInstruction*>& input_record : phi->GetInputRecords()) {
+      HPhi* input = input_record.GetInstruction()->AsPhi();
       if (input != nullptr && input->IsDead()) {
         // Input is a dead phi. Revive it and add to the worklist. We make sure
         // that the phi was not dead initially (see definition of `initially_live`).
@@ -102,9 +102,7 @@ void SsaDeadPhiElimination::EliminateDeadPhis() {
           }
         }
         // Remove the phi from use lists of its inputs.
-        for (size_t i = 0, e = phi->InputCount(); i < e; ++i) {
-          phi->RemoveAsUserOfInput(i);
-        }
+        phi->RemoveAsUserOfAllInputs();
         // Remove the phi from environments that use it.
         for (const HUseListNode<HEnvironment*>& use : phi->GetEnvUses()) {
           HEnvironment* user = use.GetUser();
@@ -159,8 +157,8 @@ void SsaRedundantPhiElimination::Run() {
     bool irreducible_loop_phi_in_cycle = phi->IsIrreducibleLoopHeaderPhi();
 
     // First do a simple loop over inputs and check if they are all the same.
-    for (size_t j = 0; j < phi->InputCount(); ++j) {
-      HInstruction* input = phi->InputAt(j);
+    for (const HUserRecord<HInstruction*>& input_record : phi->GetInputRecords()) {
+      HInstruction* input = input_record.GetInstruction();
       if (input == phi) {
         continue;
       } else if (candidate == nullptr) {
@@ -181,8 +179,8 @@ void SsaRedundantPhiElimination::Run() {
         DCHECK(!current->IsLoopHeaderPhi() ||
                current->GetBlock()->IsLoopPreHeaderFirstPredecessor());
 
-        for (size_t j = 0; j < current->InputCount(); ++j) {
-          HInstruction* input = current->InputAt(j);
+        for (const HUserRecord<HInstruction*>& input_record : current->GetInputRecords()) {
+          HInstruction* input = input_record.GetInstruction();
           if (input == current) {
             continue;
           } else if (input->IsPhi()) {

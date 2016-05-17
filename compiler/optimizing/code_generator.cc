@@ -111,9 +111,10 @@ static bool CheckTypeConsistency(HInstruction* instruction) {
         << " " << locations->Out();
   }
 
-  for (size_t i = 0, e = instruction->InputCount(); i < e; ++i) {
-    DCHECK(CheckType(instruction->InputAt(i)->GetType(), locations->InAt(i)))
-      << instruction->InputAt(i)->GetType()
+  ArrayRef<HUserRecord<HInstruction*>> input_records = instruction->GetInputRecords();
+  for (size_t i = 0; i < input_records.size(); ++i) {
+    DCHECK(CheckType(input_records[i].GetInstruction()->GetType(), locations->InAt(i)))
+      << input_records[i].GetInstruction()->GetType()
       << " " << locations->InAt(i);
   }
 
