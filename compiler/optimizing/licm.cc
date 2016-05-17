@@ -30,8 +30,8 @@ static bool IsPhiOf(HInstruction* instruction, HBasicBlock* block) {
 static bool InputsAreDefinedBeforeLoop(HInstruction* instruction) {
   DCHECK(instruction->IsInLoop());
   HLoopInformation* info = instruction->GetBlock()->GetLoopInformation();
-  for (HInputIterator it(instruction); !it.Done(); it.Advance()) {
-    HLoopInformation* input_loop = it.Current()->GetBlock()->GetLoopInformation();
+  for (const HUserRecord<HInstruction*>& input_record : instruction->GetInputRecords()) {
+    HLoopInformation* input_loop = input_record.GetInstruction()->GetBlock()->GetLoopInformation();
     // We only need to check whether the input is defined in the loop. If it is not
     // it is defined before the loop.
     if (input_loop != nullptr && input_loop->IsIn(*info)) {

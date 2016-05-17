@@ -497,10 +497,12 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
 
   void PrintInstruction(HInstruction* instruction) {
     output_ << instruction->DebugName();
-    if (instruction->InputCount() > 0) {
+    ArrayRef<HUserRecord<HInstruction*>> input_records = instruction->GetInputRecords();
+    if (!input_records.empty()) {
       StringList inputs;
-      for (HInputIterator it(instruction); !it.Done(); it.Advance()) {
-        inputs.NewEntryStream() << GetTypeId(it.Current()->GetType()) << it.Current()->GetId();
+      for (const HUserRecord<HInstruction*>& input_record : input_records) {
+        HInstruction* input = input_record.GetInstruction();
+        inputs.NewEntryStream() << GetTypeId(input->GetType()) << input->GetId();
       }
       StartAttributeStream() << inputs;
     }
@@ -545,7 +547,7 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       LocationSummary* locations = instruction->GetLocations();
       if (locations != nullptr) {
         StringList inputs;
-        for (size_t i = 0; i < instruction->InputCount(); ++i) {
+        for (size_t i = 0, e = locations->GetInputCount(); i < e; ++i) {
           DumpLocation(inputs.NewEntryStream(), locations->InAt(i));
         }
         std::ostream& attr = StartAttributeStream("locations");
@@ -739,8 +741,8 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       HInstruction* instruction = it.Current();
       output_ << instruction->GetId() << " " << GetTypeId(instruction->GetType())
               << instruction->GetId() << "[ ";
-      for (HInputIterator inputs(instruction); !inputs.Done(); inputs.Advance()) {
-        output_ << inputs.Current()->GetId() << " ";
+      for (const HUserRecord<HInstruction*>& input_record : instruction->GetInputRecords()) {
+        output_ << input_record.GetInstruction()->GetId() << " ";
       }
       output_ << "]\n";
     }
