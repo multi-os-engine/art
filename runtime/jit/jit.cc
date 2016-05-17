@@ -128,7 +128,9 @@ void Jit::DumpInfo(std::ostream& os) {
   code_cache_->Dump(os);
   cumulative_timings_.Dump(os);
   MutexLock mu(Thread::Current(), lock_);
-  memory_use_.PrintMemoryUse(os);
+  if (memory_use_.SampleSize() > 0U) {
+    memory_use_.PrintMemoryUse(os);
+  }
 }
 
 void Jit::DumpForSigQuit(std::ostream& os) {

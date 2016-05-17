@@ -1030,9 +1030,15 @@ void JitCodeCache::Dump(std::ostream& os) {
         << number_of_osr_compilations_ << "\n"
      << "Total number of deoptimizations: " << number_of_deoptimizations_ << "\n"
      << "Total number of JIT code cache collections: " << number_of_collections_ << std::endl;
-  histogram_stack_map_memory_use_.PrintMemoryUse(os);
-  histogram_code_memory_use_.PrintMemoryUse(os);
-  histogram_profiling_info_memory_use_.PrintMemoryUse(os);
+  if (histogram_stack_map_memory_use_.SampleSize() > 0U) {
+    histogram_stack_map_memory_use_.PrintMemoryUse(os);
+  }
+  if (histogram_code_memory_use_.SampleSize() > 0U) {
+    histogram_code_memory_use_.PrintMemoryUse(os);
+  }
+  if (histogram_profiling_info_memory_use_.SampleSize() > 0U) {
+    histogram_profiling_info_memory_use_.PrintMemoryUse(os);
+  }
 }
 
 }  // namespace jit
