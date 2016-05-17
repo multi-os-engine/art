@@ -202,9 +202,12 @@ inline void Histogram<Value>::PrintConfidenceIntervals(std::ostream &os, double 
 
 template <class Value>
 inline void Histogram<Value>::PrintMemoryUse(std::ostream &os) const {
-  os << Name()
-     << ": Avg: " << PrettySize(Mean()) << " Max: "
-     << PrettySize(Max()) << " Min: " << PrettySize(Min()) << "\n";
+  // Only print if we have samples.
+  if (sample_size_ != 0u) {
+    os << Name()
+       << ": Avg: " << PrettySize(Mean()) << " Max: "
+       << PrettySize(Max()) << " Min: " << PrettySize(Min()) << "\n";
+  }
 }
 
 template <class Value>
