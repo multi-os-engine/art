@@ -1013,9 +1013,6 @@ bool Thread::ModifySuspendCount(Thread* self, int delta, AtomicInteger* suspend_
           << delta << " " << tls32_.debug_suspend_count << " " << this;
     DCHECK_GE(tls32_.suspend_count, tls32_.debug_suspend_count) << this;
     Locks::thread_suspend_count_lock_->AssertHeld(self);
-    if (this != self && !IsSuspended()) {
-      Locks::thread_list_lock_->AssertHeld(self);
-    }
   }
   if (UNLIKELY(delta < 0 && tls32_.suspend_count <= 0)) {
     UnsafeLogFatalForSuspendCount(self, this);
