@@ -235,7 +235,7 @@ uint32_t ArtMethod::FindCatchBlock(Handle<mirror::Class> exception_type,
 
 void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue* result,
                        const char* shorty) {
-  if (UNLIKELY(__builtin_frame_address(0) < self->GetStackEnd())) {
+  if (self->IsBelowStackEnd()) {
     ThrowStackOverflowError(self);
     return;
   }
