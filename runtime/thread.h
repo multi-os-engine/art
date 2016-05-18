@@ -684,14 +684,46 @@ class Thread {
     if (implicit_overflow_check) {
       // The interpreter needs the extra overflow bytes that stack_end does
       // not include.
-      return tlsPtr_.stack_end + GetStackOverflowReservedBytes(kRuntimeISA);
+      return GetStackEnd() + GetStackOverflowReservedBytes(kRuntimeISA);
     } else {
-      return tlsPtr_.stack_end;
+      return GetStackEnd();
+    }
+  }
+
+  uint8_t* GetUnsafeStackEndForInterpreter(bool implicit_overflow_check) const {
+    if (implicit_overflow_check) {
+      // The interpreter needs the extra overflow bytes that stack_end does
+      // not include.
+      return GetUnsafeStackEnd() + GetStackOverflowReservedBytes(kRuntimeISA);
+    } else {
+      return GetUnsafeStackEnd();
     }
   }
 
   uint8_t* GetStackEnd() const {
     return tlsPtr_.stack_end;
+  }
+
+  uint8_t* GetUnsafeStackEnd() const {
+    return tlsPtr_.unsafe_stack_end;
+  }
+
+  bool IsBelowStackEnd() const {
+    bool below = __builtin_frame_address(0) < GetStackEnd();
+#ifdef SAFE_STACK
+    below |= __builtin___get_unsafe_stack_ptr() < GetUnsafeStackEnd();
+#endif
+    return below;
+  }
+
+  bool IsBelowStackEndForInterpreter(bool implicit_overflow_check) const {
+    bool below = __builtin_frame_address(0) <
+                 GetStackEndForInterpreter(implicit_overflow_check);
+#ifdef SAFE_STACK
+    below |= __builtin___get_unsafe_stack_ptr() <
+             GetUnsafeStackEndForInterpreter(implicit_overflow_check);
+#endif
+    return below;
   }
 
   // Set the stack end to that to be used during a stack overflow
@@ -701,7 +733,13 @@ class Thread {
   void ResetDefaultStackEnd() {
     // Our stacks grow down, so we want stack_end_ to be near there, but reserving enough room
     // to throw a StackOverflowError.
-    tlsPtr_.stack_end = tlsPtr_.stack_begin + GetStackOverflowReservedBytes(kRuntimeISA);
+    size_t reserved = GetStackOverflowReservedBytes(kRuntimeISA);
+    tlsPtr_.stack_end = tlsPtr_.stack_begin + reserved;
+    if (tlsPtr_.unsafe_stack_begin != nullptr) {
+      tlsPtr_.unsafe_stack_end = tlsPtr_.unsafe_stack_begin + reserved;
+    } else {
+      tlsPtr_.unsafe_stack_end = nullptr;
+    }
   }
 
   // Install the protected region for implicit stack checks.
@@ -1358,7 +1396,7 @@ class Thread {
       mterp_current_ibase(nullptr), mterp_default_ibase(nullptr), mterp_alt_ibase(nullptr),
       thread_local_alloc_stack_top(nullptr), thread_local_alloc_stack_end(nullptr),
       nested_signal_state(nullptr), flip_function(nullptr), method_verifier(nullptr),
-      thread_local_mark_stack(nullptr) {
+      thread_local_mark_stack(nullptr), unsafe_stack_begin(nullptr), unsafe_stack_end(nullptr) {
       std::fill(held_mutexes, held_mutexes + kLockLevelCount, nullptr);
     }
 
@@ -1502,6 +1540,13 @@ class Thread {
 
     // Thread-local mark stack for the concurrent copying collector.
     gc::accounting::AtomicStack<mirror::Object>* thread_local_mark_stack;
+
+    // The "lowest addressable byte" of the unsafe stack.
+    uint8_t* unsafe_stack_begin;
+
+    // The end of this thread's stack. This is the lowest safely-addressable
+    // address on the unsafe stack.
+    uint8_t* unsafe_stack_end;
   } tlsPtr_;
 
   // Guards the 'interrupted_' and 'wait_monitor_' members.

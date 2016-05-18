@@ -899,6 +899,13 @@ bool Thread::InitStackHwm() {
   tlsPtr_.stack_begin = reinterpret_cast<uint8_t*>(read_stack_base);
   tlsPtr_.stack_size = read_stack_size;
 
+#ifdef SAFE_STACK
+  void *unsafe_base = __builtin___get_unsafe_stack_start();
+  tlsPtr_.unsafe_stack_begin = reinterpret_cast<uint8_t*>(unsafe_base);
+#else
+  tlsPtr_.unsafe_stack_begin = nullptr;
+#endif
+
   // The minimum stack size we can cope with is the overflow reserved bytes (typically
   // 8K) + the protected region size (4K) + another page (4K).  Typically this will
   // be 8+4+4 = 16K.  The thread won't be able to do much with this stack even the GC takes
@@ -934,11 +941,20 @@ bool Thread::InitStackHwm() {
     tlsPtr_.stack_end += read_guard_size + kStackOverflowProtectedSize;
     tlsPtr_.stack_size -= read_guard_size;
 
+    if (tlsPtr_.unsafe_stack_begin != nullptr) {
+      tlsPtr_.unsafe_stack_begin += kStackOverflowProtectedSize;
+      tlsPtr_.unsafe_stack_end += kStackOverflowProtectedSize;
+    }
     InstallImplicitProtection();
   }
 
   // Sanity check.
   CHECK_GT(FindStackTop(), reinterpret_cast<void*>(tlsPtr_.stack_end));
+#ifdef SAFE_STACK
+  if (tlsPtr_.unsafe_stack_begin != nullptr) {
+    CHECK_GT(__builtin___get_unsafe_stack_ptr(), reinterpret_cast<void*>(tlsPtr_.unsafe_stack_end));
+  }
+#endif
 
   return true;
 }
@@ -2958,13 +2974,36 @@ bool Thread::ProtectStack(bool fatal_on_error) {
     }
     return false;
   }
+
+  if (tlsPtr_.unsafe_stack_begin != nullptr) {
+    void* unsafe_pregion = tlsPtr_.unsafe_stack_begin - kStackOverflowProtectedSize;
+    VLOG(threads) << "Protecting stack at " << unsafe_pregion;
+    if (mprotect(unsafe_pregion, kStackOverflowProtectedSize, PROT_NONE) == -1) {
+      if (fatal_on_error) {
+        LOG(FATAL) << "Unable to create protected region in unsafe stack for "
+                      "implicit overflow check. "
+                      "Reason: "
+                   << strerror(errno)
+                   << " size:  " << kStackOverflowProtectedSize;
+      }
+      return false;
+    }
+  }
+
   return true;
 }
 
 bool Thread::UnprotectStack() {
   void* pregion = tlsPtr_.stack_begin - kStackOverflowProtectedSize;
   VLOG(threads) << "Unprotecting stack at " << pregion;
-  return mprotect(pregion, kStackOverflowProtectedSize, PROT_READ|PROT_WRITE) == 0;
+  bool ret = (mprotect(pregion, kStackOverflowProtectedSize, PROT_READ|PROT_WRITE) == 0);
+
+  if (tlsPtr_.unsafe_stack_begin != nullptr) {
+    void* unsafe_pregion = tlsPtr_.unsafe_stack_begin - kStackOverflowProtectedSize;
+    VLOG(threads) << "Unprotecting unsafe stack at " << pregion;
+    ret &= (mprotect(unsafe_pregion, kStackOverflowProtectedSize, PROT_READ|PROT_WRITE) == 0);
+  }
+  return ret;
 }
 
 void Thread::ActivateSingleStepControl(SingleStepControl* ssc) {
