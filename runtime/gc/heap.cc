@@ -311,7 +311,7 @@ Heap::Heap(size_t initial_size,
 
           const OatHeader& boot_oat_header = boot_oat_file->GetOatHeader();
           const char* boot_classpath =
-              boot_oat_header.GetStoreValueByKey(OatHeader::kBootClassPathKey);
+              boot_oat_header.GetStoreValueByKey(OatHeader::kBootClassPath);
           if (boot_classpath == nullptr) {
             continue;
           }

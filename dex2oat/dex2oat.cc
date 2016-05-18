@@ -1312,7 +1312,7 @@ class Dex2Oat FINAL {
     if (IsBootImage() && image_filenames_.size() > 1) {
       // If we're compiling the boot image, store the boot classpath into the Key-Value store.
       // We need this for the multi-image case.
-      key_value_store_->Put(OatHeader::kBootClassPathKey, GetMultiImageBootClassPath());
+      key_value_store_->Put(OatHeader::kBootClassPath, GetMultiImageBootClassPath());
     }
 
     if (!IsBootImage()) {
@@ -1348,19 +1348,12 @@ class Dex2Oat FINAL {
       // Open dex files for class path.
       const std::vector<std::string> class_path_locations =
           GetClassPathLocations(runtime_->GetClassPathString());
-      OpenClassPathFiles(class_path_locations, &class_path_files_, runtime_->GetInstructionSet());
+      OpenClassPathFiles(class_path_locations, &class_path_files_);
 
       // Store the classpath we have right now.
       std::vector<const DexFile*> class_path_files = MakeNonOwningPointerVector(class_path_files_);
-      std::string encoded_class_path;
-      if (class_path_locations.size() == 1 &&
-          class_path_locations[0] == OatFile::kSpecialSharedLibrary) {
-        // When passing the special shared library as the classpath, it is the only path.
-        encoded_class_path = OatFile::kSpecialSharedLibrary;
-      } else {
-        encoded_class_path = OatFile::EncodeDexFileDependencies(class_path_files);
-      }
-      key_value_store_->Put(OatHeader::kClassPathKey, encoded_class_path);
+      key_value_store_->Put(OatHeader::kClassPathKey,
+                            OatFile::EncodeDexFileDependencies(class_path_files));
     }
 
     // Now that we have finalized key_value_store_, start writing the oat file.
@@ -1973,31 +1966,12 @@ class Dex2Oat FINAL {
 
   // Opens requested class path files and appends them to opened_dex_files.
   static void OpenClassPathFiles(const std::vector<std::string>& class_path_locations,
-                                 std::vector<std::unique_ptr<const DexFile>>* opened_dex_files,
-                                 InstructionSet isa) {
+                                 std::vector<std::unique_ptr<const DexFile>>* opened_dex_files) {
     DCHECK(opened_dex_files != nullptr) << "OpenClassPathFiles out-param is nullptr";
     for (const std::string& location : class_path_locations) {
-      // Stop early if we detect the special shared library, which may be passed as the classpath
-      // for dex2oat when we want to skip the shared libraries check.
-      if (location == OatFile::kSpecialSharedLibrary) {
-        break;
-      }
       std::string error_msg;
       if (!DexFile::Open(location.c_str(), location.c_str(), &error_msg, opened_dex_files)) {
-        // If we fail to open the dex file because it's been stripped, try to open the dex file
-        // from its corresponding oat file.
-        OatFileAssistant oat_file_assistant(location.c_str(), isa, false, false);
-        std::unique_ptr<OatFile> oat_file(oat_file_assistant.GetBestOatFile());
-        if (oat_file == nullptr) {
-          LOG(WARNING) << "Failed to open dex file and associated oat file for '" << location
-                       << "': " << error_msg;
-        } else {
-          std::vector<std::unique_ptr<const DexFile>> oat_dex_files =
-              oat_file_assistant.LoadDexFiles(*oat_file, location.c_str());
-          opened_dex_files->insert(opened_dex_files->end(),
-                                   std::make_move_iterator(oat_dex_files.begin()),
-                                   std::make_move_iterator(oat_dex_files.end()));
-        }
+        LOG(WARNING) << "Failed to open dex file '" << location << "': " << error_msg;
       }
     }
   }
