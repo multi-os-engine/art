@@ -19,9 +19,30 @@
  */
 public class Main {
     public static void main(String args[]) {
+        System.loadLibrary(args[0]);
         testSelfRecursion();
         testMutualRecursion();
+        testNativeUnsafeStackRecursion();
         System.out.println("SOE test done");
+    }
+
+    private static native int nativeUnsafeStackAlmostOverflow();
+
+    private static void testNativeUnsafeStackRecursion() {
+        // This native function uses almost all available unsafe stack space and then calls
+        // unsafeStackOverflow().
+        nativeUnsafeStackAlmostOverflow();
+    }
+
+    private static void unsafeStackOverflow() {
+        // At this point we are very low on the unsafe stack. Run a Java recursion. In the interpreter
+        // mode it should run out of the unsafe stack first.
+        try {
+            stackOverflowTestSub3(0.0, 1.0, 2.0);
+        }
+        catch (StackOverflowError soe) {
+            System.out.println("caught SOE in unsafeStackOverflow");
+        }
     }
 
     private static void testSelfRecursion() {

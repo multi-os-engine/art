@@ -1,10 +1,14 @@
 libartd run.
+JNI_OnLoad called
 caught SOE3 in testSelfRecursion
 caught SOE10 in testSelfRecursion
 caught SOE in testMutualRecursion
+caught SOE in unsafeStackOverflow
 SOE test done
 libart run.
+JNI_OnLoad called
 caught SOE3 in testSelfRecursion
 caught SOE10 in testSelfRecursion
 caught SOE in testMutualRecursion
+caught SOE in unsafeStackOverflow
 SOE test done

@@ -154,7 +154,7 @@ ifneq ($(ART_TEST_NO_SYNC),true)
 ifeq ($(ART_TEST_ANDROID_ROOT),)
 test-art-target-sync: $(TEST_ART_TARGET_SYNC_DEPS)
 	$(TEST_ART_ADB_ROOT_AND_REMOUNT)
-	adb sync
+	adb sync system && adb sync data
 else
 test-art-target-sync: $(TEST_ART_TARGET_SYNC_DEPS)
 	$(TEST_ART_ADB_ROOT_AND_REMOUNT)
@@ -408,7 +408,7 @@ oat-target: $(ART_TARGET_DEPENDENCIES) $(DEFAULT_DEX_PREOPT_INSTALLED_IMAGE) $(O
 .PHONY: oat-target-sync
 oat-target-sync: oat-target
 	$(TEST_ART_ADB_ROOT_AND_REMOUNT)
-	adb sync
+	adb sync system && adb sync data
 
 ####################################################################################################
 # Fake packages to ensure generation of libopenjdkd when one builds with mm/mmm/mmma.
