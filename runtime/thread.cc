@@ -1007,13 +1007,14 @@ static void UnsafeLogFatalForSuspendCount(Thread* self, Thread* thread) NO_THREA
 }
 
 bool Thread::ModifySuspendCount(Thread* self, int delta, AtomicInteger* suspend_barrier,
-                                bool for_debugger) {
+                                bool for_debugger, bool need_thread_list_lock) {
   if (kIsDebugBuild) {
     DCHECK(delta == -1 || delta == +1 || delta == -tls32_.debug_suspend_count)
           << delta << " " << tls32_.debug_suspend_count << " " << this;
     DCHECK_GE(tls32_.suspend_count, tls32_.debug_suspend_count) << this;
     Locks::thread_suspend_count_lock_->AssertHeld(self);
-    if (this != self && !IsSuspended()) {
+    if (this != self && !IsSuspended() && need_thread_list_lock) {
+      // Make sure the thread won't exit while modifying its suspend count.
       Locks::thread_list_lock_->AssertHeld(self);
     }
   }

@@ -226,7 +226,10 @@ class Thread {
         (state_and_flags.as_struct.flags & kSuspendRequest) != 0;
   }
 
-  bool ModifySuspendCount(Thread* self, int delta, AtomicInteger* suspend_barrier, bool for_debugger)
+  // Use need_thread_list_lock = false only if the thread is known to be suspended and won't exit
+  // without the thread list lock held.
+  bool ModifySuspendCount(Thread* self, int delta, AtomicInteger* suspend_barrier, bool for_debugger,
+                          bool need_thread_list_lock = true)
       REQUIRES(Locks::thread_suspend_count_lock_);
 
   bool RequestCheckpoint(Closure* function)

@@ -342,7 +342,11 @@ size_t ThreadList::RunCheckpoint(Closure* checkpoint_function) {
     checkpoint_function->Run(thread);
     {
       MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
-      thread->ModifySuspendCount(self, -1, nullptr, false);
+      // need_thread_list_lock = false because the thread is suspended just above and won't exit
+      // without the thread list lock held.
+      thread->ModifySuspendCount(self, -1, nullptr,
+                                 /*for_debugger*/false,
+                                 /*need_thread_list_lock*/false);
     }
   }
 
@@ -452,7 +456,11 @@ size_t ThreadList::FlipThreadRoots(Closure* thread_flip_visitor,
   {
     MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
     for (const auto& thread : other_threads) {
-      thread->ModifySuspendCount(self, -1, nullptr, false);
+      // need_thread_list_lock = false because the thread is suspended just above and won't exit
+      // without the thread list lock held.
+      thread->ModifySuspendCount(self, -1, nullptr,
+                                 /*for_debugger*/false,
+                                 /*need_thread_list_lock*/false);
     }
     Thread::resume_cond_->Broadcast(self);
   }
