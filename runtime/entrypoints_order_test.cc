@@ -138,7 +138,10 @@ class EntrypointsOrderTest : public CommonRuntimeTest {
     EXPECT_OFFSET_DIFFP(Thread, tlsPtr_, nested_signal_state, flip_function, sizeof(void*));
     EXPECT_OFFSET_DIFFP(Thread, tlsPtr_, flip_function, method_verifier, sizeof(void*));
     EXPECT_OFFSET_DIFFP(Thread, tlsPtr_, method_verifier, thread_local_mark_stack, sizeof(void*));
-    EXPECT_OFFSET_DIFF(Thread, tlsPtr_.thread_local_mark_stack, Thread, wait_mutex_, sizeof(void*),
+    EXPECT_OFFSET_DIFFP(Thread, tlsPtr_, thread_local_mark_stack, unsafe_stack_begin,
+                        sizeof(void*));
+    EXPECT_OFFSET_DIFFP(Thread, tlsPtr_, unsafe_stack_begin, unsafe_stack_end, sizeof(void*));
+    EXPECT_OFFSET_DIFF(Thread, tlsPtr_.unsafe_stack_end, Thread, wait_mutex_, sizeof(void*),
                        thread_tlsptr_end);
   }
 

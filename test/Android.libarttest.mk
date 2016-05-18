@@ -27,6 +27,7 @@ LIBARTTEST_COMMON_SRC_FILES := \
   004-StackWalk/stack_walk_jni.cc \
   004-ThreadStress/thread_stress.cc \
   004-UnsafeTest/unsafe_test.cc \
+  018-stack-overflow/native.cc \
   044-proxy/native_proxy.cc \
   051-thread/thread_test.cc \
   117-nopatchoat/nopatchoat.cc \
