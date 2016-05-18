@@ -444,6 +444,12 @@ bool Jit::MaybeDoOnStackReplacement(Thread* thread,
       return false;
     }
 
+    // Before allowing the jump, make sure the debugger is not active to avoid
+    // jumping from interpreter to OSR while e.g. single stepping.
+    if (Dbg::IsDebuggerActive()) {
+      return false;
+    }
+
     // We found a stack map, now fill the frame with dex register values from the interpreter's
     // shadow frame.
     DexRegisterMap vreg_map =
