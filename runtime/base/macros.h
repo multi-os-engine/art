@@ -301,4 +301,10 @@ template<typename... T> void UNUSED(const T&...) {}
 #define LOCKABLE CAPABILITY("mutex")
 #define SHARED_LOCKABLE SHARED_CAPABILITY("mutex")
 
+#if defined(__clang__)
+#if __has_feature(safe_stack)
+#define SAFE_STACK 1
+#endif
+#endif
+
 #endif  // ART_RUNTIME_BASE_MACROS_H_
