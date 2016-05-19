@@ -75,7 +75,7 @@ class TestStatement(PrintableMixin):
 
   class Variant(object):
     """Supported types of statements."""
-    InOrder, NextLine, DAG, Not, Eval = range(5)
+    InOrder, NextLine, DAG, Not, Eval, If, Else, Fi = range(8)
 
   def __init__(self, parent, variant, originalText, lineNo):
     assert isinstance(parent, TestCase)
@@ -91,6 +91,20 @@ class TestStatement(PrintableMixin):
   @property
   def fileName(self):
     return self.parent.fileName
+
+  def isPatternMatchContentStatement(self):
+    return self.variant in [ TestStatement.Variant.InOrder,
+                             TestStatement.Variant.NextLine,
+                             TestStatement.Variant.DAG,
+                             TestStatement.Variant.Not ]
+
+  def isEvalContentStatement(self):
+    return self.variant in [ TestStatement.Variant.Eval,
+                             TestStatement.Variant.If ]
+
+  def isNoContentStatement(self):
+    return self.variant in [ TestStatement.Variant.Else,
+                             TestStatement.Variant.Fi ]
 
   def addExpression(self, new_expression):
     assert isinstance(new_expression, TestExpression)

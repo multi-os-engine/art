@@ -28,6 +28,11 @@ class MatchFailedException(Exception):
     self.lineNo = lineNo
     self.variables = variables
 
+class BadStructureException(Exception):
+  def __init__(self, msg, lineNo):
+    self.msg = msg
+    self.lineNo = lineNo
+
 def findMatchingLine(statement, c1Pass, scope, variables, excludeLines=[]):
   """ Finds the first line in `c1Pass` which matches `statement`.
 
@@ -46,7 +51,7 @@ def findMatchingLine(statement, c1Pass, scope, variables, excludeLines=[]):
       return MatchInfo(MatchScope(i, i), newVariables)
   raise MatchFailedException(statement, scope.start, variables)
 
-class ExecutionState:
+class ExecutionState(object):
   def __init__(self, c1Pass, variables={}):
     self.cursor = 0
     self.c1Pass = c1Pass
@@ -54,6 +59,11 @@ class ExecutionState:
     self.variables = ImmutableDict(variables)
     self.dagQueue = []
     self.notQueue = []
+    self.ifStack = [ ]
+
+  class IfState(object):
+    """TODO."""
+    TakingThisBranch, NoBranchTakenYet, PreviouslyTakenBranch = range(3)
 
   def handleDagQueue(self, scope):
     """ Attempts to find matching `c1Pass` lines for a group of DAG statements.
@@ -103,8 +113,37 @@ class ExecutionState:
     self.cursor = match.scope.end + 1
     self.variables = match.variables
 
+  def shouldEvaluateCurrentStatement(self):
+    for state in self.ifStack:
+      if state is not ExecutionState.IfState.TakingThisBranch:
+        return False
+    return True
+
   def handleStatement(self, statement):
     variant = None if statement is None else statement.variant
+
+    if variant is TestStatement.Variant.If:
+      self.ifStack.append(ExecutionState.IfState.TakingThisBranch);
+      # Do not return, we need to evaluate the IF
+    elif variant is TestStatement.Variant.Else:
+      if not self.ifStack:
+        raise BadStructureException("Unexpected ELSE", statement.lineNo)
+      if self.ifStack[-1] is ExecutionState.IfState.TakingThisBranch:
+        self.ifStack[-1] = ExecutionState.IfState.PreviouslyTakenBranch
+      elif self.ifStack[-1] is ExecutionState.IfState.NoBranchTakenYet:
+        self.ifStack[-1] = ExecutionState.IfState.TakingThisBranch
+      else:
+        assert self.ifStack[-1] is ExecutionState.IfState.PreviouslyTakenBranch
+        raise BadStructureException("Multiple ELSE", statement.lineNo)
+      return
+    elif variant is TestStatement.Variant.Fi:
+      if not self.ifStack:
+        raise BadStructureException("Extra FI", statement.lineNo)
+      self.ifStack.pop()
+      return
+
+    if not self.shouldEvaluateCurrentStatement():
+      return
 
     # Handle statements which with deferred execution
     if variant is TestStatement.Variant.Not:
@@ -122,6 +161,10 @@ class ExecutionState:
       if not EvaluateLine(statement, self.variables):
         raise MatchFailedException(statement, self.cursor, self.variables)
       return
+    elif variant is TestStatement.Variant.If:
+      if not EvaluateLine(statement, self.variables):
+        self.ifStack[-1] = ExecutionState.IfState.NoBranchTakenYet
+      return
 
     # Handle statements which do move cursor
     if variant is None:
@@ -138,6 +181,10 @@ class ExecutionState:
       match = findMatchingLine(statement, self.c1Pass, scope, self.variables)
     self.moveCursor(match)
 
+  def endOfFile(self):
+    if self.ifStack:
+      raise BadStructureException("IF without FI", self.c1Length)
+
 def MatchTestCase(testCase, c1Pass):
   """ Runs a test case against a C1visualizer graph dump.
 
@@ -149,6 +196,8 @@ def MatchTestCase(testCase, c1Pass):
   testStatements = testCase.statements + [ None ]
   for statement in testStatements:
     state.handleStatement(statement)
+
+  state.endOfFile()
 
 def MatchFiles(checkerFile, c1File, targetArch, debuggableMode):
   for testCase in checkerFile.testCases:

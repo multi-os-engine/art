@@ -202,7 +202,10 @@ class CheckerParser_FileLayoutTest(unittest.TestCase):
         content = statementEntry[0]
         variant = statementEntry[1]
         statement = TestStatement(testCase, variant, content, 0)
-        statement.addExpression(TestExpression.createPatternFromPlainText(content))
+        if statement.isEvalContentStatement():
+          statement.addExpression(TestExpression.createPlainText(content))
+        elif statement.isPatternMatchContentStatement():
+          statement.addExpression(TestExpression.createPatternFromPlainText(content))
     return testFile
 
   def assertParsesTo(self, checkerText, expectedData):
@@ -252,6 +255,10 @@ class CheckerParser_FileLayoutTest(unittest.TestCase):
         /// CHECK-NOT:  bar
         /// CHECK-DAG:  abc
         /// CHECK-DAG:  def
+        /// CHECK-EVAL: x > y
+        /// CHECK-IF:   x < y
+        /// CHECK-ELSE:
+        /// CHECK-FI:
       """,
       [ ( "Example Group", [ ("foo1", TestStatement.Variant.InOrder),
                              ("foo2", TestStatement.Variant.InOrder),
@@ -259,7 +266,11 @@ class CheckerParser_FileLayoutTest(unittest.TestCase):
                              ("foo4", TestStatement.Variant.NextLine),
                              ("bar", TestStatement.Variant.Not),
                              ("abc", TestStatement.Variant.DAG),
-                             ("def", TestStatement.Variant.DAG) ] ) ])
+                             ("def", TestStatement.Variant.DAG),
+                             ("x > y", TestStatement.Variant.Eval),
+                             ("x < y", TestStatement.Variant.If),
+                             (None, TestStatement.Variant.Else),
+                             (None, TestStatement.Variant.Fi) ] ) ])
 
   def test_MisplacedNext(self):
     with self.assertRaises(CheckerException):
@@ -288,6 +299,20 @@ class CheckerParser_FileLayoutTest(unittest.TestCase):
         """
           /// CHECK-START: Example Group
           /// CHECK-NEXT: bar
+        """)
+
+  def test_NoContentStatements(self):
+    with self.assertRaises(CheckerException):
+      self.parse(
+        """
+          /// CHECK-START: Example Group
+          /// CHECK-ELSE:    foo
+        """)
+    with self.assertRaises(CheckerException):
+      self.parse(
+        """
+          /// CHECK-START: Example Group
+          /// CHECK-FI:      foo
         """)
 
 class CheckerParser_SuffixTests(unittest.TestCase):
