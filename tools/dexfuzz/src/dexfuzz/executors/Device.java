@@ -69,7 +69,13 @@ public class Device {
   }
 
   private String getHostCoreImagePath() {
-    return androidHostOut + "/framework/core.art";
+    // TODO: Using host currently implies x86 (see Options.java), change this when generalized.
+    assert(Options.useArchX86);
+    return androidHostOut + "/framework/x86/core.art";
+  }
+
+  private String getHostPICCoreImagePath() {
+    return androidHostOut + "/framework/core-optimizing-pic.art";
   }
 
   private void setup() {
@@ -156,7 +162,7 @@ public class Device {
    * Get any extra flags required to execute ART on the host.
    */
   public String getHostExecutionFlags() {
-    return String.format("-Xnorelocate -Ximage:%s", getHostCoreImagePath());
+    return String.format("-Xnorelocate -Ximage:%s", getHostPICCoreImagePath());
   }
 
   public String getAndroidHostOut() {
