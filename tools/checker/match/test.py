@@ -18,7 +18,8 @@ from file_format.c1visualizer.parser import ParseC1visualizerStream
 from file_format.c1visualizer.struct import C1visualizerFile, C1visualizerPass
 from file_format.checker.parser      import ParseCheckerStream, ParseCheckerStatement
 from file_format.checker.struct      import CheckerFile, TestCase, TestStatement
-from match.file                      import MatchTestCase, MatchFailedException
+from match.file                      import MatchTestCase, MatchFailedException, \
+                                            BadStructureException
 from match.line                      import MatchLines
 
 import io
@@ -128,6 +129,10 @@ class MatchFiles_Test(unittest.TestCase):
 
   def assertDoesNotMatch(self, checkerString, c1String):
     with self.assertRaises(MatchFailedException):
+      self.assertMatches(checkerString, c1String)
+
+  def assertBadStructure(self, checkerString, c1String):
+    with self.assertRaises(BadStructureException):
       self.assertMatches(checkerString, c1String)
 
   def test_Text(self):
@@ -364,6 +369,39 @@ class MatchFiles_Test(unittest.TestCase):
       foo
       def
     """)
+    self.assertDoesNotMatch(
+    """
+      /// CHECK-NOT:  foo
+      /// CHECK-EVAL: 1 + 1 == 2
+      /// CHECK:      bar
+    """,
+    """
+      foo
+      abc
+      bar
+    """);
+    self.assertMatches(
+    """
+      /// CHECK-DAG:  bar
+      /// CHECK-DAG:  abc
+      /// CHECK-NOT:  foo
+    """,
+    """
+      foo
+      abc
+      bar
+    """);
+    self.assertDoesNotMatch(
+    """
+      /// CHECK-DAG:  abc
+      /// CHECK-DAG:  foo
+      /// CHECK-NOT:  bar
+    """,
+    """
+      foo
+      abc
+      bar
+    """);
 
   def test_LineOnlyMatchesOnce(self):
     self.assertMatches(
@@ -400,3 +438,222 @@ class MatchFiles_Test(unittest.TestCase):
                      """
     self.assertMatches(twoVarTestCase, "42 41");
     self.assertDoesNotMatch(twoVarTestCase, "42 43")
+
+  def test_IfThenStatements(self):
+    self.assertMatches(
+    """
+      /// CHECK-IF: True
+      ///   CHECK:    foo
+      /// CHECK-FI:
+      /// CHECK:    bar
+    """,
+    """
+    foo
+    bar
+    """)
+    self.assertMatches(
+    """
+      /// CHECK-IF: False
+      ///   CHECK:    foo
+      /// CHECK-FI:
+      /// CHECK:    bar
+    """,
+    """
+    bar
+    """)
+    self.assertDoesNotMatch(
+    """
+      /// CHECK-IF: True
+      ///   CHECK:    foo
+      /// CHECK-FI:
+      /// CHECK:    bar
+    """,
+    """
+    bar
+    """)
+
+  def test_IfThenElseStatements(self):
+    self.assertMatches(
+    """
+      /// CHECK-IF: True
+      ///   CHECK:    foo1
+      /// CHECK-ELSE:
+      ///   CHECK:    foo2
+      /// CHECK-FI:
+      /// CHECK:    bar
+    """,
+    """
+    foo1
+    bar
+    """)
+    self.assertMatches(
+    """
+      /// CHECK-IF: False
+      ///   CHECK:    foo1
+      /// CHECK-ELSE:
+      ///   CHECK:    foo2
+      /// CHECK-FI:
+      /// CHECK:    bar
+    """,
+    """
+    foo2
+    bar
+    """)
+    self.assertDoesNotMatch(
+    """
+      /// CHECK-IF: True
+      ///   CHECK:    foo1
+      /// CHECK-ELSE:
+      ///   CHECK:    foo2
+      /// CHECK-FI:
+      /// CHECK:    bar
+    """,
+    """
+    foo2
+    bar
+    """)
+    self.assertDoesNotMatch(
+    """
+      /// CHECK-IF: False
+      ///   CHECK:    foo1
+      /// CHECK-ELSE:
+      ///   CHECK:    foo2
+      /// CHECK-FI:
+      /// CHECK:    bar
+    """,
+    """
+    foo1
+    bar
+    """)
+
+  def test_NestedIfThenElseStatements(self):
+    self.assertMatches(
+    """
+      /// CHECK-IF: True
+      ///   CHECK-IF: True
+      ///     CHECK:    foo1
+      ///   CHECK-ELSE:
+      ///     CHECK:    foo2
+      ///   CHECK-FI:
+      /// CHECK-ELSE:
+      ///   CHECK-IF: True
+      ///     CHECK:    foo3
+      ///   CHECK-ELSE:
+      ///     CHECK:    foo4
+      ///   CHECK-FI:
+      /// CHECK-FI:
+    """,
+    """
+    foo1
+    bar
+    """)
+    self.assertMatches(
+    """
+      /// CHECK-IF: True
+      ///   CHECK-IF: False
+      ///     CHECK:    foo1
+      ///   CHECK-ELSE:
+      ///     CHECK:    foo2
+      ///   CHECK-FI:
+      /// CHECK-ELSE:
+      ///   CHECK-IF: True
+      ///     CHECK:    foo3
+      ///   CHECK-ELSE:
+      ///     CHECK:    foo4
+      ///   CHECK-FI:
+      /// CHECK-FI:
+    """,
+    """
+    foo2
+    bar
+    """)
+    self.assertMatches(
+    """
+      /// CHECK-IF: False
+      ///   CHECK-IF: False
+      ///     CHECK:    foo1
+      ///   CHECK-ELSE:
+      ///     CHECK:    foo2
+      ///   CHECK-FI:
+      /// CHECK-ELSE:
+      ///   CHECK-IF: True
+      ///     CHECK:    foo3
+      ///   CHECK-ELSE:
+      ///     CHECK:    foo4
+      ///   CHECK-FI:
+      /// CHECK-FI:
+    """,
+    """
+    foo3
+    bar
+    """)
+
+  def test_MissingFi(self):
+    self.assertBadStructure(
+    """
+      /// CHECK-IF: True
+      ///   CHECK:    foo1
+    """,
+    """
+    foo1
+    bar
+    """)
+
+  def test_UnexpectedFi(self):
+    self.assertBadStructure(
+    """
+      /// CHECK:    foo1
+      /// CHECK-FI:
+    """,
+    """
+    foo1
+    bar
+    """)
+
+  def test_MultipleFi(self):
+    self.assertBadStructure(
+    """
+      /// CHECK-IF: True
+      ///   CHECK:    foo1
+      /// CHECK-FI:
+      /// CHECK-FI:
+    """,
+    """
+    foo1
+    bar
+    """)
+
+  def test_UnexpectedElse(self):
+    self.assertBadStructure(
+    """
+      /// CHECK-ELSE:
+      /// CHECK:    foo1
+    """,
+    """
+    foo1
+    bar
+    """)
+    self.assertBadStructure(
+    """
+      /// CHECK-ELSE:
+      /// CHECK:    foo1
+      /// CHECK-FI:
+    """,
+    """
+    foo1
+    bar
+    """)
+
+  def test_MultipleElse(self):
+    self.assertBadStructure(
+    """
+      /// CHECK-IF: True
+      ///   CHECK:    foo1
+      /// CHECK-ELSE:
+      /// CHECK-ELSE:
+      /// CHECK-FI:
+    """,
+    """
+    foo1
+    bar
+    """)

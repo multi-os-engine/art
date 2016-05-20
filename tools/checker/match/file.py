@@ -28,6 +28,11 @@ class MatchFailedException(Exception):
     self.lineNo = lineNo
     self.variables = variables
 
+class BadStructureException(Exception):
+  def __init__(self, msg, lineNo):
+    self.msg = msg
+    self.lineNo = lineNo
+
 def findMatchingLine(statement, c1Pass, scope, variables, excludeLines=[]):
   """ Finds the first line in `c1Pass` which matches `statement`.
 
@@ -54,6 +59,11 @@ class ExecutionState(object):
     self.variables = ImmutableDict(variables)
     self.dagQueue = []
     self.notQueue = []
+    self.ifStack = [ ]
+
+  class IfState(object):
+    """TODO."""
+    TakingThisBranch, NoBranchTakenYet, PreviouslyTakenBranch = range(3)
 
   def moveCursor(self, match):
     assert self.cursor <= match.scope.end
@@ -108,6 +118,8 @@ class ExecutionState(object):
 
   def handleEOF(self):
     """ EOF marker always moves the cursor to the end of the file."""
+    if self.ifStack:
+      raise BadStructureException("IF without FI", self.c1Length)
     match = MatchInfo(MatchScope(self.c1Length, self.c1Length), None)
     self.moveCursor(match)
 
@@ -139,8 +151,62 @@ class ExecutionState(object):
     if not EvaluateLine(statement, self.variables):
       raise MatchFailedException(statement, self.cursor, self.variables)
 
+  def updateIfStack(self, variant, lineNo):
+    """ Updates information about which IF branches are being taken.
+
+    IF statement pushes `TakingThisBranch` onto `ifStack`. Later evaluation of
+    the condition may change the value to `NoBranchTakenYet` which will cause
+    the other statements inside the branch to be skipped.
+
+    ELSE statement changes the top of the stack as follows:
+      - TakingThisBranch       =>   PreviouslyTakenBranch (do not allow any other branch be taken)
+      - NoBranchTakenYet       =>   TakingThisBranch
+      - PreviouslyTakenBranch  =>   BadStructureException (multiple ELSE statements)
+
+    FI statement pops `ifStack`.
+
+    BadStructureException is raised if the blocks are not well structured.
+    """
+    if variant is TestStatement.Variant.If:
+      self.ifStack.append(ExecutionState.IfState.TakingThisBranch);
+      # Do not return, we need to evaluate the IF
+    elif variant is TestStatement.Variant.Else:
+      if not self.ifStack:
+        raise BadStructureException("ELSE outside IF", lineNo)
+      elif self.ifStack[-1] is ExecutionState.IfState.TakingThisBranch:
+        self.ifStack[-1] = ExecutionState.IfState.PreviouslyTakenBranch
+      elif self.ifStack[-1] is ExecutionState.IfState.NoBranchTakenYet:
+        self.ifStack[-1] = ExecutionState.IfState.TakingThisBranch
+      else:
+        assert self.ifStack[-1] is ExecutionState.IfState.PreviouslyTakenBranch
+        raise BadStructureException("Multiple ELSE statements", lineNo)
+    elif variant is TestStatement.Variant.Fi:
+      if not self.ifStack:
+        raise BadStructureException("FI without IF", lineNo)
+      self.ifStack.pop()
+
+  def shouldEvaluateCurrentStatement(self):
+    """ Returns True if the state of execution is either not inside any IF
+        branches or only IF branches which have been taken and not skipped."""
+    for state in self.ifStack:
+      if state is not ExecutionState.IfState.TakingThisBranch:
+        return False
+    return True
+
+  def handleIf(self, statement):
+    if not EvaluateLine(statement, self.variables):
+      self.ifStack[-1] = ExecutionState.IfState.NoBranchTakenYet
+
   def handle(self, statement):
     variant = None if statement is None else statement.variant
+
+    if variant in [ TestStatement.Variant.If,
+                    TestStatement.Variant.Else,
+                    TestStatement.Variant.Fi ]:
+      self.updateIfStack(variant, statement.lineNo)
+
+    if not self.shouldEvaluateCurrentStatement():
+      return
 
     # First non-DAG statement always triggers execution of any preceeding
     # DAG statements.
@@ -157,9 +223,12 @@ class ExecutionState(object):
       self.dagQueue.append(statement)
     elif variant is TestStatement.Variant.Not:
       self.notQueue.append(statement)
-    else:
-      assert variant is TestStatement.Variant.Eval
+    elif variant is TestStatement.Variant.Eval:
       self.handleEval(statement)
+    elif variant is TestStatement.Variant.If:
+      self.handleIf(statement)
+    else:
+      assert variant in [ TestStatement.Variant.Else, TestStatement.Variant.Fi ]
 
 def MatchTestCase(testCase, c1Pass):
   """ Runs a test case against a C1visualizer graph dump.

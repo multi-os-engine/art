@@ -88,6 +88,21 @@ def __processLine(line, lineNo, prefix, fileName):
   if evalLine is not None:
     return (evalLine, TestStatement.Variant.Eval, lineNo), None, None
 
+  # 'CHECK-IF' lines evaluate a Python expression.
+  ifLine = __extractLine(prefix + "-IF", line)
+  if ifLine is not None:
+    return (ifLine, TestStatement.Variant.If, lineNo), None, None
+
+  # 'CHECK-ELSE' lines evaluate a Python expression.
+  elseLine = __extractLine(prefix + "-ELSE", line)
+  if elseLine is not None:
+    return (elseLine, TestStatement.Variant.Else, lineNo), None, None
+
+  # 'CHECK-FI' lines evaluate a Python expression.
+  fiLine = __extractLine(prefix + "-FI", line)
+  if fiLine is not None:
+    return (fiLine, TestStatement.Variant.Fi, lineNo), None, None
+
   Logger.fail("Checker statement could not be parsed: '" + line + "'", fileName, lineNo)
 
 def __isMatchAtStart(match):
@@ -107,13 +122,15 @@ def ParseCheckerStatement(parent, line, variant, lineNo):
       comment symbol and the CHECK-* keyword.
   """
   statement = TestStatement(parent, variant, line, lineNo)
-  isEvalLine = (variant == TestStatement.Variant.Eval)
+
+  if statement.isNoContentStatement() and line:
+    Logger.fail("Expected empty statement: '" + line + "'", statement.fileName, statement.lineNo)
 
   # Loop as long as there is something to parse.
   while line:
     # Search for the nearest occurrence of the special markers.
-    if isEvalLine:
-      # The following constructs are not supported in CHECK-EVAL lines
+    if statement.isEvalContentStatement():
+      # The following constructs are not supported in CHECK-EVAL, -IF and -ELIF lines
       matchWhitespace = None
       matchPattern = None
       matchVariableDefinition = None
@@ -158,7 +175,7 @@ def ParseCheckerStatement(parent, line, variant, lineNo):
                                 line)
       text = line[0:firstMatch]
       line = line[firstMatch:]
-      if isEvalLine:
+      if statement.isEvalContentStatement():
         statement.addExpression(TestExpression.createPlainText(text))
       else:
         statement.addExpression(TestExpression.createPatternFromPlainText(text))
