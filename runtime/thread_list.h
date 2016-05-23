@@ -161,6 +161,12 @@ class ThreadList {
   size_t RunCheckpoint(Closure* checkpoint_function, bool includeSuspended)
       REQUIRES(!Locks::thread_list_lock_, !Locks::thread_suspend_count_lock_);
 
+  bool WaitForAllThreadsToFinish()
+      REQUIRES(!Locks::thread_list_lock_, !Locks::thread_suspend_count_lock_);
+
+  std::vector<pid_t> GetProcessThreads()
+      REQUIRES(!Locks::thread_list_lock_);
+
   void DumpUnattachedThreads(std::ostream& os, bool dump_native_stack)
       REQUIRES(!Locks::thread_list_lock_);
 
