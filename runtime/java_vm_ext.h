@@ -36,6 +36,12 @@ class ParsedOptions;
 class Runtime;
 struct RuntimeArgumentMap;
 
+class ShutdownListener {
+ public:
+  virtual ~ShutdownListener() {}
+  virtual void NotifyFailure(const std::string& description) = 0;
+};
+
 class JavaVMExt : public JavaVM {
  public:
   JavaVMExt(Runtime* runtime, const RuntimeArgumentMap& runtime_options);
@@ -44,6 +50,14 @@ class JavaVMExt : public JavaVM {
   bool ForceCopy() const {
     return force_copy_;
   }
+
+  void NotifyShutdownFailure(const std::string& reason)
+      REQUIRES(!shutdown_listener_lock_);
+
+  // Sets the observer for shutdown failures. The caller is responsible for destroying the observer
+  // after either a SetShutdownFailureListener(nullptr) call or the JavaVMExt is deleted.
+  void SetShutdownFailureListener(ShutdownListener* l)
+      REQUIRES(!shutdown_listener_lock_);
 
   bool IsCheckJniEnabled() const {
     return check_jni_;
@@ -214,6 +228,9 @@ class JavaVMExt : public JavaVM {
   // Not guarded by weak_globals_lock since we may use SynchronizedGet in DecodeWeakGlobal.
   Atomic<bool> allow_accessing_weak_globals_;
   ConditionVariable weak_globals_add_condition_ GUARDED_BY(weak_globals_lock_);
+
+  Mutex shutdown_listener_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
+  ShutdownListener* listener_ GUARDED_BY(shutdown_listener_lock_);
 
   DISALLOW_COPY_AND_ASSIGN(JavaVMExt);
 };

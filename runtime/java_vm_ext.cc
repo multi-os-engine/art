@@ -74,6 +74,10 @@ class SharedLibrary {
     if (self != nullptr) {
       self->GetJniEnv()->DeleteWeakGlobalRef(class_loader_);
     }
+
+    if (!needs_native_bridge_) {
+      android::CloseNativeLibrary(handle_);
+    }
   }
 
   jweak GetClassLoader() const {
@@ -271,8 +275,7 @@ class Libraries {
       REQUIRES(!Locks::jni_libraries_lock_)
       SHARED_REQUIRES(Locks::mutator_lock_) {
     ScopedObjectAccessUnchecked soa(Thread::Current());
-    typedef void (*JNI_OnUnloadFn)(JavaVM*, void*);
-    std::vector<JNI_OnUnloadFn> unload_functions;
+    std::vector<SharedLibrary*> unload_libraries;
     {
       MutexLock mu(soa.Self(), *Locks::jni_libraries_lock_);
       for (auto it = libraries_.begin(); it != libraries_.end(); ) {
@@ -283,15 +286,7 @@ class Libraries {
         // the native libraries of the boot class loader.
         if (class_loader != nullptr &&
             soa.Self()->IsJWeakCleared(class_loader)) {
-          void* const sym = library->FindSymbol("JNI_OnUnload", nullptr);
-          if (sym == nullptr) {
-            VLOG(jni) << "[No JNI_OnUnload found in \"" << library->GetPath() << "\"]";
-          } else {
-            VLOG(jni) << "[JNI_OnUnload found for \"" << library->GetPath() << "\"]";
-            JNI_OnUnloadFn jni_on_unload = reinterpret_cast<JNI_OnUnloadFn>(sym);
-            unload_functions.push_back(jni_on_unload);
-          }
-          delete library;
+          unload_libraries.push_back(library);
           it = libraries_.erase(it);
         } else {
           ++it;
@@ -299,9 +294,17 @@ class Libraries {
       }
     }
     // Do this without holding the jni libraries lock to prevent possible deadlocks.
-    for (JNI_OnUnloadFn fn : unload_functions) {
-      VLOG(jni) << "Calling JNI_OnUnload";
-      (*fn)(soa.Vm(), nullptr);
+    typedef void (*JNI_OnUnloadFn)(JavaVM*, void*);
+    for (auto library : unload_libraries) {
+      void* const sym = library->FindSymbol("JNI_OnUnload", nullptr);
+      if (sym == nullptr) {
+        VLOG(jni) << "[No JNI_OnUnload found in \"" << library->GetPath() << "\"]";
+      } else {
+        VLOG(jni) << "[JNI_OnUnload found for \"" << library->GetPath() << "\"]: Calling...";
+        JNI_OnUnloadFn jni_on_unload = reinterpret_cast<JNI_OnUnloadFn>(sym);
+        jni_on_unload(soa.Vm(), nullptr);
+      }
+      delete library;
     }
   }
 
@@ -310,16 +313,36 @@ class Libraries {
       GUARDED_BY(Locks::jni_libraries_lock_);
 };
 
+class FailureListener : public ShutdownListener {
+ public:
+  void NotifyFailure(const std::string& message) {
+    LOG(ERROR) << "Failure while shutting down runtime: " << message;
+    failed_ = true;
+  }
+
+  bool Failed() {
+    return failed_;
+  }
+ private:
+  bool failed_ = false;
+};
+
 class JII {
  public:
   static jint DestroyJavaVM(JavaVM* vm) {
     if (vm == nullptr) {
       return JNI_ERR;
     }
+    FailureListener listener;
     JavaVMExt* raw_vm = reinterpret_cast<JavaVMExt*>(vm);
+    raw_vm->SetShutdownFailureListener(&listener);
     delete raw_vm->GetRuntime();
     android::ResetNativeLoader();
-    return JNI_OK;
+    if (UNLIKELY(listener.Failed())) {
+      return JNI_ERR;
+    } else {
+      return JNI_OK;
+    }
   }
 
   static jint AttachCurrentThread(JavaVM* vm, JNIEnv** p_env, void* thr_args) {
@@ -433,12 +456,29 @@ JavaVMExt::JavaVMExt(Runtime* runtime, const RuntimeArgumentMap& runtime_options
       weak_globals_lock_("JNI weak global reference table lock", kJniWeakGlobalsLock),
       weak_globals_(kWeakGlobalsInitial, kWeakGlobalsMax, kWeakGlobal),
       allow_accessing_weak_globals_(true),
-      weak_globals_add_condition_("weak globals add condition", weak_globals_lock_) {
+      weak_globals_add_condition_("weak globals add condition", weak_globals_lock_),
+      shutdown_listener_lock_("Shutdown Listener Lock"),
+      listener_(nullptr) {
   functions = unchecked_functions_;
   SetCheckJniEnabled(runtime_options.Exists(RuntimeArgumentMap::CheckJni));
 }
 
 JavaVMExt::~JavaVMExt() {
+}
+
+void JavaVMExt::NotifyShutdownFailure(const std::string& reason) {
+  Thread* self = Thread::Current();
+  MutexLock mu(self, shutdown_listener_lock_);
+  ShutdownListener* l = listener_;
+  if (l != nullptr) {
+    l->NotifyFailure(reason);
+  }
+}
+
+void JavaVMExt::SetShutdownFailureListener(ShutdownListener* listener) {
+  Thread* self = Thread::Current();
+  MutexLock mu(self, shutdown_listener_lock_);
+  listener_ = listener;
 }
 
 void JavaVMExt::JniAbort(const char* jni_function_name, const char* msg) {
