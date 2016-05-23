@@ -1108,6 +1108,9 @@ void ThreadList::UndoDebuggerSuspensions() {
 
 void ThreadList::WaitForOtherNonDaemonThreadsToExit() {
   ScopedTrace trace(__PRETTY_FUNCTION__);
+  static constexpr size_t kSleepAfterLoopMicrosecond = 1000;
+  // Sleep for 0 (i.e. sched_yield) after each wait. Adjust as needed.
+  static constexpr size_t kSleepAfterWaitMicrosecond = 0;
   Thread* self = Thread::Current();
   Locks::mutator_lock_->AssertNotHeld(self);
   while (true) {
@@ -1135,7 +1138,11 @@ void ThreadList::WaitForOtherNonDaemonThreadsToExit() {
     }
     // Wait for another thread to exit before re-checking.
     Locks::thread_exit_cond_->Wait(self);
+    // Wait (or at least yield) a bit so that other threads have a bit of time to stop.
+    ThreadSuspendSleep(kSleepAfterWaitMicrosecond);
   }
+  // Wait a tiny bit more to really try to avoid nasty scheduler surprises.
+  ThreadSuspendSleep(kSleepAfterLoopMicrosecond);
 }
 
 void ThreadList::SuspendAllDaemonThreadsForShutdown() {
