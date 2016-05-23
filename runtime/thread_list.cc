@@ -61,6 +61,17 @@ static constexpr useconds_t kThreadSuspendMaxSleepUs = 5000;
 // some history.
 static constexpr bool kDumpUnattachedThreadNativeStack = true;
 
+// Unlike suspending all threads where we can wait to acquire the mutator_lock_, suspending an
+// individual thread requires polling. delay_us is the requested sleep wait. If delay_us is 0 then
+// we use sched_yield instead of calling usleep.
+static void ThreadSuspendSleep(useconds_t delay_us) {
+  if (delay_us == 0) {
+    sched_yield();
+  } else {
+    usleep(delay_us);
+  }
+}
+
 ThreadList::ThreadList()
     : suspend_all_count_(0),
       debug_suspend_all_count_(0),
@@ -94,6 +105,41 @@ ThreadList::~ThreadList() {
   // TODO: there's an unaddressed race here where a thread may attach during shutdown, see
   //       Thread::Init.
   SuspendAllDaemonThreadsForShutdown();
+  // TODO Notify JNI_DestroyJavaVM that shutdown failed. Since this is all called during destructors
+  // how we do this is not obvious.
+  WaitForAllThreadsToFinish();
+}
+
+bool ThreadList::WaitForAllThreadsToFinish() {
+  // TODO We should consider using libbacktrace to check if any remaining threads are actually part
+  // of ART before returning failure instead of just looking for any extras.
+  static constexpr uint32_t kRetryCount = 10;
+  static constexpr useconds_t kRetryWaitTimeMicro = 200 * 1000;
+  Thread* self = Thread::Current();
+  size_t list_size;
+  for (uint32_t i = 0; i < kRetryCount; ++i) {
+    {
+      MutexLock mu(self, *Locks::thread_list_lock_);
+      list_size = list_.size();
+    }
+    if (GetProcessThreads().size() <= list_size + 1) {
+      return true;
+    }
+    ThreadSuspendSleep(kRetryWaitTimeMicro);
+  }
+  {
+    MutexLock mu(self, *Locks::thread_list_lock_);
+    list_size = list_.size();
+  }
+  size_t threads_size = GetProcessThreads().size();
+  bool last_try =  threads_size <= list_size + 1;
+  if (!last_try) {
+    LOG(ERROR) << "Some threads failed to finish after being canceled and waiting a total of "
+               << ((kRetryWaitTimeMicro * kRetryCount) / 1000) << " milliseconds! " << "We had "
+               << threads_size << " threads remaining but only expected " << (list_size + 1)
+               << " threads.";
+  }
+  return last_try;
 }
 
 bool ThreadList::Contains(Thread* thread) {
@@ -150,29 +196,36 @@ static void DumpUnattachedThread(std::ostream& os, pid_t tid, bool dump_native_s
   os << "\n";
 }
 
-void ThreadList::DumpUnattachedThreads(std::ostream& os, bool dump_native_stack) {
-  DIR* d = opendir("/proc/self/task");
-  if (!d) {
-    return;
-  }
-
-  Thread* self = Thread::Current();
-  dirent* e;
-  while ((e = readdir(d)) != nullptr) {
-    char* end;
-    pid_t tid = strtol(e->d_name, &end, 10);
-    if (!*end) {
-      bool contains;
-      {
-        MutexLock mu(self, *Locks::thread_list_lock_);
-        contains = Contains(tid);
-      }
-      if (!contains) {
-        DumpUnattachedThread(os, tid, dump_native_stack);
+std::vector<pid_t> ThreadList::GetProcessThreads() {
+  DIR* d;
+  std::vector<pid_t> pids;
+  if ((d = opendir("/proc/self/task")) != nullptr) {
+    dirent* e;
+    while ((e = readdir(d)) != nullptr) {
+      char* end;
+      pid_t tid = strtol(e->d_name, &end, 10);
+      if (!*end) {
+        pids.push_back(tid);
       }
     }
+    closedir(d);
   }
-  closedir(d);
+  return pids;
+}
+
+void ThreadList::DumpUnattachedThreads(std::ostream& os, bool dump_native_stack) {
+  std::vector<pid_t> pids = GetProcessThreads();
+  Thread* self = Thread::Current();
+  for (pid_t tid : pids) {
+    bool contains;
+    {
+      MutexLock mu(self, *Locks::thread_list_lock_);
+      contains = Contains(tid);
+    }
+    if (!contains) {
+      DumpUnattachedThread(os, tid, dump_native_stack);
+    }
+  }
 }
 
 // Dump checkpoint timeout in milliseconds. Larger amount on the target, since the device could be
@@ -265,17 +318,6 @@ NO_RETURN static void UnsafeLogFatalForThreadSuspendAllTimeout() {
   exit(0);
 }
 #endif
-
-// Unlike suspending all threads where we can wait to acquire the mutator_lock_, suspending an
-// individual thread requires polling. delay_us is the requested sleep wait. If delay_us is 0 then
-// we use sched_yield instead of calling usleep.
-static void ThreadSuspendSleep(useconds_t delay_us) {
-  if (delay_us == 0) {
-    sched_yield();
-  } else {
-    usleep(delay_us);
-  }
-}
 
 size_t ThreadList::RunCheckpoint(Closure* checkpoint_function) {
   Thread* self = Thread::Current();
