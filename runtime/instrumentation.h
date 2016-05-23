@@ -402,7 +402,7 @@ class Instrumentation {
       SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!deoptimized_methods_lock_);
 
   // Pops an instrumentation frame from the current thread and generate an unwind event.
-  void PopMethodForUnwind(Thread* self, bool is_deoptimization) const
+  uintptr_t PopMethodForUnwind(Thread* self, bool is_deoptimization) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Call back for configure stubs.

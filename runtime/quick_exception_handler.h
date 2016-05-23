@@ -50,11 +50,13 @@ class QuickExceptionHandler {
   // shadow frame that will be executed with the interpreter.
   void DeoptimizeStack() SHARED_REQUIRES(Locks::mutator_lock_);
   void DeoptimizeSingleFrame() SHARED_REQUIRES(Locks::mutator_lock_);
-  void DeoptimizeSingleFrameArchDependentFixup() SHARED_REQUIRES(Locks::mutator_lock_);
+  void DeoptimizePartialFragmentFixup(uintptr_t return_pc)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Update the instrumentation stack by removing all methods that will be unwound
   // by the exception being thrown.
-  void UpdateInstrumentationStack() SHARED_REQUIRES(Locks::mutator_lock_);
+  // Return the return pc of the last frame that's unwound.
+  uintptr_t UpdateInstrumentationStack() SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Set up environment before delivering an exception to optimized code.
   void SetCatchEnvironmentForOptimizedHandler(StackVisitor* stack_visitor)
@@ -103,8 +105,16 @@ class QuickExceptionHandler {
     handler_frame_depth_ = frame_depth;
   }
 
+  bool IsFullFragmentDone() const {
+    return full_fragment_done_;
+  }
+
+  void SetFullFragmentDone(bool full_fragment_done) {
+    full_fragment_done_ = full_fragment_done;
+  }
+
   // Walk the stack frames of the given thread, printing out non-runtime methods with their types
-  // of frames. Helps to verify that single-frame deopt really only deopted one frame.
+  // of frames. Helps to verify that partial-fragment deopt really works as expected.
   static void DumpFramesWithType(Thread* self, bool details = false)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
@@ -131,6 +141,13 @@ class QuickExceptionHandler {
   bool clear_exception_;
   // Frame depth of the catch handler or the upcall.
   size_t handler_frame_depth_;
+  // Does the handler successfully walk the full fragment (not stopped
+  // by some code that's not deoptimizeable)? Even single-frame deoptimization
+  // can set this to true if the fragment contains only one quick frame.
+  bool full_fragment_done_;
+
+  void PrepareForLongJumpToInvokeStubOrInterpreterBridge()
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
   DISALLOW_COPY_AND_ASSIGN(QuickExceptionHandler);
 };

@@ -84,6 +84,8 @@
 
 namespace art {
 
+extern "C" NO_RETURN void artDeoptimize(Thread* self);
+
 bool Thread::is_started_ = false;
 pthread_key_t Thread::pthread_key_self_;
 ConditionVariable* Thread::resume_cond_ = nullptr;
@@ -266,13 +268,12 @@ void Thread::PushStackedShadowFrame(ShadowFrame* sf, StackedShadowFrameType type
   tlsPtr_.stacked_shadow_frame_record = record;
 }
 
-ShadowFrame* Thread::PopStackedShadowFrame(StackedShadowFrameType type, bool must_be_present) {
+ShadowFrame* Thread::PopStackedShadowFrame(StackedShadowFrameType type ATTRIBUTE_UNUSED, bool must_be_present) {
   StackedShadowFrameRecord* record = tlsPtr_.stacked_shadow_frame_record;
   if (must_be_present) {
     DCHECK(record != nullptr);
-    DCHECK_EQ(record->GetType(), type);
   } else {
-    if (record == nullptr || record->GetType() != type) {
+    if (record == nullptr) {
       return nullptr;
     }
   }
@@ -2583,38 +2584,38 @@ void Thread::QuickDeliverException() {
   // Get exception from thread.
   mirror::Throwable* exception = GetException();
   CHECK(exception != nullptr);
-  bool is_deoptimization = (exception == GetDeoptimizationException());
-  if (!is_deoptimization) {
-    // This is a real exception: let the instrumentation know about it.
-    instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
-    if (instrumentation->HasExceptionCaughtListeners() &&
-        IsExceptionThrownByCurrentMethod(exception)) {
-      // Instrumentation may cause GC so keep the exception object safe.
-      StackHandleScope<1> hs(this);
-      HandleWrapper<mirror::Throwable> h_exception(hs.NewHandleWrapper(&exception));
-      instrumentation->ExceptionCaughtEvent(this, exception);
-    }
-    // Does instrumentation need to deoptimize the stack?
-    // Note: we do this *after* reporting the exception to instrumentation in case it
-    // now requires deoptimization. It may happen if a debugger is attached and requests
-    // new events (single-step, breakpoint, ...) when the exception is reported.
-    is_deoptimization = Dbg::IsForcedInterpreterNeededForException(this);
-    if (is_deoptimization) {
-      // Save the exception into the deoptimization context so it can be restored
-      // before entering the interpreter.
-      PushDeoptimizationContext(
-          JValue(), /*is_reference */ false, /* from_code */ false, exception);
-    }
+  if (exception == GetDeoptimizationException()) {
+    artDeoptimize(this);
+    UNREACHABLE();
   }
+
+  // This is a real exception: let the instrumentation know about it.
+  instrumentation::Instrumentation* instrumentation = Runtime::Current()->GetInstrumentation();
+  if (instrumentation->HasExceptionCaughtListeners() &&
+      IsExceptionThrownByCurrentMethod(exception)) {
+    // Instrumentation may cause GC so keep the exception object safe.
+    StackHandleScope<1> hs(this);
+    HandleWrapper<mirror::Throwable> h_exception(hs.NewHandleWrapper(&exception));
+    instrumentation->ExceptionCaughtEvent(this, exception);
+  }
+  // Does instrumentation need to deoptimize the stack?
+  // Note: we do this *after* reporting the exception to instrumentation in case it
+  // now requires deoptimization. It may happen if a debugger is attached and requests
+  // new events (single-step, breakpoint, ...) when the exception is reported.
+  if (Dbg::IsForcedInterpreterNeededForException(this)) {
+    // Save the exception into the deoptimization context so it can be restored
+    // before entering the interpreter.
+    PushDeoptimizationContext(
+        JValue(), /*is_reference */ false, /* from_code */ false, exception);
+    artDeoptimize(this);
+    UNREACHABLE();
+  }
+
   // Don't leave exception visible while we try to find the handler, which may cause class
   // resolution.
   ClearException();
-  QuickExceptionHandler exception_handler(this, is_deoptimization);
-  if (is_deoptimization) {
-    exception_handler.DeoptimizeStack();
-  } else {
-    exception_handler.FindCatch(exception);
-  }
+  QuickExceptionHandler exception_handler(this, false);
+  exception_handler.FindCatch(exception);
   exception_handler.UpdateInstrumentationStack();
   exception_handler.DoLongJump();
 }
@@ -3024,7 +3025,6 @@ void Thread::DeoptimizeWithDeoptimizationException(JValue* result) {
   mirror::Throwable* pending_exception = nullptr;
   bool from_code = false;
   PopDeoptimizationContext(result, &pending_exception, &from_code);
-  CHECK(!from_code) << "Deoptimizing from code should be done with single frame deoptimization";
   SetTopOfStack(nullptr);
   SetTopOfShadowStack(shadow_frame);
 
