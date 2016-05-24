@@ -655,7 +655,6 @@ void Dbg::Disconnected() {
                                     gc::kGcCauseInstrumentation,
                                     gc::kCollectorTypeInstrumentation);
     ScopedSuspendAll ssa(__FUNCTION__);
-    ThreadState old_state = self->SetStateUnsafe(kRunnable);
     // Debugger may not be active at this point.
     if (IsDebuggerActive()) {
       {
@@ -676,7 +675,6 @@ void Dbg::Disconnected() {
       }
       gDebuggerActive = false;
     }
-    CHECK_EQ(self->SetStateUnsafe(old_state), kRunnable);
   }
 
   {
