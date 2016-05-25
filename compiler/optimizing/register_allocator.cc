@@ -618,6 +618,45 @@ void RegisterAllocator::LinearScan() {
            unhandled_->empty() ||
            !unhandled_->back()->IsHighInterval());
 
+    // (1.5) Avoid parallel moves in multiple predecessors for a split with
+    // a spill or constant. For loop headers, count only back-edges.
+    if (current->IsSplit()) {
+      LiveInterval* parent = current->GetParent();
+      if (parent->HasSpillSlot() || parent->GetDefinedBy()->IsConstant()) {
+        HBasicBlock* block = liveness_.GetBlockFromPosition(current->GetStart() / 2u);
+        if (block->GetLifetimeStart() == current->GetStart()) {
+          static constexpr size_t kRequiredParallelMovesCutOff = 2u;
+          size_t required_parallel_moves = 0u;
+          for (HBasicBlock* predecessor : block->GetPredecessors()) {
+            if (block->IsLoopHeader() && !block->GetLoopInformation()->Contains(*predecessor)) {
+              continue;
+            }
+            if (predecessor->GetLifetimeStart() > current->GetStart()) {
+              continue;
+            }
+            LiveInterval* move_from =
+                current->GetParent()->GetSiblingAt(predecessor->GetLifetimeEnd() - 1u);
+            DCHECK(move_from != nullptr);
+            if (!move_from->HasRegister()) {
+              ++required_parallel_moves;
+              if (required_parallel_moves == kRequiredParallelMovesCutOff) {
+                break;
+              }
+            }
+          }
+          if (required_parallel_moves == kRequiredParallelMovesCutOff) {
+            size_t first_register_use = current->FirstRegisterUse();
+            if (first_register_use != kNoLifetime) {
+              LiveInterval* split =
+                  SplitBetween(current, current->GetStart(), first_register_use - 1);
+              AddSorted(unhandled_, split);
+            }
+            continue;
+          }
+        }
+      }
+    }
+
     size_t position = current->GetStart();
 
     // Remember the inactive_ size here since the ones moved to inactive_ from
