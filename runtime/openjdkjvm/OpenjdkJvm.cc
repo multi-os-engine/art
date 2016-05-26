@@ -79,6 +79,8 @@ JNIEXPORT jint JVM_Open(const char* fname, jint flags, jint mode) {
      * want the special return value JVM_EEXIST if the file open fails
      * due to O_EXCL.
      */
+    // Don't use JVM_O_DELETE, it's problematic with FUSE, see b/28901232.
+
     int fd = TEMP_FAILURE_RETRY(open(fname, flags & ~JVM_O_DELETE, mode));
     if (fd < 0) {
         int err = errno;
