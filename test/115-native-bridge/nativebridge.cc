@@ -461,16 +461,68 @@ static ::android::NativeBridgeSignalHandlerFn native_bridge_get_signal_handler(i
   return nullptr;
 }
 
+extern "C" int native_bridge3_unloadLibrary(void* /* handle */) {
+  printf("dlclose() in native bridge.\n");
+  return 0;
+}
+
+static const char* native_bridge3_getError() {
+  printf("dlerror() in native bridge.\n");
+  return nullptr;
+}
+
+#ifdef __ANDROID__
+static bool native_bridge3_isPathSupported(const char* /* library_path */) {
+  printf("Checking for path support.\n");
+  return false;
+}
+
+// test in __ANDROID__ is not enabled yet.
+static bool native_bridge3_initNamespace(const char* /* public_ns_sonames */,
+                                         const char* /* anon_ns_library_path */) {
+  printf("Initializing namespaces.\n");
+  return false;
+}
+
+static android::native_bridge_namespace_t* native_bridge3_createNamespace(
+                                              const char* /* name */,
+                                              const char* /* ld_library_path */,
+                                              const char* /* default_library_path */,
+                                              uint64_t /* type */,
+                                              const char* /* permitted_when_isolated_path */,
+                                              android::native_bridge_namespace_t* /* parent_ns */) {
+  printf("Creating namespace.\n");
+  return nullptr;
+}
+
+static void* native_bridge3_loadLibraryExt(const char* /* libpath */,
+                                           int /* flag */,
+                                           android::native_bridge_namespace_t* /* ns */) {
+    printf("Loading library with Extension.\n");
+    return nullptr;
+}
+#endif
 
 // "NativeBridgeItf" is effectively an API (it is the name of the symbol that will be loaded
 // by the native bridge library).
 android::NativeBridgeCallbacks NativeBridgeItf {
-  .version = 2,
+  .version = 3,
   .initialize = &native_bridge_initialize,
   .loadLibrary = &native_bridge_loadLibrary,
   .getTrampoline = &native_bridge_getTrampoline,
   .isSupported = &native_bridge_isSupported,
   .getAppEnv = &native_bridge_getAppEnv,
   .isCompatibleWith = &nb_is_compatible,
-  .getSignalHandler = &native_bridge_get_signal_handler
+  .getSignalHandler = &native_bridge_get_signal_handler,
+  .unloadLibrary = &native_bridge3_unloadLibrary,
+#ifndef __ANDROID__
+  .getError = &native_bridge3_getError
+#else
+  .getError = &native_bridge3_getError,
+  .isPathSupported = &native_bridge3_isPathSupported,
+  // below APIs are enabled in __ANDROID__ only.
+  .initNamespace = &native_bridge3_initNamespace,
+  .createNamespace = &native_bridge3_createNamespace,
+  .loadLibraryExt = &native_bridge3_loadLibraryExt
+#endif
 };
