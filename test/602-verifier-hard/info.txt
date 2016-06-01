@@ -1,0 +1,4 @@
+The situation in this test was discovered by running dexfuzz on
+another fuzzingly random generated Java test. The hard verification
+fail (constructor returns without calling super) should stop verification
+and not proceed, which may add soft failures to the list.
