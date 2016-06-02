@@ -117,9 +117,11 @@ void ThreadList::DumpNativeStacks(std::ostream& os) {
   MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
   std::unique_ptr<BacktraceMap> map(BacktraceMap::Create(getpid()));
   for (const auto& thread : list_) {
-    os << "DUMPING THREAD " << thread->GetTid() << "\n";
-    DumpNativeStack(os, thread->GetTid(), map.get(), "\t");
-    os << "\n";
+    if (thread == Thread::Current()) {
+      os << "DUMPING THREAD " << thread->GetTid() << "\n";
+      DumpNativeStack(os, thread->GetTid(), map.get(), "\t");
+      os << "\n";
+    }
   }
 }
 
