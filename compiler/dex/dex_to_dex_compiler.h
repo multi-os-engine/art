@@ -32,7 +32,8 @@ namespace optimizer {
 enum class DexToDexCompilationLevel {
   kDontDexToDexCompile,   // Only meaning wrt image time interpretation.
   kRequired,              // Dex-to-dex compilation required for correctness.
-  kOptimize               // Perform required transformation and peep-hole optimizations.
+  kOptimize,              // Perform required transformation and peep-hole optimizations.
+  kLast = kOptimize
 };
 std::ostream& operator<<(std::ostream& os, const DexToDexCompilationLevel& rhs);
 

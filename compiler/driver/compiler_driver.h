@@ -25,6 +25,7 @@
 #include "arch/instruction_set.h"
 #include "base/arena_allocator.h"
 #include "base/bit_utils.h"
+#include "base/dchecked_vector.h"
 #include "base/mutex.h"
 #include "base/timing_logger.h"
 #include "class_reference.h"
@@ -52,7 +53,6 @@ namespace verifier {
 class MethodVerifier;
 }  // namespace verifier
 
-class BitVector;
 class CompiledClass;
 class CompiledMethod;
 class CompilerOptions;
@@ -121,12 +121,12 @@ class CompilerDriver {
   void CompileAll(jobject class_loader,
                   const std::vector<const DexFile*>& dex_files,
                   TimingLogger* timings)
-      REQUIRES(!Locks::mutator_lock_, !compiled_classes_lock_, !dex_to_dex_references_lock_);
+      REQUIRES(!Locks::mutator_lock_, !compiled_classes_lock_);
 
-  // Compile a single Method.
+  // Compile a single Method. Used only for testing.
   void CompileOne(Thread* self, ArtMethod* method, TimingLogger* timings)
       SHARED_REQUIRES(Locks::mutator_lock_)
-      REQUIRES(!compiled_methods_lock_, !compiled_classes_lock_, !dex_to_dex_references_lock_);
+      REQUIRES(!compiled_classes_lock_);
 
   VerificationResults* GetVerificationResults() const {
     DCHECK(Runtime::Current()->IsAotCompiler());
@@ -172,18 +172,8 @@ class CompilerDriver {
   CompiledClass* GetCompiledClass(ClassReference ref) const
       REQUIRES(!compiled_classes_lock_);
 
-  CompiledMethod* GetCompiledMethod(MethodReference ref) const
-      REQUIRES(!compiled_methods_lock_);
-  size_t GetNonRelativeLinkerPatchCount() const
-      REQUIRES(!compiled_methods_lock_);
-
-  // Add a compiled method.
-  void AddCompiledMethod(const MethodReference& method_ref,
-                         CompiledMethod* const compiled_method,
-                         size_t non_relative_linker_patch_count)
-      REQUIRES(!compiled_methods_lock_);
-  // Remove and delete a compiled method.
-  void RemoveCompiledMethod(const MethodReference& method_ref) REQUIRES(!compiled_methods_lock_);
+  CompiledMethod* GetCompiledMethod(MethodReference ref) const;
+  size_t GetNonRelativeLinkerPatchCount() const;
 
   void SetRequiresConstructorBarrier(Thread* self,
                                      const DexFile* dex_file,
@@ -476,13 +466,6 @@ class CompilerDriver {
     return true;
   }
 
-  void MarkForDexToDexCompilation(Thread* self, const MethodReference& method_ref)
-      REQUIRES(!dex_to_dex_references_lock_);
-
-  const BitVector* GetCurrentDexToDexMethods() const {
-    return current_dex_to_dex_methods_;
-  }
-
  private:
   // Return whether the declaring class of `resolved_member` is
   // available to `referrer_class` for read or write access using two
@@ -607,16 +590,30 @@ class CompilerDriver {
   static void FindClinitImageClassesCallback(mirror::Object* object, void* arg)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  class DexFileCompiledMethods;
+  class EnabledCompilers;
+  class CompileClassVisitor;
+
   void Compile(jobject class_loader,
                const std::vector<const DexFile*>& dex_files,
-               TimingLogger* timings) REQUIRES(!dex_to_dex_references_lock_);
+               TimingLogger* timings);
   void CompileDexFile(jobject class_loader,
-                      const DexFile& dex_file,
+                      DexFileCompiledMethods* dex_file_compiled_methods,
                       const std::vector<const DexFile*>& dex_files,
                       ThreadPool* thread_pool,
                       size_t thread_count,
-                      TimingLogger* timings)
+                      EnabledCompilers enabled_compilers)
       REQUIRES(!Locks::mutator_lock_);
+  void CompileMethod(Thread* self,
+                     const DexFile::CodeItem* code_item,
+                     uint32_t access_flags,
+                     InvokeType invoke_type,
+                     uint16_t class_def_idx,
+                     uint32_t method_idx,
+                     jobject class_loader,
+                     DexFileCompiledMethods* dex_file_compiled_methods,
+                     EnabledCompilers enabled_compilers,
+                     Handle<mirror::DexCache> dex_cache);
 
   bool MayInlineInternal(const DexFile* inlined_from, const DexFile* inlined_into) const;
 
@@ -646,19 +643,6 @@ class CompilerDriver {
   // All class references that this compiler has compiled.
   mutable Mutex compiled_classes_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
   ClassTable compiled_classes_ GUARDED_BY(compiled_classes_lock_);
-
-  typedef SafeMap<const MethodReference, CompiledMethod*, MethodReferenceComparator> MethodTable;
-
- public:
-  // Lock is public so that non-members can have lock annotations.
-  mutable Mutex compiled_methods_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
-
- private:
-  // All method references that this compiler has compiled.
-  MethodTable compiled_methods_ GUARDED_BY(compiled_methods_lock_);
-  // Number of non-relative patches in all compiled methods. These patches need space
-  // in the .oat_patches ELF section if requested in the compiler options.
-  size_t non_relative_linker_patch_count_ GUARDED_BY(compiled_methods_lock_);
 
   const bool boot_image_;
   const bool app_image_;
@@ -706,20 +690,27 @@ class CompilerDriver {
 
   CompiledMethodStorage compiled_method_storage_;
 
+  // All methods that compilers managed by this driver have compiled.
+  // Note: We do not synchronize access to compiled_methods_ as we prepare the
+  // DexFileCompiledMethods for each dex file before starting its AOT compilation
+  // and the individual compilation threads never race at the same CompiledMethod
+  // pointer (ensured by structural checks in DexFileVerifier), each such pointer
+  // being a separate "memory location," see C++11 memory model, 1.7/3. We rely on
+  // the Wait() for the thread pool workers as the final synchronization barrier
+  // before reading the results.
+  dchecked_vector<DexFileCompiledMethods, SwapAllocator<DexFileCompiledMethods>> compiled_methods_;
+
+  // Number of non-relative patches in all compiled methods. These patches need space
+  // in the .oat_patches ELF section if requested in the compiler options. During AOT
+  // compilation, we collect this statistic and then use it at the linking phase.
+  // We are adding to this with std::memory_order_relaxed and rely on the Wait() for
+  // the thread pool workers as the synchronization barrier to get the final result.
+  Atomic<size_t> non_relative_linker_patch_count_;
+
   // Info for profile guided compilation.
   const ProfileCompilationInfo* const profile_compilation_info_;
 
   size_t max_arena_alloc_;
-
-  // Data for delaying dex-to-dex compilation.
-  Mutex dex_to_dex_references_lock_;
-  // In the first phase, dex_to_dex_references_ collects methods for dex-to-dex compilation.
-  class DexFileMethodSet;
-  std::vector<DexFileMethodSet> dex_to_dex_references_ GUARDED_BY(dex_to_dex_references_lock_);
-  // In the second phase, current_dex_to_dex_methods_ points to the BitVector with method
-  // indexes for dex-to-dex compilation in the current dex file.
-  const BitVector* current_dex_to_dex_methods_;
-
   friend class CompileClassVisitor;
   DISALLOW_COPY_AND_ASSIGN(CompilerDriver);
 };

@@ -26,7 +26,7 @@
 
 #include "art_field-inl.h"
 #include "art_method-inl.h"
-#include "base/bit_vector.h"
+#include "base/bit_field.h"
 #include "base/stl_util.h"
 #include "base/systrace.h"
 #include "base/time_utils.h"
@@ -67,13 +67,14 @@
 #include "thread_pool.h"
 #include "trampolines/trampoline_compiler.h"
 #include "transaction.h"
-#include "utils/array_ref.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 #include "utils/swap_space.h"
 #include "verifier/method_verifier.h"
 #include "verifier/method_verifier-inl.h"
 
 namespace art {
+
+namespace {  // anonymous namespace
 
 static constexpr bool kTimeCompileMethod = !kIsDebugBuild;
 
@@ -94,6 +95,114 @@ static void DumpStat(size_t x, size_t y, const char* str) {
   }
   LOG(INFO) << Percentage(x, y) << "% of " << str << " for " << (x + y) << " cases";
 }
+
+}  // anonymous namespace
+
+class CompilerDriver::EnabledCompilers {
+ public:
+  EnabledCompilers() : packed_fields_(0u) {
+    DCHECK(!IsJniCompilerEnabled());
+    DCHECK(!IsOptimizingEnabled());
+    DCHECK(!IsDexToDexEnabled());
+  }
+
+  bool IsJniCompilerEnabled() const { return GetPackedFlag<kFlagJniCompiler>(); }
+  void SetJniCompilerEnabled(bool value = true) { SetPackedFlag<kFlagJniCompiler>(value); }
+
+  bool IsOptimizingEnabled() const { return GetPackedFlag<kFlagOptimizing>(); }
+  void SetOptimizingEnabled(bool value = true) { SetPackedFlag<kFlagOptimizing>(value); }
+
+  bool IsDexToDexEnabled() const {
+    return GetDexToDexCompilationLevel() !=
+        optimizer::DexToDexCompilationLevel::kDontDexToDexCompile;
+  }
+
+  optimizer::DexToDexCompilationLevel GetDexToDexCompilationLevel() const {
+    return GetPackedField<DexToDexCompilationLevelField>();
+  }
+
+  void SetDexToDexCompilationLevel(optimizer::DexToDexCompilationLevel level) {
+    SetPackedField<DexToDexCompilationLevelField>(level);
+  }
+
+ private:
+  static constexpr size_t kFlagJniCompiler = 0u;
+  static constexpr size_t kFlagOptimizing = kFlagJniCompiler + 1u;
+  static constexpr size_t kFieldDexToDexCompilationLevel = kFlagOptimizing + 1u;
+  static constexpr size_t kFieldDexToDexCompilationLevelSize =
+      MinimumBitsToStore(static_cast<size_t>(optimizer::DexToDexCompilationLevel::kLast));
+  static constexpr size_t kNumberOfPackedBits =
+      kFieldDexToDexCompilationLevel + kFieldDexToDexCompilationLevelSize;
+  static_assert(kNumberOfPackedBits <= sizeof(uint32_t) * kBitsPerByte, "Too many packed fields.");
+
+  using DexToDexCompilationLevelField = BitField<optimizer::DexToDexCompilationLevel,
+                                                 kFieldDexToDexCompilationLevel,
+                                                 kFieldDexToDexCompilationLevelSize>;
+
+  template <size_t flag>
+  bool GetPackedFlag() const {
+    return (packed_fields_ & (1u << flag)) != 0u;
+  }
+
+  template <size_t flag>
+  void SetPackedFlag(bool value) {
+    packed_fields_ = (packed_fields_ & ~(1u << flag)) | ((value ? 1u : 0u) << flag);
+  }
+
+  template <typename BitFieldType>
+  typename BitFieldType::value_type GetPackedField() const {
+    return BitFieldType::Decode(packed_fields_);
+  }
+
+  template <typename BitFieldType>
+  void SetPackedField(typename BitFieldType::value_type value) {
+    DCHECK(IsUint<BitFieldType::size>(static_cast<uintptr_t>(value)));
+    packed_fields_ = BitFieldType::Update(value, packed_fields_);
+  }
+
+  uint32_t packed_fields_;
+};
+
+class CompilerDriver::DexFileCompiledMethods {
+ public:
+  class IsForDexFile {
+   public:
+    explicit IsForDexFile(const DexFile& dex_file) : dex_file_(dex_file) { }
+
+    bool operator()(const DexFileCompiledMethods& dex_file_compiled_methods) const {
+      return &dex_file_ == &dex_file_compiled_methods.GetDexFile();
+    }
+
+   private:
+    const DexFile& dex_file_;
+  };
+
+  DexFileCompiledMethods(const DexFile& dex_file, CompilerDriver* driver)
+      : dex_file_(&dex_file),
+        compiled_methods_(dex_file.NumMethodIds(),
+                          driver->GetCompiledMethodStorage()->GetSwapSpaceAllocator()) { }
+
+  DexFileCompiledMethods(DexFileCompiledMethods&& other) = default;
+  DexFileCompiledMethods& operator=(DexFileCompiledMethods&& other) = default;
+
+  ~DexFileCompiledMethods() = default;
+
+  const DexFile& GetDexFile() const { return *dex_file_; }
+
+  CompiledMethod* GetCompiledMethod(size_t method_index) const {
+    return compiled_methods_[method_index].get();
+  }
+
+  void SetCompiledMethod(size_t method_index,
+                         SwapAllocatedCompiledMethodUniquePtr&& compiled_method) {
+    compiled_methods_[method_index] = std::move(compiled_method);
+  }
+
+ private:
+  const DexFile* dex_file_;
+  std::vector<SwapAllocatedCompiledMethodUniquePtr,
+              SwapAllocator<SwapAllocatedCompiledMethodUniquePtr>> compiled_methods_;
+};
 
 class CompilerDriver::AOTCompilationStats {
  public:
@@ -335,24 +444,6 @@ class CompilerDriver::AOTCompilationStats {
   DISALLOW_COPY_AND_ASSIGN(AOTCompilationStats);
 };
 
-class CompilerDriver::DexFileMethodSet {
- public:
-  explicit DexFileMethodSet(const DexFile& dex_file)
-    : dex_file_(dex_file),
-      method_indexes_(dex_file.NumMethodIds(), false, Allocator::GetMallocAllocator()) {
-  }
-  DexFileMethodSet(DexFileMethodSet&& other) = default;
-
-  const DexFile& GetDexFile() const { return dex_file_; }
-
-  BitVector& GetMethodIndexes() { return method_indexes_; }
-  const BitVector& GetMethodIndexes() const { return method_indexes_; }
-
- private:
-  const DexFile& dex_file_;
-  BitVector method_indexes_;
-};
-
 CompilerDriver::CompilerDriver(
     const CompilerOptions* compiler_options,
     VerificationResults* verification_results,
@@ -380,9 +471,6 @@ CompilerDriver::CompilerDriver(
       instruction_set_features_(instruction_set_features),
       requires_constructor_barrier_lock_("constructor barrier lock"),
       compiled_classes_lock_("compiled classes lock"),
-      compiled_methods_lock_("compiled method lock"),
-      compiled_methods_(MethodTable::key_compare()),
-      non_relative_linker_patch_count_(0u),
       boot_image_(boot_image),
       app_image_(app_image),
       image_classes_(image_classes),
@@ -398,11 +486,10 @@ CompilerDriver::CompilerDriver(
       support_boot_image_fixup_(instruction_set != kMips && instruction_set != kMips64),
       dex_files_for_oat_file_(nullptr),
       compiled_method_storage_(swap_fd),
+      compiled_methods_(compiled_method_storage_.GetSwapSpaceAllocator()),
+      non_relative_linker_patch_count_(0u),
       profile_compilation_info_(profile_compilation_info),
-      max_arena_alloc_(0),
-      dex_to_dex_references_lock_("dex-to-dex references lock"),
-      dex_to_dex_references_(),
-      current_dex_to_dex_methods_(nullptr) {
+      max_arena_alloc_(0) {
   DCHECK(compiler_options_ != nullptr);
   DCHECK(method_inliner_map_ != nullptr);
 
@@ -421,12 +508,6 @@ CompilerDriver::~CompilerDriver() {
   {
     MutexLock mu(self, compiled_classes_lock_);
     STLDeleteValues(&compiled_classes_);
-  }
-  {
-    MutexLock mu(self, compiled_methods_lock_);
-    for (auto& pair : compiled_methods_) {
-      CompiledMethod::ReleaseSwapAllocatedCompiledMethod(this, pair.second);
-    }
   }
   compiler_->UnInit();
 }
@@ -517,14 +598,14 @@ static optimizer::DexToDexCompilationLevel GetDexToDexCompilationLevel(
   // can validate (checksums) and use to skip load-time verification. It is thus safe to
   // optimize when a class has been fully verified before.
   if (klass->IsVerified()) {
-    // Class is verified so we can enable DEX-to-DEX compilation for performance.
+    // Class is verified so we can enable dex-to-dex compilation for performance.
     return optimizer::DexToDexCompilationLevel::kOptimize;
   } else if (klass->IsCompileTimeVerified()) {
     // Class verification has soft-failed. Anyway, ensure at least correctness.
     DCHECK_EQ(klass->GetStatus(), mirror::Class::kStatusRetryVerificationAtRuntime);
     return optimizer::DexToDexCompilationLevel::kRequired;
   } else {
-    // Class verification has failed: do not run DEX-to-DEX compilation.
+    // Class verification has failed: do not run dex-to-dex compilation.
     return optimizer::DexToDexCompilationLevel::kDontDexToDexCompile;
   }
 }
@@ -557,35 +638,70 @@ static bool InstructionSetHasGenericJniStub(InstructionSet isa) {
   }
 }
 
-static void CompileMethod(Thread* self,
-                          CompilerDriver* driver,
-                          const DexFile::CodeItem* code_item,
-                          uint32_t access_flags,
-                          InvokeType invoke_type,
-                          uint16_t class_def_idx,
-                          uint32_t method_idx,
-                          jobject class_loader,
-                          const DexFile& dex_file,
-                          optimizer::DexToDexCompilationLevel dex_to_dex_compilation_level,
-                          bool compilation_enabled,
-                          Handle<mirror::DexCache> dex_cache)
-    REQUIRES(!driver->compiled_methods_lock_) {
-  DCHECK(driver != nullptr);
-  CompiledMethod* compiled_method = nullptr;
+void CompilerDriver::CompileMethod(Thread* self,
+                                   const DexFile::CodeItem* code_item,
+                                   uint32_t access_flags,
+                                   InvokeType invoke_type,
+                                   uint16_t class_def_idx,
+                                   uint32_t method_idx,
+                                   jobject class_loader,
+                                   DexFileCompiledMethods* dex_file_compiled_methods,
+                                   EnabledCompilers enabled_compilers,
+                                   Handle<mirror::DexCache> dex_cache) {
+  SwapAllocatedCompiledMethodUniquePtr compiled_method;
   uint64_t start_ns = kTimeCompileMethod ? NanoTime() : 0;
+  const DexFile& dex_file = dex_file_compiled_methods->GetDexFile();
   MethodReference method_ref(&dex_file, method_idx);
 
-  if (driver->GetCurrentDexToDexMethods() != nullptr) {
-    // This is the second pass when we dex-to-dex compile previously marked methods.
-    // TODO: Refactor the compilation to avoid having to distinguish the two passes
-    // here. That should be done on a higher level. http://b/29089975
-    if (driver->GetCurrentDexToDexMethods()->IsBitSet(method_idx)) {
-      const VerifiedMethod* verified_method =
-          driver->GetVerificationResults()->GetVerifiedMethod(method_ref);
-      // Do not optimize if a VerifiedMethod is missing. SafeCast elision,
-      // for example, relies on it.
-      compiled_method = optimizer::ArtCompileDEX(
-          driver,
+  if (dex_file_compiled_methods->GetCompiledMethod(method_idx) != nullptr) {
+    // Already compiled, presumably by a different compiler (though we could
+    // theoretically try to compile remaining methods with different compiler
+    // settings, say higher method size limit with lower inlining limits).
+    // Note: We currently do not have any way to merge the dex-to-dex
+    // quickening data with the Optimizing compiler's metadata.
+  } else if ((access_flags & kAccNative) != 0) {
+    // Are we extracting only and have support for generic JNI down calls?
+    if (!enabled_compilers.IsJniCompilerEnabled() &&
+        InstructionSetHasGenericJniStub(GetInstructionSet())) {
+      // Leaving this empty will trigger the generic JNI version
+    } else {
+      compiled_method.reset(GetCompiler()->JniCompile(access_flags, method_idx, dex_file));
+      CHECK(compiled_method != nullptr);
+    }
+  } else if ((access_flags & kAccAbstract) != 0) {
+    // Abstract methods don't have code.
+  } else {
+    const VerifiedMethod* verified_method =
+        GetVerificationResults()->GetVerifiedMethod(method_ref);
+    bool compile = enabled_compilers.IsOptimizingEnabled() &&
+        // Basic checks, e.g., not <clinit>.
+        GetVerificationResults()->IsCandidateForCompilation(method_ref, access_flags) &&
+        // Did not fail to create VerifiedMethod metadata.
+        verified_method != nullptr &&
+        // Do not have failures that should punt to the interpreter.
+        !verified_method->HasRuntimeThrow() &&
+        (verified_method->GetEncounteredVerificationFailures() &
+            (verifier::VERIFY_ERROR_FORCE_INTERPRETER | verifier::VERIFY_ERROR_LOCKING)) == 0 &&
+        // Is eligable for compilation by methods-to-compile filter.
+        IsMethodToCompile(method_ref) &&
+        ShouldCompileBasedOnProfile(method_ref);
+
+    if (compile) {
+      // NOTE: if compiler declines to compile this method, it will return null.
+      compiled_method.reset(GetCompiler()->Compile(code_item,
+                                                   access_flags,
+                                                   invoke_type,
+                                                   class_def_idx,
+                                                   method_idx,
+                                                   class_loader,
+                                                   dex_file,
+                                                   dex_cache));
+    }
+    if (compiled_method == nullptr && enabled_compilers.IsDexToDexEnabled()) {
+      // Do not optimize if a VerifiedMethod is missing. SafeCast elision, for example, relies on
+      // it.
+      compiled_method.reset(optimizer::ArtCompileDEX(
+          this,
           code_item,
           access_flags,
           invoke_type,
@@ -594,53 +710,13 @@ static void CompileMethod(Thread* self,
           class_loader,
           dex_file,
           (verified_method != nullptr)
-              ? dex_to_dex_compilation_level
-              : optimizer::DexToDexCompilationLevel::kRequired);
-    }
-  } else if ((access_flags & kAccNative) != 0) {
-    // Are we extracting only and have support for generic JNI down calls?
-    if (!driver->GetCompilerOptions().IsJniCompilationEnabled() &&
-        InstructionSetHasGenericJniStub(driver->GetInstructionSet())) {
-      // Leaving this empty will trigger the generic JNI version
-    } else {
-      compiled_method = driver->GetCompiler()->JniCompile(access_flags, method_idx, dex_file);
-      CHECK(compiled_method != nullptr);
-    }
-  } else if ((access_flags & kAccAbstract) != 0) {
-    // Abstract methods don't have code.
-  } else {
-    const VerifiedMethod* verified_method =
-        driver->GetVerificationResults()->GetVerifiedMethod(method_ref);
-    bool compile = compilation_enabled &&
-        // Basic checks, e.g., not <clinit>.
-        driver->GetVerificationResults()
-            ->IsCandidateForCompilation(method_ref, access_flags) &&
-        // Did not fail to create VerifiedMethod metadata.
-        verified_method != nullptr &&
-        // Do not have failures that should punt to the interpreter.
-        !verified_method->HasRuntimeThrow() &&
-        (verified_method->GetEncounteredVerificationFailures() &
-            (verifier::VERIFY_ERROR_FORCE_INTERPRETER | verifier::VERIFY_ERROR_LOCKING)) == 0 &&
-        // Is eligable for compilation by methods-to-compile filter.
-        driver->IsMethodToCompile(method_ref) &&
-        driver->ShouldCompileBasedOnProfile(method_ref);
-
-    if (compile) {
-      // NOTE: if compiler declines to compile this method, it will return null.
-      compiled_method = driver->GetCompiler()->Compile(code_item, access_flags, invoke_type,
-                                                       class_def_idx, method_idx, class_loader,
-                                                       dex_file, dex_cache);
-    }
-    if (compiled_method == nullptr &&
-        dex_to_dex_compilation_level != optimizer::DexToDexCompilationLevel::kDontDexToDexCompile) {
-      DCHECK(!Runtime::Current()->UseJitCompilation());
-      // TODO: add a command-line option to disable DEX-to-DEX compilation ?
-      driver->MarkForDexToDexCompilation(self, method_ref);
+              ? enabled_compilers.GetDexToDexCompilationLevel()
+              : optimizer::DexToDexCompilationLevel::kRequired));
     }
   }
   if (kTimeCompileMethod) {
     uint64_t duration_ns = NanoTime() - start_ns;
-    if (duration_ns > MsToNs(driver->GetCompiler()->GetMaximumCompilationTimeBeforeWarning())) {
+    if (duration_ns > MsToNs(GetCompiler()->GetMaximumCompilationTimeBeforeWarning())) {
       LOG(WARNING) << "Compilation of " << PrettyMethod(method_idx, dex_file)
                    << " took " << PrettyDuration(duration_ns);
     }
@@ -654,11 +730,12 @@ static void CompileMethod(Thread* self,
         ++non_relative_linker_patch_count;
       }
     }
-    bool compile_pic = driver->GetCompilerOptions().GetCompilePic();  // Off by default
+    bool compile_pic = GetCompilerOptions().GetCompilePic();  // Off by default
     // When compiling with PIC, there should be zero non-relative linker patches
     CHECK(!compile_pic || non_relative_linker_patch_count == 0u);
 
-    driver->AddCompiledMethod(method_ref, compiled_method, non_relative_linker_patch_count);
+    non_relative_linker_patch_count_.FetchAndAddRelaxed(non_relative_linker_patch_count);
+    dex_file_compiled_methods->SetCompiledMethod(method_idx, std::move(compiled_method));
   }
 
   if (self->IsExceptionPending()) {
@@ -699,55 +776,33 @@ void CompilerDriver::CompileOne(Thread* self, ArtMethod* method, TimingLogger* t
 
   PreCompile(jclass_loader, dex_files, timings);
 
-  // Can we run DEX-to-DEX compiler on this class ?
-  optimizer::DexToDexCompilationLevel dex_to_dex_compilation_level =
-      GetDexToDexCompilationLevel(self,
-                                  *this,
-                                  jclass_loader,
-                                  *dex_file,
-                                  dex_file->GetClassDef(class_def_idx));
+  const DexFile::ClassDef& class_def = dex_file->GetClassDef(class_def_idx);
+  EnabledCompilers enabled_compilers;
+  enabled_compilers.SetJniCompilerEnabled(GetCompilerOptions().IsJniCompilationEnabled());
+  enabled_compilers.SetOptimizingEnabled();
+  // Can we run dex-to-dex compiler on this class?
+  // Note: Allow both Optimizing and dex-to-dex at the same time
+  // as we're not going to race with any other thread.
+  enabled_compilers.SetDexToDexCompilationLevel(
+      GetDexToDexCompilationLevel(self, *this, jclass_loader, *dex_file, class_def));
 
-  DCHECK(current_dex_to_dex_methods_ == nullptr);
+  auto it = std::find_if(
+      compiled_methods_.begin(),
+      compiled_methods_.end(),
+      DexFileCompiledMethods::IsForDexFile(*dex_file));
+  if (it == compiled_methods_.end()) {
+    it = compiled_methods_.emplace(it, *dex_file, this);
+  }
   CompileMethod(self,
-                this,
                 code_item,
                 access_flags,
                 invoke_type,
                 class_def_idx,
                 method_idx,
                 jclass_loader,
-                *dex_file,
-                dex_to_dex_compilation_level,
-                true,
+                &*it,
+                enabled_compilers,
                 dex_cache);
-
-  ArrayRef<DexFileMethodSet> dex_to_dex_references;
-  {
-    // From this point on, we shall not modify dex_to_dex_references_, so
-    // just grab a reference to it that we use without holding the mutex.
-    MutexLock lock(Thread::Current(), dex_to_dex_references_lock_);
-    dex_to_dex_references = ArrayRef<DexFileMethodSet>(dex_to_dex_references_);
-  }
-  if (!dex_to_dex_references.empty()) {
-    DCHECK_EQ(dex_to_dex_references.size(), 1u);
-    DCHECK(&dex_to_dex_references[0].GetDexFile() == dex_file);
-    current_dex_to_dex_methods_ = &dex_to_dex_references.front().GetMethodIndexes();
-    DCHECK(current_dex_to_dex_methods_->IsBitSet(method_idx));
-    DCHECK_EQ(current_dex_to_dex_methods_->NumSetBits(), 1u);
-    CompileMethod(self,
-                  this,
-                  code_item,
-                  access_flags,
-                  invoke_type,
-                  class_def_idx,
-                  method_idx,
-                  jclass_loader,
-                  *dex_file,
-                  dex_to_dex_compilation_level,
-                  true,
-                  dex_cache);
-    current_dex_to_dex_methods_ = nullptr;
-  }
 
   FreeThreadPools();
 
@@ -1338,17 +1393,6 @@ bool CompilerDriver::CanAssumeClassIsLoaded(mirror::Class* klass) {
   std::string temp;
   const char* descriptor = klass->GetDescriptor(&temp);
   return IsImageClass(descriptor);
-}
-
-void CompilerDriver::MarkForDexToDexCompilation(Thread* self, const MethodReference& method_ref) {
-  MutexLock lock(self, dex_to_dex_references_lock_);
-  // Since we're compiling one dex file at a time, we need to look for the
-  // current dex file entry only at the end of dex_to_dex_references_.
-  if (dex_to_dex_references_.empty() ||
-      &dex_to_dex_references_.back().GetDexFile() != method_ref.dex_file) {
-    dex_to_dex_references_.emplace_back(*method_ref.dex_file);
-  }
-  dex_to_dex_references_.back().GetMethodIndexes().SetBit(method_ref.dex_method_index);
 }
 
 bool CompilerDriver::CanAssumeTypeIsPresentInDexCache(Handle<mirror::DexCache> dex_cache,
@@ -2562,46 +2606,67 @@ void CompilerDriver::Compile(jobject class_loader,
             ? "null"
             : profile_compilation_info_->DumpInfo(&dex_files));
   }
-
-  DCHECK(current_dex_to_dex_methods_ == nullptr);
+  DCHECK(compiled_methods_.empty());
+  compiled_methods_.reserve(dex_files.size());
   for (const DexFile* dex_file : dex_files) {
-    CHECK(dex_file != nullptr);
+    compiled_methods_.emplace_back(*dex_file, this);
+  }
+
+  EnabledCompilers enabled_compilers;
+  enabled_compilers.SetJniCompilerEnabled(GetCompilerOptions().IsJniCompilationEnabled());
+  enabled_compilers.SetOptimizingEnabled(GetCompilerOptions().IsBytecodeCompilationEnabled());
+  // TODO: add a command-line option to disable dex-to-dex compilation?
+  // If Optimizing is enabled, postpone dex-to-dex to a second phase to avoid races
+  // between dex-to-dex quickening and Optimizing inlining.
+  enabled_compilers.SetDexToDexCompilationLevel(
+      GetCompilerOptions().IsBytecodeCompilationEnabled()
+          ? optimizer::DexToDexCompilationLevel::kDontDexToDexCompile
+          : optimizer::DexToDexCompilationLevel::kOptimize);
+  for (DexFileCompiledMethods& dex_file_compiled_methods : compiled_methods_) {
+    TimingLogger::ScopedTiming t("Compile Dex File", timings);
     CompileDexFile(class_loader,
-                   *dex_file,
+                   &dex_file_compiled_methods,
                    dex_files,
                    parallel_thread_pool_.get(),
                    parallel_thread_count_,
-                   timings);
+                   enabled_compilers);
     const ArenaPool* const arena_pool = Runtime::Current()->GetArenaPool();
     const size_t arena_alloc = arena_pool->GetBytesAllocated();
     max_arena_alloc_ = std::max(arena_alloc, max_arena_alloc_);
     Runtime::Current()->ReclaimArenaPoolMemory();
   }
 
-  ArrayRef<DexFileMethodSet> dex_to_dex_references;
-  {
-    // From this point on, we shall not modify dex_to_dex_references_, so
-    // just grab a reference to it that we use without holding the mutex.
-    MutexLock lock(Thread::Current(), dex_to_dex_references_lock_);
-    dex_to_dex_references = ArrayRef<DexFileMethodSet>(dex_to_dex_references_);
+  if (GetCompilerOptions().IsBytecodeCompilationEnabled()) {
+    enabled_compilers.SetJniCompilerEnabled(false);
+    enabled_compilers.SetOptimizingEnabled(false);
+    enabled_compilers.SetDexToDexCompilationLevel(optimizer::DexToDexCompilationLevel::kOptimize);
+    // Do the dex-to-dex compilation in the second phase.
+    for (DexFileCompiledMethods& dex_file_compiled_methods : compiled_methods_) {
+      TimingLogger::ScopedTiming t("Compile Dex File dex-to-dex", timings);
+      CompileDexFile(class_loader,
+                     &dex_file_compiled_methods,
+                     dex_files,
+                     parallel_thread_pool_.get(),
+                     parallel_thread_count_,
+                     enabled_compilers);
+      const ArenaPool* const arena_pool = Runtime::Current()->GetArenaPool();
+      const size_t arena_alloc = arena_pool->GetBytesAllocated();
+      max_arena_alloc_ = std::max(arena_alloc, max_arena_alloc_);
+      Runtime::Current()->ReclaimArenaPoolMemory();
+    }
   }
-  for (const auto& method_set : dex_to_dex_references) {
-    current_dex_to_dex_methods_ = &method_set.GetMethodIndexes();
-    CompileDexFile(class_loader,
-                   method_set.GetDexFile(),
-                   dex_files,
-                   parallel_thread_pool_.get(),
-                   parallel_thread_count_,
-                   timings);
-  }
-  current_dex_to_dex_methods_ = nullptr;
 
   VLOG(compiler) << "Compile: " << GetMemoryUsageString(false);
 }
 
-class CompileClassVisitor : public CompilationVisitor {
+class CompilerDriver::CompileClassVisitor : public CompilationVisitor {
  public:
-  explicit CompileClassVisitor(const ParallelCompilationManager* manager) : manager_(manager) {}
+  CompileClassVisitor(const ParallelCompilationManager* manager,
+                      DexFileCompiledMethods* dex_file_compiled_methods,
+                      EnabledCompilers enabled_compilers)
+      : manager_(manager),
+        dex_file_compiled_methods_(dex_file_compiled_methods),
+        enabled_compilers_(enabled_compilers) {}
 
   virtual void Visit(size_t class_def_index) REQUIRES(!Locks::mutator_lock_) OVERRIDE {
     ATRACE_CALL();
@@ -2644,9 +2709,19 @@ class CompileClassVisitor : public CompilationVisitor {
 
     CompilerDriver* const driver = manager_->GetCompiler();
 
-    // Can we run DEX-to-DEX compiler on this class ?
-    optimizer::DexToDexCompilationLevel dex_to_dex_compilation_level =
-        GetDexToDexCompilationLevel(soa.Self(), *driver, jclass_loader, dex_file, class_def);
+    EnabledCompilers enabled_compilers = enabled_compilers_;
+    // Refine the enabled compilers based on the particular class we're trying to compile.
+    if (enabled_compilers.IsOptimizingEnabled()) {
+      enabled_compilers.SetOptimizingEnabled(
+          driver->IsClassToCompile(dex_file.StringByTypeIdx(class_def.class_idx_)));
+    }
+    if (enabled_compilers.IsDexToDexEnabled()) {
+      optimizer::DexToDexCompilationLevel class_level =
+          GetDexToDexCompilationLevel(soa.Self(), *driver, jclass_loader, dex_file, class_def);
+      if (class_level < enabled_compilers.GetDexToDexCompilationLevel()) {
+        enabled_compilers.SetDexToDexCompilationLevel(class_level);
+      }
+    }
 
     ClassDataItemIterator it(dex_file, class_data);
     // Skip fields
@@ -2656,9 +2731,6 @@ class CompileClassVisitor : public CompilationVisitor {
     while (it.HasNextInstanceField()) {
       it.Next();
     }
-
-    bool compilation_enabled = driver->IsClassToCompile(
-        dex_file.StringByTypeIdx(class_def.class_idx_));
 
     // Compile direct methods
     int64_t previous_direct_method_idx = -1;
@@ -2671,10 +2743,16 @@ class CompileClassVisitor : public CompilationVisitor {
         continue;
       }
       previous_direct_method_idx = method_idx;
-      CompileMethod(soa.Self(), driver, it.GetMethodCodeItem(), it.GetMethodAccessFlags(),
-                    it.GetMethodInvokeType(class_def), class_def_index,
-                    method_idx, jclass_loader, dex_file, dex_to_dex_compilation_level,
-                    compilation_enabled, dex_cache);
+      driver->CompileMethod(soa.Self(),
+                            it.GetMethodCodeItem(),
+                            it.GetMethodAccessFlags(),
+                            it.GetMethodInvokeType(class_def),
+                            class_def_index,
+                            method_idx,
+                            jclass_loader,
+                            dex_file_compiled_methods_,
+                            enabled_compilers,
+                            dex_cache);
       it.Next();
     }
     // Compile virtual methods
@@ -2688,10 +2766,16 @@ class CompileClassVisitor : public CompilationVisitor {
         continue;
       }
       previous_virtual_method_idx = method_idx;
-      CompileMethod(soa.Self(), driver, it.GetMethodCodeItem(), it.GetMethodAccessFlags(),
-                    it.GetMethodInvokeType(class_def), class_def_index,
-                    method_idx, jclass_loader, dex_file, dex_to_dex_compilation_level,
-                    compilation_enabled, dex_cache);
+      driver->CompileMethod(soa.Self(),
+                            it.GetMethodCodeItem(),
+                            it.GetMethodAccessFlags(),
+                            it.GetMethodInvokeType(class_def),
+                            class_def_index,
+                            method_idx,
+                            jclass_loader,
+                            dex_file_compiled_methods_,
+                            enabled_compilers,
+                            dex_cache);
       it.Next();
     }
     DCHECK(!it.HasNext());
@@ -2699,48 +2783,25 @@ class CompileClassVisitor : public CompilationVisitor {
 
  private:
   const ParallelCompilationManager* const manager_;
+  DexFileCompiledMethods* dex_file_compiled_methods_;
+  EnabledCompilers enabled_compilers_;
 };
 
 void CompilerDriver::CompileDexFile(jobject class_loader,
-                                    const DexFile& dex_file,
+                                    DexFileCompiledMethods* dex_file_compiled_methods,
                                     const std::vector<const DexFile*>& dex_files,
                                     ThreadPool* thread_pool,
                                     size_t thread_count,
-                                    TimingLogger* timings) {
-  TimingLogger::ScopedTiming t("Compile Dex File", timings);
-  ParallelCompilationManager context(Runtime::Current()->GetClassLinker(), class_loader, this,
-                                     &dex_file, dex_files, thread_pool);
-  CompileClassVisitor visitor(&context);
+                                    EnabledCompilers enabled_compilers) {
+  const DexFile& dex_file = dex_file_compiled_methods->GetDexFile();
+  ParallelCompilationManager context(Runtime::Current()->GetClassLinker(),
+                                     class_loader,
+                                     this,
+                                     &dex_file,
+                                     dex_files,
+                                     thread_pool);
+  CompileClassVisitor visitor(&context, dex_file_compiled_methods, enabled_compilers);
   context.ForAll(0, dex_file.NumClassDefs(), &visitor, thread_count);
-}
-
-void CompilerDriver::AddCompiledMethod(const MethodReference& method_ref,
-                                       CompiledMethod* const compiled_method,
-                                       size_t non_relative_linker_patch_count) {
-  DCHECK(GetCompiledMethod(method_ref) == nullptr)
-      << PrettyMethod(method_ref.dex_method_index, *method_ref.dex_file);
-  {
-    MutexLock mu(Thread::Current(), compiled_methods_lock_);
-    compiled_methods_.Put(method_ref, compiled_method);
-    non_relative_linker_patch_count_ += non_relative_linker_patch_count;
-  }
-  DCHECK(GetCompiledMethod(method_ref) != nullptr)
-      << PrettyMethod(method_ref.dex_method_index, *method_ref.dex_file);
-}
-
-void CompilerDriver::RemoveCompiledMethod(const MethodReference& method_ref) {
-  CompiledMethod* compiled_method = nullptr;
-  {
-    MutexLock mu(Thread::Current(), compiled_methods_lock_);
-    auto it = compiled_methods_.find(method_ref);
-    if (it != compiled_methods_.end()) {
-      compiled_method = it->second;
-      compiled_methods_.erase(it);
-    }
-  }
-  if (compiled_method != nullptr) {
-    CompiledMethod::ReleaseSwapAllocatedCompiledMethod(this, compiled_method);
-  }
 }
 
 CompiledClass* CompilerDriver::GetCompiledClass(ClassReference ref) const {
@@ -2781,13 +2842,11 @@ void CompilerDriver::RecordClassStatus(ClassReference ref, mirror::Class::Status
 }
 
 CompiledMethod* CompilerDriver::GetCompiledMethod(MethodReference ref) const {
-  MutexLock mu(Thread::Current(), compiled_methods_lock_);
-  MethodTable::const_iterator it = compiled_methods_.find(ref);
-  if (it == compiled_methods_.end()) {
-    return nullptr;
-  }
-  CHECK(it->second != nullptr);
-  return it->second;
+  auto it = std::find_if(
+      compiled_methods_.begin(),
+      compiled_methods_.end(),
+      DexFileCompiledMethods::IsForDexFile(*ref.dex_file));
+  return (it != compiled_methods_.end()) ? it->GetCompiledMethod(ref.dex_method_index) : nullptr;
 }
 
 bool CompilerDriver::IsMethodVerifiedWithoutFailures(uint32_t method_idx,
@@ -2816,8 +2875,7 @@ bool CompilerDriver::IsMethodVerifiedWithoutFailures(uint32_t method_idx,
 }
 
 size_t CompilerDriver::GetNonRelativeLinkerPatchCount() const {
-  MutexLock mu(Thread::Current(), compiled_methods_lock_);
-  return non_relative_linker_patch_count_;
+  return non_relative_linker_patch_count_.LoadRelaxed();
 }
 
 void CompilerDriver::SetRequiresConstructorBarrier(Thread* self,

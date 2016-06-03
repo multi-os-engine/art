@@ -186,7 +186,7 @@ class dchecked_vector : private std::vector<T, Alloc> {
   template <typename... Args>
   iterator emplace(const_iterator position, Args&&... args) {
     DCHECK(cbegin() <= position && position <= cend());
-    Base::emplace(position, std::forward(args...));
+    return Base::emplace(position, std::forward<Args>(args)...);
   }
 
   // Allocator.

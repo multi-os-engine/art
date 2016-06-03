@@ -395,7 +395,7 @@ class CompiledMethod FINAL : public CompiledCode {
       const ArrayRef<const uint8_t>& cfi_info,
       const ArrayRef<const LinkerPatch>& patches);
 
-  static void ReleaseSwapAllocatedCompiledMethod(CompilerDriver* driver, CompiledMethod* m);
+  static void ReleaseSwapAllocatedCompiledMethod(CompiledMethod* m);
 
   size_t GetFrameSizeInBytes() const {
     return frame_size_in_bytes_;
@@ -441,6 +441,19 @@ class CompiledMethod FINAL : public CompiledCode {
   // For quick code, linker patches needed by the method.
   const LengthPrefixedArray<LinkerPatch>* const patches_;
 };
+
+// A deleter for a CompiledMethod allocated with CompiledMethod::SwapAllocCompiledMethod().
+class SwapAllocatedCompiledMethodDeleter {
+ public:
+  void operator()(CompiledMethod* compiled_method) const {
+    if (compiled_method != nullptr) {
+      CompiledMethod::ReleaseSwapAllocatedCompiledMethod(compiled_method);
+    }
+  }
+};
+
+using SwapAllocatedCompiledMethodUniquePtr =
+    std::unique_ptr<CompiledMethod, SwapAllocatedCompiledMethodDeleter>;
 
 }  // namespace art
 
