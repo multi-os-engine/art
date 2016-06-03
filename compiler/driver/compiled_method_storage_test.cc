@@ -87,14 +87,14 @@ TEST(CompiledMethodStorage, Deduplicate) {
       ArrayRef<const LinkerPatch>(raw_patches2),
   };
 
-  std::vector<CompiledMethod*> compiled_methods;
+  std::vector<SwapAllocatedCompiledMethodUniquePtr> compiled_methods;
   compiled_methods.reserve(1u << 7);
   for (auto&& c : code) {
     for (auto&& s : src_map) {
       for (auto&& v : vmap_table) {
         for (auto&& f : cfi_info) {
           for (auto&& p : patches) {
-            compiled_methods.push_back(CompiledMethod::SwapAllocCompiledMethod(
+            compiled_methods.emplace_back(CompiledMethod::SwapAllocCompiledMethod(
                 &driver, kNone, c, 0u, 0u, 0u, s, v, f, p));
           }
         }
@@ -109,8 +109,8 @@ TEST(CompiledMethodStorage, Deduplicate) {
   CHECK_EQ(compiled_methods.size(), 1u << 5);
   for (size_t i = 0; i != compiled_methods.size(); ++i) {
     for (size_t j = 0; j != compiled_methods.size(); ++j) {
-      CompiledMethod* lhs = compiled_methods[i];
-      CompiledMethod* rhs = compiled_methods[j];
+      CompiledMethod* lhs = compiled_methods[i].get();
+      CompiledMethod* rhs = compiled_methods[j].get();
       bool same_code = ((i ^ j) & code_bit) == 0u;
       bool same_src_map = ((i ^ j) & src_map_bit) == 0u;
       bool same_vmap_table = ((i ^ j) & vmap_table_bit) == 0u;
@@ -127,9 +127,6 @@ TEST(CompiledMethodStorage, Deduplicate) {
       ASSERT_EQ(same_patches, lhs->GetPatches().data() == rhs->GetPatches().data())
           << i << " " << j;
     }
-  }
-  for (CompiledMethod* method : compiled_methods) {
-    CompiledMethod::ReleaseSwapAllocatedCompiledMethod(&driver, method);
   }
 }
 
