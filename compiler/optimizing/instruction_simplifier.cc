@@ -92,6 +92,8 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   void VisitInstanceOf(HInstanceOf* instruction) OVERRIDE;
   void VisitInvoke(HInvoke* invoke) OVERRIDE;
   void VisitDeoptimize(HDeoptimize* deoptimize) OVERRIDE;
+  void VisitUnresolvedInstanceFieldSet(HUnresolvedInstanceFieldSet* set) OVERRIDE;
+  void VisitUnresolvedInstanceFieldGet(HUnresolvedInstanceFieldGet* get) OVERRIDE;
 
   bool CanEnsureNotNullAt(HInstruction* instr, HInstruction* at) const;
 
@@ -103,6 +105,7 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
   void SimplifyFP2Int(HInvoke* invoke);
   void SimplifyStringIsEmptyOrLength(HInvoke* invoke);
   void SimplifyMemBarrier(HInvoke* invoke, MemBarrierKind barrier_kind);
+  void SimplifyUnresolved(HInstruction* obj);
 
   OptimizingCompilerStats* stats_;
   bool simplification_occurred_ = false;
@@ -1779,6 +1782,21 @@ void InstructionSimplifierVisitor::VisitDeoptimize(HDeoptimize* deoptimize) {
     } else {
       // Always deopt.
     }
+  }
+}
+
+void InstructionSimplifierVisitor::VisitUnresolvedInstanceFieldSet(HUnresolvedInstanceFieldSet* set) {
+  SimplifyUnresolved(set->InputAt(0));
+}
+
+void InstructionSimplifierVisitor::VisitUnresolvedInstanceFieldGet(HUnresolvedInstanceFieldGet* get) {
+  SimplifyUnresolved(get->InputAt(0));
+}
+
+void InstructionSimplifierVisitor::SimplifyUnresolved(HInstruction* obj) {
+  if (obj->IsNullCheck()) {
+    obj->ReplaceWith(obj->InputAt(0));
+    obj->GetBlock()->RemoveInstruction(obj);
   }
 }
 
