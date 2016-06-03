@@ -145,7 +145,8 @@ CompiledMethod* CompiledMethod::SwapAllocCompiledMethod(
   return ret;
 }
 
-void CompiledMethod::ReleaseSwapAllocatedCompiledMethod(CompilerDriver* driver, CompiledMethod* m) {
+void CompiledMethod::ReleaseSwapAllocatedCompiledMethod(CompiledMethod* m) {
+  CompilerDriver* driver = m->GetCompilerDriver();
   SwapAllocator<CompiledMethod> alloc(driver->GetCompiledMethodStorage()->GetSwapSpaceAllocator());
   alloc.destroy(m);
   alloc.deallocate(m, 1);
