@@ -18,16 +18,20 @@ public class Main {
 
   public static final String staticField = null;
 
+  public static int staticIntField = 0;
+
+  private static void test(String name) throws Exception {
+    try {
+      Class<?> a = Class.forName(name);
+      a.newInstance();
+    } catch (java.lang.LinkageError e) {
+      System.out.println("passed " + name);
+    }
+  }
+
   public static void main(String[] args) throws Exception {
-    try {
-      Class<?> a = Class.forName("A");
-    } catch (java.lang.VerifyError e) {
-      System.out.println("passed A");
-    }
-    try {
-      Class<?> a = Class.forName("B");
-    } catch (java.lang.VerifyError e) {
-      System.out.println("passed B");
-    }
+    test("A");
+    test("B");
+    test("C");
   }
 }
