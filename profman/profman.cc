@@ -89,15 +89,30 @@ NO_RETURN static void Usage(const char *fmt, ...) {
   UsageError("  --reference-profile-file-fd=<number>: same as --reference-profile-file but");
   UsageError("      accepts a file descriptor. Cannot be used together with");
   UsageError("      --reference-profile-file.");
+  UsageError("  --generate-test-profile=<filename>: generates a random profile file for testing.");
+  UsageError("  --generate-test-profile-num-dex=<number>: number of dex files that should be");
+  UsageError("      included in the generated profile. Defaults to 20.");
+  UsageError("  --generate-test-profile-method-ratio=<number>: the percentage from the maximum");
+  UsageError("      number of methods that should be generated");
+  UsageError("  --generate-test-profile-class-ratio=<number>: the percentage from the maximum");
+  UsageError("      number of classes that should be generated");
+  UsageError("");
   UsageError("");
 
   exit(EXIT_FAILURE);
 }
 
+static constexpr uint16_t kDefaultTestProfileNumDex = 20;
+static constexpr uint16_t kDefaultTestProfileMethodRatio = 5;
+static constexpr uint16_t kDefaultTestProfileClassRatio = 5;
+
 class ProfMan FINAL {
  public:
   ProfMan() :
       reference_profile_file_fd_(-1),
+      test_profile_num_dex_(kDefaultTestProfileNumDex),
+      test_profile_method_ratio_(kDefaultTestProfileMethodRatio),
+      test_profile_class_ratio_(kDefaultTestProfileClassRatio),
       start_ns_(NanoTime()) {}
 
   ~ProfMan() {
@@ -134,6 +149,23 @@ class ProfMan FINAL {
         reference_profile_file_ = option.substr(strlen("--reference-profile-file=")).ToString();
       } else if (option.starts_with("--reference-profile-file-fd=")) {
         ParseUintOption(option, "--reference-profile-file-fd", &reference_profile_file_fd_, Usage);
+      } else if (option.starts_with("--generate-test-profile=")) {
+        test_profile_ = option.substr(strlen("--generate-test-profile=")).ToString();
+      } else if (option.starts_with("--generate-test-profile-num-dex=")) {
+        ParseUintOption(option,
+                        "--generate-test-profile-num-dex",
+                        &test_profile_num_dex_,
+                        Usage);
+      } else if (option.starts_with("--generate-test-profile-method-ratio")) {
+        ParseUintOption(option,
+                        "--generate-test-profile-method-ratio",
+                        &test_profile_method_ratio_,
+                        Usage);
+      } else if (option.starts_with("--generate-test-profile-class-ratio")) {
+        ParseUintOption(option,
+                        "--generate-test-profile-class-ratio",
+                        &test_profile_class_ratio_,
+                        Usage);
       } else {
         Usage("Unknown argument %s", option.data());
       }
@@ -142,7 +174,15 @@ class ProfMan FINAL {
     bool has_profiles = !profile_files_.empty() || !profile_files_fd_.empty();
     bool has_reference_profile = !reference_profile_file_.empty() ||
         (reference_profile_file_fd_ != -1);
-
+    if (!test_profile_.empty()) {
+      if (test_profile_method_ratio_ > 100) {
+        Usage("Invalid ratio for --generate-test-profile-method-ratio");
+      }
+      if (test_profile_class_ratio_ > 100) {
+        Usage("Invalid ratio for --generate-test-profile-class-ratio");
+      }
+      return;
+    }
     if (!dump_info_for_.empty()) {
       if (has_profiles || has_reference_profile) {
         Usage("dump-info-for cannot be specified together with other options");
@@ -188,6 +228,7 @@ class ProfMan FINAL {
       std::cerr << "Cannot load profile info from " << dump_info_for_;
       return -1;
     }
+    close(fd);
     std::string dump = info.DumpInfo(/*dex_files*/ nullptr);
     std::cout << dump << "\n";
     return 0;
@@ -195,6 +236,25 @@ class ProfMan FINAL {
 
   bool ShouldOnlyDumpProfile() {
     return !dump_info_for_.empty();
+  }
+
+  int GenerateTestProfile() {
+    int profile_test_fd = open(test_profile_.c_str(), O_CREAT | O_TRUNC | O_WRONLY);
+    if (profile_test_fd < 0) {
+      std::cerr << "Cannot open " << test_profile_ << strerror(errno);
+      return -1;
+    }
+
+    bool result = ProfileCompilationInfo::GenerateTestProfile(profile_test_fd,
+                                                             test_profile_num_dex_,
+                                                             test_profile_method_ratio_,
+                                                             test_profile_class_ratio_);
+    close(profile_test_fd);  // ignore close result.
+    return result ? 0 : -1;
+  }
+
+  bool ShouldGenerateTestProfile() {
+    return !test_profile_.empty();
   }
 
  private:
@@ -226,8 +286,12 @@ class ProfMan FINAL {
   std::vector<int> profile_files_fd_;
   std::string reference_profile_file_;
   int reference_profile_file_fd_;
-  uint64_t start_ns_;
   std::string dump_info_for_;
+  std::string test_profile_;
+  uint16_t test_profile_num_dex_;
+  uint16_t test_profile_method_ratio_;
+  uint16_t test_profile_class_ratio_;
+  uint64_t start_ns_;
 };
 
 // See ProfileAssistant::ProcessingResult for return codes.
@@ -237,6 +301,9 @@ static int profman(int argc, char** argv) {
   // Parse arguments. Argument mistakes will lead to exit(EXIT_FAILURE) in UsageError.
   profman.ParseArgs(argc, argv);
 
+  if (profman.ShouldGenerateTestProfile()) {
+    return profman.GenerateTestProfile();
+  }
   if (profman.ShouldOnlyDumpProfile()) {
     return profman.DumpProfileInfo();
   }

@@ -19,6 +19,7 @@
 #include "errno.h"
 #include <limits.h>
 #include <vector>
+#include <stdlib.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
@@ -657,6 +658,49 @@ void ProfileCompilationInfo::ClearResolvedClasses() {
   for (auto& pair : info_) {
     pair.second.class_set.clear();
   }
+}
+
+// Naive implementation to generate a random profile file suitable for testing.
+bool ProfileCompilationInfo::GenerateTestProfile(int fd,
+                                                 uint16_t number_of_dex_files,
+                                                 uint16_t method_ratio,
+                                                 uint16_t class_ratio) {
+  const std::string base_dex_location = "base.apk";
+  ProfileCompilationInfo info;
+  uint16_t max_method = std::numeric_limits<uint16_t>::max();
+  uint16_t max_classes = std::numeric_limits<uint16_t>::max();
+  uint16_t number_of_methods = max_method * method_ratio / 100;
+  uint16_t number_of_classes = max_classes * class_ratio / 100;
+
+  srand(MicroTime());
+
+  // Make sure we generate more samples with a low index value.
+  // Indices are attribute incrementally and using the entire range uniformly
+  // does not favor small apps.
+  const uint16_t kFavorFirstN = 10000;
+  const uint16_t kFavorSplit = 2;
+
+  for (uint16_t i = 0; i < number_of_dex_files; i++) {
+    std::string dex_location = DexFile::GetMultiDexLocation(i, base_dex_location.c_str());
+    std::string profile_key = GetProfileDexFileKey(dex_location);
+
+    for (uint16_t m = 0; m < number_of_methods; m++) {
+      uint16_t method_idx = rand() % max_method;
+      if (m < number_of_methods / kFavorSplit) {
+        method_idx %= kFavorFirstN;
+      }
+      info.AddMethodIndex(profile_key, 0, method_idx);
+    }
+
+    for (uint16_t c = 0; c < number_of_classes; c++) {
+      uint16_t class_idx = rand() % max_classes;
+      if (c < number_of_classes / kFavorSplit) {
+        class_idx %= kFavorFirstN;
+      }
+      info.AddClassIndex(profile_key, 0, class_idx);
+    }
+  }
+  return info.Save(fd);
 }
 
 }  // namespace art
