@@ -19,7 +19,7 @@
 namespace art {
 
 void PrepareForRegisterAllocation::Run() {
-  // Order does not matter.
+  // ClinitCheck removal expects nodes to be visited in reverse post order.
   for (HReversePostOrderIterator it(*GetGraph()); !it.Done(); it.Advance()) {
     HBasicBlock* block = it.Current();
     // No need to visit the phis.
@@ -143,10 +143,6 @@ void PrepareForRegisterAllocation::VisitNewInstance(HNewInstance* instruction) {
 
 bool PrepareForRegisterAllocation::CanEmitConditionAt(HCondition* condition,
                                                       HInstruction* user) const {
-  if (condition->GetNext() != user) {
-    return false;
-  }
-
   if (user->IsIf() || user->IsDeoptimize()) {
     return true;
   }
@@ -162,6 +158,15 @@ void PrepareForRegisterAllocation::VisitCondition(HCondition* condition) {
   if (condition->HasOnlyOneNonEnvironmentUse()) {
     HInstruction* user = condition->GetUses().front().GetUser();
     if (CanEmitConditionAt(condition, user)) {
+      if (condition->GetNext() != user) {
+        // Move the condition just before its user to avoid materialization.
+        // Note that this move cannot extend liveness of the instruction or
+        // its inputs past an irreducible loop boundary because HConditions
+        // are generated adjacent to their users and optimizations should not
+        // move them out of an irreducible loop.
+        DCHECK(!condition->HasSideEffects());
+        condition->MoveBefore(user);
+      }
       condition->MarkEmittedAtUseSite();
     }
   }
@@ -171,7 +176,7 @@ void PrepareForRegisterAllocation::VisitInvokeStaticOrDirect(HInvokeStaticOrDire
   if (invoke->IsStaticWithExplicitClinitCheck()) {
     HLoadClass* last_input = invoke->GetInputs().back()->AsLoadClass();
     DCHECK(last_input != nullptr)
-        << "Last input is not HLoadClass. It is " << last_input->DebugName();
+        << "Last input is not HLoadClass. It is " << invoke->GetInputs().back()->DebugName();
 
     // Detach the explicit class initialization check from the invoke.
     // Keeping track of the initializing instruction is no longer required

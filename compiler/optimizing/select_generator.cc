@@ -93,8 +93,6 @@ void HSelectGenerator::Run() {
     HBasicBlock* merge_block = true_block->GetSingleSuccessor();
 
     // If the branches are not empty, move instructions in front of the If.
-    // TODO(dbrazdil): This puts an instruction between If and its condition.
-    //                 Implement moving of conditions to first users if possible.
     if (!true_block->IsSingleGoto()) {
       true_block->MoveInstructionBefore(true_block->GetFirstInstruction(), if_instruction);
     }
