@@ -639,6 +639,7 @@ void Jit::AddSamples(Thread* self, ArtMethod* method, uint16_t count, bool with_
           !code_cache_->ContainsPc(method->GetEntryPointFromQuickCompiledCode())) {
         DCHECK(thread_pool_ != nullptr);
         thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kCompile));
+        sleep(1);
       }
       // Avoid jumping more than one state at a time.
       new_count = std::min(new_count, osr_method_threshold_ - 1);
