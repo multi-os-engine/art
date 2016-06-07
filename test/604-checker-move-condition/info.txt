@@ -1,0 +1,1 @@
+Test that conditions with single user are moved before that user.
