@@ -512,6 +512,8 @@ bool OatFileAssistant::GivenOatFileIsOutOfDate(const OatFile& file) {
   const OatFile::OatDexFile* oat_dex_file = file.GetOatDexFile(
       dex_location_.c_str(), dex_checksum_pointer, false);
   if (oat_dex_file == nullptr) {
+    VLOG(oat) << "Dex file for location " << dex_location_ << " could not be found in "
+              << file.GetLocation();
     return true;
   }
 
