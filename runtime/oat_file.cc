@@ -1072,7 +1072,7 @@ const uint8_t* OatFile::BssEnd() const {
 
 const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
                                                   const uint32_t* dex_location_checksum,
-                                                  bool warn_if_not_found) const {
+                                                  std::string* error_msg) const {
   // NOTE: We assume here that the canonical location for a given dex_location never
   // changes. If it does (i.e. some symlink used by the filename changes) we may return
   // an incorrect OatDexFile. As long as we have a checksum to check, we shall return
@@ -1120,21 +1120,27 @@ const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
     return oat_dex_file;
   }
 
-  if (warn_if_not_found) {
+  if (error_msg != nullptr) {
     std::string dex_canonical_location = DexFile::GetDexCanonicalLocation(dex_location);
     std::string checksum("<unspecified>");
     if (dex_location_checksum != nullptr) {
       checksum = StringPrintf("0x%08x", *dex_location_checksum);
     }
-    LOG(WARNING) << "Failed to find OatDexFile for DexFile " << dex_location
-                 << " ( canonical path " << dex_canonical_location << ")"
-                 << " with checksum " << checksum << " in OatFile " << GetLocation();
+    *error_msg = StringPrintf("Failed to find OatDexFile for DexFile %s ( canonical path %s)"
+                              " with checksum %s in OatFile %s",
+                              dex_location,
+                              dex_canonical_location.c_str(),
+                              checksum.c_str(),
+                              GetLocation().c_str());
     if (kIsDebugBuild) {
       for (const OatDexFile* odf : oat_dex_files_storage_) {
-        LOG(WARNING) << "OatFile " << GetLocation()
-                     << " contains OatDexFile " << odf->GetDexFileLocation()
-                     << " (canonical path " << odf->GetCanonicalDexFileLocation() << ")"
-                     << " with checksum 0x" << std::hex << odf->GetDexFileLocationChecksum();
+        *error_msg = StringPrintf("%s\nOatFile %s  contains OatDexFile %s (canonical path %s)"
+                                  " with checksum 0x%08x",
+                                  error_msg->c_str(),
+                                  GetLocation().c_str(),
+                                  odf->GetDexFileLocation().c_str(),
+                                  odf->GetCanonicalDexFileLocation().c_str(),
+                                  odf->GetDexFileLocationChecksum());
       }
     }
   }

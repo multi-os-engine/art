@@ -299,10 +299,10 @@ std::vector<std::unique_ptr<const DexFile>> OatFileAssistant::LoadDexFiles(
   // Load the primary dex file.
   std::string error_msg;
   const OatFile::OatDexFile* oat_dex_file = oat_file.GetOatDexFile(
-      dex_location, nullptr, false);
+      dex_location, nullptr, &error_msg);
   if (oat_dex_file == nullptr) {
     LOG(WARNING) << "Attempt to load out-of-date oat file "
-      << oat_file.GetLocation() << " for dex location " << dex_location;
+      << oat_file.GetLocation() << " for dex location " << dex_location << ": " << error_msg;
     return std::vector<std::unique_ptr<const DexFile>>();
   }
 
@@ -316,7 +316,9 @@ std::vector<std::unique_ptr<const DexFile>> OatFileAssistant::LoadDexFiles(
   // Load secondary multidex files
   for (size_t i = 1; ; i++) {
     std::string secondary_dex_location = DexFile::GetMultiDexLocation(i, dex_location);
-    oat_dex_file = oat_file.GetOatDexFile(secondary_dex_location.c_str(), nullptr, false);
+    oat_dex_file = oat_file.GetOatDexFile(secondary_dex_location.c_str(),
+                                          nullptr /* dex_location_checksum */,
+                                          nullptr /* error_msg */);
     if (oat_dex_file == nullptr) {
       // There are no more secondary dex files to load.
       break;
@@ -509,9 +511,11 @@ bool OatFileAssistant::GivenOatFileIsOutOfDate(const OatFile& file) {
   // Note: GetOatDexFile will return null if the dex checksum doesn't match
   // what we provide, which verifies the primary dex checksum for us.
   const uint32_t* dex_checksum_pointer = GetRequiredDexChecksum();
+  std::string error_msg;
   const OatFile::OatDexFile* oat_dex_file = file.GetOatDexFile(
-      dex_location_.c_str(), dex_checksum_pointer, false);
+      dex_location_.c_str(), dex_checksum_pointer, &error_msg);
   if (oat_dex_file == nullptr) {
+    VLOG(oat) << error_msg;
     return true;
   }
 
@@ -520,13 +524,14 @@ bool OatFileAssistant::GivenOatFileIsOutOfDate(const OatFile& file) {
     std::string secondary_dex_location
       = DexFile::GetMultiDexLocation(i, dex_location_.c_str());
     const OatFile::OatDexFile* secondary_oat_dex_file
-      = file.GetOatDexFile(secondary_dex_location.c_str(), nullptr, false);
+      = file.GetOatDexFile(secondary_dex_location.c_str(),
+                           nullptr /* dex_location_checksum */,
+                           nullptr /* error_msg */);
     if (secondary_oat_dex_file == nullptr) {
       // There are no more secondary dex files to check.
       break;
     }
 
-    std::string error_msg;
     uint32_t expected_secondary_checksum = 0;
     if (DexFile::GetChecksum(secondary_dex_location.c_str(),
           &expected_secondary_checksum, &error_msg)) {
@@ -898,7 +903,9 @@ const uint32_t* OatFileAssistant::GetRequiredDexChecksum() {
       const OatFile* odex_file = GetOdexFile();
       if (odex_file != nullptr) {
         const OatFile::OatDexFile* odex_dex_file = odex_file->GetOatDexFile(
-            dex_location_.c_str(), nullptr, false);
+            dex_location_.c_str(),
+            nullptr /* dex_location_checksum */,
+            nullptr /* error_msg */);
         if (odex_dex_file != nullptr) {
           cached_required_dex_checksum_ = odex_dex_file->GetDexFileLocationChecksum();
           required_dex_checksum_found_ = true;
