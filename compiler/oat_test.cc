@@ -394,8 +394,9 @@ TEST_F(OatTest, WriteRead) {
   const DexFile& dex_file = *java_lang_dex_file_;
   uint32_t dex_file_checksum = dex_file.GetLocationChecksum();
   const OatFile::OatDexFile* oat_dex_file = oat_file->GetOatDexFile(dex_file.GetLocation().c_str(),
-                                                                    &dex_file_checksum);
-  ASSERT_TRUE(oat_dex_file != nullptr);
+                                                                    &dex_file_checksum,
+                                                                    &error_msg);
+  ASSERT_TRUE(oat_dex_file != nullptr) << error_msg;
   CHECK_EQ(dex_file.GetLocationChecksum(), oat_dex_file->GetDexFileLocationChecksum());
   ScopedObjectAccess soa(Thread::Current());
   auto pointer_size = class_linker->GetImagePointerSize();
