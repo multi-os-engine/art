@@ -1990,10 +1990,11 @@ class ImageDumper {
         sum_of_expansion_squared += cur_expansion * cur_expansion;
       }
       size_t size_mean = sum_of_sizes / n;
-      size_t size_variance = (sum_of_sizes_squared - sum_of_sizes * size_mean) / (n - 1);
+      size_t size_variance = (sum_of_sizes_squared - sum_of_sizes * size_mean) /
+          std::max(n - 1, static_cast<size_t>(1));
       double expansion_mean = sum_of_expansion / n;
-      double expansion_variance =
-          (sum_of_expansion_squared - sum_of_expansion * expansion_mean) / (n - 1);
+      double expansion_variance = (sum_of_expansion_squared - sum_of_expansion * expansion_mean) /
+          std::max(n - 1, static_cast<size_t>(1));
 
       // Dump methods whose size is a certain number of standard deviations from the mean
       size_t dumped_values = 0;
