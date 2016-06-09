@@ -60,7 +60,7 @@
 #include "interpreter/interpreter.h"
 #include "jit/jit.h"
 #include "jit/jit_code_cache.h"
-#include "jit/offline_profiling_info.h"
+#include "jit/profile_compilation_info.h"
 #include "leb128.h"
 #include "linear_alloc.h"
 #include "mirror/class.h"

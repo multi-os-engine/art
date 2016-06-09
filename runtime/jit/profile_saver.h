@@ -19,7 +19,7 @@
 
 #include "base/mutex.h"
 #include "jit_code_cache.h"
-#include "offline_profiling_info.h"
+#include "profile_compilation_info.h"
 #include "safe_map.h"
 
 namespace art {

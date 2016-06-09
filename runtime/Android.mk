@@ -106,9 +106,9 @@ LIBART_COMMON_SRC_FILES := \
   jit/debugger_interface.cc \
   jit/jit.cc \
   jit/jit_code_cache.cc \
-  jit/offline_profiling_info.cc \
-  jit/profiling_info.cc \
+  jit/profile_compilation_info.cc \
   jit/profile_saver.cc  \
+  jit/profiling_info.cc \
   lambda/art_lambda_method.cc \
   lambda/box_table.cc \
   lambda/closure.cc \

@@ -23,7 +23,7 @@
 #include "base/mutex.h"
 #include "base/timing_logger.h"
 #include "object_callbacks.h"
-#include "offline_profiling_info.h"
+#include "profile_compilation_info.h"
 #include "thread_pool.h"
 
 namespace art {
