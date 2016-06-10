@@ -12,8 +12,8 @@ string_ids_size     : 323
 string_ids_off      : 112 (0x000070)
 type_ids_size       : 58
 type_ids_off        : 1404 (0x00057c)
-proto_ids_size       : 88
-proto_ids_off        : 1636 (0x000664)
+proto_ids_size      : 88
+proto_ids_off       : 1636 (0x000664)
 field_ids_size      : 108
 field_ids_off       : 2692 (0x000a84)
 method_ids_size     : 177

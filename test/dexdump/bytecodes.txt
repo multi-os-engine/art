@@ -12,8 +12,8 @@ string_ids_size     : 153
 string_ids_off      : 112 (0x000070)
 type_ids_size       : 42
 type_ids_off        : 724 (0x0002d4)
-proto_ids_size       : 12
-proto_ids_off        : 892 (0x00037c)
+proto_ids_size      : 12
+proto_ids_off       : 892 (0x00037c)
 field_ids_size      : 40
 field_ids_off       : 1036 (0x00040c)
 method_ids_size     : 28
@@ -35,6 +35,11 @@ static_fields_size  : 0
 instance_fields_size: 0
 direct_methods_size : 0
 virtual_methods_size: 1
+
+Class #0 annotations:
+Annotations on class
+  VISIBILITY_RUNTIME Ljava/lang/annotation/Retention; value=CLASS
+  VISIBILITY_RUNTIME Ljava/lang/annotation/Target; value={ TYPE FIELD METHOD PARAMETER CONSTRUCTOR LOCAL_VARIABLE }
 
 Class #0            -
   Class descriptor  : 'Landroid/annotation/SuppressLint;'
@@ -66,6 +71,11 @@ static_fields_size  : 0
 instance_fields_size: 0
 direct_methods_size : 0
 virtual_methods_size: 1
+
+Class #1 annotations:
+Annotations on class
+  VISIBILITY_RUNTIME Ljava/lang/annotation/Retention; value=CLASS
+  VISIBILITY_RUNTIME Ljava/lang/annotation/Target; value={ TYPE METHOD CONSTRUCTOR }
 
 Class #1            -
   Class descriptor  : 'Landroid/annotation/TargetApi;'
@@ -144,6 +154,11 @@ instance_fields_size: 0
 direct_methods_size : 1
 virtual_methods_size: 0
 
+Class #3 annotations:
+Annotations on class
+  VISIBILITY_SYSTEM Ldalvik/annotation/EnclosingClass; value=Lcom/google/android/test/R;
+  VISIBILITY_SYSTEM Ldalvik/annotation/InnerClass; accessFlags=0x19 name="attr"
+
 Class #3            -
   Class descriptor  : 'Lcom/google/android/test/R$attr;'
   Access flags      : 0x0011 (PUBLIC FINAL)
@@ -185,6 +200,11 @@ static_fields_size  : 1
 instance_fields_size: 0
 direct_methods_size : 1
 virtual_methods_size: 0
+
+Class #4 annotations:
+Annotations on class
+  VISIBILITY_SYSTEM Ldalvik/annotation/EnclosingClass; value=Lcom/google/android/test/R;
+  VISIBILITY_SYSTEM Ldalvik/annotation/InnerClass; accessFlags=0x19 name="drawable"
 
 Class #4            -
   Class descriptor  : 'Lcom/google/android/test/R$drawable;'
@@ -233,6 +253,10 @@ instance_fields_size: 0
 direct_methods_size : 1
 virtual_methods_size: 0
 
+Class #5 annotations:
+Annotations on class
+  VISIBILITY_SYSTEM Ldalvik/annotation/MemberClasses; value={ Lcom/google/android/test/R$attr; Lcom/google/android/test/R$drawable; }
+
 Class #5            -
   Class descriptor  : 'Lcom/google/android/test/R;'
   Access flags      : 0x0011 (PUBLIC FINAL)
@@ -274,6 +298,10 @@ static_fields_size  : 10
 instance_fields_size: 20
 direct_methods_size : 13
 virtual_methods_size: 2
+
+Class #6 annotations:
+Annotations on method #13 'doit'
+  VISIBILITY_SYSTEM Ldalvik/annotation/Throws; value={ Ljava/lang/Exception; }
 
 Class #6            -
   Class descriptor  : 'Lcom/google/android/test/Test;'
