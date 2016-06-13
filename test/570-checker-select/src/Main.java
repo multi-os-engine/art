@@ -431,6 +431,54 @@ public class Main {
     return result + (a < b ? 0 : 1);
   }
 
+  /// CHECK-START: int Main.BoolCond_0_m1(boolean) register (after)
+  /// CHECK:            <<Cond:z\d+>> ParameterValue
+  /// CHECK:                          Select [{{i\d+}},{{i\d+}},<<Cond>>]
+
+  /// CHECK-START-ARM64: int Main.BoolCond_0_m1(boolean) disassembly (after)
+  /// CHECK:            <<Cond:z\d+>> ParameterValue
+  /// CHECK:                          Select [{{i\d+}},{{i\d+}},<<Cond>>]
+  /// CHECK-NEXT:                     cmp w1, #0x0 (0)
+  /// CHECK-NEXT:                     csetm w0, eq
+
+  /// CHECK-START-X86_64: int Main.BoolCond_0_m1(boolean) disassembly (after)
+  /// CHECK:            <<Cond:z\d+>> ParameterValue
+  /// CHECK:                          Select [{{i\d+}},{{i\d+}},<<Cond>>]
+  /// CHECK:                          cmovnz/ne
+
+  /// CHECK-START-X86: int Main.BoolCond_0_m1(boolean) disassembly (after)
+  /// CHECK:            <<Cond:z\d+>> ParameterValue
+  /// CHECK:                          Select [{{i\d+}},{{i\d+}},<<Cond>>]
+  /// CHECK:                          cmovnz/ne
+
+  public static int BoolCond_0_m1(boolean cond) {
+    return cond ? 0 : -1;
+  }
+
+  /// CHECK-START: int Main.BoolCond_m1_0(boolean) register (after)
+  /// CHECK:            <<Cond:z\d+>> ParameterValue
+  /// CHECK:                          Select [{{i\d+}},{{i\d+}},<<Cond>>]
+
+  /// CHECK-START-ARM64: int Main.BoolCond_m1_0(boolean) disassembly (after)
+  /// CHECK:            <<Cond:z\d+>> ParameterValue
+  /// CHECK:                          Select [{{i\d+}},{{i\d+}},<<Cond>>]
+  /// CHECK-NEXT:                     cmp w1, #0x0 (0)
+  /// CHECK-NEXT:                     csetm w0, ne
+
+  /// CHECK-START-X86_64: int Main.BoolCond_m1_0(boolean) disassembly (after)
+  /// CHECK:            <<Cond:z\d+>> ParameterValue
+  /// CHECK:                          Select [{{i\d+}},{{i\d+}},<<Cond>>]
+  /// CHECK:                          cmovnz/ne
+
+  /// CHECK-START-X86: int Main.BoolCond_m1_0(boolean) disassembly (after)
+  /// CHECK:            <<Cond:z\d+>> ParameterValue
+  /// CHECK:                          Select [{{i\d+}},{{i\d+}},<<Cond>>]
+  /// CHECK:                          cmovnz/ne
+
+  public static int BoolCond_m1_0(boolean cond) {
+    return cond ? -1 : 0;
+  }
+
   public static void assertEqual(int expected, int actual) {
     if (expected != actual) {
       throw new Error("Assertion failed: " + expected + " != " + actual);
