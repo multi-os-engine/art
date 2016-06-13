@@ -1068,6 +1068,16 @@ void JdwpState::PostThreadChange(Thread* thread, bool start) {
   Dbg::ManageDeoptimization();
 
   SendRequestAndPossiblySuspend(pReq, suspend_policy, thread_id);
+
+  if (!start)
+  {
+    // As GetThreadId increases the reference count of thread->Peer() by 1
+    // and we call this twice (at thread start&death) we need to decrement
+    // it here again by 2, otherwise weak global references are leaked.
+    // See https://code.google.com/p/android/issues/detail?id=204755
+    ObjectRegistry* registry = Dbg::GetObjectRegistry();
+    registry->DisposeObject(thread_id, 2);
+  }
 }
 
 /*
