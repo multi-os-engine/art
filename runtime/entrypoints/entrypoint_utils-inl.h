@@ -559,7 +559,7 @@ inline ArtMethod* FindMethodFromCode(uint32_t method_idx, mirror::Object** this_
       }
     }
     case kInterface: {
-      uint32_t imt_index = resolved_method->GetDexMethodIndex() % ImTable::kSize;
+      uint32_t imt_index = mirror::Class::GetIMTIndex(resolved_method->GetDexMethodIndex());
       size_t pointer_size = class_linker->GetImagePointerSize();
       ArtMethod* imt_method = (*this_object)->GetClass()->GetImt(pointer_size)->
           Get(imt_index, pointer_size);

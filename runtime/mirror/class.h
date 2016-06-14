@@ -822,6 +822,11 @@ class MANAGED Class FINAL : public Object {
     return MemberOffset(sizeof(Class));
   }
 
+  static uint32_t GetIMTIndex(uint32_t method_index);
+
+  static uint32_t GetIMTIndex(ArtMethod* interface_method)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   static MemberOffset ImtPtrOffset(size_t pointer_size) {
     return MemberOffset(
         RoundUp(EmbeddedVTableLengthOffset().Uint32Value() + sizeof(uint32_t), pointer_size));

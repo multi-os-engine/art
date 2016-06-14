@@ -275,6 +275,15 @@ inline void Class::SetEmbeddedVTableLength(int32_t len) {
   SetField32<false>(MemberOffset(EmbeddedVTableLengthOffset()), len);
 }
 
+inline uint32_t Class::GetIMTIndex(uint32_t method_index) {
+  return method_index % ImTable::kSize;
+}
+
+inline uint32_t Class::GetIMTIndex(ArtMethod* interface_method)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+  return GetIMTIndex(interface_method->GetDexMethodIndex());
+}
+
 inline ImTable* Class::GetImt(size_t pointer_size) {
   return GetFieldPtrWithSize<ImTable*>(MemberOffset(ImtPtrOffset(pointer_size)), pointer_size);
 }
