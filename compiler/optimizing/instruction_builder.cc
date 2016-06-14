@@ -890,7 +890,7 @@ bool HInstructionBuilder::BuildInvoke(const Instruction& instruction,
                                            return_type,
                                            dex_pc,
                                            method_idx,
-                                           resolved_method->GetDexMethodIndex());
+                                           resolved_method->GetImtIndex());
   }
 
   return HandleInvoke(invoke,
