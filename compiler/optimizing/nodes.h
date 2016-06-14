@@ -4132,9 +4132,9 @@ class HInvokeInterface FINAL : public HInvoke {
                    Primitive::Type return_type,
                    uint32_t dex_pc,
                    uint32_t dex_method_index,
-                   uint32_t imt_index)
+                   uint32_t method_index)
       : HInvoke(arena, number_of_arguments, 0u, return_type, dex_pc, dex_method_index, kInterface),
-        imt_index_(imt_index) {}
+        imt_index_(mirror::Class::GetIMTIndex(method_index)) {}
 
   bool CanDoImplicitNullCheckOn(HInstruction* obj) const OVERRIDE {
     // TODO: Add implicit null checks in intrinsics.
