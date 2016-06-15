@@ -1300,6 +1300,36 @@ void ThreadList::ForEach(void (*callback)(Thread*, void*), void* context) {
   }
 }
 
+void ThreadList::VisitRootsForSuspendedThreads(RootVisitor* visitor) {
+  Thread* const self = Thread::Current();
+  std::vector<Thread*> threads_to_visit;
+
+  // Tell threads to suspend and copy them into list.
+  {
+    MutexLock mu(self, *Locks::thread_list_lock_);
+    MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
+    for (Thread* thread : list_) {
+      thread->ModifySuspendCount(self, +1, nullptr, false);
+      if (thread == self || thread->IsSuspended()) {
+        threads_to_visit.push_back(thread);
+      }
+    }
+  }
+
+  // Visit roots without holding any locks to prevent lock order violations.
+  for (Thread* thread : threads_to_visit) {
+    thread->VisitRoots(visitor);
+  }
+
+  // Restore suspend counts.
+  {
+    MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
+    for (Thread* thread : threads_to_visit) {
+      thread->ModifySuspendCount(self, -1, nullptr, false);
+    }
+  }
+}
+
 void ThreadList::VisitRoots(RootVisitor* visitor) const {
   MutexLock mu(Thread::Current(), *Locks::thread_list_lock_);
   for (const auto& thread : list_) {
