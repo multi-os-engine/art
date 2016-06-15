@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import java.util.concurrent.CyclicBarrier;
+
 /**
  * This causes most VMs to lock up.
  *
@@ -22,6 +24,9 @@
 public class Main {
     public static boolean aInitialized = false;
     public static boolean bInitialized = false;
+
+    public static CyclicBarrier barrier =
+            new CyclicBarrier(2, new Runnable() { public void run() { } });
 
     static public void main(String[] args) {
         Thread thread1, thread2;
@@ -49,7 +54,7 @@ public class Main {
 class A {
     static {
         System.out.println("A initializing...");
-        try { Thread.sleep(3000); } catch (InterruptedException ie) { }
+        try { Main.barrier.await(); } catch (Exception e) { }
         new B();
         System.out.println("A initialized");
         Main.aInitialized = true;
@@ -59,7 +64,7 @@ class A {
 class B {
     static {
         System.out.println("B initializing...");
-        try { Thread.sleep(3000); } catch (InterruptedException ie) { }
+        try { Main.barrier.await(); } catch (Exception e) { }
         new A();
         System.out.println("B initialized");
         Main.bInitialized = true;
