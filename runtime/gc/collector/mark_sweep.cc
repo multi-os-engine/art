@@ -444,27 +444,8 @@ class MarkSweepMarkObjectSlowPath {
       }
       PrintFileToLog("/proc/self/maps", LogSeverity::INTERNAL_FATAL);
       MemMap::DumpMaps(LOG(INTERNAL_FATAL), true);
-      {
-        LOG(INTERNAL_FATAL) << "Attempting see if it's a bad root";
-        Thread* self = Thread::Current();
-        if (Locks::mutator_lock_->IsExclusiveHeld(self)) {
-          mark_sweep_->VerifyRoots();
-        } else {
-          const bool heap_bitmap_exclusive_locked =
-              Locks::heap_bitmap_lock_->IsExclusiveHeld(self);
-          if (heap_bitmap_exclusive_locked) {
-            Locks::heap_bitmap_lock_->ExclusiveUnlock(self);
-          }
-          {
-            ScopedThreadSuspension(self, kSuspended);
-            ScopedSuspendAll ssa(__FUNCTION__);
-            mark_sweep_->VerifyRoots();
-          }
-          if (heap_bitmap_exclusive_locked) {
-            Locks::heap_bitmap_lock_->ExclusiveLock(self);
-          }
-        }
-      }
+      LOG(INTERNAL_FATAL) << "Attempting see if it's a bad thread root\n";
+      mark_sweep_->VerifyRoots();
       LOG(FATAL) << "Can't mark invalid object";
     }
   }
@@ -591,7 +572,7 @@ class VerifyRootVisitor : public SingleRootVisitor {
     if (heap->GetLiveBitmap()->GetContinuousSpaceBitmap(root) == nullptr) {
       space::LargeObjectSpace* large_object_space = heap->GetLargeObjectsSpace();
       if (large_object_space != nullptr && !large_object_space->Contains(root)) {
-        LOG(INTERNAL_FATAL) << "Found invalid root: " << root << " " << info;
+        LOG(INTERNAL_FATAL) << "Found invalid root: " << root << " " << info << "\n";
       }
     }
   }
@@ -599,7 +580,7 @@ class VerifyRootVisitor : public SingleRootVisitor {
 
 void MarkSweep::VerifyRoots() {
   VerifyRootVisitor visitor;
-  Runtime::Current()->GetThreadList()->VisitRoots(&visitor);
+  Runtime::Current()->GetThreadList()->VisitRootsForSuspendedThreads(&visitor);
 }
 
 void MarkSweep::MarkRoots(Thread* self) {
