@@ -1415,6 +1415,21 @@ class HUserRecord : public ValueObject {
   typename HUseList<T>::iterator before_use_node_;
 };
 
+// Helper class that extracts the input instruction from HUserRecord<HInstruction*>.
+// This is used for HInstruction::GetInputs() to return a container wrapper providing
+// HInstruction* values even though the underlying container has HUserRecord<>s.
+struct HInputExtractor {
+  HInstruction* operator()(HUserRecord<HInstruction*>& record) const {
+    return record.GetInstruction();
+  }
+  const HInstruction* operator()(const HUserRecord<HInstruction*>& record) const {
+    return record.GetInstruction();
+  }
+};
+
+using HInputsRef = TransformArrayRef<HUserRecord<HInstruction*>, HInputExtractor>;
+using HConstInputsRef = TransformArrayRef<const HUserRecord<HInstruction*>, HInputExtractor>;
+
 /**
  * Side-effects representation.
  *
@@ -1804,20 +1819,12 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
         const_cast<HInstruction*>(this)->GetInputRecords());
   }
 
-  auto GetInputs() {
-    return MakeTransformArrayRef(
-        GetInputRecords(),
-        [](HUserRecord<HInstruction*>& record) -> HInstruction* {
-            return record.GetInstruction();
-        });
+  HInputsRef GetInputs() {
+    return MakeTransformArrayRef(GetInputRecords(), HInputExtractor());
   }
 
-  auto GetInputs() const {
-    return MakeTransformArrayRef(
-        GetInputRecords(),
-        [](const HUserRecord<HInstruction*>& record) -> const HInstruction* {
-            return record.GetInstruction();
-        });
+  HConstInputsRef GetInputs() const {
+    return MakeTransformArrayRef(GetInputRecords(), HInputExtractor());
   }
 
   size_t InputCount() const { return GetInputRecords().size(); }
