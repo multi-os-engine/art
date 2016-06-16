@@ -534,9 +534,9 @@ inline void MarkSweep::MarkObject(mirror::Object* obj,
   }
 }
 
-class VerifyRootMarkedVisitor : public SingleRootVisitor {
+class MarkSweepVerifyRootMarkedVisitor : public SingleRootVisitor {
  public:
-  explicit VerifyRootMarkedVisitor(MarkSweep* collector) : collector_(collector) { }
+  explicit MarkSweepVerifyRootMarkedVisitor(MarkSweep* collector) : collector_(collector) { }
 
   void VisitRoot(mirror::Object* root, const RootInfo& info) OVERRIDE
       SHARED_REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
@@ -563,7 +563,7 @@ void MarkSweep::VisitRoots(mirror::CompressedReference<mirror::Object>** roots,
   }
 }
 
-class VerifyRootVisitor : public SingleRootVisitor {
+class MarkSweepVerifyRootVisitor : public SingleRootVisitor {
  public:
   void VisitRoot(mirror::Object* root, const RootInfo& info) OVERRIDE
       SHARED_REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
@@ -579,7 +579,7 @@ class VerifyRootVisitor : public SingleRootVisitor {
 };
 
 void MarkSweep::VerifySuspendedThreadRoots() {
-  VerifyRootVisitor visitor;
+  MarkSweepVerifyRootVisitor visitor;
   Runtime::Current()->GetThreadList()->VisitRootsForSuspendedThreads(&visitor);
 }
 
@@ -625,12 +625,12 @@ class DelayReferenceReferentVisitor {
 };
 
 template <bool kUseFinger = false>
-class MarkStackTask : public Task {
+class MarkSweepMarkStackTask : public Task {
  public:
-  MarkStackTask(ThreadPool* thread_pool,
-                MarkSweep* mark_sweep,
-                size_t mark_stack_size,
-                StackReference<mirror::Object>* mark_stack)
+  MarkSweepMarkStackTask(ThreadPool* thread_pool,
+                         MarkSweep* mark_sweep,
+                         size_t mark_stack_size,
+                         StackReference<mirror::Object>* mark_stack)
       : mark_sweep_(mark_sweep),
         thread_pool_(thread_pool),
         mark_stack_pos_(mark_stack_size) {
@@ -650,7 +650,7 @@ class MarkStackTask : public Task {
  protected:
   class MarkObjectParallelVisitor {
    public:
-    ALWAYS_INLINE MarkObjectParallelVisitor(MarkStackTask<kUseFinger>* chunk_task,
+    ALWAYS_INLINE MarkObjectParallelVisitor(MarkSweepMarkStackTask<kUseFinger>* chunk_task,
                                             MarkSweep* mark_sweep)
         : chunk_task_(chunk_task), mark_sweep_(mark_sweep) {}
 
@@ -691,13 +691,14 @@ class MarkStackTask : public Task {
       }
     }
 
-    MarkStackTask<kUseFinger>* const chunk_task_;
+    MarkSweepMarkStackTask<kUseFinger>* const chunk_task_;
     MarkSweep* const mark_sweep_;
   };
 
   class ScanObjectParallelVisitor {
    public:
-    ALWAYS_INLINE explicit ScanObjectParallelVisitor(MarkStackTask<kUseFinger>* chunk_task)
+    ALWAYS_INLINE explicit ScanObjectParallelVisitor(
+        MarkSweepMarkStackTask<kUseFinger>* chunk_task)
         : chunk_task_(chunk_task) {}
 
     // No thread safety analysis since multiple threads will use this visitor.
@@ -711,10 +712,10 @@ class MarkStackTask : public Task {
     }
 
    private:
-    MarkStackTask<kUseFinger>* const chunk_task_;
+    MarkSweepMarkStackTask<kUseFinger>* const chunk_task_;
   };
 
-  virtual ~MarkStackTask() {
+  virtual ~MarkSweepMarkStackTask() {
     // Make sure that we have cleared our mark stack.
     DCHECK_EQ(mark_stack_pos_, 0U);
     if (kCountTasks) {
@@ -734,10 +735,10 @@ class MarkStackTask : public Task {
     if (UNLIKELY(mark_stack_pos_ == kMaxSize)) {
       // Mark stack overflow, give 1/2 the stack to the thread pool as a new work task.
       mark_stack_pos_ /= 2;
-      auto* task = new MarkStackTask(thread_pool_,
-                                     mark_sweep_,
-                                     kMaxSize - mark_stack_pos_,
-                                     mark_stack_ + mark_stack_pos_);
+      auto* task = new MarkSweepMarkStackTask(thread_pool_,
+                                              mark_sweep_,
+                                              kMaxSize - mark_stack_pos_,
+                                              mark_stack_ + mark_stack_pos_);
       thread_pool_->AddTask(Thread::Current(), task);
     }
     DCHECK(obj != nullptr);
@@ -783,18 +784,18 @@ class MarkStackTask : public Task {
   }
 };
 
-class CardScanTask : public MarkStackTask<false> {
+class MarkSweepCardScanTask : public MarkSweepMarkStackTask<false> {
  public:
-  CardScanTask(ThreadPool* thread_pool,
-               MarkSweep* mark_sweep,
-               accounting::ContinuousSpaceBitmap* bitmap,
-               uint8_t* begin,
-               uint8_t* end,
-               uint8_t minimum_age,
-               size_t mark_stack_size,
-               StackReference<mirror::Object>* mark_stack_obj,
-               bool clear_card)
-      : MarkStackTask<false>(thread_pool, mark_sweep, mark_stack_size, mark_stack_obj),
+  MarkSweepCardScanTask(ThreadPool* thread_pool,
+                        MarkSweep* mark_sweep,
+                        accounting::ContinuousSpaceBitmap* bitmap,
+                        uint8_t* begin,
+                        uint8_t* end,
+                        uint8_t minimum_age,
+                        size_t mark_stack_size,
+                        StackReference<mirror::Object>* mark_stack_obj,
+                        bool clear_card)
+      : MarkSweepMarkStackTask<false>(thread_pool, mark_sweep, mark_stack_size, mark_stack_obj),
         bitmap_(bitmap),
         begin_(begin),
         end_(end),
@@ -821,7 +822,7 @@ class CardScanTask : public MarkStackTask<false> {
     VLOG(heap) << "Parallel scanning cards " << reinterpret_cast<void*>(begin_) << " - "
         << reinterpret_cast<void*>(end_) << " = " << cards_scanned;
     // Finish by emptying our local mark stack.
-    MarkStackTask::Run(self);
+    MarkSweepMarkStackTask::Run(self);
   }
 };
 
@@ -852,7 +853,7 @@ void MarkSweep::ScanGrayObjects(bool paused, uint8_t minimum_age) {
     // Estimated number of work tasks we will create.
     const size_t mark_stack_tasks = GetHeap()->GetContinuousSpaces().size() * thread_count;
     DCHECK_NE(mark_stack_tasks, 0U);
-    const size_t mark_stack_delta = std::min(CardScanTask::kMaxSize / 2,
+    const size_t mark_stack_delta = std::min(MarkSweepCardScanTask::kMaxSize / 2,
                                              mark_stack_size / mark_stack_tasks + 1);
     for (const auto& space : GetHeap()->GetContinuousSpaces()) {
       if (space->GetMarkBitmap() == nullptr) {
@@ -887,15 +888,15 @@ void MarkSweep::ScanGrayObjects(bool paused, uint8_t minimum_age) {
         mark_stack_->PopBackCount(static_cast<int32_t>(mark_stack_increment));
         DCHECK_EQ(mark_stack_end, mark_stack_->End());
         // Add the new task to the thread pool.
-        auto* task = new CardScanTask(thread_pool,
-                                      this,
-                                      space->GetMarkBitmap(),
-                                      card_begin,
-                                      card_begin + card_increment,
-                                      minimum_age,
-                                      mark_stack_increment,
-                                      mark_stack_end,
-                                      clear_card);
+        auto* task = new MarkSweepCardScanTask(thread_pool,
+                                               this,
+                                               space->GetMarkBitmap(),
+                                               card_begin,
+                                               card_begin + card_increment,
+                                               minimum_age,
+                                               mark_stack_increment,
+                                               mark_stack_end,
+                                               clear_card);
         thread_pool->AddTask(self, task);
         card_begin += card_increment;
       }
@@ -948,14 +949,14 @@ void MarkSweep::ScanGrayObjects(bool paused, uint8_t minimum_age) {
   }
 }
 
-class RecursiveMarkTask : public MarkStackTask<false> {
+class MarkSweepRecursiveMarkTask : public MarkSweepMarkStackTask<false> {
  public:
-  RecursiveMarkTask(ThreadPool* thread_pool,
-                    MarkSweep* mark_sweep,
-                    accounting::ContinuousSpaceBitmap* bitmap,
-                    uintptr_t begin,
-                    uintptr_t end)
-      : MarkStackTask<false>(thread_pool, mark_sweep, 0, nullptr),
+  MarkSweepRecursiveMarkTask(ThreadPool* thread_pool,
+                             MarkSweep* mark_sweep,
+                             accounting::ContinuousSpaceBitmap* bitmap,
+                             uintptr_t begin,
+                             uintptr_t end)
+      : MarkSweepMarkStackTask<false>(thread_pool, mark_sweep, 0, nullptr),
         bitmap_(bitmap),
         begin_(begin),
         end_(end) {}
@@ -974,7 +975,7 @@ class RecursiveMarkTask : public MarkStackTask<false> {
     ScanObjectParallelVisitor visitor(this);
     bitmap_->VisitMarkedRange(begin_, end_, visitor);
     // Finish by emptying our local mark stack.
-    MarkStackTask::Run(self);
+    MarkSweepMarkStackTask::Run(self);
   }
 };
 
@@ -1015,11 +1016,11 @@ void MarkSweep::RecursiveMark() {
             delta = RoundUp(delta, KB);
             if (delta < 16 * KB) delta = end - begin;
             begin += delta;
-            auto* task = new RecursiveMarkTask(thread_pool,
-                                               this,
-                                               current_space_bitmap_,
-                                               start,
-                                               begin);
+            auto* task = new MarkSweepRecursiveMarkTask(thread_pool,
+                                                        this,
+                                                        current_space_bitmap_,
+                                                        start,
+                                                        begin);
             thread_pool->AddTask(self, task);
           }
           thread_pool->SetMaxActiveWorkers(thread_count - 1);
@@ -1050,7 +1051,7 @@ void MarkSweep::ReMarkRoots() {
       kVisitRootFlagNewRoots | kVisitRootFlagStopLoggingNewRoots | kVisitRootFlagClearRootLog));
   if (kVerifyRootsMarked) {
     TimingLogger::ScopedTiming t2("(Paused)VerifyRoots", GetTimings());
-    VerifyRootMarkedVisitor visitor(this);
+    MarkSweepVerifyRootMarkedVisitor visitor(this);
     Runtime::Current()->VisitRoots(&visitor);
   }
 }
@@ -1061,9 +1062,9 @@ void MarkSweep::SweepSystemWeaks(Thread* self) {
   Runtime::Current()->SweepSystemWeaks(this);
 }
 
-class VerifySystemWeakVisitor : public IsMarkedVisitor {
+class MarkSweepVerifySystemWeakVisitor : public IsMarkedVisitor {
  public:
-  explicit VerifySystemWeakVisitor(MarkSweep* mark_sweep) : mark_sweep_(mark_sweep) {}
+  explicit MarkSweepVerifySystemWeakVisitor(MarkSweep* mark_sweep) : mark_sweep_(mark_sweep) {}
 
   virtual mirror::Object* IsMarked(mirror::Object* obj)
       OVERRIDE
@@ -1086,14 +1087,14 @@ void MarkSweep::VerifyIsLive(const mirror::Object* obj) {
 void MarkSweep::VerifySystemWeaks() {
   TimingLogger::ScopedTiming t(__FUNCTION__, GetTimings());
   // Verify system weaks, uses a special object visitor which returns the input object.
-  VerifySystemWeakVisitor visitor(this);
+  MarkSweepVerifySystemWeakVisitor visitor(this);
   Runtime::Current()->SweepSystemWeaks(&visitor);
 }
 
-class CheckpointMarkThreadRoots : public Closure, public RootVisitor {
+class MarkSweepCheckpointMarkThreadRoots : public Closure, public RootVisitor {
  public:
-  CheckpointMarkThreadRoots(MarkSweep* mark_sweep,
-                            bool revoke_ros_alloc_thread_local_buffers_at_checkpoint)
+  MarkSweepCheckpointMarkThreadRoots(MarkSweep* mark_sweep,
+                                     bool revoke_ros_alloc_thread_local_buffers_at_checkpoint)
       : mark_sweep_(mark_sweep),
         revoke_ros_alloc_thread_local_buffers_at_checkpoint_(
             revoke_ros_alloc_thread_local_buffers_at_checkpoint) {
@@ -1141,7 +1142,9 @@ class CheckpointMarkThreadRoots : public Closure, public RootVisitor {
 void MarkSweep::MarkRootsCheckpoint(Thread* self,
                                     bool revoke_ros_alloc_thread_local_buffers_at_checkpoint) {
   TimingLogger::ScopedTiming t(__FUNCTION__, GetTimings());
-  CheckpointMarkThreadRoots check_point(this, revoke_ros_alloc_thread_local_buffers_at_checkpoint);
+  MarkSweepCheckpointMarkThreadRoots check_point(
+      this,
+      revoke_ros_alloc_thread_local_buffers_at_checkpoint);
   ThreadList* thread_list = Runtime::Current()->GetThreadList();
   // Request the check point is run on all threads returning a count of the threads that must
   // run through the barrier including self.
@@ -1351,12 +1354,12 @@ void MarkSweep::ProcessMarkStackParallel(size_t thread_count) {
   Thread* self = Thread::Current();
   ThreadPool* thread_pool = GetHeap()->GetThreadPool();
   const size_t chunk_size = std::min(mark_stack_->Size() / thread_count + 1,
-                                     static_cast<size_t>(MarkStackTask<false>::kMaxSize));
+                                     static_cast<size_t>(MarkSweepMarkStackTask<false>::kMaxSize));
   CHECK_GT(chunk_size, 0U);
   // Split the current mark stack up into work tasks.
   for (auto* it = mark_stack_->Begin(), *end = mark_stack_->End(); it < end; ) {
     const size_t delta = std::min(static_cast<size_t>(end - it), chunk_size);
-    thread_pool->AddTask(self, new MarkStackTask<false>(thread_pool, this, delta, it));
+    thread_pool->AddTask(self, new MarkSweepMarkStackTask<false>(thread_pool, this, delta, it));
     it += delta;
   }
   thread_pool->SetMaxActiveWorkers(thread_count - 1);

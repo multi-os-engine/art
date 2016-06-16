@@ -353,17 +353,12 @@ class MarkSweep : public GarbageCollector {
   std::unique_ptr<MemMap> sweep_array_free_buffer_mem_map_;
 
  private:
-  friend class CardScanTask;
-  friend class CheckBitmapVisitor;
-  friend class CheckReferenceVisitor;
-  friend class CheckpointMarkThreadRoots;
-  friend class Heap;
-  friend class FifoMarkStackChunk;
-  friend class MarkObjectVisitor;
-  template<bool kUseFinger> friend class MarkStackTask;
+  friend class MarkSweepCardScanTask;
+  friend class MarkSweepCheckpointMarkThreadRoots;
+  template<bool kUseFinger> friend class MarkSweepMarkStackTask;
   friend class MarkSweepMarkObjectSlowPath;
-  friend class VerifyRootMarkedVisitor;
-  friend class VerifyRootVisitor;
+  friend class MarkSweepVerifyRootMarkedVisitor;
+  friend class MarkSweepVerifyRootVisitor;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(MarkSweep);
 };

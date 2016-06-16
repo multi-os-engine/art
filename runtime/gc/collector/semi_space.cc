@@ -282,17 +282,6 @@ void SemiSpace::MarkingPhase() {
   }
 }
 
-class SemiSpaceScanObjectVisitor {
- public:
-  explicit SemiSpaceScanObjectVisitor(SemiSpace* ss) : semi_space_(ss) {}
-  void operator()(Object* obj) const REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
-    DCHECK(obj != nullptr);
-    semi_space_->ScanObject(obj);
-  }
- private:
-  SemiSpace* const semi_space_;
-};
-
 // Used to verify that there's no references to the from-space.
 class SemiSpaceVerifyNoFromSpaceReferencesVisitor {
  public:
@@ -334,19 +323,6 @@ void SemiSpace::VerifyNoFromSpaceReferences(Object* obj) {
   SemiSpaceVerifyNoFromSpaceReferencesVisitor visitor(from_space_);
   obj->VisitReferences(visitor, VoidFunctor());
 }
-
-class SemiSpaceVerifyNoFromSpaceReferencesObjectVisitor {
- public:
-  explicit SemiSpaceVerifyNoFromSpaceReferencesObjectVisitor(SemiSpace* ss) : semi_space_(ss) {}
-  void operator()(Object* obj) const
-      SHARED_REQUIRES(Locks::heap_bitmap_lock_, Locks::mutator_lock_) {
-    DCHECK(obj != nullptr);
-    semi_space_->VerifyNoFromSpaceReferences(obj);
-  }
-
- private:
-  SemiSpace* const semi_space_;
-};
 
 void SemiSpace::MarkReachableObjects() {
   TimingLogger::ScopedTiming t(__FUNCTION__, GetTimings());
@@ -390,10 +366,12 @@ void SemiSpace::MarkReachableObjects() {
       } else {
         TimingLogger::ScopedTiming t2("VisitLiveBits", GetTimings());
         accounting::ContinuousSpaceBitmap* live_bitmap = space->GetLiveBitmap();
-        SemiSpaceScanObjectVisitor visitor(this);
         live_bitmap->VisitMarkedRange(reinterpret_cast<uintptr_t>(space->Begin()),
                                       reinterpret_cast<uintptr_t>(space->End()),
-                                      visitor);
+                                      [this](mirror::Object* obj)
+           REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
+          ScanObject(obj);
+        });
       }
       if (kIsDebugBuild) {
         // Verify that there are no from-space references that
@@ -401,10 +379,13 @@ void SemiSpace::MarkReachableObjects() {
         // card table) didn't miss any from-space references in the
         // space.
         accounting::ContinuousSpaceBitmap* live_bitmap = space->GetLiveBitmap();
-        SemiSpaceVerifyNoFromSpaceReferencesObjectVisitor visitor(this);
         live_bitmap->VisitMarkedRange(reinterpret_cast<uintptr_t>(space->Begin()),
                                       reinterpret_cast<uintptr_t>(space->End()),
-                                      visitor);
+                                      [this](Object* obj)
+            SHARED_REQUIRES(Locks::heap_bitmap_lock_, Locks::mutator_lock_) {
+          DCHECK(obj != nullptr);
+          VerifyNoFromSpaceReferences(obj);
+        });
       }
     }
   }
@@ -424,10 +405,12 @@ void SemiSpace::MarkReachableObjects() {
     // classes (primitive array classes) that could move though they
     // don't contain any other references.
     accounting::LargeObjectBitmap* large_live_bitmap = los->GetLiveBitmap();
-    SemiSpaceScanObjectVisitor visitor(this);
     large_live_bitmap->VisitMarkedRange(reinterpret_cast<uintptr_t>(los->Begin()),
                                         reinterpret_cast<uintptr_t>(los->End()),
-                                        visitor);
+                                        [this](mirror::Object* obj)
+        REQUIRES(Locks::mutator_lock_, Locks::heap_bitmap_lock_) {
+      ScanObject(obj);
+    });
   }
   // Recursively process the mark stack.
   ProcessMarkStack();

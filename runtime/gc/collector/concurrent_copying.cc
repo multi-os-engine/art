@@ -192,9 +192,9 @@ void ConcurrentCopying::InitializePhase() {
 }
 
 // Used to switch the thread roots of a thread from from-space refs to to-space refs.
-class ThreadFlipVisitor : public Closure {
+class ConcurrentCopyingThreadFlipVisitor : public Closure {
  public:
-  ThreadFlipVisitor(ConcurrentCopying* concurrent_copying, bool use_tlab)
+  ConcurrentCopyingThreadFlipVisitor(ConcurrentCopying* concurrent_copying, bool use_tlab)
       : concurrent_copying_(concurrent_copying), use_tlab_(use_tlab) {
   }
 
@@ -229,9 +229,9 @@ class ThreadFlipVisitor : public Closure {
 };
 
 // Called back from Runtime::FlipThreadRoots() during a pause.
-class FlipCallback : public Closure {
+class ConcurrentCopyingFlipCallback : public Closure {
  public:
-  explicit FlipCallback(ConcurrentCopying* concurrent_copying)
+  explicit ConcurrentCopyingFlipCallback(ConcurrentCopying* concurrent_copying)
       : concurrent_copying_(concurrent_copying) {
   }
 
@@ -275,8 +275,8 @@ void ConcurrentCopying::FlipThreadRoots() {
   Thread* self = Thread::Current();
   Locks::mutator_lock_->AssertNotHeld(self);
   gc_barrier_->Init(self, 0);
-  ThreadFlipVisitor thread_flip_visitor(this, heap_->use_tlab_);
-  FlipCallback flip_callback(this);
+  ConcurrentCopyingThreadFlipVisitor thread_flip_visitor(this, heap_->use_tlab_);
+  ConcurrentCopyingFlipCallback flip_callback(this);
   heap_->ThreadFlipBegin(self);  // Sync with JNI critical calls.
   size_t barrier_count = Runtime::Current()->FlipThreadRoots(
       &thread_flip_visitor, &flip_callback, this);
@@ -892,10 +892,10 @@ class ConcurrentCopyingAssertToSpaceInvariantObjectVisitor {
   ConcurrentCopying* const collector_;
 };
 
-class RevokeThreadLocalMarkStackCheckpoint : public Closure {
+class ConcurrentCopyingRevokeThreadLocalMarkStackCheckpoint : public Closure {
  public:
-  RevokeThreadLocalMarkStackCheckpoint(ConcurrentCopying* concurrent_copying,
-                                       bool disable_weak_ref_access)
+  ConcurrentCopyingRevokeThreadLocalMarkStackCheckpoint(ConcurrentCopying* concurrent_copying,
+                                                        bool disable_weak_ref_access)
       : concurrent_copying_(concurrent_copying),
         disable_weak_ref_access_(disable_weak_ref_access) {
   }
@@ -928,7 +928,7 @@ class RevokeThreadLocalMarkStackCheckpoint : public Closure {
 
 void ConcurrentCopying::RevokeThreadLocalMarkStacks(bool disable_weak_ref_access) {
   Thread* self = Thread::Current();
-  RevokeThreadLocalMarkStackCheckpoint check_point(this, disable_weak_ref_access);
+  ConcurrentCopyingRevokeThreadLocalMarkStackCheckpoint check_point(this, disable_weak_ref_access);
   ThreadList* thread_list = Runtime::Current()->GetThreadList();
   gc_barrier_->Init(self, 0);
   size_t barrier_count = thread_list->RunCheckpoint(&check_point);

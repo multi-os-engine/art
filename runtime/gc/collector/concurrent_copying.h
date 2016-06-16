@@ -243,16 +243,16 @@ class ConcurrentCopying : public GarbageCollector {
   accounting::ReadBarrierTable* rb_table_;
   bool force_evacuate_all_;  // True if all regions are evacuated.
 
-  friend class ConcurrentCopyingRefFieldsVisitor;
+  friend class ConcurrentCopyingClearBlackPtrsVisitor;
+  friend class ConcurrentCopyingComputeUnevacFromSpaceLiveRatioVisitor;
+  friend class ConcurrentCopyingFlipCallback;
   friend class ConcurrentCopyingImmuneSpaceObjVisitor;
+  friend class ConcurrentCopyingLostCopyVisitor;
+  friend class ConcurrentCopyingRefFieldsVisitor;
+  friend class ConcurrentCopyingRevokeThreadLocalMarkStackCheckpoint;
   friend class ConcurrentCopyingVerifyNoFromSpaceRefsVisitor;
   friend class ConcurrentCopyingVerifyNoFromSpaceRefsObjectVisitor;
-  friend class ConcurrentCopyingClearBlackPtrsVisitor;
-  friend class ConcurrentCopyingLostCopyVisitor;
-  friend class ThreadFlipVisitor;
-  friend class FlipCallback;
-  friend class ConcurrentCopyingComputeUnevacFromSpaceLiveRatioVisitor;
-  friend class RevokeThreadLocalMarkStackCheckpoint;
+  friend class ConcurrentCopyingThreadFlipVisitor;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(ConcurrentCopying);
 };
