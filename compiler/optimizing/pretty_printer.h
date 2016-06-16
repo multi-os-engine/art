@@ -39,7 +39,7 @@ class HPrettyPrinter : public HGraphVisitor {
   }
 
   void PrintPostInstruction(HInstruction* instruction) {
-    auto&& inputs = instruction->GetInputs();
+    HInputsRef inputs = instruction->GetInputs();
     if (!inputs.empty()) {
       PrintString("(");
       bool first = true;

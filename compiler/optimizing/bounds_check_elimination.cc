@@ -912,7 +912,7 @@ class BCEVisitor : public HGraphVisitor {
 
   static bool HasSameInputAtBackEdges(HPhi* phi) {
     DCHECK(phi->IsLoopHeaderPhi());
-    auto&& inputs = phi->GetInputs();
+    HInputsRef inputs = phi->GetInputs();
     // Start with input 1. Input 0 is from the incoming block.
     HInstruction* input1 = inputs[1];
     DCHECK(phi->GetBlock()->GetLoopInformation()->IsBackEdge(

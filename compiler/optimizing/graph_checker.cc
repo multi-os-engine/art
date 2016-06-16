@@ -362,7 +362,7 @@ void GraphChecker::VisitInstruction(HInstruction* instruction) {
                             instruction->GetId()));
     }
     size_t use_index = use.GetIndex();
-    auto&& user_inputs = user->GetInputs();
+    HInputsRef user_inputs = user->GetInputs();
     if ((use_index >= user_inputs.size()) || (user_inputs[use_index] != instruction)) {
       AddError(StringPrintf("User %s:%d of instruction %s:%d has a wrong "
                             "UseListNode index.",
@@ -673,8 +673,8 @@ static bool IsSameSizeConstant(HInstruction* insn1, HInstruction* insn2) {
 static bool IsConstantEquivalent(HInstruction* insn1, HInstruction* insn2, BitVector* visited) {
   if (insn1->IsPhi() &&
       insn1->AsPhi()->IsVRegEquivalentOf(insn2)) {
-    auto&& insn1_inputs = insn1->GetInputs();
-    auto&& insn2_inputs = insn2->GetInputs();
+    HInputsRef insn1_inputs = insn1->GetInputs();
+    HInputsRef insn2_inputs = insn2->GetInputs();
     if (insn1_inputs.size() != insn2_inputs.size()) {
       return false;
     }
