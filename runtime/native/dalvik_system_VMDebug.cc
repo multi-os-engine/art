@@ -232,6 +232,33 @@ static void VMDebug_dumpHprofData(JNIEnv* env, jclass, jstring javaFilename, job
   hprof::DumpHeap(filename.c_str(), fd, false);
 }
 
+/*
+ * static native void attachAgent(String path)
+ *
+ * Attaches the given agent.
+ */
+static void VMDebug_attachAgent(JNIEnv* env, jclass, jstring path) {
+  if (path == nullptr) {
+    ScopedObjectAccess soa(env);
+    ThrowNullPointerException("path == null");
+    return;
+  }
+
+  std::string filename;
+  {
+    ScopedUtfChars chars(env, path);
+    if (env->ExceptionCheck()) {
+      return;
+    }
+    filename = chars.c_str();
+  }
+
+  {
+    ScopedObjectAccess soa(env);
+    ThrowRuntimeException("Attaching agent: %s", filename.c_str());
+  }
+}
+
 static void VMDebug_dumpHprofDataDdms(JNIEnv*, jclass) {
   hprof::DumpHeap("[DDMS]", -1, true);
 }
@@ -481,6 +508,7 @@ static JNINativeMethod gMethods[] = {
   NATIVE_METHOD(VMDebug, crash, "()V"),
   NATIVE_METHOD(VMDebug, dumpHprofData, "(Ljava/lang/String;Ljava/io/FileDescriptor;)V"),
   NATIVE_METHOD(VMDebug, dumpHprofDataDdms, "()V"),
+  NATIVE_METHOD(VMDebug, attachAgent, "(Ljava/lang/String;)V"),
   NATIVE_METHOD(VMDebug, dumpReferenceTables, "()V"),
   NATIVE_METHOD(VMDebug, getAllocCount, "(I)I"),
   NATIVE_METHOD(VMDebug, getHeapSpaceStats, "([J)V"),
