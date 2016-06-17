@@ -978,6 +978,22 @@ TEST_F(AssemblerMIPS64Test, Lld) {
   DriverStr(RepeatRRIb(&mips64::Mips64Assembler::Lld, -9, "lld ${reg1}, {imm}(${reg2})"), "lld");
 }
 
+TEST_F(AssemblerMIPS64Test, Lsa) {
+  DriverStr(RepeatRRRIb(&mips64::Mips64Assembler::Lsa, 2, "lsa ${reg1}, ${reg2}, ${reg3}, {imm}", 1), "lsa");
+}
+
+TEST_F(AssemblerMIPS64Test, Dlsa) {
+  DriverStr(RepeatRRRIb(&mips64::Mips64Assembler::Dlsa, 2, "dlsa ${reg1}, ${reg2}, ${reg3}, {imm}", 1), "dlsa");
+}
+
+TEST_F(AssemblerMIPS64Test, Align) {
+  DriverStr(RepeatRRRIb(&mips64::Mips64Assembler::Align, 2, "align ${reg1}, ${reg2}, ${reg3}, {imm}"), "align");
+}
+
+TEST_F(AssemblerMIPS64Test, Dalign) {
+  DriverStr(RepeatRRRIb(&mips64::Mips64Assembler::Dalign, 3, "dalign ${reg1}, ${reg2}, ${reg3}, {imm}"), "dalign");
+}
+
 TEST_F(AssemblerMIPS64Test, Seleqz) {
   DriverStr(RepeatRRR(&mips64::Mips64Assembler::Seleqz, "seleqz ${reg1}, ${reg2}, ${reg3}"),
             "seleqz");

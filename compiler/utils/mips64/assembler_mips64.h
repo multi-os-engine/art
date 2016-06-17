@@ -320,6 +320,12 @@ class Mips64Assembler FINAL : public Assembler {
   void Clear(GpuRegister rd);
   void Not(GpuRegister rd, GpuRegister rs);
 
+  void Lsa(GpuRegister rd, GpuRegister rs, GpuRegister rt, uint16_t saPlusOne);  // MIPS64
+  void Dlsa(GpuRegister rd, GpuRegister rs, GpuRegister rt, uint16_t saPlusOne);  // MIPS64
+
+  void Align(GpuRegister rd, GpuRegister rs, GpuRegister rt, uint16_t bp);  // MIPS64
+  void Dalign(GpuRegister rd, GpuRegister rs, GpuRegister rt, uint16_t bp);  // MIPS64
+
   // Higher level composite instructions.
   void LoadConst32(GpuRegister rd, int32_t value);
   void LoadConst64(GpuRegister rd, int64_t value);  // MIPS64
