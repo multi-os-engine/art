@@ -1815,6 +1815,11 @@ bool OatWriter::ValidateDexFileHeader(const uint8_t* raw_header, const char* loc
 bool OatWriter::WriteDexFiles(OutputStream* rodata, File* file) {
   TimingLogger::ScopedTiming split("WriteDexFiles", timings_);
 
+  // The dex files part is required to be page aligned.
+  size_t original_offset = size_;
+  size_ = RoundUp(size_, kPageSize);
+  size_dex_file_alignment_ += size_ - original_offset;
+
   // Get the elf file offset of the oat file.
   if (!RecordOatDataOffset(rodata)) {
     return false;
@@ -1826,6 +1831,11 @@ bool OatWriter::WriteDexFiles(OutputStream* rodata, File* file) {
       return false;
     }
   }
+
+  // The next after the dex files part is required to be page aligned.
+  original_offset = size_;
+  size_ = RoundUp(size_, kPageSize);
+  size_dex_file_alignment_ += size_ - original_offset;
 
   // Close sources.
   for (OatDexFile& oat_dex_file : oat_dex_files_) {

@@ -18,6 +18,7 @@
 
 #include <inttypes.h>
 #include <sys/types.h>
+#include <type_traits>
 #include <unistd.h>
 
 #include "arch/instruction_set.h"
@@ -28,6 +29,7 @@
 #include "elf_file_impl.h"
 #include "elf_utils.h"
 #include "leb128.h"
+#include "runtime.h"
 #include "utils.h"
 
 namespace art {
@@ -1127,6 +1129,11 @@ bool ElfFileImpl<ElfTypes>::Load(bool executable, bool low_4gb, std::string* err
       if (!GetLoadedSize(&loaded_size, error_msg)) {
         DCHECK(!error_msg->empty());
         return false;
+      }
+      //TODO: send some flag from the OatFile to mention that we can map it randomly.
+      if (Runtime::Current()->IsZygote() && ((std::is_same<ElfTypes, ElfTypes64>::value && sizeof(void*) != 8)
+           || (std::is_same<ElfTypes, ElfTypes32>::value && sizeof(void*) != 4))) {
+        reserve_base_override = nullptr;
       }
       std::unique_ptr<MemMap> reserve(MemMap::MapAnonymous(reservation_name.c_str(),
                                                            reserve_base_override,

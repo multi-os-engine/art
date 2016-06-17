@@ -264,6 +264,14 @@ class OatFile {
   static bool GetDexLocationsFromDependencies(const char* dex_dependencies,
                                               std::vector<std::string>* locations);
 
+  size_t GetFirstDexFileOffset() const {
+    return first_dex_file_offset;
+  }
+
+  size_t GetDexFilesSize() const {
+    return dex_files_size;
+  }
+
  protected:
   OatFile(const std::string& filename, bool executable);
 
@@ -319,6 +327,13 @@ class OatFile {
   // new strings to the end. The adding of a new element must not touch any previously stored
   // elements. std::list<> and std::deque<> satisfy this requirement, std::vector<> doesn't.
   mutable std::list<std::string> string_cache_ GUARDED_BY(secondary_lookup_lock_);
+
+  std::unique_ptr<MemMap> shared_oat_part;
+
+  // The offset of the first dex file from the OatHeader.
+  size_t first_dex_file_offset;
+  // The size of the dex-files part.
+  size_t dex_files_size;
 
   friend class gc::collector::DummyOatFile;  // For modifying begin_ and end_.
   friend class OatClass;

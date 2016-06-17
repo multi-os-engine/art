@@ -58,10 +58,12 @@ class MultiOatRelativePatcher;
 // ...
 // OatDexFile[D]
 //
+// Page alignment    // We need it to be able to re-map the dex-files part when starting runtime
 // Dex[0]            one variable sized DexFile for each OatDexFile.
 // Dex[1]            these are literal copies of the input .dex files.
 // ...
 // Dex[D]
+// Page alignment    // TODO: align only for the files for sharing!
 //
 // TypeLookupTable[0] one descriptor to class def index hash table for each OatDexFile.
 // TypeLookupTable[1]

@@ -111,6 +111,17 @@ class OatFileBase : public OatFile {
                      const std::string& file_path,
                      std::string* error_msg);
 
+  // This method computes the data of the Dex-files part of the .oat file
+  // to share it from.
+  bool ComputeSharingDexData(std::string& file_name,
+                             size_t& first_dex_file_offset,
+                             size_t& dex_files_size,
+                             std::string* error_msg) const;
+
+  // This method returns the name of the 64-bit version of the .oat file we
+  // want to load dex files from.
+  std::string GetSharingFileName() const;
+
   virtual void PreSetup(const std::string& elf_filename) = 0;
 
   bool Setup(const char* abs_dex_location, std::string* error_msg);
@@ -213,6 +224,60 @@ bool OatFileBase::ComputeFields(uint8_t* requested_base,
   return true;
 }
 
+class ElfOatFile;
+
+std::string OatFileBase::GetSharingFileName() const {
+  std::string res = location_;
+  size_t pos = res.rfind("/");
+  if (pos == std::string::npos) {
+    return "";
+  }
+  res.insert(pos, "64");
+  return res;
+}
+
+bool OatFileBase::ComputeSharingDexData(std::string& file_name,
+                                        size_t& first_dex_file_offset,
+                                        size_t& dex_files_size,
+                                        std::string* error_msg) const {
+  file_name = GetSharingFileName();
+  if (file_name.empty()) {
+    *error_msg = StringPrintf("Can't get the name of the file for sharing for '%s'",
+                              location_.c_str());
+    return false;
+  }
+
+  std::string err;
+  // TODO: find a way to get the data without loading the whole file.
+  // TODO: race condition: ensure that the file we want to load dex files from
+  // has been fully created!
+  OatFileBase* shared_oat = OatFileBase::OpenOatFile<ElfOatFile>(file_name,
+                                                                 file_name,
+                                                                 nullptr,
+                                                                 nullptr,
+                                                                 false,
+                                                                 false,
+                                                                 false,
+                                                                 nullptr,
+                                                                 &err);
+
+  if (shared_oat == nullptr) {
+    *error_msg = StringPrintf("Can't open the oat file '%s' for sharing, error was: '%s'",
+                              file_name.c_str(), err.c_str());
+    return false;
+  }
+
+  // The offset of the OatHeader from the beginning of the .oat file.
+  const size_t oat_header_offset = 0x1000;  //TODO: implement dynamic OatHeader offset calculation.
+
+  first_dex_file_offset = oat_header_offset + shared_oat->GetFirstDexFileOffset();
+  dex_files_size = shared_oat->GetDexFilesSize();
+
+  delete shared_oat;
+
+  return true;
+}
+
 // Read an unaligned entry from the OatDexFile data in OatFile and advance the read
 // position by the number of bytes read, i.e. sizeof(T).
 // Return true on success, false if the read would go beyond the end of the OatFile.
@@ -264,6 +329,27 @@ bool OatFileBase::Setup(const char* abs_dex_location, std::string* error_msg) {
   uint8_t* dex_cache_arrays = bss_begin_;
   uint32_t dex_file_count = GetOatHeader().GetDexFileCount();
   oat_dex_files_storage_.reserve(dex_file_count);
+
+  std::string shared_oatfile_name;
+  size_t shared_first_dex_file_offset = 0;
+  size_t shared_dex_files_size = 0;
+
+  // TODO: read this info from the header (probably).
+  if (Runtime::Current()->IsZygote() && GetOatHeader().GetInstructionSet() != kArm64) {
+    LOG(INFO) << "Prepare to load 64-bit .oat for " << location_;
+    std::string err;
+    bool success = ComputeSharingDexData(shared_oatfile_name, shared_first_dex_file_offset,
+                                         shared_dex_files_size, &err);
+    if (!success) {
+      *error_msg = StringPrintf("Failed to compute the data of the oat file for sharing for"
+                                "'%s', error was: '%s'", location_.c_str(), err.c_str());
+      return false;
+    }
+  }
+
+  first_dex_file_offset = 0;
+  dex_files_size = 0;
+
   for (size_t i = 0; i < dex_file_count; i++) {
     uint32_t dex_file_location_size;
     if (UNLIKELY(!ReadOatDexFileData(*this, &oat, &dex_file_location_size))) {
@@ -343,6 +429,32 @@ bool OatFileBase::Setup(const char* abs_dex_location, std::string* error_msg) {
     }
 
     const uint8_t* dex_file_pointer = Begin() + dex_file_offset;
+
+    if (first_dex_file_offset == 0) {
+      first_dex_file_offset = dex_file_offset;
+      if (shared_dex_files_size != 0) {
+        // Do sharing
+        uint8_t* non_const_dex_file_pointer = const_cast<uint8_t*>(dex_file_pointer);
+        File* elf_file = OS::OpenFileForReading(shared_oatfile_name.c_str());
+        std::string err;
+        shared_oat_part.reset(MemMap::MapFileAtAddress(non_const_dex_file_pointer,
+                                                       shared_dex_files_size,
+                                                       PROT_READ,
+                                                       MAP_PRIVATE,
+                                                       elf_file->Fd(),
+                                                       shared_first_dex_file_offset,
+                                                       false,
+                                                       true,
+                                                       shared_oatfile_name.c_str(),
+                                                       &err));
+        if (shared_oat_part->Begin() != non_const_dex_file_pointer) {
+            *error_msg = StringPrintf("Failed to map the oat file for sharing for '%s', error was: '%s'", location_.c_str(), err.c_str());
+            return false;
+        }
+        LOG(INFO) << "Dex_file's from 64-bit .oat in use for " << location_;
+      }
+    }
+
     if (UNLIKELY(!DexFile::IsMagicValid(dex_file_pointer))) {
       *error_msg = StringPrintf("In oat file '%s' found OatDexFile #%zu for '%s' with invalid "
                                     "dex file magic '%s'",
@@ -432,6 +544,10 @@ bool OatFileBase::Setup(const char* abs_dex_location, std::string* error_msg) {
                                 Size(),
                                 header->class_defs_size_);
       return false;
+    }
+
+    if (dex_files_size == 0) {
+      dex_files_size = lookup_table_offset - first_dex_file_offset;
     }
 
     uint8_t* current_dex_cache_arrays = nullptr;
