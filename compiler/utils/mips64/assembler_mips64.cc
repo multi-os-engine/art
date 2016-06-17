@@ -1032,6 +1032,26 @@ void Mips64Assembler::Not(GpuRegister rd, GpuRegister rs) {
   Nor(rd, rs, ZERO);
 }
 
+void Mips64Assembler::Lsa(GpuRegister rd, GpuRegister rs, GpuRegister rt, int saPlusOne) {
+  CHECK(1 <= saPlusOne && saPlusOne <= 4) << saPlusOne;
+  EmitR(0x0, rs, rt, rd, saPlusOne - 1, 0x05);
+}
+
+void Mips64Assembler::Dlsa(GpuRegister rd, GpuRegister rs, GpuRegister rt, int saPlusOne) {
+  CHECK(1 <= saPlusOne && saPlusOne <= 4) << saPlusOne;
+  EmitR(0x0, rs, rt, rd, saPlusOne - 1, 0x15);
+}
+
+void Mips64Assembler::Align(GpuRegister rd, GpuRegister rs, GpuRegister rt, int bp) {
+  CHECK(IsUint<2>(bp)) << bp;
+  EmitR(0x1f, rs, rt, rd, (0x8 | bp), 0x20);
+}
+
+void Mips64Assembler::Dalign(GpuRegister rd, GpuRegister rs, GpuRegister rt, int bp) {
+  CHECK(IsUint<3>(bp)) << bp;
+  EmitR(0x1f, rs, rt, rd, (0x8 | bp), 0x24);
+}
+
 void Mips64Assembler::LoadConst32(GpuRegister rd, int32_t value) {
   if (IsUint<16>(value)) {
     // Use OR with (unsigned) immediate to encode 16b unsigned int.
