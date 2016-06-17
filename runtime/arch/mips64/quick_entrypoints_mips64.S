@@ -1966,8 +1966,7 @@ ENTRY_NO_GP art_quick_indexof
   blez  $t0,6f          # if this.length()-fromIndex <= 0
   li    $v0,-1          #     return -1;
 
-  sll   $v0,$a2,1       # $a0 += $a2 * 2
-  daddu $a0,$a0,$v0     #  "  "   "  " "
+  dlsa  $a0,$a2,$a0,1   # $a0 += $a2 << 1
   move  $v0,$a2         # Set i to fromIndex.
 
 1:
