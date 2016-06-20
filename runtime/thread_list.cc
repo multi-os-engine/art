@@ -1146,21 +1146,23 @@ void ThreadList::WaitForOtherNonDaemonThreadsToExit() {
 void ThreadList::SuspendAllDaemonThreadsForShutdown() {
   ScopedTrace trace(__PRETTY_FUNCTION__);
   Thread* self = Thread::Current();
-  MutexLock mu(self, *Locks::thread_list_lock_);
   size_t daemons_left = 0;
-  {  // Tell all the daemons it's time to suspend.
-    MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
-    for (const auto& thread : list_) {
-      // This is only run after all non-daemon threads have exited, so the remainder should all be
-      // daemons.
-      CHECK(thread->IsDaemon()) << *thread;
-      if (thread != self) {
-        thread->ModifySuspendCount(self, +1, nullptr, false);
-        ++daemons_left;
+  {
+    MutexLock mu(self, *Locks::thread_list_lock_);
+    {  // Tell all the daemons it's time to suspend.
+      MutexLock mu2(self, *Locks::thread_suspend_count_lock_);
+      for (const auto& thread : list_) {
+        // This is only run after all non-daemon threads have exited, so the remainder should all be
+        // daemons.
+        CHECK(thread->IsDaemon()) << *thread;
+        if (thread != self) {
+          thread->ModifySuspendCount(self, +1, nullptr, false);
+          ++daemons_left;
+        }
+        // We are shutting down the runtime, set the JNI functions of all the JNIEnvs to be
+        // the sleep forever one.
+        thread->GetJniEnv()->SetFunctionsToRuntimeShutdownFunctions();
       }
-      // We are shutting down the runtime, set the JNI functions of all the JNIEnvs to be
-      // the sleep forever one.
-      thread->GetJniEnv()->SetFunctionsToRuntimeShutdownFunctions();
     }
   }
   // If we have any daemons left, wait 200ms to ensure they are not stuck in a place where they
@@ -1177,13 +1179,16 @@ void ThreadList::SuspendAllDaemonThreadsForShutdown() {
   static constexpr size_t kSleepMicroseconds = 1000;
   for (size_t i = 0; i < kTimeoutMicroseconds / kSleepMicroseconds; ++i) {
     bool all_suspended = true;
-    for (const auto& thread : list_) {
-      if (thread != self && thread->GetState() == kRunnable) {
-        if (!have_complained) {
-          LOG(WARNING) << "daemon thread not yet suspended: " << *thread;
-          have_complained = true;
+    {
+      MutexLock mu(self, *Locks::thread_list_lock_);
+      for (const auto& thread : list_) {
+        if (thread != self && thread->GetState() == kRunnable) {
+          if (!have_complained) {
+            LOG(WARNING) << "daemon thread not yet suspended: " << *thread;
+            have_complained = true;
+          }
+          all_suspended = false;
         }
-        all_suspended = false;
       }
     }
     if (all_suspended) {
