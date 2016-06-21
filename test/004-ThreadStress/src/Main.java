@@ -399,12 +399,21 @@ public class Main implements Runnable {
             System.out.println(frequencyMap);
         }
 
-        runTest(numberOfThreads, numberOfDaemons, operationsPerThread, lock, frequencyMap);
+        try {
+          runTest(numberOfThreads, numberOfDaemons, operationsPerThread, lock, frequencyMap);
+        } catch (Throwable t) {
+          try { t.printStackTrace(); } catch (Throwable ignored) { }
+        }
     }
 
     public static void runTest(final int numberOfThreads, final int numberOfDaemons,
                                final int operationsPerThread, final Object lock,
                                Map<Operation, Double> frequencyMap) throws Exception {
+        final Thread mainThread = Thread.currentThread();
+        final Barrier startBarrier = new Barrier(numberOfThreads + numberOfDaemons + 1);
+        final Barrier runBarrier = new Barrier(numberOfThreads + 1);
+        final Barrier daemonStopBarrier = new Barrier(numberOfThreads + numberOfDaemons + 1);
+
         // Each normal thread is going to do operationsPerThread
         // operations. Each daemon thread will loop over all
         // the operations and will not stop.
@@ -438,8 +447,9 @@ public class Main implements Runnable {
             }
             // Randomize the operation order
             Collections.shuffle(Arrays.asList(operations));
-            threadStresses[t] = t < numberOfThreads ? new Main(lock, t, operations) :
-                                                      new Daemon(lock, t, operations);
+            threadStresses[t] = (t < numberOfThreads)
+                    ? new Main(lock, t, operations)
+                    : new Daemon(lock, t, operations, mainThread, startBarrier, daemonStopBarrier);
         }
 
         // Enable to dump operation counts per thread to make sure its
@@ -474,32 +484,42 @@ public class Main implements Runnable {
             runners[r] = new Thread("Runner thread " + r) {
                 final Main threadStress = ts;
                 public void run() {
-                    int id = threadStress.id;
-                    System.out.println("Starting worker for " + id);
-                    while (threadStress.nextOperation < operationsPerThread) {
-                        try {
-                            Thread thread = new Thread(ts, "Worker thread " + id);
-                            thread.start();
+                    try {
+                        int id = threadStress.id;
+                        // No memory hungry task are running yet, so println() should succeed.
+                        System.out.println("Starting worker for " + id);
+                        // Wait until all runners and daemons reach the starting point.
+                        startBarrier.await();
+                        // Run the stress tasks.
+                        while (threadStress.nextOperation < operationsPerThread) {
                             try {
+                                Thread thread = new Thread(ts, "Worker thread " + id);
+                                thread.start();
                                 thread.join();
-                            } catch (InterruptedException e) {
+    
+                                if (DEBUG) {
+                                    System.out.println(
+                                        "Thread exited for " + id + " with " +
+                                        (operationsPerThread - threadStress.nextOperation) +
+                                        " operations remaining.");
+                                }
+                            } catch (OutOfMemoryError e) {
+                                // Ignore OOME since we need to print "Finishing worker"
+                                // for the test to pass. This OOM can come from creating
+                                // the Thread or from the DEBUG output.
                             }
-
-                            System.out.println("Thread exited for " + id + " with "
-                                               + (operationsPerThread - threadStress.nextOperation)
-                                               + " operations remaining.");
-                        } catch (OutOfMemoryError e) {
-                            // Ignore OOME since we need to print "Finishing worker" for the test
-                            // to pass.
                         }
-                    }
-                    // Keep trying to print "Finishing worker" until it succeeds.
-                    while (true) {
-                        try {
-                            System.out.println("Finishing worker");
-                            break;
-                        } catch (OutOfMemoryError e) {
-                        }
+                        // Report that the worker is done.
+                        runBarrier.await();
+                        // Wait until daemons are stopped.
+                        daemonStopBarrier.await();
+                        // Print "Finishing worker" now that all memory hungry tasks are done
+                        // and we should not run into OOM anymore.
+                        System.out.println("Finishing worker");
+                    } catch (Throwable t) {
+                        try { t.printStackTrace(); } catch (Throwable ignored) { }
+                        mainThread.interrupt();
+                        return;
                     }
                 }
             };
@@ -532,6 +552,17 @@ public class Main implements Runnable {
         for (int r = 0; r < runners.length; r++) {
             runners[r].start();
         }
+        // Wait for all threads to reach the starting point.
+        startBarrier.await();
+        // Wait for runners to complete their tasks.
+        runBarrier.await();
+        // Stop daemons, so that they don't starve runners trying to write "Finishing worker".
+        for (int r = 0; r < numberOfDaemons; r++) {
+            Daemon daemon = (Daemon) threadStresses[numberOfThreads + r];
+            daemon.stop();
+        }
+        daemonStopBarrier.await();
+        // Wait for runners to finish.
         for (int r = 0; r < runners.length; r++) {
             runners[r].join();
         }
@@ -574,8 +605,21 @@ public class Main implements Runnable {
     }
 
     private static class Daemon extends Main {
-        private Daemon(Object lock, int id, Operation[] operations) {
+        private Daemon(Object lock,
+                       int id,
+                       Operation[] operations,
+                       Thread mainThread,
+                       Barrier startBarrier,
+                       Barrier stopBarrier) {
             super(lock, id, operations);
+            this.mainThread = mainThread;
+            this.startBarrier = startBarrier;
+            this.stopBarrier = stopBarrier;
+            running = true;
+        }
+
+        public void stop() {
+          running = false;
         }
 
         public void run() {
@@ -583,26 +627,59 @@ public class Main implements Runnable {
                 if (DEBUG) {
                     System.out.println("Starting ThreadStress Daemon " + id);
                 }
-                int i = 0;
-                while (true) {
-                    Operation operation = operations[i];
-                    if (DEBUG) {
-                        System.out.println("ThreadStress Daemon " + id
-                                           + " operation " + i
-                                           + " is " + operation);
+                startBarrier.await();
+                try {
+                    int i = 0;
+                    while (running) {
+                        Operation operation = operations[i];
+                        if (DEBUG) {
+                            System.out.println("ThreadStress Daemon " + id
+                                               + " operation " + i
+                                               + " is " + operation);
+                        }
+                        operation.perform();
+                        i = (i + 1) % operations.length;
                     }
-                    operation.perform();
-                    i = (i + 1) % operations.length;
+                } catch (OutOfMemoryError e) {
+                    // Catch OutOfMemoryErrors since these can cause the test to fail it they print
+                    // the stack trace after "Finishing worker". Note that operations should catch
+                    // their own OOME, this guards only agains OOME in the DEBUG output.
                 }
-            } catch (OutOfMemoryError e) {
-                // Catch OutOfMemoryErrors since these can cause the test to fail it they print
-                // the stack trace after "Finishing worker".
-            } finally {
                 if (DEBUG) {
                     System.out.println("Finishing ThreadStress Daemon for " + id);
                 }
+                stopBarrier.await();
+            } catch (Throwable t) {
+                try { t.printStackTrace(); } catch (Throwable ignored) { }
+                mainThread.interrupt();
             }
         }
+
+        final Thread mainThread;
+        final Barrier startBarrier;
+        final Barrier stopBarrier;
+        volatile boolean running;
     }
 
+    // Note: java.util.concurrent.CyclicBarrier.await() allocates memory and may throw OOM.
+    // That is highly undesirable in this test, so we use our own simple barrier class.
+    // The only memory allocation that can happen here is the lock inflation which uses
+    // a native allocation. As such, it should succeed even if the Java heap is full.
+    // If the native allocation suprisingly fails, the program shall abort().
+    private static class Barrier {
+      public Barrier(int initialCount) {
+        count = initialCount;
+      }
+
+      public synchronized void await() throws InterruptedException {
+        --count;
+        if (count != 0) {
+          wait();
+        } else {
+          notifyAll();
+        }
+      }
+
+      int count;
+    }
 }
