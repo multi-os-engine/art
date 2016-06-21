@@ -62,10 +62,12 @@ class ConcurrentCopying : public GarbageCollector {
   ConcurrentCopying(Heap* heap, const std::string& name_prefix = "");
   ~ConcurrentCopying();
 
-  virtual void RunPhases() OVERRIDE REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
-  void InitializePhase() SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!mark_stack_lock_);
+  virtual void RunPhases() OVERRIDE
+      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_, !immune_gray_stack_lock_);
+  void InitializePhase() SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!mark_stack_lock_, !immune_gray_stack_lock_);
   void MarkingPhase() SHARED_REQUIRES(Locks::mutator_lock_)
-      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
+      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_, !immune_gray_stack_lock_);
   void ReclaimPhase() SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!mark_stack_lock_);
   void FinishPhase() REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
 
@@ -93,8 +95,9 @@ class ConcurrentCopying : public GarbageCollector {
     DCHECK(ref != nullptr);
     return IsMarked(ref) == ref;
   }
+  template<bool kGrayImmuneObject = true>
   ALWAYS_INLINE mirror::Object* Mark(mirror::Object* from_ref) SHARED_REQUIRES(Locks::mutator_lock_)
-      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
+      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_, !immune_gray_stack_lock_);
   bool IsMarking() const {
     return is_marking_;
   }
@@ -118,16 +121,19 @@ class ConcurrentCopying : public GarbageCollector {
   void Scan(mirror::Object* to_ref) SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!mark_stack_lock_);
   void Process(mirror::Object* obj, MemberOffset offset)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!mark_stack_lock_ , !skipped_blocks_lock_);
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!mark_stack_lock_ , !skipped_blocks_lock_, !immune_gray_stack_lock_);
   virtual void VisitRoots(mirror::Object*** roots, size_t count, const RootInfo& info)
       OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_)
-      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
+      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_, !immune_gray_stack_lock_);
+  template<bool kGrayImmuneObject>
   void MarkRoot(mirror::CompressedReference<mirror::Object>* root)
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_, !immune_gray_stack_lock_);
   virtual void VisitRoots(mirror::CompressedReference<mirror::Object>** roots, size_t count,
                           const RootInfo& info)
       OVERRIDE SHARED_REQUIRES(Locks::mutator_lock_)
-      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
+      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_, !immune_gray_stack_lock_);
   void VerifyNoFromSpaceReferences() REQUIRES(Locks::mutator_lock_);
   accounting::ObjectStack* GetAllocationStack();
   accounting::ObjectStack* GetLiveStack();
@@ -147,9 +153,11 @@ class ConcurrentCopying : public GarbageCollector {
       SHARED_REQUIRES(Locks::mutator_lock_);
   void ProcessReferences(Thread* self) SHARED_REQUIRES(Locks::mutator_lock_);
   virtual mirror::Object* MarkObject(mirror::Object* from_ref) OVERRIDE
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_, !immune_gray_stack_lock_);
   virtual void MarkHeapReference(mirror::HeapReference<mirror::Object>* from_ref) OVERRIDE
-      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
+      SHARED_REQUIRES(Locks::mutator_lock_)
+      REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_, !immune_gray_stack_lock_);
   virtual mirror::Object* IsMarked(mirror::Object* from_ref) OVERRIDE
       SHARED_REQUIRES(Locks::mutator_lock_);
   virtual bool IsMarkedHeapReference(mirror::HeapReference<mirror::Object>* field) OVERRIDE
@@ -183,14 +191,19 @@ class ConcurrentCopying : public GarbageCollector {
   void ExpandGcMarkStack() SHARED_REQUIRES(Locks::mutator_lock_);
   mirror::Object* MarkNonMoving(mirror::Object* from_ref) SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
-  ALWAYS_INLINE mirror::Object* MarkUnevacFromSpaceRegionOrImmuneSpace(mirror::Object* from_ref,
+  ALWAYS_INLINE mirror::Object* MarkUnevacFromSpaceRegion(mirror::Object* from_ref,
       accounting::SpaceBitmap<kObjectAlignment>* bitmap)
       SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!mark_stack_lock_, !skipped_blocks_lock_);
+  template<bool kGrayImmuneObject>
+  ALWAYS_INLINE mirror::Object* MarkImmuneSpace(mirror::Object* from_ref)
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!immune_gray_stack_lock_);
   void PushOntoFalseGrayStack(mirror::Object* obj) SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!mark_stack_lock_);
   void ProcessFalseGrayStack() SHARED_REQUIRES(Locks::mutator_lock_)
       REQUIRES(!mark_stack_lock_);
+  void ScanImmuneObject(mirror::Object* obj)
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!mark_stack_lock_);
 
   space::RegionSpace* region_space_;      // The underlying region space.
   std::unique_ptr<Barrier> gc_barrier_;
@@ -208,8 +221,6 @@ class ConcurrentCopying : public GarbageCollector {
   bool is_active_;                        // True while the collection is ongoing.
   bool is_asserting_to_space_invariant_;  // True while asserting the to-space invariant.
   ImmuneSpaces immune_spaces_;
-  std::unique_ptr<accounting::HeapBitmap> cc_heap_bitmap_;
-  std::vector<accounting::SpaceBitmap<kObjectAlignment>*> cc_bitmaps_;
   accounting::SpaceBitmap<kObjectAlignment>* region_space_bitmap_;
   // A cache of Heap::GetMarkBitmap().
   accounting::HeapBitmap* heap_mark_bitmap_;
@@ -243,9 +254,13 @@ class ConcurrentCopying : public GarbageCollector {
 
   accounting::ReadBarrierTable* rb_table_;
   bool force_evacuate_all_;  // True if all regions are evacuated.
+  Atomic<bool> updated_all_immune_objects_;
+  bool gc_grays_immune_objects_;
+  Mutex immune_gray_stack_lock_ DEFAULT_MUTEX_ACQUIRED_AFTER;
+  std::vector<mirror::Object*> immune_gray_stack_ GUARDED_BY(immune_gray_stack_lock_);
 
   friend class ConcurrentCopyingRefFieldsVisitor;
-  friend class ConcurrentCopyingImmuneSpaceObjVisitor;
+  friend class ConcurrentCopyingImmuneSpaceScanObjVisitor;
   friend class ConcurrentCopyingVerifyNoFromSpaceRefsVisitor;
   friend class ConcurrentCopyingVerifyNoFromSpaceRefsObjectVisitor;
   friend class ConcurrentCopyingClearBlackPtrsVisitor;
