@@ -17,7 +17,7 @@
 #include "graph_visualizer.h"
 
 #include <dlfcn.h>
-
+#include <optimizing/register_allocator.h>
 #include <cctype>
 #include <sstream>
 
@@ -31,7 +31,6 @@
 #include "nodes.h"
 #include "optimization.h"
 #include "reference_type_propagation.h"
-#include "register_allocator.h"
 #include "ssa_liveness_analysis.h"
 #include "utils/assembler.h"
 

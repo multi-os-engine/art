@@ -72,7 +72,7 @@
 #include "oat_quick_method_header.h"
 #include "prepare_for_register_allocation.h"
 #include "reference_type_propagation.h"
-#include "register_allocator.h"
+#include <optimizing/register_allocator.h>
 #include "select_generator.h"
 #include "sharpening.h"
 #include "side_effects_analysis.h"
@@ -494,7 +494,7 @@ static void AllocateRegisters(HGraph* graph,
   }
   {
     PassScope scope(RegisterAllocator::kRegisterAllocatorPassName, pass_observer);
-    RegisterAllocator(graph->GetArena(), codegen, liveness).AllocateRegisters();
+    RegisterAllocator::Create(graph->GetArena(), codegen, liveness)->AllocateRegisters();
   }
 }
 
