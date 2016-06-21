@@ -124,10 +124,19 @@ class HInliner : public HOptimization {
                                            uint32_t dex_pc) const
     SHARED_REQUIRES(Locks::mutator_lock_);
 
-  void FixUpReturnReferenceType(HInvoke* invoke_instruction,
-                                ArtMethod* resolved_method,
-                                HInstruction* return_replacement,
-                                bool do_rtp)
+  void FixUpReturnReferenceType(ArtMethod* resolved_method, HInstruction* return_replacement)
+    SHARED_REQUIRES(Locks::mutator_lock_);
+
+  ReferenceTypeInfo CreateRerefenceTypeInfoIfAdmissible(mirror::Class* klass)
+    SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void RunRTPIfArgumentTypesMoreSpecific(HInvoke* invoke_instruction,
+                                         ArtMethod* resolved_method,
+                                         HGraph* callee_graph,
+                                         const DexCompilationUnit& dex_compilation_unit)
+    SHARED_REQUIRES(Locks::mutator_lock_);
+
+  void RunRTPIfReturnTypeMoreSpecific(HInvoke* invoke_instruction, HInstruction* return_replacement)
     SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Add a type guard on the given `receiver`. This will add to the graph:
