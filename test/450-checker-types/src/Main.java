@@ -30,6 +30,11 @@ class Super implements Interface {
   public void $noinline$f() {
     throw new RuntimeException();
   }
+
+  public int $inline$h(boolean cond) {
+    Super obj = (cond ? this : null);
+    return obj.hashCode();
+  }
 }
 
 class SubclassA extends Super {
@@ -58,6 +63,8 @@ class SubclassB extends Super {
     throw new RuntimeException();
   }
 }
+
+final class FinalSubclass extends Super {}
 
 class Generic<A> {
   private A a = null;
@@ -618,6 +625,48 @@ public class Main {
   private void testInlinerReturnsNull() {
     Main o = getNull();
     o.mainField = 0;
+  }
+
+  // /// CHECK-START: void Main.testThisArgumentMoreSpecific(FinalSubclass, boolean) inliner (before)
+  // /// CHECK-DAG:     <<Arg:l\d+>>   ParameterValue klass:FinalSubclass
+  // /// CHECK-DAG:     <<NCArg:l\d+>> NullCheck [<<Arg>>]
+  // /// CHECK-DAG:                    InvokeVirtual [<<NCArg>>,{{z\d+}}] method_name:Super.$inline$h
+
+  // /// CHECK-START: void Main.testThisArgumentMoreSpecific(FinalSubclass, boolean) inliner (after)
+  // /// CHECK-DAG:     <<Arg:l\d+>>   ParameterValue klass:FinalSubclass
+  // /// CHECK-DAG:     <<Null:l\d+>>  NullConstant
+  // /// CHECK-DAG:     <<NCArg:l\d+>> NullCheck [<<Arg>>]
+  // /// CHECK-DAG:     <<Phi:l\d+>>   Phi [<<NCArg>>,<<Null>>] klass:FinalSubclass
+  // /// CHECK-DAG:     <<NCPhi:l\d+>> NullCheck [<<Phi>>]
+  // /// CHECK-DAG:                    InvokeVirtual [<<NCPhi>>] method_name:Super.hashCode
+
+  public void testThisArgumentMoreSpecific(FinalSubclass obj, boolean cond) {
+    // Inlining method from Super will build it with `this` typed as Super.
+    // Running RTP will sharpen it to FinalSubclass.
+    // Note that the type of `obj` must be a final class so that the virtual call
+    // is actually inlined.
+    ((Super) obj).$inline$h(cond);
+  }
+
+  public static int $inline$hashCode(Super obj) {
+    return obj.hashCode();
+  }
+
+  /// CHECK-START: void Main.testExplicitArgumentMoreSpecific(SubclassA) inliner (before)
+  /// CHECK-DAG:     <<Arg:l\d+>>   ParameterValue klass:SubclassA
+  /// CHECK-DAG:                    InvokeStaticOrDirect [<<Arg>>] method_name:Main.$inline$hashCode
+
+  /// CHECK-START: void Main.testExplicitArgumentMoreSpecific(SubclassA) inliner (after)
+  /// CHECK-DAG:     <<Arg:l\d+>>   ParameterValue klass:SubclassA
+  /// CHECK-DAG:     <<NCArg:l\d+>> NullCheck [<<Arg>>] klass:SubclassA
+  /// CHECK-DAG:                    InvokeVirtual [<<NCArg>>] method_name:Super.hashCode
+
+  public void testExplicitArgumentMoreSpecific(SubclassA obj) {
+    // Inlining a method will build it with reference types from its signature,
+    // here the callee graph is built with Super as the type of its only argument.
+    // Running RTP after its ParameterValue instructions are replaced with actual
+    // arguments will type the inner graph more precisely.
+    $inline$hashCode(obj);
   }
 
   /// CHECK-START: void Main.testPhiHasOnlyNullInputs(boolean) inliner (before)
