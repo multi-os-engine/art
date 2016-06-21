@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <optimizing/register_allocator.h>
+#include <optimizing/register_allocator_linear_scan.h>
 #include "arch/x86/instruction_set_features_x86.h"
 #include "base/arena_allocator.h"
 #include "builder.h"
@@ -24,7 +26,6 @@
 #include "driver/compiler_options.h"
 #include "nodes.h"
 #include "optimizing_unit_test.h"
-#include "register_allocator.h"
 #include "ssa_liveness_analysis.h"
 #include "ssa_phi_elimination.h"
 
@@ -44,9 +45,9 @@ static bool Check(const uint16_t* data) {
   x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
   SsaLivenessAnalysis liveness(graph, &codegen);
   liveness.Analyze();
-  RegisterAllocator register_allocator(&allocator, &codegen, liveness);
-  register_allocator.AllocateRegisters();
-  return register_allocator.Validate(false);
+  auto register_allocator = RegisterAllocator::Create(&allocator, &codegen, liveness);
+  register_allocator->AllocateRegisters();
+  return register_allocator->Validate(false);
 }
 
 /**
@@ -295,7 +296,7 @@ TEST_F(RegisterAllocatorTest, Loop3) {
   x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
   SsaLivenessAnalysis liveness(graph, &codegen);
   liveness.Analyze();
-  RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+  RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
   register_allocator.AllocateRegisters();
   ASSERT_TRUE(register_allocator.Validate(false));
 
@@ -384,7 +385,7 @@ TEST_F(RegisterAllocatorTest, DeadPhi) {
   x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
   SsaLivenessAnalysis liveness(graph, &codegen);
   liveness.Analyze();
-  RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+  RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
   register_allocator.AllocateRegisters();
   ASSERT_TRUE(register_allocator.Validate(false));
 }
@@ -408,7 +409,7 @@ TEST_F(RegisterAllocatorTest, FreeUntil) {
   x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
   SsaLivenessAnalysis liveness(graph, &codegen);
   liveness.Analyze();
-  RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+  RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
 
   // Add an artifical range to cover the temps that will be put in the unhandled list.
   LiveInterval* unhandled = graph->GetEntryBlock()->GetFirstInstruction()->GetLiveInterval();
@@ -541,7 +542,7 @@ TEST_F(RegisterAllocatorTest, PhiHint) {
     liveness.Analyze();
 
     // Check that the register allocator is deterministic.
-    RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+    RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
     register_allocator.AllocateRegisters();
 
     ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 0);
@@ -560,7 +561,7 @@ TEST_F(RegisterAllocatorTest, PhiHint) {
     // Set the phi to a specific register, and check that the inputs get allocated
     // the same register.
     phi->GetLocations()->UpdateOut(Location::RegisterLocation(2));
-    RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+    RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
     register_allocator.AllocateRegisters();
 
     ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 2);
@@ -579,7 +580,7 @@ TEST_F(RegisterAllocatorTest, PhiHint) {
     // Set input1 to a specific register, and check that the phi and other input get allocated
     // the same register.
     input1->GetLocations()->UpdateOut(Location::RegisterLocation(2));
-    RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+    RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
     register_allocator.AllocateRegisters();
 
     ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 2);
@@ -598,7 +599,7 @@ TEST_F(RegisterAllocatorTest, PhiHint) {
     // Set input2 to a specific register, and check that the phi and other input get allocated
     // the same register.
     input2->GetLocations()->UpdateOut(Location::RegisterLocation(2));
-    RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+    RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
     register_allocator.AllocateRegisters();
 
     ASSERT_EQ(input1->GetLiveInterval()->GetRegister(), 2);
@@ -658,7 +659,7 @@ TEST_F(RegisterAllocatorTest, ExpectedInRegisterHint) {
     SsaLivenessAnalysis liveness(graph, &codegen);
     liveness.Analyze();
 
-    RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+    RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
     register_allocator.AllocateRegisters();
 
     // Sanity check that in normal conditions, the register should be hinted to 0 (EAX).
@@ -677,7 +678,7 @@ TEST_F(RegisterAllocatorTest, ExpectedInRegisterHint) {
     // Don't use SetInAt because we are overriding an already allocated location.
     ret->GetLocations()->inputs_[0] = Location::RegisterLocation(2);
 
-    RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+    RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
     register_allocator.AllocateRegisters();
 
     ASSERT_EQ(field->GetLiveInterval()->GetRegister(), 2);
@@ -726,7 +727,7 @@ TEST_F(RegisterAllocatorTest, SameAsFirstInputHint) {
     SsaLivenessAnalysis liveness(graph, &codegen);
     liveness.Analyze();
 
-    RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+    RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
     register_allocator.AllocateRegisters();
 
     // Sanity check that in normal conditions, the registers are the same.
@@ -748,7 +749,7 @@ TEST_F(RegisterAllocatorTest, SameAsFirstInputHint) {
     ASSERT_EQ(first_sub->GetLocations()->Out().GetPolicy(), Location::kSameAsFirstInput);
     ASSERT_EQ(second_sub->GetLocations()->Out().GetPolicy(), Location::kSameAsFirstInput);
 
-    RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+    RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
     register_allocator.AllocateRegisters();
 
     ASSERT_EQ(first_sub->GetLiveInterval()->GetRegister(), 2);
@@ -795,7 +796,7 @@ TEST_F(RegisterAllocatorTest, ExpectedExactInRegisterAndSameOutputHint) {
     SsaLivenessAnalysis liveness(graph, &codegen);
     liveness.Analyze();
 
-    RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+    RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
     register_allocator.AllocateRegisters();
 
     // div on x86 requires its first input in eax and the output be the same as the first input.
@@ -892,7 +893,7 @@ TEST_F(RegisterAllocatorTest, SpillInactive) {
     liveness.instructions_from_lifetime_position_.push_back(user);
   }
 
-  RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+  RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
   register_allocator.unhandled_core_intervals_.push_back(fourth);
   register_allocator.unhandled_core_intervals_.push_back(third);
   register_allocator.unhandled_core_intervals_.push_back(second);

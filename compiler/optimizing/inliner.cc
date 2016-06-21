@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <optimizing/register_allocator.h>
 #include "inliner.h"
 
 #include "art_method-inl.h"
@@ -35,7 +36,6 @@
 #include "nodes.h"
 #include "optimizing_compiler.h"
 #include "reference_type_propagation.h"
-#include "register_allocator.h"
 #include "quick/inline_method_analyser.h"
 #include "sharpening.h"
 #include "ssa_builder.h"

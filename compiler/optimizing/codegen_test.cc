@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <optimizing/register_allocator.h>
 #include <functional>
 
 #include "arch/instruction_set.h"
@@ -44,7 +45,6 @@
 #include "nodes.h"
 #include "optimizing_unit_test.h"
 #include "prepare_for_register_allocation.h"
-#include "register_allocator.h"
 #include "ssa_liveness_analysis.h"
 #include "utils.h"
 #include "utils/arm/managed_register_arm.h"
@@ -219,7 +219,7 @@ static void RunCode(CodeGenerator* codegen,
 
   PrepareForRegisterAllocation(graph).Run();
   liveness.Analyze();
-  RegisterAllocator(graph->GetArena(), codegen, liveness).AllocateRegisters();
+  RegisterAllocator::Create(graph->GetArena(), codegen, liveness)->AllocateRegisters();
   hook_before_codegen(graph);
 
   InternalCodeAllocator allocator;
