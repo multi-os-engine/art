@@ -133,7 +133,7 @@ class UsePosition : public ArenaObject<kArenaAllocSsaLiveness> {
   size_t GetInputIndex() const { return input_index_; }
 
   void Dump(std::ostream& stream) const {
-    stream << position_;
+    stream << (RequiresRegister() ? "*" : "") << position_;
   }
 
   HLoopInformation* GetLoopInformation() const {
@@ -150,9 +150,7 @@ class UsePosition : public ArenaObject<kArenaAllocSsaLiveness> {
     if (GetIsEnvironment()) return false;
     if (IsSynthesized()) return false;
     Location location = GetUser()->GetLocations()->InAt(GetInputIndex());
-    return location.IsUnallocated()
-        && (location.GetPolicy() == Location::kRequiresRegister
-            || location.GetPolicy() == Location::kRequiresFpuRegister);
+    return location.IsUnallocated() && location.RequiresRegisterKind();
   }
 
  private:
@@ -504,9 +502,15 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     return kNoLifetime;
   }
 
+  // Returns the location of the first register use for this live interval,
+  // including register definitions.
   size_t FirstRegisterUse() const {
     return FirstRegisterUseAfter(GetStart());
   }
+
+  // Whether the interval requires a register rather than a stack location.
+  // If needed for performance, this could be cached.
+  bool RequiresRegister() const { return FirstRegisterUse() != kNoLifetime; }
 
   size_t FirstUseAfter(size_t position) const {
     if (is_temp_) {
@@ -871,6 +875,33 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     range_search_start_ = first_range_;
   }
 
+  bool DefinitionRequiresRegister() const {
+    DCHECK(IsParent());
+    LocationSummary* locations = defined_by_->GetLocations();
+    Location location = locations->Out();
+    // This interval is the first interval of the instruction. If the output
+    // of the instruction requires a register, we return the position of that instruction
+    // as the first register use.
+    if (location.IsUnallocated()) {
+      if ((location.GetPolicy() == Location::kRequiresRegister)
+           || (location.GetPolicy() == Location::kSameAsFirstInput
+               && (locations->InAt(0).IsRegister()
+                   || locations->InAt(0).IsRegisterPair()
+                   || locations->InAt(0).GetPolicy() == Location::kRequiresRegister))) {
+        return true;
+      } else if ((location.GetPolicy() == Location::kRequiresFpuRegister)
+                 || (location.GetPolicy() == Location::kSameAsFirstInput
+                     && (locations->InAt(0).IsFpuRegister()
+                         || locations->InAt(0).IsFpuRegisterPair()
+                         || locations->InAt(0).GetPolicy() == Location::kRequiresFpuRegister))) {
+        return true;
+      }
+    } else if (location.IsRegister() || location.IsRegisterPair()) {
+      return true;
+    }
+    return false;
+  }
+
  private:
   LiveInterval(ArenaAllocator* allocator,
                Primitive::Type type,
@@ -923,33 +954,6 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
       continue;
     }
     return range;
-  }
-
-  bool DefinitionRequiresRegister() const {
-    DCHECK(IsParent());
-    LocationSummary* locations = defined_by_->GetLocations();
-    Location location = locations->Out();
-    // This interval is the first interval of the instruction. If the output
-    // of the instruction requires a register, we return the position of that instruction
-    // as the first register use.
-    if (location.IsUnallocated()) {
-      if ((location.GetPolicy() == Location::kRequiresRegister)
-           || (location.GetPolicy() == Location::kSameAsFirstInput
-               && (locations->InAt(0).IsRegister()
-                   || locations->InAt(0).IsRegisterPair()
-                   || locations->InAt(0).GetPolicy() == Location::kRequiresRegister))) {
-        return true;
-      } else if ((location.GetPolicy() == Location::kRequiresFpuRegister)
-                 || (location.GetPolicy() == Location::kSameAsFirstInput
-                     && (locations->InAt(0).IsFpuRegister()
-                         || locations->InAt(0).IsFpuRegisterPair()
-                         || locations->InAt(0).GetPolicy() == Location::kRequiresFpuRegister))) {
-        return true;
-      }
-    } else if (location.IsRegister() || location.IsRegisterPair()) {
-      return true;
-    }
-    return false;
   }
 
   bool IsDefiningPosition(size_t position) const {
