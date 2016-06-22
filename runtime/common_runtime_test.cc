@@ -284,7 +284,7 @@ std::unique_ptr<const DexFile> CommonRuntimeTestImpl::LoadExpectSingleDexFile(
   std::vector<std::unique_ptr<const DexFile>> dex_files;
   std::string error_msg;
   MemMap::Init();
-  if (!DexFile::Open(location, location, &error_msg, &dex_files)) {
+  if (!DexFile::Open(location, location, true, &error_msg, &dex_files)) {
     LOG(FATAL) << "Could not open .dex file '" << location << "': " << error_msg << "\n";
     UNREACHABLE();
   } else {
@@ -482,7 +482,7 @@ std::vector<std::unique_ptr<const DexFile>> CommonRuntimeTestImpl::OpenTestDexFi
   std::string filename = GetTestDexFileName(name);
   std::string error_msg;
   std::vector<std::unique_ptr<const DexFile>> dex_files;
-  bool success = DexFile::Open(filename.c_str(), filename.c_str(), &error_msg, &dex_files);
+  bool success = DexFile::Open(filename.c_str(), filename.c_str(), true, &error_msg, &dex_files);
   CHECK(success) << "Failed to open '" << filename << "': " << error_msg;
   for (auto& dex_file : dex_files) {
     CHECK_EQ(PROT_READ, dex_file->GetPermissions());

@@ -234,6 +234,7 @@ class ProfMan FINAL {
     MemMap::Init();  // for ZipArchive::OpenFromFd
     std::vector<const DexFile*> dex_files;
     assert(dex_locations_.size() == apks_fd_.size());
+    const bool verify_checksum = true;
     for (size_t i = 0; i < dex_locations_.size(); ++i) {
       std::string error_msg;
       std::vector<std::unique_ptr<const DexFile>> dex_files_for_location;
@@ -246,6 +247,7 @@ class ProfMan FINAL {
       }
       if (DexFile::OpenFromZip(*zip_archive,
                                dex_locations_[i],
+                               verify_checksum,
                                &error_msg,
                                &dex_files_for_location)) {
       } else {
