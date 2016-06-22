@@ -370,6 +370,10 @@ class Location : public ValueObject {
     return PolicyField::Decode(GetPayload());
   }
 
+  bool RequiresRegisterKind() {
+    return GetPolicy() == kRequiresRegister || GetPolicy() == kRequiresFpuRegister;
+  }
+
   uintptr_t GetEncoding() const {
     return GetPayload();
   }
