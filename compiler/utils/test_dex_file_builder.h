@@ -229,7 +229,8 @@ class TestDexFileBuilder {
 
     std::string error_msg;
     std::unique_ptr<const DexFile> dex_file(DexFile::Open(
-        &dex_file_data_[0], dex_file_data_.size(), dex_location, 0u, nullptr, false, &error_msg));
+        &dex_file_data_[0], dex_file_data_.size(), dex_location,
+        0u, nullptr, false, false, &error_msg));
     CHECK(dex_file != nullptr) << error_msg;
     return dex_file;
   }

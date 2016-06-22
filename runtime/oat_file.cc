@@ -1173,6 +1173,7 @@ std::unique_ptr<const DexFile> OatFile::OatDexFile::OpenDexFile(std::string* err
                        dex_file_location_checksum_,
                        this,
                        false /* verify */,
+                       false /* verify_checksum */,
                        error_msg);
 }
 
