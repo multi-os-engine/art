@@ -46,7 +46,8 @@ class RegisterAllocator : public ArenaObject<kArenaAllocRegisterAllocator> {
 
   enum Strategy {
     kRegisterAllocatorDefault,
-    kRegisterAllocatorLinearScan
+    kRegisterAllocatorLinearScan,
+    kRegisterAllocatorGraphColor
   };
 
   static RegisterAllocator* Create(ArenaAllocator* allocator,
