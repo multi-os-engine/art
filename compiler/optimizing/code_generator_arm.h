@@ -369,12 +369,7 @@ class CodeGeneratorARM : public CodeGenerator {
   void InvokeRuntime(QuickEntrypointEnum entrypoint,
                      HInstruction* instruction,
                      uint32_t dex_pc,
-                     SlowPathCode* slow_path) OVERRIDE;
-
-  void InvokeRuntime(int32_t offset,
-                     HInstruction* instruction,
-                     uint32_t dex_pc,
-                     SlowPathCode* slow_path);
+                     SlowPathCode* slow_path = nullptr) OVERRIDE;
 
   // Emit a write barrier.
   void MarkGCCard(Register temp, Register card, Register object, Register value, bool can_be_null);
