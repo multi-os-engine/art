@@ -50,7 +50,7 @@ LiveInterval* BuildInterval(const size_t ranges[][2],
                             ArenaAllocator* allocator,
                             int reg = -1,
                             HInstruction* defined_by = nullptr) {
-  LiveInterval* interval = LiveInterval::MakeInterval(allocator, Primitive::kPrimInt, defined_by);
+  LiveInterval* interval = LiveInterval::MakeInterval(nullptr, allocator, Primitive::kPrimInt, defined_by);
   if (defined_by != nullptr) {
     defined_by->SetLiveInterval(interval);
   }
