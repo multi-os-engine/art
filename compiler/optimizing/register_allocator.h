@@ -41,10 +41,11 @@ class SsaLivenessAnalysis;
 class RegisterAllocator : public ArenaObject<kArenaAllocRegisterAllocator> {
  public:
   enum Strategy {
-    kRegisterAllocatorLinearScan
+    kRegisterAllocatorLinearScan,
+    kRegisterAllocatorGraphColor
   };
 
-  static constexpr Strategy kRegisterAllocatorDefault = kRegisterAllocatorLinearScan;
+  static constexpr Strategy kRegisterAllocatorDefault = kRegisterAllocatorGraphColor;  // TODO
 
   static RegisterAllocator* Create(ArenaAllocator* allocator,
                                    CodeGenerator* codegen,
