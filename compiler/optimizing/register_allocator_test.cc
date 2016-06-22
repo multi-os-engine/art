@@ -408,7 +408,7 @@ TEST_F(RegisterAllocatorTest, FreeUntil) {
   x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
   SsaLivenessAnalysis liveness(graph, &codegen);
   liveness.Analyze();
-  RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+  RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
 
   // Add an artifical range to cover the temps that will be put in the unhandled list.
   LiveInterval* unhandled = graph->GetEntryBlock()->GetFirstInstruction()->GetLiveInterval();
@@ -427,15 +427,15 @@ TEST_F(RegisterAllocatorTest, FreeUntil) {
   // Add three temps holding the same register, and starting at different positions.
   // Put the one that should be picked in the middle of the inactive list to ensure
   // we do not depend on an order.
-  LiveInterval* interval = LiveInterval::MakeFixedInterval(&allocator, 0, Primitive::kPrimInt);
+  LiveInterval* interval = LiveInterval::MakeFixedInterval(nullptr, &allocator, 0, Primitive::kPrimInt);
   interval->AddRange(40, 50);
   register_allocator.inactive_.push_back(interval);
 
-  interval = LiveInterval::MakeFixedInterval(&allocator, 0, Primitive::kPrimInt);
+  interval = LiveInterval::MakeFixedInterval(nullptr, &allocator, 0, Primitive::kPrimInt);
   interval->AddRange(20, 30);
   register_allocator.inactive_.push_back(interval);
 
-  interval = LiveInterval::MakeFixedInterval(&allocator, 0, Primitive::kPrimInt);
+  interval = LiveInterval::MakeFixedInterval(nullptr, &allocator, 0, Primitive::kPrimInt);
   interval->AddRange(60, 70);
   register_allocator.inactive_.push_back(interval);
 
@@ -892,7 +892,7 @@ TEST_F(RegisterAllocatorTest, SpillInactive) {
     liveness.instructions_from_lifetime_position_.push_back(user);
   }
 
-  RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+  RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
   register_allocator.unhandled_core_intervals_.push_back(fourth);
   register_allocator.unhandled_core_intervals_.push_back(third);
   register_allocator.unhandled_core_intervals_.push_back(second);
