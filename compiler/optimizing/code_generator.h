@@ -482,6 +482,10 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
   uint32_t GetReferenceSlowFlagOffset() const;
   uint32_t GetReferenceDisableFlagOffset() const;
 
+  uint64_t AllocateIntervalId() {
+    return interval_id_counter_++;
+  }
+
  protected:
   // Method patch info used for recording locations of required linker patches and
   // target methods. The target method can be used for various purposes, whether for
@@ -553,7 +557,8 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
         current_slow_path_(nullptr),
         current_block_index_(0),
         is_leaf_(true),
-        requires_current_method_(false) {
+        requires_current_method_(false),
+        interval_id_counter_(0) {
     slow_paths_.reserve(8);
   }
 
@@ -664,6 +669,10 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
 
   // Whether an instruction in the graph accesses the current method.
   bool requires_current_method_;
+
+  // Used to assign unique IDs to live intervals, in order to maintain
+  // determinism when using intervals in sets and maps.
+  uint64_t interval_id_counter_;
 
   friend class OptimizingCFITest;
 
