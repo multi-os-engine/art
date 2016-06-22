@@ -408,7 +408,7 @@ TEST_F(RegisterAllocatorTest, FreeUntil) {
   x86::CodeGeneratorX86 codegen(graph, *features_x86.get(), CompilerOptions());
   SsaLivenessAnalysis liveness(graph, &codegen);
   liveness.Analyze();
-  RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+  RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
 
   // Add an artifical range to cover the temps that will be put in the unhandled list.
   LiveInterval* unhandled = graph->GetEntryBlock()->GetFirstInstruction()->GetLiveInterval();
@@ -892,7 +892,7 @@ TEST_F(RegisterAllocatorTest, SpillInactive) {
     liveness.instructions_from_lifetime_position_.push_back(user);
   }
 
-  RegisterAllocator register_allocator(&allocator, &codegen, liveness);
+  RegisterAllocatorLinearScan register_allocator(&allocator, &codegen, liveness);
   register_allocator.unhandled_core_intervals_.push_back(fourth);
   register_allocator.unhandled_core_intervals_.push_back(third);
   register_allocator.unhandled_core_intervals_.push_back(second);
