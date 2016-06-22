@@ -500,7 +500,8 @@ static void RunArchOptimizations(InstructionSet instruction_set,
 NO_INLINE  // Avoid increasing caller's frame size by large stack-allocated objects.
 static void AllocateRegisters(HGraph* graph,
                               CodeGenerator* codegen,
-                              PassObserver* pass_observer) {
+                              PassObserver* pass_observer,
+                              CompilerDriver* driver ATTRIBUTE_UNUSED) {
   {
     PassScope scope(PrepareForRegisterAllocation::kPrepareForRegisterAllocationPassName,
                     pass_observer);
@@ -580,7 +581,7 @@ static void RunOptimizations(HGraph* graph,
   RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
 
   RunArchOptimizations(driver->GetInstructionSet(), graph, codegen, stats, pass_observer);
-  AllocateRegisters(graph, codegen, pass_observer);
+  AllocateRegisters(graph, codegen, pass_observer, driver);
 }
 
 static ArenaVector<LinkerPatch> EmitAndSortLinkerPatches(CodeGenerator* codegen) {

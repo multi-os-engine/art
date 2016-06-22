@@ -18,6 +18,7 @@
 #define ART_COMPILER_OPTIMIZING_SSA_LIVENESS_ANALYSIS_H_
 
 #include "nodes.h"
+#include "code_generator.h"
 #include <iostream>
 
 namespace art {
@@ -133,7 +134,7 @@ class UsePosition : public ArenaObject<kArenaAllocSsaLiveness> {
   size_t GetInputIndex() const { return input_index_; }
 
   void Dump(std::ostream& stream) const {
-    stream << position_;
+    stream << (RequiresRegister() ? "*" : "") << position_;
   }
 
   HLoopInformation* GetLoopInformation() const {
@@ -150,9 +151,7 @@ class UsePosition : public ArenaObject<kArenaAllocSsaLiveness> {
     if (GetIsEnvironment()) return false;
     if (IsSynthesized()) return false;
     Location location = GetUser()->GetLocations()->InAt(GetInputIndex());
-    return location.IsUnallocated()
-        && (location.GetPolicy() == Location::kRequiresRegister
-            || location.GetPolicy() == Location::kRequiresFpuRegister);
+    return location.IsUnallocated() && location.RequiresRegisterKind();
   }
 
  private:
@@ -204,23 +203,27 @@ class SafepointPosition : public ArenaObject<kArenaAllocSsaLiveness> {
  */
 class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
  public:
-  static LiveInterval* MakeInterval(ArenaAllocator* allocator,
+  static LiveInterval* MakeInterval(CodeGenerator* codegen,
+                                    ArenaAllocator* allocator,
                                     Primitive::Type type,
                                     HInstruction* instruction = nullptr) {
-    return new (allocator) LiveInterval(allocator, type, instruction);
+    return new (allocator) LiveInterval(codegen, allocator, type, instruction);
   }
 
-  static LiveInterval* MakeSlowPathInterval(ArenaAllocator* allocator, HInstruction* instruction) {
+  static LiveInterval* MakeSlowPathInterval(CodeGenerator* codegen,
+                                            ArenaAllocator* allocator,
+                                            HInstruction* instruction) {
     return new (allocator) LiveInterval(
-        allocator, Primitive::kPrimVoid, instruction, false, kNoRegister, false, true);
+        codegen, allocator, Primitive::kPrimVoid, instruction, false, kNoRegister, false, true);
   }
 
-  static LiveInterval* MakeFixedInterval(ArenaAllocator* allocator, int reg, Primitive::Type type) {
-    return new (allocator) LiveInterval(allocator, type, nullptr, true, reg, false);
+  static LiveInterval* MakeFixedInterval(CodeGenerator* codegen, ArenaAllocator* allocator, int reg, Primitive::Type type) {
+    return new (allocator) LiveInterval(codegen, allocator, type, nullptr, true, reg, false);
   }
 
-  static LiveInterval* MakeTempInterval(ArenaAllocator* allocator, Primitive::Type type) {
-    return new (allocator) LiveInterval(allocator, type, nullptr, false, kNoRegister, true);
+  static LiveInterval* MakeTempInterval(CodeGenerator* codegen, ArenaAllocator* allocator, Primitive::Type type) {
+    LiveInterval* ret = new (allocator) LiveInterval(codegen, allocator, type, nullptr, false, kNoRegister, true);
+    return ret;
   }
 
   bool IsFixed() const { return is_fixed_; }
@@ -504,9 +507,15 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     return kNoLifetime;
   }
 
+  // Returns the location of the first register use for this live interval,
+  // including register definitions.
   size_t FirstRegisterUse() const {
     return FirstRegisterUseAfter(GetStart());
   }
+
+  // Whether the interval requires a register rather than a stack location.
+  // Currently used by the graph coloring register allocator.
+  bool RequiresRegister() const { return FirstRegisterUse() != kNoLifetime; }
 
   size_t FirstUseAfter(size_t position) const {
     if (is_temp_) {
@@ -570,6 +579,8 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
    *
    * The new interval covers:
    * [position ... end)
+   *
+   * Register and stack slot information is not transferred to the new interval.
    */
   LiveInterval* SplitAt(size_t position) {
     DCHECK(!is_temp_);
@@ -581,7 +592,7 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
       return nullptr;
     }
 
-    LiveInterval* new_interval = new (allocator_) LiveInterval(allocator_, type_);
+    LiveInterval* new_interval = new (allocator_) LiveInterval(codegen_, allocator_, type_);
     SafepointPosition* new_last_safepoint = FindSafepointJustBefore(position);
     if (new_last_safepoint == nullptr) {
       new_interval->first_safepoint_ = first_safepoint_;
@@ -664,14 +675,20 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
   }
 
   void Dump(std::ostream& stream) const {
-    stream << "ranges: { ";
-    LiveRange* current = first_range_;
-    while (current != nullptr) {
-      current->Dump(stream);
-      stream << " ";
-      current = current->GetNext();
+    stream << "ranges: ";
+    for (const LiveInterval* sibling = this;
+         sibling != nullptr;
+         sibling = sibling->GetNextSibling()) {
+      stream << "{ ";
+      LiveRange* current = sibling->first_range_;
+      while (current != nullptr) {
+        current->Dump(stream);
+        stream << " ";
+        current = current->GetNext();
+      }
+      stream << "} ";
     }
-    stream << "}, uses: { ";
+    stream << ", uses: { ";
     UsePosition* use = first_use_;
     if (use != nullptr) {
       do {
@@ -688,9 +705,9 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
       } while ((use = use->GetNext()) != nullptr);
     }
     stream << "}";
-    stream << " is_fixed: " << is_fixed_ << ", is_split: " << IsSplit();
-    stream << " is_low: " << IsLowInterval();
-    stream << " is_high: " << IsHighInterval();
+    stream << " is_fixed:" << is_fixed_ << ", is_split:" << IsSplit();
+    stream << " is_low:" << IsLowInterval();
+    stream << " is_high:" << IsHighInterval();
   }
 
   LiveInterval* GetNextSibling() const { return next_sibling_; }
@@ -776,7 +793,7 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     DCHECK(!HasHighInterval());
     DCHECK(!HasLowInterval());
     high_or_low_interval_ = new (allocator_) LiveInterval(
-        allocator_, type_, defined_by_, false, kNoRegister, is_temp, false, true);
+        codegen_, allocator_, type_, defined_by_, false, kNoRegister, is_temp, false, true);
     high_or_low_interval_->high_or_low_interval_ = this;
     if (first_range_ != nullptr) {
       high_or_low_interval_->first_range_ = first_range_->Dup(allocator_);
@@ -871,58 +888,8 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     range_search_start_ = first_range_;
   }
 
- private:
-  LiveInterval(ArenaAllocator* allocator,
-               Primitive::Type type,
-               HInstruction* defined_by = nullptr,
-               bool is_fixed = false,
-               int reg = kNoRegister,
-               bool is_temp = false,
-               bool is_slow_path_safepoint = false,
-               bool is_high_interval = false)
-      : allocator_(allocator),
-        first_range_(nullptr),
-        last_range_(nullptr),
-        range_search_start_(nullptr),
-        first_safepoint_(nullptr),
-        last_safepoint_(nullptr),
-        first_use_(nullptr),
-        first_env_use_(nullptr),
-        type_(type),
-        next_sibling_(nullptr),
-        parent_(this),
-        register_(reg),
-        spill_slot_(kNoSpillSlot),
-        is_fixed_(is_fixed),
-        is_temp_(is_temp),
-        is_slow_path_safepoint_(is_slow_path_safepoint),
-        is_high_interval_(is_high_interval),
-        high_or_low_interval_(nullptr),
-        defined_by_(defined_by) {}
-
-  // Searches for a LiveRange that either covers the given position or is the
-  // first next LiveRange. Returns null if no such LiveRange exists. Ranges
-  // known to end before `position` can be skipped with `search_start`.
-  LiveRange* FindRangeAtOrAfter(size_t position, LiveRange* search_start) const {
-    if (kIsDebugBuild) {
-      if (search_start != first_range_) {
-        // If we are not searching the entire list of ranges, make sure we do
-        // not skip the range we are searching for.
-        if (search_start == nullptr) {
-          DCHECK(IsDeadAt(position));
-        } else if (search_start->GetStart() > position) {
-          DCHECK_EQ(search_start, FindRangeAtOrAfter(position, first_range_));
-        }
-      }
-    }
-
-    LiveRange* range;
-    for (range = search_start;
-         range != nullptr && range->GetEnd() <= position;
-         range = range->GetNext()) {
-      continue;
-    }
-    return range;
+  uint64_t GetUniqueId() const {
+    return unique_id_;
   }
 
   bool DefinitionRequiresRegister() const {
@@ -950,6 +917,63 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
       return true;
     }
     return false;
+  }
+
+ private:
+  LiveInterval(CodeGenerator* codegen,
+               ArenaAllocator* allocator,
+               Primitive::Type type,
+               HInstruction* defined_by = nullptr,
+               bool is_fixed = false,
+               int reg = kNoRegister,
+               bool is_temp = false,
+               bool is_slow_path_safepoint = false,
+               bool is_high_interval = false)
+      : codegen_(codegen),
+        allocator_(allocator),
+        first_range_(nullptr),
+        last_range_(nullptr),
+        range_search_start_(nullptr),
+        first_safepoint_(nullptr),
+        last_safepoint_(nullptr),
+        first_use_(nullptr),
+        first_env_use_(nullptr),
+        type_(type),
+        next_sibling_(nullptr),
+        parent_(this),
+        register_(reg),
+        spill_slot_(kNoSpillSlot),
+        is_fixed_(is_fixed),
+        is_temp_(is_temp),
+        is_slow_path_safepoint_(is_slow_path_safepoint),
+        is_high_interval_(is_high_interval),
+        high_or_low_interval_(nullptr),
+        defined_by_(defined_by),
+        unique_id_(codegen->AllocateIntervalId()) {}
+
+  // Searches for a LiveRange that either covers the given position or is the
+  // first next LiveRange. Returns null if no such LiveRange exists. Ranges
+  // known to end before `position` can be skipped with `search_start`.
+  LiveRange* FindRangeAtOrAfter(size_t position, LiveRange* search_start) const {
+    if (kIsDebugBuild) {
+      if (search_start != first_range_) {
+        // If we are not searching the entire list of ranges, make sure we do
+        // not skip the range we are searching for.
+        if (search_start == nullptr) {
+          DCHECK(IsDeadAt(position));
+        } else if (search_start->GetStart() > position) {
+          DCHECK_EQ(search_start, FindRangeAtOrAfter(position, first_range_));
+        }
+      }
+    }
+
+    LiveRange* range;
+    for (range = search_start;
+         range != nullptr && range->GetEnd() <= position;
+         range = range->GetNext()) {
+      continue;
+    }
+    return range;
   }
 
   bool IsDefiningPosition(size_t position) const {
@@ -1067,6 +1091,9 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     }
   }
 
+  // Currently used to allocate unique IDs when splitting. (See unique_id.)
+  CodeGenerator* codegen_;
+
   ArenaAllocator* const allocator_;
 
   // Ranges of this interval. We need a quick access to the last range to test
@@ -1119,6 +1146,10 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
 
   // The instruction represented by this interval.
   HInstruction* const defined_by_;
+
+  // Used to maintain determinism when storing live intervals in
+  // trees and hash tables.
+  const uint64_t unique_id_;
 
   static constexpr int kNoRegister = -1;
   static constexpr int kNoSpillSlot = -1;
