@@ -21,6 +21,7 @@
 
 #include "base/bit_vector-inl.h"
 #include "code_generator.h"
+#include "register_allocator_graph_color.h"
 #include "register_allocator_linear_scan.h"
 #include "ssa_liveness_analysis.h"
 
@@ -39,11 +40,13 @@ RegisterAllocator* RegisterAllocator::Create(ArenaAllocator* allocator,
                                              const SsaLivenessAnalysis& analysis,
                                              Strategy strategy) {
   if (strategy == kRegisterAllocatorDefault) {
-    strategy = kRegisterAllocatorLinearScan;
+    strategy = kRegisterAllocatorGraphColor;
   }
   switch (strategy) {
     case kRegisterAllocatorLinearScan:
       return new (allocator) RegisterAllocatorLinearScan(allocator, codegen, analysis);
+    case kRegisterAllocatorGraphColor:
+      return new (allocator) RegisterAllocatorGraphColor(allocator, codegen, analysis);
     default:
       LOG(FATAL) << "Invalid register allocation strategy: " << strategy;
       UNREACHABLE();
