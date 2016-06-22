@@ -150,9 +150,7 @@ class UsePosition : public ArenaObject<kArenaAllocSsaLiveness> {
     if (GetIsEnvironment()) return false;
     if (IsSynthesized()) return false;
     Location location = GetUser()->GetLocations()->InAt(GetInputIndex());
-    return location.IsUnallocated()
-        && (location.GetPolicy() == Location::kRequiresRegister
-            || location.GetPolicy() == Location::kRequiresFpuRegister);
+    return location.IsUnallocated() && location.RequiresRegisterKind();
   }
 
  private:
@@ -220,10 +218,14 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
   }
 
   static LiveInterval* MakeTempInterval(ArenaAllocator* allocator, Primitive::Type type) {
-    return new (allocator) LiveInterval(allocator, type, nullptr, false, kNoRegister, true);
+    LiveInterval* ret = new (allocator) LiveInterval(allocator, type, nullptr, false, kNoRegister, true);
+    ret->requires_register_ = true;
+    return ret;
   }
 
   bool IsFixed() const { return is_fixed_; }
+  bool RequiresRegister() const { return requires_register_; }
+  void SetRequiresRegister() { requires_register_ = true; }
   bool IsTemp() const { return is_temp_; }
   bool IsSlowPathSafepoint() const { return is_slow_path_safepoint_; }
   // This interval is the result of a split.
@@ -504,6 +506,8 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     return kNoLifetime;
   }
 
+  // Returns the location of the first register use for this live interval,
+  // including register definitions.
   size_t FirstRegisterUse() const {
     return FirstRegisterUseAfter(GetStart());
   }
@@ -570,6 +574,8 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
    *
    * The new interval covers:
    * [position ... end)
+   *
+   * Register and stack slot information is not transferred to the new interval.
    */
   LiveInterval* SplitAt(size_t position) {
     DCHECK(!is_temp_);
@@ -664,14 +670,20 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
   }
 
   void Dump(std::ostream& stream) const {
-    stream << "ranges: { ";
-    LiveRange* current = first_range_;
-    while (current != nullptr) {
-      current->Dump(stream);
-      stream << " ";
-      current = current->GetNext();
+    stream << "ranges: ";
+    for (const LiveInterval* sibling = this;
+         sibling != nullptr;
+         sibling = sibling->GetNextSibling()) {
+      stream << "{ ";
+      LiveRange* current = sibling->first_range_;
+      while (current != nullptr) {
+        current->Dump(stream);
+        stream << " ";
+        current = current->GetNext();
+      }
+      stream << "} ";
     }
-    stream << "}, uses: { ";
+    stream << ", uses: { ";
     UsePosition* use = first_use_;
     if (use != nullptr) {
       do {
@@ -871,6 +883,10 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     range_search_start_ = first_range_;
   }
 
+  uint64_t GetUniqueId() const {
+    return unique_id_;
+  }
+
  private:
   LiveInterval(ArenaAllocator* allocator,
                Primitive::Type type,
@@ -894,11 +910,16 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
         register_(reg),
         spill_slot_(kNoSpillSlot),
         is_fixed_(is_fixed),
+        requires_register_(false),
         is_temp_(is_temp),
         is_slow_path_safepoint_(is_slow_path_safepoint),
         is_high_interval_(is_high_interval),
         high_or_low_interval_(nullptr),
-        defined_by_(defined_by) {}
+        defined_by_(defined_by),
+        unique_id_(0) {
+    static uint64_t id_counter = 0;
+    unique_id_ = id_counter++;
+  }
 
   // Searches for a LiveRange that either covers the given position or is the
   // first next LiveRange. Returns null if no such LiveRange exists. Ranges
@@ -1104,6 +1125,10 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
   // Whether the interval is for a fixed register.
   const bool is_fixed_;
 
+  // Whether the interval requires a register rather than a stack location.
+  // Currently used by the graph coloring register allocator.
+  bool requires_register_;
+
   // Whether the interval is for a temporary.
   const bool is_temp_;
 
@@ -1119,6 +1144,9 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
 
   // The instruction represented by this interval.
   HInstruction* const defined_by_;
+
+  // Help maintain determinism when working with live intervals.
+  uint64_t unique_id_;
 
   static constexpr int kNoRegister = -1;
   static constexpr int kNoSpillSlot = -1;
