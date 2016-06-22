@@ -479,6 +479,10 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     return last_range_->GetEnd();
   }
 
+  size_t GetLength() const {
+    return GetEnd() - GetStart();
+  }
+
   size_t FirstRegisterUseAfter(size_t position) const {
     if (is_temp_) {
       return position == GetStart() ? position : kNoLifetime;
