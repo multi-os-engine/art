@@ -1988,6 +1988,103 @@ public class Main {
     }
   }
 
+  /// CHECK-START: int Main.intUnnecessaryShiftMasking(int, int) instruction_simplifier (before)
+  /// CHECK-DAG:      <<Value:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Const31:i\d+>>  IntConstant 31
+  /// CHECK-DAG:      <<And:i\d+>>      And [<<Shift>>,<<Const31>>]
+  /// CHECK-DAG:      <<Shl:i\d+>>      Shl [<<Value>>,<<And>>]
+  /// CHECK-DAG:                        Return [<<Shl>>]
+
+  /// CHECK-START: int Main.intUnnecessaryShiftMasking(int, int) instruction_simplifier (after)
+  /// CHECK-DAG:      <<Value:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shl:i\d+>>      Shl [<<Value>>,<<Shift>>]
+  /// CHECK-DAG:                        Return [<<Shl>>]
+
+  public static int intUnnecessaryShiftMasking(int value, int shift) {
+    return value << (shift & 31);
+  }
+
+  /// CHECK-START: long Main.longUnnecessaryShiftMasking(long, int) instruction_simplifier (before)
+  /// CHECK-DAG:      <<Value:j\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Const63:i\d+>>  IntConstant 63
+  /// CHECK-DAG:      <<And:i\d+>>      And [<<Shift>>,<<Const63>>]
+  /// CHECK-DAG:      <<Shr:j\d+>>      Shr [<<Value>>,<<And>>]
+  /// CHECK-DAG:                        Return [<<Shr>>]
+
+  /// CHECK-START: long Main.longUnnecessaryShiftMasking(long, int) instruction_simplifier (after)
+  /// CHECK-DAG:      <<Value:j\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shr:j\d+>>      Shr [<<Value>>,<<Shift>>]
+  /// CHECK-DAG:                        Return [<<Shr>>]
+
+  public static long longUnnecessaryShiftMasking(long value, int shift) {
+    return value >> (shift & 63);
+  }
+
+  /// CHECK-START: int Main.intUnnecessaryWiderShiftMasking(int, int) instruction_simplifier (before)
+  /// CHECK-DAG:      <<Value:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Const255:i\d+>> IntConstant 255
+  /// CHECK-DAG:      <<And:i\d+>>      And [<<Shift>>,<<Const255>>]
+  /// CHECK-DAG:      <<UShr:i\d+>>     UShr [<<Value>>,<<And>>]
+  /// CHECK-DAG:                        Return [<<UShr>>]
+
+  /// CHECK-START: int Main.intUnnecessaryWiderShiftMasking(int, int) instruction_simplifier (after)
+  /// CHECK-DAG:      <<Value:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<UShr:i\d+>>     UShr [<<Value>>,<<Shift>>]
+  /// CHECK-DAG:                        Return [<<UShr>>]
+
+  public static int intUnnecessaryWiderShiftMasking(int value, int shift) {
+    return value >>> (shift & 0xff);
+  }
+
+  /// CHECK-START: long Main.longSmallerShiftMasking(long, int) instruction_simplifier (before)
+  /// CHECK-DAG:      <<Value:j\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Const3:i\d+>>   IntConstant 3
+  /// CHECK-DAG:      <<And:i\d+>>      And [<<Shift>>,<<Const3>>]
+  /// CHECK-DAG:      <<Shl:j\d+>>      Shl [<<Value>>,<<And>>]
+  /// CHECK-DAG:                        Return [<<Shl>>]
+
+  /// CHECK-START: long Main.longSmallerShiftMasking(long, int) instruction_simplifier (after)
+  /// CHECK-DAG:      <<Value:j\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Const3:i\d+>>   IntConstant 3
+  /// CHECK-DAG:      <<And:i\d+>>      And [<<Shift>>,<<Const3>>]
+  /// CHECK-DAG:      <<Shl:j\d+>>      Shl [<<Value>>,<<And>>]
+  /// CHECK-DAG:                        Return [<<Shl>>]
+
+  public static long longSmallerShiftMasking(long value, int shift) {
+    return value << (shift & 3);
+  }
+
+  /// CHECK-START: int Main.otherUseOfUnnecessaryShiftMasking(int, int) instruction_simplifier (before)
+  /// CHECK-DAG:      <<Value:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Const63:i\d+>>  IntConstant 63
+  /// CHECK-DAG:      <<And:i\d+>>      And [<<Shift>>,<<Const63>>]
+  /// CHECK-DAG:      <<Shr:i\d+>>      Shr [<<Value>>,<<And>>]
+  /// CHECK-DAG:      <<Add:i\d+>>      Add [<<Shr>>,<<And>>]
+  /// CHECK-DAG:                        Return [<<Add>>]
+
+  /// CHECK-START: int Main.otherUseOfUnnecessaryShiftMasking(int, int) instruction_simplifier (after)
+  /// CHECK-DAG:      <<Value:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Shift:i\d+>>    ParameterValue
+  /// CHECK-DAG:      <<Const63:i\d+>>  IntConstant 63
+  /// CHECK-DAG:      <<And:i\d+>>      And [<<Shift>>,<<Const63>>]
+  /// CHECK-DAG:      <<Shr:i\d+>>      Shr [<<Value>>,<<Shift>>]
+  /// CHECK-DAG:      <<Add:i\d+>>      Add [<<Shr>>,<<And>>]
+  /// CHECK-DAG:                        Return [<<Add>>]
+
+  public static int otherUseOfUnnecessaryShiftMasking(int value, int shift) {
+    int temp = shift & 63;
+    return (value >> temp) + temp;
+  }
+
 public static void main(String[] args) {
     int arg = 123456;
 
@@ -2137,6 +2234,19 @@ public static void main(String[] args) {
         }
       }
     }
+
+    int int_val = 0xabcdef01;
+    long long_val = 0xabcdef0123456789L;
+    assertIntEquals(int_val << 3, intUnnecessaryShiftMasking(int_val, 3));
+    assertIntEquals(int_val << 3, intUnnecessaryShiftMasking(int_val, 3 + 32));
+    assertLongEquals(long_val >> 50, longUnnecessaryShiftMasking(long_val, 50));
+    assertLongEquals(long_val >> 50, longUnnecessaryShiftMasking(long_val, 50 + 64));
+    assertIntEquals(int_val >>> 10, intUnnecessaryWiderShiftMasking(int_val, 10));
+    assertIntEquals(int_val >>> 10, intUnnecessaryWiderShiftMasking(int_val, 10 + 128));
+    assertLongEquals(long_val << 2, longSmallerShiftMasking(long_val, 2));
+    assertLongEquals(long_val << 2, longSmallerShiftMasking(long_val, 2 + 256));
+    assertIntEquals((int_val >> 13) + 13, otherUseOfUnnecessaryShiftMasking(int_val, 13));
+    assertIntEquals((int_val >> 13) + 13, otherUseOfUnnecessaryShiftMasking(int_val, 13 + 512));
   }
 
   private static boolean $inline$true() { return true; }
