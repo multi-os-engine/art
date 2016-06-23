@@ -18,6 +18,8 @@ import java.lang.reflect.Method;
 
 public class Main {
 
+  static boolean doThrow = false;
+
   public static void assertBooleanEquals(boolean expected, boolean result) {
     if (expected != result) {
       throw new Error("Expected: " + expected + ", found: " + result);
@@ -72,6 +74,10 @@ public class Main {
   /// CHECK-NOT:                        Add
 
   public static long Add0(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return 0 + arg;
   }
 
@@ -89,6 +95,10 @@ public class Main {
   /// CHECK-NOT:                      And
 
   public static int AndAllOnes(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg & -1;
   }
 
@@ -110,6 +120,10 @@ public class Main {
   /// CHECK-NOT:                       And
 
   public static int UShr28And15(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg >>> 28) & 15;
   }
 
@@ -131,6 +145,10 @@ public class Main {
   /// CHECK-NOT:                       And
 
   public static long UShr60And15(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg >>> 60) & 15;
   }
 
@@ -151,6 +169,10 @@ public class Main {
   /// CHECK-DAG:                       Return [<<And>>]
 
   public static int UShr28And7(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg >>> 28) & 7;
   }
 
@@ -171,6 +193,10 @@ public class Main {
   /// CHECK-DAG:                       Return [<<And>>]
 
   public static long UShr60And7(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg >>> 60) & 7;
   }
 
@@ -193,6 +219,10 @@ public class Main {
   /// CHECK-NOT:                       And
 
   public static int Shr24And255(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg >> 24) & 255;
   }
 
@@ -215,6 +245,10 @@ public class Main {
   /// CHECK-NOT:                       And
 
   public static long Shr56And255(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg >> 56) & 255;
   }
 
@@ -235,6 +269,10 @@ public class Main {
   /// CHECK-DAG:                       Return [<<And>>]
 
   public static int Shr24And127(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg >> 24) & 127;
   }
 
@@ -255,6 +293,10 @@ public class Main {
   /// CHECK-DAG:                       Return [<<And>>]
 
   public static long Shr56And127(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg >> 56) & 127;
   }
 
@@ -272,6 +314,10 @@ public class Main {
   /// CHECK-NOT:                      Div
 
   public static long Div1(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg / 1;
   }
 
@@ -290,6 +336,10 @@ public class Main {
   /// CHECK-NOT:                       Div
 
   public static int DivN1(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg / -1;
   }
 
@@ -307,6 +357,10 @@ public class Main {
   /// CHECK-NOT:                       Mul
 
   public static long Mul1(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg * 1;
   }
 
@@ -325,6 +379,10 @@ public class Main {
   /// CHECK-NOT:                       Mul
 
   public static int MulN1(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg * -1;
   }
 
@@ -344,6 +402,10 @@ public class Main {
   /// CHECK-NOT:                        Mul
 
   public static long MulPowerOfTwo128(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg * 128;
   }
 
@@ -361,6 +423,10 @@ public class Main {
   /// CHECK-NOT:                       Or
 
   public static int Or0(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg | 0;
   }
 
@@ -377,6 +443,10 @@ public class Main {
   /// CHECK-NOT:                        Or
 
   public static long OrSame(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg | arg;
   }
 
@@ -394,6 +464,10 @@ public class Main {
   /// CHECK-NOT:                       Shl
 
   public static int Shl0(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg << 0;
   }
 
@@ -411,6 +485,10 @@ public class Main {
   /// CHECK-NOT:                       Shr
 
   public static long Shr0(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg >> 0;
   }
 
@@ -428,6 +506,10 @@ public class Main {
   /// CHECK-NOT:                       Shr
 
   public static long Shr64(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg >> 64;
   }
 
@@ -445,6 +527,10 @@ public class Main {
   /// CHECK-NOT:                       Sub
 
   public static long Sub0(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg - 0;
   }
 
@@ -463,6 +549,10 @@ public class Main {
   /// CHECK-NOT:                       Sub
 
   public static int SubAliasNeg(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return 0 - arg;
   }
 
@@ -480,6 +570,10 @@ public class Main {
   /// CHECK-NOT:                       UShr
 
   public static long UShr0(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg >>> 0;
   }
 
@@ -497,6 +591,10 @@ public class Main {
   /// CHECK-NOT:                       Xor
 
   public static int Xor0(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg ^ 0;
   }
 
@@ -515,6 +613,10 @@ public class Main {
   /// CHECK-NOT:                       Xor
 
   public static int XorAllOnes(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg ^ -1;
   }
 
@@ -542,6 +644,10 @@ public class Main {
   /// CHECK-DAG:                       Return [<<Neg>>]
 
   public static int AddNegs1(int arg1, int arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return -arg1 + -arg2;
   }
 
@@ -587,6 +693,10 @@ public class Main {
   /// CHECK-DAG:                       Return [<<Or>>]
 
   public static int AddNegs2(int arg1, int arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     int temp1 = -arg1;
     int temp2 = -arg2;
     return (temp1 + temp2) | (temp1 + temp2);
@@ -626,6 +736,10 @@ public class Main {
   /// CHECK:                           Goto
 
   public static long AddNegs3(long arg1, long arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     long res = 0;
     long n_arg1 = -arg1;
     long n_arg2 = -arg2;
@@ -659,6 +773,10 @@ public class Main {
   /// CHECK-NOT:                       Add
 
   public static long AddNeg1(long arg1, long arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return -arg1 + arg2;
   }
 
@@ -693,6 +811,10 @@ public class Main {
   /// CHECK-NOT:                       Sub
 
   public static long AddNeg2(long arg1, long arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     long temp = -arg2;
     return (arg1 + temp) | (arg1 + temp);
   }
@@ -716,6 +838,10 @@ public class Main {
   /// CHECK-NOT:                       Neg
 
   public static long NegNeg1(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return -(-arg);
   }
 
@@ -749,6 +875,10 @@ public class Main {
   /// CHECK:                           Return [<<Const0>>]
 
   public static int NegNeg2(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     int temp = -arg;
     return temp + -temp;
   }
@@ -776,6 +906,10 @@ public class Main {
   /// CHECK-NOT:                       Sub
 
   public static long NegNeg3(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return 0 - -arg;
   }
 
@@ -802,6 +936,10 @@ public class Main {
   /// CHECK-NOT:                       Neg
 
   public static int NegSub1(int arg1, int arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return -(arg1 - arg2);
   }
 
@@ -834,6 +972,10 @@ public class Main {
   /// CHECK-DAG:                       Return [<<Or>>]
 
   public static int NegSub2(int arg1, int arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     int temp = arg1 - arg2;
     return -temp | -temp;
   }
@@ -857,6 +999,10 @@ public class Main {
   /// CHECK-NOT:                       Not
 
   public static long NotNot1(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return ~~arg;
   }
 
@@ -878,6 +1024,10 @@ public class Main {
   /// CHECK-NOT:                       Not
 
   public static int NotNot2(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     int temp = ~arg;
     return temp + ~temp;
   }
@@ -905,6 +1055,10 @@ public class Main {
   /// CHECK-NOT:                       Sub
 
   public static int SubNeg1(int arg1, int arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return -arg1 - arg2;
   }
 
@@ -940,6 +1094,10 @@ public class Main {
   /// CHECK-NOT:                       Add
 
   public static int SubNeg2(int arg1, int arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     int temp = -arg1;
     return (temp - arg2) | (temp - arg2);
   }
@@ -975,6 +1133,10 @@ public class Main {
   /// CHECK:                           Goto
 
   public static long SubNeg3(long arg1, long arg2) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     long res = 0;
     long temp = -arg1;
     for (long i = 0; i < 1; i++) {
@@ -998,6 +1160,10 @@ public class Main {
   /// CHECK-DAG:                       Return [<<True>>]
 
   public static boolean EqualBoolVsIntConst(boolean arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg ? 0 : 1) != 2;
   }
 
@@ -1016,6 +1182,10 @@ public class Main {
   /// CHECK-DAG:                       Return [<<False>>]
 
   public static boolean NotEqualBoolVsIntConst(boolean arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (arg ? 0 : 1) == 2;
   }
 
@@ -1042,6 +1212,10 @@ public class Main {
   }
 
   public static boolean NotNotBool(boolean arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return !(NegateValue(arg));
   }
 
@@ -1061,6 +1235,10 @@ public class Main {
   /// CHECK-NOT:                        Div
 
   public static float Div2(float arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg / 2.0f;
   }
 
@@ -1079,6 +1257,10 @@ public class Main {
   /// CHECK-START: double Main.Div2(double) instruction_simplifier (after)
   /// CHECK-NOT:                        Div
   public static double Div2(double arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg / 2.0;
   }
 
@@ -1098,6 +1280,10 @@ public class Main {
   /// CHECK-NOT:                        Div
 
   public static float DivMP25(float arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg / -0.25f;
   }
 
@@ -1116,6 +1302,10 @@ public class Main {
   /// CHECK-START: double Main.DivMP25(double) instruction_simplifier (after)
   /// CHECK-NOT:                        Div
   public static double DivMP25(double arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg / -0.25f;
   }
 
@@ -1135,6 +1325,10 @@ public class Main {
   /// CHECK-NEXT:                       Add [<<Arg>>,<<Shift>>]
 
   public static int mulPow2Plus1(int arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg * 9;
   }
 
@@ -1154,6 +1348,10 @@ public class Main {
   /// CHECK-NEXT:                       Sub [<<Shift>>,<<Arg>>]
 
   public static long mulPow2Minus1(long arg) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return arg * 31;
   }
 
@@ -1161,12 +1359,14 @@ public class Main {
   /// CHECK-DAG:      <<Const1:i\d+>>   IntConstant 1
   /// CHECK-DAG:      <<Const13:i\d+>>  IntConstant 13
   /// CHECK-DAG:      <<Const54:i\d+>>  IntConstant 54
+  /// CHECK-DAG:      <<doThrow:z\d+>>  StaticFieldGet
   /// CHECK-DAG:      <<Field:z\d+>>    StaticFieldGet
   /// CHECK-DAG:      <<NE:z\d+>>       NotEqual [<<Field>>,<<Const1>>]
   /// CHECK-DAG:      <<Select:i\d+>>   Select [<<Const13>>,<<Const54>>,<<NE>>]
   /// CHECK-DAG:                        Return [<<Select>>]
 
   /// CHECK-START: int Main.booleanFieldNotEqualOne() instruction_simplifier_after_bce (after)
+  /// CHECK-DAG:      <<doThrow:z\d+>>  StaticFieldGet
   /// CHECK-DAG:      <<Field:z\d+>>    StaticFieldGet
   /// CHECK-DAG:      <<Const13:i\d+>>  IntConstant 13
   /// CHECK-DAG:      <<Const54:i\d+>>  IntConstant 54
@@ -1174,6 +1374,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Select>>]
 
   public static int booleanFieldNotEqualOne() {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (booleanField == $inline$true()) ? 13 : 54;
   }
 
@@ -1181,12 +1385,14 @@ public class Main {
   /// CHECK-DAG:      <<Const0:i\d+>>   IntConstant 0
   /// CHECK-DAG:      <<Const13:i\d+>>  IntConstant 13
   /// CHECK-DAG:      <<Const54:i\d+>>  IntConstant 54
+  /// CHECK-DAG:      <<doThrow:z\d+>>  StaticFieldGet
   /// CHECK-DAG:      <<Field:z\d+>>    StaticFieldGet
   /// CHECK-DAG:      <<NE:z\d+>>       Equal [<<Field>>,<<Const0>>]
   /// CHECK-DAG:      <<Select:i\d+>>   Select [<<Const13>>,<<Const54>>,<<NE>>]
   /// CHECK-DAG:                        Return [<<Select>>]
 
   /// CHECK-START: int Main.booleanFieldEqualZero() instruction_simplifier_after_bce (after)
+  /// CHECK-DAG:      <<doThrow:z\d+>>  StaticFieldGet
   /// CHECK-DAG:      <<Field:z\d+>>    StaticFieldGet
   /// CHECK-DAG:      <<Const13:i\d+>>  IntConstant 13
   /// CHECK-DAG:      <<Const54:i\d+>>  IntConstant 54
@@ -1194,6 +1400,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Select>>]
 
   public static int booleanFieldEqualZero() {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (booleanField != $inline$false()) ? 13 : 54;
   }
 
@@ -1222,6 +1432,10 @@ public class Main {
   // LessThanOrEqual instructions.
 
   public static int intConditionNotEqualOne(int i) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return ((i > 42) == $inline$true()) ? 13 : 54;
   }
 
@@ -1250,6 +1464,10 @@ public class Main {
   // LessThanOrEqual instructions.
 
   public static int intConditionEqualZero(int i) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return ((i > 42) != $inline$false()) ? 13 : 54;
   }
 
@@ -1268,6 +1486,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Select>>]
 
   public static int floatConditionNotEqualOne(float f) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return ((f > 42.0f) == true) ? 13 : 54;
   }
 
@@ -1284,6 +1506,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Select>>]
 
   public static int doubleConditionEqualZero(double d) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return ((d > 42.0) != false) ? 13 : 54;
   }
 
@@ -1301,6 +1527,10 @@ public class Main {
   /// CHECK-NOT:                        TypeConversion
 
   public static int intToDoubleToInt(int value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Lossless conversion followed by a conversion back.
     return (int) (double) value;
   }
@@ -1319,6 +1549,10 @@ public class Main {
   /// CHECK-NOT:                        TypeConversion
 
   public static String intToDoubleToIntPrint(int value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Lossless conversion followed by a conversion back
     // with another use of the intermediate result.
     double d = (double) value;
@@ -1340,6 +1574,10 @@ public class Main {
   /// CHECK-NOT:                        TypeConversion
 
   public static int byteToDoubleToInt(byte value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Lossless conversion followed by another conversion, use implicit conversion.
     return (int) (double) value;
   }
@@ -1360,6 +1598,10 @@ public class Main {
   /// CHECK-NOT:                        TypeConversion
 
   public static int floatToDoubleToInt(float value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Lossless conversion followed by another conversion.
     return (int) (double) value;
   }
@@ -1375,6 +1617,10 @@ public class Main {
   /// CHECK-DAG:      {{i\d+}}          TypeConversion [<<Double>>]
 
   public static String floatToDoubleToIntPrint(float value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Lossless conversion followed by another conversion with
     // an extra use of the intermediate result.
     double d = (double) value;
@@ -1397,6 +1643,10 @@ public class Main {
   /// CHECK-NOT:                        TypeConversion
 
   public static short byteToDoubleToShort(byte value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Originally, this is byte->double->int->short. The first conversion is lossless,
     // so we merge this with the second one to byte->int which we omit as it's an implicit
     // conversion. Then we eliminate the resulting byte->short as an implicit conversion.
@@ -1420,6 +1670,10 @@ public class Main {
   /// CHECK-NOT:                        TypeConversion
 
   public static short charToDoubleToShort(char value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Originally, this is char->double->int->short. The first conversion is lossless,
     // so we merge this with the second one to char->int which we omit as it's an implicit
     // conversion. Then we are left with the resulting char->short conversion.
@@ -1439,6 +1693,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Short>>]
 
   public static short floatToIntToShort(float value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Lossy FP to integral conversion followed by another conversion: no simplification.
     return (short) value;
   }
@@ -1456,6 +1714,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Int>>]
 
   public static int intToFloatToInt(int value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Lossy integral to FP conversion followed another conversion: no simplification.
     return (int) (float) value;
   }
@@ -1473,6 +1735,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Double>>]
 
   public static double longToIntToDouble(long value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Lossy long-to-int conversion followed an integral to FP conversion: no simplification.
     return (double) (int) value;
   }
@@ -1490,6 +1756,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Long>>]
 
   public static long longToIntToLong(long value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Lossy long-to-int conversion followed an int-to-long conversion: no simplification.
     return (long) (int) value;
   }
@@ -1505,6 +1775,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Arg>>]
 
   public static short shortToCharToShort(short value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Integral conversion followed by non-widening integral conversion to original type.
     return (short) (char) value;
   }
@@ -1520,6 +1794,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Arg>>]
 
   public static int shortToLongToInt(short value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Integral conversion followed by non-widening integral conversion, use implicit conversion.
     return (int) (long) value;
   }
@@ -1536,6 +1814,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Byte>>]
 
   public static byte shortToCharToByte(short value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Integral conversion followed by non-widening integral conversion losing bits
     // from the original type. Simplify to use only one conversion.
     return (byte) (char) value;
@@ -1552,6 +1834,10 @@ public class Main {
   /// CHECK-DAG:      {{b\d+}}          TypeConversion [<<Char>>]
 
   public static String shortToCharToBytePrint(short value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Integral conversion followed by non-widening integral conversion losing bits
     // from the original type with an extra use of the intermediate result.
     char c = (char) value;
@@ -1576,6 +1862,10 @@ public class Main {
   /// CHECK-NOT:                        And
 
   public static byte longAnd0xffToByte(long value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (byte) (value & 0xff);
   }
 
@@ -1595,6 +1885,10 @@ public class Main {
   /// CHECK-NOT:                        And
 
   public static char intAnd0x1ffffToChar(int value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // Keeping all significant bits and one more.
     return (char) (value & 0x1ffff);
   }
@@ -1614,6 +1908,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Short>>]
 
   public static short intAnd0x17fffToShort(int value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     // No simplification: clearing a significant bit.
     return (short) (value & 0x17fff);
   }
@@ -1632,6 +1930,10 @@ public class Main {
   /// CHECK-DAG:                        Return [<<Double>>]
 
   public static double shortAnd0xffffToShortToDouble(short value) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     short same = (short) (value & 0xffff);
     return (double) same;
   }
@@ -1647,6 +1949,10 @@ public class Main {
   /// CHECK-DAG:      <<GE:z\d+>>       GreaterThanOrEqual [<<Arg>>,<<Const42>>]
 
   public static int intReverseCondition(int i) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (42 > i) ? 13 : 54;
   }
 
@@ -1661,10 +1967,18 @@ public class Main {
   /// CHECK-DAG:      <<EQ:z\d+>>       Equal [<<Result>>,<<Const42>>]
 
   public static int intReverseConditionNaN(int i) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     return (42 != Math.sqrt(i)) ? 13 : 54;
   }
 
   public static int runSmaliTest(String name, boolean input) {
+    if (doThrow) {
+      // Try to defeat inlining.
+      throw new Error();
+    }
     try {
       Class<?> c = Class.forName("SmaliTests");
       Method m = c.getMethod(name, new Class[] { boolean.class });
@@ -1677,56 +1991,56 @@ public class Main {
 public static void main(String[] args) {
     int arg = 123456;
 
-    assertLongEquals(Add0(arg), arg);
-    assertIntEquals(AndAllOnes(arg), arg);
-    assertLongEquals(Div1(arg), arg);
-    assertIntEquals(DivN1(arg), -arg);
-    assertLongEquals(Mul1(arg), arg);
-    assertIntEquals(MulN1(arg), -arg);
-    assertLongEquals(MulPowerOfTwo128(arg), (128 * arg));
-    assertIntEquals(Or0(arg), arg);
-    assertLongEquals(OrSame(arg), arg);
-    assertIntEquals(Shl0(arg), arg);
-    assertLongEquals(Shr0(arg), arg);
-    assertLongEquals(Shr64(arg), arg);
-    assertLongEquals(Sub0(arg), arg);
-    assertIntEquals(SubAliasNeg(arg), -arg);
-    assertLongEquals(UShr0(arg), arg);
-    assertIntEquals(Xor0(arg), arg);
-    assertIntEquals(XorAllOnes(arg), ~arg);
-    assertIntEquals(AddNegs1(arg, arg + 1), -(arg + arg + 1));
-    assertIntEquals(AddNegs2(arg, arg + 1), -(arg + arg + 1));
-    assertLongEquals(AddNegs3(arg, arg + 1), -(2 * arg + 1));
-    assertLongEquals(AddNeg1(arg, arg + 1), 1);
-    assertLongEquals(AddNeg2(arg, arg + 1), -1);
-    assertLongEquals(NegNeg1(arg), arg);
-    assertIntEquals(NegNeg2(arg), 0);
-    assertLongEquals(NegNeg3(arg), arg);
-    assertIntEquals(NegSub1(arg, arg + 1), 1);
-    assertIntEquals(NegSub2(arg, arg + 1), 1);
-    assertLongEquals(NotNot1(arg), arg);
-    assertIntEquals(NotNot2(arg), -1);
-    assertIntEquals(SubNeg1(arg, arg + 1), -(arg + arg + 1));
-    assertIntEquals(SubNeg2(arg, arg + 1), -(arg + arg + 1));
-    assertLongEquals(SubNeg3(arg, arg + 1), -(2 * arg + 1));
-    assertBooleanEquals(EqualBoolVsIntConst(true), true);
-    assertBooleanEquals(EqualBoolVsIntConst(true), true);
-    assertBooleanEquals(NotEqualBoolVsIntConst(false), false);
-    assertBooleanEquals(NotEqualBoolVsIntConst(false), false);
-    assertBooleanEquals(NotNotBool(true), true);
-    assertBooleanEquals(NotNotBool(false), false);
-    assertFloatEquals(Div2(100.0f), 50.0f);
-    assertDoubleEquals(Div2(150.0), 75.0);
-    assertFloatEquals(DivMP25(100.0f), -400.0f);
-    assertDoubleEquals(DivMP25(150.0), -600.0);
-    assertIntEquals(UShr28And15(0xc1234567), 0xc);
-    assertLongEquals(UShr60And15(0xc123456787654321L), 0xcL);
-    assertIntEquals(UShr28And7(0xc1234567), 0x4);
-    assertLongEquals(UShr60And7(0xc123456787654321L), 0x4L);
-    assertIntEquals(Shr24And255(0xc1234567), 0xc1);
-    assertLongEquals(Shr56And255(0xc123456787654321L), 0xc1L);
-    assertIntEquals(Shr24And127(0xc1234567), 0x41);
-    assertLongEquals(Shr56And127(0xc123456787654321L), 0x41L);
+    assertLongEquals(arg, Add0(arg));
+    assertIntEquals(arg, AndAllOnes(arg));
+    assertLongEquals(arg, Div1(arg));
+    assertIntEquals(-arg, DivN1(arg));
+    assertLongEquals(arg, Mul1(arg));
+    assertIntEquals(-arg, MulN1(arg));
+    assertLongEquals((128 * arg), MulPowerOfTwo128(arg));
+    assertIntEquals(arg, Or0(arg));
+    assertLongEquals(arg, OrSame(arg));
+    assertIntEquals(arg, Shl0(arg));
+    assertLongEquals(arg, Shr0(arg));
+    assertLongEquals(arg, Shr64(arg));
+    assertLongEquals(arg, Sub0(arg));
+    assertIntEquals(-arg, SubAliasNeg(arg));
+    assertLongEquals(arg, UShr0(arg));
+    assertIntEquals(arg, Xor0(arg));
+    assertIntEquals(~arg, XorAllOnes(arg));
+    assertIntEquals(-(arg + arg + 1), AddNegs1(arg, arg + 1));
+    assertIntEquals(-(arg + arg + 1), AddNegs2(arg, arg + 1));
+    assertLongEquals(-(2 * arg + 1), AddNegs3(arg, arg + 1));
+    assertLongEquals(1, AddNeg1(arg, arg + 1));
+    assertLongEquals(-1, AddNeg2(arg, arg + 1));
+    assertLongEquals(arg, NegNeg1(arg));
+    assertIntEquals(0, NegNeg2(arg));
+    assertLongEquals(arg, NegNeg3(arg));
+    assertIntEquals(1, NegSub1(arg, arg + 1));
+    assertIntEquals(1, NegSub2(arg, arg + 1));
+    assertLongEquals(arg, NotNot1(arg));
+    assertIntEquals(-1, NotNot2(arg));
+    assertIntEquals(-(arg + arg + 1), SubNeg1(arg, arg + 1));
+    assertIntEquals(-(arg + arg + 1), SubNeg2(arg, arg + 1));
+    assertLongEquals(-(2 * arg + 1), SubNeg3(arg, arg + 1));
+    assertBooleanEquals(true, EqualBoolVsIntConst(true));
+    assertBooleanEquals(true, EqualBoolVsIntConst(true));
+    assertBooleanEquals(false, NotEqualBoolVsIntConst(false));
+    assertBooleanEquals(false, NotEqualBoolVsIntConst(false));
+    assertBooleanEquals(true, NotNotBool(true));
+    assertBooleanEquals(false, NotNotBool(false));
+    assertFloatEquals(50.0f, Div2(100.0f));
+    assertDoubleEquals(75.0, Div2(150.0));
+    assertFloatEquals(-400.0f, DivMP25(100.0f));
+    assertDoubleEquals(-600.0, DivMP25(150.0));
+    assertIntEquals(0xc, UShr28And15(0xc1234567));
+    assertLongEquals(0xcL, UShr60And15(0xc123456787654321L));
+    assertIntEquals(0x4, UShr28And7(0xc1234567));
+    assertLongEquals(0x4L, UShr60And7(0xc123456787654321L));
+    assertIntEquals(0xc1, Shr24And255(0xc1234567));
+    assertLongEquals(0xc1L, Shr56And255(0xc123456787654321L));
+    assertIntEquals(0x41, Shr24And127(0xc1234567));
+    assertLongEquals(0x41L, Shr56And127(0xc123456787654321L));
     assertIntEquals(0, mulPow2Plus1(0));
     assertIntEquals(9, mulPow2Plus1(1));
     assertIntEquals(18, mulPow2Plus1(2));
@@ -1742,16 +2056,16 @@ public static void main(String[] args) {
     assertIntEquals(booleanFieldNotEqualOne(), 54);
     assertIntEquals(booleanFieldEqualZero(), 54);
     booleanField = true;
-    assertIntEquals(booleanFieldNotEqualOne(), 13);
-    assertIntEquals(booleanFieldEqualZero(), 13);
-    assertIntEquals(intConditionNotEqualOne(6), 54);
-    assertIntEquals(intConditionNotEqualOne(43), 13);
-    assertIntEquals(intConditionEqualZero(6), 54);
-    assertIntEquals(intConditionEqualZero(43), 13);
-    assertIntEquals(floatConditionNotEqualOne(6.0f), 54);
-    assertIntEquals(floatConditionNotEqualOne(43.0f), 13);
-    assertIntEquals(doubleConditionEqualZero(6.0), 54);
-    assertIntEquals(doubleConditionEqualZero(43.0), 13);
+    assertIntEquals(13, booleanFieldNotEqualOne());
+    assertIntEquals(13, booleanFieldEqualZero());
+    assertIntEquals(54, intConditionNotEqualOne(6));
+    assertIntEquals(13, intConditionNotEqualOne(43));
+    assertIntEquals(54, intConditionEqualZero(6));
+    assertIntEquals(13, intConditionEqualZero(43));
+    assertIntEquals(54, floatConditionNotEqualOne(6.0f));
+    assertIntEquals(13, floatConditionNotEqualOne(43.0f));
+    assertIntEquals(54, doubleConditionEqualZero(6.0));
+    assertIntEquals(13, doubleConditionEqualZero(43.0));
 
     assertIntEquals(1234567, intToDoubleToInt(1234567));
     assertIntEquals(Integer.MIN_VALUE, intToDoubleToInt(Integer.MIN_VALUE));
@@ -1811,15 +2125,15 @@ public static void main(String[] args) {
     assertDoubleEquals((double)Short.MAX_VALUE, shortAnd0xffffToShortToDouble(Short.MAX_VALUE));
     assertDoubleEquals((double)Short.MIN_VALUE, shortAnd0xffffToShortToDouble(Short.MIN_VALUE));
 
-    assertIntEquals(intReverseCondition(41), 13);
-    assertIntEquals(intReverseConditionNaN(-5), 13);
+    assertIntEquals(13, intReverseCondition(41));
+    assertIntEquals(13, intReverseConditionNaN(-5));
 
     for (String condition : new String[] { "Equal", "NotEqual" }) {
       for (String constant : new String[] { "True", "False" }) {
         for (String side : new String[] { "Rhs", "Lhs" }) {
           String name = condition + constant + side;
-          assertIntEquals(runSmaliTest(name, true), 5);
-          assertIntEquals(runSmaliTest(name, false), 3);
+          assertIntEquals(5, runSmaliTest(name, true));
+          assertIntEquals(3, runSmaliTest(name, false));
         }
       }
     }
