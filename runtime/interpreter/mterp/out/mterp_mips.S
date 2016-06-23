@@ -8020,8 +8020,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8038,8 +8039,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8056,8 +8058,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8074,8 +8077,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8092,8 +8096,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8110,8 +8115,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8128,8 +8134,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8146,8 +8153,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8164,8 +8172,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8182,8 +8191,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8200,8 +8210,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8218,8 +8229,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8236,8 +8248,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8254,8 +8267,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8272,8 +8286,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8290,8 +8305,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8308,8 +8324,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8326,8 +8343,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8344,8 +8362,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8362,8 +8381,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8380,8 +8400,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8398,8 +8419,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8416,8 +8438,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8434,8 +8457,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8452,8 +8476,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8470,8 +8495,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8488,8 +8514,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8506,8 +8533,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8524,8 +8552,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8542,8 +8571,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8560,8 +8590,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8578,8 +8609,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8596,8 +8628,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8614,8 +8647,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8632,8 +8666,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8650,8 +8685,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8668,8 +8704,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8686,8 +8723,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8704,8 +8742,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8722,8 +8761,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8740,8 +8780,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8758,8 +8799,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8776,8 +8818,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8794,8 +8837,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8812,8 +8856,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8830,8 +8875,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8848,8 +8894,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8866,8 +8913,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8884,8 +8932,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8902,8 +8951,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8920,8 +8970,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8938,8 +8989,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8956,8 +9008,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8974,8 +9027,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -8992,8 +9046,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9010,8 +9065,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9028,8 +9084,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9046,8 +9103,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9064,8 +9122,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9082,8 +9141,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9100,8 +9160,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9118,8 +9179,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9136,8 +9198,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9154,8 +9217,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9172,8 +9236,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9190,8 +9255,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9208,8 +9274,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9226,8 +9293,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9244,8 +9312,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9262,8 +9331,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9280,8 +9350,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9298,8 +9369,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9316,8 +9388,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9334,8 +9407,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9352,8 +9426,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9370,8 +9445,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9388,8 +9464,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9406,8 +9483,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9424,8 +9502,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9442,8 +9521,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9460,8 +9540,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9478,8 +9559,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9496,8 +9578,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9514,8 +9597,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9532,8 +9616,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9550,8 +9635,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9568,8 +9654,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9586,8 +9673,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9604,8 +9692,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9622,8 +9711,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9640,8 +9730,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9658,8 +9749,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9676,8 +9768,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9694,8 +9787,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9712,8 +9806,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9730,8 +9825,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9748,8 +9844,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9766,8 +9863,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9784,8 +9882,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9802,8 +9901,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9820,8 +9920,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9838,8 +9939,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9856,8 +9958,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9874,8 +9977,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9892,8 +9996,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9910,8 +10015,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9928,8 +10034,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9946,8 +10053,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9964,8 +10072,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -9982,8 +10091,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10000,8 +10110,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10018,8 +10129,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10036,8 +10148,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10054,8 +10167,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10072,8 +10186,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10090,8 +10205,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10108,8 +10224,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10126,8 +10243,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10144,8 +10262,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10162,8 +10281,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10180,8 +10300,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10198,8 +10319,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10216,8 +10338,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10234,8 +10357,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10252,8 +10376,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10270,8 +10395,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10288,8 +10414,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10306,8 +10433,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10324,8 +10452,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10342,8 +10471,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10360,8 +10490,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10378,8 +10509,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10396,8 +10528,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10414,8 +10547,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10432,8 +10566,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10450,8 +10585,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10468,8 +10604,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10486,8 +10623,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10504,8 +10642,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10522,8 +10661,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10540,8 +10680,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10558,8 +10699,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10576,8 +10718,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10594,8 +10737,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10612,8 +10756,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10630,8 +10775,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10648,8 +10794,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10666,8 +10813,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10684,8 +10832,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10702,8 +10851,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10720,8 +10870,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10738,8 +10889,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10756,8 +10908,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10774,8 +10927,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10792,8 +10946,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10810,8 +10965,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10828,8 +10984,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10846,8 +11003,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10864,8 +11022,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10882,8 +11041,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10900,8 +11060,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10918,8 +11079,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10936,8 +11098,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10954,8 +11117,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10972,8 +11136,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -10990,8 +11155,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11008,8 +11174,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11026,8 +11193,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11044,8 +11212,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11062,8 +11231,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11080,8 +11250,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11098,8 +11269,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11116,8 +11288,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11134,8 +11307,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11152,8 +11326,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11170,8 +11345,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11188,8 +11364,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11206,8 +11383,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11224,8 +11402,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11242,8 +11421,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11260,8 +11440,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11278,8 +11459,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11296,8 +11478,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11314,8 +11497,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11332,8 +11516,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11350,8 +11535,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11368,8 +11554,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11386,8 +11573,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11404,8 +11592,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11422,8 +11611,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11440,8 +11630,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11458,8 +11649,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11476,8 +11668,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11494,8 +11687,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11512,8 +11706,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11530,8 +11725,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11548,8 +11744,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11566,8 +11763,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11584,8 +11782,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11602,8 +11801,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11620,8 +11820,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11638,8 +11839,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11656,8 +11858,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11674,8 +11877,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11692,8 +11896,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11710,8 +11915,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11728,8 +11934,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11746,8 +11953,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11764,8 +11972,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11782,8 +11991,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11800,8 +12010,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11818,8 +12029,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11836,8 +12048,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11854,8 +12067,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11872,8 +12086,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11890,8 +12105,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11908,8 +12124,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11926,8 +12143,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11944,8 +12162,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11962,8 +12181,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11980,8 +12200,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -11998,8 +12219,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12016,8 +12238,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12034,8 +12257,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12052,8 +12276,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12070,8 +12295,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12088,8 +12314,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12106,8 +12333,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12124,8 +12352,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12142,8 +12371,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12160,8 +12390,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12178,8 +12409,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12196,8 +12428,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12214,8 +12447,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12232,8 +12466,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12250,8 +12485,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12268,8 +12504,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12286,8 +12523,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12304,8 +12542,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12322,8 +12561,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12340,8 +12580,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12358,8 +12599,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12376,8 +12618,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12394,8 +12637,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12412,8 +12656,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12430,8 +12675,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12448,8 +12694,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12466,8 +12713,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12484,8 +12732,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12502,8 +12751,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12520,8 +12770,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12538,8 +12789,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12556,8 +12808,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12574,8 +12827,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12592,8 +12846,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
 /* ------------------------------ */
     .balign 128
@@ -12610,8 +12865,9 @@ artMterpAsmAltInstructionStart = .L_ALT_op_nop
     lw     rIBASE, THREAD_CURRENT_IBASE_OFFSET(rSELF)           # refresh IBASE
     move   a0, rSELF                    # arg0
     addu   a1, rFP, OFF_FP_SHADOWFRAME  # arg1
-    la     a2, MterpCheckBefore
-    jalr   zero, a2                     # Tail call to Mterp(self, shadow_frame)
+    mov    a2, rPC
+    la     a3, MterpCheckBefore
+    jalr   zero, a3                     # Tail call to Mterp(self, shadow_frame, dex_pc_ptr)
 
     .balign 128
     .size   artMterpAsmAltInstructionStart, .-artMterpAsmAltInstructionStart
