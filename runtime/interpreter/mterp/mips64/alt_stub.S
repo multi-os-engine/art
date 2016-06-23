@@ -10,5 +10,6 @@
     dla     t9, MterpCheckBefore
     move    a0, rSELF
     daddu   a1, rFP, OFF_FP_SHADOWFRAME
+    mov     a2, rPC
     daddu   ra, ra, (${opnum} * 128)            # Addr of primary handler.
-    jalr    zero, t9                            # (self, shadow_frame) Note: tail call.
+    jalr    zero, t9                            # (self, shadow_frame, dex_pc_ptr) Note: tail call.
