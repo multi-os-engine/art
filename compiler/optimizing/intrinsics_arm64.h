@@ -20,10 +20,11 @@
 #include "intrinsics.h"
 
 namespace vixl {
+namespace aarch64 {
 
 class MacroAssembler;
 
-}  // namespace vixl
+}}  // namespace vixl::aarch64
 
 namespace art {
 
@@ -32,6 +33,8 @@ class HInvokeStaticOrDirect;
 class HInvokeVirtual;
 
 namespace arm64 {
+
+using namespace vixl::aarch64;   // NOLINT(build/namespaces)
 
 class CodeGeneratorARM64;
 
@@ -73,7 +76,7 @@ INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
 #undef OPTIMIZING_INTRINSICS
 
  private:
-  vixl::MacroAssembler* GetVIXLAssembler();
+  vixl::aarch64::MacroAssembler* GetVIXLAssembler();
 
   ArenaAllocator* GetAllocator();
 
