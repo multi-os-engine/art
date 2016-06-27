@@ -649,7 +649,7 @@ public class Main {
 
   /// CHECK-START: void Main.testExplicitArgumentMoreSpecific(SubclassA) inliner (before)
   /// CHECK-DAG:     <<Arg:l\d+>>   ParameterValue klass:SubclassA
-  /// CHECK-DAG:                    InvokeStaticOrDirect [<<Arg>>] method_name:Main.$inline$hashCode
+  /// CHECK-DAG:                    InvokeStaticOrDirect [<<Arg>>{{(,[ij]\d+)?}}] method_name:Main.$inline$hashCode
 
   /// CHECK-START: void Main.testExplicitArgumentMoreSpecific(SubclassA) inliner (after)
   /// CHECK-DAG:     <<Arg:l\d+>>   ParameterValue klass:SubclassA
