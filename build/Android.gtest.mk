@@ -293,6 +293,7 @@ COMPILER_GTEST_COMMON_SRC_FILES_all := \
   compiler/optimizing/live_ranges_test.cc \
   compiler/optimizing/optimizing_cfi_test.cc \
   compiler/optimizing/register_allocator_test.cc \
+  compiler/optimizing/scheduler_test.cc \
 
 COMPILER_GTEST_COMMON_SRC_FILES_arm := \
   compiler/linker/arm/relative_patcher_thumb2_test.cc \

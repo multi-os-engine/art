@@ -69,6 +69,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/reference_type_propagation.cc \
 	optimizing/register_allocator.cc \
 	optimizing/select_generator.cc \
+	optimizing/scheduler.cc \
 	optimizing/sharpening.cc \
 	optimizing/side_effects_analysis.cc \
 	optimizing/ssa_builder.cc \

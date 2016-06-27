@@ -58,12 +58,12 @@ class Arm64InstructionSetFeatures FINAL : public InstructionSetFeatures {
 
   // Generate code addressing Cortex-A53 erratum 835769?
   bool NeedFixCortexA53_835769() const {
-      return fix_cortex_a53_835769_;
+    return fix_cortex_a53_835769_;
   }
 
   // Generate code addressing Cortex-A53 erratum 843419?
   bool NeedFixCortexA53_843419() const {
-      return fix_cortex_a53_843419_;
+    return fix_cortex_a53_843419_;
   }
 
   virtual ~Arm64InstructionSetFeatures() {}

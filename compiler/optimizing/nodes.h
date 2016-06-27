@@ -1564,6 +1564,16 @@ class SideEffects : public ValueObject {
     return (other.flags_ & depends_on_flags);
   }
 
+  // Returns true if we cannot reorder this and other instructions given their side effects.
+  bool MayHaveReorderingDependency(SideEffects other) const {
+    const uint64_t this_memory_writes = flags_ & kAllWrites;
+    const uint64_t other_memory_writes = other.flags_ & kAllWrites;
+    // RAW, WAR and memory WAW.
+    return MayDependOn(other) ||  // Read after write.
+        other.MayDependOn(*this) ||  // Write after read.
+        (other_memory_writes & this_memory_writes) != 0;  // Memory write after write.
+  }
+
   // Returns string representation of flags (for debugging only).
   // Format: |x|DFJISCBZL|DFJISCBZL|y|DFJISCBZL|DFJISCBZL|
   std::string ToString() const {
@@ -1985,8 +1995,9 @@ class HInstruction : public ArenaObject<kArenaAllocInstruction> {
     other->ReplaceInput(this, use_index);
   }
 
-  // Move `this` instruction before `cursor`.
+  // Move `this` instruction before or after `cursor`.
   void MoveBefore(HInstruction* cursor);
+  void MoveAfter(HInstruction* cursor);
 
   // Move `this` before its first user and out of any loops. If there is no
   // out-of-loop user that dominates all other users, move the instruction

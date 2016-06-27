@@ -19,6 +19,8 @@
 
 #include "nodes.h"
 #include "builder.h"
+#include "code_generator_arm.h"
+#include "code_generator_x86.h"
 #include "common_compiler_test.h"
 #include "dex_file.h"
 #include "dex_instruction.h"
@@ -64,6 +66,9 @@ LiveInterval* BuildInterval(const size_t ranges[][2],
 void RemoveSuspendChecks(HGraph* graph) {
   for (HBasicBlock* block : graph->GetBlocks()) {
     if (block != nullptr) {
+      if (block->GetLoopInformation() != nullptr) {
+        block->GetLoopInformation()->SetSuspendCheck(nullptr);
+      }
       for (HInstructionIterator it(block->GetInstructions()); !it.Done(); it.Advance()) {
         HInstruction* current = it.Current();
         if (current->IsSuspendCheck()) {
@@ -120,6 +125,56 @@ inline std::string Patch(const std::string& original, const diff_t& diff) {
 inline bool IsRemoved(HInstruction* instruction) {
   return instruction->GetBlock() == nullptr;
 }
+
+// Provide our own codegen, that ensures the C calling conventions
+// are preserved. Currently, ART and C do not match as R4 is caller-save
+// in ART, and callee-save in C. Alternatively, we could use or write
+// the stub that saves and restores all registers, but it is easier
+// to just overwrite the code generator.
+class TestCodeGeneratorARM : public arm::CodeGeneratorARM {
+ public:
+  TestCodeGeneratorARM(HGraph* graph,
+                       const ArmInstructionSetFeatures& isa_features,
+                       const CompilerOptions& compiler_options)
+      : arm::CodeGeneratorARM(graph, isa_features, compiler_options) {
+    AddAllocatedRegister(Location::RegisterLocation(arm::R6));
+    AddAllocatedRegister(Location::RegisterLocation(arm::R7));
+  }
+
+  void SetupBlockedRegisters() const OVERRIDE {
+    arm::CodeGeneratorARM::SetupBlockedRegisters();
+    blocked_core_registers_[arm::R4] = true;
+    blocked_core_registers_[arm::R6] = false;
+    blocked_core_registers_[arm::R7] = false;
+    // Makes pair R6-R7 available.
+    blocked_register_pairs_[arm::R6_R7] = false;
+  }
+};
+
+class TestCodeGeneratorX86 : public x86::CodeGeneratorX86 {
+ public:
+  TestCodeGeneratorX86(HGraph* graph,
+                       const X86InstructionSetFeatures& isa_features,
+                       const CompilerOptions& compiler_options)
+      : x86::CodeGeneratorX86(graph, isa_features, compiler_options) {
+    // Save edi, we need it for getting enough registers for long multiplication.
+    AddAllocatedRegister(Location::RegisterLocation(x86::EDI));
+  }
+
+  void SetupBlockedRegisters() const OVERRIDE {
+    x86::CodeGeneratorX86::SetupBlockedRegisters();
+    // ebx is a callee-save register in C, but caller-save for ART.
+    blocked_core_registers_[x86::EBX] = true;
+    blocked_register_pairs_[x86::EAX_EBX] = true;
+    blocked_register_pairs_[x86::EDX_EBX] = true;
+    blocked_register_pairs_[x86::ECX_EBX] = true;
+    blocked_register_pairs_[x86::EBX_EDI] = true;
+
+    // Make edi available.
+    blocked_core_registers_[x86::EDI] = false;
+    blocked_register_pairs_[x86::ECX_EDI] = false;
+  }
+};
 
 }  // namespace art
 

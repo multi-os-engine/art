@@ -28,6 +28,7 @@
 #include "mirror/array-inl.h"
 #include "mirror/class-inl.h"
 #include "offsets.h"
+#include "scheduler_arm64.h"
 #include "thread.h"
 #include "utils/arm64/assembler_arm64.h"
 #include "utils/assembler.h"
@@ -1789,6 +1790,12 @@ void InstructionCodeGeneratorARM64::HandleBinaryOp(HBinaryOperation* instr) {
   }
 }
 
+void Arm64SchedulingLatencyVisitor::VisitBinaryOperation(HBinaryOperation* instr) {
+  last_visited_latency_ = Primitive::IsFloatingPointType(instr->GetResultType())
+      ? kArm64FloatingPointOpLatency
+      : kArm64IntegerOpLatency;
+}
+
 void LocationsBuilderARM64::HandleShift(HBinaryOperation* instr) {
   DCHECK(instr->IsShl() || instr->IsShr() || instr->IsUShr());
 
@@ -1890,6 +1897,11 @@ void InstructionCodeGeneratorARM64::VisitBitwiseNegatedRight(HBitwiseNegatedRigh
   }
 }
 
+void Arm64SchedulingLatencyVisitor::VisitBitwiseNegatedRight(
+    HBitwiseNegatedRight* ATTRIBUTE_UNUSED) {
+  last_visited_latency_ = kArm64IntegerOpLatency;
+}
+
 void LocationsBuilderARM64::VisitArm64DataProcWithShifterOp(
     HArm64DataProcWithShifterOp* instruction) {
   DCHECK(instruction->GetType() == Primitive::kPrimInt ||
@@ -1965,6 +1977,11 @@ void InstructionCodeGeneratorARM64::VisitArm64DataProcWithShifterOp(
   }
 }
 
+void Arm64SchedulingLatencyVisitor::VisitArm64DataProcWithShifterOp(
+    HArm64DataProcWithShifterOp* ATTRIBUTE_UNUSED) {
+  last_visited_latency_ = kArm64DataProcWithShifterOpLatency;
+}
+
 void LocationsBuilderARM64::VisitArm64IntermediateAddress(HArm64IntermediateAddress* instruction) {
   // The read barrier instrumentation does not support the
   // HArm64IntermediateAddress instruction yet.
@@ -1984,6 +2001,13 @@ void InstructionCodeGeneratorARM64::VisitArm64IntermediateAddress(
   __ Add(OutputRegister(instruction),
          InputRegisterAt(instruction, 0),
          Operand(InputOperandAt(instruction, 1)));
+}
+
+void Arm64SchedulingLatencyVisitor::VisitArm64IntermediateAddress(
+    HArm64IntermediateAddress* ATTRIBUTE_UNUSED) {
+  // Although the code generated is a simple `add` instruction, we found through empirical results
+  // that spacing it from its use in memory accesses was beneficial.
+  last_visited_latency_ = kArm64IntegerOpLatency + 2;
 }
 
 void LocationsBuilderARM64::VisitMultiplyAccumulate(HMultiplyAccumulate* instr) {
@@ -2038,6 +2062,10 @@ void InstructionCodeGeneratorARM64::VisitMultiplyAccumulate(HMultiplyAccumulate*
       __ Msub(res, mul_left, mul_right, accumulator);
     }
   }
+}
+
+void Arm64SchedulingLatencyVisitor::VisitMultiplyAccumulate(HMultiplyAccumulate* ATTRIBUTE_UNUSED) {
+  last_visited_latency_ = kArm64MulIntegerLatency;
 }
 
 void LocationsBuilderARM64::VisitArrayGet(HArrayGet* instruction) {
@@ -2128,6 +2156,14 @@ void InstructionCodeGeneratorARM64::VisitArrayGet(HArrayGet* instruction) {
   }
 }
 
+void Arm64SchedulingLatencyVisitor::VisitArrayGet(HArrayGet* instruction) {
+  if (!instruction->GetArray()->IsArm64IntermediateAddress()) {
+    // Take the intermediate address computation into account.
+    last_visited_internal_latency_ = kArm64IntegerOpLatency;
+  }
+  last_visited_latency_ = kArm64MemoryLoadLatency;
+}
+
 void LocationsBuilderARM64::VisitArrayLength(HArrayLength* instruction) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
   locations->SetInAt(0, Location::RequiresRegister());
@@ -2139,6 +2175,10 @@ void InstructionCodeGeneratorARM64::VisitArrayLength(HArrayLength* instruction) 
   BlockPoolsScope block_pools(GetVIXLAssembler());
   __ Ldr(OutputRegister(instruction), HeapOperand(InputRegisterAt(instruction, 0), offset));
   codegen_->MaybeRecordImplicitNullCheck(instruction);
+}
+
+void Arm64SchedulingLatencyVisitor::VisitArrayLength(HArrayLength* ATTRIBUTE_UNUSED) {
+  last_visited_latency_ = kArm64MemoryLoadLatency;
 }
 
 void LocationsBuilderARM64::VisitArraySet(HArraySet* instruction) {
@@ -2338,6 +2378,10 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
   }
 }
 
+void Arm64SchedulingLatencyVisitor::VisitArraySet(HArraySet* ATTRIBUTE_UNUSED) {
+  last_visited_latency_ = kArm64MemoryStoreLatency;
+}
+
 void LocationsBuilderARM64::VisitBoundsCheck(HBoundsCheck* instruction) {
   LocationSummary::CallKind call_kind = instruction->CanThrowIntoCatchBlock()
       ? LocationSummary::kCallOnSlowPath
@@ -2357,6 +2401,12 @@ void InstructionCodeGeneratorARM64::VisitBoundsCheck(HBoundsCheck* instruction) 
 
   __ Cmp(InputRegisterAt(instruction, 0), InputOperandAt(instruction, 1));
   __ B(slow_path->GetEntryLabel(), hs);
+}
+
+void Arm64SchedulingLatencyVisitor::VisitBoundsCheck(HBoundsCheck* ATTRIBUTE_UNUSED) {
+  last_visited_internal_latency_ = kArm64IntegerOpLatency;
+  // Users do not use any data results.
+  last_visited_latency_ = 0;
 }
 
 void LocationsBuilderARM64::VisitClinitCheck(HClinitCheck* check) {
@@ -2717,6 +2767,20 @@ void InstructionCodeGeneratorARM64::VisitDiv(HDiv* div) {
   }
 }
 
+void Arm64SchedulingLatencyVisitor::VisitDiv(HDiv* instr) {
+  switch (instr->GetResultType()) {
+    case Primitive::kPrimFloat:
+      last_visited_latency_ = kArm64DivFloatingPointLatency;
+      break;
+    case Primitive::kPrimDouble:
+      last_visited_latency_ = kArm64DivDoubleLatency;
+      break;
+    default:
+      last_visited_latency_ = kArm64DivIntegerLatency;
+      return;
+  }
+}
+
 void LocationsBuilderARM64::VisitDivZeroCheck(HDivZeroCheck* instruction) {
   LocationSummary::CallKind call_kind = instruction->CanThrowIntoCatchBlock()
       ? LocationSummary::kCallOnSlowPath
@@ -3067,6 +3131,10 @@ void InstructionCodeGeneratorARM64::VisitInstanceFieldGet(HInstanceFieldGet* ins
   HandleFieldGet(instruction, instruction->GetFieldInfo());
 }
 
+void Arm64SchedulingLatencyVisitor::VisitInstanceFieldGet(HInstanceFieldGet* ATTRIBUTE_UNUSED) {
+  last_visited_latency_ = kArm64MemoryLoadLatency;
+}
+
 void LocationsBuilderARM64::VisitInstanceFieldSet(HInstanceFieldSet* instruction) {
   HandleFieldSet(instruction);
 }
@@ -3266,6 +3334,11 @@ void InstructionCodeGeneratorARM64::VisitInstanceOf(HInstanceOf* instruction) {
   if (slow_path != nullptr) {
     __ Bind(slow_path->GetExitLabel());
   }
+}
+
+void Arm64SchedulingLatencyVisitor::VisitInstanceOf(HInstanceOf* ATTRIBUTE_UNUSED) {
+  last_visited_internal_latency_ = kArm64CallRuntimeInternalLatency;
+  last_visited_latency_ = kArm64IntegerOpLatency;
 }
 
 void LocationsBuilderARM64::VisitCheckCast(HCheckCast* instruction) {
@@ -3569,6 +3642,11 @@ void LocationsBuilderARM64::VisitInvokeStaticOrDirect(HInvokeStaticOrDirect* inv
   }
 
   HandleInvoke(invoke);
+}
+
+void Arm64SchedulingLatencyVisitor::VisitInvoke(HInvoke* ATTRIBUTE_UNUSED) {
+  last_visited_internal_latency_ = kArm64CallRuntimeInternalLatency;
+  last_visited_latency_ = kArm64CallRuntimeLatency;
 }
 
 static bool TryGenerateIntrinsicCode(HInvoke* invoke, CodeGeneratorARM64* codegen) {
@@ -4262,6 +4340,11 @@ void InstructionCodeGeneratorARM64::VisitLoadString(HLoadString* load) {
   }
 }
 
+void Arm64SchedulingLatencyVisitor::VisitLoadString(HLoadString* ATTRIBUTE_UNUSED) {
+  last_visited_internal_latency_ = kArm64LoadStringInternalLatency;
+  last_visited_latency_ = kArm64MemoryLoadLatency;
+}
+
 void LocationsBuilderARM64::VisitLongConstant(HLongConstant* constant) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(constant);
   locations->SetOut(Location::ConstantLocation(constant));
@@ -4331,6 +4414,12 @@ void InstructionCodeGeneratorARM64::VisitMul(HMul* mul) {
   }
 }
 
+void Arm64SchedulingLatencyVisitor::VisitMul(HMul* instr) {
+  last_visited_latency_ = Primitive::IsFloatingPointType(instr->GetResultType())
+      ? kArm64MulFloatingPointLatency
+      : kArm64MulIntegerLatency;
+}
+
 void LocationsBuilderARM64::VisitNeg(HNeg* neg) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(neg, LocationSummary::kNoCall);
@@ -4394,6 +4483,11 @@ void InstructionCodeGeneratorARM64::VisitNewArray(HNewArray* instruction) {
   CheckEntrypointTypes<kQuickAllocArrayWithAccessCheck, void*, uint32_t, int32_t, ArtMethod*>();
 }
 
+void Arm64SchedulingLatencyVisitor::VisitNewArray(HNewArray* ATTRIBUTE_UNUSED) {
+  last_visited_internal_latency_ = kArm64IntegerOpLatency + kArm64CallRuntimeInternalLatency;
+  last_visited_latency_ = kArm64CallRuntimeLatency;
+}
+
 void LocationsBuilderARM64::VisitNewInstance(HNewInstance* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
@@ -4425,6 +4519,15 @@ void InstructionCodeGeneratorARM64::VisitNewInstance(HNewInstance* instruction) 
                             nullptr);
     CheckEntrypointTypes<kQuickAllocObjectWithAccessCheck, void*, uint32_t, ArtMethod*>();
   }
+}
+
+void Arm64SchedulingLatencyVisitor::VisitNewInstance(HNewInstance* instruction) {
+  if (instruction->IsStringAlloc()) {
+    last_visited_internal_latency_ = 2 + kArm64MemoryLoadLatency + kArm64CallRuntimeInternalLatency;
+  } else {
+    last_visited_internal_latency_ = kArm64CallRuntimeInternalLatency;
+  }
+  last_visited_latency_ = kArm64CallRuntimeLatency;
 }
 
 void LocationsBuilderARM64::VisitNot(HNot* instruction) {
@@ -4604,6 +4707,40 @@ void InstructionCodeGeneratorARM64::VisitRem(HRem* rem) {
   }
 }
 
+void Arm64SchedulingLatencyVisitor::VisitRem(HRem* instruction) {
+  if (Primitive::IsFloatingPointType(instruction->GetResultType())) {
+    last_visited_internal_latency_ = kArm64CallRuntimeInternalLatency;
+    last_visited_latency_ = kArm64CallRuntimeLatency;
+  } else {
+    // Follow the code path used by code generation.
+    if (instruction->GetRight()->IsConstant()) {
+      int64_t imm = Int64FromConstant(instruction->GetRight()->AsConstant());
+
+      if (imm == 0) {
+        last_visited_internal_latency_ = 0;
+        last_visited_latency_ = 0;
+      } else if (imm == 1 || imm == -1) {
+        last_visited_internal_latency_ = 0;
+        last_visited_latency_ = kArm64IntegerOpLatency;
+      } else if (IsPowerOfTwo(AbsOrMin(imm))) {
+        last_visited_internal_latency_ = 4 * kArm64IntegerOpLatency;
+        last_visited_latency_ = kArm64IntegerOpLatency;
+      } else {
+        DCHECK(imm <= -2 || imm >= 2);
+        last_visited_internal_latency_ = 4 * kArm64IntegerOpLatency;
+        last_visited_latency_ = kArm64MulIntegerLatency;
+      }
+    } else {
+      if (instruction->IsDiv()) {
+        last_visited_latency_ = kArm64DivIntegerLatency;
+      } else {
+        last_visited_internal_latency_ = kArm64DivIntegerLatency;
+        last_visited_latency_ = kArm64MulIntegerLatency;
+      }
+    }
+  }
+}
+
 void LocationsBuilderARM64::VisitMemoryBarrier(HMemoryBarrier* memory_barrier) {
   memory_barrier->SetLocations(nullptr);
 }
@@ -4668,6 +4805,10 @@ void LocationsBuilderARM64::VisitStaticFieldGet(HStaticFieldGet* instruction) {
 
 void InstructionCodeGeneratorARM64::VisitStaticFieldGet(HStaticFieldGet* instruction) {
   HandleFieldGet(instruction, instruction->GetFieldInfo());
+}
+
+void Arm64SchedulingLatencyVisitor::VisitStaticFieldGet(HStaticFieldGet* ATTRIBUTE_UNUSED) {
+  last_visited_latency_ = kArm64MemoryLoadLatency;
 }
 
 void LocationsBuilderARM64::VisitStaticFieldSet(HStaticFieldSet* instruction) {
@@ -4764,6 +4905,11 @@ void InstructionCodeGeneratorARM64::VisitSuspendCheck(HSuspendCheck* instruction
   GenerateSuspendCheck(instruction, nullptr);
 }
 
+void Arm64SchedulingLatencyVisitor::VisitSuspendCheck(HSuspendCheck* ATTRIBUTE_UNUSED) {
+  last_visited_internal_latency_ = kArm64MemoryLoadLatency + 3 * kArm64IntegerOpLatency;
+  last_visited_latency_ = 0;
+}
+
 void LocationsBuilderARM64::VisitThrow(HThrow* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
@@ -4841,6 +4987,15 @@ void InstructionCodeGeneratorARM64::VisitTypeConversion(HTypeConversion* convers
   } else {
     LOG(FATAL) << "Unexpected or unimplemented type conversion from " << input_type
                 << " to " << result_type;
+  }
+}
+
+void Arm64SchedulingLatencyVisitor::VisitTypeConversion(HTypeConversion* instr) {
+  if (Primitive::IsFloatingPointType(instr->GetResultType()) ||
+      Primitive::IsFloatingPointType(instr->GetInputType())) {
+    last_visited_latency_ = kArm64TypeConversionFloatingPointIntegerLatency;
+  } else {
+    last_visited_latency_ = kArm64IntegerOpLatency;
   }
 }
 
