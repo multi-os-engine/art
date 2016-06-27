@@ -191,7 +191,8 @@ class HeapLocationCollector : public HGraphVisitor {
         has_heap_stores_(false),
         has_volatile_(false),
         has_monitor_operations_(false),
-        may_deoptimize_(false) {}
+        may_deoptimize_(false),
+        has_unresolved_accesses_(false) {}
 
   size_t GetNumberOfHeapLocations() const {
     return heap_locations_.size();
@@ -229,6 +230,15 @@ class HeapLocationCollector : public HGraphVisitor {
   // a method that eliminates allocations/stores.
   bool MayDeoptimize() const {
     return may_deoptimize_;
+  }
+
+  // Returns whether this method has unresolved field accesses.
+  // We cannot eliminate loads/stores when there are such accesses,
+  // because we might resolve to a field also used within that method.
+  // A field being accessed in a resolved way and in an unresolved way
+  // within the same method is due to inlining.
+  bool HasUnresolvedAccesses() const {
+    return has_unresolved_accesses_;
   }
 
   // Find and return the heap location index in heap_locations_.
@@ -425,8 +435,15 @@ class HeapLocationCollector : public HGraphVisitor {
     has_heap_stores_ = true;
   }
 
-  // We intentionally don't collect HUnresolvedInstanceField/HUnresolvedStaticField accesses
-  // since we cannot accurately track the fields.
+  void VisitUnresolvedInstanceFieldGet(
+      HUnresolvedInstanceFieldGet* instruction ATTRIBUTE_UNUSED) OVERRIDE {
+    has_unresolved_accesses_ = true;
+  }
+
+  void VisitUnresolvedInstanceFieldSet(
+      HUnresolvedInstanceFieldSet* instruction ATTRIBUTE_UNUSED) OVERRIDE {
+    has_unresolved_accesses_ = true;
+  }
 
   void VisitArrayGet(HArrayGet* instruction) OVERRIDE {
     VisitArrayAccess(instruction->InputAt(0), instruction->InputAt(1));
@@ -479,6 +496,7 @@ class HeapLocationCollector : public HGraphVisitor {
   bool has_volatile_;       // If there are volatile field accesses.
   bool has_monitor_operations_;    // If there are monitor operations.
   bool may_deoptimize_;     // Only true for HDeoptimize with single-frame deoptimization.
+  bool has_unresolved_accesses_;  // If there are unresolved accesses.
 
   DISALLOW_COPY_AND_ASSIGN(HeapLocationCollector);
 };
@@ -783,6 +801,7 @@ class LSEVisitor : public HGraphVisitor {
       // For array element, don't eliminate stores since it can be easily aliased
       // with non-constant index.
     } else if (!heap_location_collector_.MayDeoptimize() &&
+               !heap_location_collector_.HasUnresolvedAccesses() &&
                ref_info->IsSingletonAndNotReturned()) {
       // Store into a field of a singleton that's not returned. The value cannot be
       // killed due to aliasing/invocation. It can be redundant since future loads can
@@ -961,6 +980,7 @@ class LSEVisitor : public HGraphVisitor {
       return;
     }
     if (!heap_location_collector_.MayDeoptimize() &&
+        !heap_location_collector_.HasUnresolvedAccesses() &&
         ref_info->IsSingletonAndNotReturned() &&
         !new_instance->IsFinalizable() &&
         !new_instance->NeedsAccessCheck()) {
