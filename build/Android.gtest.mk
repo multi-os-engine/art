@@ -64,6 +64,12 @@ $(ART_TEST_TARGET_GTEST_MainStripped_DEX): $(ART_TEST_TARGET_GTEST_Main_DEX)
 	cp $< $@
 	$(call dexpreopt-remove-classes.dex,$@)
 
+ART_TEST_GTEST_VerifierMetadata_SRC := $(abspath $(wildcard $(LOCAL_PATH)/VerifierMetadata/*.smali))
+ART_TEST_HOST_GTEST_VerifierMetadata_DEX := $(dir $(ART_TEST_HOST_GTEST_Main_DEX))$(subst Main,VerifierMetadata,$(basename $(notdir $(ART_TEST_HOST_GTEST_Main_DEX))))$(suffix $(ART_TEST_HOST_GTEST_Main_DEX))
+
+$(ART_TEST_HOST_GTEST_VerifierMetadata_DEX): $(ART_TEST_GTEST_VerifierMetadata_SRC) $(HOST_OUT_EXECUTABLES)/smali
+	 $(HOST_OUT_EXECUTABLES)/smali --output=$@ $(filter %.smali,$^)
+
 # Dex file dependencies for each gtest.
 ART_GTEST_dex2oat_environment_tests_DEX_DEPS := Main MainStripped MultiDex MultiDexModifiedSecondary Nested
 
@@ -87,6 +93,7 @@ ART_GTEST_profile_compilation_info_test_DEX_DEPS := ProfileTestMultiDex
 ART_GTEST_stub_test_DEX_DEPS := AllFields
 ART_GTEST_transaction_test_DEX_DEPS := Transaction
 ART_GTEST_type_lookup_table_test_DEX_DEPS := Lookup
+ART_GTEST_verifier_metadata_test_DEX_DEPS := VerifierMetadata
 
 # The elf writer test has dependencies on core.oat.
 ART_GTEST_elf_writer_test_HOST_DEPS := $(HOST_CORE_IMAGE_default_no-pic_64) $(HOST_CORE_IMAGE_default_no-pic_32)
@@ -255,6 +262,7 @@ RUNTIME_GTEST_COMMON_SRC_FILES := \
   runtime/utils_test.cc \
   runtime/verifier/method_verifier_test.cc \
   runtime/verifier/reg_type_test.cc \
+  runtime/verifier/verifier_metadata_test.cc \
   runtime/zip_archive_test.cc
 
 COMPILER_GTEST_COMMON_SRC_FILES := \
@@ -834,11 +842,14 @@ ART_GTEST_reflection_test_DEX_DEPS :=
 ART_GTEST_stub_test_DEX_DEPS :=
 ART_GTEST_transaction_test_DEX_DEPS :=
 ART_GTEST_dex2oat_environment_tests_DEX_DEPS :=
+ART_GTEST_verification_metadata_test_DEX_DEPS :=
 ART_VALGRIND_DEPENDENCIES :=
 ART_VALGRIND_TARGET_DEPENDENCIES :=
 $(foreach dir,$(GTEST_DEX_DIRECTORIES), $(eval ART_TEST_TARGET_GTEST_$(dir)_DEX :=))
 $(foreach dir,$(GTEST_DEX_DIRECTORIES), $(eval ART_TEST_HOST_GTEST_$(dir)_DEX :=))
 ART_TEST_HOST_GTEST_MainStripped_DEX :=
 ART_TEST_TARGET_GTEST_MainStripped_DEX :=
+ART_TEST_GTEST_VerifierMetadata_SRC :=
+ART_TEST_HOST_GTEST_VerifierMetadata_DEX :=
 GTEST_DEX_DIRECTORIES :=
 LOCAL_PATH :=

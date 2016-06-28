@@ -191,6 +191,7 @@ LIBART_COMMON_SRC_FILES := \
   verifier/reg_type.cc \
   verifier/reg_type_cache.cc \
   verifier/register_line.cc \
+  verifier/verifier_metadata.cc \
   well_known_classes.cc \
   zip_archive.cc
 

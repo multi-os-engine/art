@@ -19,6 +19,7 @@
 #include <unordered_set>
 #include <vector>
 #include <unistd.h>
+#include <iostream>
 
 #ifndef __APPLE__
 #include <malloc.h>  // For mallinfo
@@ -72,6 +73,7 @@
 #include "utils/swap_space.h"
 #include "verifier/method_verifier.h"
 #include "verifier/method_verifier-inl.h"
+#include "verifier/verifier_metadata.h"
 
 namespace art {
 
@@ -2234,8 +2236,10 @@ void CompilerDriver::Verify(jobject class_loader,
 
 class VerifyClassVisitor : public CompilationVisitor {
  public:
-  VerifyClassVisitor(const ParallelCompilationManager* manager, LogSeverity log_level)
-     : manager_(manager), log_level_(log_level) {}
+  VerifyClassVisitor(const ParallelCompilationManager* manager,
+                     verifier::VerifierMetadata* metadata,
+                     LogSeverity log_level)
+     : manager_(manager), metadata_(metadata), log_level_(log_level) {}
 
   virtual void Visit(size_t class_def_index) REQUIRES(!Locks::mutator_lock_) OVERRIDE {
     ATRACE_CALL();
@@ -2272,6 +2276,7 @@ class VerifyClassVisitor : public CompilationVisitor {
                                                 class_loader,
                                                 &class_def,
                                                 Runtime::Current()->GetCompilerCallbacks(),
+                                                metadata_,
                                                 true /* allow soft failures */,
                                                 log_level_,
                                                 &error_msg) ==
@@ -2282,7 +2287,7 @@ class VerifyClassVisitor : public CompilationVisitor {
       }
     } else if (!SkipClass(jclass_loader, dex_file, klass.Get())) {
       CHECK(klass->IsResolved()) << PrettyClass(klass.Get());
-      class_linker->VerifyClass(soa.Self(), klass, log_level_);
+      class_linker->VerifyClass(soa.Self(), klass, metadata_, log_level_);
 
       if (klass->IsErroneous()) {
         // ClassLinker::VerifyClass throws, which isn't useful in the compiler.
@@ -2305,6 +2310,7 @@ class VerifyClassVisitor : public CompilationVisitor {
 
  private:
   const ParallelCompilationManager* const manager_;
+  verifier::VerifierMetadata* const metadata_;
   const LogSeverity log_level_;
 };
 
@@ -2318,11 +2324,16 @@ void CompilerDriver::VerifyDexFile(jobject class_loader,
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   ParallelCompilationManager context(class_linker, class_loader, this, &dex_file, dex_files,
                                      thread_pool);
+  verifier::VerifierMetadata metadata(dex_file);
   LogSeverity log_level = GetCompilerOptions().AbortOnHardVerifierFailure()
                               ? LogSeverity::INTERNAL_FATAL
                               : LogSeverity::WARNING;
-  VerifyClassVisitor visitor(&context, log_level);
+  VerifyClassVisitor visitor(&context, &metadata, log_level);
   context.ForAll(0, dex_file.NumClassDefs(), &visitor, thread_count);
+  // {
+  //   ScopedObjectAccess soa(Thread::Current());
+  //   metadata.Dump(std::cout);
+  // }
 }
 
 class SetVerifiedClassVisitor : public CompilationVisitor {

@@ -122,6 +122,7 @@ static void SafelyMarkAllRegistersAsConflicts(MethodVerifier* verifier, Register
 MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                         mirror::Class* klass,
                                                         CompilerCallbacks* callbacks,
+                                                        VerifierMetadata* metadata,
                                                         bool allow_soft_failures,
                                                         LogSeverity log_level,
                                                         std::string* error) {
@@ -161,6 +162,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                      class_loader,
                      class_def,
                      callbacks,
+                     metadata,
                      allow_soft_failures,
                      log_level,
                      error);
@@ -195,6 +197,7 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethods(Thread* self,
                                                           Handle<mirror::DexCache> dex_cache,
                                                           Handle<mirror::ClassLoader> class_loader,
                                                           CompilerCallbacks* callbacks,
+                                                          VerifierMetadata* metadata,
                                                           bool allow_soft_failures,
                                                           LogSeverity log_level,
                                                           bool need_precise_constants,
@@ -236,6 +239,7 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethods(Thread* self,
                                                       method,
                                                       it->GetMethodAccessFlags(),
                                                       callbacks,
+                                                      metadata,
                                                       allow_soft_failures,
                                                       log_level,
                                                       need_precise_constants,
@@ -266,6 +270,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                         Handle<mirror::ClassLoader> class_loader,
                                                         const DexFile::ClassDef* class_def,
                                                         CompilerCallbacks* callbacks,
+                                                        VerifierMetadata* metadata,
                                                         bool allow_soft_failures,
                                                         LogSeverity log_level,
                                                         std::string* error) {
@@ -299,6 +304,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                           dex_cache,
                                                           class_loader,
                                                           callbacks,
+                                                          metadata,
                                                           allow_soft_failures,
                                                           log_level,
                                                           false /* need precise constants */,
@@ -312,6 +318,7 @@ MethodVerifier::FailureKind MethodVerifier::VerifyClass(Thread* self,
                                                            dex_cache,
                                                            class_loader,
                                                            callbacks,
+                                                           metadata,
                                                            allow_soft_failures,
                                                            log_level,
                                                            false /* need precise constants */,
@@ -360,6 +367,7 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethod(Thread* self,
                                                          ArtMethod* method,
                                                          uint32_t method_access_flags,
                                                          CompilerCallbacks* callbacks,
+                                                         VerifierMetadata* metadata,
                                                          bool allow_soft_failures,
                                                          LogSeverity log_level,
                                                          bool need_precise_constants,
@@ -380,7 +388,8 @@ MethodVerifier::FailureData MethodVerifier::VerifyMethod(Thread* self,
                           allow_soft_failures,
                           need_precise_constants,
                           false /* verify to dump */,
-                          true /* allow_thread_suspension */);
+                          true /* allow_thread_suspension */,
+                          metadata);
   if (verifier.Verify()) {
     // Verification completed, however failures may be pending that didn't cause the verification
     // to hard fail.
@@ -466,7 +475,8 @@ MethodVerifier* MethodVerifier::VerifyMethodAndDump(Thread* self,
                                                     const DexFile::ClassDef* class_def,
                                                     const DexFile::CodeItem* code_item,
                                                     ArtMethod* method,
-                                                    uint32_t method_access_flags) {
+                                                    uint32_t method_access_flags,
+                                                    VerifierMetadata* metadata) {
   MethodVerifier* verifier = new MethodVerifier(self,
                                                 dex_file,
                                                 dex_cache,
@@ -480,7 +490,8 @@ MethodVerifier* MethodVerifier::VerifyMethodAndDump(Thread* self,
                                                 true /* allow_soft_failures */,
                                                 true /* need_precise_constants */,
                                                 true /* verify_to_dump */,
-                                                true /* allow_thread_suspension */);
+                                                true /* allow_thread_suspension */,
+                                                metadata);
   verifier->Verify();
   verifier->DumpFailures(vios->Stream());
   vios->Stream() << verifier->info_messages_.str();
@@ -508,10 +519,12 @@ MethodVerifier::MethodVerifier(Thread* self,
                                bool allow_soft_failures,
                                bool need_precise_constants,
                                bool verify_to_dump,
-                               bool allow_thread_suspension)
+                               bool allow_thread_suspension,
+                               VerifierMetadata* metadata)
     : self_(self),
       arena_stack_(Runtime::Current()->GetArenaPool()),
       arena_(&arena_stack_),
+      metadata_(metadata),
       reg_types_(can_load_classes, arena_),
       reg_table_(arena_),
       work_insn_idx_(DexFile::kDexNoIndex),
@@ -570,7 +583,8 @@ void MethodVerifier::FindLocksAtDexPc(ArtMethod* m, uint32_t dex_pc,
                           true  /* allow_soft_failures */,
                           false /* need_precise_constants */,
                           false /* verify_to_dump */,
-                          false /* allow_thread_suspension */);
+                          false /* allow_thread_suspension */,
+                          nullptr /* metadata */);
   verifier.interesting_dex_pc_ = dex_pc;
   verifier.monitor_enter_dex_pcs_ = monitor_enter_dex_pcs;
   verifier.FindLocksAtDexPc();
@@ -625,7 +639,8 @@ ArtField* MethodVerifier::FindAccessedFieldAtDexPc(ArtMethod* m, uint32_t dex_pc
                           true  /* allow_soft_failures */,
                           false /* need_precise_constants */,
                           false /* verify_to_dump */,
-                          true  /* allow_thread_suspension */);
+                          true  /* allow_thread_suspension */,
+                          nullptr /* metadata */);
   return verifier.FindAccessedFieldAtDexPc(dex_pc);
 }
 
@@ -665,7 +680,8 @@ ArtMethod* MethodVerifier::FindInvokedMethodAtDexPc(ArtMethod* m, uint32_t dex_p
                           true  /* allow_soft_failures */,
                           false /* need_precise_constants */,
                           false /* verify_to_dump */,
-                          true  /* allow_thread_suspension */);
+                          true  /* allow_thread_suspension */,
+                          nullptr /* metadata */);
   return verifier.FindInvokedMethodAtDexPc(dex_pc);
 }
 
@@ -1806,6 +1822,7 @@ bool MethodVerifier::SetTypesFromSignature() {
 }
 
 bool MethodVerifier::CodeFlowVerifyMethod() {
+  // std::cout << "VERIFYING " << PrettyMethod(dex_method_idx_, *dex_file_) << std::endl;
   const uint16_t* insns = code_item_->insns_;
   const uint32_t insns_size = code_item_->insns_size_in_code_units_;
 
@@ -2179,7 +2196,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
             // We really do expect a reference here.
             Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "return-object returns a non-reference type "
                                               << reg_type;
-          } else if (!return_type.IsAssignableFrom(reg_type)) {
+          } else if (!return_type.IsAssignableFrom(reg_type, metadata_)) {
             if (reg_type.IsUnresolvedTypes() || return_type.IsUnresolvedTypes()) {
               Fail(VERIFY_ERROR_NO_CLASS) << " can't resolve returned type '" << return_type
                   << "' or '" << reg_type << "'";
@@ -2476,7 +2493,7 @@ bool MethodVerifier::CodeFlowVerifyInstruction(uint32_t* start_guess) {
       break;
     case Instruction::THROW: {
       const RegType& res_type = work_line_->GetRegisterType(this, inst->VRegA_11x());
-      if (!reg_types_.JavaLangThrowable(false).IsAssignableFrom(res_type)) {
+      if (!reg_types_.JavaLangThrowable(false).IsAssignableFrom(res_type, metadata_)) {
         if (res_type.IsUninitializedTypes()) {
           Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "thrown exception not initialized";
         } else if (!res_type.IsReferenceTypes()) {
@@ -3680,8 +3697,13 @@ const RegType& MethodVerifier::ResolveClassAndCheckAccess(uint32_t class_idx) {
     return *result;
   }
   if (klass == nullptr && !result->IsUnresolvedTypes()) {
-    dex_cache_->SetResolvedType(class_idx, result->GetClass());
+    klass = result->GetClass();
+    dex_cache_->SetResolvedType(class_idx, klass);
   }
+  if (metadata_ != nullptr) {
+    metadata_->RecordClassResolution(class_idx, klass);
+  }
+
   // Check if access is allowed. Unresolved types use xxxWithAccessCheck to
   // check at runtime if access is allowed and so pass here. If result is
   // primitive, skip the access check.
@@ -3708,7 +3730,7 @@ const RegType& MethodVerifier::GetCaughtExceptionType() {
             common_super = &reg_types_.JavaLangThrowable(false);
           } else {
             const RegType& exception = ResolveClassAndCheckAccess(iterator.GetHandlerTypeIndex());
-            if (!reg_types_.JavaLangThrowable(false).IsAssignableFrom(exception)) {
+            if (!reg_types_.JavaLangThrowable(false).IsAssignableFrom(exception, metadata_)) {
               DCHECK(!exception.IsUninitializedTypes());  // Comes from dex, shouldn't be uninit.
               if (exception.IsUnresolvedTypes()) {
                 // We don't know enough about the type. Fail here and let runtime handle it.
@@ -3723,9 +3745,10 @@ const RegType& MethodVerifier::GetCaughtExceptionType() {
             } else if (common_super->Equals(exception)) {
               // odd case, but nothing to do
             } else {
-              common_super = &common_super->Merge(exception, &reg_types_);
+              common_super = &common_super->Merge(exception, &reg_types_, metadata_);
               if (FailOrAbort(this,
-                              reg_types_.JavaLangThrowable(false).IsAssignableFrom(*common_super),
+                              reg_types_.JavaLangThrowable(false).IsAssignableFrom(
+                                  *common_super, metadata_),
                               "java.lang.Throwable is not assignable-from common_super at ",
                               work_insn_idx_)) {
                 break;
@@ -3745,6 +3768,20 @@ const RegType& MethodVerifier::GetCaughtExceptionType() {
   return *common_super;
 }
 
+inline static MethodResolutionType GetMethodResolutionType(
+    MethodType method_type, bool is_interface) {
+  if (method_type == METHOD_DIRECT || method_type == METHOD_STATIC) {
+    return kDirectMethodResolution;
+  } else if (method_type == METHOD_INTERFACE) {
+    return kInterfaceMethodResolution;
+  } else if (method_type == METHOD_SUPER && is_interface) {
+    return kInterfaceMethodResolution;
+  } else {
+    DCHECK(method_type == METHOD_VIRTUAL || method_type == METHOD_SUPER);
+    return kVirtualMethodResolution;
+  }
+}
+
 ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(
     uint32_t dex_method_idx, MethodType method_type) {
   const DexFile::MethodId& method_id = dex_file_->GetMethodId(dex_method_idx);
@@ -3762,6 +3799,7 @@ ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(
   const RegType& referrer = GetDeclaringClass();
   auto* cl = Runtime::Current()->GetClassLinker();
   auto pointer_size = cl->GetImagePointerSize();
+  MethodResolutionType res_type = GetMethodResolutionType(method_type, klass->IsInterface());
 
   ArtMethod* res_method = dex_cache_->GetResolvedMethod(dex_method_idx, pointer_size);
   bool stash_method = false;
@@ -3769,35 +3807,47 @@ ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(
     const char* name = dex_file_->GetMethodName(method_id);
     const Signature signature = dex_file_->GetMethodSignature(method_id);
 
-    if (method_type == METHOD_DIRECT || method_type == METHOD_STATIC) {
-      res_method = klass->FindDirectMethod(name, signature, pointer_size);
-    } else if (method_type == METHOD_INTERFACE) {
-      res_method = klass->FindInterfaceMethod(name, signature, pointer_size);
-    } else if (method_type == METHOD_SUPER && klass->IsInterface()) {
-      res_method = klass->FindInterfaceMethod(name, signature, pointer_size);
-    } else {
-      DCHECK(method_type == METHOD_VIRTUAL || method_type == METHOD_SUPER);
-      res_method = klass->FindVirtualMethod(name, signature, pointer_size);
+    switch (res_type) {
+      case kDirectMethodResolution:
+        res_method = klass->FindDirectMethod(name, signature, pointer_size);
+        break;
+      case kVirtualMethodResolution:
+        res_method = klass->FindVirtualMethod(name, signature, pointer_size);
+        break;
+      case kInterfaceMethodResolution:
+        res_method = klass->FindInterfaceMethod(name, signature, pointer_size);
+        break;
     }
+
     if (res_method != nullptr) {
       stash_method = true;
     } else {
       // If a virtual or interface method wasn't found with the expected type, look in
       // the direct methods. This can happen when the wrong invoke type is used or when
       // a class has changed, and will be flagged as an error in later checks.
-      if (method_type == METHOD_INTERFACE ||
-          method_type == METHOD_VIRTUAL ||
-          method_type == METHOD_SUPER) {
+      // Note that in this case, we do not put the resolved method in the Dex cache
+      // because it was not discovered using the expected type of method resolution.
+
+      // TODO: TEST THIS (and implement!, change res_type)
+
+      if (res_type != kDirectMethodResolution) {
         res_method = klass->FindDirectMethod(name, signature, pointer_size);
-      }
-      if (res_method == nullptr) {
-        Fail(VERIFY_ERROR_NO_METHOD) << "couldn't find method "
-                                     << PrettyDescriptor(klass) << "." << name
-                                     << " " << signature;
-        return nullptr;
       }
     }
   }
+
+  if (metadata_ != nullptr) {
+    metadata_->RecordMethodResolution(dex_method_idx, res_type, res_method);
+  }
+
+  if (res_method == nullptr) {
+    Fail(VERIFY_ERROR_NO_METHOD) << "couldn't find method "
+                                 << PrettyDescriptor(klass) << "."
+                                 << dex_file_->GetMethodName(method_id) << " "
+                                 << dex_file_->GetMethodSignature(method_id);
+    return nullptr;
+  }
+
   // Make sure calls to constructors are "direct". There are additional restrictions but we don't
   // enforce them here.
   if (res_method->IsConstructor() && method_type != METHOD_DIRECT) {
@@ -4496,7 +4546,7 @@ void MethodVerifier::VerifyAPut(const Instruction* inst,
   }
 }
 
-ArtField* MethodVerifier::GetStaticField(int field_idx) {
+ArtField* MethodVerifier::GetStaticField(uint32_t field_idx) {
   const DexFile::FieldId& field_id = dex_file_->GetFieldId(field_idx);
   // Check access to class
   const RegType& klass_type = ResolveClassAndCheckAccess(field_id.class_idx_);
@@ -4510,8 +4560,10 @@ ArtField* MethodVerifier::GetStaticField(int field_idx) {
     return nullptr;  // Can't resolve Class so no more to do here, will do checking at runtime.
   }
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, dex_cache_,
-                                                  class_loader_);
+  ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, dex_cache_, class_loader_);
+  if (metadata_ != nullptr) {
+    metadata_->RecordFieldResolution(field_idx, field);
+  }
   if (field == nullptr) {
     VLOG(verifier) << "Unable to resolve static field " << field_idx << " ("
               << dex_file_->GetFieldName(field_id) << ") in "
@@ -4519,8 +4571,9 @@ ArtField* MethodVerifier::GetStaticField(int field_idx) {
     DCHECK(self_->IsExceptionPending());
     self_->ClearException();
     return nullptr;
-  } else if (!GetDeclaringClass().CanAccessMember(field->GetDeclaringClass(),
-                                                  field->GetAccessFlags())) {
+  }
+
+  if (!GetDeclaringClass().CanAccessMember(field->GetDeclaringClass(), field->GetAccessFlags())) {
     Fail(VERIFY_ERROR_ACCESS_FIELD) << "cannot access static field " << PrettyField(field)
                                     << " from " << GetDeclaringClass();
     return nullptr;
@@ -4528,10 +4581,11 @@ ArtField* MethodVerifier::GetStaticField(int field_idx) {
     Fail(VERIFY_ERROR_CLASS_CHANGE) << "expected field " << PrettyField(field) << " to be static";
     return nullptr;
   }
+
   return field;
 }
 
-ArtField* MethodVerifier::GetInstanceField(const RegType& obj_type, int field_idx) {
+ArtField* MethodVerifier::GetInstanceField(const RegType& obj_type, uint32_t field_idx) {
   const DexFile::FieldId& field_id = dex_file_->GetFieldId(field_idx);
   // Check access to class.
   const RegType& klass_type = ResolveClassAndCheckAccess(field_id.class_idx_);
@@ -4545,8 +4599,10 @@ ArtField* MethodVerifier::GetInstanceField(const RegType& obj_type, int field_id
     return nullptr;  // Can't resolve Class so no more to do here
   }
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
-  ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, dex_cache_,
-                                                  class_loader_);
+  ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, dex_cache_, class_loader_);
+  if (metadata_ != nullptr) {
+    metadata_->RecordFieldResolution(field_idx, field);
+  }
   if (field == nullptr) {
     VLOG(verifier) << "Unable to resolve instance field " << field_idx << " ("
               << dex_file_->GetFieldName(field_id) << ") in "
@@ -4554,7 +4610,9 @@ ArtField* MethodVerifier::GetInstanceField(const RegType& obj_type, int field_id
     DCHECK(self_->IsExceptionPending());
     self_->ClearException();
     return nullptr;
-  } else if (obj_type.IsZero()) {
+  }
+
+  if (obj_type.IsZero()) {
     // Cannot infer and check type, however, access will cause null pointer exception.
     // Fall through into a few last soft failure checks below.
   } else if (!obj_type.IsReferenceTypes()) {
@@ -4580,7 +4638,7 @@ ArtField* MethodVerifier::GetInstanceField(const RegType& obj_type, int field_id
                                           << " of " << PrettyMethod(dex_method_idx_, *dex_file_);
         return nullptr;
       }
-    } else if (!field_klass.IsAssignableFrom(obj_type)) {
+    } else if (!field_klass.IsAssignableFrom(obj_type, metadata_)) {
       // Trying to access C1.field1 using reference of type C2, which is neither C1 or a sub-class
       // of C1. For resolution to occur the declared class of the field must be compatible with
       // obj_type, we've discovered this wasn't so, so report the field didn't exist.
@@ -4687,7 +4745,7 @@ void MethodVerifier::VerifyISFieldAccess(const Instruction* inst, const RegType&
     if (is_primitive) {
       VerifyPrimitivePut(*field_type, insn_type, vregA);
     } else {
-      if (!insn_type.IsAssignableFrom(*field_type)) {
+      if (!insn_type.IsAssignableFrom(*field_type, metadata_)) {
         // If the field type is not a reference, this is a global failure rather than
         // a class change failure as the instructions and the descriptors for the type
         // should have been consistent within the same file at compile time.
@@ -4719,7 +4777,7 @@ void MethodVerifier::VerifyISFieldAccess(const Instruction* inst, const RegType&
         return;
       }
     } else {
-      if (!insn_type.IsAssignableFrom(*field_type)) {
+      if (!insn_type.IsAssignableFrom(*field_type, metadata_)) {
         // If the field type is not a reference, this is a global failure rather than
         // a class change failure as the instructions and the descriptors for the type
         // should have been consistent within the same file at compile time.
@@ -4850,7 +4908,7 @@ void MethodVerifier::VerifyQuickFieldAccess(const Instruction* inst, const RegTy
         return;
       }
     } else {
-      if (!insn_type.IsAssignableFrom(*field_type)) {
+      if (!insn_type.IsAssignableFrom(*field_type, metadata_)) {
         Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "expected field " << PrettyField(field)
                                           << " to be compatible with type '" << insn_type
                                           << "' but found type '" << *field_type
@@ -4876,7 +4934,7 @@ void MethodVerifier::VerifyQuickFieldAccess(const Instruction* inst, const RegTy
         return;
       }
     } else {
-      if (!insn_type.IsAssignableFrom(*field_type)) {
+      if (!insn_type.IsAssignableFrom(*field_type, metadata_)) {
         Fail(VERIFY_ERROR_BAD_CLASS_SOFT) << "expected field " << PrettyField(field)
                                           << " to be compatible with type '" << insn_type
                                           << "' but found type '" << *field_type

@@ -43,6 +43,8 @@ class ScopedArenaAllocator;
 namespace verifier {
 
 class RegTypeCache;
+class VerifierMetadata;
+
 /*
  * RegType holds information about the "type" of data held in a register.
  */
@@ -209,7 +211,7 @@ class RegType {
   // Note: Object and interface types may always be assigned to one another, see
   // comment on
   // ClassJoin.
-  bool IsAssignableFrom(const RegType& src) const
+  bool IsAssignableFrom(const RegType& src, VerifierMetadata* metadata = nullptr) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Can this array type potentially be assigned by src.
@@ -226,7 +228,7 @@ class RegType {
   // Can this type be assigned by src? Variant of IsAssignableFrom that doesn't
   // allow assignment to
   // an interface from an Object.
-  bool IsStrictlyAssignableFrom(const RegType& src) const
+  bool IsStrictlyAssignableFrom(const RegType& src, VerifierMetadata* metadata = nullptr) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Are these RegTypes the same?
@@ -234,7 +236,9 @@ class RegType {
 
   // Compute the merge of this register from one edge (path) with incoming_type
   // from another.
-  const RegType& Merge(const RegType& incoming_type, RegTypeCache* reg_types) const
+  const RegType& Merge(const RegType& incoming_type,
+                       RegTypeCache* reg_types,
+                       VerifierMetadata* metadata = nullptr) const
       SHARED_REQUIRES(Locks::mutator_lock_);
   // Same as above, but also handles the case where incoming_type == this.
   const RegType& SafeMerge(const RegType& incoming_type, RegTypeCache* reg_types) const
@@ -297,7 +301,10 @@ class RegType {
   friend class RegTypeCache;
 
  private:
-  static bool AssignableFrom(const RegType& lhs, const RegType& rhs, bool strict)
+  static bool AssignableFrom(const RegType& lhs,
+                             const RegType& rhs,
+                             bool strict,
+                             VerifierMetadata* metadata)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   DISALLOW_COPY_AND_ASSIGN(RegType);

@@ -575,7 +575,9 @@ static const RegType& SelectNonConstant(const RegType& a, const RegType& b) {
   return a.IsConstantTypes() ? b : a;
 }
 
-const RegType& RegType::Merge(const RegType& incoming_type, RegTypeCache* reg_types) const {
+const RegType& RegType::Merge(const RegType& incoming_type,
+                              RegTypeCache* reg_types,
+                              VerifierMetadata* metadata) const {
   DCHECK(!Equals(incoming_type));  // Trivial equality handled by caller
   // Perform pointer equality tests for undefined and conflict to avoid virtual method dispatch.
   const UndefinedType& undefined = reg_types->Undefined();
@@ -703,6 +705,10 @@ const RegType& RegType::Merge(const RegType& incoming_type, RegTypeCache* reg_ty
       DCHECK(c1 != nullptr && !c1->IsPrimitive());
       DCHECK(c2 != nullptr && !c2->IsPrimitive());
       mirror::Class* join_class = ClassJoin(c1, c2);
+      if (metadata != nullptr) {
+        metadata->RecordAssignabilityTest(join_class, c1, /* strict */ true, /* outcome */ true);
+        metadata->RecordAssignabilityTest(join_class, c2, /* strict */ true, /* outcome */ true);
+      }
       if (c1 == join_class && !IsPreciseReference()) {
         return *this;
       } else if (c2 == join_class && !incoming_type.IsPreciseReference()) {

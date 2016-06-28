@@ -99,6 +99,7 @@ enum LockLevel {
   kMonitorPoolLock,
   kMethodVerifiersLock,
   kClassLinkerClassesLock,  // TODO rename.
+  kVerifierMetadataLock,
   kBreakpointLock,
   kMonitorLock,
   kMonitorListLock,

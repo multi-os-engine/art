@@ -44,7 +44,7 @@ static constexpr size_t kDefaultArenaBitVectorBytes = 8;
 
 class RegTypeCache {
  public:
-  explicit RegTypeCache(bool can_load_classes, ScopedArenaAllocator& arena);
+  RegTypeCache(bool can_load_classes, ScopedArenaAllocator& arena);
   ~RegTypeCache();
   static void Init() SHARED_REQUIRES(Locks::mutator_lock_) {
     if (!RegTypeCache::primitive_initialized_) {
@@ -153,10 +153,15 @@ class RegTypeCache {
   static void VisitStaticRoots(RootVisitor* visitor)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  const ScopedArenaVector<const RegType*>& GetEntries() const { return entries_; }
+
+  static mirror::Class* ResolveClass(const char* descriptor,
+                                     mirror::ClassLoader* loader,
+                                     bool can_load_classes)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
  private:
   void FillPrimitiveAndSmallConstantTypes() SHARED_REQUIRES(Locks::mutator_lock_);
-  mirror::Class* ResolveClass(const char* descriptor, mirror::ClassLoader* loader)
-      SHARED_REQUIRES(Locks::mutator_lock_);
   bool MatchDescriptor(size_t idx, const StringPiece& descriptor, bool precise)
       SHARED_REQUIRES(Locks::mutator_lock_);
   const ConstantType& FromCat1NonSmallConstant(int32_t value, bool precise)
