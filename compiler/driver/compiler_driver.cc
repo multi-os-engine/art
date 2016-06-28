@@ -71,6 +71,7 @@
 #include "utils/swap_space.h"
 #include "verifier/method_verifier.h"
 #include "verifier/method_verifier-inl.h"
+#include "verifier/verifier_metadata.h"
 
 namespace art {
 

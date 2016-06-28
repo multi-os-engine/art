@@ -511,6 +511,7 @@ MethodVerifier::MethodVerifier(Thread* self,
     : self_(self),
       arena_stack_(Runtime::Current()->GetArenaPool()),
       arena_(&arena_stack_),
+      metadata_(),
       reg_types_(can_load_classes, arena_),
       reg_table_(arena_),
       work_insn_idx_(DexFile::kDexNoIndex),
@@ -847,6 +848,16 @@ bool MethodVerifier::Verify() {
   result = result && VerifyInstructions();
   // Perform code-flow analysis and return.
   result = result && VerifyCodeFlow();
+
+  for (const RegType* type : reg_types_.GetEntries()) {
+    if (type->IsNonZeroReferenceTypes()) {
+      if (type->IsUnresolvedTypes()) {
+        metadata_.AddUnresolvedClass(type->GetDescriptor().ToString());
+      } else {
+        metadata_.AddResolvedClass(type->GetClass());
+      }
+    }
+  }
 
   return result;
 }
@@ -1801,6 +1812,7 @@ bool MethodVerifier::SetTypesFromSignature() {
 }
 
 bool MethodVerifier::CodeFlowVerifyMethod() {
+  // std::cout << "VERIFYING " << PrettyMethod(dex_method_idx_, *dex_file_) << std::endl;
   const uint16_t* insns = code_item_->insns_;
   const uint32_t insns_size = code_item_->insns_size_in_code_units_;
 
@@ -3786,6 +3798,7 @@ ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(
         res_method = klass->FindDirectMethod(name, signature, pointer_size);
       }
       if (res_method == nullptr) {
+        metadata_.AddUnresolvedMethod(klass, name, signature.ToString());
         Fail(VERIFY_ERROR_NO_METHOD) << "couldn't find method "
                                      << PrettyDescriptor(klass) << "." << name
                                      << " " << signature;
@@ -3793,6 +3806,9 @@ ArtMethod* MethodVerifier::ResolveMethodAndCheckAccess(
       }
     }
   }
+
+  metadata_.AddResolvedMethod(res_method, klass);
+
   // Make sure calls to constructors are "direct". There are additional restrictions but we don't
   // enforce them here.
   if (res_method->IsConstructor() && method_type != METHOD_DIRECT) {
@@ -4508,14 +4524,21 @@ ArtField* MethodVerifier::GetStaticField(int field_idx) {
   ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, dex_cache_,
                                                   class_loader_);
   if (field == nullptr) {
+    const char* field_name = dex_file_->GetFieldName(field_id);
+    const char* field_type = dex_file_->GetFieldTypeDescriptor(field_id);
+    metadata_.AddUnresolvedField(klass_type.GetClass(), field_name, field_type);
+
     VLOG(verifier) << "Unable to resolve static field " << field_idx << " ("
-              << dex_file_->GetFieldName(field_id) << ") in "
+              << field_name << ") in "
               << dex_file_->GetFieldDeclaringClassDescriptor(field_id);
     DCHECK(self_->IsExceptionPending());
     self_->ClearException();
     return nullptr;
-  } else if (!GetDeclaringClass().CanAccessMember(field->GetDeclaringClass(),
-                                                  field->GetAccessFlags())) {
+  }
+
+  metadata_.AddResolvedField(field, klass_type.GetClass());
+
+  if (!GetDeclaringClass().CanAccessMember(field->GetDeclaringClass(), field->GetAccessFlags())) {
     Fail(VERIFY_ERROR_ACCESS_FIELD) << "cannot access static field " << PrettyField(field)
                                     << " from " << GetDeclaringClass();
     return nullptr;
@@ -4523,6 +4546,7 @@ ArtField* MethodVerifier::GetStaticField(int field_idx) {
     Fail(VERIFY_ERROR_CLASS_CHANGE) << "expected field " << PrettyField(field) << " to be static";
     return nullptr;
   }
+
   return field;
 }
 
@@ -4543,13 +4567,21 @@ ArtField* MethodVerifier::GetInstanceField(const RegType& obj_type, int field_id
   ArtField* field = class_linker->ResolveFieldJLS(*dex_file_, field_idx, dex_cache_,
                                                   class_loader_);
   if (field == nullptr) {
+    const char* field_name = dex_file_->GetFieldName(field_id);
+    const char* field_type = dex_file_->GetFieldTypeDescriptor(field_id);
+    metadata_.AddUnresolvedField(klass_type.GetClass(), field_name, field_type);
+
     VLOG(verifier) << "Unable to resolve instance field " << field_idx << " ("
-              << dex_file_->GetFieldName(field_id) << ") in "
+              << field_name << ") in "
               << dex_file_->GetFieldDeclaringClassDescriptor(field_id);
     DCHECK(self_->IsExceptionPending());
     self_->ClearException();
     return nullptr;
-  } else if (obj_type.IsZero()) {
+  }
+
+  metadata_.AddResolvedField(field, klass_type.GetClass());
+
+  if (obj_type.IsZero()) {
     // Cannot infer and check type, however, access will cause null pointer exception.
     // Fall through into a few last soft failure checks below.
   } else if (!obj_type.IsReferenceTypes()) {

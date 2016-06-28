@@ -452,8 +452,8 @@ inline bool Class::CheckResolvedMethodAccess(Class* access_to, ArtMethod* method
 }
 
 inline bool Class::IsSubClass(Class* klass) {
-  DCHECK(!IsInterface()) << PrettyClass(this);
-  DCHECK(!IsArrayClass()) << PrettyClass(this);
+  // DCHECK(!IsInterface()) << PrettyClass(this);
+  // DCHECK(!IsArrayClass()) << PrettyClass(this);
   Class* current = this;
   do {
     if (current == klass) {
