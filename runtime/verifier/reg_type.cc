@@ -575,7 +575,9 @@ static const RegType& SelectNonConstant(const RegType& a, const RegType& b) {
   return a.IsConstantTypes() ? b : a;
 }
 
-const RegType& RegType::Merge(const RegType& incoming_type, RegTypeCache* reg_types) const {
+const RegType& RegType::Merge(const RegType& incoming_type,
+                              RegTypeCache* reg_types,
+                              VerifierMetadata* metadata) const {
   DCHECK(!Equals(incoming_type));  // Trivial equality handled by caller
   // Perform pointer equality tests for undefined and conflict to avoid virtual method dispatch.
   const UndefinedType& undefined = reg_types->Undefined();
@@ -696,13 +698,17 @@ const RegType& RegType::Merge(const RegType& incoming_type, RegTypeCache* reg_ty
       // have two sub-classes and don't know how to merge. Create a new string-based unresolved
       // type that reflects our lack of knowledge and that allows the rest of the unresolved
       // mechanics to continue.
-      return reg_types->FromUnresolvedMerge(*this, incoming_type);
+      return reg_types->FromUnresolvedMerge(*this, incoming_type, metadata);
     } else {  // Two reference types, compute Join
       mirror::Class* c1 = GetClass();
       mirror::Class* c2 = incoming_type.GetClass();
       DCHECK(c1 != nullptr && !c1->IsPrimitive());
       DCHECK(c2 != nullptr && !c2->IsPrimitive());
       mirror::Class* join_class = ClassJoin(c1, c2);
+      if (metadata != nullptr) {
+        metadata->RecordAssignabilityTest(join_class, c1, /* strict */ true, /* outcome */ true);
+        metadata->RecordAssignabilityTest(join_class, c2, /* strict */ true, /* outcome */ true);
+      }
       if (c1 == join_class && !IsPreciseReference()) {
         return *this;
       } else if (c2 == join_class && !incoming_type.IsPreciseReference()) {
@@ -873,8 +879,11 @@ std::ostream& operator<<(std::ostream& os, const RegType& rhs) {
   return os;
 }
 
-bool RegType::CanAssignArray(const RegType& src, RegTypeCache& reg_types,
-                             Handle<mirror::ClassLoader> class_loader, bool* soft_error) const {
+bool RegType::CanAssignArray(const RegType& src,
+                             RegTypeCache& reg_types,
+                             Handle<mirror::ClassLoader> class_loader,
+                             VerifierMetadata* metadata,
+                             bool* soft_error) const {
   if (!IsArrayTypes() || !src.IsArrayTypes()) {
     *soft_error = false;
     return false;
@@ -891,7 +900,7 @@ bool RegType::CanAssignArray(const RegType& src, RegTypeCache& reg_types,
   const RegType& cmp1 = reg_types.GetComponentType(*this, class_loader.Get());
   const RegType& cmp2 = reg_types.GetComponentType(src, class_loader.Get());
 
-  if (cmp1.IsAssignableFrom(cmp2)) {
+  if (cmp1.IsAssignableFrom(cmp2, metadata)) {
     return true;
   }
   if (cmp1.IsUnresolvedTypes()) {
@@ -914,7 +923,7 @@ bool RegType::CanAssignArray(const RegType& src, RegTypeCache& reg_types,
     *soft_error = false;
     return false;
   }
-  return cmp1.CanAssignArray(cmp2, reg_types, class_loader, soft_error);
+  return cmp1.CanAssignArray(cmp2, reg_types, class_loader, metadata, soft_error);
 }
 
 

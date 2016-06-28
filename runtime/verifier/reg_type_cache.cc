@@ -143,15 +143,18 @@ bool RegTypeCache::MatchDescriptor(size_t idx, const StringPiece& descriptor, bo
   return true;
 }
 
-mirror::Class* RegTypeCache::ResolveClass(const char* descriptor, mirror::ClassLoader* loader) {
+mirror::Class* RegTypeCache::ResolveClass(const char* descriptor,
+                                          mirror::ClassLoader* loader,
+                                          bool can_load_classes) {
   // Class was not found, must create new type.
   // Try resolving class
   ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
   Thread* self = Thread::Current();
   StackHandleScope<1> hs(self);
   Handle<mirror::ClassLoader> class_loader(hs.NewHandle(loader));
+
   mirror::Class* klass = nullptr;
-  if (can_load_classes_) {
+  if (can_load_classes) {
     klass = class_linker->FindClass(self, descriptor, class_loader);
   } else {
     klass = class_linker->LookupClass(self, descriptor, ComputeModifiedUtf8Hash(descriptor),
@@ -161,6 +164,18 @@ mirror::Class* RegTypeCache::ResolveClass(const char* descriptor, mirror::ClassL
       klass = nullptr;
     }
   }
+
+  if (klass == nullptr) {
+    // Resolution failed. This might get an exception raised so we want to clear
+    // it before we go on.
+    if (can_load_classes) {
+      DCHECK(Thread::Current()->IsExceptionPending());
+      Thread::Current()->ClearException();
+    } else {
+      DCHECK(!Thread::Current()->IsExceptionPending());
+    }
+  }
+
   return klass;
 }
 
@@ -183,7 +198,7 @@ const RegType& RegTypeCache::From(mirror::ClassLoader* loader,
   }
   // Class not found in the cache, will create a new type for that.
   // Try resolving class.
-  mirror::Class* klass = ResolveClass(descriptor, loader);
+  mirror::Class* klass = ResolveClass(descriptor, loader, can_load_classes_);
   if (klass != nullptr) {
     // Class resolved, first look for the class in the list of entries
     // Class was not found, must create new type.
@@ -204,14 +219,7 @@ const RegType& RegTypeCache::From(mirror::ClassLoader* loader,
     }
     return AddEntry(entry);
   } else {  // Class not resolved.
-    // We tried loading the class and failed, this might get an exception raised
-    // so we want to clear it before we go on.
-    if (can_load_classes_) {
-      DCHECK(Thread::Current()->IsExceptionPending());
-      Thread::Current()->ClearException();
-    } else {
-      DCHECK(!Thread::Current()->IsExceptionPending());
-    }
+    // We tried loading the class and failed.
     if (IsValidDescriptor(descriptor)) {
       return AddEntry(
           new (&arena_) UnresolvedReferenceType(AddString(sp_descriptor), entries_.size()));
@@ -342,7 +350,9 @@ void RegTypeCache::CreatePrimitiveAndSmallConstantTypes() {
   }
 }
 
-const RegType& RegTypeCache::FromUnresolvedMerge(const RegType& left, const RegType& right) {
+const RegType& RegTypeCache::FromUnresolvedMerge(const RegType& left,
+                                                 const RegType& right,
+                                                 VerifierMetadata* metadata) {
   ArenaBitVector types(&arena_,
                        kDefaultArenaBitVectorBytes * kBitsPerByte,  // Allocate at least 8 bytes.
                        true);                                       // Is expandable.
@@ -383,7 +393,8 @@ const RegType& RegTypeCache::FromUnresolvedMerge(const RegType& left, const RegT
   }
 
   // Merge the resolved parts. Left and right might be equal, so use SafeMerge.
-  const RegType& resolved_parts_merged = left_resolved->SafeMerge(*right_resolved, this);
+  const RegType& resolved_parts_merged = left_resolved->SafeMerge(
+        *right_resolved, this, metadata);
   // If we get a conflict here, the merge result is a conflict, not an unresolved merge type.
   if (resolved_parts_merged.IsConflict()) {
     return Conflict();

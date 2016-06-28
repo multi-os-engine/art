@@ -650,6 +650,7 @@ class MANAGED Class FINAL : public Object {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   bool IsSubClass(Class* klass) SHARED_REQUIRES(Locks::mutator_lock_);
+  bool Implements(Class* klass) SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Can src be assigned to this class? For example, String can be assigned to Object (by an
   // upcast), however, an Object cannot be assigned to a String as a potentially exception throwing
@@ -1298,7 +1299,6 @@ class MANAGED Class FINAL : public Object {
                                 uint32_t method_idx, DexCache* dex_cache)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  bool Implements(Class* klass) SHARED_REQUIRES(Locks::mutator_lock_);
   bool IsArrayAssignableFromArray(Class* klass) SHARED_REQUIRES(Locks::mutator_lock_);
   bool IsAssignableFromArray(Class* klass) SHARED_REQUIRES(Locks::mutator_lock_);
 

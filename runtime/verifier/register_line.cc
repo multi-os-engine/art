@@ -70,10 +70,11 @@ const RegType& RegisterLine::GetInvocationThis(MethodVerifier* verifier, const I
 bool RegisterLine::VerifyRegisterTypeWide(MethodVerifier* verifier, uint32_t vsrc,
                                           const RegType& check_type1,
                                           const RegType& check_type2) {
+  DCHECK(!check_type1.IsReference());
   DCHECK(check_type1.CheckWidePair(check_type2));
   // Verify the src register type against the check type refining the type of the register
   const RegType& src_type = GetRegisterType(verifier, vsrc);
-  if (!check_type1.IsAssignableFrom(src_type)) {
+  if (!check_type1.IsAssignableFrom(src_type, nullptr /* metadata */)) {
     verifier->Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "register v" << vsrc << " has type " << src_type
                                << " but expected " << check_type1;
     return false;
@@ -429,11 +430,13 @@ bool FindLockAliasedRegister(uint32_t src,
 bool RegisterLine::MergeRegisters(MethodVerifier* verifier, const RegisterLine* incoming_line) {
   bool changed = false;
   DCHECK(incoming_line != nullptr);
+  RegTypeCache* reg_types = verifier->GetRegTypeCache();
+  VerifierMetadata* metadata = verifier->GetMetadata();
   for (size_t idx = 0; idx < num_regs_; idx++) {
     if (line_[idx] != incoming_line->line_[idx]) {
       const RegType& incoming_reg_type = incoming_line->GetRegisterType(verifier, idx);
       const RegType& cur_type = GetRegisterType(verifier, idx);
-      const RegType& new_type = cur_type.Merge(incoming_reg_type, verifier->GetRegTypeCache());
+      const RegType& new_type = cur_type.Merge(incoming_reg_type, reg_types, metadata);
       changed = changed || !cur_type.Equals(new_type);
       line_[idx] = new_type.GetId();
     }

@@ -43,6 +43,8 @@ class ScopedArenaAllocator;
 namespace verifier {
 
 class RegTypeCache;
+class VerifierMetadata;
+
 /*
  * RegType holds information about the "type" of data held in a register.
  */
@@ -209,7 +211,7 @@ class RegType {
   // Note: Object and interface types may always be assigned to one another, see
   // comment on
   // ClassJoin.
-  bool IsAssignableFrom(const RegType& src) const
+  bool IsAssignableFrom(const RegType& src, VerifierMetadata* metadata) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Can this array type potentially be assigned by src.
@@ -219,14 +221,17 @@ class RegType {
   // will be set to true iff the assignment test failure should be treated as a soft-error, i.e.,
   // when both array types have the same 'depth' and the 'final' component types may be assignable
   // (both are reference types).
-  bool CanAssignArray(const RegType& src, RegTypeCache& reg_types,
-                      Handle<mirror::ClassLoader> class_loader, bool* soft_error) const
+  bool CanAssignArray(const RegType& src,
+                      RegTypeCache& reg_types,
+                      Handle<mirror::ClassLoader> class_loader,
+                      VerifierMetadata* metadata,
+                      /* out */ bool* soft_error) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Can this type be assigned by src? Variant of IsAssignableFrom that doesn't
   // allow assignment to
   // an interface from an Object.
-  bool IsStrictlyAssignableFrom(const RegType& src) const
+  bool IsStrictlyAssignableFrom(const RegType& src, VerifierMetadata* metadata) const
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Are these RegTypes the same?
@@ -234,15 +239,19 @@ class RegType {
 
   // Compute the merge of this register from one edge (path) with incoming_type
   // from another.
-  const RegType& Merge(const RegType& incoming_type, RegTypeCache* reg_types) const
+  const RegType& Merge(const RegType& incoming_type,
+                       RegTypeCache* reg_types,
+                       VerifierMetadata* metadata) const
       SHARED_REQUIRES(Locks::mutator_lock_);
   // Same as above, but also handles the case where incoming_type == this.
-  const RegType& SafeMerge(const RegType& incoming_type, RegTypeCache* reg_types) const
+  const RegType& SafeMerge(const RegType& incoming_type,
+                           RegTypeCache* reg_types,
+                           VerifierMetadata* metadata) const
       SHARED_REQUIRES(Locks::mutator_lock_) {
     if (Equals(incoming_type)) {
       return *this;
     }
-    return Merge(incoming_type, reg_types);
+    return Merge(incoming_type, reg_types, metadata);
   }
 
   /*
@@ -297,7 +306,10 @@ class RegType {
   friend class RegTypeCache;
 
  private:
-  static bool AssignableFrom(const RegType& lhs, const RegType& rhs, bool strict)
+  static bool AssignableFrom(const RegType& lhs,
+                             const RegType& rhs,
+                             bool strict,
+                             VerifierMetadata* metadata)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   DISALLOW_COPY_AND_ASSIGN(RegType);

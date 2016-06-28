@@ -44,7 +44,7 @@ static constexpr size_t kDefaultArenaBitVectorBytes = 8;
 
 class RegTypeCache {
  public:
-  explicit RegTypeCache(bool can_load_classes, ScopedArenaAllocator& arena);
+  RegTypeCache(bool can_load_classes, ScopedArenaAllocator& arena);
   ~RegTypeCache();
   static void Init() SHARED_REQUIRES(Locks::mutator_lock_) {
     if (!RegTypeCache::primitive_initialized_) {
@@ -55,7 +55,7 @@ class RegTypeCache {
     }
   }
   static void ShutDown();
-  const art::verifier::RegType& GetFromId(uint16_t id) const;
+  const RegType& GetFromId(uint16_t id) const;
   const RegType& From(mirror::ClassLoader* loader, const char* descriptor, bool precise)
       SHARED_REQUIRES(Locks::mutator_lock_);
   // Find a RegType, returns null if not found.
@@ -75,7 +75,9 @@ class RegTypeCache {
       SHARED_REQUIRES(Locks::mutator_lock_);
   const RegType& FromDescriptor(mirror::ClassLoader* loader, const char* descriptor, bool precise)
       SHARED_REQUIRES(Locks::mutator_lock_);
-  const RegType& FromUnresolvedMerge(const RegType& left, const RegType& right)
+  const RegType& FromUnresolvedMerge(const RegType& left,
+                                     const RegType& right,
+                                     VerifierMetadata* metadata)
       SHARED_REQUIRES(Locks::mutator_lock_);
   const RegType& FromUnresolvedSuperClass(const RegType& child)
       SHARED_REQUIRES(Locks::mutator_lock_);
@@ -153,10 +155,15 @@ class RegTypeCache {
   static void VisitStaticRoots(RootVisitor* visitor)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  const ScopedArenaVector<const RegType*>& GetEntries() const { return entries_; }
+
+  static mirror::Class* ResolveClass(const char* descriptor,
+                                     mirror::ClassLoader* loader,
+                                     bool can_load_classes)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
  private:
   void FillPrimitiveAndSmallConstantTypes() SHARED_REQUIRES(Locks::mutator_lock_);
-  mirror::Class* ResolveClass(const char* descriptor, mirror::ClassLoader* loader)
-      SHARED_REQUIRES(Locks::mutator_lock_);
   bool MatchDescriptor(size_t idx, const StringPiece& descriptor, bool precise)
       SHARED_REQUIRES(Locks::mutator_lock_);
   const ConstantType& FromCat1NonSmallConstant(int32_t value, bool precise)

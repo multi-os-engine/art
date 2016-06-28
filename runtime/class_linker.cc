@@ -3789,7 +3789,7 @@ bool ClassLinker::AttemptSupertypeVerification(Thread* self,
   DCHECK(supertype.Get() != nullptr);
 
   if (!supertype->IsVerified() && !supertype->IsErroneous()) {
-    VerifyClass(self, supertype);
+    VerifyClass(self, supertype, /* metadata */ nullptr);
   }
   if (supertype->IsCompileTimeVerified()) {
     // Either we are verified or we soft failed and need to retry at runtime.
@@ -3822,7 +3822,10 @@ bool ClassLinker::AttemptSupertypeVerification(Thread* self,
   return false;
 }
 
-void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass, LogSeverity log_level) {
+void ClassLinker::VerifyClass(Thread* self,
+                              Handle<mirror::Class> klass,
+                              verifier::VerifierMetadata* metadata,
+                              LogSeverity log_level) {
   {
     // TODO: assert that the monitor on the Class is held
     ObjectLock<mirror::Class> lock(self, klass);
@@ -3937,6 +3940,7 @@ void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass, LogSeve
     verifier_failure = verifier::MethodVerifier::VerifyClass(self,
                                                              klass.Get(),
                                                              runtime->GetCompilerCallbacks(),
+                                                             metadata,
                                                              runtime->IsAotCompiler(),
                                                              log_level,
                                                              &error_msg);
@@ -4456,7 +4460,7 @@ bool ClassLinker::InitializeClass(Thread* self, Handle<mirror::Class> klass,
     CHECK(klass->IsResolved()) << PrettyClass(klass.Get()) << ": state=" << klass->GetStatus();
 
     if (!klass->IsVerified()) {
-      VerifyClass(self, klass);
+      VerifyClass(self, klass, /* metadata */ nullptr);
       if (!klass->IsVerified()) {
         // We failed to verify, expect either the klass to be erroneous or verification failed at
         // compile time.
