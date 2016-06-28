@@ -24,6 +24,8 @@
 #include "reg_type.h"
 #include "reg_type_cache.h"
 
+#include <iostream>
+
 namespace art {
 namespace verifier {
 
