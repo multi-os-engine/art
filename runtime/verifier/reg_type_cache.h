@@ -44,7 +44,7 @@ static constexpr size_t kDefaultArenaBitVectorBytes = 8;
 
 class RegTypeCache {
  public:
-  explicit RegTypeCache(bool can_load_classes, ScopedArenaAllocator& arena);
+  RegTypeCache(bool can_load_classes, ScopedArenaAllocator& arena);
   ~RegTypeCache();
   static void Init() SHARED_REQUIRES(Locks::mutator_lock_) {
     if (!RegTypeCache::primitive_initialized_) {
@@ -152,6 +152,8 @@ class RegTypeCache {
       SHARED_REQUIRES(Locks::mutator_lock_);
   static void VisitStaticRoots(RootVisitor* visitor)
       SHARED_REQUIRES(Locks::mutator_lock_);
+
+  const ScopedArenaVector<const RegType*>& GetEntries() const { return entries_; }
 
  private:
   void FillPrimitiveAndSmallConstantTypes() SHARED_REQUIRES(Locks::mutator_lock_);
