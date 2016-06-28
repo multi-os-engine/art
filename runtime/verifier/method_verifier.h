@@ -32,6 +32,7 @@
 #include "method_reference.h"
 #include "register_line.h"
 #include "reg_type_cache.h"
+#include "verifier_metadata.h"
 
 namespace art {
 
@@ -509,8 +510,7 @@ class MethodVerifier {
 
   // Extract the relative offset from a branch instruction.
   // Returns "false" on failure (e.g. this isn't a branch instruction).
-  bool GetBranchOffset(uint32_t cur_offset, int32_t* pOffset, bool* pConditional,
-                       bool* selfOkay);
+  bool GetBranchOffset(uint32_t cur_offset, int32_t* pOffset, bool* pConditional, bool* selfOkay);
 
   /* Perform detailed code-flow analysis on a single method. */
   bool VerifyCodeFlow() SHARED_REQUIRES(Locks::mutator_lock_);
@@ -640,6 +640,9 @@ class MethodVerifier {
   ArtMethod* ResolveMethodAndCheckAccess(uint32_t method_idx, MethodType method_type)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  ArtMethod* ResolveMethodAndCheckAccess_Impl(uint32_t method_idx, MethodType method_type)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
   /*
    * Verify the arguments to a method. We're executing in "method", making
    * a call to the method reference in vB.
@@ -737,6 +740,8 @@ class MethodVerifier {
   // Arena allocator.
   ArenaStack arena_stack_;
   ScopedArenaAllocator arena_;
+
+  VerifierMetadata metadata_;
 
   RegTypeCache reg_types_;
 
@@ -844,6 +849,7 @@ class MethodVerifier {
   MethodVerifier* link_;
 
   friend class art::Thread;
+  friend class VerifierMetadataTest;
 
   DISALLOW_COPY_AND_ASSIGN(MethodVerifier);
 };

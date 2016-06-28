@@ -153,6 +153,8 @@ class RegTypeCache {
   static void VisitStaticRoots(RootVisitor* visitor)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
+  const ScopedArenaVector<const RegType*>& GetEntries() const { return entries_; }
+
  private:
   void FillPrimitiveAndSmallConstantTypes() SHARED_REQUIRES(Locks::mutator_lock_);
   mirror::Class* ResolveClass(const char* descriptor, mirror::ClassLoader* loader)
