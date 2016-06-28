@@ -22,6 +22,7 @@
 #include "base/casts.h"
 #include "base/scoped_arena_allocator.h"
 #include "mirror/class.h"
+#include "verifier_metadata.h"
 
 namespace art {
 namespace verifier {
@@ -62,7 +63,10 @@ inline bool RegType::IsConstantBoolean() const {
   }
 }
 
-inline bool RegType::AssignableFrom(const RegType& lhs, const RegType& rhs, bool strict) {
+inline bool RegType::AssignableFrom(const RegType& lhs,
+                                    const RegType& rhs,
+                                    bool strict,
+                                    VerifierMetadata* metadata) {
   if (lhs.Equals(rhs)) {
     return true;
   } else {
@@ -104,11 +108,15 @@ inline bool RegType::AssignableFrom(const RegType& lhs, const RegType& rhs, bool
         return true;
       } else if (lhs.IsJavaLangObjectArray()) {
         return rhs.IsObjectArrayTypes();  // All reference arrays may be assigned to Object[]
-      } else if (lhs.HasClass() && rhs.HasClass() &&
-                 lhs.GetClass()->IsAssignableFrom(rhs.GetClass())) {
-        // We're assignable from the Class point-of-view.
-        return true;
+      } else if (lhs.HasClass() && rhs.HasClass()) {
+        // Check if we're assignable from the Class' point-of-view.
+        bool result = lhs.GetClass()->IsAssignableFrom(rhs.GetClass());
+        if (metadata != nullptr) {
+          metadata->RecordAssignabilityTest(lhs.GetClass(), rhs.GetClass(), strict, result);
+        }
+        return result;
       } else {
+        DCHECK(lhs.IsUnresolvedTypes() || rhs.IsUnresolvedTypes());
         // Unresolved types are only assignable for null and equality.
         return false;
       }
@@ -116,12 +124,14 @@ inline bool RegType::AssignableFrom(const RegType& lhs, const RegType& rhs, bool
   }
 }
 
-inline bool RegType::IsAssignableFrom(const RegType& src) const {
-  return AssignableFrom(*this, src, false);
+inline bool RegType::IsAssignableFrom(const RegType& src,
+                                      VerifierMetadata* metadata) const {
+  return AssignableFrom(*this, src, false, metadata);
 }
 
-inline bool RegType::IsStrictlyAssignableFrom(const RegType& src) const {
-  return AssignableFrom(*this, src, true);
+inline bool RegType::IsStrictlyAssignableFrom(const RegType& src,
+                                              VerifierMetadata* metadata) const {
+  return AssignableFrom(*this, src, true, metadata);
 }
 
 inline const DoubleHiType* DoubleHiType::GetInstance() {
