@@ -73,6 +73,10 @@ static inline void CheckUnattachedThread(LockLevel level) NO_THREAD_SAFETY_ANALY
           level == kThreadListLock ||
           // Ignore logging which may or may not have set up thread data structures.
           level == kLoggingLock ||
+          // When transitioning from suspended to runnable, a daemon thread might be in
+          // a situation where the runtime is shutting down. To not crash our debug locking
+          // mechanisnm we just pass null during that transition.
+          level == kThreadSuspendCountLock ||
           // Avoid recursive death.
           level == kAbortLock) << level;
   }

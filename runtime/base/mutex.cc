@@ -198,7 +198,7 @@ void BaseMutex::CheckSafeToWait(Thread* self) {
     return;
   }
   if (kDebugLocking) {
-    CHECK(self->GetHeldMutex(level_) == this || level_ == kMonitorLock)
+    CHECK(self->GetHeldMutex(level_) == this || level_ == kMonitorLock || level_ == kThreadSuspendCountLock)
         << "Waiting on unacquired mutex: " << name_;
     bool bad_mutexes_held = false;
     for (int i = kLockLevelCount - 1; i >= 0; --i) {
