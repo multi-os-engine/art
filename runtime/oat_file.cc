@@ -210,6 +210,9 @@ bool OatFileBase::ComputeFields(uint8_t* requested_base,
     bss_end_ += sizeof(uint32_t);
   }
 
+  // Record oatexec symbol value, used by profiling client
+  oatexec_ = FindDynamicSymbolAddress("oatexec", &symbol_error_msg);
+
   return true;
 }
 
@@ -1039,6 +1042,7 @@ OatFile::OatFile(const std::string& location, bool is_executable)
       end_(nullptr),
       bss_begin_(nullptr),
       bss_end_(nullptr),
+      oatexec_(nullptr),
       is_executable_(is_executable),
       secondary_lookup_lock_("OatFile secondary lookup lock", kOatFileSecondaryLookupLock) {
   CHECK(!location_.empty());
@@ -1068,6 +1072,10 @@ const uint8_t* OatFile::BssBegin() const {
 
 const uint8_t* OatFile::BssEnd() const {
   return bss_end_;
+}
+
+const uint8_t* OatFile::OatExec() const {
+  return oatexec_;
 }
 
 const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,

@@ -240,6 +240,8 @@ class OatFile {
   const uint8_t* BssBegin() const;
   const uint8_t* BssEnd() const;
 
+  const uint8_t* OatExec() const;
+
   // Returns the absolute dex location for the encoded relative dex location.
   //
   // If not null, abs_dex_location is used to resolve the absolute dex
@@ -284,6 +286,9 @@ class OatFile {
 
   // Pointer to the end of the .bss section, if present, otherwise null.
   uint8_t* bss_end_;
+
+  // Value of "oatexec" dynamic symbol if present
+  const uint8_t* oatexec_;
 
   // Was this oat_file loaded executable?
   const bool is_executable_;
