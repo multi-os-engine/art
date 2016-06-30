@@ -1,10 +1,12 @@
 1
 2
 JNI_OnLoad called
+IsNull1 false
 JNI_OnUnload called
 1
 2
 JNI_OnLoad called
+IsNull2 false
 JNI_OnUnload called
 null
 null
