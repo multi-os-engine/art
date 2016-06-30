@@ -154,33 +154,44 @@ class Dex2oatTest : public Dex2oatEnvironmentTest {
     CHECK(android_root != nullptr);
     argv.push_back("--android-root=" + std::string(android_root));
 
-    std::string command_line(Join(argv, ' '));
-
-    // We need to fix up the '&' being used for "do not check classpath."
-    size_t ampersand = command_line.find(" &");
-    CHECK_NE(ampersand, std::string::npos);
-    command_line = command_line.replace(ampersand, 2, " \\&");
-
-    command_line += " 2>&1";
-
     // We need dex2oat to actually log things.
     setenv("ANDROID_LOG_TAGS", "*:d", 1);
 
-    FILE* pipe = popen(command_line.c_str(), "r");
+    int link[2];
+    pid_t pid;
 
-    setenv("ANDROID_LOG_TAGS", "*:e", 1);
+    if (pipe(link) == -1) {
+      return false;
+    }
 
-    if (pipe == nullptr) {
-      success_ = false;
-    } else {
-      char buffer[128];
+    if ((pid = fork()) == -1) {
+      return false;
+    }
 
-      while (fgets(buffer, 128, pipe) != nullptr) {
-        output_ += buffer;
+    if (pid == 0) {
+      dup2(link[1], STDERR_FILENO);
+      close(link[0]);
+      close(link[1]);
+      std::vector<const char*> c_args;
+      for (const std::string& str : argv) {
+        c_args.push_back(str.c_str());
       }
+      c_args.push_back(0);
+      execv(c_args[0], const_cast<char* const*>(c_args.data()));
+      exit(0);
+    } else {
+      setenv("ANDROID_LOG_TAGS", "*:e", 1);
+      close(link[1]);
+      char buffer[128];
+      memset(buffer, 0, 128);
 
-      int result = pclose(pipe);
-      success_ = result == 0;
+      while (read(link[0], buffer, 128) > 0) {
+        output_ += buffer;
+        // Remove trailing 0.
+        output_.pop_back();
+      }
+      success_ = true;
+      waitpid(pid, nullptr, 0);
     }
     return success_;
   }
