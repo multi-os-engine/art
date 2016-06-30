@@ -748,11 +748,13 @@ ArtField* Class::FindStaticField(Thread* self, Handle<Class> klass, const String
   return nullptr;
 }
 
-ArtField* Class::FindStaticField(Thread* self, Handle<Class> klass, const DexCache* dex_cache,
+ArtField* Class::FindStaticField(Thread* self,
+                                 Handle<Class> klass,
+                                 Handle<DexCache> dex_cache,
                                  uint32_t dex_field_idx) {
   for (Class* k = klass.Get(); k != nullptr; k = k->GetSuperClass()) {
     // Is the field in this class?
-    ArtField* f = k->FindDeclaredStaticField(dex_cache, dex_field_idx);
+    ArtField* f = k->FindDeclaredStaticField(dex_cache.Get(), dex_field_idx);
     if (f != nullptr) {
       return f;
     }
