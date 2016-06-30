@@ -88,7 +88,7 @@ bool NullPointerHandler::Action(int sig ATTRIBUTE_UNUSED, siginfo_t* info, void*
   sc->sc_regs[25] = sc->sc_pc;          // make sure T9 points to the function
   // Pass the faulting address as the first argument of
   // art_quick_throw_null_pointer_exception_from_signal.
-  sc->sc_regs[0] = reinterpret_cast<uintptr_t>(info->si_addr);
+  sc->sc_regs[4] = reinterpret_cast<uintptr_t>(info->si_addr);
   VLOG(signals) << "Generating null pointer exception";
   return true;
 }
