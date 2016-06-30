@@ -389,6 +389,7 @@ TEST_F(OatTest, WriteRead) {
   ASSERT_EQ(42U, oat_header.GetImageFileLocationOatChecksum());
   ASSERT_EQ(4096U, oat_header.GetImageFileLocationOatDataBegin());
   ASSERT_EQ("lue.art", std::string(oat_header.GetStoreValueByKey(OatHeader::kImageLocationKey)));
+  ASSERT_EQ(nullptr, oat_file->OatExec());
 
   ASSERT_TRUE(java_lang_dex_file_ != nullptr);
   const DexFile& dex_file = *java_lang_dex_file_;

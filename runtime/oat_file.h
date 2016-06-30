@@ -240,6 +240,9 @@ class OatFile {
   const uint8_t* BssBegin() const;
   const uint8_t* BssEnd() const;
 
+  // Value of "oatexec" dynamic symbol if present.
+  virtual const uint8_t* OatExec() const;
+
   // Returns the absolute dex location for the encoded relative dex location.
   //
   // If not null, abs_dex_location is used to resolve the absolute dex

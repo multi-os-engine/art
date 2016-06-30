@@ -92,6 +92,11 @@ class OatFileBase : public OatFile {
                                   const char* abs_dex_location,
                                   std::string* error_msg);
 
+  virtual const uint8_t* OatExec() const {
+    std::string unused;
+    return FindDynamicSymbolAddress("oatexec", &unused);
+  }
+
  protected:
   OatFileBase(const std::string& filename, bool executable) : OatFile(filename, executable) {}
 
@@ -1068,6 +1073,11 @@ const uint8_t* OatFile::BssBegin() const {
 
 const uint8_t* OatFile::BssEnd() const {
   return bss_end_;
+}
+
+const uint8_t* OatFile::OatExec() const {
+  UNIMPLEMENTED(FATAL) << "should not reach here.";
+  UNREACHABLE();
 }
 
 const OatFile::OatDexFile* OatFile::GetOatDexFile(const char* dex_location,
