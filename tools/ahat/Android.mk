@@ -67,6 +67,7 @@ AHAT_TEST_DUMP_HPROF := $(intermediates.COMMON)/test-dump.hprof
 # Run ahat-test-dump.jar to generate test-dump.hprof
 AHAT_TEST_DUMP_DEPENDENCIES := \
 	$(ART_HOST_EXECUTABLES) \
+	$(ART_HOST_SHARED_LIBRARY_DEPENDENCIES) \
 	$(HOST_OUT_EXECUTABLES)/art \
 	$(HOST_CORE_IMG_OUT_BASE)-optimizing-pic$(CORE_IMG_SUFFIX)
 
