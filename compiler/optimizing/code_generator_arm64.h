@@ -418,6 +418,15 @@ class CodeGeneratorARM64 : public CodeGenerator {
     block_labels_.resize(GetGraph()->GetBlocks().size());
   }
 
+  uint32_t AdjustSlotsSize(uint32_t slots_size) OVERRIDE {
+    // Adjust the offset to which we spill and restore registers for slow paths.
+    // We want to use the STP and LDP instructions, which can only encode
+    // offsets that are multiples of the register size accessed.
+    slots_size = RoundUp(slots_size, vixl::kXRegSizeInBytes);
+    first_register_slot_in_slow_path_ = slots_size;
+    return slots_size;
+  }
+
   JumpTableARM64* CreateJumpTable(HPackedSwitch* switch_instr) {
     jump_tables_.emplace_back(new (GetGraph()->GetArena()) JumpTableARM64(switch_instr));
     return jump_tables_.back().get();
