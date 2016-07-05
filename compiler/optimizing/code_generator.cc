@@ -291,7 +291,8 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
   DCHECK(!block_order.empty());
   DCHECK(block_order[0] == GetGraph()->GetEntryBlock());
   ComputeSpillMask();
-  first_register_slot_in_slow_path_ = (number_of_out_slots + number_of_spill_slots) * kVRegSize;
+  uint32_t slots_size = (number_of_out_slots + number_of_spill_slots) * kVRegSize;
+  first_register_slot_in_slow_path_ = slots_size;
 
   if (number_of_spill_slots == 0
       && !HasAllocatedCalleeSaveRegisters()
@@ -301,9 +302,15 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
     DCHECK_EQ(maximum_number_of_live_fpu_registers, 0u);
     SetFrameSize(CallPushesPC() ? GetWordSize() : 0);
   } else {
+    if (GetInstructionSet() == kArm64) {
+      // Adjust the offset to which we spill and restore registers for slow
+      // paths. We want to use the STP and LDP instructions, which can only
+      // encode offsets that are multiples of the register size accessed.
+      slots_size = RoundUp(slots_size, vixl::kXRegSizeInBytes);
+      first_register_slot_in_slow_path_ = slots_size;
+    }
     SetFrameSize(RoundUp(
-        number_of_spill_slots * kVRegSize
-        + number_of_out_slots * kVRegSize
+        slots_size
         + maximum_number_of_live_core_registers * GetWordSize()
         + maximum_number_of_live_fpu_registers * GetFloatingPointSpillSlotSize()
         + FrameEntrySpillSize(),
