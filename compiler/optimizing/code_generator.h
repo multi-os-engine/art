@@ -211,6 +211,7 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
                                 size_t maximum_number_of_live_fpu_registers,
                                 size_t number_of_out_slots,
                                 const ArenaVector<HBasicBlock*>& block_order);
+  virtual uint32_t AdjustSlotsSize(uint32_t slots_size) { return slots_size; }
 
   uint32_t GetFrameSize() const { return frame_size_; }
   void SetFrameSize(uint32_t size) { frame_size_ = size; }
