@@ -702,6 +702,23 @@ class LiveInterval : public ArenaObject<kArenaAllocSsaLiveness> {
     return result;
   }
 
+  // Returns whether this interval or one of its siblings is live
+  // after the instruction.
+  bool IsLiveOrIsSiblingLiveAfter(HInstruction* instruction) {
+    size_t position = instruction->GetLifetimePosition() + 1;
+    LiveInterval* current = this;
+    do {
+      if (position < current->GetStart()) {
+        return false;
+      }
+      if (position < current->GetEnd()) {
+        return current->CoversSlow(position);
+      }
+      current = current->GetNextSibling();
+    } while (current != nullptr);
+    return false;
+  }
+
   // Returns the first register hint that is at least free before
   // the value contained in `free_until`. If none is found, returns
   // `kNoRegister`.

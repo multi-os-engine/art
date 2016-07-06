@@ -2264,8 +2264,7 @@ void IntrinsicCodeGeneratorARM64::VisitSystemArrayCopy(HInvoke* invoke) {
                                 src_stop_addr);
 
     // Iterate over the arrays and do a raw copy of the objects. We don't need to
-    // poison/unpoison, nor do any read barrier as the next uses of the destination
-    // array will do it.
+    // poison/unpoison.
     vixl::Label loop, done;
     const int32_t element_size = Primitive::ComponentSize(Primitive::kPrimNot);
     __ Bind(&loop);
