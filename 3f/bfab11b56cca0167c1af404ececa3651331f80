@@ -1,0 +1,8 @@
+Presubmit-Ready+1: Treehugger Robot <treehugger-gerrit@google.com>
+Code-Review+2: Richard Uhler <ruhler@google.com>
+Verified+1: Richard Uhler <ruhler@google.com>
+Submitted-by: Richard Uhler <ruhler@google.com>
+Submitted-at: Wed, 06 Jul 2016 20:02:20 +0000
+Reviewed-on: https://android-review.googlesource.com/245868
+Project: platform/art
+Branch: refs/heads/master
