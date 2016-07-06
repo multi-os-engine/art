@@ -65,7 +65,46 @@ public class Main {
     System.arraycopy(obj, 1, obj, 0, 1);
   }
 
+  // Test case for having enough registers on x86 for the arraycopy intrinsic
+  // when an input dies at the use site.
+  /// CHECK-START-X86: void Main.arraycopy(java.lang.Object[], int) disassembly (after)
+  /// CHECK:          InvokeStaticOrDirect
+  /// CHECK:          push
+  /// CHECK:          pop
+  /// CHECK-NOT:      pop
+  /// CHECK:          ReturnVoid
   public static void arraycopy(Object[] obj, int pos) {
     System.arraycopy(obj, pos, obj, 0, obj.length);
+  }
+
+  // Test case for having enough registers on x86 for the arraycopy intrinsic
+  // when an input is passed twice.
+  /// CHECK-START-X86: int Main.arraycopy2(java.lang.Object[], int) disassembly (after)
+  /// CHECK:          InvokeStaticOrDirect
+  /// CHECK:          push
+  /// CHECK:          pop
+  /// CHECK:          add
+  /// CHECK-NOT:      pop
+  /// CHECK:          Return
+  public static int arraycopy2(Object[] obj, int pos) {
+    System.arraycopy(obj, pos, obj, pos, pos);
+    return pos;
+  }
+
+  // Test case for not having enough registers on x86. The arraycopy intrinsic
+  // will re-use an input register by pushing it and restoring it.
+  /// CHECK-START-X86: int Main.arraycopy3(java.lang.Object[], java.lang.Object[], int, int, int) disassembly (after)
+  /// CHECK:          InvokeStaticOrDirect
+  /// CHECK:          push
+  /// CHECK:          push
+  /// CHECK:          pop
+  /// CHECK:          add
+  /// CHECK:          pop
+  /// CHECK:          Return
+  public static int arraycopy3(Object[] obj1, Object[] obj2, int input1, int input3, int input4) {
+    System.arraycopy(obj1, input1, obj2, input3, input4);
+    System.out.println(obj1);
+    System.out.println(obj2);
+    return input1 + input3 + input4;
   }
 }
