@@ -523,6 +523,10 @@ class LocationSummary : public ArenaObject<kArenaAllocLocationSummary> {
     temps_.push_back(location);
   }
 
+  void RemoveTemp() {
+    temps_.pop_back();
+  }
+
   Location GetTemp(uint32_t at) const {
     return temps_[at];
   }

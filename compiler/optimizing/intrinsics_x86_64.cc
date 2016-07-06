@@ -1279,8 +1279,7 @@ void IntrinsicCodeGeneratorX86_64::VisitSystemArrayCopy(HInvoke* invoke) {
   }
 
   // Iterate over the arrays and do a raw copy of the objects. We don't need to
-  // poison/unpoison, nor do any read barrier as the next uses of the destination
-  // array will do it.
+  // poison/unpoison.
   NearLabel loop, done;
   __ cmpl(temp1, temp3);
   __ j(kEqual, &done);

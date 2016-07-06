@@ -1625,8 +1625,7 @@ void IntrinsicCodeGeneratorARM::VisitSystemArrayCopy(HInvoke* invoke) {
   }
 
   // Iterate over the arrays and do a raw copy of the objects. We don't need to
-  // poison/unpoison, nor do any read barrier as the next uses of the destination
-  // array will do it.
+  // poison/unpoison.
   Label loop, done;
   __ cmp(temp1, ShifterOperand(temp3));
   __ b(&done, EQ);
