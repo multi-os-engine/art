@@ -1365,7 +1365,6 @@ static void CheckPosition(ArmAssembler* assembler,
                           Register input,
                           Location length,
                           SlowPathCode* slow_path,
-                          Register input_len,
                           Register temp,
                           bool length_is_input_length = false) {
   // Where is the length in the Array?
@@ -1386,8 +1385,8 @@ static void CheckPosition(ArmAssembler* assembler,
       }
     } else {
       // Check that length(input) >= pos.
-      __ LoadFromOffset(kLoadWord, input_len, input, length_offset);
-      __ subs(temp, input_len, ShifterOperand(pos_const));
+      __ LoadFromOffset(kLoadWord, temp, input, length_offset);
+      __ subs(temp, temp, ShifterOperand(pos_const));
       __ b(slow_path->GetEntryLabel(), LT);
 
       // Check that (length(input) - pos) >= length.
@@ -1511,7 +1510,6 @@ void IntrinsicCodeGeneratorARM::VisitSystemArrayCopy(HInvoke* invoke) {
                 length,
                 slow_path,
                 temp1,
-                temp2,
                 optimizations.GetCountIsSourceLength());
 
   // Validity checks: dest.
@@ -1521,7 +1519,6 @@ void IntrinsicCodeGeneratorARM::VisitSystemArrayCopy(HInvoke* invoke) {
                 length,
                 slow_path,
                 temp1,
-                temp2,
                 optimizations.GetCountIsDestinationLength());
 
   if (!optimizations.GetDoesNotNeedTypeCheck()) {
@@ -1599,7 +1596,7 @@ void IntrinsicCodeGeneratorARM::VisitSystemArrayCopy(HInvoke* invoke) {
 
   // Compute base source address, base destination address, and end source address.
 
-  uint32_t element_size = sizeof(int32_t);
+  int32_t element_size = Primitive::ComponentSize(Primitive::kPrimNot);
   uint32_t offset = mirror::Array::DataOffset(element_size).Uint32Value();
   if (src_pos.IsConstant()) {
     int32_t constant = src_pos.GetConstant()->AsIntConstant()->GetValue();
@@ -1625,8 +1622,7 @@ void IntrinsicCodeGeneratorARM::VisitSystemArrayCopy(HInvoke* invoke) {
   }
 
   // Iterate over the arrays and do a raw copy of the objects. We don't need to
-  // poison/unpoison, nor do any read barrier as the next uses of the destination
-  // array will do it.
+  // poison/unpoison.
   Label loop, done;
   __ cmp(temp1, ShifterOperand(temp3));
   __ b(&done, EQ);
