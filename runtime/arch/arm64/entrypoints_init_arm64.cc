@@ -30,6 +30,43 @@ namespace art {
 extern "C" uint32_t artIsAssignableFromCode(const mirror::Class* klass,
                                             const mirror::Class* ref_class);
 
+// Read barrier entrypoints.
+// art_quick_read_barrier_mark_regX is not really a void -> void
+// function, but it has an non-conventional call convention: it
+// expects its input in register X and returns its result in
+// that same register.
+extern "C" void art_quick_read_barrier_mark_reg01(void);
+extern "C" void art_quick_read_barrier_mark_reg02(void);
+extern "C" void art_quick_read_barrier_mark_reg03(void);
+extern "C" void art_quick_read_barrier_mark_reg04(void);
+extern "C" void art_quick_read_barrier_mark_reg05(void);
+extern "C" void art_quick_read_barrier_mark_reg06(void);
+extern "C" void art_quick_read_barrier_mark_reg07(void);
+extern "C" void art_quick_read_barrier_mark_reg08(void);
+extern "C" void art_quick_read_barrier_mark_reg09(void);
+extern "C" void art_quick_read_barrier_mark_reg10(void);
+extern "C" void art_quick_read_barrier_mark_reg11(void);
+extern "C" void art_quick_read_barrier_mark_reg12(void);
+extern "C" void art_quick_read_barrier_mark_reg12(void);
+extern "C" void art_quick_read_barrier_mark_reg13(void);
+extern "C" void art_quick_read_barrier_mark_reg14(void);
+extern "C" void art_quick_read_barrier_mark_reg15(void);
+extern "C" void art_quick_read_barrier_mark_reg16(void);
+extern "C" void art_quick_read_barrier_mark_reg17(void);
+extern "C" void art_quick_read_barrier_mark_reg18(void);
+extern "C" void art_quick_read_barrier_mark_reg19(void);
+extern "C" void art_quick_read_barrier_mark_reg20(void);
+extern "C" void art_quick_read_barrier_mark_reg21(void);
+extern "C" void art_quick_read_barrier_mark_reg22(void);
+extern "C" void art_quick_read_barrier_mark_reg22(void);
+extern "C" void art_quick_read_barrier_mark_reg23(void);
+extern "C" void art_quick_read_barrier_mark_reg24(void);
+extern "C" void art_quick_read_barrier_mark_reg25(void);
+extern "C" void art_quick_read_barrier_mark_reg26(void);
+extern "C" void art_quick_read_barrier_mark_reg27(void);
+extern "C" void art_quick_read_barrier_mark_reg28(void);
+extern "C" void art_quick_read_barrier_mark_reg29(void);
+
 void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
   DefaultInitEntryPoints(jpoints, qpoints);
 
@@ -87,6 +124,41 @@ void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
   // Read barrier.
   qpoints->pReadBarrierJni = ReadBarrierJni;
   qpoints->pReadBarrierMark = artReadBarrierMark;
+  // Shoe-horn artReadBarrierMark into the ReadBarrierMarkReg00 entry
+  // point, which is fine, as that read barrier mark entry point
+  // actually follows the standard runtime calling convention on ARM.
+  qpoints->pReadBarrierMarkReg00 = reinterpret_cast<void(*)(void)>(artReadBarrierMark);
+  qpoints->pReadBarrierMarkReg01 = art_quick_read_barrier_mark_reg01;
+  qpoints->pReadBarrierMarkReg02 = art_quick_read_barrier_mark_reg02;
+  qpoints->pReadBarrierMarkReg03 = art_quick_read_barrier_mark_reg03;
+  qpoints->pReadBarrierMarkReg04 = art_quick_read_barrier_mark_reg04;
+  qpoints->pReadBarrierMarkReg05 = art_quick_read_barrier_mark_reg05;
+  qpoints->pReadBarrierMarkReg06 = art_quick_read_barrier_mark_reg06;
+  qpoints->pReadBarrierMarkReg07 = art_quick_read_barrier_mark_reg07;
+  qpoints->pReadBarrierMarkReg08 = art_quick_read_barrier_mark_reg08;
+  qpoints->pReadBarrierMarkReg09 = art_quick_read_barrier_mark_reg09;
+  qpoints->pReadBarrierMarkReg10 = art_quick_read_barrier_mark_reg10;
+  qpoints->pReadBarrierMarkReg11 = art_quick_read_barrier_mark_reg11;
+  qpoints->pReadBarrierMarkReg12 = art_quick_read_barrier_mark_reg12;
+  qpoints->pReadBarrierMarkReg13 = art_quick_read_barrier_mark_reg13;
+  qpoints->pReadBarrierMarkReg14 = art_quick_read_barrier_mark_reg14;
+  qpoints->pReadBarrierMarkReg15 = art_quick_read_barrier_mark_reg15;
+  qpoints->pReadBarrierMarkReg16 = art_quick_read_barrier_mark_reg16;
+  qpoints->pReadBarrierMarkReg17 = art_quick_read_barrier_mark_reg17;
+  qpoints->pReadBarrierMarkReg18 = art_quick_read_barrier_mark_reg18;
+  qpoints->pReadBarrierMarkReg19 = art_quick_read_barrier_mark_reg19;
+  qpoints->pReadBarrierMarkReg20 = art_quick_read_barrier_mark_reg20;
+  qpoints->pReadBarrierMarkReg21 = art_quick_read_barrier_mark_reg21;
+  qpoints->pReadBarrierMarkReg22 = art_quick_read_barrier_mark_reg22;
+  qpoints->pReadBarrierMarkReg23 = art_quick_read_barrier_mark_reg23;
+  qpoints->pReadBarrierMarkReg24 = art_quick_read_barrier_mark_reg24;
+  qpoints->pReadBarrierMarkReg25 = art_quick_read_barrier_mark_reg25;
+  qpoints->pReadBarrierMarkReg26 = art_quick_read_barrier_mark_reg26;
+  qpoints->pReadBarrierMarkReg27 = art_quick_read_barrier_mark_reg27;
+  qpoints->pReadBarrierMarkReg28 = art_quick_read_barrier_mark_reg28;
+  qpoints->pReadBarrierMarkReg29 = art_quick_read_barrier_mark_reg29;
+  qpoints->pReadBarrierMarkReg30 = nullptr;  // Cannot use register 30 (LR) to pass arguments.
+  qpoints->pReadBarrierMarkReg31 = nullptr;  // Cannot use register 31 (SP/XZR) to pass arguments.
   qpoints->pReadBarrierSlow = artReadBarrierSlow;
   qpoints->pReadBarrierForRootSlow = artReadBarrierForRootSlow;
 };

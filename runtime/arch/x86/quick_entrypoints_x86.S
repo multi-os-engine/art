@@ -1908,6 +1908,9 @@ DEFINE_FUNCTION art_nested_signal_return
     UNREACHABLE
 END_FUNCTION art_nested_signal_return
 
+// Call the ReadBarrierMark entry point, getting input and returning
+// result through EAX (register 0), following the standard runtime
+// calling convention.
 DEFINE_FUNCTION art_quick_read_barrier_mark
     subl LITERAL(8), %esp            // alignment padding
     CFI_ADJUST_CFA_OFFSET(8)
@@ -1917,6 +1920,33 @@ DEFINE_FUNCTION art_quick_read_barrier_mark
     CFI_ADJUST_CFA_OFFSET(-12)
     ret
 END_FUNCTION art_quick_read_barrier_mark
+
+// Create a function `name` calling the ReadBarrierMark entry point,
+// getting its input and returning its result through register `reg`,
+// following a non-standard calling convention.
+MACRO2(READ_BARRIER_MARK_REG, name, reg)
+    DEFINE_FUNCTION VAR(name)
+    PUSH eax                         // save EAX, which is clobbered by the call below
+    subl LITERAL(4), %esp            // alignment padding
+    CFI_ADJUST_CFA_OFFSET(8)
+    PUSH RAW_VAR(reg)                // pass arg1 - obj from `reg`
+    call SYMBOL(artReadBarrierMark)  // artReadBarrierMark(obj)
+    movl %eax, REG_VAR(reg)          // return result into `reg`
+    addl LITERAL(8), %esp            // pop argument and remove padding
+    CFI_ADJUST_CFA_OFFSET(-8)
+    POP eax                          // restore EAX
+    ret
+    END_FUNCTION VAR(name)
+END_MACRO
+
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg01, ecx
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg02, edx
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg03, ebx
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg05, ebp
+// Note: There is no art_quick_read_barrier_mark_reg04, as register 4 (ESP)
+// cannot be used to pass arguments.
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg06, esi
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg07, edi
 
 DEFINE_FUNCTION art_quick_read_barrier_slow
     PUSH edx                         // pass arg3 - offset

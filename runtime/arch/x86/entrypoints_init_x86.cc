@@ -30,6 +30,17 @@ extern "C" uint32_t art_quick_is_assignable(const mirror::Class* klass,
 
 // Read barrier entrypoints.
 extern "C" mirror::Object* art_quick_read_barrier_mark(mirror::Object*);
+// art_quick_read_barrier_mark_regX is not really a void -> void
+// function, but it has an non-conventional call convention: it
+// expects its input in register X and returns its result in
+// that same register.
+extern "C" void art_quick_read_barrier_mark_reg01(void);
+extern "C" void art_quick_read_barrier_mark_reg02(void);
+extern "C" void art_quick_read_barrier_mark_reg03(void);
+extern "C" void art_quick_read_barrier_mark_reg05(void);
+extern "C" void art_quick_read_barrier_mark_reg06(void);
+extern "C" void art_quick_read_barrier_mark_reg07(void);
+
 extern "C" mirror::Object* art_quick_read_barrier_slow(mirror::Object*, mirror::Object*, uint32_t);
 extern "C" mirror::Object* art_quick_read_barrier_for_root_slow(GcRoot<mirror::Object>*);
 
@@ -77,6 +88,43 @@ void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
   // Read barrier.
   qpoints->pReadBarrierJni = ReadBarrierJni;
   qpoints->pReadBarrierMark = art_quick_read_barrier_mark;
+  // Shoe-horn art_quick_read_barrier_mark into the
+  // ReadBarrierMarkReg00 entry point, which is fine, as that read
+  // barrier mark entry point actually follows the standard runtime
+  // calling convention on x86.
+  qpoints->pReadBarrierMarkReg00 = reinterpret_cast<void(*)(void)>(art_quick_read_barrier_mark);
+  qpoints->pReadBarrierMarkReg01 = art_quick_read_barrier_mark_reg01;
+  qpoints->pReadBarrierMarkReg02 = art_quick_read_barrier_mark_reg02;
+  qpoints->pReadBarrierMarkReg03 = art_quick_read_barrier_mark_reg03;
+  qpoints->pReadBarrierMarkReg04 = nullptr;  // Cannot use register 4 (ESP) to pass arguments.
+  qpoints->pReadBarrierMarkReg05 = art_quick_read_barrier_mark_reg05;
+  qpoints->pReadBarrierMarkReg06 = art_quick_read_barrier_mark_reg06;
+  qpoints->pReadBarrierMarkReg07 = art_quick_read_barrier_mark_reg07;
+  // x86 has only 8 core registers.
+  qpoints->pReadBarrierMarkReg08 = nullptr;
+  qpoints->pReadBarrierMarkReg09 = nullptr;
+  qpoints->pReadBarrierMarkReg10 = nullptr;
+  qpoints->pReadBarrierMarkReg11 = nullptr;
+  qpoints->pReadBarrierMarkReg12 = nullptr;
+  qpoints->pReadBarrierMarkReg13 = nullptr;
+  qpoints->pReadBarrierMarkReg14 = nullptr;
+  qpoints->pReadBarrierMarkReg15 = nullptr;
+  qpoints->pReadBarrierMarkReg16 = nullptr;
+  qpoints->pReadBarrierMarkReg17 = nullptr;
+  qpoints->pReadBarrierMarkReg18 = nullptr;
+  qpoints->pReadBarrierMarkReg19 = nullptr;
+  qpoints->pReadBarrierMarkReg20 = nullptr;
+  qpoints->pReadBarrierMarkReg21 = nullptr;
+  qpoints->pReadBarrierMarkReg22 = nullptr;
+  qpoints->pReadBarrierMarkReg23 = nullptr;
+  qpoints->pReadBarrierMarkReg24 = nullptr;
+  qpoints->pReadBarrierMarkReg25 = nullptr;
+  qpoints->pReadBarrierMarkReg26 = nullptr;
+  qpoints->pReadBarrierMarkReg27 = nullptr;
+  qpoints->pReadBarrierMarkReg28 = nullptr;
+  qpoints->pReadBarrierMarkReg29 = nullptr;
+  qpoints->pReadBarrierMarkReg30 = nullptr;
+  qpoints->pReadBarrierMarkReg31 = nullptr;
   qpoints->pReadBarrierSlow = art_quick_read_barrier_slow;
   qpoints->pReadBarrierForRootSlow = art_quick_read_barrier_for_root_slow;
 };

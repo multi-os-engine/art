@@ -350,6 +350,48 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
   // accessing the String's `value` field in String intrinsics.
   static uint32_t GetArrayDataOffset(HArrayGet* array_get);
 
+  // Return the entry point offset for ReadBarrierMarkRegX, where X is `reg`.
+  template <size_t pointer_size>
+  static int32_t GetReadBarrierMarkEntryPointsOffset(size_t reg) {
+    switch (reg) {
+      case  0: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg00).Int32Value();
+      case  1: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg01).Int32Value();
+      case  2: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg02).Int32Value();
+      case  3: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg03).Int32Value();
+      case  4: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg04).Int32Value();
+      case  5: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg05).Int32Value();
+      case  6: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg06).Int32Value();
+      case  7: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg07).Int32Value();
+      case  8: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg08).Int32Value();
+      case  9: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg09).Int32Value();
+      case 10: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg10).Int32Value();
+      case 11: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg11).Int32Value();
+      case 12: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg12).Int32Value();
+      case 13: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg13).Int32Value();
+      case 14: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg14).Int32Value();
+      case 15: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg15).Int32Value();
+      case 16: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg16).Int32Value();
+      case 17: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg17).Int32Value();
+      case 18: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg18).Int32Value();
+      case 19: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg19).Int32Value();
+      case 20: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg20).Int32Value();
+      case 21: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg21).Int32Value();
+      case 22: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg22).Int32Value();
+      case 23: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg23).Int32Value();
+      case 24: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg24).Int32Value();
+      case 25: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg25).Int32Value();
+      case 26: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg26).Int32Value();
+      case 27: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg27).Int32Value();
+      case 28: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg28).Int32Value();
+      case 29: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg29).Int32Value();
+      case 30: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg30).Int32Value();
+      case 31: return QUICK_ENTRYPOINT_OFFSET(pointer_size, pReadBarrierMarkReg31).Int32Value();
+      default:
+        LOG(FATAL) << "Unexpected register number " << reg;
+        UNREACHABLE();
+    }
+  }
+
   void EmitParallelMoves(Location from1,
                          Location to1,
                          Primitive::Type type1,

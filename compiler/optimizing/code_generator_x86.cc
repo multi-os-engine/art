@@ -459,13 +459,37 @@ class ReadBarrierMarkSlowPathX86 : public SlowPathCode {
 
     InvokeRuntimeCallingConvention calling_convention;
     CodeGeneratorX86* x86_codegen = down_cast<CodeGeneratorX86*>(codegen);
-    x86_codegen->Move32(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), obj_);
-    x86_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierMark),
-                               instruction_,
-                               instruction_->GetDexPc(),
-                               this);
-    CheckEntrypointTypes<kQuickReadBarrierMark, mirror::Object*, mirror::Object*>();
-    x86_codegen->Move32(out_, Location::RegisterLocation(EAX));
+    if (out_.Equals(obj_)) {
+      DCHECK_NE(reg_out, ESP);
+      DCHECK(0 <= reg_out && reg_out < kNumberOfCpuRegisters) << reg_out;
+      // "Compact" slow path, saving two moves.
+      //
+      //   rX <- ReadBarrierMarkRegX(rX)
+      //
+      // ReadBarrierMarkRegX entry points are not really a void -> void
+      // functions: they use an non-conventional call convention: they
+      // expect their input in register X and returns their result in that
+      // same register.
+      int32_t entry_point_offset =
+          CodeGenerator::GetReadBarrierMarkEntryPointsOffset<kX86WordSize>(reg_out);
+      x86_codegen->InvokeRuntime(entry_point_offset,
+                                 instruction_,
+                                 instruction_->GetDexPc(),
+                                 this);
+    } else {
+      // "Standard" slow path.
+      //
+      //   EAX <- obj
+      //   EAX <- ReadBarrierMark(EAX)
+      //   out <- EAX
+      x86_codegen->Move32(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), obj_);
+      x86_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierMark),
+                                 instruction_,
+                                 instruction_->GetDexPc(),
+                                 this);
+      CheckEntrypointTypes<kQuickReadBarrierMark, mirror::Object*, mirror::Object*>();
+      x86_codegen->Move32(out_, Location::RegisterLocation(EAX));
+    }
 
     RestoreLiveRegisters(codegen, locations);
     __ jmp(GetExitLabel());

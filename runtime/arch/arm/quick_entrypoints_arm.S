@@ -1743,3 +1743,38 @@ ENTRY art_quick_l2f
     .cfi_adjust_cfa_offset -4
     pop   {pc}
 END art_quick_l2f
+
+    /*
+     * Create a function `name` calling the ReadBarrierMark entry point,
+     * getting its input and returning its result through register `reg`,
+     * following a non-standard calling convention.
+     */
+.macro READ_BARRIER_MARK_REG name, reg
+ENTRY \name
+    push  {r0, lr}                      @ save R0, which is clobbered by the call below (and LR)
+    .cfi_adjust_cfa_offset 8
+    .cfi_rel_offset r0, 0
+    .cfi_rel_offset lr, 4
+    sub   sp, #8                        @ push padding
+    .cfi_adjust_cfa_offset 8
+    mov   r0, \reg                      @ pass arg1 - obj from `reg`
+    bl    artReadBarrierMark            @ artReadBarrierMark(obj)
+    mov   \reg, r0                      @ return result into `reg`
+    add   sp, #8                        @ pop padding
+    .cfi_adjust_cfa_offset -8
+    pop   {r0, pc}                      @ restore R0 and return
+END \name
+.endm
+
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg01, r1
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg02, r2
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg03, r3
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg04, r4
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg05, r5
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg06, r6
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg07, r7
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg08, r8
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg09, r9
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg10, r10
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg11, r11
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg12, r12

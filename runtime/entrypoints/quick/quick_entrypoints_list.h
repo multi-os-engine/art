@@ -165,6 +165,38 @@
 \
   V(ReadBarrierJni, void, mirror::CompressedReference<mirror::Object>*, Thread*) \
   V(ReadBarrierMark, mirror::Object*, mirror::Object*) \
+  V(ReadBarrierMarkReg00, void) \
+  V(ReadBarrierMarkReg01, void) \
+  V(ReadBarrierMarkReg02, void) \
+  V(ReadBarrierMarkReg03, void) \
+  V(ReadBarrierMarkReg04, void) \
+  V(ReadBarrierMarkReg05, void) \
+  V(ReadBarrierMarkReg06, void) \
+  V(ReadBarrierMarkReg07, void) \
+  V(ReadBarrierMarkReg08, void) \
+  V(ReadBarrierMarkReg09, void) \
+  V(ReadBarrierMarkReg10, void) \
+  V(ReadBarrierMarkReg11, void) \
+  V(ReadBarrierMarkReg12, void) \
+  V(ReadBarrierMarkReg13, void) \
+  V(ReadBarrierMarkReg14, void) \
+  V(ReadBarrierMarkReg15, void) \
+  V(ReadBarrierMarkReg16, void) \
+  V(ReadBarrierMarkReg17, void) \
+  V(ReadBarrierMarkReg18, void) \
+  V(ReadBarrierMarkReg19, void) \
+  V(ReadBarrierMarkReg20, void) \
+  V(ReadBarrierMarkReg21, void) \
+  V(ReadBarrierMarkReg22, void) \
+  V(ReadBarrierMarkReg23, void) \
+  V(ReadBarrierMarkReg24, void) \
+  V(ReadBarrierMarkReg25, void) \
+  V(ReadBarrierMarkReg26, void) \
+  V(ReadBarrierMarkReg27, void) \
+  V(ReadBarrierMarkReg28, void) \
+  V(ReadBarrierMarkReg29, void) \
+  V(ReadBarrierMarkReg30, void) \
+  V(ReadBarrierMarkReg31, void) \
   V(ReadBarrierSlow, mirror::Object*, mirror::Object*, mirror::Object*, uint32_t) \
   V(ReadBarrierForRootSlow, mirror::Object*, GcRoot<mirror::Object>*)
 

@@ -609,13 +609,39 @@ class ReadBarrierMarkSlowPathARM64 : public SlowPathCodeARM64 {
 
     InvokeRuntimeCallingConvention calling_convention;
     CodeGeneratorARM64* arm64_codegen = down_cast<CodeGeneratorARM64*>(codegen);
-    arm64_codegen->MoveLocation(LocationFrom(calling_convention.GetRegisterAt(0)), obj_, type);
-    arm64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierMark),
-                                 instruction_,
-                                 instruction_->GetDexPc(),
-                                 this);
-    CheckEntrypointTypes<kQuickReadBarrierMark, mirror::Object*, mirror::Object*>();
-    arm64_codegen->MoveLocation(out_, calling_convention.GetReturnLocation(type), type);
+    if (out_.Equals(obj_)) {
+      DCHECK_NE(out_.reg(), LR);
+      DCHECK_NE(out_.reg(), WSP);
+      DCHECK_NE(out_.reg(), WZR);
+      DCHECK(0 <= out_.reg() && out_.reg() < kNumberOfWRegisters) << out_.reg();
+      // "Compact" slow path, saving two moves.
+      //
+      //   rX <- ReadBarrierMarkRegX(rX)
+      //
+      // ReadBarrierMarkRegX entry points are not really a void -> void
+      // functions: they use an non-conventional call convention: they
+      // expect their input in register X and returns their result in that
+      // same register.
+      int32_t entry_point_offset =
+          CodeGenerator::GetReadBarrierMarkEntryPointsOffset<kArm64WordSize>(out_.reg());
+      arm64_codegen->InvokeRuntime(entry_point_offset,
+                                   instruction_,
+                                   instruction_->GetDexPc(),
+                                   this);
+    } else {
+      // "Standard" slow path.
+      //
+      //   W0 <- obj
+      //   W0 <- ReadBarrierMark(W0)
+      //   out <- W0
+      arm64_codegen->MoveLocation(LocationFrom(calling_convention.GetRegisterAt(0)), obj_, type);
+      arm64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierMark),
+                                   instruction_,
+                                   instruction_->GetDexPc(),
+                                   this);
+      CheckEntrypointTypes<kQuickReadBarrierMark, mirror::Object*, mirror::Object*>();
+      arm64_codegen->MoveLocation(out_, calling_convention.GetReturnLocation(type), type);
+    }
 
     RestoreLiveRegisters(codegen, locations);
     __ B(GetExitLabel());

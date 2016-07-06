@@ -33,6 +33,27 @@ extern "C" uint32_t art_quick_assignable_from_code(const mirror::Class* klass,
 
 // Read barrier entrypoints.
 extern "C" mirror::Object* art_quick_read_barrier_mark(mirror::Object*);
+
+// art_quick_read_barrier_mark_regX is not really a void -> void
+// function, but it has an non-conventional call convention: it
+// expects its input in register X and returns its result in
+// that same register.
+extern "C" void art_quick_read_barrier_mark_reg00(void);
+extern "C" void art_quick_read_barrier_mark_reg01(void);
+extern "C" void art_quick_read_barrier_mark_reg02(void);
+extern "C" void art_quick_read_barrier_mark_reg03(void);
+extern "C" void art_quick_read_barrier_mark_reg05(void);
+extern "C" void art_quick_read_barrier_mark_reg06(void);
+extern "C" void art_quick_read_barrier_mark_reg07(void);
+extern "C" void art_quick_read_barrier_mark_reg08(void);
+extern "C" void art_quick_read_barrier_mark_reg09(void);
+extern "C" void art_quick_read_barrier_mark_reg10(void);
+extern "C" void art_quick_read_barrier_mark_reg11(void);
+extern "C" void art_quick_read_barrier_mark_reg12(void);
+extern "C" void art_quick_read_barrier_mark_reg13(void);
+extern "C" void art_quick_read_barrier_mark_reg14(void);
+extern "C" void art_quick_read_barrier_mark_reg15(void);
+
 extern "C" mirror::Object* art_quick_read_barrier_slow(mirror::Object*, mirror::Object*, uint32_t);
 extern "C" mirror::Object* art_quick_read_barrier_for_root_slow(GcRoot<mirror::Object>*);
 
@@ -83,6 +104,39 @@ void InitEntryPoints(JniEntryPoints* jpoints, QuickEntryPoints* qpoints) {
   // Read barrier.
   qpoints->pReadBarrierJni = ReadBarrierJni;
   qpoints->pReadBarrierMark = art_quick_read_barrier_mark;
+  qpoints->pReadBarrierMarkReg00 = art_quick_read_barrier_mark_reg00;
+  qpoints->pReadBarrierMarkReg01 = art_quick_read_barrier_mark_reg01;
+  qpoints->pReadBarrierMarkReg02 = art_quick_read_barrier_mark_reg02;
+  qpoints->pReadBarrierMarkReg03 = art_quick_read_barrier_mark_reg03;
+  qpoints->pReadBarrierMarkReg04 = nullptr;  // Cannot use register 4 (RSP) to pass arguments.
+  qpoints->pReadBarrierMarkReg05 = art_quick_read_barrier_mark_reg05;
+  qpoints->pReadBarrierMarkReg06 = art_quick_read_barrier_mark_reg06;
+  qpoints->pReadBarrierMarkReg07 = art_quick_read_barrier_mark_reg07;
+  qpoints->pReadBarrierMarkReg08 = art_quick_read_barrier_mark_reg08;
+  qpoints->pReadBarrierMarkReg09 = art_quick_read_barrier_mark_reg09;
+  qpoints->pReadBarrierMarkReg10 = art_quick_read_barrier_mark_reg10;
+  qpoints->pReadBarrierMarkReg11 = art_quick_read_barrier_mark_reg11;
+  qpoints->pReadBarrierMarkReg12 = art_quick_read_barrier_mark_reg12;
+  qpoints->pReadBarrierMarkReg13 = art_quick_read_barrier_mark_reg13;
+  qpoints->pReadBarrierMarkReg14 = art_quick_read_barrier_mark_reg14;
+  qpoints->pReadBarrierMarkReg15 = art_quick_read_barrier_mark_reg15;
+  // x86 has only 16 core registers.
+  qpoints->pReadBarrierMarkReg16 = nullptr;
+  qpoints->pReadBarrierMarkReg17 = nullptr;
+  qpoints->pReadBarrierMarkReg18 = nullptr;
+  qpoints->pReadBarrierMarkReg19 = nullptr;
+  qpoints->pReadBarrierMarkReg20 = nullptr;
+  qpoints->pReadBarrierMarkReg21 = nullptr;
+  qpoints->pReadBarrierMarkReg22 = nullptr;
+  qpoints->pReadBarrierMarkReg23 = nullptr;
+  qpoints->pReadBarrierMarkReg24 = nullptr;
+  qpoints->pReadBarrierMarkReg25 = nullptr;
+  qpoints->pReadBarrierMarkReg26 = nullptr;
+  qpoints->pReadBarrierMarkReg27 = nullptr;
+  qpoints->pReadBarrierMarkReg28 = nullptr;
+  qpoints->pReadBarrierMarkReg29 = nullptr;
+  qpoints->pReadBarrierMarkReg30 = nullptr;
+  qpoints->pReadBarrierMarkReg31 = nullptr;
   qpoints->pReadBarrierSlow = art_quick_read_barrier_slow;
   qpoints->pReadBarrierForRootSlow = art_quick_read_barrier_for_root_slow;
 #endif  // __APPLE__

@@ -480,13 +480,37 @@ class ReadBarrierMarkSlowPathX86_64 : public SlowPathCode {
 
     InvokeRuntimeCallingConvention calling_convention;
     CodeGeneratorX86_64* x86_64_codegen = down_cast<CodeGeneratorX86_64*>(codegen);
-    x86_64_codegen->Move(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), obj_);
-    x86_64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierMark),
-                               instruction_,
-                               instruction_->GetDexPc(),
-                               this);
-    CheckEntrypointTypes<kQuickReadBarrierMark, mirror::Object*, mirror::Object*>();
-    x86_64_codegen->Move(out_, Location::RegisterLocation(RAX));
+    if (out_.Equals(obj_)) {
+      DCHECK_NE(reg_out, RSP);
+      DCHECK(0 <= reg_out && reg_out < kNumberOfCpuRegisters) << reg_out;
+      // "Compact" slow path, saving two moves.
+      //
+      //   rX <- ReadBarrierMarkRegX(rX)
+      //
+      // ReadBarrierMarkRegX entry points are not really a void -> void
+      // functions: they use an non-conventional call convention: they
+      // expect their input in register X and returns their result in that
+      // same register.
+      int32_t entry_point_offset =
+          CodeGenerator::GetReadBarrierMarkEntryPointsOffset<kX86_64WordSize>(reg_out);
+      x86_64_codegen->InvokeRuntime(entry_point_offset,
+                                    instruction_,
+                                    instruction_->GetDexPc(),
+                                    this);
+    } else {
+      // "Standard" slow path.
+      //
+      //   RDI <- obj
+      //   RAX <- ReadBarrierMark(RDI)
+      //   out <- RAX
+      x86_64_codegen->Move(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), obj_);
+      x86_64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierMark),
+                                    instruction_,
+                                    instruction_->GetDexPc(),
+                                    this);
+      CheckEntrypointTypes<kQuickReadBarrierMark, mirror::Object*, mirror::Object*>();
+      x86_64_codegen->Move(out_, Location::RegisterLocation(RAX));
+    }
 
     RestoreLiveRegisters(codegen, locations);
     __ jmp(GetExitLabel());
