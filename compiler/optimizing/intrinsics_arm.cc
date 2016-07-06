@@ -1599,7 +1599,7 @@ void IntrinsicCodeGeneratorARM::VisitSystemArrayCopy(HInvoke* invoke) {
 
   // Compute base source address, base destination address, and end source address.
 
-  uint32_t element_size = sizeof(int32_t);
+  int32_t element_size = Primitive::ComponentSize(Primitive::kPrimNot);
   uint32_t offset = mirror::Array::DataOffset(element_size).Uint32Value();
   if (src_pos.IsConstant()) {
     int32_t constant = src_pos.GetConstant()->AsIntConstant()->GetValue();
@@ -1625,8 +1625,7 @@ void IntrinsicCodeGeneratorARM::VisitSystemArrayCopy(HInvoke* invoke) {
   }
 
   // Iterate over the arrays and do a raw copy of the objects. We don't need to
-  // poison/unpoison, nor do any read barrier as the next uses of the destination
-  // array will do it.
+  // poison/unpoison.
   Label loop, done;
   __ cmp(temp1, ShifterOperand(temp3));
   __ b(&done, EQ);
