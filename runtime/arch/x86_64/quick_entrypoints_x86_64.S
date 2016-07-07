@@ -1815,16 +1815,89 @@ DEFINE_FUNCTION art_nested_signal_return
     UNREACHABLE
 END_FUNCTION art_nested_signal_return
 
-DEFINE_FUNCTION art_quick_read_barrier_mark
+// Call the ReadBarrier::Mark routine, getting argument through RAX,
+// i.e. register 0 (instead of RDI), and returning result through RAX,
+// following a non-standard calling convention.
+//
+// This function clobbers RDI and shifts the responsibility
+// to save this (caller-save) register to its caller (see
+// art::x86_64::ReadBarrierMarkSlowPathX86_64::EmitNativeCode).
+DEFINE_FUNCTION art_quick_read_barrier_mark_reg00
+    SETUP_FP_CALLEE_SAVE_FRAME
+    subq LITERAL(8), %rsp           // Alignment padding.
+    CFI_ADJUST_CFA_OFFSET(8)
+    movq %rax, %rdi                 // Pass arg1 - obj from RAX.
+    call SYMBOL(artReadBarrierMark) // artReadBarrierMark(obj)
+    addq LITERAL(8), %rsp           // Remove padding.
+    CFI_ADJUST_CFA_OFFSET(-8)
+    RESTORE_FP_CALLEE_SAVE_FRAME
+    ret
+END_FUNCTION art_quick_read_barrier_mark_reg00
+
+// Call the ReadBarrierMark entry point, getting input and returning
+// result through RDI (register 7), following a non-standard
+// calling convention.
+
+// Call the ReadBarrier::Mark routine, getting argument through RDI,
+// i.e. register 7, and returning result through RDI (instead of RAX),
+// following a non-standard calling convention.
+//
+// This function clobbers RAX and shifts the responsibility
+// to save this (caller-save) register to its caller (see
+// art::x86_64::ReadBarrierMarkSlowPathX86_64::EmitNativeCode).
+DEFINE_FUNCTION art_quick_read_barrier_mark_reg07
     SETUP_FP_CALLEE_SAVE_FRAME
     subq LITERAL(8), %rsp           // Alignment padding.
     CFI_ADJUST_CFA_OFFSET(8)
     call SYMBOL(artReadBarrierMark) // artReadBarrierMark(obj)
-    addq LITERAL(8), %rsp
+    movq %rax, %rdi                 // Return result into RDI.
+    addq LITERAL(8), %rsp           // Remove padding.
     CFI_ADJUST_CFA_OFFSET(-8)
     RESTORE_FP_CALLEE_SAVE_FRAME
     ret
-END_FUNCTION art_quick_read_barrier_slow
+END_FUNCTION art_quick_read_barrier_mark_reg07
+
+// Create a function `name` calling the ReadBarrier::Mark routine,
+// getting its argument through register `reg` (instead of RDI) and
+// returning its result through register `reg` (instead of RAX),
+// thus providing a non-standard runtime calling convention to its
+// callers.
+//
+// This function clobbers RAX and RDI and shifts the responsibility
+// to save these (caller-save) registers to its caller (see
+// art::x86_64::ReadBarrierMarkSlowPathX86_64::EmitNativeCode).
+MACRO2(READ_BARRIER_MARK_REG, name, reg)
+    DEFINE_FUNCTION VAR(name)
+    SETUP_FP_CALLEE_SAVE_FRAME
+    subq LITERAL(8), %rsp           // Alignment padding.
+    CFI_ADJUST_CFA_OFFSET(8)
+    movq REG_VAR(reg), %rdi         // Pass arg1 - obj from `reg`.
+    call SYMBOL(artReadBarrierMark) // artReadBarrierMark(obj)
+    movq %rax, REG_VAR(reg)         // Return result into `reg`.
+    addq LITERAL(8), %rsp           // Remove padding.
+    CFI_ADJUST_CFA_OFFSET(-8)
+    RESTORE_FP_CALLEE_SAVE_FRAME
+    ret
+    END_FUNCTION VAR(name)
+END_MACRO
+
+// Note: art_quick_read_barrier_mark_reg00 is implemented above.
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg01, rcx
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg02, rdx
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg03, rbx
+// Note: There is no art_quick_read_barrier_mark_reg04, as register 4 (RSP)
+// cannot be used to pass arguments.
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg05, rbp
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg06, rsi
+// Note: art_quick_read_barrier_mark_reg07 is implemented above.
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg08, r8
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg09, r9
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg10, r10
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg11, r11
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg12, r12
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg13, r13
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg14, r14
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg15, r15
 
 DEFINE_FUNCTION art_quick_read_barrier_slow
     SETUP_FP_CALLEE_SAVE_FRAME
