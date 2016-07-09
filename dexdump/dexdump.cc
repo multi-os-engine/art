@@ -785,7 +785,12 @@ static void dumpLocalsCb(void* /*context*/, const DexFile::LocalInfo& entry) {
  * needs to be free()d.
  */
 static char* indexString(const DexFile* pDexFile,
-                         const Instruction* pDecInsn, char* buf, size_t bufSize) {
+                         const Instruction* pDecInsn, size_t bufSize) {
+  // Buffer.
+  char* buf = (char*)malloc(bufSize);
+  if (buf == nullptr) {
+    return nullptr;
+  }
   // Determine index and width of the string.
   u4 index = 0;
   u4 width = 4;
@@ -888,12 +893,8 @@ static char* indexString(const DexFile* pDexFile,
     // The buffer wasn't big enough; allocate and retry. Note:
     // snprintf() doesn't count the '\0' as part of its returned
     // size, so we add explicit space for it here.
-    outSize++;
-    buf = reinterpret_cast<char*>(malloc(outSize));
-    if (buf == nullptr) {
-      return nullptr;
-    }
-    return indexString(pDexFile, pDecInsn, buf, outSize);
+    free(buf);
+    return indexString(pDexFile, pDecInsn, outSize + 1);
   }
   return buf;
 }
@@ -941,11 +942,9 @@ static void dumpInstruction(const DexFile* pDexFile,
   }
 
   // Set up additional argument.
-  char indexBufChars[200];
-  char *indexBuf = indexBufChars;
+  char *indexBuf = nullptr;
   if (Instruction::IndexTypeOf(pDecInsn->Opcode()) != Instruction::kIndexNone) {
-    indexBuf = indexString(pDexFile, pDecInsn,
-                           indexBufChars, sizeof(indexBufChars));
+    indexBuf = indexString(pDexFile, pDecInsn, 200);
   }
 
   // Dump the instruction.
@@ -1124,10 +1123,7 @@ static void dumpInstruction(const DexFile* pDexFile,
   }  // switch
 
   fputc('\n', gOutFile);
-
-  if (indexBuf != indexBufChars) {
-    free(indexBuf);
-  }
+  free(indexBuf);
 }
 
 /*
@@ -1274,7 +1270,7 @@ static void dumpMethod(const DexFile* pDexFile, u4 idx, u4 flags,
         // Primitive char, copy it.
         if (strchr("ZBCSIFJD", *base) == NULL) {
           fprintf(stderr, "ERROR: bad method signature '%s'\n", base);
-          goto bail;
+          break;  // while
         }
         *cp++ = *base++;
       }
