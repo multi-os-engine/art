@@ -1346,8 +1346,11 @@ void RegisterAllocator::AllocateSpillSlotFor(LiveInterval* interval) {
   // Find an available spill slot.
   size_t slot = 0;
   for (size_t e = spill_slots->size(); slot < e; ++slot) {
-    if ((*spill_slots)[slot] <= parent->GetStart()
-        && (slot == (e - 1) || (*spill_slots)[slot + 1] <= parent->GetStart())) {
+    bool low = (*spill_slots)[slot] <= parent->GetStart();
+    bool high = !parent->NeedsTwoSpillSlots()
+                || slot == (e - 1)
+                || (*spill_slots)[slot + 1] <= parent->GetStart();
+    if (low && high) {
       break;
     }
   }
