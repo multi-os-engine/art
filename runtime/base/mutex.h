@@ -91,6 +91,7 @@ enum LockLevel {
   kJitCodeCacheLock,
   kClassLoaderClassesLock,
   kDefaultMutexLevel,
+  kJitQueueLevel,
   kMarkSweepLargeObjectLock,
   kPinTableLock,
   kJdwpObjectRegistryLock,

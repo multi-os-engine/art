@@ -36,6 +36,13 @@ namespace jit {
 
 class JitCodeCache;
 class JitOptions;
+class JitCompileTask;
+
+enum JitTaskKind {
+  kAllocateProfile,
+  kCompile,
+  kCompileOsr
+};
 
 static constexpr int16_t kJitCheckForOSR = -1;
 static constexpr int16_t kJitHotnessDisabled = -2;
@@ -102,10 +109,10 @@ class Jit {
 
   // Profiling methods.
   void MethodEntered(Thread* thread, ArtMethod* method)
-      SHARED_REQUIRES(Locks::mutator_lock_);
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!tasks_in_queue_lock_);
 
   void AddSamples(Thread* self, ArtMethod* method, uint16_t samples, bool with_backedges)
-      SHARED_REQUIRES(Locks::mutator_lock_);
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!tasks_in_queue_lock_);
 
   void InvokeVirtualOrInterface(Thread* thread,
                                 mirror::Object* this_object,
@@ -115,12 +122,12 @@ class Jit {
       SHARED_REQUIRES(Locks::mutator_lock_);
 
   void NotifyInterpreterToCompiledCodeTransition(Thread* self, ArtMethod* caller)
-      SHARED_REQUIRES(Locks::mutator_lock_) {
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!tasks_in_queue_lock_) {
     AddSamples(self, caller, invoke_transition_weight_, false);
   }
 
   void NotifyCompiledCodeToInterpreterTransition(Thread* self, ArtMethod* callee)
-      SHARED_REQUIRES(Locks::mutator_lock_) {
+      SHARED_REQUIRES(Locks::mutator_lock_) REQUIRES(!tasks_in_queue_lock_) {
     AddSamples(self, callee, invoke_transition_weight_, false);
   }
 
@@ -168,6 +175,10 @@ class Jit {
 
   static bool LoadCompilerLibrary(std::string* error_msg);
 
+  void AddCompileTask(Thread* self, ArtMethod* method, JitTaskKind kind)
+      REQUIRES(!tasks_in_queue_lock_);
+  void RemoveCompileTask(ArtMethod* method, JitTaskKind kind) REQUIRES(!tasks_in_queue_lock_);
+
  private:
   Jit();
 
@@ -198,6 +209,8 @@ class Jit {
   uint16_t priority_thread_weight_;
   uint16_t invoke_transition_weight_;
   std::unique_ptr<ThreadPool> thread_pool_;
+  Mutex tasks_in_queue_lock_;
+  std::set<std::pair<ArtMethod*, JitTaskKind>> tasks_in_queue_;
 
   DISALLOW_COPY_AND_ASSIGN(Jit);
 };

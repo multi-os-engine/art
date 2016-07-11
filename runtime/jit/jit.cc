@@ -145,7 +145,8 @@ Jit::Jit() : dump_info_on_shutdown_(false),
              cumulative_timings_("JIT timings"),
              memory_use_("Memory used for compilation", 16),
              lock_("JIT memory use lock"),
-             use_jit_compilation_(true) {}
+             use_jit_compilation_(true),
+             tasks_in_queue_lock_("task queue lock in Jit", kJitQueueLevel) {}
 
 Jit* Jit::Create(JitOptions* options, std::string* error_msg) {
   DCHECK(options->UseJitCompilation() || options->GetProfileSaverOptions().IsEnabled());
@@ -547,13 +548,7 @@ void Jit::AddMemoryUsage(ArtMethod* method, size_t bytes) {
 
 class JitCompileTask FINAL : public Task {
  public:
-  enum TaskKind {
-    kAllocateProfile,
-    kCompile,
-    kCompileOsr
-  };
-
-  JitCompileTask(ArtMethod* method, TaskKind kind) : method_(method), kind_(kind) {
+  JitCompileTask(ArtMethod* method, JitTaskKind kind) : method_(method), kind_(kind) {
     ScopedObjectAccess soa(Thread::Current());
     // Add a global ref to the class to prevent class unloading until compilation is done.
     klass_ = soa.Vm()->AddGlobalRef(soa.Self(), method_->GetDeclaringClass());
@@ -561,6 +556,10 @@ class JitCompileTask FINAL : public Task {
   }
 
   ~JitCompileTask() {
+    jit::Jit* jit = Runtime::Current()->GetJit();
+    if (jit != nullptr) {
+      jit->RemoveCompileTask(method_, kind_);
+    }
     ScopedObjectAccess soa(Thread::Current());
     soa.Vm()->DeleteGlobalRef(soa.Self(), klass_);
   }
@@ -586,7 +585,7 @@ class JitCompileTask FINAL : public Task {
 
  private:
   ArtMethod* const method_;
-  const TaskKind kind_;
+  const JitTaskKind kind_;
   jobject klass_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(JitCompileTask);
@@ -633,7 +632,7 @@ void Jit::AddSamples(Thread* self, ArtMethod* method, uint16_t count, bool with_
       if (!success) {
         // We failed allocating. Instead of doing the collection on the Java thread, we push
         // an allocation to a compiler thread, that will do the collection.
-        thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kAllocateProfile));
+        AddCompileTask(self, method, kAllocateProfile);
       }
     }
     // Avoid jumping more than one state at a time.
@@ -643,7 +642,7 @@ void Jit::AddSamples(Thread* self, ArtMethod* method, uint16_t count, bool with_
       if ((new_count >= hot_method_threshold_) &&
           !code_cache_->ContainsPc(method->GetEntryPointFromQuickCompiledCode())) {
         DCHECK(thread_pool_ != nullptr);
-        thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kCompile));
+        AddCompileTask(self, method, kCompile);
       }
       // Avoid jumping more than one state at a time.
       new_count = std::min(new_count, osr_method_threshold_ - 1);
@@ -654,7 +653,7 @@ void Jit::AddSamples(Thread* self, ArtMethod* method, uint16_t count, bool with_
       }
       if ((new_count >= osr_method_threshold_) &&  !code_cache_->IsOsrCompiled(method)) {
         DCHECK(thread_pool_ != nullptr);
-        thread_pool_->AddTask(self, new JitCompileTask(method, JitCompileTask::kCompileOsr));
+        AddCompileTask(self, method, kCompileOsr);
       }
     }
   }
@@ -667,7 +666,7 @@ void Jit::MethodEntered(Thread* thread, ArtMethod* method) {
   if (UNLIKELY(runtime->UseJitCompilation() && runtime->GetJit()->JitAtFirstUse())) {
     // The compiler requires a ProfilingInfo object.
     ProfilingInfo::Create(thread, method, /* retry_allocation */ true);
-    JitCompileTask compile_task(method, JitCompileTask::kCompile);
+    JitCompileTask compile_task(method, kCompile);
     compile_task.Run(thread);
     return;
   }
@@ -681,6 +680,20 @@ void Jit::MethodEntered(Thread* thread, ArtMethod* method) {
   } else {
     AddSamples(thread, method, 1, /* with_backedges */false);
   }
+}
+
+void Jit::AddCompileTask(Thread* self, ArtMethod* method, JitTaskKind kind) {
+  std::pair<ArtMethod*, JitTaskKind> key(method, kind);
+  MutexLock mu(Thread::Current(), tasks_in_queue_lock_);
+  if (tasks_in_queue_.insert(key).second) {
+    thread_pool_->AddTask(self, new JitCompileTask(method, kind));
+  }
+}
+
+void Jit::RemoveCompileTask(ArtMethod* method, JitTaskKind kind) {
+  std::pair<ArtMethod*, JitTaskKind> key(method, kind);
+  MutexLock mu(Thread::Current(), tasks_in_queue_lock_);
+  tasks_in_queue_.erase(key);
 }
 
 void Jit::InvokeVirtualOrInterface(Thread* thread,
