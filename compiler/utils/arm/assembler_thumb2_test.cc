@@ -1492,5 +1492,4 @@ TEST_F(AssemblerThumb2Test, VStmLdmPushPop) {
 
   DriverStr(expected, "VStmLdmPushPop");
 }
-
 }  // namespace art

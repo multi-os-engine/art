@@ -1356,6 +1356,18 @@ void Arm32Assembler::PopList(RegList regs, Condition cond) {
 }
 
 
+void Arm32Assembler::StoreList(RegList regs, size_t stack_offset) {
+  add(IP, SP, ShifterOperand(stack_offset));
+  stm(DB_W, IP, regs);
+}
+
+
+void Arm32Assembler::LoadList(RegList regs, size_t stack_offset) {
+  add(IP, SP, ShifterOperand(stack_offset));
+  ldm(IA_W, IP, regs);
+}
+
+
 void Arm32Assembler::Mov(Register rd, Register rm, Condition cond) {
   if (rd != rm) {
     mov(rd, ShifterOperand(rm), cond);
