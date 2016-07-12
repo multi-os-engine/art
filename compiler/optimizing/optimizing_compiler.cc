@@ -37,6 +37,10 @@
 #include "pc_relative_fixups_x86.h"
 #endif
 
+#if defined(ART_ENABLE_CODEGEN_x86) || defined(ART_ENABLE_CODEGEN_x86_64)
+#include "x86_memory_gen.h"
+#endif
+
 #include "art_method-inl.h"
 #include "base/arena_allocator.h"
 #include "base/arena_containers.h"
@@ -485,10 +489,29 @@ static void RunArchOptimizations(InstructionSet instruction_set,
     case kX86: {
       x86::PcRelativeFixups* pc_relative_fixups =
           new (arena) x86::PcRelativeFixups(graph, codegen, stats);
+#if 0
+      x86::X86MemoryOperandGeneration* memory_gen =
+          new(arena) x86::X86MemoryOperandGeneration(graph, stats, codegen);
+#endif
       HOptimization* x86_optimizations[] = {
           pc_relative_fixups
+#if 0
+            // FIXME
+            , memory_gen
+#endif
       };
       RunOptimizations(x86_optimizations, arraysize(x86_optimizations), pass_observer);
+      break;
+    }
+#endif
+#ifdef ART_ENABLE_CODEGEN_x86_64
+    case kX86_64: {
+      x86::X86MemoryOperandGeneration* memory_gen =
+          new(arena) x86::X86MemoryOperandGeneration(graph, stats, codegen);
+      HOptimization* x86_64_optimizations[] = {
+          memory_gen
+      };
+      RunOptimizations(x86_64_optimizations, arraysize(x86_64_optimizations), pass_observer);
       break;
     }
 #endif

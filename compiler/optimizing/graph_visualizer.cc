@@ -401,6 +401,9 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
   void VisitArrayLength(HArrayLength* array_length) OVERRIDE {
     StartAttributeStream("is_string_length") << std::boolalpha
         << array_length->IsStringLength() << std::noboolalpha;
+    if (array_length->IsEmittedAtUseSite()) {
+      StartAttributeStream("emitted_at_use") << "true";
+    }
   }
 
   void VisitBoundsCheck(HBoundsCheck* bounds_check) OVERRIDE {
@@ -555,6 +558,20 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
       }
     }
 
+#if 1
+    if (IsPass("liveness") && !is_after_pass_) {
+      LocationSummary* locations = instruction->GetLocations();
+      if (locations != nullptr) {
+        StringList input_list;
+        for (size_t i = 0, e = locations->GetInputCount(); i < e; ++i) {
+          DumpLocation(input_list.NewEntryStream(), locations->InAt(i));
+        }
+        std::ostream& attr = StartAttributeStream("locations");
+        attr << input_list << "->";
+        DumpLocation(attr, locations->Out());
+      }
+    }
+#endif
     if (IsPass(RegisterAllocator::kRegisterAllocatorPassName) && is_after_pass_) {
       StartAttributeStream("liveness") << instruction->GetLifetimePosition();
       LocationSummary* locations = instruction->GetLocations();
