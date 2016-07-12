@@ -1971,7 +1971,83 @@ public class Main {
     return (value >> temp) + temp;
   }
 
-public static void main(String[] args) {
+  /// CHECK-START: int Main.$noinline$intAddSubSimplifyArg1(int, int) instruction_simplifier (before)
+  /// CHECK:          <<X:i\d+>>        ParameterValue
+  /// CHECK:          <<Y:i\d+>>        ParameterValue
+  /// CHECK-DAG:      <<Sum:i\d+>>      Add [<<X>>,<<Y>>]
+  /// CHECK-DAG:      <<Res:i\d+>>      Sub [<<Sum>>,<<X>>]
+  /// CHECK-DAG:                        Return [<<Res>>]
+
+  /// CHECK-START: int Main.$noinline$intAddSubSimplifyArg1(int, int) instruction_simplifier (after)
+  /// CHECK:          <<X:i\d+>>        ParameterValue
+  /// CHECK:          <<Y:i\d+>>        ParameterValue
+  /// CHECK-DAG:      <<Sum:i\d+>>      Add [<<X>>,<<Y>>]
+  /// CHECK-DAG:                        Return [<<Y>>]
+
+  public static int $noinline$intAddSubSimplifyArg1(int x, int y) {
+    if (doThrow) { throw new Error(); }
+    int sum = x + y;
+    return sum - x;
+  }
+
+  /// CHECK-START: int Main.$noinline$intAddSubSimplifyArg2(int, int) instruction_simplifier (before)
+  /// CHECK:          <<X:i\d+>>        ParameterValue
+  /// CHECK:          <<Y:i\d+>>        ParameterValue
+  /// CHECK-DAG:      <<Sum:i\d+>>      Add [<<X>>,<<Y>>]
+  /// CHECK-DAG:      <<Res:i\d+>>      Sub [<<Sum>>,<<Y>>]
+  /// CHECK-DAG:                        Return [<<Res>>]
+
+  /// CHECK-START: int Main.$noinline$intAddSubSimplifyArg2(int, int) instruction_simplifier (after)
+  /// CHECK:          <<X:i\d+>>        ParameterValue
+  /// CHECK:          <<Y:i\d+>>        ParameterValue
+  /// CHECK-DAG:      <<Sum:i\d+>>      Add [<<X>>,<<Y>>]
+  /// CHECK-DAG:                        Return [<<X>>]
+
+  public static int $noinline$intAddSubSimplifyArg2(int x, int y) {
+    if (doThrow) { throw new Error(); }
+    int sum = x + y;
+    return sum - y;
+  }
+
+  /// CHECK-START: int Main.$noinline$intSubAddSimplifyLeft(int, int) instruction_simplifier (before)
+  /// CHECK:          <<X:i\d+>>        ParameterValue
+  /// CHECK:          <<Y:i\d+>>        ParameterValue
+  /// CHECK-DAG:      <<Sub:i\d+>>      Sub [<<X>>,<<Y>>]
+  /// CHECK-DAG:      <<Res:i\d+>>      Add [<<Sub>>,<<Y>>]
+  /// CHECK-DAG:                        Return [<<Res>>]
+
+  /// CHECK-START: int Main.$noinline$intSubAddSimplifyLeft(int, int) instruction_simplifier (after)
+  /// CHECK:          <<X:i\d+>>        ParameterValue
+  /// CHECK:          <<Y:i\d+>>        ParameterValue
+  /// CHECK-DAG:      <<Sub:i\d+>>      Sub [<<X>>,<<Y>>]
+  /// CHECK-DAG:                        Return [<<X>>]
+
+  public static int $noinline$intSubAddSimplifyLeft(int x, int y) {
+    if (doThrow) { throw new Error(); }
+    int sub = x - y;
+    return sub + y;
+  }
+
+  /// CHECK-START: int Main.$noinline$intSubAddSimplifyRight(int, int) instruction_simplifier (before)
+  /// CHECK:          <<X:i\d+>>        ParameterValue
+  /// CHECK:          <<Y:i\d+>>        ParameterValue
+  /// CHECK-DAG:      <<Sub:i\d+>>      Sub [<<X>>,<<Y>>]
+  /// CHECK-DAG:      <<Res:i\d+>>      Add [<<Y>>,<<Sub>>]
+  /// CHECK-DAG:                        Return [<<Res>>]
+
+  /// CHECK-START: int Main.$noinline$intSubAddSimplifyRight(int, int) instruction_simplifier (after)
+  /// CHECK:          <<X:i\d+>>        ParameterValue
+  /// CHECK:          <<Y:i\d+>>        ParameterValue
+  /// CHECK-DAG:      <<Sub:i\d+>>      Sub [<<X>>,<<Y>>]
+  /// CHECK-DAG:                        Return [<<X>>]
+
+  public static int $noinline$intSubAddSimplifyRight(int x, int y) {
+    if (doThrow) { throw new Error(); }
+    int sub = x - y;
+    return y + sub;
+  }
+
+ public static void main(String[] args) {
     int arg = 123456;
 
     assertLongEquals(arg, $noinline$Add0(arg));
@@ -2143,6 +2219,11 @@ public static void main(String[] args) {
     assertLongEquals(0xaf37bc048d159e24L, $noinline$longSmallerShiftMasking(0xabcdef0123456789L, 2 + 256));
     assertIntEquals(0xfffd5e7c, $noinline$otherUseOfUnnecessaryShiftMasking(0xabcdef01, 13));
     assertIntEquals(0xfffd5e7c, $noinline$otherUseOfUnnecessaryShiftMasking(0xabcdef01, 13 + 512));
+
+    assertIntEquals(654321, $noinline$intAddSubSimplifyArg1(arg, 654321));
+    assertIntEquals(arg, $noinline$intAddSubSimplifyArg2(arg, 654321));
+    assertIntEquals(arg, $noinline$intSubAddSimplifyLeft(arg, 654321));
+    assertIntEquals(arg, $noinline$intSubAddSimplifyRight(arg, 654321));
   }
 
   private static boolean $inline$true() { return true; }
