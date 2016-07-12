@@ -223,6 +223,80 @@ class BoundsCheckSlowPathX86_64 : public SlowPathCode {
   DISALLOW_COPY_AND_ASSIGN(BoundsCheckSlowPathX86_64);
 };
 
+// Helper routine to get address of array length.
+Address GetArrayLengthAddress(CodeGenerator* codegen,
+                              uint32_t len_offset,
+                              const Location& array_loc,
+                              const Location& temp_reg) {
+  // Initialize to dummy register.
+  int array_reg;
+  if (array_loc.IsRegister()) {
+    array_reg = array_loc.AsRegister<Register>();
+  } else {
+    DCHECK(array_loc.IsStackSlot());
+    array_reg = temp_reg.AsRegister<Register>();
+    __ movl(CpuRegister(array_reg), Address(CpuRegister(RSP), array_loc.GetStackIndex()));
+  }
+  return Address(CpuRegister(array_reg), len_offset);
+}
+
+class BoundsCheckSlowPathMemoryX86_64 : public SlowPathCode {
+ public:
+  explicit BoundsCheckSlowPathMemoryX86_64(HBoundsCheck* instruction)
+    : SlowPathCode(instruction) {}
+
+  void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    LocationSummary* locations = instruction_->GetLocations();
+      CodeGeneratorX86_64* x86_64_codegen = down_cast<CodeGeneratorX86_64*>(codegen);
+      __ Bind(GetEntryLabel());
+      if (instruction_->CanThrowIntoCatchBlock()) {
+        // Live registers will be restored in the catch block if caught.
+        SaveLiveRegisters(codegen, instruction_->GetLocations());
+      }
+
+      // Load the array length into our temporary.
+      HInstruction* length = instruction_->InputAt(1);
+      DCHECK(length->IsArrayLength());
+      // Find the array, as the locations in the ArrayLength are undefined.
+      HInstruction* array = length->InputAt(0);
+      while (array->IsNullCheck() || array->IsBoundType()) {
+        array = array->InputAt(0);
+      }
+      uint32_t len_offset = CodeGenerator::GetArrayLengthOffset(length->AsArrayLength());
+      Location temp_loc = locations->GetTemp(0);
+      Address array_length(GetArrayLengthAddress(codegen,
+                                                 len_offset,
+                                                 array->GetLocations()->Out(),
+                                                 temp_loc));
+      __ movl(temp_loc.AsRegister<CpuRegister>(), array_length);
+
+      // We're moving two locations to locations that could overlap, so we need a parallel
+      // move resolver.
+      InvokeRuntimeCallingConvention calling_convention;
+      codegen->EmitParallelMoves(
+          locations->InAt(0),
+          Location::RegisterLocation(calling_convention.GetRegisterAt(0)),
+          Primitive::kPrimInt,
+          locations->GetTemp(0),
+          Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
+          Primitive::kPrimInt);
+      uint32_t entry_point_offset = instruction_->AsBoundsCheck()->IsStringCharAt()
+          ? QUICK_ENTRY_POINT(pThrowStringBounds)
+          : QUICK_ENTRY_POINT(pThrowArrayBounds);
+      x86_64_codegen->InvokeRuntime(entry_point_offset,
+                                  instruction_,
+                                  instruction_->GetDexPc(),
+                                  this);
+  }
+
+  bool IsFatal() const OVERRIDE { return true; }
+
+  const char* GetDescription() const OVERRIDE { return "BoundsCheckSlowPathMemoryX86_64"; }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(BoundsCheckSlowPathMemoryX86_64);
+};
+
 class LoadClassSlowPathX86_64 : public SlowPathCode {
  public:
   LoadClassSlowPathX86_64(HLoadClass* cls,
@@ -4986,11 +5060,17 @@ void InstructionCodeGeneratorX86_64::VisitArraySet(HArraySet* instruction) {
 void LocationsBuilderX86_64::VisitArrayLength(HArrayLength* instruction) {
   LocationSummary* locations =
       new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kNoCall);
-  locations->SetInAt(0, Location::RequiresRegister());
-  locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  if (!instruction->IsEmittedAtUseSite()) {
+    locations->SetInAt(0, Location::RequiresRegister());
+    locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+  }
 }
 
 void InstructionCodeGeneratorX86_64::VisitArrayLength(HArrayLength* instruction) {
+  if (instruction->IsEmittedAtUseSite()) {
+    return;
+  }
+
   LocationSummary* locations = instruction->GetLocations();
   uint32_t offset = CodeGenerator::GetArrayLengthOffset(instruction);
   CpuRegister obj = locations->InAt(0).AsRegister<CpuRegister>();
@@ -5005,7 +5085,13 @@ void LocationsBuilderX86_64::VisitBoundsCheck(HBoundsCheck* instruction) {
       : LocationSummary::kNoCall;
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction, call_kind);
   locations->SetInAt(0, Location::RegisterOrConstant(instruction->InputAt(0)));
-  locations->SetInAt(1, Location::RegisterOrConstant(instruction->InputAt(1)));
+  HInstruction* length = instruction->InputAt(1);
+  if (length->IsEmittedAtUseSite()) {
+    // Need a temporary for the slow path and/or if the array is not in a register.
+    locations->AddTemp(Location::RequiresRegister());
+  } else {
+    locations->SetInAt(1, Location::RegisterOrConstant(length));
+  }
   if (instruction->HasUses()) {
     locations->SetOut(Location::SameAsFirstInput());
   }
@@ -5015,8 +5101,13 @@ void InstructionCodeGeneratorX86_64::VisitBoundsCheck(HBoundsCheck* instruction)
   LocationSummary* locations = instruction->GetLocations();
   Location index_loc = locations->InAt(0);
   Location length_loc = locations->InAt(1);
-  SlowPathCode* slow_path =
-      new (GetGraph()->GetArena()) BoundsCheckSlowPathX86_64(instruction);
+  HInstruction* array_length = instruction->InputAt(1);
+  bool use_memory = array_length->IsEmittedAtUseSite();
+  SlowPathCode* slow_path = use_memory
+      ? static_cast<SlowPathCode*>(
+          new (GetGraph()->GetArena()) BoundsCheckSlowPathMemoryX86_64(instruction))
+      : static_cast<SlowPathCode*>(
+          new (GetGraph()->GetArena()) BoundsCheckSlowPathX86_64(instruction));
 
   if (length_loc.IsConstant()) {
     int32_t length = CodeGenerator::GetInt32ValueOf(length_loc.GetConstant());
@@ -5039,12 +5130,32 @@ void InstructionCodeGeneratorX86_64::VisitBoundsCheck(HBoundsCheck* instruction)
     codegen_->AddSlowPath(slow_path);
     __ j(kAboveEqual, slow_path->GetEntryLabel());
   } else {
-    CpuRegister length = length_loc.AsRegister<CpuRegister>();
-    if (index_loc.IsConstant()) {
-      int32_t value = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
-      __ cmpl(length, Immediate(value));
+    if (use_memory) {
+      // Address the length field in the array.
+      DCHECK(array_length->IsArrayLength());
+      // Find the array, as the locations in the ArrayLength are undefined.
+      HInstruction* array = array_length->InputAt(0);
+      while (array->IsNullCheck() || array->IsBoundType()) {
+        array = array->InputAt(0);
+      }
+      uint32_t len_offset = CodeGenerator::GetArrayLengthOffset(array_length->AsArrayLength());
+      Location array_loc = array->GetLocations()->Out();
+      Address array_len(GetArrayLengthAddress(codegen_, len_offset, array_loc, locations->GetTemp(0)));
+      if (index_loc.IsConstant()) {
+        int32_t value = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
+        __ cmpl(array_len, Immediate(value));
+      } else {
+        __ cmpl(array_len, index_loc.AsRegister<CpuRegister>());
+      }
+      codegen_->MaybeRecordImplicitNullCheck(array_length);
     } else {
-      __ cmpl(length, index_loc.AsRegister<CpuRegister>());
+        CpuRegister length = length_loc.AsRegister<CpuRegister>();
+      if (index_loc.IsConstant()) {
+        int32_t value = CodeGenerator::GetInt32ValueOf(index_loc.GetConstant());
+        __ cmpl(length, Immediate(value));
+      } else {
+        __ cmpl(length, index_loc.AsRegister<CpuRegister>());
+      }
     }
     codegen_->AddSlowPath(slow_path);
     __ j(kBelowEqual, slow_path->GetEntryLabel());
