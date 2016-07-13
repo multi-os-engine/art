@@ -4078,7 +4078,7 @@ void InstructionCodeGeneratorX86::VisitClassTableGet(HClassTableGet* instruction
     method_offset = mirror::Class::EmbeddedVTableEntryOffset(
         instruction->GetIndex(), kX86PointerSize).SizeValue();
   } else {
-    __ movl(locations->InAt(0).AsRegister<Register>(),
+    __ movl(locations->Out().AsRegister<Register>(),
         Address(locations->InAt(0).AsRegister<Register>(),
         mirror::Class::ImtPtrOffset(kX86PointerSize).Uint32Value()));
     // temp = temp->GetImtEntryAt(method_offset);
