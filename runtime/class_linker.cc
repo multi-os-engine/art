@@ -2177,20 +2177,23 @@ mirror::Class* ClassLinker::EnsureResolved(Thread* self,
   }
 
   // Wait for the class if it has not already been linked.
-  if (!klass->IsResolved() && !klass->IsErroneous()) {
+  while (!klass->IsResolved() && !klass->IsErroneous()) {
     StackHandleScope<1> hs(self);
     HandleWrapper<mirror::Class> h_class(hs.NewHandleWrapper(&klass));
-    ObjectLock<mirror::Class> lock(self, h_class);
-    // Check for circular dependencies between classes.
-    if (!h_class->IsResolved() && h_class->GetClinitThreadId() == self->GetTid()) {
-      ThrowClassCircularityError(h_class.Get());
-      mirror::Class::SetStatus(h_class, mirror::Class::kStatusError, self);
-      return nullptr;
+    {
+      ObjectTryLock<mirror::Class> lock(self, h_class);
+      // Check for circular dependencies between classes.
+      if (lock.Acquired() &&
+          !h_class->IsResolved() &&
+          h_class->GetClinitThreadId() == self->GetTid()) {
+        ThrowClassCircularityError(h_class.Get());
+        mirror::Class::SetStatus(h_class, mirror::Class::kStatusError, self);
+        return nullptr;
+      }
     }
-    // Wait for the pending initialization to complete.
-    while (!h_class->IsResolved() && !h_class->IsErroneous()) {
-      lock.WaitIgnoringInterrupts();
-    }
+    // Wait for the pending initialization to complete, we do not have the trylock so we can not
+    // use a condition wait.
+    usleep(100);
   }
 
   if (klass->IsErroneous()) {
