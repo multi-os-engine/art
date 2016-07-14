@@ -5022,7 +5022,7 @@ class HInstanceFieldGet FINAL : public HExpression<1> {
                     Handle<mirror::DexCache> dex_cache,
                     uint32_t dex_pc)
       : HExpression(field_type,
-                    SideEffects::FieldReadOfType(field_type, is_volatile),
+                    SideEffectsForArchRuntimeCalls(field_type, is_volatile),
                     dex_pc),
         field_info_(field_offset,
                     field_type,
@@ -5054,6 +5054,16 @@ class HInstanceFieldGet FINAL : public HExpression<1> {
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
 
+  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type field_type, bool is_volatile) {
+    SideEffects side_effects = SideEffects::FieldReadOfType(field_type, is_volatile);
+
+    // MIPS delegates volatile kPrimLong and kPrimDouble loads to a runtime helper.
+    if (field_type == Primitive::kPrimLong || field_type == Primitive::kPrimDouble) {
+      side_effects.Add(SideEffects::CanTriggerGC());
+    }
+    return side_effects;
+  }
+
   DECLARE_INSTRUCTION(InstanceFieldGet);
 
  private:
@@ -5074,7 +5084,7 @@ class HInstanceFieldSet FINAL : public HTemplateInstruction<2> {
                     const DexFile& dex_file,
                     Handle<mirror::DexCache> dex_cache,
                     uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::FieldWriteOfType(field_type, is_volatile),
+      : HTemplateInstruction(SideEffectsForArchRuntimeCalls(field_type, is_volatile),
                              dex_pc),
         field_info_(field_offset,
                     field_type,
@@ -5099,6 +5109,16 @@ class HInstanceFieldSet FINAL : public HTemplateInstruction<2> {
   HInstruction* GetValue() const { return InputAt(1); }
   bool GetValueCanBeNull() const { return GetPackedFlag<kFlagValueCanBeNull>(); }
   void ClearValueCanBeNull() { SetPackedFlag<kFlagValueCanBeNull>(false); }
+
+  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type field_type, bool is_volatile) {
+    SideEffects side_effects = SideEffects::FieldWriteOfType(field_type, is_volatile);
+
+    // MIPS delegates volatile kPrimLong and kPrimDouble stores to a runtime helper.
+    if (field_type == Primitive::kPrimLong || field_type == Primitive::kPrimDouble) {
+      side_effects.Add(SideEffects::CanTriggerGC());
+    }
+    return side_effects;
+  }
 
   DECLARE_INSTRUCTION(InstanceFieldSet);
 
@@ -5891,7 +5911,7 @@ class HStaticFieldGet FINAL : public HExpression<1> {
                   Handle<mirror::DexCache> dex_cache,
                   uint32_t dex_pc)
       : HExpression(field_type,
-                    SideEffects::FieldReadOfType(field_type, is_volatile),
+                    SideEffectsForArchRuntimeCalls(field_type, is_volatile),
                     dex_pc),
         field_info_(field_offset,
                     field_type,
@@ -5920,6 +5940,16 @@ class HStaticFieldGet FINAL : public HExpression<1> {
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
 
+  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type field_type, bool is_volatile) {
+    SideEffects side_effects = SideEffects::FieldReadOfType(field_type, is_volatile);
+
+    // MIPS delegates volatile kPrimLong and kPrimDouble loads to a runtime helper.
+    if (field_type == Primitive::kPrimLong || field_type == Primitive::kPrimDouble) {
+      side_effects.Add(SideEffects::CanTriggerGC());
+    }
+    return side_effects;
+  }
+
   DECLARE_INSTRUCTION(StaticFieldGet);
 
  private:
@@ -5940,7 +5970,7 @@ class HStaticFieldSet FINAL : public HTemplateInstruction<2> {
                   const DexFile& dex_file,
                   Handle<mirror::DexCache> dex_cache,
                   uint32_t dex_pc)
-      : HTemplateInstruction(SideEffects::FieldWriteOfType(field_type, is_volatile),
+      : HTemplateInstruction(SideEffectsForArchRuntimeCalls(field_type, is_volatile),
                              dex_pc),
         field_info_(field_offset,
                     field_type,
@@ -5962,6 +5992,16 @@ class HStaticFieldSet FINAL : public HTemplateInstruction<2> {
   HInstruction* GetValue() const { return InputAt(1); }
   bool GetValueCanBeNull() const { return GetPackedFlag<kFlagValueCanBeNull>(); }
   void ClearValueCanBeNull() { SetPackedFlag<kFlagValueCanBeNull>(false); }
+
+  static SideEffects SideEffectsForArchRuntimeCalls(Primitive::Type field_type, bool is_volatile) {
+    SideEffects side_effects = SideEffects::FieldWriteOfType(field_type, is_volatile);
+
+    // MIPS delegates volatile kPrimLong and kPrimDouble stores to a runtime helper.
+    if (field_type == Primitive::kPrimLong || field_type == Primitive::kPrimDouble) {
+      side_effects.Add(SideEffects::CanTriggerGC());
+    }
+    return side_effects;
+  }
 
   DECLARE_INSTRUCTION(StaticFieldSet);
 

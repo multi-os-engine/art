@@ -1875,7 +1875,7 @@ void IntrinsicCodeGeneratorMIPS::VisitUnsafeCASObject(HInvoke* invoke) {
 // int java.lang.String.compareTo(String anotherString)
 void IntrinsicLocationsBuilderMIPS::VisitStringCompareTo(HInvoke* invoke) {
   LocationSummary* locations = new (arena_) LocationSummary(invoke,
-                                                            LocationSummary::kCallOnMainOnly,
+                                                            LocationSummary::kCallOnMainAndSlowPath,
                                                             kIntrinsified);
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
@@ -1896,13 +1896,7 @@ void IntrinsicCodeGeneratorMIPS::VisitStringCompareTo(HInvoke* invoke) {
   codegen_->AddSlowPath(slow_path);
   __ Beqz(argument, slow_path->GetEntryLabel());
 
-  __ LoadFromOffset(kLoadWord,
-                    T9,
-                    TR,
-                    QUICK_ENTRYPOINT_OFFSET(kMipsWordSize,
-                                            pStringCompareTo).Int32Value());
-  __ Jalr(T9);
-  __ Nop();
+  codegen_->InvokeRuntime(kQuickStringCompareTo, invoke, invoke->GetDexPc(), slow_path);
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -2056,13 +2050,7 @@ static void GenerateStringIndexOf(HInvoke* invoke,
     __ Clear(tmp_reg);
   }
 
-  __ LoadFromOffset(kLoadWord,
-                    T9,
-                    TR,
-                    QUICK_ENTRYPOINT_OFFSET(kMipsWordSize, pIndexOf).Int32Value());
-  __ Jalr(T9);
-  __ Nop();
-
+  codegen->InvokeRuntime(kQuickIndexOf, invoke, invoke->GetDexPc(), slow_path);
   if (slow_path != nullptr) {
     __ Bind(slow_path->GetExitLabel());
   }
@@ -2142,13 +2130,7 @@ void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromBytes(HInvoke* invoke) 
   codegen_->AddSlowPath(slow_path);
   __ Beqz(byte_array, slow_path->GetEntryLabel());
 
-  __ LoadFromOffset(kLoadWord,
-                    T9,
-                    TR,
-                    QUICK_ENTRYPOINT_OFFSET(kMipsWordSize, pAllocStringFromBytes).Int32Value());
-  __ Jalr(T9);
-  __ Nop();
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
+  codegen_->InvokeRuntime(kQuickAllocStringFromBytes, invoke, invoke->GetDexPc(), slow_path);
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -2166,22 +2148,13 @@ void IntrinsicLocationsBuilderMIPS::VisitStringNewStringFromChars(HInvoke* invok
 }
 
 void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromChars(HInvoke* invoke) {
-  MipsAssembler* assembler = GetAssembler();
-
   // No need to emit code checking whether `locations->InAt(2)` is a null
   // pointer, as callers of the native method
   //
   //   java.lang.StringFactory.newStringFromChars(int offset, int charCount, char[] data)
   //
   // all include a null check on `data` before calling that method.
-
-  __ LoadFromOffset(kLoadWord,
-                    T9,
-                    TR,
-                    QUICK_ENTRYPOINT_OFFSET(kMipsWordSize, pAllocStringFromChars).Int32Value());
-  __ Jalr(T9);
-  __ Nop();
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
+  codegen_->InvokeRuntime(kQuickAllocStringFromChars, invoke, invoke->GetDexPc());
 }
 
 // java.lang.StringFactory.newStringFromString(String toCopy)
@@ -2204,13 +2177,7 @@ void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromString(HInvoke* invoke)
   codegen_->AddSlowPath(slow_path);
   __ Beqz(string_to_copy, slow_path->GetEntryLabel());
 
-  __ LoadFromOffset(kLoadWord,
-                    T9,
-                    TR,
-                    QUICK_ENTRYPOINT_OFFSET(kMipsWordSize, pAllocStringFromString).Int32Value());
-  __ Jalr(T9);
-  __ Nop();
-  codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
+  codegen_->InvokeRuntime(kQuickAllocStringFromString, invoke, invoke->GetDexPc());
   __ Bind(slow_path->GetExitLabel());
 }
 
