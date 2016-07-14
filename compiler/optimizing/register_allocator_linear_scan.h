@@ -21,6 +21,7 @@
 #include "base/arena_containers.h"
 #include "base/macros.h"
 #include "primitive.h"
+#include "register_allocator.h"
 
 namespace art {
 
@@ -37,19 +38,15 @@ class SsaLivenessAnalysis;
 /**
  * An implementation of a linear scan register allocator on an `HGraph` with SSA form.
  */
-class RegisterAllocator {
+class RegisterAllocatorLinearScan : public RegisterAllocator {
  public:
-  RegisterAllocator(ArenaAllocator* allocator,
-                    CodeGenerator* codegen,
-                    const SsaLivenessAnalysis& analysis);
+  RegisterAllocatorLinearScan(ArenaAllocator* allocator,
+                              CodeGenerator* codegen,
+                              const SsaLivenessAnalysis& analysis);
 
-  // Main entry point for the register allocator. Given the liveness analysis,
-  // allocates registers to live intervals.
-  void AllocateRegisters();
+  void AllocateRegisters() override;
 
-  // Validate that the register allocator did not allocate the same register to
-  // intervals that intersect each other. Returns false if it did not.
-  bool Validate(bool log_fatal_on_failure) {
+  bool Validate(bool log_fatal_on_failure) override {
     processing_core_registers_ = true;
     if (!ValidateInternal(log_fatal_on_failure)) {
       return false;
@@ -58,17 +55,6 @@ class RegisterAllocator {
     return ValidateInternal(log_fatal_on_failure);
   }
 
-  // Helper method for validation. Used by unit testing.
-  static bool ValidateIntervals(const ArenaVector<LiveInterval*>& intervals,
-                                size_t number_of_spill_slots,
-                                size_t number_of_out_slots,
-                                const CodeGenerator& codegen,
-                                ArenaAllocator* allocator,
-                                bool processing_core_registers,
-                                bool log_fatal_on_failure);
-
-  static bool CanAllocateRegistersFor(const HGraph& graph, InstructionSet instruction_set);
-
   size_t GetNumberOfSpillSlots() const {
     return int_spill_slots_.size()
         + long_spill_slots_.size()
@@ -76,8 +62,6 @@ class RegisterAllocator {
         + double_spill_slots_.size()
         + catch_phi_spill_slots_;
   }
-
-  static constexpr const char* kRegisterAllocatorPassName = "register";
 
  private:
   // Main methods of the allocator.
@@ -88,13 +72,6 @@ class RegisterAllocator {
 
   // Add `interval` in the given sorted list.
   static void AddSorted(ArenaVector<LiveInterval*>* array, LiveInterval* interval);
-
-  // Split `interval` at the position `position`. The new interval starts at `position`.
-  LiveInterval* Split(LiveInterval* interval, size_t position);
-
-  // Split `interval` at a position between `from` and `to`. The method will try
-  // to find an optimal split position.
-  LiveInterval* SplitBetween(LiveInterval* interval, size_t from, size_t to);
 
   // Returns whether `reg` is blocked by the code generator.
   bool IsBlocked(int reg) const;
@@ -112,37 +89,6 @@ class RegisterAllocator {
   // of lifetime positions and ascending vreg numbers for correctness.
   void AllocateSpillSlotForCatchPhi(HPhi* phi);
 
-  // Connect adjacent siblings within blocks.
-  void ConnectSiblings(LiveInterval* interval);
-
-  // Connect siblings between block entries and exits.
-  void ConnectSplitSiblings(LiveInterval* interval, HBasicBlock* from, HBasicBlock* to) const;
-
-  // Helper methods to insert parallel moves in the graph.
-  void InsertParallelMoveAtExitOf(HBasicBlock* block,
-                                  HInstruction* instruction,
-                                  Location source,
-                                  Location destination) const;
-  void InsertParallelMoveAtEntryOf(HBasicBlock* block,
-                                   HInstruction* instruction,
-                                   Location source,
-                                   Location destination) const;
-  void InsertMoveAfter(HInstruction* instruction, Location source, Location destination) const;
-  void AddInputMoveFor(HInstruction* input,
-                       HInstruction* user,
-                       Location source,
-                       Location destination) const;
-  void InsertParallelMoveAt(size_t position,
-                            HInstruction* instruction,
-                            Location source,
-                            Location destination) const;
-
-  void AddMove(HParallelMove* move,
-               Location source,
-               Location destination,
-               HInstruction* instruction,
-               Primitive::Type type) const;
-
   // Helper methods.
   void AllocateRegistersInternal();
   void ProcessInstruction(HInstruction* instruction);
@@ -158,10 +104,6 @@ class RegisterAllocator {
   bool TrySplitNonPairOrUnalignedPairIntervalAt(size_t position,
                                                 size_t first_register_use,
                                                 size_t* next_use);
-
-  ArenaAllocator* const allocator_;
-  CodeGenerator* const codegen_;
-  const SsaLivenessAnalysis& liveness_;
 
   // List of intervals for core registers that must be processed, ordered by start
   // position. Last entry is the interval that has the lowest start position.
@@ -238,7 +180,7 @@ class RegisterAllocator {
   ART_FRIEND_TEST(RegisterAllocatorTest, FreeUntil);
   ART_FRIEND_TEST(RegisterAllocatorTest, SpillInactive);
 
-  DISALLOW_COPY_AND_ASSIGN(RegisterAllocator);
+  DISALLOW_COPY_AND_ASSIGN(RegisterAllocatorLinearScan);
 };
 
 }  // namespace art
