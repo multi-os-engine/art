@@ -672,6 +672,14 @@ END art_quick_check_cast
     .endif
 .endm
 
+// Save rReg's value to [sp, #offset] if rReg is the same as rSave.
+.macro PUSH_REG_EQ rReg, offset, rSave
+    .ifc \rReg, \rSave
+        str \rReg, [sp, #\offset]   @ save rReg
+        .cfi_rel_offset \rReg, \offset
+    .endif
+.endm
+
     /*
      * Macro to insert read barrier, only used in art_quick_aput_obj.
      * rObj and rDest are registers, offset is a defined literal such as MIRROR_OBJECT_CLASS_OFFSET.
@@ -1752,30 +1760,55 @@ END art_quick_l2f
     /*
      * Create a function `name` calling the ReadBarrier::Mark routine,
      * getting its argument and returning its result through register
-     * `reg`, thus following a non-standard runtime calling convention:
-     * - `reg` is used to pass the (sole) argument of this function
+     * `reg`, saving and restoring all caller-save registers.
+     *
+     * If `reg` is different from `r0`, the generated function follows a
+     * non-standard runtime calling convention:
+     * - register `reg` is used to pass the (sole) argument of this
+     *   function (instead of R0);
+     * - register `reg` is used to return the result of this function
      *   (instead of R0);
-     * - `reg` is used to return the result of this function (instead of R0);
      * - R0 is treated like a normal (non-argument) caller-save register;
      * - everything else is the same as in the standard runtime calling
-     *   convention (e.g. same callee-save registers).
+     *   convention (e.g. standard callee-save registers are preserved).
      */
 .macro READ_BARRIER_MARK_REG name, reg
 ENTRY \name
-    push  {lr}                          @ save return address
-    .cfi_adjust_cfa_offset 4
-    .cfi_rel_offset lr, 0
-    sub   sp, #4                        @ push padding (native calling convention 8-byte alignment)
-    .cfi_adjust_cfa_offset 4
-    mov   r0, \reg                      @ pass arg1 - obj from `reg`
+    push  {r0-r4, r9, r12, lr}          @ save return address and core caller-save registers
+    .cfi_adjust_cfa_offset 32
+    .cfi_rel_offset r0, 0
+    .cfi_rel_offset r1, 4
+    .cfi_rel_offset r2, 8
+    .cfi_rel_offset r3, 12
+    .cfi_rel_offset r4, 16
+    .cfi_rel_offset r9, 20
+    .cfi_rel_offset r12, 24
+    .cfi_rel_offset lr, 28
+    vpush {s0-s15}                      @ save floating-point caller-save registers
+    .cfi_adjust_cfa_offset 64
+
+    .ifnc \reg, r0
+      mov   r0, \reg                    @ pass arg1 - obj from `reg`
+    .endif
     bl    artReadBarrierMark            @ artReadBarrierMark(obj)
-    mov   \reg, r0                      @ return result into `reg`
-    add   sp, #4                        @ pop padding
-    .cfi_adjust_cfa_offset -4
-    pop   {pc}                          @ return
+    .ifnc \reg, r0
+      mov   \reg, r0                    @ return result into `reg`
+    .endif
+
+    vpop {s0-s15}                       @ restore floating-point registers
+    .cfi_adjust_cfa_offset -64
+    PUSH_REG_EQ r0, 0, \reg             @ if `reg` is a caller-save register,
+    PUSH_REG_EQ r1, 4, \reg             @ save it to its stack slot (and overwrite
+    PUSH_REG_EQ r2, 8, \reg             @ the previous value); it will be restored
+    PUSH_REG_EQ r3, 12, \reg            @ by the pop instruction below
+    PUSH_REG_EQ r4, 16, \reg
+    PUSH_REG_EQ r9, 20, \reg
+    PUSH_REG_EQ r12, 24, \reg
+    pop   {r0-r4, r9, r12, pc}          @ restore caller-save registers and return
 END \name
 .endm
 
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg00, r0
 READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg01, r1
 READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg02, r2
 READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg03, r3
