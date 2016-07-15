@@ -67,6 +67,7 @@ static constexpr uint32_t kAccCompileDontBother =     0x01000000;  // method (ru
 
 // Set by the verifier for a method that could not be verified to follow structured locking.
 static constexpr uint32_t kAccMustCountLocks =        0x02000000;  // method (runtime)
+static constexpr uint32_t kAccIntrinsic  =            0x80000000;  // method (runtime)
 
 // Special runtime-only flags.
 // Interface and all its super-interfaces with default methods have been recursively initialized.

@@ -72,6 +72,8 @@
 #include "verifier/method_verifier.h"
 #include "verifier/method_verifier-inl.h"
 
+#include "../optimizing/nodes.h"
+
 namespace art {
 
 static constexpr bool kTimeCompileMethod = !kIsDebugBuild;
@@ -479,6 +481,22 @@ void CompilerDriver::CompileAll(jobject class_loader,
   // 3) Attempt to verify all classes
   // 4) Attempt to initialize image classes, and trivially initialized classes
   PreCompile(class_loader, dex_files, timings);
+  if (IsBootImage()) {
+  ScopedObjectAccess soa(Thread::Current());
+  ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+  size_t image_size = class_linker->GetImagePointerSize();
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache, SideEffects, Exceptions, ClassName, MethodName, Signature) \
+  if (ClassName != "") { \
+    mirror::Class* cls = class_linker->FindSystemClass(soa.Self(), ClassName); \
+    ArtMethod* method = cls->FindDeclaredDirectMethod(MethodName, Signature, image_size); \
+    method->SetIntrinsic(static_cast<uint32_t>(Intrinsics::k##Name)); \
+    fprintf(stderr, "%s\n", PrettyMethod(method).c_str()); \
+  }
+#include "../optimizing/intrinsics_list.h"
+INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
+#undef INTRINSICS_LIST
+#undef OPTIMIZING_INTRINSICS
+  }
   // Compile:
   // 1) Compile all classes and methods enabled for compilation. May fall back to dex-to-dex
   //    compilation.
