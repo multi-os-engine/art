@@ -301,9 +301,10 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
     DCHECK_EQ(maximum_number_of_live_fpu_registers, 0u);
     SetFrameSize(CallPushesPC() ? GetWordSize() : 0);
   } else {
+    first_register_slot_in_slow_path_ = RoundUp(first_register_slot_in_slow_path_,
+                                                GetPreferredSlotsAlignment());
     SetFrameSize(RoundUp(
-        number_of_spill_slots * kVRegSize
-        + number_of_out_slots * kVRegSize
+        first_register_slot_in_slow_path_
         + maximum_number_of_live_core_registers * GetWordSize()
         + maximum_number_of_live_fpu_registers * GetFloatingPointSpillSlotSize()
         + FrameEntrySpillSize(),

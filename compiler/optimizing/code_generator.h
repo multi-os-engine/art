@@ -211,6 +211,10 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
                                 size_t maximum_number_of_live_fpu_registers,
                                 size_t number_of_out_slots,
                                 const ArenaVector<HBasicBlock*>& block_order);
+  // Adjust the offset to which we spill and restore registers for slow paths. We want to use the
+  // STP and LDP instructions, which can only encode offsets that are multiples of the register size
+  // accessed.
+  virtual uint32_t GetPreferredSlotsAlignment() const { return 1; }
 
   uint32_t GetFrameSize() const { return frame_size_; }
   void SetFrameSize(uint32_t size) { frame_size_ = size; }
