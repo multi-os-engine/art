@@ -288,7 +288,51 @@ class ArtMethod FINAL {
     return (GetAccessFlags() & kAccFinal) != 0;
   }
 
+  bool IsIntrinsic() {
+    return (GetAccessFlags() & kAccIntrinsic) != 0;
+  }
+
+  void SetIntrinsic(uint32_t intrinsic) {
+    DCHECK(IsUint<8>(intrinsic));
+    uint32_t new_value = (GetAccessFlags() & 0x7FFFFF) | kAccIntrinsic | (intrinsic << 23);
+    if (kIsDebugBuild) {
+      uint32_t java_flags = (GetAccessFlags() & kAccJavaFlagsMask);
+      bool is_constructor = IsConstructor();
+      bool is_synchronized = IsSynchronized();
+      bool skip_access_checks = SkipAccessChecks();
+      bool is_fast_native = IsFastNative();
+      bool is_copied = IsCopied();
+      bool is_miranda = IsMiranda();
+      bool is_default = IsDefault();
+      bool is_default_conflict = IsDefaultConflicting();
+      bool is_compilable = IsCompilable();
+      bool must_count_locks = MustCountLocks();
+      SetAccessFlags(new_value);
+      DCHECK_EQ(java_flags, (GetAccessFlags() & kAccJavaFlagsMask));
+      DCHECK_EQ(is_constructor, IsConstructor());
+      DCHECK_EQ(is_synchronized, IsSynchronized());
+      DCHECK_EQ(skip_access_checks, SkipAccessChecks());
+      DCHECK_EQ(is_fast_native, IsFastNative());
+      DCHECK_EQ(is_copied, IsCopied());
+      DCHECK_EQ(is_miranda, IsMiranda());
+      DCHECK_EQ(is_default, IsDefault());
+      DCHECK_EQ(is_default_conflict, IsDefaultConflicting());
+      DCHECK_EQ(is_compilable, IsCompilable());
+      DCHECK_EQ(must_count_locks, MustCountLocks());
+    } else {
+      SetAccessFlags(new_value);
+    }
+  }
+
+  uint32_t GetIntrinsic() {
+    DCHECK(IsIntrinsic());
+    return (GetAccessFlags() >> 23) & 0xFF;
+  }
+
   bool IsCopied() {
+    if (IsIntrinsic()) {
+      return false;
+    }
     const bool copied = (GetAccessFlags() & kAccCopied) != 0;
     // (IsMiranda() || IsDefaultConflicting()) implies copied
     DCHECK(!(IsMiranda() || IsDefaultConflicting()) || copied)
@@ -297,16 +341,25 @@ class ArtMethod FINAL {
   }
 
   bool IsMiranda() {
+    if (IsIntrinsic()) {
+      return false;
+    }
     return (GetAccessFlags() & kAccMiranda) != 0;
   }
 
   // Returns true if invoking this method will not throw an AbstractMethodError or
   // IncompatibleClassChangeError.
   bool IsInvokable() {
+    if (IsIntrinsic()) {
+      return true;
+    }
     return !IsAbstract() && !IsDefaultConflicting();
   }
 
   bool IsCompilable() {
+    if (IsIntrinsic()) {
+      return true;
+    }
     return (GetAccessFlags() & kAccCompileDontBother) == 0;
   }
 
@@ -314,11 +367,17 @@ class ArtMethod FINAL {
   // multiple default methods. It cannot be invoked, throwing an IncompatibleClassChangeError if one
   // attempts to do so.
   bool IsDefaultConflicting() {
+    if (IsIntrinsic()) {
+      return false;
+    }
     return (GetAccessFlags() & kAccDefaultConflict) != 0u;
   }
 
   // This is set by the class linker.
   bool IsDefault() {
+    if (IsIntrinsic()) {
+      return false;
+    }
     return (GetAccessFlags() & kAccDefault) != 0;
   }
 
@@ -355,6 +414,9 @@ class ArtMethod FINAL {
   // Should this method be run in the interpreter and count locks (e.g., failed structured-
   // locking verification)?
   bool MustCountLocks() {
+    if (IsIntrinsic()) {
+      return false;
+    }
     return (GetAccessFlags() & kAccMustCountLocks) != 0;
   }
 

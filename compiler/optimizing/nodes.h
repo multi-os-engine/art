@@ -3681,7 +3681,7 @@ class HNewInstance FINAL : public HExpression<2> {
 };
 
 enum class Intrinsics {
-#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache, SideEffects, Exceptions) \
+#define OPTIMIZING_INTRINSICS(Name, IsStatic, NeedsEnvironmentOrCache, SideEffects, Exceptions, ...) \
   k ## Name,
 #include "intrinsics_list.h"
   kNone,
