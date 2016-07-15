@@ -1823,9 +1823,11 @@ void HBasicBlock::DisconnectAndDelete() {
     }
   }
 
-  // (6) Disconnect from the dominator.
-  dominator_->RemoveDominatedBlock(this);
-  SetDominator(nullptr);
+  if (dominator_ != nullptr) {
+    // (6) Disconnect from the dominator.
+    dominator_->RemoveDominatedBlock(this);
+    SetDominator(nullptr);
+  }
 
   // (7) Delete from the graph, update reverse post order.
   graph_->DeleteDeadEmptyBlock(this);
