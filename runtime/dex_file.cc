@@ -320,6 +320,12 @@ std::unique_ptr<const DexFile> DexFile::Open(const ZipArchive& zip_archive, cons
     *error_code = ZipOpenErrorCode::kEntryNotFound;
     return nullptr;
   }
+  if (zip_entry->GetUncompressedLength() == 0) {
+    *error_msg = StringPrintf("Failed to make dex file '%s' no uncompressed length", location.c_str());
+    *error_code = ZipOpenErrorCode::kDexFileError;
+    return nullptr;
+  }
+
   std::unique_ptr<MemMap> map(zip_entry->ExtractToMemMap(location.c_str(), entry_name, error_msg));
   if (map.get() == nullptr) {
     *error_msg = StringPrintf("Failed to extract '%s' from '%s': %s", entry_name, location.c_str(),
