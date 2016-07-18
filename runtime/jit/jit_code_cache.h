@@ -189,6 +189,10 @@ class JitCodeCache {
 
   bool IsOsrCompiled(ArtMethod* method) REQUIRES(!lock_);
 
+  void VisitRoots(RootVisitor* visitor)
+      REQUIRES(!lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
+
  private:
   // Take ownership of maps.
   JitCodeCache(MemMap* code_map,

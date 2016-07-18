@@ -1534,6 +1534,9 @@ void Runtime::VisitConcurrentRoots(RootVisitor* visitor, VisitRootFlags flags) {
     VisitConstantRoots(visitor);
   }
   Dbg::VisitRoots(visitor);
+  if (GetJit() != nullptr && GetJit()->GetCodeCache() != nullptr) {
+    GetJit()->GetCodeCache()->VisitRoots(visitor);
+  }
 }
 
 void Runtime::VisitTransactionRoots(RootVisitor* visitor) {

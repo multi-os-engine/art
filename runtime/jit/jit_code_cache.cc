@@ -1035,5 +1035,12 @@ void JitCodeCache::Dump(std::ostream& os) {
   histogram_profiling_info_memory_use_.PrintMemoryUse(os);
 }
 
+void JitCodeCache::VisitRoots(RootVisitor* visitor) {
+  MutexLock mu(Thread::Current(), lock_);
+  for (ProfilingInfo* info : profiling_infos_) {
+    info->VisitRoots(visitor);
+  }
+}
+
 }  // namespace jit
 }  // namespace art

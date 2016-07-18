@@ -102,13 +102,11 @@ class ProfilingInfo {
       REQUIRES(Roles::uninterruptible_)
       SHARED_REQUIRES(Locks::mutator_lock_);
 
-  // NO_THREAD_SAFETY_ANALYSIS since we don't know what the callback requires.
-  template<typename RootVisitorType>
-  void VisitRoots(RootVisitorType& visitor) NO_THREAD_SAFETY_ANALYSIS {
+  void VisitRoots(RootVisitor* visitor) SHARED_REQUIRES(Locks::mutator_lock_) {
     for (size_t i = 0; i < number_of_inline_caches_; ++i) {
       InlineCache* cache = &cache_[i];
       for (size_t j = 0; j < InlineCache::kIndividualCacheSize; ++j) {
-        visitor.VisitRootIfNonNull(cache->classes_[j].AddressWithoutBarrier());
+        cache->classes_[j].VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
       }
     }
   }
