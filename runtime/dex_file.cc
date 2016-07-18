@@ -316,7 +316,7 @@ std::unique_ptr<const DexFile> DexFile::Open(const ZipArchive& zip_archive, cons
   ScopedTrace trace("Dex file open from Zip Archive " + std::string(location));
   CHECK(!location.empty());
   std::unique_ptr<ZipEntry> zip_entry(zip_archive.Find(entry_name, error_msg));
-  if (zip_entry.get() == nullptr) {
+  if (zip_entry.get() == nullptr || zip_entry.GetUncompressedLength() == 0) {
     *error_code = ZipOpenErrorCode::kEntryNotFound;
     return nullptr;
   }
