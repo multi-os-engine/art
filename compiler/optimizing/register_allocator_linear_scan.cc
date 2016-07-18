@@ -276,14 +276,8 @@ void RegisterAllocator::ProcessInstruction(HInstruction* instruction) {
       && (instruction->GetType() != Primitive::kPrimFloat);
 
   if (locations->NeedsSafepoint()) {
-    if (codegen_->IsLeafMethod()) {
-      // TODO: We do this here because we do not want the suspend check to artificially
-      // create live registers. We should find another place, but this is currently the
-      // simplest.
-      DCHECK(instruction->IsSuspendCheckEntry());
-      instruction->GetBlock()->RemoveInstruction(instruction);
-      return;
-    }
+    DCHECK(!codegen_->IsLeafMethod()) << "Suspend check elimination should "
+        << "have removed this instruction before register allocation";
     safepoints_.push_back(instruction);
     if (locations->OnlyCallsOnSlowPath()) {
       // We add a synthesized range at this position to record the live registers

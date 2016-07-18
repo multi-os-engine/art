@@ -75,6 +75,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/ssa_liveness_analysis.cc \
 	optimizing/ssa_phi_elimination.cc \
 	optimizing/stack_map_stream.cc \
+	optimizing/suspend_check_elimination.cc \
 	optimizing/x86_memory_gen.cc \
 	trampolines/trampoline_compiler.cc \
 	utils/assembler.cc \

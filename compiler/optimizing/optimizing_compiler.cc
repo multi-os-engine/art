@@ -88,6 +88,7 @@
 #include "ssa_builder.h"
 #include "ssa_liveness_analysis.h"
 #include "ssa_phi_elimination.h"
+#include "suspend_check_elimination.h"
 #include "utils/assembler.h"
 #include "verifier/method_verifier.h"
 
@@ -564,6 +565,7 @@ static void RunOptimizations(HGraph* graph,
   InstructionSimplifier* simplify3 = new (arena) InstructionSimplifier(
       graph, stats, "instruction_simplifier_before_codegen");
   IntrinsicsRecognizer* intrinsics = new (arena) IntrinsicsRecognizer(graph, driver, stats);
+  SuspendCheckElimination* suspend_check_elim = new (arena) SuspendCheckElimination(codegen);
 
   HOptimization* optimizations1[] = {
     intrinsics,
@@ -594,6 +596,7 @@ static void RunOptimizations(HGraph* graph,
     // can satisfy. For example, the code generator does not expect to see a
     // HTypeConversion from a type to the same type.
     simplify3,
+    suspend_check_elim,
   };
   RunOptimizations(optimizations2, arraysize(optimizations2), pass_observer);
 
