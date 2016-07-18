@@ -72,6 +72,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/sharpening.cc \
 	optimizing/side_effects_analysis.cc \
 	optimizing/ssa_builder.cc \
+	optimizing/ssa_deconstruction.cc \
 	optimizing/ssa_liveness_analysis.cc \
 	optimizing/ssa_phi_elimination.cc \
 	optimizing/stack_map_stream.cc \
