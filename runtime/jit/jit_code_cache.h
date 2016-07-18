@@ -28,6 +28,7 @@
 #include "jni.h"
 #include "method_reference.h"
 #include "oat_file.h"
+#include "profiling_info.h"
 #include "object_callbacks.h"
 #include "safe_map.h"
 #include "thread_pool.h"
@@ -188,6 +189,10 @@ class JitCodeCache {
   void Dump(std::ostream& os) REQUIRES(!lock_);
 
   bool IsOsrCompiled(ArtMethod* method) REQUIRES(!lock_);
+
+  void VisitRoots(RootVisitor* visitor)
+      REQUIRES(!lock_)
+      SHARED_REQUIRES(Locks::mutator_lock_);
 
  private:
   // Take ownership of maps.
