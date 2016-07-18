@@ -33,7 +33,8 @@
 #include "utils/assembler.h"
 #include "utils/stack_checks.h"
 
-using namespace vixl::aarch64;  // NOLINT(build/namespaces)
+
+using namespace vixl;   // NOLINT(build/namespaces)
 
 #ifdef __
 #error "ARM64 Codegen VIXL macro-assembler macro already defined."
@@ -146,20 +147,20 @@ static void SaveRestoreLiveRegistersHelper(CodeGenerator* codegen,
                                          codegen->GetNumberOfFloatingPointRegisters()));
 
   CPURegList core_list = CPURegList(CPURegister::kRegister, kXRegSize,
-      register_set->GetCoreRegisters() & (~callee_saved_core_registers.GetList()));
+      register_set->GetCoreRegisters() & (~callee_saved_core_registers.list()));
   CPURegList fp_list = CPURegList(CPURegister::kFPRegister, kDRegSize,
-      register_set->GetFloatingPointRegisters() & (~callee_saved_fp_registers.GetList()));
+      register_set->GetFloatingPointRegisters() & (~callee_saved_fp_registers.list()));
 
   MacroAssembler* masm = down_cast<CodeGeneratorARM64*>(codegen)->GetVIXLAssembler();
   UseScratchRegisterScope temps(masm);
 
   Register base = masm->StackPointer();
-  int64_t core_spill_size = core_list.GetTotalSizeInBytes();
-  int64_t fp_spill_size = fp_list.GetTotalSizeInBytes();
+  int64_t core_spill_size = core_list.TotalSizeInBytes();
+  int64_t fp_spill_size = fp_list.TotalSizeInBytes();
   int64_t reg_size = kXRegSizeInBytes;
   int64_t max_ls_pair_offset = spill_offset + core_spill_size + fp_spill_size - 2 * reg_size;
   uint32_t ls_access_size = WhichPowerOf2(reg_size);
-  if (((core_list.GetCount() > 1) || (fp_list.GetCount() > 1)) &&
+  if (((core_list.Count() > 1) || (fp_list.Count() > 1)) &&
       !masm->IsImmLSPair(max_ls_pair_offset, ls_access_size)) {
     // If the offset does not fit in the instruction's immediate field, use an alternate register
     // to compute the base address(float point registers spill base address).
@@ -410,7 +411,7 @@ class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
     }
   }
 
-  vixl::aarch64::Label* GetReturnLabel() {
+  vixl::Label* GetReturnLabel() {
     DCHECK(successor_ == nullptr);
     return &return_label_;
   }
@@ -426,7 +427,7 @@ class SuspendCheckSlowPathARM64 : public SlowPathCodeARM64 {
   HBasicBlock* const successor_;
 
   // If `successor_` is null, the label to branch to after the suspend check.
-  vixl::aarch64::Label return_label_;
+  vixl::Label return_label_;
 
   DISALLOW_COPY_AND_ASSIGN(SuspendCheckSlowPathARM64);
 };
@@ -566,9 +567,9 @@ void JumpTableARM64::EmitTable(CodeGeneratorARM64* codegen) {
   __ Bind(&table_start_);
   const ArenaVector<HBasicBlock*>& successors = switch_instr_->GetBlock()->GetSuccessors();
   for (uint32_t i = 0; i < num_entries; i++) {
-    vixl::aarch64::Label* target_label = codegen->GetLabelOf(successors[i]);
+    vixl::Label* target_label = codegen->GetLabelOf(successors[i]);
     DCHECK(target_label->IsBound());
-    ptrdiff_t jump_offset = target_label->GetLocation() - table_start_.GetLocation();
+    ptrdiff_t jump_offset = target_label->location() - table_start_.location();
     DCHECK_GT(jump_offset, std::numeric_limits<int32_t>::min());
     DCHECK_LE(jump_offset, std::numeric_limits<int32_t>::max());
     Literal<int32_t> literal(jump_offset);
@@ -789,8 +790,8 @@ class ReadBarrierForHeapReferenceSlowPathARM64 : public SlowPathCodeARM64 {
 
  private:
   Register FindAvailableCallerSaveRegister(CodeGenerator* codegen) {
-    size_t ref = static_cast<int>(XRegisterFrom(ref_).GetCode());
-    size_t obj = static_cast<int>(XRegisterFrom(obj_).GetCode());
+    size_t ref = static_cast<int>(XRegisterFrom(ref_).code());
+    size_t obj = static_cast<int>(XRegisterFrom(obj_).code());
     for (size_t i = 0, e = codegen->GetNumberOfCoreRegisters(); i < e; ++i) {
       if (i != ref && i != obj && !codegen->IsCoreCalleeSaveRegister(i)) {
         return Register(VIXLRegCodeFromART(i), kXRegSize);
@@ -908,8 +909,8 @@ CodeGeneratorARM64::CodeGeneratorARM64(HGraph* graph,
                     kNumberOfAllocatableRegisters,
                     kNumberOfAllocatableFPRegisters,
                     kNumberOfAllocatableRegisterPairs,
-                    callee_saved_core_registers.GetList(),
-                    callee_saved_fp_registers.GetList(),
+                    callee_saved_core_registers.list(),
+                    callee_saved_fp_registers.list(),
                     compiler_options,
                     stats),
       block_labels_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
@@ -1059,17 +1060,17 @@ void CodeGeneratorARM64::GenerateFrameExit() {
   GetAssembler()->cfi().DefCFAOffset(GetFrameSize());
 }
 
-CPURegList CodeGeneratorARM64::GetFramePreservedCoreRegisters() const {
+vixl::CPURegList CodeGeneratorARM64::GetFramePreservedCoreRegisters() const {
   DCHECK(ArtVixlRegCodeCoherentForRegSet(core_spill_mask_, GetNumberOfCoreRegisters(), 0, 0));
-  return CPURegList(CPURegister::kRegister, kXRegSize,
-                    core_spill_mask_);
+  return vixl::CPURegList(vixl::CPURegister::kRegister, vixl::kXRegSize,
+                          core_spill_mask_);
 }
 
-CPURegList CodeGeneratorARM64::GetFramePreservedFPRegisters() const {
+vixl::CPURegList CodeGeneratorARM64::GetFramePreservedFPRegisters() const {
   DCHECK(ArtVixlRegCodeCoherentForRegSet(0, 0, fpu_spill_mask_,
                                          GetNumberOfFloatingPointRegisters()));
-  return CPURegList(CPURegister::kFPRegister, kDRegSize,
-                    fpu_spill_mask_);
+  return vixl::CPURegList(vixl::CPURegister::kFPRegister, vixl::kDRegSize,
+                          fpu_spill_mask_);
 }
 
 void CodeGeneratorARM64::Bind(HBasicBlock* block) {
@@ -1093,7 +1094,7 @@ void CodeGeneratorARM64::MarkGCCard(Register object, Register value, bool value_
   UseScratchRegisterScope temps(GetVIXLAssembler());
   Register card = temps.AcquireX();
   Register temp = temps.AcquireW();   // Index within the CardTable - 32bit.
-  vixl::aarch64::Label done;
+  vixl::Label done;
   if (value_can_be_null) {
     __ Cbz(value, &done);
   }
@@ -1118,12 +1119,12 @@ void CodeGeneratorARM64::SetupBlockedRegisters() const {
   CPURegList reserved_core_registers = vixl_reserved_core_registers;
   reserved_core_registers.Combine(runtime_reserved_core_registers);
   while (!reserved_core_registers.IsEmpty()) {
-    blocked_core_registers_[reserved_core_registers.PopLowestIndex().GetCode()] = true;
+    blocked_core_registers_[reserved_core_registers.PopLowestIndex().code()] = true;
   }
 
   CPURegList reserved_fp_registers = vixl_reserved_fp_registers;
   while (!reserved_fp_registers.IsEmpty()) {
-    blocked_fpu_registers_[reserved_fp_registers.PopLowestIndex().GetCode()] = true;
+    blocked_fpu_registers_[reserved_fp_registers.PopLowestIndex().code()] = true;
   }
 
   if (GetGraph()->IsDebuggable()) {
@@ -1132,7 +1133,7 @@ void CodeGeneratorARM64::SetupBlockedRegisters() const {
     // now, just block them.
     CPURegList reserved_fp_registers_debuggable = callee_saved_fp_registers;
     while (!reserved_fp_registers_debuggable.IsEmpty()) {
-      blocked_fpu_registers_[reserved_fp_registers_debuggable.PopLowestIndex().GetCode()] = true;
+      blocked_fpu_registers_[reserved_fp_registers_debuggable.PopLowestIndex().code()] = true;
     }
   }
 }
@@ -1343,7 +1344,7 @@ void CodeGeneratorARM64::LoadAcquire(HInstruction* instruction,
   DCHECK(!src.IsPostIndex());
 
   // TODO(vixl): Let the MacroAssembler handle MemOperand.
-  __ Add(temp_base, src.GetBaseRegister(), OperandFromMemOperand(src));
+  __ Add(temp_base, src.base(), OperandFromMemOperand(src));
   MemOperand base = MemOperand(temp_base);
   switch (type) {
     case Primitive::kPrimBoolean:
@@ -1435,7 +1436,7 @@ void CodeGeneratorARM64::StoreRelease(Primitive::Type type,
 
   // TODO(vixl): Let the MacroAssembler handle this.
   Operand op = OperandFromMemOperand(dst);
-  __ Add(temp_base, dst.GetBaseRegister(), op);
+  __ Add(temp_base, dst.base(), op);
   MemOperand base = MemOperand(temp_base);
   switch (type) {
     case Primitive::kPrimBoolean:
@@ -1489,7 +1490,7 @@ void CodeGeneratorARM64::InvokeRuntime(int32_t entry_point_offset,
 }
 
 void InstructionCodeGeneratorARM64::GenerateClassInitializationCheck(SlowPathCodeARM64* slow_path,
-                                                                     Register class_reg) {
+                                                                     vixl::Register class_reg) {
   UseScratchRegisterScope temps(GetVIXLAssembler());
   Register temp = temps.AcquireW();
   size_t status_offset = mirror::Class::StatusOffset().SizeValue();
@@ -1754,7 +1755,7 @@ void InstructionCodeGeneratorARM64::HandleBinaryOp(HBinaryOperation* instr) {
         __ Sub(dst, lhs, rhs);
       } else if (instr->IsRor()) {
         if (rhs.IsImmediate()) {
-          uint32_t shift = rhs.GetImmediate() & (lhs.GetSizeInBits() - 1);
+          uint32_t shift = rhs.immediate() & (lhs.SizeInBits() - 1);
           __ Ror(dst, lhs, shift);
         } else {
           // Ensure shift distance is in the same size register as the result. If
@@ -1817,7 +1818,7 @@ void InstructionCodeGeneratorARM64::HandleShift(HBinaryOperation* instr) {
       Register lhs = InputRegisterAt(instr, 0);
       Operand rhs = InputOperandAt(instr, 1);
       if (rhs.IsImmediate()) {
-        uint32_t shift_value = rhs.GetImmediate() &
+        uint32_t shift_value = rhs.immediate() &
             (type == Primitive::kPrimInt ? kMaxIntShiftDistance : kMaxLongShiftDistance);
         if (instr->IsShl()) {
           __ Lsl(dst, lhs, shift_value);
@@ -1827,7 +1828,7 @@ void InstructionCodeGeneratorARM64::HandleShift(HBinaryOperation* instr) {
           __ Lsr(dst, lhs, shift_value);
         }
       } else {
-        Register rhs_reg = dst.IsX() ? rhs.GetRegister().X() : rhs.GetRegister().W();
+        Register rhs_reg = dst.IsX() ? rhs.reg().X() : rhs.reg().W();
 
         if (instr->IsShl()) {
           __ Lsl(dst, lhs, rhs_reg);
@@ -2013,14 +2014,13 @@ void InstructionCodeGeneratorARM64::VisitMultiplyAccumulate(HMultiplyAccumulate*
   if (instr->GetType() == Primitive::kPrimLong &&
       codegen_->GetInstructionSetFeatures().NeedFixCortexA53_835769()) {
     MacroAssembler* masm = down_cast<CodeGeneratorARM64*>(codegen_)->GetVIXLAssembler();
-    vixl::aarch64::Instruction* prev =
-        masm->GetCursorAddress<vixl::aarch64::Instruction*>() - kInstructionSize;
+    vixl::Instruction* prev = masm->GetCursorAddress<vixl::Instruction*>() - vixl::kInstructionSize;
     if (prev->IsLoadOrStore()) {
       // Make sure we emit only exactly one nop.
-      vixl::aarch64::CodeBufferCheckScope scope(masm,
-                                                kInstructionSize,
-                                                vixl::aarch64::CodeBufferCheckScope::kCheck,
-                                                vixl::aarch64::CodeBufferCheckScope::kExactSize);
+      vixl::CodeBufferCheckScope scope(masm,
+                                       vixl::kInstructionSize,
+                                       vixl::CodeBufferCheckScope::kCheck,
+                                       vixl::CodeBufferCheckScope::kExactSize);
       __ nop();
     }
   }
@@ -2210,7 +2210,7 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
   } else {
     DCHECK(needs_write_barrier);
     DCHECK(!instruction->GetArray()->IsArm64IntermediateAddress());
-    vixl::aarch64::Label done;
+    vixl::Label done;
     SlowPathCodeARM64* slow_path = nullptr;
     {
       // We use a block to end the scratch scope before the write barrier, thus
@@ -2235,7 +2235,7 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
         slow_path = new (GetGraph()->GetArena()) ArraySetSlowPathARM64(instruction);
         codegen_->AddSlowPath(slow_path);
         if (instruction->GetValueCanBeNull()) {
-          vixl::aarch64::Label non_zero;
+          vixl::Label non_zero;
           __ Cbnz(Register(value), &non_zero);
           if (!index.IsConstant()) {
             __ Add(temp, array, offset);
@@ -2289,7 +2289,7 @@ void InstructionCodeGeneratorARM64::VisitArraySet(HArraySet* instruction) {
           __ Cmp(temp, temp2);
 
           if (instruction->StaticTypeOfArrayIsObjectArray()) {
-            vixl::aarch64::Label do_put;
+            vixl::Label do_put;
             __ B(eq, &do_put);
             // If heap poisoning is enabled, the `temp` reference has
             // not been unpoisoned yet; unpoison it now.
@@ -2822,11 +2822,11 @@ void InstructionCodeGeneratorARM64::VisitTryBoundary(HTryBoundary* try_boundary)
 
 void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruction,
                                                           size_t condition_input_index,
-                                                          vixl::aarch64::Label* true_target,
-                                                          vixl::aarch64::Label* false_target) {
+                                                          vixl::Label* true_target,
+                                                          vixl::Label* false_target) {
   // FP branching requires both targets to be explicit. If either of the targets
   // is nullptr (fallthrough) use and bind `fallthrough_target` instead.
-  vixl::aarch64::Label fallthrough_target;
+  vixl::Label fallthrough_target;
   HInstruction* cond = instruction->InputAt(condition_input_index);
 
   if (true_target == nullptr && false_target == nullptr) {
@@ -2884,7 +2884,7 @@ void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruct
       Operand rhs = InputOperandAt(condition, 1);
 
       Condition arm64_cond;
-      vixl::aarch64::Label* non_fallthrough_target;
+      vixl::Label* non_fallthrough_target;
       if (true_target == nullptr) {
         arm64_cond = ARM64Condition(condition->GetOppositeCondition());
         non_fallthrough_target = false_target;
@@ -2894,7 +2894,7 @@ void InstructionCodeGeneratorARM64::GenerateTestAndBranch(HInstruction* instruct
       }
 
       if ((arm64_cond == eq || arm64_cond == ne || arm64_cond == lt || arm64_cond == ge) &&
-          rhs.IsImmediate() && (rhs.GetImmediate() == 0)) {
+          rhs.IsImmediate() && (rhs.immediate() == 0)) {
         switch (arm64_cond) {
           case eq:
             __ Cbz(lhs, non_fallthrough_target);
@@ -2943,14 +2943,10 @@ void LocationsBuilderARM64::VisitIf(HIf* if_instr) {
 void InstructionCodeGeneratorARM64::VisitIf(HIf* if_instr) {
   HBasicBlock* true_successor = if_instr->IfTrueSuccessor();
   HBasicBlock* false_successor = if_instr->IfFalseSuccessor();
-  vixl::aarch64::Label* true_target = codegen_->GetLabelOf(true_successor);
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(), true_successor)) {
-    true_target = nullptr;
-  }
-  vixl::aarch64::Label* false_target = codegen_->GetLabelOf(false_successor);
-  if (codegen_->GoesToNextBlock(if_instr->GetBlock(), false_successor)) {
-    false_target = nullptr;
-  }
+  vixl::Label* true_target = codegen_->GoesToNextBlock(if_instr->GetBlock(), true_successor) ?
+      nullptr : codegen_->GetLabelOf(true_successor);
+  vixl::Label* false_target = codegen_->GoesToNextBlock(if_instr->GetBlock(), false_successor) ?
+      nullptr : codegen_->GetLabelOf(false_successor);
   GenerateTestAndBranch(if_instr, /* condition_input_index */ 0, true_target, false_target);
 }
 
@@ -3134,7 +3130,7 @@ void InstructionCodeGeneratorARM64::VisitInstanceOf(HInstanceOf* instruction) {
   uint32_t component_offset = mirror::Class::ComponentTypeOffset().Int32Value();
   uint32_t primitive_offset = mirror::Class::PrimitiveTypeOffset().Int32Value();
 
-  vixl::aarch64::Label done, zero;
+  vixl::Label done, zero;
   SlowPathCodeARM64* slow_path = nullptr;
 
   // Return 0 if `obj` is null.
@@ -3159,7 +3155,7 @@ void InstructionCodeGeneratorARM64::VisitInstanceOf(HInstanceOf* instruction) {
     case TypeCheckKind::kAbstractClassCheck: {
       // If the class is abstract, we eagerly fetch the super class of the
       // object to avoid doing a comparison we know will fail.
-      vixl::aarch64::Label loop, success;
+      vixl::Label loop, success;
       __ Bind(&loop);
       // /* HeapReference<Class> */ out = out->super_class_
       GenerateReferenceLoadOneRegister(instruction, out_loc, super_offset, maybe_temp_loc);
@@ -3176,7 +3172,7 @@ void InstructionCodeGeneratorARM64::VisitInstanceOf(HInstanceOf* instruction) {
 
     case TypeCheckKind::kClassHierarchyCheck: {
       // Walk over the class hierarchy to find a match.
-      vixl::aarch64::Label loop, success;
+      vixl::Label loop, success;
       __ Bind(&loop);
       __ Cmp(out, cls);
       __ B(eq, &success);
@@ -3195,7 +3191,7 @@ void InstructionCodeGeneratorARM64::VisitInstanceOf(HInstanceOf* instruction) {
 
     case TypeCheckKind::kArrayObjectCheck: {
       // Do an exact check.
-      vixl::aarch64::Label exact_check;
+      vixl::Label exact_check;
       __ Cmp(out, cls);
       __ B(eq, &exact_check);
       // Otherwise, we need to check that the object's class is a non-primitive array.
@@ -3332,7 +3328,7 @@ void InstructionCodeGeneratorARM64::VisitCheckCast(HCheckCast* instruction) {
                                                           is_type_check_slow_path_fatal);
   codegen_->AddSlowPath(type_check_slow_path);
 
-  vixl::aarch64::Label done;
+  vixl::Label done;
   // Avoid null check if we know obj is not null.
   if (instruction->MustDoNullCheck()) {
     __ Cbz(obj, &done);
@@ -3354,7 +3350,7 @@ void InstructionCodeGeneratorARM64::VisitCheckCast(HCheckCast* instruction) {
     case TypeCheckKind::kAbstractClassCheck: {
       // If the class is abstract, we eagerly fetch the super class of the
       // object to avoid doing a comparison we know will fail.
-      vixl::aarch64::Label loop, compare_classes;
+      vixl::Label loop, compare_classes;
       __ Bind(&loop);
       // /* HeapReference<Class> */ temp = temp->super_class_
       GenerateReferenceLoadOneRegister(instruction, temp_loc, super_offset, maybe_temp2_loc);
@@ -3381,7 +3377,7 @@ void InstructionCodeGeneratorARM64::VisitCheckCast(HCheckCast* instruction) {
 
     case TypeCheckKind::kClassHierarchyCheck: {
       // Walk over the class hierarchy to find a match.
-      vixl::aarch64::Label loop;
+      vixl::Label loop;
       __ Bind(&loop);
       __ Cmp(temp, cls);
       __ B(eq, &done);
@@ -3406,7 +3402,7 @@ void InstructionCodeGeneratorARM64::VisitCheckCast(HCheckCast* instruction) {
 
     case TypeCheckKind::kArrayObjectCheck: {
       // Do an exact check.
-      vixl::aarch64::Label check_non_primitive_component_type;
+      vixl::Label check_non_primitive_component_type;
       __ Cmp(temp, cls);
       __ B(eq, &done);
 
@@ -3632,17 +3628,17 @@ void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invok
       // Add ADRP with its PC-relative DexCache access patch.
       const DexFile& dex_file = *invoke->GetTargetMethod().dex_file;
       uint32_t element_offset = invoke->GetDexCacheArrayOffset();
-      vixl::aarch64::Label* adrp_label = NewPcRelativeDexCacheArrayPatch(dex_file, element_offset);
+      vixl::Label* adrp_label = NewPcRelativeDexCacheArrayPatch(dex_file, element_offset);
       {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(adrp_label);
         __ adrp(XRegisterFrom(temp), /* offset placeholder */ 0);
       }
       // Add LDR with its PC-relative DexCache access patch.
-      vixl::aarch64::Label* ldr_label =
+      vixl::Label* ldr_label =
           NewPcRelativeDexCacheArrayPatch(dex_file, element_offset, adrp_label);
       {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(ldr_label);
         __ ldr(XRegisterFrom(temp), MemOperand(XRegisterFrom(temp), /* offset placeholder */ 0));
       }
@@ -3679,8 +3675,8 @@ void CodeGeneratorARM64::GenerateStaticOrDirectCall(HInvokeStaticOrDirect* invok
       break;
     case HInvokeStaticOrDirect::CodePtrLocation::kCallPCRelative: {
       relative_call_patches_.emplace_back(invoke->GetTargetMethod());
-      vixl::aarch64::Label* label = &relative_call_patches_.back().label;
-      SingleEmissionCheckScope guard(GetVIXLAssembler());
+      vixl::Label* label = &relative_call_patches_.back().label;
+      vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
       __ Bind(label);
       __ bl(0);  // Branch and link to itself. This will be overriden at link time.
       break;
@@ -3739,64 +3735,58 @@ void CodeGeneratorARM64::GenerateVirtualCall(HInvokeVirtual* invoke, Location te
   __ Blr(lr);
 }
 
-vixl::aarch64::Label* CodeGeneratorARM64::NewPcRelativeStringPatch(
-    const DexFile& dex_file,
-    uint32_t string_index,
-    vixl::aarch64::Label* adrp_label) {
+vixl::Label* CodeGeneratorARM64::NewPcRelativeStringPatch(const DexFile& dex_file,
+                                                          uint32_t string_index,
+                                                          vixl::Label* adrp_label) {
   return NewPcRelativePatch(dex_file, string_index, adrp_label, &pc_relative_string_patches_);
 }
 
-vixl::aarch64::Label* CodeGeneratorARM64::NewPcRelativeTypePatch(
-    const DexFile& dex_file,
-    uint32_t type_index,
-    vixl::aarch64::Label* adrp_label) {
+vixl::Label* CodeGeneratorARM64::NewPcRelativeTypePatch(const DexFile& dex_file,
+                                                        uint32_t type_index,
+                                                        vixl::Label* adrp_label) {
   return NewPcRelativePatch(dex_file, type_index, adrp_label, &pc_relative_type_patches_);
 }
 
-vixl::aarch64::Label* CodeGeneratorARM64::NewPcRelativeDexCacheArrayPatch(
-    const DexFile& dex_file,
-    uint32_t element_offset,
-    vixl::aarch64::Label* adrp_label) {
+vixl::Label* CodeGeneratorARM64::NewPcRelativeDexCacheArrayPatch(const DexFile& dex_file,
+                                                                 uint32_t element_offset,
+                                                                 vixl::Label* adrp_label) {
   return NewPcRelativePatch(dex_file, element_offset, adrp_label, &pc_relative_dex_cache_patches_);
 }
 
-vixl::aarch64::Label* CodeGeneratorARM64::NewPcRelativePatch(
-    const DexFile& dex_file,
-    uint32_t offset_or_index,
-    vixl::aarch64::Label* adrp_label,
-    ArenaDeque<PcRelativePatchInfo>* patches) {
+vixl::Label* CodeGeneratorARM64::NewPcRelativePatch(const DexFile& dex_file,
+                                                    uint32_t offset_or_index,
+                                                    vixl::Label* adrp_label,
+                                                    ArenaDeque<PcRelativePatchInfo>* patches) {
   // Add a patch entry and return the label.
   patches->emplace_back(dex_file, offset_or_index);
   PcRelativePatchInfo* info = &patches->back();
-  vixl::aarch64::Label* label = &info->label;
+  vixl::Label* label = &info->label;
   // If adrp_label is null, this is the ADRP patch and needs to point to its own label.
   info->pc_insn_label = (adrp_label != nullptr) ? adrp_label : label;
   return label;
 }
 
-vixl::aarch64::Literal<uint32_t>* CodeGeneratorARM64::DeduplicateBootImageStringLiteral(
+vixl::Literal<uint32_t>* CodeGeneratorARM64::DeduplicateBootImageStringLiteral(
     const DexFile& dex_file, uint32_t string_index) {
   return boot_image_string_patches_.GetOrCreate(
       StringReference(&dex_file, string_index),
       [this]() { return __ CreateLiteralDestroyedWithPool<uint32_t>(/* placeholder */ 0u); });
 }
 
-vixl::aarch64::Literal<uint32_t>* CodeGeneratorARM64::DeduplicateBootImageTypeLiteral(
+vixl::Literal<uint32_t>* CodeGeneratorARM64::DeduplicateBootImageTypeLiteral(
     const DexFile& dex_file, uint32_t type_index) {
   return boot_image_type_patches_.GetOrCreate(
       TypeReference(&dex_file, type_index),
       [this]() { return __ CreateLiteralDestroyedWithPool<uint32_t>(/* placeholder */ 0u); });
 }
 
-vixl::aarch64::Literal<uint32_t>* CodeGeneratorARM64::DeduplicateBootImageAddressLiteral(
-    uint64_t address) {
+vixl::Literal<uint32_t>* CodeGeneratorARM64::DeduplicateBootImageAddressLiteral(uint64_t address) {
   bool needs_patch = GetCompilerOptions().GetIncludePatchInformation();
   Uint32ToLiteralMap* map = needs_patch ? &boot_image_address_patches_ : &uint32_literals_;
   return DeduplicateUint32Literal(dchecked_integral_cast<uint32_t>(address), map);
 }
 
-vixl::aarch64::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateDexCacheAddressLiteral(
-    uint64_t address) {
+vixl::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateDexCacheAddressLiteral(uint64_t address) {
   return DeduplicateUint64Literal(address);
 }
 
@@ -3815,76 +3805,76 @@ void CodeGeneratorARM64::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patc
   linker_patches->reserve(size);
   for (const auto& entry : method_patches_) {
     const MethodReference& target_method = entry.first;
-    vixl::aarch64::Literal<uint64_t>* literal = entry.second;
-    linker_patches->push_back(LinkerPatch::MethodPatch(literal->GetOffset(),
+    vixl::Literal<uint64_t>* literal = entry.second;
+    linker_patches->push_back(LinkerPatch::MethodPatch(literal->offset(),
                                                        target_method.dex_file,
                                                        target_method.dex_method_index));
   }
   for (const auto& entry : call_patches_) {
     const MethodReference& target_method = entry.first;
-    vixl::aarch64::Literal<uint64_t>* literal = entry.second;
-    linker_patches->push_back(LinkerPatch::CodePatch(literal->GetOffset(),
+    vixl::Literal<uint64_t>* literal = entry.second;
+    linker_patches->push_back(LinkerPatch::CodePatch(literal->offset(),
                                                      target_method.dex_file,
                                                      target_method.dex_method_index));
   }
-  for (const MethodPatchInfo<vixl::aarch64::Label>& info : relative_call_patches_) {
-    linker_patches->push_back(LinkerPatch::RelativeCodePatch(info.label.GetLocation(),
+  for (const MethodPatchInfo<vixl::Label>& info : relative_call_patches_) {
+    linker_patches->push_back(LinkerPatch::RelativeCodePatch(info.label.location(),
                                                              info.target_method.dex_file,
                                                              info.target_method.dex_method_index));
   }
   for (const PcRelativePatchInfo& info : pc_relative_dex_cache_patches_) {
-    linker_patches->push_back(LinkerPatch::DexCacheArrayPatch(info.label.GetLocation(),
+    linker_patches->push_back(LinkerPatch::DexCacheArrayPatch(info.label.location(),
                                                               &info.target_dex_file,
-                                                              info.pc_insn_label->GetLocation(),
+                                                              info.pc_insn_label->location(),
                                                               info.offset_or_index));
   }
   for (const auto& entry : boot_image_string_patches_) {
     const StringReference& target_string = entry.first;
-    vixl::aarch64::Literal<uint32_t>* literal = entry.second;
-    linker_patches->push_back(LinkerPatch::StringPatch(literal->GetOffset(),
+    vixl::Literal<uint32_t>* literal = entry.second;
+    linker_patches->push_back(LinkerPatch::StringPatch(literal->offset(),
                                                        target_string.dex_file,
                                                        target_string.string_index));
   }
   for (const PcRelativePatchInfo& info : pc_relative_string_patches_) {
-    linker_patches->push_back(LinkerPatch::RelativeStringPatch(info.label.GetLocation(),
+    linker_patches->push_back(LinkerPatch::RelativeStringPatch(info.label.location(),
                                                                &info.target_dex_file,
-                                                               info.pc_insn_label->GetLocation(),
+                                                               info.pc_insn_label->location(),
                                                                info.offset_or_index));
   }
   for (const auto& entry : boot_image_type_patches_) {
     const TypeReference& target_type = entry.first;
-    vixl::aarch64::Literal<uint32_t>* literal = entry.second;
-    linker_patches->push_back(LinkerPatch::TypePatch(literal->GetOffset(),
+    vixl::Literal<uint32_t>* literal = entry.second;
+    linker_patches->push_back(LinkerPatch::TypePatch(literal->offset(),
                                                      target_type.dex_file,
                                                      target_type.type_index));
   }
   for (const PcRelativePatchInfo& info : pc_relative_type_patches_) {
-    linker_patches->push_back(LinkerPatch::RelativeTypePatch(info.label.GetLocation(),
+    linker_patches->push_back(LinkerPatch::RelativeTypePatch(info.label.location(),
                                                              &info.target_dex_file,
-                                                             info.pc_insn_label->GetLocation(),
+                                                             info.pc_insn_label->location(),
                                                              info.offset_or_index));
   }
   for (const auto& entry : boot_image_address_patches_) {
     DCHECK(GetCompilerOptions().GetIncludePatchInformation());
-    vixl::aarch64::Literal<uint32_t>* literal = entry.second;
-    linker_patches->push_back(LinkerPatch::RecordPosition(literal->GetOffset()));
+    vixl::Literal<uint32_t>* literal = entry.second;
+    linker_patches->push_back(LinkerPatch::RecordPosition(literal->offset()));
   }
 }
 
-vixl::aarch64::Literal<uint32_t>* CodeGeneratorARM64::DeduplicateUint32Literal(uint32_t value,
+vixl::Literal<uint32_t>* CodeGeneratorARM64::DeduplicateUint32Literal(uint32_t value,
                                                                       Uint32ToLiteralMap* map) {
   return map->GetOrCreate(
       value,
       [this, value]() { return __ CreateLiteralDestroyedWithPool<uint32_t>(value); });
 }
 
-vixl::aarch64::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateUint64Literal(uint64_t value) {
+vixl::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateUint64Literal(uint64_t value) {
   return uint64_literals_.GetOrCreate(
       value,
       [this, value]() { return __ CreateLiteralDestroyedWithPool<uint64_t>(value); });
 }
 
-vixl::aarch64::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateMethodLiteral(
+vixl::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateMethodLiteral(
     MethodReference target_method,
     MethodToLiteralMap* map) {
   return map->GetOrCreate(
@@ -3892,12 +3882,12 @@ vixl::aarch64::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateMethodLiteral(
       [this]() { return __ CreateLiteralDestroyedWithPool<uint64_t>(/* placeholder */ 0u); });
 }
 
-vixl::aarch64::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateMethodAddressLiteral(
+vixl::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateMethodAddressLiteral(
     MethodReference target_method) {
   return DeduplicateMethodLiteral(target_method, &method_patches_);
 }
 
-vixl::aarch64::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateMethodCodeLiteral(
+vixl::Literal<uint64_t>* CodeGeneratorARM64::DeduplicateMethodCodeLiteral(
     MethodReference target_method) {
   return DeduplicateMethodLiteral(target_method, &call_patches_);
 }
@@ -3971,7 +3961,7 @@ void LocationsBuilderARM64::VisitLoadClass(HLoadClass* cls) {
     CodeGenerator::CreateLoadClassLocationSummary(
         cls,
         LocationFrom(calling_convention.GetRegisterAt(0)),
-        LocationFrom(vixl::aarch64::x0),
+        LocationFrom(vixl::x0),
         /* code_generator_supports_read_barrier */ true);
     return;
   }
@@ -4023,17 +4013,16 @@ void InstructionCodeGeneratorARM64::VisitLoadClass(HLoadClass* cls) {
       // Add ADRP with its PC-relative type patch.
       const DexFile& dex_file = cls->GetDexFile();
       uint32_t type_index = cls->GetTypeIndex();
-      vixl::aarch64::Label* adrp_label = codegen_->NewPcRelativeTypePatch(dex_file, type_index);
+      vixl::Label* adrp_label = codegen_->NewPcRelativeTypePatch(dex_file, type_index);
       {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(adrp_label);
         __ adrp(out.X(), /* offset placeholder */ 0);
       }
       // Add ADD with its PC-relative type patch.
-      vixl::aarch64::Label* add_label =
-          codegen_->NewPcRelativeTypePatch(dex_file, type_index, adrp_label);
+      vixl::Label* add_label = codegen_->NewPcRelativeTypePatch(dex_file, type_index, adrp_label);
       {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(add_label);
         __ add(out.X(), out.X(), Operand(/* offset placeholder */ 0));
       }
@@ -4066,15 +4055,14 @@ void InstructionCodeGeneratorARM64::VisitLoadClass(HLoadClass* cls) {
       // Add ADRP with its PC-relative DexCache access patch.
       const DexFile& dex_file = cls->GetDexFile();
       uint32_t element_offset = cls->GetDexCacheElementOffset();
-      vixl::aarch64::Label* adrp_label =
-          codegen_->NewPcRelativeDexCacheArrayPatch(dex_file, element_offset);
+      vixl::Label* adrp_label = codegen_->NewPcRelativeDexCacheArrayPatch(dex_file, element_offset);
       {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(adrp_label);
         __ adrp(out.X(), /* offset placeholder */ 0);
       }
       // Add LDR with its PC-relative DexCache access patch.
-      vixl::aarch64::Label* ldr_label =
+      vixl::Label* ldr_label =
           codegen_->NewPcRelativeDexCacheArrayPatch(dex_file, element_offset, adrp_label);
       // /* GcRoot<mirror::Class> */ out = *(base_address + offset)  /* PC-relative */
       GenerateGcRootFieldLoad(cls, out_loc, out.X(), /* offset placeholder */ 0, ldr_label);
@@ -4194,17 +4182,17 @@ void InstructionCodeGeneratorARM64::VisitLoadString(HLoadString* load) {
       // Add ADRP with its PC-relative String patch.
       const DexFile& dex_file = load->GetDexFile();
       uint32_t string_index = load->GetStringIndex();
-      vixl::aarch64::Label* adrp_label = codegen_->NewPcRelativeStringPatch(dex_file, string_index);
+      vixl::Label* adrp_label = codegen_->NewPcRelativeStringPatch(dex_file, string_index);
       {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(adrp_label);
         __ adrp(out.X(), /* offset placeholder */ 0);
       }
       // Add ADD with its PC-relative String patch.
-      vixl::aarch64::Label* add_label =
+      vixl::Label* add_label =
           codegen_->NewPcRelativeStringPatch(dex_file, string_index, adrp_label);
       {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(add_label);
         __ add(out.X(), out.X(), Operand(/* offset placeholder */ 0));
       }
@@ -4236,15 +4224,14 @@ void InstructionCodeGeneratorARM64::VisitLoadString(HLoadString* load) {
       // Add ADRP with its PC-relative DexCache access patch.
       const DexFile& dex_file = load->GetDexFile();
       uint32_t element_offset = load->GetDexCacheElementOffset();
-      vixl::aarch64::Label* adrp_label =
-          codegen_->NewPcRelativeDexCacheArrayPatch(dex_file, element_offset);
+      vixl::Label* adrp_label = codegen_->NewPcRelativeDexCacheArrayPatch(dex_file, element_offset);
       {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(adrp_label);
         __ adrp(out.X(), /* offset placeholder */ 0);
       }
       // Add LDR with its PC-relative DexCache access patch.
-      vixl::aarch64::Label* ldr_label =
+      vixl::Label* ldr_label =
           codegen_->NewPcRelativeDexCacheArrayPatch(dex_file, element_offset, adrp_label);
       // /* GcRoot<mirror::String> */ out = *(base_address + offset)  /* PC-relative */
       GenerateGcRootFieldLoad(load, out_loc, out.X(), /* offset placeholder */ 0, ldr_label);
@@ -4465,7 +4452,7 @@ void LocationsBuilderARM64::VisitBooleanNot(HBooleanNot* instruction) {
 }
 
 void InstructionCodeGeneratorARM64::VisitBooleanNot(HBooleanNot* instruction) {
-  __ Eor(OutputRegister(instruction), InputRegisterAt(instruction, 0), vixl::aarch64::Operand(1));
+  __ Eor(OutputRegister(instruction), InputRegisterAt(instruction, 0), vixl::Operand(1));
 }
 
 void LocationsBuilderARM64::VisitNullCheck(HNullCheck* instruction) {
@@ -4898,7 +4885,7 @@ void InstructionCodeGeneratorARM64::VisitPackedSwitch(HPackedSwitch* switch_inst
   HBasicBlock* default_block = switch_instr->GetDefaultBlock();
 
   // Roughly set 16 as max average assemblies generated per HIR in a graph.
-  static constexpr int32_t kMaxExpectedSizePerHInstruction = 16 * kInstructionSize;
+  static constexpr int32_t kMaxExpectedSizePerHInstruction = 16 * vixl::kInstructionSize;
   // ADR has a limited range(+/-1MB), so we set a threshold for the number of HIRs in the graph to
   // make sure we don't emit it if the target may run out of range.
   // TODO: Instead of emitting all jump tables at the end of the code, we could keep track of ADR
@@ -5043,9 +5030,9 @@ void InstructionCodeGeneratorARM64::GenerateReferenceLoadTwoRegisters(HInstructi
 
 void InstructionCodeGeneratorARM64::GenerateGcRootFieldLoad(HInstruction* instruction,
                                                             Location root,
-                                                            Register obj,
+                                                            vixl::Register obj,
                                                             uint32_t offset,
-                                                            vixl::aarch64::Label* fixup_label) {
+                                                            vixl::Label* fixup_label) {
   Register root_reg = RegisterFrom(root, Primitive::kPrimNot);
   if (kEmitCompilerReadBarrier) {
     if (kUseBakerReadBarrier) {
@@ -5061,7 +5048,7 @@ void InstructionCodeGeneratorARM64::GenerateGcRootFieldLoad(HInstruction* instru
       if (fixup_label == nullptr) {
         __ Ldr(root_reg, MemOperand(obj, offset));
       } else {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(fixup_label);
         __ ldr(root_reg, MemOperand(obj, offset));
       }
@@ -5092,7 +5079,7 @@ void InstructionCodeGeneratorARM64::GenerateGcRootFieldLoad(HInstruction* instru
       if (fixup_label == nullptr) {
         __ Add(root_reg.X(), obj.X(), offset);
       } else {
-        SingleEmissionCheckScope guard(GetVIXLAssembler());
+        vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
         __ Bind(fixup_label);
         __ add(root_reg.X(), obj.X(), offset);
       }
@@ -5105,7 +5092,7 @@ void InstructionCodeGeneratorARM64::GenerateGcRootFieldLoad(HInstruction* instru
     if (fixup_label == nullptr) {
       __ Ldr(root_reg, MemOperand(obj, offset));
     } else {
-      SingleEmissionCheckScope guard(GetVIXLAssembler());
+      vixl::SingleEmissionCheckScope guard(GetVIXLAssembler());
       __ Bind(fixup_label);
       __ ldr(root_reg, MemOperand(obj, offset));
     }
@@ -5116,7 +5103,7 @@ void InstructionCodeGeneratorARM64::GenerateGcRootFieldLoad(HInstruction* instru
 
 void CodeGeneratorARM64::GenerateFieldLoadWithBakerReadBarrier(HInstruction* instruction,
                                                                Location ref,
-                                                               Register obj,
+                                                               vixl::Register obj,
                                                                uint32_t offset,
                                                                Register temp,
                                                                bool needs_null_check,
@@ -5140,7 +5127,7 @@ void CodeGeneratorARM64::GenerateFieldLoadWithBakerReadBarrier(HInstruction* ins
 
 void CodeGeneratorARM64::GenerateArrayLoadWithBakerReadBarrier(HInstruction* instruction,
                                                                Location ref,
-                                                               Register obj,
+                                                               vixl::Register obj,
                                                                uint32_t data_offset,
                                                                Location index,
                                                                Register temp,
@@ -5171,7 +5158,7 @@ void CodeGeneratorARM64::GenerateArrayLoadWithBakerReadBarrier(HInstruction* ins
 
 void CodeGeneratorARM64::GenerateReferenceLoadWithBakerReadBarrier(HInstruction* instruction,
                                                                    Location ref,
-                                                                   Register obj,
+                                                                   vixl::Register obj,
                                                                    uint32_t offset,
                                                                    Location index,
                                                                    size_t scale_factor,
