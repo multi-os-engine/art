@@ -2053,3 +2053,117 @@ ENTRY_NO_GP art_quick_string_compareto
   j      $ra
   nop
 END art_quick_string_compareto
+
+    /*
+     * Create a function `name` calling the ReadBarrier::Mark routine,
+     * getting its argument and returning its result through register
+     * `reg`, saving and restoring all caller-save registers.
+     */
+.macro READ_BARRIER_MARK_REG name, reg
+ENTRY \name
+    addiu   $sp, $sp, -96
+    .cfi_adjust_cfa_offset 96
+
+    sw      $ra, 92($sp)
+    .cfi_rel_offset 31, 92
+    sw      $s8, 88($sp)
+    .cfi_rel_offset 30, 88
+    sw      $gp, 84($sp)
+    .cfi_rel_offset 28, 84
+    sw      $s7, 80($sp)
+    .cfi_rel_offset 23, 80
+    sw      $s6, 76($sp)
+    .cfi_rel_offset 22, 76
+    sw      $s5, 72($sp)
+    .cfi_rel_offset 21, 72
+    sw      $s4, 68($sp)
+    .cfi_rel_offset 20, 68
+    sw      $s3, 64($sp)
+    .cfi_rel_offset 19, 64
+    sw      $s2, 60($sp)
+    .cfi_rel_offset 18, 60
+    sw      $s1, 56($sp)
+    .cfi_rel_offset 17, 56
+    sw      $s0, 52($sp)
+    .cfi_rel_offset 16, 52
+
+    la      $t9, artReadBarrierMark
+
+    sdc1    $f30, 40($sp)
+    sdc1    $f28, 32($sp)
+    sdc1    $f26, 24($sp)
+    sdc1    $f24, 16($sp)
+    sdc1    $f22,  8($sp)
+    sdc1    $f20,  0($sp)
+
+    jalr    $zero, $t9          # v0 <- artReadBarrierMark(obj)
+    .ifnc \reg, $a0
+      move  $a0, \reg           # pass obj from `reg` in a0
+    .else
+      nop                       # fill the delay slot
+    .endif
+
+    lw      $ra, 92($sp)
+    .cfi_restore 31
+    lw      $s8, 88($sp)
+    .cfi_restore 30
+    lw      $gp, 84($sp)
+    .cfi_restore 28
+    lw      $s7, 80($sp)
+    .cfi_restore 23
+    lw      $s6, 76($sp)
+    .cfi_restore 22
+    lw      $s5, 72($sp)
+    .cfi_restore 21
+    lw      $s4, 68($sp)
+    .cfi_restore 20
+    lw      $s3, 64($sp)
+    .cfi_restore 19
+    lw      $s2, 60($sp)
+    .cfi_restore 18
+    lw      $s1, 56($sp)
+    .cfi_restore 17
+    lw      $s0, 52($sp)
+    .cfi_restore 16
+
+    .ifnc \reg, $v0
+      move  \reg, $v0           # `reg` <- v0
+    .endif
+
+    ldc1    $f30, 40($sp)
+    ldc1    $f28, 32($sp)
+    ldc1    $f26, 24($sp)
+    ldc1    $f24, 16($sp)
+    ldc1    $f22,  8($sp)
+    ldc1    $f20,  0($sp)
+
+    jalr    $zero, $ra
+    addiu   $sp, $sp, 96
+    .cfi_adjust_cfa_offset -96
+END \name
+.endm
+
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg02, $v0
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg03, $v1
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg04, $a0
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg05, $a1
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg06, $a2
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg07, $a3
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg08, $t0
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg09, $t1
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg10, $t2
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg11, $t3
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg12, $t4
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg13, $t5
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg14, $t6
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg15, $t7
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg16, $s0
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg17, $s1
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg18, $s2
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg19, $s3
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg20, $s4
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg21, $s5
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg22, $s6
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg23, $s7
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg24, $t8
+READ_BARRIER_MARK_REG art_quick_read_barrier_mark_reg30, $s8
