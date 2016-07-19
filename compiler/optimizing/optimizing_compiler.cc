@@ -472,7 +472,7 @@ static void RunArchOptimizations(InstructionSet instruction_set,
       mips::PcRelativeFixups* pc_relative_fixups =
           new (arena) mips::PcRelativeFixups(graph, codegen, stats);
       mips::DexCacheArrayFixups* dex_cache_array_fixups =
-          new (arena) mips::DexCacheArrayFixups(graph, stats);
+          new (arena) mips::DexCacheArrayFixups(graph, codegen, stats);
       HOptimization* mips_optimizations[] = {
           pc_relative_fixups,
           dex_cache_array_fixups
