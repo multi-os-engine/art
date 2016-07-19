@@ -852,8 +852,10 @@ bool Trace::RegisterMethod(ArtMethod* method) {
   const DexFile* dex_file = dex_cache->GetDexFile();
   auto* resolved_method = dex_cache->GetResolvedMethod(method->GetDexMethodIndex(), sizeof(void*));
   if (resolved_method != method) {
-    DCHECK(resolved_method == nullptr);
-    dex_cache->SetResolvedMethod(method->GetDexMethodIndex(), method, sizeof(void*));
+    DCHECK(resolved_method == nullptr || resolved_method->IsCopied());
+    if (resolved_method == nullptr) {
+      dex_cache->SetResolvedMethod(method->GetDexMethodIndex(), method, sizeof(void*));
+    }
   }
   if (seen_methods_.find(dex_file) == seen_methods_.end()) {
     seen_methods_.insert(std::make_pair(dex_file, new DexIndexBitSet()));
