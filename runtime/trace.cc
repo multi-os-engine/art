@@ -851,8 +851,7 @@ bool Trace::RegisterMethod(ArtMethod* method) {
   mirror::DexCache* dex_cache = method->GetDexCache();
   const DexFile* dex_file = dex_cache->GetDexFile();
   auto* resolved_method = dex_cache->GetResolvedMethod(method->GetDexMethodIndex(), sizeof(void*));
-  if (resolved_method != method) {
-    DCHECK(resolved_method == nullptr);
+  if (resolved_method != method && (resolved_method == nullptr || !resolved_method->IsCopied())) {
     dex_cache->SetResolvedMethod(method->GetDexMethodIndex(), method, sizeof(void*));
   }
   if (seen_methods_.find(dex_file) == seen_methods_.end()) {
