@@ -127,10 +127,10 @@ class BoundsCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
                                locations->InAt(1),
                                Location::RegisterLocation(calling_convention.GetRegisterAt(1)),
                                Primitive::kPrimInt);
-    uint32_t entry_point_offset = instruction_->AsBoundsCheck()->IsStringCharAt()
-        ? QUICK_ENTRY_POINT(pThrowStringBounds)
-        : QUICK_ENTRY_POINT(pThrowArrayBounds);
-    mips64_codegen->InvokeRuntime(entry_point_offset,
+    QuickEntrypointEnum entrypoint = instruction_->AsBoundsCheck()->IsStringCharAt()
+        ? kQuickThrowStringBounds
+        : kQuickThrowArrayBounds;
+    mips64_codegen->InvokeRuntime(entrypoint,
                                   instruction_,
                                   instruction_->GetDexPc(),
                                   this);
@@ -157,7 +157,7 @@ class DivZeroCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
       // Live registers will be restored in the catch block if caught.
       SaveLiveRegisters(codegen, instruction_->GetLocations());
     }
-    mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pThrowDivZero),
+    mips64_codegen->InvokeRuntime(kQuickThrowDivZero,
                                   instruction_,
                                   instruction_->GetDexPc(),
                                   this);
@@ -191,9 +191,9 @@ class LoadClassSlowPathMIPS64 : public SlowPathCodeMIPS64 {
 
     InvokeRuntimeCallingConvention calling_convention;
     __ LoadConst32(calling_convention.GetRegisterAt(0), cls_->GetTypeIndex());
-    int32_t entry_point_offset = do_clinit_ ? QUICK_ENTRY_POINT(pInitializeStaticStorage)
-                                            : QUICK_ENTRY_POINT(pInitializeType);
-    mips64_codegen->InvokeRuntime(entry_point_offset, at_, dex_pc_, this);
+    QuickEntrypointEnum entrypoint = do_clinit_ ? kQuickInitializeStaticStorage
+                                                : kQuickInitializeType;
+    mips64_codegen->InvokeRuntime(entrypoint, at_, dex_pc_, this);
     if (do_clinit_) {
       CheckEntrypointTypes<kQuickInitializeStaticStorage, void*, uint32_t>();
     } else {
@@ -246,7 +246,7 @@ class LoadStringSlowPathMIPS64 : public SlowPathCodeMIPS64 {
     InvokeRuntimeCallingConvention calling_convention;
     const uint32_t string_index = instruction_->AsLoadString()->GetStringIndex();
     __ LoadConst32(calling_convention.GetRegisterAt(0), string_index);
-    mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pResolveString),
+    mips64_codegen->InvokeRuntime(kQuickResolveString,
                                   instruction_,
                                   instruction_->GetDexPc(),
                                   this);
@@ -277,7 +277,7 @@ class NullCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
       // Live registers will be restored in the catch block if caught.
       SaveLiveRegisters(codegen, instruction_->GetLocations());
     }
-    mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pThrowNullPointer),
+    mips64_codegen->InvokeRuntime(kQuickThrowNullPointer,
                                   instruction_,
                                   instruction_->GetDexPc(),
                                   this);
@@ -301,7 +301,7 @@ class SuspendCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
     CodeGeneratorMIPS64* mips64_codegen = down_cast<CodeGeneratorMIPS64*>(codegen);
     __ Bind(GetEntryLabel());
     SaveLiveRegisters(codegen, instruction_->GetLocations());
-    mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pTestSuspend),
+    mips64_codegen->InvokeRuntime(kQuickTestSuspend,
                                   instruction_,
                                   instruction_->GetDexPc(),
                                   this);
@@ -357,7 +357,7 @@ class TypeCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
                                Primitive::kPrimNot);
 
     if (instruction_->IsInstanceOf()) {
-      mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pInstanceofNonTrivial),
+      mips64_codegen->InvokeRuntime(kQuickInstanceofNonTrivial,
                                     instruction_,
                                     dex_pc,
                                     this);
@@ -368,7 +368,7 @@ class TypeCheckSlowPathMIPS64 : public SlowPathCodeMIPS64 {
       mips64_codegen->MoveLocation(locations->Out(), ret_loc, ret_type);
     } else {
       DCHECK(instruction_->IsCheckCast());
-      mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pCheckCast), instruction_, dex_pc, this);
+      mips64_codegen->InvokeRuntime(kQuickCheckCast, instruction_, dex_pc, this);
       CheckEntrypointTypes<kQuickCheckCast, void, const mirror::Class*, const mirror::Class*>();
     }
 
@@ -391,7 +391,7 @@ class DeoptimizationSlowPathMIPS64 : public SlowPathCodeMIPS64 {
     CodeGeneratorMIPS64* mips64_codegen = down_cast<CodeGeneratorMIPS64*>(codegen);
     __ Bind(GetEntryLabel());
     SaveLiveRegisters(codegen, instruction_->GetLocations());
-    mips64_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pDeoptimize),
+    mips64_codegen->InvokeRuntime(kQuickDeoptimize,
                                   instruction_,
                                   instruction_->GetDexPc(),
                                   this);
@@ -961,25 +961,20 @@ void CodeGeneratorMIPS64::DumpFloatingPointRegister(std::ostream& stream, int re
 }
 
 void CodeGeneratorMIPS64::InvokeRuntime(QuickEntrypointEnum entrypoint,
-                                     HInstruction* instruction,
-                                     uint32_t dex_pc,
-                                     SlowPathCode* slow_path) {
-  InvokeRuntime(GetThreadOffset<kMips64DoublewordSize>(entrypoint).Int32Value(),
-                instruction,
-                dex_pc,
-                slow_path);
-}
-
-void CodeGeneratorMIPS64::InvokeRuntime(int32_t entry_point_offset,
                                         HInstruction* instruction,
                                         uint32_t dex_pc,
                                         SlowPathCode* slow_path) {
   ValidateInvokeRuntime(instruction, slow_path);
   // TODO: anything related to T9/GP/GOT/PIC/.so's?
-  __ LoadFromOffset(kLoadDoubleword, T9, TR, entry_point_offset);
+  __ LoadFromOffset(kLoadDoubleword,
+                    T9,
+                    TR,
+                    GetThreadOffset<kMips64DoublewordSize>(entrypoint).Int32Value());
   __ Jalr(T9);
   __ Nop();
-  RecordPcInfo(instruction, dex_pc, slow_path);
+  if (EntrypointRequiresStackMap(entrypoint)) {
+    RecordPcInfo(instruction, dex_pc, slow_path);
+  }
 }
 
 void InstructionCodeGeneratorMIPS64::GenerateClassInitializationCheck(SlowPathCodeMIPS64* slow_path,
@@ -1516,10 +1511,9 @@ void InstructionCodeGeneratorMIPS64::VisitArraySet(HArraySet* instruction) {
         }
       } else {
         DCHECK_EQ(value_type, Primitive::kPrimNot);
-        codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pAputObject),
+        codegen_->InvokeRuntime(kQuickAputObject,
                                 instruction,
-                                instruction->GetDexPc(),
-                                nullptr);
+                                instruction->GetDexPc());
         CheckEntrypointTypes<kQuickAputObject, void, mirror::Array*, int32_t, mirror::Object*>();
       }
       break;
@@ -3189,10 +3183,9 @@ void InstructionCodeGeneratorMIPS64::VisitLoadClass(HLoadClass* cls) {
   LocationSummary* locations = cls->GetLocations();
   if (cls->NeedsAccessCheck()) {
     codegen_->MoveConstant(locations->GetTemp(0), cls->GetTypeIndex());
-    codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pInitializeTypeAndVerifyAccess),
+    codegen_->InvokeRuntime(kQuickInitializeTypeAndVerifyAccess,
                             cls,
-                            cls->GetDexPc(),
-                            nullptr);
+                            cls->GetDexPc());
     CheckEntrypointTypes<kQuickInitializeTypeAndVerifyAccess, void*, uint32_t>();
     return;
   }
@@ -3298,12 +3291,9 @@ void LocationsBuilderMIPS64::VisitMonitorOperation(HMonitorOperation* instructio
 }
 
 void InstructionCodeGeneratorMIPS64::VisitMonitorOperation(HMonitorOperation* instruction) {
-  codegen_->InvokeRuntime(instruction->IsEnter()
-                              ? QUICK_ENTRY_POINT(pLockObject)
-                              : QUICK_ENTRY_POINT(pUnlockObject),
+  codegen_->InvokeRuntime(instruction->IsEnter() ? kQuickLockObject : kQuickUnlockObject,
                           instruction,
-                          instruction->GetDexPc(),
-                          nullptr);
+                          instruction->GetDexPc());
   if (instruction->IsEnter()) {
     CheckEntrypointTypes<kQuickLockObject, void, mirror::Object*>();
   } else {
@@ -3433,8 +3423,7 @@ void InstructionCodeGeneratorMIPS64::VisitNewArray(HNewArray* instruction) {
   __ LoadConst32(locations->GetTemp(0).AsRegister<GpuRegister>(), instruction->GetTypeIndex());
   codegen_->InvokeRuntime(instruction->GetEntrypoint(),
                           instruction,
-                          instruction->GetDexPc(),
-                          nullptr);
+                          instruction->GetDexPc());
   CheckEntrypointTypes<kQuickAllocArrayWithAccessCheck, void*, uint32_t, int32_t, ArtMethod*>();
 }
 
@@ -3465,8 +3454,7 @@ void InstructionCodeGeneratorMIPS64::VisitNewInstance(HNewInstance* instruction)
   } else {
     codegen_->InvokeRuntime(instruction->GetEntrypoint(),
                             instruction,
-                            instruction->GetDexPc(),
-                            nullptr);
+                            instruction->GetDexPc());;
     CheckEntrypointTypes<kQuickAllocObjectWithAccessCheck, void*, uint32_t, ArtMethod*>();
   }
 }
@@ -3637,9 +3625,9 @@ void InstructionCodeGeneratorMIPS64::VisitRem(HRem* instruction) {
 
     case Primitive::kPrimFloat:
     case Primitive::kPrimDouble: {
-      int32_t entry_offset = (type == Primitive::kPrimFloat) ? QUICK_ENTRY_POINT(pFmodf)
-                                                             : QUICK_ENTRY_POINT(pFmod);
-      codegen_->InvokeRuntime(entry_offset, instruction, instruction->GetDexPc(), nullptr);
+      QuickEntrypointEnum entrypoint = (type == Primitive::kPrimFloat) ? kQuickFmodf
+                                                                       : kQuickFmod;
+      codegen_->InvokeRuntime(entrypoint, instruction, instruction->GetDexPc());
       if (type == Primitive::kPrimFloat) {
         CheckEntrypointTypes<kQuickFmodf, float, float, float>();
       } else {
@@ -3820,10 +3808,9 @@ void LocationsBuilderMIPS64::VisitThrow(HThrow* instruction) {
 }
 
 void InstructionCodeGeneratorMIPS64::VisitThrow(HThrow* instruction) {
-  codegen_->InvokeRuntime(QUICK_ENTRY_POINT(pDeliverException),
+  codegen_->InvokeRuntime(kQuickDeliverException,
                           instruction,
-                          instruction->GetDexPc(),
-                          nullptr);
+                          instruction->GetDexPc());
   CheckEntrypointTypes<kQuickDeliverException, void, mirror::Object*>();
 }
 
