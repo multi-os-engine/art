@@ -462,6 +462,106 @@ class DeoptimizationSlowPathMIPS : public SlowPathCodeMIPS {
   DISALLOW_COPY_AND_ASSIGN(DeoptimizationSlowPathMIPS);
 };
 
+// Slow path marking an object during a read barrier.
+class ReadBarrierMarkSlowPathMIPS : public SlowPathCodeMIPS {
+ public:
+  ReadBarrierMarkSlowPathMIPS(HInstruction* instruction, Location out, Location obj)
+      : SlowPathCodeMIPS(instruction), out_(out), obj_(obj) {
+    DCHECK(kEmitCompilerReadBarrier);
+  }
+
+  const char* GetDescription() const OVERRIDE { return "ReadBarrierMarkSlowPathMIPS"; }
+
+  void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    LocationSummary* locations = instruction_->GetLocations();
+    Register reg_out = out_.AsRegister<Register>();
+    DCHECK(locations->CanCall());
+    DCHECK(!locations->GetLiveRegisters()->ContainsCoreRegister(reg_out));
+    DCHECK(instruction_->IsInstanceFieldGet() ||
+           instruction_->IsStaticFieldGet() ||
+           instruction_->IsArrayGet() ||
+           instruction_->IsLoadClass() ||
+           instruction_->IsLoadString() ||
+           instruction_->IsInstanceOf() ||
+           instruction_->IsCheckCast() ||
+           ((instruction_->IsInvokeStaticOrDirect() || instruction_->IsInvokeVirtual()) &&
+            instruction_->GetLocations()->Intrinsified()))
+        << "Unexpected instruction in read barrier marking slow path: "
+        << instruction_->DebugName();
+
+    __ Bind(GetEntryLabel());
+    SaveLiveRegisters(codegen, locations);
+
+    InvokeRuntimeCallingConvention calling_convention;
+    CodeGeneratorMIPS* mips_codegen = down_cast<CodeGeneratorMIPS*>(codegen);
+    mips_codegen->Move32(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), obj_);
+    mips_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierMark),
+                                instruction_,
+                                instruction_->GetDexPc(),
+                                this,
+                                IsDirectEntrypoint(kQuickReadBarrierMark));
+    CheckEntrypointTypes<kQuickReadBarrierMark, mirror::Object*, mirror::Object*>();
+    Primitive::Type ret_type = instruction_->GetType();
+    Location ret_loc = calling_convention.GetReturnLocation(ret_type);
+    mips_codegen->Move32(out_, ret_loc);
+
+    RestoreLiveRegisters(codegen, locations);
+    __ B(GetExitLabel());
+  }
+
+ private:
+  const Location out_;
+  const Location obj_;
+
+  DISALLOW_COPY_AND_ASSIGN(ReadBarrierMarkSlowPathMIPS);
+};
+
+// Slow path generating a read barrier for a GC root.
+class ReadBarrierForRootSlowPathMIPS : public SlowPathCodeMIPS {
+ public:
+  ReadBarrierForRootSlowPathMIPS(HInstruction* instruction, Location out, Location root)
+      : SlowPathCodeMIPS(instruction), out_(out), root_(root) {
+    DCHECK(kEmitCompilerReadBarrier);
+  }
+
+  void EmitNativeCode(CodeGenerator* codegen) OVERRIDE {
+    LocationSummary* locations = instruction_->GetLocations();
+    Register reg_out = out_.AsRegister<Register>();
+    DCHECK(locations->CanCall());
+    DCHECK(!locations->GetLiveRegisters()->ContainsCoreRegister(reg_out));
+    DCHECK(instruction_->IsLoadClass() || instruction_->IsLoadString())
+        << "Unexpected instruction in read barrier for GC root slow path: "
+        << instruction_->DebugName();
+
+    __ Bind(GetEntryLabel());
+    SaveLiveRegisters(codegen, locations);
+
+    InvokeRuntimeCallingConvention calling_convention;
+    CodeGeneratorMIPS* mips_codegen = down_cast<CodeGeneratorMIPS*>(codegen);
+    mips_codegen->Move32(Location::RegisterLocation(calling_convention.GetRegisterAt(0)), root_);
+    mips_codegen->InvokeRuntime(QUICK_ENTRY_POINT(pReadBarrierForRootSlow),
+                                instruction_,
+                                instruction_->GetDexPc(),
+                                this,
+                                IsDirectEntrypoint(kQuickReadBarrierForRootSlow));
+    CheckEntrypointTypes<kQuickReadBarrierForRootSlow, mirror::Object*, GcRoot<mirror::Object>*>();
+    Primitive::Type ret_type = instruction_->GetType();
+    Location ret_loc = calling_convention.GetReturnLocation(ret_type);
+    mips_codegen->Move32(out_, ret_loc);
+
+    RestoreLiveRegisters(codegen, locations);
+    __ B(GetExitLabel());
+  }
+
+  const char* GetDescription() const OVERRIDE { return "ReadBarrierForRootSlowPathMIPS"; }
+
+ private:
+  const Location out_;
+  const Location root_;
+
+  DISALLOW_COPY_AND_ASSIGN(ReadBarrierForRootSlowPathMIPS);
+};
+
 CodeGeneratorMIPS::CodeGeneratorMIPS(HGraph* graph,
                                      const MipsInstructionSetFeatures& isa_features,
                                      const CompilerOptions& compiler_options,
@@ -482,11 +582,22 @@ CodeGeneratorMIPS::CodeGeneratorMIPS(HGraph* graph,
       move_resolver_(graph->GetArena(), this),
       assembler_(graph->GetArena(), &isa_features),
       isa_features_(isa_features),
+      uint32_literals_(std::less<uint32_t>(),
+                       graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
       method_patches_(MethodReferenceComparator(),
                       graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
       call_patches_(MethodReferenceComparator(),
                     graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
-      pc_relative_dex_cache_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)) {
+      pc_relative_dex_cache_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
+      boot_image_string_patches_(StringReferenceValueComparator(),
+                                 graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
+      pc_relative_string_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
+      boot_image_type_patches_(TypeReferenceValueComparator(),
+                               graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
+      pc_relative_type_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
+      boot_image_address_patches_(std::less<uint32_t>(),
+                                  graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
+      clobbered_ra_(false) {
   // Save RA (containing the return address) to mimic Quick.
   AddAllocatedRegister(Location::RegisterLocation(RA));
 }
@@ -686,6 +797,16 @@ void CodeGeneratorMIPS::ComputeSpillMask() {
   // registers, include the ZERO register to force alignment of FPU callee-saved registers
   // within the stack frame.
   if ((fpu_spill_mask_ != 0) && (POPCOUNT(core_spill_mask_) % 2 != 0)) {
+    core_spill_mask_ |= (1 << ZERO);
+  }
+  // If RA is clobbered by PC-relative operations on R2 and it's the only spilled register
+  // (this can happen in leaf methods), artificially spill the ZERO register in order to
+  // force explicit saving and restoring of RA. RA isn't saved/restored when it's the only
+  // spilled register.
+  // TODO: Can this be improved? It causes creation of a stack frame (while RA might be
+  // saved in an unused temporary register) and saving of RA and the current method pointer
+  // in the frame.
+  if (clobbered_ra_ && core_spill_mask_ == (1u << RA) && fpu_spill_mask_ == 0) {
     core_spill_mask_ |= (1 << ZERO);
   }
 }
@@ -962,7 +1083,12 @@ void CodeGeneratorMIPS::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patch
   size_t size =
       method_patches_.size() +
       call_patches_.size() +
-      pc_relative_dex_cache_patches_.size();
+      pc_relative_dex_cache_patches_.size() +
+      pc_relative_string_patches_.size() +
+      pc_relative_type_patches_.size() +
+      boot_image_string_patches_.size() +
+      boot_image_type_patches_.size() +
+      boot_image_address_patches_.size();
   linker_patches->reserve(size);
   for (const auto& entry : method_patches_) {
     const MethodReference& target_method = entry.first;
@@ -994,6 +1120,65 @@ void CodeGeneratorMIPS::EmitLinkerPatches(ArenaVector<LinkerPatch>* linker_patch
                                                               pc_rel_offset,
                                                               base_element_offset));
   }
+  for (const PcRelativePatchInfo& info : pc_relative_string_patches_) {
+    const DexFile& dex_file = info.target_dex_file;
+    size_t string_index = info.offset_or_index;
+    DCHECK(info.high_label.IsBound());
+    uint32_t high_offset = __ GetLabelLocation(&info.high_label);
+    DCHECK(info.pc_rel_label.IsBound());
+    uint32_t pc_rel_offset = __ GetLabelLocation(&info.pc_rel_label);
+    linker_patches->push_back(LinkerPatch::RelativeStringPatch(high_offset,
+                                                               &dex_file,
+                                                               pc_rel_offset,
+                                                               string_index));
+  }
+  for (const PcRelativePatchInfo& info : pc_relative_type_patches_) {
+    const DexFile& dex_file = info.target_dex_file;
+    size_t type_index = info.offset_or_index;
+    DCHECK(info.high_label.IsBound());
+    uint32_t high_offset = __ GetLabelLocation(&info.high_label);
+    DCHECK(info.pc_rel_label.IsBound());
+    uint32_t pc_rel_offset = __ GetLabelLocation(&info.pc_rel_label);
+    linker_patches->push_back(LinkerPatch::RelativeTypePatch(high_offset,
+                                                             &dex_file,
+                                                             pc_rel_offset,
+                                                             type_index));
+  }
+  for (const auto& entry : boot_image_string_patches_) {
+    const StringReference& target_string = entry.first;
+    Literal* literal = entry.second;
+    DCHECK(literal->GetLabel()->IsBound());
+    uint32_t literal_offset = __ GetLabelLocation(literal->GetLabel());
+    linker_patches->push_back(LinkerPatch::StringPatch(literal_offset,
+                                                       target_string.dex_file,
+                                                       target_string.string_index));
+  }
+  for (const auto& entry : boot_image_type_patches_) {
+    const TypeReference& target_type = entry.first;
+    Literal* literal = entry.second;
+    DCHECK(literal->GetLabel()->IsBound());
+    uint32_t literal_offset = __ GetLabelLocation(literal->GetLabel());
+    linker_patches->push_back(LinkerPatch::TypePatch(literal_offset,
+                                                     target_type.dex_file,
+                                                     target_type.type_index));
+  }
+  for (const auto& entry : boot_image_address_patches_) {
+    DCHECK(GetCompilerOptions().GetIncludePatchInformation());
+    Literal* literal = entry.second;
+    DCHECK(literal->GetLabel()->IsBound());
+    uint32_t literal_offset = __ GetLabelLocation(literal->GetLabel());
+    linker_patches->push_back(LinkerPatch::RecordPosition(literal_offset));
+  }
+}
+
+CodeGeneratorMIPS::PcRelativePatchInfo* CodeGeneratorMIPS::NewPcRelativeStringPatch(
+    const DexFile& dex_file, uint32_t string_index) {
+  return NewPcRelativePatch(dex_file, string_index, &pc_relative_string_patches_);
+}
+
+CodeGeneratorMIPS::PcRelativePatchInfo* CodeGeneratorMIPS::NewPcRelativeTypePatch(
+    const DexFile& dex_file, uint32_t type_index) {
+  return NewPcRelativePatch(dex_file, type_index, &pc_relative_type_patches_);
 }
 
 CodeGeneratorMIPS::PcRelativePatchInfo* CodeGeneratorMIPS::NewPcRelativeDexCacheArrayPatch(
@@ -1005,6 +1190,12 @@ CodeGeneratorMIPS::PcRelativePatchInfo* CodeGeneratorMIPS::NewPcRelativePatch(
     const DexFile& dex_file, uint32_t offset_or_index, ArenaDeque<PcRelativePatchInfo>* patches) {
   patches->emplace_back(dex_file, offset_or_index);
   return &patches->back();
+}
+
+Literal* CodeGeneratorMIPS::DeduplicateUint32Literal(uint32_t value, Uint32ToLiteralMap* map) {
+  return map->GetOrCreate(
+      value,
+      [this, value]() { return __ NewLiteral<uint32_t>(value); });
 }
 
 Literal* CodeGeneratorMIPS::DeduplicateMethodLiteral(MethodReference target_method,
@@ -1020,6 +1211,30 @@ Literal* CodeGeneratorMIPS::DeduplicateMethodAddressLiteral(MethodReference targ
 
 Literal* CodeGeneratorMIPS::DeduplicateMethodCodeLiteral(MethodReference target_method) {
   return DeduplicateMethodLiteral(target_method, &call_patches_);
+}
+
+Literal* CodeGeneratorMIPS::DeduplicateBootImageStringLiteral(const DexFile& dex_file,
+                                                              uint32_t string_index) {
+  return boot_image_string_patches_.GetOrCreate(
+      StringReference(&dex_file, string_index),
+      [this]() { return __ NewLiteral<uint32_t>(/* placeholder */ 0u); });
+}
+
+Literal* CodeGeneratorMIPS::DeduplicateBootImageTypeLiteral(const DexFile& dex_file,
+                                                            uint32_t type_index) {
+  return boot_image_type_patches_.GetOrCreate(
+      TypeReference(&dex_file, type_index),
+      [this]() { return __ NewLiteral<uint32_t>(/* placeholder */ 0u); });
+}
+
+Literal* CodeGeneratorMIPS::DeduplicateBootImageAddressLiteral(uint32_t address) {
+  bool needs_patch = GetCompilerOptions().GetIncludePatchInformation();
+  Uint32ToLiteralMap* map = needs_patch ? &boot_image_address_patches_ : &uint32_literals_;
+  return DeduplicateUint32Literal(dchecked_integral_cast<uint32_t>(address), map);
+}
+
+Literal* CodeGeneratorMIPS::DeduplicateDexCacheAddressLiteral(uint32_t address) {
+  return DeduplicateUint32Literal(address, &uint32_literals_);
 }
 
 void CodeGeneratorMIPS::MarkGCCard(Register object, Register value) {
@@ -3696,6 +3911,77 @@ void InstructionCodeGeneratorMIPS::VisitInstanceFieldSet(HInstanceFieldSet* inst
   HandleFieldSet(instruction, instruction->GetFieldInfo(), instruction->GetDexPc());
 }
 
+void InstructionCodeGeneratorMIPS::GenerateGcRootFieldLoad(HInstruction* instruction,
+                                                           Location root,
+                                                           Register obj,
+                                                           uint32_t offset) {
+  Register root_reg = root.AsRegister<Register>();
+  if (kEmitCompilerReadBarrier) {
+    if (kUseBakerReadBarrier) {
+      // Fast path implementation of art::ReadBarrier::BarrierForRoot when
+      // Baker's read barrier are used:
+      //
+      //   root = obj.field;
+      //   if (Thread::Current()->GetIsGcMarking()) {
+      //     root = ReadBarrier::Mark(root)
+      //   }
+
+      // /* GcRoot<mirror::Object> */ root = *(obj + offset)
+      __ LoadFromOffset(kLoadWord, root_reg, obj, offset);
+      static_assert(
+          sizeof(mirror::CompressedReference<mirror::Object>) == sizeof(GcRoot<mirror::Object>),
+          "art::mirror::CompressedReference<mirror::Object> and art::GcRoot<mirror::Object> "
+          "have different sizes.");
+      static_assert(sizeof(mirror::CompressedReference<mirror::Object>) == sizeof(int32_t),
+                    "art::mirror::CompressedReference<mirror::Object> and int32_t "
+                    "have different sizes.");
+
+      // Slow path used to mark the GC root `root`.
+      SlowPathCodeMIPS* slow_path =
+          new (GetGraph()->GetArena()) ReadBarrierMarkSlowPathMIPS(instruction, root, root);
+      codegen_->AddSlowPath(slow_path);
+
+      // IP = Thread::Current()->GetIsGcMarking()
+      __ LoadFromOffset(kLoadWord,
+                        TMP,
+                        TR,
+                        Thread::IsGcMarkingOffset<kMipsWordSize>().Int32Value());
+      __ Bnez(TMP, slow_path->GetEntryLabel());
+      __ Bind(slow_path->GetExitLabel());
+    } else {
+      // GC root loaded through a slow path for read barriers other
+      // than Baker's.
+      // /* GcRoot<mirror::Object>* */ root = obj + offset
+      __ Addiu32(root_reg, obj, offset);
+      // /* mirror::Object* */ root = root->Read()
+      codegen_->GenerateReadBarrierForRootSlow(instruction, root, root);
+    }
+  } else {
+    // Plain GC root load with no read barrier.
+    // /* GcRoot<mirror::Object> */ root = *(obj + offset)
+    __ LoadFromOffset(kLoadWord, root_reg, obj, offset);
+    // Note that GC roots are not affected by heap poisoning, thus we
+    // do not have to unpoison `root_reg` here.
+  }
+}
+
+void CodeGeneratorMIPS::GenerateReadBarrierForRootSlow(HInstruction* instruction,
+                                                       Location out,
+                                                       Location root) {
+  DCHECK(kEmitCompilerReadBarrier);
+
+  // Insert a slow path based read barrier *after* the GC root load.
+  //
+  // Note that GC roots are not affected by heap poisoning, so we do
+  // not need to do anything special for this here.
+  SlowPathCodeMIPS* slow_path =
+      new (GetGraph()->GetArena()) ReadBarrierForRootSlowPathMIPS(instruction, out, root);
+  AddSlowPath(slow_path);
+
+  __ B(slow_path->GetEntryLabel());
+  __ Bind(slow_path->GetExitLabel());
+}
+
 void LocationsBuilderMIPS::VisitInstanceOf(HInstanceOf* instruction) {
   LocationSummary::CallKind call_kind =
       instruction->IsExactCheck() ? LocationSummary::kNoCall : LocationSummary::kCallOnSlowPath;
@@ -3861,16 +4147,97 @@ static bool TryGenerateIntrinsicCode(HInvoke* invoke, CodeGeneratorMIPS* codegen
 }
 
 HLoadString::LoadKind CodeGeneratorMIPS::GetSupportedLoadStringKind(
-    HLoadString::LoadKind desired_string_load_kind ATTRIBUTE_UNUSED) {
-  // TODO: Implement other kinds.
-  return HLoadString::LoadKind::kDexCacheViaMethod;
+    HLoadString::LoadKind desired_string_load_kind) {
+  if (kEmitCompilerReadBarrier) {
+    switch (desired_string_load_kind) {
+      case HLoadString::LoadKind::kBootImageLinkTimeAddress:
+      case HLoadString::LoadKind::kBootImageLinkTimePcRelative:
+      case HLoadString::LoadKind::kBootImageAddress:
+        // TODO: Implement for read barrier.
+        return HLoadString::LoadKind::kDexCacheViaMethod;
+      default:
+        break;
+    }
+  }
+  // We disable PC-relative load when there is an irreducible loop, as the optimization
+  // is incompatible with it.
+  bool has_irreducible_loops = GetGraph()->HasIrreducibleLoops();
+  bool fallback_load = has_irreducible_loops;
+  switch (desired_string_load_kind) {
+    case HLoadString::LoadKind::kBootImageLinkTimeAddress:
+      DCHECK(!GetCompilerOptions().GetCompilePic());
+      break;
+    case HLoadString::LoadKind::kBootImageLinkTimePcRelative:
+      DCHECK(GetCompilerOptions().GetCompilePic());
+      break;
+    case HLoadString::LoadKind::kBootImageAddress:
+      break;
+    case HLoadString::LoadKind::kDexCacheAddress:
+      DCHECK(Runtime::Current()->UseJitCompilation());
+      break;
+    case HLoadString::LoadKind::kDexCachePcRelative:
+      DCHECK(!Runtime::Current()->UseJitCompilation());
+      // TODO: Create as many MipsDexCacheArraysBase instructions as needed for methods
+      // with irreducible loops.
+      break;
+    case HLoadString::LoadKind::kDexCacheViaMethod:
+      fallback_load = false;
+      break;
+  }
+  if (fallback_load) {
+    desired_string_load_kind = HLoadString::LoadKind::kDexCacheViaMethod;
+  }
+  return desired_string_load_kind;
 }
 
 HLoadClass::LoadKind CodeGeneratorMIPS::GetSupportedLoadClassKind(
     HLoadClass::LoadKind desired_class_load_kind) {
-  DCHECK_NE(desired_class_load_kind, HLoadClass::LoadKind::kReferrersClass);
-  // TODO: Implement other kinds.
-  return HLoadClass::LoadKind::kDexCacheViaMethod;
+  if (kEmitCompilerReadBarrier) {
+    switch (desired_class_load_kind) {
+      case HLoadClass::LoadKind::kBootImageLinkTimeAddress:
+      case HLoadClass::LoadKind::kBootImageLinkTimePcRelative:
+      case HLoadClass::LoadKind::kBootImageAddress:
+        // TODO: Implement for read barrier.
+        return HLoadClass::LoadKind::kDexCacheViaMethod;
+      default:
+        break;
+    }
+  }
+  // We disable pc-relative load when there is an irreducible loop, as the optimization
+  // is incompatible with it.
+  bool has_irreducible_loops = GetGraph()->HasIrreducibleLoops();
+  bool fallback_load = has_irreducible_loops;
+  switch (desired_class_load_kind) {
+    case HLoadClass::LoadKind::kReferrersClass:
+      fallback_load = false;
+      break;
+    case HLoadClass::LoadKind::kBootImageLinkTimeAddress:
+      DCHECK(!GetCompilerOptions().GetCompilePic());
+      break;
+    case HLoadClass::LoadKind::kBootImageLinkTimePcRelative:
+      DCHECK(GetCompilerOptions().GetCompilePic());
+      break;
+    case HLoadClass::LoadKind::kBootImageAddress:
+      break;
+    case HLoadClass::LoadKind::kDexCacheAddress:
+      DCHECK(Runtime::Current()->UseJitCompilation());
+      break;
+    case HLoadClass::LoadKind::kDexCachePcRelative:
+      DCHECK(!Runtime::Current()->UseJitCompilation());
+      // TODO: Create as many ArmDexCacheArraysBase instructions as needed for methods
+      // with irreducible loops.
+      if (GetGraph()->HasIrreducibleLoops()) {
+        return HLoadClass::LoadKind::kDexCacheViaMethod;
+      }
+      break;
+    case HLoadClass::LoadKind::kDexCacheViaMethod:
+      fallback_load = false;
+      break;
+  }
+  if (fallback_load) {
+    desired_class_load_kind = HLoadClass::LoadKind::kDexCacheViaMethod;
+  }
+  return desired_class_load_kind;
 }
 
 Register CodeGeneratorMIPS::GetInvokeStaticOrDirectExtraParameter(HInvokeStaticOrDirect* invoke,
@@ -4107,11 +4474,40 @@ void InstructionCodeGeneratorMIPS::VisitInvokeVirtual(HInvokeVirtual* invoke) {
 }
 
 void LocationsBuilderMIPS::VisitLoadClass(HLoadClass* cls) {
-  InvokeRuntimeCallingConvention calling_convention;
-  CodeGenerator::CreateLoadClassLocationSummary(
-      cls,
-      Location::RegisterLocation(calling_convention.GetRegisterAt(0)),
-      Location::RegisterLocation(V0));
+  if (cls->NeedsAccessCheck()) {
+    InvokeRuntimeCallingConvention calling_convention;
+    CodeGenerator::CreateLoadClassLocationSummary(
+        cls,
+        Location::RegisterLocation(calling_convention.GetRegisterAt(0)),
+        Location::RegisterLocation(V0),
+        /* code_generator_supports_read_barrier */ true);  // TODO: review this bool
+    return;
+  }
+
+  LocationSummary::CallKind call_kind = (cls->NeedsEnvironment() || kEmitCompilerReadBarrier)
+      ? LocationSummary::kCallOnSlowPath
+      : LocationSummary::kNoCall;
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(cls, call_kind);
+  HLoadClass::LoadKind load_kind = cls->GetLoadKind();
+  switch (load_kind) {
+    // We need an extra register for PC-relative literals on R2.
+    case HLoadClass::LoadKind::kBootImageLinkTimeAddress:
+    case HLoadClass::LoadKind::kBootImageAddress:
+    case HLoadClass::LoadKind::kDexCacheAddress:
+      if (codegen_->GetInstructionSetFeatures().IsR6()) {
+        break;
+      }
+      FALLTHROUGH_INTENDED;
+    // We need an extra register for PC-relative dex cache accesses.
+    case HLoadClass::LoadKind::kDexCachePcRelative:
+    case HLoadClass::LoadKind::kReferrersClass:
+    case HLoadClass::LoadKind::kDexCacheViaMethod:
+      locations->SetInAt(0, Location::RequiresRegister());
+      break;
+    default:
+      break;
+  }
+  locations->SetOut(Location::RequiresRegister());
 }
 
 void InstructionCodeGeneratorMIPS::VisitLoadClass(HLoadClass* cls) {
@@ -4127,34 +4523,135 @@ void InstructionCodeGeneratorMIPS::VisitLoadClass(HLoadClass* cls) {
     return;
   }
 
-  Register out = locations->Out().AsRegister<Register>();
-  Register current_method = locations->InAt(0).AsRegister<Register>();
-  if (cls->IsReferrersClass()) {
-    DCHECK(!cls->CanCallRuntime());
-    DCHECK(!cls->MustGenerateClinitCheck());
-    __ LoadFromOffset(kLoadWord, out, current_method,
-                      ArtMethod::DeclaringClassOffset().Int32Value());
-  } else {
-    __ LoadFromOffset(kLoadWord, out, current_method,
-                      ArtMethod::DexCacheResolvedTypesOffset(kMipsPointerSize).Int32Value());
-    __ LoadFromOffset(kLoadWord, out, out, CodeGenerator::GetCacheOffset(cls->GetTypeIndex()));
+  HLoadClass::LoadKind load_kind = cls->GetLoadKind();
+  Location out_loc = locations->Out();
+  Register out = out_loc.AsRegister<Register>();
+  Register base_or_current_method_reg;
+  bool isR6 = codegen_->GetInstructionSetFeatures().IsR6();
+  switch (load_kind) {
+    // We need an extra register for PC-relative literals on R2.
+    case HLoadClass::LoadKind::kBootImageLinkTimeAddress:
+    case HLoadClass::LoadKind::kBootImageAddress:
+    case HLoadClass::LoadKind::kDexCacheAddress:
+      base_or_current_method_reg = isR6 ? ZERO : locations->InAt(0).AsRegister<Register>();
+      break;
+    // We need an extra register for PC-relative dex cache accesses.
+    case HLoadClass::LoadKind::kDexCachePcRelative:
+    case HLoadClass::LoadKind::kReferrersClass:
+    case HLoadClass::LoadKind::kDexCacheViaMethod:
+      base_or_current_method_reg = locations->InAt(0).AsRegister<Register>();
+      break;
+    default:
+      base_or_current_method_reg = ZERO;
+      break;
+  }
 
-    if (!cls->IsInDexCache() || cls->MustGenerateClinitCheck()) {
-      DCHECK(cls->CanCallRuntime());
-      SlowPathCodeMIPS* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathMIPS(
-          cls,
-          cls,
-          cls->GetDexPc(),
-          cls->MustGenerateClinitCheck());
-      codegen_->AddSlowPath(slow_path);
-      if (!cls->IsInDexCache()) {
-        __ Beqz(out, slow_path->GetEntryLabel());
-      }
-      if (cls->MustGenerateClinitCheck()) {
-        GenerateClassInitializationCheck(slow_path, out);
+  bool generate_null_check = false;
+  switch (load_kind) {
+    case HLoadClass::LoadKind::kReferrersClass: {
+      DCHECK(!cls->CanCallRuntime());
+      DCHECK(!cls->MustGenerateClinitCheck());
+      // /* GcRoot<mirror::Class> */ out = current_method->declaring_class_
+      GenerateGcRootFieldLoad(cls,
+                              out_loc,
+                              base_or_current_method_reg,
+                              ArtMethod::DeclaringClassOffset().Int32Value());
+      break;
+    }
+    case HLoadClass::LoadKind::kBootImageLinkTimeAddress:
+      DCHECK(!kEmitCompilerReadBarrier);
+      __ LoadLiteral(out,
+                     base_or_current_method_reg,
+                     codegen_->DeduplicateBootImageTypeLiteral(cls->GetDexFile(),
+                                                               cls->GetTypeIndex()));
+      break;
+    case HLoadClass::LoadKind::kBootImageLinkTimePcRelative: {
+      DCHECK(!kEmitCompilerReadBarrier);
+      CodeGeneratorMIPS::PcRelativePatchInfo* info =
+          codegen_->NewPcRelativeTypePatch(cls->GetDexFile(), cls->GetTypeIndex());
+      if (isR6) {
+        __ Bind(&info->high_label);
+        __ Bind(&info->pc_rel_label);
+        // Add a 32-bit offset to PC.
+        __ Auipc(out, /* placeholder */ 0x1234);
+        __ Addiu(out, out, /* placeholder */ 0x5678);
       } else {
-        __ Bind(slow_path->GetExitLabel());
+        // TODO: Can this be improved (e.g. somehow via literals)?
+        // Generate a dummy PC-relative call to obtain PC.
+        CHECK(codegen_->IsClobberedRA());
+        __ Nal();
+        __ Bind(&info->high_label);
+        __ Lui(out, /* placeholder */ 0x1234);
+        __ Bind(&info->pc_rel_label);
+        __ Ori(out, out, /* placeholder */ 0x5678);
+        // Add a 32-bit offset to PC.
+        __ Addu(out, out, RA);
       }
+      break;
+    }
+    case HLoadClass::LoadKind::kBootImageAddress: {
+      DCHECK(!kEmitCompilerReadBarrier);
+      DCHECK_NE(cls->GetAddress(), 0u);
+      uint32_t address = dchecked_integral_cast<uint32_t>(cls->GetAddress());
+      __ LoadLiteral(out,
+                     base_or_current_method_reg,
+                     codegen_->DeduplicateBootImageAddressLiteral(address));
+      break;
+    }
+    case HLoadClass::LoadKind::kDexCacheAddress: {
+      DCHECK_NE(cls->GetAddress(), 0u);
+      uint32_t address = dchecked_integral_cast<uint32_t>(cls->GetAddress());
+      // The lw instruction has a 16-bit signed offset. To try and reduce the number of
+      // literals if we load multiple types, simply split the dex cache address to a
+      // 64KB-aligned base loaded from a literal and the remaining offset embedded in
+      // the load.
+      static_assert(sizeof(GcRoot<mirror::Class>) == 4u, "Expected GC root to be 4 bytes.");
+      DCHECK_ALIGNED(cls->GetAddress(), 4u);
+      int16_t offset = Low16Bits(address);
+      uint32_t base_address = address - offset;  // This accounts for offset sign extension.
+      __ LoadLiteral(out,
+                     base_or_current_method_reg,
+                     codegen_->DeduplicateDexCacheAddressLiteral(base_address));
+      // /* GcRoot<mirror::Class> */ out = *(base_address + offset)
+      GenerateGcRootFieldLoad(cls, out_loc, out, offset);
+      generate_null_check = !cls->IsInDexCache();
+      break;
+    }
+    case HLoadClass::LoadKind::kDexCachePcRelative: {
+      HMipsDexCacheArraysBase* base = cls->InputAt(0)->AsMipsDexCacheArraysBase();
+      int32_t offset =
+          cls->GetDexCacheElementOffset() - base->GetElementOffset() - kDexCacheArrayLwOffset;
+      // /* GcRoot<mirror::Class> */ out = *(dex_cache_arrays_base + offset)
+      GenerateGcRootFieldLoad(cls, out_loc, base_or_current_method_reg, offset);
+      generate_null_check = !cls->IsInDexCache();
+      break;
+    }
+    case HLoadClass::LoadKind::kDexCacheViaMethod: {
+      // /* GcRoot<mirror::Class>[] */ out =
+      //        current_method.ptr_sized_fields_->dex_cache_resolved_types_
+      __ LoadFromOffset(kLoadWord,
+                        out,
+                        base_or_current_method_reg,
+                        ArtMethod::DexCacheResolvedTypesOffset(kArmPointerSize).Int32Value());
+      // /* GcRoot<mirror::Class> */ out = out[type_index]
+      size_t offset = CodeGenerator::GetCacheOffset(cls->GetTypeIndex());
+      GenerateGcRootFieldLoad(cls, out_loc, out, offset);
+      generate_null_check = !cls->IsInDexCache();
+    }
+  }
+
+  if (generate_null_check || cls->MustGenerateClinitCheck()) {
+    DCHECK(cls->CanCallRuntime());
+    SlowPathCodeMIPS* slow_path = new (GetGraph()->GetArena()) LoadClassSlowPathMIPS(
+        cls, cls, cls->GetDexPc(), cls->MustGenerateClinitCheck());
+    codegen_->AddSlowPath(slow_path);
+    if (generate_null_check) {
+      __ Beqz(out, slow_path->GetEntryLabel());
+    }
+    if (cls->MustGenerateClinitCheck()) {
+      GenerateClassInitializationCheck(slow_path, out);
+    } else {
+      __ Bind(slow_path->GetExitLabel());
     }
   }
 }
@@ -4183,21 +4680,141 @@ void InstructionCodeGeneratorMIPS::VisitClearException(HClearException* clear AT
 }
 
 void LocationsBuilderMIPS::VisitLoadString(HLoadString* load) {
-  LocationSummary::CallKind call_kind = load->NeedsEnvironment()
+  LocationSummary::CallKind call_kind = (load->NeedsEnvironment() || kEmitCompilerReadBarrier)
       ? LocationSummary::kCallOnSlowPath
       : LocationSummary::kNoCall;
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(load, call_kind);
-  locations->SetInAt(0, Location::RequiresRegister());
+  HLoadString::LoadKind load_kind = load->GetLoadKind();
+  switch (load_kind) {
+    // We need an extra register for PC-relative literals on R2.
+    case HLoadString::LoadKind::kBootImageLinkTimeAddress:
+    case HLoadString::LoadKind::kBootImageAddress:
+    case HLoadString::LoadKind::kDexCacheAddress:
+      if (codegen_->GetInstructionSetFeatures().IsR6()) {
+        break;
+      }
+      FALLTHROUGH_INTENDED;
+    // We need an extra register for PC-relative dex cache accesses.
+    case HLoadString::LoadKind::kDexCachePcRelative:
+    case HLoadString::LoadKind::kDexCacheViaMethod:
+      locations->SetInAt(0, Location::RequiresRegister());
+      break;
+    default:
+      break;
+  }
   locations->SetOut(Location::RequiresRegister());
 }
 
 void InstructionCodeGeneratorMIPS::VisitLoadString(HLoadString* load) {
+  HLoadString::LoadKind load_kind = load->GetLoadKind();
   LocationSummary* locations = load->GetLocations();
-  Register out = locations->Out().AsRegister<Register>();
-  Register current_method = locations->InAt(0).AsRegister<Register>();
-  __ LoadFromOffset(kLoadWord, out, current_method, ArtMethod::DeclaringClassOffset().Int32Value());
-  __ LoadFromOffset(kLoadWord, out, out, mirror::Class::DexCacheStringsOffset().Int32Value());
-  __ LoadFromOffset(kLoadWord, out, out, CodeGenerator::GetCacheOffset(load->GetStringIndex()));
+  Location out_loc = locations->Out();
+  Register out = out_loc.AsRegister<Register>();
+  Register base_or_current_method_reg;
+  bool isR6 = codegen_->GetInstructionSetFeatures().IsR6();
+  switch (load_kind) {
+    // We need an extra register for PC-relative literals on R2.
+    case HLoadString::LoadKind::kBootImageLinkTimeAddress:
+    case HLoadString::LoadKind::kBootImageAddress:
+    case HLoadString::LoadKind::kDexCacheAddress:
+      base_or_current_method_reg = isR6 ? ZERO : locations->InAt(0).AsRegister<Register>();
+      break;
+    // We need an extra register for PC-relative dex cache accesses.
+    case HLoadString::LoadKind::kDexCachePcRelative:
+    case HLoadString::LoadKind::kDexCacheViaMethod:
+      base_or_current_method_reg = locations->InAt(0).AsRegister<Register>();
+      break;
+    default:
+      base_or_current_method_reg = ZERO;
+      break;
+  }
+
+  switch (load_kind) {
+    case HLoadString::LoadKind::kBootImageLinkTimeAddress:
+      DCHECK(!kEmitCompilerReadBarrier);
+      __ LoadLiteral(out,
+                     base_or_current_method_reg,
+                     codegen_->DeduplicateBootImageStringLiteral(load->GetDexFile(),
+                                                                 load->GetStringIndex()));
+      return;  // No dex cache slow path.
+    case HLoadString::LoadKind::kBootImageLinkTimePcRelative: {
+      DCHECK(!kEmitCompilerReadBarrier);
+      CodeGeneratorMIPS::PcRelativePatchInfo* info =
+          codegen_->NewPcRelativeStringPatch(load->GetDexFile(), load->GetStringIndex());
+      if (isR6) {
+        __ Bind(&info->high_label);
+        __ Bind(&info->pc_rel_label);
+        // Add a 32-bit offset to PC.
+        __ Auipc(out, /* placeholder */ 0x1234);
+        __ Addiu(out, out, /* placeholder */ 0x5678);
+      } else {
+        // TODO: Can this be improved (e.g. somehow via literals)?
+        // Generate a dummy PC-relative call to obtain PC.
+        CHECK(codegen_->IsClobberedRA());
+        __ Nal();
+        __ Bind(&info->high_label);
+        __ Lui(out, /* placeholder */ 0x1234);
+        __ Bind(&info->pc_rel_label);
+        __ Ori(out, out, /* placeholder */ 0x5678);
+        // Add a 32-bit offset to PC.
+        __ Addu(out, out, RA);
+      }
+      return;  // No dex cache slow path.
+    }
+    case HLoadString::LoadKind::kBootImageAddress: {
+      DCHECK(!kEmitCompilerReadBarrier);
+      DCHECK_NE(load->GetAddress(), 0u);
+      uint32_t address = dchecked_integral_cast<uint32_t>(load->GetAddress());
+      __ LoadLiteral(out,
+                     base_or_current_method_reg,
+                     codegen_->DeduplicateBootImageAddressLiteral(address));
+      return;  // No dex cache slow path.
+    }
+    case HLoadString::LoadKind::kDexCacheAddress: {
+      DCHECK_NE(load->GetAddress(), 0u);
+      uint32_t address = dchecked_integral_cast<uint32_t>(load->GetAddress());
+      // The lw instruction has a 16-bit signed offset. To try and reduce the number of
+      // literals if we load multiple types, simply split the dex cache address to a
+      // 64KB-aligned base loaded from a literal and the remaining offset embedded in
+      // the load.
+      static_assert(sizeof(GcRoot<mirror::String>) == 4u, "Expected GC root to be 4 bytes.");
+      DCHECK_ALIGNED(load->GetAddress(), 4u);
+      int16_t offset = Low16Bits(address);
+      uint32_t base_address = address - offset;  // This accounts for offset sign extension.
+      __ LoadLiteral(out,
+                     base_or_current_method_reg,
+                     codegen_->DeduplicateDexCacheAddressLiteral(base_address));
+      // /* GcRoot<mirror::String> */ out = *(base_address + offset)
+      GenerateGcRootFieldLoad(load, out_loc, out, offset);
+      break;
+    }
+    case HLoadString::LoadKind::kDexCachePcRelative: {
+      HMipsDexCacheArraysBase* base = load->InputAt(0)->AsMipsDexCacheArraysBase();
+      int32_t offset =
+          load->GetDexCacheElementOffset() - base->GetElementOffset() - kDexCacheArrayLwOffset;
+      // /* GcRoot<mirror::String> */ out = *(dex_cache_arrays_base + offset)
+      GenerateGcRootFieldLoad(load, out_loc, base_or_current_method_reg, offset);
+      break;
+    }
+    case HLoadString::LoadKind::kDexCacheViaMethod: {
+      // /* GcRoot<mirror::Class> */ out = current_method->declaring_class_
+      GenerateGcRootFieldLoad(load,
+                              out_loc,
+                              base_or_current_method_reg,
+                              ArtMethod::DeclaringClassOffset().Int32Value());
+      // /* GcRoot<mirror::String>[] */ out = out->dex_cache_strings_
+      __ LoadFromOffset(kLoadWord, out, out, mirror::Class::DexCacheStringsOffset().Int32Value());
+      // /* GcRoot<mirror::String> */ out = out[string_index]
+      GenerateGcRootFieldLoad(load,
+                              out_loc,
+                              out,
+                              CodeGenerator::GetCacheOffset(load->GetStringIndex()));
+      break;
+    }
+    default:
+      LOG(FATAL) << "Unexpected load kind: " << load->GetLoadKind();
+      UNREACHABLE();
+  }
 
   if (!load->IsInDexCache()) {
     SlowPathCodeMIPS* slow_path = new (GetGraph()->GetArena()) LoadStringSlowPathMIPS(load);
@@ -5327,6 +5944,7 @@ void InstructionCodeGeneratorMIPS::VisitMipsComputeBaseMethodAddress(
   __ Nal();
   // Grab the return address off RA.
   __ Move(reg, RA);
+  // TODO: Can we share this code with that of VisitMipsDexCacheArraysBase()?
 
   // Remember this offset (the obtained PC value) for later use with constant area.
   __ BindPcRelBaseLabel();
@@ -5357,6 +5975,7 @@ void InstructionCodeGeneratorMIPS::VisitMipsDexCacheArraysBase(HMipsDexCacheArra
     __ Ori(reg, reg, /* placeholder */ 0x5678);
     // Add a 32-bit offset to PC.
     __ Addu(reg, reg, RA);
+    // TODO: Can we share this code with that of VisitMipsComputeBaseMethodAddress()?
   }
 }
 

@@ -92,7 +92,10 @@ void MipsRelativePatcher::PatchPcRelativeReference(std::vector<uint8_t>* code,
 
   // Apply patch.
   uint32_t anchor_offset = patch_offset - literal_offset + anchor_literal_offset;
-  uint32_t diff = target_offset - anchor_offset + kDexCacheArrayLwOffset;
+  uint32_t diff = target_offset - anchor_offset;
+  if (patch.GetType() == LinkerPatch::Type::kDexCacheArray) {
+    diff += kDexCacheArrayLwOffset;
+  }
   if (is_r6) {
     diff += (diff & 0x8000) << 1;  // Account for sign extension in ADDIU.
   }
