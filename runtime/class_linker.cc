@@ -3549,6 +3549,9 @@ mirror::Class* ClassLinker::InsertClass(const char* descriptor, mirror::Class* k
       source += dex_cache->GetLocation()->ToModifiedUtf8();
     }
     LOG(INFO) << "Loaded class " << descriptor << source;
+    if (std::string(descriptor) == std::string("LB;")) {
+      LOG(INFO) << "wOOT " << descriptor << source;
+    }
   }
   WriterMutexLock mu(Thread::Current(), *Locks::classlinker_classes_lock_);
   mirror::ClassLoader* const class_loader = klass->GetClassLoader();
