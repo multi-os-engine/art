@@ -30,7 +30,7 @@ namespace interpreter {
 
 void InitMterpTls(Thread* self);
 void CheckMterpAsmConstants();
-extern "C" bool MterpShouldSwitchInterpreters();
+extern "C" size_t MterpShouldSwitchInterpreters();
 
 // Poison value for TestExportPC.  If we segfault with this value, it means that a mterp
 // handler for a recent opcode failed to export the Dalvik PC prior to a possible exit from
