@@ -309,6 +309,12 @@ ifeq ($(ART_HEAP_POISONING),true)
   art_asflags += -DART_HEAP_POISONING=1
 endif
 
+ifdef ART_TRACE_MAX_THREAD_ID
+  art_cflags += -DMAX_THREAD_ID=$(ART_TRACE_MAX_THREAD_ID)
+else
+  art_host_cflags += -DMAX_THREAD_ID=1048576
+  art_target_cflags += -DMAX_THREAD_ID=65536
+endif
 #
 # Used to change the read barrier type. Valid values are BAKER, BROOKS, TABLELOOKUP.
 # The default is BAKER.
