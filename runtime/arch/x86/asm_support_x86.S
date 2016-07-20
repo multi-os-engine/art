@@ -185,5 +185,22 @@ MACRO1(UNPOISON_HEAP_REF, rRef)
 #endif  // USE_HEAP_POISONING
 END_MACRO
 
+// Macro checking stack 16-byte alignment.
+MACRO0(CHECK_STACK_ALIGNMENT)
+#if !defined(NDEBUG)
+    PUSH eax                          // Save EAX, which is used for intermediate computations.
+    subl MACRO_LITERAL(16 - 4), %esp  // Add padding to make ESP mod 16 invariant.
+    movl %esp, %eax
+    andl MACRO_LITERAL(16 - 1), %eax  // Test whether EAX is 16-byte aligned.
+    testl %eax, %eax
+    je 1f
+    int3                              // The stack is not 16-byte aligned; interrupt program.
+    int3
+1:
+    addl MACRO_LITERAL(16 - 4), %esp  // Remove padding.
+    POP eax                           // Restore EAX.
+#endif
+END_MACRO
+
 
 #endif  // ART_RUNTIME_ARCH_X86_ASM_SUPPORT_X86_S_
