@@ -240,7 +240,12 @@ static std::ostream& operator<<(std::ostream& os, const InterpreterImplKind& rhs
   return os;
 }
 
-static constexpr InterpreterImplKind kInterpreterImplKind = kMterpImplKind;
+static constexpr InterpreterImplKind kInterpreterImplKind =
+#if defined(__i386__) || defined(__x86_64__)
+    kSwitchImplKind;
+#else
+    kMterpImplKind;
+#endif
 
 #if defined(__clang__)
 // Clang 3.4 fails to build the goto interpreter implementation.
