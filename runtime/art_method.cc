@@ -498,6 +498,17 @@ void ArtMethod::CopyFrom(ArtMethod* src, size_t image_pointer_size) {
 }
 
 bool ArtMethod::CheckImagePointerSize(size_t pointer_size) {
+  // Hijack this function to get access to PtrSizedFieldsOffset.
+  //
+  // Ensure that PrtSizedFieldsOffset is correct. We rely here on usually having both 32-bit and
+  // 64-bit builds.
+  static_assert((sizeof(void*) != 4) ||
+                    (offsetof(ArtMethod, ptr_sized_fields_) == PtrSizedFieldsOffset(4)),
+                "Unexpected 32-bit class layout.");
+  static_assert((sizeof(void*) != 8) ||
+                    (offsetof(ArtMethod, ptr_sized_fields_) == PtrSizedFieldsOffset(8)),
+                "Unexpected 64-bit class layout.");
+
   Runtime* runtime = Runtime::Current();
   if (runtime == nullptr) {
     return true;
