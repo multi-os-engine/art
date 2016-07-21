@@ -270,6 +270,7 @@ class ConcurrentCopying : public GarbageCollector {
   class RefFieldsVisitor;
   class RevokeThreadLocalMarkStackCheckpoint;
   class ScopedGcGraysImmuneObjects;
+  class ThreadFlipRootVisitor;
   class ThreadFlipVisitor;
   class VerifyNoFromSpaceRefsFieldVisitor;
   class VerifyNoFromSpaceRefsObjectVisitor;

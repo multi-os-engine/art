@@ -193,6 +193,47 @@ void ConcurrentCopying::InitializePhase() {
   }
 }
 
+// Non-CAS root visitor for thread flip.
+class ConcurrentCopying::ThreadFlipRootVisitor : public RootVisitor {
+ public:
+  explicit ThreadFlipRootVisitor(ConcurrentCopying* collector)
+      : collector_(collector) {}
+
+  void VisitRoots(mirror::Object*** roots, size_t count,
+                  const RootInfo& info ATTRIBUTE_UNUSED)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    for (size_t i = 0; i < count; ++i) {
+      mirror::Object** root = roots[i];
+      mirror::Object* ref = *root;
+      if (ref != nullptr) {
+        mirror::Object* to_ref = collector_->Mark(ref);
+        if (to_ref != ref) {
+          *root = to_ref;
+        }
+      }
+    }
+  }
+
+  void VisitRoots(mirror::CompressedReference<mirror::Object>** roots, size_t count,
+                  const RootInfo& info ATTRIBUTE_UNUSED)
+      SHARED_REQUIRES(Locks::mutator_lock_) {
+    for (size_t i = 0; i < count; ++i) {
+      mirror::CompressedReference<mirror::Object>* const root = roots[i];
+      if (!root->IsNull()) {
+        mirror::Object* ref = root->AsMirrorPtr();
+        mirror::Object* to_ref = collector_->Mark(ref);
+        if (to_ref != ref) {
+          root->Assign(to_ref);
+        }
+      }
+    }
+  }
+
+ private:
+  ConcurrentCopying* const collector_;
+};
+
+
 // Used to switch the thread roots of a thread from from-space refs to to-space refs.
 class ConcurrentCopying::ThreadFlipVisitor : public Closure {
  public:
@@ -221,7 +262,8 @@ class ConcurrentCopying::ThreadFlipVisitor : public Closure {
       thread->RevokeThreadLocalAllocationStack();
     }
     ReaderMutexLock mu(self, *Locks::heap_bitmap_lock_);
-    thread->VisitRoots(concurrent_copying_);
+    ThreadFlipRootVisitor root_visitor(concurrent_copying_);
+    thread->VisitRoots(&root_visitor);
     concurrent_copying_->GetBarrier().Pass(self);
   }
 
