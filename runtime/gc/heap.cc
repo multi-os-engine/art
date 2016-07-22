@@ -2429,7 +2429,13 @@ void Heap::UnBindBitmaps() {
   }
 }
 
-void Heap::PreZygoteFork() {
+class EmptyMarkObjectVisitor : public MarkObjectVisitor {
+ public:
+  mirror::Object* MarkObject(mirror::Object* obj) OVERRIDE {return obj;}
+  void MarkHeapReference(mirror::HeapReference<mirror::Object>*) OVERRIDE {}
+};
+
+void Heap::PreZygoteFork() NO_THREAD_SAFETY_ANALYSIS {
   if (!HasZygoteSpace()) {
     // We still want to GC in case there is some unreachable non moving objects that could cause a
     // suboptimal bin packing when we compact the zygote space.
@@ -2546,6 +2552,9 @@ void Heap::PreZygoteFork() {
   // Set all the cards in the mod-union table since we don't know which objects contain references
   // to large objects.
   mod_union_table->SetCards();
+  EmptyMarkObjectVisitor empty_visitor;
+  // Filter out cards that don't need to be dirty.
+  mod_union_table->UpdateAndMarkReferences(&empty_visitor);
   AddModUnionTable(mod_union_table);
   large_object_space_->SetAllLargeObjectsAsZygoteObjects(self);
   if (collector::SemiSpace::kUseRememberedSet) {

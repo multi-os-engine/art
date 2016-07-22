@@ -22,6 +22,7 @@
 #include "base/systrace.h"
 #include "debugger.h"
 #include "gc/accounting/heap_bitmap-inl.h"
+#include "gc/accounting/mod_union_table-inl.h"
 #include "gc/accounting/space_bitmap-inl.h"
 #include "gc/reference_processor.h"
 #include "gc/space/image_space.h"
@@ -284,6 +285,8 @@ class ConcurrentCopying::ThreadFlipVisitor : public Closure, public RootVisitor 
   const bool use_tlab_;
 };
 
+constexpr bool kGrayDirtyImmuneObjects = true;
+
 // Called back from Runtime::FlipThreadRoots() during a pause.
 class ConcurrentCopying::FlipCallback : public Closure {
  public:
@@ -314,6 +317,9 @@ class ConcurrentCopying::FlipCallback : public Closure {
       CHECK(Runtime::Current()->IsAotCompiler());
       TimingLogger::ScopedTiming split2("(Paused)VisitTransactionRoots", cc->GetTimings());
       Runtime::Current()->VisitTransactionRoots(cc);
+    }
+    if (kGrayDirtyImmuneObjects) {
+      cc->MarkAllDirtyImmuneObjects();
     }
   }
 
@@ -348,6 +354,50 @@ void ConcurrentCopying::FlipThreadRoots() {
     region_space_->DumpNonFreeRegions(LOG(INFO));
     LOG(INFO) << "GC end of FlipThreadRoots";
   }
+}
+
+class ConcurrentCopying::MarkImmuneObjectVisitor {
+ public:
+  mutable size_t num_ = 0;
+
+  explicit MarkImmuneObjectVisitor(ConcurrentCopying* cc) : cc_(cc) {
+    UNUSED(cc_);
+  }
+
+  ALWAYS_INLINE void operator()(mirror::Object* obj) const SHARED_REQUIRES(Locks::mutator_lock_) {
+    obj->AtomicSetReadBarrierPointer(ReadBarrier::WhitePtr(), ReadBarrier::GrayPtr());
+    ++num_;
+  }
+
+  static void Callback(mirror::Object* obj, void* arg) SHARED_REQUIRES(Locks::mutator_lock_) {
+    reinterpret_cast<MarkImmuneObjectVisitor*>(arg)->operator()(obj);
+  }
+ private:
+  ConcurrentCopying* const cc_;
+};
+
+void ConcurrentCopying::MarkAllDirtyImmuneObjects() {
+  TimingLogger::ScopedTiming split(__FUNCTION__, GetTimings());
+  WriterMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
+  gc::Heap* const heap = Runtime::Current()->GetHeap();
+  accounting::CardTable* const card_table = heap->GetCardTable();
+  for (auto& space : immune_spaces_.GetSpaces()) {
+    MarkImmuneObjectVisitor visitor(this);
+    DCHECK(space->IsImageSpace() || space->IsZygoteSpace());
+    accounting::ModUnionTable* table = heap->FindModUnionTableFromSpace(space);
+    // Mark all the objects on dirty cards since these may point to objects in other space.
+    // Once these are marked, the GC will eventually clear them later.
+    if (table != nullptr) {
+      table->ClearCards();
+      table->VisitObjects(MarkImmuneObjectVisitor::Callback, &visitor);
+    } else {
+      card_table->Scan<false>(space->GetMarkBitmap(), space->Begin(), space->End(), visitor);
+    }
+    // LOG(ERROR) << visitor.num_ << ": " << *space;
+  }
+  // Since all of the objects that may point to other spaces are marked, we can avoid all the read
+  // barriers in the immune spaces.
+  updated_all_immune_objects_.StoreSequentiallyConsistent(true);
 }
 
 void ConcurrentCopying::SwapStacks() {
@@ -393,7 +443,16 @@ class ConcurrentCopying::ImmuneSpaceScanObjVisitor {
       : collector_(cc) {}
 
   void operator()(mirror::Object* obj) const SHARED_REQUIRES(Locks::mutator_lock_) {
-    collector_->ScanImmuneObject(obj);
+    if (kGrayDirtyImmuneObjects) {
+      if (obj->GetReadBarrierPointer() == ReadBarrier::GrayPtr()) {
+        collector_->ScanImmuneObject(obj);
+        bool success = obj->AtomicSetReadBarrierPointer(ReadBarrier::GrayPtr(),
+                                                        ReadBarrier::WhitePtr());
+        CHECK(success);
+      }
+    } else {
+      collector_->ScanImmuneObject(obj);
+    }
   }
 
  private:
@@ -415,13 +474,16 @@ void ConcurrentCopying::MarkingPhase() {
   if (kUseBakerReadBarrier) {
     gc_grays_immune_objects_ = false;
   }
-  for (auto& space : immune_spaces_.GetSpaces()) {
-    DCHECK(space->IsImageSpace() || space->IsZygoteSpace());
-    accounting::ContinuousSpaceBitmap* live_bitmap = space->GetLiveBitmap();
-    ImmuneSpaceScanObjVisitor visitor(this);
-    live_bitmap->VisitMarkedRange(reinterpret_cast<uintptr_t>(space->Begin()),
-                                  reinterpret_cast<uintptr_t>(space->Limit()),
-                                  visitor);
+  {
+    TimingLogger::ScopedTiming split2("ScanImmuneSpaces", GetTimings());
+    for (auto& space : immune_spaces_.GetSpaces()) {
+      DCHECK(space->IsImageSpace() || space->IsZygoteSpace());
+      accounting::ContinuousSpaceBitmap* live_bitmap = space->GetLiveBitmap();
+      ImmuneSpaceScanObjVisitor visitor(this);
+      live_bitmap->VisitMarkedRange(reinterpret_cast<uintptr_t>(space->Begin()),
+                                    reinterpret_cast<uintptr_t>(space->Limit()),
+                                    visitor);
+    }
   }
   if (kUseBakerReadBarrier) {
     // This release fence makes the field updates in the above loop visible before allowing mutator
