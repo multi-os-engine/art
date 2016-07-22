@@ -74,7 +74,8 @@ class CompilerOptions FINAL {
                   bool abort_on_hard_verifier_failure,
                   const std::string& dump_cfg_file_name,
                   bool dump_cfg_append,
-                  bool force_determinism);
+                  bool force_determinism,
+                  std::string* bisection_config);
 
   CompilerFilter::Filter GetCompilerFilter() const {
     return compiler_filter_;
@@ -244,6 +245,14 @@ class CompilerOptions FINAL {
     return force_determinism_;
   }
 
+  std::string* GetBisectionConfig() const {
+    return bisection_config_.get();
+  }
+
+  bool IsBisectedOptimization() const {
+    return bisection_config_.get() != nullptr;
+  }
+
  private:
   void ParseDumpInitFailures(const StringPiece& option, UsageFn Usage);
   void ParseDumpCfgPasses(const StringPiece& option, UsageFn Usage);
@@ -254,6 +263,7 @@ class CompilerOptions FINAL {
   void ParseSmallMethodMax(const StringPiece& option, UsageFn Usage);
   void ParseLargeMethodMax(const StringPiece& option, UsageFn Usage);
   void ParseHugeMethodMax(const StringPiece& option, UsageFn Usage);
+  void ParseBisectionConfig(const StringPiece& option);
 
   CompilerFilter::Filter compiler_filter_;
   size_t huge_method_threshold_;
@@ -296,6 +306,10 @@ class CompilerOptions FINAL {
   // Whether the compiler should trade performance for determinism to guarantee exactly reproducable
   // outcomes.
   bool force_determinism_;
+
+  // Used by BisectionController, specifies which optimizations to run for purposes of
+  // bisection bug search.
+  std::unique_ptr<std::string> bisection_config_;
 
   friend class Dex2Oat;
 
