@@ -44,7 +44,9 @@ CompilerOptions::CompilerOptions()
       init_failure_output_(nullptr),
       dump_cfg_file_name_(""),
       dump_cfg_append_(false),
-      force_determinism_(false) {
+      force_determinism_(false),
+      optimize_up_to_method_(kBisectedOptimizationDisabled),
+      optimize_up_to_phase_(kBisectedOptimizationDisabled) {
 }
 
 CompilerOptions::~CompilerOptions() {
@@ -61,6 +63,8 @@ CompilerOptions::CompilerOptions(CompilerFilter::Filter compiler_filter,
                                  size_t inline_depth_limit,
                                  size_t inline_max_code_units,
                                  const std::vector<const DexFile*>* no_inline_from,
+                                 uint32_t optimize_up_to_method,
+                                 uint32_t optimize_up_to_phase,
                                  bool include_patch_information,
                                  double top_k_profile_threshold,
                                  bool debuggable,
@@ -99,7 +103,9 @@ CompilerOptions::CompilerOptions(CompilerFilter::Filter compiler_filter,
     init_failure_output_(init_failure_output),
     dump_cfg_file_name_(dump_cfg_file_name),
     dump_cfg_append_(dump_cfg_append),
-    force_determinism_(force_determinism) {
+    force_determinism_(force_determinism),
+    optimize_up_to_method_(optimize_up_to_method),
+    optimize_up_to_phase_(optimize_up_to_phase) {
 }
 
 void CompilerOptions::ParseHugeMethodMax(const StringPiece& option, UsageFn Usage) {
@@ -142,6 +148,14 @@ void CompilerOptions::ParseDumpInitFailures(const StringPiece& option,
                << "failures.";
     init_failure_output_.reset();
   }
+}
+
+void CompilerOptions::ParseOptimizeUpToMethod(const StringPiece& option, UsageFn Usage) {
+  ParseUintOption(option, "--optimize-up-to-method", &optimize_up_to_method_, Usage);
+}
+
+void CompilerOptions::ParseOptimizeUpToPhase(const StringPiece& option, UsageFn Usage) {
+  ParseUintOption(option, "--optimize-up-to-phase", &optimize_up_to_phase_, Usage);
 }
 
 bool CompilerOptions::ParseCompilerOption(const StringPiece& option, UsageFn Usage) {
@@ -190,6 +204,10 @@ bool CompilerOptions::ParseCompilerOption(const StringPiece& option, UsageFn Usa
     dump_cfg_file_name_ = option.substr(strlen("--dump-cfg=")).data();
   } else if (option.starts_with("--dump-cfg-append")) {
     dump_cfg_append_ = true;
+  } else if (option.starts_with("--optimize-up-to-method=")) {
+    ParseOptimizeUpToMethod(option, Usage);
+  } else if (option.starts_with("--optimize-up-to-phase=")) {
+    ParseOptimizeUpToPhase(option, Usage);
   } else {
     // Option not recognized.
     return false;

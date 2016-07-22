@@ -382,6 +382,17 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      This option is incompatible with read barriers (e.g., if dex2oat has been");
   UsageError("      built with the environment variable `ART_USE_READ_BARRIER` set to `true`).");
   UsageError("");
+  UsageError("  --optimize-up-to-method=<method-nr>:  only run optimizations for first");
+  UsageError("      <method-nr> methods.");
+  UsageError("      Example: --optimize-up-to-method=17 optimizes first 17 methods");
+  UsageError("");
+  UsageError("  --optimize-up-to-phase=<phase-nr>:  valid only in conjunction with");
+  UsageError("      --optimize-up-to-method.");
+  UsageError("      Only runs first <phase-nr> optimization phases for <method-nr>-th");
+  UsageError("      optimized method. Runs all optimization phases for first <phase-nr> - 1");
+  UsageError("      methods. Runs no optimization phases for all remaining methods.");
+  UsageError("      Example: --optimize-up-to-method=3 --optimize-up-to-phase=2");
+  UsageError("");
   std::cerr << "See log for usage error information\n";
   exit(EXIT_FAILURE);
 }
@@ -894,6 +905,15 @@ class Dex2Oat FINAL {
       }
     }
     compiler_options_->force_determinism_ = force_determinism_;
+
+    if (compiler_options_->GetOptimizeUpToMethod() == CompilerOptions::kBisectedOptimizationDisabled
+        && compiler_options_->GetOptimizeUpToPhase() != CompilerOptions::kBisectedOptimizationDisabled) {
+      Usage("--optimize-up-to-phase must be used with --optimize-up-to-method");
+    }
+
+    if (compiler_options_->IsBisectedOptimization() && thread_count_ != 1) {
+      Usage("--optimize-up-to-method must be used with -j1");
+    }
   }
 
   static bool SupportsDeterministicCompilation() {

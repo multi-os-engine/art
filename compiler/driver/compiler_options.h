@@ -49,6 +49,8 @@ class CompilerOptions FINAL {
   static constexpr size_t kSpaceFilterInlineDepthLimit = 3;
   static constexpr size_t kSpaceFilterInlineMaxCodeUnits = 10;
 
+  static const uint32_t kBisectedOptimizationDisabled = std::numeric_limits<uint32_t>::max();
+
   CompilerOptions();
   ~CompilerOptions();
 
@@ -61,6 +63,8 @@ class CompilerOptions FINAL {
                   size_t inline_depth_limit,
                   size_t inline_max_code_units,
                   const std::vector<const DexFile*>* no_inline_from,
+                  uint32_t optimize_up_to_method,
+                  uint32_t optimize_up_to_phase,
                   bool include_patch_information,
                   double top_k_profile_threshold,
                   bool debuggable,
@@ -158,6 +162,18 @@ class CompilerOptions FINAL {
     inline_max_code_units_ = units;
   }
 
+  uint32_t GetOptimizeUpToMethod() const {
+    return optimize_up_to_method_;
+  }
+
+  uint32_t GetOptimizeUpToPhase() const {
+    return optimize_up_to_phase_;
+  }
+
+  bool IsBisectedOptimization() const {
+    return optimize_up_to_method_ != kBisectedOptimizationDisabled;
+  }
+
   double GetTopKProfileThreshold() const {
     return top_k_profile_threshold_;
   }
@@ -245,6 +261,8 @@ class CompilerOptions FINAL {
   }
 
  private:
+  void ParseOptimizeUpToMethod(const StringPiece& option, UsageFn Usage);
+  void ParseOptimizeUpToPhase(const StringPiece& option, UsageFn Usage);
   void ParseDumpInitFailures(const StringPiece& option, UsageFn Usage);
   void ParseDumpCfgPasses(const StringPiece& option, UsageFn Usage);
   void ParseInlineMaxCodeUnits(const StringPiece& option, UsageFn Usage);
@@ -296,6 +314,10 @@ class CompilerOptions FINAL {
   // Whether the compiler should trade performance for determinism to guarantee exactly reproducable
   // outcomes.
   bool force_determinism_;
+
+  // Bisected optimization used for bisection search.
+  uint32_t optimize_up_to_method_;
+  uint32_t optimize_up_to_phase_;
 
   friend class Dex2Oat;
 
