@@ -44,7 +44,7 @@ class RegisterAllocator : public ArenaObject<kArenaAllocRegisterAllocator> {
     kRegisterAllocatorGraphColor
   };
 
-  static constexpr Strategy kRegisterAllocatorDefault = kRegisterAllocatorLinearScan;
+  static constexpr Strategy kRegisterAllocatorDefault = kRegisterAllocatorGraphColor;  // TODO
 
   static RegisterAllocator* Create(ArenaAllocator* allocator,
                                    CodeGenerator* codegen,
