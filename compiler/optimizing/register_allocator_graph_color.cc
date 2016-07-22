@@ -30,6 +30,12 @@ static bool IsCoreInterval(LiveInterval* interval) {
 
 std::string RegisterAllocatorGraphColor::DumpInterval(const LiveInterval* interval) const {
   std::stringstream s;
+  if (interval->GetParent()->GetDefinedBy() != nullptr) {
+    s << interval->GetParent()->GetDefinedBy()->GetKind()
+        << "(" << interval->GetParent()->GetDefinedBy()->GetLifetimePosition() << ") ";
+  } else {
+    s << "[unknown] ";
+  }
   interval->Dump(s);
   if (interval->IsFixed()) {
     s << ", register:" << interval->GetRegister() << "(";
@@ -43,57 +49,38 @@ std::string RegisterAllocatorGraphColor::DumpInterval(const LiveInterval* interv
     s << ", spill slot:" << interval->GetSpillSlot();
   }
   s << ", requires_register:" << (interval->GetDefinedBy() != nullptr && interval->RequiresRegister());
-  if (interval->GetParent()->GetDefinedBy() != nullptr) {
-    s << ", defined_by:" << interval->GetParent()->GetDefinedBy()->GetKind()
-        << "(" << interval->GetParent()->GetDefinedBy()->GetLifetimePosition() << ")";
-  }
   return s.str();
 }
 
-RegisterAllocatorGraphColor::RegisterAllocatorGraphColor(ArenaAllocator* allocator,
-                                                         CodeGenerator* codegen,
-                                                         const SsaLivenessAnalysis& liveness)
-      : RegisterAllocator(allocator, codegen, liveness),
-        core_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
-        fp_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
-        temp_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
-        safepoints_(allocator->Adapter(kArenaAllocRegisterAllocator)),
-        physical_core_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
-        physical_fp_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
-        int_spill_slot_counter_(0),
-        double_spill_slot_counter_(0),
-        float_spill_slot_counter_(0),
-        long_spill_slot_counter_(0),
-        catch_phi_spill_slot_counter_(0),
-        reserved_art_method_slots_(InstructionSetPointerSize(codegen->GetInstructionSet()) / kVRegSize),
-        reserved_out_slots_(codegen->GetGraph()->GetMaximumNumberOfOutVRegs()),
-        max_safepoint_live_core_regs_(0),
-        max_safepoint_live_fp_regs_(0) {
-  // Before we ask for blocked registers, set them up in the code generator.
-  codegen->SetupBlockedRegisters();
+enum CoalescePhase {
+  kWorklist,  // Currently in the coalesce worklist.
+  kActive,    // Not in a worklist, but could be in the future.
+  kDefunct    // No longer a valid coalesce opportunity.
+};
 
-  // Initialize physical core register live intervals and blocked registers.
-  // This includes globally blocked registers, such as the stack pointer.
-  physical_core_intervals_.resize(codegen->GetNumberOfCoreRegisters(), nullptr);
-  for (size_t i = 0; i < codegen->GetNumberOfCoreRegisters(); ++i) {
-    LiveInterval* interval = LiveInterval::MakeFixedInterval(allocator_, i, Primitive::kPrimInt);
-    physical_core_intervals_[i] = interval;
-    core_intervals_.push_back(interval);
-    if (codegen_->GetBlockedCoreRegisters()[i]) {
-      interval->AddRange(0, liveness.GetMaxLifetimePosition());
-    }
-  }
-  // Initialize physical floating point register live intervals and blocked registers.
-  physical_fp_intervals_.resize(codegen->GetNumberOfFloatingPointRegisters(), nullptr);
-  for (size_t i = 0; i < codegen->GetNumberOfFloatingPointRegisters(); ++i) {
-    LiveInterval* interval = LiveInterval::MakeFixedInterval(allocator_, i, Primitive::kPrimFloat);
-    physical_fp_intervals_[i] = interval;
-    fp_intervals_.push_back(interval);
-    if (codegen_->GetBlockedFloatingPointRegisters()[i]) {
-      interval->AddRange(0, liveness.GetMaxLifetimePosition());
-    }
-  }
-}
+// Represents a coalesce opportunity between two nodes.
+struct CoalesceOpportunity : public ArenaObject<kArenaAllocRegisterAllocator> {
+  CoalesceOpportunity(InterferenceNode* a_in, InterferenceNode* b_in);
+
+  InterferenceNode* const a;
+  InterferenceNode* const b;
+
+  CoalescePhase phase;
+
+  // TODO: Add priority, possibly based on loop information.
+  const size_t priority;
+};
+
+enum InterferenceNodePhase {
+  kInitial,
+  kPrecolored,
+  kSafepoint,
+  kPrunable,
+  kSimplifyWorklist,
+  kFreezeWorklist,
+  kSpillWorklist,
+  kPruned
+};
 
 // Interference nodes make up the interference graph, which is the primary
 // data structure in graph coloring register allocation.
@@ -102,10 +89,16 @@ class InterferenceNode : public ArenaObject<kArenaAllocRegisterAllocator> {
   InterferenceNode(ArenaAllocator* allocator,
                    LiveInterval* interval,
                    size_t id)
-        : interval_(interval),
+        : phase(kInitial),
+          interval_(interval),
           adj_(CmpPtr, allocator->Adapter(kArenaAllocRegisterAllocator)),
+          coalesce_opportunities_(allocator->Adapter(kArenaAllocRegisterAllocator)),
           degree_(0),
-          id_(id) {}
+          id_(id),
+          alias_(this) {
+    DCHECK(!interval->IsHighInterval())
+        << "Pair nodes should be represented by the low interval";
+  }
 
   // Use to maintain determinism when storing InterferenceNode pointers in sets.
   static bool CmpPtr(const InterferenceNode* lhs, const InterferenceNode* rhs) {
@@ -113,44 +106,97 @@ class InterferenceNode : public ArenaObject<kArenaAllocRegisterAllocator> {
   }
 
   void AddInterference(InterferenceNode* other) {
+    DCHECK(!Precolored()) << "To save memory, fixed nodes should not have outgoing interferences";
+    DCHECK_NE(this, other) << "Should not create self loops in the interference graph";
+    DCHECK_EQ(this, alias_) << "Should not add interferences to a node that aliases another";
+    DCHECK(phase != kPruned && other->phase != kPruned);
     if (adj_.insert(other).second) {
       degree_ += EdgeWeightWith(other);
     }
   }
   void RemoveInterference(InterferenceNode* other) {
+    DCHECK_EQ(this, alias_) << "Should not remove interferences from a coalesced node";
+    DCHECK_EQ(other->phase, kPruned) << "Should only remove interferences when pruning";
     if (adj_.erase(other) > 0) {
       degree_ -= EdgeWeightWith(other);
     }
   }
-  bool ContainsInterference(InterferenceNode* other) const {
+  bool HasInterference(InterferenceNode* other) const {
+    DCHECK(!Precolored()) << "Should not query fixed nodes for interferences";
+    DCHECK_EQ(this, alias_) << "Should not query a coalesced node for interferences";
     return adj_.count(other) > 0;
   }
 
+  void AddCoalesceOpportunity(CoalesceOpportunity* other) {
+    coalesce_opportunities_.push_back(other);
+  }
+  bool MoveRelated() const {
+    for (CoalesceOpportunity* opportunity : coalesce_opportunities_) {
+      if (opportunity->phase != kDefunct) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool Precolored() const {
+    return interval_->HasRegister();
+  }
+  bool IsPair() const {
+    return interval_->HasHighInterval();
+  }
+
+  void SetAlias(InterferenceNode* rep) {
+    DCHECK_NE(rep->phase, kPruned);
+    DCHECK_EQ(this, alias_) << "Should only set a node's alias once";
+    alias_ = rep;
+  }
+  InterferenceNode* Alias() {
+    if (alias_ != this) {
+      // Recurse in order to flatten tree of alias pointers.
+      alias_ = alias_->Alias();
+    }
+    return alias_;
+  }
+
+  // TODO: Reduce these getters.
   LiveInterval* Interval() const {
     return interval_;
   }
   const ArenaSet<InterferenceNode*, decltype(&CmpPtr)>& Adj() const {
     return adj_;
   }
+  const ArenaVector<CoalesceOpportunity*>& CoalesceOpportunities() const {
+    return coalesce_opportunities_;
+  }
   size_t Degree() const {
-    return degree_;
+    // Pre-colored nodes have infinite degree.
+    return interval_->HasRegister() ? std::numeric_limits<size_t>::max() : degree_;
   }
   size_t Id() const {
     return id_;
   }
 
- private:
   // In order to model the constraints imposed by register pairs, we give
   // extra weight to edges adjacent to register pair nodes.
-  size_t EdgeWeightWith(InterferenceNode* other) const {
-    return (interval_->HasHighInterval() || other->interval_->HasHighInterval()) ? 2 : 1;
+  size_t EdgeWeightWith(const InterferenceNode* other) const {
+    return (IsPair() || other->IsPair()) ? 2 : 1;
   }
 
+  // The current phase of this node, indicating which worklist it belongs to.
+  InterferenceNodePhase phase;
+
+ private:
   // The live interval that this node represents.
   LiveInterval* const interval_;
 
   // All nodes interfering with this one.
+  // To save memory, we do not keep track of interferences for fixed nodes.
+  // TUNING: There is potential to use a cheaper data structure here.
   ArenaSet<InterferenceNode*, decltype(&CmpPtr)> adj_;
+
+  // Interference nodes that this node should be coalesced with to reduce moves.
+  ArenaVector<CoalesceOpportunity*> coalesce_opportunities_;
 
   // We cannot use adjacency set size for degree, since that ignores nodes
   // representing pair intervals.
@@ -159,8 +205,87 @@ class InterferenceNode : public ArenaObject<kArenaAllocRegisterAllocator> {
   // A unique identifier for this node.
   const size_t id_;
 
+  // If nodes are coalesced, this will be set to indicate which node represents this one.
+  // Initially set to `this`.
+  InterferenceNode* alias_;
+
   // TODO: Cache RequiresRegister for the live interval here.
+  DISALLOW_COPY_AND_ASSIGN(InterferenceNode);
 };
+
+CoalesceOpportunity::CoalesceOpportunity(InterferenceNode* a_in, InterferenceNode* b_in)
+      : a(a_in), b(b_in), phase(kWorklist), priority(0) {
+  DCHECK_EQ(a->IsPair(), b->IsPair())
+      << "A pair node cannot be coalesced with a non-pair node";
+}
+
+RegisterAllocatorGraphColor::RegisterAllocatorGraphColor(ArenaAllocator* allocator,
+                                                         CodeGenerator* codegen,
+                                                         const SsaLivenessAnalysis& liveness,
+                                                         bool iterative_move_coalescing)
+      : RegisterAllocator(allocator, codegen, liveness),
+        iterative_move_coalescing_(iterative_move_coalescing),
+        core_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
+        fp_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
+        temp_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
+        safepoints_(allocator->Adapter(kArenaAllocRegisterAllocator)),
+        physical_core_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
+        physical_fp_intervals_(allocator->Adapter(kArenaAllocRegisterAllocator)),
+        physical_core_nodes_(allocator->Adapter(kArenaAllocRegisterAllocator)),
+        physical_fp_nodes_(allocator->Adapter(kArenaAllocRegisterAllocator)),
+        int_spill_slot_counter_(0),
+        double_spill_slot_counter_(0),
+        float_spill_slot_counter_(0),
+        long_spill_slot_counter_(0),
+        catch_phi_spill_slot_counter_(0),
+        reserved_art_method_slots_(InstructionSetPointerSize(codegen->GetInstructionSet())
+                                   / kVRegSize),
+        reserved_out_slots_(codegen->GetGraph()->GetMaximumNumberOfOutVRegs()),
+        max_safepoint_live_core_regs_(0),
+        max_safepoint_live_fp_regs_(0),
+        node_id_counter_(0),
+        interval_node_map_(allocator_->Adapter(kArenaAllocRegisterAllocator)),
+        prunable_nodes_(allocator_->Adapter(kArenaAllocRegisterAllocator)),
+        pruned_nodes_(allocator_->Adapter(kArenaAllocRegisterAllocator)),
+        simplify_worklist_(allocator_->Adapter(kArenaAllocRegisterAllocator)),
+        freeze_worklist_(allocator_->Adapter(kArenaAllocRegisterAllocator)),
+        spill_worklist_(ChooseHigherPriorityNode,
+                        allocator_->Adapter(kArenaAllocRegisterAllocator)),
+        coalesce_worklist_(CmpCoalesceOpportunity,
+                           allocator_->Adapter(kArenaAllocRegisterAllocator)) {
+  // Before we ask for blocked registers, set them up in the code generator.
+  codegen->SetupBlockedRegisters();
+
+  // Initialize physical core register live intervals and blocked registers.
+  // This includes globally blocked registers, such as the stack pointer.
+  physical_core_intervals_.resize(codegen->GetNumberOfCoreRegisters(), nullptr);
+  physical_core_nodes_.resize(codegen->GetNumberOfCoreRegisters(), nullptr);
+  for (size_t i = 0; i < codegen->GetNumberOfCoreRegisters(); ++i) {
+    LiveInterval* interval = LiveInterval::MakeFixedInterval(allocator_, i, Primitive::kPrimInt);
+    physical_core_intervals_[i] = interval;
+    physical_core_nodes_[i] =
+        new (allocator_) InterferenceNode(allocator_, interval, node_id_counter_++);
+    physical_core_nodes_[i]->phase = kPrecolored;
+    core_intervals_.push_back(interval);
+    if (codegen_->GetBlockedCoreRegisters()[i]) {
+      interval->AddRange(0, liveness.GetMaxLifetimePosition());
+    }
+  }
+  // Initialize physical floating point register live intervals and blocked registers.
+  physical_fp_intervals_.resize(codegen->GetNumberOfFloatingPointRegisters(), nullptr);
+  physical_fp_nodes_.resize(codegen->GetNumberOfFloatingPointRegisters(), nullptr);
+  for (size_t i = 0; i < codegen->GetNumberOfFloatingPointRegisters(); ++i) {
+    LiveInterval* interval = LiveInterval::MakeFixedInterval(allocator_, i, Primitive::kPrimFloat);
+    physical_fp_intervals_[i] = interval;
+    physical_fp_nodes_[i] =
+        new (allocator_) InterferenceNode(allocator_, interval, node_id_counter_++);
+    physical_fp_nodes_[i]->phase = kPrecolored;
+    fp_intervals_.push_back(interval);
+    if (codegen_->GetBlockedFloatingPointRegisters()[i]) {
+      interval->AddRange(0, liveness.GetMaxLifetimePosition());
+    }
+  }
+}
 
 bool RegisterAllocatorGraphColor::Validate(bool log_fatal_on_failure) {
   for (bool processing_core_regs : {true, false}) {
@@ -234,21 +359,38 @@ void RegisterAllocatorGraphColor::AllocateRegisters() {
       CHECK(attempt <= kMaxGraphColoringAttemptsRelease)
           << "Exceeded max graph coloring register allocation attempts";
 
-      // (2) Build the interference graph.
-      ArenaVector<InterferenceNode*> prunable_nodes(
+      // Clear data structures.
+      // TODO: Ideally there would be cleaner way to clear stacks and priority queues.
+      interval_node_map_.Clear();
+      prunable_nodes_.clear();
+      pruned_nodes_ = ArenaStdStack<InterferenceNode*>(
           allocator_->Adapter(kArenaAllocRegisterAllocator));
+      simplify_worklist_.clear();
+      freeze_worklist_.clear();
+      spill_worklist_ = ArenaPriorityQueue<InterferenceNode*, decltype(&ChooseHigherPriorityNode)>(
+          ChooseHigherPriorityNode, allocator_->Adapter(kArenaAllocRegisterAllocator));
+      coalesce_worklist_ =
+          ArenaPriorityQueue<CoalesceOpportunity*, decltype(&CmpCoalesceOpportunity)>(
+              CmpCoalesceOpportunity, allocator_->Adapter(kArenaAllocRegisterAllocator));
+
+      // (2) Build the interference graph. Also gather safepoints and build the interval node map.
       ArenaVector<InterferenceNode*> safepoints(
           allocator_->Adapter(kArenaAllocRegisterAllocator));
-      BuildInterferenceGraph(intervals, prunable_nodes, safepoints);
+      ArenaVector<InterferenceNode*>& physical_nodes = processing_core_regs
+          ? physical_core_nodes_
+          : physical_fp_nodes_;
+      BuildInterferenceGraph(intervals, physical_nodes, safepoints);
 
-      // (3) Prune all uncolored nodes from interference graph.
-      ArenaStdStack<InterferenceNode*> pruned_nodes(
-          allocator_->Adapter(kArenaAllocRegisterAllocator));
-      PruneInterferenceGraph(prunable_nodes, num_registers, pruned_nodes);
+      // (3) Add coalesce opportunities.
+      if (iterative_move_coalescing_) {
+        FindCoalesceOpportunities();
+      }
 
-      // (4) Color pruned nodes based on interferences.
-      bool successful = ColorInterferenceGraph(pruned_nodes,
-                                               num_registers,
+      // (4) Prune all uncolored nodes from interference graph.
+      PruneInterferenceGraph(num_registers);
+
+      // (5) Color pruned nodes based on interferences.
+      bool successful = ColorInterferenceGraph(num_registers,
                                                processing_core_regs);
 
       if (successful) {
@@ -262,7 +404,7 @@ void RegisterAllocatorGraphColor::AllocateRegisters() {
         // We only look at prunable_nodes because we already told the code generator about
         // fixed intervals while processing instructions. We also ignore the fixed intervals
         // placed at the top of catch blocks.
-        for (InterferenceNode* node : prunable_nodes) {
+        for (InterferenceNode* node : prunable_nodes_) {
           LiveInterval* interval = node->Interval();
           if (interval->HasRegister()) {
             Location low_reg = processing_core_regs
@@ -287,7 +429,7 @@ void RegisterAllocatorGraphColor::AllocateRegisters() {
     }
   }
 
-  // (5) Resolve locations and deconstruct SSA form.
+  // (6) Resolve locations and deconstruct SSA form.
   RegisterAllocationResolver(allocator_, codegen_, liveness_)
       .Resolve(max_safepoint_live_core_regs_,
                max_safepoint_live_fp_regs_,
@@ -618,26 +760,58 @@ void RegisterAllocatorGraphColor::BlockRegisters(size_t start, size_t end, bool 
   }
 }
 
-// Add an interference edge, but only if necessary.
-static void AddPotentialInterference(InterferenceNode* from, InterferenceNode* to) {
-  if (from->Interval()->HasRegister()) {
+void RegisterAllocatorGraphColor::AddPotentialInterference(InterferenceNode* from,
+                                                           InterferenceNode* to,
+                                                           bool both_directions) {
+  if (from->Precolored()) {
     // We save space by ignoring outgoing edges from fixed nodes.
   } else if (to->Interval()->IsSlowPathSafepoint()) {
     // Safepoint intervals are only there to count max live registers,
     // so no need to give them incoming interference edges.
     // This is also necessary for correctness, because we don't want nodes
     // to remove themselves from safepoint adjacency sets when they're pruned.
+  } else if (to->Precolored()) {
+    // It is important that only a single node represents a given fixed register in the
+    // interference graph. We retrieve that node here.
+    const ArenaVector<InterferenceNode*>& physical_nodes =
+        to->Interval()->IsFloatingPoint() ? physical_fp_nodes_ : physical_core_nodes_;
+    InterferenceNode* physical_node = physical_nodes[to->Interval()->GetRegister()];
+    from->AddInterference(physical_node);
+    DCHECK_EQ(to->Interval()->GetRegister(), physical_node->Interval()->GetRegister());
+    DCHECK_EQ(to->Alias(), physical_node) << "Fixed nodes should alias the canonical fixed node";
+
+    // TODO
+    // If an uncolored singular node interferes with a fixed pair node, the weight of the edge
+    // is inaccurate after using the alias of the pair node, because the alias of the pair node
+    // is a singular node.
+    // We could make special pair fixed nodes, but that ends up being too conservative because
+    // a node could then interfere with both {r1} and {r1,r2}, leading to a degree of
+    // three rather than two.
+    // Instead, we explicitly add an interference with the high node of the fixed pair node.
+    if (to->IsPair()) {
+      InterferenceNode* high_node =
+          physical_nodes[to->Interval()->GetHighInterval()->GetRegister()];
+      DCHECK_EQ(to->Interval()->GetHighInterval()->GetRegister(),
+                high_node->Interval()->GetRegister());
+      from->AddInterference(high_node);
+    }
   } else {
     from->AddInterference(to);
   }
+
+  if (both_directions) {
+    AddPotentialInterference(to, from, false);
+  }
 }
 
-// TODO: See locations->OutputCanOverlapWithInputs(); we may want to consider
+// TODO: See locations->OutputCanOverlapWithInputs(); we will want to consider
 //       this when building the interference graph.
-void RegisterAllocatorGraphColor::BuildInterferenceGraph(ArenaVector<LiveInterval*>& intervals,
-                                                         ArenaVector<InterferenceNode*>& prunable_nodes,
-                                                         ArenaVector<InterferenceNode*>& safepoints) {
-  size_t interval_id_counter = 0;
+void RegisterAllocatorGraphColor::BuildInterferenceGraph(
+    const ArenaVector<LiveInterval*>& intervals,
+    const ArenaVector<InterferenceNode*>& physical_nodes,
+    ArenaVector<InterferenceNode*>& safepoints) {
+  DCHECK(interval_node_map_.Empty() && prunable_nodes_.empty());
+
   // Build the interference graph efficiently by ordering range endpoints
   // by position and doing a line sweep to find interferences.
   // We order by both position and (secondarily) by whether the endpoint
@@ -651,15 +825,23 @@ void RegisterAllocatorGraphColor::BuildInterferenceGraph(ArenaVector<LiveInterva
       LiveRange* range = sibling->GetFirstRange();
       if (range != nullptr) {
         InterferenceNode* node = new (allocator_) InterferenceNode(
-            allocator_, sibling, interval_id_counter++);
+            allocator_, sibling, node_id_counter_++);
+        interval_node_map_.Insert(std::make_pair(sibling, node));
+
         if (sibling->HasRegister()) {
-          // Fixed nodes will never be pruned, so no need to keep track of them.
+          // Fixed nodes should alias the canonical node for the corresponding register.
+          node->phase = kPrecolored;
+          InterferenceNode* physical_node = physical_nodes[sibling->GetRegister()];
+          node->SetAlias(physical_node);
+          DCHECK_EQ(node->Interval()->GetRegister(), physical_node->Interval()->GetRegister());
         } else if (sibling->IsSlowPathSafepoint()) {
           // Safepoint intervals are synthesized to count max live registers.
           // They will be processed separately after coloring.
+          node->phase = kSafepoint;
           safepoints.push_back(node);
         } else {
-          prunable_nodes.push_back(node);
+          node->phase = kPrunable;
+          prunable_nodes_.push_back(node);
         }
 
         while (range != nullptr) {
@@ -686,7 +868,6 @@ void RegisterAllocatorGraphColor::BuildInterferenceGraph(ArenaVector<LiveInterva
       for (InterferenceNode* conflicting : live) {
         DCHECK_NE(node, conflicting);
         AddPotentialInterference(node, conflicting);
-        AddPotentialInterference(conflicting, node);
       }
       DCHECK_EQ(live.count(node), 0u);
       live.insert(node);
@@ -698,14 +879,157 @@ void RegisterAllocatorGraphColor::BuildInterferenceGraph(ArenaVector<LiveInterva
   DCHECK(live.empty());
 }
 
+void RegisterAllocatorGraphColor::CreateCoalesceOpportunity(InterferenceNode* a,
+                                                            InterferenceNode* b) {
+  DCHECK_EQ(a->IsPair(), b->IsPair())
+      << "Nodes of different memory widths should never be coalesced";
+  CoalesceOpportunity* opportunity = new (allocator_) CoalesceOpportunity(a, b);
+  a->AddCoalesceOpportunity(opportunity);
+  b->AddCoalesceOpportunity(opportunity);
+  coalesce_worklist_.push(opportunity);
+}
+
+//  static bool OnlyOverlapWhereOutputCannotOverlapWithInputs(LiveInterval* input,
+//                                                            LiveInterval* output) {
+//    for (LiveRange* range_in = input->GetFirstRange();
+//         range_in != nullptr; range_in = range_in->GetNext()) {
+//      for (LiveRange* range_out = output->GetFirstRange();
+//           range_out != nullptr; range_out = range_out->GetNext()) {
+//        if (range_in->IntersectsWith(*range_out)) {
+//          if (range_out->GetStart() == output->GetStart()
+//              && range_in->GetEnd() == range_out->GetStart() + 1) {
+//            // This overlap is ok, since it occurs at the instruction
+//            // where outputs cannot overlap with inputs.
+//          } else {
+//            return false;
+//          }
+//        }
+//      }
+//    }
+//    return true;
+//  }
+
+// TODO: Ideally all intervals would be in the interval_node_map.
+void RegisterAllocatorGraphColor::FindCoalesceOpportunities() {
+  DCHECK(coalesce_worklist_.empty());
+
+  // TODO: Maybe iterate over fixed nodes too.
+  for (InterferenceNode* node : prunable_nodes_) {
+    LiveInterval* interval = node->Interval();
+
+    // TODO: Verify that we should ignore intervals not in the interval_node_map.
+
+    // Coalesce siblings.
+    LiveInterval* next_sibling = interval->GetNextSibling();
+    if (next_sibling != nullptr) {
+      auto it = interval_node_map_.Find(next_sibling);
+      if (it != interval_node_map_.end()) {
+        InterferenceNode* sibling_node = it->second;
+        CreateCoalesceOpportunity(node, sibling_node);
+      }
+    }
+
+    // Coalesce fixed outputs with this interval if this interval is an adjacent sibling.
+    // TODO: This could be cleaner.
+    LiveInterval* parent = interval->GetParent();
+    if (parent->HasRegister()
+        && parent->GetNextSibling() == interval
+        && parent->GetEnd() == interval->GetStart()) {
+      auto it = interval_node_map_.Find(parent);
+      if (it != interval_node_map_.end()) {
+        InterferenceNode* parent_node = it->second;
+        CreateCoalesceOpportunity(node, parent_node);
+      }
+    }
+
+    // TODO: The following three blocks are partially copied from liveness analysis.
+    //       Can we share this code?
+
+    // Try to prevent moves across blocks.
+    if (interval->IsSplit() && liveness_.IsAtBlockBoundary(interval->GetStart() / 2)) {
+      // If the start of this interval is at a block boundary, we look at the
+      // location of the interval in blocks preceding the block this interval
+      // starts at. This can avoid a move between the two blocks.
+      HBasicBlock* block = liveness_.GetBlockFromPosition(interval->GetStart() / 2);
+      for (HBasicBlock* predecessor : block->GetPredecessors()) {
+        size_t position = predecessor->GetLifetimeEnd() - 1;
+        LiveInterval* existing = interval->GetParent()->GetSiblingAt(position);
+        if (existing != nullptr) {
+          auto it = interval_node_map_.Find(existing);
+          if (it != interval_node_map_.end()) {
+            InterferenceNode* existing_node = it->second;
+            CreateCoalesceOpportunity(node, existing_node);
+          }
+        }
+      }
+    }
+
+    // Coalesce phi inputs with the corresponding output.
+    HInstruction* defined_by = interval->GetDefinedBy();
+    if (defined_by != nullptr && defined_by->IsPhi()) {
+      const ArenaVector<HBasicBlock*>& predecessors = defined_by->GetBlock()->GetPredecessors();
+      HInputsRef inputs = defined_by->GetInputs();
+
+      for (size_t i = 0, e = inputs.size(); i < e; ++i) {
+        // We want the sibling at the end of the appropriate predecessor block.
+        size_t end = predecessors[i]->GetLifetimeEnd();
+        LiveInterval* input_interval = inputs[i]->GetLiveInterval()->GetSiblingAt(end - 1);
+
+        auto it = interval_node_map_.Find(input_interval);
+        if (it != interval_node_map_.end()) {
+          InterferenceNode* input_node = it->second;
+          CreateCoalesceOpportunity(node, input_node);
+        }
+      }
+    }
+
+    // An interval that starts an instruction (that is, it is not split), may
+    // re-use the registers used by the inputs of that instruction, based on the
+    // location summary.
+//    if (defined_by != nullptr && !interval->IsSplit()) {
+//      LocationSummary* locations = defined_by->GetLocations();
+//      if (!locations->OutputCanOverlapWithInputs() && locations->Out().IsUnallocated()) {
+//        HInputsRef inputs = defined_by->GetInputs();
+//        for (size_t i = 0; i < inputs.size(); ++i) {
+//          LiveInterval* input_interval =
+//              inputs[i]->GetLiveInterval()->GetSiblingAt(interval->GetStart());
+//          if (locations->InAt(i).IsValid()
+//              && input_interval->SameRegisterKind(*interval)
+//              && input_interval->HasHighInterval() == interval->HasHighInterval()) {
+//            auto it = interval_node_map_.Find(input_interval);
+//            if (it != interval_node_map_.end()) {
+//              DCHECK(input_interval->CoversSlow(defined_by->GetLifetimePosition()));
+//              size_t position = defined_by->GetLifetimePosition() + 1;
+//              // TODO: This check is too conservative.
+//              if (input_interval->IsDeadAt(position)) {
+//                InterferenceNode* input_node = it->second;
+//                CreateCoalesceOpportunity(node, input_node);
+//                // Right now, these live intervals overlap, so we explicitly remove interferences.
+//                // TODO: Ideally we should just produce correct intervals in liveness analysis.
+//                //       May need to refactor the current live interval layout to do so.
+//                input_node->RemoveInterference(node);
+//                node->RemoveInterference(input_node);
+//              }
+//            }
+//          }
+//        }
+//      }
+//    }
+
+    // TODO: Could coalesce intervals with fixed register uses. Especially useful for
+    //       lifetimes ending at calls.
+    // TODO: Handle OutputSameAsFirstInput coalescing.
+  }
+}
+
 // The order in which we color nodes is vital to both correctness (forward
 // progress) and code quality.
 // TODO: May also want to consider:
 // - Loop depth
 // - Constants (since they can be rematerialized)
 // - Allocated spill slots
-static bool ChooseHigherPriority(const InterferenceNode* lhs,
-                                 const InterferenceNode* rhs) {
+bool RegisterAllocatorGraphColor::ChooseHigherPriorityNode(const InterferenceNode* lhs,
+                                                           const InterferenceNode* rhs) {
   LiveInterval* lhs_interval = lhs->Interval();
   LiveInterval* rhs_interval = rhs->Interval();
 
@@ -720,79 +1044,299 @@ static bool ChooseHigherPriority(const InterferenceNode* lhs,
   }
 
   // (3) Just choose the interval based on a deterministic ordering.
+  // TODO: Tie breaker not necessary for a deque.
   return InterferenceNode::CmpPtr(lhs, rhs);
 }
 
-void RegisterAllocatorGraphColor::PruneInterferenceGraph(
-      const ArenaVector<InterferenceNode*>& prunable_nodes,
-      size_t num_regs,
-      ArenaStdStack<InterferenceNode*>& pruned_nodes) {
-  // Low-degree nodes are guaranteed a color, so worklist order does not matter.
-  ArenaDeque<InterferenceNode*> low_degree_worklist(
-      allocator_->Adapter(kArenaAllocRegisterAllocator));
+bool RegisterAllocatorGraphColor::CmpCoalesceOpportunity(const CoalesceOpportunity* lhs,
+                                                         const CoalesceOpportunity* rhs) {
+  return lhs->priority < rhs->priority;
+}
 
-  // If we have to prune from the high-degree worklist, we cannot guarantee
-  // the pruned node a color. So, we order the worklist by priority.
-  ArenaSet<InterferenceNode*, decltype(&ChooseHigherPriority)> high_degree_worklist(
-      ChooseHigherPriority, allocator_->Adapter(kArenaAllocRegisterAllocator));
+void RegisterAllocatorGraphColor::PruneInterferenceGraph(size_t num_regs) {
+  DCHECK(pruned_nodes_.empty()
+      && simplify_worklist_.empty()
+      && freeze_worklist_.empty()
+      && spill_worklist_.empty());
 
-  // Build worklists.
-  for (InterferenceNode* node : prunable_nodes) {
-    DCHECK(!node->Interval()->HasRegister())
-        << "Fixed nodes should never be pruned";
-    DCHECK(!node->Interval()->IsSlowPathSafepoint())
-        << "Safepoint nodes should never be pruned";
+  // Build worklists. Note that the coalesce worklist has already been
+  // filled by FindCoalesceOpportunities().
+  for (InterferenceNode* node : prunable_nodes_) {
+    DCHECK(!node->Precolored()) << "Fixed nodes should never be pruned";
+    DCHECK(!node->Interval()->IsSlowPathSafepoint()) << "Safepoint nodes should never be pruned";
     if (node->Degree() < num_regs) {
-      low_degree_worklist.push_back(node);
+      if (node->CoalesceOpportunities().empty()) {
+        // Simplify Worklist.
+        node->phase = kSimplifyWorklist;
+        simplify_worklist_.push_back(node);
+      } else {
+        // Freeze Worklist.
+        node->phase = kFreezeWorklist;
+        freeze_worklist_.push_back(node);
+      }
     } else {
-      high_degree_worklist.insert(node);
+      // Spill worklist.
+      node->phase = kSpillWorklist;
+      spill_worklist_.push(node);
     }
   }
 
-  // Helper function to prune an interval from the interference graph,
-  // which includes updating the worklists.
-  auto prune_node = [this, num_regs,
-                     &pruned_nodes,
-                     &low_degree_worklist,
-                     &high_degree_worklist] (InterferenceNode* node) {
-    DCHECK(!node->Interval()->HasRegister());
-    pruned_nodes.push(node);
-    for (InterferenceNode* adj : node->Adj()) {
-      DCHECK(!adj->Interval()->IsSlowPathSafepoint())
-          << "Nodes should never interfere with synthesized safepoint nodes";
-      if (adj->Interval()->HasRegister()) {
-        // No effect on pre-colored nodes; they're never pruned.
-      } else {
-        bool was_high_degree = adj->Degree() >= num_regs;
-        DCHECK(adj->ContainsInterference(node))
-            << "Missing incoming interference edge from non-fixed node";
-        adj->RemoveInterference(node);
-        if (was_high_degree && adj->Degree() < num_regs) {
-          // This is a transition from high degree to low degree.
-          DCHECK_EQ(high_degree_worklist.count(adj), 1u);
-          high_degree_worklist.erase(adj);
-          low_degree_worklist.push_back(adj);
+  // Prune graph.
+  // Note that we do not remove nodes from worklists, so they may be in multiple worklists at
+  // once; the node's `phase` says which worklist it is really in.
+  while (true) {
+    // TODO: Could assert things about node here.
+    if (!simplify_worklist_.empty()) {
+      // Prune low-degree nodes.
+      // TODO: pop_back() should work as well, but it didn't; we get a
+      //       failed check while pruning. We should look into this.
+      InterferenceNode* node = simplify_worklist_.front();
+      simplify_worklist_.pop_front();
+      DCHECK_EQ(node->phase, kSimplifyWorklist) << "Cannot transition away from simplify worklist";
+      DCHECK_LT(node->Degree(), num_regs) << "Nodes in simplify worklist should be low degree";
+      DCHECK(!node->MoveRelated()) << "Nodes in the simplify worklist should not be move related";
+      PruneNode(node, num_regs);
+    } else if (!coalesce_worklist_.empty()) {
+      // Coalesce.
+      CoalesceOpportunity* opportunity = coalesce_worklist_.top();
+      coalesce_worklist_.pop();
+      if (opportunity->phase == kWorklist) {
+        Coalesce(opportunity, num_regs);
+      }
+    } else if (!freeze_worklist_.empty()) {
+      // Freeze moves and prune a low-degree move-related node.
+      InterferenceNode* node = freeze_worklist_.front();
+      freeze_worklist_.pop_front();
+      if (node->phase == kFreezeWorklist) {
+        DCHECK_LT(node->Degree(), num_regs) << "Nodes in the freeze worklist should be low degree";
+        DCHECK(node->MoveRelated()) << "Nodes in the freeze worklist should be move related";
+        FreezeMoves(node);
+        PruneNode(node, num_regs);
+      }
+    } else if (!spill_worklist_.empty()) {
+      // We spill the lowest-priority node, because pruning a node earlier
+      // gives it a higher chance of being spilled.
+      InterferenceNode* node = spill_worklist_.top();
+      spill_worklist_.pop();
+      if (node->phase == kSpillWorklist) {
+        DCHECK_GE(node->Degree(), num_regs) << "Nodes in the spill worklist should be high degree";
+        FreezeMoves(node);
+        PruneNode(node, num_regs);
+      }
+    } else {
+      // Pruning complete.
+      break;
+    }
+  }
+  DCHECK_EQ(prunable_nodes_.size(), pruned_nodes_.size());
+}
+
+void RegisterAllocatorGraphColor::EnableCoalesceOpportunities(InterferenceNode* node) {
+  for (CoalesceOpportunity* opportunity : node->CoalesceOpportunities()) {
+    if (opportunity->phase == kActive) {
+      opportunity->phase = kWorklist;
+      coalesce_worklist_.push(opportunity);
+    }
+  }
+}
+
+void RegisterAllocatorGraphColor::PruneNode(InterferenceNode* node,
+                                            size_t num_regs) {
+  DCHECK_NE(node->phase, kPruned);
+  DCHECK(!node->Precolored());
+  node->phase = kPruned;
+  pruned_nodes_.push(node);
+  // TODO: Appel doesn't do this, but if high degree, enable moves for all neighbors?
+
+  for (InterferenceNode* adj : node->Adj()) {
+    DCHECK(!adj->Interval()->IsSlowPathSafepoint())
+        << "Nodes should never interfere with synthesized safepoint nodes";
+    DCHECK_NE(!adj->phase, kPruned) << "Should be no interferences with pruned nodes";
+
+    if (adj->Precolored()) {
+      // No effect on pre-colored nodes; they're never pruned.
+    } else {
+      // Remove the interference.
+      bool was_high_degree = adj->Degree() >= num_regs;
+      DCHECK(adj->HasInterference(node))
+          << "Missing reflexive interference from non-fixed node";
+      adj->RemoveInterference(node);
+
+      // Handle transitions from high degree to low degree.
+      if (was_high_degree && adj->Degree() < num_regs) {
+        EnableCoalesceOpportunities(adj);
+        for (InterferenceNode* adj_adj : adj->Adj()) {
+          EnableCoalesceOpportunities(adj_adj);
+        }
+
+        DCHECK_EQ(adj->phase, kSpillWorklist);
+        if (adj->MoveRelated()) {
+          adj->phase = kFreezeWorklist;
+          freeze_worklist_.push_back(adj);
+        } else {
+          adj->phase = kSimplifyWorklist;
+          simplify_worklist_.push_back(adj);
         }
       }
     }
-  };
+  }
+}
 
-  // Prune graph.
-  while (!low_degree_worklist.empty() || !high_degree_worklist.empty()) {
-    while (!low_degree_worklist.empty()) {
-      InterferenceNode* node = low_degree_worklist.front();
-      // TODO: pop_back() should work as well, but it doesn't; we get a
-      //       failed check while pruning. We should look into this.
-      low_degree_worklist.pop_front();
-      prune_node(node);
+void RegisterAllocatorGraphColor::FreezeMoves(InterferenceNode* node) {
+  for (CoalesceOpportunity* opportunity : node->CoalesceOpportunities()) {
+    opportunity->phase = kDefunct;
+    InterferenceNode* other = opportunity->a->Alias() == node
+        ? opportunity->b->Alias()
+        : opportunity->a->Alias();
+    if (other != node && other->phase == kFreezeWorklist && !other->MoveRelated()) {
+      other->phase = kSimplifyWorklist;
+      simplify_worklist_.push_back(other);
     }
-    if (!high_degree_worklist.empty()) {
-      // We prune the lowest-priority node, because pruning a node earlier
-      // gives it a higher chance of being spilled.
-      InterferenceNode* node = *high_degree_worklist.rbegin();
-      high_degree_worklist.erase(node);
-      prune_node(node);
+  }
+}
+
+void RegisterAllocatorGraphColor::CheckTransitionFromFreezeWorklist(InterferenceNode* node,
+                                                                    size_t num_regs) {
+  if (node->Degree() < num_regs && !node->MoveRelated()) {
+    DCHECK_EQ(node->phase, kFreezeWorklist);
+    node->phase = kSimplifyWorklist;
+    simplify_worklist_.push_back(node);
+  }
+}
+
+bool RegisterAllocatorGraphColor::PrecoloredHeuristic(InterferenceNode* from,
+                                                      InterferenceNode* into,
+                                                      size_t num_regs) {
+  if (!into->Precolored()) {
+    // The uncolored heuristic will cover this case.
+    return false;
+  }
+  if (from->IsPair() || into->IsPair()) {
+    // TODO: Merging from a pair node is currently not supported, since fixed pair nodes
+    //       are currently represented as two single fixed nodes in the graph, and `into` is
+    //       only one of them. It would probably be best to create special fixed pair nodes
+    //       to fix this situation.
+    return false;
+  }
+
+  // Reasons an adjacent node can be "ok":
+  // (1) If `adj` is low degree, interference with `into` will not affect its existing
+  //     colorable guarantee. (Notice that coalescing cannot increase its degree.)
+  // (2) If `adj` is pre-colored, it already interferes with `into`. See (3).
+  // (3) If there's already an interference with `into`, coalescing will not add interferences.
+  for (InterferenceNode* adj : from->Adj()) {
+    if (adj->Degree() < num_regs || adj->Precolored() || adj->HasInterference(into)) {
+      // Ok.
+    } else {
+      return false;
     }
+  }
+  return true;
+}
+
+bool RegisterAllocatorGraphColor::UncoloredHeuristic(InterferenceNode* from,
+                                                     InterferenceNode* into,
+                                                     size_t num_regs) {
+  if (into->Precolored()) {
+    // The pre-colored heuristic will handle this case.
+    return false;
+  }
+
+  // It's safe to coalesce two nodes if the resulting node has fewer than `num_regs` interferences
+  // with nodes of high degree.
+  size_t high_degree_interferences = 0;
+  for (InterferenceNode* adj : from->Adj()) {
+    if (adj->Degree() >= num_regs) {
+      high_degree_interferences += from->EdgeWeightWith(adj);
+    }
+  }
+  for (InterferenceNode* adj : into->Adj()) {
+    if (from->HasInterference(adj)) {
+      // We've already counted this adjacent node.
+      // Furthermore, its degree will decrease if coalescing succeeds. Thus, it's possible that
+      // we should not have counted it at all. (This extends the original Briggs coalescing test,
+      // but remains conservative.)
+      if (adj->Degree() - into->EdgeWeightWith(adj) < num_regs) {
+        // TODO: Doesn't work right now; within degree 2 of being sufficiently conservative.
+        // high_degree_interferences -= into->EdgeWeightWith(adj);
+      }
+    } else {
+      high_degree_interferences += into->EdgeWeightWith(adj);
+    }
+  }
+
+  return high_degree_interferences < num_regs;
+}
+
+void RegisterAllocatorGraphColor::Combine(InterferenceNode* from,
+                                          InterferenceNode* into,
+                                          size_t num_regs) {
+  from->SetAlias(into);
+
+  // Add interferences.
+  for (InterferenceNode* adj : from->Adj()) {
+    bool was_low_degree = adj->Degree() < num_regs;
+    AddPotentialInterference(adj, into);
+    if (was_low_degree && adj->Degree() >= num_regs) {
+      // This is a (temporary) transition to a high degree node. Its degree will decrease again
+      // when we prune `from`, but it's best to be consistent about the current worklist.
+      // TUNING: Could remove this.
+      adj->phase = kSpillWorklist;
+      spill_worklist_.push(adj);
+    }
+  }
+
+  // Add coalesce opportunities.
+  for (CoalesceOpportunity* opportunity : from->CoalesceOpportunities()) {
+    if (opportunity->phase != kDefunct) {
+      into->AddCoalesceOpportunity(opportunity);
+    }
+  }
+  EnableCoalesceOpportunities(from);
+
+  // Prune and update worklists.
+  PruneNode(from, num_regs);
+  if (into->Degree() < num_regs) {
+    // Coalesce(...) takes care of checking for a transition to the simplify worklist.
+    DCHECK_EQ(into->phase, kFreezeWorklist);
+  } else if (into->phase == kFreezeWorklist) {
+    // This is a transition to a high degree node.
+    into->phase = kSpillWorklist;
+    spill_worklist_.push(into);
+  } else {
+    DCHECK(into->phase == kSpillWorklist || into->phase == kPrecolored);
+  }
+}
+
+void RegisterAllocatorGraphColor::Coalesce(CoalesceOpportunity* opportunity,
+                                           size_t num_regs) {
+  InterferenceNode* from = opportunity->a->Alias();
+  InterferenceNode* into = opportunity->b->Alias();
+  DCHECK(from->phase != kPruned && into->phase != kPruned);
+
+  if (from->Precolored()) {
+    // If we have one pre-colored node, make sure it's the `into` node.
+    std::swap(from, into);
+  }
+
+  if (from == into) {
+    // These nodes have already been coalesced.
+    opportunity->phase = kDefunct;
+    CheckTransitionFromFreezeWorklist(from, num_regs);
+  } else if (from->Precolored() || from->HasInterference(into)) {
+    // These nodes interfere.
+    opportunity->phase = kDefunct;
+    CheckTransitionFromFreezeWorklist(from, num_regs);
+    CheckTransitionFromFreezeWorklist(into, num_regs);
+  } else if (PrecoloredHeuristic(from, into, num_regs)
+          || UncoloredHeuristic(from, into, num_regs)) {
+    // We can coalesce these nodes.
+    opportunity->phase = kDefunct;
+    Combine(from, into, num_regs);
+    CheckTransitionFromFreezeWorklist(into, num_regs);
+  } else {
+    // We cannot coalesce, but we may be able to later.
+    opportunity->phase = kActive;
   }
 }
 
@@ -817,10 +1361,8 @@ static uint64_t BuildConflictMask(Container& intervals) {
   return conflict_mask;
 }
 
-bool RegisterAllocatorGraphColor::ColorInterferenceGraph(
-      ArenaStdStack<InterferenceNode*>& pruned_nodes,
-      size_t num_regs,
-      bool processing_core_regs) {
+bool RegisterAllocatorGraphColor::ColorInterferenceGraph(size_t num_regs,
+                                                         bool processing_core_regs) {
   DCHECK_LE(num_regs, 64u);
   size_t& max_safepoint_live_regs = processing_core_regs
       ? max_safepoint_live_core_regs_
@@ -829,29 +1371,71 @@ bool RegisterAllocatorGraphColor::ColorInterferenceGraph(
       allocator_->Adapter(kArenaAllocRegisterAllocator));
   bool successful = true;
 
-  while (!pruned_nodes.empty()) {
-    InterferenceNode* node = pruned_nodes.top();
-    pruned_nodes.pop();
+  while (!pruned_nodes_.empty()) {
+    InterferenceNode* node = pruned_nodes_.top();
+    pruned_nodes_.pop();
     LiveInterval* interval = node->Interval();
-
-    // Search for free register(s).
-    uint64_t conflict_mask =  BuildConflictMask(node->Adj());
+    DCHECK(!interval->HasRegister());
     size_t reg = 0;
-    if (interval->HasHighInterval()) {
-      while (reg < num_regs - 1
-          && ((conflict_mask & (1u << reg)) || (conflict_mask & (1u << (reg + 1))))) {
-        reg += 2;
+
+    InterferenceNode* alias = node->Alias();
+    if (alias != node) {
+      // This node was coalesced with another.
+      LiveInterval* alias_interval = alias->Interval();
+      if (alias_interval->HasRegister()) {
+        reg = alias_interval->GetRegister();
+        DCHECK_EQ(0u, (1u << reg) & BuildConflictMask(node->Adj()))
+            << "This node conflicts with the register it was coalesced with";
+      } else {
+        DCHECK(false) << node->Degree() << " " << alias->Degree() << " "
+            << "Move coalescing was not conservative, causing a node to be coalesced "
+            << "with another node that could not be colored";
+        if (interval->RequiresRegister()) {
+          successful = false;
+        }
       }
     } else {
-      // Flip the bits of conflict_mask and find the first 1,
-      // indicating a free register. Note that CTZ(0) is undefined.
-      // TODO: We could do more to preserve free register pairs here (if targeting 32-bit).
-      reg = (~conflict_mask == 0u) ? 64u : CTZ(~conflict_mask);
+      // Search for free register(s).
+      uint64_t conflict_mask = BuildConflictMask(node->Adj());
+      if (interval->HasHighInterval()) {
+        // TODO: We had assumed that pair intervals were always aligned and possibly even needed
+        //       to be aligned, yet some fixed pair intervals are not. Still, the graph coloring
+        //       algorithm assumes that *uncolored* nodes will be aligned, so if we change
+        //       the alignment requirements here, we will have to update the algorithm (e.g.,
+        //       be more conservative about the weight of edges adjacent to pair nodes.)
+        while (reg < num_regs - 1
+            && ((conflict_mask & (1u << reg)) || (conflict_mask & (1u << (reg + 1))))) {
+          reg += 2;
+        }
+      } else {
+        // Flip the bits of conflict_mask and find the first 1,
+        // indicating a free register. Note that CTZ(0) is undefined.
+        // TODO: We could do more to preserve free register pairs here (if targeting 32-bit).
+        reg = (~conflict_mask == 0u) ? 64u : CTZ(~conflict_mask);
+
+        // Last-chance coalescing.
+        // TODO: May be beneficial to pick the register with the highest count among
+        //       coalesce candidates.
+        // TODO: We should do the same for pair intervals, but first attempts to do so
+        //       led to an extreme number of attempts needed to color the graph on 32-bit.
+        //       Need to look into this.
+        for (CoalesceOpportunity* opportunity : node->CoalesceOpportunities()) {
+          LiveInterval* other_interval = opportunity->a->Alias() == node
+              ? opportunity->b->Alias()->Interval()
+              : opportunity->a->Alias()->Interval();
+          if (other_interval->HasRegister()) {
+            size_t coalesce_register = other_interval->GetRegister();
+            if (~conflict_mask & (1u << coalesce_register)) {
+              reg = coalesce_register;
+              break;
+            }
+          }
+        }
+      }
     }
 
     if (reg < (interval->HasHighInterval() ? num_regs - 1 : num_regs)) {
       // Assign register.
-      DCHECK(!interval->HasRegister());
       interval->SetRegister(reg);
       colored_intervals.push_back(interval);
       if (interval->HasHighInterval()) {

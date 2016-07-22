@@ -54,6 +54,9 @@ using ArenaQueue = std::queue<T, ArenaDeque<T>>;
 template <typename T>
 using ArenaVector = dchecked_vector<T, ArenaAllocatorAdapter<T>>;
 
+template <typename T, typename Comparator = std::less<T>>
+using ArenaPriorityQueue = std::priority_queue<T, ArenaVector<T>, Comparator>;
+
 template <typename T>
 using ArenaStdStack = std::stack<T, ArenaDeque<T>>;
 
