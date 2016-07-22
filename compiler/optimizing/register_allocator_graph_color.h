@@ -34,6 +34,8 @@ class HParallelMove;
 class Location;
 class SsaLivenessAnalysis;
 class InterferenceNode;
+struct CoalesceOpportunity;
+enum class CoalesceKind;
 
 /**
  * A graph coloring register allocator.
@@ -67,7 +69,8 @@ class RegisterAllocatorGraphColor : public RegisterAllocator {
  public:
   RegisterAllocatorGraphColor(ArenaAllocator* allocator,
                               CodeGenerator* codegen,
-                              const SsaLivenessAnalysis& analysis);
+                              const SsaLivenessAnalysis& analysis,
+                              bool iterative_move_coalescing = true);
   ~RegisterAllocatorGraphColor() OVERRIDE {}
 
   void AllocateRegisters() OVERRIDE;
@@ -75,6 +78,10 @@ class RegisterAllocatorGraphColor : public RegisterAllocator {
   bool Validate(bool log_fatal_on_failure);
 
  private:
+  // Initialize physical register nodes, and add ranges for globally blocked registers,
+  // such as the stack pointer.
+  void SetupPhysicalNodes();
+
   // Collect all intervals and prepare for register allocation.
   void ProcessInstructions();
   void ProcessInstruction(HInstruction* instruction);
@@ -116,12 +123,19 @@ class RegisterAllocatorGraphColor : public RegisterAllocator {
   void BlockRegister(Location location, size_t start, size_t end);
   void BlockRegisters(size_t start, size_t end, bool caller_save_only = false);
 
+  static bool GreaterNodePriority(const InterferenceNode* lhs, const InterferenceNode* rhs);
+
+  // Compare two coalesce opportunities based on their priority.
+  static bool CmpCoalesceOpportunity(const CoalesceOpportunity* lhs,
+                                     const CoalesceOpportunity* rhs);
+
   // Use the intervals collected from instructions to construct an
   // interference graph mapping intervals to adjacency lists.
   // Also, collect synthesized safepoint nodes, used to keep
   // track of live intervals across safepoints.
+  // TODO: Should build safepoints elsewhere.
   void BuildInterferenceGraph(const ArenaVector<LiveInterval*>& intervals,
-                              ArenaVector<InterferenceNode*>* prunable_nodes,
+                              const ArenaVector<InterferenceNode*>& physical_nodes,
                               ArenaVector<InterferenceNode*>* safepoints);
 
   // Prune nodes from the interference graph to be colored later. Build
@@ -131,11 +145,52 @@ class RegisterAllocatorGraphColor : public RegisterAllocator {
                               size_t num_registers,
                               ArenaStdStack<InterferenceNode*>* pruned_nodes);
 
-  // Process pruned_intervals to color the interference graph, spilling when
-  // necessary. Return true if successful. Else, split some intervals to make
-  // the interference graph sparser.
-  bool ColorInterferenceGraph(ArenaStdStack<InterferenceNode*>* pruned_nodes,
-                              size_t num_registers);
+  void AddPotentialInterference(InterferenceNode* from,
+                                InterferenceNode* to,
+                                bool both_directions = true);
+
+  // Create a coalesce opportunity between two nodes.
+  void CreateCoalesceOpportunity(InterferenceNode* a, InterferenceNode* b, CoalesceKind kind);
+
+  // Add coalesce opportunities to interference nodes.
+  void FindCoalesceOpportunities();
+
+  // Prune nodes from the interference graph to be colored later. Returns
+  // a stack containing these intervals in an order determined by various
+  // heuristics.
+  // Also performs iterative conservative coalescing, based on Modern Compiler Implementation
+  // in Java, 2nd ed. (Andrew Appel, Cambridge University Press.)
+  void PruneInterferenceGraph(size_t num_registers);
+
+  // Invalidate all coalesce opportunities this node has, so that it (and possibly its neighbors)
+  // may be pruned from the interference graph.
+  void FreezeMoves(InterferenceNode* node);
+
+  // Prune a node from the interference graph, updating worklists if necessary.
+  void PruneNode(InterferenceNode* node, size_t num_regs);
+
+  // Add coalesce opportunities associated with this node to the coalesce worklist.
+  void EnableCoalesceOpportunities(InterferenceNode* node);
+
+  // If needed, from `node` from the freeze worklist to the simplify worklist.
+  void CheckTransitionFromFreezeWorklist(InterferenceNode* node, size_t num_regs);
+
+  // Returns true if `from` can be conservatively coalesced into another node `into`.
+  bool PrecoloredHeuristic(InterferenceNode* from, InterferenceNode* into, size_t num_regs);
+  bool UncoloredHeuristic(InterferenceNode* from, InterferenceNode* into, size_t num_regs);
+
+  void Coalesce(CoalesceOpportunity* opportunity, size_t num_regs);
+
+  // Merge `from` into `into` in the interference graph.
+  void Combine(InterferenceNode* from, InterferenceNode* into, size_t num_regs);
+
+  bool IsCallerSave(size_t reg, bool processing_core_regs);
+
+  // Process pruned_intervals_ to color the interference graph, spilling when
+  // necessary. Returns true if successful. Else, some intervals have been
+  // split, and the interference graph should be rebuilt for another attempt.
+  bool ColorInterferenceGraph(size_t num_registers,
+                              bool processing_core_regs);
 
   // Return the maximum number of registers live at safepoints,
   // based on the outgoing interference edges of safepoint nodes.
@@ -144,6 +199,10 @@ class RegisterAllocatorGraphColor : public RegisterAllocator {
   // If necessary, add the given interval to the list of spilled intervals,
   // and make sure it's ready to be spilled to the stack.
   void AllocateSpillSlotFor(LiveInterval* interval);
+
+  // Whether iterative move coalescing should be performed. Iterative move coalescing
+  // improves code quality, but increases compile time.
+  const bool iterative_move_coalescing_;
 
   // Live intervals, split by kind (core and floating point).
   // These should not contain high intervals, as those are represented by
@@ -156,9 +215,9 @@ class RegisterAllocatorGraphColor : public RegisterAllocator {
   // Safepoints, saved for special handling while processing instructions.
   ArenaVector<HInstruction*> safepoints_;
 
-  // Live intervals for specific registers. These become pre-colored nodes
+  // Interference nodes representing specific registers. These are "pre-colored" nodes
   // in the interference graph.
-  ArenaVector<LiveInterval*> physical_core_intervals_, physical_fp_intervals_;
+  ArenaVector<InterferenceNode*> physical_core_nodes_, physical_fp_nodes_;
 
   // Allocated stack slot counters.
   size_t int_spill_slot_counter_;
@@ -180,6 +239,34 @@ class RegisterAllocatorGraphColor : public RegisterAllocator {
 
   // An arena allocator used for each round of graph coloring, since there could be several.
   ArenaAllocator* coloring_attempt_allocator_;
+
+  // It is important that interference nodes receive unique IDs.
+  size_t node_id_counter_;
+
+  // A map from live intervals to interference nodes.
+  ArenaHashMap<LiveInterval*, InterferenceNode*> interval_node_map_;
+
+  // Uncolored nodes that should be pruned from the interference graph.
+  ArenaVector<InterferenceNode*> prunable_nodes_;
+
+  // A stack of nodes pruned from the interference graph, waiting to be pruned.
+  ArenaStdStack<InterferenceNode*> pruned_nodes_;
+
+  // Contains low degree, non-move-related nodes that can pruned immediately.
+  ArenaDeque<InterferenceNode*> simplify_worklist_;
+
+  // Contains low degree, move-related nodes.
+  ArenaDeque<InterferenceNode*> freeze_worklist_;
+
+  // Contains high degree nodes.
+  // If we have to prune from the spill worklist, we cannot guarantee
+  // the pruned node a color, so we order the worklist by priority.
+  ArenaPriorityQueue<InterferenceNode*, decltype(&GreaterNodePriority)> spill_worklist_;
+
+  // Contains coalesce opportunities.
+  // We order the coalesce worklist by priority, since some coalesce opportunities (e.g., those
+  // inside of loops) are more important than others.
+  ArenaPriorityQueue<CoalesceOpportunity*, decltype(&CmpCoalesceOpportunity)> coalesce_worklist_;
 
   DISALLOW_COPY_AND_ASSIGN(RegisterAllocatorGraphColor);
 };
