@@ -382,6 +382,25 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      This option is incompatible with read barriers (e.g., if dex2oat has been");
   UsageError("      built with the environment variable `ART_USE_READ_BARRIER` set to `true`).");
   UsageError("");
+  UsageError("  --optimize-up-to-method=<method-nr>:  only run optimizations for first");
+  UsageError("      <method-nr> methods.");
+  UsageError("      <method-nr> can be either hex or decimal value.");
+  UsageError("      Example: --stop-compiling-after=17 optimizes first 17 methods");
+  UsageError("      Example: --stop-compiling-after=0x%x optimizes all of methods",
+             std::numeric_limits<uint32_t>::max());
+  UsageError("      Default: 0x%x", std::numeric_limits<uint32_t>::max());
+  UsageError("");
+  UsageError("  --optimize-up-to-phase=<phase-nr>:  works in conjunction with");
+  UsageError("      --optimize-up-to-methods.");
+  UsageError("      Only runs first <phase-nr> optimization phases for <method-nr>-th");
+  UsageError("      optimized method. Runs all optimization phases for first <phase-nr> - 1");
+  UsageError("      methods. Runs no optimization phases for all remaining methods.");
+  UsageError("      <phase-nr> can be either hex or decimal value.");
+  UsageError("      Example: --optimize-up-to-method=3 --optimize-up-to-phase=2");
+  UsageError("      Example: --optimize-up-to-method=5 --optimize-up-to-phase=0x%x",
+             std::numeric_limits<uint32_t>::max());
+  UsageError("      Default: 0x%x", std::numeric_limits<uint32_t>::max());
+  UsageError("");
   std::cerr << "See log for usage error information\n";
   exit(EXIT_FAILURE);
 }
